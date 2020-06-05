@@ -14,7 +14,7 @@ set MSBUILD_QUERY=!MSBUILD_QUERY1!
 set MSBUILD=
 call :FindMSBuild
 
-set SOLUTION_DIRECTORY=VQE\
+set SOLUTION_DIRECTORY=SolutionFiles\
 set SOLUTION_FILE_NAME=VQE.sln
 set SOLUTION_FILE_PATH=!SOLUTION_DIRECTORY!!SOLUTION_FILE_NAME!
 
@@ -88,6 +88,8 @@ if !BUILD_FLAG_CLEAN! equ 1 (
 
 :: Package the engine
 call :ExecBuildTask_Build
+
+if !errorlevel! neq 0  exit /b !errorlevel!
 
 :: move build artifacts into destination folder
 call :ExecBuildTask_Move

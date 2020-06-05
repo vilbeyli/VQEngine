@@ -74,33 +74,33 @@ exit /b 0
 :: CheckAndInitializeSubmodules()
 ::
 :CheckAndInitializeSubmodules
-:: TODO: set & check submodules
+set SUBMODULE_DIR=..\Libs\VQUtils\
+set SUBMODULE_FILE=CMakeLists.txt
+set SUBMODULE_FILE_PATH=!SUBMODULE_DIR!!SUBMODULE_FILE!
+if not exist !SUBMODULE_FILE_PATH! (
+    echo    [VQBuild] Git Submodules   - Not Ready: File !SUBMODULE_FILE! doesn't exist in '!SUBMODULE_DIR!'  
+    echo    [VQBuild] Initializing submodule...
 
-::set SUBMODULE_DIR=..\Source\3rdParty\DirectXTex\
-::set SUBMODULE_FILE=!SUBMODULE_DIR!DirectXTex_Desktop_2017.sln
-::if not exist !SUBMODULE_FILE! (
-::    echo    Git Submodules   - Not Ready: File common.cmake doesn't exist in '!SUBMODULE_DIR!'  -  Initializing submodule...
-::
-::    :: attempt to initialize submodule
-::    cd ..
-::    echo.
-::    git submodule init
-::    git submodule update
-::    cd build
-::
-::    :: check if submodule initialized properly
-::    if not exist !SUBMODULE_FILE! (
-::        echo.
-::        echo Could not initialize submodule. Make sure all the submodules are initialized and updated.
-::        echo Exiting...
-::        echo.
-::        exit /b -1 
-::    ) else (
-::        echo    Git Submodules   - Ready.
-::    )
-::) else (
+    :: attempt to initialize submodule
+    cd ..
+    echo.
+    git submodule init 
+    git submodule update
+    cd Build
+
+    :: check if submodule initialized properly
+    if not exist !SUBMODULE_FILE_PATH! (
+        echo.
+        echo [VQBuild] Could not initialize submodule. Make sure all the submodules are initialized and updated.
+        echo [VQBuild] Exiting...
+        echo.
+        exit /b -1 
+    ) else (
+        echo    Git Submodules   - Ready.
+    )
+) else (
     echo [VQBuild]   Git Submodules   - Ready.
-::)
+)
 exit /b 0
 
 
