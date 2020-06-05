@@ -8,6 +8,8 @@ set(CMAKE_GENERATOR_PLATFORM x64)
 
 project (VQE)
 
+add_compile_options(/MP)
+
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
 
 # ouput exe to bin directory
@@ -28,10 +30,15 @@ set (SourceVQE
 
 add_link_options(/SUBSYSTEM:WINDOWS)
 
+add_subdirectory(Libs/VQUtils)
+
+link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/VQUtils/Bin/)
+
 # Create a library with the project name that is build with the Headers and Source files
 add_executable( ${PROJECT_NAME} ${SourceVQE} )
 
 # Make sure the compile can find include files for the libraries
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${Includes})
 
-#target_link_libraries(${PROJECT_NAME} Application )
+
+target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils )

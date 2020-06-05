@@ -21,9 +21,53 @@
 #include <ctime>
 #include <cstdlib>
 #include <windows.h>
+#include <vector>
+#include <string>
+
+#include "Libs/VQUtils/Source/Log.h"
+#include "Libs/VQUtils/Source/utils.h"
+
+struct FStartupParameters
+{
+	Log::LogInitializeParams LogInitParams;
+
+};
+
+void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmdl)
+{
+	const std::string StrCmdLineParams = pScmdl;
+	const std::vector<std::string> params = StrUtil::split(StrCmdLineParams, ' ');
+	for (const std::string& param : params)
+	{
+		const std::vector<std::string> paramNameValue = StrUtil::split(param, '=');
+		const std::string& paramName = paramNameValue.front();
+		std::string  paramValue = paramNameValue.size() > 1 ? paramNameValue[1] : "";
+
+		if (paramName == "-LogConsole")
+		{
+			refStartupParams.LogInitParams.bLogConsole = true;
+		}
+		if (paramName == "-LogFile")
+		{
+			refStartupParams.LogInitParams.bLogFile = true;
+			refStartupParams.LogInitParams.LogFilePath = std::move(paramValue);
+		}
+
+	}
+}
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR pScmdl, int iCmdShow)
 {
 	srand(static_cast<unsigned>(time(NULL)));
+	FStartupParameters StartupParameters = {};
+
+	ParseCommandLineParameters(StartupParameters, pScmdl);
+
+	Log::Initialize(StartupParameters.LogInitParams);
+
+	// Launch/Run Engine
+
+	Log::Exit();
+
 	return 0;
 }

@@ -1,0 +1,3 @@
+[submodule "Libs/VQUtils"]
+	path = Libs/VQUtils
+	url = https://github.com/vilbeyli/VQUtils.git
