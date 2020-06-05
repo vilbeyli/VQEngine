@@ -14,7 +14,7 @@ set MSBUILD_QUERY=!MSBUILD_QUERY1!
 set MSBUILD=
 call :FindMSBuild
 
-set SOLUTION_DIRECTORY=VQE\
+set SOLUTION_DIRECTORY=SolutionFiles\
 set SOLUTION_FILE_NAME=VQE.sln
 set SOLUTION_FILE_PATH=!SOLUTION_DIRECTORY!!SOLUTION_FILE_NAME!
 
@@ -34,7 +34,7 @@ set BUILD_NUM_CURR_TASK=0
 
 :: Check FindMSBuild's status
 if !errorlevel! neq 0 (
-    echo [VQE-Package] Error: Couldn't find MSBuild
+    echo [VQPackage] Error: Couldn't find MSBuild
     exit /b -1
 )
 
@@ -68,14 +68,14 @@ for %%i IN (%*) DO (
 :: MAIN()
 ::
 echo.
-echo [VQE-Package] Packaging Engine...
+echo [VQPackage] Packaging Engine...
 
 pushd %~dp0
 
 
 :: Check if GenerateProjectFiles.bat has been run
 if not exist !SOLUTION_DIRECTORY! (
-    echo [VQE-Package] Solution directory '!SOLUTION_DIRECTORY!' doesn't exist.
+    echo [VQPackage] Solution directory '!SOLUTION_DIRECTORY!' doesn't exist.
     mkdir !SOLUTION_DIRECTORY!
 )
 
@@ -89,11 +89,13 @@ if !BUILD_FLAG_CLEAN! equ 1 (
 :: Package the engine
 call :ExecBuildTask_Build
 
+if !errorlevel! neq 0  exit /b !errorlevel!
+
 :: move build artifacts into destination folder
 call :ExecBuildTask_Move
 
 popd
-echo [VQE-Package] PACKAGING SUCCESSFUL!
+echo [VQPackage] PACKAGING SUCCESSFUL!
 
 start !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
 
@@ -114,14 +116,14 @@ for /f "usebackq tokens=*" %%i IN (`%MSBUILD_QUERY%`) DO (
 )
 :CHECK_MSBUILD
 if not exist !MSBUILD! (
-    echo [VQE-Package] Build Error: MSBuild.exe could not be located.
+    echo [VQPackage] Build Error: MSBuild.exe could not be located.
     echo.
     exit /b -1
 )
 
 :: check arg1 == true (bPrintMSBuild)
 if "%~1"=="true" (
-    echo [VQE-Package] MSBuild Found: !MSBUILD!
+    echo [VQPackage] MSBuild Found: !MSBUILD!
 )
 exit /b 0
 
@@ -143,7 +145,7 @@ exit /b 0
 ::
 :ExecBuildTask_PreBuild
 if not exist !SOLUTION_FILE_PATH! (
-    echo [VQE-Package] Couldn't find !SOLUTION_FILE_PATH!
+    echo [VQPackage] Couldn't find !SOLUTION_FILE_PATH!
     echo.
     echo **********************************************************************
     echo        [!BUILD_NUM_CURR_TASK!/!BUILD_NUM_TASKS!] Running GenerateProjectFiles.bat...
@@ -151,7 +153,7 @@ if not exist !SOLUTION_FILE_PATH! (
     echo.
     call %~dp0GenerateProjectFiles.bat -noVS
     if !errorlevel! neq 0 (
-        echo [VQE-Package] Error: Couldn't generate project files.
+        echo [VQPackage] Error: Couldn't generate project files.
         exit /b -1
     )
 )
@@ -175,7 +177,7 @@ exit /b 0
 :: ExecBuildTask_Build()
 ::
 :ExecBuildTask_Build
-::echo [VQE-Package] ENGINE_BUILD_COMMAND = !ENGINE_BUILD_COMMAND!
+::echo [VQPackage] ENGINE_BUILD_COMMAND = !ENGINE_BUILD_COMMAND!
 call :PrintBuildStage Release
 call !ENGINE_BUILD_COMMAND! /p:Configuration=Release
 set /A BUILD_NUM_CURR_TASK=!BUILD_NUM_CURR_TASK!+1
@@ -204,7 +206,7 @@ if !errorlevel! neq 0 (
     exit /b -1
 )
 
-echo [VQE-Package] BUILD SUCCESSFUL
+echo [VQPackage] BUILD SUCCESSFUL
 echo               - Release
 if !BUILD_CONFIG_DEBUG!        neq 0 echo               - Debug
 if !BUILD_CONFIG_REL_WITH_DBG! neq 0 echo               - RelWithDbgInfo
@@ -223,13 +225,13 @@ echo **********************************************************************
 
 :: Check engine packaging output directory and clean it if there's a previous engine package
 if exist !ENGINE_PACKAGE_OUTPUT_DIRECTORY! (
-    echo [VQE-Package] Cleaning... ENGINE_PACKAGE_OUTPUT_DIRECTORY = !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
+    echo [VQPackage] Cleaning... ENGINE_PACKAGE_OUTPUT_DIRECTORY = !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
     rmdir /S /Q !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
 )
 
 mkdir !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
 
-echo [VQE-Package] Moving build artifacts to package output directory...
+echo [VQPackage] Moving build artifacts to package output directory...
 robocopy ../Bin/RELEASE !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win64 > nul
 if !BUILD_CONFIG_DEBUG!        neq 0  robocopy ../Bin/DEBUG !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win64-Debug > nul
 if !BUILD_CONFIG_REL_WITH_DBG! neq 0  robocopy ../Bin/RELEASE !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win64-PDB > nul

@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 
 set LAUNCH_VS=1
 set SOLUTION_FILE=VQE.sln
-set SOLUTION_DIRECTORY=VQE
+set SOLUTION_DIRECTORY=SolutionFiles
 
 :: parameter scan
 for %%i IN (%*) DO (
@@ -20,15 +20,15 @@ for %%i IN (%*) DO (
 :: Main() 
 ::
 echo.
-echo [VQE-Build] Checking pre-requisites...
+echo [VQBuild] Checking pre-requisites...
 
 :: Check if CMake is installed
 cmake --version > nul 2>&1
 if %errorlevel% NEQ 0 (
-    echo [VQE-Build] Cannot find path to cmake. Is CMake installed? Exiting...
+    echo [VQBuild] Cannot find path to cmake. Is CMake installed? Exiting...
     exit /b -1
 ) else (
-    echo [VQE-Build]   CMake            - Ready.
+    echo [VQBuild]   CMake            - Ready.
 )
 
 :: Check if submodule is initialized to avoid CMake file not found errors
@@ -38,26 +38,26 @@ echo.
 
 :: Generate Build directory
 if not exist !SOLUTION_DIRECTORY! (
-    echo [VQE-Build] Creating directory !SOLUTION_DIRECTORY!...
+    echo [VQBuild] Creating directory !SOLUTION_DIRECTORY!...
     mkdir !SOLUTION_DIRECTORY!
 )
 
 :: Run CMake
 cd !SOLUTION_DIRECTORY!
 
-echo [VQE-Build] Generating solution files...
+echo [VQBuild] Generating solution files...
 
 cmake ..\..
 
 
 if !errorlevel! EQU 0 (
-    echo [VQE-Build] Success!
+    echo [VQBuild] Success!
     if !LAUNCH_VS! EQU 1 (
         start %SOLUTION_FILE%
     )
 ) else (
     echo.
-    echo [VQE-Build] GenerateSolutions.bat: Error with CMake. No solution file generated. 
+    echo [VQBuild] GenerateSolutions.bat: Error with CMake. No solution file generated. 
     echo.
     pause
 )
@@ -74,33 +74,33 @@ exit /b 0
 :: CheckAndInitializeSubmodules()
 ::
 :CheckAndInitializeSubmodules
-:: TODO: set & check submodules
+set SUBMODULE_DIR=..\Libs\VQUtils\
+set SUBMODULE_FILE=CMakeLists.txt
+set SUBMODULE_FILE_PATH=!SUBMODULE_DIR!!SUBMODULE_FILE!
+if not exist !SUBMODULE_FILE_PATH! (
+    echo    [VQBuild] Git Submodules   - Not Ready: File !SUBMODULE_FILE! doesn't exist in '!SUBMODULE_DIR!'  
+    echo    [VQBuild] Initializing submodule...
 
-::set SUBMODULE_DIR=..\Source\3rdParty\DirectXTex\
-::set SUBMODULE_FILE=!SUBMODULE_DIR!DirectXTex_Desktop_2017.sln
-::if not exist !SUBMODULE_FILE! (
-::    echo    Git Submodules   - Not Ready: File common.cmake doesn't exist in '!SUBMODULE_DIR!'  -  Initializing submodule...
-::
-::    :: attempt to initialize submodule
-::    cd ..
-::    echo.
-::    git submodule init
-::    git submodule update
-::    cd build
-::
-::    :: check if submodule initialized properly
-::    if not exist !SUBMODULE_FILE! (
-::        echo.
-::        echo Could not initialize submodule. Make sure all the submodules are initialized and updated.
-::        echo Exiting...
-::        echo.
-::        exit /b -1 
-::    ) else (
-::        echo    Git Submodules   - Ready.
-::    )
-::) else (
-    echo [VQE-Build]   Git Submodules   - Ready.
-::)
+    :: attempt to initialize submodule
+    cd ..
+    echo.
+    git submodule init 
+    git submodule update
+    cd Build
+
+    :: check if submodule initialized properly
+    if not exist !SUBMODULE_FILE_PATH! (
+        echo.
+        echo [VQBuild] Could not initialize submodule. Make sure all the submodules are initialized and updated.
+        echo [VQBuild] Exiting...
+        echo.
+        exit /b -1 
+    ) else (
+        echo    Git Submodules   - Ready.
+    )
+) else (
+    echo [VQBuild]   Git Submodules   - Ready.
+)
 exit /b 0
 
 
