@@ -8,22 +8,23 @@ set VSWHERE="%PROGRAMFILES(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 set MSBUILD_QUERY1=!VSWHERE! -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe
 set MSBUILD_QUERY2=vswhere.exe -version "[15.0,16.0)" -products Microsoft.VisualStudio.Product.BuildTools -find MSBuild\**\Bin\MSBuild.exe
 set MSBUILD_QUERY3=vswhere.exe -version "[15.0,16.0)" -find MSBuild\**\Bin\MSBuild.exe
+set MSBUILD_FIND=1
 
-set BUILD_FLAG_CLEAN=0
 set MSBUILD_QUERY=!MSBUILD_QUERY1!
-set MSBUILD=
-call :FindMSBuild
+set MSBUILD=MSBuild.exe
 
 set SOLUTION_DIRECTORY=SolutionFiles\
 set SOLUTION_FILE_NAME=VQE.sln
 set SOLUTION_FILE_PATH=!SOLUTION_DIRECTORY!!SOLUTION_FILE_NAME!
 
-set ENGINE_PACKAGE_OUTPUT_DIRECTORY=_artifacts
-set ENGINE_BUILD_COMMAND="!MSBUILD!" "%~dp0!SOLUTION_FILE_PATH!"
-
 set BUILD_CONFIG_DEBUG=0
 set BUILD_CONFIG_RELEASE=1
 set BUILD_CONFIG_REL_WITH_DBG=0
+
+set BUILD_FLAG_CLEAN=0
+
+:: flag to use for AppVeyor build to skip packaging process and do builds only
+set BUILD_TASKS_ONLY=0
 
 :: Keep track of # build tasks. build, clean, copy/move, etc.
 :: assume 2 for build+copy, add more depending on prebuild+clean tasks
@@ -32,11 +33,6 @@ set BUILD_NUM_CURR_TASK=0
 
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-:: Check FindMSBuild's status
-if !errorlevel! neq 0 (
-    echo [VQPackage] Error: Couldn't find MSBuild
-    exit /b -1
-)
 
 :: parameter scan
 for %%i IN (%*) DO (
@@ -60,9 +56,23 @@ for %%i IN (%*) DO (
         set BUILD_CONFIG_REL_WITH_DBG=1
         set /A BUILD_NUM_TASKS=!BUILD_NUM_TASKS!+1
     )
+
+    if "%%i"=="-SkipMSBuildFind" set MSBUILD_FIND=0
+    if "%%i"=="-SkipPackaging"   set BUILD_TASKS_ONLY=1
+)
+
+::echo SkipMSBuildFind=!MSBUILD_FIND!
+if !MSBUILD_FIND! equ 1 (
+    call :FindMSBuild
+    if !errorlevel! neq 0 (
+        echo [VQPackage] Error: Couldn't find MSBuild
+        exit /b -1
+    )
 )
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+set ENGINE_PACKAGE_OUTPUT_DIRECTORY=_artifacts
+set ENGINE_BUILD_COMMAND="!MSBUILD!" "%~dp0!SOLUTION_FILE_PATH!"
 
 ::
 :: MAIN()
@@ -92,12 +102,15 @@ call :ExecBuildTask_Build
 if !errorlevel! neq 0  exit /b !errorlevel!
 
 :: move build artifacts into destination folder
-call :ExecBuildTask_Move
+::echo BUILD_TASKS_ONLY=!BUILD_TASKS_ONLY!
+if !BUILD_TASKS_ONLY! NEQ 1 (
+    call :ExecBuildTask_Move
+    echo [VQPackage] PACKAGING SUCCESSFUL!
+    start !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
+)
 
 popd
-echo [VQPackage] PACKAGING SUCCESSFUL!
 
-start !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
 
 exit /b 0
 
@@ -178,10 +191,12 @@ exit /b 0
 ::
 :ExecBuildTask_Build
 ::echo [VQPackage] ENGINE_BUILD_COMMAND = !ENGINE_BUILD_COMMAND!
+:: ---------------------- Build Release ----------------------
 call :PrintBuildStage Release
 call !ENGINE_BUILD_COMMAND! /p:Configuration=Release
 set /A BUILD_NUM_CURR_TASK=!BUILD_NUM_CURR_TASK!+1
-
+:: ---------------------- Build Release ----------------------
+:: ---------------------- Build Debug   ----------------------
 if !BUILD_CONFIG_DEBUG! neq 0 (
     call :PrintBuildStage Debug
     call !ENGINE_BUILD_COMMAND! /p:Configuration=Debug
@@ -191,6 +206,8 @@ if !BUILD_CONFIG_DEBUG! neq 0 (
         exit /b -1
     )
 )
+:: ---------------------- Build Debug   ----------------------
+:: ---------------------- Build RelWithDebInfo----------------
 if !BUILD_CONFIG_REL_WITH_DBG! neq 0 (
     call :PrintBuildStage RelWithDebInfo
     call !ENGINE_BUILD_COMMAND! /p:Configuration=RelWithDebInfo
@@ -200,7 +217,7 @@ if !BUILD_CONFIG_REL_WITH_DBG! neq 0 (
         exit /b -1
     )
 )
-
+:: ---------------------- Build RelWithDebInfo----------------
 if !errorlevel! neq 0 (
     echo ERROR: BUILD ERROR
     exit /b -1

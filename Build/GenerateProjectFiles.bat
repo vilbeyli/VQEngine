@@ -34,6 +34,11 @@ if %errorlevel% NEQ 0 (
 :: Check if submodule is initialized to avoid CMake file not found errors
 call :CheckAndInitializeSubmodules
 
+if !errorlevel! NEQ 0 (
+    echo [VQBuild] Error checking submodules. Exiting.
+    exit /b -1
+)
+
 echo.
 
 :: Generate Build directory
@@ -47,24 +52,11 @@ cd !SOLUTION_DIRECTORY!
 
 echo [VQBuild] Generating solution files...
 
-cmake ..\..
-
-
-if !errorlevel! EQU 0 (
-    echo [VQBuild] Success!
-    if !LAUNCH_VS! EQU 1 (
-        start %SOLUTION_FILE%
-    )
-) else (
-    echo.
-    echo [VQBuild] GenerateSolutions.bat: Error with CMake. No solution file generated. 
-    echo.
-    pause
-)
+call :RunCmake
 
 echo.
 cd ..
-exit /b 0
+exit /b !errorlevel!
 
 
 :: -----------------------------------------------------------------------------------------------
@@ -78,8 +70,8 @@ set SUBMODULE_DIR=..\Libs\VQUtils\
 set SUBMODULE_FILE=CMakeLists.txt
 set SUBMODULE_FILE_PATH=!SUBMODULE_DIR!!SUBMODULE_FILE!
 if not exist !SUBMODULE_FILE_PATH! (
-    echo    [VQBuild] Git Submodules   - Not Ready: File !SUBMODULE_FILE! doesn't exist in '!SUBMODULE_DIR!'  
-    echo    [VQBuild] Initializing submodule...
+    echo [VQBuild]    Git Submodules   - Not Ready: File !SUBMODULE_FILE! doesn't exist in '!SUBMODULE_DIR!'  
+    echo [VQBuild]    Initializing submodule...
 
     :: attempt to initialize submodule
     cd ..
@@ -91,12 +83,12 @@ if not exist !SUBMODULE_FILE_PATH! (
     :: check if submodule initialized properly
     if not exist !SUBMODULE_FILE_PATH! (
         echo.
-        echo [VQBuild] Could not initialize submodule. Make sure all the submodules are initialized and updated.
-        echo [VQBuild] Exiting...
+        echo [VQBuild]    Could not initialize submodule. Make sure all the submodules are initialized and updated.
+        echo [VQBuild]    Exiting...
         echo.
         exit /b -1 
     ) else (
-        echo    Git Submodules   - Ready.
+        echo [VQBuild]    Git Submodules   - Ready.
     )
 ) else (
     echo [VQBuild]   Git Submodules   - Ready.
@@ -104,15 +96,36 @@ if not exist !SUBMODULE_FILE_PATH! (
 exit /b 0
 
 
+::
+:: RunCmake()
+::
+:RunCmake
 
-::
-:: PrintUsage()
-::
-:PrintUsage
-::echo Usage    : GenerateSolutions.bat [API]
-::echo.
-::echo Examples : GenerateSolutions.bat VK
-::echo            GenerateSolutions.bat DX
-::echo            GenerateSolutions.bat Vulkan
-::echo            GenerateSolutions.bat DX12
-exit /b 0f
+cmake ..\.. -G "Visual Studio 16 2019" -A x64
+
+if !errorlevel! EQU 0 (
+    echo [VQBuild] Success!
+    if !LAUNCH_VS! EQU 1 (
+        start %SOLUTION_FILE%
+    )
+) else (
+    echo.
+    echo [VQBuild] cmake VS2019 failed, retrying with VS 2017...
+    echo [VQBuild] removing %~dp0SolutionFiles ...
+    rmdir /S /Q  %~dp0SolutionFiles
+    cmake ..\.. -G "Visual Studio 15 2017" -A x64
+    if !errorlevel! NEQ 0 (
+        echo [VQBuild] cmake VS2017 failed, retrying without specifying VS version...
+        echo [VQBuild] removing %~dp0SolutionFiles ...
+        rmdir /S /Q  %~dp0SolutionFiles
+        cmake ..\..
+        if !errorlevel! NEQ 0 (
+            echo [VQBuild] GenerateSolutions.bat: Error with CMake. No solution file generated after retrying. 
+            exit /b -1
+        )
+    )
+    echo. 
+)
+
+exit /b 0
+
