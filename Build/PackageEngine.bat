@@ -61,7 +61,7 @@ for %%i IN (%*) DO (
     if "%%i"=="-SkipPackaging"   set BUILD_TASKS_ONLY=1
 )
 
-echo SkipMSBuildFind = !MSBUILD_FIND!
+::echo SkipMSBuildFind=!MSBUILD_FIND!
 if !MSBUILD_FIND! equ 1 (
     call :FindMSBuild
     if !errorlevel! neq 0 (
@@ -102,12 +102,13 @@ call :ExecBuildTask_Build
 if !errorlevel! neq 0  exit /b !errorlevel!
 
 :: move build artifacts into destination folder
-if !BUILD_TASKS_ONLY! NEQ 0 (
+::echo BUILD_TASKS_ONLY=!BUILD_TASKS_ONLY!
+if !BUILD_TASKS_ONLY! NEQ 1 (
     call :ExecBuildTask_Move
+    echo [VQPackage] PACKAGING SUCCESSFUL!
 )
 
 popd
-echo [VQPackage] PACKAGING SUCCESSFUL!
 
 start !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
 
