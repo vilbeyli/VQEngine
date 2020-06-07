@@ -18,8 +18,10 @@
 
 #pragma once
 
-// Modified version of the Window class defined below
+// ----------------------------------------------------------------------------
+// Modified version of the Window class defined in HelloD3D12 from AMD
 // Source: https://github.com/GPUOpen-LibrariesAndSDKs/HelloD3D12/
+// ----------------------------------------------------------------------------
 
 //
 // Copyright (c) 2016 Advanced Micro Devices, Inc. All rights reserved.
