@@ -106,11 +106,11 @@ if !errorlevel! neq 0  exit /b !errorlevel!
 if !BUILD_TASKS_ONLY! NEQ 1 (
     call :ExecBuildTask_Move
     echo [VQPackage] PACKAGING SUCCESSFUL!
+    start !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
 )
 
 popd
 
-start !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
 
 exit /b 0
 
