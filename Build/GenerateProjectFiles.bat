@@ -47,7 +47,7 @@ cd !SOLUTION_DIRECTORY!
 
 echo [VQBuild] Generating solution files...
 
-cmake ..\.. -T "v142"
+cmake ..\.. -G "Visual Studio 16 2019" -A x64
 
 
 if !errorlevel! EQU 0 (

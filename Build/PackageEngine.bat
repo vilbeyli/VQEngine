@@ -57,7 +57,7 @@ for %%i IN (%*) DO (
     if "%%i"=="-SkipMSBuildFind" set MSBUILD_FIND=0
 )
 
-echo MSBUILD_SKIP_FIND = !MSBUILD_SKIP_FIND!
+echo SkipMSBuildFind = !SkipMSBuildFind!
 if !MSBUILD_FIND! equ 1 (
     call :FindMSBuild
     if !errorlevel! neq 0 (
