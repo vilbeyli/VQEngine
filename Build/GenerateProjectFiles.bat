@@ -96,7 +96,7 @@ if not exist !SUBMODULE_FILE_PATH! (
         echo.
         exit /b -1 
     ) else (
-        echo    Git Submodules   - Ready.
+        echo    [VQBuild] Git Submodules   - Ready.
     )
 ) else (
     echo [VQBuild]   Git Submodules   - Ready.
