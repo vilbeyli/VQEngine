@@ -70,8 +70,8 @@ set SUBMODULE_DIR=..\Libs\VQUtils\
 set SUBMODULE_FILE=CMakeLists.txt
 set SUBMODULE_FILE_PATH=!SUBMODULE_DIR!!SUBMODULE_FILE!
 if not exist !SUBMODULE_FILE_PATH! (
-    echo    [VQBuild] Git Submodules   - Not Ready: File !SUBMODULE_FILE! doesn't exist in '!SUBMODULE_DIR!'  
-    echo    [VQBuild] Initializing submodule...
+    echo [VQBuild]    Git Submodules   - Not Ready: File !SUBMODULE_FILE! doesn't exist in '!SUBMODULE_DIR!'  
+    echo [VQBuild]    Initializing submodule...
 
     :: attempt to initialize submodule
     cd ..
@@ -83,12 +83,12 @@ if not exist !SUBMODULE_FILE_PATH! (
     :: check if submodule initialized properly
     if not exist !SUBMODULE_FILE_PATH! (
         echo.
-        echo [VQBuild] Could not initialize submodule. Make sure all the submodules are initialized and updated.
-        echo [VQBuild] Exiting...
+        echo [VQBuild]    Could not initialize submodule. Make sure all the submodules are initialized and updated.
+        echo [VQBuild]    Exiting...
         echo.
         exit /b -1 
     ) else (
-        echo    [VQBuild] Git Submodules   - Ready.
+        echo [VQBuild]    Git Submodules   - Ready.
     )
 ) else (
     echo [VQBuild]   Git Submodules   - Ready.
