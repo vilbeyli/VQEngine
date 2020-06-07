@@ -58,6 +58,12 @@ if !errorlevel! EQU 0 (
 ) else (
     echo.
     echo [VQBuild] GenerateSolutions.bat: Error with CMake. No solution file generated. 
+    echo [VQBuild] Retrying without specifying VS 2019...
+    cmake ..\..
+    if !errorlevel! NEQ 0 (
+        echo [VQBuild] GenerateSolutions.bat: Error with CMake. No solution file generated after retrying. 
+        exit /b -1
+    )
     echo.
 )
 

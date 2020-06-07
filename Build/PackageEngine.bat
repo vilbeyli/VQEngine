@@ -57,7 +57,7 @@ for %%i IN (%*) DO (
     if "%%i"=="-SkipMSBuildFind" set MSBUILD_FIND=0
 )
 
-echo SkipMSBuildFind = !SkipMSBuildFind!
+echo SkipMSBuildFind = !MSBUILD_FIND!
 if !MSBUILD_FIND! equ 1 (
     call :FindMSBuild
     if !errorlevel! neq 0 (
@@ -184,10 +184,12 @@ exit /b 0
 ::
 :ExecBuildTask_Build
 ::echo [VQPackage] ENGINE_BUILD_COMMAND = !ENGINE_BUILD_COMMAND!
+:: ---------------------- Build Release ----------------------
 call :PrintBuildStage Release
 call !ENGINE_BUILD_COMMAND! /p:Configuration=Release
 set /A BUILD_NUM_CURR_TASK=!BUILD_NUM_CURR_TASK!+1
-
+:: ---------------------- Build Release ----------------------
+:: ---------------------- Build Debug   ----------------------
 if !BUILD_CONFIG_DEBUG! neq 0 (
     call :PrintBuildStage Debug
     call !ENGINE_BUILD_COMMAND! /p:Configuration=Debug
@@ -197,6 +199,8 @@ if !BUILD_CONFIG_DEBUG! neq 0 (
         exit /b -1
     )
 )
+:: ---------------------- Build Debug   ----------------------
+:: ---------------------- Build RelWithDebInfo----------------
 if !BUILD_CONFIG_REL_WITH_DBG! neq 0 (
     call :PrintBuildStage RelWithDebInfo
     call !ENGINE_BUILD_COMMAND! /p:Configuration=RelWithDebInfo
@@ -206,7 +210,7 @@ if !BUILD_CONFIG_REL_WITH_DBG! neq 0 (
         exit /b -1
     )
 )
-
+:: ---------------------- Build RelWithDebInfo----------------
 if !errorlevel! neq 0 (
     echo ERROR: BUILD ERROR
     exit /b -1
