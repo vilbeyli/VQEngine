@@ -8,22 +8,20 @@ set VSWHERE="%PROGRAMFILES(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 set MSBUILD_QUERY1=!VSWHERE! -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe
 set MSBUILD_QUERY2=vswhere.exe -version "[15.0,16.0)" -products Microsoft.VisualStudio.Product.BuildTools -find MSBuild\**\Bin\MSBuild.exe
 set MSBUILD_QUERY3=vswhere.exe -version "[15.0,16.0)" -find MSBuild\**\Bin\MSBuild.exe
+set MSBUILD_FIND=1
 
-set BUILD_FLAG_CLEAN=0
 set MSBUILD_QUERY=!MSBUILD_QUERY1!
-set MSBUILD=
-call :FindMSBuild
+set MSBUILD=MSBuild.exe
 
 set SOLUTION_DIRECTORY=SolutionFiles\
 set SOLUTION_FILE_NAME=VQE.sln
 set SOLUTION_FILE_PATH=!SOLUTION_DIRECTORY!!SOLUTION_FILE_NAME!
 
-set ENGINE_PACKAGE_OUTPUT_DIRECTORY=_artifacts
-set ENGINE_BUILD_COMMAND="!MSBUILD!" "%~dp0!SOLUTION_FILE_PATH!"
-
 set BUILD_CONFIG_DEBUG=0
 set BUILD_CONFIG_RELEASE=1
 set BUILD_CONFIG_REL_WITH_DBG=0
+
+set BUILD_FLAG_CLEAN=0
 
 :: Keep track of # build tasks. build, clean, copy/move, etc.
 :: assume 2 for build+copy, add more depending on prebuild+clean tasks
@@ -32,11 +30,6 @@ set BUILD_NUM_CURR_TASK=0
 
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-:: Check FindMSBuild's status
-if !errorlevel! neq 0 (
-    echo [VQPackage] Error: Couldn't find MSBuild
-    exit /b -1
-)
 
 :: parameter scan
 for %%i IN (%*) DO (
@@ -60,9 +53,22 @@ for %%i IN (%*) DO (
         set BUILD_CONFIG_REL_WITH_DBG=1
         set /A BUILD_NUM_TASKS=!BUILD_NUM_TASKS!+1
     )
+
+    if "%%i"=="-SkipMSBuildFind" set MSBUILD_FIND=0
+)
+
+echo MSBUILD_SKIP_FIND = !MSBUILD_SKIP_FIND!
+if !MSBUILD_FIND! equ 1 (
+    call :FindMSBuild
+    if !errorlevel! neq 0 (
+        echo [VQPackage] Error: Couldn't find MSBuild
+        exit /b -1
+    )
 )
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+set ENGINE_PACKAGE_OUTPUT_DIRECTORY=_artifacts
+set ENGINE_BUILD_COMMAND="!MSBUILD!" "%~dp0!SOLUTION_FILE_PATH!"
 
 ::
 :: MAIN()
