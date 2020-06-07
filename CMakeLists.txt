@@ -26,6 +26,12 @@ endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 
 set (SourceVQE 
     "Source/Application/Main.cpp"
+    "Source/Application/Window.cpp"
+    "Source/Application/Window.h"
+    "Source/Application/VQEngine.cpp"
+    "Source/Application/VQEngine.h"
+    "Source/Application/Platform.cpp"
+    "Source/Application/Platform.h"
 )
 
 add_link_options(/SUBSYSTEM:WINDOWS)
