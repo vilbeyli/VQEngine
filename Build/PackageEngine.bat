@@ -23,6 +23,9 @@ set BUILD_CONFIG_REL_WITH_DBG=0
 
 set BUILD_FLAG_CLEAN=0
 
+:: flag to use for AppVeyor build to skip packaging process and do builds only
+set BUILD_TASKS_ONLY=0
+
 :: Keep track of # build tasks. build, clean, copy/move, etc.
 :: assume 2 for build+copy, add more depending on prebuild+clean tasks
 set BUILD_NUM_TASKS=2
@@ -55,6 +58,7 @@ for %%i IN (%*) DO (
     )
 
     if "%%i"=="-SkipMSBuildFind" set MSBUILD_FIND=0
+    if "%%i"=="-SkipPackaging"   set BUILD_TASKS_ONLY=1
 )
 
 echo SkipMSBuildFind = !MSBUILD_FIND!
@@ -98,7 +102,9 @@ call :ExecBuildTask_Build
 if !errorlevel! neq 0  exit /b !errorlevel!
 
 :: move build artifacts into destination folder
-call :ExecBuildTask_Move
+if !BUILD_TASKS_ONLY! NEQ 0 (
+    call :ExecBuildTask_Move
+)
 
 popd
 echo [VQPackage] PACKAGING SUCCESSFUL!
