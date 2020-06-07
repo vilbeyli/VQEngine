@@ -16,22 +16,19 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-//#include "../Application/Application.h"
-
 #include <ctime>
 #include <cstdlib>
-#include <windows.h>
+#include <Windows.h>
 #include <vector>
 #include <string>
 
 #include "Libs/VQUtils/Source/Log.h"
 #include "Libs/VQUtils/Source/utils.h"
+#include "Window.h"
 
-struct FStartupParameters
-{
-	Log::LogInitializeParams LogInitParams;
+#include "Platform.h"
+#include "VQEngine.h"
 
-};
 
 void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmdl)
 {
@@ -58,15 +55,43 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR pScmdl, int iCmdShow)
 {
-	srand(static_cast<unsigned>(time(NULL)));
 	FStartupParameters StartupParameters = {};
-
+	StartupParameters.hExeInstance = hInst;
+	
+	srand(static_cast<unsigned>(time(NULL)));
+	
 	ParseCommandLineParameters(StartupParameters, pScmdl);
 
 	Log::Initialize(StartupParameters.LogInitParams);
 
-	// Launch/Run Engine
+	VQEngine Engine = {};
+	Engine.Initialize(StartupParameters);
+	
 
+	MSG msg;
+	bool bQuit = false;
+	while (!bQuit)
+	{
+		// https://docs.microsoft.com/en-us/windows/win32/learnwin32/window-messages
+		// http://www.directxtutorial.com/Lesson.aspx?lessonid=9-1-4
+		while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+		{
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+
+			if (msg.message == WM_QUIT)
+			{
+				Log::Info("WM_QUIT!");
+				bQuit = true;
+				break;
+			} 
+		}
+		
+		Engine.OnUpdate_MainThread();
+	}
+
+	Engine.Exit();
+	
 	Log::Exit();
 
 	return 0;
