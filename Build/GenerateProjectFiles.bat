@@ -47,7 +47,7 @@ cd !SOLUTION_DIRECTORY!
 
 echo [VQBuild] Generating solution files...
 
-cmake ..\..
+cmake ..\.. -T "v142"
 
 
 if !errorlevel! EQU 0 (
