@@ -34,6 +34,11 @@ if %errorlevel% NEQ 0 (
 :: Check if submodule is initialized to avoid CMake file not found errors
 call :CheckAndInitializeSubmodules
 
+if !errorlevel! NEQ 0 (
+    echo [VQBuild] Error checking submodules. Exiting.
+    exit /b -1
+)
+
 echo.
 
 :: Generate Build directory
