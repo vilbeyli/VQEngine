@@ -52,31 +52,11 @@ cd !SOLUTION_DIRECTORY!
 
 echo [VQBuild] Generating solution files...
 
-cmake ..\.. -G "Visual Studio 16 2019" -A x64
-
-
-if !errorlevel! EQU 0 (
-    echo [VQBuild] Success!
-    if !LAUNCH_VS! EQU 1 (
-        start %SOLUTION_FILE%
-    )
-) else (
-    echo.
-    echo [VQBuild] GenerateSolutions.bat: Error with CMake. No solution file generated. 
-    echo [VQBuild] Retrying without specifying VS 2019...
-    echo [VQBuild] removing %~dp0SolutionFiles ...
-    rmdir /S /Q  %~dp0SolutionFiles
-    cmake ..\..
-    if !errorlevel! NEQ 0 (
-        echo [VQBuild] GenerateSolutions.bat: Error with CMake. No solution file generated after retrying. 
-        exit /b -1
-    )
-    echo.
-)
+call :RunCmake
 
 echo.
 cd ..
-exit /b 0
+exit /b !errorlevel!
 
 
 :: -----------------------------------------------------------------------------------------------
@@ -116,15 +96,36 @@ if not exist !SUBMODULE_FILE_PATH! (
 exit /b 0
 
 
+::
+:: RunCmake()
+::
+:RunCmake
 
-::
-:: PrintUsage()
-::
-:PrintUsage
-::echo Usage    : GenerateSolutions.bat [API]
-::echo.
-::echo Examples : GenerateSolutions.bat VK
-::echo            GenerateSolutions.bat DX
-::echo            GenerateSolutions.bat Vulkan
-::echo            GenerateSolutions.bat DX12
-exit /b 0f
+cmake ..\.. -G "Visual Studio 16 2019" -A x64
+
+if !errorlevel! EQU 0 (
+    echo [VQBuild] Success!
+    if !LAUNCH_VS! EQU 1 (
+        start %SOLUTION_FILE%
+    )
+) else (
+    echo.
+    echo [VQBuild] cmake VS2019 failed, retrying with VS 2017...
+    echo [VQBuild] removing %~dp0SolutionFiles ...
+    rmdir /S /Q  %~dp0SolutionFiles
+    cmake ..\.. -G "Visual Studio 15 2017" -A x64
+    if !errorlevel! NEQ 0 (
+        echo [VQBuild] cmake VS2017 failed, retrying without specifying VS version...
+        echo [VQBuild] removing %~dp0SolutionFiles ...
+        rmdir /S /Q  %~dp0SolutionFiles
+        cmake ..\..
+        if !errorlevel! NEQ 0 (
+            echo [VQBuild] GenerateSolutions.bat: Error with CMake. No solution file generated after retrying. 
+            exit /b -1
+        )
+    )
+    echo.
+)
+
+exit /b 0
+
