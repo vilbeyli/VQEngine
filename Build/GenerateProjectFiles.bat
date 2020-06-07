@@ -124,7 +124,7 @@ if !errorlevel! EQU 0 (
             exit /b -1
         )
     )
-    echo.
+    echo. 
 )
 
 exit /b 0
