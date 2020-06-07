@@ -59,7 +59,6 @@ if !errorlevel! EQU 0 (
     echo.
     echo [VQBuild] GenerateSolutions.bat: Error with CMake. No solution file generated. 
     echo.
-    pause
 )
 
 echo.
