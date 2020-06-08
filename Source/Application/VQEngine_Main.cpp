@@ -18,7 +18,7 @@
 
 #include "VQEngine.h"
 
-bool VQEngine::Initialize(const FStartupParameters& Params)
+void VQEngine::InitializeWindow(const FStartupParameters& Params)
 {
 	FWindowDesc mainWndDesc = {};
 	mainWndDesc.width = 640;
@@ -26,20 +26,40 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	mainWndDesc.hInst = Params.hExeInstance;
 	mainWndDesc.pWndOwner = this;
 	mainWndDesc.pfnWndProc = WndProc;
-	WinMain.reset(new Window("Main Window", mainWndDesc));
+	mWinMain.reset(new Window("Main Window", mainWndDesc));
 
 	mainWndDesc.width = 320;
 	mainWndDesc.height = 240;
-	WinDebug.reset(new Window("Debug Window", mainWndDesc));
+	mWinDebug.reset(new Window("Debug Window", mainWndDesc));
+}
 
+void VQEngine::InitializeThreads()
+{
+	mbStopAllThreads.store(false);
+	mRenderThread = std::thread(&VQEngine::RenderThread_Main, this);
+	mUpdateThread = std::thread(&VQEngine::UpdateThread_Main, this);
+	mLoadThread   = std::thread(&VQEngine::LoadThread_Main, this);
+}
 
+void VQEngine::ExitThreads()
+{
+	mbStopAllThreads.store(true);
+	mRenderThread.join();
+	mUpdateThread.join();
+	mLoadThread.join();
+}
 
-
+bool VQEngine::Initialize(const FStartupParameters& Params)
+{
+	InitializeWindow(Params);
+	InitializeThreads();
+	
 	return false;
 }
 
 void VQEngine::Exit()
 {
+	ExitThreads();
 }
 
 void VQEngine::OnWindowCreate()
@@ -78,12 +98,19 @@ void VQEngine::OnWindowClose()
 
 
 
-void VQEngine::OnUpdate_MainThread()
+void VQEngine::MainThread_Tick()
 {
-	if (WinMain->IsClosed())
+	if (mWinMain->IsClosed())
 	{
+		mWinDebug->OnClose();
 		PostQuitMessage(0);
 	}
+
+	static unsigned long long c = 0;
+	static unsigned long long cp = 0;
+	constexpr unsigned long long p = 10000;
+	if (++c % p)
+		;// Log::Info("Tick<%llu> : %llu", p, cp++);
 
 	//const UINT64 newTimeValue = GetTickCount64() - g_TimeOffset;
 	//g_TimeDelta = (float)(newTimeValue - g_TimeValue) * 0.001f;

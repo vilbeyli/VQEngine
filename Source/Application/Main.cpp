@@ -87,7 +87,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR pScmdl, int iCmdSh
 			} 
 		}
 		
-		Engine.OnUpdate_MainThread();
+		Engine.MainThread_Tick();
 	}
 
 	Engine.Exit();

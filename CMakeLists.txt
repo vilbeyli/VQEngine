@@ -19,17 +19,16 @@ foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
     set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_HOME_DIRECTORY}/Bin/${OUTPUTCONFIG} )
 endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 
-# Recurse into the subdirectories. This does not actually
-# cause another cmake executable to run. The same process will walk through
-# the project's entire directory structure.
-#add_subdirectory (Source)
 
 set (SourceVQE 
     "Source/Application/Main.cpp"
     "Source/Application/Window.cpp"
     "Source/Application/Window.h"
-    "Source/Application/VQEngine.cpp"
     "Source/Application/VQEngine.h"
+    "Source/Application/VQEngine_Main.cpp"
+    "Source/Application/VQEngine_Render.cpp"
+    "Source/Application/VQEngine_Update.cpp"
+    "Source/Application/VQEngine_Load.cpp"
     "Source/Application/Platform.cpp"
     "Source/Application/Platform.h"
 )
@@ -37,6 +36,7 @@ set (SourceVQE
 add_link_options(/SUBSYSTEM:WINDOWS)
 
 add_subdirectory(Libs/VQUtils)
+add_subdirectory(Source/Renderer)
 
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/VQUtils/Bin/)
 
@@ -47,4 +47,4 @@ add_executable( ${PROJECT_NAME} ${SourceVQE} )
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${Includes})
 
 
-target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils )
+target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer )

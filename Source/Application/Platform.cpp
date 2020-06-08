@@ -19,8 +19,9 @@
 #include "Platform.h"
 #include "Window.h"
 
-#define LOG_WINDOW_MESSAGE_EVENTS 1
+#include <dxgi1_6.h>
 
+#define LOG_WINDOW_MESSAGE_EVENTS 1
 
 static void LogWndMsg(UINT uMsg, HWND hwnd)
 {

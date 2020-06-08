@@ -21,13 +21,20 @@
 #include "Platform.h"
 #include "Window.h"
 
+#include "Source/Renderer/Renderer.h"
+
 #include <memory>
+#include <thread>
+#include <atomic>
 
 class VQEngine : public IWindowOwner
 {
 public:
 
 public:
+	// ---------------------------------------------------------
+	// Main Thread
+	// ---------------------------------------------------------
 	bool Initialize(const FStartupParameters& Params);
 	void Exit();
 
@@ -39,10 +46,40 @@ public:
 	void OnWindowKeyDown(WPARAM wParam) override;
 	void OnWindowClose() override;
 	
-	void OnUpdate_MainThread();
+	void MainThread_Tick();
+
+	// ---------------------------------------------------------
+	// Render Thread
+	// ---------------------------------------------------------
+	void RenderThread_Main();
+	void RenderThread_Inititalize();
+	void RenderThread_Exit();
+
+	// ---------------------------------------------------------
+	// Update Thread
+	// ---------------------------------------------------------
+	void UpdateThread_Main();
+
+	// ---------------------------------------------------------
+	// Load Thread
+	// ---------------------------------------------------------
+	void LoadThread_Main();
+
 
 private:
+	void InitializeWindow(const FStartupParameters& Params);
+	void InitializeThreads();
+	void ExitThreads();
 
-	std::unique_ptr<Window> WinMain;
-	std::unique_ptr<Window> WinDebug;
+
+private:
+	std::atomic<bool> mbStopAllThreads;
+	std::thread mRenderThread;
+	std::thread mUpdateThread;
+	std::thread mLoadThread;
+
+	std::unique_ptr<Window> mWinMain;
+	std::unique_ptr<Window> mWinDebug;
+
+	VQRenderer mRenderer;
 };

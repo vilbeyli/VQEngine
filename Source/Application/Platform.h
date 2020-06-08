@@ -18,12 +18,16 @@
 
 #pragma once
 
+#define CHECK_HR(expr)  do { if(FAILED(expr)) FAIL(__FILE__ "(" LINE_STRING "): FAILED( " #expr " )"); } while(false)
 
 
 #include <Windows.h>
+#include <d3d12.h>
 
-#include "Libs/VQUtils/Source/Log.h"
+#include "../../Libs/VQUtils/Source/Log.h"
 
+struct IDXGIAdapter1;
+struct IDXGIOutput;
 
 struct FStartupParameters
 {
@@ -32,3 +36,36 @@ struct FStartupParameters
 };
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+
+// -------------------------------------------------------------------------------
+
+struct FCPUInfo
+{
+	std::string ManufacturerName;
+	std::string DeviceName;
+	unsigned DeviceID;
+	unsigned VendorID;
+	short NumCores;
+	short NumThreads;
+};
+
+struct FGPUInfo
+{
+	std::string ManufacturerName;
+	std::string DeviceName;
+	unsigned DeviceID;
+	unsigned VendorID;
+	size_t DedicatedGPUMemory;
+	D3D_FEATURE_LEVEL MaxSupportedFeatureLevel; // todo: bool d3d12_0 ?
+	IDXGIAdapter1* pAdapter;
+};
+
+struct FMonitorInfo
+{
+	std::string ManufacturerName;
+	std::string DeviceName;
+	unsigned DeviceID;
+	unsigned VendorID;
+	bool bSupportsHDR;
+	IDXGIOutput* pDXGIOut;
+};
