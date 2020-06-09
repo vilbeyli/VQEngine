@@ -19,24 +19,57 @@
 #include "Renderer.h"
 
 #include "Device.h"
+#include "../Application/Window.h"
 
 #define ENABLE_DEBUG_LAYER      (1 && _DEBUG)
-#define ENABLE_VALIDATION_LAYER (0 && _DEBUG)
+#define ENABLE_VALIDATION_LAYER (1 && _DEBUG)
 
-void VQRenderer::Initialize()
+
+
+void VQRenderer::Initialize(const FRendererInitializeParameters& RendererInitParams)
 {
+	// Create the device
 	FDeviceCreateDesc deviceDesc = {};
 	deviceDesc.bEnableDebugLayer = ENABLE_DEBUG_LAYER;
 	deviceDesc.bEnableValidationLayer = ENABLE_VALIDATION_LAYER;
-
 	mDevice.Create(deviceDesc);
+
+	// Create the present queues & swapchains associated with each window passed into the VQRenderer
+	const size_t NumWindows = RendererInitParams.Windows.size();
+	mRenderContexts.resize(NumWindows);
+	for(size_t i = 0; i< NumWindows; ++i)
+	{
+		const FWindowRepresentation& wnd = RendererInitParams.Windows[i];
+
+		mRenderContexts[i].pDevice = &mDevice;
+
+		// Create the GFX queue for presenting the SwapChain
+		mRenderContexts[i].PresentQueue.CreateCommandQueue(mRenderContexts[i].pDevice, CommandQueue::ECommandQueueType::GFX);
+
+		// Create the SwapChain
+		FSwapChainCreateDesc swapChainDesc = {};
+		swapChainDesc.numBackBuffers = 3;
+		swapChainDesc.pDevice = mRenderContexts[i].pDevice->GetDevicePtr();
+		swapChainDesc.pWindow = &wnd;
+		swapChainDesc.pCmdQueue = &mRenderContexts[i].PresentQueue;
+		mRenderContexts[i].SwapChain.Create(swapChainDesc);
+	}
+	
+	
 }
 
 void VQRenderer::Exit()
 {
+	for (FRenderWindowContext ctx : mRenderContexts)
+	{
+		// ctx.pDevice is shared, its handled below
+		ctx.PresentQueue.DestroyCommandQueue();
+		ctx.SwapChain.Destroy();
+	}
+
 	mDevice.Destroy();
 }
 
-void VQRenderer::InitializeD3D()
+void VQRenderer::Render()
 {
 }

@@ -26,11 +26,11 @@ void VQEngine::InitializeWindow(const FStartupParameters& Params)
 	mainWndDesc.hInst = Params.hExeInstance;
 	mainWndDesc.pWndOwner = this;
 	mainWndDesc.pfnWndProc = WndProc;
-	mWinMain.reset(new Window("Main Window", mainWndDesc));
+	mpWinMain.reset(new Window("Main Window", mainWndDesc));
 
 	mainWndDesc.width = 320;
 	mainWndDesc.height = 240;
-	mWinDebug.reset(new Window("Debug Window", mainWndDesc));
+	mpWinDebug.reset(new Window("Debug Window", mainWndDesc));
 }
 
 void VQEngine::InitializeThreads()
@@ -68,6 +68,7 @@ void VQEngine::OnWindowCreate()
 
 void VQEngine::OnWindowResize(HWND hWnd)
 {
+	// https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/d3d10-graphics-programming-guide-dxgi#handling-window-resizing
 #if 0 // TODO
 	RECT clientRect = {};
 	GetClientRect(hWnd, &clientRect);
@@ -100,9 +101,9 @@ void VQEngine::OnWindowClose()
 
 void VQEngine::MainThread_Tick()
 {
-	if (mWinMain->IsClosed())
+	if (mpWinMain->IsClosed())
 	{
-		mWinDebug->OnClose();
+		mpWinDebug->OnClose();
 		PostQuitMessage(0);
 	}
 

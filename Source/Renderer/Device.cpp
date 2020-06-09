@@ -36,7 +36,7 @@
 #include <vector>
 
 /*
-@bEnumerateSoftwareAdapters : Basic Render Driver pAdapter.
+@bEnumerateSoftwareAdapters : Basic Render Driver adapter.
 */
 static std::vector< FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters = false)
 {

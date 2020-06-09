@@ -35,7 +35,9 @@ public:
 	bool Create(const FDeviceCreateDesc& desc);
 	void Destroy();
 
+	inline ID3D12Device* GetDevicePtr() const { return mpDevice; }
 private:
 	ID3D12Device* mpDevice  = nullptr;
 	IDXGIAdapter* mpAdapter = nullptr;
+	// TODO: Multi-adapter systems: https://docs.microsoft.com/en-us/windows/win32/direct3d12/multi-engine
 };

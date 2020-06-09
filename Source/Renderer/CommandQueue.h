@@ -18,43 +18,24 @@
 
 #pragma once
 
-#include "Device.h"
-#include "SwapChain.h"
-#include "CommandQueue.h"
+struct ID3D12CommandQueue;
+class Device;
 
-#include <vector>
-
-class Window;
-
-struct FRendererInitializeParameters
-{
-	std::vector<FWindowRepresentation> Windows;
-};
-
-class VQRenderer
+class CommandQueue
 {
 public:
-	void Initialize(const FRendererInitializeParameters& RendererInitParams);
-	void Exit();
-
-	void Render();
-private:
-
-
-
-private:
-	// SwapChain requirements define a RenderWindowContext struct
-	// - Each SwapChain is associated with a Window (HWND)
-	// - Each SwapChain is associated with a Graphics Queue for Present()
-	// - Each SwapChain is created with a Device
-	struct FRenderWindowContext
+	enum ECommandQueueType
 	{
-		Device*      pDevice = nullptr;
-		SwapChain    SwapChain;
-		CommandQueue PresentQueue;
+		GFX = 0,
+		COMPUTE,
+		COPY,
+
+		NUM_COMMAND_QUEUE_TYPES
 	};
 
-	Device mDevice;
+public:
+	void CreateCommandQueue(Device* pDevice, ECommandQueueType type);
+	void DestroyCommandQueue();
 
-	std::vector<FRenderWindowContext> mRenderContexts;
+	ID3D12CommandQueue* pQueue;
 };

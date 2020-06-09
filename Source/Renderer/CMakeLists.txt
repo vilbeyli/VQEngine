@@ -9,11 +9,15 @@ add_compile_options(/std:c++17)
 set (Headers
     "Renderer.h"
     "Device.h"
+    "SwapChain.h"
+    "CommandQueue.h"
 )
 
 set (Source
     "Renderer.cpp"
     "Device.cpp"
+    "SwapChain.cpp"
+    "CommandQueue.cpp"
 )
 
 # set ouput directory

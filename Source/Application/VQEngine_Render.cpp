@@ -24,7 +24,10 @@
 
 void VQEngine::RenderThread_Inititalize()
 {
-	mRenderer.Initialize();
+	FRendererInitializeParameters params = {};
+	params.Windows.push_back(FWindowRepresentation(mpWinMain));
+	params.Windows.push_back(FWindowRepresentation(mpWinDebug));
+	mRenderer.Initialize(params);
 }
 
 void VQEngine::RenderThread_Exit()

@@ -78,8 +78,8 @@ private:
 	std::thread mUpdateThread;
 	std::thread mLoadThread;
 
-	std::unique_ptr<Window> mWinMain;
-	std::unique_ptr<Window> mWinDebug;
+	std::unique_ptr<Window> mpWinMain;
+	std::unique_ptr<Window> mpWinDebug;
 
 	VQRenderer mRenderer;
 };
