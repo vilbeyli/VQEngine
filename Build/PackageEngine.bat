@@ -221,7 +221,7 @@ if !BUILD_CONFIG_REL_WITH_DBG! neq 0 (
 )
 :: ---------------------- Build RelWithDebInfo----------------
 if !ERR_REL! neq 0 (
-    echo ERROR: BUILD ERROR (Release)
+    echo ERROR: BUILD ERROR RELEASE
     exit /b -1
 )
 
