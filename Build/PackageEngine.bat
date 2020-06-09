@@ -64,7 +64,7 @@ for %%i IN (%*) DO (
 ::echo SkipMSBuildFind=!MSBUILD_FIND!
 if !MSBUILD_FIND! equ 1 (
     call :FindMSBuild
-    if !errorlevel! neq 0 (
+    if %ERRORLEVEL% neq 0 (
         echo [VQPackage] Error: Couldn't find MSBuild
         exit /b -1
     )
@@ -99,7 +99,7 @@ if !BUILD_FLAG_CLEAN! equ 1 (
 :: Package the engine
 call :ExecBuildTask_Build
 
-if !errorlevel! neq 0  exit /b !errorlevel!
+if %ERRORLEVEL% neq 0  exit /b %ERRORLEVEL%
 
 :: move build artifacts into destination folder
 ::echo BUILD_TASKS_ONLY=!BUILD_TASKS_ONLY!
@@ -165,7 +165,7 @@ if not exist !SOLUTION_FILE_PATH! (
     echo **********************************************************************
     echo.
     call %~dp0GenerateProjectFiles.bat -noVS
-    if !errorlevel! neq 0 (
+    if %ERRORLEVEL% neq 0 (
         echo [VQPackage] Error: Couldn't generate project files.
         exit /b -1
     )
@@ -201,7 +201,7 @@ if !BUILD_CONFIG_DEBUG! neq 0 (
     call :PrintBuildStage Debug
     call !ENGINE_BUILD_COMMAND! /p:Configuration=Debug
     set /A BUILD_NUM_CURR_TASK=!BUILD_NUM_CURR_TASK!+1
-    if !errorlevel! neq 0 (
+    if %ERRORLEVEL% neq 0 (
         echo ERROR: BUILD ERROR
         exit /b -1
     )
@@ -212,13 +212,13 @@ if !BUILD_CONFIG_REL_WITH_DBG! neq 0 (
     call :PrintBuildStage RelWithDebInfo
     call !ENGINE_BUILD_COMMAND! /p:Configuration=RelWithDebInfo
     set /A BUILD_NUM_CURR_TASK=!BUILD_NUM_CURR_TASK!+1
-    if !errorlevel! neq 0 (
+    if %ERRORLEVEL% neq 0 (
         echo ERROR: BUILD ERROR
         exit /b -1
     )
 )
 :: ---------------------- Build RelWithDebInfo----------------
-if !errorlevel! neq 0 (
+if %ERRORLEVEL% neq 0 (
     echo ERROR: BUILD ERROR
     exit /b -1
 )
