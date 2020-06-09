@@ -194,6 +194,7 @@ exit /b 0
 :: ---------------------- Build Release ----------------------
 call :PrintBuildStage Release
 call !ENGINE_BUILD_COMMAND! /p:Configuration=Release
+set /A ERR_REL=!ERRORLEVEL!
 set /A BUILD_NUM_CURR_TASK=!BUILD_NUM_CURR_TASK!+1
 :: ---------------------- Build Release ----------------------
 :: ---------------------- Build Debug   ----------------------
@@ -211,15 +212,16 @@ if !BUILD_CONFIG_DEBUG! neq 0 (
 if !BUILD_CONFIG_REL_WITH_DBG! neq 0 (
     call :PrintBuildStage RelWithDebInfo
     call !ENGINE_BUILD_COMMAND! /p:Configuration=RelWithDebInfo
+    set /A ERR=!ERRORLEVEL!
     set /A BUILD_NUM_CURR_TASK=!BUILD_NUM_CURR_TASK!+1
-    if %ERRORLEVEL% neq 0 (
+    if !ERR! neq 0 (
         echo ERROR: BUILD ERROR
         exit /b -1
     )
 )
 :: ---------------------- Build RelWithDebInfo----------------
-if %ERRORLEVEL% neq 0 (
-    echo ERROR: BUILD ERROR
+if !ERR_REL! neq 0 (
+    echo ERROR: BUILD ERROR (Release)
     exit /b -1
 )
 
