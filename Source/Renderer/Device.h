@@ -39,4 +39,6 @@ private:
 	ID3D12Device* mpDevice  = nullptr;
 	IDXGIAdapter* mpAdapter = nullptr;
 	// TODO: Multi-adapter systems: https://docs.microsoft.com/en-us/windows/win32/direct3d12/multi-engine
+
+	//UINT mRTVDescIncremenetSize = 0;
 };

@@ -11,6 +11,7 @@ set (Headers
     "Device.h"
     "SwapChain.h"
     "CommandQueue.h"
+    "Fence.h"
 )
 
 set (Source
@@ -18,6 +19,7 @@ set (Source
     "Device.cpp"
     "SwapChain.cpp"
     "CommandQueue.cpp"
+    "Fence.cpp"
 )
 
 # set ouput directory

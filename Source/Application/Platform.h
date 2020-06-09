@@ -18,9 +18,6 @@
 
 #pragma once
 
-#define CHECK_HR(expr)  do { if(FAILED(expr)) FAIL(__FILE__ "(" LINE_STRING "): FAILED( " #expr " )"); } while(false)
-
-
 #include <Windows.h>
 #include <d3d12.h>
 

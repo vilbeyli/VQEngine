@@ -125,6 +125,57 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     }
 
     pDxgiFactory->Release();
+
+    // Create Fences & RTVs (Render Target Views )
+    this->mFences.resize(this->mNumBackBuffer);
+    D3D12_FENCE_FLAGS FenceFlags = D3D12_FENCE_FLAG_NONE;
+    for (unsigned i = 0; i < this->mNumBackBuffer; ++i)
+    {
+        this->mFences[i].Create(this->mpDevice, "SwapChainFence");
+
+
+    }
+
+    // -- Create the Back Buffers (render target views) Descriptor Heap -- //
+    // describe an rtv descriptor heap and create
+    D3D12_DESCRIPTOR_HEAP_DESC RTVHeapDesc = {};
+    RTVHeapDesc.NumDescriptors = this->mNumBackBuffer; // number of descriptors for this heap.
+    RTVHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV; // this heap is a render target view heap
+
+    // This heap will not be directly referenced by the shaders (not shader visible), as this will store the output from the pipeline
+    // otherwise we would set the heap's flag to D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
+    RTVHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+
+    ID3D12DescriptorHeap* rtvDescriptorHeap = nullptr;
+    hr = this->mpDevice->CreateDescriptorHeap(&RTVHeapDesc, IID_PPV_ARGS(&this->mpDescHeapRTV));
+    if (FAILED(hr))
+    {
+        assert(false);
+    }
+
+    // get the size of a descriptor in this heap (this is a rtv heap, so only rtv descriptors should be stored in it.
+    // descriptor sizes may vary from g_Device to g_Device, which is why there is no set size and we must ask the 
+    // g_Device to give us the size. we will use this size to increment a descriptor handle offset
+    const UINT RTVDescSize = this->mpDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+    // get a handle to the first descriptor in the descriptor heap. a handle is basically a pointer,
+    // but we cannot literally use it like a c++ pointer.
+    D3D12_CPU_DESCRIPTOR_HANDLE hRTV{ this->mpDescHeapRTV->GetCPUDescriptorHandleForHeapStart() };
+
+    // Create a RTV for each SwapChain buffer
+    this->mRenderTargets.resize(this->mNumBackBuffer);
+    for (int i = 0; i < this->mNumBackBuffer; i++)
+    {
+        hr = this->mpSwapChain->GetBuffer(i, IID_PPV_ARGS(&this->mRenderTargets[i]));
+        if (FAILED(hr))
+        {
+            assert(false);
+        }
+
+        this->mpDevice->CreateRenderTargetView(this->mRenderTargets[i], nullptr, hRTV);
+        hRTV.ptr += RTVDescSize; // we increment the rtv handle by the rtv descriptor size we got above
+    }
+
     return bSuccess;
 }
 
@@ -136,7 +187,13 @@ void SwapChain::Destroy()
     // release of the swap chain. 
     SetFullscreen(false);
 
-    if(mpSwapChain) mpSwapChain->Release();
+    for (unsigned i = 0; i < this->mNumBackBuffer; ++i)
+    {
+        this->mFences[i].Destroy();
+        this->mRenderTargets[i]->Release();
+    }
+    if (this->mpDescHeapRTV) this->mpDescHeapRTV->Release();
+    if (this->mpSwapChain)   this->mpSwapChain->Release();
 }
 
 void SwapChain::Resize(int w, int h)

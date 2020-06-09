@@ -18,10 +18,14 @@
 
 #pragma once
 
+#include "Fence.h"
+
 #include <d3d12.h>
 #include <dxgi1_6.h>
 
+#include <vector>
 #include <memory>
+
 
 class CommandQueue;
 class Window;
@@ -56,11 +60,17 @@ public:
 	void Present(bool bVSync);
 
 private:
-	HWND mHwnd;
+	HWND           mHwnd;
 	unsigned short mNumBackBuffer;
+	
+	UINT64                       mFenceCurrent;
+	std::vector<Fence>           mFences;
+	std::vector<ID3D12Resource*> mRenderTargets;
+	ID3D12DescriptorHeap*        mpDescHeapRTV;
 
 	ID3D12Device*       mpDevice         = nullptr;
 	IDXGIAdapter*       mpAdapter        = nullptr;
+
 	IDXGISwapChain4*    mpSwapChain      = nullptr;
 	ID3D12CommandQueue* mpDirectQueue    = nullptr;
 	DXGI_FORMAT         mSwapChainFormat = DXGI_FORMAT_UNKNOWN;

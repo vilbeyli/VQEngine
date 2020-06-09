@@ -39,6 +39,7 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& RendererInitPar
 	mDevice.Create(deviceDesc);
 
 	// Create the present queues & swapchains associated with each window passed into the VQRenderer
+	// Swapchains contain their own render targets 
 	const size_t NumWindows = RendererInitParams.Windows.size();
 	mRenderContexts.resize(NumWindows);
 	for(size_t i = 0; i< NumWindows; ++i)
@@ -59,7 +60,7 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& RendererInitPar
 		mRenderContexts[i].SwapChain.Create(swapChainDesc);
 	}
 	
-	
+
 }
 
 void VQRenderer::Exit()
@@ -76,4 +77,5 @@ void VQRenderer::Exit()
 
 void VQRenderer::Render()
 {
+
 }

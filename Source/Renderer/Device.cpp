@@ -44,7 +44,7 @@ static std::vector< FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, boo
     HRESULT hr = {};
 
     IDXGIAdapter1* pAdapter = nullptr; // adapters are the graphics card (this includes the embedded graphics on the motherboard)
-    int iAdapter = 0;             // we'll start looking for DX12  compatible graphics devices starting at index 0
+    int iAdapter = 0;                  // we'll start looking for DX12  compatible graphics devices starting at index 0
     bool bAdapterFound = false;        // set this to true when a good one was found
 
     // https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/d3d10-graphics-programming-guide-dxgi
@@ -168,21 +168,17 @@ bool Device::Create(const FDeviceCreateDesc& desc)
 
 void Device::Destroy()
 {
-    //m_pDirectQueue->Release();
-    //m_pComputeQueue->Release();
     mpAdapter->Release();
     mpDevice->Release();
     
 
 #ifdef _DEBUG
     // Report live objects
+    IDXGIDebug1* pDxgiDebug;
+    if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&pDxgiDebug))))
     {
-        IDXGIDebug1* pDxgiDebug;
-        if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&pDxgiDebug))))
-        {
-            pDxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS(DXGI_DEBUG_RLO_DETAIL | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
-            pDxgiDebug->Release();
-        }
+        pDxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS(DXGI_DEBUG_RLO_DETAIL | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
+        pDxgiDebug->Release();
     }
 #endif
 }
