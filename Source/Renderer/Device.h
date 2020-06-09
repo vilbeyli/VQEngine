@@ -21,17 +21,10 @@
 #include <d3d12.h>
 #include <dxgi.h>
 
-#ifdef _DEBUG 
-constexpr bool DEBUG_LAYER_DEFAULT = true;
-#else
-constexpr bool DEBUG_LAYER_DEFAULT = false;
-#endif
-
 struct FDeviceCreateDesc
 {
-	bool bEnableDebugLayer = DEBUG_LAYER_DEFAULT;
+	bool bEnableDebugLayer = false;
 	bool bEnableValidationLayer = false;
-	
 };
 
 

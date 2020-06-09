@@ -21,9 +21,13 @@
 #include "Device.h"
 #include "../Application/Window.h"
 
-#define ENABLE_DEBUG_LAYER      (1 && _DEBUG)
-#define ENABLE_VALIDATION_LAYER (1 && _DEBUG)
-
+#ifdef _DEBUG
+	#define ENABLE_DEBUG_LAYER      1
+	#define ENABLE_VALIDATION_LAYER 1
+#else
+	#define ENABLE_DEBUG_LAYER      0
+	#define ENABLE_VALIDATION_LAYER 0
+#endif
 
 
 void VQRenderer::Initialize(const FRendererInitializeParameters& RendererInitParams)
