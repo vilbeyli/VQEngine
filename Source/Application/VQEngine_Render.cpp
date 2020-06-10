@@ -22,21 +22,6 @@
 #include <dxgi.h>
 
 
-void VQEngine::RenderThread_Inititalize()
-{
-	FRendererInitializeParameters params = {};
-	params.Windows.push_back(FWindowRepresentation(mpWinMain));
-	params.Windows.push_back(FWindowRepresentation(mpWinDebug));
-	mRenderer.Initialize(params);
-}
-
-void VQEngine::RenderThread_Exit()
-{
-	mRenderer.Exit();
-}
-
-
-
 void VQEngine::RenderThread_Main()
 {
 	Log::Info("RenderThread_Main()");
@@ -45,11 +30,38 @@ void VQEngine::RenderThread_Main()
 	bool bQuit = false;
 	while (!this->mbStopAllThreads && !bQuit)
 	{
-		Sleep(800*2);
-		Log::Info("RenderThread::Tick()");
+		RenderThread_PreRender();
+		RenderThread_Render();
+		Log::Info("RenderThread_Tick()");
 	}
 
 	this->RenderThread_Exit();
 	Log::Info("RenderThread_Main() : Exit");
+}
+
+
+void VQEngine::RenderThread_Inititalize()
+{
+	FRendererInitializeParameters params = {};
+	params.Windows.push_back(FWindowRepresentation(mpWinMain));
+	params.Windows.push_back(FWindowRepresentation(mpWinDebug));
+	mRenderer.Initialize(params);
+
+}
+
+void VQEngine::RenderThread_Exit()
+{
+	mRenderer.Exit();
+}
+
+void VQEngine::RenderThread_PreRender()
+{
+}
+
+void VQEngine::RenderThread_Render()
+{
+	// TODO: render in parallel???
+	mRenderer.RenderWindowContext(mpWinMain->GetHWND());
+	mRenderer.RenderWindowContext(mpWinDebug->GetHWND());
 }
 

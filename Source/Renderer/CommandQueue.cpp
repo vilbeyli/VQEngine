@@ -24,7 +24,7 @@
 #include <d3d12.h>
 #include <cassert>
 
-void CommandQueue::CreateCommandQueue(Device* pDevice, ECommandQueueType type)
+void CommandQueue::Create(Device* pDevice, ECommandQueueType type)
 {
 	HRESULT hr = {};
 	ID3D12Device* pDevice_ = pDevice->GetDevicePtr();
@@ -48,7 +48,7 @@ void CommandQueue::CreateCommandQueue(Device* pDevice, ECommandQueueType type)
 	}
 }
 
-void CommandQueue::DestroyCommandQueue()
+void CommandQueue::Destroy()
 {
 	if (pQueue) pQueue->Release();
 }

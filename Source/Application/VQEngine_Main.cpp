@@ -18,6 +18,19 @@
 
 #include "VQEngine.h"
 
+void VQEngine::MainThread_Tick()
+{
+	if (mpWinMain->IsClosed())
+	{
+		mpWinDebug->OnClose();
+		PostQuitMessage(0);
+	}
+
+	// TODO: populate input queue and signal Update thread 
+	//       to drain the buffered input from the queue
+}
+
+
 void VQEngine::InitializeWindow(const FStartupParameters& Params)
 {
 	FWindowDesc mainWndDesc = {};
@@ -46,6 +59,14 @@ void VQEngine::ExitThreads()
 	mbStopAllThreads.store(true);
 	mRenderThread.join();
 	mUpdateThread.join();
+
+	// no need to lock here: https://en.cppreference.com/w/cpp/thread/condition_variable/notify_all
+	// The notifying thread does not need to hold the lock on the same mutex 
+	// as the one held by the waiting thread(s); in fact doing so is a pessimization, 
+	// since the notified thread would immediately block again, waiting for the 
+	// notifying thread to release the lock.
+	mCVLoadTasksReadyForProcess.notify_all();
+
 	mLoadThread.join();
 }
 
@@ -54,7 +75,7 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	InitializeWindow(Params);
 	InitializeThreads();
 	
-	return false;
+	return true;
 }
 
 void VQEngine::Exit()
@@ -93,32 +114,4 @@ void VQEngine::OnWindowKeyDown(WPARAM wParam)
 
 void VQEngine::OnWindowClose()
 {
-}
-
-
-
-
-
-void VQEngine::MainThread_Tick()
-{
-	if (mpWinMain->IsClosed())
-	{
-		mpWinDebug->OnClose();
-		PostQuitMessage(0);
-	}
-
-	static unsigned long long c = 0;
-	static unsigned long long cp = 0;
-	constexpr unsigned long long p = 10000;
-	if (++c % p)
-		;// Log::Info("Tick<%llu> : %llu", p, cp++);
-
-	//const UINT64 newTimeValue = GetTickCount64() - g_TimeOffset;
-	//g_TimeDelta = (float)(newTimeValue - g_TimeValue) * 0.001f;
-	//g_TimeValue = newTimeValue;
-	//g_Time = (float)newTimeValue * 0.001f;
-	//
-	//Update();
-	//Render();
-	//Present();
 }

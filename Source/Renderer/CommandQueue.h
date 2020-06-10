@@ -34,8 +34,8 @@ public:
 	};
 
 public:
-	void CreateCommandQueue(Device* pDevice, ECommandQueueType type);
-	void DestroyCommandQueue();
+	void Create(Device* pDevice, ECommandQueueType type);
+	void Destroy();
 
 	ID3D12CommandQueue* pQueue;
 };

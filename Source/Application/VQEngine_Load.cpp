@@ -18,17 +18,31 @@
 
 #include "VQEngine.h"
 
+#include <functional>
+
 
 void VQEngine::LoadThread_Main()
 {
 	Log::Info("LoadThread_Main()");
-
-	bool bQuit = false;
-	while (!mbStopAllThreads && !bQuit)
+	
+	while (!this->mbStopAllThreads)
 	{
-		Sleep(200*2);
+		LoadThread_WaitForLoadTask();
+		
+		// If we decided to quit while waiting, do not process any more tasks
+		if (this->mbStopAllThreads) break;
+
+
 		Log::Info("LoadThread::Tick()");
+		// TODO: Queue<LoadTask>
 	}
 
 	Log::Info("LoadThread_Main() : Exit");
+}
+
+void VQEngine::LoadThread_WaitForLoadTask()
+{
+	// Block until we have a Load Task ready to go
+	std::unique_lock<std::mutex> lk(mMtxLoadTasksReadyForProcess);
+	mCVLoadTasksReadyForProcess.wait(lk);
 }

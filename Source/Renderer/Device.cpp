@@ -182,3 +182,15 @@ void Device::Destroy()
     }
 #endif
 }
+
+UINT Device::GetDeviceMemoryMax() const
+{
+    assert(false);
+    return 0;
+}
+
+UINT Device::GetDeviceMemoryAvailable() const
+{
+    assert(false);
+    return 0;
+}

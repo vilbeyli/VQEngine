@@ -23,6 +23,7 @@
 #include "CommandQueue.h"
 
 #include <vector>
+#include <unordered_map>
 
 class Window;
 
@@ -37,9 +38,11 @@ public:
 	void Initialize(const FRendererInitializeParameters& RendererInitParams);
 	void Exit();
 
-	void Render();
-private:
+	void RenderWindowContext(HWND hwnd);
 
+	
+private:
+	// Private Functions go here
 
 
 private:
@@ -52,9 +55,25 @@ private:
 		Device*      pDevice = nullptr;
 		SwapChain    SwapChain;
 		CommandQueue PresentQueue;
+
+
+		// 1x allocator per command-recording-thread, multiplied by num swapchain backbuffers
+		// Source: https://gpuopen.com/performance/
+		std::vector<ID3D12CommandAllocator*> mCommandAllocatorsGFX;
+		std::vector<ID3D12CommandAllocator*> mCommandAllocatorsCompute;
+		std::vector<ID3D12CommandAllocator*> mCommandAllocatorsCopy;
+
+
+		ID3D12GraphicsCommandList* pCmdList_GFX = nullptr;
 	};
 
-	Device mDevice;
+private:
+	Device mDevice; // GPU
 
-	std::vector<FRenderWindowContext> mRenderContexts;
+	std::unordered_map<HWND, FRenderWindowContext> mRenderContextLookup;
+
+	CommandQueue mGFXQueue;
+	CommandQueue mComputeQueue;
+	CommandQueue mCopyQueue;
+
 };

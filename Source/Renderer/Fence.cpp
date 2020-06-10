@@ -42,7 +42,7 @@ void Fence::Destroy()
     CloseHandle(mHEvent);
 }
 
-void Fence::IssueFence(ID3D12CommandQueue* pCommandQueue)
+void Fence::Signal(ID3D12CommandQueue* pCommandQueue)
 {
     ++mFenceValue;
     //ThrowIfFailed(
@@ -52,29 +52,17 @@ void Fence::IssueFence(ID3D12CommandQueue* pCommandQueue)
     ;
 }
 
-// This member is useful for tracking how ahead the CPU is from the GPU
-//
-// If the fence is used once per frame, calling this function with  
-// WaitForFence(3) will make sure the CPU is no more than 3 frames ahead
-//
-void Fence::CPUWaitForFence(UINT64 olderFence)
-{
-    if (mFenceValue > olderFence)
-    {
-        UINT64 valueToWaitFor = mFenceValue - olderFence;
 
-        if (mpFence->GetCompletedValue() <= valueToWaitFor)
-        {
-            //ThrowIfFailed(
-                mpFence->SetEventOnCompletion(valueToWaitFor, mHEvent)
-            //);
-            ;
-            WaitForSingleObject(mHEvent, INFINITE);
-        }
+void Fence::WaitOnCPU(UINT64 FenceWaitValue)
+{
+    if (mpFence->GetCompletedValue() < FenceWaitValue)
+    {
+        ThrowIfFailed(mpFence->SetEventOnCompletion(FenceWaitValue, mHEvent));
+        WaitForSingleObject(mHEvent, INFINITE);
     }
 }
 
-void Fence::GPUWaitForFence(ID3D12CommandQueue* pCommandQueue)
+void Fence::WaitOnGPU(ID3D12CommandQueue* pCommandQueue)
 {
     //ThrowIfFailed(
         pCommandQueue->Wait(mpFence, mFenceValue)

@@ -35,6 +35,10 @@ public:
 	void Destroy();
 
 	inline ID3D12Device* GetDevicePtr() const { return mpDevice; }
+
+	UINT GetDeviceMemoryMax() const;
+	UINT GetDeviceMemoryAvailable() const;
+
 private:
 	ID3D12Device* mpDevice  = nullptr;
 	IDXGIAdapter* mpAdapter = nullptr;

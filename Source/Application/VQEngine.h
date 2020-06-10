@@ -26,6 +26,8 @@
 #include <memory>
 #include <thread>
 #include <atomic>
+#include <condition_variable>
+#include <mutex>
 
 class VQEngine : public IWindowOwner
 {
@@ -55,6 +57,9 @@ public:
 	void RenderThread_Inititalize();
 	void RenderThread_Exit();
 
+	void RenderThread_PreRender();
+	void RenderThread_Render();
+
 	// ---------------------------------------------------------
 	// Update Thread
 	// ---------------------------------------------------------
@@ -64,7 +69,7 @@ public:
 	// Load Thread
 	// ---------------------------------------------------------
 	void LoadThread_Main();
-
+	void LoadThread_WaitForLoadTask();
 
 private:
 	void InitializeWindow(const FStartupParameters& Params);
@@ -77,6 +82,10 @@ private:
 	std::thread mRenderThread;
 	std::thread mUpdateThread;
 	std::thread mLoadThread;
+
+	std::condition_variable mCVLoadTasksReadyForProcess;
+	std::mutex              mMtxLoadTasksReadyForProcess;
+
 
 	std::unique_ptr<Window> mpWinMain;
 	std::unique_ptr<Window> mpWinDebug;

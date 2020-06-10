@@ -18,29 +18,6 @@
 
 #pragma once
 
-// Modified version of Fence from AMD / Cauldron
-// https://github.com/GPUOpen-LibrariesAndSDKs/Cauldron/blob/fd91cd744d014505daef1780dceee49fd62ce953/src/DX12/base/Fence.h
-
-// AMD AMDUtils code
-// 
-// Copyright(c) 2018 Advanced Micro Devices, Inc.All rights reserved.
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files(the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and / or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions :
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-
-
 #include <Windows.h>
 
 struct ID3D12CommandQueue;
@@ -53,18 +30,23 @@ public:
     void Create(ID3D12Device* pDevice, const char* pDebugName);
     void Destroy();
 
-    void IssueFence(ID3D12CommandQueue* pCommandQueue);
+    void Signal(ID3D12CommandQueue* pCommandQueue);
+    inline UINT64 GetValue() const { return mFenceValue; }
 
-    // This member is useful for tracking how ahead the CPU is from the GPU
-    //
-    // If the fence is used once per frame, calling this function with  
-    // WaitForFence(3) will make sure the CPU is no more than 3 frames ahead
-    //
-    void CPUWaitForFence(UINT64 olderFence);
-    void GPUWaitForFence(ID3D12CommandQueue* pCommandQueue);
+    void WaitOnCPU(UINT64 olderFence);
+    void WaitOnGPU(ID3D12CommandQueue* pCommandQueue);
 
 private:
     HANDLE       mHEvent = 0;
     ID3D12Fence* mpFence = nullptr;
     UINT64       mFenceValue = 0;
 };
+
+#include <cassert>
+inline void ThrowIfFailed(HRESULT hr)
+{
+    if (FAILED(hr))
+    {
+        assert(false);// throw HrException(hr);
+    }
+}

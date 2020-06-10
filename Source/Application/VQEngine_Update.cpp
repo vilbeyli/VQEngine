@@ -18,6 +18,7 @@
 
 #include "VQEngine.h"
 
+
 void VQEngine::UpdateThread_Main()
 {
 	Log::Info("UpdateThread_Main()");

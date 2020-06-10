@@ -59,6 +59,7 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     this->mpDevice = desc.pDevice;
     this->mHwnd = desc.pWindow->hwnd;
     this->mNumBackBuffer = desc.numBackBuffers;
+    this->mpPresentQueue = desc.pCmdQueue->pQueue;
 
     HRESULT hr = {};
     IDXGIFactory4* pDxgiFactory = nullptr;
@@ -126,14 +127,15 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
 
     pDxgiFactory->Release();
 
-    // Create Fences & RTVs (Render Target Views )
-    this->mFences.resize(this->mNumBackBuffer);
+    // Create Fence & Fence Event
+    this->mFenceValues.resize(this->mNumBackBuffer, 0);
     D3D12_FENCE_FLAGS FenceFlags = D3D12_FENCE_FLAG_NONE;
-    for (unsigned i = 0; i < this->mNumBackBuffer; ++i)
+    mpDevice->CreateFence(this->mFenceValues[this->mICurrentBackBuffer], FenceFlags, IID_PPV_ARGS(&this->mpFence));
+    ++mFenceValues[mICurrentBackBuffer];
+    mHEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    if (mHEvent == nullptr)
     {
-        this->mFences[i].Create(this->mpDevice, "SwapChainFence");
-
-
+        ThrowIfFailed(HRESULT_FROM_WIN32(GetLastError()));
     }
 
     // -- Create the Back Buffers (render target views) Descriptor Heap -- //
@@ -150,16 +152,15 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     hr = this->mpDevice->CreateDescriptorHeap(&RTVHeapDesc, IID_PPV_ARGS(&this->mpDescHeapRTV));
     if (FAILED(hr))
     {
-        assert(false);
+        assert(false); // TODO: err msg
     }
 
+    // From Adam Sawicki's D3D12MA sample code:
     // get the size of a descriptor in this heap (this is a rtv heap, so only rtv descriptors should be stored in it.
     // descriptor sizes may vary from g_Device to g_Device, which is why there is no set size and we must ask the 
     // g_Device to give us the size. we will use this size to increment a descriptor handle offset
     const UINT RTVDescSize = this->mpDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
-    // get a handle to the first descriptor in the descriptor heap. a handle is basically a pointer,
-    // but we cannot literally use it like a c++ pointer.
     D3D12_CPU_DESCRIPTOR_HANDLE hRTV{ this->mpDescHeapRTV->GetCPUDescriptorHandleForHeapStart() };
 
     // Create a RTV for each SwapChain buffer
@@ -173,7 +174,7 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
         }
 
         this->mpDevice->CreateRenderTargetView(this->mRenderTargets[i], nullptr, hRTV);
-        hRTV.ptr += RTVDescSize; // we increment the rtv handle by the rtv descriptor size we got above
+        hRTV.ptr += RTVDescSize; 
     }
 
     return bSuccess;
@@ -187,9 +188,24 @@ void SwapChain::Destroy()
     // release of the swap chain. 
     SetFullscreen(false);
 
+    // TODO: sync GPU
+    {
+        // Schedule a Signal command in the queue.
+        ThrowIfFailed(mpPresentQueue->Signal(mpFence, mFenceValues[mICurrentBackBuffer]));
+
+        // Wait until the fence has been processed.
+        ThrowIfFailed(mpFence->SetEventOnCompletion(mFenceValues[mICurrentBackBuffer], mHEvent));
+        WaitForSingleObjectEx(mHEvent, INFINITE, FALSE);
+
+        // Increment the fence value for the current frame.
+        ++mFenceValues[mICurrentBackBuffer];
+    }
+
+    this->mpFence->Release();
+    CloseHandle(this->mHEvent);
+
     for (unsigned i = 0; i < this->mNumBackBuffer; ++i)
     {
-        this->mFences[i].Destroy();
         this->mRenderTargets[i]->Release();
     }
     if (this->mpDescHeapRTV) this->mpDescHeapRTV->Release();
@@ -248,4 +264,24 @@ void SwapChain::Present(bool bVSync)
             break;
         }
     }
+}
+
+void SwapChain::MoveToNextFrame()
+{
+    // Schedule a Signal command in the queue.
+    const UINT64 currentFenceValue = mFenceValues[mICurrentBackBuffer];
+    ThrowIfFailed(mpPresentQueue->Signal(mpFence, currentFenceValue));
+
+    // Update the frame index.
+    mICurrentBackBuffer = mpSwapChain->GetCurrentBackBufferIndex();
+
+    // If the next frame is not ready to be rendered yet, wait until it is ready.
+    if (mpFence->GetCompletedValue() < mFenceValues[mICurrentBackBuffer])
+    {
+        ThrowIfFailed(mpFence->SetEventOnCompletion(mFenceValues[mICurrentBackBuffer], mHEvent));
+        WaitForSingleObjectEx(mHEvent, INFINITE, FALSE);
+    }
+
+    // Set the fence value for the next frame.
+    mFenceValues[mICurrentBackBuffer] = currentFenceValue + 1;
 }
