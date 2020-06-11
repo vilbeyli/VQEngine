@@ -23,11 +23,19 @@
 #include "CommandQueue.h"
 
 #include "../Application/Settings.h"
+#include "../Application/Types.h"
 
 #include <vector>
 #include <unordered_map>
+#include <array>
 
 class Window;
+
+// Data to be updated per frame
+struct FFrameData
+{
+	std::array<float, 4> SwapChainClearColor;
+};
 
 struct FRendererInitializeParameters
 {
@@ -35,14 +43,18 @@ struct FRendererInitializeParameters
 	FGraphicsSettings                  Settings;
 };
 
+
+
 class VQRenderer
 {
 public:
 	void Initialize(const FRendererInitializeParameters& RendererInitParams);
 	void Exit();
 
-	void RenderWindowContext(HWND hwnd);
+	void RenderWindowContext(HWND hwnd, const FFrameData& FrameData);
 
+	inline short GetSwapChainBackBufferCountOfWindow(std::unique_ptr<Window>& pWnd) const { return GetSwapChainBackBufferCountOfWindow(pWnd.get()); };
+	short GetSwapChainBackBufferCountOfWindow(Window* pWnd) const;
 	short GetSwapChainBackBufferCountOfWindow(HWND hwnd) const;
 
 private:

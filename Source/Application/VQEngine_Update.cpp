@@ -49,3 +49,11 @@ void VQEngine::UpdateThread_Main()
 
 	Log::Info("UpdateThread_Main() : Exit");
 }
+
+void MainWindowScene::Update()
+{
+}
+
+void DebugWindowScene::Update()
+{
+}

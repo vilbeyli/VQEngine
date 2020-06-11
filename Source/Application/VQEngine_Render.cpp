@@ -48,8 +48,17 @@ void VQEngine::RenderThread_Inititalize()
 	params.Settings = mSettings.gfx;
 	mRenderer.Initialize(params);
 
-	//mFrameData_MainWnd.resize(mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain.get()->GetHWND()));
-	//mFrameData_DbgWnd .resize(mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinDebug.get()->GetHWND()));
+	// TODO: initialize window scene data here for now, should update this to proper location later on (Scene probably?)
+	FFrameData data[2];
+	data[0].SwapChainClearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
+	data[1].SwapChainClearColor = { 0.80f, 0.45f, 0.01f, 1.0f };
+	const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain);
+	const int NumBackBuffer_WndDbg  = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinDebug);
+	mScene_MainWnd.mFrameData.resize(NumBackBuffer_WndMain, data[0]);
+	mScene_DebugWnd.mFrameData.resize(NumBackBuffer_WndDbg, data[1]);
+
+	mWindowUpdateContextLookup[mpWinMain->GetHWND()]  = &mScene_MainWnd;
+	mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
 
 	mbRenderThreadInitialized.store(true);
 	mNumRenderLoopsExecuted.store(0);
@@ -66,10 +75,14 @@ void VQEngine::RenderThread_PreRender()
 
 void VQEngine::RenderThread_Render()
 {
+	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain);
+	const int FRAME_DATA_INDEX  = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
+	
 	// TODO: sync with CPU
+	
 
 	// TODO: render in parallel???
-	mRenderer.RenderWindowContext(mpWinMain->GetHWND());
-	mRenderer.RenderWindowContext(mpWinDebug->GetHWND());
+	mRenderer.RenderWindowContext(mpWinMain->GetHWND() , mScene_MainWnd.mFrameData[FRAME_DATA_INDEX]);
+	mRenderer.RenderWindowContext(mpWinDebug->GetHWND(), mScene_DebugWnd.mFrameData[FRAME_DATA_INDEX]);
 }
 

@@ -31,14 +31,6 @@
 #include <condition_variable>
 #include <mutex>
 
-#include <array>
-
-// Data to be updated per frame
-struct FFrameData
-{
-	std::array<float, 4> SwapChainClearColor;
-};
-
 class IWindowUpdateContext
 {
 public:
@@ -48,14 +40,24 @@ protected:
 	HWND hwnd;
 };
 
-class MainWindowUpdateContext : public IWindowUpdateContext
+class MainWindowScene : public IWindowUpdateContext
 {
 public:
 	void Update() override;
 
-private:
+//private:
 	std::vector<FFrameData> mFrameData;
 };
+class DebugWindowScene : public IWindowUpdateContext
+{
+public:
+	void Update() override;
+
+//private:
+	std::vector<FFrameData> mFrameData;
+};
+
+
 
 class VQEngine : public IWindowOwner
 {
@@ -127,6 +129,8 @@ private:
 
 	// data
 	FEngineSettings         mSettings;
+	MainWindowScene         mScene_MainWnd;
+	DebugWindowScene        mScene_DebugWnd;
 	std::unordered_map<HWND, IWindowUpdateContext*> mWindowUpdateContextLookup;
 
 private:

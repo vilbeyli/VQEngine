@@ -121,7 +121,7 @@ void VQRenderer::Exit()
 }
 
 
-void VQRenderer::RenderWindowContext(HWND hwnd)
+void VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
 {
 	if (mRenderContextLookup.find(hwnd) == mRenderContextLookup.end())
 	{
@@ -136,6 +136,7 @@ void VQRenderer::RenderWindowContext(HWND hwnd)
 	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
 	// ----------------------------------------------------------------------------
 
+	
 
 	//
 	// PRE RENDER
@@ -163,7 +164,13 @@ void VQRenderer::RenderWindowContext(HWND hwnd)
 	);
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = ctx.SwapChain.GetCurrentBackBufferRTVHandle(); 
-	const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
+	const float clearColor[] = 
+	{ 
+		FrameData.SwapChainClearColor[0],
+		FrameData.SwapChainClearColor[1],
+		FrameData.SwapChainClearColor[2],
+		FrameData.SwapChainClearColor[3]
+	};
 	ctx.pCmdList_GFX->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
 	// Indicate that the back buffer will now be used to present.
@@ -186,6 +193,7 @@ void VQRenderer::RenderWindowContext(HWND hwnd)
 	ctx.SwapChain.MoveToNextFrame();
 }
 
+short VQRenderer::GetSwapChainBackBufferCountOfWindow(Window* pWnd) const { return this->GetSwapChainBackBufferCountOfWindow(pWnd->GetHWND()); }
 short VQRenderer::GetSwapChainBackBufferCountOfWindow(HWND hwnd) const
 {
 	if (mRenderContextLookup.find(hwnd) == mRenderContextLookup.end())
