@@ -18,33 +18,35 @@
 
 #include "VQEngine.h"
 
-
-void VQEngine::UpdateThread_Main()
+void VQEngine::OnWindowCreate()
 {
-	Log::Info("UpdateThread_Main()");
+}
 
-	bool bQuit = false;
-	while (!mbStopAllThreads && !bQuit)
-	{
-		// update timer
+void VQEngine::OnWindowResize(HWND hWnd)
+{
+	// https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/d3d10-graphics-programming-guide-dxgi#handling-window-resizing
+#if 0 // TODO
+	RECT clientRect = {};
+	GetClientRect(hWnd, &clientRect);
+	dxSample->OnResize(clientRect.right - clientRect.left, clientRect.bottom - clientRect.top);
 
-		// update input
+	bIsMinimized = (IsIconic(hWnd) == TRUE);
+#endif
+}
 
-		if (!mbRenderThreadInitialized)
-		{
-			continue;
-		}
+void VQEngine::OnWindowMinimize()
+{
+}
 
-		// update main window frame data
-
-		// update debug window frame data
-
-		// wait if we're too ahead
-		
-		Sleep(400*2);
-		Log::Info("UpdateThread::Tick()");
-	}
+void VQEngine::OnWindowFocus()
+{
+}
 
 
-	Log::Info("UpdateThread_Main() : Exit");
+void VQEngine::OnWindowKeyDown(WPARAM wParam)
+{
+}
+
+void VQEngine::OnWindowClose()
+{
 }

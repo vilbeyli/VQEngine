@@ -32,7 +32,6 @@ void VQEngine::RenderThread_Main()
 	{
 		RenderThread_PreRender();
 		RenderThread_Render();
-		Log::Info("RenderThread_Tick()");
 	}
 
 	this->RenderThread_Exit();
@@ -42,11 +41,17 @@ void VQEngine::RenderThread_Main()
 
 void VQEngine::RenderThread_Inititalize()
 {
+	
+
 	FRendererInitializeParameters params = {};
-	params.Windows.push_back(FWindowRepresentation(mpWinMain));
-	params.Windows.push_back(FWindowRepresentation(mpWinDebug));
+	params.Windows.push_back(FWindowRepresentation(mpWinMain , mSettings.gfx.bVsync));
+	params.Windows.push_back(FWindowRepresentation(mpWinDebug, false));
 	mRenderer.Initialize(params);
 
+	//mFrameData_MainWnd.resize(mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain.get()->GetHWND()));
+	//mFrameData_DbgWnd .resize(mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinDebug.get()->GetHWND()));
+
+	mbRenderThreadInitialized.store(true);
 }
 
 void VQEngine::RenderThread_Exit()
@@ -60,6 +65,8 @@ void VQEngine::RenderThread_PreRender()
 
 void VQEngine::RenderThread_Render()
 {
+	// TODO: sync with CPU
+
 	// TODO: render in parallel???
 	mRenderer.RenderWindowContext(mpWinMain->GetHWND());
 	mRenderer.RenderWindowContext(mpWinDebug->GetHWND());

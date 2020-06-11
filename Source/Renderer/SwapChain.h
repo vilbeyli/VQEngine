@@ -34,7 +34,8 @@ class Window;
 struct FWindowRepresentation
 {
 	HWND hwnd; int width, height;
-	FWindowRepresentation(const std::unique_ptr<Window>& pWnd);
+	bool bVSync;
+	FWindowRepresentation(const std::unique_ptr<Window>& pWnd, bool bVSync);
 };
 struct FSwapChainCreateDesc
 {
@@ -43,6 +44,7 @@ struct FSwapChainCreateDesc
 	CommandQueue*                pCmdQueue = nullptr;
 
 	int numBackBuffers;
+	bool bVSync;
 };
 
 
@@ -60,16 +62,19 @@ public:
 
 	void Present(bool bVSync = false);
 	void MoveToNextFrame();
+	void WaitForGPU();
 
-	inline int GetNumBackBuffers() const { return mNumBackBuffer; }
+	inline int GetNumBackBuffers() const { return mNumBackBuffers; }
 	inline int GetCurrentBackBufferIndex() const { return mICurrentBackBuffer; }
 	inline CD3DX12_CPU_DESCRIPTOR_HANDLE GetCurrentBackBufferRTVHandle() const { return CD3DX12_CPU_DESCRIPTOR_HANDLE(mpDescHeapRTV->GetCPUDescriptorHandleForHeapStart(), GetCurrentBackBufferIndex(), mpDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)); }
 	inline ID3D12Resource* GetCurrentBackBufferRenderTarget() const { return mRenderTargets[GetCurrentBackBufferIndex()]; }
+	inline unsigned long long GetNumPresentedFrames() const { return mNumTotalFrames; }
 
 private:
 	HWND           mHwnd;
-	unsigned short mNumBackBuffer;
+	unsigned short mNumBackBuffers;
 	unsigned short mICurrentBackBuffer;
+	unsigned long long mNumTotalFrames = 0;
 
 	HANDLE              mHEvent = 0;
 	ID3D12Fence*        mpFence = nullptr;

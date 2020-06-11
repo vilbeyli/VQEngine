@@ -40,6 +40,9 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 		const std::string& paramName = paramNameValue.front();
 		std::string  paramValue = paramNameValue.size() > 1 ? paramNameValue[1] : "";
 
+		//
+		// Log Settings
+		//
 		if (paramName == "-LogConsole")
 		{
 			refStartupParams.LogInitParams.bLogConsole = true;
@@ -50,6 +53,45 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 			refStartupParams.LogInitParams.LogFilePath = std::move(paramValue);
 		}
 
+		//
+		// Engine Settings
+		//
+
+
+		//
+		// Graphics Settings
+		//
+		if (paramName == "-Width" || paramName == "-W")
+		{
+			refStartupParams.bOverrideGFXSetting_Width = true;
+			refStartupParams.GraphicsSettings.Width = std::atoi(paramValue.c_str());
+
+		}
+		if (paramName == "-Height" || paramName == "-H")
+		{
+			refStartupParams.bOverrideGFXSetting_Height = true;
+			refStartupParams.GraphicsSettings.Height = std::atoi(paramValue.c_str());
+		}
+		if (paramName == "-Fullscreen" || paramName == "-FullScreen")
+		{
+			refStartupParams.bOverrideGFXSetting_bFullscreen = true;
+			refStartupParams.GraphicsSettings.bFullscreen = true;
+		}
+		if (paramName == "-VSync" || paramName == "-vsync" || paramName == "-Vsync")
+		{
+			refStartupParams.bOverrideGFXSetting_bVSync= true;
+			refStartupParams.GraphicsSettings.bVsync= true;
+		}
+		if (paramName == "-TripleBuffering")
+		{
+			refStartupParams.bOverrideGFXSetting_bUseTripleBuffering = true;
+			refStartupParams.GraphicsSettings.bUseTripleBuffering = true;
+		}
+		if (paramName == "-DoubleBuffering")
+		{
+			refStartupParams.bOverrideGFXSetting_bUseTripleBuffering = true;
+			refStartupParams.GraphicsSettings.bUseTripleBuffering = false;
+		}
 	}
 }
 

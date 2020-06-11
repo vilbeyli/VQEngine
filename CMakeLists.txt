@@ -19,18 +19,23 @@ foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
     set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_HOME_DIRECTORY}/Bin/${OUTPUTCONFIG} )
 endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 
+set (HeaderVQE 
+    "Source/Application/Platform.h"
+    "Source/Application/Window.h"
+    "Source/Application/Settings.h"
+    "Source/Application/Types.h"
+    "Source/Application/VQEngine.h"
+)
 
 set (SourceVQE 
-    "Source/Application/Main.cpp"
+    "Source/Application/Platform.cpp"
     "Source/Application/Window.cpp"
-    "Source/Application/Window.h"
-    "Source/Application/VQEngine.h"
+    "Source/Application/Main.cpp"
     "Source/Application/VQEngine_Main.cpp"
     "Source/Application/VQEngine_Render.cpp"
     "Source/Application/VQEngine_Update.cpp"
     "Source/Application/VQEngine_Load.cpp"
-    "Source/Application/Platform.cpp"
-    "Source/Application/Platform.h"
+    "Source/Application/VQEngine_WindowEvents.cpp"
 )
 
 add_link_options(/SUBSYSTEM:WINDOWS)
@@ -41,9 +46,9 @@ add_subdirectory(Source/Renderer)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/VQUtils/Bin/)
 
 # Create a library with the project name that is build with the Headers and Source files
-add_executable( ${PROJECT_NAME} ${SourceVQE} )
+add_executable( ${PROJECT_NAME} ${HeaderVQE} ${SourceVQE} )
 
-# Make sure the compile can find include files for the libraries
+# Make sure the compiler can find include files for the libraries
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${Includes})
 
 

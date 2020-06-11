@@ -40,10 +40,11 @@
 
 #define NUM_MAX_BACK_BUFFERS 3
 
-FWindowRepresentation::FWindowRepresentation(const std::unique_ptr<Window>& pWnd)
+FWindowRepresentation::FWindowRepresentation(const std::unique_ptr<Window>& pWnd, bool bVSyncIn)
     : hwnd(pWnd->GetHWND())
     , width(pWnd->GetWidth())
     , height(pWnd->GetHeight())
+    , bVSync(bVSyncIn)
 {}
 
 // The programming model for swap chains in D3D12 is not identical to that in earlier versions of D3D. 
@@ -58,7 +59,7 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
 
     this->mpDevice = desc.pDevice;
     this->mHwnd = desc.pWindow->hwnd;
-    this->mNumBackBuffer = desc.numBackBuffers;
+    this->mNumBackBuffers = desc.numBackBuffers;
     this->mpPresentQueue = desc.pCmdQueue->pQueue;
 
     HRESULT hr = {};
@@ -85,7 +86,9 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     swapChainDesc.SampleDesc.Count   = 1;
     swapChainDesc.SwapEffect         = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     swapChainDesc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
-    swapChainDesc.Flags              = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+    swapChainDesc.Flags              = desc.bVSync 
+        ? 0
+        : DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 
     // SwapChain creation methods for the newer DXGI_SWAP_CHAIN_DESC1
     // https://docs.microsoft.com/en-us/windows/win32/api/dxgi1_2/nf-dxgi1_2-idxgifactory2-createswapchainforhwnd
@@ -128,7 +131,7 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     pDxgiFactory->Release();
 
     // Create Fence & Fence Event
-    this->mFenceValues.resize(this->mNumBackBuffer, 0);
+    this->mFenceValues.resize(this->mNumBackBuffers, 0);
     D3D12_FENCE_FLAGS FenceFlags = D3D12_FENCE_FLAG_NONE;
     mpDevice->CreateFence(this->mFenceValues[this->mICurrentBackBuffer], FenceFlags, IID_PPV_ARGS(&this->mpFence));
     ++mFenceValues[mICurrentBackBuffer];
@@ -141,7 +144,7 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     // -- Create the Back Buffers (render target views) Descriptor Heap -- //
     // describe an rtv descriptor heap and create
     D3D12_DESCRIPTOR_HEAP_DESC RTVHeapDesc = {};
-    RTVHeapDesc.NumDescriptors = this->mNumBackBuffer; // number of descriptors for this heap.
+    RTVHeapDesc.NumDescriptors = this->mNumBackBuffers; // number of descriptors for this heap.
     RTVHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV; // this heap is a render target view heap
 
     // This heap will not be directly referenced by the shaders (not shader visible), as this will store the output from the pipeline
@@ -164,8 +167,8 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     D3D12_CPU_DESCRIPTOR_HANDLE hRTV{ this->mpDescHeapRTV->GetCPUDescriptorHandleForHeapStart() };
 
     // Create a RTV for each SwapChain buffer
-    this->mRenderTargets.resize(this->mNumBackBuffer);
-    for (int i = 0; i < this->mNumBackBuffer; i++)
+    this->mRenderTargets.resize(this->mNumBackBuffers);
+    for (int i = 0; i < this->mNumBackBuffers; i++)
     {
         hr = this->mpSwapChain->GetBuffer(i, IID_PPV_ARGS(&this->mRenderTargets[i]));
         if (FAILED(hr))
@@ -188,23 +191,12 @@ void SwapChain::Destroy()
     // release of the swap chain. 
     SetFullscreen(false);
 
-    // TODO: sync GPU
-    {
-        // Schedule a Signal command in the queue.
-        ThrowIfFailed(mpPresentQueue->Signal(mpFence, mFenceValues[mICurrentBackBuffer]));
-
-        // Wait until the fence has been processed.
-        ThrowIfFailed(mpFence->SetEventOnCompletion(mFenceValues[mICurrentBackBuffer], mHEvent));
-        WaitForSingleObjectEx(mHEvent, INFINITE, FALSE);
-
-        // Increment the fence value for the current frame.
-        ++mFenceValues[mICurrentBackBuffer];
-    }
+    WaitForGPU();
 
     this->mpFence->Release();
     CloseHandle(this->mHEvent);
 
-    for (unsigned i = 0; i < this->mNumBackBuffer; ++i)
+    for (unsigned i = 0; i < this->mNumBackBuffers; ++i)
     {
         this->mRenderTargets[i]->Release();
     }
@@ -264,6 +256,8 @@ void SwapChain::Present(bool bVSync)
             break;
         }
     }
+
+    ++mNumTotalFrames;
 }
 
 void SwapChain::MoveToNextFrame()
@@ -284,4 +278,17 @@ void SwapChain::MoveToNextFrame()
 
     // Set the fence value for the next frame.
     mFenceValues[mICurrentBackBuffer] = currentFenceValue + 1;
+}
+
+void SwapChain::WaitForGPU()
+{
+    // Schedule a Signal command in the queue.
+    ThrowIfFailed(mpPresentQueue->Signal(mpFence, mFenceValues[mICurrentBackBuffer]));
+
+    // Wait until the fence has been processed.
+    ThrowIfFailed(mpFence->SetEventOnCompletion(mFenceValues[mICurrentBackBuffer], mHEvent));
+    WaitForSingleObjectEx(mHEvent, INFINITE, FALSE);
+
+    // Increment the fence value for the current frame.
+    ++mFenceValues[mICurrentBackBuffer];
 }

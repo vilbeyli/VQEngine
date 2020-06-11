@@ -31,11 +31,12 @@
 	#define ENABLE_VALIDATION_LAYER 0
 #endif
 
-#define NUM_SWAPCHAIN_BUFFERS       3
-
-void VQRenderer::Initialize(const FRendererInitializeParameters& RendererInitParams)
+void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 {
 	Device* pDevice = &mDevice;
+	const FGraphicsSettings& Settings = params.Settings;
+	const int NUM_SWAPCHAIN_BUFFERS   = Settings.bUseTripleBuffering ? 3 : 2;
+
 
 	// Create the device
 	FDeviceCreateDesc deviceDesc = {};
@@ -52,15 +53,17 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& RendererInitPar
 
 	// Create the present queues & swapchains associated with each window passed into the VQRenderer
 	// Swapchains contain their own render targets 
-	const size_t NumWindows = RendererInitParams.Windows.size();
+	const size_t NumWindows = params.Windows.size();
 	for(size_t i = 0; i< NumWindows; ++i)
 	{
-		const FWindowRepresentation& wnd = RendererInitParams.Windows[i];
+		const FWindowRepresentation& wnd = params.Windows[i];
+		
 
 		FRenderWindowContext ctx = {};
 
 		ctx.pDevice = pDevice;
 		ctx.PresentQueue.Create(ctx.pDevice, CommandQueue::ECommandQueueType::GFX); // Create the GFX queue for presenting the SwapChain
+		ctx.bVsync = wnd.bVSync; // we store bVSync in ctx instead of SwapChain and provide it through SwapChain.Present() param : either way should be fine
 
 		// Create the SwapChain
 		FSwapChainCreateDesc swapChainDesc = {};
@@ -68,6 +71,7 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& RendererInitPar
 		swapChainDesc.pDevice = ctx.pDevice->GetDevicePtr();
 		swapChainDesc.pWindow = &wnd;
 		swapChainDesc.pCmdQueue = &ctx.PresentQueue;
+		swapChainDesc.bVSync = ctx.bVsync;
 		ctx.SwapChain.Create(swapChainDesc);
 
 		// Create command allocators
@@ -89,8 +93,6 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& RendererInitPar
 		// save the render context
 		this->mRenderContextLookup.emplace(wnd.hwnd, std::move(ctx));
 	}
-	
-
 
 }
 
@@ -118,6 +120,7 @@ void VQRenderer::Exit()
 	mDevice.Destroy();
 }
 
+
 void VQRenderer::RenderWindowContext(HWND hwnd)
 {
 	if (mRenderContextLookup.find(hwnd) == mRenderContextLookup.end())
@@ -131,18 +134,16 @@ void VQRenderer::RenderWindowContext(HWND hwnd)
 	const int NUM_BACK_BUFFERS  = ctx.SwapChain.GetNumBackBuffers();
 	const int BACK_BUFFER_INDEX = ctx.SwapChain.GetCurrentBackBufferIndex();
 	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
-	// --------------------------------------
+	// ----------------------------------------------------------------------------
 
 
 	//
 	// PRE RENDER
 	//
-	ID3D12CommandAllocator* pCmdAlloc = ctx.mCommandAllocatorsGFX[BACK_BUFFER_INDEX];
-	
-
 	// Command list allocators can only be reset when the associated 
 	// command lists have finished execution on the GPU; apps should use 
 	// fences to determine GPU execution progress.
+	ID3D12CommandAllocator* pCmdAlloc = ctx.mCommandAllocatorsGFX[BACK_BUFFER_INDEX];
 	ThrowIfFailed(pCmdAlloc->Reset());
 
 	// However, when ExecuteCommandList() is called on a particular command 
@@ -180,8 +181,21 @@ void VQRenderer::RenderWindowContext(HWND hwnd)
 	//
 	// PRESENT
 	//
-	ctx.SwapChain.Present();
+	ctx.SwapChain.Present(ctx.bVsync);
 
 	ctx.SwapChain.MoveToNextFrame();
+}
+
+short VQRenderer::GetSwapChainBackBufferCountOfWindow(HWND hwnd) const
+{
+	if (mRenderContextLookup.find(hwnd) == mRenderContextLookup.end())
+	{
+		Log::Warning("Render Context not found for <hwnd=0x%x>", hwnd);
+		return 0;
+	}
+
+	const FRenderWindowContext& ctx = mRenderContextLookup.at(hwnd);
+	return ctx.SwapChain.GetNumBackBuffers();
+	
 }
 

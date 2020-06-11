@@ -16,35 +16,18 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-#include "VQEngine.h"
+#pragma once
 
+using int64 = long long;
+using int32 = int;
+using int16 = short;
+using int8  = char;
 
-void VQEngine::UpdateThread_Main()
-{
-	Log::Info("UpdateThread_Main()");
+using uint64 = unsigned long long;
+using uint32 = unsigned;
+using uint16 = unsigned short;
+using uint8  = unsigned char;
 
-	bool bQuit = false;
-	while (!mbStopAllThreads && !bQuit)
-	{
-		// update timer
+using uint = unsigned;
 
-		// update input
-
-		if (!mbRenderThreadInitialized)
-		{
-			continue;
-		}
-
-		// update main window frame data
-
-		// update debug window frame data
-
-		// wait if we're too ahead
-		
-		Sleep(400*2);
-		Log::Info("UpdateThread::Tick()");
-	}
-
-
-	Log::Info("UpdateThread_Main() : Exit");
-}
+using fp32 = float;

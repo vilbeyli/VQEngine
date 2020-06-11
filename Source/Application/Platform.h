@@ -18,10 +18,13 @@
 
 #pragma once
 
+#include "Types.h"
 #include <Windows.h>
 #include <d3d12.h>
 
 #include "../../Libs/VQUtils/Source/Log.h"
+
+#include "Settings.h"
 
 struct IDXGIAdapter1;
 struct IDXGIOutput;
@@ -30,6 +33,13 @@ struct FStartupParameters
 {
 	Log::LogInitializeParams  LogInitParams;
 	HINSTANCE                 hExeInstance;
+
+	FGraphicsSettings GraphicsSettings;
+	uint8 bOverrideGFXSetting_Width  : 1;
+	uint8 bOverrideGFXSetting_Height : 1;
+	uint8 bOverrideGFXSetting_bVSync : 1;
+	uint8 bOverrideGFXSetting_bUseTripleBuffering : 1;
+	uint8 bOverrideGFXSetting_bFullscreen : 1;
 };
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -40,18 +50,18 @@ struct FCPUInfo
 {
 	std::string ManufacturerName;
 	std::string DeviceName;
-	unsigned DeviceID;
-	unsigned VendorID;
-	short NumCores;
-	short NumThreads;
+	uint DeviceID;
+	uint VendorID;
+	uint16 NumCores;
+	uint16 NumThreads;
 };
 
 struct FGPUInfo
 {
 	std::string ManufacturerName;
 	std::string DeviceName;
-	unsigned DeviceID;
-	unsigned VendorID;
+	uint DeviceID;
+	uint VendorID;
 	size_t DedicatedGPUMemory;
 	D3D_FEATURE_LEVEL MaxSupportedFeatureLevel; // todo: bool d3d12_0 ?
 	IDXGIAdapter1* pAdapter;
@@ -61,8 +71,8 @@ struct FMonitorInfo
 {
 	std::string ManufacturerName;
 	std::string DeviceName;
-	unsigned DeviceID;
-	unsigned VendorID;
+	uint DeviceID;
+	uint VendorID;
 	bool bSupportsHDR;
 	IDXGIOutput* pDXGIOut;
 };

@@ -18,8 +18,10 @@
 
 #pragma once
 
+#include "Types.h"
 #include "Platform.h"
 #include "Window.h"
+#include "Settings.h"
 
 #include "Source/Renderer/Renderer.h"
 
@@ -28,6 +30,32 @@
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
+
+#include <array>
+
+// Data to be updated per frame
+struct FFrameData
+{
+	std::array<float, 4> SwapChainClearColor;
+};
+
+class IWindowUpdateContext
+{
+public:
+	virtual void Update() = 0;
+
+protected:
+	HWND hwnd;
+};
+
+class MainWindowUpdateContext : public IWindowUpdateContext
+{
+public:
+	void Update() override;
+
+private:
+	std::vector<FFrameData> mFrameData;
+};
 
 class VQEngine : public IWindowOwner
 {
@@ -72,23 +100,32 @@ public:
 	void LoadThread_WaitForLoadTask();
 
 private:
+	void InititalizeEngineSettings(const FStartupParameters& Params);
 	void InitializeWindow(const FStartupParameters& Params);
 	void InitializeThreads();
 	void ExitThreads();
 
 
 private:
+	// threads
 	std::atomic<bool> mbStopAllThreads;
 	std::thread mRenderThread;
 	std::thread mUpdateThread;
 	std::thread mLoadThread;
 
+	// sync
 	std::condition_variable mCVLoadTasksReadyForProcess;
 	std::mutex              mMtxLoadTasksReadyForProcess;
+	std::atomic<bool>       mbRenderThreadInitialized;
 
-
+	// wnd
 	std::unique_ptr<Window> mpWinMain;
 	std::unique_ptr<Window> mpWinDebug;
 
-	VQRenderer mRenderer;
+	// render
+	VQRenderer              mRenderer;
+
+	// data
+	FEngineSettings         mSettings;
+	std::unordered_map<HWND, IWindowUpdateContext*> mWindowUpdateContextLookup;
 };

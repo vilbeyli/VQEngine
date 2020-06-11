@@ -16,35 +16,25 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-#include "VQEngine.h"
+#pragma once
 
-
-void VQEngine::UpdateThread_Main()
+struct FGraphicsSettings
 {
-	Log::Info("UpdateThread_Main()");
+	bool bVsync              = false;
+	bool bUseTripleBuffering = false;
+	bool bFullscreen         = false;
 
-	bool bQuit = false;
-	while (!mbStopAllThreads && !bQuit)
-	{
-		// update timer
+	int Width  = -1;
+	int Height = -1;
+};
 
-		// update input
+struct FEngineSettings
+{
+	FGraphicsSettings gfx;
 
-		if (!mbRenderThreadInitialized)
-		{
-			continue;
-		}
+	int DebugWindow_Width  = -1;
+	int DebugWindow_Height = -1;
 
-		// update main window frame data
-
-		// update debug window frame data
-
-		// wait if we're too ahead
-		
-		Sleep(400*2);
-		Log::Info("UpdateThread::Tick()");
-	}
-
-
-	Log::Info("UpdateThread_Main() : Exit");
-}
+	char strMainWindowTitle[64]  = "";
+	char strDebugWindowTitle[64] = "";
+};

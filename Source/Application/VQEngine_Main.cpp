@@ -18,6 +18,13 @@
 
 #include "VQEngine.h"
 
+#ifdef _DEBUG
+constexpr char* BUILD_CONFIG = "Debug";
+#else
+constexpr char* BUILD_CONFIG = "Release";
+#endif
+
+
 void VQEngine::MainThread_Tick()
 {
 	if (mpWinMain->IsClosed())
@@ -31,19 +38,45 @@ void VQEngine::MainThread_Tick()
 }
 
 
+void VQEngine::InititalizeEngineSettings(const FStartupParameters& Params)
+{
+	// Defaults
+	mSettings.gfx.bFullscreen = false;
+	mSettings.gfx.bVsync = false;
+	mSettings.gfx.bUseTripleBuffering = true;
+	mSettings.gfx.Width = 1920;
+	mSettings.gfx.Height = 1080;
+
+	mSettings.DebugWindow_Width = 600;
+	mSettings.DebugWindow_Height = 600;
+
+	sprintf_s(mSettings.strMainWindowTitle , "VQEngine v0.1.0-%s", BUILD_CONFIG);
+	sprintf_s(mSettings.strDebugWindowTitle, "VQDebug");
+
+	// Override #0 : from file
+
+
+	// Override #1 : if there's command line params
+	if (Params.bOverrideGFXSetting_bFullscreen) mSettings.gfx.bFullscreen         = Params.GraphicsSettings.bFullscreen;
+	if (Params.bOverrideGFXSetting_bVSync     ) mSettings.gfx.bVsync              = Params.GraphicsSettings.bVsync;
+	if (Params.bOverrideGFXSetting_bUseTripleBuffering) mSettings.gfx.bUseTripleBuffering = Params.GraphicsSettings.bUseTripleBuffering;
+	if (Params.bOverrideGFXSetting_Width)       mSettings.gfx.Width               = Params.GraphicsSettings.Width;
+	if (Params.bOverrideGFXSetting_Height)      mSettings.gfx.Height              = Params.GraphicsSettings.Height;
+}
+
 void VQEngine::InitializeWindow(const FStartupParameters& Params)
 {
 	FWindowDesc mainWndDesc = {};
-	mainWndDesc.width = 640;
-	mainWndDesc.height = 480;
+	mainWndDesc.width  = mSettings.gfx.Width;
+	mainWndDesc.height = mSettings.gfx.Height;
 	mainWndDesc.hInst = Params.hExeInstance;
 	mainWndDesc.pWndOwner = this;
 	mainWndDesc.pfnWndProc = WndProc;
-	mpWinMain.reset(new Window("Main Window", mainWndDesc));
+	mpWinMain.reset(new Window(mSettings.strMainWindowTitle, mainWndDesc));
 
-	mainWndDesc.width = 320;
-	mainWndDesc.height = 240;
-	mpWinDebug.reset(new Window("Debug Window", mainWndDesc));
+	mainWndDesc.width  = mSettings.DebugWindow_Width;
+	mainWndDesc.height = mSettings.DebugWindow_Height;
+	mpWinDebug.reset(new Window(mSettings.strDebugWindowTitle, mainWndDesc));
 }
 
 void VQEngine::InitializeThreads()
@@ -72,6 +105,7 @@ void VQEngine::ExitThreads()
 
 bool VQEngine::Initialize(const FStartupParameters& Params)
 {
+	InititalizeEngineSettings(Params);
 	InitializeWindow(Params);
 	InitializeThreads();
 	
@@ -83,35 +117,3 @@ void VQEngine::Exit()
 	ExitThreads();
 }
 
-void VQEngine::OnWindowCreate()
-{
-}
-
-void VQEngine::OnWindowResize(HWND hWnd)
-{
-	// https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/d3d10-graphics-programming-guide-dxgi#handling-window-resizing
-#if 0 // TODO
-	RECT clientRect = {};
-	GetClientRect(hWnd, &clientRect);
-	dxSample->OnResize(clientRect.right - clientRect.left, clientRect.bottom - clientRect.top);
-
-	bIsMinimized = (IsIconic(hWnd) == TRUE);
-#endif
-}
-
-void VQEngine::OnWindowMinimize()
-{
-}
-
-void VQEngine::OnWindowFocus()
-{
-}
-
-
-void VQEngine::OnWindowKeyDown(WPARAM wParam)
-{
-}
-
-void VQEngine::OnWindowClose()
-{
-}

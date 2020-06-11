@@ -22,6 +22,8 @@
 #include "SwapChain.h"
 #include "CommandQueue.h"
 
+#include "../Application/Settings.h"
+
 #include <vector>
 #include <unordered_map>
 
@@ -30,6 +32,7 @@ class Window;
 struct FRendererInitializeParameters
 {
 	std::vector<FWindowRepresentation> Windows;
+	FGraphicsSettings                  Settings;
 };
 
 class VQRenderer
@@ -40,13 +43,14 @@ public:
 
 	void RenderWindowContext(HWND hwnd);
 
-	
+	short GetSwapChainBackBufferCountOfWindow(HWND hwnd) const;
+
 private:
 	// Private Functions go here
 
 
 private:
-	// SwapChain requirements define a RenderWindowContext struct
+	// RenderWindowContext struct encapsulates the swapchain and window association
 	// - Each SwapChain is associated with a Window (HWND)
 	// - Each SwapChain is associated with a Graphics Queue for Present()
 	// - Each SwapChain is created with a Device
@@ -65,6 +69,8 @@ private:
 
 
 		ID3D12GraphicsCommandList* pCmdList_GFX = nullptr;
+
+		bool bVsync = false;
 	};
 
 private:
