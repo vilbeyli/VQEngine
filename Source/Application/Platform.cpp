@@ -44,7 +44,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	IWindow* pWindow = reinterpret_cast<IWindow*> (::GetWindowLongPtr(hwnd, GWLP_USERDATA));
 	if (!pWindow)
 	{
-		Log::Warning("WndProc::pWindow=nullptr");
+		//Log::Warning("WndProc::pWindow=nullptr");
 		return DefWindowProc(hwnd, uMsg, wParam, lParam);
 	}
 

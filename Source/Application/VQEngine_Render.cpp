@@ -32,6 +32,7 @@ void VQEngine::RenderThread_Main()
 	{
 		RenderThread_PreRender();
 		RenderThread_Render();
+		++mNumRenderLoopsExecuted;
 	}
 
 	this->RenderThread_Exit();
@@ -41,17 +42,17 @@ void VQEngine::RenderThread_Main()
 
 void VQEngine::RenderThread_Inititalize()
 {
-	
-
 	FRendererInitializeParameters params = {};
 	params.Windows.push_back(FWindowRepresentation(mpWinMain , mSettings.gfx.bVsync));
 	params.Windows.push_back(FWindowRepresentation(mpWinDebug, false));
+	params.Settings = mSettings.gfx;
 	mRenderer.Initialize(params);
 
 	//mFrameData_MainWnd.resize(mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain.get()->GetHWND()));
 	//mFrameData_DbgWnd .resize(mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinDebug.get()->GetHWND()));
 
 	mbRenderThreadInitialized.store(true);
+	mNumRenderLoopsExecuted.store(0);
 }
 
 void VQEngine::RenderThread_Exit()

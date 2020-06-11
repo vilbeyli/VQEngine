@@ -56,7 +56,28 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 		//
 		// Engine Settings
 		//
+		if (paramName == "-Test")
+		{
+			refStartupParams.bOverrideENGSetting_bAutomatedTest = true;
+			refStartupParams.EngineSettings.bAutomatedTestRun = true;
+		}
+		if (paramName == "-TestFrames")
+		{
+			refStartupParams.bOverrideENGSetting_bAutomatedTest = true;
+			refStartupParams.EngineSettings.bAutomatedTestRun = true;
 
+			refStartupParams.bOverrideENGSetting_bTestFrames  = true;
+			if (paramValue.empty())
+			{
+				constexpr int NUM_DEFAULT_TEST_FRAMES = 100;
+				Log::Warning("Empty -TestFrames value specified, using default: %d", NUM_DEFAULT_TEST_FRAMES);
+				refStartupParams.EngineSettings.NumAutomatedTestFrames = NUM_DEFAULT_TEST_FRAMES;
+			}
+			else
+			{
+				refStartupParams.EngineSettings.NumAutomatedTestFrames = std::atoi(paramValue.c_str());
+			}
+		}
 
 		//
 		// Graphics Settings
@@ -64,33 +85,33 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 		if (paramName == "-Width" || paramName == "-W")
 		{
 			refStartupParams.bOverrideGFXSetting_Width = true;
-			refStartupParams.GraphicsSettings.Width = std::atoi(paramValue.c_str());
+			refStartupParams.EngineSettings.gfx.RenderResolutionX = std::atoi(paramValue.c_str());
 
 		}
 		if (paramName == "-Height" || paramName == "-H")
 		{
 			refStartupParams.bOverrideGFXSetting_Height = true;
-			refStartupParams.GraphicsSettings.Height = std::atoi(paramValue.c_str());
+			refStartupParams.EngineSettings.gfx.RenderResolutionY = std::atoi(paramValue.c_str());
 		}
 		if (paramName == "-Fullscreen" || paramName == "-FullScreen")
 		{
 			refStartupParams.bOverrideGFXSetting_bFullscreen = true;
-			refStartupParams.GraphicsSettings.bFullscreen = true;
+			refStartupParams.EngineSettings.gfx.bFullscreen = true;
 		}
 		if (paramName == "-VSync" || paramName == "-vsync" || paramName == "-Vsync")
 		{
 			refStartupParams.bOverrideGFXSetting_bVSync= true;
-			refStartupParams.GraphicsSettings.bVsync= true;
+			refStartupParams.EngineSettings.gfx.bVsync= true;
 		}
 		if (paramName == "-TripleBuffering")
 		{
 			refStartupParams.bOverrideGFXSetting_bUseTripleBuffering = true;
-			refStartupParams.GraphicsSettings.bUseTripleBuffering = true;
+			refStartupParams.EngineSettings.gfx.bUseTripleBuffering = true;
 		}
 		if (paramName == "-DoubleBuffering")
 		{
 			refStartupParams.bOverrideGFXSetting_bUseTripleBuffering = true;
-			refStartupParams.GraphicsSettings.bUseTripleBuffering = false;
+			refStartupParams.EngineSettings.gfx.bUseTripleBuffering = false;
 		}
 	}
 }

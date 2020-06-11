@@ -24,17 +24,23 @@ struct FGraphicsSettings
 	bool bUseTripleBuffering = false;
 	bool bFullscreen         = false;
 
-	int Width  = -1;
-	int Height = -1;
+	int RenderResolutionX = -1;
+	int RenderResolutionY = -1;
 };
 
 struct FEngineSettings
 {
 	FGraphicsSettings gfx;
 
+	int MainWindow_Width  = -1;
+	int MainWindow_Height = -1;
+
 	int DebugWindow_Width  = -1;
 	int DebugWindow_Height = -1;
 
 	char strMainWindowTitle[64]  = "";
 	char strDebugWindowTitle[64] = "";
+
+	bool bAutomatedTestRun     = false;
+	int NumAutomatedTestFrames = -1;
 };

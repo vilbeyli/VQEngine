@@ -101,10 +101,9 @@ public:
 
 private:
 	void InititalizeEngineSettings(const FStartupParameters& Params);
-	void InitializeWindow(const FStartupParameters& Params);
+	void InitializeApplicationWindows(const FStartupParameters& Params);
 	void InitializeThreads();
 	void ExitThreads();
-
 
 private:
 	// threads
@@ -117,8 +116,9 @@ private:
 	std::condition_variable mCVLoadTasksReadyForProcess;
 	std::mutex              mMtxLoadTasksReadyForProcess;
 	std::atomic<bool>       mbRenderThreadInitialized;
+	std::atomic<uint64>     mNumRenderLoopsExecuted;
 
-	// wnd
+	// windows
 	std::unique_ptr<Window> mpWinMain;
 	std::unique_ptr<Window> mpWinDebug;
 
@@ -128,4 +128,9 @@ private:
 	// data
 	FEngineSettings         mSettings;
 	std::unordered_map<HWND, IWindowUpdateContext*> mWindowUpdateContextLookup;
+
+private:
+	// Reads EngineSettings.ini from next to the executable and returns a 
+	// FStartupParameters struct as it readily has override booleans for engine settings
+	static FStartupParameters ParseEngineSettingsFile();
 };

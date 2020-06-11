@@ -41,8 +41,9 @@ void VQEngine::UpdateThread_Main()
 
 		// wait if we're too ahead
 		
-		Sleep(400*2);
-		Log::Info("UpdateThread::Tick()");
+		//Sleep(100);
+		//Log::Info("UpdateThread::Tick() %llu", mNumRenderLoopsExecuted.load());
+
 	}
 
 

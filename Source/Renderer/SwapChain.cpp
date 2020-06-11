@@ -21,7 +21,7 @@
 #include "CommandQueue.h"
 
 #include "../Application/Platform.h" // CHECK_HR
-#include "../Application/Window.h" // CHECK_HR
+#include "../Application/Window.h"
 #include "../../Libs/VQUtils/Source/Log.h"
 #include "../../Libs/VQUtils/Source/utils.h"
 
@@ -38,7 +38,8 @@
 #include <cassert>
 #include <vector>
 
-#define NUM_MAX_BACK_BUFFERS 3
+#define NUM_MAX_BACK_BUFFERS  3
+#define LOG_SWAPCHAIN_VERBOSE 0
 
 FWindowRepresentation::FWindowRepresentation(const std::unique_ptr<Window>& pWnd, bool bVSyncIn)
     : hwnd(pWnd->GetHWND())
@@ -256,18 +257,24 @@ void SwapChain::Present(bool bVSync)
             break;
         }
     }
-
-    ++mNumTotalFrames;
 }
 
 void SwapChain::MoveToNextFrame()
 {
+#if LOG_SWAPCHAIN_VERBOSE
+    Log::Info("MoveToNextFrame() Begin : hwnd=0x%x iBackBuff=%d / Frame=%d / FenceVal=%d"
+        , mHwnd, mICurrentBackBuffer, mNumTotalFrames, mFenceValues[mICurrentBackBuffer]
+    );
+#endif
+
+
     // Schedule a Signal command in the queue.
     const UINT64 currentFenceValue = mFenceValues[mICurrentBackBuffer];
     ThrowIfFailed(mpPresentQueue->Signal(mpFence, currentFenceValue));
 
     // Update the frame index.
     mICurrentBackBuffer = mpSwapChain->GetCurrentBackBufferIndex();
+    ++mNumTotalFrames;
 
     // If the next frame is not ready to be rendered yet, wait until it is ready.
     if (mpFence->GetCompletedValue() < mFenceValues[mICurrentBackBuffer])
@@ -278,16 +285,34 @@ void SwapChain::MoveToNextFrame()
 
     // Set the fence value for the next frame.
     mFenceValues[mICurrentBackBuffer] = currentFenceValue + 1;
+
+
+#if LOG_SWAPCHAIN_VERBOSE
+    Log::Info("MoveToNextFrame() End   : hwnd=0x%x iBackBuff=%d / Frame=%d / FenceVal=%d"
+        , mHwnd, mICurrentBackBuffer, mNumTotalFrames, mFenceValues[mICurrentBackBuffer]
+    );
+#endif
 }
 
 void SwapChain::WaitForGPU()
 {
+    HRESULT hr = {};
+
     // Schedule a Signal command in the queue.
     ThrowIfFailed(mpPresentQueue->Signal(mpFence, mFenceValues[mICurrentBackBuffer]));
 
     // Wait until the fence has been processed.
     ThrowIfFailed(mpFence->SetEventOnCompletion(mFenceValues[mICurrentBackBuffer], mHEvent));
-    WaitForSingleObjectEx(mHEvent, INFINITE, FALSE);
+    hr = WaitForSingleObjectEx(mHEvent, 3000, FALSE); // wait for 3000 milliseconds tops
+    
+    switch (hr)
+    {
+    case WAIT_TIMEOUT:
+        Log::Warning("SwapChain<hwnd=0x%x> timed out on WaitForGPU(): Signal=%d, ICurrBackBuffer=%d, NumFramesPresented=%d"
+            , mHwnd, mFenceValues[mICurrentBackBuffer], mICurrentBackBuffer, this->GetNumPresentedFrames());
+        break;
+    default: break;
+    }
 
     // Increment the fence value for the current frame.
     ++mFenceValues[mICurrentBackBuffer];
