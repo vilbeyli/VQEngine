@@ -1,3 +1,6 @@
 [submodule "Libs/VQUtils"]
 	path = Libs/VQUtils
 	url = https://github.com/vilbeyli/VQUtils.git
+[submodule "Source/Renderer/Libs/D3DX12"]
+	path = Source/Renderer/Libs/D3DX12
+	url = https://github.com/vilbeyli/D3DX12.git
