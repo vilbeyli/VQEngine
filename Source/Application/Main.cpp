@@ -40,6 +40,9 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 		const std::string& paramName = paramNameValue.front();
 		std::string  paramValue = paramNameValue.size() > 1 ? paramNameValue[1] : "";
 
+		//
+		// Log Settings
+		//
 		if (paramName == "-LogConsole")
 		{
 			refStartupParams.LogInitParams.bLogConsole = true;
@@ -50,6 +53,66 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 			refStartupParams.LogInitParams.LogFilePath = std::move(paramValue);
 		}
 
+		//
+		// Engine Settings
+		//
+		if (paramName == "-Test")
+		{
+			refStartupParams.bOverrideENGSetting_bAutomatedTest = true;
+			refStartupParams.EngineSettings.bAutomatedTestRun = true;
+		}
+		if (paramName == "-TestFrames")
+		{
+			refStartupParams.bOverrideENGSetting_bAutomatedTest = true;
+			refStartupParams.EngineSettings.bAutomatedTestRun = true;
+
+			refStartupParams.bOverrideENGSetting_bTestFrames  = true;
+			if (paramValue.empty())
+			{
+				constexpr int NUM_DEFAULT_TEST_FRAMES = 100;
+				Log::Warning("Empty -TestFrames value specified, using default: %d", NUM_DEFAULT_TEST_FRAMES);
+				refStartupParams.EngineSettings.NumAutomatedTestFrames = NUM_DEFAULT_TEST_FRAMES;
+			}
+			else
+			{
+				refStartupParams.EngineSettings.NumAutomatedTestFrames = std::atoi(paramValue.c_str());
+			}
+		}
+
+		//
+		// Graphics Settings
+		//
+		if (paramName == "-Width" || paramName == "-W")
+		{
+			refStartupParams.bOverrideGFXSetting_Width = true;
+			refStartupParams.EngineSettings.gfx.RenderResolutionX = std::atoi(paramValue.c_str());
+
+		}
+		if (paramName == "-Height" || paramName == "-H")
+		{
+			refStartupParams.bOverrideGFXSetting_Height = true;
+			refStartupParams.EngineSettings.gfx.RenderResolutionY = std::atoi(paramValue.c_str());
+		}
+		if (paramName == "-Fullscreen" || paramName == "-FullScreen")
+		{
+			refStartupParams.bOverrideGFXSetting_bFullscreen = true;
+			refStartupParams.EngineSettings.gfx.bFullscreen = true;
+		}
+		if (paramName == "-VSync" || paramName == "-vsync" || paramName == "-Vsync")
+		{
+			refStartupParams.bOverrideGFXSetting_bVSync= true;
+			refStartupParams.EngineSettings.gfx.bVsync= true;
+		}
+		if (paramName == "-TripleBuffering")
+		{
+			refStartupParams.bOverrideGFXSetting_bUseTripleBuffering = true;
+			refStartupParams.EngineSettings.gfx.bUseTripleBuffering = true;
+		}
+		if (paramName == "-DoubleBuffering")
+		{
+			refStartupParams.bOverrideGFXSetting_bUseTripleBuffering = true;
+			refStartupParams.EngineSettings.gfx.bUseTripleBuffering = false;
+		}
 	}
 }
 
@@ -87,7 +150,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR pScmdl, int iCmdSh
 			} 
 		}
 		
-		Engine.OnUpdate_MainThread();
+		Engine.MainThread_Tick();
 	}
 
 	Engine.Exit();

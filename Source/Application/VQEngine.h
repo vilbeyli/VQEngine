@@ -18,16 +18,55 @@
 
 #pragma once
 
+#include "Types.h"
 #include "Platform.h"
 #include "Window.h"
+#include "Settings.h"
+
+#include "Source/Renderer/Renderer.h"
 
 #include <memory>
+#include <thread>
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
+
+class IWindowUpdateContext
+{
+public:
+	virtual void Update() = 0;
+
+protected:
+	HWND hwnd;
+};
+
+class MainWindowScene : public IWindowUpdateContext
+{
+public:
+	void Update() override;
+
+//private:
+	std::vector<FFrameData> mFrameData;
+};
+class DebugWindowScene : public IWindowUpdateContext
+{
+public:
+	void Update() override;
+
+//private:
+	std::vector<FFrameData> mFrameData;
+};
+
+
 
 class VQEngine : public IWindowOwner
 {
 public:
 
 public:
+	// ---------------------------------------------------------
+	// Main Thread
+	// ---------------------------------------------------------
 	bool Initialize(const FStartupParameters& Params);
 	void Exit();
 
@@ -39,10 +78,63 @@ public:
 	void OnWindowKeyDown(WPARAM wParam) override;
 	void OnWindowClose() override;
 	
-	void OnUpdate_MainThread();
+	void MainThread_Tick();
+
+	// ---------------------------------------------------------
+	// Render Thread
+	// ---------------------------------------------------------
+	void RenderThread_Main();
+	void RenderThread_Inititalize();
+	void RenderThread_Exit();
+
+	void RenderThread_PreRender();
+	void RenderThread_Render();
+
+	// ---------------------------------------------------------
+	// Update Thread
+	// ---------------------------------------------------------
+	void UpdateThread_Main();
+
+	// ---------------------------------------------------------
+	// Load Thread
+	// ---------------------------------------------------------
+	void LoadThread_Main();
+	void LoadThread_WaitForLoadTask();
 
 private:
+	void InititalizeEngineSettings(const FStartupParameters& Params);
+	void InitializeApplicationWindows(const FStartupParameters& Params);
+	void InitializeThreads();
+	void ExitThreads();
 
-	std::unique_ptr<Window> WinMain;
-	std::unique_ptr<Window> WinDebug;
+private:
+	// threads
+	std::atomic<bool> mbStopAllThreads;
+	std::thread mRenderThread;
+	std::thread mUpdateThread;
+	std::thread mLoadThread;
+
+	// sync
+	std::condition_variable mCVLoadTasksReadyForProcess;
+	std::mutex              mMtxLoadTasksReadyForProcess;
+	std::atomic<bool>       mbRenderThreadInitialized;
+	std::atomic<uint64>     mNumRenderLoopsExecuted;
+
+	// windows
+	std::unique_ptr<Window> mpWinMain;
+	std::unique_ptr<Window> mpWinDebug;
+
+	// render
+	VQRenderer              mRenderer;
+
+	// data
+	FEngineSettings         mSettings;
+	MainWindowScene         mScene_MainWnd;
+	DebugWindowScene        mScene_DebugWnd;
+	std::unordered_map<HWND, IWindowUpdateContext*> mWindowUpdateContextLookup;
+
+private:
+	// Reads EngineSettings.ini from next to the executable and returns a 
+	// FStartupParameters struct as it readily has override booleans for engine settings
+	static FStartupParameters ParseEngineSettingsFile();
 };

@@ -19,8 +19,9 @@
 #include "Platform.h"
 #include "Window.h"
 
-#define LOG_WINDOW_MESSAGE_EVENTS 1
+#include <dxgi1_6.h>
 
+#define LOG_WINDOW_MESSAGE_EVENTS 1
 
 static void LogWndMsg(UINT uMsg, HWND hwnd)
 {
@@ -43,7 +44,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	IWindow* pWindow = reinterpret_cast<IWindow*> (::GetWindowLongPtr(hwnd, GWLP_USERDATA));
 	if (!pWindow)
 	{
-		Log::Warning("WndProc::pWindow=nullptr");
+		//Log::Warning("WndProc::pWindow=nullptr");
 		return DefWindowProc(hwnd, uMsg, wParam, lParam);
 	}
 
