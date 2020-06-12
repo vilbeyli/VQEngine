@@ -81,16 +81,34 @@ void VQEngine::UpdateThread_PreUpdate()
 
 void VQEngine::UpdateThread_UpdateAppState()
 {
-	// We'
+	assert(mbRenderThreadInitialized);
+
 	if (mAppState == EAppState::INITIALIZING)
 	{
 		// start loading
+		Log::Info("Main Thread starts loading...");
+		
+		mUpdateWorkerThreads.AddTask([&]() { Sleep(5000); });
+
 		mAppState = EAppState::LOADING;
+		mbLoadingLevel.store(true);
 	}
 
 	if (mbLoadingLevel)
 	{
 		// animate loading screen
+
+
+		// check if loading is done
+		const int NumActiveTasks = mUpdateWorkerThreads.GetNumActiveTasks();
+		const bool bLoadDone = NumActiveTasks == 0;
+		if (bLoadDone)
+		{
+			Log::Info("Main Thread loaded");
+			mAppState = EAppState::SIMULATING;
+			mbLoadingLevel.store(false);
+		}
+
 	}
 
 

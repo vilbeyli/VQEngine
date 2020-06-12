@@ -144,7 +144,12 @@ void VQEngine::InitializeThreads()
 	mbStopAllThreads.store(false);
 	mRenderThread = std::thread(&VQEngine::RenderThread_Main, this);
 	mUpdateThread = std::thread(&VQEngine::UpdateThread_Main, this);
-	mLoadThread   = std::thread(&VQEngine::LoadThread_Main, this);
+
+	const size_t HWThreads = ThreadPool::sHardwareThreadCount;
+	const size_t HWCores   = HWThreads/2;
+	const size_t NumWorkers = HWCores - 2; // reserve 2 cores for (Update + Render) + Main threads
+	mUpdateWorkerThreads.Initialize(NumWorkers);
+	mRenderWorkerThreads.Initialize(NumWorkers);
 }
 
 void VQEngine::ExitThreads()
@@ -153,14 +158,8 @@ void VQEngine::ExitThreads()
 	mRenderThread.join();
 	mUpdateThread.join();
 
-	// no need to lock here: https://en.cppreference.com/w/cpp/thread/condition_variable/notify_all
-	// The notifying thread does not need to hold the lock on the same mutex 
-	// as the one held by the waiting thread(s); in fact doing so is a pessimization, 
-	// since the notified thread would immediately block again, waiting for the 
-	// notifying thread to release the lock.
-	mSignalLoadTaskReadyForProcess.NotifyAll();
-
-	mLoadThread.join();
+	mUpdateWorkerThreads.Exit();
+	mRenderWorkerThreads.Exit();
 }
 
 

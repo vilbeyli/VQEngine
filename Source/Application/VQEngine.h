@@ -22,6 +22,7 @@
 #include "Platform.h"
 #include "Window.h"
 #include "Settings.h"
+#include "ThreadPool.h"
 
 #include "Source/Renderer/Renderer.h"
 
@@ -119,12 +120,6 @@ public:
 	void UpdateThread_UpdateAppState();
 	void UpdateThread_PostUpdate();
 
-	// ---------------------------------------------------------
-	// Load Thread
-	// ---------------------------------------------------------
-	void LoadThread_Main();
-	void LoadThread_WaitForLoadTask();
-
 
 //-----------------------------------------------------------------------
 private:
@@ -138,10 +133,10 @@ private:
 	std::atomic<bool> mbStopAllThreads;
 	std::thread mRenderThread;
 	std::thread mUpdateThread;
-	std::thread mLoadThread;
+	ThreadPool  mUpdateWorkerThreads;
+	ThreadPool  mRenderWorkerThreads;
 
 	// sync
-	Signal              mSignalLoadTaskReadyForProcess;
 	Signal              mSignalRenderLoopFinished;
 	Signal              mSignalUpdateLoopFinished;
 	std::atomic<bool>   mbRenderThreadInitialized;
@@ -158,10 +153,13 @@ private:
 
 	// data
 	FEngineSettings         mSettings;
+	EAppState               mAppState;
+
+	// scene
 	MainWindowScene         mScene_MainWnd;
 	DebugWindowScene        mScene_DebugWnd;
 	std::unordered_map<HWND, IWindowUpdateContext*> mWindowUpdateContextLookup;
-	EAppState               mAppState;
+
 
 private:
 	// Reads EngineSettings.ini from next to the executable and returns a 
