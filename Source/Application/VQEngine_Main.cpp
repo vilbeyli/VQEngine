@@ -29,7 +29,7 @@ constexpr char* BUILD_CONFIG = "Debug";
 #else
 constexpr char* BUILD_CONFIG = "Release";
 #endif
-constexpr char* VQENGINE_VERSION = "v0.1.0";
+constexpr char* VQENGINE_VERSION = "v0.0.0";
 
 
 void VQEngine::MainThread_Tick()
@@ -158,7 +158,7 @@ void VQEngine::ExitThreads()
 	// as the one held by the waiting thread(s); in fact doing so is a pessimization, 
 	// since the notified thread would immediately block again, waiting for the 
 	// notifying thread to release the lock.
-	mCVLoadTasksReadyForProcess.notify_all();
+	mSignalLoadTaskReadyForProcess.NotifyAll();
 
 	mLoadThread.join();
 }

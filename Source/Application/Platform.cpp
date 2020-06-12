@@ -18,6 +18,7 @@
 
 #include "Platform.h"
 #include "Window.h"
+#include "../Renderer/Renderer.h" // GetDX12Adapters
 
 #include <dxgi1_6.h>
 
@@ -97,4 +98,23 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 
 	return DefWindowProc(hwnd, uMsg, wParam, lParam);
+}
+
+FSystemInfo FSystemInfo::GetSystemInfo()
+{
+	FSystemInfo inf = {};
+
+	// GPU 
+	inf.GPUInfoVec = std::move(VQRenderer::EnumerateDX12Adapters(false, false));
+	
+	// MONITOR
+	// TODO
+
+	// CPU
+	// TODO
+
+	// RAM
+	// TODO
+
+	return inf;
 }

@@ -42,7 +42,5 @@ void VQEngine::LoadThread_Main()
 
 void VQEngine::LoadThread_WaitForLoadTask()
 {
-	// Block until we have a Load Task ready to go
-	std::unique_lock<std::mutex> lk(mMtxLoadTasksReadyForProcess);
-	mCVLoadTasksReadyForProcess.wait(lk);
+	mSignalLoadTaskReadyForProcess.Wait();
 }

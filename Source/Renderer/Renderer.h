@@ -22,6 +22,7 @@
 #include "SwapChain.h"
 #include "CommandQueue.h"
 
+#include "../Application/Platform.h" // FGPUInfo
 #include "../Application/Settings.h"
 #include "../Application/Types.h"
 
@@ -47,6 +48,9 @@ struct FRendererInitializeParameters
 
 class VQRenderer
 {
+public:
+	static std::vector< FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters = false);
+
 public:
 	void Initialize(const FRendererInitializeParameters& RendererInitParams);
 	void Exit();

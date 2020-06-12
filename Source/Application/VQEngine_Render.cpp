@@ -56,14 +56,12 @@ void VQEngine::RenderThread_WaitForUpdateThread()
 	Log::Info("r:wait : u=%llu, r=%llu", mNumUpdateLoopsExecuted.load(), mNumRenderLoopsExecuted.load());
 #endif
 
-	// wait until we have at least 1 frame updated
-	std::unique_lock<std::mutex> lk(mMtxUpdateLoopFinished);
-	mCVUpdateLoopFinished.wait(lk, [&]() { return (mNumUpdateLoopsExecuted - mNumRenderLoopsExecuted) > 0; });
+	mSignalUpdateLoopFinished.Wait([&]() { return (mNumUpdateLoopsExecuted - mNumRenderLoopsExecuted) > 0; });
 }
 
 void VQEngine::RenderThread_SignalUpdateThread()
 {
-	mCVRenderLoopFinished.notify_all();
+	mSignalRenderLoopFinished.NotifyAll();
 }
 
 
@@ -108,8 +106,6 @@ void VQEngine::RenderThread_Render()
 {
 	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain);
 	const int FRAME_DATA_INDEX  = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
-	
-	// TODO: sync with CPU
 	
 
 	// TODO: render in parallel???

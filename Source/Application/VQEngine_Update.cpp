@@ -62,16 +62,13 @@ void VQEngine::UpdateThread_WaitForRenderThread()
 	Log::Info("u:wait : u=%llu, r=%llu", mNumUpdateLoopsExecuted.load(), mNumRenderLoopsExecuted.load());
 #endif
 
-	
 
-	// wait if we're more than NUM_FRAME_DIFFERENCE frames ahead
-	std::unique_lock<std::mutex> lk(mMtxRenderLoopFinished);
-	mCVRenderLoopFinished.wait(lk, [&]() { return (mNumUpdateLoopsExecuted - mNumRenderLoopsExecuted) < mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain); });
+	mSignalRenderLoopFinished.Wait([&]() { return (mNumUpdateLoopsExecuted - mNumRenderLoopsExecuted) < mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain); });
 }
 
 void VQEngine::UpdateThread_SignalRenderThread()
 {
-	mCVUpdateLoopFinished.notify_all();
+	mSignalUpdateLoopFinished.NotifyAll();
 }
 
 void VQEngine::UpdateThread_PreUpdate()
@@ -84,7 +81,24 @@ void VQEngine::UpdateThread_PreUpdate()
 
 void VQEngine::UpdateThread_UpdateAppState()
 {
-	// update scene data
+	// We'
+	if (mAppState == EAppState::INITIALIZING)
+	{
+		// start loading
+		mAppState = EAppState::LOADING;
+	}
+
+	if (mbLoadingLevel)
+	{
+		// animate loading screen
+	}
+
+
+	else
+	{
+		// update scene data
+	}
+
 }
 
 void VQEngine::UpdateThread_PostUpdate()

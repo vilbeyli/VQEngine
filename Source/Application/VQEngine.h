@@ -61,6 +61,15 @@ public:
 };
 
 
+enum EAppState
+{
+	INITIALIZING = 0,
+	LOADING,
+	SIMULATING,
+	UNLOADING,
+	EXITING,
+	NUM_APP_STATES
+};
 
 class VQEngine : public IWindowOwner
 {
@@ -132,15 +141,13 @@ private:
 	std::thread mLoadThread;
 
 	// sync
-	std::condition_variable mCVLoadTasksReadyForProcess;
-	std::condition_variable mCVRenderLoopFinished;
-	std::condition_variable mCVUpdateLoopFinished;
-	std::mutex              mMtxLoadTasksReadyForProcess;
-	std::mutex              mMtxRenderLoopFinished;
-	std::mutex              mMtxUpdateLoopFinished;
-	std::atomic<bool>       mbRenderThreadInitialized;
-	std::atomic<uint64>     mNumRenderLoopsExecuted;
-	std::atomic<uint64>     mNumUpdateLoopsExecuted;
+	Signal              mSignalLoadTaskReadyForProcess;
+	Signal              mSignalRenderLoopFinished;
+	Signal              mSignalUpdateLoopFinished;
+	std::atomic<bool>   mbRenderThreadInitialized;
+	std::atomic<uint64> mNumRenderLoopsExecuted;
+	std::atomic<uint64> mNumUpdateLoopsExecuted;
+	std::atomic<bool>   mbLoadingLevel;
 
 	// windows
 	std::unique_ptr<Window> mpWinMain;
@@ -154,6 +161,7 @@ private:
 	MainWindowScene         mScene_MainWnd;
 	DebugWindowScene        mScene_DebugWnd;
 	std::unordered_map<HWND, IWindowUpdateContext*> mWindowUpdateContextLookup;
+	EAppState               mAppState;
 
 private:
 	// Reads EngineSettings.ini from next to the executable and returns a 
