@@ -31,6 +31,9 @@
 #include <condition_variable>
 #include <mutex>
 
+// Outputs Render/Update thread sync values on each Tick()
+#define DEBUG_LOG_THREAD_SYNC_VERBOSE 0
+
 class IWindowUpdateContext
 {
 public:
@@ -90,10 +93,22 @@ public:
 	void RenderThread_PreRender();
 	void RenderThread_Render();
 
+	inline bool RenderThread_ShouldWaitForUpdate() const { return mNumUpdateLoopsExecuted - mNumRenderLoopsExecuted == 0; }
+	void RenderThread_WaitForUpdateThread();
+	void RenderThread_SignalUpdateThread();
+
 	// ---------------------------------------------------------
 	// Update Thread
 	// ---------------------------------------------------------
 	void UpdateThread_Main();
+
+	inline bool UpdateThread_ShouldWaitForRender() const { return (mNumUpdateLoopsExecuted - mNumRenderLoopsExecuted) == mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain.get()); }
+	void UpdateThread_WaitForRenderThread();
+	void UpdateThread_SignalRenderThread();
+
+	void UpdateThread_PreUpdate();
+	void UpdateThread_UpdateAppState();
+	void UpdateThread_PostUpdate();
 
 	// ---------------------------------------------------------
 	// Load Thread
@@ -101,6 +116,8 @@ public:
 	void LoadThread_Main();
 	void LoadThread_WaitForLoadTask();
 
+
+//-----------------------------------------------------------------------
 private:
 	void InititalizeEngineSettings(const FStartupParameters& Params);
 	void InitializeApplicationWindows(const FStartupParameters& Params);
@@ -116,9 +133,14 @@ private:
 
 	// sync
 	std::condition_variable mCVLoadTasksReadyForProcess;
+	std::condition_variable mCVRenderLoopFinished;
+	std::condition_variable mCVUpdateLoopFinished;
 	std::mutex              mMtxLoadTasksReadyForProcess;
+	std::mutex              mMtxRenderLoopFinished;
+	std::mutex              mMtxUpdateLoopFinished;
 	std::atomic<bool>       mbRenderThreadInitialized;
 	std::atomic<uint64>     mNumRenderLoopsExecuted;
+	std::atomic<uint64>     mNumUpdateLoopsExecuted;
 
 	// windows
 	std::unique_ptr<Window> mpWinMain;

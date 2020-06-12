@@ -30,14 +30,45 @@ void VQEngine::RenderThread_Main()
 	bool bQuit = false;
 	while (!this->mbStopAllThreads && !bQuit)
 	{
+		if(RenderThread_ShouldWaitForUpdate())
+			RenderThread_WaitForUpdateThread();
+
+#if DEBUG_LOG_THREAD_SYNC_VERBOSE
+		Log::Info(/*"RenderThread_Tick() : */"r%d (u=%llu)", mNumRenderLoopsExecuted.load(), mNumUpdateLoopsExecuted.load());
+#endif
+
 		RenderThread_PreRender();
 		RenderThread_Render();
+
 		++mNumRenderLoopsExecuted;
+
+		RenderThread_SignalUpdateThread();
 	}
 
 	this->RenderThread_Exit();
 	Log::Info("RenderThread_Main() : Exit");
 }
+
+
+void VQEngine::RenderThread_WaitForUpdateThread()
+{
+#if DEBUG_LOG_THREAD_SYNC_VERBOSE
+	Log::Info("r:wait : u=%llu, r=%llu", mNumUpdateLoopsExecuted.load(), mNumRenderLoopsExecuted.load());
+#endif
+
+	// wait until we have at least 1 frame updated
+	std::unique_lock<std::mutex> lk(mMtxUpdateLoopFinished);
+	mCVUpdateLoopFinished.wait(lk, [&]() { return (mNumUpdateLoopsExecuted - mNumRenderLoopsExecuted) > 0; });
+}
+
+void VQEngine::RenderThread_SignalUpdateThread()
+{
+	mCVRenderLoopFinished.notify_all();
+}
+
+
+
+
 
 
 void VQEngine::RenderThread_Inititalize()

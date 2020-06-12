@@ -19,36 +19,82 @@
 #include "VQEngine.h"
 
 
+
 void VQEngine::UpdateThread_Main()
 {
 	Log::Info("UpdateThread_Main()");
+	mNumUpdateLoopsExecuted.store(0);
 
 	bool bQuit = false;
 	while (!mbStopAllThreads && !bQuit)
 	{
-		// update timer
-
-		// update input
+		UpdateThread_PreUpdate();
 
 		if (!mbRenderThreadInitialized)
 		{
 			continue;
 		}
 
-		// update main window frame data
+#if DEBUG_LOG_THREAD_SYNC_VERBOSE
+		Log::Info(/*"UpdateThread_Tick() : */"u%d (r=%llu)", mNumUpdateLoopsExecuted.load(), mNumRenderLoopsExecuted.load());
+#endif
 
-		// update debug window frame data
+		UpdateThread_UpdateAppState();
 
-		// wait if we're too ahead
-		
-		//Sleep(100);
-		//Log::Info("UpdateThread::Tick() %llu", mNumRenderLoopsExecuted.load());
+		UpdateThread_PostUpdate();
 
+		++mNumUpdateLoopsExecuted;
+
+		UpdateThread_SignalRenderThread();
+
+		if(UpdateThread_ShouldWaitForRender())
+			UpdateThread_WaitForRenderThread();
 	}
-
 
 	Log::Info("UpdateThread_Main() : Exit");
 }
+
+
+
+void VQEngine::UpdateThread_WaitForRenderThread()
+{
+#if DEBUG_LOG_THREAD_SYNC_VERBOSE
+	Log::Info("u:wait : u=%llu, r=%llu", mNumUpdateLoopsExecuted.load(), mNumRenderLoopsExecuted.load());
+#endif
+
+	
+
+	// wait if we're more than NUM_FRAME_DIFFERENCE frames ahead
+	std::unique_lock<std::mutex> lk(mMtxRenderLoopFinished);
+	mCVRenderLoopFinished.wait(lk, [&]() { return (mNumUpdateLoopsExecuted - mNumRenderLoopsExecuted) < mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain); });
+}
+
+void VQEngine::UpdateThread_SignalRenderThread()
+{
+	mCVUpdateLoopFinished.notify_all();
+}
+
+void VQEngine::UpdateThread_PreUpdate()
+{
+	// update timer
+
+	// update input
+
+}
+
+void VQEngine::UpdateThread_UpdateAppState()
+{
+	// update scene data
+}
+
+void VQEngine::UpdateThread_PostUpdate()
+{
+	// compute visibility 
+}
+
+
+// ===============================================================================================================================
+
 
 void MainWindowScene::Update()
 {
