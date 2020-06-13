@@ -4,7 +4,7 @@
 
 VQE stands for **VQEngine**: A DX12 rewrite of [VQEngine-Vanilla](https://github.com/vilbeyli/VQEngine) for fast prototyping of rendering techniques and experimenting with cutting-edge technology.
 
-VQE focuses on the following
+VQE will be focusing on the following
 
  - Multi-threaded execution
    - Update & Render Threads
@@ -32,23 +32,23 @@ Then, run the build scripts in `Build/` folder,
 ## Build Scripts
 
 
-| Script | What it does | Flags |
-| :-- | :-- | :--|
-| `GenerateSolutions.bat` | - Initializes the submodule repos<br/> - Runs `CMake` to generate visual studio solution files in `Build/SolutionFiles` directory <br/> - Launches Visual Studio | - `noVS` : Updates/Generates `VQE.sln` without launching a Visual Studio instance <br/><br/> ***Example** : `GenerateSolutions.bat -noVS` <br/> while VS is open to update solution files after modifying CmakeLists.txt without closing/relaunching VS*
-| `PackageEngine.bat` |   - Runs `GenerateSolutions.bat` if the visual studio solution doesn't exist <br/> - Builds the engine in Release configuration <br/> - Moves build output into `Build/_artifacts` folder | `-Clean` : Runs Clean on `VQE.sln` projects before building <br/> `-DebugOnly` : Builds the Debug binaries only <br/> `-Debug` : Builds Debug binaries in addition to Release <br/> `-RelWithDebInfo` : Builds the Release binaries with Debug info in addition to Release    <br/><br/> ***Note**: Release build is always on by default, unless `-DebugOnly` is specified* <br/><br/> ***Example**: `PackageEngine.bat -Clean -Debug -RelWithDebInfo ` <br/>will build all configurations after running Clean and copy the binaries into `Build/_artifacts` folder*
+| Script | |
+| :-- | :-- |
+| `GenerateSolutions.bat` | **What it does** <br/>- Initializes the submodule repos<br/> - Runs `CMake` to generate visual studio solution files in `Build/SolutionFiles` directory <br/> - Launches Visual Studio <br/> <br/> **Flags** <br/> - `noVS` : Updates/Generates `VQE.sln` without launching a Visual Studio instance <br/><br/> ***Example** : `GenerateSolutions.bat -noVS` <br/> while VS is open to update solution files after modifying CmakeLists.txt without closing/relaunching VS*
+| `PackageEngine.bat` | **What it does** <br/>  - Runs `GenerateSolutions.bat` if the visual studio solution doesn't exist <br/> - Builds the engine in Release configuration <br/> - Moves build output into `Build/_artifacts` folder <br/> <br/> **Flags** <br/> `-Clean` : Runs Clean on `VQE.sln` projects before building <br/> `-DebugOnly` : Builds the Debug binaries only <br/> `-Debug` : Builds Debug binaries in addition to Release <br/> `-RelWithDebInfo` : Builds the Release binaries with Debug info in addition to Release    <br/><br/> ***Note**: Release build is always on by default, unless `-DebugOnly` is specified* <br/><br/> ***Example**: `PackageEngine.bat -Clean -Debug -RelWithDebInfo ` <br/>will build all configurations after running Clean and copy the binaries into `Build/_artifacts` folder*
 
-# Usage
+# Engine Settings
 
 ## Command Line Parameters
+
+VQE supports the following command line parameters.
 
 | Parameter | Description |
 | :-- | :-- |
 | `-LogConsole` | Launches a console window that displays log messages |
 | `-LogFile=<value>` | Writes logs into an output file specified by `%FILE_NAME%`. <br/> ***Example**: `VQE.exe -LogFile=Logs/log.txt` will create `Logs/` directory if it doesn't exist, and will write log messages to the `log.txt` file*
-|
 | `-Test` | Launches the application in test mode: The app renders a pre-defined amount of frames and then exits. |
 | `-TestFrames=<value>` | Launches the application in test mode with sepcified amount of frames. <br/> ***Example**: `VQE.exe -TestFrames=1000`* |
-|
 | `-W=<value>` <br/> `-Width=<value>` | Sets application main window width to the specified amount |
 | `-H=<value>` <br/> `-Height=<value>` | Sets application main window height to the specified amount |
 | `-ResX=<value>` | Sets application render resolution width |
@@ -58,6 +58,25 @@ Then, run the build scripts in `Build/` folder,
 | `-TripleBuffering` | Initializes SwapChain with 3 back buffers |
 | `-DoubleBuffering` | Initializes SwapChain with 2 back buffers |
 
+## Engine Settings
+
+VQE can be configured through `Data/EngineConfig.ini` file
+
+| Graphics | |
+| :-- | :-- |
+| `ResolutionX=<value:int>` | Sets application render resolution width | 
+| `ResolutionY=<value:int>` | Sets application render resolution height |
+| `VSync=<value:bool>` | Toggles VSync on/off based on the specified `<value>` |
+
+<br/>
+
+| Engine | |
+| :-- | :-- |
+| `Width=<value:int>` | Sets application main window width | 
+| `Height=<value:int>` | Sets application main window height |
+
+
+**Note:** Command line parameters will override the `EngineSettings.ini` values.
 
 # 3rd-Party
 
