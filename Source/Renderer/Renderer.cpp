@@ -74,6 +74,7 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 		swapChainDesc.pCmdQueue = &ctx.PresentQueue;
 		swapChainDesc.bVSync = ctx.bVsync;
 		ctx.SwapChain.Create(swapChainDesc);
+		Log::Info("[Renderer] Created swapchain<hwnd=0x%x> w/ %d back buffers.", wnd.hwnd, NUM_SWAPCHAIN_BUFFERS);
 
 		// Create command allocators
 		ctx.mCommandAllocatorsGFX.resize(NUM_SWAPCHAIN_BUFFERS);
@@ -95,6 +96,8 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 		this->mRenderContextLookup.emplace(wnd.hwnd, std::move(ctx));
 	}
 
+	Log::Info("[Renderer] Initialized.");
+	// TODO: Log system info
 }
 
 void VQRenderer::Exit()

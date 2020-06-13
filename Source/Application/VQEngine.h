@@ -35,6 +35,7 @@
 // Outputs Render/Update thread sync values on each Tick()
 #define DEBUG_LOG_THREAD_SYNC_VERBOSE 0
 
+
 class IWindowUpdateContext
 {
 public:
@@ -51,6 +52,7 @@ public:
 
 //private:
 	std::vector<FFrameData> mFrameData;
+	std::vector<FLoadingScreenData> mLoadingScreenData;
 };
 class DebugWindowScene : public IWindowUpdateContext
 {
@@ -59,6 +61,7 @@ public:
 
 //private:
 	std::vector<FFrameData> mFrameData;
+	std::vector<FLoadingScreenData> mLoadingScreenData;
 };
 
 
@@ -77,6 +80,7 @@ class VQEngine : public IWindowOwner
 public:
 
 public:
+
 	// ---------------------------------------------------------
 	// Main Thread
 	// ---------------------------------------------------------
@@ -89,7 +93,7 @@ public:
 	void OnWindowMinimize() override;
 	void OnWindowFocus() override;
 	void OnWindowKeyDown(WPARAM wParam) override;
-	void OnWindowClose() override;
+	void OnWindowClose(IWindow* pWindow) override;
 	
 	void MainThread_Tick();
 
@@ -99,25 +103,41 @@ public:
 	void RenderThread_Main();
 	void RenderThread_Inititalize();
 	void RenderThread_Exit();
-
-	void RenderThread_PreRender();
-	void RenderThread_Render();
-
-	inline bool RenderThread_ShouldWaitForUpdate() const { return mNumUpdateLoopsExecuted - mNumRenderLoopsExecuted == 0; }
 	void RenderThread_WaitForUpdateThread();
 	void RenderThread_SignalUpdateThread();
+
+	// PRE_RENDER()
+	// - TBA
+	void RenderThread_PreRender();
+
+	// RENDER()
+	// - Records command lists in parallel per SceneView
+	// - Submits commands to the GPU
+	// - Presents SwapChain
+	void RenderThread_Render();
+
 
 	// ---------------------------------------------------------
 	// Update Thread
 	// ---------------------------------------------------------
 	void UpdateThread_Main();
-
-	inline bool UpdateThread_ShouldWaitForRender() const { return (mNumUpdateLoopsExecuted - mNumRenderLoopsExecuted) == mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain.get()); }
 	void UpdateThread_WaitForRenderThread();
 	void UpdateThread_SignalRenderThread();
 
+	// PRE_UPDATE()
+	// - Updates timer
+	// - Updates input state reading from Main Thread's input queue
 	void UpdateThread_PreUpdate();
+	
+	// UPDATE()
+	// - Updates program state (init/load/sim/unload/exit)
+	// - Starts loading tasks
+	// - Animates loading screen
+	// - Updates scene data
 	void UpdateThread_UpdateAppState();
+
+	// POST_UPDATE()
+	// - Computes visibility per SceneView
 	void UpdateThread_PostUpdate();
 
 
@@ -128,6 +148,10 @@ private:
 	void InitializeThreads();
 	void ExitThreads();
 
+	void LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete
+	void Load_SceneData_Dispatch();
+	void Load_SceneData_Join();
+
 private:
 	// threads
 	std::atomic<bool> mbStopAllThreads;
@@ -137,12 +161,9 @@ private:
 	ThreadPool  mRenderWorkerThreads;
 
 	// sync
-	Signal              mSignalRenderLoopFinished;
-	Signal              mSignalUpdateLoopFinished;
-	std::atomic<bool>   mbRenderThreadInitialized;
-	std::atomic<uint64> mNumRenderLoopsExecuted;
-	std::atomic<uint64> mNumUpdateLoopsExecuted;
-	std::atomic<bool>   mbLoadingLevel;
+	std::unique_ptr<Semaphore> mpSemUpdate;
+	std::unique_ptr<Semaphore> mpSemRender;
+	
 
 	// windows
 	std::unique_ptr<Window> mpWinMain;
@@ -151,7 +172,11 @@ private:
 	// render
 	VQRenderer              mRenderer;
 
-	// data
+	// data / state
+	std::atomic<bool>       mbRenderThreadInitialized;
+	std::atomic<uint64>     mNumRenderLoopsExecuted;
+	std::atomic<uint64>     mNumUpdateLoopsExecuted;
+	std::atomic<bool>       mbLoadingLevel;
 	FEngineSettings         mSettings;
 	EAppState               mAppState;
 

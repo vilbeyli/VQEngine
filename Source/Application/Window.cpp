@@ -99,15 +99,9 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
     ::SetWindowLongPtr(hwnd_, GWLP_USERDATA, reinterpret_cast<LONG_PTR> (this));
 
     // Show the window and paint its contents.
-    ::ShowWindow(hwnd_, SW_SHOWDEFAULT);
-    //::UpdateWindow(hwnd_);
+    //Show();
 }
-void Window::OnClose()
-{
-    this->isClosed_ = true;
-    ::ShowWindow(hwnd_, FALSE);
-    ::DestroyWindow(hwnd_);
-}
+
 ///////////////////////////////////////////////////////////////////////////////
 bool IWindow::IsClosed() const
 {
@@ -118,6 +112,25 @@ bool IWindow::IsClosed() const
 HWND Window::GetHWND() const
 {
     return hwnd_;
+}
+
+void Window::Show()
+{
+    ::ShowWindow(hwnd_, SW_SHOWDEFAULT);
+    //::UpdateWindow(hwnd_);
+}
+
+void Window::Minimize()
+{
+
+    ::ShowWindow(hwnd_, SW_MINIMIZE);
+}
+
+void Window::Close()
+{
+    this->isClosed_ = true;
+    ::ShowWindow(hwnd_, FALSE);
+    ::DestroyWindow(hwnd_);
 }
 
 /////////////////////////////////////////////////////////////////////////

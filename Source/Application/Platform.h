@@ -113,3 +113,19 @@ private:
 	std::mutex mtx;
 	std::condition_variable cv;
 };
+
+class Semaphore
+{
+public:
+	Semaphore(int val, int max) : maxVal(max), currVal(val) {}
+
+	inline void P() { Wait(); }
+	inline void V() { Signal(); }
+	void Wait();
+	void Signal();
+
+private:
+	int currVal, maxVal;
+	std::mutex mtx;
+	std::condition_variable cv;
+};

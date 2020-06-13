@@ -37,6 +37,12 @@ struct FFrameData
 {
 	std::array<float, 4> SwapChainClearColor;
 };
+struct FLoadingScreenData
+{
+	std::array<float, 4> SwapChainClearColor;
+	// TODO: loading screen background img resource
+	// TODO: animation resources
+};
 
 struct FRendererInitializeParameters
 {

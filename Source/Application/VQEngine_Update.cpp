@@ -47,8 +47,7 @@ void VQEngine::UpdateThread_Main()
 
 		UpdateThread_SignalRenderThread();
 
-		if(UpdateThread_ShouldWaitForRender())
-			UpdateThread_WaitForRenderThread();
+		UpdateThread_WaitForRenderThread();
 	}
 
 	Log::Info("UpdateThread_Main() : Exit");
@@ -62,13 +61,12 @@ void VQEngine::UpdateThread_WaitForRenderThread()
 	Log::Info("u:wait : u=%llu, r=%llu", mNumUpdateLoopsExecuted.load(), mNumRenderLoopsExecuted.load());
 #endif
 
-
-	mSignalRenderLoopFinished.Wait([&]() { return (mNumUpdateLoopsExecuted - mNumRenderLoopsExecuted) < mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain); });
+	mpSemUpdate->Wait();
 }
 
 void VQEngine::UpdateThread_SignalRenderThread()
 {
-	mSignalUpdateLoopFinished.NotifyAll();
+	mpSemRender->Signal();
 }
 
 void VQEngine::UpdateThread_PreUpdate()
@@ -87,10 +85,16 @@ void VQEngine::UpdateThread_UpdateAppState()
 	{
 		// start loading
 		Log::Info("Main Thread starts loading...");
-		
-		mUpdateWorkerThreads.AddTask([&]() { Sleep(5000); });
+	
+		// Do not show windows until we have the loading screen data ready.
+		LoadLoadingScreenData();
+		mpWinMain->Show();
+		mpWinDebug->Show();
 
+		// start load level
+		Load_SceneData_Dispatch();
 		mAppState = EAppState::LOADING;
+
 		mbLoadingLevel.store(true);
 	}
 

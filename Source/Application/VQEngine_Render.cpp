@@ -30,8 +30,7 @@ void VQEngine::RenderThread_Main()
 	bool bQuit = false;
 	while (!this->mbStopAllThreads && !bQuit)
 	{
-		if(RenderThread_ShouldWaitForUpdate())
-			RenderThread_WaitForUpdateThread();
+		RenderThread_WaitForUpdateThread();
 
 #if DEBUG_LOG_THREAD_SYNC_VERBOSE
 		Log::Info(/*"RenderThread_Tick() : */"r%d (u=%llu)", mNumRenderLoopsExecuted.load(), mNumUpdateLoopsExecuted.load());
@@ -56,12 +55,12 @@ void VQEngine::RenderThread_WaitForUpdateThread()
 	Log::Info("r:wait : u=%llu, r=%llu", mNumUpdateLoopsExecuted.load(), mNumRenderLoopsExecuted.load());
 #endif
 
-	mSignalUpdateLoopFinished.Wait([&]() { return (mNumUpdateLoopsExecuted - mNumRenderLoopsExecuted) > 0; });
+	mpSemRender->Wait();
 }
 
 void VQEngine::RenderThread_SignalUpdateThread()
 {
-	mSignalRenderLoopFinished.NotifyAll();
+	mpSemUpdate->Signal();
 }
 
 
@@ -76,18 +75,6 @@ void VQEngine::RenderThread_Inititalize()
 	params.Windows.push_back(FWindowRepresentation(mpWinDebug, false));
 	params.Settings = mSettings.gfx;
 	mRenderer.Initialize(params);
-
-	// TODO: initialize window scene data here for now, should update this to proper location later on (Scene probably?)
-	FFrameData data[2];
-	data[0].SwapChainClearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
-	data[1].SwapChainClearColor = { 0.80f, 0.45f, 0.01f, 1.0f };
-	const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain);
-	const int NumBackBuffer_WndDbg  = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinDebug);
-	mScene_MainWnd.mFrameData.resize(NumBackBuffer_WndMain, data[0]);
-	mScene_DebugWnd.mFrameData.resize(NumBackBuffer_WndDbg, data[1]);
-
-	mWindowUpdateContextLookup[mpWinMain->GetHWND()]  = &mScene_MainWnd;
-	mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
 
 	mbRenderThreadInitialized.store(true);
 	mNumRenderLoopsExecuted.store(0);
@@ -108,8 +95,19 @@ void VQEngine::RenderThread_Render()
 	const int FRAME_DATA_INDEX  = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
 	
 
-	// TODO: render in parallel???
-	mRenderer.RenderWindowContext(mpWinMain->GetHWND() , mScene_MainWnd.mFrameData[FRAME_DATA_INDEX]);
-	mRenderer.RenderWindowContext(mpWinDebug->GetHWND(), mScene_DebugWnd.mFrameData[FRAME_DATA_INDEX]);
+	if (mbLoadingLevel)
+	{
+		// TODO: proper data encalsulation + remove reinterpret cast.
+		//       this was good enough for testing threaded loading and is meant to be temporary.
+		mRenderer.RenderWindowContext(mpWinMain->GetHWND() , *reinterpret_cast<FFrameData*>(&mScene_MainWnd.mLoadingScreenData[FRAME_DATA_INDEX]));
+		mRenderer.RenderWindowContext(mpWinDebug->GetHWND(), *reinterpret_cast<FFrameData*>(&mScene_DebugWnd.mLoadingScreenData[FRAME_DATA_INDEX]));
+	}
+	
+	else
+	{
+		// TODO: render in parallel???
+		mRenderer.RenderWindowContext(mpWinMain->GetHWND(), mScene_MainWnd.mFrameData[FRAME_DATA_INDEX]);
+		mRenderer.RenderWindowContext(mpWinDebug->GetHWND(), mScene_DebugWnd.mFrameData[FRAME_DATA_INDEX]);
+	}
 }
 

@@ -30,6 +30,23 @@
 #include "VQEngine.h"
 
 
+#define LOG_WINDOW_MESSAGE_EVENTS 1
+static void LogWndMsg(UINT uMsg, HWND hwnd)
+{
+#if LOG_WINDOW_MESSAGE_EVENTS
+	switch (uMsg)
+	{
+	case WM_CLOSE	: Log::Info("WM_CLOSE<hwnd=0x%x>", hwnd); break;
+	case WM_CREATE	: Log::Info("WM_CREATE<hwnd=0x%x>", hwnd); break;
+	case WM_SIZE	: Log::Info("WM_SIZE<hwnd=0x%x>", hwnd); break;
+	case WM_DESTROY	: Log::Info("WM_DESTROY<hwnd=0x%x>", hwnd); break;
+	case WM_KEYDOWN	: Log::Info("WM_KEYDOWN<hwnd=0x%x>", hwnd); break;
+	case WM_PAINT	: Log::Info("WM_PAINT<hwnd=0x%x>", hwnd); break;
+	default: Log::Warning("LogWndMsg not defined for msg=%u", uMsg); break;
+	}
+#endif
+}
+
 void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmdl)
 {
 	const std::string StrCmdLineParams = pScmdl;
@@ -115,6 +132,69 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 		}
 	}
 }
+
+
+
+LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	IWindow* pWindow = reinterpret_cast<IWindow*> (::GetWindowLongPtr(hwnd, GWLP_USERDATA));
+	if (!pWindow)
+	{
+		//Log::Warning("WndProc::pWindow=nullptr");
+		return DefWindowProc(hwnd, uMsg, wParam, lParam);
+	}
+
+	switch (uMsg)
+	{
+	// https://docs.microsoft.com/en-us/windows/win32/learnwin32/managing-application-state-
+	case WM_CREATE:
+		LogWndMsg(uMsg, hwnd);
+		if(pWindow->pOwner) pWindow->pOwner->OnWindowCreate();
+		return 0;
+
+
+	// https://docs.microsoft.com/en-us/windows/win32/learnwin32/writing-the-window-procedure
+	case WM_SIZE:
+	{
+		LogWndMsg(uMsg, hwnd);
+		if (pWindow->pOwner) pWindow->pOwner->OnWindowResize(hwnd);
+		return 0;
+	}
+
+	case WM_KEYDOWN:
+		LogWndMsg(uMsg, hwnd);
+		if (pWindow->pOwner) pWindow->pOwner->OnWindowKeyDown(wParam);
+		return 0;
+
+	// https://docs.microsoft.com/en-us/windows/win32/learnwin32/painting-the-window
+	case WM_PAINT:
+	{
+		LogWndMsg(uMsg, hwnd);
+		PAINTSTRUCT ps;
+		HDC hdc = BeginPaint(hwnd, &ps);
+		FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW + 1));
+		EndPaint(hwnd, &ps);
+		return 0;
+	}
+
+
+	// https://docs.microsoft.com/en-us/windows/win32/learnwin32/closing-the-window
+	case WM_CLOSE:
+		LogWndMsg(uMsg, hwnd);
+		if (pWindow->pOwner) pWindow->pOwner->OnWindowClose(pWindow);
+		return 0;
+
+	case WM_DESTROY:
+		LogWndMsg(uMsg, hwnd);
+		return 0;
+
+	}
+
+
+	return DefWindowProc(hwnd, uMsg, wParam, lParam);
+}
+
+
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR pScmdl, int iCmdShow)
 {

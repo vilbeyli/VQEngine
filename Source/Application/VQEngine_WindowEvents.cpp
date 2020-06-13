@@ -47,6 +47,14 @@ void VQEngine::OnWindowKeyDown(WPARAM wParam)
 {
 }
 
-void VQEngine::OnWindowClose()
+void VQEngine::OnWindowClose(IWindow* pWindow)
 {
+	// todo: flush GPU ?
+
+
+	pWindow->Close();
+
+	if (pWindow == mpWinMain.get())
+		PostQuitMessage(0);
+
 }
