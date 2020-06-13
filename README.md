@@ -46,9 +46,9 @@ VQE supports the following command line parameters.
 | Parameter | Description |
 | :-- | :-- |
 | `-LogConsole` | Launches a console window that displays log messages |
-| `-LogFile=<value>` | Writes logs into an output file specified by `%FILE_NAME%`. <br/> ***Example**: `VQE.exe -LogFile=Logs/log.txt` <br/>will create `Logs/` directory if it doesn't exist, and will write log messages to the `log.txt` file*
+| `-LogFile=<value>` | Writes logs into an output file specified by `%FILE_NAME%`. <br/><br/> ***Example**: `VQE.exe -LogFile=Logs/log.txt` <br/>will create `Logs/` directory if it doesn't exist, and write log messages to the `log.txt` file*
 | `-Test` | Launches the application in test mode: <br/> The app renders a pre-defined amount of frames and then exits. |
-| `-TestFrames=<value>` | Application runs the sepcified amount of frames and then exits. <br/>Used for Automated testing. <br/> ***Example**: `VQE.exe -TestFrames=1000`* |
+| `-TestFrames=<value>` | Application runs the sepcified amount of frames and then exits. <br/>Used for Automated testing. <br/><br/> ***Example**: `VQE.exe -TestFrames=1000`* |
 | `-W=<value>` <br/> `-Width=<value>` | Sets application main window width to the specified amount |
 | `-H=<value>` <br/> `-Height=<value>` | Sets application main window height to the specified amount |
 | `-ResX=<value>` | Sets application render resolution width |
