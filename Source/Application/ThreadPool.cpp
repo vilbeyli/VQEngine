@@ -116,34 +116,28 @@ void ThreadPool::Exit()
 	}
 }
 
-int ThreadPool::GetNumActiveTasks()
-{
-	std::lock_guard<std::mutex> lk(mTaskQueue.mutex);
-	return mTaskQueue.activeTasks;
-}
-
 void ThreadPool::Execute()
 {
+	Task task;
+	
 	while (!mbStopWorkers)
-	{
-		Task task;
-		{
-			mSignal.Wait([&] { return mbStopWorkers || !mTaskQueue.queue.empty(); });
+	{		
+		mSignal.Wait([&] { return mbStopWorkers || !mTaskQueue.IsQueueEmpty(); });
 
-			if (mbStopWorkers)
-				break;
+		if (mbStopWorkers)
+			break;
 
-			{
-				std::lock_guard<std::mutex> lk(mTaskQueue.mutex);
-				task = std::move(mTaskQueue.queue.front());
-				mTaskQueue.queue.pop();
-			}
-		}
+		task = mTaskQueue.PopTask();
 		task();
-
-		{
-			std::lock_guard<std::mutex> lk(mTaskQueue.mutex);
-			--mTaskQueue.activeTasks;
-		}
+		mTaskQueue.OnTaskComplete();
 	}
+}
+
+Task TaskQueue::PopTask()
+{
+	Task t;
+	std::lock_guard<std::mutex> lk(mutex);
+	t = std::move(queue.front());
+	queue.pop();
+	return t;
 }

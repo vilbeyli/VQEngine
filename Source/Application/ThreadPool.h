@@ -26,35 +26,52 @@
 #include <mutex>
 #include <queue>
 #include <future>
+#include <atomic>
 #include <condition_variable>
 
 // http://www.cplusplus.com/reference/thread/thread/
 // https://stackoverflow.com/a/32593825/2034041
-// todo: finish implementation for shader hotswapping
 
 using Task = std::function<void()>;
 
-struct TaskQueue
+class TaskQueue
 {
-	int activeTasks = 0;
-	std::mutex		 mutex;
+public:
+	template<class T>
+	void AddTask(std::shared_ptr<T>& pTask)
+	{
+		std::unique_lock<std::mutex> lock(mutex);
+		queue.emplace([=]() { (*pTask)(); });
+		++activeTasks;
+	}
+	Task PopTask();
+
+	inline bool IsQueueEmpty()      const { std::unique_lock<std::mutex> lock(mutex); return queue.empty(); }
+	inline int  GetNumActiveTasks() const { return activeTasks; }
+
+	// must be called after Task() completes.
+	// TODO: can we do this with a callback mechanism somewhere?
+	inline void OnTaskComplete()          { --activeTasks; }
+
+private:
+	std::atomic<int> activeTasks = 0;
+	mutable std::mutex mutex; // https://stackoverflow.com/a/25521702/2034041
 	std::queue<Task> queue;
 };
 
 template<typename R>
 bool is_ready(std::future<R> const& f) { return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready; }
 
-// src: https://www.youtube.com/watch?v=eWTGtp3HXiw
-
 class ThreadPool
 {
+// src: https://www.youtube.com/watch?v=eWTGtp3HXiw
 public:
 	const static size_t ThreadPool::sHardwareThreadCount;
 
 	void Initialize(size_t numWorkers);
 	void Exit();
 
-	int GetNumActiveTasks() /*const*/;
+	inline int GetNumActiveTasks() const { return mTaskQueue.GetNumActiveTasks(); };
 
 	// Notes on C++11 Threading:
 	// ------------------------------------------------------------------------------------
@@ -94,18 +111,12 @@ public:
 	//std::future<decltype(task())> AddTask(T task)	// (why doesn't this compile)
 	auto AddTask(T task) -> std::future<decltype(task())>
 	{
+		using typename task_return_t = decltype(task());
+
 		// use a shared_ptr<> of packaged tasks here as we execute them in the thread pool workers as well
 		// as accesing its get_future() on the thread that calls this AddTask() function.
-		using typename task_return_t = decltype(task());
 		auto pTask = std::make_shared< std::packaged_task<task_return_t()>>(std::move(task));
-		{
-			std::unique_lock<std::mutex> lock(mTaskQueue.mutex);
-			mTaskQueue.queue.emplace([=]
-			{					// Add a lambda function to the task queue which 
-				(*pTask)();		// calls the packaged_task<>'s callable object -> T task 
-			});
-			++mTaskQueue.activeTasks;
-		}
+		mTaskQueue.AddTask(pTask);
 
 		mSignal.NotifyOne();
 		return pTask->get_future();
