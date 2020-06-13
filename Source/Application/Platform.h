@@ -33,6 +33,8 @@
 struct IDXGIAdapter1;
 struct IDXGIOutput;
 
+// -------------------------------------------------------------------------------
+
 struct FStartupParameters
 {
 	Log::LogInitializeParams  LogInitParams;
