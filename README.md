@@ -29,21 +29,18 @@ Then, run the build scripts in `Build/` folder,
 
 `VQE.sln` can be found in `Build/SolutionFiles` directory.
 
-## Build Scripts
+## Scripts
 
-
-| Script | |
+| File |  |
 | :-- | :-- |
 | `GenerateSolutions.bat` | **What it does** <br/>- Initializes the submodule repos<br/> - Runs `CMake` to generate visual studio solution files in `Build/SolutionFiles` directory <br/> - Launches Visual Studio <br/> <br/> **Flags** <br/> - `noVS` : Updates/Generates `VQE.sln` without launching a Visual Studio instance <br/><br/> ***Example** : `GenerateSolutions.bat -noVS` <br/> while VS is open to update solution files after modifying CmakeLists.txt without closing/relaunching VS*
 | `PackageEngine.bat` | **What it does** <br/>  - Runs `GenerateSolutions.bat` if the visual studio solution doesn't exist <br/> - Builds the engine in Release configuration <br/> - Moves build output into `Build/_artifacts` folder <br/> <br/> **Flags** <br/> `-Clean` : Runs Clean on `VQE.sln` projects before building <br/> `-DebugOnly` : Builds the Debug binaries only <br/> `-Debug` : Builds Debug binaries in addition to Release <br/> `-RelWithDebInfo` : Builds the Release binaries with Debug info in addition to Release    <br/><br/> ***Note**: Release build is always on by default, unless `-DebugOnly` is specified* <br/><br/> ***Example**: `PackageEngine.bat -Clean -Debug -RelWithDebInfo ` <br/>will build all configurations after running Clean and copy the binaries into `Build/_artifacts` folder*
 
-# Engine Settings
-
-## Command Line Parameters
+# Settings / Config
 
 VQE supports the following command line parameters.
 
-| Parameter | Description |
+| Parameter |  |
 | :-- | :-- |
 | `-LogConsole` | Launches a console window that displays log messages |
 | `-LogFile=<value>` | Writes logs into an output file specified by `%FILE_NAME%`. <br/><br/> ***Example**: `VQE.exe -LogFile=Logs/log.txt` <br/>will create `Logs/` directory if it doesn't exist, and write log messages to the `log.txt` file*
@@ -58,7 +55,7 @@ VQE supports the following command line parameters.
 | `-TripleBuffering` | Initializes SwapChain with 3 back buffers |
 | `-DoubleBuffering` | Initializes SwapChain with 2 back buffers |
 
-## Engine Settings
+<br>
 
 VQE can be configured through `Data/EngineConfig.ini` file
 
