@@ -19,36 +19,118 @@
 #include "VQEngine.h"
 
 
+
 void VQEngine::UpdateThread_Main()
 {
 	Log::Info("UpdateThread_Main()");
+	mNumUpdateLoopsExecuted.store(0);
 
 	bool bQuit = false;
 	while (!mbStopAllThreads && !bQuit)
 	{
-		// update timer
-
-		// update input
+		UpdateThread_PreUpdate();
 
 		if (!mbRenderThreadInitialized)
 		{
 			continue;
 		}
 
-		// update main window frame data
+#if DEBUG_LOG_THREAD_SYNC_VERBOSE
+		Log::Info(/*"UpdateThread_Tick() : */"u%d (r=%llu)", mNumUpdateLoopsExecuted.load(), mNumRenderLoopsExecuted.load());
+#endif
 
-		// update debug window frame data
+		UpdateThread_UpdateAppState();
 
-		// wait if we're too ahead
-		
-		//Sleep(100);
-		//Log::Info("UpdateThread::Tick() %llu", mNumRenderLoopsExecuted.load());
+		UpdateThread_PostUpdate();
+
+		++mNumUpdateLoopsExecuted;
+
+		UpdateThread_SignalRenderThread();
+
+		UpdateThread_WaitForRenderThread();
+	}
+
+	Log::Info("UpdateThread_Main() : Exit");
+}
+
+
+
+void VQEngine::UpdateThread_WaitForRenderThread()
+{
+#if DEBUG_LOG_THREAD_SYNC_VERBOSE
+	Log::Info("u:wait : u=%llu, r=%llu", mNumUpdateLoopsExecuted.load(), mNumRenderLoopsExecuted.load());
+#endif
+
+	mpSemUpdate->Wait();
+}
+
+void VQEngine::UpdateThread_SignalRenderThread()
+{
+	mpSemRender->Signal();
+}
+
+void VQEngine::UpdateThread_PreUpdate()
+{
+	// update timer
+
+	// update input
+
+}
+
+void VQEngine::UpdateThread_UpdateAppState()
+{
+	assert(mbRenderThreadInitialized);
+
+	if (mAppState == EAppState::INITIALIZING)
+	{
+		// start loading
+		Log::Info("Main Thread starts loading...");
+	
+		// Do not show windows until we have the loading screen data ready.
+		LoadLoadingScreenData();
+		mpWinMain->Show();
+		mpWinDebug->Show();
+
+		// start load level
+		Load_SceneData_Dispatch();
+		mAppState = EAppState::LOADING;
+
+		mbLoadingLevel.store(true);
+	}
+
+	if (mbLoadingLevel)
+	{
+		// animate loading screen
+
+
+		// check if loading is done
+		const int NumActiveTasks = mUpdateWorkerThreads.GetNumActiveTasks();
+		const bool bLoadDone = NumActiveTasks == 0;
+		if (bLoadDone)
+		{
+			Log::Info("Main Thread loaded");
+			mAppState = EAppState::SIMULATING;
+			mbLoadingLevel.store(false);
+		}
 
 	}
 
 
-	Log::Info("UpdateThread_Main() : Exit");
+	else
+	{
+		// update scene data
+	}
+
 }
+
+void VQEngine::UpdateThread_PostUpdate()
+{
+	// compute visibility 
+}
+
+
+// ===============================================================================================================================
+
 
 void MainWindowScene::Update()
 {

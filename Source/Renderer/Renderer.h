@@ -22,6 +22,7 @@
 #include "SwapChain.h"
 #include "CommandQueue.h"
 
+#include "../Application/Platform.h" // FGPUInfo
 #include "../Application/Settings.h"
 #include "../Application/Types.h"
 
@@ -36,6 +37,12 @@ struct FFrameData
 {
 	std::array<float, 4> SwapChainClearColor;
 };
+struct FLoadingScreenData
+{
+	std::array<float, 4> SwapChainClearColor;
+	// TODO: loading screen background img resource
+	// TODO: animation resources
+};
 
 struct FRendererInitializeParameters
 {
@@ -47,6 +54,9 @@ struct FRendererInitializeParameters
 
 class VQRenderer
 {
+public:
+	static std::vector< FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters = false);
+
 public:
 	void Initialize(const FRendererInitializeParameters& RendererInitParams);
 	void Exit();

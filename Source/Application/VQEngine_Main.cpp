@@ -29,17 +29,11 @@ constexpr char* BUILD_CONFIG = "Debug";
 #else
 constexpr char* BUILD_CONFIG = "Release";
 #endif
-constexpr char* VQENGINE_VERSION = "v0.1.0";
+constexpr char* VQENGINE_VERSION = "v0.0.0";
 
 
 void VQEngine::MainThread_Tick()
 {
-	if (mpWinMain->IsClosed())
-	{
-		mpWinDebug->OnClose();
-		PostQuitMessage(0);
-	}
-
 	if (this->mSettings.bAutomatedTestRun)
 	{
 		if (this->mSettings.NumAutomatedTestFrames <= mNumRenderLoopsExecuted)
@@ -47,7 +41,6 @@ void VQEngine::MainThread_Tick()
 			PostQuitMessage(0);
 		}
 	}
-
 
 	// TODO: populate input queue and signal Update thread 
 	//       to drain the buffered input from the queue
@@ -133,18 +126,29 @@ void VQEngine::InitializeApplicationWindows(const FStartupParameters& Params)
 	mainWndDesc.pWndOwner = this;
 	mainWndDesc.pfnWndProc = WndProc;
 	mpWinMain.reset(new Window(mSettings.strMainWindowTitle, mainWndDesc));
+	Log::Info("Created main window<0x%x>: %dx%d", mpWinMain->GetHWND(), mainWndDesc.width, mainWndDesc.height);
 
 	mainWndDesc.width  = mSettings.DebugWindow_Width;
 	mainWndDesc.height = mSettings.DebugWindow_Height;
 	mpWinDebug.reset(new Window(mSettings.strDebugWindowTitle, mainWndDesc));
+	Log::Info("Created debug window<0x%x>: %dx%d", mpWinDebug->GetHWND(), mainWndDesc.width, mainWndDesc.height);
 }
 
 void VQEngine::InitializeThreads()
 {
+	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
+	mpSemUpdate.reset(new Semaphore(NUM_SWAPCHAIN_BACKBUFFERS, NUM_SWAPCHAIN_BACKBUFFERS));
+	mpSemRender.reset(new Semaphore(0                        , NUM_SWAPCHAIN_BACKBUFFERS));
+
 	mbStopAllThreads.store(false);
 	mRenderThread = std::thread(&VQEngine::RenderThread_Main, this);
 	mUpdateThread = std::thread(&VQEngine::UpdateThread_Main, this);
-	mLoadThread   = std::thread(&VQEngine::LoadThread_Main, this);
+
+	const size_t HWThreads = ThreadPool::sHardwareThreadCount;
+	const size_t HWCores   = HWThreads/2;
+	const size_t NumWorkers = HWCores - 2; // reserve 2 cores for (Update + Render) + Main threads
+	mUpdateWorkerThreads.Initialize(NumWorkers);
+	mRenderWorkerThreads.Initialize(NumWorkers);
 }
 
 void VQEngine::ExitThreads()
@@ -153,15 +157,68 @@ void VQEngine::ExitThreads()
 	mRenderThread.join();
 	mUpdateThread.join();
 
-	// no need to lock here: https://en.cppreference.com/w/cpp/thread/condition_variable/notify_all
-	// The notifying thread does not need to hold the lock on the same mutex 
-	// as the one held by the waiting thread(s); in fact doing so is a pessimization, 
-	// since the notified thread would immediately block again, waiting for the 
-	// notifying thread to release the lock.
-	mCVLoadTasksReadyForProcess.notify_all();
-
-	mLoadThread.join();
+	mUpdateWorkerThreads.Exit();
+	mRenderWorkerThreads.Exit();
 }
+
+void VQEngine::LoadLoadingScreenData()
+{
+	// start loading loadingscreen data for each window 
+	auto fMain = mUpdateWorkerThreads.AddTask([&]()
+	{
+		FLoadingScreenData data;
+		data.SwapChainClearColor = { 0.0f, 0.5f, 0.0f, 1.0f };
+		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain);
+		mScene_MainWnd.mLoadingScreenData.resize(NumBackBuffer_WndMain, data);
+
+		mWindowUpdateContextLookup[mpWinMain->GetHWND()] = &mScene_MainWnd;
+		
+	});
+
+	auto fDbg = mUpdateWorkerThreads.AddTask([&]()
+	{
+		FLoadingScreenData data;
+		data.SwapChainClearColor = { 0.5f, 0.4f, 0.01f, 1.0f };
+		const int NumBackBuffer_WndDbg = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinDebug);
+		mScene_DebugWnd.mLoadingScreenData.resize(NumBackBuffer_WndDbg, data);
+
+		mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
+	});
+
+	Log::Info("Load_LoadingScreenData_Dispatch");
+
+	// loading screen data must be loaded right away.
+	if(fMain.valid()) fMain.get();
+	if(fDbg.valid()) fDbg.get();
+
+	Log::Info("Load_LoadingScreenData_Dispatch - DONE");
+
+}
+
+
+void VQEngine::Load_SceneData_Dispatch()
+{
+	mUpdateWorkerThreads.AddTask([&]() { Sleep(1000); Log::Info("Worker SLEEP done!"); }); // Test-task
+	mUpdateWorkerThreads.AddTask([&]()
+	{
+		// TODO: initialize window scene data here for now, should update this to proper location later on (Scene probably?)
+		FFrameData data[2];
+		data[0].SwapChainClearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
+		data[1].SwapChainClearColor = { 0.80f, 0.45f, 0.01f, 1.0f };
+		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain);
+		const int NumBackBuffer_WndDbg = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinDebug);
+		mScene_MainWnd.mFrameData.resize(NumBackBuffer_WndMain, data[0]);
+		mScene_DebugWnd.mFrameData.resize(NumBackBuffer_WndDbg, data[1]);
+
+		mWindowUpdateContextLookup[mpWinMain->GetHWND()] = &mScene_MainWnd;
+		mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
+	});
+}
+
+void VQEngine::Load_SceneData_Join()
+{
+}
+
 
 
 static std::pair<std::string, std::string> ParseLineINI(const std::string& iniLine)

@@ -22,6 +22,7 @@
 #include "Platform.h"
 #include "Window.h"
 #include "Settings.h"
+#include "ThreadPool.h"
 
 #include "Source/Renderer/Renderer.h"
 
@@ -30,6 +31,10 @@
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
+
+// Outputs Render/Update thread sync values on each Tick()
+#define DEBUG_LOG_THREAD_SYNC_VERBOSE 0
+
 
 class IWindowUpdateContext
 {
@@ -47,6 +52,7 @@ public:
 
 //private:
 	std::vector<FFrameData> mFrameData;
+	std::vector<FLoadingScreenData> mLoadingScreenData;
 };
 class DebugWindowScene : public IWindowUpdateContext
 {
@@ -55,15 +61,26 @@ public:
 
 //private:
 	std::vector<FFrameData> mFrameData;
+	std::vector<FLoadingScreenData> mLoadingScreenData;
 };
 
 
+enum EAppState
+{
+	INITIALIZING = 0,
+	LOADING,
+	SIMULATING,
+	UNLOADING,
+	EXITING,
+	NUM_APP_STATES
+};
 
 class VQEngine : public IWindowOwner
 {
 public:
 
 public:
+
 	// ---------------------------------------------------------
 	// Main Thread
 	// ---------------------------------------------------------
@@ -76,7 +93,7 @@ public:
 	void OnWindowMinimize() override;
 	void OnWindowFocus() override;
 	void OnWindowKeyDown(WPARAM wParam) override;
-	void OnWindowClose() override;
+	void OnWindowClose(IWindow* pWindow) override;
 	
 	void MainThread_Tick();
 
@@ -86,39 +103,67 @@ public:
 	void RenderThread_Main();
 	void RenderThread_Inititalize();
 	void RenderThread_Exit();
+	void RenderThread_WaitForUpdateThread();
+	void RenderThread_SignalUpdateThread();
 
+	// PRE_RENDER()
+	// - TBA
 	void RenderThread_PreRender();
+
+	// RENDER()
+	// - Records command lists in parallel per SceneView
+	// - Submits commands to the GPU
+	// - Presents SwapChain
 	void RenderThread_Render();
+
 
 	// ---------------------------------------------------------
 	// Update Thread
 	// ---------------------------------------------------------
 	void UpdateThread_Main();
+	void UpdateThread_WaitForRenderThread();
+	void UpdateThread_SignalRenderThread();
 
-	// ---------------------------------------------------------
-	// Load Thread
-	// ---------------------------------------------------------
-	void LoadThread_Main();
-	void LoadThread_WaitForLoadTask();
+	// PRE_UPDATE()
+	// - Updates timer
+	// - Updates input state reading from Main Thread's input queue
+	void UpdateThread_PreUpdate();
+	
+	// UPDATE()
+	// - Updates program state (init/load/sim/unload/exit)
+	// - Starts loading tasks
+	// - Animates loading screen
+	// - Updates scene data
+	void UpdateThread_UpdateAppState();
 
+	// POST_UPDATE()
+	// - Computes visibility per SceneView
+	void UpdateThread_PostUpdate();
+
+
+//-----------------------------------------------------------------------
 private:
 	void InititalizeEngineSettings(const FStartupParameters& Params);
 	void InitializeApplicationWindows(const FStartupParameters& Params);
 	void InitializeThreads();
 	void ExitThreads();
 
+	void LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete
+	void Load_SceneData_Dispatch();
+	void Load_SceneData_Join();
+
 private:
 	// threads
 	std::atomic<bool> mbStopAllThreads;
 	std::thread mRenderThread;
 	std::thread mUpdateThread;
-	std::thread mLoadThread;
+	ThreadPool  mUpdateWorkerThreads;
+	ThreadPool  mRenderWorkerThreads;
 
 	// sync
-	std::condition_variable mCVLoadTasksReadyForProcess;
-	std::mutex              mMtxLoadTasksReadyForProcess;
-	std::atomic<bool>       mbRenderThreadInitialized;
-	std::atomic<uint64>     mNumRenderLoopsExecuted;
+	std::unique_ptr<Semaphore> mpSemUpdate;
+	std::unique_ptr<Semaphore> mpSemRender;
+	
 
 	// windows
 	std::unique_ptr<Window> mpWinMain;
@@ -127,11 +172,19 @@ private:
 	// render
 	VQRenderer              mRenderer;
 
-	// data
+	// data / state
+	std::atomic<bool>       mbRenderThreadInitialized;
+	std::atomic<uint64>     mNumRenderLoopsExecuted;
+	std::atomic<uint64>     mNumUpdateLoopsExecuted;
+	std::atomic<bool>       mbLoadingLevel;
 	FEngineSettings         mSettings;
+	EAppState               mAppState;
+
+	// scene
 	MainWindowScene         mScene_MainWnd;
 	DebugWindowScene        mScene_DebugWnd;
 	std::unordered_map<HWND, IWindowUpdateContext*> mWindowUpdateContextLookup;
+
 
 private:
 	// Reads EngineSettings.ini from next to the executable and returns a 

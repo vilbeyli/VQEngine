@@ -22,6 +22,10 @@
 #include <Windows.h>
 #include <d3d12.h>
 
+#include <mutex>
+#include <condition_variable>
+#include <vector>
+
 #include "../../Libs/VQUtils/Source/Log.h"
 
 #include "Settings.h"
@@ -35,6 +39,7 @@ struct FStartupParameters
 	HINSTANCE                 hExeInstance;
 
 	FEngineSettings EngineSettings;
+
 	uint8 bOverrideGFXSetting_Width  : 1;
 	uint8 bOverrideGFXSetting_Height : 1;
 	uint8 bOverrideGFXSetting_bVSync : 1;
@@ -80,4 +85,47 @@ struct FMonitorInfo
 	uint VendorID;
 	bool bSupportsHDR;
 	IDXGIOutput* pDXGIOut;
+};
+
+struct FSystemInfo
+{
+	FCPUInfo                  CPUInfo;
+	std::vector<FGPUInfo>     GPUInfoVec;
+	std::vector<FMonitorInfo> MonitorInfoVec;
+	uint64                    RAM;
+	static FSystemInfo GetSystemInfo();
+};
+
+// ---------------------------------------------------------------------------------
+
+class Signal
+{
+public:
+	inline void NotifyOne() { cv.notify_one(); };
+	inline void NotifyAll() { cv.notify_all(); };
+
+	inline void Wait()               { std::unique_lock<std::mutex> lk(this->mtx); this->cv.wait(lk); }
+	inline void Wait(bool(*pPred)()) { std::unique_lock<std::mutex> lk(this->mtx); this->cv.wait(lk, pPred); }
+	template<class Functor>  // https://stackoverflow.com/questions/6458612/c0x-proper-way-to-receive-a-lambda-as-parameter-by-reference
+	inline void Wait(Functor fn)     { std::unique_lock<std::mutex> lk(this->mtx); this->cv.wait(lk, fn); }
+
+private:
+	std::mutex mtx;
+	std::condition_variable cv;
+};
+
+class Semaphore
+{
+public:
+	Semaphore(int val, int max) : maxVal(max), currVal(val) {}
+
+	inline void P() { Wait(); }
+	inline void V() { Signal(); }
+	void Wait();
+	void Signal();
+
+private:
+	int currVal, maxVal;
+	std::mutex mtx;
+	std::condition_variable cv;
 };

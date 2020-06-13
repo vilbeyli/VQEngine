@@ -21,6 +21,7 @@
 #include "Device.h"
 #include "../Application/Window.h"
 #include "../../Libs/VQUtils/Source/Log.h"
+#include "../../Libs/VQUtils/Source/utils.h"
 
 
 #ifdef _DEBUG
@@ -73,6 +74,7 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 		swapChainDesc.pCmdQueue = &ctx.PresentQueue;
 		swapChainDesc.bVSync = ctx.bVsync;
 		ctx.SwapChain.Create(swapChainDesc);
+		Log::Info("[Renderer] Created swapchain<hwnd=0x%x> w/ %d back buffers.", wnd.hwnd, NUM_SWAPCHAIN_BUFFERS);
 
 		// Create command allocators
 		ctx.mCommandAllocatorsGFX.resize(NUM_SWAPCHAIN_BUFFERS);
@@ -94,6 +96,8 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 		this->mRenderContextLookup.emplace(wnd.hwnd, std::move(ctx));
 	}
 
+	Log::Info("[Renderer] Initialized.");
+	// TODO: Log system info
 }
 
 void VQRenderer::Exit()
@@ -207,3 +211,89 @@ short VQRenderer::GetSwapChainBackBufferCountOfWindow(HWND hwnd) const
 	
 }
 
+
+
+// ================================================================================================================================================
+
+/*
+@bEnumerateSoftwareAdapters : Basic Render Driver adapter.
+*/
+std::vector< FGPUInfo > VQRenderer::EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters /*= false*/)
+{
+	std::vector< FGPUInfo > GPUs;
+	HRESULT hr = {};
+
+	IDXGIAdapter1* pAdapter = nullptr; // adapters are the graphics card (this includes the embedded graphics on the motherboard)
+	int iAdapter = 0;                  // we'll start looking for DX12  compatible graphics devices starting at index 0
+	bool bAdapterFound = false;        // set this to true when a good one was found
+
+	// https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/d3d10-graphics-programming-guide-dxgi
+	// https://stackoverflow.com/questions/42354369/idxgifactory-versions
+	// Chuck Walbourn: For DIrect3D 12, you can assume CreateDXGIFactory2 and IDXGIFactory4 or later is supported. 
+	IDXGIFactory6* pDxgiFactory; // DXGIFactory6 supports preferences when querying devices: DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE
+	UINT DXGIFlags = 0;
+	if (bEnableDebugLayer)
+	{
+		DXGIFlags |= DXGI_CREATE_FACTORY_DEBUG;
+	}
+	hr = CreateDXGIFactory2(DXGIFlags, IID_PPV_ARGS(&pDxgiFactory));
+
+	auto fnAddAdapter = [&bAdapterFound, &GPUs](IDXGIAdapter1*& pAdapter, const DXGI_ADAPTER_DESC1& desc, D3D_FEATURE_LEVEL FEATURE_LEVEL)
+	{
+		bAdapterFound = true;
+
+		FGPUInfo GPUInfo = {};
+		GPUInfo.DedicatedGPUMemory = desc.DedicatedVideoMemory;
+		GPUInfo.DeviceID = desc.DeviceId;
+		GPUInfo.DeviceName = StrUtil::UnicodeToASCII<_countof(desc.Description)>(desc.Description);
+		GPUInfo.VendorID = desc.VendorId;
+		GPUInfo.MaxSupportedFeatureLevel = FEATURE_LEVEL;
+		pAdapter->QueryInterface(IID_PPV_ARGS(&GPUInfo.pAdapter));
+		GPUs.push_back(GPUInfo);
+	};
+
+	// Find GPU with highest perf: https://stackoverflow.com/questions/49702059/dxgi-integred-pAdapter
+	// https://docs.microsoft.com/en-us/windows/win32/api/dxgi1_6/nf-dxgi1_6-idxgifactory6-enumadapterbygpupreference
+	while (pDxgiFactory->EnumAdapterByGpuPreference(iAdapter, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&pAdapter)) != DXGI_ERROR_NOT_FOUND)
+	{
+		DXGI_ADAPTER_DESC1 desc;
+		pAdapter->GetDesc1(&desc);
+
+		const bool bSoftwareAdapter = desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE;
+		if ((bEnumerateSoftwareAdapters && !bSoftwareAdapter) // We want software adapters, but we got a hardware adapter
+			|| (!bEnumerateSoftwareAdapters && bSoftwareAdapter) // We want hardware adapters, but we got a software adapter
+			)
+		{
+			++iAdapter;
+			pAdapter->Release();
+			continue;
+		}
+
+		hr = D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_12_1, _uuidof(ID3D12Device), nullptr);
+		if (SUCCEEDED(hr))
+		{
+			fnAddAdapter(pAdapter, desc, D3D_FEATURE_LEVEL_12_1);
+		}
+		else
+		{
+			const std::string AdapterDesc = StrUtil::UnicodeToASCII(desc.Description);
+			Log::Warning("Device::Create(): D3D12CreateDevice() with Feature Level 12_1 failed with adapter=%s, retrying with Feature Level 12_0", AdapterDesc.c_str());
+			hr = D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_12_0, _uuidof(ID3D12Device), nullptr);
+			if (SUCCEEDED(hr))
+			{
+				fnAddAdapter(pAdapter, desc, D3D_FEATURE_LEVEL_12_0);
+			}
+			else
+			{
+				Log::Error("Device::Create(): D3D12CreateDevice() with Feature Level 12_0 failed ith adapter=%s", AdapterDesc.c_str());
+			}
+		}
+
+		pAdapter->Release();
+		++iAdapter;
+	}
+	pDxgiFactory->Release();
+	assert(bAdapterFound);
+
+	return GPUs;
+}

@@ -71,6 +71,7 @@ private:
 	std::string name_;
 };
 
+struct IWindow;
 class IWindowOwner
 {
 public:
@@ -78,7 +79,7 @@ public:
 	virtual void OnWindowResize(HWND) = 0;
 	virtual void OnWindowMinimize() = 0;
 	virtual void OnWindowFocus() = 0;
-	virtual void OnWindowClose() = 0;
+	virtual void OnWindowClose(IWindow* pWnd) = 0;
 	virtual void OnWindowKeyDown(WPARAM) = 0;
 };
 
@@ -92,8 +93,11 @@ public:
 
 	virtual ~IWindow();
 
+	virtual void Show()     = 0;
+	virtual void Minimize() = 0;
+	virtual void Close()    = 0;
+
 	bool IsClosed() const;
-	virtual void OnClose() = 0;
 
 	int GetWidth() const;
 	int GetHeight() const;
@@ -124,7 +128,9 @@ public:
 
 	HWND GetHWND() const;
 
-	void OnClose() override;
+	void Show() override;
+	void Minimize() override;
+	void Close() override;
 
 private:
 	inline bool IsClosedImpl()  const override { return isClosed_; }
