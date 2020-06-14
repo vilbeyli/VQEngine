@@ -46,6 +46,7 @@ set (SourceVQE
 add_link_options(/SUBSYSTEM:WINDOWS)
 
 add_subdirectory(Libs/VQUtils)
+add_subdirectory(Libs/D3D12MA)
 add_subdirectory(Source/Renderer)
 
 source_group("Config" FILES ${Config})
