@@ -21,15 +21,21 @@
 #include "Device.h"
 #include "SwapChain.h"
 #include "CommandQueue.h"
+#include "ResourceHeaps.h"
+#include "Buffer.h"
 
 #include "../Application/Platform.h" // FGPUInfo
 #include "../Application/Settings.h"
 #include "../Application/Types.h"
 
+#include <wrl.h> // ComPtr
+using namespace Microsoft::WRL;
+
 #include <vector>
 #include <unordered_map>
 #include <array>
 
+namespace D3D12MA { class Allocator; }
 class Window;
 
 // Data to be updated per frame
@@ -59,17 +65,22 @@ public:
 
 public:
 	void Initialize(const FRendererInitializeParameters& RendererInitParams);
+	void Load();
+	void RenderWindowContext(HWND hwnd, const FFrameData& FrameData);
+	void Unload();
 	void Exit();
 
-	void RenderWindowContext(HWND hwnd, const FFrameData& FrameData);
 
 	inline short GetSwapChainBackBufferCountOfWindow(std::unique_ptr<Window>& pWnd) const { return GetSwapChainBackBufferCountOfWindow(pWnd.get()); };
 	short GetSwapChainBackBufferCountOfWindow(Window* pWnd) const;
 	short GetSwapChainBackBufferCountOfWindow(HWND hwnd) const;
 
 private:
-	// Private Functions go here
+	void InitializeD3D12MA();
+	void InitializeResourceHeaps();
 
+	void LoadPSOs();
+	void LoadDefaultResources();
 
 private:
 	// RenderWindowContext struct encapsulates the swapchain and window association
@@ -93,15 +104,40 @@ private:
 		ID3D12GraphicsCommandList* pCmdList_GFX = nullptr;
 
 		bool bVsync = false;
+
+		int MainRTResolutionX;
+		int MainRTResolutionY;
 	};
+	using VBV = D3D12_VERTEX_BUFFER_VIEW;
+	using IBV = D3D12_INDEX_BUFFER_VIEW;
 
 private:
-	Device mDevice; // GPU
-
-	std::unordered_map<HWND, FRenderWindowContext> mRenderContextLookup;
-
+	// GPU
+	Device mDevice; 
 	CommandQueue mGFXQueue;
 	CommandQueue mComputeQueue;
 	CommandQueue mCopyQueue;
+
+	// memory
+	D3D12MA::Allocator* mpAllocator;
+	StaticResourceViewHeap mHeapRTV;
+	StaticResourceViewHeap mHeapDSV;
+	StaticResourceViewHeap mHeapCBV_SRV_UAV;
+	StaticResourceViewHeap mHeapSampler;
+	UploadHeap             mHeapUpload;
+
+
+	StaticBufferPool mStaticBufferPool;
+
+	// resources
+	std::vector<VBV> mVertexBufferViews;
+	std::vector<IBV> mIndexBufferViews;
+
+	// PSOs
+	ComPtr<ID3D12RootSignature> mpRootSignature;
+	ComPtr<ID3D12PipelineState> mpPSO;
+
+	// data
+	std::unordered_map<HWND, FRenderWindowContext> mRenderContextLookup;
 
 };

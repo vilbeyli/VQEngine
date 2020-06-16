@@ -27,6 +27,8 @@ void VQEngine::RenderThread_Main()
 	Log::Info("RenderThread_Main()");
 	this->RenderThread_Inititalize();
 
+	this->mRenderer.Load();
+
 	bool bQuit = false;
 	while (!this->mbStopAllThreads && !bQuit)
 	{
@@ -43,6 +45,8 @@ void VQEngine::RenderThread_Main()
 
 		RenderThread_SignalUpdateThread();
 	}
+
+	this->mRenderer.Unload();
 
 	this->RenderThread_Exit();
 	Log::Info("RenderThread_Main() : Exit");

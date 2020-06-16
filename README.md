@@ -12,7 +12,7 @@ VQE will be focusing on the following
  - HDR display support
  - Real-time and offline Ray Tracing
 
-
+![](Screenshots/HelloTriangle.png)
 
 # Build
 

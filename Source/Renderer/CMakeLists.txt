@@ -12,6 +12,9 @@ set (Headers
     "SwapChain.h"
     "CommandQueue.h"
     "Fence.h"
+    "ResourceHeaps.h"
+    "Buffer.h"
+    "Common.h"
 )
 
 set (Source
@@ -20,6 +23,8 @@ set (Source
     "SwapChain.cpp"
     "CommandQueue.cpp"
     "Fence.cpp"
+    "ResourceHeaps.cpp"
+    "Buffer.cpp"
 )
 
 # set ouput directory
@@ -34,3 +39,5 @@ endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 # add_link_options(/SUBSYSTEM:WINDOWS)
 
 add_library(${PROJECT_NAME} STATIC ${Headers} ${Source} )
+
+target_link_libraries(${PROJECT_NAME} PRIVATE D3D12MA )
