@@ -27,6 +27,8 @@ void VQEngine::RenderThread_Main()
 	Log::Info("RenderThread_Main()");
 	this->RenderThread_Inititalize();
 
+	this->mRenderer.Load();
+
 	bool bQuit = false;
 	while (!this->mbStopAllThreads && !bQuit)
 	{
@@ -43,6 +45,8 @@ void VQEngine::RenderThread_Main()
 
 		RenderThread_SignalUpdateThread();
 	}
+
+	this->mRenderer.Unload();
 
 	this->RenderThread_Exit();
 	Log::Info("RenderThread_Main() : Exit");
@@ -72,7 +76,7 @@ void VQEngine::RenderThread_Inititalize()
 {
 	FRendererInitializeParameters params = {};
 	params.Windows.push_back(FWindowRepresentation(mpWinMain , mSettings.gfx.bVsync));
-	params.Windows.push_back(FWindowRepresentation(mpWinDebug, false));
+	if(mpWinDebug) params.Windows.push_back(FWindowRepresentation(mpWinDebug, false));
 	params.Settings = mSettings.gfx;
 	mRenderer.Initialize(params);
 
@@ -100,14 +104,14 @@ void VQEngine::RenderThread_Render()
 		// TODO: proper data encalsulation + remove reinterpret cast.
 		//       this was good enough for testing threaded loading and is meant to be temporary.
 		mRenderer.RenderWindowContext(mpWinMain->GetHWND() , *reinterpret_cast<FFrameData*>(&mScene_MainWnd.mLoadingScreenData[FRAME_DATA_INDEX]));
-		mRenderer.RenderWindowContext(mpWinDebug->GetHWND(), *reinterpret_cast<FFrameData*>(&mScene_DebugWnd.mLoadingScreenData[FRAME_DATA_INDEX]));
+		if(mpWinDebug) mRenderer.RenderWindowContext(mpWinDebug->GetHWND(), *reinterpret_cast<FFrameData*>(&mScene_DebugWnd.mLoadingScreenData[FRAME_DATA_INDEX]));
 	}
 	
 	else
 	{
 		// TODO: render in parallel???
 		mRenderer.RenderWindowContext(mpWinMain->GetHWND(), mScene_MainWnd.mFrameData[FRAME_DATA_INDEX]);
-		mRenderer.RenderWindowContext(mpWinDebug->GetHWND(), mScene_DebugWnd.mFrameData[FRAME_DATA_INDEX]);
+		if(mpWinDebug) mRenderer.RenderWindowContext(mpWinDebug->GetHWND(), mScene_DebugWnd.mFrameData[FRAME_DATA_INDEX]);
 	}
 }
 

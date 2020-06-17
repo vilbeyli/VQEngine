@@ -44,6 +44,10 @@
 //
 #include "Window.h"
 
+#include "Libs/VQUtils/Source/Log.h"
+
+#include "Data/Resources/resource.h"
+
 ///////////////////////////////////////////////////////////////////////////////
 IWindow::~IWindow()
 {
@@ -85,7 +89,6 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
     hwnd_ = CreateWindowEx(NULL,
         windowClass_->GetName().c_str(),
         title.c_str(),
-        //style,
         FlagWindowStyle,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
@@ -97,9 +100,6 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
         NULL);   // used with multiple windows, NULL
 
     ::SetWindowLongPtr(hwnd_, GWLP_USERDATA, reinterpret_cast<LONG_PTR> (this));
-
-    // Show the window and paint its contents.
-    //Show();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -137,7 +137,7 @@ void Window::Close()
 WindowClass::WindowClass(const std::string& name, HINSTANCE hInst, ::WNDPROC procedure)
     : name_(name)
 {
-    ::WNDCLASSA wc = {};
+    ::WNDCLASSEX wc = {};
 
     // Register the window class for the main window.
     // https://docs.microsoft.com/en-us/windows/win32/winmsg/window-class-styles
@@ -146,13 +146,19 @@ WindowClass::WindowClass(const std::string& name, HINSTANCE hInst, ::WNDPROC pro
     wc.cbClsExtra = 0;
     wc.cbWndExtra = 0;
     wc.hInstance = hInst;
-    wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+    wc.hIcon = LoadIcon(hInst, MAKEINTRESOURCE(IDI_ICON1));
+    if (wc.hIcon == NULL)
+    {
+        DWORD dw = GetLastError();
+        Log::Warning("Couldn't load icon for window: 0x%x", dw);
+    }
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = NULL;
     wc.lpszMenuName = NULL;
     wc.lpszClassName = name_.c_str();
+    wc.cbSize = sizeof(WNDCLASSEX);
 
-    ::RegisterClassA(&wc);
+    ::RegisterClassEx(&wc);
 }
 
 /////////////////////////////////////////////////////////////////////////

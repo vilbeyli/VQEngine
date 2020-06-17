@@ -89,7 +89,7 @@ void VQEngine::UpdateThread_UpdateAppState()
 		// Do not show windows until we have the loading screen data ready.
 		LoadLoadingScreenData();
 		mpWinMain->Show();
-		mpWinDebug->Show();
+		if(mpWinDebug) mpWinDebug->Show();
 
 		// start load level
 		Load_SceneData_Dispatch();

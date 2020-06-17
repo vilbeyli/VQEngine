@@ -66,11 +66,34 @@ exit /b !errorlevel!
 :: CheckAndInitializeSubmodules()
 ::
 :CheckAndInitializeSubmodules
-set SUBMODULE_DIR=..\Libs\VQUtils\
 set SUBMODULE_FILE=CMakeLists.txt
-set SUBMODULE_FILE_PATH=!SUBMODULE_DIR!!SUBMODULE_FILE!
-if not exist !SUBMODULE_FILE_PATH! (
-    echo [VQBuild]    Git Submodules   - Not Ready: File !SUBMODULE_FILE! doesn't exist in '!SUBMODULE_DIR!'  
+
+set SUBMODULE_DIR0=..\Libs\VQUtils\
+set SUBMODULE_DIR1=..\Libs\D3D12MA\
+set SUBMODULE_DIR2=..\Source\Renderer\Libs\D3DX12\
+set SUBMODULE_FILE_PATH0=!SUBMODULE_DIR0!!SUBMODULE_FILE!
+set SUBMODULE_FILE_PATH1=!SUBMODULE_DIR1!!SUBMODULE_FILE!
+set SUBMODULE_FILE_PATH2=!SUBMODULE_DIR2!
+
+:: walk thru submodule paths
+set MISSING_SUBMODULE_DIRS=
+set NEED_TO_INIT_SUBMODULES=0
+if not exist !SUBMODULE_FILE_PATH0! ( 
+    set NEED_TO_INIT_SUBMODULES=1 
+    set MISSING_SUBMODULE_DIRS=!SUBMODULE_DIR0!,
+)
+if not exist !SUBMODULE_FILE_PATH1! ( 
+    set NEED_TO_INIT_SUBMODULES=1 
+    set MISSING_SUBMODULE_DIRS=!MISSING_SUBMODULE_DIRS! !SUBMODULE_DIR1!,
+)
+if not exist !SUBMODULE_FILE_PATH2! ( 
+    set NEED_TO_INIT_SUBMODULES=1 
+    set MISSING_SUBMODULE_DIRS=!MISSING_SUBMODULE_DIRS! !SUBMODULE_DIR2!,
+)
+
+:: init submodules if necessary
+if !NEED_TO_INIT_SUBMODULES! neq 0 (
+    echo [VQBuild]    Git Submodules   - Not Ready: File !SUBMODULE_FILE! doesn't exist in !MISSING_SUBMODULE_DIRS!
     echo [VQBuild]    Initializing submodule...
 
     :: attempt to initialize submodule
@@ -81,7 +104,11 @@ if not exist !SUBMODULE_FILE_PATH! (
     cd Build
 
     :: check if submodule initialized properly
-    if not exist !SUBMODULE_FILE_PATH! (
+    set NEED_TO_INIT_SUBMODULES=0
+    if not exist !SUBMODULE_FILE_PATH0! ( set NEED_TO_INIT_SUBMODULES=1 )
+    if not exist !SUBMODULE_FILE_PATH1! ( set NEED_TO_INIT_SUBMODULES=1 )
+    if not exist !SUBMODULE_FILE_PATH2! ( set NEED_TO_INIT_SUBMODULES=1 )
+    if !NEED_TO_INIT_SUBMODULES! neq 0 (
         echo.
         echo [VQBuild]    Could not initialize submodule. Make sure all the submodules are initialized and updated.
         echo [VQBuild]    Exiting...

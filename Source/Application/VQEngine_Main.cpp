@@ -167,7 +167,7 @@ void VQEngine::LoadLoadingScreenData()
 	auto fMain = mUpdateWorkerThreads.AddTask([&]()
 	{
 		FLoadingScreenData data;
-		data.SwapChainClearColor = { 0.0f, 0.5f, 0.0f, 1.0f };
+		data.SwapChainClearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
 		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain);
 		mScene_MainWnd.mLoadingScreenData.resize(NumBackBuffer_WndMain, data);
 
@@ -175,21 +175,24 @@ void VQEngine::LoadLoadingScreenData()
 		
 	});
 
-	auto fDbg = mUpdateWorkerThreads.AddTask([&]()
-	{
-		FLoadingScreenData data;
-		data.SwapChainClearColor = { 0.5f, 0.4f, 0.01f, 1.0f };
-		const int NumBackBuffer_WndDbg = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinDebug);
-		mScene_DebugWnd.mLoadingScreenData.resize(NumBackBuffer_WndDbg, data);
-
-		mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
-	});
-
 	Log::Info("Load_LoadingScreenData_Dispatch");
+
+	if (mpWinDebug)
+	{
+		auto fDbg = mUpdateWorkerThreads.AddTask([&]()
+		{
+			FLoadingScreenData data;
+			data.SwapChainClearColor = { 0.5f, 0.4f, 0.01f, 1.0f };
+			const int NumBackBuffer_WndDbg = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinDebug);
+			mScene_DebugWnd.mLoadingScreenData.resize(NumBackBuffer_WndDbg, data);
+
+			mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
+		});
+		if(fDbg.valid()) fDbg.get();
+	}
 
 	// loading screen data must be loaded right away.
 	if(fMain.valid()) fMain.get();
-	if(fDbg.valid()) fDbg.get();
 
 	Log::Info("Load_LoadingScreenData_Dispatch - DONE");
 
@@ -203,7 +206,7 @@ void VQEngine::Load_SceneData_Dispatch()
 	{
 		// TODO: initialize window scene data here for now, should update this to proper location later on (Scene probably?)
 		FFrameData data[2];
-		data[0].SwapChainClearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
+		data[0].SwapChainClearColor = { 0.07f, 0.07f, 0.07f, 1.0f };
 		data[1].SwapChainClearColor = { 0.80f, 0.45f, 0.01f, 1.0f };
 		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain);
 		const int NumBackBuffer_WndDbg = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinDebug);
@@ -211,7 +214,7 @@ void VQEngine::Load_SceneData_Dispatch()
 		mScene_DebugWnd.mFrameData.resize(NumBackBuffer_WndDbg, data[1]);
 
 		mWindowUpdateContextLookup[mpWinMain->GetHWND()] = &mScene_MainWnd;
-		mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
+		if(mpWinDebug) mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
 	});
 }
 

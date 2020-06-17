@@ -158,6 +158,9 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     {
         assert(false); // TODO: err msg
     }
+#if _DEBUG
+    mpDescHeapRTV->SetName(L"SwapChainRTVDescHeap");
+#endif
 
     // From Adam Sawicki's D3D12MA sample code:
     // get the size of a descriptor in this heap (this is a rtv heap, so only rtv descriptors should be stored in it.

@@ -12,7 +12,7 @@ VQE will be focusing on the following
  - HDR display support
  - Real-time and offline Ray Tracing
 
-
+![](Screenshots/HelloTriangle.png)
 
 # Build
 
@@ -78,3 +78,4 @@ VQE can be configured through `Data/EngineConfig.ini` file
 # 3rd-Party
 
 - [D3DX12](https://github.com/microsoft/DirectX-Graphics-Samples/tree/master/Libraries/D3DX12)
+- [D3D12MA](https://github.com/GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator)
