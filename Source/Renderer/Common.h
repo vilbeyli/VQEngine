@@ -18,6 +18,7 @@
 #pragma once
 
 #include "../Application/Types.h"
+#include "../../Libs/VQUtils/Source/Log.h"
 
 template<class T>
 T AlignOffset(const T& uOffset, const T& uAlign) { return ((uOffset + (uAlign - 1)) & ~(uAlign - 1)); }

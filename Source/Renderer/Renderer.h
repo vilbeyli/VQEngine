@@ -28,9 +28,6 @@
 #include "../Application/Settings.h"
 #include "../Application/Types.h"
 
-#include <wrl.h> // ComPtr
-using namespace Microsoft::WRL;
-
 #include <vector>
 #include <unordered_map>
 #include <array>
@@ -57,6 +54,9 @@ struct FRendererInitializeParameters
 };
 
 
+
+struct ID3D12RootSignature;
+struct ID3D12PipelineState;
 
 class VQRenderer
 {
@@ -127,15 +127,16 @@ private:
 	UploadHeap             mHeapUpload;
 
 
-	StaticBufferPool mStaticBufferPool; // TODO: separate Index/Vertex buffer pool???
+	StaticBufferPool mStaticVertexBufferPool;
+	StaticBufferPool mStaticIndexBufferPool;
 
 	// resources
 	std::vector<VBV> mVertexBufferViews;
 	std::vector<IBV> mIndexBufferViews;
 
 	// PSOs
-	ComPtr<ID3D12RootSignature> mpRootSignature;
-	ComPtr<ID3D12PipelineState> mpPSO;
+	ID3D12RootSignature* mpRootSignature = nullptr;
+	ID3D12PipelineState* mpPSO           = nullptr;
 
 	// data
 	std::unordered_map<HWND, FRenderWindowContext> mRenderContextLookup;

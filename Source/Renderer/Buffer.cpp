@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "Buffer.h"
+#include "Common.h"
 
 #include "Libs/D3DX12/d3dx12.h"
 
@@ -26,29 +27,45 @@
 size_t StaticBufferPool::MEMORY_ALIGNMENT = 256;
 
 
+static D3D12_RESOURCE_STATES GetResourceTransitionState(EBufferType eType)
+{
+    D3D12_RESOURCE_STATES s;
+    switch (eType)
+    {
+        case CONSTANT_BUFFER : s = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER; break;
+        case VERTEX_BUFFER   : s = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER; break;
+        case INDEX_BUFFER    : s = D3D12_RESOURCE_STATE_INDEX_BUFFER; break;
+        default:
+            Log::Warning("StaticBufferPool::Create(): unkown resource type, couldn't determine resource transition state for upload.");
+            break;
+        }
+    return s;
+}
+
 //
 // CREATE / DESTROY
 //
-void StaticBufferPool::Create(ID3D12Device* pDevice, uint32 totalMemSize, bool bUseVidMem, const char* name)
+void StaticBufferPool::Create(ID3D12Device* pDevice, EBufferType type, uint32 totalMemSize, bool bUseVidMem, const char* name)
 {
-    m_pDevice = pDevice;
-    m_totalMemSize = totalMemSize;
-    m_memOffset = 0;
-    m_memInit = 0;
-    m_pData = nullptr;
-    m_bUseVidMem = bUseVidMem;
+    mpDevice = pDevice;
+    mTotalMemSize = totalMemSize;
+    mMemOffset = 0;
+    mMemInit = 0;
+    mpData = nullptr;
+    mbUseVidMem = bUseVidMem;
+    mType = type;
 
     HRESULT hr = {};
     if (bUseVidMem)
     {
-        hr = m_pDevice->CreateCommittedResource(
+        hr = mpDevice->CreateCommittedResource(
             &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
             D3D12_HEAP_FLAG_NONE,
             &CD3DX12_RESOURCE_DESC::Buffer(totalMemSize),
-            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+            GetResourceTransitionState(mType),
             nullptr,
-            IID_PPV_ARGS(&m_pVidMemBuffer));
-        m_pVidMemBuffer->SetName(L"StaticBufferPool::m_pVidMemBuffer");
+            IID_PPV_ARGS(&mpVidMemBuffer));
+        mpVidMemBuffer->SetName(L"StaticBufferPool::m_pVidMemBuffer");
 
         if (FAILED(hr))
         {
@@ -57,13 +74,13 @@ void StaticBufferPool::Create(ID3D12Device* pDevice, uint32 totalMemSize, bool b
         }
     }
 
-    hr = m_pDevice->CreateCommittedResource(
+    hr = mpDevice->CreateCommittedResource(
         &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
         D3D12_HEAP_FLAG_NONE,
         &CD3DX12_RESOURCE_DESC::Buffer(totalMemSize),
         D3D12_RESOURCE_STATE_GENERIC_READ,
         nullptr,
-        IID_PPV_ARGS(&m_pSysMemBuffer));
+        IID_PPV_ARGS(&mpSysMemBuffer));
 
     if (FAILED(hr))
     {
@@ -71,26 +88,26 @@ void StaticBufferPool::Create(ID3D12Device* pDevice, uint32 totalMemSize, bool b
         // TODO
     }
 
-    m_pSysMemBuffer->SetName(L"StaticBufferPool::m_pSysMemBuffer");
+    mpSysMemBuffer->SetName(L"StaticBufferPool::m_pSysMemBuffer");
 
-    m_pSysMemBuffer->Map(0, NULL, reinterpret_cast<void**>(&m_pData));
+    mpSysMemBuffer->Map(0, NULL, reinterpret_cast<void**>(&mpData));
 }
 
 void StaticBufferPool::Destroy()
 {
-    if (m_bUseVidMem)
+    if (mbUseVidMem)
     {
-        if (m_pVidMemBuffer)
+        if (mpVidMemBuffer)
         {
-            m_pVidMemBuffer->Release();
-            m_pVidMemBuffer = nullptr;
+            mpVidMemBuffer->Release();
+            mpVidMemBuffer = nullptr;
         }
     }
 
-    if (m_pSysMemBuffer)
+    if (mpSysMemBuffer)
     {
-        m_pSysMemBuffer->Release();
-        m_pSysMemBuffer = nullptr;
+        mpSysMemBuffer->Release();
+        mpSysMemBuffer = nullptr;
     }
 }
 
@@ -112,6 +129,7 @@ bool StaticBufferPool::AllocBuffer(uint32 numElements, uint32 strideInBytes, voi
 
 bool StaticBufferPool::AllocVertexBuffer(uint32 numVertices, uint32 strideInBytes, void* pInitData, D3D12_VERTEX_BUFFER_VIEW* pViewOut)
 {
+    assert(mType == EBufferType::VERTEX_BUFFER);
     void* pData = nullptr;
     if (AllocVertexBuffer(numVertices, strideInBytes, &pData, pViewOut))
     {
@@ -124,6 +142,7 @@ bool StaticBufferPool::AllocVertexBuffer(uint32 numVertices, uint32 strideInByte
 
 bool StaticBufferPool::AllocIndexBuffer(uint32 numIndices, uint32 strideInBytes, void* pInitData, D3D12_INDEX_BUFFER_VIEW* pOut)
 {
+    assert(mType == EBufferType::INDEX_BUFFER);
     void* pData = nullptr;
     if (AllocIndexBuffer(numIndices, strideInBytes, &pData, pOut))
     {
@@ -140,16 +159,16 @@ bool StaticBufferPool::AllocBuffer(uint32 numElements, uint32 strideInBytes, voi
     std::lock_guard<std::mutex> lock(mMtx);
 
     uint32 size = AlignOffset(numElements * strideInBytes, (uint32)StaticBufferPool::MEMORY_ALIGNMENT);
-    assert(m_memOffset + size < m_totalMemSize); // if this is hit, initialize heap with a larger size.
+    assert(mMemOffset + size < mTotalMemSize); // if this is hit, initialize heap with a larger size.
 
-    *ppDataOut = (void*)(m_pData + m_memOffset);
+    *ppDataOut = (void*)(mpData + mMemOffset);
 
-    ID3D12Resource* pRsc = m_bUseVidMem ? m_pVidMemBuffer : m_pSysMemBuffer;
+    ID3D12Resource*& pRsc = mbUseVidMem ? mpVidMemBuffer : mpSysMemBuffer;
 
-    *pBufferLocationOut = m_memOffset + pRsc->GetGPUVirtualAddress();
+    *pBufferLocationOut = mMemOffset + pRsc->GetGPUVirtualAddress();
     *pSizeOut = size;
 
-    m_memOffset += size;
+    mMemOffset += size;
 
     return true;
 }
@@ -178,30 +197,22 @@ bool StaticBufferPool::AllocIndexBuffer(uint32 numIndices, uint32 strideInBytes,
 //
 void StaticBufferPool::UploadData(ID3D12GraphicsCommandList* pCmd)
 {
-    if (m_bUseVidMem)
+    if (mbUseVidMem)
     {
-        pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pVidMemBuffer
-            , D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+        D3D12_RESOURCE_STATES state = GetResourceTransitionState(mType);
+
+        pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mpVidMemBuffer
+            , state
             , D3D12_RESOURCE_STATE_COPY_DEST)
         );
 
-        pCmd->CopyBufferRegion(m_pVidMemBuffer, m_memInit, m_pSysMemBuffer, m_memInit, m_memOffset - m_memInit);
+        pCmd->CopyBufferRegion(mpVidMemBuffer, mMemInit, mpSysMemBuffer, mMemInit, mMemOffset - mMemInit);
 
-        // With 'dynamic resources' we can use a same resource to hold Constant, Index and Vertex buffers.
-        // That is because we dont need to use a transition.
-        //
-        // With static buffers though we need to transition them and we only have 2 options
-        //      1) D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
-        //      2) D3D12_RESOURCE_STATE_INDEX_BUFFER
-        // Because we need to transition the whole buffer we cant have now Index buffers to share the 
-        // same resource with the Vertex or Constant buffers. Hence is why we need separate classes.
-        // For Index and Vertex buffers we *could* use the same resource, but index buffers need their own resource.
-        // Please note that in the interest of clarity vertex buffers and constant buffers have been split into two different classes though
-        pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_pVidMemBuffer
+        pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mpVidMemBuffer
             , D3D12_RESOURCE_STATE_COPY_DEST
-            , D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER)
+            , state)
         );
 
-        m_memInit = m_memOffset;
+        mMemInit = mMemOffset;
     }
 }

@@ -79,7 +79,7 @@ public:
     bool AllocDescriptor(uint32 size, ResourceView* pRV);
     
 
-    ID3D12DescriptorHeap *GetHeap() { return mpHeap; }
+    ID3D12DescriptorHeap *GetHeap() const { return mpHeap; }
 
 private:
     uint32 mIndex;

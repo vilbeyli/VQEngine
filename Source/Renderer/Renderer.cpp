@@ -161,8 +161,12 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 	InitializeD3D12MA();
 	InitializeResourceHeaps();
 	
-	constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 128 * MEGABYTE;
-	mStaticBufferPool.Create(pDevice, STATIC_GEOMETRY_MEMORY_SIZE, true, "VQRenderer::mStaticBufferPool");
+	{
+		constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 64 * MEGABYTE;
+		constexpr bool USE_GPU_MEMORY = true;
+		mStaticVertexBufferPool.Create(pDevice, EBufferType::VERTEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticVertexBufferPool");
+		mStaticIndexBufferPool .Create(pDevice, EBufferType::INDEX_BUFFER , STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticIndexBufferPool");
+	}
 
 	Log::Info("[Renderer] Initialized.");
 	// TODO: Log system info
@@ -196,9 +200,13 @@ void VQRenderer::Exit()
 	}
 
 	mHeapUpload.Destroy();
-	mStaticBufferPool.Destroy();
+	mStaticVertexBufferPool.Destroy();
+	mStaticIndexBufferPool.Destroy();
 
 	mpAllocator->Release();
+
+	mpRootSignature->Release();
+	mpPSO->Release();
 
 	mGFXQueue.Destroy();
 	mComputeQueue.Destroy();
@@ -267,9 +275,9 @@ void VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
 
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
 
-	pCmd->SetPipelineState(mpPSO.Get());
+	pCmd->SetPipelineState(mpPSO);
 
-	pCmd->SetGraphicsRootSignature(mpRootSignature.Get());
+	pCmd->SetGraphicsRootSignature(mpRootSignature);
 
 #if 0
 	//pCmd->SetDescriptorHeaps(_countof(), NULL);
@@ -422,8 +430,8 @@ void VQRenderer::LoadPSOs()
 
 	// Describe and create the graphics pipeline state object (PSO).
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-	psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-	psoDesc.pRootSignature = mpRootSignature.Get();
+	psoDesc.InputLayout    = { inputElementDescs, _countof(inputElementDescs) };
+	psoDesc.pRootSignature = mpRootSignature;
 	psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
 	psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
 	psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
@@ -465,7 +473,7 @@ void VQRenderer::LoadDefaultResources()
 
 		// allocate mem
 		VBV vertBufView;
-		bool bAllocSuccess = mStaticBufferPool.AllocVertexBuffer(numVerts, sizeof(Vertex), triangleVertices, &vertBufView);
+		bool bAllocSuccess = mStaticVertexBufferPool.AllocVertexBuffer(numVerts, sizeof(Vertex), triangleVertices, &vertBufView);
 		if (bAllocSuccess)
 		{
 			mVertexBufferViews.push_back(vertBufView);
@@ -481,7 +489,7 @@ void VQRenderer::LoadDefaultResources()
 		UINT indices[] = { 0, 1, 2 };
 
 		IBV indexBufView;
-		bool bAllocSuccess = mStaticBufferPool.AllocIndexBuffer(_countof(indices), sizeof(UINT), indices, &indexBufView);
+		bool bAllocSuccess = mStaticIndexBufferPool.AllocIndexBuffer(_countof(indices), sizeof(UINT), indices, &indexBufView);
 		if (bAllocSuccess)
 		{
 			mIndexBufferViews.push_back(indexBufView);
@@ -492,7 +500,8 @@ void VQRenderer::LoadDefaultResources()
 }
 	}
 
-	mStaticBufferPool.UploadData(mHeapUpload.GetCommandList());
+	mStaticVertexBufferPool.UploadData(mHeapUpload.GetCommandList());
+	mStaticIndexBufferPool.UploadData(mHeapUpload.GetCommandList());
 }
 
 

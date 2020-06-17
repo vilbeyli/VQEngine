@@ -54,44 +54,49 @@ struct ID3D12Resource;
 struct D3D12_CONSTANT_BUFFER_VIEW_DESC;
 struct ID3D12GraphicsCommandList;
 
+enum EBufferType
+{
+    VERTEX_BUFFER = 0,
+    INDEX_BUFFER,
+    CONSTANT_BUFFER,
+
+    NUM_BUFFER_TYPES
+};
+
 class StaticBufferPool
 {
-    static size_t MEMORY_ALIGNMENT; // TODO: potentially move to renderer settings ini
+    static size_t MEMORY_ALIGNMENT; // TODO: potentially move to renderer settings ini or make a member
 public:
-    void Create(ID3D12Device* pDevice, uint32 totalMemSize, bool bUseVidMem, const char* name);
+    void Create(ID3D12Device* pDevice, EBufferType type, uint32 totalMemSize, bool bUseVidMem, const char* name);
     void Destroy();
 
-    bool AllocBuffer(uint32 numElements, uint32 strideInBytes, void* pInitData , D3D12_GPU_VIRTUAL_ADDRESS* pBufferLocationOut, /*[optional]*/ uint32* pSizeOut);
+    bool AllocBuffer(uint32 numElements, uint32 strideInBytes, void* pInitData , D3D12_GPU_VIRTUAL_ADDRESS* pBufferLocationOut, uint32* pSizeOut);
     bool AllocVertexBuffer(uint32 numVertices, uint32 strideInBytes, void* pInitData, D3D12_VERTEX_BUFFER_VIEW* pViewOut);
     bool AllocIndexBuffer(uint32 numIndices, uint32 strideInBytes, void* pInitData, D3D12_INDEX_BUFFER_VIEW* pOut);
-    bool AllocConstantBuffer(uint32 size, void* pData, D3D12_CONSTANT_BUFFER_VIEW_DESC* pViewDesc);
+    //bool AllocConstantBuffer(uint32 size, void* pData, D3D12_CONSTANT_BUFFER_VIEW_DESC* pViewDesc);
 
     void UploadData(ID3D12GraphicsCommandList* pCmdList);
-    void FreeUploadHeap();
-
-    ID3D12Resource* GetResource();
+    //void FreeUploadHeap();
 
 private:
-    bool AllocBuffer(uint32 numElements, uint32 strideInBytes, void** ppDataOut, D3D12_GPU_VIRTUAL_ADDRESS* pBufferLocationOut, /*[optional]*/ uint32* pSizeOut);
+    bool AllocBuffer(uint32 numElements, uint32 strideInBytes, void** ppDataOut, D3D12_GPU_VIRTUAL_ADDRESS* pBufferLocationOut, uint32* pSizeOut);
     bool AllocVertexBuffer(uint32 numVertices, uint32 strideInBytes, void** ppDataOut, D3D12_VERTEX_BUFFER_VIEW* pViewOut);
     bool AllocIndexBuffer(uint32 numIndices, uint32 strideInBytes, void** ppDataOut, D3D12_INDEX_BUFFER_VIEW* pIndexView);
-    bool AllocConstantBuffer(uint32 size, void** pData, D3D12_CONSTANT_BUFFER_VIEW_DESC* pViewDesc);
+    //bool AllocConstantBuffer(uint32 size, void** pData, D3D12_CONSTANT_BUFFER_VIEW_DESC* pViewDesc);
 
 private:
-    ID3D12Device*    m_pDevice = nullptr;
+    ID3D12Device*  mpDevice = nullptr;
+    EBufferType    mType    = EBufferType::NUM_BUFFER_TYPES;
+    std::mutex     mMtx;
 
-    std::mutex       mMtx = {};
+    bool           mbUseVidMem     = true;
+    char*          mpData          = nullptr;
+    uint32         mMemInit        = 0;
+    uint32         mMemOffset      = 0;
+    uint32         mTotalMemSize   = 0;
 
-    bool             m_bUseVidMem = true;
-
-    char*          m_pData = nullptr;
-    uint32         m_memInit = 0;
-    uint32         m_memOffset = 0;
-    uint32         m_totalMemSize = 0;
-
-    ID3D12Resource* m_pMemBuffer = nullptr;
-    ID3D12Resource* m_pSysMemBuffer = nullptr;
-    ID3D12Resource* m_pVidMemBuffer = nullptr;
+    ID3D12Resource* mpSysMemBuffer = nullptr;
+    ID3D12Resource* mpVidMemBuffer = nullptr;
 };
 
 #if 0
@@ -106,21 +111,21 @@ public:
     void FreeUploadHeap();
 
 private:
-    ID3D12Device* m_pDevice;
+    ID3D12Device* mpDevice;
     ID3D12Resource* m_pMemBuffer;
-    ID3D12Resource* m_pSysMemBuffer;
-    ID3D12Resource* m_pVidMemBuffer;
+    ID3D12Resource* mpSysMemBuffer;
+    ID3D12Resource* mpVidMemBuffer;
 
-    char*          m_pData;
-    uint32         m_memOffset;
-    uint32         m_totalMemSize;
+    char*          mpData;
+    uint32         mMemOffset;
+    uint32         mTotalMemSize;
 
     uint32         m_cbvOffset;
     uint32         m_cbvEntriesSize;
 
     D3D12_CONSTANT_BUFFER_VIEW_DESC* m_pCBVDesc;
 
-    bool            m_bUseVidMem;
+    bool            mbUseVidMem;
 };
 
 class DynamicBufferRing
@@ -137,7 +142,7 @@ public:
 private:
     uint32          m_memTotalSize;
     RingWithTabs    m_mem;
-    char*           m_pData = nullptr;
+    char*           mpData = nullptr;
     ID3D12Resource* m_pBuffer = nullptr;
 };
 #endif
