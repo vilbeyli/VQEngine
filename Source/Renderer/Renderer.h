@@ -127,7 +127,7 @@ private:
 	UploadHeap             mHeapUpload;
 
 
-	StaticBufferPool mStaticBufferPool;
+	StaticBufferPool mStaticBufferPool; // TODO: separate Index/Vertex buffer pool???
 
 	// resources
 	std::vector<VBV> mVertexBufferViews;

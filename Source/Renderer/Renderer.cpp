@@ -313,7 +313,7 @@ void VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
 	ctx.SwapChain.MoveToNextFrame();
 }
 
-short VQRenderer::GetSwapChainBackBufferCountOfWindow(Window* pWnd) const { return this->GetSwapChainBackBufferCountOfWindow(pWnd->GetHWND()); }
+short VQRenderer::GetSwapChainBackBufferCountOfWindow(Window* pWnd) const { return pWnd ? this->GetSwapChainBackBufferCountOfWindow(pWnd->GetHWND()) : 0; }
 short VQRenderer::GetSwapChainBackBufferCountOfWindow(HWND hwnd) const
 {
 	if (mRenderContextLookup.find(hwnd) == mRenderContextLookup.end())

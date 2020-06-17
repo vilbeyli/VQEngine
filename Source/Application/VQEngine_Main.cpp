@@ -175,21 +175,24 @@ void VQEngine::LoadLoadingScreenData()
 		
 	});
 
-	auto fDbg = mUpdateWorkerThreads.AddTask([&]()
-	{
-		FLoadingScreenData data;
-		data.SwapChainClearColor = { 0.5f, 0.4f, 0.01f, 1.0f };
-		const int NumBackBuffer_WndDbg = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinDebug);
-		mScene_DebugWnd.mLoadingScreenData.resize(NumBackBuffer_WndDbg, data);
-
-		mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
-	});
-
 	Log::Info("Load_LoadingScreenData_Dispatch");
+
+	if (mpWinDebug)
+	{
+		auto fDbg = mUpdateWorkerThreads.AddTask([&]()
+		{
+			FLoadingScreenData data;
+			data.SwapChainClearColor = { 0.5f, 0.4f, 0.01f, 1.0f };
+			const int NumBackBuffer_WndDbg = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinDebug);
+			mScene_DebugWnd.mLoadingScreenData.resize(NumBackBuffer_WndDbg, data);
+
+			mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
+		});
+		if(fDbg.valid()) fDbg.get();
+	}
 
 	// loading screen data must be loaded right away.
 	if(fMain.valid()) fMain.get();
-	if(fDbg.valid()) fDbg.get();
 
 	Log::Info("Load_LoadingScreenData_Dispatch - DONE");
 
@@ -211,7 +214,7 @@ void VQEngine::Load_SceneData_Dispatch()
 		mScene_DebugWnd.mFrameData.resize(NumBackBuffer_WndDbg, data[1]);
 
 		mWindowUpdateContextLookup[mpWinMain->GetHWND()] = &mScene_MainWnd;
-		mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
+		if(mpWinDebug) mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
 	});
 }
 
