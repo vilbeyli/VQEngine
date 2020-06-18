@@ -18,14 +18,22 @@
 
 #pragma once
 
+enum EDisplayMode
+{
+	WINDOWED = 0,
+	WINDOWED_FULLSCREEN,
+	EXCLUSIVE_FULLSCREEN,
+
+	NUM_DISPLAY_MODES
+};
+
 struct FGraphicsSettings
 {
 	bool bVsync              = false;
 	bool bUseTripleBuffering = false;
-	bool bFullscreen         = false;
+	EDisplayMode DisplayMode = EDisplayMode::WINDOWED;
 
-	int RenderResolutionX = -1;
-	int RenderResolutionY = -1;
+	float RenderScale = 1.0f;
 };
 
 struct FEngineSettings

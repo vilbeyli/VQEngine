@@ -16,8 +16,6 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-#define NOMINMAX
-
 #include "Platform.h"
 #include "Window.h"
 #include "../Renderer/Renderer.h" // GetDX12Adapters
@@ -41,19 +39,4 @@ FSystemInfo FSystemInfo::GetSystemInfo()
 	// TODO
 
 	return inf;
-}
-
-void Semaphore::Wait()
-{
-	std::unique_lock<std::mutex> lk(mtx);
-	cv.wait(lk, [&]() {return currVal > 0; });
-	--currVal;
-	return;
-}
-
-void Semaphore::Signal()
-{
-	std::unique_lock<std::mutex> lk(mtx);
-	currVal = std::min(currVal+1, maxVal);
-	cv.notify_one();
 }

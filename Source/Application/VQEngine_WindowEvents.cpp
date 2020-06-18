@@ -18,20 +18,21 @@
 
 #include "VQEngine.h"
 
-void VQEngine::OnWindowCreate()
+void VQEngine::OnWindowCreate(	)
 {
 }
 
 void VQEngine::OnWindowResize(HWND hWnd)
 {
 	// https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/d3d10-graphics-programming-guide-dxgi#handling-window-resizing
-#if 0 // TODO
 	RECT clientRect = {};
 	GetClientRect(hWnd, &clientRect);
-	dxSample->OnResize(clientRect.right - clientRect.left, clientRect.bottom - clientRect.top);
-
-	bIsMinimized = (IsIconic(hWnd) == TRUE);
-#endif
+	int w = clientRect.right - clientRect.left;
+	int h = clientRect.bottom - clientRect.top;
+	
+	// Due to multi-threading, this thread will record the events and 
+	// Render Thread will process the queue at the of a render loop
+	mWinEventQueue.AddItem(WindowResizeEvent(w, h, hWnd));
 }
 
 void VQEngine::OnWindowMinimize()
@@ -49,8 +50,7 @@ void VQEngine::OnWindowKeyDown(WPARAM wParam)
 
 void VQEngine::OnWindowClose(IWindow* pWindow)
 {
-	// todo: flush GPU ?
-
+	mRenderer.GetWindowSwapChain(static_cast<Window*>(pWindow)->GetHWND()).WaitForGPU();
 
 	pWindow->Close();
 
@@ -58,3 +58,4 @@ void VQEngine::OnWindowClose(IWindow* pWindow)
 		PostQuitMessage(0);
 
 }
+ 

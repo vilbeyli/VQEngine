@@ -44,6 +44,8 @@ void VQEngine::RenderThread_Main()
 		++mNumRenderLoopsExecuted;
 
 		RenderThread_SignalUpdateThread();
+
+		RenderThread_HandleEvents();
 	}
 
 	this->mRenderer.Unload();
@@ -112,6 +114,30 @@ void VQEngine::RenderThread_Render()
 		// TODO: render in parallel???
 		mRenderer.RenderWindowContext(mpWinMain->GetHWND(), mScene_MainWnd.mFrameData[FRAME_DATA_INDEX]);
 		if(mpWinDebug) mRenderer.RenderWindowContext(mpWinDebug->GetHWND(), mScene_DebugWnd.mFrameData[FRAME_DATA_INDEX]);
+	}
+}
+
+void VQEngine::RenderThread_HandleEvents()
+{
+	// Swap event recording buffers so we can read & process a limited number of events safely.
+	//   Otherwise, theoretically the producer (Main) thread could keep adding new events 
+	//   while we're spinning on the queue items below, and cause render thread to stall while, say, resizing.
+	mWinEventQueue.SwapBuffers();
+	{
+		std::queue<WindowResizeEvent>& q = mWinEventQueue.GetBackContainer();
+
+		if (q.empty())
+			return;
+		
+		// we only care about the last event to avoid unnecessary sync / buffer resize calls.
+		WindowResizeEvent lastEvent = {};
+		while (!q.empty())
+		{
+			lastEvent = q.front();
+			q.pop();
+		}
+
+		mRenderer.ResizeSwapChain(lastEvent.hwnd, lastEvent.width, lastEvent.height);
 	}
 }
 

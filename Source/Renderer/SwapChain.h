@@ -71,6 +71,8 @@ public:
 	inline unsigned long long GetNumPresentedFrames() const { return mNumTotalFrames; }
 
 private:
+	void CreateRenderTargetViews();
+private:
 	HWND           mHwnd;
 	unsigned short mNumBackBuffers;
 	unsigned short mICurrentBackBuffer;

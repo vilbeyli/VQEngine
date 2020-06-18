@@ -128,7 +128,6 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 		swapChainDesc.pCmdQueue = &ctx.PresentQueue;
 		swapChainDesc.bVSync = ctx.bVsync;
 		ctx.SwapChain.Create(swapChainDesc);
-		Log::Info("[Renderer] Created swapchain<hwnd=0x%x> w/ %d back buffers.", wnd.hwnd, NUM_SWAPCHAIN_BUFFERS);
 
 		// Create command allocators
 		ctx.mCommandAllocatorsGFX.resize(NUM_SWAPCHAIN_BUFFERS);
@@ -140,9 +139,9 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 			pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT , IID_PPV_ARGS(&ctx.mCommandAllocatorsGFX[f]));
 			pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&ctx.mCommandAllocatorsCompute[f]));
 			pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY   , IID_PPV_ARGS(&ctx.mCommandAllocatorsCopy[f]));
-			ctx.mCommandAllocatorsGFX[f]->SetName(L"RenderContext::CmdAllocGFX");
-			ctx.mCommandAllocatorsCompute[f]->SetName(L"RenderContext::CmdAllocCompute");
-			ctx.mCommandAllocatorsCopy[f]->SetName(L"RenderContext::CmdAllocCopy");
+			SetName(ctx.mCommandAllocatorsGFX[f], "RenderContext::CmdAllocGFX[%d]", f);
+			SetName(ctx.mCommandAllocatorsCompute[f], "RenderContext::CmdAllocCompute[%d]", f);
+			SetName(ctx.mCommandAllocatorsCopy[f], "RenderContext::CmdAllocCopy[%d]", f);
 		}
 
 		// Create command lists
@@ -158,9 +157,9 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 		this->mRenderContextLookup.emplace(wnd.hwnd, std::move(ctx));
 	}
 
+	// Initialize memory
 	InitializeD3D12MA();
 	InitializeResourceHeaps();
-	
 	{
 		constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 64 * MEGABYTE;
 		constexpr bool USE_GPU_MEMORY = true;
@@ -215,6 +214,7 @@ void VQRenderer::Exit()
 	mDevice.Destroy();
 }
 
+SwapChain& VQRenderer::GetWindowSwapChain(HWND hwnd) { return mRenderContextLookup.at(hwnd).SwapChain; }
 
 void VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
 {
@@ -231,7 +231,7 @@ void VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
 	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
 	// ----------------------------------------------------------------------------
 
-	
+	HRESULT hr = {};
 
 	//
 	// PRE RENDER
@@ -240,7 +240,22 @@ void VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
 	// command lists have finished execution on the GPU; apps should use 
 	// fences to determine GPU execution progress.
 	ID3D12CommandAllocator* pCmdAlloc = ctx.mCommandAllocatorsGFX[BACK_BUFFER_INDEX];
+	
+	//******************************************************************************
 	ThrowIfFailed(pCmdAlloc->Reset());
+	// NOTE:
+	//
+	// The Debug Layer throws an error here sometimes during resizing the window
+	// whith the following message, even though the returned value from Reset()
+	// is S_OK.
+	//
+	// A command allocator 0x00000283C47C77F0:'RenderContext::CmdAllocGFX[0]' is 
+	// being reset before previous executions associated with the allocator have 
+	// completed. [ EXECUTION ERROR #552: COMMAND_ALLOCATOR_SYNC]
+	//
+	// MSDN docs say it will return S_FAIL but it doesn't.
+	// https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12commandallocator-reset
+	//******************************************************************************
 
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
@@ -319,6 +334,7 @@ void VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
 	ctx.SwapChain.Present(ctx.bVsync);
 
 	ctx.SwapChain.MoveToNextFrame();
+
 }
 
 short VQRenderer::GetSwapChainBackBufferCountOfWindow(Window* pWnd) const { return pWnd ? this->GetSwapChainBackBufferCountOfWindow(pWnd->GetHWND()) : 0; }
@@ -334,7 +350,20 @@ short VQRenderer::GetSwapChainBackBufferCountOfWindow(HWND hwnd) const
 	return ctx.SwapChain.GetNumBackBuffers();
 	
 }
+void VQRenderer::ResizeSwapChain(HWND hwnd, int w, int h)
+{
+	if (mRenderContextLookup.find(hwnd) == mRenderContextLookup.end())
+	{
+		Log::Warning("Render Context not found for <hwnd=0x%x>", hwnd);
+		return;
+	}
 
+	FRenderWindowContext& ctx = mRenderContextLookup.at(hwnd);
+	ctx.SwapChain.WaitForGPU();
+	ctx.SwapChain.Resize(w, h);
+	ctx.MainRTResolutionX = w; // TODO: RenderScale
+	ctx.MainRTResolutionY = h; // TODO: RenderScale
+}
 
 
 

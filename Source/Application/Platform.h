@@ -42,16 +42,15 @@ struct FStartupParameters
 
 	FEngineSettings EngineSettings;
 
-	uint8 bOverrideGFXSetting_Width  : 1;
-	uint8 bOverrideGFXSetting_Height : 1;
-	uint8 bOverrideGFXSetting_bVSync : 1;
+	uint8 bOverrideGFXSetting_RenderScale         : 1;
+	uint8 bOverrideGFXSetting_bVSync              : 1;
 	uint8 bOverrideGFXSetting_bUseTripleBuffering : 1;
-	uint8 bOverrideGFXSetting_bFullscreen : 1;
+	uint8 bOverrideGFXSetting_bFullscreen         : 1;
 
-	uint8 bOverrideENGSetting_MainWindowHeight : 1;
-	uint8 bOverrideENGSetting_MainWindowWidth : 1;
-	uint8 bOverrideENGSetting_bAutomatedTest : 1;
-	uint8 bOverrideENGSetting_bTestFrames : 1;
+	uint8 bOverrideENGSetting_MainWindowHeight    : 1;
+	uint8 bOverrideENGSetting_MainWindowWidth     : 1;
+	uint8 bOverrideENGSetting_bAutomatedTest      : 1;
+	uint8 bOverrideENGSetting_bTestFrames         : 1;
 };
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -99,35 +98,3 @@ struct FSystemInfo
 };
 
 // ---------------------------------------------------------------------------------
-
-class Signal
-{
-public:
-	inline void NotifyOne() { cv.notify_one(); };
-	inline void NotifyAll() { cv.notify_all(); };
-
-	inline void Wait()               { std::unique_lock<std::mutex> lk(this->mtx); this->cv.wait(lk); }
-	inline void Wait(bool(*pPred)()) { std::unique_lock<std::mutex> lk(this->mtx); this->cv.wait(lk, pPred); }
-	template<class Functor>  // https://stackoverflow.com/questions/6458612/c0x-proper-way-to-receive-a-lambda-as-parameter-by-reference
-	inline void Wait(Functor fn)     { std::unique_lock<std::mutex> lk(this->mtx); this->cv.wait(lk, fn); }
-
-private:
-	std::mutex mtx;
-	std::condition_variable cv;
-};
-
-class Semaphore
-{
-public:
-	Semaphore(int val, int max) : maxVal(max), currVal(val) {}
-
-	inline void P() { Wait(); }
-	inline void V() { Signal(); }
-	void Wait();
-	void Signal();
-
-private:
-	int currVal, maxVal;
-	std::mutex mtx;
-	std::condition_variable cv;
-};

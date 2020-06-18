@@ -65,11 +65,10 @@ void VQEngine::Exit()
 void VQEngine::InititalizeEngineSettings(const FStartupParameters& Params)
 {
 	// Defaults
-	mSettings.gfx.bFullscreen = false;
+	mSettings.gfx.DisplayMode = EDisplayMode::WINDOWED;
 	mSettings.gfx.bVsync = false;
 	mSettings.gfx.bUseTripleBuffering = true;
-	mSettings.gfx.RenderResolutionX = 1920;
-	mSettings.gfx.RenderResolutionY = 1080;
+	mSettings.gfx.RenderScale = 1.0f;
 
 
 	mSettings.bAutomatedTestRun = false;
@@ -84,11 +83,10 @@ void VQEngine::InititalizeEngineSettings(const FStartupParameters& Params)
 
 	// Override #0 : from file
 	FStartupParameters paramFile = VQEngine::ParseEngineSettingsFile();
-	if (paramFile.bOverrideGFXSetting_bFullscreen)         mSettings.gfx.bFullscreen         = paramFile.EngineSettings.gfx.bFullscreen;
+	if (paramFile.bOverrideGFXSetting_bFullscreen)         mSettings.gfx.DisplayMode         = paramFile.EngineSettings.gfx.DisplayMode;
 	if (paramFile.bOverrideGFXSetting_bVSync     )         mSettings.gfx.bVsync              = paramFile.EngineSettings.gfx.bVsync;
 	if (paramFile.bOverrideGFXSetting_bUseTripleBuffering) mSettings.gfx.bUseTripleBuffering = paramFile.EngineSettings.gfx.bUseTripleBuffering;
-	if (paramFile.bOverrideGFXSetting_Width)               mSettings.gfx.RenderResolutionX   = paramFile.EngineSettings.gfx.RenderResolutionX;
-	if (paramFile.bOverrideGFXSetting_Height)              mSettings.gfx.RenderResolutionY   = paramFile.EngineSettings.gfx.RenderResolutionY;
+	if (paramFile.bOverrideGFXSetting_RenderScale)         mSettings.gfx.RenderScale         = paramFile.EngineSettings.gfx.RenderScale;
 
 	if (paramFile.bOverrideENGSetting_MainWindowWidth)    mSettings.MainWindow_Width  = paramFile.EngineSettings.MainWindow_Width;
 	if (paramFile.bOverrideENGSetting_MainWindowHeight)   mSettings.MainWindow_Height = paramFile.EngineSettings.MainWindow_Height;
@@ -101,11 +99,10 @@ void VQEngine::InititalizeEngineSettings(const FStartupParameters& Params)
 
 
 	// Override #1 : if there's command line params
-	if (Params.bOverrideGFXSetting_bFullscreen)         mSettings.gfx.bFullscreen         = Params.EngineSettings.gfx.bFullscreen;
+	if (Params.bOverrideGFXSetting_bFullscreen)         mSettings.gfx.DisplayMode         = Params.EngineSettings.gfx.DisplayMode;
 	if (Params.bOverrideGFXSetting_bVSync     )         mSettings.gfx.bVsync              = Params.EngineSettings.gfx.bVsync;
 	if (Params.bOverrideGFXSetting_bUseTripleBuffering) mSettings.gfx.bUseTripleBuffering = Params.EngineSettings.gfx.bUseTripleBuffering;
-	if (Params.bOverrideGFXSetting_Width)               mSettings.gfx.RenderResolutionX   = Params.EngineSettings.gfx.RenderResolutionX;
-	if (Params.bOverrideGFXSetting_Height)              mSettings.gfx.RenderResolutionY   = Params.EngineSettings.gfx.RenderResolutionY;
+	if (Params.bOverrideGFXSetting_RenderScale)         mSettings.gfx.RenderScale         = Params.EngineSettings.gfx.RenderScale;
 
 	if (Params.bOverrideENGSetting_MainWindowWidth)    mSettings.MainWindow_Width  = Params.EngineSettings.MainWindow_Width;
 	if (Params.bOverrideENGSetting_MainWindowHeight)   mSettings.MainWindow_Height = Params.EngineSettings.MainWindow_Height;
@@ -130,8 +127,8 @@ void VQEngine::InitializeApplicationWindows(const FStartupParameters& Params)
 
 	mainWndDesc.width  = mSettings.DebugWindow_Width;
 	mainWndDesc.height = mSettings.DebugWindow_Height;
-	mpWinDebug.reset(new Window(mSettings.strDebugWindowTitle, mainWndDesc));
-	Log::Info("Created debug window<0x%x>: %dx%d", mpWinDebug->GetHWND(), mainWndDesc.width, mainWndDesc.height);
+	//mpWinDebug.reset(new Window(mSettings.strDebugWindowTitle, mainWndDesc));
+	//Log::Info("Created debug window<0x%x>: %dx%d", mpWinDebug->GetHWND(), mainWndDesc.width, mainWndDesc.height);
 }
 
 void VQEngine::InitializeThreads()
@@ -249,6 +246,7 @@ static std::pair<std::string, std::string> ParseLineINI(const std::string& iniLi
 }
 static bool ParseBool(const std::string& s) { bool b; std::istringstream(s) >> b; return b; }
 static int  ParseInt(const std::string& s) { return std::atoi(s.c_str()); }
+static float ParseFloat(const std::string& s) { return static_cast<float>(std::atof(s.c_str())); }
 
 FStartupParameters VQEngine::ParseEngineSettingsFile()
 {
@@ -285,15 +283,10 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 				params.bOverrideGFXSetting_bVSync = true;
 				params.EngineSettings.gfx.bVsync = ParseBool(SettingValue);
 			}
-			if (SettingName == "ResolutionX")
+			if (SettingName == "RenderScale")
 			{
-				params.bOverrideGFXSetting_Width = true;
-				params.EngineSettings.gfx.RenderResolutionX = ParseInt(SettingValue);
-			}
-			if (SettingName == "ResolutionY")
-			{
-				params.bOverrideGFXSetting_Height = true;
-				params.EngineSettings.gfx.RenderResolutionY = ParseInt(SettingValue);
+				params.bOverrideGFXSetting_RenderScale = true;
+				params.EngineSettings.gfx.RenderScale = ParseFloat(SettingValue);
 			}
 
 

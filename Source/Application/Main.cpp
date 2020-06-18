@@ -30,7 +30,7 @@
 #include "VQEngine.h"
 
 
-#define LOG_WINDOW_MESSAGE_EVENTS 1
+#define LOG_WINDOW_MESSAGE_EVENTS 0
 static void LogWndMsg(UINT uMsg, HWND hwnd)
 {
 #if LOG_WINDOW_MESSAGE_EVENTS
@@ -95,25 +95,25 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 				refStartupParams.EngineSettings.NumAutomatedTestFrames = std::atoi(paramValue.c_str());
 			}
 		}
-
-		//
-		// Graphics Settings
-		//
 		if (paramName == "-Width" || paramName == "-W")
 		{
-			refStartupParams.bOverrideGFXSetting_Width = true;
-			refStartupParams.EngineSettings.gfx.RenderResolutionX = std::atoi(paramValue.c_str());
+			refStartupParams.bOverrideENGSetting_MainWindowWidth = true;
+			refStartupParams.EngineSettings.MainWindow_Width = std::atoi(paramValue.c_str());
 
 		}
 		if (paramName == "-Height" || paramName == "-H")
 		{
-			refStartupParams.bOverrideGFXSetting_Height = true;
-			refStartupParams.EngineSettings.gfx.RenderResolutionY = std::atoi(paramValue.c_str());
+			refStartupParams.bOverrideENGSetting_MainWindowHeight = true;
+			refStartupParams.EngineSettings.MainWindow_Height = std::atoi(paramValue.c_str());
 		}
+
+		//
+		// Graphics Settings
+		//
 		if (paramName == "-Fullscreen" || paramName == "-FullScreen")
 		{
 			refStartupParams.bOverrideGFXSetting_bFullscreen = true;
-			refStartupParams.EngineSettings.gfx.bFullscreen = true;
+			refStartupParams.EngineSettings.gfx.DisplayMode = EDisplayMode::EXCLUSIVE_FULLSCREEN;
 		}
 		if (paramName == "-VSync" || paramName == "-vsync" || paramName == "-Vsync")
 		{

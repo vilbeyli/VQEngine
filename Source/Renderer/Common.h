@@ -17,9 +17,19 @@
 //	Contact: volkanilbeyli@gmail.com
 #pragma once
 
+#include <d3d12.h>
 #include "../Application/Types.h"
 #include "../../Libs/VQUtils/Source/Log.h"
 
 template<class T>
 T AlignOffset(const T& uOffset, const T& uAlign) { return ((uOffset + (uAlign - 1)) & ~(uAlign - 1)); }
 
+template<class... Args>
+void SetName(ID3D12Object* pObj, const char* format, Args&&... args)
+{
+	char bufName[240];
+	sprintf_s(bufName, format, args...);
+	std::string Name = bufName;
+	std::wstring wName(Name.begin(), Name.end());
+	pObj->SetName(wName.c_str());
+}

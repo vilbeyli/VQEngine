@@ -74,6 +74,8 @@ public:
 	inline short GetSwapChainBackBufferCountOfWindow(std::unique_ptr<Window>& pWnd) const { return GetSwapChainBackBufferCountOfWindow(pWnd.get()); };
 	short GetSwapChainBackBufferCountOfWindow(Window* pWnd) const;
 	short GetSwapChainBackBufferCountOfWindow(HWND hwnd) const;
+	void  ResizeSwapChain(HWND hwnd, int w, int h);
+	SwapChain& GetWindowSwapChain(HWND hwnd);
 
 private:
 	void InitializeD3D12MA();
@@ -125,7 +127,6 @@ private:
 	StaticResourceViewHeap mHeapCBV_SRV_UAV;
 	StaticResourceViewHeap mHeapSampler;
 	UploadHeap             mHeapUpload;
-
 
 	StaticBufferPool mStaticVertexBufferPool;
 	StaticBufferPool mStaticIndexBufferPool;

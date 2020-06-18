@@ -22,15 +22,11 @@
 #include "Platform.h"
 #include "Window.h"
 #include "Settings.h"
-#include "ThreadPool.h"
 
+#include "Libs/VQUtils/Source/Multithreading.h"
 #include "Source/Renderer/Renderer.h"
 
 #include <memory>
-#include <thread>
-#include <atomic>
-#include <condition_variable>
-#include <mutex>
 
 // Outputs Render/Update thread sync values on each Tick()
 #define DEBUG_LOG_THREAD_SYNC_VERBOSE 0
@@ -117,6 +113,9 @@ public:
 	void RenderThread_Render();
 
 
+	// Processes the event queue populated by the VQEngine_Main.cpp thread
+	void RenderThread_HandleEvents();
+
 	// ---------------------------------------------------------
 	// Update Thread
 	// ---------------------------------------------------------
@@ -164,7 +163,6 @@ private:
 	std::unique_ptr<Semaphore> mpSemUpdate;
 	std::unique_ptr<Semaphore> mpSemRender;
 	
-
 	// windows
 	std::unique_ptr<Window> mpWinMain;
 	std::unique_ptr<Window> mpWinDebug;
@@ -185,6 +183,11 @@ private:
 	DebugWindowScene        mScene_DebugWnd;
 	std::unordered_map<HWND, IWindowUpdateContext*> mWindowUpdateContextLookup;
 
+	// input
+
+	// events
+	struct WindowResizeEvent { int width, height; HWND hwnd; WindowResizeEvent(int w, int h, HWND hwnd_) :width(w), height(h), hwnd(hwnd_) {} WindowResizeEvent() = default; };
+	BufferedContainer<std::queue<WindowResizeEvent>, WindowResizeEvent> mWinEventQueue;
 
 private:
 	// Reads EngineSettings.ini from next to the executable and returns a 

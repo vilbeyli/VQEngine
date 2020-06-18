@@ -162,28 +162,11 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     mpDescHeapRTV->SetName(L"SwapChainRTVDescHeap");
 #endif
 
-    // From Adam Sawicki's D3D12MA sample code:
-    // get the size of a descriptor in this heap (this is a rtv heap, so only rtv descriptors should be stored in it.
-    // descriptor sizes may vary from g_Device to g_Device, which is why there is no set size and we must ask the 
-    // g_Device to give us the size. we will use this size to increment a descriptor handle offset
-    const UINT RTVDescSize = this->mpDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
-    D3D12_CPU_DESCRIPTOR_HANDLE hRTV{ this->mpDescHeapRTV->GetCPUDescriptorHandleForHeapStart() };
-
     // Create a RTV for each SwapChain buffer
     this->mRenderTargets.resize(this->mNumBackBuffers);
-    for (int i = 0; i < this->mNumBackBuffers; i++)
-    {
-        hr = this->mpSwapChain->GetBuffer(i, IID_PPV_ARGS(&this->mRenderTargets[i]));
-        if (FAILED(hr))
-        {
-            assert(false);
-        }
+    CreateRenderTargetViews();
 
-        this->mpDevice->CreateRenderTargetView(this->mRenderTargets[i], nullptr, hRTV);
-        hRTV.ptr += RTVDescSize; 
-    }
-
+    Log::Info("SwapChain: Created swapchain<hwnd=0x%x> w/ %d back buffers of %dx%d.", mHwnd, desc.numBackBuffers, desc.pWindow->width, desc.pWindow->height);
     return bSuccess;
 }
 
@@ -210,7 +193,26 @@ void SwapChain::Destroy()
 
 void SwapChain::Resize(int w, int h)
 {
-    assert(false);
+#if LOG_SWAPCHAIN_VERBOSE
+    Log::Warning("SwapChain<hwnd=0x%x> Resize: %dx%d", mHwnd, w, h);
+#endif
+
+    for (int i = 0; i < this->mNumBackBuffers; i++)
+    {
+        this->mRenderTargets[i]->Release();
+    }
+
+    bool bVsync = false; // TODO
+    mpSwapChain->ResizeBuffers(
+        (UINT)this->mFenceValues.size(),
+        w, h,
+        this->mSwapChainFormat,
+        bVsync ? 0 : DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING
+    );
+
+    CreateRenderTargetViews();
+    this->mICurrentBackBuffer = mpSwapChain->GetCurrentBackBufferIndex();
+    for (UINT64& FenceVal : mFenceValues) FenceVal = 1;
 }
 
 void SwapChain::SetFullscreen(bool bState)
@@ -280,11 +282,26 @@ void SwapChain::MoveToNextFrame()
     ++mNumTotalFrames;
 
     // If the next frame is not ready to be rendered yet, wait until it is ready.
-    if (mpFence->GetCompletedValue() < mFenceValues[mICurrentBackBuffer])
+    UINT64 fenceComplVal = mpFence->GetCompletedValue();
+    HRESULT hr = {};
+    if (fenceComplVal < mFenceValues[mICurrentBackBuffer])
     {
+#if LOG_SWAPCHAIN_VERBOSE
+        Log::Warning("SwapChain : next frame not ready. FenceComplVal=%d < FenceVal[curr]=%d", fenceComplVal, mFenceValues[mICurrentBackBuffer]);
+#endif
         ThrowIfFailed(mpFence->SetEventOnCompletion(mFenceValues[mICurrentBackBuffer], mHEvent));
-        WaitForSingleObjectEx(mHEvent, INFINITE, FALSE);
+        hr = WaitForSingleObjectEx(mHEvent, 200, FALSE);
     }
+    switch (hr)
+    {
+    case WAIT_TIMEOUT:
+        Log::Warning("SwapChain<hwnd=0x%x> timed out on WaitForGPU(): Signal=%d, ICurrBackBuffer=%d, NumFramesPresented=%d"
+            , mHwnd, mFenceValues[mICurrentBackBuffer], mICurrentBackBuffer, this->GetNumPresentedFrames());
+        break;
+    default: break;
+    }
+
+    assert(hr == S_OK);
 
     // Set the fence value for the next frame.
     mFenceValues[mICurrentBackBuffer] = currentFenceValue + 1;
@@ -299,24 +316,40 @@ void SwapChain::MoveToNextFrame()
 
 void SwapChain::WaitForGPU()
 {
+    ID3D12Fence* pFence;
+    ThrowIfFailed(mpDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&pFence)));
+
+    ID3D12CommandQueue* queue = mpPresentQueue;
+
+    ThrowIfFailed(queue->Signal(pFence, 1));
+
+    HANDLE mHandleFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    pFence->SetEventOnCompletion(1, mHandleFenceEvent);
+    WaitForSingleObject(mHandleFenceEvent, INFINITE);
+    CloseHandle(mHandleFenceEvent);
+
+    pFence->Release();
+}
+
+void SwapChain::CreateRenderTargetViews()
+{
+    // From Adam Sawicki's D3D12MA sample code:
+    // get the size of a descriptor in this heap (this is a rtv heap, so only rtv descriptors should be stored in it.
+    // descriptor sizes may vary from g_Device to g_Device, which is why there is no set size and we must ask the 
+    // g_Device to give us the size. we will use this size to increment a descriptor handle offset
+    const UINT RTVDescSize = this->mpDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    D3D12_CPU_DESCRIPTOR_HANDLE hRTV{ this->mpDescHeapRTV->GetCPUDescriptorHandleForHeapStart() };
+
     HRESULT hr = {};
-
-    // Schedule a Signal command in the queue.
-    ThrowIfFailed(mpPresentQueue->Signal(mpFence, mFenceValues[mICurrentBackBuffer]));
-
-    // Wait until the fence has been processed.
-    ThrowIfFailed(mpFence->SetEventOnCompletion(mFenceValues[mICurrentBackBuffer], mHEvent));
-    hr = WaitForSingleObjectEx(mHEvent, 3000, FALSE); // wait for 3000 milliseconds tops
-    
-    switch (hr)
+    for (int i = 0; i < this->mNumBackBuffers; i++)
     {
-    case WAIT_TIMEOUT:
-        Log::Warning("SwapChain<hwnd=0x%x> timed out on WaitForGPU(): Signal=%d, ICurrBackBuffer=%d, NumFramesPresented=%d"
-            , mHwnd, mFenceValues[mICurrentBackBuffer], mICurrentBackBuffer, this->GetNumPresentedFrames());
-        break;
-    default: break;
-    }
+        hr = this->mpSwapChain->GetBuffer(i, IID_PPV_ARGS(&this->mRenderTargets[i]));
+        if (FAILED(hr))
+        {
+            assert(false);
+        }
 
-    // Increment the fence value for the current frame.
-    ++mFenceValues[mICurrentBackBuffer];
+        this->mpDevice->CreateRenderTargetView(this->mRenderTargets[i], nullptr, hRTV);
+        hRTV.ptr += RTVDescSize;
+    }
 }
