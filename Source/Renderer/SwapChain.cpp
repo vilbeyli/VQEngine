@@ -210,6 +210,7 @@ void SwapChain::Resize(int w, int h)
     for (int i = 0; i < this->mNumBackBuffers; i++)
     {
         this->mRenderTargets[i]->Release();
+        mFenceValues[i] = mFenceValues[mpSwapChain->GetCurrentBackBufferIndex()];
     }
 
     bool bVsync = false; // TODO
@@ -222,7 +223,6 @@ void SwapChain::Resize(int w, int h)
 
     CreateRenderTargetViews();
     this->mICurrentBackBuffer = mpSwapChain->GetCurrentBackBufferIndex();
-    for (UINT64& FenceVal : mFenceValues) FenceVal = 1;
 }
 
 void SwapChain::SetFullscreen(bool bState)

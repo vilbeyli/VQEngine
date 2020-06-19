@@ -237,22 +237,7 @@ void VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
 	// command lists have finished execution on the GPU; apps should use 
 	// fences to determine GPU execution progress.
 	ID3D12CommandAllocator* pCmdAlloc = ctx.mCommandAllocatorsGFX[BACK_BUFFER_INDEX];
-	
-	//******************************************************************************
 	ThrowIfFailed(pCmdAlloc->Reset());
-	// NOTE:
-	//
-	// The Debug Layer throws an error here sometimes during resizing the window
-	// whith the following message, even though the returned value from Reset()
-	// is S_OK | RX 5700XT.
-	//
-	// A command allocator 0x00000283C47C77F0:'RenderContext::CmdAllocGFX[0]' is 
-	// being reset before previous executions associated with the allocator have 
-	// completed. [ EXECUTION ERROR #552: COMMAND_ALLOCATOR_SYNC]
-	//
-	// MSDN docs say it will return S_FAIL but it doesn't.
-	// https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12commandallocator-reset
-	//******************************************************************************
 
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
