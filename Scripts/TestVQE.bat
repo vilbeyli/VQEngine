@@ -4,7 +4,6 @@ setlocal enabledelayedexpansion
 
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
 cd ../Build/_artifacts
-echo cd is !CD!
 set DIR_BUILD=!CD!
 
 set VQE_REL_DIR=!DIR_BUILD!/Win64
@@ -32,7 +31,7 @@ for %%i IN (%*) DO (
 :: MAIN()
 ::
 echo.
-echo [VQTest] Running Tests...
+echo [VQTest] RUNNING TESTS...
 
 call :CheckDirectories
 
