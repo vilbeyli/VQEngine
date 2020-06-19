@@ -41,11 +41,12 @@
 #define NUM_MAX_BACK_BUFFERS  3
 #define LOG_SWAPCHAIN_VERBOSE 0
 
-FWindowRepresentation::FWindowRepresentation(const std::unique_ptr<Window>& pWnd, bool bVSyncIn)
+FWindowRepresentation::FWindowRepresentation(const std::unique_ptr<Window>& pWnd, bool bVSyncIn, bool bFullscreenIn)
     : hwnd(pWnd->GetHWND())
     , width(pWnd->GetWidth())
     , height(pWnd->GetHeight())
     , bVSync(bVSyncIn)
+    , bFullscreen(bFullscreenIn)
 {}
 
 // The programming model for swap chains in D3D12 is not identical to that in earlier versions of D3D. 
@@ -110,6 +111,10 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
         , &pSwapChain
     );
 
+    // https://docs.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgifactory-makewindowassociation
+    UINT WndAssocFlags = DXGI_MWA_NO_ALT_ENTER; // We're gonna handle the Alt+Enter ourselves instead of DXGI
+    pDxgiFactory->MakeWindowAssociation(desc.pWindow->hwnd, WndAssocFlags);
+
     const bool bSuccess = SUCCEEDED(hr);
     if (bSuccess)
     {
@@ -161,6 +166,11 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
 #if _DEBUG
     mpDescHeapRTV->SetName(L"SwapChainRTVDescHeap");
 #endif
+
+    if (desc.bFullscreen)
+    {
+        //this->SetFullscreen(true);
+    }
 
     // Create a RTV for each SwapChain buffer
     this->mRenderTargets.resize(this->mNumBackBuffers);
@@ -217,13 +227,46 @@ void SwapChain::Resize(int w, int h)
 
 void SwapChain::SetFullscreen(bool bState)
 {
-    mpSwapChain->SetFullscreenState(bState ? TRUE : FALSE, NULL);
+    HRESULT hr = {};
+
+    // Set Fullscreen
+    // https://docs.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-setfullscreenstate
+    hr = mpSwapChain->SetFullscreenState(bState ? TRUE : FALSE, NULL);
+    if (hr != S_OK)
+    {
+        switch (hr)
+        {
+        case DXGI_ERROR_NOT_CURRENTLY_AVAILABLE : Log::Error("SwapChain::SetFullScreen() : DXGI_ERROR_NOT_CURRENTLY_AVAILABLE"); break;
+        case DXGI_STATUS_MODE_CHANGE_IN_PROGRESS: Log::Error("SwapChain::SetFullScreen() : DXGI_STATUS_MODE_CHANGE_IN_PROGRESS "); break;
+            
+        default: Log::Error("SwapChain::SetFullScreen() : unhandled error code"); break;
+        }
+    }
+
+    // Call Resize Target
+    // https://docs.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-resizetarget
+    DXGI_MODE_DESC mode = {};
+    mode.Width  = 1920;
+    mode.Height = 1080; // if we're toggling off fullscreen, fallback to 1080p windowed
+    mode.Format = DXGI_FORMAT_UNKNOWN;
+
+    // calling ResizeTarget() will produce WM_RESIZE event right away.
+    // RenderThread handles events twice before present to be able to catch
+    // the Resize() event before calling Present() as the events
+    // are produced and consumed on different threads (p:main, c:render).
+    hr = mpSwapChain->ResizeTarget(&mode);
+    if (hr != S_OK)
+    {
+        Log::Error("SwapChain::ResizeTarget() : unhandled error code");
+    }
+
 }
 
-bool SwapChain::IsFullscreen() const
+bool SwapChain::IsFullscreen(/*IDXGIOUtput* ?*/) const
 {
-    assert(false);
-    return false;
+    BOOL fullscreenState;
+    ThrowIfFailed(mpSwapChain->GetFullscreenState(&fullscreenState, nullptr));
+    return fullscreenState;
 }
 
 void SwapChain::Present(bool bVSync)
@@ -234,7 +277,7 @@ void SwapChain::Present(bool bVSync)
     // https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/dxgi-flip-model#avoiding-detecting-and-recovering-from-glitches
 
     HRESULT hr = {};
-    UINT FlagPresent = !bVSync 
+    UINT FlagPresent = (!bVSync && !IsFullscreen())
         ? DXGI_PRESENT_ALLOW_TEARING // works only in Windowed mode
         : 0;
 
@@ -253,6 +296,9 @@ void SwapChain::Present(bool bVSync)
             break;
         case DXGI_ERROR_DEVICE_REMOVED:
             // TODO: call HandleDeviceReset()
+            break;
+        case DXGI_ERROR_INVALID_CALL:
+            // TODO:
             break;
         case DXGI_STATUS_OCCLUDED:
             // TODO: call HandleStatusOcclueded() 

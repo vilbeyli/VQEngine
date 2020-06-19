@@ -108,6 +108,11 @@ bool IWindow::IsClosed() const
     return IsClosedImpl();
 }
 
+bool IWindow::IsFullscreen() const
+{
+    return IsFullscreenImpl();
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 HWND Window::GetHWND() const
 {

@@ -34,6 +34,8 @@ struct FGraphicsSettings
 	EDisplayMode DisplayMode = EDisplayMode::WINDOWED;
 
 	float RenderScale = 1.0f;
+
+	inline bool IsDisplayModeFullscreen() const { return DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN || DisplayMode == EDisplayMode::WINDOWED_FULLSCREEN; }
 };
 
 struct FEngineSettings

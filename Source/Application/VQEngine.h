@@ -22,6 +22,7 @@
 #include "Platform.h"
 #include "Window.h"
 #include "Settings.h"
+#include "Events.h"
 
 #include "Libs/VQUtils/Source/Multithreading.h"
 #include "Source/Renderer/Renderer.h"
@@ -86,11 +87,13 @@ public:
 	// Window event callbacks for the main Window
 	void OnWindowCreate() override;
 	void OnWindowResize(HWND hWnd) override;
+	void OnToggleFullscreen(HWND hWnd) override;
 	void OnWindowMinimize() override;
 	void OnWindowFocus() override;
 	void OnWindowKeyDown(WPARAM wParam) override;
 	void OnWindowClose(IWindow* pWindow) override;
 	
+
 	void MainThread_Tick();
 
 	// ---------------------------------------------------------
@@ -115,6 +118,8 @@ public:
 
 	// Processes the event queue populated by the VQEngine_Main.cpp thread
 	void RenderThread_HandleEvents();
+	void RenderThread_HandleResizeWindowEvent(const IEvent* pEvent);
+	void RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent);
 
 	// ---------------------------------------------------------
 	// Update Thread
@@ -186,8 +191,7 @@ private:
 	// input
 
 	// events
-	struct WindowResizeEvent { int width, height; HWND hwnd; WindowResizeEvent(int w, int h, HWND hwnd_) :width(w), height(h), hwnd(hwnd_) {} WindowResizeEvent() = default; };
-	BufferedContainer<std::queue<WindowResizeEvent>, WindowResizeEvent> mWinEventQueue;
+	BufferedContainer<std::queue<IEvent*>, IEvent*> mWinEventQueue;
 
 private:
 	// Reads EngineSettings.ini from next to the executable and returns a 

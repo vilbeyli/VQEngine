@@ -77,6 +77,7 @@ class IWindowOwner
 public:
 	virtual void OnWindowCreate() = 0;
 	virtual void OnWindowResize(HWND) = 0;
+	virtual void OnToggleFullscreen(HWND) = 0;
 	virtual void OnWindowMinimize() = 0;
 	virtual void OnWindowFocus() = 0;
 	virtual void OnWindowClose(IWindow* pWnd) = 0;
@@ -98,6 +99,7 @@ public:
 	virtual void Close()    = 0;
 
 	bool IsClosed() const;
+	bool IsFullscreen() const;
 
 	int GetWidth() const;
 	int GetHeight() const;
@@ -105,6 +107,7 @@ public:
 	IWindowOwner* pOwner;
 private:
 	virtual bool IsClosedImpl() const = 0;
+	virtual bool IsFullscreenImpl() const = 0;
 	virtual int GetWidthImpl() const = 0;
 	virtual int GetHeightImpl() const = 0;
 };
@@ -134,6 +137,7 @@ public:
 
 private:
 	inline bool IsClosedImpl()  const override { return isClosed_; }
+	inline bool IsFullscreenImpl() const override { return isFullscreen_; }
 	inline int  GetWidthImpl()  const override { return width_; }
 	inline int  GetHeightImpl() const override { return height_; }
 
@@ -141,4 +145,5 @@ private:
 	HWND hwnd_ = 0;
 	bool isClosed_ = false;
 	int width_ = -1, height_ = -1;
+	bool isFullscreen_ = false;
 };

@@ -32,6 +32,8 @@ void VQEngine::RenderThread_Main()
 	bool bQuit = false;
 	while (!this->mbStopAllThreads && !bQuit)
 	{
+		RenderThread_HandleEvents();
+
 		RenderThread_WaitForUpdateThread();
 
 #if DEBUG_LOG_THREAD_SYNC_VERBOSE
@@ -77,8 +79,11 @@ void VQEngine::RenderThread_SignalUpdateThread()
 void VQEngine::RenderThread_Inititalize()
 {
 	FRendererInitializeParameters params = {};
-	params.Windows.push_back(FWindowRepresentation(mpWinMain , mSettings.gfx.bVsync));
-	if(mpWinDebug) params.Windows.push_back(FWindowRepresentation(mpWinDebug, false));
+	const bool bFullscreen = mSettings.gfx.IsDisplayModeFullscreen();
+
+	params.Windows.push_back(FWindowRepresentation(mpWinMain , mSettings.gfx.bVsync, bFullscreen));
+	if(mpWinDebug) 
+		params.Windows.push_back(FWindowRepresentation(mpWinDebug, false, false));
 	params.Settings = mSettings.gfx;
 	mRenderer.Initialize(params);
 
@@ -117,27 +122,63 @@ void VQEngine::RenderThread_Render()
 	}
 }
 
+
+
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//
+// EVENT HANDLING
+//
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
 void VQEngine::RenderThread_HandleEvents()
 {
 	// Swap event recording buffers so we can read & process a limited number of events safely.
 	//   Otherwise, theoretically the producer (Main) thread could keep adding new events 
 	//   while we're spinning on the queue items below, and cause render thread to stall while, say, resizing.
 	mWinEventQueue.SwapBuffers();
-	{
-		std::queue<WindowResizeEvent>& q = mWinEventQueue.GetBackContainer();
-
-		if (q.empty())
-			return;
+	std::queue<IEvent*>& q = mWinEventQueue.GetBackContainer();
+	if (q.empty())
+		return;
 		
-		// we only care about the last event to avoid unnecessary sync / buffer resize calls.
-		WindowResizeEvent lastEvent = {};
-		while (!q.empty())
-		{
-			lastEvent = q.front();
-			q.pop();
-		}
 
-		mRenderer.ResizeSwapChain(lastEvent.hwnd, lastEvent.width, lastEvent.height);
+	// process the events
+	const IEvent* pEvent = {};
+	const WindowResizeEvent* pResizeEvent = nullptr;
+	while (!q.empty())
+	{
+		pEvent = q.front();
+		q.pop();
+
+		switch (pEvent->mType)
+		{
+		case EEventType::WINDOW_RESIZE_EVENT: 
+			// noop, we only care about the last RESIZE event to avoid calling SwapchainResize() unneccessarily
+			pResizeEvent = static_cast<const WindowResizeEvent*>(pEvent);
+			break;
+		case EEventType::TOGGLE_FULLSCREEN_EVENT:
+			// handle every fullscreen event
+			RenderThread_HandleToggleFullscreenEvent(pEvent);
+			break;
+		}
 	}
+
+	// Process Window Resize
+	if (pResizeEvent)
+	{
+		RenderThread_HandleResizeWindowEvent(pResizeEvent);
+	}
+	
+}
+
+void VQEngine::RenderThread_HandleResizeWindowEvent(const IEvent* pEvent)
+{
+	const WindowResizeEvent* pResizeEvent = static_cast<const WindowResizeEvent*>(pEvent);
+	mRenderer.ResizeSwapChain(pResizeEvent->hwnd, pResizeEvent->width, pResizeEvent->height);
+}
+
+void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
+{
+	const ToggleFullscreenEvent* pToggleFSEvent = static_cast<const ToggleFullscreenEvent*>(pEvent);
+	mRenderer.ToggleFullscreen(pToggleFSEvent->hwnd);
 }
 

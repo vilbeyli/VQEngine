@@ -110,7 +110,7 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 		//
 		// Graphics Settings
 		//
-		if (paramName == "-Fullscreen" || paramName == "-FullScreen")
+		if (paramName == "-Fullscreen" || paramName == "-FullScreen" || paramName == "-fullscreen")
 		{
 			refStartupParams.bOverrideGFXSetting_bFullscreen = true;
 			refStartupParams.EngineSettings.gfx.DisplayMode = EDisplayMode::EXCLUSIVE_FULLSCREEN;
@@ -165,6 +165,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		LogWndMsg(uMsg, hwnd);
 		if (pWindow->pOwner) pWindow->pOwner->OnWindowKeyDown(wParam);
 		return 0;
+
+	case WM_SYSKEYDOWN:
+		LogWndMsg(uMsg, hwnd);
+		if ((wParam == VK_RETURN) && (lParam & (1 << 29))) // Handle ALT+ENTER
+		{
+			if (pWindow->pOwner) pWindow->pOwner->OnToggleFullscreen(hwnd);
+			return 0;
+		}
+		// Send all other WM_SYSKEYDOWN messages to the default WndProc.
+		break;
 
 	// https://docs.microsoft.com/en-us/windows/win32/learnwin32/painting-the-window
 	case WM_PAINT:

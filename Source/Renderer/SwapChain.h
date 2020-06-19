@@ -35,7 +35,8 @@ struct FWindowRepresentation
 {
 	HWND hwnd; int width, height;
 	bool bVSync;
-	FWindowRepresentation(const std::unique_ptr<Window>& pWnd, bool bVSync);
+	bool bFullscreen;
+	FWindowRepresentation(const std::unique_ptr<Window>& pWnd, bool bVSync, bool bFullscreen);
 };
 struct FSwapChainCreateDesc
 {
@@ -45,6 +46,7 @@ struct FSwapChainCreateDesc
 
 	int numBackBuffers;
 	bool bVSync;
+	bool bFullscreen;
 };
 
 
@@ -56,6 +58,7 @@ public:
 	void Destroy();
 
 	void Resize(int w, int h);
+
 
 	void SetFullscreen(bool bState);
 	bool IsFullscreen() const;

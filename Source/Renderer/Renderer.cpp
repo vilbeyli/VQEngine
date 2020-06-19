@@ -127,9 +127,10 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 		swapChainDesc.pWindow = &wnd;
 		swapChainDesc.pCmdQueue = &ctx.PresentQueue;
 		swapChainDesc.bVSync = ctx.bVsync;
+		swapChainDesc.bFullscreen = params.Settings.IsDisplayModeFullscreen();
 		ctx.SwapChain.Create(swapChainDesc);
 
-		// Create command allocators
+		// Create command allocatorsd
 		ctx.mCommandAllocatorsGFX.resize(NUM_SWAPCHAIN_BUFFERS);
 		ctx.mCommandAllocatorsCompute.resize(NUM_SWAPCHAIN_BUFFERS);
 		ctx.mCommandAllocatorsCopy.resize(NUM_SWAPCHAIN_BUFFERS);
@@ -218,11 +219,7 @@ SwapChain& VQRenderer::GetWindowSwapChain(HWND hwnd) { return mRenderContextLook
 
 void VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
 {
-	if (mRenderContextLookup.find(hwnd) == mRenderContextLookup.end())
-	{
-		Log::Warning("Render Context not found for <hwnd=0x%x>", hwnd);
-		return;
-	}
+	if (!CheckContext(hwnd)) return;
 
 	FRenderWindowContext& ctx = mRenderContextLookup.at(hwnd);
 
@@ -247,7 +244,7 @@ void VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
 	//
 	// The Debug Layer throws an error here sometimes during resizing the window
 	// whith the following message, even though the returned value from Reset()
-	// is S_OK.
+	// is S_OK | RX 5700XT.
 	//
 	// A command allocator 0x00000283C47C77F0:'RenderContext::CmdAllocGFX[0]' is 
 	// being reset before previous executions associated with the allocator have 
@@ -340,23 +337,16 @@ void VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
 short VQRenderer::GetSwapChainBackBufferCountOfWindow(Window* pWnd) const { return pWnd ? this->GetSwapChainBackBufferCountOfWindow(pWnd->GetHWND()) : 0; }
 short VQRenderer::GetSwapChainBackBufferCountOfWindow(HWND hwnd) const
 {
-	if (mRenderContextLookup.find(hwnd) == mRenderContextLookup.end())
-	{
-		Log::Warning("Render Context not found for <hwnd=0x%x>", hwnd);
-		return 0;
-	}
+	if (!CheckContext(hwnd)) return 0;
 
 	const FRenderWindowContext& ctx = mRenderContextLookup.at(hwnd);
 	return ctx.SwapChain.GetNumBackBuffers();
 	
 }
+
 void VQRenderer::ResizeSwapChain(HWND hwnd, int w, int h)
 {
-	if (mRenderContextLookup.find(hwnd) == mRenderContextLookup.end())
-	{
-		Log::Warning("Render Context not found for <hwnd=0x%x>", hwnd);
-		return;
-	}
+	if (!CheckContext(hwnd)) return;
 
 	FRenderWindowContext& ctx = mRenderContextLookup.at(hwnd);
 	ctx.SwapChain.WaitForGPU();
@@ -365,7 +355,24 @@ void VQRenderer::ResizeSwapChain(HWND hwnd, int w, int h)
 	ctx.MainRTResolutionY = h; // TODO: RenderScale
 }
 
+void VQRenderer::ToggleFullscreen(HWND hwnd)
+{
+	if (!CheckContext(hwnd)) return;
 
+	FRenderWindowContext& ctx = mRenderContextLookup.at(hwnd);
+	ctx.SwapChain.WaitForGPU();
+	ctx.SwapChain.SetFullscreen(!ctx.SwapChain.IsFullscreen());
+}
+
+bool VQRenderer::CheckContext(HWND hwnd) const
+{
+	if (mRenderContextLookup.find(hwnd) == mRenderContextLookup.end())
+	{
+		Log::Warning("Render Context not found for <hwnd=0x%x>", hwnd);
+		return false;
+	}
+	return true;
+}
 
 // ================================================================================================================================================
 

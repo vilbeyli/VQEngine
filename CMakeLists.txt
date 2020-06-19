@@ -35,6 +35,7 @@ set (HeaderVQE
     "Source/Application/Settings.h"
     "Source/Application/Types.h"
     "Source/Application/VQEngine.h"
+    "Source/Application/Events.h"
 )
 
 set (SourceVQE 
@@ -45,6 +46,7 @@ set (SourceVQE
     "Source/Application/VQEngine_Render.cpp"
     "Source/Application/VQEngine_Update.cpp"
     "Source/Application/VQEngine_WindowEvents.cpp"
+    "Source/Application/Events.cpp"
 )
 
 add_link_options(/SUBSYSTEM:WINDOWS)

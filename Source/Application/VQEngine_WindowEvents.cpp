@@ -32,7 +32,14 @@ void VQEngine::OnWindowResize(HWND hWnd)
 	
 	// Due to multi-threading, this thread will record the events and 
 	// Render Thread will process the queue at the of a render loop
-	mWinEventQueue.AddItem(WindowResizeEvent(w, h, hWnd));
+	mWinEventQueue.AddItem(new WindowResizeEvent(w, h, hWnd));
+}
+
+void VQEngine::OnToggleFullscreen(HWND hWnd)
+{
+	// Due to multi-threading, this thread will record the events and 
+	// Render Thread will process the queue at the of a render loop
+	mWinEventQueue.AddItem(new ToggleFullscreenEvent(hWnd));
 }
 
 void VQEngine::OnWindowMinimize()
