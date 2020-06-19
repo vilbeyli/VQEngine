@@ -186,7 +186,7 @@ void SwapChain::Destroy()
     // Full-screen swap chains continue to have the restriction that 
     // SetFullscreenState(FALSE, NULL) must be called before the final 
     // release of the swap chain. 
-    SetFullscreen(false);
+    mpSwapChain->SetFullscreenState(FALSE, NULL);
 
     WaitForGPU();
 
