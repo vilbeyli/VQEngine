@@ -23,8 +23,11 @@ set BUILD_CONFIG_REL_WITH_DBG=0
 
 set BUILD_FLAG_CLEAN=0
 
-:: flag to use for AppVeyor build to skip packaging process and do builds only
-set BUILD_TASKS_ONLY=0
+set DBG_BUILD_DIRECTORY=../Bin/DEBUG
+set RLS_BUILD_DIRECTORY=../Bin/RELEASE
+set RWD_BUILD_DIRECTORY=../Bin/RELWITHDEBINFO
+set SHADER_DIRECTORY=../Source/Shaders
+set DATA_DIRECTORY=../Data
 
 :: Keep track of # build tasks. build, clean, copy/move, etc.
 :: assume 2 for build+copy, add more depending on prebuild+clean tasks
@@ -102,12 +105,9 @@ call :ExecBuildTask_Build
 if %ERRORLEVEL% neq 0  exit /b %ERRORLEVEL%
 
 :: move build artifacts into destination folder
-::echo BUILD_TASKS_ONLY=!BUILD_TASKS_ONLY!
-if !BUILD_TASKS_ONLY! NEQ 1 (
-    call :ExecBuildTask_Move
-    echo [VQPackage] PACKAGING SUCCESSFUL!
-    start !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
-)
+call :ExecBuildTask_Move
+echo [VQPackage] PACKAGING SUCCESSFUL!
+start !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
 
 popd
 
@@ -233,6 +233,18 @@ exit /b 0
 
 
 
+
+::
+:: PackageBuild(source, dest)
+::
+:PackageBuild
+set SRC=%~1
+set DST=%~2
+robocopy !SRC! !DST!
+robocopy !SHADER_DIRECTORY! !DST!/Shaders
+xcopy "!DATA_DIRECTORY!/EngineSettings.ini" "!DST!/Data"\ /Y /Q /F
+exit /b 0
+
 ::
 :: ExecBuildTask_Move()
 ::
@@ -248,12 +260,14 @@ if exist !ENGINE_PACKAGE_OUTPUT_DIRECTORY! (
     rmdir /S /Q !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
 )
 
+:: make artifacts directory
 mkdir !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
 
+:: move builds
 echo [VQPackage] Moving build artifacts to package output directory...
-robocopy ../Bin/RELEASE !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win64 > nul
-if !BUILD_CONFIG_DEBUG!        neq 0  robocopy ../Bin/DEBUG !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win64-Debug > nul
-if !BUILD_CONFIG_REL_WITH_DBG! neq 0  robocopy ../Bin/RELEASE !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win64-PDB > nul
+call :PackageBuild !RLS_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win64
+if !BUILD_CONFIG_DEBUG! NEQ 0         call :PackageBuild !DBG_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win64-Debug
+if !BUILD_CONFIG_REL_WITH_DBG! NEQ 0  call :PackageBuild !RWD_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win64-PDB
 exit /b 0
 
 :: --------------------------------------------------------------------------
