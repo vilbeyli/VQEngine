@@ -21,22 +21,3 @@
 #include "../Renderer/Renderer.h" // GetDX12Adapters
 
 #include <dxgi1_6.h>
-
-FSystemInfo FSystemInfo::GetSystemInfo()
-{
-	FSystemInfo inf = {};
-
-	// GPU 
-	inf.GPUInfoVec = std::move(VQRenderer::EnumerateDX12Adapters(false, false));
-	
-	// MONITOR
-	// TODO
-
-	// CPU
-	// TODO
-
-	// RAM
-	// TODO
-
-	return inf;
-}

@@ -34,6 +34,7 @@
 #pragma comment(lib, "D3DCompiler.lib")
 
 using namespace Microsoft::WRL;
+using namespace VQSystemInfo;
 
 #ifdef _DEBUG
 	#define ENABLE_DEBUG_LAYER      1

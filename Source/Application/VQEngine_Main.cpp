@@ -48,6 +48,7 @@ void VQEngine::MainThread_Tick()
 
 bool VQEngine::Initialize(const FStartupParameters& Params)
 {
+	this->mSysInfo = VQSystemInfo::GetSystemInfo();
 	InititalizeEngineSettings(Params);
 	InitializeApplicationWindows(Params);
 	InitializeThreads();
@@ -127,8 +128,8 @@ void VQEngine::InitializeApplicationWindows(const FStartupParameters& Params)
 
 	mainWndDesc.width  = mSettings.DebugWindow_Width;
 	mainWndDesc.height = mSettings.DebugWindow_Height;
-	//mpWinDebug.reset(new Window(mSettings.strDebugWindowTitle, mainWndDesc));
-	//Log::Info("Created debug window<0x%x>: %dx%d", mpWinDebug->GetHWND(), mainWndDesc.width, mainWndDesc.height);
+	mpWinDebug.reset(new Window(mSettings.strDebugWindowTitle, mainWndDesc));
+	Log::Info("Created debug window<0x%x>: %dx%d", mpWinDebug->GetHWND(), mainWndDesc.width, mainWndDesc.height);
 }
 
 void VQEngine::InitializeThreads()

@@ -24,9 +24,13 @@
 #include "ResourceHeaps.h"
 #include "Buffer.h"
 
-#include "../Application/Platform.h" // FGPUInfo
+#include "../Application/Platform.h"
 #include "../Application/Settings.h"
 #include "../Application/Types.h"
+
+#define VQUTILS_SYSTEMINFO_INCLUDE_D3D12 1
+#include "../../Libs/VQUtils/Source/SystemInfo.h" // FGPUInfo
+
 
 #include <vector>
 #include <unordered_map>
@@ -61,7 +65,7 @@ struct ID3D12PipelineState;
 class VQRenderer
 {
 public:
-	static std::vector< FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters = false);
+	static std::vector< VQSystemInfo::FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters = false);
 
 public:
 	void Initialize(const FRendererInitializeParameters& RendererInitParams);

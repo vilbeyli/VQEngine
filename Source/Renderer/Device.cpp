@@ -36,7 +36,7 @@
 #include <cassert>
 #include <vector>
 
-
+using namespace VQSystemInfo;
 
 bool Device::Create(const FDeviceCreateDesc& desc)
 {

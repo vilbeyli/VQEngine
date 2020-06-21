@@ -169,19 +169,20 @@ private:
 	std::unique_ptr<Semaphore> mpSemRender;
 	
 	// windows
-	std::unique_ptr<Window> mpWinMain;
-	std::unique_ptr<Window> mpWinDebug;
+	std::unique_ptr<Window>   mpWinMain;
+	std::unique_ptr<Window>   mpWinDebug;
 
 	// render
-	VQRenderer              mRenderer;
+	VQRenderer                mRenderer;
 
 	// data / state
-	std::atomic<bool>       mbRenderThreadInitialized;
-	std::atomic<uint64>     mNumRenderLoopsExecuted;
-	std::atomic<uint64>     mNumUpdateLoopsExecuted;
-	std::atomic<bool>       mbLoadingLevel;
-	FEngineSettings         mSettings;
-	EAppState               mAppState;
+	std::atomic<bool>         mbRenderThreadInitialized;
+	std::atomic<uint64>       mNumRenderLoopsExecuted;
+	std::atomic<uint64>       mNumUpdateLoopsExecuted;
+	std::atomic<bool>         mbLoadingLevel;
+	FEngineSettings           mSettings;
+	EAppState                 mAppState;
+	VQSystemInfo::FSystemInfo mSysInfo;
 
 	// scene
 	MainWindowScene         mScene_MainWnd;
