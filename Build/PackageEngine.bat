@@ -240,8 +240,8 @@ exit /b 0
 :PackageBuild
 set SRC=%~1
 set DST=%~2
-robocopy !SRC! !DST!
-robocopy !SHADER_DIRECTORY! !DST!/Shaders
+robocopy !SRC! !DST! /xf *.lib *.ilk /xd Icons/ Resources/ 
+robocopy !SHADER_DIRECTORY! !DST!/Shaders 
 xcopy "!DATA_DIRECTORY!/EngineSettings.ini" "!DST!/Data"\ /Y /Q /F
 exit /b 0
 
