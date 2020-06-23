@@ -75,10 +75,11 @@ struct IWindow;
 class IWindowOwner
 {
 public:
-	virtual void OnWindowCreate() = 0;
+	virtual void OnWindowCreate(IWindow* pWnd) = 0;
 	virtual void OnWindowResize(HWND) = 0;
-	virtual void OnWindowMinimize() = 0;
-	virtual void OnWindowFocus() = 0;
+	virtual void OnToggleFullscreen(HWND) = 0;
+	virtual void OnWindowMinimize(IWindow* pWnd) = 0;
+	virtual void OnWindowFocus(IWindow* pWnd) = 0;
 	virtual void OnWindowClose(IWindow* pWnd) = 0;
 	virtual void OnWindowKeyDown(WPARAM) = 0;
 };
@@ -94,10 +95,12 @@ public:
 	virtual ~IWindow();
 
 	virtual void Show()     = 0;
+	virtual void ToggleWindowedFullscreen() = 0;
 	virtual void Minimize() = 0;
 	virtual void Close()    = 0;
 
 	bool IsClosed() const;
+	bool IsFullscreen() const;
 
 	int GetWidth() const;
 	int GetHeight() const;
@@ -105,6 +108,7 @@ public:
 	IWindowOwner* pOwner;
 private:
 	virtual bool IsClosedImpl() const = 0;
+	virtual bool IsFullscreenImpl() const = 0;
 	virtual int GetWidthImpl() const = 0;
 	virtual int GetHeightImpl() const = 0;
 };
@@ -131,14 +135,22 @@ public:
 	void Show() override;
 	void Minimize() override;
 	void Close() override;
+	void ToggleWindowedFullscreen() override;
+
+	// updates width_ and height_ members
+	inline void OnResize(int w, int h) { width_ = w; height_ = h; }
 
 private:
 	inline bool IsClosedImpl()  const override { return isClosed_; }
+	inline bool IsFullscreenImpl() const override { return isFullscreen_; }
 	inline int  GetWidthImpl()  const override { return width_; }
 	inline int  GetHeightImpl() const override { return height_; }
 
 	std::unique_ptr<WindowClass> windowClass_;
 	HWND hwnd_ = 0;
+	RECT rect_;
 	bool isClosed_ = false;
 	int width_ = -1, height_ = -1;
+	bool isFullscreen_ = false;
+	UINT windowStyle_;
 };

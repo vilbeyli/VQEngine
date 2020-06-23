@@ -34,6 +34,7 @@
 #pragma comment(lib, "D3DCompiler.lib")
 
 using namespace Microsoft::WRL;
+using namespace VQSystemInfo;
 
 #ifdef _DEBUG
 	#define ENABLE_DEBUG_LAYER      1
@@ -127,8 +128,8 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 		swapChainDesc.pWindow = &wnd;
 		swapChainDesc.pCmdQueue = &ctx.PresentQueue;
 		swapChainDesc.bVSync = ctx.bVsync;
+		swapChainDesc.bFullscreen = false;
 		ctx.SwapChain.Create(swapChainDesc);
-		Log::Info("[Renderer] Created swapchain<hwnd=0x%x> w/ %d back buffers.", wnd.hwnd, NUM_SWAPCHAIN_BUFFERS);
 
 		// Create command allocators
 		ctx.mCommandAllocatorsGFX.resize(NUM_SWAPCHAIN_BUFFERS);
@@ -140,9 +141,9 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 			pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT , IID_PPV_ARGS(&ctx.mCommandAllocatorsGFX[f]));
 			pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&ctx.mCommandAllocatorsCompute[f]));
 			pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY   , IID_PPV_ARGS(&ctx.mCommandAllocatorsCopy[f]));
-			ctx.mCommandAllocatorsGFX[f]->SetName(L"RenderContext::CmdAllocGFX");
-			ctx.mCommandAllocatorsCompute[f]->SetName(L"RenderContext::CmdAllocCompute");
-			ctx.mCommandAllocatorsCopy[f]->SetName(L"RenderContext::CmdAllocCopy");
+			SetName(ctx.mCommandAllocatorsGFX[f], "RenderContext::CmdAllocGFX[%d]", f);
+			SetName(ctx.mCommandAllocatorsCompute[f], "RenderContext::CmdAllocCompute[%d]", f);
+			SetName(ctx.mCommandAllocatorsCopy[f], "RenderContext::CmdAllocCopy[%d]", f);
 		}
 
 		// Create command lists
@@ -158,9 +159,9 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 		this->mRenderContextLookup.emplace(wnd.hwnd, std::move(ctx));
 	}
 
+	// Initialize memory
 	InitializeD3D12MA();
 	InitializeResourceHeaps();
-	
 	{
 		constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 64 * MEGABYTE;
 		constexpr bool USE_GPU_MEMORY = true;
@@ -215,14 +216,20 @@ void VQRenderer::Exit()
 	mDevice.Destroy();
 }
 
+void VQRenderer::OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h)
+{
+	if (!CheckContext(hwnd)) return;
+	FRenderWindowContext& ctx = mRenderContextLookup.at(hwnd);
+
+	ctx.MainRTResolutionX = w; // TODO: RenderScale
+	ctx.MainRTResolutionY = h; // TODO: RenderScale
+}
+
+SwapChain& VQRenderer::GetWindowSwapChain(HWND hwnd) { return mRenderContextLookup.at(hwnd).SwapChain; }
 
 void VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
 {
-	if (mRenderContextLookup.find(hwnd) == mRenderContextLookup.end())
-	{
-		Log::Warning("Render Context not found for <hwnd=0x%x>", hwnd);
-		return;
-	}
+	if (!CheckContext(hwnd)) return;
 
 	FRenderWindowContext& ctx = mRenderContextLookup.at(hwnd);
 
@@ -231,7 +238,7 @@ void VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
 	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
 	// ----------------------------------------------------------------------------
 
-	
+	HRESULT hr = {};
 
 	//
 	// PRE RENDER
@@ -319,16 +326,13 @@ void VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
 	ctx.SwapChain.Present(ctx.bVsync);
 
 	ctx.SwapChain.MoveToNextFrame();
+
 }
 
 short VQRenderer::GetSwapChainBackBufferCountOfWindow(Window* pWnd) const { return pWnd ? this->GetSwapChainBackBufferCountOfWindow(pWnd->GetHWND()) : 0; }
 short VQRenderer::GetSwapChainBackBufferCountOfWindow(HWND hwnd) const
 {
-	if (mRenderContextLookup.find(hwnd) == mRenderContextLookup.end())
-	{
-		Log::Warning("Render Context not found for <hwnd=0x%x>", hwnd);
-		return 0;
-	}
+	if (!CheckContext(hwnd)) return 0;
 
 	const FRenderWindowContext& ctx = mRenderContextLookup.at(hwnd);
 	return ctx.SwapChain.GetNumBackBuffers();
@@ -336,7 +340,15 @@ short VQRenderer::GetSwapChainBackBufferCountOfWindow(HWND hwnd) const
 }
 
 
-
+bool VQRenderer::CheckContext(HWND hwnd) const
+{
+	if (mRenderContextLookup.find(hwnd) == mRenderContextLookup.end())
+	{
+		Log::Warning("Render Context not found for <hwnd=0x%x>", hwnd);
+		return false;
+	}
+	return true;
+}
 
 // ================================================================================================================================================
 

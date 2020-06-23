@@ -22,15 +22,12 @@
 #include "Platform.h"
 #include "Window.h"
 #include "Settings.h"
-#include "ThreadPool.h"
+#include "Events.h"
 
+#include "Libs/VQUtils/Source/Multithreading.h"
 #include "Source/Renderer/Renderer.h"
 
 #include <memory>
-#include <thread>
-#include <atomic>
-#include <condition_variable>
-#include <mutex>
 
 // Outputs Render/Update thread sync values on each Tick()
 #define DEBUG_LOG_THREAD_SYNC_VERBOSE 0
@@ -88,13 +85,15 @@ public:
 	void Exit();
 
 	// Window event callbacks for the main Window
-	void OnWindowCreate() override;
+	void OnWindowCreate(IWindow* pWnd) override;
 	void OnWindowResize(HWND hWnd) override;
-	void OnWindowMinimize() override;
-	void OnWindowFocus() override;
+	void OnToggleFullscreen(HWND hWnd) override;
+	void OnWindowMinimize(IWindow* pWnd) override;
+	void OnWindowFocus(IWindow* pWindow) override;
 	void OnWindowKeyDown(WPARAM wParam) override;
 	void OnWindowClose(IWindow* pWindow) override;
 	
+
 	void MainThread_Tick();
 
 	// ---------------------------------------------------------
@@ -116,6 +115,11 @@ public:
 	// - Presents SwapChain
 	void RenderThread_Render();
 
+
+	// Processes the event queue populated by the VQEngine_Main.cpp thread
+	void RenderThread_HandleEvents();
+	void RenderThread_HandleResizeWindowEvent(const IEvent* pEvent);
+	void RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent);
 
 	// ---------------------------------------------------------
 	// Update Thread
@@ -152,6 +156,10 @@ private:
 	void Load_SceneData_Dispatch();
 	void Load_SceneData_Join();
 
+	std::unique_ptr<Window>& GetWindow(HWND hwnd);
+	const FWindowSettings& GetWindowSettings(HWND hwnd) const;
+	FWindowSettings& GetWindowSettings(HWND hwnd);
+
 private:
 	// threads
 	std::atomic<bool> mbStopAllThreads;
@@ -164,27 +172,31 @@ private:
 	std::unique_ptr<Semaphore> mpSemUpdate;
 	std::unique_ptr<Semaphore> mpSemRender;
 	
-
 	// windows
-	std::unique_ptr<Window> mpWinMain;
-	std::unique_ptr<Window> mpWinDebug;
+	std::unique_ptr<Window>   mpWinMain;
+	std::unique_ptr<Window>   mpWinDebug;
 
 	// render
-	VQRenderer              mRenderer;
+	VQRenderer                mRenderer;
 
 	// data / state
-	std::atomic<bool>       mbRenderThreadInitialized;
-	std::atomic<uint64>     mNumRenderLoopsExecuted;
-	std::atomic<uint64>     mNumUpdateLoopsExecuted;
-	std::atomic<bool>       mbLoadingLevel;
-	FEngineSettings         mSettings;
-	EAppState               mAppState;
+	std::atomic<bool>         mbRenderThreadInitialized;
+	std::atomic<uint64>       mNumRenderLoopsExecuted;
+	std::atomic<uint64>       mNumUpdateLoopsExecuted;
+	std::atomic<bool>         mbLoadingLevel;
+	FEngineSettings           mSettings;
+	EAppState                 mAppState;
+	VQSystemInfo::FSystemInfo mSysInfo;
 
 	// scene
 	MainWindowScene         mScene_MainWnd;
 	DebugWindowScene        mScene_DebugWnd;
 	std::unordered_map<HWND, IWindowUpdateContext*> mWindowUpdateContextLookup;
 
+	// input
+
+	// events
+	BufferedContainer<std::queue<IEvent*>, IEvent*> mWinEventQueue;
 
 private:
 	// Reads EngineSettings.ini from next to the executable and returns a 

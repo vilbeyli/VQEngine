@@ -24,9 +24,13 @@
 #include "ResourceHeaps.h"
 #include "Buffer.h"
 
-#include "../Application/Platform.h" // FGPUInfo
+#include "../Application/Platform.h"
 #include "../Application/Settings.h"
 #include "../Application/Types.h"
+
+#define VQUTILS_SYSTEMINFO_INCLUDE_D3D12 1
+#include "../../Libs/VQUtils/Source/SystemInfo.h" // FGPUInfo
+
 
 #include <vector>
 #include <unordered_map>
@@ -61,7 +65,7 @@ struct ID3D12PipelineState;
 class VQRenderer
 {
 public:
-	static std::vector< FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters = false);
+	static std::vector< VQSystemInfo::FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters = false);
 
 public:
 	void Initialize(const FRendererInitializeParameters& RendererInitParams);
@@ -70,10 +74,12 @@ public:
 	void Unload();
 	void Exit();
 
+	void OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h);
 
 	inline short GetSwapChainBackBufferCountOfWindow(std::unique_ptr<Window>& pWnd) const { return GetSwapChainBackBufferCountOfWindow(pWnd.get()); };
-	short GetSwapChainBackBufferCountOfWindow(Window* pWnd) const;
-	short GetSwapChainBackBufferCountOfWindow(HWND hwnd) const;
+	short        GetSwapChainBackBufferCountOfWindow(Window* pWnd) const;
+	short        GetSwapChainBackBufferCountOfWindow(HWND hwnd) const;
+	SwapChain&   GetWindowSwapChain(HWND hwnd);
 
 private:
 	void InitializeD3D12MA();
@@ -81,6 +87,8 @@ private:
 
 	void LoadPSOs();
 	void LoadDefaultResources();
+
+	bool CheckContext(HWND hwnd) const;
 
 private:
 	// RenderWindowContext struct encapsulates the swapchain and window association
@@ -125,7 +133,6 @@ private:
 	StaticResourceViewHeap mHeapCBV_SRV_UAV;
 	StaticResourceViewHeap mHeapSampler;
 	UploadHeap             mHeapUpload;
-
 
 	StaticBufferPool mStaticVertexBufferPool;
 	StaticBufferPool mStaticIndexBufferPool;

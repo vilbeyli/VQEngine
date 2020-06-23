@@ -41,11 +41,12 @@
 #define NUM_MAX_BACK_BUFFERS  3
 #define LOG_SWAPCHAIN_VERBOSE 0
 
-FWindowRepresentation::FWindowRepresentation(const std::unique_ptr<Window>& pWnd, bool bVSyncIn)
+FWindowRepresentation::FWindowRepresentation(const std::unique_ptr<Window>& pWnd, bool bVSyncIn, bool bFullscreenIn)
     : hwnd(pWnd->GetHWND())
     , width(pWnd->GetWidth())
     , height(pWnd->GetHeight())
     , bVSync(bVSyncIn)
+    , bFullscreen(bFullscreenIn)
 {}
 
 // The programming model for swap chains in D3D12 is not identical to that in earlier versions of D3D. 
@@ -110,6 +111,10 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
         , &pSwapChain
     );
 
+    // https://docs.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgifactory-makewindowassociation
+    UINT WndAssocFlags = DXGI_MWA_NO_ALT_ENTER; // We're gonna handle the Alt+Enter ourselves instead of DXGI
+    pDxgiFactory->MakeWindowAssociation(desc.pWindow->hwnd, WndAssocFlags);
+
     const bool bSuccess = SUCCEEDED(hr);
     if (bSuccess)
     {
@@ -162,28 +167,16 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     mpDescHeapRTV->SetName(L"SwapChainRTVDescHeap");
 #endif
 
-    // From Adam Sawicki's D3D12MA sample code:
-    // get the size of a descriptor in this heap (this is a rtv heap, so only rtv descriptors should be stored in it.
-    // descriptor sizes may vary from g_Device to g_Device, which is why there is no set size and we must ask the 
-    // g_Device to give us the size. we will use this size to increment a descriptor handle offset
-    const UINT RTVDescSize = this->mpDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
-    D3D12_CPU_DESCRIPTOR_HANDLE hRTV{ this->mpDescHeapRTV->GetCPUDescriptorHandleForHeapStart() };
+    if (desc.bFullscreen)
+    {
+        //this->SetFullscreen(true);
+    }
 
     // Create a RTV for each SwapChain buffer
     this->mRenderTargets.resize(this->mNumBackBuffers);
-    for (int i = 0; i < this->mNumBackBuffers; i++)
-    {
-        hr = this->mpSwapChain->GetBuffer(i, IID_PPV_ARGS(&this->mRenderTargets[i]));
-        if (FAILED(hr))
-        {
-            assert(false);
-        }
+    CreateRenderTargetViews();
 
-        this->mpDevice->CreateRenderTargetView(this->mRenderTargets[i], nullptr, hRTV);
-        hRTV.ptr += RTVDescSize; 
-    }
-
+    Log::Info("SwapChain: Created swapchain<hwnd=0x%x> w/ %d back buffers of %dx%d.", mHwnd, desc.numBackBuffers, desc.pWindow->width, desc.pWindow->height);
     return bSuccess;
 }
 
@@ -193,35 +186,113 @@ void SwapChain::Destroy()
     // Full-screen swap chains continue to have the restriction that 
     // SetFullscreenState(FALSE, NULL) must be called before the final 
     // release of the swap chain. 
-    SetFullscreen(false);
+    mpSwapChain->SetFullscreenState(FALSE, NULL);
 
     WaitForGPU();
 
     this->mpFence->Release();
     CloseHandle(this->mHEvent);
 
-    for (unsigned i = 0; i < this->mNumBackBuffers; ++i)
-    {
-        this->mRenderTargets[i]->Release();
-    }
+    DestroyRenderTargetViews();
     if (this->mpDescHeapRTV) this->mpDescHeapRTV->Release();
     if (this->mpSwapChain)   this->mpSwapChain->Release();
 }
 
 void SwapChain::Resize(int w, int h)
 {
-    assert(false);
+#if LOG_SWAPCHAIN_VERBOSE
+    Log::Warning("SwapChain<hwnd=0x%x> Resize: %dx%d", mHwnd, w, h);
+#endif
+
+    DestroyRenderTargetViews();
+    for (int i = 0; i < this->mNumBackBuffers; i++)
+    {
+        mFenceValues[i] = mFenceValues[mpSwapChain->GetCurrentBackBufferIndex()];
+    }
+
+    bool bVsync = false; // TODO
+    mpSwapChain->ResizeBuffers(
+        (UINT)this->mFenceValues.size(),
+        w, h,
+        this->mSwapChainFormat,
+        bVsync ? 0 : DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING
+    );
+
+    CreateRenderTargetViews();
+    this->mICurrentBackBuffer = mpSwapChain->GetCurrentBackBufferIndex();
 }
 
-void SwapChain::SetFullscreen(bool bState)
+// https://docs.microsoft.com/de-de/windows/win32/direct3darticles/dxgi-best-practices#full-screen-issues
+void SwapChain::SetFullscreen(bool bState, int FSRecoveryWindowWidth, int FSRecoveryWindowHeight)
 {
-    mpSwapChain->SetFullscreenState(bState ? TRUE : FALSE, NULL);
+    HRESULT hr = {};
+
+    // Set Fullscreen
+    // https://docs.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-setfullscreenstate
+    hr = mpSwapChain->SetFullscreenState(bState ? TRUE : FALSE, NULL);
+    if (hr != S_OK)
+    {
+        switch (hr)
+        {
+        case DXGI_ERROR_NOT_CURRENTLY_AVAILABLE : Log::Error("SwapChain::SetFullScreen() : DXGI_ERROR_NOT_CURRENTLY_AVAILABLE"); break;
+        case DXGI_STATUS_MODE_CHANGE_IN_PROGRESS: Log::Error("SwapChain::SetFullScreen() : DXGI_STATUS_MODE_CHANGE_IN_PROGRESS "); break;
+            
+        default: Log::Error("SwapChain::SetFullScreen() : unhandled error code"); break;
+        }
+    }
+
+    // Figure out which monitor swapchain is in
+    // and set the mode we want to use for ResizeTarget().
+    IDXGIOutput6* pOut = nullptr;
+    {
+        IDXGIOutput* pOutput = nullptr;
+        mpSwapChain->GetContainingOutput(&pOutput);
+        hr = pOutput->QueryInterface(IID_PPV_ARGS(&pOut));
+        assert(hr == S_OK);
+        pOutput->Release();
+    }
+    
+    DXGI_OUTPUT_DESC1 desc;
+    pOut->GetDesc1(&desc);
+    
+    // Get supported mode count and then all the supported modes
+    UINT NumModes = 0;
+    hr = pOut->GetDisplayModeList1(DXGI_FORMAT_R8G8B8A8_UNORM, 0, &NumModes, NULL);
+    std::vector<DXGI_MODE_DESC1> currMode(NumModes);
+    hr = pOut->GetDisplayModeList1(DXGI_FORMAT_R8G8B8A8_UNORM, 0, &NumModes, &currMode[0]);
+
+    DXGI_MODE_DESC1 matchDesc = {};
+    matchDesc = currMode.back();
+    matchDesc.Width = FSRecoveryWindowWidth;
+    matchDesc.Height = FSRecoveryWindowHeight;
+    DXGI_MODE_DESC1 matchedDesc = {};
+    pOut->FindClosestMatchingMode1(&matchDesc, &matchedDesc, NULL);
+    pOut->Release();
+
+    DXGI_MODE_DESC mode = {};
+    mode.Width = matchDesc.Width;
+    mode.Height = matchDesc.Height;
+    mode.RefreshRate = matchDesc.RefreshRate;
+    mode.Format = matchDesc.Format;
+    mode.Scaling = matchDesc.Scaling;
+    mode.ScanlineOrdering = matchDesc.ScanlineOrdering;
+    // https://docs.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-resizetarget
+    // calling ResizeTarget() will produce WM_RESIZE event right away.
+    // RenderThread handles events twice before present to be able to catch
+    // the Resize() event before calling Present() as the events
+    // are produced and consumed on different threads (p:main, c:render).
+    hr = mpSwapChain->ResizeTarget(&mode);
+    if (hr != S_OK)
+    {
+        Log::Error("SwapChain::ResizeTarget() : unhandled error code");
+    }
 }
 
-bool SwapChain::IsFullscreen() const
+bool SwapChain::IsFullscreen(/*IDXGIOUtput* ?*/) const
 {
-    assert(false);
-    return false;
+    BOOL fullscreenState;
+    ThrowIfFailed(mpSwapChain->GetFullscreenState(&fullscreenState, nullptr));
+    return fullscreenState;
 }
 
 void SwapChain::Present(bool bVSync)
@@ -232,7 +303,7 @@ void SwapChain::Present(bool bVSync)
     // https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/dxgi-flip-model#avoiding-detecting-and-recovering-from-glitches
 
     HRESULT hr = {};
-    UINT FlagPresent = !bVSync 
+    UINT FlagPresent = (!bVSync && !IsFullscreen())
         ? DXGI_PRESENT_ALLOW_TEARING // works only in Windowed mode
         : 0;
 
@@ -241,18 +312,23 @@ void SwapChain::Present(bool bVSync)
 
     if (hr != S_OK)
     {
-        Log::Error("SwapChain::Present(): Error on Present(): HRESULT=%u", hr);
-
         // https://docs.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-present
         switch (hr)
         {
         case DXGI_ERROR_DEVICE_RESET:
+            Log::Error("SwapChain::Present(): Error on Present() : DXGI_ERROR_DEVICE_RESET");
             // TODO: call HandleDeviceReset() from whoever will be responsible
             break;
         case DXGI_ERROR_DEVICE_REMOVED:
+            Log::Error("SwapChain::Present(): Error on Present() : DXGI_ERROR_DEVICE_REMOVED");
             // TODO: call HandleDeviceReset()
             break;
+        case DXGI_ERROR_INVALID_CALL:
+            Log::Error("SwapChain::Present(): Error on Present() : DXGI_ERROR_INVALID_CALL");
+            // TODO:
+            break;
         case DXGI_STATUS_OCCLUDED:
+            Log::Warning("SwapChain::Present(): Error on Present() : DXGI_STATUS_OCCLUDED");
             // TODO: call HandleStatusOcclueded() 
             break;
         default:
@@ -280,11 +356,26 @@ void SwapChain::MoveToNextFrame()
     ++mNumTotalFrames;
 
     // If the next frame is not ready to be rendered yet, wait until it is ready.
-    if (mpFence->GetCompletedValue() < mFenceValues[mICurrentBackBuffer])
+    UINT64 fenceComplVal = mpFence->GetCompletedValue();
+    HRESULT hr = {};
+    if (fenceComplVal < mFenceValues[mICurrentBackBuffer])
     {
+#if LOG_SWAPCHAIN_VERBOSE
+        Log::Warning("SwapChain : next frame not ready. FenceComplVal=%d < FenceVal[curr]=%d", fenceComplVal, mFenceValues[mICurrentBackBuffer]);
+#endif
         ThrowIfFailed(mpFence->SetEventOnCompletion(mFenceValues[mICurrentBackBuffer], mHEvent));
-        WaitForSingleObjectEx(mHEvent, INFINITE, FALSE);
+        hr = WaitForSingleObjectEx(mHEvent, 200, FALSE);
     }
+    switch (hr)
+    {
+    case WAIT_TIMEOUT:
+        Log::Warning("SwapChain<hwnd=0x%x> timed out on WaitForGPU(): Signal=%d, ICurrBackBuffer=%d, NumFramesPresented=%d"
+            , mHwnd, mFenceValues[mICurrentBackBuffer], mICurrentBackBuffer, this->GetNumPresentedFrames());
+        break;
+    default: break;
+    }
+
+    assert(hr == S_OK);
 
     // Set the fence value for the next frame.
     mFenceValues[mICurrentBackBuffer] = currentFenceValue + 1;
@@ -299,24 +390,48 @@ void SwapChain::MoveToNextFrame()
 
 void SwapChain::WaitForGPU()
 {
+    ID3D12Fence* pFence;
+    ThrowIfFailed(mpDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&pFence)));
+
+    ID3D12CommandQueue* queue = mpPresentQueue;
+
+    ThrowIfFailed(queue->Signal(pFence, 1));
+
+    HANDLE mHandleFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    pFence->SetEventOnCompletion(1, mHandleFenceEvent);
+    WaitForSingleObject(mHandleFenceEvent, INFINITE);
+    CloseHandle(mHandleFenceEvent);
+
+    pFence->Release();
+}
+
+void SwapChain::CreateRenderTargetViews()
+{
+    // From Adam Sawicki's D3D12MA sample code:
+    // get the size of a descriptor in this heap (this is a rtv heap, so only rtv descriptors should be stored in it.
+    // descriptor sizes may vary from g_Device to g_Device, which is why there is no set size and we must ask the 
+    // g_Device to give us the size. we will use this size to increment a descriptor handle offset
+    const UINT RTVDescSize = this->mpDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    D3D12_CPU_DESCRIPTOR_HANDLE hRTV{ this->mpDescHeapRTV->GetCPUDescriptorHandleForHeapStart() };
+
     HRESULT hr = {};
-
-    // Schedule a Signal command in the queue.
-    ThrowIfFailed(mpPresentQueue->Signal(mpFence, mFenceValues[mICurrentBackBuffer]));
-
-    // Wait until the fence has been processed.
-    ThrowIfFailed(mpFence->SetEventOnCompletion(mFenceValues[mICurrentBackBuffer], mHEvent));
-    hr = WaitForSingleObjectEx(mHEvent, 3000, FALSE); // wait for 3000 milliseconds tops
-    
-    switch (hr)
+    for (int i = 0; i < this->mNumBackBuffers; i++)
     {
-    case WAIT_TIMEOUT:
-        Log::Warning("SwapChain<hwnd=0x%x> timed out on WaitForGPU(): Signal=%d, ICurrBackBuffer=%d, NumFramesPresented=%d"
-            , mHwnd, mFenceValues[mICurrentBackBuffer], mICurrentBackBuffer, this->GetNumPresentedFrames());
-        break;
-    default: break;
-    }
+        hr = this->mpSwapChain->GetBuffer(i, IID_PPV_ARGS(&this->mRenderTargets[i]));
+        if (FAILED(hr))
+        {
+            assert(false);
+        }
 
-    // Increment the fence value for the current frame.
-    ++mFenceValues[mICurrentBackBuffer];
+        this->mpDevice->CreateRenderTargetView(this->mRenderTargets[i], nullptr, hRTV);
+        hRTV.ptr += RTVDescSize;
+    }
+}
+
+void SwapChain::DestroyRenderTargetViews()
+{
+    for (int i = 0; i < this->mNumBackBuffers; i++)
+    {
+        this->mRenderTargets[i]->Release();
+    }
 }

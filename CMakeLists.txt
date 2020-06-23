@@ -35,7 +35,7 @@ set (HeaderVQE
     "Source/Application/Settings.h"
     "Source/Application/Types.h"
     "Source/Application/VQEngine.h"
-    "Source/Application/ThreadPool.h"
+    "Source/Application/Events.h"
 )
 
 set (SourceVQE 
@@ -46,7 +46,7 @@ set (SourceVQE
     "Source/Application/VQEngine_Render.cpp"
     "Source/Application/VQEngine_Update.cpp"
     "Source/Application/VQEngine_WindowEvents.cpp"
-    "Source/Application/ThreadPool.cpp"
+    "Source/Application/Events.cpp"
 )
 
 add_link_options(/SUBSYSTEM:WINDOWS)
@@ -71,6 +71,7 @@ add_executable( ${PROJECT_NAME} ${HeaderVQE} ${SourceVQE} ${Config} ${Resource} 
 set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY}/Bin/ )
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Data ${CMAKE_SOURCE_DIR}/Bin/Data)
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Source/Shaders ${CMAKE_SOURCE_DIR}/Bin/Shaders)
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Data $<TARGET_FILE_DIR:${PROJECT_NAME}>/Data)
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Source/Shaders $<TARGET_FILE_DIR:${PROJECT_NAME}>/Shaders)
 

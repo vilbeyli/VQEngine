@@ -48,6 +48,16 @@ void VQEngine::MainThread_Tick()
 
 bool VQEngine::Initialize(const FStartupParameters& Params)
 {
+	// -------------------------------------------------------------------------
+	// TODO: When this function is called, EnumerateAdapters function misbehaves
+	//       by not populating the std::vector after push_back(). Looks like 
+	//       a module/linking/project dependency issue. Commenting out this line
+	//       and then recompiling fixes the issue, even though the same program
+	//       when compiled initially will not function correctly.
+	#if 0
+	this->mSysInfo = VQSystemInfo::GetSystemInfo();
+	#endif
+	// -------------------------------------------------------------------------
 	InititalizeEngineSettings(Params);
 	InitializeApplicationWindows(Params);
 	InitializeThreads();
@@ -64,74 +74,98 @@ void VQEngine::Exit()
 
 void VQEngine::InititalizeEngineSettings(const FStartupParameters& Params)
 {
+	const FEngineSettings& p = Params.EngineSettings;
+
 	// Defaults
-	mSettings.gfx.bFullscreen = false;
-	mSettings.gfx.bVsync = false;
-	mSettings.gfx.bUseTripleBuffering = true;
-	mSettings.gfx.RenderResolutionX = 1920;
-	mSettings.gfx.RenderResolutionY = 1080;
+	FEngineSettings& s = mSettings;
+	s.gfx.bVsync = false;
+	s.gfx.bUseTripleBuffering = true;
+	s.gfx.RenderScale = 1.0f;
+	
+	s.WndMain.Width = 1920;
+	s.WndMain.Height = 1080;
+	s.WndMain.DisplayMode = EDisplayMode::WINDOWED;
+	s.WndMain.PreferredDisplay = 0;
+	sprintf_s(s.WndMain.Title , "VQEngine %s-%s", VQENGINE_VERSION, BUILD_CONFIG);
 
+	s.WndDebug.Width  = 600;
+	s.WndDebug.Height = 600;
+	s.WndDebug.DisplayMode = EDisplayMode::WINDOWED;
+	s.WndDebug.PreferredDisplay = 1;
+	sprintf_s(s.WndDebug.Title, "VQDebugging");
 
-	mSettings.bAutomatedTestRun = false;
-	mSettings.NumAutomatedTestFrames = 100; // default num frames to run if -Test is specified in cmd line params
-	mSettings.DebugWindow_Width  = 600;
-	mSettings.DebugWindow_Height = 600;
-	mSettings.MainWindow_Width = 1920;
-	mSettings.MainWindow_Height = 1080;
+	s.bAutomatedTestRun = false;
+	s.NumAutomatedTestFrames = 100; // default num frames to run if -Test is specified in cmd line params
 
-	sprintf_s(mSettings.strMainWindowTitle , "VQEngine %s-%s", VQENGINE_VERSION, BUILD_CONFIG);
-	sprintf_s(mSettings.strDebugWindowTitle, "VQDebugging");
 
 	// Override #0 : from file
 	FStartupParameters paramFile = VQEngine::ParseEngineSettingsFile();
-	if (paramFile.bOverrideGFXSetting_bFullscreen)         mSettings.gfx.bFullscreen         = paramFile.EngineSettings.gfx.bFullscreen;
-	if (paramFile.bOverrideGFXSetting_bVSync     )         mSettings.gfx.bVsync              = paramFile.EngineSettings.gfx.bVsync;
-	if (paramFile.bOverrideGFXSetting_bUseTripleBuffering) mSettings.gfx.bUseTripleBuffering = paramFile.EngineSettings.gfx.bUseTripleBuffering;
-	if (paramFile.bOverrideGFXSetting_Width)               mSettings.gfx.RenderResolutionX   = paramFile.EngineSettings.gfx.RenderResolutionX;
-	if (paramFile.bOverrideGFXSetting_Height)              mSettings.gfx.RenderResolutionY   = paramFile.EngineSettings.gfx.RenderResolutionY;
+	const FEngineSettings& pf = paramFile.EngineSettings;
+	if (paramFile.bOverrideGFXSetting_bVSync     )                 s.gfx.bVsync              = pf.gfx.bVsync;
+	if (paramFile.bOverrideGFXSetting_bUseTripleBuffering)         s.gfx.bUseTripleBuffering = pf.gfx.bUseTripleBuffering;
+	if (paramFile.bOverrideGFXSetting_RenderScale)                 s.gfx.RenderScale         = pf.gfx.RenderScale;
 
-	if (paramFile.bOverrideENGSetting_MainWindowWidth)    mSettings.MainWindow_Width  = paramFile.EngineSettings.MainWindow_Width;
-	if (paramFile.bOverrideENGSetting_MainWindowHeight)   mSettings.MainWindow_Height = paramFile.EngineSettings.MainWindow_Height;
-	if (paramFile.bOverrideENGSetting_bAutomatedTest)     mSettings.bAutomatedTestRun = paramFile.EngineSettings.bAutomatedTestRun;
+	if (paramFile.bOverrideENGSetting_MainWindowWidth)             s.WndMain.Width            = pf.WndMain.Width;
+	if (paramFile.bOverrideENGSetting_MainWindowHeight)            s.WndMain.Height           = pf.WndMain.Height;
+	if (paramFile.bOverrideENGSetting_bFullscreen)                 s.WndMain.DisplayMode      = pf.WndMain.DisplayMode;
+	if (paramFile.bOverrideENGSetting_PreferredDisplay)            s.WndMain.PreferredDisplay = pf.WndMain.PreferredDisplay;
+
+	if (paramFile.bOverrideENGSetting_bDebugWindowEnable)          s.bShowDebugWindow          = pf.bShowDebugWindow;
+	if (paramFile.bOverrideENGSetting_DebugWindowWidth)            s.WndDebug.Width            = pf.WndDebug.Width;
+	if (paramFile.bOverrideENGSetting_DebugWindowHeight)           s.WndDebug.Height           = pf.WndDebug.Height;
+	if (paramFile.bOverrideENGSetting_DebugWindowbFullscreen)      s.WndDebug.DisplayMode      = pf.WndDebug.DisplayMode;
+	if (paramFile.bOverrideENGSetting_DebugWindowPreferredDisplay) s.WndDebug.PreferredDisplay = pf.WndDebug.PreferredDisplay;
+
+	if (paramFile.bOverrideENGSetting_bAutomatedTest)              s.bAutomatedTestRun = pf.bAutomatedTestRun;
 	if (paramFile.bOverrideENGSetting_bTestFrames)
 	{ 
-		mSettings.bAutomatedTestRun = true; 
-		mSettings.NumAutomatedTestFrames = paramFile.EngineSettings.NumAutomatedTestFrames; 
+		s.bAutomatedTestRun = true; 
+		s.NumAutomatedTestFrames = pf.NumAutomatedTestFrames; 
 	}
 
 
 	// Override #1 : if there's command line params
-	if (Params.bOverrideGFXSetting_bFullscreen)         mSettings.gfx.bFullscreen         = Params.EngineSettings.gfx.bFullscreen;
-	if (Params.bOverrideGFXSetting_bVSync     )         mSettings.gfx.bVsync              = Params.EngineSettings.gfx.bVsync;
-	if (Params.bOverrideGFXSetting_bUseTripleBuffering) mSettings.gfx.bUseTripleBuffering = Params.EngineSettings.gfx.bUseTripleBuffering;
-	if (Params.bOverrideGFXSetting_Width)               mSettings.gfx.RenderResolutionX   = Params.EngineSettings.gfx.RenderResolutionX;
-	if (Params.bOverrideGFXSetting_Height)              mSettings.gfx.RenderResolutionY   = Params.EngineSettings.gfx.RenderResolutionY;
+	if (Params.bOverrideGFXSetting_bVSync     )                 s.gfx.bVsync              = p.gfx.bVsync;
+	if (Params.bOverrideGFXSetting_bUseTripleBuffering)         s.gfx.bUseTripleBuffering = p.gfx.bUseTripleBuffering;
+	if (Params.bOverrideGFXSetting_RenderScale)                 s.gfx.RenderScale         = p.gfx.RenderScale;
 
-	if (Params.bOverrideENGSetting_MainWindowWidth)    mSettings.MainWindow_Width  = Params.EngineSettings.MainWindow_Width;
-	if (Params.bOverrideENGSetting_MainWindowHeight)   mSettings.MainWindow_Height = Params.EngineSettings.MainWindow_Height;
-	if (Params.bOverrideENGSetting_bAutomatedTest)     mSettings.bAutomatedTestRun = Params.EngineSettings.bAutomatedTestRun;
+	if (Params.bOverrideENGSetting_MainWindowWidth)             s.WndMain.Width            = p.WndMain.Width;
+	if (Params.bOverrideENGSetting_MainWindowHeight)            s.WndMain.Height           = p.WndMain.Height;
+	if (Params.bOverrideENGSetting_bFullscreen)                 s.WndMain.DisplayMode      = p.WndMain.DisplayMode;
+	if (Params.bOverrideENGSetting_PreferredDisplay)            s.WndMain.PreferredDisplay = p.WndMain.PreferredDisplay;
+	
+	if (Params.bOverrideENGSetting_bDebugWindowEnable)          s.bShowDebugWindow          = p.bShowDebugWindow;
+	if (Params.bOverrideENGSetting_DebugWindowWidth)            s.WndDebug.Width            = p.WndDebug.Width;
+	if (Params.bOverrideENGSetting_DebugWindowHeight)           s.WndDebug.Height           = p.WndDebug.Height;
+	if (Params.bOverrideENGSetting_DebugWindowbFullscreen)      s.WndDebug.DisplayMode      = p.WndDebug.DisplayMode;
+	if (Params.bOverrideENGSetting_DebugWindowPreferredDisplay) s.WndDebug.PreferredDisplay = p.WndDebug.PreferredDisplay;
+
+	if (Params.bOverrideENGSetting_bAutomatedTest)     s.bAutomatedTestRun    = p.bAutomatedTestRun;
 	if (Params.bOverrideENGSetting_bTestFrames)
 	{
-		mSettings.bAutomatedTestRun = true;
-		mSettings.NumAutomatedTestFrames = Params.EngineSettings.NumAutomatedTestFrames;
+		s.bAutomatedTestRun = true;
+		s.NumAutomatedTestFrames = Params.EngineSettings.NumAutomatedTestFrames;
 	}
 }
 
 void VQEngine::InitializeApplicationWindows(const FStartupParameters& Params)
 {
 	FWindowDesc mainWndDesc = {};
-	mainWndDesc.width  = mSettings.MainWindow_Width;
-	mainWndDesc.height = mSettings.MainWindow_Height;
+	mainWndDesc.width  = mSettings.WndMain.Width;
+	mainWndDesc.height = mSettings.WndMain.Height;
 	mainWndDesc.hInst = Params.hExeInstance;
 	mainWndDesc.pWndOwner = this;
 	mainWndDesc.pfnWndProc = WndProc;
-	mpWinMain.reset(new Window(mSettings.strMainWindowTitle, mainWndDesc));
+	mpWinMain.reset(new Window(mSettings.WndMain.Title, mainWndDesc));
 	Log::Info("Created main window<0x%x>: %dx%d", mpWinMain->GetHWND(), mainWndDesc.width, mainWndDesc.height);
 
-	mainWndDesc.width  = mSettings.DebugWindow_Width;
-	mainWndDesc.height = mSettings.DebugWindow_Height;
-	mpWinDebug.reset(new Window(mSettings.strDebugWindowTitle, mainWndDesc));
-	Log::Info("Created debug window<0x%x>: %dx%d", mpWinDebug->GetHWND(), mainWndDesc.width, mainWndDesc.height);
+	if (mSettings.bShowDebugWindow)
+	{
+		mainWndDesc.width = mSettings.WndDebug.Width;
+		mainWndDesc.height = mSettings.WndDebug.Height;
+		mpWinDebug.reset(new Window(mSettings.WndDebug.Title, mainWndDesc));
+		Log::Info("Created debug window<0x%x>: %dx%d", mpWinDebug->GetHWND(), mainWndDesc.width, mainWndDesc.height);
+	}
 }
 
 void VQEngine::InitializeThreads()
@@ -222,6 +256,43 @@ void VQEngine::Load_SceneData_Join()
 {
 }
 
+std::unique_ptr<Window>& VQEngine::GetWindow(HWND hwnd)
+{
+	if (mpWinMain->GetHWND() == hwnd)
+		return mpWinMain;
+	else if (mpWinDebug->GetHWND() == hwnd)
+		return mpWinDebug;
+
+	// TODO: handle other windows here when they're implemented
+
+	Log::Warning("VQEngine::GetWindow() : Invalid hwnd=0x%x, returning Main Window", hwnd);
+	return mpWinMain;
+}
+
+const FWindowSettings& VQEngine::GetWindowSettings(HWND hwnd) const
+{
+	if (mpWinMain->GetHWND() == hwnd)
+		return mSettings.WndMain;
+	else if (mpWinDebug->GetHWND() == hwnd)
+		return mSettings.WndDebug;
+
+	// TODO: handle other windows here when they're implemented
+
+	Log::Warning("VQEngine::GetWindowSettings() : Invalid hwnd=0x%x, returning Main Window Settings", hwnd);
+	return mSettings.WndMain;
+}
+FWindowSettings& VQEngine::GetWindowSettings(HWND hwnd)
+{
+	if (mpWinMain->GetHWND() == hwnd)
+		return mSettings.WndMain;
+	else if (mpWinDebug->GetHWND() == hwnd)
+		return mSettings.WndDebug;
+
+	// TODO: handle other windows here when they're implemented
+
+	Log::Warning("VQEngine::GetWindowSettings() : Invalid hwnd=0x%x, returning Main Window Settings", hwnd);
+	return mSettings.WndMain;
+}
 
 
 static std::pair<std::string, std::string> ParseLineINI(const std::string& iniLine)
@@ -247,8 +318,18 @@ static std::pair<std::string, std::string> ParseLineINI(const std::string& iniLi
 
 	return SettingNameValuePair;
 }
-static bool ParseBool(const std::string& s) { bool b; std::istringstream(s) >> b; return b; }
+static bool ParseBool(const std::string& s) { bool b; std::istringstream(s) >> std::boolalpha >> b; return b; }
 static int  ParseInt(const std::string& s) { return std::atoi(s.c_str()); }
+static float ParseFloat(const std::string& s) { return static_cast<float>(std::atof(s.c_str())); }
+
+static std::unordered_map<std::string, EDisplayMode> S_LOOKUP_STR_TO_DISPLAYMODE =
+{
+	  { "Fullscreen"        , EDisplayMode::EXCLUSIVE_FULLSCREEN }
+	, { "Borderless"        , EDisplayMode::WINDOWED_FULLSCREEN  }
+	, { "Windowed"          , EDisplayMode::WINDOWED_FULLSCREEN  }
+	, { "BorderlessWindowed", EDisplayMode::WINDOWED_FULLSCREEN  }
+	, { "Windowed"          , EDisplayMode::WINDOWED             }
+};
 
 FStartupParameters VQEngine::ParseEngineSettingsFile()
 {
@@ -285,15 +366,15 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 				params.bOverrideGFXSetting_bVSync = true;
 				params.EngineSettings.gfx.bVsync = ParseBool(SettingValue);
 			}
-			if (SettingName == "ResolutionX")
+			if (SettingName == "RenderScale")
 			{
-				params.bOverrideGFXSetting_Width = true;
-				params.EngineSettings.gfx.RenderResolutionX = ParseInt(SettingValue);
+				params.bOverrideGFXSetting_RenderScale = true;
+				params.EngineSettings.gfx.RenderScale = ParseFloat(SettingValue);
 			}
-			if (SettingName == "ResolutionY")
+			if (SettingName == "TripleBuffer")
 			{
-				params.bOverrideGFXSetting_Height = true;
-				params.EngineSettings.gfx.RenderResolutionY = ParseInt(SettingValue);
+				params.bOverrideGFXSetting_bUseTripleBuffering = true;
+				params.EngineSettings.gfx.bUseTripleBuffering = ParseBool(SettingValue);
 			}
 
 
@@ -303,13 +384,57 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 			if (SettingName == "Width")
 			{
 				params.bOverrideENGSetting_MainWindowWidth = true;
-				params.EngineSettings.MainWindow_Width = ParseInt(SettingValue);
+				params.EngineSettings.WndMain.Width = ParseInt(SettingValue);
 			}
 			if (SettingName == "Height")
 			{
 				params.bOverrideENGSetting_MainWindowHeight = true;
-				params.EngineSettings.MainWindow_Height = ParseInt(SettingValue);
+				params.EngineSettings.WndMain.Height = ParseInt(SettingValue);
 			}
+			if (SettingName == "DisplayMode")
+			{
+				if (S_LOOKUP_STR_TO_DISPLAYMODE.find(SettingValue) != S_LOOKUP_STR_TO_DISPLAYMODE.end())
+				{
+					params.bOverrideENGSetting_bFullscreen = true;
+					params.EngineSettings.WndMain.DisplayMode = S_LOOKUP_STR_TO_DISPLAYMODE.at(SettingValue);
+				}
+			}
+			if (SettingName == "PreferredDisplay")
+			{
+				params.bOverrideENGSetting_PreferredDisplay = true;
+				params.EngineSettings.WndMain.PreferredDisplay = ParseInt(SettingValue);
+			}
+
+
+			if (SettingName == "DebugWindow")
+			{
+				params.bOverrideENGSetting_bDebugWindowEnable = true;
+				params.EngineSettings.bShowDebugWindow = ParseBool(SettingValue);
+			}
+			if (SettingName == "DebugWindowWidth")
+			{
+				params.bOverrideENGSetting_DebugWindowWidth = true;
+				params.EngineSettings.WndDebug.Width = ParseInt(SettingValue);
+			}
+			if (SettingName == "DebugWindowHeight")
+			{
+				params.bOverrideENGSetting_DebugWindowHeight = true;
+				params.EngineSettings.WndDebug.Height = ParseInt(SettingValue);
+			}
+			if (SettingName == "DebugWindowDisplayMode")
+			{
+				if (S_LOOKUP_STR_TO_DISPLAYMODE.find(SettingValue) != S_LOOKUP_STR_TO_DISPLAYMODE.end())
+				{
+					params.bOverrideENGSetting_DebugWindowbFullscreen = true;
+					params.EngineSettings.WndDebug.DisplayMode = S_LOOKUP_STR_TO_DISPLAYMODE.at(SettingValue);
+				}
+			}
+			if (SettingName == "DebugWindowPreferredDisplay")
+			{
+				params.bOverrideENGSetting_DebugWindowPreferredDisplay = true;
+				params.EngineSettings.WndDebug.PreferredDisplay = ParseInt(SettingValue);
+			}
+			
 		}
 	}
 	else
