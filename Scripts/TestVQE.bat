@@ -40,8 +40,8 @@ if !errorlevel! NEQ 0 (
     exit /b -1 
 )
 
-if !RUN_TEST_REL! NEQ 0  call :RunTest !VQE_REL_DIR!, VQE.exe
 if !RUN_TEST_DBG! NEQ 0  call :RunTest !VQE_DBG_DIR!, VQE.exe
+if !RUN_TEST_REL! NEQ 0  call :RunTest !VQE_REL_DIR!, VQE.exe
 if !RUN_TEST_RWD! NEQ 0  call :RunTest !VQE_RWD_DIR!, VQE.exe
 
 exit /b 0

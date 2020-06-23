@@ -74,15 +74,12 @@ public:
 	void Unload();
 	void Exit();
 
+	void OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h);
 
 	inline short GetSwapChainBackBufferCountOfWindow(std::unique_ptr<Window>& pWnd) const { return GetSwapChainBackBufferCountOfWindow(pWnd.get()); };
 	short        GetSwapChainBackBufferCountOfWindow(Window* pWnd) const;
 	short        GetSwapChainBackBufferCountOfWindow(HWND hwnd) const;
 	SwapChain&   GetWindowSwapChain(HWND hwnd);
-
-
-	void  ResizeSwapChain(HWND hwnd, int w, int h);
-	void  ToggleFullscreen(HWND hwnd);
 
 private:
 	void InitializeD3D12MA();

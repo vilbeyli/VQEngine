@@ -79,7 +79,7 @@ void VQEngine::RenderThread_SignalUpdateThread()
 void VQEngine::RenderThread_Inititalize()
 {
 	FRendererInitializeParameters params = {};
-	const bool bFullscreen = mSettings.gfx.IsDisplayModeFullscreen();
+	const bool bFullscreen = mSettings.WndMain.IsDisplayModeFullscreen();
 
 	params.Windows.push_back(FWindowRepresentation(mpWinMain , mSettings.gfx.bVsync, bFullscreen));
 	if(mpWinDebug) 
@@ -173,12 +173,48 @@ void VQEngine::RenderThread_HandleEvents()
 void VQEngine::RenderThread_HandleResizeWindowEvent(const IEvent* pEvent)
 {
 	const WindowResizeEvent* pResizeEvent = static_cast<const WindowResizeEvent*>(pEvent);
-	mRenderer.ResizeSwapChain(pResizeEvent->hwnd, pResizeEvent->width, pResizeEvent->height);
+	const HWND& hwnd = pResizeEvent->hwnd;
+	const int WIDTH  = pResizeEvent->width;
+	const int HEIGHT = pResizeEvent->height;
+
+	SwapChain& Swapchain = mRenderer.GetWindowSwapChain(hwnd);
+	std::unique_ptr<Window>& pWnd = GetWindow(hwnd);
+
+	Swapchain.WaitForGPU();
+	Swapchain.Resize(WIDTH, HEIGHT);
+	pWnd->OnResize(WIDTH, HEIGHT);
+	mRenderer.OnWindowSizeChanged(hwnd, WIDTH, HEIGHT);
 }
 
 void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 {
 	const ToggleFullscreenEvent* pToggleFSEvent = static_cast<const ToggleFullscreenEvent*>(pEvent);
-	mRenderer.ToggleFullscreen(pToggleFSEvent->hwnd);
+	HWND hwnd = pToggleFSEvent->hwnd;
+	SwapChain& Swapchain = mRenderer.GetWindowSwapChain(pToggleFSEvent->hwnd);
+
+
+	const FWindowSettings& WndSettings = GetWindowSettings(hwnd);
+	const bool bFullscreenStateToSet = !Swapchain.IsFullscreen();
+
+	// if we're transitioning into Fullscreen, save the current window dimensions
+	if (bFullscreenStateToSet)
+	{
+		std::unique_ptr<Window>& pWnd = GetWindow(hwnd);
+		FWindowSettings& WndSettings = GetWindowSettings(hwnd);
+		WndSettings.Width  = pWnd->GetWidth();
+		WndSettings.Height = pWnd->GetHeight();
+	}
+
+	Swapchain.WaitForGPU();
+	if (WndSettings.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN)
+	{
+		// Swapchain handles resizing the window through SetFullscreenState() call
+		Swapchain.SetFullscreen(bFullscreenStateToSet, WndSettings.Width, WndSettings.Height);
+		// TODO: capture/release mouse
+	}
+	else // BORDERLESS FULLSCREEN
+	{
+		GetWindow(hwnd)->ToggleWindowedFullscreen();
+	}
 }
 

@@ -43,10 +43,10 @@
 // THE SOFTWARE.
 //
 #include "Window.h"
-
 #include "Libs/VQUtils/Source/Log.h"
-
 #include "Data/Resources/resource.h"
+
+#include <dxgi1_6.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 IWindow::~IWindow()
@@ -99,6 +99,7 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
         initParams.hInst,   // application handle
         NULL);   // used with multiple windows, NULL
 
+    windowStyle_ = FlagWindowStyle;
     ::SetWindowLongPtr(hwnd_, GWLP_USERDATA, reinterpret_cast<LONG_PTR> (this));
 }
 
@@ -136,6 +137,76 @@ void Window::Close()
     this->isClosed_ = true;
     ::ShowWindow(hwnd_, FALSE);
     ::DestroyWindow(hwnd_);
+}
+
+// from MS D3D12Fullscreen sample
+void Window::ToggleWindowedFullscreen()
+{
+    if (isFullscreen_)
+    {
+        // Restore the window's attributes and size.
+        SetWindowLong(hwnd_, GWL_STYLE, windowStyle_);
+
+        SetWindowPos(
+            hwnd_,
+            HWND_NOTOPMOST,
+            rect_.left,
+            rect_.top,
+            rect_.right - rect_.left,
+            rect_.bottom - rect_.top,
+            SWP_FRAMECHANGED | SWP_NOACTIVATE);
+
+        ShowWindow(hwnd_, SW_NORMAL);
+    }
+    else
+    {
+        // Save the old window rect so we can restore it when exiting fullscreen mode.
+        GetWindowRect(hwnd_, &rect_);
+
+        // Make the window borderless so that the client area can fill the screen.
+        SetWindowLong(hwnd_, GWL_STYLE, windowStyle_ & ~(WS_CAPTION | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_SYSMENU | WS_THICKFRAME));
+
+        RECT fullscreenWindowRect;
+        
+        IDXGISwapChain* pSwapChain = nullptr;
+        if (pSwapChain)
+        {
+            // Get the settings of the display on which the app's window is currently displayed
+            IDXGIOutput* pOutput = nullptr;
+            pSwapChain->GetContainingOutput(&pOutput);
+            DXGI_OUTPUT_DESC Desc;
+            pOutput->GetDesc(&Desc);
+            fullscreenWindowRect = Desc.DesktopCoordinates;
+        }
+        else
+        {
+            // Fallback to EnumDisplaySettings implementation
+            // Get the settings of the primary display
+            DEVMODE devMode = {};
+            devMode.dmSize = sizeof(DEVMODE);
+            EnumDisplaySettings(nullptr, ENUM_CURRENT_SETTINGS, &devMode);
+
+            fullscreenWindowRect = {
+                devMode.dmPosition.x,
+                devMode.dmPosition.y,
+                devMode.dmPosition.x + static_cast<LONG>(devMode.dmPelsWidth),
+                devMode.dmPosition.y + static_cast<LONG>(devMode.dmPelsHeight)
+            };
+        }
+
+        SetWindowPos(
+            hwnd_,
+            HWND_TOPMOST,
+            fullscreenWindowRect.left,
+            fullscreenWindowRect.top,
+            fullscreenWindowRect.right,
+            fullscreenWindowRect.bottom,
+            SWP_FRAMECHANGED | SWP_NOACTIVATE);
+
+        ShowWindow(hwnd_, SW_MAXIMIZE);
+    }
+
+    isFullscreen_ = !isFullscreen_;
 }
 
 /////////////////////////////////////////////////////////////////////////

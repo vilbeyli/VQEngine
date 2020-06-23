@@ -85,11 +85,11 @@ public:
 	void Exit();
 
 	// Window event callbacks for the main Window
-	void OnWindowCreate() override;
+	void OnWindowCreate(IWindow* pWnd) override;
 	void OnWindowResize(HWND hWnd) override;
 	void OnToggleFullscreen(HWND hWnd) override;
-	void OnWindowMinimize() override;
-	void OnWindowFocus() override;
+	void OnWindowMinimize(IWindow* pWnd) override;
+	void OnWindowFocus(IWindow* pWindow) override;
 	void OnWindowKeyDown(WPARAM wParam) override;
 	void OnWindowClose(IWindow* pWindow) override;
 	
@@ -155,6 +155,10 @@ private:
 	void LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete
 	void Load_SceneData_Dispatch();
 	void Load_SceneData_Join();
+
+	std::unique_ptr<Window>& GetWindow(HWND hwnd);
+	const FWindowSettings& GetWindowSettings(HWND hwnd) const;
+	FWindowSettings& GetWindowSettings(HWND hwnd);
 
 private:
 	// threads

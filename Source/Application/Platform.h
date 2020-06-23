@@ -37,18 +37,27 @@ struct IDXGIOutput;
 
 struct FStartupParameters
 {
-	Log::LogInitializeParams  LogInitParams;
 	HINSTANCE                 hExeInstance;
+	
+	Log::LogInitializeParams  LogInitParams;
 
 	FEngineSettings EngineSettings;
 
 	uint8 bOverrideGFXSetting_RenderScale         : 1;
 	uint8 bOverrideGFXSetting_bVSync              : 1;
 	uint8 bOverrideGFXSetting_bUseTripleBuffering : 1;
-	uint8 bOverrideGFXSetting_bFullscreen         : 1;
 
 	uint8 bOverrideENGSetting_MainWindowHeight    : 1;
 	uint8 bOverrideENGSetting_MainWindowWidth     : 1;
+	uint8 bOverrideENGSetting_bFullscreen         : 1;
+	uint8 bOverrideENGSetting_PreferredDisplay    : 1;
+
+	uint8 bOverrideENGSetting_bDebugWindowEnable          : 1;
+	uint8 bOverrideENGSetting_DebugWindowHeight           : 1;
+	uint8 bOverrideENGSetting_DebugWindowWidth            : 1;
+	uint8 bOverrideENGSetting_DebugWindowbFullscreen      : 1;
+	uint8 bOverrideENGSetting_DebugWindowPreferredDisplay : 1;
+
 	uint8 bOverrideENGSetting_bAutomatedTest      : 1;
 	uint8 bOverrideENGSetting_bTestFrames         : 1;
 };

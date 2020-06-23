@@ -193,10 +193,7 @@ void SwapChain::Destroy()
     this->mpFence->Release();
     CloseHandle(this->mHEvent);
 
-    for (unsigned i = 0; i < this->mNumBackBuffers; ++i)
-    {
-        this->mRenderTargets[i]->Release();
-    }
+    DestroyRenderTargetViews();
     if (this->mpDescHeapRTV) this->mpDescHeapRTV->Release();
     if (this->mpSwapChain)   this->mpSwapChain->Release();
 }
@@ -207,9 +204,9 @@ void SwapChain::Resize(int w, int h)
     Log::Warning("SwapChain<hwnd=0x%x> Resize: %dx%d", mHwnd, w, h);
 #endif
 
+    DestroyRenderTargetViews();
     for (int i = 0; i < this->mNumBackBuffers; i++)
     {
-        this->mRenderTargets[i]->Release();
         mFenceValues[i] = mFenceValues[mpSwapChain->GetCurrentBackBufferIndex()];
     }
 
@@ -225,7 +222,8 @@ void SwapChain::Resize(int w, int h)
     this->mICurrentBackBuffer = mpSwapChain->GetCurrentBackBufferIndex();
 }
 
-void SwapChain::SetFullscreen(bool bState)
+// https://docs.microsoft.com/de-de/windows/win32/direct3darticles/dxgi-best-practices#full-screen-issues
+void SwapChain::SetFullscreen(bool bState, int FSRecoveryWindowWidth, int FSRecoveryWindowHeight)
 {
     HRESULT hr = {};
 
@@ -243,13 +241,42 @@ void SwapChain::SetFullscreen(bool bState)
         }
     }
 
-    // Call Resize Target
-    // https://docs.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-resizetarget
-    DXGI_MODE_DESC mode = {};
-    mode.Width  = 1920;
-    mode.Height = 1080; // if we're toggling off fullscreen, fallback to 1080p windowed
-    mode.Format = DXGI_FORMAT_UNKNOWN;
+    // Figure out which monitor swapchain is in
+    // and set the mode we want to use for ResizeTarget().
+    IDXGIOutput6* pOut = nullptr;
+    {
+        IDXGIOutput* pOutput = nullptr;
+        mpSwapChain->GetContainingOutput(&pOutput);
+        hr = pOutput->QueryInterface(IID_PPV_ARGS(&pOut));
+        assert(hr == S_OK);
+        pOutput->Release();
+    }
+    
+    DXGI_OUTPUT_DESC1 desc;
+    pOut->GetDesc1(&desc);
+    
+    // Get supported mode count and then all the supported modes
+    UINT NumModes = 0;
+    hr = pOut->GetDisplayModeList1(DXGI_FORMAT_R8G8B8A8_UNORM, 0, &NumModes, NULL);
+    std::vector<DXGI_MODE_DESC1> currMode(NumModes);
+    hr = pOut->GetDisplayModeList1(DXGI_FORMAT_R8G8B8A8_UNORM, 0, &NumModes, &currMode[0]);
 
+    DXGI_MODE_DESC1 matchDesc = {};
+    matchDesc = currMode.back();
+    matchDesc.Width = FSRecoveryWindowWidth;
+    matchDesc.Height = FSRecoveryWindowHeight;
+    DXGI_MODE_DESC1 matchedDesc = {};
+    pOut->FindClosestMatchingMode1(&matchDesc, &matchedDesc, NULL);
+    pOut->Release();
+
+    DXGI_MODE_DESC mode = {};
+    mode.Width = matchDesc.Width;
+    mode.Height = matchDesc.Height;
+    mode.RefreshRate = matchDesc.RefreshRate;
+    mode.Format = matchDesc.Format;
+    mode.Scaling = matchDesc.Scaling;
+    mode.ScanlineOrdering = matchDesc.ScanlineOrdering;
+    // https://docs.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-resizetarget
     // calling ResizeTarget() will produce WM_RESIZE event right away.
     // RenderThread handles events twice before present to be able to catch
     // the Resize() event before calling Present() as the events
@@ -259,7 +286,6 @@ void SwapChain::SetFullscreen(bool bState)
     {
         Log::Error("SwapChain::ResizeTarget() : unhandled error code");
     }
-
 }
 
 bool SwapChain::IsFullscreen(/*IDXGIOUtput* ?*/) const
@@ -286,21 +312,23 @@ void SwapChain::Present(bool bVSync)
 
     if (hr != S_OK)
     {
-        Log::Error("SwapChain::Present(): Error on Present(): HRESULT=%u", hr);
-
         // https://docs.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-present
         switch (hr)
         {
         case DXGI_ERROR_DEVICE_RESET:
+            Log::Error("SwapChain::Present(): Error on Present() : DXGI_ERROR_DEVICE_RESET");
             // TODO: call HandleDeviceReset() from whoever will be responsible
             break;
         case DXGI_ERROR_DEVICE_REMOVED:
+            Log::Error("SwapChain::Present(): Error on Present() : DXGI_ERROR_DEVICE_REMOVED");
             // TODO: call HandleDeviceReset()
             break;
         case DXGI_ERROR_INVALID_CALL:
+            Log::Error("SwapChain::Present(): Error on Present() : DXGI_ERROR_INVALID_CALL");
             // TODO:
             break;
         case DXGI_STATUS_OCCLUDED:
+            Log::Warning("SwapChain::Present(): Error on Present() : DXGI_STATUS_OCCLUDED");
             // TODO: call HandleStatusOcclueded() 
             break;
         default:
@@ -397,5 +425,13 @@ void SwapChain::CreateRenderTargetViews()
 
         this->mpDevice->CreateRenderTargetView(this->mRenderTargets[i], nullptr, hRTV);
         hRTV.ptr += RTVDescSize;
+    }
+}
+
+void SwapChain::DestroyRenderTargetViews()
+{
+    for (int i = 0; i < this->mNumBackBuffers; i++)
+    {
+        this->mRenderTargets[i]->Release();
     }
 }

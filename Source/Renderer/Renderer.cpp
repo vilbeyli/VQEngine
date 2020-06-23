@@ -128,10 +128,10 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 		swapChainDesc.pWindow = &wnd;
 		swapChainDesc.pCmdQueue = &ctx.PresentQueue;
 		swapChainDesc.bVSync = ctx.bVsync;
-		swapChainDesc.bFullscreen = params.Settings.IsDisplayModeFullscreen();
+		swapChainDesc.bFullscreen = false;
 		ctx.SwapChain.Create(swapChainDesc);
 
-		// Create command allocatorsd
+		// Create command allocators
 		ctx.mCommandAllocatorsGFX.resize(NUM_SWAPCHAIN_BUFFERS);
 		ctx.mCommandAllocatorsCompute.resize(NUM_SWAPCHAIN_BUFFERS);
 		ctx.mCommandAllocatorsCopy.resize(NUM_SWAPCHAIN_BUFFERS);
@@ -214,6 +214,15 @@ void VQRenderer::Exit()
 	mCopyQueue.Destroy();
 
 	mDevice.Destroy();
+}
+
+void VQRenderer::OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h)
+{
+	if (!CheckContext(hwnd)) return;
+	FRenderWindowContext& ctx = mRenderContextLookup.at(hwnd);
+
+	ctx.MainRTResolutionX = w; // TODO: RenderScale
+	ctx.MainRTResolutionY = h; // TODO: RenderScale
 }
 
 SwapChain& VQRenderer::GetWindowSwapChain(HWND hwnd) { return mRenderContextLookup.at(hwnd).SwapChain; }
@@ -330,25 +339,6 @@ short VQRenderer::GetSwapChainBackBufferCountOfWindow(HWND hwnd) const
 	
 }
 
-void VQRenderer::ResizeSwapChain(HWND hwnd, int w, int h)
-{
-	if (!CheckContext(hwnd)) return;
-
-	FRenderWindowContext& ctx = mRenderContextLookup.at(hwnd);
-	ctx.SwapChain.WaitForGPU();
-	ctx.SwapChain.Resize(w, h);
-	ctx.MainRTResolutionX = w; // TODO: RenderScale
-	ctx.MainRTResolutionY = h; // TODO: RenderScale
-}
-
-void VQRenderer::ToggleFullscreen(HWND hwnd)
-{
-	if (!CheckContext(hwnd)) return;
-
-	FRenderWindowContext& ctx = mRenderContextLookup.at(hwnd);
-	ctx.SwapChain.WaitForGPU();
-	ctx.SwapChain.SetFullscreen(!ctx.SwapChain.IsFullscreen());
-}
 
 bool VQRenderer::CheckContext(HWND hwnd) const
 {
