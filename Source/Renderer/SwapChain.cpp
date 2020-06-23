@@ -147,6 +147,11 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
         ThrowIfFailed(HRESULT_FROM_WIN32(GetLastError()));
     }
 
+    if (desc.bFullscreen)
+    {
+        //this->SetFullscreen(true, desc.pWindow->width, desc.pWindow->height);
+    }
+
     // -- Create the Back Buffers (render target views) Descriptor Heap -- //
     // describe an rtv descriptor heap and create
     D3D12_DESCRIPTOR_HEAP_DESC RTVHeapDesc = {};
@@ -167,14 +172,10 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     mpDescHeapRTV->SetName(L"SwapChainRTVDescHeap");
 #endif
 
-    if (desc.bFullscreen)
-    {
-        //this->SetFullscreen(true);
-    }
-
     // Create a RTV for each SwapChain buffer
     this->mRenderTargets.resize(this->mNumBackBuffers);
     CreateRenderTargetViews();
+
 
     Log::Info("SwapChain: Created swapchain<hwnd=0x%x> w/ %d back buffers of %dx%d.", mHwnd, desc.numBackBuffers, desc.pWindow->width, desc.pWindow->height);
     return bSuccess;
@@ -263,8 +264,11 @@ void SwapChain::SetFullscreen(bool bState, int FSRecoveryWindowWidth, int FSReco
 
     DXGI_MODE_DESC1 matchDesc = {};
     matchDesc = currMode.back();
-    matchDesc.Width = FSRecoveryWindowWidth;
-    matchDesc.Height = FSRecoveryWindowHeight;
+    if (!bState)
+    {
+        matchDesc.Width = FSRecoveryWindowWidth;
+        matchDesc.Height = FSRecoveryWindowHeight;
+    }
     DXGI_MODE_DESC1 matchedDesc = {};
     pOut->FindClosestMatchingMode1(&matchDesc, &matchedDesc, NULL);
     pOut->Release();
