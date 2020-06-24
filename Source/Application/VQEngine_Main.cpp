@@ -29,7 +29,7 @@ constexpr char* BUILD_CONFIG = "Debug";
 #else
 constexpr char* BUILD_CONFIG = "Release";
 #endif
-constexpr char* VQENGINE_VERSION = "v0.0.0";
+constexpr char* VQENGINE_VERSION = "v0.1.0";
 
 
 void VQEngine::MainThread_Tick()
@@ -246,7 +246,7 @@ void VQEngine::Load_SceneData_Dispatch()
 		// TODO: initialize window scene data here for now, should update this to proper location later on (Scene probably?)
 		FFrameData data[2];
 		data[0].SwapChainClearColor = { 0.07f, 0.07f, 0.07f, 1.0f };
-		data[1].SwapChainClearColor = { 0.80f, 0.45f, 0.01f, 1.0f };
+		data[1].SwapChainClearColor = { 0.20f, 0.21f, 0.21f, 1.0f };
 		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain);
 		const int NumBackBuffer_WndDbg = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinDebug);
 		mScene_MainWnd.mFrameData.resize(NumBackBuffer_WndMain, data[0]);
