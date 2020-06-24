@@ -150,21 +150,26 @@ void VQEngine::InititalizeEngineSettings(const FStartupParameters& Params)
 
 void VQEngine::InitializeApplicationWindows(const FStartupParameters& Params)
 {
-	FWindowDesc mainWndDesc = {};
-	mainWndDesc.width  = mSettings.WndMain.Width;
-	mainWndDesc.height = mSettings.WndMain.Height;
-	mainWndDesc.hInst = Params.hExeInstance;
-	mainWndDesc.pWndOwner = this;
-	mainWndDesc.pfnWndProc = WndProc;
-	mpWinMain.reset(new Window(mSettings.WndMain.Title, mainWndDesc));
-	Log::Info("Created main window<0x%x>: %dx%d", mpWinMain->GetHWND(), mainWndDesc.width, mainWndDesc.height);
+	auto fnInitializeWindows = [&](const FWindowSettings& settings, HINSTANCE hInstance, std::unique_ptr<Window>& pWin)
+	{
+		FWindowDesc desc = {};
+		desc.width = settings.Width;
+		desc.height= settings.Height;
+		desc.hInst = hInstance;
+		desc.pWndOwner  = this;
+		desc.pfnWndProc = WndProc;
+		desc.bFullscreen = settings.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN;
+		desc.preferredDisplay = settings.PreferredDisplay;
+		pWin.reset(new Window(settings.Title, desc));
+	};
+
+	fnInitializeWindows(mSettings.WndMain, Params.hExeInstance, mpWinMain);
+	Log::Info("Created main window<0x%x>: %dx%d", mpWinMain->GetHWND(), mpWinMain->GetWidth(), mpWinMain->GetHeight());
 
 	if (mSettings.bShowDebugWindow)
 	{
-		mainWndDesc.width = mSettings.WndDebug.Width;
-		mainWndDesc.height = mSettings.WndDebug.Height;
-		mpWinDebug.reset(new Window(mSettings.WndDebug.Title, mainWndDesc));
-		Log::Info("Created debug window<0x%x>: %dx%d", mpWinDebug->GetHWND(), mainWndDesc.width, mainWndDesc.height);
+		fnInitializeWindows(mSettings.WndDebug, Params.hExeInstance, mpWinDebug);
+		Log::Info("Created debug window<0x%x>: %dx%d", mpWinDebug->GetHWND(), mpWinDebug->GetWidth(), mpWinDebug->GetHeight());
 	}
 }
 
@@ -324,11 +329,11 @@ static float ParseFloat(const std::string& s) { return static_cast<float>(std::a
 
 static std::unordered_map<std::string, EDisplayMode> S_LOOKUP_STR_TO_DISPLAYMODE =
 {
-	  { "Fullscreen"        , EDisplayMode::EXCLUSIVE_FULLSCREEN }
-	, { "Borderless"        , EDisplayMode::WINDOWED_FULLSCREEN  }
-	, { "Windowed"          , EDisplayMode::WINDOWED_FULLSCREEN  }
-	, { "BorderlessWindowed", EDisplayMode::WINDOWED_FULLSCREEN  }
-	, { "Windowed"          , EDisplayMode::WINDOWED             }
+	  { "Fullscreen"           , EDisplayMode::EXCLUSIVE_FULLSCREEN }
+	, { "Borderless"           , EDisplayMode::BORDERLESS_FULLSCREEN  }
+	, { "BorderlessFullscreen" , EDisplayMode::BORDERLESS_FULLSCREEN  }
+	, { "BorderlessWindowed"   , EDisplayMode::BORDERLESS_FULLSCREEN  }
+	, { "Windowed"             , EDisplayMode::WINDOWED             }
 };
 
 FStartupParameters VQEngine::ParseEngineSettingsFile()

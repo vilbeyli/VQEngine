@@ -20,6 +20,8 @@
 // ----------------------------------------------------------------------------
 // Modified version of the Window class defined in HelloD3D12 from AMD
 // Source: https://github.com/GPUOpen-LibrariesAndSDKs/HelloD3D12/
+// Adding multi-monitor support, letting the user specify which monitor
+// the window can be created in.
 // ----------------------------------------------------------------------------
 
 // Copyright (c) 2016 Advanced Micro Devices, Inc. All rights reserved.
@@ -43,7 +45,9 @@
 // THE SOFTWARE.
 //
 #include "Window.h"
+#include "../Renderer/SwapChain.h"
 #include "Libs/VQUtils/Source/Log.h"
+#include "Libs/VQUtils/Source/utils.h"
 #include "Data/Resources/resource.h"
 
 #include <dxgi1_6.h>
@@ -70,6 +74,7 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
     : IWindow(initParams.pWndOwner)
     , width_(initParams.width)
     , height_(initParams.height)
+    , isFullscreen_(initParams.bFullscreen)
 {
     // https://docs.microsoft.com/en-us/windows/win32/winmsg/window-styles
     DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE;
@@ -83,6 +88,61 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
 
     windowClass_.reset(new WindowClass("VQWindowClass", initParams.hInst, initParams.pfnWndProc));
 
+    // handle preferred display
+    struct MonitorEnumCallbackParams
+    {
+        int PreferredMonitorIndex = 0;
+        RECT* pRectOriginal = nullptr;
+        RECT* pRectNew = nullptr;
+    };
+    RECT preferredScreenRect = { CW_USEDEFAULT , CW_USEDEFAULT , CW_USEDEFAULT , CW_USEDEFAULT };
+    MonitorEnumCallbackParams p = {};
+    p.PreferredMonitorIndex = initParams.preferredDisplay;
+    p.pRectOriginal = &rect;
+    p.pRectNew = &preferredScreenRect;
+
+    auto fnCallbackMonitorEnum = [](HMONITOR Arg1, HDC Arg2, LPRECT Arg3, LPARAM Arg4) -> BOOL
+    {
+        BOOL b = TRUE;
+        MonitorEnumCallbackParams* pParam = (MonitorEnumCallbackParams*)Arg4;
+
+        MONITORINFOEX monitorInfo = {};
+        monitorInfo.cbSize = sizeof(MONITORINFOEX);
+        GetMonitorInfo(Arg1, &monitorInfo);
+
+        // get monitor index from monitor name
+        std::string monitorName(monitorInfo.szDevice); // monitorName is usually something like "///./DISPLAY1"
+        monitorName = StrUtil::split(monitorName, {'/', '\\', '.'})[0];         // strMonitorIndex is "1" for "///./DISPLAY1"
+        std::string strMonitorIndex = monitorName.substr(monitorName.size()-1); // monitorIndex    is  0  for "///./DISPLAY1"
+        const int monitorIndex = std::atoi(strMonitorIndex.c_str()) - 1;        // -1 so it starts from 0
+        
+        // copy over the desired monitor's rect
+        if (monitorIndex == pParam->PreferredMonitorIndex)
+        {
+            *pParam->pRectNew = *Arg3;
+        }
+        return b;
+    };
+    auto fnCenterScreen = [](const RECT& screenRect, const RECT& wndRect) -> RECT
+    {
+        RECT centered = {};
+
+        const int szWndX = wndRect.right - wndRect.left;
+        const int szWndY = wndRect.bottom - wndRect.top;
+        const int offsetX = (screenRect.right - screenRect.left - szWndX) / 2;
+        const int offsetY = (screenRect.bottom - screenRect.top - szWndY) / 2;
+
+        centered.left = screenRect.left + offsetX;
+        centered.right = centered.left + szWndX;
+        centered.top = screenRect.top + offsetY;
+        centered.bottom = centered.top + szWndY;
+
+        return centered;
+    };
+
+
+    EnumDisplayMonitors(NULL, NULL, fnCallbackMonitorEnum, (LPARAM)&p);
+    RECT centeredRect = fnCenterScreen(preferredScreenRect, rect);
 
     // https://docs.microsoft.com/en-us/windows/win32/learnwin32/creating-a-window
     // Create the main window.
@@ -90,10 +150,10 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
         windowClass_->GetName().c_str(),
         title.c_str(),
         FlagWindowStyle,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        rect.right - rect.left, 
-        rect.bottom - rect.top, 
+        centeredRect.left,      // positions //CW_USEDEFAULT,
+        centeredRect.top ,      // positions //CW_USEDEFAULT,
+        rect.right - rect.left, // size
+        rect.bottom - rect.top, // size
         hwnd_parent,
         NULL,    // we aren't using menus, NULL
         initParams.hInst,   // application handle
@@ -140,7 +200,7 @@ void Window::Close()
 }
 
 // from MS D3D12Fullscreen sample
-void Window::ToggleWindowedFullscreen()
+void Window::ToggleWindowedFullscreen(SwapChain* pSwapChain /*= nullptr*/)
 {
     if (isFullscreen_)
     {
@@ -168,12 +228,11 @@ void Window::ToggleWindowedFullscreen()
 
         RECT fullscreenWindowRect;
         
-        IDXGISwapChain* pSwapChain = nullptr;
         if (pSwapChain)
         {
             // Get the settings of the display on which the app's window is currently displayed
             IDXGIOutput* pOutput = nullptr;
-            pSwapChain->GetContainingOutput(&pOutput);
+            pSwapChain->mpSwapChain->GetContainingOutput(&pOutput);
             DXGI_OUTPUT_DESC Desc;
             pOutput->GetDesc(&Desc);
             fullscreenWindowRect = Desc.DesktopCoordinates;

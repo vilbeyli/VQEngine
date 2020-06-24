@@ -48,6 +48,11 @@
 #include <Windows.h>
 #include <memory>
 
+
+struct IWindow;
+class SwapChain;
+
+
 /**
 * Encapsulate a window class.
 *
@@ -71,7 +76,6 @@ private:
 	std::string name_;
 };
 
-struct IWindow;
 class IWindowOwner
 {
 public:
@@ -95,7 +99,7 @@ public:
 	virtual ~IWindow();
 
 	virtual void Show()     = 0;
-	virtual void ToggleWindowedFullscreen() = 0;
+	virtual void ToggleWindowedFullscreen(SwapChain* pSwapChain = nullptr) = 0;
 	virtual void Minimize() = 0;
 	virtual void Close()    = 0;
 
@@ -123,6 +127,8 @@ struct FWindowDesc
 	HINSTANCE hInst = NULL;
 	pfnWndProc_t pfnWndProc = nullptr;
 	IWindowOwner* pWndOwner = nullptr;
+	bool bFullscreen = false;
+	int preferredDisplay = 0;
 };
 
 class Window : public IWindow
@@ -135,10 +141,11 @@ public:
 	void Show() override;
 	void Minimize() override;
 	void Close() override;
-	void ToggleWindowedFullscreen() override;
+	void ToggleWindowedFullscreen(SwapChain* pSwapChain = nullptr) override;
 
 	// updates width_ and height_ members
 	inline void OnResize(int w, int h) { width_ = w; height_ = h; }
+	inline void SetFullscreen(bool b) { isFullscreen_ = b; }
 
 private:
 	inline bool IsClosedImpl()  const override { return isClosed_; }
