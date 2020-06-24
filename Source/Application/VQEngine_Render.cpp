@@ -79,19 +79,34 @@ void VQEngine::RenderThread_SignalUpdateThread()
 void VQEngine::RenderThread_Inititalize()
 {
 	FRendererInitializeParameters params = {};
-
-	params.Windows.push_back(FWindowRepresentation(mpWinMain , mSettings.gfx.bVsync, mSettings.WndMain.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN));
-	if(mpWinDebug) 
-		params.Windows.push_back(FWindowRepresentation(mpWinDebug, false, false));
 	params.Settings = mSettings.gfx;
+	params.Windows.push_back(FWindowRepresentation(mpWinMain , mSettings.gfx.bVsync, mSettings.WndMain.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN));
+	if(mpWinDebug) params.Windows.push_back(FWindowRepresentation(mpWinDebug, false, false));
+
 	mRenderer.Initialize(params);
 
 	auto fnHandleWindowTransitions = [&](std::unique_ptr<Window>& pWin, const FWindowSettings& settings)
 	{
+		if (!pWin) return;
+
+		// TODO: generic solution to multi window/display settings. 
+		//       For now, simply prevent debug wnd occupying main wnd's display.
+		if ( mpWinMain->IsFullscreen()
+			&& (mSettings.WndMain.PreferredDisplay == mSettings.WndDebug.PreferredDisplay)
+			&& settings.IsDisplayModeFullscreen()
+			&& pWin != mpWinMain)
+		{
+			Log::Warning("Debug window and Main window cannot be Fullscreen on the same display!");
+			pWin->SetFullscreen(false);
+			// TODO: as a more graceful fallback, move it to the next monitor and keep fullscreen
+			return;
+		}
+
 		// Borderless fullscreen transitions are handled through Window object
 		// Exclusive  fullscreen transitions are handled through the Swapchain
 		if (settings.DisplayMode == EDisplayMode::BORDERLESS_FULLSCREEN)
 		{
+			// TODO: preferred screen impl
 			if(pWin) pWin->ToggleWindowedFullscreen();
 		}
 	};
@@ -116,21 +131,39 @@ void VQEngine::RenderThread_Render()
 {
 	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain);
 	const int FRAME_DATA_INDEX  = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
-	
 
+	HRESULT hr0 = S_OK;
+	HRESULT hr1 = S_OK;
+
+#define RENDER_IN_PARALLEL 0
+#if RENDER_IN_PARALLEL
+	// TODO: test parallel rendering of window contexts
+#else
 	if (mbLoadingLevel)
 	{
 		// TODO: proper data encalsulation + remove reinterpret cast.
 		//       this was good enough for testing threaded loading and is meant to be temporary.
-		mRenderer.RenderWindowContext(mpWinMain->GetHWND() , *reinterpret_cast<FFrameData*>(&mScene_MainWnd.mLoadingScreenData[FRAME_DATA_INDEX]));
-		if(mpWinDebug) mRenderer.RenderWindowContext(mpWinDebug->GetHWND(), *reinterpret_cast<FFrameData*>(&mScene_DebugWnd.mLoadingScreenData[FRAME_DATA_INDEX]));
+		hr0 = mRenderer.RenderWindowContext(mpWinMain->GetHWND() , *reinterpret_cast<FFrameData*>(&mScene_MainWnd.mLoadingScreenData[FRAME_DATA_INDEX]));
+		if(mpWinDebug) hr1 = mRenderer.RenderWindowContext(mpWinDebug->GetHWND(), *reinterpret_cast<FFrameData*>(&mScene_DebugWnd.mLoadingScreenData[FRAME_DATA_INDEX]));
 	}
-	
+
+	// Scene rendering
 	else
 	{
-		// TODO: render in parallel???
-		mRenderer.RenderWindowContext(mpWinMain->GetHWND(), mScene_MainWnd.mFrameData[FRAME_DATA_INDEX]);
-		if(mpWinDebug) mRenderer.RenderWindowContext(mpWinDebug->GetHWND(), mScene_DebugWnd.mFrameData[FRAME_DATA_INDEX]);
+		hr0 = mRenderer.RenderWindowContext(mpWinMain->GetHWND(), mScene_MainWnd.mFrameData[FRAME_DATA_INDEX]);
+		if(mpWinDebug) hr1 = mRenderer.RenderWindowContext(mpWinDebug->GetHWND(), mScene_DebugWnd.mFrameData[FRAME_DATA_INDEX]);
+	}
+#endif
+
+	// TODO: remove copy paste and use encapsulation of context rendering properly
+	// currently check only for hr0 for the mainWindow
+	if (hr0 == DXGI_STATUS_OCCLUDED)
+	{
+		if (mpWinMain->IsFullscreen()) 
+		{
+			mpWinMain->SetFullscreen(false);
+			mpWinMain->Show();
+		}
 	}
 }
 

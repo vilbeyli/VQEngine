@@ -86,7 +86,7 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.BufferCount = desc.numBackBuffers;
     swapChainDesc.Height = desc.pWindow->height;
-    swapChainDesc.Width = desc.pWindow->width;
+    swapChainDesc.Width  = desc.pWindow->width;
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapChainDesc.SampleDesc.Quality = 0;
     swapChainDesc.SampleDesc.Count = 1;
@@ -190,6 +190,10 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     // Resize will handle RTV creation logic if its a Fullscreen SwapChain
     if (desc.bFullscreen)
     {
+        // TODO: the SetFullscreen here doesn't trigger WM_SIZE event, hence
+        //       we have to call here. For now, we use the specified w and h,
+        //       however, that results in non native screen resolution (=low res fullscreen).
+        //       Need to figure out how to properly start a swapchain in fullscreen mode.
         this->SetFullscreen(true, desc.pWindow->width, desc.pWindow->height);
         this->Resize(desc.pWindow->width, desc.pWindow->height);
     }
@@ -330,7 +334,7 @@ bool SwapChain::IsFullscreen(/*IDXGIOUtput* ?*/) const
     return fullscreenState;
 }
 
-void SwapChain::Present(bool bVSync)
+HRESULT SwapChain::Present(bool bVSync)
 {
     constexpr UINT VSYNC_INTERVAL = 1;
 
@@ -351,26 +355,27 @@ void SwapChain::Present(bool bVSync)
         switch (hr)
         {
         case DXGI_ERROR_DEVICE_RESET:
-            Log::Error("SwapChain::Present(): Error on Present() : DXGI_ERROR_DEVICE_RESET");
+            Log::Error("SwapChain::Present(): DXGI_ERROR_DEVICE_RESET");
             // TODO: call HandleDeviceReset() from whoever will be responsible
             break;
         case DXGI_ERROR_DEVICE_REMOVED:
-            Log::Error("SwapChain::Present(): Error on Present() : DXGI_ERROR_DEVICE_REMOVED");
+            Log::Error("SwapChain::Present(): DXGI_ERROR_DEVICE_REMOVED");
             // TODO: call HandleDeviceReset()
             break;
         case DXGI_ERROR_INVALID_CALL:
-            Log::Error("SwapChain::Present(): Error on Present() : DXGI_ERROR_INVALID_CALL");
+            Log::Error("SwapChain::Present(): DXGI_ERROR_INVALID_CALL");
             // TODO:
             break;
         case DXGI_STATUS_OCCLUDED:
-            Log::Warning("SwapChain::Present(): Error on Present() : DXGI_STATUS_OCCLUDED");
-            // TODO: call HandleStatusOcclueded() 
+            Log::Warning("SwapChain::Present(): DXGI_STATUS_OCCLUDED");
             break;
         default:
             assert(false); // unhandled Present() return code
             break;
         }
     }
+
+    return hr;
 }
 
 void SwapChain::MoveToNextFrame()

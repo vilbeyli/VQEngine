@@ -61,7 +61,7 @@ public:
 	void SetFullscreen(bool bState, int FSRecoveryWindowWidth, int FSRecoveryWindowHeight);
 	bool IsFullscreen() const;
 
-	void Present(bool bVSync = false);
+	HRESULT Present(bool bVSync = false);
 	void MoveToNextFrame();
 	void WaitForGPU();
 

@@ -70,7 +70,7 @@ public:
 public:
 	void Initialize(const FRendererInitializeParameters& RendererInitParams);
 	void Load();
-	void RenderWindowContext(HWND hwnd, const FFrameData& FrameData);
+	HRESULT RenderWindowContext(HWND hwnd, const FFrameData& FrameData);
 	void Unload();
 	void Exit();
 

@@ -127,6 +127,8 @@ struct FWindowDesc
 	HINSTANCE hInst = NULL;
 	pfnWndProc_t pfnWndProc = nullptr;
 	IWindowOwner* pWndOwner = nullptr;
+	bool bFullscreen = false;
+	int preferredDisplay = 0;
 };
 
 class Window : public IWindow
@@ -143,6 +145,7 @@ public:
 
 	// updates width_ and height_ members
 	inline void OnResize(int w, int h) { width_ = w; height_ = h; }
+	inline void SetFullscreen(bool b) { isFullscreen_ = b; }
 
 private:
 	inline bool IsClosedImpl()  const override { return isClosed_; }

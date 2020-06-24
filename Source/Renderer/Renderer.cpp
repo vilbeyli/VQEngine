@@ -227,9 +227,10 @@ void VQRenderer::OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h)
 
 SwapChain& VQRenderer::GetWindowSwapChain(HWND hwnd) { return mRenderContextLookup.at(hwnd).SwapChain; }
 
-void VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
+HRESULT VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
 {
-	if (!CheckContext(hwnd)) return;
+	HRESULT hr = {};
+	if (!CheckContext(hwnd)) return hr;
 
 	FRenderWindowContext& ctx = mRenderContextLookup.at(hwnd);
 
@@ -237,8 +238,6 @@ void VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
 	const int BACK_BUFFER_INDEX = ctx.SwapChain.GetCurrentBackBufferIndex();
 	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
 	// ----------------------------------------------------------------------------
-
-	HRESULT hr = {};
 
 	//
 	// PRE RENDER
@@ -323,10 +322,11 @@ void VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
 	//
 	// PRESENT
 	//
-	ctx.SwapChain.Present(ctx.bVsync);
+	hr = ctx.SwapChain.Present(ctx.bVsync);
 
 	ctx.SwapChain.MoveToNextFrame();
 
+	return hr;
 }
 
 short VQRenderer::GetSwapChainBackBufferCountOfWindow(Window* pWnd) const { return pWnd ? this->GetSwapChainBackBufferCountOfWindow(pWnd->GetHWND()) : 0; }

@@ -158,6 +158,8 @@ void VQEngine::InitializeApplicationWindows(const FStartupParameters& Params)
 		desc.hInst = hInstance;
 		desc.pWndOwner  = this;
 		desc.pfnWndProc = WndProc;
+		desc.bFullscreen = settings.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN;
+		desc.preferredDisplay = settings.PreferredDisplay;
 		pWin.reset(new Window(settings.Title, desc));
 	};
 
