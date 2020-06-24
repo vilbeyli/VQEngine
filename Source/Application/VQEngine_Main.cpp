@@ -329,11 +329,11 @@ static float ParseFloat(const std::string& s) { return static_cast<float>(std::a
 
 static std::unordered_map<std::string, EDisplayMode> S_LOOKUP_STR_TO_DISPLAYMODE =
 {
-	  { "Fullscreen"           , EDisplayMode::EXCLUSIVE_FULLSCREEN }
+	  { "Fullscreen"           , EDisplayMode::EXCLUSIVE_FULLSCREEN   }
 	, { "Borderless"           , EDisplayMode::BORDERLESS_FULLSCREEN  }
 	, { "BorderlessFullscreen" , EDisplayMode::BORDERLESS_FULLSCREEN  }
 	, { "BorderlessWindowed"   , EDisplayMode::BORDERLESS_FULLSCREEN  }
-	, { "Windowed"             , EDisplayMode::WINDOWED             }
+	, { "Windowed"             , EDisplayMode::WINDOWED               }
 };
 
 FStartupParameters VQEngine::ParseEngineSettingsFile()
