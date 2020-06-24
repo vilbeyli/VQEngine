@@ -43,6 +43,7 @@
 // THE SOFTWARE.
 //
 #include "Window.h"
+#include "../Renderer/SwapChain.h"
 #include "Libs/VQUtils/Source/Log.h"
 #include "Data/Resources/resource.h"
 
@@ -140,7 +141,7 @@ void Window::Close()
 }
 
 // from MS D3D12Fullscreen sample
-void Window::ToggleWindowedFullscreen()
+void Window::ToggleWindowedFullscreen(SwapChain* pSwapChain /*= nullptr*/)
 {
     if (isFullscreen_)
     {
@@ -168,12 +169,11 @@ void Window::ToggleWindowedFullscreen()
 
         RECT fullscreenWindowRect;
         
-        IDXGISwapChain* pSwapChain = nullptr;
         if (pSwapChain)
         {
             // Get the settings of the display on which the app's window is currently displayed
             IDXGIOutput* pOutput = nullptr;
-            pSwapChain->GetContainingOutput(&pOutput);
+            pSwapChain->mpSwapChain->GetContainingOutput(&pOutput);
             DXGI_OUTPUT_DESC Desc;
             pOutput->GetDesc(&Desc);
             fullscreenWindowRect = Desc.DesktopCoordinates;

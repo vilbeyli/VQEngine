@@ -66,17 +66,19 @@ public:
 	void WaitForGPU();
 
 	/* Getters */ 
-	inline int GetNumBackBuffers() const { return mNumBackBuffers; }
-	inline int GetCurrentBackBufferIndex() const { return mICurrentBackBuffer; }
-	inline CD3DX12_CPU_DESCRIPTOR_HANDLE GetCurrentBackBufferRTVHandle() const { return CD3DX12_CPU_DESCRIPTOR_HANDLE(mpDescHeapRTV->GetCPUDescriptorHandleForHeapStart(), GetCurrentBackBufferIndex(), mpDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)); }
-	inline ID3D12Resource* GetCurrentBackBufferRenderTarget() const { return mRenderTargets[GetCurrentBackBufferIndex()]; }
-	inline unsigned long long GetNumPresentedFrames() const { return mNumTotalFrames; }
+	inline int                           GetNumBackBuffers()                const { return mNumBackBuffers; }
+	inline int                           GetCurrentBackBufferIndex()        const { return mICurrentBackBuffer; }
+	inline CD3DX12_CPU_DESCRIPTOR_HANDLE GetCurrentBackBufferRTVHandle()    const { return CD3DX12_CPU_DESCRIPTOR_HANDLE(mpDescHeapRTV->GetCPUDescriptorHandleForHeapStart(), GetCurrentBackBufferIndex(), mpDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)); }
+	inline ID3D12Resource*               GetCurrentBackBufferRenderTarget() const { return mRenderTargets[GetCurrentBackBufferIndex()]; }
+	inline unsigned long long            GetNumPresentedFrames()            const { return mNumTotalFrames; }
 
 private:
 	void CreateRenderTargetViews();
 	void DestroyRenderTargetViews();
 
 private:
+	friend class Window; // Window can access pSwapChain.
+
 	HWND                         mHwnd;
 	unsigned short               mNumBackBuffers;
 	unsigned short               mICurrentBackBuffer;
