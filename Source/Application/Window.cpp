@@ -140,9 +140,13 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
         return centered;
     };
 
-
     EnumDisplayMonitors(NULL, NULL, fnCallbackMonitorEnum, (LPARAM)&p);
-    RECT centeredRect = fnCenterScreen(preferredScreenRect, rect);
+    const bool bPreferredDisplayNotFound = 
+           (preferredScreenRect.right == preferredScreenRect.left == preferredScreenRect.top == preferredScreenRect.bottom )
+        && (preferredScreenRect.right == CW_USEDEFAULT);
+    RECT centeredRect = bPreferredDisplayNotFound
+        ? preferredScreenRect
+        : fnCenterScreen(preferredScreenRect, rect);
 
     // https://docs.microsoft.com/en-us/windows/win32/learnwin32/creating-a-window
     // Create the main window.
