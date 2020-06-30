@@ -181,44 +181,36 @@ void VQEngine::RenderThread_HandleEvents()
 	//   Otherwise, theoretically the producer (Main) thread could keep adding new events 
 	//   while we're spinning on the queue items below, and cause render thread to stall while, say, resizing.
 	mWinEventQueue.SwapBuffers();
-	std::queue<IEvent*>& q = mWinEventQueue.GetBackContainer();
+	std::queue<std::unique_ptr<IEvent>>& q = mWinEventQueue.GetBackContainer();
 	if (q.empty())
 		return;
 
-#define HANDLE_EVERY_RESIZE_EVENT 0
-
 	// process the events
-	const IEvent* pEvent = {};
-	const WindowResizeEvent* pResizeEvent = nullptr;
+	std::shared_ptr<IEvent> pEvent = nullptr;
+	std::shared_ptr<WindowResizeEvent> pResizeEvent = nullptr;
 	while (!q.empty())
 	{
-		pEvent = q.front();
+		pEvent = std::move(q.front());
 		q.pop();
 
 		switch (pEvent->mType)
 		{
 		case EEventType::WINDOW_RESIZE_EVENT: 
-#if HANDLE_EVERY_RESIZE_EVENT
-			RenderThread_HandleResizeWindowEvent(pEvent);
-#else
 			// noop, we only care about the last RESIZE event to avoid calling SwapchainResize() unneccessarily
-			pResizeEvent = static_cast<const WindowResizeEvent*>(pEvent);
-#endif
+			pResizeEvent = std::static_pointer_cast<WindowResizeEvent>(pEvent);
+
 			break;
 		case EEventType::TOGGLE_FULLSCREEN_EVENT:
 			// handle every fullscreen event
-			RenderThread_HandleToggleFullscreenEvent(pEvent);
+			RenderThread_HandleToggleFullscreenEvent(pEvent.get());
 			break;
 		}
 	}
-
-#if !HANDLE_EVERY_RESIZE_EVENT
 	// Process Window Resize
 	if (pResizeEvent)
 	{
-		RenderThread_HandleResizeWindowEvent(pResizeEvent);
+		RenderThread_HandleResizeWindowEvent(pResizeEvent.get());
 	}
-#endif
 	
 }
 

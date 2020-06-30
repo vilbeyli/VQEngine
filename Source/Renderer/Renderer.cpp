@@ -393,7 +393,7 @@ void VQRenderer::InitializeResourceHeaps()
 {
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
-	const uint32 UPLOAD_HEAP_SIZE = 1 * GIGABYTE; // TODO: from RendererSettings.ini
+	const uint32 UPLOAD_HEAP_SIZE = 5 * MEGABYTE; // TODO: from RendererSettings.ini
 	mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE);
 }
 

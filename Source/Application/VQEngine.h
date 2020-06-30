@@ -196,7 +196,7 @@ private:
 	// input
 
 	// events
-	BufferedContainer<std::queue<IEvent*>, IEvent*> mWinEventQueue;
+	BufferedContainer<std::queue<std::unique_ptr<IEvent>>, std::unique_ptr<IEvent>> mWinEventQueue;
 
 private:
 	// Reads EngineSettings.ini from next to the executable and returns a 
