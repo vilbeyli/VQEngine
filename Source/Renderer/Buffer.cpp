@@ -24,6 +24,13 @@
 #include <cassert>
 
 
+EVertexBufferType FVertexDefault::TYPE              = EVertexBufferType::DEFAULT;
+EVertexBufferType FVertexWithColor::TYPE            = EVertexBufferType::COLOR;
+EVertexBufferType FVertexWithColorAndAlpha::TYPE    = EVertexBufferType::COLOR_AND_ALPHA;
+EVertexBufferType FVertexWithNormal::TYPE           = EVertexBufferType::NORMAL;
+EVertexBufferType FVertexWithNormalAndTangent::TYPE = EVertexBufferType::NORMAL_AND_TANGENT;
+
+
 size_t StaticBufferPool::MEMORY_ALIGNMENT = 256;
 
 
@@ -116,7 +123,7 @@ void StaticBufferPool::Destroy()
 //
 // ALLOC
 //
-bool StaticBufferPool::AllocBuffer(uint32 numElements, uint32 strideInBytes, void* pInitData, D3D12_GPU_VIRTUAL_ADDRESS* pBufferLocation, uint32* pSizeOut)
+bool StaticBufferPool::AllocBuffer(uint32 numElements, uint32 strideInBytes, const void* pInitData, D3D12_GPU_VIRTUAL_ADDRESS* pBufferLocation, uint32* pSizeOut)
 {
     void* pData;
     if (AllocBuffer(numElements, strideInBytes, &pData, pBufferLocation, pSizeOut))
@@ -127,7 +134,7 @@ bool StaticBufferPool::AllocBuffer(uint32 numElements, uint32 strideInBytes, voi
     return false;
 }
 
-bool StaticBufferPool::AllocVertexBuffer(uint32 numVertices, uint32 strideInBytes, void* pInitData, D3D12_VERTEX_BUFFER_VIEW* pViewOut)
+bool StaticBufferPool::AllocVertexBuffer(uint32 numVertices, uint32 strideInBytes, const void* pInitData, D3D12_VERTEX_BUFFER_VIEW* pViewOut)
 {
     assert(mType == EBufferType::VERTEX_BUFFER);
     void* pData = nullptr;
@@ -140,7 +147,7 @@ bool StaticBufferPool::AllocVertexBuffer(uint32 numVertices, uint32 strideInByte
     return false;
 }
 
-bool StaticBufferPool::AllocIndexBuffer(uint32 numIndices, uint32 strideInBytes, void* pInitData, D3D12_INDEX_BUFFER_VIEW* pOut)
+bool StaticBufferPool::AllocIndexBuffer(uint32 numIndices, uint32 strideInBytes, const void* pInitData, D3D12_INDEX_BUFFER_VIEW* pOut)
 {
     assert(mType == EBufferType::INDEX_BUFFER);
     void* pData = nullptr;

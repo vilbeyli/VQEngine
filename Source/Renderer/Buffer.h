@@ -54,6 +54,60 @@ struct ID3D12Resource;
 struct D3D12_CONSTANT_BUFFER_VIEW_DESC;
 struct ID3D12GraphicsCommandList;
 
+//
+// VERTEX BUFFER DEFINITIONS
+//
+enum EVertexBufferType
+{
+    DEFAULT = 0,
+    COLOR,
+    COLOR_AND_ALPHA,
+    NORMAL,
+    NORMAL_AND_TANGENT,
+
+    NUM_VERTEX_BUFFER_TYPES
+};
+struct FVertexDefault
+{
+    static EVertexBufferType TYPE;
+    float position[3];
+    float uv[2];
+};
+struct FVertexWithColor
+{
+    static EVertexBufferType TYPE;
+    float position[3];
+    float color[3];
+    float uv[2];
+};
+struct FVertexWithColorAndAlpha
+{
+    static EVertexBufferType TYPE;
+    float position[3];
+    float color[4];
+    float uv[2];
+};
+struct FVertexWithNormal
+{
+    static EVertexBufferType TYPE;
+    float position[3];
+    float normal[3];
+    float uv[2];
+};
+struct FVertexWithNormalAndTangent
+{
+    static EVertexBufferType TYPE;
+    float position[3];
+    float normal[3];
+    float tangent[3];
+    float uv[2];
+};
+
+
+
+//
+// BUFFER POOL DEFINITIONS
+//
 enum EBufferType
 {
     VERTEX_BUFFER = 0,
@@ -63,6 +117,15 @@ enum EBufferType
     NUM_BUFFER_TYPES
 };
 
+struct FBufferDesc
+{
+    EBufferType Type;
+    uint        NumElements;
+    uint        Stride;
+    const void* pData;
+    std::string Name;
+};
+
 class StaticBufferPool
 {
     static size_t MEMORY_ALIGNMENT; // TODO: potentially move to renderer settings ini or make a member
@@ -70,18 +133,18 @@ public:
     void Create(ID3D12Device* pDevice, EBufferType type, uint32 totalMemSize, bool bUseVidMem, const char* name);
     void Destroy();
 
-    bool AllocBuffer(uint32 numElements, uint32 strideInBytes, void* pInitData , D3D12_GPU_VIRTUAL_ADDRESS* pBufferLocationOut, uint32* pSizeOut);
-    bool AllocVertexBuffer(uint32 numVertices, uint32 strideInBytes, void* pInitData, D3D12_VERTEX_BUFFER_VIEW* pViewOut);
-    bool AllocIndexBuffer(uint32 numIndices, uint32 strideInBytes, void* pInitData, D3D12_INDEX_BUFFER_VIEW* pOut);
+    bool AllocBuffer      (uint32 numElements, uint32 strideInBytes, const void* pInitData, D3D12_GPU_VIRTUAL_ADDRESS* pBufferLocationOut, uint32* pSizeOut);
+    bool AllocVertexBuffer(uint32 numVertices, uint32 strideInBytes, const void* pInitData, D3D12_VERTEX_BUFFER_VIEW* pViewOut);
+    bool AllocIndexBuffer (uint32 numIndices , uint32 strideInBytes, const void* pInitData, D3D12_INDEX_BUFFER_VIEW* pOut);
     //bool AllocConstantBuffer(uint32 size, void* pData, D3D12_CONSTANT_BUFFER_VIEW_DESC* pViewDesc);
 
     void UploadData(ID3D12GraphicsCommandList* pCmdList);
     //void FreeUploadHeap();
 
 private:
-    bool AllocBuffer(uint32 numElements, uint32 strideInBytes, void** ppDataOut, D3D12_GPU_VIRTUAL_ADDRESS* pBufferLocationOut, uint32* pSizeOut);
+    bool AllocBuffer      (uint32 numElements, uint32 strideInBytes, void** ppDataOut, D3D12_GPU_VIRTUAL_ADDRESS* pBufferLocationOut, uint32* pSizeOut);
     bool AllocVertexBuffer(uint32 numVertices, uint32 strideInBytes, void** ppDataOut, D3D12_VERTEX_BUFFER_VIEW* pViewOut);
-    bool AllocIndexBuffer(uint32 numIndices, uint32 strideInBytes, void** ppDataOut, D3D12_INDEX_BUFFER_VIEW* pIndexView);
+    bool AllocIndexBuffer (uint32 numIndices , uint32 strideInBytes, void** ppDataOut, D3D12_INDEX_BUFFER_VIEW* pIndexView);
     //bool AllocConstantBuffer(uint32 size, void** pData, D3D12_CONSTANT_BUFFER_VIEW_DESC* pViewDesc);
 
 private:

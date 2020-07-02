@@ -240,29 +240,6 @@ void VQEngine::LoadLoadingScreenData()
 }
 
 
-void VQEngine::Load_SceneData_Dispatch()
-{
-	mUpdateWorkerThreads.AddTask([&]() { Sleep(1000); Log::Info("Worker SLEEP done!"); }); // Test-task
-	mUpdateWorkerThreads.AddTask([&]()
-	{
-		// TODO: initialize window scene data here for now, should update this to proper location later on (Scene probably?)
-		FFrameData data[2];
-		data[0].SwapChainClearColor = { 0.07f, 0.07f, 0.07f, 1.0f };
-		data[1].SwapChainClearColor = { 0.20f, 0.21f, 0.21f, 1.0f };
-		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain);
-		const int NumBackBuffer_WndDbg = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinDebug);
-		mScene_MainWnd.mFrameData.resize(NumBackBuffer_WndMain, data[0]);
-		mScene_DebugWnd.mFrameData.resize(NumBackBuffer_WndDbg, data[1]);
-
-		mWindowUpdateContextLookup[mpWinMain->GetHWND()] = &mScene_MainWnd;
-		if(mpWinDebug) mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
-	});
-}
-
-void VQEngine::Load_SceneData_Join()
-{
-}
-
 std::unique_ptr<Window>& VQEngine::GetWindow(HWND hwnd)
 {
 	if (mpWinMain->GetHWND() == hwnd)

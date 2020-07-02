@@ -115,7 +115,7 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 		const FWindowRepresentation& wnd = params.Windows[i];
 		
 
-		FRenderWindowContext ctx = {};
+		FWindowRenderContext ctx = {};
 
 		ctx.pDevice = pVQDevice;
 		ctx.PresentQueue.Create(ctx.pDevice, CommandQueue::ECommandQueueType::GFX); // Create the GFX queue for presenting the SwapChain
@@ -206,8 +206,16 @@ void VQRenderer::Exit()
 
 	mpAllocator->Release();
 
-	mpRootSignature->Release();
-	mpPSO->Release();
+	for (ID3D12RootSignature* pRootSignature : mpBuiltinRootSignatures)
+	{
+		if (pRootSignature) 
+			pRootSignature->Release();
+	}
+	for (ID3D12PipelineState* pPSO : mpBuiltinPSOs)
+	{
+		if (pPSO)
+			pPSO->Release();
+	}
 
 	mGFXQueue.Destroy();
 	mComputeQueue.Destroy();
@@ -219,7 +227,7 @@ void VQRenderer::Exit()
 void VQRenderer::OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h)
 {
 	if (!CheckContext(hwnd)) return;
-	FRenderWindowContext& ctx = mRenderContextLookup.at(hwnd);
+	FWindowRenderContext& ctx = mRenderContextLookup.at(hwnd);
 
 	ctx.MainRTResolutionX = w; // TODO: RenderScale
 	ctx.MainRTResolutionY = h; // TODO: RenderScale
@@ -227,114 +235,76 @@ void VQRenderer::OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h)
 
 SwapChain& VQRenderer::GetWindowSwapChain(HWND hwnd) { return mRenderContextLookup.at(hwnd).SwapChain; }
 
-HRESULT VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
+FWindowRenderContext& VQRenderer::GetWindowRenderContext(HWND hwnd)
 {
-	HRESULT hr = {};
-	if (!CheckContext(hwnd)) return hr;
-
-	FRenderWindowContext& ctx = mRenderContextLookup.at(hwnd);
-
-	const int NUM_BACK_BUFFERS  = ctx.SwapChain.GetNumBackBuffers();
-	const int BACK_BUFFER_INDEX = ctx.SwapChain.GetCurrentBackBufferIndex();
-	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
-	// ----------------------------------------------------------------------------
-
-	//
-	// PRE RENDER
-	//
-	// Command list allocators can only be reset when the associated 
-	// command lists have finished execution on the GPU; apps should use 
-	// fences to determine GPU execution progress.
-	ID3D12CommandAllocator* pCmdAlloc = ctx.mCommandAllocatorsGFX[BACK_BUFFER_INDEX];
-	ThrowIfFailed(pCmdAlloc->Reset());
-
-	// However, when ExecuteCommandList() is called on a particular command 
-	// list, that command list can then be reset at any time and must be before 
-	// re-recording.
-	ID3D12PipelineState* pInitialState = nullptr;
-	ThrowIfFailed(ctx.pCmdList_GFX->Reset(pCmdAlloc, pInitialState));
-
-	//
-	// RENDER
-	//
-	ID3D12GraphicsCommandList* pCmd = ctx.pCmdList_GFX;
-
-	// Transition SwapChain RT
-	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
-	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
-		, D3D12_RESOURCE_STATE_PRESENT
-		, D3D12_RESOURCE_STATE_RENDER_TARGET)
-	);
-
-	// Clear RT
-	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = ctx.SwapChain.GetCurrentBackBufferRTVHandle(); 
-	const float clearColor[] = 
-	{ 
-		FrameData.SwapChainClearColor[0],
-		FrameData.SwapChainClearColor[1],
-		FrameData.SwapChainClearColor[2],
-		FrameData.SwapChainClearColor[3]
-	};
-	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
-
-	// Draw Triangle
-
-	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
-
-	pCmd->SetPipelineState(mpPSO);
-
-	pCmd->SetGraphicsRootSignature(mpRootSignature);
-
-#if 0
-	//pCmd->SetDescriptorHeaps(_countof(), NULL);
-	//pCmd->SetGraphicsRootDescriptorTable(0, g_MainDescriptorHeap[g_FrameIndex]->GetGPUDescriptorHandleForHeapStart()))
-	//pCmd->SetGraphicsRootDescriptorTable(2, g_MainDescriptorHeap[g_FrameIndex]->GetGPUDescriptorHandleForHeapStart()))
-	//pCmd->SetGraphicsRootConstantBufferView(1, )
-#endif
-
-	const float RenderResolutionX = static_cast<float>(ctx.MainRTResolutionX);
-	const float RenderResolutionY = static_cast<float>(ctx.MainRTResolutionY);
-	D3D12_VIEWPORT viewport { 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
-	pCmd->RSSetViewports(1, &viewport);
-
-	D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
-	pCmd->RSSetScissorRects(1, &scissorsRect);
-
-	pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	pCmd->IASetVertexBuffers(0, 1, &mVertexBufferViews[0]);
-	pCmd->IASetIndexBuffer(&mIndexBufferViews[0]);
-
-	pCmd->DrawIndexedInstanced(3, 1, 0, 0, 0);
-
-
-	// Transition SwapChain for Present
-	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
-		, D3D12_RESOURCE_STATE_RENDER_TARGET
-		, D3D12_RESOURCE_STATE_PRESENT)
-	);
-
-	pCmd->Close();
-
-	ID3D12CommandList* ppCommandLists[] = { ctx.pCmdList_GFX };
-	ctx.PresentQueue.pQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
-
-
-	//
-	// PRESENT
-	//
-	hr = ctx.SwapChain.Present(ctx.bVsync);
-
-	ctx.SwapChain.MoveToNextFrame();
-
-	return hr;
+	if (!CheckContext(hwnd))
+	{
+		Log::Error("VQRenderer::GetWindowRenderContext(): Context not found!");
+		//return FWindowRenderContext{};
+	}
+	return mRenderContextLookup.at(hwnd);
 }
+
+BufferID VQRenderer::CreateBuffer(const FBufferDesc& desc)
+{
+	BufferID Id = -1;
+	bool bSuccess = false;
+
+	switch (desc.Type)
+	{
+	case VERTEX_BUFFER:
+	{
+		VBV vbv;
+		bSuccess = mStaticVertexBufferPool.AllocVertexBuffer(desc.NumElements, desc.Stride, desc.pData, &vbv);
+		if (bSuccess)
+		{
+			mVertexBufferViews.push_back(vbv);
+			Id = static_cast<BufferID>(mVertexBufferViews.size() - 1);
+		}
+		else
+			Log::Error("Couldn't allocate vertex buffer");
+		break;
+	}
+	case INDEX_BUFFER: 
+	{
+		IBV ibv;
+		bSuccess = mStaticIndexBufferPool.AllocIndexBuffer(desc.NumElements, desc.Stride, desc.pData, &ibv);
+		if (bSuccess)
+		{
+			mIndexBufferViews.push_back(ibv);
+			Id = static_cast<BufferID>(mIndexBufferViews.size() - 1);
+		}
+		else
+			Log::Error("Couldn't allocate index buffer");
+		break;
+	}
+
+	case CONSTANT_BUFFER : assert(false);/*TODO: implementation*/  break;
+	default              : assert(false); break; // shouldn't happen
+	}
+
+	return Id;
+}
+
+const VBV& VQRenderer::GetVertexBufferView(BufferID Id) const
+{
+	assert(Id < mVertexBufferViews.size() && Id != INVALID_BUFFER_ID);
+	return mVertexBufferViews[Id];
+}
+
+const IBV& VQRenderer::GetIndexBufferView(BufferID Id) const
+{
+	assert(Id < mIndexBufferViews.size() && Id != INVALID_BUFFER_ID);
+	return mIndexBufferViews[Id];
+}
+
 
 short VQRenderer::GetSwapChainBackBufferCountOfWindow(Window* pWnd) const { return pWnd ? this->GetSwapChainBackBufferCountOfWindow(pWnd->GetHWND()) : 0; }
 short VQRenderer::GetSwapChainBackBufferCountOfWindow(HWND hwnd) const
 {
 	if (!CheckContext(hwnd)) return 0;
 
-	const FRenderWindowContext& ctx = mRenderContextLookup.at(hwnd);
+	const FWindowRenderContext& ctx = mRenderContextLookup.at(hwnd);
 	return ctx.SwapChain.GetNumBackBuffers();
 	
 }
@@ -350,7 +320,12 @@ bool VQRenderer::CheckContext(HWND hwnd) const
 	return true;
 }
 
+
 // ================================================================================================================================================
+// ================================================================================================================================================
+// ================================================================================================================================================
+
+
 
 //
 // PRIVATE
@@ -407,111 +382,112 @@ void VQRenderer::LoadPSOs()
 {
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
-	// Create an empty root signature.
+	// HELLO WORLD TRIANGLE PSO
 	{
-		CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
-		rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+		// Create an empty root signature.
+		{
+			CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
+			rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
-		ComPtr<ID3DBlob> signature;
-		ComPtr<ID3DBlob> error;
-		ThrowIfFailed(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
-		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&mpRootSignature)));
-	}
+			ComPtr<ID3DBlob> signature;
+			ComPtr<ID3DBlob> error;
+			ThrowIfFailed(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
+			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&mpBuiltinRootSignatures[EVertexBufferType::COLOR_AND_ALPHA])));
+		}
 
 
-	ComPtr<ID3DBlob> vertexShader;
-	ComPtr<ID3DBlob> pixelShader;
+		ComPtr<ID3DBlob> vertexShader;
+		ComPtr<ID3DBlob> pixelShader;
 
 #if defined(_DEBUG)
-	// Enable better shader debugging with the graphics debugging tools.
-	UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+		// Enable better shader debugging with the graphics debugging tools.
+		UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #else
-	UINT compileFlags = 0;
+		UINT compileFlags = 0;
 #endif
 
 
-	ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"hello-triangle.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr));
-	ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"hello-triangle.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr));
+		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"hello-triangle.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr));
+		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"hello-triangle.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr));
 
-	// Define the vertex input layout.
-	D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
+		// Define the vertex input layout.
+		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
+		{
+			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT   , 0, 0 , D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "COLOR"   , 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT      , 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		};
+
+		// Describe and create the graphics pipeline state object (PSO).
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+		psoDesc.pRootSignature = mpBuiltinRootSignatures[EVertexBufferType::COLOR_AND_ALPHA];
+		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
+		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
+		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+		psoDesc.DepthStencilState.DepthEnable = FALSE;
+		psoDesc.DepthStencilState.StencilEnable = FALSE;
+		psoDesc.SampleMask = UINT_MAX;
+		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		psoDesc.NumRenderTargets = 1;
+		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		psoDesc.SampleDesc.Count = 1;
+		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO])));
+	}
+
+
+	// FULLSCREEN TIRANGLE PSO
 	{
-		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT   , 0, 0 , D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "COLOR"   , 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-	};
+		// Create an empty root signature.
+		{
+			CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
+			rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
-	// Describe and create the graphics pipeline state object (PSO).
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-	psoDesc.InputLayout    = { inputElementDescs, _countof(inputElementDescs) };
-	psoDesc.pRootSignature = mpRootSignature;
-	psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
-	psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
-	psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-	psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-	psoDesc.DepthStencilState.DepthEnable = FALSE;
-	psoDesc.DepthStencilState.StencilEnable = FALSE;
-	psoDesc.SampleMask = UINT_MAX;
-	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	psoDesc.NumRenderTargets = 1;
-	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-	psoDesc.SampleDesc.Count = 1;
-	ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpPSO)));
+			ComPtr<ID3DBlob> signature;
+			ComPtr<ID3DBlob> error;
+			ThrowIfFailed(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
+			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&mpBuiltinRootSignatures[EVertexBufferType::DEFAULT])));
+		}
 
 
+		ComPtr<ID3DBlob> vertexShader;
+		ComPtr<ID3DBlob> pixelShader;
+
+#if defined(_DEBUG)
+		// Enable better shader debugging with the graphics debugging tools.
+		UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+		UINT compileFlags = 0;
+#endif
+
+
+		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"FullscreenTriangle.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr));
+		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"FullscreenTriangle.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr));
+
+
+		// Describe and create the graphics pipeline state object (PSO).
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.InputLayout = { };
+		psoDesc.pRootSignature = mpBuiltinRootSignatures[EVertexBufferType::DEFAULT];
+		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
+		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
+		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+		psoDesc.DepthStencilState.DepthEnable = FALSE;
+		psoDesc.DepthStencilState.StencilEnable = FALSE;
+		psoDesc.SampleMask = UINT_MAX;
+		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		psoDesc.NumRenderTargets = 1;
+		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		psoDesc.SampleDesc.Count = 1;
+		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::LOADING_SCREEN_PSO])));
+	}
 }
 
 void VQRenderer::LoadDefaultResources()
 {
-	ID3D12Device* pDevice = mDevice.GetDevicePtr();
-
-	// Create the vertex buffer.
-	{
-		struct Vertex
-		{
-			float position[3];
-			float color[4];
-		};
-		constexpr float ASPECT_RATIO = 16.f / 9.f;
-		// Define the geometry for a triangle.
-		Vertex triangleVertices[] =
-		{
-			{ {  0.00f,  0.25f * ASPECT_RATIO, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
-			{ {  0.25f, -0.25f * ASPECT_RATIO, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
-			{ { -0.25f, -0.25f * ASPECT_RATIO, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
-		};
-
-		const UINT vertexBufferSize = sizeof(triangleVertices);
-		const UINT numVerts = vertexBufferSize / sizeof(Vertex);
-
-		// allocate mem
-		VBV vertBufView;
-		bool bAllocSuccess = mStaticVertexBufferPool.AllocVertexBuffer(numVerts, sizeof(Vertex), triangleVertices, &vertBufView);
-		if (bAllocSuccess)
-		{
-			mVertexBufferViews.push_back(vertBufView);
-		}
-		else
-		{
-			Log::Error("Couldn't allocate vertex buffer");
-		}
-	}
-
-	// Create the index buffer
-	{
-		UINT indices[] = { 0, 1, 2 };
-
-		IBV indexBufView;
-		bool bAllocSuccess = mStaticIndexBufferPool.AllocIndexBuffer(_countof(indices), sizeof(UINT), indices, &indexBufView);
-		if (bAllocSuccess)
-		{
-			mIndexBufferViews.push_back(indexBufView);
-		}
-		else
-		{
-			Log::Error("Couldn't allocate vertex buffer");
-}
-	}
-
 	mStaticVertexBufferPool.UploadData(mHeapUpload.GetCommandList());
 	mStaticIndexBufferPool.UploadData(mHeapUpload.GetCommandList());
 }

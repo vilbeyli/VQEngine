@@ -29,6 +29,11 @@ set (Config
     "Data/EngineSettings.ini"
 )
 
+set (Shaders
+    "Source/Shaders/hello-triangle.hlsl"
+    "Source/Shaders/FullscreenTriangle.hlsl"
+)
+
 set (HeaderVQE 
     "Source/Application/Platform.h"
     "Source/Application/Window.h"
@@ -36,6 +41,8 @@ set (HeaderVQE
     "Source/Application/Types.h"
     "Source/Application/VQEngine.h"
     "Source/Application/Events.h"
+    "Source/Application/Mesh.h"
+    "Source/Application/Geometry.h"
 )
 
 set (SourceVQE 
@@ -47,9 +54,12 @@ set (SourceVQE
     "Source/Application/VQEngine_Update.cpp"
     "Source/Application/VQEngine_WindowEvents.cpp"
     "Source/Application/Events.cpp"
+    "Source/Application/Mesh.cpp"
+    "Source/Application/Geometry.cpp"
 )
 
 add_link_options(/SUBSYSTEM:WINDOWS)
+
 
 add_subdirectory(Libs/VQUtils)
 add_subdirectory(Libs/D3D12MA)
@@ -58,17 +68,21 @@ add_subdirectory(Source/Renderer)
 source_group("Config"   FILES ${Config})
 source_group("Resource" FILES ${Resource})
 source_group("Icons"    FILES ${Icons})
+source_group("Shaders"  FILES ${Shaders})
 
 set_source_files_properties(${Config} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(Data/Resources/VQE.rc PROPERTIES VS_TOOL_OVERRIDE "Resource compiler")
 set_source_files_properties(Data/Icons/VQE32.ico  PROPERTIES VS_TOOL_OVERRIDE "Image")
 
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/VQUtils/Bin/)
 
 # Create a library with the project name that is build with the Headers and Source files
-add_executable( ${PROJECT_NAME} ${HeaderVQE} ${SourceVQE} ${Config} ${Resource} )
+add_executable( ${PROJECT_NAME} ${HeaderVQE} ${SourceVQE} ${Config} ${Resource} ${Shaders} )
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY}/Bin/ )
+
+set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 17)
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Data ${CMAKE_SOURCE_DIR}/Bin/Data)
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Source/Shaders ${CMAKE_SOURCE_DIR}/Bin/Shaders)

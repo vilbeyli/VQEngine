@@ -23,6 +23,7 @@
 #include "Window.h"
 #include "Settings.h"
 #include "Events.h"
+#include "Mesh.h"
 
 #include "Libs/VQUtils/Source/Multithreading.h"
 #include "Source/Renderer/Renderer.h"
@@ -114,12 +115,12 @@ public:
 	// - Submits commands to the GPU
 	// - Presents SwapChain
 	void RenderThread_Render();
+	void RenderThread_RenderMainWindow();
+	void RenderThread_RenderDebugWindow();
 
 
 	// Processes the event queue populated by the VQEngine_Main.cpp thread
 	void RenderThread_HandleEvents();
-	void RenderThread_HandleResizeWindowEvent(const IEvent* pEvent);
-	void RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent);
 
 	// ---------------------------------------------------------
 	// Update Thread
@@ -149,12 +150,20 @@ public:
 private:
 	void InititalizeEngineSettings(const FStartupParameters& Params);
 	void InitializeApplicationWindows(const FStartupParameters& Params);
+
 	void InitializeThreads();
 	void ExitThreads();
 
+	void InitializeBuiltinMeshes();
 	void LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete
 	void Load_SceneData_Dispatch();
 	void Load_SceneData_Join();
+
+	HRESULT RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderContext& ctx);
+	HRESULT RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx);
+
+	void RenderThread_HandleResizeWindowEvent(const IEvent* pEvent);
+	void RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent);
 
 	std::unique_ptr<Window>& GetWindow(HWND hwnd);
 	const FWindowSettings& GetWindowSettings(HWND hwnd) const;
@@ -177,7 +186,9 @@ private:
 	std::unique_ptr<Window>   mpWinDebug;
 
 	// render
-	VQRenderer                mRenderer;
+	VQRenderer mRenderer;
+	std::array<Mesh       , EBuiltInMeshes::NUM_BUILTIN_MESHES> mBuiltinMeshes;
+	std::array<std::string, EBuiltInMeshes::NUM_BUILTIN_MESHES> mBuiltinMeshNames;
 
 	// data / state
 	std::atomic<bool>         mbRenderThreadInitialized;

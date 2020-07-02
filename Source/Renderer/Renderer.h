@@ -38,7 +38,18 @@
 
 namespace D3D12MA { class Allocator; }
 class Window;
+struct ID3D12RootSignature;
+struct ID3D12PipelineState;
 
+using BufferID = int;
+#define INVALID_BUFFER_ID  -1
+
+using VBV = D3D12_VERTEX_BUFFER_VIEW;
+using IBV = D3D12_INDEX_BUFFER_VIEW;
+
+//
+// TYPE DEFINITIONS
+//
 // Data to be updated per frame
 struct FFrameData
 {
@@ -57,29 +68,77 @@ struct FRendererInitializeParameters
 	FGraphicsSettings                  Settings;
 };
 
+// Encapsulates the swapchain and window association.
+// Each SwapChain is:
+// - associated with a Window (HWND)
+// - associated with a Graphics Queue for Present()
+// - created with a Device
+struct FWindowRenderContext
+{
+	Device* pDevice = nullptr;
+	SwapChain    SwapChain;
+	CommandQueue PresentQueue;
 
 
-struct ID3D12RootSignature;
-struct ID3D12PipelineState;
+	// 1x allocator per command-recording-thread, multiplied by num swapchain backbuffers
+	// Source: https://gpuopen.com/performance/
+	std::vector<ID3D12CommandAllocator*> mCommandAllocatorsGFX;
+	std::vector<ID3D12CommandAllocator*> mCommandAllocatorsCompute;
+	std::vector<ID3D12CommandAllocator*> mCommandAllocatorsCopy;
 
+
+	ID3D12GraphicsCommandList* pCmdList_GFX = nullptr;
+
+	bool bVsync = false;
+
+	int MainRTResolutionX = -1;
+	int MainRTResolutionY = -1;
+
+	HRESULT(*pfnRenderFrame)(FWindowRenderContext&) = nullptr; // each window can assign their own Render function
+};
+
+enum EBuiltinPSOs
+{
+	HELLO_WORLD_TRIANGLE_PSO = 0,
+	LOADING_SCREEN_PSO,
+
+	NUM_BUILTIN_PSOs
+};
+
+
+
+//
+// RENDERER
+//
 class VQRenderer
 {
 public:
 	static std::vector< VQSystemInfo::FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters = false);
 
 public:
-	void Initialize(const FRendererInitializeParameters& RendererInitParams);
-	void Load();
-	HRESULT RenderWindowContext(HWND hwnd, const FFrameData& FrameData);
-	void Unload();
-	void Exit();
+	void                         Initialize(const FRendererInitializeParameters& RendererInitParams);
+	void                         Load();
+	void                         Unload();
+	void                         Exit();
 
-	void OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h);
+	void                         OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h);
 
-	inline short GetSwapChainBackBufferCountOfWindow(std::unique_ptr<Window>& pWnd) const { return GetSwapChainBackBufferCountOfWindow(pWnd.get()); };
-	short        GetSwapChainBackBufferCountOfWindow(Window* pWnd) const;
-	short        GetSwapChainBackBufferCountOfWindow(HWND hwnd) const;
-	SwapChain&   GetWindowSwapChain(HWND hwnd);
+	// Swapchain-interface
+	inline short                 GetSwapChainBackBufferCountOfWindow(std::unique_ptr<Window>& pWnd) const { return GetSwapChainBackBufferCountOfWindow(pWnd.get()); };
+	short                        GetSwapChainBackBufferCountOfWindow(Window* pWnd) const;
+	short                        GetSwapChainBackBufferCountOfWindow(HWND hwnd) const;
+	SwapChain&                   GetWindowSwapChain(HWND hwnd);
+	FWindowRenderContext&        GetWindowRenderContext(HWND hwnd);
+
+	// Resource management
+	BufferID                     CreateBuffer(const FBufferDesc& desc);
+
+	// Getters
+	const VBV&                   GetVertexBufferView(BufferID Id) const;
+	const IBV&                   GetIndexBufferView(BufferID Id) const;
+	inline ID3D12PipelineState*  GetPSO(EBuiltinPSOs pso) const { return mpBuiltinPSOs[pso]; }
+	inline ID3D12RootSignature*  GetRootSignature(EVertexBufferType vbType) const { return mpBuiltinRootSignatures[vbType]; }
+
 
 private:
 	void InitializeD3D12MA();
@@ -90,34 +149,7 @@ private:
 
 	bool CheckContext(HWND hwnd) const;
 
-private:
-	// RenderWindowContext struct encapsulates the swapchain and window association
-	// - Each SwapChain is associated with a Window (HWND)
-	// - Each SwapChain is associated with a Graphics Queue for Present()
-	// - Each SwapChain is created with a Device
-	struct FRenderWindowContext
-	{
-		Device*      pDevice = nullptr;
-		SwapChain    SwapChain;
-		CommandQueue PresentQueue;
 
-
-		// 1x allocator per command-recording-thread, multiplied by num swapchain backbuffers
-		// Source: https://gpuopen.com/performance/
-		std::vector<ID3D12CommandAllocator*> mCommandAllocatorsGFX;
-		std::vector<ID3D12CommandAllocator*> mCommandAllocatorsCompute;
-		std::vector<ID3D12CommandAllocator*> mCommandAllocatorsCopy;
-
-
-		ID3D12GraphicsCommandList* pCmdList_GFX = nullptr;
-
-		bool bVsync = false;
-
-		int MainRTResolutionX;
-		int MainRTResolutionY;
-	};
-	using VBV = D3D12_VERTEX_BUFFER_VIEW;
-	using IBV = D3D12_INDEX_BUFFER_VIEW;
 
 private:
 	// GPU
@@ -137,15 +169,25 @@ private:
 	StaticBufferPool mStaticVertexBufferPool;
 	StaticBufferPool mStaticIndexBufferPool;
 
-	// resources
+	// buffers
 	std::vector<VBV> mVertexBufferViews;
 	std::vector<IBV> mIndexBufferViews;
 
+	// textures
+	// todo
+
+	// render targets
+	// todo
+
+	// root signatures
+	std::array<ID3D12RootSignature*, EVertexBufferType::NUM_VERTEX_BUFFER_TYPES> mpBuiltinRootSignatures;
+
 	// PSOs
-	ID3D12RootSignature* mpRootSignature = nullptr;
-	ID3D12PipelineState* mpPSO           = nullptr;
+	std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs> mpBuiltinPSOs;
+
+
 
 	// data
-	std::unordered_map<HWND, FRenderWindowContext> mRenderContextLookup;
+	std::unordered_map<HWND, FWindowRenderContext> mRenderContextLookup;
 
 };
