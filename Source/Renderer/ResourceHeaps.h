@@ -43,6 +43,17 @@
 
 #include <d3d12.h>
 
+
+enum EResourceHeapType
+{
+    RTV_HEAP = 0,
+    DSV_HEAP,
+    CBV_SRV_UAV_HEAP,
+    SAMPLER_HEAP,
+
+    NUM_HEAP_TYPES
+};
+
 class ResourceView
 {
 public:
@@ -79,7 +90,7 @@ public:
     bool AllocDescriptor(uint32 size, ResourceView* pRV);
     
 
-    ID3D12DescriptorHeap *GetHeap() { return mpHeap; }
+    inline ID3D12DescriptorHeap* GetHeap() { return mpHeap; }
 
 private:
     uint32 mIndex;
@@ -105,17 +116,17 @@ public:
     void UploadToGPUAndWait(ID3D12CommandQueue* pCmdQueue);
 
 private:
-    ID3D12Device*   mpDevice     = nullptr;
-    ID3D12Resource* mpUploadHeap = nullptr;
+    ID3D12Device*              mpDevice     = nullptr;
+    ID3D12Resource*            mpUploadHeap = nullptr;
 
     ID3D12GraphicsCommandList* mpCommandList      = nullptr;
     ID3D12CommandAllocator*    mpCommandAllocator = nullptr;
 
-    UINT8* mpDataCur   = nullptr;
-    UINT8* mpDataEnd   = nullptr; 
-    UINT8* mpDataBegin = nullptr;
+    UINT8*                     mpDataCur   = nullptr;
+    UINT8*                     mpDataEnd   = nullptr; 
+    UINT8*                     mpDataBegin = nullptr;
 
-    ID3D12Fence* mpFence = nullptr;
-    UINT64       mFenceValue = 0;
-    HANDLE       mHEvent;
+    ID3D12Fence*               mpFence = nullptr;
+    UINT64                     mFenceValue = 0;
+    HANDLE                     mHEvent;
 };

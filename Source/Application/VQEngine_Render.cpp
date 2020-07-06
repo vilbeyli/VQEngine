@@ -352,47 +352,40 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
 	// Draw Triangle
+	const float           RenderResolutionX = static_cast<float>(ctx.MainRTResolutionX);
+	const float           RenderResolutionY = static_cast<float>(ctx.MainRTResolutionY);
+	D3D12_VIEWPORT        viewport          { 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
+	const auto            VBIBIDs           = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE].GetIABuffers();
+	const BufferID&       IB_ID             = VBIBIDs.second;
+	const IBV&            ib                = mRenderer.GetIndexBufferView(IB_ID);
+	ID3D12DescriptorHeap* ppHeaps[]         = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
+	D3D12_RECT            scissorsRect      { 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
 
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
 
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::LOADING_SCREEN_PSO));
 	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(EVertexBufferType::DEFAULT));
 
-	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.mHeapCBV_SRV_UAV.GetHeap() };
 	pCmd->SetDescriptorHeaps(1, ppHeaps);
-	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.mSRVs[0].GetGPUDescHandle(0));
-
+	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetShaderResourceView(0).GetGPUDescHandle(0));
 #if 0
 	//pCmd->SetGraphicsRootDescriptorTable(2, g_MainDescriptorHeap[g_FrameIndex]->GetGPUDescriptorHandleForHeapStart()))
 	//pCmd->SetGraphicsRootConstantBufferView(1, )
 #endif
 
-	const float RenderResolutionX = static_cast<float>(ctx.MainRTResolutionX);
-	const float RenderResolutionY = static_cast<float>(ctx.MainRTResolutionY);
-	D3D12_VIEWPORT viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
 	pCmd->RSSetViewports(1, &viewport);
-
-	D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
 	pCmd->RSSetScissorRects(1, &scissorsRect);
 
-	const auto VBIBIDs = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE].GetIABuffers();
-	const BufferID& VB_ID = VBIBIDs.first;
-	const BufferID& IB_ID = VBIBIDs.second;
-	const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
-	const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
-
 	pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	pCmd->IASetVertexBuffers(0, 1, &vb);
+	pCmd->IASetVertexBuffers(0, 1, NULL);
 	pCmd->IASetIndexBuffer(&ib);
 
 	pCmd->DrawIndexedInstanced(3, 1, 0, 0, 0);
 
-
-	// Transition SwapChain for Present
 	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
 		, D3D12_RESOURCE_STATE_RENDER_TARGET
 		, D3D12_RESOURCE_STATE_PRESENT)
-	);
+	); // Transition SwapChain for Present
 
 	pCmd->Close();
 

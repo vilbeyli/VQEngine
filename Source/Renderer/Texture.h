@@ -51,7 +51,7 @@ public:
 
 	void Destroy();
 
-	void CreateSRV(size_t index, CBV_SRV_UAV* pRV, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc = nullptr);
+	void CreateSRV(uint32 index, CBV_SRV_UAV* pRV, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc = nullptr);
 
 public:
 

@@ -294,16 +294,20 @@ BufferID VQRenderer::CreateBuffer(const FBufferDesc& desc)
 
 const VBV& VQRenderer::GetVertexBufferView(BufferID Id) const
 {
-	assert(Id < mVertexBufferViews.size() && Id != INVALID_BUFFER_ID);
+	assert(Id < mVertexBufferViews.size() && Id != INVALID_ID);
 	return mVertexBufferViews[Id];
 }
 
 const IBV& VQRenderer::GetIndexBufferView(BufferID Id) const
 {
-	assert(Id < mIndexBufferViews.size() && Id != INVALID_BUFFER_ID);
+	assert(Id < mIndexBufferViews.size() && Id != INVALID_ID);
 	return mIndexBufferViews[Id];
 }
-
+const CBV_SRV_UAV& VQRenderer::GetShaderResourceView(SRV_ID Id) const
+{
+	assert(Id < mSRVs.size() && Id != INVALID_ID);
+	return mSRVs[Id];
+}
 
 short VQRenderer::GetSwapChainBackBufferCountOfWindow(Window* pWnd) const { return pWnd ? this->GetSwapChainBackBufferCountOfWindow(pWnd->GetHWND()) : 0; }
 short VQRenderer::GetSwapChainBackBufferCountOfWindow(HWND hwnd) const
@@ -581,6 +585,18 @@ void VQRenderer::LoadDefaultResources()
 }
 
 
+ID3D12DescriptorHeap* VQRenderer::GetDescHeap(EResourceHeapType HeapType)
+{
+	ID3D12DescriptorHeap* pHeap = nullptr;
+	switch (HeapType)
+	{
+	case RTV_HEAP:          pHeap = mHeapRTV.GetHeap(); break;
+	case DSV_HEAP:          pHeap = mHeapDSV.GetHeap(); break;
+	case CBV_SRV_UAV_HEAP:  pHeap = mHeapCBV_SRV_UAV.GetHeap(); break;
+	case SAMPLER_HEAP:      pHeap = mHeapSampler.GetHeap(); break;
+	}
+	return pHeap;
+}
 
 
 

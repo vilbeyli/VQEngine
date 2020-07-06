@@ -43,7 +43,13 @@ struct ID3D12RootSignature;
 struct ID3D12PipelineState;
 
 using BufferID = int;
-#define INVALID_BUFFER_ID  -1
+using TextureID = int;
+using SRV_ID = int;
+using UAV_ID = int;
+using CBV_ID = int;
+using RTV_ID = int;
+using DSV_ID = int;
+#define INVALID_ID  -1
 
 using VBV = D3D12_VERTEX_BUFFER_VIEW;
 using IBV = D3D12_INDEX_BUFFER_VIEW;
@@ -105,7 +111,6 @@ enum EBuiltinPSOs
 };
 
 
-
 //
 // RENDERER
 //
@@ -133,11 +138,14 @@ public:
 	BufferID                     CreateBuffer(const FBufferDesc& desc);
 
 	// Getters
-	const VBV&                   GetVertexBufferView(BufferID Id) const;
-	const IBV&                   GetIndexBufferView(BufferID Id) const;
 	inline ID3D12PipelineState*  GetPSO(EBuiltinPSOs pso) const { return mpBuiltinPSOs[pso]; }
 	inline ID3D12RootSignature*  GetRootSignature(EVertexBufferType vbType) const { return mpBuiltinRootSignatures[vbType]; }
-
+	ID3D12DescriptorHeap*        GetDescHeap(EResourceHeapType HeapType);
+	const VBV&                   GetVertexBufferView(BufferID Id) const;
+	const IBV&                   GetIndexBufferView(BufferID Id) const;
+	const CBV_SRV_UAV&           GetShaderResourceView(SRV_ID Id) const;
+	const CBV_SRV_UAV&           GetUnorderedAccessView(UAV_ID Id) const;
+	const CBV_SRV_UAV&           GetConstantBufferView(CBV_ID Id) const;
 
 private:
 	void InitializeD3D12MA();
@@ -147,8 +155,6 @@ private:
 	void LoadDefaultResources();
 
 	bool CheckContext(HWND hwnd) const;
-
-	friend class VQEngine; // TODO: remove
 
 private:
 	using RootSignatureArray_t = std::array<ID3D12RootSignature*, EVertexBufferType::NUM_VERTEX_BUFFER_TYPES>;
@@ -168,24 +174,18 @@ private:
 	StaticResourceViewHeap   mHeapSampler;
 	UploadHeap               mHeapUpload;
 
+	// resources
 	StaticBufferPool         mStaticVertexBufferPool;
 	StaticBufferPool         mStaticIndexBufferPool;
+	std::vector<Texture>     mTextures;
 
 	// resource views
 	std::vector<VBV>         mVertexBufferViews;
 	std::vector<IBV>         mIndexBufferViews;
 	std::vector<CBV_SRV_UAV> mCBVs;
-
 	std::vector<CBV_SRV_UAV> mSRVs;
 	std::vector<CBV_SRV_UAV> mUAVs;
 	std::vector<RTV>         mRTVs;
-
-	// textures
-	std::vector<Texture>     mTextures;
-
-	// render targets
-
-	// depth targets
 
 	// root signatures
 	RootSignatureArray_t     mpBuiltinRootSignatures;

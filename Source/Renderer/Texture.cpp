@@ -250,7 +250,7 @@ bool Texture::InitFromData(Device* pDevice, const char* pDebugName, UploadHeap& 
 
 
 
-void Texture::CreateSRV(size_t index, CBV_SRV_UAV* pRV, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc)
+void Texture::CreateSRV(uint32 index, CBV_SRV_UAV* pRV, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc)
 {
     ID3D12Device* pDevice;
     mpTexture->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice));
