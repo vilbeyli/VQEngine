@@ -358,9 +358,11 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::LOADING_SCREEN_PSO));
 	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(EVertexBufferType::DEFAULT));
 
+	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.mHeapCBV_SRV_UAV.GetHeap() };
+	pCmd->SetDescriptorHeaps(1, ppHeaps);
+	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.mSRVs[0].GetGPUDescHandle(0));
+
 #if 0
-	//pCmd->SetDescriptorHeaps(_countof(), NULL);
-	//pCmd->SetGraphicsRootDescriptorTable(0, g_MainDescriptorHeap[g_FrameIndex]->GetGPUDescriptorHandleForHeapStart()))
 	//pCmd->SetGraphicsRootDescriptorTable(2, g_MainDescriptorHeap[g_FrameIndex]->GetGPUDescriptorHandleForHeapStart()))
 	//pCmd->SetGraphicsRootConstantBufferView(1, )
 #endif

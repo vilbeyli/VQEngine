@@ -16,12 +16,14 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
+Texture2D texSrc;
+SamplerState Sampler;
+
 struct PSInput
 {
     float4 position : SV_POSITION;
 	float2 uv       : TEXCOORD0;
 };
-
 
 PSInput VSMain(uint id : SV_VertexID)
 {
@@ -44,6 +46,5 @@ PSInput VSMain(uint id : SV_VertexID)
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	// TODO: read texture
-	return float4(0, 1, 0, 1);
+	return float4(texSrc.SampleLevel(Sampler, input.uv, 0).rgb, 1);
 }

@@ -23,6 +23,7 @@
 #include "CommandQueue.h"
 #include "ResourceHeaps.h"
 #include "Buffer.h"
+#include "Texture.h"
 
 #include "../Application/Platform.h"
 #include "../Application/Settings.h"
@@ -93,8 +94,6 @@ struct FWindowRenderContext
 
 	int MainRTResolutionX = -1;
 	int MainRTResolutionY = -1;
-
-	HRESULT(*pfnRenderFrame)(FWindowRenderContext&) = nullptr; // each window can assign their own Render function
 };
 
 enum EBuiltinPSOs
@@ -149,41 +148,50 @@ private:
 
 	bool CheckContext(HWND hwnd) const;
 
-
+	friend class VQEngine; // TODO: remove
 
 private:
+	using RootSignatureArray_t = std::array<ID3D12RootSignature*, EVertexBufferType::NUM_VERTEX_BUFFER_TYPES>;
+	using PSOArray_t           = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
+
 	// GPU
-	Device mDevice; 
-	CommandQueue mGFXQueue;
-	CommandQueue mComputeQueue;
-	CommandQueue mCopyQueue;
+	Device                   mDevice; 
+	CommandQueue             mGFXQueue;
+	CommandQueue             mComputeQueue;
+	CommandQueue             mCopyQueue;
 
 	// memory
-	D3D12MA::Allocator* mpAllocator;
-	StaticResourceViewHeap mHeapRTV;
-	StaticResourceViewHeap mHeapDSV;
-	StaticResourceViewHeap mHeapCBV_SRV_UAV;
-	StaticResourceViewHeap mHeapSampler;
-	UploadHeap             mHeapUpload;
+	D3D12MA::Allocator*      mpAllocator;
+	StaticResourceViewHeap   mHeapRTV;
+	StaticResourceViewHeap   mHeapDSV;
+	StaticResourceViewHeap   mHeapCBV_SRV_UAV;
+	StaticResourceViewHeap   mHeapSampler;
+	UploadHeap               mHeapUpload;
 
-	StaticBufferPool mStaticVertexBufferPool;
-	StaticBufferPool mStaticIndexBufferPool;
+	StaticBufferPool         mStaticVertexBufferPool;
+	StaticBufferPool         mStaticIndexBufferPool;
 
-	// buffers
-	std::vector<VBV> mVertexBufferViews;
-	std::vector<IBV> mIndexBufferViews;
+	// resource views
+	std::vector<VBV>         mVertexBufferViews;
+	std::vector<IBV>         mIndexBufferViews;
+	std::vector<CBV_SRV_UAV> mCBVs;
+
+	std::vector<CBV_SRV_UAV> mSRVs;
+	std::vector<CBV_SRV_UAV> mUAVs;
+	std::vector<RTV>         mRTVs;
 
 	// textures
-	// todo
+	std::vector<Texture>     mTextures;
 
 	// render targets
-	// todo
+
+	// depth targets
 
 	// root signatures
-	std::array<ID3D12RootSignature*, EVertexBufferType::NUM_VERTEX_BUFFER_TYPES> mpBuiltinRootSignatures;
+	RootSignatureArray_t     mpBuiltinRootSignatures;
 
 	// PSOs
-	std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs> mpBuiltinPSOs;
+	PSOArray_t               mpBuiltinPSOs;
 
 
 

@@ -15,6 +15,7 @@ set (Headers
     "ResourceHeaps.h"
     "Buffer.h"
     "Common.h"
+    "Texture.h"
 )
 
 set (Source
@@ -25,6 +26,7 @@ set (Source
     "Fence.cpp"
     "ResourceHeaps.cpp"
     "Buffer.cpp"
+    "Texture.cpp"
 )
 
 # set ouput directory

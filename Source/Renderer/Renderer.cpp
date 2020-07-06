@@ -18,6 +18,7 @@
 
 #include "Renderer.h"
 #include "Device.h"
+#include "Texture.h"
 
 #include "../Application/Window.h"
 
@@ -201,9 +202,13 @@ void VQRenderer::Exit()
 	}
 
 	mHeapUpload.Destroy();
+	mHeapCBV_SRV_UAV.Destroy();
 	mStaticVertexBufferPool.Destroy();
 	mStaticIndexBufferPool.Destroy();
-
+	for (Texture& tex : mTextures)
+	{
+		tex.Destroy();
+	}
 	mpAllocator->Release();
 
 	for (ID3D12RootSignature* pRootSignature : mpBuiltinRootSignatures)
@@ -216,6 +221,7 @@ void VQRenderer::Exit()
 		if (pPSO)
 			pPSO->Release();
 	}
+
 
 	mGFXQueue.Destroy();
 	mComputeQueue.Destroy();
@@ -370,6 +376,12 @@ void VQRenderer::InitializeResourceHeaps()
 
 	const uint32 UPLOAD_HEAP_SIZE = 5 * MEGABYTE; // TODO: from RendererSettings.ini
 	mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE);
+
+	constexpr uint32 NumDescsCBV = 10;
+	constexpr uint32 NumDescsSRV = 10;
+	constexpr uint32 NumDescsUAV = 10;
+	constexpr bool   bCPUVisible = false;
+	mHeapCBV_SRV_UAV.Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, NumDescsCBV + NumDescsSRV + NumDescsUAV, bCPUVisible);
 }
 
 static std::wstring GetAssetFullPath(LPCWSTR assetName)
@@ -441,12 +453,43 @@ void VQRenderer::LoadPSOs()
 	{
 		// Create an empty root signature.
 		{
-			CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
-			rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+			D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
+
+			// This is the highest version the sample supports. If CheckFeatureSupport succeeds, the HighestVersion returned will not be greater than this.
+			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
+
+			if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
+			{
+				featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+			}
+
+			CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
+			ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+
+			CD3DX12_ROOT_PARAMETER1 rootParameters[1];
+			rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
+
+			D3D12_STATIC_SAMPLER_DESC sampler = {};
+			sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+			sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+			sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+			sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+			sampler.MipLODBias = 0;
+			sampler.MaxAnisotropy = 0;
+			sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+			sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+			sampler.MinLOD = 0.0f;
+			sampler.MaxLOD = D3D12_FLOAT32_MAX;
+			sampler.ShaderRegister = 0;
+			sampler.RegisterSpace = 0;
+			sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+			CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+			rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 			ComPtr<ID3DBlob> signature;
 			ComPtr<ID3DBlob> error;
-			ThrowIfFailed(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
+			ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
 			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&mpBuiltinRootSignatures[EVertexBufferType::DEFAULT])));
 		}
 
@@ -488,6 +531,51 @@ void VQRenderer::LoadPSOs()
 
 void VQRenderer::LoadDefaultResources()
 {
+	ID3D12Device* pDevice = mDevice.GetDevicePtr();
+
+	const UINT sizeX = 1024;
+	const UINT sizeY = 1024;
+
+	constexpr DXGI_FORMAT format    = DXGI_FORMAT_R8G8B8A8_UNORM;
+	constexpr UINT TexturePixelSize = 4; // RGBA8 -> 32-bits = 4 bytes
+	std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX);
+
+	TextureDesc tDesc = {};
+	tDesc.pDevice = pDevice;
+	tDesc.pAllocator = mpAllocator;
+	tDesc.pUploadHeap = &mHeapUpload;
+	D3D12_RESOURCE_DESC& textureDesc = tDesc.Desc;
+	size_t imageBytesPerRow;
+	size_t imageSize = SIZE_MAX;
+	{
+		const UINT bytesPerPixel = 4;
+
+		imageBytesPerRow = sizeX * bytesPerPixel;
+		imageSize = sizeY * imageBytesPerRow;
+
+		textureDesc = {};
+		textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+		textureDesc.Alignment = 0;
+		textureDesc.Width = sizeX;
+		textureDesc.Height = sizeY;
+		textureDesc.DepthOrArraySize = 1;
+		textureDesc.MipLevels = 1;
+		textureDesc.Format = format;
+		textureDesc.SampleDesc.Count = 1;
+		textureDesc.SampleDesc.Quality = 0;
+		textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+		textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	}
+
+	Texture tex;
+	tex.CreateFromData(tDesc, texture.data());
+	mTextures.push_back(tex);
+
+	CBV_SRV_UAV SRV = {};
+	mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
+	tex.CreateSRV(0, &SRV);
+	mSRVs.push_back(SRV);
+
 	mStaticVertexBufferPool.UploadData(mHeapUpload.GetCommandList());
 	mStaticIndexBufferPool.UploadData(mHeapUpload.GetCommandList());
 }
