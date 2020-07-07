@@ -367,7 +367,8 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(EVertexBufferType::DEFAULT));
 
 	pCmd->SetDescriptorHeaps(1, ppHeaps);
-	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetShaderResourceView(0).GetGPUDescHandle(0));
+	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetShaderResourceView(1).GetGPUDescHandle());
+
 #if 0
 	//pCmd->SetGraphicsRootDescriptorTable(2, g_MainDescriptorHeap[g_FrameIndex]->GetGPUDescriptorHandleForHeapStart()))
 	//pCmd->SetGraphicsRootConstantBufferView(1, )

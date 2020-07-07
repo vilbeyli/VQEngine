@@ -253,55 +253,65 @@ FWindowRenderContext& VQRenderer::GetWindowRenderContext(HWND hwnd)
 
 BufferID VQRenderer::CreateBuffer(const FBufferDesc& desc)
 {
-	BufferID Id = -1;
+	BufferID Id = INVALID_ID;
 	bool bSuccess = false;
 
 	switch (desc.Type)
 	{
-	case VERTEX_BUFFER:
-	{
-		VBV vbv;
-		bSuccess = mStaticVertexBufferPool.AllocVertexBuffer(desc.NumElements, desc.Stride, desc.pData, &vbv);
-		if (bSuccess)
-		{
-			mVertexBufferViews.push_back(vbv);
-			Id = static_cast<BufferID>(mVertexBufferViews.size() - 1);
-		}
-		else
-			Log::Error("Couldn't allocate vertex buffer");
-		break;
-	}
-	case INDEX_BUFFER: 
-	{
-		IBV ibv;
-		bSuccess = mStaticIndexBufferPool.AllocIndexBuffer(desc.NumElements, desc.Stride, desc.pData, &ibv);
-		if (bSuccess)
-		{
-			mIndexBufferViews.push_back(ibv);
-			Id = static_cast<BufferID>(mIndexBufferViews.size() - 1);
-		}
-		else
-			Log::Error("Couldn't allocate index buffer");
-		break;
-	}
-
-	case CONSTANT_BUFFER : assert(false);/*TODO: implementation*/  break;
+	case VERTEX_BUFFER   : Id = CreateVertexBuffer(desc); break;
+	case INDEX_BUFFER    : Id = CreateIndexBuffer(desc); break;
+	case CONSTANT_BUFFER : Id = CreateConstantBuffer(desc); break;
 	default              : assert(false); break; // shouldn't happen
 	}
-
 	return Id;
 }
 
+BufferID VQRenderer::CreateVertexBuffer(const FBufferDesc& desc)
+{
+	BufferID Id = INVALID_ID;
+	VBV vbv;
+	bool bSuccess = mStaticVertexBufferPool.AllocVertexBuffer(desc.NumElements, desc.Stride, desc.pData, &vbv);
+	if (bSuccess)
+	{
+		mVBVs.push_back(vbv);
+		Id = static_cast<BufferID>(mVBVs.size() - 1);
+	}
+	else
+		Log::Error("Couldn't allocate vertex buffer");
+	return Id;
+}
+BufferID VQRenderer::CreateIndexBuffer(const FBufferDesc& desc)
+{
+	BufferID Id = INVALID_ID;
+	IBV ibv;
+	bool bSuccess = mStaticIndexBufferPool.AllocIndexBuffer(desc.NumElements, desc.Stride, desc.pData, &ibv);
+	if (bSuccess)
+	{
+		mIBVs.push_back(ibv);
+		Id = static_cast<BufferID>(mIBVs.size() - 1);
+	}
+	else
+		Log::Error("Couldn't allocate index buffer");
+	return Id;
+}
+BufferID VQRenderer::CreateConstantBuffer(const FBufferDesc& desc)
+{
+	BufferID Id = INVALID_ID;
+	assert(false);
+	return Id;
+}
+
+
 const VBV& VQRenderer::GetVertexBufferView(BufferID Id) const
 {
-	assert(Id < mVertexBufferViews.size() && Id != INVALID_ID);
-	return mVertexBufferViews[Id];
+	assert(Id < mVBVs.size() && Id != INVALID_ID);
+	return mVBVs[Id];
 }
 
 const IBV& VQRenderer::GetIndexBufferView(BufferID Id) const
 {
-	assert(Id < mIndexBufferViews.size() && Id != INVALID_ID);
-	return mIndexBufferViews[Id];
+	assert(Id < mIBVs.size() && Id != INVALID_ID);
+	return mIBVs[Id];
 }
 const CBV_SRV_UAV& VQRenderer::GetShaderResourceView(SRV_ID Id) const
 {
@@ -378,7 +388,7 @@ void VQRenderer::InitializeResourceHeaps()
 {
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
-	const uint32 UPLOAD_HEAP_SIZE = 5 * MEGABYTE; // TODO: from RendererSettings.ini
+	const uint32 UPLOAD_HEAP_SIZE = 256 * MEGABYTE; // TODO: from RendererSettings.ini
 	mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE);
 
 	constexpr uint32 NumDescsCBV = 10;
@@ -474,7 +484,7 @@ void VQRenderer::LoadPSOs()
 			rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
 
 			D3D12_STATIC_SAMPLER_DESC sampler = {};
-			sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+			sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
 			sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
 			sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
 			sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
@@ -539,46 +549,64 @@ void VQRenderer::LoadDefaultResources()
 
 	const UINT sizeX = 1024;
 	const UINT sizeY = 1024;
-
-	constexpr DXGI_FORMAT format    = DXGI_FORMAT_R8G8B8A8_UNORM;
-	constexpr UINT TexturePixelSize = 4; // RGBA8 -> 32-bits = 4 bytes
-	std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX);
+	
 
 	TextureDesc tDesc = {};
 	tDesc.pDevice = pDevice;
 	tDesc.pAllocator = mpAllocator;
 	tDesc.pUploadHeap = &mHeapUpload;
 	D3D12_RESOURCE_DESC& textureDesc = tDesc.Desc;
-	size_t imageBytesPerRow;
-	size_t imageSize = SIZE_MAX;
 	{
-		const UINT bytesPerPixel = 4;
-
-		imageBytesPerRow = sizeX * bytesPerPixel;
-		imageSize = sizeY * imageBytesPerRow;
-
 		textureDesc = {};
 		textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 		textureDesc.Alignment = 0;
 		textureDesc.Width = sizeX;
 		textureDesc.Height = sizeY;
 		textureDesc.DepthOrArraySize = 1;
+		textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 		textureDesc.MipLevels = 1;
-		textureDesc.Format = format;
 		textureDesc.SampleDesc.Count = 1;
 		textureDesc.SampleDesc.Quality = 0;
 		textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 		textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 	}
 
-	Texture tex;
-	tex.CreateFromData(tDesc, texture.data());
-	mTextures.push_back(tex);
+	// programmatically generated texture
+	{
+		std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX);
+		Texture tex;
+		tex.CreateFromData(tDesc, texture.data());
+		mTextures.push_back(tex);
 
-	CBV_SRV_UAV SRV = {};
-	mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
-	tex.CreateSRV(0, &SRV);
-	mSRVs.push_back(SRV);
+		CBV_SRV_UAV SRV = {};
+		mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
+		mTextures.back().CreateSRV(0, &SRV);
+		mSRVs.push_back(SRV);
+	}
+	
+	// texture from file
+	{
+		Texture tex;
+		tex.CreateFromFile(tDesc, "Data/Textures/LoadingScreen/2.png");
+		mTextures.push_back(tex);
+
+		CBV_SRV_UAV SRV = {};
+		mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
+		mTextures.back().CreateSRV(0, &SRV);
+		mSRVs.push_back(SRV);
+	}
+
+	// HDR texture from file
+	{
+		Texture tex;
+		tex.CreateFromFile(tDesc, "Data/Textures/sIBL/Walk_Of_Fame/Mans_Outside_2k.hdr");
+		mTextures.push_back(tex);
+
+		CBV_SRV_UAV SRV = {};
+		mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
+		mTextures.back().CreateSRV(0, &SRV);
+		mSRVs.push_back(SRV);
+	}
 
 	mStaticVertexBufferPool.UploadData(mHeapUpload.GetCommandList());
 	mStaticIndexBufferPool.UploadData(mHeapUpload.GetCommandList());

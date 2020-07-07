@@ -77,6 +77,8 @@ private:
     D3D12_GPU_DESCRIPTOR_HANDLE mGPUDescriptor;
 };
 
+using VBV = D3D12_VERTEX_BUFFER_VIEW;
+using IBV = D3D12_INDEX_BUFFER_VIEW;
 class RTV         : public ResourceView { };
 class DSV         : public ResourceView { };
 class CBV_SRV_UAV : public ResourceView { };

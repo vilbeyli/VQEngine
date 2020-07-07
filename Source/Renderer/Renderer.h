@@ -51,8 +51,6 @@ using RTV_ID = int;
 using DSV_ID = int;
 #define INVALID_ID  -1
 
-using VBV = D3D12_VERTEX_BUFFER_VIEW;
-using IBV = D3D12_INDEX_BUFFER_VIEW;
 
 //
 // TYPE DEFINITIONS
@@ -137,15 +135,26 @@ public:
 	// Resource management
 	BufferID                     CreateBuffer(const FBufferDesc& desc);
 
-	// Getters
+	// Getters: PSO, RootSignature, Heap
 	inline ID3D12PipelineState*  GetPSO(EBuiltinPSOs pso) const { return mpBuiltinPSOs[pso]; }
 	inline ID3D12RootSignature*  GetRootSignature(EVertexBufferType vbType) const { return mpBuiltinRootSignatures[vbType]; }
 	ID3D12DescriptorHeap*        GetDescHeap(EResourceHeapType HeapType);
+
+	// Getters: Resource Views
 	const VBV&                   GetVertexBufferView(BufferID Id) const;
 	const IBV&                   GetIndexBufferView(BufferID Id) const;
 	const CBV_SRV_UAV&           GetShaderResourceView(SRV_ID Id) const;
 	const CBV_SRV_UAV&           GetUnorderedAccessView(UAV_ID Id) const;
 	const CBV_SRV_UAV&           GetConstantBufferView(CBV_ID Id) const;
+	const RTV&                   GetRenderTargetView(RTV_ID Id) const;
+
+	inline const VBV&            GetVBV(BufferID Id) const { return GetVertexBufferView(Id); }
+	inline const IBV&            GetIBV(BufferID Id) const { return GetIndexBufferView(Id); }
+	inline const CBV_SRV_UAV&    GetSRV(SRV_ID   Id) const { return GetShaderResourceView(Id); }
+	inline const CBV_SRV_UAV&    GetUAV(UAV_ID   Id) const { return GetUnorderedAccessView(Id); }
+	inline const CBV_SRV_UAV&    GetCBV(CBV_ID   Id) const { return GetConstantBufferView(Id); }
+	inline const RTV&            GetRTV(RTV_ID   Id) const { return GetRenderTargetView(Id); }
+
 
 private:
 	void InitializeD3D12MA();
@@ -153,6 +162,10 @@ private:
 
 	void LoadPSOs();
 	void LoadDefaultResources();
+
+	BufferID CreateVertexBuffer(const FBufferDesc& desc);
+	BufferID CreateIndexBuffer(const FBufferDesc& desc);
+	BufferID CreateConstantBuffer(const FBufferDesc& desc);
 
 	bool CheckContext(HWND hwnd) const;
 
@@ -178,22 +191,22 @@ private:
 	StaticBufferPool         mStaticVertexBufferPool;
 	StaticBufferPool         mStaticIndexBufferPool;
 	std::vector<Texture>     mTextures;
+	//todo: samplers
 
 	// resource views
-	std::vector<VBV>         mVertexBufferViews;
-	std::vector<IBV>         mIndexBufferViews;
+	std::vector<VBV>         mVBVs;
+	std::vector<IBV>         mIBVs;
 	std::vector<CBV_SRV_UAV> mCBVs;
 	std::vector<CBV_SRV_UAV> mSRVs;
 	std::vector<CBV_SRV_UAV> mUAVs;
 	std::vector<RTV>         mRTVs;
+	// todo: convert std::vector<T> -> std::unordered_map<ID, T>
 
 	// root signatures
 	RootSignatureArray_t     mpBuiltinRootSignatures;
 
 	// PSOs
 	PSOArray_t               mpBuiltinPSOs;
-
-
 
 	// data
 	std::unordered_map<HWND, FWindowRenderContext> mRenderContextLookup;

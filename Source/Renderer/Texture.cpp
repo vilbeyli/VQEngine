@@ -21,13 +21,48 @@
 #include "Libs/D3DX12/d3dx12.h"
 
 #include "../../Libs/D3D12MA/src/D3D12MemAlloc.h"
+#include "../../Libs/VQUtils/Source/utils.h"
+#include "../../Libs/VQUtils/Source/Image.h"
 
+#include <unordered_map>
 #include <cassert>
+ 
 
-
-void Texture::CreateFromFile(const TextureDesc& desc, const std::string FilePath)
+//
+// TEXTURE
+//
+void Texture::CreateFromFile(const TextureDesc& tDesc, const std::string FilePath)
 {
-    assert(false);
+    if (FilePath.empty())
+    {
+        Log::Error("Cannot create Texture from file: empty FilePath provided.");
+        return;
+    }
+
+    // process file path
+    const std::vector<std::string> FilePathTokens = StrUtil::split(FilePath, { '/', '\\' });
+    assert(FilePathTokens.size() >= 1);
+
+    const std::string& FileNameAndExtension = FilePathTokens.back();
+    const std::vector<std::string> FileNameTokens = StrUtil::split(FileNameAndExtension, '.');
+    assert(FileNameTokens.size() == 2);
+
+    const std::string FileDirectory = FilePath.substr(0, FilePath.find(FileNameAndExtension));
+    const std::string FileName = FileNameTokens.front();
+    const std::string FileExtension = StrUtil::GetLowercased(FileNameTokens.back());
+
+    const bool bHDR = FileExtension == "hdr";
+
+    // load img
+    Image image = Image::LoadFromFile(FilePath.c_str(), bHDR);
+    assert(image.pData && image.BytesPerPixel > 0);
+
+    TextureDesc desc = tDesc;
+    desc.Desc.Width = image.Width;
+    desc.Desc.Height = image.Height;
+    desc.Desc.Format = bHDR ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
+    CreateFromData(desc, image.pData);
+    image.Destroy();
 }
 
 void Texture::CreateFromData(const TextureDesc& desc, void* pData)
