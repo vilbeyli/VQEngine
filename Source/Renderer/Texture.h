@@ -46,8 +46,8 @@ public:
 	Texture()  = default;
 	~Texture() = default;
 
-	void CreateFromFile(const TextureDesc& desc, const std::string FilePath);
-	void CreateFromData(const TextureDesc& desc, void* pData);
+	void CreateFromFile(const TextureDesc& desc, const std::string& FilePath);
+	void CreateFromData(const TextureDesc& desc, const void* pData);
 
 	void Destroy();
 

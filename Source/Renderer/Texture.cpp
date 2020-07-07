@@ -31,7 +31,7 @@
 //
 // TEXTURE
 //
-void Texture::CreateFromFile(const TextureDesc& tDesc, const std::string FilePath)
+void Texture::CreateFromFile(const TextureDesc& tDesc, const std::string& FilePath)
 {
     if (FilePath.empty())
     {
@@ -65,7 +65,7 @@ void Texture::CreateFromFile(const TextureDesc& tDesc, const std::string FilePat
     image.Destroy();
 }
 
-void Texture::CreateFromData(const TextureDesc& desc, void* pData)
+void Texture::CreateFromData(const TextureDesc& desc, const void* pData)
 {
     assert(pData);
     HRESULT hr = {};
@@ -164,124 +164,6 @@ void Texture::Destroy()
     }
 }
 
-
-#if 0
-bool Texture::InitFromData(Device* pDevice, const char* pDebugName, UploadHeap& uploadHeap, const IMG_INFO& header, const void* data)
-{
-    assert(!m_pResource);
-    assert(header.arraySize == 1 && header.mipMapCount == 1);
-
-    m_header = header;
-
-    CreateTextureCommitted(pDevice, pDebugName, false);
-
-    // Get mip footprints (if it is an array we reuse the mip footprints for all the elements of the array)
-    //
-    UINT64 UplHeapSize;
-    uint32_t num_rows = {};
-    UINT64 row_sizes_in_bytes = {};
-    D3D12_PLACED_SUBRESOURCE_FOOTPRINT placedTex2D = {};
-    CD3DX12_RESOURCE_DESC RDescs = CD3DX12_RESOURCE_DESC::Tex2D((DXGI_FORMAT)m_header.format, m_header.width, m_header.height, 1, 1);
-    pDevice->GetDevice()->GetCopyableFootprints(&RDescs, 0, 1, 0, &placedTex2D, &num_rows, &row_sizes_in_bytes, &UplHeapSize);
-
-    //compute pixel size
-    //
-    //UINT32 bytePP = m_header.bitCount / 8;
-
-    // allocate memory for mip chain from upload heap
-    //
-    UINT8* pUploadBufferMem = uploadHeap.Suballocate(SIZE_T(UplHeapSize), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
-    if (pUploadBufferMem == NULL)
-    {
-        // oh! We ran out of mem in the upload heap, flush it and try allocating mem from it again
-        uploadHeap.FlushAndFinish();
-        pUploadBufferMem = uploadHeap.Suballocate(SIZE_T(UplHeapSize), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
-        assert(pUploadBufferMem);
-    }
-
-    placedTex2D.Offset += UINT64(pUploadBufferMem - uploadHeap.BasePtr());
-
-    // copy all the mip slices into the offsets specified by the footprint structure
-    //
-    for (uint32_t y = 0; y < num_rows; y++)
-    {
-        memcpy(pUploadBufferMem + y * placedTex2D.Footprint.RowPitch, (UINT8*)data + y * placedTex2D.Footprint.RowPitch, row_sizes_in_bytes);
-    }
-
-    CD3DX12_TEXTURE_COPY_LOCATION Dst(m_pResource, 0);
-    CD3DX12_TEXTURE_COPY_LOCATION Src(uploadHeap.GetResource(), placedTex2D);
-    uploadHeap.GetCommandList()->CopyTextureRegion(&Dst, 0, 0, 0, &Src, NULL);
-
-    // prepare to shader read
-    //
-    D3D12_RESOURCE_BARRIER RBDesc = {};
-    RBDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    RBDesc.Transition.pResource = m_pResource;
-    RBDesc.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    RBDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-    RBDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-
-    uploadHeap.GetCommandList()->ResourceBarrier(1, &RBDesc);
-
-    return true;
-}
-
-
-
-// Create Builtin textures.
-{
-    // Describe and create a Texture2D.
-    D3D12_RESOURCE_DESC textureDesc = {};
-    textureDesc.MipLevels = 1;
-    textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    textureDesc.Width = TextureWidth;
-    textureDesc.Height = TextureHeight;
-    textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-    textureDesc.DepthOrArraySize = 1;
-    textureDesc.SampleDesc.Count = 1;
-    textureDesc.SampleDesc.Quality = 0;
-    textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-
-    ThrowIfFailed(m_device->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-        D3D12_HEAP_FLAG_NONE,
-        &textureDesc,
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        nullptr,
-        IID_PPV_ARGS(&m_texture)));
-
-    const UINT64 uploadBufferSize = GetRequiredIntermediateSize(m_texture.Get(), 0, 1);
-
-    // Create the GPU upload buffer.
-    ThrowIfFailed(m_device->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
-        D3D12_HEAP_FLAG_NONE,
-        &CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize),
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(&textureUploadHeap)));
-
-    // Copy data to the intermediate upload heap and then schedule a copy 
-    // from the upload heap to the Texture2D.
-    std::vector<UINT8> texture = GenerateTextureData();
-
-    D3D12_SUBRESOURCE_DATA textureData = {};
-    textureData.pData = &texture[0];
-    textureData.RowPitch = TextureWidth * TexturePixelSize;
-    textureData.SlicePitch = textureData.RowPitch * TextureHeight;
-
-    UpdateSubresources(m_commandList.Get(), m_texture.Get(), textureUploadHeap.Get(), 0, 0, 1, &textureData);
-    m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_texture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
-
-    // Describe and create a SRV for the texture.
-    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srvDesc.Format = textureDesc.Format;
-    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MipLevels = 1;
-    m_device->CreateShaderResourceView(m_texture.Get(), &srvDesc, m_srvHeap->GetCPUDescriptorHandleForHeapStart());
-    }
-#endif
 
 
 

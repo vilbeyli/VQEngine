@@ -103,6 +103,7 @@ namespace GeometryGenerator
 		std::vector<TVertex>& v = data.Vertices;
 		v.resize(NUM_VERTS);
 
+		// indices
 		data.Indices = { 0u, 1u, 2u };
 		
 		// position
@@ -146,6 +147,160 @@ namespace GeometryGenerator
 
 		return data;
 	}
+
+
+	//     ASCII Cube art from: http://www.lonniebest.com/ASCII/Art/?ID=2
+	// 
+	//             0 _________________________ 1        0, 1, 2, 0, 2, 3,       // Top
+	//              / _____________________  /|         4, 5, 6, 4, 6, 7,       // Front
+	//             / / ___________________/ / |         8, 9, 10, 8, 10, 11,    // Right
+	//            / / /| |               / /  |         12, 13, 14, 12, 14, 15, // Left
+	//           / / / | |              / / . |         16, 17, 18, 16, 18, 19, // Back
+	//          / / /| | |             / / /| |         20, 22, 21, 20, 23, 22, // Bottom
+	//         / / / | | |            / / / | |           
+	//        / / /  | | |           / / /| | |          +Y
+	//       / /_/__________________/ / / | | |           |  +Z
+	//  4,3 /________________________/5/  | | |           |  /
+	//      | ______________________8|2|  | | |           | /
+	//      | | |    | | |_________| | |__| | |           |/______+X
+	//      | | |    | |___________| | |____| |           
+	//      | | |   / / ___________| | |_  / /
+	//      | | |  / / /           | | |/ / /
+	//      | | | / / /            | | | / /
+	//      | | |/ / /             | | |/ /
+	//      | | | / /              | | ' /
+	//      | | |/_/_______________| |  /
+	//      | |____________________| | /
+	//      |________________________|/6
+	//      7
+	//
+	// vertices - CW 
+	template<class TVertex, class TIndex>
+	constexpr GeometryData<TVertex, TIndex> Cube()
+	{
+		constexpr bool bHasTangents = std::is_same<TVertex, FVertexWithNormalAndTangent>();
+		constexpr bool bHasNormals  = std::is_same<TVertex, FVertexWithNormal>() || std::is_same<TVertex, FVertexWithNormalAndTangent>();
+		constexpr bool bHasColor    = std::is_same<TVertex, FVertexWithColor>()  || std::is_same<TVertex, FVertexWithColorAndAlpha>();
+		constexpr bool bHasAlpha    = std::is_same<TVertex, FVertexWithColorAndAlpha>();
+
+		constexpr int NUM_VERTS   = 24;
+
+		GeometryData<TVertex, TIndex> data;
+		std::vector<TVertex>& v = data.Vertices;
+		v.resize(NUM_VERTS);
+
+		// indices
+		data.Indices = {
+			0, 1, 2, 0, 2, 3,		// Top
+			4, 5, 6, 4, 6, 7,		// back
+			8, 9, 10, 8, 10, 11,	// Right
+			12, 13, 14, 12, 14, 15, // Back
+			16, 17, 18, 16, 18, 19, // Left
+			20, 22, 21, 20, 23, 22, // Bottom
+		};
+
+		// uv
+		SetFVec<2>(v[0] .uv, { +0.0f, +0.0f });    SetFVec<2>(v[3] .uv, { +0.0f, +1.0f });
+		SetFVec<2>(v[1] .uv, { +1.0f, +0.0f });    SetFVec<2>(v[4] .uv, { +0.0f, +0.0f });
+		SetFVec<2>(v[2] .uv, { +1.0f, +1.0f });    SetFVec<2>(v[5] .uv, { +1.0f, +0.0f });
+
+		SetFVec<2>(v[6] .uv, { +1.0f, +1.0f });    SetFVec<2>(v[9] .uv, { +1.0f, +0.0f });
+		SetFVec<2>(v[7] .uv, { +0.0f, +1.0f });    SetFVec<2>(v[10].uv, { +1.0f, +1.0f });
+		SetFVec<2>(v[8] .uv, { +0.0f, +0.0f });    SetFVec<2>(v[11].uv, { +0.0f, +1.0f });
+		
+		SetFVec<2>(v[12].uv, { +0.0f, +0.0f });    SetFVec<2>(v[15].uv, { +0.0f, +1.0f });
+		SetFVec<2>(v[13].uv, { +1.0f, +0.0f });    SetFVec<2>(v[16].uv, { +0.0f, +0.0f });
+		SetFVec<2>(v[14].uv, { +1.0f, +1.0f });    SetFVec<2>(v[17].uv, { +1.0f, +0.0f });
+
+		SetFVec<2>(v[18].uv, { +1.0f, +1.0f });    SetFVec<2>(v[21].uv, { +0.0f, +0.0f });
+		SetFVec<2>(v[19].uv, { +0.0f, +1.0f });    SetFVec<2>(v[22].uv, { +0.0f, +1.0f });
+		SetFVec<2>(v[20].uv, { +1.0f, +0.0f });    SetFVec<2>(v[23].uv, { +1.0f, +1.0f });
+
+		// positions / normals / tangents
+		/* TOP */                   SetFVec<3>(v[0].position , { -1.0f, +1.0f, +1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[0].normal   , { +0.0f, +1.0f, +0.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[0].tangent  , { +1.0f, +0.0f, +0.0f });
+
+		                            SetFVec<3>(v[1].position , { +1.0f, +1.0f, +1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[1].normal   , { +0.0f, +1.0f, +0.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[1].tangent  , { +1.0f, +0.0f, +0.0f });
+
+		                            SetFVec<3>(v[2].position , { +1.0f, +1.0f, -1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[2].normal   , { +0.0f, +1.0f, +0.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[2].tangent  , { +1.0f, +0.0f, +0.0f });
+
+		                            SetFVec<3>(v[3].position , { -1.0f, +1.0f, -1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[3].normal   , { +0.0f, +1.0f, +0.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[3].tangent  , { +1.0f, +0.0f, +0.0f });
+
+		/* FRONT */                 SetFVec<3>(v[4].position , { -1.0f, +1.0f, -1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[4].normal   , { +0.0f, +0.0f, -1.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[4].tangent  , { +1.0f, +0.0f, +0.0f });
+		                            SetFVec<3>(v[5].position , { +1.0f, +1.0f, -1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[5].normal   , { +0.0f, +0.0f, -1.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[5].tangent  , { +1.0f, +0.0f, +0.0f });
+		                            SetFVec<3>(v[6].position , { +1.0f, -1.0f, -1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[6].normal   , { +0.0f, +0.0f, -1.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[6].tangent  , { +1.0f, +0.0f, +0.0f });
+		                            SetFVec<3>(v[7].position , { -1.0f, -1.0f, -1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[7].normal   , { +0.0f, +0.0f, -1.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[7].tangent  , { +1.0f, +0.0f, +0.0f });
+
+		/* RIGHT */                 SetFVec<3>(v[8].position , { +1.0f, +1.0f, -1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[8].normal   , { +1.0f, +0.0f, +0.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[8].tangent  , { +0.0f, +0.0f, +1.0f });
+		                            SetFVec<3>(v[9].position , { +1.0f, +1.0f, +1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[9].normal   , { +1.0f, +0.0f, +0.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[9].tangent  , { +0.0f, +0.0f, +1.0f });
+		                            SetFVec<3>(v[10].position, { +1.0f, -1.0f, +1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[10].normal  , { +1.0f, +0.0f, +0.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[10].tangent , { +0.0f, +0.0f, +1.0f });
+		                            SetFVec<3>(v[11].position, { +1.0f, -1.0f, -1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[11].normal  , { +1.0f, +0.0f, +0.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[11].tangent , { +0.0f, +0.0f, +1.0f });
+
+		/* BACK */                  SetFVec<3>(v[12].position, { +1.0f, +1.0f, +1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[12].normal  , { +0.0f, +0.0f, +1.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[12].tangent , { +1.0f, +0.0f, +0.0f });
+		                            SetFVec<3>(v[13].position, { -1.0f, +1.0f, +1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[13].normal  , { +0.0f, +0.0f, +1.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[13].tangent , { +1.0f, +0.0f, +0.0f });
+		                            SetFVec<3>(v[14].position, { -1.0f, -1.0f, +1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[14].normal  , { +0.0f, +0.0f, +1.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[14].tangent , { +1.0f, +0.0f, +0.0f });
+		                            SetFVec<3>(v[15].position, { +1.0f, -1.0f, +1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[15].normal  , { +0.0f, +0.0f, +1.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[15].tangent , { +1.0f, +0.0f, +0.0f });
+
+		/* LEFT */                  SetFVec<3>(v[16].position, { -1.0f, +1.0f, +1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[16].normal  , { -1.0f, +0.0f, +0.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[16].tangent , { +0.0f, +0.0f, -1.0f });
+		                            SetFVec<3>(v[17].position, { -1.0f, +1.0f, -1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[17].normal  , { -1.0f, +0.0f, +0.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[17].tangent , { +0.0f, +0.0f, -1.0f });
+		                            SetFVec<3>(v[18].position, { -1.0f, -1.0f, -1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[18].normal  , { -1.0f, +0.0f, +0.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[18].tangent , { +0.0f, +0.0f, -1.0f });
+		                            SetFVec<3>(v[19].position, { -1.0f, -1.0f, +1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[19].normal  , { -1.0f, +0.0f, +0.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[19].tangent , { +0.0f, +0.0f, -1.0f });
+
+		/* BOTTOM */                SetFVec<3>(v[20].position, { +1.0f, -1.0f, -1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[20].normal  , { +0.0f, -1.0f, +0.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[20].tangent , { +1.0f, +0.0f, +0.0f });
+		                            SetFVec<3>(v[21].position, { -1.0f, -1.0f, -1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[21].normal  , { +0.0f, -1.0f, +0.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[21].tangent , { +1.0f, +0.0f, +0.0f });
+		                            SetFVec<3>(v[22].position, { -1.0f, -1.0f, +1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[22].normal  , { +0.0f, -1.0f, +0.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[22].tangent , { +1.0f, +0.0f, +0.0f });
+		                            SetFVec<3>(v[23].position, { +1.0f, -1.0f, +1.0f });
+		if constexpr (bHasNormals)  SetFVec<3>(v[23].normal  , { +0.0f, -1.0f, +0.0f });
+		if constexpr (bHasTangents) SetFVec<3>(v[23].tangent , { +1.0f, +0.0f, +0.0f });
+
+		return data;
+	}
+
 
 };
 

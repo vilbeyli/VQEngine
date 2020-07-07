@@ -141,15 +141,13 @@ void VQEngine::InitializeBuiltinMeshes()
 		mBuiltinMeshNames[EBuiltInMeshes::TRIANGLE] = "Triangle";
 		mBuiltinMeshes[EBuiltInMeshes::TRIANGLE] = Mesh(&mRenderer, data.Vertices, data.Indices, mBuiltinMeshNames[EBuiltInMeshes::TRIANGLE]);
 	}
-
-#if 0
 	{
-		GeometryGenerator::GeometryData<FVertexWithColorAndAlpha> data = GeometryGenerator::Cube<FVertexWithColorAndAlpha>();
+		GeometryGenerator::GeometryData<FVertexWithNormalAndTangent> data = GeometryGenerator::Cube<FVertexWithNormalAndTangent>();
 		mBuiltinMeshNames[EBuiltInMeshes::CUBE] = "Cube";
 		mBuiltinMeshes[EBuiltInMeshes::CUBE] = Mesh(&mRenderer, data.Vertices, data.Indices, mBuiltinMeshNames[EBuiltInMeshes::CUBE]);
 	}
+
 	// ...
-#endif
 }
 
 
