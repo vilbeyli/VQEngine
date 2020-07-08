@@ -23,17 +23,12 @@
 void VQEngine::UpdateThread_Main()
 {
 	Log::Info("UpdateThread_Main()");
-	mNumUpdateLoopsExecuted.store(0);
+	UpdateThread_Inititalize();
 
 	bool bQuit = false;
 	while (!mbStopAllThreads && !bQuit)
 	{
 		UpdateThread_PreUpdate();
-
-		if (!mbRenderThreadInitialized)
-		{
-			continue;
-		}
 
 #if DEBUG_LOG_THREAD_SYNC_VERBOSE
 		Log::Info(/*"UpdateThread_Tick() : */"u%d (r=%llu)", mNumUpdateLoopsExecuted.load(), mNumRenderLoopsExecuted.load());
@@ -50,7 +45,26 @@ void VQEngine::UpdateThread_Main()
 		UpdateThread_WaitForRenderThread();
 	}
 
+	UpdateThread_Exit();
 	Log::Info("UpdateThread_Main() : Exit");
+}
+
+void VQEngine::UpdateThread_Inititalize()
+{
+	mNumUpdateLoopsExecuted.store(0);
+
+	// busy lock until render thread is initialized
+	while (!mbRenderThreadInitialized); 
+	LoadLoadingScreenData();
+
+	// Do not show windows until we have the loading screen data ready.
+	mpWinMain->Show();
+	if (mpWinDebug) 
+		mpWinDebug->Show();
+}
+
+void VQEngine::UpdateThread_Exit()
+{
 }
 
 
@@ -85,11 +99,6 @@ void VQEngine::UpdateThread_UpdateAppState()
 	{
 		// start loading
 		Log::Info("Main Thread starts loading...");
-	
-		// Do not show windows until we have the loading screen data ready.
-		LoadLoadingScreenData();
-		mpWinMain->Show();
-		if(mpWinDebug) mpWinDebug->Show();
 
 		// start load level
 		Load_SceneData_Dispatch();
@@ -131,7 +140,7 @@ void VQEngine::UpdateThread_PostUpdate()
 
 void VQEngine::Load_SceneData_Dispatch()
 {
-	mUpdateWorkerThreads.AddTask([&]() { Sleep(2000); Log::Info("Worker SLEEP done!"); }); // Test-task
+	mUpdateWorkerThreads.AddTask([&]() { Sleep(2000); Log::Info("Worker SLEEP done!"); }); // simulate 2second loading time
 	mUpdateWorkerThreads.AddTask([&]()
 	{
 		// TODO: initialize window scene data here for now, should update this to proper location later on (Scene probably?)
@@ -155,45 +164,29 @@ void VQEngine::Load_SceneData_Join()
 
 void VQEngine::LoadLoadingScreenData()
 {
-	// start loading loadingscreen data for each window 
-	auto fMain = mUpdateWorkerThreads.AddTask([&]()
-	{
-		FLoadingScreenData data;
-		
-		data.SwapChainClearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
+	FLoadingScreenData data;
 
-		srand(static_cast<unsigned>(time(NULL)));
-		const std::string LoadingScreenTextureFileDirectory = "Data/Textures/LoadingScreen/";
-		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(MathUtil::RandU(0, 4)) + ".png");
-		TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
-		SRV_ID    srvID = mRenderer.CreateSRV(texID);
-		data.SRVLoadingScreen = srvID;
+	data.SwapChainClearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
 
-		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
-		mScene_MainWnd.mLoadingScreenData.resize(NumBackBuffer_WndMain, data);
-	});
+	srand(static_cast<unsigned>(time(NULL)));
+	const std::string LoadingScreenTextureFileDirectory = "Data/Textures/LoadingScreen/";
+	const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(MathUtil::RandU(0, 4)) + ".png");
+	TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
+	SRV_ID    srvID = mRenderer.CreateSRV(texID);
+	data.SRVLoadingScreen = srvID;
 
-	Log::Info("Load_LoadingScreenData_Dispatch");
+	const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
+	mScene_MainWnd.mLoadingScreenData.resize(NumBackBuffer_WndMain, data);
 
 	if (mpWinDebug)
 	{
-		auto fDbg = mUpdateWorkerThreads.AddTask([&]()
-		{
-			FLoadingScreenData data;
-			data.SwapChainClearColor = { 0.5f, 0.4f, 0.01f, 1.0f };
-			const int NumBackBuffer_WndDbg = mRenderer.GetSwapChainBackBufferCount(mpWinDebug);
-			mScene_DebugWnd.mLoadingScreenData.resize(NumBackBuffer_WndDbg, data);
+		FLoadingScreenData data;
+		data.SwapChainClearColor = { 0.5f, 0.4f, 0.01f, 1.0f };
+		const int NumBackBuffer_WndDbg = mRenderer.GetSwapChainBackBufferCount(mpWinDebug);
+		mScene_DebugWnd.mLoadingScreenData.resize(NumBackBuffer_WndDbg, data);
 
-			mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
-		});
-		if (fDbg.valid()) fDbg.get();
+		mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
 	}
-
-	// loading screen data must be loaded right away.
-	if (fMain.valid()) fMain.get();
-
-	Log::Info("Load_LoadingScreenData_Dispatch - DONE");
-
 }
 
 

@@ -91,6 +91,13 @@ void VQEngine::RenderThread_Inititalize()
 	if(mpWinDebug) params.Windows.push_back(FWindowRepresentation(mpWinDebug, false, false));
 
 	mRenderer.Initialize(params);
+	mbRenderThreadInitialized.store(true);
+
+	mNumRenderLoopsExecuted.store(0);
+
+	InitializeBuiltinMeshes();
+	mRenderer.Load();
+
 
 	auto fnHandleWindowTransitions = [&](std::unique_ptr<Window>& pWin, const FWindowSettings& settings)
 	{
@@ -98,7 +105,7 @@ void VQEngine::RenderThread_Inititalize()
 
 		// TODO: generic solution to multi window/display settings. 
 		//       For now, simply prevent debug wnd occupying main wnd's display.
-		if ( mpWinMain->IsFullscreen()
+		if (mpWinMain->IsFullscreen()
 			&& (mSettings.WndMain.PreferredDisplay == mSettings.WndDebug.PreferredDisplay)
 			&& settings.IsDisplayModeFullscreen()
 			&& pWin != mpWinMain)
@@ -114,18 +121,13 @@ void VQEngine::RenderThread_Inititalize()
 		if (settings.DisplayMode == EDisplayMode::BORDERLESS_FULLSCREEN)
 		{
 			// TODO: preferred screen impl
-			if(pWin) pWin->ToggleWindowedFullscreen();
+			if (pWin) pWin->ToggleWindowedFullscreen();
 		}
 	};
 
-	fnHandleWindowTransitions(mpWinMain , mSettings.WndMain);
+	fnHandleWindowTransitions(mpWinMain, mSettings.WndMain);
 	fnHandleWindowTransitions(mpWinDebug, mSettings.WndDebug);
 
-	mbRenderThreadInitialized.store(true);
-	mNumRenderLoopsExecuted.store(0);
-
-	InitializeBuiltinMeshes();
-	mRenderer.Load();
 }
 
 void VQEngine::RenderThread_Exit()
