@@ -18,7 +18,7 @@
 
 #include "VQEngine.h"
 
-
+#include "Libs/VQUtils/Source/utils.h"
 
 void VQEngine::UpdateThread_Main()
 {
@@ -138,8 +138,8 @@ void VQEngine::Load_SceneData_Dispatch()
 		FFrameData data[2];
 		data[0].SwapChainClearColor = { 0.07f, 0.07f, 0.07f, 1.0f };
 		data[1].SwapChainClearColor = { 0.20f, 0.21f, 0.21f, 1.0f };
-		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain);
-		const int NumBackBuffer_WndDbg = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinDebug);
+		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
+		const int NumBackBuffer_WndDbg = mRenderer.GetSwapChainBackBufferCount(mpWinDebug);
 		mScene_MainWnd.mFrameData.resize(NumBackBuffer_WndMain, data[0]);
 		mScene_DebugWnd.mFrameData.resize(NumBackBuffer_WndDbg, data[1]);
 
@@ -150,6 +150,49 @@ void VQEngine::Load_SceneData_Dispatch()
 
 void VQEngine::Load_SceneData_Join()
 {
+}
+
+
+void VQEngine::LoadLoadingScreenData()
+{
+	// start loading loadingscreen data for each window 
+	auto fMain = mUpdateWorkerThreads.AddTask([&]()
+	{
+		FLoadingScreenData data;
+		data.SwapChainClearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
+		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
+		mScene_MainWnd.mLoadingScreenData.resize(NumBackBuffer_WndMain, data);
+
+		mWindowUpdateContextLookup[mpWinMain->GetHWND()] = &mScene_MainWnd;
+
+		srand(static_cast<unsigned>(time(NULL)));
+		const std::string LoadingScreenTextureFileDirectory = "Data/Textures/LoadingScreen/";
+		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(MathUtil::RandU(0, 4)) + ".png");
+		TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
+		SRV_ID    srvID = mRenderer.CreateSRV(texID);
+	});
+
+	Log::Info("Load_LoadingScreenData_Dispatch");
+
+	if (mpWinDebug)
+	{
+		auto fDbg = mUpdateWorkerThreads.AddTask([&]()
+		{
+			FLoadingScreenData data;
+			data.SwapChainClearColor = { 0.5f, 0.4f, 0.01f, 1.0f };
+			const int NumBackBuffer_WndDbg = mRenderer.GetSwapChainBackBufferCount(mpWinDebug);
+			mScene_DebugWnd.mLoadingScreenData.resize(NumBackBuffer_WndDbg, data);
+
+			mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
+		});
+		if (fDbg.valid()) fDbg.get();
+	}
+
+	// loading screen data must be loaded right away.
+	if (fMain.valid()) fMain.get();
+
+	Log::Info("Load_LoadingScreenData_Dispatch - DONE");
+
 }
 
 

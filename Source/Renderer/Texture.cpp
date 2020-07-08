@@ -33,6 +33,7 @@
 //
 void Texture::CreateFromFile(const TextureDesc& tDesc, const std::string& FilePath)
 {
+
     if (FilePath.empty())
     {
         Log::Error("Cannot create Texture from file: empty FilePath provided.");
@@ -58,9 +59,20 @@ void Texture::CreateFromFile(const TextureDesc& tDesc, const std::string& FilePa
     assert(image.pData && image.BytesPerPixel > 0);
 
     TextureDesc desc = tDesc;
-    desc.Desc.Width = image.Width;
+    desc.Desc.Width  = image.Width;
     desc.Desc.Height = image.Height;
     desc.Desc.Format = bHDR ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
+    //-------------------------------
+    desc.Desc.DepthOrArraySize = 1;
+    desc.Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Desc.Alignment = 0;
+    desc.Desc.DepthOrArraySize = 1;
+    desc.Desc.MipLevels = 1;
+    desc.Desc.SampleDesc.Count = 1;
+    desc.Desc.SampleDesc.Quality = 0;
+    desc.Desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    desc.Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+    //-------------------------------
     CreateFromData(desc, image.pData);
     image.Destroy();
 }

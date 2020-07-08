@@ -126,14 +126,17 @@ public:
 	void                         OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h);
 
 	// Swapchain-interface
-	inline short                 GetSwapChainBackBufferCountOfWindow(std::unique_ptr<Window>& pWnd) const { return GetSwapChainBackBufferCountOfWindow(pWnd.get()); };
-	short                        GetSwapChainBackBufferCountOfWindow(Window* pWnd) const;
-	short                        GetSwapChainBackBufferCountOfWindow(HWND hwnd) const;
+	inline short                 GetSwapChainBackBufferCount(std::unique_ptr<Window>& pWnd) const { return GetSwapChainBackBufferCount(pWnd.get()); };
+	short                        GetSwapChainBackBufferCount(Window* pWnd) const;
+	short                        GetSwapChainBackBufferCount(HWND hwnd) const;
 	SwapChain&                   GetWindowSwapChain(HWND hwnd);
 	FWindowRenderContext&        GetWindowRenderContext(HWND hwnd);
 
 	// Resource management
 	BufferID                     CreateBuffer(const FBufferDesc& desc);
+	TextureID                    CreateTextureFromFile(const char* pFilePath);
+	TextureID                    CreateTexture(const D3D12_RESOURCE_DESC& desc, const void* pData = nullptr);
+	SRV_ID                       CreateSRV(TextureID texID);
 
 	// Getters: PSO, RootSignature, Heap
 	inline ID3D12PipelineState*  GetPSO(EBuiltinPSOs pso) const { return mpBuiltinPSOs[pso]; }
@@ -155,19 +158,6 @@ public:
 	inline const CBV_SRV_UAV&    GetCBV(CBV_ID   Id) const { return GetConstantBufferView(Id); }
 	inline const RTV&            GetRTV(RTV_ID   Id) const { return GetRenderTargetView(Id); }
 
-
-private:
-	void InitializeD3D12MA();
-	void InitializeResourceHeaps();
-
-	void LoadPSOs();
-	void LoadDefaultResources();
-
-	BufferID CreateVertexBuffer(const FBufferDesc& desc);
-	BufferID CreateIndexBuffer(const FBufferDesc& desc);
-	BufferID CreateConstantBuffer(const FBufferDesc& desc);
-
-	bool CheckContext(HWND hwnd) const;
 
 private:
 	using RootSignatureArray_t = std::array<ID3D12RootSignature*, EVertexBufferType::NUM_VERTEX_BUFFER_TYPES>;
@@ -210,5 +200,34 @@ private:
 
 	// data
 	std::unordered_map<HWND, FWindowRenderContext> mRenderContextLookup;
+
+	// bookkeeping
+	// todo: unordered map of TexID <-> DiskLocation
+
+	// threading
+	mutable std::mutex       mMtxStaticVBPool;
+	mutable std::mutex       mMtxStaticIBPool;
+	mutable std::mutex       mMtxTextures;
+	mutable std::mutex       mMtxSRVs;
+	mutable std::mutex       mMtxCBVs;
+	mutable std::mutex       mMtxRTVs;
+	mutable std::mutex       mMtxDSVs;
+	mutable std::mutex       mMtxUAVs;
+	mutable std::mutex       mMtxVBVs;
+	mutable std::mutex       mMtxIBVs;
+
+
+private:
+	void InitializeD3D12MA();
+	void InitializeResourceHeaps();
+
+	void LoadPSOs();
+	void LoadDefaultResources();
+
+	BufferID CreateVertexBuffer(const FBufferDesc& desc);
+	BufferID CreateIndexBuffer(const FBufferDesc& desc);
+	BufferID CreateConstantBuffer(const FBufferDesc& desc);
+
+	bool CheckContext(HWND hwnd) const;
 
 };

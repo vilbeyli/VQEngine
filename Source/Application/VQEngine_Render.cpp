@@ -164,7 +164,7 @@ void VQEngine::RenderThread_PreRender()
 
 void VQEngine::RenderThread_Render()
 {
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain);
+	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
 	const int FRAME_DATA_INDEX  = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
 
 	RenderThread_RenderMainWindow();
@@ -174,7 +174,7 @@ void VQEngine::RenderThread_Render()
 
 void VQEngine::RenderThread_RenderMainWindow()
 {
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain);
+	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
 	const int FRAME_DATA_INDEX = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
 
 	HRESULT hr = S_OK; 
@@ -307,7 +307,8 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	const int NUM_BACK_BUFFERS = ctx.SwapChain.GetNumBackBuffers();
 	const int BACK_BUFFER_INDEX = ctx.SwapChain.GetCurrentBackBufferIndex();
 	const int FRAME_DATA_INDEX = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
-	const FFrameData& FrameData = mScene_MainWnd.mFrameData[FRAME_DATA_INDEX];
+	assert(mScene_MainWnd.mLoadingScreenData.size() > 0);
+	const FFrameData& FrameData = (const FFrameData&)mScene_MainWnd.mLoadingScreenData[FRAME_DATA_INDEX];
 	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
 	// ----------------------------------------------------------------------------
 

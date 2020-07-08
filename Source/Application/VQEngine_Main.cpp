@@ -202,42 +202,6 @@ void VQEngine::ExitThreads()
 	mRenderWorkerThreads.Exit();
 }
 
-void VQEngine::LoadLoadingScreenData()
-{
-	// start loading loadingscreen data for each window 
-	auto fMain = mUpdateWorkerThreads.AddTask([&]()
-	{
-		FLoadingScreenData data;
-		data.SwapChainClearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
-		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain);
-		mScene_MainWnd.mLoadingScreenData.resize(NumBackBuffer_WndMain, data);
-
-		mWindowUpdateContextLookup[mpWinMain->GetHWND()] = &mScene_MainWnd;
-		
-	});
-
-	Log::Info("Load_LoadingScreenData_Dispatch");
-
-	if (mpWinDebug)
-	{
-		auto fDbg = mUpdateWorkerThreads.AddTask([&]()
-		{
-			FLoadingScreenData data;
-			data.SwapChainClearColor = { 0.5f, 0.4f, 0.01f, 1.0f };
-			const int NumBackBuffer_WndDbg = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinDebug);
-			mScene_DebugWnd.mLoadingScreenData.resize(NumBackBuffer_WndDbg, data);
-
-			mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
-		});
-		if(fDbg.valid()) fDbg.get();
-	}
-
-	// loading screen data must be loaded right away.
-	if(fMain.valid()) fMain.get();
-
-	Log::Info("Load_LoadingScreenData_Dispatch - DONE");
-
-}
 
 
 std::unique_ptr<Window>& VQEngine::GetWindow(HWND hwnd)

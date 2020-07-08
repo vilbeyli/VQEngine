@@ -164,7 +164,7 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 	InitializeD3D12MA();
 	InitializeResourceHeaps();
 	{
-		constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 64 * MEGABYTE;
+		constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 16 * MEGABYTE;
 		constexpr bool USE_GPU_MEMORY = true;
 		mStaticVertexBufferPool.Create(pDevice, EBufferType::VERTEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticVertexBufferPool");
 		mStaticIndexBufferPool .Create(pDevice, EBufferType::INDEX_BUFFER , STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticIndexBufferPool");
@@ -266,6 +266,81 @@ BufferID VQRenderer::CreateBuffer(const FBufferDesc& desc)
 	return Id;
 }
 
+TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
+{
+	// TODO: check if file already loaded
+
+	Texture tex;
+
+	// https://docs.microsoft.com/en-us/windows/win32/direct3d12/residency#heap-resources
+	// Heap creation can be slow; but it is optimized for background thread processing. 
+	// It's recommended to create heaps on background threads to avoid glitching the render 
+	// thread. In D3D12, multiple threads may safely call create routines concurrently.
+	UploadHeap uploadHeap;
+	uploadHeap.Create(mDevice.GetDevicePtr(), 32 * MEGABYTE);
+
+	TextureDesc tDesc = {};
+	tDesc.pAllocator = mpAllocator;
+	tDesc.pDevice = mDevice.GetDevicePtr();
+	tDesc.pUploadHeap = &uploadHeap;
+	tDesc.TexName = pFilePath;
+	tDesc.Desc = {};
+
+	tex.CreateFromFile(tDesc, pFilePath);
+
+	uploadHeap.UploadToGPUAndWait(mGFXQueue.pQueue);
+	uploadHeap.Destroy();
+
+	std::lock_guard<std::mutex> lk(mMtxTextures);
+	mTextures.push_back(tex);
+	return static_cast<TextureID>(mTextures.size() - 1);
+}
+
+TextureID VQRenderer::CreateTexture(const D3D12_RESOURCE_DESC& desc, const void* pData)
+{
+	Texture tex;
+
+	// https://docs.microsoft.com/en-us/windows/win32/direct3d12/residency#heap-resources
+	// Heap creation can be slow; but it is optimized for background thread processing. 
+	// It's recommended to create heaps on background threads to avoid glitching the render 
+	// thread. In D3D12, multiple threads may safely call create routines concurrently.
+	UploadHeap uploadHeap;
+	uploadHeap.Create(mDevice.GetDevicePtr(), 32 * MEGABYTE);
+
+	TextureDesc tDesc = {};
+	tDesc.Desc = desc;
+	tDesc.pAllocator = mpAllocator;
+	tDesc.pDevice = mDevice.GetDevicePtr();
+	tDesc.pUploadHeap = &uploadHeap;
+
+	if (pData)
+	{
+		tex.CreateFromData(tDesc, pData);
+	}
+	else
+	{
+		assert(false); // TODO;
+	}
+	uploadHeap.UploadToGPUAndWait(mGFXQueue.pQueue);
+	uploadHeap.Destroy();
+
+	std::lock_guard<std::mutex> lk(mMtxTextures);
+	mTextures.push_back(tex);
+	return static_cast<TextureID>(mTextures.size() - 1);
+}
+
+SRV_ID VQRenderer::CreateSRV(TextureID texID)
+{
+	CBV_SRV_UAV SRV = {};
+
+	std::lock_guard<std::mutex> lk(mMtxSRVs);
+	mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
+	mTextures[texID].CreateSRV(0, &SRV);
+
+	mSRVs.push_back(SRV);
+	return static_cast<SRV_ID>(mSRVs.size() - 1);
+}
+
 BufferID VQRenderer::CreateVertexBuffer(const FBufferDesc& desc)
 {
 	BufferID Id = INVALID_ID;
@@ -319,8 +394,8 @@ const CBV_SRV_UAV& VQRenderer::GetShaderResourceView(SRV_ID Id) const
 	return mSRVs[Id];
 }
 
-short VQRenderer::GetSwapChainBackBufferCountOfWindow(Window* pWnd) const { return pWnd ? this->GetSwapChainBackBufferCountOfWindow(pWnd->GetHWND()) : 0; }
-short VQRenderer::GetSwapChainBackBufferCountOfWindow(HWND hwnd) const
+short VQRenderer::GetSwapChainBackBufferCount(Window* pWnd) const { return pWnd ? this->GetSwapChainBackBufferCount(pWnd->GetHWND()) : 0; }
+short VQRenderer::GetSwapChainBackBufferCount(HWND hwnd) const
 {
 	if (!CheckContext(hwnd)) return 0;
 
@@ -571,42 +646,22 @@ void VQRenderer::LoadDefaultResources()
 		textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 	}
 
+	
+
 	// programmatically generated texture
 	{
 		std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX);
-		Texture tex;
-		tex.CreateFromData(tDesc, texture.data());
-		mTextures.push_back(tex);
-
-		CBV_SRV_UAV SRV = {};
-		mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
-		mTextures.back().CreateSRV(0, &SRV);
-		mSRVs.push_back(SRV);
-	}
-	
-	// texture from file
-	{
-		Texture tex;
-		tex.CreateFromFile(tDesc, "Data/Textures/LoadingScreen/2.png");
-		mTextures.push_back(tex);
-
-		CBV_SRV_UAV SRV = {};
-		mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
-		mTextures.back().CreateSRV(0, &SRV);
-		mSRVs.push_back(SRV);
+		TextureID texID = this->CreateTexture(textureDesc, texture.data());
+		this->CreateSRV(texID);
 	}
 
+#if 0
 	// HDR texture from file
 	{
-		Texture tex;
-		tex.CreateFromFile(tDesc, "Data/Textures/sIBL/Walk_Of_Fame/Mans_Outside_2k.hdr");
-		mTextures.push_back(tex);
-
-		CBV_SRV_UAV SRV = {};
-		mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
-		mTextures.back().CreateSRV(0, &SRV);
-		mSRVs.push_back(SRV);
+		TextureID texID = this->CreateTextureFromFile("Data/Textures/sIBL/Walk_Of_Fame/Mans_Outside_2k.hdr");
+		this->CreateSRV(texID);
 	}
+#endif
 
 	mStaticVertexBufferPool.UploadData(mHeapUpload.GetCommandList());
 	mStaticIndexBufferPool.UploadData(mHeapUpload.GetCommandList());
