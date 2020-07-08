@@ -159,17 +159,18 @@ void VQEngine::LoadLoadingScreenData()
 	auto fMain = mUpdateWorkerThreads.AddTask([&]()
 	{
 		FLoadingScreenData data;
+		
 		data.SwapChainClearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
-		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
-		mScene_MainWnd.mLoadingScreenData.resize(NumBackBuffer_WndMain, data);
-
-		mWindowUpdateContextLookup[mpWinMain->GetHWND()] = &mScene_MainWnd;
 
 		srand(static_cast<unsigned>(time(NULL)));
 		const std::string LoadingScreenTextureFileDirectory = "Data/Textures/LoadingScreen/";
 		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(MathUtil::RandU(0, 4)) + ".png");
 		TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
 		SRV_ID    srvID = mRenderer.CreateSRV(texID);
+		data.SRVLoadingScreen = srvID;
+
+		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
+		mScene_MainWnd.mLoadingScreenData.resize(NumBackBuffer_WndMain, data);
 	});
 
 	Log::Info("Load_LoadingScreenData_Dispatch");

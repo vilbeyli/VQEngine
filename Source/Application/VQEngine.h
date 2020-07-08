@@ -171,19 +171,20 @@ private:
 
 private:
 	// threads
-	std::atomic<bool> mbStopAllThreads;
 	std::thread mRenderThread;
 	std::thread mUpdateThread;
 	ThreadPool  mUpdateWorkerThreads;
 	ThreadPool  mRenderWorkerThreads;
 
 	// sync
+	std::atomic<bool>          mbStopAllThreads;
 	std::unique_ptr<Semaphore> mpSemUpdate;
 	std::unique_ptr<Semaphore> mpSemRender;
 	
 	// windows
 	std::unique_ptr<Window>   mpWinMain;
 	std::unique_ptr<Window>   mpWinDebug;
+	// todo: generic window mngmt
 
 	// render
 	VQRenderer mRenderer;
