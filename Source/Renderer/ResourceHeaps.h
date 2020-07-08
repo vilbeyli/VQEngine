@@ -43,12 +43,23 @@
 
 #include <d3d12.h>
 
+
+enum EResourceHeapType
+{
+    RTV_HEAP = 0,
+    DSV_HEAP,
+    CBV_SRV_UAV_HEAP,
+    SAMPLER_HEAP,
+
+    NUM_HEAP_TYPES
+};
+
 class ResourceView
 {
 public:
     inline uint32 GetSize() const { return mSize; }
-    inline D3D12_CPU_DESCRIPTOR_HANDLE GetCPU(uint32 i = 0) const { return D3D12_CPU_DESCRIPTOR_HANDLE{ mCPUDescriptor.ptr + static_cast<uint64>(i)*mDescriptorSize }; }
-    inline D3D12_GPU_DESCRIPTOR_HANDLE GetGPU(uint32 i = 0) const { return D3D12_GPU_DESCRIPTOR_HANDLE{ mGPUDescriptor.ptr + static_cast<uint64>(i)*mDescriptorSize }; }
+    inline D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescHandle(uint32 i = 0) const { return D3D12_CPU_DESCRIPTOR_HANDLE{ mCPUDescriptor.ptr + static_cast<uint64>(i)*mDescriptorSize }; }
+    inline D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescHandle(uint32 i = 0) const { return D3D12_GPU_DESCRIPTOR_HANDLE{ mGPUDescriptor.ptr + static_cast<uint64>(i)*mDescriptorSize }; }
 
     inline void SetResourceView(uint32 size, uint32 dsvDescriptorSize, D3D12_CPU_DESCRIPTOR_HANDLE CPUDescriptor, D3D12_GPU_DESCRIPTOR_HANDLE GPUDescriptor)
     {
@@ -66,6 +77,8 @@ private:
     D3D12_GPU_DESCRIPTOR_HANDLE mGPUDescriptor;
 };
 
+using VBV = D3D12_VERTEX_BUFFER_VIEW;
+using IBV = D3D12_INDEX_BUFFER_VIEW;
 class RTV         : public ResourceView { };
 class DSV         : public ResourceView { };
 class CBV_SRV_UAV : public ResourceView { };
@@ -79,7 +92,7 @@ public:
     bool AllocDescriptor(uint32 size, ResourceView* pRV);
     
 
-    ID3D12DescriptorHeap *GetHeap() const { return mpHeap; }
+    inline ID3D12DescriptorHeap* GetHeap() { return mpHeap; }
 
 private:
     uint32 mIndex;
@@ -105,73 +118,17 @@ public:
     void UploadToGPUAndWait(ID3D12CommandQueue* pCmdQueue);
 
 private:
-    ID3D12Device*   mpDevice     = nullptr;
-    ID3D12Resource* mpUploadHeap = nullptr;
+    ID3D12Device*              mpDevice     = nullptr;
+    ID3D12Resource*            mpUploadHeap = nullptr;
 
     ID3D12GraphicsCommandList* mpCommandList      = nullptr;
     ID3D12CommandAllocator*    mpCommandAllocator = nullptr;
 
-    UINT8* mpDataCur   = nullptr;
-    UINT8* mpDataEnd   = nullptr; 
-    UINT8* mpDataBegin = nullptr;
+    UINT8*                     mpDataCur   = nullptr;
+    UINT8*                     mpDataEnd   = nullptr; 
+    UINT8*                     mpDataBegin = nullptr;
 
-    ID3D12Fence* mpFence = nullptr;
-    UINT64       mFenceValue = 0;
-    HANDLE       mHEvent;
+    ID3D12Fence*               mpFence = nullptr;
+    UINT64                     mFenceValue = 0;
+    HANDLE                     mHEvent;
 };
-
-
-#if 0
-// This class will hold descriptor heaps for all the types of resources. We are going to need them all anyway.
-class ResourceViewHeaps
-{
-public:
-    void Create(Device *pDevice, uint32 cbvDescriptorCount, uint32 srvDescriptorCount, uint32 uavDescriptorCount, uint32 dsvDescriptorCount, uint32 rtvDescriptorCount, uint32 samplerDescriptorCount)
-    {
-        m_DSV_Heap.Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, dsvDescriptorCount);
-        m_RTV_Heap.Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, rtvDescriptorCount);
-        m_Sampler_Heap.Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, samplerDescriptorCount);
-        m_CBV_SRV_UAV_Heap.Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, cbvDescriptorCount + srvDescriptorCount + uavDescriptorCount);
-    }
-
-    void Destroy()
-    {
-        m_DSV_Heap.Destroy();
-        m_RTV_Heap.Destroy();
-        m_Sampler_Heap.Destroy();
-        m_CBV_SRV_UAV_Heap.Destroy();
-    }
-
-    bool AllocCBV_SRV_UAVDescriptor(uint32 size, CBV_SRV_UAV *pRV)
-    {
-        return m_CBV_SRV_UAV_Heap.AllocDescriptor(size, pRV);
-    }
-
-    bool AllocDSVDescriptor(uint32 size, DSV *pRV)
-    {
-        return m_DSV_Heap.AllocDescriptor(size, pRV);
-    }
-
-    bool AllocRTVDescriptor(uint32 size, RTV *pRV)
-    {
-        return m_RTV_Heap.AllocDescriptor(size, pRV);
-    }
-
-    bool AllocSamplerDescriptor(uint32 size, SAMPLER *pRV)
-    {
-        return m_Sampler_Heap.AllocDescriptor(size, pRV);
-    }
-
-    ID3D12DescriptorHeap* GetDSVHeap() { return m_DSV_Heap.GetHeap(); }
-    ID3D12DescriptorHeap* GetRTVHeap() { return m_RTV_Heap.GetHeap(); }
-    ID3D12DescriptorHeap* GetSamplerHeap() { return m_Sampler_Heap.GetHeap(); }
-    ID3D12DescriptorHeap* GetCBV_SRV_UAVHeap() { return m_CBV_SRV_UAV_Heap.GetHeap(); }
-
-private:
-    StaticResourceViewHeap m_DSV_Heap;
-    StaticResourceViewHeap m_RTV_Heap;
-    StaticResourceViewHeap m_Sampler_Heap;
-    StaticResourceViewHeap m_CBV_SRV_UAV_Heap;
-};
-#endif
-

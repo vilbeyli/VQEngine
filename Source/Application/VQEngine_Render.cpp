@@ -17,17 +17,22 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "VQEngine.h"
+#include "Geometry.h"
 
 #include <d3d12.h>
 #include <dxgi.h>
 
 
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//
+// MAIN
+//
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
 void VQEngine::RenderThread_Main()
 {
 	Log::Info("RenderThread_Main()");
-	this->RenderThread_Inititalize();
+	RenderThread_Inititalize();
 
-	this->mRenderer.Load();
 
 	bool bQuit = false;
 	while (!this->mbStopAllThreads && !bQuit)
@@ -50,9 +55,7 @@ void VQEngine::RenderThread_Main()
 		RenderThread_HandleEvents();
 	}
 
-	this->mRenderer.Unload();
-
-	this->RenderThread_Exit();
+	RenderThread_Exit();
 	Log::Info("RenderThread_Main() : Exit");
 }
 
@@ -75,7 +78,11 @@ void VQEngine::RenderThread_SignalUpdateThread()
 
 
 
-
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//
+// INITIALIZE
+//
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
 void VQEngine::RenderThread_Inititalize()
 {
 	FRendererInitializeParameters params = {};
@@ -116,50 +123,72 @@ void VQEngine::RenderThread_Inititalize()
 
 	mbRenderThreadInitialized.store(true);
 	mNumRenderLoopsExecuted.store(0);
+
+	InitializeBuiltinMeshes();
+	mRenderer.Load();
 }
 
 void VQEngine::RenderThread_Exit()
 {
+	mRenderer.Unload();
 	mRenderer.Exit();
 }
 
+void VQEngine::InitializeBuiltinMeshes()
+{
+	{
+		GeometryGenerator::GeometryData<FVertexWithColorAndAlpha> data = GeometryGenerator::Triangle<FVertexWithColorAndAlpha>(1.0f);
+		mBuiltinMeshNames[EBuiltInMeshes::TRIANGLE] = "Triangle";
+		mBuiltinMeshes[EBuiltInMeshes::TRIANGLE] = Mesh(&mRenderer, data.Vertices, data.Indices, mBuiltinMeshNames[EBuiltInMeshes::TRIANGLE]);
+	}
+	{
+		GeometryGenerator::GeometryData<FVertexWithNormalAndTangent> data = GeometryGenerator::Cube<FVertexWithNormalAndTangent>();
+		mBuiltinMeshNames[EBuiltInMeshes::CUBE] = "Cube";
+		mBuiltinMeshes[EBuiltInMeshes::CUBE] = Mesh(&mRenderer, data.Vertices, data.Indices, mBuiltinMeshNames[EBuiltInMeshes::CUBE]);
+	}
+
+	// ...
+}
+
+
+
+
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//
+// RENDER
+//
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
 void VQEngine::RenderThread_PreRender()
 {
 }
 
 void VQEngine::RenderThread_Render()
 {
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain);
+	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
 	const int FRAME_DATA_INDEX  = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
 
-	HRESULT hr0 = S_OK;
-	HRESULT hr1 = S_OK;
+	RenderThread_RenderMainWindow();
+	RenderThread_RenderDebugWindow();
+}
 
-#define RENDER_IN_PARALLEL 0
-#if RENDER_IN_PARALLEL
-	// TODO: test parallel rendering of window contexts
-#else
-	if (mbLoadingLevel)
-	{
-		// TODO: proper data encalsulation + remove reinterpret cast.
-		//       this was good enough for testing threaded loading and is meant to be temporary.
-		hr0 = mRenderer.RenderWindowContext(mpWinMain->GetHWND() , *reinterpret_cast<FFrameData*>(&mScene_MainWnd.mLoadingScreenData[FRAME_DATA_INDEX]));
-		if(mpWinDebug) hr1 = mRenderer.RenderWindowContext(mpWinDebug->GetHWND(), *reinterpret_cast<FFrameData*>(&mScene_DebugWnd.mLoadingScreenData[FRAME_DATA_INDEX]));
-	}
 
-	// Scene rendering
-	else
-	{
-		hr0 = mRenderer.RenderWindowContext(mpWinMain->GetHWND(), mScene_MainWnd.mFrameData[FRAME_DATA_INDEX]);
-		if(mpWinDebug) hr1 = mRenderer.RenderWindowContext(mpWinDebug->GetHWND(), mScene_DebugWnd.mFrameData[FRAME_DATA_INDEX]);
-	}
-#endif
+void VQEngine::RenderThread_RenderMainWindow()
+{
+	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
+	const int FRAME_DATA_INDEX = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
+
+	HRESULT hr = S_OK; 
+
+	FWindowRenderContext& ctx = mRenderer.GetWindowRenderContext(mpWinMain->GetHWND());
+	hr = mbLoadingLevel
+		? RenderThread_RenderMainWindow_LoadingScreen(ctx)
+		: RenderThread_RenderMainWindow_Scene(ctx);
 
 	// TODO: remove copy paste and use encapsulation of context rendering properly
 	// currently check only for hr0 for the mainWindow
-	if (hr0 == DXGI_STATUS_OCCLUDED)
+	if (hr == DXGI_STATUS_OCCLUDED)
 	{
-		if (mpWinMain->IsFullscreen()) 
+		if (mpWinMain->IsFullscreen())
 		{
 			mpWinMain->SetFullscreen(false);
 			mpWinMain->Show();
@@ -167,6 +196,313 @@ void VQEngine::RenderThread_Render()
 	}
 }
 
+void VQEngine::RenderThread_RenderDebugWindow()
+{
+	HRESULT hr = S_OK;
+	FWindowRenderContext& ctx   = mRenderer.GetWindowRenderContext(mpWinDebug->GetHWND());
+	const int NUM_BACK_BUFFERS  = ctx.SwapChain.GetNumBackBuffers();
+	const int BACK_BUFFER_INDEX = ctx.SwapChain.GetCurrentBackBufferIndex();
+	const int FRAME_DATA_INDEX  = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
+	const FFrameData& FrameData = mScene_DebugWnd.mFrameData[FRAME_DATA_INDEX];
+	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
+	// ----------------------------------------------------------------------------
+
+	
+	//
+	// PRE RENDER
+	//
+	// Command list allocators can only be reset when the associated 
+	// command lists have finished execution on the GPU; apps should use 
+	// fences to determine GPU execution progress.
+	ID3D12CommandAllocator* pCmdAlloc = ctx.mCommandAllocatorsGFX[BACK_BUFFER_INDEX];
+	ThrowIfFailed(pCmdAlloc->Reset());
+
+	// However, when ExecuteCommandList() is called on a particular command 
+	// list, that command list can then be reset at any time and must be before 
+	// re-recording.
+	ID3D12PipelineState* pInitialState = nullptr;
+	ThrowIfFailed(ctx.pCmdList_GFX->Reset(pCmdAlloc, pInitialState));
+
+	//
+	// RENDER
+	//
+	ID3D12GraphicsCommandList* pCmd = ctx.pCmdList_GFX;
+
+	// Transition SwapChain RT
+	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
+	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
+		, D3D12_RESOURCE_STATE_PRESENT
+		, D3D12_RESOURCE_STATE_RENDER_TARGET)
+	);
+
+	// Clear RT
+	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = ctx.SwapChain.GetCurrentBackBufferRTVHandle();
+	const float clearColor[] =
+	{
+		FrameData.SwapChainClearColor[0],
+		FrameData.SwapChainClearColor[1],
+		FrameData.SwapChainClearColor[2],
+		FrameData.SwapChainClearColor[3]
+	};
+	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+
+	// Draw Triangle
+
+	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
+
+	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO));
+	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(EVertexBufferType::COLOR_AND_ALPHA));
+
+#if 0
+	//pCmd->SetDescriptorHeaps(_countof(), NULL);
+	//pCmd->SetGraphicsRootDescriptorTable(0, g_MainDescriptorHeap[g_FrameIndex]->GetGPUDescriptorHandleForHeapStart()))
+	//pCmd->SetGraphicsRootDescriptorTable(2, g_MainDescriptorHeap[g_FrameIndex]->GetGPUDescriptorHandleForHeapStart()))
+	//pCmd->SetGraphicsRootConstantBufferView(1, )
+#endif
+
+	const float RenderResolutionX = static_cast<float>(ctx.MainRTResolutionX);
+	const float RenderResolutionY = static_cast<float>(ctx.MainRTResolutionY);
+	D3D12_VIEWPORT viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
+	pCmd->RSSetViewports(1, &viewport);
+
+	D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
+	pCmd->RSSetScissorRects(1, &scissorsRect);
+
+	const auto VBIBIDs = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE].GetIABuffers();
+	const BufferID& VB_ID = VBIBIDs.first;
+	const BufferID& IB_ID = VBIBIDs.second;
+	const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
+	const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
+
+	pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	pCmd->IASetVertexBuffers(0, 1, &vb);
+	pCmd->IASetIndexBuffer(&ib);
+
+	pCmd->DrawIndexedInstanced(3, 1, 0, 0, 0);
+
+
+	// Transition SwapChain for Present
+	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
+		, D3D12_RESOURCE_STATE_RENDER_TARGET
+		, D3D12_RESOURCE_STATE_PRESENT)
+	);
+
+	pCmd->Close();
+
+	ID3D12CommandList* ppCommandLists[] = { ctx.pCmdList_GFX };
+	ctx.PresentQueue.pQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+
+
+	//
+	// PRESENT
+	//
+	hr = ctx.SwapChain.Present(ctx.bVsync);
+	ctx.SwapChain.MoveToNextFrame();
+	//return hr;
+}
+
+HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderContext& ctx)
+{
+	HRESULT hr = S_OK;
+	const int NUM_BACK_BUFFERS = ctx.SwapChain.GetNumBackBuffers();
+	const int BACK_BUFFER_INDEX = ctx.SwapChain.GetCurrentBackBufferIndex();
+	const int FRAME_DATA_INDEX = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
+	assert(mScene_MainWnd.mLoadingScreenData.size() > 0);
+	const FLoadingScreenData& FrameData = mScene_MainWnd.mLoadingScreenData[FRAME_DATA_INDEX];
+	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
+	// ----------------------------------------------------------------------------
+
+	//
+	// PRE RENDER
+	//
+	// Command list allocators can only be reset when the associated 
+	// command lists have finished execution on the GPU; apps should use 
+	// fences to determine GPU execution progress.
+	ID3D12CommandAllocator* pCmdAlloc = ctx.mCommandAllocatorsGFX[BACK_BUFFER_INDEX];
+	ThrowIfFailed(pCmdAlloc->Reset());
+
+	// However, when ExecuteCommandList() is called on a particular command 
+	// list, that command list can then be reset at any time and must be before 
+	// re-recording.
+	ID3D12PipelineState* pInitialState = nullptr;
+	ThrowIfFailed(ctx.pCmdList_GFX->Reset(pCmdAlloc, pInitialState));
+
+	//
+	// RENDER
+	//
+	ID3D12GraphicsCommandList* pCmd = ctx.pCmdList_GFX;
+
+	// Transition SwapChain RT
+	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
+	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
+		, D3D12_RESOURCE_STATE_PRESENT
+		, D3D12_RESOURCE_STATE_RENDER_TARGET)
+	);
+
+	// Clear RT
+	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = ctx.SwapChain.GetCurrentBackBufferRTVHandle();
+	const float clearColor[] =
+	{
+		FrameData.SwapChainClearColor[0],
+		FrameData.SwapChainClearColor[1],
+		FrameData.SwapChainClearColor[2],
+		FrameData.SwapChainClearColor[3]
+	};
+	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+
+	// Draw Triangle
+	const float           RenderResolutionX = static_cast<float>(ctx.MainRTResolutionX);
+	const float           RenderResolutionY = static_cast<float>(ctx.MainRTResolutionY);
+	D3D12_VIEWPORT        viewport          { 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
+	const auto            VBIBIDs           = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE].GetIABuffers();
+	const BufferID&       IB_ID             = VBIBIDs.second;
+	const IBV&            ib                = mRenderer.GetIndexBufferView(IB_ID);
+	ID3D12DescriptorHeap* ppHeaps[]         = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
+	D3D12_RECT            scissorsRect      { 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
+
+	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
+
+	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::LOADING_SCREEN_PSO));
+	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(EVertexBufferType::DEFAULT));
+
+	pCmd->SetDescriptorHeaps(1, ppHeaps);
+	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetShaderResourceView(FrameData.SRVLoadingScreen).GetGPUDescHandle());
+
+#if 0
+	//pCmd->SetGraphicsRootDescriptorTable(2, g_MainDescriptorHeap[g_FrameIndex]->GetGPUDescriptorHandleForHeapStart()))
+	//pCmd->SetGraphicsRootConstantBufferView(1, )
+#endif
+
+	pCmd->RSSetViewports(1, &viewport);
+	pCmd->RSSetScissorRects(1, &scissorsRect);
+
+	pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	pCmd->IASetVertexBuffers(0, 1, NULL);
+	pCmd->IASetIndexBuffer(&ib);
+
+	pCmd->DrawIndexedInstanced(3, 1, 0, 0, 0);
+
+	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
+		, D3D12_RESOURCE_STATE_RENDER_TARGET
+		, D3D12_RESOURCE_STATE_PRESENT)
+	); // Transition SwapChain for Present
+
+	pCmd->Close();
+
+	ID3D12CommandList* ppCommandLists[] = { ctx.pCmdList_GFX };
+	ctx.PresentQueue.pQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+
+
+	//
+	// PRESENT
+	//
+	hr = ctx.SwapChain.Present(ctx.bVsync);
+	ctx.SwapChain.MoveToNextFrame();
+	return hr;
+}
+
+HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
+{
+	HRESULT hr = S_OK;
+	const int NUM_BACK_BUFFERS  = ctx.SwapChain.GetNumBackBuffers();
+	const int BACK_BUFFER_INDEX = ctx.SwapChain.GetCurrentBackBufferIndex();
+	const int FRAME_DATA_INDEX  = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
+	const FFrameData& FrameData = mScene_MainWnd.mFrameData[FRAME_DATA_INDEX];
+	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
+	// ----------------------------------------------------------------------------
+
+	//
+	// PRE RENDER
+	//
+	// Command list allocators can only be reset when the associated 
+	// command lists have finished execution on the GPU; apps should use 
+	// fences to determine GPU execution progress.
+	ID3D12CommandAllocator* pCmdAlloc = ctx.mCommandAllocatorsGFX[BACK_BUFFER_INDEX];
+	ThrowIfFailed(pCmdAlloc->Reset());
+
+	// However, when ExecuteCommandList() is called on a particular command 
+	// list, that command list can then be reset at any time and must be before 
+	// re-recording.
+	ID3D12PipelineState* pInitialState = nullptr;
+	ThrowIfFailed(ctx.pCmdList_GFX->Reset(pCmdAlloc, pInitialState));
+
+	//
+	// RENDER
+	//
+	ID3D12GraphicsCommandList* pCmd = ctx.pCmdList_GFX;
+
+	// Transition SwapChain RT
+	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
+	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
+		, D3D12_RESOURCE_STATE_PRESENT
+		, D3D12_RESOURCE_STATE_RENDER_TARGET)
+	);
+
+	// Clear RT
+	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = ctx.SwapChain.GetCurrentBackBufferRTVHandle();
+	const float clearColor[] =
+	{
+		FrameData.SwapChainClearColor[0],
+		FrameData.SwapChainClearColor[1],
+		FrameData.SwapChainClearColor[2],
+		FrameData.SwapChainClearColor[3]
+	};
+	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+
+	// Draw Triangle
+
+	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
+
+	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO));
+	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(EVertexBufferType::COLOR_AND_ALPHA));
+
+#if 0
+	//pCmd->SetDescriptorHeaps(_countof(), NULL);
+	//pCmd->SetGraphicsRootDescriptorTable(0, g_MainDescriptorHeap[g_FrameIndex]->GetGPUDescriptorHandleForHeapStart()))
+	//pCmd->SetGraphicsRootDescriptorTable(2, g_MainDescriptorHeap[g_FrameIndex]->GetGPUDescriptorHandleForHeapStart()))
+	//pCmd->SetGraphicsRootConstantBufferView(1, )
+#endif
+
+	const float RenderResolutionX = static_cast<float>(ctx.MainRTResolutionX);
+	const float RenderResolutionY = static_cast<float>(ctx.MainRTResolutionY);
+	D3D12_VIEWPORT viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
+	pCmd->RSSetViewports(1, &viewport);
+
+	D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
+	pCmd->RSSetScissorRects(1, &scissorsRect);
+
+	const auto VBIBIDs = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE].GetIABuffers();
+	const BufferID& VB_ID = VBIBIDs.first;
+	const BufferID& IB_ID = VBIBIDs.second;
+	const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
+	const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
+
+	pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	pCmd->IASetVertexBuffers(0, 1, &vb);
+	pCmd->IASetIndexBuffer(&ib);
+
+	pCmd->DrawIndexedInstanced(3, 1, 0, 0, 0);
+
+
+	// Transition SwapChain for Present
+	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
+		, D3D12_RESOURCE_STATE_RENDER_TARGET
+		, D3D12_RESOURCE_STATE_PRESENT)
+	);
+
+	pCmd->Close();
+
+	ID3D12CommandList* ppCommandLists[] = { ctx.pCmdList_GFX };
+	ctx.PresentQueue.pQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+
+
+	//
+	// PRESENT
+	//
+	hr = ctx.SwapChain.Present(ctx.bVsync);
+	ctx.SwapChain.MoveToNextFrame();
+	return hr;
+}
 
 
 
@@ -181,44 +517,36 @@ void VQEngine::RenderThread_HandleEvents()
 	//   Otherwise, theoretically the producer (Main) thread could keep adding new events 
 	//   while we're spinning on the queue items below, and cause render thread to stall while, say, resizing.
 	mWinEventQueue.SwapBuffers();
-	std::queue<IEvent*>& q = mWinEventQueue.GetBackContainer();
+	std::queue<std::unique_ptr<IEvent>>& q = mWinEventQueue.GetBackContainer();
 	if (q.empty())
 		return;
 
-#define HANDLE_EVERY_RESIZE_EVENT 0
-
 	// process the events
-	const IEvent* pEvent = {};
-	const WindowResizeEvent* pResizeEvent = nullptr;
+	std::shared_ptr<IEvent> pEvent = nullptr;
+	std::shared_ptr<WindowResizeEvent> pResizeEvent = nullptr;
 	while (!q.empty())
 	{
-		pEvent = q.front();
+		pEvent = std::move(q.front());
 		q.pop();
 
 		switch (pEvent->mType)
 		{
 		case EEventType::WINDOW_RESIZE_EVENT: 
-#if HANDLE_EVERY_RESIZE_EVENT
-			RenderThread_HandleResizeWindowEvent(pEvent);
-#else
 			// noop, we only care about the last RESIZE event to avoid calling SwapchainResize() unneccessarily
-			pResizeEvent = static_cast<const WindowResizeEvent*>(pEvent);
-#endif
+			pResizeEvent = std::static_pointer_cast<WindowResizeEvent>(pEvent);
+
 			break;
 		case EEventType::TOGGLE_FULLSCREEN_EVENT:
 			// handle every fullscreen event
-			RenderThread_HandleToggleFullscreenEvent(pEvent);
+			RenderThread_HandleToggleFullscreenEvent(pEvent.get());
 			break;
 		}
 	}
-
-#if !HANDLE_EVERY_RESIZE_EVENT
 	// Process Window Resize
 	if (pResizeEvent)
 	{
-		RenderThread_HandleResizeWindowEvent(pResizeEvent);
+		RenderThread_HandleResizeWindowEvent(pResizeEvent.get());
 	}
-#endif
 	
 }
 

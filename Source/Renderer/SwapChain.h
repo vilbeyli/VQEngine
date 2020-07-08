@@ -79,10 +79,10 @@ private:
 private:
 	friend class Window; // Window can access pSwapChain.
 
-	HWND                         mHwnd;
-	unsigned short               mNumBackBuffers;
-	unsigned short               mICurrentBackBuffer;
-	unsigned long long           mNumTotalFrames = 0;
+	HWND                         mHwnd               = NULL;
+	unsigned short               mNumBackBuffers     = 0;
+	unsigned short               mICurrentBackBuffer = 0;
+	unsigned long long           mNumTotalFrames     = 0;
 
 	HANDLE                       mHEvent = 0;
 	ID3D12Fence*                 mpFence = nullptr;

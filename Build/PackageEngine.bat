@@ -34,6 +34,9 @@ set DATA_DIRECTORY=../Data
 set BUILD_NUM_TASKS=2
 set BUILD_NUM_CURR_TASK=0
 
+:: flag determining whether to launch the explorer upon package completion or not
+set SKIP_EXPLORER=0
+
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
@@ -62,6 +65,8 @@ for %%i IN (%*) DO (
 
     if "%%i"=="-SkipMSBuildFind" set MSBUILD_FIND=0
     if "%%i"=="-SkipPackaging"   set BUILD_TASKS_ONLY=1
+    if "%%i"=="-NoExplorer"      set SKIP_EXPLORER=1
+    if "%%i"=="-SkipExplorer"    set SKIP_EXPLORER=1
 )
 
 ::echo SkipMSBuildFind=!MSBUILD_FIND!
@@ -107,7 +112,10 @@ if %ERRORLEVEL% neq 0  exit /b %ERRORLEVEL%
 :: move build artifacts into destination folder
 call :ExecBuildTask_Move
 echo [VQPackage] PACKAGING SUCCESSFUL!
-start !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
+
+if !SKIP_EXPLORER! neq 0 (
+    start !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
+)
 
 popd
 
@@ -240,9 +248,10 @@ exit /b 0
 :PackageBuild
 set SRC=%~1
 set DST=%~2
-robocopy !SRC! !DST! /xf *.lib *.ilk /xd Icons/ Resources/ 
-robocopy !SHADER_DIRECTORY! !DST!/Shaders 
+robocopy !SRC! !DST! /xf *.lib *.ilk /xd Icons/ Resources/ /E
+robocopy !SHADER_DIRECTORY! !DST!/Shaders /E
 xcopy "!DATA_DIRECTORY!/EngineSettings.ini" "!DST!/Data"\ /Y /Q /F
+robocopy "!DATA_DIRECTORY!/Textures" "!DST!/Data/Textures" /E
 exit /b 0
 
 ::

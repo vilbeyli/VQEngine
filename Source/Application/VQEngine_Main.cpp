@@ -68,6 +68,8 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 void VQEngine::Exit()
 {
 	ExitThreads();
+
+	
 }
 
 
@@ -200,66 +202,7 @@ void VQEngine::ExitThreads()
 	mRenderWorkerThreads.Exit();
 }
 
-void VQEngine::LoadLoadingScreenData()
-{
-	// start loading loadingscreen data for each window 
-	auto fMain = mUpdateWorkerThreads.AddTask([&]()
-	{
-		FLoadingScreenData data;
-		data.SwapChainClearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
-		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain);
-		mScene_MainWnd.mLoadingScreenData.resize(NumBackBuffer_WndMain, data);
 
-		mWindowUpdateContextLookup[mpWinMain->GetHWND()] = &mScene_MainWnd;
-		
-	});
-
-	Log::Info("Load_LoadingScreenData_Dispatch");
-
-	if (mpWinDebug)
-	{
-		auto fDbg = mUpdateWorkerThreads.AddTask([&]()
-		{
-			FLoadingScreenData data;
-			data.SwapChainClearColor = { 0.5f, 0.4f, 0.01f, 1.0f };
-			const int NumBackBuffer_WndDbg = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinDebug);
-			mScene_DebugWnd.mLoadingScreenData.resize(NumBackBuffer_WndDbg, data);
-
-			mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
-		});
-		if(fDbg.valid()) fDbg.get();
-	}
-
-	// loading screen data must be loaded right away.
-	if(fMain.valid()) fMain.get();
-
-	Log::Info("Load_LoadingScreenData_Dispatch - DONE");
-
-}
-
-
-void VQEngine::Load_SceneData_Dispatch()
-{
-	mUpdateWorkerThreads.AddTask([&]() { Sleep(1000); Log::Info("Worker SLEEP done!"); }); // Test-task
-	mUpdateWorkerThreads.AddTask([&]()
-	{
-		// TODO: initialize window scene data here for now, should update this to proper location later on (Scene probably?)
-		FFrameData data[2];
-		data[0].SwapChainClearColor = { 0.07f, 0.07f, 0.07f, 1.0f };
-		data[1].SwapChainClearColor = { 0.20f, 0.21f, 0.21f, 1.0f };
-		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinMain);
-		const int NumBackBuffer_WndDbg = mRenderer.GetSwapChainBackBufferCountOfWindow(mpWinDebug);
-		mScene_MainWnd.mFrameData.resize(NumBackBuffer_WndMain, data[0]);
-		mScene_DebugWnd.mFrameData.resize(NumBackBuffer_WndDbg, data[1]);
-
-		mWindowUpdateContextLookup[mpWinMain->GetHWND()] = &mScene_MainWnd;
-		if(mpWinDebug) mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
-	});
-}
-
-void VQEngine::Load_SceneData_Join()
-{
-}
 
 std::unique_ptr<Window>& VQEngine::GetWindow(HWND hwnd)
 {

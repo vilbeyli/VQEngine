@@ -2,6 +2,6 @@
 
 setlocal enabledelayedexpansion
 
-call PackageEngine.bat -Debug -Clean
+call PackageEngine.bat -Debug -Clean -SkipExplorer
 cd ../Scripts
 call TestVQE.bat -Debug

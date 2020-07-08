@@ -132,35 +132,38 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR pScmdl, int iCmdSh
 
 	Log::Initialize(StartupParameters.LogInitParams);
 
-	VQEngine Engine = {};
-	Engine.Initialize(StartupParameters);
-	
-
-	MSG msg;
-	bool bQuit = false;
-	while (!bQuit)
 	{
-		// https://docs.microsoft.com/en-us/windows/win32/learnwin32/window-messages
-		// http://www.directxtutorial.com/Lesson.aspx?lessonid=9-1-4
-		while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
-		{
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
+		VQEngine Engine = {};
+		Engine.Initialize(StartupParameters);
 
-			if (msg.message == WM_QUIT)
+		MSG msg;
+		bool bQuit = false;
+		while (!bQuit)
+		{
+			// https://docs.microsoft.com/en-us/windows/win32/learnwin32/window-messages
+			// http://www.directxtutorial.com/Lesson.aspx?lessonid=9-1-4
+			while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
 			{
-				Log::Info("WM_QUIT!");
-				bQuit = true;
-				break;
-			} 
+				TranslateMessage(&msg);
+				DispatchMessage(&msg);
+
+				if (msg.message == WM_QUIT)
+				{
+					Log::Info("WM_QUIT!");
+					bQuit = true;
+					break;
+				}
+			}
+
+			Engine.MainThread_Tick();
 		}
-		
-		Engine.MainThread_Tick();
+
+		Engine.Exit();
 	}
 
-	Engine.Exit();
-	
 	Log::Exit();
+
+	//MessageBox(NULL, "EXIT", "Exit", MB_OK); // quick debugging
 
 	return 0;
 }

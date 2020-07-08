@@ -18,6 +18,7 @@
 
 #include "Renderer.h"
 #include "Device.h"
+#include "Texture.h"
 
 #include "../Application/Window.h"
 
@@ -115,7 +116,7 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 		const FWindowRepresentation& wnd = params.Windows[i];
 		
 
-		FRenderWindowContext ctx = {};
+		FWindowRenderContext ctx = {};
 
 		ctx.pDevice = pVQDevice;
 		ctx.PresentQueue.Create(ctx.pDevice, CommandQueue::ECommandQueueType::GFX); // Create the GFX queue for presenting the SwapChain
@@ -163,7 +164,7 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 	InitializeD3D12MA();
 	InitializeResourceHeaps();
 	{
-		constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 64 * MEGABYTE;
+		constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 16 * MEGABYTE;
 		constexpr bool USE_GPU_MEMORY = true;
 		mStaticVertexBufferPool.Create(pDevice, EBufferType::VERTEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticVertexBufferPool");
 		mStaticIndexBufferPool .Create(pDevice, EBufferType::INDEX_BUFFER , STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticIndexBufferPool");
@@ -201,13 +202,26 @@ void VQRenderer::Exit()
 	}
 
 	mHeapUpload.Destroy();
+	mHeapCBV_SRV_UAV.Destroy();
 	mStaticVertexBufferPool.Destroy();
 	mStaticIndexBufferPool.Destroy();
-
+	for (Texture& tex : mTextures)
+	{
+		tex.Destroy();
+	}
 	mpAllocator->Release();
 
-	mpRootSignature->Release();
-	mpPSO->Release();
+	for (ID3D12RootSignature* pRootSignature : mpBuiltinRootSignatures)
+	{
+		if (pRootSignature) 
+			pRootSignature->Release();
+	}
+	for (ID3D12PipelineState* pPSO : mpBuiltinPSOs)
+	{
+		if (pPSO)
+			pPSO->Release();
+	}
+
 
 	mGFXQueue.Destroy();
 	mComputeQueue.Destroy();
@@ -219,7 +233,7 @@ void VQRenderer::Exit()
 void VQRenderer::OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h)
 {
 	if (!CheckContext(hwnd)) return;
-	FRenderWindowContext& ctx = mRenderContextLookup.at(hwnd);
+	FWindowRenderContext& ctx = mRenderContextLookup.at(hwnd);
 
 	ctx.MainRTResolutionX = w; // TODO: RenderScale
 	ctx.MainRTResolutionY = h; // TODO: RenderScale
@@ -227,114 +241,165 @@ void VQRenderer::OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h)
 
 SwapChain& VQRenderer::GetWindowSwapChain(HWND hwnd) { return mRenderContextLookup.at(hwnd).SwapChain; }
 
-HRESULT VQRenderer::RenderWindowContext(HWND hwnd, const FFrameData& FrameData)
+FWindowRenderContext& VQRenderer::GetWindowRenderContext(HWND hwnd)
 {
-	HRESULT hr = {};
-	if (!CheckContext(hwnd)) return hr;
-
-	FRenderWindowContext& ctx = mRenderContextLookup.at(hwnd);
-
-	const int NUM_BACK_BUFFERS  = ctx.SwapChain.GetNumBackBuffers();
-	const int BACK_BUFFER_INDEX = ctx.SwapChain.GetCurrentBackBufferIndex();
-	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
-	// ----------------------------------------------------------------------------
-
-	//
-	// PRE RENDER
-	//
-	// Command list allocators can only be reset when the associated 
-	// command lists have finished execution on the GPU; apps should use 
-	// fences to determine GPU execution progress.
-	ID3D12CommandAllocator* pCmdAlloc = ctx.mCommandAllocatorsGFX[BACK_BUFFER_INDEX];
-	ThrowIfFailed(pCmdAlloc->Reset());
-
-	// However, when ExecuteCommandList() is called on a particular command 
-	// list, that command list can then be reset at any time and must be before 
-	// re-recording.
-	ID3D12PipelineState* pInitialState = nullptr;
-	ThrowIfFailed(ctx.pCmdList_GFX->Reset(pCmdAlloc, pInitialState));
-
-	//
-	// RENDER
-	//
-	ID3D12GraphicsCommandList* pCmd = ctx.pCmdList_GFX;
-
-	// Transition SwapChain RT
-	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
-	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
-		, D3D12_RESOURCE_STATE_PRESENT
-		, D3D12_RESOURCE_STATE_RENDER_TARGET)
-	);
-
-	// Clear RT
-	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = ctx.SwapChain.GetCurrentBackBufferRTVHandle(); 
-	const float clearColor[] = 
-	{ 
-		FrameData.SwapChainClearColor[0],
-		FrameData.SwapChainClearColor[1],
-		FrameData.SwapChainClearColor[2],
-		FrameData.SwapChainClearColor[3]
-	};
-	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
-
-	// Draw Triangle
-
-	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
-
-	pCmd->SetPipelineState(mpPSO);
-
-	pCmd->SetGraphicsRootSignature(mpRootSignature);
-
-#if 0
-	//pCmd->SetDescriptorHeaps(_countof(), NULL);
-	//pCmd->SetGraphicsRootDescriptorTable(0, g_MainDescriptorHeap[g_FrameIndex]->GetGPUDescriptorHandleForHeapStart()))
-	//pCmd->SetGraphicsRootDescriptorTable(2, g_MainDescriptorHeap[g_FrameIndex]->GetGPUDescriptorHandleForHeapStart()))
-	//pCmd->SetGraphicsRootConstantBufferView(1, )
-#endif
-
-	const float RenderResolutionX = static_cast<float>(ctx.MainRTResolutionX);
-	const float RenderResolutionY = static_cast<float>(ctx.MainRTResolutionY);
-	D3D12_VIEWPORT viewport { 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
-	pCmd->RSSetViewports(1, &viewport);
-
-	D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
-	pCmd->RSSetScissorRects(1, &scissorsRect);
-
-	pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	pCmd->IASetVertexBuffers(0, 1, &mVertexBufferViews[0]);
-	pCmd->IASetIndexBuffer(&mIndexBufferViews[0]);
-
-	pCmd->DrawIndexedInstanced(3, 1, 0, 0, 0);
-
-
-	// Transition SwapChain for Present
-	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
-		, D3D12_RESOURCE_STATE_RENDER_TARGET
-		, D3D12_RESOURCE_STATE_PRESENT)
-	);
-
-	pCmd->Close();
-
-	ID3D12CommandList* ppCommandLists[] = { ctx.pCmdList_GFX };
-	ctx.PresentQueue.pQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
-
-
-	//
-	// PRESENT
-	//
-	hr = ctx.SwapChain.Present(ctx.bVsync);
-
-	ctx.SwapChain.MoveToNextFrame();
-
-	return hr;
+	if (!CheckContext(hwnd))
+	{
+		Log::Error("VQRenderer::GetWindowRenderContext(): Context not found!");
+		//return FWindowRenderContext{};
+	}
+	return mRenderContextLookup.at(hwnd);
 }
 
-short VQRenderer::GetSwapChainBackBufferCountOfWindow(Window* pWnd) const { return pWnd ? this->GetSwapChainBackBufferCountOfWindow(pWnd->GetHWND()) : 0; }
-short VQRenderer::GetSwapChainBackBufferCountOfWindow(HWND hwnd) const
+BufferID VQRenderer::CreateBuffer(const FBufferDesc& desc)
+{
+	BufferID Id = INVALID_ID;
+	bool bSuccess = false;
+
+	switch (desc.Type)
+	{
+	case VERTEX_BUFFER   : Id = CreateVertexBuffer(desc); break;
+	case INDEX_BUFFER    : Id = CreateIndexBuffer(desc); break;
+	case CONSTANT_BUFFER : Id = CreateConstantBuffer(desc); break;
+	default              : assert(false); break; // shouldn't happen
+	}
+	return Id;
+}
+
+TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
+{
+	// TODO: check if file already loaded
+
+	Texture tex;
+
+	// https://docs.microsoft.com/en-us/windows/win32/direct3d12/residency#heap-resources
+	// Heap creation can be slow; but it is optimized for background thread processing. 
+	// It's recommended to create heaps on background threads to avoid glitching the render 
+	// thread. In D3D12, multiple threads may safely call create routines concurrently.
+	UploadHeap uploadHeap;
+	uploadHeap.Create(mDevice.GetDevicePtr(), 32 * MEGABYTE);
+
+	TextureDesc tDesc = {};
+	tDesc.pAllocator = mpAllocator;
+	tDesc.pDevice = mDevice.GetDevicePtr();
+	tDesc.pUploadHeap = &uploadHeap;
+	tDesc.TexName = pFilePath;
+	tDesc.Desc = {};
+
+	tex.CreateFromFile(tDesc, pFilePath);
+
+	uploadHeap.UploadToGPUAndWait(mGFXQueue.pQueue);
+	uploadHeap.Destroy();
+
+	std::lock_guard<std::mutex> lk(mMtxTextures);
+	mTextures.push_back(tex);
+	return static_cast<TextureID>(mTextures.size() - 1);
+}
+
+TextureID VQRenderer::CreateTexture(const D3D12_RESOURCE_DESC& desc, const void* pData)
+{
+	Texture tex;
+
+	// https://docs.microsoft.com/en-us/windows/win32/direct3d12/residency#heap-resources
+	// Heap creation can be slow; but it is optimized for background thread processing. 
+	// It's recommended to create heaps on background threads to avoid glitching the render 
+	// thread. In D3D12, multiple threads may safely call create routines concurrently.
+	UploadHeap uploadHeap;
+	uploadHeap.Create(mDevice.GetDevicePtr(), 32 * MEGABYTE);
+
+	TextureDesc tDesc = {};
+	tDesc.Desc = desc;
+	tDesc.pAllocator = mpAllocator;
+	tDesc.pDevice = mDevice.GetDevicePtr();
+	tDesc.pUploadHeap = &uploadHeap;
+
+	if (pData)
+	{
+		tex.CreateFromData(tDesc, pData);
+	}
+	else
+	{
+		assert(false); // TODO;
+	}
+	uploadHeap.UploadToGPUAndWait(mGFXQueue.pQueue);
+	uploadHeap.Destroy();
+
+	std::lock_guard<std::mutex> lk(mMtxTextures);
+	mTextures.push_back(tex);
+	return static_cast<TextureID>(mTextures.size() - 1);
+}
+
+SRV_ID VQRenderer::CreateSRV(TextureID texID)
+{
+	CBV_SRV_UAV SRV = {};
+
+	std::lock_guard<std::mutex> lk(mMtxSRVs);
+	mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
+	mTextures[texID].CreateSRV(0, &SRV);
+
+	mSRVs.push_back(SRV);
+	return static_cast<SRV_ID>(mSRVs.size() - 1);
+}
+
+BufferID VQRenderer::CreateVertexBuffer(const FBufferDesc& desc)
+{
+	BufferID Id = INVALID_ID;
+	VBV vbv;
+	bool bSuccess = mStaticVertexBufferPool.AllocVertexBuffer(desc.NumElements, desc.Stride, desc.pData, &vbv);
+	if (bSuccess)
+	{
+		mVBVs.push_back(vbv);
+		Id = static_cast<BufferID>(mVBVs.size() - 1);
+	}
+	else
+		Log::Error("Couldn't allocate vertex buffer");
+	return Id;
+}
+BufferID VQRenderer::CreateIndexBuffer(const FBufferDesc& desc)
+{
+	BufferID Id = INVALID_ID;
+	IBV ibv;
+	bool bSuccess = mStaticIndexBufferPool.AllocIndexBuffer(desc.NumElements, desc.Stride, desc.pData, &ibv);
+	if (bSuccess)
+	{
+		mIBVs.push_back(ibv);
+		Id = static_cast<BufferID>(mIBVs.size() - 1);
+	}
+	else
+		Log::Error("Couldn't allocate index buffer");
+	return Id;
+}
+BufferID VQRenderer::CreateConstantBuffer(const FBufferDesc& desc)
+{
+	BufferID Id = INVALID_ID;
+	assert(false);
+	return Id;
+}
+
+
+const VBV& VQRenderer::GetVertexBufferView(BufferID Id) const
+{
+	assert(Id < mVBVs.size() && Id != INVALID_ID);
+	return mVBVs[Id];
+}
+
+const IBV& VQRenderer::GetIndexBufferView(BufferID Id) const
+{
+	assert(Id < mIBVs.size() && Id != INVALID_ID);
+	return mIBVs[Id];
+}
+const CBV_SRV_UAV& VQRenderer::GetShaderResourceView(SRV_ID Id) const
+{
+	assert(Id < mSRVs.size() && Id != INVALID_ID);
+	return mSRVs[Id];
+}
+
+short VQRenderer::GetSwapChainBackBufferCount(Window* pWnd) const { return pWnd ? this->GetSwapChainBackBufferCount(pWnd->GetHWND()) : 0; }
+short VQRenderer::GetSwapChainBackBufferCount(HWND hwnd) const
 {
 	if (!CheckContext(hwnd)) return 0;
 
-	const FRenderWindowContext& ctx = mRenderContextLookup.at(hwnd);
+	const FWindowRenderContext& ctx = mRenderContextLookup.at(hwnd);
 	return ctx.SwapChain.GetNumBackBuffers();
 	
 }
@@ -350,7 +415,12 @@ bool VQRenderer::CheckContext(HWND hwnd) const
 	return true;
 }
 
+
 // ================================================================================================================================================
+// ================================================================================================================================================
+// ================================================================================================================================================
+
+
 
 //
 // PRIVATE
@@ -393,8 +463,14 @@ void VQRenderer::InitializeResourceHeaps()
 {
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
-	const uint32 UPLOAD_HEAP_SIZE = 1 * GIGABYTE; // TODO: from RendererSettings.ini
+	const uint32 UPLOAD_HEAP_SIZE = 256 * MEGABYTE; // TODO: from RendererSettings.ini
 	mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE);
+
+	constexpr uint32 NumDescsCBV = 10;
+	constexpr uint32 NumDescsSRV = 10;
+	constexpr uint32 NumDescsUAV = 10;
+	constexpr bool   bCPUVisible = false;
+	mHeapCBV_SRV_UAV.Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, NumDescsCBV + NumDescsSRV + NumDescsUAV, bCPUVisible);
 }
 
 static std::wstring GetAssetFullPath(LPCWSTR assetName)
@@ -407,116 +483,203 @@ void VQRenderer::LoadPSOs()
 {
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
-	// Create an empty root signature.
+	// HELLO WORLD TRIANGLE PSO
 	{
-		CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
-		rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+		// Create an empty root signature.
+		{
+			CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
+			rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
-		ComPtr<ID3DBlob> signature;
-		ComPtr<ID3DBlob> error;
-		ThrowIfFailed(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
-		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&mpRootSignature)));
-	}
+			ComPtr<ID3DBlob> signature;
+			ComPtr<ID3DBlob> error;
+			ThrowIfFailed(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
+			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&mpBuiltinRootSignatures[EVertexBufferType::COLOR_AND_ALPHA])));
+		}
 
 
-	ComPtr<ID3DBlob> vertexShader;
-	ComPtr<ID3DBlob> pixelShader;
+		ComPtr<ID3DBlob> vertexShader;
+		ComPtr<ID3DBlob> pixelShader;
 
 #if defined(_DEBUG)
-	// Enable better shader debugging with the graphics debugging tools.
-	UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+		// Enable better shader debugging with the graphics debugging tools.
+		UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #else
-	UINT compileFlags = 0;
+		UINT compileFlags = 0;
 #endif
 
 
-	ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"hello-triangle.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr));
-	ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"hello-triangle.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr));
+		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"hello-triangle.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr));
+		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"hello-triangle.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr));
 
-	// Define the vertex input layout.
-	D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
+		// Define the vertex input layout.
+		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
+		{
+			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT   , 0, 0 , D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "COLOR"   , 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT      , 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		};
+
+		// Describe and create the graphics pipeline state object (PSO).
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+		psoDesc.pRootSignature = mpBuiltinRootSignatures[EVertexBufferType::COLOR_AND_ALPHA];
+		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
+		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
+		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+		psoDesc.DepthStencilState.DepthEnable = FALSE;
+		psoDesc.DepthStencilState.StencilEnable = FALSE;
+		psoDesc.SampleMask = UINT_MAX;
+		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		psoDesc.NumRenderTargets = 1;
+		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		psoDesc.SampleDesc.Count = 1;
+		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO])));
+	}
+
+
+	// FULLSCREEN TIRANGLE PSO
 	{
-		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT   , 0, 0 , D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "COLOR"   , 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-	};
+		// Create an empty root signature.
+		{
+			D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
 
-	// Describe and create the graphics pipeline state object (PSO).
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-	psoDesc.InputLayout    = { inputElementDescs, _countof(inputElementDescs) };
-	psoDesc.pRootSignature = mpRootSignature;
-	psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
-	psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
-	psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-	psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-	psoDesc.DepthStencilState.DepthEnable = FALSE;
-	psoDesc.DepthStencilState.StencilEnable = FALSE;
-	psoDesc.SampleMask = UINT_MAX;
-	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	psoDesc.NumRenderTargets = 1;
-	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-	psoDesc.SampleDesc.Count = 1;
-	ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpPSO)));
+			// This is the highest version the sample supports. If CheckFeatureSupport succeeds, the HighestVersion returned will not be greater than this.
+			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
+
+			if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
+			{
+				featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+			}
+
+			CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
+			ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+
+			CD3DX12_ROOT_PARAMETER1 rootParameters[1];
+			rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
+
+			D3D12_STATIC_SAMPLER_DESC sampler = {};
+			sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+			sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+			sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+			sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+			sampler.MipLODBias = 0;
+			sampler.MaxAnisotropy = 0;
+			sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+			sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+			sampler.MinLOD = 0.0f;
+			sampler.MaxLOD = D3D12_FLOAT32_MAX;
+			sampler.ShaderRegister = 0;
+			sampler.RegisterSpace = 0;
+			sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+			CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+			rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+			ComPtr<ID3DBlob> signature;
+			ComPtr<ID3DBlob> error;
+			ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
+			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&mpBuiltinRootSignatures[EVertexBufferType::DEFAULT])));
+		}
 
 
+		ComPtr<ID3DBlob> vertexShader;
+		ComPtr<ID3DBlob> pixelShader;
+
+#if defined(_DEBUG)
+		// Enable better shader debugging with the graphics debugging tools.
+		UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+		UINT compileFlags = 0;
+#endif
+
+
+		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"FullscreenTriangle.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr));
+		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"FullscreenTriangle.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr));
+
+
+		// Describe and create the graphics pipeline state object (PSO).
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.InputLayout = { };
+		psoDesc.pRootSignature = mpBuiltinRootSignatures[EVertexBufferType::DEFAULT];
+		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
+		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
+		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+		psoDesc.DepthStencilState.DepthEnable = FALSE;
+		psoDesc.DepthStencilState.StencilEnable = FALSE;
+		psoDesc.SampleMask = UINT_MAX;
+		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		psoDesc.NumRenderTargets = 1;
+		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		psoDesc.SampleDesc.Count = 1;
+		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::LOADING_SCREEN_PSO])));
+	}
 }
 
 void VQRenderer::LoadDefaultResources()
 {
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
-	// Create the vertex buffer.
+	const UINT sizeX = 1024;
+	const UINT sizeY = 1024;
+	
+
+	TextureDesc tDesc = {};
+	tDesc.pDevice = pDevice;
+	tDesc.pAllocator = mpAllocator;
+	tDesc.pUploadHeap = &mHeapUpload;
+	D3D12_RESOURCE_DESC& textureDesc = tDesc.Desc;
 	{
-		struct Vertex
-		{
-			float position[3];
-			float color[4];
-		};
-		constexpr float ASPECT_RATIO = 16.f / 9.f;
-		// Define the geometry for a triangle.
-		Vertex triangleVertices[] =
-		{
-			{ {  0.00f,  0.25f * ASPECT_RATIO, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
-			{ {  0.25f, -0.25f * ASPECT_RATIO, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
-			{ { -0.25f, -0.25f * ASPECT_RATIO, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
-		};
-
-		const UINT vertexBufferSize = sizeof(triangleVertices);
-		const UINT numVerts = vertexBufferSize / sizeof(Vertex);
-
-		// allocate mem
-		VBV vertBufView;
-		bool bAllocSuccess = mStaticVertexBufferPool.AllocVertexBuffer(numVerts, sizeof(Vertex), triangleVertices, &vertBufView);
-		if (bAllocSuccess)
-		{
-			mVertexBufferViews.push_back(vertBufView);
-		}
-		else
-		{
-			Log::Error("Couldn't allocate vertex buffer");
-		}
+		textureDesc = {};
+		textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+		textureDesc.Alignment = 0;
+		textureDesc.Width = sizeX;
+		textureDesc.Height = sizeY;
+		textureDesc.DepthOrArraySize = 1;
+		textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		textureDesc.MipLevels = 1;
+		textureDesc.SampleDesc.Count = 1;
+		textureDesc.SampleDesc.Quality = 0;
+		textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+		textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 	}
 
-	// Create the index buffer
-	{
-		UINT indices[] = { 0, 1, 2 };
+	
 
-		IBV indexBufView;
-		bool bAllocSuccess = mStaticIndexBufferPool.AllocIndexBuffer(_countof(indices), sizeof(UINT), indices, &indexBufView);
-		if (bAllocSuccess)
-		{
-			mIndexBufferViews.push_back(indexBufView);
-		}
-		else
-		{
-			Log::Error("Couldn't allocate vertex buffer");
-}
+	// programmatically generated texture
+	{
+		std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX);
+		TextureID texID = this->CreateTexture(textureDesc, texture.data());
+		this->CreateSRV(texID);
 	}
+
+#if 0
+	// HDR texture from file
+	{
+		TextureID texID = this->CreateTextureFromFile("Data/Textures/sIBL/Walk_Of_Fame/Mans_Outside_2k.hdr");
+		this->CreateSRV(texID);
+	}
+#endif
 
 	mStaticVertexBufferPool.UploadData(mHeapUpload.GetCommandList());
 	mStaticIndexBufferPool.UploadData(mHeapUpload.GetCommandList());
 }
 
 
+ID3D12DescriptorHeap* VQRenderer::GetDescHeap(EResourceHeapType HeapType)
+{
+	ID3D12DescriptorHeap* pHeap = nullptr;
+	switch (HeapType)
+	{
+	case RTV_HEAP:          pHeap = mHeapRTV.GetHeap(); break;
+	case DSV_HEAP:          pHeap = mHeapDSV.GetHeap(); break;
+	case CBV_SRV_UAV_HEAP:  pHeap = mHeapCBV_SRV_UAV.GetHeap(); break;
+	case SAMPLER_HEAP:      pHeap = mHeapSampler.GetHeap(); break;
+	}
+	return pHeap;
+}
 
 
 
