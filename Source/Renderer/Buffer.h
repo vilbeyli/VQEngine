@@ -69,34 +69,29 @@ enum EVertexBufferType
 };
 struct FVertexDefault
 {
-    static EVertexBufferType TYPE;
     float position[3];
     float uv[2];
 };
 struct FVertexWithColor
 {
-    static EVertexBufferType TYPE;
     float position[3];
     float color[3];
     float uv[2];
 };
 struct FVertexWithColorAndAlpha
 {
-    static EVertexBufferType TYPE;
     float position[3];
     float color[4];
     float uv[2];
 };
 struct FVertexWithNormal
 {
-    static EVertexBufferType TYPE;
     float position[3];
     float normal[3];
     float uv[2];
 };
 struct FVertexWithNormalAndTangent
 {
-    static EVertexBufferType TYPE;
     float position[3];
     float normal[3];
     float tangent[3];

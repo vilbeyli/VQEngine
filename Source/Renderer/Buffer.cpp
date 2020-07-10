@@ -24,13 +24,6 @@
 #include <cassert>
 
 
-EVertexBufferType FVertexDefault::TYPE              = EVertexBufferType::DEFAULT;
-EVertexBufferType FVertexWithColor::TYPE            = EVertexBufferType::COLOR;
-EVertexBufferType FVertexWithColorAndAlpha::TYPE    = EVertexBufferType::COLOR_AND_ALPHA;
-EVertexBufferType FVertexWithNormal::TYPE           = EVertexBufferType::NORMAL;
-EVertexBufferType FVertexWithNormalAndTangent::TYPE = EVertexBufferType::NORMAL_AND_TANGENT;
-
-
 size_t StaticBufferPool::MEMORY_ALIGNMENT = 256;
 
 
