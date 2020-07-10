@@ -58,18 +58,6 @@ IWindow::~IWindow()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-int IWindow::GetWidth() const
-{
-    return GetWidthImpl();
-}
-
-///////////////////////////////////////////////////////////////////////////////
-int IWindow::GetHeight() const
-{
-    return GetHeightImpl();
-}
-
-///////////////////////////////////////////////////////////////////////////////
 Window::Window(const std::string& title, FWindowDesc& initParams)
     : IWindow(initParams.pWndOwner)
     , width_(initParams.width)
@@ -147,6 +135,10 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
     RECT centeredRect = bPreferredDisplayNotFound
         ? preferredScreenRect
         : fnCenterScreen(preferredScreenRect, rect);
+
+    // set fullscreen width & height based on the selected monitor
+    this->FSwidth_  = preferredScreenRect.right  - preferredScreenRect.left;
+    this->FSheight_ = preferredScreenRect.bottom - preferredScreenRect.top;
 
     // https://docs.microsoft.com/en-us/windows/win32/learnwin32/creating-a-window
     // Create the main window.
@@ -267,6 +259,10 @@ void Window::ToggleWindowedFullscreen(SwapChain* pSwapChain /*= nullptr*/)
             SWP_FRAMECHANGED | SWP_NOACTIVATE);
 
         ShowWindow(hwnd_, SW_MAXIMIZE);
+
+        // save fullscreen width & height 
+        this->FSwidth_  = fullscreenWindowRect.right  - fullscreenWindowRect.left;
+        this->FSheight_ = fullscreenWindowRect.bottom - fullscreenWindowRect.top;
     }
 
     isFullscreen_ = !isFullscreen_;

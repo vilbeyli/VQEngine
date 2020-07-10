@@ -74,20 +74,6 @@ void VQEngine::RenderThread_SignalUpdateThread()
 	mpSemUpdate->Signal();
 }
 
-void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height)
-{
-
-}
-
-void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
-{
-	for (const TextureID& id : mLookup_WindowSizeDependentTextures.at(hwnd))
-	{
-		mRenderer.DestroyTexture(id);
-	}
-}
-
-
 
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -140,10 +126,12 @@ void VQEngine::RenderThread_Inititalize()
 	fnHandleWindowTransitions(mpWinMain, mSettings.WndMain);
 	fnHandleWindowTransitions(mpWinDebug, mSettings.WndDebug);
 
+	RenderThread_LoadWindowSizeDependentResources(mpWinMain->GetHWND(), mpWinMain->GetWidth(), mpWinMain->GetHeight());
 }
 
 void VQEngine::RenderThread_Exit()
 {
+	RenderThread_UnloadWindowSizeDependentResources(mpWinMain->GetHWND());
 	mRenderer.Unload();
 	mRenderer.Exit();
 }
@@ -165,6 +153,30 @@ void VQEngine::InitializeBuiltinMeshes()
 }
 
 
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//
+// LOAD
+//
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height)
+{
+	if (hwnd == mpWinMain->GetHWND())
+	{
+
+	}
+
+	// TODO: generic implementation of other window procedures for load
+}
+
+void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
+{
+	if (hwnd == mpWinMain->GetHWND())
+	{
+
+	}
+
+	// TODO: generic implementation of other window procedures for unload
+}
 
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -579,6 +591,9 @@ void VQEngine::RenderThread_HandleResizeWindowEvent(const IEvent* pEvent)
 	Swapchain.Resize(WIDTH, HEIGHT);
 	pWnd->OnResize(WIDTH, HEIGHT);
 	mRenderer.OnWindowSizeChanged(hwnd, WIDTH, HEIGHT);
+
+	RenderThread_UnloadWindowSizeDependentResources(hwnd);
+	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT);
 }
 
 void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
@@ -633,7 +648,12 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 	//
 	else 
 	{
-		GetWindow(hwnd)->ToggleWindowedFullscreen(&Swapchain);
+		pWnd->ToggleWindowedFullscreen(&Swapchain);
 	}
+
+	const int WIDTH  = bFullscreenStateToSet ? pWnd->GetFullscreenWidth()  : pWnd->GetWidth();
+	const int HEIGHT = bFullscreenStateToSet ? pWnd->GetFullscreenHeight() : pWnd->GetHeight();
+	RenderThread_UnloadWindowSizeDependentResources(hwnd);
+	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT);
 }
 

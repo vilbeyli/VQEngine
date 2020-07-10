@@ -29,12 +29,14 @@
 #include "Source/Renderer/Renderer.h"
 
 #include <memory>
-#include <unordered_set>
 
 // Outputs Render/Update thread sync values on each Tick()
 #define DEBUG_LOG_THREAD_SYNC_VERBOSE 0
 
 
+//
+// DATA STRUCTS
+//
 class IWindowUpdateContext
 {
 public:
@@ -63,7 +65,6 @@ public:
 	std::vector<FLoadingScreenData> mLoadingScreenData;
 };
 
-
 enum EAppState
 {
 	INITIALIZING = 0,
@@ -74,6 +75,11 @@ enum EAppState
 	NUM_APP_STATES
 };
 
+
+
+//
+// VQENGINE
+//
 class VQEngine : public IWindowOwner
 {
 public:
@@ -188,9 +194,6 @@ private:
 	EAppState                  mAppState;
 	VQSystemInfo::FSystemInfo  mSysInfo;
 
-	// bookkeeping
-	std::unordered_map<HWND, std::unordered_set<TextureID>>  mLookup_WindowSizeDependentTextures;
-
 	// scene
 	MainWindowScene             mScene_MainWnd;
 	DebugWindowScene            mScene_DebugWnd;
@@ -200,6 +203,9 @@ private:
 
 	// events
 	BufferedContainer<std::queue<std::unique_ptr<IEvent>>, std::unique_ptr<IEvent>> mWinEventQueue;
+
+
+
 
 private:
 	// Reads EngineSettings.ini from next to the executable and returns a 
