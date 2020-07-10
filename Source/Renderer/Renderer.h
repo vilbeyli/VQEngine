@@ -81,7 +81,7 @@ struct FRendererInitializeParameters
 // - created with a Device
 struct FWindowRenderContext
 {
-	Device* pDevice = nullptr;
+	Device*      pDevice = nullptr;
 	SwapChain    SwapChain;
 	CommandQueue PresentQueue;
 
@@ -139,6 +139,9 @@ public:
 	TextureID                    CreateTexture(const D3D12_RESOURCE_DESC& desc, const void* pData = nullptr);
 	SRV_ID                       CreateSRV(TextureID texID);
 
+	void                         DestroyTexture(TextureID texID);
+	void                         DestroySRV(SRV_ID texID);
+
 	// Getters: PSO, RootSignature, Heap
 	inline ID3D12PipelineState*  GetPSO(EBuiltinPSOs pso) const { return mpBuiltinPSOs[pso]; }
 	inline ID3D12RootSignature*  GetRootSignature(EVertexBufferType vbType) const { return mpBuiltinRootSignatures[vbType]; }
@@ -165,57 +168,56 @@ private:
 	using PSOArray_t           = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
 
 	// GPU
-	Device                   mDevice; 
-	CommandQueue             mGFXQueue;
-	CommandQueue             mComputeQueue;
-	CommandQueue             mCopyQueue;
+	Device                                         mDevice; 
+	CommandQueue                                   mGFXQueue;
+	CommandQueue                                   mComputeQueue;
+	CommandQueue                                   mCopyQueue;
 
 	// memory
-	D3D12MA::Allocator*      mpAllocator;
-	StaticResourceViewHeap   mHeapRTV;
-	StaticResourceViewHeap   mHeapDSV;
-	StaticResourceViewHeap   mHeapCBV_SRV_UAV;
-	StaticResourceViewHeap   mHeapSampler;
-	UploadHeap               mHeapUpload;
+	D3D12MA::Allocator*                            mpAllocator;
+	StaticResourceViewHeap                         mHeapRTV;
+	StaticResourceViewHeap                         mHeapDSV;
+	StaticResourceViewHeap                         mHeapCBV_SRV_UAV;
+	StaticResourceViewHeap                         mHeapSampler;
+	UploadHeap                                     mHeapUpload;
 
 	// resources
-	StaticBufferPool         mStaticVertexBufferPool;
-	StaticBufferPool         mStaticIndexBufferPool;
-	std::vector<Texture>     mTextures;
+	StaticBufferPool                               mStaticVertexBufferPool;
+	StaticBufferPool                               mStaticIndexBufferPool;
+	std::unordered_map<TextureID, Texture>         mTextures;
 	//todo: samplers
 
 	// resource views
-	std::vector<VBV>         mVBVs;
-	std::vector<IBV>         mIBVs;
-	std::vector<CBV_SRV_UAV> mCBVs;
-	std::vector<CBV_SRV_UAV> mSRVs;
-	std::vector<CBV_SRV_UAV> mUAVs;
-	std::vector<RTV>         mRTVs;
-	// todo: convert std::vector<T> -> std::unordered_map<ID, T>
+	std::unordered_map<BufferID, VBV>              mVBVs;
+	std::unordered_map<BufferID, IBV>              mIBVs;
+	std::unordered_map<CBV_ID  , CBV_SRV_UAV>      mCBVs;
+	std::unordered_map<SRV_ID  , CBV_SRV_UAV>      mSRVs;
+	std::unordered_map<UAV_ID  , CBV_SRV_UAV>      mUAVs;
+	std::unordered_map<RTV_ID  , RTV>              mRTVs;
 
 	// root signatures
-	RootSignatureArray_t     mpBuiltinRootSignatures;
+	RootSignatureArray_t                           mpBuiltinRootSignatures;
 
 	// PSOs
-	PSOArray_t               mpBuiltinPSOs;
+	PSOArray_t                                     mpBuiltinPSOs;
 
 	// data
 	std::unordered_map<HWND, FWindowRenderContext> mRenderContextLookup;
 
 	// bookkeeping
-	// todo: unordered map of TexID <-> DiskLocation
+	std::unordered_map<TextureID, std::string>     mLookup_TextureDiskLocations;
 
 	// threading
-	mutable std::mutex       mMtxStaticVBPool;
-	mutable std::mutex       mMtxStaticIBPool;
-	mutable std::mutex       mMtxTextures;
-	mutable std::mutex       mMtxSRVs;
-	mutable std::mutex       mMtxCBVs;
-	mutable std::mutex       mMtxRTVs;
-	mutable std::mutex       mMtxDSVs;
-	mutable std::mutex       mMtxUAVs;
-	mutable std::mutex       mMtxVBVs;
-	mutable std::mutex       mMtxIBVs;
+	mutable std::mutex                             mMtxStaticVBPool;
+	mutable std::mutex                             mMtxStaticIBPool;
+	mutable std::mutex                             mMtxTextures;
+	mutable std::mutex                             mMtxSRVs;
+	mutable std::mutex                             mMtxCBVs;
+	mutable std::mutex                             mMtxRTVs;
+	mutable std::mutex                             mMtxDSVs;
+	mutable std::mutex                             mMtxUAVs;
+	mutable std::mutex                             mMtxVBVs;
+	mutable std::mutex                             mMtxIBVs;
 
 
 private:
@@ -231,4 +233,5 @@ private:
 
 	bool CheckContext(HWND hwnd) const;
 
+	TextureID AddTexture_ThreadSafe(Texture&& tex);
 };

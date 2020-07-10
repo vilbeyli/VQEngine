@@ -31,7 +31,7 @@
 //
 // TEXTURE
 //
-void Texture::CreateFromFile(const TextureDesc& tDesc, const std::string& FilePath)
+void Texture::CreateFromFile(const TextureCreateDesc& tDesc, const std::string& FilePath)
 {
 
     if (FilePath.empty())
@@ -58,7 +58,7 @@ void Texture::CreateFromFile(const TextureDesc& tDesc, const std::string& FilePa
     Image image = Image::LoadFromFile(FilePath.c_str(), bHDR);
     assert(image.pData && image.BytesPerPixel > 0);
 
-    TextureDesc desc = tDesc;
+    TextureCreateDesc desc = tDesc;
     desc.Desc.Width  = image.Width;
     desc.Desc.Height = image.Height;
     desc.Desc.Format = bHDR ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -77,7 +77,7 @@ void Texture::CreateFromFile(const TextureDesc& tDesc, const std::string& FilePa
     image.Destroy();
 }
 
-void Texture::CreateFromData(const TextureDesc& desc, const void* pData)
+void Texture::CreateFromData(const TextureCreateDesc& desc, const void* pData)
 {
     assert(pData);
     HRESULT hr = {};
@@ -159,7 +159,11 @@ void Texture::CreateFromData(const TextureDesc& desc, const void* pData)
         textureBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         pCmd->ResourceBarrier(1, &textureBarrier);
     }
-    
+}
+
+void Texture::CreateDepthBuffer(const TextureCreateDesc& desc)
+{
+
 }
 
 void Texture::Destroy()

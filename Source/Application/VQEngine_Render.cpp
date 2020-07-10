@@ -74,6 +74,18 @@ void VQEngine::RenderThread_SignalUpdateThread()
 	mpSemUpdate->Signal();
 }
 
+void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height)
+{
+
+}
+
+void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
+{
+	for (const TextureID& id : mLookup_WindowSizeDependentTextures.at(hwnd))
+	{
+		mRenderer.DestroyTexture(id);
+	}
+}
 
 
 

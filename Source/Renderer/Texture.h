@@ -28,7 +28,7 @@ class UploadHeap;
 class CBV_SRV_UAV;
 struct D3D12_SHADER_RESOURCE_VIEW_DESC;
 
-struct TextureDesc
+struct TextureCreateDesc
 {
 	ID3D12Device*         pDevice   = nullptr;
 	D3D12MA::Allocator*   pAllocator = nullptr;
@@ -46,8 +46,9 @@ public:
 	Texture()  = default;
 	~Texture() = default;
 
-	void CreateFromFile(const TextureDesc& desc, const std::string& FilePath);
-	void CreateFromData(const TextureDesc& desc, const void* pData);
+	void CreateFromFile(const TextureCreateDesc& desc, const std::string& FilePath);
+	void CreateFromData(const TextureCreateDesc& desc, const void* pData);
+	void CreateDepthBuffer(const TextureCreateDesc& desc);
 
 	void Destroy();
 

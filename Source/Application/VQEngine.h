@@ -29,6 +29,7 @@
 #include "Source/Renderer/Renderer.h"
 
 #include <memory>
+#include <unordered_set>
 
 // Outputs Render/Update thread sync values on each Tick()
 #define DEBUG_LOG_THREAD_SYNC_VERBOSE 0
@@ -106,6 +107,9 @@ public:
 	void RenderThread_WaitForUpdateThread();
 	void RenderThread_SignalUpdateThread();
 
+	void RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height);
+	void RenderThread_UnloadWindowSizeDependentResources(HWND hwnd);
+
 	// PRE_RENDER()
 	// - TBA
 	void RenderThread_PreRender();
@@ -149,34 +153,16 @@ public:
 
 
 //-----------------------------------------------------------------------
-private:
-	void InititalizeEngineSettings(const FStartupParameters& Params);
-	void InitializeApplicationWindows(const FStartupParameters& Params);
-
-	void InitializeThreads();
-	void ExitThreads();
-
-	void InitializeBuiltinMeshes();
-	void LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete
-	void Load_SceneData_Dispatch();
-	void Load_SceneData_Join();
-
-	HRESULT RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderContext& ctx);
-	HRESULT RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx);
-
-	void RenderThread_HandleResizeWindowEvent(const IEvent* pEvent);
-	void RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent);
-
-	std::unique_ptr<Window>& GetWindow(HWND hwnd);
-	const FWindowSettings& GetWindowSettings(HWND hwnd) const;
-	FWindowSettings& GetWindowSettings(HWND hwnd);
 
 private:
+	using BuiltinMeshArray_t     = std::array<Mesh       , EBuiltInMeshes::NUM_BUILTIN_MESHES>;
+	using BuiltinMeshNameArray_t = std::array<std::string, EBuiltInMeshes::NUM_BUILTIN_MESHES>;
+
 	// threads
-	std::thread mRenderThread;
-	std::thread mUpdateThread;
-	ThreadPool  mUpdateWorkerThreads;
-	ThreadPool  mRenderWorkerThreads;
+	std::thread                mRenderThread;
+	std::thread                mUpdateThread;
+	ThreadPool                 mUpdateWorkerThreads;
+	ThreadPool                 mRenderWorkerThreads;
 
 	// sync
 	std::atomic<bool>          mbStopAllThreads;
@@ -184,27 +170,30 @@ private:
 	std::unique_ptr<Semaphore> mpSemRender;
 	
 	// windows
-	std::unique_ptr<Window>   mpWinMain;
-	std::unique_ptr<Window>   mpWinDebug;
+	std::unique_ptr<Window>    mpWinMain;
+	std::unique_ptr<Window>    mpWinDebug;
 	// todo: generic window mngmt
 
 	// render
-	VQRenderer mRenderer;
-	std::array<Mesh       , EBuiltInMeshes::NUM_BUILTIN_MESHES> mBuiltinMeshes;
-	std::array<std::string, EBuiltInMeshes::NUM_BUILTIN_MESHES> mBuiltinMeshNames;
+	VQRenderer                 mRenderer;
+	BuiltinMeshArray_t         mBuiltinMeshes;
+	BuiltinMeshNameArray_t     mBuiltinMeshNames;
 
 	// data / state
-	std::atomic<bool>         mbRenderThreadInitialized;
-	std::atomic<uint64>       mNumRenderLoopsExecuted;
-	std::atomic<uint64>       mNumUpdateLoopsExecuted;
-	std::atomic<bool>         mbLoadingLevel;
-	FEngineSettings           mSettings;
-	EAppState                 mAppState;
-	VQSystemInfo::FSystemInfo mSysInfo;
+	std::atomic<bool>          mbRenderThreadInitialized;
+	std::atomic<uint64>        mNumRenderLoopsExecuted;
+	std::atomic<uint64>        mNumUpdateLoopsExecuted;
+	std::atomic<bool>          mbLoadingLevel;
+	FEngineSettings            mSettings;
+	EAppState                  mAppState;
+	VQSystemInfo::FSystemInfo  mSysInfo;
+
+	// bookkeeping
+	std::unordered_map<HWND, std::unordered_set<TextureID>>  mLookup_WindowSizeDependentTextures;
 
 	// scene
-	MainWindowScene         mScene_MainWnd;
-	DebugWindowScene        mScene_DebugWnd;
+	MainWindowScene             mScene_MainWnd;
+	DebugWindowScene            mScene_DebugWnd;
 	std::unordered_map<HWND, IWindowUpdateContext*> mWindowUpdateContextLookup;
 
 	// input
@@ -216,4 +205,26 @@ private:
 	// Reads EngineSettings.ini from next to the executable and returns a 
 	// FStartupParameters struct as it readily has override booleans for engine settings
 	static FStartupParameters ParseEngineSettingsFile();
+
+private:
+	void                     InititalizeEngineSettings(const FStartupParameters& Params);
+	void                     InitializeApplicationWindows(const FStartupParameters& Params);
+
+	void                     InitializeThreads();
+	void                     ExitThreads();
+
+	void                     InitializeBuiltinMeshes();
+	void                     LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete
+	void                     Load_SceneData_Dispatch();
+	void                     Load_SceneData_Join();
+	
+	HRESULT                  RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderContext& ctx);
+	HRESULT                  RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx);
+	
+	void                     RenderThread_HandleResizeWindowEvent(const IEvent* pEvent);
+	void                     RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent);
+	
+	std::unique_ptr<Window>& GetWindow(HWND hwnd);
+	const FWindowSettings&   GetWindowSettings(HWND hwnd) const;
+	FWindowSettings&         GetWindowSettings(HWND hwnd);
 };

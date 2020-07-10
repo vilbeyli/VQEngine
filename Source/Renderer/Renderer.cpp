@@ -205,10 +205,13 @@ void VQRenderer::Exit()
 	mHeapCBV_SRV_UAV.Destroy();
 	mStaticVertexBufferPool.Destroy();
 	mStaticIndexBufferPool.Destroy();
-	for (Texture& tex : mTextures)
+	for (std::unordered_map<TextureID, Texture>::iterator it = mTextures.begin(); it != mTextures.end(); ++it)
 	{
-		tex.Destroy();
+		it->second.Destroy();
 	}
+
+	mTextures.clear();
+	
 	mpAllocator->Release();
 
 	for (ID3D12RootSignature* pRootSignature : mpBuiltinRootSignatures)
@@ -279,7 +282,7 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 	UploadHeap uploadHeap;
 	uploadHeap.Create(mDevice.GetDevicePtr(), 32 * MEGABYTE);
 
-	TextureDesc tDesc = {};
+	TextureCreateDesc tDesc = {};
 	tDesc.pAllocator = mpAllocator;
 	tDesc.pDevice = mDevice.GetDevicePtr();
 	tDesc.pUploadHeap = &uploadHeap;
@@ -291,9 +294,7 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 	uploadHeap.UploadToGPUAndWait(mGFXQueue.pQueue);
 	uploadHeap.Destroy();
 
-	std::lock_guard<std::mutex> lk(mMtxTextures);
-	mTextures.push_back(tex);
-	return static_cast<TextureID>(mTextures.size() - 1);
+	return AddTexture_ThreadSafe(std::move(tex));
 }
 
 TextureID VQRenderer::CreateTexture(const D3D12_RESOURCE_DESC& desc, const void* pData)
@@ -307,7 +308,7 @@ TextureID VQRenderer::CreateTexture(const D3D12_RESOURCE_DESC& desc, const void*
 	UploadHeap uploadHeap;
 	uploadHeap.Create(mDevice.GetDevicePtr(), 32 * MEGABYTE);
 
-	TextureDesc tDesc = {};
+	TextureCreateDesc tDesc = {};
 	tDesc.Desc = desc;
 	tDesc.pAllocator = mpAllocator;
 	tDesc.pDevice = mDevice.GetDevicePtr();
@@ -324,32 +325,42 @@ TextureID VQRenderer::CreateTexture(const D3D12_RESOURCE_DESC& desc, const void*
 	uploadHeap.UploadToGPUAndWait(mGFXQueue.pQueue);
 	uploadHeap.Destroy();
 
-	std::lock_guard<std::mutex> lk(mMtxTextures);
-	mTextures.push_back(tex);
-	return static_cast<TextureID>(mTextures.size() - 1);
+	return AddTexture_ThreadSafe(std::move(tex));
 }
 
 SRV_ID VQRenderer::CreateSRV(TextureID texID)
 {
+	static SRV_ID LAST_USED_SRV_ID = 0;
+
+	SRV_ID Id = INVALID_ID;
 	CBV_SRV_UAV SRV = {};
 
-	std::lock_guard<std::mutex> lk(mMtxSRVs);
-	mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
-	mTextures[texID].CreateSRV(0, &SRV);
+	{
+		std::lock_guard<std::mutex> lk(mMtxSRVs);
 
-	mSRVs.push_back(SRV);
-	return static_cast<SRV_ID>(mSRVs.size() - 1);
+		mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
+		mTextures[texID].CreateSRV(0, &SRV);
+		Id = LAST_USED_SRV_ID++;
+		mSRVs[Id] = SRV;
+	}
+
+	return Id;
 }
 
 BufferID VQRenderer::CreateVertexBuffer(const FBufferDesc& desc)
 {
+	static BufferID LAST_USED_VBV_ID = 0;
+
 	BufferID Id = INVALID_ID;
 	VBV vbv;
+
+	std::lock_guard <std::mutex> lk(mMtxStaticVBPool);
+
 	bool bSuccess = mStaticVertexBufferPool.AllocVertexBuffer(desc.NumElements, desc.Stride, desc.pData, &vbv);
 	if (bSuccess)
 	{
-		mVBVs.push_back(vbv);
-		Id = static_cast<BufferID>(mVBVs.size() - 1);
+		Id = LAST_USED_VBV_ID++;
+		mVBVs[Id] = vbv;
 	}
 	else
 		Log::Error("Couldn't allocate vertex buffer");
@@ -357,13 +368,18 @@ BufferID VQRenderer::CreateVertexBuffer(const FBufferDesc& desc)
 }
 BufferID VQRenderer::CreateIndexBuffer(const FBufferDesc& desc)
 {
+	static BufferID LAST_USED_IBV_ID = 0;
+
 	BufferID Id = INVALID_ID;
 	IBV ibv;
+
+	std::lock_guard<std::mutex> lk(mMtxStaticIBPool);
+
 	bool bSuccess = mStaticIndexBufferPool.AllocIndexBuffer(desc.NumElements, desc.Stride, desc.pData, &ibv);
 	if (bSuccess)
 	{
-		mIBVs.push_back(ibv);
-		Id = static_cast<BufferID>(mIBVs.size() - 1);
+		Id = LAST_USED_IBV_ID++;
+		mIBVs[Id] = ibv;
 	}
 	else
 		Log::Error("Couldn't allocate index buffer");
@@ -371,7 +387,10 @@ BufferID VQRenderer::CreateIndexBuffer(const FBufferDesc& desc)
 }
 BufferID VQRenderer::CreateConstantBuffer(const FBufferDesc& desc)
 {
+	static BufferID LAST_USED_CBV_ID = 0;
+
 	BufferID Id = INVALID_ID;
+
 	assert(false);
 	return Id;
 }
@@ -379,19 +398,19 @@ BufferID VQRenderer::CreateConstantBuffer(const FBufferDesc& desc)
 
 const VBV& VQRenderer::GetVertexBufferView(BufferID Id) const
 {
-	assert(Id < mVBVs.size() && Id != INVALID_ID);
-	return mVBVs[Id];
+	//assert(Id < mVBVs.size() && Id != INVALID_ID);
+	return mVBVs.at(Id);
 }
 
 const IBV& VQRenderer::GetIndexBufferView(BufferID Id) const
 {
-	assert(Id < mIBVs.size() && Id != INVALID_ID);
-	return mIBVs[Id];
+	//assert(Id < mIBVs.size() && Id != INVALID_ID);
+	return mIBVs.at(Id);
 }
 const CBV_SRV_UAV& VQRenderer::GetShaderResourceView(SRV_ID Id) const
 {
-	assert(Id < mSRVs.size() && Id != INVALID_ID);
-	return mSRVs[Id];
+	//assert(Id < mSRVs.size() && Id != INVALID_ID);
+	return mSRVs.at(Id);
 }
 
 short VQRenderer::GetSwapChainBackBufferCount(Window* pWnd) const { return pWnd ? this->GetSwapChainBackBufferCount(pWnd->GetHWND()) : 0; }
@@ -413,6 +432,18 @@ bool VQRenderer::CheckContext(HWND hwnd) const
 		return false;
 	}
 	return true;
+}
+
+TextureID VQRenderer::AddTexture_ThreadSafe(Texture&& tex)
+{
+	static TextureID LAST_USED_TEXTURE_ID = 0;
+
+	TextureID Id = INVALID_ID;
+
+	std::lock_guard<std::mutex> lk(mMtxTextures);
+	Id = LAST_USED_TEXTURE_ID++;
+	mTextures[Id] = tex;
+	return Id;
 }
 
 
@@ -626,7 +657,7 @@ void VQRenderer::LoadDefaultResources()
 	const UINT sizeY = 1024;
 	
 
-	TextureDesc tDesc = {};
+	TextureCreateDesc tDesc = {};
 	tDesc.pDevice = pDevice;
 	tDesc.pAllocator = mpAllocator;
 	tDesc.pUploadHeap = &mHeapUpload;
