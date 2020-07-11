@@ -220,15 +220,12 @@ namespace GeometryGenerator
 		/* TOP */                   SetFVec<3>(v[0].position , { -1.0f, +1.0f, +1.0f });
 		if constexpr (bHasNormals)  SetFVec<3>(v[0].normal   , { +0.0f, +1.0f, +0.0f });
 		if constexpr (bHasTangents) SetFVec<3>(v[0].tangent  , { +1.0f, +0.0f, +0.0f });
-
 		                            SetFVec<3>(v[1].position , { +1.0f, +1.0f, +1.0f });
 		if constexpr (bHasNormals)  SetFVec<3>(v[1].normal   , { +0.0f, +1.0f, +0.0f });
 		if constexpr (bHasTangents) SetFVec<3>(v[1].tangent  , { +1.0f, +0.0f, +0.0f });
-
 		                            SetFVec<3>(v[2].position , { +1.0f, +1.0f, -1.0f });
 		if constexpr (bHasNormals)  SetFVec<3>(v[2].normal   , { +0.0f, +1.0f, +0.0f });
 		if constexpr (bHasTangents) SetFVec<3>(v[2].tangent  , { +1.0f, +0.0f, +0.0f });
-
 		                            SetFVec<3>(v[3].position , { -1.0f, +1.0f, -1.0f });
 		if constexpr (bHasNormals)  SetFVec<3>(v[3].normal   , { +0.0f, +1.0f, +0.0f });
 		if constexpr (bHasTangents) SetFVec<3>(v[3].tangent  , { +1.0f, +0.0f, +0.0f });
