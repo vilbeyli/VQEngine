@@ -21,6 +21,11 @@
 #include "../Application/Types.h"
 #include "../../Libs/VQUtils/Source/Log.h"
 
+#define KILOBYTE 1024
+#define MEGABYTE 1024*KILOBYTE
+#define GIGABYTE 1024*MEGABYTE
+
+
 template<class T>
 T AlignOffset(const T& uOffset, const T& uAlign) { return ((uOffset + (uAlign - 1)) & ~(uAlign - 1)); }
 

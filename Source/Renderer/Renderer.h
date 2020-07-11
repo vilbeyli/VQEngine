@@ -108,6 +108,7 @@ enum EBuiltinPSOs
 {
 	HELLO_WORLD_TRIANGLE_PSO = 0,
 	LOADING_SCREEN_PSO,
+	HELLO_WORLD_CUBE_PSO,
 
 	NUM_BUILTIN_PSOs
 };
@@ -166,13 +167,13 @@ public:
 	const RTV&                   GetRenderTargetView(RTV_ID Id) const;
 	const DSV&                   GetDepthStencilView(RTV_ID Id) const;
 
-	inline const VBV&            GetVBV(BufferID Id) const { return GetVertexBufferView(Id); }
-	inline const IBV&            GetIBV(BufferID Id) const { return GetIndexBufferView(Id); }
-	inline const CBV_SRV_UAV&    GetSRV(SRV_ID   Id) const { return GetShaderResourceView(Id); }
+	inline const VBV&            GetVBV(BufferID Id) const { return GetVertexBufferView(Id);    }
+	inline const IBV&            GetIBV(BufferID Id) const { return GetIndexBufferView(Id);     }
+	inline const CBV_SRV_UAV&    GetSRV(SRV_ID   Id) const { return GetShaderResourceView(Id);  }
 	inline const CBV_SRV_UAV&    GetUAV(UAV_ID   Id) const { return GetUnorderedAccessView(Id); }
-	inline const CBV_SRV_UAV&    GetCBV(CBV_ID   Id) const { return GetConstantBufferView(Id); }
-	inline const RTV&            GetRTV(RTV_ID   Id) const { return GetRenderTargetView(Id); }
-	inline const DSV&            GetDSV(DSV_ID   Id) const { return GetDepthStencilView(Id); }
+	inline const CBV_SRV_UAV&    GetCBV(CBV_ID   Id) const { return GetConstantBufferView(Id);  }
+	inline const RTV&            GetRTV(RTV_ID   Id) const { return GetRenderTargetView(Id);    }
+	inline const DSV&            GetDSV(DSV_ID   Id) const { return GetDepthStencilView(Id);    }
 
 
 private:

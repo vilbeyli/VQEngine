@@ -25,6 +25,7 @@ set (Headers
 
 set (Source
     "Renderer.cpp"
+    "Renderer_Resources.cpp"
     "Device.cpp"
     "SwapChain.cpp"
     "CommandQueue.cpp"
