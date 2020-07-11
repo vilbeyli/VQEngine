@@ -44,6 +44,9 @@ set (HeaderVQE
     "Source/Application/Events.h"
     "Source/Application/Mesh.h"
     "Source/Application/Geometry.h"
+    "Source/Application/Transform.h"
+    "Source/Application/Quaternion.h"
+    "Source/Application/Camera.h"
 )
 
 set (SourceVQE 
@@ -57,6 +60,9 @@ set (SourceVQE
     "Source/Application/Events.cpp"
     "Source/Application/Mesh.cpp"
     "Source/Application/Geometry.cpp"
+    "Source/Application/Transform.cpp"
+    "Source/Application/Quaternion.cpp"
+    "Source/Application/Camera.cpp"
 )
 
 add_link_options(/SUBSYSTEM:WINDOWS)
