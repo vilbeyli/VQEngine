@@ -24,6 +24,8 @@
 #include "Settings.h"
 #include "Events.h"
 #include "Mesh.h"
+#include "Transform.h"
+#include "Camera.h"
 
 #include "Libs/VQUtils/Source/Multithreading.h"
 #include "Source/Renderer/Renderer.h"
@@ -46,6 +48,20 @@ protected:
 	HWND hwnd;
 };
 
+// Data to be updated per frame
+struct FFrameData
+{
+	Camera SceneCamera;
+	Transform TFCube;
+	std::array<float, 4> SwapChainClearColor;
+};
+struct FLoadingScreenData
+{
+	std::array<float, 4> SwapChainClearColor;
+	// TODO: loading screen background img resource
+	// TODO: animation resources
+	SRV_ID SRVLoadingScreen = INVALID_ID;
+};
 class MainWindowScene : public IWindowUpdateContext
 {
 public:

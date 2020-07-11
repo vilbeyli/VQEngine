@@ -20,6 +20,8 @@
 
 #include "Libs/VQUtils/Source/utils.h"
 
+using namespace DirectX;
+
 void VQEngine::UpdateThread_Main()
 {
 	Log::Info("UpdateThread_Main()");
@@ -135,6 +137,8 @@ void VQEngine::UpdateThread_UpdateAppState()
 void VQEngine::UpdateThread_PostUpdate()
 {
 	// compute visibility 
+
+	// extract scene view
 }
 
 
@@ -143,13 +147,17 @@ void VQEngine::Load_SceneData_Dispatch()
 	mUpdateWorkerThreads.AddTask([&]() { Sleep(2000); Log::Info("Worker SLEEP done!"); }); // simulate 2second loading time
 	mUpdateWorkerThreads.AddTask([&]()
 	{
+		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
+		const int NumBackBuffer_WndDbg  = mRenderer.GetSwapChainBackBufferCount(mpWinDebug);
+
 		// TODO: initialize window scene data here for now, should update this to proper location later on (Scene probably?)
 		FFrameData data[2];
 		data[0].SwapChainClearColor = { 0.07f, 0.07f, 0.07f, 1.0f };
-		data[1].SwapChainClearColor = { 0.20f, 0.21f, 0.21f, 1.0f };
-		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
-		const int NumBackBuffer_WndDbg = mRenderer.GetSwapChainBackBufferCount(mpWinDebug);
+		data[0].TFCube = Transform(XMFLOAT3(0, 0, 5), Quaternion::FromAxisAngle(XMFLOAT3(1, 1, 1), 45.0f * DEG2RAD), XMFLOAT3(0.5f, 0.5f, 0.5f));
+		// data[0].SceneCamera. // TODO: initialize the camera
 		mScene_MainWnd.mFrameData.resize(NumBackBuffer_WndMain, data[0]);
+
+		data[1].SwapChainClearColor = { 0.20f, 0.21f, 0.21f, 1.0f };
 		mScene_DebugWnd.mFrameData.resize(NumBackBuffer_WndDbg, data[1]);
 
 		mWindowUpdateContextLookup[mpWinMain->GetHWND()] = &mScene_MainWnd;
