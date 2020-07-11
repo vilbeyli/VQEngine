@@ -38,6 +38,7 @@
 // THE SOFTWARE.
 
 #include "ResourceHeaps.h"
+#include "ResourceViews.h"
 
 #include "Libs/D3DX12/d3dx12.h"
 #include "../../Libs/VQUtils/Source/Log.h"
@@ -70,7 +71,7 @@ void StaticResourceViewHeap::Create(ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP
     descHeap.NodeMask = 0;
 
     pDevice->CreateDescriptorHeap(&descHeap, IID_PPV_ARGS(&mpHeap));
-    mpHeap->SetName(L"StaticHeapDX12");
+    mpHeap->SetName(L"StaticHeap");
 }
 
 void StaticResourceViewHeap::Destroy()

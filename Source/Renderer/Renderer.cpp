@@ -84,6 +84,14 @@ static void CustomFree(void* pMemory, void* pUserData)
 #define GIGABYTE 1024*MEGABYTE
 
 
+static TextureID LAST_USED_TEXTURE_ID = 0;
+static SRV_ID    LAST_USED_SRV_ID = 0;
+static DSV_ID    LAST_USED_DSV_ID = 0;
+static BufferID  LAST_USED_VBV_ID = 0;
+static BufferID  LAST_USED_IBV_ID = 0;
+static BufferID  LAST_USED_CBV_ID = 0;
+
+
 //
 // PUBLIC
 //
@@ -183,11 +191,6 @@ void VQRenderer::Load()
 
 void VQRenderer::Unload()
 {
-}
-
-
-void VQRenderer::Exit()
-{
 	for (auto it_hwnd_ctx : mRenderContextLookup)
 	{
 		auto& ctx = it_hwnd_ctx.second;
@@ -198,11 +201,17 @@ void VQRenderer::Exit()
 		ctx.SwapChain.Destroy(); // syncs GPU before releasing resources
 
 		ctx.PresentQueue.Destroy();
-		if (ctx.pCmdList_GFX) ctx.pCmdList_GFX->Release();
+		if (ctx.pCmdList_GFX) 
+			ctx.pCmdList_GFX->Release();
 	}
+}
 
+
+void VQRenderer::Exit()
+{
 	mHeapUpload.Destroy();
 	mHeapCBV_SRV_UAV.Destroy();
+	mHeapDSV.Destroy();
 	mStaticVertexBufferPool.Destroy();
 	mStaticIndexBufferPool.Destroy();
 	for (std::unordered_map<TextureID, Texture>::iterator it = mTextures.begin(); it != mTextures.end(); ++it)
@@ -280,13 +289,12 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 	// It's recommended to create heaps on background threads to avoid glitching the render 
 	// thread. In D3D12, multiple threads may safely call create routines concurrently.
 	UploadHeap uploadHeap;
-	uploadHeap.Create(mDevice.GetDevicePtr(), 32 * MEGABYTE);
+	uploadHeap.Create(mDevice.GetDevicePtr(), 32 * MEGABYTE); // TODO: drive the heapsize through RendererSettings.ini
 
-	TextureCreateDesc tDesc = {};
+	TextureCreateDesc tDesc(DirectoryUtil::GetFileNameFromPath(pFilePath));
 	tDesc.pAllocator = mpAllocator;
 	tDesc.pDevice = mDevice.GetDevicePtr();
 	tDesc.pUploadHeap = &uploadHeap;
-	tDesc.TexName = pFilePath;
 	tDesc.Desc = {};
 
 	tex.CreateFromFile(tDesc, pFilePath);
@@ -297,7 +305,7 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 	return AddTexture_ThreadSafe(std::move(tex));
 }
 
-TextureID VQRenderer::CreateTexture(const D3D12_RESOURCE_DESC& desc, const void* pData)
+TextureID VQRenderer::CreateTexture(const std::string& name, const D3D12_RESOURCE_DESC& desc, const void* pData)
 {
 	Texture tex;
 
@@ -306,31 +314,23 @@ TextureID VQRenderer::CreateTexture(const D3D12_RESOURCE_DESC& desc, const void*
 	// It's recommended to create heaps on background threads to avoid glitching the render 
 	// thread. In D3D12, multiple threads may safely call create routines concurrently.
 	UploadHeap uploadHeap;
-	uploadHeap.Create(mDevice.GetDevicePtr(), 32 * MEGABYTE);
+	uploadHeap.Create(mDevice.GetDevicePtr(), 32 * MEGABYTE); // TODO: drive the heapsize through RendererSettings.ini
 
-	TextureCreateDesc tDesc = {};
+	TextureCreateDesc tDesc(name);
 	tDesc.Desc = desc;
 	tDesc.pAllocator = mpAllocator;
 	tDesc.pDevice = mDevice.GetDevicePtr();
 	tDesc.pUploadHeap = &uploadHeap;
 
-	if (pData)
-	{
-		tex.CreateFromData(tDesc, pData);
-	}
-	else
-	{
-		assert(false); // TODO;
-	}
+	tex.Create(tDesc, pData);
+
 	uploadHeap.UploadToGPUAndWait(mGFXQueue.pQueue);
 	uploadHeap.Destroy();
 
 	return AddTexture_ThreadSafe(std::move(tex));
 }
-
-SRV_ID VQRenderer::CreateSRV(TextureID texID)
+SRV_ID VQRenderer::CreateAndInitializeSRV(TextureID texID)
 {
-	static SRV_ID LAST_USED_SRV_ID = 0;
 
 	SRV_ID Id = INVALID_ID;
 	CBV_SRV_UAV SRV = {};
@@ -339,17 +339,53 @@ SRV_ID VQRenderer::CreateSRV(TextureID texID)
 		std::lock_guard<std::mutex> lk(mMtxSRVs);
 
 		mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
-		mTextures[texID].CreateSRV(0, &SRV);
+		mTextures[texID].InitializeSRV(0, &SRV);
 		Id = LAST_USED_SRV_ID++;
 		mSRVs[Id] = SRV;
 	}
 
 	return Id;
 }
+DSV_ID VQRenderer::CreateAndInitializeDSV(TextureID texID)
+{
+	assert(mTextures.find(texID) != mTextures.end());
+
+	DSV_ID Id = INVALID_ID;
+	DSV dsv = {};
+	{
+		std::lock_guard<std::mutex> lk(mMtxDSVs);
+
+		mHeapDSV.AllocDescriptor(1, &dsv);
+		Id = LAST_USED_DSV_ID++;
+		mTextures.at(texID).InitializeDSV(0, &dsv);
+		mDSVs[Id] = dsv;
+	}
+	return Id;
+}
+DSV_ID VQRenderer::CreateDSV()
+{
+	DSV dsv = {};
+	DSV_ID Id = INVALID_ID;
+
+	std::lock_guard<std::mutex> lk(mMtxDSVs);
+
+	mHeapDSV.AllocDescriptor(1, &dsv);
+	Id = LAST_USED_DSV_ID++;
+	mDSVs[Id] = dsv;
+
+	return Id;
+}
+void VQRenderer::InitializeDSV(DSV_ID dsvID, uint32 heapIndex, TextureID texID)
+{
+	assert(mTextures.find(texID) != mTextures.end());
+	assert(mDSVs.find(dsvID) != mDSVs.end());
+
+	mTextures.at(texID).InitializeDSV(heapIndex, &mDSVs.at(dsvID));
+}
+
 
 BufferID VQRenderer::CreateVertexBuffer(const FBufferDesc& desc)
 {
-	static BufferID LAST_USED_VBV_ID = 0;
 
 	BufferID Id = INVALID_ID;
 	VBV vbv;
@@ -368,7 +404,6 @@ BufferID VQRenderer::CreateVertexBuffer(const FBufferDesc& desc)
 }
 BufferID VQRenderer::CreateIndexBuffer(const FBufferDesc& desc)
 {
-	static BufferID LAST_USED_IBV_ID = 0;
 
 	BufferID Id = INVALID_ID;
 	IBV ibv;
@@ -387,7 +422,6 @@ BufferID VQRenderer::CreateIndexBuffer(const FBufferDesc& desc)
 }
 BufferID VQRenderer::CreateConstantBuffer(const FBufferDesc& desc)
 {
-	static BufferID LAST_USED_CBV_ID = 0;
 
 	BufferID Id = INVALID_ID;
 
@@ -413,6 +447,11 @@ const CBV_SRV_UAV& VQRenderer::GetShaderResourceView(SRV_ID Id) const
 	return mSRVs.at(Id);
 }
 
+const DSV& VQRenderer::GetDepthStencilView(RTV_ID Id) const
+{
+	return mDSVs.at(Id);
+}
+
 short VQRenderer::GetSwapChainBackBufferCount(Window* pWnd) const { return pWnd ? this->GetSwapChainBackBufferCount(pWnd->GetHWND()) : 0; }
 short VQRenderer::GetSwapChainBackBufferCount(HWND hwnd) const
 {
@@ -436,14 +475,30 @@ bool VQRenderer::CheckContext(HWND hwnd) const
 
 TextureID VQRenderer::AddTexture_ThreadSafe(Texture&& tex)
 {
-	static TextureID LAST_USED_TEXTURE_ID = 0;
-
 	TextureID Id = INVALID_ID;
 
 	std::lock_guard<std::mutex> lk(mMtxTextures);
 	Id = LAST_USED_TEXTURE_ID++;
 	mTextures[Id] = tex;
 	return Id;
+}
+void VQRenderer::DestroyTexture(TextureID texID)
+{
+	std::lock_guard<std::mutex> lk(mMtxTextures);
+	mTextures.at(texID).Destroy();
+	mTextures.erase(texID);
+}
+void VQRenderer::DestroySRV(SRV_ID srvID)
+{
+	std::lock_guard<std::mutex> lk(mMtxSRVs);
+	//mSRVs.at(srvID).Destroy(); // TODO
+	mSRVs.erase(srvID);
+}
+void VQRenderer::DestroyDSV(DSV_ID dsvID)
+{
+	std::lock_guard<std::mutex> lk(mMtxDSVs);
+	//mDSVs.at(dsvID).Destroy(); // TODO
+	mDSVs.erase(dsvID);
 }
 
 
@@ -502,6 +557,9 @@ void VQRenderer::InitializeResourceHeaps()
 	constexpr uint32 NumDescsUAV = 10;
 	constexpr bool   bCPUVisible = false;
 	mHeapCBV_SRV_UAV.Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, NumDescsCBV + NumDescsSRV + NumDescsUAV, bCPUVisible);
+
+	constexpr uint32 NumDescsDSV = 10;
+	mHeapDSV.Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, NumDescsDSV);
 }
 
 static std::wstring GetAssetFullPath(LPCWSTR assetName)
@@ -558,14 +616,18 @@ void VQRenderer::LoadPSOs()
 		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
 		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-		psoDesc.DepthStencilState.DepthEnable = FALSE;
+		psoDesc.DepthStencilState.DepthEnable = TRUE;
+		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
 		psoDesc.DepthStencilState.StencilEnable = FALSE;
+		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 		psoDesc.SampleMask = UINT_MAX;
 		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 		psoDesc.NumRenderTargets = 1;
 		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 		psoDesc.SampleDesc.Count = 1;
 		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO])));
+		SetName(mpBuiltinPSOs[EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO], "PSO_HelloWorld");
 	}
 
 
@@ -646,6 +708,7 @@ void VQRenderer::LoadPSOs()
 		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 		psoDesc.SampleDesc.Count = 1;
 		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::LOADING_SCREEN_PSO])));
+		SetName(mpBuiltinPSOs[EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO], "PSO_LoadingScreen");
 	}
 }
 
@@ -656,12 +719,7 @@ void VQRenderer::LoadDefaultResources()
 	const UINT sizeX = 1024;
 	const UINT sizeY = 1024;
 	
-
-	TextureCreateDesc tDesc = {};
-	tDesc.pDevice = pDevice;
-	tDesc.pAllocator = mpAllocator;
-	tDesc.pUploadHeap = &mHeapUpload;
-	D3D12_RESOURCE_DESC& textureDesc = tDesc.Desc;
+	D3D12_RESOURCE_DESC textureDesc = {};
 	{
 		textureDesc = {};
 		textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -675,22 +733,22 @@ void VQRenderer::LoadDefaultResources()
 		textureDesc.SampleDesc.Quality = 0;
 		textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 		textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-	}
-
-	
+	}	
 
 	// programmatically generated texture
 	{
 		std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX);
-		TextureID texID = this->CreateTexture(textureDesc, texture.data());
-		this->CreateSRV(texID);
+		TextureID texID = this->CreateTexture("Checkerboard", textureDesc, texture.data());
+		this->CreateAndInitializeSRV(texID);
 	}
 
 #if 0
 	// HDR texture from file
 	{
-		TextureID texID = this->CreateTextureFromFile("Data/Textures/sIBL/Walk_Of_Fame/Mans_Outside_2k.hdr");
-		this->CreateSRV(texID);
+		const std::string TextureFilePath = "Data/Textures/sIBL/Walk_Of_Fame/Mans_Outside_2k.hdr";
+		tDesc.TexName = (TextureFilePath);
+		TextureID texID = this->CreateTextureFromFile(TextureFilePath);
+		this->CreateAndInitializeSRV(texID);
 	}
 #endif
 

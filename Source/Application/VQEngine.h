@@ -65,6 +65,16 @@ public:
 	std::vector<FLoadingScreenData> mLoadingScreenData;
 };
 
+struct RenderingResources_MainWindow
+{
+	TextureID Tex_MainViewDepth = INVALID_ID;
+	DSV_ID    DSV_MainViewDepth = INVALID_ID;
+};
+struct RenderingResources_DebugWindow
+{
+	// TODO
+};
+
 enum EAppState
 {
 	INITIALIZING = 0,
@@ -198,6 +208,8 @@ private:
 	MainWindowScene             mScene_MainWnd;
 	DebugWindowScene            mScene_DebugWnd;
 	std::unordered_map<HWND, IWindowUpdateContext*> mWindowUpdateContextLookup;
+	RenderingResources_MainWindow  mResources_MainWnd;
+	RenderingResources_DebugWindow mResources_DebugWnd;
 
 	// input
 

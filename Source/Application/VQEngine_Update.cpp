@@ -172,7 +172,7 @@ void VQEngine::LoadLoadingScreenData()
 	const std::string LoadingScreenTextureFileDirectory = "Data/Textures/LoadingScreen/";
 	const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(MathUtil::RandU(0, 4)) + ".png");
 	TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
-	SRV_ID    srvID = mRenderer.CreateSRV(texID);
+	SRV_ID    srvID = mRenderer.CreateAndInitializeSRV(texID);
 	data.SRVLoadingScreen = srvID;
 
 	const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCount(mpWinMain);

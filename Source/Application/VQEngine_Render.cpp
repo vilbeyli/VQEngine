@@ -96,7 +96,10 @@ void VQEngine::RenderThread_Inititalize()
 	InitializeBuiltinMeshes();
 	mRenderer.Load();
 
+	mResources_MainWnd.DSV_MainViewDepth = mRenderer.CreateDSV();
 
+
+	// ---------- Window initialziation
 	auto fnHandleWindowTransitions = [&](std::unique_ptr<Window>& pWin, const FWindowSettings& settings)
 	{
 		if (!pWin) return;
@@ -131,8 +134,8 @@ void VQEngine::RenderThread_Inititalize()
 
 void VQEngine::RenderThread_Exit()
 {
+	mRenderer.Unload(); // syncs GPU for all render contexts, destroys swapchains
 	RenderThread_UnloadWindowSizeDependentResources(mpWinMain->GetHWND());
-	mRenderer.Unload();
 	mRenderer.Exit();
 }
 
@@ -162,6 +165,21 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 {
 	if (hwnd == mpWinMain->GetHWND())
 	{
+		RenderingResources_MainWindow& r = mResources_MainWnd;
+
+		// Main depth stencil view
+		D3D12_RESOURCE_DESC d = CD3DX12_RESOURCE_DESC::Tex2D(
+			DXGI_FORMAT_R32_TYPELESS
+			, Width
+			, Height
+			, 1 // Array Size
+			, 0 // MIP levels
+			, 1 // MSAA SampleCount
+			, 0 // MSAA SampleQuality
+			, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+		);
+		r.Tex_MainViewDepth = mRenderer.CreateTexture("SceneDepth", d);
+		mRenderer.InitializeDSV(r.DSV_MainViewDepth, 0u, r.Tex_MainViewDepth);
 
 	}
 
@@ -172,7 +190,9 @@ void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 {
 	if (hwnd == mpWinMain->GetHWND())
 	{
+		RenderingResources_MainWindow& r = mResources_MainWnd;
 
+		mRenderer.DestroyTexture(r.Tex_MainViewDepth);
 	}
 
 	// TODO: generic implementation of other window procedures for unload
@@ -194,7 +214,9 @@ void VQEngine::RenderThread_Render()
 	const int FRAME_DATA_INDEX  = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
 
 	RenderThread_RenderMainWindow();
-	RenderThread_RenderDebugWindow();
+	
+	if(!mpWinDebug->IsClosed()) 
+		RenderThread_RenderDebugWindow();
 }
 
 
@@ -232,7 +254,6 @@ void VQEngine::RenderThread_RenderDebugWindow()
 	const FFrameData& FrameData = mScene_DebugWnd.mFrameData[FRAME_DATA_INDEX];
 	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
 	// ----------------------------------------------------------------------------
-
 	
 	//
 	// PRE RENDER
@@ -272,8 +293,8 @@ void VQEngine::RenderThread_RenderDebugWindow()
 	};
 	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
+#if 0
 	// Draw Triangle
-
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
 
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO));
@@ -305,7 +326,7 @@ void VQEngine::RenderThread_RenderDebugWindow()
 	pCmd->IASetIndexBuffer(&ib);
 
 	pCmd->DrawIndexedInstanced(3, 1, 0, 0, 0);
-
+#endif
 
 	// Transition SwapChain for Present
 	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
@@ -459,13 +480,19 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 	// Transition SwapChain RT
 	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
-	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
-		, D3D12_RESOURCE_STATE_PRESENT
-		, D3D12_RESOURCE_STATE_RENDER_TARGET)
-	);
+
+	CD3DX12_RESOURCE_BARRIER barriers[] =
+	{
+		  CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET)
+		//, CD3DX12_RESOURCE_BARRIER::Transition(
+	};
+
+	pCmd->ResourceBarrier(_countof(barriers), barriers);
 
 	// Clear RT
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = ctx.SwapChain.GetCurrentBackBufferRTVHandle();
+	D3D12_CPU_DESCRIPTOR_HANDLE   dsvHandle = mRenderer.GetDSV(mResources_MainWnd.DSV_MainViewDepth).GetCPUDescHandle();
+
 	const float clearColor[] =
 	{
 		FrameData.SwapChainClearColor[0],
@@ -474,10 +501,12 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		FrameData.SwapChainClearColor[3]
 	};
 	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+	D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
+	pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, nullptr);
 
 	// Draw Triangle
 
-	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
+	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO));
 	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(EVertexBufferType::COLOR_AND_ALPHA));

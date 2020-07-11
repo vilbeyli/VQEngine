@@ -22,6 +22,7 @@
 #include "SwapChain.h"
 #include "CommandQueue.h"
 #include "ResourceHeaps.h"
+#include "ResourceViews.h"
 #include "Buffer.h"
 #include "Texture.h"
 
@@ -42,13 +43,15 @@ class Window;
 struct ID3D12RootSignature;
 struct ID3D12PipelineState;
 
-using BufferID = int;
-using TextureID = int;
-using SRV_ID = int;
-using UAV_ID = int;
-using CBV_ID = int;
-using RTV_ID = int;
-using DSV_ID = int;
+using ID_TYPE = int;
+using BufferID  = ID_TYPE;
+using TextureID = ID_TYPE;
+using SamplerID = ID_TYPE;
+using SRV_ID    = ID_TYPE;
+using UAV_ID    = ID_TYPE;
+using CBV_ID    = ID_TYPE;
+using RTV_ID    = ID_TYPE;
+using DSV_ID    = ID_TYPE;
 #define INVALID_ID  -1
 
 
@@ -136,11 +139,18 @@ public:
 	// Resource management
 	BufferID                     CreateBuffer(const FBufferDesc& desc);
 	TextureID                    CreateTextureFromFile(const char* pFilePath);
-	TextureID                    CreateTexture(const D3D12_RESOURCE_DESC& desc, const void* pData = nullptr);
-	SRV_ID                       CreateSRV(TextureID texID);
+	TextureID                    CreateTexture(const std::string& name, const D3D12_RESOURCE_DESC& desc, const void* pData = nullptr);
+
+	SRV_ID                       CreateSRV();
+	DSV_ID                       CreateDSV();
+	SRV_ID                       CreateAndInitializeSRV(TextureID texID);
+	DSV_ID                       CreateAndInitializeDSV(TextureID texID);
+	void                         InitializeDSV(DSV_ID dsvID, uint heapIndex, TextureID texID);
+	void                         InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID);
 
 	void                         DestroyTexture(TextureID texID);
-	void                         DestroySRV(SRV_ID texID);
+	void                         DestroySRV(SRV_ID srvID);
+	void                         DestroyDSV(DSV_ID dsvID);
 
 	// Getters: PSO, RootSignature, Heap
 	inline ID3D12PipelineState*  GetPSO(EBuiltinPSOs pso) const { return mpBuiltinPSOs[pso]; }
@@ -154,6 +164,7 @@ public:
 	const CBV_SRV_UAV&           GetUnorderedAccessView(UAV_ID Id) const;
 	const CBV_SRV_UAV&           GetConstantBufferView(CBV_ID Id) const;
 	const RTV&                   GetRenderTargetView(RTV_ID Id) const;
+	const DSV&                   GetDepthStencilView(RTV_ID Id) const;
 
 	inline const VBV&            GetVBV(BufferID Id) const { return GetVertexBufferView(Id); }
 	inline const IBV&            GetIBV(BufferID Id) const { return GetIndexBufferView(Id); }
@@ -161,6 +172,7 @@ public:
 	inline const CBV_SRV_UAV&    GetUAV(UAV_ID   Id) const { return GetUnorderedAccessView(Id); }
 	inline const CBV_SRV_UAV&    GetCBV(CBV_ID   Id) const { return GetConstantBufferView(Id); }
 	inline const RTV&            GetRTV(RTV_ID   Id) const { return GetRenderTargetView(Id); }
+	inline const DSV&            GetDSV(DSV_ID   Id) const { return GetDepthStencilView(Id); }
 
 
 private:
@@ -181,19 +193,29 @@ private:
 	StaticResourceViewHeap                         mHeapSampler;
 	UploadHeap                                     mHeapUpload;
 
-	// resources
+	// resources & views
 	StaticBufferPool                               mStaticVertexBufferPool;
 	StaticBufferPool                               mStaticIndexBufferPool;
 	std::unordered_map<TextureID, Texture>         mTextures;
-	//todo: samplers
-
-	// resource views
+	std::unordered_map<SamplerID, SAMPLER>         mSamplers;
 	std::unordered_map<BufferID, VBV>              mVBVs;
 	std::unordered_map<BufferID, IBV>              mIBVs;
 	std::unordered_map<CBV_ID  , CBV_SRV_UAV>      mCBVs;
 	std::unordered_map<SRV_ID  , CBV_SRV_UAV>      mSRVs;
 	std::unordered_map<UAV_ID  , CBV_SRV_UAV>      mUAVs;
 	std::unordered_map<RTV_ID  , RTV>              mRTVs;
+	std::unordered_map<DSV_ID  , DSV>              mDSVs;
+	mutable std::mutex                             mMtxStaticVBPool;
+	mutable std::mutex                             mMtxStaticIBPool;
+	mutable std::mutex                             mMtxTextures;
+	mutable std::mutex                             mMtxSamplers;
+	mutable std::mutex                             mMtxSRVs;
+	mutable std::mutex                             mMtxCBVs;
+	mutable std::mutex                             mMtxRTVs;
+	mutable std::mutex                             mMtxDSVs;
+	mutable std::mutex                             mMtxUAVs;
+	mutable std::mutex                             mMtxVBVs;
+	mutable std::mutex                             mMtxIBVs;
 
 	// root signatures
 	RootSignatureArray_t                           mpBuiltinRootSignatures;
@@ -207,17 +229,6 @@ private:
 	// bookkeeping
 	std::unordered_map<TextureID, std::string>     mLookup_TextureDiskLocations;
 
-	// threading
-	mutable std::mutex                             mMtxStaticVBPool;
-	mutable std::mutex                             mMtxStaticIBPool;
-	mutable std::mutex                             mMtxTextures;
-	mutable std::mutex                             mMtxSRVs;
-	mutable std::mutex                             mMtxCBVs;
-	mutable std::mutex                             mMtxRTVs;
-	mutable std::mutex                             mMtxDSVs;
-	mutable std::mutex                             mMtxUAVs;
-	mutable std::mutex                             mMtxVBVs;
-	mutable std::mutex                             mMtxIBVs;
 
 
 private:
