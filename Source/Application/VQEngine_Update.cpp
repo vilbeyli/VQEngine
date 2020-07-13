@@ -139,12 +139,13 @@ void VQEngine::UpdateThread_PostUpdate()
 	// compute visibility 
 
 	// extract scene view
+
 }
 
 
 void VQEngine::Load_SceneData_Dispatch()
 {
-	mUpdateWorkerThreads.AddTask([&]() { Sleep(2000); Log::Info("Worker SLEEP done!"); }); // simulate 2second loading time
+	//mUpdateWorkerThreads.AddTask([&]() { Sleep(2000); Log::Info("Worker SLEEP done!"); }); // simulate 2second loading time
 	mUpdateWorkerThreads.AddTask([&]()
 	{
 		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
@@ -153,8 +154,27 @@ void VQEngine::Load_SceneData_Dispatch()
 		// TODO: initialize window scene data here for now, should update this to proper location later on (Scene probably?)
 		FFrameData data[2];
 		data[0].SwapChainClearColor = { 0.07f, 0.07f, 0.07f, 1.0f };
-		data[0].TFCube = Transform(XMFLOAT3(0, 0, 5), Quaternion::FromAxisAngle(XMFLOAT3(1, 1, 1), 45.0f * DEG2RAD), XMFLOAT3(0.5f, 0.5f, 0.5f));
-		// data[0].SceneCamera. // TODO: initialize the camera
+
+		// Cube Data
+		constexpr XMFLOAT3 CUBE_POSITION         = XMFLOAT3(0, 0, 4);
+		constexpr float    CUBE_SCALE            = 1.0f;
+		constexpr XMFLOAT3 CUBE_ROTATION_VECTOR  = XMFLOAT3(1, 1, 1);
+		constexpr float    CUBE_ROTATION_DEGREES = 60.0f;
+		const XMVECTOR     CUBE_ROTATION_AXIS    = XMVector3Normalize(XMLoadFloat3(&CUBE_ROTATION_VECTOR));
+		data[0].TFCube = Transform(
+			  CUBE_POSITION
+			, Quaternion::FromAxisAngle(CUBE_ROTATION_AXIS, CUBE_ROTATION_DEGREES * DEG2RAD)
+			, XMFLOAT3(CUBE_SCALE, CUBE_SCALE, CUBE_SCALE)
+		);
+
+		CameraData camData = {};
+		camData.nearPlane = 0.01f;
+		camData.farPlane  = 1000.0f;
+		camData.x = 0.0f; camData.y = 3.0f; camData.z = -5.0f;
+		camData.pitch = 10.0f;
+		camData.yaw = 0.0f;
+		camData.fovH_Degrees = 60.0f;
+		data[0].SceneCamera.InitializeCamera(camData, mpWinMain->GetWidth(), mpWinMain->GetHeight());
 		mScene_MainWnd.mFrameData.resize(NumBackBuffer_WndMain, data[0]);
 
 		data[1].SwapChainClearColor = { 0.20f, 0.21f, 0.21f, 1.0f };

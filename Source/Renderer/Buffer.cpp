@@ -24,7 +24,7 @@
 #include <cassert>
 
 
-size_t StaticBufferPool::MEMORY_ALIGNMENT = 256;
+size_t StaticBufferHeap::MEMORY_ALIGNMENT = 256;
 
 
 static D3D12_RESOURCE_STATES GetResourceTransitionState(EBufferType eType)
@@ -43,9 +43,9 @@ static D3D12_RESOURCE_STATES GetResourceTransitionState(EBufferType eType)
 }
 
 //
-// CREATE / DESTROY
+// STATIC BUFFER HEAP
 //
-void StaticBufferPool::Create(ID3D12Device* pDevice, EBufferType type, uint32 totalMemSize, bool bUseVidMem, const char* name)
+void StaticBufferHeap::Create(ID3D12Device* pDevice, EBufferType type, uint32 totalMemSize, bool bUseVidMem, const char* name)
 {
     mpDevice = pDevice;
     mTotalMemSize = totalMemSize;
@@ -93,7 +93,7 @@ void StaticBufferPool::Create(ID3D12Device* pDevice, EBufferType type, uint32 to
     mpSysMemBuffer->Map(0, NULL, reinterpret_cast<void**>(&mpData));
 }
 
-void StaticBufferPool::Destroy()
+void StaticBufferHeap::Destroy()
 {
     if (mbUseVidMem)
     {
@@ -112,11 +112,7 @@ void StaticBufferPool::Destroy()
 }
 
 
-
-//
-// ALLOC
-//
-bool StaticBufferPool::AllocBuffer(uint32 numElements, uint32 strideInBytes, const void* pInitData, D3D12_GPU_VIRTUAL_ADDRESS* pBufferLocation, uint32* pSizeOut)
+bool StaticBufferHeap::AllocBuffer(uint32 numElements, uint32 strideInBytes, const void* pInitData, D3D12_GPU_VIRTUAL_ADDRESS* pBufferLocation, uint32* pSizeOut)
 {
     void* pData;
     if (AllocBuffer(numElements, strideInBytes, &pData, pBufferLocation, pSizeOut))
@@ -126,8 +122,7 @@ bool StaticBufferPool::AllocBuffer(uint32 numElements, uint32 strideInBytes, con
     }
     return false;
 }
-
-bool StaticBufferPool::AllocVertexBuffer(uint32 numVertices, uint32 strideInBytes, const void* pInitData, D3D12_VERTEX_BUFFER_VIEW* pViewOut)
+bool StaticBufferHeap::AllocVertexBuffer(uint32 numVertices, uint32 strideInBytes, const void* pInitData, D3D12_VERTEX_BUFFER_VIEW* pViewOut)
 {
     assert(mType == EBufferType::VERTEX_BUFFER);
     void* pData = nullptr;
@@ -139,8 +134,7 @@ bool StaticBufferPool::AllocVertexBuffer(uint32 numVertices, uint32 strideInByte
 
     return false;
 }
-
-bool StaticBufferPool::AllocIndexBuffer(uint32 numIndices, uint32 strideInBytes, const void* pInitData, D3D12_INDEX_BUFFER_VIEW* pOut)
+bool StaticBufferHeap::AllocIndexBuffer(uint32 numIndices, uint32 strideInBytes, const void* pInitData, D3D12_INDEX_BUFFER_VIEW* pOut)
 {
     assert(mType == EBufferType::INDEX_BUFFER);
     void* pData = nullptr;
@@ -153,12 +147,11 @@ bool StaticBufferPool::AllocIndexBuffer(uint32 numIndices, uint32 strideInBytes,
 }
 
 
-
-bool StaticBufferPool::AllocBuffer(uint32 numElements, uint32 strideInBytes, void** ppDataOut, D3D12_GPU_VIRTUAL_ADDRESS* pBufferLocationOut, uint32* pSizeOut)
+bool StaticBufferHeap::AllocBuffer(uint32 numElements, uint32 strideInBytes, void** ppDataOut, D3D12_GPU_VIRTUAL_ADDRESS* pBufferLocationOut, uint32* pSizeOut)
 {
     std::lock_guard<std::mutex> lock(mMtx);
 
-    uint32 size = AlignOffset(numElements * strideInBytes, (uint32)StaticBufferPool::MEMORY_ALIGNMENT);
+    uint32 size = AlignOffset(numElements * strideInBytes, (uint32)StaticBufferHeap::MEMORY_ALIGNMENT);
     assert(mMemOffset + size < mTotalMemSize); // if this is hit, initialize heap with a larger size.
 
     *ppDataOut = (void*)(mpData + mMemOffset);
@@ -172,15 +165,13 @@ bool StaticBufferPool::AllocBuffer(uint32 numElements, uint32 strideInBytes, voi
 
     return true;
 }
-
-bool StaticBufferPool::AllocVertexBuffer(uint32 numVertices, uint32 strideInBytes, void** ppDataOut, D3D12_VERTEX_BUFFER_VIEW* pViewOut)
+bool StaticBufferHeap::AllocVertexBuffer(uint32 numVertices, uint32 strideInBytes, void** ppDataOut, D3D12_VERTEX_BUFFER_VIEW* pViewOut)
 {
     bool bSuccess = AllocBuffer(numVertices, strideInBytes, ppDataOut, &pViewOut->BufferLocation, &pViewOut->SizeInBytes);
     pViewOut->StrideInBytes = bSuccess ? strideInBytes : 0;
     return bSuccess;
 }
-
-bool StaticBufferPool::AllocIndexBuffer(uint32 numIndices, uint32 strideInBytes, void** ppDataOut, D3D12_INDEX_BUFFER_VIEW* pViewOut)
+bool StaticBufferHeap::AllocIndexBuffer(uint32 numIndices, uint32 strideInBytes, void** ppDataOut, D3D12_INDEX_BUFFER_VIEW* pViewOut)
 {
     bool bSuccess = AllocBuffer(numIndices, strideInBytes, ppDataOut, &pViewOut->BufferLocation, &pViewOut->SizeInBytes);
     pViewOut->Format = bSuccess 
@@ -190,12 +181,7 @@ bool StaticBufferPool::AllocIndexBuffer(uint32 numIndices, uint32 strideInBytes,
 }
 
 
-
-
-//
-// UPLOAD
-//
-void StaticBufferPool::UploadData(ID3D12GraphicsCommandList* pCmd)
+void StaticBufferHeap::UploadData(ID3D12GraphicsCommandList* pCmd)
 {
     if (mbUseVidMem)
     {
@@ -215,4 +201,194 @@ void StaticBufferPool::UploadData(ID3D12GraphicsCommandList* pCmd)
 
         mMemInit = mMemOffset;
     }
+}
+
+
+
+//
+// DYNAMIC BUFFER HEAP
+//
+void DynamicBufferHeap::Create(ID3D12Device* pDevice, uint32_t numberOfBackBuffers, uint32_t memTotalSize)
+{
+    m_memTotalSize = AlignOffset(memTotalSize, 256u);
+
+    m_mem.Create(numberOfBackBuffers, memTotalSize);
+
+    ThrowIfFailed(pDevice->CreateCommittedResource(
+        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+        D3D12_HEAP_FLAG_NONE,
+        &CD3DX12_RESOURCE_DESC::Buffer(memTotalSize),
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&m_pBuffer)));
+    SetName(m_pBuffer, "DynamicBufferHeap::m_pBuffer");
+
+    m_pBuffer->Map(0, nullptr, reinterpret_cast<void**>(&m_pData));
+}
+
+void DynamicBufferHeap::Destroy()
+{
+    m_pBuffer->Release();
+    m_mem.Destroy();
+}
+
+bool DynamicBufferHeap::AllocConstantBuffer(uint32_t size, void** pData, D3D12_GPU_VIRTUAL_ADDRESS* pBufferViewDesc)
+{
+    size = AlignOffset(size, 256u);
+
+    uint32_t memOffset;
+    if (m_mem.Alloc(size, &memOffset) == false)
+    {
+        Log::Error("Ran out of mem for 'dynamic' buffers, please increase the allocated size\n");
+        return false;
+    }
+
+    *pData = (void*)(m_pData + memOffset);
+
+    *pBufferViewDesc = m_pBuffer->GetGPUVirtualAddress() + memOffset;
+
+    return true;
+}
+
+bool DynamicBufferHeap::AllocVertexBuffer(uint32_t NumVertices, uint32_t strideInBytes, void** ppData, D3D12_VERTEX_BUFFER_VIEW* pView)
+{
+    uint32_t size = AlignOffset(NumVertices * strideInBytes, 256u);
+
+    uint32_t memOffset;
+    if (m_mem.Alloc(size, &memOffset) == false)
+        return false;
+
+    *ppData = (void*)(m_pData + memOffset);
+
+
+    pView->BufferLocation = m_pBuffer->GetGPUVirtualAddress() + memOffset;
+    pView->StrideInBytes = strideInBytes;
+    pView->SizeInBytes = size;
+
+    return true;
+}
+
+bool DynamicBufferHeap::AllocIndexBuffer(uint32_t NumIndices, uint32_t strideInBytes, void** ppData, D3D12_INDEX_BUFFER_VIEW* pView)
+{
+    uint32_t size = AlignOffset(NumIndices * strideInBytes, 256u);
+
+    uint32_t memOffset;
+    if (m_mem.Alloc(size, &memOffset) == false)
+        return false;
+
+    *ppData = (void*)(m_pData + memOffset);
+
+    pView->BufferLocation = m_pBuffer->GetGPUVirtualAddress() + memOffset;
+    pView->Format = (strideInBytes == 4) ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
+    pView->SizeInBytes = size;
+
+    return true;
+}
+
+//--------------------------------------------------------------------------------------
+//
+// OnBeginFrame
+//
+//--------------------------------------------------------------------------------------
+void DynamicBufferHeap::OnBeginFrame()
+{
+    m_mem.OnBeginFrame();
+}
+
+
+//
+// RING BUFFER
+// 
+void RingBuffer::Create(uint32_t TotalSize)
+{
+    m_Head = 0;
+    m_AllocatedSize = 0;
+    m_TotalSize = TotalSize;
+}
+uint32_t RingBuffer::PaddingToAvoidCrossOver(uint32_t size)
+{
+    int tail = GetTail();
+    if ((tail + size) > m_TotalSize)
+        return (m_TotalSize - tail);
+    else
+        return 0;
+}
+bool RingBuffer::Alloc(uint32_t size, uint32_t* pOut)
+{
+    if (m_AllocatedSize + size <= m_TotalSize)
+    {
+        if (pOut)
+            *pOut = GetTail();
+
+        m_AllocatedSize += size;
+        return true;
+    }
+
+    assert(false);
+    return false;
+}
+bool RingBuffer::Free(uint32_t size)
+{
+    if (m_AllocatedSize > size)
+    {
+        m_Head = (m_Head + size) % m_TotalSize;
+        m_AllocatedSize -= size;
+        return true;
+    }
+    return false;
+}
+
+
+//
+// RING BUFFER WITH TABS
+//
+void RingBufferWithTabs::Create(uint32_t numberOfBackBuffers, uint32_t memTotalSize)
+{
+    m_backBufferIndex = 0;
+    m_numberOfBackBuffers = numberOfBackBuffers;
+
+    //init mem per frame tracker
+    m_memAllocatedInFrame = 0;
+    for (int i = 0; i < 4; i++)
+        m_allocatedMemPerBackBuffer[i] = 0;
+
+    m_mem.Create(memTotalSize);
+}
+
+void RingBufferWithTabs::Destroy()
+{
+    m_mem.Free(m_mem.GetSize());
+}
+
+bool RingBufferWithTabs::Alloc(uint32_t size, uint32_t* pOut)
+{
+    uint32_t padding = m_mem.PaddingToAvoidCrossOver(size);
+    if (padding > 0)
+    {
+        m_memAllocatedInFrame += padding;
+
+        if (m_mem.Alloc(padding, NULL) == false) //alloc chunk to avoid crossover, ignore offset        
+        {
+            return false;  //no mem, cannot allocate apdding
+        }
+    }
+
+    if (m_mem.Alloc(size, pOut) == true)
+    {
+        m_memAllocatedInFrame += size;
+        return true;
+    }
+    return false;
+}
+
+void RingBufferWithTabs::OnBeginFrame()
+{
+    m_allocatedMemPerBackBuffer[m_backBufferIndex] = m_memAllocatedInFrame;
+    m_memAllocatedInFrame = 0;
+
+    m_backBufferIndex = (m_backBufferIndex + 1) % m_numberOfBackBuffers;
+
+    // free all the entries for the oldest buffer in one go
+    uint32_t memToFree = m_allocatedMemPerBackBuffer[m_backBufferIndex];
+    m_mem.Free(memToFree);
 }

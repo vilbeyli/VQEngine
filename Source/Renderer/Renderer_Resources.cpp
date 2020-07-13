@@ -180,9 +180,9 @@ BufferID VQRenderer::CreateVertexBuffer(const FBufferDesc& desc)
 	BufferID Id = INVALID_ID;
 	VBV vbv;
 
-	std::lock_guard <std::mutex> lk(mMtxStaticVBPool);
+	std::lock_guard <std::mutex> lk(mMtxStaticVBHeap);
 
-	bool bSuccess = mStaticVertexBufferPool.AllocVertexBuffer(desc.NumElements, desc.Stride, desc.pData, &vbv);
+	bool bSuccess = mStaticHeap_VertexBuffer.AllocVertexBuffer(desc.NumElements, desc.Stride, desc.pData, &vbv);
 	if (bSuccess)
 	{
 		Id = LAST_USED_VBV_ID++;
@@ -198,9 +198,9 @@ BufferID VQRenderer::CreateIndexBuffer(const FBufferDesc& desc)
 	BufferID Id = INVALID_ID;
 	IBV ibv;
 
-	std::lock_guard<std::mutex> lk(mMtxStaticIBPool);
+	std::lock_guard<std::mutex> lk(mMtxStaticIBHeap);
 
-	bool bSuccess = mStaticIndexBufferPool.AllocIndexBuffer(desc.NumElements, desc.Stride, desc.pData, &ibv);
+	bool bSuccess = mStaticHeap_IndexBuffer.AllocIndexBuffer(desc.NumElements, desc.Stride, desc.pData, &ibv);
 	if (bSuccess)
 	{
 		Id = LAST_USED_IBV_ID++;

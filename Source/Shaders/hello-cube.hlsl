@@ -16,12 +16,30 @@ struct PSInput
 	float2 uv : TEXCOORD0;
 };
 
+struct PerFrame{};
+struct PerView 
+{
+
+};
+struct PerObject
+{
+
+};
+
+cbuffer CBuffer : register(b0)
+{
+	float4x4 matModelViewProj;
+}
+
+
+Texture2D    texColor;
+SamplerState Sampler;
+
 PSInput VSMain(float4 position : POSITION, float4 color : COLOR, float2 uv : TEXCOORD0)
 {
     PSInput result;
 
-	float3 pos = position.xyz * 0.5f;
-	result.position = float4(pos.x, pos.y, pos.z, 1.0f);
+	result.position = mul(matModelViewProj, position);
     result.color = color;
 	result.uv = uv;
 
@@ -30,5 +48,5 @@ PSInput VSMain(float4 position : POSITION, float4 color : COLOR, float2 uv : TEX
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	return float4(input.uv.x, input.uv.y, 0, 1);
+	return float4(texColor.SampleLevel(Sampler, input.uv, 0).rgb, 1);
 }

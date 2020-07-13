@@ -21,7 +21,9 @@
 // Adopted from AMD/Cauldron's Static & Dynamic Buffer Pool classes
 // https://github.com/GPUOpen-LibrariesAndSDKs/Cauldron/blob/master/src/DX12/base/DynamicBufferRing.h
 // https://github.com/GPUOpen-LibrariesAndSDKs/Cauldron/blob/master/src/DX12/base/StaticConstantBufferPool.h
-// https://github.com/GPUOpen-LibrariesAndSDKs/Cauldron/blob/master/src/DX12/base/StaticBufferPool.h
+// https://github.com/GPUOpen-LibrariesAndSDKs/Cauldron/blob/master/src/DX12/base/DynamicBufferRing.h
+// https://github.com/GPUOpen-LibrariesAndSDKs/Cauldron/blob/master/src/DX12/base/UploadHeap.h
+// 
 
 // AMD AMDUtils code
 // 
@@ -53,6 +55,27 @@ struct ID3D12Device;
 struct ID3D12Resource;
 struct D3D12_CONSTANT_BUFFER_VIEW_DESC;
 struct ID3D12GraphicsCommandList;
+
+//
+// BUFFER DESCRIPTOR
+//
+enum EBufferType
+{
+    VERTEX_BUFFER = 0,
+    INDEX_BUFFER,
+    CONSTANT_BUFFER,
+
+    NUM_BUFFER_TYPES
+};
+struct FBufferDesc
+{
+    EBufferType Type;
+    uint        NumElements;
+    uint        Stride;
+    const void* pData;
+    std::string Name;
+};
+
 
 //
 // VERTEX BUFFER DEFINITIONS
@@ -99,31 +122,13 @@ struct FVertexWithNormalAndTangent
 };
 
 
-
 //
-// BUFFER POOL DEFINITIONS
+// STATIC BUFFER HEAP
 //
-enum EBufferType
-{
-    VERTEX_BUFFER = 0,
-    INDEX_BUFFER,
-    CONSTANT_BUFFER,
-
-    NUM_BUFFER_TYPES
-};
-
-struct FBufferDesc
-{
-    EBufferType Type;
-    uint        NumElements;
-    uint        Stride;
-    const void* pData;
-    std::string Name;
-};
-
-class StaticBufferPool
+class StaticBufferHeap
 {
     static size_t MEMORY_ALIGNMENT; // TODO: potentially move to renderer settings ini or make a member
+
 public:
     void Create(ID3D12Device* pDevice, EBufferType type, uint32 totalMemSize, bool bUseVidMem, const char* name);
     void Destroy();
@@ -157,50 +162,80 @@ private:
     ID3D12Resource* mpVidMemBuffer = nullptr;
 };
 
-#if 0
-class StaticConstantBufferPool
+
+
+//
+// RING BUFFERS
+//
+class RingBuffer
 {
 public:
-    void Create(ID3D12Device* pDevice, uint32 totalMemSize, ResourceViewHeaps* pHeaps, uint32 cbvEntriesSize, bool bUseVidMem);
-    void Destroy();
-    bool AllocConstantBuffer(uint32 size, void** pData, uint32* pIndex);
-    bool CreateCBV(uint32 index, int srvOffset, CBV_SRV_UAV* pCBV);
-    void UploadData(ID3D12GraphicsCommandList* pCmdList);
-    void FreeUploadHeap();
+    void Create(uint32_t TotalSize);
+
+    inline uint32_t GetSize() { return m_AllocatedSize; }
+    inline uint32_t GetHead() { return m_Head; }
+    inline uint32_t GetTail() { return (m_Head + m_AllocatedSize) % m_TotalSize; }
+
+    //helper to avoid allocating chunks that wouldn't fit contiguously in the ring
+    uint32_t PaddingToAvoidCrossOver(uint32_t size);
+    bool Alloc(uint32_t size, uint32_t* pOut);
+    bool Free(uint32_t size);
 
 private:
-    ID3D12Device* mpDevice;
-    ID3D12Resource* m_pMemBuffer;
-    ID3D12Resource* mpSysMemBuffer;
-    ID3D12Resource* mpVidMemBuffer;
-
-    char*          mpData;
-    uint32         mMemOffset;
-    uint32         mTotalMemSize;
-
-    uint32         m_cbvOffset;
-    uint32         m_cbvEntriesSize;
-
-    D3D12_CONSTANT_BUFFER_VIEW_DESC* m_pCBVDesc;
-
-    bool            mbUseVidMem;
+    uint32_t m_Head;
+    uint32_t m_AllocatedSize;
+    uint32_t m_TotalSize;
 };
 
-class DynamicBufferRing
+// 
+// This class can be thought as ring buffer inside a ring buffer. The outer ring is for , 
+// the frames and the internal one is for the resources that were allocated for that frame.
+// The size of the outer ring is typically the number of back buffers.
+//
+// When the outer ring is full, for the next allocation it automatically frees the entries 
+// of the oldest frame and makes those entries available for the next frame. This happens 
+// when you call 'OnBeginFrame()' 
+//
+class RingBufferWithTabs
 {
 public:
-    void Create(ID3D12Device* pDevice, uint32 numberOfBackBuffers, uint32 memTotalSize, ResourceViewHeaps* pHeaps);
+    void Create(uint32_t numberOfBackBuffers, uint32_t memTotalSize);
     void Destroy();
-
-    bool AllocIndexBuffer(uint32 numIndices, uint32 strideInBytes, void** pData, D3D12_INDEX_BUFFER_VIEW* pView);
-    bool AllocVertexBuffer(uint32 numVertices, uint32 strideInBytes, void** pData, D3D12_VERTEX_BUFFER_VIEW* pView);
-    bool AllocConstantBuffer(uint32 size, void** pData, D3D12_GPU_VIRTUAL_ADDRESS* pBufferViewDesc);
+    bool Alloc(uint32_t size, uint32_t* pOut);
     void OnBeginFrame();
 
 private:
-    uint32          m_memTotalSize;
-    RingWithTabs    m_mem;
-    char*           mpData = nullptr;
+    //internal ring buffer
+    RingBuffer m_mem;
+
+    //this is the external ring buffer (I could have reused the RingBuffer class though)
+    uint32_t m_backBufferIndex;
+    uint32_t m_numberOfBackBuffers;
+
+    uint32_t m_memAllocatedInFrame;
+    uint32_t m_allocatedMemPerBackBuffer[4];
+};
+
+
+
+
+//
+// DYNAMIC BUFFER HEAP
+//
+class DynamicBufferHeap // RingBuffer Buffer with suballocated rings for perframe/perdraw data
+{
+public:
+    void Create(ID3D12Device* pDevice, uint32_t numberOfBackBuffers, uint32_t memTotalSize);
+    void Destroy();
+
+    bool AllocIndexBuffer(uint32_t numbeOfIndices, uint32_t strideInBytes, void** pData, D3D12_INDEX_BUFFER_VIEW* pView);
+    bool AllocVertexBuffer(uint32_t numbeOfVertices, uint32_t strideInBytes, void** pData, D3D12_VERTEX_BUFFER_VIEW* pView);
+    bool AllocConstantBuffer(uint32_t size, void** pData, D3D12_GPU_VIRTUAL_ADDRESS* pBufferViewDesc);
+    void OnBeginFrame();
+
+private:
+    uint32_t            m_memTotalSize;
+    RingBufferWithTabs  m_mem;
+    char* m_pData = nullptr;
     ID3D12Resource* m_pBuffer = nullptr;
 };
-#endif

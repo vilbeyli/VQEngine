@@ -46,23 +46,25 @@ Camera::Camera()
 Camera::~Camera(void)
 {}
 
-#if 0
-void Camera::ConfigureCamera(const Settings::Camera& cameraSettings, const Settings::Window& windowSettings, Renderer* pRenderer)
+void Camera::InitializeCamera(const CameraData& data, int ViewportX, int ViewportY)
 {
-	const auto& NEAR_PLANE = cameraSettings.nearPlane;
-	const auto& FAR_PLANE = cameraSettings.farPlane;
-	const float AspectRatio = static_cast<float>(windowSettings.width) / windowSettings.height;
-	const float VerticalFoV = cameraSettings.fovV * DEG2RAD;
+	const auto& NEAR_PLANE = data.nearPlane;
+	const auto& FAR_PLANE = data.farPlane;
+	const float AspectRatio = static_cast<float>(ViewportX) / ViewportY;
+	const float VerticalFoV = data.fovV_Degrees * DEG2RAD;
 
-	m_settings = cameraSettings;
-	m_settings.aspect = AspectRatio;
+	//m_settings = data;
+	//m_settings.aspect = AspectRatio;
 
-	SetOthoMatrix(windowSettings.width, windowSettings.height, NEAR_PLANE, FAR_PLANE);
+#if 0
+	SetOthoMatrix(ViewportX, ViewportY, NEAR_PLANE, FAR_PLANE);
+#else
 	SetProjectionMatrix(VerticalFoV, AspectRatio, NEAR_PLANE, FAR_PLANE);
+#endif
 
-	SetPosition(cameraSettings.x, cameraSettings.y, cameraSettings.z);
+	SetPosition(data.x, data.y, data.z);
 	mYaw = mPitch = 0;
-	Rotate(cameraSettings.yaw * DEG2RAD, cameraSettings.pitch * DEG2RAD, 1.0f);
+	Rotate(data.yaw * DEG2RAD, data.pitch * DEG2RAD, 1.0f);
 
 	// if we haven't initialized the LUT render target
 	//if (mRT_LinearDepthLUT == -1)
@@ -73,7 +75,7 @@ void Camera::ConfigureCamera(const Settings::Camera& cameraSettings, const Setti
 // PANINI TEST
 //
 //#if 1
-//	SetProjectionMatrix(m_settings.fovV * DEG2RAD, m_settings.aspect, m_settings.nearPlane, m_settings.farPlane);
+//	SetProjectionMatrix(m_settings.fovV_Degrees * DEG2RAD, m_settings.aspect, m_settings.nearPlane, m_settings.farPlane);
 //#else  // test fov
 //	static float gFoVx = 90.0f;
 //	static float gFoVy = 45.0f;
@@ -84,13 +86,13 @@ void Camera::ConfigureCamera(const Settings::Camera& cameraSettings, const Setti
 //	gFoVx += dFoV;
 //	gFoVy += dFoV;
 //
-//	m_settings.fovH = gFoVx;
+//	m_settings.fovH_Degrees = gFoVx;
 //
 //	SetProjectionMatrixHFov(gFoVx * DEG2RAD, 1.0f / m_settings.aspect, m_settings.nearPlane, m_settings.farPlane);
 //	//SetProjectionMatrix(gFoVy * DEG2RAD, m_settings.aspect, m_settings.nearPlane, m_settings.farPlane);
 //#endif
 }
-#endif
+
 
 void Camera::SetOthoMatrix(int screenWidth, int screenHeight, float screenNear, float screenFar)
 {
@@ -140,10 +142,10 @@ void Camera::Update(float dt)
 	Rotate(dt);
 	Move(dt);
 
-	XMVECTOR up		= XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-	XMVECTOR lookAt = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
-	XMVECTOR pos	= XMLoadFloat3(&mPosition);
-	XMMATRIX MRot	= RotMatrix();
+	XMVECTOR up         = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+	XMVECTOR lookAt     = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+	const XMVECTOR pos  = XMLoadFloat3(&mPosition);
+	const XMMATRIX MRot = RotMatrix();
 
 	//transform the lookat and up vector by rotation matrix
 	lookAt	= XMVector3TransformCoord(lookAt, MRot);
@@ -175,13 +177,14 @@ XMMATRIX Camera::GetViewMatrix() const
 
 XMMATRIX Camera::GetViewInverseMatrix() const
 {
-	XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-	XMVECTOR lookAt = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
-	XMVECTOR pos = XMLoadFloat3(&mPosition);
-	XMMATRIX MRot = RotMatrix();
+	const XMVECTOR up     = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+	const XMVECTOR lookAt = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+	const XMVECTOR pos    = XMLoadFloat3(&mPosition);
+	const XMMATRIX MRot   = RotMatrix();
 
-	XMVECTOR dir	= XMVector3Normalize(lookAt - pos);
-	XMVECTOR wing	= XMVector3Cross(up, dir);
+	const XMVECTOR dir    = XMVector3Normalize(lookAt - pos);
+	const XMVECTOR wing   = XMVector3Cross(up, dir);
+
 	XMMATRIX R = XMMatrixIdentity(); 
 	R.r[0] = wing;
 	R.r[1] = up;
@@ -236,10 +239,10 @@ void Camera::Rotate(float yaw, float pitch, const float dt)
 #if 0
 void Camera::Reset() // TODO: input
 {
-	const Settings::Camera & cameraSettings = m_settings;
-	SetPosition(cameraSettings.x, cameraSettings.y, cameraSettings.z);
+	const Settings::Camera & data = m_settings;
+	SetPosition(data.x, data.y, data.z);
 	mYaw = mPitch = 0;
-	Rotate(cameraSettings.yaw * DEG2RAD, cameraSettings.pitch * DEG2RAD, 1.0f);
+	Rotate(data.yaw * DEG2RAD, data.pitch * DEG2RAD, 1.0f);
 }
 
 // internal update functions

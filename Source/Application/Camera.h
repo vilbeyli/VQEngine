@@ -91,14 +91,14 @@ struct CameraData
 {
 	union
 	{
-		float fovH;
-		float fovV;
+		float fovH_Degrees;
+		float fovV_Degrees;
 	};
 	float nearPlane;
 	float farPlane;
 	float aspect;
 	float x, y, z;
-	float yaw, pitch;
+	float yaw, pitch; // in degrees
 };
 
 class Camera
@@ -107,7 +107,7 @@ public:
 	Camera();
 	~Camera(void);
 
-	//void ConfigureCamera(const CameraData& data, const Settings::Window& windowSettings, Renderer* pRenderer);
+	void InitializeCamera(const CameraData& data, int ViewportX, int ViewportY);
 
 	void SetOthoMatrix(int screenWidth, int screenHeight, float screenNear, float screenFar);
 	void SetProjectionMatrix(float fovy, float screenAspect, float screenNear, float screenFar);

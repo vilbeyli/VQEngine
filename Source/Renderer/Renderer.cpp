@@ -147,9 +147,13 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 		ctx.pCmdList_GFX->SetName(L"RenderContext::CmdListGFX");
 		ctx.pCmdList_GFX->Close();
 
+		// Create dynamic buffer heap
+		ctx.mDynamicHeap_ConstantBuffer.Create(pDevice, NUM_SWAPCHAIN_BUFFERS, 16 * MEGABYTE);
+
 		// Save other context data
 		ctx.MainRTResolutionX = wnd.width;
 		ctx.MainRTResolutionY = wnd.height;
+
 
 		// save the render context
 		this->mRenderContextLookup.emplace(wnd.hwnd, std::move(ctx));
@@ -157,13 +161,7 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 
 	// Initialize memory
 	InitializeD3D12MA();
-	InitializeResourceHeaps();
-	{
-		constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 16 * MEGABYTE;
-		constexpr bool USE_GPU_MEMORY = true;
-		mStaticVertexBufferPool.Create(pDevice, EBufferType::VERTEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticVertexBufferPool");
-		mStaticIndexBufferPool .Create(pDevice, EBufferType::INDEX_BUFFER , STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticIndexBufferPool");
-	}
+	InitializeHeaps();
 
 	Log::Info("[Renderer] Initialized.");
 	// TODO: Log system info
@@ -178,19 +176,7 @@ void VQRenderer::Load()
 
 void VQRenderer::Unload()
 {
-	for (auto it_hwnd_ctx : mRenderContextLookup)
-	{
-		auto& ctx = it_hwnd_ctx.second;
-		for (ID3D12CommandAllocator* pCmdAlloc : ctx.mCommandAllocatorsGFX)     if (pCmdAlloc) pCmdAlloc->Release();
-		for (ID3D12CommandAllocator* pCmdAlloc : ctx.mCommandAllocatorsCompute) if (pCmdAlloc) pCmdAlloc->Release();
-		for (ID3D12CommandAllocator* pCmdAlloc : ctx.mCommandAllocatorsCopy)    if (pCmdAlloc) pCmdAlloc->Release();
-
-		ctx.SwapChain.Destroy(); // syncs GPU before releasing resources
-
-		ctx.PresentQueue.Destroy();
-		if (ctx.pCmdList_GFX) 
-			ctx.pCmdList_GFX->Release();
-	}
+	// todo: mirror Load() functions?
 }
 
 
@@ -199,8 +185,9 @@ void VQRenderer::Exit()
 	mHeapUpload.Destroy();
 	mHeapCBV_SRV_UAV.Destroy();
 	mHeapDSV.Destroy();
-	mStaticVertexBufferPool.Destroy();
-	mStaticIndexBufferPool.Destroy();
+	mStaticHeap_VertexBuffer.Destroy();
+	mStaticHeap_IndexBuffer.Destroy();
+
 	for (std::unordered_map<TextureID, Texture>::iterator it = mTextures.begin(); it != mTextures.end(); ++it)
 	{
 		it->second.Destroy();
@@ -209,18 +196,33 @@ void VQRenderer::Exit()
 	mTextures.clear();
 	
 	mpAllocator->Release();
-
-	for (ID3D12RootSignature* pRootSignature : mpBuiltinRootSignatures)
+	
+	for (auto* p : mpBuiltinRootSignatures)
 	{
-		if (pRootSignature) 
-			pRootSignature->Release();
+		if (p) p->Release();
 	}
+
 	for (ID3D12PipelineState* pPSO : mpBuiltinPSOs)
 	{
 		if (pPSO)
 			pPSO->Release();
 	}
 
+	for (std::unordered_map<HWND, FWindowRenderContext>::iterator it = mRenderContextLookup.begin(); it != mRenderContextLookup.end(); ++it)
+	{
+		auto& ctx = it->second;
+		for (ID3D12CommandAllocator* pCmdAlloc : ctx.mCommandAllocatorsGFX)     if (pCmdAlloc) pCmdAlloc->Release();
+		for (ID3D12CommandAllocator* pCmdAlloc : ctx.mCommandAllocatorsCompute) if (pCmdAlloc) pCmdAlloc->Release();
+		for (ID3D12CommandAllocator* pCmdAlloc : ctx.mCommandAllocatorsCopy)    if (pCmdAlloc) pCmdAlloc->Release();
+
+		ctx.mDynamicHeap_ConstantBuffer.Destroy();
+
+		ctx.SwapChain.Destroy(); // syncs GPU before releasing resources
+
+		ctx.PresentQueue.Destroy();
+		if (ctx.pCmdList_GFX)
+			ctx.pCmdList_GFX->Release();
+	}
 
 	mGFXQueue.Destroy();
 	mComputeQueue.Destroy();
@@ -314,7 +316,7 @@ void VQRenderer::InitializeD3D12MA()
 	}
 }
 
-void VQRenderer::InitializeResourceHeaps()
+void VQRenderer::InitializeHeaps()
 {
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
@@ -329,6 +331,11 @@ void VQRenderer::InitializeResourceHeaps()
 
 	constexpr uint32 NumDescsDSV = 10;
 	mHeapDSV.Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, NumDescsDSV);
+
+	constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 16 * MEGABYTE;
+	constexpr bool USE_GPU_MEMORY = true;
+	mStaticHeap_VertexBuffer.Create(pDevice, EBufferType::VERTEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticVertexBufferPool");
+	mStaticHeap_IndexBuffer .Create(pDevice, EBufferType::INDEX_BUFFER , STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticIndexBufferPool");
 }
 
 static std::wstring GetAssetFullPath(LPCWSTR assetName)
@@ -340,75 +347,37 @@ static std::wstring GetAssetFullPath(LPCWSTR assetName)
 void VQRenderer::LoadPSOs()
 {
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
+#if defined(_DEBUG)
+	// Enable better shader debugging with the graphics debugging tools.
+	UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+	UINT compileFlags = 0;
+#endif
 
-	// HELLO WORLD TRIANGLE PSO
-	{
-		// Create an empty root signature.
-		{
+	constexpr char* strShadingModelVS = "vs_5_0";
+	constexpr char* strShadingModelPS = "ps_5_0";
+
+	// ROOT SIGNATURES - hardcoded for now. TODO: http://simonstechblog.blogspot.com/2019/06/d3d12-root-signature-management.html
+	{		
+		// Hello-World-Triangle Root Signature : [0]
+		{   
 			CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
 			rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 			ComPtr<ID3DBlob> signature;
 			ComPtr<ID3DBlob> error;
 			ThrowIfFailed(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
-			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&mpBuiltinRootSignatures[EVertexBufferType::COLOR_AND_ALPHA])));
+			ID3D12RootSignature* pRS = nullptr;
+			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
+			mpBuiltinRootSignatures.push_back(pRS);
 		}
 
-
-		ComPtr<ID3DBlob> vertexShader;
-		ComPtr<ID3DBlob> pixelShader;
-
-#if defined(_DEBUG)
-		// Enable better shader debugging with the graphics debugging tools.
-		UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-		UINT compileFlags = 0;
-#endif
-
-
-		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"hello-triangle.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr));
-		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"hello-triangle.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr));
-
-		// Define the vertex input layout.
-		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
-		{
-			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT   , 0, 0 , D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "COLOR"   , 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT      , 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		};
-
-		// Describe and create the graphics pipeline state object (PSO).
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-		psoDesc.pRootSignature = mpBuiltinRootSignatures[EVertexBufferType::COLOR_AND_ALPHA];
-		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
-		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
-		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-		psoDesc.DepthStencilState.DepthEnable = TRUE;
-		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-		psoDesc.DepthStencilState.StencilEnable = FALSE;
-		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-		psoDesc.SampleMask = UINT_MAX;
-		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		psoDesc.NumRenderTargets = 1;
-		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-		psoDesc.SampleDesc.Count = 1;
-		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO])));
-		SetName(mpBuiltinPSOs[EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO], "PSO_HelloWorld");
-	}
-
-
-	// FULLSCREEN TIRANGLE PSO
-	{
-		// Create an empty root signature.
-		{
+		// Fullscreen-Triangle Root Signature : [1]
+		{   
 			D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
 
 			// This is the highest version the sample supports. If CheckFeatureSupport succeeds, the HighestVersion returned will not be greater than this.
 			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-
 			if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
 			{
 				featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
@@ -441,20 +410,101 @@ void VQRenderer::LoadPSOs()
 			ComPtr<ID3DBlob> signature;
 			ComPtr<ID3DBlob> error;
 			ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
-			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&mpBuiltinRootSignatures[EVertexBufferType::DEFAULT])));
+			ID3D12RootSignature* pRS = nullptr;
+			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
+			mpBuiltinRootSignatures.push_back(pRS);
 		}
 
+		// Hello-World-Cube Root Signature : [2]
+		{   
+			D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
 
+			// This is the highest version the sample supports. If CheckFeatureSupport succeeds, the HighestVersion returned will not be greater than this.
+			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
+			if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
+			{
+				featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+			}
+
+			CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
+			ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+			ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+
+			CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+			rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
+			//rootParameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_VERTEX); // InitAsCBufferView?
+			rootParameters[1].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_VERTEX);
+
+			D3D12_STATIC_SAMPLER_DESC sampler = {};
+			sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+			sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+			sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+			sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+			sampler.MipLODBias = 0;
+			sampler.MaxAnisotropy = 0;
+			sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+			sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+			sampler.MinLOD = 0.0f;
+			sampler.MaxLOD = D3D12_FLOAT32_MAX;
+			sampler.ShaderRegister = 0;
+			sampler.RegisterSpace = 0;
+			sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+			CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+			rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+			ComPtr<ID3DBlob> signature;
+			ComPtr<ID3DBlob> error;
+			ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
+			ID3D12RootSignature* pRS = nullptr;
+			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
+			mpBuiltinRootSignatures.push_back(pRS);
+		}
+	}
+
+	// HELLO WORLD TRIANGLE PSO
+	{
 		ComPtr<ID3DBlob> vertexShader;
 		ComPtr<ID3DBlob> pixelShader;
 
-#if defined(_DEBUG)
-		// Enable better shader debugging with the graphics debugging tools.
-		UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-		UINT compileFlags = 0;
-#endif
+		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"hello-triangle.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr));
+		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"hello-triangle.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr));
 
+		// Define the vertex input layout.
+		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
+		{
+			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT   , 0, 0 , D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "COLOR"   , 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT      , 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		};
+
+		// Describe and create the graphics pipeline state object (PSO).
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+		psoDesc.pRootSignature = mpBuiltinRootSignatures[0];
+		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
+		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
+		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+		psoDesc.DepthStencilState.DepthEnable = TRUE;
+		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+		psoDesc.DepthStencilState.StencilEnable = FALSE;
+		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+		psoDesc.SampleMask = UINT_MAX;
+		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		psoDesc.NumRenderTargets = 1;
+		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		psoDesc.SampleDesc.Count = 1;
+		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO])));
+		SetName(mpBuiltinPSOs[EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO], "PSO_HelloWorld");
+	}
+
+
+	// FULLSCREEN TIRANGLE PSO
+	{
+		ComPtr<ID3DBlob> vertexShader;
+		ComPtr<ID3DBlob> pixelShader;
 
 		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"FullscreenTriangle.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr));
 		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"FullscreenTriangle.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr));
@@ -463,7 +513,7 @@ void VQRenderer::LoadPSOs()
 		// Describe and create the graphics pipeline state object (PSO).
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
 		psoDesc.InputLayout = { };
-		psoDesc.pRootSignature = mpBuiltinRootSignatures[EVertexBufferType::DEFAULT];
+		psoDesc.pRootSignature = mpBuiltinRootSignatures[1];
 		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
 		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
 		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
@@ -487,14 +537,6 @@ void VQRenderer::LoadPSOs()
 		ComPtr<ID3DBlob> pixelShader;
 		ComPtr<ID3DBlob> errBlob;
 
-#if defined(_DEBUG)
-		// Enable better shader debugging with the graphics debugging tools.
-		UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-		UINT compileFlags = 0;
-#endif
-
-
 		HRESULT hr = D3DCompileFromFile(GetAssetFullPath(L"hello-cube.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, &errBlob);
 		if (FAILED(hr))
 		{
@@ -517,7 +559,7 @@ void VQRenderer::LoadPSOs()
 		// Describe and create the graphics pipeline state object (PSO).
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
 		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-		psoDesc.pRootSignature = mpBuiltinRootSignatures[EVertexBufferType::COLOR_AND_ALPHA];
+		psoDesc.pRootSignature = mpBuiltinRootSignatures[2];
 		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
 		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
 		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
@@ -578,8 +620,8 @@ void VQRenderer::LoadDefaultResources()
 	}
 #endif
 
-	mStaticVertexBufferPool.UploadData(mHeapUpload.GetCommandList());
-	mStaticIndexBufferPool.UploadData(mHeapUpload.GetCommandList());
+	mStaticHeap_VertexBuffer.UploadData(mHeapUpload.GetCommandList());
+	mStaticHeap_IndexBuffer.UploadData(mHeapUpload.GetCommandList());
 }
 
 
