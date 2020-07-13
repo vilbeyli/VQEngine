@@ -23,7 +23,7 @@
 
 struct FrustumPlaneset
 {	// plane equations: aX + bY + cZ + d = 0
-	DirectX::XMFLOAT4 abcd[6];	// r, l, t, b, n, f
+	DirectX::XMFLOAT4 abcd[6]; // r, l, t, b, n, f
 	enum EPlaneset
 	{
 		PL_RIGHT = 0,
@@ -37,8 +37,8 @@ struct FrustumPlaneset
 	// src: http://gamedevs.org/uploads/fast-extraction-viewing-frustum-planes-from-world-view-projection-matrix.pdfe
 	// gets the frustum planes based on @projectionTransformation. if:
 	//
-	// - @projectionTransformation is proj			matrix ->  view space plane equations
-	// - @projectionTransformation is viewProj		matrix -> world space plane equations
+	// - @projectionTransformation is proj          matrix ->  view space plane equations
+	// - @projectionTransformation is viewProj      matrix -> world space plane equations
 	// - @projectionTransformation is worldViewProj matrix -> model space plane equations
 	// 
 	inline static FrustumPlaneset ExtractFromMatrix(const DirectX::XMMATRIX& projectionTransformation)
@@ -131,9 +131,9 @@ public:
 	void Reset();	// resets camera transform to initial position & orientation
 
 public:
-	float Drag;				// 15.0f
-	float AngularSpeedDeg;	// 40.0f
-	float MoveSpeed;		// 1000.0f
+	float Drag;             // 15.0f
+	float AngularSpeedDeg;  // 40.0f
+	float MoveSpeed;        // 1000.0f
 
 private:
 	void Move(const float dt);

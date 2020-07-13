@@ -53,44 +53,12 @@ void Camera::InitializeCamera(const CameraData& data, int ViewportX, int Viewpor
 	const float AspectRatio = static_cast<float>(ViewportX) / ViewportY;
 	const float VerticalFoV = data.fovV_Degrees * DEG2RAD;
 
-	//m_settings = data;
-	//m_settings.aspect = AspectRatio;
-
-#if 0
-	SetOthoMatrix(ViewportX, ViewportY, NEAR_PLANE, FAR_PLANE);
-#else
+	//SetOthoMatrix(ViewportX, ViewportY, NEAR_PLANE, FAR_PLANE); // quick test
 	SetProjectionMatrix(VerticalFoV, AspectRatio, NEAR_PLANE, FAR_PLANE);
-#endif
 
 	SetPosition(data.x, data.y, data.z);
 	mYaw = mPitch = 0;
 	Rotate(data.yaw * DEG2RAD, data.pitch * DEG2RAD, 1.0f);
-
-	// if we haven't initialized the LUT render target
-	//if (mRT_LinearDepthLUT == -1)
-	//{
-	//	mRT_LinearDepthLUT = pRenderer->AddRenderTarget();
-	//}
-
-// PANINI TEST
-//
-//#if 1
-//	SetProjectionMatrix(m_settings.fovV_Degrees * DEG2RAD, m_settings.aspect, m_settings.nearPlane, m_settings.farPlane);
-//#else  // test fov
-//	static float gFoVx = 90.0f;
-//	static float gFoVy = 45.0f;
-//
-//	float dFoV = 0.0f;
-//	//if (ENGINE->INP()->IsScrollDown()) dFoV = -5.0f;
-//	//if (ENGINE->INP()->IsScrollUp()  ) dFoV = +5.0f;
-//	gFoVx += dFoV;
-//	gFoVy += dFoV;
-//
-//	m_settings.fovH_Degrees = gFoVx;
-//
-//	SetProjectionMatrixHFov(gFoVx * DEG2RAD, 1.0f / m_settings.aspect, m_settings.nearPlane, m_settings.farPlane);
-//	//SetProjectionMatrix(gFoVy * DEG2RAD, m_settings.aspect, m_settings.nearPlane, m_settings.farPlane);
-//#endif
 }
 
 

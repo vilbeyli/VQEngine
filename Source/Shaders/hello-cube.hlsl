@@ -16,15 +16,9 @@ struct PSInput
 	float2 uv : TEXCOORD0;
 };
 
-struct PerFrame{};
-struct PerView 
-{
-
-};
-struct PerObject
-{
-
-};
+struct PerFrame{};  // TODO
+struct PerView {};  // TODO
+struct PerObject{}; // TODO
 
 cbuffer CBuffer : register(b0)
 {

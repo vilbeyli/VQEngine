@@ -413,7 +413,9 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
 
-	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::LOADING_SCREEN_PSO));
+	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::LOADING_SCREEN_PSO))
+		;
+	// hardcoded roog signature for now until shader reflection and rootsignature management is implemented
 	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(1));
 
 	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
@@ -546,7 +548,9 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::HELLO_WORLD_CUBE_PSO));
-	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(2));
+	
+	// hardcoded roog signature for now until shader reflection and rootsignature management is implemented
+	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(2)); 
 
 	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(0).GetGPUDescHandle());

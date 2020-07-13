@@ -25,7 +25,6 @@ Transform::Transform(const XMFLOAT3& position, const Quaternion& rotation, const
 	: _position(position)
 	, _rotation(rotation)
 	, _scale(scale)
-	//, Component(ComponentType::TRANSFORM, "Transform")
 {}
 
 Transform::~Transform() {}
