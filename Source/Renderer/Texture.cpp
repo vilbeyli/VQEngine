@@ -18,6 +18,7 @@
 
 #include "Texture.h"
 #include "ResourceHeaps.h"
+#include "ResourceViews.h"
 #include "Libs/D3DX12/d3dx12.h"
 
 #include "../../Libs/D3D12MA/src/D3D12MemAlloc.h"
@@ -31,7 +32,7 @@
 //
 // TEXTURE
 //
-void Texture::CreateFromFile(const TextureDesc& tDesc, const std::string& FilePath)
+void Texture::CreateFromFile(const TextureCreateDesc& tDesc, const std::string& FilePath)
 {
 
     if (FilePath.empty())
@@ -58,7 +59,7 @@ void Texture::CreateFromFile(const TextureDesc& tDesc, const std::string& FilePa
     Image image = Image::LoadFromFile(FilePath.c_str(), bHDR);
     assert(image.pData && image.BytesPerPixel > 0);
 
-    TextureDesc desc = tDesc;
+    TextureCreateDesc desc = tDesc;
     desc.Desc.Width  = image.Width;
     desc.Desc.Height = image.Height;
     desc.Desc.Format = bHDR ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -73,16 +74,39 @@ void Texture::CreateFromFile(const TextureDesc& tDesc, const std::string& FilePa
     desc.Desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     desc.Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
     //-------------------------------
-    CreateFromData(desc, image.pData);
+    Create(desc, image.pData);
     image.Destroy();
 }
 
-void Texture::CreateFromData(const TextureDesc& desc, const void* pData)
+// TODO: clean up function
+void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullptr*/)
 {
-    assert(pData);
     HRESULT hr = {};
 
     ID3D12GraphicsCommandList* pCmd = desc.pUploadHeap->GetCommandList();
+
+    const bool bDepthStencilTexture = desc.Desc.Format == DXGI_FORMAT_R32_TYPELESS;
+    const bool bRenderTargetTexture = false;
+
+    // determine resource state & optimal clear value
+    D3D12_RESOURCE_STATES ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_COPY_DEST;
+    D3D12_CLEAR_VALUE* pClearValue = nullptr;
+    if (bDepthStencilTexture)
+    {
+        D3D12_CLEAR_VALUE ClearValue = {};
+        ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_DEPTH_WRITE;
+        ClearValue.Format = (desc.Desc.Format == DXGI_FORMAT_R32_TYPELESS) ? DXGI_FORMAT_D32_FLOAT : desc.Desc.Format;
+        ClearValue.DepthStencil.Depth = 1.0f;
+        ClearValue.DepthStencil.Stencil = 0;
+        pClearValue = &ClearValue;
+    }
+    if (bRenderTargetTexture)
+    {
+        D3D12_CLEAR_VALUE ClearValue = {};
+        ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
+        pClearValue = &ClearValue;
+    }
+
 
     // Create resource
     D3D12MA::ALLOCATION_DESC textureAllocDesc = {};
@@ -90,8 +114,8 @@ void Texture::CreateFromData(const TextureDesc& desc, const void* pData)
     hr = desc.pAllocator->CreateResource(
         &textureAllocDesc,
         &desc.Desc,
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        nullptr, // pOptimizedClearValue
+        ResourceState,
+        pClearValue,
         &mpAlloc,
         IID_PPV_ARGS(&mpTexture));
     SetName(mpTexture, desc.TexName.c_str());
@@ -141,7 +165,6 @@ void Texture::CreateFromData(const TextureDesc& desc, const void* pData)
         CD3DX12_TEXTURE_COPY_LOCATION Src(desc.pUploadHeap->GetResource(), placedTex2D);
         desc.pUploadHeap->GetCommandList()->CopyTextureRegion(&Dst, 0, 0, 0, &Src, NULL);
 
-
 #else
         D3D12_SUBRESOURCE_DATA textureSubresourceData = {};
         textureSubresourceData.pData = pData;
@@ -159,8 +182,8 @@ void Texture::CreateFromData(const TextureDesc& desc, const void* pData)
         textureBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         pCmd->ResourceBarrier(1, &textureBarrier);
     }
-    
 }
+
 
 void Texture::Destroy()
 {
@@ -179,12 +202,45 @@ void Texture::Destroy()
 
 
 
-void Texture::CreateSRV(uint32 index, CBV_SRV_UAV* pRV, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc)
+void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc)
 {
     ID3D12Device* pDevice;
     mpTexture->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice));
 
     pDevice->CreateShaderResourceView(mpTexture, pSRVDesc, pRV->GetCPUDescHandle(index));
+
+    pDevice->Release();
+}
+
+void Texture::InitializeDSV(uint32 index, DSV* pRV, int ArraySlice /*= 1*/)
+{
+    ID3D12Device* pDevice;
+    mpTexture->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice));
+    D3D12_RESOURCE_DESC texDesc = mpTexture->GetDesc();
+
+    D3D12_DEPTH_STENCIL_VIEW_DESC DSViewDesc = {};
+    DSViewDesc.Format = DXGI_FORMAT_D32_FLOAT;
+    if (texDesc.SampleDesc.Count == 1)
+    {
+        if (texDesc.DepthOrArraySize == 1)
+        {
+            DSViewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+            DSViewDesc.Texture2D.MipSlice = 0;
+        }
+        else
+        {
+            DSViewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+            DSViewDesc.Texture2DArray.MipSlice = 0;
+            DSViewDesc.Texture2DArray.FirstArraySlice = ArraySlice;
+            DSViewDesc.Texture2DArray.ArraySize = 1;// texDesc.DepthOrArraySize;
+        }
+    }
+    else
+    {
+        DSViewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS;
+    }
+
+    pDevice->CreateDepthStencilView(mpTexture, &DSViewDesc, pRV->GetCPUDescHandle(index));
 
     pDevice->Release();
 }

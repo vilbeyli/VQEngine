@@ -21,6 +21,7 @@
 // https://github.com/GPUOpen-LibrariesAndSDKs/Cauldron/blob/fd91cd744d014505daef1780dceee49fd62ce953/src/DX12/base/Fence.cpp
 
 #include "Fence.h"
+#include "Common.h"
 
 #include <d3d12.h>
 

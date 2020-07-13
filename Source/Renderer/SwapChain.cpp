@@ -19,6 +19,7 @@
 
 #include "SwapChain.h"
 #include "CommandQueue.h"
+#include "Common.h"
 
 #include "../Application/Platform.h" // CHECK_HR
 #include "../Application/Window.h"

@@ -106,8 +106,10 @@ public:
 	bool IsClosed() const;
 	bool IsFullscreen() const;
 
-	int GetWidth() const;
-	int GetHeight() const;
+	inline int GetWidth() const            { return GetWidthImpl(); }
+	inline int GetHeight() const           { return GetHeightImpl(); }
+	inline int GetFullscreenWidth() const  { return GetFullscreenWidthImpl(); }
+	inline int GetFullscreenHeight() const { return GetFullscreenHeightImpl(); }
 
 	IWindowOwner* pOwner;
 private:
@@ -115,6 +117,8 @@ private:
 	virtual bool IsFullscreenImpl() const = 0;
 	virtual int GetWidthImpl() const = 0;
 	virtual int GetHeightImpl() const = 0;
+	virtual int GetFullscreenWidthImpl() const = 0;
+	virtual int GetFullscreenHeightImpl() const = 0;
 };
 
 
@@ -152,6 +156,8 @@ private:
 	inline bool IsFullscreenImpl() const override { return isFullscreen_; }
 	inline int  GetWidthImpl()  const override { return width_; }
 	inline int  GetHeightImpl() const override { return height_; }
+	inline int  GetFullscreenWidthImpl()  const override { return FSwidth_; }
+	inline int  GetFullscreenHeightImpl() const override { return FSheight_; }
 
 	std::unique_ptr<WindowClass> windowClass_;
 	HWND hwnd_ = 0;
@@ -160,4 +166,5 @@ private:
 	int width_ = -1, height_ = -1;
 	bool isFullscreen_ = false;
 	UINT windowStyle_;
+	int FSwidth_ = -1, FSheight_ = -1;
 };

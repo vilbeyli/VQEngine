@@ -113,7 +113,7 @@ if %ERRORLEVEL% neq 0  exit /b %ERRORLEVEL%
 call :ExecBuildTask_Move
 echo [VQPackage] PACKAGING SUCCESSFUL!
 
-if !SKIP_EXPLORER! neq 0 (
+if !SKIP_EXPLORER! equ 0 (
     start !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
 )
 

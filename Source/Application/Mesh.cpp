@@ -25,7 +25,7 @@
 #endif
 
 
-std::pair<BufferID, BufferID> Mesh::GetIABuffers(int lod /*= 0*/) const
+std::pair<BufferID, BufferID> Mesh::GetIABufferIDs(int lod /*= 0*/) const
 {
 	assert(mLODBufferPairs.size() > 0); // maybe no assert and return <-1, -1> ?
 

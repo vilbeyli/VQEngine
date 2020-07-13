@@ -20,6 +20,12 @@
 #include <d3d12.h>
 #include "../Application/Types.h"
 #include "../../Libs/VQUtils/Source/Log.h"
+#include <cassert>
+
+#define KILOBYTE 1024
+#define MEGABYTE 1024*KILOBYTE
+#define GIGABYTE 1024*MEGABYTE
+
 
 template<class T>
 T AlignOffset(const T& uOffset, const T& uAlign) { return ((uOffset + (uAlign - 1)) & ~(uAlign - 1)); }
@@ -32,4 +38,12 @@ void SetName(ID3D12Object* pObj, const char* format, Args&&... args)
 	std::string Name = bufName;
 	std::wstring wName(Name.begin(), Name.end());
 	pObj->SetName(wName.c_str());
+}
+
+inline void ThrowIfFailed(HRESULT hr)
+{
+	if (FAILED(hr))
+	{
+		assert(false);// throw HrException(hr);
+	}
 }

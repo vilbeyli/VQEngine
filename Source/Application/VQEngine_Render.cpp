@@ -76,8 +76,6 @@ void VQEngine::RenderThread_SignalUpdateThread()
 
 
 
-
-
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 //
 // INITIALIZE
@@ -91,14 +89,24 @@ void VQEngine::RenderThread_Inititalize()
 	if(mpWinDebug) params.Windows.push_back(FWindowRepresentation(mpWinDebug, false, false));
 
 	mRenderer.Initialize(params);
+	mbRenderThreadInitialized.store(true);
 
+	mNumRenderLoopsExecuted.store(0);
+
+	InitializeBuiltinMeshes();
+	mRenderer.Load();
+
+	mResources_MainWnd.DSV_MainViewDepth = mRenderer.CreateDSV();
+
+
+	// ---------- Window initialziation
 	auto fnHandleWindowTransitions = [&](std::unique_ptr<Window>& pWin, const FWindowSettings& settings)
 	{
 		if (!pWin) return;
 
 		// TODO: generic solution to multi window/display settings. 
 		//       For now, simply prevent debug wnd occupying main wnd's display.
-		if ( mpWinMain->IsFullscreen()
+		if (mpWinMain->IsFullscreen()
 			&& (mSettings.WndMain.PreferredDisplay == mSettings.WndDebug.PreferredDisplay)
 			&& settings.IsDisplayModeFullscreen()
 			&& pWin != mpWinMain)
@@ -114,23 +122,20 @@ void VQEngine::RenderThread_Inititalize()
 		if (settings.DisplayMode == EDisplayMode::BORDERLESS_FULLSCREEN)
 		{
 			// TODO: preferred screen impl
-			if(pWin) pWin->ToggleWindowedFullscreen();
+			if (pWin) pWin->ToggleWindowedFullscreen();
 		}
 	};
 
-	fnHandleWindowTransitions(mpWinMain , mSettings.WndMain);
+	fnHandleWindowTransitions(mpWinMain, mSettings.WndMain);
 	fnHandleWindowTransitions(mpWinDebug, mSettings.WndDebug);
 
-	mbRenderThreadInitialized.store(true);
-	mNumRenderLoopsExecuted.store(0);
-
-	InitializeBuiltinMeshes();
-	mRenderer.Load();
+	RenderThread_LoadWindowSizeDependentResources(mpWinMain->GetHWND(), mpWinMain->GetWidth(), mpWinMain->GetHeight());
 }
 
 void VQEngine::RenderThread_Exit()
 {
 	mRenderer.Unload();
+	RenderThread_UnloadWindowSizeDependentResources(mpWinMain->GetHWND());
 	mRenderer.Exit();
 }
 
@@ -142,7 +147,7 @@ void VQEngine::InitializeBuiltinMeshes()
 		mBuiltinMeshes[EBuiltInMeshes::TRIANGLE] = Mesh(&mRenderer, data.Vertices, data.Indices, mBuiltinMeshNames[EBuiltInMeshes::TRIANGLE]);
 	}
 	{
-		GeometryGenerator::GeometryData<FVertexWithNormalAndTangent> data = GeometryGenerator::Cube<FVertexWithNormalAndTangent>();
+		GeometryGenerator::GeometryData<FVertexWithColorAndAlpha> data = GeometryGenerator::Cube<FVertexWithColorAndAlpha>();
 		mBuiltinMeshNames[EBuiltInMeshes::CUBE] = "Cube";
 		mBuiltinMeshes[EBuiltInMeshes::CUBE] = Mesh(&mRenderer, data.Vertices, data.Indices, mBuiltinMeshNames[EBuiltInMeshes::CUBE]);
 	}
@@ -151,6 +156,51 @@ void VQEngine::InitializeBuiltinMeshes()
 }
 
 
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+//
+// LOAD
+//
+// ------------------------------------------------------------------------------------------------------------------------------------------------------------
+void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height)
+{
+	if (hwnd == mpWinMain->GetHWND())
+	{
+		RenderingResources_MainWindow& r = mResources_MainWnd;
+
+		// Main depth stencil view
+		D3D12_RESOURCE_DESC d = CD3DX12_RESOURCE_DESC::Tex2D(
+			DXGI_FORMAT_R32_TYPELESS
+			, Width
+			, Height
+			, 1 // Array Size
+			, 0 // MIP levels
+			, 1 // MSAA SampleCount
+			, 0 // MSAA SampleQuality
+			, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+		);
+		r.Tex_MainViewDepth = mRenderer.CreateTexture("SceneDepth", d);
+		mRenderer.InitializeDSV(r.DSV_MainViewDepth, 0u, r.Tex_MainViewDepth);
+
+	}
+
+	// TODO: generic implementation of other window procedures for load
+}
+
+void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
+{
+	if (hwnd == mpWinMain->GetHWND())
+	{
+		RenderingResources_MainWindow& r = mResources_MainWnd;
+
+		// sync GPU
+		auto& ctx = mRenderer.GetWindowRenderContext(hwnd);
+		ctx.SwapChain.WaitForGPU();
+
+		mRenderer.DestroyTexture(r.Tex_MainViewDepth);
+	}
+
+	// TODO: generic implementation of other window procedures for unload
+}
 
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -168,7 +218,9 @@ void VQEngine::RenderThread_Render()
 	const int FRAME_DATA_INDEX  = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
 
 	RenderThread_RenderMainWindow();
-	RenderThread_RenderDebugWindow();
+	
+	if(!mpWinDebug->IsClosed()) 
+		RenderThread_RenderDebugWindow();
 }
 
 
@@ -206,7 +258,6 @@ void VQEngine::RenderThread_RenderDebugWindow()
 	const FFrameData& FrameData = mScene_DebugWnd.mFrameData[FRAME_DATA_INDEX];
 	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
 	// ----------------------------------------------------------------------------
-
 	
 	//
 	// PRE RENDER
@@ -246,8 +297,8 @@ void VQEngine::RenderThread_RenderDebugWindow()
 	};
 	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
+#if 0
 	// Draw Triangle
-
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
 
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO));
@@ -268,7 +319,7 @@ void VQEngine::RenderThread_RenderDebugWindow()
 	D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
 	pCmd->RSSetScissorRects(1, &scissorsRect);
 
-	const auto VBIBIDs = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE].GetIABuffers();
+	const auto VBIBIDs = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE].GetIABufferIDs();
 	const BufferID& VB_ID = VBIBIDs.first;
 	const BufferID& IB_ID = VBIBIDs.second;
 	const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
@@ -279,7 +330,7 @@ void VQEngine::RenderThread_RenderDebugWindow()
 	pCmd->IASetIndexBuffer(&ib);
 
 	pCmd->DrawIndexedInstanced(3, 1, 0, 0, 0);
-
+#endif
 
 	// Transition SwapChain for Present
 	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
@@ -354,7 +405,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	const float           RenderResolutionX = static_cast<float>(ctx.MainRTResolutionX);
 	const float           RenderResolutionY = static_cast<float>(ctx.MainRTResolutionY);
 	D3D12_VIEWPORT        viewport          { 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
-	const auto            VBIBIDs           = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE].GetIABuffers();
+	const auto            VBIBIDs           = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE].GetIABufferIDs();
 	const BufferID&       IB_ID             = VBIBIDs.second;
 	const IBV&            ib                = mRenderer.GetIndexBufferView(IB_ID);
 	ID3D12DescriptorHeap* ppHeaps[]         = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
@@ -362,16 +413,13 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
 
-	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::LOADING_SCREEN_PSO));
-	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(EVertexBufferType::DEFAULT));
+	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::LOADING_SCREEN_PSO))
+		;
+	// hardcoded roog signature for now until shader reflection and rootsignature management is implemented
+	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(1));
 
-	pCmd->SetDescriptorHeaps(1, ppHeaps);
+	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetShaderResourceView(FrameData.SRVLoadingScreen).GetGPUDescHandle());
-
-#if 0
-	//pCmd->SetGraphicsRootDescriptorTable(2, g_MainDescriptorHeap[g_FrameIndex]->GetGPUDescriptorHandleForHeapStart()))
-	//pCmd->SetGraphicsRootConstantBufferView(1, )
-#endif
 
 	pCmd->RSSetViewports(1, &viewport);
 	pCmd->RSSetScissorRects(1, &scissorsRect);
@@ -411,9 +459,14 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
 	// ----------------------------------------------------------------------------
 
+
 	//
 	// PRE RENDER
 	//
+
+	// Dynamic constant buffer maintenance
+	ctx.mDynamicHeap_ConstantBuffer.OnBeginFrame();
+
 	// Command list allocators can only be reset when the associated 
 	// command lists have finished execution on the GPU; apps should use 
 	// fences to determine GPU execution progress.
@@ -426,20 +479,26 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	ID3D12PipelineState* pInitialState = nullptr;
 	ThrowIfFailed(ctx.pCmdList_GFX->Reset(pCmdAlloc, pInitialState));
 
+	ID3D12GraphicsCommandList* pCmd = ctx.pCmdList_GFX;
+
 	//
 	// RENDER
 	//
-	ID3D12GraphicsCommandList* pCmd = ctx.pCmdList_GFX;
 
 	// Transition SwapChain RT
 	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
-	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
-		, D3D12_RESOURCE_STATE_PRESENT
-		, D3D12_RESOURCE_STATE_RENDER_TARGET)
-	);
+	CD3DX12_RESOURCE_BARRIER barriers[] =
+	{
+		  CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET)
+		//, CD3DX12_RESOURCE_BARRIER::Transition(
+	};
+	pCmd->ResourceBarrier(_countof(barriers), barriers);
+
 
 	// Clear RT
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = ctx.SwapChain.GetCurrentBackBufferRTVHandle();
+	D3D12_CPU_DESCRIPTOR_HANDLE   dsvHandle = mRenderer.GetDSV(mResources_MainWnd.DSV_MainViewDepth).GetCPUDescHandle();
+	D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
 	const float clearColor[] =
 	{
 		FrameData.SwapChainClearColor[0],
@@ -448,41 +507,64 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		FrameData.SwapChainClearColor[3]
 	};
 	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+	pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, nullptr);
 
-	// Draw Triangle
 
-	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
-
-	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO));
-	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(EVertexBufferType::COLOR_AND_ALPHA));
-
-#if 0
-	//pCmd->SetDescriptorHeaps(_countof(), NULL);
-	//pCmd->SetGraphicsRootDescriptorTable(0, g_MainDescriptorHeap[g_FrameIndex]->GetGPUDescriptorHandleForHeapStart()))
-	//pCmd->SetGraphicsRootDescriptorTable(2, g_MainDescriptorHeap[g_FrameIndex]->GetGPUDescriptorHandleForHeapStart()))
-	//pCmd->SetGraphicsRootConstantBufferView(1, )
-#endif
-
+	// Set Viewport & Scissors
 	const float RenderResolutionX = static_cast<float>(ctx.MainRTResolutionX);
 	const float RenderResolutionY = static_cast<float>(ctx.MainRTResolutionY);
 	D3D12_VIEWPORT viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
-	pCmd->RSSetViewports(1, &viewport);
-
 	D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
+	pCmd->RSSetViewports(1, &viewport);
 	pCmd->RSSetScissorRects(1, &scissorsRect);
 
-	const auto VBIBIDs = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE].GetIABuffers();
+	// TODO: Draw Environment Map w/ HDR Swapchain
+	// TBA
+
+	// Draw Object
+	const Mesh& mesh = mBuiltinMeshes[EBuiltInMeshes::CUBE];
+	const auto VBIBIDs = mesh.GetIABufferIDs();
+	const uint32 NumIndices = mesh.GetNumIndices();
+	const uint32 NumInstances = 1;
 	const BufferID& VB_ID = VBIBIDs.first;
 	const BufferID& IB_ID = VBIBIDs.second;
 	const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
 	const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
+	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
+
+	// set constant buffer data
+	using namespace DirectX;
+	const XMMATRIX mMVP
+		= FrameData.TFCube.WorldTransformationMatrix()
+		* FrameData.SceneCamera.GetViewMatrix()
+		* FrameData.SceneCamera.GetProjectionMatrix();
+	struct Consts { XMMATRIX matModelViewProj; } consts{ mMVP };
+	
+	D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+	void* pMem = nullptr;
+	ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(Consts), &pMem, &cbAddr);
+	*((Consts*)pMem) = consts;
+
+	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+
+	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::HELLO_WORLD_CUBE_PSO));
+	
+	// hardcoded roog signature for now until shader reflection and rootsignature management is implemented
+	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(2)); 
+
+	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(0).GetGPUDescHandle());
+	pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
+
 
 	pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	pCmd->IASetVertexBuffers(0, 1, &vb);
 	pCmd->IASetIndexBuffer(&ib);
 
-	pCmd->DrawIndexedInstanced(3, 1, 0, 0, 0);
+	pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 
+	// TODO: PostProcess Pass
+	//TBA
 
 	// Transition SwapChain for Present
 	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
@@ -565,6 +647,9 @@ void VQEngine::RenderThread_HandleResizeWindowEvent(const IEvent* pEvent)
 	Swapchain.Resize(WIDTH, HEIGHT);
 	pWnd->OnResize(WIDTH, HEIGHT);
 	mRenderer.OnWindowSizeChanged(hwnd, WIDTH, HEIGHT);
+
+	RenderThread_UnloadWindowSizeDependentResources(hwnd);
+	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT);
 }
 
 void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
@@ -619,7 +704,12 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 	//
 	else 
 	{
-		GetWindow(hwnd)->ToggleWindowedFullscreen(&Swapchain);
+		pWnd->ToggleWindowedFullscreen(&Swapchain);
 	}
+
+	const int WIDTH  = bFullscreenStateToSet ? pWnd->GetFullscreenWidth()  : pWnd->GetWidth();
+	const int HEIGHT = bFullscreenStateToSet ? pWnd->GetFullscreenHeight() : pWnd->GetHeight();
+	RenderThread_UnloadWindowSizeDependentResources(hwnd);
+	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT);
 }
 

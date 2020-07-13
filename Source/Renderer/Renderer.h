@@ -22,6 +22,7 @@
 #include "SwapChain.h"
 #include "CommandQueue.h"
 #include "ResourceHeaps.h"
+#include "ResourceViews.h"
 #include "Buffer.h"
 #include "Texture.h"
 
@@ -42,32 +43,21 @@ class Window;
 struct ID3D12RootSignature;
 struct ID3D12PipelineState;
 
-using BufferID = int;
-using TextureID = int;
-using SRV_ID = int;
-using UAV_ID = int;
-using CBV_ID = int;
-using RTV_ID = int;
-using DSV_ID = int;
+using ID_TYPE = int;
+using BufferID  = ID_TYPE;
+using TextureID = ID_TYPE;
+using SamplerID = ID_TYPE;
+using SRV_ID    = ID_TYPE;
+using UAV_ID    = ID_TYPE;
+using CBV_ID    = ID_TYPE;
+using RTV_ID    = ID_TYPE;
+using DSV_ID    = ID_TYPE;
 #define INVALID_ID  -1
 
 
 //
 // TYPE DEFINITIONS
 //
-// Data to be updated per frame
-struct FFrameData
-{
-	std::array<float, 4> SwapChainClearColor;
-};
-struct FLoadingScreenData
-{
-	std::array<float, 4> SwapChainClearColor;
-	// TODO: loading screen background img resource
-	// TODO: animation resources
-	SRV_ID SRVLoadingScreen = INVALID_ID;
-};
-
 struct FRendererInitializeParameters
 {
 	std::vector<FWindowRepresentation> Windows;
@@ -81,7 +71,7 @@ struct FRendererInitializeParameters
 // - created with a Device
 struct FWindowRenderContext
 {
-	Device* pDevice = nullptr;
+	Device*      pDevice = nullptr;
 	SwapChain    SwapChain;
 	CommandQueue PresentQueue;
 
@@ -92,6 +82,7 @@ struct FWindowRenderContext
 	std::vector<ID3D12CommandAllocator*> mCommandAllocatorsCompute;
 	std::vector<ID3D12CommandAllocator*> mCommandAllocatorsCopy;
 
+	DynamicBufferHeap mDynamicHeap_ConstantBuffer;
 
 	ID3D12GraphicsCommandList* pCmdList_GFX = nullptr;
 
@@ -105,6 +96,7 @@ enum EBuiltinPSOs
 {
 	HELLO_WORLD_TRIANGLE_PSO = 0,
 	LOADING_SCREEN_PSO,
+	HELLO_WORLD_CUBE_PSO,
 
 	NUM_BUILTIN_PSOs
 };
@@ -136,12 +128,22 @@ public:
 	// Resource management
 	BufferID                     CreateBuffer(const FBufferDesc& desc);
 	TextureID                    CreateTextureFromFile(const char* pFilePath);
-	TextureID                    CreateTexture(const D3D12_RESOURCE_DESC& desc, const void* pData = nullptr);
-	SRV_ID                       CreateSRV(TextureID texID);
+	TextureID                    CreateTexture(const std::string& name, const D3D12_RESOURCE_DESC& desc, const void* pData = nullptr);
+
+	SRV_ID                       CreateSRV();
+	DSV_ID                       CreateDSV();
+	SRV_ID                       CreateAndInitializeSRV(TextureID texID);
+	DSV_ID                       CreateAndInitializeDSV(TextureID texID);
+	void                         InitializeDSV(DSV_ID dsvID, uint heapIndex, TextureID texID);
+	void                         InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID);
+
+	void                         DestroyTexture(TextureID texID);
+	void                         DestroySRV(SRV_ID srvID);
+	void                         DestroyDSV(DSV_ID dsvID);
 
 	// Getters: PSO, RootSignature, Heap
 	inline ID3D12PipelineState*  GetPSO(EBuiltinPSOs pso) const { return mpBuiltinPSOs[pso]; }
-	inline ID3D12RootSignature*  GetRootSignature(EVertexBufferType vbType) const { return mpBuiltinRootSignatures[vbType]; }
+	inline ID3D12RootSignature*  GetRootSignature(int idx) const { return mpBuiltinRootSignatures[idx]; }
 	ID3D12DescriptorHeap*        GetDescHeap(EResourceHeapType HeapType);
 
 	// Getters: Resource Views
@@ -151,76 +153,76 @@ public:
 	const CBV_SRV_UAV&           GetUnorderedAccessView(UAV_ID Id) const;
 	const CBV_SRV_UAV&           GetConstantBufferView(CBV_ID Id) const;
 	const RTV&                   GetRenderTargetView(RTV_ID Id) const;
+	const DSV&                   GetDepthStencilView(RTV_ID Id) const;
 
-	inline const VBV&            GetVBV(BufferID Id) const { return GetVertexBufferView(Id); }
-	inline const IBV&            GetIBV(BufferID Id) const { return GetIndexBufferView(Id); }
-	inline const CBV_SRV_UAV&    GetSRV(SRV_ID   Id) const { return GetShaderResourceView(Id); }
+	inline const VBV&            GetVBV(BufferID Id) const { return GetVertexBufferView(Id);    }
+	inline const IBV&            GetIBV(BufferID Id) const { return GetIndexBufferView(Id);     }
+	inline const CBV_SRV_UAV&    GetSRV(SRV_ID   Id) const { return GetShaderResourceView(Id);  }
 	inline const CBV_SRV_UAV&    GetUAV(UAV_ID   Id) const { return GetUnorderedAccessView(Id); }
-	inline const CBV_SRV_UAV&    GetCBV(CBV_ID   Id) const { return GetConstantBufferView(Id); }
-	inline const RTV&            GetRTV(RTV_ID   Id) const { return GetRenderTargetView(Id); }
+	inline const CBV_SRV_UAV&    GetCBV(CBV_ID   Id) const { return GetConstantBufferView(Id);  }
+	inline const RTV&            GetRTV(RTV_ID   Id) const { return GetRenderTargetView(Id);    }
+	inline const DSV&            GetDSV(DSV_ID   Id) const { return GetDepthStencilView(Id);    }
 
 
 private:
-	using RootSignatureArray_t = std::array<ID3D12RootSignature*, EVertexBufferType::NUM_VERTEX_BUFFER_TYPES>;
 	using PSOArray_t           = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
 
 	// GPU
-	Device                   mDevice; 
-	CommandQueue             mGFXQueue;
-	CommandQueue             mComputeQueue;
-	CommandQueue             mCopyQueue;
+	Device                                         mDevice; 
+	CommandQueue                                   mGFXQueue;
+	CommandQueue                                   mComputeQueue;
+	CommandQueue                                   mCopyQueue;
 
 	// memory
-	D3D12MA::Allocator*      mpAllocator;
-	StaticResourceViewHeap   mHeapRTV;
-	StaticResourceViewHeap   mHeapDSV;
-	StaticResourceViewHeap   mHeapCBV_SRV_UAV;
-	StaticResourceViewHeap   mHeapSampler;
-	UploadHeap               mHeapUpload;
+	D3D12MA::Allocator*                            mpAllocator;
+	StaticResourceViewHeap                         mHeapRTV;
+	StaticResourceViewHeap                         mHeapDSV;
+	StaticResourceViewHeap                         mHeapCBV_SRV_UAV;
+	StaticResourceViewHeap                         mHeapSampler;
+	UploadHeap                                     mHeapUpload;
+	StaticBufferHeap                               mStaticHeap_VertexBuffer;
+	StaticBufferHeap                               mStaticHeap_IndexBuffer;
 
-	// resources
-	StaticBufferPool         mStaticVertexBufferPool;
-	StaticBufferPool         mStaticIndexBufferPool;
-	std::vector<Texture>     mTextures;
-	//todo: samplers
-
-	// resource views
-	std::vector<VBV>         mVBVs;
-	std::vector<IBV>         mIBVs;
-	std::vector<CBV_SRV_UAV> mCBVs;
-	std::vector<CBV_SRV_UAV> mSRVs;
-	std::vector<CBV_SRV_UAV> mUAVs;
-	std::vector<RTV>         mRTVs;
-	// todo: convert std::vector<T> -> std::unordered_map<ID, T>
+	// resources & views
+	std::unordered_map<TextureID, Texture>         mTextures;
+	std::unordered_map<SamplerID, SAMPLER>         mSamplers;
+	std::unordered_map<BufferID, VBV>              mVBVs;
+	std::unordered_map<BufferID, IBV>              mIBVs;
+	std::unordered_map<CBV_ID  , CBV_SRV_UAV>      mCBVs;
+	std::unordered_map<SRV_ID  , CBV_SRV_UAV>      mSRVs;
+	std::unordered_map<UAV_ID  , CBV_SRV_UAV>      mUAVs;
+	std::unordered_map<RTV_ID  , RTV>              mRTVs;
+	std::unordered_map<DSV_ID  , DSV>              mDSVs;
+	mutable std::mutex                             mMtxStaticVBHeap;
+	mutable std::mutex                             mMtxStaticIBHeap;
+	mutable std::mutex                             mMtxDynamicCBHeap;
+	mutable std::mutex                             mMtxTextures;
+	mutable std::mutex                             mMtxSamplers;
+	mutable std::mutex                             mMtxSRVs;
+	mutable std::mutex                             mMtxCBVs;
+	mutable std::mutex                             mMtxRTVs;
+	mutable std::mutex                             mMtxDSVs;
+	mutable std::mutex                             mMtxUAVs;
+	mutable std::mutex                             mMtxVBVs;
+	mutable std::mutex                             mMtxIBVs;
 
 	// root signatures
-	RootSignatureArray_t     mpBuiltinRootSignatures;
+	std::vector<ID3D12RootSignature*>              mpBuiltinRootSignatures;
 
 	// PSOs
-	PSOArray_t               mpBuiltinPSOs;
+	PSOArray_t                                     mpBuiltinPSOs;
 
 	// data
 	std::unordered_map<HWND, FWindowRenderContext> mRenderContextLookup;
 
 	// bookkeeping
-	// todo: unordered map of TexID <-> DiskLocation
+	std::unordered_map<TextureID, std::string>     mLookup_TextureDiskLocations;
 
-	// threading
-	mutable std::mutex       mMtxStaticVBPool;
-	mutable std::mutex       mMtxStaticIBPool;
-	mutable std::mutex       mMtxTextures;
-	mutable std::mutex       mMtxSRVs;
-	mutable std::mutex       mMtxCBVs;
-	mutable std::mutex       mMtxRTVs;
-	mutable std::mutex       mMtxDSVs;
-	mutable std::mutex       mMtxUAVs;
-	mutable std::mutex       mMtxVBVs;
-	mutable std::mutex       mMtxIBVs;
 
 
 private:
 	void InitializeD3D12MA();
-	void InitializeResourceHeaps();
+	void InitializeHeaps();
 
 	void LoadPSOs();
 	void LoadDefaultResources();
@@ -231,4 +233,5 @@ private:
 
 	bool CheckContext(HWND hwnd) const;
 
+	TextureID AddTexture_ThreadSafe(Texture&& tex);
 };

@@ -17,6 +17,7 @@ set (Headers
     "CommandQueue.h"
     "Fence.h"
     "ResourceHeaps.h"
+    "ResourceViews.h"
     "Buffer.h"
     "Common.h"
     "Texture.h"
@@ -24,11 +25,13 @@ set (Headers
 
 set (Source
     "Renderer.cpp"
+    "Renderer_Resources.cpp"
     "Device.cpp"
     "SwapChain.cpp"
     "CommandQueue.cpp"
     "Fence.cpp"
     "ResourceHeaps.cpp"
+    "ResourceViews.cpp"
     "Buffer.cpp"
     "Texture.cpp"
 )

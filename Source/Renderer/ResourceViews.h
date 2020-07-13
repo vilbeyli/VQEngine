@@ -43,63 +43,33 @@
 
 #include <d3d12.h>
 
-class ResourceView;
-
-enum EResourceHeapType
-{
-    RTV_HEAP = 0,
-    DSV_HEAP,
-    CBV_SRV_UAV_HEAP,
-    SAMPLER_HEAP,
-
-    NUM_HEAP_TYPES
-};
-
-class StaticResourceViewHeap
+class ResourceView
 {
 public:
-    void Create(ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP_TYPE heapType, uint32 descriptorCount, bool forceCPUVisible = false);
-    void Destroy();
-    bool AllocDescriptor(uint32 size, ResourceView* pRV);
-    
+    inline uint32 GetSize() const { return mSize; }
+    inline D3D12_CPU_DESCRIPTOR_HANDLE GetCPUDescHandle(uint32 i = 0) const { return D3D12_CPU_DESCRIPTOR_HANDLE{ mCPUDescriptor.ptr + static_cast<uint64>(i)*mDescriptorSize }; }
+    inline D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescHandle(uint32 i = 0) const { return D3D12_GPU_DESCRIPTOR_HANDLE{ mGPUDescriptor.ptr + static_cast<uint64>(i)*mDescriptorSize }; }
 
-    inline ID3D12DescriptorHeap* GetHeap() { return mpHeap; }
-
-private:
-    uint32 mIndex;
-    uint32 mDescriptorCount;
-    uint32 mDescriptorElementSize;
-
-    ID3D12DescriptorHeap *mpHeap;
-};
-
-// Creates one Upload heap and suballocates memory from the heap
-class UploadHeap
-{
-public:
-    void Create(ID3D12Device* pDevice, SIZE_T uSize);
-    void Destroy();
-
-    UINT8* Suballocate(SIZE_T uSize, UINT64 uAlign);
-
-    inline UINT8*                     BasePtr()         const { return mpDataBegin; }
-    inline ID3D12Resource*            GetResource()     const { return mpUploadHeap; }
-    inline ID3D12GraphicsCommandList* GetCommandList()  const { return mpCommandList; }
-
-    void UploadToGPUAndWait(ID3D12CommandQueue* pCmdQueue);
+    inline void SetResourceView(uint32 size, uint32 dsvDescriptorSize, D3D12_CPU_DESCRIPTOR_HANDLE CPUDescriptor, D3D12_GPU_DESCRIPTOR_HANDLE GPUDescriptor)
+    {
+        mSize = size;
+        mCPUDescriptor = CPUDescriptor;
+        mGPUDescriptor = GPUDescriptor;
+        mDescriptorSize = dsvDescriptorSize;
+    }
 
 private:
-    ID3D12Device*              mpDevice     = nullptr;
-    ID3D12Resource*            mpUploadHeap = nullptr;
+    uint32 mSize = 0;
+    uint32 mDescriptorSize = 0;
 
-    ID3D12GraphicsCommandList* mpCommandList      = nullptr;
-    ID3D12CommandAllocator*    mpCommandAllocator = nullptr;
-
-    UINT8*                     mpDataCur   = nullptr;
-    UINT8*                     mpDataEnd   = nullptr; 
-    UINT8*                     mpDataBegin = nullptr;
-
-    ID3D12Fence*               mpFence = nullptr;
-    UINT64                     mFenceValue = 0;
-    HANDLE                     mHEvent;
+    D3D12_CPU_DESCRIPTOR_HANDLE mCPUDescriptor;
+    D3D12_GPU_DESCRIPTOR_HANDLE mGPUDescriptor;
 };
+
+using VBV = D3D12_VERTEX_BUFFER_VIEW;
+using IBV = D3D12_INDEX_BUFFER_VIEW;
+class RTV         : public ResourceView { };
+class DSV         : public ResourceView { };
+class CBV_SRV_UAV : public ResourceView { };
+class SAMPLER     : public ResourceView { };
+
