@@ -295,6 +295,30 @@ namespace GeometryGenerator
 		if constexpr (bHasNormals)  SetFVec<3>(v[23].normal  , { +0.0f, -1.0f, +0.0f });
 		if constexpr (bHasTangents) SetFVec<3>(v[23].tangent , { +1.0f, +0.0f, +0.0f });
 
+		if constexpr (bHasColor)
+		{
+			for (int i = 0; i < (int)data.Indices.size(); i += 3)
+			{
+				int Indices[3] = 
+				{
+					  data.Indices[i + 0]
+					, data.Indices[i + 1]
+					, data.Indices[i + 2]
+				};
+
+				SetFVec<3>(v[Indices[0]].color, { 1.0f, 0.0f, 0.0f });
+				SetFVec<3>(v[Indices[1]].color, { 0.0f, 1.0f, 0.0f });
+				SetFVec<3>(v[Indices[2]].color, { 0.0f, 0.0f, 1.0f });
+				if constexpr (bHasAlpha)
+				{
+					v[Indices[0]].color[3] = 1.0f;
+					v[Indices[1]].color[3] = 1.0f;
+					v[Indices[2]].color[3] = 1.0f;
+				}
+			}
+		
+		}
+
 		return data;
 	}
 
