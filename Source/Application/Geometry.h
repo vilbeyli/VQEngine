@@ -299,7 +299,7 @@ namespace GeometryGenerator
 		{
 			for (int i = 0; i < (int)data.Indices.size(); i += 3)
 			{
-				int Indices[3] = 
+				TIndex Indices[3] = 
 				{
 					  data.Indices[i + 0]
 					, data.Indices[i + 1]

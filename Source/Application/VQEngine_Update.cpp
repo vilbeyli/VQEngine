@@ -28,15 +28,16 @@ void VQEngine::UpdateThread_Main()
 	UpdateThread_Inititalize();
 
 	bool bQuit = false;
+	float dt = 0.0f;
 	while (!mbStopAllThreads && !bQuit)
 	{
-		UpdateThread_PreUpdate();
+		UpdateThread_PreUpdate(dt);
 
 #if DEBUG_LOG_THREAD_SYNC_VERBOSE
 		Log::Info(/*"UpdateThread_Tick() : */"u%d (r=%llu)", mNumUpdateLoopsExecuted.load(), mNumRenderLoopsExecuted.load());
 #endif
 
-		UpdateThread_UpdateAppState();
+		UpdateThread_UpdateAppState(dt);
 
 		UpdateThread_PostUpdate();
 
@@ -63,6 +64,9 @@ void VQEngine::UpdateThread_Inititalize()
 	mpWinMain->Show();
 	if (mpWinDebug) 
 		mpWinDebug->Show();
+
+	mTimer.Reset();
+	mTimer.Start();
 }
 
 void VQEngine::UpdateThread_Exit()
@@ -85,17 +89,19 @@ void VQEngine::UpdateThread_SignalRenderThread()
 	mpSemRender->Signal();
 }
 
-void VQEngine::UpdateThread_PreUpdate()
+void VQEngine::UpdateThread_PreUpdate(float& dt)
 {
 	// update timer
+	dt = mTimer.Tick();
 
 	// update input
 
 }
 
-void VQEngine::UpdateThread_UpdateAppState()
+void VQEngine::UpdateThread_UpdateAppState(const float dt)
 {
 	assert(mbRenderThreadInitialized);
+
 
 	if (mAppState == EAppState::INITIALIZING)
 	{
@@ -129,17 +135,33 @@ void VQEngine::UpdateThread_UpdateAppState()
 
 	else
 	{
+		const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
+		const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
+
 		// update scene data
+		mScene_MainWnd.mFrameData[FRAME_DATA_INDEX].TFCube.RotateAroundAxisRadians(YAxis, dt * 0.2f * PI);
 	}
 
 }
 
 void VQEngine::UpdateThread_PostUpdate()
 {
+	if (mbLoadingLevel)
+	{
+		return;
+	}
+
 	// compute visibility 
 
 	// extract scene view
 
+	// copy over state for next frame
+	
+	const int NUM_BACK_BUFFERS      = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
+	const int FRAME_DATA_INDEX      = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
+	const int FRAME_DATA_NEXT_INDEX = ((mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS) + 1) % NUM_BACK_BUFFERS;
+
+	mScene_MainWnd.mFrameData[FRAME_DATA_NEXT_INDEX] = mScene_MainWnd.mFrameData[FRAME_DATA_INDEX];
 }
 
 
