@@ -18,6 +18,7 @@
 
 #include "VQEngine.h"
 
+constexpr int MIN_WINDOW_SIZE = 128; // make sure window cannot be resized smaller than 128x128
 
 
 #define LOG_WINDOW_MESSAGE_EVENTS 0
@@ -48,7 +49,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		if (pWindow->pOwner) pWindow->pOwner->OnWindowResize(hwnd);
 		return 0;
 	}
-
+	case WM_GETMINMAXINFO:
+	{   
+		LPMINMAXINFO lpMMI = (LPMINMAXINFO)lParam;
+		lpMMI->ptMinTrackSize.x = MIN_WINDOW_SIZE;
+		lpMMI->ptMinTrackSize.y = MIN_WINDOW_SIZE;
+		break;
+	}
 	case WM_KEYDOWN:
 		if (pWindow->pOwner) pWindow->pOwner->OnWindowKeyDown(wParam);
 		return 0;
@@ -108,7 +115,12 @@ void VQEngine::OnWindowResize(HWND hWnd)
 	GetClientRect(hWnd, &clientRect);
 	int w = clientRect.right - clientRect.left;
 	int h = clientRect.bottom - clientRect.top;
-	
+
+#if 0 // MinWindowSize prevents the crash from h==0, no need for the code below.
+	if (h == 0) { h = 8; Log::Warning("WND RESIZE TOO SMALL"); }
+	if (w == 0) { w = 8; Log::Warning("WND RESIZE TOO SMALL"); }
+#endif
+
 	// Due to multi-threading, this thread will record the events and 
 	// Render Thread will process the queue at the of a render loop
 	mWinEventQueue.AddItem(std::make_unique<WindowResizeEvent>(w, h, hWnd));

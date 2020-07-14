@@ -1,5 +1,4 @@
 cmake_minimum_required (VERSION 3.4)
-set(CMAKE_GENERATOR_PLATFORM x64)
 
 project (VQRenderer)
 
