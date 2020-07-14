@@ -28,6 +28,8 @@
 #include "Camera.h"
 
 #include "Libs/VQUtils/Source/Multithreading.h"
+#include "Libs/VQUtils/Source/Timer.h"
+
 #include "Source/Renderer/Renderer.h"
 
 #include <memory>
@@ -170,14 +172,14 @@ public:
 	// PRE_UPDATE()
 	// - Updates timer
 	// - Updates input state reading from Main Thread's input queue
-	void UpdateThread_PreUpdate();
+	void UpdateThread_PreUpdate(float& dt);
 	
 	// UPDATE()
 	// - Updates program state (init/load/sim/unload/exit)
 	// - Starts loading tasks
 	// - Animates loading screen
 	// - Updates scene data
-	void UpdateThread_UpdateAppState();
+	void UpdateThread_UpdateAppState(const float dt);
 
 	// POST_UPDATE()
 	// - Computes visibility per SceneView
@@ -189,6 +191,7 @@ public:
 private:
 	using BuiltinMeshArray_t     = std::array<Mesh       , EBuiltInMeshes::NUM_BUILTIN_MESHES>;
 	using BuiltinMeshNameArray_t = std::array<std::string, EBuiltInMeshes::NUM_BUILTIN_MESHES>;
+	using EventQueue_t           = BufferedContainer<std::queue<std::unique_ptr<IEvent>>, std::unique_ptr<IEvent>>;
 
 	// threads
 	std::thread                mRenderThread;
@@ -230,9 +233,9 @@ private:
 	// input
 
 	// events
-	BufferedContainer<std::queue<std::unique_ptr<IEvent>>, std::unique_ptr<IEvent>> mWinEventQueue;
+	EventQueue_t                  mWinEventQueue;
 
-
+	Timer                         mTimer;
 
 
 private:

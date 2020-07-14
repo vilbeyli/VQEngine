@@ -29,7 +29,7 @@ constexpr char* BUILD_CONFIG = "Debug";
 #else
 constexpr char* BUILD_CONFIG = "Release";
 #endif
-constexpr char* VQENGINE_VERSION = "v0.1.0";
+constexpr char* VQENGINE_VERSION = "v0.2.0";
 
 
 void VQEngine::MainThread_Tick()
