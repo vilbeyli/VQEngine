@@ -27,7 +27,7 @@ Make sure to have pre-requisites installed
 - [Visual Studio 2019](https://visualstudio.microsoft.com/downloads/)
 - [Windows 10 SDK 10.0.18362.0](https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk)
 
-Then, run the build scripts in `Build/` folder,
+Then, run one of the build scripts in `Build/` folder,
 
 - `GenerateSolutions.bat` to build from source with Visual Studio
   - `VQE.sln` can be found in `Build/SolutionFiles` directory
