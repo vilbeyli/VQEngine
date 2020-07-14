@@ -17,7 +17,7 @@ VQE supports
  - Real-time and offline Ray Tracing (WIP)
 
 
-See [Releases](https://github.com/vilbeyli/VQE/releases) if you want to download the source & pre-built executables.
+See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source & pre-built executables.
 
 # Build
 
