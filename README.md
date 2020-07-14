@@ -51,7 +51,7 @@ VQE can be configured through `Data/EngineConfig.ini` file
 | :-- | :-- |
 | `ResolutionX=<int>` | Sets application render resolution width | 
 | `ResolutionY=<int>` | Sets application render resolution height |
-| `VSync=<bool>` <br/> (TO BE IMPLEMENTED) | Toggles VSync on/off based on the specified `<bool>` |
+| `VSync=<bool>` <br/> (TO BE IMPLEMENTED) | Toggles VSync based on the specified `<bool>` |
 
 <br/>
 
