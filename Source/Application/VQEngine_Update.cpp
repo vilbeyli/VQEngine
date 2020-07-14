@@ -167,7 +167,7 @@ void VQEngine::UpdateThread_PostUpdate()
 
 void VQEngine::Load_SceneData_Dispatch()
 {
-	//mUpdateWorkerThreads.AddTask([&]() { Sleep(2000); Log::Info("Worker SLEEP done!"); }); // simulate 2second loading time
+	mUpdateWorkerThreads.AddTask([&]() { Sleep(1000); Log::Info("Worker SLEEP done!"); }); // simulate 1second loading time
 	mUpdateWorkerThreads.AddTask([&]()
 	{
 		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCount(mpWinMain);

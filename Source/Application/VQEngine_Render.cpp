@@ -297,39 +297,33 @@ void VQEngine::RenderThread_RenderDebugWindow()
 	};
 	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
-#if 0
+#if 1
 	// Draw Triangle
-	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
-
-	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO));
-	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(EVertexBufferType::COLOR_AND_ALPHA));
-
-#if 0
-	//pCmd->SetDescriptorHeaps(_countof(), NULL);
-	//pCmd->SetGraphicsRootDescriptorTable(0, g_MainDescriptorHeap[g_FrameIndex]->GetGPUDescriptorHandleForHeapStart()))
-	//pCmd->SetGraphicsRootDescriptorTable(2, g_MainDescriptorHeap[g_FrameIndex]->GetGPUDescriptorHandleForHeapStart()))
-	//pCmd->SetGraphicsRootConstantBufferView(1, )
-#endif
-
+	const Mesh& TriangleMesh = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE];
+	const auto& VBIBIDs      = TriangleMesh.GetIABufferIDs();
+	const BufferID& VB_ID    = VBIBIDs.first;
+	const BufferID& IB_ID    = VBIBIDs.second;
+	const VBV& vbv = mRenderer.GetVertexBufferView(VB_ID);
+	const IBV& ibv = mRenderer.GetIndexBufferView(IB_ID);
 	const float RenderResolutionX = static_cast<float>(ctx.MainRTResolutionX);
 	const float RenderResolutionY = static_cast<float>(ctx.MainRTResolutionY);
 	D3D12_VIEWPORT viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
-	pCmd->RSSetViewports(1, &viewport);
-
 	D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
-	pCmd->RSSetScissorRects(1, &scissorsRect);
 
-	const auto VBIBIDs = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE].GetIABufferIDs();
-	const BufferID& VB_ID = VBIBIDs.first;
-	const BufferID& IB_ID = VBIBIDs.second;
-	const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
-	const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
+
+	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO));
+	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(0));
 
 	pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	pCmd->IASetVertexBuffers(0, 1, &vb);
-	pCmd->IASetIndexBuffer(&ib);
+	pCmd->IASetVertexBuffers(0, 1, &vbv);
+	pCmd->IASetIndexBuffer(&ibv);
 
-	pCmd->DrawIndexedInstanced(3, 1, 0, 0, 0);
+	pCmd->RSSetViewports(1, &viewport);
+	pCmd->RSSetScissorRects(1, &scissorsRect);
+
+	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
+
+	pCmd->DrawIndexedInstanced(TriangleMesh.GetNumIndices(), 1, 0, 0, 0);
 #endif
 
 	// Transition SwapChain for Present
