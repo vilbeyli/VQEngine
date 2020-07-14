@@ -52,6 +52,23 @@
 
 #include <dxgi1_6.h>
 
+static RECT CenterScreen(const RECT& screenRect, const RECT& wndRect)
+{
+    RECT centered = {};
+
+    const int szWndX = wndRect.right - wndRect.left;
+    const int szWndY = wndRect.bottom - wndRect.top;
+    const int offsetX = (screenRect.right - screenRect.left - szWndX) / 2;
+    const int offsetY = (screenRect.bottom - screenRect.top - szWndY) / 2;
+
+    centered.left = screenRect.left + offsetX;
+    centered.right = centered.left + szWndX;
+    centered.top = screenRect.top + offsetY;
+    centered.bottom = centered.top + szWndY;
+
+    return centered;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 IWindow::~IWindow()
 {
@@ -65,14 +82,13 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
     , isFullscreen_(initParams.bFullscreen)
 {
     // https://docs.microsoft.com/en-us/windows/win32/winmsg/window-styles
-    DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE;
+    UINT FlagWindowStyle = WS_OVERLAPPEDWINDOW;
 
     ::RECT rect;
     ::SetRect(&rect, 0, 0, width_, height_);
-    ::AdjustWindowRect(&rect, style, FALSE);
+    ::AdjustWindowRect(&rect, FlagWindowStyle, FALSE);
 
     HWND hwnd_parent = NULL;
-    UINT FlagWindowStyle = WS_OVERLAPPEDWINDOW;
 
     windowClass_.reset(new WindowClass("VQWindowClass", initParams.hInst, initParams.pfnWndProc));
 
@@ -111,30 +127,13 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
         }
         return b;
     };
-    auto fnCenterScreen = [](const RECT& screenRect, const RECT& wndRect) -> RECT
-    {
-        RECT centered = {};
-
-        const int szWndX = wndRect.right - wndRect.left;
-        const int szWndY = wndRect.bottom - wndRect.top;
-        const int offsetX = (screenRect.right - screenRect.left - szWndX) / 2;
-        const int offsetY = (screenRect.bottom - screenRect.top - szWndY) / 2;
-
-        centered.left = screenRect.left + offsetX;
-        centered.right = centered.left + szWndX;
-        centered.top = screenRect.top + offsetY;
-        centered.bottom = centered.top + szWndY;
-
-        return centered;
-    };
 
     EnumDisplayMonitors(NULL, NULL, fnCallbackMonitorEnum, (LPARAM)&p);
     const bool bPreferredDisplayNotFound = 
            (preferredScreenRect.right == preferredScreenRect.left == preferredScreenRect.top == preferredScreenRect.bottom )
         && (preferredScreenRect.right == CW_USEDEFAULT);
-    RECT centeredRect = bPreferredDisplayNotFound
-        ? preferredScreenRect
-        : fnCenterScreen(preferredScreenRect, rect);
+    
+    RECT centeredRect = bPreferredDisplayNotFound ? preferredScreenRect : CenterScreen(preferredScreenRect, rect);
 
     // set fullscreen width & height based on the selected monitor
     this->FSwidth_  = preferredScreenRect.right  - preferredScreenRect.left;
@@ -220,7 +219,7 @@ void Window::ToggleWindowedFullscreen(SwapChain* pSwapChain /*= nullptr*/)
         GetWindowRect(hwnd_, &rect_);
 
         // Make the window borderless so that the client area can fill the screen.
-        SetWindowLong(hwnd_, GWL_STYLE, windowStyle_ & ~(WS_CAPTION | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_SYSMENU | WS_THICKFRAME));
+        SetWindowLong(hwnd_, GWL_STYLE, windowStyle_ & ~(WS_CAPTION | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_THICKFRAME));
 
         RECT fullscreenWindowRect;
         
