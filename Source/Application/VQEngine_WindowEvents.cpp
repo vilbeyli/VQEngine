@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "VQEngine.h"
+#include "Input.h"
 
 constexpr int MIN_WINDOW_SIZE = 128; // make sure window cannot be resized smaller than 128x128
 
@@ -57,7 +58,23 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		break;
 	}
 	case WM_KEYDOWN:
-		if (pWindow->pOwner) pWindow->pOwner->OnWindowKeyDown(wParam);
+		if (pWindow->pOwner) pWindow->pOwner->OnWindowKeyDown(hwnd, wParam);
+		return 0;
+	case WM_KEYUP:
+		if (pWindow->pOwner) pWindow->pOwner->OnWindowKeyUp(hwnd, wParam);
+		return 0;
+
+	// mouse buttons
+	case WM_MBUTTONDOWN:
+	case WM_LBUTTONDOWN:
+	case WM_RBUTTONDOWN:
+		//if (pWindow->pOwner) pWindow->pOwner->OnMouseButtonDown();
+		return 0;
+
+	case WM_MBUTTONUP:
+	case WM_RBUTTONUP:
+	case WM_LBUTTONUP:
+		//if (pWindow->pOwner) pWindow->pOwner->OnMouseButtonUp();
 		return 0;
 
 	case WM_SYSKEYDOWN:
@@ -122,14 +139,14 @@ void VQEngine::OnWindowResize(HWND hWnd)
 #endif
 
 	// Due to multi-threading, this thread will record the events and 
-	// Render Thread will process the queue at the of a render loop
+	// Render Thread will process the queue at the beginning & end of a render loop
 	mWinEventQueue.AddItem(std::make_unique<WindowResizeEvent>(w, h, hWnd));
 }
 
 void VQEngine::OnToggleFullscreen(HWND hWnd)
 {
 	// Due to multi-threading, this thread will record the events and 
-	// Render Thread will process the queue at the of a render loop
+	// Render Thread will process the queue at the beginning & end of a render loop
 	mWinEventQueue.AddItem(std::make_unique<ToggleFullscreenEvent>(hWnd));
 }
 
@@ -143,8 +160,18 @@ void VQEngine::OnWindowFocus(IWindow* pWindow)
 }
 
 
-void VQEngine::OnWindowKeyDown(WPARAM wParam)
+void VQEngine::OnWindowKeyDown(HWND hwnd, WPARAM wParam)
 {
+	// Due to multi-threading, this thread will record the events and 
+	// Update Thread will process the queue at the beginning of an update loop
+	mInputEventQueue.AddItem(std::make_unique<KeyDownEvent>(hwnd, wParam));
+}
+
+void VQEngine::OnWindowKeyUp(HWND hwnd, WPARAM wParam)
+{
+	// Due to multi-threading, this thread will record the events and 
+	// Update Thread will process the queue at the beginning of an update loop
+	mInputEventQueue.AddItem(std::make_unique<KeyUpEvent>(hwnd, wParam));
 }
 
 void VQEngine::OnWindowClose(IWindow* pWindow)
@@ -164,8 +191,7 @@ void VQEngine::OnWindowClose(IWindow* pWindow)
 static void LogWndMsg(UINT uMsg, HWND hwnd)
 {
 #if LOG_WINDOW_MESSAGE_EVENTS
-#define HANDLE_CASE(EVENT)\
-case EVENT: Log::Info(#EVENT"\t(0x%04x)\t\t<hwnd=0x%x>", EVENT, hwnd); break
+#define HANDLE_CASE(EVENT)    case EVENT: Log::Info(#EVENT"\t(0x%04x)\t\t<hwnd=0x%x>", EVENT, hwnd); break
 	switch (uMsg)
 	{
 		// https://www.autoitscript.com/autoit3/docs/appendix/WinMsgCodes.htm

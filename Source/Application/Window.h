@@ -85,7 +85,8 @@ public:
 	virtual void OnWindowMinimize(IWindow* pWnd) = 0;
 	virtual void OnWindowFocus(IWindow* pWnd) = 0;
 	virtual void OnWindowClose(IWindow* pWnd) = 0;
-	virtual void OnWindowKeyDown(WPARAM) = 0;
+	virtual void OnWindowKeyDown(HWND, WPARAM) = 0;
+	virtual void OnWindowKeyUp(HWND, WPARAM) = 0;
 };
 
 struct IWindow

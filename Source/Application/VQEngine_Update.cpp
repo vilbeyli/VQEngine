@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "VQEngine.h"
+#include "Math.h"
 
 #include "Libs/VQUtils/Source/utils.h"
 
@@ -31,6 +32,8 @@ void VQEngine::UpdateThread_Main()
 	float dt = 0.0f;
 	while (!mbStopAllThreads && !bQuit)
 	{
+		UpdateThread_HandleEvents();
+
 		UpdateThread_PreUpdate(dt);
 
 #if DEBUG_LOG_THREAD_SYNC_VERBOSE
@@ -93,9 +96,6 @@ void VQEngine::UpdateThread_PreUpdate(float& dt)
 {
 	// update timer
 	dt = mTimer.Tick();
-
-	// update input
-
 }
 
 void VQEngine::UpdateThread_UpdateAppState(const float dt)
@@ -110,9 +110,9 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 
 		// start load level
 		Load_SceneData_Dispatch();
-		mAppState = EAppState::LOADING;
+		mAppState = EAppState::LOADING;// not thread-safe
 
-		mbLoadingLevel.store(true);
+		mbLoadingLevel.store(true);    // thread-safe
 	}
 
 	if (mbLoadingLevel)
@@ -135,13 +135,36 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 
 	else
 	{
-		const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
-		const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
-
-		// update scene data
-		mScene_MainWnd.mFrameData[FRAME_DATA_INDEX].TFCube.RotateAroundAxisRadians(YAxis, dt * 0.2f * PI);
+		UpdateThread_UpdateScene_MainWnd(dt);
 	}
 
+}
+
+void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
+{
+	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
+	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
+	FFrameData& FrameData = mScene_MainWnd.mFrameData[FRAME_DATA_INDEX];
+
+	
+	// handle input
+	XMVECTOR LocalSpaceTranslation = XMVectorSet(0,0,0,0);
+	if (mInput.IsKeyDown('A'))		LocalSpaceTranslation += XMLoadFloat3(&LeftVector);
+	if (mInput.IsKeyDown('D'))		LocalSpaceTranslation += XMLoadFloat3(&RightVector);
+	if (mInput.IsKeyDown('W'))		LocalSpaceTranslation += XMLoadFloat3(&ForwardVector);
+	if (mInput.IsKeyDown('S'))		LocalSpaceTranslation += XMLoadFloat3(&BackVector);
+	if (mInput.IsKeyDown('E'))		LocalSpaceTranslation += XMLoadFloat3(&UpVector);
+	if (mInput.IsKeyDown('Q'))		LocalSpaceTranslation += XMLoadFloat3(&DownVector);
+	if (mInput.IsKeyDown(VK_SHIFT))	LocalSpaceTranslation *= 2.0f;
+	//LocalSpaceTranslation *= 4.0f;
+
+	// update camera
+	FCameraInput camInput(LocalSpaceTranslation);
+	camInput.DeltaMouseXY = mInput.GetMouseDelta();
+	FrameData.SceneCamera.Update(dt, camInput);
+	
+	// update scene data
+	FrameData.TFCube.RotateAroundAxisRadians(YAxis, dt * 0.2f * PI);
 }
 
 void VQEngine::UpdateThread_PostUpdate()
@@ -162,6 +185,43 @@ void VQEngine::UpdateThread_PostUpdate()
 	const int FRAME_DATA_NEXT_INDEX = ((mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS) + 1) % NUM_BACK_BUFFERS;
 
 	mScene_MainWnd.mFrameData[FRAME_DATA_NEXT_INDEX] = mScene_MainWnd.mFrameData[FRAME_DATA_INDEX];
+
+	// input post update;
+	mInput.PostUpdate();
+}
+
+void VQEngine::UpdateThread_HandleEvents()
+{
+	// Swap event recording buffers so we can read & process a limited number of events safely.
+	mInputEventQueue.SwapBuffers();
+	std::queue<std::unique_ptr<IEvent>>& q = mInputEventQueue.GetBackContainer();
+
+	if (q.empty())
+		return;
+
+	// process the events
+	std::shared_ptr<IEvent> pEvent = nullptr;
+	while (!q.empty())
+	{
+		pEvent = std::move(q.front());
+		q.pop();
+
+		switch (pEvent->mType)
+		{
+
+		case KEY_DOWN_EVENT: 
+		{
+			std::shared_ptr<KeyDownEvent> p = std::static_pointer_cast<KeyDownEvent>(pEvent);
+			mInput.UpdateKeyDown(p->wparam);
+		} break;
+		case KEY_UP_EVENT:
+		{
+			std::shared_ptr<KeyUpEvent> p = std::static_pointer_cast<KeyUpEvent>(pEvent);
+			mInput.UpdateKeyUp(p->wparam);
+		} break;
+		}
+	}
+	
 }
 
 
@@ -189,7 +249,7 @@ void VQEngine::Load_SceneData_Dispatch()
 			, XMFLOAT3(CUBE_SCALE, CUBE_SCALE, CUBE_SCALE)
 		);
 
-		CameraData camData = {};
+		FCameraData camData = {};
 		camData.nearPlane = 0.01f;
 		camData.farPlane  = 1000.0f;
 		camData.x = 0.0f; camData.y = 3.0f; camData.z = -5.0f;
@@ -245,6 +305,7 @@ void VQEngine::LoadLoadingScreenData()
 
 void MainWindowScene::Update()
 {
+
 }
 
 void DebugWindowScene::Update()

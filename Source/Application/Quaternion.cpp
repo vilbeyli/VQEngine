@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "Quaternion.h"
+#include "Math.h"
 
 #include <cmath>
 #include <algorithm>

@@ -26,6 +26,7 @@
 #include "Mesh.h"
 #include "Transform.h"
 #include "Camera.h"
+#include "Input.h"
 
 #include "Libs/VQUtils/Source/Multithreading.h"
 #include "Libs/VQUtils/Source/Timer.h"
@@ -126,7 +127,8 @@ public:
 	void OnToggleFullscreen(HWND hWnd) override;
 	void OnWindowMinimize(IWindow* pWnd) override;
 	void OnWindowFocus(IWindow* pWindow) override;
-	void OnWindowKeyDown(WPARAM wParam) override;
+	void OnWindowKeyDown(HWND hwnd, WPARAM wParam) override;
+	void OnWindowKeyUp(HWND hwnd, WPARAM wParam) override;
 	void OnWindowClose(IWindow* pWindow) override;
 	
 
@@ -178,13 +180,17 @@ public:
 	// - Updates program state (init/load/sim/unload/exit)
 	// - Starts loading tasks
 	// - Animates loading screen
-	// - Updates scene data
+	// - Updates scene state
 	void UpdateThread_UpdateAppState(const float dt);
+	void UpdateThread_UpdateScene_MainWnd(const float dt);
+
 
 	// POST_UPDATE()
 	// - Computes visibility per SceneView
 	void UpdateThread_PostUpdate();
 
+	// Processes the event queue populated by the VQEngine_Main.cpp thread
+	void UpdateThread_HandleEvents();
 
 //-----------------------------------------------------------------------
 
@@ -192,50 +198,53 @@ private:
 	using BuiltinMeshArray_t     = std::array<Mesh       , EBuiltInMeshes::NUM_BUILTIN_MESHES>;
 	using BuiltinMeshNameArray_t = std::array<std::string, EBuiltInMeshes::NUM_BUILTIN_MESHES>;
 	using EventQueue_t           = BufferedContainer<std::queue<std::unique_ptr<IEvent>>, std::unique_ptr<IEvent>>;
+	using UpdateContextLookup_t  = std::unordered_map<HWND, IWindowUpdateContext*>;
 
 	// threads
-	std::thread                mRenderThread;
-	std::thread                mUpdateThread;
-	ThreadPool                 mUpdateWorkerThreads;
-	ThreadPool                 mRenderWorkerThreads;
+	std::thread                    mRenderThread;
+	std::thread                    mUpdateThread;
+	ThreadPool                     mUpdateWorkerThreads;
+	ThreadPool                     mRenderWorkerThreads;
 
 	// sync
-	std::atomic<bool>          mbStopAllThreads;
-	std::unique_ptr<Semaphore> mpSemUpdate;
-	std::unique_ptr<Semaphore> mpSemRender;
+	std::atomic<bool>              mbStopAllThreads;
+	std::unique_ptr<Semaphore>     mpSemUpdate;
+	std::unique_ptr<Semaphore>     mpSemRender;
 	
 	// windows
-	std::unique_ptr<Window>    mpWinMain;
-	std::unique_ptr<Window>    mpWinDebug;
+	std::unique_ptr<Window>        mpWinMain;
+	std::unique_ptr<Window>        mpWinDebug;
 	// todo: generic window mngmt
 
 	// render
-	VQRenderer                 mRenderer;
-	BuiltinMeshArray_t         mBuiltinMeshes;
-	BuiltinMeshNameArray_t     mBuiltinMeshNames;
+	VQRenderer                     mRenderer;
+	BuiltinMeshArray_t             mBuiltinMeshes;
+	BuiltinMeshNameArray_t         mBuiltinMeshNames;
 
 	// data / state
-	std::atomic<bool>          mbRenderThreadInitialized;
-	std::atomic<uint64>        mNumRenderLoopsExecuted;
-	std::atomic<uint64>        mNumUpdateLoopsExecuted;
-	std::atomic<bool>          mbLoadingLevel;
-	FEngineSettings            mSettings;
-	EAppState                  mAppState;
-	VQSystemInfo::FSystemInfo  mSysInfo;
+	std::atomic<bool>              mbRenderThreadInitialized;
+	std::atomic<uint64>            mNumRenderLoopsExecuted;
+	std::atomic<uint64>            mNumUpdateLoopsExecuted;
+	std::atomic<bool>              mbLoadingLevel;
+	FEngineSettings                mSettings;
+	EAppState                      mAppState;
+	VQSystemInfo::FSystemInfo      mSysInfo;
 
 	// scene
-	MainWindowScene             mScene_MainWnd;
-	DebugWindowScene            mScene_DebugWnd;
-	std::unordered_map<HWND, IWindowUpdateContext*> mWindowUpdateContextLookup;
+	MainWindowScene                mScene_MainWnd;
+	DebugWindowScene               mScene_DebugWnd;
+	UpdateContextLookup_t          mWindowUpdateContextLookup;
 	RenderingResources_MainWindow  mResources_MainWnd;
 	RenderingResources_DebugWindow mResources_DebugWnd;
 
 	// input
+	Input                          mInput; // input per HWND?
 
 	// events
-	EventQueue_t                  mWinEventQueue;
+	EventQueue_t                   mWinEventQueue;
+	EventQueue_t                   mInputEventQueue;
 
-	Timer                         mTimer;
+	Timer                          mTimer;
 
 
 private:

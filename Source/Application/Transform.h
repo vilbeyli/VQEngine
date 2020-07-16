@@ -21,16 +21,10 @@
 #include <DirectXMath.h>
 
 #include "Quaternion.h"
+#include "Math.h"
 
 #include <utility>
 
-constexpr DirectX::XMFLOAT3 UpVector      = DirectX::XMFLOAT3(0, 1, 0);
-constexpr DirectX::XMFLOAT3 RightVector   = DirectX::XMFLOAT3(1, 0, 0);
-constexpr DirectX::XMFLOAT3 ForwardVector = DirectX::XMFLOAT3(0, 0, 1);
-
-constexpr DirectX::XMFLOAT3 XAxis = DirectX::XMFLOAT3(1, 0, 0);
-constexpr DirectX::XMFLOAT3 YAxis = DirectX::XMFLOAT3(0, 1, 0);
-constexpr DirectX::XMFLOAT3 ZAxis = DirectX::XMFLOAT3(0, 0, 1);
 
 struct Transform
 {

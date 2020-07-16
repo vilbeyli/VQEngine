@@ -39,6 +39,7 @@ set (HeaderVQE
     "Source/Application/Window.h"
     "Source/Application/Settings.h"
     "Source/Application/Types.h"
+    "Source/Application/Math.h"
     "Source/Application/VQEngine.h"
     "Source/Application/Events.h"
     "Source/Application/Mesh.h"
@@ -46,6 +47,7 @@ set (HeaderVQE
     "Source/Application/Transform.h"
     "Source/Application/Quaternion.h"
     "Source/Application/Camera.h"
+    "Source/Application/Input.h"
 )
 
 set (SourceVQE 
@@ -62,6 +64,7 @@ set (SourceVQE
     "Source/Application/Transform.cpp"
     "Source/Application/Quaternion.cpp"
     "Source/Application/Camera.cpp"
+    "Source/Application/Input.cpp"
 )
 
 add_link_options(/SUBSYSTEM:WINDOWS)
