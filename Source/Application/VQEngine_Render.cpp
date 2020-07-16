@@ -639,6 +639,12 @@ void VQEngine::RenderThread_HandleResizeWindowEvent(const IEvent* pEvent)
 	SwapChain&                  Swapchain = mRenderer.GetWindowSwapChain(hwnd);
 	std::unique_ptr<Window>&         pWnd = GetWindow(hwnd);
 
+	if (pWnd->IsClosed())
+	{
+		Log::Warning("RenderThread: Ignoring WindowResizeEvent as Window<%x> is closed.", pWnd->GetHWND());
+		return;
+	}
+
 	Log::Info("RenderThread: Handle Resize event, set resolution to %dx%d", WIDTH , HEIGHT);
 
 	Swapchain.WaitForGPU();
