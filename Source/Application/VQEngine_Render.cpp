@@ -589,6 +589,10 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 void VQEngine::RenderThread_HandleEvents()
 {
+	// do not process events anymore if we're exiting
+	if (mbStopAllThreads)
+		return; 
+
 	// Swap event recording buffers so we can read & process a limited number of events safely.
 	//   Otherwise, theoretically the producer (Main) thread could keep adding new events 
 	//   while we're spinning on the queue items below, and cause render thread to stall while, say, resizing.
