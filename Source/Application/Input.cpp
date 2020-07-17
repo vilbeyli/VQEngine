@@ -20,6 +20,7 @@
 #include "Input.h"
 
 #include "Libs/VQUtils/Source/Log.h"
+#include "Libs/VQUtils/Source/Utils.h"
 
 #include <algorithm>
 #include <cassert>
@@ -176,7 +177,7 @@ bool Input::ReadRawInput_Mouse(LPARAM lParam, MouseInputEventData* pData)
 void Input::InitRawInputDevices(HWND hwnd)
 {
 	// register mouse for raw input
-// https://msdn.microsoft.com/en-us/library/windows/desktop/ms645565.aspx
+	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms645565.aspx
 	RAWINPUTDEVICE Rid[1];
 	Rid[0].usUsagePage = (USHORT)0x01;	// HID_USAGE_PAGE_GENERIC;
 	Rid[0].usUsage = (USHORT)0x02;	// HID_USAGE_GENERIC_MOUSE;
@@ -199,7 +200,6 @@ void Input::InitRawInputDevices(HWND hwnd)
 		&deviceList[0], &numDevices, sizeof(RAWINPUTDEVICELIST));
 
 	std::vector<wchar_t> deviceNameData;
-	std::wstring deviceName;
 	for (UINT i = 0; i < numDevices; ++i)
 	{
 		const RAWINPUTDEVICELIST& device = deviceList[i];
@@ -216,13 +216,11 @@ void Input::InitRawInputDevices(HWND hwnd)
 			{
 				deviceNameData.resize(dataSize);
 				UINT result = GetRawInputDeviceInfo(
-					device.hDevice, RIDI_DEVICENAME, &deviceNameData[0], &dataSize);
+				device.hDevice, RIDI_DEVICENAME, &deviceNameData[0], &dataSize);
 				if (result != UINT_MAX)
 				{
-					deviceName.assign(deviceNameData.begin(), deviceNameData.end());
-
 					char info[1024];
-					std::string ndeviceName(deviceName.begin(), deviceName.end());
+					const std::string ndeviceName = StrUtil::UnicodeToASCII(deviceNameData.data());
 					sprintf_s(info, "  Name=%s\n", ndeviceName.c_str());
 					OutputDebugString(info);
 				}
