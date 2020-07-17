@@ -177,7 +177,7 @@ bool Input::ReadRawInput_Mouse(LPARAM lParam, MouseInputEventData* pData)
 void Input::InitRawInputDevices(HWND hwnd)
 {
 	// register mouse for raw input
-	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms645565.aspx
+// https://msdn.microsoft.com/en-us/library/windows/desktop/ms645565.aspx
 	RAWINPUTDEVICE Rid[1];
 	Rid[0].usUsagePage = (USHORT)0x01;	// HID_USAGE_PAGE_GENERIC;
 	Rid[0].usUsage = (USHORT)0x02;	// HID_USAGE_GENERIC_MOUSE;
@@ -185,14 +185,13 @@ void Input::InitRawInputDevices(HWND hwnd)
 	Rid[0].hwndTarget = hwnd;
 	if (FALSE == (RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]))))	// Cast between semantically different integer types : a Boolean type to HRESULT.
 	{
-		OutputDebugString("Failed to register raw input device!");
+		//OutputDebugString("Failed to register raw input device!");
 	}
 
 	// get devices and print info
 	//-----------------------------------------------------
 	UINT numDevices = 0;
-	GetRawInputDeviceList(
-		NULL, &numDevices, sizeof(RAWINPUTDEVICELIST));
+	GetRawInputDeviceList(NULL, &numDevices, sizeof(RAWINPUTDEVICELIST));
 	if (numDevices == 0) return;
 
 	std::vector<RAWINPUTDEVICELIST> deviceList(numDevices);
@@ -200,6 +199,7 @@ void Input::InitRawInputDevices(HWND hwnd)
 		&deviceList[0], &numDevices, sizeof(RAWINPUTDEVICELIST));
 
 	std::vector<wchar_t> deviceNameData;
+	std::wstring deviceName;
 	for (UINT i = 0; i < numDevices; ++i)
 	{
 		const RAWINPUTDEVICELIST& device = deviceList[i];
@@ -207,30 +207,29 @@ void Input::InitRawInputDevices(HWND hwnd)
 		{
 			char info[1024];
 			sprintf_s(info, "Mouse: Handle=0x%08p\n", device.hDevice);
-			OutputDebugString(info);
+			//OutputDebugString(info);
 
 			UINT dataSize = 0;
-			GetRawInputDeviceInfo(
-				device.hDevice, RIDI_DEVICENAME, nullptr, &dataSize);
+			GetRawInputDeviceInfo(device.hDevice, RIDI_DEVICENAME, nullptr, &dataSize);
 			if (dataSize)
 			{
 				deviceNameData.resize(dataSize);
-				UINT result = GetRawInputDeviceInfo(
-				device.hDevice, RIDI_DEVICENAME, &deviceNameData[0], &dataSize);
+				UINT result = GetRawInputDeviceInfo(device.hDevice, RIDI_DEVICENAME, &deviceNameData[0], &dataSize);
 				if (result != UINT_MAX)
 				{
+					deviceName.assign(deviceNameData.begin(), deviceNameData.end());
+					
 					char info[1024];
 					const std::string ndeviceName = StrUtil::UnicodeToASCII(deviceNameData.data());
 					sprintf_s(info, "  Name=%s\n", ndeviceName.c_str());
-					OutputDebugString(info);
+					//OutputDebugString(info);
 				}
 			}
 
 			RID_DEVICE_INFO deviceInfo;
 			deviceInfo.cbSize = sizeof deviceInfo;
 			dataSize = sizeof deviceInfo;
-			UINT result = GetRawInputDeviceInfo(
-				device.hDevice, RIDI_DEVICEINFO, &deviceInfo, &dataSize);
+			UINT result = GetRawInputDeviceInfo(device.hDevice, RIDI_DEVICEINFO, &deviceInfo, &dataSize);
 			if (result != UINT_MAX)
 			{
 #ifdef _DEBUG
@@ -243,7 +242,7 @@ void Input::InitRawInputDevices(HWND hwnd)
 					deviceInfo.mouse.dwNumberOfButtons,
 					deviceInfo.mouse.dwSampleRate,
 					deviceInfo.mouse.fHasHorizontalWheel ? "1" : "0");
-				OutputDebugString(info);
+				//OutputDebugString(info);
 			}
 		}
 	}
@@ -264,7 +263,11 @@ Input::Input()
 	mMouseButtons[EMouseButtons::MOUSE_BUTTON_MIDDLE] = 0;
 	
 	mMouseButtonDoubleClicks = mMouseButtonsPrevious = mMouseButtons;
+
+	mKeys.fill(0);
+	mKeysPrevious.fill(0);
 }
+
 // called at the end of the frame
 void Input::PostUpdate()
 {
@@ -274,7 +277,10 @@ void Input::PostUpdate()
 	// Reset Mouse Data
 	mMouseDelta[0] = mMouseDelta[1] = 0;
 	mMouseScroll = 0;
+
+#if VERBOSE_LOGGING
 	Log::Info("Input::PostUpdate() : scroll=%d", mMouseScroll);
+#endif
 }
 
 
@@ -438,7 +444,9 @@ bool Input::IsMouseScrollUp() const
 
 bool Input::IsMouseScrollDown() const
 {
+#if VERBOSE_LOGGING
 	Log::Info("Input::IsMouseScrollDown() : scroll=%d", mMouseScroll);
+#endif
 	return mMouseScroll < 0 && !mbIgnoreInput;
 }
 
