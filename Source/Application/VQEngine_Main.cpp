@@ -41,9 +41,7 @@ void VQEngine::MainThread_Tick()
 			PostQuitMessage(0);
 		}
 	}
-
-	// TODO: populate input queue and signal Update thread 
-	//       to drain the buffered input from the queue
+	// Sleep(10);
 }
 
 bool VQEngine::Initialize(const FStartupParameters& Params)
@@ -240,6 +238,30 @@ FWindowSettings& VQEngine::GetWindowSettings(HWND hwnd)
 
 	Log::Warning("VQEngine::GetWindowSettings() : Invalid hwnd=0x%x, returning Main Window Settings", hwnd);
 	return mSettings.WndMain;
+}
+
+void VQEngine::RegisterWindowForInput(const std::unique_ptr<Window>& pWnd)
+{
+	if (pWnd)
+	{
+		mInputStates[pWnd->GetHWND()] = Input();
+	}
+}
+
+void VQEngine::UnregisterWindowForInput(const std::unique_ptr<Window>& pWnd)
+{
+	if (pWnd)
+	{
+		HWND hwnd = pWnd->GetHWND();
+		auto it = mInputStates.find(hwnd);
+		if (it == mInputStates.end())
+		{
+			Log::Error("UnregisterWindowForInput() called with an unregistered Window<%x>", hwnd);
+			return;
+		}
+
+		mInputStates.erase(it);
+	}
 }
 
 

@@ -59,6 +59,15 @@ void VQEngine::UpdateThread_Inititalize()
 {
 	mNumUpdateLoopsExecuted.store(0);
 
+#if ENABLE_RAW_INPUT
+	// initialize raw input
+	Input::InitRawInputDevices(mpWinMain->GetHWND());
+	if (mpWinDebug) Input::InitRawInputDevices(mpWinDebug->GetHWND());
+#endif
+
+	RegisterWindowForInput(mpWinMain);
+	RegisterWindowForInput(mpWinDebug);
+
 	// busy lock until render thread is initialized
 	while (!mbRenderThreadInitialized); 
 	LoadLoadingScreenData();
@@ -83,6 +92,9 @@ void VQEngine::UpdateThread_WaitForRenderThread()
 #if DEBUG_LOG_THREAD_SYNC_VERBOSE
 	Log::Info("u:wait : u=%llu, r=%llu", mNumUpdateLoopsExecuted.load(), mNumRenderLoopsExecuted.load());
 #endif
+
+	if (mbStopAllThreads)
+		return;
 
 	mpSemUpdate->Wait();
 }
@@ -144,23 +156,39 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 {
 	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
-	FFrameData& FrameData = mScene_MainWnd.mFrameData[FRAME_DATA_INDEX];
-
+	FFrameData& FrameData      = mScene_MainWnd.mFrameData[FRAME_DATA_INDEX];
+	const Input& input         = mInputStates.at(mpWinMain->GetHWND());
 	
 	// handle input
+	constexpr float CAMERA_MOVEMENT_SPEED_MULTIPLER = 0.75f;
+	constexpr float CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER = 2.0f;
 	XMVECTOR LocalSpaceTranslation = XMVectorSet(0,0,0,0);
-	if (mInput.IsKeyDown('A'))		LocalSpaceTranslation += XMLoadFloat3(&LeftVector);
-	if (mInput.IsKeyDown('D'))		LocalSpaceTranslation += XMLoadFloat3(&RightVector);
-	if (mInput.IsKeyDown('W'))		LocalSpaceTranslation += XMLoadFloat3(&ForwardVector);
-	if (mInput.IsKeyDown('S'))		LocalSpaceTranslation += XMLoadFloat3(&BackVector);
-	if (mInput.IsKeyDown('E'))		LocalSpaceTranslation += XMLoadFloat3(&UpVector);
-	if (mInput.IsKeyDown('Q'))		LocalSpaceTranslation += XMLoadFloat3(&DownVector);
-	if (mInput.IsKeyDown(VK_SHIFT))	LocalSpaceTranslation *= 2.0f;
-	//LocalSpaceTranslation *= 4.0f;
+	if (input.IsKeyDown('A'))		LocalSpaceTranslation += XMLoadFloat3(&LeftVector);
+	if (input.IsKeyDown('D'))		LocalSpaceTranslation += XMLoadFloat3(&RightVector);
+	if (input.IsKeyDown('W'))		LocalSpaceTranslation += XMLoadFloat3(&ForwardVector);
+	if (input.IsKeyDown('S'))		LocalSpaceTranslation += XMLoadFloat3(&BackVector);
+	if (input.IsKeyDown('E'))		LocalSpaceTranslation += XMLoadFloat3(&UpVector);
+	if (input.IsKeyDown('Q'))		LocalSpaceTranslation += XMLoadFloat3(&DownVector);
+	if (input.IsKeyDown(VK_SHIFT))	LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER;
+	LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_MULTIPLER;
+
+	constexpr float MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER = 1.0f;
+	if (input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_LEFT))   FrameData.TFCube.RotateAroundAxisRadians(ZAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
+	if (input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_RIGHT))  FrameData.TFCube.RotateAroundAxisRadians(YAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
+	if (input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE)) FrameData.TFCube.RotateAroundAxisRadians(XAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
+
+	constexpr float DOUBLE_CLICK_MULTIPLIER = 4.0f;
+	if (input.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_LEFT))   FrameData.TFCube.RotateAroundAxisRadians(ZAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
+	if (input.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_RIGHT))  FrameData.TFCube.RotateAroundAxisRadians(YAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
+	if (input.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE)) FrameData.TFCube.RotateAroundAxisRadians(XAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
+	
+	constexpr float SCROLL_ROTATION_MULTIPLIER = 0.5f; // 90 degs | 0.5 rads
+	if (input.IsMouseScrollUp()  ) FrameData.TFCube.RotateAroundAxisRadians(XAxis,  PI * SCROLL_ROTATION_MULTIPLIER);
+	if (input.IsMouseScrollDown()) FrameData.TFCube.RotateAroundAxisRadians(XAxis, -PI * SCROLL_ROTATION_MULTIPLIER);
 
 	// update camera
 	FCameraInput camInput(LocalSpaceTranslation);
-	camInput.DeltaMouseXY = mInput.GetMouseDelta();
+	camInput.DeltaMouseXY = input.GetMouseDelta();
 	FrameData.SceneCamera.Update(dt, camInput);
 	
 	// update scene data
@@ -187,14 +215,20 @@ void VQEngine::UpdateThread_PostUpdate()
 	mScene_MainWnd.mFrameData[FRAME_DATA_NEXT_INDEX] = mScene_MainWnd.mFrameData[FRAME_DATA_INDEX];
 
 	// input post update;
-	mInput.PostUpdate();
+	Input& i = mInputStates.at(mpWinMain->GetHWND()); // inline copies Input(), hence explicitly get refs
+	i.PostUpdate();
+	if (mpWinDebug) 
+	{
+		Input& iD = mInputStates.at(mpWinDebug->GetHWND());
+		iD.PostUpdate();
+	}
 }
 
 void VQEngine::UpdateThread_HandleEvents()
 {
 	// Swap event recording buffers so we can read & process a limited number of events safely.
 	mInputEventQueue.SwapBuffers();
-	std::queue<std::unique_ptr<IEvent>>& q = mInputEventQueue.GetBackContainer();
+	std::queue<EventPtr_t>& q = mInputEventQueue.GetBackContainer();
 
 	if (q.empty())
 		return;
@@ -212,13 +246,34 @@ void VQEngine::UpdateThread_HandleEvents()
 		case KEY_DOWN_EVENT: 
 		{
 			std::shared_ptr<KeyDownEvent> p = std::static_pointer_cast<KeyDownEvent>(pEvent);
-			mInput.UpdateKeyDown(p->wparam);
+			mInputStates.at(p->hwnd).UpdateKeyDown(p->data);
 		} break;
 		case KEY_UP_EVENT:
 		{
 			std::shared_ptr<KeyUpEvent> p = std::static_pointer_cast<KeyUpEvent>(pEvent);
-			mInput.UpdateKeyUp(p->wparam);
+			mInputStates.at(p->hwnd).UpdateKeyUp(p->wparam);
 		} break;
+		case MOUSE_MOVE_EVENT:
+		{
+			std::shared_ptr<MouseMoveEvent> p = std::static_pointer_cast<MouseMoveEvent>(pEvent);
+			mInputStates.at(p->hwnd).UpdateMousePos(p->x, p->y, 0);
+		} break;
+		case MOUSE_INPUT_EVENT:
+		{
+			std::shared_ptr<MouseInputEvent> p = std::static_pointer_cast<MouseInputEvent>(pEvent);
+			mInputStates.at(p->hwnd).UpdateMousePos_Raw(
+				  p->data.relativeX
+				, p->data.relativeY
+				, static_cast<short>(p->data.scrollDelta)
+				, GetWindow(p->hwnd)->IsMouseCaptured() || 1
+			);
+		} break;
+		case MOUSE_SCROLL_EVENT:
+		{
+			std::shared_ptr<MouseScrollEvent> p = std::static_pointer_cast<MouseScrollEvent>(pEvent);
+			mInputStates.at(p->hwnd).UpdateMousePos(0, 0, p->scroll);
+		} break;
+
 		}
 	}
 	

@@ -1,5 +1,5 @@
-//	VQEngine | DirectX11 Renderer
-//	Copyright(C) 2018  - Volkan Ilbeyli
+//	VQE
+//	Copyright(C) 2020  - Volkan Ilbeyli
 //
 //	This program is free software : you can redistribute it and / or modify
 //	it under the terms of the GNU General Public License as published by
@@ -18,11 +18,13 @@
 
 #pragma once
 
+#include "Events.h"
+
 #include <array>
 #include <unordered_map>
 #include <string>
 
-#define ENABLE_RAW_INPUT
+#define ENABLE_RAW_INPUT 1
 
 // A char[] is used for key mappings, large enough array will do
 #define NUM_MAX_KEYS 256
@@ -35,11 +37,14 @@ class Input
 public:
 	using KeyMapping = std::unordered_map<std::string_view, KeyCode>;
 	enum EMouseButtons
-	{	// windows btn codes
-		MOUSE_BUTTON_LEFT   = 1,
-		MOUSE_BUTTON_RIGHT  = 2,
-		MOUSE_BUTTON_MIDDLE = 16
+	{	// windows btn codes: https://docs.microsoft.com/en-us/windows/win32/inputdev/wm-mbuttondown
+		MOUSE_BUTTON_LEFT   = MK_LBUTTON,
+		MOUSE_BUTTON_RIGHT  = MK_RBUTTON,
+		MOUSE_BUTTON_MIDDLE = MK_MBUTTON
 	};
+
+	static void InitRawInputDevices(HWND hwnd);
+	static bool ReadRawInput_Mouse(LPARAM lParam, MouseInputEventData* pData);
 
 	Input();
 	Input(const Input&) = default;
@@ -48,25 +53,28 @@ public:
 	inline void ToggleInputBypassing() { mbIgnoreInput = !mbIgnoreInput; }
 
 	// update state
-	void UpdateKeyDown(KeyCode);
-	void UpdateKeyUp(KeyCode);
-	void UpdateButtonDown(EMouseButtons);
-	void UpdateButtonUp(EMouseButtons);
+	void UpdateKeyDown(KeyDownEventData); // includes mouse button
+	void UpdateKeyUp(KeyCode);	 // includes mouse button
 	void UpdateMousePos(long x, long y, short scroll);
+	void UpdateMousePos_Raw(int relativeX, int relativeY, short scroll, bool bMouseCaptured);
 
 	bool IsKeyDown(KeyCode) const;
 	bool IsKeyDown(const char*) const;
 	bool IsKeyDown(const std::string&) const;
 
 	bool IsKeyUp(const char*) const;
-	//bool IsMouseDown(KeyCode) const;
 	bool IsKeyTriggered(KeyCode) const;
 	bool IsKeyTriggered(const char*) const;
 	bool IsKeyTriggered(const std::string&) const;
+
 	int  MouseDeltaX() const;
 	int  MouseDeltaY() const;
-	bool IsScrollUp() const;
-	bool IsScrollDown() const;
+	bool IsMouseDown(EMouseButtons) const;
+	bool IsMouseUp(EMouseButtons) const;
+	bool IsMouseDoubleClick(EMouseButtons) const;
+	bool IsMouseTriggered(EMouseButtons) const;
+	bool IsMouseScrollUp() const;
+	bool IsMouseScrollDown() const;
 
 	void PostUpdate();
 	inline const std::array<float, 2>& GetMouseDelta() const { return mMouseDelta; }
@@ -89,9 +97,11 @@ private: // On/Off state is represented as char (8-bit) instead of bool (32-bit)
 
 	// mouse
 	std::unordered_map<EMouseButtons, char> mMouseButtons;
-	std::array<float, 2> mMouseDelta;
-	std::array<long, 2> mMousePosition;
-	short mMouseScroll;
+	std::unordered_map<EMouseButtons, char> mMouseButtonsPrevious;
+	std::unordered_map<EMouseButtons, char> mMouseButtonDoubleClicks;
+	std::array<float, 2>                    mMouseDelta;
+	std::array<long, 2>                     mMousePosition;
+	short                                   mMouseScroll;
 
 
 // SOME TEMPLATE FUN HERE --------------------------------------------------------------------

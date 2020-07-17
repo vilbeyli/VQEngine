@@ -320,12 +320,12 @@ void SwapChain::SetFullscreen(bool bState, int FSRecoveryWindowWidth, int FSReco
         Log::Error("SwapChain::ResizeTarget() : unhandled error code");
     }
 
-
     const bool bRefreshRateIsInteger = mode.RefreshRate.Denominator == 1;
+
     if(bRefreshRateIsInteger)
-        Log::Info("SwapChain::SetFullscreen() Mode: %dx%d@%dHz" , mode.Width, mode.Height, mode.RefreshRate.Numerator);
+        Log::Info("SwapChain::SetFullscreen(%s) Mode: %dx%d@%dHz" , (bState ? "true" : "false"), mode.Width, mode.Height, mode.RefreshRate.Numerator);
     else
-        Log::Info("SwapChain::SetFullscreen() Mode: %dx%d@%.2fHz", mode.Width, mode.Height, (float)mode.RefreshRate.Numerator / mode.RefreshRate.Denominator);
+        Log::Info("SwapChain::SetFullscreen(%s) Mode: %dx%d@%.2fHz", (bState ? "true" : "false"), mode.Width, mode.Height, (float)mode.RefreshRate.Numerator / mode.RefreshRate.Denominator);
 }
 
 bool SwapChain::IsFullscreen(/*IDXGIOUtput* ?*/) const

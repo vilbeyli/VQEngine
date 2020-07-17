@@ -1,5 +1,5 @@
-//	VQEngine | DirectX11 Renderer
-//	Copyright(C) 2018  - Volkan Ilbeyli
+//	VQE
+//	Copyright(C) 2020  - Volkan Ilbeyli
 //
 //	This program is free software : you can redistribute it and / or modify
 //	it under the terms of the GNU General Public License as published by
@@ -15,10 +15,14 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
+#define NOMINMAX
 
 #include "Input.h"
 
+#include "Libs/VQUtils/Source/Log.h"
+
 #include <algorithm>
+#include <cassert>
 
 #define VERBOSE_LOGGING 0
 
@@ -64,6 +68,191 @@ static const Input::KeyMapping KEY_MAP = []()
 	return std::move(m);
 }();
 
+static constexpr bool IsMouseKey(WPARAM wparam)
+{
+	return wparam == Input::EMouseButtons::MOUSE_BUTTON_LEFT
+		|| wparam == Input::EMouseButtons::MOUSE_BUTTON_RIGHT
+		|| wparam == Input::EMouseButtons::MOUSE_BUTTON_MIDDLE
+		|| wparam == (Input::EMouseButtons::MOUSE_BUTTON_LEFT | Input::EMouseButtons::MOUSE_BUTTON_RIGHT)
+		|| wparam == (Input::EMouseButtons::MOUSE_BUTTON_MIDDLE | Input::EMouseButtons::MOUSE_BUTTON_RIGHT)
+		|| wparam == (Input::EMouseButtons::MOUSE_BUTTON_MIDDLE | Input::EMouseButtons::MOUSE_BUTTON_LEFT)
+		|| wparam == (Input::EMouseButtons::MOUSE_BUTTON_MIDDLE | Input::EMouseButtons::MOUSE_BUTTON_LEFT | Input::EMouseButtons::MOUSE_BUTTON_RIGHT);
+}
+
+
+bool Input::ReadRawInput_Mouse(LPARAM lParam, MouseInputEventData* pData)
+{
+	constexpr UINT RAW_INPUT_SIZE_IN_BYTES = 48;
+
+	UINT rawInputSize = RAW_INPUT_SIZE_IN_BYTES;
+	LPBYTE inputBuffer[RAW_INPUT_SIZE_IN_BYTES];
+	ZeroMemory(inputBuffer, RAW_INPUT_SIZE_IN_BYTES);
+
+	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getrawinputdata
+	GetRawInputData(
+		(HRAWINPUT)lParam,
+		RID_INPUT,
+		inputBuffer,
+		&rawInputSize,
+		sizeof(RAWINPUTHEADER));
+
+	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-rawmouse
+	RAWINPUT* raw = (RAWINPUT*)inputBuffer;    assert(raw);
+	RAWMOUSE rawMouse = raw->data.mouse;
+	bool bIsMouseInput = false;
+
+	// Handle Wheel
+	if ((rawMouse.usButtonFlags & RI_MOUSE_WHEEL) == RI_MOUSE_WHEEL ||
+		(rawMouse.usButtonFlags & RI_MOUSE_HWHEEL) == RI_MOUSE_HWHEEL)
+	{
+		static const unsigned long defaultScrollLinesPerWheelDelta = 3;
+		static const unsigned long defaultScrollCharsPerWheelDelta = 1;
+
+		float wheelDelta = (float)(short)rawMouse.usButtonData;
+		float numTicks = wheelDelta / WHEEL_DELTA;
+
+		bool isHorizontalScroll = (rawMouse.usButtonFlags & RI_MOUSE_HWHEEL) == RI_MOUSE_HWHEEL;
+		bool isScrollByPage = false;
+		float scrollDelta = numTicks;
+
+		if (isHorizontalScroll)
+		{
+			pData->scrollChars = defaultScrollCharsPerWheelDelta;
+			SystemParametersInfo(SPI_GETWHEELSCROLLCHARS, 0, &pData->scrollChars, 0);
+			scrollDelta *= pData->scrollChars;
+		}
+		else
+		{
+			pData->scrollLines = defaultScrollLinesPerWheelDelta;
+			SystemParametersInfo(SPI_GETWHEELSCROLLLINES, 0, &pData->scrollLines, 0);
+			if (pData->scrollLines == WHEEL_PAGESCROLL)
+				isScrollByPage = true;
+			else
+				scrollDelta *= pData->scrollLines;
+		}
+
+		pData->scrollDelta = scrollDelta;
+		bIsMouseInput = true;
+	}
+
+	// Handle Move
+	if ((rawMouse.usFlags & MOUSE_MOVE_ABSOLUTE) == MOUSE_MOVE_ABSOLUTE)
+	{
+		bool isVirtualDesktop = (rawMouse.usFlags & MOUSE_VIRTUAL_DESKTOP) == MOUSE_VIRTUAL_DESKTOP;
+
+		int width = GetSystemMetrics(isVirtualDesktop ? SM_CXVIRTUALSCREEN : SM_CXSCREEN);
+		int height = GetSystemMetrics(isVirtualDesktop ? SM_CYVIRTUALSCREEN : SM_CYSCREEN);
+
+		int absoluteX = int((rawMouse.lLastX / 65535.0f) * width);
+		int absoluteY = int((rawMouse.lLastY / 65535.0f) * height);
+	}
+	else if (rawMouse.lLastX != 0 || rawMouse.lLastY != 0)
+	{
+		pData->relativeX = rawMouse.lLastX;
+		pData->relativeY = rawMouse.lLastY;
+
+		bIsMouseInput = true;
+	}
+
+
+#if LOG_RAW_INPUT
+	char szTempOutput[1024];
+	StringCchPrintf(szTempOutput, STRSAFE_MAX_CCH, TEXT("%u  Mouse: usFlags=%04x ulButtons=%04x usButtonFlags=%04x usButtonData=%04x ulRawButtons=%04x lLastX=%04x lLastY=%04x ulExtraInformation=%04x\r\n"),
+		rawInputSize,
+		raw->data.mouse.usFlags,
+		raw->data.mouse.ulButtons,
+		raw->data.mouse.usButtonFlags,
+		raw->data.mouse.usButtonData,
+		raw->data.mouse.ulRawButtons,
+		raw->data.mouse.lLastX,
+		raw->data.mouse.lLastY,
+		raw->data.mouse.ulExtraInformation);
+	OutputDebugString(szTempOutput);
+#endif
+
+	return bIsMouseInput;
+}
+
+void Input::InitRawInputDevices(HWND hwnd)
+{
+	// register mouse for raw input
+// https://msdn.microsoft.com/en-us/library/windows/desktop/ms645565.aspx
+	RAWINPUTDEVICE Rid[1];
+	Rid[0].usUsagePage = (USHORT)0x01;	// HID_USAGE_PAGE_GENERIC;
+	Rid[0].usUsage = (USHORT)0x02;	// HID_USAGE_GENERIC_MOUSE;
+	Rid[0].dwFlags = 0;
+	Rid[0].hwndTarget = hwnd;
+	if (FALSE == (RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]))))	// Cast between semantically different integer types : a Boolean type to HRESULT.
+	{
+		OutputDebugString("Failed to register raw input device!");
+	}
+
+	// get devices and print info
+	//-----------------------------------------------------
+	UINT numDevices = 0;
+	GetRawInputDeviceList(
+		NULL, &numDevices, sizeof(RAWINPUTDEVICELIST));
+	if (numDevices == 0) return;
+
+	std::vector<RAWINPUTDEVICELIST> deviceList(numDevices);
+	GetRawInputDeviceList(
+		&deviceList[0], &numDevices, sizeof(RAWINPUTDEVICELIST));
+
+	std::vector<wchar_t> deviceNameData;
+	std::wstring deviceName;
+	for (UINT i = 0; i < numDevices; ++i)
+	{
+		const RAWINPUTDEVICELIST& device = deviceList[i];
+		if (device.dwType == RIM_TYPEMOUSE)
+		{
+			char info[1024];
+			sprintf_s(info, "Mouse: Handle=0x%08p\n", device.hDevice);
+			OutputDebugString(info);
+
+			UINT dataSize = 0;
+			GetRawInputDeviceInfo(
+				device.hDevice, RIDI_DEVICENAME, nullptr, &dataSize);
+			if (dataSize)
+			{
+				deviceNameData.resize(dataSize);
+				UINT result = GetRawInputDeviceInfo(
+					device.hDevice, RIDI_DEVICENAME, &deviceNameData[0], &dataSize);
+				if (result != UINT_MAX)
+				{
+					deviceName.assign(deviceNameData.begin(), deviceNameData.end());
+
+					char info[1024];
+					std::string ndeviceName(deviceName.begin(), deviceName.end());
+					sprintf_s(info, "  Name=%s\n", ndeviceName.c_str());
+					OutputDebugString(info);
+				}
+			}
+
+			RID_DEVICE_INFO deviceInfo;
+			deviceInfo.cbSize = sizeof deviceInfo;
+			dataSize = sizeof deviceInfo;
+			UINT result = GetRawInputDeviceInfo(
+				device.hDevice, RIDI_DEVICEINFO, &deviceInfo, &dataSize);
+			if (result != UINT_MAX)
+			{
+#ifdef _DEBUG
+				assert(deviceInfo.dwType == RIM_TYPEMOUSE);
+#endif
+				char info[1024];
+				sprintf_s(info,
+					"  Id=%u, Buttons=%u, SampleRate=%u, HorizontalWheel=%s\n",
+					deviceInfo.mouse.dwId,
+					deviceInfo.mouse.dwNumberOfButtons,
+					deviceInfo.mouse.dwSampleRate,
+					deviceInfo.mouse.fHasHorizontalWheel ? "1" : "0");
+				OutputDebugString(info);
+			}
+		}
+	}
+}
+
+
+
 
 Input::Input()
 	:
@@ -75,47 +264,74 @@ Input::Input()
 	mMouseButtons[EMouseButtons::MOUSE_BUTTON_LEFT]   = 0;
 	mMouseButtons[EMouseButtons::MOUSE_BUTTON_RIGHT]  = 0;
 	mMouseButtons[EMouseButtons::MOUSE_BUTTON_MIDDLE] = 0;
+	
+	mMouseButtonDoubleClicks = mMouseButtonsPrevious = mMouseButtons;
 }
-
-
-void Input::UpdateKeyDown(KeyCode key)
+// called at the end of the frame
+void Input::PostUpdate()
 {
-	mKeys[key] = true;
+	mKeysPrevious = mKeys;
+	mMouseButtonsPrevious = mMouseButtons;
+
+	// Reset Mouse Data
+	mMouseDelta[0] = mMouseDelta[1] = 0;
+	mMouseScroll = 0;
+	Log::Info("Input::PostUpdate() : scroll=%d", mMouseScroll);
 }
 
+
+
+
+void Input::UpdateKeyDown(KeyDownEventData data)
+{
+	const auto& key = data.mouse.wparam;
+
+	if (IsMouseKey(key))
+	{
+		const EMouseButtons mouseBtn = static_cast<EMouseButtons>(key);
+
+		// if left & right mouse is clicked the same time, @key will be
+		// Input::EMouseButtons::MOUSE_BUTTON_LEFT | Input::EMouseButtons::MOUSE_BUTTON_RIGHT
+		if (mouseBtn & EMouseButtons::MOUSE_BUTTON_LEFT)   mMouseButtons[EMouseButtons::MOUSE_BUTTON_LEFT] = true;
+		if (mouseBtn & EMouseButtons::MOUSE_BUTTON_RIGHT)  mMouseButtons[EMouseButtons::MOUSE_BUTTON_RIGHT] = true;
+		if (mouseBtn & EMouseButtons::MOUSE_BUTTON_MIDDLE) mMouseButtons[EMouseButtons::MOUSE_BUTTON_MIDDLE] = true;
+		if (data.mouse.bDoubleClick)
+		{
+			if (mouseBtn & EMouseButtons::MOUSE_BUTTON_LEFT)   mMouseButtonDoubleClicks[EMouseButtons::MOUSE_BUTTON_LEFT] = true;
+			if (mouseBtn & EMouseButtons::MOUSE_BUTTON_RIGHT)  mMouseButtonDoubleClicks[EMouseButtons::MOUSE_BUTTON_RIGHT] = true;
+			if (mouseBtn & EMouseButtons::MOUSE_BUTTON_MIDDLE) mMouseButtonDoubleClicks[EMouseButtons::MOUSE_BUTTON_MIDDLE] = true;
+#if VERBOSE_LOGGING
+			Log::Info("Double Click!!");
+#endif
+		}
+	}
+	else
+		mKeys[key] = true;
+}
 
 void Input::UpdateKeyUp(KeyCode key)
 {
-	mKeys[key] = false;
-}
-
-void Input::UpdateButtonDown(EMouseButtons btn)
-{
-	mMouseButtons[btn] = true;
-}
-
-void Input::UpdateButtonUp(EMouseButtons btn)
-{
-
-	mMouseButtons[btn] = false;
+	if (IsMouseKey(key))
+	{
+		const EMouseButtons mouseBtn = static_cast<EMouseButtons>(key);
+		
+		mMouseButtons[mouseBtn] = false;
+		mMouseButtonDoubleClicks[mouseBtn] = false;
+#if VERBOSE_LOGGING
+		Log::Info("Mouse Key Up %x", key);
+#endif
+	}
+	else
+		mKeys[key] = false;
 }
 
 void Input::UpdateMousePos(long x, long y, short scroll)
 {
-#ifdef ENABLE_RAW_INPUT
-	mMouseDelta[0] = static_cast<float>(x);
-	mMouseDelta[1] = static_cast<float>(y);
-
-	// unused for now
-	mMousePosition[0] = 0;
-	mMousePosition[1] = 0;
-#else
-	mMouseDelta[0] = max(-1, min(x - mMousePosition[0], 1));
-	mMouseDelta[1] = max(-1, min(y - mMousePosition[1], 1));
+	mMouseDelta[0] = static_cast<float>(std::max(-1l, std::min(x - mMousePosition[0], 1l)));
+	mMouseDelta[1] = static_cast<float>(std::max(-1l, std::min(y - mMousePosition[1], 1l)));
 
 	mMousePosition[0] = x;
 	mMousePosition[1] = y;
-#endif
 
 #if defined(_DEBUG) && VERBOSE_LOGGING
 	Log::Info("Mouse Delta: (%d, %d)\tMouse Position: (%d, %d)\tMouse Scroll: (%d)", 
@@ -123,18 +339,33 @@ void Input::UpdateMousePos(long x, long y, short scroll)
 		mMousePosition[0], mMousePosition[1],
 		(int)scroll);
 #endif
+
 	mMouseScroll = scroll;
 }
 
-bool Input::IsScrollUp() const
+void Input::UpdateMousePos_Raw(int relativeX, int relativeY, short scroll, bool bMouseCaptured)
 {
-	return mMouseScroll > 0 && !mbIgnoreInput;
+	if (bMouseCaptured)
+	{
+		//SetCursorPos(setting.width / 2, setting.height / 2);
+
+		mMouseDelta[0] = static_cast<float>(relativeX);
+		mMouseDelta[1] = static_cast<float>(relativeY);
+
+		// unused for now
+		mMousePosition[0] = 0;
+		mMousePosition[1] = 0;
+
+		mMouseScroll = scroll;
+		if (scroll != 0)
+		{
+			Log::Info("Scroll: %d", mMouseScroll);
+		}
+	}
 }
 
-bool Input::IsScrollDown() const
-{
-	return mMouseScroll < 0 && !mbIgnoreInput;
-}
+
+
 
 bool Input::IsKeyDown(KeyCode key) const
 {
@@ -143,28 +374,21 @@ bool Input::IsKeyDown(KeyCode key) const
 
 bool Input::IsKeyDown(const char * key) const
 {
-	const KeyCode code = KEY_MAP.at(key);
+	const KeyCode& code = KEY_MAP.at(key);
 	return mKeys[code] && !mbIgnoreInput;
 }
 
 bool Input::IsKeyUp(const char * key) const
 {
-	const KeyCode code = KEY_MAP.at(key);
+	const KeyCode& code = KEY_MAP.at(key);
 	return (!mKeys[code] && mKeysPrevious[code]) && !mbIgnoreInput;
 }
 
 bool Input::IsKeyDown(const std::string& key) const
 {
-	const KeyCode code = KEY_MAP.at(key.c_str());
+	const KeyCode& code = KEY_MAP.at(key.c_str());
 	return mKeys[code] && !mbIgnoreInput;
 }
-
-#if 0
-bool Input::IsMouseDown(KeyCode btn) const
-{
-	return mMouseButtons[btn] && !mbIgnoreInput;
-}
-#endif
 
 bool Input::IsKeyTriggered(KeyCode key) const
 {
@@ -183,24 +407,41 @@ bool Input::IsKeyTriggered(const std::string & key) const
 	return !mKeysPrevious[code] && mKeys[code] && !mbIgnoreInput;
 }
 
-int Input::MouseDeltaX() const
+
+int Input::MouseDeltaX() const { return !mbIgnoreInput ? (int)mMouseDelta[0] : 0; }
+int Input::MouseDeltaY() const { return !mbIgnoreInput ? (int)mMouseDelta[1] : 0; }
+
+bool Input::IsMouseDown(EMouseButtons mbtn) const
 {
-	return !mbIgnoreInput ? mMouseDelta[0] : 0;
+	return !mbIgnoreInput && mMouseButtons.at(mbtn);
 }
 
-int Input::MouseDeltaY() const
+bool Input::IsMouseDoubleClick(EMouseButtons mbtn) const
 {
-	return !mbIgnoreInput ? mMouseDelta[1] : 0;
+	return !mbIgnoreInput && mMouseButtonDoubleClicks.at(mbtn);
 }
 
-// called at the end of the frame
-#include <algorithm>
-void Input::PostUpdate()
+bool Input::IsMouseUp(EMouseButtons mbtn) const
 {
-	mKeysPrevious = mKeys;
-	mMouseDelta[0] = mMouseDelta[1] = 0;
-	mMouseScroll = 0;
-	mMouseButtons[EMouseButtons::MOUSE_BUTTON_LEFT] = 0;
-	mMouseButtons[EMouseButtons::MOUSE_BUTTON_RIGHT] = 0;
-	mMouseButtons[EMouseButtons::MOUSE_BUTTON_MIDDLE] = 0;
+	const bool bButtonUp = !mMouseButtons.at(mbtn) && mMouseButtonsPrevious.at(mbtn);
+	return !mbIgnoreInput && bButtonUp;
 }
+
+bool Input::IsMouseTriggered(EMouseButtons mbtn) const
+{
+	const bool bButtonTriggered = mMouseButtons.at(mbtn) && !mMouseButtonsPrevious.at(mbtn);
+	return !mbIgnoreInput && bButtonTriggered;
+}
+
+bool Input::IsMouseScrollUp() const
+{
+	return mMouseScroll > 0 && !mbIgnoreInput;
+}
+
+bool Input::IsMouseScrollDown() const
+{
+	Log::Info("Input::IsMouseScrollDown() : scroll=%d", mMouseScroll);
+	return mMouseScroll < 0 && !mbIgnoreInput;
+}
+
+

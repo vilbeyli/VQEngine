@@ -74,6 +74,52 @@ IWindow::~IWindow()
 {
 }
 
+static RECT GetScreenRectOnPreferredDisplay(const RECT& preferredRect, int PreferredDisplayIndex)
+{
+    // handle preferred display
+    struct MonitorEnumCallbackParams
+    {
+        int PreferredMonitorIndex = 0;
+        const RECT* pRectOriginal = nullptr;
+        RECT* pRectNew = nullptr;
+    };
+    RECT preferredScreenRect = { CW_USEDEFAULT , CW_USEDEFAULT , CW_USEDEFAULT , CW_USEDEFAULT };
+    MonitorEnumCallbackParams p = {};
+    p.PreferredMonitorIndex = PreferredDisplayIndex;
+    p.pRectOriginal = &preferredRect;
+    p.pRectNew = &preferredScreenRect;
+
+    auto fnCallbackMonitorEnum = [](HMONITOR Arg1, HDC Arg2, LPRECT Arg3, LPARAM Arg4) -> BOOL
+    {
+        BOOL b = TRUE;
+        MonitorEnumCallbackParams* pParam = (MonitorEnumCallbackParams*)Arg4;
+
+        MONITORINFOEX monitorInfo = {};
+        monitorInfo.cbSize = sizeof(MONITORINFOEX);
+        GetMonitorInfo(Arg1, &monitorInfo);
+
+        // get monitor index from monitor name
+        std::string monitorName(monitorInfo.szDevice); // monitorName is usually something like "///./DISPLAY1"
+        monitorName = StrUtil::split(monitorName, { '/', '\\', '.' })[0];         // strMonitorIndex is "1" for "///./DISPLAY1"
+        std::string strMonitorIndex = monitorName.substr(monitorName.size() - 1); // monitorIndex    is  0  for "///./DISPLAY1"
+        const int monitorIndex = std::atoi(strMonitorIndex.c_str()) - 1;        // -1 so it starts from 0
+
+        // copy over the desired monitor's rect
+        if (monitorIndex == pParam->PreferredMonitorIndex)
+        {
+            *pParam->pRectNew = *Arg3;
+        }
+        return b;
+    };
+
+    EnumDisplayMonitors(NULL, NULL, fnCallbackMonitorEnum, (LPARAM)&p);
+    const bool bPreferredDisplayNotFound =
+        (preferredScreenRect.right == preferredScreenRect.left == preferredScreenRect.top == preferredScreenRect.bottom)
+        && (preferredScreenRect.right == CW_USEDEFAULT);
+
+    return bPreferredDisplayNotFound ? preferredScreenRect : CenterScreen(preferredScreenRect, preferredRect);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 Window::Window(const std::string& title, FWindowDesc& initParams)
     : IWindow(initParams.pWndOwner)
@@ -92,48 +138,8 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
 
     windowClass_.reset(new WindowClass("VQWindowClass", initParams.hInst, initParams.pfnWndProc));
 
-    // handle preferred display
-    struct MonitorEnumCallbackParams
-    {
-        int PreferredMonitorIndex = 0;
-        RECT* pRectOriginal = nullptr;
-        RECT* pRectNew = nullptr;
-    };
-    RECT preferredScreenRect = { CW_USEDEFAULT , CW_USEDEFAULT , CW_USEDEFAULT , CW_USEDEFAULT };
-    MonitorEnumCallbackParams p = {};
-    p.PreferredMonitorIndex = initParams.preferredDisplay;
-    p.pRectOriginal = &rect;
-    p.pRectNew = &preferredScreenRect;
+    RECT preferredScreenRect = GetScreenRectOnPreferredDisplay(rect, initParams.preferredDisplay);
 
-    auto fnCallbackMonitorEnum = [](HMONITOR Arg1, HDC Arg2, LPRECT Arg3, LPARAM Arg4) -> BOOL
-    {
-        BOOL b = TRUE;
-        MonitorEnumCallbackParams* pParam = (MonitorEnumCallbackParams*)Arg4;
-
-        MONITORINFOEX monitorInfo = {};
-        monitorInfo.cbSize = sizeof(MONITORINFOEX);
-        GetMonitorInfo(Arg1, &monitorInfo);
-
-        // get monitor index from monitor name
-        std::string monitorName(monitorInfo.szDevice); // monitorName is usually something like "///./DISPLAY1"
-        monitorName = StrUtil::split(monitorName, {'/', '\\', '.'})[0];         // strMonitorIndex is "1" for "///./DISPLAY1"
-        std::string strMonitorIndex = monitorName.substr(monitorName.size()-1); // monitorIndex    is  0  for "///./DISPLAY1"
-        const int monitorIndex = std::atoi(strMonitorIndex.c_str()) - 1;        // -1 so it starts from 0
-        
-        // copy over the desired monitor's rect
-        if (monitorIndex == pParam->PreferredMonitorIndex)
-        {
-            *pParam->pRectNew = *Arg3;
-        }
-        return b;
-    };
-
-    EnumDisplayMonitors(NULL, NULL, fnCallbackMonitorEnum, (LPARAM)&p);
-    const bool bPreferredDisplayNotFound = 
-           (preferredScreenRect.right == preferredScreenRect.left == preferredScreenRect.top == preferredScreenRect.bottom )
-        && (preferredScreenRect.right == CW_USEDEFAULT);
-    
-    RECT centeredRect = bPreferredDisplayNotFound ? preferredScreenRect : CenterScreen(preferredScreenRect, rect);
 
     // set fullscreen width & height based on the selected monitor
     this->FSwidth_  = preferredScreenRect.right  - preferredScreenRect.left;
@@ -145,8 +151,8 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
         windowClass_->GetName().c_str(),
         title.c_str(),
         FlagWindowStyle,
-        centeredRect.left,      // positions //CW_USEDEFAULT,
-        centeredRect.top ,      // positions //CW_USEDEFAULT,
+        preferredScreenRect.left,      // positions //CW_USEDEFAULT,
+        preferredScreenRect.top ,      // positions //CW_USEDEFAULT,
         rect.right - rect.left, // size
         rect.bottom - rect.top, // size
         hwnd_parent,
@@ -159,15 +165,9 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-bool IWindow::IsClosed() const
-{
-    return IsClosedImpl();
-}
-
-bool IWindow::IsFullscreen() const
-{
-    return IsFullscreenImpl();
-}
+bool IWindow::IsClosed()     const { return IsClosedImpl(); }
+bool IWindow::IsFullscreen() const { return IsFullscreenImpl(); }
+bool IWindow::IsMouseCaptured() const { return IsMouseCapturedImpl(); }
 
 ///////////////////////////////////////////////////////////////////////////////
 HWND Window::GetHWND() const
@@ -189,6 +189,7 @@ void Window::Minimize()
 
 void Window::Close()
 {
+    Log::Info("Window: Closing<%x>", this->hwnd_);
     this->isClosed_ = true;
     ::ShowWindow(hwnd_, FALSE);
     ::DestroyWindow(hwnd_);
@@ -265,6 +266,42 @@ void Window::ToggleWindowedFullscreen(SwapChain* pSwapChain /*= nullptr*/)
     }
 
     isFullscreen_ = !isFullscreen_;
+}
+
+void Window::SetMouseCapture(bool bCapture)
+{
+    Log::Warning("Capture Mouse: %d", bCapture);
+
+    isMouseCaptured_ = bCapture;
+    if (bCapture)
+    {
+        RECT rcClip;
+        GetWindowRect(hwnd_, &rcClip);
+
+        // keep clip cursor rect inside pixel area
+        // TODO: properly do it with rects
+        constexpr int PX_OFFSET = 15;
+        constexpr int PX_WND_TITLE_OFFSET = 30;
+        rcClip.left   += PX_OFFSET;
+        rcClip.right  -= PX_OFFSET;
+        rcClip.top    += PX_OFFSET + PX_WND_TITLE_OFFSET;
+        rcClip.bottom -= PX_OFFSET;
+
+        while (ShowCursor(FALSE) >= 0);
+        ClipCursor(&rcClip);
+        GetCursorPos(&mouseCapturePosition_);
+        //SetForegroundWindow(hwnd_);
+        //SetFocus(hwnd_);
+    }
+    else
+    {
+        ClipCursor(nullptr);
+        SetCursorPos(mouseCapturePosition_.x, mouseCapturePosition_.y);
+        while (ShowCursor(TRUE) <= 0);
+        //SetForegroundWindow(NULL);
+        // SetFocus(NULL);	// we still want to register events
+    }
+
 }
 
 /////////////////////////////////////////////////////////////////////////

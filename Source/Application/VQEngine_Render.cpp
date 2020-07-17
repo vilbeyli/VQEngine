@@ -81,12 +81,28 @@ void VQEngine::RenderThread_SignalUpdateThread()
 // INITIALIZE
 //
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
+static bool CheckInitialSwapchainResizeRequired(std::unordered_map<HWND, bool>& map, const FWindowSettings& setting, HWND hwnd)
+{
+	const bool bExclusiveFullscreen = setting.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN;
+	if (bExclusiveFullscreen)
+	{
+		map[hwnd] = true;
+	}
+	return bExclusiveFullscreen;
+}
 void VQEngine::RenderThread_Inititalize()
 {
+	const bool bExclusiveFullscreen_MainWnd = CheckInitialSwapchainResizeRequired(mInitialSwapchainResizeRequiredWindowLookup, mSettings.WndMain, mpWinMain->GetHWND());
+
 	FRendererInitializeParameters params = {};
 	params.Settings = mSettings.gfx;
-	params.Windows.push_back(FWindowRepresentation(mpWinMain , mSettings.gfx.bVsync, mSettings.WndMain.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN));
-	if(mpWinDebug) params.Windows.push_back(FWindowRepresentation(mpWinDebug, false, false));
+	params.Windows.push_back(FWindowRepresentation(mpWinMain , mSettings.gfx.bVsync, bExclusiveFullscreen_MainWnd));
+	
+	if (mpWinDebug) 
+	{
+		// debug window is never fullscreen for now.
+		params.Windows.push_back(FWindowRepresentation(mpWinDebug, false, false)); 
+	}
 
 	mRenderer.Initialize(params);
 	mbRenderThreadInitialized.store(true);
@@ -117,12 +133,22 @@ void VQEngine::RenderThread_Inititalize()
 			return;
 		}
 
-		// Borderless fullscreen transitions are handled through Window object
-		// Exclusive  fullscreen transitions are handled through the Swapchain
-		if (settings.DisplayMode == EDisplayMode::BORDERLESS_FULLSCREEN)
+		if (pWin)
 		{
-			// TODO: preferred screen impl
-			if (pWin) pWin->ToggleWindowedFullscreen();
+			// Borderless fullscreen transitions are handled through Window object
+			// Exclusive  fullscreen transitions are handled through the Swapchain
+			if (settings.DisplayMode == EDisplayMode::BORDERLESS_FULLSCREEN)
+			{
+			#if 0 // TODO: Initial borderless fullscreen window rect is bugged. Default to Primary Display.
+				pWin->ToggleWindowedFullscreen(&mRenderer.GetWindowSwapChain(pWin->GetHWND()));
+			#else
+				pWin->ToggleWindowedFullscreen();
+			#endif
+			}
+			if (settings.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN)
+			{
+				pWin->SetMouseCapture(true);
+			}
 		}
 	};
 
@@ -135,7 +161,6 @@ void VQEngine::RenderThread_Inititalize()
 void VQEngine::RenderThread_Exit()
 {
 	mRenderer.Unload();
-	RenderThread_UnloadWindowSizeDependentResources(mpWinMain->GetHWND());
 	mRenderer.Exit();
 }
 
@@ -219,7 +244,7 @@ void VQEngine::RenderThread_Render()
 
 	RenderThread_RenderMainWindow();
 	
-	if(!mpWinDebug->IsClosed()) 
+	if(mpWinDebug && !mpWinDebug->IsClosed())
 		RenderThread_RenderDebugWindow();
 }
 
@@ -597,7 +622,7 @@ void VQEngine::RenderThread_HandleEvents()
 	//   Otherwise, theoretically the producer (Main) thread could keep adding new events 
 	//   while we're spinning on the queue items below, and cause render thread to stall while, say, resizing.
 	mWinEventQueue.SwapBuffers();
-	std::queue<std::unique_ptr<IEvent>>& q = mWinEventQueue.GetBackContainer();
+	std::queue<EventPtr_t>& q = mWinEventQueue.GetBackContainer();
 	if (q.empty())
 		return;
 
@@ -611,26 +636,20 @@ void VQEngine::RenderThread_HandleEvents()
 
 		switch (pEvent->mType)
 		{
-		case EEventType::WINDOW_RESIZE_EVENT: 
-			// noop, we only care about the last RESIZE event to avoid calling SwapchainResize() unneccessarily
-			pResizeEvent = std::static_pointer_cast<WindowResizeEvent>(pEvent);
-
-			break;
-		case EEventType::TOGGLE_FULLSCREEN_EVENT:
-			// handle every fullscreen event
-			RenderThread_HandleToggleFullscreenEvent(pEvent.get());
-			break;
+		case EEventType::WINDOW_RESIZE_EVENT     : pResizeEvent = std::static_pointer_cast<WindowResizeEvent>(pEvent); break;
+		case EEventType::TOGGLE_FULLSCREEN_EVENT : RenderThread_HandleToggleFullscreenEvent(pEvent.get()); break;
+		case EEventType::WINDOW_CLOSE_EVENT      : RenderThread_HandleWindowCloseEvent(pEvent.get()); break;
 		}
 	}
-	// Process Window Resize
-	if (pResizeEvent)
+	
+	if (pResizeEvent) // Process only one Window Resize, if any.
 	{
-		RenderThread_HandleResizeWindowEvent(pResizeEvent.get());
+		RenderThread_HandleWindowResizeEvent(pResizeEvent.get());
 	}
 	
 }
 
-void VQEngine::RenderThread_HandleResizeWindowEvent(const IEvent* pEvent)
+void VQEngine::RenderThread_HandleWindowResizeEvent(const IEvent* pEvent)
 {
 	const WindowResizeEvent* pResizeEvent = static_cast<const WindowResizeEvent*>(pEvent);
 	const HWND&                      hwnd = pResizeEvent->hwnd;
@@ -656,6 +675,25 @@ void VQEngine::RenderThread_HandleResizeWindowEvent(const IEvent* pEvent)
 	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT);
 }
 
+void VQEngine::RenderThread_HandleWindowCloseEvent(const IEvent* pEvent)
+{
+	const WindowCloseEvent*  pWindowCloseEvent = static_cast<const WindowCloseEvent*>(pEvent);
+	const HWND&                           hwnd = pWindowCloseEvent->hwnd;
+	SwapChain&                       Swapchain = mRenderer.GetWindowSwapChain(hwnd);
+	std::unique_ptr<Window>&              pWnd = GetWindow(hwnd);
+
+	Log::Info("RenderThread: Handle Window Close event <%x>", hwnd);
+
+	RenderThread_UnloadWindowSizeDependentResources(hwnd);
+	pWindowCloseEvent->Signal_WindowDependentResourcesDestroyed.NotifyAll();
+
+	if (hwnd == mpWinMain->GetHWND())
+	{
+		mbStopAllThreads.store(true);
+		RenderThread_SignalUpdateThread();
+	}
+}
+
 void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 {
 	const ToggleFullscreenEvent* pToggleFSEvent = static_cast<const ToggleFullscreenEvent*>(pEvent);
@@ -666,8 +704,9 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 	const bool            bFullscreenStateToSet = !Swapchain.IsFullscreen();
 	std::unique_ptr<Window>&               pWnd = GetWindow(hwnd);
 
-	Log::Info("RenderThread: Handle Fullscreen(exclusiveFS=%s) transition to %dx%d"
+	Log::Info("RenderThread: Handle Fullscreen(exclusiveFS=%s), %s %dx%d"
 		, (bFullscreenStateToSet ? "true" : "false")
+		, (bFullscreenStateToSet ? "RestoreSize: " : "Transition to: ")
 		, WndSettings.Width
 		, WndSettings.Height
 	);
@@ -691,7 +730,7 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 		// Swapchain handles resizing the window through SetFullscreenState() call
 		Swapchain.SetFullscreen(bFullscreenStateToSet, WndSettings.Width, WndSettings.Height);
 
-		// TODO: capture/release mouse
+		pWnd->SetMouseCapture(bFullscreenStateToSet);
 		
 		if (!bFullscreenStateToSet)
 		{
@@ -700,6 +739,17 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 			// will be visible, but not interactable and also not visible in taskbar.
 			// Explicitly calling Show() here fixes the situation.
 			pWnd->Show();
+
+			// Handle one-time transition: Swapchains starting in exclusive fullscreen will not trigger
+			// a Resize() event on the first Alt+Tab (Fullscreen -> Windowed). Doing it always in Swapchain.Resize()
+			// will result flickering from double resizing.
+			auto it = mInitialSwapchainResizeRequiredWindowLookup.find(hwnd);
+			const bool bWndNeedsResize = it != mInitialSwapchainResizeRequiredWindowLookup.end() && it->second;
+			if (bWndNeedsResize)
+			{
+				mInitialSwapchainResizeRequiredWindowLookup.erase(it);
+				Swapchain.Resize(WndSettings.Width, WndSettings.Height);
+			}
 		}
 	}
 

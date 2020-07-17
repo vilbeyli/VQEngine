@@ -84,9 +84,16 @@ public:
 	virtual void OnToggleFullscreen(HWND) = 0;
 	virtual void OnWindowMinimize(IWindow* pWnd) = 0;
 	virtual void OnWindowFocus(IWindow* pWnd) = 0;
-	virtual void OnWindowClose(IWindow* pWnd) = 0;
-	virtual void OnWindowKeyDown(HWND, WPARAM) = 0;
-	virtual void OnWindowKeyUp(HWND, WPARAM) = 0;
+	virtual void OnWindowClose(HWND hwnd_) = 0;
+	
+	virtual void OnKeyDown(HWND, WPARAM) = 0;
+	virtual void OnKeyUp(HWND, WPARAM) = 0;
+
+	virtual void OnMouseButtonDown(HWND hwnd, WPARAM wParam, bool bIsDoubleClick) = 0;
+	virtual void OnMouseButtonUp(HWND, WPARAM) = 0;
+	virtual void OnMouseScroll(HWND hwnd, short scrollDirection) = 0;
+	virtual void OnMouseMove(HWND hwnd, long x, long y) = 0;
+	virtual void OnMouseInput(HWND hwnd, LPARAM lParam) = 0; // Raw Input
 };
 
 struct IWindow
@@ -102,10 +109,12 @@ public:
 	virtual void Show()     = 0;
 	virtual void ToggleWindowedFullscreen(SwapChain* pSwapChain = nullptr) = 0;
 	virtual void Minimize() = 0;
+	virtual void SetMouseCapture(bool bCapture) = 0;
 	virtual void Close()    = 0;
 
 	bool IsClosed() const;
 	bool IsFullscreen() const;
+	bool IsMouseCaptured() const;
 
 	inline int GetWidth() const            { return GetWidthImpl(); }
 	inline int GetHeight() const           { return GetHeightImpl(); }
@@ -116,6 +125,7 @@ public:
 private:
 	virtual bool IsClosedImpl() const = 0;
 	virtual bool IsFullscreenImpl() const = 0;
+	virtual bool IsMouseCapturedImpl() const = 0;
 	virtual int GetWidthImpl() const = 0;
 	virtual int GetHeightImpl() const = 0;
 	virtual int GetFullscreenWidthImpl() const = 0;
@@ -145,21 +155,23 @@ public:
 
 	void Show() override;
 	void Minimize() override;
-	void Close() override;
+	void Close() override; // must be called from the WinMain Thread
 	void ToggleWindowedFullscreen(SwapChain* pSwapChain = nullptr) override;
+	void SetMouseCapture(bool bCapture) override;
 
-	// updates width_ and height_ members
 	inline void OnResize(int w, int h) { width_ = w; height_ = h; }
 	inline void SetFullscreen(bool b) { isFullscreen_ = b; }
 
 private:
 	inline bool IsClosedImpl()  const override { return isClosed_; }
 	inline bool IsFullscreenImpl() const override { return isFullscreen_; }
+	inline bool IsMouseCapturedImpl() const override { return isMouseCaptured_; }
 	inline int  GetWidthImpl()  const override { return width_; }
 	inline int  GetHeightImpl() const override { return height_; }
 	inline int  GetFullscreenWidthImpl()  const override { return FSwidth_; }
 	inline int  GetFullscreenHeightImpl() const override { return FSheight_; }
 
+private:
 	std::unique_ptr<WindowClass> windowClass_;
 	HWND hwnd_ = 0;
 	RECT rect_;
@@ -168,4 +180,6 @@ private:
 	bool isFullscreen_ = false;
 	UINT windowStyle_;
 	int FSwidth_ = -1, FSheight_ = -1;
+	bool isMouseCaptured_ = false;
+	POINT mouseCapturePosition_ = { 0, 0 };
 };
