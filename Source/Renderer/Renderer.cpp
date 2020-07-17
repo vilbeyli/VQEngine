@@ -124,7 +124,7 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 		swapChainDesc.pWindow = &wnd;
 		swapChainDesc.pCmdQueue = &ctx.PresentQueue;
 		swapChainDesc.bVSync = ctx.bVsync;
-		swapChainDesc.bFullscreen = wnd.bFullscreen;
+		swapChainDesc.bFullscreen = wnd.bExclusiveFullscreen;
 		ctx.SwapChain.Create(swapChainDesc);
 
 		// Create command allocators

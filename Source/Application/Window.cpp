@@ -69,11 +69,6 @@ static RECT CenterScreen(const RECT& screenRect, const RECT& wndRect)
     return centered;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-IWindow::~IWindow()
-{
-}
-
 static RECT GetScreenRectOnPreferredDisplay(const RECT& preferredRect, int PreferredDisplayIndex)
 {
     // handle preferred display
@@ -118,6 +113,13 @@ static RECT GetScreenRectOnPreferredDisplay(const RECT& preferredRect, int Prefe
         && (preferredScreenRect.right == CW_USEDEFAULT);
 
     return bPreferredDisplayNotFound ? preferredScreenRect : CenterScreen(preferredScreenRect, preferredRect);
+}
+
+
+
+///////////////////////////////////////////////////////////////////////////////
+IWindow::~IWindow()
+{
 }
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -51,7 +51,7 @@ FWindowRepresentation::FWindowRepresentation(const std::unique_ptr<Window>& pWnd
     , width(pWnd->GetWidth())
     , height(pWnd->GetHeight())
     , bVSync(bVSyncIn)
-    , bFullscreen(bFullscreenIn)
+    , bExclusiveFullscreen(bFullscreenIn)
 {}
 
 // The programming model for swap chains in D3D12 is not identical to that in earlier versions of D3D. 

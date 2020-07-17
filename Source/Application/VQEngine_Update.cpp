@@ -242,7 +242,6 @@ void VQEngine::UpdateThread_HandleEvents()
 
 		switch (pEvent->mType)
 		{
-
 		case KEY_DOWN_EVENT: 
 		{
 			std::shared_ptr<KeyDownEvent> p = std::static_pointer_cast<KeyDownEvent>(pEvent);
@@ -253,27 +252,27 @@ void VQEngine::UpdateThread_HandleEvents()
 			std::shared_ptr<KeyUpEvent> p = std::static_pointer_cast<KeyUpEvent>(pEvent);
 			mInputStates.at(p->hwnd).UpdateKeyUp(p->wparam);
 		} break;
+
 		case MOUSE_MOVE_EVENT:
 		{
 			std::shared_ptr<MouseMoveEvent> p = std::static_pointer_cast<MouseMoveEvent>(pEvent);
 			mInputStates.at(p->hwnd).UpdateMousePos(p->x, p->y, 0);
-		} break;
-		case MOUSE_INPUT_EVENT:
-		{
-			std::shared_ptr<MouseInputEvent> p = std::static_pointer_cast<MouseInputEvent>(pEvent);
-			mInputStates.at(p->hwnd).UpdateMousePos_Raw(
-				  p->data.relativeX
-				, p->data.relativeY
-				, static_cast<short>(p->data.scrollDelta)
-				, GetWindow(p->hwnd)->IsMouseCaptured() || 1
-			);
 		} break;
 		case MOUSE_SCROLL_EVENT:
 		{
 			std::shared_ptr<MouseScrollEvent> p = std::static_pointer_cast<MouseScrollEvent>(pEvent);
 			mInputStates.at(p->hwnd).UpdateMousePos(0, 0, p->scroll);
 		} break;
-
+		case MOUSE_INPUT_EVENT:
+		{
+			std::shared_ptr<MouseInputEvent> p = std::static_pointer_cast<MouseInputEvent>(pEvent);
+			mInputStates.at(p->hwnd).UpdateMousePos_Raw(
+				p->data.relativeX
+				, p->data.relativeY
+				, static_cast<short>(p->data.scrollDelta)
+				, GetWindow(p->hwnd)->IsMouseCaptured() || 1 // TODO
+			);
+		} break;
 		}
 	}
 	

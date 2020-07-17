@@ -35,7 +35,7 @@ struct FWindowRepresentation
 {
 	HWND hwnd; int width, height;
 	bool bVSync;
-	bool bFullscreen;
+	bool bExclusiveFullscreen;
 	FWindowRepresentation(const std::unique_ptr<Window>& pWnd, bool bVSync, bool bFullscreen);
 };
 struct FSwapChainCreateDesc

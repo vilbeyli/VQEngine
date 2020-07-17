@@ -188,6 +188,8 @@ void VQEngine::InitializeBuiltinMeshes()
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height)
 {
+	assert(Width >= 1 && Height >= 1);
+
 	if (hwnd == mpWinMain->GetHWND())
 	{
 		RenderingResources_MainWindow& r = mResources_MainWnd;
@@ -703,9 +705,11 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 	const bool   bExclusiveFullscreenTransition = WndSettings.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN;
 	const bool            bFullscreenStateToSet = !Swapchain.IsFullscreen();
 	std::unique_ptr<Window>&               pWnd = GetWindow(hwnd);
+	const int                             WIDTH = bFullscreenStateToSet ? pWnd->GetFullscreenWidth()  : pWnd->GetWidth();
+	const int                            HEIGHT = bFullscreenStateToSet ? pWnd->GetFullscreenHeight() : pWnd->GetHeight();
 
 	Log::Info("RenderThread: Handle Fullscreen(exclusiveFS=%s), %s %dx%d"
-		, (bFullscreenStateToSet ? "true" : "false")
+		, (bExclusiveFullscreenTransition ? "true" : "false")
 		, (bFullscreenStateToSet ? "RestoreSize: " : "Transition to: ")
 		, WndSettings.Width
 		, WndSettings.Height
@@ -761,8 +765,6 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 		pWnd->ToggleWindowedFullscreen(&Swapchain);
 	}
 
-	const int WIDTH  = bFullscreenStateToSet ? pWnd->GetFullscreenWidth()  : pWnd->GetWidth();
-	const int HEIGHT = bFullscreenStateToSet ? pWnd->GetFullscreenHeight() : pWnd->GetHeight();
 	RenderThread_UnloadWindowSizeDependentResources(hwnd);
 	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT);
 }
