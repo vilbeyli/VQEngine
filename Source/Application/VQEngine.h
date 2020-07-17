@@ -163,8 +163,6 @@ public:
 	void RenderThread_RenderDebugWindow();
 
 
-	// Processes the event queue populated by the VQEngine_Main.cpp thread
-	void RenderThread_HandleEvents();
 
 	// ---------------------------------------------------------
 	// Update Thread
@@ -193,8 +191,6 @@ public:
 	// - Computes visibility per SceneView
 	void UpdateThread_PostUpdate();
 
-	// Processes the event queue populated by the VQEngine_Main.cpp thread
-	void UpdateThread_HandleEvents();
 
 //-----------------------------------------------------------------------
 
@@ -245,9 +241,12 @@ private:
 	// input
 	std::unordered_map<HWND, Input> mInputStates;
 
-	// events
-	EventQueue_t                   mWinEventQueue;
-	EventQueue_t                   mInputEventQueue;
+	// events Windows->VQE
+	EventQueue_t                   mEventQueue_WinToVQE_Renderer;
+	EventQueue_t                   mEventQueue_WinToVQE_Update;
+
+	// events VQE->Windows
+	EventQueue_t                   mEventQueue_VQEToWin_Main;
 
 	// timer / profiler
 	Timer                          mTimer;
@@ -269,6 +268,8 @@ private:
 	void                     InitializeThreads();
 	void                     ExitThreads();
 
+	void                     HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWindowSettings& settings);
+
 	void                     InitializeBuiltinMeshes();
 	void                     LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete
 	void                     Load_SceneData_Dispatch();
@@ -277,6 +278,11 @@ private:
 	HRESULT                  RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderContext& ctx);
 	HRESULT                  RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx);
 	
+
+	void                     UpdateThread_HandleEvents();
+	void                     RenderThread_HandleEvents();
+	void                     MainThread_HandleEvents();
+
 	void                     RenderThread_HandleWindowResizeEvent(const IEvent* pEvent);
 	void                     RenderThread_HandleWindowCloseEvent(const IEvent* pEvent);
 	void                     RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent);

@@ -103,62 +103,6 @@ void VQRenderer::Initialize(const FRendererInitializeParameters& params)
 	mCopyQueue.Create(pVQDevice, CommandQueue::ECommandQueueType::COPY);
 
 
-	// Create the present queues & swapchains associated with each window passed into the VQRenderer
-	// Swapchains contain their own render targets 
-	const size_t NumWindows = params.Windows.size();
-	for(size_t i = 0; i< NumWindows; ++i)
-	{
-		const FWindowRepresentation& wnd = params.Windows[i];
-		
-
-		FWindowRenderContext ctx = {};
-
-		ctx.pDevice = pVQDevice;
-		ctx.PresentQueue.Create(ctx.pDevice, CommandQueue::ECommandQueueType::GFX); // Create the GFX queue for presenting the SwapChain
-		ctx.bVsync = wnd.bVSync; // we store bVSync in ctx instead of SwapChain and provide it through SwapChain.Present() param : either way should be fine
-
-		// Create the SwapChain
-		FSwapChainCreateDesc swapChainDesc = {};
-		swapChainDesc.numBackBuffers = NUM_SWAPCHAIN_BUFFERS;
-		swapChainDesc.pDevice = ctx.pDevice->GetDevicePtr();
-		swapChainDesc.pWindow = &wnd;
-		swapChainDesc.pCmdQueue = &ctx.PresentQueue;
-		swapChainDesc.bVSync = ctx.bVsync;
-		swapChainDesc.bFullscreen = wnd.bExclusiveFullscreen;
-		ctx.SwapChain.Create(swapChainDesc);
-
-		// Create command allocators
-		ctx.mCommandAllocatorsGFX.resize(NUM_SWAPCHAIN_BUFFERS);
-		ctx.mCommandAllocatorsCompute.resize(NUM_SWAPCHAIN_BUFFERS);
-		ctx.mCommandAllocatorsCopy.resize(NUM_SWAPCHAIN_BUFFERS);
-		for (int f = 0; f < NUM_SWAPCHAIN_BUFFERS; ++f)
-		{
-			ID3D12CommandAllocator* pCmdAlloc = {};
-			pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT , IID_PPV_ARGS(&ctx.mCommandAllocatorsGFX[f]));
-			pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&ctx.mCommandAllocatorsCompute[f]));
-			pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY   , IID_PPV_ARGS(&ctx.mCommandAllocatorsCopy[f]));
-			SetName(ctx.mCommandAllocatorsGFX[f], "RenderContext::CmdAllocGFX[%d]", f);
-			SetName(ctx.mCommandAllocatorsCompute[f], "RenderContext::CmdAllocCompute[%d]", f);
-			SetName(ctx.mCommandAllocatorsCopy[f], "RenderContext::CmdAllocCopy[%d]", f);
-		}
-
-		// Create command lists
-		pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, ctx.mCommandAllocatorsGFX[0], nullptr, IID_PPV_ARGS(&ctx.pCmdList_GFX));
-		ctx.pCmdList_GFX->SetName(L"RenderContext::CmdListGFX");
-		ctx.pCmdList_GFX->Close();
-
-		// Create dynamic buffer heap
-		ctx.mDynamicHeap_ConstantBuffer.Create(pDevice, NUM_SWAPCHAIN_BUFFERS, 16 * MEGABYTE);
-
-		// Save other context data
-		ctx.MainRTResolutionX = wnd.width;
-		ctx.MainRTResolutionY = wnd.height;
-
-
-		// save the render context
-		this->mRenderContextLookup.emplace(wnd.hwnd, std::move(ctx));
-	}
-
 	// Initialize memory
 	InitializeD3D12MA();
 	InitializeHeaps();
@@ -252,6 +196,59 @@ short VQRenderer::GetSwapChainBackBufferCount(HWND hwnd) const
 	
 }
 
+
+void VQRenderer::InitializeRenderContext(const FWindowRepresentation& WndDesc, int NumSwapchainBuffers)
+{
+	Device*       pVQDevice = &mDevice;
+	ID3D12Device* pDevice = pVQDevice->GetDevicePtr();
+
+	FWindowRenderContext ctx = {};
+
+	ctx.pDevice = pVQDevice;
+	ctx.PresentQueue.Create(ctx.pDevice, CommandQueue::ECommandQueueType::GFX); // Create the GFX queue for presenting the SwapChain
+	ctx.bVsync = WndDesc.bVSync; // we store bVSync in ctx instead of SwapChain and provide it through SwapChain.Present() param : either way should be fine
+
+	// Create the SwapChain
+	FSwapChainCreateDesc swapChainDesc = {};
+	swapChainDesc.numBackBuffers = NumSwapchainBuffers;
+	swapChainDesc.pDevice = ctx.pDevice->GetDevicePtr();
+	swapChainDesc.pWindow = &WndDesc;
+	swapChainDesc.pCmdQueue = &ctx.PresentQueue;
+	swapChainDesc.bVSync = ctx.bVsync;
+	swapChainDesc.bFullscreen = WndDesc.bExclusiveFullscreen;
+	ctx.SwapChain.Create(swapChainDesc);
+
+	// Create command allocators
+	ctx.mCommandAllocatorsGFX.resize(NumSwapchainBuffers);
+	ctx.mCommandAllocatorsCompute.resize(NumSwapchainBuffers);
+	ctx.mCommandAllocatorsCopy.resize(NumSwapchainBuffers);
+	for (int f = 0; f < NumSwapchainBuffers; ++f)
+	{
+		ID3D12CommandAllocator* pCmdAlloc = {};
+		pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&ctx.mCommandAllocatorsGFX[f]));
+		pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&ctx.mCommandAllocatorsCompute[f]));
+		pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&ctx.mCommandAllocatorsCopy[f]));
+		SetName(ctx.mCommandAllocatorsGFX[f], "RenderContext::CmdAllocGFX[%d]", f);
+		SetName(ctx.mCommandAllocatorsCompute[f], "RenderContext::CmdAllocCompute[%d]", f);
+		SetName(ctx.mCommandAllocatorsCopy[f], "RenderContext::CmdAllocCopy[%d]", f);
+	}
+
+	// Create command lists
+	pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, ctx.mCommandAllocatorsGFX[0], nullptr, IID_PPV_ARGS(&ctx.pCmdList_GFX));
+	ctx.pCmdList_GFX->SetName(L"RenderContext::CmdListGFX");
+	ctx.pCmdList_GFX->Close();
+
+	// Create dynamic buffer heap
+	ctx.mDynamicHeap_ConstantBuffer.Create(pDevice, NumSwapchainBuffers, 16 * MEGABYTE);
+
+	// Save other context data
+	ctx.MainRTResolutionX = WndDesc.width;
+	ctx.MainRTResolutionY = WndDesc.height;
+
+
+	// save the render context
+	this->mRenderContextLookup.emplace(WndDesc.hwnd, std::move(ctx));
+}
 
 bool VQRenderer::CheckContext(HWND hwnd) const
 {

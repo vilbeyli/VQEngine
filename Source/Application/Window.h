@@ -146,6 +146,8 @@ struct FWindowDesc
 	int preferredDisplay = 0;
 };
 
+#define __MUST_BE_CALLED_FROM_WINMAIN_THREAD_ 
+
 class Window : public IWindow
 {
 public:
@@ -153,11 +155,11 @@ public:
 
 	HWND GetHWND() const;
 
-	void Show() override;
-	void Minimize() override;
-	void Close() override; // must be called from the WinMain Thread
-	void ToggleWindowedFullscreen(SwapChain* pSwapChain = nullptr) override;
-	void SetMouseCapture(bool bCapture) override;
+	void                                       Show() override;
+	void                                       Minimize() override;
+	void                                       ToggleWindowedFullscreen(SwapChain* pSwapChain = nullptr) override;
+	void __MUST_BE_CALLED_FROM_WINMAIN_THREAD_ Close() override;
+	void __MUST_BE_CALLED_FROM_WINMAIN_THREAD_ SetMouseCapture(bool bCapture) override;
 
 	inline void OnResize(int w, int h) { width_ = w; height_ = h; }
 	inline void SetFullscreen(bool b) { isFullscreen_ = b; }

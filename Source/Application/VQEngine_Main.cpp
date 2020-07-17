@@ -41,7 +41,10 @@ void VQEngine::MainThread_Tick()
 			PostQuitMessage(0);
 		}
 	}
+
 	// Sleep(10);
+
+	MainThread_HandleEvents();
 }
 
 bool VQEngine::Initialize(const FStartupParameters& Params)
@@ -150,7 +153,7 @@ void VQEngine::InititalizeEngineSettings(const FStartupParameters& Params)
 
 void VQEngine::InitializeApplicationWindows(const FStartupParameters& Params)
 {
-	auto fnInitializeWindows = [&](const FWindowSettings& settings, HINSTANCE hInstance, std::unique_ptr<Window>& pWin)
+	auto fnInitializeWindow = [&](const FWindowSettings& settings, HINSTANCE hInstance, std::unique_ptr<Window>& pWin)
 	{
 		FWindowDesc desc = {};
 		desc.width = settings.Width;
@@ -161,14 +164,15 @@ void VQEngine::InitializeApplicationWindows(const FStartupParameters& Params)
 		desc.bFullscreen = settings.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN;
 		desc.preferredDisplay = settings.PreferredDisplay;
 		pWin.reset(new Window(settings.Title, desc));
+		pWin->pOwner->OnWindowCreate(pWin.get());
 	};
 
-	fnInitializeWindows(mSettings.WndMain, Params.hExeInstance, mpWinMain);
+	fnInitializeWindow(mSettings.WndMain, Params.hExeInstance, mpWinMain);
 	Log::Info("Created main window<0x%x>: %dx%d", mpWinMain->GetHWND(), mpWinMain->GetWidth(), mpWinMain->GetHeight());
 
 	if (mSettings.bShowDebugWindow)
 	{
-		fnInitializeWindows(mSettings.WndDebug, Params.hExeInstance, mpWinDebug);
+		fnInitializeWindow(mSettings.WndDebug, Params.hExeInstance, mpWinDebug);
 		Log::Info("Created debug window<0x%x>: %dx%d", mpWinDebug->GetHWND(), mpWinDebug->GetWidth(), mpWinDebug->GetHeight());
 	}
 }
@@ -198,6 +202,42 @@ void VQEngine::ExitThreads()
 
 	mUpdateWorkerThreads.Exit();
 	mRenderWorkerThreads.Exit();
+}
+
+void VQEngine::HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWindowSettings& settings)
+{
+	if (!pWin) return;
+
+	// TODO: generic solution to multi window/display settings. 
+	//       For now, simply prevent debug wnd occupying main wnd's display.
+	if (mpWinMain->IsFullscreen()
+		&& (mSettings.WndMain.PreferredDisplay == mSettings.WndDebug.PreferredDisplay)
+		&& settings.IsDisplayModeFullscreen()
+		&& pWin != mpWinMain)
+	{
+		Log::Warning("Debug window and Main window cannot be Fullscreen on the same display!");
+		pWin->SetFullscreen(false);
+		// TODO: as a more graceful fallback, move it to the next monitor and keep fullscreen
+		return;
+	}
+
+	if (pWin)
+	{
+		// Borderless fullscreen transitions are handled through Window object
+		// Exclusive  fullscreen transitions are handled through the Swapchain
+		if (settings.DisplayMode == EDisplayMode::BORDERLESS_FULLSCREEN)
+		{
+#if 0 // TODO: Initial borderless fullscreen window rect is bugged. Default to Primary Display.
+			pWin->ToggleWindowedFullscreen(&mRenderer.GetWindowSwapChain(pWin->GetHWND()));
+#else
+			pWin->ToggleWindowedFullscreen();
+#endif
+		}
+		if (settings.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN)
+		{
+			pWin->SetMouseCapture(true);
+		}
+	}
 }
 
 

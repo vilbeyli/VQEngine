@@ -36,16 +36,23 @@
 //
 enum EEventType
 {
-	// Windows window-related events
+	// Windows->VQE window events
 	WINDOW_RESIZE_EVENT = 0,
 	WINDOW_CLOSE_EVENT,
 	TOGGLE_FULLSCREEN_EVENT,
 	SET_FULLSCREEN_EVENT,
+	
+	// Windows->VQE input events
 	KEY_DOWN_EVENT,
 	KEY_UP_EVENT,
 	MOUSE_MOVE_EVENT,
 	MOUSE_INPUT_EVENT,
 	MOUSE_SCROLL_EVENT,
+
+	// VQE->Windows window events
+	MOUSE_CAPTURE_EVENT,
+	HANDLE_WINDOW_TRANSITIONS_EVENT,
+
 
 	NUM_EVENT_TYPES
 };
@@ -56,6 +63,26 @@ struct IEvent
 
 	EEventType mType = EEventType::NUM_EVENT_TYPES;
 	HWND       hwnd = 0;
+};
+
+
+// -------------------------------------------------------------------------------------
+struct SetMouseCaptureEvent : public IEvent
+{
+	SetMouseCaptureEvent(HWND hwnd_, bool bCap, bool bVis) 
+		: IEvent(EEventType::MOUSE_CAPTURE_EVENT, hwnd_)
+		, bCapture(bCap)
+		, bVisible(bVis) 
+	{}
+	bool bCapture = false;
+	bool bVisible = false;
+};
+
+struct HandleWindowTransitionsEvent : public IEvent
+{
+	HandleWindowTransitionsEvent(HWND hwnd_)
+		: IEvent(EEventType::HANDLE_WINDOW_TRANSITIONS_EVENT, hwnd_)
+	{}
 };
 
 // -------------------------------------------------------------------------------------

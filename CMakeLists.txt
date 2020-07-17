@@ -58,6 +58,7 @@ set (SourceVQE
     "Source/Application/VQEngine_Render.cpp"
     "Source/Application/VQEngine_Update.cpp"
     "Source/Application/VQEngine_WindowEvents.cpp"
+    "Source/Application/VQEngine_EventHandlers.cpp"
     "Source/Application/Events.cpp"
     "Source/Application/Mesh.cpp"
     "Source/Application/Geometry.cpp"

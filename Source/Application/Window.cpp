@@ -289,7 +289,16 @@ void Window::SetMouseCapture(bool bCapture)
         rcClip.top    += PX_OFFSET + PX_WND_TITLE_OFFSET;
         rcClip.bottom -= PX_OFFSET;
 
-        while (ShowCursor(FALSE) >= 0);
+        // https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showcursor
+        //while (ShowCursor(FALSE) >= 0);
+        int hr = ShowCursor(FALSE);
+        switch (hr)
+        {
+        case -1: Log::Warning("ShowCursor(FALSE): No mouse is installed!"); break;
+        case 0: break;
+        default: Log::Info("ShowCursor(FALSE): %d", hr); break;
+        }
+
         ClipCursor(&rcClip);
         GetCursorPos(&mouseCapturePosition_);
         //SetForegroundWindow(hwnd_);

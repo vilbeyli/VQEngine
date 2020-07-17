@@ -37,7 +37,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	IWindow* pWindow = reinterpret_cast<IWindow*> (::GetWindowLongPtr(hwnd, GWLP_USERDATA));
 	if (!pWindow)
 	{
-		//Log::Warning("WndProc::pWindow=nullptr");
+		// WM_CREATE will be sent before SetWindowLongPtr() is called, 
+		// hence we'll call OnWindowCreate from inside Window class.
+		///if(uMsg == WM_CREATE) Log::Warning("WM_CREATE without pWindow");
+
+		#if 0
+		Log::Warning("WndProc::pWindow=nullptr");
+		#endif
 		return DefWindowProc(hwnd, uMsg, wParam, lParam);
 	}
 
@@ -48,7 +54,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	// WINDOW
 	//
 	// https://docs.microsoft.com/en-us/windows/win32/learnwin32/managing-application-state-
-	case WM_CREATE: if (pWindow->pOwner) pWindow->pOwner->OnWindowCreate(pWindow); return 0;
 
 	// https://docs.microsoft.com/en-us/windows/win32/learnwin32/writing-the-window-procedure
 	case WM_SIZE:   if (pWindow->pOwner) pWindow->pOwner->OnWindowResize(hwnd); return 0;
@@ -128,10 +133,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		if (pWindow->pOwner) pWindow->pOwner->OnMouseScroll(hwnd, zDelta); return 0;
 	}
 #endif // ENABLE_RAW_INPUT
-
-	// TODO: MOUSE CAPTURE
-
-
 	}
 
 
@@ -160,22 +161,23 @@ void VQEngine::OnWindowResize(HWND hWnd)
 	if (w == 0) { w = 8; Log::Warning("WND RESIZE TOO SMALL"); }
 #endif
 
-	mWinEventQueue.AddItem(std::make_unique<WindowResizeEvent>(w, h, hWnd));
+	mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<WindowResizeEvent>(w, h, hWnd));
 }
 
 void VQEngine::OnToggleFullscreen(HWND hWnd)
 {
-	mWinEventQueue.AddItem(std::make_unique<ToggleFullscreenEvent>(hWnd));
+	mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<ToggleFullscreenEvent>(hWnd));
 }
 
 void VQEngine::OnWindowCreate(IWindow* pWnd)
 {
+	//Log::Info("WinCreate");
 }
 
 void VQEngine::OnWindowClose(HWND hwnd_)
 {
 	std::shared_ptr<WindowCloseEvent> ptr = std::make_shared<WindowCloseEvent>(hwnd_);
-	mWinEventQueue.AddItem(ptr);
+	mEventQueue_WinToVQE_Renderer.AddItem(ptr);
 
 	ptr->Signal_WindowDependentResourcesDestroyed.Wait();
 	if (hwnd_ == mpWinMain->GetHWND())
@@ -202,12 +204,12 @@ void VQEngine::OnWindowFocus(IWindow* pWindow)
 // Update Thread will process the queue at the beginning of an update loop
 void VQEngine::OnKeyDown(HWND hwnd, WPARAM wParam)
 {
-	mInputEventQueue.AddItem(std::make_unique<KeyDownEvent>(hwnd, wParam));
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<KeyDownEvent>(hwnd, wParam));
 }
 
 void VQEngine::OnKeyUp(HWND hwnd, WPARAM wParam)
 {
-	mInputEventQueue.AddItem(std::make_unique<KeyUpEvent>(hwnd, wParam));
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<KeyUpEvent>(hwnd, wParam));
 }
 
 
@@ -218,24 +220,24 @@ void VQEngine::OnKeyUp(HWND hwnd, WPARAM wParam)
 // Update Thread will process the queue at the beginning of an update loop
 void VQEngine::OnMouseButtonDown(HWND hwnd, WPARAM wParam, bool bIsDoubleClick)
 {
-	mInputEventQueue.AddItem(std::make_unique<KeyDownEvent>(hwnd, wParam, bIsDoubleClick));
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<KeyDownEvent>(hwnd, wParam, bIsDoubleClick));
 }
 
 void VQEngine::OnMouseButtonUp(HWND hwnd, WPARAM wParam)
 {
-	mInputEventQueue.AddItem(std::make_unique<KeyUpEvent>(hwnd, wParam));
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<KeyUpEvent>(hwnd, wParam));
 }
 
 void VQEngine::OnMouseScroll(HWND hwnd, short scroll)
 {
-	mInputEventQueue.AddItem(std::make_unique<MouseScrollEvent>(hwnd, scroll));
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<MouseScrollEvent>(hwnd, scroll));
 }
 
 
 void VQEngine::OnMouseMove(HWND hwnd, long x, long y)
 {
 	//Log::Info("MouseMove : (%ld, %ld)", x, y);
-	mInputEventQueue.AddItem(std::make_unique<MouseMoveEvent>(hwnd, x, y));
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<MouseMoveEvent>(hwnd, x, y));
 }
 
 
@@ -246,7 +248,7 @@ void VQEngine::OnMouseInput(HWND hwnd, LPARAM lParam)
 
 	if (bMouseInputEvent)
 	{
-		mInputEventQueue.AddItem(std::make_shared<MouseInputEvent>(data, hwnd));
+		mEventQueue_WinToVQE_Update.AddItem(std::make_shared<MouseInputEvent>(data, hwnd));
 	}
 }
 

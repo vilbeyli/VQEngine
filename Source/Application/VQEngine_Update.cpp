@@ -70,6 +70,8 @@ void VQEngine::UpdateThread_Inititalize()
 
 	// busy lock until render thread is initialized
 	while (!mbRenderThreadInitialized); 
+
+	// immediately load loading screen texture
 	LoadLoadingScreenData();
 
 	// Do not show windows until we have the loading screen data ready.
@@ -222,60 +224,6 @@ void VQEngine::UpdateThread_PostUpdate()
 		Input& iD = mInputStates.at(mpWinDebug->GetHWND());
 		iD.PostUpdate();
 	}
-}
-
-void VQEngine::UpdateThread_HandleEvents()
-{
-	// Swap event recording buffers so we can read & process a limited number of events safely.
-	mInputEventQueue.SwapBuffers();
-	std::queue<EventPtr_t>& q = mInputEventQueue.GetBackContainer();
-
-	if (q.empty())
-		return;
-
-	// process the events
-	std::shared_ptr<IEvent> pEvent = nullptr;
-	while (!q.empty())
-	{
-		pEvent = std::move(q.front());
-		q.pop();
-
-		switch (pEvent->mType)
-		{
-		case KEY_DOWN_EVENT: 
-		{
-			std::shared_ptr<KeyDownEvent> p = std::static_pointer_cast<KeyDownEvent>(pEvent);
-			mInputStates.at(p->hwnd).UpdateKeyDown(p->data);
-		} break;
-		case KEY_UP_EVENT:
-		{
-			std::shared_ptr<KeyUpEvent> p = std::static_pointer_cast<KeyUpEvent>(pEvent);
-			mInputStates.at(p->hwnd).UpdateKeyUp(p->wparam);
-		} break;
-
-		case MOUSE_MOVE_EVENT:
-		{
-			std::shared_ptr<MouseMoveEvent> p = std::static_pointer_cast<MouseMoveEvent>(pEvent);
-			mInputStates.at(p->hwnd).UpdateMousePos(p->x, p->y, 0);
-		} break;
-		case MOUSE_SCROLL_EVENT:
-		{
-			std::shared_ptr<MouseScrollEvent> p = std::static_pointer_cast<MouseScrollEvent>(pEvent);
-			mInputStates.at(p->hwnd).UpdateMousePos(0, 0, p->scroll);
-		} break;
-		case MOUSE_INPUT_EVENT:
-		{
-			std::shared_ptr<MouseInputEvent> p = std::static_pointer_cast<MouseInputEvent>(pEvent);
-			mInputStates.at(p->hwnd).UpdateMousePos_Raw(
-				p->data.relativeX
-				, p->data.relativeY
-				, static_cast<short>(p->data.scrollDelta)
-				, GetWindow(p->hwnd)->IsMouseCaptured() || 1 // TODO
-			);
-		} break;
-		}
-	}
-	
 }
 
 
