@@ -84,12 +84,14 @@ public:
 	std::vector<FLoadingScreenData> mLoadingScreenData;
 };
 
-struct RenderingResources_MainWindow
+
+struct FRenderingResources{};
+struct FRenderingResources_MainWindow : public FRenderingResources
 {
 	TextureID Tex_MainViewDepth = INVALID_ID;
 	DSV_ID    DSV_MainViewDepth = INVALID_ID;
 };
-struct RenderingResources_DebugWindow
+struct FRenderingResources_DebugWindow : public FRenderingResources
 {
 	// TODO
 };
@@ -196,11 +198,17 @@ public:
 //-----------------------------------------------------------------------
 
 private:
-	using BuiltinMeshArray_t     = std::array<Mesh       , EBuiltInMeshes::NUM_BUILTIN_MESHES>;
-	using BuiltinMeshNameArray_t = std::array<std::string, EBuiltInMeshes::NUM_BUILTIN_MESHES>;
-	using EventPtr_t             = std::shared_ptr<IEvent>;
-	using EventQueue_t           = BufferedContainer<std::queue<EventPtr_t>, EventPtr_t>;
-	using UpdateContextLookup_t  = std::unordered_map<HWND, IWindowUpdateContext*>;
+	//-----------------------------------------------------------------------------------------
+	using BuiltinMeshArray_t         = std::array<Mesh       , EBuiltInMeshes::NUM_BUILTIN_MESHES>;
+	using BuiltinMeshNameArray_t     = std::array<std::string, EBuiltInMeshes::NUM_BUILTIN_MESHES>;
+	//-----------------------------------------------------------------------------------------
+	using EventPtr_t                 = std::shared_ptr<IEvent>;
+	using EventQueue_t               = BufferedContainer<std::queue<EventPtr_t>, EventPtr_t>;
+	//-----------------------------------------------------------------------------------------
+	using UpdateContextLookup_t      = std::unordered_map<HWND, IWindowUpdateContext*>;
+	using RenderingResourcesLookup_t = std::unordered_map<HWND, std::shared_ptr<FRenderingResources>>;
+	using WindowLookup_t             = std::unordered_map<HWND, std::unique_ptr<Window>>;
+	//-----------------------------------------------------------------------------------------
 
 	// threads
 	std::thread                    mRenderThread;
@@ -214,9 +222,11 @@ private:
 	std::unique_ptr<Semaphore>     mpSemRender;
 	
 	// windows
+	WindowLookup_t                 mpWindows;
+
 	std::unique_ptr<Window>        mpWinMain;
 	std::unique_ptr<Window>        mpWinDebug;
-	// todo: generic window mngmt
+	
 
 	// render
 	VQRenderer                     mRenderer;
@@ -236,8 +246,11 @@ private:
 	MainWindowScene                mScene_MainWnd;
 	DebugWindowScene               mScene_DebugWnd;
 	UpdateContextLookup_t          mWindowUpdateContextLookup;
-	RenderingResources_MainWindow  mResources_MainWnd;
-	RenderingResources_DebugWindow mResources_DebugWnd;
+
+	RenderingResourcesLookup_t     mRenderingResources;
+
+	FRenderingResources_MainWindow  mResources_MainWnd;
+	FRenderingResources_DebugWindow mResources_DebugWnd;
 
 	// input
 	std::unordered_map<HWND, Input> mInputStates;
@@ -263,8 +276,8 @@ private:
 	static FStartupParameters ParseEngineSettingsFile();
 
 private:
-	void                     InititalizeEngineSettings(const FStartupParameters& Params);
-	void                     InitializeApplicationWindows(const FStartupParameters& Params);
+	void                     InitializeEngineSettings(const FStartupParameters& Params);
+	void                     InitializeWindows(const FStartupParameters& Params);
 
 	void                     InitializeThreads();
 	void                     ExitThreads();

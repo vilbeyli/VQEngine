@@ -144,6 +144,7 @@ struct FWindowDesc
 	IWindowOwner* pWndOwner = nullptr;
 	bool bFullscreen = false;
 	int preferredDisplay = 0;
+	int iShowCmd;
 };
 
 #define __MUST_BE_CALLED_FROM_WINMAIN_THREAD_ 
@@ -155,7 +156,7 @@ public:
 
 	HWND GetHWND() const;
 
-	void                                       Show() override;
+	void __MUST_BE_CALLED_FROM_WINMAIN_THREAD_ Show() override;
 	void                                       Minimize() override;
 	void                                       ToggleWindowedFullscreen(SwapChain* pSwapChain = nullptr) override;
 	void __MUST_BE_CALLED_FROM_WINMAIN_THREAD_ Close() override;

@@ -62,7 +62,6 @@ void VQEngine::UpdateThread_Inititalize()
 #if ENABLE_RAW_INPUT
 	// initialize raw input
 	Input::InitRawInputDevices(mpWinMain->GetHWND());
-	if (mpWinDebug) Input::InitRawInputDevices(mpWinDebug->GetHWND());
 #endif
 
 	RegisterWindowForInput(mpWinMain);
@@ -73,11 +72,6 @@ void VQEngine::UpdateThread_Inititalize()
 
 	// immediately load loading screen texture
 	LoadLoadingScreenData();
-
-	// Do not show windows until we have the loading screen data ready.
-	mpWinMain->Show();
-	if (mpWinDebug) 
-		mpWinDebug->Show();
 
 	mTimer.Reset();
 	mTimer.Start();

@@ -59,11 +59,11 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	this->mSysInfo = VQSystemInfo::GetSystemInfo();
 	#endif
 	// -------------------------------------------------------------------------
-	InititalizeEngineSettings(Params);
-	InitializeApplicationWindows(Params);
+	InitializeEngineSettings(Params);
+	InitializeWindows(Params);
 	InitializeThreads();
 
-	return true;
+	return true; 
 }
 
 void VQEngine::Exit()
@@ -75,7 +75,7 @@ void VQEngine::Exit()
 
 
 
-void VQEngine::InititalizeEngineSettings(const FStartupParameters& Params)
+void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 {
 	const FEngineSettings& p = Params.EngineSettings;
 
@@ -151,7 +151,7 @@ void VQEngine::InititalizeEngineSettings(const FStartupParameters& Params)
 	}
 }
 
-void VQEngine::InitializeApplicationWindows(const FStartupParameters& Params)
+void VQEngine::InitializeWindows(const FStartupParameters& Params)
 {
 	auto fnInitializeWindow = [&](const FWindowSettings& settings, HINSTANCE hInstance, std::unique_ptr<Window>& pWin)
 	{
@@ -163,6 +163,7 @@ void VQEngine::InitializeApplicationWindows(const FStartupParameters& Params)
 		desc.pfnWndProc = WndProc;
 		desc.bFullscreen = settings.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN;
 		desc.preferredDisplay = settings.PreferredDisplay;
+		desc.iShowCmd = Params.iCmdShow;
 		pWin.reset(new Window(settings.Title, desc));
 		pWin->pOwner->OnWindowCreate(pWin.get());
 	};
@@ -204,49 +205,6 @@ void VQEngine::ExitThreads()
 	mRenderWorkerThreads.Exit();
 }
 
-void VQEngine::HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWindowSettings& settings)
-{
-	if (!pWin) return;
-
-	// TODO: generic solution to multi window/display settings. 
-	//       For now, simply prevent debug wnd occupying main wnd's display.
-	if (mpWinMain->IsFullscreen()
-		&& (mSettings.WndMain.PreferredDisplay == mSettings.WndDebug.PreferredDisplay)
-		&& settings.IsDisplayModeFullscreen()
-		&& pWin != mpWinMain)
-	{
-		Log::Warning("Debug window and Main window cannot be Fullscreen on the same display!");
-		pWin->SetFullscreen(false);
-		// TODO: as a more graceful fallback, move it to the next monitor and keep fullscreen
-		return;
-	}
-
-	if (pWin)
-	{
-		// Borderless fullscreen transitions are handled through Window object
-		// Exclusive  fullscreen transitions are handled through the Swapchain
-		if (settings.DisplayMode == EDisplayMode::BORDERLESS_FULLSCREEN)
-		{
-#if 0 // TODO: Initial borderless fullscreen window rect is bugged. Default to Primary Display.
-			pWin->ToggleWindowedFullscreen(&mRenderer.GetWindowSwapChain(pWin->GetHWND()));
-#else
-			pWin->ToggleWindowedFullscreen();
-#endif
-		}
-		if (settings.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN)
-		{
-			pWin->SetMouseCapture(true);
-		}
-	}
-}
-
-void VQEngine::SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse)
-{
-	auto& pWin = this->GetWindow(hwnd);
-
-	mInputStates.at(hwnd).SetInputBypassing(!bCaptureMouse);
-	pWin->SetMouseCapture(bCaptureMouse);
-}
 
 
 

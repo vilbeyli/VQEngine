@@ -33,6 +33,7 @@ void VQEngine::RenderThread_Main()
 	Log::Info("RenderThread_Main()");
 	RenderThread_Inititalize();
 
+	RenderThread_HandleEvents();
 
 	bool bQuit = false;
 	while (!this->mbStopAllThreads && !bQuit)
@@ -110,7 +111,16 @@ void VQEngine::RenderThread_Inititalize()
 	for (const FWindowRepresentation& wnd : params.Windows)
 	{
 		mRenderer.InitializeRenderContext(wnd, params.Settings.bUseTripleBuffering ? 3 : 2);
+
+#if 1
 		mEventQueue_VQEToWin_Main.AddItem(std::make_shared<HandleWindowTransitionsEvent>(wnd.hwnd));
+#else
+		const bool bFullscreen = this->GetWindowSettings(wnd.hwnd).IsDisplayModeFullscreen();
+		const bool bFullscreenTransitionNeeded = this->GetWindow(wnd.hwnd)->IsFullscreen() != bFullscreen;
+
+		if(bFullscreenTransitionNeeded)
+			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<ToggleFullscreenEvent>(wnd.hwnd));
+#endif
 	}
 
 	mbRenderThreadInitialized.store(true);
@@ -129,7 +139,10 @@ void VQEngine::RenderThread_Inititalize()
 	mResources_MainWnd.DSV_MainViewDepth = mRenderer.CreateDSV();
 
 	// load window resources
-	RenderThread_LoadWindowSizeDependentResources(mpWinMain->GetHWND(), mpWinMain->GetWidth(), mpWinMain->GetHeight());
+	const bool bFullscreen = mpWinMain->IsFullscreen();
+	const int W = bFullscreen ? mpWinMain->GetFullscreenWidth() : mpWinMain->GetWidth();
+	const int H = bFullscreen ? mpWinMain->GetFullscreenHeight() : mpWinMain->GetHeight();
+	RenderThread_LoadWindowSizeDependentResources(mpWinMain->GetHWND(), W, H);
 }
 
 void VQEngine::RenderThread_Exit()
@@ -166,7 +179,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 
 	if (hwnd == mpWinMain->GetHWND())
 	{
-		RenderingResources_MainWindow& r = mResources_MainWnd;
+		FRenderingResources_MainWindow& r = mResources_MainWnd;
 
 		// Main depth stencil view
 		D3D12_RESOURCE_DESC d = CD3DX12_RESOURCE_DESC::Tex2D(
@@ -191,7 +204,7 @@ void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 {
 	if (hwnd == mpWinMain->GetHWND())
 	{
-		RenderingResources_MainWindow& r = mResources_MainWnd;
+		FRenderingResources_MainWindow& r = mResources_MainWnd;
 
 		// sync GPU
 		auto& ctx = mRenderer.GetWindowRenderContext(hwnd);

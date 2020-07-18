@@ -52,7 +52,7 @@ enum EEventType
 	// VQE->Windows window events
 	MOUSE_CAPTURE_EVENT,
 	HANDLE_WINDOW_TRANSITIONS_EVENT,
-
+	SHOW_WINDOW_EVENT,
 
 	NUM_EVENT_TYPES
 };
@@ -80,9 +80,12 @@ struct SetMouseCaptureEvent : public IEvent
 
 struct HandleWindowTransitionsEvent : public IEvent
 {
-	HandleWindowTransitionsEvent(HWND hwnd_)
-		: IEvent(EEventType::HANDLE_WINDOW_TRANSITIONS_EVENT, hwnd_)
-	{}
+	HandleWindowTransitionsEvent(HWND hwnd_) : IEvent(EEventType::HANDLE_WINDOW_TRANSITIONS_EVENT, hwnd_) {}
+};
+
+struct ShowWindowEvent : public IEvent
+{
+	ShowWindowEvent(HWND hwnd_) : IEvent(EEventType::SHOW_WINDOW_EVENT, hwnd_) {}
 };
 
 // -------------------------------------------------------------------------------------

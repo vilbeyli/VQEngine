@@ -166,6 +166,10 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
 
     windowStyle_ = FlagWindowStyle;
     ::SetWindowLongPtr(hwnd_, GWLP_USERDATA, reinterpret_cast<LONG_PTR> (this));
+    
+    // TODO: initial Show() sets the resolution low for the first frame.
+    //       Workaround: RenderThread() calls HandleEvents() right before looping to handle the first ShowWindow() before Present().
+    ::ShowWindow(hwnd_, initParams.iShowCmd);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -182,7 +186,7 @@ HWND Window::GetHWND() const
 void Window::Show()
 {
     ::ShowWindow(hwnd_, SW_SHOWDEFAULT);
-    //::UpdateWindow(hwnd_);
+    ::UpdateWindow(hwnd_);
 }
 
 void Window::Minimize()
@@ -236,6 +240,7 @@ void Window::ToggleWindowedFullscreen(SwapChain* pSwapChain /*= nullptr*/)
             DXGI_OUTPUT_DESC Desc;
             pOutput->GetDesc(&Desc);
             fullscreenWindowRect = Desc.DesktopCoordinates;
+            pOutput->Release();
         }
         else
         {
