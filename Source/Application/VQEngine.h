@@ -185,6 +185,7 @@ public:
 	// - Updates scene state
 	void UpdateThread_UpdateAppState(const float dt);
 	void UpdateThread_UpdateScene_MainWnd(const float dt);
+	void UpdateThread_UpdateScene_DebugWnd(const float dt);
 
 
 	// POST_UPDATE()
@@ -269,6 +270,7 @@ private:
 	void                     ExitThreads();
 
 	void                     HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWindowSettings& settings);
+	void                     SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse);
 
 	void                     InitializeBuiltinMeshes();
 	void                     LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete
@@ -293,4 +295,6 @@ private:
 
 	void                     RegisterWindowForInput(const std::unique_ptr<Window>& pWnd);
 	void                     UnregisterWindowForInput(const std::unique_ptr<Window>& pWnd);
+
+	void                     HandleEngineInput();
 };

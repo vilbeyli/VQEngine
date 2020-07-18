@@ -52,6 +52,8 @@
 
 #include <dxgi1_6.h>
 
+#define VERBOSE_LOGGING 0
+
 static RECT CenterScreen(const RECT& screenRect, const RECT& wndRect)
 {
     RECT centered = {};
@@ -272,7 +274,9 @@ void Window::ToggleWindowedFullscreen(SwapChain* pSwapChain /*= nullptr*/)
 
 void Window::SetMouseCapture(bool bCapture)
 {
+#if VERBOSE_LOGGING
     Log::Warning("Capture Mouse: %d", bCapture);
+#endif
 
     isMouseCaptured_ = bCapture;
     if (bCapture)
@@ -290,26 +294,26 @@ void Window::SetMouseCapture(bool bCapture)
         rcClip.bottom -= PX_OFFSET;
 
         // https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showcursor
-        //while (ShowCursor(FALSE) >= 0);
         int hr = ShowCursor(FALSE);
+        while (hr >= 0) hr = ShowCursor(FALSE);
         switch (hr)
         {
         case -1: Log::Warning("ShowCursor(FALSE): No mouse is installed!"); break;
         case 0: break;
-        default: Log::Info("ShowCursor(FALSE): %d", hr); break;
+        //default: Log::Info("ShowCursor(FALSE): %d", hr); break;
         }
 
         ClipCursor(&rcClip);
         GetCursorPos(&mouseCapturePosition_);
-        //SetForegroundWindow(hwnd_);
-        //SetFocus(hwnd_);
+        SetForegroundWindow(hwnd_);
+        SetFocus(hwnd_);
     }
     else
     {
         ClipCursor(nullptr);
         SetCursorPos(mouseCapturePosition_.x, mouseCapturePosition_.y);
         while (ShowCursor(TRUE) <= 0);
-        //SetForegroundWindow(NULL);
+        SetForegroundWindow(NULL);
         // SetFocus(NULL);	// we still want to register events
     }
 

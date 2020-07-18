@@ -110,6 +110,36 @@ void VQEngine::UpdateThread_PreUpdate(float& dt)
 {
 	// update timer
 	dt = mTimer.Tick();
+
+	// system-wide input (esc/mouse click on wnd)
+	HandleEngineInput();
+}
+
+void VQEngine::HandleEngineInput()
+{
+	for (decltype(mInputStates)::iterator it = mInputStates.begin(); it != mInputStates.end(); ++it)
+	{
+		HWND   hwnd  = it->first;
+		Input& input = it->second;
+		auto&  pWin  = this->GetWindow(hwnd);
+
+		if (input.IsKeyDown("Esc"))
+		{
+			if (pWin->IsMouseCaptured())
+			{
+				mEventQueue_VQEToWin_Main.AddItem(std::make_shared<SetMouseCaptureEvent>(hwnd, false, true));
+			}
+		}
+		if (input.IsAnyMouseDown())
+		{
+			Input& inp = mInputStates.at(hwnd); // non const ref
+			if (inp.GetInputBypassing())
+			{
+				inp.SetInputBypassing(false);
+				mEventQueue_VQEToWin_Main.AddItem(std::make_shared<SetMouseCaptureEvent>(hwnd, true, false));
+			}
+		}
+	}
 }
 
 void VQEngine::UpdateThread_UpdateAppState(const float dt)
@@ -129,6 +159,7 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 		mbLoadingLevel.store(true);    // thread-safe
 	}
 
+
 	if (mbLoadingLevel)
 	{
 		// animate loading screen
@@ -143,23 +174,26 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 			mAppState = EAppState::SIMULATING;
 			mbLoadingLevel.store(false);
 		}
-
 	}
 
 
 	else
 	{
+		// TODO: threaded?
 		UpdateThread_UpdateScene_MainWnd(dt);
+		UpdateThread_UpdateScene_DebugWnd(dt);
 	}
 
 }
 
 void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 {
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
-	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
-	FFrameData& FrameData      = mScene_MainWnd.mFrameData[FRAME_DATA_INDEX];
-	const Input& input         = mInputStates.at(mpWinMain->GetHWND());
+	std::unique_ptr<Window>& pWin = mpWinMain;
+	HWND hwnd                     = pWin->GetHWND();
+	const int NUM_BACK_BUFFERS    = mRenderer.GetSwapChainBackBufferCount(hwnd);
+	const int FRAME_DATA_INDEX    = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
+	FFrameData& FrameData         = mScene_MainWnd.mFrameData[FRAME_DATA_INDEX];
+	const Input& input            = mInputStates.at(hwnd);
 	
 	// handle input
 	constexpr float CAMERA_MOVEMENT_SPEED_MULTIPLER = 0.75f;
@@ -195,6 +229,21 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 	
 	// update scene data
 	FrameData.TFCube.RotateAroundAxisRadians(YAxis, dt * 0.2f * PI);
+	
+}
+
+void VQEngine::UpdateThread_UpdateScene_DebugWnd(const float dt)
+{
+	if (!mpWinDebug) return;
+
+	std::unique_ptr<Window>& pWin = mpWinDebug;
+	HWND hwnd                     = pWin->GetHWND();
+	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(hwnd);
+	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
+	FFrameData& FrameData      = mScene_DebugWnd.mFrameData[FRAME_DATA_INDEX];
+	const Input& input         = mInputStates.at(hwnd);
+
+
 }
 
 void VQEngine::UpdateThread_PostUpdate()

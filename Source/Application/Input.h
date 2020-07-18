@@ -23,6 +23,7 @@
 #include <array>
 #include <unordered_map>
 #include <string>
+#include <atomic>
 
 #define ENABLE_RAW_INPUT 1
 
@@ -47,10 +48,12 @@ public:
 	static bool ReadRawInput_Mouse(LPARAM lParam, MouseInputEventData* pData);
 
 	Input();
-	Input(const Input&) = default;
+	Input(Input&& other);
 	~Input() = default;
 
 	inline void ToggleInputBypassing() { mbIgnoreInput = !mbIgnoreInput; }
+	inline void SetInputBypassing(bool b) { mbIgnoreInput.store(b); };
+	inline bool GetInputBypassing() const { return mbIgnoreInput.load(); }
 
 	// update state
 	void UpdateKeyDown(KeyDownEventData); // includes mouse button
@@ -75,6 +78,7 @@ public:
 	bool IsMouseTriggered(EMouseButtons) const;
 	bool IsMouseScrollUp() const;
 	bool IsMouseScrollDown() const;
+	bool IsAnyMouseDown() const;
 
 	void PostUpdate();
 	inline const std::array<float, 2>& GetMouseDelta() const { return mMouseDelta; }
@@ -82,7 +86,7 @@ public:
 
 private: // On/Off state is represented as char (8-bit) instead of bool (32-bit)
 	// state
-	bool mbIgnoreInput;
+	std::atomic<bool> mbIgnoreInput;
 
 	// keyboard
 #if 1

@@ -193,7 +193,11 @@ void VQEngine::OnWindowMinimize(IWindow* pWnd)
 
 void VQEngine::OnWindowFocus(IWindow* pWindow)
 {
-	//Log::Info("On Focus!");
+	Window* pWin = static_cast<Window*>(pWindow);
+	HWND hwnd = pWin->GetHWND();
+
+	//Log::Warning("OnWindowFocus");
+	//this->SetMouseCaptureForWindow(hwnd, true);
 }
 
 

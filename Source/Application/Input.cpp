@@ -52,7 +52,7 @@ static const Input::KeyMapping KEY_MAP = []()
 	m["Shift"] = 16;	m["shift"] = 16;
 	m["Enter"] = 13;	m["enter"] = 13;
 	m["Backspace"] = 8; m["backspace"] = 8;
-	m["Escape"] = 0x1B; m["escape"] = 0x1B; m["ESC"] = 0x1B; m["esc"] = 0x1B;
+	m["Escape"] = 0x1B; m["escape"] = 0x1B; m["ESC"] = 0x1B; m["esc"] = 0x1B; m["Esc"] = 0x1B;
 	m["PageUp"] = 33;	m["PageDown"] = 34;
 	m["Space"] = VK_SPACE; m["space"] = VK_SPACE;
 
@@ -252,11 +252,10 @@ void Input::InitRawInputDevices(HWND hwnd)
 
 
 Input::Input()
-	:
-	mbIgnoreInput(false),
-	mMouseDelta{0, 0},
-	mMousePosition{0, 0},
-	mMouseScroll(0)
+	: mbIgnoreInput(false)
+	, mMouseDelta{0, 0}
+	, mMousePosition{0, 0}
+	, mMouseScroll(0)
 {
 	mMouseButtons[EMouseButtons::MOUSE_BUTTON_LEFT]   = 0;
 	mMouseButtons[EMouseButtons::MOUSE_BUTTON_RIGHT]  = 0;
@@ -267,6 +266,21 @@ Input::Input()
 	mKeys.fill(0);
 	mKeysPrevious.fill(0);
 }
+
+Input::Input(Input&& other)
+
+	: mbIgnoreInput(other.mbIgnoreInput.load())
+
+	, mMouseDelta   (other.mMouseDelta)
+	, mMousePosition(other.mMousePosition)
+	, mMouseScroll  (other.mMouseScroll)
+	, mMouseButtons (other.mMouseButtons)
+	, mMouseButtonsPrevious(other.mMouseButtonsPrevious)
+	, mMouseButtonDoubleClicks(other.mMouseButtonsPrevious)
+
+	, mKeys(other.mKeys)
+	, mKeysPrevious(other.mKeysPrevious)
+{}
 
 // called at the end of the frame
 void Input::PostUpdate()
@@ -290,6 +304,7 @@ void Input::UpdateKeyDown(KeyDownEventData data)
 {
 	const auto& key = data.mouse.wparam;
 
+	// MOUSE KEY
 	if (IsMouseKey(key))
 	{
 		const EMouseButtons mouseBtn = static_cast<EMouseButtons>(key);
@@ -309,6 +324,8 @@ void Input::UpdateKeyDown(KeyDownEventData data)
 #endif
 		}
 	}
+
+	// KEYBOARD KEY
 	else
 		mKeys[key] = true;
 }
@@ -448,6 +465,19 @@ bool Input::IsMouseScrollDown() const
 	Log::Info("Input::IsMouseScrollDown() : scroll=%d", mMouseScroll);
 #endif
 	return mMouseScroll < 0 && !mbIgnoreInput;
+}
+
+bool Input::IsAnyMouseDown() const
+{
+	return 
+		   mMouseButtons.at(EMouseButtons::MOUSE_BUTTON_LEFT)
+		|| mMouseButtons.at(EMouseButtons::MOUSE_BUTTON_RIGHT)
+		|| mMouseButtons.at(EMouseButtons::MOUSE_BUTTON_MIDDLE)
+
+		|| mMouseButtonDoubleClicks.at(EMouseButtons::MOUSE_BUTTON_RIGHT)
+		|| mMouseButtonDoubleClicks.at(EMouseButtons::MOUSE_BUTTON_MIDDLE)
+		|| mMouseButtonDoubleClicks.at(EMouseButtons::MOUSE_BUTTON_LEFT)
+	;
 }
 
 

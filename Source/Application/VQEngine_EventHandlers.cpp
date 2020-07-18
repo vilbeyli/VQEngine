@@ -18,6 +18,8 @@
 
 #include "VQEngine.h"
 
+#define VERBOSE_LOGGING 0
+
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 //
 // MAIN THREAD
@@ -44,7 +46,7 @@ void VQEngine::MainThread_HandleEvents()
 		case MOUSE_CAPTURE_EVENT:
 		{
 			std::shared_ptr<SetMouseCaptureEvent> p = std::static_pointer_cast<SetMouseCaptureEvent>(pEvent);
-			this->GetWindow(p->hwnd)->SetMouseCapture(p->bCapture);
+			this->SetMouseCaptureForWindow(p->hwnd, p->bCapture);
 		} break;
 		case HANDLE_WINDOW_TRANSITIONS_EVENT:
 		{
@@ -106,7 +108,7 @@ void VQEngine::UpdateThread_HandleEvents()
 		{
 			std::shared_ptr<MouseInputEvent> p = std::static_pointer_cast<MouseInputEvent>(pEvent);
 			mInputStates.at(p->hwnd).UpdateMousePos_Raw(
-				p->data.relativeX
+				  p->data.relativeX
 				, p->data.relativeY
 				, static_cast<short>(p->data.scrollDelta)
 				, GetWindow(p->hwnd)->IsMouseCaptured()
@@ -218,12 +220,14 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 	const int                             WIDTH = bFullscreenStateToSet ? pWnd->GetFullscreenWidth() : pWnd->GetWidth();
 	const int                            HEIGHT = bFullscreenStateToSet ? pWnd->GetFullscreenHeight() : pWnd->GetHeight();
 
+#if VERBOSE_LOGGING
 	Log::Info("RenderThread: Handle Fullscreen(exclusiveFS=%s), %s %dx%d"
 		, (bExclusiveFullscreenTransition ? "true" : "false")
 		, (bFullscreenStateToSet ? "RestoreSize: " : "Transition to: ")
 		, WndSettings.Width
 		, WndSettings.Height
 	);
+#endif
 
 	// if we're transitioning into Fullscreen, save the current window dimensions
 	if (bFullscreenStateToSet)

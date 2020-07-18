@@ -240,6 +240,14 @@ void VQEngine::HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWin
 	}
 }
 
+void VQEngine::SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse)
+{
+	auto& pWin = this->GetWindow(hwnd);
+
+	mInputStates.at(hwnd).SetInputBypassing(!bCaptureMouse);
+	pWin->SetMouseCapture(bCaptureMouse);
+}
+
 
 
 std::unique_ptr<Window>& VQEngine::GetWindow(HWND hwnd)
@@ -284,7 +292,7 @@ void VQEngine::RegisterWindowForInput(const std::unique_ptr<Window>& pWnd)
 {
 	if (pWnd)
 	{
-		mInputStates[pWnd->GetHWND()] = Input();
+		mInputStates.emplace(pWnd->GetHWND(), std::move(Input()));
 	}
 }
 
@@ -303,6 +311,7 @@ void VQEngine::UnregisterWindowForInput(const std::unique_ptr<Window>& pWnd)
 		mInputStates.erase(it);
 	}
 }
+
 
 
 static std::pair<std::string, std::string> ParseLineINI(const std::string& iniLine)
