@@ -222,11 +222,12 @@ private:
 	std::unique_ptr<Semaphore>      mpSemRender;
 	
 	// windows
+#if 0
 	WindowLookup_t                  mpWindows;
-
+#else
 	std::unique_ptr<Window>         mpWinMain;
 	std::unique_ptr<Window>         mpWinDebug;
-	
+#endif
 
 	// render
 	VQRenderer                      mRenderer;

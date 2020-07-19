@@ -23,9 +23,25 @@
 
 using namespace DirectX;
 
+// temporary hardcoded initialization until scene is data driven
+static FCameraData GenerateCameraInitializationParameters(const std::unique_ptr<Window>& pWin)
+{
+	assert(pWin);
+	FCameraData camData = {};
+	camData.nearPlane = 0.01f;
+	camData.farPlane = 1000.0f;
+	camData.x = 0.0f; camData.y = 3.0f; camData.z = -5.0f;
+	camData.pitch = 10.0f;
+	camData.yaw = 0.0f;
+	camData.fovH_Degrees = 60.0f;
+	camData.aspect = static_cast<float>(pWin->GetWidth()) / pWin->GetHeight();
+	return camData;
+}
+
 void VQEngine::UpdateThread_Main()
 {
 	Log::Info("UpdateThread_Main()");
+
 	UpdateThread_Inititalize();
 
 	bool bQuit = false;
@@ -62,10 +78,10 @@ void VQEngine::UpdateThread_Inititalize()
 #if ENABLE_RAW_INPUT
 	// initialize raw input
 	Input::InitRawInputDevices(mpWinMain->GetHWND());
-#endif
 
 	RegisterWindowForInput(mpWinMain);
 	RegisterWindowForInput(mpWinDebug);
+#endif
 
 	// busy lock until render thread is initialized
 	while (!mbRenderThreadInitialized); 
@@ -202,6 +218,9 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 	if (input.IsKeyDown(VK_SHIFT))	LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER;
 	LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_MULTIPLER;
 
+	if (input.IsKeyTriggered('R')) FrameData.SceneCamera.InitializeCamera(GenerateCameraInitializationParameters(mpWinMain));
+	
+
 	constexpr float MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER = 1.0f;
 	if (input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_LEFT))   FrameData.TFCube.RotateAroundAxisRadians(ZAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
 	if (input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_RIGHT))  FrameData.TFCube.RotateAroundAxisRadians(YAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
@@ -242,6 +261,10 @@ void VQEngine::UpdateThread_UpdateScene_DebugWnd(const float dt)
 
 void VQEngine::UpdateThread_PostUpdate()
 {
+	const int NUM_BACK_BUFFERS      = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
+	const int FRAME_DATA_INDEX      = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
+	const int FRAME_DATA_NEXT_INDEX = ((mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS) + 1) % NUM_BACK_BUFFERS;
+
 	if (mbLoadingLevel)
 	{
 		return;
@@ -252,23 +275,15 @@ void VQEngine::UpdateThread_PostUpdate()
 	// extract scene view
 
 	// copy over state for next frame
-	
-	const int NUM_BACK_BUFFERS      = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
-	const int FRAME_DATA_INDEX      = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
-	const int FRAME_DATA_NEXT_INDEX = ((mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS) + 1) % NUM_BACK_BUFFERS;
-
 	mScene_MainWnd.mFrameData[FRAME_DATA_NEXT_INDEX] = mScene_MainWnd.mFrameData[FRAME_DATA_INDEX];
 
-	// input post update;
-	Input& i = mInputStates.at(mpWinMain->GetHWND()); // inline copies Input(), hence explicitly get refs
-	i.PostUpdate();
-	if (mpWinDebug) 
+	// input post update
+	for (auto it = mInputStates.begin(); it != mInputStates.end(); ++it)
 	{
-		Input& iD = mInputStates.at(mpWinDebug->GetHWND());
-		iD.PostUpdate();
+		const HWND& hwnd = it->first;
+		mInputStates.at(hwnd).PostUpdate(); // non-const accessor
 	}
 }
-
 
 void VQEngine::Load_SceneData_Dispatch()
 {
@@ -294,14 +309,8 @@ void VQEngine::Load_SceneData_Dispatch()
 			, XMFLOAT3(CUBE_SCALE, CUBE_SCALE, CUBE_SCALE)
 		);
 
-		FCameraData camData = {};
-		camData.nearPlane = 0.01f;
-		camData.farPlane  = 1000.0f;
-		camData.x = 0.0f; camData.y = 3.0f; camData.z = -5.0f;
-		camData.pitch = 10.0f;
-		camData.yaw = 0.0f;
-		camData.fovH_Degrees = 60.0f;
-		data[0].SceneCamera.InitializeCamera(camData, mpWinMain->GetWidth(), mpWinMain->GetHeight());
+		FCameraData camData = GenerateCameraInitializationParameters(mpWinMain);
+		data[0].SceneCamera.InitializeCamera(camData);
 		mScene_MainWnd.mFrameData.resize(NumBackBuffer_WndMain, data[0]);
 
 		data[1].SwapChainClearColor = { 0.20f, 0.21f, 0.21f, 1.0f };

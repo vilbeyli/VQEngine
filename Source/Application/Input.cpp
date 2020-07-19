@@ -74,14 +74,14 @@ static constexpr bool IsMouseKey(WPARAM wparam)
 	return wparam == Input::EMouseButtons::MOUSE_BUTTON_LEFT
 		|| wparam == Input::EMouseButtons::MOUSE_BUTTON_RIGHT
 		|| wparam == Input::EMouseButtons::MOUSE_BUTTON_MIDDLE
-		|| wparam == (Input::EMouseButtons::MOUSE_BUTTON_LEFT | Input::EMouseButtons::MOUSE_BUTTON_RIGHT)
+		|| wparam == (Input::EMouseButtons::MOUSE_BUTTON_LEFT   | Input::EMouseButtons::MOUSE_BUTTON_RIGHT)
 		|| wparam == (Input::EMouseButtons::MOUSE_BUTTON_MIDDLE | Input::EMouseButtons::MOUSE_BUTTON_RIGHT)
-		|| wparam == (Input::EMouseButtons::MOUSE_BUTTON_MIDDLE | Input::EMouseButtons::MOUSE_BUTTON_LEFT)
+		|| wparam == (Input::EMouseButtons::MOUSE_BUTTON_MIDDLE | Input::EMouseButtons::MOUSE_BUTTON_LEFT )
 		|| wparam == (Input::EMouseButtons::MOUSE_BUTTON_MIDDLE | Input::EMouseButtons::MOUSE_BUTTON_LEFT | Input::EMouseButtons::MOUSE_BUTTON_RIGHT);
 }
 
 
-bool Input::ReadRawInput_Mouse(LPARAM lParam, MouseInputEventData* pData)
+bool Input::ReadRawInput_Mouse(LPARAM lParam, MouseInputEventData* pDataOut)
 {
 	constexpr UINT RAW_INPUT_SIZE_IN_BYTES = 48;
 
@@ -118,21 +118,21 @@ bool Input::ReadRawInput_Mouse(LPARAM lParam, MouseInputEventData* pData)
 
 		if (isHorizontalScroll)
 		{
-			pData->scrollChars = defaultScrollCharsPerWheelDelta;
-			SystemParametersInfo(SPI_GETWHEELSCROLLCHARS, 0, &pData->scrollChars, 0);
-			scrollDelta *= pData->scrollChars;
+			pDataOut->scrollChars = defaultScrollCharsPerWheelDelta;
+			SystemParametersInfo(SPI_GETWHEELSCROLLCHARS, 0, &pDataOut->scrollChars, 0);
+			scrollDelta *= pDataOut->scrollChars;
 		}
 		else
 		{
-			pData->scrollLines = defaultScrollLinesPerWheelDelta;
-			SystemParametersInfo(SPI_GETWHEELSCROLLLINES, 0, &pData->scrollLines, 0);
-			if (pData->scrollLines == WHEEL_PAGESCROLL)
+			pDataOut->scrollLines = defaultScrollLinesPerWheelDelta;
+			SystemParametersInfo(SPI_GETWHEELSCROLLLINES, 0, &pDataOut->scrollLines, 0);
+			if (pDataOut->scrollLines == WHEEL_PAGESCROLL)
 				isScrollByPage = true;
 			else
-				scrollDelta *= pData->scrollLines;
+				scrollDelta *= pDataOut->scrollLines;
 		}
 
-		pData->scrollDelta = scrollDelta;
+		pDataOut->scrollDelta = scrollDelta;
 		bIsMouseInput = true;
 	}
 
@@ -149,8 +149,8 @@ bool Input::ReadRawInput_Mouse(LPARAM lParam, MouseInputEventData* pData)
 	}
 	else if (rawMouse.lLastX != 0 || rawMouse.lLastY != 0)
 	{
-		pData->relativeX = rawMouse.lLastX;
-		pData->relativeY = rawMouse.lLastY;
+		pDataOut->relativeX = rawMouse.lLastX;
+		pDataOut->relativeY = rawMouse.lLastY;
 
 		bIsMouseInput = true;
 	}
@@ -310,7 +310,8 @@ void Input::UpdateKeyDown(KeyDownEventData data)
 		const EMouseButtons mouseBtn = static_cast<EMouseButtons>(key);
 
 		// if left & right mouse is clicked the same time, @key will be
-		// Input::EMouseButtons::MOUSE_BUTTON_LEFT | Input::EMouseButtons::MOUSE_BUTTON_RIGHT
+		// Input::EMouseButtons::MOUSE_BUTTON_LEFT | Input::EMouseButtons::MOUSE_BUTTON_RIGHT.
+		// Here, we decode that into distinct state variables.
 		if (mouseBtn & EMouseButtons::MOUSE_BUTTON_LEFT)   mMouseButtons[EMouseButtons::MOUSE_BUTTON_LEFT] = true;
 		if (mouseBtn & EMouseButtons::MOUSE_BUTTON_RIGHT)  mMouseButtons[EMouseButtons::MOUSE_BUTTON_RIGHT] = true;
 		if (mouseBtn & EMouseButtons::MOUSE_BUTTON_MIDDLE) mMouseButtons[EMouseButtons::MOUSE_BUTTON_MIDDLE] = true;
@@ -432,10 +433,6 @@ bool Input::IsKeyTriggered(const std::string & key) const
 	const KeyCode code = KEY_MAP.at(key.data());
 	return !mKeysPrevious[code] && mKeys[code] && !mbIgnoreInput;
 }
-
-
-int Input::MouseDeltaX() const { return !mbIgnoreInput ? (int)mMouseDelta[0] : 0; }
-int Input::MouseDeltaY() const { return !mbIgnoreInput ? (int)mMouseDelta[1] : 0; }
 
 bool Input::IsMouseDown(EMouseButtons mbtn) const
 {

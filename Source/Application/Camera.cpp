@@ -40,11 +40,11 @@ Camera::Camera()
 Camera::~Camera(void)
 {}
 
-void Camera::InitializeCamera(const FCameraData& data, int ViewportX, int ViewportY)
+void Camera::InitializeCamera(const FCameraData& data)
 {
 	const auto& NEAR_PLANE = data.nearPlane;
 	const auto& FAR_PLANE = data.farPlane;
-	const float AspectRatio = static_cast<float>(ViewportX) / ViewportY;
+	const float& AspectRatio = data.aspect;
 	const float VerticalFoV = data.fovV_Degrees * DEG2RAD;
 
 	//SetOthoMatrix(ViewportX, ViewportY, NEAR_PLANE, FAR_PLANE); // quick test

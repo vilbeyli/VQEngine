@@ -36,16 +36,22 @@ using KeyCode = WPARAM;
 class Input
 {
 public:
-	using KeyMapping = std::unordered_map<std::string_view, KeyCode>;
 	enum EMouseButtons
 	{	// windows btn codes: https://docs.microsoft.com/en-us/windows/win32/inputdev/wm-mbuttondown
 		MOUSE_BUTTON_LEFT   = MK_LBUTTON,
 		MOUSE_BUTTON_RIGHT  = MK_RBUTTON,
 		MOUSE_BUTTON_MIDDLE = MK_MBUTTON
 	};
+	// ---------------------------------------------------------------------------------------------
+	using KeyState         = char;
+	using KeyMapping       = std::unordered_map<std::string_view, KeyCode>;
+	using ButtonStateMap_t = std::unordered_map<EMouseButtons, KeyState>;
+	// ---------------------------------------------------------------------------------------------
 
 	static void InitRawInputDevices(HWND hwnd);
-	static bool ReadRawInput_Mouse(LPARAM lParam, MouseInputEventData* pData);
+	static bool ReadRawInput_Mouse(LPARAM lParam, MouseInputEventData* pDataOut);
+	
+	// ---------------------------------------------------------------------------------------------
 
 	Input();
 	Input(Input&& other);
@@ -55,91 +61,52 @@ public:
 	inline void SetInputBypassing(bool b) { mbIgnoreInput.store(b); };
 	inline bool GetInputBypassing() const { return mbIgnoreInput.load(); }
 
-	// update state
-	void UpdateKeyDown(KeyDownEventData); // includes mouse button
-	void UpdateKeyUp(KeyCode);	 // includes mouse button
+	// update state (key states include mouse buttons)
+	void UpdateKeyDown(KeyDownEventData);
+	void UpdateKeyUp(KeyCode);
 	void UpdateMousePos(long x, long y, short scroll);
 	void UpdateMousePos_Raw(int relativeX, int relativeY, short scroll, bool bMouseCaptured);
+	void PostUpdate();
 
+	// state check
 	bool IsKeyDown(KeyCode) const;
 	bool IsKeyDown(const char*) const;
 	bool IsKeyDown(const std::string&) const;
 
 	bool IsKeyUp(const char*) const;
+
 	bool IsKeyTriggered(KeyCode) const;
 	bool IsKeyTriggered(const char*) const;
 	bool IsKeyTriggered(const std::string&) const;
 
-	int  MouseDeltaX() const;
-	int  MouseDeltaY() const;
+	inline const std::array<float, 2>& GetMouseDelta() const { return mMouseDelta; }
+	inline float MouseDeltaX() const { return mMouseDelta[0] && !mbIgnoreInput; };
+	inline float MouseDeltaY() const { return mMouseDelta[1] && !mbIgnoreInput; };
+
 	bool IsMouseDown(EMouseButtons) const;
 	bool IsMouseUp(EMouseButtons) const;
 	bool IsMouseDoubleClick(EMouseButtons) const;
 	bool IsMouseTriggered(EMouseButtons) const;
 	bool IsMouseScrollUp() const;
 	bool IsMouseScrollDown() const;
-	bool IsAnyMouseDown() const;
-
-	void PostUpdate();
-	inline const std::array<float, 2>& GetMouseDelta() const { return mMouseDelta; }
+	bool IsAnyMouseDown() const; // @mbIgnoreInput doesn't affect this
 
 
-private: // On/Off state is represented as char (8-bit) instead of bool (32-bit)
+private:
 	// state
-	std::atomic<bool> mbIgnoreInput;
+	std::atomic<bool>                    mbIgnoreInput;
 
 	// keyboard
-#if 1
-	std::array<char, NUM_MAX_KEYS> mKeys;
-	std::array<char, NUM_MAX_KEYS> mKeysPrevious;
-#else
-	// how do we populate KeyCodes during initialization?
-	// is it better to simply use an array?
-	std::unordered_map<KeyCode, char> mKeys;
-	std::unordered_map<KeyCode, char> mKeysPrevious;
-#endif
+	std::array<KeyState, NUM_MAX_KEYS>   mKeys;
+	std::array<KeyState, NUM_MAX_KEYS>   mKeysPrevious;
 
 	// mouse
-	std::unordered_map<EMouseButtons, char> mMouseButtons;
-	std::unordered_map<EMouseButtons, char> mMouseButtonsPrevious;
-	std::unordered_map<EMouseButtons, char> mMouseButtonDoubleClicks;
-	std::array<float, 2>                    mMouseDelta;
-	std::array<long, 2>                     mMousePosition;
-	short                                   mMouseScroll;
+	ButtonStateMap_t                     mMouseButtons;
+	ButtonStateMap_t                     mMouseButtonsPrevious;
+	ButtonStateMap_t                     mMouseButtonDoubleClicks;
 
-
-// SOME TEMPLATE FUN HERE --------------------------------------------------------------------
-public:
-	template<class Args> inline bool are_all_true(int argc, Args...)
-	{
-		bool bAreAllDown = true;
-		va_list args;	// use this unpack function variadic parameters
-		va_start(args, argc);
-		for (int i = 0; i < argc; ++i)
-		{
-			bAreAllDown &= va_arg(args, bool);
-		}
-		va_end(args);
-		return bAreAllDown;
-	}
-	template<class... Args> bool AreKeysDown(int keyCount, Args&&... args)
-	{ 	//-------------------------------------------------------------------------------------
-		// Note:
-		//
-		// We want to feed each argument to IsKeyDown() which is not a tmeplate function.
-		//
-		// IsKeyDown(args)...; -> we can't do this to expand and feed the args to the function. 
-		//
-		// but if we enclose it in a template function like this: 
-		//     f(argc, IsKeyDown(args)...)
-		//
-		// we can expand the arguments one by one into the IsKeyDown() function.
-		// now if the function f is a template function, all its arguments will be bools
-		// as the return type of IsKeyDown() is bool. We can simply chain them together to
-		// get the final result. f() in this case is 'are_all_true()'.
-		//-------------------------------------------------------------------------------------
-		assert(false);	// there's a bug. doesn't work in release mode. don't use this for now.
-		return are_all_true(keyCount, IsKeyDown(args)...);
-	}
+	std::array<float, 2>                 mMouseDelta;
+	std::array<long, 2>                  mMousePosition;
+	short                                mMouseScroll;
 };
 

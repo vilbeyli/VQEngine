@@ -116,7 +116,7 @@ public:
 	Camera();
 	~Camera(void);
 
-	void InitializeCamera(const FCameraData& data, int ViewportX, int ViewportY);
+	void InitializeCamera(const FCameraData& data);
 
 	void SetOthoMatrix(int screenWidth, int screenHeight, float screenNear, float screenFar);
 	void SetProjectionMatrix(float fovy, float screenAspect, float screenNear, float screenFar);
