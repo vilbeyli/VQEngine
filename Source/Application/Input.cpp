@@ -327,7 +327,9 @@ void Input::UpdateKeyDown(KeyDownEventData data)
 
 	// KEYBOARD KEY
 	else
+	{
 		mKeys[key] = true;
+	}
 }
 
 void Input::UpdateKeyUp(KeyCode key)
@@ -378,10 +380,13 @@ void Input::UpdateMousePos_Raw(int relativeX, int relativeY, short scroll, bool 
 		mMousePosition[1] = 0;
 
 		mMouseScroll = scroll;
+
+#if VERBOSE_LOGGING
 		if (scroll != 0)
 		{
 			Log::Info("Scroll: %d", mMouseScroll);
 		}
+#endif
 	}
 }
 

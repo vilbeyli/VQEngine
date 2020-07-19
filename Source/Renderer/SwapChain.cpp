@@ -48,8 +48,8 @@
 
 FWindowRepresentation::FWindowRepresentation(const std::unique_ptr<Window>& pWnd, bool bVSyncIn, bool bFullscreenIn)
     : hwnd(pWnd->GetHWND())
-    , width(pWnd->GetWidth())
-    , height(pWnd->GetHeight())
+    , width(pWnd->IsFullscreen() ? pWnd->GetFullscreenWidth() : pWnd->GetWidth())
+    , height(pWnd->IsFullscreen() ? pWnd->GetFullscreenHeight() : pWnd->GetHeight())
     , bVSync(bVSyncIn)
     , bExclusiveFullscreen(bFullscreenIn)
 {}
@@ -310,7 +310,7 @@ void SwapChain::SetFullscreen(bool bState, int FSRecoveryWindowWidth, int FSReco
     mode.Scaling          = matchedDesc.Scaling;
     mode.ScanlineOrdering = matchedDesc.ScanlineOrdering;
     // https://docs.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-resizetarget
-    // calling ResizeTarget() will produce WM_RESIZE event right away.
+    // calling ResizeTarget() will produce WM_SIZE event right away.
     // RenderThread handles events twice before present to be able to catch
     // the Resize() event before calling Present() as the events
     // are produced and consumed on different threads (p:main, c:render).

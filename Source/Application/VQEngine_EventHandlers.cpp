@@ -187,6 +187,9 @@ void VQEngine::RenderThread_HandleEvents()
 	if (q.empty())
 		return;
 
+	// keep track of the resize events per HWND and only handle the last one 
+	std::unordered_map<HWND, std::shared_ptr<WindowResizeEvent>> pLastResizeEventLookup;
+
 	// process the events
 	std::shared_ptr<IEvent> pEvent = nullptr;
 	while (!q.empty())
@@ -196,19 +199,17 @@ void VQEngine::RenderThread_HandleEvents()
 
 		switch (pEvent->mType)
 		{
-		case EEventType::WINDOW_RESIZE_EVENT     : RenderThread_HandleWindowResizeEvent(pEvent.get()); break;// pResizeEvent = std::static_pointer_cast<WindowResizeEvent>(pEvent); break;
+		case EEventType::WINDOW_RESIZE_EVENT     : pLastResizeEventLookup[pEvent->hwnd] = std::static_pointer_cast<WindowResizeEvent>(pEvent); break;
 		case EEventType::TOGGLE_FULLSCREEN_EVENT : RenderThread_HandleToggleFullscreenEvent(pEvent.get()); break;
 		case EEventType::WINDOW_CLOSE_EVENT      : RenderThread_HandleWindowCloseEvent(pEvent.get()); break;
 		}
 	}
 
-	// TODO: last resize event PER HWND
-#if 0
-	if (pResizeEvent) // Process only one Window Resize, if any.
+	// Handle the last resize event per hwnd and ignore the rest of it so the app can stay responsive while resizing.
+	for (auto it = pLastResizeEventLookup.begin(); it != pLastResizeEventLookup.end(); ++it)
 	{
-		RenderThread_HandleWindowResizeEvent(pResizeEvent.get());
+		RenderThread_HandleWindowResizeEvent(it->second.get());
 	}
-#endif
 
 }
 
@@ -227,7 +228,9 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const IEvent* pEvent)
 		return;
 	}
 
+#if VERBOSE_LOGGING
 	Log::Info("RenderThread: Handle Window<%x> Resize event, set resolution to %dx%d", hwnd, WIDTH, HEIGHT);
+#endif
 
 	Swapchain.WaitForGPU();
 	Swapchain.Resize(WIDTH, HEIGHT);
@@ -264,8 +267,8 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 	SwapChain&                        Swapchain = mRenderer.GetWindowSwapChain(pToggleFSEvent->hwnd);
 	const FWindowSettings&          WndSettings = GetWindowSettings(hwnd);
 	const bool   bExclusiveFullscreenTransition = WndSettings.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN;
-	const bool            bFullscreenStateToSet = !Swapchain.IsFullscreen();
 	std::unique_ptr<Window>&               pWnd = GetWindow(hwnd);
+	const bool            bFullscreenStateToSet = bExclusiveFullscreenTransition ? !Swapchain.IsFullscreen() : !pWnd->IsFullscreen();
 	const int                             WIDTH = bFullscreenStateToSet ? pWnd->GetFullscreenWidth() : pWnd->GetWidth();
 	const int                            HEIGHT = bFullscreenStateToSet ? pWnd->GetFullscreenHeight() : pWnd->GetHeight();
 
@@ -331,6 +334,10 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 	else
 	{
 		pWnd->ToggleWindowedFullscreen(&Swapchain);
+
+		const bool bCapture = true;
+		const bool bVisible = true;
+		mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bFullscreenStateToSet, bVisible));
 	}
 
 }
