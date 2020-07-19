@@ -165,11 +165,16 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
         NULL);   // used with multiple windows, NULL
 
     windowStyle_ = FlagWindowStyle;
-    ::SetWindowLongPtr(hwnd_, GWLP_USERDATA, reinterpret_cast<LONG_PTR> (this));
     
     // TODO: initial Show() sets the resolution low for the first frame.
     //       Workaround: RenderThread() calls HandleEvents() right before looping to handle the first ShowWindow() before Present().
     ::ShowWindow(hwnd_, initParams.iShowCmd);
+
+    // set the data after the window shows up the first time.
+    // otherwise, the Focus event will be sent on ::ShowWindow() before 
+    // this function returns, causing issues dereferencing the smart
+    // pointer calling this ctor.
+    ::SetWindowLongPtr(hwnd_, GWLP_USERDATA, reinterpret_cast<LONG_PTR> (this));
 }
 
 ///////////////////////////////////////////////////////////////////////////////

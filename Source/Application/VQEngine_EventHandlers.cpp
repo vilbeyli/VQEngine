@@ -232,6 +232,7 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const IEvent* pEvent)
 	Log::Info("RenderThread: Handle Window<%x> Resize event, set resolution to %dx%d", hwnd, WIDTH, HEIGHT);
 #endif
 
+	
 	Swapchain.WaitForGPU();
 	Swapchain.Resize(WIDTH, HEIGHT);
 	pWnd->OnResize(WIDTH, HEIGHT);

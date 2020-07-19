@@ -211,103 +211,107 @@ private:
 	//-----------------------------------------------------------------------------------------
 
 	// threads
-	std::thread                    mRenderThread;
-	std::thread                    mUpdateThread;
-	ThreadPool                     mUpdateWorkerThreads;
-	ThreadPool                     mRenderWorkerThreads;
+	std::thread                     mRenderThread;
+	std::thread                     mUpdateThread;
+	ThreadPool                      mUpdateWorkerThreads;
+	ThreadPool                      mRenderWorkerThreads;
 
 	// sync
-	std::atomic<bool>              mbStopAllThreads;
-	std::unique_ptr<Semaphore>     mpSemUpdate;
-	std::unique_ptr<Semaphore>     mpSemRender;
+	std::atomic<bool>               mbStopAllThreads;
+	std::unique_ptr<Semaphore>      mpSemUpdate;
+	std::unique_ptr<Semaphore>      mpSemRender;
 	
 	// windows
-	WindowLookup_t                 mpWindows;
+	WindowLookup_t                  mpWindows;
 
-	std::unique_ptr<Window>        mpWinMain;
-	std::unique_ptr<Window>        mpWinDebug;
+	std::unique_ptr<Window>         mpWinMain;
+	std::unique_ptr<Window>         mpWinDebug;
 	
 
 	// render
-	VQRenderer                     mRenderer;
-	BuiltinMeshArray_t             mBuiltinMeshes;
-	BuiltinMeshNameArray_t         mBuiltinMeshNames;
+	VQRenderer                      mRenderer;
+	BuiltinMeshArray_t              mBuiltinMeshes;
+	BuiltinMeshNameArray_t          mBuiltinMeshNames;
 
 	// data / state
-	std::atomic<bool>              mbRenderThreadInitialized;
-	std::atomic<uint64>            mNumRenderLoopsExecuted;
-	std::atomic<uint64>            mNumUpdateLoopsExecuted;
-	std::atomic<bool>              mbLoadingLevel;
-	FEngineSettings                mSettings;
-	EAppState                      mAppState;
-	VQSystemInfo::FSystemInfo      mSysInfo;
+	std::atomic<bool>               mbRenderThreadInitialized;
+	std::atomic<uint64>             mNumRenderLoopsExecuted;
+	std::atomic<uint64>             mNumUpdateLoopsExecuted;
+	std::atomic<bool>               mbLoadingLevel;
+	FEngineSettings                 mSettings;
+	EAppState                       mAppState;
+	VQSystemInfo::FSystemInfo       mSysInfo;
 
 	// scene
-	MainWindowScene                mScene_MainWnd;
-	DebugWindowScene               mScene_DebugWnd;
-	UpdateContextLookup_t          mWindowUpdateContextLookup;
+	MainWindowScene                 mScene_MainWnd;
+	DebugWindowScene                mScene_DebugWnd;
+	UpdateContextLookup_t           mWindowUpdateContextLookup;
 
-	RenderingResourcesLookup_t     mRenderingResources;
-
+#if 0
+	RenderingResourcesLookup_t      mRenderingResources;
+#else
 	FRenderingResources_MainWindow  mResources_MainWnd;
 	FRenderingResources_DebugWindow mResources_DebugWnd;
+#endif
 
 	// input
 	std::unordered_map<HWND, Input> mInputStates;
 
 	// events Windows->VQE
-	EventQueue_t                   mEventQueue_WinToVQE_Renderer;
-	EventQueue_t                   mEventQueue_WinToVQE_Update;
+	EventQueue_t                    mEventQueue_WinToVQE_Renderer;
+	EventQueue_t                    mEventQueue_WinToVQE_Update;
 
 	// events VQE->Windows
-	EventQueue_t                   mEventQueue_VQEToWin_Main;
+	EventQueue_t                    mEventQueue_VQEToWin_Main;
 
 	// timer / profiler
-	Timer                          mTimer;
+	Timer                           mTimer;
 
 	// misc.
 	// One Swapchain.Resize() call is required for the first time 
 	// transition of swapchains which are initialzied fullscreen.
-	std::unordered_map<HWND, bool> mInitialSwapchainResizeRequiredWindowLookup;
+	std::unordered_map<HWND, bool>  mInitialSwapchainResizeRequiredWindowLookup;
+
+
+private:
+	void                            InitializeEngineSettings(const FStartupParameters& Params);
+	void                            InitializeWindows(const FStartupParameters& Params);
+
+	void                            InitializeThreads();
+	void                            ExitThreads();
+
+	void                            HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWindowSettings& settings);
+	void                            SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse);
+	inline void                     SetMouseCaptureForWindow(Window* pWin, bool bCaptureMouse) { this->SetMouseCaptureForWindow(pWin->GetHWND(), bCaptureMouse); };
+
+	void                            InitializeBuiltinMeshes();
+	void                            LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete
+	void                            Load_SceneData_Dispatch();
+	void                            Load_SceneData_Join();
+
+	HRESULT                         RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderContext& ctx);
+	HRESULT                         RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx);
+
+	void                            UpdateThread_HandleEvents();
+	void                            RenderThread_HandleEvents();
+	void                            MainThread_HandleEvents();
+
+	void                            RenderThread_HandleWindowResizeEvent(const IEvent* pEvent);
+	void                            RenderThread_HandleWindowCloseEvent(const IEvent* pEvent);
+	void                            RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent);
+
+	std::unique_ptr<Window>&        GetWindow(HWND hwnd);
+	const FWindowSettings&          GetWindowSettings(HWND hwnd) const;
+	FWindowSettings&                GetWindowSettings(HWND hwnd);
+
+	void                            RegisterWindowForInput(const std::unique_ptr<Window>& pWnd);
+	void                            UnregisterWindowForInput(const std::unique_ptr<Window>& pWnd);
+
+	void                            HandleEngineInput();
+
 
 private:
 	// Reads EngineSettings.ini from next to the executable and returns a 
 	// FStartupParameters struct as it readily has override booleans for engine settings
-	static FStartupParameters ParseEngineSettingsFile();
-
-private:
-	void                     InitializeEngineSettings(const FStartupParameters& Params);
-	void                     InitializeWindows(const FStartupParameters& Params);
-
-	void                     InitializeThreads();
-	void                     ExitThreads();
-
-	void                     HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWindowSettings& settings);
-	void                     SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse);
-
-	void                     InitializeBuiltinMeshes();
-	void                     LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete
-	void                     Load_SceneData_Dispatch();
-	void                     Load_SceneData_Join();
-	
-	HRESULT                  RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderContext& ctx);
-	HRESULT                  RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx);
-	
-
-	void                     UpdateThread_HandleEvents();
-	void                     RenderThread_HandleEvents();
-	void                     MainThread_HandleEvents();
-
-	void                     RenderThread_HandleWindowResizeEvent(const IEvent* pEvent);
-	void                     RenderThread_HandleWindowCloseEvent(const IEvent* pEvent);
-	void                     RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent);
-	
-	std::unique_ptr<Window>& GetWindow(HWND hwnd);
-	const FWindowSettings&   GetWindowSettings(HWND hwnd) const;
-	FWindowSettings&         GetWindowSettings(HWND hwnd);
-
-	void                     RegisterWindowForInput(const std::unique_ptr<Window>& pWnd);
-	void                     UnregisterWindowForInput(const std::unique_ptr<Window>& pWnd);
-
-	void                     HandleEngineInput();
+	static FStartupParameters       ParseEngineSettingsFile();
 };
