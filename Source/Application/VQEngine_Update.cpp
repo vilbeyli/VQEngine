@@ -82,10 +82,11 @@ void VQEngine::UpdateThread_Inititalize()
 #if ENABLE_RAW_INPUT
 	// initialize raw input
 	Input::InitRawInputDevices(mpWinMain->GetHWND());
+#endif
 
+	// initialize input states
 	RegisterWindowForInput(mpWinMain);
 	RegisterWindowForInput(mpWinDebug);
-#endif
 
 	// busy lock until render thread is initialized
 	while (!mbRenderThreadInitialized); 
@@ -236,16 +237,21 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 	
 
 	// check if camera aspect ratio has changed
+	// TODO: event-based solution.
+#if 0
 	static FCameraData STATIC_CAMERA_INITIALIZATION_DATA = GenerateCameraInitializationParameters(mpWinMain);
 	FCameraData CameraInitParams = GenerateCameraInitializationParameters(mpWinMain);
 	const bool bCameraAspectRatioChanged = STATIC_CAMERA_INITIALIZATION_DATA.aspect != CameraInitParams.aspect;
+	if (bCameraAspectRatioChanged)
+	{
+		CameraInitParams.x = FrameData.SceneCamera.GetPositionF().x;
+		CameraInitParams.y = FrameData.SceneCamera.GetPositionF().y;
+		CameraInitParams.z = FrameData.SceneCamera.GetPositionF().z;
+	}
+#endif
 
 	// handle input
-	if (input.IsKeyTriggered('R') || bCameraAspectRatioChanged)
-	{
-		FrameData.SceneCamera.InitializeCamera(CameraInitParams);
-		STATIC_CAMERA_INITIALIZATION_DATA = CameraInitParams;
-	}
+	if (input.IsKeyTriggered('R')) FrameData.SceneCamera.InitializeCamera(GenerateCameraInitializationParameters(mpWinMain));
 
 	constexpr float CAMERA_MOVEMENT_SPEED_MULTIPLER = 0.75f;
 	constexpr float CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER = 2.0f;
