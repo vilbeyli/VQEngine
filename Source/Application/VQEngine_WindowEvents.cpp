@@ -93,9 +93,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				pWindow->pOwner->OnToggleFullscreen(hwnd);
 				return 0;
 			}
-		}	
-		break; // Send all other WM_SYSKEYDOWN messages to the default WndProc.
+		} break; // Send all other WM_SYSKEYDOWN messages to the default WndProc.
 	
+	// Turn off MessageBeep sound on Alt+Enter: https://stackoverflow.com/questions/3662192/disable-messagebeep-on-invalid-syskeypress
+	case WM_MENUCHAR: return MNC_CLOSE << 16;
+
+
 	//
 	// MOUSE
 	//
