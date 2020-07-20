@@ -63,7 +63,7 @@ public:
 
 	// update state (key states include mouse buttons)
 	void UpdateKeyDown(KeyDownEventData);
-	void UpdateKeyUp(KeyCode);
+	void UpdateKeyUp(KeyCode, bool bIsMouseKey);
 	void UpdateMousePos(long x, long y, short scroll);
 	void UpdateMousePos_Raw(int relativeX, int relativeY, short scroll, bool bMouseCaptured);
 	void PostUpdate();

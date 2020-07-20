@@ -269,10 +269,10 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 	if (input.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_RIGHT))  FrameData.TFCube.RotateAroundAxisRadians(YAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
 	if (input.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE)) FrameData.TFCube.RotateAroundAxisRadians(XAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
 	
-	constexpr float SCROLL_SCALE_DELTA = 0.5f;
+	constexpr float SCROLL_SCALE_DELTA = 1.1f;
 	const float CubeScale = FrameData.TFCube._scale.x;
-	if (input.IsMouseScrollUp()  ) FrameData.TFCube.SetUniformScale(CubeScale + SCROLL_SCALE_DELTA);
-	if (input.IsMouseScrollDown()) FrameData.TFCube.SetUniformScale(std::max(0.5f, CubeScale - SCROLL_SCALE_DELTA));
+	if (input.IsMouseScrollUp()  ) FrameData.TFCube.SetUniformScale(CubeScale * SCROLL_SCALE_DELTA);
+	if (input.IsMouseScrollDown()) FrameData.TFCube.SetUniformScale(std::max(0.5f, CubeScale / SCROLL_SCALE_DELTA));
 
 	// update camera
 	FCameraInput camInput(LocalSpaceTranslation);

@@ -293,12 +293,14 @@ void VQEngine::OnWindowLoseFocus(HWND hwnd)
 // Update Thread will process the queue at the beginning of an update loop
 void VQEngine::OnKeyDown(HWND hwnd, WPARAM wParam)
 {
-	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<KeyDownEvent>(hwnd, wParam));
+	constexpr bool bIsMouseEvent = false;
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<KeyDownEvent>(hwnd, wParam, bIsMouseEvent));
 }
 
 void VQEngine::OnKeyUp(HWND hwnd, WPARAM wParam)
 {
-	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<KeyUpEvent>(hwnd, wParam));
+	constexpr bool bIsMouseEvent = false;
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<KeyUpEvent>(hwnd, wParam, bIsMouseEvent));
 }
 
 
@@ -309,12 +311,14 @@ void VQEngine::OnKeyUp(HWND hwnd, WPARAM wParam)
 // Update Thread will process the queue at the beginning of an update loop
 void VQEngine::OnMouseButtonDown(HWND hwnd, WPARAM wParam, bool bIsDoubleClick)
 {
-	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<KeyDownEvent>(hwnd, wParam, bIsDoubleClick));
+	constexpr bool bIsMouseEvent = true;
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<KeyDownEvent>(hwnd, wParam, bIsMouseEvent, bIsDoubleClick));
 }
 
 void VQEngine::OnMouseButtonUp(HWND hwnd, WPARAM wParam)
 {
-	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<KeyUpEvent>(hwnd, wParam));
+	constexpr bool bIsMouseEvent = true;
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<KeyUpEvent>(hwnd, wParam, bIsMouseEvent));
 }
 
 void VQEngine::OnMouseScroll(HWND hwnd, short scroll)

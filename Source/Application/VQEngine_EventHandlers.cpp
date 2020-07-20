@@ -148,7 +148,7 @@ void VQEngine::UpdateThread_HandleEvents()
 		case KEY_UP_EVENT:
 		{
 			std::shared_ptr<KeyUpEvent> p = std::static_pointer_cast<KeyUpEvent>(pEvent);
-			mInputStates.at(p->hwnd).UpdateKeyUp(p->wparam);
+			mInputStates.at(p->hwnd).UpdateKeyUp(p->wparam, p->bMouseEvent);
 		} break;
 
 		case MOUSE_MOVE_EVENT:

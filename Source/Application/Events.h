@@ -128,31 +128,34 @@ union KeyDownEventData
 {
 	struct Keyboard
 	{
-		Keyboard(WPARAM wp) : wparam(wp){}
+		Keyboard(WPARAM wp, bool bIsMouse) : wparam(wp), bMouse(bIsMouse) {}
 		WPARAM wparam = 0;
+		bool bMouse;
 	} keyboard;
 	struct Mouse
 	{
-		Mouse(WPARAM wp, bool cl) : wparam(wp), bDoubleClick(cl) {}
+		Mouse(WPARAM wp, bool bIsMouse, bool cl) : wparam(wp), bDoubleClick(cl), bMouse(bIsMouse){}
 		WPARAM wparam = 0;
 		bool   bDoubleClick = false;
+		bool   bMouse;
 	} mouse;
 
-	KeyDownEventData(WPARAM wp, bool cl) : mouse(wp, cl) {}
+	KeyDownEventData(WPARAM wp, bool bIsMouse, bool cl) : mouse(wp, bIsMouse, cl) {}
 };
 struct KeyDownEvent : public IEvent
 {
 	KeyDownEventData data;
-	KeyDownEvent(HWND hwnd_, WPARAM wparam_, bool bDoubleClick_ = false) 
+	KeyDownEvent(HWND hwnd_, WPARAM wparam_, bool bIsMouse,  bool bDoubleClick_ = false)
 		: IEvent(EEventType::KEY_DOWN_EVENT, hwnd_)
-		, data(wparam_, bDoubleClick_)
+		, data(wparam_, bIsMouse, bDoubleClick_)
 	{}
 };
 
 struct KeyUpEvent : public IEvent
 {
-	KeyUpEvent(HWND hwnd_, WPARAM wparam_) : IEvent(EEventType::KEY_UP_EVENT, hwnd_), wparam(wparam_) {}
+	KeyUpEvent(HWND hwnd_, WPARAM wparam_, bool bIsMouse) : IEvent(EEventType::KEY_UP_EVENT, hwnd_), wparam(wparam_), bMouseEvent(bIsMouse) {}
 	
+	bool bMouseEvent = false;
 	WPARAM wparam = 0;
 };
 

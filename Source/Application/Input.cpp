@@ -305,7 +305,7 @@ void Input::UpdateKeyDown(KeyDownEventData data)
 	const auto& key = data.mouse.wparam;
 
 	// MOUSE KEY
-	if (IsMouseKey(key))
+	if (data.mouse.bMouse)
 	{
 		const EMouseButtons mouseBtn = static_cast<EMouseButtons>(key);
 
@@ -333,9 +333,9 @@ void Input::UpdateKeyDown(KeyDownEventData data)
 	}
 }
 
-void Input::UpdateKeyUp(KeyCode key)
+void Input::UpdateKeyUp(KeyCode key, bool bIsMouseKey)
 {
-	if (IsMouseKey(key))
+	if (bIsMouseKey)
 	{
 		const EMouseButtons mouseBtn = static_cast<EMouseButtons>(key);
 		
