@@ -231,10 +231,14 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const IEvent* pEvent)
 	const int                      HEIGHT = pResizeEvent->height;
 	SwapChain&                  Swapchain = mRenderer.GetWindowSwapChain(hwnd);
 	std::unique_ptr<Window>&         pWnd = GetWindow(hwnd);
+	const bool         bIsWindowMinimized = WIDTH == 0 && HEIGHT == 0;
+	const bool                  bIsClosed = pWnd->IsClosed();
 
-	if (pWnd->IsClosed())
+
+	if (bIsClosed || bIsWindowMinimized)
 	{
-		Log::Warning("RenderThread: Ignoring WindowResizeEvent as Window<%x> is closed.", hwnd);
+		const std::string reason = bIsClosed ? "closed" : "minimized";
+		Log::Warning("RenderThread: Ignoring WindowResizeEvent as Window<%x> is %s.", hwnd, reason.c_str());
 		return;
 	}
 
@@ -242,7 +246,6 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const IEvent* pEvent)
 	Log::Info("RenderThread: Handle Window<%x> Resize event, set resolution to %dx%d", hwnd, WIDTH, HEIGHT);
 #endif
 
-	
 	Swapchain.WaitForGPU();
 	Swapchain.Resize(WIDTH, HEIGHT);
 	pWnd->OnResize(WIDTH, HEIGHT);
