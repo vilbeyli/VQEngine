@@ -146,16 +146,23 @@ void VQEngine::HandleEngineInput()
 			if (inp.GetInputBypassing())
 			{
 				inp.SetInputBypassing(false);
-				mEventQueue_VQEToWin_Main.AddItem(std::make_shared<SetMouseCaptureEvent>(hwnd, true, false));
+
+				// capture mouse only when main window is clicked
+				if(hwnd == mpWinMain->GetHWND())
+					mEventQueue_VQEToWin_Main.AddItem(std::make_shared<SetMouseCaptureEvent>(hwnd, true, false));
 			}
 		}
 	}
 }
 
-void VQEngine::SetWindowName(const std::unique_ptr<Window>& pWin, const std::string& name)
+bool VQEngine::IsWindowRegistered(HWND hwnd) const
 {
-	mWinNameLookup[pWin->GetHWND()] = name;
+	auto it = mWinNameLookup.find(hwnd);
+	return it != mWinNameLookup.end();
 }
+
+void VQEngine::SetWindowName(HWND hwnd, const std::string& name){	mWinNameLookup[hwnd] = name; }
+void VQEngine::SetWindowName(const std::unique_ptr<Window>& pWin, const std::string& name) { SetWindowName(pWin->GetHWND(), name); }
 
 const std::string& VQEngine::GetWindowName(HWND hwnd) const
 {

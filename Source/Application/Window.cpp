@@ -45,6 +45,7 @@
 // THE SOFTWARE.
 //
 #include "Window.h"
+#include "VQEngine.h"
 #include "../Renderer/SwapChain.h"
 #include "Libs/VQUtils/Source/Log.h"
 #include "Libs/VQUtils/Source/utils.h"
@@ -163,6 +164,11 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
         NULL,    // we aren't using menus, NULL
         initParams.hInst,   // application handle
         NULL);   // used with multiple windows, NULL
+
+    if (initParams.pRegistrar && initParams.pfnRegisterWindowName)
+    {
+        (initParams.pRegistrar->*initParams.pfnRegisterWindowName)(hwnd_, initParams.windowName);
+    }
 
     windowStyle_ = FlagWindowStyle;
     
@@ -314,14 +320,12 @@ void Window::SetMouseCapture(bool bCapture)
         }
 
         ClipCursor(&rcClip);
-        GetCursorPos(&mouseCapturePosition_);
         SetForegroundWindow(hwnd_);
         SetFocus(hwnd_);
     }
     else
     {
         ClipCursor(nullptr);
-        SetCursorPos(mouseCapturePosition_.x, mouseCapturePosition_.y);
         while (ShowCursor(TRUE) <= 0);
         SetForegroundWindow(NULL);
         // SetFocus(NULL);	// we still want to register events

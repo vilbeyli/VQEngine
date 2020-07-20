@@ -96,6 +96,7 @@ struct FRenderingResources_DebugWindow : public FRenderingResources
 	// TODO
 };
 
+
 enum EAppState
 {
 	INITIALIZING = 0,
@@ -124,14 +125,19 @@ public:
 	void Exit();
 
 	// Window event callbacks for the main Window
-	void OnWindowCreate(IWindow* pWnd) override;
+	void OnWindowCreate(HWND hWnd) override;
 	void OnWindowResize(HWND hWnd) override;
-	void OnWindowMinimize(IWindow* pWnd) override;
-	void OnWindowFocus(IWindow* pWindow) override;
-	void OnWindowClose(HWND hwnd_) override;
+	void OnWindowMinimize(HWND hwnd) override;
+	void OnWindowFocus(HWND hwnd) override;
+	void OnWindowLoseFocus(HWND hwnd) override;
+	void OnWindowClose(HWND hwnd) override;
 	void OnToggleFullscreen(HWND hWnd) override;
+	void OnWindowActivate(HWND hWnd) override;
+	void OnWindowDeactivate(HWND hWnd) override;
+
 	void OnKeyDown(HWND hwnd, WPARAM wParam) override;
 	void OnKeyUp(HWND hwnd, WPARAM wParam) override;
+
 	void OnMouseButtonDown(HWND hwnd, WPARAM wParam, bool bIsDoubleClick) override;
 	void OnMouseButtonUp(HWND hwnd, WPARAM wParam) override;
 	void OnMouseScroll(HWND hwnd, short scroll) override;
@@ -196,6 +202,12 @@ public:
 
 
 //-----------------------------------------------------------------------
+	
+	void                            SetWindowName(HWND hwnd, const std::string& name);
+	void                            SetWindowName(const std::unique_ptr<Window>& pWin, const std::string& name);
+	const std::string&              GetWindowName(HWND hwnd) const;
+	inline const std::string&       GetWindowName(const std::unique_ptr<Window>& pWin) const { return GetWindowName(pWin->GetHWND()); }
+	inline const std::string&       GetWindowName(const Window* pWin) const { return GetWindowName(pWin->GetHWND()); }
 
 private:
 	//-----------------------------------------------------------------------------------------
@@ -230,6 +242,7 @@ private:
 	std::unique_ptr<Window>         mpWinDebug;
 #endif
 	WindowNameLookup_t              mWinNameLookup;
+	POINT                           mMouseCapturePosition;
 
 	// render
 	VQRenderer                      mRenderer;
@@ -312,13 +325,29 @@ private:
 
 	void                            HandleEngineInput();
 
-	void                            SetWindowName(const std::unique_ptr<Window>& pWin, const std::string& name);
-	const std::string&              GetWindowName(HWND hwnd) const;
-	inline const std::string&       GetWindowName(const std::unique_ptr<Window>& pWin) const { return GetWindowName(pWin->GetHWND()); }
-	inline const std::string&       GetWindowName(const Window* pWin) const { return GetWindowName(pWin->GetHWND()); }
+	bool                            IsWindowRegistered(HWND hwnd) const;
 
 private:
 	// Reads EngineSettings.ini from next to the executable and returns a 
 	// FStartupParameters struct as it readily has override booleans for engine settings
 	static FStartupParameters       ParseEngineSettingsFile();
+};
+
+
+
+struct FWindowDesc
+{
+	int width = -1;
+	int height = -1;
+	HINSTANCE hInst = NULL;
+	pfnWndProc_t pfnWndProc = nullptr;
+	IWindowOwner* pWndOwner = nullptr;
+	bool bFullscreen = false;
+	int preferredDisplay = 0;
+	int iShowCmd;
+	std::string windowName;
+
+	using Registrar_t = VQEngine;
+	void (Registrar_t::* pfnRegisterWindowName)(HWND hwnd, const std::string& WindowName);
+	Registrar_t* pRegistrar;
 };

@@ -94,8 +94,25 @@ void VQEngine::SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse)
 {
 	auto& pWin = this->GetWindow(hwnd);
 
-	mInputStates.at(hwnd).SetInputBypassing(!bCaptureMouse);
+	if(mInputStates.find(hwnd) != mInputStates.end())
+		mInputStates.at(hwnd).SetInputBypassing(!bCaptureMouse);
+	
 	pWin->SetMouseCapture(bCaptureMouse);
+
+	if (bCaptureMouse)
+	{
+		GetCursorPos(&this->mMouseCapturePosition);
+#if VERBOSE_LOGGING
+		Log::Info("Capturing Mouse: Last position=(%d, %d)", this->mMouseCapturePosition.x, this->mMouseCapturePosition.y);
+#endif
+	}
+	else
+	{ 
+		SetCursorPos(this->mMouseCapturePosition.x, this->mMouseCapturePosition.y);
+#if VERBOSE_LOGGING
+		Log::Info("Releasing Mouse: Settingh Position=(%d, %d)", this->mMouseCapturePosition.x, this->mMouseCapturePosition.y);
+#endif
+	}
 }
 
 
@@ -331,7 +348,10 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 
 		const bool bCapture = true;
 		const bool bVisible = true;
-		mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bFullscreenStateToSet, bVisible));
+		
+		// only capture/release mouse for the main window
+		if(hwnd == mpWinMain->GetHWND())
+			mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bFullscreenStateToSet, bVisible));
 	}
 
 }

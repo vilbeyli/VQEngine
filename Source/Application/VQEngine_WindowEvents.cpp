@@ -25,7 +25,7 @@ constexpr int MIN_WINDOW_SIZE = 128; // make sure window cannot be resized small
 
 #define LOG_WINDOW_MESSAGE_EVENTS 0
 #define LOG_RAW_INPUT             0
-#define LOG_CALLBACKS             1
+#define LOG_CALLBACKS             0
 static void LogWndMsg(UINT uMsg, HWND hwnd);
 
 
@@ -73,12 +73,49 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		EndPaint(hwnd, &ps);
 		return 0;
 	}
-	case WM_SETFOCUS: if (pWindow->pOwner) pWindow->pOwner->OnWindowFocus(pWindow); return 0;
+
+	// https://docs.microsoft.com/en-us/windows/win32/inputdev/wm-setfocus
+	case WM_SETFOCUS: if (pWindow->pOwner) pWindow->pOwner->OnWindowFocus(hwnd); return 0;
+	// https://docs.microsoft.com/en-us/windows/win32/inputdev/wm-killfocus
+	case WM_KILLFOCUS: if (pWindow->pOwner) pWindow->pOwner->OnWindowLoseFocus(hwnd); return 0;
 
 	// https://docs.microsoft.com/en-us/windows/win32/learnwin32/closing-the-window
 	case WM_CLOSE:    if (pWindow->pOwner) pWindow->pOwner->OnWindowClose(hwnd); return 0;
 	case WM_DESTROY:  return 0;
 
+	// https://docs.microsoft.com/en-us/windows/win32/inputdev/wm-activate
+	case WM_ACTIVATE: 
+		if (pWindow->pOwner)
+		{		
+			// wParam:
+			// - The low-order word specifies whether the window is being activated or deactivated.
+			// - The high-order word specifies the minimized state of the window being activated or deactivated
+			// - A nonzero value indicates the window is minimized.
+
+			// **** **** **** **** = wParam
+			// 1111 1111 0000 0000 = 0xFF00
+			UINT wparam_hi  = (wParam & 0xFF00) >> 16;
+
+			// **** **** **** **** = wParam
+			// 0000 0000 1111 1111 = 0x00FF
+			UINT wparam_low = wParam & 0x00FF;
+
+			const bool bWindowInactivation =  wparam_low == WA_INACTIVE;
+			const bool bWindowActivation   = (wparam_low == WA_ACTIVE) || (wparam_low == WA_CLICKACTIVE);
+			
+
+			// lParam:
+			// - A handle to the window being activated or deactivated, depending on the value of the wParam parameter.
+			// - If the low-order word of wParam is WA_INACTIVE, lParam is the handle to the window being activated
+			// - if the low-order word of wParam is WA_ACTIVE or WA_CLICKACTIVE, lParam is the handle to the window being deactivated. 
+			//   This handle can be NULL.
+			HWND hwnd = reinterpret_cast<HWND>(lParam);
+			if (bWindowInactivation)
+				pWindow->pOwner->OnWindowActivate(hwnd);
+			else if (hwnd != NULL)
+				pWindow->pOwner->OnWindowDeactivate(hwnd);
+		}
+		return 0;
 
 	//
 	// KEYBOARD
@@ -173,9 +210,37 @@ void VQEngine::OnToggleFullscreen(HWND hWnd)
 	mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<ToggleFullscreenEvent>(hWnd));
 }
 
-void VQEngine::OnWindowCreate(IWindow* pWnd)
+//------------------------------------------------------------------------------------
+// windows ACTIVATE msg contains the other HWND that the application switches to.
+// this could be an HWND of any program on the user machine, so ensure VQEngine
+// owns the hWnd before calling GetWindowName() for OnWindowActivate() and 
+// OnWindowDeactivate().
+//------------------------------------------------------------------------------------
+void VQEngine::OnWindowActivate(HWND hWnd)
 {
-	//Log::Info("WinCreate");
+	if (IsWindowRegistered(hWnd))
+	{
+#if LOG_CALLBACKS
+		Log::Warning("OnWindowActivate<%0x, %s>", hWnd, GetWindowName(hWnd).c_str());
+#endif
+	}
+}
+void VQEngine::OnWindowDeactivate(HWND hWnd)
+{
+	if (IsWindowRegistered(hWnd))
+	{
+#if LOG_CALLBACKS
+		Log::Warning("OnWindowDeactivate<%0x, %s> ", hWnd, GetWindowName(hWnd).c_str());
+#endif
+	}
+}
+//------------------------------------------------------------------------------------
+
+void VQEngine::OnWindowCreate(HWND hWnd)
+{
+#if LOG_CALLBACKS
+	Log::Info("OnWindowCreate<%0x, %s> ", hWnd, GetWindowName(hWnd).c_str());
+#endif
 }
 
 void VQEngine::OnWindowClose(HWND hwnd_)
@@ -191,23 +256,34 @@ void VQEngine::OnWindowClose(HWND hwnd_)
 	GetWindow(hwnd_)->Close(); // must be called from the main thread.
 }
 
-void VQEngine::OnWindowMinimize(IWindow* pWnd)
+void VQEngine::OnWindowMinimize(HWND hwnd)
 {
 }
 
-void VQEngine::OnWindowFocus(IWindow* pWindow)
+void VQEngine::OnWindowFocus(HWND hwnd)
 {
-	Window* pWin = static_cast<Window*>(pWindow);
-	assert(pWin);
-	const bool bMainWindowFocused = pWindow == mpWinMain.get();
+	const bool bMainWindowFocused = hwnd == mpWinMain->GetHWND();
 
 #if LOG_CALLBACKS
-	Log::Warning("OnWindowFocus<%x, %s>", pWin->GetHWND(), this->GetWindowName(pWin).c_str());
+	Log::Warning("OnWindowFocus<%x, %s>", hwnd, this->GetWindowName(hwnd).c_str());
 #endif
 
+	// make sure the mouse becomes visible when Main Window is not the one that is focused
 	if(bMainWindowFocused)
-		this->SetMouseCaptureForWindow(pWin, true);
+		this->SetMouseCaptureForWindow(mpWinMain->GetHWND(), true);
 }
+
+void VQEngine::OnWindowLoseFocus(HWND hwnd)
+{
+#if LOG_CALLBACKS
+	Log::Warning("OnWindowLoseFocus<%x, %s>", hwnd, this->GetWindowName(hwnd).c_str());
+#endif
+
+	// make sure the mouse becomes visible when Main Window is not the one that is focused
+	if(hwnd == mpWinMain->GetHWND() && mpWinMain->IsMouseCaptured())
+		this->SetMouseCaptureForWindow(mpWinMain->GetHWND(), false);
+}
+
 
 
 // ===================================================================================================================================

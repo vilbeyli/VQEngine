@@ -29,7 +29,7 @@ constexpr char* BUILD_CONFIG = "Debug";
 #else
 constexpr char* BUILD_CONFIG = "Release";
 #endif
-constexpr char* VQENGINE_VERSION = "v0.2.0";
+constexpr char* VQENGINE_VERSION = "v0.3.0";
 
 
 void VQEngine::MainThread_Tick()
@@ -153,7 +153,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 
 void VQEngine::InitializeWindows(const FStartupParameters& Params)
 {
-	auto fnInitializeWindow = [&](const FWindowSettings& settings, HINSTANCE hInstance, std::unique_ptr<Window>& pWin)
+	auto fnInitializeWindow = [&](const FWindowSettings& settings, HINSTANCE hInstance, std::unique_ptr<Window>& pWin, const std::string& WindowName)
 	{
 		FWindowDesc desc = {};
 		desc.width = settings.Width;
@@ -164,19 +164,20 @@ void VQEngine::InitializeWindows(const FStartupParameters& Params)
 		desc.bFullscreen = settings.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN;
 		desc.preferredDisplay = settings.PreferredDisplay;
 		desc.iShowCmd = Params.iCmdShow;
+		desc.windowName = WindowName;
+		desc.pfnRegisterWindowName = &VQEngine::SetWindowName;
+		desc.pRegistrar = this;
 		pWin.reset(new Window(settings.Title, desc));
-		pWin->pOwner->OnWindowCreate(pWin.get());
+		pWin->pOwner->OnWindowCreate(pWin->GetHWND());
 	};
 
-	fnInitializeWindow(mSettings.WndMain, Params.hExeInstance, mpWinMain);
+	fnInitializeWindow(mSettings.WndMain, Params.hExeInstance, mpWinMain, "Main Window");
 	Log::Info("Created main window<0x%x>: %dx%d", mpWinMain->GetHWND(), mpWinMain->GetWidth(), mpWinMain->GetHeight());
-	this->SetWindowName(mpWinMain, "Main Window");
 
 	if (mSettings.bShowDebugWindow)
 	{
-		fnInitializeWindow(mSettings.WndDebug, Params.hExeInstance, mpWinDebug);
+		fnInitializeWindow(mSettings.WndDebug, Params.hExeInstance, mpWinDebug, "Debug Window");
 		Log::Info("Created debug window<0x%x>: %dx%d", mpWinDebug->GetHWND(), mpWinDebug->GetWidth(), mpWinDebug->GetHeight());
-		this->SetWindowName(mpWinDebug, "Debug Window");
 	}
 
 }

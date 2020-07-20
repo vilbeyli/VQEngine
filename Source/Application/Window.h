@@ -79,12 +79,15 @@ private:
 class IWindowOwner
 {
 public:
-	virtual void OnWindowCreate(IWindow* pWnd) = 0;
+	virtual void OnWindowCreate(HWND hwnd_) = 0;
 	virtual void OnWindowResize(HWND) = 0;
 	virtual void OnToggleFullscreen(HWND) = 0;
-	virtual void OnWindowMinimize(IWindow* pWnd) = 0;
-	virtual void OnWindowFocus(IWindow* pWnd) = 0;
+	virtual void OnWindowMinimize(HWND hwnd_) = 0;
+	virtual void OnWindowFocus(HWND hwnd_) = 0;
+	virtual void OnWindowLoseFocus(HWND hwnd_) = 0;
 	virtual void OnWindowClose(HWND hwnd_) = 0;
+	virtual void OnWindowActivate(HWND hwnd_) = 0;
+	virtual void OnWindowDeactivate(HWND hwnd_) = 0;
 	
 	virtual void OnKeyDown(HWND, WPARAM) = 0;
 	virtual void OnKeyUp(HWND, WPARAM) = 0;
@@ -134,18 +137,8 @@ private:
 
 
 using pfnWndProc_t = LRESULT(CALLBACK*)(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+struct FWindowDesc;
 
-struct FWindowDesc
-{
-	int width  = -1;
-	int height = -1;
-	HINSTANCE hInst = NULL;
-	pfnWndProc_t pfnWndProc = nullptr;
-	IWindowOwner* pWndOwner = nullptr;
-	bool bFullscreen = false;
-	int preferredDisplay = 0;
-	int iShowCmd;
-};
 
 #define __MUST_BE_CALLED_FROM_WINMAIN_THREAD_ 
 
@@ -184,5 +177,4 @@ private:
 	UINT windowStyle_;
 	int FSwidth_ = -1, FSheight_ = -1;
 	bool isMouseCaptured_ = false;
-	POINT mouseCapturePosition_ = { 0, 0 };
 };
