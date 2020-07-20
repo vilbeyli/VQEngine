@@ -16,10 +16,14 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
+#define NOMINMAX
+
 #include "VQEngine.h"
 #include "Math.h"
 
 #include "Libs/VQUtils/Source/utils.h"
+
+#include <algorithm>
 
 using namespace DirectX;
 
@@ -230,10 +234,22 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 	FFrameData& FrameData         = mScene_MainWnd.mFrameData[FRAME_DATA_INDEX];
 	const Input& input            = mInputStates.at(hwnd);
 	
+
+	// check if camera aspect ratio has changed
+	static FCameraData STATIC_CAMERA_INITIALIZATION_DATA = GenerateCameraInitializationParameters(mpWinMain);
+	FCameraData CameraInitParams = GenerateCameraInitializationParameters(mpWinMain);
+	const bool bCameraAspectRatioChanged = STATIC_CAMERA_INITIALIZATION_DATA.aspect != CameraInitParams.aspect;
+
 	// handle input
+	if (input.IsKeyTriggered('R') || bCameraAspectRatioChanged)
+	{
+		FrameData.SceneCamera.InitializeCamera(CameraInitParams);
+		STATIC_CAMERA_INITIALIZATION_DATA = CameraInitParams;
+	}
+
 	constexpr float CAMERA_MOVEMENT_SPEED_MULTIPLER = 0.75f;
 	constexpr float CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER = 2.0f;
-	XMVECTOR LocalSpaceTranslation = XMVectorSet(0,0,0,0);
+	XMVECTOR LocalSpaceTranslation = XMVectorSet(0, 0, 0, 0);
 	if (input.IsKeyDown('A'))		LocalSpaceTranslation += XMLoadFloat3(&LeftVector);
 	if (input.IsKeyDown('D'))		LocalSpaceTranslation += XMLoadFloat3(&RightVector);
 	if (input.IsKeyDown('W'))		LocalSpaceTranslation += XMLoadFloat3(&ForwardVector);
@@ -242,9 +258,6 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 	if (input.IsKeyDown('Q'))		LocalSpaceTranslation += XMLoadFloat3(&DownVector);
 	if (input.IsKeyDown(VK_SHIFT))	LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER;
 	LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_MULTIPLER;
-
-	if (input.IsKeyTriggered('R')) FrameData.SceneCamera.InitializeCamera(GenerateCameraInitializationParameters(mpWinMain));
-	
 
 	constexpr float MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER = 1.0f;
 	if (input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_LEFT))   FrameData.TFCube.RotateAroundAxisRadians(ZAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
@@ -256,9 +269,10 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 	if (input.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_RIGHT))  FrameData.TFCube.RotateAroundAxisRadians(YAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
 	if (input.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE)) FrameData.TFCube.RotateAroundAxisRadians(XAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
 	
-	constexpr float SCROLL_ROTATION_MULTIPLIER = 0.5f; // 90 degs | 0.5 rads
-	if (input.IsMouseScrollUp()  ) FrameData.TFCube.RotateAroundAxisRadians(XAxis,  PI * SCROLL_ROTATION_MULTIPLIER);
-	if (input.IsMouseScrollDown()) FrameData.TFCube.RotateAroundAxisRadians(XAxis, -PI * SCROLL_ROTATION_MULTIPLIER);
+	constexpr float SCROLL_SCALE_DELTA = 0.5f;
+	const float CubeScale = FrameData.TFCube._scale.x;
+	if (input.IsMouseScrollUp()  ) FrameData.TFCube.SetUniformScale(CubeScale + SCROLL_SCALE_DELTA);
+	if (input.IsMouseScrollDown()) FrameData.TFCube.SetUniformScale(std::max(0.5f, CubeScale - SCROLL_SCALE_DELTA));
 
 	// update camera
 	FCameraInput camInput(LocalSpaceTranslation);

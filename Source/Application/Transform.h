@@ -46,6 +46,7 @@ public:
 	inline void SetZRotationDeg(float zDeg)              { _rotation = Quaternion::FromAxisAngle(ForwardVector, zDeg * DEG2RAD); }
 	inline void SetScale(float x, float y, float z)      { _scale = DirectX::XMFLOAT3(x, y, z); }
 	inline void SetScale(const DirectX::XMFLOAT3& scl)   { _scale = scl; }
+	inline void SetScale(const DirectX::XMVECTOR& scl)   { XMStoreFloat3(&_scale, scl); }
 	inline void SetUniformScale(float s)                 { _scale = DirectX::XMFLOAT3(s, s, s); }
 	inline void SetPosition(float x, float y, float z)   { _position = DirectX::XMFLOAT3(x, y, z); }
 	inline void SetPosition(const DirectX::XMFLOAT3& pos){ _position = pos; }
