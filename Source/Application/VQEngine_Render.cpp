@@ -100,27 +100,18 @@ void VQEngine::RenderThread_Inititalize()
 	// Initialize Renderer: Device, Queues, Heaps
 	FRendererInitializeParameters params = {};
 	params.Settings = mSettings.gfx;
-	params.Windows.push_back(FWindowRepresentation(mpWinMain , mSettings.gfx.bVsync, bExclusiveFullscreen_MainWnd));
 	if (mpWinDebug) 
 	{
 		params.Windows.push_back(FWindowRepresentation(mpWinDebug, false, false));  // debug window is never fullscreen for now.
 	}
+	params.Windows.push_back(FWindowRepresentation(mpWinMain , mSettings.gfx.bVsync, bExclusiveFullscreen_MainWnd));
 	mRenderer.Initialize(params);
 
 	// Initialize swapchains & respective render targets
 	for (const FWindowRepresentation& wnd : params.Windows)
 	{
 		mRenderer.InitializeRenderContext(wnd, params.Settings.bUseTripleBuffering ? 3 : 2);
-
-#if 1
 		mEventQueue_VQEToWin_Main.AddItem(std::make_shared<HandleWindowTransitionsEvent>(wnd.hwnd));
-#else
-		const bool bFullscreen = this->GetWindowSettings(wnd.hwnd).IsDisplayModeFullscreen();
-		const bool bFullscreenTransitionNeeded = this->GetWindow(wnd.hwnd)->IsFullscreen() != bFullscreen;
-
-		if(bFullscreenTransitionNeeded)
-			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<ToggleFullscreenEvent>(wnd.hwnd));
-#endif
 	}
 
 	mbRenderThreadInitialized.store(true);

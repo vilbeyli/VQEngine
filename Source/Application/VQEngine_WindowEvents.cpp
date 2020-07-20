@@ -25,7 +25,7 @@ constexpr int MIN_WINDOW_SIZE = 128; // make sure window cannot be resized small
 
 #define LOG_WINDOW_MESSAGE_EVENTS 0
 #define LOG_RAW_INPUT             0
-#define LOG_CALLBACKS             0
+#define LOG_CALLBACKS             1
 static void LogWndMsg(UINT uMsg, HWND hwnd);
 
 
@@ -199,11 +199,14 @@ void VQEngine::OnWindowFocus(IWindow* pWindow)
 {
 	Window* pWin = static_cast<Window*>(pWindow);
 	assert(pWin);
+	const bool bMainWindowFocused = pWindow == mpWinMain.get();
 
 #if LOG_CALLBACKS
-	Log::Warning("OnWindowFocus");
+	Log::Warning("OnWindowFocus<%x, %s>", pWin->GetHWND(), this->GetWindowName(pWin).c_str());
 #endif
-	this->SetMouseCaptureForWindow(pWin, true);
+
+	if(bMainWindowFocused)
+		this->SetMouseCaptureForWindow(pWin, true);
 }
 
 

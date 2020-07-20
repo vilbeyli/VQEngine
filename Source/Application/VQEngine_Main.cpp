@@ -170,12 +170,15 @@ void VQEngine::InitializeWindows(const FStartupParameters& Params)
 
 	fnInitializeWindow(mSettings.WndMain, Params.hExeInstance, mpWinMain);
 	Log::Info("Created main window<0x%x>: %dx%d", mpWinMain->GetHWND(), mpWinMain->GetWidth(), mpWinMain->GetHeight());
+	this->SetWindowName(mpWinMain, "Main Window");
 
 	if (mSettings.bShowDebugWindow)
 	{
 		fnInitializeWindow(mSettings.WndDebug, Params.hExeInstance, mpWinDebug);
 		Log::Info("Created debug window<0x%x>: %dx%d", mpWinDebug->GetHWND(), mpWinDebug->GetWidth(), mpWinDebug->GetHeight());
+		this->SetWindowName(mpWinDebug, "Debug Window");
 	}
+
 }
 
 void VQEngine::InitializeThreads()

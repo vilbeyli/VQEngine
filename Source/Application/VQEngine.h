@@ -208,6 +208,7 @@ private:
 	using UpdateContextLookup_t      = std::unordered_map<HWND, IWindowUpdateContext*>;
 	using RenderingResourcesLookup_t = std::unordered_map<HWND, std::shared_ptr<FRenderingResources>>;
 	using WindowLookup_t             = std::unordered_map<HWND, std::unique_ptr<Window>>;
+	using WindowNameLookup_t         = std::unordered_map<HWND, std::string>;
 	//-----------------------------------------------------------------------------------------
 
 	// threads
@@ -228,6 +229,7 @@ private:
 	std::unique_ptr<Window>         mpWinMain;
 	std::unique_ptr<Window>         mpWinDebug;
 #endif
+	WindowNameLookup_t              mWinNameLookup;
 
 	// render
 	VQRenderer                      mRenderer;
@@ -310,6 +312,10 @@ private:
 
 	void                            HandleEngineInput();
 
+	void                            SetWindowName(const std::unique_ptr<Window>& pWin, const std::string& name);
+	const std::string&              GetWindowName(HWND hwnd) const;
+	inline const std::string&       GetWindowName(const std::unique_ptr<Window>& pWin) const { return GetWindowName(pWin->GetHWND()); }
+	inline const std::string&       GetWindowName(const Window* pWin) const { return GetWindowName(pWin->GetHWND()); }
 
 private:
 	// Reads EngineSettings.ini from next to the executable and returns a 

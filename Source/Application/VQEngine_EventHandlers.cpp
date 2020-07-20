@@ -66,12 +66,14 @@ void VQEngine::HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWin
 {
 	if (!pWin) return;
 
+	const bool bHandlingMainWindowTransition = pWin == mpWinMain;
+
 	// TODO: generic solution to multi window/display settings. 
 	//       For now, simply prevent debug wnd occupying main wnd's display.
 	if (mpWinMain->IsFullscreen()
 		&& (mSettings.WndMain.PreferredDisplay == mSettings.WndDebug.PreferredDisplay)
 		&& settings.IsDisplayModeFullscreen()
-		&& pWin != mpWinMain)
+		&& !bHandlingMainWindowTransition)
 	{
 		Log::Warning("Debug window and Main window cannot be Fullscreen on the same display!");
 		pWin->SetFullscreen(false);
@@ -84,17 +86,8 @@ void VQEngine::HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWin
 	// Exclusive  fullscreen transitions are handled through the Swapchain
 	if (settings.DisplayMode == EDisplayMode::BORDERLESS_FULLSCREEN)
 	{
-#if 1 // TODO: Initial borderless fullscreen window rect is bugged. Default to Primary Display.
 		pWin->ToggleWindowedFullscreen(&mRenderer.GetWindowSwapChain(pWin->GetHWND()));
-#else
-		pWin->ToggleWindowedFullscreen();
-#endif
 	}
-	if (settings.IsDisplayModeFullscreen())
-	{
-		pWin->SetMouseCapture(true);
-	}
-	
 }
 
 void VQEngine::SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse)
