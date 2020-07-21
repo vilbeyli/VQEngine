@@ -92,13 +92,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			// - The high-order word specifies the minimized state of the window being activated or deactivated
 			// - A nonzero value indicates the window is minimized.
 
-			// **** **** **** **** = wParam
-			// 1111 1111 0000 0000 = 0xFF00
-			UINT wparam_hi  = (wParam & 0xFF00) >> 16;
 
-			// **** **** **** **** = wParam
-			// 0000 0000 1111 1111 = 0x00FF
-			UINT wparam_low = wParam & 0x00FF;
+			// **** **** **** **** **** **** **** **** = wParam <-- (32-bits)
+			// 0000 0000 0000 0000 1111 1111 1111 1111 = 0xFFFF <-- LOWORD(Wparam)
+			UINT wparam_hi  = HIWORD(wParam);
+			UINT wparam_low = LOWORD(wParam);
 
 			const bool bWindowInactivation =  wparam_low == WA_INACTIVE;
 			const bool bWindowActivation   = (wparam_low == WA_ACTIVE) || (wparam_low == WA_CLICKACTIVE);
