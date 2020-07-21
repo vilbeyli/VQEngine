@@ -20,6 +20,8 @@
 
 #include <DirectXMath.h>
 
+#include "Math.h"
+
 #include <array>
 
 struct FFrustumPlaneset
@@ -90,22 +92,30 @@ struct FFrustumPlaneset
 
 struct FCameraData
 {
-	union
-	{
-		float fovH_Degrees;
-		float fovV_Degrees;
-	};
+	float x, y, z; // position
+	float width;
+	float height;
 	float nearPlane;
 	float farPlane;
-	float aspect;
-	float x, y, z;
+	float fovV_Degrees;
 	float yaw, pitch; // in degrees
+	bool bPerspectiveProjection;
+};
+struct ProjectionMatrixParameters
+{
+	float ViewporWidth;
+	float ViewporHeight;
+	float NearZ;
+	float FarZ;
+	float FieldOfView;
+	bool bPerspectiveProjection;
 };
 
 struct FCameraInput
 {
 	FCameraInput() = delete;
 	FCameraInput(const DirectX::XMVECTOR& v) : LocalTranslationVector(v), DeltaMouseXY{ 0, 0 } {}
+
 	const DirectX::XMVECTOR& LocalTranslationVector;
 	std::array<float, 2> DeltaMouseXY;
 };
@@ -118,9 +128,7 @@ public:
 
 	void InitializeCamera(const FCameraData& data);
 
-	void SetOthoMatrix(int screenWidth, int screenHeight, float screenNear, float screenFar);
-	void SetProjectionMatrix(float fovy, float screenAspect, float screenNear, float screenFar);
-	void SetProjectionMatrixHFov(float fovx, float screenAspectInverse, float screenNear, float screenFar);
+	void SetProjectionMatrix(const ProjectionMatrixParameters& params);
 
 	// updates View Matrix @mMatView
 	void Update(const float dt, const FCameraInput& input);
@@ -132,33 +140,29 @@ public:
 	DirectX::XMMATRIX GetRotationMatrix() const;
 
 	// returns World Space frustum plane set 
-	//
 	FFrustumPlaneset GetViewFrustumPlanes() const;
 	
 	void SetPosition(float x, float y, float z);
 	void Rotate(float yaw, float pitch, const float dt);
-
-	void Reset();	// resets camera transform to initial position & orientation
-
-public:
-	float Drag;             // 15.0f
-	float AngularSpeedDeg;  // 40.0f
-	float MoveSpeed;        // 1000.0f
-
-private:
 	void Move(const float dt, const FCameraInput& input);
 	void Rotate(const float dt, const FCameraInput& input);
 
-private:
+
 	//--------------------------
 	DirectX::XMFLOAT3 mPosition;
 	float mYaw = 0.0f;
 	//--------------------------
 	DirectX::XMFLOAT3 mVelocity;
 	float mPitch = 0.0f;
-	//--------------------------
-	DirectX::XMFLOAT4X4 mMatView;
-	//--------------------------
+	// -------------------------
+	ProjectionMatrixParameters mProjParams;
+	// -------------------------
+	float Drag;            // 15.0f
+	float AngularSpeedDeg; // 40.0f
+	float MoveSpeed;       // 1000.0f
+	// -------------------------
 	DirectX::XMFLOAT4X4 mMatProj;
-	//--------------------------
+	// -------------------------
+	DirectX::XMFLOAT4X4 mMatView;
+	// -------------------------
 };

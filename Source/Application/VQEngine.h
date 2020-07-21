@@ -42,16 +42,6 @@
 //
 // DATA STRUCTS
 //
-class IWindowUpdateContext
-{
-public:
-	virtual void Update() = 0;
-
-protected:
-	HWND hwnd;
-};
-
-// Data to be updated per frame
 struct FFrameData
 {
 	Camera SceneCamera;
@@ -61,28 +51,19 @@ struct FFrameData
 struct FLoadingScreenData
 {
 	std::array<float, 4> SwapChainClearColor;
-	// TODO: loading screen background img resource
-	// TODO: animation resources
+	
 	SRV_ID SRVLoadingScreen = INVALID_ID;
+	// TODO: animation resources
 };
-class MainWindowScene : public IWindowUpdateContext
+class IWindowUpdateContext
 {
 public:
-	void Update() override;
-
-//private:
+	HWND hwnd;
 	std::vector<FFrameData> mFrameData;
 	std::vector<FLoadingScreenData> mLoadingScreenData;
 };
-class DebugWindowScene : public IWindowUpdateContext
-{
-public:
-	void Update() override;
-
-//private:
-	std::vector<FFrameData> mFrameData;
-	std::vector<FLoadingScreenData> mLoadingScreenData;
-};
+class MainWindowSceneData : public IWindowUpdateContext{};
+class DebugWindowSceneData : public IWindowUpdateContext{};
 
 
 struct FRenderingResources{};
@@ -203,25 +184,25 @@ public:
 
 //-----------------------------------------------------------------------
 	
-	void                            SetWindowName(HWND hwnd, const std::string& name);
-	void                            SetWindowName(const std::unique_ptr<Window>& pWin, const std::string& name);
-	const std::string&              GetWindowName(HWND hwnd) const;
-	inline const std::string&       GetWindowName(const std::unique_ptr<Window>& pWin) const { return GetWindowName(pWin->GetHWND()); }
-	inline const std::string&       GetWindowName(const Window* pWin) const { return GetWindowName(pWin->GetHWND()); }
+	void                       SetWindowName(HWND hwnd, const std::string& name);
+	void                       SetWindowName(const std::unique_ptr<Window>& pWin, const std::string& name);
+	const std::string&         GetWindowName(HWND hwnd) const;
+	inline const std::string&  GetWindowName(const std::unique_ptr<Window>& pWin) const { return GetWindowName(pWin->GetHWND()); }
+	inline const std::string&  GetWindowName(const Window* pWin) const { return GetWindowName(pWin->GetHWND()); }
 
 private:
-	//-----------------------------------------------------------------------------------------
-	using BuiltinMeshArray_t         = std::array<Mesh       , EBuiltInMeshes::NUM_BUILTIN_MESHES>;
-	using BuiltinMeshNameArray_t     = std::array<std::string, EBuiltInMeshes::NUM_BUILTIN_MESHES>;
-	//-----------------------------------------------------------------------------------------
-	using EventPtr_t                 = std::shared_ptr<IEvent>;
-	using EventQueue_t               = BufferedContainer<std::queue<EventPtr_t>, EventPtr_t>;
-	//-----------------------------------------------------------------------------------------
-	using UpdateContextLookup_t      = std::unordered_map<HWND, IWindowUpdateContext*>;
-	using RenderingResourcesLookup_t = std::unordered_map<HWND, std::shared_ptr<FRenderingResources>>;
-	using WindowLookup_t             = std::unordered_map<HWND, std::unique_ptr<Window>>;
-	using WindowNameLookup_t         = std::unordered_map<HWND, std::string>;
-	//-----------------------------------------------------------------------------------------
+	//-------------------------------------------------------------------------------------------------
+	using BuiltinMeshArray_t          = std::array<Mesh       , EBuiltInMeshes::NUM_BUILTIN_MESHES>;
+	using BuiltinMeshNameArray_t      = std::array<std::string, EBuiltInMeshes::NUM_BUILTIN_MESHES>;
+	//-------------------------------------------------------------------------------------------------
+	using EventPtr_t                  = std::shared_ptr<IEvent>;
+	using EventQueue_t                = BufferedContainer<std::queue<EventPtr_t>, EventPtr_t>;
+	//-------------------------------------------------------------------------------------------------
+	using UpdateContextLookup_t       = std::unordered_map<HWND, IWindowUpdateContext*>;
+	using RenderingResourcesLookup_t  = std::unordered_map<HWND, std::shared_ptr<FRenderingResources>>;
+	using WindowLookup_t              = std::unordered_map<HWND, std::unique_ptr<Window>>;
+	using WindowNameLookup_t          = std::unordered_map<HWND, std::string>;
+	//-------------------------------------------------------------------------------------------------
 
 	// threads
 	std::thread                     mRenderThread;
@@ -235,7 +216,7 @@ private:
 	std::unique_ptr<Semaphore>      mpSemRender;
 	
 	// windows
-#if 0
+#if 0 // TODO
 	WindowLookup_t                  mpWindows;
 #else
 	std::unique_ptr<Window>         mpWinMain;
@@ -249,18 +230,20 @@ private:
 	BuiltinMeshArray_t              mBuiltinMeshes;
 	BuiltinMeshNameArray_t          mBuiltinMeshNames;
 
-	// data / state
+	// state
 	std::atomic<bool>               mbRenderThreadInitialized;
 	std::atomic<uint64>             mNumRenderLoopsExecuted;
 	std::atomic<uint64>             mNumUpdateLoopsExecuted;
 	std::atomic<bool>               mbLoadingLevel;
-	FEngineSettings                 mSettings;
 	EAppState                       mAppState;
+
+	// system & settings
+	FEngineSettings                 mSettings;
 	VQSystemInfo::FSystemInfo       mSysInfo;
 
 	// scene
-	MainWindowScene                 mScene_MainWnd;
-	DebugWindowScene                mScene_DebugWnd;
+	MainWindowSceneData             mScene_MainWnd;
+	DebugWindowSceneData            mScene_DebugWnd;
 	UpdateContextLookup_t           mWindowUpdateContextLookup;
 
 #if 0
@@ -273,11 +256,9 @@ private:
 	// input
 	std::unordered_map<HWND, Input> mInputStates;
 
-	// events Windows->VQE
+	// events 
 	EventQueue_t                    mEventQueue_WinToVQE_Renderer;
 	EventQueue_t                    mEventQueue_WinToVQE_Update;
-
-	// events VQE->Windows
 	EventQueue_t                    mEventQueue_VQEToWin_Main;
 
 	// timer / profiler
@@ -312,13 +293,16 @@ private:
 	void                            RenderThread_HandleEvents();
 	void                            MainThread_HandleEvents();
 
-	void                            RenderThread_HandleWindowResizeEvent(const IEvent* pEvent);
+	void                            RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent);
 	void                            RenderThread_HandleWindowCloseEvent(const IEvent* pEvent);
 	void                            RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent);
+
+	void                            UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent);
 
 	std::unique_ptr<Window>&        GetWindow(HWND hwnd);
 	const FWindowSettings&          GetWindowSettings(HWND hwnd) const;
 	FWindowSettings&                GetWindowSettings(HWND hwnd);
+	FFrameData&                     GetCurrentFrameData(HWND hwnd);
 
 	void                            RegisterWindowForInput(const std::unique_ptr<Window>& pWnd);
 	void                            UnregisterWindowForInput(const std::unique_ptr<Window>& pWnd);

@@ -140,7 +140,7 @@ using pfnWndProc_t = LRESULT(CALLBACK*)(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
 struct FWindowDesc;
 
 
-#define __MUST_BE_CALLED_FROM_WINMAIN_THREAD_ 
+#define __MUST_BE_CALLED_FROM_WINMAIN_THREAD__
 
 class Window : public IWindow
 {
@@ -149,11 +149,11 @@ public:
 
 	HWND GetHWND() const;
 
-	void __MUST_BE_CALLED_FROM_WINMAIN_THREAD_ Show() override;
-	void                                       Minimize() override;
-	void                                       ToggleWindowedFullscreen(SwapChain* pSwapChain = nullptr) override;
-	void __MUST_BE_CALLED_FROM_WINMAIN_THREAD_ Close() override;
-	void __MUST_BE_CALLED_FROM_WINMAIN_THREAD_ SetMouseCapture(bool bCapture) override;
+	void __MUST_BE_CALLED_FROM_WINMAIN_THREAD__ Show() override;
+	void                                        Minimize() override;
+	void                                        ToggleWindowedFullscreen(SwapChain* pSwapChain = nullptr) override;
+	void __MUST_BE_CALLED_FROM_WINMAIN_THREAD__ Close() override;
+	void __MUST_BE_CALLED_FROM_WINMAIN_THREAD__ SetMouseCapture(bool bCapture) override;
 
 	inline void OnResize(int w, int h) { width_ = w; height_ = h; }
 	inline void SetFullscreen(bool b) { isFullscreen_ = b; }

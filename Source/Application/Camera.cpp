@@ -17,7 +17,6 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "Camera.h"
-#include "Math.h"
 
 #define CAMERA_DEBUG 1
 
@@ -42,13 +41,21 @@ Camera::~Camera(void)
 
 void Camera::InitializeCamera(const FCameraData& data)
 {
-	const auto& NEAR_PLANE = data.nearPlane;
-	const auto& FAR_PLANE = data.farPlane;
-	const float& AspectRatio = data.aspect;
-	const float VerticalFoV = data.fovV_Degrees * DEG2RAD;
+	const auto& NEAR_PLANE   = data.nearPlane;
+	const auto& FAR_PLANE    = data.farPlane;
+	const float AspectRatio  = data.width / data.height;
+	const float VerticalFoV  = data.fovV_Degrees * DEG2RAD;
+	const float& ViewportX   = data.width;
+	const float& ViewportY   = data.height;
 
-	//SetOthoMatrix(ViewportX, ViewportY, NEAR_PLANE, FAR_PLANE); // quick test
-	SetProjectionMatrix(VerticalFoV, AspectRatio, NEAR_PLANE, FAR_PLANE);
+	this->mProjParams.NearZ = NEAR_PLANE;
+	this->mProjParams.FarZ  = FAR_PLANE;
+	this->mProjParams.ViewporHeight = ViewportY;
+	this->mProjParams.ViewporWidth  = ViewportX;
+	this->mProjParams.FieldOfView = data.fovV_Degrees * DEG2RAD;
+	this->mProjParams.bPerspectiveProjection = data.bPerspectiveProjection;
+
+	SetProjectionMatrix(this->mProjParams);
 
 	SetPosition(data.x, data.y, data.z);
 	mYaw = mPitch = 0;
@@ -56,48 +63,15 @@ void Camera::InitializeCamera(const FCameraData& data)
 }
 
 
-void Camera::SetOthoMatrix(int screenWidth, int screenHeight, float screenNear, float screenFar)
+void Camera::SetProjectionMatrix(const ProjectionMatrixParameters& params)
 {
-	XMStoreFloat4x4(&mMatProj, XMMatrixOrthographicLH((float)screenWidth, (float)screenHeight, screenNear, screenFar));
+	assert(params.ViewporHeight > 0.0f);
+	const float AspectRatio = params.ViewporWidth / params.ViewporHeight;
+
+	mMatProj = params.bPerspectiveProjection
+		? MakePerspectiveProjectionMatrix(params.FieldOfView, AspectRatio, params.NearZ, params.FarZ)
+		: MakeOthographicProjectionMatrix(params.ViewporWidth, params.ViewporHeight, params.NearZ, params.FarZ);
 }
-
-void Camera::SetProjectionMatrix(float fovy, float screenAspect, float screenNear, float screenFar)
-{
-	XMStoreFloat4x4(&mMatProj, XMMatrixPerspectiveFovLH(fovy, screenAspect, screenNear, screenFar));
-}
-
-void Camera::SetProjectionMatrixHFov(float fovx, float screenAspectInverse, float screenNear, float screenFar)
-{	// horizonital FOV
-	const float FarZ = screenFar; float NearZ = screenNear;
-	const float r = screenAspectInverse;
-	
-	const float Width = 1.0f / tanf(fovx*0.5f);
-	const float Height = Width / r;
-	const float fRange = FarZ / (FarZ - NearZ);
-
-	XMMATRIX M;	
-	M.r[0].m128_f32[0] = Width;
-	M.r[0].m128_f32[1] = 0.0f;
-	M.r[0].m128_f32[2] = 0.0f;
-	M.r[0].m128_f32[3] = 0.0f;
-
-	M.r[1].m128_f32[0] = 0.0f;
-	M.r[1].m128_f32[1] = Height;
-	M.r[1].m128_f32[2] = 0.0f;
-	M.r[1].m128_f32[3] = 0.0f;
-
-	M.r[2].m128_f32[0] = 0.0f;
-	M.r[2].m128_f32[1] = 0.0f;
-	M.r[2].m128_f32[2] = fRange;
-	M.r[2].m128_f32[3] = 1.0f;
-
-	M.r[3].m128_f32[0] = 0.0f;
-	M.r[3].m128_f32[1] = 0.0f;
-	M.r[3].m128_f32[2] = -fRange * NearZ;
-	M.r[3].m128_f32[3] = 0.0f;
-	XMStoreFloat4x4(&mMatProj, M);
-}
-
 
 void Camera::Update(const float dt, const FCameraInput& input)
 {

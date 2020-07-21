@@ -255,6 +255,9 @@ void VQEngine::RenderThread_RenderMainWindow()
 
 void VQEngine::RenderThread_RenderDebugWindow()
 {
+	if (mbLoadingLevel)
+		return;
+
 	HRESULT hr = S_OK;
 	FWindowRenderContext& ctx   = mRenderer.GetWindowRenderContext(mpWinDebug->GetHWND());
 	const int NUM_BACK_BUFFERS  = ctx.SwapChain.GetNumBackBuffers();

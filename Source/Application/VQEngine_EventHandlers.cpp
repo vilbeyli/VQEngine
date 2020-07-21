@@ -57,7 +57,6 @@ void VQEngine::MainThread_HandleEvents()
 		{
 			this->GetWindow(pEvent->hwnd)->Show();
 		} break;
-
 		}
 	}
 }
@@ -171,9 +170,32 @@ void VQEngine::UpdateThread_HandleEvents()
 				, GetWindow(p->hwnd)->IsMouseCaptured()
 			);
 		} break;
+		case WINDOW_RESIZE_EVENT: UpdateThread_HandleWindowResizeEvent(pEvent);  break;
 		}
 	}
 
+}
+
+void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent)
+{
+	std::shared_ptr<WindowResizeEvent> p = std::static_pointer_cast<WindowResizeEvent>(pEvent);
+
+	// TODO: potentially use a lookup when camera count gets larger.
+	//       also need to take into account the array of framedata that containts the camera.
+	// there's only one camera for one window for now.
+	if (p->hwnd == mpWinMain->GetHWND())
+	{
+		if (mWindowUpdateContextLookup.find(p->hwnd) != mWindowUpdateContextLookup.end())
+		{
+			Camera& cam = GetCurrentFrameData(p->hwnd).SceneCamera;
+			
+			ProjectionMatrixParameters UpdatedProjectionMatrixParams = cam.mProjParams;
+			UpdatedProjectionMatrixParams.ViewporWidth  = static_cast<float>(p->width );
+			UpdatedProjectionMatrixParams.ViewporHeight = static_cast<float>(p->height);
+
+			cam.SetProjectionMatrix(UpdatedProjectionMatrixParams);
+		}
+	}
 }
 
 
@@ -218,14 +240,14 @@ void VQEngine::RenderThread_HandleEvents()
 	// Handle the last resize event per hwnd and ignore the rest of it so the app can stay responsive while resizing.
 	for (auto it = pLastResizeEventLookup.begin(); it != pLastResizeEventLookup.end(); ++it)
 	{
-		RenderThread_HandleWindowResizeEvent(it->second.get());
+		RenderThread_HandleWindowResizeEvent(it->second);
 	}
 
 }
 
-void VQEngine::RenderThread_HandleWindowResizeEvent(const IEvent* pEvent)
+void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent)
 {
-	const WindowResizeEvent* pResizeEvent = static_cast<const WindowResizeEvent*>(pEvent);
+	const std::shared_ptr<WindowResizeEvent> pResizeEvent = std::static_pointer_cast<WindowResizeEvent>(pEvent);
 	const HWND&                      hwnd = pResizeEvent->hwnd;
 	const int                       WIDTH = pResizeEvent->width;
 	const int                      HEIGHT = pResizeEvent->height;
@@ -246,6 +268,9 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const IEvent* pEvent)
 	Log::Info("RenderThread: Handle Window<%x> Resize event, set resolution to %dx%d", hwnd, WIDTH, HEIGHT);
 #endif
 
+
+	mEventQueue_WinToVQE_Update.AddItem(pResizeEvent);
+
 	Swapchain.WaitForGPU();
 	Swapchain.Resize(WIDTH, HEIGHT);
 	pWnd->OnResize(WIDTH, HEIGHT);
@@ -253,6 +278,7 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const IEvent* pEvent)
 
 	RenderThread_UnloadWindowSizeDependentResources(hwnd);
 	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT);
+
 }
 
 void VQEngine::RenderThread_HandleWindowCloseEvent(const IEvent* pEvent)

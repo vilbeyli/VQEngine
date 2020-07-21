@@ -32,13 +32,15 @@ static FCameraData GenerateCameraInitializationParameters(const std::unique_ptr<
 {
 	assert(pWin);
 	FCameraData camData = {};
-	camData.nearPlane = 0.01f;
-	camData.farPlane = 1000.0f;
 	camData.x = 0.0f; camData.y = 3.0f; camData.z = -5.0f;
 	camData.pitch = 10.0f;
 	camData.yaw = 0.0f;
-	camData.fovH_Degrees = 60.0f;
-	camData.aspect = static_cast<float>(pWin->GetWidth()) / pWin->GetHeight();
+	camData.bPerspectiveProjection = true;
+	camData.fovV_Degrees = 60.0f;
+	camData.nearPlane = 0.01f;
+	camData.farPlane = 1000.0f;
+	camData.width = pWin->GetWidth();
+	camData.height = pWin->GetHeight();
 	return camData;
 }
 
@@ -226,30 +228,23 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 
 }
 
+
+
+FFrameData& VQEngine::GetCurrentFrameData(HWND hwnd)
+{
+	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(hwnd);
+	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
+	return mWindowUpdateContextLookup.at(hwnd)->mFrameData[FRAME_DATA_INDEX];
+
+}
+
 void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 {
 	std::unique_ptr<Window>& pWin = mpWinMain;
 	HWND hwnd                     = pWin->GetHWND();
-	const int NUM_BACK_BUFFERS    = mRenderer.GetSwapChainBackBufferCount(hwnd);
-	const int FRAME_DATA_INDEX    = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
-	FFrameData& FrameData         = mScene_MainWnd.mFrameData[FRAME_DATA_INDEX];
+	FFrameData& FrameData         = GetCurrentFrameData(hwnd);
 	const Input& input            = mInputStates.at(hwnd);
 	
-
-	// check if camera aspect ratio has changed
-	// TODO: event-based solution.
-#if 0
-	static FCameraData STATIC_CAMERA_INITIALIZATION_DATA = GenerateCameraInitializationParameters(mpWinMain);
-	FCameraData CameraInitParams = GenerateCameraInitializationParameters(mpWinMain);
-	const bool bCameraAspectRatioChanged = STATIC_CAMERA_INITIALIZATION_DATA.aspect != CameraInitParams.aspect;
-	if (bCameraAspectRatioChanged)
-	{
-		CameraInitParams.x = FrameData.SceneCamera.GetPositionF().x;
-		CameraInitParams.y = FrameData.SceneCamera.GetPositionF().y;
-		CameraInitParams.z = FrameData.SceneCamera.GetPositionF().z;
-	}
-#endif
-
 	// handle input
 	if (input.IsKeyTriggered('R')) FrameData.SceneCamera.InitializeCamera(GenerateCameraInitializationParameters(mpWinMain));
 
@@ -296,10 +291,8 @@ void VQEngine::UpdateThread_UpdateScene_DebugWnd(const float dt)
 
 	std::unique_ptr<Window>& pWin = mpWinDebug;
 	HWND hwnd                     = pWin->GetHWND();
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(hwnd);
-	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
-	FFrameData& FrameData      = mScene_DebugWnd.mFrameData[FRAME_DATA_INDEX];
-	const Input& input         = mInputStates.at(hwnd);
+	FFrameData& FrameData         = GetCurrentFrameData(hwnd);
+	const Input& input            = mInputStates.at(hwnd);
 
 
 }
@@ -397,18 +390,4 @@ void VQEngine::LoadLoadingScreenData()
 		mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
 	}
 }
-
-
-// ===============================================================================================================================
-
-
-void MainWindowScene::Update()
-{
-
-}
-
-void DebugWindowScene::Update()
-{
-}
-
 
