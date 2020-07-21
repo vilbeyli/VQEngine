@@ -20,11 +20,6 @@
 
 #include <DirectXMath.h>
 
-#define DEG2RAD (DirectX::XM_PI / 180.0f)
-#define RAD2DEG (180.0f / DirectX::XM_PI)
-#define PI		DirectX::XM_PI
-#define PI_DIV2 DirectX::XM_PIDIV2
-
 class Quaternion
 {
 public:

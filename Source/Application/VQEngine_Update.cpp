@@ -16,21 +16,46 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
+#define NOMINMAX
+
 #include "VQEngine.h"
+#include "Math.h"
 
 #include "Libs/VQUtils/Source/utils.h"
 
+#include <algorithm>
+
 using namespace DirectX;
+
+// temporary hardcoded initialization until scene is data driven
+static FCameraData GenerateCameraInitializationParameters(const std::unique_ptr<Window>& pWin)
+{
+	assert(pWin);
+	FCameraData camData = {};
+	camData.x = 0.0f; camData.y = 3.0f; camData.z = -5.0f;
+	camData.pitch = 10.0f;
+	camData.yaw = 0.0f;
+	camData.bPerspectiveProjection = true;
+	camData.fovV_Degrees = 60.0f;
+	camData.nearPlane = 0.01f;
+	camData.farPlane = 1000.0f;
+	camData.width  = static_cast<float>(pWin->GetWidth() );
+	camData.height = static_cast<float>(pWin->GetHeight());
+	return camData;
+}
 
 void VQEngine::UpdateThread_Main()
 {
 	Log::Info("UpdateThread_Main()");
+
 	UpdateThread_Inititalize();
 
 	bool bQuit = false;
 	float dt = 0.0f;
 	while (!mbStopAllThreads && !bQuit)
 	{
+		UpdateThread_HandleEvents();
+
 		UpdateThread_PreUpdate(dt);
 
 #if DEBUG_LOG_THREAD_SYNC_VERBOSE
@@ -56,14 +81,20 @@ void VQEngine::UpdateThread_Inititalize()
 {
 	mNumUpdateLoopsExecuted.store(0);
 
+#if ENABLE_RAW_INPUT
+	// initialize raw input
+	Input::InitRawInputDevices(mpWinMain->GetHWND());
+#endif
+
+	// initialize input states
+	RegisterWindowForInput(mpWinMain);
+	RegisterWindowForInput(mpWinDebug);
+
 	// busy lock until render thread is initialized
 	while (!mbRenderThreadInitialized); 
-	LoadLoadingScreenData();
 
-	// Do not show windows until we have the loading screen data ready.
-	mpWinMain->Show();
-	if (mpWinDebug) 
-		mpWinDebug->Show();
+	// immediately load loading screen texture
+	LoadLoadingScreenData();
 
 	mTimer.Reset();
 	mTimer.Start();
@@ -81,6 +112,9 @@ void VQEngine::UpdateThread_WaitForRenderThread()
 	Log::Info("u:wait : u=%llu, r=%llu", mNumUpdateLoopsExecuted.load(), mNumRenderLoopsExecuted.load());
 #endif
 
+	if (mbStopAllThreads)
+		return;
+
 	mpSemUpdate->Wait();
 }
 
@@ -94,8 +128,60 @@ void VQEngine::UpdateThread_PreUpdate(float& dt)
 	// update timer
 	dt = mTimer.Tick();
 
-	// update input
+	// system-wide input (esc/mouse click on wnd)
+	HandleEngineInput();
+}
 
+void VQEngine::HandleEngineInput()
+{
+	for (decltype(mInputStates)::iterator it = mInputStates.begin(); it != mInputStates.end(); ++it)
+	{
+		HWND   hwnd  = it->first;
+		Input& input = it->second;
+		auto&  pWin  = this->GetWindow(hwnd);
+
+		if (input.IsKeyDown("Esc"))
+		{
+			if (pWin->IsMouseCaptured())
+			{
+				mEventQueue_VQEToWin_Main.AddItem(std::make_shared<SetMouseCaptureEvent>(hwnd, false, true));
+			}
+		}
+		if (input.IsAnyMouseDown())
+		{
+			Input& inp = mInputStates.at(hwnd); // non const ref
+			if (inp.GetInputBypassing())
+			{
+				inp.SetInputBypassing(false);
+
+				// capture mouse only when main window is clicked
+				if(hwnd == mpWinMain->GetHWND())
+					mEventQueue_VQEToWin_Main.AddItem(std::make_shared<SetMouseCaptureEvent>(hwnd, true, false));
+			}
+		}
+	}
+}
+
+bool VQEngine::IsWindowRegistered(HWND hwnd) const
+{
+	auto it = mWinNameLookup.find(hwnd);
+	return it != mWinNameLookup.end();
+}
+
+void VQEngine::SetWindowName(HWND hwnd, const std::string& name){	mWinNameLookup[hwnd] = name; }
+void VQEngine::SetWindowName(const std::unique_ptr<Window>& pWin, const std::string& name) { SetWindowName(pWin->GetHWND(), name); }
+
+const std::string& VQEngine::GetWindowName(HWND hwnd) const
+{
+#if _DEBUG
+	auto it = mWinNameLookup.find(hwnd);
+	if (it == mWinNameLookup.end())
+	{
+		Log::Error("Couldn't find window<%x> name: HWND not called with SetWindowName()!", hwnd);
+		assert(false); // gonna crash at .at() call anyways.
+	}
+#endif
+	return mWinNameLookup.at(hwnd);
 }
 
 void VQEngine::UpdateThread_UpdateAppState(const float dt)
@@ -110,10 +196,11 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 
 		// start load level
 		Load_SceneData_Dispatch();
-		mAppState = EAppState::LOADING;
+		mAppState = EAppState::LOADING;// not thread-safe
 
-		mbLoadingLevel.store(true);
+		mbLoadingLevel.store(true);    // thread-safe
 	}
+
 
 	if (mbLoadingLevel)
 	{
@@ -129,23 +216,93 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 			mAppState = EAppState::SIMULATING;
 			mbLoadingLevel.store(false);
 		}
-
 	}
 
 
 	else
 	{
-		const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
-		const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
-
-		// update scene data
-		mScene_MainWnd.mFrameData[FRAME_DATA_INDEX].TFCube.RotateAroundAxisRadians(YAxis, dt * 0.2f * PI);
+		// TODO: threaded?
+		UpdateThread_UpdateScene_MainWnd(dt);
+		UpdateThread_UpdateScene_DebugWnd(dt);
 	}
+
+}
+
+
+
+FFrameData& VQEngine::GetCurrentFrameData(HWND hwnd)
+{
+	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(hwnd);
+	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
+	return mWindowUpdateContextLookup.at(hwnd)->mFrameData[FRAME_DATA_INDEX];
+
+}
+
+void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
+{
+	std::unique_ptr<Window>& pWin = mpWinMain;
+	HWND hwnd                     = pWin->GetHWND();
+	FFrameData& FrameData         = GetCurrentFrameData(hwnd);
+	const Input& input            = mInputStates.at(hwnd);
+	
+	// handle input
+	if (input.IsKeyTriggered('R')) FrameData.SceneCamera.InitializeCamera(GenerateCameraInitializationParameters(mpWinMain));
+
+	constexpr float CAMERA_MOVEMENT_SPEED_MULTIPLER = 0.75f;
+	constexpr float CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER = 2.0f;
+	XMVECTOR LocalSpaceTranslation = XMVectorSet(0, 0, 0, 0);
+	if (input.IsKeyDown('A'))		LocalSpaceTranslation += XMLoadFloat3(&LeftVector);
+	if (input.IsKeyDown('D'))		LocalSpaceTranslation += XMLoadFloat3(&RightVector);
+	if (input.IsKeyDown('W'))		LocalSpaceTranslation += XMLoadFloat3(&ForwardVector);
+	if (input.IsKeyDown('S'))		LocalSpaceTranslation += XMLoadFloat3(&BackVector);
+	if (input.IsKeyDown('E'))		LocalSpaceTranslation += XMLoadFloat3(&UpVector);
+	if (input.IsKeyDown('Q'))		LocalSpaceTranslation += XMLoadFloat3(&DownVector);
+	if (input.IsKeyDown(VK_SHIFT))	LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER;
+	LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_MULTIPLER;
+
+	constexpr float MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER = 1.0f;
+	if (input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_LEFT))   FrameData.TFCube.RotateAroundAxisRadians(ZAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
+	if (input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_RIGHT))  FrameData.TFCube.RotateAroundAxisRadians(YAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
+	if (input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE)) FrameData.TFCube.RotateAroundAxisRadians(XAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
+
+	constexpr float DOUBLE_CLICK_MULTIPLIER = 4.0f;
+	if (input.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_LEFT))   FrameData.TFCube.RotateAroundAxisRadians(ZAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
+	if (input.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_RIGHT))  FrameData.TFCube.RotateAroundAxisRadians(YAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
+	if (input.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE)) FrameData.TFCube.RotateAroundAxisRadians(XAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
+	
+	constexpr float SCROLL_SCALE_DELTA = 1.1f;
+	const float CubeScale = FrameData.TFCube._scale.x;
+	if (input.IsMouseScrollUp()  ) FrameData.TFCube.SetUniformScale(CubeScale * SCROLL_SCALE_DELTA);
+	if (input.IsMouseScrollDown()) FrameData.TFCube.SetUniformScale(std::max(0.5f, CubeScale / SCROLL_SCALE_DELTA));
+
+	// update camera
+	FCameraInput camInput(LocalSpaceTranslation);
+	camInput.DeltaMouseXY = input.GetMouseDelta();
+	FrameData.SceneCamera.Update(dt, camInput);
+	
+	// update scene data
+	FrameData.TFCube.RotateAroundAxisRadians(YAxis, dt * 0.2f * PI);
+	
+}
+
+void VQEngine::UpdateThread_UpdateScene_DebugWnd(const float dt)
+{
+	if (!mpWinDebug) return;
+
+	std::unique_ptr<Window>& pWin = mpWinDebug;
+	HWND hwnd                     = pWin->GetHWND();
+	FFrameData& FrameData         = GetCurrentFrameData(hwnd);
+	const Input& input            = mInputStates.at(hwnd);
+
 
 }
 
 void VQEngine::UpdateThread_PostUpdate()
 {
+	const int NUM_BACK_BUFFERS      = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
+	const int FRAME_DATA_INDEX      = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
+	const int FRAME_DATA_NEXT_INDEX = ((mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS) + 1) % NUM_BACK_BUFFERS;
+
 	if (mbLoadingLevel)
 	{
 		return;
@@ -156,14 +313,15 @@ void VQEngine::UpdateThread_PostUpdate()
 	// extract scene view
 
 	// copy over state for next frame
-	
-	const int NUM_BACK_BUFFERS      = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
-	const int FRAME_DATA_INDEX      = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
-	const int FRAME_DATA_NEXT_INDEX = ((mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS) + 1) % NUM_BACK_BUFFERS;
-
 	mScene_MainWnd.mFrameData[FRAME_DATA_NEXT_INDEX] = mScene_MainWnd.mFrameData[FRAME_DATA_INDEX];
-}
 
+	// input post update
+	for (auto it = mInputStates.begin(); it != mInputStates.end(); ++it)
+	{
+		const HWND& hwnd = it->first;
+		mInputStates.at(hwnd).PostUpdate(); // non-const accessor
+	}
+}
 
 void VQEngine::Load_SceneData_Dispatch()
 {
@@ -189,14 +347,8 @@ void VQEngine::Load_SceneData_Dispatch()
 			, XMFLOAT3(CUBE_SCALE, CUBE_SCALE, CUBE_SCALE)
 		);
 
-		CameraData camData = {};
-		camData.nearPlane = 0.01f;
-		camData.farPlane  = 1000.0f;
-		camData.x = 0.0f; camData.y = 3.0f; camData.z = -5.0f;
-		camData.pitch = 10.0f;
-		camData.yaw = 0.0f;
-		camData.fovH_Degrees = 60.0f;
-		data[0].SceneCamera.InitializeCamera(camData, mpWinMain->GetWidth(), mpWinMain->GetHeight());
+		FCameraData camData = GenerateCameraInitializationParameters(mpWinMain);
+		data[0].SceneCamera.InitializeCamera(camData);
 		mScene_MainWnd.mFrameData.resize(NumBackBuffer_WndMain, data[0]);
 
 		data[1].SwapChainClearColor = { 0.20f, 0.21f, 0.21f, 1.0f };
@@ -238,17 +390,4 @@ void VQEngine::LoadLoadingScreenData()
 		mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
 	}
 }
-
-
-// ===============================================================================================================================
-
-
-void MainWindowScene::Update()
-{
-}
-
-void DebugWindowScene::Update()
-{
-}
-
 

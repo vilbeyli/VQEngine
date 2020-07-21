@@ -119,6 +119,7 @@ public:
 	void                         OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h);
 
 	// Swapchain-interface
+	void                         InitializeRenderContext(const FWindowRepresentation& WndDesc, int NumSwapchainBuffers);
 	inline short                 GetSwapChainBackBufferCount(std::unique_ptr<Window>& pWnd) const { return GetSwapChainBackBufferCount(pWnd.get()); };
 	short                        GetSwapChainBackBufferCount(Window* pWnd) const;
 	short                        GetSwapChainBackBufferCount(HWND hwnd) const;
@@ -162,8 +163,7 @@ public:
 	inline const CBV_SRV_UAV&    GetCBV(CBV_ID   Id) const { return GetConstantBufferView(Id);  }
 	inline const RTV&            GetRTV(RTV_ID   Id) const { return GetRenderTargetView(Id);    }
 	inline const DSV&            GetDSV(DSV_ID   Id) const { return GetDepthStencilView(Id);    }
-
-
+	
 private:
 	using PSOArray_t           = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
 

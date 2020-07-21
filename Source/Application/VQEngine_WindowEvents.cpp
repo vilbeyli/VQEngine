@@ -17,38 +17,47 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "VQEngine.h"
+#include "Input.h"
+
+#include <Windowsx.h>
 
 constexpr int MIN_WINDOW_SIZE = 128; // make sure window cannot be resized smaller than 128x128
 
-
 #define LOG_WINDOW_MESSAGE_EVENTS 0
+#define LOG_RAW_INPUT             0
+#define LOG_CALLBACKS             0
 static void LogWndMsg(UINT uMsg, HWND hwnd);
 
+
+// ===================================================================================================================================
+// WINDOW PROCEDURE
+// ===================================================================================================================================
 LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	LogWndMsg(uMsg, hwnd);
-
 	IWindow* pWindow = reinterpret_cast<IWindow*> (::GetWindowLongPtr(hwnd, GWLP_USERDATA));
 	if (!pWindow)
 	{
-		//Log::Warning("WndProc::pWindow=nullptr");
+		// WM_CREATE will be sent before SetWindowLongPtr() is called, 
+		// hence we'll call OnWindowCreate from inside Window class.
+		///if(uMsg == WM_CREATE) Log::Warning("WM_CREATE without pWindow");
+
+		#if 0
+		Log::Warning("WndProc::pWindow=nullptr");
+		#endif
 		return DefWindowProc(hwnd, uMsg, wParam, lParam);
 	}
 
-	switch (uMsg)
-	{
-		// https://docs.microsoft.com/en-us/windows/win32/learnwin32/managing-application-state-
-	case WM_CREATE:
-		if (pWindow->pOwner) pWindow->pOwner->OnWindowCreate(pWindow);
-		return 0;
 
-
-		// https://docs.microsoft.com/en-us/windows/win32/learnwin32/writing-the-window-procedure
-	case WM_SIZE:
+	switch (uMsg) // HANDLE EVENTS
 	{
-		if (pWindow->pOwner) pWindow->pOwner->OnWindowResize(hwnd);
-		return 0;
-	}
+	//
+	// WINDOW
+	//
+	// https://docs.microsoft.com/en-us/windows/win32/learnwin32/managing-application-state-
+
+	// https://docs.microsoft.com/en-us/windows/win32/learnwin32/writing-the-window-procedure
+	case WM_SIZE:   if (pWindow->pOwner) pWindow->pOwner->OnWindowResize(hwnd); return 0;
 	case WM_GETMINMAXINFO:
 	{   
 		LPMINMAXINFO lpMMI = (LPMINMAXINFO)lParam;
@@ -56,24 +65,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		lpMMI->ptMinTrackSize.y = MIN_WINDOW_SIZE;
 		break;
 	}
-	case WM_KEYDOWN:
-		if (pWindow->pOwner) pWindow->pOwner->OnWindowKeyDown(wParam);
-		return 0;
-
-	case WM_SYSKEYDOWN:
-		if ((wParam == VK_RETURN) && (lParam & (1 << 29))) // Handle ALT+ENTER
-		{
-			if (pWindow->pOwner)
-			{
-				pWindow->pOwner->OnToggleFullscreen(hwnd);
-				return 0;
-			}
-		}
-		// Send all other WM_SYSKEYDOWN messages to the default WndProc.
-		break;
-
-		// https://docs.microsoft.com/en-us/windows/win32/learnwin32/painting-the-window
-	case WM_PAINT:
+	case WM_PAINT: // https://docs.microsoft.com/en-us/windows/win32/learnwin32/painting-the-window
 	{
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hwnd, &ps);
@@ -82,20 +74,104 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		return 0;
 	}
 
-	case WM_SETFOCUS:
-	{
-		if (pWindow->pOwner) pWindow->pOwner->OnWindowFocus(pWindow);
-		return 0;
-	}
+	// https://docs.microsoft.com/en-us/windows/win32/inputdev/wm-setfocus
+	case WM_SETFOCUS: if (pWindow->pOwner) pWindow->pOwner->OnWindowFocus(hwnd); return 0;
+	// https://docs.microsoft.com/en-us/windows/win32/inputdev/wm-killfocus
+	case WM_KILLFOCUS: if (pWindow->pOwner) pWindow->pOwner->OnWindowLoseFocus(hwnd); return 0;
 
 	// https://docs.microsoft.com/en-us/windows/win32/learnwin32/closing-the-window
-	case WM_CLOSE:
-		if (pWindow->pOwner) pWindow->pOwner->OnWindowClose(pWindow);
+	case WM_CLOSE:    if (pWindow->pOwner) pWindow->pOwner->OnWindowClose(hwnd); return 0;
+	case WM_DESTROY:  return 0;
+
+	// https://docs.microsoft.com/en-us/windows/win32/inputdev/wm-activate
+	case WM_ACTIVATE: 
+		if (pWindow->pOwner)
+		{		
+			// wParam:
+			// - The low-order word specifies whether the window is being activated or deactivated.
+			// - The high-order word specifies the minimized state of the window being activated or deactivated
+			// - A nonzero value indicates the window is minimized.
+
+
+			// **** **** **** **** **** **** **** **** = wParam <-- (32-bits)
+			// 0000 0000 0000 0000 1111 1111 1111 1111 = 0xFFFF <-- LOWORD(Wparam)
+			UINT wparam_hi  = HIWORD(wParam);
+			UINT wparam_low = LOWORD(wParam);
+
+			const bool bWindowInactivation =  wparam_low == WA_INACTIVE;
+			const bool bWindowActivation   = (wparam_low == WA_ACTIVE) || (wparam_low == WA_CLICKACTIVE);
+			
+
+			// lParam:
+			// - A handle to the window being activated or deactivated, depending on the value of the wParam parameter.
+			// - If the low-order word of wParam is WA_INACTIVE, lParam is the handle to the window being activated
+			// - if the low-order word of wParam is WA_ACTIVE or WA_CLICKACTIVE, lParam is the handle to the window being deactivated. 
+			//   This handle can be NULL.
+			HWND hwnd = reinterpret_cast<HWND>(lParam);
+			if (bWindowInactivation)
+				pWindow->pOwner->OnWindowActivate(hwnd);
+			else if (hwnd != NULL)
+				pWindow->pOwner->OnWindowDeactivate(hwnd);
+		}
 		return 0;
 
-	case WM_DESTROY:
+	//
+	// KEYBOARD
+	//
+	case WM_KEYDOWN: if (pWindow->pOwner) pWindow->pOwner->OnKeyDown(hwnd, wParam); return 0;
+	case WM_KEYUP:   if (pWindow->pOwner) pWindow->pOwner->OnKeyUp(hwnd, wParam);   return 0;
+	case WM_SYSKEYDOWN:
+		if ((wParam == VK_RETURN) && (lParam & (1 << 29))) // Handle ALT+ENTER
+		{
+			if (pWindow->pOwner)
+			{
+				pWindow->pOwner->OnToggleFullscreen(hwnd);
+				return 0;
+			}
+		} break; // Send all other WM_SYSKEYDOWN messages to the default WndProc.
+	
+	// Turn off MessageBeep sound on Alt+Enter: https://stackoverflow.com/questions/3662192/disable-messagebeep-on-invalid-syskeypress
+	case WM_MENUCHAR: return MNC_CLOSE << 16;
+
+
+	//
+	// MOUSE
+	//
+	case WM_MBUTTONDOWN: // wParam encodes which mouse key is pressed, unlike *BUTTONUP events
+	case WM_LBUTTONDOWN:
+	case WM_RBUTTONDOWN:
+		if (pWindow->pOwner) pWindow->pOwner->OnMouseButtonDown(hwnd, wParam, false);
+		return 0;
+	case WM_LBUTTONDBLCLK:
+	case WM_RBUTTONDBLCLK:
+	case WM_MBUTTONDBLCLK:
+		if (pWindow->pOwner)
+		{
+			pWindow->pOwner->OnMouseButtonDown(hwnd, wParam, true);
+			pWindow->pOwner->OnMouseButtonDown(hwnd, wParam, true);
+		}
 		return 0;
 
+	// For mouse button up events, wParam=0 for some reason, as opposed to the documentation
+	// https://docs.microsoft.com/en-us/windows/win32/inputdev/wm-lbuttonup
+	// hence we handle each case individually here with the proper key code.
+	case WM_MBUTTONUP: if (pWindow->pOwner) pWindow->pOwner->OnMouseButtonUp(hwnd, MK_MBUTTON); return 0;
+	case WM_RBUTTONUP: if (pWindow->pOwner) pWindow->pOwner->OnMouseButtonUp(hwnd, MK_RBUTTON); return 0;
+	case WM_LBUTTONUP: if (pWindow->pOwner) pWindow->pOwner->OnMouseButtonUp(hwnd, MK_LBUTTON); return 0;
+
+
+#if ENABLE_RAW_INPUT // https://msdn.microsoft.com/en-us/library/windows/desktop/ee418864.aspx
+	case WM_INPUT: if (pWindow->pOwner) pWindow->pOwner->OnMouseInput(hwnd, lParam);
+#else
+		
+	case WM_MOUSEMOVE  : if (pWindow->pOwner) pWindow->pOwner->OnMouseMove(hwnd, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)); return 0; 
+	case WM_MOUSEWHEEL :
+	{
+		const WORD fwKeys  = GET_KEYSTATE_WPARAM(wParam);
+		const short zDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+		if (pWindow->pOwner) pWindow->pOwner->OnMouseScroll(hwnd, zDelta); return 0;
+	}
+#endif // ENABLE_RAW_INPUT
 	}
 
 
@@ -104,10 +180,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 
 
-void VQEngine::OnWindowCreate(IWindow* pWnd)
-{
-}
 
+
+// ===================================================================================================================================
+// WINDOW EVENTS
+// ===================================================================================================================================
+// Due to multi-threading, this thread will record the events and 
+// Render Thread will process the queue at the beginning & end of a render loop
 void VQEngine::OnWindowResize(HWND hWnd)
 {
 	// https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/d3d10-graphics-programming-guide-dxgi#handling-window-resizing
@@ -121,51 +200,162 @@ void VQEngine::OnWindowResize(HWND hWnd)
 	if (w == 0) { w = 8; Log::Warning("WND RESIZE TOO SMALL"); }
 #endif
 
-	// Due to multi-threading, this thread will record the events and 
-	// Render Thread will process the queue at the of a render loop
-	mWinEventQueue.AddItem(std::make_unique<WindowResizeEvent>(w, h, hWnd));
+	mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<WindowResizeEvent>(w, h, hWnd));
 }
 
 void VQEngine::OnToggleFullscreen(HWND hWnd)
 {
-	// Due to multi-threading, this thread will record the events and 
-	// Render Thread will process the queue at the of a render loop
-	mWinEventQueue.AddItem(std::make_unique<ToggleFullscreenEvent>(hWnd));
+	mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<ToggleFullscreenEvent>(hWnd));
 }
 
-void VQEngine::OnWindowMinimize(IWindow* pWnd)
+//------------------------------------------------------------------------------------
+// windows ACTIVATE msg contains the other HWND that the application switches to.
+// this could be an HWND of any program on the user machine, so ensure VQEngine
+// owns the hWnd before calling GetWindowName() for OnWindowActivate() and 
+// OnWindowDeactivate().
+//------------------------------------------------------------------------------------
+void VQEngine::OnWindowActivate(HWND hWnd)
+{
+	if (IsWindowRegistered(hWnd))
+	{
+#if LOG_CALLBACKS
+		Log::Warning("OnWindowActivate<%0x, %s>", hWnd, GetWindowName(hWnd).c_str());
+#endif
+	}
+}
+void VQEngine::OnWindowDeactivate(HWND hWnd)
+{
+	if (IsWindowRegistered(hWnd))
+	{
+#if LOG_CALLBACKS
+		Log::Warning("OnWindowDeactivate<%0x, %s> ", hWnd, GetWindowName(hWnd).c_str());
+#endif
+	}
+}
+//------------------------------------------------------------------------------------
+
+void VQEngine::OnWindowCreate(HWND hWnd)
+{
+#if LOG_CALLBACKS
+	Log::Info("OnWindowCreate<%0x, %s> ", hWnd, GetWindowName(hWnd).c_str());
+#endif
+}
+
+void VQEngine::OnWindowClose(HWND hwnd_)
+{
+	std::shared_ptr<WindowCloseEvent> ptr = std::make_shared<WindowCloseEvent>(hwnd_);
+	mEventQueue_WinToVQE_Renderer.AddItem(ptr);
+
+	ptr->Signal_WindowDependentResourcesDestroyed.Wait();
+	if (hwnd_ == mpWinMain->GetHWND())
+	{
+		PostQuitMessage(0); // must be called from the main thread.
+	}
+	GetWindow(hwnd_)->Close(); // must be called from the main thread.
+}
+
+void VQEngine::OnWindowMinimize(HWND hwnd)
 {
 }
 
-void VQEngine::OnWindowFocus(IWindow* pWindow)
+void VQEngine::OnWindowFocus(HWND hwnd)
 {
-	//Log::Info("On Focus!");
+	const bool bMainWindowFocused = hwnd == mpWinMain->GetHWND();
+
+#if LOG_CALLBACKS
+	Log::Warning("OnWindowFocus<%x, %s>", hwnd, this->GetWindowName(hwnd).c_str());
+#endif
+
+	// make sure the mouse becomes visible when Main Window is not the one that is focused
+	if(bMainWindowFocused)
+		this->SetMouseCaptureForWindow(mpWinMain->GetHWND(), true);
+}
+
+void VQEngine::OnWindowLoseFocus(HWND hwnd)
+{
+#if LOG_CALLBACKS
+	Log::Warning("OnWindowLoseFocus<%x, %s>", hwnd, this->GetWindowName(hwnd).c_str());
+#endif
+
+	// make sure the mouse becomes visible when Main Window is not the one that is focused
+	if(hwnd == mpWinMain->GetHWND() && mpWinMain->IsMouseCaptured())
+		this->SetMouseCaptureForWindow(mpWinMain->GetHWND(), false);
 }
 
 
-void VQEngine::OnWindowKeyDown(WPARAM wParam)
+
+// ===================================================================================================================================
+// KEYBOARD EVENTS
+// ===================================================================================================================================
+// Due to multi-threading, this thread will record the events and 
+// Update Thread will process the queue at the beginning of an update loop
+void VQEngine::OnKeyDown(HWND hwnd, WPARAM wParam)
 {
+	constexpr bool bIsMouseEvent = false;
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<KeyDownEvent>(hwnd, wParam, bIsMouseEvent));
 }
 
-void VQEngine::OnWindowClose(IWindow* pWindow)
+void VQEngine::OnKeyUp(HWND hwnd, WPARAM wParam)
 {
-	mRenderer.GetWindowSwapChain(static_cast<Window*>(pWindow)->GetHWND()).WaitForGPU();
-
-	pWindow->Close();
-
-	if (pWindow == mpWinMain.get())
-		PostQuitMessage(0);
-
+	constexpr bool bIsMouseEvent = false;
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<KeyUpEvent>(hwnd, wParam, bIsMouseEvent));
 }
- 
 
 
-// ----------------------------------------------------------------------------------------------------
+// ===================================================================================================================================
+// MOUSE EVENTS
+// ===================================================================================================================================
+// Due to multi-threading, this thread will record the events and 
+// Update Thread will process the queue at the beginning of an update loop
+void VQEngine::OnMouseButtonDown(HWND hwnd, WPARAM wParam, bool bIsDoubleClick)
+{
+	constexpr bool bIsMouseEvent = true;
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<KeyDownEvent>(hwnd, wParam, bIsMouseEvent, bIsDoubleClick));
+}
+
+void VQEngine::OnMouseButtonUp(HWND hwnd, WPARAM wParam)
+{
+	constexpr bool bIsMouseEvent = true;
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<KeyUpEvent>(hwnd, wParam, bIsMouseEvent));
+}
+
+void VQEngine::OnMouseScroll(HWND hwnd, short scroll)
+{
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<MouseScrollEvent>(hwnd, scroll));
+}
+
+
+void VQEngine::OnMouseMove(HWND hwnd, long x, long y)
+{
+	//Log::Info("MouseMove : (%ld, %ld)", x, y);
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<MouseMoveEvent>(hwnd, x, y));
+}
+
+
+void VQEngine::OnMouseInput(HWND hwnd, LPARAM lParam)
+{
+	MouseInputEventData data = {};
+	const bool bMouseInputEvent = Input::ReadRawInput_Mouse(lParam, &data);
+
+	if (bMouseInputEvent)
+	{
+		mEventQueue_WinToVQE_Update.AddItem(std::make_shared<MouseInputEvent>(data, hwnd));
+	}
+}
+
+
+
+
+
+
+// ===================================================================================================================================
+// MISC
+// ===================================================================================================================================
+
 static void LogWndMsg(UINT uMsg, HWND hwnd)
 {
 #if LOG_WINDOW_MESSAGE_EVENTS
-#define HANDLE_CASE(EVENT)\
-case EVENT: Log::Info(#EVENT"\t(0x%04x)\t\t<hwnd=0x%x>", EVENT, hwnd); break
+#define HANDLE_CASE(EVENT)    case EVENT: Log::Info(#EVENT"\t(0x%04x)\t\t<hwnd=0x%x>", EVENT, hwnd); break
 	switch (uMsg)
 	{
 		// https://www.autoitscript.com/autoit3/docs/appendix/WinMsgCodes.htm

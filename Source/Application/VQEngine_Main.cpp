@@ -29,7 +29,7 @@ constexpr char* BUILD_CONFIG = "Debug";
 #else
 constexpr char* BUILD_CONFIG = "Release";
 #endif
-constexpr char* VQENGINE_VERSION = "v0.2.0";
+constexpr char* VQENGINE_VERSION = "v0.3.0";
 
 
 void VQEngine::MainThread_Tick()
@@ -42,8 +42,9 @@ void VQEngine::MainThread_Tick()
 		}
 	}
 
-	// TODO: populate input queue and signal Update thread 
-	//       to drain the buffered input from the queue
+	// Sleep(10);
+
+	MainThread_HandleEvents();
 }
 
 bool VQEngine::Initialize(const FStartupParameters& Params)
@@ -58,11 +59,11 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	this->mSysInfo = VQSystemInfo::GetSystemInfo();
 	#endif
 	// -------------------------------------------------------------------------
-	InititalizeEngineSettings(Params);
-	InitializeApplicationWindows(Params);
+	InitializeEngineSettings(Params);
+	InitializeWindows(Params);
 	InitializeThreads();
 
-	return true;
+	return true; 
 }
 
 void VQEngine::Exit()
@@ -74,7 +75,7 @@ void VQEngine::Exit()
 
 
 
-void VQEngine::InititalizeEngineSettings(const FStartupParameters& Params)
+void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 {
 	const FEngineSettings& p = Params.EngineSettings;
 
@@ -150,9 +151,9 @@ void VQEngine::InititalizeEngineSettings(const FStartupParameters& Params)
 	}
 }
 
-void VQEngine::InitializeApplicationWindows(const FStartupParameters& Params)
+void VQEngine::InitializeWindows(const FStartupParameters& Params)
 {
-	auto fnInitializeWindows = [&](const FWindowSettings& settings, HINSTANCE hInstance, std::unique_ptr<Window>& pWin)
+	auto fnInitializeWindow = [&](const FWindowSettings& settings, HINSTANCE hInstance, std::unique_ptr<Window>& pWin, const std::string& WindowName)
 	{
 		FWindowDesc desc = {};
 		desc.width = settings.Width;
@@ -162,17 +163,23 @@ void VQEngine::InitializeApplicationWindows(const FStartupParameters& Params)
 		desc.pfnWndProc = WndProc;
 		desc.bFullscreen = settings.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN;
 		desc.preferredDisplay = settings.PreferredDisplay;
+		desc.iShowCmd = Params.iCmdShow;
+		desc.windowName = WindowName;
+		desc.pfnRegisterWindowName = &VQEngine::SetWindowName;
+		desc.pRegistrar = this;
 		pWin.reset(new Window(settings.Title, desc));
+		pWin->pOwner->OnWindowCreate(pWin->GetHWND());
 	};
 
-	fnInitializeWindows(mSettings.WndMain, Params.hExeInstance, mpWinMain);
+	fnInitializeWindow(mSettings.WndMain, Params.hExeInstance, mpWinMain, "Main Window");
 	Log::Info("Created main window<0x%x>: %dx%d", mpWinMain->GetHWND(), mpWinMain->GetWidth(), mpWinMain->GetHeight());
 
 	if (mSettings.bShowDebugWindow)
 	{
-		fnInitializeWindows(mSettings.WndDebug, Params.hExeInstance, mpWinDebug);
+		fnInitializeWindow(mSettings.WndDebug, Params.hExeInstance, mpWinDebug, "Debug Window");
 		Log::Info("Created debug window<0x%x>: %dx%d", mpWinDebug->GetHWND(), mpWinDebug->GetWidth(), mpWinDebug->GetHeight());
 	}
+
 }
 
 void VQEngine::InitializeThreads()
@@ -201,6 +208,7 @@ void VQEngine::ExitThreads()
 	mUpdateWorkerThreads.Exit();
 	mRenderWorkerThreads.Exit();
 }
+
 
 
 
@@ -241,6 +249,31 @@ FWindowSettings& VQEngine::GetWindowSettings(HWND hwnd)
 	Log::Warning("VQEngine::GetWindowSettings() : Invalid hwnd=0x%x, returning Main Window Settings", hwnd);
 	return mSettings.WndMain;
 }
+
+void VQEngine::RegisterWindowForInput(const std::unique_ptr<Window>& pWnd)
+{
+	if (pWnd)
+	{
+		mInputStates.emplace(pWnd->GetHWND(), std::move(Input()));
+	}
+}
+
+void VQEngine::UnregisterWindowForInput(const std::unique_ptr<Window>& pWnd)
+{
+	if (pWnd)
+	{
+		HWND hwnd = pWnd->GetHWND();
+		auto it = mInputStates.find(hwnd);
+		if (it == mInputStates.end())
+		{
+			Log::Error("UnregisterWindowForInput() called with an unregistered Window<%x>", hwnd);
+			return;
+		}
+
+		mInputStates.erase(it);
+	}
+}
+
 
 
 static std::pair<std::string, std::string> ParseLineINI(const std::string& iniLine)

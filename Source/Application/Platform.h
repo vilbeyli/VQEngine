@@ -38,11 +38,10 @@ struct IDXGIOutput;
 struct FStartupParameters
 {
 	HINSTANCE                 hExeInstance;
-	
+	int                       iCmdShow;
 	Log::LogInitializeParams  LogInitParams;
 
 	FEngineSettings EngineSettings;
-
 	uint8 bOverrideGFXSetting_RenderScale         : 1;
 	uint8 bOverrideGFXSetting_bVSync              : 1;
 	uint8 bOverrideGFXSetting_bUseTripleBuffering : 1;

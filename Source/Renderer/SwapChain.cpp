@@ -48,10 +48,10 @@
 
 FWindowRepresentation::FWindowRepresentation(const std::unique_ptr<Window>& pWnd, bool bVSyncIn, bool bFullscreenIn)
     : hwnd(pWnd->GetHWND())
-    , width(pWnd->GetWidth())
-    , height(pWnd->GetHeight())
+    , width(pWnd->IsFullscreen() ? pWnd->GetFullscreenWidth() : pWnd->GetWidth())
+    , height(pWnd->IsFullscreen() ? pWnd->GetFullscreenHeight() : pWnd->GetHeight())
     , bVSync(bVSyncIn)
-    , bFullscreen(bFullscreenIn)
+    , bExclusiveFullscreen(bFullscreenIn)
 {}
 
 // The programming model for swap chains in D3D12 is not identical to that in earlier versions of D3D. 
@@ -310,7 +310,7 @@ void SwapChain::SetFullscreen(bool bState, int FSRecoveryWindowWidth, int FSReco
     mode.Scaling          = matchedDesc.Scaling;
     mode.ScanlineOrdering = matchedDesc.ScanlineOrdering;
     // https://docs.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-resizetarget
-    // calling ResizeTarget() will produce WM_RESIZE event right away.
+    // calling ResizeTarget() will produce WM_SIZE event right away.
     // RenderThread handles events twice before present to be able to catch
     // the Resize() event before calling Present() as the events
     // are produced and consumed on different threads (p:main, c:render).
@@ -320,12 +320,12 @@ void SwapChain::SetFullscreen(bool bState, int FSRecoveryWindowWidth, int FSReco
         Log::Error("SwapChain::ResizeTarget() : unhandled error code");
     }
 
-
     const bool bRefreshRateIsInteger = mode.RefreshRate.Denominator == 1;
+
     if(bRefreshRateIsInteger)
-        Log::Info("SwapChain::SetFullscreen() Mode: %dx%d@%dHz" , mode.Width, mode.Height, mode.RefreshRate.Numerator);
+        Log::Info("SwapChain::SetFullscreen(%s) Mode: %dx%d@%dHz" , (bState ? "true" : "false"), mode.Width, mode.Height, mode.RefreshRate.Numerator);
     else
-        Log::Info("SwapChain::SetFullscreen() Mode: %dx%d@%.2fHz", mode.Width, mode.Height, (float)mode.RefreshRate.Numerator / mode.RefreshRate.Denominator);
+        Log::Info("SwapChain::SetFullscreen(%s) Mode: %dx%d@%.2fHz", (bState ? "true" : "false"), mode.Width, mode.Height, (float)mode.RefreshRate.Numerator / mode.RefreshRate.Denominator);
 }
 
 bool SwapChain::IsFullscreen(/*IDXGIOUtput* ?*/) const

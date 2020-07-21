@@ -18,13 +18,6 @@
 
 #include "Camera.h"
 
-
-// TODO: remove duplicate definition
-#define DEG2RAD (DirectX::XM_PI / 180.0f)
-#define RAD2DEG (180.0f / DirectX::XM_PI)
-#define PI		DirectX::XM_PI
-#define PI_DIV2 DirectX::XM_PIDIV2
-
 #define CAMERA_DEBUG 1
 
 using namespace DirectX;
@@ -46,15 +39,23 @@ Camera::Camera()
 Camera::~Camera(void)
 {}
 
-void Camera::InitializeCamera(const CameraData& data, int ViewportX, int ViewportY)
+void Camera::InitializeCamera(const FCameraData& data)
 {
-	const auto& NEAR_PLANE = data.nearPlane;
-	const auto& FAR_PLANE = data.farPlane;
-	const float AspectRatio = static_cast<float>(ViewportX) / ViewportY;
-	const float VerticalFoV = data.fovV_Degrees * DEG2RAD;
+	const auto& NEAR_PLANE   = data.nearPlane;
+	const auto& FAR_PLANE    = data.farPlane;
+	const float AspectRatio  = data.width / data.height;
+	const float VerticalFoV  = data.fovV_Degrees * DEG2RAD;
+	const float& ViewportX   = data.width;
+	const float& ViewportY   = data.height;
 
-	//SetOthoMatrix(ViewportX, ViewportY, NEAR_PLANE, FAR_PLANE); // quick test
-	SetProjectionMatrix(VerticalFoV, AspectRatio, NEAR_PLANE, FAR_PLANE);
+	this->mProjParams.NearZ = NEAR_PLANE;
+	this->mProjParams.FarZ  = FAR_PLANE;
+	this->mProjParams.ViewporHeight = ViewportY;
+	this->mProjParams.ViewporWidth  = ViewportX;
+	this->mProjParams.FieldOfView = data.fovV_Degrees * DEG2RAD;
+	this->mProjParams.bPerspectiveProjection = data.bPerspectiveProjection;
+
+	SetProjectionMatrix(this->mProjParams);
 
 	SetPosition(data.x, data.y, data.z);
 	mYaw = mPitch = 0;
@@ -62,58 +63,25 @@ void Camera::InitializeCamera(const CameraData& data, int ViewportX, int Viewpor
 }
 
 
-void Camera::SetOthoMatrix(int screenWidth, int screenHeight, float screenNear, float screenFar)
+void Camera::SetProjectionMatrix(const ProjectionMatrixParameters& params)
 {
-	XMStoreFloat4x4(&mMatProj, XMMatrixOrthographicLH((float)screenWidth, (float)screenHeight, screenNear, screenFar));
+	assert(params.ViewporHeight > 0.0f);
+	const float AspectRatio = params.ViewporWidth / params.ViewporHeight;
+
+	mMatProj = params.bPerspectiveProjection
+		? MakePerspectiveProjectionMatrix(params.FieldOfView, AspectRatio, params.NearZ, params.FarZ)
+		: MakeOthographicProjectionMatrix(params.ViewporWidth, params.ViewporHeight, params.NearZ, params.FarZ);
 }
 
-void Camera::SetProjectionMatrix(float fovy, float screenAspect, float screenNear, float screenFar)
+void Camera::Update(const float dt, const FCameraInput& input)
 {
-	XMStoreFloat4x4(&mMatProj, XMMatrixPerspectiveFovLH(fovy, screenAspect, screenNear, screenFar));
-}
-
-void Camera::SetProjectionMatrixHFov(float fovx, float screenAspectInverse, float screenNear, float screenFar)
-{	// horizonital FOV
-	const float FarZ = screenFar; float NearZ = screenNear;
-	const float r = screenAspectInverse;
-	
-	const float Width = 1.0f / tanf(fovx*0.5f);
-	const float Height = Width / r;
-	const float fRange = FarZ / (FarZ - NearZ);
-
-	XMMATRIX M;	
-	M.r[0].m128_f32[0] = Width;
-	M.r[0].m128_f32[1] = 0.0f;
-	M.r[0].m128_f32[2] = 0.0f;
-	M.r[0].m128_f32[3] = 0.0f;
-
-	M.r[1].m128_f32[0] = 0.0f;
-	M.r[1].m128_f32[1] = Height;
-	M.r[1].m128_f32[2] = 0.0f;
-	M.r[1].m128_f32[3] = 0.0f;
-
-	M.r[2].m128_f32[0] = 0.0f;
-	M.r[2].m128_f32[1] = 0.0f;
-	M.r[2].m128_f32[2] = fRange;
-	M.r[2].m128_f32[3] = 1.0f;
-
-	M.r[3].m128_f32[0] = 0.0f;
-	M.r[3].m128_f32[1] = 0.0f;
-	M.r[3].m128_f32[2] = -fRange * NearZ;
-	M.r[3].m128_f32[3] = 0.0f;
-	XMStoreFloat4x4(&mMatProj, M);
-}
-
-
-void Camera::Update(float dt)
-{
-	Rotate(dt);
-	Move(dt);
+	Rotate(dt, input);
+	Move(dt, input);
 
 	XMVECTOR up         = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 	XMVECTOR lookAt     = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
 	const XMVECTOR pos  = XMLoadFloat3(&mPosition);
-	const XMMATRIX MRot = RotMatrix();
+	const XMMATRIX MRot = GetRotationMatrix();
 
 	//transform the lookat and up vector by rotation matrix
 	lookAt	= XMVector3TransformCoord(lookAt, MRot);
@@ -148,7 +116,7 @@ XMMATRIX Camera::GetViewInverseMatrix() const
 	const XMVECTOR up     = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 	const XMVECTOR lookAt = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
 	const XMVECTOR pos    = XMLoadFloat3(&mPosition);
-	const XMMATRIX MRot   = RotMatrix();
+	const XMMATRIX MRot   = GetRotationMatrix();
 
 	const XMVECTOR dir    = XMVector3Normalize(lookAt - pos);
 	const XMVECTOR wing   = XMVector3Cross(up, dir);
@@ -180,12 +148,12 @@ XMMATRIX Camera::GetProjectionMatrix() const
 	return  XMLoadFloat4x4(&mMatProj);
 }
 
-FrustumPlaneset Camera::GetViewFrustumPlanes() const
+FFrustumPlaneset Camera::GetViewFrustumPlanes() const
 {
-	return FrustumPlaneset::ExtractFromMatrix(GetViewMatrix() * GetProjectionMatrix());
+	return FFrustumPlaneset::ExtractFromMatrix(GetViewMatrix() * GetProjectionMatrix());
 }
 
-XMMATRIX Camera::RotMatrix() const
+XMMATRIX Camera::GetRotationMatrix() const
 {
 	return XMMatrixRotationRollPitchYaw(mPitch, mYaw, 0.0f);
 }
@@ -204,47 +172,31 @@ void Camera::Rotate(float yaw, float pitch, const float dt)
 	if (mPitch < -90.0f * DEG2RAD) mPitch = -90.0f * DEG2RAD;
 }
 
-#if 0
-void Camera::Reset() // TODO: input
-{
-	const Settings::Camera & data = m_settings;
-	SetPosition(data.x, data.y, data.z);
-	mYaw = mPitch = 0;
-	Rotate(data.yaw * DEG2RAD, data.pitch * DEG2RAD, 1.0f);
-}
+
+//void Camera::Reset() // TODO: input
+//{
+//	const Settings::Camera & data = m_settings;
+//	SetPosition(data.x, data.y, data.z);
+//	mYaw = mPitch = 0;
+//	Rotate(data.yaw * DEG2RAD, data.pitch * DEG2RAD, 1.0f);
+//}
 
 // internal update functions
-void Camera::Rotate(const float dt)
+void Camera::Rotate(const float dt, const FCameraInput& input)
 {
-	auto m_input = ENGINE->INP();
-	const long* dxdy = m_input->GetDelta();
-	float dy = static_cast<float>(dxdy[1]);
-	float dx = static_cast<float>(dxdy[0]);
+	float dy = input.DeltaMouseXY[1];
+	float dx = input.DeltaMouseXY[0];
 
 	const float delta = AngularSpeedDeg * DEG2RAD * dt;
 	Rotate(dx, dy, delta);
 }
 
-void Camera::Move(const float dt)
+void Camera::Move(const float dt, const FCameraInput& input)
 {
-	auto m_input = ENGINE->INP();
-	XMMATRIX MRotation	 = RotMatrix();
-	XMVECTOR translation = XMVectorSet(0,0,0,0);
-	if (m_input->IsKeyDown('A'))		translation += XMVector3TransformCoord(XMFLOAT3::Left,		MRotation);
-	if (m_input->IsKeyDown('D'))		translation += XMVector3TransformCoord(XMFLOAT3::Right,		MRotation);
-	if (m_input->IsKeyDown('W'))		translation += XMVector3TransformCoord(XMFLOAT3::Forward,	MRotation);
-	if (m_input->IsKeyDown('S'))		translation += XMVector3TransformCoord(XMFLOAT3::Back,		MRotation);
-	if (m_input->IsKeyDown('E'))		translation += XMVector3TransformCoord(XMFLOAT3::Up,		MRotation);
-	if (m_input->IsKeyDown('Q'))		translation += XMVector3TransformCoord(XMFLOAT3::Down,		MRotation);
-	if (m_input->IsKeyDown(VK_SHIFT))	translation *= 2.0f;
-	translation *= 4.0f;
+	const XMMATRIX MRotation	 = GetRotationMatrix();
+	const XMVECTOR WorldSpaceTranslation = XMVector3TransformCoord(input.LocalTranslationVector, MRotation);
 
-	XMVECTOR V = mVelocity;
-	V += (translation * MoveSpeed - V * Drag) * dt;
-	mVelocity = V;
+	XMVECTOR V = XMLoadFloat3(&mVelocity);
+	V += (WorldSpaceTranslation * MoveSpeed - V * Drag) * dt;
+	XMStoreFloat3(&mVelocity, V);
 }
-#else
-void Camera::Reset() {}
-void Camera::Rotate(const float dt) {}
-void Camera::Move(const float dt) {}
-#endif

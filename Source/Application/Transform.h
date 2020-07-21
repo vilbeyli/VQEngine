@@ -21,16 +21,10 @@
 #include <DirectXMath.h>
 
 #include "Quaternion.h"
+#include "Math.h"
 
 #include <utility>
 
-constexpr DirectX::XMFLOAT3 UpVector      = DirectX::XMFLOAT3(0, 1, 0);
-constexpr DirectX::XMFLOAT3 RightVector   = DirectX::XMFLOAT3(1, 0, 0);
-constexpr DirectX::XMFLOAT3 ForwardVector = DirectX::XMFLOAT3(0, 0, 1);
-
-constexpr DirectX::XMFLOAT3 XAxis = DirectX::XMFLOAT3(1, 0, 0);
-constexpr DirectX::XMFLOAT3 YAxis = DirectX::XMFLOAT3(0, 1, 0);
-constexpr DirectX::XMFLOAT3 ZAxis = DirectX::XMFLOAT3(0, 0, 1);
 
 struct Transform
 {
@@ -52,6 +46,7 @@ public:
 	inline void SetZRotationDeg(float zDeg)              { _rotation = Quaternion::FromAxisAngle(ForwardVector, zDeg * DEG2RAD); }
 	inline void SetScale(float x, float y, float z)      { _scale = DirectX::XMFLOAT3(x, y, z); }
 	inline void SetScale(const DirectX::XMFLOAT3& scl)   { _scale = scl; }
+	inline void SetScale(const DirectX::XMVECTOR& scl)   { XMStoreFloat3(&_scale, scl); }
 	inline void SetUniformScale(float s)                 { _scale = DirectX::XMFLOAT3(s, s, s); }
 	inline void SetPosition(float x, float y, float z)   { _position = DirectX::XMFLOAT3(x, y, z); }
 	inline void SetPosition(const DirectX::XMFLOAT3& pos){ _position = pos; }

@@ -77,12 +77,12 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "CompanyName", "Volkan Ilbeyli @vilbeyli - GitHub/VQE"
-            VALUE "FileDescription", "VQE Application"
-            VALUE "FileVersion", "0.1.0.0"
+            VALUE "FileDescription", "VQEngine Application"
+            VALUE "FileVersion", "0.3.0.0"
             VALUE "InternalName", "VQE.exe"
             VALUE "OriginalFilename", "VQE.exe"
-            VALUE "ProductName", "VQE"
-            VALUE "ProductVersion", "0.1.0.0"
+            VALUE "ProductName", "VQEngine"
+            VALUE "ProductVersion", "0.3.0.0"
         END
     END
     BLOCK "VarFileInfo"
