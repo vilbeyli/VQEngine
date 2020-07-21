@@ -1,6 +1,6 @@
 # VQE
 
-![](Data/Icons/VQEngine-icon.png) 
+![](Data/Icons/VQEngine-icon.png)
 
 VQE is **VQEngine**: A DX12 rewrite of [VQEngine-Vanilla](https://github.com/vilbeyli/VQEngine) for fast prototyping of rendering techniques and experimenting with cutting-edge technology.
 
