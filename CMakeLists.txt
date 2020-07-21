@@ -63,6 +63,7 @@ set (SourceVQE
     "Source/Application/Mesh.cpp"
     "Source/Application/Geometry.cpp"
     "Source/Application/Transform.cpp"
+    "Source/Application/Math.cpp"
     "Source/Application/Quaternion.cpp"
     "Source/Application/Camera.cpp"
     "Source/Application/Input.cpp"

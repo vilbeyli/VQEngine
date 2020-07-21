@@ -39,8 +39,8 @@ static FCameraData GenerateCameraInitializationParameters(const std::unique_ptr<
 	camData.fovV_Degrees = 60.0f;
 	camData.nearPlane = 0.01f;
 	camData.farPlane = 1000.0f;
-	camData.width = pWin->GetWidth();
-	camData.height = pWin->GetHeight();
+	camData.width  = static_cast<float>(pWin->GetWidth() );
+	camData.height = static_cast<float>(pWin->GetHeight());
 	return camData;
 }
 
