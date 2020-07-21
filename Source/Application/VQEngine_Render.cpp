@@ -255,7 +255,7 @@ void VQEngine::RenderThread_RenderMainWindow()
 
 void VQEngine::RenderThread_RenderDebugWindow()
 {
-	if (mbLoadingLevel)
+	if (mScene_DebugWnd.mFrameData.empty())
 		return;
 
 	HRESULT hr = S_OK;
