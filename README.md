@@ -51,7 +51,7 @@ VQE can be configured through `Data/EngineConfig.ini` file
 | :-- | :-- |
 | `ResolutionX=<int>` | Sets application render resolution width | 
 | `ResolutionY=<int>` | Sets application render resolution height |
-| `VSync=<bool>` <br/> (TO BE IMPLEMENTED) | Toggles VSync based on the specified `<bool>` |
+| `VSync=<bool>` <br/> | Toggles VSync based on the specified `<bool>` |
 
 <br/>
 
@@ -75,7 +75,8 @@ VQE supports the following command line parameters:
 | `-ResX=<int>` | Sets application render resolution width |
 | `-ResY=<int>` | Sets application render resolution height |
 | `-FullScreen` | Launches in fullscreen |
-| `-VSync` | Enables VSync (TO BE IMPLEMENTED)  |
+| `-VSync` | Enables VSync |
+| `-VSync=<bool>` | Sets Specified VSync State |
 | `-TripleBuffering` | Initializes SwapChain with 3 back buffers |
 | `-DoubleBuffering` | Initializes SwapChain with 2 back buffers |
 

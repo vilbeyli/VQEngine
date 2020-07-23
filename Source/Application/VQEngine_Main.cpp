@@ -21,7 +21,6 @@
 #include "Libs/VQUtils/Source/utils.h"
 
 #include <fstream>
-#include <sstream>
 #include <cassert>
 
 #ifdef _DEBUG
@@ -30,6 +29,42 @@ constexpr char* BUILD_CONFIG = "Debug";
 constexpr char* BUILD_CONFIG = "Release";
 #endif
 constexpr char* VQENGINE_VERSION = "v0.3.0";
+
+
+static std::pair<std::string, std::string> ParseLineINI(const std::string& iniLine)
+{
+	assert(!iniLine.empty());
+	std::pair<std::string, std::string> SettingNameValuePair;
+
+	const bool bSectionTag = iniLine[0] == '[';
+
+	if (bSectionTag)
+	{
+		auto vecSettingNameValue = StrUtil::split(iniLine.substr(1), ']');
+		SettingNameValuePair.first = vecSettingNameValue[0];
+	}
+	else
+	{
+		auto vecSettingNameValue = StrUtil::split(iniLine, '=');
+		assert(vecSettingNameValue.size() >= 2);
+		SettingNameValuePair.first = vecSettingNameValue[0];
+		SettingNameValuePair.second = vecSettingNameValue[1];
+	}
+
+
+	return SettingNameValuePair;
+}
+
+static std::unordered_map<std::string, EDisplayMode> S_LOOKUP_STR_TO_DISPLAYMODE =
+{
+	  { "Fullscreen"           , EDisplayMode::EXCLUSIVE_FULLSCREEN   }
+	, { "Borderless"           , EDisplayMode::BORDERLESS_FULLSCREEN  }
+	, { "BorderlessFullscreen" , EDisplayMode::BORDERLESS_FULLSCREEN  }
+	, { "BorderlessWindowed"   , EDisplayMode::BORDERLESS_FULLSCREEN  }
+	, { "Windowed"             , EDisplayMode::WINDOWED               }
+};
+
+
 
 
 void VQEngine::MainThread_Tick()
@@ -276,42 +311,6 @@ void VQEngine::UnregisterWindowForInput(const std::unique_ptr<Window>& pWnd)
 
 
 
-static std::pair<std::string, std::string> ParseLineINI(const std::string& iniLine)
-{
-	assert(!iniLine.empty());
-	std::pair<std::string, std::string> SettingNameValuePair;
-
-	const bool bSectionTag = iniLine[0] == '[';
-
-	if (bSectionTag)
-	{
-		auto vecSettingNameValue = StrUtil::split(iniLine.substr(1), ']');
-		SettingNameValuePair.first = vecSettingNameValue[0];
-	}
-	else
-	{
-		auto vecSettingNameValue = StrUtil::split(iniLine, '=');
-		assert(vecSettingNameValue.size() >= 2);
-		SettingNameValuePair.first  = vecSettingNameValue[0];
-		SettingNameValuePair.second = vecSettingNameValue[1];
-	}
-
-
-	return SettingNameValuePair;
-}
-static bool ParseBool(const std::string& s) { bool b; std::istringstream(s) >> std::boolalpha >> b; return b; }
-static int  ParseInt(const std::string& s) { return std::atoi(s.c_str()); }
-static float ParseFloat(const std::string& s) { return static_cast<float>(std::atof(s.c_str())); }
-
-static std::unordered_map<std::string, EDisplayMode> S_LOOKUP_STR_TO_DISPLAYMODE =
-{
-	  { "Fullscreen"           , EDisplayMode::EXCLUSIVE_FULLSCREEN   }
-	, { "Borderless"           , EDisplayMode::BORDERLESS_FULLSCREEN  }
-	, { "BorderlessFullscreen" , EDisplayMode::BORDERLESS_FULLSCREEN  }
-	, { "BorderlessWindowed"   , EDisplayMode::BORDERLESS_FULLSCREEN  }
-	, { "Windowed"             , EDisplayMode::WINDOWED               }
-};
-
 FStartupParameters VQEngine::ParseEngineSettingsFile()
 {
 	constexpr char* ENGINE_SETTINGS_FILE_NAME = "Data/EngineSettings.ini";
@@ -345,17 +344,17 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 			if (SettingName == "VSync")
 			{
 				params.bOverrideGFXSetting_bVSync = true;
-				params.EngineSettings.gfx.bVsync = ParseBool(SettingValue);
+				params.EngineSettings.gfx.bVsync = StrUtil::ParseBool(SettingValue);
 			}
 			if (SettingName == "RenderScale")
 			{
 				params.bOverrideGFXSetting_RenderScale = true;
-				params.EngineSettings.gfx.RenderScale = ParseFloat(SettingValue);
+				params.EngineSettings.gfx.RenderScale = StrUtil::ParseFloat(SettingValue);
 			}
 			if (SettingName == "TripleBuffer")
 			{
 				params.bOverrideGFXSetting_bUseTripleBuffering = true;
-				params.EngineSettings.gfx.bUseTripleBuffering = ParseBool(SettingValue);
+				params.EngineSettings.gfx.bUseTripleBuffering = StrUtil::ParseBool(SettingValue);
 			}
 
 
@@ -365,12 +364,12 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 			if (SettingName == "Width")
 			{
 				params.bOverrideENGSetting_MainWindowWidth = true;
-				params.EngineSettings.WndMain.Width = ParseInt(SettingValue);
+				params.EngineSettings.WndMain.Width = StrUtil::ParseInt(SettingValue);
 			}
 			if (SettingName == "Height")
 			{
 				params.bOverrideENGSetting_MainWindowHeight = true;
-				params.EngineSettings.WndMain.Height = ParseInt(SettingValue);
+				params.EngineSettings.WndMain.Height = StrUtil::ParseInt(SettingValue);
 			}
 			if (SettingName == "DisplayMode")
 			{
@@ -383,24 +382,24 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 			if (SettingName == "PreferredDisplay")
 			{
 				params.bOverrideENGSetting_PreferredDisplay = true;
-				params.EngineSettings.WndMain.PreferredDisplay = ParseInt(SettingValue);
+				params.EngineSettings.WndMain.PreferredDisplay = StrUtil::ParseInt(SettingValue);
 			}
 
 
 			if (SettingName == "DebugWindow")
 			{
 				params.bOverrideENGSetting_bDebugWindowEnable = true;
-				params.EngineSettings.bShowDebugWindow = ParseBool(SettingValue);
+				params.EngineSettings.bShowDebugWindow = StrUtil::ParseBool(SettingValue);
 			}
 			if (SettingName == "DebugWindowWidth")
 			{
 				params.bOverrideENGSetting_DebugWindowWidth = true;
-				params.EngineSettings.WndDebug.Width = ParseInt(SettingValue);
+				params.EngineSettings.WndDebug.Width = StrUtil::ParseInt(SettingValue);
 			}
 			if (SettingName == "DebugWindowHeight")
 			{
 				params.bOverrideENGSetting_DebugWindowHeight = true;
-				params.EngineSettings.WndDebug.Height = ParseInt(SettingValue);
+				params.EngineSettings.WndDebug.Height = StrUtil::ParseInt(SettingValue);
 			}
 			if (SettingName == "DebugWindowDisplayMode")
 			{
@@ -413,7 +412,7 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 			if (SettingName == "DebugWindowPreferredDisplay")
 			{
 				params.bOverrideENGSetting_DebugWindowPreferredDisplay = true;
-				params.EngineSettings.WndDebug.PreferredDisplay = ParseInt(SettingValue);
+				params.EngineSettings.WndDebug.PreferredDisplay = StrUtil::ParseInt(SettingValue);
 			}
 			
 		}

@@ -104,8 +104,15 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 		}
 		if (paramName == "-VSync" || paramName == "-vsync" || paramName == "-Vsync")
 		{
-			refStartupParams.bOverrideGFXSetting_bVSync= true;
-			refStartupParams.EngineSettings.gfx.bVsync= true;
+			refStartupParams.bOverrideGFXSetting_bVSync = true;
+			if (paramValue.empty())
+			{
+				refStartupParams.EngineSettings.gfx.bVsync = true;
+			}
+			else
+			{
+				refStartupParams.EngineSettings.gfx.bVsync = StrUtil::ParseBool(paramValue);
+			}
 		}
 		if (paramName == "-TripleBuffering")
 		{

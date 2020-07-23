@@ -61,7 +61,7 @@ public:
 	void SetFullscreen(bool bState, int FSRecoveryWindowWidth, int FSRecoveryWindowHeight);
 	bool IsFullscreen() const;
 
-	HRESULT Present(bool bVSync = false);
+	HRESULT Present();
 	void MoveToNextFrame();
 	void WaitForGPU();
 
@@ -71,6 +71,7 @@ public:
 	inline CD3DX12_CPU_DESCRIPTOR_HANDLE GetCurrentBackBufferRTVHandle()    const { return CD3DX12_CPU_DESCRIPTOR_HANDLE(mpDescHeapRTV->GetCPUDescriptorHandleForHeapStart(), GetCurrentBackBufferIndex(), mpDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)); }
 	inline ID3D12Resource*               GetCurrentBackBufferRenderTarget() const { return mRenderTargets[GetCurrentBackBufferIndex()]; }
 	inline unsigned long long            GetNumPresentedFrames()            const { return mNumTotalFrames; }
+	inline bool                          IsVSyncOn()                        const { return mbVSync;}
 
 private:
 	void CreateRenderTargetViews();
@@ -83,6 +84,7 @@ private:
 	unsigned short               mNumBackBuffers     = 0;
 	unsigned short               mICurrentBackBuffer = 0;
 	unsigned long long           mNumTotalFrames     = 0;
+	bool                         mbVSync = false;
 
 	HANDLE                       mHEvent = 0;
 	ID3D12Fence*                 mpFence = nullptr;

@@ -41,6 +41,7 @@ enum EEventType
 	WINDOW_CLOSE_EVENT,
 	TOGGLE_FULLSCREEN_EVENT,
 	SET_FULLSCREEN_EVENT,
+	SET_VSYNC_EVENT,
 	
 	// Windows->VQE input events
 	KEY_DOWN_EVENT,
@@ -119,7 +120,11 @@ struct SetFullscreenEvent : public IEvent
 	SetFullscreenEvent(HWND hwnd_, bool bFullscreen) : IEvent(EEventType::SET_FULLSCREEN_EVENT, hwnd_), bToggleValue(bFullscreen) {}
 	bool bToggleValue = false;
 };
-
+struct SetVSyncEvent : public IEvent
+{
+	SetVSyncEvent(HWND hwnd_, bool bVSync) : IEvent(EEventType::SET_VSYNC_EVENT, hwnd_), bToggleValue(bVSync) {}
+	bool bToggleValue = false;
+};
 
 //
 // INPUT EVENTS

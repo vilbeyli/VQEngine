@@ -140,7 +140,7 @@ void VQEngine::HandleEngineInput()
 		Input& input = it->second;
 		auto&  pWin  = this->GetWindow(hwnd);
 
-		if (input.IsKeyDown("Esc"))
+		if (input.IsKeyTriggered("Esc"))
 		{
 			if (pWin->IsMouseCaptured())
 			{
@@ -157,6 +157,14 @@ void VQEngine::HandleEngineInput()
 				// capture mouse only when main window is clicked
 				if(hwnd == mpWinMain->GetHWND())
 					mEventQueue_VQEToWin_Main.AddItem(std::make_shared<SetMouseCaptureEvent>(hwnd, true, false));
+			}
+		}
+		if (input.IsKeyTriggered("V"))
+		{
+			if (pWin == mpWinMain)
+			{
+				auto& SwapChain = mRenderer.GetWindowSwapChain(hwnd);
+				mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetVSyncEvent>(hwnd, !SwapChain.IsVSyncOn()));
 			}
 		}
 	}

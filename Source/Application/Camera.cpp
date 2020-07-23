@@ -55,10 +55,9 @@ void Camera::InitializeCamera(const FCameraData& data)
 	this->mProjParams.FieldOfView = data.fovV_Degrees * DEG2RAD;
 	this->mProjParams.bPerspectiveProjection = data.bPerspectiveProjection;
 
-	SetProjectionMatrix(this->mProjParams);
-
-	SetPosition(data.x, data.y, data.z);
 	mYaw = mPitch = 0;
+	SetProjectionMatrix(this->mProjParams);
+	SetPosition(data.x, data.y, data.z);
 	Rotate(data.yaw * DEG2RAD, data.pitch * DEG2RAD, 1.0f);
 }
 
@@ -171,15 +170,6 @@ void Camera::Rotate(float yaw, float pitch, const float dt)
 	if (mPitch > +90.0f * DEG2RAD) mPitch = +90.0f * DEG2RAD;
 	if (mPitch < -90.0f * DEG2RAD) mPitch = -90.0f * DEG2RAD;
 }
-
-
-//void Camera::Reset() // TODO: input
-//{
-//	const Settings::Camera & data = m_settings;
-//	SetPosition(data.x, data.y, data.z);
-//	mYaw = mPitch = 0;
-//	Rotate(data.yaw * DEG2RAD, data.pitch * DEG2RAD, 1.0f);
-//}
 
 // internal update functions
 void Camera::Rotate(const float dt, const FCameraInput& input)

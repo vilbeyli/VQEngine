@@ -68,6 +68,7 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     this->mHwnd = desc.pWindow->hwnd;
     this->mNumBackBuffers = desc.numBackBuffers;
     this->mpPresentQueue = desc.pCmdQueue->pQueue;
+    this->mbVSync = desc.bVSync;
 
     HRESULT hr = {};
     IDXGIFactory4* pDxgiFactory = nullptr;
@@ -93,9 +94,7 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     swapChainDesc.SampleDesc.Count = 1;
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    swapChainDesc.Flags = desc.bVSync
-        ? 0
-        : DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+    swapChainDesc.Flags = desc.bVSync ? 0: DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
     if (desc.bFullscreen)
     {
         // https://docs.microsoft.com/en-us/windows/win32/direct3darticles/dxgi-best-practices#full-screen-issues
@@ -154,6 +153,7 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     pDxgiFactory->Release();
 
     // Create Fence & Fence Event
+    this->mICurrentBackBuffer = mpSwapChain->GetCurrentBackBufferIndex();
     this->mFenceValues.resize(this->mNumBackBuffers, 0);
     D3D12_FENCE_FLAGS FenceFlags = D3D12_FENCE_FLAG_NONE;
     mpDevice->CreateFence(this->mFenceValues[this->mICurrentBackBuffer], FenceFlags, IID_PPV_ARGS(&this->mpFence));
@@ -205,7 +205,13 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     }
 
 
-    Log::Info("SwapChain: Created swapchain<hwnd=0x%x> w/ %d back buffers of %dx%d.", mHwnd, desc.numBackBuffers, desc.pWindow->width, desc.pWindow->height);
+    Log::Info("SwapChain: Created swapchain<hwnd=0x%x, bVSync=%d> w/ %d back buffers of %dx%d."
+        , mHwnd
+        , this->mbVSync
+        , desc.numBackBuffers
+        , desc.pWindow->width
+        , desc.pWindow->height
+    );
     return bSuccess;
 }
 
@@ -239,12 +245,11 @@ void SwapChain::Resize(int w, int h)
         mFenceValues[i] = mFenceValues[mpSwapChain->GetCurrentBackBufferIndex()];
     }
 
-    const bool bVsync = false; // TODO
     mpSwapChain->ResizeBuffers(
         (UINT)this->mFenceValues.size(),
         w, h,
         this->mSwapChainFormat,
-        bVsync ? 0 : (DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING /*| DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH*/)
+        this->mbVSync ? 0 : (DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING /*| DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH*/)
     );
 
     CreateRenderTargetViews();
@@ -335,9 +340,10 @@ bool SwapChain::IsFullscreen(/*IDXGIOUtput* ?*/) const
     return fullscreenState;
 }
 
-HRESULT SwapChain::Present(bool bVSync)
+HRESULT SwapChain::Present()
 {
     constexpr UINT VSYNC_INTERVAL = 1;
+    const bool& bVSync = this->mbVSync;
 
     // TODO: glitch detection and avoidance
     // https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/dxgi-flip-model#avoiding-detecting-and-recovering-from-glitches
