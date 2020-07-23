@@ -234,6 +234,7 @@ void VQEngine::RenderThread_HandleEvents()
 		case EEventType::WINDOW_RESIZE_EVENT     : pLastResizeEventLookup[pEvent->hwnd] = std::static_pointer_cast<WindowResizeEvent>(pEvent); break;
 		case EEventType::TOGGLE_FULLSCREEN_EVENT : RenderThread_HandleToggleFullscreenEvent(pEvent.get()); break;
 		case EEventType::WINDOW_CLOSE_EVENT      : RenderThread_HandleWindowCloseEvent(pEvent.get()); break;
+		case EEventType::SET_VSYNC_EVENT         : RenderThread_HandleSetVSyncEvent(pEvent.get()); break;
 		}
 	}
 
@@ -383,5 +384,38 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 			mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bFullscreenStateToSet, bVisible));
 	}
 
+}
+
+void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
+{
+	const SetVSyncEvent*         pToggleFSEvent = static_cast<const SetVSyncEvent*>(pEvent);
+	HWND                                   hwnd = pToggleFSEvent->hwnd;
+	const bool                      bVsyncState = pToggleFSEvent->bToggleValue;
+	SwapChain&                        Swapchain = mRenderer.GetWindowSwapChain(pToggleFSEvent->hwnd);
+	const FWindowSettings&          WndSettings = GetWindowSettings(hwnd);
+	std::unique_ptr<Window>&               pWnd = GetWindow(hwnd);
+	const bool   bExclusiveFullscreenTransition = WndSettings.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN;
+	const bool                 bFullscreenState = bExclusiveFullscreenTransition ? Swapchain.IsFullscreen() : pWnd->IsFullscreen();
+	const int                             WIDTH = bFullscreenState ? pWnd->GetFullscreenWidth() : pWnd->GetWidth();
+	const int                            HEIGHT = bFullscreenState ? pWnd->GetFullscreenHeight() : pWnd->GetHeight();
+
+	Swapchain.WaitForGPU(); // make sure GPU is finished
+	{
+		auto& ctx = mRenderer.GetWindowRenderContext(hwnd);
+		FWindowRepresentation wndRep(pWnd, bVsyncState, Swapchain.IsFullscreen());
+
+		FSwapChainCreateDesc desc;
+		desc.bVSync         = bVsyncState;
+		desc.bFullscreen    = Swapchain.IsFullscreen();
+		desc.numBackBuffers = Swapchain.GetNumBackBuffers();
+		desc.pCmdQueue      = &ctx.PresentQueue;
+		desc.pDevice        = ctx.pDevice->GetDevicePtr();
+		desc.pWindow        = &wndRep;
+
+		Swapchain.Destroy();
+		Swapchain.Create(desc);
+	}
+
+	Log::Info("Toggle VSync: %d", bVsyncState);
 }
 

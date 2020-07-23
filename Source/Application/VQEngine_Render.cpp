@@ -349,7 +349,7 @@ void VQEngine::RenderThread_RenderDebugWindow()
 	//
 	// PRESENT
 	//
-	hr = ctx.SwapChain.Present(ctx.bVsync);
+	hr = ctx.SwapChain.Present();
 	ctx.SwapChain.MoveToNextFrame();
 	//return hr;
 }
@@ -446,7 +446,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	//
 	// PRESENT
 	//
-	hr = ctx.SwapChain.Present(ctx.bVsync);
+	hr = ctx.SwapChain.Present();
 	ctx.SwapChain.MoveToNextFrame();
 	return hr;
 }
@@ -583,7 +583,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	//
 	// PRESENT
 	//
-	hr = ctx.SwapChain.Present(ctx.bVsync);
+	hr = ctx.SwapChain.Present();
 	ctx.SwapChain.MoveToNextFrame();
 	return hr;
 }

@@ -296,6 +296,7 @@ private:
 	void                            RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent);
 	void                            RenderThread_HandleWindowCloseEvent(const IEvent* pEvent);
 	void                            RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent);
+	void                            RenderThread_HandleSetVSyncEvent(const IEvent* pEvent);
 
 	void                            UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent);
 

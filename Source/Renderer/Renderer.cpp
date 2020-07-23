@@ -206,7 +206,6 @@ void VQRenderer::InitializeRenderContext(const FWindowRepresentation& WndDesc, i
 
 	ctx.pDevice = pVQDevice;
 	ctx.PresentQueue.Create(ctx.pDevice, CommandQueue::ECommandQueueType::GFX); // Create the GFX queue for presenting the SwapChain
-	ctx.bVsync = WndDesc.bVSync; // we store bVSync in ctx instead of SwapChain and provide it through SwapChain.Present() param : either way should be fine
 
 	// Create the SwapChain
 	FSwapChainCreateDesc swapChainDesc = {};
@@ -214,7 +213,7 @@ void VQRenderer::InitializeRenderContext(const FWindowRepresentation& WndDesc, i
 	swapChainDesc.pDevice = ctx.pDevice->GetDevicePtr();
 	swapChainDesc.pWindow = &WndDesc;
 	swapChainDesc.pCmdQueue = &ctx.PresentQueue;
-	swapChainDesc.bVSync = ctx.bVsync;
+	swapChainDesc.bVSync = WndDesc.bVSync;
 	swapChainDesc.bFullscreen = WndDesc.bExclusiveFullscreen;
 	ctx.SwapChain.Create(swapChainDesc);
 

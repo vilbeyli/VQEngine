@@ -86,8 +86,6 @@ struct FWindowRenderContext
 
 	ID3D12GraphicsCommandList* pCmdList_GFX = nullptr;
 
-	bool bVsync = false;
-
 	int MainRTResolutionX = -1;
 	int MainRTResolutionY = -1;
 };
