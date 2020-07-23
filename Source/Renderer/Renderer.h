@@ -95,6 +95,8 @@ enum EBuiltinPSOs
 	HELLO_WORLD_TRIANGLE_PSO = 0,
 	LOADING_SCREEN_PSO,
 	HELLO_WORLD_CUBE_PSO,
+	HELLO_WORLD_CUBE_PSO_MSAA_4,
+	TONEMAPPER_PSO,
 
 	NUM_BUILTIN_PSOs
 };
@@ -129,12 +131,19 @@ public:
 	TextureID                    CreateTextureFromFile(const char* pFilePath);
 	TextureID                    CreateTexture(const std::string& name, const D3D12_RESOURCE_DESC& desc, const void* pData = nullptr);
 
-	SRV_ID                       CreateSRV();
-	DSV_ID                       CreateDSV();
+	// Allocates a ResourceView from the respective heap and returns a unique identifier.
+	SRV_ID                       CreateSRV(uint NumDescriptors = 1);
+	DSV_ID                       CreateDSV(uint NumDescriptors = 1);
+	RTV_ID                       CreateRTV(uint NumDescriptors = 1);
+	UAV_ID                       CreateUAV(uint NumDescriptors = 1);
 	SRV_ID                       CreateAndInitializeSRV(TextureID texID);
 	DSV_ID                       CreateAndInitializeDSV(TextureID texID);
+
+	// Initializes a ResourceView from given texture and the specified heap index
 	void                         InitializeDSV(DSV_ID dsvID, uint heapIndex, TextureID texID);
 	void                         InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID);
+	void                         InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID);
+	void                         InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID);
 
 	void                         DestroyTexture(TextureID texID);
 	void                         DestroySRV(SRV_ID srvID);
@@ -154,6 +163,9 @@ public:
 	const RTV&                   GetRenderTargetView(RTV_ID Id) const;
 	const DSV&                   GetDepthStencilView(RTV_ID Id) const;
 
+	const ID3D12Resource*        GetTextureResource(TextureID Id) const;
+	      ID3D12Resource*        GetTextureResource(TextureID Id);
+
 	inline const VBV&            GetVBV(BufferID Id) const { return GetVertexBufferView(Id);    }
 	inline const IBV&            GetIBV(BufferID Id) const { return GetIndexBufferView(Id);     }
 	inline const CBV_SRV_UAV&    GetSRV(SRV_ID   Id) const { return GetShaderResourceView(Id);  }
@@ -163,7 +175,7 @@ public:
 	inline const DSV&            GetDSV(DSV_ID   Id) const { return GetDepthStencilView(Id);    }
 	
 private:
-	using PSOArray_t           = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
+	using PSOArray_t = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
 
 	// GPU
 	Device                                         mDevice; 
@@ -196,11 +208,9 @@ private:
 	mutable std::mutex                             mMtxDynamicCBHeap;
 	mutable std::mutex                             mMtxTextures;
 	mutable std::mutex                             mMtxSamplers;
-	mutable std::mutex                             mMtxSRVs;
-	mutable std::mutex                             mMtxCBVs;
+	mutable std::mutex                             mMtxSRVs_CBVs_UAVs;
 	mutable std::mutex                             mMtxRTVs;
 	mutable std::mutex                             mMtxDSVs;
-	mutable std::mutex                             mMtxUAVs;
 	mutable std::mutex                             mMtxVBVs;
 	mutable std::mutex                             mMtxIBVs;
 

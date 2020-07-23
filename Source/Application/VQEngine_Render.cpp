@@ -126,8 +126,14 @@ void VQEngine::RenderThread_Inititalize()
 	// load renderer resources
 	mRenderer.Load();
 
-	// TODO:
-	mResources_MainWnd.DSV_MainViewDepth = mRenderer.CreateDSV();
+	// TODO: initialize scene resources
+	mResources_MainWnd.DSV_MainViewDepthMSAA = mRenderer.CreateDSV();
+	mResources_MainWnd.DSV_MainViewDepth     = mRenderer.CreateDSV();
+	mResources_MainWnd.RTV_MainViewColorMSAA = mRenderer.CreateRTV();
+	mResources_MainWnd.RTV_MainViewColor     = mRenderer.CreateRTV();
+	mResources_MainWnd.SRV_MainViewColor     = mRenderer.CreateSRV();
+	mResources_MainWnd.UAV_PostProcess_TonemapperOut = mRenderer.CreateUAV();
+	mResources_MainWnd.SRV_PostProcess_TonemapperOut = mRenderer.CreateSRV();
 
 	// load window resources
 	const bool bFullscreen = mpWinMain->IsFullscreen();
@@ -159,6 +165,8 @@ void VQEngine::InitializeBuiltinMeshes()
 }
 
 
+constexpr bool MSAA_ENABLE       = true;
+constexpr uint MSAA_SAMPLE_COUNT = 4;
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 //
 // LOAD
@@ -170,22 +178,88 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 
 	if (hwnd == mpWinMain->GetHWND())
 	{
+
+		constexpr DXGI_FORMAT MainColorRTFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 		FRenderingResources_MainWindow& r = mResources_MainWnd;
 
-		// Main depth stencil view
-		D3D12_RESOURCE_DESC d = CD3DX12_RESOURCE_DESC::Tex2D(
-			DXGI_FORMAT_R32_TYPELESS
-			, Width
-			, Height
-			, 1 // Array Size
-			, 0 // MIP levels
-			, 1 // MSAA SampleCount
-			, 0 // MSAA SampleQuality
-			, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
-		);
-		r.Tex_MainViewDepth = mRenderer.CreateTexture("SceneDepth", d);
-		mRenderer.InitializeDSV(r.DSV_MainViewDepth, 0u, r.Tex_MainViewDepth);
 
+		{	// Main depth stencil view
+			D3D12_RESOURCE_DESC d = CD3DX12_RESOURCE_DESC::Tex2D(
+				DXGI_FORMAT_R32_TYPELESS
+				, Width
+				, Height
+				, 1 // Array Size
+				, 1 // MIP levels
+				, 1 // MSAA SampleCount
+				, 0 // MSAA SampleQuality
+				, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+			);
+			r.Tex_MainViewDepth = mRenderer.CreateTexture("SceneDepth", d);
+			mRenderer.InitializeDSV(r.DSV_MainViewDepth, 0u, r.Tex_MainViewDepth);
+		}
+		{	// Main depth stencil view /w MSAA
+			D3D12_RESOURCE_DESC d = CD3DX12_RESOURCE_DESC::Tex2D(
+				DXGI_FORMAT_R32_TYPELESS
+				, Width
+				, Height
+				, 1 // Array Size
+				, 1 // MIP levels
+				, MSAA_SAMPLE_COUNT // MSAA SampleCount
+				, 0 // MSAA SampleQuality
+				, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+			);
+			r.Tex_MainViewDepthMSAA = mRenderer.CreateTexture("SceneDepthMSAA", d);
+			mRenderer.InitializeDSV(r.DSV_MainViewDepthMSAA, 0u, r.Tex_MainViewDepthMSAA);
+		}
+
+		{ // Main render target view w/ MSAA
+			D3D12_RESOURCE_DESC d = CD3DX12_RESOURCE_DESC::Tex2D(
+				MainColorRTFormat
+				, Width
+				, Height
+				, 1 // Array Size
+				, 1 // MIP levels
+				, MSAA_SAMPLE_COUNT // MSAA SampleCount
+				, 0 // MSAA SampleQuality
+				, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
+			);
+
+			r.Tex_MainViewColorMSAA = mRenderer.CreateTexture("SceneColorMSAA", d);
+			mRenderer.InitializeRTV(r.RTV_MainViewColorMSAA, 0u, r.Tex_MainViewColorMSAA);
+		}
+
+		{ // MSAA resolve target
+			D3D12_RESOURCE_DESC d = CD3DX12_RESOURCE_DESC::Tex2D(
+				MainColorRTFormat
+				, Width
+				, Height
+				, 1 // Array Size
+				, 0 // MIP levels
+				, 1 // MSAA SampleCount
+				, 0 // MSAA SampleQuality
+				, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
+			);
+
+			r.Tex_MainViewColor = mRenderer.CreateTexture("SceneColor", d);
+			mRenderer.InitializeRTV(r.RTV_MainViewColor, 0u, r.Tex_MainViewColor);
+			mRenderer.InitializeSRV(r.SRV_MainViewColor, 0u, r.Tex_MainViewColor);
+		}
+
+		{ // Tonemapper UAV
+			D3D12_RESOURCE_DESC d = CD3DX12_RESOURCE_DESC::Tex2D(
+				MainColorRTFormat
+				, Width
+				, Height
+				, 1 // Array Size
+				, 0 // MIP levels
+				, 1 // MSAA SampleCount
+				, 0 // MSAA SampleQuality
+				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+			);
+			r.Tex_PostProcess_TonemapperOut = mRenderer.CreateTexture("TonemapperOut", d);
+			mRenderer.InitializeUAV(r.UAV_PostProcess_TonemapperOut, 0u, r.Tex_PostProcess_TonemapperOut);
+			mRenderer.InitializeSRV(r.SRV_PostProcess_TonemapperOut, 0u, r.Tex_PostProcess_TonemapperOut);
+		}
 	}
 
 	// TODO: generic implementation of other window procedures for load
@@ -202,6 +276,10 @@ void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 		ctx.SwapChain.WaitForGPU();
 
 		mRenderer.DestroyTexture(r.Tex_MainViewDepth);
+		mRenderer.DestroyTexture(r.Tex_MainViewDepthMSAA);
+		mRenderer.DestroyTexture(r.Tex_MainViewColor);
+		mRenderer.DestroyTexture(r.Tex_MainViewColorMSAA);
+		mRenderer.DestroyTexture(r.Tex_PostProcess_TonemapperOut);
 	}
 
 	// TODO: generic implementation of other window procedures for unload
@@ -285,7 +363,7 @@ void VQEngine::RenderThread_RenderDebugWindow()
 	//
 	// RENDER
 	//
-	ID3D12GraphicsCommandList* pCmd = ctx.pCmdList_GFX;
+	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
 
 	// Transition SwapChain RT
 	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
@@ -383,7 +461,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	//
 	// RENDER
 	//
-	ID3D12GraphicsCommandList* pCmd = ctx.pCmdList_GFX;
+	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
 
 	// Transition SwapChain RT
 	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
@@ -481,25 +559,94 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	ID3D12PipelineState* pInitialState = nullptr;
 	ThrowIfFailed(ctx.pCmdList_GFX->Reset(pCmdAlloc, pInitialState));
 
-	ID3D12GraphicsCommandList* pCmd = ctx.pCmdList_GFX;
+	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
 
 	//
 	// RENDER
 	//
+	TransitionForSceneRendering(ctx);
 
-	// Transition SwapChain RT
-	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
-	CD3DX12_RESOURCE_BARRIER barriers[] =
+	RenderSceneColor(ctx, FrameData);
+	
+	ResolveMSAA(ctx);
+
+	TransitionForPostProcessing(ctx);
+
+	RenderPostProcess(ctx);
+
+	RenderUI(ctx);
+
+	constexpr bool bHDR = false;
+	if (bHDR)
 	{
-		  CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET)
-		//, CD3DX12_RESOURCE_BARRIER::Transition(
-	};
-	pCmd->ResourceBarrier(_countof(barriers), barriers);
+		CompositUIToHDRSwapchain(ctx);
+	}
+
+	hr = PresentFrame(ctx);
+
+	return hr;
+}
 
 
-	// Clear RT
-	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = ctx.SwapChain.GetCurrentBackBufferRTVHandle();
-	D3D12_CPU_DESCRIPTOR_HANDLE   dsvHandle = mRenderer.GetDSV(mResources_MainWnd.DSV_MainViewDepth).GetCPUDescHandle();
+void VQEngine::TransitionForSceneRendering(FWindowRenderContext& ctx)
+{
+	mSettings.gfx.bAntiAliasing = false; // TODO: undo
+	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
+	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
+
+	//-----------------------------------------------------------------------------------------------
+	// TODO: create resource in SRV state (even though its a UAV texture)
+	static bool bOneTimeHack = true;
+	if (bOneTimeHack)
+	{
+		auto pRscTonemapper = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_TonemapperOut);
+		auto pRscColor      = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColor);
+
+		const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+		{
+			   CD3DX12_RESOURCE_BARRIER::Transition(pRscColor     , D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+			 , CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapper, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+		};
+		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+
+		bOneTimeHack = false;
+	}
+	//-----------------------------------------------------------------------------------------------
+
+
+	auto pRscColor     = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColor);
+	auto pRscColorMSAA = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColorMSAA);
+
+	if (bMSAA)
+	{
+		assert(false); // todo
+		//const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+		//{
+		//};
+		// pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+	}
+	else
+	{
+		const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+		{
+			  CD3DX12_RESOURCE_BARRIER::Transition(pRscColor , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET)
+		};
+		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+	}
+}
+
+
+void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& FrameData)
+{
+	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
+	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
+
+	const RTV& rtv = mRenderer.GetRTV(bMSAA ? mResources_MainWnd.RTV_MainViewColorMSAA : mResources_MainWnd.RTV_MainViewColor);
+	const DSV& dsv = mRenderer.GetDSV(bMSAA ? mResources_MainWnd.DSV_MainViewDepthMSAA : mResources_MainWnd.DSV_MainViewDepth);
+
+	// Clear Depth & Render targets
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle();
+	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle();
 	D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
 	const float clearColor[] =
 	{
@@ -523,7 +670,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	// TODO: Draw Environment Map w/ HDR Swapchain
 	// TBA
 
-	// Draw Object
+	// Draw Object -----------------------------------------------
 	const Mesh& mesh = mBuiltinMeshes[EBuiltInMeshes::CUBE];
 	const auto VBIBIDs = mesh.GetIABufferIDs();
 	const uint32 NumIndices = mesh.GetNumIndices();
@@ -533,15 +680,14 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
 	const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
 	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
-
-	// set constant buffer data
 	using namespace DirectX;
 	const XMMATRIX mMVP
 		= FrameData.TFCube.WorldTransformationMatrix()
 		* FrameData.SceneCamera.GetViewMatrix()
 		* FrameData.SceneCamera.GetProjectionMatrix();
 	struct Consts { XMMATRIX matModelViewProj; } consts{ mMVP };
-	
+
+	// set constant buffer data
 	D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 	void* pMem = nullptr;
 	ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(Consts), &pMem, &cbAddr);
@@ -549,10 +695,10 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
-	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::HELLO_WORLD_CUBE_PSO));
-	
+	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::HELLO_WORLD_CUBE_PSO_MSAA_4 : EBuiltinPSOs::HELLO_WORLD_CUBE_PSO));
+
 	// hardcoded roog signature for now until shader reflection and rootsignature management is implemented
-	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(2)); 
+	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(2));
 
 	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(0).GetGPUDescHandle());
@@ -564,9 +710,116 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	pCmd->IASetIndexBuffer(&ib);
 
 	pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
+}
 
-	// TODO: PostProcess Pass
-	//TBA
+void VQEngine::ResolveMSAA(FWindowRenderContext& ctx)
+{
+	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
+	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
+
+	if (!bMSAA)
+		return;
+
+	// TODO: resolve
+	assert(false);
+}
+
+void VQEngine::TransitionForPostProcessing(FWindowRenderContext& ctx)
+{
+	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
+	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
+
+	auto pRscInput  = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColor);
+	auto pRscOutput = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_TonemapperOut);
+
+	const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+	{
+		  CD3DX12_RESOURCE_BARRIER::Transition(pRscInput , D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+		, CD3DX12_RESOURCE_BARRIER::Transition(pRscOutput, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+	};
+	pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+}
+
+void VQEngine::RenderPostProcess(FWindowRenderContext& ctx)
+{
+	ID3D12DescriptorHeap*       ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
+	ID3D12GraphicsCommandList*&      pCmd = ctx.pCmdList_GFX;
+
+	const int InputImageWidth  = 768; // TODO
+	const int InputImageHeight = 432; // TODO
+	const SRV& srv_ColorIn  = mRenderer.GetSRV(mResources_MainWnd.SRV_MainViewColor);
+	const UAV& uav_ColorOut = mRenderer.GetUAV(mResources_MainWnd.UAV_PostProcess_TonemapperOut);
+
+	constexpr int DispatchGroupDimensionX = 8;
+	constexpr int DispatchGroupDimensionY = 8;
+	const int DispatchX = (InputImageWidth  + (DispatchGroupDimensionX - 1)) / DispatchGroupDimensionX;
+	const int DispatchY = (InputImageHeight + (DispatchGroupDimensionY - 1)) / DispatchGroupDimensionY;
+	const int DispatchZ = 1;
+
+
+	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::TONEMAPPER_PSO));
+	pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(3)); // compute RS
+	pCmd->SetComputeRootDescriptorTable(0, srv_ColorIn.GetGPUDescHandle());
+	pCmd->SetComputeRootDescriptorTable(1, uav_ColorOut.GetGPUDescHandle());
+	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+	pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
+
+	// TODO: move this to elsewhere
+	auto pRsc = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_TonemapperOut);
+	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRsc
+		, D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+		, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+	);
+}
+
+void VQEngine::RenderUI(FWindowRenderContext& ctx)
+{
+	const float           RenderResolutionX = static_cast<float>(ctx.MainRTResolutionX);
+	const float           RenderResolutionY = static_cast<float>(ctx.MainRTResolutionY);
+	D3D12_VIEWPORT        viewport          { 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
+	const auto            VBIBIDs           = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE].GetIABufferIDs();
+	const BufferID&       IB_ID             = VBIBIDs.second;
+	const IBV&            ib                = mRenderer.GetIndexBufferView(IB_ID);
+	ID3D12DescriptorHeap* ppHeaps[]         = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
+	D3D12_RECT            scissorsRect      { 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
+	ID3D12GraphicsCommandList*&        pCmd = ctx.pCmdList_GFX;
+
+
+	const SRV& srv_ColorIn = mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_TonemapperOut);
+	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = ctx.SwapChain.GetCurrentBackBufferRTVHandle();
+
+	// Transition SwapChain RT
+	CD3DX12_RESOURCE_BARRIER barriers[] =
+	{
+		  CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET)
+		  //, CD3DX12_RESOURCE_BARRIER::Transition(
+	};
+	pCmd->ResourceBarrier(_countof(barriers), barriers);
+
+	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::LOADING_SCREEN_PSO));
+	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(1)); // hardcoded roog signature for now until shader reflection and rootsignature management is implemented
+	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+	pCmd->SetGraphicsRootDescriptorTable(0, srv_ColorIn.GetGPUDescHandle());
+
+	pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	pCmd->IASetVertexBuffers(0, 1, NULL);
+	pCmd->IASetIndexBuffer(&ib);
+
+	pCmd->RSSetViewports(1, &viewport);
+	pCmd->RSSetScissorRects(1, &scissorsRect);
+
+	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
+
+	pCmd->DrawIndexedInstanced(3, 1, 0, 0, 0);
+}
+
+HRESULT VQEngine::PresentFrame(FWindowRenderContext& ctx)
+{
+	HRESULT hr = {};
+
+	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
+	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
 
 	// Transition SwapChain for Present
 	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
@@ -576,16 +829,13 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 	pCmd->Close();
 
-	ID3D12CommandList* ppCommandLists[] = { ctx.pCmdList_GFX };
+	ID3D12CommandList* ppCommandLists[] = { pCmd };
 	ctx.PresentQueue.pQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
-
-
-	//
-	// PRESENT
-	//
 	hr = ctx.SwapChain.Present();
 	ctx.SwapChain.MoveToNextFrame();
 	return hr;
 }
 
-
+void VQEngine::CompositUIToHDRSwapchain(FWindowRenderContext& ctx)
+{
+}

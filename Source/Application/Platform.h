@@ -45,16 +45,17 @@ struct FStartupParameters
 	uint8 bOverrideGFXSetting_RenderScale         : 1;
 	uint8 bOverrideGFXSetting_bVSync              : 1;
 	uint8 bOverrideGFXSetting_bUseTripleBuffering : 1;
+	uint8 bOverrideGFXSetting_bAA                 : 1;
 
 	uint8 bOverrideENGSetting_MainWindowHeight    : 1;
 	uint8 bOverrideENGSetting_MainWindowWidth     : 1;
-	uint8 bOverrideENGSetting_bFullscreen         : 1;
+	uint8 bOverrideENGSetting_bDisplayMode         : 1;
 	uint8 bOverrideENGSetting_PreferredDisplay    : 1;
 
 	uint8 bOverrideENGSetting_bDebugWindowEnable          : 1;
 	uint8 bOverrideENGSetting_DebugWindowHeight           : 1;
 	uint8 bOverrideENGSetting_DebugWindowWidth            : 1;
-	uint8 bOverrideENGSetting_DebugWindowbFullscreen      : 1;
+	uint8 bOverrideENGSetting_DebugWindowDisplayMode      : 1;
 	uint8 bOverrideENGSetting_DebugWindowPreferredDisplay : 1;
 
 	uint8 bOverrideENGSetting_bAutomatedTest      : 1;

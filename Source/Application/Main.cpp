@@ -93,13 +93,20 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 		{
 			//refStartupParams.
 		}
+		if (paramName == "-Windowed" || paramName == "-windowed")
+		{
+			refStartupParams.bOverrideENGSetting_DebugWindowDisplayMode = true;
+			refStartupParams.bOverrideENGSetting_bDisplayMode = true;
+			refStartupParams.EngineSettings.WndMain.DisplayMode = EDisplayMode::WINDOWED;
+			refStartupParams.EngineSettings.WndDebug.DisplayMode = EDisplayMode::WINDOWED;
+		}
 
 		//
 		// Graphics Settings
 		//
 		if (paramName == "-Fullscreen" || paramName == "-FullScreen" || paramName == "-fullscreen")
 		{
-			refStartupParams.bOverrideENGSetting_bFullscreen = true;
+			refStartupParams.bOverrideENGSetting_bDisplayMode = true;
 			refStartupParams.EngineSettings.WndMain.DisplayMode = EDisplayMode::EXCLUSIVE_FULLSCREEN;
 		}
 		if (paramName == "-VSync" || paramName == "-vsync" || paramName == "-Vsync")
@@ -112,6 +119,18 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 			else
 			{
 				refStartupParams.EngineSettings.gfx.bVsync = StrUtil::ParseBool(paramValue);
+			}
+		}
+		if (paramName == "-AntiAliasing" || paramName == "-AA")
+		{
+			refStartupParams.bOverrideGFXSetting_bAA = true;
+			if (paramValue.empty())
+			{
+				refStartupParams.EngineSettings.gfx.bAntiAliasing = true;
+			}
+			else
+			{
+				refStartupParams.EngineSettings.gfx.bAntiAliasing = StrUtil::ParseBool(paramValue);
 			}
 		}
 		if (paramName == "-TripleBuffering")

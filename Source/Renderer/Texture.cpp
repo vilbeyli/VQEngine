@@ -85,8 +85,9 @@ void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullpt
 
     ID3D12GraphicsCommandList* pCmd = desc.pUploadHeap->GetCommandList();
 
-    const bool bDepthStencilTexture = desc.Desc.Format == DXGI_FORMAT_R32_TYPELESS;
-    const bool bRenderTargetTexture = false;
+    const bool bDepthStencilTexture    = desc.Desc.Format == DXGI_FORMAT_R32_TYPELESS; // TODO: change this?
+    const bool bRenderTargetTexture    = (desc.Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0;
+    const bool bUnorderedAccessTexture = (desc.Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) != 0;
 
     // determine resource state & optimal clear value
     D3D12_RESOURCE_STATES ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_COPY_DEST;
@@ -103,8 +104,13 @@ void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullpt
     if (bRenderTargetTexture)
     {
         D3D12_CLEAR_VALUE ClearValue = {};
+        ClearValue.Format = desc.Desc.Format;
         ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
         pClearValue = &ClearValue;
+    }
+    if (bUnorderedAccessTexture)
+    {
+        ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     }
 
 
@@ -118,12 +124,12 @@ void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullpt
         pClearValue,
         &mpAlloc,
         IID_PPV_ARGS(&mpTexture));
-    SetName(mpTexture, desc.TexName.c_str());
     if (FAILED(hr))
     {
         Log::Error("Couldn't create texture: ", desc.TexName.c_str());
         return;
     }
+    SetName(mpTexture, desc.TexName.c_str());
 
     // upload the data
     if (pData)
@@ -200,13 +206,13 @@ void Texture::Destroy()
 }
 
 
-
+#define GetDevice(pDevice, pTex)\
+ID3D12Device* pDevice;\
+pTex->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice))\
 
 void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc)
 {
-    ID3D12Device* pDevice;
-    mpTexture->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice));
-
+    GetDevice(pDevice, mpTexture);
     pDevice->CreateShaderResourceView(mpTexture, pSRVDesc, pRV->GetCPUDescHandle(index));
 
     pDevice->Release();
@@ -214,8 +220,7 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, D3D12_SHADER_RESOURC
 
 void Texture::InitializeDSV(uint32 index, DSV* pRV, int ArraySlice /*= 1*/)
 {
-    ID3D12Device* pDevice;
-    mpTexture->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice));
+    GetDevice(pDevice, mpTexture);
     D3D12_RESOURCE_DESC texDesc = mpTexture->GetDesc();
 
     D3D12_DEPTH_STENCIL_VIEW_DESC DSViewDesc = {};
@@ -241,21 +246,29 @@ void Texture::InitializeDSV(uint32 index, DSV* pRV, int ArraySlice /*= 1*/)
     }
 
     pDevice->CreateDepthStencilView(mpTexture, &DSViewDesc, pRV->GetCPUDescHandle(index));
+    pDevice->Release();
+}
 
+void Texture::InitializeRTV(uint32 index, RTV* pRV, D3D12_RENDER_TARGET_VIEW_DESC* pRTVDesc)
+{
+    GetDevice(pDevice, mpTexture);
+    pDevice->CreateRenderTargetView(mpTexture, pRTVDesc, pRV->GetCPUDescHandle(index));
+    pDevice->Release();
+}
+
+void Texture::InitializeUAV(uint32 index, CBV_SRV_UAV* pRV, D3D12_UNORDERED_ACCESS_VIEW_DESC* pUAVDesc, const Texture* pCounterTexture /*= nullptr*/)
+{
+    GetDevice(pDevice, mpTexture);
+    pDevice->CreateUnorderedAccessView(
+          mpTexture
+        , pCounterTexture ? pCounterTexture->mpTexture : NULL
+        , pUAVDesc
+        , pRV->GetCPUDescHandle(index)
+    );
     pDevice->Release();
 }
 
 #if 0
-void Texture::CreateRTV(uint32_t index, RTV* pRV, D3D12_RENDER_TARGET_VIEW_DESC* pRtvDesc)
-{
-    ID3D12Device* pDevice;
-    m_pResource->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice));
-
-    pDevice->CreateRenderTargetView(m_pResource, pRtvDesc, pRV->GetCPUDescHandle(index));
-
-    pDevice->Release();
-}
-
 void Texture::CreateUAV(uint32_t index, Texture* pCounterTex, CBV_SRV_UAV* pRV, D3D12_UNORDERED_ACCESS_VIEW_DESC* pUavDesc)
 {
     ID3D12Device* pDevice;
