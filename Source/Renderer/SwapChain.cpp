@@ -415,14 +415,13 @@ void SwapChain::MoveToNextFrame()
     }
     switch (hr)
     {
+    case S_OK: break;
     case WAIT_TIMEOUT:
         Log::Warning("SwapChain<hwnd=0x%x> timed out on WaitForGPU(): Signal=%d, ICurrBackBuffer=%d, NumFramesPresented=%d"
             , mHwnd, mFenceValues[mICurrentBackBuffer], mICurrentBackBuffer, this->GetNumPresentedFrames());
         break;
     default: break;
     }
-
-    assert(hr == S_OK);
 
     // Set the fence value for the next frame.
     mFenceValues[mICurrentBackBuffer] = currentFenceValue + 1;

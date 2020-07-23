@@ -32,7 +32,7 @@ void CSMain(
   , uint3 DispatchThreadID : SV_DispatchThreadID
 ) 
 {
-	float4 InRGBA = texColorInput.Load(DispatchThreadID);
+	float4 InRGBA = texColorInput[DispatchThreadID.xy];
 	float3 OutRGB = ApplyGamma(InRGBA.rgb, 1.0 / 2.2);
 	
 	texColorOutput[DispatchThreadID.xy] = float4(OutRGB, InRGBA.a);

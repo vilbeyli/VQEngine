@@ -207,7 +207,8 @@ void VQRenderer::InitializeRenderContext(const FWindowRepresentation& WndDesc, i
 	FWindowRenderContext ctx = {};
 
 	ctx.pDevice = pVQDevice;
-	ctx.PresentQueue.Create(ctx.pDevice, CommandQueue::ECommandQueueType::GFX); // Create the GFX queue for presenting the SwapChain
+	char c[127] = {}; sprintf_s(c, "PresentQueue<0x%p>", WndDesc.hwnd);
+	ctx.PresentQueue.Create(ctx.pDevice, CommandQueue::ECommandQueueType::GFX, c); // Create the GFX queue for presenting the SwapChain
 
 	// Create the SwapChain
 	FSwapChainCreateDesc swapChainDesc = {};
@@ -396,7 +397,7 @@ void VQRenderer::LoadPSOs()
 			}
 
 			CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
-			ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+			ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
 
 			CD3DX12_ROOT_PARAMETER1 rootParameters[1];
 			rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
@@ -485,7 +486,7 @@ void VQRenderer::LoadPSOs()
 			}
 
 			CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
-			ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+			ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
 			ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
 			//ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
 
@@ -506,6 +507,8 @@ void VQRenderer::LoadPSOs()
 			mpBuiltinRootSignatures.push_back(pRS);
 		}
 	}
+
+	//-----------------------------------------------------------------------------------------------------------------------------------------------
 
 	// HELLO WORLD TRIANGLE PSO
 	{
@@ -569,7 +572,7 @@ void VQRenderer::LoadPSOs()
 		psoDesc.NumRenderTargets = 1;
 		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 		psoDesc.SampleDesc.Count = 1;
-		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::LOADING_SCREEN_PSO])));
+		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO])));
 		SetName(mpBuiltinPSOs[EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO], "PSO_LoadingScreen");
 	}
 

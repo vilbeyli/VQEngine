@@ -28,7 +28,7 @@ constexpr char* BUILD_CONFIG = "Debug";
 #else
 constexpr char* BUILD_CONFIG = "Release";
 #endif
-constexpr char* VQENGINE_VERSION = "v0.3.0";
+constexpr char* VQENGINE_VERSION = "v0.4.0";
 
 
 static std::pair<std::string, std::string> ParseLineINI(const std::string& iniLine)

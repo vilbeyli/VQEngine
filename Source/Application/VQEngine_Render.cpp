@@ -493,7 +493,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
 
-	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::LOADING_SCREEN_PSO));
+	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO));
 
 	// hardcoded roog signature for now until shader reflection and rootsignature management is implemented
 	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(1));
@@ -648,13 +648,7 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& Fra
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle();
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle();
 	D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
-	const float clearColor[] =
-	{
-		FrameData.SwapChainClearColor[0],
-		FrameData.SwapChainClearColor[1],
-		FrameData.SwapChainClearColor[2],
-		FrameData.SwapChainClearColor[3]
-	};
+	const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
 	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 	pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, nullptr);
 
@@ -745,59 +739,57 @@ void VQEngine::RenderPostProcess(FWindowRenderContext& ctx)
 	ID3D12DescriptorHeap*       ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 	ID3D12GraphicsCommandList*&      pCmd = ctx.pCmdList_GFX;
 
-	const int InputImageWidth  = 768; // TODO
-	const int InputImageHeight = 432; // TODO
+	// pass io
 	const SRV& srv_ColorIn  = mRenderer.GetSRV(mResources_MainWnd.SRV_MainViewColor);
 	const UAV& uav_ColorOut = mRenderer.GetUAV(mResources_MainWnd.UAV_PostProcess_TonemapperOut);
 
+	// compute dispatch dimensions
+	const int& InputImageWidth  = ctx.MainRTResolutionX;
+	const int& InputImageHeight = ctx.MainRTResolutionY;
 	constexpr int DispatchGroupDimensionX = 8;
 	constexpr int DispatchGroupDimensionY = 8;
-	const int DispatchX = (InputImageWidth  + (DispatchGroupDimensionX - 1)) / DispatchGroupDimensionX;
-	const int DispatchY = (InputImageHeight + (DispatchGroupDimensionY - 1)) / DispatchGroupDimensionY;
-	const int DispatchZ = 1;
+	const     int DispatchX = (InputImageWidth  + (DispatchGroupDimensionX - 1)) / DispatchGroupDimensionX;
+	const     int DispatchY = (InputImageHeight + (DispatchGroupDimensionY - 1)) / DispatchGroupDimensionY;
+	constexpr int DispatchZ = 1;
 
-
+	// cmds
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::TONEMAPPER_PSO));
 	pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(3)); // compute RS
 	pCmd->SetComputeRootDescriptorTable(0, srv_ColorIn.GetGPUDescHandle());
 	pCmd->SetComputeRootDescriptorTable(1, uav_ColorOut.GetGPUDescHandle());
 	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 	pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
-
-	// TODO: move this to elsewhere
-	auto pRsc = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_TonemapperOut);
-	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRsc
-		, D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-		, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
-	);
 }
 
 void VQEngine::RenderUI(FWindowRenderContext& ctx)
 {
 	const float           RenderResolutionX = static_cast<float>(ctx.MainRTResolutionX);
 	const float           RenderResolutionY = static_cast<float>(ctx.MainRTResolutionY);
-	D3D12_VIEWPORT        viewport          { 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
-	const auto            VBIBIDs           = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE].GetIABufferIDs();
-	const BufferID&       IB_ID             = VBIBIDs.second;
-	const IBV&            ib                = mRenderer.GetIndexBufferView(IB_ID);
-	ID3D12DescriptorHeap* ppHeaps[]         = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
-	D3D12_RECT            scissorsRect      { 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
+	D3D12_VIEWPORT                  viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
+	const auto                      VBIBIDs = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE].GetIABufferIDs();
+	const BufferID&                   IB_ID = VBIBIDs.second;
+	const IBV&                        ib    = mRenderer.GetIndexBufferView(IB_ID);
+	ID3D12DescriptorHeap*         ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
+	D3D12_RECT                 scissorsRect { 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
 	ID3D12GraphicsCommandList*&        pCmd = ctx.pCmdList_GFX;
 
 
-	const SRV& srv_ColorIn = mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_TonemapperOut);
-	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
+	const SRV&                srv_ColorIn = mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_TonemapperOut);
+	ID3D12Resource*          pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = ctx.SwapChain.GetCurrentBackBufferRTVHandle();
 
-	// Transition SwapChain RT
+	// Transition Input & Output resources
+	auto pRscTonemapperOut = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_TonemapperOut);
 	CD3DX12_RESOURCE_BARRIER barriers[] =
 	{
-		  CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET)
-		  //, CD3DX12_RESOURCE_BARRIER::Transition(
+		    CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT      , D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET)
+		  , CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
 	};
 	pCmd->ResourceBarrier(_countof(barriers), barriers);
 
-	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::LOADING_SCREEN_PSO));
+	// TODO: UI rendering
+	//       Currently a passthrough pass fullscreen triangle pso
+	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO));
 	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(1)); // hardcoded roog signature for now until shader reflection and rootsignature management is implemented
 	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 	pCmd->SetGraphicsRootDescriptorTable(0, srv_ColorIn.GetGPUDescHandle());

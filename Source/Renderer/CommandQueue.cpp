@@ -20,11 +20,12 @@
 #include "CommandQueue.h"
 #include "Device.h"
 #include "../../Libs/VQUtils/Source/Log.h"
+#include "Common.h"
 
 #include <d3d12.h>
 #include <cassert>
 
-void CommandQueue::Create(Device* pDevice, ECommandQueueType type)
+void CommandQueue::Create(Device* pDevice, ECommandQueueType type, const char* pName /*= nullptr*/)
 {
 	HRESULT hr = {};
 	ID3D12Device* pDevice_ = pDevice->GetDevicePtr();
@@ -46,6 +47,8 @@ void CommandQueue::Create(Device* pDevice, ECommandQueueType type)
 	{
 		Log::Error("Couldn't create Command List: %s", "TODO:reason");
 	}
+	if (pName)
+		SetName(this->pQueue, pName);
 }
 
 void CommandQueue::Destroy()
