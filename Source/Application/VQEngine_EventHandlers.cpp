@@ -85,7 +85,11 @@ void VQEngine::HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWin
 	// Exclusive  fullscreen transitions are handled through the Swapchain
 	if (settings.DisplayMode == EDisplayMode::BORDERLESS_FULLSCREEN)
 	{
-		pWin->ToggleWindowedFullscreen(&mRenderer.GetWindowSwapChain(pWin->GetHWND()));
+		HWND hwnd = pWin->GetHWND();
+		pWin->ToggleWindowedFullscreen(&mRenderer.GetWindowSwapChain(hwnd));
+		
+		if (bHandlingMainWindowTransition)
+			SetMouseCaptureForWindow(hwnd, true);
 	}
 }
 
