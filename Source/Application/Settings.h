@@ -31,6 +31,7 @@ struct FGraphicsSettings
 {
 	bool bVsync              = false;
 	bool bUseTripleBuffering = false;
+	bool bAntiAliasing       = false;
 
 	float RenderScale = 1.0f;
 };

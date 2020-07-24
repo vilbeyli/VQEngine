@@ -44,7 +44,8 @@ static const Input::KeyMapping KEY_MAP = []()
 	m["C"] = 67;		m["c"] = 67;	m["N"] = 78;	m["n"] = 78;
 	m["R"] = 82;		m["r"] = 82;	m["T"] = 'T';	m["t"] = 'T';
 	m["F"] = 'F';		m["f"] = 'F';	m["J"] = 'J';	m["j"] = 'J';
-	m["K"] = 'K';		m["k"] = 'K';	m["V"] = 'V';
+	m["K"] = 'K';		m["k"] = 'K';	m["V"] = 'V';	m["v"] = 'V';
+	m["M"] = 'M';		m["m"] = 'M';
 
 
 	m["\\"] = 220;		m[";"] = 186;
@@ -293,7 +294,8 @@ void Input::PostUpdate()
 	mMouseScroll = 0;
 
 #if VERBOSE_LOGGING
-	Log::Info("Input::PostUpdate() : scroll=%d", mMouseScroll);
+	if(mMouseScroll!=0)
+		Log::Info("Input::PostUpdate() : scroll=%d", mMouseScroll);
 #endif
 }
 
@@ -357,7 +359,7 @@ void Input::UpdateMousePos(long x, long y, short scroll)
 	mMousePosition[0] = x;
 	mMousePosition[1] = y;
 
-#if defined(_DEBUG) && VERBOSE_LOGGING
+#if VERBOSE_LOGGING
 	Log::Info("Mouse Delta: (%d, %d)\tMouse Position: (%d, %d)\tMouse Scroll: (%d)", 
 		mMouseDelta[0], mMouseDelta[1],
 		mMousePosition[0], mMousePosition[1],
@@ -371,10 +373,8 @@ void Input::UpdateMousePos_Raw(int relativeX, int relativeY, short scroll, bool 
 {
 	if (bMouseCaptured)
 	{
-		//SetCursorPos(setting.width / 2, setting.height / 2);
-
-		mMouseDelta[0] = static_cast<float>(relativeX);
-		mMouseDelta[1] = static_cast<float>(relativeY);
+		mMouseDelta[0] += static_cast<float>(relativeX);
+		mMouseDelta[1] += static_cast<float>(relativeY);
 
 		// unused for now
 		mMousePosition[0] = 0;
@@ -387,6 +387,11 @@ void Input::UpdateMousePos_Raw(int relativeX, int relativeY, short scroll, bool 
 		{
 			Log::Info("Scroll: %d", mMouseScroll);
 		}
+		Log::Info("Mouse Delta: (%.2f, %.2f)",//\tMouse Position: (%d, %d)\tMouse Scroll: (%d)",
+			mMouseDelta[0], mMouseDelta[1]
+			//,mMousePosition[0], mMousePosition[1]
+			//,(int)scroll
+		);
 #endif
 	}
 }
@@ -464,7 +469,7 @@ bool Input::IsMouseScrollUp() const
 bool Input::IsMouseScrollDown() const
 {
 #if VERBOSE_LOGGING
-	Log::Info("Input::IsMouseScrollDown() : scroll=%d", mMouseScroll);
+	//Log::Info("Input::IsMouseScrollDown() : scroll=%d", mMouseScroll);
 #endif
 	return mMouseScroll < 0 && !mbIgnoreInput;
 }

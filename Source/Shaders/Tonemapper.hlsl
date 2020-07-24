@@ -16,26 +16,24 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-#pragma once
 
-struct ID3D12CommandQueue;
-class Device;
+Texture2D           texColorInput;
+RWTexture2D<float4> texColorOutput;
 
-class CommandQueue
+float3 ApplyGamma(float3 rgb, float gamma)
 {
-public:
-	enum ECommandQueueType
-	{
-		GFX = 0,
-		COMPUTE,
-		COPY,
+	return pow(rgb, gamma);
+}
 
-		NUM_COMMAND_QUEUE_TYPES
-	};
-
-public:
-	void Create(Device* pDevice, ECommandQueueType type, const char* pName = nullptr);
-	void Destroy();
-
-	ID3D12CommandQueue* pQueue;
-};
+[numthreads(8, 8, 1)]
+void CSMain(
+ 	uint3 LocalThreadId    : SV_GroupThreadID
+  , uint3 WorkGroupId      : SV_GroupID
+  , uint3 DispatchThreadID : SV_DispatchThreadID
+) 
+{
+	float4 InRGBA = texColorInput[DispatchThreadID.xy];
+	float3 OutRGB = ApplyGamma(InRGBA.rgb, 1.0 / 2.2);
+	
+	texColorOutput[DispatchThreadID.xy] = float4(OutRGB, InRGBA.a);
+}

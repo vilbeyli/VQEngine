@@ -422,4 +422,3 @@ void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
 
 	Log::Info("Toggle VSync: %d", bVsyncState);
 }
-

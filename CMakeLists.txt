@@ -32,6 +32,7 @@ set (Shaders
     "Source/Shaders/hello-triangle.hlsl"
     "Source/Shaders/hello-cube.hlsl"
     "Source/Shaders/FullscreenTriangle.hlsl"
+    "Source/Shaders/Tonemapper.hlsl"
 )
 
 set (HeaderVQE 

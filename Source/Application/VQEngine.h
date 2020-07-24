@@ -69,8 +69,19 @@ class DebugWindowSceneData : public IWindowUpdateContext{};
 struct FRenderingResources{};
 struct FRenderingResources_MainWindow : public FRenderingResources
 {
-	TextureID Tex_MainViewDepth = INVALID_ID;
-	DSV_ID    DSV_MainViewDepth = INVALID_ID;
+	TextureID Tex_MainViewColorMSAA  = INVALID_ID;
+	TextureID Tex_MainViewColor      = INVALID_ID;
+	TextureID Tex_MainViewDepthMSAA  = INVALID_ID;
+	TextureID Tex_MainViewDepth      = INVALID_ID;
+	TextureID Tex_PostProcess_TonemapperOut = INVALID_ID;
+
+	RTV_ID    RTV_MainViewColorMSAA  = INVALID_ID;
+	RTV_ID    RTV_MainViewColor      = INVALID_ID;
+	SRV_ID    SRV_MainViewColor      = INVALID_ID;
+	DSV_ID    DSV_MainViewDepthMSAA  = INVALID_ID;
+	DSV_ID    DSV_MainViewDepth      = INVALID_ID;
+	SRV_ID    SRV_PostProcess_TonemapperOut = INVALID_ID;
+	UAV_ID    UAV_PostProcess_TonemapperOut = INVALID_ID;
 };
 struct FRenderingResources_DebugWindow : public FRenderingResources
 {
@@ -297,6 +308,17 @@ private:
 	void                            RenderThread_HandleWindowCloseEvent(const IEvent* pEvent);
 	void                            RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent);
 	void                            RenderThread_HandleSetVSyncEvent(const IEvent* pEvent);
+
+	void                            TransitionForSceneRendering(FWindowRenderContext& ctx);
+	void                            RenderShadowMaps(FWindowRenderContext& ctx);
+	void                            RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& FrameData);
+	void                            ResolveMSAA(FWindowRenderContext& ctx);
+	void                            TransitionForPostProcessing(FWindowRenderContext& ctx);
+	void                            RenderPostProcess(FWindowRenderContext& ctx);
+	void                            RenderUI(FWindowRenderContext& ctx);
+	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
+	void                            CompositUIToHDRSwapchain(FWindowRenderContext& ctx); // TODO
+
 
 	void                            UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent);
 

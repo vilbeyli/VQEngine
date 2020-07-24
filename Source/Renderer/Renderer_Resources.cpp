@@ -43,7 +43,9 @@ using namespace VQSystemInfo;
 
 static TextureID LAST_USED_TEXTURE_ID = 0;
 static SRV_ID    LAST_USED_SRV_ID = 0;
+static UAV_ID    LAST_USED_UAV_ID = 0;
 static DSV_ID    LAST_USED_DSV_ID = 0;
+static RTV_ID    LAST_USED_RTV_ID = 0;
 static BufferID  LAST_USED_VBV_ID = 0;
 static BufferID  LAST_USED_IBV_ID = 0;
 static BufferID  LAST_USED_CBV_ID = 0;
@@ -126,7 +128,7 @@ SRV_ID VQRenderer::CreateAndInitializeSRV(TextureID texID)
 	CBV_SRV_UAV SRV = {};
 
 	{
-		std::lock_guard<std::mutex> lk(mMtxSRVs);
+		std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 
 		mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
 		mTextures[texID].InitializeSRV(0, &SRV);
@@ -143,40 +145,121 @@ DSV_ID VQRenderer::CreateAndInitializeDSV(TextureID texID)
 	DSV_ID Id = INVALID_ID;
 	DSV dsv = {};
 	{
-		std::lock_guard<std::mutex> lk(mMtxDSVs);
+		std::lock_guard<std::mutex> lk(this->mMtxDSVs);
 
-		mHeapDSV.AllocDescriptor(1, &dsv);
+		this->mHeapDSV.AllocDescriptor(1, &dsv);
 		Id = LAST_USED_DSV_ID++;
-		mTextures.at(texID).InitializeDSV(0, &dsv);
-		mDSVs[Id] = dsv;
+		this->mTextures.at(texID).InitializeDSV(0, &dsv);
+		this->mDSVs[Id] = dsv;
 	}
 	return Id;
 }
-DSV_ID VQRenderer::CreateDSV()
+
+#if 0 // can we generalize Create*() ?
+//#define CreateRV(RV_t, )\
+//##RV_t_ID VQRenderer::Create##RV_t(uint NumDescriptors /*= 1*/)\
+//{\
+//}
+#endif
+
+DSV_ID VQRenderer::CreateDSV(uint NumDescriptors /*= 1*/)
 {
 	DSV dsv = {};
 	DSV_ID Id = INVALID_ID;
 
-	std::lock_guard<std::mutex> lk(mMtxDSVs);
+	std::lock_guard<std::mutex> lk(this->mMtxDSVs);
 
-	mHeapDSV.AllocDescriptor(1, &dsv);
+	this->mHeapDSV.AllocDescriptor(NumDescriptors, &dsv);
 	Id = LAST_USED_DSV_ID++;
-	mDSVs[Id] = dsv;
+	this->mDSVs[Id] = dsv;
 
 	return Id;
 }
+RTV_ID VQRenderer::CreateRTV(uint NumDescriptors /*= 1*/)
+{
+	RTV rtv = {};
+	RTV_ID Id = INVALID_ID;
+
+	std::lock_guard<std::mutex> lk(this->mMtxRTVs);
+
+	this->mHeapRTV.AllocDescriptor(NumDescriptors, &rtv);
+	Id = LAST_USED_RTV_ID++;
+	this->mRTVs[Id] = rtv;
+
+	return Id;
+}
+SRV_ID VQRenderer::CreateSRV(uint NumDescriptors)
+{
+	CBV_SRV_UAV srv = {};
+	SRV_ID Id = INVALID_ID;
+
+	std::lock_guard<std::mutex> lk(this->mMtxSRVs_CBVs_UAVs);
+
+	this->mHeapCBV_SRV_UAV.AllocDescriptor(NumDescriptors, &srv);
+	Id = LAST_USED_SRV_ID++;
+	this->mSRVs[Id] = srv;
+
+	return Id;
+}
+UAV_ID VQRenderer::CreateUAV(uint NumDescriptors)
+{
+	CBV_SRV_UAV uav = {};
+	UAV_ID Id = INVALID_ID;
+
+	std::lock_guard<std::mutex> lk(this->mMtxSRVs_CBVs_UAVs);
+
+	this->mHeapCBV_SRV_UAV.AllocDescriptor(NumDescriptors, &uav);
+	Id = LAST_USED_UAV_ID++;
+	this->mUAVs[Id] = uav;
+
+	return Id;
+}
+
+#define CHECK_TEXTURE(map, id)\
+if(map.find(id) == map.end())\
+{\
+Log::Error("Texture not created. Call mRenderer.CreateTexture() on the given Texture (id=%d)", id);\
+}\
+assert(map.find(id) != map.end());
+
+#define CHECK_RESOURCE_VIEW(RV_t, id)\
+if(m ## RV_t ## s.find(id) == m ## RV_t ## s.end())\
+{\
+Log::Error("Resource View <type=%s> was not allocated. Call mRenderer.Create%s() on the given %s (id=%d)", #RV_t,  #RV_t, #RV_t, id);\
+}\
+assert(m ## RV_t ## s.find(id) != m ## RV_t ## s.end());
+
 void VQRenderer::InitializeDSV(DSV_ID dsvID, uint32 heapIndex, TextureID texID)
 {
-	assert(mTextures.find(texID) != mTextures.end());
+	CHECK_TEXTURE(mTextures, texID);
+	CHECK_RESOURCE_VIEW(DSV, dsvID);
+	
 	assert(mDSVs.find(dsvID) != mDSVs.end());
 
 	mTextures.at(texID).InitializeDSV(heapIndex, &mDSVs.at(dsvID));
 }
+void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID)
+{
+	CHECK_TEXTURE(mTextures, texID);
+	CHECK_RESOURCE_VIEW(SRV, srvID);
+	mTextures.at(texID).InitializeSRV(heapIndex, &mSRVs.at(srvID));
+}
+void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID)
+{
+	CHECK_TEXTURE(mTextures, texID);
+	CHECK_RESOURCE_VIEW(RTV, rtvID);
+	mTextures.at(texID).InitializeRTV(heapIndex, &mRTVs.at(rtvID));
+}
 
+void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID)
+{
+	CHECK_TEXTURE(mTextures, texID);
+	CHECK_RESOURCE_VIEW(UAV, uavID);
+	mTextures.at(texID).InitializeUAV(heapIndex, &mUAVs.at(uavID));
+}
 
 BufferID VQRenderer::CreateVertexBuffer(const FBufferDesc& desc)
 {
-
 	BufferID Id = INVALID_ID;
 	VBV vbv;
 
@@ -194,7 +277,6 @@ BufferID VQRenderer::CreateVertexBuffer(const FBufferDesc& desc)
 }
 BufferID VQRenderer::CreateIndexBuffer(const FBufferDesc& desc)
 {
-
 	BufferID Id = INVALID_ID;
 	IBV ibv;
 
@@ -212,7 +294,6 @@ BufferID VQRenderer::CreateIndexBuffer(const FBufferDesc& desc)
 }
 BufferID VQRenderer::CreateConstantBuffer(const FBufferDesc& desc)
 {
-
 	BufferID Id = INVALID_ID;
 
 	assert(false);
@@ -237,10 +318,30 @@ const CBV_SRV_UAV& VQRenderer::GetShaderResourceView(SRV_ID Id) const
 	return mSRVs.at(Id);
 }
 
+const CBV_SRV_UAV& VQRenderer::GetUnorderedAccessView(UAV_ID Id) const
+{
+	return mUAVs.at(Id);
+}
+
 const DSV& VQRenderer::GetDepthStencilView(RTV_ID Id) const
 {
 	return mDSVs.at(Id);
 }
+const RTV& VQRenderer::GetRenderTargetView(RTV_ID Id) const
+{
+	return mRTVs.at(Id);
+}
+const ID3D12Resource* VQRenderer::GetTextureResource(TextureID Id) const
+{
+	CHECK_TEXTURE(mTextures, Id);
+	return mTextures.at(Id).GetResource();
+}
+ID3D12Resource* VQRenderer::GetTextureResource(TextureID Id) 
+{
+	CHECK_TEXTURE(mTextures, Id);
+	return mTextures.at(Id).GetResource();
+}
+
 
 TextureID VQRenderer::AddTexture_ThreadSafe(Texture&& tex)
 {
@@ -259,7 +360,7 @@ void VQRenderer::DestroyTexture(TextureID texID)
 }
 void VQRenderer::DestroySRV(SRV_ID srvID)
 {
-	std::lock_guard<std::mutex> lk(mMtxSRVs);
+	std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 	//mSRVs.at(srvID).Destroy(); // TODO
 	mSRVs.erase(srvID);
 }

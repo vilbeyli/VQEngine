@@ -28,7 +28,7 @@ constexpr char* BUILD_CONFIG = "Debug";
 #else
 constexpr char* BUILD_CONFIG = "Release";
 #endif
-constexpr char* VQENGINE_VERSION = "v0.3.0";
+constexpr char* VQENGINE_VERSION = "v0.4.0";
 
 
 static std::pair<std::string, std::string> ParseLineINI(const std::string& iniLine)
@@ -140,18 +140,19 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	FStartupParameters paramFile = VQEngine::ParseEngineSettingsFile();
 	const FEngineSettings& pf = paramFile.EngineSettings;
 	if (paramFile.bOverrideGFXSetting_bVSync     )                 s.gfx.bVsync              = pf.gfx.bVsync;
+	if (paramFile.bOverrideGFXSetting_bAA        )                 s.gfx.bAntiAliasing       = pf.gfx.bAntiAliasing;
 	if (paramFile.bOverrideGFXSetting_bUseTripleBuffering)         s.gfx.bUseTripleBuffering = pf.gfx.bUseTripleBuffering;
 	if (paramFile.bOverrideGFXSetting_RenderScale)                 s.gfx.RenderScale         = pf.gfx.RenderScale;
 
 	if (paramFile.bOverrideENGSetting_MainWindowWidth)             s.WndMain.Width            = pf.WndMain.Width;
 	if (paramFile.bOverrideENGSetting_MainWindowHeight)            s.WndMain.Height           = pf.WndMain.Height;
-	if (paramFile.bOverrideENGSetting_bFullscreen)                 s.WndMain.DisplayMode      = pf.WndMain.DisplayMode;
+	if (paramFile.bOverrideENGSetting_bDisplayMode)                s.WndMain.DisplayMode      = pf.WndMain.DisplayMode;
 	if (paramFile.bOverrideENGSetting_PreferredDisplay)            s.WndMain.PreferredDisplay = pf.WndMain.PreferredDisplay;
 
 	if (paramFile.bOverrideENGSetting_bDebugWindowEnable)          s.bShowDebugWindow          = pf.bShowDebugWindow;
 	if (paramFile.bOverrideENGSetting_DebugWindowWidth)            s.WndDebug.Width            = pf.WndDebug.Width;
 	if (paramFile.bOverrideENGSetting_DebugWindowHeight)           s.WndDebug.Height           = pf.WndDebug.Height;
-	if (paramFile.bOverrideENGSetting_DebugWindowbFullscreen)      s.WndDebug.DisplayMode      = pf.WndDebug.DisplayMode;
+	if (paramFile.bOverrideENGSetting_DebugWindowDisplayMode)      s.WndDebug.DisplayMode      = pf.WndDebug.DisplayMode;
 	if (paramFile.bOverrideENGSetting_DebugWindowPreferredDisplay) s.WndDebug.PreferredDisplay = pf.WndDebug.PreferredDisplay;
 
 	if (paramFile.bOverrideENGSetting_bAutomatedTest)              s.bAutomatedTestRun = pf.bAutomatedTestRun;
@@ -164,18 +165,19 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 
 	// Override #1 : if there's command line params
 	if (Params.bOverrideGFXSetting_bVSync     )                 s.gfx.bVsync              = p.gfx.bVsync;
+	if (Params.bOverrideGFXSetting_bAA        )                 s.gfx.bAntiAliasing       = p.gfx.bAntiAliasing;
 	if (Params.bOverrideGFXSetting_bUseTripleBuffering)         s.gfx.bUseTripleBuffering = p.gfx.bUseTripleBuffering;
 	if (Params.bOverrideGFXSetting_RenderScale)                 s.gfx.RenderScale         = p.gfx.RenderScale;
 
 	if (Params.bOverrideENGSetting_MainWindowWidth)             s.WndMain.Width            = p.WndMain.Width;
 	if (Params.bOverrideENGSetting_MainWindowHeight)            s.WndMain.Height           = p.WndMain.Height;
-	if (Params.bOverrideENGSetting_bFullscreen)                 s.WndMain.DisplayMode      = p.WndMain.DisplayMode;
+	if (Params.bOverrideENGSetting_bDisplayMode)                s.WndMain.DisplayMode      = p.WndMain.DisplayMode;
 	if (Params.bOverrideENGSetting_PreferredDisplay)            s.WndMain.PreferredDisplay = p.WndMain.PreferredDisplay;
 	
 	if (Params.bOverrideENGSetting_bDebugWindowEnable)          s.bShowDebugWindow          = p.bShowDebugWindow;
 	if (Params.bOverrideENGSetting_DebugWindowWidth)            s.WndDebug.Width            = p.WndDebug.Width;
 	if (Params.bOverrideENGSetting_DebugWindowHeight)           s.WndDebug.Height           = p.WndDebug.Height;
-	if (Params.bOverrideENGSetting_DebugWindowbFullscreen)      s.WndDebug.DisplayMode      = p.WndDebug.DisplayMode;
+	if (Params.bOverrideENGSetting_DebugWindowDisplayMode)      s.WndDebug.DisplayMode      = p.WndDebug.DisplayMode;
 	if (Params.bOverrideENGSetting_DebugWindowPreferredDisplay) s.WndDebug.PreferredDisplay = p.WndDebug.PreferredDisplay;
 
 	if (Params.bOverrideENGSetting_bAutomatedTest)     s.bAutomatedTestRun    = p.bAutomatedTestRun;
@@ -356,6 +358,11 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 				params.bOverrideGFXSetting_bUseTripleBuffering = true;
 				params.EngineSettings.gfx.bUseTripleBuffering = StrUtil::ParseBool(SettingValue);
 			}
+			if (SettingName == "AntiAliasing" || SettingName == "AA")
+			{
+				params.bOverrideGFXSetting_bAA = true;
+				params.EngineSettings.gfx.bAntiAliasing = StrUtil::ParseBool(SettingValue);
+			}
 
 
 			// 
@@ -375,7 +382,7 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 			{
 				if (S_LOOKUP_STR_TO_DISPLAYMODE.find(SettingValue) != S_LOOKUP_STR_TO_DISPLAYMODE.end())
 				{
-					params.bOverrideENGSetting_bFullscreen = true;
+					params.bOverrideENGSetting_bDisplayMode = true;
 					params.EngineSettings.WndMain.DisplayMode = S_LOOKUP_STR_TO_DISPLAYMODE.at(SettingValue);
 				}
 			}
@@ -405,7 +412,7 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 			{
 				if (S_LOOKUP_STR_TO_DISPLAYMODE.find(SettingValue) != S_LOOKUP_STR_TO_DISPLAYMODE.end())
 				{
-					params.bOverrideENGSetting_DebugWindowbFullscreen = true;
+					params.bOverrideENGSetting_DebugWindowDisplayMode = true;
 					params.EngineSettings.WndDebug.DisplayMode = S_LOOKUP_STR_TO_DISPLAYMODE.at(SettingValue);
 				}
 			}

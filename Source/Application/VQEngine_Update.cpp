@@ -150,7 +150,7 @@ void VQEngine::HandleEngineInput()
 		if (input.IsAnyMouseDown())
 		{
 			Input& inp = mInputStates.at(hwnd); // non const ref
-			if (inp.GetInputBypassing())
+			//if (inp.GetInputBypassing())
 			{
 				inp.SetInputBypassing(false);
 
@@ -165,6 +165,14 @@ void VQEngine::HandleEngineInput()
 			{
 				auto& SwapChain = mRenderer.GetWindowSwapChain(hwnd);
 				mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetVSyncEvent>(hwnd, !SwapChain.IsVSyncOn()));
+			}
+		}
+		if (input.IsKeyTriggered("M"))
+		{
+			if (pWin == mpWinMain)
+			{
+				mSettings.gfx.bAntiAliasing = !mSettings.gfx.bAntiAliasing;
+				Log::Info("Toggle MSAA: %d", mSettings.gfx.bAntiAliasing);
 			}
 		}
 	}

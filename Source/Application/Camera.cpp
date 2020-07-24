@@ -25,7 +25,7 @@ using namespace DirectX;
 Camera::Camera()
 	:
 	MoveSpeed(1000.0f),
-	AngularSpeedDeg(20.0f),
+	AngularSpeedDeg(0.05f),
 	Drag(9.5f),
 	mPitch(0.0f),
 	mYaw(0.0f),
@@ -174,10 +174,10 @@ void Camera::Rotate(float yaw, float pitch, const float dt)
 // internal update functions
 void Camera::Rotate(const float dt, const FCameraInput& input)
 {
-	float dy = input.DeltaMouseXY[1];
-	float dx = input.DeltaMouseXY[0];
+	const float& dy = input.DeltaMouseXY[1];
+	const float& dx = input.DeltaMouseXY[0];
 
-	const float delta = AngularSpeedDeg * DEG2RAD * dt;
+	const float delta = AngularSpeedDeg * DEG2RAD; // rotation doesn't depend on time
 	Rotate(dx, dy, delta);
 }
 
