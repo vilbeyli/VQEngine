@@ -254,6 +254,8 @@ FFrameData& VQEngine::GetCurrentFrameData(HWND hwnd)
 
 }
 
+static void Toggle(bool& b) { b = !b; }
+
 void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 {
 	std::unique_ptr<Window>& pWin = mpWinMain;
@@ -276,6 +278,8 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 	if (input.IsKeyDown(VK_SHIFT))	LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER;
 	LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_MULTIPLER;
 
+	if (input.IsKeyTriggered("Space")) Toggle(FrameData.bCubeAnimating);
+
 	constexpr float MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER = 1.0f;
 	if (input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_LEFT))   FrameData.TFCube.RotateAroundAxisRadians(ZAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
 	if (input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_RIGHT))  FrameData.TFCube.RotateAroundAxisRadians(YAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
@@ -297,7 +301,8 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 	FrameData.SceneCamera.Update(dt, camInput);
 	
 	// update scene data
-	FrameData.TFCube.RotateAroundAxisRadians(YAxis, dt * 0.2f * PI);
+	if(FrameData.bCubeAnimating)
+		FrameData.TFCube.RotateAroundAxisRadians(YAxis, dt * 0.2f * PI);
 	
 }
 

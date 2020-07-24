@@ -46,6 +46,7 @@ struct FFrameData
 {
 	Camera SceneCamera;
 	Transform TFCube;
+	bool bCubeAnimating;
 	std::array<float, 4> SwapChainClearColor;
 };
 struct FLoadingScreenData
