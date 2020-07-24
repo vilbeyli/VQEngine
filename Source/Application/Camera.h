@@ -157,9 +157,9 @@ public:
 	// -------------------------
 	ProjectionMatrixParameters mProjParams;
 	// -------------------------
-	float Drag;            // 15.0f
-	float AngularSpeedDeg; // 40.0f
-	float MoveSpeed;       // 1000.0f
+	float Drag;            
+	float AngularSpeedDeg; 
+	float MoveSpeed;       
 	// -------------------------
 	DirectX::XMFLOAT4X4 mMatProj;
 	// -------------------------
