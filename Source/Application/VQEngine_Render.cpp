@@ -590,21 +590,22 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 void VQEngine::TransitionForSceneRendering(FWindowRenderContext& ctx)
 {
-	mSettings.gfx.bAntiAliasing = false; // TODO: undo
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
+
+	auto pRscTonemapper = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_TonemapperOut);
+	auto pRscColor = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColor);
+	auto pRscColorMSAA = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColorMSAA);
 
 	//-----------------------------------------------------------------------------------------------
 	// TODO: create resource in SRV state (even though its a UAV texture)
 	static bool bOneTimeHack = true;
 	if (bOneTimeHack)
 	{
-		auto pRscTonemapper = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_TonemapperOut);
-		auto pRscColor      = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColor);
-
 		const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 		{
 			   CD3DX12_RESOURCE_BARRIER::Transition(pRscColor     , D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+			 , CD3DX12_RESOURCE_BARRIER::Transition(pRscColorMSAA , D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE)
 			 , CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapper, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
 		};
 		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
@@ -614,16 +615,13 @@ void VQEngine::TransitionForSceneRendering(FWindowRenderContext& ctx)
 	//-----------------------------------------------------------------------------------------------
 
 
-	auto pRscColor     = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColor);
-	auto pRscColorMSAA = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColorMSAA);
-
 	if (bMSAA)
 	{
-		assert(false); // todo
-		//const CD3DX12_RESOURCE_BARRIER pBarriers[] =
-		//{
-		//};
-		// pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+		const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+		{
+			 CD3DX12_RESOURCE_BARRIER::Transition(pRscColorMSAA , D3D12_RESOURCE_STATE_RESOLVE_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET)
+		};
+		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
 	}
 	else
 	{
@@ -714,8 +712,21 @@ void VQEngine::ResolveMSAA(FWindowRenderContext& ctx)
 	if (!bMSAA)
 		return;
 
-	// TODO: resolve
-	assert(false);
+	
+	auto pRscColor     = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColor);
+	auto pRscColorMSAA = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColorMSAA);
+
+	{
+		const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+		{
+				  CD3DX12_RESOURCE_BARRIER::Transition(pRscColorMSAA , D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE)
+				, CD3DX12_RESOURCE_BARRIER::Transition(pRscColor     , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RESOLVE_DEST)
+		};
+		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+	}
+
+	constexpr DXGI_FORMAT ResolveFormat = DXGI_FORMAT_R16G16B16A16_FLOAT; // TODO: infer this from scene resources
+	pCmd->ResolveSubresource(pRscColor, 0, pRscColorMSAA, 0, ResolveFormat);
 }
 
 void VQEngine::TransitionForPostProcessing(FWindowRenderContext& ctx)
@@ -728,7 +739,7 @@ void VQEngine::TransitionForPostProcessing(FWindowRenderContext& ctx)
 
 	const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 	{
-		  CD3DX12_RESOURCE_BARRIER::Transition(pRscInput , D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+		  CD3DX12_RESOURCE_BARRIER::Transition(pRscInput , (bMSAA ? D3D12_RESOURCE_STATE_RESOLVE_DEST : D3D12_RESOURCE_STATE_RENDER_TARGET), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
 		, CD3DX12_RESOURCE_BARRIER::Transition(pRscOutput, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
 	};
 	pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
