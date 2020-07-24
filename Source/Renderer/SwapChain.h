@@ -34,6 +34,7 @@ class Window;
 struct FWindowRepresentation
 {
 	HWND hwnd; int width, height;
+	int positionX, positionY;
 	bool bVSync;
 	bool bExclusiveFullscreen;
 	FWindowRepresentation(const std::unique_ptr<Window>& pWnd, bool bVSync, bool bFullscreen);
@@ -44,9 +45,10 @@ struct FSwapChainCreateDesc
 	const FWindowRepresentation* pWindow   = nullptr;
 	CommandQueue*                pCmdQueue = nullptr;
 
-	int numBackBuffers;
-	bool bVSync;
-	bool bFullscreen;
+	int numBackBuffers = 2;
+	bool bVSync        = false;
+	bool bFullscreen   = false;
+	bool bHDR          = false;
 };
 
 

@@ -86,29 +86,26 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	// https://docs.microsoft.com/en-us/windows/win32/inputdev/wm-activate
 	case WM_ACTIVATE: 
 		if (pWindow->pOwner)
-		{		
-			// wParam:
-			// - The low-order word specifies whether the window is being activated or deactivated.
-			// - The high-order word specifies the minimized state of the window being activated or deactivated
-			// - A nonzero value indicates the window is minimized.
-
-
+		{
 			// **** **** **** **** **** **** **** **** = wParam <-- (32-bits)
 			// 0000 0000 0000 0000 1111 1111 1111 1111 = 0xFFFF <-- LOWORD(Wparam)
 			UINT wparam_hi  = HIWORD(wParam);
 			UINT wparam_low = LOWORD(wParam);
 
-			const bool bWindowInactivation =  wparam_low == WA_INACTIVE;
+			// wParam:
+			// - The low-order word specifies whether the window is being activated or deactivated.
+			// - The high-order word specifies the minimized state of the window being activated or deactivated
+			// - A nonzero value indicates the window is minimized.
+			const bool bWindowInactive     =  wparam_low == WA_INACTIVE;
 			const bool bWindowActivation   = (wparam_low == WA_ACTIVE) || (wparam_low == WA_CLICKACTIVE);
 			
-
 			// lParam:
 			// - A handle to the window being activated or deactivated, depending on the value of the wParam parameter.
 			// - If the low-order word of wParam is WA_INACTIVE, lParam is the handle to the window being activated
 			// - if the low-order word of wParam is WA_ACTIVE or WA_CLICKACTIVE, lParam is the handle to the window being deactivated. 
 			//   This handle can be NULL.
 			HWND hwnd = reinterpret_cast<HWND>(lParam);
-			if (bWindowInactivation)
+			if (bWindowInactive)
 				pWindow->pOwner->OnWindowActivate(hwnd);
 			else if (hwnd != NULL)
 				pWindow->pOwner->OnWindowDeactivate(hwnd);

@@ -63,13 +63,12 @@ bool Device::Create(const FDeviceCreateDesc& desc)
             Log::Warning("Device::Create(): D3D12GetDebugInterface() returned != S_OK : %l", hr);
         }
     }
-
+     
     std::vector<FGPUInfo> vAdapters = VQRenderer::EnumerateDX12Adapters(desc.bEnableDebugLayer);
-
-    // TODO: implement software device as fallback ---------------------------------
-    // https://walbourn.github.io/anatomy-of-direct3d-12-create-device/
     assert(vAdapters.size() > 0);
-    //       implement software device as fallback ---------------------------------
+
+    // TODO: implement software device as fallback
+    // https://walbourn.github.io/anatomy-of-direct3d-12-create-device/
 
     FGPUInfo& adapter = vAdapters[0];
 

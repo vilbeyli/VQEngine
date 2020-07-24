@@ -18,6 +18,8 @@
 
 #pragma once
 
+#define VQUTILS_SYSTEMINFO_INCLUDE_D3D12 1
+
 #include "Types.h"
 #include "Platform.h"
 #include "Window.h"

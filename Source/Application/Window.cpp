@@ -98,9 +98,9 @@ static RECT GetScreenRectOnPreferredDisplay(const RECT& preferredRect, int Prefe
 
         // get monitor index from monitor name
         std::string monitorName(monitorInfo.szDevice); // monitorName is usually something like "///./DISPLAY1"
-        monitorName = StrUtil::split(monitorName, { '/', '\\', '.' })[0];         // strMonitorIndex is "1" for "///./DISPLAY1"
-        std::string strMonitorIndex = monitorName.substr(monitorName.size() - 1); // monitorIndex    is  0  for "///./DISPLAY1"
-        const int monitorIndex = std::atoi(strMonitorIndex.c_str()) - 1;        // -1 so it starts from 0
+        monitorName = StrUtil::split(monitorName, { '/', '\\', '.' })[0];         
+        std::string strMonitorIndex = monitorName.substr(monitorName.size() - 1); // strMonitorIndex is "1" for "///./DISPLAY1"
+        const int monitorIndex = std::atoi(strMonitorIndex.c_str()) - 1;          // monitorIndex    is  0  for "///./DISPLAY1"
 
         // copy over the desired monitor's rect
         if (monitorIndex == pParam->PreferredMonitorIndex)

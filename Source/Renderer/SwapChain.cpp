@@ -25,6 +25,7 @@
 #include "../Application/Window.h"
 #include "../../Libs/VQUtils/Source/Log.h"
 #include "../../Libs/VQUtils/Source/utils.h"
+#include "../../Libs/VQUtils/Source/SystemInfo.h"
 
 
 #include <dxgi1_6.h>
@@ -46,13 +47,47 @@
     #define LOG_SWAPCHAIN_SYNCHRONIZATION_EVENTS  0
 #endif
 
+// assumes only 1 HDR capable display and selects the 
+// first one that coems up with EnumDisplayMonitors() call.
+static bool CheckHDRCapability(VQSystemInfo::FMonitorInfo* pOutMonitorInfo)
+{
+    using namespace VQSystemInfo;
+
+    std::vector<FMonitorInfo> ConnectedDisplays = VQSystemInfo::GetDisplayInfo();
+
+    bool bHDRMonitorFound = false;
+    for (const FMonitorInfo& i : ConnectedDisplays)
+    {
+        bHDRMonitorFound |= i.bSupportsHDR;
+        if (bHDRMonitorFound)
+        {
+            *pOutMonitorInfo = i;
+            break;
+        }
+    }
+    return bHDRMonitorFound;
+}
+
 FWindowRepresentation::FWindowRepresentation(const std::unique_ptr<Window>& pWnd, bool bVSyncIn, bool bFullscreenIn)
     : hwnd(pWnd->GetHWND())
     , width(pWnd->IsFullscreen() ? pWnd->GetFullscreenWidth() : pWnd->GetWidth())
     , height(pWnd->IsFullscreen() ? pWnd->GetFullscreenHeight() : pWnd->GetHeight())
     , bVSync(bVSyncIn)
     , bExclusiveFullscreen(bFullscreenIn)
-{}
+{
+    RECT wndRect = {};
+    BOOL bResult = GetWindowRect(hwnd, &wndRect);
+    const bool bSuccess = bResult != 0;
+    if (bSuccess)
+    {
+        this->positionX = wndRect.left;
+        this->positionY = wndRect.top;
+    }
+    else
+    {
+        Log::Warning("GetWindowRect(hwnd=<%x>) failed", hwnd);
+    }
+}
 
 // The programming model for swap chains in D3D12 is not identical to that in earlier versions of D3D. 
 // The programming convenience, for example, of supporting automatic resource rotation that was present 
@@ -79,12 +114,17 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
         return false;
     }
 
+    DXGI_FORMAT SwapChainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+
     // https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/dxgi-flip-model
     // https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/dxgi-1-4-improvements
     // DXGI_SWAP_EFFECT_FLIP_DISCARD    should be preferred when applications fully render over the backbuffer before 
     //                                  presenting it or are interested in supporting multi-adapter scenarios easily.
     // DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL should be used by applications that rely on partial presentation optimizations 
     //                                  or regularly read from previously presented backbuffers.
+    constexpr DXGI_SWAP_EFFECT SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+
+
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.BufferCount = desc.numBackBuffers;
     swapChainDesc.Height = desc.pWindow->height;
@@ -92,9 +132,9 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapChainDesc.SampleDesc.Quality = 0;
     swapChainDesc.SampleDesc.Count = 1;
-    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-    swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    swapChainDesc.Flags = desc.bVSync ? 0: DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+    swapChainDesc.SwapEffect = SwapEffect;
+    swapChainDesc.Format = SwapChainFormat;
+    swapChainDesc.Flags = desc.bVSync ? 0 : DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
     if (desc.bFullscreen)
     {
         // https://docs.microsoft.com/en-us/windows/win32/direct3darticles/dxgi-best-practices#full-screen-issues
@@ -149,6 +189,29 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
         }
         Log::Error("Couldn't create Swapchain: %s", reason.c_str());
     }
+
+
+    // HDR support
+    if (desc.bHDR || 1) // TODO: undo || 1
+    {
+        VQSystemInfo::FMonitorInfo DisplayInfo = {};
+
+        const bool bIsHDRCapable = CheckHDRCapability(&DisplayInfo);
+
+        if (!bIsHDRCapable)
+        {
+            Log::Warning("No HDR capable display found!");
+        }
+        else
+        {
+            SwapChainFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+            
+            //this->mpSwapChain->CheckColorSpaceSupport();
+            //this->mpSwapChain->SetColorSpace1();
+        }
+    }
+
+
 
     pDxgiFactory->Release();
 

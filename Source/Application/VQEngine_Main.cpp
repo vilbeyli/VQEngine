@@ -66,6 +66,14 @@ static std::unordered_map<std::string, EDisplayMode> S_LOOKUP_STR_TO_DISPLAYMODE
 
 
 
+#define REPORT_SYSTEM_INFO 1
+#if REPORT_SYSTEM_INFO 
+void ReportSystemInfo(VQSystemInfo::FSystemInfo)
+{
+	// TODO:
+}
+#endif
+
 
 void VQEngine::MainThread_Tick()
 {
@@ -84,16 +92,11 @@ void VQEngine::MainThread_Tick()
 
 bool VQEngine::Initialize(const FStartupParameters& Params)
 {
-	// -------------------------------------------------------------------------
-	// TODO: When this function is called, EnumerateAdapters function misbehaves
-	//       by not populating the std::vector after push_back(). Looks like 
-	//       a module/linking/project dependency issue. Commenting out this line
-	//       and then recompiling fixes the issue, even though the same program
-	//       when compiled initially will not function correctly.
-	#if 0
 	this->mSysInfo = VQSystemInfo::GetSystemInfo();
-	#endif
-	// -------------------------------------------------------------------------
+#if REPORT_SYSTEM_INFO 
+	ReportSystemInfo(this->mSysInfo);
+#endif
+
 	InitializeEngineSettings(Params);
 	InitializeWindows(Params);
 	InitializeThreads();

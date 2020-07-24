@@ -750,6 +750,7 @@ std::vector< FGPUInfo > VQRenderer::EnumerateDX12Adapters(bool bEnableDebugLayer
 		GPUInfo.MaxSupportedFeatureLevel = FEATURE_LEVEL;
 		pAdapter->QueryInterface(IID_PPV_ARGS(&GPUInfo.pAdapter));
 		GPUs.push_back(GPUInfo);
+		int a = 5;
 	};
 
 	// Find GPU with highest perf: https://stackoverflow.com/questions/49702059/dxgi-integred-pAdapter
