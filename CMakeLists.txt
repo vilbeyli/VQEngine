@@ -41,7 +41,6 @@ set (HeaderVQE
     "Source/Application/Settings.h"
     "Source/Application/Types.h"
     "Source/Application/Math.h"
-    "Source/Application/HDR.h"
     "Source/Application/VQEngine.h"
     "Source/Application/Events.h"
     "Source/Application/Mesh.h"

@@ -93,9 +93,27 @@ enum EDisplayCurve
 	, NUM_DISPLAY_CURVES
 };
 
-struct HDRConfig
+struct HDRConfig // TODO: remove?
 {
 	EColorSpace   DisplayColorSpace;
 	EDisplayCurve DisplayCurve;
-
 };
+
+
+#include <unordered_map>
+#include <string>
+#include "../../Libs/VQUtils/Source/SystemInfo.h"
+using DisplayBrightnessValueLookup_t = std::unordered_map<std::string_view, VQSystemInfo::FDisplayBrightnessValues>;
+namespace HDR
+{
+	// BUILT-IN HDR10 METADATA PROFILES
+	//
+	// Some non-HDR10 certified monitors which claim 'HDR' can provide incorrect data through DXGI.
+	// For example, take Dell U2718Q:
+	// - https://www.dell.com/support/article/en-us/sln307250/dell-high-dynamic-range-hdr-and-hdr10-displays?lang=en
+	// - DXGI_OUTPUT_DESC1 returns 12.5k Nits as opposed to the monitor's actual 350 Nits brightness value
+	const DisplayBrightnessValueLookup_t BUILTIN_MONITOR_HDR10_METADATA_BRIGHTNESS_PROFILES = 
+	{
+		  { "DELL U2718Q", VQSystemInfo::FDisplayBrightnessValues(0.01f, 350.f, 200.0f) }
+	};
+}
