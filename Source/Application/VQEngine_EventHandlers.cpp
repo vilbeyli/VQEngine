@@ -235,10 +235,11 @@ void VQEngine::RenderThread_HandleEvents()
 
 		switch (pEvent->mType)
 		{
-		case EEventType::WINDOW_RESIZE_EVENT     : pLastResizeEventLookup[pEvent->hwnd] = std::static_pointer_cast<WindowResizeEvent>(pEvent); break;
-		case EEventType::TOGGLE_FULLSCREEN_EVENT : RenderThread_HandleToggleFullscreenEvent(pEvent.get()); break;
-		case EEventType::WINDOW_CLOSE_EVENT      : RenderThread_HandleWindowCloseEvent(pEvent.get()); break;
-		case EEventType::SET_VSYNC_EVENT         : RenderThread_HandleSetVSyncEvent(pEvent.get()); break;
+		case EEventType::WINDOW_RESIZE_EVENT        : pLastResizeEventLookup[pEvent->hwnd] = std::static_pointer_cast<WindowResizeEvent>(pEvent); break;
+		case EEventType::TOGGLE_FULLSCREEN_EVENT    : RenderThread_HandleToggleFullscreenEvent(pEvent.get()); break;
+		case EEventType::WINDOW_CLOSE_EVENT         : RenderThread_HandleWindowCloseEvent(pEvent.get()); break;
+		case EEventType::SET_VSYNC_EVENT            : RenderThread_HandleSetVSyncEvent(pEvent.get()); break;
+		case EEventType::SET_SWAPCHAIN_FORMAT_EVENT : RenderThread_HandleSetSwapchainFormatEvent(pEvent.get()); break;
 		}
 	}
 
@@ -277,7 +278,7 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	mEventQueue_WinToVQE_Update.AddItem(pResizeEvent);
 
 	Swapchain.WaitForGPU();
-	Swapchain.Resize(WIDTH, HEIGHT);
+	Swapchain.Resize(WIDTH, HEIGHT, Swapchain.GetFormat());
 	pWnd->OnResize(WIDTH, HEIGHT);
 	mRenderer.OnWindowSizeChanged(hwnd, WIDTH, HEIGHT);
 
@@ -364,7 +365,7 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 			if (bWndNeedsResize)
 			{
 				mInitialSwapchainResizeRequiredWindowLookup.erase(it);
-				Swapchain.Resize(WndSettings.Width, WndSettings.Height);
+				Swapchain.Resize(WndSettings.Width, WndSettings.Height, Swapchain.GetFormat());
 			}
 		}
 
@@ -406,7 +407,6 @@ void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
 	Swapchain.WaitForGPU(); // make sure GPU is finished
 	{
 		auto& ctx = mRenderer.GetWindowRenderContext(hwnd);
-		FWindowRepresentation wndRep(pWnd, bVsyncState, Swapchain.IsFullscreen());
 
 		FSwapChainCreateDesc desc;
 		desc.bVSync         = bVsyncState;
@@ -414,11 +414,33 @@ void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
 		desc.numBackBuffers = Swapchain.GetNumBackBuffers();
 		desc.pCmdQueue      = &ctx.PresentQueue;
 		desc.pDevice        = ctx.pDevice->GetDevicePtr();
-		desc.pWindow        = &wndRep;
+		desc.pWindow        = pWnd.get();
+		desc.bHDR           = Swapchain.IsHDRFormat();
 
 		Swapchain.Destroy();
 		Swapchain.Create(desc);
 	}
 
 	Log::Info("Toggle VSync: %d", bVsyncState);
+}
+
+void VQEngine::RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent)
+{
+	const SetSwapchainFormatEvent* pSwapchainEvent = static_cast<const SetSwapchainFormatEvent*>(pEvent);
+	const HWND&                      hwnd = pEvent->hwnd;
+	const std::unique_ptr<Window>&   pWnd = GetWindow(hwnd);
+	const int                       WIDTH = pWnd->GetWidth();
+	const int                      HEIGHT = pWnd->GetHeight();
+	SwapChain&                  Swapchain = mRenderer.GetWindowSwapChain(hwnd);
+
+	Swapchain.WaitForGPU();
+	Swapchain.Resize(WIDTH, HEIGHT, pSwapchainEvent->format);
+
+	static const std::unordered_map<DXGI_FORMAT, std::string_view> FormatStringTranslation =
+	{
+		  { DXGI_FORMAT_R8G8B8A8_UNORM	   , "R8G8B8A8_UNORM"    }
+		, { DXGI_FORMAT_R10G10B10A2_UNORM  , "R10G10B10A2_UNORM" }
+		, { DXGI_FORMAT_R16G16B16A16_FLOAT , "R16G16B16A16_FLOAT"}
+	};
+	Log::Info("Set Swapchain Format: %s", FormatStringTranslation.at(pSwapchainEvent->format).data());
 }

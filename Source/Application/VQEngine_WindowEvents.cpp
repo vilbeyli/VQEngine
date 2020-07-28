@@ -20,6 +20,7 @@
 #include "Input.h"
 
 #include <Windowsx.h>
+#include <atlbase.h>
 
 constexpr int MIN_WINDOW_SIZE = 128; // make sure window cannot be resized smaller than 128x128
 
@@ -112,6 +113,27 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		}
 		return 0;
 
+	case WM_MOVE:
+		if (pWindow->pOwner)
+		{
+			int xPos = (int)(short)LOWORD(lParam);
+			int yPos = (int)(short)HIWORD(lParam);
+			pWindow->pOwner->OnWindowMove(hwnd, xPos, yPos);
+		}
+		return 0;
+	
+	// https://docs.microsoft.com/en-us/windows/win32/gdi/wm-displaychange
+	// This message is only sent to top-level windows. For all other windows it is posted.
+	case WM_DISPLAYCHANGE:
+		if (pWindow->pOwner)
+		{
+			int ImageDepthBitsPerPixel = wParam;
+			int ScreenResolutionX = LOWORD(lParam);
+			int ScreenResolutionY = HIWORD(lParam);
+			pWindow->pOwner->OnDisplayChange(hwnd, ImageDepthBitsPerPixel, ScreenResolutionX, ScreenResolutionY);
+		}
+		return 0;
+
 	//
 	// KEYBOARD
 	//
@@ -177,6 +199,89 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 
 
+// ===================================================================================================================================
+// UTILITY FUNCTIONS
+// ===================================================================================================================================
+// To detect HDR support, we will need to check the color space in the primary DXGI output associated with the app at
+// this point in time (using window/display intersection). 
+static inline int ComputeIntersectionArea(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2)
+{
+	// Compute the overlay area of two rectangles, A and B.
+	// (ax1, ay1) = left-top coordinates of A; (ax2, ay2) = right-bottom coordinates of A
+	// (bx1, by1) = left-top coordinates of B; (bx2, by2) = right-bottom coordinates of B
+	return max(0, min(ax2, bx2) - max(ax1, bx1)) * max(0, min(ay2, by2) - max(ay1, by1));
+}
+bool VQEngine::CheckDisplayHDRSupport(HWND hwnd)
+{
+	RECT windowRect = {};
+	GetWindowRect(hwnd, &windowRect);
+
+	using namespace Microsoft::WRL;
+	ComPtr<IDXGIFactory6> m_dxgiFactory;
+	ThrowIfFailed(CreateDXGIFactory2(0, IID_PPV_ARGS(&m_dxgiFactory)));
+
+	// First, the method must determine the app's current display. 
+	// We don't recommend using IDXGISwapChain::GetContainingOutput method to do that because of two reasons:
+	//    1. Swap chains created with CreateSwapChainForComposition do not support this method.
+	//    2. Swap chains will return a stale dxgi output once DXGIFactory::IsCurrent() is false. In addition, 
+	//       we don't recommend re-creating swapchain to resolve the stale dxgi output because it will cause a short 
+	//       period of black screen.
+	// Instead, we suggest enumerating through the bounds of all dxgi outputs and determine which one has the greatest 
+	// intersection with the app window bounds. Then, use the DXGI output found in previous step to determine if the 
+	// app is on a HDR capable display. 
+
+	// Retrieve the current default adapter.
+	ComPtr<IDXGIAdapter1> dxgiAdapter;
+	ThrowIfFailed(m_dxgiFactory->EnumAdapters1(0, &dxgiAdapter));
+
+	// Iterate through the DXGI outputs associated with the DXGI adapter,
+	// and find the output whose bounds have the greatest overlap with the
+	// app window (i.e. the output for which the intersection area is the
+	// greatest).
+
+	UINT i = 0;
+	ComPtr<IDXGIOutput> currentOutput;
+	ComPtr<IDXGIOutput> bestOutput;
+	float bestIntersectArea = -1;
+
+	while (dxgiAdapter->EnumOutputs(i, &currentOutput) != DXGI_ERROR_NOT_FOUND)
+	{
+		// Get the retangle bounds of the app window
+		int ax1 = windowRect.left;
+		int ay1 = windowRect.top;
+		int ax2 = windowRect.right;
+		int ay2 = windowRect.bottom;
+
+		// Get the rectangle bounds of current output
+		DXGI_OUTPUT_DESC desc;
+		ThrowIfFailed(currentOutput->GetDesc(&desc));
+		RECT r = desc.DesktopCoordinates;
+		int bx1 = r.left;
+		int by1 = r.top;
+		int bx2 = r.right;
+		int by2 = r.bottom;
+
+		// Compute the intersection
+		int intersectArea = ComputeIntersectionArea(ax1, ay1, ax2, ay2, bx1, by1, bx2, by2);
+		if (intersectArea > bestIntersectArea)
+		{
+			bestOutput = currentOutput;
+			bestIntersectArea = static_cast<float>(intersectArea);
+		}
+
+		i++;
+	}
+
+	// Having determined the output (display) upon which the app is primarily being 
+	// rendered, retrieve the HDR capabilities of that display by checking the color space.
+	ComPtr<IDXGIOutput6> output6;
+	ThrowIfFailed(bestOutput.As(&output6));
+
+	DXGI_OUTPUT_DESC1 desc1;
+	ThrowIfFailed(output6->GetDesc1(&desc1));
+
+	return (desc1.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020);
+}
 
 
 // ===================================================================================================================================
@@ -229,6 +334,63 @@ void VQEngine::OnWindowDeactivate(HWND hWnd)
 #endif
 	}
 }
+//-------------------------------------------------------------------------------------
+void VQEngine::OnWindowMove(HWND hwnd_, int x, int y)
+{
+#if LOG_CALLBACKS
+	Log::Warning("OnWindowMove<%0x, %s>: (%d, %d)", hWnd, GetWindowName(hWnd).c_str(), x, y);
+#endif
+
+	auto& pWin = GetWindow(hwnd_);
+	const bool bCurrentMonitorSupportsHDR = CheckDisplayHDRSupport(hwnd_);
+	const bool bCurrentMonitorWasSupportingHDR = pWin->GetIsOnHDRCapableDisplay();
+
+	// TODO: move this into function and remove copy paste 
+	// TODO: setting this right away causes 1 frame of mismatching Swapchain RT format vs shader PSO due to ShouldRenderHDR() evaluation
+	pWin->SetIsOnHDRCapableDisplay(bCurrentMonitorSupportsHDR);
+
+	if (mSettings.WndMain.bEnableHDR)
+	{
+		if (!bCurrentMonitorWasSupportingHDR && bCurrentMonitorSupportsHDR)
+		{
+			Log::Info("OnWindowMove<%0x, %s>() : Window moved to HDR-capable monitor.", hwnd_, GetWindowName(hwnd_).c_str());
+			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetSwapchainFormatEvent>(hwnd_, PREFERRED_HDR_FORMAT));
+		}
+		if (bCurrentMonitorWasSupportingHDR && !bCurrentMonitorSupportsHDR)
+		{
+			Log::Info("OnWindowMove<%0x, %s>() : Window moved to non-HDR-capable monitor.", hwnd_, GetWindowName(hwnd_).c_str());
+			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetSwapchainFormatEvent>(hwnd_, PREFERRED_SDR_FORMAT));
+		}
+	}
+}
+void VQEngine::OnDisplayChange(HWND hwnd_, int ImageDepthBitsPerPixel, int ScreenWidth, int ScreenHeight)
+{
+	// If the display's advanced color state has changed (e.g. HDR display plug/unplug, or OS HDR setting on/off)
+	mSysInfo.Monitors = VQSystemInfo::GetDisplayInfo(); // re-acquire Monitors info 
+
+	auto& pWin = GetWindow(hwnd_);
+	const bool bCurrentMonitorSupportsHDR = CheckDisplayHDRSupport(hwnd_);
+	const bool bCurrentMonitorWasSupportingHDR = pWin->GetIsOnHDRCapableDisplay();
+
+	// TODO: move this into function and remove copy paste 
+	// TODO: setting this right away causes 1 frame of mismatching Swapchain RT format vs shader PSO due to ShouldRenderHDR() evaluation
+	pWin->SetIsOnHDRCapableDisplay(bCurrentMonitorSupportsHDR);
+
+	if (mSettings.WndMain.bEnableHDR)
+	{
+		if (!bCurrentMonitorWasSupportingHDR && bCurrentMonitorSupportsHDR)
+		{
+			Log::Info("OnDisplayChange<%0x, %s>() : Window moved to HDR capable monitor.", hwnd_, GetWindowName(hwnd_).c_str());
+			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetSwapchainFormatEvent>(hwnd_, PREFERRED_HDR_FORMAT));
+		}
+
+		if (bCurrentMonitorWasSupportingHDR && !bCurrentMonitorSupportsHDR)
+		{
+			Log::Info("OnDisplayChange<%0x, %s>() : Window moved to non-HDR-capable monitor.", hwnd_, GetWindowName(hwnd_).c_str());
+			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetSwapchainFormatEvent>(hwnd_, PREFERRED_SDR_FORMAT));
+		}
+	}
+}
 //------------------------------------------------------------------------------------
 
 void VQEngine::OnWindowCreate(HWND hWnd)
@@ -236,6 +398,7 @@ void VQEngine::OnWindowCreate(HWND hWnd)
 #if LOG_CALLBACKS
 	Log::Info("OnWindowCreate<%0x, %s> ", hWnd, GetWindowName(hWnd).c_str());
 #endif
+	GetWindow(hWnd)->SetIsOnHDRCapableDisplay(CheckDisplayHDRSupport(hWnd));
 }
 
 void VQEngine::OnWindowClose(HWND hwnd_)

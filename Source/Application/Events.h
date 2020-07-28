@@ -19,6 +19,7 @@
 #pragma once
 
 #include <Windows.h>
+#include <dxgi1_6.h>
 
 #include "Libs/VQUtils/Source/Multithreading.h"
 
@@ -42,6 +43,7 @@ enum EEventType
 	TOGGLE_FULLSCREEN_EVENT,
 	SET_FULLSCREEN_EVENT,
 	SET_VSYNC_EVENT,
+	SET_SWAPCHAIN_FORMAT_EVENT,
 	
 	// Windows->VQE input events
 	KEY_DOWN_EVENT,
@@ -124,6 +126,11 @@ struct SetVSyncEvent : public IEvent
 {
 	SetVSyncEvent(HWND hwnd_, bool bVSync) : IEvent(EEventType::SET_VSYNC_EVENT, hwnd_), bToggleValue(bVSync) {}
 	bool bToggleValue = false;
+};
+struct SetSwapchainFormatEvent : public IEvent
+{
+	SetSwapchainFormatEvent(HWND hwnd_, DXGI_FORMAT format_) : IEvent(EEventType::SET_SWAPCHAIN_FORMAT_EVENT, hwnd_), format(format_) {}
+	DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
 };
 
 //

@@ -184,6 +184,12 @@ bool VQEngine::IsWindowRegistered(HWND hwnd) const
 	return it != mWinNameLookup.end();
 }
 
+bool VQEngine::ShouldRenderHDR(HWND hwnd) const
+{
+	const auto& pWin = this->GetWindow(hwnd);
+	return mSettings.WndMain.bEnableHDR && pWin->GetIsOnHDRCapableDisplay();
+}
+
 void VQEngine::SetWindowName(HWND hwnd, const std::string& name){	mWinNameLookup[hwnd] = name; }
 void VQEngine::SetWindowName(const std::unique_ptr<Window>& pWin, const std::string& name) { SetWindowName(pWin->GetHWND(), name); }
 
@@ -370,6 +376,7 @@ void VQEngine::Load_SceneData_Dispatch()
 
 		FCameraData camData = GenerateCameraInitializationParameters(mpWinMain);
 		data[0].SceneCamera.InitializeCamera(camData);
+		data[0].bCubeAnimating = true;
 		mScene_MainWnd.mFrameData.resize(NumBackBuffer_WndMain, data[0]);
 
 		data[1].SwapChainClearColor = { 0.20f, 0.21f, 0.21f, 1.0f };

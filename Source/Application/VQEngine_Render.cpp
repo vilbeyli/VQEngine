@@ -98,31 +98,37 @@ void VQEngine::RenderThread_Inititalize()
 	mNumRenderLoopsExecuted.store(0);
 
 	// Initialize Renderer: Device, Queues, Heaps
-	FRendererInitializeParameters params = {};
-	params.Settings = mSettings.gfx;
-	if (mpWinDebug) 
-	{
-		params.Windows.push_back(FWindowRepresentation(mpWinDebug, false, false));  // debug window is never fullscreen for now.
-	}
-	params.Windows.push_back(FWindowRepresentation(mpWinMain , mSettings.gfx.bVsync, bExclusiveFullscreen_MainWnd));
-	mRenderer.Initialize(params);
+	mRenderer.Initialize(mSettings.gfx);
 
-	// Initialize swapchains & respective render targets
-	for (const FWindowRepresentation& wnd : params.Windows)
+	// Initialize swapchains for each rendering window
+	// all windows use the same number of swapchains as the main window
+	const int NUM_SWAPCHAIN_BUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
 	{
-		mRenderer.InitializeRenderContext(wnd, params.Settings.bUseTripleBuffering ? 3 : 2);
-		mEventQueue_VQEToWin_Main.AddItem(std::make_shared<HandleWindowTransitionsEvent>(wnd.hwnd));
+		const bool bIsContainingWindowOnHDRScreen = VQEngine::CheckDisplayHDRSupport(mpWinMain->GetHWND());
+		const bool bCreateHDRSwapchain = mSettings.WndMain.bEnableHDR && bIsContainingWindowOnHDRScreen;
+		if (mSettings.WndMain.bEnableHDR && !bIsContainingWindowOnHDRScreen)
+		{
+			Log::Warning("RenderThread_Initialize(): HDR Swapchain requested, but the containing monitor does not support HDR. This'll fallback to SDR Swapchain but will enable HDR swapchain when the window is moved to the HDR display");
+		}
+
+		mRenderer.InitializeRenderContext(mpWinMain.get(), NUM_SWAPCHAIN_BUFFERS, mSettings.gfx.bVsync, bCreateHDRSwapchain);
+		mEventQueue_VQEToWin_Main.AddItem(std::make_shared<HandleWindowTransitionsEvent>(mpWinMain->GetHWND()));
+	}
+	if(mpWinDebug)
+	{
+		const bool bIsContainingWindowOnHDRScreen = VQEngine::CheckDisplayHDRSupport(mpWinDebug->GetHWND());
+		constexpr bool bCreateHDRSwapchain = false; // only main window in HDR for now
+		mRenderer.InitializeRenderContext(mpWinDebug.get(), NUM_SWAPCHAIN_BUFFERS, false, bCreateHDRSwapchain);
+		mEventQueue_VQEToWin_Main.AddItem(std::make_shared<HandleWindowTransitionsEvent>(mpWinDebug->GetHWND()));
 	}
 
+	// initialize builtin meshes
+	InitializeBuiltinMeshes();
 	mbRenderThreadInitialized.store(true);
-
 
 	//
 	// TODO: THREADED LOADING
 	// 
-	// initialize builtin meshes
-	InitializeBuiltinMeshes();
-
 	// load renderer resources
 	mRenderer.Load();
 
@@ -441,6 +447,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	assert(mScene_MainWnd.mLoadingScreenData.size() > 0);
 	const FLoadingScreenData& FrameData = mScene_MainWnd.mLoadingScreenData[FRAME_DATA_INDEX];
 	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
+	const bool bUseHDRRenderPath = this->ShouldRenderHDR(mpWinMain->GetHWND());
 	// ----------------------------------------------------------------------------
 
 	//
@@ -493,7 +500,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
 
-	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO));
+	pCmd->SetPipelineState(mRenderer.GetPSO(bUseHDRRenderPath ? EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO : EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO));
 
 	// hardcoded roog signature for now until shader reflection and rootsignature management is implemented
 	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(1));
@@ -537,6 +544,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	const int FRAME_DATA_INDEX  = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
 	const FFrameData& FrameData = mScene_MainWnd.mFrameData[FRAME_DATA_INDEX];
 	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
+	const bool bUseHDRRenderPath = this->ShouldRenderHDR(mpWinMain->GetHWND());
 	// ----------------------------------------------------------------------------
 
 
@@ -566,6 +574,8 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	//
 	TransitionForSceneRendering(ctx);
 
+	RenderShadowMaps(ctx);
+
 	RenderSceneColor(ctx, FrameData);
 	
 	ResolveMSAA(ctx);
@@ -576,8 +586,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 	RenderUI(ctx);
 
-	constexpr bool bHDR = false;
-	if (bHDR)
+	if (bUseHDRRenderPath)
 	{
 		CompositUIToHDRSwapchain(ctx);
 	}
@@ -585,6 +594,32 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	hr = PresentFrame(ctx);
 
 	return hr;
+}
+
+
+//
+// Command Recording
+//
+
+void VQEngine::DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh)
+{
+	using namespace DirectX;
+	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
+
+	// Draw Object -----------------------------------------------
+	const auto VBIBIDs = mesh.GetIABufferIDs();
+	const uint32 NumIndices = mesh.GetNumIndices();
+	const uint32 NumInstances = 1;
+	const BufferID& VB_ID = VBIBIDs.first;
+	const BufferID& IB_ID = VBIBIDs.second;
+	const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
+	const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
+
+	pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	pCmd->IASetVertexBuffers(0, 1, &vb);
+	pCmd->IASetIndexBuffer(&ib);
+
+	pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 }
 
 
@@ -633,6 +668,10 @@ void VQEngine::TransitionForSceneRendering(FWindowRenderContext& ctx)
 	}
 }
 
+void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx)
+{
+
+}
 
 void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& FrameData)
 {
@@ -663,27 +702,23 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& Fra
 	// TBA
 
 	// Draw Object -----------------------------------------------
-	const Mesh& mesh = mBuiltinMeshes[EBuiltInMeshes::CUBE];
-	const auto VBIBIDs = mesh.GetIABufferIDs();
-	const uint32 NumIndices = mesh.GetNumIndices();
-	const uint32 NumInstances = 1;
-	const BufferID& VB_ID = VBIBIDs.first;
-	const BufferID& IB_ID = VBIBIDs.second;
-	const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
-	const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
-	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
+
 	using namespace DirectX;
+	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
+
+	// set constant buffer data
 	const XMMATRIX mMVP
 		= FrameData.TFCube.WorldTransformationMatrix()
 		* FrameData.SceneCamera.GetViewMatrix()
 		* FrameData.SceneCamera.GetProjectionMatrix();
-	struct Consts { XMMATRIX matModelViewProj; } consts{ mMVP };
+	FrameConstantBuffer* pConstBuffer = {};
 
-	// set constant buffer data
 	D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 	void* pMem = nullptr;
-	ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(Consts), &pMem, &cbAddr);
-	*((Consts*)pMem) = consts;
+	ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(FrameConstantBuffer), &pMem, &cbAddr);
+	pConstBuffer = reinterpret_cast<FrameConstantBuffer*>(pMem);
+	pConstBuffer->matModelViewProj = mMVP;
+
 
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
@@ -696,12 +731,24 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& Fra
 	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(0).GetGPUDescHandle());
 	pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
 
+#if 0
+	DrawMesh(pCmd, mBuiltinMeshes[EBuiltInMeshes::CUBE]);
+#else
+	const Mesh& mesh = mBuiltinMeshes[EBuiltInMeshes::CUBE];
+	const auto VBIBIDs = mesh.GetIABufferIDs();
+	const uint32 NumIndices = mesh.GetNumIndices();
+	const uint32 NumInstances = 1;
+	const BufferID& VB_ID = VBIBIDs.first;
+	const BufferID& IB_ID = VBIBIDs.second;
+	const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
+	const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
 
 	pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	pCmd->IASetVertexBuffers(0, 1, &vb);
 	pCmd->IASetIndexBuffer(&ib);
 
 	pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
+#endif
 }
 
 void VQEngine::ResolveMSAA(FWindowRenderContext& ctx)
@@ -774,6 +821,8 @@ void VQEngine::RenderPostProcess(FWindowRenderContext& ctx)
 
 void VQEngine::RenderUI(FWindowRenderContext& ctx)
 {
+	const bool bUseHDRRenderPath = this->ShouldRenderHDR(mpWinMain->GetHWND());
+
 	const float           RenderResolutionX = static_cast<float>(ctx.MainRTResolutionX);
 	const float           RenderResolutionY = static_cast<float>(ctx.MainRTResolutionY);
 	D3D12_VIEWPORT                  viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
@@ -800,8 +849,8 @@ void VQEngine::RenderUI(FWindowRenderContext& ctx)
 
 	// TODO: UI rendering
 	//       Currently a passthrough pass fullscreen triangle pso
-	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO));
-	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(1)); // hardcoded roog signature for now until shader reflection and rootsignature management is implemented
+	pCmd->SetPipelineState(mRenderer.GetPSO(bUseHDRRenderPath ? EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO : EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO));
+	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(1)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
 	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 	pCmd->SetGraphicsRootDescriptorTable(0, srv_ColorIn.GetGPUDescHandle());
 

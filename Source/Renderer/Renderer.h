@@ -33,7 +33,6 @@
 #define VQUTILS_SYSTEMINFO_INCLUDE_D3D12 1
 #include "../../Libs/VQUtils/Source/SystemInfo.h" // FGPUInfo
 
-
 #include <vector>
 #include <unordered_map>
 #include <array>
@@ -58,12 +57,6 @@ using DSV_ID    = ID_TYPE;
 //
 // TYPE DEFINITIONS
 //
-struct FRendererInitializeParameters
-{
-	std::vector<FWindowRepresentation> Windows;
-	FGraphicsSettings                  Settings;
-};
-
 // Encapsulates the swapchain and window association.
 // Each SwapChain is:
 // - associated with a Window (HWND)
@@ -90,13 +83,14 @@ struct FWindowRenderContext
 	int MainRTResolutionY = -1;
 };
 
-enum EBuiltinPSOs
+enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is integrated
 {
 	HELLO_WORLD_TRIANGLE_PSO = 0,
 	FULLSCREEN_TRIANGLE_PSO,
 	HELLO_WORLD_CUBE_PSO,
 	HELLO_WORLD_CUBE_PSO_MSAA_4,
 	TONEMAPPER_PSO,
+	HDR_FP16_SWAPCHAIN_PSO,
 
 	NUM_BUILTIN_PSOs
 };
@@ -108,10 +102,10 @@ enum EBuiltinPSOs
 class VQRenderer
 {
 public:
-	static std::vector< VQSystemInfo::FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters = false);
+	static std::vector< VQSystemInfo::FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters = false, IDXGIFactory6* pFactory = nullptr);
 
 public:
-	void                         Initialize(const FRendererInitializeParameters& RendererInitParams);
+	void                         Initialize(const FGraphicsSettings& Settings);
 	void                         Load();
 	void                         Unload();
 	void                         Exit();
@@ -119,7 +113,7 @@ public:
 	void                         OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h);
 
 	// Swapchain-interface
-	void                         InitializeRenderContext(const FWindowRepresentation& WndDesc, int NumSwapchainBuffers);
+	void                         InitializeRenderContext(const Window* pWnd, int NumSwapchainBuffers, bool bVSync, bool bHDRSwapchain);
 	inline short                 GetSwapChainBackBufferCount(std::unique_ptr<Window>& pWnd) const { return GetSwapChainBackBufferCount(pWnd.get()); };
 	short                        GetSwapChainBackBufferCount(Window* pWnd) const;
 	short                        GetSwapChainBackBufferCount(HWND hwnd) const;
@@ -176,7 +170,7 @@ public:
 	
 private:
 	using PSOArray_t = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
-
+	
 	// GPU
 	Device                                         mDevice; 
 	CommandQueue                                   mGFXQueue;

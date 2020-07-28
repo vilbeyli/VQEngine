@@ -18,13 +18,15 @@
 
 #pragma once
 
-#include <d3d12.h>
-#include <dxgi.h>
+struct IDXGIFactory6;
+struct ID3D12Device;
+struct IDXGIAdapter;
 
 struct FDeviceCreateDesc
 {
 	bool bEnableDebugLayer = false;
 	bool bEnableValidationLayer = false;
+	IDXGIFactory6* pFactory = nullptr;
 };
 
 
@@ -37,8 +39,8 @@ public:
 	inline ID3D12Device* GetDevicePtr()  const { return mpDevice; }
 	inline IDXGIAdapter* GetAdapterPtr() const { return mpAdapter; }
 
-	UINT GetDeviceMemoryMax() const;
-	UINT GetDeviceMemoryAvailable() const;
+	unsigned GetDeviceMemoryMax() const;
+	unsigned GetDeviceMemoryAvailable() const;
 
 private:
 	ID3D12Device* mpDevice  = nullptr;

@@ -119,7 +119,7 @@ public:
 	bool Initialize(const FStartupParameters& Params);
 	void Exit();
 
-	// Window event callbacks for the main Window
+	// OS event callbacks for the application
 	void OnWindowCreate(HWND hWnd) override;
 	void OnWindowResize(HWND hWnd) override;
 	void OnWindowMinimize(HWND hwnd) override;
@@ -129,6 +129,8 @@ public:
 	void OnToggleFullscreen(HWND hWnd) override;
 	void OnWindowActivate(HWND hWnd) override;
 	void OnWindowDeactivate(HWND hWnd) override;
+	void OnWindowMove(HWND hwnd_, int x, int y) override;
+	void OnDisplayChange(HWND hwnd_, int ImageDepthBitsPerPixel, int ScreenWidth, int ScreenHeight) override;
 
 	void OnKeyDown(HWND hwnd, WPARAM wParam) override;
 	void OnKeyUp(HWND hwnd, WPARAM wParam) override;
@@ -311,7 +313,13 @@ private:
 	void                            RenderThread_HandleWindowCloseEvent(const IEvent* pEvent);
 	void                            RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent);
 	void                            RenderThread_HandleSetVSyncEvent(const IEvent* pEvent);
+	void                            RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent);
 
+	void                            UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent);
+
+	//
+	// FRAME RENDERING PIPELINE
+	//
 	void                            TransitionForSceneRendering(FWindowRenderContext& ctx);
 	void                            RenderShadowMaps(FWindowRenderContext& ctx);
 	void                            RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& FrameData);
@@ -322,10 +330,14 @@ private:
 	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
 	void                            CompositUIToHDRSwapchain(FWindowRenderContext& ctx); // TODO
 
+	// temp
+	struct FrameConstantBuffer { DirectX::XMMATRIX matModelViewProj; };
 
-	void                            UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent);
+	void                            DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh);
+
 
 	std::unique_ptr<Window>&        GetWindow(HWND hwnd);
+	const std::unique_ptr<Window>&  GetWindow(HWND hwnd) const;
 	const FWindowSettings&          GetWindowSettings(HWND hwnd) const;
 	FWindowSettings&                GetWindowSettings(HWND hwnd);
 	FFrameData&                     GetCurrentFrameData(HWND hwnd);
@@ -336,11 +348,22 @@ private:
 	void                            HandleEngineInput();
 
 	bool                            IsWindowRegistered(HWND hwnd) const;
+	bool                            ShouldRenderHDR(HWND hwnd) const;
 
 private:
 	// Reads EngineSettings.ini from next to the executable and returns a 
 	// FStartupParameters struct as it readily has override booleans for engine settings
 	static FStartupParameters       ParseEngineSettingsFile();
+
+public:
+	// Supported HDR Formats
+	// - DXGI_FORMAT_R8G8B8A8_UNORM	   
+	// - DXGI_FORMAT_R10G10B10A2_UNORM  
+	// - DXGI_FORMAT_R16G16B16A16_FLOAT 
+	// 
+	static const DXGI_FORMAT PREFERRED_HDR_FORMAT = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	static const DXGI_FORMAT PREFERRED_SDR_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
+	static bool CheckDisplayHDRSupport(HWND hwnd);
 };
 
 

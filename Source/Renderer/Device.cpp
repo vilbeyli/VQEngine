@@ -24,6 +24,7 @@
 #include "../../Libs/VQUtils/Source/Log.h"
 #include "../../Libs/VQUtils/Source/utils.h"
 
+#include <d3d12.h>
 #include <dxgi1_6.h>
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -64,7 +65,7 @@ bool Device::Create(const FDeviceCreateDesc& desc)
         }
     }
      
-    std::vector<FGPUInfo> vAdapters = VQRenderer::EnumerateDX12Adapters(desc.bEnableDebugLayer);
+    std::vector<FGPUInfo> vAdapters = VQRenderer::EnumerateDX12Adapters(desc.bEnableDebugLayer, desc.pFactory);
     assert(vAdapters.size() > 0);
 
     // TODO: implement software device as fallback
