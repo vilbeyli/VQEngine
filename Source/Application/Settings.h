@@ -42,7 +42,8 @@ struct FWindowSettings
 	int Height                = -1;
 	EDisplayMode DisplayMode  = EDisplayMode::WINDOWED;
 	unsigned PreferredDisplay = 0;
-	char Title[64]           = "";
+	char Title[64]            = "";
+	bool bEnableHDR           = false;
 
 	inline bool IsDisplayModeFullscreen() const { return DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN || DisplayMode == EDisplayMode::BORDERLESS_FULLSCREEN; }
 };

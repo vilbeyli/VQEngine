@@ -42,15 +42,16 @@ struct FStartupParameters
 	Log::LogInitializeParams  LogInitParams;
 
 	FEngineSettings EngineSettings;
-	uint8 bOverrideGFXSetting_RenderScale         : 1;
-	uint8 bOverrideGFXSetting_bVSync              : 1;
-	uint8 bOverrideGFXSetting_bUseTripleBuffering : 1;
-	uint8 bOverrideGFXSetting_bAA                 : 1;
+	uint8 bOverrideGFXSetting_RenderScale                 : 1;
+	uint8 bOverrideGFXSetting_bVSync                      : 1;
+	uint8 bOverrideGFXSetting_bUseTripleBuffering         : 1;
+	uint8 bOverrideGFXSetting_bAA                         : 1;
+	uint8 bOverrideGFXSetting_bHDR                        : 1;
 
-	uint8 bOverrideENGSetting_MainWindowHeight    : 1;
-	uint8 bOverrideENGSetting_MainWindowWidth     : 1;
-	uint8 bOverrideENGSetting_bDisplayMode         : 1;
-	uint8 bOverrideENGSetting_PreferredDisplay    : 1;
+	uint8 bOverrideENGSetting_MainWindowHeight            : 1;
+	uint8 bOverrideENGSetting_MainWindowWidth             : 1;
+	uint8 bOverrideENGSetting_bDisplayMode                : 1;
+	uint8 bOverrideENGSetting_PreferredDisplay            : 1;
 
 	uint8 bOverrideENGSetting_bDebugWindowEnable          : 1;
 	uint8 bOverrideENGSetting_DebugWindowHeight           : 1;
@@ -58,8 +59,8 @@ struct FStartupParameters
 	uint8 bOverrideENGSetting_DebugWindowDisplayMode      : 1;
 	uint8 bOverrideENGSetting_DebugWindowPreferredDisplay : 1;
 
-	uint8 bOverrideENGSetting_bAutomatedTest      : 1;
-	uint8 bOverrideENGSetting_bTestFrames         : 1;
+	uint8 bOverrideENGSetting_bAutomatedTest              : 1;
+	uint8 bOverrideENGSetting_bTestFrames                 : 1;
 };
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);

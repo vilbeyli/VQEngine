@@ -127,12 +127,14 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	s.WndMain.Height = 1080;
 	s.WndMain.DisplayMode = EDisplayMode::WINDOWED;
 	s.WndMain.PreferredDisplay = 0;
+	s.WndMain.bEnableHDR = false;
 	sprintf_s(s.WndMain.Title , "VQEngine %s-%s", VQENGINE_VERSION, BUILD_CONFIG);
 
 	s.WndDebug.Width  = 600;
 	s.WndDebug.Height = 600;
 	s.WndDebug.DisplayMode = EDisplayMode::WINDOWED;
 	s.WndDebug.PreferredDisplay = 1;
+	s.WndDebug.bEnableHDR = false;
 	sprintf_s(s.WndDebug.Title, "VQDebugging");
 
 	s.bAutomatedTestRun = false;
@@ -151,6 +153,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	if (paramFile.bOverrideENGSetting_MainWindowHeight)            s.WndMain.Height           = pf.WndMain.Height;
 	if (paramFile.bOverrideENGSetting_bDisplayMode)                s.WndMain.DisplayMode      = pf.WndMain.DisplayMode;
 	if (paramFile.bOverrideENGSetting_PreferredDisplay)            s.WndMain.PreferredDisplay = pf.WndMain.PreferredDisplay;
+	if (paramFile.bOverrideGFXSetting_bHDR)                        s.WndMain.bEnableHDR       = pf.WndMain.bEnableHDR;
 
 	if (paramFile.bOverrideENGSetting_bDebugWindowEnable)          s.bShowDebugWindow          = pf.bShowDebugWindow;
 	if (paramFile.bOverrideENGSetting_DebugWindowWidth)            s.WndDebug.Width            = pf.WndDebug.Width;
@@ -176,6 +179,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	if (Params.bOverrideENGSetting_MainWindowHeight)            s.WndMain.Height           = p.WndMain.Height;
 	if (Params.bOverrideENGSetting_bDisplayMode)                s.WndMain.DisplayMode      = p.WndMain.DisplayMode;
 	if (Params.bOverrideENGSetting_PreferredDisplay)            s.WndMain.PreferredDisplay = p.WndMain.PreferredDisplay;
+	if (Params.bOverrideGFXSetting_bHDR)                        s.WndMain.bEnableHDR       = p.WndMain.bEnableHDR;
 	
 	if (Params.bOverrideENGSetting_bDebugWindowEnable)          s.bShowDebugWindow          = p.bShowDebugWindow;
 	if (Params.bOverrideENGSetting_DebugWindowWidth)            s.WndDebug.Width            = p.WndDebug.Width;
@@ -253,6 +257,19 @@ void VQEngine::ExitThreads()
 
 
 std::unique_ptr<Window>& VQEngine::GetWindow(HWND hwnd)
+{
+	if (mpWinMain->GetHWND() == hwnd)
+		return mpWinMain;
+	else if (mpWinDebug->GetHWND() == hwnd)
+		return mpWinDebug;
+
+	// TODO: handle other windows here when they're implemented
+
+	Log::Warning("VQEngine::GetWindow() : Invalid hwnd=0x%x, returning Main Window", hwnd);
+	return mpWinMain;
+}
+
+const std::unique_ptr<Window>& VQEngine::GetWindow(HWND hwnd) const
 {
 	if (mpWinMain->GetHWND() == hwnd)
 		return mpWinMain;
@@ -393,6 +410,11 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 			{
 				params.bOverrideENGSetting_PreferredDisplay = true;
 				params.EngineSettings.WndMain.PreferredDisplay = StrUtil::ParseInt(SettingValue);
+			}
+			if (SettingName == "HDR")
+			{
+				params.bOverrideGFXSetting_bHDR = true;
+				params.EngineSettings.WndMain.bEnableHDR = StrUtil::ParseBool(SettingValue);
 			}
 
 
