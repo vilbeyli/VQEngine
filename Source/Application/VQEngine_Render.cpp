@@ -104,7 +104,7 @@ void VQEngine::RenderThread_Inititalize()
 	// all windows use the same number of swapchains as the main window
 	const int NUM_SWAPCHAIN_BUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
 	{
-		const bool bIsContainingWindowOnHDRScreen = VQEngine::CheckDisplayHDRSupport(mpWinMain->GetHWND());
+		const bool bIsContainingWindowOnHDRScreen = VQSystemInfo::FMonitorInfo::CheckHDRSupport(mpWinMain->GetHWND());
 		const bool bCreateHDRSwapchain = mSettings.WndMain.bEnableHDR && bIsContainingWindowOnHDRScreen;
 		if (mSettings.WndMain.bEnableHDR && !bIsContainingWindowOnHDRScreen)
 		{
@@ -116,7 +116,7 @@ void VQEngine::RenderThread_Inititalize()
 	}
 	if(mpWinDebug)
 	{
-		const bool bIsContainingWindowOnHDRScreen = VQEngine::CheckDisplayHDRSupport(mpWinDebug->GetHWND());
+		const bool bIsContainingWindowOnHDRScreen = VQSystemInfo::FMonitorInfo::CheckHDRSupport(mpWinDebug->GetHWND());
 		constexpr bool bCreateHDRSwapchain = false; // only main window in HDR for now
 		mRenderer.InitializeRenderContext(mpWinDebug.get(), NUM_SWAPCHAIN_BUFFERS, false, bCreateHDRSwapchain);
 		mEventQueue_VQEToWin_Main.AddItem(std::make_shared<HandleWindowTransitionsEvent>(mpWinDebug->GetHWND()));

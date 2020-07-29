@@ -176,8 +176,7 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     DXGI_FORMAT SwapChainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
     // Check HDR support : https://docs.microsoft.com/en-us/windows/win32/direct3darticles/high-dynamic-range
-    VQSystemInfo::FMonitorInfo DisplayInfo = {};
-    const bool bIsHDRCapableDisplayAvailable = CheckHDRCapability(&DisplayInfo);
+    const bool bIsHDRCapableDisplayAvailable = VQSystemInfo::FMonitorInfo::CheckHDRSupport(this->mHwnd);
     if (desc.bHDR)
     {
         if (bIsHDRCapableDisplayAvailable)

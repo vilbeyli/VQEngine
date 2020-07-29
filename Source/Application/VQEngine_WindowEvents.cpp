@@ -199,90 +199,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 
 
-// ===================================================================================================================================
-// UTILITY FUNCTIONS
-// ===================================================================================================================================
-// To detect HDR support, we will need to check the color space in the primary DXGI output associated with the app at
-// this point in time (using window/display intersection). 
-static inline int ComputeIntersectionArea(int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2)
-{
-	// Compute the overlay area of two rectangles, A and B.
-	// (ax1, ay1) = left-top coordinates of A; (ax2, ay2) = right-bottom coordinates of A
-	// (bx1, by1) = left-top coordinates of B; (bx2, by2) = right-bottom coordinates of B
-	return max(0, min(ax2, bx2) - max(ax1, bx1)) * max(0, min(ay2, by2) - max(ay1, by1));
-}
-bool VQEngine::CheckDisplayHDRSupport(HWND hwnd)
-{
-	RECT windowRect = {};
-	GetWindowRect(hwnd, &windowRect);
-
-	using namespace Microsoft::WRL;
-	ComPtr<IDXGIFactory6> m_dxgiFactory;
-	ThrowIfFailed(CreateDXGIFactory2(0, IID_PPV_ARGS(&m_dxgiFactory)));
-
-	// First, the method must determine the app's current display. 
-	// We don't recommend using IDXGISwapChain::GetContainingOutput method to do that because of two reasons:
-	//    1. Swap chains created with CreateSwapChainForComposition do not support this method.
-	//    2. Swap chains will return a stale dxgi output once DXGIFactory::IsCurrent() is false. In addition, 
-	//       we don't recommend re-creating swapchain to resolve the stale dxgi output because it will cause a short 
-	//       period of black screen.
-	// Instead, we suggest enumerating through the bounds of all dxgi outputs and determine which one has the greatest 
-	// intersection with the app window bounds. Then, use the DXGI output found in previous step to determine if the 
-	// app is on a HDR capable display. 
-
-	// Retrieve the current default adapter.
-	ComPtr<IDXGIAdapter1> dxgiAdapter;
-	ThrowIfFailed(m_dxgiFactory->EnumAdapters1(0, &dxgiAdapter));
-
-	// Iterate through the DXGI outputs associated with the DXGI adapter,
-	// and find the output whose bounds have the greatest overlap with the
-	// app window (i.e. the output for which the intersection area is the
-	// greatest).
-
-	UINT i = 0;
-	ComPtr<IDXGIOutput> currentOutput;
-	ComPtr<IDXGIOutput> bestOutput;
-	float bestIntersectArea = -1;
-
-	while (dxgiAdapter->EnumOutputs(i, &currentOutput) != DXGI_ERROR_NOT_FOUND)
-	{
-		// Get the retangle bounds of the app window
-		int ax1 = windowRect.left;
-		int ay1 = windowRect.top;
-		int ax2 = windowRect.right;
-		int ay2 = windowRect.bottom;
-
-		// Get the rectangle bounds of current output
-		DXGI_OUTPUT_DESC desc;
-		ThrowIfFailed(currentOutput->GetDesc(&desc));
-		RECT r = desc.DesktopCoordinates;
-		int bx1 = r.left;
-		int by1 = r.top;
-		int bx2 = r.right;
-		int by2 = r.bottom;
-
-		// Compute the intersection
-		int intersectArea = ComputeIntersectionArea(ax1, ay1, ax2, ay2, bx1, by1, bx2, by2);
-		if (intersectArea > bestIntersectArea)
-		{
-			bestOutput = currentOutput;
-			bestIntersectArea = static_cast<float>(intersectArea);
-		}
-
-		i++;
-	}
-
-	// Having determined the output (display) upon which the app is primarily being 
-	// rendered, retrieve the HDR capabilities of that display by checking the color space.
-	ComPtr<IDXGIOutput6> output6;
-	ThrowIfFailed(bestOutput.As(&output6));
-
-	DXGI_OUTPUT_DESC1 desc1;
-	ThrowIfFailed(output6->GetDesc1(&desc1));
-
-	return (desc1.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020);
-}
-
 
 // ===================================================================================================================================
 // WINDOW EVENTS
@@ -342,7 +258,7 @@ void VQEngine::OnWindowMove(HWND hwnd_, int x, int y)
 #endif
 
 	auto& pWin = GetWindow(hwnd_);
-	const bool bCurrentMonitorSupportsHDR = CheckDisplayHDRSupport(hwnd_);
+	const bool bCurrentMonitorSupportsHDR = VQSystemInfo::FMonitorInfo::CheckHDRSupport(hwnd_);
 	const bool bCurrentMonitorWasSupportingHDR = pWin->GetIsOnHDRCapableDisplay();
 
 	// TODO: move this into function and remove copy paste 
@@ -369,7 +285,7 @@ void VQEngine::OnDisplayChange(HWND hwnd_, int ImageDepthBitsPerPixel, int Scree
 	mSysInfo.Monitors = VQSystemInfo::GetDisplayInfo(); // re-acquire Monitors info 
 
 	auto& pWin = GetWindow(hwnd_);
-	const bool bCurrentMonitorSupportsHDR = CheckDisplayHDRSupport(hwnd_);
+	const bool bCurrentMonitorSupportsHDR = VQSystemInfo::FMonitorInfo::CheckHDRSupport(hwnd_);
 	const bool bCurrentMonitorWasSupportingHDR = pWin->GetIsOnHDRCapableDisplay();
 
 	// TODO: move this into function and remove copy paste 
@@ -398,7 +314,7 @@ void VQEngine::OnWindowCreate(HWND hWnd)
 #if LOG_CALLBACKS
 	Log::Info("OnWindowCreate<%0x, %s> ", hWnd, GetWindowName(hWnd).c_str());
 #endif
-	GetWindow(hWnd)->SetIsOnHDRCapableDisplay(CheckDisplayHDRSupport(hWnd));
+	GetWindow(hWnd)->SetIsOnHDRCapableDisplay(VQSystemInfo::FMonitorInfo::CheckHDRSupport(hWnd));
 }
 
 void VQEngine::OnWindowClose(HWND hwnd_)
