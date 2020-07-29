@@ -72,7 +72,7 @@ static RECT CenterScreen(const RECT& screenRect, const RECT& wndRect)
     return centered;
 }
 
-static RECT GetScreenRectOnPreferredDisplay(const RECT& preferredRect, int PreferredDisplayIndex)
+static RECT GetScreenRectOnPreferredDisplay(const RECT& preferredRect, int PreferredDisplayIndex, bool* pbMonitorFound)
 {
     // handle preferred display
     struct MonitorEnumCallbackParams
@@ -80,6 +80,7 @@ static RECT GetScreenRectOnPreferredDisplay(const RECT& preferredRect, int Prefe
         int PreferredMonitorIndex = 0;
         const RECT* pRectOriginal = nullptr;
         RECT* pRectNew = nullptr;
+        RECT RectDefault;
     };
     RECT preferredScreenRect = { CW_USEDEFAULT , CW_USEDEFAULT , CW_USEDEFAULT , CW_USEDEFAULT };
     MonitorEnumCallbackParams p = {};
@@ -107,15 +108,23 @@ static RECT GetScreenRectOnPreferredDisplay(const RECT& preferredRect, int Prefe
         {
             *pParam->pRectNew = *Arg3;
         }
+        if (monitorIndex == 0)
+        {
+            pParam->RectDefault = *Arg3;
+        }
         return b;
     };
 
     EnumDisplayMonitors(NULL, NULL, fnCallbackMonitorEnum, (LPARAM)&p);
     const bool bPreferredDisplayNotFound =
-        (preferredScreenRect.right == preferredScreenRect.left == preferredScreenRect.top == preferredScreenRect.bottom)
+        (preferredScreenRect.right == preferredScreenRect.left 
+        && preferredScreenRect.left  == preferredScreenRect.top
+        && preferredScreenRect.top == preferredScreenRect.bottom)
         && (preferredScreenRect.right == CW_USEDEFAULT);
+    
+    *pbMonitorFound = !bPreferredDisplayNotFound;
 
-    return bPreferredDisplayNotFound ? preferredScreenRect : CenterScreen(preferredScreenRect, preferredRect);
+    return bPreferredDisplayNotFound ? p.RectDefault : CenterScreen(preferredScreenRect, preferredRect);
 }
 
 
@@ -143,7 +152,8 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
 
     windowClass_.reset(new WindowClass("VQWindowClass", initParams.hInst, initParams.pfnWndProc));
 
-    RECT preferredScreenRect = GetScreenRectOnPreferredDisplay(rect, initParams.preferredDisplay);
+    bool bPreferredDisplayFound = false;
+    RECT preferredScreenRect = GetScreenRectOnPreferredDisplay(rect, initParams.preferredDisplay, &bPreferredDisplayFound);
 
 
     // set fullscreen width & height based on the selected monitor
@@ -156,8 +166,8 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
         windowClass_->GetName().c_str(),
         title.c_str(),
         FlagWindowStyle,
-        preferredScreenRect.left,      // positions //CW_USEDEFAULT,
-        preferredScreenRect.top ,      // positions //CW_USEDEFAULT,
+        bPreferredDisplayFound ? preferredScreenRect.left : CW_USEDEFAULT, // positions
+        bPreferredDisplayFound ? preferredScreenRect.top  : CW_USEDEFAULT, // positions
         rect.right - rect.left, // size
         rect.bottom - rect.top, // size
         hwnd_parent,
@@ -181,6 +191,11 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
     // this function returns, causing issues dereferencing the smart
     // pointer calling this ctor.
     ::SetWindowLongPtr(hwnd_, GWLP_USERDATA, reinterpret_cast<LONG_PTR> (this));
+
+    if (!bPreferredDisplayFound)
+    {
+        Log::Warning("Window(): Couldn't find the preferred display: %d", initParams.preferredDisplay);
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
