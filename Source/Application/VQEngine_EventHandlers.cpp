@@ -435,12 +435,7 @@ void VQEngine::RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent)
 
 	Swapchain.WaitForGPU();
 	Swapchain.Resize(WIDTH, HEIGHT, pSwapchainEvent->format);
+	Swapchain.SetHDRMetaData(EColorSpace::REC_709, 350.0f, 0.01f, 100, 5); // Depending on @mFormat, sets or clears HDR Metadata
 
-	static const std::unordered_map<DXGI_FORMAT, std::string_view> FormatStringTranslation =
-	{
-		  { DXGI_FORMAT_R8G8B8A8_UNORM	   , "R8G8B8A8_UNORM"    }
-		, { DXGI_FORMAT_R10G10B10A2_UNORM  , "R10G10B10A2_UNORM" }
-		, { DXGI_FORMAT_R16G16B16A16_FLOAT , "R16G16B16A16_FLOAT"}
-	};
-	Log::Info("Set Swapchain Format: %s", FormatStringTranslation.at(pSwapchainEvent->format).data());
+	Log::Info("Set Swapchain Format: %s", VQRenderer::DXGIFormatAsString(pSwapchainEvent->format).data());
 }

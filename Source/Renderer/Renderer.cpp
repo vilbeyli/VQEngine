@@ -45,6 +45,18 @@ using namespace VQSystemInfo;
 	#define ENABLE_VALIDATION_LAYER 0
 #endif
 
+const std::string_view& VQRenderer::DXGIFormatAsString(DXGI_FORMAT format)
+{
+	static std::unordered_map<DXGI_FORMAT, std::string_view> DXGI_FORMAT_STRING_TRANSLATION =
+	{
+			  { DXGI_FORMAT_R8G8B8A8_UNORM	   , "R8G8B8A8_UNORM"    }
+			, { DXGI_FORMAT_R10G10B10A2_UNORM  , "R10G10B10A2_UNORM" }
+			, { DXGI_FORMAT_R16G16B16A16_FLOAT , "R16G16B16A16_FLOAT"}
+	};
+	return DXGI_FORMAT_STRING_TRANSLATION.at(format);
+}
+
+
 
 // ---------------------------------------------------------------------------------------
 // D3D12MA Integration 
@@ -219,6 +231,10 @@ void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuf
 	swapChainDesc.bitDepth       = bHDRSwapchain ? _16 : _8; // currently no support for HDR10 / R10G10B10A2 signals
 	swapChainDesc.bFullscreen    = false; // TODO: exclusive fullscreen to be deprecated. App shouldn't make dxgi mode changes.
 	ctx.SwapChain.Create(swapChainDesc);
+	if (bHDRSwapchain)
+	{
+		ctx.SwapChain.SetHDRMetaData(EColorSpace::REC_709, 350.0f, 0.01f, 100, 5); // Depending on @mFormat, sets or clears HDR Metadata
+	}
 
 	// Create command allocators
 	ctx.mCommandAllocatorsGFX.resize(NumSwapchainBuffers);

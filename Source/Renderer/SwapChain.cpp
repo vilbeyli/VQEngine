@@ -20,6 +20,7 @@
 #include "SwapChain.h"
 #include "CommandQueue.h"
 #include "Common.h"
+#include "Renderer.h"
 
 #include "../Application/Platform.h" // CHECK_HR
 #include "../Application/Window.h"
@@ -109,6 +110,7 @@ void SwapChain::SetHDRMetaData(EColorSpace ColorSpace, float MaxOutputNits, floa
     if (!IsHDRFormat())
     {
         ThrowIfFailed(mpSwapChain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_NONE, 0, nullptr));
+        Log::Info("Cleared HDR Metadata.");
         return;
     }
 
@@ -192,14 +194,6 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
                 mColorSpace = DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709; // set mColorSpace value to ensure consistant state
                 break;
             }
-
-            // also check if there's an override for the HDR metadata for non-HDR10-compliant displays
-            auto it = HDR::BUILTIN_MONITOR_HDR10_METADATA_BRIGHTNESS_PROFILES.find(DisplayInfo.DeviceName);
-            const bool bHDRMetadataProfileExists = it != HDR::BUILTIN_MONITOR_HDR10_METADATA_BRIGHTNESS_PROFILES.end();
-            if (bHDRMetadataProfileExists)
-            {
-                // TODO: override metadata
-            }
         }
         else
         {
@@ -259,6 +253,7 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
         , NULL
         , &pSwapChain
     );
+    this->mFormat = SwapChainFormat;
 
     // https://docs.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgifactory-makewindowassociation
     UINT WndAssocFlags = DXGI_MWA_NO_ALT_ENTER; // We're gonna handle the Alt+Enter ourselves instead of DXGI
@@ -290,9 +285,6 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
         const bool bIsHDR10Signal = desc.bitDepth == _10 && bIsOutputSignalST2084;
         EnsureSwapChainColorSpace(desc.bitDepth, bIsHDR10Signal);
     }
-
-    SetHDRMetaData(EColorSpace::REC_709, 350.0f, 0.01f, 100, 5); // Depending on @mFormat, sets or clears HDR Metadata
-
 
     pDxgiFactory->Release();
 
@@ -349,12 +341,13 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     }
 
 
-    Log::Info("SwapChain: Created swapchain<hwnd=0x%x, bVSync=%d> w/ %d back buffers of %dx%d."
+    Log::Info("SwapChain: Created <hwnd=0x%x, bVSync=%d> w/ %d back buffers of resolution %dx%d %s."
         , mHwnd
         , this->mbVSync
         , desc.numBackBuffers
         , WIDTH
         , HEIGHT
+        , VQRenderer::DXGIFormatAsString(this->mFormat).data()
     );
     return bSuccess;
 }
@@ -395,6 +388,7 @@ void SwapChain::Resize(int w, int h, DXGI_FORMAT format)
         format,
         this->mbVSync ? 0 : (DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING /*| DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH*/)
     );
+    this->mFormat = format;
 
     CreateRenderTargetViews();
     this->mICurrentBackBuffer = mpSwapChain->GetCurrentBackBufferIndex();

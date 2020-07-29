@@ -102,9 +102,6 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 class VQRenderer
 {
 public:
-	static std::vector< VQSystemInfo::FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters = false, IDXGIFactory6* pFactory = nullptr);
-
-public:
 	void                         Initialize(const FGraphicsSettings& Settings);
 	void                         Load();
 	void                         Unload();
@@ -236,4 +233,11 @@ private:
 	bool CheckContext(HWND hwnd) const;
 
 	TextureID AddTexture_ThreadSafe(Texture&& tex);
+
+//
+// STATIC PUBLIC DATA/INTERFACE
+//
+public:
+	static std::vector< VQSystemInfo::FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters = false, IDXGIFactory6* pFactory = nullptr);
+	static const std::string_view& DXGIFormatAsString(DXGI_FORMAT format);
 };

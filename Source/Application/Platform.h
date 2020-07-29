@@ -20,11 +20,6 @@
 
 #include "Types.h"
 #include <Windows.h>
-#include <d3d12.h>
-
-#include <mutex>
-#include <condition_variable>
-#include <vector>
 
 #include "../../Libs/VQUtils/Source/Log.h"
 
