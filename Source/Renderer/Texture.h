@@ -37,7 +37,9 @@ struct TextureCreateDesc
 	D3D12MA::Allocator*   pAllocator = nullptr;
 	UploadHeap*           pUploadHeap = nullptr;
 	D3D12_RESOURCE_DESC   Desc = {};
+	D3D12_RESOURCE_STATES ResourceState = D3D12_RESOURCE_STATE_COMMON;
 	const std::string&    TexName;
+
 };
 
 

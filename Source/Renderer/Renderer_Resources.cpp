@@ -97,7 +97,7 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 	return AddTexture_ThreadSafe(std::move(tex));
 }
 
-TextureID VQRenderer::CreateTexture(const std::string& name, const D3D12_RESOURCE_DESC& desc, const void* pData)
+TextureID VQRenderer::CreateTexture(const std::string& name, const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES ResourceState, const void* pData)
 {
 	Texture tex;
 
@@ -113,6 +113,7 @@ TextureID VQRenderer::CreateTexture(const std::string& name, const D3D12_RESOURC
 	tDesc.pAllocator = mpAllocator;
 	tDesc.pDevice = mDevice.GetDevicePtr();
 	tDesc.pUploadHeap = &uploadHeap;
+	tDesc.ResourceState = ResourceState;
 
 	tex.Create(tDesc, pData);
 

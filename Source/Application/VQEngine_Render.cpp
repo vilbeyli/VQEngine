@@ -200,7 +200,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, 0 // MSAA SampleQuality
 				, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
 			);
-			r.Tex_MainViewDepth = mRenderer.CreateTexture("SceneDepth", d);
+			r.Tex_MainViewDepth = mRenderer.CreateTexture("SceneDepth", d, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 			mRenderer.InitializeDSV(r.DSV_MainViewDepth, 0u, r.Tex_MainViewDepth);
 		}
 		{	// Main depth stencil view /w MSAA
@@ -214,7 +214,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, 0 // MSAA SampleQuality
 				, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
 			);
-			r.Tex_MainViewDepthMSAA = mRenderer.CreateTexture("SceneDepthMSAA", d);
+			r.Tex_MainViewDepthMSAA = mRenderer.CreateTexture("SceneDepthMSAA", d, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 			mRenderer.InitializeDSV(r.DSV_MainViewDepthMSAA, 0u, r.Tex_MainViewDepthMSAA);
 		}
 
@@ -230,7 +230,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
 			);
 
-			r.Tex_MainViewColorMSAA = mRenderer.CreateTexture("SceneColorMSAA", d);
+			r.Tex_MainViewColorMSAA = mRenderer.CreateTexture("SceneColorMSAA", d, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
 			mRenderer.InitializeRTV(r.RTV_MainViewColorMSAA, 0u, r.Tex_MainViewColorMSAA);
 		}
 
@@ -246,7 +246,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
 			);
 
-			r.Tex_MainViewColor = mRenderer.CreateTexture("SceneColor", d);
+			r.Tex_MainViewColor = mRenderer.CreateTexture("SceneColor", d, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			mRenderer.InitializeRTV(r.RTV_MainViewColor, 0u, r.Tex_MainViewColor);
 			mRenderer.InitializeSRV(r.SRV_MainViewColor, 0u, r.Tex_MainViewColor);
 		}
@@ -262,7 +262,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, 0 // MSAA SampleQuality
 				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
 			);
-			r.Tex_PostProcess_TonemapperOut = mRenderer.CreateTexture("TonemapperOut", d);
+			r.Tex_PostProcess_TonemapperOut = mRenderer.CreateTexture("TonemapperOut", d, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			mRenderer.InitializeUAV(r.UAV_PostProcess_TonemapperOut, 0u, r.Tex_PostProcess_TonemapperOut);
 			mRenderer.InitializeSRV(r.SRV_PostProcess_TonemapperOut, 0u, r.Tex_PostProcess_TonemapperOut);
 		}
@@ -631,24 +631,6 @@ void VQEngine::TransitionForSceneRendering(FWindowRenderContext& ctx)
 	auto pRscTonemapper = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_TonemapperOut);
 	auto pRscColor = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColor);
 	auto pRscColorMSAA = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColorMSAA);
-
-	//-----------------------------------------------------------------------------------------------
-	// TODO: create resource in SRV state (even though its a UAV texture)
-	static bool bOneTimeHack = true;
-	if (bOneTimeHack)
-	{
-		const CD3DX12_RESOURCE_BARRIER pBarriers[] =
-		{
-			   CD3DX12_RESOURCE_BARRIER::Transition(pRscColor     , D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
-			 , CD3DX12_RESOURCE_BARRIER::Transition(pRscColorMSAA , D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE)
-			 , CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapper, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
-		};
-		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
-
-		bOneTimeHack = false;
-	}
-	//-----------------------------------------------------------------------------------------------
-
 
 	if (bMSAA)
 	{

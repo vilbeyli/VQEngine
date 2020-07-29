@@ -90,12 +90,13 @@ void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullpt
     const bool bUnorderedAccessTexture = (desc.Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) != 0;
 
     // determine resource state & optimal clear value
-    D3D12_RESOURCE_STATES ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_COPY_DEST;
+    D3D12_RESOURCE_STATES ResourceState = pData 
+        ? D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_COPY_DEST
+        : desc.ResourceState;
     D3D12_CLEAR_VALUE* pClearValue = nullptr;
     if (bDepthStencilTexture)
     {
         D3D12_CLEAR_VALUE ClearValue = {};
-        ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_DEPTH_WRITE;
         ClearValue.Format = (desc.Desc.Format == DXGI_FORMAT_R32_TYPELESS) ? DXGI_FORMAT_D32_FLOAT : desc.Desc.Format;
         ClearValue.DepthStencil.Depth = 1.0f;
         ClearValue.DepthStencil.Stencil = 0;
@@ -105,12 +106,11 @@ void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullpt
     {
         D3D12_CLEAR_VALUE ClearValue = {};
         ClearValue.Format = desc.Desc.Format;
-        ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
         pClearValue = &ClearValue;
     }
     if (bUnorderedAccessTexture)
     {
-        ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
     }
 
 
@@ -184,7 +184,7 @@ void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullpt
         textureBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         textureBarrier.Transition.pResource = mpTexture;
         textureBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-        textureBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        textureBarrier.Transition.StateAfter = desc.ResourceState;
         textureBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         pCmd->ResourceBarrier(1, &textureBarrier);
     }

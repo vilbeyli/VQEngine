@@ -123,7 +123,7 @@ public:
 	// Resource management
 	BufferID                     CreateBuffer(const FBufferDesc& desc);
 	TextureID                    CreateTextureFromFile(const char* pFilePath);
-	TextureID                    CreateTexture(const std::string& name, const D3D12_RESOURCE_DESC& desc, const void* pData = nullptr);
+	TextureID                    CreateTexture(const std::string& name, const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES ResourceState, const void* pData = nullptr);
 
 	// Allocates a ResourceView from the respective heap and returns a unique identifier.
 	SRV_ID                       CreateSRV(uint NumDescriptors = 1);
