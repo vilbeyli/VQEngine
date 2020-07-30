@@ -88,6 +88,8 @@ public:
 	virtual void OnWindowClose(HWND hwnd_) = 0;
 	virtual void OnWindowActivate(HWND hwnd_) = 0;
 	virtual void OnWindowDeactivate(HWND hwnd_) = 0;
+	virtual void OnWindowMove(HWND hwnd_, int x, int y) = 0;
+	virtual void OnDisplayChange(HWND hwnd_, int ImageDepthBitsPerPixel, int ScreenWidth, int ScreenHeight) = 0;
 	
 	virtual void OnKeyDown(HWND, WPARAM) = 0;
 	virtual void OnKeyUp(HWND, WPARAM) = 0;
@@ -157,6 +159,9 @@ public:
 
 	inline void OnResize(int w, int h) { width_ = w; height_ = h; }
 	inline void SetFullscreen(bool b) { isFullscreen_ = b; }
+	inline void SetIsOnHDRCapableDisplay(bool b) { isOnHDRCapableDisplay_ = b; }
+
+	inline bool GetIsOnHDRCapableDisplay() const { return isOnHDRCapableDisplay_; }
 
 private:
 	inline bool IsClosedImpl()  const override { return isClosed_; }
@@ -177,4 +182,5 @@ private:
 	UINT windowStyle_;
 	int FSwidth_ = -1, FSheight_ = -1;
 	bool isMouseCaptured_ = false;
+	bool isOnHDRCapableDisplay_ = false;
 };

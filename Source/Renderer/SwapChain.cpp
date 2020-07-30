@@ -20,11 +20,13 @@
 #include "SwapChain.h"
 #include "CommandQueue.h"
 #include "Common.h"
+#include "Renderer.h"
 
 #include "../Application/Platform.h" // CHECK_HR
 #include "../Application/Window.h"
 #include "../../Libs/VQUtils/Source/Log.h"
 #include "../../Libs/VQUtils/Source/utils.h"
+#include "../../Libs/VQUtils/Source/SystemInfo.h"
 
 
 #include <dxgi1_6.h>
@@ -46,13 +48,70 @@
     #define LOG_SWAPCHAIN_SYNCHRONIZATION_EVENTS  0
 #endif
 
-FWindowRepresentation::FWindowRepresentation(const std::unique_ptr<Window>& pWnd, bool bVSyncIn, bool bFullscreenIn)
-    : hwnd(pWnd->GetHWND())
-    , width(pWnd->IsFullscreen() ? pWnd->GetFullscreenWidth() : pWnd->GetWidth())
-    , height(pWnd->IsFullscreen() ? pWnd->GetFullscreenHeight() : pWnd->GetHeight())
-    , bVSync(bVSyncIn)
-    , bExclusiveFullscreen(bFullscreenIn)
-{}
+using namespace VQSystemInfo;
+
+void SwapChain::EnsureSwapChainColorSpace(SwapChainBitDepth swapChainBitDepth, bool enableST2084)
+{
+    DXGI_COLOR_SPACE_TYPE colorSpace = {};
+    switch (swapChainBitDepth)
+    {
+    case  _8: colorSpace = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709; break;
+    case _10: colorSpace = enableST2084 ? DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709; break;
+    case _16: colorSpace = DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709; break;
+    }
+
+    if (mColorSpace != colorSpace)
+    {
+        UINT colorSpaceSupport = 0;
+        if (SUCCEEDED(mpSwapChain->CheckColorSpaceSupport(colorSpace, &colorSpaceSupport)) &&
+            ((colorSpaceSupport & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT) == DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT))
+        {
+            ThrowIfFailed(mpSwapChain->SetColorSpace1(colorSpace));
+            mColorSpace = colorSpace;
+        }
+    }
+}
+
+void SwapChain::SetHDRMetaData(EColorSpace ColorSpace, float MaxOutputNits, float MinOutputNits, float MaxContentLightLevel, float MaxFrameAverageLightLevel)
+{
+    using namespace VQSystemInfo;
+    
+    if (!IsHDRFormat())
+    {
+        ThrowIfFailed(mpSwapChain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_NONE, 0, nullptr));
+        Log::Info("Cleared HDR Metadata.");
+        return;
+    }
+
+    // https://en.wikipedia.org/wiki/Chromaticity
+    // E.g., the white point of an sRGB display  is an x,y chromaticity of 
+    //       (0.3216, 0.3290) where x and y coords are used in the xyY space.
+    static const FDisplayChromaticities DisplayChromaticityList[] =
+    {
+        //                      Red_x   , Red_y   , Green_x , Green_y,  Blue_x  , Blue_y  , White_x , White_y     // xyY space
+        FDisplayChromaticities( 0.64000f, 0.33000f, 0.30000f, 0.60000f, 0.15000f, 0.06000f, 0.31270f, 0.32900f ), // Display Gamut Rec709 
+        FDisplayChromaticities( 0.70800f, 0.29200f, 0.17000f, 0.79700f, 0.13100f, 0.04600f, 0.31270f, 0.32900f ), // Display Gamut Rec2020
+        FDisplayChromaticities(), // Display Gamut DCI-P3 | TODO: handle p3
+    };
+
+    // Set HDR meta data : https://docs.microsoft.com/en-us/windows/win32/api/dxgi1_5/ns-dxgi1_5-dxgi_hdr_metadata_hdr10
+    const FDisplayChromaticities& Chroma = DisplayChromaticityList[ColorSpace];
+    mHDRMetaData.RedPrimary[0]   = static_cast<UINT16>(Chroma.RedPrimary_xy[0]   * 50000.0f);
+    mHDRMetaData.RedPrimary[1]   = static_cast<UINT16>(Chroma.RedPrimary_xy[1]   * 50000.0f);
+    mHDRMetaData.GreenPrimary[0] = static_cast<UINT16>(Chroma.GreenPrimary_xy[0] * 50000.0f);
+    mHDRMetaData.GreenPrimary[1] = static_cast<UINT16>(Chroma.GreenPrimary_xy[1] * 50000.0f);
+    mHDRMetaData.BluePrimary[0]  = static_cast<UINT16>(Chroma.BluePrimary_xy[0]  * 50000.0f);
+    mHDRMetaData.BluePrimary[1]  = static_cast<UINT16>(Chroma.BluePrimary_xy[1]  * 50000.0f);
+    mHDRMetaData.WhitePoint[0]   = static_cast<UINT16>(Chroma.WhitePoint_xy[0]   * 50000.0f);
+    mHDRMetaData.WhitePoint[1]   = static_cast<UINT16>(Chroma.WhitePoint_xy[1]   * 50000.0f);
+    mHDRMetaData.MaxMasteringLuminance = static_cast<UINT>(MaxOutputNits * 10000.0f);
+    mHDRMetaData.MinMasteringLuminance = static_cast<UINT>(MinOutputNits * 10000.0f);
+    mHDRMetaData.MaxContentLightLevel = static_cast<UINT16>(MaxContentLightLevel);
+    mHDRMetaData.MaxFrameAverageLightLevel = static_cast<UINT16>(MaxFrameAverageLightLevel);
+    ThrowIfFailed(mpSwapChain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_HDR10, sizeof(DXGI_HDR_METADATA_HDR10), &mHDRMetaData));
+}
+
+
 
 // The programming model for swap chains in D3D12 is not identical to that in earlier versions of D3D. 
 // The programming convenience, for example, of supporting automatic resource rotation that was present 
@@ -60,12 +119,15 @@ FWindowRepresentation::FWindowRepresentation(const std::unique_ptr<Window>& pWnd
 bool SwapChain::Create(const FSwapChainCreateDesc& desc)
 {
     assert(desc.pDevice);
-    assert(desc.pWindow && desc.pWindow->hwnd);
+    assert(desc.pWindow && desc.pWindow->GetHWND());
     assert(desc.pCmdQueue && desc.pCmdQueue->pQueue);
     assert(desc.numBackBuffers > 0 && desc.numBackBuffers <= NUM_MAX_BACK_BUFFERS);
 
+    const int WIDTH  = desc.pWindow->GetWidth();
+    const int HEIGHT = desc.pWindow->GetHeight();
+
     this->mpDevice = desc.pDevice;
-    this->mHwnd = desc.pWindow->hwnd;
+    this->mHwnd = desc.pWindow->GetHWND();
     this->mNumBackBuffers = desc.numBackBuffers;
     this->mpPresentQueue = desc.pCmdQueue->pQueue;
     this->mbVSync = desc.bVSync;
@@ -79,22 +141,55 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
         return false;
     }
 
+    // Determine Swapchain Format based on whether HDR is supported & enabled or not
+    DXGI_FORMAT SwapChainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+    // Check HDR support : https://docs.microsoft.com/en-us/windows/win32/direct3darticles/high-dynamic-range
+    const bool bIsHDRCapableDisplayAvailable = VQSystemInfo::FMonitorInfo::CheckHDRSupport(this->mHwnd);
+    if (desc.bHDR)
+    {
+        if (bIsHDRCapableDisplayAvailable)
+        {
+            switch (desc.bitDepth)
+            {
+            case _10:
+                assert(false); // HDR10 isn't supported for now
+                break;
+            case _16:
+                // By default, a swap chain created with a floating point pixel format is treated as if it 
+                // uses the DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709 color space, which is also known as scRGB.
+                SwapChainFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+                mColorSpace = DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709; // set mColorSpace value to ensure consistant state
+                break;
+            }
+        }
+        else
+        {
+            Log::Warning("No HDR capable display found! Falling back to SDR swapchain.");
+            SwapChainFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+            mColorSpace = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+        }
+    }
+
     // https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/dxgi-flip-model
     // https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/dxgi-1-4-improvements
     // DXGI_SWAP_EFFECT_FLIP_DISCARD    should be preferred when applications fully render over the backbuffer before 
     //                                  presenting it or are interested in supporting multi-adapter scenarios easily.
     // DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL should be used by applications that rely on partial presentation optimizations 
     //                                  or regularly read from previously presented backbuffers.
+    constexpr DXGI_SWAP_EFFECT SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+
+
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.BufferCount = desc.numBackBuffers;
-    swapChainDesc.Height = desc.pWindow->height;
-    swapChainDesc.Width  = desc.pWindow->width;
+    swapChainDesc.Height = HEIGHT;
+    swapChainDesc.Width  = WIDTH;
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapChainDesc.SampleDesc.Quality = 0;
     swapChainDesc.SampleDesc.Count = 1;
-    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-    swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    swapChainDesc.Flags = desc.bVSync ? 0: DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+    swapChainDesc.SwapEffect = SwapEffect;
+    swapChainDesc.Format = SwapChainFormat;
+    swapChainDesc.Flags = desc.bVSync ? 0 : DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
     if (desc.bFullscreen)
     {
         // https://docs.microsoft.com/en-us/windows/win32/direct3darticles/dxgi-best-practices#full-screen-issues
@@ -120,16 +215,17 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     IDXGISwapChain1* pSwapChain = nullptr;
     hr = pDxgiFactory->CreateSwapChainForHwnd(
         desc.pCmdQueue->pQueue
-        , desc.pWindow->hwnd
+        , this->mHwnd
         , &swapChainDesc
         , NULL
         , NULL
         , &pSwapChain
     );
+    this->mFormat = SwapChainFormat;
 
     // https://docs.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgifactory-makewindowassociation
     UINT WndAssocFlags = DXGI_MWA_NO_ALT_ENTER; // We're gonna handle the Alt+Enter ourselves instead of DXGI
-    pDxgiFactory->MakeWindowAssociation(desc.pWindow->hwnd, WndAssocFlags);
+    pDxgiFactory->MakeWindowAssociation(this->mHwnd, WndAssocFlags);
 
     const bool bSuccess = SUCCEEDED(hr);
     if (bSuccess)
@@ -148,6 +244,14 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
         default: reason = "UNKNOWN"; break;
         }
         Log::Error("Couldn't create Swapchain: %s", reason.c_str());
+    }
+
+    // Set color space for HDR if specified
+    if (desc.bHDR && bIsHDRCapableDisplayAvailable)
+    {
+        constexpr bool bIsOutputSignalST2084 = false; // output signal type for the HDR10 standard
+        const bool bIsHDR10Signal = desc.bitDepth == _10 && bIsOutputSignalST2084;
+        EnsureSwapChainColorSpace(desc.bitDepth, bIsHDR10Signal);
     }
 
     pDxgiFactory->Release();
@@ -195,8 +299,8 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
         //       we have to call here. For now, we use the specified w and h,
         //       however, that results in non native screen resolution (=low res fullscreen).
         //       Need to figure out how to properly start a swapchain in fullscreen mode.
-        this->SetFullscreen(true, desc.pWindow->width, desc.pWindow->height);
-        this->Resize(desc.pWindow->width, desc.pWindow->height);
+        this->SetFullscreen(true, WIDTH, HEIGHT);
+        this->Resize(WIDTH, HEIGHT, this->mFormat);
     }
     // create RTVs if non-fullscreen swapchain
     else
@@ -205,12 +309,13 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     }
 
 
-    Log::Info("SwapChain: Created swapchain<hwnd=0x%x, bVSync=%d> w/ %d back buffers of %dx%d."
+    Log::Info("SwapChain: Created <hwnd=0x%x, bVSync=%d> w/ %d back buffers of resolution %dx%d %s."
         , mHwnd
         , this->mbVSync
         , desc.numBackBuffers
-        , desc.pWindow->width
-        , desc.pWindow->height
+        , WIDTH
+        , HEIGHT
+        , VQRenderer::DXGIFormatAsString(this->mFormat).data()
     );
     return bSuccess;
 }
@@ -233,7 +338,7 @@ void SwapChain::Destroy()
     if (this->mpSwapChain)   this->mpSwapChain->Release();
 }
 
-void SwapChain::Resize(int w, int h)
+void SwapChain::Resize(int w, int h, DXGI_FORMAT format)
 {
 #if LOG_SWAPCHAIN_VERBOSE
     Log::Info("SwapChain<hwnd=0x%x> Resize: %dx%d", mHwnd, w, h);
@@ -248,9 +353,10 @@ void SwapChain::Resize(int w, int h)
     mpSwapChain->ResizeBuffers(
         (UINT)this->mFenceValues.size(),
         w, h,
-        this->mSwapChainFormat,
+        format,
         this->mbVSync ? 0 : (DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING /*| DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH*/)
     );
+    this->mFormat = format;
 
     CreateRenderTargetViews();
     this->mICurrentBackBuffer = mpSwapChain->GetCurrentBackBufferIndex();
@@ -471,6 +577,7 @@ void SwapChain::CreateRenderTargetViews()
 
         this->mpDevice->CreateRenderTargetView(this->mRenderTargets[i], nullptr, hRTV);
         hRTV.ptr += RTVDescSize;
+        SetName(this->mRenderTargets[i], "SwapChain<hwnd=0x%x>::RenderTarget[%d]", this->mHwnd, i);
     }
 }
 

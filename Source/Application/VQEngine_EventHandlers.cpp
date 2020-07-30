@@ -235,10 +235,11 @@ void VQEngine::RenderThread_HandleEvents()
 
 		switch (pEvent->mType)
 		{
-		case EEventType::WINDOW_RESIZE_EVENT     : pLastResizeEventLookup[pEvent->hwnd] = std::static_pointer_cast<WindowResizeEvent>(pEvent); break;
-		case EEventType::TOGGLE_FULLSCREEN_EVENT : RenderThread_HandleToggleFullscreenEvent(pEvent.get()); break;
-		case EEventType::WINDOW_CLOSE_EVENT      : RenderThread_HandleWindowCloseEvent(pEvent.get()); break;
-		case EEventType::SET_VSYNC_EVENT         : RenderThread_HandleSetVSyncEvent(pEvent.get()); break;
+		case EEventType::WINDOW_RESIZE_EVENT        : pLastResizeEventLookup[pEvent->hwnd] = std::static_pointer_cast<WindowResizeEvent>(pEvent); break;
+		case EEventType::TOGGLE_FULLSCREEN_EVENT    : RenderThread_HandleToggleFullscreenEvent(pEvent.get()); break;
+		case EEventType::WINDOW_CLOSE_EVENT         : RenderThread_HandleWindowCloseEvent(pEvent.get()); break;
+		case EEventType::SET_VSYNC_EVENT            : RenderThread_HandleSetVSyncEvent(pEvent.get()); break;
+		case EEventType::SET_SWAPCHAIN_FORMAT_EVENT : RenderThread_HandleSetSwapchainFormatEvent(pEvent.get()); break;
 		}
 	}
 
@@ -277,7 +278,7 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	mEventQueue_WinToVQE_Update.AddItem(pResizeEvent);
 
 	Swapchain.WaitForGPU();
-	Swapchain.Resize(WIDTH, HEIGHT);
+	Swapchain.Resize(WIDTH, HEIGHT, Swapchain.GetFormat());
 	pWnd->OnResize(WIDTH, HEIGHT);
 	mRenderer.OnWindowSizeChanged(hwnd, WIDTH, HEIGHT);
 
@@ -364,7 +365,7 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 			if (bWndNeedsResize)
 			{
 				mInitialSwapchainResizeRequiredWindowLookup.erase(it);
-				Swapchain.Resize(WndSettings.Width, WndSettings.Height);
+				Swapchain.Resize(WndSettings.Width, WndSettings.Height, Swapchain.GetFormat());
 			}
 		}
 
@@ -406,7 +407,6 @@ void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
 	Swapchain.WaitForGPU(); // make sure GPU is finished
 	{
 		auto& ctx = mRenderer.GetWindowRenderContext(hwnd);
-		FWindowRepresentation wndRep(pWnd, bVsyncState, Swapchain.IsFullscreen());
 
 		FSwapChainCreateDesc desc;
 		desc.bVSync         = bVsyncState;
@@ -414,11 +414,41 @@ void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
 		desc.numBackBuffers = Swapchain.GetNumBackBuffers();
 		desc.pCmdQueue      = &ctx.PresentQueue;
 		desc.pDevice        = ctx.pDevice->GetDevicePtr();
-		desc.pWindow        = &wndRep;
+		desc.pWindow        = pWnd.get();
+		desc.bHDR           = Swapchain.IsHDRFormat();
 
 		Swapchain.Destroy();
 		Swapchain.Create(desc);
 	}
 
 	Log::Info("Toggle VSync: %d", bVsyncState);
+}
+
+void VQEngine::RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent)
+{
+	const SetSwapchainFormatEvent* pSwapchainEvent = static_cast<const SetSwapchainFormatEvent*>(pEvent);
+	const HWND&                      hwnd = pEvent->hwnd;
+	const std::unique_ptr<Window>&   pWnd = GetWindow(hwnd);
+	const int                       WIDTH = pWnd->GetWidth();
+	const int                      HEIGHT = pWnd->GetHeight();
+	SwapChain&                  Swapchain = mRenderer.GetWindowSwapChain(hwnd);
+
+	Swapchain.WaitForGPU();
+	Swapchain.Resize(WIDTH, HEIGHT, pSwapchainEvent->format);
+	Swapchain.SetHDRMetaData(EColorSpace::REC_709, 350.0f, 0.01f, 100, 5); // Depending on @mFormat, sets or clears HDR Metadata
+	Swapchain.EnsureSwapChainColorSpace(pSwapchainEvent->format == DXGI_FORMAT_R16G16B16A16_FLOAT? _16 : _8, false);
+
+	pWnd->SetIsOnHDRCapableDisplay(VQSystemInfo::FMonitorInfo::CheckHDRSupport(hwnd));
+	mbMainWindowHDRTransitionInProgress.store(false);
+
+	const int NUM_BACK_BUFFERS  = Swapchain.GetNumBackBuffers();
+	const int BACK_BUFFER_INDEX = Swapchain.GetCurrentBackBufferIndex();
+	const EDisplayCurve OutputDisplayCurve = Swapchain.IsHDRFormat() ? EDisplayCurve::Linear : EDisplayCurve::sRGB;
+	for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
+		mScene_MainWnd.mFrameData[i].PPParams.OutputDisplayCurve = OutputDisplayCurve;
+	
+	Log::Info("Set Swapchain Format: %s | OutputDisplayCurve: %s"
+		, VQRenderer::DXGIFormatAsString(pSwapchainEvent->format).data()
+		, (OutputDisplayCurve == EDisplayCurve::sRGB ? "Gamma2.2" : (OutputDisplayCurve == EDisplayCurve::Linear ? "Linear" : "PQ"))
+	);
 }

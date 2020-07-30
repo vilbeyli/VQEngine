@@ -45,6 +45,18 @@ using namespace VQSystemInfo;
 	#define ENABLE_VALIDATION_LAYER 0
 #endif
 
+const std::string_view& VQRenderer::DXGIFormatAsString(DXGI_FORMAT format)
+{
+	static std::unordered_map<DXGI_FORMAT, std::string_view> DXGI_FORMAT_STRING_TRANSLATION =
+	{
+			  { DXGI_FORMAT_R8G8B8A8_UNORM	   , "R8G8B8A8_UNORM"    }
+			, { DXGI_FORMAT_R10G10B10A2_UNORM  , "R10G10B10A2_UNORM" }
+			, { DXGI_FORMAT_R16G16B16A16_FLOAT , "R16G16B16A16_FLOAT"}
+	};
+	return DXGI_FORMAT_STRING_TRANSLATION.at(format);
+}
+
+
 
 // ---------------------------------------------------------------------------------------
 // D3D12MA Integration 
@@ -82,11 +94,9 @@ static void CustomFree(void* pMemory, void* pUserData)
 //
 // PUBLIC
 //
-void VQRenderer::Initialize(const FRendererInitializeParameters& params)
+void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 {
 	Device* pVQDevice = &mDevice;
-	const FGraphicsSettings& Settings = params.Settings;
-	const int NUM_SWAPCHAIN_BUFFERS   = Settings.bUseTripleBuffering ? 3 : 2;
 
 
 	// Create the device
@@ -199,7 +209,7 @@ short VQRenderer::GetSwapChainBackBufferCount(HWND hwnd) const
 }
 
 
-void VQRenderer::InitializeRenderContext(const FWindowRepresentation& WndDesc, int NumSwapchainBuffers)
+void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuffers, bool bVSync, bool bHDRSwapchain)
 {
 	Device*       pVQDevice = &mDevice;
 	ID3D12Device* pDevice = pVQDevice->GetDevicePtr();
@@ -207,18 +217,24 @@ void VQRenderer::InitializeRenderContext(const FWindowRepresentation& WndDesc, i
 	FWindowRenderContext ctx = {};
 
 	ctx.pDevice = pVQDevice;
-	char c[127] = {}; sprintf_s(c, "PresentQueue<0x%p>", WndDesc.hwnd);
+	char c[127] = {}; sprintf_s(c, "PresentQueue<0x%p>", pWin->GetHWND());
 	ctx.PresentQueue.Create(ctx.pDevice, CommandQueue::ECommandQueueType::GFX, c); // Create the GFX queue for presenting the SwapChain
 
 	// Create the SwapChain
 	FSwapChainCreateDesc swapChainDesc = {};
 	swapChainDesc.numBackBuffers = NumSwapchainBuffers;
-	swapChainDesc.pDevice = ctx.pDevice->GetDevicePtr();
-	swapChainDesc.pWindow = &WndDesc;
-	swapChainDesc.pCmdQueue = &ctx.PresentQueue;
-	swapChainDesc.bVSync = WndDesc.bVSync;
-	swapChainDesc.bFullscreen = WndDesc.bExclusiveFullscreen;
+	swapChainDesc.pDevice        = ctx.pDevice->GetDevicePtr();
+	swapChainDesc.pWindow        = pWin;
+	swapChainDesc.pCmdQueue      = &ctx.PresentQueue;
+	swapChainDesc.bVSync         = bVSync;
+	swapChainDesc.bHDR           = bHDRSwapchain;
+	swapChainDesc.bitDepth       = bHDRSwapchain ? _16 : _8; // currently no support for HDR10 / R10G10B10A2 signals
+	swapChainDesc.bFullscreen    = false; // TODO: exclusive fullscreen to be deprecated. App shouldn't make dxgi mode changes.
 	ctx.SwapChain.Create(swapChainDesc);
+	if (bHDRSwapchain)
+	{
+		ctx.SwapChain.SetHDRMetaData(EColorSpace::REC_709, 350.0f, 0.01f, 100, 5); // Depending on @mFormat, sets or clears HDR Metadata
+	}
 
 	// Create command allocators
 	ctx.mCommandAllocatorsGFX.resize(NumSwapchainBuffers);
@@ -244,12 +260,12 @@ void VQRenderer::InitializeRenderContext(const FWindowRepresentation& WndDesc, i
 	ctx.mDynamicHeap_ConstantBuffer.Create(pDevice, NumSwapchainBuffers, 16 * MEGABYTE);
 
 	// Save other context data
-	ctx.MainRTResolutionX = WndDesc.width;
-	ctx.MainRTResolutionY = WndDesc.height;
+	ctx.MainRTResolutionX = pWin->GetWidth();
+	ctx.MainRTResolutionY = pWin->GetHeight();
 
 
 	// save the render context
-	this->mRenderContextLookup.emplace(WndDesc.hwnd, std::move(ctx));
+	this->mRenderContextLookup.emplace(pWin->GetHWND(), std::move(ctx));
 }
 
 bool VQRenderer::CheckContext(HWND hwnd) const
@@ -474,7 +490,7 @@ void VQRenderer::LoadPSOs()
 			mpBuiltinRootSignatures.push_back(pRS);
 		}
 
-		// Tonemapper Root Signature
+		// Tonemapper Root Signature : [3]
 		{
 			D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
 
@@ -485,15 +501,15 @@ void VQRenderer::LoadPSOs()
 				featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
 			}
 
-			CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
+			CD3DX12_DESCRIPTOR_RANGE1 ranges[3];
 			ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
 			ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
 			//ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
 
-			CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+			CD3DX12_ROOT_PARAMETER1 rootParameters[3];
 			rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_ALL);
 			rootParameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_ALL);
-			//rootParameters[1].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_VERTEX);
+			rootParameters[2].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL);
 
 			CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 			rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, NULL, D3D12_ROOT_SIGNATURE_FLAG_NONE);
@@ -573,7 +589,12 @@ void VQRenderer::LoadPSOs()
 		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 		psoDesc.SampleDesc.Count = 1;
 		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO])));
-		SetName(mpBuiltinPSOs[EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO], "PSO_LoadingScreen");
+		SetName(mpBuiltinPSOs[EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO], "PSO_FullscreenTriangle");
+	
+	    // HDR SWAPCHAIN PSO
+		psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO])));
+		SetName(mpBuiltinPSOs[EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO], "PSO_HDRSwapchain");
 	}
 
 	// HELLO CUBE PSO
@@ -627,7 +648,7 @@ void VQRenderer::LoadPSOs()
 		ComPtr<ID3DBlob> computeShader;
 		ComPtr<ID3DBlob> errBlob;
 
-		HRESULT hr = D3DCompileFromFile(GetAssetFullPath(L"Tonemapper.hlsl").c_str(), nullptr, nullptr, "CSMain", "cs_5_0", compileFlags, 0, &computeShader, &errBlob);
+		HRESULT hr = D3DCompileFromFile(GetAssetFullPath(L"Tonemapper.hlsl").c_str(), nullptr, nullptr, "CSMain", "cs_5_1", compileFlags, 0, &computeShader, &errBlob);
 		if (FAILED(hr))
 		{
 			if (errBlob)
@@ -672,7 +693,7 @@ void VQRenderer::LoadDefaultResources()
 	// programmatically generated texture
 	{
 		std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX);
-		TextureID texID = this->CreateTexture("Checkerboard", textureDesc, texture.data());
+		TextureID texID = this->CreateTexture("Checkerboard", textureDesc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, texture.data());
 		this->CreateAndInitializeSRV(texID);
 	}
 
@@ -718,7 +739,7 @@ ID3D12DescriptorHeap* VQRenderer::GetDescHeap(EResourceHeapType HeapType)
 /*
 @bEnumerateSoftwareAdapters : Basic Render Driver adapter.
 */
-std::vector< FGPUInfo > VQRenderer::EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters /*= false*/)
+std::vector< FGPUInfo > VQRenderer::EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters /*= false*/, IDXGIFactory6* pFactory /*= nullptr*/)
 {
 	std::vector< FGPUInfo > GPUs;
 	HRESULT hr = {};
@@ -730,14 +751,21 @@ std::vector< FGPUInfo > VQRenderer::EnumerateDX12Adapters(bool bEnableDebugLayer
 	// https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/d3d10-graphics-programming-guide-dxgi
 	// https://stackoverflow.com/questions/42354369/idxgifactory-versions
 	// Chuck Walbourn: For DIrect3D 12, you can assume CreateDXGIFactory2 and IDXGIFactory4 or later is supported. 
-	IDXGIFactory6* pDxgiFactory; // DXGIFactory6 supports preferences when querying devices: DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE
-	UINT DXGIFlags = 0;
-	if (bEnableDebugLayer)
+	// DXGIFactory6 supports preferences when querying devices: DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE
+	IDXGIFactory6* pDxgiFactory = nullptr;
+	if (pFactory)
 	{
-		DXGIFlags |= DXGI_CREATE_FACTORY_DEBUG;
+		pDxgiFactory = pFactory;
 	}
-	hr = CreateDXGIFactory2(DXGIFlags, IID_PPV_ARGS(&pDxgiFactory));
-
+	else
+	{
+		UINT DXGIFlags = 0;
+		if (bEnableDebugLayer)
+		{
+			DXGIFlags |= DXGI_CREATE_FACTORY_DEBUG;
+		}
+		hr = CreateDXGIFactory2(DXGIFlags, IID_PPV_ARGS(&pDxgiFactory));
+	}
 	auto fnAddAdapter = [&bAdapterFound, &GPUs](IDXGIAdapter1*& pAdapter, const DXGI_ADAPTER_DESC1& desc, D3D_FEATURE_LEVEL FEATURE_LEVEL)
 	{
 		bAdapterFound = true;
@@ -750,6 +778,7 @@ std::vector< FGPUInfo > VQRenderer::EnumerateDX12Adapters(bool bEnableDebugLayer
 		GPUInfo.MaxSupportedFeatureLevel = FEATURE_LEVEL;
 		pAdapter->QueryInterface(IID_PPV_ARGS(&GPUInfo.pAdapter));
 		GPUs.push_back(GPUInfo);
+		int a = 5;
 	};
 
 	// Find GPU with highest perf: https://stackoverflow.com/questions/49702059/dxgi-integred-pAdapter
@@ -792,7 +821,12 @@ std::vector< FGPUInfo > VQRenderer::EnumerateDX12Adapters(bool bEnableDebugLayer
 		pAdapter->Release();
 		++iAdapter;
 	}
-	pDxgiFactory->Release();
+
+	// if we're using the local factory and haven't provided one with the argument
+	if (!pFactory)
+	{
+		pDxgiFactory->Release();
+	}
 	assert(bAdapterFound);
 
 	return GPUs;

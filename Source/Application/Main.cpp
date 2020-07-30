@@ -143,6 +143,11 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 			refStartupParams.bOverrideGFXSetting_bUseTripleBuffering = true;
 			refStartupParams.EngineSettings.gfx.bUseTripleBuffering = false;
 		}
+		if (paramName == "-HDR")
+		{
+			refStartupParams.bOverrideGFXSetting_bHDR = true;
+			refStartupParams.EngineSettings.WndMain.bEnableHDR = true;
+		}
 	}
 }
 

@@ -86,32 +86,50 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	// https://docs.microsoft.com/en-us/windows/win32/inputdev/wm-activate
 	case WM_ACTIVATE: 
 		if (pWindow->pOwner)
-		{		
-			// wParam:
-			// - The low-order word specifies whether the window is being activated or deactivated.
-			// - The high-order word specifies the minimized state of the window being activated or deactivated
-			// - A nonzero value indicates the window is minimized.
-
-
+		{
 			// **** **** **** **** **** **** **** **** = wParam <-- (32-bits)
 			// 0000 0000 0000 0000 1111 1111 1111 1111 = 0xFFFF <-- LOWORD(Wparam)
 			UINT wparam_hi  = HIWORD(wParam);
 			UINT wparam_low = LOWORD(wParam);
 
-			const bool bWindowInactivation =  wparam_low == WA_INACTIVE;
+			// wParam:
+			// - The low-order word specifies whether the window is being activated or deactivated.
+			// - The high-order word specifies the minimized state of the window being activated or deactivated
+			// - A nonzero value indicates the window is minimized.
+			const bool bWindowInactive     =  wparam_low == WA_INACTIVE;
 			const bool bWindowActivation   = (wparam_low == WA_ACTIVE) || (wparam_low == WA_CLICKACTIVE);
 			
-
 			// lParam:
 			// - A handle to the window being activated or deactivated, depending on the value of the wParam parameter.
 			// - If the low-order word of wParam is WA_INACTIVE, lParam is the handle to the window being activated
 			// - if the low-order word of wParam is WA_ACTIVE or WA_CLICKACTIVE, lParam is the handle to the window being deactivated. 
 			//   This handle can be NULL.
 			HWND hwnd = reinterpret_cast<HWND>(lParam);
-			if (bWindowInactivation)
+			if (bWindowInactive)
 				pWindow->pOwner->OnWindowActivate(hwnd);
 			else if (hwnd != NULL)
 				pWindow->pOwner->OnWindowDeactivate(hwnd);
+		}
+		return 0;
+
+	case WM_MOVE:
+		if (pWindow->pOwner)
+		{
+			int xPos = (int)(short)LOWORD(lParam);
+			int yPos = (int)(short)HIWORD(lParam);
+			pWindow->pOwner->OnWindowMove(hwnd, xPos, yPos);
+		}
+		return 0;
+	
+	// https://docs.microsoft.com/en-us/windows/win32/gdi/wm-displaychange
+	// This message is only sent to top-level windows. For all other windows it is posted.
+	case WM_DISPLAYCHANGE:
+		if (pWindow->pOwner)
+		{
+			int ImageDepthBitsPerPixel = (int)wParam;
+			int ScreenResolutionX = LOWORD(lParam);
+			int ScreenResolutionY = HIWORD(lParam);
+			pWindow->pOwner->OnDisplayChange(hwnd, ImageDepthBitsPerPixel, ScreenResolutionX, ScreenResolutionY);
 		}
 		return 0;
 
@@ -181,7 +199,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 
 
-
 // ===================================================================================================================================
 // WINDOW EVENTS
 // ===================================================================================================================================
@@ -232,6 +249,60 @@ void VQEngine::OnWindowDeactivate(HWND hWnd)
 #endif
 	}
 }
+//-------------------------------------------------------------------------------------
+
+
+void VQEngine::DispatchHDRSwapchainTransitionEvents(HWND hwnd)
+{
+	// Note: @mbMainWindowHDRTransitionInProgress is a necessary state here to avoid one of the following:
+	// - 1.1: OnMove() and OnDisplayChange() updates the Window.IsOnHDRCapableDisplay
+	// - 1.2: DX12 validation error due to Window.IsOnHDRCapableDisplay changes the render path and causes a mismatch in swapchain output format
+	// - 2.1: Render thread updates the Window.IsOnHDRCapableDisplay, but,
+	// - 2.2: Main thread sends multiple messages of SetSwapchainFormatEvent due to not seeing Window.IsOnHDRCapableDisplay updated just yet
+	// Solution: Keep (2) and use @mbMainWindowHDRTransitionInProgress to block additional main thread messages to render thread
+	if (mbMainWindowHDRTransitionInProgress)
+		return;
+
+	auto& pWin = GetWindow(hwnd);
+	const bool bCurrentMonitorSupportsHDR = VQSystemInfo::FMonitorInfo::CheckHDRSupport(hwnd);
+	const bool bCurrentMonitorWasSupportingHDR = pWin->GetIsOnHDRCapableDisplay();
+	// Note: pWin->SetIsOnHDRCapableDisplay() is called from the Render Thread when handling SwapchainFormatEvent.
+
+	if (bCurrentMonitorWasSupportingHDR ^ bCurrentMonitorSupportsHDR)
+	{
+		DXGI_FORMAT FORMAT = bCurrentMonitorSupportsHDR ? PREFERRED_HDR_FORMAT : PREFERRED_SDR_FORMAT;
+		Log::Info("OnWindowMove<%0x, %s>() : Window moved to %s monitor."
+			, hwnd
+			, GetWindowName(hwnd).c_str()
+			, (bCurrentMonitorSupportsHDR ? "HDR-capable" : "Non-HDR-capable")
+		);
+		mbMainWindowHDRTransitionInProgress.store(true);
+		mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetSwapchainFormatEvent>(hwnd, FORMAT));
+	}
+}
+
+void VQEngine::OnWindowMove(HWND hwnd_, int x, int y)
+{
+#if LOG_CALLBACKS
+	Log::Warning("OnWindowMove<%0x, %s>: (%d, %d)", hWnd, GetWindowName(hWnd).c_str(), x, y);
+#endif
+
+	if (mSettings.WndMain.bEnableHDR)
+	{
+		DispatchHDRSwapchainTransitionEvents(hwnd_);
+	}
+}
+void VQEngine::OnDisplayChange(HWND hwnd_, int ImageDepthBitsPerPixel, int ScreenWidth, int ScreenHeight)
+{
+	// If the display's advanced color state has changed (e.g. HDR display plug/unplug, or OS HDR setting on/off)
+	mSysInfo.Monitors = VQSystemInfo::GetDisplayInfo(); // re-acquire Monitors info 
+
+
+	if (mSettings.WndMain.bEnableHDR)
+	{
+		DispatchHDRSwapchainTransitionEvents(hwnd_);
+	}
+}
 //------------------------------------------------------------------------------------
 
 void VQEngine::OnWindowCreate(HWND hWnd)
@@ -239,6 +310,7 @@ void VQEngine::OnWindowCreate(HWND hWnd)
 #if LOG_CALLBACKS
 	Log::Info("OnWindowCreate<%0x, %s> ", hWnd, GetWindowName(hWnd).c_str());
 #endif
+	GetWindow(hWnd)->SetIsOnHDRCapableDisplay(VQSystemInfo::FMonitorInfo::CheckHDRSupport(hWnd));
 }
 
 void VQEngine::OnWindowClose(HWND hwnd_)

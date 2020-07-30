@@ -140,6 +140,9 @@ void VQEngine::HandleEngineInput()
 		Input& input = it->second;
 		auto&  pWin  = this->GetWindow(hwnd);
 
+		//
+		// Process-level input handling
+		//
 		if (input.IsKeyTriggered("Esc"))
 		{
 			if (pWin->IsMouseCaptured())
@@ -159,6 +162,10 @@ void VQEngine::HandleEngineInput()
 					mEventQueue_VQEToWin_Main.AddItem(std::make_shared<SetMouseCaptureEvent>(hwnd, true, false));
 			}
 		}
+
+		//
+		// Graphics Settings Controls
+		//
 		if (input.IsKeyTriggered("V"))
 		{
 			if (pWin == mpWinMain)
@@ -175,6 +182,14 @@ void VQEngine::HandleEngineInput()
 				Log::Info("Toggle MSAA: %d", mSettings.gfx.bAntiAliasing);
 			}
 		}
+		if (input.IsKeyTriggered("PageUp"))
+		{
+
+		}
+		if (input.IsKeyTriggered("PageDown"))
+		{
+
+		}
 	}
 }
 
@@ -182,6 +197,12 @@ bool VQEngine::IsWindowRegistered(HWND hwnd) const
 {
 	auto it = mWinNameLookup.find(hwnd);
 	return it != mWinNameLookup.end();
+}
+
+bool VQEngine::ShouldRenderHDR(HWND hwnd) const
+{
+	const auto& pWin = this->GetWindow(hwnd);
+	return mSettings.WndMain.bEnableHDR && pWin->GetIsOnHDRCapableDisplay();
 }
 
 void VQEngine::SetWindowName(HWND hwnd, const std::string& name){	mWinNameLookup[hwnd] = name; }
@@ -254,6 +275,8 @@ FFrameData& VQEngine::GetCurrentFrameData(HWND hwnd)
 
 }
 
+static void Toggle(bool& b) { b = !b; }
+
 void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 {
 	std::unique_ptr<Window>& pWin = mpWinMain;
@@ -276,6 +299,8 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 	if (input.IsKeyDown(VK_SHIFT))	LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER;
 	LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_MULTIPLER;
 
+	if (input.IsKeyTriggered("Space")) Toggle(FrameData.bCubeAnimating);
+
 	constexpr float MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER = 1.0f;
 	if (input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_LEFT))   FrameData.TFCube.RotateAroundAxisRadians(ZAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
 	if (input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_RIGHT))  FrameData.TFCube.RotateAroundAxisRadians(YAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
@@ -297,7 +322,8 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 	FrameData.SceneCamera.Update(dt, camInput);
 	
 	// update scene data
-	FrameData.TFCube.RotateAroundAxisRadians(YAxis, dt * 0.2f * PI);
+	if(FrameData.bCubeAnimating)
+		FrameData.TFCube.RotateAroundAxisRadians(YAxis, dt * 0.2f * PI);
 	
 }
 
@@ -349,6 +375,10 @@ void VQEngine::Load_SceneData_Dispatch()
 
 		// TODO: initialize window scene data here for now, should update this to proper location later on (Scene probably?)
 		FFrameData data[2];
+
+		//
+		// MAIN WINDOW DATA
+		//
 		data[0].SwapChainClearColor = { 0.07f, 0.07f, 0.07f, 1.0f };
 
 		// Cube Data
@@ -362,11 +392,20 @@ void VQEngine::Load_SceneData_Dispatch()
 			, Quaternion::FromAxisAngle(CUBE_ROTATION_AXIS, CUBE_ROTATION_DEGREES * DEG2RAD)
 			, XMFLOAT3(CUBE_SCALE, CUBE_SCALE, CUBE_SCALE)
 		);
-
+		data[0].bCubeAnimating = true;
+		// Camera Data
 		FCameraData camData = GenerateCameraInitializationParameters(mpWinMain);
 		data[0].SceneCamera.InitializeCamera(camData);
+		// Post Process Data
+		data[0].PPParams.ContentColorSpace  = EColorSpace::REC_709;
+		data[0].PPParams.OutputDisplayCurve = ShouldRenderHDR(mpWinMain->GetHWND()) ? EDisplayCurve::Linear : EDisplayCurve::sRGB;
+		data[0].PPParams.DisplayReferenceBrightnessLevel = 200.0f;
+
 		mScene_MainWnd.mFrameData.resize(NumBackBuffer_WndMain, data[0]);
 
+		//
+		// DEBUG WINDOW DATA
+		//
 		data[1].SwapChainClearColor = { 0.20f, 0.21f, 0.21f, 1.0f };
 		mScene_DebugWnd.mFrameData.resize(NumBackBuffer_WndDbg, data[1]);
 

@@ -66,6 +66,14 @@ static std::unordered_map<std::string, EDisplayMode> S_LOOKUP_STR_TO_DISPLAYMODE
 
 
 
+#define REPORT_SYSTEM_INFO 1
+#if REPORT_SYSTEM_INFO 
+void ReportSystemInfo(VQSystemInfo::FSystemInfo)
+{
+	// TODO:
+}
+#endif
+
 
 void VQEngine::MainThread_Tick()
 {
@@ -84,16 +92,11 @@ void VQEngine::MainThread_Tick()
 
 bool VQEngine::Initialize(const FStartupParameters& Params)
 {
-	// -------------------------------------------------------------------------
-	// TODO: When this function is called, EnumerateAdapters function misbehaves
-	//       by not populating the std::vector after push_back(). Looks like 
-	//       a module/linking/project dependency issue. Commenting out this line
-	//       and then recompiling fixes the issue, even though the same program
-	//       when compiled initially will not function correctly.
-	#if 0
 	this->mSysInfo = VQSystemInfo::GetSystemInfo();
-	#endif
-	// -------------------------------------------------------------------------
+#if REPORT_SYSTEM_INFO 
+	ReportSystemInfo(this->mSysInfo);
+#endif
+
 	InitializeEngineSettings(Params);
 	InitializeWindows(Params);
 	InitializeThreads();
@@ -124,12 +127,14 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	s.WndMain.Height = 1080;
 	s.WndMain.DisplayMode = EDisplayMode::WINDOWED;
 	s.WndMain.PreferredDisplay = 0;
+	s.WndMain.bEnableHDR = false;
 	sprintf_s(s.WndMain.Title , "VQEngine %s-%s", VQENGINE_VERSION, BUILD_CONFIG);
 
 	s.WndDebug.Width  = 600;
 	s.WndDebug.Height = 600;
 	s.WndDebug.DisplayMode = EDisplayMode::WINDOWED;
 	s.WndDebug.PreferredDisplay = 1;
+	s.WndDebug.bEnableHDR = false;
 	sprintf_s(s.WndDebug.Title, "VQDebugging");
 
 	s.bAutomatedTestRun = false;
@@ -148,6 +153,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	if (paramFile.bOverrideENGSetting_MainWindowHeight)            s.WndMain.Height           = pf.WndMain.Height;
 	if (paramFile.bOverrideENGSetting_bDisplayMode)                s.WndMain.DisplayMode      = pf.WndMain.DisplayMode;
 	if (paramFile.bOverrideENGSetting_PreferredDisplay)            s.WndMain.PreferredDisplay = pf.WndMain.PreferredDisplay;
+	if (paramFile.bOverrideGFXSetting_bHDR)                        s.WndMain.bEnableHDR       = pf.WndMain.bEnableHDR;
 
 	if (paramFile.bOverrideENGSetting_bDebugWindowEnable)          s.bShowDebugWindow          = pf.bShowDebugWindow;
 	if (paramFile.bOverrideENGSetting_DebugWindowWidth)            s.WndDebug.Width            = pf.WndDebug.Width;
@@ -173,6 +179,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	if (Params.bOverrideENGSetting_MainWindowHeight)            s.WndMain.Height           = p.WndMain.Height;
 	if (Params.bOverrideENGSetting_bDisplayMode)                s.WndMain.DisplayMode      = p.WndMain.DisplayMode;
 	if (Params.bOverrideENGSetting_PreferredDisplay)            s.WndMain.PreferredDisplay = p.WndMain.PreferredDisplay;
+	if (Params.bOverrideGFXSetting_bHDR)                        s.WndMain.bEnableHDR       = p.WndMain.bEnableHDR;
 	
 	if (Params.bOverrideENGSetting_bDebugWindowEnable)          s.bShowDebugWindow          = p.bShowDebugWindow;
 	if (Params.bOverrideENGSetting_DebugWindowWidth)            s.WndDebug.Width            = p.WndDebug.Width;
@@ -190,6 +197,8 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 
 void VQEngine::InitializeWindows(const FStartupParameters& Params)
 {
+	mbMainWindowHDRTransitionInProgress.store(false);
+
 	auto fnInitializeWindow = [&](const FWindowSettings& settings, HINSTANCE hInstance, std::unique_ptr<Window>& pWin, const std::string& WindowName)
 	{
 		FWindowDesc desc = {};
@@ -206,7 +215,7 @@ void VQEngine::InitializeWindows(const FStartupParameters& Params)
 		desc.pRegistrar = this;
 		pWin.reset(new Window(settings.Title, desc));
 		pWin->pOwner->OnWindowCreate(pWin->GetHWND());
-	};
+	};	
 
 	fnInitializeWindow(mSettings.WndMain, Params.hExeInstance, mpWinMain, "Main Window");
 	Log::Info("Created main window<0x%x>: %dx%d", mpWinMain->GetHWND(), mpWinMain->GetWidth(), mpWinMain->GetHeight());
@@ -250,6 +259,19 @@ void VQEngine::ExitThreads()
 
 
 std::unique_ptr<Window>& VQEngine::GetWindow(HWND hwnd)
+{
+	if (mpWinMain->GetHWND() == hwnd)
+		return mpWinMain;
+	else if (mpWinDebug->GetHWND() == hwnd)
+		return mpWinDebug;
+
+	// TODO: handle other windows here when they're implemented
+
+	Log::Warning("VQEngine::GetWindow() : Invalid hwnd=0x%x, returning Main Window", hwnd);
+	return mpWinMain;
+}
+
+const std::unique_ptr<Window>& VQEngine::GetWindow(HWND hwnd) const
 {
 	if (mpWinMain->GetHWND() == hwnd)
 		return mpWinMain;
@@ -390,6 +412,11 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 			{
 				params.bOverrideENGSetting_PreferredDisplay = true;
 				params.EngineSettings.WndMain.PreferredDisplay = StrUtil::ParseInt(SettingValue);
+			}
+			if (SettingName == "HDR")
+			{
+				params.bOverrideGFXSetting_bHDR = true;
+				params.EngineSettings.WndMain.bEnableHDR = StrUtil::ParseBool(SettingValue);
 			}
 
 

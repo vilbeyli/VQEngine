@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "Fence.h"
+#include "HDR.h"
 
 #include <d3d12.h>
 #include <dxgi1_6.h>
@@ -31,24 +31,30 @@
 class CommandQueue;
 class Window;
 
-struct FWindowRepresentation
+
+
+
+// lifted (shamelessly) from D3D12HDR.h of Microsoft's DX12 samples
+enum SwapChainBitDepth
 {
-	HWND hwnd; int width, height;
-	bool bVSync;
-	bool bExclusiveFullscreen;
-	FWindowRepresentation(const std::unique_ptr<Window>& pWnd, bool bVSync, bool bFullscreen);
+	_8 = 0,
+	_10,
+	_16,
+	SwapChainBitDepthCount
 };
+
 struct FSwapChainCreateDesc
 {
-	ID3D12Device*                pDevice   = nullptr;
-	const FWindowRepresentation* pWindow   = nullptr;
-	CommandQueue*                pCmdQueue = nullptr;
+	ID3D12Device* pDevice   = nullptr;
+	const Window* pWindow   = nullptr;
+	CommandQueue* pCmdQueue = nullptr;
 
-	int numBackBuffers;
-	bool bVSync;
-	bool bFullscreen;
+	int numBackBuffers = 2;
+	bool bVSync        = false;
+	bool bFullscreen   = false;
+	bool bHDR          = false;
+	SwapChainBitDepth bitDepth = _8;
 };
-
 
 // https://docs.microsoft.com/en-us/windows/win32/direct3d12/swap-chains
 class SwapChain
@@ -56,10 +62,18 @@ class SwapChain
 public:
 	bool Create(const FSwapChainCreateDesc& desc);
 	void Destroy();
-	void Resize(int w, int h);
+	void Resize(int w, int h, DXGI_FORMAT format);
 
 	void SetFullscreen(bool bState, int FSRecoveryWindowWidth, int FSRecoveryWindowHeight);
 	bool IsFullscreen() const;
+	void SetHDRMetaData( // Depending on @mFormat, sets or clears HDR Metadata
+		EColorSpace ColorSpace = REC_709
+		, float MaxOutputNits = 1000.0f
+		, float MinOutputNits = 0.01f
+		, float MaxContentLightLevel = 2000.0f
+		, float MaxFrameAverageLightLevel = 500.0f
+	);
+	void EnsureSwapChainColorSpace(SwapChainBitDepth swapChainBitDepth, bool bHDR10Signal);
 
 	HRESULT Present();
 	void MoveToNextFrame();
@@ -72,6 +86,9 @@ public:
 	inline ID3D12Resource*               GetCurrentBackBufferRenderTarget() const { return mRenderTargets[GetCurrentBackBufferIndex()]; }
 	inline unsigned long long            GetNumPresentedFrames()            const { return mNumTotalFrames; }
 	inline bool                          IsVSyncOn()                        const { return mbVSync;}
+	inline DXGI_FORMAT                   GetFormat()                        const { return mFormat; }
+	inline DXGI_COLOR_SPACE_TYPE         GetColorSpace()                    const { return mColorSpace; }
+	inline bool                          IsHDRFormat()                      const { return mFormat == DXGI_FORMAT_R16G16B16A16_FLOAT || mFormat == DXGI_FORMAT_R10G10B10A2_UNORM; }
 
 private:
 	void CreateRenderTargetViews();
@@ -98,6 +115,7 @@ private:
 
 	IDXGISwapChain4*             mpSwapChain      = nullptr;
 	ID3D12CommandQueue*          mpPresentQueue   = nullptr;
-	DXGI_FORMAT                  mSwapChainFormat = DXGI_FORMAT_UNKNOWN;
-	// TODO: HDR: https://docs.microsoft.com/en-us/windows/win32/direct3darticles/high-dynamic-range
+	DXGI_FORMAT                  mFormat = DXGI_FORMAT_UNKNOWN;
+	DXGI_COLOR_SPACE_TYPE        mColorSpace = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709; // Rec709 w/ Gamma2.2
+	DXGI_HDR_METADATA_HDR10      mHDRMetaData;
 };
