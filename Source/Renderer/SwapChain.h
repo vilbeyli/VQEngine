@@ -73,6 +73,7 @@ public:
 		, float MaxContentLightLevel = 2000.0f
 		, float MaxFrameAverageLightLevel = 500.0f
 	);
+	void EnsureSwapChainColorSpace(SwapChainBitDepth swapChainBitDepth, bool bHDR10Signal);
 
 	HRESULT Present();
 	void MoveToNextFrame();
@@ -92,7 +93,6 @@ public:
 private:
 	void CreateRenderTargetViews();
 	void DestroyRenderTargetViews();
-	void EnsureSwapChainColorSpace(SwapChainBitDepth swapChainBitDepth, bool bHDR10Signal);
 
 private:
 	friend class Window; // Window can access pSwapChain.
