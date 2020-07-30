@@ -44,12 +44,23 @@
 //
 // DATA STRUCTS
 //
+struct FPostProcessParameters
+{
+	EColorSpace   ContentColorSpace = EColorSpace::REC_709;
+	EDisplayCurve OutputDisplayCurve = EDisplayCurve::sRGB;
+	float         DisplayReferenceBrightnessLevel = 200.0f;
+};
 struct FFrameData
 {
+	std::array<float, 4> SwapChainClearColor;
+
+	// scene 
 	Camera SceneCamera;
 	Transform TFCube;
 	bool bCubeAnimating;
-	std::array<float, 4> SwapChainClearColor;
+
+	// post process
+	FPostProcessParameters PPParams;
 };
 struct FLoadingScreenData
 {
@@ -326,7 +337,7 @@ private:
 	void                            RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& FrameData);
 	void                            ResolveMSAA(FWindowRenderContext& ctx);
 	void                            TransitionForPostProcessing(FWindowRenderContext& ctx);
-	void                            RenderPostProcess(FWindowRenderContext& ctx);
+	void                            RenderPostProcess(FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
 	void                            RenderUI(FWindowRenderContext& ctx);
 	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
 	void                            CompositUIToHDRSwapchain(FWindowRenderContext& ctx); // TODO

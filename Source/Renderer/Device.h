@@ -29,6 +29,11 @@ struct FDeviceCreateDesc
 	IDXGIFactory6* pFactory = nullptr;
 };
 
+struct FDeviceCapabilities
+{
+	bool bSupportTearing = false;
+	unsigned SupportedMaxMultiSampleQualityLevel = 0;
+};
 
 class Device 
 {
@@ -41,11 +46,12 @@ public:
 
 	unsigned GetDeviceMemoryMax() const;
 	unsigned GetDeviceMemoryAvailable() const;
-
+	
+	const FDeviceCapabilities& GetDeviceCapabilities() const { return mDeviceCapabilities; }
 private:
 	ID3D12Device* mpDevice  = nullptr;
 	IDXGIAdapter* mpAdapter = nullptr;
 	// TODO: Multi-adapter systems: https://docs.microsoft.com/en-us/windows/win32/direct3d12/multi-engine
 
-	//UINT mRTVDescIncremenetSize = 0;
+	FDeviceCapabilities mDeviceCapabilities;
 };

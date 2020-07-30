@@ -31,10 +31,15 @@
 //
 //*********************************************************
 
-// These values must match the DisplayCurve enum in D3D12HDR.h.
+// These values must match the EDisplayCurve enum in HDR.h
 #define DISPLAY_CURVE_SRGB      0
 #define DISPLAY_CURVE_ST2084    1
 #define DISPLAY_CURVE_LINEAR    2
+#define COLOR_SPACE__REC_709    0
+#define COLOR_SPACE__REC_2020   1
+
+
+#define ST2084_MAX 10000.0f
 
 float3 xyYToRec709(float2 xy, float Y = 1.0)
 {
@@ -119,8 +124,12 @@ float3 LinearToST2084(float3 color)
 Texture2D           texColorInput;
 RWTexture2D<float4> texColorOutput;
 
-// TODO: cbuffer for toggling output signal processing
-
+cbuffer TonemapperParameters : register(b0)
+{
+    int   ContentColorSpaceEnum;
+	int   OutputDisplayCurveEnum;
+	float DisplayReferenceBrightnessLevel;
+}
 
 //
 // ENTRY POINT
@@ -133,10 +142,34 @@ void CSMain(
   , uint3 DispatchThreadID : SV_DispatchThreadID
 ) 
 {
-	float4 InRGBA = texColorInput[DispatchThreadID.xy];
-	//float3 OutRGB = LinearToSRGB(InRGBA.rgb);
-	//float3 OutRGB = SRGBToLinear(InRGBA.rgb);
-	float3 OutRGB = InRGBA.rgb;
+	float4 InRGBA = texColorInput[DispatchThreadID.xy]; // scene color in linear space
+	float3 OutRGB = 0.0.xxx;
+    
+	switch (OutputDisplayCurveEnum)
+	{
+        case DISPLAY_CURVE_SRGB   : 
+            OutRGB = LinearToSRGB(InRGBA.rgb);
+            break;
+        
+        case DISPLAY_CURVE_ST2084 : // indicates Display color space is Rec2020
+        {
+            const float HDR_Scalar = DisplayReferenceBrightnessLevel / ST2084_MAX;
+            OutRGB = InRGBA.rgb;
+            if(ContentColorSpaceEnum == COLOR_SPACE__REC_709)
+            {
+                OutRGB = Rec709ToRec2020(OutRGB);
+            }
+            OutRGB = LinearToST2084(OutRGB * HDR_Scalar); 
+        } break;
+        
+		case DISPLAY_CURVE_LINEAR:
+			OutRGB = InRGBA.rgb;
+			break;
+        default:
+			OutRGB = float4(1, 1, 0, 1);
+			break;
+
+	}
 
 	texColorOutput[DispatchThreadID.xy] = float4(OutRGB, InRGBA.a);
 }

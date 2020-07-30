@@ -76,9 +76,9 @@
 
 enum EColorSpace
 {
-	REC_709,  // Also: sRGB
-	REC_2020, // Also: BT_2020
-	DCI_P3, // ==REC_2020 ?
+	REC_709 = 0,  // Also: sRGB
+	REC_2020,     // Also: BT_2020
+	DCI_P3,       // TODO: how do we handle this?
 	
 	NUM_COLOR_SPACES
 };

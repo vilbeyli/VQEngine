@@ -582,7 +582,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 	TransitionForPostProcessing(ctx);
 
-	RenderPostProcess(ctx);
+	RenderPostProcess(ctx, FrameData.PPParams);
 
 	RenderUI(ctx);
 
@@ -774,7 +774,7 @@ void VQEngine::TransitionForPostProcessing(FWindowRenderContext& ctx)
 	pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
 }
 
-void VQEngine::RenderPostProcess(FWindowRenderContext& ctx)
+void VQEngine::RenderPostProcess(FWindowRenderContext& ctx, const FPostProcessParameters& PPParams)
 {
 	ID3D12DescriptorHeap*       ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 	ID3D12GraphicsCommandList*&      pCmd = ctx.pCmdList_GFX;
@@ -782,6 +782,11 @@ void VQEngine::RenderPostProcess(FWindowRenderContext& ctx)
 	// pass io
 	const SRV& srv_ColorIn  = mRenderer.GetSRV(mResources_MainWnd.SRV_MainViewColor);
 	const UAV& uav_ColorOut = mRenderer.GetUAV(mResources_MainWnd.UAV_PostProcess_TonemapperOut);
+
+	FPostProcessParameters* pConstBuffer = {};
+	D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+	ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(FPostProcessParameters), (void**)&pConstBuffer, &cbAddr);
+	*pConstBuffer = PPParams;
 
 	// compute dispatch dimensions
 	const int& InputImageWidth  = ctx.MainRTResolutionX;
@@ -795,9 +800,10 @@ void VQEngine::RenderPostProcess(FWindowRenderContext& ctx)
 	// cmds
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::TONEMAPPER_PSO));
 	pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(3)); // compute RS
+	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 	pCmd->SetComputeRootDescriptorTable(0, srv_ColorIn.GetGPUDescHandle());
 	pCmd->SetComputeRootDescriptorTable(1, uav_ColorOut.GetGPUDescHandle());
-	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+	pCmd->SetComputeRootConstantBufferView(2, cbAddr);
 	pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
 }
 

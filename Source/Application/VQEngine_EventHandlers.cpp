@@ -439,5 +439,15 @@ void VQEngine::RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent)
 
 	pWnd->SetIsOnHDRCapableDisplay(VQSystemInfo::FMonitorInfo::CheckHDRSupport(hwnd));
 	mbMainWindowHDRTransitionInProgress.store(false);
-	Log::Info("Set Swapchain Format: %s", VQRenderer::DXGIFormatAsString(pSwapchainEvent->format).data());
+
+	const int NUM_BACK_BUFFERS  = Swapchain.GetNumBackBuffers();
+	const int BACK_BUFFER_INDEX = Swapchain.GetCurrentBackBufferIndex();
+	const EDisplayCurve OutputDisplayCurve = Swapchain.IsHDRFormat() ? EDisplayCurve::Linear : EDisplayCurve::sRGB;
+	for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
+		mScene_MainWnd.mFrameData[i].PPParams.OutputDisplayCurve = OutputDisplayCurve;
+	
+	Log::Info("Set Swapchain Format: %s | OutputDisplayCurve: %s"
+		, VQRenderer::DXGIFormatAsString(pSwapchainEvent->format).data()
+		, (OutputDisplayCurve == EDisplayCurve::sRGB ? "Gamma2.2" : (OutputDisplayCurve == EDisplayCurve::Linear ? "Linear" : "PQ"))
+	);
 }

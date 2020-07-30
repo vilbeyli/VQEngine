@@ -140,6 +140,9 @@ void VQEngine::HandleEngineInput()
 		Input& input = it->second;
 		auto&  pWin  = this->GetWindow(hwnd);
 
+		//
+		// Process-level input handling
+		//
 		if (input.IsKeyTriggered("Esc"))
 		{
 			if (pWin->IsMouseCaptured())
@@ -159,6 +162,10 @@ void VQEngine::HandleEngineInput()
 					mEventQueue_VQEToWin_Main.AddItem(std::make_shared<SetMouseCaptureEvent>(hwnd, true, false));
 			}
 		}
+
+		//
+		// Graphics Settings Controls
+		//
 		if (input.IsKeyTriggered("V"))
 		{
 			if (pWin == mpWinMain)
@@ -174,6 +181,14 @@ void VQEngine::HandleEngineInput()
 				mSettings.gfx.bAntiAliasing = !mSettings.gfx.bAntiAliasing;
 				Log::Info("Toggle MSAA: %d", mSettings.gfx.bAntiAliasing);
 			}
+		}
+		if (input.IsKeyTriggered("PageUp"))
+		{
+
+		}
+		if (input.IsKeyTriggered("PageDown"))
+		{
+
 		}
 	}
 }
@@ -360,6 +375,10 @@ void VQEngine::Load_SceneData_Dispatch()
 
 		// TODO: initialize window scene data here for now, should update this to proper location later on (Scene probably?)
 		FFrameData data[2];
+
+		//
+		// MAIN WINDOW DATA
+		//
 		data[0].SwapChainClearColor = { 0.07f, 0.07f, 0.07f, 1.0f };
 
 		// Cube Data
@@ -373,12 +392,20 @@ void VQEngine::Load_SceneData_Dispatch()
 			, Quaternion::FromAxisAngle(CUBE_ROTATION_AXIS, CUBE_ROTATION_DEGREES * DEG2RAD)
 			, XMFLOAT3(CUBE_SCALE, CUBE_SCALE, CUBE_SCALE)
 		);
-
+		data[0].bCubeAnimating = true;
+		// Camera Data
 		FCameraData camData = GenerateCameraInitializationParameters(mpWinMain);
 		data[0].SceneCamera.InitializeCamera(camData);
-		data[0].bCubeAnimating = true;
+		// Post Process Data
+		data[0].PPParams.ContentColorSpace  = EColorSpace::REC_709;
+		data[0].PPParams.OutputDisplayCurve = ShouldRenderHDR(mpWinMain->GetHWND()) ? EDisplayCurve::Linear : EDisplayCurve::sRGB;
+		data[0].PPParams.DisplayReferenceBrightnessLevel = 200.0f;
+
 		mScene_MainWnd.mFrameData.resize(NumBackBuffer_WndMain, data[0]);
 
+		//
+		// DEBUG WINDOW DATA
+		//
 		data[1].SwapChainClearColor = { 0.20f, 0.21f, 0.21f, 1.0f };
 		mScene_DebugWnd.mFrameData.resize(NumBackBuffer_WndDbg, data[1]);
 
