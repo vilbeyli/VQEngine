@@ -18,8 +18,6 @@
 
 #pragma once
 
-#define VQUTILS_SYSTEMINFO_INCLUDE_D3D12 1
-
 #include "Types.h"
 #include "Platform.h"
 #include "Window.h"
@@ -263,7 +261,7 @@ private:
 	std::atomic<uint64>             mNumUpdateLoopsExecuted;
 	std::atomic<bool>               mbLoadingLevel;
 	EAppState                       mAppState;
-	std::atomic<bool>               mbMainWindowHDRTransitionInProgress;
+	std::atomic<bool>               mbMainWindowHDRTransitionInProgress; // see DispatchHDRSwapchainTransitionEvents()
 
 	// system & settings
 	FEngineSettings                 mSettings;

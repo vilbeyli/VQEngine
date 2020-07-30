@@ -50,45 +50,14 @@
 
 using namespace VQSystemInfo;
 
-
-// assumes only 1 HDR capable display and selects the 
-// first one that coems up with EnumDisplayMonitors() call.
-static bool CheckHDRCapability(VQSystemInfo::FMonitorInfo* pOutMonitorInfo)
-{
-    std::vector<FMonitorInfo> ConnectedDisplays = VQSystemInfo::GetDisplayInfo(); // TODO: way too slow due to reading from registry.
-
-    bool bHDRMonitorFound = false;
-    for (const FMonitorInfo& i : ConnectedDisplays)
-    {
-        bHDRMonitorFound |= i.bSupportsHDR;
-        if (bHDRMonitorFound)
-        {
-            *pOutMonitorInfo = i;
-            break;
-        }
-    }
-    return bHDRMonitorFound;
-}
-
 void SwapChain::EnsureSwapChainColorSpace(SwapChainBitDepth swapChainBitDepth, bool enableST2084)
 {
     DXGI_COLOR_SPACE_TYPE colorSpace = {};
     switch (swapChainBitDepth)
     {
-    case _8:
-        colorSpace = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
-        //m_rootConstants[DisplayCurve] = sRGB;
-        break;
-
-    case _10:
-        colorSpace = enableST2084 ? DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
-        //m_rootConstants[DisplayCurve] = enableST2084 ? ST2084 : sRGB;
-        break;
-
-    case _16:
-        colorSpace = DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709;
-        //m_rootConstants[DisplayCurve] = None;
-        break;
+    case  _8: colorSpace = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709; break;
+    case _10: colorSpace = enableST2084 ? DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709; break;
+    case _16: colorSpace = DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709; break;
     }
 
     if (mColorSpace != colorSpace)

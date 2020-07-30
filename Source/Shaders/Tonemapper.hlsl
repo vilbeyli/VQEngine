@@ -127,8 +127,8 @@ RWTexture2D<float4> texColorOutput;
 cbuffer TonemapperParameters : register(b0)
 {
     int   ContentColorSpaceEnum;
-	int   OutputDisplayCurveEnum;
-	float DisplayReferenceBrightnessLevel;
+    int   OutputDisplayCurveEnum;
+    float DisplayReferenceBrightnessLevel;
 }
 
 //
@@ -137,16 +137,16 @@ cbuffer TonemapperParameters : register(b0)
 
 [numthreads(8, 8, 1)]
 void CSMain(
- 	uint3 LocalThreadId    : SV_GroupThreadID
+    uint3 LocalThreadId    : SV_GroupThreadID
   , uint3 WorkGroupId      : SV_GroupID
   , uint3 DispatchThreadID : SV_DispatchThreadID
 ) 
 {
-	float4 InRGBA = texColorInput[DispatchThreadID.xy]; // scene color in linear space
-	float3 OutRGB = 0.0.xxx;
+    float4 InRGBA = texColorInput[DispatchThreadID.xy]; // scene color in linear space
+    float3 OutRGB = 0.0.xxx;
     
-	switch (OutputDisplayCurveEnum)
-	{
+    switch (OutputDisplayCurveEnum)
+    {
         case DISPLAY_CURVE_SRGB   : 
             OutRGB = LinearToSRGB(InRGBA.rgb);
             break;
@@ -162,14 +162,14 @@ void CSMain(
             OutRGB = LinearToST2084(OutRGB * HDR_Scalar); 
         } break;
         
-		case DISPLAY_CURVE_LINEAR:
-			OutRGB = InRGBA.rgb;
-			break;
+        case DISPLAY_CURVE_LINEAR:
+            OutRGB = InRGBA.rgb;
+            break;
         default:
-			OutRGB = float4(1, 1, 0, 1);
-			break;
+            OutRGB = float4(1, 1, 0, 1);
+            break;
 
-	}
+    }
 
-	texColorOutput[DispatchThreadID.xy] = float4(OutRGB, InRGBA.a);
+    texColorOutput[DispatchThreadID.xy] = float4(OutRGB, InRGBA.a);
 }

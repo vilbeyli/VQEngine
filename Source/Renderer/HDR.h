@@ -93,12 +93,6 @@ enum EDisplayCurve
 	, NUM_DISPLAY_CURVES
 };
 
-struct HDRConfig // TODO: remove?
-{
-	EColorSpace   DisplayColorSpace;
-	EDisplayCurve DisplayCurve;
-};
-
 
 #include <unordered_map>
 #include <string>

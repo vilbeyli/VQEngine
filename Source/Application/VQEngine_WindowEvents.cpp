@@ -20,7 +20,6 @@
 #include "Input.h"
 
 #include <Windowsx.h>
-#include <atlbase.h>
 
 constexpr int MIN_WINDOW_SIZE = 128; // make sure window cannot be resized smaller than 128x128
 
