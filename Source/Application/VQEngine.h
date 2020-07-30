@@ -252,6 +252,7 @@ private:
 	std::atomic<uint64>             mNumUpdateLoopsExecuted;
 	std::atomic<bool>               mbLoadingLevel;
 	EAppState                       mAppState;
+	std::atomic<bool>               mbMainWindowHDRTransitionInProgress;
 
 	// system & settings
 	FEngineSettings                 mSettings;
@@ -346,6 +347,8 @@ private:
 	void                            UnregisterWindowForInput(const std::unique_ptr<Window>& pWnd);
 
 	void                            HandleEngineInput();
+
+	void                            DispatchHDRSwapchainTransitionEvents(HWND hwnd);
 
 	bool                            IsWindowRegistered(HWND hwnd) const;
 	bool                            ShouldRenderHDR(HWND hwnd) const;

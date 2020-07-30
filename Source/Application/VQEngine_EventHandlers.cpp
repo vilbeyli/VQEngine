@@ -437,5 +437,7 @@ void VQEngine::RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent)
 	Swapchain.Resize(WIDTH, HEIGHT, pSwapchainEvent->format);
 	Swapchain.SetHDRMetaData(EColorSpace::REC_709, 350.0f, 0.01f, 100, 5); // Depending on @mFormat, sets or clears HDR Metadata
 
+	pWnd->SetIsOnHDRCapableDisplay(VQSystemInfo::FMonitorInfo::CheckHDRSupport(hwnd));
+	mbMainWindowHDRTransitionInProgress.store(false);
 	Log::Info("Set Swapchain Format: %s", VQRenderer::DXGIFormatAsString(pSwapchainEvent->format).data());
 }

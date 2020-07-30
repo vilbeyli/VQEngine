@@ -608,6 +608,7 @@ void SwapChain::CreateRenderTargetViews()
 
         this->mpDevice->CreateRenderTargetView(this->mRenderTargets[i], nullptr, hRTV);
         hRTV.ptr += RTVDescSize;
+        SetName(this->mRenderTargets[i], "SwapChain<hwnd=0x%x>::RenderTarget[%d]", this->mHwnd, i);
     }
 }
 

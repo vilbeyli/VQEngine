@@ -127,7 +127,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	case WM_DISPLAYCHANGE:
 		if (pWindow->pOwner)
 		{
-			int ImageDepthBitsPerPixel = wParam;
+			int ImageDepthBitsPerPixel = (int)wParam;
 			int ScreenResolutionX = LOWORD(lParam);
 			int ScreenResolutionY = HIWORD(lParam);
 			pWindow->pOwner->OnDisplayChange(hwnd, ImageDepthBitsPerPixel, ScreenResolutionX, ScreenResolutionY);
@@ -251,32 +251,46 @@ void VQEngine::OnWindowDeactivate(HWND hWnd)
 	}
 }
 //-------------------------------------------------------------------------------------
+
+
+void VQEngine::DispatchHDRSwapchainTransitionEvents(HWND hwnd)
+{
+	// Note: @mbMainWindowHDRTransitionInProgress is a necessary state here to avoid one of the following:
+	// - 1.1: OnMove() and OnDisplayChange() updates the Window.IsOnHDRCapableDisplay
+	// - 1.2: DX12 validation error due to Window.IsOnHDRCapableDisplay changes the render path and causes a mismatch in swapchain output format
+	// - 2.1: Render thread updates the Window.IsOnHDRCapableDisplay, but,
+	// - 2.2: Main thread sends multiple messages of SetSwapchainFormatEvent due to not seeing Window.IsOnHDRCapableDisplay updated just yet
+	// Solution: Keep (2) and use @mbMainWindowHDRTransitionInProgress to block additional main thread messages to render thread
+	if (mbMainWindowHDRTransitionInProgress)
+		return;
+
+	auto& pWin = GetWindow(hwnd);
+	const bool bCurrentMonitorSupportsHDR = VQSystemInfo::FMonitorInfo::CheckHDRSupport(hwnd);
+	const bool bCurrentMonitorWasSupportingHDR = pWin->GetIsOnHDRCapableDisplay();
+	// Note: pWin->SetIsOnHDRCapableDisplay() is called from the Render Thread when handling SwapchainFormatEvent.
+
+	if (bCurrentMonitorWasSupportingHDR ^ bCurrentMonitorSupportsHDR)
+	{
+		DXGI_FORMAT FORMAT = bCurrentMonitorSupportsHDR ? PREFERRED_HDR_FORMAT : PREFERRED_SDR_FORMAT;
+		Log::Info("OnWindowMove<%0x, %s>() : Window moved to %s monitor."
+			, hwnd
+			, GetWindowName(hwnd).c_str()
+			, (bCurrentMonitorSupportsHDR ? "HDR-capable" : "Non-HDR-capable")
+		);
+		mbMainWindowHDRTransitionInProgress.store(true);
+		mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetSwapchainFormatEvent>(hwnd, FORMAT));
+	}
+}
+
 void VQEngine::OnWindowMove(HWND hwnd_, int x, int y)
 {
 #if LOG_CALLBACKS
 	Log::Warning("OnWindowMove<%0x, %s>: (%d, %d)", hWnd, GetWindowName(hWnd).c_str(), x, y);
 #endif
 
-	auto& pWin = GetWindow(hwnd_);
-	const bool bCurrentMonitorSupportsHDR = VQSystemInfo::FMonitorInfo::CheckHDRSupport(hwnd_);
-	const bool bCurrentMonitorWasSupportingHDR = pWin->GetIsOnHDRCapableDisplay();
-
-	// TODO: move this into function and remove copy paste 
-	// TODO: setting this right away causes 1 frame of mismatching Swapchain RT format vs shader PSO due to ShouldRenderHDR() evaluation
-	pWin->SetIsOnHDRCapableDisplay(bCurrentMonitorSupportsHDR);
-
 	if (mSettings.WndMain.bEnableHDR)
 	{
-		if (!bCurrentMonitorWasSupportingHDR && bCurrentMonitorSupportsHDR)
-		{
-			Log::Info("OnWindowMove<%0x, %s>() : Window moved to HDR-capable monitor.", hwnd_, GetWindowName(hwnd_).c_str());
-			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetSwapchainFormatEvent>(hwnd_, PREFERRED_HDR_FORMAT));
-		}
-		if (bCurrentMonitorWasSupportingHDR && !bCurrentMonitorSupportsHDR)
-		{
-			Log::Info("OnWindowMove<%0x, %s>() : Window moved to non-HDR-capable monitor.", hwnd_, GetWindowName(hwnd_).c_str());
-			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetSwapchainFormatEvent>(hwnd_, PREFERRED_SDR_FORMAT));
-		}
+		DispatchHDRSwapchainTransitionEvents(hwnd_);
 	}
 }
 void VQEngine::OnDisplayChange(HWND hwnd_, int ImageDepthBitsPerPixel, int ScreenWidth, int ScreenHeight)
@@ -284,27 +298,10 @@ void VQEngine::OnDisplayChange(HWND hwnd_, int ImageDepthBitsPerPixel, int Scree
 	// If the display's advanced color state has changed (e.g. HDR display plug/unplug, or OS HDR setting on/off)
 	mSysInfo.Monitors = VQSystemInfo::GetDisplayInfo(); // re-acquire Monitors info 
 
-	auto& pWin = GetWindow(hwnd_);
-	const bool bCurrentMonitorSupportsHDR = VQSystemInfo::FMonitorInfo::CheckHDRSupport(hwnd_);
-	const bool bCurrentMonitorWasSupportingHDR = pWin->GetIsOnHDRCapableDisplay();
-
-	// TODO: move this into function and remove copy paste 
-	// TODO: setting this right away causes 1 frame of mismatching Swapchain RT format vs shader PSO due to ShouldRenderHDR() evaluation
-	pWin->SetIsOnHDRCapableDisplay(bCurrentMonitorSupportsHDR);
 
 	if (mSettings.WndMain.bEnableHDR)
 	{
-		if (!bCurrentMonitorWasSupportingHDR && bCurrentMonitorSupportsHDR)
-		{
-			Log::Info("OnDisplayChange<%0x, %s>() : Window moved to HDR capable monitor.", hwnd_, GetWindowName(hwnd_).c_str());
-			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetSwapchainFormatEvent>(hwnd_, PREFERRED_HDR_FORMAT));
-		}
-
-		if (bCurrentMonitorWasSupportingHDR && !bCurrentMonitorSupportsHDR)
-		{
-			Log::Info("OnDisplayChange<%0x, %s>() : Window moved to non-HDR-capable monitor.", hwnd_, GetWindowName(hwnd_).c_str());
-			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetSwapchainFormatEvent>(hwnd_, PREFERRED_SDR_FORMAT));
-		}
+		DispatchHDRSwapchainTransitionEvents(hwnd_);
 	}
 }
 //------------------------------------------------------------------------------------

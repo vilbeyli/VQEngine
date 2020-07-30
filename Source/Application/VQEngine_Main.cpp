@@ -197,6 +197,8 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 
 void VQEngine::InitializeWindows(const FStartupParameters& Params)
 {
+	mbMainWindowHDRTransitionInProgress.store(false);
+
 	auto fnInitializeWindow = [&](const FWindowSettings& settings, HINSTANCE hInstance, std::unique_ptr<Window>& pWin, const std::string& WindowName)
 	{
 		FWindowDesc desc = {};
@@ -213,7 +215,7 @@ void VQEngine::InitializeWindows(const FStartupParameters& Params)
 		desc.pRegistrar = this;
 		pWin.reset(new Window(settings.Title, desc));
 		pWin->pOwner->OnWindowCreate(pWin->GetHWND());
-	};
+	};	
 
 	fnInitializeWindow(mSettings.WndMain, Params.hExeInstance, mpWinMain, "Main Window");
 	Log::Info("Created main window<0x%x>: %dx%d", mpWinMain->GetHWND(), mpWinMain->GetWidth(), mpWinMain->GetHeight());
