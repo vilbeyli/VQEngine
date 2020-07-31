@@ -702,7 +702,7 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& Fra
 
 	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::HELLO_WORLD_CUBE_PSO_MSAA_4 : EBuiltinPSOs::HELLO_WORLD_CUBE_PSO));
 
-	// hardcoded roog signature for now until shader reflection and rootsignature management is implemented
+	// hardcoded root signature for now until shader reflection and rootsignature management is implemented
 	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(2));
 
 	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
@@ -743,7 +743,7 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& Fra
 
 		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::SKYDOME_PSO_MSAA_4 : EBuiltinPSOs::SKYDOME_PSO));
 
-		// hardcoded roog signature for now until shader reflection and rootsignature management is implemented
+		// hardcoded root signature for now until shader reflection and rootsignature management is implemented
 		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(2));
 
 		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);

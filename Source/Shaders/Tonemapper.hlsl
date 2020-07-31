@@ -135,6 +135,7 @@ cbuffer TonemapperParameters : register(b0)
     int   ContentColorSpaceEnum;
     int   OutputDisplayCurveEnum;
     float DisplayReferenceBrightnessLevel;
+    int   ToggleGammaCorrection;
 }
 
 //
@@ -156,7 +157,8 @@ void CSMain(
         case DISPLAY_CURVE_SRGB   : 
             // Reinhard tonemap
             OutRGB = Tonemap_Reinhard(InRGBA.rgb);
-            OutRGB = LinearToSRGB(OutRGB.rgb);
+            if(ToggleGammaCorrection)
+                OutRGB = LinearToSRGB(OutRGB.rgb);
             break;
         
         case DISPLAY_CURVE_ST2084 : // indicates Display color space is Rec2020

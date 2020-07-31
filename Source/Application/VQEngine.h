@@ -47,6 +47,7 @@ struct FPostProcessParameters
 	EColorSpace   ContentColorSpace = EColorSpace::REC_709;
 	EDisplayCurve OutputDisplayCurve = EDisplayCurve::sRGB;
 	float         DisplayReferenceBrightnessLevel = 200.0f;
+	int           ToggleGammaCorrection = 1;
 };
 struct FFrameData
 {

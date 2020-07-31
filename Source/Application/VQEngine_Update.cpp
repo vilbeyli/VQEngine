@@ -190,6 +190,15 @@ void VQEngine::HandleEngineInput()
 		{
 
 		}
+		if (input.IsKeyTriggered("G"))
+		{
+			if (pWin == mpWinMain)
+			{
+				FFrameData& data = GetCurrentFrameData(mpWinMain->GetHWND());
+				data.PPParams.ToggleGammaCorrection = data.PPParams.ToggleGammaCorrection == 1 ? 0 : 1;
+				Log::Info("Tonemapper: ApplyGamma=%d (SDR-only)", data.PPParams.ToggleGammaCorrection);
+			}
+		}
 	}
 }
 
@@ -428,7 +437,7 @@ void VQEngine::Load_SceneData_Dispatch()
 			, "Data/Textures/HDRI/sunny_vondelpark_8k.hdr"
 			, "Data/Textures/HDRI/vignaioli_night_8k.hdr"
 		};
-		env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(pHDREnvironmentTexturePaths[8]);
+		env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(pHDREnvironmentTexturePaths[6]);
 		env.SRV_HDREnvironment = mRenderer.CreateAndInitializeSRV(env.Tex_HDREnvironment);
 	});
 }
