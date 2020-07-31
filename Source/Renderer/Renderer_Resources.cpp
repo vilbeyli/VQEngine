@@ -90,12 +90,15 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 	tDesc.pUploadHeap = &uploadHeap;
 	tDesc.Desc = {};
 
-	tex.CreateFromFile(tDesc, pFilePath);
-
-	uploadHeap.UploadToGPUAndWait(mGFXQueue.pQueue);
+	bool bSuccess = tex.CreateFromFile(tDesc, pFilePath);
+	TextureID ID = INVALID_ID;
+	if (bSuccess)
+	{
+		uploadHeap.UploadToGPUAndWait(mGFXQueue.pQueue);
+		ID = AddTexture_ThreadSafe(std::move(tex));
+	}
 	uploadHeap.Destroy();
-
-	return AddTexture_ThreadSafe(std::move(tex));
+	return ID;
 }
 
 TextureID VQRenderer::CreateTexture(const std::string& name, const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES ResourceState, const void* pData)
@@ -125,10 +128,9 @@ TextureID VQRenderer::CreateTexture(const std::string& name, const D3D12_RESOURC
 }
 SRV_ID VQRenderer::CreateAndInitializeSRV(TextureID texID)
 {
-
 	SRV_ID Id = INVALID_ID;
 	CBV_SRV_UAV SRV = {};
-
+	if(texID != INVALID_ID)
 	{
 		std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 

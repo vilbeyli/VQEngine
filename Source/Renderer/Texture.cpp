@@ -33,13 +33,13 @@
 //
 // TEXTURE
 //
-void Texture::CreateFromFile(const TextureCreateDesc& tDesc, const std::string& FilePath)
+bool Texture::CreateFromFile(const TextureCreateDesc& tDesc, const std::string& FilePath)
 {
 
     if (FilePath.empty())
     {
         Log::Error("Cannot create Texture from file: empty FilePath provided.");
-        return;
+        return false;
     }
 
     // process file path
@@ -60,25 +60,32 @@ void Texture::CreateFromFile(const TextureCreateDesc& tDesc, const std::string& 
 
     // load img
     Image image = Image::LoadFromFile(FilePath.c_str(), bHDR);
-    assert(image.pData && image.BytesPerPixel > 0);
-
-    TextureCreateDesc desc = tDesc;
-    desc.Desc.Width  = image.Width;
-    desc.Desc.Height = image.Height;
-    desc.Desc.Format = bHDR ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
-    //-------------------------------
-    desc.Desc.DepthOrArraySize = 1;
-    desc.Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    desc.Desc.Alignment = 0;
-    desc.Desc.DepthOrArraySize = 1;
-    desc.Desc.MipLevels = 1;
-    desc.Desc.SampleDesc.Count = 1;
-    desc.Desc.SampleDesc.Quality = 0;
-    desc.Desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    desc.Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-    //-------------------------------
-    Create(desc, image.pData);
+    const bool bImageLoadSucceeded = image.pData && image.BytesPerPixel > 0;
+    if (bImageLoadSucceeded)
+    {
+        TextureCreateDesc desc = tDesc;
+        desc.Desc.Width = image.Width;
+        desc.Desc.Height = image.Height;
+        desc.Desc.Format = bHDR ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
+        //-------------------------------
+        desc.Desc.DepthOrArraySize = 1;
+        desc.Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Desc.Alignment = 0;
+        desc.Desc.DepthOrArraySize = 1;
+        desc.Desc.MipLevels = 1;
+        desc.Desc.SampleDesc.Count = 1;
+        desc.Desc.SampleDesc.Quality = 0;
+        desc.Desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        desc.Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+        //-------------------------------
+        Create(desc, image.pData);
+    }
+    else
+    {
+        Log::Error("Texture::CreateFromFile() : TexName=%s, FileName=%s", tDesc.TexName.c_str(), FileName.c_str() );
+    }
     image.Destroy();
+    return bImageLoadSucceeded;
 }
 
 // TODO: clean up function
@@ -165,8 +172,8 @@ void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullpt
         // copy data row by row
         for (uint32_t y = 0; y < num_rows; y++)
         {
-            const UINT UploadMemOffset = y * placedTex2D.Footprint.RowPitch;
-            const UINT   DataMemOffset = y * row_size_in_bytes;
+            const UINT64 UploadMemOffset = y * placedTex2D.Footprint.RowPitch;
+            const UINT64   DataMemOffset = y * row_size_in_bytes;
             memcpy(pUploadBufferMem + UploadMemOffset, (UINT8*)pData + DataMemOffset, row_size_in_bytes);
         }
 
