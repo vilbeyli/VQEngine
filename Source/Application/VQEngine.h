@@ -78,6 +78,14 @@ class MainWindowSceneData : public IWindowUpdateContext{};
 class DebugWindowSceneData : public IWindowUpdateContext{};
 
 
+struct FEnvironmentMap
+{
+	TextureID Tex_HDREnvironment = INVALID_ID;
+	TextureID Tex_Irradiance     = INVALID_ID;
+	SRV_ID    SRV_HDREnvironment = INVALID_ID;
+	SRV_ID    SRV_Irradiance     = INVALID_ID;
+};
+
 struct FRenderingResources{};
 struct FRenderingResources_MainWindow : public FRenderingResources
 {
@@ -94,6 +102,8 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	DSV_ID    DSV_MainViewDepth      = INVALID_ID;
 	SRV_ID    SRV_PostProcess_TonemapperOut = INVALID_ID;
 	UAV_ID    UAV_PostProcess_TonemapperOut = INVALID_ID;
+
+	FEnvironmentMap SelectedEnvironmentMap;
 };
 struct FRenderingResources_DebugWindow : public FRenderingResources
 {

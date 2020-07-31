@@ -81,9 +81,10 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 	// It's recommended to create heaps on background threads to avoid glitching the render 
 	// thread. In D3D12, multiple threads may safely call create routines concurrently.
 	UploadHeap uploadHeap;
-	uploadHeap.Create(mDevice.GetDevicePtr(), 32 * MEGABYTE); // TODO: drive the heapsize through RendererSettings.ini
+	uploadHeap.Create(mDevice.GetDevicePtr(), 1024 * MEGABYTE); // TODO: drive the heapsize through RendererSettings.ini
 
-	TextureCreateDesc tDesc(DirectoryUtil::GetFileNameFromPath(pFilePath));
+	const std::string FileNameAndExtension = DirectoryUtil::GetFileNameFromPath(pFilePath);
+	TextureCreateDesc tDesc(FileNameAndExtension);
 	tDesc.pAllocator = mpAllocator;
 	tDesc.pDevice = mDevice.GetDevicePtr();
 	tDesc.pUploadHeap = &uploadHeap;

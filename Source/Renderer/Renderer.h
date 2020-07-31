@@ -91,6 +91,8 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	HELLO_WORLD_CUBE_PSO_MSAA_4,
 	TONEMAPPER_PSO,
 	HDR_FP16_SWAPCHAIN_PSO,
+	SKYDOME_PSO,
+	SKYDOME_PSO_MSAA_4,
 
 	NUM_BUILTIN_PSOs
 };

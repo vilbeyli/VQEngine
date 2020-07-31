@@ -680,25 +680,21 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& Fra
 	pCmd->RSSetViewports(1, &viewport);
 	pCmd->RSSetScissorRects(1, &scissorsRect);
 
-	// TODO: Draw Environment Map w/ HDR Swapchain
-	// TBA
+
 
 	// Draw Object -----------------------------------------------
-
 	using namespace DirectX;
-	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
-
-	// set constant buffer data
 	const XMMATRIX mMVP
 		= FrameData.TFCube.WorldTransformationMatrix()
 		* FrameData.SceneCamera.GetViewMatrix()
 		* FrameData.SceneCamera.GetProjectionMatrix();
-	FrameConstantBuffer* pConstBuffer = {};
 
+	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
+
+	// set constant buffer data
+	FrameConstantBuffer* pConstBuffer = {};
 	D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-	void* pMem = nullptr;
-	ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(FrameConstantBuffer), &pMem, &cbAddr);
-	pConstBuffer = reinterpret_cast<FrameConstantBuffer*>(pMem);
+	ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(FrameConstantBuffer), (void**)(&pConstBuffer), &cbAddr);
 	pConstBuffer->matModelViewProj = mMVP;
 
 
@@ -731,6 +727,30 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& Fra
 
 	pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 #endif
+
+	// Draw Environment Map ---------------------------------------
+	Camera skyCam = FrameData.SceneCamera;
+	skyCam.SetPosition(0, 0, 0);
+	skyCam.UpdateViewMatrix();
+
+	cbAddr = {};
+	ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(FrameConstantBuffer), (void**)(&pConstBuffer), &cbAddr);
+	pConstBuffer->matModelViewProj = skyCam.GetViewMatrix() * skyCam.GetProjectionMatrix();
+
+	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::SKYDOME_PSO_MSAA_4 : EBuiltinPSOs::SKYDOME_PSO));
+
+	// hardcoded roog signature for now until shader reflection and rootsignature management is implemented
+	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(2));
+
+	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mResources_MainWnd.SelectedEnvironmentMap.SRV_HDREnvironment).GetGPUDescHandle());
+	pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
+
+	pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	pCmd->IASetVertexBuffers(0, 1, &vb);
+	pCmd->IASetIndexBuffer(&ib);
+
+	pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 }
 
 void VQEngine::ResolveMSAA(FWindowRenderContext& ctx)

@@ -35,10 +35,12 @@
 #define DISPLAY_CURVE_SRGB      0
 #define DISPLAY_CURVE_ST2084    1
 #define DISPLAY_CURVE_LINEAR    2
+
+// These values must match the EColorSpace enum in HDR.h
 #define COLOR_SPACE__REC_709    0
 #define COLOR_SPACE__REC_2020   1
 
-
+// PQ Curve theoretical reference display of 10,000 nits
 #define ST2084_MAX 10000.0f
 
 float3 xyYToRec709(float2 xy, float Y = 1.0)
@@ -116,6 +118,10 @@ float3 LinearToST2084(float3 color)
     return pow((c1 + c2 * cp) / (1 + c3 * cp), m2);
 }
 
+float3 Tonemap_Reinhard(float3 color)
+{
+	return color / (color + 1.0f.xxx);
+}
 
 //
 // RESOURCE BINDING
@@ -148,7 +154,9 @@ void CSMain(
     switch (OutputDisplayCurveEnum)
     {
         case DISPLAY_CURVE_SRGB   : 
-            OutRGB = LinearToSRGB(InRGBA.rgb);
+            // Reinhard tonemap
+            OutRGB = Tonemap_Reinhard(InRGBA.rgb);
+            OutRGB = LinearToSRGB(OutRGB.rgb);
             break;
         
         case DISPLAY_CURVE_ST2084 : // indicates Display color space is Rec2020

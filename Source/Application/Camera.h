@@ -129,6 +129,7 @@ public:
 	void InitializeCamera(const FCameraData& data);
 
 	void SetProjectionMatrix(const ProjectionMatrixParameters& params);
+	void UpdateViewMatrix();
 
 	// updates View Matrix @mMatView
 	void Update(const float dt, const FCameraInput& input);

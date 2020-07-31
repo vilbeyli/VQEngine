@@ -33,7 +33,7 @@ static FCameraData GenerateCameraInitializationParameters(const std::unique_ptr<
 	assert(pWin);
 	FCameraData camData = {};
 	camData.x = 0.0f; camData.y = 3.0f; camData.z = -5.0f;
-	camData.pitch = 10.0f;
+	camData.pitch = 15.0f;
 	camData.yaw = 0.0f;
 	camData.bPerspectiveProjection = true;
 	camData.fovV_Degrees = 60.0f;
@@ -367,8 +367,8 @@ void VQEngine::UpdateThread_PostUpdate()
 
 void VQEngine::Load_SceneData_Dispatch()
 {
-	mUpdateWorkerThreads.AddTask([&]() { Sleep(1000); Log::Info("Worker SLEEP done!"); }); // simulate 1second loading time
-	mUpdateWorkerThreads.AddTask([&]()
+	mUpdateWorkerThreads.AddTask([&]() { Sleep(1000); Log::Info("Worker SLEEP done!"); }); // simulate 1-second loading time
+	mUpdateWorkerThreads.AddTask([&]() // Load scene data
 	{
 		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
 		const int NumBackBuffer_WndDbg  = mRenderer.GetSwapChainBackBufferCount(mpWinDebug);
@@ -383,7 +383,7 @@ void VQEngine::Load_SceneData_Dispatch()
 
 		// Cube Data
 		constexpr XMFLOAT3 CUBE_POSITION         = XMFLOAT3(0, 0, 4);
-		constexpr float    CUBE_SCALE            = 1.0f;
+		constexpr float    CUBE_SCALE            = 3.0f;
 		constexpr XMFLOAT3 CUBE_ROTATION_VECTOR  = XMFLOAT3(1, 1, 1);
 		constexpr float    CUBE_ROTATION_DEGREES = 60.0f;
 		const XMVECTOR     CUBE_ROTATION_AXIS    = XMVector3Normalize(XMLoadFloat3(&CUBE_ROTATION_VECTOR));
@@ -411,6 +411,25 @@ void VQEngine::Load_SceneData_Dispatch()
 
 		mWindowUpdateContextLookup[mpWinMain->GetHWND()] = &mScene_MainWnd;
 		if (mpWinDebug) mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
+	});
+	mUpdateWorkerThreads.AddTask([&]() // Load Environment map textures
+	{
+		FEnvironmentMap& env = mResources_MainWnd.SelectedEnvironmentMap;
+		constexpr char* pHDREnvironmentTexturePaths[] =
+		{
+			  "Data/Textures/sIBL/waterfall/waterfall_Ref.exr" // TODO: exr importer
+			, "Data/Textures/sIBL/PaperMill_Ruins_E/PaperMill_E_3k.hdr"
+			, "Data/Textures/sIBL/Barcelona_Rooftops/Barce_Rooftop_C_3k.hdr"
+			, "Data/Textures/HDRI/colorful_studio_8k.hdr"
+			, "Data/Textures/HDRI/hansaplatz_8k.hdr"
+			, "Data/Textures/HDRI/industrial_pipe_and_valve_02_8k.hdr"
+			, "Data/Textures/HDRI/shanghai_bund_8k.hdr"
+			, "Data/Textures/HDRI/studio_small_07_8k.hdr"
+			, "Data/Textures/HDRI/sunny_vondelpark_8k.hdr"
+			, "Data/Textures/HDRI/vignaioli_night_8k.hdr"
+		};
+		env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(pHDREnvironmentTexturePaths[8]);
+		env.SRV_HDREnvironment = mRenderer.CreateAndInitializeSRV(env.Tex_HDREnvironment);
 	});
 }
 

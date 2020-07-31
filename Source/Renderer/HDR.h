@@ -66,7 +66,7 @@
 //   - Transfer/Gamma fuinctions 
 //     - G22   : Gamma2.2                  | RGBA8_UNORM / RGB10A2_UNORM
 //     - G10   : Linear ~ scRGB (no Gamma) | RGBA16_FLOAT
-//     - G2084 : SMPTE 2084                | RGBA8_UNORM / RGB10A2_UNORM
+//     - G2084 : SMPTE 2084 (PQ Curve)     | RGBA8_UNORM / RGB10A2_UNORM
 //   - Encoding range (Full / Studio)
 //   - Siting / chroma subsampling (video)
 //   - Color primaries (P709 / P2020)
