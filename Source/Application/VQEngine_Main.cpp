@@ -100,7 +100,7 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	InitializeEngineSettings(Params);
 	InitializeWindows(Params);
 	InitializeThreads();
-
+	CalculateEffectiveFrameRate(mpWinMain->GetHWND());
 	return true; 
 }
 
@@ -122,7 +122,8 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	s.gfx.bVsync = false;
 	s.gfx.bUseTripleBuffering = true;
 	s.gfx.RenderScale = 1.0f;
-	
+	s.gfx.MaxFrameRate = -1; // Auto
+
 	s.WndMain.Width = 1920;
 	s.WndMain.Height = 1080;
 	s.WndMain.DisplayMode = EDisplayMode::WINDOWED;
@@ -148,6 +149,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	if (paramFile.bOverrideGFXSetting_bAA        )                 s.gfx.bAntiAliasing       = pf.gfx.bAntiAliasing;
 	if (paramFile.bOverrideGFXSetting_bUseTripleBuffering)         s.gfx.bUseTripleBuffering = pf.gfx.bUseTripleBuffering;
 	if (paramFile.bOverrideGFXSetting_RenderScale)                 s.gfx.RenderScale         = pf.gfx.RenderScale;
+	if (paramFile.bOverrideGFXSetting_bMaxFrameRate)               s.gfx.MaxFrameRate        = pf.gfx.MaxFrameRate;
 
 	if (paramFile.bOverrideENGSetting_MainWindowWidth)             s.WndMain.Width            = pf.WndMain.Width;
 	if (paramFile.bOverrideENGSetting_MainWindowHeight)            s.WndMain.Height           = pf.WndMain.Height;
@@ -174,6 +176,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	if (Params.bOverrideGFXSetting_bAA        )                 s.gfx.bAntiAliasing       = p.gfx.bAntiAliasing;
 	if (Params.bOverrideGFXSetting_bUseTripleBuffering)         s.gfx.bUseTripleBuffering = p.gfx.bUseTripleBuffering;
 	if (Params.bOverrideGFXSetting_RenderScale)                 s.gfx.RenderScale         = p.gfx.RenderScale;
+	if (Params.bOverrideGFXSetting_bMaxFrameRate)               s.gfx.MaxFrameRate        = p.gfx.MaxFrameRate;
 
 	if (Params.bOverrideENGSetting_MainWindowWidth)             s.WndMain.Width            = p.WndMain.Width;
 	if (Params.bOverrideENGSetting_MainWindowHeight)            s.WndMain.Height           = p.WndMain.Height;
@@ -215,7 +218,7 @@ void VQEngine::InitializeWindows(const FStartupParameters& Params)
 		desc.pRegistrar = this;
 		pWin.reset(new Window(settings.Title, desc));
 		pWin->pOwner->OnWindowCreate(pWin->GetHWND());
-	};	
+	};
 
 	fnInitializeWindow(mSettings.WndMain, Params.hExeInstance, mpWinMain, "Main Window");
 	Log::Info("Created main window<0x%x>: %dx%d", mpWinMain->GetHWND(), mpWinMain->GetWidth(), mpWinMain->GetHeight());
@@ -225,7 +228,6 @@ void VQEngine::InitializeWindows(const FStartupParameters& Params)
 		fnInitializeWindow(mSettings.WndDebug, Params.hExeInstance, mpWinDebug, "Debug Window");
 		Log::Info("Created debug window<0x%x>: %dx%d", mpWinDebug->GetHWND(), mpWinDebug->GetWidth(), mpWinDebug->GetHeight());
 	}
-
 }
 
 void VQEngine::InitializeThreads()
@@ -385,7 +387,16 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 				params.bOverrideGFXSetting_bAA = true;
 				params.EngineSettings.gfx.bAntiAliasing = StrUtil::ParseBool(SettingValue);
 			}
-
+			if (SettingName == "MaxFrameRate" || SettingName == "MaxFPS")
+			{
+				params.bOverrideGFXSetting_bMaxFrameRate = true;
+				if (SettingValue == "Unlimited" || SettingValue == "0")
+					params.EngineSettings.gfx.MaxFrameRate = 0;
+				else if (SettingValue == "Auto" || SettingValue == "Automatic" || SettingValue == "-1")
+					params.EngineSettings.gfx.MaxFrameRate = -1;
+				else
+					params.EngineSettings.gfx.MaxFrameRate = StrUtil::ParseInt(SettingValue);
+			}
 
 			// 
 			// Engine

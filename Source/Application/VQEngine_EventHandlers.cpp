@@ -419,8 +419,16 @@ void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
 		desc.pWindow        = pWnd.get();
 		desc.bHDR           = Swapchain.IsHDRFormat();
 
+		constexpr bool bHDR10 = false; // TODO;
+		if(desc.bHDR)
+			desc.bitDepth = bHDR10 ? _10 : _16;
+
 		Swapchain.Destroy();
 		Swapchain.Create(desc);
+		
+		// TODO: HDR PROFILE
+		Swapchain.SetHDRMetaData(EColorSpace::REC_709, 350.0f, 0.01f, 20.0f, 0.8f); // Depending on @mFormat, sets or clears HDR Metadata
+		Swapchain.EnsureSwapChainColorSpace(Swapchain.GetFormat() == DXGI_FORMAT_R16G16B16A16_FLOAT ? _16 : _8, false);
 	}
 
 	Log::Info("Toggle VSync: %d", bVsyncState);
@@ -437,6 +445,8 @@ void VQEngine::RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent)
 
 	Swapchain.WaitForGPU();
 	Swapchain.Resize(WIDTH, HEIGHT, pSwapchainEvent->format);
+	
+	// TODO: HDR PROFILE
 	Swapchain.SetHDRMetaData(EColorSpace::REC_709, 350.0f, 0.01f, 20.0f, 0.8f); // Depending on @mFormat, sets or clears HDR Metadata
 	Swapchain.EnsureSwapChainColorSpace(pSwapchainEvent->format == DXGI_FORMAT_R16G16B16A16_FLOAT? _16 : _8, false);
 

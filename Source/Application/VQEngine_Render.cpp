@@ -36,9 +36,15 @@ void VQEngine::RenderThread_Main()
 	RenderThread_HandleEvents();
 
 	bool bQuit = false;
+	float dt = 0.0f;
 	while (!this->mbStopAllThreads && !bQuit)
 	{
+		dt = mTimerRender.Tick();
+
 		RenderThread_HandleEvents();
+
+		if (this->mbStopAllThreads || bQuit)
+			break; // HandleEvents() can set @this->mbStopAllThreads true with WindowCloseEvent;
 
 		RenderThread_WaitForUpdateThread();
 
@@ -54,6 +60,16 @@ void VQEngine::RenderThread_Main()
 		RenderThread_SignalUpdateThread();
 
 		RenderThread_HandleEvents();
+
+		if (mEffectiveFrameRateLimit_ms != 0.0f)
+		{
+			const float TimeBudgetLeft_ms = mEffectiveFrameRateLimit_ms - dt;
+			if (TimeBudgetLeft_ms > 0.0f)
+			{
+				Sleep((DWORD)TimeBudgetLeft_ms);
+			}
+			//Log::Info("RenderThread_Main() : dt=%.2f, Sleep=%.2f", dt, TimeBudgetLeft_ms);
+		}
 	}
 
 	RenderThread_Exit();
@@ -146,6 +162,9 @@ void VQEngine::RenderThread_Inititalize()
 	const int W = bFullscreen ? mpWinMain->GetFullscreenWidth() : mpWinMain->GetWidth();
 	const int H = bFullscreen ? mpWinMain->GetFullscreenHeight() : mpWinMain->GetHeight();
 	RenderThread_LoadWindowSizeDependentResources(mpWinMain->GetHWND(), W, H);
+
+	mTimerRender.Reset();
+	mTimerRender.Start();
 }
 
 void VQEngine::RenderThread_Exit()

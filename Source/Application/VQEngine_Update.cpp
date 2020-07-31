@@ -25,6 +25,8 @@
 
 #include <algorithm>
 
+#pragma comment(lib, "Dwmapi.lib")
+
 using namespace DirectX;
 
 // temporary hardcoded initialization until scene is data driven
@@ -128,6 +130,8 @@ void VQEngine::UpdateThread_PreUpdate(float& dt)
 	// update timer
 	dt = mTimer.Tick();
 
+	// TODO: perf entry
+
 	// system-wide input (esc/mouse click on wnd)
 	HandleEngineInput();
 }
@@ -212,6 +216,32 @@ bool VQEngine::ShouldRenderHDR(HWND hwnd) const
 {
 	const auto& pWin = this->GetWindow(hwnd);
 	return mSettings.WndMain.bEnableHDR && pWin->GetIsOnHDRCapableDisplay();
+}
+#include <dwmapi.h>
+void VQEngine::CalculateEffectiveFrameRate(HWND hwnd)
+{
+	if (mSettings.gfx.MaxFrameRate == -1)
+	{
+		// Get monitor refresh rate (primary monitor?)
+		DWM_TIMING_INFO dti = {};
+		dti.cbSize = sizeof(DWM_TIMING_INFO);
+		HRESULT hr = DwmGetCompositionTimingInfo(NULL, &dti);
+		assert(dti.rateRefresh.uiDenominator != 0 && dti.rateRefresh.uiNumerator != 0);
+		const float DisplayRefreshRate = static_cast<float>(dti.rateRefresh.uiNumerator) / dti.rateRefresh.uiDenominator;
+		Log::Info("Getting Monitor Refresh Rate: %.1fHz", DisplayRefreshRate);
+		mEffectiveFrameRateLimit_ms = 1000.0f / (DisplayRefreshRate * 1.15f);
+	}
+	else if (mSettings.gfx.MaxFrameRate == 0)
+	{
+		mEffectiveFrameRateLimit_ms = 0.0f;
+	}
+	else
+	{
+		mEffectiveFrameRateLimit_ms = 1000.0f / mSettings.gfx.MaxFrameRate;
+	}
+	const bool bUnlimitedFrameRate = mEffectiveFrameRateLimit_ms == 0.0f;
+	if(bUnlimitedFrameRate) Log::Info("FrameRateLimit(ms) : Unlimited");
+	else                    Log::Info("FrameRateLimit(ms) : %.2f | %d FPS", mEffectiveFrameRateLimit_ms, static_cast<int>(1000.0f / mEffectiveFrameRateLimit_ms));
 }
 
 void VQEngine::SetWindowName(HWND hwnd, const std::string& name){	mWinNameLookup[hwnd] = name; }

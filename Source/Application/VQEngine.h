@@ -82,9 +82,23 @@ class DebugWindowSceneData : public IWindowUpdateContext{};
 struct FEnvironmentMap
 {
 	TextureID Tex_HDREnvironment = INVALID_ID;
-	TextureID Tex_Irradiance     = INVALID_ID;
+	TextureID Tex_Irradiance     = INVALID_ID; // TODO: lighting
 	SRV_ID    SRV_HDREnvironment = INVALID_ID;
-	SRV_ID    SRV_Irradiance     = INVALID_ID;
+	SRV_ID    SRV_Irradiance     = INVALID_ID; // TODO: lighting
+
+	//
+	// HDR10 Static Metadata Parameters -------------------------------
+	// https://docs.microsoft.com/en-us/windows/win32/api/dxgi1_5/ns-dxgi1_5-dxgi_hdr_metadata_hdr10
+	//
+	// The maximum content light level (MaxCLL). This is the nit value 
+	// corresponding to the brightest pixel used anywhere in the content.
+	int MaxContentLightLevel = 0;
+
+	// The maximum frame average light level (MaxFALL). 
+	// This is the nit value corresponding to the average luminance of 
+	// the frame which has the brightest average luminance anywhere in 
+	// the content.
+	int MaxFrameAverageLightLevel = 0;
 };
 
 struct FRenderingResources{};
@@ -300,6 +314,8 @@ private:
 
 	// timer / profiler
 	Timer                           mTimer;
+	Timer                           mTimerRender;
+	float                           mEffectiveFrameRateLimit_ms;
 
 	// misc.
 	// One Swapchain.Resize() call is required for the first time 
@@ -372,6 +388,8 @@ private:
 
 	bool                            IsWindowRegistered(HWND hwnd) const;
 	bool                            ShouldRenderHDR(HWND hwnd) const;
+
+	void                            CalculateEffectiveFrameRate(HWND hwnd);
 
 private:
 	// Reads EngineSettings.ini from next to the executable and returns a 

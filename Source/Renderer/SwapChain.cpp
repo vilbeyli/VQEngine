@@ -109,6 +109,8 @@ void SwapChain::SetHDRMetaData(EColorSpace ColorSpace, float MaxOutputNits, floa
     mHDRMetaData.MaxContentLightLevel = static_cast<UINT16>(MaxContentLightLevel);
     mHDRMetaData.MaxFrameAverageLightLevel = static_cast<UINT16>(MaxFrameAverageLightLevel);
     ThrowIfFailed(mpSwapChain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_HDR10, sizeof(DXGI_HDR_METADATA_HDR10), &mHDRMetaData));
+
+    Log::Info("SetHDRMetaData(): Min: %.2f, Max: %.2f, MaxCLL: %.2f, MaxFALL: %.2f", MinOutputNits, MaxOutputNits, MaxContentLightLevel, MaxFrameAverageLightLevel);
 }
 
 
@@ -388,12 +390,8 @@ void SwapChain::SetFullscreen(bool bState, int FSRecoveryWindowWidth, int FSReco
         IDXGIOutput* pOutput = nullptr;
         mpSwapChain->GetContainingOutput(&pOutput);
         hr = pOutput->QueryInterface(IID_PPV_ARGS(&pOut));
-        assert(hr == S_OK);
-        pOutput->Release();
     }
-    
-    DXGI_OUTPUT_DESC1 desc;
-    pOut->GetDesc1(&desc);
+    DXGI_OUTPUT_DESC1 desc = this->GetContainingMonitorDesc();
     
     // Get supported mode count and then all the supported modes
     UINT NumModes = 0;
@@ -555,6 +553,25 @@ void SwapChain::WaitForGPU()
     CloseHandle(mHandleFenceEvent);
 
     pFence->Release();
+}
+
+DXGI_OUTPUT_DESC1 SwapChain::GetContainingMonitorDesc() const
+{
+    DXGI_OUTPUT_DESC1 d = {};
+
+    // Figure out which monitor swapchain is in
+    // and set the mode we want to use for ResizeTarget().
+    IDXGIOutput6* pOut = nullptr;
+    {
+        IDXGIOutput* pOutput = nullptr;
+        mpSwapChain->GetContainingOutput(&pOutput);
+        HRESULT hr = pOutput->QueryInterface(IID_PPV_ARGS(&pOut));
+        assert(hr == S_OK);
+        pOutput->Release();
+    }
+    pOut->GetDesc1(&d);
+    pOut->Release();
+    return d;
 }
 
 void SwapChain::CreateRenderTargetViews()
