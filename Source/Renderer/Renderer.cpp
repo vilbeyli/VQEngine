@@ -233,7 +233,8 @@ void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuf
 	ctx.SwapChain.Create(swapChainDesc);
 	if (bHDRSwapchain)
 	{
-		ctx.SwapChain.SetHDRMetaData(EColorSpace::REC_709, 350.0f, 0.01f, 100, 5); // Depending on @mFormat, sets or clears HDR Metadata
+		// TODO: HDR PROFILE
+		ctx.SwapChain.SetHDRMetaData(EColorSpace::REC_709, 350.0f, 0.01f, 20.0f, 0.8f); // Depending on @mFormat, sets or clears HDR Metadata
 	}
 
 	// Create command allocators

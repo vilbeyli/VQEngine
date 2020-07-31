@@ -85,6 +85,7 @@ public:
 	inline CD3DX12_CPU_DESCRIPTOR_HANDLE GetCurrentBackBufferRTVHandle()    const { return CD3DX12_CPU_DESCRIPTOR_HANDLE(mpDescHeapRTV->GetCPUDescriptorHandleForHeapStart(), GetCurrentBackBufferIndex(), mpDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)); }
 	inline ID3D12Resource*               GetCurrentBackBufferRenderTarget() const { return mRenderTargets[GetCurrentBackBufferIndex()]; }
 	inline unsigned long long            GetNumPresentedFrames()            const { return mNumTotalFrames; }
+	       DXGI_OUTPUT_DESC1             GetContainingMonitorDesc()         const;
 	inline bool                          IsVSyncOn()                        const { return mbVSync;}
 	inline DXGI_FORMAT                   GetFormat()                        const { return mFormat; }
 	inline DXGI_COLOR_SPACE_TYPE         GetColorSpace()                    const { return mColorSpace; }

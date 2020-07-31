@@ -34,6 +34,7 @@ struct FGraphicsSettings
 	bool bAntiAliasing       = false;
 
 	float RenderScale = 1.0f;
+	int   MaxFrameRate = -1; // -1: Auto (RefreshRate x 1.15) | 0: Unlimited | <int>: specified value
 };
 
 struct FWindowSettings

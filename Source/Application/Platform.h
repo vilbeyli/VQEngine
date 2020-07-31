@@ -41,6 +41,7 @@ struct FStartupParameters
 	uint8 bOverrideGFXSetting_bVSync                      : 1;
 	uint8 bOverrideGFXSetting_bUseTripleBuffering         : 1;
 	uint8 bOverrideGFXSetting_bAA                         : 1;
+	uint8 bOverrideGFXSetting_bMaxFrameRate               : 1;
 	uint8 bOverrideGFXSetting_bHDR                        : 1;
 
 	uint8 bOverrideENGSetting_MainWindowHeight            : 1;
