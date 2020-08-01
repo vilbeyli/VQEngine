@@ -59,6 +59,7 @@ void Camera::InitializeCamera(const FCameraData& data)
 	SetProjectionMatrix(this->mProjParams);
 	SetPosition(data.x, data.y, data.z);
 	Rotate(data.yaw * DEG2RAD, data.pitch * DEG2RAD, 1.0f);
+	UpdateViewMatrix();
 }
 
 
