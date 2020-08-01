@@ -25,6 +25,7 @@
 
 #include <algorithm>
 
+#include <dwmapi.h>
 #pragma comment(lib, "Dwmapi.lib")
 
 using namespace DirectX;
@@ -217,7 +218,7 @@ bool VQEngine::ShouldRenderHDR(HWND hwnd) const
 	const auto& pWin = this->GetWindow(hwnd);
 	return mSettings.WndMain.bEnableHDR && pWin->GetIsOnHDRCapableDisplay();
 }
-#include <dwmapi.h>
+
 void VQEngine::CalculateEffectiveFrameRate(HWND hwnd)
 {
 	if (mSettings.gfx.MaxFrameRate == -1)
@@ -406,7 +407,6 @@ void VQEngine::UpdateThread_PostUpdate()
 
 void VQEngine::Load_SceneData_Dispatch()
 {
-	mUpdateWorkerThreads.AddTask([&]() { Sleep(1000); Log::Info("Worker SLEEP done!"); }); // simulate 1-second loading time
 	mUpdateWorkerThreads.AddTask([&]() // Load scene data
 	{
 		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCount(mpWinMain);

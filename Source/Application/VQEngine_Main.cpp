@@ -68,9 +68,10 @@ static std::unordered_map<std::string, EDisplayMode> S_LOOKUP_STR_TO_DISPLAYMODE
 
 #define REPORT_SYSTEM_INFO 1
 #if REPORT_SYSTEM_INFO 
-void ReportSystemInfo(VQSystemInfo::FSystemInfo)
-{
-	// TODO:
+void ReportSystemInfo(const VQSystemInfo::FSystemInfo& i, bool bDetailed = false)
+{	
+	const std::string sysInfo = VQSystemInfo::PrintSystemInfo(i, bDetailed || 1);
+	Log::Info("\n%s", sysInfo.c_str());
 }
 #endif
 
@@ -92,23 +93,42 @@ void VQEngine::MainThread_Tick()
 
 bool VQEngine::Initialize(const FStartupParameters& Params)
 {
-	this->mSysInfo = VQSystemInfo::GetSystemInfo();
-#if REPORT_SYSTEM_INFO 
-	ReportSystemInfo(this->mSysInfo);
-#endif
+	Timer  t;  t.Reset();  t.Start();
+	Timer t2; t2.Reset(); t2.Start();
 
 	InitializeEngineSettings(Params);
+	float f2 = t.Tick();
 	InitializeWindows(Params);
+	float f3 = t.Tick();
 	InitializeThreads();
 	CalculateEffectiveFrameRate(mpWinMain->GetHWND());
+	float f4 = t.Tick();
+
+	// offload system info acquisition to a thread as it takes a few seconds on Debug build
+	mUpdateWorkerThreads.AddTask([&]() 
+	{
+		this->mSysInfo = VQSystemInfo::GetSystemInfo();
+#if REPORT_SYSTEM_INFO 
+		ReportSystemInfo(this->mSysInfo);
+#endif
+		// TODO: either dispatch an event to update HDR metada
+		//       or do so here, check contention
+	});
+	float f0 = t.Tick();
+
+
+	Log::Info("[PERF] VQEngine::Initialize() : %.3fs", t2.StopGetDeltaTimeAndReset());
+	Log::Info("[PERF]    DispatchSysInfo : %.3fs", f0);
+	//Log::Info("[PERF]    PrintInfo  : %.3fs", f1);
+	Log::Info("[PERF]    Settings       : %.3fs", f2);
+	Log::Info("[PERF]    Windows        : %.3fs", f3);
+	Log::Info("[PERF]    Threads        : %.3fs", f4);
 	return true; 
 }
 
 void VQEngine::Exit()
 {
 	ExitThreads();
-
-	
 }
 
 
