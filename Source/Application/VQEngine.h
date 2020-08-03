@@ -131,7 +131,7 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	SRV_ID    SRV_PostProcess_TonemapperOut = INVALID_ID;
 	UAV_ID    UAV_PostProcess_TonemapperOut = INVALID_ID;
 
-	FEnvironmentMap SelectedEnvironmentMap;
+	FEnvironmentMap EnvironmentMap;
 };
 struct FRenderingResources_DebugWindow : public FRenderingResources
 {
@@ -306,7 +306,8 @@ private:
 	BuiltinMeshNameArray_t          mBuiltinMeshNames;
 	std::vector<FDisplayHDRProfile> mDisplayHDRProfiles;
 	EnvironmentMapLookup_t          mLookup_EnvironmentMapDescriptors;
-
+	std::vector<std::string>        mEnvironmentMapPresetNames;
+	int                             mActiveEnvironmentMapPresetIndex;
 
 	// state
 	std::atomic<bool>               mbRenderThreadInitialized;
@@ -361,6 +362,7 @@ private:
 	void                            InitializeBuiltinMeshes();
 	void                            LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete
 	void                            Load_SceneData_Dispatch();
+	void                            LoadEnvironmentMap(const std::string& EnvMapName);
 
 	HRESULT                         RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderContext& ctx);
 	HRESULT                         RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx);

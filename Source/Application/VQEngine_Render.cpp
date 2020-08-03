@@ -748,7 +748,7 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& Fra
 #endif
 
 	// Draw Environment Map ---------------------------------------
-	const bool bHasEnvironmentMapHDRTexture = mResources_MainWnd.SelectedEnvironmentMap.SRV_HDREnvironment != INVALID_ID;
+	const bool bHasEnvironmentMapHDRTexture = mResources_MainWnd.EnvironmentMap.SRV_HDREnvironment != INVALID_ID;
 	const bool bDrawEnvironmentMap = bHasEnvironmentMapHDRTexture && true;
 	if (bDrawEnvironmentMap)
 	{
@@ -766,7 +766,7 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& Fra
 		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(2));
 
 		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-		pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mResources_MainWnd.SelectedEnvironmentMap.SRV_HDREnvironment).GetGPUDescHandle());
+		pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_HDREnvironment).GetGPUDescHandle());
 		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
 
 		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
