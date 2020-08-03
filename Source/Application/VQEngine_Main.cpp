@@ -266,7 +266,10 @@ void VQEngine::InitializeEnvironmentMaps()
 {
 	std::vector<FEnvironmentMapDescriptor> descs = VQEngine::ParseEnvironmentMapsFile();
 	for (const FEnvironmentMapDescriptor& desc : descs)
+	{
 		mLookup_EnvironmentMapDescriptors[desc.Name] = desc;
+		mEnvironmentMapPresetNames.push_back(desc.Name);
+	}
 }
 
 void VQEngine::InitializeScenes(const FStartupParameters& Params)

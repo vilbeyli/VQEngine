@@ -66,6 +66,7 @@ void VQEngine::UpdateThread_Main()
 
 void VQEngine::UpdateThread_Inititalize()
 {
+	mActiveEnvironmentMapPresetIndex = -1;
 	mNumUpdateLoopsExecuted.store(0);
 
 #if ENABLE_RAW_INPUT
@@ -259,14 +260,6 @@ void VQEngine::HandleEngineInput()
 				Log::Info("Toggle MSAA: %d", mSettings.gfx.bAntiAliasing);
 			}
 		}
-		if (input.IsKeyTriggered("PageUp"))
-		{
-
-		}
-		if (input.IsKeyTriggered("PageDown"))
-		{
-
-		}
 		if (input.IsKeyTriggered("G"))
 		{
 			if (pWin == mpWinMain)
@@ -346,10 +339,10 @@ FSetHDRMetaDataParams VQEngine::GatherHDRMetaDataParameters(HWND hwnd)
 	params.MaxOutputNits = pProfile ? pProfile->MaxBrightness : desc.MaxLuminance;
 	params.MinOutputNits = pProfile ? pProfile->MinBrightness : desc.MinLuminance;
 	
-	const bool bHDREnvironmentMap = mResources_MainWnd.SelectedEnvironmentMap.Tex_HDREnvironment != INVALID_ID;
+	const bool bHDREnvironmentMap = mResources_MainWnd.EnvironmentMap.Tex_HDREnvironment != INVALID_ID;
 	if (bHDREnvironmentMap)
 	{
-		params.MaxContentLightLevel = static_cast<float>(mResources_MainWnd.SelectedEnvironmentMap.MaxContentLightLevel);
+		params.MaxContentLightLevel = static_cast<float>(mResources_MainWnd.EnvironmentMap.MaxContentLightLevel);
 	}
 
 	params.MaxFrameAverageLightLevel = 80.0f; // TODO: dynamic calculation using histograms?
@@ -435,6 +428,43 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 	if (input.IsMouseScrollUp()  ) FrameData.TFCube.SetUniformScale(CubeScale * SCROLL_SCALE_DELTA);
 	if (input.IsMouseScrollDown()) FrameData.TFCube.SetUniformScale(std::max(0.5f, CubeScale / SCROLL_SCALE_DELTA));
 
+	
+	auto fnBusyWaitUntilRenderThreadCatchesUp = [&]()
+	{
+		while ((mNumRenderLoopsExecuted+1) != mNumUpdateLoopsExecuted);
+	};
+
+	//mUpdateWorkerThreads.AddTask([&,
+
+	const FEnvironmentMap& env = mResources_MainWnd.EnvironmentMap;
+	if (input.IsKeyTriggered("PageUp"))
+	{
+		fnBusyWaitUntilRenderThreadCatchesUp();
+		mActiveEnvironmentMapPresetIndex = (mActiveEnvironmentMapPresetIndex + 1) % mEnvironmentMapPresetNames.size();
+		mAppState = EAppState::LOADING;
+		mbLoadingLevel = true;
+		mUpdateWorkerThreads.AddTask([&]() 
+		{
+			LoadEnvironmentMap(mEnvironmentMapPresetNames[mActiveEnvironmentMapPresetIndex]);
+		});
+		
+
+	}
+	if (input.IsKeyTriggered("PageDown"))
+	{
+		fnBusyWaitUntilRenderThreadCatchesUp();
+		mActiveEnvironmentMapPresetIndex = mActiveEnvironmentMapPresetIndex == 0
+			? mEnvironmentMapPresetNames.size() - 1
+			: mActiveEnvironmentMapPresetIndex - 1;
+		mAppState = EAppState::LOADING;
+		mbLoadingLevel = true;
+		mUpdateWorkerThreads.AddTask([&]()
+		{
+			LoadEnvironmentMap(mEnvironmentMapPresetNames[mActiveEnvironmentMapPresetIndex]);
+		});
+	}
+
+
 	// update camera
 	FCameraInput camInput(LocalSpaceTranslation);
 	camInput.DeltaMouseXY = input.GetMouseDelta();
@@ -513,22 +543,48 @@ void VQEngine::Load_SceneData_Dispatch()
 	});
 	mUpdateWorkerThreads.AddTask([&, SceneRep]() // Load Environment map textures
 	{
-		Log::Info("Loading scene: %s", SceneRep.SceneName.c_str());
-		FEnvironmentMap& env = mResources_MainWnd.SelectedEnvironmentMap;
-
-		const FEnvironmentMapDescriptor& desc = this->GetEnvironmentMapDesc(SceneRep.EnvironmentMapPreset);
-		if (!desc.FilePath.empty()) // check whether the env map was found or not
-		{
-			env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(desc.FilePath.c_str());
-			env.SRV_HDREnvironment = mRenderer.CreateAndInitializeSRV(env.Tex_HDREnvironment);
-			env.MaxContentLightLevel = static_cast<int>(desc.MaxContentLightLevel);
-
-			// Update HDRMetaData when the nvironment map is loaded
-			HWND hwnd = mpWinMain->GetHWND();
-			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetStaticHDRMetaDataEvent>(hwnd, this->GatherHDRMetaDataParameters(hwnd)));
-		}
-		Log::Info("%s loaded.", SceneRep.SceneName.c_str());
+		Log::Info("[Scene] Loading: %s", SceneRep.SceneName.c_str());
+		LoadEnvironmentMap(SceneRep.EnvironmentMapPreset);
+		Log::Info("[Scene] %s loaded.", SceneRep.SceneName.c_str());
 	});
+}
+
+void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
+{
+	assert(EnvMapName.size() != 0);
+	FEnvironmentMap& env = mResources_MainWnd.EnvironmentMap;
+
+	// if already loaded, unload it
+	if (env.Tex_HDREnvironment != INVALID_ID)
+	{
+		assert(env.SRV_HDREnvironment != INVALID_ID);
+		// GPU-sync assumed
+		mRenderer.GetWindowSwapChain(mpWinMain->GetHWND()).WaitForGPU();
+		mRenderer.DestroySRV(env.SRV_HDREnvironment);
+		mRenderer.DestroyTexture(env.Tex_HDREnvironment);
+		env.MaxContentLightLevel = 0.0f;
+	}
+
+	const FEnvironmentMapDescriptor& desc = this->GetEnvironmentMapDesc(EnvMapName);
+	std::vector<std::string>::iterator it = std::find(mEnvironmentMapPresetNames.begin(), mEnvironmentMapPresetNames.end(), EnvMapName);
+	const size_t ActiveEnvMapIndex = it - mEnvironmentMapPresetNames.begin();
+	if (!desc.FilePath.empty()) // check whether the env map was found or not
+	{
+		Log::Info("Loading Environment Map: %s", EnvMapName.c_str());
+		env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(desc.FilePath.c_str());
+		env.SRV_HDREnvironment = mRenderer.CreateAndInitializeSRV(env.Tex_HDREnvironment);
+		env.MaxContentLightLevel = static_cast<int>(desc.MaxContentLightLevel);
+
+		this->mActiveEnvironmentMapPresetIndex = ActiveEnvMapIndex;
+
+		// Update HDRMetaData when the nvironment map is loaded
+		HWND hwnd = mpWinMain->GetHWND();
+		mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetStaticHDRMetaDataEvent>(hwnd, this->GatherHDRMetaDataParameters(hwnd)));
+	}
+	else
+	{
+		Log::Error("Couldn't find Environment Map: %s", EnvMapName.c_str());
+	}
 }
 
 
