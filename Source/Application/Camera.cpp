@@ -59,6 +59,7 @@ void Camera::InitializeCamera(const FCameraData& data)
 	SetProjectionMatrix(this->mProjParams);
 	SetPosition(data.x, data.y, data.z);
 	Rotate(data.yaw * DEG2RAD, data.pitch * DEG2RAD, 1.0f);
+	UpdateViewMatrix();
 }
 
 
@@ -72,25 +73,29 @@ void Camera::SetProjectionMatrix(const ProjectionMatrixParameters& params)
 		: MakeOthographicProjectionMatrix(params.ViewporWidth, params.ViewporHeight, params.NearZ, params.FarZ);
 }
 
-void Camera::Update(const float dt, const FCameraInput& input)
+void Camera::UpdateViewMatrix()
 {
-	Rotate(dt, input);
-	Move(dt, input);
-
 	XMVECTOR up         = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 	XMVECTOR lookAt     = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
 	const XMVECTOR pos  = XMLoadFloat3(&mPosition);
 	const XMMATRIX MRot = GetRotationMatrix();
 
 	//transform the lookat and up vector by rotation matrix
-	lookAt	= XMVector3TransformCoord(lookAt, MRot);
-	up		= XMVector3TransformCoord(up,	  MRot);
+	lookAt = XMVector3TransformCoord(lookAt, MRot);
+	up = XMVector3TransformCoord(up, MRot);
 
 	//translate the lookat
 	lookAt = pos + lookAt;
 
-	//create view matrix
 	XMStoreFloat4x4(&mMatView, XMMatrixLookAtLH(pos, lookAt, up));
+}
+
+void Camera::Update(const float dt, const FCameraInput& input)
+{
+	Rotate(dt, input);
+	Move(dt, input);
+
+	UpdateViewMatrix();
 
 	// move based on velocity
 	XMVECTOR P = XMLoadFloat3(&mPosition);

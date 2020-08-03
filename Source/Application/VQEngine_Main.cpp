@@ -31,12 +31,14 @@ constexpr char* BUILD_CONFIG = "Release";
 constexpr char* VQENGINE_VERSION = "v0.4.0";
 
 
-static std::pair<std::string, std::string> ParseLineINI(const std::string& iniLine)
+static std::pair<std::string, std::string> ParseLineINI(const std::string& iniLine, bool* pbSectionTag)
 {
 	assert(!iniLine.empty());
 	std::pair<std::string, std::string> SettingNameValuePair;
 
 	const bool bSectionTag = iniLine[0] == '[';
+	if(pbSectionTag) 
+		*pbSectionTag = bSectionTag;
 
 	if (bSectionTag)
 	{
@@ -50,7 +52,6 @@ static std::pair<std::string, std::string> ParseLineINI(const std::string& iniLi
 		SettingNameValuePair.first = vecSettingNameValue[0];
 		SettingNameValuePair.second = vecSettingNameValue[1];
 	}
-
 
 	return SettingNameValuePair;
 }
@@ -68,9 +69,10 @@ static std::unordered_map<std::string, EDisplayMode> S_LOOKUP_STR_TO_DISPLAYMODE
 
 #define REPORT_SYSTEM_INFO 1
 #if REPORT_SYSTEM_INFO 
-void ReportSystemInfo(VQSystemInfo::FSystemInfo)
-{
-	// TODO:
+void ReportSystemInfo(const VQSystemInfo::FSystemInfo& i, bool bDetailed = false)
+{	
+	const std::string sysInfo = VQSystemInfo::PrintSystemInfo(i, bDetailed);
+	Log::Info("\n%s", sysInfo.c_str());
 }
 #endif
 
@@ -92,23 +94,44 @@ void VQEngine::MainThread_Tick()
 
 bool VQEngine::Initialize(const FStartupParameters& Params)
 {
-	this->mSysInfo = VQSystemInfo::GetSystemInfo();
-#if REPORT_SYSTEM_INFO 
-	ReportSystemInfo(this->mSysInfo);
-#endif
+	Timer  t;  t.Reset();  t.Start();
+	Timer t2; t2.Reset(); t2.Start();
 
 	InitializeEngineSettings(Params);
+	InitializeEnvironmentMaps();
+	InitializeHDRProfiles();
+	InitializeScenes(Params);
+	float f2 = t.Tick();
 	InitializeWindows(Params);
+	float f3 = t.Tick();
 	InitializeThreads();
+	CalculateEffectiveFrameRate(mpWinMain->GetHWND());
+	float f4 = t.Tick();
 
+	// offload system info acquisition to a thread as it takes a few seconds on Debug build
+	mUpdateWorkerThreads.AddTask([&]() 
+	{
+		this->mSysInfo = VQSystemInfo::GetSystemInfo();
+#if REPORT_SYSTEM_INFO 
+		ReportSystemInfo(this->mSysInfo);
+#endif
+		HWND hwnd = mpWinMain->GetHWND();
+		mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetStaticHDRMetaDataEvent>(hwnd, this->GatherHDRMetaDataParameters(hwnd)));
+	});
+	float f0 = t.Tick();
+
+
+	Log::Info("[PERF] VQEngine::Initialize() : %.3fs", t2.StopGetDeltaTimeAndReset());
+	Log::Info("[PERF]    DispatchSysInfo : %.3fs", f0);
+	Log::Info("[PERF]    Settings       : %.3fs", f2);
+	Log::Info("[PERF]    Windows        : %.3fs", f3);
+	Log::Info("[PERF]    Threads        : %.3fs", f4);
 	return true; 
 }
 
 void VQEngine::Exit()
 {
 	ExitThreads();
-
-	
 }
 
 
@@ -122,7 +145,8 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	s.gfx.bVsync = false;
 	s.gfx.bUseTripleBuffering = true;
 	s.gfx.RenderScale = 1.0f;
-	
+	s.gfx.MaxFrameRate = -1; // Auto
+
 	s.WndMain.Width = 1920;
 	s.WndMain.Height = 1080;
 	s.WndMain.DisplayMode = EDisplayMode::WINDOWED;
@@ -148,6 +172,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	if (paramFile.bOverrideGFXSetting_bAA        )                 s.gfx.bAntiAliasing       = pf.gfx.bAntiAliasing;
 	if (paramFile.bOverrideGFXSetting_bUseTripleBuffering)         s.gfx.bUseTripleBuffering = pf.gfx.bUseTripleBuffering;
 	if (paramFile.bOverrideGFXSetting_RenderScale)                 s.gfx.RenderScale         = pf.gfx.RenderScale;
+	if (paramFile.bOverrideGFXSetting_bMaxFrameRate)               s.gfx.MaxFrameRate        = pf.gfx.MaxFrameRate;
 
 	if (paramFile.bOverrideENGSetting_MainWindowWidth)             s.WndMain.Width            = pf.WndMain.Width;
 	if (paramFile.bOverrideENGSetting_MainWindowHeight)            s.WndMain.Height           = pf.WndMain.Height;
@@ -174,6 +199,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	if (Params.bOverrideGFXSetting_bAA        )                 s.gfx.bAntiAliasing       = p.gfx.bAntiAliasing;
 	if (Params.bOverrideGFXSetting_bUseTripleBuffering)         s.gfx.bUseTripleBuffering = p.gfx.bUseTripleBuffering;
 	if (Params.bOverrideGFXSetting_RenderScale)                 s.gfx.RenderScale         = p.gfx.RenderScale;
+	if (Params.bOverrideGFXSetting_bMaxFrameRate)               s.gfx.MaxFrameRate        = p.gfx.MaxFrameRate;
 
 	if (Params.bOverrideENGSetting_MainWindowWidth)             s.WndMain.Width            = p.WndMain.Width;
 	if (Params.bOverrideENGSetting_MainWindowHeight)            s.WndMain.Height           = p.WndMain.Height;
@@ -193,6 +219,8 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 		s.bAutomatedTestRun = true;
 		s.NumAutomatedTestFrames = Params.EngineSettings.NumAutomatedTestFrames;
 	}
+
+	// TODO: parse scene to load
 }
 
 void VQEngine::InitializeWindows(const FStartupParameters& Params)
@@ -215,7 +243,7 @@ void VQEngine::InitializeWindows(const FStartupParameters& Params)
 		desc.pRegistrar = this;
 		pWin.reset(new Window(settings.Title, desc));
 		pWin->pOwner->OnWindowCreate(pWin->GetHWND());
-	};	
+	};
 
 	fnInitializeWindow(mSettings.WndMain, Params.hExeInstance, mpWinMain, "Main Window");
 	Log::Info("Created main window<0x%x>: %dx%d", mpWinMain->GetHWND(), mpWinMain->GetWidth(), mpWinMain->GetHeight());
@@ -226,6 +254,36 @@ void VQEngine::InitializeWindows(const FStartupParameters& Params)
 		Log::Info("Created debug window<0x%x>: %dx%d", mpWinDebug->GetHWND(), mpWinDebug->GetWidth(), mpWinDebug->GetHeight());
 	}
 
+	this->SetMouseCaptureForWindow(mpWinMain->GetHWND(), true);
+}
+
+void VQEngine::InitializeHDRProfiles()
+{
+	mDisplayHDRProfiles = VQEngine::ParseHDRProfilesFile();
+}
+
+void VQEngine::InitializeEnvironmentMaps()
+{
+	std::vector<FEnvironmentMapDescriptor> descs = VQEngine::ParseEnvironmentMapsFile();
+	for (const FEnvironmentMapDescriptor& desc : descs)
+	{
+		mLookup_EnvironmentMapDescriptors[desc.Name] = desc;
+		mEnvironmentMapPresetNames.push_back(desc.Name);
+	}
+}
+
+void VQEngine::InitializeScenes(const FStartupParameters& Params)
+{
+	std::vector< FSceneRepresentation> SceneReps = VQEngine::ParseScenesFile();
+
+	auto it = std::find_if(SceneReps.begin(), SceneReps.end(), [&Params](const FSceneRepresentation& s) { return s.SceneName == Params.LevelNameToLoad; });
+	const bool bSceneFound = it != SceneReps.end();
+	if (!bSceneFound)
+	{
+		Log::Error("Couldn't find scene '%s' among parsed scene files. DefaultScene will be loaded", Params.LevelNameToLoad.c_str());
+	}
+	
+	mQueue_SceneLoad.push(bSceneFound ? *it : SceneReps.back());
 }
 
 void VQEngine::InitializeThreads()
@@ -345,17 +403,18 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 	{
 		std::string line;
 		std::string currSection;
+		bool bReadingSection = false;
 		while (std::getline(file, line))
 		{
 			if (line[0] == ';') continue; // skip comment lines
 			if (line == "") continue; // skip empty lines
 
-			const std::pair<std::string, std::string> SettingNameValuePair = ParseLineINI(line);
+			const std::pair<std::string, std::string> SettingNameValuePair = ParseLineINI(line, &bReadingSection);
 			const std::string& SettingName  = SettingNameValuePair.first;
 			const std::string& SettingValue = SettingNameValuePair.second;
 
 			// Header sections;
-			if (SettingName == "Graphics" || SettingName == "Engine")
+			if (bReadingSection)
 			{
 				currSection = SettingName;
 				continue;
@@ -385,7 +444,16 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 				params.bOverrideGFXSetting_bAA = true;
 				params.EngineSettings.gfx.bAntiAliasing = StrUtil::ParseBool(SettingValue);
 			}
-
+			if (SettingName == "MaxFrameRate" || SettingName == "MaxFPS")
+			{
+				params.bOverrideGFXSetting_bMaxFrameRate = true;
+				if (SettingValue == "Unlimited" || SettingValue == "0")
+					params.EngineSettings.gfx.MaxFrameRate = 0;
+				else if (SettingValue == "Auto" || SettingValue == "Automatic" || SettingValue == "-1")
+					params.EngineSettings.gfx.MaxFrameRate = -1;
+				else
+					params.EngineSettings.gfx.MaxFrameRate = StrUtil::ParseInt(SettingValue);
+			}
 
 			// 
 			// Engine
@@ -458,4 +526,178 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 	}
 
 	return params;
+}
+
+std::vector<FEnvironmentMapDescriptor> VQEngine::ParseEnvironmentMapsFile()
+{
+	constexpr char* SETTINGS_FILE_NAME = "Data/EnvironmentMaps.ini";
+
+	std::vector<FEnvironmentMapDescriptor> EnvironmentMapDescriptors;
+
+	std::ifstream file(SETTINGS_FILE_NAME);
+	if (file.is_open())
+	{
+		std::string line;
+		bool bReadingSection = false;
+		bool bRecentlyReadEmptyLine = false;
+		bool bCurrentlyReadingEnvMap = false;
+		FEnvironmentMapDescriptor desc = {};
+		while (std::getline(file, line))
+		{
+			if (line[0] == ';') continue; // skip comment lines
+			if (line == "") { bRecentlyReadEmptyLine = true; continue; } // skip empty lines
+
+			const std::pair<std::string, std::string> SettingNameValuePair = ParseLineINI(line, &bReadingSection);
+			const std::string& SettingName = SettingNameValuePair.first;
+			const std::string& SettingValue = SettingNameValuePair.second;
+
+			// Header sections;
+			if (bReadingSection)
+			{
+				bCurrentlyReadingEnvMap = true;
+				if (bRecentlyReadEmptyLine)
+				{
+					EnvironmentMapDescriptors.push_back(desc);
+					desc = {};
+					bRecentlyReadEmptyLine = false;
+				}
+				desc.Name = SettingName;
+				continue;
+			}
+
+			if (SettingName == "Path")
+			{
+				desc.FilePath = SettingValue;
+			}
+			if (SettingName == "MaxCLL")
+			{
+				desc.MaxContentLightLevel = StrUtil::ParseFloat(SettingValue);
+			}
+			bRecentlyReadEmptyLine = false;
+		}
+		if (bCurrentlyReadingEnvMap)
+		{
+			EnvironmentMapDescriptors.push_back(desc);
+			desc = {};
+			bCurrentlyReadingEnvMap = false;
+		}
+	}
+	else
+	{ 
+		Log::Error("Cannot find settings file %s in current directory: %s", SETTINGS_FILE_NAME, DirectoryUtil::GetCurrentPath().c_str());
+	}
+
+	return EnvironmentMapDescriptors;
+}
+
+std::vector<FDisplayHDRProfile> VQEngine::ParseHDRProfilesFile()
+{
+	constexpr char* SETTINGS_FILE_NAME = "Data/HDRDisplayProfiles.ini";
+
+	std::vector<FDisplayHDRProfile> HDRProfiles;
+
+	std::ifstream file(SETTINGS_FILE_NAME);
+	if (file.is_open())
+	{
+		std::string line;
+		bool bReadingSection = false; // Section is an .ini term
+		bool bRecentlyReadEmptyLine = false;
+		bool bCurrentlyReadingProfile = false;
+		FDisplayHDRProfile profile = {};
+		while (std::getline(file, line))
+		{
+			if (line[0] == ';') continue; // skip comment lines
+			if (line == "") { bRecentlyReadEmptyLine = true; continue; } // skip empty lines
+
+			const std::pair<std::string, std::string> SettingNameValuePair = ParseLineINI(line, &bReadingSection);
+			const std::string& SettingName = SettingNameValuePair.first;
+			const std::string& SettingValue = SettingNameValuePair.second;
+
+			// Header sections;
+			if (bReadingSection)
+			{
+				bCurrentlyReadingProfile = true;
+				if (bRecentlyReadEmptyLine)
+				{
+					HDRProfiles.push_back(profile);
+					profile = {};
+					bRecentlyReadEmptyLine = false;
+				}
+				profile.DisplayName = SettingName;
+				continue;
+			}
+
+			if (SettingName == "MaxBrightness")
+			{
+				profile.MaxBrightness = StrUtil::ParseFloat(SettingValue);
+			}
+			if (SettingName == "MinBrightness")
+			{
+				profile.MinBrightness = StrUtil::ParseFloat(SettingValue);
+			}
+			bRecentlyReadEmptyLine = false;
+		}
+		if (bCurrentlyReadingProfile) // Take into account the last item we're reading (.push_back() isn't called above for the last item)
+		{
+			HDRProfiles.push_back(profile);
+			profile = {};
+			bCurrentlyReadingProfile = false;
+		}
+	}
+	else
+	{
+		Log::Error("Cannot find settings file %s in current directory: %s", SETTINGS_FILE_NAME, DirectoryUtil::GetCurrentPath().c_str());
+	}
+	return HDRProfiles;
+}
+
+#include "Libs/VQUtils/Libs/tinyxml2/tinyxml2.h"
+std::vector< FSceneRepresentation> VQEngine::ParseScenesFile()
+{
+	using namespace tinyxml2;
+	constexpr char* XML_TAG_SCENE                  = "scene";
+	constexpr char* XML_TAG_ENVIRONMENT_MAP        = "environment_map";
+	constexpr char* XML_TAG_ENVIRONMENT_MAP_PRESET = "preset";
+	//-----------------------------------------------------------------
+	constexpr char* SCENE_FILES_DIRECTORY          = "Data/Levels/";
+	//-----------------------------------------------------------------
+	const std::vector< std::string>          SceneFiles = DirectoryUtil::ListFilesInDirectory(SCENE_FILES_DIRECTORY, ".xml");
+	      std::vector< FSceneRepresentation> SceneRepresentations;
+	//-----------------------------------------------------------------
+
+	for (const std::string SceneFile : SceneFiles)
+	{
+		// scene rep
+		FSceneRepresentation SceneRep = {};
+		SceneRep.SceneName = DirectoryUtil::GetFileNameWithoutExtension(SceneFile);
+
+		// parse XML
+		tinyxml2::XMLDocument doc;
+		doc.LoadFile(SceneFile.c_str());
+
+		XMLElement* pScene = doc.FirstChildElement(XML_TAG_SCENE);
+		if (pScene)
+		{
+			XMLElement* pEnvMap = pScene->FirstChildElement(XML_TAG_ENVIRONMENT_MAP);
+			if (pEnvMap)
+			{
+				XMLElement* pPreset = pEnvMap->FirstChildElement(XML_TAG_ENVIRONMENT_MAP_PRESET);
+				if (pPreset)
+				{
+					XMLNode* pPresetVal = pPreset->FirstChild();
+					if (pPresetVal)
+					{
+						SceneRep.EnvironmentMapPreset = pPresetVal->Value();
+					}
+				}
+			}
+		}
+
+		// TODO: error reporting?
+
+		SceneRepresentations.push_back(SceneRep);
+	}
+
+
+	return SceneRepresentations;
 }

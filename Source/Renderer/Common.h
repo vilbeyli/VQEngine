@@ -22,9 +22,10 @@
 #include "../../Libs/VQUtils/Source/Log.h"
 #include <cassert>
 
-#define KILOBYTE 1024
-#define MEGABYTE 1024*KILOBYTE
-#define GIGABYTE 1024*MEGABYTE
+#define KILOBYTE 1024ull
+#define MEGABYTE (1024ull*KILOBYTE)
+#define GIGABYTE (1024ull*MEGABYTE)
+#define TERABYTE (1024ull*GIGABYTE)
 
 template<class T>
 T AlignOffset(const T& uOffset, const T& uAlign) { return ((uOffset + (uAlign - 1)) & ~(uAlign - 1)); }

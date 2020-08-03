@@ -233,7 +233,11 @@ void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuf
 	ctx.SwapChain.Create(swapChainDesc);
 	if (bHDRSwapchain)
 	{
-		ctx.SwapChain.SetHDRMetaData(EColorSpace::REC_709, 350.0f, 0.01f, 100, 5); // Depending on @mFormat, sets or clears HDR Metadata
+		FSetHDRMetaDataParams p = {}; // default
+		// Set default HDRMetaData - the engine is likely loading resources at this stage 
+		// and all the HDRMetaData parts are not ready yet.
+		// Engine dispatches an event to set HDR MetaData when mSystemInfo is initialized.
+		ctx.SwapChain.SetHDRMetaData(p);
 	}
 
 	// Create command allocators
@@ -640,7 +644,51 @@ void VQRenderer::LoadPSOs()
 
 		psoDesc.SampleDesc.Count = 4;
 		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::HELLO_WORLD_CUBE_PSO_MSAA_4])));
-		SetName(mpBuiltinPSOs[EBuiltinPSOs::HELLO_WORLD_CUBE_PSO], "PSO_HelloCube");
+		SetName(mpBuiltinPSOs[EBuiltinPSOs::HELLO_WORLD_CUBE_PSO], "PSO_HelloCubeMSAA");
+	}
+
+	// SKYDOME PSO
+	{
+		ComPtr<ID3DBlob> vertexShader;
+		ComPtr<ID3DBlob> pixelShader;
+		ComPtr<ID3DBlob> errBlob;
+
+		hr = D3DCompileFromFile(GetAssetFullPath(L"Skydome.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, &errBlob);
+		if (FAILED(hr)) { ReportErrorAndReleaseBlob(errBlob); }
+		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"Skydome.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, &errBlob));
+
+		// Define the vertex input layout.
+		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
+		{
+			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT   , 0, 0 , D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT      , 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		};
+
+		// Describe and create the graphics pipeline state object (PSO).
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+		psoDesc.pRootSignature = mpBuiltinRootSignatures[2];
+		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
+		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
+		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+		psoDesc.DepthStencilState.DepthEnable = TRUE;
+		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+		psoDesc.DepthStencilState.StencilEnable = FALSE;
+		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+		psoDesc.SampleMask = UINT_MAX;
+		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		psoDesc.NumRenderTargets = 1;
+		psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		psoDesc.SampleDesc.Count = 1;
+		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::SKYDOME_PSO])));
+		SetName(mpBuiltinPSOs[EBuiltinPSOs::SKYDOME_PSO], "PSO_Skydome");
+
+		psoDesc.SampleDesc.Count = 4;
+		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::SKYDOME_PSO_MSAA_4])));
+		SetName(mpBuiltinPSOs[EBuiltinPSOs::SKYDOME_PSO_MSAA_4], "PSO_SkydomeMSAA");
 	}
 
 	// TONEMAPPER PSO
@@ -696,16 +744,6 @@ void VQRenderer::LoadDefaultResources()
 		TextureID texID = this->CreateTexture("Checkerboard", textureDesc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, texture.data());
 		this->CreateAndInitializeSRV(texID);
 	}
-
-#if 0
-	// HDR texture from file
-	{
-		const std::string TextureFilePath = "Data/Textures/sIBL/Walk_Of_Fame/Mans_Outside_2k.hdr";
-		tDesc.TexName = (TextureFilePath);
-		TextureID texID = this->CreateTextureFromFile(TextureFilePath);
-		this->CreateAndInitializeSRV(texID);
-	}
-#endif
 
 	mStaticHeap_VertexBuffer.UploadData(mHeapUpload.GetCommandList());
 	mStaticHeap_IndexBuffer.UploadData(mHeapUpload.GetCommandList());

@@ -42,16 +42,6 @@ class Window;
 struct ID3D12RootSignature;
 struct ID3D12PipelineState;
 
-using ID_TYPE = int;
-using BufferID  = ID_TYPE;
-using TextureID = ID_TYPE;
-using SamplerID = ID_TYPE;
-using SRV_ID    = ID_TYPE;
-using UAV_ID    = ID_TYPE;
-using CBV_ID    = ID_TYPE;
-using RTV_ID    = ID_TYPE;
-using DSV_ID    = ID_TYPE;
-#define INVALID_ID  -1
 
 
 //
@@ -91,6 +81,8 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	HELLO_WORLD_CUBE_PSO_MSAA_4,
 	TONEMAPPER_PSO,
 	HDR_FP16_SWAPCHAIN_PSO,
+	SKYDOME_PSO,
+	SKYDOME_PSO_MSAA_4,
 
 	NUM_BUILTIN_PSOs
 };

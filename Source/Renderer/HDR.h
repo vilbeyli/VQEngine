@@ -28,6 +28,7 @@
 // - https://www.youtube.com/watch?v=9Upl31Mykrc : Linus Sebastian : Backlight Types As Fast As Possible
 // - https://www.youtube.com/watch?v=tzm2XjcyKDQ : Linus Sebastian : HDR Standards Explained 
 // - https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-24-importance-being-linear
+// - https://app.spectracal.com/Documents/White%20Papers/HDR_Demystified.pdf
 
 
 //
@@ -66,13 +67,15 @@
 //   - Transfer/Gamma fuinctions 
 //     - G22   : Gamma2.2                  | RGBA8_UNORM / RGB10A2_UNORM
 //     - G10   : Linear ~ scRGB (no Gamma) | RGBA16_FLOAT
-//     - G2084 : SMPTE 2084                | RGBA8_UNORM / RGB10A2_UNORM
+//     - G2084 : SMPTE 2084 (PQ Curve)     | RGBA8_UNORM / RGB10A2_UNORM
 //   - Encoding range (Full / Studio)
 //   - Siting / chroma subsampling (video)
 //   - Color primaries (P709 / P2020)
 //   - IDXGISwapChain4::SetHDRMetaData()
 
 //------------------------------------------------------------------------------------------------------------------
+
+#include <string>
 
 enum EColorSpace
 {
@@ -93,21 +96,26 @@ enum EDisplayCurve
 	, NUM_DISPLAY_CURVES
 };
 
-
-#include <unordered_map>
-#include <string>
-#include "../../Libs/VQUtils/Source/SystemInfo.h"
-using DisplayBrightnessValueLookup_t = std::unordered_map<std::string_view, VQSystemInfo::FDisplayBrightnessValues>;
-namespace HDR
+struct FDisplayHDRProfile
 {
-	// BUILT-IN HDR10 METADATA PROFILES
-	//
-	// Some non-HDR10 certified monitors which claim 'HDR' can provide incorrect data through DXGI.
-	// For example, take Dell U2718Q:
-	// - https://www.dell.com/support/article/en-us/sln307250/dell-high-dynamic-range-hdr-and-hdr10-displays?lang=en
-	// - DXGI_OUTPUT_DESC1 returns 12.5k Nits as opposed to the monitor's actual 350 Nits brightness value
-	const DisplayBrightnessValueLookup_t BUILTIN_MONITOR_HDR10_METADATA_BRIGHTNESS_PROFILES = 
+	std::string DisplayName;
+	union 
 	{
-		  { "DELL U2718Q", VQSystemInfo::FDisplayBrightnessValues(0.01f, 350.f, 200.0f) }
+		float MinBrightness;
+		float MinLuminance;
 	};
-}
+	union
+	{
+		float MaxBrightness;
+		float MaxLuminance;
+	};
+};
+
+struct FSetHDRMetaDataParams
+{
+	EColorSpace ColorSpace = REC_709;
+	float MaxOutputNits = 270.0f;
+	float MinOutputNits = 0.01f;
+	float MaxContentLightLevel = 2000.0f;
+	float MaxFrameAverageLightLevel = 80.0f;
+};

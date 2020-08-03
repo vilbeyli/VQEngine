@@ -26,19 +26,20 @@
 #include "../../Libs/VQUtils/Source/Image.h"
 
 #include <unordered_map>
+#include <set>
 #include <cassert>
  
 
 //
 // TEXTURE
 //
-void Texture::CreateFromFile(const TextureCreateDesc& tDesc, const std::string& FilePath)
+bool Texture::CreateFromFile(const TextureCreateDesc& tDesc, const std::string& FilePath)
 {
 
     if (FilePath.empty())
     {
         Log::Error("Cannot create Texture from file: empty FilePath provided.");
-        return;
+        return false;
     }
 
     // process file path
@@ -53,29 +54,38 @@ void Texture::CreateFromFile(const TextureCreateDesc& tDesc, const std::string& 
     const std::string FileName = FileNameTokens.front();
     const std::string FileExtension = StrUtil::GetLowercased(FileNameTokens.back());
 
-    const bool bHDR = FileExtension == "hdr";
+    static const std::set<std::string> S_HDR_FORMATS = { "hdr", /*"exr"*/ };
+    assert(FileExtension != "exr"); // TODO: add exr loading support to Image class
+    const bool bHDR = S_HDR_FORMATS.find(FileExtension) != S_HDR_FORMATS.end();
 
     // load img
     Image image = Image::LoadFromFile(FilePath.c_str(), bHDR);
-    assert(image.pData && image.BytesPerPixel > 0);
-
-    TextureCreateDesc desc = tDesc;
-    desc.Desc.Width  = image.Width;
-    desc.Desc.Height = image.Height;
-    desc.Desc.Format = bHDR ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
-    //-------------------------------
-    desc.Desc.DepthOrArraySize = 1;
-    desc.Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    desc.Desc.Alignment = 0;
-    desc.Desc.DepthOrArraySize = 1;
-    desc.Desc.MipLevels = 1;
-    desc.Desc.SampleDesc.Count = 1;
-    desc.Desc.SampleDesc.Quality = 0;
-    desc.Desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    desc.Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-    //-------------------------------
-    Create(desc, image.pData);
+    const bool bImageLoadSucceeded = image.pData && image.BytesPerPixel > 0;
+    if (bImageLoadSucceeded)
+    {
+        TextureCreateDesc desc = tDesc;
+        desc.Desc.Width = image.Width;
+        desc.Desc.Height = image.Height;
+        desc.Desc.Format = bHDR ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
+        //-------------------------------
+        desc.Desc.DepthOrArraySize = 1;
+        desc.Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Desc.Alignment = 0;
+        desc.Desc.DepthOrArraySize = 1;
+        desc.Desc.MipLevels = 1;
+        desc.Desc.SampleDesc.Count = 1;
+        desc.Desc.SampleDesc.Quality = 0;
+        desc.Desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        desc.Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+        //-------------------------------
+        Create(desc, image.pData);
+    }
+    else
+    {
+        Log::Error("Texture::CreateFromFile() : TexName=%s, FileName=%s", tDesc.TexName.c_str(), FileName.c_str() );
+    }
     image.Destroy();
+    return bImageLoadSucceeded;
 }
 
 // TODO: clean up function
@@ -154,17 +164,17 @@ void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullpt
 
         UINT64 UplHeapSize;
         uint32_t num_rows = {};
-        UINT64 row_sizes_in_bytes = {};
+        UINT64 row_size_in_bytes = {};
         D3D12_PLACED_SUBRESOURCE_FOOTPRINT placedTex2D = {};
-        desc.pDevice->GetCopyableFootprints(&desc.Desc, 0, 1, 0, &placedTex2D, &num_rows, &row_sizes_in_bytes, &UplHeapSize);
+        desc.pDevice->GetCopyableFootprints(&desc.Desc, 0, 1, 0, &placedTex2D, &num_rows, &row_size_in_bytes, &UplHeapSize);
         placedTex2D.Offset += UINT64(pUploadBufferMem - desc.pUploadHeap->BasePtr());
 
-        // copy all the mip slices into the offsets specified by the footprint structure
-        //
+        // copy data row by row
         for (uint32_t y = 0; y < num_rows; y++)
         {
-            memcpy(pUploadBufferMem + y * placedTex2D.Footprint.RowPitch,
-                (UINT8*)pData + y * placedTex2D.Footprint.RowPitch, row_sizes_in_bytes);
+            const UINT64 UploadMemOffset = y * placedTex2D.Footprint.RowPitch;
+            const UINT64   DataMemOffset = y * row_size_in_bytes;
+            memcpy(pUploadBufferMem + UploadMemOffset, (UINT8*)pData + DataMemOffset, row_size_in_bytes);
         }
 
         CD3DX12_TEXTURE_COPY_LOCATION Dst(mpTexture, 0);

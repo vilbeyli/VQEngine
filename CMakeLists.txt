@@ -26,6 +26,9 @@ set (Resource
 
 set (Config
     "Data/EngineSettings.ini"
+    "Data/RendererSettings.ini"
+    "Data/HDRDisplayProfiles.ini"
+    "Data/EnvironmentMaps.ini"
 )
 
 set (Shaders
@@ -33,6 +36,7 @@ set (Shaders
     "Source/Shaders/hello-cube.hlsl"
     "Source/Shaders/FullscreenTriangle.hlsl"
     "Source/Shaders/Tonemapper.hlsl"
+    "Source/Shaders/Skydome.hlsl"
 )
 
 set (HeaderVQE 

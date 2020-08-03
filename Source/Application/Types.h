@@ -31,3 +31,19 @@ using uint8  = unsigned char;
 using uint = unsigned;
 
 using fp32 = float;
+
+// -------------------------------------
+
+using ID_TYPE = int;
+constexpr ID_TYPE INVALID_ID = -1;
+
+using BufferID = ID_TYPE;
+using TextureID = ID_TYPE;
+using SamplerID = ID_TYPE;
+using SRV_ID = ID_TYPE;
+using UAV_ID = ID_TYPE;
+using CBV_ID = ID_TYPE;
+using RTV_ID = ID_TYPE;
+using DSV_ID = ID_TYPE;
+
+using EnvironmentMapID = ID_TYPE;

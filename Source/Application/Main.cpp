@@ -148,6 +148,16 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 			refStartupParams.bOverrideGFXSetting_bHDR = true;
 			refStartupParams.EngineSettings.WndMain.bEnableHDR = true;
 		}
+		if (paramName == "-MaxFrameRate" || paramName == "-MaxFPS")
+		{
+			refStartupParams.bOverrideGFXSetting_bMaxFrameRate = true;
+			if (paramValue == "Unlimited" || paramValue == "0")
+				refStartupParams.EngineSettings.gfx.MaxFrameRate = 0;
+			else if (paramValue == "Auto" || paramValue == "Automatic" || paramValue == "-1")
+				refStartupParams.EngineSettings.gfx.MaxFrameRate = -1;
+			else
+				refStartupParams.EngineSettings.gfx.MaxFrameRate = StrUtil::ParseInt(paramValue);
+		}
 	}
 }
 

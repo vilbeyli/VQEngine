@@ -40,7 +40,7 @@ using namespace VQSystemInfo;
 	#define ENABLE_VALIDATION_LAYER 0
 #endif
 
-
+// TODO: initialize from functions?
 static TextureID LAST_USED_TEXTURE_ID = 0;
 static SRV_ID    LAST_USED_SRV_ID = 0;
 static UAV_ID    LAST_USED_UAV_ID = 0;
@@ -81,20 +81,24 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 	// It's recommended to create heaps on background threads to avoid glitching the render 
 	// thread. In D3D12, multiple threads may safely call create routines concurrently.
 	UploadHeap uploadHeap;
-	uploadHeap.Create(mDevice.GetDevicePtr(), 32 * MEGABYTE); // TODO: drive the heapsize through RendererSettings.ini
+	uploadHeap.Create(mDevice.GetDevicePtr(), 1024 * MEGABYTE); // TODO: drive the heapsize through RendererSettings.ini
 
-	TextureCreateDesc tDesc(DirectoryUtil::GetFileNameFromPath(pFilePath));
+	const std::string FileNameAndExtension = DirectoryUtil::GetFileNameFromPath(pFilePath);
+	TextureCreateDesc tDesc(FileNameAndExtension);
 	tDesc.pAllocator = mpAllocator;
 	tDesc.pDevice = mDevice.GetDevicePtr();
 	tDesc.pUploadHeap = &uploadHeap;
 	tDesc.Desc = {};
 
-	tex.CreateFromFile(tDesc, pFilePath);
-
-	uploadHeap.UploadToGPUAndWait(mGFXQueue.pQueue);
+	bool bSuccess = tex.CreateFromFile(tDesc, pFilePath);
+	TextureID ID = INVALID_ID;
+	if (bSuccess)
+	{
+		uploadHeap.UploadToGPUAndWait(mGFXQueue.pQueue);
+		ID = AddTexture_ThreadSafe(std::move(tex));
+	}
 	uploadHeap.Destroy();
-
-	return AddTexture_ThreadSafe(std::move(tex));
+	return ID;
 }
 
 TextureID VQRenderer::CreateTexture(const std::string& name, const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES ResourceState, const void* pData)
@@ -124,10 +128,9 @@ TextureID VQRenderer::CreateTexture(const std::string& name, const D3D12_RESOURC
 }
 SRV_ID VQRenderer::CreateAndInitializeSRV(TextureID texID)
 {
-
 	SRV_ID Id = INVALID_ID;
 	CBV_SRV_UAV SRV = {};
-
+	if(texID != INVALID_ID)
 	{
 		std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 
@@ -156,12 +159,6 @@ DSV_ID VQRenderer::CreateAndInitializeDSV(TextureID texID)
 	return Id;
 }
 
-#if 0 // can we generalize Create*() ?
-//#define CreateRV(RV_t, )\
-//##RV_t_ID VQRenderer::Create##RV_t(uint NumDescriptors /*= 1*/)\
-//{\
-//}
-#endif
 
 DSV_ID VQRenderer::CreateDSV(uint NumDescriptors /*= 1*/)
 {
