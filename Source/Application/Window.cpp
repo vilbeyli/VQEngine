@@ -329,7 +329,9 @@ void Window::SetMouseCapture(bool bCapture)
         while (hr >= 0) hr = ShowCursor(FALSE);
         switch (hr)
         {
+#if VERBOSE_LOGGING
         case -1: Log::Warning("ShowCursor(FALSE): No mouse is installed!"); break;
+#endif
         case 0: break;
         //default: Log::Info("ShowCursor(FALSE): %d", hr); break;
         }

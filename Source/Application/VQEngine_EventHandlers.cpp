@@ -113,7 +113,7 @@ void VQEngine::SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse)
 	{ 
 		SetCursorPos(this->mMouseCapturePosition.x, this->mMouseCapturePosition.y);
 #if VERBOSE_LOGGING
-		Log::Info("Releasing Mouse: Settingh Position=(%d, %d)", this->mMouseCapturePosition.x, this->mMouseCapturePosition.y);
+		Log::Info("Releasing Mouse: Setting Position=(%d, %d)", this->mMouseCapturePosition.x, this->mMouseCapturePosition.y);
 #endif
 	}
 }
