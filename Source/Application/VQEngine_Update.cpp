@@ -231,7 +231,7 @@ void VQEngine::HandleEngineInput()
 		if (input.IsAnyMouseDown())
 		{
 			Input& inp = mInputStates.at(hwnd); // non const ref
-			//if (inp.GetInputBypassing())
+			if (inp.GetInputBypassing())
 			{
 				inp.SetInputBypassing(false);
 

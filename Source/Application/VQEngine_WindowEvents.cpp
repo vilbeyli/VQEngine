@@ -284,7 +284,7 @@ void VQEngine::DispatchHDRSwapchainTransitionEvents(HWND hwnd)
 void VQEngine::OnWindowMove(HWND hwnd_, int x, int y)
 {
 #if LOG_CALLBACKS
-	Log::Warning("OnWindowMove<%0x, %s>: (%d, %d)", hWnd, GetWindowName(hWnd).c_str(), x, y);
+	Log::Warning("OnWindowMove<%0x, %s>: (%d, %d)", hwnd_, GetWindowName(hwnd_).c_str(), x, y);
 #endif
 
 	if (mSettings.WndMain.bEnableHDR)
@@ -337,10 +337,6 @@ void VQEngine::OnWindowFocus(HWND hwnd)
 #if LOG_CALLBACKS
 	Log::Warning("OnWindowFocus<%x, %s>", hwnd, this->GetWindowName(hwnd).c_str());
 #endif
-
-	// make sure the mouse becomes visible when Main Window is not the one that is focused
-	if(bMainWindowFocused)
-		this->SetMouseCaptureForWindow(mpWinMain->GetHWND(), true);
 }
 
 void VQEngine::OnWindowLoseFocus(HWND hwnd)

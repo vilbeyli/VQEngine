@@ -97,7 +97,6 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	Timer  t;  t.Reset();  t.Start();
 	Timer t2; t2.Reset(); t2.Start();
 
-	// TODO: threadify initialization calls 
 	InitializeEngineSettings(Params);
 	InitializeEnvironmentMaps();
 	InitializeHDRProfiles();
@@ -124,7 +123,6 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 
 	Log::Info("[PERF] VQEngine::Initialize() : %.3fs", t2.StopGetDeltaTimeAndReset());
 	Log::Info("[PERF]    DispatchSysInfo : %.3fs", f0);
-	//Log::Info("[PERF]    PrintInfo  : %.3fs", f1);
 	Log::Info("[PERF]    Settings       : %.3fs", f2);
 	Log::Info("[PERF]    Windows        : %.3fs", f3);
 	Log::Info("[PERF]    Threads        : %.3fs", f4);
@@ -255,6 +253,8 @@ void VQEngine::InitializeWindows(const FStartupParameters& Params)
 		fnInitializeWindow(mSettings.WndDebug, Params.hExeInstance, mpWinDebug, "Debug Window");
 		Log::Info("Created debug window<0x%x>: %dx%d", mpWinDebug->GetHWND(), mpWinDebug->GetWidth(), mpWinDebug->GetHeight());
 	}
+
+	this->SetMouseCaptureForWindow(mpWinMain->GetHWND(), true);
 }
 
 void VQEngine::InitializeHDRProfiles()
