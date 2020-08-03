@@ -57,6 +57,8 @@ struct FStartupParameters
 
 	uint8 bOverrideENGSetting_bAutomatedTest              : 1;
 	uint8 bOverrideENGSetting_bTestFrames                 : 1;
+
+	std::string LevelNameToLoad = "DefaultScene";
 };
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);

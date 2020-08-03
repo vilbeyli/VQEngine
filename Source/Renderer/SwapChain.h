@@ -32,8 +32,6 @@ class CommandQueue;
 class Window;
 
 
-
-
 // lifted (shamelessly) from D3D12HDR.h of Microsoft's DX12 samples
 enum SwapChainBitDepth
 {
@@ -64,20 +62,17 @@ public:
 	void Destroy();
 	void Resize(int w, int h, DXGI_FORMAT format);
 
-	void SetFullscreen(bool bState, int FSRecoveryWindowWidth, int FSRecoveryWindowHeight);
-	bool IsFullscreen() const;
-	void SetHDRMetaData( // Depending on @mFormat, sets or clears HDR Metadata
-		EColorSpace ColorSpace = REC_709
-		, float MaxOutputNits = 1000.0f
-		, float MinOutputNits = 0.01f
-		, float MaxContentLightLevel = 2000.0f
-		, float MaxFrameAverageLightLevel = 500.0f
-	);
-	void EnsureSwapChainColorSpace(SwapChainBitDepth swapChainBitDepth, bool bHDR10Signal);
-
 	HRESULT Present();
 	void MoveToNextFrame();
 	void WaitForGPU();
+
+	/* Setters */
+	void SetFullscreen(bool bState, int FSRecoveryWindowWidth, int FSRecoveryWindowHeight);
+	void SetHDRMetaData(EColorSpace ColorSpace, float MaxOutputNits, float MinOutputNits, float MaxContentLightLevel, float MaxFrameAverageLightLevel);
+	inline void SetHDRMetaData(const FSetHDRMetaDataParams& p) { SetHDRMetaData(p.ColorSpace, p.MaxOutputNits, p.MinOutputNits, p.MaxContentLightLevel, p.MaxFrameAverageLightLevel); }
+	void ClearHDRMetaData();
+	void EnsureSwapChainColorSpace(SwapChainBitDepth swapChainBitDepth, bool bHDR10Signal); 
+
 
 	/* Getters */ 
 	inline int                           GetNumBackBuffers()                const { return mNumBackBuffers; }
@@ -88,8 +83,12 @@ public:
 	       DXGI_OUTPUT_DESC1             GetContainingMonitorDesc()         const;
 	inline bool                          IsVSyncOn()                        const { return mbVSync;}
 	inline DXGI_FORMAT                   GetFormat()                        const { return mFormat; }
-	inline DXGI_COLOR_SPACE_TYPE         GetColorSpace()                    const { return mColorSpace; }
+	       bool                          IsFullscreen() const;
+
 	inline bool                          IsHDRFormat()                      const { return mFormat == DXGI_FORMAT_R16G16B16A16_FLOAT || mFormat == DXGI_FORMAT_R10G10B10A2_UNORM; }
+	inline DXGI_COLOR_SPACE_TYPE         GetColorSpace()                    const { return mColorSpace; }
+	inline float                         GetHDRMetaData_MaxOutputNits()     const { return static_cast<float>(mHDRMetaData.MaxMasteringLuminance) / 10000.0f; }
+	inline float                         GetHDRMetaData_MinOutputNits()     const { return static_cast<float>(mHDRMetaData.MinMasteringLuminance) / 10000.0f; }
 
 private:
 	void CreateRenderTargetViews();

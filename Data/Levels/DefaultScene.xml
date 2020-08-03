@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<scene>
+    <!-- Environment maps are defined in Data/EnvironmentMaps.ini -->
+    <!--
+         // custom env map usage: specify path & MaxCLL
+         <path>Textures/HDRI/env_map.hdr</path>
+         <MaxCLL>1200</MaxCLL>
+
+         // preset usage: defined in EnvironmentMaps.ini
+         <preset>Stadium01</preset>
+    -->
+    <environment_map>
+        <preset>Stadium01</preset>
+    </environment_map>
+
+    
+</scene>

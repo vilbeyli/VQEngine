@@ -42,16 +42,6 @@ class Window;
 struct ID3D12RootSignature;
 struct ID3D12PipelineState;
 
-using ID_TYPE = int;
-using BufferID  = ID_TYPE;
-using TextureID = ID_TYPE;
-using SamplerID = ID_TYPE;
-using SRV_ID    = ID_TYPE;
-using UAV_ID    = ID_TYPE;
-using CBV_ID    = ID_TYPE;
-using RTV_ID    = ID_TYPE;
-using DSV_ID    = ID_TYPE;
-#define INVALID_ID  -1
 
 
 //

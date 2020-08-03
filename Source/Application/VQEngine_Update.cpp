@@ -30,22 +30,6 @@
 
 using namespace DirectX;
 
-// temporary hardcoded initialization until scene is data driven
-static FCameraData GenerateCameraInitializationParameters(const std::unique_ptr<Window>& pWin)
-{
-	assert(pWin);
-	FCameraData camData = {};
-	camData.x = 0.0f; camData.y = 3.0f; camData.z = -5.0f;
-	camData.pitch = 15.0f;
-	camData.yaw = 0.0f;
-	camData.bPerspectiveProjection = true;
-	camData.fovV_Degrees = 60.0f;
-	camData.nearPlane = 0.01f;
-	camData.farPlane = 1000.0f;
-	camData.width  = static_cast<float>(pWin->GetWidth() );
-	camData.height = static_cast<float>(pWin->GetHeight());
-	return camData;
-}
 
 void VQEngine::UpdateThread_Main()
 {
@@ -107,7 +91,86 @@ void VQEngine::UpdateThread_Exit()
 {
 }
 
+void VQEngine::UpdateThread_PreUpdate(float& dt)
+{
+	// update timer
+	dt = mTimer.Tick();
 
+	// TODO: perf entry
+
+	// system-wide input (esc/mouse click on wnd)
+	HandleEngineInput();
+}
+
+void VQEngine::UpdateThread_UpdateAppState(const float dt)
+{
+	assert(mbRenderThreadInitialized);
+
+
+	if (mAppState == EAppState::INITIALIZING)
+	{
+		// start loading
+		Log::Info("Main Thread starts loading...");
+
+		// start load level
+		Load_SceneData_Dispatch();
+		mAppState = EAppState::LOADING;// not thread-safe
+
+		mbLoadingLevel.store(true);    // thread-safe
+	}
+
+
+	if (mbLoadingLevel)
+	{
+		// animate loading screen
+
+
+		// check if loading is done
+		const int NumActiveTasks = mUpdateWorkerThreads.GetNumActiveTasks();
+		const bool bLoadDone = NumActiveTasks == 0;
+		if (bLoadDone)
+		{
+			Log::Info("Main Thread loaded");
+			mAppState = EAppState::SIMULATING;
+			mbLoadingLevel.store(false);
+		}
+	}
+
+
+	else
+	{
+		// TODO: threaded?
+		UpdateThread_UpdateScene_MainWnd(dt);
+		UpdateThread_UpdateScene_DebugWnd(dt);
+	}
+
+}
+
+void VQEngine::UpdateThread_PostUpdate()
+{
+	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
+	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
+	const int FRAME_DATA_NEXT_INDEX = ((mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS) + 1) % NUM_BACK_BUFFERS;
+
+	if (mbLoadingLevel)
+	{
+		return;
+	}
+
+	// compute visibility 
+
+	// extract scene view
+
+	// copy over state for next frame
+	mScene_MainWnd.mFrameData[FRAME_DATA_NEXT_INDEX] = mScene_MainWnd.mFrameData[FRAME_DATA_INDEX];
+
+	// input post update
+	for (auto it = mInputStates.begin(); it != mInputStates.end(); ++it)
+	{
+		const HWND& hwnd = it->first;
+		mInputStates.at(hwnd).PostUpdate(); // non-const accessor
+	}
+}
 
 void VQEngine::UpdateThread_WaitForRenderThread()
 {
@@ -126,16 +189,25 @@ void VQEngine::UpdateThread_SignalRenderThread()
 	mpSemRender->Signal();
 }
 
-void VQEngine::UpdateThread_PreUpdate(float& dt)
+// -------------------------------------------------------------------
+
+// temporary hardcoded initialization until scene is data driven
+static FCameraData GenerateCameraInitializationParameters(const std::unique_ptr<Window>& pWin)
 {
-	// update timer
-	dt = mTimer.Tick();
-
-	// TODO: perf entry
-
-	// system-wide input (esc/mouse click on wnd)
-	HandleEngineInput();
+	assert(pWin);
+	FCameraData camData = {};
+	camData.x = 0.0f; camData.y = 3.0f; camData.z = -5.0f;
+	camData.pitch = 15.0f;
+	camData.yaw = 0.0f;
+	camData.bPerspectiveProjection = true;
+	camData.fovV_Degrees = 60.0f;
+	camData.nearPlane = 0.01f;
+	camData.farPlane = 1000.0f;
+	camData.width = static_cast<float>(pWin->GetWidth());
+	camData.height = static_cast<float>(pWin->GetHeight());
+	return camData;
 }
+static void Toggle(bool& b) { b = !b; }
 
 void VQEngine::HandleEngineInput()
 {
@@ -245,6 +317,46 @@ void VQEngine::CalculateEffectiveFrameRate(HWND hwnd)
 	else                    Log::Info("FrameRateLimit(ms) : %.2f | %d FPS", mEffectiveFrameRateLimit_ms, static_cast<int>(1000.0f / mEffectiveFrameRateLimit_ms));
 }
 
+const FDisplayHDRProfile* VQEngine::GetHDRProfileIfExists(const wchar_t* pwStrLogicalDisplayName)
+{
+	const FDisplayHDRProfile* pProfile = nullptr;
+	const std::string LogicalDisplayNameToMatch = StrUtil::UnicodeToASCII<256>(pwStrLogicalDisplayName);
+	for (const FDisplayHDRProfile& profile : mDisplayHDRProfiles)
+	{
+		profile.DisplayName;
+		for (const VQSystemInfo::FMonitorInfo& dInfo : mSysInfo.Monitors)
+		{
+			if (dInfo.LogicalDeviceName == LogicalDisplayNameToMatch)
+			{
+				return &profile;
+			}
+		}
+	}
+	return pProfile;
+}
+
+FSetHDRMetaDataParams VQEngine::GatherHDRMetaDataParameters(HWND hwnd)
+{
+	FSetHDRMetaDataParams params;
+
+	const SwapChain& Swapchain = mRenderer.GetWindowSwapChain(hwnd);
+	const DXGI_OUTPUT_DESC1 desc = Swapchain.GetContainingMonitorDesc();
+	const FDisplayHDRProfile* pProfile = GetHDRProfileIfExists(desc.DeviceName);
+
+	params.MaxOutputNits = pProfile ? pProfile->MaxBrightness : desc.MaxLuminance;
+	params.MinOutputNits = pProfile ? pProfile->MinBrightness : desc.MinLuminance;
+	
+	const bool bHDREnvironmentMap = mResources_MainWnd.SelectedEnvironmentMap.Tex_HDREnvironment != INVALID_ID;
+	if (bHDREnvironmentMap)
+	{
+		params.MaxContentLightLevel = static_cast<float>(mResources_MainWnd.SelectedEnvironmentMap.MaxContentLightLevel);
+	}
+
+	params.MaxFrameAverageLightLevel = 80.0f; // TODO: dynamic calculation using histograms?
+
+	return params;
+}
+
 void VQEngine::SetWindowName(HWND hwnd, const std::string& name){	mWinNameLookup[hwnd] = name; }
 void VQEngine::SetWindowName(const std::unique_ptr<Window>& pWin, const std::string& name) { SetWindowName(pWin->GetHWND(), name); }
 
@@ -261,52 +373,6 @@ const std::string& VQEngine::GetWindowName(HWND hwnd) const
 	return mWinNameLookup.at(hwnd);
 }
 
-void VQEngine::UpdateThread_UpdateAppState(const float dt)
-{
-	assert(mbRenderThreadInitialized);
-
-
-	if (mAppState == EAppState::INITIALIZING)
-	{
-		// start loading
-		Log::Info("Main Thread starts loading...");
-
-		// start load level
-		Load_SceneData_Dispatch();
-		mAppState = EAppState::LOADING;// not thread-safe
-
-		mbLoadingLevel.store(true);    // thread-safe
-	}
-
-
-	if (mbLoadingLevel)
-	{
-		// animate loading screen
-
-
-		// check if loading is done
-		const int NumActiveTasks = mUpdateWorkerThreads.GetNumActiveTasks();
-		const bool bLoadDone = NumActiveTasks == 0;
-		if (bLoadDone)
-		{
-			Log::Info("Main Thread loaded");
-			mAppState = EAppState::SIMULATING;
-			mbLoadingLevel.store(false);
-		}
-	}
-
-
-	else
-	{
-		// TODO: threaded?
-		UpdateThread_UpdateScene_MainWnd(dt);
-		UpdateThread_UpdateScene_DebugWnd(dt);
-	}
-
-}
-
-
-
 FFrameData& VQEngine::GetCurrentFrameData(HWND hwnd)
 {
 	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(hwnd);
@@ -315,7 +381,20 @@ FFrameData& VQEngine::GetCurrentFrameData(HWND hwnd)
 
 }
 
-static void Toggle(bool& b) { b = !b; }
+const FEnvironmentMapDescriptor& VQEngine::GetEnvironmentMapDesc(const std::string& EnvMapName) const
+{
+	static const FEnvironmentMapDescriptor DEFAULT_ENV_MAP_DESC = { "ENV_MAP_NOT_FOUND", "", 0.0f };
+	const bool bEnvMapNotFound = mLookup_EnvironmentMapDescriptors.find(EnvMapName) == mLookup_EnvironmentMapDescriptors.end();
+	if (bEnvMapNotFound)
+	{
+		Log::Error("Environment Map %s not found.", EnvMapName.c_str());
+	}
+	return  bEnvMapNotFound
+		? DEFAULT_ENV_MAP_DESC
+		: mLookup_EnvironmentMapDescriptors.at(EnvMapName);
+}
+
+// ---------------------------------------------------------------------
 
 void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 {
@@ -379,34 +458,15 @@ void VQEngine::UpdateThread_UpdateScene_DebugWnd(const float dt)
 
 }
 
-void VQEngine::UpdateThread_PostUpdate()
-{
-	const int NUM_BACK_BUFFERS      = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
-	const int FRAME_DATA_INDEX      = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
-	const int FRAME_DATA_NEXT_INDEX = ((mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS) + 1) % NUM_BACK_BUFFERS;
-
-	if (mbLoadingLevel)
-	{
-		return;
-	}
-
-	// compute visibility 
-
-	// extract scene view
-
-	// copy over state for next frame
-	mScene_MainWnd.mFrameData[FRAME_DATA_NEXT_INDEX] = mScene_MainWnd.mFrameData[FRAME_DATA_INDEX];
-
-	// input post update
-	for (auto it = mInputStates.begin(); it != mInputStates.end(); ++it)
-	{
-		const HWND& hwnd = it->first;
-		mInputStates.at(hwnd).PostUpdate(); // non-const accessor
-	}
-}
 
 void VQEngine::Load_SceneData_Dispatch()
 {
+	if (mQueue_SceneLoad.empty())
+		return;
+
+	const FSceneRepresentation SceneRep = mQueue_SceneLoad.front();
+	mQueue_SceneLoad.pop();
+
 	mUpdateWorkerThreads.AddTask([&]() // Load scene data
 	{
 		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
@@ -451,29 +511,24 @@ void VQEngine::Load_SceneData_Dispatch()
 		mWindowUpdateContextLookup[mpWinMain->GetHWND()] = &mScene_MainWnd;
 		if (mpWinDebug) mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
 	});
-	mUpdateWorkerThreads.AddTask([&]() // Load Environment map textures
+	mUpdateWorkerThreads.AddTask([&, SceneRep]() // Load Environment map textures
 	{
+		Log::Info("Loading scene: %s", SceneRep.SceneName.c_str());
 		FEnvironmentMap& env = mResources_MainWnd.SelectedEnvironmentMap;
-		constexpr char* pHDREnvironmentTexturePaths[] =
-		{
-			  "Data/Textures/sIBL/waterfall/waterfall_Ref.exr" // TODO: exr importer
-			, "Data/Textures/sIBL/PaperMill_Ruins_E/PaperMill_E_3k.hdr"
-			, "Data/Textures/sIBL/Barcelona_Rooftops/Barce_Rooftop_C_3k.hdr"
-			, "Data/Textures/HDRI/colorful_studio_8k.hdr"
-			, "Data/Textures/HDRI/hansaplatz_8k.hdr"
-			, "Data/Textures/HDRI/industrial_pipe_and_valve_02_8k.hdr"
-			, "Data/Textures/HDRI/shanghai_bund_8k.hdr"
-			, "Data/Textures/HDRI/studio_small_07_8k.hdr"
-			, "Data/Textures/HDRI/sunny_vondelpark_8k.hdr"
-			, "Data/Textures/HDRI/vignaioli_night_8k.hdr"
-		};
-		env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(pHDREnvironmentTexturePaths[6]);
-		env.SRV_HDREnvironment = mRenderer.CreateAndInitializeSRV(env.Tex_HDREnvironment);
-	});
-}
 
-void VQEngine::Load_SceneData_Join()
-{
+		const FEnvironmentMapDescriptor& desc = this->GetEnvironmentMapDesc(SceneRep.EnvironmentMapPreset);
+		if (!desc.FilePath.empty()) // check whether the env map was found or not
+		{
+			env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(desc.FilePath.c_str());
+			env.SRV_HDREnvironment = mRenderer.CreateAndInitializeSRV(env.Tex_HDREnvironment);
+			env.MaxContentLightLevel = static_cast<float>(desc.MaxContentLightLevel);
+
+			// Update HDRMetaData when the nvironment map is loaded
+			HWND hwnd = mpWinMain->GetHWND();
+			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetStaticHDRMetaDataEvent>(hwnd, this->GatherHDRMetaDataParameters(hwnd)));
+		}
+		Log::Info("%s loaded.", SceneRep.SceneName.c_str());
+	});
 }
 
 
