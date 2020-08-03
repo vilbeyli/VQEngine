@@ -78,8 +78,7 @@ void SwapChain::SetHDRMetaData(EColorSpace ColorSpace, float MaxOutputNits, floa
     
     if (!IsHDRFormat())
     {
-        ThrowIfFailed(mpSwapChain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_NONE, 0, nullptr));
-        Log::Info("Cleared HDR Metadata.");
+        Log::Warning("SetHDRMetadata() called on non-HDR swapchain.");
         return;
     }
 
@@ -111,6 +110,12 @@ void SwapChain::SetHDRMetaData(EColorSpace ColorSpace, float MaxOutputNits, floa
     ThrowIfFailed(mpSwapChain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_HDR10, sizeof(DXGI_HDR_METADATA_HDR10), &mHDRMetaData));
 
     Log::Info("SetHDRMetaData(): Min: %.2f, Max: %.2f, MaxCLL: %.2f, MaxFALL: %.2f", MinOutputNits, MaxOutputNits, MaxContentLightLevel, MaxFrameAverageLightLevel);
+}
+
+void SwapChain::ClearHDRMetaData()
+{
+    ThrowIfFailed(mpSwapChain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_NONE, 0, nullptr));
+    Log::Info("ClearHDRMetaData()");
 }
 
 

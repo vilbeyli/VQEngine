@@ -23,6 +23,8 @@
 
 #include "Libs/VQUtils/Source/Multithreading.h"
 
+#include "../Renderer/HDR.h"
+
 //
 // EVENT BASE CLASS
 //
@@ -44,7 +46,8 @@ enum EEventType
 	SET_FULLSCREEN_EVENT,
 	SET_VSYNC_EVENT,
 	SET_SWAPCHAIN_FORMAT_EVENT,
-	
+	SET_HDR10_STATIC_METADATA_EVENT,
+
 	// Windows->VQE input events
 	KEY_DOWN_EVENT,
 	KEY_UP_EVENT,
@@ -131,6 +134,11 @@ struct SetSwapchainFormatEvent : public IEvent
 {
 	SetSwapchainFormatEvent(HWND hwnd_, DXGI_FORMAT format_) : IEvent(EEventType::SET_SWAPCHAIN_FORMAT_EVENT, hwnd_), format(format_) {}
 	DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
+};
+struct SetStaticHDRMetaDataEvent : public IEvent
+{
+	SetStaticHDRMetaDataEvent(HWND hwnd_, const FSetHDRMetaDataParams& metadata) : IEvent(EEventType::SET_HDR10_STATIC_METADATA_EVENT, hwnd_), payload(metadata) {}
+	FSetHDRMetaDataParams payload;
 };
 
 //

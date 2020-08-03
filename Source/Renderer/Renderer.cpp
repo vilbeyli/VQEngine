@@ -233,8 +233,11 @@ void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuf
 	ctx.SwapChain.Create(swapChainDesc);
 	if (bHDRSwapchain)
 	{
-		// TODO: HDR PROFILE
-		ctx.SwapChain.SetHDRMetaData(EColorSpace::REC_709, 350.0f, 0.01f, 20.0f, 0.8f); // Depending on @mFormat, sets or clears HDR Metadata
+		FSetHDRMetaDataParams p = {}; // default
+		// Set default HDRMetaData - the engine is likely loading resources at this stage 
+		// and all the HDRMetaData parts are not ready yet.
+		// Engine dispatches an event to set HDR MetaData when mSystemInfo is initialized.
+		ctx.SwapChain.SetHDRMetaData(p);
 	}
 
 	// Create command allocators

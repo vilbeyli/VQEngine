@@ -50,7 +50,7 @@ PSInput VSMain(float4 position : POSITION, float4 color : COLOR, float2 uv : TEX
 float4 PSMain(PSInput input) : SV_TARGET
 {
 	float3 ColorTex  = texColor.SampleLevel(Sampler, input.uv, 0).rgb;
-	float3 ColorVert = input.color * 0.8f; // Dim the vert colors a bit... they're too bright and look uglier.
+	float3 ColorVert = input.color;
 	float3 Color = ColorVert * ColorTex;
 	return float4(Color, 1);
 }

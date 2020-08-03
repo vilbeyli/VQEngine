@@ -26,6 +26,9 @@ set (Resource
 
 set (Config
     "Data/EngineSettings.ini"
+    "Data/RendererSettings.ini"
+    "Data/HDRDisplayProfiles.ini"
+    "Data/EnvironmentMaps.ini"
 )
 
 set (Shaders

@@ -40,7 +40,7 @@ using namespace VQSystemInfo;
 	#define ENABLE_VALIDATION_LAYER 0
 #endif
 
-
+// TODO: initialize from functions?
 static TextureID LAST_USED_TEXTURE_ID = 0;
 static SRV_ID    LAST_USED_SRV_ID = 0;
 static UAV_ID    LAST_USED_UAV_ID = 0;
@@ -159,12 +159,6 @@ DSV_ID VQRenderer::CreateAndInitializeDSV(TextureID texID)
 	return Id;
 }
 
-#if 0 // can we generalize Create*() ?
-//#define CreateRV(RV_t, )\
-//##RV_t_ID VQRenderer::Create##RV_t(uint NumDescriptors /*= 1*/)\
-//{\
-//}
-#endif
 
 DSV_ID VQRenderer::CreateDSV(uint NumDescriptors /*= 1*/)
 {

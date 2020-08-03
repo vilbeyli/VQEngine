@@ -240,6 +240,7 @@ void VQEngine::RenderThread_HandleEvents()
 		case EEventType::WINDOW_CLOSE_EVENT         : RenderThread_HandleWindowCloseEvent(pEvent.get()); break;
 		case EEventType::SET_VSYNC_EVENT            : RenderThread_HandleSetVSyncEvent(pEvent.get()); break;
 		case EEventType::SET_SWAPCHAIN_FORMAT_EVENT : RenderThread_HandleSetSwapchainFormatEvent(pEvent.get()); break;
+		case EEventType::SET_HDR10_STATIC_METADATA_EVENT : RenderThread_HandleSetHDRMetaDataEvent(pEvent.get()); break;
 		}
 	}
 
@@ -274,12 +275,16 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	Log::Info("RenderThread: Handle Window<%x> Resize event, set resolution to %dx%d", hwnd, WIDTH, HEIGHT);
 #endif
 
+	const FSetHDRMetaDataParams HDRMetaData = this->GatherHDRMetaDataParameters(hwnd);
 
 	mEventQueue_WinToVQE_Update.AddItem(pResizeEvent);
 
 	Swapchain.WaitForGPU();
 	Swapchain.Resize(WIDTH, HEIGHT, Swapchain.GetFormat());
-	Swapchain.SetHDRMetaData(EColorSpace::REC_709, 350.0f, 0.01f, 20.0f, 0.8f); // Depending on @mFormat, sets or clears HDR Metadata
+	if (pWnd->GetIsOnHDRCapableDisplay()) 
+		Swapchain.SetHDRMetaData(HDRMetaData);
+	else
+		Swapchain.ClearHDRMetaData();
 	Swapchain.EnsureSwapChainColorSpace(Swapchain.GetFormat() == DXGI_FORMAT_R16G16B16A16_FLOAT ? _16 : _8, false);
 	pWnd->OnResize(WIDTH, HEIGHT);
 	mRenderer.OnWindowSizeChanged(hwnd, WIDTH, HEIGHT);
@@ -426,8 +431,11 @@ void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
 		Swapchain.Destroy();
 		Swapchain.Create(desc);
 		
-		// TODO: HDR PROFILE
-		Swapchain.SetHDRMetaData(EColorSpace::REC_709, 350.0f, 0.01f, 20.0f, 0.8f); // Depending on @mFormat, sets or clears HDR Metadata
+		const FSetHDRMetaDataParams HDRMetaData = this->GatherHDRMetaDataParameters(hwnd);
+		if (pWnd->GetIsOnHDRCapableDisplay())
+			Swapchain.SetHDRMetaData(HDRMetaData);
+		else
+			Swapchain.ClearHDRMetaData();
 		Swapchain.EnsureSwapChainColorSpace(Swapchain.GetFormat() == DXGI_FORMAT_R16G16B16A16_FLOAT ? _16 : _8, false);
 	}
 
@@ -442,15 +450,18 @@ void VQEngine::RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent)
 	const int                       WIDTH = pWnd->GetWidth();
 	const int                      HEIGHT = pWnd->GetHeight();
 	SwapChain&                  Swapchain = mRenderer.GetWindowSwapChain(hwnd);
+	const FSetHDRMetaDataParams HDRMetaData = this->GatherHDRMetaDataParameters(hwnd);
 
 	Swapchain.WaitForGPU();
 	Swapchain.Resize(WIDTH, HEIGHT, pSwapchainEvent->format);
 	
-	// TODO: HDR PROFILE
-	Swapchain.SetHDRMetaData(EColorSpace::REC_709, 350.0f, 0.01f, 20.0f, 0.8f); // Depending on @mFormat, sets or clears HDR Metadata
+	pWnd->SetIsOnHDRCapableDisplay(VQSystemInfo::FMonitorInfo::CheckHDRSupport(hwnd));
+	if (pWnd->GetIsOnHDRCapableDisplay())
+		Swapchain.SetHDRMetaData(HDRMetaData);
+	else
+		Swapchain.ClearHDRMetaData();
 	Swapchain.EnsureSwapChainColorSpace(pSwapchainEvent->format == DXGI_FORMAT_R16G16B16A16_FLOAT? _16 : _8, false);
 
-	pWnd->SetIsOnHDRCapableDisplay(VQSystemInfo::FMonitorInfo::CheckHDRSupport(hwnd));
 	mbMainWindowHDRTransitionInProgress.store(false);
 
 	const int NUM_BACK_BUFFERS  = Swapchain.GetNumBackBuffers();
@@ -463,4 +474,18 @@ void VQEngine::RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent)
 		, VQRenderer::DXGIFormatAsString(pSwapchainEvent->format).data()
 		, (OutputDisplayCurve == EDisplayCurve::sRGB ? "Gamma2.2" : (OutputDisplayCurve == EDisplayCurve::Linear ? "Linear" : "PQ"))
 	);
+}
+
+void VQEngine::RenderThread_HandleSetHDRMetaDataEvent(const IEvent* pEvent)
+{
+	const SetStaticHDRMetaDataEvent* pSetMetaDataEvent = static_cast<const SetStaticHDRMetaDataEvent*>(pEvent);
+	const HWND&                      hwnd = pEvent->hwnd;
+	const std::unique_ptr<Window>&   pWnd = GetWindow(hwnd);
+	SwapChain&                  Swapchain = mRenderer.GetWindowSwapChain(hwnd);
+
+	if (pWnd->GetIsOnHDRCapableDisplay())
+	{
+		Swapchain.WaitForGPU();
+		Swapchain.SetHDRMetaData(pSetMetaDataEvent->payload);
+	}
 }
