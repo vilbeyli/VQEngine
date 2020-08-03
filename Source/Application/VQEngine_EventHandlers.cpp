@@ -262,6 +262,7 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	std::unique_ptr<Window>&         pWnd = GetWindow(hwnd);
 	const bool         bIsWindowMinimized = WIDTH == 0 && HEIGHT == 0;
 	const bool                  bIsClosed = pWnd->IsClosed();
+	const bool      bFullscreenTransition = pWnd->GetFullscreenHeight() == HEIGHT && pWnd->GetFullscreenWidth() == WIDTH;
 
 
 	if (bIsClosed || bIsWindowMinimized)
@@ -281,10 +282,14 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 
 	Swapchain.WaitForGPU();
 	Swapchain.Resize(WIDTH, HEIGHT, Swapchain.GetFormat());
-	if (pWnd->GetIsOnHDRCapableDisplay()) 
-		Swapchain.SetHDRMetaData(HDRMetaData);
-	else
-		Swapchain.ClearHDRMetaData();
+	if (bFullscreenTransition)
+	{
+		const FSetHDRMetaDataParams HDRMetaData = this->GatherHDRMetaDataParameters(hwnd);
+		if (pWnd->GetIsOnHDRCapableDisplay())
+			Swapchain.SetHDRMetaData(HDRMetaData);
+		else
+			Swapchain.ClearHDRMetaData();
+	}
 	Swapchain.EnsureSwapChainColorSpace(Swapchain.GetFormat() == DXGI_FORMAT_R16G16B16A16_FLOAT ? _16 : _8, false);
 	pWnd->OnResize(WIDTH, HEIGHT);
 	mRenderer.OnWindowSizeChanged(hwnd, WIDTH, HEIGHT);
@@ -451,16 +456,20 @@ void VQEngine::RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent)
 	const int                      HEIGHT = pWnd->GetHeight();
 	SwapChain&                  Swapchain = mRenderer.GetWindowSwapChain(hwnd);
 	const FSetHDRMetaDataParams HDRMetaData = this->GatherHDRMetaDataParameters(hwnd);
+	const bool                bFormatChange = pSwapchainEvent->format != Swapchain.GetFormat();
 
 	Swapchain.WaitForGPU();
 	Swapchain.Resize(WIDTH, HEIGHT, pSwapchainEvent->format);
 	
 	pWnd->SetIsOnHDRCapableDisplay(VQSystemInfo::FMonitorInfo::CheckHDRSupport(hwnd));
-	if (pWnd->GetIsOnHDRCapableDisplay())
-		Swapchain.SetHDRMetaData(HDRMetaData);
-	else
-		Swapchain.ClearHDRMetaData();
-	Swapchain.EnsureSwapChainColorSpace(pSwapchainEvent->format == DXGI_FORMAT_R16G16B16A16_FLOAT? _16 : _8, false);
+	if (bFormatChange)
+	{
+		if (pWnd->GetIsOnHDRCapableDisplay())
+			Swapchain.SetHDRMetaData(HDRMetaData);
+		else
+			Swapchain.ClearHDRMetaData();
+		Swapchain.EnsureSwapChainColorSpace(pSwapchainEvent->format == DXGI_FORMAT_R16G16B16A16_FLOAT? _16 : _8, false);
+	}
 
 	mbMainWindowHDRTransitionInProgress.store(false);
 

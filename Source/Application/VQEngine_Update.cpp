@@ -521,7 +521,7 @@ void VQEngine::Load_SceneData_Dispatch()
 		{
 			env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(desc.FilePath.c_str());
 			env.SRV_HDREnvironment = mRenderer.CreateAndInitializeSRV(env.Tex_HDREnvironment);
-			env.MaxContentLightLevel = static_cast<float>(desc.MaxContentLightLevel);
+			env.MaxContentLightLevel = static_cast<int>(desc.MaxContentLightLevel);
 
 			// Update HDRMetaData when the nvironment map is loaded
 			HWND hwnd = mpWinMain->GetHWND();
