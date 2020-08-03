@@ -60,7 +60,7 @@ void SwapChain::EnsureSwapChainColorSpace(SwapChainBitDepth swapChainBitDepth, b
     case _16: colorSpace = DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709; break;
     }
 
-    if (mColorSpace != colorSpace)
+    //if (mColorSpace != colorSpace)
     {
         UINT colorSpaceSupport = 0;
         if (SUCCEEDED(mpSwapChain->CheckColorSpaceSupport(colorSpace, &colorSpaceSupport)) &&
@@ -569,8 +569,9 @@ DXGI_OUTPUT_DESC1 SwapChain::GetContainingMonitorDesc() const
     IDXGIOutput6* pOut = nullptr;
     {
         IDXGIOutput* pOutput = nullptr;
-        mpSwapChain->GetContainingOutput(&pOutput);
-        HRESULT hr = pOutput->QueryInterface(IID_PPV_ARGS(&pOut));
+        HRESULT hr = mpSwapChain->GetContainingOutput(&pOutput);
+        assert(hr == S_OK); // TODO: fix NVidia RTX 2060 Mobile, this assertion is hit.
+        hr = pOutput->QueryInterface(IID_PPV_ARGS(&pOut));
         assert(hr == S_OK);
         pOutput->Release();
     }
