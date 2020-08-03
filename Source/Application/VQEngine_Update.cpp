@@ -437,10 +437,11 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 	//mUpdateWorkerThreads.AddTask([&,
 
 	const FEnvironmentMap& env = mResources_MainWnd.EnvironmentMap;
+	const int NumEnvMaps = static_cast<int>(mEnvironmentMapPresetNames.size());
 	if (input.IsKeyTriggered("PageUp"))
 	{
 		fnBusyWaitUntilRenderThreadCatchesUp();
-		mActiveEnvironmentMapPresetIndex = (mActiveEnvironmentMapPresetIndex + 1) % mEnvironmentMapPresetNames.size();
+		mActiveEnvironmentMapPresetIndex = (mActiveEnvironmentMapPresetIndex + 1) % NumEnvMaps;
 		mAppState = EAppState::LOADING;
 		mbLoadingLevel = true;
 		mUpdateWorkerThreads.AddTask([&]() 
@@ -454,7 +455,7 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 	{
 		fnBusyWaitUntilRenderThreadCatchesUp();
 		mActiveEnvironmentMapPresetIndex = mActiveEnvironmentMapPresetIndex == 0
-			? mEnvironmentMapPresetNames.size() - 1
+			? NumEnvMaps - 1
 			: mActiveEnvironmentMapPresetIndex - 1;
 		mAppState = EAppState::LOADING;
 		mbLoadingLevel = true;
@@ -562,7 +563,7 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 		mRenderer.GetWindowSwapChain(mpWinMain->GetHWND()).WaitForGPU();
 		mRenderer.DestroySRV(env.SRV_HDREnvironment);
 		mRenderer.DestroyTexture(env.Tex_HDREnvironment);
-		env.MaxContentLightLevel = 0.0f;
+		env.MaxContentLightLevel = 0;
 	}
 
 	const FEnvironmentMapDescriptor& desc = this->GetEnvironmentMapDesc(EnvMapName);
@@ -575,7 +576,7 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 		env.SRV_HDREnvironment = mRenderer.CreateAndInitializeSRV(env.Tex_HDREnvironment);
 		env.MaxContentLightLevel = static_cast<int>(desc.MaxContentLightLevel);
 
-		this->mActiveEnvironmentMapPresetIndex = ActiveEnvMapIndex;
+		this->mActiveEnvironmentMapPresetIndex = static_cast<int>(ActiveEnvMapIndex);
 
 		// Update HDRMetaData when the nvironment map is loaded
 		HWND hwnd = mpWinMain->GetHWND();
