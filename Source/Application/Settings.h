@@ -31,8 +31,10 @@ struct FGraphicsSettings
 {
 	bool bVsync              = false;
 	bool bUseTripleBuffering = false;
+	bool bAntiAliasing       = false;
 
 	float RenderScale = 1.0f;
+	int   MaxFrameRate = -1; // -1: Auto (RefreshRate x 1.15) | 0: Unlimited | <int>: specified value
 };
 
 struct FWindowSettings
@@ -41,7 +43,8 @@ struct FWindowSettings
 	int Height                = -1;
 	EDisplayMode DisplayMode  = EDisplayMode::WINDOWED;
 	unsigned PreferredDisplay = 0;
-	char Title[64]           = "";
+	char Title[64]            = "";
+	bool bEnableHDR           = false;
 
 	inline bool IsDisplayModeFullscreen() const { return DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN || DisplayMode == EDisplayMode::BORDERLESS_FULLSCREEN; }
 };

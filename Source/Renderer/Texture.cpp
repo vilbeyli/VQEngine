@@ -26,19 +26,20 @@
 #include "../../Libs/VQUtils/Source/Image.h"
 
 #include <unordered_map>
+#include <set>
 #include <cassert>
  
 
 //
 // TEXTURE
 //
-void Texture::CreateFromFile(const TextureCreateDesc& tDesc, const std::string& FilePath)
+bool Texture::CreateFromFile(const TextureCreateDesc& tDesc, const std::string& FilePath)
 {
 
     if (FilePath.empty())
     {
         Log::Error("Cannot create Texture from file: empty FilePath provided.");
-        return;
+        return false;
     }
 
     // process file path
@@ -53,29 +54,38 @@ void Texture::CreateFromFile(const TextureCreateDesc& tDesc, const std::string& 
     const std::string FileName = FileNameTokens.front();
     const std::string FileExtension = StrUtil::GetLowercased(FileNameTokens.back());
 
-    const bool bHDR = FileExtension == "hdr";
+    static const std::set<std::string> S_HDR_FORMATS = { "hdr", /*"exr"*/ };
+    assert(FileExtension != "exr"); // TODO: add exr loading support to Image class
+    const bool bHDR = S_HDR_FORMATS.find(FileExtension) != S_HDR_FORMATS.end();
 
     // load img
     Image image = Image::LoadFromFile(FilePath.c_str(), bHDR);
-    assert(image.pData && image.BytesPerPixel > 0);
-
-    TextureCreateDesc desc = tDesc;
-    desc.Desc.Width  = image.Width;
-    desc.Desc.Height = image.Height;
-    desc.Desc.Format = bHDR ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
-    //-------------------------------
-    desc.Desc.DepthOrArraySize = 1;
-    desc.Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    desc.Desc.Alignment = 0;
-    desc.Desc.DepthOrArraySize = 1;
-    desc.Desc.MipLevels = 1;
-    desc.Desc.SampleDesc.Count = 1;
-    desc.Desc.SampleDesc.Quality = 0;
-    desc.Desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    desc.Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-    //-------------------------------
-    Create(desc, image.pData);
+    const bool bImageLoadSucceeded = image.pData && image.BytesPerPixel > 0;
+    if (bImageLoadSucceeded)
+    {
+        TextureCreateDesc desc = tDesc;
+        desc.Desc.Width = image.Width;
+        desc.Desc.Height = image.Height;
+        desc.Desc.Format = bHDR ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
+        //-------------------------------
+        desc.Desc.DepthOrArraySize = 1;
+        desc.Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Desc.Alignment = 0;
+        desc.Desc.DepthOrArraySize = 1;
+        desc.Desc.MipLevels = 1;
+        desc.Desc.SampleDesc.Count = 1;
+        desc.Desc.SampleDesc.Quality = 0;
+        desc.Desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        desc.Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+        //-------------------------------
+        Create(desc, image.pData);
+    }
+    else
+    {
+        Log::Error("Texture::CreateFromFile() : TexName=%s, FileName=%s", tDesc.TexName.c_str(), FileName.c_str() );
+    }
     image.Destroy();
+    return bImageLoadSucceeded;
 }
 
 // TODO: clean up function
@@ -85,16 +95,18 @@ void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullpt
 
     ID3D12GraphicsCommandList* pCmd = desc.pUploadHeap->GetCommandList();
 
-    const bool bDepthStencilTexture = desc.Desc.Format == DXGI_FORMAT_R32_TYPELESS;
-    const bool bRenderTargetTexture = false;
+    const bool bDepthStencilTexture    = desc.Desc.Format == DXGI_FORMAT_R32_TYPELESS; // TODO: change this?
+    const bool bRenderTargetTexture    = (desc.Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0;
+    const bool bUnorderedAccessTexture = (desc.Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) != 0;
 
     // determine resource state & optimal clear value
-    D3D12_RESOURCE_STATES ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_COPY_DEST;
+    D3D12_RESOURCE_STATES ResourceState = pData 
+        ? D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_COPY_DEST
+        : desc.ResourceState;
     D3D12_CLEAR_VALUE* pClearValue = nullptr;
     if (bDepthStencilTexture)
     {
         D3D12_CLEAR_VALUE ClearValue = {};
-        ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_DEPTH_WRITE;
         ClearValue.Format = (desc.Desc.Format == DXGI_FORMAT_R32_TYPELESS) ? DXGI_FORMAT_D32_FLOAT : desc.Desc.Format;
         ClearValue.DepthStencil.Depth = 1.0f;
         ClearValue.DepthStencil.Stencil = 0;
@@ -103,8 +115,12 @@ void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullpt
     if (bRenderTargetTexture)
     {
         D3D12_CLEAR_VALUE ClearValue = {};
-        ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
+        ClearValue.Format = desc.Desc.Format;
         pClearValue = &ClearValue;
+    }
+    if (bUnorderedAccessTexture)
+    {
+
     }
 
 
@@ -118,12 +134,12 @@ void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullpt
         pClearValue,
         &mpAlloc,
         IID_PPV_ARGS(&mpTexture));
-    SetName(mpTexture, desc.TexName.c_str());
     if (FAILED(hr))
     {
         Log::Error("Couldn't create texture: ", desc.TexName.c_str());
         return;
     }
+    SetName(mpTexture, desc.TexName.c_str());
 
     // upload the data
     if (pData)
@@ -148,17 +164,17 @@ void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullpt
 
         UINT64 UplHeapSize;
         uint32_t num_rows = {};
-        UINT64 row_sizes_in_bytes = {};
+        UINT64 row_size_in_bytes = {};
         D3D12_PLACED_SUBRESOURCE_FOOTPRINT placedTex2D = {};
-        desc.pDevice->GetCopyableFootprints(&desc.Desc, 0, 1, 0, &placedTex2D, &num_rows, &row_sizes_in_bytes, &UplHeapSize);
+        desc.pDevice->GetCopyableFootprints(&desc.Desc, 0, 1, 0, &placedTex2D, &num_rows, &row_size_in_bytes, &UplHeapSize);
         placedTex2D.Offset += UINT64(pUploadBufferMem - desc.pUploadHeap->BasePtr());
 
-        // copy all the mip slices into the offsets specified by the footprint structure
-        //
+        // copy data row by row
         for (uint32_t y = 0; y < num_rows; y++)
         {
-            memcpy(pUploadBufferMem + y * placedTex2D.Footprint.RowPitch,
-                (UINT8*)pData + y * placedTex2D.Footprint.RowPitch, row_sizes_in_bytes);
+            const UINT64 UploadMemOffset = y * placedTex2D.Footprint.RowPitch;
+            const UINT64   DataMemOffset = y * row_size_in_bytes;
+            memcpy(pUploadBufferMem + UploadMemOffset, (UINT8*)pData + DataMemOffset, row_size_in_bytes);
         }
 
         CD3DX12_TEXTURE_COPY_LOCATION Dst(mpTexture, 0);
@@ -178,7 +194,7 @@ void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullpt
         textureBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         textureBarrier.Transition.pResource = mpTexture;
         textureBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-        textureBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        textureBarrier.Transition.StateAfter = desc.ResourceState;
         textureBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         pCmd->ResourceBarrier(1, &textureBarrier);
     }
@@ -200,13 +216,13 @@ void Texture::Destroy()
 }
 
 
-
+#define GetDevice(pDevice, pTex)\
+ID3D12Device* pDevice;\
+pTex->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice))\
 
 void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc)
 {
-    ID3D12Device* pDevice;
-    mpTexture->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice));
-
+    GetDevice(pDevice, mpTexture);
     pDevice->CreateShaderResourceView(mpTexture, pSRVDesc, pRV->GetCPUDescHandle(index));
 
     pDevice->Release();
@@ -214,8 +230,7 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, D3D12_SHADER_RESOURC
 
 void Texture::InitializeDSV(uint32 index, DSV* pRV, int ArraySlice /*= 1*/)
 {
-    ID3D12Device* pDevice;
-    mpTexture->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice));
+    GetDevice(pDevice, mpTexture);
     D3D12_RESOURCE_DESC texDesc = mpTexture->GetDesc();
 
     D3D12_DEPTH_STENCIL_VIEW_DESC DSViewDesc = {};
@@ -241,21 +256,29 @@ void Texture::InitializeDSV(uint32 index, DSV* pRV, int ArraySlice /*= 1*/)
     }
 
     pDevice->CreateDepthStencilView(mpTexture, &DSViewDesc, pRV->GetCPUDescHandle(index));
+    pDevice->Release();
+}
 
+void Texture::InitializeRTV(uint32 index, RTV* pRV, D3D12_RENDER_TARGET_VIEW_DESC* pRTVDesc)
+{
+    GetDevice(pDevice, mpTexture);
+    pDevice->CreateRenderTargetView(mpTexture, pRTVDesc, pRV->GetCPUDescHandle(index));
+    pDevice->Release();
+}
+
+void Texture::InitializeUAV(uint32 index, CBV_SRV_UAV* pRV, D3D12_UNORDERED_ACCESS_VIEW_DESC* pUAVDesc, const Texture* pCounterTexture /*= nullptr*/)
+{
+    GetDevice(pDevice, mpTexture);
+    pDevice->CreateUnorderedAccessView(
+          mpTexture
+        , pCounterTexture ? pCounterTexture->mpTexture : NULL
+        , pUAVDesc
+        , pRV->GetCPUDescHandle(index)
+    );
     pDevice->Release();
 }
 
 #if 0
-void Texture::CreateRTV(uint32_t index, RTV* pRV, D3D12_RENDER_TARGET_VIEW_DESC* pRtvDesc)
-{
-    ID3D12Device* pDevice;
-    m_pResource->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice));
-
-    pDevice->CreateRenderTargetView(m_pResource, pRtvDesc, pRV->GetCPUDescHandle(index));
-
-    pDevice->Release();
-}
-
 void Texture::CreateUAV(uint32_t index, Texture* pCounterTex, CBV_SRV_UAV* pRV, D3D12_UNORDERED_ACCESS_VIEW_DESC* pUavDesc)
 {
     ID3D12Device* pDevice;

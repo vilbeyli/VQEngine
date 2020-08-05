@@ -20,6 +20,7 @@ set (Headers
     "Buffer.h"
     "Common.h"
     "Texture.h"
+    "HDR.h"
 )
 
 set (Source

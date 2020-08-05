@@ -33,7 +33,6 @@
 #define VQUTILS_SYSTEMINFO_INCLUDE_D3D12 1
 #include "../../Libs/VQUtils/Source/SystemInfo.h" // FGPUInfo
 
-
 #include <vector>
 #include <unordered_map>
 #include <array>
@@ -43,27 +42,11 @@ class Window;
 struct ID3D12RootSignature;
 struct ID3D12PipelineState;
 
-using ID_TYPE = int;
-using BufferID  = ID_TYPE;
-using TextureID = ID_TYPE;
-using SamplerID = ID_TYPE;
-using SRV_ID    = ID_TYPE;
-using UAV_ID    = ID_TYPE;
-using CBV_ID    = ID_TYPE;
-using RTV_ID    = ID_TYPE;
-using DSV_ID    = ID_TYPE;
-#define INVALID_ID  -1
 
 
 //
 // TYPE DEFINITIONS
 //
-struct FRendererInitializeParameters
-{
-	std::vector<FWindowRepresentation> Windows;
-	FGraphicsSettings                  Settings;
-};
-
 // Encapsulates the swapchain and window association.
 // Each SwapChain is:
 // - associated with a Window (HWND)
@@ -86,17 +69,20 @@ struct FWindowRenderContext
 
 	ID3D12GraphicsCommandList* pCmdList_GFX = nullptr;
 
-	bool bVsync = false;
-
 	int MainRTResolutionX = -1;
 	int MainRTResolutionY = -1;
 };
 
-enum EBuiltinPSOs
+enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is integrated
 {
 	HELLO_WORLD_TRIANGLE_PSO = 0,
-	LOADING_SCREEN_PSO,
+	FULLSCREEN_TRIANGLE_PSO,
 	HELLO_WORLD_CUBE_PSO,
+	HELLO_WORLD_CUBE_PSO_MSAA_4,
+	TONEMAPPER_PSO,
+	HDR_FP16_SWAPCHAIN_PSO,
+	SKYDOME_PSO,
+	SKYDOME_PSO_MSAA_4,
 
 	NUM_BUILTIN_PSOs
 };
@@ -108,10 +94,7 @@ enum EBuiltinPSOs
 class VQRenderer
 {
 public:
-	static std::vector< VQSystemInfo::FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters = false);
-
-public:
-	void                         Initialize(const FRendererInitializeParameters& RendererInitParams);
+	void                         Initialize(const FGraphicsSettings& Settings);
 	void                         Load();
 	void                         Unload();
 	void                         Exit();
@@ -119,7 +102,7 @@ public:
 	void                         OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h);
 
 	// Swapchain-interface
-	void                         InitializeRenderContext(const FWindowRepresentation& WndDesc, int NumSwapchainBuffers);
+	void                         InitializeRenderContext(const Window* pWnd, int NumSwapchainBuffers, bool bVSync, bool bHDRSwapchain);
 	inline short                 GetSwapChainBackBufferCount(std::unique_ptr<Window>& pWnd) const { return GetSwapChainBackBufferCount(pWnd.get()); };
 	short                        GetSwapChainBackBufferCount(Window* pWnd) const;
 	short                        GetSwapChainBackBufferCount(HWND hwnd) const;
@@ -129,14 +112,21 @@ public:
 	// Resource management
 	BufferID                     CreateBuffer(const FBufferDesc& desc);
 	TextureID                    CreateTextureFromFile(const char* pFilePath);
-	TextureID                    CreateTexture(const std::string& name, const D3D12_RESOURCE_DESC& desc, const void* pData = nullptr);
+	TextureID                    CreateTexture(const std::string& name, const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES ResourceState, const void* pData = nullptr);
 
-	SRV_ID                       CreateSRV();
-	DSV_ID                       CreateDSV();
+	// Allocates a ResourceView from the respective heap and returns a unique identifier.
+	SRV_ID                       CreateSRV(uint NumDescriptors = 1);
+	DSV_ID                       CreateDSV(uint NumDescriptors = 1);
+	RTV_ID                       CreateRTV(uint NumDescriptors = 1);
+	UAV_ID                       CreateUAV(uint NumDescriptors = 1);
 	SRV_ID                       CreateAndInitializeSRV(TextureID texID);
 	DSV_ID                       CreateAndInitializeDSV(TextureID texID);
+
+	// Initializes a ResourceView from given texture and the specified heap index
 	void                         InitializeDSV(DSV_ID dsvID, uint heapIndex, TextureID texID);
 	void                         InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID);
+	void                         InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID);
+	void                         InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID);
 
 	void                         DestroyTexture(TextureID texID);
 	void                         DestroySRV(SRV_ID srvID);
@@ -156,6 +146,9 @@ public:
 	const RTV&                   GetRenderTargetView(RTV_ID Id) const;
 	const DSV&                   GetDepthStencilView(RTV_ID Id) const;
 
+	const ID3D12Resource*        GetTextureResource(TextureID Id) const;
+	      ID3D12Resource*        GetTextureResource(TextureID Id);
+
 	inline const VBV&            GetVBV(BufferID Id) const { return GetVertexBufferView(Id);    }
 	inline const IBV&            GetIBV(BufferID Id) const { return GetIndexBufferView(Id);     }
 	inline const CBV_SRV_UAV&    GetSRV(SRV_ID   Id) const { return GetShaderResourceView(Id);  }
@@ -165,8 +158,8 @@ public:
 	inline const DSV&            GetDSV(DSV_ID   Id) const { return GetDepthStencilView(Id);    }
 	
 private:
-	using PSOArray_t           = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
-
+	using PSOArray_t = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
+	
 	// GPU
 	Device                                         mDevice; 
 	CommandQueue                                   mGFXQueue;
@@ -198,11 +191,9 @@ private:
 	mutable std::mutex                             mMtxDynamicCBHeap;
 	mutable std::mutex                             mMtxTextures;
 	mutable std::mutex                             mMtxSamplers;
-	mutable std::mutex                             mMtxSRVs;
-	mutable std::mutex                             mMtxCBVs;
+	mutable std::mutex                             mMtxSRVs_CBVs_UAVs;
 	mutable std::mutex                             mMtxRTVs;
 	mutable std::mutex                             mMtxDSVs;
-	mutable std::mutex                             mMtxUAVs;
 	mutable std::mutex                             mMtxVBVs;
 	mutable std::mutex                             mMtxIBVs;
 
@@ -234,4 +225,11 @@ private:
 	bool CheckContext(HWND hwnd) const;
 
 	TextureID AddTexture_ThreadSafe(Texture&& tex);
+
+//
+// STATIC PUBLIC DATA/INTERFACE
+//
+public:
+	static std::vector< VQSystemInfo::FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters = false, IDXGIFactory6* pFactory = nullptr);
+	static const std::string_view& DXGIFormatAsString(DXGI_FORMAT format);
 };

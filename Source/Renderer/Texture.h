@@ -27,6 +27,7 @@ namespace D3D12MA { class Allocation; class Allocator; }
 class UploadHeap;
 class CBV_SRV_UAV;
 class DSV;
+class RTV;
 struct D3D12_SHADER_RESOURCE_VIEW_DESC;
 
 struct TextureCreateDesc
@@ -36,7 +37,9 @@ struct TextureCreateDesc
 	D3D12MA::Allocator*   pAllocator = nullptr;
 	UploadHeap*           pUploadHeap = nullptr;
 	D3D12_RESOURCE_DESC   Desc = {};
+	D3D12_RESOURCE_STATES ResourceState = D3D12_RESOURCE_STATE_COMMON;
 	const std::string&    TexName;
+
 };
 
 
@@ -48,14 +51,18 @@ public:
 	Texture()  = default;
 	~Texture() = default;
 
-	void CreateFromFile(const TextureCreateDesc& desc, const std::string& FilePath);
+	bool CreateFromFile(const TextureCreateDesc& desc, const std::string& FilePath);
 	void Create(const TextureCreateDesc& desc, const void* pData = nullptr);
 
 	void Destroy();
 
 	void InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc = nullptr);
 	void InitializeDSV(uint32 index, DSV* pRV, int ArraySlice = 1);
+	void InitializeRTV(uint32 index, RTV* pRV, D3D12_RENDER_TARGET_VIEW_DESC* pRTVDesc = nullptr);
+	void InitializeUAV(uint32 index, CBV_SRV_UAV* pRV, D3D12_UNORDERED_ACCESS_VIEW_DESC* pUAVDesc = nullptr, const Texture* pCounterTexture = nullptr);
 
+	inline const ID3D12Resource* GetResource() const { return mpTexture; }
+	inline       ID3D12Resource* GetResource()       { return mpTexture; }
 public:
 
 private:

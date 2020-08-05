@@ -85,7 +85,11 @@ void VQEngine::HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWin
 	// Exclusive  fullscreen transitions are handled through the Swapchain
 	if (settings.DisplayMode == EDisplayMode::BORDERLESS_FULLSCREEN)
 	{
-		pWin->ToggleWindowedFullscreen(&mRenderer.GetWindowSwapChain(pWin->GetHWND()));
+		HWND hwnd = pWin->GetHWND();
+		pWin->ToggleWindowedFullscreen(&mRenderer.GetWindowSwapChain(hwnd));
+		
+		if (bHandlingMainWindowTransition)
+			SetMouseCaptureForWindow(hwnd, true);
 	}
 }
 
@@ -109,7 +113,7 @@ void VQEngine::SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse)
 	{ 
 		SetCursorPos(this->mMouseCapturePosition.x, this->mMouseCapturePosition.y);
 #if VERBOSE_LOGGING
-		Log::Info("Releasing Mouse: Settingh Position=(%d, %d)", this->mMouseCapturePosition.x, this->mMouseCapturePosition.y);
+		Log::Info("Releasing Mouse: Setting Position=(%d, %d)", this->mMouseCapturePosition.x, this->mMouseCapturePosition.y);
 #endif
 	}
 }
@@ -231,9 +235,12 @@ void VQEngine::RenderThread_HandleEvents()
 
 		switch (pEvent->mType)
 		{
-		case EEventType::WINDOW_RESIZE_EVENT     : pLastResizeEventLookup[pEvent->hwnd] = std::static_pointer_cast<WindowResizeEvent>(pEvent); break;
-		case EEventType::TOGGLE_FULLSCREEN_EVENT : RenderThread_HandleToggleFullscreenEvent(pEvent.get()); break;
-		case EEventType::WINDOW_CLOSE_EVENT      : RenderThread_HandleWindowCloseEvent(pEvent.get()); break;
+		case EEventType::WINDOW_RESIZE_EVENT        : pLastResizeEventLookup[pEvent->hwnd] = std::static_pointer_cast<WindowResizeEvent>(pEvent); break;
+		case EEventType::TOGGLE_FULLSCREEN_EVENT    : RenderThread_HandleToggleFullscreenEvent(pEvent.get()); break;
+		case EEventType::WINDOW_CLOSE_EVENT         : RenderThread_HandleWindowCloseEvent(pEvent.get()); break;
+		case EEventType::SET_VSYNC_EVENT            : RenderThread_HandleSetVSyncEvent(pEvent.get()); break;
+		case EEventType::SET_SWAPCHAIN_FORMAT_EVENT : RenderThread_HandleSetSwapchainFormatEvent(pEvent.get()); break;
+		case EEventType::SET_HDR10_STATIC_METADATA_EVENT : RenderThread_HandleSetHDRMetaDataEvent(pEvent.get()); break;
 		}
 	}
 
@@ -255,6 +262,7 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	std::unique_ptr<Window>&         pWnd = GetWindow(hwnd);
 	const bool         bIsWindowMinimized = WIDTH == 0 && HEIGHT == 0;
 	const bool                  bIsClosed = pWnd->IsClosed();
+	const bool      bFullscreenTransition = pWnd->GetFullscreenHeight() == HEIGHT && pWnd->GetFullscreenWidth() == WIDTH;
 
 
 	if (bIsClosed || bIsWindowMinimized)
@@ -268,11 +276,21 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	Log::Info("RenderThread: Handle Window<%x> Resize event, set resolution to %dx%d", hwnd, WIDTH, HEIGHT);
 #endif
 
+	const FSetHDRMetaDataParams HDRMetaData = this->GatherHDRMetaDataParameters(hwnd);
 
 	mEventQueue_WinToVQE_Update.AddItem(pResizeEvent);
 
 	Swapchain.WaitForGPU();
-	Swapchain.Resize(WIDTH, HEIGHT);
+	Swapchain.Resize(WIDTH, HEIGHT, Swapchain.GetFormat());
+	if (bFullscreenTransition)
+	{
+		const FSetHDRMetaDataParams HDRMetaData = this->GatherHDRMetaDataParameters(hwnd);
+		if (pWnd->GetIsOnHDRCapableDisplay())
+			Swapchain.SetHDRMetaData(HDRMetaData);
+		else
+			Swapchain.ClearHDRMetaData();
+	}
+	Swapchain.EnsureSwapChainColorSpace(Swapchain.GetFormat() == DXGI_FORMAT_R16G16B16A16_FLOAT ? _16 : _8, false);
 	pWnd->OnResize(WIDTH, HEIGHT);
 	mRenderer.OnWindowSizeChanged(hwnd, WIDTH, HEIGHT);
 
@@ -359,7 +377,7 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 			if (bWndNeedsResize)
 			{
 				mInitialSwapchainResizeRequiredWindowLookup.erase(it);
-				Swapchain.Resize(WndSettings.Width, WndSettings.Height);
+				Swapchain.Resize(WndSettings.Width, WndSettings.Height, Swapchain.GetFormat());
 			}
 		}
 
@@ -385,3 +403,98 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 
 }
 
+void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
+{
+	const SetVSyncEvent*         pToggleFSEvent = static_cast<const SetVSyncEvent*>(pEvent);
+	HWND                                   hwnd = pToggleFSEvent->hwnd;
+	const bool                      bVsyncState = pToggleFSEvent->bToggleValue;
+	SwapChain&                        Swapchain = mRenderer.GetWindowSwapChain(pToggleFSEvent->hwnd);
+	const FWindowSettings&          WndSettings = GetWindowSettings(hwnd);
+	std::unique_ptr<Window>&               pWnd = GetWindow(hwnd);
+	const bool   bExclusiveFullscreenTransition = WndSettings.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN;
+	const bool                 bFullscreenState = bExclusiveFullscreenTransition ? Swapchain.IsFullscreen() : pWnd->IsFullscreen();
+	const int                             WIDTH = bFullscreenState ? pWnd->GetFullscreenWidth() : pWnd->GetWidth();
+	const int                            HEIGHT = bFullscreenState ? pWnd->GetFullscreenHeight() : pWnd->GetHeight();
+
+	Swapchain.WaitForGPU(); // make sure GPU is finished
+	{
+		auto& ctx = mRenderer.GetWindowRenderContext(hwnd);
+
+		FSwapChainCreateDesc desc;
+		desc.bVSync         = bVsyncState;
+		desc.bFullscreen    = Swapchain.IsFullscreen();
+		desc.numBackBuffers = Swapchain.GetNumBackBuffers();
+		desc.pCmdQueue      = &ctx.PresentQueue;
+		desc.pDevice        = ctx.pDevice->GetDevicePtr();
+		desc.pWindow        = pWnd.get();
+		desc.bHDR           = Swapchain.IsHDRFormat();
+
+		constexpr bool bHDR10 = false; // TODO;
+		if(desc.bHDR)
+			desc.bitDepth = bHDR10 ? _10 : _16;
+
+		Swapchain.Destroy();
+		Swapchain.Create(desc);
+		
+		const FSetHDRMetaDataParams HDRMetaData = this->GatherHDRMetaDataParameters(hwnd);
+		if (pWnd->GetIsOnHDRCapableDisplay())
+			Swapchain.SetHDRMetaData(HDRMetaData);
+		else
+			Swapchain.ClearHDRMetaData();
+		Swapchain.EnsureSwapChainColorSpace(Swapchain.GetFormat() == DXGI_FORMAT_R16G16B16A16_FLOAT ? _16 : _8, false);
+	}
+
+	Log::Info("Toggle VSync: %d", bVsyncState);
+}
+
+void VQEngine::RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent)
+{
+	const SetSwapchainFormatEvent* pSwapchainEvent = static_cast<const SetSwapchainFormatEvent*>(pEvent);
+	const HWND&                      hwnd = pEvent->hwnd;
+	const std::unique_ptr<Window>&   pWnd = GetWindow(hwnd);
+	const int                       WIDTH = pWnd->GetWidth();
+	const int                      HEIGHT = pWnd->GetHeight();
+	SwapChain&                  Swapchain = mRenderer.GetWindowSwapChain(hwnd);
+	const FSetHDRMetaDataParams HDRMetaData = this->GatherHDRMetaDataParameters(hwnd);
+	const bool                bFormatChange = pSwapchainEvent->format != Swapchain.GetFormat();
+
+	Swapchain.WaitForGPU();
+	Swapchain.Resize(WIDTH, HEIGHT, pSwapchainEvent->format);
+	
+	pWnd->SetIsOnHDRCapableDisplay(VQSystemInfo::FMonitorInfo::CheckHDRSupport(hwnd));
+	if (bFormatChange)
+	{
+		if (pWnd->GetIsOnHDRCapableDisplay())
+			Swapchain.SetHDRMetaData(HDRMetaData);
+		else
+			Swapchain.ClearHDRMetaData();
+		Swapchain.EnsureSwapChainColorSpace(pSwapchainEvent->format == DXGI_FORMAT_R16G16B16A16_FLOAT? _16 : _8, false);
+	}
+
+	mbMainWindowHDRTransitionInProgress.store(false);
+
+	const int NUM_BACK_BUFFERS  = Swapchain.GetNumBackBuffers();
+	const int BACK_BUFFER_INDEX = Swapchain.GetCurrentBackBufferIndex();
+	const EDisplayCurve OutputDisplayCurve = Swapchain.IsHDRFormat() ? EDisplayCurve::Linear : EDisplayCurve::sRGB;
+	for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
+		mScene_MainWnd.mFrameData[i].PPParams.OutputDisplayCurve = OutputDisplayCurve;
+	
+	Log::Info("Set Swapchain Format: %s | OutputDisplayCurve: %s"
+		, VQRenderer::DXGIFormatAsString(pSwapchainEvent->format).data()
+		, (OutputDisplayCurve == EDisplayCurve::sRGB ? "Gamma2.2" : (OutputDisplayCurve == EDisplayCurve::Linear ? "Linear" : "PQ"))
+	);
+}
+
+void VQEngine::RenderThread_HandleSetHDRMetaDataEvent(const IEvent* pEvent)
+{
+	const SetStaticHDRMetaDataEvent* pSetMetaDataEvent = static_cast<const SetStaticHDRMetaDataEvent*>(pEvent);
+	const HWND&                      hwnd = pEvent->hwnd;
+	const std::unique_ptr<Window>&   pWnd = GetWindow(hwnd);
+	SwapChain&                  Swapchain = mRenderer.GetWindowSwapChain(hwnd);
+
+	if (pWnd->GetIsOnHDRCapableDisplay())
+	{
+		Swapchain.WaitForGPU();
+		Swapchain.SetHDRMetaData(pSetMetaDataEvent->payload);
+	}
+}

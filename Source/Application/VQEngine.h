@@ -42,11 +42,24 @@
 //
 // DATA STRUCTS
 //
+struct FPostProcessParameters
+{
+	EColorSpace   ContentColorSpace = EColorSpace::REC_709;
+	EDisplayCurve OutputDisplayCurve = EDisplayCurve::sRGB;
+	float         DisplayReferenceBrightnessLevel = 200.0f;
+	int           ToggleGammaCorrection = 1;
+};
 struct FFrameData
 {
+	std::array<float, 4> SwapChainClearColor;
+
+	// scene 
 	Camera SceneCamera;
 	Transform TFCube;
-	std::array<float, 4> SwapChainClearColor;
+	bool bCubeAnimating;
+
+	// post process
+	FPostProcessParameters PPParams;
 };
 struct FLoadingScreenData
 {
@@ -66,11 +79,59 @@ class MainWindowSceneData : public IWindowUpdateContext{};
 class DebugWindowSceneData : public IWindowUpdateContext{};
 
 
+struct FEnvironmentMapDescriptor
+{
+	std::string Name;
+	std::string FilePath;
+	float MaxContentLightLevel = 0.0f;
+};
+struct FEnvironmentMap
+{
+	TextureID Tex_HDREnvironment = INVALID_ID;
+	TextureID Tex_Irradiance     = INVALID_ID; // TODO: lighting
+	SRV_ID    SRV_HDREnvironment = INVALID_ID;
+	SRV_ID    SRV_Irradiance     = INVALID_ID; // TODO: lighting
+
+	//
+	// HDR10 Static Metadata Parameters -------------------------------
+	// https://docs.microsoft.com/en-us/windows/win32/api/dxgi1_5/ns-dxgi1_5-dxgi_hdr_metadata_hdr10
+	//
+	// The maximum content light level (MaxCLL). This is the nit value 
+	// corresponding to the brightest pixel used anywhere in the content.
+	int MaxContentLightLevel = 0;
+
+	// The maximum frame average light level (MaxFALL). 
+	// This is the nit value corresponding to the average luminance of 
+	// the frame which has the brightest average luminance anywhere in 
+	// the content.
+	int MaxFrameAverageLightLevel = 0;
+};
+
+struct FSceneRepresentation
+{
+	std::string SceneName;
+	std::string EnvironmentMapPreset;
+	// TBA
+};
+
 struct FRenderingResources{};
 struct FRenderingResources_MainWindow : public FRenderingResources
 {
-	TextureID Tex_MainViewDepth = INVALID_ID;
-	DSV_ID    DSV_MainViewDepth = INVALID_ID;
+	TextureID Tex_MainViewColorMSAA  = INVALID_ID;
+	TextureID Tex_MainViewColor      = INVALID_ID;
+	TextureID Tex_MainViewDepthMSAA  = INVALID_ID;
+	TextureID Tex_MainViewDepth      = INVALID_ID;
+	TextureID Tex_PostProcess_TonemapperOut = INVALID_ID;
+
+	RTV_ID    RTV_MainViewColorMSAA  = INVALID_ID;
+	RTV_ID    RTV_MainViewColor      = INVALID_ID;
+	SRV_ID    SRV_MainViewColor      = INVALID_ID;
+	DSV_ID    DSV_MainViewDepthMSAA  = INVALID_ID;
+	DSV_ID    DSV_MainViewDepth      = INVALID_ID;
+	SRV_ID    SRV_PostProcess_TonemapperOut = INVALID_ID;
+	UAV_ID    UAV_PostProcess_TonemapperOut = INVALID_ID;
+
+	FEnvironmentMap EnvironmentMap;
 };
 struct FRenderingResources_DebugWindow : public FRenderingResources
 {
@@ -105,7 +166,7 @@ public:
 	bool Initialize(const FStartupParameters& Params);
 	void Exit();
 
-	// Window event callbacks for the main Window
+	// OS event callbacks for the application
 	void OnWindowCreate(HWND hWnd) override;
 	void OnWindowResize(HWND hWnd) override;
 	void OnWindowMinimize(HWND hwnd) override;
@@ -115,6 +176,8 @@ public:
 	void OnToggleFullscreen(HWND hWnd) override;
 	void OnWindowActivate(HWND hWnd) override;
 	void OnWindowDeactivate(HWND hWnd) override;
+	void OnWindowMove(HWND hwnd_, int x, int y) override;
+	void OnDisplayChange(HWND hwnd_, int ImageDepthBitsPerPixel, int ScreenWidth, int ScreenHeight) override;
 
 	void OnKeyDown(HWND hwnd, WPARAM wParam) override;
 	void OnKeyUp(HWND hwnd, WPARAM wParam) override;
@@ -194,6 +257,7 @@ private:
 	//-------------------------------------------------------------------------------------------------
 	using BuiltinMeshArray_t          = std::array<Mesh       , EBuiltInMeshes::NUM_BUILTIN_MESHES>;
 	using BuiltinMeshNameArray_t      = std::array<std::string, EBuiltInMeshes::NUM_BUILTIN_MESHES>;
+	using EnvironmentMapLookup_t      = std::unordered_map<std::string, FEnvironmentMapDescriptor>;
 	//-------------------------------------------------------------------------------------------------
 	using EventPtr_t                  = std::shared_ptr<IEvent>;
 	using EventQueue_t                = BufferedContainer<std::queue<EventPtr_t>, EventPtr_t>;
@@ -225,10 +289,25 @@ private:
 	WindowNameLookup_t              mWinNameLookup;
 	POINT                           mMouseCapturePosition;
 
+	// input
+	std::unordered_map<HWND, Input> mInputStates;
+
+	// events 
+	EventQueue_t                    mEventQueue_WinToVQE_Renderer;
+	EventQueue_t                    mEventQueue_WinToVQE_Update;
+	EventQueue_t                    mEventQueue_VQEToWin_Main;
+
+
 	// render
 	VQRenderer                      mRenderer;
+
+	// data
 	BuiltinMeshArray_t              mBuiltinMeshes;
 	BuiltinMeshNameArray_t          mBuiltinMeshNames;
+	std::vector<FDisplayHDRProfile> mDisplayHDRProfiles;
+	EnvironmentMapLookup_t          mLookup_EnvironmentMapDescriptors;
+	std::vector<std::string>        mEnvironmentMapPresetNames;
+	int                             mActiveEnvironmentMapPresetIndex;
 
 	// state
 	std::atomic<bool>               mbRenderThreadInitialized;
@@ -236,6 +315,7 @@ private:
 	std::atomic<uint64>             mNumUpdateLoopsExecuted;
 	std::atomic<bool>               mbLoadingLevel;
 	EAppState                       mAppState;
+	std::atomic<bool>               mbMainWindowHDRTransitionInProgress; // see DispatchHDRSwapchainTransitionEvents()
 
 	// system & settings
 	FEngineSettings                 mSettings;
@@ -245,6 +325,7 @@ private:
 	MainWindowSceneData             mScene_MainWnd;
 	DebugWindowSceneData            mScene_DebugWnd;
 	UpdateContextLookup_t           mWindowUpdateContextLookup;
+	std::queue<FSceneRepresentation> mQueue_SceneLoad;
 
 #if 0
 	RenderingResourcesLookup_t      mRenderingResources;
@@ -253,16 +334,10 @@ private:
 	FRenderingResources_DebugWindow mResources_DebugWnd;
 #endif
 
-	// input
-	std::unordered_map<HWND, Input> mInputStates;
-
-	// events 
-	EventQueue_t                    mEventQueue_WinToVQE_Renderer;
-	EventQueue_t                    mEventQueue_WinToVQE_Update;
-	EventQueue_t                    mEventQueue_VQEToWin_Main;
-
 	// timer / profiler
 	Timer                           mTimer;
+	Timer                           mTimerRender;
+	float                           mEffectiveFrameRateLimit_ms;
 
 	// misc.
 	// One Swapchain.Resize() call is required for the first time 
@@ -273,6 +348,9 @@ private:
 private:
 	void                            InitializeEngineSettings(const FStartupParameters& Params);
 	void                            InitializeWindows(const FStartupParameters& Params);
+	void                            InitializeHDRProfiles();
+	void                            InitializeEnvironmentMaps();
+	void                            InitializeScenes(const FStartupParameters& Params);
 
 	void                            InitializeThreads();
 	void                            ExitThreads();
@@ -284,7 +362,7 @@ private:
 	void                            InitializeBuiltinMeshes();
 	void                            LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete
 	void                            Load_SceneData_Dispatch();
-	void                            Load_SceneData_Join();
+	void                            LoadEnvironmentMap(const std::string& EnvMapName);
 
 	HRESULT                         RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderContext& ctx);
 	HRESULT                         RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx);
@@ -296,25 +374,67 @@ private:
 	void                            RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent);
 	void                            RenderThread_HandleWindowCloseEvent(const IEvent* pEvent);
 	void                            RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent);
+	void                            RenderThread_HandleSetVSyncEvent(const IEvent* pEvent);
+	void                            RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent);
+	void                            RenderThread_HandleSetHDRMetaDataEvent(const IEvent* pEvent);
 
 	void                            UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent);
 
+	//
+	// FRAME RENDERING PIPELINE
+	//
+	void                            TransitionForSceneRendering(FWindowRenderContext& ctx);
+	void                            RenderShadowMaps(FWindowRenderContext& ctx);
+	void                            RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& FrameData);
+	void                            ResolveMSAA(FWindowRenderContext& ctx);
+	void                            TransitionForPostProcessing(FWindowRenderContext& ctx);
+	void                            RenderPostProcess(FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
+	void                            RenderUI(FWindowRenderContext& ctx);
+	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
+	void                            CompositUIToHDRSwapchain(FWindowRenderContext& ctx); // TODO
+
+	// temp
+	struct FrameConstantBuffer { DirectX::XMMATRIX matModelViewProj; };
+
+	void                            DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh);
+
+
 	std::unique_ptr<Window>&        GetWindow(HWND hwnd);
+	const std::unique_ptr<Window>&  GetWindow(HWND hwnd) const;
 	const FWindowSettings&          GetWindowSettings(HWND hwnd) const;
 	FWindowSettings&                GetWindowSettings(HWND hwnd);
 	FFrameData&                     GetCurrentFrameData(HWND hwnd);
+
+	const FEnvironmentMapDescriptor& GetEnvironmentMapDesc(const std::string& EnvMapName) const;
 
 	void                            RegisterWindowForInput(const std::unique_ptr<Window>& pWnd);
 	void                            UnregisterWindowForInput(const std::unique_ptr<Window>& pWnd);
 
 	void                            HandleEngineInput();
+	
+	void                            DispatchHDRSwapchainTransitionEvents(HWND hwnd);
 
 	bool                            IsWindowRegistered(HWND hwnd) const;
+	bool                            ShouldRenderHDR(HWND hwnd) const;
+
+	void                            CalculateEffectiveFrameRate(HWND hwnd);
+	const FDisplayHDRProfile*       GetHDRProfileIfExists(const wchar_t* pwStrLogicalDisplayName);
+	FSetHDRMetaDataParams           GatherHDRMetaDataParameters(HWND hwnd);
+
 
 private:
 	// Reads EngineSettings.ini from next to the executable and returns a 
 	// FStartupParameters struct as it readily has override booleans for engine settings
-	static FStartupParameters       ParseEngineSettingsFile();
+	static FStartupParameters                     ParseEngineSettingsFile();
+	static std::vector<FEnvironmentMapDescriptor> ParseEnvironmentMapsFile();
+	static std::vector<FDisplayHDRProfile>        ParseHDRProfilesFile();
+	static std::vector<FSceneRepresentation>      ParseScenesFile();
+
+public:
+	// Supported HDR Formats { DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_FORMAT_R16G16B16A16_FLOAT  }
+	// Supported SDR Formats { DXGI_FORMAT_R8G8B8A8_UNORM   , DXGI_FORMAT_R8G8B8A8_UNORM_SRGB }
+	static const DXGI_FORMAT PREFERRED_HDR_FORMAT = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	static const DXGI_FORMAT PREFERRED_SDR_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 };
 
 

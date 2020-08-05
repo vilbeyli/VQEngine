@@ -25,7 +25,7 @@ using namespace DirectX;
 Camera::Camera()
 	:
 	MoveSpeed(1000.0f),
-	AngularSpeedDeg(20.0f),
+	AngularSpeedDeg(0.05f),
 	Drag(9.5f),
 	mPitch(0.0f),
 	mYaw(0.0f),
@@ -55,11 +55,11 @@ void Camera::InitializeCamera(const FCameraData& data)
 	this->mProjParams.FieldOfView = data.fovV_Degrees * DEG2RAD;
 	this->mProjParams.bPerspectiveProjection = data.bPerspectiveProjection;
 
-	SetProjectionMatrix(this->mProjParams);
-
-	SetPosition(data.x, data.y, data.z);
 	mYaw = mPitch = 0;
+	SetProjectionMatrix(this->mProjParams);
+	SetPosition(data.x, data.y, data.z);
 	Rotate(data.yaw * DEG2RAD, data.pitch * DEG2RAD, 1.0f);
+	UpdateViewMatrix();
 }
 
 
@@ -73,25 +73,29 @@ void Camera::SetProjectionMatrix(const ProjectionMatrixParameters& params)
 		: MakeOthographicProjectionMatrix(params.ViewporWidth, params.ViewporHeight, params.NearZ, params.FarZ);
 }
 
-void Camera::Update(const float dt, const FCameraInput& input)
+void Camera::UpdateViewMatrix()
 {
-	Rotate(dt, input);
-	Move(dt, input);
-
 	XMVECTOR up         = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 	XMVECTOR lookAt     = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
 	const XMVECTOR pos  = XMLoadFloat3(&mPosition);
 	const XMMATRIX MRot = GetRotationMatrix();
 
 	//transform the lookat and up vector by rotation matrix
-	lookAt	= XMVector3TransformCoord(lookAt, MRot);
-	up		= XMVector3TransformCoord(up,	  MRot);
+	lookAt = XMVector3TransformCoord(lookAt, MRot);
+	up = XMVector3TransformCoord(up, MRot);
 
 	//translate the lookat
 	lookAt = pos + lookAt;
 
-	//create view matrix
 	XMStoreFloat4x4(&mMatView, XMMatrixLookAtLH(pos, lookAt, up));
+}
+
+void Camera::Update(const float dt, const FCameraInput& input)
+{
+	Rotate(dt, input);
+	Move(dt, input);
+
+	UpdateViewMatrix();
 
 	// move based on velocity
 	XMVECTOR P = XMLoadFloat3(&mPosition);
@@ -172,22 +176,13 @@ void Camera::Rotate(float yaw, float pitch, const float dt)
 	if (mPitch < -90.0f * DEG2RAD) mPitch = -90.0f * DEG2RAD;
 }
 
-
-//void Camera::Reset() // TODO: input
-//{
-//	const Settings::Camera & data = m_settings;
-//	SetPosition(data.x, data.y, data.z);
-//	mYaw = mPitch = 0;
-//	Rotate(data.yaw * DEG2RAD, data.pitch * DEG2RAD, 1.0f);
-//}
-
 // internal update functions
 void Camera::Rotate(const float dt, const FCameraInput& input)
 {
-	float dy = input.DeltaMouseXY[1];
-	float dx = input.DeltaMouseXY[0];
+	const float& dy = input.DeltaMouseXY[1];
+	const float& dx = input.DeltaMouseXY[0];
 
-	const float delta = AngularSpeedDeg * DEG2RAD * dt;
+	const float delta = AngularSpeedDeg * DEG2RAD; // rotation doesn't depend on time
 	Rotate(dx, dy, delta);
 }
 

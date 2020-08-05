@@ -1,20 +1,26 @@
-# VQE
-
 ![](Data/Icons/VQEngine-icon.png)
+
+# VQE
 
 VQE is **VQEngine**: A DX12 rewrite of [VQEngine-Vanilla](https://github.com/vilbeyli/VQEngine) for fast prototyping of rendering techniques and experimenting with cutting-edge technology.
 
-![](Screenshots/HelloCube.png)
+![](Screenshots/HelloEnvMap.png)
+<p align="center">
+<sub><i>HDRI Environment Map Rendering</i></sub>
+</p>
 
-VQE supports 
+# Features
 
- - Automated build & testing
- - Multi-threaded, highly parallel execution
-   - Update & Render Threads
+ - Multi-threaded architecture
+   - Main, Update & Render Threads
    - ThreadPool of worker threads
+ - HDR Environment Maps from [HDRI Haven](https://hdrihaven.com/)
+ - HDR display support
+ ![](Screenshots/HDRDisplay.jpg)
  - Multiple windows on multiple monitors
- - HDR displays (WIP)
+ - Physically-based Rendering (WIP)
  - Real-time and offline Ray Tracing (WIP)
+ - Automated build & testing
 
 
 See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source & pre-built executables.
@@ -27,21 +33,40 @@ Make sure to have pre-requisites installed
 - [Visual Studio 2019](https://visualstudio.microsoft.com/downloads/)
 - [Windows 10 SDK 10.0.18362.0](https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk)
 
+To download the textures, run
+
+ - `Scripts/DownloadAssets.bat`
+
 Then, run one of the build scripts in `Build/` folder,
 
 - `GenerateSolutions.bat` to build from source with Visual Studio
   - `VQE.sln` can be found in `Build/SolutionFiles` directory
-- `PackageEngine.bat` to build and package the engine in release mode
+- `PackageEngine.bat` to build and package the engine in release mode and open `_artifacts` folder
   - `VQE.exe` can be found in `Build/_artifacts` directory
 
 
 # Run
 
+Make sure to have installed
+
+ - [Visual C++ 2019 Redistributiable (x64)](https://support.microsoft.com/en-us/help/2977003/the-latest-supported-visual-c-downloads)
+ - A DX12-capable GPU
+
 Run `VQE.exe`.
 
-The engine can be configured through the settings file `EngineSettings.ini` in the `Data/` folder next to the executable. 
+## Controls
 
-Command line parameters are also supported.
+| Key | |
+| :--: | :-- |
+| **WASD+EQ** | Camera Movement |
+| **Page Up/Down** | Change Environment Map |
+| **V** | Toggle VSync |
+| **M** | Toggle MSAA |
+| **Alt+Enter** | Toggle Fullscreen |
+| **Spacebar** | Toggle Cube Animation |
+| **Mouse Buttons** | Rotate Cube |
+| **Esc** | Release mouse |
+
 
 ## Settings
 
@@ -51,7 +76,10 @@ VQE can be configured through `Data/EngineConfig.ini` file
 | :-- | :-- |
 | `ResolutionX=<int>` | Sets application render resolution width | 
 | `ResolutionY=<int>` | Sets application render resolution height |
-| `VSync=<bool>` <br/> (TO BE IMPLEMENTED) | Toggles VSync based on the specified `<bool>` |
+| `VSync=<bool>` <br/> | Toggles VSync based on the specified `<bool>` |
+| `AntiAliasing=<bool>` | Toggles MSAA based on the specified `<bool>` |
+| `MaxFrameRate=<int>` | Sets maximum frame rate to the specified `<int>` |
+| `HDR=<bool>` | Toggles HDR swapchain & HDR display support |
 
 <br/>
 
@@ -59,6 +87,7 @@ VQE can be configured through `Data/EngineConfig.ini` file
 | :-- | :-- |
 | `Width=<int>` | Sets application main window width | 
 | `Height=<int>` | Sets application main window height |
+| `DisplayMode=<Windowed/Fulscreen>` | Sets Sets application main window mode: Windowed or Fullscreen |
 
 ## Command Line 
 
@@ -74,15 +103,18 @@ VQE supports the following command line parameters:
 | `-H=<int>` <br/> `-Height=<int>` | Sets application main window height to the specified amount |
 | `-ResX=<int>` | Sets application render resolution width |
 | `-ResY=<int>` | Sets application render resolution height |
-| `-FullScreen` | Launches in fullscreen |
-| `-VSync` | Enables VSync (TO BE IMPLEMENTED)  |
+| `-FullScreen` | Launches in fullscreen mode |
+| `-Windowed` | Launches in windowed mode |
+| `-VSync` | Enables VSync |
+| `-VSync=<bool>` | Sets Specified VSync State |
+| `-AntiAliasing` or `-AA` | Enables [MSAA](https://mynameismjp.wordpress.com/2012/10/24/msaa-overview/) |
 | `-TripleBuffering` | Initializes SwapChain with 3 back buffers |
 | `-DoubleBuffering` | Initializes SwapChain with 2 back buffers |
 
 
 **Note:** Command line parameters will override the `EngineSettings.ini` values.
 
-## Scripts
+# Scripts
 
 | File |  |
 | :-- | :-- |
@@ -95,3 +127,4 @@ VQE supports the following command line parameters:
 - [D3DX12](https://github.com/microsoft/DirectX-Graphics-Samples/tree/master/Libraries/D3DX12)
 - [D3D12MA](https://github.com/GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator)
 - [stb](https://github.com/nothings/stb)
+- [tinyxml2](https://github.com/leethomason/tinyxml2)

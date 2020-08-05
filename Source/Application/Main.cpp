@@ -93,19 +93,45 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 		{
 			//refStartupParams.
 		}
+		if (paramName == "-Windowed" || paramName == "-windowed")
+		{
+			refStartupParams.bOverrideENGSetting_DebugWindowDisplayMode = true;
+			refStartupParams.bOverrideENGSetting_bDisplayMode = true;
+			refStartupParams.EngineSettings.WndMain.DisplayMode = EDisplayMode::WINDOWED;
+			refStartupParams.EngineSettings.WndDebug.DisplayMode = EDisplayMode::WINDOWED;
+		}
 
 		//
 		// Graphics Settings
 		//
 		if (paramName == "-Fullscreen" || paramName == "-FullScreen" || paramName == "-fullscreen")
 		{
-			refStartupParams.bOverrideENGSetting_bFullscreen = true;
+			refStartupParams.bOverrideENGSetting_bDisplayMode = true;
 			refStartupParams.EngineSettings.WndMain.DisplayMode = EDisplayMode::EXCLUSIVE_FULLSCREEN;
 		}
 		if (paramName == "-VSync" || paramName == "-vsync" || paramName == "-Vsync")
 		{
-			refStartupParams.bOverrideGFXSetting_bVSync= true;
-			refStartupParams.EngineSettings.gfx.bVsync= true;
+			refStartupParams.bOverrideGFXSetting_bVSync = true;
+			if (paramValue.empty())
+			{
+				refStartupParams.EngineSettings.gfx.bVsync = true;
+			}
+			else
+			{
+				refStartupParams.EngineSettings.gfx.bVsync = StrUtil::ParseBool(paramValue);
+			}
+		}
+		if (paramName == "-AntiAliasing" || paramName == "-AA")
+		{
+			refStartupParams.bOverrideGFXSetting_bAA = true;
+			if (paramValue.empty())
+			{
+				refStartupParams.EngineSettings.gfx.bAntiAliasing = true;
+			}
+			else
+			{
+				refStartupParams.EngineSettings.gfx.bAntiAliasing = StrUtil::ParseBool(paramValue);
+			}
 		}
 		if (paramName == "-TripleBuffering")
 		{
@@ -116,6 +142,21 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 		{
 			refStartupParams.bOverrideGFXSetting_bUseTripleBuffering = true;
 			refStartupParams.EngineSettings.gfx.bUseTripleBuffering = false;
+		}
+		if (paramName == "-HDR")
+		{
+			refStartupParams.bOverrideGFXSetting_bHDR = true;
+			refStartupParams.EngineSettings.WndMain.bEnableHDR = true;
+		}
+		if (paramName == "-MaxFrameRate" || paramName == "-MaxFPS")
+		{
+			refStartupParams.bOverrideGFXSetting_bMaxFrameRate = true;
+			if (paramValue == "Unlimited" || paramValue == "0")
+				refStartupParams.EngineSettings.gfx.MaxFrameRate = 0;
+			else if (paramValue == "Auto" || paramValue == "Automatic" || paramValue == "-1")
+				refStartupParams.EngineSettings.gfx.MaxFrameRate = -1;
+			else
+				refStartupParams.EngineSettings.gfx.MaxFrameRate = StrUtil::ParseInt(paramValue);
 		}
 	}
 }

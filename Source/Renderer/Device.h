@@ -18,15 +18,22 @@
 
 #pragma once
 
-#include <d3d12.h>
-#include <dxgi.h>
+struct IDXGIFactory6;
+struct ID3D12Device;
+struct IDXGIAdapter;
 
 struct FDeviceCreateDesc
 {
 	bool bEnableDebugLayer = false;
 	bool bEnableValidationLayer = false;
+	IDXGIFactory6* pFactory = nullptr;
 };
 
+struct FDeviceCapabilities
+{
+	bool bSupportTearing = false;
+	unsigned SupportedMaxMultiSampleQualityLevel = 0;
+};
 
 class Device 
 {
@@ -37,13 +44,14 @@ public:
 	inline ID3D12Device* GetDevicePtr()  const { return mpDevice; }
 	inline IDXGIAdapter* GetAdapterPtr() const { return mpAdapter; }
 
-	UINT GetDeviceMemoryMax() const;
-	UINT GetDeviceMemoryAvailable() const;
-
+	unsigned GetDeviceMemoryMax() const;
+	unsigned GetDeviceMemoryAvailable() const;
+	
+	const FDeviceCapabilities& GetDeviceCapabilities() const { return mDeviceCapabilities; }
 private:
 	ID3D12Device* mpDevice  = nullptr;
 	IDXGIAdapter* mpAdapter = nullptr;
 	// TODO: Multi-adapter systems: https://docs.microsoft.com/en-us/windows/win32/direct3d12/multi-engine
 
-	//UINT mRTVDescIncremenetSize = 0;
+	FDeviceCapabilities mDeviceCapabilities;
 };

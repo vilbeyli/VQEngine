@@ -22,6 +22,7 @@ set BUILD_CONFIG_RELEASE=1
 set BUILD_CONFIG_REL_WITH_DBG=0
 
 set BUILD_FLAG_CLEAN=0
+set SKIP_DOWNLOADS=0
 
 set DBG_BUILD_DIRECTORY=../Bin/DEBUG
 set RLS_BUILD_DIRECTORY=../Bin/RELEASE
@@ -37,8 +38,10 @@ set BUILD_NUM_CURR_TASK=0
 :: flag determining whether to launch the explorer upon package completion or not
 set SKIP_EXPLORER=0
 
-::-------------------------------------------------------------------------------------------------------------------------------------------------------------
+:: flag to skip build and only copy artifacts to the destination
+set NO_BUILD=0
 
+::-------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 :: parameter scan
 for %%i IN (%*) DO (
@@ -67,6 +70,8 @@ for %%i IN (%*) DO (
     if "%%i"=="-SkipPackaging"   set BUILD_TASKS_ONLY=1
     if "%%i"=="-NoExplorer"      set SKIP_EXPLORER=1
     if "%%i"=="-SkipExplorer"    set SKIP_EXPLORER=1
+    if "%%i"=="-NoBuild"         set NO_BUILD=1
+    if "%%i"=="-NoDownload"      set SKIP_DOWNLOADS=1
 )
 
 ::echo SkipMSBuildFind=!MSBUILD_FIND!
@@ -88,26 +93,31 @@ set ENGINE_BUILD_COMMAND="!MSBUILD!" "%~dp0!SOLUTION_FILE_PATH!"
 echo.
 echo [VQPackage] Packaging Engine...
 
+if !SKIP_DOWNLOADS! equ 0 (
+    call :CheckAssetsAndDownloadIfNecessary
+)
+
 pushd %~dp0
 
+if !NO_BUILD! equ 0 (
+    :: Check if GenerateProjectFiles.bat has been run
+    if not exist !SOLUTION_DIRECTORY! (
+        echo [VQPackage] Solution directory '!SOLUTION_DIRECTORY!' doesn't exist.
+        mkdir !SOLUTION_DIRECTORY!
+    )
 
-:: Check if GenerateProjectFiles.bat has been run
-if not exist !SOLUTION_DIRECTORY! (
-    echo [VQPackage] Solution directory '!SOLUTION_DIRECTORY!' doesn't exist.
-    mkdir !SOLUTION_DIRECTORY!
+    call :ExecBuildTask_PreBuild
+
+    :: clean if specified
+    if !BUILD_FLAG_CLEAN! equ 1 (
+        call :ExecBuildTask_Clean
+    )
+
+    :: Package the engine
+    call :ExecBuildTask_Build
+
+    if %ERRORLEVEL% neq 0  exit /b %ERRORLEVEL%
 )
-
-call :ExecBuildTask_PreBuild
-
-:: clean if specified
-if !BUILD_FLAG_CLEAN! equ 1 (
-    call :ExecBuildTask_Clean
-)
-
-:: Package the engine
-call :ExecBuildTask_Build
-
-if %ERRORLEVEL% neq 0  exit /b %ERRORLEVEL%
 
 :: move build artifacts into destination folder
 call :ExecBuildTask_Move
@@ -241,6 +251,28 @@ exit /b 0
 
 
 
+::
+:: CheckAssetsAndDownloadIfNecessary()
+::
+:CheckAssetsAndDownloadIfNecessary
+set ASSETS_DIR__HDRI=
+
+pushd %cd%
+cd !DATA_DIRECTORY!/Textures/HDRI
+set ASSETS_DIR__HDRI=%cd%
+
+popd
+
+
+echo [VQPackage] Checking Assets...
+if exist !ASSETS_DIR__HDRI!/*.hdr (
+    echo [VQPackage] Found .hdr files in Data/Textures/HDRI/ directory, skipping download.
+) else (
+    echo [VQPackage] Textures are missing, starting download...
+    call %~dp0/../Scripts/DownloadAssets.bat
+)
+
+exit /b 0
 
 ::
 :: PackageBuild(source, dest)
@@ -248,10 +280,16 @@ exit /b 0
 :PackageBuild
 set SRC=%~1
 set DST=%~2
-robocopy !SRC! !DST! /xf *.lib *.ilk /xd Icons/ Resources/ /E
+::prepare ignore directory list
+pushd %cd%
+cd !SRC!/Data/Icons
+set IGNORE_DIRS=%cd%
+cd ../Resources
+set IGNORE_DIRS=%IGNORE_DIRS% %cd%
+popd
+:: move files to final destination
+robocopy !SRC! !DST! /xf *.lib *.ilk /E /xd !IGNORE_DIRS!
 robocopy !SHADER_DIRECTORY! !DST!/Shaders /E
-xcopy "!DATA_DIRECTORY!/EngineSettings.ini" "!DST!/Data"\ /Y /Q /F
-robocopy "!DATA_DIRECTORY!/Textures" "!DST!/Data/Textures" /E
 exit /b 0
 
 ::
