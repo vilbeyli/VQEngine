@@ -93,6 +93,10 @@ set ENGINE_BUILD_COMMAND="!MSBUILD!" "%~dp0!SOLUTION_FILE_PATH!"
 echo.
 echo [VQPackage] Packaging Engine...
 
+if !SKIP_DOWNLOADS! equ 0 (
+    call :CheckAssetsAndDownloadIfNecessary
+)
+
 pushd %~dp0
 
 if !NO_BUILD! equ 0 (
@@ -259,9 +263,12 @@ set ASSETS_DIR__HDRI=%cd%
 
 popd
 
+
+echo [VQPackage] Checking Assets...
 if exist !ASSETS_DIR__HDRI!/*.hdr (
-    echo Found .hdr files in Data/Textures/HDRI/ directory, skipping download.
+    echo [VQPackage] Found .hdr files in Data/Textures/HDRI/ directory, skipping download.
 ) else (
+    echo [VQPackage] Textures are missing, starting download...
     call %~dp0/../Scripts/DownloadAssets.bat
 )
 
@@ -273,9 +280,6 @@ exit /b 0
 :PackageBuild
 set SRC=%~1
 set DST=%~2
-if !SKIP_DOWNLOADS! equ 0 (
-    call :CheckAssetsAndDownloadIfNecessary
-)
 ::prepare ignore directory list
 pushd %cd%
 cd !SRC!/Data/Icons
