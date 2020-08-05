@@ -5,6 +5,7 @@
 VQE is **VQEngine**: A DX12 rewrite of [VQEngine-Vanilla](https://github.com/vilbeyli/VQEngine) for fast prototyping of rendering techniques and experimenting with cutting-edge technology.
 
 ![](Screenshots/HelloEnvMap.png)
+<center><sub><i>HDRI Environment Map Rendering</i></sub></center>
 
 # Features
 
