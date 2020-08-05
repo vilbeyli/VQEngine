@@ -1,3 +1,7 @@
+# HDR textures
+*.exr
+*.hdr
+
 # Prerequisites
 *.d
 
@@ -58,9 +62,6 @@ bld/
 [Oo]bj/
 [Ll]og/
 Build/_artifacts/
-Build/DX11/
-Build/DX12/
-Source/3rdParty/assimp-4.1.0/
 
 
 # Visual Studio 2015 cache/options directory
