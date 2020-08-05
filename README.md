@@ -1,17 +1,22 @@
-# VQE
-
 ![](Data/Icons/VQEngine-icon.png)
+
+# VQE
 
 VQE is **VQEngine**: A DX12 rewrite of [VQEngine-Vanilla](https://github.com/vilbeyli/VQEngine) for fast prototyping of rendering techniques and experimenting with cutting-edge technology.
 
-![](Screenshots/HelloCube.png)
+![](Screenshots/HelloEnvMap.png)
+<p align="center">
+<sub><i>HDRI Environment Map Rendering</i></sub>
+</p>
 
-VQE supports 
+# Features
 
- - Multi-threaded architexture
+ - Multi-threaded architecture
    - Main, Update & Render Threads
    - ThreadPool of worker threads
- - HDR displays
+ - HDR Environment Maps from [HDRI Haven](https://hdrihaven.com/)
+ - HDR display support
+ ![](Screenshots/HDRDisplay.jpg)
  - Multiple windows on multiple monitors
  - Physically-based Rendering (WIP)
  - Real-time and offline Ray Tracing (WIP)
@@ -45,12 +50,23 @@ Then, run one of the build scripts in `Build/` folder,
 Make sure to have installed
 
  - [Visual C++ 2019 Redistributiable (x64)](https://support.microsoft.com/en-us/help/2977003/the-latest-supported-visual-c-downloads)
+ - A DX12-capable GPU
 
 Run `VQE.exe`.
 
-The engine can be configured through the settings file `EngineSettings.ini` in the `Data/` folder next to the executable. 
+## Controls
 
-Command line parameters are also supported.
+| Key | |
+| :--: | :-- |
+| **WASD+EQ** | Camera Movement |
+| **Page Up/Down** | Change Environment Map |
+| **V** | Toggle VSync |
+| **M** | Toggle MSAA |
+| **Alt+Enter** | Toggle Fullscreen |
+| **Spacebar** | Toggle Cube Animation |
+| **Mouse Buttons** | Rotate Cube |
+| **Esc** | Release mouse |
+
 
 ## Settings
 
@@ -98,7 +114,7 @@ VQE supports the following command line parameters:
 
 **Note:** Command line parameters will override the `EngineSettings.ini` values.
 
-## Scripts
+# Scripts
 
 | File |  |
 | :-- | :-- |
