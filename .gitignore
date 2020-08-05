@@ -344,3 +344,4 @@ $RECYCLE.BIN/
 # EXCEPTIONS
 !Data/Models/*/*.obj
 !Tools/7z1900-x64.exe
+!Tools/wget.exe
