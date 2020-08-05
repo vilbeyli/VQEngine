@@ -22,6 +22,7 @@ set BUILD_CONFIG_RELEASE=1
 set BUILD_CONFIG_REL_WITH_DBG=0
 
 set BUILD_FLAG_CLEAN=0
+set SKIP_DOWNLOADS=0
 
 set DBG_BUILD_DIRECTORY=../Bin/DEBUG
 set RLS_BUILD_DIRECTORY=../Bin/RELEASE
@@ -41,7 +42,6 @@ set SKIP_EXPLORER=0
 set NO_BUILD=0
 
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
-
 
 :: parameter scan
 for %%i IN (%*) DO (
@@ -71,6 +71,7 @@ for %%i IN (%*) DO (
     if "%%i"=="-NoExplorer"      set SKIP_EXPLORER=1
     if "%%i"=="-SkipExplorer"    set SKIP_EXPLORER=1
     if "%%i"=="-NoBuild"         set NO_BUILD=1
+    if "%%i"=="-NoDownload"      set SKIP_DOWNLOADS=1
 )
 
 ::echo SkipMSBuildFind=!MSBUILD_FIND!
@@ -246,6 +247,25 @@ exit /b 0
 
 
 
+::
+:: CheckAssetsAndDownloadIfNecessary()
+::
+:CheckAssetsAndDownloadIfNecessary
+set ASSETS_DIR__HDRI=
+
+pushd %cd%
+cd !DATA_DIRECTORY!/Textures/HDRI
+set ASSETS_DIR__HDRI=%cd%
+
+popd
+
+if exist !ASSETS_DIR__HDRI!/*.hdr (
+    echo Found .hdr files in Data/Textures/HDRI/ directory, skipping download.
+) else (
+    call %~dp0/../Scripts/DownloadAssets.bat
+)
+
+exit /b 0
 
 ::
 :: PackageBuild(source, dest)
@@ -253,6 +273,9 @@ exit /b 0
 :PackageBuild
 set SRC=%~1
 set DST=%~2
+if !SKIP_DOWNLOADS! equ 0 (
+    call :CheckAssetsAndDownloadIfNecessary
+)
 ::prepare ignore directory list
 pushd %cd%
 cd !SRC!/Data/Icons
@@ -289,9 +312,6 @@ call :PackageBuild !RLS_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win6
 if !BUILD_CONFIG_DEBUG! NEQ 0         call :PackageBuild !DBG_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win64-Debug
 if !BUILD_CONFIG_REL_WITH_DBG! NEQ 0  call :PackageBuild !RWD_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win64-PDB
 exit /b 0
-
-:: check for download assets
-if 
 
 :: --------------------------------------------------------------------------
 
