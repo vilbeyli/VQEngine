@@ -253,10 +253,16 @@ exit /b 0
 :PackageBuild
 set SRC=%~1
 set DST=%~2
-robocopy !SRC! !DST! /xf *.lib *.ilk /xd Icons/ Resources/ /E
+::prepare ignore directory list
+pushd %cd%
+cd !SRC!/Data/Icons
+set IGNORE_DIRS=%cd%
+cd ../Resources
+set IGNORE_DIRS=%IGNORE_DIRS% %cd%
+popd
+:: move files to final destination
+robocopy !SRC! !DST! /xf *.lib *.ilk /E /xd !IGNORE_DIRS!
 robocopy !SHADER_DIRECTORY! !DST!/Shaders /E
-xcopy "!DATA_DIRECTORY!/EngineSettings.ini" "!DST!/Data"\ /Y /Q /F
-robocopy "!DATA_DIRECTORY!/Textures" "!DST!/Data/Textures" /E
 exit /b 0
 
 ::
