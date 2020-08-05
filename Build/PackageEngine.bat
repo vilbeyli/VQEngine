@@ -37,6 +37,9 @@ set BUILD_NUM_CURR_TASK=0
 :: flag determining whether to launch the explorer upon package completion or not
 set SKIP_EXPLORER=0
 
+:: flag to skip build and only copy artifacts to the destination
+set NO_BUILD=0
+
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
@@ -67,6 +70,7 @@ for %%i IN (%*) DO (
     if "%%i"=="-SkipPackaging"   set BUILD_TASKS_ONLY=1
     if "%%i"=="-NoExplorer"      set SKIP_EXPLORER=1
     if "%%i"=="-SkipExplorer"    set SKIP_EXPLORER=1
+    if "%%i"=="-NoBuild"         set NO_BUILD=1
 )
 
 ::echo SkipMSBuildFind=!MSBUILD_FIND!
@@ -90,24 +94,25 @@ echo [VQPackage] Packaging Engine...
 
 pushd %~dp0
 
+if !NO_BUILD! equ 0 (
+    :: Check if GenerateProjectFiles.bat has been run
+    if not exist !SOLUTION_DIRECTORY! (
+        echo [VQPackage] Solution directory '!SOLUTION_DIRECTORY!' doesn't exist.
+        mkdir !SOLUTION_DIRECTORY!
+    )
 
-:: Check if GenerateProjectFiles.bat has been run
-if not exist !SOLUTION_DIRECTORY! (
-    echo [VQPackage] Solution directory '!SOLUTION_DIRECTORY!' doesn't exist.
-    mkdir !SOLUTION_DIRECTORY!
+    call :ExecBuildTask_PreBuild
+
+    :: clean if specified
+    if !BUILD_FLAG_CLEAN! equ 1 (
+        call :ExecBuildTask_Clean
+    )
+
+    :: Package the engine
+    call :ExecBuildTask_Build
+
+    if %ERRORLEVEL% neq 0  exit /b %ERRORLEVEL%
 )
-
-call :ExecBuildTask_PreBuild
-
-:: clean if specified
-if !BUILD_FLAG_CLEAN! equ 1 (
-    call :ExecBuildTask_Clean
-)
-
-:: Package the engine
-call :ExecBuildTask_Build
-
-if %ERRORLEVEL% neq 0  exit /b %ERRORLEVEL%
 
 :: move build artifacts into destination folder
 call :ExecBuildTask_Move
@@ -278,6 +283,9 @@ call :PackageBuild !RLS_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win6
 if !BUILD_CONFIG_DEBUG! NEQ 0         call :PackageBuild !DBG_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win64-Debug
 if !BUILD_CONFIG_REL_WITH_DBG! NEQ 0  call :PackageBuild !RWD_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win64-PDB
 exit /b 0
+
+:: check for download assets
+if 
 
 :: --------------------------------------------------------------------------
 

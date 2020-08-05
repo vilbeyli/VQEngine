@@ -584,6 +584,7 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	}
 	else
 	{
+		Log::Warning("Have you run Scripts/DownloadAssets.bat?");
 		Log::Error("Couldn't find Environment Map: %s", EnvMapName.c_str());
 	}
 }
