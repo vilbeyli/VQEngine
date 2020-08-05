@@ -56,7 +56,7 @@ Run `VQE.exe`.
 
 ## Controls
 
-| | |
+| Key | |
 | :--: | :-- |
 | **WASD+EQ** | Camera Movement |
 | **Page Up/Down** | Change Environment Map |
