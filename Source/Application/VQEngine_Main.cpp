@@ -120,12 +120,13 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	});
 	float f0 = t.Tick();
 
-
+#if 0
 	Log::Info("[PERF] VQEngine::Initialize() : %.3fs", t2.StopGetDeltaTimeAndReset());
 	Log::Info("[PERF]    DispatchSysInfo : %.3fs", f0);
 	Log::Info("[PERF]    Settings       : %.3fs", f2);
 	Log::Info("[PERF]    Windows        : %.3fs", f3);
 	Log::Info("[PERF]    Threads        : %.3fs", f4);
+#endif
 	return true; 
 }
 

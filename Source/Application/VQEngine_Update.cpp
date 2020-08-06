@@ -33,7 +33,7 @@ using namespace DirectX;
 
 void VQEngine::UpdateThread_Main()
 {
-	Log::Info("UpdateThread_Main()");
+	Log::Info("UpdateThread Created.");
 
 	UpdateThread_Inititalize();
 
@@ -111,7 +111,7 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 	if (mAppState == EAppState::INITIALIZING)
 	{
 		// start loading
-		Log::Info("Main Thread starts loading...");
+		Log::Info("Update Thread starts loading...");
 
 		// start load level
 		Load_SceneData_Dispatch();
@@ -131,7 +131,7 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 		const bool bLoadDone = NumActiveTasks == 0;
 		if (bLoadDone)
 		{
-			Log::Info("Main Thread loaded");
+			Log::Info("Update Thread loaded, starting simulation...");
 			mAppState = EAppState::SIMULATING;
 			mbLoadingLevel.store(false);
 		}
@@ -306,8 +306,8 @@ void VQEngine::CalculateEffectiveFrameRate(HWND hwnd)
 		mEffectiveFrameRateLimit_ms = 1000.0f / mSettings.gfx.MaxFrameRate;
 	}
 	const bool bUnlimitedFrameRate = mEffectiveFrameRateLimit_ms == 0.0f;
-	if(bUnlimitedFrameRate) Log::Info("FrameRateLimit(ms) : Unlimited");
-	else                    Log::Info("FrameRateLimit(ms) : %.2f | %d FPS", mEffectiveFrameRateLimit_ms, static_cast<int>(1000.0f / mEffectiveFrameRateLimit_ms));
+	if(bUnlimitedFrameRate) Log::Info("FrameRateLimit : Unlimited");
+	else                    Log::Info("FrameRateLimit : %.2fms | %d FPS", mEffectiveFrameRateLimit_ms, static_cast<int>(1000.0f / mEffectiveFrameRateLimit_ms));
 }
 
 const FDisplayHDRProfile* VQEngine::GetHDRProfileIfExists(const wchar_t* pwStrLogicalDisplayName)
