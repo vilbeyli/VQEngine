@@ -24,9 +24,9 @@
 #include <cassert>
 
 #ifdef _DEBUG
-constexpr char* BUILD_CONFIG = "Debug";
+constexpr char* BUILD_CONFIG = "-Debug";
 #else
-constexpr char* BUILD_CONFIG = "Release";
+constexpr char* BUILD_CONFIG = "";
 #endif
 constexpr char* VQENGINE_VERSION = "v0.4.0";
 
@@ -152,7 +152,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	s.WndMain.DisplayMode = EDisplayMode::WINDOWED;
 	s.WndMain.PreferredDisplay = 0;
 	s.WndMain.bEnableHDR = false;
-	sprintf_s(s.WndMain.Title , "VQEngine %s-%s", VQENGINE_VERSION, BUILD_CONFIG);
+	sprintf_s(s.WndMain.Title , "VQEngine %s%s", VQENGINE_VERSION, BUILD_CONFIG);
 
 	s.WndDebug.Width  = 600;
 	s.WndDebug.Height = 600;
