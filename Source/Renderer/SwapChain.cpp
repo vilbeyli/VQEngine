@@ -570,7 +570,12 @@ DXGI_OUTPUT_DESC1 SwapChain::GetContainingMonitorDesc() const
     {
         IDXGIOutput* pOutput = nullptr;
         HRESULT hr = mpSwapChain->GetContainingOutput(&pOutput);
-        assert(hr == S_OK); // TODO: fix NVidia RTX 2060 Mobile, this assertion is hit.
+        pOutput = nullptr;
+        if (hr != S_OK || pOutput == nullptr)
+        {
+            Log::Error("SwapChain::GetContainingOutput() returned error");
+            return d;
+        }
         hr = pOutput->QueryInterface(IID_PPV_ARGS(&pOut));
         assert(hr == S_OK);
         pOutput->Release();
