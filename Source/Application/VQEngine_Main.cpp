@@ -133,6 +133,9 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 void VQEngine::Exit()
 {
 	ExitThreads();
+
+	mRenderer.Unload();
+	mRenderer.Exit();
 }
 
 
