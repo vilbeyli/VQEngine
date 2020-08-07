@@ -30,7 +30,7 @@
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 void VQEngine::RenderThread_Main()
 {
-	Log::Info("RenderThread_Main()");
+	Log::Info("RenderThread Created.");
 	RenderThread_Inititalize();
 
 	RenderThread_HandleEvents();
@@ -71,6 +71,9 @@ void VQEngine::RenderThread_Main()
 			//Log::Info("RenderThread_Main() : dt=%.2f, Sleep=%.2f", dt, TimeBudgetLeft_ms);
 		}
 	}
+
+	// busy wait until all loading is finished before calling Exit
+	while (mWorkers_Load.GetNumActiveTasks() > 0); 
 
 	RenderThread_Exit();
 	Log::Info("RenderThread_Main() : Exit");
@@ -124,7 +127,7 @@ void VQEngine::RenderThread_Inititalize()
 		const bool bCreateHDRSwapchain = mSettings.WndMain.bEnableHDR && bIsContainingWindowOnHDRScreen;
 		if (mSettings.WndMain.bEnableHDR && !bIsContainingWindowOnHDRScreen)
 		{
-			Log::Warning("RenderThread_Initialize(): HDR Swapchain requested, but the containing monitor does not support HDR. This'll fallback to SDR Swapchain but will enable HDR swapchain when the window is moved to the HDR display");
+			Log::Warning("RenderThread_Initialize(): HDR Swapchain requested, but the containing monitor does not support HDR. Falling back to SDR Swapchain, and will enable HDR swapchain when the window is moved to a HDR-capable display");
 		}
 
 		mRenderer.InitializeRenderContext(mpWinMain.get(), NUM_SWAPCHAIN_BUFFERS, mSettings.gfx.bVsync, bCreateHDRSwapchain);
@@ -169,8 +172,7 @@ void VQEngine::RenderThread_Inititalize()
 
 void VQEngine::RenderThread_Exit()
 {
-	mRenderer.Unload();
-	mRenderer.Exit();
+	mpSemUpdate->Signal();
 }
 
 void VQEngine::InitializeBuiltinMeshes()

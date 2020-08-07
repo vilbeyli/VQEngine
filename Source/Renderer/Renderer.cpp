@@ -62,7 +62,7 @@ const std::string_view& VQRenderer::DXGIFormatAsString(DXGI_FORMAT format)
 // D3D12MA Integration 
 // ---------------------------------------------------------------------------------------
 #define D3D12MA_ENABLE_CPU_ALLOCATION_CALLBACKS       1
-#define D3D12MA_ENABLE_CPU_ALLOCATION_CALLBACKS_PRINT 1
+#define D3D12MA_ENABLE_CPU_ALLOCATION_CALLBACKS_PRINT 0
 static void* const         CUSTOM_ALLOCATION_USER_DATA = (void*)(uintptr_t)0xDEADC0DE;
 static std::atomic<size_t> g_CpuAllocationCount{ 0 };
 static void* CustomAllocate(size_t Size, size_t Alignment, void* pUserData)

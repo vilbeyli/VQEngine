@@ -316,13 +316,13 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     }
 
 
-    Log::Info("SwapChain: Created <hwnd=0x%x, bVSync=%d> w/ %d back buffers of resolution %dx%d %s."
+    Log::Info("SwapChain: Created <hwnd=0x%x, bVSync=%d> w/ %d back buffers of format %s @ %dx%d."
         , mHwnd
         , this->mbVSync
         , desc.numBackBuffers
+        , VQRenderer::DXGIFormatAsString(this->mFormat).data()
         , WIDTH
         , HEIGHT
-        , VQRenderer::DXGIFormatAsString(this->mFormat).data()
     );
     return bSuccess;
 }
@@ -570,7 +570,11 @@ DXGI_OUTPUT_DESC1 SwapChain::GetContainingMonitorDesc() const
     {
         IDXGIOutput* pOutput = nullptr;
         HRESULT hr = mpSwapChain->GetContainingOutput(&pOutput);
-        assert(hr == S_OK); // TODO: fix NVidia RTX 2060 Mobile, this assertion is hit.
+        if (hr != S_OK || pOutput == nullptr)
+        {
+            Log::Error("SwapChain::GetContainingOutput() returned error");
+            return d;
+        }
         hr = pOutput->QueryInterface(IID_PPV_ARGS(&pOut));
         assert(hr == S_OK);
         pOutput->Release();

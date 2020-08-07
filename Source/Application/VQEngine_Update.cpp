@@ -33,7 +33,7 @@ using namespace DirectX;
 
 void VQEngine::UpdateThread_Main()
 {
-	Log::Info("UpdateThread_Main()");
+	Log::Info("UpdateThread Created.");
 
 	UpdateThread_Inititalize();
 
@@ -111,7 +111,7 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 	if (mAppState == EAppState::INITIALIZING)
 	{
 		// start loading
-		Log::Info("Main Thread starts loading...");
+		Log::Info("Update Thread starts loading...");
 
 		// start load level
 		Load_SceneData_Dispatch();
@@ -127,11 +127,11 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 
 
 		// check if loading is done
-		const int NumActiveTasks = mUpdateWorkerThreads.GetNumActiveTasks();
+		const int NumActiveTasks = mWorkers_Load.GetNumActiveTasks();
 		const bool bLoadDone = NumActiveTasks == 0;
 		if (bLoadDone)
 		{
-			Log::Info("Main Thread loaded");
+			Log::Info("Update Thread loaded, starting simulation...");
 			mAppState = EAppState::SIMULATING;
 			mbLoadingLevel.store(false);
 		}
@@ -306,8 +306,8 @@ void VQEngine::CalculateEffectiveFrameRate(HWND hwnd)
 		mEffectiveFrameRateLimit_ms = 1000.0f / mSettings.gfx.MaxFrameRate;
 	}
 	const bool bUnlimitedFrameRate = mEffectiveFrameRateLimit_ms == 0.0f;
-	if(bUnlimitedFrameRate) Log::Info("FrameRateLimit(ms) : Unlimited");
-	else                    Log::Info("FrameRateLimit(ms) : %.2f | %d FPS", mEffectiveFrameRateLimit_ms, static_cast<int>(1000.0f / mEffectiveFrameRateLimit_ms));
+	if(bUnlimitedFrameRate) Log::Info("FrameRateLimit : Unlimited");
+	else                    Log::Info("FrameRateLimit : %.2fms | %d FPS", mEffectiveFrameRateLimit_ms, static_cast<int>(1000.0f / mEffectiveFrameRateLimit_ms));
 }
 
 const FDisplayHDRProfile* VQEngine::GetHDRProfileIfExists(const wchar_t* pwStrLogicalDisplayName)
@@ -434,8 +434,6 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 		while ((mNumRenderLoopsExecuted+1) != mNumUpdateLoopsExecuted);
 	};
 
-	//mUpdateWorkerThreads.AddTask([&,
-
 	const FEnvironmentMap& env = mResources_MainWnd.EnvironmentMap;
 	const int NumEnvMaps = static_cast<int>(mEnvironmentMapPresetNames.size());
 	if (input.IsKeyTriggered("PageUp"))
@@ -444,7 +442,7 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 		mActiveEnvironmentMapPresetIndex = (mActiveEnvironmentMapPresetIndex + 1) % NumEnvMaps;
 		mAppState = EAppState::LOADING;
 		mbLoadingLevel = true;
-		mUpdateWorkerThreads.AddTask([&]() 
+		mWorkers_Load.AddTask([&]()
 		{
 			LoadEnvironmentMap(mEnvironmentMapPresetNames[mActiveEnvironmentMapPresetIndex]);
 		});
@@ -459,7 +457,7 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 			: mActiveEnvironmentMapPresetIndex - 1;
 		mAppState = EAppState::LOADING;
 		mbLoadingLevel = true;
-		mUpdateWorkerThreads.AddTask([&]()
+		mWorkers_Load.AddTask([&]()
 		{
 			LoadEnvironmentMap(mEnvironmentMapPresetNames[mActiveEnvironmentMapPresetIndex]);
 		});
@@ -498,7 +496,7 @@ void VQEngine::Load_SceneData_Dispatch()
 	const FSceneRepresentation SceneRep = mQueue_SceneLoad.front();
 	mQueue_SceneLoad.pop();
 
-	mUpdateWorkerThreads.AddTask([&]() // Load scene data
+	mWorkers_Load.AddTask([&]() // Load scene data
 	{
 		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
 		const int NumBackBuffer_WndDbg  = mRenderer.GetSwapChainBackBufferCount(mpWinDebug);
@@ -542,7 +540,7 @@ void VQEngine::Load_SceneData_Dispatch()
 		mWindowUpdateContextLookup[mpWinMain->GetHWND()] = &mScene_MainWnd;
 		if (mpWinDebug) mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
 	});
-	mUpdateWorkerThreads.AddTask([&, SceneRep]() // Load Environment map textures
+	mWorkers_Load.AddTask([&, SceneRep]() // Load Environment map textures
 	{
 		Log::Info("[Scene] Loading: %s", SceneRep.SceneName.c_str());
 		LoadEnvironmentMap(SceneRep.EnvironmentMapPreset);

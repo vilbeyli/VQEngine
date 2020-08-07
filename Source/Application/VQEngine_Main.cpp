@@ -24,9 +24,9 @@
 #include <cassert>
 
 #ifdef _DEBUG
-constexpr char* BUILD_CONFIG = "Debug";
+constexpr char* BUILD_CONFIG = "-Debug";
 #else
-constexpr char* BUILD_CONFIG = "Release";
+constexpr char* BUILD_CONFIG = "";
 #endif
 constexpr char* VQENGINE_VERSION = "v0.4.0";
 
@@ -109,7 +109,7 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	float f4 = t.Tick();
 
 	// offload system info acquisition to a thread as it takes a few seconds on Debug build
-	mUpdateWorkerThreads.AddTask([&]() 
+	mWorkers_Update.AddTask([&]() 
 	{
 		this->mSysInfo = VQSystemInfo::GetSystemInfo();
 #if REPORT_SYSTEM_INFO 
@@ -120,18 +120,22 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	});
 	float f0 = t.Tick();
 
-
+#if 0
 	Log::Info("[PERF] VQEngine::Initialize() : %.3fs", t2.StopGetDeltaTimeAndReset());
 	Log::Info("[PERF]    DispatchSysInfo : %.3fs", f0);
 	Log::Info("[PERF]    Settings       : %.3fs", f2);
 	Log::Info("[PERF]    Windows        : %.3fs", f3);
 	Log::Info("[PERF]    Threads        : %.3fs", f4);
+#endif
 	return true; 
 }
 
 void VQEngine::Exit()
 {
 	ExitThreads();
+
+	mRenderer.Unload();
+	mRenderer.Exit();
 }
 
 
@@ -152,7 +156,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	s.WndMain.DisplayMode = EDisplayMode::WINDOWED;
 	s.WndMain.PreferredDisplay = 0;
 	s.WndMain.bEnableHDR = false;
-	sprintf_s(s.WndMain.Title , "VQEngine %s-%s", VQENGINE_VERSION, BUILD_CONFIG);
+	sprintf_s(s.WndMain.Title , "VQEngine %s%s", VQENGINE_VERSION, BUILD_CONFIG);
 
 	s.WndDebug.Width  = 600;
 	s.WndDebug.Height = 600;
@@ -289,28 +293,30 @@ void VQEngine::InitializeScenes(const FStartupParameters& Params)
 void VQEngine::InitializeThreads()
 {
 	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
+	const size_t HWThreads  = ThreadPool::sHardwareThreadCount;
+	const size_t HWCores    = HWThreads / 2;
+	const size_t NumWorkers = HWCores - 2; // reserve 2 cores for (Update + Render) + Main threads
+
 	mpSemUpdate.reset(new Semaphore(NUM_SWAPCHAIN_BACKBUFFERS, NUM_SWAPCHAIN_BACKBUFFERS));
 	mpSemRender.reset(new Semaphore(0                        , NUM_SWAPCHAIN_BACKBUFFERS));
 
 	mbStopAllThreads.store(false);
+	mWorkers_Load.Initialize(NumWorkers);
 	mRenderThread = std::thread(&VQEngine::RenderThread_Main, this);
 	mUpdateThread = std::thread(&VQEngine::UpdateThread_Main, this);
-
-	const size_t HWThreads = ThreadPool::sHardwareThreadCount;
-	const size_t HWCores   = HWThreads/2;
-	const size_t NumWorkers = HWCores - 2; // reserve 2 cores for (Update + Render) + Main threads
-	mUpdateWorkerThreads.Initialize(NumWorkers);
-	mRenderWorkerThreads.Initialize(NumWorkers);
+	mWorkers_Update.Initialize(NumWorkers);
+	mWorkers_Render.Initialize(NumWorkers);
 }
 
 void VQEngine::ExitThreads()
 {
+	mWorkers_Load.Exit();
 	mbStopAllThreads.store(true);
 	mRenderThread.join();
 	mUpdateThread.join();
 
-	mUpdateWorkerThreads.Exit();
-	mRenderWorkerThreads.Exit();
+	mWorkers_Update.Exit();
+	mWorkers_Render.Exit();
 }
 
 
