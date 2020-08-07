@@ -127,7 +127,7 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 
 
 		// check if loading is done
-		const int NumActiveTasks = mUpdateWorkerThreads.GetNumActiveTasks();
+		const int NumActiveTasks = mWorkers_Load.GetNumActiveTasks();
 		const bool bLoadDone = NumActiveTasks == 0;
 		if (bLoadDone)
 		{
@@ -434,8 +434,6 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 		while ((mNumRenderLoopsExecuted+1) != mNumUpdateLoopsExecuted);
 	};
 
-	//mUpdateWorkerThreads.AddTask([&,
-
 	const FEnvironmentMap& env = mResources_MainWnd.EnvironmentMap;
 	const int NumEnvMaps = static_cast<int>(mEnvironmentMapPresetNames.size());
 	if (input.IsKeyTriggered("PageUp"))
@@ -444,7 +442,7 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 		mActiveEnvironmentMapPresetIndex = (mActiveEnvironmentMapPresetIndex + 1) % NumEnvMaps;
 		mAppState = EAppState::LOADING;
 		mbLoadingLevel = true;
-		mUpdateWorkerThreads.AddTask([&]() 
+		mWorkers_Load.AddTask([&]()
 		{
 			LoadEnvironmentMap(mEnvironmentMapPresetNames[mActiveEnvironmentMapPresetIndex]);
 		});
@@ -459,7 +457,7 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 			: mActiveEnvironmentMapPresetIndex - 1;
 		mAppState = EAppState::LOADING;
 		mbLoadingLevel = true;
-		mUpdateWorkerThreads.AddTask([&]()
+		mWorkers_Load.AddTask([&]()
 		{
 			LoadEnvironmentMap(mEnvironmentMapPresetNames[mActiveEnvironmentMapPresetIndex]);
 		});
@@ -498,7 +496,7 @@ void VQEngine::Load_SceneData_Dispatch()
 	const FSceneRepresentation SceneRep = mQueue_SceneLoad.front();
 	mQueue_SceneLoad.pop();
 
-	mUpdateWorkerThreads.AddTask([&]() // Load scene data
+	mWorkers_Load.AddTask([&]() // Load scene data
 	{
 		const int NumBackBuffer_WndMain = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
 		const int NumBackBuffer_WndDbg  = mRenderer.GetSwapChainBackBufferCount(mpWinDebug);
@@ -542,7 +540,7 @@ void VQEngine::Load_SceneData_Dispatch()
 		mWindowUpdateContextLookup[mpWinMain->GetHWND()] = &mScene_MainWnd;
 		if (mpWinDebug) mWindowUpdateContextLookup[mpWinDebug->GetHWND()] = &mScene_DebugWnd;
 	});
-	mUpdateWorkerThreads.AddTask([&, SceneRep]() // Load Environment map textures
+	mWorkers_Load.AddTask([&, SceneRep]() // Load Environment map textures
 	{
 		Log::Info("[Scene] Loading: %s", SceneRep.SceneName.c_str());
 		LoadEnvironmentMap(SceneRep.EnvironmentMapPreset);
