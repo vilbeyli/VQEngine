@@ -172,8 +172,7 @@ void VQEngine::RenderThread_Inititalize()
 
 void VQEngine::RenderThread_Exit()
 {
-	mRenderer.Unload();
-	mRenderer.Exit();
+	mpSemUpdate->Signal();
 }
 
 void VQEngine::InitializeBuiltinMeshes()
