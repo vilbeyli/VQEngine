@@ -72,6 +72,9 @@ void VQEngine::RenderThread_Main()
 		}
 	}
 
+	// busy wait until all loading is finished before calling Exit
+	while (mWorkers_Load.GetNumActiveTasks() > 0); 
+
 	RenderThread_Exit();
 	Log::Info("RenderThread_Main() : Exit");
 }
