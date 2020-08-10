@@ -6,9 +6,9 @@ setlocal enabledelayedexpansion
 cd ../Build/_artifacts
 set DIR_BUILD=!CD!
 
-set VQE_REL_DIR=!DIR_BUILD!/Win64
-set VQE_DBG_DIR=!DIR_BUILD!/Win64-Debug
-set VQE_RWD_DIR=!DIR_BUILD!/Win64-PDB
+set VQE_REL_DIR=!DIR_BUILD!
+set VQE_DBG_DIR=!DIR_BUILD!
+set VQE_RWD_DIR=!DIR_BUILD!
 
 set RUN_TEST_REL=1
 set RUN_TEST_DBG=0
@@ -40,9 +40,9 @@ if !errorlevel! NEQ 0 (
     exit /b -1 
 )
 
-if !RUN_TEST_DBG! NEQ 0  call :RunTest !VQE_DBG_DIR!, VQE.exe
+if !RUN_TEST_DBG! NEQ 0  call :RunTest !VQE_DBG_DIR!, VQE-d.exe
 if !RUN_TEST_REL! NEQ 0  call :RunTest !VQE_REL_DIR!, VQE.exe
-if !RUN_TEST_RWD! NEQ 0  call :RunTest !VQE_RWD_DIR!, VQE.exe
+if !RUN_TEST_RWD! NEQ 0  call :RunTest !VQE_RWD_DIR!, VQE-rwd.exe
 
 exit /b 0
 
