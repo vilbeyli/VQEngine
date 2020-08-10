@@ -25,11 +25,11 @@ set (Config
 )
 
 set (Shaders
-    "Source/Shaders/hello-triangle.hlsl"
-    "Source/Shaders/hello-cube.hlsl"
-    "Source/Shaders/FullscreenTriangle.hlsl"
-    "Source/Shaders/Tonemapper.hlsl"
-    "Source/Shaders/Skydome.hlsl"
+    "Shaders/hello-triangle.hlsl"
+    "Shaders/hello-cube.hlsl"
+    "Shaders/FullscreenTriangle.hlsl"
+    "Shaders/Tonemapper.hlsl"
+    "Shaders/Skydome.hlsl"
 )
 
 set (HeaderVQE 
@@ -95,6 +95,16 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/VQUtils/Bin/)
 add_executable( ${PROJECT_NAME} ${HeaderVQE} ${SourceVQE} ${Config} ${Resource} ${Shaders} )
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY} )
+
+# set target executable name for debug/releasewithdebug builds, release is VQE.exe
+foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
+    string( TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG )
+    if (${OUTPUTCONFIG} MATCHES "DEBUG")
+        set_target_properties(${PROJECT_NAME} PROPERTIES ${OUTPUTCONFIG}_OUTPUT_NAME "VQE-d")
+    elseif (${OUTPUTCONFIG} MATCHES "RELWITHDEBINFO")
+        set_target_properties(${PROJECT_NAME} PROPERTIES ${OUTPUTCONFIG}_OUTPUT_NAME "VQE-rwd")
+    endif()
+endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 17)
 
