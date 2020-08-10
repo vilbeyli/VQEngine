@@ -11,13 +11,6 @@ add_compile_options(/MP)
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
 
-# ouput exe to bin directory
-SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_HOME_DIRECTORY}/Bin)
-foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
-    string( TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG )
-    set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_HOME_DIRECTORY}/Bin/${OUTPUTCONFIG} )
-endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
-
 set (Resource 
     "Data/Resources/VQE.rc"
     "Data/Resources/resource.h"
@@ -32,11 +25,11 @@ set (Config
 )
 
 set (Shaders
-    "Source/Shaders/hello-triangle.hlsl"
-    "Source/Shaders/hello-cube.hlsl"
-    "Source/Shaders/FullscreenTriangle.hlsl"
-    "Source/Shaders/Tonemapper.hlsl"
-    "Source/Shaders/Skydome.hlsl"
+    "Shaders/hello-triangle.hlsl"
+    "Shaders/hello-cube.hlsl"
+    "Shaders/FullscreenTriangle.hlsl"
+    "Shaders/Tonemapper.hlsl"
+    "Shaders/Skydome.hlsl"
 )
 
 set (HeaderVQE 
@@ -74,8 +67,13 @@ set (SourceVQE
     "Source/Application/Input.cpp"
 )
 
-add_link_options(/SUBSYSTEM:WINDOWS)
+# ouput exe to bin directory
+foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
+    string( TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG )
+    set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_HOME_DIRECTORY}/Bin/${OUTPUTCONFIG} )
+endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 
+add_link_options(/SUBSYSTEM:WINDOWS)
 
 add_subdirectory(Libs/VQUtils)
 add_subdirectory(Libs/D3D12MA)
@@ -96,18 +94,19 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/VQUtils/Bin/)
 # Create a library with the project name that is build with the Headers and Source files
 add_executable( ${PROJECT_NAME} ${HeaderVQE} ${SourceVQE} ${Config} ${Resource} ${Shaders} )
 
-set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY}/Bin/ )
+set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY} )
+
+# set target executable name for debug/releasewithdebug builds, release is VQE.exe
+foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
+    string( TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG )
+    if (${OUTPUTCONFIG} MATCHES "DEBUG")
+        set_target_properties(${PROJECT_NAME} PROPERTIES ${OUTPUTCONFIG}_OUTPUT_NAME "VQE-d")
+    elseif (${OUTPUTCONFIG} MATCHES "RELWITHDEBINFO")
+        set_target_properties(${PROJECT_NAME} PROPERTIES ${OUTPUTCONFIG}_OUTPUT_NAME "VQE-rwd")
+    endif()
+endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 17)
-
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Data ${CMAKE_SOURCE_DIR}/Bin/Data)
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Source/Shaders ${CMAKE_SOURCE_DIR}/Bin/Shaders)
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Data $<TARGET_FILE_DIR:${PROJECT_NAME}>/Data)
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Source/Shaders $<TARGET_FILE_DIR:${PROJECT_NAME}>/Shaders)
-
-# TODO: the above commands must run even if the project is up to date which is not the case now.
-#       if Data/EngineSettings.ini is updated, the copy in the target destination of the commands above
-#       is not updated.
 
 # Make sure the compiler can find include files for the libraries
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${Includes})

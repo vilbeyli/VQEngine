@@ -27,8 +27,16 @@ set SKIP_DOWNLOADS=0
 set DBG_BUILD_DIRECTORY=../Bin/DEBUG
 set RLS_BUILD_DIRECTORY=../Bin/RELEASE
 set RWD_BUILD_DIRECTORY=../Bin/RELWITHDEBINFO
-set SHADER_DIRECTORY=../Source/Shaders
+set SHADER_DIRECTORY=../Shaders
 set DATA_DIRECTORY=../Data
+
+::prepare ignore directory list
+pushd %cd%
+cd ../Data/Icons
+set IGNORE_DIRS=%cd%
+cd ../Resources
+set IGNORE_DIRS=%IGNORE_DIRS% %cd%
+popd
 
 :: Keep track of # build tasks. build, clean, copy/move, etc.
 :: assume 2 for build+copy, add more depending on prebuild+clean tasks
@@ -280,16 +288,17 @@ exit /b 0
 :PackageBuild
 set SRC=%~1
 set DST=%~2
-::prepare ignore directory list
-pushd %cd%
-cd !SRC!/Data/Icons
-set IGNORE_DIRS=%cd%
-cd ../Resources
-set IGNORE_DIRS=%IGNORE_DIRS% %cd%
-popd
 :: move files to final destination
 robocopy !SRC! !DST! /xf *.lib *.ilk /E /xd !IGNORE_DIRS!
+exit /b 0
+
+::
+:: PackageBuild(source, dest)
+::
+:PackageResources
+set DST=%~1
 robocopy !SHADER_DIRECTORY! !DST!/Shaders /E
+robocopy !DATA_DIRECTORY! !DST!/Data /E /xd !IGNORE_DIRS!
 exit /b 0
 
 ::
@@ -307,14 +316,17 @@ if exist !ENGINE_PACKAGE_OUTPUT_DIRECTORY! (
     rmdir /S /Q !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
 )
 
-:: make artifacts directory
+:: create artifacts directory
 mkdir !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
 
-:: move builds
+:: move data
+call :PackageResources !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
+
+:: move built binaries
 echo [VQPackage] Moving build artifacts to package output directory...
-call :PackageBuild !RLS_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win64
-if !BUILD_CONFIG_DEBUG! NEQ 0         call :PackageBuild !DBG_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win64-Debug
-if !BUILD_CONFIG_REL_WITH_DBG! NEQ 0  call :PackageBuild !RWD_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win64-PDB
+call :PackageBuild !RLS_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
+if !BUILD_CONFIG_DEBUG! NEQ 0         call :PackageBuild !DBG_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
+if !BUILD_CONFIG_REL_WITH_DBG! NEQ 0  call :PackageBuild !RWD_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
 exit /b 0
 
 :: --------------------------------------------------------------------------
