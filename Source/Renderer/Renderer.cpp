@@ -362,7 +362,7 @@ void VQRenderer::InitializeHeaps()
 
 static std::wstring GetAssetFullPath(LPCWSTR assetName)
 {
-	std::wstring fullPath = L"Shaders/";
+	std::wstring fullPath = L"Source/Shaders/";
 	return fullPath + assetName;
 }
 
