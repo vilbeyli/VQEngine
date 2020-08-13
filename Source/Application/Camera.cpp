@@ -39,31 +39,31 @@ Camera::Camera()
 Camera::~Camera(void)
 {}
 
-void Camera::InitializeCamera(const FCameraData& data)
+void Camera::InitializeCamera(const FCameraParameters& data)
 {
-	const auto& NEAR_PLANE   = data.nearPlane;
-	const auto& FAR_PLANE    = data.farPlane;
-	const float AspectRatio  = data.width / data.height;
-	const float VerticalFoV  = data.fovV_Degrees * DEG2RAD;
-	const float& ViewportX   = data.width;
-	const float& ViewportY   = data.height;
+	const auto& NEAR_PLANE   = data.NearPlane;
+	const auto& FAR_PLANE    = data.FarPlane;
+	const float AspectRatio  = data.Width / data.Height;
+	const float VerticalFoV  = data.FovV_Degrees * DEG2RAD;
+	const float& ViewportX   = data.Width;
+	const float& ViewportY   = data.Height;
 
 	this->mProjParams.NearZ = NEAR_PLANE;
 	this->mProjParams.FarZ  = FAR_PLANE;
 	this->mProjParams.ViewporHeight = ViewportY;
 	this->mProjParams.ViewporWidth  = ViewportX;
-	this->mProjParams.FieldOfView = data.fovV_Degrees * DEG2RAD;
+	this->mProjParams.FieldOfView = data.FovV_Degrees * DEG2RAD;
 	this->mProjParams.bPerspectiveProjection = data.bPerspectiveProjection;
 
 	mYaw = mPitch = 0;
 	SetProjectionMatrix(this->mProjParams);
 	SetPosition(data.x, data.y, data.z);
-	Rotate(data.yaw * DEG2RAD, data.pitch * DEG2RAD, 1.0f);
+	Rotate(data.Yaw * DEG2RAD, data.Pitch * DEG2RAD, 1.0f);
 	UpdateViewMatrix();
 }
 
 
-void Camera::SetProjectionMatrix(const ProjectionMatrixParameters& params)
+void Camera::SetProjectionMatrix(const FProjectionMatrixParameters& params)
 {
 	assert(params.ViewporHeight > 0.0f);
 	const float AspectRatio = params.ViewporWidth / params.ViewporHeight;

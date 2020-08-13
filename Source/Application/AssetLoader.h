@@ -15,29 +15,15 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
+#pragma once
 
-#include "Mesh.h"
-#include <cassert>
+#include "Model.h"
 
-#define VERBOSE_LOGGING 0
-#if VERBOSE_LOGGING
-#include "Utilities/Log.h"
-#endif
-
-
-std::pair<BufferID, BufferID> Mesh::GetIABufferIDs(int lod /*= 0*/) const
+class AssetLoader
 {
-	assert(mLODBufferPairs.size() > 0); // maybe no assert and return <-1, -1> ?
 
-	if (lod < mLODBufferPairs.size())
-	{
-		return mLODBufferPairs[lod].GetIABufferPair();
-	}
 
-#if VERBOSE_LOGGING
-	Log::Warning("Requested LOD level (%d) doesn't exist (LOD levels = %d). Returning LOD=0", lod, static_cast<int>(mLODBufferPairs.size()));
-#endif
+public:
+	static Model ImportModel_obj(const std::string& objFilePath, std::string ModelName = "NONE"); // TODO: rename to LoadModel_obj() ?
 
-	return mLODBufferPairs.back().GetIABufferPair();
-}
-
+};

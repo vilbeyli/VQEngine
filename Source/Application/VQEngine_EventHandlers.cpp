@@ -184,21 +184,16 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 {
 	std::shared_ptr<WindowResizeEvent> p = std::static_pointer_cast<WindowResizeEvent>(pEvent);
 
-	// TODO: potentially use a lookup when camera count gets larger.
-	//       also need to take into account the array of framedata that containts the camera.
-	// there's only one camera for one window for now.
 	if (p->hwnd == mpWinMain->GetHWND())
 	{
-		if (mWindowUpdateContextLookup.find(p->hwnd) != mWindowUpdateContextLookup.end())
-		{
-			Camera& cam = GetCurrentFrameData(p->hwnd).SceneCamera;
-			
-			ProjectionMatrixParameters UpdatedProjectionMatrixParams = cam.mProjParams;
-			UpdatedProjectionMatrixParams.ViewporWidth  = static_cast<float>(p->width );
-			UpdatedProjectionMatrixParams.ViewporHeight = static_cast<float>(p->height);
+		// TODO: all cameras?
+		Camera& cam = mpScene->GetActiveCamera();
+		
+		FProjectionMatrixParameters UpdatedProjectionMatrixParams = cam.mProjParams;
+		UpdatedProjectionMatrixParams.ViewporWidth  = static_cast<float>(p->width );
+		UpdatedProjectionMatrixParams.ViewporHeight = static_cast<float>(p->height);
 
-			cam.SetProjectionMatrix(UpdatedProjectionMatrixParams);
-		}
+		cam.SetProjectionMatrix(UpdatedProjectionMatrixParams);		
 	}
 }
 
@@ -287,7 +282,7 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 		const FSetHDRMetaDataParams HDRMetaData = this->GatherHDRMetaDataParameters(hwnd);
 		if (pWnd->GetIsOnHDRCapableDisplay())
 			Swapchain.SetHDRMetaData(HDRMetaData);
-		else
+		else if (GetWindowSettings(hwnd).bEnableHDR)
 			Swapchain.ClearHDRMetaData();
 	}
 	Swapchain.EnsureSwapChainColorSpace(Swapchain.GetFormat() == DXGI_FORMAT_R16G16B16A16_FLOAT ? _16 : _8, false);
@@ -439,7 +434,7 @@ void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
 		const FSetHDRMetaDataParams HDRMetaData = this->GatherHDRMetaDataParameters(hwnd);
 		if (pWnd->GetIsOnHDRCapableDisplay())
 			Swapchain.SetHDRMetaData(HDRMetaData);
-		else
+		else if (GetWindowSettings(hwnd).bEnableHDR)
 			Swapchain.ClearHDRMetaData();
 		Swapchain.EnsureSwapChainColorSpace(Swapchain.GetFormat() == DXGI_FORMAT_R16G16B16A16_FLOAT ? _16 : _8, false);
 	}
@@ -466,7 +461,7 @@ void VQEngine::RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent)
 	{
 		if (pWnd->GetIsOnHDRCapableDisplay())
 			Swapchain.SetHDRMetaData(HDRMetaData);
-		else
+		else if(GetWindowSettings(hwnd).bEnableHDR)
 			Swapchain.ClearHDRMetaData();
 		Swapchain.EnsureSwapChainColorSpace(pSwapchainEvent->format == DXGI_FORMAT_R16G16B16A16_FLOAT? _16 : _8, false);
 	}
@@ -477,7 +472,7 @@ void VQEngine::RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent)
 	const int BACK_BUFFER_INDEX = Swapchain.GetCurrentBackBufferIndex();
 	const EDisplayCurve OutputDisplayCurve = Swapchain.IsHDRFormat() ? EDisplayCurve::Linear : EDisplayCurve::sRGB;
 	for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
-		mScene_MainWnd.mFrameData[i].PPParams.OutputDisplayCurve = OutputDisplayCurve;
+		mpScene->GetPostProcessParameters(i).OutputDisplayCurve = OutputDisplayCurve;
 	
 	Log::Info("Set Swapchain Format: %s | OutputDisplayCurve: %s"
 		, VQRenderer::DXGIFormatAsString(pSwapchainEvent->format).data()

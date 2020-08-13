@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Scene>
+    <!-- 
+    ENVIRONMENT MAP
+        Environment maps are defined in Data/EnvironmentMaps.ini 
+        Custom env map usage: specify path & MaxCLL
+         <path>Textures/HDRI/env_map.hdr</path>
+         <MaxCLL>1200</MaxCLL>
+
+        Presets are defined in EnvironmentMaps.ini. Usage:
+         <Preset>Stadium01</Preset>
+    -->
+    <!-- 
+    CAMERA
+        Contains 3 main data fields
+         - Translational Data   : Position, Yaw, Pitch
+         - Camera Viewport Data : Projection Type <perspective/orthogonal>, FoV in Degrees, Near & Far Planes
+         - Camera Type Data     : First Person <TranslationSpeed, AngularSpeed, Drag> / Orbit < TBA >
+    -->
+
+    <!-- 
+    GAME OBJECT
+        Transform & Model container
+    -->
+    
+    <!-- ================================================================ -->
+    
+    <!--
+    <EnvironmentMap>
+        <Preset>Stadium01</Preset>
+    </EnvironmentMap>
+    -->
+    <Camera>
+        <Position> 0.0 3.0 -5 </Position>
+        <Pitch> 15 </Pitch>
+        <Yaw> 0 </Yaw>
+        <Projection>Perspective</Projection>
+        <FoV>60.0</FoV>
+        <Near>0.01</Near>
+        <Far>1000</Far>
+
+        <FirstPerson>
+            <TranslationSpeed>1000</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+
+
+    <GameObject>
+        <Transform>
+            <Position>0 0 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>1 1 1</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/sponza/sponza.obj</Path>
+            <Name>Sponza</Name>
+        </Model>
+    </GameObject>
+    
+    <GameObject>
+        <Transform>
+            <Position>0 0 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>1 1 1</Scale>
+        </Transform>
+        <Model>
+            <Mesh>Cube</Mesh>
+            <Material>
+                <Diffuse></Diffuse>
+            </Material>
+        </Model>
+    </GameObject>
+
+
+    <PostProcess>
+    <!-- TBA -->
+    </PostProcess>
+</Scene>

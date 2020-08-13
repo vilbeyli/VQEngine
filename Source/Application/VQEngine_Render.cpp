@@ -360,6 +360,8 @@ void VQEngine::RenderThread_RenderMainWindow()
 
 void VQEngine::RenderThread_RenderDebugWindow()
 {
+	// temporarily disabled
+#if 0
 	if (mScene_DebugWnd.mFrameData.empty())
 		return;
 
@@ -457,6 +459,7 @@ void VQEngine::RenderThread_RenderDebugWindow()
 	hr = ctx.SwapChain.Present();
 	ctx.SwapChain.MoveToNextFrame();
 	//return hr;
+#endif
 }
 
 HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderContext& ctx)
@@ -465,8 +468,6 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	const int NUM_BACK_BUFFERS = ctx.SwapChain.GetNumBackBuffers();
 	const int BACK_BUFFER_INDEX = ctx.SwapChain.GetCurrentBackBufferIndex();
 	const int FRAME_DATA_INDEX = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
-	assert(mScene_MainWnd.mLoadingScreenData.size() > 0);
-	const FLoadingScreenData& FrameData = mScene_MainWnd.mLoadingScreenData[FRAME_DATA_INDEX];
 	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
 	const bool bUseHDRRenderPath = this->ShouldRenderHDR(mpWinMain->GetHWND());
 	// ----------------------------------------------------------------------------
@@ -502,10 +503,10 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = ctx.SwapChain.GetCurrentBackBufferRTVHandle();
 	const float clearColor[] =
 	{
-		FrameData.SwapChainClearColor[0],
-		FrameData.SwapChainClearColor[1],
-		FrameData.SwapChainClearColor[2],
-		FrameData.SwapChainClearColor[3]
+		mLoadingScreenData.SwapChainClearColor[0],
+		mLoadingScreenData.SwapChainClearColor[1],
+		mLoadingScreenData.SwapChainClearColor[2],
+		mLoadingScreenData.SwapChainClearColor[3]
 	};
 	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
@@ -527,7 +528,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(1));
 
 	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetShaderResourceView(FrameData.SRVLoadingScreen).GetGPUDescHandle());
+	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetShaderResourceView(mLoadingScreenData.SRVLoadingScreen).GetGPUDescHandle());
 
 	pCmd->RSSetViewports(1, &viewport);
 	pCmd->RSSetScissorRects(1, &scissorsRect);
@@ -563,7 +564,6 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	const int NUM_BACK_BUFFERS  = ctx.SwapChain.GetNumBackBuffers();
 	const int BACK_BUFFER_INDEX = ctx.SwapChain.GetCurrentBackBufferIndex();
 	const int FRAME_DATA_INDEX  = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
-	const FFrameData& FrameData = mScene_MainWnd.mFrameData[FRAME_DATA_INDEX];
 	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
 	const bool bUseHDRRenderPath = this->ShouldRenderHDR(mpWinMain->GetHWND());
 	// ----------------------------------------------------------------------------
@@ -597,13 +597,13 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 	RenderShadowMaps(ctx);
 
-	RenderSceneColor(ctx, FrameData);
+	RenderSceneColor(ctx, mpScene->GetSceneView(FRAME_DATA_INDEX));
 	
 	ResolveMSAA(ctx);
 
 	TransitionForPostProcessing(ctx);
 
-	RenderPostProcess(ctx, FrameData.PPParams);
+	RenderPostProcess(ctx, mpScene->GetPostProcessParameters(FRAME_DATA_INDEX));
 
 	RenderUI(ctx);
 
@@ -676,7 +676,7 @@ void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx)
 
 }
 
-void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& FrameData)
+void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& SceneView)
 {
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
@@ -692,6 +692,8 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& Fra
 	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 	pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, nullptr);
 
+	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+
 
 	// Set Viewport & Scissors
 	const float RenderResolutionX = static_cast<float>(ctx.MainRTResolutionX);
@@ -701,14 +703,14 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& Fra
 	pCmd->RSSetViewports(1, &viewport);
 	pCmd->RSSetScissorRects(1, &scissorsRect);
 
-
+	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::HELLO_WORLD_CUBE_PSO_MSAA_4 : EBuiltinPSOs::HELLO_WORLD_CUBE_PSO));
 
 	// Draw Object -----------------------------------------------
+#if 0
 	using namespace DirectX;
 	const XMMATRIX mMVP
 		= FrameData.TFCube.WorldTransformationMatrix()
-		* FrameData.SceneCamera.GetViewMatrix()
-		* FrameData.SceneCamera.GetProjectionMatrix();
+		* SceneView.viewProj;
 
 	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 
@@ -718,11 +720,6 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& Fra
 	ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(FrameConstantBuffer), (void**)(&pConstBuffer), &cbAddr);
 	pConstBuffer->matModelViewProj = mMVP;
 
-
-	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
-
-	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::HELLO_WORLD_CUBE_PSO_MSAA_4 : EBuiltinPSOs::HELLO_WORLD_CUBE_PSO));
-
 	// hardcoded root signature for now until shader reflection and rootsignature management is implemented
 	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(2));
 
@@ -730,9 +727,6 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& Fra
 	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(0).GetGPUDescHandle());
 	pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
 
-#if 0
-	DrawMesh(pCmd, mBuiltinMeshes[EBuiltInMeshes::CUBE]);
-#else
 	const Mesh& mesh = mBuiltinMeshes[EBuiltInMeshes::CUBE];
 	const auto VBIBIDs = mesh.GetIABufferIDs();
 	const uint32 NumIndices = mesh.GetNumIndices();
@@ -754,11 +748,14 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& Fra
 	const bool bDrawEnvironmentMap = bHasEnvironmentMapHDRTexture && true;
 	if (bDrawEnvironmentMap)
 	{
-		Camera skyCam = FrameData.SceneCamera;
+		ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
+
+		Camera skyCam = mpScene->GetActiveCamera();
 		skyCam.SetPosition(0, 0, 0);
 		skyCam.UpdateViewMatrix();
 
-		cbAddr = {};
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+		FrameConstantBuffer* pConstBuffer = {};
 		ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(FrameConstantBuffer), (void**)(&pConstBuffer), &cbAddr);
 		pConstBuffer->matModelViewProj = skyCam.GetViewMatrix() * skyCam.GetProjectionMatrix();
 
@@ -771,11 +768,7 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& Fra
 		pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_HDREnvironment).GetGPUDescHandle());
 		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
 
-		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		pCmd->IASetVertexBuffers(0, 1, &vb);
-		pCmd->IASetIndexBuffer(&ib);
-
-		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
+		DrawMesh(pCmd, mBuiltinMeshes[EBuiltInMeshes::CUBE]);
 	}
 }
 

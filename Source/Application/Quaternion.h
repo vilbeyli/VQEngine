@@ -33,6 +33,7 @@ public:
 
 	Quaternion(const DirectX::XMMATRIX& rotMatrix);
 	Quaternion(float s, const DirectX::XMVECTOR& v);
+	Quaternion(float s, const DirectX::XMFLOAT3& v) : S(s), V(v) {};
 
 	Quaternion  operator+(const Quaternion& q) const;
 	Quaternion  operator*(const Quaternion& q) const;
@@ -48,7 +49,6 @@ public:
 	DirectX::XMFLOAT3 TransformVector(const DirectX::XMFLOAT3& v) const;
 	DirectX::XMVECTOR TransformVector(const DirectX::XMVECTOR& v) const;
 private:	// used by operator()s
-	Quaternion(float s, const DirectX::XMFLOAT3& v) : S(s), V(v) {};
 	Quaternion() = default;
 
 public:

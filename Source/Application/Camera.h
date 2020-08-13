@@ -90,21 +90,27 @@ struct FFrustumPlaneset
 	}
 };
 
-struct FCameraData
+struct FCameraParameters
 {
 	float x, y, z; // position
-	float width;
-	float height;
-	float nearPlane;
-	float farPlane;
-	float fovV_Degrees;
-	float yaw, pitch; // in degrees
-	bool bPerspectiveProjection;
+	float Yaw, Pitch; // in degrees
+	
+	bool bPerspectiveProjection; // perspective / orthographic
+	float Width;
+	float Height;
+	float NearPlane;
+	float FarPlane;
+	float FovV_Degrees;
+
+	bool FirstPerson; // First Person / orbit
+	float TranslationSpeed;
+	float AngularSpeed;
+	float Drag;
 };
-struct ProjectionMatrixParameters
+struct FProjectionMatrixParameters
 {
-	float ViewporWidth;
-	float ViewporHeight;
+	float ViewporWidth;  // needed for orthographic projection
+	float ViewporHeight; // needed for orthographic projection
 	float NearZ;
 	float FarZ;
 	float FieldOfView;
@@ -126,9 +132,9 @@ public:
 	Camera();
 	~Camera(void);
 
-	void InitializeCamera(const FCameraData& data);
+	void InitializeCamera(const FCameraParameters& data);
 
-	void SetProjectionMatrix(const ProjectionMatrixParameters& params);
+	void SetProjectionMatrix(const FProjectionMatrixParameters& params);
 	void UpdateViewMatrix();
 
 	// updates View Matrix @mMatView
@@ -156,7 +162,7 @@ public:
 	DirectX::XMFLOAT3 mVelocity;
 	float mPitch = 0.0f;
 	// -------------------------
-	ProjectionMatrixParameters mProjParams;
+	FProjectionMatrixParameters mProjParams;
 	// -------------------------
 	float Drag;            
 	float AngularSpeedDeg; 

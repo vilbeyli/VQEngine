@@ -18,7 +18,10 @@
 
 #include "VQEngine.h"
 
+#include "../Scenes/Scenes.h"
+
 #include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Libs/tinyxml2/tinyxml2.h"
 
 #include <fstream>
 #include <cassert>
@@ -28,7 +31,7 @@ constexpr char* BUILD_CONFIG = "-Debug";
 #else
 constexpr char* BUILD_CONFIG = "";
 #endif
-constexpr char* VQENGINE_VERSION = "v0.4.0";
+constexpr char* VQENGINE_VERSION = "v0.5.0";
 
 
 static std::pair<std::string, std::string> ParseLineINI(const std::string& iniLine, bool* pbSectionTag)
@@ -100,10 +103,12 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	InitializeEngineSettings(Params);
 	InitializeEnvironmentMaps();
 	InitializeHDRProfiles();
-	InitializeScenes(Params);
-	float f2 = t.Tick();
+	float f1 = t.Tick();
 	InitializeWindows(Params);
 	float f3 = t.Tick();
+	InitializeInput();
+	InitializeScenes();
+	float f2 = t.Tick();
 	InitializeThreads();
 	CalculateEffectiveFrameRate(mpWinMain->GetHWND());
 	float f4 = t.Tick();
@@ -123,7 +128,8 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 #if 0
 	Log::Info("[PERF] VQEngine::Initialize() : %.3fs", t2.StopGetDeltaTimeAndReset());
 	Log::Info("[PERF]    DispatchSysInfo : %.3fs", f0);
-	Log::Info("[PERF]    Settings       : %.3fs", f2);
+	Log::Info("[PERF]    Settings       : %.3fs", f1);
+	Log::Info("[PERF]    Scenes         : %.3fs", f2);
 	Log::Info("[PERF]    Windows        : %.3fs", f3);
 	Log::Info("[PERF]    Threads        : %.3fs", f4);
 #endif
@@ -139,6 +145,17 @@ void VQEngine::Exit()
 }
 
 
+
+void VQEngine::InitializeInput()
+{
+#if ENABLE_RAW_INPUT
+	Input::InitRawInputDevices(mpWinMain->GetHWND());
+#endif
+
+	// initialize input states
+	RegisterWindowForInput(mpWinMain);
+	RegisterWindowForInput(mpWinDebug);
+}
 
 void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 {
@@ -168,6 +185,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	s.bAutomatedTestRun = false;
 	s.NumAutomatedTestFrames = 100; // default num frames to run if -Test is specified in cmd line params
 
+	s.StartupScene = "Default";
 
 	// Override #0 : from file
 	FStartupParameters paramFile = VQEngine::ParseEngineSettingsFile();
@@ -197,13 +215,14 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 		s.NumAutomatedTestFrames = pf.NumAutomatedTestFrames; 
 	}
 
+	if (paramFile.bOverrideENGSetting_StartupScene)              s.StartupScene = pf.StartupScene;
 
 	// Override #1 : if there's command line params
-	if (Params.bOverrideGFXSetting_bVSync     )                 s.gfx.bVsync              = p.gfx.bVsync;
-	if (Params.bOverrideGFXSetting_bAA        )                 s.gfx.bAntiAliasing       = p.gfx.bAntiAliasing;
-	if (Params.bOverrideGFXSetting_bUseTripleBuffering)         s.gfx.bUseTripleBuffering = p.gfx.bUseTripleBuffering;
-	if (Params.bOverrideGFXSetting_RenderScale)                 s.gfx.RenderScale         = p.gfx.RenderScale;
-	if (Params.bOverrideGFXSetting_bMaxFrameRate)               s.gfx.MaxFrameRate        = p.gfx.MaxFrameRate;
+	if (Params.bOverrideGFXSetting_bVSync     )                 s.gfx.bVsync               = p.gfx.bVsync;
+	if (Params.bOverrideGFXSetting_bAA        )                 s.gfx.bAntiAliasing        = p.gfx.bAntiAliasing;
+	if (Params.bOverrideGFXSetting_bUseTripleBuffering)         s.gfx.bUseTripleBuffering  = p.gfx.bUseTripleBuffering;
+	if (Params.bOverrideGFXSetting_RenderScale)                 s.gfx.RenderScale          = p.gfx.RenderScale;
+	if (Params.bOverrideGFXSetting_bMaxFrameRate)               s.gfx.MaxFrameRate         = p.gfx.MaxFrameRate;
 
 	if (Params.bOverrideENGSetting_MainWindowWidth)             s.WndMain.Width            = p.WndMain.Width;
 	if (Params.bOverrideENGSetting_MainWindowHeight)            s.WndMain.Height           = p.WndMain.Height;
@@ -211,20 +230,20 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	if (Params.bOverrideENGSetting_PreferredDisplay)            s.WndMain.PreferredDisplay = p.WndMain.PreferredDisplay;
 	if (Params.bOverrideGFXSetting_bHDR)                        s.WndMain.bEnableHDR       = p.WndMain.bEnableHDR;
 	
-	if (Params.bOverrideENGSetting_bDebugWindowEnable)          s.bShowDebugWindow          = p.bShowDebugWindow;
-	if (Params.bOverrideENGSetting_DebugWindowWidth)            s.WndDebug.Width            = p.WndDebug.Width;
-	if (Params.bOverrideENGSetting_DebugWindowHeight)           s.WndDebug.Height           = p.WndDebug.Height;
-	if (Params.bOverrideENGSetting_DebugWindowDisplayMode)      s.WndDebug.DisplayMode      = p.WndDebug.DisplayMode;
-	if (Params.bOverrideENGSetting_DebugWindowPreferredDisplay) s.WndDebug.PreferredDisplay = p.WndDebug.PreferredDisplay;
+	if (Params.bOverrideENGSetting_bDebugWindowEnable)          s.bShowDebugWindow         = p.bShowDebugWindow;
+	if (Params.bOverrideENGSetting_DebugWindowWidth)            s.WndDebug.Width           = p.WndDebug.Width;
+	if (Params.bOverrideENGSetting_DebugWindowHeight)           s.WndDebug.Height          = p.WndDebug.Height;
+	if (Params.bOverrideENGSetting_DebugWindowDisplayMode)      s.WndDebug.DisplayMode     = p.WndDebug.DisplayMode;
+	if (Params.bOverrideENGSetting_DebugWindowPreferredDisplay) s.WndDebug.PreferredDisplay= p.WndDebug.PreferredDisplay;
 
-	if (Params.bOverrideENGSetting_bAutomatedTest)     s.bAutomatedTestRun    = p.bAutomatedTestRun;
+	if (Params.bOverrideENGSetting_bAutomatedTest)              s.bAutomatedTestRun        = p.bAutomatedTestRun;
 	if (Params.bOverrideENGSetting_bTestFrames)
 	{
 		s.bAutomatedTestRun = true;
-		s.NumAutomatedTestFrames = Params.EngineSettings.NumAutomatedTestFrames;
+		s.NumAutomatedTestFrames = p.NumAutomatedTestFrames;
 	}
 
-	// TODO: parse scene to load
+	if (Params.bOverrideENGSetting_StartupScene)             s.StartupScene           = p.StartupScene;
 }
 
 void VQEngine::InitializeWindows(const FStartupParameters& Params)
@@ -276,18 +295,54 @@ void VQEngine::InitializeEnvironmentMaps()
 	}
 }
 
-void VQEngine::InitializeScenes(const FStartupParameters& Params)
+void VQEngine::InitializeScenes()
 {
+	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
+	const Input&                  input = mInputStates.at(mpWinMain->GetHWND());
+
+	auto fnCreateSceneInstance = [&](const std::string& SceneType, std::unique_ptr<Scene>& pScene) -> void
+	{
+		     if (SceneType == "Default")    pScene = std::make_unique<DefaultScene>(NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain);
+		else if (SceneType == "Sponza")     pScene = std::make_unique<SponzaScene >(NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain);
+	};
+
+
+	// Read Scene Index Mappings from file and initialize @mSceneNames
+	{
+		std::vector<std::pair<std::string, int>> SceneIndexMappings = VQEngine::ParseSceneIndexMappingFile();
+		for (auto& nameIndex : SceneIndexMappings)
+			mSceneNames.push_back(std::move(nameIndex.first));
+	}
+	// read scene files from disk: Data/Scenes/
 	std::vector< FSceneRepresentation> SceneReps = VQEngine::ParseScenesFile();
 
-	auto it = std::find_if(SceneReps.begin(), SceneReps.end(), [&Params](const FSceneRepresentation& s) { return s.SceneName == Params.LevelNameToLoad; });
-	const bool bSceneFound = it != SceneReps.end();
+	// find out which scene to load
+	auto it = std::find_if(SceneReps.begin(), SceneReps.end(), [&](const FSceneRepresentation& s) { return s.SceneName == mSettings.StartupScene; });
+	bool bSceneFound = it != SceneReps.end();
 	if (!bSceneFound)
 	{
-		Log::Error("Couldn't find scene '%s' among parsed scene files. DefaultScene will be loaded", Params.LevelNameToLoad.c_str());
+		Log::Error("Couldn't find scene '%s' among parsed scene files.", mSettings.StartupScene.c_str());
+		Log::Warning("DefaultScene will be loaded");
+		it = std::find_if(SceneReps.begin(), SceneReps.end(), [&](const FSceneRepresentation& s) { return s.SceneName == "Default"; });
+		mSettings.StartupScene = "Default";
 	}
-	
-	mQueue_SceneLoad.push(bSceneFound ? *it : SceneReps.back());
+
+	// Create the scene instance
+	fnCreateSceneInstance(mSettings.StartupScene, mpScene);
+
+	// queue the selected scene (@mSettings.StartupScene) for loading
+	assert(it != SceneReps.end());
+	mQueue_SceneLoad.push(*it);
+
+	// set the selected scene index for easily 
+	auto it2 = std::find_if(mSceneNames.begin(), mSceneNames.end(), [&](const std::string& scn) { return scn == mSettings.StartupScene; });
+	bSceneFound = it2 != mSceneNames.end();
+	if (!bSceneFound)
+	{
+		Log::Error("Couldn't find scene '%s' among scene file names", mSettings.StartupScene.c_str());
+		it2 = mSceneNames.begin();
+	}
+	mIndex_SelectedScene = static_cast<int>(it2 - mSceneNames.begin());
 }
 
 void VQEngine::InitializeThreads()
@@ -375,10 +430,13 @@ FWindowSettings& VQEngine::GetWindowSettings(HWND hwnd)
 
 void VQEngine::RegisterWindowForInput(const std::unique_ptr<Window>& pWnd)
 {
-	if (pWnd)
+	if (!pWnd)
 	{
-		mInputStates.emplace(pWnd->GetHWND(), std::move(Input()));
+		Log::Warning("RegisterWindowForInput() called with nullptr");
+		return;
 	}
+
+	mInputStates.emplace(pWnd->GetHWND(), std::move(Input()));
 }
 
 void VQEngine::UnregisterWindowForInput(const std::unique_ptr<Window>& pWnd)
@@ -396,7 +454,6 @@ void VQEngine::UnregisterWindowForInput(const std::unique_ptr<Window>& pWnd)
 		mInputStates.erase(it);
 	}
 }
-
 
 
 FStartupParameters VQEngine::ParseEngineSettingsFile()
@@ -522,6 +579,12 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 				params.bOverrideENGSetting_DebugWindowPreferredDisplay = true;
 				params.EngineSettings.WndDebug.PreferredDisplay = StrUtil::ParseInt(SettingValue);
 			}
+
+			if (SettingName == "Scene")
+			{
+				params.bOverrideENGSetting_StartupScene = true;
+				params.EngineSettings.StartupScene = SettingValue;
+			}
 			
 		}
 	}
@@ -531,7 +594,53 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 		Log::Warning("Will use default settings for Engine & Graphics.", ENGINE_SETTINGS_FILE_NAME, DirectoryUtil::GetCurrentPath().c_str());
 	}
 
+	file.close();
+
 	return params;
+}
+
+std::vector<std::pair<std::string, int>> VQEngine::ParseSceneIndexMappingFile()
+{
+	constexpr char* SCENE_MAPPING_FILE_NAME = "Data/Scenes.ini";
+
+	std::vector<std::pair<std::string, int>> SceneIndexMappings;
+
+	std::ifstream file(SCENE_MAPPING_FILE_NAME);
+	if (file.is_open())
+	{
+		std::string line;
+		std::string currSection;
+		bool bReadingSection = false;
+		while (std::getline(file, line))
+		{
+			if (line[0] == ';') continue; // skip comment lines
+			if (line == "") continue; // skip empty lines
+
+			const std::pair<std::string, std::string> SettingNameValuePair = ParseLineINI(line, &bReadingSection);
+			const std::string& SettingName = SettingNameValuePair.first;
+			const std::string& SettingValue = SettingNameValuePair.second;
+
+			// Header sections;
+			if (bReadingSection)
+			{
+				currSection = SettingName;
+				continue;
+			}
+
+			const int          SceneIndex = StrUtil::ParseInt(SettingValue);
+			const std::string& SceneName = SettingName;
+			SceneIndexMappings.push_back(std::make_pair(SceneName, SceneIndex));
+		}
+	}
+	else
+	{
+		Log::Warning("Cannot find settings file %s in current directory: %s", SCENE_MAPPING_FILE_NAME, DirectoryUtil::GetCurrentPath().c_str());
+		Log::Warning("Default scene mapping will be used.");
+	}
+
+	std::sort(SceneIndexMappings.begin(), SceneIndexMappings.end(), [](const auto& l, const auto& r) { return l.second < r.second; });
+
+	return SceneIndexMappings;
 }
 
 std::vector<FEnvironmentMapDescriptor> VQEngine::ParseEnvironmentMapsFile()
@@ -657,49 +766,220 @@ std::vector<FDisplayHDRProfile> VQEngine::ParseHDRProfilesFile()
 	return HDRProfiles;
 }
 
-#include "Libs/VQUtils/Libs/tinyxml2/tinyxml2.h"
 std::vector< FSceneRepresentation> VQEngine::ParseScenesFile()
 {
+	using namespace DirectX;
 	using namespace tinyxml2;
-	constexpr char* XML_TAG_SCENE                  = "scene";
-	constexpr char* XML_TAG_ENVIRONMENT_MAP        = "environment_map";
-	constexpr char* XML_TAG_ENVIRONMENT_MAP_PRESET = "preset";
+	//-----------------------------------------------------------------
+	constexpr char* XML_TAG__SCENE                  = "Scene";
+	constexpr char* XML_TAG__ENVIRONMENT_MAP        = "EnvironmentMap";
+	constexpr char* XML_TAG__ENVIRONMENT_MAP_PRESET = "Preset";
+	constexpr char* XML_TAG__CAMERA                 = "Camera";
+	constexpr char* XML_TAG__GAMEOBJECT             = "GameObject";
 	//-----------------------------------------------------------------
 	constexpr char* SCENE_FILES_DIRECTORY          = "Data/Levels/";
 	//-----------------------------------------------------------------
-	const std::vector< std::string>          SceneFiles = DirectoryUtil::ListFilesInDirectory(SCENE_FILES_DIRECTORY, ".xml");
 	      std::vector< FSceneRepresentation> SceneRepresentations;
+	const std::vector< std::string>          SceneFiles = DirectoryUtil::ListFilesInDirectory(SCENE_FILES_DIRECTORY, ".xml");
 	//-----------------------------------------------------------------
 
+	// parse vectors --------------------------------------------------
+	// e.g." 0.0 9 -1.0f" -> [0.0f, 9.0f, -1.0f]
+	auto fnParseF3 = [](const std::string& xyz) -> XMFLOAT3
+	{
+		XMFLOAT3 f3;
+		std::vector<std::string> tokens = StrUtil::split(xyz, ' ');
+		assert(tokens.size() == 3);
+		f3.x = StrUtil::ParseFloat(tokens[0]);
+		f3.y = StrUtil::ParseFloat(tokens[1]);
+		f3.z = StrUtil::ParseFloat(tokens[2]);
+		return f3;
+	};
+	auto fnParseF4 = [](const std::string& xyzw) -> XMFLOAT4
+	{
+		XMFLOAT4 f4;
+		std::vector<std::string> tokens = StrUtil::split(xyzw, ' ');
+		assert(tokens.size() == 4);
+		f4.x = StrUtil::ParseFloat(tokens[0]);
+		f4.y = StrUtil::ParseFloat(tokens[1]);
+		f4.z = StrUtil::ParseFloat(tokens[2]);
+		f4.w = StrUtil::ParseFloat(tokens[3]);
+		return f4;
+	};
+	// parse xml elements ---------------------------------------------
+	auto fnParseXMLStringVal = [](XMLElement* pEle, std::string& dest)
+	{
+		XMLNode* pNode = pEle->FirstChild();
+		if (pNode)
+		{
+			dest = pNode->Value();
+		}
+	};
+	auto fnParseXMLFloatVal = [](XMLElement* pEle, float& dest)
+	{
+		XMLNode* pNode = pEle->FirstChild();
+		if (pNode)
+		{
+			dest = StrUtil::ParseFloat(pNode->Value());
+		}
+	};
+	auto fnParseXMLFloat3Val = [&](XMLElement* pEle, XMFLOAT3& f3)
+	{
+		XMLNode* pNode = pEle->FirstChild();
+		if (pNode)
+		{
+			f3 = fnParseF3(pNode->Value());
+		}
+	};
+	auto fnParseXMLFloat4Val = [&](XMLElement* pEle, XMFLOAT4& f4)
+	{
+		XMLNode* pNode = pEle->FirstChild();
+		if (pNode)
+		{
+			f4 = fnParseF4(pNode->Value());
+		}
+	};
+	// parse engine stuff -------------------------------------------
+	auto fnParseTransform = [&](XMLElement* pTransform) -> Transform
+	{
+		Transform tf;
+
+		XMLElement* pPos = pTransform->FirstChildElement("Position");
+		XMLElement* pRot = pTransform->FirstChildElement("Quaternion");
+		XMLElement* pScl = pTransform->FirstChildElement("Scale");
+		if (pPos) fnParseXMLFloat3Val(pPos, tf._position);
+		if (pScl) fnParseXMLFloat3Val(pScl, tf._scale);
+		if (pRot)
+		{
+			XMFLOAT4 qf4; fnParseXMLFloat4Val(pRot, qf4);
+			tf._rotation = Quaternion(qf4.w, XMFLOAT3(qf4.x, qf4.y, qf4.z));
+		}
+		return tf;
+	};
+
+	//-----------------------------------------------------------------
+
+	// Start reading scene XML files
 	for (const std::string SceneFile : SceneFiles)
 	{
-		// scene rep
 		FSceneRepresentation SceneRep = {};
-		SceneRep.SceneName = DirectoryUtil::GetFileNameWithoutExtension(SceneFile);
 
 		// parse XML
 		tinyxml2::XMLDocument doc;
 		doc.LoadFile(SceneFile.c_str());
 
-		XMLElement* pScene = doc.FirstChildElement(XML_TAG_SCENE);
+		// scene name
+		SceneRep.SceneName = DirectoryUtil::GetFileNameWithoutExtension(SceneFile);
+
+
+		XMLElement* pScene = doc.FirstChildElement(XML_TAG__SCENE);
 		if (pScene)
 		{
-			XMLElement* pEnvMap = pScene->FirstChildElement(XML_TAG_ENVIRONMENT_MAP);
-			if (pEnvMap)
+			XMLElement* pCurrentSceneElement = pScene->FirstChildElement();
+			if (!pCurrentSceneElement)
 			{
-				XMLElement* pPreset = pEnvMap->FirstChildElement(XML_TAG_ENVIRONMENT_MAP_PRESET);
-				if (pPreset)
+				SceneRepresentations.push_back(SceneRep);
+				continue;
+			}
+
+			do
+			{
+				// Environment Map
+				const std::string CurrEle = pCurrentSceneElement->Value();
+				if (XML_TAG__ENVIRONMENT_MAP == CurrEle)
 				{
-					XMLNode* pPresetVal = pPreset->FirstChild();
-					if (pPresetVal)
+					XMLElement* pPreset = pCurrentSceneElement->FirstChildElement(XML_TAG__ENVIRONMENT_MAP_PRESET);
+					if (pPreset)
 					{
-						SceneRep.EnvironmentMapPreset = pPresetVal->Value();
+						fnParseXMLStringVal(pPreset, SceneRep.EnvironmentMapPreset);
 					}
 				}
-			}
-		}
 
-		// TODO: error reporting?
+				// Cameras
+				else if (XML_TAG__CAMERA == CurrEle)
+				{
+					FCameraParameters cam;
+					XMLElement*& pCam = pCurrentSceneElement;
+
+					// transform
+					XMLElement* pPos   = pCam->FirstChildElement("Position");
+					XMLElement* pPitch = pCam->FirstChildElement("Pitch");
+					XMLElement* pYaw   = pCam->FirstChildElement("Yaw");
+
+					// projection
+					XMLElement* pProj = pCam->FirstChildElement("Projection");
+					XMLElement* pFoV  = pCam->FirstChildElement("FoV");
+					XMLElement* pNear = pCam->FirstChildElement("Near");
+					XMLElement* pFar  = pCam->FirstChildElement("Far");
+
+					// attributes
+					XMLElement* pFP     = pCam->FirstChildElement("FirstPerson");
+					XMLElement* pTSpeed = pFP ? pFP->FirstChildElement("TranslationSpeed") : nullptr;
+					XMLElement* pASpeed = pFP ? pFP->FirstChildElement("AngularSpeed")     : nullptr;
+					XMLElement* pDrag   = pFP ? pFP->FirstChildElement("Drag")             : nullptr;
+
+					// transform ----------------------------------------
+					if (pPos)
+					{
+						XMFLOAT3 xyz;
+						fnParseXMLFloat3Val(pPos, xyz);
+						cam.x = xyz.x;
+						cam.y = xyz.y;
+						cam.z = xyz.z;
+					}
+					if (pPitch) fnParseXMLFloatVal(pPitch, cam.Pitch); 
+					if (pYaw)   fnParseXMLFloatVal(pYaw, cam.Yaw);
+
+					// projection----------------------------------------
+					if(pProj)
+					{
+						std::string projVal;
+						fnParseXMLStringVal(pProj, projVal);
+						cam.bPerspectiveProjection = projVal == "Perspective";
+					}
+					if(pFoV ) fnParseXMLFloatVal(pFoV, cam.FovV_Degrees);
+					if(pNear) fnParseXMLFloatVal(pNear, cam.NearPlane);
+					if(pFar ) fnParseXMLFloatVal(pFar, cam.FarPlane);
+						
+
+					// attributes----------------------------------------
+					if (pFP)
+					{
+						if(pTSpeed)  fnParseXMLFloatVal(pTSpeed, cam.TranslationSpeed);
+						if(pASpeed)  fnParseXMLFloatVal(pASpeed, cam.AngularSpeed);
+						if(pDrag  )  fnParseXMLFloatVal(pDrag  , cam.Drag);
+					}
+
+					SceneRep.Cameras.push_back(cam);
+				}
+
+
+				// Game Objects
+				else if (XML_TAG__GAMEOBJECT == CurrEle)
+				{
+					GameObjectRepresentation obj;
+
+					XMLElement*& pObj = pCurrentSceneElement;
+					XMLElement* pTransform = pObj->FirstChildElement("Transform");
+					XMLElement* pModel     = pObj->FirstChildElement("Model");
+
+					if (pTransform)
+					{
+						obj.tf = fnParseTransform(pTransform);
+					}
+
+					// TODO: this is currently WIP
+					if (pModel)
+					{
+						//obj.ModelName
+					}
+
+					SceneRep.Objects.push_back(obj);
+				}
+
+				pCurrentSceneElement = pCurrentSceneElement->NextSiblingElement();
+			} while (pCurrentSceneElement);
+		}
 
 		SceneRepresentations.push_back(SceneRep);
 	}
