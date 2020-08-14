@@ -42,6 +42,8 @@ void VQEngine::UpdateThread_Main()
 	float dt = 0.0f;
 	while (!mbStopAllThreads && !bQuit)
 	{
+		UpdateThread_WaitForRenderThread();
+
 		UpdateThread_HandleEvents();
 
 		UpdateThread_PreUpdate(dt);
@@ -57,8 +59,6 @@ void VQEngine::UpdateThread_Main()
 		++mNumUpdateLoopsExecuted;
 
 		UpdateThread_SignalRenderThread();
-
-		UpdateThread_WaitForRenderThread();
 	}
 
 	UpdateThread_Exit();
