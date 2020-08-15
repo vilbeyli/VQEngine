@@ -58,8 +58,8 @@ void Scene::StartLoading(FSceneRepresentation& scene)
 	// initialize cameras
 	for (FCameraParameters& param : scene.Cameras)
 	{
-		param.Width = mpWindow->GetWidth();
-		param.Height = mpWindow->GetHeight();
+		param.Width  = static_cast<float>( mpWindow->GetWidth()  );
+		param.Height = static_cast<float>( mpWindow->GetHeight() );
 
 		Camera c;
 		c.InitializeCamera(param);
