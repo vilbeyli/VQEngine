@@ -81,6 +81,7 @@ void VQEngine::UpdateThread_Inititalize()
 
 void VQEngine::UpdateThread_Exit()
 {
+	mpScene->Unload();
 }
 
 void VQEngine::UpdateThread_PreUpdate(float& dt)
@@ -334,6 +335,38 @@ const std::string& VQEngine::GetWindowName(HWND hwnd) const
 	return mWinNameLookup.at(hwnd);
 }
 
+
+MeshID VQEngine::GetBuiltInMeshID(const std::string& MeshName) const
+{
+	const auto it = std::find(mBuiltinMeshNames.begin(), mBuiltinMeshNames.end(), MeshName);
+	if (it == mBuiltinMeshNames.end())
+	{
+		Log::Error("Builtin Mesh Not Found: %s", MeshName.c_str());
+		return INVALID_ID;
+	}
+	return static_cast<MeshID>(it - mBuiltinMeshNames.begin());
+}
+
+Model& VQEngine::GetModel(ModelID id)
+{
+	// TODO: err msg
+	return mModels.at(id);
+}
+
+const Model& VQEngine::GetModel(ModelID id) const
+{
+	// TODO: err msg
+	return mModels.at(id);
+}
+
+ModelID VQEngine::CreateModel()
+{
+	static ModelID LAST_USED_MODEL_ID = 0;
+	ModelID id = LAST_USED_MODEL_ID++;
+	mModels[id] = Model();
+	return id;
+}
+
 const FEnvironmentMapDescriptor& VQEngine::GetEnvironmentMapDesc(const std::string& EnvMapName) const
 {
 	static const FEnvironmentMapDescriptor DEFAULT_ENV_MAP_DESC = { "ENV_MAP_NOT_FOUND", "", 0.0f };
@@ -369,7 +402,6 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 	const FEnvironmentMap& env = mResources_MainWnd.EnvironmentMap;
 	const int NumEnvMaps = static_cast<int>(mEnvironmentMapPresetNames.size());
 
-#if 0 // TODO: there's a crash during changing environment map for some reason :(
 	if (input.IsKeyTriggered("PageUp"))
 	{
 		fnBusyWaitUntilRenderThreadCatchesUp();
@@ -402,7 +434,6 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 			LoadEnvironmentMap(mEnvironmentMapPresetNames[ACTIVE_ENV_MAP_INDEX]);
 		});
 	}
-#endif
 }
 
 void VQEngine::UpdateThread_UpdateScene_DebugWnd(const float dt)

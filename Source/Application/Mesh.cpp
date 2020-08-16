@@ -25,6 +25,17 @@
 #endif
 
 
+EBuiltInMeshes Mesh::GetBuiltInMeshType(const std::string& MeshTypeStr)
+{
+	static std::unordered_map<std::string, EBuiltInMeshes> MESH_TYPE_LOOKUP = 
+	{
+		  { "Cube", EBuiltInMeshes::CUBE }
+		, { "Triangle", EBuiltInMeshes::TRIANGLE }
+		// TODO
+	};
+	return MESH_TYPE_LOOKUP.at(MeshTypeStr);
+}
+
 std::pair<BufferID, BufferID> Mesh::GetIABufferIDs(int lod /*= 0*/) const
 {
 	assert(mLODBufferPairs.size() > 0); // maybe no assert and return <-1, -1> ?

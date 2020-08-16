@@ -25,8 +25,9 @@
 struct BoundingBox {};
 class GameObject
 {
-	TransformID mTransformID;
-	ModelID     mModelID;
+public:
+	TransformID mTransformID = INVALID_ID;
+	ModelID     mModelID = INVALID_ID;
 
 	// Todo: move to scene and rename to @BoundingBoxes_GameObjects;
 	BoundingBox mBoundingBox;

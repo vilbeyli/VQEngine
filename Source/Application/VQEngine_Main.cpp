@@ -302,8 +302,8 @@ void VQEngine::InitializeScenes()
 
 	auto fnCreateSceneInstance = [&](const std::string& SceneType, std::unique_ptr<Scene>& pScene) -> void
 	{
-		     if (SceneType == "Default")    pScene = std::make_unique<DefaultScene>(NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain);
-		else if (SceneType == "Sponza")     pScene = std::make_unique<SponzaScene >(NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain);
+		     if (SceneType == "Default")    pScene = std::make_unique<DefaultScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain);
+		else if (SceneType == "Sponza")     pScene = std::make_unique<SponzaScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain);
 	};
 
 
@@ -962,17 +962,33 @@ std::vector< FSceneRepresentation> VQEngine::ParseScenesFile()
 					XMLElement*& pObj = pCurrentSceneElement;
 					XMLElement* pTransform = pObj->FirstChildElement("Transform");
 					XMLElement* pModel     = pObj->FirstChildElement("Model");
-
+					
+					// Transform
 					if (pTransform)
 					{
 						obj.tf = fnParseTransform(pTransform);
 					}
 
-					// TODO: this is currently WIP
+					// Model (WIP)
 					if (pModel)
 					{
+						XMLElement* pMesh = pModel->FirstChildElement("Mesh");
+						XMLElement* pMaterial = pModel->FirstChildElement("Material");
+						
+						if (pMesh)
+						{
+							fnParseXMLStringVal(pMesh, obj.BuiltinMeshName);
+						}
+						
+						if (pMaterial)
+						{
+							// TODO
+						}
+						
+						// TODO: model loading from disk
 						//obj.ModelName
 					}
+
 
 					SceneRep.Objects.push_back(obj);
 				}

@@ -4,6 +4,8 @@
 
 #pragma once
 
+class VQEngine;
+
 #define DECLARE_SCENE_INTERFACE()\
 protected:\
 	void UpdateScene(float dt, FSceneView& SceneView) override;\
@@ -13,11 +15,12 @@ protected:\
 
 #define DECLARE_CTOR(TypeName)\
 public:\
-	TypeName(int NumFrameBuffers\
+	TypeName(VQEngine& engine\
+		, int NumFrameBuffers\
 		, const Input& input\
 		, const std::unique_ptr<Window>& pWin\
 	)\
-		: Scene(NumFrameBuffers, input, pWin)\
+		: Scene(engine, NumFrameBuffers, input, pWin)\
 	{}\
 
 

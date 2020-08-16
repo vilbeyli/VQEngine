@@ -35,6 +35,7 @@ enum EBuiltInMeshes
 	NUM_BUILTIN_MESHES
 };
 
+
  
 
 struct VertexIndexBufferIDPair
@@ -64,6 +65,7 @@ struct MeshLODData
 struct Mesh
 {
 public:
+	static EBuiltInMeshes GetBuiltInMeshType(const std::string& MeshTypeStr);
 	//
 	// Constructors / Operators
 	//

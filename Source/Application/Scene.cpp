@@ -20,6 +20,7 @@
 
 #include "Scene.h"
 #include "Window.h"
+#include "VQEngine.h"
 
 using namespace DirectX;
 
@@ -50,12 +51,68 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 
 void Scene::StartLoading(FSceneRepresentation& scene)
 {
+	constexpr bool B_LOAD_SERIAL = true;
+
 	// scene-specific load 
 	this->LoadScene(scene);
 
-	// dispatch workers
+	// GAME OBJECTS
+	auto fnDeserializeGameObject = [&](GameObjectRepresentation& ObjRep)
+	{
+		// Transform
+		Transform* pTransform = mTransformPool.Allocate(1);
+		*pTransform = std::move(ObjRep.tf);
+		mpTransforms.push_back(pTransform);
 
-	// initialize cameras
+		TransformID tID = static_cast<TransformID>(mpTransforms.size() - 1);
+
+		// Model
+		const bool bModelIsBuiltinMesh = !ObjRep.BuiltinMeshName.empty();
+		const bool bModelIsLoadedFromFile = !ObjRep.ModelFilePath.empty();
+		assert(bModelIsBuiltinMesh != bModelIsLoadedFromFile);
+
+		ModelID mID = INVALID_ID;
+		if (bModelIsBuiltinMesh)
+		{
+			// create model
+			mID = mEngine.CreateModel();
+			Model& model = mEngine.GetModel(mID);
+			
+			// create/get mesh
+			MeshID meshID = mEngine.GetBuiltInMeshID(ObjRep.BuiltinMeshName);
+			model.mData.mMeshIDs.push_back(meshID);
+
+			// TODO: material
+		}
+		else
+		{
+			// TODO: load/create model?
+			//ObjRep.ModelName; // TODO
+		}
+		
+
+		// GameObject
+		GameObject* pObj = mGameObjectPool.Allocate(1);
+		pObj->mTransformID = tID;
+		pObj->mModelID = mID;
+		mpObjects.push_back(pObj);
+	};
+
+	if constexpr (B_LOAD_SERIAL)
+	{
+		for (GameObjectRepresentation& ObjRep : scene.Objects)
+		{
+			fnDeserializeGameObject(ObjRep);
+		}
+	}
+	
+	// dispatch workers
+	else
+	{
+		assert(false); // TODO
+	}
+
+	// CAMERAS
 	for (FCameraParameters& param : scene.Cameras)
 	{
 		param.Width  = static_cast<float>( mpWindow->GetWidth()  );
@@ -84,9 +141,14 @@ void Scene::Unload()
 	mFrameSceneViews.clear();
 	mFrameSceneViews.resize(sz);
 
-	mMeshIDs.clear();
-	mObjects.clear();
-	mGameObjectTransforms.clear();
+	//mMeshIDs.clear();
+	
+	for (Transform* pTf : mpTransforms) mTransformPool.Free(pTf);
+	mpTransforms.clear();
+
+	for (GameObject* pObj : mpObjects) mGameObjectPool.Free(pObj);
+	mpObjects.clear();
+
 	mCameras.clear();
 
 	mDirectionalLight = {};

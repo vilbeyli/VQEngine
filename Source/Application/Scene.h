@@ -23,6 +23,7 @@
 #include "Light.h"
 #include "Transform.h"
 #include "GameObject.h"
+#include "Memory.h"
 
 class Input;
 
@@ -34,7 +35,12 @@ class Input;
 struct GameObjectRepresentation
 {
 	Transform tf;
+	
 	std::string ModelName;
+	std::string ModelFilePath;
+	
+	std::string BuiltinMeshName;
+	struct Material { float data[16]; };
 };
 
 struct FSceneRepresentation
@@ -86,6 +92,10 @@ struct FSceneView
 #endif
 };
 
+
+constexpr size_t NUM_GAMEOBJECT_POOL_SIZE = 4096;
+constexpr size_t GAMEOBJECT_BYTE_ALIGNMENT = 64; // assumed typical cache-line size
+
 //----------------------------------------------------------------------------------------------------------------
 // https://en.wikipedia.org/wiki/Template_method_pattern
 // https://stackoverflow.com/questions/9724371/force-calling-base-class-virtual-function
@@ -103,7 +113,7 @@ class Scene
 	// for Scene to query scene data would be a waste of time without added benefit.
 	// Hence VQEngine is declared a friend and has easy acess to all data to 
 	// effectively orchestrate communication between its multiple threads.
-	///friend class VQEngine; 
+	friend class VQEngine; 
 
 //----------------------------------------------------------------------------------------------------------------
 // SCENE INTERFACE
@@ -131,14 +141,18 @@ protected:
 // ENGINE INTERFACE
 //----------------------------------------------------------------------------------------------------------------
 public:
-	Scene(int NumFrameBuffers, const Input& input, const std::unique_ptr<Window>& pWin)
+	Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const std::unique_ptr<Window>& pWin)
 		: mInput(input)
 		, mpWindow(pWin)
+		, mEngine(engine)
 		, mFrameSceneViews(NumFrameBuffers)
 		, mIndex_SelectedCamera(0)
 		, mIndex_ActiveEnvironmentMapPreset(0)
+		, mGameObjectPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
+		, mTransformPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
 	{}
 
+private: // Derived Scenes shouldn't access these functions
 	void Update(float dt, int FRAME_DATA_INDEX);
 	void PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX);
 	void StartLoading(FSceneRepresentation& scene);
@@ -146,11 +160,16 @@ public:
 	void Unload(); // serial-only for now. maybe MT later.
 	void RenderUI();
 
+public:
 	inline const FSceneView& GetSceneView(int FRAME_DATA_INDEX) const { return mFrameSceneViews[FRAME_DATA_INDEX]; }
 	inline       FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX)       { return mFrameSceneViews[FRAME_DATA_INDEX].postProcess; }
 	inline const FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX) const { return mFrameSceneViews[FRAME_DATA_INDEX].postProcess; }
 	inline const Camera& GetActiveCamera() const { return mCameras[mIndex_SelectedCamera]; }
 	inline       Camera& GetActiveCamera()       { return mCameras[mIndex_SelectedCamera]; }
+
+	//TransformID CreateTransform(Transform** ppTransform);
+	//GameObject* CreateObject(TransformID tfID, ModelID modelID);
+
 //----------------------------------------------------------------------------------------------------------------
 // SCENE DATA
 //----------------------------------------------------------------------------------------------------------------
@@ -160,15 +179,15 @@ protected:
 	//
 	// SCENE RESOURCE CONTAINERS
 	//
-	std::vector<MeshID>     mMeshIDs;
-	std::vector<GameObject> mObjects;
-	std::vector<Transform>  mGameObjectTransforms;
-	std::vector<Camera>     mCameras;
+	//std::vector<MeshID>      mMeshIDs;
+	std::vector<GameObject*> mpObjects;
+	std::vector<Transform*>  mpTransforms;
+	std::vector<Camera>      mCameras;
 
-	Light                   mDirectionalLight;
-	std::vector<Light>      mLightsStatic;  // stationary lights
-	std::vector<Light>      mLightsDynamic; // moving lights
-	//Skybox                mSkybox;
+	Light                    mDirectionalLight;
+	std::vector<Light>       mLightsStatic;  // stationary lights
+	std::vector<Light>       mLightsDynamic; // moving lights
+	//Skybox                   mSkybox;
 
 
 	//
@@ -181,26 +200,29 @@ protected:
 	//
 	// SCENE STATE
 	//
-	int                     mIndex_SelectedCamera;
+	int                      mIndex_SelectedCamera;
 
 public:
-	int                     mIndex_ActiveEnvironmentMapPreset;
-	//EEnvironmentMapPresets   mActiveSkyboxPreset;
-	//Settings::SceneRender  mSceneRenderSettings;
+	int                      mIndex_ActiveEnvironmentMapPreset;
+	//EEnvironmentMapPresets  mActiveSkyboxPreset;
+	//Settings::SceneRender   mSceneRenderSettings;
 
 
 protected:
-	const Input&             mInput;
+	const Input&                   mInput;
 	const std::unique_ptr<Window>& mpWindow;
+	VQEngine&                      mEngine;
 
 	FSceneRepresentation mSceneRepresentation;
 //----------------------------------------------------------------------------------------------------------------
 // INTERNAL DATA
 //----------------------------------------------------------------------------------------------------------------
 private:
+	MemoryPool<GameObject> mGameObjectPool;
+	MemoryPool<Transform>  mTransformPool;
+
 	//CPUProfiler*    mpCPUProfiler;
 	//ModelLoader     mModelLoader;
-	//GameObjectPool  mObjectPool;
 	//MaterialPool    mMaterials;
 	//ModelLoadQueue  mModelLoadQueue;
 

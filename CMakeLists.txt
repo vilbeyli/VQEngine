@@ -60,6 +60,7 @@ set (HeaderVQE
     "Source/Application/Scene.h"
     "Source/Application/Light.h"
     "Source/Application/GameObject.h"
+    "Source/Application/Memory.h"
 )
 
 set (SourceVQE 
@@ -84,6 +85,7 @@ set (SourceVQE
     "Source/Application/Scene.cpp"
     "Source/Application/Light.cpp"
     "Source/Application/GameObject.cpp"
+    "Source/Application/Memory.cpp"
 )
 
 # ouput exe to bin directory

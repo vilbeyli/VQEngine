@@ -218,6 +218,14 @@ public:
 	inline const std::string&  GetWindowName(const std::unique_ptr<Window>& pWin) const { return GetWindowName(pWin->GetHWND()); }
 	inline const std::string&  GetWindowName(const Window* pWin) const { return GetWindowName(pWin->GetHWND()); }
 
+	// Mesh & Model management
+	ModelID CreateModel();
+
+	MeshID GetBuiltInMeshID(const std::string& MeshName) const;
+
+	      Model& GetModel(ModelID id);
+	const Model& GetModel(ModelID id) const;
+
 private:
 	//-------------------------------------------------------------------------------------------------
 	using BuiltinMeshArray_t          = std::array<Mesh, EBuiltInMeshes::NUM_BUILTIN_MESHES>;
