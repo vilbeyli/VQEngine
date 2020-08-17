@@ -153,8 +153,6 @@ void VQEngine::UpdateThread_PostUpdate()
 
 	mpScene->PostUpdate(FRAME_DATA_INDEX, FRAME_DATA_NEXT_INDEX);
 
-	// TODO: compute visibility 
-
 	// input post update
 	for (auto it = mInputStates.begin(); it != mInputStates.end(); ++it)
 	{

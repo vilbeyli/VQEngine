@@ -705,43 +705,46 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 
 	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::HELLO_WORLD_CUBE_PSO_MSAA_4 : EBuiltinPSOs::HELLO_WORLD_CUBE_PSO));
 
-	// Draw Object -----------------------------------------------
-#if 0
+	// Draw Objects -----------------------------------------------
 	using namespace DirectX;
-	const XMMATRIX mMVP
-		= FrameData.TFCube.WorldTransformationMatrix()
-		* SceneView.viewProj;
+	for (const FMeshRenderCommand& meshRenderCmd : SceneView.meshRenderCommands)
+	{
+		const XMMATRIX mMVP
+			= meshRenderCmd.WorldTransformationMatrix
+			* SceneView.viewProj;
 
-	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
+		ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 
-	// set constant buffer data
-	FrameConstantBuffer* pConstBuffer = {};
-	D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-	ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(FrameConstantBuffer), (void**)(&pConstBuffer), &cbAddr);
-	pConstBuffer->matModelViewProj = mMVP;
+		// set constant buffer data
+		FrameConstantBuffer* pConstBuffer = {};
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+		ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(FrameConstantBuffer), (void**)(&pConstBuffer), &cbAddr);
+		pConstBuffer->matModelViewProj = mMVP;
 
-	// hardcoded root signature for now until shader reflection and rootsignature management is implemented
-	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(2));
+		// hardcoded root signature for now until shader reflection and rootsignature management is implemented
+		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(2));
 
-	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(0).GetGPUDescHandle());
-	pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
+		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+		pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(0).GetGPUDescHandle());
+		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
 
-	const Mesh& mesh = mBuiltinMeshes[EBuiltInMeshes::CUBE];
-	const auto VBIBIDs = mesh.GetIABufferIDs();
-	const uint32 NumIndices = mesh.GetNumIndices();
-	const uint32 NumInstances = 1;
-	const BufferID& VB_ID = VBIBIDs.first;
-	const BufferID& IB_ID = VBIBIDs.second;
-	const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
-	const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
+		const Mesh& mesh = mBuiltinMeshes[meshRenderCmd.meshID];
+		const auto VBIBIDs = mesh.GetIABufferIDs();
+		const uint32 NumIndices = mesh.GetNumIndices();
+		const uint32 NumInstances = 1;
+		const BufferID& VB_ID = VBIBIDs.first;
+		const BufferID& IB_ID = VBIBIDs.second;
+		const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
+		const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
 
-	pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	pCmd->IASetVertexBuffers(0, 1, &vb);
-	pCmd->IASetIndexBuffer(&ib);
+		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pCmd->IASetVertexBuffers(0, 1, &vb);
+		pCmd->IASetIndexBuffer(&ib);
 
-	pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
-#endif
+		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
+	}
+
+
 
 	// Draw Environment Map ---------------------------------------
 	const bool bHasEnvironmentMapHDRTexture = mResources_MainWnd.EnvironmentMap.SRV_HDREnvironment != INVALID_ID;
