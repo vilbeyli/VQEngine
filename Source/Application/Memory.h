@@ -20,6 +20,7 @@
 //
 // Resources on memory management
 //
+// - https://akkadia.org/drepper/cpumemory.pdf
 // - http://allenchou.net/memory-management-series/
 // - https://www.gamasutra.com/blogs/MichaelKissner/20151104/258271/Writing_a_Game_Engine_from_Scratch__Part_2_Memory.php
 // - https://gamasutra.com/blogs/MichaelKissner/20151120/259561/Writing_a_Game_Engine_from_Scratch__Part_3_Data__Cache.php

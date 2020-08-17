@@ -213,11 +213,7 @@ void VQEngine::HandleEngineInput()
 					mEventQueue_VQEToWin_Main.AddItem(std::make_shared<SetMouseCaptureEvent>(hwnd, true, false));
 			}
 		}
-
-		//
-		// Graphics Settings Controls
-		//
-		if (pWin == mpWinMain)
+		if (pWin == mpWinMain) // Graphics Settings Controls
 		{
 			if (input.IsKeyTriggered("V"))
 			{
@@ -336,13 +332,13 @@ const std::string& VQEngine::GetWindowName(HWND hwnd) const
 
 MeshID VQEngine::GetBuiltInMeshID(const std::string& MeshName) const
 {
-	const auto it = std::find(mBuiltinMeshNames.begin(), mBuiltinMeshNames.end(), MeshName);
-	if (it == mBuiltinMeshNames.end())
+	const auto it = std::find(mResourceNames.mBuiltinMeshNames.begin(), mResourceNames.mBuiltinMeshNames.end(), MeshName);
+	if (it == mResourceNames.mBuiltinMeshNames.end())
 	{
 		Log::Error("Builtin Mesh Not Found: %s", MeshName.c_str());
 		return INVALID_ID;
 	}
-	return static_cast<MeshID>(it - mBuiltinMeshNames.begin());
+	return static_cast<MeshID>(it - mResourceNames.mBuiltinMeshNames.begin());
 }
 
 Model& VQEngine::GetModel(ModelID id)
@@ -355,6 +351,21 @@ const Model& VQEngine::GetModel(ModelID id) const
 {
 	// TODO: err msg
 	return mModels.at(id);
+}
+
+void VQEngine::StartLoadingEnvironmentMap(int IndexEnvMap)
+{
+	mAppState = EAppState::LOADING;
+	mbLoadingLevel = true;
+	mWorkers_Load.AddTask([&, IndexEnvMap]()
+	{
+		LoadEnvironmentMap(mResourceNames.mEnvironmentMapPresetNames[IndexEnvMap]);
+	});
+}
+
+void VQEngine::WaitUntilRenderingFinishes()
+{
+	while ((mNumRenderLoopsExecuted + 1) != mNumUpdateLoopsExecuted);
 }
 
 ModelID VQEngine::CreateModel()
@@ -384,54 +395,11 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 {
 	std::unique_ptr<Window>& pWin = mpWinMain;
 	HWND hwnd                     = pWin->GetHWND();
-	const Input& input            = mInputStates.at(hwnd);
 
 	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(hwnd);
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
 
 	mpScene->Update(dt, FRAME_DATA_INDEX);
-
-
-	auto fnBusyWaitUntilRenderThreadCatchesUp = [&]()
-	{
-		while ((mNumRenderLoopsExecuted + 1) != mNumUpdateLoopsExecuted);
-	};
-
-	const FEnvironmentMap& env = mResources_MainWnd.EnvironmentMap;
-	const int NumEnvMaps = static_cast<int>(mEnvironmentMapPresetNames.size());
-
-	if (input.IsKeyTriggered("PageUp"))
-	{
-		fnBusyWaitUntilRenderThreadCatchesUp();
-
-		int& ACTIVE_ENV_MAP_INDEX = mpScene->mIndex_ActiveEnvironmentMapPreset;
-		ACTIVE_ENV_MAP_INDEX = (ACTIVE_ENV_MAP_INDEX + 1) % NumEnvMaps;
-
-		mAppState = EAppState::LOADING;
-		mbLoadingLevel = true;
-		mWorkers_Load.AddTask([&]()
-		{
-			LoadEnvironmentMap(mEnvironmentMapPresetNames[ACTIVE_ENV_MAP_INDEX]);
-		});
-
-
-	}
-	if (input.IsKeyTriggered("PageDown"))
-	{
-		fnBusyWaitUntilRenderThreadCatchesUp();
-		
-		int& ACTIVE_ENV_MAP_INDEX = mpScene->mIndex_ActiveEnvironmentMapPreset;
-		ACTIVE_ENV_MAP_INDEX = ACTIVE_ENV_MAP_INDEX == 0
-			? NumEnvMaps - 1
-			: ACTIVE_ENV_MAP_INDEX - 1;
-
-		mAppState = EAppState::LOADING;
-		mbLoadingLevel = true;
-		mWorkers_Load.AddTask([&]()
-		{
-			LoadEnvironmentMap(mEnvironmentMapPresetNames[ACTIVE_ENV_MAP_INDEX]);
-		});
-	}
 }
 
 void VQEngine::UpdateThread_UpdateScene_DebugWnd(const float dt)
@@ -483,8 +451,8 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	}
 
 	const FEnvironmentMapDescriptor& desc = this->GetEnvironmentMapDesc(EnvMapName);
-	std::vector<std::string>::iterator it = std::find(mEnvironmentMapPresetNames.begin(), mEnvironmentMapPresetNames.end(), EnvMapName);
-	const size_t ActiveEnvMapIndex = it - mEnvironmentMapPresetNames.begin();
+	std::vector<std::string>::iterator it = std::find(mResourceNames.mEnvironmentMapPresetNames.begin(), mResourceNames.mEnvironmentMapPresetNames.end(), EnvMapName);
+	const size_t ActiveEnvMapIndex = it - mResourceNames.mEnvironmentMapPresetNames.begin();
 	if (!desc.FilePath.empty()) // check whether the env map was found or not
 	{
 		Log::Info("Loading Environment Map: %s", EnvMapName.c_str());

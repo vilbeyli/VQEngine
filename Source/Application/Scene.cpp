@@ -24,11 +24,25 @@
 
 using namespace DirectX;
 
+Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const std::unique_ptr<Window>& pWin)
+	: mInput(input)
+	, mpWindow(pWin)
+	, mEngine(engine)
+	, mFrameSceneViews(NumFrameBuffers)
+	, mIndex_SelectedCamera(0)
+	, mIndex_ActiveEnvironmentMapPreset(0)
+	, mGameObjectPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
+	, mTransformPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
+	, mResourceNames(engine.GetResourceNames())
+{}
+
 void Scene::Update(float dt, int FRAME_DATA_INDEX)
 {
+
 	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
 	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
 
+	this->HandleInput();
 	this->UpdateScene(dt, SceneView);
 }
 
@@ -73,7 +87,6 @@ void Scene::StartLoading(FSceneRepresentation& scene)
 	// scene-specific load 
 	this->LoadScene(scene);
 
-	// GAME OBJECTS
 	auto fnDeserializeGameObject = [&](GameObjectRepresentation& ObjRep)
 	{
 		// Transform
@@ -117,6 +130,7 @@ void Scene::StartLoading(FSceneRepresentation& scene)
 
 	if constexpr (B_LOAD_SERIAL)
 	{
+		// GAME OBJECTS
 		for (GameObjectRepresentation& ObjRep : scene.Objects)
 		{
 			fnDeserializeGameObject(ObjRep);
@@ -188,3 +202,41 @@ void Scene::RenderUI()
 	// TODO
 }
 
+void Scene::HandleInput()
+{
+	const int NumEnvMaps = static_cast<int>(mResourceNames.mEnvironmentMapPresetNames.size());
+
+	const bool bIsShiftDown = mInput.IsKeyDown("Shift");
+	if (mInput.IsKeyTriggered("PageUp"))
+	{
+		// Change Scene
+		if (bIsShiftDown)
+		{
+			
+		}
+
+		// Change Env Map
+		else
+		{
+			mIndex_ActiveEnvironmentMapPreset = (mIndex_ActiveEnvironmentMapPreset + 1) % NumEnvMaps;
+			mEngine.StartLoadingEnvironmentMap(mIndex_ActiveEnvironmentMapPreset);
+		}
+	}
+	if (mInput.IsKeyTriggered("PageDown"))
+	{
+		// Change Scene
+		if (bIsShiftDown)
+		{
+
+		}
+
+		// Change Env Map
+		else
+		{
+			mIndex_ActiveEnvironmentMapPreset = mIndex_ActiveEnvironmentMapPreset == 0
+				? NumEnvMaps - 1
+				: mIndex_ActiveEnvironmentMapPreset - 1;
+			mEngine.StartLoadingEnvironmentMap(mIndex_ActiveEnvironmentMapPreset);
+		}
+	}
+}

@@ -251,7 +251,7 @@ void VQEngine::InitializeEnvironmentMaps()
 	for (const FEnvironmentMapDescriptor& desc : descs)
 	{
 		mLookup_EnvironmentMapDescriptors[desc.Name] = desc;
-		mEnvironmentMapPresetNames.push_back(desc.Name);
+		mResourceNames.mEnvironmentMapPresetNames.push_back(desc.Name);
 	}
 }
 
@@ -259,6 +259,7 @@ void VQEngine::InitializeScenes()
 {
 	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
 	const Input&                  input = mInputStates.at(mpWinMain->GetHWND());
+	std::vector<std::string>& mSceneNames = mResourceNames.mSceneNames;
 
 	auto fnCreateSceneInstance = [&](const std::string& SceneType, std::unique_ptr<Scene>& pScene) -> void
 	{

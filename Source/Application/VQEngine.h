@@ -114,15 +114,19 @@ enum EAppState
 	NUM_APP_STATES
 };
 
-
+using BuiltinMeshNameArray_t = std::array<std::string, EBuiltInMeshes::NUM_BUILTIN_MESHES>;
+struct FResourceNames
+{
+	BuiltinMeshNameArray_t      mBuiltinMeshNames;
+	std::vector<std::string>    mEnvironmentMapPresetNames;
+	std::vector<std::string>    mSceneNames;
+};
 
 //
 // VQENGINE
 //
 class VQEngine : public IWindowOwner
 {
-public:
-
 public:
 
 	// ---------------------------------------------------------
@@ -190,12 +194,12 @@ public:
 	void UpdateThread_WaitForRenderThread();
 	void UpdateThread_SignalRenderThread();
 
-	// PRE_UPDATE()
+	// PreUpdate()
 	// - Updates timer
 	// - Updates input state reading from Main Thread's input queue
 	void UpdateThread_PreUpdate(float& dt);
 	
-	// UPDATE()
+	// Update()
 	// - Updates program state (init/load/sim/unload/exit)
 	// - Starts loading tasks
 	// - Animates loading screen
@@ -204,8 +208,7 @@ public:
 	void UpdateThread_UpdateScene_MainWnd(const float dt);
 	void UpdateThread_UpdateScene_DebugWnd(const float dt);
 
-
-	// POST_UPDATE()
+	// PostUpdate()
 	// - Computes visibility per FSceneView
 	void UpdateThread_PostUpdate();
 
@@ -218,18 +221,30 @@ public:
 	inline const std::string&  GetWindowName(const std::unique_ptr<Window>& pWin) const { return GetWindowName(pWin->GetHWND()); }
 	inline const std::string&  GetWindowName(const Window* pWin) const { return GetWindowName(pWin->GetHWND()); }
 
+
+	// ---------------------------------------------------------
+	// Scene Interface
+	// ---------------------------------------------------------
+	void StartLoadingEnvironmentMap(int IndexEnvMap);
+
+	// Busy waits until render thread catches up with update thread
+	void WaitUntilRenderingFinishes();
+	
 	// Mesh & Model management
 	ModelID CreateModel();
 
+	// Getters
 	MeshID GetBuiltInMeshID(const std::string& MeshName) const;
 
 	      Model& GetModel(ModelID id);
 	const Model& GetModel(ModelID id) const;
+	inline const FResourceNames& GetResourceNames() const { return mResourceNames; }
+
+
 
 private:
 	//-------------------------------------------------------------------------------------------------
 	using BuiltinMeshArray_t          = std::array<Mesh, EBuiltInMeshes::NUM_BUILTIN_MESHES>;
-	using BuiltinMeshNameArray_t      = std::array<std::string, EBuiltInMeshes::NUM_BUILTIN_MESHES>;
 	using MeshLookup_t                = std::unordered_map<MeshID, Mesh>;
 	using ModelLookup_t               = std::unordered_map<ModelID, Model>;
 	using EnvironmentMapDescLookup_t  = std::unordered_map<std::string, FEnvironmentMapDescriptor>;
@@ -286,9 +301,7 @@ private:
 	EnvironmentMapDescLookup_t      mLookup_EnvironmentMapDescriptors;
 
 	// data: strings
-	BuiltinMeshNameArray_t          mBuiltinMeshNames;
-	std::vector<std::string>        mEnvironmentMapPresetNames;
-	std::vector<std::string>        mSceneNames;
+	FResourceNames                  mResourceNames;
 
 	// state
 	EAppState                       mAppState;

@@ -26,10 +26,9 @@
 #include "Memory.h"
 
 class Input;
-
+struct FResourceNames;
 
 //------------------------------------------------------
-
 struct GameObjectRepresentation
 {
 	Transform tf;
@@ -40,7 +39,6 @@ struct GameObjectRepresentation
 	std::string BuiltinMeshName;
 	struct Material { float data[16]; };
 };
-
 struct FSceneRepresentation
 {
 	std::string SceneName;
@@ -52,9 +50,7 @@ struct FSceneRepresentation
 
 	char loadSuccess = 0;
 };
-
 //------------------------------------------------------
-
 struct FPostProcessParameters
 {
 	EColorSpace   ContentColorSpace = EColorSpace::REC_709;
@@ -62,15 +58,12 @@ struct FPostProcessParameters
 	float         DisplayReferenceBrightnessLevel = 200.0f;
 	int           ToggleGammaCorrection = 1;
 };
-
-
 struct FMeshRenderCommand
 {
 	MeshID     meshID = INVALID_ID;
 	MaterialID matID  = INVALID_ID;
 	DirectX::XMMATRIX WorldTransformationMatrix;
 };
-
 struct FSceneView
 {
 	DirectX::XMMATRIX     view;
@@ -90,6 +83,7 @@ struct FSceneView
 
 	std::vector<FMeshRenderCommand> meshRenderCommands;
 };
+//------------------------------------------------------
 
 constexpr size_t NUM_GAMEOBJECT_POOL_SIZE = 4096;
 constexpr size_t GAMEOBJECT_BYTE_ALIGNMENT = 64; // assumed typical cache-line size
@@ -144,16 +138,7 @@ protected:
 // ENGINE INTERFACE
 //----------------------------------------------------------------------------------------------------------------
 public:
-	Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const std::unique_ptr<Window>& pWin)
-		: mInput(input)
-		, mpWindow(pWin)
-		, mEngine(engine)
-		, mFrameSceneViews(NumFrameBuffers)
-		, mIndex_SelectedCamera(0)
-		, mIndex_ActiveEnvironmentMapPreset(0)
-		, mGameObjectPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
-		, mTransformPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
-	{}
+	Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const std::unique_ptr<Window>& pWin);
 
 private: // Derived Scenes shouldn't access these functions
 	void Update(float dt, int FRAME_DATA_INDEX);
@@ -162,6 +147,7 @@ private: // Derived Scenes shouldn't access these functions
 	void OnLoadComplete();
 	void Unload(); // serial-only for now. maybe MT later.
 	void RenderUI();
+	void HandleInput();
 
 public:
 	inline const FSceneView& GetSceneView(int FRAME_DATA_INDEX) const { return mFrameSceneViews[FRAME_DATA_INDEX]; }
@@ -215,6 +201,7 @@ protected:
 	const Input&                   mInput;
 	const std::unique_ptr<Window>& mpWindow;
 	VQEngine&                      mEngine;
+	const FResourceNames&          mResourceNames;
 
 	FSceneRepresentation mSceneRepresentation;
 //----------------------------------------------------------------------------------------------------------------
