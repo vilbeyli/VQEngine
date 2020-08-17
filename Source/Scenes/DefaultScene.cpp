@@ -11,13 +11,19 @@ static void Toggle(bool& b) { b = !b; }
 
 void DefaultScene::UpdateScene(float dt, FSceneView& SceneView)
 {
-	// TODO:
-	//FFrameData& FrameData = GetCurrentFrameData(hwnd);
+	assert(pObject);
+	assert(mIndex_SelectedCamera < mCameras.size());
+
+	Camera& cam = mCameras[mIndex_SelectedCamera];
 
 	// handle input
 	if (mInput.IsKeyTriggered('R'))
-		//FrameData.SceneCamera.InitializeCamera(GenerateCameraInitializationParameters(mpWinMain));
-		; // TODO: reset camera to initial stat
+	{
+		FCameraParameters params = mSceneRepresentation.Cameras[mIndex_SelectedCamera];
+		params.Width  = static_cast<float>(mpWindow->GetWidth() );
+		params.Height = static_cast<float>(mpWindow->GetHeight());
+		cam.InitializeCamera(params);
+	}
 
 	constexpr float CAMERA_MOVEMENT_SPEED_MULTIPLER = 0.75f;
 	constexpr float CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER = 2.0f;
@@ -31,46 +37,51 @@ void DefaultScene::UpdateScene(float dt, FSceneView& SceneView)
 	if (mInput.IsKeyDown(VK_SHIFT)) LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER;
 	LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_MULTIPLER;
 
-#if 0
-	if (mInput.IsKeyTriggered("Space")) Toggle(FrameData.bCubeAnimating);
+	if (mInput.IsKeyTriggered("Space")) Toggle(this->bObjectAnimation);
 
+	Transform* pTF = mpTransforms[pObject->mTransformID];
 	constexpr float MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER = 1.0f;
-	if (mInput.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_LEFT))   FrameData.TFCube.RotateAroundAxisRadians(ZAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
-	if (mInput.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_RIGHT))  FrameData.TFCube.RotateAroundAxisRadians(YAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
-	if (mInput.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE)) FrameData.TFCube.RotateAroundAxisRadians(XAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
+	if (mInput.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_LEFT))   pTF->RotateAroundAxisRadians(ZAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
+	if (mInput.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_RIGHT))  pTF->RotateAroundAxisRadians(YAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
+	if (mInput.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE)) pTF->RotateAroundAxisRadians(XAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
 
 	constexpr float DOUBLE_CLICK_MULTIPLIER = 4.0f;
-	if (mInput.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_LEFT))   FrameData.TFCube.RotateAroundAxisRadians(ZAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
-	if (mInput.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_RIGHT))  FrameData.TFCube.RotateAroundAxisRadians(YAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
-	if (mInput.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE)) FrameData.TFCube.RotateAroundAxisRadians(XAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
+	if (mInput.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_LEFT))   pTF->RotateAroundAxisRadians(ZAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
+	if (mInput.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_RIGHT))  pTF->RotateAroundAxisRadians(YAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
+	if (mInput.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE)) pTF->RotateAroundAxisRadians(XAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
 
 	constexpr float SCROLL_SCALE_DELTA = 1.1f;
-	const float CubeScale = FrameData.TFCube._scale.x;
-	if (mInput.IsMouseScrollUp()) FrameData.TFCube.SetUniformScale(CubeScale * SCROLL_SCALE_DELTA);
-	if (mInput.IsMouseScrollDown()) FrameData.TFCube.SetUniformScale(std::max(0.5f, CubeScale / SCROLL_SCALE_DELTA));
-#endif
-
+	const float CubeScale = pTF->_scale.x;
+	if (mInput.IsMouseScrollUp()) pTF->SetUniformScale(CubeScale * SCROLL_SCALE_DELTA);
+	if (mInput.IsMouseScrollDown()) pTF->SetUniformScale(std::max(0.5f, CubeScale / SCROLL_SCALE_DELTA));
 
 
 	// update camera
 	FCameraInput camInput(LocalSpaceTranslation);
 	camInput.DeltaMouseXY = mInput.GetMouseDelta();
-	mCameras[mIndex_SelectedCamera].Update(dt, camInput);
+	cam.Update(dt, camInput);
 
-#if 0
 	// update scene data
-	if (FrameData.bCubeAnimating)
-		FrameData.TFCube.RotateAroundAxisRadians(YAxis, dt * 0.2f * PI);
-#endif
+	if (this->bObjectAnimation)
+		pTF->RotateAroundAxisRadians(YAxis, dt * 0.2f * PI);
 }
+
+
+void DefaultScene::InitializeScene()
+{
+	assert(!mpObjects.empty());
+	this->pObject = mpObjects.front();
+	this->bObjectAnimation = true;
+}
+
 
 void DefaultScene::LoadScene(FSceneRepresentation& scene)
 {
-
 }
 
 void DefaultScene::UnloadScene()
 {
+
 }
 
 void DefaultScene::RenderSceneUI() const

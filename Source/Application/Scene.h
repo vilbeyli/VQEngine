@@ -117,13 +117,18 @@ class Scene
 // SCENE INTERFACE
 //----------------------------------------------------------------------------------------------------------------
 protected:
+	// Scene-specific loading logic goes here. 
+	// LoadScene() is called right before loading begins.
+	//
+	virtual void LoadScene(FSceneRepresentation& scene) = 0;
+
+	// InitializeScene() is called after the scene data is loaded from the disk.
+	// 
+	virtual void InitializeScene() = 0;
+
 	// Update() is called each frame before Engine::Render(). Scene-specific update logic goes here.
 	//
 	virtual void UpdateScene(float dt, FSceneView& view) = 0;
-
-	// Scene-specific loading logic goes here
-	//
-	virtual void LoadScene(FSceneRepresentation& scene) = 0;
 
 	// Scene-specific unloading logic goes here
 	//

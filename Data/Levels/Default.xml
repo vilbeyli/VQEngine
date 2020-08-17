@@ -61,11 +61,12 @@
             <Drag>9.5</Drag>
         </FirstPerson>
     </Camera>
+    
     <GameObject>
         <Transform>
-            <Position>-1.0 5 2</Position>
-            <Quaternion>0 3.14 0 1</Quaternion>
-            <Scale>3 4 5</Scale>
+            <Position> 0.0 3.0 -14 </Position>
+            <Rotation>30 0 15</Rotation>
+            <Scale>3.1 3.1 3.1</Scale>
         </Transform>
         <Model>
             <Mesh>Cube</Mesh>

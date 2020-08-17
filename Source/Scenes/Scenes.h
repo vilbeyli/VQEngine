@@ -8,6 +8,7 @@ class VQEngine;
 
 #define DECLARE_SCENE_INTERFACE()\
 protected:\
+	void InitializeScene() override;\
 	void UpdateScene(float dt, FSceneView& SceneView) override;\
 	void LoadScene(FSceneRepresentation& scene) override;\
 	void UnloadScene() override;\
@@ -40,3 +41,4 @@ class SponzaScene : public Scene
 
 	DECLARE_CTOR(SponzaScene)
 };
+

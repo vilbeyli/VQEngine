@@ -147,10 +147,13 @@ void Scene::OnLoadComplete()
 {
 	Log::Info("[Scene] %s loaded.", mSceneRepresentation.SceneName.c_str());
 	mSceneRepresentation.loadSuccess = 1;
+	this->InitializeScene();
 }
 
 void Scene::Unload()
 {
+	this->UnloadScene();
+
 	mSceneRepresentation = {};
 
 	const size_t sz = mFrameSceneViews.size();

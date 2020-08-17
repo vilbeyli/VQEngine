@@ -1,5 +1,10 @@
 #include "Scenes.h"
 
+void SponzaScene::InitializeScene()
+{
+}
+
+
 void SponzaScene::UpdateScene(float dt, FSceneView& SceneView)
 {
 
