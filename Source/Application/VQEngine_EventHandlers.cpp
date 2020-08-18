@@ -189,7 +189,7 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 		// TODO: all cameras?
 		Camera& cam = mpScene->GetActiveCamera();
 		
-		FProjectionMatrixParameters UpdatedProjectionMatrixParams = cam.mProjParams;
+		FProjectionMatrixParameters UpdatedProjectionMatrixParams = cam.GetProjectionParameters();
 		UpdatedProjectionMatrixParams.ViewporWidth  = static_cast<float>(p->width );
 		UpdatedProjectionMatrixParams.ViewporHeight = static_cast<float>(p->height);
 

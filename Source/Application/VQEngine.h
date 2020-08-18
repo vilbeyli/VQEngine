@@ -226,9 +226,7 @@ public:
 	// Scene Interface
 	// ---------------------------------------------------------
 	void StartLoadingEnvironmentMap(int IndexEnvMap);
-
-	// Busy waits until render thread catches up with update thread
-	void WaitUntilRenderingFinishes();
+	void StartLoadingScene(int IndexScene);
 	
 	// Mesh & Model management
 	ModelID CreateModel();
@@ -318,7 +316,8 @@ private:
 	// scene
 	FLoadingScreenData              mLoadingScreenData;
 	std::queue<FSceneRepresentation> mQueue_SceneLoad;
-
+	
+	std::vector< FSceneRepresentation> mSceneRepresentations;
 	int                             mIndex_SelectedScene;
 	std::unique_ptr<Scene>          mpScene;
 
@@ -387,8 +386,8 @@ private:
 	void                            TransitionForPostProcessing(FWindowRenderContext& ctx);
 	void                            RenderPostProcess(FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
 	void                            RenderUI(FWindowRenderContext& ctx);
-	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
 	void                            CompositUIToHDRSwapchain(FWindowRenderContext& ctx); // TODO
+	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
 
 	// temp
 	struct FrameConstantBuffer { DirectX::XMMATRIX matModelViewProj; };
@@ -417,6 +416,9 @@ private:
 	const FDisplayHDRProfile*       GetHDRProfileIfExists(const wchar_t* pwStrLogicalDisplayName);
 	FSetHDRMetaDataParams           GatherHDRMetaDataParameters(HWND hwnd);
 
+	// Busy waits until render thread catches up with update thread
+	void                            WaitUntilRenderingFinishes();
+
 
 private:
 	// Reads EngineSettings.ini from next to the executable and returns a 
@@ -425,7 +427,7 @@ private:
 	static std::vector<std::pair<std::string, int>> ParseSceneIndexMappingFile();
 	static std::vector<FEnvironmentMapDescriptor>   ParseEnvironmentMapsFile();
 	static std::vector<FDisplayHDRProfile>          ParseHDRProfilesFile();
-	static std::vector<FSceneRepresentation>        ParseScenesFile();
+	static std::vector<FSceneRepresentation>        ParseSceneFiles();
 
 public:
 	// Supported HDR Formats { DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_FORMAT_R16G16B16A16_FLOAT  }

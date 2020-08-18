@@ -363,6 +363,17 @@ void VQEngine::StartLoadingEnvironmentMap(int IndexEnvMap)
 	});
 }
 
+void VQEngine::StartLoadingScene(int IndexScene)
+{
+	assert(IndexScene >= 0 && IndexScene < mResourceNames.mSceneNames.size());
+
+	// get scene representation 
+	const std::string& SceneName = mResourceNames.mSceneNames[IndexScene];
+
+	// queue the selected scene for loading
+	mQueue_SceneLoad.push(mSceneRepresentations[IndexScene]);
+}
+
 void VQEngine::WaitUntilRenderingFinishes()
 {
 	while ((mNumRenderLoopsExecuted + 1) != mNumUpdateLoopsExecuted);

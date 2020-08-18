@@ -275,7 +275,9 @@ void VQEngine::InitializeScenes()
 			mSceneNames.push_back(std::move(nameIndex.first));
 	}
 	// read scene files from disk: Data/Scenes/
-	std::vector< FSceneRepresentation> SceneReps = VQEngine::ParseScenesFile();
+	this->mSceneRepresentations = VQEngine::ParseSceneFiles();
+	std::vector< FSceneRepresentation>& SceneReps = this->mSceneRepresentations;
+	// ---------------------------------------------
 
 	// find out which scene to load
 	auto it = std::find_if(SceneReps.begin(), SceneReps.end(), [&](const FSceneRepresentation& s) { return s.SceneName == mSettings.StartupScene; });
@@ -285,17 +287,16 @@ void VQEngine::InitializeScenes()
 		Log::Error("Couldn't find scene '%s' among parsed scene files.", mSettings.StartupScene.c_str());
 		Log::Warning("DefaultScene will be loaded");
 		it = std::find_if(SceneReps.begin(), SceneReps.end(), [&](const FSceneRepresentation& s) { return s.SceneName == "Default"; });
+		assert(it != SceneReps.end());
 		mSettings.StartupScene = "Default";
 	}
 
 	// Create the scene instance
 	fnCreateSceneInstance(mSettings.StartupScene, mpScene);
 
-	// queue the selected scene (@mSettings.StartupScene) for loading
-	assert(it != SceneReps.end());
-	mQueue_SceneLoad.push(*it);
+	// ---------------------------------------------
 
-	// set the selected scene index for easily 
+	// set the selected scene index
 	auto it2 = std::find_if(mSceneNames.begin(), mSceneNames.end(), [&](const std::string& scn) { return scn == mSettings.StartupScene; });
 	bSceneFound = it2 != mSceneNames.end();
 	if (!bSceneFound)
@@ -304,6 +305,8 @@ void VQEngine::InitializeScenes()
 		it2 = mSceneNames.begin();
 	}
 	mIndex_SelectedScene = static_cast<int>(it2 - mSceneNames.begin());
+
+	this->StartLoadingScene(mIndex_SelectedScene);
 }
 
 void VQEngine::InitializeThreads()

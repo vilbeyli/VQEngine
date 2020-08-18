@@ -753,7 +753,7 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 	{
 		ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 
-		Camera skyCam = mpScene->GetActiveCamera();
+		Camera skyCam = mpScene->GetActiveCamera().Clone();
 		skyCam.SetPosition(0, 0, 0);
 		skyCam.UpdateViewMatrix();
 

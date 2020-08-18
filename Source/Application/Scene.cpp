@@ -38,10 +38,11 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 
 void Scene::Update(float dt, int FRAME_DATA_INDEX)
 {
-
 	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
 	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
-
+	Camera& Cam = this->mCameras[this->mIndex_SelectedCamera];
+	
+	Cam.Update(dt, mInput);
 	this->HandleInput();
 	this->UpdateScene(dt, SceneView);
 }
@@ -100,24 +101,24 @@ void Scene::StartLoading(FSceneRepresentation& scene)
 		const bool bModelIsBuiltinMesh = !ObjRep.BuiltinMeshName.empty();
 		const bool bModelIsLoadedFromFile = !ObjRep.ModelFilePath.empty();
 		assert(bModelIsBuiltinMesh != bModelIsLoadedFromFile);
+		ModelID mID = mEngine.CreateModel();
+		Model& model = mEngine.GetModel(mID);
 
-		ModelID mID = INVALID_ID;
 		if (bModelIsBuiltinMesh)
 		{
-			// create model
-			mID = mEngine.CreateModel();
-			Model& model = mEngine.GetModel(mID);
-			
 			// create/get mesh
 			MeshID meshID = mEngine.GetBuiltInMeshID(ObjRep.BuiltinMeshName);
 			model.mData.mMeshIDs.push_back(meshID);
 
 			// TODO: material
+
+			model.mbLoaded = true;
 		}
 		else
 		{
-			// TODO: load/create model?
-			//ObjRep.ModelName; // TODO
+			model.mbLoaded = false;
+			model.mModelName = ObjRep.ModelName;
+			model.mModelDirectory = ObjRep.ModelFilePath;
 		}
 		
 
@@ -150,8 +151,20 @@ void Scene::StartLoading(FSceneRepresentation& scene)
 
 		Camera c;
 		c.InitializeCamera(param);
-		mCameras.push_back(c);
+		mCameras.emplace_back(std::move(c));
 	}
+
+	// CAMERA CONTROLLERS
+	// controllers need to be initialized after mCameras are populated in order
+	// to prevent dangling pointers in @pController->mpCamera
+	for (size_t i = 0; i < mCameras.size(); ++i)
+	{
+		if (scene.Cameras[i].bInitializeCameraController)
+		{
+			mCameras[i].InitializeController(scene.Cameras[i].bFirstPerson);
+		}
+	}
+
 
 	// assign scene rep
 	mSceneRepresentation = scene;
@@ -202,11 +215,22 @@ void Scene::RenderUI()
 	// TODO
 }
 
+template<typename T> static inline T CircularIncrement(T currVal, T maxVal) { return (currVal + 1) % maxVal; }
+template<typename T> static inline T CircularDecrement(T currVal, T maxVal) { return currVal == 0 ? maxVal : currVal-1; }
+
 void Scene::HandleInput()
 {
+	const bool bIsShiftDown = mInput.IsKeyDown("Shift");
 	const int NumEnvMaps = static_cast<int>(mResourceNames.mEnvironmentMapPresetNames.size());
 
-	const bool bIsShiftDown = mInput.IsKeyDown("Shift");
+	if (mInput.IsKeyTriggered("C"))
+	{
+		const int NumCameras = static_cast<int>(mCameras.size());
+		mIndex_SelectedCamera = bIsShiftDown 
+			? CircularDecrement(mIndex_SelectedCamera, NumCameras) 
+			: CircularIncrement(mIndex_SelectedCamera, NumCameras);
+	}
+
 	if (mInput.IsKeyTriggered("PageUp"))
 	{
 		// Change Scene
@@ -218,7 +242,7 @@ void Scene::HandleInput()
 		// Change Env Map
 		else
 		{
-			mIndex_ActiveEnvironmentMapPreset = (mIndex_ActiveEnvironmentMapPreset + 1) % NumEnvMaps;
+			mIndex_ActiveEnvironmentMapPreset = CircularIncrement(mIndex_ActiveEnvironmentMapPreset, NumEnvMaps);
 			mEngine.StartLoadingEnvironmentMap(mIndex_ActiveEnvironmentMapPreset);
 		}
 	}
@@ -233,9 +257,7 @@ void Scene::HandleInput()
 		// Change Env Map
 		else
 		{
-			mIndex_ActiveEnvironmentMapPreset = mIndex_ActiveEnvironmentMapPreset == 0
-				? NumEnvMaps - 1
-				: mIndex_ActiveEnvironmentMapPreset - 1;
+			mIndex_ActiveEnvironmentMapPreset = CircularDecrement(mIndex_ActiveEnvironmentMapPreset, NumEnvMaps - 1);
 			mEngine.StartLoadingEnvironmentMap(mIndex_ActiveEnvironmentMapPreset);
 		}
 	}

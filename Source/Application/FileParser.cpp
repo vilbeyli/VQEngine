@@ -378,7 +378,7 @@ std::vector<FDisplayHDRProfile> VQEngine::ParseHDRProfilesFile()
 	return HDRProfiles;
 }
 
-std::vector< FSceneRepresentation> VQEngine::ParseScenesFile()
+std::vector< FSceneRepresentation> VQEngine::ParseSceneFiles()
 {
 	using namespace DirectX;
 	using namespace tinyxml2;
@@ -389,10 +389,10 @@ std::vector< FSceneRepresentation> VQEngine::ParseScenesFile()
 	constexpr char* XML_TAG__CAMERA                 = "Camera";
 	constexpr char* XML_TAG__GAMEOBJECT             = "GameObject";
 	//-----------------------------------------------------------------
-	constexpr char* SCENE_FILES_DIRECTORY          = "Data/Levels/";
+	constexpr char* SCENE_FILES_DIRECTORY           = "Data/Levels/";
 	//-----------------------------------------------------------------
-	      std::vector< FSceneRepresentation> SceneRepresentations;
-	const std::vector< std::string>          SceneFiles = DirectoryUtil::ListFilesInDirectory(SCENE_FILES_DIRECTORY, ".xml");
+	      std::vector<FSceneRepresentation> SceneRepresentations;
+	const std::vector<std::string>          SceneFiles = DirectoryUtil::ListFilesInDirectory(SCENE_FILES_DIRECTORY, ".xml");
 	//-----------------------------------------------------------------
 
 	// parse vectors --------------------------------------------------
@@ -518,7 +518,7 @@ std::vector< FSceneRepresentation> VQEngine::ParseScenesFile()
 				// Cameras
 				else if (XML_TAG__CAMERA == CurrEle)
 				{
-					FCameraParameters cam;
+					FCameraParameters cam = {};
 					XMLElement*& pCam = pCurrentSceneElement;
 
 					// transform
@@ -537,6 +537,7 @@ std::vector< FSceneRepresentation> VQEngine::ParseScenesFile()
 					XMLElement* pTSpeed = pFP ? pFP->FirstChildElement("TranslationSpeed") : nullptr;
 					XMLElement* pASpeed = pFP ? pFP->FirstChildElement("AngularSpeed")     : nullptr;
 					XMLElement* pDrag   = pFP ? pFP->FirstChildElement("Drag")             : nullptr;
+					XMLElement* pOrbit = pCam->FirstChildElement("Orbit");
 
 					// transform ----------------------------------------
 					if (pPos)
@@ -565,9 +566,17 @@ std::vector< FSceneRepresentation> VQEngine::ParseScenesFile()
 					// attributes----------------------------------------
 					if (pFP)
 					{
+						cam.bInitializeCameraController = true;
+						cam.bFirstPerson = true;
 						if(pTSpeed)  fnParseXMLFloatVal(pTSpeed, cam.TranslationSpeed);
 						if(pASpeed)  fnParseXMLFloatVal(pASpeed, cam.AngularSpeed);
 						if(pDrag  )  fnParseXMLFloatVal(pDrag  , cam.Drag);
+					}
+					if (pOrbit)
+					{
+						cam.bInitializeCameraController = true;
+						cam.bFirstPerson = false;
+
 					}
 
 					SceneRep.Cameras.push_back(cam);
@@ -594,19 +603,17 @@ std::vector< FSceneRepresentation> VQEngine::ParseScenesFile()
 					{
 						XMLElement* pMesh = pModel->FirstChildElement("Mesh");
 						XMLElement* pMaterial = pModel->FirstChildElement("Material");
+						XMLElement* pModelPath = pModel->FirstChildElement("Path");
+						XMLElement* pModelName = pModel->FirstChildElement("Name");
 						
-						if (pMesh)
-						{
-							fnParseXMLStringVal(pMesh, obj.BuiltinMeshName);
-						}
 						
+						if (pMesh) fnParseXMLStringVal(pMesh, obj.BuiltinMeshName);
 						if (pMaterial)
 						{
 							// TODO
 						}
-						
-						// TODO: model loading from disk
-						//obj.ModelName
+						if (pModelPath) fnParseXMLStringVal(pModelPath, obj.ModelFilePath);
+						if (pModelName) fnParseXMLStringVal(pModelName, obj.ModelName);
 					}
 
 

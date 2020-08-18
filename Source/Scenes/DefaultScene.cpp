@@ -25,18 +25,6 @@ void DefaultScene::UpdateScene(float dt, FSceneView& SceneView)
 		cam.InitializeCamera(params);
 	}
 
-	constexpr float CAMERA_MOVEMENT_SPEED_MULTIPLER = 0.75f;
-	constexpr float CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER = 2.0f;
-	XMVECTOR LocalSpaceTranslation = XMVectorSet(0, 0, 0, 0);
-	if (mInput.IsKeyDown('A'))      LocalSpaceTranslation += XMLoadFloat3(&LeftVector);
-	if (mInput.IsKeyDown('D'))      LocalSpaceTranslation += XMLoadFloat3(&RightVector);
-	if (mInput.IsKeyDown('W'))      LocalSpaceTranslation += XMLoadFloat3(&ForwardVector);
-	if (mInput.IsKeyDown('S'))      LocalSpaceTranslation += XMLoadFloat3(&BackVector);
-	if (mInput.IsKeyDown('E'))      LocalSpaceTranslation += XMLoadFloat3(&UpVector);
-	if (mInput.IsKeyDown('Q'))      LocalSpaceTranslation += XMLoadFloat3(&DownVector);
-	if (mInput.IsKeyDown(VK_SHIFT)) LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER;
-	LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_MULTIPLER;
-
 	if (mInput.IsKeyTriggered("Space")) Toggle(this->bObjectAnimation);
 
 	Transform* pTF = mpTransforms[pObject->mTransformID];
@@ -54,12 +42,6 @@ void DefaultScene::UpdateScene(float dt, FSceneView& SceneView)
 	const float CubeScale = pTF->_scale.x;
 	if (mInput.IsMouseScrollUp()) pTF->SetUniformScale(CubeScale * SCROLL_SCALE_DELTA);
 	if (mInput.IsMouseScrollDown()) pTF->SetUniformScale(std::max(0.5f, CubeScale / SCROLL_SCALE_DELTA));
-
-
-	// update camera
-	FCameraInput camInput(LocalSpaceTranslation);
-	camInput.DeltaMouseXY = mInput.GetMouseDelta();
-	cam.Update(dt, camInput);
 
 	// update scene data
 	if (this->bObjectAnimation)
