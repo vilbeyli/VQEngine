@@ -20,9 +20,13 @@ set (Resource
 set (Scenes 
     "Data/Levels/Default.xml"
     "Data/Levels/Sponza.xml"
+    "Data/Levels/GeometryUnitTest.xml"
+    "Data/Levels/StressTest.xml"
     "Source/Scenes/Scenes.h"
     "Source/Scenes/DefaultScene.cpp"
-    "Source/Scenes/Sponza.cpp"
+    "Source/Scenes/SponzaScene.cpp"
+    "Source/Scenes/GeometryUnitTestScene.cpp"
+    "Source/Scenes/StressTestScene.cpp"
 )
 
 set (Config

@@ -42,3 +42,16 @@ class SponzaScene : public Scene
 	DECLARE_CTOR(SponzaScene)
 };
 
+class GeometryUnitTestScene : public Scene
+{
+	DECLARE_SCENE_INTERFACE()
+
+	DECLARE_CTOR(GeometryUnitTestScene)
+};
+
+class StressTestScene : public Scene
+{
+	DECLARE_SCENE_INTERFACE()
+
+	DECLARE_CTOR(StressTestScene)
+};
