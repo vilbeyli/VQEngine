@@ -16,38 +16,13 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-#pragma once
+#include "AssetLoader.h"
 
-using int64 = long long;
-using int32 = int;
-using int16 = short;
-using int8  = char;
+Model AssetLoader::ImportModel_obj(const std::string& objFilePath, std::string ModelName)
+{
+	Model::Data modelData;
 
-using uint64 = unsigned long long;
-using uint32 = unsigned;
-using uint16 = unsigned short;
-using uint8  = unsigned char;
+	// TODO: assimp model import
 
-using uint = unsigned;
-
-using fp32 = float;
-
-// -------------------------------------
-
-using ID_TYPE = int;
-constexpr ID_TYPE INVALID_ID = -1;
-
-using BufferID = ID_TYPE;
-using TextureID = ID_TYPE;
-using SamplerID = ID_TYPE;
-using SRV_ID = ID_TYPE;
-using UAV_ID = ID_TYPE;
-using CBV_ID = ID_TYPE;
-using RTV_ID = ID_TYPE;
-using DSV_ID = ID_TYPE;
-
-using EnvironmentMapID = ID_TYPE;
-using MeshID = ID_TYPE;
-using MaterialID = ID_TYPE;
-using ModelID = ID_TYPE;
-using TransformID = ID_TYPE;
+	return Model(objFilePath, ModelName, std::move(modelData));
+}

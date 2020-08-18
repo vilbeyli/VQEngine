@@ -1,5 +1,5 @@
-//	VQEngine | DirectX11 Renderer
-//	Copyright(C) 2018  - Volkan Ilbeyli
+//	VQE
+//	Copyright(C) 2020  - Volkan Ilbeyli
 //
 //	This program is free software : you can redistribute it and / or modify
 //	it under the terms of the GNU General Public License as published by
@@ -35,6 +35,7 @@ enum EBuiltInMeshes
 	NUM_BUILTIN_MESHES
 };
 
+
  
 
 struct VertexIndexBufferIDPair
@@ -64,6 +65,7 @@ struct MeshLODData
 struct Mesh
 {
 public:
+	static EBuiltInMeshes GetBuiltInMeshType(const std::string& MeshTypeStr);
 	//
 	// Constructors / Operators
 	//

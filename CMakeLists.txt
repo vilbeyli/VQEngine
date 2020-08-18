@@ -17,11 +17,24 @@ set (Resource
     "Data/Icons/VQE32.ico"
 )
 
+set (Scenes 
+    "Data/Levels/Default.xml"
+    "Data/Levels/Sponza.xml"
+    "Data/Levels/GeometryUnitTest.xml"
+    "Data/Levels/StressTest.xml"
+    "Source/Scenes/Scenes.h"
+    "Source/Scenes/DefaultScene.cpp"
+    "Source/Scenes/SponzaScene.cpp"
+    "Source/Scenes/GeometryUnitTestScene.cpp"
+    "Source/Scenes/StressTestScene.cpp"
+)
+
 set (Config
     "Data/EngineSettings.ini"
     "Data/RendererSettings.ini"
     "Data/HDRDisplayProfiles.ini"
     "Data/EnvironmentMaps.ini"
+    "Data/Scenes.ini"
 )
 
 set (Shaders
@@ -41,11 +54,17 @@ set (HeaderVQE
     "Source/Application/VQEngine.h"
     "Source/Application/Events.h"
     "Source/Application/Mesh.h"
+    "Source/Application/Model.h"
     "Source/Application/Geometry.h"
     "Source/Application/Transform.h"
     "Source/Application/Quaternion.h"
     "Source/Application/Camera.h"
     "Source/Application/Input.h"
+    "Source/Application/AssetLoader.h"
+    "Source/Application/Scene.h"
+    "Source/Application/Light.h"
+    "Source/Application/GameObject.h"
+    "Source/Application/Memory.h"
 )
 
 set (SourceVQE 
@@ -57,14 +76,21 @@ set (SourceVQE
     "Source/Application/VQEngine_Update.cpp"
     "Source/Application/VQEngine_WindowEvents.cpp"
     "Source/Application/VQEngine_EventHandlers.cpp"
+    "Source/Application/FileParser.cpp"
     "Source/Application/Events.cpp"
     "Source/Application/Mesh.cpp"
+    "Source/Application/Model.cpp"
     "Source/Application/Geometry.cpp"
     "Source/Application/Transform.cpp"
     "Source/Application/Math.cpp"
     "Source/Application/Quaternion.cpp"
     "Source/Application/Camera.cpp"
     "Source/Application/Input.cpp"
+    "Source/Application/AssetLoader.cpp"
+    "Source/Application/Scene.cpp"
+    "Source/Application/Light.cpp"
+    "Source/Application/GameObject.cpp"
+    "Source/Application/Memory.cpp"
 )
 
 # ouput exe to bin directory
@@ -83,8 +109,10 @@ source_group("Config"   FILES ${Config})
 source_group("Resource" FILES ${Resource})
 source_group("Icons"    FILES ${Icons})
 source_group("Shaders"  FILES ${Shaders})
+source_group("Scenes"   FILES ${Scenes})
 
 set_source_files_properties(${Config} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${Scenes} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(Data/Resources/VQE.rc PROPERTIES VS_TOOL_OVERRIDE "Resource compiler")
 set_source_files_properties(Data/Icons/VQE32.ico  PROPERTIES VS_TOOL_OVERRIDE "Image")
@@ -92,7 +120,7 @@ set_source_files_properties(Data/Icons/VQE32.ico  PROPERTIES VS_TOOL_OVERRIDE "I
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/VQUtils/Bin/)
 
 # Create a library with the project name that is build with the Headers and Source files
-add_executable( ${PROJECT_NAME} ${HeaderVQE} ${SourceVQE} ${Config} ${Resource} ${Shaders} )
+add_executable( ${PROJECT_NAME} ${HeaderVQE} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} )
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY} )
 

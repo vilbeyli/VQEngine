@@ -20,6 +20,8 @@
 
 #include "Common.h"
 
+#include <DirectXMath.h>
+
 #include <vector>
 
 namespace D3D12MA { class Allocation; class Allocator; }
@@ -46,6 +48,31 @@ struct TextureCreateDesc
 class Texture
 {
 public:
+	struct CubemapUtility
+	{
+		// cube face order: https://msdn.microsoft.com/en-us/library/windows/desktop/ff476906(v=vs.85).aspx
+		//------------------------------------------------------------------------------------------------------
+		// 0: RIGHT		1: LEFT
+		// 2: UP		3: DOWN
+		// 4: FRONT		5: BACK
+		//------------------------------------------------------------------------------------------------------
+		enum ECubeMapLookDirections
+		{
+			CUBEMAP_LOOK_RIGHT = 0,
+			CUBEMAP_LOOK_LEFT,
+			CUBEMAP_LOOK_UP,
+			CUBEMAP_LOOK_DOWN,
+			CUBEMAP_LOOK_FRONT,
+			CUBEMAP_LOOK_BACK,
+
+			NUM_CUBEMAP_LOOK_DIRECTIONS
+		};
+#if 0
+		// TODO implement with Lights
+		static DirectX::XMMATRIX CalculateViewMatrix(ECubeMapLookDirections cubeFace, const vec3& position = vec3::Zero);
+		inline static DirectX::XMMATRIX CalculateViewMatrix(int face, const vec3& position = vec3::Zero) { return CalculateViewMatrix(static_cast<ECubeMapLookDirections>(face), position); }
+#endif
+	};
 	static std::vector<uint8> GenerateTexture_Checkerboard(uint Dimension);
 
 	Texture()  = default;

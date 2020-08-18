@@ -27,6 +27,8 @@
 #include "Transform.h"
 #include "Camera.h"
 #include "Input.h"
+#include "AssetLoader.h"
+#include "Scene.h"
 
 #include "Libs/VQUtils/Source/Multithreading.h"
 #include "Libs/VQUtils/Source/Timer.h"
@@ -38,45 +40,15 @@
 // Outputs Render/Update thread sync values on each Tick()
 #define DEBUG_LOG_THREAD_SYNC_VERBOSE 0
 
-
 //
 // DATA STRUCTS
 //
-struct FPostProcessParameters
-{
-	EColorSpace   ContentColorSpace = EColorSpace::REC_709;
-	EDisplayCurve OutputDisplayCurve = EDisplayCurve::sRGB;
-	float         DisplayReferenceBrightnessLevel = 200.0f;
-	int           ToggleGammaCorrection = 1;
-};
-struct FFrameData
-{
-	std::array<float, 4> SwapChainClearColor;
-
-	// scene 
-	Camera SceneCamera;
-	Transform TFCube;
-	bool bCubeAnimating;
-
-	// post process
-	FPostProcessParameters PPParams;
-};
 struct FLoadingScreenData
 {
 	std::array<float, 4> SwapChainClearColor;
-	
 	SRV_ID SRVLoadingScreen = INVALID_ID;
 	// TODO: animation resources
 };
-class IWindowUpdateContext
-{
-public:
-	HWND hwnd;
-	std::vector<FFrameData> mFrameData;
-	std::vector<FLoadingScreenData> mLoadingScreenData;
-};
-class MainWindowSceneData : public IWindowUpdateContext{};
-class DebugWindowSceneData : public IWindowUpdateContext{};
 
 
 struct FEnvironmentMapDescriptor
@@ -105,13 +77,6 @@ struct FEnvironmentMap
 	// the frame which has the brightest average luminance anywhere in 
 	// the content.
 	int MaxFrameAverageLightLevel = 0;
-};
-
-struct FSceneRepresentation
-{
-	std::string SceneName;
-	std::string EnvironmentMapPreset;
-	// TBA
 };
 
 struct FRenderingResources{};
@@ -149,15 +114,19 @@ enum EAppState
 	NUM_APP_STATES
 };
 
-
+using BuiltinMeshNameArray_t = std::array<std::string, EBuiltInMeshes::NUM_BUILTIN_MESHES>;
+struct FResourceNames
+{
+	BuiltinMeshNameArray_t      mBuiltinMeshNames;
+	std::vector<std::string>    mEnvironmentMapPresetNames;
+	std::vector<std::string>    mSceneNames;
+};
 
 //
 // VQENGINE
 //
 class VQEngine : public IWindowOwner
 {
-public:
-
 public:
 
 	// ---------------------------------------------------------
@@ -207,7 +176,7 @@ public:
 	void RenderThread_PreRender();
 
 	// RENDER()
-	// - Records command lists in parallel per SceneView
+	// - Records command lists in parallel per FSceneView
 	// - Submits commands to the GPU
 	// - Presents SwapChain
 	void RenderThread_Render();
@@ -225,12 +194,12 @@ public:
 	void UpdateThread_WaitForRenderThread();
 	void UpdateThread_SignalRenderThread();
 
-	// PRE_UPDATE()
+	// PreUpdate()
 	// - Updates timer
 	// - Updates input state reading from Main Thread's input queue
 	void UpdateThread_PreUpdate(float& dt);
 	
-	// UPDATE()
+	// Update()
 	// - Updates program state (init/load/sim/unload/exit)
 	// - Starts loading tasks
 	// - Animates loading screen
@@ -239,9 +208,8 @@ public:
 	void UpdateThread_UpdateScene_MainWnd(const float dt);
 	void UpdateThread_UpdateScene_DebugWnd(const float dt);
 
-
-	// POST_UPDATE()
-	// - Computes visibility per SceneView
+	// PostUpdate()
+	// - Computes visibility per FSceneView
 	void UpdateThread_PostUpdate();
 
 
@@ -253,16 +221,37 @@ public:
 	inline const std::string&  GetWindowName(const std::unique_ptr<Window>& pWin) const { return GetWindowName(pWin->GetHWND()); }
 	inline const std::string&  GetWindowName(const Window* pWin) const { return GetWindowName(pWin->GetHWND()); }
 
+
+	// ---------------------------------------------------------
+	// Scene Interface
+	// ---------------------------------------------------------
+	void StartLoadingEnvironmentMap(int IndexEnvMap);
+	void StartLoadingScene(int IndexScene);
+	
+	void UnloadEnvironmentMap();
+
+	// Mesh & Model management
+	ModelID CreateModel();
+
+	// Getters
+	MeshID GetBuiltInMeshID(const std::string& MeshName) const;
+
+	      Model& GetModel(ModelID id);
+	const Model& GetModel(ModelID id) const;
+	inline const FResourceNames& GetResourceNames() const { return mResourceNames; }
+
+
+
 private:
 	//-------------------------------------------------------------------------------------------------
-	using BuiltinMeshArray_t          = std::array<Mesh       , EBuiltInMeshes::NUM_BUILTIN_MESHES>;
-	using BuiltinMeshNameArray_t      = std::array<std::string, EBuiltInMeshes::NUM_BUILTIN_MESHES>;
-	using EnvironmentMapLookup_t      = std::unordered_map<std::string, FEnvironmentMapDescriptor>;
+	using BuiltinMeshArray_t          = std::array<Mesh, EBuiltInMeshes::NUM_BUILTIN_MESHES>;
+	using MeshLookup_t                = std::unordered_map<MeshID, Mesh>;
+	using ModelLookup_t               = std::unordered_map<ModelID, Model>;
+	using EnvironmentMapDescLookup_t  = std::unordered_map<std::string, FEnvironmentMapDescriptor>;
 	//-------------------------------------------------------------------------------------------------
 	using EventPtr_t                  = std::shared_ptr<IEvent>;
 	using EventQueue_t                = BufferedContainer<std::queue<EventPtr_t>, EventPtr_t>;
 	//-------------------------------------------------------------------------------------------------
-	using UpdateContextLookup_t       = std::unordered_map<HWND, IWindowUpdateContext*>;
 	using RenderingResourcesLookup_t  = std::unordered_map<HWND, std::shared_ptr<FRenderingResources>>;
 	using WindowLookup_t              = std::unordered_map<HWND, std::unique_ptr<Window>>;
 	using WindowNameLookup_t          = std::unordered_map<HWND, std::string>;
@@ -298,24 +287,28 @@ private:
 	EventQueue_t                    mEventQueue_WinToVQE_Update;
 	EventQueue_t                    mEventQueue_VQEToWin_Main;
 
-
 	// render
 	VQRenderer                      mRenderer;
+	AssetLoader                     mAssetLoader;
 
-	// data
+	// data: geometry
 	BuiltinMeshArray_t              mBuiltinMeshes;
-	BuiltinMeshNameArray_t          mBuiltinMeshNames;
+	MeshLookup_t                    mMeshes;
+	ModelLookup_t                   mModels; // contains MeshIDs and MaterialIDs
+
+	// data: environment maps & HDR profiles
 	std::vector<FDisplayHDRProfile> mDisplayHDRProfiles;
-	EnvironmentMapLookup_t          mLookup_EnvironmentMapDescriptors;
-	std::vector<std::string>        mEnvironmentMapPresetNames;
-	int                             mActiveEnvironmentMapPresetIndex;
+	EnvironmentMapDescLookup_t      mLookup_EnvironmentMapDescriptors;
+
+	// data: strings
+	FResourceNames                  mResourceNames;
 
 	// state
+	EAppState                       mAppState;
 	std::atomic<bool>               mbRenderThreadInitialized;
 	std::atomic<uint64>             mNumRenderLoopsExecuted;
 	std::atomic<uint64>             mNumUpdateLoopsExecuted;
 	std::atomic<bool>               mbLoadingLevel;
-	EAppState                       mAppState;
 	std::atomic<bool>               mbMainWindowHDRTransitionInProgress; // see DispatchHDRSwapchainTransitionEvents()
 
 	// system & settings
@@ -323,10 +316,12 @@ private:
 	VQSystemInfo::FSystemInfo       mSysInfo;
 
 	// scene
-	MainWindowSceneData             mScene_MainWnd;
-	DebugWindowSceneData            mScene_DebugWnd;
-	UpdateContextLookup_t           mWindowUpdateContextLookup;
+	FLoadingScreenData              mLoadingScreenData;
 	std::queue<FSceneRepresentation> mQueue_SceneLoad;
+	
+	std::vector< FSceneRepresentation> mSceneRepresentations;
+	int                             mIndex_SelectedScene;
+	std::unique_ptr<Scene>          mpScene;
 
 #if 0
 	RenderingResourcesLookup_t      mRenderingResources;
@@ -334,6 +329,7 @@ private:
 	FRenderingResources_MainWindow  mResources_MainWnd;
 	FRenderingResources_DebugWindow mResources_DebugWnd;
 #endif
+
 
 	// timer / profiler
 	Timer                           mTimer;
@@ -347,11 +343,12 @@ private:
 
 
 private:
+	void                            InitializeInput();
 	void                            InitializeEngineSettings(const FStartupParameters& Params);
 	void                            InitializeWindows(const FStartupParameters& Params);
 	void                            InitializeHDRProfiles();
 	void                            InitializeEnvironmentMaps();
-	void                            InitializeScenes(const FStartupParameters& Params);
+	void                            InitializeScenes();
 
 	void                            InitializeThreads();
 	void                            ExitThreads();
@@ -386,13 +383,13 @@ private:
 	//
 	void                            TransitionForSceneRendering(FWindowRenderContext& ctx);
 	void                            RenderShadowMaps(FWindowRenderContext& ctx);
-	void                            RenderSceneColor(FWindowRenderContext& ctx, const FFrameData& FrameData);
+	void                            RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& SceneView);
 	void                            ResolveMSAA(FWindowRenderContext& ctx);
 	void                            TransitionForPostProcessing(FWindowRenderContext& ctx);
 	void                            RenderPostProcess(FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
 	void                            RenderUI(FWindowRenderContext& ctx);
-	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
 	void                            CompositUIToHDRSwapchain(FWindowRenderContext& ctx); // TODO
+	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
 
 	// temp
 	struct FrameConstantBuffer { DirectX::XMMATRIX matModelViewProj; };
@@ -404,7 +401,6 @@ private:
 	const std::unique_ptr<Window>&  GetWindow(HWND hwnd) const;
 	const FWindowSettings&          GetWindowSettings(HWND hwnd) const;
 	FWindowSettings&                GetWindowSettings(HWND hwnd);
-	FFrameData&                     GetCurrentFrameData(HWND hwnd);
 
 	const FEnvironmentMapDescriptor& GetEnvironmentMapDesc(const std::string& EnvMapName) const;
 
@@ -422,14 +418,18 @@ private:
 	const FDisplayHDRProfile*       GetHDRProfileIfExists(const wchar_t* pwStrLogicalDisplayName);
 	FSetHDRMetaDataParams           GatherHDRMetaDataParameters(HWND hwnd);
 
+	// Busy waits until render thread catches up with update thread
+	void                            WaitUntilRenderingFinishes();
+
 
 private:
 	// Reads EngineSettings.ini from next to the executable and returns a 
 	// FStartupParameters struct as it readily has override booleans for engine settings
-	static FStartupParameters                     ParseEngineSettingsFile();
-	static std::vector<FEnvironmentMapDescriptor> ParseEnvironmentMapsFile();
-	static std::vector<FDisplayHDRProfile>        ParseHDRProfilesFile();
-	static std::vector<FSceneRepresentation>      ParseScenesFile();
+	static FStartupParameters                       ParseEngineSettingsFile();
+	static std::vector<std::pair<std::string, int>> ParseSceneIndexMappingFile();
+	static std::vector<FEnvironmentMapDescriptor>   ParseEnvironmentMapsFile();
+	static std::vector<FDisplayHDRProfile>          ParseHDRProfilesFile();
+	static std::vector<FSceneRepresentation>        ParseSceneFiles();
 
 public:
 	// Supported HDR Formats { DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_FORMAT_R16G16B16A16_FLOAT  }

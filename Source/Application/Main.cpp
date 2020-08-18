@@ -158,6 +158,12 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 			else
 				refStartupParams.EngineSettings.gfx.MaxFrameRate = StrUtil::ParseInt(paramValue);
 		}
+
+		if (paramName == "-Scene")
+		{
+			refStartupParams.bOverrideENGSetting_StartupScene = true;
+			refStartupParams.EngineSettings.StartupScene = paramValue;
+		}
 	}
 }
 

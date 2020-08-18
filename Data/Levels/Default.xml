@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Scene>
+    <!-- Environment maps are defined in Data/EnvironmentMaps.ini -->
+    <!--
+         // custom env map usage: specify path & MaxCLL
+         <path>Textures/HDRI/env_map.hdr</path>
+         <MaxCLL>1200</MaxCLL>
+
+         // preset usage: defined in EnvironmentMaps.ini
+         <Preset>Stadium01</Preset>
+    -->
+    <EnvironmentMap>
+        <Preset>Stadium01</Preset>
+    </EnvironmentMap>
+    
+    <Camera>
+        <Position> 0.0 3.0 -5 </Position>
+        <Pitch> 15 </Pitch>
+        <Yaw> 0 </Yaw>
+        
+        <Projection>Perspective</Projection>
+        <FoV>60.0</FoV>
+        <Near>0.01</Near>
+        <Far>1000</Far>
+
+        <FirstPerson>
+            <TranslationSpeed>1000</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+
+    <GameObject>
+        <Transform>
+            <Position>0 0 4</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>3 3 3</Scale>
+        </Transform>
+        <Model>
+            <Mesh>Cube</Mesh>
+            <Material>
+                <Diffuse></Diffuse>
+            </Material>
+        </Model>
+    </GameObject>
+
+
+    <Camera>
+        <Position> 6.0 3.0 -5 </Position>
+        <Pitch> 65 </Pitch>
+        <Yaw> 6 </Yaw>
+        
+        <Projection>Orthographic</Projection>
+        <FoV>90.0</FoV>
+        <Near>0.01</Near>
+        <Far>1000</Far>
+
+        <FirstPerson>
+            <TranslationSpeed>1000</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+    
+    <GameObject>
+        <Transform>
+            <Position> 0.0 3.0 -14 </Position>
+            <Rotation>30 0 15</Rotation>
+            <Scale>3.1 3.1 3.1</Scale>
+        </Transform>
+        <Model>
+            <Mesh>Cube</Mesh>
+            <Material>
+                <Diffuse></Diffuse>
+            </Material>
+        </Model>
+    </GameObject>
+
+
+</Scene>
