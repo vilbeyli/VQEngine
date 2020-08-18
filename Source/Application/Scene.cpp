@@ -205,9 +205,9 @@ void Scene::Unload()
 	mMeshBoundingBoxes.clear();
 	mGameObjectBoundingBoxes.clear();
 
-	mIndex_SelectedCamera
-		= mIndex_ActiveEnvironmentMapPreset
-		= 0;
+	mIndex_SelectedCamera = 0;
+	mIndex_ActiveEnvironmentMapPreset = -1;
+	mEngine.UnloadEnvironmentMap();
 }
 
 void Scene::RenderUI()

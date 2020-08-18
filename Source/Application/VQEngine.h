@@ -228,6 +228,8 @@ public:
 	void StartLoadingEnvironmentMap(int IndexEnvMap);
 	void StartLoadingScene(int IndexScene);
 	
+	void UnloadEnvironmentMap();
+
 	// Mesh & Model management
 	ModelID CreateModel();
 

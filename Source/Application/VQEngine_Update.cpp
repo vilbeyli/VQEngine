@@ -105,12 +105,13 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 	if (mAppState == EAppState::INITIALIZING)
 	{
 		// start loading
-		Log::Info("Update Thread starts loading...");
+		Log::Info("UpdateThread: loading...");
 
 		// start load level
 		Load_SceneData_Dispatch();
-		mAppState = EAppState::LOADING;// not thread-safe
 
+		// set state
+		mAppState = EAppState::LOADING;// not thread-safe
 		mbLoadingLevel.store(true);    // thread-safe
 	}
 
@@ -216,8 +217,9 @@ void VQEngine::HandleEngineInput()
 					mEventQueue_VQEToWin_Main.AddItem(std::make_shared<SetMouseCaptureEvent>(hwnd, true, false));
 			}
 		}
-		if (pWin == mpWinMain) // Graphics Settings Controls
+		if (pWin == mpWinMain) 
 		{
+			// Graphics Settings Controls
 			if (input.IsKeyTriggered("V"))
 			{
 				auto& SwapChain = mRenderer.GetWindowSwapChain(hwnd);
@@ -234,18 +236,30 @@ void VQEngine::HandleEngineInput()
 				PPParams.ToggleGammaCorrection = PPParams.ToggleGammaCorrection == 1 ? 0 : 1;
 				Log::Info("Tonemapper: ApplyGamma=%d (SDR-only)", PPParams.ToggleGammaCorrection);
 			}
-		}
-		if (bIsShiftDown)
-		{
-			const int NumScenes = static_cast<int>(mSceneRepresentations.size());
-			if (input.IsKeyTriggered("PageUp") && !mbLoadingLevel)
+
+			// Scene switching
+			if (bIsShiftDown)
 			{
-				mIndex_SelectedScene = CircularIncrement(mIndex_SelectedScene, NumScenes);
+				const int NumScenes = static_cast<int>(mSceneRepresentations.size());
+				if (input.IsKeyTriggered("PageUp") && !mbLoadingLevel)
+				{
+					mIndex_SelectedScene = CircularIncrement(mIndex_SelectedScene, NumScenes);
+					this->StartLoadingScene(mIndex_SelectedScene);
+				}
+				if (input.IsKeyTriggered("PageDown") && !mbLoadingLevel)
+				{
+					mIndex_SelectedScene = CircularDecrement(mIndex_SelectedScene, NumScenes - 1);
+					this->StartLoadingScene(mIndex_SelectedScene);
+				}
+			}
+			if (input.IsKeyTriggered("1") && !mbLoadingLevel)
+			{
+				mIndex_SelectedScene = 0;
 				this->StartLoadingScene(mIndex_SelectedScene);
 			}
-			if (input.IsKeyTriggered("PageDown") && !mbLoadingLevel)
+			if (input.IsKeyTriggered("2") && !mbLoadingLevel)
 			{
-				mIndex_SelectedScene = CircularDecrement(mIndex_SelectedScene, NumScenes-1);
+				mIndex_SelectedScene = 1;
 				this->StartLoadingScene(mIndex_SelectedScene);
 			}
 		}
@@ -395,6 +409,20 @@ void VQEngine::StartLoadingScene(int IndexScene)
 	Log::Info("StartLoadingScene: %d", IndexScene);
 }
 
+void VQEngine::UnloadEnvironmentMap()
+{
+	FEnvironmentMap& env = mResources_MainWnd.EnvironmentMap;
+	if (env.Tex_HDREnvironment != INVALID_ID)
+	{
+		// GPU-sync assumed
+		mRenderer.GetWindowSwapChain(mpWinMain->GetHWND()).WaitForGPU();
+		mRenderer.DestroySRV(env.SRV_HDREnvironment);
+		mRenderer.DestroyTexture(env.Tex_HDREnvironment);
+		env.SRV_HDREnvironment = env.Tex_HDREnvironment = INVALID_ID;
+		env.MaxContentLightLevel = 0;
+	}
+}
+
 void VQEngine::WaitUntilRenderingFinishes()
 {
 	while (mNumRenderLoopsExecuted != mNumUpdateLoopsExecuted);
@@ -493,11 +521,7 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	if (env.Tex_HDREnvironment != INVALID_ID)
 	{
 		assert(env.SRV_HDREnvironment != INVALID_ID);
-		// GPU-sync assumed
-		mRenderer.GetWindowSwapChain(mpWinMain->GetHWND()).WaitForGPU();
-		mRenderer.DestroySRV(env.SRV_HDREnvironment);
-		mRenderer.DestroyTexture(env.Tex_HDREnvironment);
-		env.MaxContentLightLevel = 0;
+		UnloadEnvironmentMap();
 	}
 
 	const FEnvironmentMapDescriptor& desc = this->GetEnvironmentMapDesc(EnvMapName);
