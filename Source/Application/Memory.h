@@ -35,7 +35,7 @@ inline constexpr size_t AlignTo(size_t size, size_t alignment = 64)
 	return (size + alignment - 1) & ~(alignment - 1);
 }
 
-#define MEMORY_POOL__ENABLE_DEBUG_LOG 1
+#define MEMORY_POOL__ENABLE_DEBUG_LOG 0
 #define MEMORY_POOL__LOG_VERBOSE      0
 #if MEMORY_POOL__ENABLE_DEBUG_LOG
 #include "../../Libs/VQUtils/Source/Log.h"

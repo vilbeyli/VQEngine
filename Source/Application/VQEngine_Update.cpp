@@ -21,6 +21,8 @@
 #include "VQEngine.h"
 #include "Math.h"
 #include "Scene.h"
+#include "../Scenes/Scenes.h"
+
 
 #include "Libs/VQUtils/Source/utils.h"
 
@@ -190,6 +192,7 @@ void VQEngine::HandleEngineInput()
 		HWND   hwnd  = it->first;
 		Input& input = it->second;
 		auto&  pWin  = this->GetWindow(hwnd);
+		const bool bIsShiftDown = input.IsKeyDown("Shift");
 
 		//
 		// Process-level input handling
@@ -230,6 +233,20 @@ void VQEngine::HandleEngineInput()
 				FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 				PPParams.ToggleGammaCorrection = PPParams.ToggleGammaCorrection == 1 ? 0 : 1;
 				Log::Info("Tonemapper: ApplyGamma=%d (SDR-only)", PPParams.ToggleGammaCorrection);
+			}
+		}
+		if (bIsShiftDown)
+		{
+			const int NumScenes = static_cast<int>(mSceneRepresentations.size());
+			if (input.IsKeyTriggered("PageUp") && !mbLoadingLevel)
+			{
+				mIndex_SelectedScene = CircularIncrement(mIndex_SelectedScene, NumScenes);
+				this->StartLoadingScene(mIndex_SelectedScene);
+			}
+			if (input.IsKeyTriggered("PageDown") && !mbLoadingLevel)
+			{
+				mIndex_SelectedScene = CircularDecrement(mIndex_SelectedScene, NumScenes-1);
+				this->StartLoadingScene(mIndex_SelectedScene);
 			}
 		}
 	}
@@ -355,6 +372,7 @@ const Model& VQEngine::GetModel(ModelID id) const
 
 void VQEngine::StartLoadingEnvironmentMap(int IndexEnvMap)
 {
+	this->WaitUntilRenderingFinishes();
 	mAppState = EAppState::LOADING;
 	mbLoadingLevel = true;
 	mWorkers_Load.AddTask([&, IndexEnvMap]()
@@ -372,11 +390,14 @@ void VQEngine::StartLoadingScene(int IndexScene)
 
 	// queue the selected scene for loading
 	mQueue_SceneLoad.push(mSceneRepresentations[IndexScene]);
+
+	mAppState = INITIALIZING;
+	Log::Info("StartLoadingScene: %d", IndexScene);
 }
 
 void VQEngine::WaitUntilRenderingFinishes()
 {
-	while ((mNumRenderLoopsExecuted + 1) != mNumUpdateLoopsExecuted);
+	while (mNumRenderLoopsExecuted != mNumUpdateLoopsExecuted);
 }
 
 ModelID VQEngine::CreateModel()
@@ -432,6 +453,24 @@ void VQEngine::Load_SceneData_Dispatch()
 
 	FSceneRepresentation SceneRep = mQueue_SceneLoad.front();
 	mQueue_SceneLoad.pop();
+
+	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
+	const Input& input                  = mInputStates.at(mpWinMain->GetHWND());
+
+	auto fnCreateSceneInstance = [&](const std::string& SceneType, std::unique_ptr<Scene>& pScene) -> void
+	{
+		     if (SceneType == "Default") pScene = std::make_unique<DefaultScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain);
+		else if (SceneType == "Sponza")  pScene = std::make_unique<SponzaScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain);
+	};
+
+	if (mpScene)
+	{
+		this->WaitUntilRenderingFinishes();
+		mpScene->Unload();
+	}
+
+	fnCreateSceneInstance(SceneRep.SceneName, mpScene);
+
 
 	// let the custom scene logic edit the scene representation
 	mpScene->StartLoading(SceneRep);

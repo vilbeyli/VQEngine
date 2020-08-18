@@ -156,7 +156,7 @@ void Scene::StartLoading(FSceneRepresentation& scene)
 
 	// CAMERA CONTROLLERS
 	// controllers need to be initialized after mCameras are populated in order
-	// to prevent dangling pointers in @pController->mpCamera
+	// to prevent dangling pointers in @pController->mpCamera (circular ptrs)
 	for (size_t i = 0; i < mCameras.size(); ++i)
 	{
 		if (scene.Cameras[i].bInitializeCameraController)
@@ -215,9 +215,6 @@ void Scene::RenderUI()
 	// TODO
 }
 
-template<typename T> static inline T CircularIncrement(T currVal, T maxVal) { return (currVal + 1) % maxVal; }
-template<typename T> static inline T CircularDecrement(T currVal, T maxVal) { return currVal == 0 ? maxVal : currVal-1; }
-
 void Scene::HandleInput()
 {
 	const bool bIsShiftDown = mInput.IsKeyDown("Shift");
@@ -233,32 +230,12 @@ void Scene::HandleInput()
 
 	if (mInput.IsKeyTriggered("PageUp"))
 	{
-		// Change Scene
-		if (bIsShiftDown)
-		{
-			
-		}
-
-		// Change Env Map
-		else
-		{
-			mIndex_ActiveEnvironmentMapPreset = CircularIncrement(mIndex_ActiveEnvironmentMapPreset, NumEnvMaps);
-			mEngine.StartLoadingEnvironmentMap(mIndex_ActiveEnvironmentMapPreset);
-		}
+		mIndex_ActiveEnvironmentMapPreset = CircularIncrement(mIndex_ActiveEnvironmentMapPreset, NumEnvMaps);
+		mEngine.StartLoadingEnvironmentMap(mIndex_ActiveEnvironmentMapPreset);
 	}
 	if (mInput.IsKeyTriggered("PageDown"))
 	{
-		// Change Scene
-		if (bIsShiftDown)
-		{
-
-		}
-
-		// Change Env Map
-		else
-		{
-			mIndex_ActiveEnvironmentMapPreset = CircularDecrement(mIndex_ActiveEnvironmentMapPreset, NumEnvMaps - 1);
-			mEngine.StartLoadingEnvironmentMap(mIndex_ActiveEnvironmentMapPreset);
-		}
+		mIndex_ActiveEnvironmentMapPreset = CircularDecrement(mIndex_ActiveEnvironmentMapPreset, NumEnvMaps - 1);
+		mEngine.StartLoadingEnvironmentMap(mIndex_ActiveEnvironmentMapPreset);
 	}
 }

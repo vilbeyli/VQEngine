@@ -18,8 +18,6 @@
 
 #include "VQEngine.h"
 
-#include "../Scenes/Scenes.h"
-
 #include <cassert>
 
 #ifdef _DEBUG
@@ -257,16 +255,7 @@ void VQEngine::InitializeEnvironmentMaps()
 
 void VQEngine::InitializeScenes()
 {
-	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
-	const Input&                  input = mInputStates.at(mpWinMain->GetHWND());
 	std::vector<std::string>& mSceneNames = mResourceNames.mSceneNames;
-
-	auto fnCreateSceneInstance = [&](const std::string& SceneType, std::unique_ptr<Scene>& pScene) -> void
-	{
-		     if (SceneType == "Default")    pScene = std::make_unique<DefaultScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain);
-		else if (SceneType == "Sponza")     pScene = std::make_unique<SponzaScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain);
-	};
-
 
 	// Read Scene Index Mappings from file and initialize @mSceneNames
 	{
@@ -290,9 +279,6 @@ void VQEngine::InitializeScenes()
 		assert(it != SceneReps.end());
 		mSettings.StartupScene = "Default";
 	}
-
-	// Create the scene instance
-	fnCreateSceneInstance(mSettings.StartupScene, mpScene);
 
 	// ---------------------------------------------
 

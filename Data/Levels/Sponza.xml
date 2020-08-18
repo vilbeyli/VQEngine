@@ -66,7 +66,7 @@
             <Scale>1 1 1</Scale>
         </Transform>
         <Model>
-            <Mesh>Cube</Mesh>
+            <Mesh>Triangle</Mesh>
             <Material>
                 <Diffuse></Diffuse>
             </Material>

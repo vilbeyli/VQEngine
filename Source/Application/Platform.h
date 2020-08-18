@@ -63,3 +63,7 @@ struct FStartupParameters
 LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 // -------------------------------------------------------------------------------
+
+
+template<typename T> static inline T CircularIncrement(T currVal, T maxVal) { return (currVal + 1) % maxVal; }
+template<typename T> static inline T CircularDecrement(T currVal, T maxVal) { return currVal == 0 ? maxVal : currVal - 1; }
