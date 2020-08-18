@@ -46,32 +46,6 @@
         </FirstPerson>
     </Camera>
 
-    <GameObject>
-        <Transform>
-            <Position>-10 0 0</Position>
-            <Quaternion>0 0 0 1</Quaternion>
-            <Scale>1 1 1</Scale>
-        </Transform>
-        <Model>
-            <Mesh>Triangle</Mesh>
-            <Material>
-                <Diffuse></Diffuse>
-            </Material>
-        </Model>
-    </GameObject>
-    <GameObject>
-        <Transform>
-            <Position>-5 0 0</Position>
-            <Quaternion>0 0 0 1</Quaternion>
-            <Scale>1 1 1</Scale>
-        </Transform>
-        <Model>
-            <Mesh>Cube</Mesh>
-            <Material>
-                <Diffuse></Diffuse>
-            </Material>
-        </Model>
-    </GameObject>
 
     <PostProcess>
     <!-- TBA -->

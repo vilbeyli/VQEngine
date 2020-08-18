@@ -67,8 +67,11 @@ public:
 
 			NUM_CUBEMAP_LOOK_DIRECTIONS
 		};
+#if 0
+		// TODO implement with Lights
 		static DirectX::XMMATRIX CalculateViewMatrix(ECubeMapLookDirections cubeFace, const vec3& position = vec3::Zero);
 		inline static DirectX::XMMATRIX CalculateViewMatrix(int face, const vec3& position = vec3::Zero) { return CalculateViewMatrix(static_cast<ECubeMapLookDirections>(face), position); }
+#endif
 	};
 	static std::vector<uint8> GenerateTexture_Checkerboard(uint Dimension);
 

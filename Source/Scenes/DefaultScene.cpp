@@ -20,8 +20,8 @@ void DefaultScene::UpdateScene(float dt, FSceneView& SceneView)
 	if (mInput.IsKeyTriggered('R'))
 	{
 		FCameraParameters params = mSceneRepresentation.Cameras[mIndex_SelectedCamera];
-		params.Width  = static_cast<float>(mpWindow->GetWidth() );
-		params.Height = static_cast<float>(mpWindow->GetHeight());
+		params.ProjectionParams.ViewportWidth  = static_cast<float>(mpWindow->GetWidth() );
+		params.ProjectionParams.ViewportHeight = static_cast<float>(mpWindow->GetHeight());
 		cam.InitializeCamera(params);
 	}
 

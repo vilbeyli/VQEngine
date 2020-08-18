@@ -35,14 +35,13 @@ class Input;
 // ---------------------------------------------------------
 struct FProjectionMatrixParameters
 {
-	float ViewporWidth;  // needed for orthographic projection
-	float ViewporHeight; // needed for orthographic projection
+	float ViewportWidth;  // needed for orthographic projection
+	float ViewportHeight; // needed for orthographic projection
 	float NearZ;
 	float FarZ;
 	float FieldOfView;
 	bool bPerspectiveProjection;
 };
-#if 0  // TODO: remove duplication
 struct FCameraParameters
 {
 	float x, y, z; // position
@@ -50,31 +49,12 @@ struct FCameraParameters
 
 	FProjectionMatrixParameters ProjectionParams;
 
-	bool FirstPerson; // First Person / orbit
-	float TranslationSpeed;
-	float AngularSpeed;
-	float Drag;
-};
-#else
-struct FCameraParameters
-{
-	float x, y, z; // position
-	float Yaw, Pitch; // in degrees
-	
-	bool bPerspectiveProjection; // perspective / orthographic
-	float Width;
-	float Height;
-	float NearPlane;
-	float FarPlane;
-	float FovV_Degrees;
-
 	bool bInitializeCameraController;
 	bool bFirstPerson; // First Person / orbit
 	float TranslationSpeed;
 	float AngularSpeed;
 	float Drag;
 };
-#endif
 
 struct FCameraInput
 {

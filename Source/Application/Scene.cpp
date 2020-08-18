@@ -146,8 +146,8 @@ void Scene::StartLoading(FSceneRepresentation& scene)
 	// CAMERAS
 	for (FCameraParameters& param : scene.Cameras)
 	{
-		param.Width  = static_cast<float>( mpWindow->GetWidth()  );
-		param.Height = static_cast<float>( mpWindow->GetHeight() );
+		param.ProjectionParams.ViewportWidth  = static_cast<float>( mpWindow->GetWidth()  );
+		param.ProjectionParams.ViewportHeight = static_cast<float>( mpWindow->GetHeight() );
 
 		Camera c;
 		c.InitializeCamera(param);

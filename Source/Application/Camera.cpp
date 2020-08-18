@@ -64,20 +64,8 @@ Camera Camera::Clone()
 
 void Camera::InitializeCamera(const FCameraParameters& data)
 {
-	const auto& NEAR_PLANE   = data.NearPlane;
-	const auto& FAR_PLANE    = data.FarPlane;
-	const float AspectRatio  = data.Width / data.Height;
-	const float VerticalFoV  = data.FovV_Degrees * DEG2RAD;
-	const float& ViewportX   = data.Width;
-	const float& ViewportY   = data.Height;
-
-	this->mProjParams.NearZ = NEAR_PLANE;
-	this->mProjParams.FarZ  = FAR_PLANE;
-	this->mProjParams.ViewporHeight = ViewportY;
-	this->mProjParams.ViewporWidth  = ViewportX;
-	this->mProjParams.FieldOfView = data.FovV_Degrees * DEG2RAD;
-	this->mProjParams.bPerspectiveProjection = data.bPerspectiveProjection;
-
+	this->mProjParams = data.ProjectionParams;
+	this->mProjParams.FieldOfView *= DEG2RAD; // convert FoV to radians
 	mYaw = mPitch = 0;
 	SetProjectionMatrix(this->mProjParams);
 	SetPosition(data.x, data.y, data.z);
@@ -99,12 +87,12 @@ void Camera::InitializeController(bool bFirstPersonController)
 
 void Camera::SetProjectionMatrix(const FProjectionMatrixParameters& params)
 {
-	assert(params.ViewporHeight > 0.0f);
-	const float AspectRatio = params.ViewporWidth / params.ViewporHeight;
+	assert(params.ViewportHeight > 0.0f);
+	const float AspectRatio = params.ViewportWidth / params.ViewportHeight;
 
 	mMatProj = params.bPerspectiveProjection
 		? MakePerspectiveProjectionMatrix(params.FieldOfView, AspectRatio, params.NearZ, params.FarZ)
-		: MakeOthographicProjectionMatrix(params.ViewporWidth, params.ViewporHeight, params.NearZ, params.FarZ);
+		: MakeOthographicProjectionMatrix(params.ViewportWidth, params.ViewportHeight, params.NearZ, params.FarZ);
 }
 
 void Camera::UpdateViewMatrix()

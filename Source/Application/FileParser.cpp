@@ -556,11 +556,11 @@ std::vector< FSceneRepresentation> VQEngine::ParseSceneFiles()
 					{
 						std::string projVal;
 						fnParseXMLStringVal(pProj, projVal);
-						cam.bPerspectiveProjection = projVal == "Perspective";
+						cam.ProjectionParams.bPerspectiveProjection = projVal == "Perspective";
 					}
-					if(pFoV ) fnParseXMLFloatVal(pFoV, cam.FovV_Degrees);
-					if(pNear) fnParseXMLFloatVal(pNear, cam.NearPlane);
-					if(pFar ) fnParseXMLFloatVal(pFar, cam.FarPlane);
+					if(pFoV ) fnParseXMLFloatVal(pFoV , cam.ProjectionParams.FieldOfView);
+					if(pNear) fnParseXMLFloatVal(pNear, cam.ProjectionParams.NearZ);
+					if(pFar ) fnParseXMLFloatVal(pFar , cam.ProjectionParams.FarZ);
 						
 
 					// attributes----------------------------------------
