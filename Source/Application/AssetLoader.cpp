@@ -18,11 +18,68 @@
 
 #include "AssetLoader.h"
 
+#include "Libs/VQUtils/Source/Multithreading.h"
+#include "Libs/VQUtils/Source/utils.h"
+
 Model AssetLoader::ImportModel_obj(const std::string& objFilePath, std::string ModelName)
 {
 	Model::Data modelData;
 
+	Log::Info("ImportModel_obj: %s - %s", ModelName.c_str(), objFilePath.c_str());
 	// TODO: assimp model import
 
 	return Model(objFilePath, ModelName, std::move(modelData));
 }
+
+Model AssetLoader::ImportModel_gltf(const std::string& objFilePath, std::string ModelName)
+{
+	assert(false); // TODO
+	return Model();
+}
+
+void AssetLoader::QueueAssetLoad(const std::string& ModelPath)
+{
+	const std::string FileExtension = DirectoryUtil::GetFileExtension(ModelPath);
+
+	static std::unordered_map < std::string, FModelLoadParams::pfnImportModel_t> MODEL_IMPORT_FUNCTIONS =
+	{
+		  { "obj" , AssetLoader::ImportModel_obj }
+		, { "gltf", AssetLoader::ImportModel_gltf } // TODO
+	};
+
+	std::unique_lock<std::mutex> lk(mMtxQueue_ModelLoad);
+	mModelLoadQueue.push({ModelPath, MODEL_IMPORT_FUNCTIONS.at(FileExtension)});
+}
+
+void AssetLoader::StartLoadingAssets()
+{
+	if (mModelLoadQueue.empty())
+	{
+		Log::Warning("AssetLoader::StartLoadingAssets(): no models to load");
+		return;
+	}
+
+	// process model load queue
+	std::unique_lock<std::mutex> lk(mMtxQueue_ModelLoad);
+	do
+	{
+		FModelLoadParams ModelLoadParams = mModelLoadQueue.front();
+		const std::string& ModelPath = ModelLoadParams.ModelPath;
+		mModelLoadQueue.pop();
+
+		// eliminate duplicates
+		if (mUniqueModelPaths.find(ModelPath) == mUniqueModelPaths.end())
+		{
+			mUniqueModelPaths.insert(ModelPath);
+
+			// start loading
+			mWorkers.AddTask([=]()
+			{
+				ModelLoadParams.pfnImportModel(ModelLoadParams.ModelPath, "");
+			});
+		}
+	} while (!mModelLoadQueue.empty());
+
+	mUniqueModelPaths.clear();
+}
+

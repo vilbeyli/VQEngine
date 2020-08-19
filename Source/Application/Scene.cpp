@@ -34,6 +34,7 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 	, mGameObjectPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
 	, mTransformPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
 	, mResourceNames(engine.GetResourceNames())
+	, mAssetLoader(engine.GetAssetLoader())
 {}
 
 void Scene::Update(float dt, int FRAME_DATA_INDEX)
@@ -118,7 +119,8 @@ void Scene::StartLoading(FSceneRepresentation& scene)
 		{
 			model.mbLoaded = false;
 			model.mModelName = ObjRep.ModelName;
-			model.mModelDirectory = ObjRep.ModelFilePath;
+			model.mModelPath = ObjRep.ModelFilePath;
+			mAssetLoader.QueueAssetLoad(model.mModelPath);
 		}
 		
 
@@ -142,6 +144,7 @@ void Scene::StartLoading(FSceneRepresentation& scene)
 		// dispatch workers
 		assert(false); // TODO
 	}
+	mAssetLoader.StartLoadingAssets();
 
 	// CAMERAS
 	for (FCameraParameters& param : scene.Cameras)

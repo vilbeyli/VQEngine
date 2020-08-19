@@ -128,7 +128,7 @@ struct FResourceNames
 class VQEngine : public IWindowOwner
 {
 public:
-
+	VQEngine();
 	// ---------------------------------------------------------
 	// Main Thread
 	// ---------------------------------------------------------
@@ -239,6 +239,7 @@ public:
 	      Model& GetModel(ModelID id);
 	const Model& GetModel(ModelID id) const;
 	inline const FResourceNames& GetResourceNames() const { return mResourceNames; }
+	inline AssetLoader& GetAssetLoader() { return mAssetLoader; }
 
 
 
@@ -317,9 +318,8 @@ private:
 
 	// scene
 	FLoadingScreenData              mLoadingScreenData;
-	std::queue<FSceneRepresentation> mQueue_SceneLoad;
+	std::queue<std::string>         mQueue_SceneLoad;
 	
-	std::vector< FSceneRepresentation> mSceneRepresentations;
 	int                             mIndex_SelectedScene;
 	std::unique_ptr<Scene>          mpScene;
 
@@ -429,7 +429,7 @@ private:
 	static std::vector<std::pair<std::string, int>> ParseSceneIndexMappingFile();
 	static std::vector<FEnvironmentMapDescriptor>   ParseEnvironmentMapsFile();
 	static std::vector<FDisplayHDRProfile>          ParseHDRProfilesFile();
-	static std::vector<FSceneRepresentation>        ParseSceneFiles();
+	static FSceneRepresentation                     ParseSceneFile(const std::string& SceneFile);
 
 public:
 	// Supported HDR Formats { DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_FORMAT_R16G16B16A16_FLOAT  }

@@ -240,7 +240,7 @@ void VQEngine::HandleEngineInput()
 			// Scene switching
 			if (bIsShiftDown)
 			{
-				const int NumScenes = static_cast<int>(mSceneRepresentations.size());
+				const int NumScenes = static_cast<int>(mResourceNames.mSceneNames.size());
 				if (input.IsKeyTriggered("PageUp") && !mbLoadingLevel)  { mIndex_SelectedScene = CircularIncrement(mIndex_SelectedScene, NumScenes);     this->StartLoadingScene(mIndex_SelectedScene); }
 				if (input.IsKeyTriggered("PageDown") && !mbLoadingLevel){ mIndex_SelectedScene = CircularDecrement(mIndex_SelectedScene, NumScenes - 1); this->StartLoadingScene(mIndex_SelectedScene); }
 			}
@@ -388,8 +388,10 @@ void VQEngine::StartLoadingScene(int IndexScene)
 	// get scene representation 
 	const std::string& SceneName = mResourceNames.mSceneNames[IndexScene];
 
+
+
 	// queue the selected scene for loading
-	mQueue_SceneLoad.push(mSceneRepresentations[IndexScene]);
+	mQueue_SceneLoad.push(mResourceNames.mSceneNames[IndexScene]);
 
 	mAppState = INITIALIZING;
 	Log::Info("StartLoadingScene: %d", IndexScene);
@@ -465,8 +467,9 @@ void VQEngine::Load_SceneData_Dispatch()
 	if (mQueue_SceneLoad.empty())
 		return;
 
-	FSceneRepresentation SceneRep = mQueue_SceneLoad.front();
+	const std::string SceneFileName = mQueue_SceneLoad.front();
 	mQueue_SceneLoad.pop();
+	
 
 	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
 	const Input& input                  = mInputStates.at(mpWinMain->GetHWND());
@@ -485,8 +488,9 @@ void VQEngine::Load_SceneData_Dispatch()
 		mpScene->Unload();
 	}
 
+	const std::string SceneFilePath = "Data/Levels/" + SceneFileName + ".xml";
+	FSceneRepresentation SceneRep = VQEngine::ParseSceneFile(SceneFilePath);
 	fnCreateSceneInstance(SceneRep.SceneName, mpScene);
-
 
 	// let the custom scene logic edit the scene representation
 	mpScene->StartLoading(SceneRep);

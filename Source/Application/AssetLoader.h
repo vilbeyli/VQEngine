@@ -19,11 +19,46 @@
 
 #include "Model.h"
 
+#include<set>
+
+class ThreadPool;
+
 class AssetLoader
 {
-
+public:
+	static Model ImportModel_obj (const std::string& objFilePath, std::string ModelName = "NONE"); // TODO: rename to LoadModel_obj() ?
+	static Model ImportModel_gltf(const std::string& objFilePath, std::string ModelName = "NONE"); // TODO: rename to LoadModel_gltf() ?
 
 public:
-	static Model ImportModel_obj(const std::string& objFilePath, std::string ModelName = "NONE"); // TODO: rename to LoadModel_obj() ?
 
+	AssetLoader(ThreadPool& WorkerThreads)
+		: mWorkers(WorkerThreads)
+	{}
+
+	void QueueAssetLoad(const std::string& ModelPath);
+	void StartLoadingAssets();
+
+private:
+	struct FModelLoadParams
+	{
+		using pfnImportModel_t = Model(*)(const std::string& objFilePath, std::string ModelName);
+		std::string      ModelPath;
+		pfnImportModel_t pfnImportModel;
+	};
+	struct FTextureLoadParams
+	{
+		std::string TexturePath;
+	};
+
+private:
+	ThreadPool& mWorkers;
+
+	std::queue<FModelLoadParams> mModelLoadQueue;
+	std::set<std::string> mUniqueModelPaths;
+
+	std::queue< FTextureLoadParams> mTextureLoadQueue;
+	std::set<std::string> mUniqueTexturePaths;
+
+	std::mutex mMtxQueue_ModelLoad;
+	std::mutex mMtxQueue_TextureLoad;
 };

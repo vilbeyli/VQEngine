@@ -60,21 +60,20 @@ struct Model
 public:
 	struct Data
 	{
-		std::vector<MeshID>         mMeshIDs;
-		MeshMaterialLookup_t        mOpaqueMaterials;
-		MeshMaterialLookup_t        mTransparentMaterials;
+		std::vector<MeshID>  mMeshIDs;
+		MeshMaterialLookup_t mOpaqueMaterials;
+		MeshMaterialLookup_t mTransparentMaterials;
 		inline bool HasMaterial() const { return !mOpaqueMaterials.empty() || !mTransparentMaterials.empty(); }
 		bool AddMaterial(MeshID meshID, MaterialID matID, bool bTransparent = false);
 	};
 
-	void AddMaterialToMesh(MeshID meshID, MaterialID materialID, bool bTransparent);
-	void OverrideMaterials(MaterialID materialID);
+	//---------------------------------------
 
 	Model() = default;
 	Model(const std::string& directoryFullPath, const std::string& modelName, Data&& modelDataIn)
 		: mData(modelDataIn)
 		, mModelName(modelName)
-		, mModelDirectory(directoryFullPath)
+		, mModelPath(directoryFullPath)
 		, mbLoaded(true)
 	{}
 
@@ -82,53 +81,9 @@ public:
 
 	Data         mData;
 	std::string  mModelName;
-	std::string  mModelDirectory;
+	std::string  mModelPath;
 	bool         mbLoaded = false;
-
-private:
-	friend class GameObject;
-	friend class Scene;
-
-	// queue of materials to be assigned in case the model has not been loaded yet.
-	std::queue<MaterialID> mMaterialAssignmentQueue;
 };
 
 
 
-
-//
-// MODEL LOADER
-//
-class ModelLoader
-{
-public:
-	inline void Initialize(VQRenderer* pRenderer) { mpRenderer = pRenderer; }
-
-	// Loads the Model in a serial fashion - blocks thread
-	//
-	Model	LoadModel(const std::string& modelPath, Scene* pScene);
-
-	// Ends async loading.
-	//
-	Model	LoadModel_Async(const std::string& modelPath, Scene* pScene);
-
-
-	void UnloadSceneModels(Scene* pScene);
-
-
-private:
-	static const char* sRootFolderModels;
-
-
-	using ModelLookUpTable             = std::unordered_map<std::string, Model>;
-	using PerSceneModelNameLookupTable = std::unordered_map<Scene*, std::vector<std::string>>;
-
-
-private:
-	VQRenderer* mpRenderer;
-	ModelLookUpTable mLoadedModels;
-	PerSceneModelNameLookupTable mSceneModels;
-
-	std::mutex mLoadedModelMutex;
-	std::mutex mSceneModelsMutex;
-};

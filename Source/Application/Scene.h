@@ -26,6 +26,7 @@
 #include "Memory.h"
 
 class Input;
+class AssetLoader;
 struct FResourceNames;
 
 //------------------------------------------------------
@@ -202,6 +203,7 @@ protected:
 	const std::unique_ptr<Window>& mpWindow;
 	VQEngine&                      mEngine;
 	const FResourceNames&          mResourceNames;
+	AssetLoader&                   mAssetLoader;
 
 	FSceneRepresentation mSceneRepresentation;
 //----------------------------------------------------------------------------------------------------------------
