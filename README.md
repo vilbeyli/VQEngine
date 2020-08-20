@@ -128,3 +128,4 @@ VQE supports the following command line parameters:
 - [D3D12MA](https://github.com/GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator)
 - [stb](https://github.com/nothings/stb)
 - [tinyxml2](https://github.com/leethomason/tinyxml2)
+- [assimp](https://github.com/assimp/assimp)

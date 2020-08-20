@@ -101,9 +101,20 @@ endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 
 add_link_options(/SUBSYSTEM:WINDOWS)
 
+# add submodules
 add_subdirectory(Libs/VQUtils)
 add_subdirectory(Libs/D3D12MA)
 add_subdirectory(Source/Renderer)
+
+#add_definitions(
+#    -DASSIMP_BUILD_ASSIMP_TOOLS=OFF 
+#    -DASSIMP_NO_EXPORT=ON 
+#    -DBUILD_SHARED_LIBS=OFF 
+#    -DASSIMP_BUILD_TESTS=OFF 
+#    -DASSIMP_INSTALL=OFF
+#)
+add_subdirectory(Libs/assimp)
+
 
 source_group("Config"   FILES ${Config})
 source_group("Resource" FILES ${Resource})
@@ -135,9 +146,19 @@ foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
 endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 17)
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+set_target_properties(assimp PROPERTIES FOLDER assimp)
+set_target_properties(IrrXML PROPERTIES FOLDER assimp)
+set_target_properties(uninstall PROPERTIES FOLDER assimp)
+set_target_properties(UpdateAssimpLibsDebugSymbolsAndDLLs PROPERTIES FOLDER assimp)
+set_target_properties(zlibstatic PROPERTIES FOLDER assimp)
+
+set_target_properties(VQRenderer PROPERTIES FOLDER Libs)
+set_target_properties(VQUtils PROPERTIES FOLDER Libs)
+set_target_properties(D3D12MA PROPERTIES FOLDER Libs)
 
 # Make sure the compiler can find include files for the libraries
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${Includes})
 
 
-target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer )
+target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer assimp)

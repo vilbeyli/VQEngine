@@ -128,7 +128,19 @@ exit /b 0
 ::
 :RunCmake
 
-cmake ..\.. -G "Visual Studio 16 2019" -A x64
+:: assimp importers
+set ASSIMP_IMPORT_FORMATS=-DASSIMP_BUILD_OBJ_IMPORTER=TRUE
+:: assimp build options
+set CMAKE_ASSIMP_PARAMETERS=-DASSIMP_BUILD_ASSIMP_TOOLS=OFF
+set CMAKE_ASSIMP_PARAMETERS=!CMAKE_ASSIMP_PARAMETERS! -DASSIMP_NO_EXPORT=ON 
+set CMAKE_ASSIMP_PARAMETERS=!CMAKE_ASSIMP_PARAMETERS! -DASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT=FALSE
+set CMAKE_ASSIMP_PARAMETERS=!CMAKE_ASSIMP_PARAMETERS! -DBUILD_SHARED_LIBS=OFF 
+set CMAKE_ASSIMP_PARAMETERS=!CMAKE_ASSIMP_PARAMETERS! -DASSIMP_BUILD_TESTS=OFF 
+set CMAKE_ASSIMP_PARAMETERS=!CMAKE_ASSIMP_PARAMETERS! -DASSIMP_INSTALL=OFF
+set CMAKE_ASSIMP_PARAMETERS=!CMAKE_ASSIMP_PARAMETERS! !ASSIMP_IMPORT_FORMATS!
+
+
+cmake ..\.. -G "Visual Studio 16 2019" -A x64 !CMAKE_ASSIMP_PARAMETERS!
 
 if !errorlevel! EQU 0 (
     echo [VQBuild] Success!
@@ -140,7 +152,7 @@ if !errorlevel! EQU 0 (
     echo [VQBuild] cmake VS2019 failed, retrying with VS 2017...
     echo [VQBuild] removing %~dp0SolutionFiles ...
     rmdir /S /Q  %~dp0SolutionFiles
-    cmake ..\.. -G "Visual Studio 15 2017" -A x64
+    cmake ..\.. -G "Visual Studio 15 2017" -A x64 !CMAKE_ASSIMP_PARAMETERS!
     if !errorlevel! NEQ 0 (
         echo [VQBuild] cmake VS2017 failed, retrying without specifying VS version...
         echo [VQBuild] removing %~dp0SolutionFiles ...
