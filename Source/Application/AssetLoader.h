@@ -26,6 +26,7 @@
 
 class ThreadPool;
 class Scene;
+class GameObject;
 
 class AssetLoader
 {
@@ -47,9 +48,10 @@ public:
 	{
 		using pfnImportModel_t = ModelID(*)(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName);
 		
+		GameObject*      pObject = nullptr;
 		std::string      ModelPath;
 		std::string      ModelName;
-		pfnImportModel_t pfnImportModel;
+		pfnImportModel_t pfnImportModel = nullptr;
 	};
 	struct FTextureLoadParams
 	{
@@ -60,10 +62,10 @@ public:
 	struct FTextureLoadResult
 	{
 		ETextureType type;
-		std::future<TextureID> texLoadResult;
+		std::shared_future<TextureID> texLoadResult;
 	};
-	using ModelLoadResult_t    = std::future<ModelID>;
-	using ModelLoadResults_t   = std::vector<ModelLoadResult_t>;
+	using ModelLoadResult_t    = std::shared_future<ModelID>;
+	using ModelLoadResults_t   = std::unordered_map<GameObject*, ModelLoadResult_t>;
 	using TextureLoadResult_t  = FTextureLoadResult;
 	using TextureLoadResults_t = std::unordered_multimap<MaterialID, TextureLoadResult_t>;
 public:
@@ -72,7 +74,7 @@ public:
 		, mRenderer(renderer)
 	{}
 
-	void QueueModelLoad(const std::string& ModelPath, const std::string& ModelName);
+	void QueueModelLoad(GameObject* pObject, const std::string& ModelPath, const std::string& ModelName);
 	ModelLoadResults_t StartLoadingModels(Scene* pScene);
 
 	void QueueTextureLoad(const FTextureLoadParams& TexLoadParam);

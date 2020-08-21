@@ -161,22 +161,29 @@ void Scene::StartLoading(FSceneRepresentation& scene)
 
 	auto fnDeserializeGameObject = [&](GameObjectRepresentation& ObjRep)
 	{
+		// GameObject
+		GameObject* pObj = mGameObjectPool.Allocate(1);
+		pObj->mModelID = INVALID_ID;
+		pObj->mTransformID = INVALID_ID;
+
 		// Transform
 		Transform* pTransform = mTransformPool.Allocate(1);
 		*pTransform = std::move(ObjRep.tf);
 		mpTransforms.push_back(pTransform);
 
 		TransformID tID = static_cast<TransformID>(mpTransforms.size() - 1);
+		pObj->mTransformID = tID;
 
 		// Model
 		const bool bModelIsBuiltinMesh = !ObjRep.BuiltinMeshName.empty();
 		const bool bModelIsLoadedFromFile = !ObjRep.ModelFilePath.empty();
 		assert(bModelIsBuiltinMesh != bModelIsLoadedFromFile);
-		ModelID mID = this->CreateModel();
-		Model& model = mModels.at(mID);
 
 		if (bModelIsBuiltinMesh)
 		{
+			ModelID mID = this->CreateModel();
+			Model& model = mModels.at(mID);
+
 			// create/get mesh
 			MeshID meshID = mEngine.GetBuiltInMeshID(ObjRep.BuiltinMeshName);
 			model.mData.mOpaueMeshIDs.push_back(meshID);
@@ -184,20 +191,14 @@ void Scene::StartLoading(FSceneRepresentation& scene)
 			// TODO: material
 
 			model.mbLoaded = true;
+			pObj->mModelID = mID;
 		}
 		else
 		{
-			model.mbLoaded = false;
-			model.mModelName = ObjRep.ModelName;
-			model.mModelPath = ObjRep.ModelFilePath;
-			mAssetLoader.QueueModelLoad(model.mModelPath, model.mModelName);
+			mAssetLoader.QueueModelLoad(pObj, ObjRep.ModelFilePath, ObjRep.ModelName);
 		}
 		
 
-		// GameObject
-		GameObject* pObj = mGameObjectPool.Allocate(1);
-		pObj->mTransformID = tID;
-		pObj->mModelID = mID;
 		mpObjects.push_back(pObj);
 	};
 
@@ -215,7 +216,20 @@ void Scene::StartLoading(FSceneRepresentation& scene)
 		assert(false); // TODO
 	}
 
-	std::vector<std::future<ModelID>> vModelLoadResults = mAssetLoader.StartLoadingModels(this);
+	AssetLoader::ModelLoadResults_t vModelLoadResults = mAssetLoader.StartLoadingModels(this);
+
+	// TODO: serial model loading for now
+	{
+		for (auto it = vModelLoadResults.begin(); it != vModelLoadResults.end(); ++it)
+		{
+			GameObject* pObj = it->first;
+			AssetLoader::ModelLoadResult_t res = std::move(it->second);
+			
+			assert(res.valid());
+			res.wait();
+			pObj->mModelID = res.get();
+		}
+	}
 
 	// CAMERAS
 	for (FCameraParameters& param : scene.Cameras)

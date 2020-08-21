@@ -104,15 +104,17 @@ ModelID AssetLoader::ImportModel_obj(Scene* pScene, AssetLoader* pAssetLoader, V
 	model = Model(objFilePath, ModelName, std::move(data));
 
 	// SYNC POINT - wait for textures to load
-	for (auto it = vTexLoadResults.begin(); it != vTexLoadResults.end(); ++it)
 	{
-		const MaterialID& matID = it->first;
-		const TextureLoadResult_t& result = it->second;
-		assert(result.texLoadResult.valid());
-		result.texLoadResult.wait();
+		for (auto it = vTexLoadResults.begin(); it != vTexLoadResults.end(); ++it)
+		{
+			const MaterialID& matID = it->first;
+			const TextureLoadResult_t& result = it->second;
+			assert(result.texLoadResult.valid());
+			result.texLoadResult.wait();
+		}
 	}
 
-	// wait for textures to be loaded and assign TextureIDs;
+	// assign TextureIDs to the materials;
 	for (FMaterialTextureAssignments& assignment : MaterialTextureAssignments)
 	{
 		Material& mat = pScene->GetMaterial(assignment.matID);
@@ -123,6 +125,7 @@ ModelID AssetLoader::ImportModel_obj(Scene* pScene, AssetLoader* pAssetLoader, V
 			const MaterialID& matID = it->first;
 			TextureLoadResult_t& result = it->second;
 
+			assert(result.texLoadResult.valid());
 			switch (result.type)
 			{
 			case DIFFUSE   : mat.diffuseMap   = result.texLoadResult.get(); break;
@@ -157,7 +160,7 @@ ModelID AssetLoader::ImportModel_gltf(Scene* pScene, AssetLoader* pAssetLoader, 
 // ASSET LOADER
 //----------------------------------------------------------------------------------------------------------------
 
-void AssetLoader::QueueModelLoad(const std::string& ModelPath, const std::string& ModelName)
+void AssetLoader::QueueModelLoad(GameObject* pObject, const std::string& ModelPath, const std::string& ModelName)
 {
 	const std::string FileExtension = DirectoryUtil::GetFileExtension(ModelPath);
 
@@ -168,7 +171,7 @@ void AssetLoader::QueueModelLoad(const std::string& ModelPath, const std::string
 	};
 
 	std::unique_lock<std::mutex> lk(mMtxQueue_ModelLoad);
-	mModelLoadQueue.push({ModelPath, ModelName, MODEL_IMPORT_FUNCTIONS.at(FileExtension)});
+	mModelLoadQueue.push({pObject, ModelPath, ModelName, MODEL_IMPORT_FUNCTIONS.at(FileExtension)});
 }
 
 AssetLoader::ModelLoadResults_t AssetLoader::StartLoadingModels(Scene* pScene)
@@ -195,11 +198,13 @@ AssetLoader::ModelLoadResults_t AssetLoader::StartLoadingModels(Scene* pScene)
 			mUniqueModelPaths.insert(ModelPath);
 
 			// start loading
-			std::future<ModelID> modelLoadResult = mWorkers.AddTask([=]()
+			std::future<ModelID> modelLoadResult = std::move(mWorkers.AddTask([=]()
 			{
 				return ModelLoadParams.pfnImportModel(pScene, this, pRenderer, ModelLoadParams.ModelPath, ModelLoadParams.ModelName);
-			});
-			ModelLoadResults.push_back(std::move(modelLoadResult));
+			}));
+
+			ModelLoadResults.emplace(std::make_pair(ModelLoadParams.pObject, std::move(modelLoadResult)));
+			//ModelLoadResults[ModelLoadParams.pObject] = std::move(modelLoadResult);
 		}
 	} while (!mModelLoadQueue.empty());
 
