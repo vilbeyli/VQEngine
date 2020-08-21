@@ -114,7 +114,7 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 		Log::Info("VQRenderer::CreateTextureFromFile(): %s", pFilePath);
 #endif
 	}
-	uploadHeap.Destroy();
+	uploadHeap.Destroy(); // this is VERY expensive, TODO: find another solution.
 	return ID;
 }
 

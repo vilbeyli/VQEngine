@@ -30,19 +30,42 @@ class Scene;
 class AssetLoader
 {
 public:
+	enum ETextureType
+	{
+		DIFFUSE = 0,
+		NORMALS,
+		SPECULAR,
+		ALPHA_MASK,
+		EMISSIVE,
+		HEIGHT,
+		METALNESS,
+		ROUGHNESS,
+
+		NUM_TEXTURE_TYPES
+	};
 	struct FModelLoadParams
 	{
 		using pfnImportModel_t = ModelID(*)(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName);
+		
 		std::string      ModelPath;
 		std::string      ModelName;
 		pfnImportModel_t pfnImportModel;
 	};
 	struct FTextureLoadParams
 	{
-		std::string TexturePath;
+		ETextureType TexType;
+		MaterialID   MatID;
+		std::string  TexturePath;
 	};
-	using ModelLoadResults_t   = std::vector<std::future<ModelID>>;
-	using TextureLoadResults_t = std::vector<std::future<TextureID>>;
+	struct FTextureLoadResult
+	{
+		ETextureType type;
+		std::future<TextureID> texLoadResult;
+	};
+	using ModelLoadResult_t    = std::future<ModelID>;
+	using ModelLoadResults_t   = std::vector<ModelLoadResult_t>;
+	using TextureLoadResult_t  = FTextureLoadResult;
+	using TextureLoadResults_t = std::unordered_multimap<MaterialID, TextureLoadResult_t>;
 public:
 	AssetLoader(ThreadPool& WorkerThreads, VQRenderer& renderer)
 		: mWorkers(WorkerThreads)

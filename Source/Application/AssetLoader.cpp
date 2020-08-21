@@ -39,11 +39,11 @@ using namespace DirectX;
 struct FMaterialTextureAssignments
 {
 	MaterialID matID;
-	AssetLoader::TextureLoadResults_t DiffuseIDs;
-	AssetLoader::TextureLoadResults_t SpecularIDs;
-	AssetLoader::TextureLoadResults_t NormalsIDs;
-	AssetLoader::TextureLoadResults_t HeightMapIDs;
-	AssetLoader::TextureLoadResults_t AlphaMapIDs;
+	std::vector<AssetLoader::FTextureLoadResult> DiffuseIDs;
+	std::vector<AssetLoader::FTextureLoadResult> SpecularIDs;
+	std::vector<AssetLoader::FTextureLoadResult> NormalsIDs;
+	std::vector<AssetLoader::FTextureLoadResult> HeightMapIDs;
+	std::vector<AssetLoader::FTextureLoadResult> AlphaMapIDs;
 };
 
 Model::Data ProcessAssimpNode(
@@ -96,38 +96,48 @@ ModelID AssetLoader::ImportModel_obj(Scene* pScene, AssetLoader* pAssetLoader, V
 	std::vector<FMaterialTextureAssignments> MaterialTextureAssignments;
 	Model::Data data = ProcessAssimpNode(pAiScene->mRootNode, pAiScene, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments);
 
-	std::vector<std::future<TextureID>> v = pAssetLoader->StartLoadingTextures();
+	TextureLoadResults_t vTexLoadResults = pAssetLoader->StartLoadingTextures();
 
 	// cache the imported model in Scene
 	ModelID mID = pScene->CreateModel();
 	Model& model = pScene->GetModel(mID);
 	model = Model(objFilePath, ModelName, std::move(data));
 
+	// SYNC POINT - wait for textures to load
+	for (auto it = vTexLoadResults.begin(); it != vTexLoadResults.end(); ++it)
+	{
+		const MaterialID& matID = it->first;
+		const TextureLoadResult_t& result = it->second;
+		assert(result.texLoadResult.valid());
+		result.texLoadResult.wait();
+	}
+
 	// wait for textures to be loaded and assign TextureIDs;
 	for (FMaterialTextureAssignments& assignment : MaterialTextureAssignments)
 	{
 		Material& mat = pScene->GetMaterial(assignment.matID);
 
-		auto fnAssignTextureIDs = [](MaterialID matID, const std::string& strTexType, std::vector<std::future<TextureID>>& textures, TextureID& textureMapID)
+		auto pair_itBeginEnd = vTexLoadResults.equal_range(assignment.matID);
+		for (auto it = pair_itBeginEnd.first; it != pair_itBeginEnd.second; ++it)
 		{
-			if (textures.size() > 1)
-			{
-				Log::Warning("More than 1 %s in MaterialID=%d, will only use the first texture.", strTexType.c_str(), matID);
-			}
-			for (std::future<TextureID>& texIDs : textures)
-			{
-				assert(texIDs.valid());
-				texIDs.wait();
-				textureMapID = texIDs.get();
-				break; // TODO: currently only 1 diffuse map supported (no texture blending)
-			}
-		};
+			const MaterialID& matID = it->first;
+			TextureLoadResult_t& result = it->second;
 
-		fnAssignTextureIDs(assignment.matID, "Diffuse Map"  , assignment.DiffuseIDs  , mat.diffuseMap);
-		fnAssignTextureIDs(assignment.matID, "Specular Map" , assignment.SpecularIDs , mat.specularMap);
-		fnAssignTextureIDs(assignment.matID, "Normal Map"   , assignment.NormalsIDs  , mat.normalMap);
-		fnAssignTextureIDs(assignment.matID, "HeightMap Map", assignment.HeightMapIDs, mat.heightMap);
-		fnAssignTextureIDs(assignment.matID, "Alpha Map"    , assignment.AlphaMapIDs , mat.mask);	
+			switch (result.type)
+			{
+			case DIFFUSE   : mat.diffuseMap   = result.texLoadResult.get(); break;
+			case NORMALS   : mat.normalMap    = result.texLoadResult.get(); break;
+			case SPECULAR  : mat.specularMap  = result.texLoadResult.get(); break;
+			case ALPHA_MASK: mat.mask         = result.texLoadResult.get(); break;
+			case EMISSIVE  : mat.emissiveMap  = result.texLoadResult.get(); break;
+			case HEIGHT    : mat.heightMap    = result.texLoadResult.get(); break;
+			case METALNESS : mat.metallicMap  = result.texLoadResult.get(); break;
+			case ROUGHNESS : mat.roughnessMap = result.texLoadResult.get(); break;
+			default:
+				Log::Warning("TODO");
+				break;
+			}
+		}
 	}
 
 	t.Stop();
@@ -203,15 +213,14 @@ void AssetLoader::QueueTextureLoad(const FTextureLoadParams& TexLoadParam)
 	mTextureLoadQueue.push(TexLoadParam);
 }
 
-std::vector<std::future<TextureID>> AssetLoader::StartLoadingTextures()
+AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures()
 {
-	std::vector<std::future<TextureID>> TextureLoadResults;
+	TextureLoadResults_t TextureLoadResults;
 	if (mTextureLoadQueue.empty())
 	{
 		Log::Warning("AssetLoader::StartLoadingTextures(): no Textures to load");
 		return TextureLoadResults;
 	}
-
 	
 	// process model load queue
 	std::unique_lock<std::mutex> lk(mMtxQueue_ModelLoad);
@@ -225,21 +234,60 @@ std::vector<std::future<TextureID>> AssetLoader::StartLoadingTextures()
 		{
 			mUniqueTexturePaths.insert(TexLoadParams.TexturePath);
 
-			std::future<TextureID> loadResult = mWorkers.AddTask([this, TexLoadParams]()
+			std::future<TextureID> texLoadResult = std::move(mWorkers.AddTask([this, TexLoadParams]()
 			{
 				return mRenderer.CreateTextureFromFile(TexLoadParams.TexturePath.c_str());
-			});
-			TextureLoadResults.push_back(std::move(loadResult));
+			}));
+			TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, TextureLoadResult_t{ TexLoadParams.TexType, std::move(texLoadResult) }));
 		}
 	} while (!mTextureLoadQueue.empty());
 
 	mUniqueTexturePaths.clear();
 
-	return TextureLoadResults;
+	return std::move(TextureLoadResults);
 }
 
 
 
+static AssetLoader::ETextureType GetTextureType(aiTextureType aiType)
+{
+	switch (aiType)
+	{
+	case aiTextureType_NONE:      return AssetLoader::ETextureType::NUM_TEXTURE_TYPES; break;
+	case aiTextureType_DIFFUSE:   return AssetLoader::ETextureType::DIFFUSE; break;
+	case aiTextureType_SPECULAR:  return AssetLoader::ETextureType::SPECULAR; break;
+	case aiTextureType_EMISSIVE:  return AssetLoader::ETextureType::EMISSIVE; break;
+	case aiTextureType_HEIGHT:    return AssetLoader::ETextureType::HEIGHT; break;
+	case aiTextureType_NORMALS:   return AssetLoader::ETextureType::NORMALS; break;
+	case aiTextureType_OPACITY:   return AssetLoader::ETextureType::ALPHA_MASK; break;
+	case aiTextureType_METALNESS: return AssetLoader::ETextureType::METALNESS; break;
+	case aiTextureType_AMBIENT:   break;
+	case aiTextureType_SHININESS: break;
+	case aiTextureType_DISPLACEMENT:
+		break;
+	case aiTextureType_LIGHTMAP:
+		break;
+	case aiTextureType_REFLECTION:
+		break;
+	case aiTextureType_BASE_COLOR:
+		break;
+	case aiTextureType_NORMAL_CAMERA:
+		break;
+	case aiTextureType_EMISSION_COLOR:
+		break;
+	case aiTextureType_DIFFUSE_ROUGHNESS:
+		break;
+	case aiTextureType_AMBIENT_OCCLUSION:
+		break;
+	case aiTextureType_UNKNOWN:
+		break;
+	case _aiTextureType_Force32Bit:
+		break;
+	default:
+		break;
+	}
+	return AssetLoader::ETextureType::NUM_TEXTURE_TYPES;
+}
 
 
 //----------------------------------------------------------------------------------------------------------------
@@ -247,6 +295,7 @@ std::vector<std::future<TextureID>> AssetLoader::StartLoadingTextures()
 //----------------------------------------------------------------------------------------------------------------
 static std::vector<AssetLoader::FTextureLoadParams> GenerateTextureLoadParams(
 	  aiMaterial*        pMaterial
+	, MaterialID         matID
 	, aiTextureType      type
 	, const std::string& textureName
 	, const std::string& modelDirectory
@@ -260,6 +309,8 @@ static std::vector<AssetLoader::FTextureLoadParams> GenerateTextureLoadParams(
 		std::string path = str.C_Str();
 		AssetLoader::FTextureLoadParams params = {};
 		params.TexturePath = modelDirectory + path;
+		params.MatID = matID;
+		params.TexType = GetTextureType(type);
 		TexLoadParams.push_back(params);
 	}
 	return TexLoadParams;
@@ -344,17 +395,30 @@ static Model::Data ProcessAssimpNode(
 		// MATERIAL - http://assimp.sourceforge.net/lib_html/materials.html
 		aiMaterial* material = pAiScene->mMaterials[pAiMesh->mMaterialIndex];
 
+		// Every material assumed to have a name : Create material here
+		MaterialID matID = INVALID_ID;
+		aiString name;
+		if (aiReturn_SUCCESS == material->Get(AI_MATKEY_NAME, name))
+		{
+			const std::string ModelFolderName = DirectoryUtil::GetFlattenedFolderHierarchy(modelDirectory).back();
+			std::string uniqueMatName = name.C_Str();
+			// modelDirectory = "Data/Models/%MODEL_NAME%/"
+			// Materials use the following unique naming: %MODEL_NAME%/%MATERIAL_NAME%
+			uniqueMatName = ModelFolderName + "/" + uniqueMatName;
+			matID = pScene->CreateMaterial(uniqueMatName);
+		}
+
 		// get texture paths to load
 		FMaterialTextureAssignments MatAssignment = {};
-		std::vector<AssetLoader::FTextureLoadParams> diffuseMaps  = GenerateTextureLoadParams(material, aiTextureType_DIFFUSE, "texture_diffuse", modelDirectory);
-		std::vector<AssetLoader::FTextureLoadParams> specularMaps = GenerateTextureLoadParams(material, aiTextureType_SPECULAR, "texture_specular", modelDirectory);
-		std::vector<AssetLoader::FTextureLoadParams> normalMaps   = GenerateTextureLoadParams(material, aiTextureType_NORMALS, "texture_normal", modelDirectory);
-		std::vector<AssetLoader::FTextureLoadParams> heightMaps   = GenerateTextureLoadParams(material, aiTextureType_HEIGHT, "texture_height", modelDirectory);
-		std::vector<AssetLoader::FTextureLoadParams> alphaMaps    = GenerateTextureLoadParams(material, aiTextureType_OPACITY, "texture_alpha", modelDirectory);
+		std::vector<AssetLoader::FTextureLoadParams> diffuseMaps  = GenerateTextureLoadParams(material, matID, aiTextureType_DIFFUSE, "texture_diffuse", modelDirectory);
+		std::vector<AssetLoader::FTextureLoadParams> specularMaps = GenerateTextureLoadParams(material, matID, aiTextureType_SPECULAR, "texture_specular", modelDirectory);
+		std::vector<AssetLoader::FTextureLoadParams> normalMaps   = GenerateTextureLoadParams(material, matID, aiTextureType_NORMALS, "texture_normal", modelDirectory);
+		std::vector<AssetLoader::FTextureLoadParams> heightMaps   = GenerateTextureLoadParams(material, matID, aiTextureType_HEIGHT, "texture_height", modelDirectory);
+		std::vector<AssetLoader::FTextureLoadParams> alphaMaps    = GenerateTextureLoadParams(material, matID, aiTextureType_OPACITY, "texture_alpha", modelDirectory);
 
-		// start loading textures
+		// queue texture load
 		std::array<decltype(diffuseMaps)*, 5>             TexLoadParams   = { &diffuseMaps, &specularMaps, &normalMaps, &heightMaps, &alphaMaps };
-		std::array<AssetLoader::TextureLoadResults_t*, 5> TexAssignParams = 
+		std::array<std::vector<AssetLoader::FTextureLoadResult>*, 5> TexAssignParams = 
 		{ 
 			  &MatAssignment.DiffuseIDs
 			, &MatAssignment.SpecularIDs
@@ -372,28 +436,9 @@ static Model::Data ProcessAssimpNode(
 				pAssetLoader->QueueTextureLoad(param);
 				++iTex;
 			}
-
-			// kick off texture load workers only if we have at least 1 texture
-			if (iTex > 0)
-			{
-				//*TexAssignParams[iTexType] = std::move(pAssetLoader->StartLoadingTextures());
-			}
-
 			++iTexType;
 		}
 
-		// Every material assumed to have a name : Create material here
-		MaterialID matID = INVALID_ID;
-		aiString name;
-		if (aiReturn_SUCCESS == material->Get(AI_MATKEY_NAME, name))
-		{
-			const std::string ModelFolderName = DirectoryUtil::GetFlattenedFolderHierarchy(modelDirectory).back();
-			std::string uniqueMatName = name.C_Str();
-			// modelDirectory = "Data/Models/%MODEL_NAME%/"
-			// Materials use the following unique naming: %MODEL_NAME%/%MATERIAL_NAME%
-			uniqueMatName = ModelFolderName + "/" + uniqueMatName;
-			matID = pScene->CreateMaterial(uniqueMatName);
-		}
 
 		// unflatten the material texture assignments
 		MatAssignment.matID = matID;
