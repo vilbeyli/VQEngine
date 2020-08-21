@@ -290,7 +290,8 @@ void VQEngine::InitializeThreads()
 
 	mpSemUpdate.reset(new Semaphore(NUM_SWAPCHAIN_BACKBUFFERS, NUM_SWAPCHAIN_BACKBUFFERS));
 	mpSemRender.reset(new Semaphore(0                        , NUM_SWAPCHAIN_BACKBUFFERS));
-
+	
+	mbRenderThreadInitialized.store(false);
 	mbStopAllThreads.store(false);
 	mWorkers_Load.Initialize(NumWorkers, "LoadWorkers");
 	mRenderThread = std::thread(&VQEngine::RenderThread_Main, this);
