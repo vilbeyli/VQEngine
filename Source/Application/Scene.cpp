@@ -22,9 +22,78 @@
 #include "Window.h"
 #include "VQEngine.h"
 
+#define LOG_CACHED_RESOURCES_ON_LOAD 0
+#define LOG_RESOURCE_CREATE          1
+
 using namespace DirectX;
 
-Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const std::unique_ptr<Window>& pWin)
+static ModelID LAST_USED_MESH_ID = 0;
+
+//MeshID Scene::CreateMesh()
+//{
+//	ModelID id = LAST_USED_MESH_ID++;
+//
+//	mMeshes[id] = Mesh();
+//	return id;
+//}
+
+MeshID Scene::AddMesh(Mesh&& mesh)
+{
+	std::lock_guard<std::mutex> lk(mMtx_Meshes);
+	MeshID id = LAST_USED_MESH_ID++;
+	mMeshes[id] = mesh;
+	return id;
+}
+
+ModelID Scene::CreateModel()
+{
+	std::unique_lock<std::mutex> lk(mMtx_Models);
+	static ModelID LAST_USED_MODEL_ID = 0;
+	ModelID id = LAST_USED_MODEL_ID++;
+	mModels[id] = Model();
+	return id;
+}
+
+MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
+{
+	auto it = mLoadedMaterials.find(UniqueMaterialName);
+	if (it != mLoadedMaterials.end())
+	{
+#if LOG_CACHED_RESOURCES_ON_LOAD
+		Log::Info("Material already loaded: %s", UniqueMaterialName.c_str());
+#endif
+		return it->second;
+	}
+
+	static MaterialID LAST_USED_MATERIAL_ID = 0;
+	MaterialID id = INVALID_ID;
+	// critical section
+	{
+		std::unique_lock<std::mutex> lk(mMtx_Materials);
+		id = LAST_USED_MATERIAL_ID++;
+	}
+	mMaterials[id] = Material();
+	mLoadedMaterials[UniqueMaterialName] = id;
+#if LOG_RESOURCE_CREATE
+	Log::Info("Scene::CreateMaterial(): %s", UniqueMaterialName.c_str());
+#endif
+	return id;
+}
+
+Material& Scene::GetMaterial(MaterialID ID)
+{
+	// TODO: err handle
+	return mMaterials.at(ID);
+}
+
+Model& Scene::GetModel(ModelID id)
+{
+	// TODO: err handle
+	return mModels.at(id);
+}
+
+
+Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const std::unique_ptr<Window>& pWin, VQRenderer& renderer)
 	: mInput(input)
 	, mpWindow(pWin)
 	, mEngine(engine)
@@ -35,6 +104,7 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 	, mTransformPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
 	, mResourceNames(engine.GetResourceNames())
 	, mAssetLoader(engine.GetAssetLoader())
+	, mRenderer(renderer)
 {}
 
 void Scene::Update(float dt, int FRAME_DATA_INDEX)
@@ -72,7 +142,7 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 	{
 		const XMMATRIX matWorldTransform = mpTransforms.at(pObj->mTransformID)->WorldTransformationMatrix();
 
-		for (const MeshID id : mEngine.GetModel(pObj->mModelID).mData.mMeshIDs)
+		for (const MeshID id : mModels.at(pObj->mModelID).mData.mOpaueMeshIDs)
 		{
 			FMeshRenderCommand meshRenderCmd;
 			meshRenderCmd.meshID = id;
@@ -102,14 +172,14 @@ void Scene::StartLoading(FSceneRepresentation& scene)
 		const bool bModelIsBuiltinMesh = !ObjRep.BuiltinMeshName.empty();
 		const bool bModelIsLoadedFromFile = !ObjRep.ModelFilePath.empty();
 		assert(bModelIsBuiltinMesh != bModelIsLoadedFromFile);
-		ModelID mID = mEngine.CreateModel();
-		Model& model = mEngine.GetModel(mID);
+		ModelID mID = this->CreateModel();
+		Model& model = mModels.at(mID);
 
 		if (bModelIsBuiltinMesh)
 		{
 			// create/get mesh
 			MeshID meshID = mEngine.GetBuiltInMeshID(ObjRep.BuiltinMeshName);
-			model.mData.mMeshIDs.push_back(meshID);
+			model.mData.mOpaueMeshIDs.push_back(meshID);
 
 			// TODO: material
 
@@ -120,7 +190,7 @@ void Scene::StartLoading(FSceneRepresentation& scene)
 			model.mbLoaded = false;
 			model.mModelName = ObjRep.ModelName;
 			model.mModelPath = ObjRep.ModelFilePath;
-			mAssetLoader.QueueAssetLoad(model.mModelPath);
+			mAssetLoader.QueueModelLoad(model.mModelPath, model.mModelName);
 		}
 		
 
@@ -144,7 +214,8 @@ void Scene::StartLoading(FSceneRepresentation& scene)
 		// dispatch workers
 		assert(false); // TODO
 	}
-	mAssetLoader.StartLoadingAssets();
+
+	std::vector<std::future<ModelID>> vModelLoadResults = mAssetLoader.StartLoadingModels(this);
 
 	// CAMERAS
 	for (FCameraParameters& param : scene.Cameras)

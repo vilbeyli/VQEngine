@@ -17,23 +17,12 @@
 //	Contact: volkanilbeyli@gmail.com
 #pragma once
 
-//#include "Material.h" // TODO
-#include "Mesh.h"
 #include "Types.h"
 
-#include <vector>
 #include <unordered_map>
-#include <queue>
+#include <vector>
 
-#include <mutex>
-
-struct aiScene;
-struct aiNode;
-struct aiMesh;
-struct aiMaterial;
 class VQRenderer;
-// class GameObject; // TODO
-// class Scene; // TODO
 
 struct MeshRenderSettings
 {
@@ -60,7 +49,8 @@ struct Model
 public:
 	struct Data
 	{
-		std::vector<MeshID>  mMeshIDs;
+		std::vector<MeshID>  mOpaueMeshIDs;
+		std::vector<MeshID>  mTransparentMeshIDs;
 		MeshMaterialLookup_t mOpaqueMaterials;
 		MeshMaterialLookup_t mTransparentMaterials;
 		inline bool HasMaterial() const { return !mOpaqueMaterials.empty() || !mTransparentMaterials.empty(); }

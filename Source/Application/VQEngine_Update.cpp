@@ -358,18 +358,6 @@ MeshID VQEngine::GetBuiltInMeshID(const std::string& MeshName) const
 	return static_cast<MeshID>(it - mResourceNames.mBuiltinMeshNames.begin());
 }
 
-Model& VQEngine::GetModel(ModelID id)
-{
-	// TODO: err msg
-	return mModels.at(id);
-}
-
-const Model& VQEngine::GetModel(ModelID id) const
-{
-	// TODO: err msg
-	return mModels.at(id);
-}
-
 void VQEngine::StartLoadingEnvironmentMap(int IndexEnvMap)
 {
 	this->WaitUntilRenderingFinishes();
@@ -414,14 +402,6 @@ void VQEngine::UnloadEnvironmentMap()
 void VQEngine::WaitUntilRenderingFinishes()
 {
 	while (mNumRenderLoopsExecuted != mNumUpdateLoopsExecuted);
-}
-
-ModelID VQEngine::CreateModel()
-{
-	static ModelID LAST_USED_MODEL_ID = 0;
-	ModelID id = LAST_USED_MODEL_ID++;
-	mModels[id] = Model();
-	return id;
 }
 
 const FEnvironmentMapDescriptor& VQEngine::GetEnvironmentMapDesc(const std::string& EnvMapName) const
@@ -476,10 +456,10 @@ void VQEngine::Load_SceneData_Dispatch()
 
 	auto fnCreateSceneInstance = [&](const std::string& SceneType, std::unique_ptr<Scene>& pScene) -> void
 	{
-		     if (SceneType == "Default")          pScene = std::make_unique<DefaultScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain);
-		else if (SceneType == "Sponza")           pScene = std::make_unique<SponzaScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain);
-		else if (SceneType == "StressTest")       pScene = std::make_unique<StressTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain);
-		else if (SceneType == "GeometryUnitTest") pScene = std::make_unique<GeometryUnitTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain);
+		     if (SceneType == "Default")          pScene = std::make_unique<DefaultScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
+		else if (SceneType == "Sponza")           pScene = std::make_unique<SponzaScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
+		else if (SceneType == "StressTest")       pScene = std::make_unique<StressTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
+		else if (SceneType == "GeometryUnitTest") pScene = std::make_unique<GeometryUnitTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 	};
 
 	if (mpScene)

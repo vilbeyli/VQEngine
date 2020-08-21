@@ -19,6 +19,7 @@
 
 #include "Camera.h"
 #include "Mesh.h"
+#include "Material.h"
 #include "Model.h"
 #include "Light.h"
 #include "Transform.h"
@@ -27,6 +28,7 @@
 
 class Input;
 class AssetLoader;
+struct Material;
 struct FResourceNames;
 
 //------------------------------------------------------
@@ -139,7 +141,13 @@ protected:
 // ENGINE INTERFACE
 //----------------------------------------------------------------------------------------------------------------
 public:
-	Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const std::unique_ptr<Window>& pWin);
+	Scene(
+		  VQEngine& engine
+		, int NumFrameBuffers
+		, const Input& input
+		, const std::unique_ptr<Window>& pWin
+		, VQRenderer& renderer
+	);
 
 private: // Derived Scenes shouldn't access these functions
 	void Update(float dt, int FRAME_DATA_INDEX);
@@ -157,19 +165,37 @@ public:
 	inline const Camera& GetActiveCamera() const { return mCameras[mIndex_SelectedCamera]; }
 	inline       Camera& GetActiveCamera()       { return mCameras[mIndex_SelectedCamera]; }
 
+	// Mesh, Model, GameObj management
 	//TransformID CreateTransform(Transform** ppTransform);
 	//GameObject* CreateObject(TransformID tfID, ModelID modelID);
+	//MeshID     CreateMesh();
+	MeshID     AddMesh(Mesh&& mesh);
+	ModelID    CreateModel();
+	MaterialID CreateMaterial(const std::string& UniqueMaterialName);
+
+	Material&  GetMaterial(MaterialID ID);
+	Model&     GetModel(ModelID);
 
 //----------------------------------------------------------------------------------------------------------------
 // SCENE DATA
 //----------------------------------------------------------------------------------------------------------------
 protected:
+	using MeshLookup_t     = std::unordered_map<MeshID, Mesh>;
+	using ModelLookup_t    = std::unordered_map<ModelID, Model>;
+	using MaterialLookup_t = std::unordered_map<MaterialID, Material>;
+	//--------------------------------------------------------------
+
+	//
+	// SCENE VIEWS
+	//
 	std::vector<FSceneView> mFrameSceneViews;
 
 	//
 	// SCENE RESOURCE CONTAINERS
 	//
-	//std::vector<MeshID>      mMeshIDs;
+	MeshLookup_t             mMeshes;
+	ModelLookup_t            mModels;
+	MaterialLookup_t         mMaterials;
 	std::vector<GameObject*> mpObjects;
 	std::vector<Transform*>  mpTransforms;
 	std::vector<Camera>      mCameras;
@@ -204,14 +230,22 @@ protected:
 	VQEngine&                      mEngine;
 	const FResourceNames&          mResourceNames;
 	AssetLoader&                   mAssetLoader;
+	VQRenderer&                    mRenderer;
 
 	FSceneRepresentation mSceneRepresentation;
+
 //----------------------------------------------------------------------------------------------------------------
 // INTERNAL DATA
 //----------------------------------------------------------------------------------------------------------------
 private:
 	MemoryPool<GameObject> mGameObjectPool;
 	MemoryPool<Transform>  mTransformPool;
+
+	std::mutex mMtx_Meshes;
+	std::mutex mMtx_Models;
+	std::mutex mMtx_Materials;
+
+	std::unordered_map<std::string, MaterialID> mLoadedMaterials;
 
 	//CPUProfiler*    mpCPUProfiler;
 	//ModelLoader     mModelLoader;

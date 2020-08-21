@@ -177,6 +177,7 @@ private:
 	StaticBufferHeap                               mStaticHeap_IndexBuffer;
 
 	// resources & views
+	std::unordered_map<std::string, TextureID>     mLoadedTexturePaths;
 	std::unordered_map<TextureID, Texture>         mTextures;
 	std::unordered_map<SamplerID, SAMPLER>         mSamplers;
 	std::unordered_map<BufferID, VBV>              mVBVs;
@@ -196,6 +197,8 @@ private:
 	mutable std::mutex                             mMtxDSVs;
 	mutable std::mutex                             mMtxVBVs;
 	mutable std::mutex                             mMtxIBVs;
+
+	mutable std::mutex mMtxUploadHeapCreation;
 
 	// root signatures
 	std::vector<ID3D12RootSignature*>              mpBuiltinRootSignatures;

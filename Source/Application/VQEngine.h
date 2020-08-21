@@ -230,14 +230,9 @@ public:
 	
 	void UnloadEnvironmentMap();
 
-	// Mesh & Model management
-	ModelID CreateModel();
-
 	// Getters
 	MeshID GetBuiltInMeshID(const std::string& MeshName) const;
 
-	      Model& GetModel(ModelID id);
-	const Model& GetModel(ModelID id) const;
 	inline const FResourceNames& GetResourceNames() const { return mResourceNames; }
 	inline AssetLoader& GetAssetLoader() { return mAssetLoader; }
 
@@ -246,8 +241,6 @@ public:
 private:
 	//-------------------------------------------------------------------------------------------------
 	using BuiltinMeshArray_t          = std::array<Mesh, EBuiltInMeshes::NUM_BUILTIN_MESHES>;
-	using MeshLookup_t                = std::unordered_map<MeshID, Mesh>;
-	using ModelLookup_t               = std::unordered_map<ModelID, Model>;
 	using EnvironmentMapDescLookup_t  = std::unordered_map<std::string, FEnvironmentMapDescriptor>;
 	//-------------------------------------------------------------------------------------------------
 	using EventPtr_t                  = std::shared_ptr<IEvent>;
@@ -294,8 +287,6 @@ private:
 
 	// data: geometry
 	BuiltinMeshArray_t              mBuiltinMeshes;
-	MeshLookup_t                    mMeshes;
-	ModelLookup_t                   mModels; // contains MeshIDs and MaterialIDs
 
 	// data: environment maps & HDR profiles
 	std::vector<FDisplayHDRProfile> mDisplayHDRProfiles;

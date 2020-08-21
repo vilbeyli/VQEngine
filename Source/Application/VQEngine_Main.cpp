@@ -37,7 +37,7 @@ void ReportSystemInfo(const VQSystemInfo::FSystemInfo& i, bool bDetailed = false
 }
 #endif
 VQEngine::VQEngine()
-	: mAssetLoader(mWorkers_Load)
+	: mAssetLoader(mWorkers_Load, mRenderer)
 {}
 
 void VQEngine::MainThread_Tick()
@@ -292,11 +292,11 @@ void VQEngine::InitializeThreads()
 	mpSemRender.reset(new Semaphore(0                        , NUM_SWAPCHAIN_BACKBUFFERS));
 
 	mbStopAllThreads.store(false);
-	mWorkers_Load.Initialize(NumWorkers);
+	mWorkers_Load.Initialize(NumWorkers, "LoadWorkers");
 	mRenderThread = std::thread(&VQEngine::RenderThread_Main, this);
 	mUpdateThread = std::thread(&VQEngine::UpdateThread_Main, this);
-	mWorkers_Update.Initialize(NumWorkers);
-	mWorkers_Render.Initialize(NumWorkers);
+	mWorkers_Update.Initialize(NumWorkers, "UpdateWorkers");
+	mWorkers_Render.Initialize(NumWorkers, "RenderWorkers");
 }
 
 void VQEngine::ExitThreads()

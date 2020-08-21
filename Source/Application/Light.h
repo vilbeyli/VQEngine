@@ -71,4 +71,5 @@ struct Light
 
 	// TODO
 };
-constexpr size_t SZ_LIGHT_STRUCT = sizeof(Light);
+
+//constexpr size_t SZ_LIGHT_STRUCT = sizeof(Light);

@@ -15,13 +15,3 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
-
-#include "Model.h"
-
-#include <cassert>
-
-bool Model::Data::AddMaterial(MeshID meshID, MaterialID matID, bool bTransparent)
-{
-	assert(false);
-	return false;
-}

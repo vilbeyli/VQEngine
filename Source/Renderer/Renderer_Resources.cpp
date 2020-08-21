@@ -39,6 +39,8 @@ using namespace VQSystemInfo;
 	#define ENABLE_DEBUG_LAYER      0
 	#define ENABLE_VALIDATION_LAYER 0
 #endif
+#define LOG_CACHED_RESOURCES_ON_LOAD 0
+#define LOG_RESOURCE_CREATE          1
 
 // TODO: initialize from functions?
 static TextureID LAST_USED_TEXTURE_ID = 0;
@@ -72,7 +74,16 @@ BufferID VQRenderer::CreateBuffer(const FBufferDesc& desc)
 
 TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 {
-	// TODO: check if file already loaded
+	// check if we've already loaded the texture
+	auto it = mLoadedTexturePaths.find(pFilePath);
+	if (it != mLoadedTexturePaths.end())
+	{
+#if LOG_CACHED_RESOURCES_ON_LOAD
+		Log::Info("Texture already loaded: %s", pFilePath);
+#endif
+		return it->second;
+	}
+	
 
 	Texture tex;
 
@@ -81,8 +92,10 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 	// It's recommended to create heaps on background threads to avoid glitching the render 
 	// thread. In D3D12, multiple threads may safely call create routines concurrently.
 	UploadHeap uploadHeap;
-	uploadHeap.Create(mDevice.GetDevicePtr(), 1024 * MEGABYTE); // TODO: drive the heapsize through RendererSettings.ini
-
+	{
+		std::unique_lock<std::mutex> lk(mMtxUploadHeapCreation);
+		uploadHeap.Create(mDevice.GetDevicePtr(), 1024 * MEGABYTE); // TODO: drive the heapsize through RendererSettings.ini
+	}
 	const std::string FileNameAndExtension = DirectoryUtil::GetFileNameFromPath(pFilePath);
 	TextureCreateDesc tDesc(FileNameAndExtension);
 	tDesc.pAllocator = mpAllocator;
@@ -96,6 +109,10 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 	{
 		uploadHeap.UploadToGPUAndWait(mGFXQueue.pQueue);
 		ID = AddTexture_ThreadSafe(std::move(tex));
+		mLoadedTexturePaths[std::string(pFilePath)] = ID;
+#if LOG_RESOURCE_CREATE
+		Log::Info("VQRenderer::CreateTextureFromFile(): %s", pFilePath);
+#endif
 	}
 	uploadHeap.Destroy();
 	return ID;
@@ -348,6 +365,7 @@ TextureID VQRenderer::AddTexture_ThreadSafe(Texture&& tex)
 	std::lock_guard<std::mutex> lk(mMtxTextures);
 	Id = LAST_USED_TEXTURE_ID++;
 	mTextures[Id] = tex;
+	
 	return Id;
 }
 void VQRenderer::DestroyTexture(TextureID texID)

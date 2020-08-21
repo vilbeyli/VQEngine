@@ -19,46 +19,56 @@
 
 #include "Model.h"
 
-#include<set>
+#include <set>
+#include <queue>
+#include <mutex>
+#include <future>
 
 class ThreadPool;
+class Scene;
 
 class AssetLoader
 {
 public:
-	static Model ImportModel_obj (const std::string& objFilePath, std::string ModelName = "NONE"); // TODO: rename to LoadModel_obj() ?
-	static Model ImportModel_gltf(const std::string& objFilePath, std::string ModelName = "NONE"); // TODO: rename to LoadModel_gltf() ?
-
-public:
-
-	AssetLoader(ThreadPool& WorkerThreads)
-		: mWorkers(WorkerThreads)
-	{}
-
-	void QueueAssetLoad(const std::string& ModelPath);
-	void StartLoadingAssets();
-
-private:
 	struct FModelLoadParams
 	{
-		using pfnImportModel_t = Model(*)(const std::string& objFilePath, std::string ModelName);
+		using pfnImportModel_t = ModelID(*)(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName);
 		std::string      ModelPath;
+		std::string      ModelName;
 		pfnImportModel_t pfnImportModel;
 	};
 	struct FTextureLoadParams
 	{
 		std::string TexturePath;
 	};
+	using ModelLoadResults_t   = std::vector<std::future<ModelID>>;
+	using TextureLoadResults_t = std::vector<std::future<TextureID>>;
+public:
+	AssetLoader(ThreadPool& WorkerThreads, VQRenderer& renderer)
+		: mWorkers(WorkerThreads)
+		, mRenderer(renderer)
+	{}
+
+	void QueueModelLoad(const std::string& ModelPath, const std::string& ModelName);
+	ModelLoadResults_t StartLoadingModels(Scene* pScene);
+
+	void QueueTextureLoad(const FTextureLoadParams& TexLoadParam);
+	TextureLoadResults_t StartLoadingTextures();
+private:
+	static ModelID ImportModel_obj (Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName = "NONE"); // TODO: rename to LoadModel_obj() ?
+	static ModelID ImportModel_gltf(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName = "NONE"); // TODO: rename to LoadModel_gltf() ?	
 
 private:
+	std::unordered_map<std::string, ModelID> mLoadedModels;
+
+	// MT Model loading
 	ThreadPool& mWorkers;
-
-	std::queue<FModelLoadParams> mModelLoadQueue;
+	VQRenderer& mRenderer;
+	// TODO: use ConcurrentQueue<T> with ProcessElements(pfnProcess);
+	std::queue<FModelLoadParams>   mModelLoadQueue;
+	std::queue<FTextureLoadParams> mTextureLoadQueue;
 	std::set<std::string> mUniqueModelPaths;
-
-	std::queue< FTextureLoadParams> mTextureLoadQueue;
 	std::set<std::string> mUniqueTexturePaths;
-
 	std::mutex mMtxQueue_ModelLoad;
 	std::mutex mMtxQueue_TextureLoad;
 };
