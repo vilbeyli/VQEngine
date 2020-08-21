@@ -65,7 +65,7 @@ struct FMeshRenderCommand
 {
 	MeshID     meshID = INVALID_ID;
 	MaterialID matID  = INVALID_ID;
-	DirectX::XMMATRIX WorldTransformationMatrix;
+	DirectX::XMMATRIX WorldTransformationMatrix; // WorldTF ID ?
 };
 struct FSceneView
 {

@@ -249,7 +249,7 @@ void Scene::StartLoading(FSceneRepresentation& scene)
 	{
 		if (scene.Cameras[i].bInitializeCameraController)
 		{
-			mCameras[i].InitializeController(scene.Cameras[i].bFirstPerson);
+			mCameras[i].InitializeController(scene.Cameras[i].bFirstPerson, scene.Cameras[i]);
 		}
 	}
 

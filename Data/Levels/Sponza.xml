@@ -36,11 +36,11 @@
         <Yaw> 0 </Yaw>
         <Projection>Perspective</Projection>
         <FoV>60.0</FoV>
-        <Near>0.01</Near>
-        <Far>1000</Far>
+        <Near>0.1</Near>
+        <Far>5000</Far>
 
         <FirstPerson>
-            <TranslationSpeed>1000</TranslationSpeed>
+            <TranslationSpeed>5800</TranslationSpeed>
             <AngularSpeed>0.05</AngularSpeed>
             <Drag>9.5</Drag>
         </FirstPerson>

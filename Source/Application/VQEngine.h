@@ -405,7 +405,7 @@ private:
 	bool                            IsWindowRegistered(HWND hwnd) const;
 	bool                            ShouldRenderHDR(HWND hwnd) const;
 
-	void                            CalculateEffectiveFrameRate(HWND hwnd);
+	void                            CalculateEffectiveFrameRateLimit(HWND hwnd);
 	const FDisplayHDRProfile*       GetHDRProfileIfExists(const wchar_t* pwStrLogicalDisplayName);
 	FSetHDRMetaDataParams           GatherHDRMetaDataParameters(HWND hwnd);
 

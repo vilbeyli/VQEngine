@@ -96,12 +96,14 @@ ModelID AssetLoader::ImportModel_obj(Scene* pScene, AssetLoader* pAssetLoader, V
 	std::vector<FMaterialTextureAssignments> MaterialTextureAssignments;
 	Model::Data data = ProcessAssimpNode(pAiScene->mRootNode, pAiScene, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments);
 
+	pRenderer->UploadVertexAndIndexBufferHeaps(); // load VB/IBs
 	TextureLoadResults_t vTexLoadResults = pAssetLoader->StartLoadingTextures();
 
 	// cache the imported model in Scene
 	ModelID mID = pScene->CreateModel();
 	Model& model = pScene->GetModel(mID);
 	model = Model(objFilePath, ModelName, std::move(data));
+
 
 	// SYNC POINT - wait for textures to load
 	{
@@ -323,19 +325,31 @@ static std::vector<AssetLoader::FTextureLoadParams> GenerateTextureLoadParams(
 
 static Mesh ProcessAssimpMesh(VQRenderer* pRenderer, aiMesh* mesh, const aiScene* scene)
 {
-	std::vector<FVertexWithNormalAndTangent> Vertices;
+	std::vector<FVertexWithColorAndAlpha> Vertices;
 	std::vector<unsigned> Indices;
 
 	// Walk through each of the mesh's vertices
 	for (unsigned int i = 0; i < mesh->mNumVertices; i++)
 	{
-		FVertexWithNormalAndTangent Vert;
+		FVertexWithColorAndAlpha Vert;
+		Vert.color[0] = 1.0f;
+		Vert.color[1] = 1.0f;
+		Vert.color[2] = 1.0f;
+		Vert.color[3] = 1.0f;
+		//FVertexWithNormalAndTangent Vert;
 
 		// POSITIONS
 		Vert.position[0] = mesh->mVertices[i].x;
 		Vert.position[1] = mesh->mVertices[i].y;
 		Vert.position[2] = mesh->mVertices[i].z;
 
+		// TEXTURE COORDINATES
+		// a vertex can contain up to 8 different texture coordinates. We thus make the assumption that we won't 
+		// use models where a vertex can have multiple texture coordinates so we always take the first set (0).
+		Vert.uv[0] = mesh->mTextureCoords[0] ? mesh->mTextureCoords[0][i].x : 0;
+		Vert.uv[1] = mesh->mTextureCoords[0] ? mesh->mTextureCoords[0][i].y : 0;
+
+#if 0
 		// NORMALS
 		if (mesh->mNormals)
 		{
@@ -343,13 +357,7 @@ static Mesh ProcessAssimpMesh(VQRenderer* pRenderer, aiMesh* mesh, const aiScene
 			Vert.normal[1] = mesh->mNormals[i].y;
 			Vert.normal[2] = mesh->mNormals[i].z;
 		}
-
-		// TEXTURE COORDINATES
-		// a vertex can contain up to 8 different texture coordinates. We thus make the assumption that we won't 
-		// use models where a vertex can have multiple texture coordinates so we always take the first set (0).
-		Vert.uv[0] = mesh->mTextureCoords[0] ? mesh->mTextureCoords[0][i].x : 0;
-		Vert.uv[1] = mesh->mTextureCoords[0] ? mesh->mTextureCoords[0][i].y : 0;
-		
+	
 		// TANGENT
 		if (mesh->mTangents)
 		{
@@ -357,7 +365,7 @@ static Mesh ProcessAssimpMesh(VQRenderer* pRenderer, aiMesh* mesh, const aiScene
 			Vert.tangent[1] = mesh->mTangents[i].y;
 			Vert.tangent[2] = mesh->mTangents[i].z;
 		}
-
+#endif
 
 		// BITANGENT ( NOT USED )
 		// Vert.bitangent = XMFLOAT3(
@@ -378,7 +386,7 @@ static Mesh ProcessAssimpMesh(VQRenderer* pRenderer, aiMesh* mesh, const aiScene
 	}
 
 	// TODO: mesh name
-	return Mesh(pRenderer, Vertices, Indices, "");
+	return Mesh(pRenderer, Vertices, Indices, "TODO");;
 }
 
 static Model::Data ProcessAssimpNode(

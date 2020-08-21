@@ -126,7 +126,7 @@ void VQRenderer::Load()
 {
 	LoadPSOs();
 	LoadDefaultResources();
-	mHeapUpload.UploadToGPUAndWait(mGFXQueue.pQueue);
+	this->UploadVertexAndIndexBufferHeaps();
 }
 
 void VQRenderer::Unload()
@@ -745,8 +745,12 @@ void VQRenderer::LoadDefaultResources()
 		this->CreateAndInitializeSRV(texID);
 	}
 
+}
+void VQRenderer::UploadVertexAndIndexBufferHeaps()
+{
 	mStaticHeap_VertexBuffer.UploadData(mHeapUpload.GetCommandList());
 	mStaticHeap_IndexBuffer.UploadData(mHeapUpload.GetCommandList());
+	mHeapUpload.UploadToGPUAndWait(mGFXQueue.pQueue);
 }
 
 

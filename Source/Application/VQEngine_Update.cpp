@@ -264,7 +264,7 @@ bool VQEngine::ShouldRenderHDR(HWND hwnd) const
 	return mSettings.WndMain.bEnableHDR && pWin->GetIsOnHDRCapableDisplay();
 }
 
-void VQEngine::CalculateEffectiveFrameRate(HWND hwnd)
+void VQEngine::CalculateEffectiveFrameRateLimit(HWND hwnd)
 {
 	if (mSettings.gfx.MaxFrameRate == -1)
 	{

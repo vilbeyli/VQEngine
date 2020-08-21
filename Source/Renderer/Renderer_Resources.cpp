@@ -276,7 +276,7 @@ void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID)
 BufferID VQRenderer::CreateVertexBuffer(const FBufferDesc& desc)
 {
 	BufferID Id = INVALID_ID;
-	VBV vbv;
+	VBV vbv = {};
 
 	std::lock_guard <std::mutex> lk(mMtxStaticVBHeap);
 

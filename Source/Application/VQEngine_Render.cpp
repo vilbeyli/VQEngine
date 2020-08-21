@@ -678,6 +678,8 @@ void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx)
 
 void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& SceneView)
 {
+	using namespace DirectX;
+
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
 
@@ -706,14 +708,16 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::HELLO_WORLD_CUBE_PSO_MSAA_4 : EBuiltinPSOs::HELLO_WORLD_CUBE_PSO));
 
 	// Draw Objects -----------------------------------------------
-	using namespace DirectX;
+	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
+
+	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(2)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
+	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(0).GetGPUDescHandle());
 	for (const FMeshRenderCommand& meshRenderCmd : SceneView.meshRenderCommands)
 	{
 		const XMMATRIX mMVP
 			= meshRenderCmd.WorldTransformationMatrix
 			* SceneView.viewProj;
-
-		ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 
 		// set constant buffer data
 		FrameConstantBuffer* pConstBuffer = {};
@@ -721,15 +725,11 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 		ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(FrameConstantBuffer), (void**)(&pConstBuffer), &cbAddr);
 		pConstBuffer->matModelViewProj = mMVP;
 
-		// hardcoded root signature for now until shader reflection and rootsignature management is implemented
-		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(2));
-
-		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-		pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(0).GetGPUDescHandle());
 		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
 
-		assert(false);  // TODO: not everything is builting mesh
-		const Mesh& mesh = mBuiltinMeshes[meshRenderCmd.meshID]; 
+		//assert(false);  // TODO: not everything is builting mesh
+		//const Mesh& mesh = mBuiltinMeshes[meshRenderCmd.meshID];
+		const Mesh& mesh = mpScene->mMeshes[meshRenderCmd.meshID];
 
 		const auto VBIBIDs = mesh.GetIABufferIDs();
 		const uint32 NumIndices = mesh.GetNumIndices();

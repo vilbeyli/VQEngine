@@ -70,7 +70,7 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	InitializeScenes();
 	float f2 = t.Tick();
 	InitializeThreads();
-	CalculateEffectiveFrameRate(mpWinMain->GetHWND());
+	CalculateEffectiveFrameRateLimit(mpWinMain->GetHWND());
 	float f4 = t.Tick();
 
 	// offload system info acquisition to a thread as it takes a few seconds on Debug build

@@ -65,7 +65,7 @@ void StaticBufferHeap::Create(ID3D12Device* pDevice, EBufferType type, uint32 to
             GetResourceTransitionState(mType),
             nullptr,
             IID_PPV_ARGS(&mpVidMemBuffer));
-        mpVidMemBuffer->SetName(L"StaticBufferPool::m_pVidMemBuffer");
+        SetName(mpVidMemBuffer, name);
 
         if (FAILED(hr))
         {
@@ -88,7 +88,7 @@ void StaticBufferHeap::Create(ID3D12Device* pDevice, EBufferType type, uint32 to
         // TODO
     }
 
-    mpSysMemBuffer->SetName(L"StaticBufferPool::m_pSysMemBuffer");
+    SetName(mpSysMemBuffer, name);
 
     mpSysMemBuffer->Map(0, NULL, reinterpret_cast<void**>(&mpData));
 }
@@ -152,7 +152,7 @@ bool StaticBufferHeap::AllocBuffer(uint32 numElements, uint32 strideInBytes, voi
     std::lock_guard<std::mutex> lock(mMtx);
 
     uint32 size = AlignOffset(numElements * strideInBytes, (uint32)StaticBufferHeap::MEMORY_ALIGNMENT);
-    assert(mMemOffset + size < mTotalMemSize); // if this is hit, initialize heap with a larger size.
+    assert( (mMemOffset + size) < mTotalMemSize); // if this is hit, initialize heap with a larger size.
 
     *ppDataOut = (void*)(mpData + mMemOffset);
 

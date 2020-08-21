@@ -66,18 +66,20 @@ void Camera::InitializeCamera(const FCameraParameters& data)
 {
 	this->mProjParams = data.ProjectionParams;
 	this->mProjParams.FieldOfView *= DEG2RAD; // convert FoV to radians
-	mYaw = mPitch = 0;
+	this->mYaw = this->mPitch = 0;
+	
+
 	SetProjectionMatrix(this->mProjParams);
 	SetPosition(data.x, data.y, data.z);
 	Rotate(data.Yaw * DEG2RAD, data.Pitch * DEG2RAD);
 	UpdateViewMatrix();
 }
 
-void Camera::InitializeController(bool bFirstPersonController)
+void Camera::InitializeController(bool bFirstPersonController, const FCameraParameters& data)
 {
 	if (bFirstPersonController)
 	{
-		pController = std::make_unique<FirstPersonController>(this);
+		pController = std::make_unique<FirstPersonController>(this, data.TranslationSpeed, data.AngularSpeed, data.Drag);
 	}
 	else
 	{
@@ -203,10 +205,16 @@ CameraController* OrbitController::Clone_impl(Camera* pNewCam)
 	return p;
 }
 
-FirstPersonController::FirstPersonController(Camera* pCam)
+FirstPersonController::FirstPersonController(Camera* pCam
+	, float moveSpeed    /*= 1000.0f*/
+	, float angularSpeed /*= 0.05f	*/
+	, float drag         /*= 9.5f	*/
+)
 	: CameraController(pCam)
-{
-}
+	, MoveSpeed(moveSpeed)
+	, AngularSpeedDeg(angularSpeed)
+	, Drag(drag)
+{}
 
 void FirstPersonController::UpdateCamera(const Input& input, float dt)
 {
