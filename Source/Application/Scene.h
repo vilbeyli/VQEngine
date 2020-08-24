@@ -141,8 +141,7 @@ protected:
 // ENGINE INTERFACE
 //----------------------------------------------------------------------------------------------------------------
 public:
-	Scene(
-		  VQEngine& engine
+	Scene(VQEngine& engine
 		, int NumFrameBuffers
 		, const Input& input
 		, const std::unique_ptr<Window>& pWin
@@ -152,7 +151,7 @@ public:
 private: // Derived Scenes shouldn't access these functions
 	void Update(float dt, int FRAME_DATA_INDEX);
 	void PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX);
-	void StartLoading(FSceneRepresentation& scene);
+	void StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene);
 	void OnLoadComplete();
 	void Unload(); // serial-only for now. maybe MT later.
 	void RenderUI();
@@ -168,8 +167,8 @@ public:
 	// Mesh, Model, GameObj management
 	//TransformID CreateTransform(Transform** ppTransform);
 	//GameObject* CreateObject(TransformID tfID, ModelID modelID);
-	//MeshID     CreateMesh();
 	MeshID     AddMesh(Mesh&& mesh);
+	MeshID     AddMesh(const Mesh& mesh);
 	ModelID    CreateModel();
 	MaterialID CreateMaterial(const std::string& UniqueMaterialName);
 

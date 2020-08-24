@@ -237,10 +237,8 @@ public:
 	inline AssetLoader& GetAssetLoader() { return mAssetLoader; }
 
 
-
 private:
 	//-------------------------------------------------------------------------------------------------
-	using BuiltinMeshArray_t          = std::array<Mesh, EBuiltInMeshes::NUM_BUILTIN_MESHES>;
 	using EnvironmentMapDescLookup_t  = std::unordered_map<std::string, FEnvironmentMapDescriptor>;
 	//-------------------------------------------------------------------------------------------------
 	using EventPtr_t                  = std::shared_ptr<IEvent>;

@@ -152,7 +152,7 @@ SRV_ID VQRenderer::CreateAndInitializeSRV(TextureID texID)
 		std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 
 		mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
-		mTextures[texID].InitializeSRV(0, &SRV);
+		mTextures.at(texID).InitializeSRV(0, &SRV);
 		Id = LAST_USED_SRV_ID++;
 		mSRVs[Id] = SRV;
 	}
@@ -373,6 +373,17 @@ void VQRenderer::DestroyTexture(TextureID texID)
 	std::lock_guard<std::mutex> lk(mMtxTextures);
 	mTextures.at(texID).Destroy();
 	mTextures.erase(texID);
+
+	std::string texPath = "";
+	for (const auto& path_id_pair : mLoadedTexturePaths)
+	{
+		if (path_id_pair.second == texID)
+		{
+			texPath = path_id_pair.first;
+			break;
+		}
+	}
+	mLoadedTexturePaths.erase(texPath);
 }
 void VQRenderer::DestroySRV(SRV_ID srvID)
 {

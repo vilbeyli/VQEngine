@@ -473,7 +473,7 @@ void VQEngine::Load_SceneData_Dispatch()
 	fnCreateSceneInstance(SceneRep.SceneName, mpScene);
 
 	// let the custom scene logic edit the scene representation
-	mpScene->StartLoading(SceneRep);
+	mpScene->StartLoading(this->mBuiltinMeshes, SceneRep);
 
 	// start loading;
 	Log::Info("[Scene] Loading: %s", SceneRep.SceneName.c_str());

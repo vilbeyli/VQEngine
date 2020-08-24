@@ -61,9 +61,9 @@
     
     <GameObject>
         <Transform>
-            <Position>0 0 0</Position>
+            <Position>0 100 0</Position>
             <Quaternion>0 0 0 1</Quaternion>
-            <Scale>1 1 1</Scale>
+            <Scale>100 100 100</Scale>
         </Transform>
         <Model>
             <Mesh>Triangle</Mesh>

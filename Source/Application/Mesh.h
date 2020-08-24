@@ -162,3 +162,7 @@ Mesh::Mesh(VQRenderer* pRenderer, const MeshLODData<TVertex, TIndex>& meshLODDat
 		mNumIndicesPerLODLevel.push_back(bufferDesc.NumElements);
 	}
 }
+
+
+
+using BuiltinMeshArray_t = std::array<Mesh, EBuiltInMeshes::NUM_BUILTIN_MESHES>;

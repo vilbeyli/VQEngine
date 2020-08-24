@@ -27,7 +27,7 @@
 
 using namespace DirectX;
 
-static ModelID LAST_USED_MESH_ID = 0;
+static MeshID LAST_USED_MESH_ID = EBuiltInMeshes::NUM_BUILTIN_MESHES;
 
 //MeshID Scene::CreateMesh()
 //{
@@ -38,6 +38,14 @@ static ModelID LAST_USED_MESH_ID = 0;
 //}
 
 MeshID Scene::AddMesh(Mesh&& mesh)
+{
+	std::lock_guard<std::mutex> lk(mMtx_Meshes);
+	MeshID id = LAST_USED_MESH_ID++;
+	mMeshes[id] = mesh;
+	return id;
+}
+
+MeshID Scene::AddMesh(const Mesh& mesh)
 {
 	std::lock_guard<std::mutex> lk(mMtx_Meshes);
 	MeshID id = LAST_USED_MESH_ID++;
@@ -152,9 +160,17 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 	}
 }
 
-void Scene::StartLoading(FSceneRepresentation& scene)
+void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene)
 {
 	constexpr bool B_LOAD_SERIAL = true;
+
+	// register builtin meshes to scene mesh lookup
+	// @mMeshes[0-NUM_BUILTIN_MESHES] are assigned here directly while the rest
+	// of the meshes used in the scene must use this->AddMesh(Mesh&&) interface;
+	for (size_t i = 0; i < builtinMeshes.size(); ++i)
+	{
+		this->mMeshes[i] = builtinMeshes[i];
+	}
 
 	// scene-specific load 
 	this->LoadScene(scene);
@@ -226,6 +242,7 @@ void Scene::StartLoading(FSceneRepresentation& scene)
 			AssetLoader::ModelLoadResult_t res = std::move(it->second);
 			
 			assert(res.valid());
+			
 			res.wait();
 			pObj->mModelID = res.get();
 		}
@@ -275,7 +292,7 @@ void Scene::Unload()
 	mFrameSceneViews.clear();
 	mFrameSceneViews.resize(sz);
 
-	//mMeshIDs.clear();
+	//mMeshes.clear(); // TODO
 	
 	for (Transform* pTf : mpTransforms) mTransformPool.Free(pTf);
 	mpTransforms.clear();

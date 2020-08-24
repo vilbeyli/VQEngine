@@ -727,9 +727,7 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 
 		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
 
-		//assert(false);  // TODO: not everything is builting mesh
-		//const Mesh& mesh = mBuiltinMeshes[meshRenderCmd.meshID];
-		const Mesh& mesh = mpScene->mMeshes[meshRenderCmd.meshID];
+		const Mesh& mesh = mpScene->mMeshes.at(meshRenderCmd.meshID);
 
 		const auto VBIBIDs = mesh.GetIABufferIDs();
 		const uint32 NumIndices = mesh.GetNumIndices();
