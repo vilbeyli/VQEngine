@@ -25,9 +25,9 @@
 #include "Transform.h"
 #include "GameObject.h"
 #include "Memory.h"
+#include "AssetLoader.h"
 
 class Input;
-class AssetLoader;
 struct Material;
 struct FResourceNames;
 
@@ -244,8 +244,11 @@ private:
 	std::mutex mMtx_Models;
 	std::mutex mMtx_Materials;
 
+	AssetLoader::ModelLoadResults_t mModelLoadResults;
+	
+	// cache
 	std::unordered_map<std::string, MaterialID> mLoadedMaterials;
-
+	
 	//CPUProfiler*    mpCPUProfiler;
 	//ModelLoader     mModelLoader;
 	//MaterialPool    mMaterials;

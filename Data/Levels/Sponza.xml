@@ -73,7 +73,40 @@
         </Model>
     </GameObject>
 
-
+    <GameObject>
+        <Transform>
+            <Position>0 0 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>0.01 0.01 0.01</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/sponza/sponza.obj</Path>
+            <Name>Sponza</Name>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>-130 0 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>0.01 0.01 0.01</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/sponza/sponza.obj</Path>
+            <Name>Sponza</Name>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>130 0 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>0.01 0.01 0.01</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/sponza/sponza.obj</Path>
+            <Name>Sponza</Name>
+        </Model>
+    </GameObject>
+    
     <PostProcess>
     <!-- TBA -->
     </PostProcess>

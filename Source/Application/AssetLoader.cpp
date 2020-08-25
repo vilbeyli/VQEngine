@@ -35,10 +35,9 @@
 using namespace Assimp;
 using namespace DirectX;
 
-
 struct FMaterialTextureAssignments
 {
-	MaterialID matID;
+	MaterialID matID = INVALID_ID;
 	std::vector<AssetLoader::FTextureLoadResult> DiffuseIDs;
 	std::vector<AssetLoader::FTextureLoadResult> SpecularIDs;
 	std::vector<AssetLoader::FTextureLoadResult> NormalsIDs;
@@ -178,7 +177,9 @@ void AssetLoader::QueueModelLoad(GameObject* pObject, const std::string& ModelPa
 
 AssetLoader::ModelLoadResults_t AssetLoader::StartLoadingModels(Scene* pScene)
 {
+	VQRenderer* pRenderer = &mRenderer;
 	ModelLoadResults_t ModelLoadResults;
+
 	if (mModelLoadQueue.empty())
 	{
 		Log::Warning("AssetLoader::StartLoadingModels(): no models to load");
@@ -186,7 +187,7 @@ AssetLoader::ModelLoadResults_t AssetLoader::StartLoadingModels(Scene* pScene)
 	}
 
 	// process model load queue
-	VQRenderer* pRenderer = &mRenderer;
+	std::unordered_map<std::string, std::shared_future<ModelID>> ModelLoadResultMap;
 	std::unique_lock<std::mutex> lk(mMtxQueue_ModelLoad);
 	do
 	{
@@ -194,20 +195,26 @@ AssetLoader::ModelLoadResults_t AssetLoader::StartLoadingModels(Scene* pScene)
 		const std::string& ModelPath = ModelLoadParams.ModelPath;
 		mModelLoadQueue.pop();
 
-		// eliminate duplicates
+		// queue unique model paths for loading
+		std::shared_future<ModelID> modelLoadResult;
 		if (mUniqueModelPaths.find(ModelPath) == mUniqueModelPaths.end())
 		{
 			mUniqueModelPaths.insert(ModelPath);
 
 			// start loading
-			std::future<ModelID> modelLoadResult = std::move(mWorkers.AddTask([=]()
+			modelLoadResult = std::move(mWorkers.AddTask([=]()
 			{
 				return ModelLoadParams.pfnImportModel(pScene, this, pRenderer, ModelLoadParams.ModelPath, ModelLoadParams.ModelName);
 			}));
-
-			ModelLoadResults.emplace(std::make_pair(ModelLoadParams.pObject, std::move(modelLoadResult)));
-			//ModelLoadResults[ModelLoadParams.pObject] = std::move(modelLoadResult);
+			ModelLoadResultMap[ModelLoadParams.ModelPath] = modelLoadResult;
 		}
+		else
+		{
+			modelLoadResult = ModelLoadResultMap.at(ModelLoadParams.ModelPath);
+		}
+
+		ModelLoadResults.emplace(std::make_pair(ModelLoadParams.pObject, modelLoadResult));
+
 	} while (!mModelLoadQueue.empty());
 
 	mUniqueModelPaths.clear();

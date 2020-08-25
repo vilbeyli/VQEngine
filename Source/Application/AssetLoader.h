@@ -61,7 +61,7 @@ public:
 	};
 	struct FTextureLoadResult
 	{
-		ETextureType type;
+		ETextureType type; // material textures: diffuse/normal/alpha_mask/...
 		std::shared_future<TextureID> texLoadResult;
 	};
 	using ModelLoadResult_t    = std::shared_future<ModelID>;

@@ -149,7 +149,8 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 	for (const GameObject* pObj : mpObjects)
 	{
 		const XMMATRIX matWorldTransform = mpTransforms.at(pObj->mTransformID)->WorldTransformationMatrix();
-
+		
+		assert(pObj->mModelID != INVALID_ID);
 		for (const MeshID id : mModels.at(pObj->mModelID).mData.mOpaueMeshIDs)
 		{
 			FMeshRenderCommand meshRenderCmd;
@@ -232,21 +233,7 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 		assert(false); // TODO
 	}
 
-	AssetLoader::ModelLoadResults_t vModelLoadResults = mAssetLoader.StartLoadingModels(this);
-
-	// TODO: serial model loading for now
-	{
-		for (auto it = vModelLoadResults.begin(); it != vModelLoadResults.end(); ++it)
-		{
-			GameObject* pObj = it->first;
-			AssetLoader::ModelLoadResult_t res = std::move(it->second);
-			
-			assert(res.valid());
-			
-			res.wait();
-			pObj->mModelID = res.get();
-		}
-	}
+	mModelLoadResults = mAssetLoader.StartLoadingModels(this);
 
 	// CAMERAS
 	for (FCameraParameters& param : scene.Cameras)
@@ -277,6 +264,18 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 
 void Scene::OnLoadComplete()
 {
+
+	for (auto it = mModelLoadResults.begin(); it != mModelLoadResults.end(); ++it)
+	{
+		GameObject* pObj = it->first;
+		AssetLoader::ModelLoadResult_t res = std::move(it->second);
+
+		assert(res.valid());
+		///res.wait(); // we should already have the results ready in OnLoadComplete()
+
+		pObj->mModelID = res.get();
+	}
+
 	Log::Info("[Scene] %s loaded.", mSceneRepresentation.SceneName.c_str());
 	mSceneRepresentation.loadSuccess = 1;
 	this->InitializeScene();
