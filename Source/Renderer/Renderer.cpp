@@ -343,7 +343,7 @@ void VQRenderer::InitializeHeaps()
 	mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE);
 
 	constexpr uint32 NumDescsCBV = 10;
-	constexpr uint32 NumDescsSRV = 10;
+	constexpr uint32 NumDescsSRV = 150;
 	constexpr uint32 NumDescsUAV = 10;
 	constexpr bool   bCPUVisible = false;
 	mHeapCBV_SRV_UAV.Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, NumDescsCBV + NumDescsSRV + NumDescsUAV, bCPUVisible);
@@ -403,6 +403,7 @@ void VQRenderer::LoadPSOs()
 			ID3D12RootSignature* pRS = nullptr;
 			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
 			mpBuiltinRootSignatures.push_back(pRS);
+			SetName(pRS, "RootSignature_HelloWorldTriangle");
 		}
 
 		// Fullscreen-Triangle Root Signature : [1]
@@ -446,6 +447,7 @@ void VQRenderer::LoadPSOs()
 			ID3D12RootSignature* pRS = nullptr;
 			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
 			mpBuiltinRootSignatures.push_back(pRS);
+			SetName(pRS, "RootSignature_FSTriangle");
 		}
 
 		// Hello-World-Cube Root Signature : [2]
@@ -492,6 +494,7 @@ void VQRenderer::LoadPSOs()
 			ID3D12RootSignature* pRS = nullptr;
 			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
 			mpBuiltinRootSignatures.push_back(pRS);
+			SetName(pRS, "RootSignature_HelloWorldCube");
 		}
 
 		// Tonemapper Root Signature : [3]
@@ -525,6 +528,59 @@ void VQRenderer::LoadPSOs()
 			ID3D12RootSignature* pRS = nullptr;
 			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
 			mpBuiltinRootSignatures.push_back(pRS);
+			SetName(pRS, "RootSignature_Tonemapper");
+		}
+
+		// Object Root Signature : [4]
+		{
+			D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
+
+			// This is the highest version the sample supports. If CheckFeatureSupport succeeds, the HighestVersion returned will not be greater than this.
+			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
+			if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
+			{
+				featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+			}
+
+			CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
+			ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
+			ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+
+			CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+			rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
+			rootParameters[1].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL);
+
+			D3D12_STATIC_SAMPLER_DESC samplers[2] = {};
+			D3D12_STATIC_SAMPLER_DESC sampler = {};
+			sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+			sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+			sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+			sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+			sampler.MipLODBias = 0;
+			sampler.MaxAnisotropy = 0;
+			sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+			sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+			sampler.MinLOD = 0.0f;
+			sampler.MaxLOD = D3D12_FLOAT32_MAX;
+			sampler.ShaderRegister = 0;
+			sampler.RegisterSpace = 0;
+			sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+			samplers[0] = sampler;
+
+			sampler.ShaderRegister = 1;
+			sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+			samplers[1] = sampler;
+
+			CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+			rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, _countof(samplers), &samplers[0], D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+			ComPtr<ID3DBlob> signature;
+			ComPtr<ID3DBlob> error;
+			ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
+			ID3D12RootSignature* pRS = nullptr;
+			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
+			mpBuiltinRootSignatures.push_back(pRS);
+			SetName(pRS, "RootSignature_Object");
 		}
 	}
 
@@ -611,6 +667,10 @@ void VQRenderer::LoadPSOs()
 		hr = D3DCompileFromFile(GetAssetFullPath(L"hello-cube.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, &errBlob);
 		if (FAILED(hr)) { ReportErrorAndReleaseBlob(errBlob); }
 		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"hello-cube.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, &errBlob));
+
+		// TEST REFLECTION
+		//D3DReflect(vertexShader->GetBufferPointer(), vertexShader->GetBufferSize(), IID_ID3D12ShaderReflection, ppBuffer);
+		//vertexShader
 
 		// Define the vertex input layout.
 		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
@@ -712,6 +772,52 @@ void VQRenderer::LoadPSOs()
 		psoDesc.CS = CD3DX12_SHADER_BYTECODE(computeShader.Get());
 		ThrowIfFailed(pDevice->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::TONEMAPPER_PSO])));
 		SetName(mpBuiltinPSOs[EBuiltinPSOs::HELLO_WORLD_CUBE_PSO], "PSO_TonemapperCS");
+	}
+
+	// OBJECT PSO
+	{
+		ComPtr<ID3DBlob> vertexShader;
+		ComPtr<ID3DBlob> pixelShader;
+		ComPtr<ID3DBlob> errBlob;
+
+		hr = D3DCompileFromFile(GetAssetFullPath(L"Object.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_1", compileFlags, 0, &vertexShader, &errBlob);
+		if (FAILED(hr)) { ReportErrorAndReleaseBlob(errBlob); }
+		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"Object.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_1", compileFlags, 0, &pixelShader, &errBlob));
+
+		// Define the vertex input layout.
+		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
+		{
+			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT   , 0, 0 , D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "NORMAL"  , 0, DXGI_FORMAT_R32G32B32_FLOAT   , 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "TANGENT" , 0, DXGI_FORMAT_R32G32B32_FLOAT   , 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT      , 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		};
+
+		// Describe and create the graphics pipeline state object (PSO).
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+		psoDesc.pRootSignature = mpBuiltinRootSignatures[4];
+		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
+		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
+		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+		psoDesc.DepthStencilState.DepthEnable = TRUE;
+		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+		psoDesc.DepthStencilState.StencilEnable = FALSE;
+		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+		psoDesc.SampleMask = UINT_MAX;
+		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		psoDesc.NumRenderTargets = 1;
+		psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		psoDesc.SampleDesc.Count = 1;
+		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::OBJECT_PSO])));
+		SetName(mpBuiltinPSOs[EBuiltinPSOs::OBJECT_PSO], "PSO_Object");
+
+		psoDesc.SampleDesc.Count = 4;
+		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::OBJECT_PSO_MSAA_4])));
+		SetName(mpBuiltinPSOs[EBuiltinPSOs::OBJECT_PSO_MSAA_4], "PSO_Object_MSAA4");
 	}
 }
 

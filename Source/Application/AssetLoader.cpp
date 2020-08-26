@@ -129,19 +129,26 @@ ModelID AssetLoader::ImportModel_obj(Scene* pScene, AssetLoader* pAssetLoader, V
 			assert(result.texLoadResult.valid());
 			switch (result.type)
 			{
-			case DIFFUSE   : mat.diffuseMap   = result.texLoadResult.get(); break;
-			case NORMALS   : mat.normalMap    = result.texLoadResult.get(); break;
-			case SPECULAR  : mat.specularMap  = result.texLoadResult.get(); break;
-			case ALPHA_MASK: mat.mask         = result.texLoadResult.get(); break;
-			case EMISSIVE  : mat.emissiveMap  = result.texLoadResult.get(); break;
-			case HEIGHT    : mat.heightMap    = result.texLoadResult.get(); break;
-			case METALNESS : mat.metallicMap  = result.texLoadResult.get(); break;
-			case ROUGHNESS : mat.roughnessMap = result.texLoadResult.get(); break;
+			case DIFFUSE   : mat.TexDiffuseMap   = result.texLoadResult.get();  break;
+			case NORMALS   : mat.TexNormalMap    = result.texLoadResult.get();  break;
+			case ALPHA_MASK: mat.TexAlphaMaskMap = result.texLoadResult.get();  break;
+			case EMISSIVE  : mat.TexEmissiveMap  = result.texLoadResult.get();  break;
+			case METALNESS : mat.TexMetallicMap  = result.texLoadResult.get();  break;
+			case ROUGHNESS : mat.TexRoughnessMap = result.texLoadResult.get();  break;
+			case SPECULAR  : mat.TexSpecularMap  = result.texLoadResult.get(); /*pRenderer->InitializeSRV(mat.SRVMaterialMaps, 0, mat.TexSpecularMap);*/ break;
+			case HEIGHT    : mat.TexHeightMap    = result.texLoadResult.get(); /*pRenderer->InitializeSRV(mat.SRVMaterialMaps, 0, mat.TexHeightMap)  ;*/ break;
 			default:
 				Log::Warning("TODO");
 				break;
 			}
 		}
+
+		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ALBEDO, mat.TexDiffuseMap);
+		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::NORMALS, mat.TexNormalMap);
+		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ALPHA_MASK, mat.TexAlphaMaskMap);
+		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::EMISSIVE, mat.TexEmissiveMap);
+		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::METALLIC, mat.TexMetallicMap);
+		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ROUGHNESS, mat.TexRoughnessMap);
 	}
 
 	t.Stop();
@@ -332,18 +339,13 @@ static std::vector<AssetLoader::FTextureLoadParams> GenerateTextureLoadParams(
 
 static Mesh ProcessAssimpMesh(VQRenderer* pRenderer, aiMesh* mesh, const aiScene* scene)
 {
-	std::vector<FVertexWithColorAndAlpha> Vertices;
+	std::vector<FVertexWithNormalAndTangent> Vertices;
 	std::vector<unsigned> Indices;
 
 	// Walk through each of the mesh's vertices
 	for (unsigned int i = 0; i < mesh->mNumVertices; i++)
 	{
-		FVertexWithColorAndAlpha Vert;
-		Vert.color[0] = 1.0f;
-		Vert.color[1] = 1.0f;
-		Vert.color[2] = 1.0f;
-		Vert.color[3] = 1.0f;
-		//FVertexWithNormalAndTangent Vert;
+		FVertexWithNormalAndTangent Vert;
 
 		// POSITIONS
 		Vert.position[0] = mesh->mVertices[i].x;
@@ -356,7 +358,6 @@ static Mesh ProcessAssimpMesh(VQRenderer* pRenderer, aiMesh* mesh, const aiScene
 		Vert.uv[0] = mesh->mTextureCoords[0] ? mesh->mTextureCoords[0][i].x : 0;
 		Vert.uv[1] = mesh->mTextureCoords[0] ? mesh->mTextureCoords[0][i].y : 0;
 
-#if 0
 		// NORMALS
 		if (mesh->mNormals)
 		{
@@ -372,7 +373,6 @@ static Mesh ProcessAssimpMesh(VQRenderer* pRenderer, aiMesh* mesh, const aiScene
 			Vert.tangent[1] = mesh->mTangents[i].y;
 			Vert.tangent[2] = mesh->mTangents[i].z;
 		}
-#endif
 
 		// BITANGENT ( NOT USED )
 		// Vert.bitangent = XMFLOAT3(
@@ -426,6 +426,11 @@ static Model::Data ProcessAssimpNode(
 			// Materials use the following unique naming: %MODEL_NAME%/%MATERIAL_NAME%
 			uniqueMatName = ModelFolderName + "/" + uniqueMatName;
 			matID = pScene->CreateMaterial(uniqueMatName);
+			Material& mat = pScene->GetMaterial(matID);
+			if (mat.SRVMaterialMaps == INVALID_ID)
+			{
+				mat.SRVMaterialMaps = pRenderer->CreateSRV(NUM_MATERIAL_TEXTURE_MAP_BINDINGS);
+			}
 		}
 
 		// get texture paths to load

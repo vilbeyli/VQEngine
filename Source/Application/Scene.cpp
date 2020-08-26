@@ -149,13 +149,16 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 	for (const GameObject* pObj : mpObjects)
 	{
 		const XMMATRIX matWorldTransform = mpTransforms.at(pObj->mTransformID)->WorldTransformationMatrix();
+		const Model& model = mModels.at(pObj->mModelID);
 		
 		assert(pObj->mModelID != INVALID_ID);
-		for (const MeshID id : mModels.at(pObj->mModelID).mData.mOpaueMeshIDs)
+		for (const MeshID id : model.mData.mOpaueMeshIDs)
 		{
 			FMeshRenderCommand meshRenderCmd;
 			meshRenderCmd.meshID = id;
 			meshRenderCmd.WorldTransformationMatrix = matWorldTransform;
+			meshRenderCmd.matID = model.mData.mOpaqueMaterials.at(id);
+
 			SceneView.meshRenderCommands.push_back(meshRenderCmd);
 		}
 	}
@@ -170,13 +173,13 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	// of the meshes used in the scene must use this->AddMesh(Mesh&&) interface;
 	for (size_t i = 0; i < builtinMeshes.size(); ++i)
 	{
-		this->mMeshes[i] = builtinMeshes[i];
+		this->mMeshes[(int)i] = builtinMeshes[i];
 	}
 
 	// scene-specific load 
 	this->LoadScene(scene);
 
-	auto fnDeserializeGameObject = [&](GameObjectRepresentation& ObjRep)
+	auto fnDeserializeGameObject = [&](GameObjectRepresentation& ObjRep, int i)
 	{
 		// GameObject
 		GameObject* pObj = mGameObjectPool.Allocate(1);
@@ -206,6 +209,10 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 			model.mData.mOpaueMeshIDs.push_back(meshID);
 
 			// TODO: material
+			std::string matName = "ObjMat";
+			matName += std::to_string(i);
+			MaterialID matID = this->CreateMaterial(matName);
+			model.mData.mOpaqueMaterials[meshID] = matID;
 
 			model.mbLoaded = true;
 			pObj->mModelID = mID;
@@ -222,9 +229,10 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	if constexpr (B_LOAD_SERIAL)
 	{
 		// GAME OBJECTS
+		int i = 0;
 		for (GameObjectRepresentation& ObjRep : scene.Objects)
 		{
-			fnDeserializeGameObject(ObjRep);
+			fnDeserializeGameObject(ObjRep, i++);
 		}
 	}
 	else // THREADED LOAD

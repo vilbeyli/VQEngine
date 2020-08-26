@@ -381,7 +381,8 @@ private:
 	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
 
 	// temp
-	struct FrameConstantBuffer { DirectX::XMMATRIX matModelViewProj; };
+	struct FFrameConstantBuffer  { DirectX::XMMATRIX matModelViewProj; };
+	struct FFrameConstantBuffer2 { DirectX::XMMATRIX matModelViewProj; int iTextureConfig; int iTextureOutput; };
 
 	void                            DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh);
 

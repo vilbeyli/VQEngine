@@ -19,6 +19,20 @@
 #pragma once
 #include <DirectXMath.h>
 
+enum EMaterialTextureMapBindings
+{
+	ALBEDO = 0,
+	NORMALS,
+	EMISSIVE,
+	// HEIGHT,
+	// SPECULAR,
+	ALPHA_MASK,
+	METALLIC,
+	ROUGHNESS,
+
+	NUM_MATERIAL_TEXTURE_MAP_BINDINGS
+};
+
 struct Material // 56 Bytes
 {
 	//------------------------------------------------------------
@@ -40,15 +54,16 @@ struct Material // 56 Bytes
 	float pad0, pad1;                                  // 8 Bytes
 	//------------------------------------------------------------
 
-	TextureID	diffuseMap   = INVALID_ID;
-	TextureID	normalMap    = INVALID_ID;
-	TextureID	heightMap    = INVALID_ID;
-	TextureID	specularMap  = INVALID_ID;  // phong?
-	TextureID	roughnessMap = INVALID_ID;
-	TextureID	metallicMap  = INVALID_ID;
-	TextureID	mask         = INVALID_ID;
-	TextureID	emissiveMap  = INVALID_ID;
+	TextureID TexDiffuseMap   = INVALID_ID;
+	TextureID TexNormalMap    = INVALID_ID;
+	TextureID TexEmissiveMap  = INVALID_ID;
+	TextureID TexHeightMap    = INVALID_ID;
+	TextureID TexSpecularMap  = INVALID_ID;  // phong?
+	TextureID TexAlphaMaskMap = INVALID_ID;
+	TextureID TexMetallicMap  = INVALID_ID;
+	TextureID TexRoughnessMap = INVALID_ID;
 	
+	SRV_ID SRVMaterialMaps = INVALID_ID;
 	//------------------------------------------------------------
 
 	inline bool IsTransparent() const { return alpha != 1.0f; }

@@ -705,25 +705,31 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 	pCmd->RSSetViewports(1, &viewport);
 	pCmd->RSSetScissorRects(1, &scissorsRect);
 
-	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::HELLO_WORLD_CUBE_PSO_MSAA_4 : EBuiltinPSOs::HELLO_WORLD_CUBE_PSO));
+	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::OBJECT_PSO_MSAA_4 : EBuiltinPSOs::OBJECT_PSO));
 
 	// Draw Objects -----------------------------------------------
 	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 
-	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(2)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
+	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(4)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
 	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(0).GetGPUDescHandle());
 	for (const FMeshRenderCommand& meshRenderCmd : SceneView.meshRenderCommands)
 	{
+		// set constant buffer data
 		const XMMATRIX mMVP
 			= meshRenderCmd.WorldTransformationMatrix
 			* SceneView.viewProj;
 
-		// set constant buffer data
-		FrameConstantBuffer* pConstBuffer = {};
+		FFrameConstantBuffer2* pConstBuffer = {};
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(FrameConstantBuffer), (void**)(&pConstBuffer), &cbAddr);
+		ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(FFrameConstantBuffer2), (void**)(&pConstBuffer), &cbAddr);
 		pConstBuffer->matModelViewProj = mMVP;
+		pConstBuffer->iTextureConfig = 0; // TODO
+		pConstBuffer->iTextureOutput = EMaterialTextureMapBindings::ALBEDO; // TODO: drive thru material
+
+		// set material data
+		const Material& mat = mpScene->GetMaterial(meshRenderCmd.matID);
+		if(mat.SRVMaterialMaps!=INVALID_ID)
+			pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
 
 		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
 
@@ -758,8 +764,8 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 		skyCam.UpdateViewMatrix();
 
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		FrameConstantBuffer* pConstBuffer = {};
-		ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(FrameConstantBuffer), (void**)(&pConstBuffer), &cbAddr);
+		FFrameConstantBuffer * pConstBuffer = {};
+		ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(FFrameConstantBuffer ), (void**)(&pConstBuffer), &cbAddr);
 		pConstBuffer->matModelViewProj = skyCam.GetViewMatrix() * skyCam.GetProjectionMatrix();
 
 		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::SKYDOME_PSO_MSAA_4 : EBuiltinPSOs::SKYDOME_PSO));

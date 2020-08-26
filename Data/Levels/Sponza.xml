@@ -31,9 +31,9 @@
     </EnvironmentMap>
     -->
     <Camera>
-        <Position> 0.0 3.0 -5 </Position>
+        <Position> 700.0 170.0 -50 </Position>
         <Pitch> 15 </Pitch>
-        <Yaw> 0 </Yaw>
+        <Yaw> -90 </Yaw>
         <Projection>Perspective</Projection>
         <FoV>60.0</FoV>
         <Near>0.1</Near>
@@ -61,7 +61,7 @@
     
     <GameObject>
         <Transform>
-            <Position>0 100 0</Position>
+            <Position>0 100 190</Position>
             <Quaternion>0 0 0 1</Quaternion>
             <Scale>100 100 100</Scale>
         </Transform>
@@ -77,7 +77,7 @@
         <Transform>
             <Position>0 0 0</Position>
             <Quaternion>0 0 0 1</Quaternion>
-            <Scale>0.01 0.01 0.01</Scale>
+            <Scale>0.05 0.05 0.05</Scale>
         </Transform>
         <Model>
             <Path>Data/Models/sponza/sponza.obj</Path>
@@ -86,9 +86,9 @@
     </GameObject>
     <GameObject>
         <Transform>
-            <Position>-130 0 0</Position>
+            <Position>-230 0 0</Position>
             <Quaternion>0 0 0 1</Quaternion>
-            <Scale>0.01 0.01 0.01</Scale>
+            <Scale>0.06 0.06 0.06</Scale>
         </Transform>
         <Model>
             <Path>Data/Models/sponza/sponza.obj</Path>
@@ -97,9 +97,9 @@
     </GameObject>
     <GameObject>
         <Transform>
-            <Position>130 0 0</Position>
+            <Position>330 0 0</Position>
             <Quaternion>0 0 0 1</Quaternion>
-            <Scale>0.01 0.01 0.01</Scale>
+            <Scale>0.07 0.07 0.07</Scale>
         </Transform>
         <Model>
             <Path>Data/Models/sponza/sponza.obj</Path>

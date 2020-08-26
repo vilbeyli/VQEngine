@@ -43,6 +43,7 @@ set (Shaders
     "Shaders/FullscreenTriangle.hlsl"
     "Shaders/Tonemapper.hlsl"
     "Shaders/Skydome.hlsl"
+    "Shaders/Object.hlsl"
 )
 
 set (HeaderVQE 

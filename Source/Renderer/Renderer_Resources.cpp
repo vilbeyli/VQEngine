@@ -24,6 +24,7 @@
 
 #include "../../Libs/VQUtils/Source/Log.h"
 #include "../../Libs/VQUtils/Source/utils.h"
+#include "../../Libs/VQUtils/Source/Timer.h"
 #include "../../Libs/D3D12MA/src/Common.h"
 
 #include <cassert>
@@ -84,7 +85,7 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 		return it->second;
 	}
 	
-
+	Timer t; t.Start();
 	Texture tex;
 
 	// https://docs.microsoft.com/en-us/windows/win32/direct3d12/residency#heap-resources
@@ -111,7 +112,7 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 		ID = AddTexture_ThreadSafe(std::move(tex));
 		mLoadedTexturePaths[std::string(pFilePath)] = ID;
 #if LOG_RESOURCE_CREATE
-		Log::Info("VQRenderer::CreateTextureFromFile(): %s", pFilePath);
+		Log::Info("VQRenderer::CreateTextureFromFile(): [%.2fs] %s", t.StopGetDeltaTimeAndReset(), pFilePath);
 #endif
 	}
 	uploadHeap.Destroy(); // this is VERY expensive, TODO: find another solution.
@@ -255,9 +256,25 @@ void VQRenderer::InitializeDSV(DSV_ID dsvID, uint32 heapIndex, TextureID texID)
 }
 void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID)
 {
-	CHECK_TEXTURE(mTextures, texID);
-	CHECK_RESOURCE_VIEW(SRV, srvID);
-	mTextures.at(texID).InitializeSRV(heapIndex, &mSRVs.at(srvID));
+	if (texID != INVALID_ID)
+	{
+		CHECK_TEXTURE(mTextures, texID);
+		CHECK_RESOURCE_VIEW(SRV, srvID);
+		mTextures.at(texID).InitializeSRV(heapIndex, &mSRVs.at(srvID));
+	}
+	else // init NULL SRV
+	{           
+		// Describe and create 2 null SRVs. Null descriptors are needed in order 
+		// to achieve the effect of an "unbound" resource.
+		D3D12_SHADER_RESOURCE_VIEW_DESC nullSrvDesc = {};
+		nullSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+		nullSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		nullSrvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		nullSrvDesc.Texture2D.MipLevels = 1;
+		nullSrvDesc.Texture2D.MostDetailedMip = 0;
+		nullSrvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+		mDevice.GetDevicePtr()->CreateShaderResourceView(nullptr, &nullSrvDesc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
+	}
 }
 void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID)
 {
@@ -370,20 +387,25 @@ TextureID VQRenderer::AddTexture_ThreadSafe(Texture&& tex)
 }
 void VQRenderer::DestroyTexture(TextureID texID)
 {
+	// Remove texID
 	std::lock_guard<std::mutex> lk(mMtxTextures);
 	mTextures.at(texID).Destroy();
 	mTextures.erase(texID);
 
+	// Remove texture path from cache
 	std::string texPath = "";
+	bool bTexturePathRegistered = false;
 	for (const auto& path_id_pair : mLoadedTexturePaths)
 	{
 		if (path_id_pair.second == texID)
 		{
 			texPath = path_id_pair.first;
+			bTexturePathRegistered = true;
 			break;
 		}
 	}
-	mLoadedTexturePaths.erase(texPath);
+	if (bTexturePathRegistered)
+		mLoadedTexturePaths.erase(texPath);
 }
 void VQRenderer::DestroySRV(SRV_ID srvID)
 {
