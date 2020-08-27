@@ -124,7 +124,7 @@ if !NO_BUILD! equ 0 (
     :: Package the engine
     call :ExecBuildTask_Build
 
-    if %ERRORLEVEL% neq 0  exit /b %ERRORLEVEL%
+    if !ERRORLEVEL! neq 0  exit /b !ERRORLEVEL!
 )
 
 :: move build artifacts into destination folder
