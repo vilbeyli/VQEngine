@@ -73,7 +73,7 @@ public:
 		inline static DirectX::XMMATRIX CalculateViewMatrix(int face, const vec3& position = vec3::Zero) { return CalculateViewMatrix(static_cast<ECubeMapLookDirections>(face), position); }
 #endif
 	};
-	static std::vector<uint8> GenerateTexture_Checkerboard(uint Dimension);
+	static std::vector<uint8> GenerateTexture_Checkerboard(uint Dimension, bool bUseMidtones = false);
 
 	Texture()  = default;
 	~Texture() = default;

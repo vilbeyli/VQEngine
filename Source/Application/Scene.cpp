@@ -22,6 +22,8 @@
 #include "Window.h"
 #include "VQEngine.h"
 
+#include "Libs/VQUtils/Source/utils.h"
+
 #define LOG_CACHED_RESOURCES_ON_LOAD 0
 #define LOG_RESOURCE_CREATE          1
 
@@ -85,6 +87,18 @@ MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 #if LOG_RESOURCE_CREATE
 	Log::Info("Scene::CreateMaterial(): %s", UniqueMaterialName.c_str());
 #endif
+
+	Material& mat = mMaterials.at(id);
+	if (mat.SRVMaterialMaps == INVALID_ID)
+	{
+		mat.SRVMaterialMaps = mRenderer.CreateSRV(NUM_MATERIAL_TEXTURE_MAP_BINDINGS);
+		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 0, INVALID_ID);
+		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 1, INVALID_ID);
+		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 2, INVALID_ID);
+		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 3, INVALID_ID);
+		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 4, INVALID_ID);
+		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 5, INVALID_ID);
+	}
 	return id;
 }
 
@@ -167,19 +181,7 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene)
 {
 	constexpr bool B_LOAD_SERIAL = true;
-
-	// register builtin meshes to scene mesh lookup
-	// @mMeshes[0-NUM_BUILTIN_MESHES] are assigned here directly while the rest
-	// of the meshes used in the scene must use this->AddMesh(Mesh&&) interface;
-	for (size_t i = 0; i < builtinMeshes.size(); ++i)
-	{
-		this->mMeshes[(int)i] = builtinMeshes[i];
-	}
-
-	// scene-specific load 
-	this->LoadScene(scene);
-
-	auto fnDeserializeGameObject = [&](GameObjectRepresentation& ObjRep, int i)
+	auto fnDeserializeGameObject = [&](FGameObjectRepresentation& ObjRep)
 	{
 		// GameObject
 		GameObject* pObj = mGameObjectPool.Allocate(1);
@@ -208,11 +210,15 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 			MeshID meshID = mEngine.GetBuiltInMeshID(ObjRep.BuiltinMeshName);
 			model.mData.mOpaueMeshIDs.push_back(meshID);
 
-			// TODO: material
-			std::string matName = "ObjMat";
-			matName += std::to_string(i);
-			MaterialID matID = this->CreateMaterial(matName);
-			model.mData.mOpaqueMaterials[meshID] = matID;
+			// material
+			MaterialID matID = this->mDefaultMaterialID;
+			if (!ObjRep.MaterialName.empty())
+			{
+				matID = this->CreateMaterial(ObjRep.MaterialName);
+			}
+			Material& mat = this->GetMaterial(matID);
+			const bool bTransparentMesh = mat.IsTransparent();
+			model.mData.mOpaqueMaterials[meshID] = matID; // todo: handle transparency
 
 			model.mbLoaded = true;
 			pObj->mModelID = mID;
@@ -221,18 +227,76 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 		{
 			mAssetLoader.QueueModelLoad(pObj, ObjRep.ModelFilePath, ObjRep.ModelName);
 		}
-		
+
 
 		mpObjects.push_back(pObj);
 	};
 
+	// register builtin meshes to scene mesh lookup
+	// @mMeshes[0-NUM_BUILTIN_MESHES] are assigned here directly while the rest
+	// of the meshes used in the scene must use this->AddMesh(Mesh&&) interface;
+	for (size_t i = 0; i < builtinMeshes.size(); ++i)
+	{
+		this->mMeshes[(int)i] = builtinMeshes[i];
+	}
+
+	// register builtin materials 
+	{
+		this->mDefaultMaterialID = this->CreateMaterial("DefaultMaterial");
+		Material& mat = this->GetMaterial(this->mDefaultMaterialID);
+	}
+
+	// scene-specific load 
+	this->LoadScene(scene);
+
+	// Create scene materials before deserializing gameobjects
+	for (const FMaterialRepresentation& matRep : scene.Materials)
+	{
+		MaterialID id = this->CreateMaterial(matRep.Name);
+		Material& mat = this->GetMaterial(id);
+
+		auto fnAssignF  = [](float& dest, const float& src) { if (src != MATERIAL_UNINITIALIZED_VALUE) dest = src; };
+		auto fnAssignF3 = [](XMFLOAT3& dest, const XMFLOAT3& src) { if (src.x != MATERIAL_UNINITIALIZED_VALUE) dest = src; };
+		auto fnEnqueueTexLoad = [&](MaterialID matID, const std::string& path, AssetLoader::ETextureType type)
+		{
+			if (path.empty()) return;
+			AssetLoader::FTextureLoadParams p = {};
+			p.MatID = matID;
+			p.TexturePath = path;
+			p.TexType = type;
+			mAssetLoader.QueueTextureLoad(p);
+		};
+
+		// immediate values
+		fnAssignF(mat.alpha, matRep.Alpha);
+		fnAssignF(mat.metalness, matRep.Metalness);
+		fnAssignF(mat.roughness, matRep.Roughness);
+		fnAssignF(mat.emissiveIntensity, matRep.EmissiveIntensity);
+		fnAssignF3(mat.emissiveColor, matRep.EmissiveColor);
+		fnAssignF3(mat.diffuse, matRep.DiffuseColor);
+
+		// async data (textures)
+		fnEnqueueTexLoad(id, matRep.DiffuseMapFilePath  , AssetLoader::ETextureType::DIFFUSE);
+		fnEnqueueTexLoad(id, matRep.NormalMapFilePath   , AssetLoader::ETextureType::NORMALS);
+		fnEnqueueTexLoad(id, matRep.EmissiveMapFilePath , AssetLoader::ETextureType::EMISSIVE);
+		fnEnqueueTexLoad(id, matRep.AlphaMaskMapFilePath, AssetLoader::ETextureType::ALPHA_MASK);
+		fnEnqueueTexLoad(id, matRep.MetallicMapFilePath , AssetLoader::ETextureType::METALNESS);
+		fnEnqueueTexLoad(id, matRep.RoughnessMapFilePath, AssetLoader::ETextureType::ROUGHNESS);
+
+		AssetLoader::FMaterialTextureAssignment MatTexAssignment = {};
+		MatTexAssignment.matID = id;
+		mMaterialAssignments.mAssignments.push_back(MatTexAssignment);
+	}
+
+	// start loading material textures
+	mMaterialAssignments.mTextureLoadResults = mAssetLoader.StartLoadingTextures();
+
 	if constexpr (B_LOAD_SERIAL)
 	{
 		// GAME OBJECTS
-		int i = 0;
-		for (GameObjectRepresentation& ObjRep : scene.Objects)
+		for (FGameObjectRepresentation& ObjRep : scene.Objects)
 		{
-			fnDeserializeGameObject(ObjRep, i++);
+			fnDeserializeGameObject(ObjRep);
 		}
 	}
 	else // THREADED LOAD
@@ -272,7 +336,7 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 
 void Scene::OnLoadComplete()
 {
-
+	// Assign model data 
 	for (auto it = mModelLoadResults.begin(); it != mModelLoadResults.end(); ++it)
 	{
 		GameObject* pObj = it->first;
@@ -283,6 +347,8 @@ void Scene::OnLoadComplete()
 
 		pObj->mModelID = res.get();
 	}
+
+	mMaterialAssignments.DoAssignments(this, &mRenderer);
 
 	Log::Info("[Scene] %s loaded.", mSceneRepresentation.SceneName.c_str());
 	mSceneRepresentation.loadSuccess = 1;
@@ -351,3 +417,8 @@ void Scene::HandleInput()
 		mEngine.StartLoadingEnvironmentMap(mIndex_ActiveEnvironmentMapPreset);
 	}
 }
+
+FMaterialRepresentation::FMaterialRepresentation()
+	: DiffuseColor(MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE)
+	, EmissiveColor(MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE)
+{}

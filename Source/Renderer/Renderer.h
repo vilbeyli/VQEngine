@@ -89,6 +89,14 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	NUM_BUILTIN_PSOs
 };
 
+enum EProceduralTextures
+{
+	  CHECKERBOARD = 0
+	, CHECKERBOARD_GRAYSCALE
+
+	, NUM_PROCEDURAL_TEXTURES
+};
+
 
 //
 // RENDERER
@@ -160,6 +168,9 @@ public:
 	inline const RTV&            GetRTV(RTV_ID   Id) const { return GetRenderTargetView(Id);    }
 	inline const DSV&            GetDSV(DSV_ID   Id) const { return GetDepthStencilView(Id);    }
 	
+	inline const SRV&            GetProceduralTextureSRV(EProceduralTextures tex) const { return GetSRV(GetProceduralTextureSRV_ID(tex)); }
+	inline const SRV_ID          GetProceduralTextureSRV_ID(EProceduralTextures tex) const { return mLookup_ProceduralTextureSRVs.at(tex); }
+
 private:
 	using PSOArray_t = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
 	
@@ -213,7 +224,8 @@ private:
 	std::unordered_map<HWND, FWindowRenderContext> mRenderContextLookup;
 
 	// bookkeeping
-	std::unordered_map<TextureID, std::string>     mLookup_TextureDiskLocations;
+	std::unordered_map<TextureID, std::string>      mLookup_TextureDiskLocations;
+	std::unordered_map<EProceduralTextures, SRV_ID> mLookup_ProceduralTextureSRVs;
 
 
 
@@ -238,4 +250,5 @@ private:
 public:
 	static std::vector< VQSystemInfo::FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters = false, IDXGIFactory6* pFactory = nullptr);
 	static const std::string_view& DXGIFormatAsString(DXGI_FORMAT format);
+	static EProceduralTextures GetProceduralTextureEnumFromName(const std::string& ProceduralTextureName);
 };

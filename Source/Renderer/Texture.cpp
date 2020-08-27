@@ -328,7 +328,7 @@ void Texture::CreateRTV(uint32_t index, RTV* pRV, int mipLevel, int arraySize, i
 //
 
 // from Microsoft's D3D12HelloTexture
-std::vector<uint8> Texture::GenerateTexture_Checkerboard(uint Dimension)
+std::vector<uint8> Texture::GenerateTexture_Checkerboard(uint Dimension, bool bUseMidtones /*= false*/)
 {
     constexpr UINT TexturePixelSizeInBytes = 4; // byte/px
     const UINT& TextureWidth = Dimension;
@@ -351,16 +351,16 @@ std::vector<uint8> Texture::GenerateTexture_Checkerboard(uint Dimension)
 
         if (i % 2 == j % 2)
         {
-            pData[n + 0] = 0x00;    // R
-            pData[n + 1] = 0x00;    // G
-            pData[n + 2] = 0x00;    // B
+            pData[n + 0] = bUseMidtones ? 0x03 : 0x00;    // R
+            pData[n + 1] = bUseMidtones ? 0x03 : 0x00;    // G
+            pData[n + 2] = bUseMidtones ? 0x03 : 0x00;    // B
             pData[n + 3] = 0xff;    // A
         }
         else
         {
-            pData[n + 0] = 0xff;    // R
-            pData[n + 1] = 0xff;    // G
-            pData[n + 2] = 0xff;    // B
+            pData[n + 0] = bUseMidtones ? 0x1F : 0xff;    // R
+            pData[n + 1] = bUseMidtones ? 0x1F : 0xff;    // G
+            pData[n + 2] = bUseMidtones ? 0x1F : 0xff;    // B
             pData[n + 3] = 0xff;    // A
         }
     }

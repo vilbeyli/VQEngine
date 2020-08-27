@@ -1,34 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Scene>
     <!-- 
-    ENVIRONMENT MAP
-        Environment maps are defined in Data/EnvironmentMaps.ini 
-        Custom env map usage: specify path & MaxCLL
-         <path>Textures/HDRI/env_map.hdr</path>
-         <MaxCLL>1200</MaxCLL>
-
-        Presets are defined in EnvironmentMaps.ini. Usage:
-         <Preset>Stadium01</Preset>
-    -->
-    <!-- 
-    CAMERA
-        Contains 3 main data fields
-         - Translational Data   : Position, Yaw, Pitch
-         - Camera Viewport Data : Projection Type <perspective/orthogonal>, FoV in Degrees, Near & Far Planes
-         - Camera Type Data     : First Person <TranslationSpeed, AngularSpeed, Drag> / Orbit < TBA >
-    -->
-
-    <!-- 
-    GAME OBJECT
-        Transform & Model container
-    -->
-    
-    <!-- ================================================================ -->
-    
-    <!--
-    <EnvironmentMap>
-        <Preset>Stadium01</Preset>
-    </EnvironmentMap>
+    CAMERAS
     -->
     <Camera>
         <Position> 700.0 170.0 -50 </Position>
@@ -46,7 +19,10 @@
         </FirstPerson>
     </Camera>
 
-
+    <!-- 
+    OBJECTS
+    -->
+    <!-- main sponza model -->
     <GameObject>
         <Transform>
             <Position>0 0 0</Position>
@@ -58,21 +34,8 @@
             <Name>Sponza</Name>
         </Model>
     </GameObject>
-    
-    <GameObject>
-        <Transform>
-            <Position>0 100 190</Position>
-            <Quaternion>0 0 0 1</Quaternion>
-            <Scale>100 100 100</Scale>
-        </Transform>
-        <Model>
-            <Mesh>Triangle</Mesh>
-            <Material>
-                <Diffuse></Diffuse>
-            </Material>
-        </Model>
-    </GameObject>
 
+    <!-- small sponza models -->
     <GameObject>
         <Transform>
             <Position>0 0 0</Position>
@@ -106,7 +69,10 @@
             <Name>Sponza</Name>
         </Model>
     </GameObject>
-    
+
+    <!-- 
+    POST PROCESS
+    -->
     <PostProcess>
     <!-- TBA -->
     </PostProcess>

@@ -21,6 +21,25 @@ void StressTestScene::InitializeScene()
 
 void StressTestScene::LoadScene(FSceneRepresentation& scene)
 {
+	//
+	// MATERIALS
+	//
+	FMaterialRepresentation matRep = {};
+	matRep.Alpha = 1.0f;
+	matRep.DiffuseColor = { 1, 1, 1 };
+	matRep.DiffuseMapFilePath = "Procedural/Checkerboard";
+	matRep.Name = "Checkerboard";
+	scene.Materials.push_back(matRep);
+	
+	matRep.DiffuseMapFilePath = "Procedural/Checkerboard_Grayscale";
+	matRep.Name = "Checkerboard_Grayscale";
+	scene.Materials.push_back(matRep);
+
+	//
+	// OBJECTS
+	//
+	
+	// small cubes
 	constexpr int NUM_OBJECTS = 1024;
 
 	constexpr int DIMENSION_X = 16;
@@ -29,6 +48,7 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 #if 0
 	for (int i = 0; i < NUM_OBJECTS; ++i)
 #else
+	int NumObjects = 0;
 	constexpr float distance = 5.0f;
 	for(int x=-DIMENSION_X/2; x<DIMENSION_X/2; ++x)
 	for(int y=-DIMENSION_Y/2; y<DIMENSION_Y/2; ++y)
@@ -36,7 +56,7 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 
 #endif
 	{
-		GameObjectRepresentation obj = {};
+		FGameObjectRepresentation obj = {};
 
 		XMFLOAT3 pos = {x*distance, y*distance, z*distance};
 		XMFLOAT3 axis = UpVector;
@@ -48,8 +68,23 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 		obj.tf.SetScale(scale);
 		obj.BuiltinMeshName = "Cube";
 
+		obj.MaterialName = NumObjects%2==0 ? "Checkerboard_Grayscale" : "Checkerboard";
+
 		scene.Objects.push_back(obj);
+		++NumObjects;
 	}
+
+
+	// big cube
+	FGameObjectRepresentation obj = {};
+	XMFLOAT3 pos = { 0, 0, 0 };
+	XMFLOAT3 axis = UpVector;
+	XMFLOAT3 scale = { 100, 100, 100 };
+	obj.tf.SetPosition(pos);
+	obj.tf.SetScale(scale);
+	obj.BuiltinMeshName = "Cube";
+	obj.MaterialName = "Checkerboard";
+	scene.Objects.push_back(obj);
 }
 
 void StressTestScene::UnloadScene()

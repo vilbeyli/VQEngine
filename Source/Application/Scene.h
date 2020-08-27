@@ -32,7 +32,26 @@ struct Material;
 struct FResourceNames;
 
 //------------------------------------------------------
-struct GameObjectRepresentation
+#define MATERIAL_UNINITIALIZED_VALUE -1.0f
+struct FMaterialRepresentation
+{
+	std::string Name;
+	DirectX::XMFLOAT3 DiffuseColor;
+	float Alpha             = MATERIAL_UNINITIALIZED_VALUE;
+	DirectX::XMFLOAT3 EmissiveColor;
+	float EmissiveIntensity = MATERIAL_UNINITIALIZED_VALUE;
+	float Metalness         = MATERIAL_UNINITIALIZED_VALUE;
+	float Roughness         = MATERIAL_UNINITIALIZED_VALUE;
+	std::string DiffuseMapFilePath  ;
+	std::string NormalMapFilePath   ;
+	std::string EmissiveMapFilePath ;
+	std::string AlphaMaskMapFilePath;
+	std::string MetallicMapFilePath ;
+	std::string RoughnessMapFilePath;
+
+	FMaterialRepresentation();
+};
+struct FGameObjectRepresentation
 {
 	Transform tf;
 	
@@ -40,15 +59,16 @@ struct GameObjectRepresentation
 	std::string ModelFilePath;
 	
 	std::string BuiltinMeshName;
-	struct Material { float data[16]; };
+	std::string MaterialName;
 };
 struct FSceneRepresentation
 {
 	std::string SceneName;
 	std::string EnvironmentMapPreset;
 
-	std::vector<FCameraParameters>        Cameras;
-	std::vector<GameObjectRepresentation> Objects;
+	std::vector<FMaterialRepresentation>   Materials;
+	std::vector<FCameraParameters>         Cameras;
+	std::vector<FGameObjectRepresentation> Objects;
 	//std::vector<LightRepresentation> Lights;
 
 	char loadSuccess = 0;
@@ -211,6 +231,8 @@ protected:
 	BoundingBox              mSceneBoundingBox;
 	std::vector<BoundingBox> mMeshBoundingBoxes;
 	std::vector<BoundingBox> mGameObjectBoundingBoxes;
+	MaterialID               mDefaultMaterialID;
+
 
 	//
 	// SCENE STATE
@@ -244,7 +266,8 @@ private:
 	std::mutex mMtx_Models;
 	std::mutex mMtx_Materials;
 
-	AssetLoader::ModelLoadResults_t mModelLoadResults;
+	AssetLoader::ModelLoadResults_t          mModelLoadResults;
+	AssetLoader::FMaterialTextureAssignments mMaterialAssignments;
 	
 	// cache
 	std::unordered_map<std::string, MaterialID> mLoadedMaterials;

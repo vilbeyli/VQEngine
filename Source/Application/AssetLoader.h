@@ -68,6 +68,24 @@ public:
 	using ModelLoadResults_t   = std::unordered_map<GameObject*, ModelLoadResult_t>;
 	using TextureLoadResult_t  = FTextureLoadResult;
 	using TextureLoadResults_t = std::unordered_multimap<MaterialID, TextureLoadResult_t>;
+	struct FMaterialTextureAssignment
+	{
+		MaterialID matID = INVALID_ID;
+		std::vector<AssetLoader::FTextureLoadResult> DiffuseIDs;
+		std::vector<AssetLoader::FTextureLoadResult> SpecularIDs;
+		std::vector<AssetLoader::FTextureLoadResult> NormalsIDs;
+		std::vector<AssetLoader::FTextureLoadResult> HeightMapIDs;
+		std::vector<AssetLoader::FTextureLoadResult> AlphaMapIDs;
+		std::vector<AssetLoader::FTextureLoadResult>& GetTextureMapCollection(ETextureType type);
+	};
+	struct FMaterialTextureAssignments
+	{
+		std::vector<FMaterialTextureAssignment> mAssignments;
+		TextureLoadResults_t mTextureLoadResults;
+
+		void DoAssignments(Scene* pScene, VQRenderer* pRenderer);
+		void WaitForTextureLoads();
+	};
 public:
 	AssetLoader(ThreadPool& WorkerThreads, VQRenderer& renderer)
 		: mWorkers(WorkerThreads)

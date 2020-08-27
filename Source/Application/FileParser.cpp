@@ -388,6 +388,7 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 	constexpr char* XML_TAG__ENVIRONMENT_MAP_PRESET = "Preset";
 	constexpr char* XML_TAG__CAMERA                 = "Camera";
 	constexpr char* XML_TAG__GAMEOBJECT             = "GameObject";
+	constexpr char* XML_TAG__MATERIAL               = "Material";
 	//-----------------------------------------------------------------
 	constexpr char* SCENE_FILES_DIRECTORY           = "Data/Levels/";
 	//-----------------------------------------------------------------
@@ -476,7 +477,42 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 		}
 		return tf;
 	};
+	auto fnParseMaterial  = [&](XMLElement* pMat) -> FMaterialRepresentation
+	{
+		FMaterialRepresentation mat;
 
+		XMLElement* pName    = pMat->FirstChildElement("Name");
+		XMLElement* pDiff    = pMat->FirstChildElement("Diffuse");
+		XMLElement* pAlph    = pMat->FirstChildElement("Alpha");
+		XMLElement* pEmsv    = pMat->FirstChildElement("Emissive");
+		XMLElement* pEmsI    = pMat->FirstChildElement("EmissiveIntensity");
+		XMLElement* pRgh     = pMat->FirstChildElement("Roughness");
+		XMLElement* pMtl     = pMat->FirstChildElement("Metalness");
+		//------------------------------------------------------------------
+		XMLElement* pDiffMap = pMat->FirstChildElement("DiffuseMap");
+		XMLElement* pNrmlMap = pMat->FirstChildElement("NormalMap");
+		XMLElement* pEmsvMap = pMat->FirstChildElement("EmissiveMap");
+		XMLElement* pAlphMap = pMat->FirstChildElement("AlphaMaskMap");
+		XMLElement* pMtlMap  = pMat->FirstChildElement("MetallicMap");
+		XMLElement* pRghMap  = pMat->FirstChildElement("RoughnessMap");
+
+		if (pName) fnParseXMLStringVal(pName, mat.Name);
+		if (pDiff) fnParseXMLFloat3Val(pDiff, mat.DiffuseColor);
+		if (pAlph) fnParseXMLFloatVal(pAlph, mat.Alpha);
+		if (pEmsv) fnParseXMLFloat3Val(pEmsI, mat.EmissiveColor);
+		if (pEmsI) fnParseXMLFloatVal(pEmsI, mat.EmissiveIntensity);
+		if (pRgh ) fnParseXMLFloatVal(pRgh , mat.Roughness);
+		if (pMtl ) fnParseXMLFloatVal(pMtl , mat.Metalness);
+		//-------------------------------------------------------------------
+		if (pDiffMap) fnParseXMLStringVal(pDiffMap, mat.DiffuseMapFilePath  );
+		if (pNrmlMap) fnParseXMLStringVal(pNrmlMap, mat.NormalMapFilePath   );
+		if (pEmsvMap) fnParseXMLStringVal(pEmsvMap, mat.EmissiveMapFilePath );
+		if (pAlphMap) fnParseXMLStringVal(pAlphMap, mat.AlphaMaskMapFilePath);
+		if (pMtlMap ) fnParseXMLStringVal(pMtlMap , mat.MetallicMapFilePath );
+		if (pRghMap ) fnParseXMLStringVal(pRghMap , mat.RoughnessMapFilePath);
+
+		return mat;
+	};
 	//-----------------------------------------------------------------
 
 	// Start reading scene XML file
@@ -579,11 +615,17 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 				SceneRep.Cameras.push_back(cam);
 			}
 
+			// Materials
+			else if (XML_TAG__MATERIAL == CurrEle)
+			{
+				FMaterialRepresentation mat = fnParseMaterial(pCurrentSceneElement);
+				SceneRep.Materials.push_back(mat);
+			}
 
 			// Game Objects
 			else if (XML_TAG__GAMEOBJECT == CurrEle)
 			{
-				GameObjectRepresentation obj;
+				FGameObjectRepresentation obj;
 
 				XMLElement*& pObj = pCurrentSceneElement;
 				XMLElement* pTransform = pObj->FirstChildElement("Transform");
@@ -595,31 +637,27 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 					obj.tf = fnParseTransform(pTransform);
 				}
 
-				// Model (WIP)
+				// Model
 				if (pModel)
 				{
 					XMLElement* pMesh = pModel->FirstChildElement("Mesh");
-					XMLElement* pMaterial = pModel->FirstChildElement("Material");
+					XMLElement* pMaterial = pModel->FirstChildElement("MaterialName");
 					XMLElement* pModelPath = pModel->FirstChildElement("Path");
 					XMLElement* pModelName = pModel->FirstChildElement("Name");
-						
-						
+
 					if (pMesh) fnParseXMLStringVal(pMesh, obj.BuiltinMeshName);
-					if (pMaterial)
-					{
-						// TODO
-					}
+					if (pMaterial) fnParseXMLStringVal(pMaterial, obj.MaterialName);
 					if (pModelPath) fnParseXMLStringVal(pModelPath, obj.ModelFilePath);
 					if (pModelName) fnParseXMLStringVal(pModelName, obj.ModelName);
 				}
 
-
 				SceneRep.Objects.push_back(obj);
 			}
 
+
 			pCurrentSceneElement = pCurrentSceneElement->NextSiblingElement();
 		} while (pCurrentSceneElement);
-	}
+	} // if (pScene)
 
 	return SceneRep;
 }

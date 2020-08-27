@@ -56,6 +56,16 @@ const std::string_view& VQRenderer::DXGIFormatAsString(DXGI_FORMAT format)
 	return DXGI_FORMAT_STRING_TRANSLATION.at(format);
 }
 
+EProceduralTextures VQRenderer::GetProceduralTextureEnumFromName(const std::string& ProceduralTextureName)
+{
+	static std::unordered_map<std::string, EProceduralTextures> MAP =
+	{
+		  { "Checkerboard", EProceduralTextures::CHECKERBOARD }
+		, { "Checkerboard_Grayscale", EProceduralTextures::CHECKERBOARD_GRAYSCALE }
+	};
+	return MAP.at(ProceduralTextureName);
+}
+
 
 
 // ---------------------------------------------------------------------------------------
@@ -343,7 +353,7 @@ void VQRenderer::InitializeHeaps()
 	mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE);
 
 	constexpr uint32 NumDescsCBV = 10;
-	constexpr uint32 NumDescsSRV = 150;
+	constexpr uint32 NumDescsSRV = 300;
 	constexpr uint32 NumDescsUAV = 10;
 	constexpr bool   bCPUVisible = false;
 	mHeapCBV_SRV_UAV.Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, NumDescsCBV + NumDescsSRV + NumDescsUAV, bCPUVisible);
@@ -848,9 +858,13 @@ void VQRenderer::LoadDefaultResources()
 	{
 		std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX);
 		TextureID texID = this->CreateTexture("Checkerboard", textureDesc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, texture.data());
-		this->CreateAndInitializeSRV(texID);
+		mLookup_ProceduralTextureSRVs[EProceduralTextures::CHECKERBOARD] = this->CreateAndInitializeSRV(texID);
 	}
-
+	{
+		std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX, true);
+		TextureID texID = this->CreateTexture("Checkerboard_Gray", textureDesc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, texture.data());
+		mLookup_ProceduralTextureSRVs[EProceduralTextures::CHECKERBOARD_GRAYSCALE] = this->CreateAndInitializeSRV(texID);
+	}
 }
 void VQRenderer::UploadVertexAndIndexBufferHeaps()
 {

@@ -35,139 +35,9 @@
 using namespace Assimp;
 using namespace DirectX;
 
-struct FMaterialTextureAssignments
-{
-	MaterialID matID = INVALID_ID;
-	std::vector<AssetLoader::FTextureLoadResult> DiffuseIDs;
-	std::vector<AssetLoader::FTextureLoadResult> SpecularIDs;
-	std::vector<AssetLoader::FTextureLoadResult> NormalsIDs;
-	std::vector<AssetLoader::FTextureLoadResult> HeightMapIDs;
-	std::vector<AssetLoader::FTextureLoadResult> AlphaMapIDs;
-};
-
-Model::Data ProcessAssimpNode(
-	  aiNode* const pNode
-	, const aiScene* pAiScene
-	, const std::string& modelDirectory
-	, AssetLoader* pAssetLoader
-	, Scene* pScene
-	, VQRenderer* pRenderer
-	, std::vector<FMaterialTextureAssignments>& MaterialTextureAssignments
-);
-
-
-//----------------------------------------------------------------------------------------------------------------
-// IMPORTERS
-//----------------------------------------------------------------------------------------------------------------
-
-ModelID AssetLoader::ImportModel_obj(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName)
-{
-	constexpr auto ASSIMP_LOAD_FLAGS
-		= aiProcess_Triangulate
-		| aiProcess_CalcTangentSpace
-		| aiProcess_MakeLeftHanded
-		| aiProcess_FlipUVs
-		| aiProcess_FlipWindingOrder
-		//| aiProcess_TransformUVCoords 
-		//| aiProcess_FixInfacingNormals
-		| aiProcess_JoinIdenticalVertices
-		| aiProcess_GenSmoothNormals;
-
-
-	const std::string modelDirectory = DirectoryUtil::GetFolderPath(objFilePath);
-
-	Log::Info("ImportModel_obj: %s - %s", ModelName.c_str(), objFilePath.c_str());
-	Timer t;
-	t.Start();
-
-	// Import Assimp Scene
-	Importer importer;
-	const aiScene* pAiScene = importer.ReadFile(objFilePath, ASSIMP_LOAD_FLAGS);
-	if (!pAiScene || pAiScene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !pAiScene->mRootNode)
-	{
-		Log::Error("Assimp error: %s", importer.GetErrorString());
-		return INVALID_ID;
-	}
-	t.Tick(); float fTimeReadFile = t.DeltaTime();
-	Log::Info("   ReadFile(): %.3fs", fTimeReadFile);
-
-	// parse scene and initialize model data
-	std::vector<FMaterialTextureAssignments> MaterialTextureAssignments;
-	Model::Data data = ProcessAssimpNode(pAiScene->mRootNode, pAiScene, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments);
-
-	pRenderer->UploadVertexAndIndexBufferHeaps(); // load VB/IBs
-	TextureLoadResults_t vTexLoadResults = pAssetLoader->StartLoadingTextures();
-
-	// cache the imported model in Scene
-	ModelID mID = pScene->CreateModel();
-	Model& model = pScene->GetModel(mID);
-	model = Model(objFilePath, ModelName, std::move(data));
-
-
-	// SYNC POINT - wait for textures to load
-	{
-		for (auto it = vTexLoadResults.begin(); it != vTexLoadResults.end(); ++it)
-		{
-			const MaterialID& matID = it->first;
-			const TextureLoadResult_t& result = it->second;
-			assert(result.texLoadResult.valid());
-			result.texLoadResult.wait();
-		}
-	}
-
-	// assign TextureIDs to the materials;
-	for (FMaterialTextureAssignments& assignment : MaterialTextureAssignments)
-	{
-		Material& mat = pScene->GetMaterial(assignment.matID);
-
-		auto pair_itBeginEnd = vTexLoadResults.equal_range(assignment.matID);
-		for (auto it = pair_itBeginEnd.first; it != pair_itBeginEnd.second; ++it)
-		{
-			const MaterialID& matID = it->first;
-			TextureLoadResult_t& result = it->second;
-
-			assert(result.texLoadResult.valid());
-			switch (result.type)
-			{
-			case DIFFUSE   : mat.TexDiffuseMap   = result.texLoadResult.get();  break;
-			case NORMALS   : mat.TexNormalMap    = result.texLoadResult.get();  break;
-			case ALPHA_MASK: mat.TexAlphaMaskMap = result.texLoadResult.get();  break;
-			case EMISSIVE  : mat.TexEmissiveMap  = result.texLoadResult.get();  break;
-			case METALNESS : mat.TexMetallicMap  = result.texLoadResult.get();  break;
-			case ROUGHNESS : mat.TexRoughnessMap = result.texLoadResult.get();  break;
-			case SPECULAR  : mat.TexSpecularMap  = result.texLoadResult.get(); /*pRenderer->InitializeSRV(mat.SRVMaterialMaps, 0, mat.TexSpecularMap);*/ break;
-			case HEIGHT    : mat.TexHeightMap    = result.texLoadResult.get(); /*pRenderer->InitializeSRV(mat.SRVMaterialMaps, 0, mat.TexHeightMap)  ;*/ break;
-			default:
-				Log::Warning("TODO");
-				break;
-			}
-		}
-
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ALBEDO, mat.TexDiffuseMap);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::NORMALS, mat.TexNormalMap);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ALPHA_MASK, mat.TexAlphaMaskMap);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::EMISSIVE, mat.TexEmissiveMap);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::METALLIC, mat.TexMetallicMap);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ROUGHNESS, mat.TexRoughnessMap);
-	}
-
-	t.Stop();
-	Log::Info("Loaded Model '%s' in %.2f seconds.", ModelName.c_str(), t.DeltaTime());
-	return mID;
-}
-
-ModelID AssetLoader::ImportModel_gltf(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName)
-{
-	assert(false); // TODO
-	return INVALID_ID;
-}
-
-
-
 //----------------------------------------------------------------------------------------------------------------
 // ASSET LOADER
 //----------------------------------------------------------------------------------------------------------------
-
 void AssetLoader::QueueModelLoad(GameObject* pObject, const std::string& ModelPath, const std::string& ModelName)
 {
 	const std::string FileExtension = DirectoryUtil::GetFileExtension(ModelPath);
@@ -255,9 +125,21 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures()
 		{
 			mUniqueTexturePaths.insert(TexLoadParams.TexturePath);
 
-			std::future<TextureID> texLoadResult = std::move(mWorkers.AddTask([this, TexLoadParams]()
+			// determine whether we'll load file OR use a procedurally generated texture
+			auto vPathTokens = StrUtil::split(TexLoadParams.TexturePath, '/');
+			assert(!vPathTokens.empty());
+			const bool bProceduralTexture = vPathTokens[0] == "Procedural";
+
+			EProceduralTextures ProcTex = bProceduralTexture 
+				? VQRenderer::GetProceduralTextureEnumFromName(vPathTokens[1])
+				: EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
+
+			std::future<TextureID> texLoadResult = std::move(mWorkers.AddTask([this, TexLoadParams, ProcTex]()
 			{
-				return mRenderer.CreateTextureFromFile(TexLoadParams.TexturePath.c_str());
+				const bool IS_PROCEDURAL = ProcTex != EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
+				return IS_PROCEDURAL
+					? mRenderer.GetProceduralTextureSRV_ID(ProcTex)
+					: mRenderer.CreateTextureFromFile(TexLoadParams.TexturePath.c_str());
 			}));
 			TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, TextureLoadResult_t{ TexLoadParams.TexType, std::move(texLoadResult) }));
 		}
@@ -309,6 +191,148 @@ static AssetLoader::ETextureType GetTextureType(aiTextureType aiType)
 	}
 	return AssetLoader::ETextureType::NUM_TEXTURE_TYPES;
 }
+
+void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, VQRenderer* pRenderer)
+{
+	for (FMaterialTextureAssignment& assignment : mAssignments)
+	{
+		Material& mat = pScene->GetMaterial(assignment.matID);
+
+		auto pair_itBeginEnd = mTextureLoadResults.equal_range(assignment.matID);
+		for (auto it = pair_itBeginEnd.first; it != pair_itBeginEnd.second; ++it)
+		{
+			const MaterialID& matID = it->first;
+			TextureLoadResult_t& result = it->second;
+
+			assert(result.texLoadResult.valid());
+			switch (result.type)
+			{
+			case DIFFUSE    : mat.TexDiffuseMap   = result.texLoadResult.get();  break;
+			case NORMALS    : mat.TexNormalMap    = result.texLoadResult.get();  break;
+			case ALPHA_MASK : mat.TexAlphaMaskMap = result.texLoadResult.get();  break;
+			case EMISSIVE   : mat.TexEmissiveMap  = result.texLoadResult.get();  break;
+			case METALNESS  : mat.TexMetallicMap  = result.texLoadResult.get();  break;
+			case ROUGHNESS  : mat.TexRoughnessMap = result.texLoadResult.get();  break;
+			case SPECULAR   : mat.TexSpecularMap  = result.texLoadResult.get(); /*pRenderer->InitializeSRV(mat.SRVMaterialMaps, 0, mat.TexSpecularMap);*/ break;
+			case HEIGHT     : mat.TexHeightMap    = result.texLoadResult.get(); /*pRenderer->InitializeSRV(mat.SRVMaterialMaps, 0, mat.TexHeightMap)  ;*/ break;
+			default:
+				Log::Warning("TODO");
+				break;
+			}
+		}
+
+		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ALBEDO, mat.TexDiffuseMap);
+		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::NORMALS, mat.TexNormalMap);
+		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ALPHA_MASK, mat.TexAlphaMaskMap);
+		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::EMISSIVE, mat.TexEmissiveMap);
+		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::METALLIC, mat.TexMetallicMap);
+		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ROUGHNESS, mat.TexRoughnessMap);
+	}
+}
+
+void AssetLoader::FMaterialTextureAssignments::WaitForTextureLoads()
+{
+	for (auto it = mTextureLoadResults.begin(); it != mTextureLoadResults.end(); ++it)
+	{
+		const MaterialID& matID = it->first;
+		const TextureLoadResult_t& result = it->second;
+		assert(result.texLoadResult.valid());
+		result.texLoadResult.wait();
+	}
+}
+
+std::vector<AssetLoader::FTextureLoadResult>& AssetLoader::FMaterialTextureAssignment::GetTextureMapCollection(ETextureType type)
+{
+	switch (type)
+	{
+	case AssetLoader::DIFFUSE    : return DiffuseIDs;
+	case AssetLoader::NORMALS    : return NormalsIDs;
+	case AssetLoader::SPECULAR   : assert(false); return DiffuseIDs; // currently not supported
+	case AssetLoader::ALPHA_MASK : return AlphaMapIDs;
+	case AssetLoader::EMISSIVE   : assert(false); return DiffuseIDs; // TODO
+	case AssetLoader::HEIGHT     : return HeightMapIDs;
+	case AssetLoader::METALNESS  : assert(false); return DiffuseIDs; // TODO
+	case AssetLoader::ROUGHNESS  : assert(false); return DiffuseIDs; // TODO
+	}
+	assert(false); return DiffuseIDs;
+}
+
+
+//----------------------------------------------------------------------------------------------------------------
+// IMPORTERS
+//----------------------------------------------------------------------------------------------------------------
+Model::Data ProcessAssimpNode(
+	aiNode* const pNode
+	, const aiScene* pAiScene
+	, const std::string& modelDirectory
+	, AssetLoader* pAssetLoader
+	, Scene* pScene
+	, VQRenderer* pRenderer
+	, AssetLoader::FMaterialTextureAssignments& MaterialTextureAssignments
+);
+
+ModelID AssetLoader::ImportModel_obj(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName)
+{
+	constexpr auto ASSIMP_LOAD_FLAGS
+		= aiProcess_Triangulate
+		| aiProcess_CalcTangentSpace
+		| aiProcess_MakeLeftHanded
+		| aiProcess_FlipUVs
+		| aiProcess_FlipWindingOrder
+		//| aiProcess_TransformUVCoords 
+		//| aiProcess_FixInfacingNormals
+		| aiProcess_JoinIdenticalVertices
+		| aiProcess_GenSmoothNormals;
+
+
+	const std::string modelDirectory = DirectoryUtil::GetFolderPath(objFilePath);
+
+	Log::Info("ImportModel_obj: %s - %s", ModelName.c_str(), objFilePath.c_str());
+	Timer t;
+	t.Start();
+
+	// Import Assimp Scene
+	Importer importer;
+	const aiScene* pAiScene = importer.ReadFile(objFilePath, ASSIMP_LOAD_FLAGS);
+	if (!pAiScene || pAiScene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !pAiScene->mRootNode)
+	{
+		Log::Error("Assimp error: %s", importer.GetErrorString());
+		return INVALID_ID;
+	}
+	t.Tick(); float fTimeReadFile = t.DeltaTime();
+	Log::Info("   ReadFile(): %.3fs", fTimeReadFile);
+
+	// parse scene and initialize model data
+	FMaterialTextureAssignments MaterialTextureAssignments;
+	Model::Data data = ProcessAssimpNode(pAiScene->mRootNode, pAiScene, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments);
+
+	pRenderer->UploadVertexAndIndexBufferHeaps(); // load VB/IBs
+	MaterialTextureAssignments.mTextureLoadResults = pAssetLoader->StartLoadingTextures();
+
+	// cache the imported model in Scene
+	ModelID mID = pScene->CreateModel();
+	Model& model = pScene->GetModel(mID);
+	model = Model(objFilePath, ModelName, std::move(data));
+
+	// SYNC POINT : wait for textures to load
+	{
+		MaterialTextureAssignments.WaitForTextureLoads();
+	}
+
+	// assign TextureIDs to the materials;
+	MaterialTextureAssignments.DoAssignments(pScene, pRenderer);
+
+	t.Stop();
+	Log::Info("Loaded Model '%s' in %.2f seconds.", ModelName.c_str(), t.DeltaTime());
+	return mID;
+}
+
+ModelID AssetLoader::ImportModel_gltf(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName)
+{
+	assert(false); // TODO
+	return INVALID_ID;
+}
+
 
 
 //----------------------------------------------------------------------------------------------------------------
@@ -403,7 +427,7 @@ static Model::Data ProcessAssimpNode(
 	AssetLoader*       pAssetLoader,
 	Scene*             pScene,
 	VQRenderer*        pRenderer,
-	std::vector<FMaterialTextureAssignments>& MaterialTextureAssignments
+	AssetLoader::FMaterialTextureAssignments& MaterialTextureAssignments
 )
 {
 	Model::Data modelData;
@@ -427,14 +451,10 @@ static Model::Data ProcessAssimpNode(
 			uniqueMatName = ModelFolderName + "/" + uniqueMatName;
 			matID = pScene->CreateMaterial(uniqueMatName);
 			Material& mat = pScene->GetMaterial(matID);
-			if (mat.SRVMaterialMaps == INVALID_ID)
-			{
-				mat.SRVMaterialMaps = pRenderer->CreateSRV(NUM_MATERIAL_TEXTURE_MAP_BINDINGS);
-			}
 		}
 
 		// get texture paths to load
-		FMaterialTextureAssignments MatAssignment = {};
+		AssetLoader::FMaterialTextureAssignment MatTexAssignment = {};
 		std::vector<AssetLoader::FTextureLoadParams> diffuseMaps  = GenerateTextureLoadParams(material, matID, aiTextureType_DIFFUSE, "texture_diffuse", modelDirectory);
 		std::vector<AssetLoader::FTextureLoadParams> specularMaps = GenerateTextureLoadParams(material, matID, aiTextureType_SPECULAR, "texture_specular", modelDirectory);
 		std::vector<AssetLoader::FTextureLoadParams> normalMaps   = GenerateTextureLoadParams(material, matID, aiTextureType_NORMALS, "texture_normal", modelDirectory);
@@ -442,16 +462,7 @@ static Model::Data ProcessAssimpNode(
 		std::vector<AssetLoader::FTextureLoadParams> alphaMaps    = GenerateTextureLoadParams(material, matID, aiTextureType_OPACITY, "texture_alpha", modelDirectory);
 
 		// queue texture load
-		std::array<decltype(diffuseMaps)*, 5>             TexLoadParams   = { &diffuseMaps, &specularMaps, &normalMaps, &heightMaps, &alphaMaps };
-		std::array<std::vector<AssetLoader::FTextureLoadResult>*, 5> TexAssignParams = 
-		{ 
-			  &MatAssignment.DiffuseIDs
-			, &MatAssignment.SpecularIDs
-			, &MatAssignment.NormalsIDs
-			, &MatAssignment.HeightMapIDs
-			, &MatAssignment.AlphaMapIDs
-		};
-		
+		std::array<decltype(diffuseMaps)*, 5> TexLoadParams = { &diffuseMaps, &specularMaps, &normalMaps, &heightMaps, &alphaMaps };
 		int iTexType = 0;
 		for (const auto* pvLoadParams : TexLoadParams)
 		{
@@ -466,8 +477,8 @@ static Model::Data ProcessAssimpNode(
 
 
 		// unflatten the material texture assignments
-		MatAssignment.matID = matID;
-		MaterialTextureAssignments.push_back(std::move(MatAssignment));
+		MatTexAssignment.matID = matID;
+		MaterialTextureAssignments.mAssignments.push_back(std::move(MatTexAssignment));
 
 		Material& mat = pScene->GetMaterial(matID);
 

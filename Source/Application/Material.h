@@ -19,6 +19,8 @@
 #pragma once
 #include <DirectXMath.h>
 
+#include "Types.h"
+
 enum EMaterialTextureMapBindings
 {
 	ALBEDO = 0,
@@ -67,6 +69,7 @@ struct Material // 56 Bytes
 	//------------------------------------------------------------
 
 	inline bool IsTransparent() const { return alpha != 1.0f; }
+
 #if 0
 	Material(MaterialID _ID);
 	~Material();
