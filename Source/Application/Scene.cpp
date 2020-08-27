@@ -143,7 +143,8 @@ void Scene::Update(float dt, int FRAME_DATA_INDEX)
 void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 {
 	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
-	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
+	FSceneView& SceneView     = mFrameSceneViews[FRAME_DATA_INDEX];
+	FSceneView& SceneViewNext = mFrameSceneViews[FRAME_DATA_NEXT_INDEX];
 
 	const Camera& cam = mCameras[mIndex_SelectedCamera];
 	const XMFLOAT3 camPos = cam.GetPositionF();
@@ -176,6 +177,9 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 			SceneView.meshRenderCommands.push_back(meshRenderCmd);
 		}
 	}
+
+	// update post process settings for next frame
+	SceneViewNext.postProcess = SceneView.postProcess;
 }
 
 void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene)
