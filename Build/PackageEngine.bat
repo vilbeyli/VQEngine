@@ -218,20 +218,25 @@ exit /b 0
 :ExecBuildTask_Build
 ::echo [VQPackage] ENGINE_BUILD_COMMAND = !ENGINE_BUILD_COMMAND!
 :: ---------------------- Build Release ----------------------
-call :PrintBuildStage Release
-call !ENGINE_BUILD_COMMAND! /p:Configuration=Release
-set /A ERR_REL=!ERRORLEVEL!
-set /A BUILD_NUM_CURR_TASK=!BUILD_NUM_CURR_TASK!+1
+if !BUILD_CONFIG_RELEASE! neq 0 (
+    call :PrintBuildStage Release
+    call !ENGINE_BUILD_COMMAND! /p:Configuration=Release
+    if !ERRORLEVEL! neq 0 (
+        echo ERROR: BUILD ERROR
+        exit /b -1
+    )
+    set /A BUILD_NUM_CURR_TASK=!BUILD_NUM_CURR_TASK!+1
+)
 :: ---------------------- Build Release ----------------------
 :: ---------------------- Build Debug   ----------------------
 if !BUILD_CONFIG_DEBUG! neq 0 (
     call :PrintBuildStage Debug
     call !ENGINE_BUILD_COMMAND! /p:Configuration=Debug
-    set /A BUILD_NUM_CURR_TASK=!BUILD_NUM_CURR_TASK!+1
     if !ERRORLEVEL! neq 0 (
         echo ERROR: BUILD ERROR
         exit /b -1
     )
+    set /A BUILD_NUM_CURR_TASK=!BUILD_NUM_CURR_TASK!+1
 )
 :: ---------------------- Build Debug   ----------------------
 :: ---------------------- Build RelWithDebInfo----------------
