@@ -923,14 +923,14 @@ HRESULT VQEngine::PresentFrame(FWindowRenderContext& ctx)
 	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
 	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
 
-	SCOPED_GPU_MARKER(pCmd, "PresentFrame");
-
-	// Transition SwapChain for Present
-	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
-		, D3D12_RESOURCE_STATE_RENDER_TARGET
-		, D3D12_RESOURCE_STATE_PRESENT)
-	);
-
+	{
+		SCOPED_GPU_MARKER(pCmd, "PresentFrame");
+		// Transition SwapChain for Present
+		pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
+			, D3D12_RESOURCE_STATE_RENDER_TARGET
+			, D3D12_RESOURCE_STATE_PRESENT)
+		);
+	}
 	pCmd->Close();
 
 	ID3D12CommandList* ppCommandLists[] = { pCmd };
