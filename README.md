@@ -129,3 +129,4 @@ VQE supports the following command line parameters:
 - [stb](https://github.com/nothings/stb)
 - [tinyxml2](https://github.com/leethomason/tinyxml2)
 - [assimp](https://github.com/assimp/assimp)
+- [WinPixEventRuntime](https://devblogs.microsoft.com/pix/winpixeventruntime/)
