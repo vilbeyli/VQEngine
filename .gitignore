@@ -345,3 +345,6 @@ $RECYCLE.BIN/
 !Data/Models/*/*.obj
 !Tools/7z.exe
 !Tools/wget.exe
+!Libs/WinPixEventRuntime/bin
+!Libs/WinPixEventRuntime/bin/x64/
+!Libs/WinPixEventRuntime/bin/x64/*
