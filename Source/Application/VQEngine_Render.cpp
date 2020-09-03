@@ -18,10 +18,10 @@
 
 #include "VQEngine.h"
 #include "Geometry.h"
+#include "GPUMarker.h"
 
 #include <d3d12.h>
 #include <dxgi.h>
-
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 //
@@ -644,7 +644,6 @@ void VQEngine::DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh)
 	pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 }
 
-
 void VQEngine::TransitionForSceneRendering(FWindowRenderContext& ctx)
 {
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
@@ -653,6 +652,8 @@ void VQEngine::TransitionForSceneRendering(FWindowRenderContext& ctx)
 	auto pRscTonemapper = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_TonemapperOut);
 	auto pRscColor = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColor);
 	auto pRscColorMSAA = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColorMSAA);
+
+	SCOPED_GPU_MARKER(pCmd, "TransitionForSceneRendering");
 
 	if (bMSAA)
 	{
@@ -674,7 +675,10 @@ void VQEngine::TransitionForSceneRendering(FWindowRenderContext& ctx)
 
 void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx)
 {
-
+	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
+	//PIXBeginEvent(pCmd, VQ_PIXEventColor, "TransitionForSceneRendering");
+	////TODO
+	//PIXEndEvent(pCmd);
 }
 
 void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& SceneView)
@@ -686,6 +690,9 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 
 	const RTV& rtv = mRenderer.GetRTV(bMSAA ? mResources_MainWnd.RTV_MainViewColorMSAA : mResources_MainWnd.RTV_MainViewColor);
 	const DSV& dsv = mRenderer.GetDSV(bMSAA ? mResources_MainWnd.DSV_MainViewDepthMSAA : mResources_MainWnd.DSV_MainViewDepth);
+
+
+	SCOPED_GPU_MARKER(pCmd, "RenderSceneColor");
 
 	// Clear Depth & Render targets
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle();
@@ -708,56 +715,59 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 
 	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::OBJECT_PSO_MSAA_4 : EBuiltinPSOs::OBJECT_PSO));
 
-	// Draw Objects -----------------------------------------------
 	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 
-	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(4)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
-	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-	for (const FMeshRenderCommand& meshRenderCmd : SceneView.meshRenderCommands)
+	// Draw Objects -----------------------------------------------
 	{
-		// set constant buffer data
-		const XMMATRIX mMVP
-			= meshRenderCmd.WorldTransformationMatrix
-			* SceneView.viewProj;
+		SCOPED_GPU_MARKER(pCmd, "Geometry");
+		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(4)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
+		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+		for (const FMeshRenderCommand& meshRenderCmd : SceneView.meshRenderCommands)
+		{
+			// set constant buffer data
+			const XMMATRIX mMVP
+				= meshRenderCmd.WorldTransformationMatrix
+				* SceneView.viewProj;
 
-		FFrameConstantBuffer2* pConstBuffer = {};
-		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(FFrameConstantBuffer2), (void**)(&pConstBuffer), &cbAddr);
-		pConstBuffer->matModelViewProj = mMVP;
-		pConstBuffer->iTextureConfig = 0; // TODO
-		pConstBuffer->iTextureOutput = EMaterialTextureMapBindings::ALBEDO; // TODO: drive thru material
+			FFrameConstantBuffer2* pConstBuffer = {};
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+			ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(FFrameConstantBuffer2), (void**)(&pConstBuffer), &cbAddr);
+			pConstBuffer->matModelViewProj = mMVP;
+			pConstBuffer->iTextureConfig = 0; // TODO
+			pConstBuffer->iTextureOutput = EMaterialTextureMapBindings::ALBEDO; // TODO: drive thru material
 
-		// set material data
-		const Material& mat = mpScene->GetMaterial(meshRenderCmd.matID);
-		if(mat.SRVMaterialMaps!=INVALID_ID)
-			pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
+			// set material data
+			const Material& mat = mpScene->GetMaterial(meshRenderCmd.matID);
+			if (mat.SRVMaterialMaps != INVALID_ID)
+				pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
 
-		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
+			pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
 
-		const Mesh& mesh = mpScene->mMeshes.at(meshRenderCmd.meshID);
+			const Mesh& mesh = mpScene->mMeshes.at(meshRenderCmd.meshID);
 
-		const auto VBIBIDs = mesh.GetIABufferIDs();
-		const uint32 NumIndices = mesh.GetNumIndices();
-		const uint32 NumInstances = 1;
-		const BufferID& VB_ID = VBIBIDs.first;
-		const BufferID& IB_ID = VBIBIDs.second;
-		const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
-		const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
+			const auto VBIBIDs = mesh.GetIABufferIDs();
+			const uint32 NumIndices = mesh.GetNumIndices();
+			const uint32 NumInstances = 1;
+			const BufferID& VB_ID = VBIBIDs.first;
+			const BufferID& IB_ID = VBIBIDs.second;
+			const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
+			const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
 
-		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		pCmd->IASetVertexBuffers(0, 1, &vb);
-		pCmd->IASetIndexBuffer(&ib);
+			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			pCmd->IASetVertexBuffers(0, 1, &vb);
+			pCmd->IASetIndexBuffer(&ib);
 
-		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
+			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
+		}
 	}
-
-
 
 	// Draw Environment Map ---------------------------------------
 	const bool bHasEnvironmentMapHDRTexture = mResources_MainWnd.EnvironmentMap.SRV_HDREnvironment != INVALID_ID;
 	const bool bDrawEnvironmentMap = bHasEnvironmentMapHDRTexture && true;
 	if (bDrawEnvironmentMap)
 	{
+		SCOPED_GPU_MARKER(pCmd, "EnvironmentMap");
+
 		ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 
 		Camera skyCam = mpScene->GetActiveCamera().Clone();
@@ -790,7 +800,7 @@ void VQEngine::ResolveMSAA(FWindowRenderContext& ctx)
 	if (!bMSAA)
 		return;
 
-	
+	SCOPED_GPU_MARKER(pCmd, "ResolveMSAA");
 	auto pRscColor     = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColor);
 	auto pRscColorMSAA = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColorMSAA);
 
@@ -815,6 +825,7 @@ void VQEngine::TransitionForPostProcessing(FWindowRenderContext& ctx)
 	auto pRscInput  = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColor);
 	auto pRscOutput = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_TonemapperOut);
 
+	SCOPED_GPU_MARKER(pCmd, "TransitionForPostProcessing");
 	const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 	{
 		  CD3DX12_RESOURCE_BARRIER::Transition(pRscInput , (bMSAA ? D3D12_RESOURCE_STATE_RESOLVE_DEST : D3D12_RESOURCE_STATE_RENDER_TARGET), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
@@ -847,6 +858,7 @@ void VQEngine::RenderPostProcess(FWindowRenderContext& ctx, const FPostProcessPa
 	constexpr int DispatchZ = 1;
 
 	// cmds
+	SCOPED_GPU_MARKER(pCmd, "RenderPostProcess");
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::TONEMAPPER_PSO));
 	pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(3)); // compute RS
 	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
@@ -875,6 +887,7 @@ void VQEngine::RenderUI(FWindowRenderContext& ctx)
 	ID3D12Resource*          pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = ctx.SwapChain.GetCurrentBackBufferRTVHandle();
 
+	SCOPED_GPU_MARKER(pCmd, "SwapchainPassthrough");
 	// Transition Input & Output resources
 	auto pRscTonemapperOut = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_TonemapperOut);
 	CD3DX12_RESOURCE_BARRIER barriers[] =
@@ -909,6 +922,8 @@ HRESULT VQEngine::PresentFrame(FWindowRenderContext& ctx)
 
 	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
 	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
+
+	SCOPED_GPU_MARKER(pCmd, "PresentFrame");
 
 	// Transition SwapChain for Present
 	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
