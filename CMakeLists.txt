@@ -67,6 +67,7 @@ set (HeaderVQE
     "Source/Application/Light.h"
     "Source/Application/GameObject.h"
     "Source/Application/Memory.h"
+    "Source/Application/GPUMarker.h"
 )
 
 set (SourceVQE 
@@ -94,6 +95,11 @@ set (SourceVQE
     "Source/Application/Light.cpp"
     "Source/Application/GameObject.cpp"
     "Source/Application/Memory.cpp"
+    "Source/Application/GPUMarker.cpp"
+)
+
+set (PIXIncl 
+    "Libs/WinPixEventRuntime/Include"
 )
 
 # ouput exe to bin directory
@@ -118,7 +124,6 @@ add_subdirectory(Source/Renderer)
 #)
 add_subdirectory(Libs/assimp)
 
-
 source_group("Config"   FILES ${Config})
 source_group("Resource" FILES ${Resource})
 source_group("Icons"    FILES ${Icons})
@@ -132,11 +137,13 @@ set_source_files_properties(Data/Resources/VQE.rc PROPERTIES VS_TOOL_OVERRIDE "R
 set_source_files_properties(Data/Icons/VQE32.ico  PROPERTIES VS_TOOL_OVERRIDE "Image")
 
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/VQUtils/Bin/)
+link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/WinPixEventRuntime/bin/x64)
 
 # Create a library with the project name that is build with the Headers and Source files
 add_executable( ${PROJECT_NAME} ${HeaderVQE} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} )
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY} )
+
 
 # set target executable name for debug/releasewithdebug builds, release is VQE.exe
 foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
@@ -162,6 +169,13 @@ set_target_properties(D3D12MA PROPERTIES FOLDER Libs)
 
 # Make sure the compiler can find include files for the libraries
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${Includes})
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${PIXIncl})
+
+target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer assimp WinPixEventRuntime)
 
 
-target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer assimp)
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_CURRENT_SOURCE_DIR}/Libs/WinPixEventRuntime/bin/x64/WinPixEventRuntime.dll"
+    $<TARGET_FILE_DIR:${PROJECT_NAME}>
+)
