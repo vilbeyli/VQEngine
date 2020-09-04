@@ -80,8 +80,11 @@ public:
 	};
 	struct FMaterialTextureAssignments
 	{
+		FMaterialTextureAssignments(const ThreadPool& workers) : mWorkers(workers) {}
+
 		std::vector<FMaterialTextureAssignment> mAssignments;
 		TextureLoadResults_t mTextureLoadResults;
+		const ThreadPool& mWorkers; // to check if pool IsExiting()
 
 		void DoAssignments(Scene* pScene, VQRenderer* pRenderer);
 		void WaitForTextureLoads();
@@ -91,6 +94,7 @@ public:
 		: mWorkers(WorkerThreads)
 		, mRenderer(renderer)
 	{}
+	inline const ThreadPool& GetThreadPool() const { return mWorkers; }
 
 	void QueueModelLoad(GameObject* pObject, const std::string& ModelPath, const std::string& ModelName);
 	ModelLoadResults_t StartLoadingModels(Scene* pScene);

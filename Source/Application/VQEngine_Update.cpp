@@ -128,7 +128,7 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 		{
 			mpScene->OnLoadComplete();
 			WaitUntilRenderingFinishes();
-			Log::Info("Update Thread loaded, starting simulation...");
+			Log::Info("Loading completed, starting scene simulation");
 			mAppState = EAppState::SIMULATING;
 			mbLoadingLevel.store(false);
 		}
