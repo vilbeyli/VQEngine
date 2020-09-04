@@ -127,6 +127,7 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 	, mResourceNames(engine.GetResourceNames())
 	, mAssetLoader(engine.GetAssetLoader())
 	, mRenderer(renderer)
+	, mMaterialAssignments(engine.GetAssetLoader().GetThreadPool())
 {}
 
 void Scene::Update(float dt, int FRAME_DATA_INDEX)

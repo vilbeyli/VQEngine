@@ -78,6 +78,12 @@ AssetLoader::ModelLoadResults_t AssetLoader::StartLoadingModels(Scene* pScene)
 		{
 			mUniqueModelPaths.insert(ModelPath);
 
+			// check whether Exit signal is given to the app before dispatching workers
+			if (mWorkers.IsExiting())
+			{
+				break;
+			}
+
 			// start loading
 			modelLoadResult = std::move(mWorkers.AddTask([=]()
 			{
@@ -133,6 +139,12 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures()
 			EProceduralTextures ProcTex = bProceduralTexture 
 				? VQRenderer::GetProceduralTextureEnumFromName(vPathTokens[1])
 				: EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
+
+			// check whether Exit signal is given to the app before dispatching workers
+			if (mWorkers.IsExiting())
+			{
+				break;
+			}
 
 			std::future<TextureID> texLoadResult = std::move(mWorkers.AddTask([this, TexLoadParams, ProcTex]()
 			{
@@ -204,6 +216,9 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, VQRe
 			const MaterialID& matID = it->first;
 			TextureLoadResult_t& result = it->second;
 
+			if (mWorkers.IsExiting())
+				break;
+
 			assert(result.texLoadResult.valid());
 			switch (result.type)
 			{
@@ -237,6 +252,10 @@ void AssetLoader::FMaterialTextureAssignments::WaitForTextureLoads()
 		const MaterialID& matID = it->first;
 		const TextureLoadResult_t& result = it->second;
 		assert(result.texLoadResult.valid());
+
+		if (mWorkers.IsExiting())
+			break;
+
 		result.texLoadResult.wait();
 	}
 }
@@ -303,7 +322,7 @@ ModelID AssetLoader::ImportModel_obj(Scene* pScene, AssetLoader* pAssetLoader, V
 	Log::Info("   ReadFile(): %.3fs", fTimeReadFile);
 
 	// parse scene and initialize model data
-	FMaterialTextureAssignments MaterialTextureAssignments;
+	FMaterialTextureAssignments MaterialTextureAssignments(pAssetLoader->mWorkers);
 	Model::Data data = ProcessAssimpNode(pAiScene->mRootNode, pAiScene, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments);
 
 	pRenderer->UploadVertexAndIndexBufferHeaps(); // load VB/IBs

@@ -16,6 +16,12 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
+
+// Resources for reading
+// - http://diligentgraphics.com/diligent-engine/architecture/d3d12/managing-descriptor-heaps/
+// - https://asawicki.info/articles/memory_management_vulkan_direct3d_12.php5
+// - https://simonstechblog.blogspot.com/2019/06/d3d12-descriptor-heap-management.html
+
 #include "Renderer.h"
 #include "Device.h"
 #include "Texture.h"

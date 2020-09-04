@@ -263,7 +263,7 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID)
 		mTextures.at(texID).InitializeSRV(heapIndex, &mSRVs.at(srvID));
 	}
 	else // init NULL SRV
-	{           
+	{
 		// Describe and create 2 null SRVs. Null descriptors are needed in order 
 		// to achieve the effect of an "unbound" resource.
 		D3D12_SHADER_RESOURCE_VIEW_DESC nullSrvDesc = {};
