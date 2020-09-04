@@ -66,7 +66,7 @@ void Camera::InitializeCamera(const FCameraParameters& data)
 {
 	this->mProjParams = data.ProjectionParams;
 	this->mProjParams.FieldOfView *= DEG2RAD; // convert FoV to radians
-	this->mYaw = this->mPitch = 0;
+	this->mYaw = this->mPitch = 0; // set with Rotate() below
 	
 
 	SetProjectionMatrix(this->mProjParams);

@@ -35,10 +35,10 @@
         <Pitch> 65 </Pitch>
         <Yaw> 6 </Yaw>
 
-        <Projection>Orthographic</Projection>
+        <Projection>Perspective</Projection>
         <FoV>90.0</FoV>
         <Near>0.01</Near>
-        <Far>1000</Far>
+        <Far>5000</Far>
 
         <FirstPerson>
             <TranslationSpeed>1000</TranslationSpeed>

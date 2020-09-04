@@ -132,6 +132,8 @@ public:
 	void UpdateViewMatrix();
 	inline void Update(float dt, const Input& input) { if(pController) pController->UpdateCamera(input, dt); }
 
+	inline float GetYaw() const { return mYaw; }
+	inline float GetPitch() const { return mPitch; }
 	DirectX::XMFLOAT3 GetPositionF() const;
 	DirectX::XMMATRIX GetViewMatrix() const;
 	DirectX::XMMATRIX GetViewInverseMatrix() const;
