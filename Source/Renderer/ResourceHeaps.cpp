@@ -109,9 +109,10 @@ bool StaticResourceViewHeap::AllocDescriptor(uint32 size, ResourceView* pRV)
 // UploadHeap
 //
 //--------------------------------------------------------------------------------------
-void UploadHeap::Create(ID3D12Device* pDevice, SIZE_T uSize)
+void UploadHeap::Create(ID3D12Device* pDevice, SIZE_T uSize, ID3D12CommandQueue* pQueue)
 {
     mpDevice = pDevice;
+    mpQueue = pQueue;
 
     // Create command list and allocators 
 
@@ -177,8 +178,13 @@ UINT8* UploadHeap::Suballocate(SIZE_T uSize, UINT64 uAlign)
     return pRet;
 }
 
-void UploadHeap::UploadToGPUAndWait(ID3D12CommandQueue* pCmdQueue)
+void UploadHeap::UploadToGPUAndWait(ID3D12CommandQueue* pCmdQueue /* =nullptr */)
 {
+    if (!pCmdQueue)
+    {
+        pCmdQueue = this->mpQueue;
+    }
+
     mpCommandList->Close();
     pCmdQueue->ExecuteCommandLists(1, CommandListCast(&mpCommandList));
     pCmdQueue->Signal(mpFence, mFenceValue);

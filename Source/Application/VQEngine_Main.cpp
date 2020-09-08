@@ -77,12 +77,15 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	mWorkers_Update.AddTask([&]() 
 	{
 		this->mSysInfo = VQSystemInfo::GetSystemInfo();
+		
 #if REPORT_SYSTEM_INFO 
 		ReportSystemInfo(this->mSysInfo);
 #endif
 		HWND hwnd = mpWinMain->GetHWND();
-		if(!mpWinMain->IsClosed())
+		if (!mpWinMain->IsClosed())
+		{
 			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetStaticHDRMetaDataEvent>(hwnd, this->GatherHDRMetaDataParameters(hwnd)));
+		}
 	});
 	float f0 = t.Tick();
 

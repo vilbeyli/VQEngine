@@ -25,6 +25,7 @@
 
 #include "Libs/VQUtils/Source/Multithreading.h"
 #include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Source/Image.h"
 #include "Libs/VQUtils/Source/Timer.h"
 #include "Libs/VQUtils/Source/Log.h"
 
@@ -149,15 +150,21 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures()
 			std::future<TextureID> texLoadResult = std::move(mWorkers.AddTask([this, TexLoadParams, ProcTex]()
 			{
 				const bool IS_PROCEDURAL = ProcTex != EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
-				return IS_PROCEDURAL
-					? mRenderer.GetProceduralTextureSRV_ID(ProcTex)
-					: mRenderer.CreateTextureFromFile(TexLoadParams.TexturePath.c_str());
+				if (IS_PROCEDURAL)
+				{
+					return mRenderer.GetProceduralTexture(ProcTex);
+				}
+
+				return mRenderer.CreateTextureFromFile(TexLoadParams.TexturePath.c_str());
 			}));
 			TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, TextureLoadResult_t{ TexLoadParams.TexType, std::move(texLoadResult) }));
 		}
 	} while (!mTextureLoadQueue.empty());
 
 	mUniqueTexturePaths.clear();
+
+	// Currently mRenderer.CreateTextureFromFile() starts the texture uploads
+	///mRenderer.StartTextureUploads();
 
 	return std::move(TextureLoadResults);
 }
@@ -210,16 +217,25 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, VQRe
 	{
 		Material& mat = pScene->GetMaterial(assignment.matID);
 
+		bool bFound = mTextureLoadResults.find(assignment.matID) != mTextureLoadResults.end();
+		if (!bFound)
+		{
+			Log::Error("TextureLoadResutls for MatID=%d not found!", assignment.matID);
+			continue;
+		}
+
 		auto pair_itBeginEnd = mTextureLoadResults.equal_range(assignment.matID);
 		for (auto it = pair_itBeginEnd.first; it != pair_itBeginEnd.second; ++it)
 		{
 			const MaterialID& matID = it->first;
 			TextureLoadResult_t& result = it->second;
-
+			
 			if (mWorkers.IsExiting())
 				break;
 
 			assert(result.texLoadResult.valid());
+
+			result.texLoadResult.wait();
 			switch (result.type)
 			{
 			case DIFFUSE    : mat.TexDiffuseMap   = result.texLoadResult.get();  break;

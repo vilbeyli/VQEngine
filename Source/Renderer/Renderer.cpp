@@ -129,13 +129,16 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 	mComputeQueue.Create(pVQDevice, CommandQueue::ECommandQueueType::COMPUTE);
 	mCopyQueue.Create(pVQDevice, CommandQueue::ECommandQueueType::COPY);
 
-
 	// Initialize memory
 	InitializeD3D12MA();
 	InitializeHeaps();
 
+	// initialize thread
+	mbExitUploadThread.store(false);
+	mbDefaultResourcesLoaded.store(false);
+	mTextureUploadThread = std::thread(&VQRenderer::TextureUploadThread_Main, this);
+
 	Log::Info("[Renderer] Initialized.");
-	// TODO: Log system info
 }
 
 void VQRenderer::Load()
@@ -143,6 +146,7 @@ void VQRenderer::Load()
 	LoadPSOs();
 	LoadDefaultResources();
 	this->UploadVertexAndIndexBufferHeaps();
+	mbDefaultResourcesLoaded.store(true);
 }
 
 void VQRenderer::Unload()
@@ -153,6 +157,9 @@ void VQRenderer::Unload()
 
 void VQRenderer::Exit()
 {
+	mbExitUploadThread.store(true);
+	mSignal_UploadThreadWorkReady.NotifyAll();
+
 	mHeapUpload.Destroy();
 	mHeapCBV_SRV_UAV.Destroy();
 	mHeapDSV.Destroy();
@@ -201,6 +208,8 @@ void VQRenderer::Exit()
 	mCopyQueue.Destroy();
 
 	mDevice.Destroy();
+
+	mTextureUploadThread.join();
 }
 
 void VQRenderer::OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h)
@@ -355,8 +364,8 @@ void VQRenderer::InitializeHeaps()
 {
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
-	const uint32 UPLOAD_HEAP_SIZE = 256 * MEGABYTE; // TODO: from RendererSettings.ini
-	mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE);
+	const uint32 UPLOAD_HEAP_SIZE = 513 * MEGABYTE; // TODO: from RendererSettings.ini
+	mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE, this->mGFXQueue.pQueue);
 
 	constexpr uint32 NumDescsCBV = 10;
 	constexpr uint32 NumDescsSRV = 300;
@@ -864,11 +873,13 @@ void VQRenderer::LoadDefaultResources()
 	{
 		std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX);
 		TextureID texID = this->CreateTexture("Checkerboard", textureDesc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, texture.data());
+		mLookup_ProceduralTextureIDs[EProceduralTextures::CHECKERBOARD] = texID;
 		mLookup_ProceduralTextureSRVs[EProceduralTextures::CHECKERBOARD] = this->CreateAndInitializeSRV(texID);
 	}
 	{
 		std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX, true);
 		TextureID texID = this->CreateTexture("Checkerboard_Gray", textureDesc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, texture.data());
+		mLookup_ProceduralTextureIDs[EProceduralTextures::CHECKERBOARD_GRAYSCALE] = texID;
 		mLookup_ProceduralTextureSRVs[EProceduralTextures::CHECKERBOARD_GRAYSCALE] = this->CreateAndInitializeSRV(texID);
 	}
 }
@@ -876,7 +887,6 @@ void VQRenderer::UploadVertexAndIndexBufferHeaps()
 {
 	mStaticHeap_VertexBuffer.UploadData(mHeapUpload.GetCommandList());
 	mStaticHeap_IndexBuffer.UploadData(mHeapUpload.GetCommandList());
-	mHeapUpload.UploadToGPUAndWait(mGFXQueue.pQueue);
 }
 
 
@@ -894,7 +904,16 @@ ID3D12DescriptorHeap* VQRenderer::GetDescHeap(EResourceHeapType HeapType)
 }
 
 
-
+TextureID VQRenderer::GetProceduralTexture(EProceduralTextures tex) const
+{
+	while (!mbDefaultResourcesLoaded);
+	if (mLookup_ProceduralTextureIDs.find(tex) == mLookup_ProceduralTextureIDs.end())
+	{
+		Log::Error("Couldn't find procedural texture %d", tex);
+		return INVALID_ID;
+	}
+	return mLookup_ProceduralTextureIDs.at(tex);
+}
 
 
 
