@@ -145,7 +145,8 @@ void VQRenderer::Load()
 {
 	LoadPSOs();
 	LoadDefaultResources();
-	this->UploadVertexAndIndexBufferHeaps();
+	
+	Log::Info("[Renderer] Loaded.");
 	mbDefaultResourcesLoaded.store(true);
 }
 
@@ -885,6 +886,7 @@ void VQRenderer::LoadDefaultResources()
 }
 void VQRenderer::UploadVertexAndIndexBufferHeaps()
 {
+	std::lock_guard<std::mutex> lk(mMtxTextureUploadQueue);
 	mStaticHeap_VertexBuffer.UploadData(mHeapUpload.GetCommandList());
 	mStaticHeap_IndexBuffer.UploadData(mHeapUpload.GetCommandList());
 }

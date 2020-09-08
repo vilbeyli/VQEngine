@@ -193,6 +193,10 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 
 void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene)
 {
+	mRenderer.WaitForLoadCompletion();
+	
+	Log::Info("[Scene] Loading Scene: %s", scene.SceneName.c_str());
+
 	constexpr bool B_LOAD_SERIAL = true;
 	auto fnDeserializeGameObject = [&](FGameObjectRepresentation& ObjRep)
 	{

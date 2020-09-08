@@ -122,6 +122,7 @@ public:
 	void                         Load();
 	void                         Unload();
 	void                         Exit();
+	inline void                  WaitForLoadCompletion() const { while (!mbDefaultResourcesLoaded); };
 
 	void                         OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h);
 

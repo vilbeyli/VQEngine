@@ -283,10 +283,10 @@ void VQRenderer::InitializeDSV(DSV_ID dsvID, uint32 heapIndex, TextureID texID)
 }
 void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID)
 {
+	CHECK_RESOURCE_VIEW(SRV, srvID);
 	if (texID != INVALID_ID)
 	{
 		CHECK_TEXTURE(mTextures, texID);
-		CHECK_RESOURCE_VIEW(SRV, srvID);
 		mTextures.at(texID).InitializeSRV(heapIndex, &mSRVs.at(srvID));
 	}
 	else // init NULL SRV

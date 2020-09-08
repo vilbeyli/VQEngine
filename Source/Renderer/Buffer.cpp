@@ -152,7 +152,13 @@ bool StaticBufferHeap::AllocBuffer(uint32 numElements, uint32 strideInBytes, voi
     std::lock_guard<std::mutex> lock(mMtx);
 
     uint32 size = AlignOffset(numElements * strideInBytes, (uint32)StaticBufferHeap::MEMORY_ALIGNMENT);
-    assert( (mMemOffset + size) < mTotalMemSize); // if this is hit, initialize heap with a larger size.
+    const bool bHeapOutOfMemory = ((mMemOffset + size) > mTotalMemSize);
+    assert( !bHeapOutOfMemory); // if this is hit, initialize heap with a larger size.
+    if (bHeapOutOfMemory)
+    {
+        Log::Error("Static Heap out of memory.");
+        return false;
+    }
 
     *ppDataOut = (void*)(mpData + mMemOffset);
 

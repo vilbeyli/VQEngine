@@ -187,6 +187,8 @@ void VQEngine::InitializeBuiltinMeshes()
 	}
 
 	// ...
+
+	mRenderer.UploadVertexAndIndexBufferHeaps();
 }
 
 
