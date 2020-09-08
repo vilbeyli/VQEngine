@@ -314,6 +314,8 @@ FSetHDRMetaDataParams VQEngine::GatherHDRMetaDataParameters(HWND hwnd)
 {
 	FSetHDRMetaDataParams params;
 
+	while (!mbRenderThreadInitialized); // wait until renderer is initialized
+
 	const SwapChain& Swapchain = mRenderer.GetWindowSwapChain(hwnd);
 	const DXGI_OUTPUT_DESC1 desc = Swapchain.GetContainingMonitorDesc();
 	const FDisplayHDRProfile* pProfile = GetHDRProfileIfExists(desc.DeviceName);
