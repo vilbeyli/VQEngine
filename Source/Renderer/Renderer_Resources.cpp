@@ -417,6 +417,7 @@ void VQRenderer::ProcessTextureUploadQueue()
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
 	std::vector<std::atomic<bool>*> vTexResidentBools;
+	std::vector<Image> vImages;
 
 	while (!mTextureUploadQueue.empty())
 	{
@@ -469,12 +470,20 @@ void VQRenderer::ProcessTextureUploadQueue()
 
 		Texture& tex = mTextures.at(desc.id);
 		vTexResidentBools.push_back(&tex.bResident);
+
+		if (desc.img.pData)
+		{
+			vImages.push_back(std::move(desc.img));
+		}
 	}
 
 	mHeapUpload.UploadToGPUAndWait();
 
 	for (std::atomic<bool>* pbResident : vTexResidentBools)
 		pbResident->store(true);
+
+	for (Image& img : vImages)
+		img.Destroy(); // free the image memory
 }
 
 void VQRenderer::TextureUploadThread_Main()
