@@ -32,16 +32,18 @@
 
 #define VQUTILS_SYSTEMINFO_INCLUDE_D3D12 1
 #include "../../Libs/VQUtils/Source/SystemInfo.h" // FGPUInfo
+#include "../../Libs/VQUtils/Source/Image.h"
+#include "../../Libs/VQUtils/Source/Multithreading.h"
 
 #include <vector>
 #include <unordered_map>
 #include <array>
+#include <queue>
 
 namespace D3D12MA { class Allocator; }
 class Window;
 struct ID3D12RootSignature;
 struct ID3D12PipelineState;
-
 
 
 //
@@ -71,6 +73,18 @@ struct FWindowRenderContext
 
 	int MainRTResolutionX = -1;
 	int MainRTResolutionY = -1;
+};
+
+struct FTextureUploadDesc
+{
+	FTextureUploadDesc(Image&& img_      , TextureID texID, const TextureCreateDesc& tDesc) : img(img_), id(texID), desc(tDesc), pData(nullptr) {}
+	FTextureUploadDesc(const void* pData_, TextureID texID, const TextureCreateDesc& tDesc) : img({  }), id(texID), desc(tDesc), pData(pData_)  {}
+	FTextureUploadDesc() = delete;
+
+	Image img;
+	const void* pData;
+	TextureID id;
+	TextureCreateDesc desc;
 };
 
 enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is integrated
@@ -170,6 +184,13 @@ public:
 	
 	inline const SRV&            GetProceduralTextureSRV(EProceduralTextures tex) const { return GetSRV(GetProceduralTextureSRV_ID(tex)); }
 	inline const SRV_ID          GetProceduralTextureSRV_ID(EProceduralTextures tex) const { return mLookup_ProceduralTextureSRVs.at(tex); }
+	TextureID                    GetProceduralTexture(EProceduralTextures tex) const;
+
+	// Texture Residency
+	void QueueTextureUpload(const FTextureUploadDesc& desc);
+	void ProcessTextureUploadQueue();
+	void TextureUploadThread_Main();
+	inline void StartTextureUploads() { mSignal_UploadThreadWorkReady.NotifyOne(); };
 
 private:
 	using PSOArray_t = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
@@ -226,8 +247,15 @@ private:
 	// bookkeeping
 	std::unordered_map<TextureID, std::string>      mLookup_TextureDiskLocations;
 	std::unordered_map<EProceduralTextures, SRV_ID> mLookup_ProceduralTextureSRVs;
+	std::unordered_map<EProceduralTextures, TextureID> mLookup_ProceduralTextureIDs;
 
+	std::atomic<bool>              mbExitUploadThread;
+	Signal                         mSignal_UploadThreadWorkReady;
+	std::thread                    mTextureUploadThread;
+	std::mutex                     mMtxTextureUploadQueue;
+	std::queue<FTextureUploadDesc> mTextureUploadQueue;
 
+	std::atomic<bool>              mbDefaultResourcesLoaded;
 
 private:
 	void InitializeD3D12MA();

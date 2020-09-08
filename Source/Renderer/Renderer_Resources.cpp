@@ -25,6 +25,7 @@
 #include "../../Libs/VQUtils/Source/Log.h"
 #include "../../Libs/VQUtils/Source/utils.h"
 #include "../../Libs/VQUtils/Source/Timer.h"
+#include "../../Libs/VQUtils/Source/Image.h"
 #include "../../Libs/D3D12MA/src/Common.h"
 
 #include <cassert>
@@ -84,65 +85,91 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 #endif
 		return it->second;
 	}
-	
+	// check path
+	if (strlen(pFilePath) == 0)
+	{
+		Log::Warning("VQRenderer::CreateTextureFromFile: Empty FilePath provided");
+		return INVALID_ID;
+	}
+
+	// --------------------------------------------------------
+
+	TextureID ID = INVALID_ID;
+
 	Timer t; t.Start();
 	Texture tex;
 
-	// https://docs.microsoft.com/en-us/windows/win32/direct3d12/residency#heap-resources
-	// Heap creation can be slow; but it is optimized for background thread processing. 
-	// It's recommended to create heaps on background threads to avoid glitching the render 
-	// thread. In D3D12, multiple threads may safely call create routines concurrently.
-	UploadHeap uploadHeap;
-	{
-		std::unique_lock<std::mutex> lk(mMtxUploadHeapCreation);
-		uploadHeap.Create(mDevice.GetDevicePtr(), 1024 * MEGABYTE); // TODO: drive the heapsize through RendererSettings.ini
-	}
 	const std::string FileNameAndExtension = DirectoryUtil::GetFileNameFromPath(pFilePath);
 	TextureCreateDesc tDesc(FileNameAndExtension);
 	tDesc.pAllocator = mpAllocator;
 	tDesc.pDevice = mDevice.GetDevicePtr();
-	tDesc.pUploadHeap = &uploadHeap;
-	tDesc.Desc = {};
 
-	bool bSuccess = tex.CreateFromFile(tDesc, pFilePath);
-	TextureID ID = INVALID_ID;
+	Image image;
+	const bool bSuccess = Texture::ReadImageFromDisk(pFilePath, image);
+	const bool bHDR = image.BytesPerPixel > 4;
 	if (bSuccess)
 	{
-		uploadHeap.UploadToGPUAndWait(mGFXQueue.pQueue);
+		// Fill D3D12 Descriptor
+		tDesc.d3d12Desc = {};
+		tDesc.d3d12Desc.Width = image.Width;
+		tDesc.d3d12Desc.Height = image.Height;
+		tDesc.d3d12Desc.Format = bHDR ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
+		tDesc.d3d12Desc.DepthOrArraySize = 1;
+		tDesc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+		tDesc.d3d12Desc.Alignment = 0;
+		tDesc.d3d12Desc.DepthOrArraySize = 1;
+		tDesc.d3d12Desc.MipLevels = 1;
+		tDesc.d3d12Desc.SampleDesc.Count = 1;
+		tDesc.d3d12Desc.SampleDesc.Quality = 0;
+		tDesc.d3d12Desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+		tDesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+		tex.Create(tDesc, image.pData);
 		ID = AddTexture_ThreadSafe(std::move(tex));
-		mLoadedTexturePaths[std::string(pFilePath)] = ID;
+		this->QueueTextureUpload(FTextureUploadDesc(std::move(image), ID, tDesc));
+
+		this->StartTextureUploads();
+		while (!mTextures.at(ID).bResident);  // busy wait here until the texture is made resident;
+
 #if LOG_RESOURCE_CREATE
 		Log::Info("VQRenderer::CreateTextureFromFile(): [%.2fs] %s", t.StopGetDeltaTimeAndReset(), pFilePath);
 #endif
 	}
-	uploadHeap.Destroy(); // this is VERY expensive, TODO: find another solution.
+
 	return ID;
 }
 
 TextureID VQRenderer::CreateTexture(const std::string& name, const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES ResourceState, const void* pData)
 {
 	Texture tex;
-
-	// https://docs.microsoft.com/en-us/windows/win32/direct3d12/residency#heap-resources
-	// Heap creation can be slow; but it is optimized for background thread processing. 
-	// It's recommended to create heaps on background threads to avoid glitching the render 
-	// thread. In D3D12, multiple threads may safely call create routines concurrently.
-	UploadHeap uploadHeap;
-	uploadHeap.Create(mDevice.GetDevicePtr(), 32 * MEGABYTE); // TODO: drive the heapsize through RendererSettings.ini
+	Timer t; t.Start();
 
 	TextureCreateDesc tDesc(name);
-	tDesc.Desc = desc;
+	tDesc.d3d12Desc = desc;
 	tDesc.pAllocator = mpAllocator;
 	tDesc.pDevice = mDevice.GetDevicePtr();
-	tDesc.pUploadHeap = &uploadHeap;
 	tDesc.ResourceState = ResourceState;
 
 	tex.Create(tDesc, pData);
 
-	uploadHeap.UploadToGPUAndWait(mGFXQueue.pQueue);
-	uploadHeap.Destroy();
+	TextureID ID = AddTexture_ThreadSafe(std::move(tex));
+	if (pData)
+	{
+		this->QueueTextureUpload(FTextureUploadDesc(pData, ID, tDesc));
 
-	return AddTexture_ThreadSafe(std::move(tex));
+		this->StartTextureUploads();
+		std::atomic<bool>& bResident = mTextures.at(ID).bResident;
+		while (!bResident);  // busy wait here until the texture is made resident;
+	}
+
+	if (pData)
+	{
+#if LOG_RESOURCE_CREATE
+		Log::Info("VQRenderer::CreateTexture(): [%.2fs] %s", t.StopGetDeltaTimeAndReset(), name.c_str());
+#endif
+	}
+
+	return ID;
 }
 SRV_ID VQRenderer::CreateAndInitializeSRV(TextureID texID)
 {
@@ -374,6 +401,95 @@ ID3D12Resource* VQRenderer::GetTextureResource(TextureID Id)
 	return mTextures.at(Id).GetResource();
 }
 
+void VQRenderer::QueueTextureUpload(const FTextureUploadDesc& desc)
+{
+	std::unique_lock<std::mutex> lk(mMtxTextureUploadQueue);
+	mTextureUploadQueue.push(desc);
+}
+
+void VQRenderer::ProcessTextureUploadQueue()
+{
+	std::unique_lock<std::mutex> lk(mMtxTextureUploadQueue);
+	if (mTextureUploadQueue.empty())
+		return;
+
+	ID3D12GraphicsCommandList* pCmd = mHeapUpload.GetCommandList();
+	ID3D12Device* pDevice = mDevice.GetDevicePtr();
+
+	std::vector<std::atomic<bool>*> vTexResidentBools;
+
+	while (!mTextureUploadQueue.empty())
+	{
+		FTextureUploadDesc desc = std::move(mTextureUploadQueue.front());
+		mTextureUploadQueue.pop();
+
+		ID3D12Resource* pResc = GetTextureResource(desc.id);
+		const void* pData = desc.img.pData ? desc.img.pData : desc.pData;
+		assert(pData);
+
+		const UINT64 UploadBufferSize = GetRequiredIntermediateSize(pResc, 0, 1);
+
+		UINT8* pUploadBufferMem = mHeapUpload.Suballocate(SIZE_T(UploadBufferSize), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+		if (pUploadBufferMem == NULL)
+		{
+			// We ran out of mem in the upload heap, flush it and try allocating mem from it again
+			mHeapUpload.UploadToGPUAndWait();
+			pUploadBufferMem = mHeapUpload.Suballocate(SIZE_T(UploadBufferSize), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+			assert(pUploadBufferMem);
+		}
+
+		UINT64 UplHeapSize;
+		uint32_t num_rows = {};
+		UINT64 row_size_in_bytes = {};
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT placedTex2D = {};
+		D3D12_RESOURCE_DESC d3dDesc = {};
+
+		pDevice->GetCopyableFootprints(&desc.desc.d3d12Desc, 0, 1, 0, &placedTex2D, &num_rows, &row_size_in_bytes, &UplHeapSize);
+		placedTex2D.Offset += UINT64(pUploadBufferMem - mHeapUpload.BasePtr());
+
+		// copy data row by row
+		for (uint32_t y = 0; y < num_rows; y++)
+		{
+			const UINT64 UploadMemOffset = y * placedTex2D.Footprint.RowPitch;
+			const UINT64   DataMemOffset = y * row_size_in_bytes;
+			memcpy(pUploadBufferMem + UploadMemOffset, (UINT8*)pData + DataMemOffset, row_size_in_bytes);
+		}
+
+		CD3DX12_TEXTURE_COPY_LOCATION Dst(pResc, 0);
+		CD3DX12_TEXTURE_COPY_LOCATION Src(mHeapUpload.GetResource(), placedTex2D);
+		pCmd->CopyTextureRegion(&Dst, 0, 0, 0, &Src, NULL);
+
+		D3D12_RESOURCE_BARRIER textureBarrier = {};
+		textureBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		textureBarrier.Transition.pResource = pResc;
+		textureBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+		textureBarrier.Transition.StateAfter = desc.desc.ResourceState;
+		textureBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+		pCmd->ResourceBarrier(1, &textureBarrier);
+
+		Texture& tex = mTextures.at(desc.id);
+		vTexResidentBools.push_back(&tex.bResident);
+	}
+
+	mHeapUpload.UploadToGPUAndWait();
+
+	for (std::atomic<bool>* pbResident : vTexResidentBools)
+		pbResident->store(true);
+}
+
+void VQRenderer::TextureUploadThread_Main()
+{
+	while (!mbExitUploadThread)
+	{
+		mSignal_UploadThreadWorkReady.Wait([&]() { return mbExitUploadThread.load() || !mTextureUploadQueue.empty(); });
+		
+		if (mbExitUploadThread)
+			break;
+
+		this->ProcessTextureUploadQueue();
+	}
+}
+
 
 TextureID VQRenderer::AddTexture_ThreadSafe(Texture&& tex)
 {
@@ -381,7 +497,8 @@ TextureID VQRenderer::AddTexture_ThreadSafe(Texture&& tex)
 
 	std::lock_guard<std::mutex> lk(mMtxTextures);
 	Id = LAST_USED_TEXTURE_ID++;
-	mTextures[Id] = tex;
+
+	mTextures[Id] = std::move(tex);
 	
 	return Id;
 }

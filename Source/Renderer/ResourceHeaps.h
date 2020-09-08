@@ -77,7 +77,7 @@ private:
 class UploadHeap
 {
 public:
-    void Create(ID3D12Device* pDevice, SIZE_T uSize);
+    void Create(ID3D12Device* pDevice, SIZE_T uSize, ID3D12CommandQueue* pQueue);
     void Destroy();
 
     UINT8* Suballocate(SIZE_T uSize, UINT64 uAlign);
@@ -86,11 +86,12 @@ public:
     inline ID3D12Resource*            GetResource()     const { return mpUploadHeap; }
     inline ID3D12GraphicsCommandList* GetCommandList()  const { return mpCommandList; }
 
-    void UploadToGPUAndWait(ID3D12CommandQueue* pCmdQueue);
+    void UploadToGPUAndWait(ID3D12CommandQueue* pCmdQueue = nullptr);
 
 private:
     ID3D12Device*              mpDevice     = nullptr;
     ID3D12Resource*            mpUploadHeap = nullptr;
+    ID3D12CommandQueue*        mpQueue      = nullptr;
 
     ID3D12GraphicsCommandList* mpCommandList      = nullptr;
     ID3D12CommandAllocator*    mpCommandAllocator = nullptr;

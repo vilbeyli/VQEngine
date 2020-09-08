@@ -104,13 +104,21 @@ MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 
 Material& Scene::GetMaterial(MaterialID ID)
 {
-	// TODO: err handle
+	if (mMaterials.find(ID) == mMaterials.end())
+	{
+		Log::Error("Material not created. Did you call Scene::CreateMaterial()? (matID=%d)", ID);
+		assert(false);
+	}
 	return mMaterials.at(ID);
 }
 
 Model& Scene::GetModel(ModelID id)
 {
-	// TODO: err handle
+	if (mModels.find(id) == mModels.end())
+	{
+		Log::Error("Model not created. Did you call Scene::CreateModel()? (modelID=%d)", id);
+		assert(false);
+	}
 	return mModels.at(id);
 }
 
@@ -292,9 +300,12 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 		MatTexAssignment.matID = id;
 		mMaterialAssignments.mAssignments.push_back(MatTexAssignment);
 	}
+	Log::Info("[Scene] Materials Created");
+
+	mMaterialAssignments.mTextureLoadResults = mAssetLoader.StartLoadingTextures();
 
 	// start loading material textures
-	mMaterialAssignments.mTextureLoadResults = mAssetLoader.StartLoadingTextures();
+	Log::Info("[Scene] Start loading textures...");
 
 	if constexpr (B_LOAD_SERIAL)
 	{
@@ -311,6 +322,7 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	}
 
 	mModelLoadResults = mAssetLoader.StartLoadingModels(this);
+	Log::Info("[Scene] Start loading models...");
 
 	// CAMERAS
 	for (FCameraParameters& param : scene.Cameras)
@@ -333,6 +345,7 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 			mCameras[i].InitializeController(scene.Cameras[i].bFirstPerson, scene.Cameras[i]);
 		}
 	}
+	Log::Info("[Scene] Cameras initialized");
 
 
 	// assign scene rep
@@ -341,6 +354,8 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 
 void Scene::OnLoadComplete()
 {
+	Log::Info("[Scene] OnLoadComplete()");
+
 	// Assign model data 
 	for (auto it = mModelLoadResults.begin(); it != mModelLoadResults.end(); ++it)
 	{
