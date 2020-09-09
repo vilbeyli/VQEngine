@@ -43,14 +43,8 @@ void AssetLoader::QueueModelLoad(GameObject* pObject, const std::string& ModelPa
 {
 	const std::string FileExtension = DirectoryUtil::GetFileExtension(ModelPath);
 
-	static const std::unordered_map<std::string, FModelLoadParams::pfnImportModel_t> MODEL_IMPORT_FUNCTIONS =
-	{
-		  { "obj" , AssetLoader::ImportModel_obj }
-		, { "gltf", AssetLoader::ImportModel_gltf } // TODO
-	};
-
 	std::unique_lock<std::mutex> lk(mMtxQueue_ModelLoad);
-	mModelLoadQueue.push({pObject, ModelPath, ModelName, MODEL_IMPORT_FUNCTIONS.at(FileExtension)});
+	mModelLoadQueue.push({pObject, ModelPath, ModelName, AssetLoader::ImportModel });
 }
 
 AssetLoader::ModelLoadResults_t AssetLoader::StartLoadingModels(Scene* pScene)
@@ -306,7 +300,7 @@ Model::Data ProcessAssimpNode(
 	, AssetLoader::FMaterialTextureAssignments& MaterialTextureAssignments
 );
 
-ModelID AssetLoader::ImportModel_obj(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName)
+ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName)
 {
 	constexpr auto ASSIMP_LOAD_FLAGS
 		= aiProcess_Triangulate
@@ -361,14 +355,6 @@ ModelID AssetLoader::ImportModel_obj(Scene* pScene, AssetLoader* pAssetLoader, V
 	Log::Info("Loaded Model '%s' in %.2f seconds.", ModelName.c_str(), t.DeltaTime());
 	return mID;
 }
-
-ModelID AssetLoader::ImportModel_gltf(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName)
-{
-	assert(false); // TODO
-	return INVALID_ID;
-}
-
-
 
 //----------------------------------------------------------------------------------------------------------------
 // ASSIMP HELPER FUNCTIONS
