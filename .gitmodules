@@ -10,3 +10,6 @@
 [submodule "Libs/assimp"]
 	path = Libs/assimp
 	url = https://github.com/assimp/assimp.git
+[submodule "Data/Models"]
+	path = Data/Models
+	url = https://github.com/vilbeyli/VQModels.git
