@@ -102,8 +102,7 @@ public:
 	void QueueTextureLoad(const FTextureLoadParams& TexLoadParam);
 	TextureLoadResults_t StartLoadingTextures();
 private:
-	static ModelID ImportModel_obj (Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName = "NONE"); // TODO: rename to LoadModel_obj() ?
-	static ModelID ImportModel_gltf(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName = "NONE"); // TODO: rename to LoadModel_gltf() ?	
+	static ModelID ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName = "NONE");
 
 private:
 	std::unordered_map<std::string, ModelID> mLoadedModels;
