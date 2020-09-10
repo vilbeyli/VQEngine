@@ -85,7 +85,7 @@ MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 	mMaterials[id] = Material();
 	mLoadedMaterials[UniqueMaterialName] = id;
 #if LOG_RESOURCE_CREATE
-	Log::Info("Scene::CreateMaterial(): %s", UniqueMaterialName.c_str());
+	Log::Info("Scene::CreateMaterial() ID=%d - %s", id,  UniqueMaterialName.c_str());
 #endif
 
 	Material& mat = mMaterials.at(id);
@@ -266,6 +266,8 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	// scene-specific load 
 	this->LoadScene(scene);
 
+	AssetLoader::LoadTaskID taskID = AssetLoader::GenerateLoadTaskID();
+
 	// Create scene materials before deserializing gameobjects
 	for (const FMaterialRepresentation& matRep : scene.Materials)
 	{
@@ -281,7 +283,7 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 			p.MatID = matID;
 			p.TexturePath = path;
 			p.TexType = type;
-			mAssetLoader.QueueTextureLoad(p);
+			mAssetLoader.QueueTextureLoad(taskID, p);
 		};
 
 		// immediate values
@@ -306,7 +308,7 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	}
 	Log::Info("[Scene] Materials Created");
 
-	mMaterialAssignments.mTextureLoadResults = mAssetLoader.StartLoadingTextures();
+	mMaterialAssignments.mTextureLoadResults = mAssetLoader.StartLoadingTextures(taskID);
 
 	// start loading material textures
 	Log::Info("[Scene] Start loading textures...");

@@ -90,6 +90,9 @@ public:
 		void WaitForTextureLoads();
 	};
 public:
+	using LoadTaskID = int;
+	static LoadTaskID GenerateLoadTaskID();
+
 	AssetLoader(ThreadPool& WorkerThreads, VQRenderer& renderer)
 		: mWorkers(WorkerThreads)
 		, mRenderer(renderer)
@@ -99,8 +102,9 @@ public:
 	void QueueModelLoad(GameObject* pObject, const std::string& ModelPath, const std::string& ModelName);
 	ModelLoadResults_t StartLoadingModels(Scene* pScene);
 
-	void QueueTextureLoad(const FTextureLoadParams& TexLoadParam);
-	TextureLoadResults_t StartLoadingTextures();
+	void QueueTextureLoad(LoadTaskID taskID, const FTextureLoadParams& TexLoadParam);
+	TextureLoadResults_t StartLoadingTextures(LoadTaskID taskID);
+
 private:
 	static ModelID ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName = "NONE");
 
@@ -110,11 +114,21 @@ private:
 	// MT Model loading
 	ThreadPool& mWorkers;
 	VQRenderer& mRenderer;
+
+	template<class T>
+	struct FLoadTaskContext
+	{
+		std::mutex   Mtx;
+		std::queue<T> LoadQueue;
+		std::set<std::string> UniquePaths;
+	};
+	std::unordered_map<LoadTaskID, FLoadTaskContext<FTextureLoadParams>> mLookup_TextureLoadContext;
+
 	// TODO: use ConcurrentQueue<T> with ProcessElements(pfnProcess);
 	std::queue<FModelLoadParams>   mModelLoadQueue;
-	std::queue<FTextureLoadParams> mTextureLoadQueue;
+	//std::queue<FTextureLoadParams> mTextureLoadQueue;
 	std::set<std::string> mUniqueModelPaths;
-	std::set<std::string> mUniqueTexturePaths;
+	//std::set<std::string> mUniqueTexturePaths;
 	std::mutex mMtxQueue_ModelLoad;
-	std::mutex mMtxQueue_TextureLoad;
+	//std::mutex mMtxQueue_TextureLoad;
 };

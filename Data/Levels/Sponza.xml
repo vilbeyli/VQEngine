@@ -30,7 +30,7 @@
             <Scale>1 1 1</Scale>
         </Transform>
         <Model>
-            <Path>Data/Models/sponza/sponza.obj</Path>
+            <Path>Data/Models/Sponza/glTF/Sponza.gltf</Path>
             <Name>Sponza</Name>
         </Model>
     </GameObject>
@@ -43,7 +43,7 @@
             <Scale>0.05 0.05 0.05</Scale>
         </Transform>
         <Model>
-            <Path>Data/Models/sponza/sponza.obj</Path>
+            <Path>Data/Models/Sponza/glTF/Sponza.gltf</Path>
             <Name>Sponza</Name>
         </Model>
     </GameObject>
@@ -54,7 +54,7 @@
             <Scale>0.06 0.06 0.06</Scale>
         </Transform>
         <Model>
-            <Path>Data/Models/sponza/sponza.obj</Path>
+            <Path>Data/Models/Sponza/glTF/Sponza.gltf</Path>
             <Name>Sponza</Name>
         </Model>
     </GameObject>
@@ -65,7 +65,7 @@
             <Scale>0.07 0.07 0.07</Scale>
         </Transform>
         <Model>
-            <Path>Data/Models/sponza/sponza.obj</Path>
+            <Path>Data/Models/Sponza/glTF/Sponza.gltf</Path>
             <Name>Sponza</Name>
         </Model>
     </GameObject>
