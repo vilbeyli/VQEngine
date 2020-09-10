@@ -361,7 +361,9 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 	Model::Data data = ProcessAssimpNode(pAiScene->mRootNode, pAiScene, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
 
 	pRenderer->UploadVertexAndIndexBufferHeaps(); // load VB/IBs
-	MaterialTextureAssignments.mTextureLoadResults = pAssetLoader->StartLoadingTextures(taskID);
+	
+	if(!MaterialTextureAssignments.mAssignments.empty())
+		MaterialTextureAssignments.mTextureLoadResults = pAssetLoader->StartLoadingTextures(taskID);
 
 	// cache the imported model in Scene
 	ModelID mID = pScene->CreateModel();

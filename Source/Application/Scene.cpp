@@ -308,7 +308,8 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	}
 	Log::Info("[Scene] Materials Created");
 
-	mMaterialAssignments.mTextureLoadResults = mAssetLoader.StartLoadingTextures(taskID);
+	if(!mMaterialAssignments.mAssignments.empty())
+		mMaterialAssignments.mTextureLoadResults = mAssetLoader.StartLoadingTextures(taskID);
 
 	// start loading material textures
 	Log::Info("[Scene] Start loading textures...");
