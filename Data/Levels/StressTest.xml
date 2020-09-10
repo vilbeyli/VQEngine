@@ -31,7 +31,7 @@
     </EnvironmentMap>
     -->
     <Camera>
-        <Position> 0.0 3.0 -5 </Position>
+        <Position> 0.0 24.0 -93 </Position>
         <Pitch> 15 </Pitch>
         <Yaw> 0 </Yaw>
         <Projection>Perspective</Projection>
@@ -46,7 +46,87 @@
         </FirstPerson>
     </Camera>
 
+    <GameObject>
+        <Transform>
+            <Position>-20 40 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>50 50 50</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/FlightHelmet/glTF/FlightHelmet.gltf</Path>
+            <Name>FlightHelmet</Name>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>20 20 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>0.01 0.01 0.01</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/Sponza/glTF/Sponza.gltf</Path>
+            <Name>Sponza</Name>
+        </Model>
+    </GameObject>
 
+    <GameObject>
+        <Transform>
+            <Position>-60 20 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>1000 1000 1000</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/BoomBox/glTF/BoomBox.gltf</Path>
+            <Name>BoomBox</Name>
+        </Model>
+    </GameObject>
+
+    <GameObject>
+        <Transform>
+            <Position>-40 20 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>10 10 10</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/DamagedHelmet/glTF/DamagedHelmet.gltf</Path>
+            <Name>DamagedHelmet</Name>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>-20 20 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>10 10 10</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/Suzanne/glTF/Suzanne.gltf</Path>
+            <Name>Suzanne</Name>
+        </Model>
+    </GameObject>
+
+    <GameObject>
+        <Transform>
+            <Position>-60 40 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>8 8 8</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/SciFiHelmet/glTF/SciFiHelmet.gltf</Path>
+            <Name>SciFiHelmet</Name>
+        </Model>
+    </GameObject>
+    
+    <GameObject>
+        <Transform>
+            <Position>-40 40 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>1 1 1</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/Lantern/glTF/Lantern.gltf</Path>
+            <Name>Lantern</Name>
+        </Model>
+    </GameObject>
     <PostProcess>
     <!-- TBA -->
     </PostProcess>

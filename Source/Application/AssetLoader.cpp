@@ -36,6 +36,13 @@
 using namespace Assimp;
 using namespace DirectX;
 
+AssetLoader::LoadTaskID AssetLoader::GenerateLoadTaskID()
+{
+	static std::atomic<LoadTaskID> LOAD_TASK_ID = 0;
+	LoadTaskID id = LOAD_TASK_ID.fetch_add(1);
+	return id;
+}
+
 //----------------------------------------------------------------------------------------------------------------
 // ASSET LOADER
 //----------------------------------------------------------------------------------------------------------------
@@ -99,32 +106,36 @@ AssetLoader::ModelLoadResults_t AssetLoader::StartLoadingModels(Scene* pScene)
 	return ModelLoadResults;
 }
 
-void AssetLoader::QueueTextureLoad(const FTextureLoadParams& TexLoadParam)
+void AssetLoader::QueueTextureLoad(LoadTaskID taskID, const FTextureLoadParams& TexLoadParam)
 {
-	std::unique_lock<std::mutex> lk(mMtxQueue_TextureLoad);
-	mTextureLoadQueue.push(TexLoadParam);
+	FLoadTaskContext<FTextureLoadParams>& ctx = mLookup_TextureLoadContext[taskID];
+	std::unique_lock<std::mutex> lk(ctx.Mtx);
+	ctx.LoadQueue.push(TexLoadParam);
 }
 
-AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures()
+AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(LoadTaskID taskID)
 {
 	TextureLoadResults_t TextureLoadResults;
-	if (mTextureLoadQueue.empty())
+	FLoadTaskContext<FTextureLoadParams>& ctx = mLookup_TextureLoadContext.at(taskID);
+
+	if (ctx.LoadQueue.empty())
 	{
-		Log::Warning("AssetLoader::StartLoadingTextures(): no Textures to load");
+		Log::Warning("AssetLoader::StartLoadingTextures(taskID=%d): no Textures to load", taskID);
 		return TextureLoadResults;
 	}
 	
+	std::unordered_map<std::string, std::shared_future<TextureID>> Lookup_TextureLoadResult;
+
 	// process model load queue
-	std::unique_lock<std::mutex> lk(mMtxQueue_ModelLoad);
 	do
 	{
-		FTextureLoadParams TexLoadParams = std::move(mTextureLoadQueue.front());
-		mTextureLoadQueue.pop();
+		FTextureLoadParams TexLoadParams = std::move(ctx.LoadQueue.front());
+		ctx.LoadQueue.pop();
 
-		// eliminate duplicates
-		if (mUniqueTexturePaths.find(TexLoadParams.TexturePath) == mUniqueTexturePaths.end())
+		// handle duplicate texture load paths
+		if (ctx.UniquePaths.find(TexLoadParams.TexturePath) == ctx.UniquePaths.end())
 		{
-			mUniqueTexturePaths.insert(TexLoadParams.TexturePath);
+			ctx.UniquePaths.insert(TexLoadParams.TexturePath);
 
 			// determine whether we'll load file OR use a procedurally generated texture
 			auto vPathTokens = StrUtil::split(TexLoadParams.TexturePath, '/');
@@ -141,7 +152,8 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures()
 				break;
 			}
 
-			std::future<TextureID> texLoadResult = std::move(mWorkers.AddTask([this, TexLoadParams, ProcTex]()
+			// dispatch worker thread
+			std::shared_future<TextureID> texLoadResult = std::move(mWorkers.AddTask([this, TexLoadParams, ProcTex]()
 			{
 				const bool IS_PROCEDURAL = ProcTex != EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
 				if (IS_PROCEDURAL)
@@ -151,11 +163,21 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures()
 
 				return mRenderer.CreateTextureFromFile(TexLoadParams.TexturePath.c_str());
 			}));
+
+			// update results lookup for the shared textures (among different materials)
+			Lookup_TextureLoadResult[TexLoadParams.TexturePath] = texLoadResult;
+
+			// record load results
 			TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, TextureLoadResult_t{ TexLoadParams.TexType, std::move(texLoadResult) }));
 		}
-	} while (!mTextureLoadQueue.empty());
+		// shared textures among materials
+		else
+		{
+			TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, TextureLoadResult_t{ TexLoadParams.TexType, Lookup_TextureLoadResult.at(TexLoadParams.TexturePath) }));
+		}
+	} while (!ctx.LoadQueue.empty());
 
-	mUniqueTexturePaths.clear();
+	ctx.UniquePaths.clear();
 
 	// Currently mRenderer.CreateTextureFromFile() starts the texture uploads
 	///mRenderer.StartTextureUploads();
@@ -297,7 +319,8 @@ Model::Data ProcessAssimpNode(
 	, AssetLoader* pAssetLoader
 	, Scene* pScene
 	, VQRenderer* pRenderer
-	, AssetLoader::FMaterialTextureAssignments& MaterialTextureAssignments
+	, AssetLoader::FMaterialTextureAssignments& MaterialTextureAssignments,
+	AssetLoader::LoadTaskID                     taskID
 );
 
 ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName)
@@ -313,10 +336,12 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 		| aiProcess_JoinIdenticalVertices
 		| aiProcess_GenSmoothNormals;
 
-
+	
+	LoadTaskID taskID = GenerateLoadTaskID();
+	//-----------------------------------------------
 	const std::string modelDirectory = DirectoryUtil::GetFolderPath(objFilePath);
 
-	Log::Info("ImportModel_obj: %s - %s", ModelName.c_str(), objFilePath.c_str());
+	Log::Info("ImportModel: %s - %s", ModelName.c_str(), objFilePath.c_str());
 	Timer t;
 	t.Start();
 
@@ -329,14 +354,14 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 		return INVALID_ID;
 	}
 	t.Tick(); float fTimeReadFile = t.DeltaTime();
-	Log::Info("   ReadFile(): %.3fs", fTimeReadFile);
+	Log::Info("   [%.2fs] ReadFile=%s ", fTimeReadFile, objFilePath.c_str());
 
 	// parse scene and initialize model data
 	FMaterialTextureAssignments MaterialTextureAssignments(pAssetLoader->mWorkers);
-	Model::Data data = ProcessAssimpNode(pAiScene->mRootNode, pAiScene, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments);
+	Model::Data data = ProcessAssimpNode(pAiScene->mRootNode, pAiScene, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
 
 	pRenderer->UploadVertexAndIndexBufferHeaps(); // load VB/IBs
-	MaterialTextureAssignments.mTextureLoadResults = pAssetLoader->StartLoadingTextures();
+	MaterialTextureAssignments.mTextureLoadResults = pAssetLoader->StartLoadingTextures(taskID);
 
 	// cache the imported model in Scene
 	ModelID mID = pScene->CreateModel();
@@ -352,9 +377,13 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 	MaterialTextureAssignments.DoAssignments(pScene, pRenderer);
 
 	t.Stop();
-	Log::Info("Loaded Model '%s' in %.2f seconds.", ModelName.c_str(), t.DeltaTime());
+	Log::Info("   [%.2fs] Loaded Model '%s'.", fTimeReadFile + t.DeltaTime(), ModelName.c_str());
 	return mID;
 }
+
+
+
+
 
 //----------------------------------------------------------------------------------------------------------------
 // ASSIMP HELPER FUNCTIONS
@@ -448,7 +477,8 @@ static Model::Data ProcessAssimpNode(
 	AssetLoader*       pAssetLoader,
 	Scene*             pScene,
 	VQRenderer*        pRenderer,
-	AssetLoader::FMaterialTextureAssignments& MaterialTextureAssignments
+	AssetLoader::FMaterialTextureAssignments& MaterialTextureAssignments,
+	AssetLoader::LoadTaskID                   taskID
 )
 {
 	Model::Data modelData;
@@ -460,19 +490,29 @@ static Model::Data ProcessAssimpNode(
 		// MATERIAL - http://assimp.sourceforge.net/lib_html/materials.html
 		aiMaterial* material = pAiScene->mMaterials[pAiMesh->mMaterialIndex];
 
-		// Every material assumed to have a name : Create material here
-		MaterialID matID = INVALID_ID;
-		aiString name;
-		if (aiReturn_SUCCESS == material->Get(AI_MATKEY_NAME, name))
+		// Every material assumed to have a name 
+		std::string uniqueMatName;
 		{
-			const std::string ModelFolderName = DirectoryUtil::GetFlattenedFolderHierarchy(modelDirectory).back();
-			std::string uniqueMatName = name.C_Str();
+			aiString matName;
+			if (aiReturn_SUCCESS != material->Get(AI_MATKEY_NAME, matName))
+			// material doesn't have a name, use generic name Material#
+			{
+				matName = std::string("Material#") + std::to_string(pAiMesh->mMaterialIndex);
+			}
+
+			// Data/Models/%MODEL_NAME%/... : index 2 will give model name
+			auto vFolders = DirectoryUtil::GetFlattenedFolderHierarchy(modelDirectory);
+			assert(vFolders.size() > 2);
+			const std::string ModelFolderName = vFolders[2];
+			uniqueMatName = matName.C_Str();
 			// modelDirectory = "Data/Models/%MODEL_NAME%/"
 			// Materials use the following unique naming: %MODEL_NAME%/%MATERIAL_NAME%
 			uniqueMatName = ModelFolderName + "/" + uniqueMatName;
-			matID = pScene->CreateMaterial(uniqueMatName);
-			Material& mat = pScene->GetMaterial(matID);
 		}
+
+		// Create new Material
+		MaterialID matID = pScene->CreateMaterial(uniqueMatName);
+		Material& mat = pScene->GetMaterial(matID);
 
 		// get texture paths to load
 		AssetLoader::FMaterialTextureAssignment MatTexAssignment = {};
@@ -490,7 +530,7 @@ static Model::Data ProcessAssimpNode(
 			int iTex = 0;
 			for (const AssetLoader::FTextureLoadParams& param : *pvLoadParams)
 			{
-				pAssetLoader->QueueTextureLoad(param);
+				pAssetLoader->QueueTextureLoad(taskID, param);
 				++iTex;
 			}
 			++iTexType;
@@ -500,8 +540,6 @@ static Model::Data ProcessAssimpNode(
 		// unflatten the material texture assignments
 		MatTexAssignment.matID = matID;
 		MaterialTextureAssignments.mAssignments.push_back(std::move(MatTexAssignment));
-
-		Material& mat = pScene->GetMaterial(matID);
 
 		aiColor3D color(0.f, 0.f, 0.f);
 		if (aiReturn_SUCCESS == material->Get(AI_MATKEY_COLOR_DIFFUSE, color))
@@ -561,7 +599,7 @@ static Model::Data ProcessAssimpNode(
 
 	for (unsigned int i = 0; i < pNode->mNumChildren; i++)
 	{	// then do the same for each of its children
-		Model::Data childModelData = ProcessAssimpNode(pNode->mChildren[i], pAiScene, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments);
+		Model::Data childModelData = ProcessAssimpNode(pNode->mChildren[i], pAiScene, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
 		std::vector<MeshID>& ChildMeshes = childModelData.mOpaueMeshIDs;
 		std::vector<MeshID>& ChildMeshesTransparent = childModelData.mTransparentMeshIDs;
 

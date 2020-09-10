@@ -129,7 +129,8 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 		this->QueueTextureUpload(FTextureUploadDesc(std::move(image), ID, tDesc));
 
 		this->StartTextureUploads();
-		while (!mTextures.at(ID).bResident);  // busy wait here until the texture is made resident;
+		std::atomic<bool>& bResident = mTextures.at(ID).bResident;
+		while (!bResident.load());  // busy wait here until the texture is made resident;
 
 #if LOG_RESOURCE_CREATE
 		Log::Info("VQRenderer::CreateTextureFromFile(): [%.2fs] %s", t.StopGetDeltaTimeAndReset(), pFilePath);
@@ -159,7 +160,7 @@ TextureID VQRenderer::CreateTexture(const std::string& name, const D3D12_RESOURC
 
 		this->StartTextureUploads();
 		std::atomic<bool>& bResident = mTextures.at(ID).bResident;
-		while (!bResident);  // busy wait here until the texture is made resident;
+		while (!bResident.load());  // busy wait here until the texture is made resident;
 	}
 
 	if (pData)
