@@ -528,7 +528,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(1));
 
 	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetShaderResourceView(mLoadingScreenData.SRVLoadingScreen).GetGPUDescHandle());
+	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetShaderResourceView(mLoadingScreenData.GetSelectedLoadingScreenSRV_ID()).GetGPUDescHandle());
 
 	pCmd->RSSetViewports(1, &viewport);
 	pCmd->RSSetScissorRects(1, &scissorsRect);

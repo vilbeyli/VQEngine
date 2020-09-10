@@ -46,7 +46,14 @@
 struct FLoadingScreenData
 {
 	std::array<float, 4> SwapChainClearColor;
-	SRV_ID SRVLoadingScreen = INVALID_ID;
+
+	int SelectedLoadingScreenSRVIndex = INVALID_ID;
+	std::mutex Mtx;
+	std::vector<SRV_ID> SRVs;
+
+	SRV_ID GetSelectedLoadingScreenSRV_ID() const;
+	void RotateLoadingScreenImage();
+
 	// TODO: animation resources
 };
 

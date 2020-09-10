@@ -113,7 +113,7 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 
 		// set state
 		mAppState = EAppState::LOADING;// not thread-safe
-		mbLoadingLevel.store(true);    // thread-safe
+		
 	}
 
 
@@ -145,6 +145,8 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 			{
 				mbLoadingEnvironmentMap.store(false);
 			}
+
+			mLoadingScreenData.RotateLoadingScreenImage();
 		}
 	}
 
@@ -400,6 +402,7 @@ void VQEngine::StartLoadingScene(int IndexScene)
 	mQueue_SceneLoad.push(mResourceNames.mSceneNames[IndexScene]);
 
 	mAppState = INITIALIZING;
+	mbLoadingLevel.store(true);    // thread-safe
 	Log::Info("StartLoadingScene: %d", IndexScene);
 }
 
@@ -536,17 +539,54 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 }
 
 
+SRV_ID FLoadingScreenData::GetSelectedLoadingScreenSRV_ID() const
+{
+	assert(SelectedLoadingScreenSRVIndex < SRVs.size());
+	return SRVs[SelectedLoadingScreenSRVIndex];
+}
+void FLoadingScreenData::RotateLoadingScreenImage()
+{
+	SelectedLoadingScreenSRVIndex = (int)MathUtil::RandU(0, (int)SRVs.size());
+}
 void VQEngine::LoadLoadingScreenData()
 {
 	FLoadingScreenData& data = mLoadingScreenData;
 
 	data.SwapChainClearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
 
+	constexpr uint NUM_LOADING_SCREEN_BACKGROUNDS = 4;
+
 	srand(static_cast<unsigned>(time(NULL)));
 	const std::string LoadingScreenTextureFileDirectory = "Data/Textures/LoadingScreen/";
-	const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(MathUtil::RandU(0, 4)) + ".png");
-	TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
-	SRV_ID    srvID = mRenderer.CreateAndInitializeSRV(texID);
-	data.SRVLoadingScreen = srvID;
+	const size_t SelectedLoadingScreenIndex = MathUtil::RandU(0u, NUM_LOADING_SCREEN_BACKGROUNDS);
+
+	// dispatch background workers for other 
+	for (size_t i = 0; i < NUM_LOADING_SCREEN_BACKGROUNDS; ++i)
+	{
+		if (i == SelectedLoadingScreenIndex)
+			continue; // will be loaded on this thread
+
+		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(i) + ".png");
+
+		mWorkers_Load.AddTask([this, &data, LoadingScreenTextureFilePath]()
+		{
+			const TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
+			const SRV_ID srvID = mRenderer.CreateAndInitializeSRV(texID);
+			std::lock_guard<std::mutex> lk(data.Mtx);
+			data.SRVs.push_back(srvID);
+		});
+
+	}
+
+	// load the selected loading screen image
+	{
+		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(SelectedLoadingScreenIndex) + ".png");
+		TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
+		SRV_ID    srvID = mRenderer.CreateAndInitializeSRV(texID);
+		std::lock_guard<std::mutex> lk(data.Mtx);
+		data.SRVs.push_back(srvID);
+		data.SelectedLoadingScreenSRVIndex = data.SRVs.size() - 1;
+	}
+
 }
 

@@ -870,7 +870,7 @@ void VQRenderer::LoadDefaultResources()
 		textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 	}	
 
-	// programmatically generated texture
+	// programmatically generated textures
 	{
 		std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX);
 		TextureID texID = this->CreateTexture("Checkerboard", textureDesc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, texture.data());
