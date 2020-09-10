@@ -182,6 +182,8 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(LoadTaskID t
 	// Currently mRenderer.CreateTextureFromFile() starts the texture uploads
 	///mRenderer.StartTextureUploads();
 
+	mLookup_TextureLoadContext.erase(taskID);
+
 	return std::move(TextureLoadResults);
 }
 

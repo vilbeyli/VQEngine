@@ -392,9 +392,6 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 	//-----------------------------------------------------------------
 	constexpr char* SCENE_FILES_DIRECTORY           = "Data/Levels/";
 	//-----------------------------------------------------------------
-	//      std::vector<FSceneRepresentation> SceneRepresentations;
-	//const std::vector<std::string>          SceneFiles = DirectoryUtil::ListFilesInDirectory(SCENE_FILES_DIRECTORY, ".xml");
-	//-----------------------------------------------------------------
 
 	// parse vectors --------------------------------------------------
 	// e.g." 0.0 9 -1.0f" -> [0.0f, 9.0f, -1.0f]

@@ -46,33 +46,24 @@
         </FirstPerson>
     </Camera>
 
+    <!-- Sponza -->
     <GameObject>
         <Transform>
-            <Position>-20 40 0</Position>
+            <Position>40 20 0</Position>
             <Quaternion>0 0 0 1</Quaternion>
-            <Scale>50 50 50</Scale>
-        </Transform>
-        <Model>
-            <Path>Data/Models/FlightHelmet/glTF/FlightHelmet.gltf</Path>
-            <Name>FlightHelmet</Name>
-        </Model>
-    </GameObject>
-    <GameObject>
-        <Transform>
-            <Position>20 20 0</Position>
-            <Quaternion>0 0 0 1</Quaternion>
-            <Scale>0.01 0.01 0.01</Scale>
+            <Scale>0.02 0.02 0.02</Scale>
         </Transform>
         <Model>
             <Path>Data/Models/Sponza/glTF/Sponza.gltf</Path>
             <Name>Sponza</Name>
         </Model>
     </GameObject>
-
+    
+    <!-- Bottom Row Objects -->
     <GameObject>
         <Transform>
             <Position>-60 20 0</Position>
-            <Quaternion>0 0 0 1</Quaternion>
+            <Rotation>0 180 0</Rotation>
             <Scale>1000 1000 1000</Scale>
         </Transform>
         <Model>
@@ -80,11 +71,10 @@
             <Name>BoomBox</Name>
         </Model>
     </GameObject>
-
     <GameObject>
         <Transform>
             <Position>-40 20 0</Position>
-            <Quaternion>0 0 0 1</Quaternion>
+            <Rotation>-90 0 0</Rotation>
             <Scale>10 10 10</Scale>
         </Transform>
         <Model>
@@ -103,10 +93,11 @@
             <Name>Suzanne</Name>
         </Model>
     </GameObject>
-
+    
+    <!-- Top Row Objects -->
     <GameObject>
         <Transform>
-            <Position>-60 40 0</Position>
+            <Position>-60 50 0</Position>
             <Quaternion>0 0 0 1</Quaternion>
             <Scale>8 8 8</Scale>
         </Transform>
@@ -118,13 +109,24 @@
     
     <GameObject>
         <Transform>
-            <Position>-40 40 0</Position>
+            <Position>-40 50 0</Position>
             <Quaternion>0 0 0 1</Quaternion>
             <Scale>1 1 1</Scale>
         </Transform>
         <Model>
             <Path>Data/Models/Lantern/glTF/Lantern.gltf</Path>
             <Name>Lantern</Name>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>-20 40 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>50 50 50</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/FlightHelmet/glTF/FlightHelmet.gltf</Path>
+            <Name>FlightHelmet</Name>
         </Model>
     </GameObject>
     <PostProcess>
