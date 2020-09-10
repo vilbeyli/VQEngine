@@ -130,3 +130,4 @@ VQE supports the following command line parameters:
 - [tinyxml2](https://github.com/leethomason/tinyxml2)
 - [assimp](https://github.com/assimp/assimp)
 - [WinPixEventRuntime](https://devblogs.microsoft.com/pix/winpixeventruntime/)
+- [Khronos glTF Sample Models](https://github.com/KhronosGroup/glTF-Sample-Models)
