@@ -173,6 +173,14 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 	for (const GameObject* pObj : mpObjects)
 	{
 		const XMMATRIX matWorldTransform = mpTransforms.at(pObj->mTransformID)->WorldTransformationMatrix();
+
+		const bool bModelNotFound = mModels.find(pObj->mModelID) == mModels.end();
+		if (bModelNotFound)
+		{
+			Log::Warning("[Scene] Model not found: ID=%d", pObj->mModelID);
+			continue;
+		}
+
 		const Model& model = mModels.at(pObj->mModelID);
 		
 		assert(pObj->mModelID != INVALID_ID);
