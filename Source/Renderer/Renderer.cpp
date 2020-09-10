@@ -369,7 +369,7 @@ void VQRenderer::InitializeHeaps()
 	mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE, this->mGFXQueue.pQueue);
 
 	constexpr uint32 NumDescsCBV = 10;
-	constexpr uint32 NumDescsSRV = 300;
+	constexpr uint32 NumDescsSRV = 1000;
 	constexpr uint32 NumDescsUAV = 10;
 	constexpr bool   bCPUVisible = false;
 	mHeapCBV_SRV_UAV.Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, NumDescsCBV + NumDescsSRV + NumDescsUAV, bCPUVisible);
@@ -380,7 +380,7 @@ void VQRenderer::InitializeHeaps()
 	constexpr uint32 NumDescsRTV = 10;
 	mHeapRTV.Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, NumDescsRTV);
 
-	constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 16 * MEGABYTE;
+	constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 32 * MEGABYTE;
 	constexpr bool USE_GPU_MEMORY = true;
 	mStaticHeap_VertexBuffer.Create(pDevice, EBufferType::VERTEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticVertexBufferPool");
 	mStaticHeap_IndexBuffer .Create(pDevice, EBufferType::INDEX_BUFFER , STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticIndexBufferPool");

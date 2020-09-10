@@ -79,7 +79,7 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 	FGameObjectRepresentation obj = {};
 	XMFLOAT3 pos = { 0, 0, 0 };
 	XMFLOAT3 axis = UpVector;
-	XMFLOAT3 scale = { 100, 100, 100 };
+	XMFLOAT3 scale = { 500, 500, 500 };
 	obj.tf.SetPosition(pos);
 	obj.tf.SetScale(scale);
 	obj.BuiltinMeshName = "Cube";

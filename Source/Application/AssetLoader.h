@@ -81,22 +81,18 @@ public:
 	struct FMaterialTextureAssignments
 	{
 		FMaterialTextureAssignments(const ThreadPool& workers) : mWorkers(workers) {}
-
-		std::vector<FMaterialTextureAssignment> mAssignments;
-		TextureLoadResults_t mTextureLoadResults;
-		const ThreadPool& mWorkers; // to check if pool IsExiting()
-
 		void DoAssignments(Scene* pScene, VQRenderer* pRenderer);
 		void WaitForTextureLoads();
+
+		const ThreadPool&                       mWorkers; // to check if pool IsExiting()
+		std::vector<FMaterialTextureAssignment> mAssignments;
+		TextureLoadResults_t                    mTextureLoadResults;
 	};
 public:
 	using LoadTaskID = int;
 	static LoadTaskID GenerateLoadTaskID();
 
-	AssetLoader(ThreadPool& WorkerThreads, VQRenderer& renderer)
-		: mWorkers(WorkerThreads)
-		, mRenderer(renderer)
-	{}
+	AssetLoader(ThreadPool& WorkerThreads, VQRenderer& renderer): mWorkers(WorkerThreads), mRenderer(renderer){}
 	inline const ThreadPool& GetThreadPool() const { return mWorkers; }
 
 	void QueueModelLoad(GameObject* pObject, const std::string& ModelPath, const std::string& ModelName);
@@ -109,26 +105,22 @@ private:
 	static ModelID ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName = "NONE");
 
 private:
-	std::unordered_map<std::string, ModelID> mLoadedModels;
-
-	// MT Model loading
+	
 	ThreadPool& mWorkers;
 	VQRenderer& mRenderer;
 
-	template<class T>
-	struct FLoadTaskContext
+	template<class T> struct FLoadTaskContext
 	{
-		std::mutex   Mtx;
-		std::queue<T> LoadQueue;
+		std::mutex            Mtx;
+		std::queue<T>         LoadQueue;
 		std::set<std::string> UniquePaths;
 	};
 	std::unordered_map<LoadTaskID, FLoadTaskContext<FTextureLoadParams>> mLookup_TextureLoadContext;
 
 	// TODO: use ConcurrentQueue<T> with ProcessElements(pfnProcess);
-	std::queue<FModelLoadParams>   mModelLoadQueue;
-	//std::queue<FTextureLoadParams> mTextureLoadQueue;
-	std::set<std::string> mUniqueModelPaths;
-	//std::set<std::string> mUniqueTexturePaths;
-	std::mutex mMtxQueue_ModelLoad;
-	//std::mutex mMtxQueue_TextureLoad;
+	std::queue<FModelLoadParams> mModelLoadQueue;
+	std::set<std::string>        mUniqueModelPaths;
+	std::mutex                   mMtxQueue_ModelLoad;
+
+	std::unordered_map<std::string, ModelID> mLoadedModels;
 };
