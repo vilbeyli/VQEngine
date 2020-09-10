@@ -342,7 +342,7 @@ void VQEngine::RenderThread_RenderMainWindow()
 	HRESULT hr = S_OK; 
 
 	FWindowRenderContext& ctx = mRenderer.GetWindowRenderContext(mpWinMain->GetHWND());
-	hr = mbLoadingLevel
+	hr = mbLoadingLevel || mbLoadingEnvironmentMap
 		? RenderThread_RenderMainWindow_LoadingScreen(ctx)
 		: RenderThread_RenderMainWindow_Scene(ctx);
 

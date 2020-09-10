@@ -70,6 +70,7 @@ void VQEngine::UpdateThread_Main()
 void VQEngine::UpdateThread_Inititalize()
 {
 	mNumUpdateLoopsExecuted.store(0);
+	mbLoadingEnvironmentMap.store(false);
 
 	// busy lock until render thread is initialized
 	while (!mbRenderThreadInitialized); 
@@ -116,7 +117,7 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 	}
 
 
-	if (mbLoadingLevel)
+	if (mbLoadingLevel || mbLoadingEnvironmentMap)
 	{
 		// animate loading screen
 
@@ -126,11 +127,24 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 		const bool bLoadDone = NumActiveTasks == 0;
 		if (bLoadDone)
 		{
-			mpScene->OnLoadComplete();
+			if (mbLoadingLevel)
+			{
+				mpScene->OnLoadComplete();
+			}
+			// OnEnvMapLoaded = noop
+
 			WaitUntilRenderingFinishes();
 			Log::Info("Loading completed, starting scene simulation");
 			mAppState = EAppState::SIMULATING;
-			mbLoadingLevel.store(false);
+
+			if (mbLoadingLevel)
+			{
+				mbLoadingLevel.store(false);
+			}
+			if (mbLoadingEnvironmentMap)
+			{
+				mbLoadingEnvironmentMap.store(false);
+			}
 		}
 	}
 
@@ -366,7 +380,7 @@ void VQEngine::StartLoadingEnvironmentMap(int IndexEnvMap)
 {
 	this->WaitUntilRenderingFinishes();
 	mAppState = EAppState::LOADING;
-	mbLoadingLevel = true;
+	mbLoadingEnvironmentMap = true;
 	mWorkers_Load.AddTask([&, IndexEnvMap]()
 	{
 		LoadEnvironmentMap(mResourceNames.mEnvironmentMapPresetNames[IndexEnvMap]);
