@@ -209,6 +209,8 @@ public:
 	inline const SRV_ID          GetProceduralTextureSRV_ID(EProceduralTextures tex) const { return mLookup_ProceduralTextureSRVs.at(tex); }
 	TextureID                    GetProceduralTexture(EProceduralTextures tex) const;
 
+	inline ID3D12Device*         GetD3D12Device() { return mDevice.GetDevicePtr(); }
+
 	// Texture Residency
 	void QueueTextureUpload(const FTextureUploadDesc& desc);
 	void ProcessTextureUpload(const FTextureUploadDesc& desc);

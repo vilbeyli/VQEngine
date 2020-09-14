@@ -22,6 +22,7 @@ set (Headers
     "Texture.h"
     "HDR.h"
     "Shader.h"
+    "DescriptorManagement.h"
 )
 
 set (Source
@@ -36,6 +37,7 @@ set (Source
     "Buffer.cpp"
     "Texture.cpp"
     "Shader.cpp"
+    "DescriptorManagement.cpp"
 )
 
 
