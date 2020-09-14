@@ -770,20 +770,15 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 		ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 
 		Camera skyCam = mpScene->GetActiveCamera().Clone();
-#if 1
 		FCameraParameters p = {};
 		p.bInitializeCameraController = false;
 		p.ProjectionParams = skyCam.GetProjectionParameters();
 		p.ProjectionParams.bPerspectiveProjection = true;
-		p.ProjectionParams.FieldOfView = 45;
+		p.ProjectionParams.FieldOfView = p.ProjectionParams.FieldOfView * RAD2DEG; // TODO: remove the need for this conversion
 		p.x = p.y = p.z = 0;
 		p.Yaw = skyCam.GetYaw() * RAD2DEG;
 		p.Pitch = skyCam.GetPitch() * RAD2DEG;
 		skyCam.InitializeCamera(p);
-#else
-		skyCam.SetPosition(0,0,0);
-		skyCam.UpdateViewMatrix();
-#endif
 
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 		FFrameConstantBuffer * pConstBuffer = {};
