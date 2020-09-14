@@ -585,7 +585,7 @@ void VQEngine::LoadLoadingScreenData()
 		SRV_ID    srvID = mRenderer.CreateAndInitializeSRV(texID);
 		std::lock_guard<std::mutex> lk(data.Mtx);
 		data.SRVs.push_back(srvID);
-		data.SelectedLoadingScreenSRVIndex = data.SRVs.size() - 1;
+		data.SelectedLoadingScreenSRVIndex = static_cast<int>(data.SRVs.size() - 1);
 	}
 
 }
