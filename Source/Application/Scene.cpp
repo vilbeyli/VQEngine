@@ -165,7 +165,8 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 	SceneView.viewInverse    = cam.GetViewInverseMatrix();
 	SceneView.viewProj       = SceneView.view * SceneView.proj;
 	SceneView.cameraPosition = XMLoadFloat3(&camPos);
-
+	SceneView.MainViewCameraYaw = cam.GetYaw();
+	SceneView.MainViewCameraPitch = cam.GetPitch();
 
 	// TODO: compute visibility 
 

@@ -105,7 +105,6 @@ private:
 	static ModelID ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName = "NONE");
 
 private:
-	
 	ThreadPool& mWorkers_ModelLoad;
 	ThreadPool& mWorkers_TextureLoad;
 	VQRenderer& mRenderer;

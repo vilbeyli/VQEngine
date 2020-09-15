@@ -776,8 +776,8 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 		p.ProjectionParams.bPerspectiveProjection = true;
 		p.ProjectionParams.FieldOfView = p.ProjectionParams.FieldOfView * RAD2DEG; // TODO: remove the need for this conversion
 		p.x = p.y = p.z = 0;
-		p.Yaw = skyCam.GetYaw() * RAD2DEG;
-		p.Pitch = skyCam.GetPitch() * RAD2DEG;
+		p.Yaw   = SceneView.MainViewCameraYaw   * RAD2DEG;
+		p.Pitch = SceneView.MainViewCameraPitch * RAD2DEG;
 		skyCam.InitializeCamera(p);
 
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};

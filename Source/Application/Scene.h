@@ -96,6 +96,8 @@ struct FSceneView
 	DirectX::XMMATRIX     projInverse;
 	DirectX::XMMATRIX     directionalLightProjection;
 	DirectX::XMVECTOR     cameraPosition;
+	float                 MainViewCameraYaw = 0.0f;
+	float                 MainViewCameraPitch = 0.0f;
 	//bool                  bIsPBRLightingUsed;
 	//bool                  bIsDeferredRendering;
 	//bool                  bIsIBLEnabled;
