@@ -9,12 +9,10 @@ VQE is **VQEngine**: A DX12 rewrite of [VQEngine-Vanilla](https://github.com/vil
 <sub><i>HDRI Environment Map Rendering</i></sub>
 </p>
 
-
-![](https://im7.ezgif.com/tmp/ezgif-7-2e3c537ed34e.gif){: class="center"; }
-
+![](Screenshots/HelloModelLoading.png)
 
 <p align="center">
-<sub><i>Scenes & glTF Model Loading</i></sub>
+<sub><i>Data-driven (XML) Scenes & glTF Model Loading</i></sub>
 </p>
 
 # Features
@@ -71,15 +69,14 @@ Or, if you're using a terminal,
 
 | Key | |
 | :--: | :-- |
-| **WASD+EQ** | Camera Movement |
+| **WASD+EQ** | Camera movement |
 | **Page Up/Down** | Change Environment Map |
-| **1-4** |	Change Scenes <br>**1**: Environment Map Scene <br>**2**: Sponza <br>**3**: Geometry Test Scene <br>**4**: Stress Test Scene |
+| **1-4** |	Change scenes <br>**1** - *Environment Map Scene* <br>**2** - *Sponza* <br>**3** - *Geometry Test Scene* <br>**4** - *Stress Test Scene* |
+| **Shift+R** | Reload level |
+| **C** | Change scene camera |
 | **V** | Toggle VSync |
 | **M** | Toggle MSAA |
 | **Alt+Enter** | Toggle Fullscreen |
-| **Spacebar** | Toggle Cube Animation |
-| **Mouse Buttons** | Rotate Cube |
-| **Shift+R** | Reload level |
 | **Esc** | Release mouse |
 
 
