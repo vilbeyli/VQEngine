@@ -1,5 +1,5 @@
-//	VQEngine | DirectX11 Renderer
-//	Copyright(C) 2018  - Volkan Ilbeyli
+//	VQE
+//	Copyright(C) 2020  - Volkan Ilbeyli
 //
 //	This program is free software : you can redistribute it and / or modify
 //	it under the terms of the GNU General Public License as published by
@@ -35,6 +35,7 @@ enum EBuiltInMeshes
 	NUM_BUILTIN_MESHES
 };
 
+
  
 
 struct VertexIndexBufferIDPair
@@ -64,6 +65,7 @@ struct MeshLODData
 struct Mesh
 {
 public:
+	static EBuiltInMeshes GetBuiltInMeshType(const std::string& MeshTypeStr);
 	//
 	// Constructors / Operators
 	//
@@ -76,7 +78,7 @@ public:
 	);
 
 	template<class TVertex, class TIndex>
-	Mesh(const MeshLODData<TVertex, TIndex>& meshLODData);
+	Mesh(VQRenderer* pRenderer, const MeshLODData<TVertex, TIndex>& meshLODData);
 
 	Mesh() = default;
 	// Mesh() = delete;
@@ -109,6 +111,7 @@ Mesh::Mesh(
 	const std::string& name
 )
 {
+	assert(pRenderer);
 	FBufferDesc bufferDesc = {};
 
 	const std::string VBName = name + "_LOD[0]_VB";
@@ -134,7 +137,7 @@ Mesh::Mesh(
 }
 
 template<class TVertex, class TIndex>
-Mesh::Mesh(const MeshLODData<TVertex, TIndex>& meshLODData)
+Mesh::Mesh(VQRenderer* pRenderer, const MeshLODData<TVertex, TIndex>& meshLODData)
 {
 	for (size_t LOD = 0; LOD < meshLODData.LODVertices.size(); ++LOD)
 	{
@@ -147,15 +150,19 @@ Mesh::Mesh(const MeshLODData<TVertex, TIndex>& meshLODData)
 		//bufferDesc.mUsage = GPU_READ_WRITE;
 		bufferDesc.mElementCount = static_cast<unsigned>(meshLODData.LODVertices[LOD].size());
 		bufferDesc.mStride = sizeof(meshLODData.LODVertices[LOD][0]);
-		BufferID vertexBufferID = spRenderer->CreateBuffer(bufferDesc, meshLODData.LODVertices[LOD].data(), VBName.c_str());
+		BufferID vertexBufferID = pRenderer->CreateBuffer(bufferDesc, meshLODData.LODVertices[LOD].data(), VBName.c_str());
 
 		bufferDesc.mType = INDEX_BUFFER;
 		//bufferDesc.mUsage = GPU_READ_WRITE;
 		bufferDesc.NumElements = static_cast<unsigned>(meshLODData.LODIndices[LOD].size());
 		bufferDesc.mStride = sizeof(unsigned);
-		BufferID indexBufferID = spRenderer->CreateBuffer(bufferDesc, meshLODData.LODIndices[LOD].data(), IBName.c_str());
+		BufferID indexBufferID = pRenderer->CreateBuffer(bufferDesc, meshLODData.LODIndices[LOD].data(), IBName.c_str());
 
 		mLODBufferPairs.push_back({ vertexBufferID, indexBufferID });
 		mNumIndicesPerLODLevel.push_back(bufferDesc.NumElements);
 	}
 }
+
+
+
+using BuiltinMeshArray_t = std::array<Mesh, EBuiltInMeshes::NUM_BUILTIN_MESHES>;

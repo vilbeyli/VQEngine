@@ -22,6 +22,7 @@
 #include "Libs/D3DX12/d3dx12.h"
 
 #include <cassert>
+#include <stdlib.h>
 
 
 size_t StaticBufferHeap::MEMORY_ALIGNMENT = 256;
@@ -65,7 +66,7 @@ void StaticBufferHeap::Create(ID3D12Device* pDevice, EBufferType type, uint32 to
             GetResourceTransitionState(mType),
             nullptr,
             IID_PPV_ARGS(&mpVidMemBuffer));
-        mpVidMemBuffer->SetName(L"StaticBufferPool::m_pVidMemBuffer");
+        SetName(mpVidMemBuffer, name);
 
         if (FAILED(hr))
         {
@@ -88,7 +89,7 @@ void StaticBufferHeap::Create(ID3D12Device* pDevice, EBufferType type, uint32 to
         // TODO
     }
 
-    mpSysMemBuffer->SetName(L"StaticBufferPool::m_pSysMemBuffer");
+    SetName(mpSysMemBuffer, name);
 
     mpSysMemBuffer->Map(0, NULL, reinterpret_cast<void**>(&mpData));
 }
@@ -152,7 +153,15 @@ bool StaticBufferHeap::AllocBuffer(uint32 numElements, uint32 strideInBytes, voi
     std::lock_guard<std::mutex> lock(mMtx);
 
     uint32 size = AlignOffset(numElements * strideInBytes, (uint32)StaticBufferHeap::MEMORY_ALIGNMENT);
-    assert(mMemOffset + size < mTotalMemSize); // if this is hit, initialize heap with a larger size.
+    const bool bHeapOutOfMemory = ((mMemOffset + size) > mTotalMemSize);
+    //assert( !bHeapOutOfMemory); // if this is hit, initialize heap with a larger size.
+    if (bHeapOutOfMemory)
+    {
+        Log::Error("Static Heap out of memory.");
+        MessageBox(NULL, "Out of StaticBufferHeap memory", "Error", MB_ICONERROR | MB_OK);
+        PostMessage(NULL, WM_QUIT, NULL, NULL);
+        return false;
+    }
 
     *ppDataOut = (void*)(mpData + mMemOffset);
 
@@ -239,7 +248,9 @@ bool DynamicBufferHeap::AllocConstantBuffer(uint32_t size, void** pData, D3D12_G
     uint32_t memOffset;
     if (m_mem.Alloc(size, &memOffset) == false)
     {
-        Log::Error("Ran out of mem for 'dynamic' buffers, please increase the allocated size\n");
+        Log::Error("Ran out of mem for 'dynamic' buffers, increase the allocated size\n");
+        MessageBox(NULL, "Out of DynamicBufferHeap memory", "Error", MB_ICONERROR | MB_OK);
+        PostMessage(NULL, WM_QUIT, NULL, NULL);
         return false;
     }
 

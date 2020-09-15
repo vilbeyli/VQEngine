@@ -16,9 +16,12 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
+#include <Windows.h>
+#include <ShellScalingAPI.h>
+#pragma comment(lib, "shcore.lib")
+
 #include <ctime>
 #include <cstdlib>
-#include <Windows.h>
 #include <vector>
 #include <string>
 
@@ -28,7 +31,6 @@
 
 #include "Platform.h"
 #include "VQEngine.h"
-
 
 void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmdl)
 {
@@ -158,12 +160,20 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 			else
 				refStartupParams.EngineSettings.gfx.MaxFrameRate = StrUtil::ParseInt(paramValue);
 		}
+
+		if (paramName == "-Scene")
+		{
+			refStartupParams.bOverrideENGSetting_StartupScene = true;
+			refStartupParams.EngineSettings.StartupScene = paramValue;
+		}
 	}
 }
 
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR pScmdl, int iCmdShow)
 {
+	SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+
 	FStartupParameters StartupParameters = {};
 	StartupParameters.hExeInstance = hInst;
 	StartupParameters.iCmdShow = iCmdShow;

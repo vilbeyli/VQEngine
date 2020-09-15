@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Scene>
+    <!-- 
+    ENVIRONMENT MAP
+        Environment maps are defined in Data/EnvironmentMaps.ini 
+        Custom env map usage: specify path & MaxCLL
+         <path>Textures/HDRI/env_map.hdr</path>
+         <MaxCLL>1200</MaxCLL>
+
+        Presets are defined in EnvironmentMaps.ini. Usage:
+         <Preset>Stadium01</Preset>
+    -->
+    <!-- 
+    CAMERA
+        Contains 3 main data fields
+         - Translational Data   : Position, Yaw, Pitch
+         - Camera Viewport Data : Projection Type <perspective/orthogonal>, FoV in Degrees, Near & Far Planes
+         - Camera Type Data     : First Person <TranslationSpeed, AngularSpeed, Drag> / Orbit < TBA >
+    -->
+
+    <!-- 
+    GAME OBJECT
+        Transform & Model container
+    -->
+    
+    <!-- ================================================================ -->
+    
+    <!--
+    <EnvironmentMap>
+        <Preset>Stadium01</Preset>
+    </EnvironmentMap>
+    -->
+
+    <!-- 
+    MATERIALS
+    -->
+    <Material>
+        <Name>GreenMat</Name>
+        <Diffuse>0 0.5 0</Diffuse>
+        <Alpha> 0.5 </Alpha>
+        <DiffuseMap>Data/Textures/PBR/cgbookcase/black-herringbone-tiles-01/Black_herringbone_tiles_01_2K_Base_Color.png</DiffuseMap>
+    </Material>
+    <Material>
+        <Name>RedMat</Name>
+        <Diffuse>0.8 0.0 0</Diffuse>
+        <Alpha> 1 </Alpha>
+    </Material>
+    <Material>
+        <Name>Checkerboard</Name>
+        <DiffuseMap>Procedural/Checkerboard</DiffuseMap>
+    </Material>
+    <Material>
+        <Name>Checkerboard_Grayscale</Name>
+        <DiffuseMap>Procedural/Checkerboard_Grayscale</DiffuseMap>
+    </Material>
+    
+    <Camera>
+        <Position> 0.0 3.0 -5 </Position>
+        <Pitch> 15 </Pitch>
+        <Yaw> 0 </Yaw>
+        <Projection>Perspective</Projection>
+        <FoV>60.0</FoV>
+        <Near>0.01</Near>
+        <Far>1000</Far>
+
+        <FirstPerson>
+            <TranslationSpeed>1000</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+
+
+    <GameObject>
+        <Transform>
+            <Position> 0.0 3.0 14 </Position>
+            <Rotation>30 0 15</Rotation>
+            <Scale>3.1 3.1 3.1</Scale>
+        </Transform>
+        <Model>
+            <Mesh>Cube</Mesh>
+            <MaterialName>GreenMat</MaterialName>
+        </Model>
+    </GameObject>
+    
+    <GameObject>
+        <Transform>
+            <Position>0 0 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>1 1 1</Scale>
+        </Transform>
+        <Model>
+            <Mesh>Triangle</Mesh>
+            <MaterialName>Checkerboard</MaterialName>
+        </Model>
+    </GameObject>
+
+
+    <GameObject>
+        <Transform>
+            <Position>-5 0 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>1 1 1</Scale>
+        </Transform>
+        <Model>
+            <Mesh>Triangle</Mesh>
+            <MaterialName>Checkerboard_Grayscale</MaterialName>
+        </Model>
+    </GameObject>
+
+    <PostProcess>
+    <!-- TBA -->
+    </PostProcess>
+</Scene>

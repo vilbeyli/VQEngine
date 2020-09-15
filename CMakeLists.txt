@@ -11,17 +11,22 @@ add_compile_options(/MP)
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
 
-# ouput exe to bin directory
-SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_HOME_DIRECTORY}/Bin)
-foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
-    string( TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG )
-    set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_HOME_DIRECTORY}/Bin/${OUTPUTCONFIG} )
-endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
-
 set (Resource 
     "Data/Resources/VQE.rc"
     "Data/Resources/resource.h"
     "Data/Icons/VQE32.ico"
+)
+
+set (Scenes 
+    "Data/Levels/Default.xml"
+    "Data/Levels/Sponza.xml"
+    "Data/Levels/GeometryUnitTest.xml"
+    "Data/Levels/StressTest.xml"
+    "Source/Scenes/Scenes.h"
+    "Source/Scenes/DefaultScene.cpp"
+    "Source/Scenes/SponzaScene.cpp"
+    "Source/Scenes/GeometryUnitTestScene.cpp"
+    "Source/Scenes/StressTestScene.cpp"
 )
 
 set (Config
@@ -29,14 +34,16 @@ set (Config
     "Data/RendererSettings.ini"
     "Data/HDRDisplayProfiles.ini"
     "Data/EnvironmentMaps.ini"
+    "Data/Scenes.ini"
 )
 
 set (Shaders
-    "Source/Shaders/hello-triangle.hlsl"
-    "Source/Shaders/hello-cube.hlsl"
-    "Source/Shaders/FullscreenTriangle.hlsl"
-    "Source/Shaders/Tonemapper.hlsl"
-    "Source/Shaders/Skydome.hlsl"
+    "Shaders/hello-triangle.hlsl"
+    "Shaders/hello-cube.hlsl"
+    "Shaders/FullscreenTriangle.hlsl"
+    "Shaders/Tonemapper.hlsl"
+    "Shaders/Skydome.hlsl"
+    "Shaders/Object.hlsl"
 )
 
 set (HeaderVQE 
@@ -48,11 +55,19 @@ set (HeaderVQE
     "Source/Application/VQEngine.h"
     "Source/Application/Events.h"
     "Source/Application/Mesh.h"
+    "Source/Application/Material.h"
+    "Source/Application/Model.h"
     "Source/Application/Geometry.h"
     "Source/Application/Transform.h"
     "Source/Application/Quaternion.h"
     "Source/Application/Camera.h"
     "Source/Application/Input.h"
+    "Source/Application/AssetLoader.h"
+    "Source/Application/Scene.h"
+    "Source/Application/Light.h"
+    "Source/Application/GameObject.h"
+    "Source/Application/Memory.h"
+    "Source/Application/GPUMarker.h"
 )
 
 set (SourceVQE 
@@ -64,53 +79,105 @@ set (SourceVQE
     "Source/Application/VQEngine_Update.cpp"
     "Source/Application/VQEngine_WindowEvents.cpp"
     "Source/Application/VQEngine_EventHandlers.cpp"
+    "Source/Application/FileParser.cpp"
     "Source/Application/Events.cpp"
     "Source/Application/Mesh.cpp"
+    "Source/Application/Material.cpp"
+    "Source/Application/Model.cpp"
     "Source/Application/Geometry.cpp"
     "Source/Application/Transform.cpp"
     "Source/Application/Math.cpp"
     "Source/Application/Quaternion.cpp"
     "Source/Application/Camera.cpp"
     "Source/Application/Input.cpp"
+    "Source/Application/AssetLoader.cpp"
+    "Source/Application/Scene.cpp"
+    "Source/Application/Light.cpp"
+    "Source/Application/GameObject.cpp"
+    "Source/Application/Memory.cpp"
+    "Source/Application/GPUMarker.cpp"
 )
+
+set (PIXIncl 
+    "Libs/WinPixEventRuntime/Include"
+)
+
+# ouput exe to bin directory
+foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
+    string( TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG )
+    set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_HOME_DIRECTORY}/Bin/${OUTPUTCONFIG} )
+endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 
 add_link_options(/SUBSYSTEM:WINDOWS)
 
-
+# add submodules
 add_subdirectory(Libs/VQUtils)
 add_subdirectory(Libs/D3D12MA)
 add_subdirectory(Source/Renderer)
+
+#add_definitions(
+#    -DASSIMP_BUILD_ASSIMP_TOOLS=OFF 
+#    -DASSIMP_NO_EXPORT=ON 
+#    -DBUILD_SHARED_LIBS=OFF 
+#    -DASSIMP_BUILD_TESTS=OFF 
+#    -DASSIMP_INSTALL=OFF
+#)
+add_subdirectory(Libs/assimp)
 
 source_group("Config"   FILES ${Config})
 source_group("Resource" FILES ${Resource})
 source_group("Icons"    FILES ${Icons})
 source_group("Shaders"  FILES ${Shaders})
+source_group("Scenes"   FILES ${Scenes})
 
 set_source_files_properties(${Config} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${Scenes} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(Data/Resources/VQE.rc PROPERTIES VS_TOOL_OVERRIDE "Resource compiler")
 set_source_files_properties(Data/Icons/VQE32.ico  PROPERTIES VS_TOOL_OVERRIDE "Image")
 
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/VQUtils/Bin/)
+link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/WinPixEventRuntime/bin/x64)
 
 # Create a library with the project name that is build with the Headers and Source files
-add_executable( ${PROJECT_NAME} ${HeaderVQE} ${SourceVQE} ${Config} ${Resource} ${Shaders} )
+add_executable( ${PROJECT_NAME} ${HeaderVQE} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} )
 
-set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY}/Bin/ )
+set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY} )
+
+
+# set target executable name for debug/releasewithdebug builds, release is VQE.exe
+foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
+    string( TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG )
+    if (${OUTPUTCONFIG} MATCHES "DEBUG")
+        set_target_properties(${PROJECT_NAME} PROPERTIES ${OUTPUTCONFIG}_OUTPUT_NAME "VQE-d")
+    elseif (${OUTPUTCONFIG} MATCHES "RELWITHDEBINFO")
+        set_target_properties(${PROJECT_NAME} PROPERTIES ${OUTPUTCONFIG}_OUTPUT_NAME "VQE-rwd")
+        add_compile_definitions(PROFILE_BUILD)
+    endif()
+endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 17)
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Data ${CMAKE_SOURCE_DIR}/Bin/Data)
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Source/Shaders ${CMAKE_SOURCE_DIR}/Bin/Shaders)
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Data $<TARGET_FILE_DIR:${PROJECT_NAME}>/Data)
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Source/Shaders $<TARGET_FILE_DIR:${PROJECT_NAME}>/Shaders)
+set_target_properties(assimp PROPERTIES FOLDER Libs/assimp)
+set_target_properties(IrrXML PROPERTIES FOLDER Libs/assimp)
+set_target_properties(uninstall PROPERTIES FOLDER Libs/assimp)
+set_target_properties(UpdateAssimpLibsDebugSymbolsAndDLLs PROPERTIES FOLDER Libs/assimp)
+set_target_properties(zlibstatic PROPERTIES FOLDER Libs/assimp)
 
-# TODO: the above commands must run even if the project is up to date which is not the case now.
-#       if Data/EngineSettings.ini is updated, the copy in the target destination of the commands above
-#       is not updated.
+#set_target_properties(VQRenderer PROPERTIES FOLDER Libs)
+#set_target_properties(VQUtils PROPERTIES FOLDER Libs)
+set_target_properties(D3D12MA PROPERTIES FOLDER Libs)
 
 # Make sure the compiler can find include files for the libraries
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${Includes})
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${PIXIncl})
+
+target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer assimp WinPixEventRuntime)
 
 
-target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer )
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_CURRENT_SOURCE_DIR}/Libs/WinPixEventRuntime/bin/x64/WinPixEventRuntime.dll"
+    $<TARGET_FILE_DIR:${PROJECT_NAME}>
+)

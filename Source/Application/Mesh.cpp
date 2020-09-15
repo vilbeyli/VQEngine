@@ -1,5 +1,5 @@
-//	VQEngine | DirectX11 Renderer
-//	Copyright(C) 2018  - Volkan Ilbeyli
+//	VQE
+//	Copyright(C) 2020  - Volkan Ilbeyli
 //
 //	This program is free software : you can redistribute it and / or modify
 //	it under the terms of the GNU General Public License as published by
@@ -24,6 +24,17 @@
 #include "Utilities/Log.h"
 #endif
 
+
+EBuiltInMeshes Mesh::GetBuiltInMeshType(const std::string& MeshTypeStr)
+{
+	static std::unordered_map<std::string, EBuiltInMeshes> MESH_TYPE_LOOKUP = 
+	{
+		  { "Cube", EBuiltInMeshes::CUBE }
+		, { "Triangle", EBuiltInMeshes::TRIANGLE }
+		// TODO
+	};
+	return MESH_TYPE_LOOKUP.at(MeshTypeStr);
+}
 
 std::pair<BufferID, BufferID> Mesh::GetIABufferIDs(int lod /*= 0*/) const
 {

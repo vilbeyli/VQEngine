@@ -1,5 +1,5 @@
-//	VQEngine | DirectX11 Renderer
-//	Copyright(C) 2018  - Volkan Ilbeyli
+//	VQE
+//	Copyright(C) 2020  - Volkan Ilbeyli
 //
 //	This program is free software : you can redistribute it and / or modify
 //	it under the terms of the GNU General Public License as published by
@@ -17,20 +17,17 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "Camera.h"
+#include "Input.h"
 
 #define CAMERA_DEBUG 1
 
 using namespace DirectX;
 
 Camera::Camera()
-	:
-	MoveSpeed(1000.0f),
-	AngularSpeedDeg(0.05f),
-	Drag(9.5f),
-	mPitch(0.0f),
-	mYaw(0.0f),
-	mPosition(0,0,0),
-	mVelocity(0,0,0)
+	: mPitch(0.0f)
+	, mYaw(0.0f)
+	, mPosition(0,0,0)
+	, mVelocity(0,0,0)
 {
 	XMStoreFloat4x4(&mMatProj, XMMatrixIdentity());
 	XMStoreFloat4x4(&mMatView, XMMatrixIdentity());
@@ -39,38 +36,65 @@ Camera::Camera()
 Camera::~Camera(void)
 {}
 
-void Camera::InitializeCamera(const FCameraData& data)
+Camera::Camera(Camera && other)
 {
-	const auto& NEAR_PLANE   = data.nearPlane;
-	const auto& FAR_PLANE    = data.farPlane;
-	const float AspectRatio  = data.width / data.height;
-	const float VerticalFoV  = data.fovV_Degrees * DEG2RAD;
-	const float& ViewportX   = data.width;
-	const float& ViewportY   = data.height;
+	mPosition = other.mPosition;
+	mYaw = other.mYaw;
+	mVelocity = other.mVelocity;
+	mPitch = other.mPitch;
+	mProjParams = other.mProjParams;
+	mMatProj = other.mMatProj;
+	mMatView = other.mMatView;
+	pController = std::move(other.pController);
+}
 
-	this->mProjParams.NearZ = NEAR_PLANE;
-	this->mProjParams.FarZ  = FAR_PLANE;
-	this->mProjParams.ViewporHeight = ViewportY;
-	this->mProjParams.ViewporWidth  = ViewportX;
-	this->mProjParams.FieldOfView = data.fovV_Degrees * DEG2RAD;
-	this->mProjParams.bPerspectiveProjection = data.bPerspectiveProjection;
+Camera Camera::Clone()
+{
+	Camera c = {};
+	c.mPosition = this->mPosition;
+	c.mYaw = this->mYaw;
+	c.mVelocity = this->mVelocity;
+	c.mPitch = this->mPitch;
+	c.mProjParams = this->mProjParams;
+	c.mMatProj = this->mMatProj;
+	c.mMatView = this->mMatView;
+	c.pController = std::move(this->pController->Clone(&c));
+	return c; // is this dangling too?
+}
 
-	mYaw = mPitch = 0;
+void Camera::InitializeCamera(const FCameraParameters& data)
+{
+	this->mProjParams = data.ProjectionParams;
+	this->mProjParams.FieldOfView *= DEG2RAD; // convert FoV to radians
+	this->mYaw = this->mPitch = 0; // set with Rotate() below
+	
+
 	SetProjectionMatrix(this->mProjParams);
 	SetPosition(data.x, data.y, data.z);
-	Rotate(data.yaw * DEG2RAD, data.pitch * DEG2RAD, 1.0f);
+	Rotate(data.Yaw * DEG2RAD, data.Pitch * DEG2RAD);
 	UpdateViewMatrix();
 }
 
-
-void Camera::SetProjectionMatrix(const ProjectionMatrixParameters& params)
+void Camera::InitializeController(bool bFirstPersonController, const FCameraParameters& data)
 {
-	assert(params.ViewporHeight > 0.0f);
-	const float AspectRatio = params.ViewporWidth / params.ViewporHeight;
+	if (bFirstPersonController)
+	{
+		pController = std::make_unique<FirstPersonController>(this, data.TranslationSpeed, data.AngularSpeed, data.Drag);
+	}
+	else
+	{
+		pController = std::make_unique<OrbitController>(this);
+	}
+}
+
+void Camera::SetProjectionMatrix(const FProjectionMatrixParameters& params)
+{
+	assert(params.ViewportHeight > 0.0f);
+	const float AspectRatio = params.ViewportWidth / params.ViewportHeight;
 
 	mMatProj = params.bPerspectiveProjection
 		? MakePerspectiveProjectionMatrix(params.FieldOfView, AspectRatio, params.NearZ, params.FarZ)
-		: MakeOthographicProjectionMatrix(params.ViewporWidth, params.ViewporHeight, params.NearZ, params.FarZ);
+		: MakeOthographicProjectionMatrix(params.ViewportWidth, params.ViewportHeight, params.NearZ, params.FarZ);
 }
 
 void Camera::UpdateViewMatrix()
@@ -89,21 +113,6 @@ void Camera::UpdateViewMatrix()
 
 	XMStoreFloat4x4(&mMatView, XMMatrixLookAtLH(pos, lookAt, up));
 }
-
-void Camera::Update(const float dt, const FCameraInput& input)
-{
-	Rotate(dt, input);
-	Move(dt, input);
-
-	UpdateViewMatrix();
-
-	// move based on velocity
-	XMVECTOR P = XMLoadFloat3(&mPosition);
-	XMVECTOR V = XMLoadFloat3(&mVelocity);
-	P += V * dt;
-	XMStoreFloat3(&mPosition, P);
-}
-
 
 XMFLOAT3 Camera::GetPositionF() const
 {
@@ -167,31 +176,94 @@ void Camera::SetPosition(float x, float y, float z)
 	mPosition = XMFLOAT3(x, y, z);
 }
 
-void Camera::Rotate(float yaw, float pitch, const float dt)
+void Camera::Rotate(float yaw, float pitch)
 {
-	mYaw   += yaw   * dt;
-	mPitch += pitch * dt;
+	mYaw   += yaw;
+	mPitch += pitch;
 	
 	if (mPitch > +90.0f * DEG2RAD) mPitch = +90.0f * DEG2RAD;
 	if (mPitch < -90.0f * DEG2RAD) mPitch = -90.0f * DEG2RAD;
 }
 
-// internal update functions
-void Camera::Rotate(const float dt, const FCameraInput& input)
-{
-	const float& dy = input.DeltaMouseXY[1];
-	const float& dx = input.DeltaMouseXY[0];
+//==============================================================================================================
 
-	const float delta = AngularSpeedDeg * DEG2RAD; // rotation doesn't depend on time
-	Rotate(dx, dy, delta);
+
+OrbitController::OrbitController(Camera* pCam)
+	: CameraController(pCam)
+{
 }
 
-void Camera::Move(const float dt, const FCameraInput& input)
-{
-	const XMMATRIX MRotation	 = GetRotationMatrix();
-	const XMVECTOR WorldSpaceTranslation = XMVector3TransformCoord(input.LocalTranslationVector, MRotation);
+void OrbitController::UpdateCamera(const Input& input, float dt)
 
-	XMVECTOR V = XMLoadFloat3(&mVelocity);
+{
+}
+
+CameraController* OrbitController::Clone_impl(Camera* pNewCam)
+{
+	OrbitController* p = new OrbitController(pNewCam); 
+	p->mF3LookAt = this->mF3LookAt;
+	return p;
+}
+
+FirstPersonController::FirstPersonController(Camera* pCam
+	, float moveSpeed    /*= 1000.0f*/
+	, float angularSpeed /*= 0.05f	*/
+	, float drag         /*= 9.5f	*/
+)
+	: CameraController(pCam)
+	, MoveSpeed(moveSpeed)
+	, AngularSpeedDeg(angularSpeed)
+	, Drag(drag)
+{}
+
+void FirstPersonController::UpdateCamera(const Input& input, float dt)
+{
+	constexpr float CAMERA_MOVEMENT_SPEED_MULTIPLER = 0.75f;
+	constexpr float CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER = 2.0f;
+
+	XMVECTOR LocalSpaceTranslation = XMVectorSet(0, 0, 0, 0);
+	if (input.IsKeyDown('A'))      LocalSpaceTranslation += XMLoadFloat3(&LeftVector);
+	if (input.IsKeyDown('D'))      LocalSpaceTranslation += XMLoadFloat3(&RightVector);
+	if (input.IsKeyDown('W'))      LocalSpaceTranslation += XMLoadFloat3(&ForwardVector);
+	if (input.IsKeyDown('S'))      LocalSpaceTranslation += XMLoadFloat3(&BackVector);
+	if (input.IsKeyDown('E'))      LocalSpaceTranslation += XMLoadFloat3(&UpVector);
+	if (input.IsKeyDown('Q'))      LocalSpaceTranslation += XMLoadFloat3(&DownVector);
+	if (input.IsKeyDown(VK_SHIFT)) LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER;
+	LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_MULTIPLER;
+
+	// update camera
+	FCameraInput camInput(LocalSpaceTranslation);
+	camInput.DeltaMouseXY = input.GetMouseDelta();
+
+
+	//this->mpCamera->Update(dt, camInput);
+	const float RotationSpeed = this->AngularSpeedDeg * DEG2RAD; // rotation doesn't depend on time
+	const float dy = camInput.DeltaMouseXY[1] * RotationSpeed;
+	const float dx = camInput.DeltaMouseXY[0] * RotationSpeed;
+	this->mpCamera->Rotate(dx, dy);
+
+
+	//this->mpCamera->Move(dt, camInput);
+	const XMMATRIX MRotation = this->mpCamera->GetRotationMatrix();
+	const XMVECTOR WorldSpaceTranslation = XMVector3TransformCoord(camInput.LocalTranslationVector, MRotation);
+
+	XMVECTOR V = XMLoadFloat3(&this->mpCamera->mVelocity);
 	V += (WorldSpaceTranslation * MoveSpeed - V * Drag) * dt;
-	XMStoreFloat3(&mVelocity, V);
+	XMStoreFloat3(&this->mpCamera->mVelocity, V);
+
+	this->mpCamera->UpdateViewMatrix();
+
+	// move based on velocity
+	XMVECTOR P = XMLoadFloat3(&this->mpCamera->mPosition);
+	P += V * dt;
+	XMStoreFloat3(&this->mpCamera->mPosition, P);
+}
+
+CameraController* FirstPersonController::Clone_impl(Camera* pNewCam)
+{
+	FirstPersonController* p = new FirstPersonController(pNewCam);
+	p->AngularSpeedDeg = this->AngularSpeedDeg;
+	p->Drag = this->Drag;
+	p->MoveSpeed = this->MoveSpeed;
+	return p;
 }

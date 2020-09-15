@@ -46,4 +46,10 @@ using CBV_ID = ID_TYPE;
 using RTV_ID = ID_TYPE;
 using DSV_ID = ID_TYPE;
 
+using ShaderID = ID_TYPE;
+
 using EnvironmentMapID = ID_TYPE;
+using MeshID = ID_TYPE;
+using MaterialID = ID_TYPE;
+using ModelID = ID_TYPE;
+using TransformID = ID_TYPE;

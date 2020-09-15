@@ -27,8 +27,16 @@ set SKIP_DOWNLOADS=0
 set DBG_BUILD_DIRECTORY=../Bin/DEBUG
 set RLS_BUILD_DIRECTORY=../Bin/RELEASE
 set RWD_BUILD_DIRECTORY=../Bin/RELWITHDEBINFO
-set SHADER_DIRECTORY=../Source/Shaders
+set SHADER_DIRECTORY=../Shaders
 set DATA_DIRECTORY=../Data
+
+::prepare ignore directory list
+pushd %cd%
+cd ../Data/Icons
+set IGNORE_DIRS=%cd%
+cd ../Resources
+set IGNORE_DIRS=%IGNORE_DIRS% %cd%
+popd
 
 :: Keep track of # build tasks. build, clean, copy/move, etc.
 :: assume 2 for build+copy, add more depending on prebuild+clean tasks
@@ -77,7 +85,7 @@ for %%i IN (%*) DO (
 ::echo SkipMSBuildFind=!MSBUILD_FIND!
 if !MSBUILD_FIND! equ 1 (
     call :FindMSBuild
-    if %ERRORLEVEL% neq 0 (
+    if !ERRORLEVEL! neq 0 (
         echo [VQPackage] Error: Couldn't find MSBuild
         exit /b -1
     )
@@ -116,7 +124,7 @@ if !NO_BUILD! equ 0 (
     :: Package the engine
     call :ExecBuildTask_Build
 
-    if %ERRORLEVEL% neq 0  exit /b %ERRORLEVEL%
+    if !ERRORLEVEL! neq 0  exit /b !ERRORLEVEL!
 )
 
 :: move build artifacts into destination folder
@@ -183,7 +191,7 @@ if not exist !SOLUTION_FILE_PATH! (
     echo **********************************************************************
     echo.
     call %~dp0GenerateProjectFiles.bat -noVS
-    if %ERRORLEVEL% neq 0 (
+    if !ERRORLEVEL! neq 0 (
         echo [VQPackage] Error: Couldn't generate project files.
         exit /b -1
     )
@@ -210,20 +218,25 @@ exit /b 0
 :ExecBuildTask_Build
 ::echo [VQPackage] ENGINE_BUILD_COMMAND = !ENGINE_BUILD_COMMAND!
 :: ---------------------- Build Release ----------------------
-call :PrintBuildStage Release
-call !ENGINE_BUILD_COMMAND! /p:Configuration=Release
-set /A ERR_REL=!ERRORLEVEL!
-set /A BUILD_NUM_CURR_TASK=!BUILD_NUM_CURR_TASK!+1
+if !BUILD_CONFIG_RELEASE! neq 0 (
+    call :PrintBuildStage Release
+    call !ENGINE_BUILD_COMMAND! /p:Configuration=Release
+    if !ERRORLEVEL! neq 0 (
+        echo ERROR: BUILD ERROR
+        exit /b -1
+    )
+    set /A BUILD_NUM_CURR_TASK=!BUILD_NUM_CURR_TASK!+1
+)
 :: ---------------------- Build Release ----------------------
 :: ---------------------- Build Debug   ----------------------
 if !BUILD_CONFIG_DEBUG! neq 0 (
     call :PrintBuildStage Debug
     call !ENGINE_BUILD_COMMAND! /p:Configuration=Debug
-    set /A BUILD_NUM_CURR_TASK=!BUILD_NUM_CURR_TASK!+1
-    if %ERRORLEVEL% neq 0 (
+    if !ERRORLEVEL! neq 0 (
         echo ERROR: BUILD ERROR
         exit /b -1
     )
+    set /A BUILD_NUM_CURR_TASK=!BUILD_NUM_CURR_TASK!+1
 )
 :: ---------------------- Build Debug   ----------------------
 :: ---------------------- Build RelWithDebInfo----------------
@@ -280,16 +293,17 @@ exit /b 0
 :PackageBuild
 set SRC=%~1
 set DST=%~2
-::prepare ignore directory list
-pushd %cd%
-cd !SRC!/Data/Icons
-set IGNORE_DIRS=%cd%
-cd ../Resources
-set IGNORE_DIRS=%IGNORE_DIRS% %cd%
-popd
 :: move files to final destination
 robocopy !SRC! !DST! /xf *.lib *.ilk /E /xd !IGNORE_DIRS!
+exit /b 0
+
+::
+:: PackageBuild(source, dest)
+::
+:PackageResources
+set DST=%~1
 robocopy !SHADER_DIRECTORY! !DST!/Shaders /E
+robocopy !DATA_DIRECTORY! !DST!/Data /E /xd !IGNORE_DIRS!
 exit /b 0
 
 ::
@@ -307,14 +321,17 @@ if exist !ENGINE_PACKAGE_OUTPUT_DIRECTORY! (
     rmdir /S /Q !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
 )
 
-:: make artifacts directory
+:: create artifacts directory
 mkdir !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
 
-:: move builds
+:: move data
+call :PackageResources !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
+
+:: move built binaries
 echo [VQPackage] Moving build artifacts to package output directory...
-call :PackageBuild !RLS_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win64
-if !BUILD_CONFIG_DEBUG! NEQ 0         call :PackageBuild !DBG_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win64-Debug
-if !BUILD_CONFIG_REL_WITH_DBG! NEQ 0  call :PackageBuild !RWD_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!/Win64-PDB
+call :PackageBuild !RLS_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
+if !BUILD_CONFIG_DEBUG! NEQ 0         call :PackageBuild !DBG_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
+if !BUILD_CONFIG_REL_WITH_DBG! NEQ 0  call :PackageBuild !RWD_BUILD_DIRECTORY!, !ENGINE_PACKAGE_OUTPUT_DIRECTORY!
 exit /b 0
 
 :: --------------------------------------------------------------------------

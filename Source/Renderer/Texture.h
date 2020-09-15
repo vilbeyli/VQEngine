@@ -20,6 +20,9 @@
 
 #include "Common.h"
 
+#include <DirectXMath.h>
+
+#include <atomic>
 #include <vector>
 
 namespace D3D12MA { class Allocation; class Allocator; }
@@ -29,29 +32,54 @@ class CBV_SRV_UAV;
 class DSV;
 class RTV;
 struct D3D12_SHADER_RESOURCE_VIEW_DESC;
+struct Image;
 
 struct TextureCreateDesc
 {
 	TextureCreateDesc(const std::string& name) : TexName(name) {}
 	ID3D12Device*         pDevice   = nullptr;
 	D3D12MA::Allocator*   pAllocator = nullptr;
-	UploadHeap*           pUploadHeap = nullptr;
-	D3D12_RESOURCE_DESC   Desc = {};
+	D3D12_RESOURCE_DESC   d3d12Desc = {};
 	D3D12_RESOURCE_STATES ResourceState = D3D12_RESOURCE_STATE_COMMON;
 	const std::string&    TexName;
-
 };
 
 
 class Texture
 {
 public:
-	static std::vector<uint8> GenerateTexture_Checkerboard(uint Dimension);
+	struct CubemapUtility
+	{
+		// cube face order: https://msdn.microsoft.com/en-us/library/windows/desktop/ff476906(v=vs.85).aspx
+		//------------------------------------------------------------------------------------------------------
+		// 0: RIGHT		1: LEFT
+		// 2: UP		3: DOWN
+		// 4: FRONT		5: BACK
+		//------------------------------------------------------------------------------------------------------
+		enum ECubeMapLookDirections
+		{
+			CUBEMAP_LOOK_RIGHT = 0,
+			CUBEMAP_LOOK_LEFT,
+			CUBEMAP_LOOK_UP,
+			CUBEMAP_LOOK_DOWN,
+			CUBEMAP_LOOK_FRONT,
+			CUBEMAP_LOOK_BACK,
+
+			NUM_CUBEMAP_LOOK_DIRECTIONS
+		};
+#if 0
+		// TODO implement with Lights
+		static DirectX::XMMATRIX CalculateViewMatrix(ECubeMapLookDirections cubeFace, const vec3& position = vec3::Zero);
+		inline static DirectX::XMMATRIX CalculateViewMatrix(int face, const vec3& position = vec3::Zero) { return CalculateViewMatrix(static_cast<ECubeMapLookDirections>(face), position); }
+#endif
+	};
+	static std::vector<uint8> GenerateTexture_Checkerboard(uint Dimension, bool bUseMidtones = false);
 
 	Texture()  = default;
 	~Texture() = default;
+	Texture(const Texture& other);
+	Texture& operator=(const Texture& other);
 
-	bool CreateFromFile(const TextureCreateDesc& desc, const std::string& FilePath);
 	void Create(const TextureCreateDesc& desc, const void* pData = nullptr);
 
 	void Destroy();
@@ -64,8 +92,11 @@ public:
 	inline const ID3D12Resource* GetResource() const { return mpTexture; }
 	inline       ID3D12Resource* GetResource()       { return mpTexture; }
 public:
+	static bool ReadImageFromDisk(const std::string& path, Image& img);
 
 private:
+	friend class VQRenderer;
 	D3D12MA::Allocation* mpAlloc = nullptr;
 	ID3D12Resource*      mpTexture = nullptr;
+	std::atomic<bool>    bResident = false;
 };

@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Scene>
+    <!-- 
+    ENVIRONMENT MAP
+        Environment maps are defined in Data/EnvironmentMaps.ini 
+        Custom env map usage: specify path & MaxCLL
+         <path>Textures/HDRI/env_map.hdr</path>
+         <MaxCLL>1200</MaxCLL>
+
+        Presets are defined in EnvironmentMaps.ini. Usage:
+         <Preset>Stadium01</Preset>
+    -->
+    <!-- 
+    CAMERA
+        Contains 3 main data fields
+         - Translational Data   : Position, Yaw, Pitch
+         - Camera Viewport Data : Projection Type <perspective/orthogonal>, FoV in Degrees, Near & Far Planes
+         - Camera Type Data     : First Person <TranslationSpeed, AngularSpeed, Drag> / Orbit < TBA >
+    -->
+
+    <!-- 
+    GAME OBJECT
+        Transform & Model container
+    -->
+    
+    <!-- ================================================================ -->
+    
+    <!--
+    <EnvironmentMap>
+        <Preset>Stadium01</Preset>
+    </EnvironmentMap>
+    -->
+    <Camera>
+        <Position> 0.0 24.0 -93 </Position>
+        <Pitch> 15 </Pitch>
+        <Yaw> 0 </Yaw>
+        <Projection>Perspective</Projection>
+        <FoV>60.0</FoV>
+        <Near>0.01</Near>
+        <Far>1000</Far>
+
+        <FirstPerson>
+            <TranslationSpeed>1000</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+
+    <!-- Sponza -->
+    <GameObject>
+        <Transform>
+            <Position>40 20 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>0.02 0.02 0.02</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/Sponza/glTF/Sponza.gltf</Path>
+            <Name>Sponza</Name>
+        </Model>
+    </GameObject>
+    
+    <!-- Bottom Row Objects -->
+    <GameObject>
+        <Transform>
+            <Position>-60 20 0</Position>
+            <Rotation>0 180 0</Rotation>
+            <Scale>1000 1000 1000</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/BoomBox/glTF/BoomBox.gltf</Path>
+            <Name>BoomBox</Name>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>-40 20 0</Position>
+            <Rotation>-90 0 0</Rotation>
+            <Scale>10 10 10</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/DamagedHelmet/glTF/DamagedHelmet.gltf</Path>
+            <Name>DamagedHelmet</Name>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>-20 20 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>10 10 10</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/Suzanne/glTF/Suzanne.gltf</Path>
+            <Name>Suzanne</Name>
+        </Model>
+    </GameObject>
+    
+    <!-- Top Row Objects -->
+    <GameObject>
+        <Transform>
+            <Position>-60 50 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>8 8 8</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/SciFiHelmet/glTF/SciFiHelmet.gltf</Path>
+            <Name>SciFiHelmet</Name>
+        </Model>
+    </GameObject>
+    
+    <GameObject>
+        <Transform>
+            <Position>-40 50 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>1 1 1</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/Lantern/glTF/Lantern.gltf</Path>
+            <Name>Lantern</Name>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>-20 40 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>50 50 50</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/FlightHelmet/glTF/FlightHelmet.gltf</Path>
+            <Name>FlightHelmet</Name>
+        </Model>
+    </GameObject>
+    <PostProcess>
+    <!-- TBA -->
+    </PostProcess>
+</Scene>

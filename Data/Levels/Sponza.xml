@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Scene>
+    <!-- 
+    CAMERAS
+    -->
+    <Camera>
+        <Position> 700.0 170.0 -50 </Position>
+        <Pitch> 15 </Pitch>
+        <Yaw> -90 </Yaw>
+        <Projection>Perspective</Projection>
+        <FoV>60.0</FoV>
+        <Near>0.1</Near>
+        <Far>5000</Far>
+
+        <FirstPerson>
+            <TranslationSpeed>5800</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+
+    <!-- 
+    OBJECTS
+    -->
+    <!-- main sponza model -->
+    <GameObject>
+        <Transform>
+            <Position>0 0 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>1 1 1</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/Sponza/glTF/Sponza.gltf</Path>
+            <Name>Sponza</Name>
+        </Model>
+    </GameObject>
+
+    <!-- small sponza models -->
+    <GameObject>
+        <Transform>
+            <Position>0 0 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>0.05 0.05 0.05</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/Sponza/glTF/Sponza.gltf</Path>
+            <Name>Sponza</Name>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>-230 0 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>0.06 0.06 0.06</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/Sponza/glTF/Sponza.gltf</Path>
+            <Name>Sponza</Name>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>330 0 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>0.07 0.07 0.07</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/Sponza/glTF/Sponza.gltf</Path>
+            <Name>Sponza</Name>
+        </Model>
+    </GameObject>
+
+    <!-- 
+    POST PROCESS
+    -->
+    <PostProcess>
+    <!-- TBA -->
+    </PostProcess>
+</Scene>

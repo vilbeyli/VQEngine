@@ -23,92 +23,37 @@
 #include "Math.h"
 
 #include <array>
+#include <memory>
 
-struct FFrustumPlaneset
-{	// plane equations: aX + bY + cZ + d = 0
-	DirectX::XMFLOAT4 abcd[6]; // r, l, t, b, n, f
-	enum EPlaneset
-	{
-		PL_RIGHT = 0,
-		PL_LEFT,
-		PL_TOP,
-		PL_BOTTOM,
-		PL_FAR,
-		PL_NEAR
-	};
+class Camera;
+class Input;
 
-	// src: http://gamedevs.org/uploads/fast-extraction-viewing-frustum-planes-from-world-view-projection-matrix.pdfe
-	// gets the frustum planes based on @projectionTransformation. if:
-	//
-	// - @projectionTransformation is proj          matrix ->  view space plane equations
-	// - @projectionTransformation is viewProj      matrix -> world space plane equations
-	// - @projectionTransformation is worldViewProj matrix -> model space plane equations
-	// 
-	inline static FFrustumPlaneset ExtractFromMatrix(const DirectX::XMMATRIX& projectionTransformation)
-	{
-		const DirectX::XMMATRIX& m = projectionTransformation;
 
-		FFrustumPlaneset viewPlanes;
-		// TODO: XMVECTOR impl;
-		viewPlanes.abcd[FFrustumPlaneset::PL_RIGHT] = DirectX::XMFLOAT4(
-			m.r[0].m128_f32[3] - m.r[0].m128_f32[0],
-			m.r[1].m128_f32[3] - m.r[1].m128_f32[0],
-			m.r[2].m128_f32[3] - m.r[2].m128_f32[0],
-			m.r[3].m128_f32[3] - m.r[3].m128_f32[0]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_LEFT] = DirectX::XMFLOAT4(
-			m.r[0].m128_f32[3] + m.r[0].m128_f32[0],
-			m.r[1].m128_f32[3] + m.r[1].m128_f32[0],
-			m.r[2].m128_f32[3] + m.r[2].m128_f32[0],
-			m.r[3].m128_f32[3] + m.r[3].m128_f32[0]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_TOP] = DirectX::XMFLOAT4(
-			m.r[0].m128_f32[3] - m.r[0].m128_f32[1],
-			m.r[1].m128_f32[3] - m.r[1].m128_f32[1],
-			m.r[2].m128_f32[3] - m.r[2].m128_f32[1],
-			m.r[3].m128_f32[3] - m.r[3].m128_f32[1]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_BOTTOM] = DirectX::XMFLOAT4(
-			m.r[0].m128_f32[3] + m.r[0].m128_f32[1],
-			m.r[1].m128_f32[3] + m.r[1].m128_f32[1],
-			m.r[2].m128_f32[3] + m.r[2].m128_f32[1],
-			m.r[3].m128_f32[3] + m.r[3].m128_f32[1]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_FAR] = DirectX::XMFLOAT4(
-			m.r[0].m128_f32[3] - m.r[0].m128_f32[2],
-			m.r[1].m128_f32[3] - m.r[1].m128_f32[2],
-			m.r[2].m128_f32[3] - m.r[2].m128_f32[2],
-			m.r[3].m128_f32[3] - m.r[3].m128_f32[2]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_NEAR] = DirectX::XMFLOAT4(
-			m.r[0].m128_f32[2],
-			m.r[1].m128_f32[2],
-			m.r[2].m128_f32[2],
-			m.r[3].m128_f32[2]
-		);
-		return viewPlanes;
-	}
-};
 
-struct FCameraData
+// ---------------------------------------------------------
+// DATA
+// ---------------------------------------------------------
+struct FProjectionMatrixParameters
 {
-	float x, y, z; // position
-	float width;
-	float height;
-	float nearPlane;
-	float farPlane;
-	float fovV_Degrees;
-	float yaw, pitch; // in degrees
-	bool bPerspectiveProjection;
-};
-struct ProjectionMatrixParameters
-{
-	float ViewporWidth;
-	float ViewporHeight;
+	float ViewportWidth;  // needed for orthographic projection
+	float ViewportHeight; // needed for orthographic projection
 	float NearZ;
 	float FarZ;
 	float FieldOfView;
 	bool bPerspectiveProjection;
+};
+struct FCameraParameters
+{
+	float x, y, z; // position
+	float Yaw, Pitch; // in degrees
+
+	FProjectionMatrixParameters ProjectionParams;
+
+	bool bInitializeCameraController;
+	bool bFirstPerson; // First Person / orbit
+	float TranslationSpeed;
+	float AngularSpeed;
+	float Drag;
 };
 
 struct FCameraInput
@@ -120,35 +65,90 @@ struct FCameraInput
 	std::array<float, 2> DeltaMouseXY;
 };
 
+
+
+// ---------------------------------------------------------
+// CAMERA CONTROLLERS
+// ---------------------------------------------------------
+class CameraController
+{
+public:
+	virtual void UpdateCamera(const Input& input, float dt) = 0;
+	inline std::unique_ptr<CameraController> Clone(Camera* pNewCam) { return std::unique_ptr<CameraController>(Clone_impl(pNewCam)); }
+protected:
+	virtual CameraController* Clone_impl(Camera* pNewCam) = 0;
+
+	CameraController() = delete;
+	CameraController(Camera* pCamera) : mpCamera(pCamera) {}
+
+protected:
+	Camera* mpCamera = nullptr;
+};
+class FirstPersonController : public CameraController
+{
+public: 
+	FirstPersonController() = delete;
+	FirstPersonController(Camera* pCam, float moveSpeed = 1000.0f, float angularSpeed = 0.05f, float drag = 9.5f);
+	void UpdateCamera(const Input& input, float dt) override;
+protected:
+	CameraController* Clone_impl(Camera* pNewCam) override;
+private:
+	float Drag;
+	float AngularSpeedDeg;
+	float MoveSpeed;
+};
+class OrbitController : public CameraController
+{
+public:
+	OrbitController(Camera* pCam);
+	void UpdateCamera(const Input& input, float dt) override;
+protected:
+	CameraController* Clone_impl(Camera* pNewCam) override;
+private:
+	DirectX::XMFLOAT3 mF3LookAt;
+};
+
+
+
+// ---------------------------------------------------------
+// CAMERA
+// ---------------------------------------------------------
 class Camera
 {
+	friend class OrbitController;
+	friend class FirstPersonController;
 public:
 	Camera();
 	~Camera(void);
+	Camera(Camera&& other);
+	//Camera(const Camera& other);
+	Camera Clone();
 
-	void InitializeCamera(const FCameraData& data);
+	void InitializeCamera(const FCameraParameters& data);
+	void InitializeController(bool bFirstPersonController, const FCameraParameters& data);
 
-	void SetProjectionMatrix(const ProjectionMatrixParameters& params);
+	void SetProjectionMatrix(const FProjectionMatrixParameters& params);
+
 	void UpdateViewMatrix();
+	inline void Update(float dt, const Input& input) { if(pController) pController->UpdateCamera(input, dt); }
 
-	// updates View Matrix @mMatView
-	void Update(const float dt, const FCameraInput& input);
-
+	inline float GetYaw() const { return mYaw; }
+	inline float GetPitch() const { return mPitch; }
 	DirectX::XMFLOAT3 GetPositionF() const;
 	DirectX::XMMATRIX GetViewMatrix() const;
 	DirectX::XMMATRIX GetViewInverseMatrix() const;
 	DirectX::XMMATRIX GetProjectionMatrix() const;
 	DirectX::XMMATRIX GetRotationMatrix() const;
+	inline const FProjectionMatrixParameters& GetProjectionParameters() const { return mProjParams; }
+	inline       FProjectionMatrixParameters& GetProjectionParameters()       { return mProjParams; }
 
 	// returns World Space frustum plane set 
 	FFrustumPlaneset GetViewFrustumPlanes() const;
 	
 	void SetPosition(float x, float y, float z);
-	void Rotate(float yaw, float pitch, const float dt);
-	void Move(const float dt, const FCameraInput& input);
-	void Rotate(const float dt, const FCameraInput& input);
+	void Rotate(float yaw, float pitch);
 
-
+private:
 	//--------------------------
 	DirectX::XMFLOAT3 mPosition;
 	float mYaw = 0.0f;
@@ -156,14 +156,11 @@ public:
 	DirectX::XMFLOAT3 mVelocity;
 	float mPitch = 0.0f;
 	// -------------------------
-	ProjectionMatrixParameters mProjParams;
-	// -------------------------
-	float Drag;            
-	float AngularSpeedDeg; 
-	float MoveSpeed;       
+	FProjectionMatrixParameters mProjParams;
 	// -------------------------
 	DirectX::XMFLOAT4X4 mMatProj;
 	// -------------------------
 	DirectX::XMFLOAT4X4 mMatView;
 	// -------------------------
+	std::unique_ptr<CameraController> pController;
 };

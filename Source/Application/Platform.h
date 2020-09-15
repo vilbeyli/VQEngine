@@ -57,10 +57,13 @@ struct FStartupParameters
 
 	uint8 bOverrideENGSetting_bAutomatedTest              : 1;
 	uint8 bOverrideENGSetting_bTestFrames                 : 1;
-
-	std::string LevelNameToLoad = "DefaultScene";
+	uint8 bOverrideENGSetting_StartupScene                : 1;
 };
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 // -------------------------------------------------------------------------------
+
+
+template<typename T> static inline T CircularIncrement(T currVal, T maxVal) { return (currVal + 1) % maxVal; }
+template<typename T> static inline T CircularDecrement(T currVal, T maxVal, T minVal = 0) { return currVal == minVal ? maxVal : currVal - 1; }

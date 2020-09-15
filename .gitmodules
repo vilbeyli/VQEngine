@@ -7,3 +7,9 @@
 [submodule "Libs/D3D12MA"]
 	path = Libs/D3D12MA
 	url = https://github.com/vilbeyli/D3D12MemoryAllocator.git
+[submodule "Libs/assimp"]
+	path = Libs/assimp
+	url = https://github.com/assimp/assimp.git
+[submodule "Data/Models"]
+	path = Data/Models
+	url = https://github.com/vilbeyli/VQModels.git

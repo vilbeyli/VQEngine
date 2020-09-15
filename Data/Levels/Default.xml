@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Scene>
+    <!-- Environment maps are defined in Data/EnvironmentMaps.ini -->
+    <!--
+         // custom env map usage: specify path & MaxCLL
+         <path>Textures/HDRI/env_map.hdr</path>
+         <MaxCLL>1200</MaxCLL>
+
+         // preset usage: defined in EnvironmentMaps.ini
+         <Preset>Stadium01</Preset>
+    -->
+    <EnvironmentMap>
+        <Preset>Stadium01</Preset>
+    </EnvironmentMap>
+    
+    <!-- CAMERAS -->
+    <Camera>
+        <Position> 0.0 3.0 -5 </Position>
+        <Pitch> 15 </Pitch>
+        <Yaw> 0 </Yaw>
+        
+        <Projection>Perspective</Projection>
+        <FoV>60.0</FoV>
+        <Near>0.01</Near>
+        <Far>1000</Far>
+
+        <FirstPerson>
+            <TranslationSpeed>1000</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+    <Camera>
+        <Position> 6.0 3.0 -5 </Position>
+        <Pitch> 65 </Pitch>
+        <Yaw> 6 </Yaw>
+
+        <Projection>Perspective</Projection>
+        <FoV>90.0</FoV>
+        <Near>0.01</Near>
+        <Far>5000</Far>
+
+        <FirstPerson>
+            <TranslationSpeed>1000</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+
+    <!-- MATERIALS -->
+    <Material>
+        <Name>Checkerboard</Name>
+        <DiffuseMap>Procedural/Checkerboard</DiffuseMap>
+    </Material>
+    <Material>
+        <Name>Checkerboard_Grayscale</Name>
+        <DiffuseMap>Procedural/Checkerboard_Grayscale</DiffuseMap>
+    </Material>
+    
+    <!-- OBJECTS -->
+    <GameObject>
+        <Transform>
+            <Position>0 0 4</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>3 3 3</Scale>
+        </Transform>
+        <Model>
+            <Mesh>Cube</Mesh>
+            <MaterialName>Checkerboard</MaterialName>
+        </Model>
+    </GameObject>
+
+    <GameObject>
+        <Transform>
+            <Position> 0.0 3.0 -14 </Position>
+            <Rotation>30 0 15</Rotation>
+            <Scale>3.1 3.1 3.1</Scale>
+        </Transform>
+        <Model>
+            <Mesh>Cube</Mesh>
+            <MaterialName>Checkerboard_Grayscale</MaterialName>
+        </Model>
+    </GameObject>
+</Scene>
