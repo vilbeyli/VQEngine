@@ -19,6 +19,8 @@
 #pragma once
 
 #include "Mesh.h"
+#include "Math.h"
+#include "Libs/VQUtils/Source/utils.h"
 
 #include <type_traits>
 
@@ -51,7 +53,7 @@ namespace GeometryGenerator
 	constexpr GeometryData<TVertex, TIndex> Grid(float width, float depth, unsigned tilingX, unsigned tilingY, int numLODLevels = 1);
 
 	template<class TVertex, class TIndex = unsigned> 
-	constexpr GeometryData<TVertex, TIndex> Cylinder(float height, float topRadius, float bottomRadius, unsigned sliceCount, unsigned stackCount, int numLODLevels = 1);
+	constexpr GeometryData<TVertex, TIndex> Cylinder(float height = 3.0f, float topRadius = 1.0f, float bottomRadius = 1.0f, unsigned sliceCount = 18, unsigned stackCount = 6, int numLODLevels = 1);
 
 	template<class TVertex, class TIndex = unsigned> 
 	constexpr GeometryData<TVertex, TIndex> Cone(float height, float radius, unsigned sliceCount, int numLODLevels = 1);
@@ -316,12 +318,247 @@ namespace GeometryGenerator
 					v[Indices[2]].color[3] = 1.0f;
 				}
 			}
-		
 		}
 
 		return data;
 	}
 
 
+	//
+	// CYLINDER
+	//
+	// From: Chapter 6.11.1.1 'Cylinder Side Geometry' from Frank Luna's DX11 book
+	// with slight modifications (LOD calculation)
+	template<class TVertex, class TIndex>
+	constexpr GeometryData<TVertex, TIndex> Cylinder(
+		  float height        /*= 3.0f*/
+		, float topRadius     /*= 1.0f*/
+		, float bottomRadius  /*= 1.0f*/
+		, unsigned sliceCount /*= 8	  */
+		, unsigned stackCount /*= 4	  */
+		, int numLODLevels    /*= 1   */
+	)
+	{
+		assert(numLODLevels == 1); // currently only 1 LOD level is supported: function signature will need updating
+		using namespace DirectX;
+
+		constexpr bool bHasTangents = std::is_same<TVertex, FVertexWithNormalAndTangent>();
+		constexpr bool bHasNormals  = std::is_same<TVertex, FVertexWithNormal>() || std::is_same<TVertex, FVertexWithNormalAndTangent>();
+		constexpr bool bHasColor    = std::is_same<TVertex, FVertexWithColor>() || std::is_same<TVertex, FVertexWithColorAndAlpha>();
+		constexpr bool bHasAlpha    = std::is_same<TVertex, FVertexWithColorAndAlpha>();
+
+		std::vector<GeometryData<TVertex, TIndex>> data(numLODLevels);
+
+		// parameters for each LOD level
+		std::vector<unsigned> LODStackCounts(numLODLevels);
+		std::vector<unsigned> LODSliceCounts(numLODLevels);
+
+		constexpr unsigned MIN_STACK_COUNT = 4;
+		constexpr unsigned MIN_SLICE_COUNT = 8;
+
+		// using a simple lerp between min levels and given parameters so that:
+		// - LOD level 0 represents the mesh defined with the function parameters @radius, @ringCount and @sliceCount
+		// - the last LOD level is represented by MIN_RING_COUNT and MIN_SLICE_COUNT
+		// 
+		for (int LOD = 0; LOD < numLODLevels; ++LOD)
+		{
+			const float t = static_cast<float>(LOD) / (numLODLevels > 1 ? (numLODLevels - 1) : 1);
+			LODStackCounts[LOD] = MathUtil::lerp(MIN_STACK_COUNT, stackCount, 1.0f - t);
+			LODSliceCounts[LOD] = MathUtil::lerp(MIN_SLICE_COUNT, sliceCount, 1.0f - t);
+		}
+
+		// Generate VB/IB for each LOD level
+		for (int LOD = 0; LOD < numLODLevels; ++LOD)
+		{
+			const unsigned stackCount = LODStackCounts[LOD];
+			const unsigned sliceCount = LODSliceCounts[LOD];
+
+			// slice count determines horizontal resolution
+			// stack count determines height resolution
+			float stackHeight = height / stackCount;
+			float radiusStep = (topRadius - bottomRadius) / stackCount;
+			unsigned ringCount = stackCount + 1;
+
+			std::vector<TVertex>& Vertices = data[LOD].Vertices;
+			std::vector<TIndex>&  Indices  = data[LOD].Indices;
+
+			// CYLINDER BODY
+			//-----------------------------------------------------------
+			for (unsigned i = 0; i < ringCount; ++i)
+			{
+				// Compute vertices for each stack ring starting at the bottom and moving up.
+				float y = -0.5f * height + i * stackHeight;
+				float r = bottomRadius + i * radiusStep;
+
+				// vertices of ring
+				float dTheta = 2.0f * PI / sliceCount;
+				for (unsigned j = 0; j <= sliceCount; ++j)
+				{
+					TVertex vertex;
+
+					// pos
+					float c = cosf(j * dTheta);
+					float s = sinf(j * dTheta);
+					SetFVec<3>(vertex.position, { r * c, y, r * s });
+
+					// uv
+					{
+						float u = (float)j / sliceCount;
+						float v = 1.0f - (float)i / stackCount;
+						SetFVec<2>(vertex.uv, { u, v });
+					}
+
+
+					// Cylinder can be parameterized as follows, where we
+					// introduce v parameter that goes in the same direction
+					// as the v tex-coord so that the bitangent goes in the
+					// same direction as the v tex-coord.
+					// Let r0 be the bottom radius and let r1 be the
+					// top radius.
+					// y(v) = h - hv for v in [0,1].
+					// r(v) = r1 + (r0-r1)v
+					//
+					// x(t, v) = r(v)*cos(t)
+					// y(t, v) = h - hv
+					// z(t, v) = r(v)*sin(t)
+					//
+					// dx/dt = -r(v)*sin(t)
+					// dy/dt = 0
+					// dz/dt = +r(v)*cos(t)
+					//
+					// dx/dv = (r0-r1)*cos(t)
+					// dy/dv = -h
+					// dz/dv = (r0-r1)*sin(t)
+					// TangentU us unit length.
+
+					// tangent
+					if constexpr (bHasTangents)
+					{
+						SetFVec<3>(vertex.tangent, { -s, 0.0f, c });
+					}
+
+					if constexpr (bHasNormals)
+					{
+						const float dr = bottomRadius - topRadius;
+						XMFLOAT3 bitangent(dr * c, -height, dr * s);
+						XMFLOAT3 tangent(vertex.tangent[0], vertex.tangent[1], vertex.tangent[2]);
+						XMVECTOR T = XMLoadFloat3(&tangent);
+						XMVECTOR B = XMLoadFloat3(&bitangent);
+						XMVECTOR N = XMVector3Normalize(XMVector3Cross(T, B));
+
+						SetFVec<3>(vertex.normal, { N.m128_f32[0], N.m128_f32[1], N.m128_f32[2] });
+					}
+
+					Vertices.push_back(vertex);
+				}
+			}
+
+			// Add one because we duplicate the first and last vertex per ring since the texture coordinates are different.
+			unsigned ringVertexCount = sliceCount + 1;
+
+			// Compute indices for each stack.
+			for (TIndex i = 0; i < stackCount; ++i)
+			{
+				for (TIndex j = 0; j < sliceCount; ++j)
+				{
+					Indices.push_back(i * ringVertexCount + j);
+					Indices.push_back((i + 1) * ringVertexCount + j);
+					Indices.push_back((i + 1) * ringVertexCount + j + 1);
+					Indices.push_back(i * ringVertexCount + j);
+					Indices.push_back((i + 1) * ringVertexCount + j + 1);
+					Indices.push_back(i * ringVertexCount + j + 1);
+				}
+			}
+
+			// CYLINDER TOP
+			//-----------------------------------------------------------
+			{
+				TIndex baseIndex = (TIndex)Vertices.size();
+				float y = 0.5f * height;
+				float dTheta = 2.0f * PI / sliceCount;
+
+				// Duplicate cap ring vertices because the texture coordinates and normals differ.
+				for (unsigned i = 0; i <= sliceCount; ++i)
+				{
+					float x = topRadius * cosf(i * dTheta);
+					float z = topRadius * sinf(i * dTheta);
+
+					// Scale down by the height to try and make top cap texture coord area proportional to base.
+					float u = x / height + 0.5f;
+					float v = z / height + 0.5f;
+
+					TVertex Vert;
+					                            SetFVec<3>(Vert.position , { x, y, z });
+					                            SetFVec<2>(Vert.uv       , { u, v }   );
+					if constexpr (bHasNormals)  SetFVec<3>(Vert.normal   , {0.0f, 1.0f, 0.0f});
+					if constexpr (bHasTangents) SetFVec<3>(Vert.tangent  , {1.0f, 0.0f, 0.0f});
+					Vertices.push_back(Vert);
+				}
+
+				// Cap center vertex.
+				TVertex capCenter;
+				                            SetFVec<3>(capCenter.position, { 0.0f, y, 0.0f });
+				                            SetFVec<3>(capCenter.uv      , {0.5f, 0.5f});
+				if constexpr (bHasNormals)  SetFVec<3>(capCenter.normal  , {0.0f, 1.0f, 0.0f});
+				if constexpr (bHasTangents) SetFVec<3>(capCenter.tangent , {1.0f, 0.0f, 0.0f});
+				Vertices.push_back(capCenter);
+
+				// Index of center vertex.
+				TIndex centerIndex = (TIndex)Vertices.size() - 1;
+				for (TIndex i = 0; i < sliceCount; ++i)
+				{
+					Indices.push_back(centerIndex);
+					Indices.push_back(baseIndex + i + 1);
+					Indices.push_back(baseIndex + i);
+				}
+			}
+
+			// CYLINDER BOTTOM
+			//-----------------------------------------------------------
+			{
+				TIndex baseIndex = (TIndex)Vertices.size();
+				float y = -0.5f * height;
+				float dTheta = 2.0f * XM_PI / sliceCount;
+
+				// Duplicate cap ring vertices because the texture coordinates and normals differ.
+				for (unsigned i = 0; i <= sliceCount; ++i)
+				{
+					float x = bottomRadius * cosf(i * dTheta);
+					float z = bottomRadius * sinf(i * dTheta);
+
+					// Scale down by the height to try and make top cap texture coord area proportional to base.
+					float u = x / height + 0.5f;
+					float v = z / height + 0.5f;
+
+					TVertex Vert;
+					                            SetFVec<3>(Vert.position , { x, y, z });
+					                            SetFVec<2>(Vert.uv       , { u, v }   );
+					if constexpr (bHasNormals)  SetFVec<3>(Vert.normal   , {0.0f, -1.0f, 0.0f});
+					if constexpr (bHasTangents) SetFVec<3>(Vert.tangent  , {-1.0f, 0.0f, 0.0f});
+					Vertices.push_back(Vert);
+				}
+
+				// Cap center vertex
+				TVertex capCenter;
+				                            SetFVec<3>(capCenter.position, { 0.0f, y, 0.0f });
+				                            SetFVec<3>(capCenter.uv      , {0.5f, 0.5f});
+				if constexpr (bHasNormals)  SetFVec<3>(capCenter.normal  , {0.0f, -1.0f, 0.0f});
+				if constexpr (bHasTangents) SetFVec<3>(capCenter.tangent , {-1.0f, 0.0f, 0.0f});
+				Vertices.push_back(capCenter);
+
+				// Index of center vertex.
+				TIndex centerIndex = (TIndex)Vertices.size() - 1;
+				for (TIndex i = 0; i < sliceCount; ++i)
+				{
+					Indices.push_back(centerIndex);
+					Indices.push_back(baseIndex + i);
+					Indices.push_back(baseIndex + i + 1);
+				}
+			}
+		}
+		//------------------------------------------------
+
+		return data[0];
+	}
 };
 

@@ -176,14 +176,22 @@ void VQEngine::InitializeBuiltinMeshes()
 {
 	using VertexType = FVertexWithNormalAndTangent;
 	{
+		const EBuiltInMeshes eMesh = EBuiltInMeshes::TRIANGLE;
 		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Triangle<VertexType>(1.0f);
-		mResourceNames.mBuiltinMeshNames[EBuiltInMeshes::TRIANGLE] = "Triangle";
-		mBuiltinMeshes[EBuiltInMeshes::TRIANGLE] = Mesh(&mRenderer, data.Vertices, data.Indices, mResourceNames.mBuiltinMeshNames[EBuiltInMeshes::TRIANGLE]);
+		mResourceNames.mBuiltinMeshNames[eMesh] = "Triangle";
+		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.Vertices, data.Indices, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
+		const EBuiltInMeshes eMesh = EBuiltInMeshes::CUBE;
 		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Cube<VertexType>();
 		mResourceNames.mBuiltinMeshNames[EBuiltInMeshes::CUBE] = "Cube";
-		mBuiltinMeshes[EBuiltInMeshes::CUBE] = Mesh(&mRenderer, data.Vertices, data.Indices, mResourceNames.mBuiltinMeshNames[EBuiltInMeshes::CUBE]);
+		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.Vertices, data.Indices, mResourceNames.mBuiltinMeshNames[eMesh]);
+	} 
+	{
+		const EBuiltInMeshes eMesh = EBuiltInMeshes::CYLINDER;
+		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Cylinder<VertexType>();
+		mResourceNames.mBuiltinMeshNames[eMesh] = "Cylinder";
+		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.Vertices, data.Indices, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 
 	// ...
@@ -741,6 +749,12 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 				pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
 
 			pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
+
+			if (mpScene->mMeshes.find(meshRenderCmd.meshID) == mpScene->mMeshes.end())
+			{
+				Log::Warning("MeshID=%d couldn't be found", meshRenderCmd.meshID);
+				continue; // skip drawing this mesh
+			}
 
 			const Mesh& mesh = mpScene->mMeshes.at(meshRenderCmd.meshID);
 
