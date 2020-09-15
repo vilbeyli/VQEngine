@@ -123,7 +123,7 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 
 
 		// check if loading is done
-		const int NumActiveTasks = mWorkers_Load.GetNumActiveTasks();
+		const int NumActiveTasks = mWorkers_ModelLoading.GetNumActiveTasks() + mWorkers_TextureLoading.GetNumActiveTasks();
 		const bool bLoadDone = NumActiveTasks == 0;
 		if (bLoadDone)
 		{
@@ -383,7 +383,7 @@ void VQEngine::StartLoadingEnvironmentMap(int IndexEnvMap)
 	this->WaitUntilRenderingFinishes();
 	mAppState = EAppState::LOADING;
 	mbLoadingEnvironmentMap = true;
-	mWorkers_Load.AddTask([&, IndexEnvMap]()
+	mWorkers_TextureLoading.AddTask([&, IndexEnvMap]()
 	{
 		LoadEnvironmentMap(mResourceNames.mEnvironmentMapPresetNames[IndexEnvMap]);
 	});
@@ -498,7 +498,7 @@ void VQEngine::Load_SceneData_Dispatch()
 
 	if (!SceneRep.EnvironmentMapPreset.empty()) 
 	{ 
-		mWorkers_Load.AddTask([=]() { LoadEnvironmentMap(SceneRep.EnvironmentMapPreset); });
+		mWorkers_TextureLoading.AddTask([=]() { LoadEnvironmentMap(SceneRep.EnvironmentMapPreset); });
 	}
 }
 
@@ -568,7 +568,7 @@ void VQEngine::LoadLoadingScreenData()
 
 		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(i) + ".png");
 
-		mWorkers_Load.AddTask([this, &data, LoadingScreenTextureFilePath]()
+		mWorkers_TextureLoading.AddTask([this, &data, LoadingScreenTextureFilePath]()
 		{
 			const TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
 			const SRV_ID srvID = mRenderer.CreateAndInitializeSRV(texID);

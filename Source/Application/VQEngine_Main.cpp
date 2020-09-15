@@ -37,7 +37,7 @@ void ReportSystemInfo(const VQSystemInfo::FSystemInfo& i, bool bDetailed = false
 }
 #endif
 VQEngine::VQEngine()
-	: mAssetLoader(mWorkers_Load, mRenderer)
+	: mAssetLoader(mWorkers_ModelLoading, mWorkers_TextureLoading, mRenderer)
 {}
 
 void VQEngine::MainThread_Tick()
@@ -290,23 +290,27 @@ void VQEngine::InitializeThreads()
 	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
 	const size_t HWThreads  = ThreadPool::sHardwareThreadCount;
 	const size_t HWCores    = HWThreads / 2;
-	const size_t NumWorkers = HWCores - 2; // reserve 2 cores for (Update + Render) + Main threads
+	const size_t NumRuntimeWorkers = HWCores - 2; // reserve 2 cores for Update + Render threads
+	const size_t NumLoadtimeWorkers    = HWThreads;
 
 	mpSemUpdate.reset(new Semaphore(NUM_SWAPCHAIN_BACKBUFFERS, NUM_SWAPCHAIN_BACKBUFFERS));
 	mpSemRender.reset(new Semaphore(0                        , NUM_SWAPCHAIN_BACKBUFFERS));
 	
 	mbRenderThreadInitialized.store(false);
 	mbStopAllThreads.store(false);
-	mWorkers_Load.Initialize(NumWorkers, "LoadWorkers");
+
+	mWorkers_ModelLoading.Initialize(NumLoadtimeWorkers, "LoadWorkers_Model");
+	mWorkers_TextureLoading.Initialize(NumLoadtimeWorkers, "LoadWorkers_Texture");
 	mRenderThread = std::thread(&VQEngine::RenderThread_Main, this);
 	mUpdateThread = std::thread(&VQEngine::UpdateThread_Main, this);
-	mWorkers_Update.Initialize(NumWorkers, "UpdateWorkers");
-	mWorkers_Render.Initialize(NumWorkers, "RenderWorkers");
+	mWorkers_Update.Initialize(NumRuntimeWorkers, "UpdateWorkers");
+	mWorkers_Render.Initialize(NumRuntimeWorkers, "RenderWorkers");
 }
 
 void VQEngine::ExitThreads()
 {
-	mWorkers_Load.Exit();
+	mWorkers_ModelLoading.Exit();
+	mWorkers_TextureLoading.Exit();
 	mbStopAllThreads.store(true);
 	mRenderThread.join();
 	mUpdateThread.join();

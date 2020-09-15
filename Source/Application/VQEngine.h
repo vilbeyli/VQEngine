@@ -261,7 +261,8 @@ private:
 	std::thread                     mUpdateThread;
 	ThreadPool                      mWorkers_Update;
 	ThreadPool                      mWorkers_Render;
-	ThreadPool                      mWorkers_Load;
+	ThreadPool                      mWorkers_ModelLoading;
+	ThreadPool                      mWorkers_TextureLoading;
 
 	// sync
 	std::atomic<bool>               mbStopAllThreads;

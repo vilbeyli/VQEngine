@@ -80,11 +80,11 @@ public:
 	};
 	struct FMaterialTextureAssignments
 	{
-		FMaterialTextureAssignments(const ThreadPool& workers) : mWorkers(workers) {}
+		FMaterialTextureAssignments(const ThreadPool& workers) : mWorkersThreads(workers) {}
 		void DoAssignments(Scene* pScene, VQRenderer* pRenderer);
 		void WaitForTextureLoads();
 
-		const ThreadPool&                       mWorkers; // to check if pool IsExiting()
+		const ThreadPool&                       mWorkersThreads; // to check if pool IsExiting()
 		std::vector<FMaterialTextureAssignment> mAssignments;
 		TextureLoadResults_t                    mTextureLoadResults;
 	};
@@ -92,8 +92,8 @@ public:
 	using LoadTaskID = int;
 	static LoadTaskID GenerateLoadTaskID();
 
-	AssetLoader(ThreadPool& WorkerThreads, VQRenderer& renderer): mWorkers(WorkerThreads), mRenderer(renderer){}
-	inline const ThreadPool& GetThreadPool() const { return mWorkers; }
+	AssetLoader(ThreadPool& WorkerThreads_Model, ThreadPool& WorkerThreads_Texture, VQRenderer& renderer);
+	inline const ThreadPool& GetThreadPool_TextureLoad() const { return mWorkers_TextureLoad; }
 
 	void QueueModelLoad(GameObject* pObject, const std::string& ModelPath, const std::string& ModelName);
 	ModelLoadResults_t StartLoadingModels(Scene* pScene);
@@ -106,7 +106,8 @@ private:
 
 private:
 	
-	ThreadPool& mWorkers;
+	ThreadPool& mWorkers_ModelLoad;
+	ThreadPool& mWorkers_TextureLoad;
 	VQRenderer& mRenderer;
 
 	template<class T> struct FLoadTaskContext
