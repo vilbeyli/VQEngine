@@ -422,7 +422,12 @@ static std::vector<AssetLoader::FTextureLoadParams> GenerateTextureLoadParams(
 	return TexLoadParams;
 }
 
-static Mesh ProcessAssimpMesh(VQRenderer* pRenderer, aiMesh* pMesh, const aiScene* pScene)
+static Mesh ProcessAssimpMesh(
+	VQRenderer*          pRenderer
+	, aiMesh*            pMesh
+	, const aiScene*     pScene
+	, const std::string& ModelName
+)
 {
 	std::vector<FVertexWithNormalAndTangent> Vertices;
 	std::vector<unsigned> Indices;
@@ -479,7 +484,7 @@ static Mesh ProcessAssimpMesh(VQRenderer* pRenderer, aiMesh* pMesh, const aiScen
 
 	// TODO: mesh name
 	
-	return Mesh(pRenderer, Vertices, Indices, "TODO");;
+	return Mesh(pRenderer, Vertices, Indices, ModelName);;
 }
 
 static Model::Data ProcessAssimpNode(
@@ -599,7 +604,7 @@ static Model::Data ProcessAssimpNode(
 		// AI_MATKEY_BLEND_FUNC
 		// AI_MATKEY_BUMPSCALING
 		
-		Mesh mesh = ProcessAssimpMesh(pRenderer, pAiMesh, pAiScene);
+		Mesh mesh = ProcessAssimpMesh(pRenderer, pAiMesh, pAiScene, ModelName);
 		MeshID id = pScene->AddMesh(std::move(mesh));
 		modelData.mOpaueMeshIDs.push_back(id);
 		
