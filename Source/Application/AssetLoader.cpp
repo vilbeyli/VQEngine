@@ -318,85 +318,6 @@ std::vector<AssetLoader::FTextureLoadResult>& AssetLoader::FMaterialTextureAssig
 
 
 //----------------------------------------------------------------------------------------------------------------
-// IMPORTERS
-//----------------------------------------------------------------------------------------------------------------
-Model::Data ProcessAssimpNode(
-	  const std::string& ModelName
-	, aiNode* const pNode
-	, const aiScene* pAiScene
-	, const std::string& modelDirectory
-	, AssetLoader* pAssetLoader
-	, Scene* pScene
-	, VQRenderer* pRenderer
-	, AssetLoader::FMaterialTextureAssignments& MaterialTextureAssignments
-	, AssetLoader::LoadTaskID                   taskID
-);
-
-ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName)
-{
-	constexpr auto ASSIMP_LOAD_FLAGS
-		= aiProcess_Triangulate
-		| aiProcess_CalcTangentSpace
-		| aiProcess_MakeLeftHanded
-		| aiProcess_FlipUVs
-		| aiProcess_FlipWindingOrder
-		//| aiProcess_TransformUVCoords 
-		//| aiProcess_FixInfacingNormals
-		| aiProcess_JoinIdenticalVertices
-		| aiProcess_GenSmoothNormals;
-
-	
-	LoadTaskID taskID = GenerateLoadTaskID();
-	//-----------------------------------------------
-	const std::string modelDirectory = DirectoryUtil::GetFolderPath(objFilePath);
-
-	Log::Info("ImportModel: %s - %s", ModelName.c_str(), objFilePath.c_str());
-	Timer t;
-	t.Start();
-
-	// Import Assimp Scene
-	Importer importer;
-	const aiScene* pAiScene = importer.ReadFile(objFilePath, ASSIMP_LOAD_FLAGS);
-	if (!pAiScene || pAiScene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !pAiScene->mRootNode)
-	{
-		Log::Error("Assimp error: %s", importer.GetErrorString());
-		return INVALID_ID;
-	}
-	t.Tick(); float fTimeReadFile = t.DeltaTime();
-	Log::Info("   [%.2fs] ReadFile=%s ", fTimeReadFile, objFilePath.c_str());
-
-	// parse scene and initialize model data
-	FMaterialTextureAssignments MaterialTextureAssignments(pAssetLoader->mWorkers_TextureLoad);
-	Model::Data data = ProcessAssimpNode(ModelName, pAiScene->mRootNode, pAiScene, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
-
-	pRenderer->UploadVertexAndIndexBufferHeaps(); // load VB/IBs
-	
-	if(!MaterialTextureAssignments.mAssignments.empty())
-		MaterialTextureAssignments.mTextureLoadResults = pAssetLoader->StartLoadingTextures(taskID);
-
-	// cache the imported model in Scene
-	ModelID mID = pScene->CreateModel();
-	Model& model = pScene->GetModel(mID);
-	model = Model(objFilePath, ModelName, std::move(data));
-
-	// SYNC POINT : wait for textures to load
-	{
-		MaterialTextureAssignments.WaitForTextureLoads();
-	}
-
-	// assign TextureIDs to the materials;
-	MaterialTextureAssignments.DoAssignments(pScene, pRenderer);
-
-	t.Stop();
-	Log::Info("   [%.2fs] Loaded Model '%s'.", fTimeReadFile + t.DeltaTime(), ModelName.c_str());
-	return mID;
-}
-
-
-
-
-
-//----------------------------------------------------------------------------------------------------------------
 // ASSIMP HELPER FUNCTIONS
 //----------------------------------------------------------------------------------------------------------------
 static std::vector<AssetLoader::FTextureLoadParams> GenerateTextureLoadParams(
@@ -482,8 +403,6 @@ static Mesh ProcessAssimpMesh(
 			Indices.push_back(face.mIndices[j]);
 	}
 
-	// TODO: mesh name
-	
 	return Mesh(pRenderer, Vertices, Indices, ModelName);;
 }
 
@@ -634,3 +553,68 @@ static Model::Data ProcessAssimpNode(
 
 	return modelData;
 }
+
+
+//----------------------------------------------------------------------------------------------------------------
+// IMPORT MODEL FUNCTION FOR WORKER THREADS
+//----------------------------------------------------------------------------------------------------------------
+ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName)
+{
+	constexpr auto ASSIMP_LOAD_FLAGS
+		= aiProcess_Triangulate
+		| aiProcess_CalcTangentSpace
+		| aiProcess_MakeLeftHanded
+		| aiProcess_FlipUVs
+		| aiProcess_FlipWindingOrder
+		//| aiProcess_TransformUVCoords 
+		//| aiProcess_FixInfacingNormals
+		| aiProcess_JoinIdenticalVertices
+		| aiProcess_GenSmoothNormals;
+
+
+	LoadTaskID taskID = GenerateLoadTaskID();
+	//-----------------------------------------------
+	const std::string modelDirectory = DirectoryUtil::GetFolderPath(objFilePath);
+
+	Log::Info("ImportModel: %s - %s", ModelName.c_str(), objFilePath.c_str());
+	Timer t;
+	t.Start();
+
+	// Import Assimp Scene
+	Importer importer;
+	const aiScene* pAiScene = importer.ReadFile(objFilePath, ASSIMP_LOAD_FLAGS);
+	if (!pAiScene || pAiScene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !pAiScene->mRootNode)
+	{
+		Log::Error("Assimp error: %s", importer.GetErrorString());
+		return INVALID_ID;
+	}
+	t.Tick(); float fTimeReadFile = t.DeltaTime();
+	Log::Info("   [%.2fs] ReadFile=%s ", fTimeReadFile, objFilePath.c_str());
+
+	// parse scene and initialize model data
+	FMaterialTextureAssignments MaterialTextureAssignments(pAssetLoader->mWorkers_TextureLoad);
+	Model::Data data = ProcessAssimpNode(ModelName, pAiScene->mRootNode, pAiScene, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
+
+	pRenderer->UploadVertexAndIndexBufferHeaps(); // load VB/IBs
+
+	if (!MaterialTextureAssignments.mAssignments.empty())
+		MaterialTextureAssignments.mTextureLoadResults = pAssetLoader->StartLoadingTextures(taskID);
+
+	// cache the imported model in Scene
+	ModelID mID = pScene->CreateModel();
+	Model& model = pScene->GetModel(mID);
+	model = Model(objFilePath, ModelName, std::move(data));
+
+	// SYNC POINT : wait for textures to load
+	{
+		MaterialTextureAssignments.WaitForTextureLoads();
+	}
+
+	// assign TextureIDs to the materials;
+	MaterialTextureAssignments.DoAssignments(pScene, pRenderer);
+
+	t.Stop();
+	Log::Info("   [%.2fs] Loaded Model '%s'.", fTimeReadFile + t.DeltaTime(), ModelName.c_str());
+	return mID;
+}
+
