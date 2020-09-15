@@ -18,7 +18,6 @@ Join the [VQE Discord Channel](https://discord.gg/U7pd8TV)!
 </p>
 
 ![](Screenshots/HelloModelLoading.png)
-
 <p align="center">
 <sub><i>Data-driven (XML) Scenes & glTF Model Loading</i></sub>
 </p>
