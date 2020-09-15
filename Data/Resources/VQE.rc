@@ -17,6 +17,7 @@
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
 
 #ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////
@@ -60,8 +61,8 @@ IDI_ICON1               ICON                    "..\\Icons\\VQE32.ico"
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,1,0,0
- PRODUCTVERSION 0,1,0,0
+ FILEVERSION 0,5,0,0
+ PRODUCTVERSION 0,5,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -78,11 +79,11 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Volkan Ilbeyli @vilbeyli - GitHub/VQE"
             VALUE "FileDescription", "VQEngine Application"
-            VALUE "FileVersion", "0.3.0.0"
+            VALUE "FileVersion", "0.5.0.0"
             VALUE "InternalName", "VQE.exe"
             VALUE "OriginalFilename", "VQE.exe"
             VALUE "ProductName", "VQEngine"
-            VALUE "ProductVersion", "0.3.0.0"
+            VALUE "ProductVersion", "0.5.0.0"
         END
     END
     BLOCK "VarFileInfo"
