@@ -157,14 +157,15 @@ endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 17)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-set_target_properties(assimp PROPERTIES FOLDER assimp)
-set_target_properties(IrrXML PROPERTIES FOLDER assimp)
-set_target_properties(uninstall PROPERTIES FOLDER assimp)
-set_target_properties(UpdateAssimpLibsDebugSymbolsAndDLLs PROPERTIES FOLDER assimp)
-set_target_properties(zlibstatic PROPERTIES FOLDER assimp)
 
-set_target_properties(VQRenderer PROPERTIES FOLDER Libs)
-set_target_properties(VQUtils PROPERTIES FOLDER Libs)
+set_target_properties(assimp PROPERTIES FOLDER Libs/assimp)
+set_target_properties(IrrXML PROPERTIES FOLDER Libs/assimp)
+set_target_properties(uninstall PROPERTIES FOLDER Libs/assimp)
+set_target_properties(UpdateAssimpLibsDebugSymbolsAndDLLs PROPERTIES FOLDER Libs/assimp)
+set_target_properties(zlibstatic PROPERTIES FOLDER Libs/assimp)
+
+#set_target_properties(VQRenderer PROPERTIES FOLDER Libs)
+#set_target_properties(VQUtils PROPERTIES FOLDER Libs)
 set_target_properties(D3D12MA PROPERTIES FOLDER Libs)
 
 # Make sure the compiler can find include files for the libraries

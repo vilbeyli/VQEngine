@@ -9,6 +9,14 @@ VQE is **VQEngine**: A DX12 rewrite of [VQEngine-Vanilla](https://github.com/vil
 <sub><i>HDRI Environment Map Rendering</i></sub>
 </p>
 
+
+![](https://im7.ezgif.com/tmp/ezgif-7-2e3c537ed34e.gif){: class="center"; }
+
+
+<p align="center">
+<sub><i>Scenes & glTF Model Loading</i></sub>
+</p>
+
 # Features
 
  - Multi-threaded architecture
@@ -17,6 +25,7 @@ VQE is **VQEngine**: A DX12 rewrite of [VQEngine-Vanilla](https://github.com/vil
  - HDR Environment Maps from [HDRI Haven](https://hdrihaven.com/)
  - HDR display support
  ![](Screenshots/HDRDisplay.jpg)
+ - [glTF](https://en.wikipedia.org/wiki/GlTF) [2.0](https://github.com/KhronosGroup/glTF/tree/master/specification/2.0) model loading using [assimp](https://github.com/assimp/assimp)
  - Multiple windows on multiple monitors
  - Physically-based Rendering (WIP)
  - Real-time and offline Ray Tracing (WIP)
@@ -52,7 +61,11 @@ Make sure to have installed
  - [Visual C++ 2019 Redistributiable (x64)](https://support.microsoft.com/en-us/help/2977003/the-latest-supported-visual-c-downloads)
  - A DX12-capable GPU
 
-Run `VQE.exe`.
+Double click `VQE.exe`. 
+
+Or, if you're using a terminal, 
+- `VQE.exe -LogConsole` for logging displayed on a console
+- `VQE.exe -LogFile="FileName.txt"` to write out to a file.
 
 ## Controls
 
@@ -60,11 +73,13 @@ Run `VQE.exe`.
 | :--: | :-- |
 | **WASD+EQ** | Camera Movement |
 | **Page Up/Down** | Change Environment Map |
+| **1-4** |	Change Scenes <br>**1**: Environment Map Scene <br>**2**: Sponza <br>**3**: Geometry Test Scene <br>**4**: Stress Test Scene |
 | **V** | Toggle VSync |
 | **M** | Toggle MSAA |
 | **Alt+Enter** | Toggle Fullscreen |
 | **Spacebar** | Toggle Cube Animation |
 | **Mouse Buttons** | Rotate Cube |
+| **Shift+R** | Reload level |
 | **Esc** | Release mouse |
 
 
