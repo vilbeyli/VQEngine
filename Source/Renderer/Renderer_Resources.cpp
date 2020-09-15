@@ -469,8 +469,12 @@ void VQRenderer::ProcessTextureUploadQueue()
 		textureBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 		pCmd->ResourceBarrier(1, &textureBarrier);
 
-		Texture& tex = mTextures.at(desc.id);
-		vTexResidentBools.push_back(&tex.bResident);
+		assert(mTextures.find(desc.id) != mTextures.end());
+		{
+			std::unique_lock<std::mutex> lk(mMtxTextures);
+			Texture& tex = mTextures.at(desc.id);
+			vTexResidentBools.push_back(&tex.bResident);
+		}
 
 		if (desc.img.pData)
 		{
