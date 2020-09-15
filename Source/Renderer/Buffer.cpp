@@ -22,6 +22,7 @@
 #include "Libs/D3DX12/d3dx12.h"
 
 #include <cassert>
+#include <stdlib.h>
 
 
 size_t StaticBufferHeap::MEMORY_ALIGNMENT = 256;
@@ -153,10 +154,12 @@ bool StaticBufferHeap::AllocBuffer(uint32 numElements, uint32 strideInBytes, voi
 
     uint32 size = AlignOffset(numElements * strideInBytes, (uint32)StaticBufferHeap::MEMORY_ALIGNMENT);
     const bool bHeapOutOfMemory = ((mMemOffset + size) > mTotalMemSize);
-    assert( !bHeapOutOfMemory); // if this is hit, initialize heap with a larger size.
+    //assert( !bHeapOutOfMemory); // if this is hit, initialize heap with a larger size.
     if (bHeapOutOfMemory)
     {
         Log::Error("Static Heap out of memory.");
+        MessageBox(NULL, "Out of StaticBufferHeap memory", "Error", MB_ICONERROR | MB_OK);
+        PostMessage(NULL, WM_QUIT, NULL, NULL);
         return false;
     }
 
@@ -245,7 +248,9 @@ bool DynamicBufferHeap::AllocConstantBuffer(uint32_t size, void** pData, D3D12_G
     uint32_t memOffset;
     if (m_mem.Alloc(size, &memOffset) == false)
     {
-        Log::Error("Ran out of mem for 'dynamic' buffers, please increase the allocated size\n");
+        Log::Error("Ran out of mem for 'dynamic' buffers, increase the allocated size\n");
+        MessageBox(NULL, "Out of DynamicBufferHeap memory", "Error", MB_ICONERROR | MB_OK);
+        PostMessage(NULL, WM_QUIT, NULL, NULL);
         return false;
     }
 
