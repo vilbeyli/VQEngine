@@ -152,6 +152,7 @@ foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
         set_target_properties(${PROJECT_NAME} PROPERTIES ${OUTPUTCONFIG}_OUTPUT_NAME "VQE-d")
     elseif (${OUTPUTCONFIG} MATCHES "RELWITHDEBINFO")
         set_target_properties(${PROJECT_NAME} PROPERTIES ${OUTPUTCONFIG}_OUTPUT_NAME "VQE-rwd")
+        add_compile_definitions(PROFILE_BUILD)
     endif()
 endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 

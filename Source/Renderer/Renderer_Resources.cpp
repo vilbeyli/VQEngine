@@ -332,7 +332,7 @@ BufferID VQRenderer::CreateVertexBuffer(const FBufferDesc& desc)
 		mVBVs[Id] = vbv;
 	}
 	else
-		Log::Error("Couldn't allocate vertex buffer");
+		Log::Error("VQRenderer: Couldn't allocate vertex buffer");
 	return Id;
 }
 BufferID VQRenderer::CreateIndexBuffer(const FBufferDesc& desc)
