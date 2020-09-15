@@ -4,6 +4,14 @@
 
 VQE is **VQEngine**: A DX12 rewrite of [VQEngine-Vanilla](https://github.com/vilbeyli/VQEngine) for fast prototyping of rendering techniques and experimenting with cutting-edge technology.
 
+
+Join the [VQE Discord Channel](https://discord.gg/U7pd8TV)!
+
+[![Discord Banner 2](https://discordapp.com/api/guilds/720409073756930079/widget.png?style=banner2)]((https://discord.gg/U7pd8TV))
+
+
+# Screenshots
+
 ![](Screenshots/HelloEnvMap.png)
 <p align="center">
 <sub><i>HDRI Environment Map Rendering</i></sub>
