@@ -1,52 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Scene>
     <!-- 
-    ENVIRONMENT MAP
-        Environment maps are defined in Data/EnvironmentMaps.ini 
-        Custom env map usage: specify path & MaxCLL
-         <path>Textures/HDRI/env_map.hdr</path>
-         <MaxCLL>1200</MaxCLL>
-
-        Presets are defined in EnvironmentMaps.ini. Usage:
-         <Preset>Stadium01</Preset>
-    -->
-    <!-- 
-    CAMERA
-        Contains 3 main data fields
-         - Translational Data   : Position, Yaw, Pitch
-         - Camera Viewport Data : Projection Type <perspective/orthogonal>, FoV in Degrees, Near & Far Planes
-         - Camera Type Data     : First Person <TranslationSpeed, AngularSpeed, Drag> / Orbit < TBA >
-    -->
-
-    <!-- 
-    GAME OBJECT
-        Transform & Model container
-    -->
-    
-    <!-- ================================================================ -->
-    
-    <!--
-    <EnvironmentMap>
-        <Preset>Stadium01</Preset>
-    </EnvironmentMap>
+    CAMERAS
     -->
     <Camera>
-        <Position> 0.0 3.0 -5 </Position>
+        <Position> 700.0 170.0 -50 </Position>
         <Pitch> 15 </Pitch>
-        <Yaw> 0 </Yaw>
+        <Yaw> -90 </Yaw>
         <Projection>Perspective</Projection>
         <FoV>60.0</FoV>
-        <Near>0.01</Near>
-        <Far>1000</Far>
+        <Near>0.1</Near>
+        <Far>5000</Far>
 
         <FirstPerson>
-            <TranslationSpeed>1000</TranslationSpeed>
+            <TranslationSpeed>5800</TranslationSpeed>
             <AngularSpeed>0.05</AngularSpeed>
             <Drag>9.5</Drag>
         </FirstPerson>
     </Camera>
 
-
+    <!-- 
+    OBJECTS
+    -->
+    <!-- main sponza model -->
     <GameObject>
         <Transform>
             <Position>0 0 0</Position>
@@ -54,26 +30,49 @@
             <Scale>1 1 1</Scale>
         </Transform>
         <Model>
-            <Path>Data/Models/sponza/sponza.obj</Path>
+            <Path>Data/Models/Sponza/glTF/Sponza.gltf</Path>
             <Name>Sponza</Name>
         </Model>
     </GameObject>
-    
+
+    <!-- small sponza models -->
     <GameObject>
         <Transform>
             <Position>0 0 0</Position>
             <Quaternion>0 0 0 1</Quaternion>
-            <Scale>1 1 1</Scale>
+            <Scale>0.05 0.05 0.05</Scale>
         </Transform>
         <Model>
-            <Mesh>Triangle</Mesh>
-            <Material>
-                <Diffuse></Diffuse>
-            </Material>
+            <Path>Data/Models/Sponza/glTF/Sponza.gltf</Path>
+            <Name>Sponza</Name>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>-230 0 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>0.06 0.06 0.06</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/Sponza/glTF/Sponza.gltf</Path>
+            <Name>Sponza</Name>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>330 0 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>0.07 0.07 0.07</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/Sponza/glTF/Sponza.gltf</Path>
+            <Name>Sponza</Name>
         </Model>
     </GameObject>
 
-
+    <!-- 
+    POST PROCESS
+    -->
     <PostProcess>
     <!-- TBA -->
     </PostProcess>

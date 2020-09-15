@@ -520,7 +520,7 @@ void SwapChain::MoveToNextFrame()
         Log::Warning("SwapChain : next frame not ready. FenceComplVal=%d < FenceVal[curr]=%d", fenceComplVal, mFenceValues[mICurrentBackBuffer]);
 #endif
         ThrowIfFailed(mpFence->SetEventOnCompletion(mFenceValues[mICurrentBackBuffer], mHEvent));
-        hr = WaitForSingleObjectEx(mHEvent, 200, FALSE);
+        hr = WaitForSingleObjectEx(mHEvent, 800, FALSE);
     }
     switch (hr)
     {

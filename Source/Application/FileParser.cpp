@@ -378,7 +378,7 @@ std::vector<FDisplayHDRProfile> VQEngine::ParseHDRProfilesFile()
 	return HDRProfiles;
 }
 
-std::vector< FSceneRepresentation> VQEngine::ParseSceneFiles()
+FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 {
 	using namespace DirectX;
 	using namespace tinyxml2;
@@ -388,11 +388,9 @@ std::vector< FSceneRepresentation> VQEngine::ParseSceneFiles()
 	constexpr char* XML_TAG__ENVIRONMENT_MAP_PRESET = "Preset";
 	constexpr char* XML_TAG__CAMERA                 = "Camera";
 	constexpr char* XML_TAG__GAMEOBJECT             = "GameObject";
+	constexpr char* XML_TAG__MATERIAL               = "Material";
 	//-----------------------------------------------------------------
 	constexpr char* SCENE_FILES_DIRECTORY           = "Data/Levels/";
-	//-----------------------------------------------------------------
-	      std::vector<FSceneRepresentation> SceneRepresentations;
-	const std::vector<std::string>          SceneFiles = DirectoryUtil::ListFilesInDirectory(SCENE_FILES_DIRECTORY, ".xml");
 	//-----------------------------------------------------------------
 
 	// parse vectors --------------------------------------------------
@@ -476,157 +474,187 @@ std::vector< FSceneRepresentation> VQEngine::ParseSceneFiles()
 		}
 		return tf;
 	};
+	auto fnParseMaterial  = [&](XMLElement* pMat) -> FMaterialRepresentation
+	{
+		FMaterialRepresentation mat;
 
+		XMLElement* pName    = pMat->FirstChildElement("Name");
+		XMLElement* pDiff    = pMat->FirstChildElement("Diffuse");
+		XMLElement* pAlph    = pMat->FirstChildElement("Alpha");
+		XMLElement* pEmsv    = pMat->FirstChildElement("Emissive");
+		XMLElement* pEmsI    = pMat->FirstChildElement("EmissiveIntensity");
+		XMLElement* pRgh     = pMat->FirstChildElement("Roughness");
+		XMLElement* pMtl     = pMat->FirstChildElement("Metalness");
+		//------------------------------------------------------------------
+		XMLElement* pDiffMap = pMat->FirstChildElement("DiffuseMap");
+		XMLElement* pNrmlMap = pMat->FirstChildElement("NormalMap");
+		XMLElement* pEmsvMap = pMat->FirstChildElement("EmissiveMap");
+		XMLElement* pAlphMap = pMat->FirstChildElement("AlphaMaskMap");
+		XMLElement* pMtlMap  = pMat->FirstChildElement("MetallicMap");
+		XMLElement* pRghMap  = pMat->FirstChildElement("RoughnessMap");
+
+		if (pName) fnParseXMLStringVal(pName, mat.Name);
+		if (pDiff) fnParseXMLFloat3Val(pDiff, mat.DiffuseColor);
+		if (pAlph) fnParseXMLFloatVal(pAlph, mat.Alpha);
+		if (pEmsv) fnParseXMLFloat3Val(pEmsI, mat.EmissiveColor);
+		if (pEmsI) fnParseXMLFloatVal(pEmsI, mat.EmissiveIntensity);
+		if (pRgh ) fnParseXMLFloatVal(pRgh , mat.Roughness);
+		if (pMtl ) fnParseXMLFloatVal(pMtl , mat.Metalness);
+		//-------------------------------------------------------------------
+		if (pDiffMap) fnParseXMLStringVal(pDiffMap, mat.DiffuseMapFilePath  );
+		if (pNrmlMap) fnParseXMLStringVal(pNrmlMap, mat.NormalMapFilePath   );
+		if (pEmsvMap) fnParseXMLStringVal(pEmsvMap, mat.EmissiveMapFilePath );
+		if (pAlphMap) fnParseXMLStringVal(pAlphMap, mat.AlphaMaskMapFilePath);
+		if (pMtlMap ) fnParseXMLStringVal(pMtlMap , mat.MetallicMapFilePath );
+		if (pRghMap ) fnParseXMLStringVal(pRghMap , mat.RoughnessMapFilePath);
+
+		return mat;
+	};
 	//-----------------------------------------------------------------
 
-	// Start reading scene XML files
-	for (const std::string SceneFile : SceneFiles)
+	// Start reading scene XML file
+	FSceneRepresentation SceneRep = {};
+
+	// parse XML
+	tinyxml2::XMLDocument doc;
+	doc.LoadFile(SceneFile.c_str());
+
+	// scene name
+	SceneRep.SceneName = DirectoryUtil::GetFileNameWithoutExtension(SceneFile);
+
+
+	XMLElement* pScene = doc.FirstChildElement(XML_TAG__SCENE);
+	if (pScene)
 	{
-		FSceneRepresentation SceneRep = {};
-
-		// parse XML
-		tinyxml2::XMLDocument doc;
-		doc.LoadFile(SceneFile.c_str());
-
-		// scene name
-		SceneRep.SceneName = DirectoryUtil::GetFileNameWithoutExtension(SceneFile);
-
-
-		XMLElement* pScene = doc.FirstChildElement(XML_TAG__SCENE);
-		if (pScene)
+		XMLElement* pCurrentSceneElement = pScene->FirstChildElement();
+		if (!pCurrentSceneElement)
 		{
-			XMLElement* pCurrentSceneElement = pScene->FirstChildElement();
-			if (!pCurrentSceneElement)
-			{
-				SceneRepresentations.push_back(SceneRep);
-				continue;
-			}
-
-			do
-			{
-				// Environment Map
-				const std::string CurrEle = pCurrentSceneElement->Value();
-				if (XML_TAG__ENVIRONMENT_MAP == CurrEle)
-				{
-					XMLElement* pPreset = pCurrentSceneElement->FirstChildElement(XML_TAG__ENVIRONMENT_MAP_PRESET);
-					if (pPreset)
-					{
-						fnParseXMLStringVal(pPreset, SceneRep.EnvironmentMapPreset);
-					}
-				}
-
-				// Cameras
-				else if (XML_TAG__CAMERA == CurrEle)
-				{
-					FCameraParameters cam = {};
-					XMLElement*& pCam = pCurrentSceneElement;
-
-					// transform
-					XMLElement* pPos   = pCam->FirstChildElement("Position");
-					XMLElement* pPitch = pCam->FirstChildElement("Pitch");
-					XMLElement* pYaw   = pCam->FirstChildElement("Yaw");
-
-					// projection
-					XMLElement* pProj = pCam->FirstChildElement("Projection");
-					XMLElement* pFoV  = pCam->FirstChildElement("FoV");
-					XMLElement* pNear = pCam->FirstChildElement("Near");
-					XMLElement* pFar  = pCam->FirstChildElement("Far");
-
-					// attributes
-					XMLElement* pFP     = pCam->FirstChildElement("FirstPerson");
-					XMLElement* pTSpeed = pFP ? pFP->FirstChildElement("TranslationSpeed") : nullptr;
-					XMLElement* pASpeed = pFP ? pFP->FirstChildElement("AngularSpeed")     : nullptr;
-					XMLElement* pDrag   = pFP ? pFP->FirstChildElement("Drag")             : nullptr;
-					XMLElement* pOrbit = pCam->FirstChildElement("Orbit");
-
-					// transform ----------------------------------------
-					if (pPos)
-					{
-						XMFLOAT3 xyz;
-						fnParseXMLFloat3Val(pPos, xyz);
-						cam.x = xyz.x;
-						cam.y = xyz.y;
-						cam.z = xyz.z;
-					}
-					if (pPitch) fnParseXMLFloatVal(pPitch, cam.Pitch); 
-					if (pYaw)   fnParseXMLFloatVal(pYaw, cam.Yaw);
-
-					// projection----------------------------------------
-					if(pProj)
-					{
-						std::string projVal;
-						fnParseXMLStringVal(pProj, projVal);
-						cam.ProjectionParams.bPerspectiveProjection = projVal == "Perspective";
-					}
-					if(pFoV ) fnParseXMLFloatVal(pFoV , cam.ProjectionParams.FieldOfView);
-					if(pNear) fnParseXMLFloatVal(pNear, cam.ProjectionParams.NearZ);
-					if(pFar ) fnParseXMLFloatVal(pFar , cam.ProjectionParams.FarZ);
-						
-
-					// attributes----------------------------------------
-					if (pFP)
-					{
-						cam.bInitializeCameraController = true;
-						cam.bFirstPerson = true;
-						if(pTSpeed)  fnParseXMLFloatVal(pTSpeed, cam.TranslationSpeed);
-						if(pASpeed)  fnParseXMLFloatVal(pASpeed, cam.AngularSpeed);
-						if(pDrag  )  fnParseXMLFloatVal(pDrag  , cam.Drag);
-					}
-					if (pOrbit)
-					{
-						cam.bInitializeCameraController = true;
-						cam.bFirstPerson = false;
-
-					}
-
-					SceneRep.Cameras.push_back(cam);
-				}
-
-
-				// Game Objects
-				else if (XML_TAG__GAMEOBJECT == CurrEle)
-				{
-					GameObjectRepresentation obj;
-
-					XMLElement*& pObj = pCurrentSceneElement;
-					XMLElement* pTransform = pObj->FirstChildElement("Transform");
-					XMLElement* pModel     = pObj->FirstChildElement("Model");
-					
-					// Transform
-					if (pTransform)
-					{
-						obj.tf = fnParseTransform(pTransform);
-					}
-
-					// Model (WIP)
-					if (pModel)
-					{
-						XMLElement* pMesh = pModel->FirstChildElement("Mesh");
-						XMLElement* pMaterial = pModel->FirstChildElement("Material");
-						XMLElement* pModelPath = pModel->FirstChildElement("Path");
-						XMLElement* pModelName = pModel->FirstChildElement("Name");
-						
-						
-						if (pMesh) fnParseXMLStringVal(pMesh, obj.BuiltinMeshName);
-						if (pMaterial)
-						{
-							// TODO
-						}
-						if (pModelPath) fnParseXMLStringVal(pModelPath, obj.ModelFilePath);
-						if (pModelName) fnParseXMLStringVal(pModelName, obj.ModelName);
-					}
-
-
-					SceneRep.Objects.push_back(obj);
-				}
-
-				pCurrentSceneElement = pCurrentSceneElement->NextSiblingElement();
-			} while (pCurrentSceneElement);
+			return SceneRep;
 		}
 
-		SceneRepresentations.push_back(SceneRep);
-	}
+		do
+		{
+			// Environment Map
+			const std::string CurrEle = pCurrentSceneElement->Value();
+			if (XML_TAG__ENVIRONMENT_MAP == CurrEle)
+			{
+				XMLElement* pPreset = pCurrentSceneElement->FirstChildElement(XML_TAG__ENVIRONMENT_MAP_PRESET);
+				if (pPreset)
+				{
+					fnParseXMLStringVal(pPreset, SceneRep.EnvironmentMapPreset);
+				}
+			}
+
+			// Cameras
+			else if (XML_TAG__CAMERA == CurrEle)
+			{
+				FCameraParameters cam = {};
+				XMLElement*& pCam = pCurrentSceneElement;
+
+				// transform
+				XMLElement* pPos   = pCam->FirstChildElement("Position");
+				XMLElement* pPitch = pCam->FirstChildElement("Pitch");
+				XMLElement* pYaw   = pCam->FirstChildElement("Yaw");
+
+				// projection
+				XMLElement* pProj = pCam->FirstChildElement("Projection");
+				XMLElement* pFoV  = pCam->FirstChildElement("FoV");
+				XMLElement* pNear = pCam->FirstChildElement("Near");
+				XMLElement* pFar  = pCam->FirstChildElement("Far");
+
+				// attributes
+				XMLElement* pFP     = pCam->FirstChildElement("FirstPerson");
+				XMLElement* pTSpeed = pFP ? pFP->FirstChildElement("TranslationSpeed") : nullptr;
+				XMLElement* pASpeed = pFP ? pFP->FirstChildElement("AngularSpeed")     : nullptr;
+				XMLElement* pDrag   = pFP ? pFP->FirstChildElement("Drag")             : nullptr;
+				XMLElement* pOrbit = pCam->FirstChildElement("Orbit");
+
+				// transform ----------------------------------------
+				if (pPos)
+				{
+					XMFLOAT3 xyz;
+					fnParseXMLFloat3Val(pPos, xyz);
+					cam.x = xyz.x;
+					cam.y = xyz.y;
+					cam.z = xyz.z;
+				}
+				if (pPitch) fnParseXMLFloatVal(pPitch, cam.Pitch); 
+				if (pYaw)   fnParseXMLFloatVal(pYaw, cam.Yaw);
+
+				// projection----------------------------------------
+				if(pProj)
+				{
+					std::string projVal;
+					fnParseXMLStringVal(pProj, projVal);
+					cam.ProjectionParams.bPerspectiveProjection = projVal == "Perspective";
+				}
+				if(pFoV ) fnParseXMLFloatVal(pFoV , cam.ProjectionParams.FieldOfView);
+				if(pNear) fnParseXMLFloatVal(pNear, cam.ProjectionParams.NearZ);
+				if(pFar ) fnParseXMLFloatVal(pFar , cam.ProjectionParams.FarZ);
+						
+
+				// attributes----------------------------------------
+				if (pFP)
+				{
+					cam.bInitializeCameraController = true;
+					cam.bFirstPerson = true;
+					if(pTSpeed)  fnParseXMLFloatVal(pTSpeed, cam.TranslationSpeed);
+					if(pASpeed)  fnParseXMLFloatVal(pASpeed, cam.AngularSpeed);
+					if(pDrag  )  fnParseXMLFloatVal(pDrag  , cam.Drag);
+				}
+				if (pOrbit)
+				{
+					cam.bInitializeCameraController = true;
+					cam.bFirstPerson = false;
+
+				}
+
+				SceneRep.Cameras.push_back(cam);
+			}
+
+			// Materials
+			else if (XML_TAG__MATERIAL == CurrEle)
+			{
+				FMaterialRepresentation mat = fnParseMaterial(pCurrentSceneElement);
+				SceneRep.Materials.push_back(mat);
+			}
+
+			// Game Objects
+			else if (XML_TAG__GAMEOBJECT == CurrEle)
+			{
+				FGameObjectRepresentation obj;
+
+				XMLElement*& pObj = pCurrentSceneElement;
+				XMLElement* pTransform = pObj->FirstChildElement("Transform");
+				XMLElement* pModel     = pObj->FirstChildElement("Model");
+					
+				// Transform
+				if (pTransform)
+				{
+					obj.tf = fnParseTransform(pTransform);
+				}
+
+				// Model
+				if (pModel)
+				{
+					XMLElement* pMesh = pModel->FirstChildElement("Mesh");
+					XMLElement* pMaterial = pModel->FirstChildElement("MaterialName");
+					XMLElement* pModelPath = pModel->FirstChildElement("Path");
+					XMLElement* pModelName = pModel->FirstChildElement("Name");
+
+					if (pMesh) fnParseXMLStringVal(pMesh, obj.BuiltinMeshName);
+					if (pMaterial) fnParseXMLStringVal(pMaterial, obj.MaterialName);
+					if (pModelPath) fnParseXMLStringVal(pModelPath, obj.ModelFilePath);
+					if (pModelName) fnParseXMLStringVal(pModelName, obj.ModelName);
+				}
+
+				SceneRep.Objects.push_back(obj);
+			}
 
 
-	return SceneRepresentations;
+			pCurrentSceneElement = pCurrentSceneElement->NextSiblingElement();
+		} while (pCurrentSceneElement);
+	} // if (pScene)
+
+	return SceneRep;
 }

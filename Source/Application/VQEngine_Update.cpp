@@ -70,6 +70,7 @@ void VQEngine::UpdateThread_Main()
 void VQEngine::UpdateThread_Inititalize()
 {
 	mNumUpdateLoopsExecuted.store(0);
+	mbLoadingEnvironmentMap.store(false);
 
 	// busy lock until render thread is initialized
 	while (!mbRenderThreadInitialized); 
@@ -112,24 +113,40 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 
 		// set state
 		mAppState = EAppState::LOADING;// not thread-safe
-		mbLoadingLevel.store(true);    // thread-safe
+		
 	}
 
 
-	if (mbLoadingLevel)
+	if (mbLoadingLevel || mbLoadingEnvironmentMap)
 	{
 		// animate loading screen
 
 
 		// check if loading is done
-		const int NumActiveTasks = mWorkers_Load.GetNumActiveTasks();
+		const int NumActiveTasks = mWorkers_ModelLoading.GetNumActiveTasks() + mWorkers_TextureLoading.GetNumActiveTasks();
 		const bool bLoadDone = NumActiveTasks == 0;
 		if (bLoadDone)
 		{
-			mpScene->OnLoadComplete();
-			Log::Info("Update Thread loaded, starting simulation...");
+			if (mbLoadingLevel)
+			{
+				mpScene->OnLoadComplete();
+			}
+			// OnEnvMapLoaded = noop
+
+			WaitUntilRenderingFinishes();
+			Log::Info("Loading completed, starting scene simulation");
 			mAppState = EAppState::SIMULATING;
-			mbLoadingLevel.store(false);
+
+			if (mbLoadingLevel)
+			{
+				mbLoadingLevel.store(false);
+			}
+			if (mbLoadingEnvironmentMap)
+			{
+				mbLoadingEnvironmentMap.store(false);
+			}
+
+			mLoadingScreenData.RotateLoadingScreenImage();
 		}
 	}
 
@@ -240,9 +257,10 @@ void VQEngine::HandleEngineInput()
 			// Scene switching
 			if (bIsShiftDown)
 			{
-				const int NumScenes = static_cast<int>(mSceneRepresentations.size());
+				const int NumScenes = static_cast<int>(mResourceNames.mSceneNames.size());
 				if (input.IsKeyTriggered("PageUp") && !mbLoadingLevel)  { mIndex_SelectedScene = CircularIncrement(mIndex_SelectedScene, NumScenes);     this->StartLoadingScene(mIndex_SelectedScene); }
 				if (input.IsKeyTriggered("PageDown") && !mbLoadingLevel){ mIndex_SelectedScene = CircularDecrement(mIndex_SelectedScene, NumScenes - 1); this->StartLoadingScene(mIndex_SelectedScene); }
+				if (input.IsKeyTriggered("R") && !mbLoadingLevel)       { this->StartLoadingScene(mIndex_SelectedScene); } // reload scene
 			}
 			if (input.IsKeyTriggered("1") && !mbLoadingLevel) { mIndex_SelectedScene = 0; this->StartLoadingScene(mIndex_SelectedScene); }
 			if (input.IsKeyTriggered("2") && !mbLoadingLevel) { mIndex_SelectedScene = 1; this->StartLoadingScene(mIndex_SelectedScene); }
@@ -264,7 +282,7 @@ bool VQEngine::ShouldRenderHDR(HWND hwnd) const
 	return mSettings.WndMain.bEnableHDR && pWin->GetIsOnHDRCapableDisplay();
 }
 
-void VQEngine::CalculateEffectiveFrameRate(HWND hwnd)
+void VQEngine::CalculateEffectiveFrameRateLimit(HWND hwnd)
 {
 	if (mSettings.gfx.MaxFrameRate == -1)
 	{
@@ -312,6 +330,8 @@ FSetHDRMetaDataParams VQEngine::GatherHDRMetaDataParameters(HWND hwnd)
 {
 	FSetHDRMetaDataParams params;
 
+	while (!mbRenderThreadInitialized); // wait until renderer is initialized
+
 	const SwapChain& Swapchain = mRenderer.GetWindowSwapChain(hwnd);
 	const DXGI_OUTPUT_DESC1 desc = Swapchain.GetContainingMonitorDesc();
 	const FDisplayHDRProfile* pProfile = GetHDRProfileIfExists(desc.DeviceName);
@@ -358,24 +378,12 @@ MeshID VQEngine::GetBuiltInMeshID(const std::string& MeshName) const
 	return static_cast<MeshID>(it - mResourceNames.mBuiltinMeshNames.begin());
 }
 
-Model& VQEngine::GetModel(ModelID id)
-{
-	// TODO: err msg
-	return mModels.at(id);
-}
-
-const Model& VQEngine::GetModel(ModelID id) const
-{
-	// TODO: err msg
-	return mModels.at(id);
-}
-
 void VQEngine::StartLoadingEnvironmentMap(int IndexEnvMap)
 {
 	this->WaitUntilRenderingFinishes();
 	mAppState = EAppState::LOADING;
-	mbLoadingLevel = true;
-	mWorkers_Load.AddTask([&, IndexEnvMap]()
+	mbLoadingEnvironmentMap = true;
+	mWorkers_TextureLoading.AddTask([&, IndexEnvMap]()
 	{
 		LoadEnvironmentMap(mResourceNames.mEnvironmentMapPresetNames[IndexEnvMap]);
 	});
@@ -388,10 +396,13 @@ void VQEngine::StartLoadingScene(int IndexScene)
 	// get scene representation 
 	const std::string& SceneName = mResourceNames.mSceneNames[IndexScene];
 
+
+
 	// queue the selected scene for loading
-	mQueue_SceneLoad.push(mSceneRepresentations[IndexScene]);
+	mQueue_SceneLoad.push(mResourceNames.mSceneNames[IndexScene]);
 
 	mAppState = INITIALIZING;
+	mbLoadingLevel.store(true);    // thread-safe
 	Log::Info("StartLoadingScene: %d", IndexScene);
 }
 
@@ -412,14 +423,6 @@ void VQEngine::UnloadEnvironmentMap()
 void VQEngine::WaitUntilRenderingFinishes()
 {
 	while (mNumRenderLoopsExecuted != mNumUpdateLoopsExecuted);
-}
-
-ModelID VQEngine::CreateModel()
-{
-	static ModelID LAST_USED_MODEL_ID = 0;
-	ModelID id = LAST_USED_MODEL_ID++;
-	mModels[id] = Model();
-	return id;
 }
 
 const FEnvironmentMapDescriptor& VQEngine::GetEnvironmentMapDesc(const std::string& EnvMapName) const
@@ -465,18 +468,19 @@ void VQEngine::Load_SceneData_Dispatch()
 	if (mQueue_SceneLoad.empty())
 		return;
 
-	FSceneRepresentation SceneRep = mQueue_SceneLoad.front();
+	const std::string SceneFileName = mQueue_SceneLoad.front();
 	mQueue_SceneLoad.pop();
+	
 
 	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
 	const Input& input                  = mInputStates.at(mpWinMain->GetHWND());
 
 	auto fnCreateSceneInstance = [&](const std::string& SceneType, std::unique_ptr<Scene>& pScene) -> void
 	{
-		     if (SceneType == "Default")          pScene = std::make_unique<DefaultScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain);
-		else if (SceneType == "Sponza")           pScene = std::make_unique<SponzaScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain);
-		else if (SceneType == "StressTest")       pScene = std::make_unique<StressTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain);
-		else if (SceneType == "GeometryUnitTest") pScene = std::make_unique<GeometryUnitTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain);
+		     if (SceneType == "Default")          pScene = std::make_unique<DefaultScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
+		else if (SceneType == "Sponza")           pScene = std::make_unique<SponzaScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
+		else if (SceneType == "StressTest")       pScene = std::make_unique<StressTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
+		else if (SceneType == "GeometryUnitTest") pScene = std::make_unique<GeometryUnitTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 	};
 
 	if (mpScene)
@@ -485,18 +489,16 @@ void VQEngine::Load_SceneData_Dispatch()
 		mpScene->Unload();
 	}
 
+	const std::string SceneFilePath = "Data/Levels/" + SceneFileName + ".xml";
+	FSceneRepresentation SceneRep = VQEngine::ParseSceneFile(SceneFilePath);
 	fnCreateSceneInstance(SceneRep.SceneName, mpScene);
 
-
-	// let the custom scene logic edit the scene representation
-	mpScene->StartLoading(SceneRep);
-
 	// start loading;
-	Log::Info("[Scene] Loading: %s", SceneRep.SceneName.c_str());
+	mpScene->StartLoading(this->mBuiltinMeshes, SceneRep);
 
 	if (!SceneRep.EnvironmentMapPreset.empty()) 
 	{ 
-		mWorkers_Load.AddTask([=]() { LoadEnvironmentMap(SceneRep.EnvironmentMapPreset); });
+		mWorkers_TextureLoading.AddTask([=]() { LoadEnvironmentMap(SceneRep.EnvironmentMapPreset); });
 	}
 }
 
@@ -537,17 +539,54 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 }
 
 
+SRV_ID FLoadingScreenData::GetSelectedLoadingScreenSRV_ID() const
+{
+	assert(SelectedLoadingScreenSRVIndex < SRVs.size());
+	return SRVs[SelectedLoadingScreenSRVIndex];
+}
+void FLoadingScreenData::RotateLoadingScreenImage()
+{
+	SelectedLoadingScreenSRVIndex = (int)MathUtil::RandU(0, (int)SRVs.size());
+}
 void VQEngine::LoadLoadingScreenData()
 {
 	FLoadingScreenData& data = mLoadingScreenData;
 
 	data.SwapChainClearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
 
+	constexpr uint NUM_LOADING_SCREEN_BACKGROUNDS = 4;
+
 	srand(static_cast<unsigned>(time(NULL)));
 	const std::string LoadingScreenTextureFileDirectory = "Data/Textures/LoadingScreen/";
-	const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(MathUtil::RandU(0, 4)) + ".png");
-	TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
-	SRV_ID    srvID = mRenderer.CreateAndInitializeSRV(texID);
-	data.SRVLoadingScreen = srvID;
+	const size_t SelectedLoadingScreenIndex = MathUtil::RandU(0u, NUM_LOADING_SCREEN_BACKGROUNDS);
+
+	// dispatch background workers for other 
+	for (size_t i = 0; i < NUM_LOADING_SCREEN_BACKGROUNDS; ++i)
+	{
+		if (i == SelectedLoadingScreenIndex)
+			continue; // will be loaded on this thread
+
+		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(i) + ".png");
+
+		mWorkers_TextureLoading.AddTask([this, &data, LoadingScreenTextureFilePath]()
+		{
+			const TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
+			const SRV_ID srvID = mRenderer.CreateAndInitializeSRV(texID);
+			std::lock_guard<std::mutex> lk(data.Mtx);
+			data.SRVs.push_back(srvID);
+		});
+
+	}
+
+	// load the selected loading screen image
+	{
+		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(SelectedLoadingScreenIndex) + ".png");
+		TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
+		SRV_ID    srvID = mRenderer.CreateAndInitializeSRV(texID);
+		std::lock_guard<std::mutex> lk(data.Mtx);
+		data.SRVs.push_back(srvID);
+		data.SelectedLoadingScreenSRVIndex = static_cast<int>(data.SRVs.size() - 1);
+	}
+
 }
 

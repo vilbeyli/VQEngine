@@ -46,7 +46,14 @@
 struct FLoadingScreenData
 {
 	std::array<float, 4> SwapChainClearColor;
-	SRV_ID SRVLoadingScreen = INVALID_ID;
+
+	int SelectedLoadingScreenSRVIndex = INVALID_ID;
+	std::mutex Mtx;
+	std::vector<SRV_ID> SRVs;
+
+	SRV_ID GetSelectedLoadingScreenSRV_ID() const;
+	void RotateLoadingScreenImage();
+
 	// TODO: animation resources
 };
 
@@ -128,7 +135,7 @@ struct FResourceNames
 class VQEngine : public IWindowOwner
 {
 public:
-
+	VQEngine();
 	// ---------------------------------------------------------
 	// Main Thread
 	// ---------------------------------------------------------
@@ -230,23 +237,15 @@ public:
 	
 	void UnloadEnvironmentMap();
 
-	// Mesh & Model management
-	ModelID CreateModel();
-
 	// Getters
 	MeshID GetBuiltInMeshID(const std::string& MeshName) const;
 
-	      Model& GetModel(ModelID id);
-	const Model& GetModel(ModelID id) const;
 	inline const FResourceNames& GetResourceNames() const { return mResourceNames; }
-
+	inline AssetLoader& GetAssetLoader() { return mAssetLoader; }
 
 
 private:
 	//-------------------------------------------------------------------------------------------------
-	using BuiltinMeshArray_t          = std::array<Mesh, EBuiltInMeshes::NUM_BUILTIN_MESHES>;
-	using MeshLookup_t                = std::unordered_map<MeshID, Mesh>;
-	using ModelLookup_t               = std::unordered_map<ModelID, Model>;
 	using EnvironmentMapDescLookup_t  = std::unordered_map<std::string, FEnvironmentMapDescriptor>;
 	//-------------------------------------------------------------------------------------------------
 	using EventPtr_t                  = std::shared_ptr<IEvent>;
@@ -262,7 +261,8 @@ private:
 	std::thread                     mUpdateThread;
 	ThreadPool                      mWorkers_Update;
 	ThreadPool                      mWorkers_Render;
-	ThreadPool                      mWorkers_Load;
+	ThreadPool                      mWorkers_ModelLoading;
+	ThreadPool                      mWorkers_TextureLoading;
 
 	// sync
 	std::atomic<bool>               mbStopAllThreads;
@@ -293,8 +293,6 @@ private:
 
 	// data: geometry
 	BuiltinMeshArray_t              mBuiltinMeshes;
-	MeshLookup_t                    mMeshes;
-	ModelLookup_t                   mModels; // contains MeshIDs and MaterialIDs
 
 	// data: environment maps & HDR profiles
 	std::vector<FDisplayHDRProfile> mDisplayHDRProfiles;
@@ -309,6 +307,7 @@ private:
 	std::atomic<uint64>             mNumRenderLoopsExecuted;
 	std::atomic<uint64>             mNumUpdateLoopsExecuted;
 	std::atomic<bool>               mbLoadingLevel;
+	std::atomic<bool>               mbLoadingEnvironmentMap;
 	std::atomic<bool>               mbMainWindowHDRTransitionInProgress; // see DispatchHDRSwapchainTransitionEvents()
 
 	// system & settings
@@ -317,9 +316,8 @@ private:
 
 	// scene
 	FLoadingScreenData              mLoadingScreenData;
-	std::queue<FSceneRepresentation> mQueue_SceneLoad;
+	std::queue<std::string>         mQueue_SceneLoad;
 	
-	std::vector< FSceneRepresentation> mSceneRepresentations;
 	int                             mIndex_SelectedScene;
 	std::unique_ptr<Scene>          mpScene;
 
@@ -392,7 +390,8 @@ private:
 	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
 
 	// temp
-	struct FrameConstantBuffer { DirectX::XMMATRIX matModelViewProj; };
+	struct FFrameConstantBuffer  { DirectX::XMMATRIX matModelViewProj; };
+	struct FFrameConstantBuffer2 { DirectX::XMMATRIX matModelViewProj; int iTextureConfig; int iTextureOutput; };
 
 	void                            DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh);
 
@@ -414,7 +413,7 @@ private:
 	bool                            IsWindowRegistered(HWND hwnd) const;
 	bool                            ShouldRenderHDR(HWND hwnd) const;
 
-	void                            CalculateEffectiveFrameRate(HWND hwnd);
+	void                            CalculateEffectiveFrameRateLimit(HWND hwnd);
 	const FDisplayHDRProfile*       GetHDRProfileIfExists(const wchar_t* pwStrLogicalDisplayName);
 	FSetHDRMetaDataParams           GatherHDRMetaDataParameters(HWND hwnd);
 
@@ -429,7 +428,7 @@ private:
 	static std::vector<std::pair<std::string, int>> ParseSceneIndexMappingFile();
 	static std::vector<FEnvironmentMapDescriptor>   ParseEnvironmentMapsFile();
 	static std::vector<FDisplayHDRProfile>          ParseHDRProfilesFile();
-	static std::vector<FSceneRepresentation>        ParseSceneFiles();
+	static FSceneRepresentation                     ParseSceneFile(const std::string& SceneFile);
 
 public:
 	// Supported HDR Formats { DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_FORMAT_R16G16B16A16_FLOAT  }

@@ -29,16 +29,26 @@
 #include <set>
 #include <cassert>
  
+Texture::Texture(const Texture& other)
+    : mpAlloc(other.mpAlloc)
+    , mpTexture(other.mpTexture)
+    , bResident(other.bResident.load())
+{}
 
-//
-// TEXTURE
-//
-bool Texture::CreateFromFile(const TextureCreateDesc& tDesc, const std::string& FilePath)
+Texture& Texture::operator=(const Texture& other)
 {
+    mpAlloc = other.mpAlloc;
+    mpTexture = other.mpTexture;
+    bResident = other.bResident.load();
+    return *this;
+}
 
+
+bool Texture::ReadImageFromDisk(const std::string& FilePath, Image& img)
+{
     if (FilePath.empty())
     {
-        Log::Error("Cannot create Texture from file: empty FilePath provided.");
+        Log::Error("Cannot load Image from file: empty FilePath provided.");
         return false;
     }
 
@@ -58,46 +68,20 @@ bool Texture::CreateFromFile(const TextureCreateDesc& tDesc, const std::string& 
     assert(FileExtension != "exr"); // TODO: add exr loading support to Image class
     const bool bHDR = S_HDR_FORMATS.find(FileExtension) != S_HDR_FORMATS.end();
 
-    // load img
-    Image image = Image::LoadFromFile(FilePath.c_str(), bHDR);
-    const bool bImageLoadSucceeded = image.pData && image.BytesPerPixel > 0;
-    if (bImageLoadSucceeded)
-    {
-        TextureCreateDesc desc = tDesc;
-        desc.Desc.Width = image.Width;
-        desc.Desc.Height = image.Height;
-        desc.Desc.Format = bHDR ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
-        //-------------------------------
-        desc.Desc.DepthOrArraySize = 1;
-        desc.Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Desc.Alignment = 0;
-        desc.Desc.DepthOrArraySize = 1;
-        desc.Desc.MipLevels = 1;
-        desc.Desc.SampleDesc.Count = 1;
-        desc.Desc.SampleDesc.Quality = 0;
-        desc.Desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-        desc.Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-        //-------------------------------
-        Create(desc, image.pData);
-    }
-    else
-    {
-        Log::Error("Texture::CreateFromFile() : TexName=%s, FileName=%s", tDesc.TexName.c_str(), FileName.c_str() );
-    }
-    image.Destroy();
-    return bImageLoadSucceeded;
+    img = Image::LoadFromFile(FilePath.c_str(), bHDR);
+    return img.pData && img.BytesPerPixel > 0;
 }
 
-// TODO: clean up function
+//
+// TEXTURE
+//
 void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullptr*/)
 {
     HRESULT hr = {};
 
-    ID3D12GraphicsCommandList* pCmd = desc.pUploadHeap->GetCommandList();
-
-    const bool bDepthStencilTexture    = desc.Desc.Format == DXGI_FORMAT_R32_TYPELESS; // TODO: change this?
-    const bool bRenderTargetTexture    = (desc.Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0;
-    const bool bUnorderedAccessTexture = (desc.Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) != 0;
+    const bool bDepthStencilTexture    = desc.d3d12Desc.Format == DXGI_FORMAT_R32_TYPELESS; // TODO: change this?
+    const bool bRenderTargetTexture    = (desc.d3d12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0;
+    const bool bUnorderedAccessTexture = (desc.d3d12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) != 0;
 
     // determine resource state & optimal clear value
     D3D12_RESOURCE_STATES ResourceState = pData 
@@ -107,7 +91,7 @@ void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullpt
     if (bDepthStencilTexture)
     {
         D3D12_CLEAR_VALUE ClearValue = {};
-        ClearValue.Format = (desc.Desc.Format == DXGI_FORMAT_R32_TYPELESS) ? DXGI_FORMAT_D32_FLOAT : desc.Desc.Format;
+        ClearValue.Format = (desc.d3d12Desc.Format == DXGI_FORMAT_R32_TYPELESS) ? DXGI_FORMAT_D32_FLOAT : desc.d3d12Desc.Format;
         ClearValue.DepthStencil.Depth = 1.0f;
         ClearValue.DepthStencil.Stencil = 0;
         pClearValue = &ClearValue;
@@ -115,7 +99,7 @@ void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullpt
     if (bRenderTargetTexture)
     {
         D3D12_CLEAR_VALUE ClearValue = {};
-        ClearValue.Format = desc.Desc.Format;
+        ClearValue.Format = desc.d3d12Desc.Format;
         pClearValue = &ClearValue;
     }
     if (bUnorderedAccessTexture)
@@ -129,7 +113,7 @@ void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullpt
     textureAllocDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
     hr = desc.pAllocator->CreateResource(
         &textureAllocDesc,
-        &desc.Desc,
+        &desc.d3d12Desc,
         ResourceState,
         pClearValue,
         &mpAlloc,
@@ -140,64 +124,6 @@ void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullpt
         return;
     }
     SetName(mpTexture, desc.TexName.c_str());
-
-    // upload the data
-    if (pData)
-    {
-        const UINT64 UploadBufferSize = GetRequiredIntermediateSize(mpTexture, 0, 1);
-
-#if 1
-        UINT8* pUploadBufferMem = desc.pUploadHeap->Suballocate(SIZE_T(UploadBufferSize), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
-        if (pUploadBufferMem == NULL)
-        {
-
-            // TODO:
-            // We ran out of mem in the upload heap, flush it and try allocating mem from it again
-#if 0
-            desc.pUploadHeap->UploadToGPUAndWait();
-            pUploadBufferMem = desc.pUploadHeap->Suballocate(SIZE_T(UploadBufferSize), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
-            assert(pUploadBufferMem);
-#else
-            assert(false);
-#endif    
-        }
-
-        UINT64 UplHeapSize;
-        uint32_t num_rows = {};
-        UINT64 row_size_in_bytes = {};
-        D3D12_PLACED_SUBRESOURCE_FOOTPRINT placedTex2D = {};
-        desc.pDevice->GetCopyableFootprints(&desc.Desc, 0, 1, 0, &placedTex2D, &num_rows, &row_size_in_bytes, &UplHeapSize);
-        placedTex2D.Offset += UINT64(pUploadBufferMem - desc.pUploadHeap->BasePtr());
-
-        // copy data row by row
-        for (uint32_t y = 0; y < num_rows; y++)
-        {
-            const UINT64 UploadMemOffset = y * placedTex2D.Footprint.RowPitch;
-            const UINT64   DataMemOffset = y * row_size_in_bytes;
-            memcpy(pUploadBufferMem + UploadMemOffset, (UINT8*)pData + DataMemOffset, row_size_in_bytes);
-        }
-
-        CD3DX12_TEXTURE_COPY_LOCATION Dst(mpTexture, 0);
-        CD3DX12_TEXTURE_COPY_LOCATION Src(desc.pUploadHeap->GetResource(), placedTex2D);
-        desc.pUploadHeap->GetCommandList()->CopyTextureRegion(&Dst, 0, 0, 0, &Src, NULL);
-
-#else
-        D3D12_SUBRESOURCE_DATA textureSubresourceData = {};
-        textureSubresourceData.pData = pData;
-        textureSubresourceData.RowPitch = imageBytesPerRow;
-        textureSubresourceData.SlicePitch = imageBytesPerRow * desc.Desc.Height;
-
-        UpdateSubresources(pCmd, mpTexture, textureUpload, 0, 0, 1, &textureSubresourceData);
-#endif
-
-        D3D12_RESOURCE_BARRIER textureBarrier = {};
-        textureBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        textureBarrier.Transition.pResource = mpTexture;
-        textureBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-        textureBarrier.Transition.StateAfter = desc.ResourceState;
-        textureBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        pCmd->ResourceBarrier(1, &textureBarrier);
-    }
 }
 
 
@@ -278,6 +204,7 @@ void Texture::InitializeUAV(uint32 index, CBV_SRV_UAV* pRV, D3D12_UNORDERED_ACCE
     pDevice->Release();
 }
 
+
 #if 0
 void Texture::CreateUAV(uint32_t index, Texture* pCounterTex, CBV_SRV_UAV* pRV, D3D12_UNORDERED_ACCESS_VIEW_DESC* pUavDesc)
 {
@@ -328,7 +255,7 @@ void Texture::CreateRTV(uint32_t index, RTV* pRV, int mipLevel, int arraySize, i
 //
 
 // from Microsoft's D3D12HelloTexture
-std::vector<uint8> Texture::GenerateTexture_Checkerboard(uint Dimension)
+std::vector<uint8> Texture::GenerateTexture_Checkerboard(uint Dimension, bool bUseMidtones /*= false*/)
 {
     constexpr UINT TexturePixelSizeInBytes = 4; // byte/px
     const UINT& TextureWidth = Dimension;
@@ -351,16 +278,16 @@ std::vector<uint8> Texture::GenerateTexture_Checkerboard(uint Dimension)
 
         if (i % 2 == j % 2)
         {
-            pData[n + 0] = 0x00;    // R
-            pData[n + 1] = 0x00;    // G
-            pData[n + 2] = 0x00;    // B
+            pData[n + 0] = bUseMidtones ? 0x03 : 0x00;    // R
+            pData[n + 1] = bUseMidtones ? 0x03 : 0x00;    // G
+            pData[n + 2] = bUseMidtones ? 0x03 : 0x00;    // B
             pData[n + 3] = 0xff;    // A
         }
         else
         {
-            pData[n + 0] = 0xff;    // R
-            pData[n + 1] = 0xff;    // G
-            pData[n + 2] = 0xff;    // B
+            pData[n + 0] = bUseMidtones ? 0x1F : 0xff;    // R
+            pData[n + 1] = bUseMidtones ? 0x1F : 0xff;    // G
+            pData[n + 2] = bUseMidtones ? 0x1F : 0xff;    // B
             pData[n + 3] = 0xff;    // A
         }
     }

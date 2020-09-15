@@ -20,8 +20,9 @@ public:\
 		, int NumFrameBuffers\
 		, const Input& input\
 		, const std::unique_ptr<Window>& pWin\
+		, VQRenderer& renderer\
 	)\
-		: Scene(engine, NumFrameBuffers, input, pWin)\
+		: Scene(engine, NumFrameBuffers, input, pWin, renderer)\
 	{}\
 
 

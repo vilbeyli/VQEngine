@@ -36,7 +36,9 @@ void ReportSystemInfo(const VQSystemInfo::FSystemInfo& i, bool bDetailed = false
 	Log::Info("\n%s", sysInfo.c_str());
 }
 #endif
-
+VQEngine::VQEngine()
+	: mAssetLoader(mWorkers_ModelLoading, mWorkers_TextureLoading, mRenderer)
+{}
 
 void VQEngine::MainThread_Tick()
 {
@@ -68,18 +70,22 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	InitializeScenes();
 	float f2 = t.Tick();
 	InitializeThreads();
-	CalculateEffectiveFrameRate(mpWinMain->GetHWND());
+	CalculateEffectiveFrameRateLimit(mpWinMain->GetHWND());
 	float f4 = t.Tick();
 
 	// offload system info acquisition to a thread as it takes a few seconds on Debug build
 	mWorkers_Update.AddTask([&]() 
 	{
 		this->mSysInfo = VQSystemInfo::GetSystemInfo();
+		
 #if REPORT_SYSTEM_INFO 
 		ReportSystemInfo(this->mSysInfo);
 #endif
 		HWND hwnd = mpWinMain->GetHWND();
-		mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetStaticHDRMetaDataEvent>(hwnd, this->GatherHDRMetaDataParameters(hwnd)));
+		if (!mpWinMain->IsClosed())
+		{
+			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetStaticHDRMetaDataEvent>(hwnd, this->GatherHDRMetaDataParameters(hwnd)));
+		}
 	});
 	float f0 = t.Tick();
 
@@ -263,28 +269,12 @@ void VQEngine::InitializeScenes()
 		for (auto& nameIndex : SceneIndexMappings)
 			mSceneNames.push_back(std::move(nameIndex.first));
 	}
+
 	// read scene files from disk: Data/Scenes/
-	this->mSceneRepresentations = VQEngine::ParseSceneFiles();
-	std::vector< FSceneRepresentation>& SceneReps = this->mSceneRepresentations;
-	// ---------------------------------------------
-
-	// find out which scene to load
-	auto it = std::find_if(SceneReps.begin(), SceneReps.end(), [&](const FSceneRepresentation& s) { return s.SceneName == mSettings.StartupScene; });
-	bool bSceneFound = it != SceneReps.end();
-	if (!bSceneFound)
-	{
-		Log::Error("Couldn't find scene '%s' among parsed scene files.", mSettings.StartupScene.c_str());
-		Log::Warning("DefaultScene will be loaded");
-		it = std::find_if(SceneReps.begin(), SceneReps.end(), [&](const FSceneRepresentation& s) { return s.SceneName == "Default"; });
-		assert(it != SceneReps.end());
-		mSettings.StartupScene = "Default";
-	}
-
-	// ---------------------------------------------
 
 	// set the selected scene index
 	auto it2 = std::find_if(mSceneNames.begin(), mSceneNames.end(), [&](const std::string& scn) { return scn == mSettings.StartupScene; });
-	bSceneFound = it2 != mSceneNames.end();
+	bool bSceneFound = it2 != mSceneNames.end();
 	if (!bSceneFound)
 	{
 		Log::Error("Couldn't find scene '%s' among scene file names", mSettings.StartupScene.c_str());
@@ -300,22 +290,27 @@ void VQEngine::InitializeThreads()
 	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
 	const size_t HWThreads  = ThreadPool::sHardwareThreadCount;
 	const size_t HWCores    = HWThreads / 2;
-	const size_t NumWorkers = HWCores - 2; // reserve 2 cores for (Update + Render) + Main threads
+	const size_t NumRuntimeWorkers = HWCores - 2; // reserve 2 cores for Update + Render threads
+	const size_t NumLoadtimeWorkers    = HWThreads;
 
 	mpSemUpdate.reset(new Semaphore(NUM_SWAPCHAIN_BACKBUFFERS, NUM_SWAPCHAIN_BACKBUFFERS));
 	mpSemRender.reset(new Semaphore(0                        , NUM_SWAPCHAIN_BACKBUFFERS));
-
+	
+	mbRenderThreadInitialized.store(false);
 	mbStopAllThreads.store(false);
-	mWorkers_Load.Initialize(NumWorkers);
+
+	mWorkers_ModelLoading.Initialize(NumLoadtimeWorkers, "LoadWorkers_Model");
+	mWorkers_TextureLoading.Initialize(NumLoadtimeWorkers, "LoadWorkers_Texture");
 	mRenderThread = std::thread(&VQEngine::RenderThread_Main, this);
 	mUpdateThread = std::thread(&VQEngine::UpdateThread_Main, this);
-	mWorkers_Update.Initialize(NumWorkers);
-	mWorkers_Render.Initialize(NumWorkers);
+	mWorkers_Update.Initialize(NumRuntimeWorkers, "UpdateWorkers");
+	mWorkers_Render.Initialize(NumRuntimeWorkers, "RenderWorkers");
 }
 
 void VQEngine::ExitThreads()
 {
-	mWorkers_Load.Exit();
+	mWorkers_ModelLoading.Exit();
+	mWorkers_TextureLoading.Exit();
 	mbStopAllThreads.store(true);
 	mRenderThread.join();
 	mUpdateThread.join();

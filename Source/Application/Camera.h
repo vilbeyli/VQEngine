@@ -87,14 +87,15 @@ protected:
 class FirstPersonController : public CameraController
 {
 public: 
-	FirstPersonController(Camera* pCam);// : CameraController(pCam)
+	FirstPersonController() = delete;
+	FirstPersonController(Camera* pCam, float moveSpeed = 1000.0f, float angularSpeed = 0.05f, float drag = 9.5f);
 	void UpdateCamera(const Input& input, float dt) override;
 protected:
 	CameraController* Clone_impl(Camera* pNewCam) override;
 private:
-	float Drag = 9.5f;
-	float AngularSpeedDeg = 0.05f;
-	float MoveSpeed = 1000.0f;
+	float Drag;
+	float AngularSpeedDeg;
+	float MoveSpeed;
 };
 class OrbitController : public CameraController
 {
@@ -124,13 +125,15 @@ public:
 	Camera Clone();
 
 	void InitializeCamera(const FCameraParameters& data);
-	void InitializeController(bool bFirstPersonController);
+	void InitializeController(bool bFirstPersonController, const FCameraParameters& data);
 
 	void SetProjectionMatrix(const FProjectionMatrixParameters& params);
 
 	void UpdateViewMatrix();
 	inline void Update(float dt, const Input& input) { if(pController) pController->UpdateCamera(input, dt); }
 
+	inline float GetYaw() const { return mYaw; }
+	inline float GetPitch() const { return mPitch; }
 	DirectX::XMFLOAT3 GetPositionF() const;
 	DirectX::XMMATRIX GetViewMatrix() const;
 	DirectX::XMMATRIX GetViewInverseMatrix() const;

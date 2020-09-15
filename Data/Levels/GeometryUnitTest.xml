@@ -30,6 +30,30 @@
         <Preset>Stadium01</Preset>
     </EnvironmentMap>
     -->
+
+    <!-- 
+    MATERIALS
+    -->
+    <Material>
+        <Name>GreenMat</Name>
+        <Diffuse>0 0.5 0</Diffuse>
+        <Alpha> 0.5 </Alpha>
+        <DiffuseMap>Data/Textures/PBR/cgbookcase/black-herringbone-tiles-01/Black_herringbone_tiles_01_2K_Base_Color.png</DiffuseMap>
+    </Material>
+    <Material>
+        <Name>RedMat</Name>
+        <Diffuse>0.8 0.0 0</Diffuse>
+        <Alpha> 1 </Alpha>
+    </Material>
+    <Material>
+        <Name>Checkerboard</Name>
+        <DiffuseMap>Procedural/Checkerboard</DiffuseMap>
+    </Material>
+    <Material>
+        <Name>Checkerboard_Grayscale</Name>
+        <DiffuseMap>Procedural/Checkerboard_Grayscale</DiffuseMap>
+    </Material>
+    
     <Camera>
         <Position> 0.0 3.0 -5 </Position>
         <Pitch> 15 </Pitch>
@@ -55,9 +79,7 @@
         </Transform>
         <Model>
             <Mesh>Cube</Mesh>
-            <Material>
-                <Diffuse></Diffuse>
-            </Material>
+            <MaterialName>GreenMat</MaterialName>
         </Model>
     </GameObject>
     
@@ -69,12 +91,22 @@
         </Transform>
         <Model>
             <Mesh>Triangle</Mesh>
-            <Material>
-                <Diffuse></Diffuse>
-            </Material>
+            <MaterialName>Checkerboard</MaterialName>
         </Model>
     </GameObject>
 
+
+    <GameObject>
+        <Transform>
+            <Position>-5 0 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>1 1 1</Scale>
+        </Transform>
+        <Model>
+            <Mesh>Triangle</Mesh>
+            <MaterialName>Checkerboard_Grayscale</MaterialName>
+        </Model>
+    </GameObject>
 
     <PostProcess>
     <!-- TBA -->

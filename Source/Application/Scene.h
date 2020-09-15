@@ -19,17 +19,39 @@
 
 #include "Camera.h"
 #include "Mesh.h"
+#include "Material.h"
 #include "Model.h"
 #include "Light.h"
 #include "Transform.h"
 #include "GameObject.h"
 #include "Memory.h"
+#include "AssetLoader.h"
 
 class Input;
+struct Material;
 struct FResourceNames;
 
 //------------------------------------------------------
-struct GameObjectRepresentation
+#define MATERIAL_UNINITIALIZED_VALUE -1.0f
+struct FMaterialRepresentation
+{
+	std::string Name;
+	DirectX::XMFLOAT3 DiffuseColor;
+	float Alpha             = MATERIAL_UNINITIALIZED_VALUE;
+	DirectX::XMFLOAT3 EmissiveColor;
+	float EmissiveIntensity = MATERIAL_UNINITIALIZED_VALUE;
+	float Metalness         = MATERIAL_UNINITIALIZED_VALUE;
+	float Roughness         = MATERIAL_UNINITIALIZED_VALUE;
+	std::string DiffuseMapFilePath  ;
+	std::string NormalMapFilePath   ;
+	std::string EmissiveMapFilePath ;
+	std::string AlphaMaskMapFilePath;
+	std::string MetallicMapFilePath ;
+	std::string RoughnessMapFilePath;
+
+	FMaterialRepresentation();
+};
+struct FGameObjectRepresentation
 {
 	Transform tf;
 	
@@ -37,15 +59,16 @@ struct GameObjectRepresentation
 	std::string ModelFilePath;
 	
 	std::string BuiltinMeshName;
-	struct Material { float data[16]; };
+	std::string MaterialName;
 };
 struct FSceneRepresentation
 {
 	std::string SceneName;
 	std::string EnvironmentMapPreset;
 
-	std::vector<FCameraParameters>        Cameras;
-	std::vector<GameObjectRepresentation> Objects;
+	std::vector<FMaterialRepresentation>   Materials;
+	std::vector<FCameraParameters>         Cameras;
+	std::vector<FGameObjectRepresentation> Objects;
 	//std::vector<LightRepresentation> Lights;
 
 	char loadSuccess = 0;
@@ -62,7 +85,7 @@ struct FMeshRenderCommand
 {
 	MeshID     meshID = INVALID_ID;
 	MaterialID matID  = INVALID_ID;
-	DirectX::XMMATRIX WorldTransformationMatrix;
+	DirectX::XMMATRIX WorldTransformationMatrix; // WorldTF ID ?
 };
 struct FSceneView
 {
@@ -73,6 +96,8 @@ struct FSceneView
 	DirectX::XMMATRIX     projInverse;
 	DirectX::XMMATRIX     directionalLightProjection;
 	DirectX::XMVECTOR     cameraPosition;
+	float                 MainViewCameraYaw = 0.0f;
+	float                 MainViewCameraPitch = 0.0f;
 	//bool                  bIsPBRLightingUsed;
 	//bool                  bIsDeferredRendering;
 	//bool                  bIsIBLEnabled;
@@ -138,12 +163,17 @@ protected:
 // ENGINE INTERFACE
 //----------------------------------------------------------------------------------------------------------------
 public:
-	Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const std::unique_ptr<Window>& pWin);
+	Scene(VQEngine& engine
+		, int NumFrameBuffers
+		, const Input& input
+		, const std::unique_ptr<Window>& pWin
+		, VQRenderer& renderer
+	);
 
 private: // Derived Scenes shouldn't access these functions
 	void Update(float dt, int FRAME_DATA_INDEX);
 	void PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX);
-	void StartLoading(FSceneRepresentation& scene);
+	void StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene);
 	void OnLoadComplete();
 	void Unload(); // serial-only for now. maybe MT later.
 	void RenderUI();
@@ -156,19 +186,37 @@ public:
 	inline const Camera& GetActiveCamera() const { return mCameras[mIndex_SelectedCamera]; }
 	inline       Camera& GetActiveCamera()       { return mCameras[mIndex_SelectedCamera]; }
 
+	// Mesh, Model, GameObj management
 	//TransformID CreateTransform(Transform** ppTransform);
 	//GameObject* CreateObject(TransformID tfID, ModelID modelID);
+	MeshID     AddMesh(Mesh&& mesh);
+	MeshID     AddMesh(const Mesh& mesh);
+	ModelID    CreateModel();
+	MaterialID CreateMaterial(const std::string& UniqueMaterialName);
+
+	Material&  GetMaterial(MaterialID ID);
+	Model&     GetModel(ModelID);
 
 //----------------------------------------------------------------------------------------------------------------
 // SCENE DATA
 //----------------------------------------------------------------------------------------------------------------
 protected:
+	using MeshLookup_t     = std::unordered_map<MeshID, Mesh>;
+	using ModelLookup_t    = std::unordered_map<ModelID, Model>;
+	using MaterialLookup_t = std::unordered_map<MaterialID, Material>;
+	//--------------------------------------------------------------
+
+	//
+	// SCENE VIEWS
+	//
 	std::vector<FSceneView> mFrameSceneViews;
 
 	//
 	// SCENE RESOURCE CONTAINERS
 	//
-	//std::vector<MeshID>      mMeshIDs;
+	MeshLookup_t             mMeshes;
+	ModelLookup_t            mModels;
+	MaterialLookup_t         mMaterials;
 	std::vector<GameObject*> mpObjects;
 	std::vector<Transform*>  mpTransforms;
 	std::vector<Camera>      mCameras;
@@ -185,6 +233,8 @@ protected:
 	BoundingBox              mSceneBoundingBox;
 	std::vector<BoundingBox> mMeshBoundingBoxes;
 	std::vector<BoundingBox> mGameObjectBoundingBoxes;
+	MaterialID               mDefaultMaterialID;
+
 
 	//
 	// SCENE STATE
@@ -202,8 +252,11 @@ protected:
 	const std::unique_ptr<Window>& mpWindow;
 	VQEngine&                      mEngine;
 	const FResourceNames&          mResourceNames;
+	AssetLoader&                   mAssetLoader;
+	VQRenderer&                    mRenderer;
 
 	FSceneRepresentation mSceneRepresentation;
+
 //----------------------------------------------------------------------------------------------------------------
 // INTERNAL DATA
 //----------------------------------------------------------------------------------------------------------------
@@ -211,6 +264,16 @@ private:
 	MemoryPool<GameObject> mGameObjectPool;
 	MemoryPool<Transform>  mTransformPool;
 
+	std::mutex mMtx_Meshes;
+	std::mutex mMtx_Models;
+	std::mutex mMtx_Materials;
+
+	AssetLoader::ModelLoadResults_t          mModelLoadResults;
+	AssetLoader::FMaterialTextureAssignments mMaterialAssignments;
+	
+	// cache
+	std::unordered_map<std::string, MaterialID> mLoadedMaterials;
+	
 	//CPUProfiler*    mpCPUProfiler;
 	//ModelLoader     mModelLoader;
 	//MaterialPool    mMaterials;

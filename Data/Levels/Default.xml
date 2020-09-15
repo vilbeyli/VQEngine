@@ -13,6 +13,7 @@
         <Preset>Stadium01</Preset>
     </EnvironmentMap>
     
+    <!-- CAMERAS -->
     <Camera>
         <Position> 0.0 3.0 -5 </Position>
         <Pitch> 15 </Pitch>
@@ -29,7 +30,34 @@
             <Drag>9.5</Drag>
         </FirstPerson>
     </Camera>
+    <Camera>
+        <Position> 6.0 3.0 -5 </Position>
+        <Pitch> 65 </Pitch>
+        <Yaw> 6 </Yaw>
 
+        <Projection>Perspective</Projection>
+        <FoV>90.0</FoV>
+        <Near>0.01</Near>
+        <Far>5000</Far>
+
+        <FirstPerson>
+            <TranslationSpeed>1000</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+
+    <!-- MATERIALS -->
+    <Material>
+        <Name>Checkerboard</Name>
+        <DiffuseMap>Procedural/Checkerboard</DiffuseMap>
+    </Material>
+    <Material>
+        <Name>Checkerboard_Grayscale</Name>
+        <DiffuseMap>Procedural/Checkerboard_Grayscale</DiffuseMap>
+    </Material>
+    
+    <!-- OBJECTS -->
     <GameObject>
         <Transform>
             <Position>0 0 4</Position>
@@ -38,30 +66,10 @@
         </Transform>
         <Model>
             <Mesh>Cube</Mesh>
-            <Material>
-                <Diffuse></Diffuse>
-            </Material>
+            <MaterialName>Checkerboard</MaterialName>
         </Model>
     </GameObject>
 
-
-    <Camera>
-        <Position> 6.0 3.0 -5 </Position>
-        <Pitch> 65 </Pitch>
-        <Yaw> 6 </Yaw>
-        
-        <Projection>Orthographic</Projection>
-        <FoV>90.0</FoV>
-        <Near>0.01</Near>
-        <Far>1000</Far>
-
-        <FirstPerson>
-            <TranslationSpeed>1000</TranslationSpeed>
-            <AngularSpeed>0.05</AngularSpeed>
-            <Drag>9.5</Drag>
-        </FirstPerson>
-    </Camera>
-    
     <GameObject>
         <Transform>
             <Position> 0.0 3.0 -14 </Position>
@@ -70,11 +78,7 @@
         </Transform>
         <Model>
             <Mesh>Cube</Mesh>
-            <Material>
-                <Diffuse></Diffuse>
-            </Material>
+            <MaterialName>Checkerboard_Grayscale</MaterialName>
         </Model>
     </GameObject>
-
-
 </Scene>
