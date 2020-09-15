@@ -7,7 +7,7 @@ VQE is **VQEngine**: A DX12 rewrite of [VQEngine-Vanilla](https://github.com/vil
 
 Join the [VQE Discord Channel](https://discord.gg/U7pd8TV)!
 
-[![Discord Banner 2](https://discordapp.com/api/guilds/720409073756930079/widget.png?style=banner2)]((https://discord.gg/U7pd8TV))
+[![Discord Banner 2](https://discordapp.com/api/guilds/720409073756930079/widget.png?style=banner2)](https://discord.gg/U7pd8TV)
 
 
 # Screenshots
