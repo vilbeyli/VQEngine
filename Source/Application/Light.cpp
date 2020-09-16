@@ -18,4 +18,52 @@
 
 #include "Light.h"
 
-// TBA
+using namespace DirectX;
+
+Light Light::MakePointLight()
+{
+	Light l; // default ctor takes care of most
+	l.AttenuationConstant  = 1.0f;
+	l.AttenuationLinear    = 1.0f;
+	l.AttenuationQuadratic = 1.0f;
+	return l;
+}
+
+Light Light::MakeDirectionalLight()
+{
+	Light l; // default ctor takes care of most
+
+	l.ViewportX = 2048;
+	l.ViewportY = 2048;
+	l.DistanceFromOrigin = 500.0f;
+
+	return l;
+}
+
+Light Light::MakeSpotLight()
+{
+	Light l; // default ctor takes care of most
+
+	l.SpotInnerConeAngleDegrees = 25.0f;
+	l.SpotOuterConeAngleDegrees = 35.0f;
+
+	return l;
+}
+
+
+Light::Light()
+	: Position(XMFLOAT3(0,0,0))
+	, Range(1000.0f)
+	, RotationQuaternion(Quaternion::Identity())
+	, RenderScale(XMFLOAT3(0.1f,0.1f,0.1f))
+	, bEnabled(true)
+	, bCastingShadows(false)
+	, Mobility(EMobility::DYNAMIC)
+	, Color(XMFLOAT3(1,1,1))
+	, Brightness(300.0f)
+	, ShadowData(FShadowData(0.00005f, 0.01f, 1500.0f))
+	// assumed point light by default
+	, AttenuationConstant(1)
+	, AttenuationLinear(1)
+	, AttenuationQuadratic(1)
+{}

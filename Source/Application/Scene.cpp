@@ -179,7 +179,7 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 		if (bModelNotFound)
 		{
 			Log::Warning("[Scene] Model not found: ID=%d", pObj->mModelID);
-			continue;
+			continue; // skip rendering object if there's no model
 		}
 
 		const Model& model = mModels.at(pObj->mModelID);
@@ -200,13 +200,13 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 	SceneViewNext.postProcess = SceneView.postProcess;
 }
 
-void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene)
+void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& sceneRep)
 {
 	mRenderer.WaitForLoadCompletion();
 	
-	Log::Info("[Scene] Loading Scene: %s", scene.SceneName.c_str());
+	Log::Info("[Scene] Loading Scene: %s", sceneRep.SceneName.c_str());
 
-	constexpr bool B_LOAD_SERIAL = true;
+	constexpr bool B_LOAD_GAMEOBJECTS_SERIAL = true;
 	auto fnDeserializeGameObject = [&](FGameObjectRepresentation& ObjRep)
 	{
 		// GameObject
@@ -273,12 +273,12 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	}
 
 	// scene-specific load 
-	this->LoadScene(scene);
+	this->LoadScene(sceneRep);
 
 	AssetLoader::LoadTaskID taskID = AssetLoader::GenerateLoadTaskID();
 
 	// Create scene materials before deserializing gameobjects
-	for (const FMaterialRepresentation& matRep : scene.Materials)
+	for (const FMaterialRepresentation& matRep : sceneRep.Materials)
 	{
 		MaterialID id = this->CreateMaterial(matRep.Name);
 		Material& mat = this->GetMaterial(id);
@@ -317,16 +317,18 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	}
 	Log::Info("[Scene] Materials Created");
 
-	if(!mMaterialAssignments.mAssignments.empty())
+	// kickoff background workers for texture loading
+	if (!mMaterialAssignments.mAssignments.empty())
+	{
 		mMaterialAssignments.mTextureLoadResults = mAssetLoader.StartLoadingTextures(taskID);
+		Log::Info("[Scene] Start loading textures...");
+	}
 
-	// start loading material textures
-	Log::Info("[Scene] Start loading textures...");
-
-	if constexpr (B_LOAD_SERIAL)
+	// load game objects
+	if constexpr (B_LOAD_GAMEOBJECTS_SERIAL)
 	{
 		// GAME OBJECTS
-		for (FGameObjectRepresentation& ObjRep : scene.Objects)
+		for (FGameObjectRepresentation& ObjRep : sceneRep.Objects)
 		{
 			fnDeserializeGameObject(ObjRep);
 		}
@@ -334,14 +336,34 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	else // THREADED LOAD
 	{
 		// dispatch workers
-		assert(false); // TODO
+		assert(false); // TODO: profile first
 	}
 
+	// kickoff workers for loading models
 	mModelLoadResults = mAssetLoader.StartLoadingModels(this);
 	Log::Info("[Scene] Start loading models...");
 
+	// LIGHTS
+	for (const Light& l : sceneRep.Lights)
+	{
+		std::vector<Light>& LightContainer = [&]() -> std::vector<Light>& {
+			switch (l.Mobility)
+			{
+			case Light::EMobility::DYNAMIC   : return mLightsDynamic;
+			case Light::EMobility::STATIC    : return mLightsStatic;
+			case Light::EMobility::STATIONARY: return mLightsStationary;
+			default:
+				Log::Warning("Invalid light mobility!");
+				break;
+			}
+			return mLightsStationary;
+		}();
+
+		LightContainer.push_back(l);
+	}
+
 	// CAMERAS
-	for (FCameraParameters& param : scene.Cameras)
+	for (FCameraParameters& param : sceneRep.Cameras)
 	{
 		param.ProjectionParams.ViewportWidth  = static_cast<float>( mpWindow->GetWidth()  );
 		param.ProjectionParams.ViewportHeight = static_cast<float>( mpWindow->GetHeight() );
@@ -356,16 +378,15 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	// to prevent dangling pointers in @pController->mpCamera (circular ptrs)
 	for (size_t i = 0; i < mCameras.size(); ++i)
 	{
-		if (scene.Cameras[i].bInitializeCameraController)
+		if (sceneRep.Cameras[i].bInitializeCameraController)
 		{
-			mCameras[i].InitializeController(scene.Cameras[i].bFirstPerson, scene.Cameras[i]);
+			mCameras[i].InitializeController(sceneRep.Cameras[i].bFirstPerson, sceneRep.Cameras[i]);
 		}
 	}
 	Log::Info("[Scene] Cameras initialized");
 
-
 	// assign scene rep
-	mSceneRepresentation = scene;
+	mSceneRepresentation = sceneRep;
 }
 
 void Scene::OnLoadComplete()
@@ -422,6 +443,10 @@ void Scene::Unload()
 	mIndex_SelectedCamera = 0;
 	mIndex_ActiveEnvironmentMapPreset = -1;
 	mEngine.UnloadEnvironmentMap();
+
+	mLightsDynamic.clear();
+	mLightsStatic.clear();
+	mLightsStationary.clear();
 }
 
 void Scene::RenderUI()

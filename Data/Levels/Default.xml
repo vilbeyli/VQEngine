@@ -81,9 +81,6 @@
         </Model>
     </GameObject>
 
-
-
-
     <GameObject>
         <Transform>
             <Position>25 2 2</Position>
@@ -107,5 +104,92 @@
         </Model>
     </GameObject>
 
+
+    <!-- LIGHTS -->
+    <Light> <!-- Directional Light -->
+        <Enabled>false</Enabled>
+        <Mobility> Stationary </Mobility>
+        <Color>0.9 0.9 0.85</Color>
+        <Range> 5000 </Range>
+        <Brightness> 6000 </Brightness>
+        <Shadows>
+            <DepthBias> 0.001 </DepthBias>
+            <NearPlane> 0.1 </NearPlane>
+            <FarPlane>  15000  </FarPlane>
+        </Shadows>
+        <Transform>
+            <Position>0 1000 0</Position>
+            <Rotation> 10 15 5 </Rotation>
+        </Transform>
+        <Directional>
+            <ViewPortX> 1024 </ViewPortX>
+            <ViewPortY> 1024 </ViewPortY>
+            <Distance> 6000 </Distance>
+        </Directional>
+    </Light>
+
+    <Light>
+        <!-- Point Light -->
+        <Mobility> Dynamic </Mobility>
+        <Color>0.9 0.9 0.85</Color>
+        <Range> 1500 </Range>
+        <Brightness> 100 </Brightness>
+        <Shadows>
+            <DepthBias> 0.001 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  1500  </FarPlane>
+        </Shadows>
+        <Transform>
+            <Position>0 10 0</Position>
+            <Rotation> 0 0 0 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <Point>
+            <Attenuation> 1 1 1 </Attenuation>
+        </Point>
+    </Light>
+
+    <Light> <!-- Spot Light -->
+        <Mobility> Static </Mobility>
+        <Enabled>false</Enabled>
+        <Color>0.9 0.9 0.85</Color>
+        <Range> 1500 </Range>
+        <Brightness> 500 </Brightness>
+        <Shadows>
+            <DepthBias> 0.001 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  1500  </FarPlane>
+        </Shadows>
+        <Transform>
+            <Position>20 10 0</Position>
+            <Rotation> 10 0 0 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <Spot>
+            <OuterConeAngleDegrees>60</OuterConeAngleDegrees>
+            <InnerConeAngleDegrees>40</InnerConeAngleDegrees>
+        </Spot>
+    </Light>
+    
+    <Light> <!-- Area Light (WIP) -->
+        <Enabled>false</Enabled>
+        <Mobility> Stationary </Mobility>
+        <Color>0.08 1.0 0.15</Color>
+        <Range> 1500 </Range>
+        <Brightness> 500 </Brightness>
+        <Shadows>
+            <DepthBias> 0.001 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  1500  </FarPlane>
+        </Shadows>
+        <Transform>
+            <Position>00 10 10</Position>
+            <Rotation> 0 15 0 </Rotation>
+            <Scale> 5 5 0.1 </Scale>
+        </Transform>
+        <Area>
+            <!-- TODO -->
+        </Area>
+    </Light>
     
 </Scene>
