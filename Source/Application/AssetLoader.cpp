@@ -36,7 +36,7 @@
 using namespace Assimp;
 using namespace DirectX;
 
-AssetLoader::LoadTaskID AssetLoader::GenerateLoadTaskID()
+AssetLoader::LoadTaskID AssetLoader::GenerateModelLoadTaskID()
 {
 	static std::atomic<LoadTaskID> LOAD_TASK_ID = 0;
 	LoadTaskID id = LOAD_TASK_ID.fetch_add(1);
@@ -572,7 +572,7 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 		| aiProcess_GenSmoothNormals;
 
 
-	LoadTaskID taskID = GenerateLoadTaskID();
+	LoadTaskID taskID = GenerateModelLoadTaskID();
 	//-----------------------------------------------
 	const std::string modelDirectory = DirectoryUtil::GetFolderPath(objFilePath);
 
