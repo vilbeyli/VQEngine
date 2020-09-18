@@ -318,6 +318,220 @@ void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID)
 	mTextures.at(texID).InitializeUAV(heapIndex, &mUAVs.at(uavID));
 }
 
+void VQRenderer::EnqueueShaderLoadTask(TaskID PSOLoadTaskID, const FShaderStageCompileDesc& ShaderStageCompileDesc)
+{
+	FShaderLoadTaskContext& taskContext = mLookup_ShaderLoadContext[PSOLoadTaskID];
+	taskContext.LoadQueue.push(ShaderStageCompileDesc);
+}
+
+std::vector<std::shared_future<FShaderStageCompileResult>> VQRenderer::StartShaderLoadTasks(TaskID PSOLoadTaskID)
+{
+	if (mLookup_ShaderLoadContext.find(PSOLoadTaskID) == mLookup_ShaderLoadContext.end())
+	{
+		Log::Error("Couldn't find PSO Load Task [ID=%d]", PSOLoadTaskID);
+		return {};
+	}
+
+	// get the task queue associated with the PSOLoadTaskID
+	FShaderLoadTaskContext& taskCtx = mLookup_ShaderLoadContext.at(PSOLoadTaskID);
+	std::queue<FShaderStageCompileDesc>& TaskQueue = taskCtx.LoadQueue;
+
+	// get the load result future<>s
+	std::vector<std::shared_future<FShaderStageCompileResult>> taskResults;
+
+	// kickoff shader load workers
+	while (!TaskQueue.empty())
+	{
+		FShaderStageCompileDesc compileDesc = std::move(TaskQueue.front());
+		TaskQueue.pop();
+
+		std::shared_future<FShaderStageCompileResult> ShaderCompileResult = mWorkers_ShaderLoad.AddTask([=]()
+		{
+			return this->LoadShader(compileDesc);
+		});
+		taskResults.push_back(std::move(ShaderCompileResult));
+	}
+
+	// return results
+	return taskResults;
+}
+
+PSO_ID VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
+{
+	static std::atomic<TaskID> LAST_USED_TASK_ID = 0;
+	TaskID PSOLoadTaskID = LAST_USED_TASK_ID.fetch_add(1);
+
+	HRESULT hr = {};
+	ID3D12Device* pDevice = mDevice.GetDevicePtr();
+	D3D12_COMPUTE_PIPELINE_STATE_DESC  d3d12ComputePSODesc  = psoLoadDesc.D3D12ComputeDesc;
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC d3d12GraphicsPSODesc = psoLoadDesc.D3D12GraphicsDesc;
+
+	// calc PSO hash
+	// TODO
+
+	// check if PSO is cached
+	const bool bCachedPSOExists = false;
+	const bool bCacheDirty = false;
+
+	std::vector<std::shared_future<FShaderStageCompileResult>> shaderCompileResults;
+	std::unordered_map<EShaderStage, ID3D12ShaderReflection*> ShaderReflections;
+
+	if (!bCachedPSOExists || bCacheDirty) // compile PSO if no cache or cache dirty
+	{
+		// Prepare shader loading tasks for worker threads
+		for (const FShaderStageCompileDesc& shaderStageDesc : psoLoadDesc.ShaderStageCompileDescs)
+		{
+			if (shaderStageDesc.FilePath.empty())
+				continue;
+			EnqueueShaderLoadTask(PSOLoadTaskID, shaderStageDesc);
+		}
+
+		// kickoff shader compiler workers
+		shaderCompileResults = std::move( StartShaderLoadTasks(PSOLoadTaskID) );
+
+		// SYNC POINT - wait for shaders to load / compile
+		for (std::shared_future<FShaderStageCompileResult>& result : shaderCompileResults)
+		{
+			assert(result.valid());
+			result.wait();
+		}
+
+		// Check for compile errors
+		for (std::shared_future<FShaderStageCompileResult>& TaskResult : shaderCompileResults)
+		{
+			FShaderStageCompileResult ShaderCompileResult = TaskResult.get();
+			if (ShaderCompileResult.pBlob == nullptr)
+			{
+				Log::Error("PSO Compile failed: PSOLoadTaskID=%d", PSOLoadTaskID);
+				return INVALID_ID;
+			}
+		}
+
+		// Compile the PSO using the shaders
+		ID3D12PipelineState* pPSO = nullptr;
+		if (psoLoadDesc.bIsComputePSODesc)
+		{
+			// Assign CS shader blob to PSODesc
+			for (std::shared_future<FShaderStageCompileResult>& TaskResult : shaderCompileResults)
+			{
+				FShaderStageCompileResult ShaderCompileResult = TaskResult.get();
+
+				CD3DX12_SHADER_BYTECODE ShaderByteCode(ShaderCompileResult.pBlob);
+				d3d12ComputePSODesc.CS = ShaderByteCode;
+			}
+
+			// TODO: assign root signature
+
+			// Compile PSO
+			hr = pDevice->CreateComputePipelineState(&d3d12ComputePSODesc, IID_PPV_ARGS(&pPSO));
+		}
+		else // graphics PSO
+		{
+
+			// Assign shader blobs to PSODesc
+			for (std::shared_future<FShaderStageCompileResult>& TaskResult : shaderCompileResults)
+			{
+				FShaderStageCompileResult ShaderCompileResult = TaskResult.get();
+
+				CD3DX12_SHADER_BYTECODE ShaderByteCode(ShaderCompileResult.pBlob);
+				switch (ShaderCompileResult.ShaderStageEnum)
+				{
+				case EShaderStage::VS: d3d12GraphicsPSODesc.VS = ShaderByteCode; break;
+				case EShaderStage::GS: d3d12GraphicsPSODesc.GS = ShaderByteCode; break;
+				case EShaderStage::DS: d3d12GraphicsPSODesc.DS = ShaderByteCode; break;
+				case EShaderStage::HS: d3d12GraphicsPSODesc.HS = ShaderByteCode; break;
+				case EShaderStage::PS: d3d12GraphicsPSODesc.PS = ShaderByteCode; break;
+				}
+
+				// reflect shader
+				ID3D12ShaderReflection*& pReflection = ShaderReflections[ShaderCompileResult.ShaderStageEnum];
+				D3DReflect(ShaderByteCode.pShaderBytecode, ShaderByteCode.BytecodeLength, IID_PPV_ARGS(&pReflection));
+			}
+			
+			// assign input layout
+			std::vector<D3D12_INPUT_ELEMENT_DESC> inputLayout;
+			const bool bHasVS = ShaderReflections.find(EShaderStage::VS) != ShaderReflections.end();
+			if (bHasVS)
+			{
+				inputLayout = ShaderUtils::ReflectInputLayoutFromVS(ShaderReflections.at(EShaderStage::VS));
+				d3d12GraphicsPSODesc.InputLayout = { inputLayout.data(), static_cast<UINT>(inputLayout.size()) };
+			}
+
+			// TODO: assign root signature
+
+			// Compile PSO
+			hr = pDevice->CreateGraphicsPipelineState(&d3d12GraphicsPSODesc, IID_PPV_ARGS(&pPSO));
+		}
+	}
+	else // load cached PSO
+	{
+		assert(false); // TODO
+	}
+
+	// Check PSO compile result
+	ThrowIfFailed(hr);
+
+	// release reflections
+	for(auto it = ShaderReflections.begin(); it != ShaderReflections.end(); ++it)
+	{
+		it->second->Release();
+	}
+	ShaderReflections.clear();
+
+	return PSO_ID();
+}
+
+FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& ShaderStageCompileDesc)
+{
+	using namespace ShaderUtils;
+	constexpr const char* SHADER_BINARY_EXTENSION = ".bin";
+
+	const std::string ShaderSourcePath = StrUtil::UnicodeToASCII<256>( ShaderStageCompileDesc.FilePath.c_str() ); 
+
+	// calculate shader hash
+	const size_t ShaderHash = GeneratePreprocessorDefinitionsHash(ShaderStageCompileDesc.Macros);
+
+	// determine cached shader file name
+	const std::string cacheFileName = ShaderStageCompileDesc.Macros.empty()
+		? DirectoryUtil::GetFileNameFromPath(ShaderSourcePath) + SHADER_BINARY_EXTENSION
+		: DirectoryUtil::GetFileNameFromPath(ShaderSourcePath) + "_" + std::to_string(ShaderHash) + SHADER_BINARY_EXTENSION;
+
+	// determine cached shader file path
+	const std::string CachedShaderBinaryPath = "";// Application::s_ShaderCacheDirectory + "\\" + cacheFileName;
+
+	// decide whether to use shader cache or compile from source
+	const bool bUseCachedShaders = DirectoryUtil::FileExists(CachedShaderBinaryPath) 
+		&& !ShaderUtils::IsCacheDirty(ShaderSourcePath, CachedShaderBinaryPath)
+		&& false; // TODO: remove this
+
+	// load the shader d3dblob
+	FShaderStageCompileResult Result = {};
+	ID3DBlob*& pShaderBlob = Result.pBlob;
+	Result.ShaderStageEnum = ShaderStageCompileDesc.ShaderStageEnum;
+
+	if (bUseCachedShaders)
+	{
+		pShaderBlob = CompileFromCachedBinary(CachedShaderBinaryPath);
+	}
+	else
+	{
+		std::string errMsg;
+		pShaderBlob = CompileFromSource(ShaderStageCompileDesc, errMsg);
+		const bool bCompileSuccessful = pShaderBlob != nullptr;
+		if (bCompileSuccessful)
+		{
+			CacheShaderBinary(CachedShaderBinaryPath, pShaderBlob);
+		}
+		else
+		{
+			Log::Error(errMsg);
+			return Result;
+		}
+	}
+
+	return Result;
+}
+
 BufferID VQRenderer::CreateVertexBuffer(const FBufferDesc& desc)
 {
 	BufferID Id = INVALID_ID;

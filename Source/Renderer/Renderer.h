@@ -25,6 +25,7 @@
 #include "ResourceViews.h"
 #include "Buffer.h"
 #include "Texture.h"
+#include "Shader.h"
 
 #include "../Application/Platform.h"
 #include "../Application/Settings.h"
@@ -39,6 +40,7 @@
 #include <unordered_map>
 #include <array>
 #include <queue>
+#include <set>
 
 namespace D3D12MA { class Allocator; }
 class Window;
@@ -85,6 +87,17 @@ struct FTextureUploadDesc
 	const void* pData;
 	TextureID id;
 	TextureCreateDesc desc;
+};
+
+struct FPSOLoadDesc
+{
+	bool bIsComputePSODesc;
+	union
+	{
+		D3D12_COMPUTE_PIPELINE_STATE_DESC  D3D12ComputeDesc;
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC D3D12GraphicsDesc;
+	};
+	std::vector<FShaderStageCompileDesc> ShaderStageCompileDescs;
 };
 
 enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is integrated
@@ -234,7 +247,6 @@ private:
 	mutable std::mutex                             mMtxVBVs;
 	mutable std::mutex                             mMtxIBVs;
 
-	mutable std::mutex mMtxUploadHeapCreation;
 
 	// root signatures
 	std::vector<ID3D12RootSignature*>              mpBuiltinRootSignatures;
@@ -246,8 +258,8 @@ private:
 	std::unordered_map<HWND, FWindowRenderContext> mRenderContextLookup;
 
 	// bookkeeping
-	std::unordered_map<TextureID, std::string>      mLookup_TextureDiskLocations;
-	std::unordered_map<EProceduralTextures, SRV_ID> mLookup_ProceduralTextureSRVs;
+	std::unordered_map<TextureID, std::string>         mLookup_TextureDiskLocations;
+	std::unordered_map<EProceduralTextures, SRV_ID>    mLookup_ProceduralTextureSRVs;
 	std::unordered_map<EProceduralTextures, TextureID> mLookup_ProceduralTextureIDs;
 
 	std::atomic<bool>              mbExitUploadThread;
@@ -257,13 +269,36 @@ private:
 	std::queue<FTextureUploadDesc> mTextureUploadQueue;
 
 	std::atomic<bool>              mbDefaultResourcesLoaded;
+	
+	
+	// Multithreaded PSO Loading
+	ThreadPool mWorkers_PSOLoad; // Loading a PSO will use one worker from shaderLoad pool for each shader stage to be compiled
+	struct FPSOLoadTaskContext
+	{
+		std::queue<FPSOLoadDesc> LoadQueue;
+		std::set<std::hash<FPSOLoadDesc>> UniquePSOHashes;
+	};
+	std::unordered_map <TaskID, FPSOLoadTaskContext> mLookup_PSOLoadContext;
+
+	// Multithreaded Shader Loading
+	ThreadPool mWorkers_ShaderLoad;
+	struct FShaderLoadTaskContext { std::queue<FShaderStageCompileDesc> LoadQueue; };
+	std::unordered_map < TaskID, FShaderLoadTaskContext> mLookup_ShaderLoadContext;
+	
+	void EnqueueShaderLoadTask(TaskID PSOLoadTaskID, const FShaderStageCompileDesc&);
+	std::vector<std::shared_future<FShaderStageCompileResult>> StartShaderLoadTasks(TaskID PSOLoadTaskID);
 
 private:
 	void InitializeD3D12MA();
 	void InitializeHeaps();
 
 	void LoadPSOs();
+	void LoadPSOs_MT();
 	void LoadDefaultResources();
+	
+
+	PSO_ID LoadPSO(const FPSOLoadDesc& psoLoadDesc);
+	FShaderStageCompileResult LoadShader(const FShaderStageCompileDesc& shaderStageDesc);
 
 	BufferID CreateVertexBuffer(const FBufferDesc& desc);
 	BufferID CreateIndexBuffer(const FBufferDesc& desc);

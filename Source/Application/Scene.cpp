@@ -275,7 +275,7 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	// scene-specific load 
 	this->LoadScene(sceneRep);
 
-	AssetLoader::LoadTaskID taskID = AssetLoader::GenerateLoadTaskID();
+	const TaskID taskID = AssetLoader::GenerateModelLoadTaskID();
 
 	// Create scene materials before deserializing gameobjects
 	for (const FMaterialRepresentation& matRep : sceneRep.Materials)

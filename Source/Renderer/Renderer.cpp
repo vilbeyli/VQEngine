@@ -25,6 +25,7 @@
 #include "Renderer.h"
 #include "Device.h"
 #include "Texture.h"
+#include "Shader.h"
 
 #include "../Application/Window.h"
 
@@ -138,12 +139,18 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 	mbDefaultResourcesLoaded.store(false);
 	mTextureUploadThread = std::thread(&VQRenderer::TextureUploadThread_Main, this);
 
+	const size_t HWThreads = ThreadPool::sHardwareThreadCount;
+	const size_t HWCores   = HWThreads >> 1;
+	mWorkers_ShaderLoad.Initialize(HWThreads, "ShaderLoadWorkers");
+	mWorkers_PSOLoad.Initialize(HWThreads, "PSOLoadWorkers");
+
 	Log::Info("[Renderer] Initialized.");
 }
 
 void VQRenderer::Load()
 {
 	LoadPSOs();
+	//LoadPSOs_MT();
 	LoadDefaultResources();
 	
 	Log::Info("[Renderer] Loaded.");
@@ -158,6 +165,9 @@ void VQRenderer::Unload()
 
 void VQRenderer::Exit()
 {
+	mWorkers_PSOLoad.Exit();
+	mWorkers_ShaderLoad.Exit();
+
 	mbExitUploadThread.store(true);
 	mSignal_UploadThreadWorkReady.NotifyAll();
 
@@ -324,6 +334,7 @@ FWindowRenderContext& VQRenderer::GetWindowRenderContext(HWND hwnd)
 
 
 
+
 //
 // PRIVATE
 //
@@ -406,15 +417,6 @@ void VQRenderer::LoadPSOs()
 {
 	HRESULT hr = {};
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
-#if defined(_DEBUG)
-	// Enable better shader debugging with the graphics debugging tools.
-	UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-	UINT compileFlags = 0;
-#endif
-
-	constexpr char* strShadingModelVS = "vs_5_0";
-	constexpr char* strShadingModelPS = "ps_5_0";
 
 	// ROOT SIGNATURES - hardcoded for now. TODO: http://simonstechblog.blogspot.com/2019/06/d3d12-root-signature-management.html
 	{		
@@ -611,6 +613,16 @@ void VQRenderer::LoadPSOs()
 	}
 
 	//-----------------------------------------------------------------------------------------------------------------------------------------------
+
+#if defined(_DEBUG)
+	// Enable better shader debugging with the graphics debugging tools.
+	UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+	UINT compileFlags = 0;
+#endif
+	constexpr char* strShadingModelVS = "vs_5_0";
+	constexpr char* strShadingModelPS = "ps_5_0";
+
 
 	// HELLO WORLD TRIANGLE PSO
 	{
@@ -841,9 +853,60 @@ void VQRenderer::LoadPSOs()
 		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::OBJECT_PSO])));
 		SetName(mpBuiltinPSOs[EBuiltinPSOs::OBJECT_PSO], "PSO_Object");
 
+
 		psoDesc.SampleDesc.Count = 4;
 		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mpBuiltinPSOs[EBuiltinPSOs::OBJECT_PSO_MSAA_4])));
 		SetName(mpBuiltinPSOs[EBuiltinPSOs::OBJECT_PSO_MSAA_4], "PSO_Object_MSAA4");
+	}
+}
+
+void VQRenderer::LoadPSOs_MT()
+{
+	// temp: singl thread pso load from vector
+	// todo: enqueue load descs into the MT queue
+	std::vector< FPSOLoadDesc > PSOLoadDescs; 
+
+	// GFX PSO - HELLO WORLD TRIANGLE
+	{
+		const std::wstring ShaderFilePath = GetAssetFullPath(L"hello-triangle.hlsl");
+
+		FPSOLoadDesc psoLoadDesc = {};
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
+
+		// Shader description
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_0", EShaderStage::VS });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_0", EShaderStage::PS });
+
+		// D3D12 description (without compiled / reflected data such as input layout, /*root signature*/ and shader bytecodes)
+		///psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+		///psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
+		///psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
+		psoDesc.pRootSignature = mpBuiltinRootSignatures[0];
+		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+		psoDesc.DepthStencilState.DepthEnable = FALSE;
+		psoDesc.DepthStencilState.StencilEnable = FALSE;
+		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+		psoDesc.SampleMask = UINT_MAX;
+		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		psoDesc.NumRenderTargets = 1;
+		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		psoDesc.SampleDesc.Count = 1;
+
+		// TODO: enqueue
+		PSOLoadDescs.push_back(psoLoadDesc);
+		//mLookup_PSOLoadContext[taskID] = psoLoadDesc;
+	}
+	// COMPUTE PSO - TONEMAPPER CS
+	{
+		const std::wstring ShaderFilePath = GetAssetFullPath(L"hello-triangle.hlsl");
+
+		FPSOLoadDesc psoLoadDesc = {};
+	}
+
+	for (const FPSOLoadDesc& psoLoadDesc : PSOLoadDescs)
+	{
+		this->LoadPSO(psoLoadDesc);
 	}
 }
 

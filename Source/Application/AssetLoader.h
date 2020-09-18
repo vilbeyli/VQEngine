@@ -31,12 +31,10 @@ class GameObject;
 class AssetLoader
 {
 public:
-	using  LoadTaskID = int;
-
 	// 
 	// STATIC INTERFACE
 	// 
-	static LoadTaskID GenerateModelLoadTaskID();
+	static TaskID GenerateModelLoadTaskID();
 
 	//
 	// TEXTURE LOADING
@@ -113,10 +111,10 @@ public:
 
 
 	void QueueModelLoad(GameObject* pObject, const std::string& ModelPath, const std::string& ModelName);
-	void QueueTextureLoad(LoadTaskID taskID, const FTextureLoadParams& TexLoadParam);
+	void QueueTextureLoad(TaskID taskID, const FTextureLoadParams& TexLoadParam);
 
 	ModelLoadResults_t   StartLoadingModels(Scene* pScene);
-	TextureLoadResults_t StartLoadingTextures(LoadTaskID taskID);
+	TextureLoadResults_t StartLoadingTextures(TaskID taskID);
 
 private:
 	static ModelID ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName = "NONE");
@@ -131,11 +129,10 @@ private:
 
 	template<class T> struct FLoadTaskContext
 	{
-		std::mutex            Mtx;
 		std::queue<T>         LoadQueue;
 		std::set<std::string> UniquePaths;
 	};
-	std::unordered_map<LoadTaskID, FLoadTaskContext<FTextureLoadParams>> mLookup_TextureLoadContext;
+	std::unordered_map<TaskID, FLoadTaskContext<FTextureLoadParams>> mLookup_TextureLoadContext;
 
 	// TODO: use ConcurrentQueue<T> with ProcessElements(pfnProcess);
 	std::queue<FModelLoadParams> mModelLoadQueue;

@@ -36,10 +36,10 @@
 using namespace Assimp;
 using namespace DirectX;
 
-AssetLoader::LoadTaskID AssetLoader::GenerateModelLoadTaskID()
+TaskID AssetLoader::GenerateModelLoadTaskID()
 {
-	static std::atomic<LoadTaskID> LOAD_TASK_ID = 0;
-	LoadTaskID id = LOAD_TASK_ID.fetch_add(1);
+	static std::atomic<TaskID> LOAD_TASK_ID = 0;
+	TaskID id = LOAD_TASK_ID.fetch_add(1);
 	return id;
 }
 
@@ -112,14 +112,13 @@ AssetLoader::ModelLoadResults_t AssetLoader::StartLoadingModels(Scene* pScene)
 	return ModelLoadResults;
 }
 
-void AssetLoader::QueueTextureLoad(LoadTaskID taskID, const FTextureLoadParams& TexLoadParam)
+void AssetLoader::QueueTextureLoad(TaskID taskID, const FTextureLoadParams& TexLoadParam)
 {
 	FLoadTaskContext<FTextureLoadParams>& ctx = mLookup_TextureLoadContext[taskID];
-	std::unique_lock<std::mutex> lk(ctx.Mtx);
 	ctx.LoadQueue.push(TexLoadParam);
 }
 
-AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(LoadTaskID taskID)
+AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskID)
 {
 	TextureLoadResults_t TextureLoadResults;
 	FLoadTaskContext<FTextureLoadParams>& ctx = mLookup_TextureLoadContext.at(taskID);
@@ -415,7 +414,7 @@ static Model::Data ProcessAssimpNode(
 	Scene*             pScene,
 	VQRenderer*        pRenderer,
 	AssetLoader::FMaterialTextureAssignments& MaterialTextureAssignments,
-	AssetLoader::LoadTaskID                   taskID
+	TaskID                                    taskID
 )
 {
 	Model::Data modelData;
@@ -572,7 +571,7 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 		| aiProcess_GenSmoothNormals;
 
 
-	LoadTaskID taskID = GenerateModelLoadTaskID();
+	TaskID taskID = GenerateModelLoadTaskID();
 	//-----------------------------------------------
 	const std::string modelDirectory = DirectoryUtil::GetFolderPath(objFilePath);
 
