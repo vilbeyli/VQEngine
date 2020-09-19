@@ -91,7 +91,7 @@ struct FTextureUploadDesc
 
 struct FPSOLoadDesc
 {
-	bool bIsComputePSODesc;
+	std::string PSOName;
 	union
 	{
 		D3D12_COMPUTE_PIPELINE_STATE_DESC  D3D12ComputeDesc;

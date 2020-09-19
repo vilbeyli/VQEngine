@@ -873,9 +873,11 @@ void VQRenderer::LoadPSOs_MT()
 		FPSOLoadDesc psoLoadDesc = {};
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
 
+		psoLoadDesc.PSOName = "PSO_TonemapperCS";
+
 		// Shader description
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_0", EShaderStage::VS });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_0", EShaderStage::PS });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_0" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_0" });
 
 		// D3D12 description (without compiled / reflected data such as input layout, /*root signature*/ and shader bytecodes)
 		///psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
@@ -899,15 +901,22 @@ void VQRenderer::LoadPSOs_MT()
 	}
 	// COMPUTE PSO - TONEMAPPER CS
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"hello-triangle.hlsl");
+		const std::wstring ShaderFilePath = GetAssetFullPath(L"Tonemapper.hlsl");
 
 		FPSOLoadDesc psoLoadDesc = {};
+		psoLoadDesc.PSOName = "PSO_TonemapperCS";
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_5_1"});
+		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[3];
+
+		PSOLoadDescs.push_back(psoLoadDesc);
 	}
 
 	for (const FPSOLoadDesc& psoLoadDesc : PSOLoadDescs)
 	{
 		this->LoadPSO(psoLoadDesc);
 	}
+
+	int a = 5;
 }
 
 void VQRenderer::LoadDefaultResources()

@@ -74,7 +74,6 @@ struct FShaderStageCompileDesc
 	std::wstring FilePath;
 	std::string EntryPoint;
 	std::string ShaderModel;
-	EShaderStage ShaderStageEnum; // this can be inferred from @ShaderModel
 	std::vector<FShaderMacro> Macros;
 };
 struct FShaderStageCompileResult
@@ -239,6 +238,8 @@ namespace ShaderUtils
 	bool         IsCacheDirty(const std::string& sourcePath, const std::string& cachePath);
 
 	std::vector<D3D12_INPUT_ELEMENT_DESC> ReflectInputLayoutFromVS(ID3D12ShaderReflection* pReflection);
+
+	EShaderStage GetShaderStageEnumFromShaderModel(const std::string& ShaderModel);
 }
 
 #if 0

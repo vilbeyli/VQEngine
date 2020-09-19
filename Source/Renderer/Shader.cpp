@@ -25,7 +25,6 @@
 //-------------------------------------------------------------------------------------------------------------
 // CONSTANTS & STATICS
 //-------------------------------------------------------------------------------------------------------------
-
 static const std::unordered_map<EShaderStage, const char*> DEFAULT_SHADER_ENTRY_POINT_LOOKUP =
 {
 	{ EShaderStage::VS, "VSMain" },
@@ -53,6 +52,7 @@ static std::unordered_map <EShaderStage, std::string> SHADER_STAGE_STRING_LOOKUP
 	{EShaderStage::PS, "PS"},
 	{EShaderStage::CS, "CS"}
 };
+
 
 //-------------------------------------------------------------------------------------------------------------
 // SHADER UTILS
@@ -199,6 +199,8 @@ ID3DBlob* CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompileDes
 	const WCHAR* PathStr = ShaderStageCompileDesc.FilePath.data();
 	ID3DBlob* pBlob_ErrMsg = nullptr;
 
+	EShaderStage ShaderStageEnum = GetShaderStageEnumFromShaderModel(ShaderStageCompileDesc.ShaderModel);
+
 	int i = 0;
 	std::vector<D3D_SHADER_MACRO> d3dMacros(ShaderStageCompileDesc.Macros.size() + 1);
 	std::for_each(RANGE(ShaderStageCompileDesc.Macros), [&](const FShaderMacro& macro)
@@ -209,7 +211,7 @@ ID3DBlob* CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompileDes
 
 	Log::Info("Compiling Shader Source: %s [%s @ %s()]"
 		, StrUtil::UnicodeToASCII<256>(ShaderStageCompileDesc.FilePath.c_str()).c_str()
-		, SHADER_STAGE_STRING_LOOKUP.at(ShaderStageCompileDesc.ShaderStageEnum).c_str()
+		, SHADER_STAGE_STRING_LOOKUP.at(ShaderStageEnum).c_str()
 		, ShaderStageCompileDesc.EntryPoint.c_str()
 	);
 	if (FAILED(D3DCompileFromFile(
@@ -268,6 +270,33 @@ size_t GeneratePreprocessorDefinitionsHash(const std::vector<FShaderMacro>& macr
 	return std::hash<std::string>()(concatenatedMacros);
 }
 
+EShaderStage GetShaderStageEnumFromShaderModel(const std::string& ShaderModel)
+{
+	// ShaderModel e.g. = "cs_5_1"
+	//                     ^^-- use this token as enum lookup key
+	auto vTokens = StrUtil::split(ShaderModel, '_');
+	assert(vTokens.size() > 1); // (sort of) validate ShaderModel string
+	const std::string ShaderModelIdentifier = StrUtil::GetLowercased(vTokens[0]);
+
+	static std::unordered_map<std::string, EShaderStage> SHADER_STAGE_ENUM_LOOKUP =
+	{
+		{ "vs", EShaderStage::VS},
+		{ "gs", EShaderStage::GS},
+		{ "ds", EShaderStage::DS},
+		{ "hs", EShaderStage::HS},
+		{ "ps", EShaderStage::PS},
+		{ "cs", EShaderStage::CS}
+	};
+
+	auto it = SHADER_STAGE_ENUM_LOOKUP.find(ShaderModelIdentifier);
+	if (it == SHADER_STAGE_ENUM_LOOKUP.end())
+	{
+		Log::Warning("Unknown shader model identifier: %s", ShaderModelIdentifier.c_str());
+		return EShaderStage::UNINITIALIZED;
+	}
+
+	return it->second;
+}
 
 } // namespace ShaderUtils
 

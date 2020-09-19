@@ -359,7 +359,9 @@ std::vector<std::shared_future<FShaderStageCompileResult>> VQRenderer::StartShad
 PSO_ID VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
 {
 	static std::atomic<TaskID> LAST_USED_TASK_ID = 0;
-	TaskID PSOLoadTaskID = LAST_USED_TASK_ID.fetch_add(1);
+	
+	TaskID               PSOLoadTaskID = LAST_USED_TASK_ID.fetch_add(1);
+	ID3D12PipelineState* pPSO = nullptr;
 
 	HRESULT hr = {};
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
@@ -372,6 +374,9 @@ PSO_ID VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
 	// check if PSO is cached
 	const bool bCachedPSOExists = false;
 	const bool bCacheDirty = false;
+	const bool bComputePSO = std::find_if(RANGE(psoLoadDesc.ShaderStageCompileDescs) // check if ShaderModel has cs_*_*
+			, [](const FShaderStageCompileDesc& desc) { return ShaderUtils::GetShaderStageEnumFromShaderModel(desc.ShaderModel) == EShaderStage::CS; }
+		) != psoLoadDesc.ShaderStageCompileDescs.end();
 
 	std::vector<std::shared_future<FShaderStageCompileResult>> shaderCompileResults;
 	std::unordered_map<EShaderStage, ID3D12ShaderReflection*> ShaderReflections;
@@ -408,8 +413,7 @@ PSO_ID VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
 		}
 
 		// Compile the PSO using the shaders
-		ID3D12PipelineState* pPSO = nullptr;
-		if (psoLoadDesc.bIsComputePSODesc)
+		if (bComputePSO)
 		{
 			// Assign CS shader blob to PSODesc
 			for (std::shared_future<FShaderStageCompileResult>& TaskResult : shaderCompileResults)
@@ -427,7 +431,6 @@ PSO_ID VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
 		}
 		else // graphics PSO
 		{
-
 			// Assign shader blobs to PSODesc
 			for (std::shared_future<FShaderStageCompileResult>& TaskResult : shaderCompileResults)
 			{
@@ -469,7 +472,8 @@ PSO_ID VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
 	}
 
 	// Check PSO compile result
-	ThrowIfFailed(hr);
+	assert(hr == S_OK);
+	SetName(pPSO, psoLoadDesc.PSOName.c_str());
 
 	// release reflections
 	for(auto it = ShaderReflections.begin(); it != ShaderReflections.end(); ++it)
@@ -507,7 +511,7 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 	// load the shader d3dblob
 	FShaderStageCompileResult Result = {};
 	ID3DBlob*& pShaderBlob = Result.pBlob;
-	Result.ShaderStageEnum = ShaderStageCompileDesc.ShaderStageEnum;
+	Result.ShaderStageEnum = ShaderUtils::GetShaderStageEnumFromShaderModel(ShaderStageCompileDesc.ShaderModel);
 
 	if (bUseCachedShaders)
 	{
