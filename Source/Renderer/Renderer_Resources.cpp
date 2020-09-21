@@ -35,11 +35,11 @@ using namespace Microsoft::WRL;
 using namespace VQSystemInfo;
 
 #ifdef _DEBUG
-	#define ENABLE_DEBUG_LAYER      1
-	#define ENABLE_VALIDATION_LAYER 1
+	#define ENABLE_DEBUG_LAYER       1
+	#define ENABLE_VALIDATION_LAYER  1
 #else
-	#define ENABLE_DEBUG_LAYER      0
-	#define ENABLE_VALIDATION_LAYER 0
+	#define ENABLE_DEBUG_LAYER       0
+	#define ENABLE_VALIDATION_LAYER  0
 #endif
 #define LOG_CACHED_RESOURCES_ON_LOAD 0
 #define LOG_RESOURCE_CREATE          1
@@ -336,10 +336,8 @@ std::vector<std::shared_future<FShaderStageCompileResult>> VQRenderer::StartShad
 	FShaderLoadTaskContext& taskCtx = mLookup_ShaderLoadContext.at(PSOLoadTaskID);
 	std::queue<FShaderStageCompileDesc>& TaskQueue = taskCtx.LoadQueue;
 
-	// get the load result future<>s
-	std::vector<std::shared_future<FShaderStageCompileResult>> taskResults;
-
 	// kickoff shader load workers
+	std::vector<std::shared_future<FShaderStageCompileResult>> taskResults;
 	while (!TaskQueue.empty())
 	{
 		FShaderStageCompileDesc compileDesc = std::move(TaskQueue.front());
@@ -352,11 +350,10 @@ std::vector<std::shared_future<FShaderStageCompileResult>> VQRenderer::StartShad
 		taskResults.push_back(std::move(ShaderCompileResult));
 	}
 
-	// return results
 	return taskResults;
 }
 
-PSO_ID VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
+ID3D12PipelineState* VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
 {
 	static std::atomic<TaskID> LAST_USED_TASK_ID = 0;
 	
@@ -365,8 +362,6 @@ PSO_ID VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
 
 	HRESULT hr = {};
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
-	D3D12_COMPUTE_PIPELINE_STATE_DESC  d3d12ComputePSODesc  = psoLoadDesc.D3D12ComputeDesc;
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC d3d12GraphicsPSODesc = psoLoadDesc.D3D12GraphicsDesc;
 
 	// calc PSO hash
 	// TODO
@@ -381,7 +376,8 @@ PSO_ID VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
 	std::vector<std::shared_future<FShaderStageCompileResult>> shaderCompileResults;
 	std::unordered_map<EShaderStage, ID3D12ShaderReflection*> ShaderReflections;
 
-	if (!bCachedPSOExists || bCacheDirty) // compile PSO if no cache or cache dirty
+	// compile PSO if no cache or cache dirty, otherwise load cached binary
+	if (!bCachedPSOExists || bCacheDirty) 
 	{
 		// Prepare shader loading tasks for worker threads
 		for (const FShaderStageCompileDesc& shaderStageDesc : psoLoadDesc.ShaderStageCompileDescs)
@@ -408,13 +404,15 @@ PSO_ID VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
 			if (ShaderCompileResult.pBlob == nullptr)
 			{
 				Log::Error("PSO Compile failed: PSOLoadTaskID=%d", PSOLoadTaskID);
-				return INVALID_ID;
+				return nullptr;
 			}
 		}
 
 		// Compile the PSO using the shaders
-		if (bComputePSO)
+		if (bComputePSO) // COMPUTE PSO ------------------------------------------------------------
 		{
+			D3D12_COMPUTE_PIPELINE_STATE_DESC  d3d12ComputePSODesc = psoLoadDesc.D3D12ComputeDesc;
+
 			// Assign CS shader blob to PSODesc
 			for (std::shared_future<FShaderStageCompileResult>& TaskResult : shaderCompileResults)
 			{
@@ -429,8 +427,10 @@ PSO_ID VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
 			// Compile PSO
 			hr = pDevice->CreateComputePipelineState(&d3d12ComputePSODesc, IID_PPV_ARGS(&pPSO));
 		}
-		else // graphics PSO
+		else // GRAPHICS PSO ------------------------------------------------------------------------
 		{
+			D3D12_GRAPHICS_PIPELINE_STATE_DESC d3d12GraphicsPSODesc = psoLoadDesc.D3D12GraphicsDesc;
+
 			// Assign shader blobs to PSODesc
 			for (std::shared_future<FShaderStageCompileResult>& TaskResult : shaderCompileResults)
 			{
@@ -482,7 +482,7 @@ PSO_ID VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
 	}
 	ShaderReflections.clear();
 
-	return PSO_ID();
+	return pPSO;
 }
 
 FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& ShaderStageCompileDesc)

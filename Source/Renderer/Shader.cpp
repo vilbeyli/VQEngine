@@ -214,6 +214,7 @@ ID3DBlob* CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompileDes
 		, SHADER_STAGE_STRING_LOOKUP.at(ShaderStageEnum).c_str()
 		, ShaderStageCompileDesc.EntryPoint.c_str()
 	);
+
 	if (FAILED(D3DCompileFromFile(
 		PathStr,
 		d3dMacros.data(),

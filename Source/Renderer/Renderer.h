@@ -172,7 +172,7 @@ public:
 	void                         DestroyDSV(DSV_ID dsvID);
 
 	// Getters: PSO, RootSignature, Heap
-	inline ID3D12PipelineState*  GetPSO(EBuiltinPSOs pso) const { return mpBuiltinPSOs[pso]; }
+	inline ID3D12PipelineState*  GetPSO(EBuiltinPSOs pso) const { return mPSOs.at(static_cast<PSO_ID>(pso)); }
 	inline ID3D12RootSignature*  GetRootSignature(int idx) const { return mpBuiltinRootSignatures[idx]; }
 	ID3D12DescriptorHeap*        GetDescHeap(EResourceHeapType HeapType);
 
@@ -252,7 +252,7 @@ private:
 	std::vector<ID3D12RootSignature*>              mpBuiltinRootSignatures;
 
 	// PSOs
-	PSOArray_t                                     mpBuiltinPSOs;
+	std::unordered_map<PSO_ID, ID3D12PipelineState*> mPSOs;
 
 	// data
 	std::unordered_map<HWND, FWindowRenderContext> mRenderContextLookup;
@@ -292,12 +292,13 @@ private:
 	void InitializeD3D12MA();
 	void InitializeHeaps();
 
+	void LoadRootSignatures();
 	void LoadPSOs();
 	void LoadPSOs_MT();
 	void LoadDefaultResources();
 	
 
-	PSO_ID LoadPSO(const FPSOLoadDesc& psoLoadDesc);
+	ID3D12PipelineState* LoadPSO(const FPSOLoadDesc& psoLoadDesc);
 	FShaderStageCompileResult LoadShader(const FShaderStageCompileDesc& shaderStageDesc);
 
 	BufferID CreateVertexBuffer(const FBufferDesc& desc);
