@@ -62,7 +62,8 @@ bld/
 [Oo]bj/
 [Ll]og/
 Build/_artifacts/
-
+ShaderCache/
+PSOCache/
 
 # Visual Studio 2015 cache/options directory
 .vs/

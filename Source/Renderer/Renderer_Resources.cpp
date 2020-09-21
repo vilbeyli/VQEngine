@@ -364,7 +364,7 @@ ID3D12PipelineState* VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
 	// calc PSO hash
-	// TODO
+	//std::hash<FPSOLoadDesc> PSO_HASH = 
 
 	// check if PSO is cached
 	const bool bCachedPSOExists = false;
@@ -461,6 +461,26 @@ ID3D12PipelineState* VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
 			}
 
 			// TODO: assign root signature
+#if 0
+			{
+				for (auto& it : ShaderReflections)
+				{
+					EShaderStage eShaderStage = it.first;
+					ID3D12ShaderReflection*& pRefl = it.second;
+
+					D3D12_SHADER_DESC shaderDesc = {};
+					pRefl->GetDesc(&shaderDesc);
+					
+					std::vector< D3D12_SHADER_INPUT_BIND_DESC> boundRscDescs(shaderDesc.BoundResources);
+					for (UINT i = 0; i < shaderDesc.BoundResources; ++i)
+					{
+						pRefl->GetResourceBindingDesc(i, &boundRscDescs[i]);
+					}
+
+					int a = 5;
+				}
+			}
+#endif
 
 			// Compile PSO
 			hr = pDevice->CreateGraphicsPipelineState(&d3d12GraphicsPSODesc, IID_PPV_ARGS(&pPSO));

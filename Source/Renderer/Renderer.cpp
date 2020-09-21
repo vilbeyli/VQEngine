@@ -992,7 +992,7 @@ void VQRenderer::LoadPSOs_MT()
 		const std::wstring ShaderFilePath = GetAssetFullPath(L"Skydome.hlsl");
 
 		FPSOLoadDesc psoLoadDesc = {};
-		psoLoadDesc.PSOName = "PSO_Object";
+		psoLoadDesc.PSOName = "PSO_Skydome";
 
 		// Shader description
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_0" });
