@@ -291,6 +291,7 @@ private:
 private:
 	void InitializeD3D12MA();
 	void InitializeHeaps();
+	
 
 	void LoadRootSignatures();
 	void LoadPSOs();
@@ -316,4 +317,8 @@ public:
 	static std::vector< VQSystemInfo::FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters = false, IDXGIFactory6* pFactory = nullptr);
 	static const std::string_view& DXGIFormatAsString(DXGI_FORMAT format);
 	static EProceduralTextures GetProceduralTextureEnumFromName(const std::string& ProceduralTextureName);
+
+	static std::string PSOCacheDirectory;
+	static std::string ShaderCacheDirectory;
+	static void InitializeShaderAndPSOCacheDirectory();
 };

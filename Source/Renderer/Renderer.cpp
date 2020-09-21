@@ -115,6 +115,7 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 {
 	Device* pVQDevice = &mDevice;
 
+	InitializeShaderAndPSOCacheDirectory();
 
 	// Create the device
 	FDeviceCreateDesc deviceDesc = {};
@@ -400,6 +401,14 @@ void VQRenderer::InitializeHeaps()
 	constexpr bool USE_GPU_MEMORY = true;
 	mStaticHeap_VertexBuffer.Create(pDevice, EBufferType::VERTEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticVertexBufferPool");
 	mStaticHeap_IndexBuffer .Create(pDevice, EBufferType::INDEX_BUFFER , STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticIndexBufferPool");
+}
+
+std::string VQRenderer::ShaderCacheDirectory = "ShaderCache";
+std::string VQRenderer::PSOCacheDirectory    = "PSOCache";
+void VQRenderer::InitializeShaderAndPSOCacheDirectory()
+{
+	DirectoryUtil::CreateFolderIfItDoesntExist(VQRenderer::ShaderCacheDirectory);
+	DirectoryUtil::CreateFolderIfItDoesntExist(VQRenderer::PSOCacheDirectory);
 }
 
 static std::wstring GetAssetFullPath(LPCWSTR assetName)

@@ -242,6 +242,8 @@ ID3DBlob* CompileFromCachedBinary(const std::string& ShaderBinaryFilePath)
 	cache.read(reinterpret_cast<char*>(pBuffer), shaderBinarySize);
 	cache.close();
 
+	Log::Info("Loading Shader Binary: %s ", DirectoryUtil::GetFileNameFromPath(ShaderBinaryFilePath).c_str());
+
 	ID3DBlob* pBlob = { nullptr };
 	D3DCreateBlob(shaderBinarySize, &pBlob);
 	memcpy(pBlob->GetBufferPointer(), pBuffer, shaderBinarySize);

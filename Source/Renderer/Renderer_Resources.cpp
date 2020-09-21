@@ -497,16 +497,15 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 
 	// determine cached shader file name
 	const std::string cacheFileName = ShaderStageCompileDesc.Macros.empty()
-		? DirectoryUtil::GetFileNameFromPath(ShaderSourcePath) + SHADER_BINARY_EXTENSION
-		: DirectoryUtil::GetFileNameFromPath(ShaderSourcePath) + "_" + std::to_string(ShaderHash) + SHADER_BINARY_EXTENSION;
+		? DirectoryUtil::GetFileNameWithoutExtension(ShaderSourcePath) + "_" + ShaderStageCompileDesc.EntryPoint + SHADER_BINARY_EXTENSION
+		: DirectoryUtil::GetFileNameWithoutExtension(ShaderSourcePath) + "_" + ShaderStageCompileDesc.EntryPoint + "_" + std::to_string(ShaderHash) + SHADER_BINARY_EXTENSION;
 
 	// determine cached shader file path
-	const std::string CachedShaderBinaryPath = "";// Application::s_ShaderCacheDirectory + "\\" + cacheFileName;
+	const std::string CachedShaderBinaryPath = VQRenderer::ShaderCacheDirectory + "\\" + cacheFileName;
 
 	// decide whether to use shader cache or compile from source
-	const bool bUseCachedShaders = DirectoryUtil::FileExists(CachedShaderBinaryPath) 
-		&& !ShaderUtils::IsCacheDirty(ShaderSourcePath, CachedShaderBinaryPath)
-		&& false; // TODO: remove this
+	const bool bUseCachedShaders = DirectoryUtil::FileExists(CachedShaderBinaryPath)
+		&& !ShaderUtils::IsCacheDirty(ShaderSourcePath, CachedShaderBinaryPath);
 
 	// load the shader d3dblob
 	FShaderStageCompileResult Result = {};
