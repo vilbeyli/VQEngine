@@ -720,36 +720,70 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 	pCmd->RSSetViewports(1, &viewport);
 	pCmd->RSSetScissorRects(1, &scissorsRect);
 
-	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::OBJECT_PSO_MSAA_4 : EBuiltinPSOs::OBJECT_PSO));
+	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::FORWARD_LIGHTING_MSAA_4 : EBuiltinPSOs::FORWARD_LIGHTING));
+	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(5)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
 
 	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 
+	using namespace VQ_SHADER_DATA;
+	// set PerFrame constants
+	{
+		constexpr UINT PerFrameRSBindSlot = 3;
+		PerFrameData* pPerFrame = {};
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+		ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(PerFrameData), (void**)(&pPerFrame), &cbAddr);
+
+		assert(pPerFrame);
+		pPerFrame->Lights = SceneView.GPULightingData;
+		
+		//pCmd->SetGraphicsRootDescriptorTable(PerFrameRSBindSlot, );
+		pCmd->SetGraphicsRootConstantBufferView(PerFrameRSBindSlot, cbAddr);
+	}
+
+	// set PerView constants
+	{
+		constexpr UINT PerViewRSBindSlot = 2;
+		PerViewData* pPerView = {};
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+		ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(decltype(pPerView)), (void**)(&pPerView), &cbAddr);
+
+		assert(pPerView);
+		XMStoreFloat3(&pPerView->CameraPosition, SceneView.cameraPosition);
+		
+		// TODO: PreView data
+
+		//pCmd->SetGraphicsRootDescriptorTable(PerViewRSBindSlot, D3D12_GPU_DESCRIPTOR_HANDLE{ cbAddr });
+		pCmd->SetGraphicsRootConstantBufferView(PerViewRSBindSlot, cbAddr);
+	}
+
 	// Draw Objects -----------------------------------------------
+	constexpr UINT PerObjRSBindSlot = 0;
 	{
 		SCOPED_GPU_MARKER(pCmd, "Geometry");
-		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(4)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
 		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 		for (const FMeshRenderCommand& meshRenderCmd : SceneView.meshRenderCommands)
 		{
-			// set constant buffer data
-			const XMMATRIX mMVP
-				= meshRenderCmd.WorldTransformationMatrix
-				* SceneView.viewProj;
-
-			FFrameConstantBuffer2* pConstBuffer = {};
-			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-			ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(FFrameConstantBuffer2), (void**)(&pConstBuffer), &cbAddr);
-			pConstBuffer->matModelViewProj = mMVP;
-			pConstBuffer->iTextureConfig = 0; // TODO
-			pConstBuffer->iTextureOutput = EMaterialTextureMapBindings::ALBEDO; // TODO: drive thru material
-
-			// set material data
 			const Material& mat = mpScene->GetMaterial(meshRenderCmd.matID);
-			if (mat.SRVMaterialMaps != INVALID_ID)
-				pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
+
+			// set constant buffer data
+			PerObjectData* pPerObj = {};
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+			ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(decltype(pPerObj)), (void**)(&pPerObj), &cbAddr);
+
+
+			pPerObj->matWorldViewProj = meshRenderCmd.WorldTransformationMatrix * SceneView.viewProj;
+			pPerObj->matWorld         = meshRenderCmd.WorldTransformationMatrix;
+			XMStoreFloat3x3(&pPerObj->matNormal, meshRenderCmd.NormalTransformationMatrix);
 
 			pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
 
+
+			// set textures
+			if (mat.SRVMaterialMaps != INVALID_ID)
+				pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
+
+
+			// draw mesh
 			if (mpScene->mMeshes.find(meshRenderCmd.meshID) == mpScene->mMeshes.end())
 			{
 				Log::Warning("MeshID=%d couldn't be found", meshRenderCmd.meshID);

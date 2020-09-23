@@ -661,6 +661,10 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 			l.AttenuationQuadratic = attn.z;
 		}
 		// TODO: area light impl
+		//if (pArea)        l.Type = Light::EType::AREA;
+		if (pSpot)        l.Type = Light::EType::SPOT;
+		if (pDirectional) l.Type = Light::EType::DIRECTIONAL;
+		if (pPoint)       l.Type = Light::EType::POINT;
 
 		return l;
 	};

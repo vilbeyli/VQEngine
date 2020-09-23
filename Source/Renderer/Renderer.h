@@ -112,6 +112,8 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	SKYDOME_PSO_MSAA_4,
 	OBJECT_PSO,
 	OBJECT_PSO_MSAA_4,
+	FORWARD_LIGHTING,
+	FORWARD_LIGHTING_MSAA_4,
 
 	NUM_BUILTIN_PSOs
 };

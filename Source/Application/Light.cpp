@@ -26,6 +26,7 @@ Light Light::MakePointLight()
 	l.AttenuationConstant  = 1.0f;
 	l.AttenuationLinear    = 1.0f;
 	l.AttenuationQuadratic = 1.0f;
+	l.Type = Light::EType::POINT;
 	return l;
 }
 
@@ -36,6 +37,7 @@ Light Light::MakeDirectionalLight()
 	l.ViewportX = 2048;
 	l.ViewportY = 2048;
 	l.DistanceFromOrigin = 500.0f;
+	l.Type = Light::EType::DIRECTIONAL;
 
 	return l;
 }
@@ -46,7 +48,7 @@ Light Light::MakeSpotLight()
 
 	l.SpotInnerConeAngleDegrees = 25.0f;
 	l.SpotOuterConeAngleDegrees = 35.0f;
-
+	l.Type = Light::EType::SPOT;
 	return l;
 }
 
@@ -67,3 +69,39 @@ Light::Light()
 	, AttenuationLinear(1)
 	, AttenuationQuadratic(1)
 {}
+
+#define COPY_COMMON_LIGHT_DATA(pDst, pSrc)\
+pDst->brightness = pSrc->Brightness;\
+pDst->color      = pSrc->Color;\
+pDst->depthBias  = 0.0f;
+
+
+void Light::GetGPUData(VQ_SHADER_DATA::DirectionalLight * pLight) const
+{
+	assert(pLight);
+	COPY_COMMON_LIGHT_DATA(pLight, this);
+	pLight->enabled = this->bEnabled;
+	pLight->shadowing = this->bCastingShadows;
+	pLight->lightDirection = { 0, -1, 0 }; // TODO
+}
+
+void Light::GetGPUData(VQ_SHADER_DATA::PointLight* pLight) const
+{
+	assert(pLight);
+	COPY_COMMON_LIGHT_DATA(pLight, this);
+
+	pLight->position = this->Position;
+	pLight->range = this->Range;
+	// pLight->attenuation
+}
+
+void Light::GetGPUData(VQ_SHADER_DATA::SpotLight* pLight) const
+{
+	assert(pLight);
+	COPY_COMMON_LIGHT_DATA(pLight, this);
+	
+	pLight->position = this->Position;
+	//pLight->spotDir = 
+	pLight->innerConeAngle = this->SpotInnerConeAngleDegrees;
+	pLight->outerConeAngle = this->SpotOuterConeAngleDegrees;
+}

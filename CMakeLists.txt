@@ -44,6 +44,12 @@ set (Shaders
     "Shaders/Tonemapper.hlsl"
     "Shaders/Skydome.hlsl"
     "Shaders/Object.hlsl"
+    "Shaders/ForwardLighting.hlsl"
+    "Shaders/BRDF.hlsl"
+    "Shaders/Common.hlsl"
+    "Shaders/ShadingMath.hlsl"
+    "Shaders/Lighting.hlsl"
+    "Shaders/LightingConstantBufferData.h"
 )
 
 set (HeaderVQE 
@@ -68,6 +74,7 @@ set (HeaderVQE
     "Source/Application/GameObject.h"
     "Source/Application/Memory.h"
     "Source/Application/GPUMarker.h"
+    "Shaders/LightingConstantBufferData.h"
 )
 
 set (SourceVQE 

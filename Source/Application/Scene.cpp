@@ -168,12 +168,19 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 	SceneView.MainViewCameraYaw = cam.GetYaw();
 	SceneView.MainViewCameraPitch = cam.GetPitch();
 
-	// TODO: compute visibility 
+	// TODO: compute mesh visibility 
 
+	// TODO: cull lights
+
+	// gather light data
+	GatherSceneLightData(SceneView);
+	
+
+	// prepare mesh render cmd arguments for objects
 	SceneView.meshRenderCommands.clear();
 	for (const GameObject* pObj : mpObjects)
 	{
-		const XMMATRIX matWorldTransform = mpTransforms.at(pObj->mTransformID)->WorldTransformationMatrix();
+		Transform*& pTF = mpTransforms.at(pObj->mTransformID);
 
 		const bool bModelNotFound = mModels.find(pObj->mModelID) == mModels.end();
 		if (bModelNotFound)
@@ -189,11 +196,18 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 		{
 			FMeshRenderCommand meshRenderCmd;
 			meshRenderCmd.meshID = id;
-			meshRenderCmd.WorldTransformationMatrix = matWorldTransform;
+			meshRenderCmd.WorldTransformationMatrix = pTF->WorldTransformationMatrix();
+			meshRenderCmd.NormalTransformationMatrix= pTF->NormalMatrix(meshRenderCmd.WorldTransformationMatrix);
 			meshRenderCmd.matID = model.mData.mOpaqueMaterials.at(id);
 
 			SceneView.meshRenderCommands.push_back(meshRenderCmd);
 		}
+	}
+
+	// TODO: prepare mesh render cmd arguments for lights
+	for(int i=0; i< SceneView.GPULightingData.numPointLights; ++i)
+	{
+		// SceneView.GPULightingData.point_lights[i].color
 	}
 
 	// update post process settings for next frame
@@ -477,6 +491,36 @@ void Scene::HandleInput()
 		mIndex_ActiveEnvironmentMapPreset = CircularDecrement(mIndex_ActiveEnvironmentMapPreset, NumEnvMaps - 1);
 		mEngine.StartLoadingEnvironmentMap(mIndex_ActiveEnvironmentMapPreset);
 	}
+}
+
+void Scene::GatherSceneLightData(FSceneView& SceneView) const
+{
+	VQ_SHADER_DATA::SceneLighting& data = SceneView.GPULightingData;
+	
+	int iGPUSpot = 0;  int iGPUSpotShadow = 0;
+	int iGPUPoint = 0; int iGPUPointShadow = 0;
+	auto fnGatherLightData = [&](const std::vector<Light>& vLights) 
+	{
+		for (const Light& l : vLights)
+		{
+			switch (l.Type)
+			{
+			case Light::EType::DIRECTIONAL: l.GetGPUData(&data.directional); break;
+			case Light::EType::SPOT       : l.GetGPUData(l.bCastingShadows ? &data.spot_casters[iGPUSpotShadow++]   : &data.spot_lights[iGPUSpot++]  ); break;
+			case Light::EType::POINT      : l.GetGPUData(l.bCastingShadows ? &data.point_casters[iGPUPointShadow++] : &data.point_lights[iGPUPoint++]); break;
+			default:
+				break;
+			}
+		}
+	};
+	fnGatherLightData(mLightsStatic);
+	fnGatherLightData(mLightsStationary);
+	fnGatherLightData(mLightsDynamic);
+
+	data.numPointCasters = iGPUPointShadow;
+	data.numPointLights = iGPUPoint;
+	data.numSpotCasters = iGPUSpotShadow;
+	data.numSpotLights = iGPUSpot;
 }
 
 FMaterialRepresentation::FMaterialRepresentation()

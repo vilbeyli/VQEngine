@@ -18,7 +18,7 @@
 
 #pragma once
 
-
+#include "Shaders/LightingConstantBufferData.h"
 #include "Transform.h"
 #include "Settings.h"
 #include <DirectXMath.h>
@@ -76,6 +76,7 @@ struct Light
 		float FarPlane;
 	};
 
+	// ===========================================================================================================
 	// returns a view matrix for each light type that supports shadow mapping
 	// 
 	static DirectX::XMMATRIX CalculateDirectionalLightViewMatrix(const Light& mDirLight);
@@ -89,8 +90,12 @@ struct Light
 	static Light MakePointLight();
 	static Light MakeDirectionalLight();
 	static Light MakeSpotLight();
-
+	// ===========================================================================================================
+	
 	Light();
+	void GetGPUData(VQ_SHADER_DATA::DirectionalLight* pLight) const;
+	void GetGPUData(VQ_SHADER_DATA::PointLight*       pLight) const;
+	void GetGPUData(VQ_SHADER_DATA::SpotLight*        pLight) const;
 
 	//
 	// DATA
@@ -104,6 +109,7 @@ public:
 	bool              bEnabled;
 	bool              bCastingShadows;
 	EMobility         Mobility;
+	EType             Type;
 
 	// GPU (Cold) data
 	DirectX::XMFLOAT3 Color;

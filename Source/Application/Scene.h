@@ -86,6 +86,7 @@ struct FMeshRenderCommand
 	MeshID     meshID = INVALID_ID;
 	MaterialID matID  = INVALID_ID;
 	DirectX::XMMATRIX WorldTransformationMatrix; // WorldTF ID ?
+	DirectX::XMMATRIX NormalTransformationMatrix; // WorldTF ID ?
 };
 struct FSceneView
 {
@@ -103,6 +104,8 @@ struct FSceneView
 	//bool                  bIsIBLEnabled;
 	//Settings::SceneRender sceneRenderSettings;
 	//EnvironmentMap	environmentMap;
+
+	VQ_SHADER_DATA::SceneLighting GPULightingData;
 
 	FPostProcessParameters postProcess;
 
@@ -162,14 +165,6 @@ protected:
 //----------------------------------------------------------------------------------------------------------------
 // ENGINE INTERFACE
 //----------------------------------------------------------------------------------------------------------------
-public:
-	Scene(VQEngine& engine
-		, int NumFrameBuffers
-		, const Input& input
-		, const std::unique_ptr<Window>& pWin
-		, VQRenderer& renderer
-	);
-
 private: // Derived Scenes shouldn't access these functions
 	void Update(float dt, int FRAME_DATA_INDEX);
 	void PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX);
@@ -179,12 +174,22 @@ private: // Derived Scenes shouldn't access these functions
 	void RenderUI();
 	void HandleInput();
 
+	void GatherSceneLightData(FSceneView& SceneView) const;
+
 public:
+	Scene(VQEngine& engine
+		, int NumFrameBuffers
+		, const Input& input
+		, const std::unique_ptr<Window>& pWin
+		, VQRenderer& renderer
+	);
+
 	inline const FSceneView& GetSceneView(int FRAME_DATA_INDEX) const { return mFrameSceneViews[FRAME_DATA_INDEX]; }
 	inline       FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX)       { return mFrameSceneViews[FRAME_DATA_INDEX].postProcess; }
 	inline const FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX) const { return mFrameSceneViews[FRAME_DATA_INDEX].postProcess; }
 	inline const Camera& GetActiveCamera() const { return mCameras[mIndex_SelectedCamera]; }
 	inline       Camera& GetActiveCamera()       { return mCameras[mIndex_SelectedCamera]; }
+
 
 	// Mesh, Model, GameObj management
 	//TransformID CreateTransform(Transform** ppTransform);
