@@ -112,8 +112,12 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	SKYDOME_PSO_MSAA_4,
 	OBJECT_PSO,
 	OBJECT_PSO_MSAA_4,
-	FORWARD_LIGHTING,
-	FORWARD_LIGHTING_MSAA_4,
+	FORWARD_LIGHTING_PSO,
+	FORWARD_LIGHTING_PSO_MSAA_4,
+	WIREFRAME_PSO,
+	WIREFRAME_PSO_MSAA_4,
+	UNLIT_PSO,
+	UNLIT_PSO_MSAA_4,
 
 	NUM_BUILTIN_PSOs
 };
@@ -297,7 +301,6 @@ private:
 
 	void LoadRootSignatures();
 	void LoadPSOs();
-	void LoadPSOs_MT();
 	void LoadDefaultResources();
 	
 

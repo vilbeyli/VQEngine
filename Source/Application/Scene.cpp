@@ -138,82 +138,6 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 	, mMaterialAssignments(engine.GetAssetLoader().GetThreadPool_TextureLoad())
 {}
 
-void Scene::Update(float dt, int FRAME_DATA_INDEX)
-{
-	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
-	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
-	Camera& Cam = this->mCameras[this->mIndex_SelectedCamera];
-	
-	Cam.Update(dt, mInput);
-	this->HandleInput();
-	this->UpdateScene(dt, SceneView);
-}
-
-void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
-{
-	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
-	FSceneView& SceneView     = mFrameSceneViews[FRAME_DATA_INDEX];
-	FSceneView& SceneViewNext = mFrameSceneViews[FRAME_DATA_NEXT_INDEX];
-
-	const Camera& cam = mCameras[mIndex_SelectedCamera];
-	const XMFLOAT3 camPos = cam.GetPositionF();
-
-	// extract scene view
-	SceneView.proj           = cam.GetProjectionMatrix();
-	SceneView.projInverse    = XMMatrixInverse(NULL, SceneView.proj);
-	SceneView.view           = cam.GetViewMatrix();
-	SceneView.viewInverse    = cam.GetViewInverseMatrix();
-	SceneView.viewProj       = SceneView.view * SceneView.proj;
-	SceneView.cameraPosition = XMLoadFloat3(&camPos);
-	SceneView.MainViewCameraYaw = cam.GetYaw();
-	SceneView.MainViewCameraPitch = cam.GetPitch();
-
-	// TODO: compute mesh visibility 
-
-	// TODO: cull lights
-
-	// gather light data
-	GatherSceneLightData(SceneView);
-	
-
-	// prepare mesh render cmd arguments for objects
-	SceneView.meshRenderCommands.clear();
-	for (const GameObject* pObj : mpObjects)
-	{
-		Transform*& pTF = mpTransforms.at(pObj->mTransformID);
-
-		const bool bModelNotFound = mModels.find(pObj->mModelID) == mModels.end();
-		if (bModelNotFound)
-		{
-			Log::Warning("[Scene] Model not found: ID=%d", pObj->mModelID);
-			continue; // skip rendering object if there's no model
-		}
-
-		const Model& model = mModels.at(pObj->mModelID);
-		
-		assert(pObj->mModelID != INVALID_ID);
-		for (const MeshID id : model.mData.mOpaueMeshIDs)
-		{
-			FMeshRenderCommand meshRenderCmd;
-			meshRenderCmd.meshID = id;
-			meshRenderCmd.WorldTransformationMatrix = pTF->WorldTransformationMatrix();
-			meshRenderCmd.NormalTransformationMatrix= pTF->NormalMatrix(meshRenderCmd.WorldTransformationMatrix);
-			meshRenderCmd.matID = model.mData.mOpaqueMaterials.at(id);
-
-			SceneView.meshRenderCommands.push_back(meshRenderCmd);
-		}
-	}
-
-	// TODO: prepare mesh render cmd arguments for lights
-	for(int i=0; i< SceneView.GPULightingData.numPointLights; ++i)
-	{
-		// SceneView.GPULightingData.point_lights[i].color
-	}
-
-	// update post process settings for next frame
-	SceneViewNext.postProcess = SceneView.postProcess;
-}
-
 void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& sceneRep)
 {
 	mRenderer.WaitForLoadCompletion();
@@ -463,12 +387,91 @@ void Scene::Unload()
 	mLightsStationary.clear();
 }
 
+
+
+void Scene::Update(float dt, int FRAME_DATA_INDEX)
+{
+	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
+	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
+	Camera& Cam = this->mCameras[this->mIndex_SelectedCamera];
+
+	Cam.Update(dt, mInput);
+	this->HandleInput(SceneView);
+	this->UpdateScene(dt, SceneView);
+}
+
+void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
+{
+	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
+	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
+	FSceneView& SceneViewNext = mFrameSceneViews[FRAME_DATA_NEXT_INDEX];
+
+	const Camera& cam = mCameras[mIndex_SelectedCamera];
+	const XMFLOAT3 camPos = cam.GetPositionF();
+
+	// extract scene view
+	SceneView.proj = cam.GetProjectionMatrix();
+	SceneView.projInverse = XMMatrixInverse(NULL, SceneView.proj);
+	SceneView.view = cam.GetViewMatrix();
+	SceneView.viewInverse = cam.GetViewInverseMatrix();
+	SceneView.viewProj = SceneView.view * SceneView.proj;
+	SceneView.cameraPosition = XMLoadFloat3(&camPos);
+	SceneView.MainViewCameraYaw = cam.GetYaw();
+	SceneView.MainViewCameraPitch = cam.GetPitch();
+
+	// TODO: compute mesh visibility 
+
+	// TODO: cull lights
+
+	// gather light data
+	SceneView.lightBoundsRenderCommands.clear();
+	SceneView.lightRenderCommands.clear();
+	GatherSceneLightData(SceneView);
+
+
+	// prepare mesh render cmd arguments for objects
+	SceneView.meshRenderCommands.clear();
+	for (const GameObject* pObj : mpObjects)
+	{
+		Transform*& pTF = mpTransforms.at(pObj->mTransformID);
+
+		const bool bModelNotFound = mModels.find(pObj->mModelID) == mModels.end();
+		if (bModelNotFound)
+		{
+			Log::Warning("[Scene] Model not found: ID=%d", pObj->mModelID);
+			continue; // skip rendering object if there's no model
+		}
+
+		const Model& model = mModels.at(pObj->mModelID);
+
+		assert(pObj->mModelID != INVALID_ID);
+		for (const MeshID id : model.mData.mOpaueMeshIDs)
+		{
+			FMeshRenderCommand meshRenderCmd;
+			meshRenderCmd.meshID = id;
+			meshRenderCmd.WorldTransformationMatrix = pTF->WorldTransformationMatrix();
+			meshRenderCmd.NormalTransformationMatrix = pTF->NormalMatrix(meshRenderCmd.WorldTransformationMatrix);
+			meshRenderCmd.matID = model.mData.mOpaqueMaterials.at(id);
+
+			SceneView.meshRenderCommands.push_back(meshRenderCmd);
+		}
+	}
+
+	PrepareLightMeshRenderParams(SceneView);
+
+
+	// update post process settings for next frame
+	SceneViewNext.postProcess = SceneView.postProcess;
+	SceneViewNext.sceneParameters = SceneView.sceneParameters;
+}
+
+
 void Scene::RenderUI()
 {
 	// TODO
 }
 
-void Scene::HandleInput()
+void Scene::HandleInput(FSceneView& SceneView)
 {
 	const bool bIsShiftDown = mInput.IsKeyDown("Shift");
 	const int NumEnvMaps = static_cast<int>(mResourceNames.mEnvironmentMapPresetNames.size());
@@ -479,6 +482,11 @@ void Scene::HandleInput()
 		mIndex_SelectedCamera = bIsShiftDown 
 			? CircularDecrement(mIndex_SelectedCamera, NumCameras) 
 			: CircularIncrement(mIndex_SelectedCamera, NumCameras);
+	}
+
+	if (mInput.IsKeyTriggered("L"))
+	{
+		SceneView.sceneParameters.bDrawLightBounds = !SceneView.sceneParameters.bDrawLightBounds;
 	}
 
 	if (mInput.IsKeyTriggered("PageUp"))
@@ -522,6 +530,92 @@ void Scene::GatherSceneLightData(FSceneView& SceneView) const
 	data.numPointLights = iGPUPoint;
 	data.numSpotCasters = iGPUSpotShadow;
 	data.numSpotLights = iGPUSpot;
+}
+
+void Scene::PrepareLightMeshRenderParams(FSceneView& SceneView) const
+{
+	if (!SceneView.sceneParameters.bDrawLightBounds && !SceneView.sceneParameters.bDrawLightMeshes)
+		return;
+
+	auto fnGatherLightRenderData = [&](const std::vector<Light>& vLights)
+	{
+		for (const Light& l : vLights)
+		{
+			if (!l.bEnabled) 
+				continue;
+
+			FLightRenderCommand cmd;
+			cmd.color = XMFLOAT3(l.Color.x * l.Brightness, l.Color.y * l.Brightness, l.Color.z * l.Brightness);
+			cmd.WorldTransformationMatrix = l.GetWorldTransformationMatrix();
+
+			switch (l.Type)
+			{
+			case Light::EType::DIRECTIONAL: 
+				continue; // don't draw directional light mesh
+				break;
+
+			case Light::EType::SPOT       :
+			{
+				// light mesh
+				if (SceneView.sceneParameters.bDrawLightMeshes)
+				{
+					cmd.meshID = EBuiltInMeshes::SPHERE;
+					SceneView.lightRenderCommands.push_back(cmd);
+				}
+
+				// light bounds
+				if (SceneView.sceneParameters.bDrawLightBounds)
+				{
+					cmd.meshID = EBuiltInMeshes::CONE;
+					Transform tf = l.GetTransform();
+					tf.SetScale(1, 1, 1); // reset scale as it holds the scale value for light's render mesh
+					tf.RotateAroundLocalXAxisDegrees(-90.0f); // align with spot light's local space
+
+					XMMATRIX alignConeToSpotLightTransformation = XMMatrixIdentity();
+					alignConeToSpotLightTransformation.r[3].m128_f32[0] = 0.0f;
+					alignConeToSpotLightTransformation.r[3].m128_f32[1] = -l.Range;
+					alignConeToSpotLightTransformation.r[3].m128_f32[2] = 0.0f;
+
+					const float coneBaseRadius = std::tanf(l.SpotOuterConeAngleDegrees * DEG2RAD) * l.Range;
+					XMMATRIX scaleConeToRange = XMMatrixIdentity();
+					scaleConeToRange.r[0].m128_f32[0] = coneBaseRadius;
+					scaleConeToRange.r[1].m128_f32[1] = l.Range;
+					scaleConeToRange.r[2].m128_f32[2] = coneBaseRadius;
+
+					//wvp = alignConeToSpotLightTransformation * tf.WorldTransformationMatrix() * viewProj;
+					cmd.WorldTransformationMatrix = scaleConeToRange * alignConeToSpotLightTransformation * tf.WorldTransformationMatrix();
+					cmd.color = l.Color;  // drop the brightness multiplier for bounds rendering
+					SceneView.lightBoundsRenderCommands.push_back(cmd);
+				}
+			}	break;
+
+			case Light::EType::POINT      : 
+			{
+				// light mesh
+				if (SceneView.sceneParameters.bDrawLightMeshes)
+				{
+					cmd.meshID = EBuiltInMeshes::SPHERE;
+					SceneView.lightRenderCommands.push_back(cmd);
+				}
+
+				// light bounds
+				if (SceneView.sceneParameters.bDrawLightBounds)
+				{
+					Transform tf = l.GetTransform();
+					tf._scale = XMFLOAT3(l.Range, l.Range, l.Range);
+					cmd.WorldTransformationMatrix = tf.WorldTransformationMatrix();
+					cmd.color = l.Color; // drop the brightness multiplier for bounds rendering
+					SceneView.lightBoundsRenderCommands.push_back(cmd);
+				}
+			}  break;
+			} // swicth
+		} // for: Lights
+	};
+
+
+	fnGatherLightRenderData(mLightsStatic);
+	fnGatherLightRenderData(mLightsStationary);
+	fnGatherLightRenderData(mLightsDynamic);
 }
 
 FMaterialRepresentation::FMaterialRepresentation()

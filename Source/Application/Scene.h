@@ -81,12 +81,23 @@ struct FPostProcessParameters
 	float         DisplayReferenceBrightnessLevel = 200.0f;
 	int           ToggleGammaCorrection = 1;
 };
+struct FSceneRenderParameters
+{
+	bool bDrawLightBounds = false;
+	bool bDrawLightMeshes = true;
+};
 struct FMeshRenderCommand
 {
 	MeshID     meshID = INVALID_ID;
 	MaterialID matID  = INVALID_ID;
-	DirectX::XMMATRIX WorldTransformationMatrix; // WorldTF ID ?
-	DirectX::XMMATRIX NormalTransformationMatrix; // WorldTF ID ?
+	DirectX::XMMATRIX WorldTransformationMatrix; // ID ?
+	DirectX::XMMATRIX NormalTransformationMatrix; //ID ?
+};
+struct FLightRenderCommand
+{
+	MeshID meshID = INVALID_ID;
+	DirectX::XMFLOAT3 color;
+	DirectX::XMMATRIX WorldTransformationMatrix;
 };
 struct FSceneView
 {
@@ -107,9 +118,13 @@ struct FSceneView
 
 	VQ_SHADER_DATA::SceneLighting GPULightingData;
 
+	FSceneRenderParameters sceneParameters;
 	FPostProcessParameters postProcess;
 
 	std::vector<FMeshRenderCommand> meshRenderCommands;
+	std::vector<FLightRenderCommand> lightRenderCommands;
+	std::vector<FLightRenderCommand> lightBoundsRenderCommands;
+
 };
 //------------------------------------------------------
 
@@ -128,11 +143,7 @@ constexpr size_t GAMEOBJECT_BYTE_ALIGNMENT = 64; // assumed typical cache-line s
 //----------------------------------------------------------------------------------------------------------------
 class Scene
 {
-	// Scene class contains the scene data and the logic to manipulate it. 
-	// Scene is essentially a small part of the Engine. Writing an entire interface
-	// for Scene to query scene data would be a waste of time without added benefit.
-	// Hence VQEngine is declared a friend and has easy acess to all data to 
-	// effectively orchestrate communication between its multiple threads.
+	// Engine has easy access to the scene as scene is essentially a part of the engine.
 	friend class VQEngine; 
 
 //----------------------------------------------------------------------------------------------------------------
@@ -172,9 +183,10 @@ private: // Derived Scenes shouldn't access these functions
 	void OnLoadComplete();
 	void Unload(); // serial-only for now. maybe MT later.
 	void RenderUI();
-	void HandleInput();
+	void HandleInput(FSceneView& SceneView);
 
 	void GatherSceneLightData(FSceneView& SceneView) const;
+	void PrepareLightMeshRenderParams(FSceneView& SceneView) const;
 
 public:
 	Scene(VQEngine& engine
@@ -282,12 +294,5 @@ private:
 	std::unordered_map<std::string, MaterialID> mLoadedMaterials;
 	
 	//CPUProfiler*    mpCPUProfiler;
-	//ModelLoader     mModelLoader;
-	//MaterialPool    mMaterials;
-	//ModelLoadQueue  mModelLoadQueue;
-
 	//BoundingBox     mSceneBoundingBox;
-	//FSceneView       mSceneView;
-	//ShadowView      mShadowView;
-
 };

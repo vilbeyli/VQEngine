@@ -20,9 +20,9 @@
         <Yaw> 0 </Yaw>
         
         <Projection>Perspective</Projection>
-        <FoV>60.0</FoV>
+        <FoV>70.0</FoV>
         <Near>0.01</Near>
-        <Far>1000</Far>
+        <Far>10000</Far>
 
         <FirstPerson>
             <TranslationSpeed>1000</TranslationSpeed>
@@ -83,7 +83,7 @@
     <GameObject>
         <Transform>
             <Position>25 2 2</Position>
-            <Rotation>30 0 15</Rotation>
+            <Rotation>30 120 60</Rotation>
             <Scale>3.1 3.1 3.1</Scale>
         </Transform>
         <Model>
@@ -103,7 +103,29 @@
     </GameObject>
     <GameObject>
         <Transform>
-            <Position>13 0 20</Position>
+            <Position>-25 0 4</Position>
+            <Rotation>0 0 0</Rotation>
+            <Scale>6 6 6</Scale>
+        </Transform>
+        <Model>
+            <Mesh>Sphere</Mesh>
+            <MaterialName>Checkerboard_Grayscale</MaterialName>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>-25 -5 4</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>10 0.1 10</Scale>
+        </Transform>
+        <Model>
+            <Mesh>Cylinder</Mesh>
+        </Model>
+    </GameObject>
+    
+    <GameObject>
+        <Transform>
+            <Position>13 5 20</Position>
             <Rotation>0 180 0</Rotation>
             <Scale>1000 1000 1000</Scale>
         </Transform>
@@ -139,20 +161,41 @@
     <Light>
         <!-- Point Light -->
         <Mobility> Dynamic </Mobility>
+        <Transform>
+            <Position>12.5 5 5</Position>
+            <Rotation> 0 0 0 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
         <Enabled>true</Enabled>
         <Color>0.4 0.4 0.85</Color>
-        <Range> 1500 </Range>
+        <Range> 20 </Range>
         <Brightness> 1500 </Brightness>
         <Shadows>
             <DepthBias> 0.001 </DepthBias>
             <NearPlane> 0.001 </NearPlane>
             <FarPlane>  1500  </FarPlane>
         </Shadows>
+        <Point>
+            <Attenuation> 1 1 1 </Attenuation>
+        </Point>
+    </Light>
+    <Light>
+        <!-- Point Light -->
         <Transform>
-            <Position>12.5 10 0</Position>
+            <Position>-12.5 3 0</Position>
             <Rotation> 0 0 0 </Rotation>
             <Scale> 0.1 0.1 0.1 </Scale>
         </Transform>
+        <Mobility> Dynamic </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.4 0.4 0.15</Color>
+        <Range> 16 </Range>
+        <Brightness> 3500 </Brightness>
+        <Shadows>
+            <DepthBias> 0.001 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  1500  </FarPlane>
+        </Shadows>
         <Point>
             <Attenuation> 1 1 1 </Attenuation>
         </Point>
@@ -162,7 +205,7 @@
         <Mobility> Static </Mobility>
         <Enabled>true</Enabled>
         <Color>0.0 0.9 0.9</Color>
-        <Range> 1500 </Range>
+        <Range> 35 </Range>
         <Brightness> 10 </Brightness>
         <Shadows>
             <DepthBias> 0.001 </DepthBias>
@@ -170,13 +213,13 @@
             <FarPlane>  1500  </FarPlane>
         </Shadows>
         <Transform>
-            <Position>20 10 0</Position>
-            <Rotation> 90 0 0 </Rotation>
+            <Position>18 20 4</Position>
+            <Rotation> 90 0 -15 </Rotation>
             <Scale> 0.1 0.1 0.1 </Scale>
         </Transform>
         <Spot>
-            <OuterConeAngleDegrees>60</OuterConeAngleDegrees>
-            <InnerConeAngleDegrees>40</InnerConeAngleDegrees>
+            <OuterConeAngleDegrees>30</OuterConeAngleDegrees>
+            <InnerConeAngleDegrees>25</InnerConeAngleDegrees>
         </Spot>
     </Light>
     

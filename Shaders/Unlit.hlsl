@@ -16,36 +16,38 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
+struct VSInput
+{
+	float3 position : POSITION;
+	float3 normal   : NORMAL;
+	float3 tangent : TANGENT;
+	float2 uv : TEXCOORD0;
+};
+
 struct PSInput
 {
-    float4 position : SV_POSITION;
-    float4 color : COLOR;
-	float2 uv : TEXCOORD0;
+	float4 position : SV_POSITION;
+	float3 color : COLOR0;
 };
 
 cbuffer CBuffer : register(b0)
 {
 	float4x4 matModelViewProj;
+	float3 color;
 }
 
-Texture2D    texColor;
-SamplerState Sampler;
 
-PSInput VSMain(float4 position : POSITION, float4 color : COLOR, float2 uv : TEXCOORD0)
+PSInput VSMain(VSInput vertex)
 {
-    PSInput result;
-
-	result.position = mul(matModelViewProj, position);
-    result.color = color;
-	result.uv = uv;
-
+	PSInput result;
+	
+	result.position    = mul(matModelViewProj, float4(vertex.position, 1));
+	result.color = color;
+	
     return result;
 }
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	float3 ColorTex  = texColor.SampleLevel(Sampler, input.uv, 0).rgb;
-	float3 ColorVert = input.color;
-	float3 Color = ColorVert * ColorTex;
-	return float4(Color, 1);
+	return float4(input.color, 1);
 }

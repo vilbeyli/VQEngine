@@ -50,6 +50,7 @@ set (Shaders
     "Shaders/ShadingMath.hlsl"
     "Shaders/Lighting.hlsl"
     "Shaders/LightingConstantBufferData.h"
+    "Shaders/Unlit.hlsl"
 )
 
 set (HeaderVQE 

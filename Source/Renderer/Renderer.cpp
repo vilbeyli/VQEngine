@@ -151,11 +151,7 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 void VQRenderer::Load()
 {
 	LoadRootSignatures();
-#if 0
 	LoadPSOs();
-#else
-	LoadPSOs_MT();
-#endif
 	LoadDefaultResources();
 	
 	Log::Info("[Renderer] Loaded.");
@@ -435,7 +431,15 @@ void VQRenderer::LoadRootSignatures()
 	// ROOT SIGNATURES 
 	//hardcoded for now. TODO: http://simonstechblog.blogspot.com/2019/06/d3d12-root-signature-management.html
 	// https://youtu.be/Wbnw87tYqVg?t=1903 : Root signature examples
+	
+	D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
 
+	// This is the highest version the sample supports. If CheckFeatureSupport succeeds, the HighestVersion returned will not be greater than this.
+	featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
+	if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
+	{
+		featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+	}
 	
 	// Hello-World-Triangle Root Signature : [0]
 	{
@@ -453,15 +457,6 @@ void VQRenderer::LoadRootSignatures()
 
 	// Fullscreen-Triangle Root Signature : [1]
 	{
-		D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
-
-		// This is the highest version the sample supports. If CheckFeatureSupport succeeds, the HighestVersion returned will not be greater than this.
-		featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-		if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
-		{
-			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-		}
-
 		CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
 		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
 
@@ -497,15 +492,6 @@ void VQRenderer::LoadRootSignatures()
 
 	// Hello-World-Cube Root Signature : [2]
 	{
-		D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
-
-		// This is the highest version the sample supports. If CheckFeatureSupport succeeds, the HighestVersion returned will not be greater than this.
-		featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-		if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
-		{
-			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-		}
-
 		CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
 		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
 		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
@@ -544,15 +530,6 @@ void VQRenderer::LoadRootSignatures()
 
 	// Tonemapper Root Signature : [3]
 	{
-		D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
-
-		// This is the highest version the sample supports. If CheckFeatureSupport succeeds, the HighestVersion returned will not be greater than this.
-		featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-		if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
-		{
-			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-		}
-
 		CD3DX12_DESCRIPTOR_RANGE1 ranges[3];
 		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
 		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
@@ -578,15 +555,6 @@ void VQRenderer::LoadRootSignatures()
 
 	// Object Root Signature : [4]
 	{
-		D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
-
-		// This is the highest version the sample supports. If CheckFeatureSupport succeeds, the HighestVersion returned will not be greater than this.
-		featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-		if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
-		{
-			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-		}
-
 		CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
 		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
 		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
@@ -628,17 +596,8 @@ void VQRenderer::LoadRootSignatures()
 		SetName(pRS, "RootSignature_Object");
 	}
 
-	// ForwardLighting Signature : [5]
+	// ForwardLighting Root Signature : [5]
 	{
-		D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
-
-		// This is the highest version the sample supports. If CheckFeatureSupport succeeds, the HighestVersion returned will not be greater than this.
-		featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-		if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
-		{
-			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-		}
-
 		CD3DX12_DESCRIPTOR_RANGE1 ranges[3];
 		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
 		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC); // perView  cb's are DescRanges
@@ -689,270 +648,36 @@ void VQRenderer::LoadRootSignatures()
 		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_ForwardLighting");
 	}
+
+
+	// Wireframe/Unlit Root Signature : [6]
+	{
+		CD3DX12_DESCRIPTOR_RANGE1 ranges[3];
+		//ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
+		
+		CD3DX12_ROOT_PARAMETER1 rootParameters[1];
+		rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_VERTEX);
+
+		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, NULL, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+		ComPtr<ID3DBlob> signature;
+		ComPtr<ID3DBlob> error;
+		ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
+		ID3D12RootSignature* pRS = nullptr;
+		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
+		mpBuiltinRootSignatures.push_back(pRS);
+		SetName(pRS, "RootSignature_WireframeUnlit");
+	}
 }
 
 void VQRenderer::LoadPSOs()
-{
-	HRESULT hr = {};
-	ID3D12Device* pDevice = mDevice.GetDevicePtr();
-
-
-
-	//-----------------------------------------------------------------------------------------------------------------------------------------------
-
-#if defined(_DEBUG)
-	// Enable better shader debugging with the graphics debugging tools.
-	UINT compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-	UINT compileFlags = 0;
-#endif
-	constexpr char* strShadingModelVS = "vs_5_0";
-	constexpr char* strShadingModelPS = "ps_5_0";
-
-
-	// HELLO WORLD TRIANGLE PSO
-	{
-		ComPtr<ID3DBlob> vertexShader;
-		ComPtr<ID3DBlob> pixelShader;
-
-		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"hello-triangle.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr));
-		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"hello-triangle.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr));
-
-		// Define the vertex input layout.
-		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
-		{
-			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT   , 0, 0 , D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "COLOR"   , 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT      , 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		};
-
-		// Describe and create the graphics pipeline state object (PSO).
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-		psoDesc.pRootSignature = mpBuiltinRootSignatures[0];
-		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
-		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
-		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-		psoDesc.DepthStencilState.DepthEnable = FALSE;
-		psoDesc.DepthStencilState.StencilEnable = FALSE;
-		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-		psoDesc.SampleMask = UINT_MAX;
-		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		psoDesc.NumRenderTargets = 1;
-		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-		psoDesc.SampleDesc.Count = 1;
-		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mPSOs[EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO])));
-		SetName(mPSOs[EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO], "PSO_HelloWorld");
-	}
-
-
-	// FULLSCREEN TIRANGLE PSO
-	{
-		ComPtr<ID3DBlob> vertexShader;
-		ComPtr<ID3DBlob> pixelShader;
-
-		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"FullscreenTriangle.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, nullptr));
-		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"FullscreenTriangle.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, nullptr));
-
-
-		// Describe and create the graphics pipeline state object (PSO).
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-		psoDesc.InputLayout = { };
-		psoDesc.pRootSignature = mpBuiltinRootSignatures[1];
-		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
-		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
-		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-		psoDesc.DepthStencilState.DepthEnable = FALSE;
-		psoDesc.DepthStencilState.StencilEnable = FALSE;
-		psoDesc.SampleMask = UINT_MAX;
-		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		psoDesc.NumRenderTargets = 1;
-		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-		psoDesc.SampleDesc.Count = 1;
-		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mPSOs[EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO])));
-		SetName(mPSOs[EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO], "PSO_FullscreenTriangle");
-	
-	    // HDR SWAPCHAIN PSO
-		psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
-		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mPSOs[EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO])));
-		SetName(mPSOs[EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO], "PSO_HDRSwapchain");
-	}
-
-	// HELLO CUBE PSO
-	{
-		
-		ComPtr<ID3DBlob> vertexShader;
-		ComPtr<ID3DBlob> pixelShader;
-		ComPtr<ID3DBlob> errBlob;
-
-		hr = D3DCompileFromFile(GetAssetFullPath(L"hello-cube.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, &errBlob);
-		if (FAILED(hr)) { ReportErrorAndReleaseBlob(errBlob); }
-		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"hello-cube.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, &errBlob));
-
-		// TEST REFLECTION
-		//D3DReflect(vertexShader->GetBufferPointer(), vertexShader->GetBufferSize(), IID_ID3D12ShaderReflection, ppBuffer);
-		//vertexShader
-
-		// Define the vertex input layout.
-		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
-		{
-			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT   , 0, 0 , D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "COLOR"   , 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT      , 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		};
-
-		// Describe and create the graphics pipeline state object (PSO).
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-		psoDesc.pRootSignature = mpBuiltinRootSignatures[2];
-		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
-		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
-		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-		psoDesc.DepthStencilState.DepthEnable = TRUE;
-		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-		psoDesc.DepthStencilState.StencilEnable = FALSE;
-		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-		psoDesc.SampleMask = UINT_MAX;
-		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		psoDesc.NumRenderTargets = 1;
-		psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
-		psoDesc.SampleDesc.Count = 1;
-		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mPSOs[EBuiltinPSOs::HELLO_WORLD_CUBE_PSO])));
-		SetName(mPSOs[EBuiltinPSOs::HELLO_WORLD_CUBE_PSO], "PSO_HelloCube");
-
-		psoDesc.SampleDesc.Count = 4;
-		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mPSOs[EBuiltinPSOs::HELLO_WORLD_CUBE_PSO_MSAA_4])));
-		SetName(mPSOs[EBuiltinPSOs::HELLO_WORLD_CUBE_PSO], "PSO_HelloCubeMSAA");
-	}
-
-	// SKYDOME PSO
-	{
-		ComPtr<ID3DBlob> vertexShader;
-		ComPtr<ID3DBlob> pixelShader;
-		ComPtr<ID3DBlob> errBlob;
-
-		hr = D3DCompileFromFile(GetAssetFullPath(L"Skydome.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_0", compileFlags, 0, &vertexShader, &errBlob);
-		if (FAILED(hr)) { ReportErrorAndReleaseBlob(errBlob); }
-		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"Skydome.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_0", compileFlags, 0, &pixelShader, &errBlob));
-
-		// Define the vertex input layout.
-		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
-		{
-			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT   , 0, 0 , D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT      , 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		};
-
-		// Describe and create the graphics pipeline state object (PSO).
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-		psoDesc.pRootSignature = mpBuiltinRootSignatures[2];
-		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
-		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
-		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-		psoDesc.DepthStencilState.DepthEnable = TRUE;
-		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
-		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-		psoDesc.DepthStencilState.StencilEnable = FALSE;
-		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-		psoDesc.SampleMask = UINT_MAX;
-		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		psoDesc.NumRenderTargets = 1;
-		psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
-		psoDesc.SampleDesc.Count = 1;
-		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mPSOs[EBuiltinPSOs::SKYDOME_PSO])));
-		SetName(mPSOs[EBuiltinPSOs::SKYDOME_PSO], "PSO_Skydome");
-
-		psoDesc.SampleDesc.Count = 4;
-		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mPSOs[EBuiltinPSOs::SKYDOME_PSO_MSAA_4])));
-		SetName(mPSOs[EBuiltinPSOs::SKYDOME_PSO_MSAA_4], "PSO_SkydomeMSAA");
-	}
-
-	// TONEMAPPER PSO
-	{
-		ComPtr<ID3DBlob> computeShader;
-		ComPtr<ID3DBlob> errBlob;
-
-		HRESULT hr = D3DCompileFromFile(GetAssetFullPath(L"Tonemapper.hlsl").c_str(), nullptr, nullptr, "CSMain", "cs_5_1", compileFlags, 0, &computeShader, &errBlob);
-		if (FAILED(hr))
-		{
-			if (errBlob)
-			{
-				OutputDebugStringA((char*)errBlob->GetBufferPointer());
-				errBlob->Release();
-			}
-		}
-
-		// Describe and create the compute pipeline state object (PSO).
-		D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
-		psoDesc.pRootSignature = mpBuiltinRootSignatures[3];
-		psoDesc.CS = CD3DX12_SHADER_BYTECODE(computeShader.Get());
-		ThrowIfFailed(pDevice->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&mPSOs[EBuiltinPSOs::TONEMAPPER_PSO])));
-		SetName(mPSOs[EBuiltinPSOs::HELLO_WORLD_CUBE_PSO], "PSO_TonemapperCS");
-	}
-
-	// OBJECT PSO
-	{
-		ComPtr<ID3DBlob> vertexShader;
-		ComPtr<ID3DBlob> pixelShader;
-		ComPtr<ID3DBlob> errBlob;
-
-		hr = D3DCompileFromFile(GetAssetFullPath(L"Object.hlsl").c_str(), nullptr, nullptr, "VSMain", "vs_5_1", compileFlags, 0, &vertexShader, &errBlob);
-		if (FAILED(hr)) { ReportErrorAndReleaseBlob(errBlob); }
-		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"Object.hlsl").c_str(), nullptr, nullptr, "PSMain", "ps_5_1", compileFlags, 0, &pixelShader, &errBlob));
-
-		// Define the vertex input layout.
-		D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
-		{
-			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT   , 0, 0 , D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "NORMAL"  , 0, DXGI_FORMAT_R32G32B32_FLOAT   , 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "TANGENT" , 0, DXGI_FORMAT_R32G32B32_FLOAT   , 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT      , 0, 36, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		};
-
-		// Describe and create the graphics pipeline state object (PSO).
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-		psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-		psoDesc.pRootSignature = mpBuiltinRootSignatures[4];
-		psoDesc.VS = CD3DX12_SHADER_BYTECODE(vertexShader.Get());
-		psoDesc.PS = CD3DX12_SHADER_BYTECODE(pixelShader.Get());
-		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-		psoDesc.DepthStencilState.DepthEnable = TRUE;
-		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-		psoDesc.DepthStencilState.StencilEnable = FALSE;
-		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-		psoDesc.SampleMask = UINT_MAX;
-		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		psoDesc.NumRenderTargets = 1;
-		psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
-		psoDesc.SampleDesc.Count = 1;
-		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mPSOs[EBuiltinPSOs::OBJECT_PSO])));
-		SetName(mPSOs[EBuiltinPSOs::OBJECT_PSO], "PSO_Object");
-
-
-		psoDesc.SampleDesc.Count = 4;
-		ThrowIfFailed(pDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mPSOs[EBuiltinPSOs::OBJECT_PSO_MSAA_4])));
-		SetName(mPSOs[EBuiltinPSOs::OBJECT_PSO_MSAA_4], "PSO_Object_MSAA4");
-	}
-}
-
-void VQRenderer::LoadPSOs_MT()
 {
 	// temp: singl thread pso load from vector
 	// todo: enqueue load descs into the MT queue
 	std::vector< std::pair<PSO_ID, FPSOLoadDesc >> PSOLoadDescs; 
 
-	// HELLO WORLD TRIANGLE
+	// HELLO WORLD TRIANGLE PSO
 	{
 		const std::wstring ShaderFilePath = GetAssetFullPath(L"hello-triangle.hlsl");
 
@@ -1126,7 +851,7 @@ void VQRenderer::LoadPSOs_MT()
 	}
 
 
-	// TONEMAPPER CS
+	// TONEMAPPER CS PSO
 	{
 		const std::wstring ShaderFilePath = GetAssetFullPath(L"Tonemapper.hlsl");
 
@@ -1164,13 +889,64 @@ void VQRenderer::LoadPSOs_MT()
 		psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
 		psoDesc.SampleDesc.Count = 1;
 
-		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING, psoLoadDesc });
+		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_PSO, psoLoadDesc });
 
 		// MSAA PSO
 		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS_MSAA4";
 		psoDesc.SampleDesc.Count = 4;
-		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_MSAA_4, psoLoadDesc });
+		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_PSO_MSAA_4, psoLoadDesc });
 	}
+
+	// WIREFRAME/UNLIT PSOs
+	{
+		const std::wstring ShaderFilePath = GetAssetFullPath(L"Unlit.hlsl");
+
+		FPSOLoadDesc psoLoadDesc = {};
+		psoLoadDesc.PSOName = "PSO_UnlitVSPS";
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
+		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mpBuiltinRootSignatures[6];
+
+		// PSO description
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
+
+		// unlit
+		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+		psoDesc.DepthStencilState.DepthEnable = TRUE;
+		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+		psoDesc.DepthStencilState.StencilEnable = FALSE;
+		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+		psoDesc.SampleMask = UINT_MAX;
+		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		psoDesc.NumRenderTargets = 1;
+		psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		psoDesc.SampleDesc.Count = 1;
+
+		PSOLoadDescs.push_back({ EBuiltinPSOs::UNLIT_PSO, psoLoadDesc });
+		{
+			// MSAA
+			psoLoadDesc.PSOName = "PSO_UnlitVSPS_MSAA4";
+			psoDesc.SampleDesc.Count = 4;
+			PSOLoadDescs.push_back({ EBuiltinPSOs::UNLIT_PSO_MSAA_4, psoLoadDesc });
+		}
+
+		// wireframe
+		psoLoadDesc.PSOName = "PSO_WireframeVSPS";
+		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+		psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+		psoDesc.SampleDesc.Count = 1;
+		PSOLoadDescs.push_back({ EBuiltinPSOs::WIREFRAME_PSO, psoLoadDesc });
+		{
+			// MSAA
+			psoLoadDesc.PSOName = "PSO_WireframeVSPS_MSAA4";
+			psoDesc.SampleDesc.Count = 4;
+			PSOLoadDescs.push_back({ EBuiltinPSOs::WIREFRAME_PSO_MSAA_4, psoLoadDesc });
+		}
+	}
+
 
 	// ---------------------------------------------------------------------------------------------------------------1
 

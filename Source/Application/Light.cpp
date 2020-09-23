@@ -82,7 +82,16 @@ void Light::GetGPUData(VQ_SHADER_DATA::DirectionalLight * pLight) const
 	COPY_COMMON_LIGHT_DATA(pLight, this);
 	pLight->enabled = this->bEnabled;
 	pLight->shadowing = this->bCastingShadows;
-	pLight->lightDirection = { 0, -1, 0 }; // TODO
+
+
+	Transform tf;
+	tf._position = this->Position;
+	tf._rotation = this->RotationQuaternion;
+	XMFLOAT3 FWD_F3(0, -1, 0); // default orientation looks down for directional lights
+	XMVECTOR FWD = XMLoadFloat3(&FWD_F3);
+	FWD = XMVector3Transform(FWD, tf.NormalMatrix(tf.WorldTransformationMatrix()));
+
+	XMStoreFloat3(&pLight->lightDirection, FWD);
 }
 
 void Light::GetGPUData(VQ_SHADER_DATA::PointLight* pLight) const
@@ -100,15 +109,30 @@ void Light::GetGPUData(VQ_SHADER_DATA::SpotLight* pLight) const
 	assert(pLight);
 	COPY_COMMON_LIGHT_DATA(pLight, this);
 	
-	Transform tf;
-	tf._position = this->Position;
-	tf._rotation = this->RotationQuaternion;
-	XMFLOAT3 FWD_F3(0, 0, 1);
+	XMFLOAT3 FWD_F3(0, 0, 1);  // default orientation looks forward for spot lights
 	XMVECTOR FWD = XMLoadFloat3(&FWD_F3);
-	FWD = XMVector3Transform(FWD, tf.NormalMatrix(tf.WorldTransformationMatrix()));
+	FWD = XMVector3Transform(FWD, Transform::NormalMatrix(this->GetWorldTransformationMatrix()));
 
 	XMStoreFloat3(&pLight->spotDir, FWD);
 	pLight->position = this->Position;
 	pLight->innerConeAngle = this->SpotInnerConeAngleDegrees * DEG2RAD;
 	pLight->outerConeAngle = this->SpotOuterConeAngleDegrees * DEG2RAD;
+}
+
+DirectX::XMMATRIX Light::GetWorldTransformationMatrix() const
+{
+	constexpr float LightMeshScale = 0.1f;
+	Transform tf;
+	tf._position = this->Position;
+	tf._rotation = this->RotationQuaternion;
+	tf._scale = XMFLOAT3(LightMeshScale, LightMeshScale, LightMeshScale);
+	return tf.WorldTransformationMatrix();
+}
+
+Transform Light::GetTransform() const
+{
+	Transform tf;
+	tf._position = this->Position;
+	tf._rotation = this->RotationQuaternion;
+	return tf;
 }

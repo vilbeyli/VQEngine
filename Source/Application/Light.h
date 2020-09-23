@@ -96,6 +96,8 @@ struct Light
 	void GetGPUData(VQ_SHADER_DATA::DirectionalLight* pLight) const;
 	void GetGPUData(VQ_SHADER_DATA::PointLight*       pLight) const;
 	void GetGPUData(VQ_SHADER_DATA::SpotLight*        pLight) const;
+	DirectX::XMMATRIX GetWorldTransformationMatrix() const;
+	Transform GetTransform() const;
 
 	//
 	// DATA

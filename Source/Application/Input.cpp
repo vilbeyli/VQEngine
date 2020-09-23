@@ -46,7 +46,7 @@ static const Input::KeyMapping KEY_MAP = []()
 	m["F"] = 'F';		m["f"] = 'F';	m["J"] = 'J';	m["j"] = 'J';
 	m["K"] = 'K';		m["k"] = 'K';	m["V"] = 'V';	m["v"] = 'V';
 	m["M"] = 'M';		m["m"] = 'M';	m["G"] = 'G';	m["g"] = 'G';
-
+	m["L"] = 'L';		m["l"] = 'L';
 
 	m["\\"] = 220;		m[";"] = 186;
 	m["'"] = 222;
