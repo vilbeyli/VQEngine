@@ -89,6 +89,7 @@ public:
 		std::vector<AssetLoader::FTextureLoadResult> NormalsIDs;
 		std::vector<AssetLoader::FTextureLoadResult> HeightMapIDs;
 		std::vector<AssetLoader::FTextureLoadResult> AlphaMapIDs;
+		std::vector<AssetLoader::FTextureLoadResult> EmissiveMapIDs;
 		std::vector<AssetLoader::FTextureLoadResult>& GetTextureMapCollection(ETextureType type);
 	};
 	struct FMaterialTextureAssignments

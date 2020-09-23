@@ -219,6 +219,7 @@ static AssetLoader::ETextureType GetTextureType(aiTextureType aiType)
 	case aiTextureType_NORMAL_CAMERA:
 		break;
 	case aiTextureType_EMISSION_COLOR:
+		assert(false);
 		break;
 	case aiTextureType_DIFFUSE_ROUGHNESS:
 		break;
@@ -333,6 +334,7 @@ static std::vector<AssetLoader::FTextureLoadParams> GenerateTextureLoadParams(
 		aiString str;
 		pMaterial->GetTexture(type, i, &str);
 		std::string path = str.C_Str();
+
 		AssetLoader::FTextureLoadParams params = {};
 		params.TexturePath = modelDirectory + path;
 		params.MatID = matID;
@@ -457,9 +459,11 @@ static Model::Data ProcessAssimpNode(
 		std::vector<AssetLoader::FTextureLoadParams> normalMaps   = GenerateTextureLoadParams(material, matID, aiTextureType_NORMALS, "texture_normal", modelDirectory);
 		std::vector<AssetLoader::FTextureLoadParams> heightMaps   = GenerateTextureLoadParams(material, matID, aiTextureType_HEIGHT, "texture_height", modelDirectory);
 		std::vector<AssetLoader::FTextureLoadParams> alphaMaps    = GenerateTextureLoadParams(material, matID, aiTextureType_OPACITY, "texture_alpha", modelDirectory);
+		std::vector<AssetLoader::FTextureLoadParams> emissiveMaps = GenerateTextureLoadParams(material, matID, aiTextureType_EMISSIVE, "texture_emissive", modelDirectory);
+
 
 		// queue texture load
-		std::array<decltype(diffuseMaps)*, 5> TexLoadParams = { &diffuseMaps, &specularMaps, &normalMaps, &heightMaps, &alphaMaps };
+		std::array<decltype(diffuseMaps)*, 6> TexLoadParams = { &diffuseMaps, &specularMaps, &normalMaps, &heightMaps, &alphaMaps, &emissiveMaps };
 		int iTexType = 0;
 		for (const auto* pvLoadParams : TexLoadParams)
 		{

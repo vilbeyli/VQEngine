@@ -602,6 +602,7 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 		XMLElement* pRange = pLight->FirstChildElement("Range");
 		XMLElement* pBrightness = pLight->FirstChildElement("Brightness");
 		XMLElement* pMobility = pLight->FirstChildElement("Mobility");
+		XMLElement* pEnabled = pLight->FirstChildElement("Enabled");
 
 		XMLElement* pShadows = pLight->FirstChildElement("Shadows");
 		XMLElement* pNear = pShadows ? pShadows->FirstChildElement("Near") : nullptr;
@@ -652,6 +653,11 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 			if (mobilityEnumStr == "static")     l.Mobility = Light::EMobility::STATIC;
 			if (mobilityEnumStr == "dynamic")    l.Mobility = Light::EMobility::DYNAMIC;
 			if (mobilityEnumStr == "stationary") l.Mobility = Light::EMobility::STATIONARY;
+		}
+		if(pEnabled)    
+		{ 
+			std::string val; XMLParseStringVal(pEnabled, val);
+			l.bEnabled = StrUtil::ParseBool(val); 
 		}
 		if(pAttenuation)
 		{ 

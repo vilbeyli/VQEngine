@@ -131,6 +131,8 @@ float4 PSMain(PSInput In) : SV_TARGET
 	SurfaceParams.N = length(Normal) < 0.01 ? normalize(In.vertNormal) : Normal;
 	SurfaceParams.roughness = 0.1f;
 	SurfaceParams.metalness = 0.0f;
+	SurfaceParams.emissiveColor = Emissive;
+	SurfaceParams.emissiveIntensity = 10.0f; 
 	
 	// lighting & surface parameters (World Space)
 	const float3 P = In.worldPos;
@@ -144,11 +146,11 @@ float4 PSMain(PSInput In) : SV_TARGET
 	
 
 	// illumination accumulators
-	float ao = 0.001f;
+	float ao = 0.005f;
 	const float3 Ia = SurfaceParams.diffuseColor * ao; // ambient illumination
 	float3 IdIs = float3(0.0f, 0.0f, 0.0f); // diffuse & specular illumination
+	float3 Ie = SurfaceParams.emissiveColor * SurfaceParams.emissiveIntensity; // emissive illumination
 	float3 IEnv = 0.0f.xxx;                 // environment lighting illumination
-	float3 Ie = 0.0f.xxx; //s.emissiveColor;            // emissive illumination
 	
 	
 	for (int p = 0; p < cbPerFrame.Lights.numPointLights; ++p)
@@ -162,5 +164,5 @@ float4 PSMain(PSInput In) : SV_TARGET
 	IdIs += CalculateDirectionalLightIllumination(cbPerFrame.Lights.directional);
 	
 	float3 OutColor = Ia + IdIs + IEnv + Ie;
-	return float4(N, 1);
+	return float4(OutColor, 1);
 }

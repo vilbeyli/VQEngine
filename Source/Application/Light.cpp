@@ -100,8 +100,15 @@ void Light::GetGPUData(VQ_SHADER_DATA::SpotLight* pLight) const
 	assert(pLight);
 	COPY_COMMON_LIGHT_DATA(pLight, this);
 	
+	Transform tf;
+	tf._position = this->Position;
+	tf._rotation = this->RotationQuaternion;
+	XMFLOAT3 FWD_F3(0, 0, 1);
+	XMVECTOR FWD = XMLoadFloat3(&FWD_F3);
+	FWD = XMVector3Transform(FWD, tf.NormalMatrix(tf.WorldTransformationMatrix()));
+
+	XMStoreFloat3(&pLight->spotDir, FWD);
 	pLight->position = this->Position;
-	//pLight->spotDir = 
-	pLight->innerConeAngle = this->SpotInnerConeAngleDegrees;
-	pLight->outerConeAngle = this->SpotOuterConeAngleDegrees;
+	pLight->innerConeAngle = this->SpotInnerConeAngleDegrees * DEG2RAD;
+	pLight->outerConeAngle = this->SpotOuterConeAngleDegrees * DEG2RAD;
 }

@@ -77,7 +77,6 @@
         </Transform>
         <Model>
             <Mesh>Cylinder</Mesh>
-            <MaterialName>Checkerboard</MaterialName>
         </Model>
     </GameObject>
 
@@ -100,10 +99,19 @@
         </Transform>
         <Model>
             <Mesh>Cylinder</Mesh>
-            <MaterialName>Checkerboard</MaterialName>
         </Model>
     </GameObject>
-
+    <GameObject>
+        <Transform>
+            <Position>13 0 20</Position>
+            <Rotation>0 180 0</Rotation>
+            <Scale>1000 1000 1000</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/BoomBox/glTF/BoomBox.gltf</Path>
+            <Name>BoomBox</Name>
+        </Model>
+    </GameObject>
 
     <!-- LIGHTS -->
     <Light> <!-- Directional Light -->
@@ -131,16 +139,17 @@
     <Light>
         <!-- Point Light -->
         <Mobility> Dynamic </Mobility>
-        <Color>0.9 0.9 0.85</Color>
+        <Enabled>true</Enabled>
+        <Color>0.4 0.4 0.85</Color>
         <Range> 1500 </Range>
-        <Brightness> 100 </Brightness>
+        <Brightness> 1500 </Brightness>
         <Shadows>
             <DepthBias> 0.001 </DepthBias>
             <NearPlane> 0.001 </NearPlane>
             <FarPlane>  1500  </FarPlane>
         </Shadows>
         <Transform>
-            <Position>0 10 0</Position>
+            <Position>12.5 10 0</Position>
             <Rotation> 0 0 0 </Rotation>
             <Scale> 0.1 0.1 0.1 </Scale>
         </Transform>
@@ -151,10 +160,10 @@
 
     <Light> <!-- Spot Light -->
         <Mobility> Static </Mobility>
-        <Enabled>false</Enabled>
-        <Color>0.9 0.9 0.85</Color>
+        <Enabled>true</Enabled>
+        <Color>0.0 0.9 0.9</Color>
         <Range> 1500 </Range>
-        <Brightness> 500 </Brightness>
+        <Brightness> 10 </Brightness>
         <Shadows>
             <DepthBias> 0.001 </DepthBias>
             <NearPlane> 0.001 </NearPlane>
@@ -162,7 +171,7 @@
         </Shadows>
         <Transform>
             <Position>20 10 0</Position>
-            <Rotation> 10 0 0 </Rotation>
+            <Rotation> 90 0 0 </Rotation>
             <Scale> 0.1 0.1 0.1 </Scale>
         </Transform>
         <Spot>

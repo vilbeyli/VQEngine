@@ -96,12 +96,11 @@ float3 CalculateSpotLightIllumination(in const SpotLight l, in BRDF_Surface s, f
 {
 	float3 IdIs = 0.0f.xxx;
 	
-#if 0 // TODO: fix negative value
 	const float3 Wi = normalize(l.position - P);
 	const float3 radiance = SpotlightIntensity(l, P) * l.color * l.brightness;
 	const float NdotL = saturate(dot(N, Wi));
 	IdIs += BRDF(s, Wi, V) * radiance * NdotL;
-#endif
+	
 	return IdIs;
 }
 float3 CalculateDirectionalLightIllumination(in const DirectionalLight l)

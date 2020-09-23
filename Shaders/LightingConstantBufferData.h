@@ -170,7 +170,8 @@ struct PerObjectData
 {
 	matrix matWorldViewProj;
 	matrix matWorld;
-	float3x3 matNormal;
+	//float3x3 matNormal;
+	matrix matNormal;
 };
 
 

@@ -503,6 +503,7 @@ void Scene::GatherSceneLightData(FSceneView& SceneView) const
 	{
 		for (const Light& l : vLights)
 		{
+			if (!l.bEnabled) continue;
 			switch (l.Type)
 			{
 			case Light::EType::DIRECTIONAL: l.GetGPUData(&data.directional); break;

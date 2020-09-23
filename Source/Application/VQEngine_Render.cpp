@@ -757,8 +757,8 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 	}
 
 	// Draw Objects -----------------------------------------------
-	constexpr UINT PerObjRSBindSlot = 0;
 	{
+		constexpr UINT PerObjRSBindSlot = 1;
 		SCOPED_GPU_MARKER(pCmd, "Geometry");
 		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 		for (const FMeshRenderCommand& meshRenderCmd : SceneView.meshRenderCommands)
@@ -773,10 +773,9 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 
 			pPerObj->matWorldViewProj = meshRenderCmd.WorldTransformationMatrix * SceneView.viewProj;
 			pPerObj->matWorld         = meshRenderCmd.WorldTransformationMatrix;
-			XMStoreFloat3x3(&pPerObj->matNormal, meshRenderCmd.NormalTransformationMatrix);
+			pPerObj->matNormal        = meshRenderCmd.NormalTransformationMatrix;
 
-			pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
-
+			pCmd->SetGraphicsRootConstantBufferView(PerObjRSBindSlot, cbAddr);
 
 			// set textures
 			if (mat.SRVMaterialMaps != INVALID_ID)
