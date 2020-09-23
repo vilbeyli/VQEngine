@@ -115,24 +115,23 @@ float4 PSMain(PSInput In) : SV_TARGET
 {
 	const float2 uv = In.uv;
 	
-	float3 Albedo    = texDiffuse.SampleLevel(LinearSampler, uv, 0).rgb;
+	float4 AlbedoAlpha = texDiffuse.SampleLevel(LinearSampler, uv, 0);
 	float3 Normal    = texNormals.SampleLevel(PointSampler, uv, 0).rgb;
 	float3 Emissive  = texEmissive.SampleLevel(LinearSampler, uv, 0).rgb;
-	float3 AlphaMask = texAlphaMask.SampleLevel(LinearSampler, uv, 0).rgb;
+	float AlphaMask  = AlbedoAlpha[3];
 	float3 Metalness = texMetalness.SampleLevel(LinearSampler, uv, 0).rgb;
 	float3 Roughness = texRoughness.SampleLevel(LinearSampler, uv, 0).rgb;
 	
-	// TODO: handle empty alpha mask case
-	//if (AlphaMask.x < 0.01f)
-	//	discard;
+	if (HasDiffuseMap(cbPerObject.materialData.textureConfig) && AlphaMask.x < 0.01f)
+		discard;
 	
 	BRDF_Surface SurfaceParams = (BRDF_Surface)0;
-	SurfaceParams.diffuseColor = Albedo;
 	SurfaceParams.N = length(Normal) < 0.01 ? normalize(In.vertNormal) : Normal;
-	SurfaceParams.roughness = 0.1f;
-	SurfaceParams.metalness = 0.0f;
-	SurfaceParams.emissiveColor = Emissive;
-	SurfaceParams.emissiveIntensity = 10.0f; 
+	SurfaceParams.diffuseColor      = HasDiffuseMap(cbPerObject.materialData.textureConfig)   ? AlbedoAlpha.rgb : cbPerObject.materialData.diffuse;
+	SurfaceParams.roughness         = HasRoughnessMap(cbPerObject.materialData.textureConfig) ? Roughness       : cbPerObject.materialData.roughness;
+	SurfaceParams.metalness         = HasMetallicMap(cbPerObject.materialData.textureConfig)  ? Metalness       : cbPerObject.materialData.metalness;
+	SurfaceParams.emissiveColor     = HasEmissiveMap(cbPerObject.materialData.textureConfig)  ? Emissive        : cbPerObject.materialData.emissiveColor;
+	SurfaceParams.emissiveIntensity = cbPerObject.materialData.emissiveIntensity;
 	
 	// lighting & surface parameters (World Space)
 	const float3 P = In.worldPos;
@@ -144,14 +143,13 @@ float4 PSMain(PSInput In) : SV_TARGET
 	const float3 B = normalize(cross(T, N));
 	float3x3 TBN = float3x3(T, B, N);
 	
-
-	// illumination accumulators
 	float ao = 0.005f;
+	
+	// illumination accumulators
 	const float3 Ia = SurfaceParams.diffuseColor * ao; // ambient illumination
 	float3 IdIs = float3(0.0f, 0.0f, 0.0f); // diffuse & specular illumination
-	float3 Ie = SurfaceParams.emissiveColor * SurfaceParams.emissiveIntensity; // emissive illumination
+	float3 Ie = SurfaceParams.emissiveColor * SurfaceParams.emissiveIntensity * 10.0f; // emissive illumination
 	float3 IEnv = 0.0f.xxx;                 // environment lighting illumination
-	
 	
 	for (int p = 0; p < cbPerFrame.Lights.numPointLights; ++p)
 	{

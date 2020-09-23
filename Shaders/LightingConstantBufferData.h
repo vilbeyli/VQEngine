@@ -119,32 +119,29 @@ struct SceneLighting
 
 // Has*Map() encoding should match Material::GetTextureConfig()
 //
-inline int HasDiffuseMap(int textureConfig)  { return ((textureConfig & 1  ) > 0 ? 1 : 0); }
-inline int HasNormalMap(int textureConfig)	 { return ((textureConfig & 2  ) > 0 ? 1 : 0); }
-inline int HasSpecularMap(int textureConfig) { return ((textureConfig & 4  ) > 0 ? 1 : 0); }
-inline int HasAlphaMask(int textureConfig)   { return ((textureConfig & 8  ) > 0 ? 1 : 0); }
-inline int HasRoughnessMap(int textureConfig){ return ((textureConfig & 16 ) > 0 ? 1 : 0); }
-inline int HasMetallicMap(int textureConfig) { return ((textureConfig & 32 ) > 0 ? 1 : 0); }
-inline int HasHeightMap(int textureConfig)   { return ((textureConfig & 64 ) > 0 ? 1 : 0); }
-inline int HasEmissiveMap(int textureConfig) { return ((textureConfig & 128) > 0 ? 1 : 0); }
+inline int HasDiffuseMap(int textureConfig)  { return ((textureConfig & (1 << 0)) > 0 ? 1 : 0); }
+inline int HasNormalMap(int textureConfig)	 { return ((textureConfig & (1 << 1)) > 0 ? 1 : 0); }
+inline int HasSpecularMap(int textureConfig) { return ((textureConfig & (1 << 2)) > 0 ? 1 : 0); }
+inline int HasAlphaMask(int textureConfig)   { return ((textureConfig & (1 << 3)) > 0 ? 1 : 0); }
+inline int HasRoughnessMap(int textureConfig){ return ((textureConfig & (1 << 4)) > 0 ? 1 : 0); }
+inline int HasMetallicMap(int textureConfig) { return ((textureConfig & (1 << 5)) > 0 ? 1 : 0); }
+inline int HasHeightMap(int textureConfig)   { return ((textureConfig & (1 << 6)) > 0 ? 1 : 0); }
+inline int HasEmissiveMap(int textureConfig) { return ((textureConfig & (1 << 7)) > 0 ? 1 : 0); }
 
-struct SurfaceMaterial
+struct MaterialData
 {
     float3 diffuse;
     float alpha;
 
+	float3 emissiveColor;
+	float emissiveIntensity;
+
     float3 specular;
     float roughness;
 
-    float metalness;
-    float shininess;
 	float2 uvScale;
-
+    float metalness;
 	int textureConfig;
-	int pad0, pad1, pad2;
-
-    float3 emissiveColor;
-    float emissiveIntensity;
 };
 
 
@@ -172,6 +169,8 @@ struct PerObjectData
 	matrix matWorld;
 	//float3x3 matNormal;
 	matrix matNormal;
+
+	MaterialData materialData;
 };
 
 

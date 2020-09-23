@@ -20,6 +20,7 @@
 #include <DirectXMath.h>
 
 #include "Types.h"
+#include "Shaders/LightingConstantBufferData.h"
 
 enum EMaterialTextureMapBindings
 {
@@ -68,6 +69,8 @@ struct Material // 56 Bytes
 	SRV_ID SRVMaterialMaps = INVALID_ID;
 	//------------------------------------------------------------
 
+	VQ_SHADER_DATA::MaterialData GetCBufferData() const;
+	int                          GetTextureConfig() const;
 	inline bool IsTransparent() const { return alpha != 1.0f; }
 
 #if 0
@@ -75,13 +78,12 @@ struct Material // 56 Bytes
 	~Material();
 
 	void SetMaterialConstants(Renderer* renderer, EShaders shader, bool bIsDeferredRendering) const;
-	int GetTextureConfig() const;
 	inline bool HasTexture() const { return GetTextureConfig() != 0; }
 
-	virtual SurfaceMaterial GetCBufferData() const = 0;
+	virtual MaterialData GetCBufferData() const = 0;
 	virtual void Clear() = 0;
 
-	static SurfaceMaterial GetDefaultMaterialCBufferData();
+	static MaterialData GetDefaultMaterialCBufferData();
 };
 
 struct BRDF_Material : public Material
@@ -91,7 +93,7 @@ struct BRDF_Material : public Material
 
 	BRDF_Material() : Material({ -1 }), metalness(0.0f), roughness(0.0f) {}
 
-	SurfaceMaterial GetCBufferData() const override;
+	MaterialData GetCBufferData() const override;
 	void Clear() override;
 
 private:

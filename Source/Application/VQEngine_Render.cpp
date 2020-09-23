@@ -785,13 +785,13 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 			pPerObj->matWorldViewProj = meshRenderCmd.WorldTransformationMatrix * SceneView.viewProj;
 			pPerObj->matWorld         = meshRenderCmd.WorldTransformationMatrix;
 			pPerObj->matNormal        = meshRenderCmd.NormalTransformationMatrix;
+			pPerObj->materialData = std::move(mat.GetCBufferData());
 
 			pCmd->SetGraphicsRootConstantBufferView(PerObjRSBindSlot, cbAddr);
 
 			// set textures
 			if (mat.SRVMaterialMaps != INVALID_ID)
 				pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
-
 
 			// draw mesh
 			if (mpScene->mMeshes.find(meshRenderCmd.meshID) == mpScene->mMeshes.end())

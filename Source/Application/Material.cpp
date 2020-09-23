@@ -18,3 +18,38 @@
 
 #include "Material.h"
 #include "Scene.h"
+
+VQ_SHADER_DATA::MaterialData Material::GetCBufferData() const
+{
+	VQ_SHADER_DATA::MaterialData d = {};
+
+	d.diffuse = this->diffuse;
+	d.alpha = this->alpha;
+
+	d.emissiveColor = this->emissiveColor;
+	d.emissiveIntensity = this->emissiveIntensity;
+
+	d.specular = this->specular;
+	d.roughness = this->roughness;
+	
+	d.metalness = this->metalness;
+	d.uvScale = this->tiling;
+
+	d.textureConfig = this->GetTextureConfig();
+	
+	return d;
+}
+
+int Material::GetTextureConfig() const
+{
+	int textureConfig = 0;
+	textureConfig |= TexDiffuseMap   == -1 ? 0 : (1 << 0);
+	textureConfig |= TexNormalMap    == -1 ? 0 : (1 << 1);
+	textureConfig |= TexSpecularMap  == -1 ? 0 : (1 << 2);
+	textureConfig |= TexAlphaMaskMap == -1 ? 0 : (1 << 3);
+	textureConfig |= TexRoughnessMap == -1 ? 0 : (1 << 4);
+	textureConfig |= TexMetallicMap  == -1 ? 0 : (1 << 5);
+	textureConfig |= TexHeightMap    == -1 ? 0 : (1 << 6);
+	textureConfig |= TexEmissiveMap  == -1 ? 0 : (1 << 7);
+	return textureConfig;
+}

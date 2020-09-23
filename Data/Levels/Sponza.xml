@@ -71,6 +71,11 @@
     </GameObject>
     
     <Light>
+        <Transform>
+            <Position>12.5 100 0</Position>
+            <Rotation> 0 0 0 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
         <!-- Point Light -->
         <Mobility> Dynamic </Mobility>
         <Enabled>true</Enabled>
@@ -82,11 +87,6 @@
             <NearPlane> 0.001 </NearPlane>
             <FarPlane>  1500  </FarPlane>
         </Shadows>
-        <Transform>
-            <Position>12.5 100 0</Position>
-            <Rotation> 0 0 0 </Rotation>
-            <Scale> 0.1 0.1 0.1 </Scale>
-        </Transform>
         <Point>
             <Attenuation> 1 1 1 </Attenuation>
         </Point>

@@ -519,6 +519,12 @@ static Model::Data ProcessAssimpNode(
 			mat.roughness = sqrtf(2.0f / (2.0f + shininess));
 		}
 
+		aiColor3D emissiveIntensity(0.0f, 0.0f, 0.0f);
+		if (aiReturn_SUCCESS == material->Get(AI_MATKEY_COLOR_EMISSIVE, emissiveIntensity))
+		{
+			mat.emissiveIntensity = emissiveIntensity.r;
+		}
+
 		// other material keys to consider
 		//
 		// AI_MATKEY_TWOSIDED

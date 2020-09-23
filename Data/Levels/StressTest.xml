@@ -129,6 +129,54 @@
             <Name>FlightHelmet</Name>
         </Model>
     </GameObject>
+
+
+
+    <Light>
+        <!-- Spot Light -->
+        <Mobility> Static </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.8 0.95 0.8</Color>
+        <Range> 1000 </Range>
+        <Brightness> 10 </Brightness>
+        <Shadows>
+            <DepthBias> 0.001 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  1500  </FarPlane>
+        </Shadows>
+        <Transform>
+            <Position>50 60 -90</Position>
+            <Rotation> 30 -15 0</Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <Spot>
+            <OuterConeAngleDegrees>20</OuterConeAngleDegrees>
+            <InnerConeAngleDegrees>10</InnerConeAngleDegrees>
+        </Spot>
+    </Light>
+
+    <Light>
+        <Transform>
+            <Position>-39.7 48 0.05</Position>
+            <Rotation> 0 0 0 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <!-- Point Light -->
+        <Mobility> Dynamic </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.8 0.8 0.45</Color>
+        <Range> 40 </Range>
+        <Brightness> 500 </Brightness>
+        <Shadows>
+            <DepthBias> 0.001 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  1500  </FarPlane>
+        </Shadows>
+        <Point>
+            <Attenuation> 1 1 1 </Attenuation>
+        </Point>
+    </Light>
+    
     <PostProcess>
     <!-- TBA -->
     </PostProcess>
