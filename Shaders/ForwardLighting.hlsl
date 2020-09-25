@@ -84,6 +84,8 @@ Texture2D texRoughness : register(t5);
 SamplerState LinearSampler : register(s0);
 SamplerState PointSampler  : register(s1);
 
+Texture2DArray   texSpotLightShadowMaps  : register(t6);
+TextureCubeArray texPointLightShadowMaps : register(t12);
 
 //---------------------------------------------------------------------------------------------------
 //
@@ -118,15 +120,14 @@ float4 PSMain(PSInput In) : SV_TARGET
 	float4 AlbedoAlpha = texDiffuse.SampleLevel(LinearSampler, uv, 0);
 	float3 Normal    = texNormals.SampleLevel(PointSampler, uv, 0).rgb;
 	float3 Emissive  = texEmissive.SampleLevel(LinearSampler, uv, 0).rgb;
-	float AlphaMask  = AlbedoAlpha[3];
 	float3 Metalness = texMetalness.SampleLevel(LinearSampler, uv, 0).rgb;
 	float3 Roughness = texRoughness.SampleLevel(LinearSampler, uv, 0).rgb;
 	
-	if (HasDiffuseMap(cbPerObject.materialData.textureConfig) && AlphaMask.x < 0.01f)
+	if (HasDiffuseMap(cbPerObject.materialData.textureConfig) && AlbedoAlpha.a < 0.01f)
 		discard;
 	
+	// read material textures & cbuffer data
 	BRDF_Surface SurfaceParams = (BRDF_Surface)0;
-	SurfaceParams.N = length(Normal) < 0.01 ? normalize(In.vertNormal) : Normal;
 	SurfaceParams.diffuseColor      = HasDiffuseMap(cbPerObject.materialData.textureConfig)   ? AlbedoAlpha.rgb : cbPerObject.materialData.diffuse;
 	SurfaceParams.roughness         = HasRoughnessMap(cbPerObject.materialData.textureConfig) ? Roughness       : cbPerObject.materialData.roughness;
 	SurfaceParams.metalness         = HasMetallicMap(cbPerObject.materialData.textureConfig)  ? Metalness       : cbPerObject.materialData.metalness;
@@ -143,14 +144,17 @@ float4 PSMain(PSInput In) : SV_TARGET
 	const float3 B = normalize(cross(T, N));
 	float3x3 TBN = float3x3(T, B, N);
 	
-	float ao = 0.005f;
+	SurfaceParams.N = length(Normal) < 0.01 
+		? normalize(In.vertNormal) 
+		: UnpackNormals(texNormals, PointSampler, uv, N, T);
 	
 	// illumination accumulators
-	const float3 Ia = SurfaceParams.diffuseColor * ao; // ambient illumination
+	const float3 Ia = SurfaceParams.diffuseColor * cbPerFrame.fAmbientLightingFactor; // ambient illumination
 	float3 IdIs = float3(0.0f, 0.0f, 0.0f); // diffuse & specular illumination
 	float3 Ie = SurfaceParams.emissiveColor * SurfaceParams.emissiveIntensity * 10.0f; // emissive illumination
 	float3 IEnv = 0.0f.xxx;                 // environment lighting illumination
 	
+	// Non-shadowing lights
 	for (int p = 0; p < cbPerFrame.Lights.numPointLights; ++p)
 	{
 		IdIs += CalculatePointLightIllumination(cbPerFrame.Lights.point_lights[p], SurfaceParams, P, N, V);
@@ -159,7 +163,50 @@ float4 PSMain(PSInput In) : SV_TARGET
 	{
 		IdIs += CalculateSpotLightIllumination(cbPerFrame.Lights.spot_lights[s], SurfaceParams, P, N, V);
 	}
-	IdIs += CalculateDirectionalLightIllumination(cbPerFrame.Lights.directional);
+	
+	
+	// Shadow casters - POINT
+	for (int pc = 0; pc < cbPerFrame.Lights.numPointCasters; ++pc)
+	{
+		const float2 PointLightShadowMapDimensions = cbPerFrame.f2PointLightShadowMapDimensions;
+		PointLight l = cbPerFrame.Lights.point_casters[pc];
+		const float  D = length   (l.position - P);
+
+		if(D < l.range)
+		{
+			const float3 L = normalize(l.position - P);
+			
+			ShadowTestPCFData pcfData = (ShadowTestPCFData) 0;
+			pcfData.depthBias           = l.depthBias;
+			pcfData.NdotL               = saturate(dot(SurfaceParams.N, L));
+			pcfData.viewDistanceOfPixel = length(P - cbPerView.CameraPosition);
+			//pcfData.lightSpacePos       = mul(cbPerFrame.Lights.shadowViews[pc], float4(P, 1));
+		
+			IdIs += CalculatePointLightIllumination(cbPerFrame.Lights.point_casters[pc], SurfaceParams, P, N, V)
+			//		* OmnidirectionalShadowTestPCF(pcfData, texPointLightShadowMaps, PointSampler, PointLightShadowMapDimensions, pc, L, l.range)
+			;
+		}
+	}
+	
+	// Shadow casters - SPOT
+	for (int sc = 0; sc < cbPerFrame.Lights.numSpotCasters; ++sc)
+	{
+		SpotLight l = cbPerFrame.Lights.spot_casters[sc];
+		const float3 L = normalize(l.position - P);
+		const float2 SpotLightShadowMapDimensions = cbPerFrame.f2SpotLightShadowMapDimensions;
+		
+		ShadowTestPCFData pcfData = (ShadowTestPCFData) 0;
+		pcfData.depthBias           = l.depthBias;
+		pcfData.NdotL               = saturate(dot(SurfaceParams.N, L));
+		pcfData.lightSpacePos       = mul(cbPerFrame.Lights.shadowViews[sc], float4(P, 1));
+		pcfData.viewDistanceOfPixel = length(P - cbPerView.CameraPosition);
+		
+		IdIs += CalculateSpotLightIllumination(cbPerFrame.Lights.spot_casters[sc], SurfaceParams, P, N, V) 
+			  * ShadowTestPCF(pcfData, texSpotLightShadowMaps, PointSampler, SpotLightShadowMapDimensions, sc);
+	}
+	
+	if (cbPerFrame.Lights.directional.enabled)
+		IdIs += CalculateDirectionalLightIllumination(cbPerFrame.Lights.directional, SurfaceParams, P, V, cbPerFrame.Lights.shadowViewDirectional);
 	
 	float3 OutColor = Ia + IdIs + IEnv + Ie;
 	return float4(OutColor, 1);

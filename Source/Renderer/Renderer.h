@@ -118,6 +118,8 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	WIREFRAME_PSO_MSAA_4,
 	UNLIT_PSO,
 	UNLIT_PSO_MSAA_4,
+	DEPTH_PASS_PSO,
+	DEPTH_PASS_ALPHAMASKED_PSO,
 
 	NUM_BUILTIN_PSOs
 };
@@ -168,7 +170,7 @@ public:
 	DSV_ID                       CreateAndInitializeDSV(TextureID texID);
 
 	// Initializes a ResourceView from given texture and the specified heap index
-	void                         InitializeDSV(DSV_ID dsvID, uint heapIndex, TextureID texID);
+	void                         InitializeDSV(DSV_ID dsvID, uint heapIndex, TextureID texID, int ArraySlice = 0);
 	void                         InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID);
 	void                         InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID);
 	void                         InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID);

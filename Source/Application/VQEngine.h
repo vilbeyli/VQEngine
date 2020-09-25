@@ -89,19 +89,31 @@ struct FEnvironmentMap
 struct FRenderingResources{};
 struct FRenderingResources_MainWindow : public FRenderingResources
 {
-	TextureID Tex_MainViewColorMSAA  = INVALID_ID;
-	TextureID Tex_MainViewColor      = INVALID_ID;
-	TextureID Tex_MainViewDepthMSAA  = INVALID_ID;
-	TextureID Tex_MainViewDepth      = INVALID_ID;
+	TextureID Tex_MainViewColorMSAA         = INVALID_ID;
+	TextureID Tex_MainViewColor             = INVALID_ID;
+	TextureID Tex_MainViewDepthMSAA         = INVALID_ID;
+	TextureID Tex_MainViewDepth             = INVALID_ID;
 	TextureID Tex_PostProcess_TonemapperOut = INVALID_ID;
+	TextureID Tex_ShadowMaps_Spot           = INVALID_ID;
+	TextureID Tex_ShadowMaps_Point          = INVALID_ID;
+	TextureID Tex_ShadowMaps_Directional    = INVALID_ID;
 
-	RTV_ID    RTV_MainViewColorMSAA  = INVALID_ID;
-	RTV_ID    RTV_MainViewColor      = INVALID_ID;
-	SRV_ID    SRV_MainViewColor      = INVALID_ID;
-	DSV_ID    DSV_MainViewDepthMSAA  = INVALID_ID;
-	DSV_ID    DSV_MainViewDepth      = INVALID_ID;
+	RTV_ID    RTV_MainViewColorMSAA         = INVALID_ID;
+	RTV_ID    RTV_MainViewColor             = INVALID_ID;
+
+	SRV_ID    SRV_MainViewColor             = INVALID_ID;
 	SRV_ID    SRV_PostProcess_TonemapperOut = INVALID_ID;
+	SRV_ID    SRV_ShadowMaps_Spot           = INVALID_ID;
+	SRV_ID    SRV_ShadowMaps_Point          = INVALID_ID;
+	SRV_ID    SRV_ShadowMaps_Directional    = INVALID_ID;
+
 	UAV_ID    UAV_PostProcess_TonemapperOut = INVALID_ID;
+
+	DSV_ID    DSV_MainViewDepthMSAA          = INVALID_ID;
+	DSV_ID    DSV_MainViewDepth              = INVALID_ID;
+	DSV_ID    DSV_ShadowMaps_Spot            = INVALID_ID;
+	DSV_ID    DSV_ShadowMaps_Point           = INVALID_ID;
+	DSV_ID    DSV_ShadowMaps_Directional     = INVALID_ID;
 
 	FEnvironmentMap EnvironmentMap;
 };
@@ -176,6 +188,7 @@ public:
 	void RenderThread_SignalUpdateThread();
 
 	void RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height);
+	void RenderThread_LoadResources();
 	void RenderThread_UnloadWindowSizeDependentResources(HWND hwnd);
 
 	// PRE_RENDER()
@@ -380,7 +393,7 @@ private:
 	// FRAME RENDERING PIPELINE
 	//
 	void                            TransitionForSceneRendering(FWindowRenderContext& ctx);
-	void                            RenderShadowMaps(FWindowRenderContext& ctx);
+	void                            RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowView& ShadowView);
 	void                            RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& SceneView);
 	void                            ResolveMSAA(FWindowRenderContext& ctx);
 	void                            TransitionForPostProcessing(FWindowRenderContext& ctx);

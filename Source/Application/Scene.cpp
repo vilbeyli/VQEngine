@@ -128,6 +128,7 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 	, mpWindow(pWin)
 	, mEngine(engine)
 	, mFrameSceneViews(NumFrameBuffers)
+	, mFrameShadowViews(NumFrameBuffers)
 	, mIndex_SelectedCamera(0)
 	, mIndex_ActiveEnvironmentMapPreset(0)
 	, mGameObjectPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
@@ -358,7 +359,9 @@ void Scene::Unload()
 
 	const size_t sz = mFrameSceneViews.size();
 	mFrameSceneViews.clear();
+	mFrameShadowViews.clear();
 	mFrameSceneViews.resize(sz);
+	mFrameShadowViews.resize(sz);
 
 	//mMeshes.clear(); // TODO
 	
@@ -404,6 +407,7 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 {
 	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
 	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
+	FSceneShadowView& ShadowView = mFrameShadowViews[FRAME_DATA_INDEX];
 	FSceneView& SceneViewNext = mFrameSceneViews[FRAME_DATA_NEXT_INDEX];
 
 	const Camera& cam = mCameras[mIndex_SelectedCamera];
@@ -420,45 +424,11 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 	SceneView.MainViewCameraPitch = cam.GetPitch();
 
 	// TODO: compute mesh visibility 
-
 	// TODO: cull lights
-
-	// gather light data
-	SceneView.lightBoundsRenderCommands.clear();
-	SceneView.lightRenderCommands.clear();
+	PrepareSceneMeshRenderParams(SceneView);
 	GatherSceneLightData(SceneView);
-
-
-	// prepare mesh render cmd arguments for objects
-	SceneView.meshRenderCommands.clear();
-	for (const GameObject* pObj : mpObjects)
-	{
-		Transform*& pTF = mpTransforms.at(pObj->mTransformID);
-
-		const bool bModelNotFound = mModels.find(pObj->mModelID) == mModels.end();
-		if (bModelNotFound)
-		{
-			Log::Warning("[Scene] Model not found: ID=%d", pObj->mModelID);
-			continue; // skip rendering object if there's no model
-		}
-
-		const Model& model = mModels.at(pObj->mModelID);
-
-		assert(pObj->mModelID != INVALID_ID);
-		for (const MeshID id : model.mData.mOpaueMeshIDs)
-		{
-			FMeshRenderCommand meshRenderCmd;
-			meshRenderCmd.meshID = id;
-			meshRenderCmd.WorldTransformationMatrix = pTF->WorldTransformationMatrix();
-			meshRenderCmd.NormalTransformationMatrix = pTF->NormalMatrix(meshRenderCmd.WorldTransformationMatrix);
-			meshRenderCmd.matID = model.mData.mOpaqueMaterials.at(id);
-
-			SceneView.meshRenderCommands.push_back(meshRenderCmd);
-		}
-	}
-
+	PrepareShadowMeshRenderParams(ShadowView);
 	PrepareLightMeshRenderParams(SceneView);
-
 
 	// update post process settings for next frame
 	SceneViewNext.postProcess = SceneView.postProcess;
@@ -503,6 +473,9 @@ void Scene::HandleInput(FSceneView& SceneView)
 
 void Scene::GatherSceneLightData(FSceneView& SceneView) const
 {
+	SceneView.lightBoundsRenderCommands.clear();
+	SceneView.lightRenderCommands.clear();
+
 	VQ_SHADER_DATA::SceneLighting& data = SceneView.GPULightingData;
 	
 	int iGPUSpot = 0;  int iGPUSpotShadow = 0;
@@ -514,12 +487,28 @@ void Scene::GatherSceneLightData(FSceneView& SceneView) const
 			if (!l.bEnabled) continue;
 			switch (l.Type)
 			{
-			case Light::EType::DIRECTIONAL: l.GetGPUData(&data.directional); break;
-			case Light::EType::SPOT       : l.GetGPUData(l.bCastingShadows ? &data.spot_casters[iGPUSpotShadow++]   : &data.spot_lights[iGPUSpot++]  ); break;
-			case Light::EType::POINT      : l.GetGPUData(l.bCastingShadows ? &data.point_casters[iGPUPointShadow++] : &data.point_lights[iGPUPoint++]); break;
+			case Light::EType::DIRECTIONAL: 
+				l.GetGPUData(&data.directional); 
+				if (l.bCastingShadows)
+				{
+					data.shadowViewDirectional = l.GetViewProjectionMatrix();
+				}
+				break;
+			case Light::EType::SPOT       : 
+				l.GetGPUData(l.bCastingShadows ? &data.spot_casters[iGPUSpotShadow++]   : &data.spot_lights[iGPUSpot++]  ); 
+				if (l.bCastingShadows)
+				{
+					data.shadowViews[iGPUSpotShadow - 1] = l.GetViewProjectionMatrix();
+				}
+				break;
+			case Light::EType::POINT      : 
+				l.GetGPUData(l.bCastingShadows ? &data.point_casters[iGPUPointShadow++] : &data.point_lights[iGPUPoint++]); 
+				// TODO: 
+				break;
 			default:
 				break;
 			}
+			
 		}
 	};
 	fnGatherLightData(mLightsStatic);
@@ -616,6 +605,106 @@ void Scene::PrepareLightMeshRenderParams(FSceneView& SceneView) const
 	fnGatherLightRenderData(mLightsStatic);
 	fnGatherLightRenderData(mLightsStationary);
 	fnGatherLightRenderData(mLightsDynamic);
+}
+
+void Scene::PrepareSceneMeshRenderParams(FSceneView& SceneView) const
+{
+	SceneView.meshRenderCommands.clear();
+	for (const GameObject* pObj : mpObjects)
+	{
+		Transform* const& pTF = mpTransforms.at(pObj->mTransformID);
+
+		const bool bModelNotFound = mModels.find(pObj->mModelID) == mModels.end();
+		if (bModelNotFound)
+		{
+			Log::Warning("[Scene] Model not found: ID=%d", pObj->mModelID);
+			continue; // skip rendering object if there's no model
+		}
+
+		const Model& model = mModels.at(pObj->mModelID);
+
+		assert(pObj->mModelID != INVALID_ID);
+		for (const MeshID id : model.mData.mOpaueMeshIDs)
+		{
+			FMeshRenderCommand meshRenderCmd;
+			meshRenderCmd.meshID = id;
+			meshRenderCmd.WorldTransformationMatrix = pTF->WorldTransformationMatrix();
+			meshRenderCmd.NormalTransformationMatrix = pTF->NormalMatrix(meshRenderCmd.WorldTransformationMatrix);
+			meshRenderCmd.matID = model.mData.mOpaqueMaterials.at(id);
+
+			SceneView.meshRenderCommands.push_back(meshRenderCmd);
+		}
+	}
+}
+
+void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView) const
+{
+	int iSpot  = 0;
+	int iPoint = 0;
+
+	auto fnGatherMeshRenderParamsForLight = [&](const Light& l, std::vector<FShadowMeshRenderCommand>& vMeshRenderList)
+	{
+		vMeshRenderList.clear();
+		for (const GameObject* pObj : mpObjects)
+		{
+			Transform* const& pTF = mpTransforms.at(pObj->mTransformID);
+
+			const bool bModelNotFound = mModels.find(pObj->mModelID) == mModels.end();
+			if (bModelNotFound)
+			{
+				Log::Warning("[Scene] Model not found: ID=%d", pObj->mModelID);
+				continue; // skip rendering object if there's no model
+			}
+
+			const Model& model = mModels.at(pObj->mModelID);
+
+			assert(pObj->mModelID != INVALID_ID);
+			for (const MeshID id : model.mData.mOpaueMeshIDs)
+			{
+				FShadowMeshRenderCommand meshRenderCmd;
+				meshRenderCmd.meshID = id;
+				meshRenderCmd.WorldTransformationMatrix = pTF->WorldTransformationMatrix();
+				vMeshRenderList.push_back(meshRenderCmd);
+			}
+		}
+	};
+	auto fnGatherShadowingLightData = [&](const std::vector<Light>& vLights)
+	{
+		for (const Light& l : vLights)
+		{
+			if (!l.bEnabled || !l.bCastingShadows)
+				continue;
+
+			switch (l.Type)
+			{
+			case Light::EType::DIRECTIONAL: 
+			{
+				FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowView_Directional;
+				ShadowView.matViewProj = l.GetViewProjectionMatrix();
+				fnGatherMeshRenderParamsForLight(l, ShadowView.meshRenderCommands);
+			}	break;
+			case Light::EType::SPOT       : 
+			{
+				FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowViews_Spot[iSpot++];
+				ShadowView.matViewProj = l.GetViewProjectionMatrix();
+				fnGatherMeshRenderParamsForLight(l, ShadowView.meshRenderCommands);
+			} break;
+			case Light::EType::POINT      : 
+			{
+				FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowViews_Point[iPoint++];
+				ShadowView.matViewProj = l.GetViewProjectionMatrix();
+				fnGatherMeshRenderParamsForLight(l, ShadowView.meshRenderCommands);
+			} break;
+			}
+		}
+	};
+
+	fnGatherShadowingLightData(mLightsStatic);
+	fnGatherShadowingLightData(mLightsStationary);
+	fnGatherShadowingLightData(mLightsDynamic);
+	SceneShadowView.NumPointShadowViews = iPoint;
+	SceneShadowView.NumSpotShadowViews = iSpot;
+
 }
 
 FMaterialRepresentation::FMaterialRepresentation()

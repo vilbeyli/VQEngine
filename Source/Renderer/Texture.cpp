@@ -32,14 +32,22 @@
 Texture::Texture(const Texture& other)
     : mpAlloc(other.mpAlloc)
     , mpTexture(other.mpTexture)
-    , bResident(other.bResident.load())
+    , mbResident(other.mbResident.load())
+    , mbTypelessTexture(other.mbTypelessTexture)
+    , mStructuredBufferStride(other.mStructuredBufferStride)
+    , mMipMapCount(other.mMipMapCount)
+    , mFormat(other.mFormat)
 {}
 
 Texture& Texture::operator=(const Texture& other)
 {
     mpAlloc = other.mpAlloc;
     mpTexture = other.mpTexture;
-    bResident = other.bResident.load();
+    mbResident = other.mbResident.load();
+    mbTypelessTexture = other.mbTypelessTexture;
+    mStructuredBufferStride = other.mStructuredBufferStride;
+    mMipMapCount = other.mMipMapCount;
+    mFormat = other.mFormat;
     return *this;
 }
 
@@ -124,6 +132,8 @@ void Texture::Create(const TextureCreateDesc& desc, const void* pData /*= nullpt
         return;
     }
     SetName(mpTexture, desc.TexName.c_str());
+
+    this->mbTypelessTexture = bDepthStencilTexture;
 }
 
 
@@ -149,7 +159,101 @@ pTex->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice))\
 void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc)
 {
     GetDevice(pDevice, mpTexture);
-    pDevice->CreateShaderResourceView(mpTexture, pSRVDesc, pRV->GetCPUDescHandle(index));
+
+    bool bArrayView = false;
+    if (mbTypelessTexture)
+    {
+        D3D12_RESOURCE_DESC resourceDesc = mpTexture->GetDesc();
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+        int mipLevel        = 0; // TODO
+        int arraySize       = resourceDesc.DepthOrArraySize; // TODO
+        int firstArraySlice = 0; // TODO
+
+        if (resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
+        {
+            srvDesc.Format = mFormat;
+            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+            srvDesc.Buffer.FirstElement = 0;
+            srvDesc.Buffer.NumElements = resourceDesc.Width;
+            srvDesc.Buffer.StructureByteStride = mStructuredBufferStride;
+            srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+        }
+        else
+        {
+            if (resourceDesc.Format == DXGI_FORMAT_R32_TYPELESS)
+            {
+                srvDesc.Format = DXGI_FORMAT_R32_FLOAT; //special case for the depth buffer
+            }
+            else
+            {
+                D3D12_RESOURCE_DESC desc = mpTexture->GetDesc();
+                srvDesc.Format = desc.Format;
+            }
+
+            if (resourceDesc.SampleDesc.Count == 1)
+            {
+                if (resourceDesc.DepthOrArraySize == 1)
+                {
+                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+
+                    srvDesc.Texture2D.MostDetailedMip = (mipLevel == -1) ? 0 : mipLevel;
+                    srvDesc.Texture2D.MipLevels = (mipLevel == -1) ? mMipMapCount : 1;
+
+                    assert(arraySize == -1);
+                    assert(firstArraySlice == -1);
+                }
+                else
+                {
+                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+
+                    srvDesc.Texture2DArray.MostDetailedMip = (mipLevel == -1) ? 0 : mipLevel;
+                    srvDesc.Texture2DArray.MipLevels = (mipLevel == -1) ? mMipMapCount : 1;
+
+                    srvDesc.Texture2DArray.FirstArraySlice = (firstArraySlice == -1) ? 0 : firstArraySlice;
+                    srvDesc.Texture2DArray.ArraySize = (arraySize == -1) ? resourceDesc.DepthOrArraySize : arraySize;
+                    bArrayView = true;
+                }
+            }
+            else
+            {
+                if (resourceDesc.DepthOrArraySize == 1)
+                {
+                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
+                    assert(mipLevel == -1);
+                    assert(arraySize == -1);
+                    assert(firstArraySlice == -1);
+                }
+                else
+                {
+                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY;
+                    srvDesc.Texture2DMSArray.FirstArraySlice = (firstArraySlice == -1) ? 0 : firstArraySlice;
+                    srvDesc.Texture2DMSArray.ArraySize = (arraySize == -1) ? resourceDesc.DepthOrArraySize : arraySize;
+                    assert(mipLevel == -1);
+                }
+            }
+        }
+
+        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+        if (bArrayView)
+        {
+            for (int i = 0; i < resourceDesc.DepthOrArraySize; ++i)
+            {
+                srvDesc.Texture2DArray.FirstArraySlice = i;
+                srvDesc.Texture2DArray.ArraySize = resourceDesc.DepthOrArraySize - i;
+                pDevice->CreateShaderResourceView(mpTexture, &srvDesc, pRV->GetCPUDescHandle(index+i));
+            }
+        }
+        else
+        {
+            pDevice->CreateShaderResourceView(mpTexture, &srvDesc, pRV->GetCPUDescHandle(index));
+        }
+    }
+    else
+    {
+        pDevice->CreateShaderResourceView(mpTexture, pSRVDesc, pRV->GetCPUDescHandle(index));
+    }
 
     pDevice->Release();
 }
@@ -295,4 +399,33 @@ std::vector<uint8> Texture::GenerateTexture_Checkerboard(uint Dimension, bool bU
     return data;
 }
 
+#include "../Application/Math.h"
+DirectX::XMMATRIX Texture::CubemapUtility::CalculateViewMatrix(Texture::CubemapUtility::ECubeMapLookDirections cubeFace, const DirectX::XMFLOAT3& position)
+{
+    using namespace DirectX;
+    const XMVECTOR pos = XMLoadFloat3(&position);
 
+    static XMVECTOR VEC3_UP      = XMLoadFloat3(&UpVector);
+    static XMVECTOR VEC3_DOWN    = XMLoadFloat3(&DownVector);
+    static XMVECTOR VEC3_LEFT    = XMLoadFloat3(&LeftVector);
+    static XMVECTOR VEC3_RIGHT   = XMLoadFloat3(&RightVector);
+    static XMVECTOR VEC3_FORWARD = XMLoadFloat3(&ForwardVector);
+    static XMVECTOR VEC3_BACK    = XMLoadFloat3(&BackVector);
+
+    // cube face order: https://msdn.microsoft.com/en-us/library/windows/desktop/ff476906(v=vs.85).aspx
+    //------------------------------------------------------------------------------------------------------
+    // 0: RIGHT		1: LEFT
+    // 2: UP		3: DOWN
+    // 4: FRONT		5: BACK
+    //------------------------------------------------------------------------------------------------------
+    switch (cubeFace)
+    {
+    case Texture::CubemapUtility::CUBEMAP_LOOK_RIGHT:	return XMMatrixLookAtLH(pos, pos + VEC3_RIGHT  , VEC3_UP);
+    case Texture::CubemapUtility::CUBEMAP_LOOK_LEFT:	return XMMatrixLookAtLH(pos, pos + VEC3_LEFT   , VEC3_UP);
+    case Texture::CubemapUtility::CUBEMAP_LOOK_UP:		return XMMatrixLookAtLH(pos, pos + VEC3_UP     , VEC3_BACK);
+    case Texture::CubemapUtility::CUBEMAP_LOOK_DOWN:	return XMMatrixLookAtLH(pos, pos + VEC3_DOWN   , VEC3_FORWARD);
+    case Texture::CubemapUtility::CUBEMAP_LOOK_FRONT:	return XMMatrixLookAtLH(pos, pos + VEC3_FORWARD, VEC3_UP);
+    case Texture::CubemapUtility::CUBEMAP_LOOK_BACK:	return XMMatrixLookAtLH(pos, pos + VEC3_BACK   , VEC3_UP);
+    default: return XMMatrixIdentity();
+    }
+}

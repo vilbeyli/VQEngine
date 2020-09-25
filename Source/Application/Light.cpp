@@ -18,6 +18,8 @@
 
 #include "Light.h"
 
+#include "Libs/VQUtils/Source/Log.h"
+
 using namespace DirectX;
 
 Light Light::MakePointLight()
@@ -73,7 +75,7 @@ Light::Light()
 #define COPY_COMMON_LIGHT_DATA(pDst, pSrc)\
 pDst->brightness = pSrc->Brightness;\
 pDst->color      = pSrc->Color;\
-pDst->depthBias  = 0.0f;
+pDst->depthBias  = pSrc->ShadowData.DepthBias;
 
 
 void Light::GetGPUData(VQ_SHADER_DATA::DirectionalLight * pLight) const
@@ -82,7 +84,6 @@ void Light::GetGPUData(VQ_SHADER_DATA::DirectionalLight * pLight) const
 	COPY_COMMON_LIGHT_DATA(pLight, this);
 	pLight->enabled = this->bEnabled;
 	pLight->shadowing = this->bCastingShadows;
-
 
 	Transform tf;
 	tf._position = this->Position;
@@ -129,10 +130,91 @@ DirectX::XMMATRIX Light::GetWorldTransformationMatrix() const
 	return tf.WorldTransformationMatrix();
 }
 
+DirectX::XMMATRIX Light::GetViewProjectionMatrix(Texture::CubemapUtility::ECubeMapLookDirections PointLightFace) const
+{
+	XMFLOAT2 ViewportSize = XMFLOAT2(1024, 1024);
+
+	XMMATRIX matView = XMMatrixIdentity();
+	XMMATRIX matProj = CalculateProjectionMatrix(this->Type, this->ShadowData.NearPlane, this->ShadowData.FarPlane, ViewportSize);
+
+	switch (this->Type)
+	{
+	case Light::EType::POINT      : matView = Light::CalculatePointLightViewMatrix(PointLightFace, this->Position); break;
+	case Light::EType::SPOT       : matView = Light::CalculateSpotLightViewMatrix(this->GetTransform()); break;
+	case Light::EType::DIRECTIONAL: matView = Light::CalculateDirectionalLightViewMatrix(*this);  break;
+	default:
+		break;
+	}
+
+	return matView * matProj;
+}
+
 Transform Light::GetTransform() const
 {
 	Transform tf;
 	tf._position = this->Position;
 	tf._rotation = this->RotationQuaternion;
 	return tf;
+}
+
+DirectX::XMMATRIX Light::CalculateSpotLightViewMatrix(const Transform& mTransform)
+{
+	XMVECTOR up = XMLoadFloat3(&UpVector);
+	XMVECTOR lookAt = XMLoadFloat3(&ForwardVector); // spot light default orientation looks fwd
+	XMMATRIX RotMatrix = mTransform.RotationMatrix();
+
+	lookAt = XMVector3TransformCoord(lookAt, RotMatrix);
+	up = XMVector3TransformCoord(up, RotMatrix);
+	XMVECTOR pos = XMLoadFloat3(&mTransform._position);
+	XMVECTOR taraget = pos + lookAt;
+	return XMMatrixLookAtLH(pos, taraget, up);
+}
+
+DirectX::XMMATRIX Light::CalculatePointLightViewMatrix(Texture::CubemapUtility::ECubeMapLookDirections lookDir, const DirectX::XMFLOAT3& position)
+{
+	return Texture::CubemapUtility::CalculateViewMatrix(lookDir, position);
+}
+
+DirectX::XMMATRIX Light::CalculateDirectionalLightViewMatrix(const Light& mDirLight)
+{
+	if (mDirLight.ViewportX < 1.0f)
+	{
+		return XMMatrixIdentity();
+	}
+
+	XMVECTOR up      = XMLoadFloat3(&UpVector);
+	XMVECTOR forward = XMLoadFloat3(&ForwardVector);
+	XMFLOAT3 f3Zero = XMFLOAT3(0, 0, 0);
+
+	const XMVECTOR lookAt = XMLoadFloat3(&f3Zero);
+	const XMMATRIX mRot = mDirLight.RotationQuaternion.Matrix();
+	const XMVECTOR direction = XMVector3Transform(forward, mRot);
+	const XMVECTOR lightPos = direction * -mDirLight.DistanceFromOrigin;	// away from the origin along the direction vector 
+	return XMMatrixLookAtLH(lightPos, lookAt, up);
+}
+
+DirectX::XMMATRIX Light::CalculateProjectionMatrix(EType lightType, float fNear, float fFar, const DirectX::XMFLOAT2 viewPortSize /*= vec2(0, 0)*/)
+{
+	switch (lightType)
+	{
+	case Light::POINT:
+	{
+		constexpr float ASPECT_RATIO = 1.0f; // cubemap aspect ratio
+		return XMMatrixPerspectiveFovLH(PI_DIV2, ASPECT_RATIO, fNear, fFar);
+	}
+	case Light::SPOT:
+	{
+		constexpr float ASPECT_RATIO = 1.0f;
+		//return XMMatrixPerspectiveFovLH(mSpotOuterConeAngleDegrees * DEG2RAD, ASPECT_RATIO, mNearPlaneDistance, mFarPlaneDistance);
+		return XMMatrixPerspectiveFovLH(PI_DIV2, ASPECT_RATIO, fNear, fFar);
+	}
+	case Light::DIRECTIONAL:
+	{
+		if (viewPortSize.x < 1.0f) return XMMatrixIdentity();
+		return XMMatrixOrthographicLH(viewPortSize.x, viewPortSize.y, fNear, fFar);
+	}
+	default:
+		Log::Warning("GetProjectionMatrix() called on invalid light type!");
+		return XMMatrixIdentity();
+	}
 }

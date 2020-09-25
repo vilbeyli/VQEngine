@@ -40,13 +40,11 @@ inline float AttenuationPhong(float2 coeffs, float dist)
 		);
 }
 
-
-
 // LearnOpenGL: PBR Lighting
 //
 // You may still want to use the constant, linear, quadratic attenuation equation that(while not physically correct) 
 // can offer you significantly more control over the light's energy falloff.
-inline float Attenuation(float3 coeffs, float dist)
+inline float Attenuation(in const float3 coeffs, float dist)
 {
     return 1.0f / (
 		coeffs[0]
@@ -56,7 +54,7 @@ inline float Attenuation(float3 coeffs, float dist)
 }
 
 
-float SpotlightIntensity(SpotLight l, float3 worldPos)
+float SpotlightIntensity(in SpotLight l, in const float3 worldPos)
 {
 	const float3 pixelDirectionInWorldSpace = normalize(worldPos - l.position);
 	const float3 spotDir = normalize(l.spotDir);
@@ -74,60 +72,7 @@ float SpotlightIntensity(SpotLight l, float3 worldPos)
 #endif
 }
 
-//----------------------------------------------------------
-// ILLUMINATION CALCULATION FUNCTIONS
-//----------------------------------------------------------
-float3 CalculatePointLightIllumination(in const PointLight l, in BRDF_Surface s, float3 P, float3 N, float3 V)
-{
-	float3 IdIs = 0.0f.xxx;
-	
-	const float3 Lw = l.position;
-	const float3 Wi = normalize(Lw - P);
-	const float D = length(Lw - P);
-	const float NdotL = saturate(dot(N, Wi));
-	const float3 radiance = AttenuationBRDF(D) * l.color * l.brightness;
 
-	if (D < l.range)
-		IdIs += BRDF(s, Wi, V) * radiance * NdotL;
-	
-	return IdIs;
-}
-float3 CalculateSpotLightIllumination(in const SpotLight l, in BRDF_Surface s, float3 P, float3 N, float3 V)
-{
-	float3 IdIs = 0.0f.xxx;
-	
-	const float3 Wi = normalize(l.position - P);
-	const float3 radiance = SpotlightIntensity(l, P) * l.color * l.brightness;
-	const float NdotL = saturate(dot(N, Wi));
-	IdIs += BRDF(s, Wi, V) * radiance * NdotL;
-	
-	return IdIs;
-}
-float3 CalculateDirectionalLightIllumination(in const DirectionalLight l)
-{
-	float3 IdIs = 0.0f.xxx;
-#if 0 // TODO
-	pcfTest.lightSpacePos = mul(Lights.shadowViewDirectional, float4(P, 1));
-	const float3 Wi = normalize(-Lights.directional.lightDirection);
-	const float3 radiance
-		= Lights.directional.color
-		* Lights.directional.brightness;
-	pcfTest.NdotL = saturate(dot(s.N, Wi));
-	pcfTest.depthBias = Lights.directional.depthBias;
-	const float shadowing = (Lights.directional.shadowing == 0)
-		? 1.0f
-		: ShadowTestPCF_Directional(
-			  pcfTest
-			, texDirectionalShadowMaps
-			, sShadowSampler
-			, directionalShadowMapDimension
-			, 0
-			, directionalProj
-		);
-	IdIs += BRDF(Wi, s, V, P) * radiance * shadowing * pcfTest.NdotL;
-#endif	
-	return IdIs;
-}
 //----------------------------------------------------------
 // SHADOW TESTS
 //----------------------------------------------------------
@@ -136,13 +81,12 @@ struct ShadowTestPCFData
 	//-------------------------
 	float4 lightSpacePos;
 	//-------------------------
-	float  depthBias;
-	float  NdotL;
-	float  viewDistanceOfPixel;
+	float depthBias;
+	float NdotL;
+	float viewDistanceOfPixel;
 	//...
 	//-------------------------
 };
-
 float OmnidirectionalShadowTest(
 	in ShadowTestPCFData pcfTestLightData
 	, TextureCubeArray shadowCubeMapArr
@@ -178,8 +122,8 @@ float OmnidirectionalShadowTestPCF(
 	   float3(1,  1,  1), float3(1, -1,  1), float3(-1, -1,  1), float3(-1,  1,  1),
 	   float3(1,  1, -1), float3(1, -1, -1), float3(-1, -1, -1), float3(-1,  1, -1),
 	   float3(1,  1,  0), float3(1, -1,  0), float3(-1, -1,  0), float3(-1,  1,  0),
-	   float3(1,  0,  1), float3(-1,  0,  1), float3(1,  0, -1), float3(-1,  0, -1),
-	   float3(0,  1,  1), float3(0, -1,  1), float3(0, -1, -1), float3(0,  1, -1)
+	   float3(1,  0,  1), float3(-1, 0,  1), float3(1 ,  0, -1), float3(-1,  0, -1),
+	   float3(0,  1,  1), float3(0, -1,  1), float3(0 , -1, -1), float3(0 ,  1, -1)
 	};
 
 	// const float BIAS = pcfTestLightData.depthBias * tan(acos(pcfTestLightData.NdotL));
@@ -218,7 +162,6 @@ float ShadowTestPCF(in ShadowTestPCFData pcfTestLightData, Texture2DArray shadow
 		return 0.0f;
 	}
 
-
 	const float BIAS = pcfTestLightData.depthBias * tan(acos(pcfTestLightData.NdotL));
 	float shadow = 0.0f;
 
@@ -230,10 +173,10 @@ float ShadowTestPCF(in ShadowTestPCFData pcfTestLightData, Texture2DArray shadow
 
 
 	// PCF
-	const int rowHalfSize = 2;
-    for (int x = -rowHalfSize; x <= rowHalfSize; ++x)
+	const int ROW_HALF_SIZE = 2;
+    for (int x = -ROW_HALF_SIZE; x <= ROW_HALF_SIZE; ++x)
     {
-		for (int y = -rowHalfSize; y <= rowHalfSize; ++y)
+		for (int y = -ROW_HALF_SIZE; y <= ROW_HALF_SIZE; ++y)
         {
 			float2 texelOffset = float2(x,y) * texelSize;
 			float closestDepthInLSpace = shadowMapArr.Sample(shadowSampler, float3(shadowTexCoords + texelOffset, shadowMapIndex)).x;
@@ -243,7 +186,7 @@ float ShadowTestPCF(in ShadowTestPCFData pcfTestLightData, Texture2DArray shadow
         }
     }
 
-    shadow /= (rowHalfSize * 2 + 1) * (rowHalfSize * 2 + 1);
+    shadow /= (ROW_HALF_SIZE * 2 + 1) * (ROW_HALF_SIZE * 2 + 1);
 
 	return 1.0 - shadow;
 }
@@ -337,6 +280,70 @@ float3 ShadowTestDebug(float3 worldPos, float4 lightSpacePos, float3 illuminatio
 	}
 
 	return noShadows;
+}
+
+
+//----------------------------------------------------------
+// ILLUMINATION CALCULATION FUNCTIONS
+//----------------------------------------------------------
+float3 CalculatePointLightIllumination(in const PointLight l, in BRDF_Surface s, const in float3 P, const in float3 N, const in float3 V)
+{
+	float3 IdIs = 0.0f.xxx;
+	
+	const float3 Lw = l.position;
+	const float3 Wi = normalize(Lw - P);
+	const float D = length(Lw - P);
+	const float NdotL = saturate(dot(N, Wi));
+	const float3 radiance = AttenuationBRDF(D) * l.color * l.brightness;
+
+	if (D < l.range)
+		IdIs += BRDF(s, Wi, V) * radiance * NdotL;
+	
+	return IdIs;
+}
+float3 CalculateSpotLightIllumination(in const SpotLight l, in BRDF_Surface s, const in float3 P, const in float3 N, const in float3 V)
+{
+	float3 IdIs = 0.0f.xxx;
+	
+	const float3 Wi = normalize(l.position - P);
+	const float3 radiance = SpotlightIntensity(l, P) * l.color * l.brightness * AttenuationBRDF(length(l.position - P));
+	const float NdotL = saturate(dot(N, Wi));
+	IdIs += BRDF(s, Wi, V) * radiance * NdotL;
+	
+	return IdIs;
+}
+float3 CalculateDirectionalLightIllumination(
+	  const in DirectionalLight l
+	, const in BRDF_Surface s
+	, const in float3 P_World
+	, const in float3 V_World
+	, const in float4x4 shadowViewDirectional
+)
+	{	
+	const float3 Wi = normalize(-l.lightDirection);
+	const float3 radiance = l.color * l.brightness;
+	const float NdotL = saturate(dot(s.N, Wi));
+	
+	float ShadowFactor = 1.0f; // no shadows
+	if (l.shadowing)
+	{
+		ShadowTestPCFData pcfTest = (ShadowTestPCFData) 0;
+		pcfTest.lightSpacePos = mul(shadowViewDirectional, float4(P_World, 1));
+		pcfTest.NdotL = NdotL;
+		pcfTest.depthBias = l.depthBias;
+		#if 0
+		ShadowFactor = ShadowTestPCF_Directional(
+				  pcfTest
+				, texDirectionalShadowMaps
+				, sShadowSampler
+				, directionalShadowMapDimension
+				, 0
+				, directionalProj
+		);
+		#endif
+	}
+	
+	return BRDF(s, Wi, V_World) * radiance * ShadowFactor * NdotL;
 }
 
 //float2 ParallaxUVs(float2 uv, float3 ViewVectorInTangentSpace, Texture2D HeightMap, SamplerState Sampler)

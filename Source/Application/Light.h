@@ -21,6 +21,7 @@
 #include "Shaders/LightingConstantBufferData.h"
 #include "Transform.h"
 #include "Settings.h"
+#include "../Renderer/Texture.h"
 #include <DirectXMath.h>
 
 
@@ -81,9 +82,8 @@ struct Light
 	// 
 	static DirectX::XMMATRIX CalculateDirectionalLightViewMatrix(const Light& mDirLight);
 	static DirectX::XMMATRIX CalculateSpotLightViewMatrix(const Transform& mTransform);
-#if 0
-	static DirectX::XMMATRIX CalculatePointLightViewMatrix(Texture::CubemapUtility::ECubeMapLookDirections lookDir, const vec3& position);
-#endif
+	static DirectX::XMMATRIX CalculatePointLightViewMatrix(Texture::CubemapUtility::ECubeMapLookDirections lookDir, const DirectX::XMFLOAT3& position);
+	static DirectX::XMMATRIX CalculateProjectionMatrix(Light::EType eType, float near, float far, const DirectX::XMFLOAT2 viewPortSize = DirectX::XMFLOAT2(0, 0));
 
 	// Creates a default Light type with some fields pre-initialized
 	//
@@ -97,6 +97,7 @@ struct Light
 	void GetGPUData(VQ_SHADER_DATA::PointLight*       pLight) const;
 	void GetGPUData(VQ_SHADER_DATA::SpotLight*        pLight) const;
 	DirectX::XMMATRIX GetWorldTransformationMatrix() const;
+	DirectX::XMMATRIX GetViewProjectionMatrix(Texture::CubemapUtility::ECubeMapLookDirections lookDir = Texture::CubemapUtility::ECubeMapLookDirections::CUBEMAP_LOOK_FRONT) const;
 	Transform GetTransform() const;
 
 	//

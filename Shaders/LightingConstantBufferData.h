@@ -151,8 +151,10 @@ struct MaterialData
 //----------------------------------------------------------
 struct PerFrameData
 {
-	// Shadow Maps
 	SceneLighting Lights;
+	float2 f2PointLightShadowMapDimensions;
+	float2 f2SpotLightShadowMapDimensions;
+	float fAmbientLightingFactor;
 };
 struct PerViewData
 {

@@ -605,8 +605,8 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 		XMLElement* pEnabled = pLight->FirstChildElement("Enabled");
 
 		XMLElement* pShadows = pLight->FirstChildElement("Shadows");
-		XMLElement* pNear = pShadows ? pShadows->FirstChildElement("Near") : nullptr;
-		XMLElement* pFar  = pShadows ? pShadows->FirstChildElement("Far")  : nullptr;
+		XMLElement* pNear = pShadows ? pShadows->FirstChildElement("NearPlane") : nullptr;
+		XMLElement* pFar  = pShadows ? pShadows->FirstChildElement("FarPlane")  : nullptr;
 		XMLElement* pBias = pShadows ? pShadows->FirstChildElement("DepthBias")  : nullptr;
 
 		XMLElement* pSpot = pLight->FirstChildElement("Spot");
@@ -658,6 +658,10 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 		{ 
 			std::string val; XMLParseStringVal(pEnabled, val);
 			l.bEnabled = StrUtil::ParseBool(val); 
+		}
+		if (pShadows)
+		{
+			l.bCastingShadows = true;
 		}
 		if(pAttenuation)
 		{ 

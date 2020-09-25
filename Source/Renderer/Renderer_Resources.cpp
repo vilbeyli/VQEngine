@@ -129,8 +129,8 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 		this->QueueTextureUpload(FTextureUploadDesc(std::move(image), ID, tDesc));
 
 		this->StartTextureUploads();
-		std::atomic<bool>& bResident = mTextures.at(ID).bResident;
-		while (!bResident.load());  // busy wait here until the texture is made resident;
+		std::atomic<bool>& mbResident = mTextures.at(ID).mbResident;
+		while (!mbResident.load());  // busy wait here until the texture is made resident;
 
 #if LOG_RESOURCE_CREATE
 		Log::Info("VQRenderer::CreateTextureFromFile(): [%.2fs] %s", t.StopGetDeltaTimeAndReset(), pFilePath);
@@ -159,8 +159,8 @@ TextureID VQRenderer::CreateTexture(const std::string& name, const D3D12_RESOURC
 		this->QueueTextureUpload(FTextureUploadDesc(pData, ID, tDesc));
 
 		this->StartTextureUploads();
-		std::atomic<bool>& bResident = mTextures.at(ID).bResident;
-		while (!bResident.load());  // busy wait here until the texture is made resident;
+		std::atomic<bool>& mbResident = mTextures.at(ID).mbResident;
+		while (!mbResident.load());  // busy wait here until the texture is made resident;
 	}
 
 	if (pData)
@@ -273,14 +273,14 @@ Log::Error("Resource View <type=%s> was not allocated. Call mRenderer.Create%s()
 }\
 assert(m ## RV_t ## s.find(id) != m ## RV_t ## s.end());
 
-void VQRenderer::InitializeDSV(DSV_ID dsvID, uint32 heapIndex, TextureID texID)
+void VQRenderer::InitializeDSV(DSV_ID dsvID, uint32 heapIndex, TextureID texID, int ArraySlice /*= 0*/)
 {
 	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(DSV, dsvID);
 	
 	assert(mDSVs.find(dsvID) != mDSVs.end());
 
-	mTextures.at(texID).InitializeDSV(heapIndex, &mDSVs.at(dsvID));
+	mTextures.at(texID).InitializeDSV(heapIndex, &mDSVs.at(dsvID), ArraySlice);
 }
 void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID)
 {
@@ -710,7 +710,7 @@ void VQRenderer::ProcessTextureUploadQueue()
 		{
 			std::unique_lock<std::mutex> lk(mMtxTextures);
 			Texture& tex = mTextures.at(desc.id);
-			vTexResidentBools.push_back(&tex.bResident);
+			vTexResidentBools.push_back(&tex.mbResident);
 		}
 
 		if (desc.img.pData)

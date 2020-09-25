@@ -85,6 +85,7 @@ struct FSceneRenderParameters
 {
 	bool bDrawLightBounds = false;
 	bool bDrawLightMeshes = true;
+	float fAmbientLightingFactor = 0.005f;
 };
 struct FMeshRenderCommand
 {
@@ -92,6 +93,11 @@ struct FMeshRenderCommand
 	MaterialID matID  = INVALID_ID;
 	DirectX::XMMATRIX WorldTransformationMatrix; // ID ?
 	DirectX::XMMATRIX NormalTransformationMatrix; //ID ?
+};
+struct FShadowMeshRenderCommand
+{
+	MeshID meshID = INVALID_ID;
+	DirectX::XMMATRIX WorldTransformationMatrix;
 };
 struct FLightRenderCommand
 {
@@ -121,10 +127,25 @@ struct FSceneView
 	FSceneRenderParameters sceneParameters;
 	FPostProcessParameters postProcess;
 
-	std::vector<FMeshRenderCommand> meshRenderCommands;
+	std::vector<FMeshRenderCommand>  meshRenderCommands;
 	std::vector<FLightRenderCommand> lightRenderCommands;
 	std::vector<FLightRenderCommand> lightBoundsRenderCommands;
 
+};
+struct FSceneShadowView
+{
+	struct FShadowView
+	{
+		DirectX::XMMATRIX matViewProj;
+		std::vector<FShadowMeshRenderCommand> meshRenderCommands;
+	};
+
+	std::array<FShadowView, NUM_SHADOWING_LIGHTS__SPOT>      ShadowViews_Spot;
+	std::array<FShadowView, NUM_SHADOWING_LIGHTS__POINT * 6> ShadowViews_Point;
+	FShadowView ShadowView_Directional;
+
+	int NumSpotShadowViews;
+	int NumPointShadowViews;
 };
 //------------------------------------------------------
 
@@ -187,6 +208,8 @@ private: // Derived Scenes shouldn't access these functions
 
 	void GatherSceneLightData(FSceneView& SceneView) const;
 	void PrepareLightMeshRenderParams(FSceneView& SceneView) const;
+	void PrepareSceneMeshRenderParams(FSceneView& SceneView) const;
+	void PrepareShadowMeshRenderParams(FSceneShadowView& ShadowView) const;
 
 public:
 	Scene(VQEngine& engine
@@ -196,7 +219,8 @@ public:
 		, VQRenderer& renderer
 	);
 
-	inline const FSceneView& GetSceneView(int FRAME_DATA_INDEX) const { return mFrameSceneViews[FRAME_DATA_INDEX]; }
+	inline const FSceneView&       GetSceneView (int FRAME_DATA_INDEX) const { return mFrameSceneViews[FRAME_DATA_INDEX]; }
+	inline const FSceneShadowView& GetShadowView(int FRAME_DATA_INDEX) const { return mFrameShadowViews[FRAME_DATA_INDEX]; }
 	inline       FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX)       { return mFrameSceneViews[FRAME_DATA_INDEX].postProcess; }
 	inline const FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX) const { return mFrameSceneViews[FRAME_DATA_INDEX].postProcess; }
 	inline const Camera& GetActiveCamera() const { return mCameras[mIndex_SelectedCamera]; }
@@ -226,7 +250,8 @@ protected:
 	//
 	// SCENE VIEWS
 	//
-	std::vector<FSceneView> mFrameSceneViews;
+	std::vector<FSceneView>       mFrameSceneViews;
+	std::vector<FSceneShadowView> mFrameShadowViews;
 
 	//
 	// SCENE RESOURCE CONTAINERS

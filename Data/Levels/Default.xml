@@ -141,16 +141,16 @@
         <Enabled>false</Enabled>
         <Mobility> Stationary </Mobility>
         <Color>0.9 0.9 0.85</Color>
-        <Range> 5000 </Range>
-        <Brightness> 6000 </Brightness>
+        <Range> 1000 </Range>
+        <Brightness> 100 </Brightness>
         <Shadows>
             <DepthBias> 0.001 </DepthBias>
             <NearPlane> 0.1 </NearPlane>
             <FarPlane>  15000  </FarPlane>
         </Shadows>
         <Transform>
-            <Position>0 1000 0</Position>
-            <Rotation> 10 15 5 </Rotation>
+            <Position>0 100 0</Position>
+            <Rotation> -50 0 0 </Rotation>
         </Transform>
         <Directional>
             <ViewPortX> 1024 </ViewPortX>
@@ -167,7 +167,7 @@
             <Rotation> 0 0 0 </Rotation>
             <Scale> 0.1 0.1 0.1 </Scale>
         </Transform>
-        <Enabled>true</Enabled>
+        <Enabled>false</Enabled>
         <Color>0.4 0.4 0.85</Color>
         <Range> 20 </Range>
         <Brightness> 1500 </Brightness>
@@ -188,7 +188,7 @@
             <Scale> 0.1 0.1 0.1 </Scale>
         </Transform>
         <Mobility> Dynamic </Mobility>
-        <Enabled>true</Enabled>
+        <Enabled>false</Enabled>
         <Color>0.4 0.4 0.15</Color>
         <Range> 16 </Range>
         <Brightness> 3500 </Brightness>
@@ -207,20 +207,42 @@
         <Enabled>true</Enabled>
         <Color>0.0 0.9 0.9</Color>
         <Range> 35 </Range>
-        <Brightness> 10 </Brightness>
+        <Brightness> 300 </Brightness>
         <Shadows>
-            <DepthBias> 0.001 </DepthBias>
+            <DepthBias> 0.000005 </DepthBias>
             <NearPlane> 0.001 </NearPlane>
             <FarPlane>  1500  </FarPlane>
         </Shadows>
         <Transform>
-            <Position>18 20 4</Position>
+            <Position>22 20 4</Position>
             <Rotation> 90 0 -15 </Rotation>
             <Scale> 0.1 0.1 0.1 </Scale>
         </Transform>
         <Spot>
             <OuterConeAngleDegrees>30</OuterConeAngleDegrees>
             <InnerConeAngleDegrees>25</InnerConeAngleDegrees>
+        </Spot>
+    </Light>
+    <Light>
+        <!-- Spot Light -->
+        <Mobility> Static </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.4 0.4 0.15</Color>
+        <Range> 35 </Range>
+        <Brightness> 1500 </Brightness>
+        <Shadows>
+            <DepthBias> 0.000005 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  1500  </FarPlane>
+        </Shadows>
+        <Transform>
+            <Position>-18 20 4</Position>
+            <Rotation> 90 0 15 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <Spot>
+            <OuterConeAngleDegrees>32</OuterConeAngleDegrees>
+            <InnerConeAngleDegrees>28</InnerConeAngleDegrees>
         </Spot>
     </Light>
     
@@ -230,11 +252,6 @@
         <Color>0.08 1.0 0.15</Color>
         <Range> 1500 </Range>
         <Brightness> 500 </Brightness>
-        <Shadows>
-            <DepthBias> 0.001 </DepthBias>
-            <NearPlane> 0.001 </NearPlane>
-            <FarPlane>  1500  </FarPlane>
-        </Shadows>
         <Transform>
             <Position>00 10 10</Position>
             <Rotation> 0 15 0 </Rotation>

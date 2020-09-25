@@ -148,14 +148,7 @@ void VQEngine::RenderThread_Inititalize()
 	// load renderer resources
 	mRenderer.Load();
 
-	// TODO: initialize scene resources
-	mResources_MainWnd.DSV_MainViewDepthMSAA = mRenderer.CreateDSV();
-	mResources_MainWnd.DSV_MainViewDepth     = mRenderer.CreateDSV();
-	mResources_MainWnd.RTV_MainViewColorMSAA = mRenderer.CreateRTV();
-	mResources_MainWnd.RTV_MainViewColor     = mRenderer.CreateRTV();
-	mResources_MainWnd.SRV_MainViewColor     = mRenderer.CreateSRV();
-	mResources_MainWnd.UAV_PostProcess_TonemapperOut = mRenderer.CreateUAV();
-	mResources_MainWnd.SRV_PostProcess_TonemapperOut = mRenderer.CreateSRV();
+	RenderThread_LoadResources();
 
 	// load window resources
 	const bool bFullscreen = mpWinMain->IsFullscreen();
@@ -189,7 +182,7 @@ void VQEngine::InitializeBuiltinMeshes()
 	} 
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::CYLINDER;
-		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Cylinder<VertexType>();
+		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Cylinder<VertexType>(3.0f, 1.0f, 1.0f, 45, 6, 1);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Cylinder";
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.Vertices, data.Indices, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
@@ -201,7 +194,7 @@ void VQEngine::InitializeBuiltinMeshes()
 	}
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::CONE;
-		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Cone<VertexType>(1, 1, 30);
+		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Cone<VertexType>(1, 1, 42);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Cone";
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.Vertices, data.Indices, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
@@ -309,6 +302,77 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 	}
 
 	// TODO: generic implementation of other window procedures for load
+}
+
+void VQEngine::RenderThread_LoadResources()
+{
+	FRenderingResources_MainWindow& rsc = mResources_MainWnd;
+
+	// scene color pass
+	{
+		rsc.DSV_MainViewDepthMSAA = mRenderer.CreateDSV();
+		rsc.DSV_MainViewDepth = mRenderer.CreateDSV();
+		rsc.RTV_MainViewColorMSAA = mRenderer.CreateRTV();
+		rsc.RTV_MainViewColor = mRenderer.CreateRTV();
+		rsc.SRV_MainViewColor = mRenderer.CreateSRV();
+	}
+
+	// post process pass
+	{
+		rsc.UAV_PostProcess_TonemapperOut = mRenderer.CreateUAV();
+		rsc.SRV_PostProcess_TonemapperOut = mRenderer.CreateSRV();
+	}
+
+	// shadow map passes
+	{
+		// initialize texture memory
+		constexpr UINT SHADOW_MAP_DIMENSION_SPOT = 1024;
+		constexpr UINT SHADOW_MAP_DIMENSION_POINT = 1024;
+		constexpr UINT SHADOW_MAP_DIMENSION_DIRECTIONAL = 2048;
+
+		D3D12_RESOURCE_DESC d = CD3DX12_RESOURCE_DESC::Tex2D(
+			DXGI_FORMAT_R32_TYPELESS
+			, SHADOW_MAP_DIMENSION_SPOT
+			, SHADOW_MAP_DIMENSION_SPOT
+			, NUM_SHADOWING_LIGHTS__SPOT // Array Size
+			, 1 // MIP levels
+			, 1 // MSAA SampleCount
+			, 0 // MSAA SampleQuality
+			, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+		);
+		rsc.Tex_ShadowMaps_Spot = mRenderer.CreateTexture("ShadowMaps_Spot", d, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+
+		d.DepthOrArraySize = NUM_SHADOWING_LIGHTS__POINT * 6;
+		d.Width = SHADOW_MAP_DIMENSION_POINT;
+		d.Height = SHADOW_MAP_DIMENSION_POINT;
+		rsc.Tex_ShadowMaps_Point = mRenderer.CreateTexture("ShadowMaps_Point", d, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+
+
+		d.Width = SHADOW_MAP_DIMENSION_DIRECTIONAL;
+		d.Height = SHADOW_MAP_DIMENSION_DIRECTIONAL;
+		d.DepthOrArraySize = 1;
+		rsc.Tex_ShadowMaps_Directional = mRenderer.CreateTexture("ShadowMap_Directional", d, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+		
+		// initialize DSVs
+		rsc.DSV_ShadowMaps_Spot        = mRenderer.CreateDSV(NUM_SHADOWING_LIGHTS__SPOT);
+		rsc.DSV_ShadowMaps_Point       = mRenderer.CreateDSV(NUM_SHADOWING_LIGHTS__POINT * 6);
+		rsc.DSV_ShadowMaps_Directional = mRenderer.CreateDSV();
+
+		for (int i = 0; i < NUM_SHADOWING_LIGHTS__SPOT; ++i)      mRenderer.InitializeDSV(rsc.DSV_ShadowMaps_Spot , i, rsc.Tex_ShadowMaps_Spot , i);
+		for (int i = 0; i < NUM_SHADOWING_LIGHTS__POINT * 6; ++i) mRenderer.InitializeDSV(rsc.DSV_ShadowMaps_Point, i, rsc.Tex_ShadowMaps_Point, i);
+		mRenderer.InitializeDSV(rsc.DSV_ShadowMaps_Directional, 0, rsc.Tex_ShadowMaps_Directional);
+
+
+		// initialize SRVs
+		rsc.SRV_ShadowMaps_Spot        = mRenderer.CreateSRV();
+		rsc.SRV_ShadowMaps_Point       = mRenderer.CreateSRV();
+		rsc.SRV_ShadowMaps_Directional = mRenderer.CreateSRV();
+		mRenderer.InitializeSRV(rsc.SRV_ShadowMaps_Spot, 0, rsc.Tex_ShadowMaps_Spot);
+#if 0
+		mRenderer.InitializeSRV(rsc.SRV_ShadowMaps_Point, 0, rsc.Tex_ShadowMaps_Point);
+		mRenderer.InitializeSRV(rsc.SRV_ShadowMaps_Directional, 0, rsc.Tex_ShadowMaps_Directional);
+#endif
+	}
 }
 
 void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
@@ -585,6 +649,9 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	const int FRAME_DATA_INDEX  = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
 	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
 	const bool bUseHDRRenderPath = this->ShouldRenderHDR(mpWinMain->GetHWND());
+	const FSceneView&       SceneView       = mpScene->GetSceneView(FRAME_DATA_INDEX);
+	const FSceneShadowView& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
+	const FPostProcessParameters& PPParams  = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 	// ----------------------------------------------------------------------------
 
 
@@ -609,20 +676,24 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
 
+
+	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
+	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+
 	//
 	// RENDER
 	//
+	RenderShadowMaps(ctx, SceneShadowView);
+
 	TransitionForSceneRendering(ctx);
 
-	RenderShadowMaps(ctx);
-
-	RenderSceneColor(ctx, mpScene->GetSceneView(FRAME_DATA_INDEX));
+	RenderSceneColor(ctx, SceneView);
 	
 	ResolveMSAA(ctx);
 
 	TransitionForPostProcessing(ctx);
 
-	RenderPostProcess(ctx, mpScene->GetPostProcessParameters(FRAME_DATA_INDEX));
+	RenderPostProcess(ctx, PPParams);
 
 	RenderUI(ctx);
 
@@ -662,41 +733,109 @@ void VQEngine::DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh)
 	pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 }
 
+void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowView& SceneShadowView)
+{
+	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
+	SCOPED_GPU_MARKER(pCmd, "RenderShadowMaps");
+
+	// Bind PSO
+	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_PSO));
+	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(7));
+
+	// Set Viewport & Scissors
+	const float RenderResolutionX = 1024.0f; // TODO
+	const float RenderResolutionY = 1024.0f; // TODO
+	D3D12_VIEWPORT viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
+	D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
+	pCmd->RSSetViewports(1, &viewport);
+	pCmd->RSSetScissorRects(1, &scissorsRect);
+
+	for (int i = 0; i < SceneShadowView.NumSpotShadowViews; ++i)
+	{
+		const std::string marker = "Spot[" + std::to_string(i) + "]";
+		SCOPED_GPU_MARKER(pCmd, marker.c_str());
+
+		// Bind Depth / clear
+		const DSV& dsv = mRenderer.GetDSV(mResources_MainWnd.DSV_ShadowMaps_Spot);
+		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle(i);
+		pCmd->OMSetRenderTargets(0, NULL, FALSE, &dsvHandle);
+
+		D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
+		pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, NULL);
+
+		const FSceneShadowView::FShadowView& SpotShadowView = SceneShadowView.ShadowViews_Spot[i];
+		for (const FShadowMeshRenderCommand& renderCmd : SpotShadowView.meshRenderCommands)
+		{
+			// set constant buffer data
+			FFrameConstantBufferUnlit* pCBuffer = {};
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+			ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(decltype(pCBuffer)), (void**)(&pCBuffer), &cbAddr);
+			pCBuffer->matModelViewProj = renderCmd.WorldTransformationMatrix * SpotShadowView.matViewProj;
+			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
+
+			// set IA
+			const Mesh& mesh = mpScene->mMeshes.at(renderCmd.meshID);
+
+			const auto VBIBIDs = mesh.GetIABufferIDs();
+			const uint32 NumIndices = mesh.GetNumIndices();
+			const uint32 NumInstances = 1;
+			const BufferID& VB_ID = VBIBIDs.first;
+			const BufferID& IB_ID = VBIBIDs.second;
+			const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
+			const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
+
+			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			pCmd->IASetVertexBuffers(0, 1, &vb);
+			pCmd->IASetIndexBuffer(&ib);
+
+			// draw
+			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
+		}
+	}
+
+	for (int i = 0; i < SceneShadowView.NumPointShadowViews; ++i)
+	{
+		const std::string marker = "Point[" + std::to_string(i) + "]";
+		SCOPED_GPU_MARKER(pCmd, marker.c_str());
+
+		// TODO: point light cubemap face rendering
+	}
+	
+	// TODO: directional shadow map pass
+	{
+		const std::string marker = "Directional";
+		SCOPED_GPU_MARKER(pCmd, marker.c_str());
+	}
+}
+
 void VQEngine::TransitionForSceneRendering(FWindowRenderContext& ctx)
 {
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
 
-	auto pRscTonemapper = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_TonemapperOut);
-	auto pRscColor = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColor);
-	auto pRscColorMSAA = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColorMSAA);
+	const auto& rsc = mResources_MainWnd;
+	auto pRscTonemapper      = mRenderer.GetTextureResource(rsc.Tex_PostProcess_TonemapperOut);
+	auto pRscColor           = mRenderer.GetTextureResource(rsc.Tex_MainViewColor);
+	auto pRscColorMSAA       = mRenderer.GetTextureResource(rsc.Tex_MainViewColorMSAA);
+	auto pRscShadowMaps_Spot = mRenderer.GetTextureResource(rsc.Tex_ShadowMaps_Spot);
+	auto pRscShadowMaps_Point= mRenderer.GetTextureResource(rsc.Tex_ShadowMaps_Point);
+	auto pRscShadowMaps_Directional = mRenderer.GetTextureResource(rsc.Tex_ShadowMaps_Directional);
 
 	SCOPED_GPU_MARKER(pCmd, "TransitionForSceneRendering");
 
-	if (bMSAA)
-	{
-		const CD3DX12_RESOURCE_BARRIER pBarriers[] =
-		{
-			 CD3DX12_RESOURCE_BARRIER::Transition(pRscColorMSAA , D3D12_RESOURCE_STATE_RESOLVE_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET)
-		};
-		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
-	}
-	else
-	{
-		const CD3DX12_RESOURCE_BARRIER pBarriers[] =
-		{
-			  CD3DX12_RESOURCE_BARRIER::Transition(pRscColor , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET)
-		};
-		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
-	}
-}
+	CD3DX12_RESOURCE_BARRIER ColorTransition = bMSAA
+		? CD3DX12_RESOURCE_BARRIER::Transition(pRscColorMSAA, D3D12_RESOURCE_STATE_RESOLVE_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET)
+		: CD3DX12_RESOURCE_BARRIER::Transition(pRscColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx)
-{
-	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
-	//PIXBeginEvent(pCmd, VQ_PIXEventColor, "TransitionForSceneRendering");
-	////TODO
-	//PIXEndEvent(pCmd);
+	const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+	{
+		  ColorTransition
+		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Spot       , D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Point      , D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Directional, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+	};
+
+	pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
 }
 
 void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& SceneView)
@@ -734,8 +873,6 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::FORWARD_LIGHTING_PSO_MSAA_4 : EBuiltinPSOs::FORWARD_LIGHTING_PSO));
 	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(5)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
 
-	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
-
 	using namespace VQ_SHADER_DATA;
 	// set PerFrame constants
 	{
@@ -746,9 +883,13 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 
 		assert(pPerFrame);
 		pPerFrame->Lights = SceneView.GPULightingData;
+		pPerFrame->fAmbientLightingFactor = SceneView.sceneParameters.fAmbientLightingFactor;
+		pPerFrame->f2PointLightShadowMapDimensions = { 1024.0f, 1024.f }; // TODO
+		pPerFrame->f2SpotLightShadowMapDimensions  = { 1024.0f, 1024.f }; // TODO
 		
 		//pCmd->SetGraphicsRootDescriptorTable(PerFrameRSBindSlot, );
 		pCmd->SetGraphicsRootConstantBufferView(PerFrameRSBindSlot, cbAddr);
+		pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Spot).GetGPUDescHandle(0));
 	}
 
 	// set PerView constants
@@ -768,10 +909,10 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 	}
 
 	// Draw Objects -----------------------------------------------
+	//if(!SceneView.meshRenderCommands.empty())
 	{
 		constexpr UINT PerObjRSBindSlot = 1;
 		SCOPED_GPU_MARKER(pCmd, "Geometry");
-		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 		for (const FMeshRenderCommand& meshRenderCmd : SceneView.meshRenderCommands)
 		{
 			const Material& mat = mpScene->GetMaterial(meshRenderCmd.matID);
@@ -791,7 +932,11 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 
 			// set textures
 			if (mat.SRVMaterialMaps != INVALID_ID)
+			{
 				pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
+				//pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
+
+			}
 
 			// draw mesh
 			if (mpScene->mMeshes.find(meshRenderCmd.meshID) == mpScene->mMeshes.end())
@@ -819,6 +964,7 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 	}
 
 	// Draw Light bounds ------------------------------------------
+	if(!SceneView.lightBoundsRenderCommands.empty())
 	{
 		SCOPED_GPU_MARKER(pCmd, "LightBounds");
 		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA 
@@ -858,12 +1004,15 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 	}
 
 	// Draw Light Meshes ------------------------------------------
+	if(!SceneView.lightRenderCommands.empty())
 	{
 		SCOPED_GPU_MARKER(pCmd, "Lights");
 		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA
 			? EBuiltinPSOs::UNLIT_PSO_MSAA_4
 			: EBuiltinPSOs::UNLIT_PSO)
 		);
+		if(SceneView.lightBoundsRenderCommands.empty())
+			pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(6)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
 		for (const FLightRenderCommand& lightRenderCmd : SceneView.lightRenderCommands)
 		{
 			// set constant buffer data
@@ -961,15 +1110,24 @@ void VQEngine::TransitionForPostProcessing(FWindowRenderContext& ctx)
 {
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
+	const auto& rsc = mResources_MainWnd;
 
-	auto pRscInput  = mRenderer.GetTextureResource(mResources_MainWnd.Tex_MainViewColor);
-	auto pRscOutput = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_TonemapperOut);
+	auto pRscInput  = mRenderer.GetTextureResource(rsc.Tex_MainViewColor);
+	auto pRscOutput = mRenderer.GetTextureResource(rsc.Tex_PostProcess_TonemapperOut);
+
+	auto pRscShadowMaps_Spot = mRenderer.GetTextureResource(rsc.Tex_ShadowMaps_Spot);
+	auto pRscShadowMaps_Point = mRenderer.GetTextureResource(rsc.Tex_ShadowMaps_Point);
+	auto pRscShadowMaps_Directional = mRenderer.GetTextureResource(rsc.Tex_ShadowMaps_Directional);
 
 	SCOPED_GPU_MARKER(pCmd, "TransitionForPostProcessing");
 	const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 	{
 		  CD3DX12_RESOURCE_BARRIER::Transition(pRscInput , (bMSAA ? D3D12_RESOURCE_STATE_RESOLVE_DEST : D3D12_RESOURCE_STATE_RENDER_TARGET), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
 		, CD3DX12_RESOURCE_BARRIER::Transition(pRscOutput, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+
+		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Spot       , D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE)
+		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Point      , D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE)
+		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Directional, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE)
 	};
 	pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
 }
