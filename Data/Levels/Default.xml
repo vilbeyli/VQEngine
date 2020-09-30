@@ -138,24 +138,23 @@
 
     <!-- LIGHTS -->
     <Light> <!-- Directional Light -->
-        <Enabled>false</Enabled>
+        <Enabled>true</Enabled>
         <Mobility> Stationary </Mobility>
         <Color>0.9 0.9 0.85</Color>
-        <Range> 1000 </Range>
-        <Brightness> 100 </Brightness>
+        <Range> 100 </Range>
+        <Brightness> 5 </Brightness>
         <Shadows>
-            <DepthBias> 0.001 </DepthBias>
+            <DepthBias> 0.00045 </DepthBias>
             <NearPlane> 0.1 </NearPlane>
             <FarPlane>  15000  </FarPlane>
         </Shadows>
         <Transform>
-            <Position>0 100 0</Position>
-            <Rotation> -50 0 0 </Rotation>
+            <Rotation> 0 0 40 </Rotation>
         </Transform>
         <Directional>
-            <ViewPortX> 1024 </ViewPortX>
-            <ViewPortY> 1024 </ViewPortY>
-            <Distance> 6000 </Distance>
+            <ViewPortX> 64 </ViewPortX>
+            <ViewPortY> 64 </ViewPortY>
+            <Distance> 100 </Distance>
         </Directional>
     </Light>
 
@@ -188,7 +187,7 @@
             <Scale> 0.1 0.1 0.1 </Scale>
         </Transform>
         <Mobility> Dynamic </Mobility>
-        <Enabled>true</Enabled>
+        <Enabled>false</Enabled>
         <Color>0.4 0.4 0.15</Color>
         <Range> 200 </Range>
         <Brightness> 35 </Brightness>
@@ -226,7 +225,7 @@
     <Light>
         <!-- Spot Light -->
         <Mobility> Static </Mobility>
-        <Enabled>false</Enabled>
+        <Enabled>true</Enabled>
         <Color>0.4 0.4 0.15</Color>
         <Range> 35 </Range>
         <Brightness> 1500 </Brightness>

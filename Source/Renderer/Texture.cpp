@@ -267,8 +267,6 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, D3D12_SHADER_RESOURC
                         srvDesc.Texture2D.MostDetailedMip = mipLevel;
                         srvDesc.Texture2D.MipLevels = (mipLevel == -1) ? mMipMapCount : 1;
                     }
-                    assert(arraySize == -1);
-                    assert(firstArraySlice == -1);
                 }
                 
             }

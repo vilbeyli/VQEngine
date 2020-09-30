@@ -222,10 +222,9 @@ float ShadowTestPCF(in ShadowTestPCFData pcfTestLightData, Texture2DArray shadow
 
 float ShadowTestPCF_Directional(
 	in ShadowTestPCFData pcfTestLightData
-	, Texture2DArray shadowMapArr
+	, Texture2D shadowMapArr
 	, SamplerState shadowSampler
 	, in float2 shadowMapDimensions
-	, in int shadowMapIndex
 	, in matrix lightProj
 )
 {
@@ -259,7 +258,7 @@ float ShadowTestPCF_Directional(
 		for (int y = -ROW_HALF_SIZE; y <= ROW_HALF_SIZE; ++y)
 		{
 			float2 texelOffset = float2(x, y) * texelSize;
-			float closestDepthInLSpace = shadowMapArr.Sample(shadowSampler, float3(shadowTexCoords + texelOffset, shadowMapIndex)).x;
+			float closestDepthInLSpace = shadowMapArr.SampleLevel(shadowSampler, shadowTexCoords + texelOffset, 0).x;
 
 			// depth check
 			const float linearCurrentPx = LinearDepth(pxDepthInLSpace, lightProj);
@@ -342,35 +341,14 @@ float3 CalculateSpotLightIllumination(in const SpotLight l, in BRDF_Surface s, c
 float3 CalculateDirectionalLightIllumination(
 	  const in DirectionalLight l
 	, const in BRDF_Surface s
-	, const in float3 P_World
 	, const in float3 V_World
-	, const in float4x4 shadowViewDirectional
 )
-	{	
+{
 	const float3 Wi = normalize(-l.lightDirection);
 	const float3 radiance = l.color * l.brightness;
 	const float NdotL = saturate(dot(s.N, Wi));
 	
-	float ShadowFactor = 1.0f; // no shadows
-	if (l.shadowing)
-	{
-		ShadowTestPCFData pcfTest = (ShadowTestPCFData) 0;
-		pcfTest.lightSpacePos = mul(shadowViewDirectional, float4(P_World, 1));
-		pcfTest.NdotL = NdotL;
-		pcfTest.depthBias = l.depthBias;
-		#if 0
-		ShadowFactor = ShadowTestPCF_Directional(
-				  pcfTest
-				, texDirectionalShadowMaps
-				, sShadowSampler
-				, directionalShadowMapDimension
-				, 0
-				, directionalProj
-		);
-		#endif
-	}
-	
-	return BRDF(s, Wi, V_World) * radiance * ShadowFactor * NdotL;
+	return BRDF(s, Wi, V_World) * radiance * NdotL;
 }
 
 //float2 ParallaxUVs(float2 uv, float3 ViewVectorInTangentSpace, Texture2D HeightMap, SamplerState Sampler)

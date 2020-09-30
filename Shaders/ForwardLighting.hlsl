@@ -84,8 +84,9 @@ Texture2D texRoughness : register(t5);
 SamplerState LinearSampler : register(s0);
 SamplerState PointSampler  : register(s1);
 
-Texture2DArray   texSpotLightShadowMaps  : register(t6);
-TextureCubeArray texPointLightShadowMaps : register(t12);
+Texture2D        texDirectionalLightShadowMap : register(t10);
+Texture2DArray   texSpotLightShadowMaps       : register(t11);
+TextureCubeArray texPointLightShadowMaps      : register(t17);
 
 //---------------------------------------------------------------------------------------------------
 //
@@ -154,8 +155,7 @@ float4 PSMain(PSInput In) : SV_TARGET
 	/* Emissive */ + SurfaceParams.emissiveColor * SurfaceParams.emissiveIntensity * 10.0f
 	;
 	
-	
-	float3 IEnv = 0.0f.xxx;                 // environment lighting illumination
+	float3 IEnv = 0.0f.xxx; // environment lighting illumination
 	
 	// Non-shadowing lights
 	for (int p = 0; p < cbPerFrame.Lights.numPointLights; ++p)
@@ -208,8 +208,26 @@ float4 PSMain(PSInput In) : SV_TARGET
 			  * ShadowTestPCF(pcfData, texSpotLightShadowMaps, PointSampler, SpotLightShadowMapDimensions, sc);
 	}
 	
-	if (cbPerFrame.Lights.directional.enabled)
-		I_total += CalculateDirectionalLightIllumination(cbPerFrame.Lights.directional, SurfaceParams, P, V, cbPerFrame.Lights.shadowViewDirectional);
+	
+	// Directional light
+	{
+		DirectionalLight l = cbPerFrame.Lights.directional;
+		if (l.enabled)
+		{
+			ShadowTestPCFData pcfData = (ShadowTestPCFData) 0;
+			float ShadowingFactor = 1.0f; // no shadows
+			if (l.shadowing)
+			{
+				const float3 L = normalize(-l.lightDirection);
+				pcfData.lightSpacePos = mul(cbPerFrame.Lights.shadowViewDirectional, float4(P, 1));
+				pcfData.NdotL = saturate(dot(SurfaceParams.N, L));
+				pcfData.depthBias = l.depthBias;
+				ShadowingFactor = ShadowTestPCF_Directional(pcfData, texDirectionalLightShadowMap, PointSampler, cbPerFrame.f2DirectionalLightShadowMapDimensions, cbPerFrame.Lights.shadowViewDirectional);
+			}
+			
+			I_total += CalculateDirectionalLightIllumination(l, SurfaceParams, V) * ShadowingFactor;
+		}
+	}
 	
 	return float4(I_total, 1);
 }

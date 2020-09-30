@@ -154,6 +154,7 @@ struct PerFrameData
 	SceneLighting Lights;
 	float2 f2PointLightShadowMapDimensions;
 	float2 f2SpotLightShadowMapDimensions;
+	float2 f2DirectionalLightShadowMapDimensions;
 	float fAmbientLightingFactor;
 };
 struct PerViewData

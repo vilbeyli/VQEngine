@@ -375,8 +375,7 @@ void VQEngine::RenderThread_LoadResources()
 		rsc.DSV_ShadowMaps_Directional = mRenderer.CreateDSV();
 
 		for (int i = 0; i < NUM_SHADOWING_LIGHTS__SPOT; ++i)      mRenderer.InitializeDSV(rsc.DSV_ShadowMaps_Spot , i, rsc.Tex_ShadowMaps_Spot , i);
-		for (int i = 0; i < NUM_SHADOWING_LIGHTS__POINT * 6; ++i) 
-			mRenderer.InitializeDSV(rsc.DSV_ShadowMaps_Point, i, rsc.Tex_ShadowMaps_Point, i);
+		for (int i = 0; i < NUM_SHADOWING_LIGHTS__POINT * 6; ++i) mRenderer.InitializeDSV(rsc.DSV_ShadowMaps_Point, i, rsc.Tex_ShadowMaps_Point, i);
 		mRenderer.InitializeDSV(rsc.DSV_ShadowMaps_Directional, 0, rsc.Tex_ShadowMaps_Directional);
 
 
@@ -386,10 +385,7 @@ void VQEngine::RenderThread_LoadResources()
 		rsc.SRV_ShadowMaps_Directional = mRenderer.CreateSRV();
 		mRenderer.InitializeSRV(rsc.SRV_ShadowMaps_Spot , 0, rsc.Tex_ShadowMaps_Spot);
 		mRenderer.InitializeSRV(rsc.SRV_ShadowMaps_Point, 0, rsc.Tex_ShadowMaps_Point);
-#if 0
 		mRenderer.InitializeSRV(rsc.SRV_ShadowMaps_Directional, 0, rsc.Tex_ShadowMaps_Directional);
-#endif
-		int a = 5;
 	}
 }
 
@@ -842,6 +838,39 @@ void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowVie
 		}
 	}
 
+
+	//
+	// DIRECTIONAL LIGHT
+	//
+	if (!SceneShadowView.ShadowView_Directional.meshRenderCommands.empty())
+	{
+		const std::string marker = "Directional";
+		SCOPED_GPU_MARKER(pCmd, marker.c_str());
+
+		pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_PSO));
+		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(7));
+
+		const float RenderResolutionX = 2048.0f; // TODO
+		const float RenderResolutionY = 2048.0f; // TODO
+		D3D12_VIEWPORT viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
+		D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
+		pCmd->RSSetViewports(1, &viewport);
+		pCmd->RSSetScissorRects(1, &scissorsRect);
+
+		// Bind Depth / clear
+		const DSV& dsv = mRenderer.GetDSV(mResources_MainWnd.DSV_ShadowMaps_Directional);
+		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle();
+		pCmd->OMSetRenderTargets(0, NULL, FALSE, &dsvHandle);
+
+		if constexpr (!B_CLEAR_DEPTH_BUFFERS_BEFORE_DRAW)
+		{
+			D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
+			pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, NULL);
+		}
+
+		fnDrawRenderList(SceneShadowView.ShadowView_Directional);
+	}
+
 	// Set Viewport & Scissors
 	{
 		const float RenderResolutionX = 1024.0f; // TODO
@@ -857,8 +886,13 @@ void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowVie
 	//
 	if (SceneShadowView.NumSpotShadowViews > 0)
 	{
-		pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_PSO));
-		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(7));
+		// set PSO & RS only when we're going to render Spot views AND directional light shadows hasn't rendered
+		// to save a context roll as the PSO and RS will already be what we want
+		if (SceneShadowView.ShadowView_Directional.meshRenderCommands.empty())
+		{
+			pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_PSO));
+			pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(7));
+		}
 	}
 	for (int i = 0; i < SceneShadowView.NumSpotShadowViews; ++i)
 	{
@@ -897,6 +931,7 @@ void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowVie
 	{
 		const std::string marker = "Point[" + std::to_string(i) + "]";
 		SCOPED_GPU_MARKER(pCmd, marker.c_str());
+
 		FCBufferLightPS* pCBuffer = {};
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 		ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(decltype(pCBuffer)), (void**)(&pCBuffer), &cbAddr);
@@ -931,38 +966,6 @@ void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowVie
 		}
 	}
 
-	//
-	// DIRECTIONAL LIGHT
-	//
-	if(!SceneShadowView.ShadowView_Directional.meshRenderCommands.empty())
-	{
-		// TODO:
-		pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_LINEAR_PSO));
-		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(8));
-
-		const float RenderResolutionX = 2048.0f; // TODO
-		const float RenderResolutionY = 2048.0f; // TODO
-		D3D12_VIEWPORT viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
-		D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
-		pCmd->RSSetViewports(1, &viewport);
-		pCmd->RSSetScissorRects(1, &scissorsRect);
-
-		const std::string marker = "Directional";
-		SCOPED_GPU_MARKER(pCmd, marker.c_str());
-
-		// Bind Depth / clear
-		const DSV& dsv = mRenderer.GetDSV(mResources_MainWnd.DSV_ShadowMaps_Directional);
-		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle();
-		pCmd->OMSetRenderTargets(0, NULL, FALSE, &dsvHandle);
-
-		if constexpr (!B_CLEAR_DEPTH_BUFFERS_BEFORE_DRAW)
-		{
-			D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
-			pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, NULL);
-		}
-
-		fnDrawRenderList(SceneShadowView.ShadowView_Directional);
-	}
 }
 
 void VQEngine::TransitionForSceneRendering(FWindowRenderContext& ctx)
@@ -1044,6 +1047,7 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 		pPerFrame->fAmbientLightingFactor = SceneView.sceneParameters.fAmbientLightingFactor;
 		pPerFrame->f2PointLightShadowMapDimensions = { 1024.0f, 1024.f }; // TODO
 		pPerFrame->f2SpotLightShadowMapDimensions  = { 1024.0f, 1024.f }; // TODO
+		pPerFrame->f2DirectionalLightShadowMapDimensions  = { 2048.0f, 2048.0f }; // TODO
 		
 		if (bUseHDRRenderPath)
 		{
@@ -1056,6 +1060,7 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 		pCmd->SetGraphicsRootConstantBufferView(PerFrameRSBindSlot, cbAddr);
 		pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Spot).GetGPUDescHandle(0));
 		pCmd->SetGraphicsRootDescriptorTable(5, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Point).GetGPUDescHandle(0));
+		pCmd->SetGraphicsRootDescriptorTable(6, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Directional).GetGPUDescHandle(0));
 	}
 
 	// set PerView constants

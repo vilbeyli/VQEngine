@@ -132,7 +132,7 @@ DirectX::XMMATRIX Light::GetWorldTransformationMatrix() const
 
 DirectX::XMMATRIX Light::GetViewProjectionMatrix(Texture::CubemapUtility::ECubeMapLookDirections PointLightFace) const
 {
-	XMFLOAT2 ViewportSize = XMFLOAT2(1024, 1024);
+	XMFLOAT2 ViewportSize = XMFLOAT2(this->ViewportX, this->ViewportY);
 
 	XMMATRIX matView = XMMatrixIdentity();
 	XMMATRIX matProj = CalculateProjectionMatrix(this->Type, this->ShadowData.NearPlane, this->ShadowData.FarPlane, ViewportSize);
@@ -183,13 +183,26 @@ DirectX::XMMATRIX Light::CalculateDirectionalLightViewMatrix(const Light& mDirLi
 	}
 
 	XMVECTOR up      = XMLoadFloat3(&UpVector);
-	XMVECTOR forward = XMLoadFloat3(&ForwardVector);
+	XMVECTOR forward = XMLoadFloat3(&DownVector); // directional light looks down by default
 	XMFLOAT3 f3Zero = XMFLOAT3(0, 0, 0);
 
 	const XMVECTOR lookAt = XMLoadFloat3(&f3Zero);
 	const XMMATRIX mRot = mDirLight.RotationQuaternion.Matrix();
-	const XMVECTOR direction = XMVector3Transform(forward, mRot);
-	const XMVECTOR lightPos = direction * -mDirLight.DistanceFromOrigin;	// away from the origin along the direction vector 
+	const XMVECTOR direction = XMVector4Transform(forward, mRot);
+	const XMVECTOR lightPos = direction * -mDirLight.DistanceFromOrigin; // away from the origin along the direction vector 
+
+	// check for edge cases: when upVector and light vector align (0deg) or oppose (180deg),
+	//                       they become become linearly dependent and the cross product will become zero.
+	//                       This happens when <Rotation> is given as 0 0 0, we end up with up(0,1,0) and down(0,-1,0)
+	XMVECTOR L = XMVector3Normalize(lookAt - lightPos);
+	XMVECTOR LDotUp = XMVector3Dot(L, up);
+	if (LDotUp.m128_f32[0] == 1.0f || LDotUp.m128_f32[0] == -1.0f)
+	{
+		// nudge the up vector a bit to prevent the vectors from being linearly dependent
+		up.m128_f32[0] += 0.001f;
+		up = XMVector3Normalize(up);
+	}
+
 	return XMMatrixLookAtLH(lightPos, lookAt, up);
 }
 
