@@ -829,8 +829,9 @@ void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowVie
 			SCOPED_GPU_MARKER(pCmd, marker.c_str());
 			for (int face = 0; face < 6; ++face)
 			{
+				const int iShadowView = i * 6 + face;
 				const DSV& dsv = mRenderer.GetDSV(mResources_MainWnd.DSV_ShadowMaps_Point);
-				pCmd->ClearDepthStencilView(dsv.GetCPUDescHandle(face), DSVClearFlags, 1.0f, 0, 0, NULL);
+				pCmd->ClearDepthStencilView(dsv.GetCPUDescHandle(iShadowView), DSVClearFlags, 1.0f, 0, 0, NULL);
 			}
 		}
 		if (!SceneShadowView.ShadowView_Directional.meshRenderCommands.empty())
@@ -917,7 +918,7 @@ void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowVie
 		
 			// Bind Depth / clear
 			const DSV& dsv = mRenderer.GetDSV(mResources_MainWnd.DSV_ShadowMaps_Point);
-			D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle(face);
+			D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle(iShadowView);
 			pCmd->OMSetRenderTargets(0, NULL, FALSE, &dsvHandle);
 			
 			if constexpr (!B_CLEAR_DEPTH_BUFFERS_BEFORE_DRAW)
