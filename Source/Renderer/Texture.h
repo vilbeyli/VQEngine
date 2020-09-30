@@ -37,11 +37,11 @@ struct Image;
 struct TextureCreateDesc
 {
 	TextureCreateDesc(const std::string& name) : TexName(name) {}
-	ID3D12Device*         pDevice   = nullptr;
-	D3D12MA::Allocator*   pAllocator = nullptr;
+	std::string           TexName;
+	const void*           pData = nullptr;
 	D3D12_RESOURCE_DESC   d3d12Desc = {};
 	D3D12_RESOURCE_STATES ResourceState = D3D12_RESOURCE_STATE_COMMON;
-	const std::string&    TexName;
+	bool                  bCubemap = false;
 };
 
 
@@ -78,7 +78,7 @@ public:
 	Texture(const Texture& other);
 	Texture& operator=(const Texture& other);
 
-	void Create(const TextureCreateDesc& desc, const void* pData = nullptr);
+	void Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, const TextureCreateDesc& desc);
 
 	void Destroy();
 
@@ -102,6 +102,7 @@ private:
 	bool mbTypelessTexture = false;
 	uint mStructuredBufferStride = 0;
 	int mMipMapCount = 1;
+	bool mbCubemap = false;
 
 	DXGI_FORMAT mFormat = DXGI_FORMAT_UNKNOWN;
 };

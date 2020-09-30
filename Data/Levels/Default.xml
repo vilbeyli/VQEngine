@@ -104,7 +104,7 @@
     </GameObject>
     <GameObject>
         <Transform>
-            <Position>-25 0 4</Position>
+            <Position>-25 1 4</Position>
             <Rotation>0 0 0</Rotation>
             <Scale>6 6 6</Scale>
         </Transform>
@@ -174,7 +174,7 @@
         <Shadows>
             <DepthBias> 0.001 </DepthBias>
             <NearPlane> 0.001 </NearPlane>
-            <FarPlane>  1500  </FarPlane>
+            <FarPlane>  20  </FarPlane>
         </Shadows>
         <Point>
             <Attenuation> 1 1 1 </Attenuation>
@@ -188,14 +188,14 @@
             <Scale> 0.1 0.1 0.1 </Scale>
         </Transform>
         <Mobility> Dynamic </Mobility>
-        <Enabled>false</Enabled>
+        <Enabled>true</Enabled>
         <Color>0.4 0.4 0.15</Color>
-        <Range> 16 </Range>
-        <Brightness> 3500 </Brightness>
+        <Range> 200 </Range>
+        <Brightness> 35 </Brightness>
         <Shadows>
-            <DepthBias> 0.001 </DepthBias>
+            <DepthBias> 0.05 </DepthBias>
             <NearPlane> 0.001 </NearPlane>
-            <FarPlane>  1500  </FarPlane>
+            <FarPlane>  200  </FarPlane>
         </Shadows>
         <Point>
             <Attenuation> 1 1 1 </Attenuation>
@@ -209,7 +209,7 @@
         <Range> 35 </Range>
         <Brightness> 300 </Brightness>
         <Shadows>
-            <DepthBias> 0.000005 </DepthBias>
+            <DepthBias> 0.000009 </DepthBias>
             <NearPlane> 0.001 </NearPlane>
             <FarPlane>  1500  </FarPlane>
         </Shadows>
@@ -226,7 +226,7 @@
     <Light>
         <!-- Spot Light -->
         <Mobility> Static </Mobility>
-        <Enabled>true</Enabled>
+        <Enabled>false</Enabled>
         <Color>0.4 0.4 0.15</Color>
         <Range> 35 </Range>
         <Brightness> 1500 </Brightness>

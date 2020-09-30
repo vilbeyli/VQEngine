@@ -139,9 +139,15 @@ struct FSceneShadowView
 		DirectX::XMMATRIX matViewProj;
 		std::vector<FShadowMeshRenderCommand> meshRenderCommands;
 	};
+	struct FPointLightLinearDepthParams
+	{
+		float fFarPlane;
+		DirectX::XMFLOAT3 vWorldPos;
+	};
 
 	std::array<FShadowView, NUM_SHADOWING_LIGHTS__SPOT>      ShadowViews_Spot;
 	std::array<FShadowView, NUM_SHADOWING_LIGHTS__POINT * 6> ShadowViews_Point;
+	std::array<FPointLightLinearDepthParams, NUM_SHADOWING_LIGHTS__POINT>     PointLightLinearDepthParams;
 	FShadowView ShadowView_Directional;
 
 	int NumSpotShadowViews;

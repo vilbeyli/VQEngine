@@ -94,14 +94,16 @@ float OmnidirectionalShadowTest(
 	, float2 shadowMapDimensions
 	, int shadowMapIndex
 	, float3 lightVectorWorldSpace
-	, float range
+	, float fFarPlane
 )
 {
 	const float BIAS = pcfTestLightData.depthBias * tan(acos(pcfTestLightData.NdotL));
 	float shadow = 0.0f;
 
+	// shadow map is already in world space depth rather than simple depth buffer value
 	const float closestDepthInLSpace = shadowCubeMapArr.Sample(shadowSampler, float4(-lightVectorWorldSpace, shadowMapIndex)).x;
-	const float closestDepthInWorldSpace = closestDepthInLSpace * range;
+	
+	const float closestDepthInWorldSpace = closestDepthInLSpace * fFarPlane;
 	shadow += (length(lightVectorWorldSpace) > closestDepthInWorldSpace + pcfTestLightData.depthBias) ? 1.0f : 0.0f;
 
 	return 1.0f - shadow;
@@ -113,42 +115,67 @@ float OmnidirectionalShadowTestPCF(
 	, float2 shadowMapDimensions
 	, int shadowMapIndex
 	, float3 lightVectorWorldSpace
-	, float range
+	, float fFarPlane
 )
 {
 #define NUM_OMNIDIRECTIONAL_PCF_TAPS 20
-	const float3 sampleOffsetDirections[NUM_OMNIDIRECTIONAL_PCF_TAPS] =
+#define USE_NORMALIZED_TAP_DIRECTIONS 1
+
+#if USE_NORMALIZED_TAP_DIRECTIONS
+	#define f3 0.5773502691896258f
+	#define f2 0.7071067811865475f
+	const float3 SAMPLE_OFFSET_DIRS_NORMALIZED[NUM_OMNIDIRECTIONAL_PCF_TAPS] =
+	{
+		float3(f3, f3,  f3), float3(f3, -f3,  f3), float3(-f3, -f3,  f3), float3(-f3, f3,  f3),
+		float3(f3, f3, -f3), float3(f3, -f3, -f3), float3(-f3, -f3, -f3), float3(-f3, f3, -f3),
+		float3(f2, f2,   0), float3( f2, -f2,  0), float3(-f2, -f2,  0), float3(-f2, f2,   0), 
+		float3(f2,  0,  f2), float3(-f2,  0,  f2), float3(f2,   0, -f2), float3(-f2,  0, -f2),
+		float3(0,  f2,  f2), float3(0,  -f2,  f2), float3(0,  -f2, -f2), float3(0, f2,   -f2),
+	};
+#else
+	const float3 SAMPLE_OFFSET_DIRS[NUM_OMNIDIRECTIONAL_PCF_TAPS] =
 	{
 	   float3(1,  1,  1), float3(1, -1,  1), float3(-1, -1,  1), float3(-1,  1,  1),
 	   float3(1,  1, -1), float3(1, -1, -1), float3(-1, -1, -1), float3(-1,  1, -1),
+	
 	   float3(1,  1,  0), float3(1, -1,  0), float3(-1, -1,  0), float3(-1,  1,  0),
 	   float3(1,  0,  1), float3(-1, 0,  1), float3(1 ,  0, -1), float3(-1,  0, -1),
 	   float3(0,  1,  1), float3(0, -1,  1), float3(0 , -1, -1), float3(0 ,  1, -1)
 	};
-
-	// const float BIAS = pcfTestLightData.depthBias * tan(acos(pcfTestLightData.NdotL));
+#endif
+	
+	 const float BIAS = pcfTestLightData.depthBias * tan(acos(pcfTestLightData.NdotL));
 	// const float bias = 0.001f;
 
 	float shadow = 0.0f;
 
 	// parameters for determining shadow softness based on view distance to the pixel
 	const float diskRadiusScaleFactor = 1.0f / 8.0f;
-	const float diskRadius = (1.0f + (pcfTestLightData.viewDistanceOfPixel / range)) * diskRadiusScaleFactor;
+	const float diskRadius = (1.0f + (pcfTestLightData.viewDistanceOfPixel / fFarPlane)) * diskRadiusScaleFactor;
 
-	[unroll]
+	//[unroll] // cannot unroll this without spilling without shader permutations.
 	for (int i = 0; i < NUM_OMNIDIRECTIONAL_PCF_TAPS; ++i)
 	{
-		const float4 cubemapSampleVec = float4(-(lightVectorWorldSpace + normalize(sampleOffsetDirections[i]) * diskRadius), shadowMapIndex);
+#if USE_NORMALIZED_TAP_DIRECTIONS
+		const float3 SAMPLE_DIR = SAMPLE_OFFSET_DIRS_NORMALIZED[i];
+#else
+		const float3 SAMPLE_DIR = normalize(SAMPLE_OFFSET_DIRS[i]);
+#endif
+		
+		
+		const float4 cubemapSampleVec = float4(-(lightVectorWorldSpace + SAMPLE_DIR*diskRadius), shadowMapIndex);
+		
+		// shadow map is already in world space depth rather than simple depth buffer value
 		const float closestDepthInLSpace = shadowCubeMapArr.Sample(shadowSampler, cubemapSampleVec).x;
-		const float closestDepthInWorldSpace = closestDepthInLSpace * range;
-		shadow += (length(lightVectorWorldSpace) > closestDepthInWorldSpace + pcfTestLightData.depthBias) ? 1.0f : 0.0f;
+		const float closestDepthInWorldSpace = closestDepthInLSpace * fFarPlane;
+		shadow += (length(lightVectorWorldSpace) > closestDepthInWorldSpace + pcfTestLightData.depthBias+0.001) ? 1.0f : 0.0f;
 	}
 	shadow /= NUM_OMNIDIRECTIONAL_PCF_TAPS;
 	return 1.0f - shadow;
 }
 
 // todo: ESM - http://www.cad.zju.edu.cn/home/jqfeng/papers/Exponential%20Soft%20Shadow%20Mapping.pdf
-float ShadowTestPCF(in ShadowTestPCFData pcfTestLightData, Texture2DArray shadowMapArr, SamplerState shadowSampler, float2 shadowMapDimensions, int shadowMapIndex)
+float ShadowTestPCF(in ShadowTestPCFData pcfTestLightData, Texture2DArray shadowMapArr, SamplerState shadowSampler, in float2 shadowMapDimensions, in int shadowMapIndex)
 {
 	// homogeneous position after interpolation
 	const float3 projLSpaceCoords = pcfTestLightData.lightSpacePos.xyz / pcfTestLightData.lightSpacePos.w;
@@ -197,8 +224,8 @@ float ShadowTestPCF_Directional(
 	in ShadowTestPCFData pcfTestLightData
 	, Texture2DArray shadowMapArr
 	, SamplerState shadowSampler
-	, float2 shadowMapDimensions
-	, int shadowMapIndex
+	, in float2 shadowMapDimensions
+	, in int shadowMapIndex
 	, in matrix lightProj
 )
 {
@@ -226,10 +253,10 @@ float ShadowTestPCF_Directional(
 
 
 	// PCF
-	const int rowHalfSize = 2;
-	for (int x = -rowHalfSize; x <= rowHalfSize; ++x)
+	const int ROW_HALF_SIZE = 2;
+	for (int x = -ROW_HALF_SIZE; x <= ROW_HALF_SIZE; ++x)
 	{
-		for (int y = -rowHalfSize; y <= rowHalfSize; ++y)
+		for (int y = -ROW_HALF_SIZE; y <= ROW_HALF_SIZE; ++y)
 		{
 			float2 texelOffset = float2(x, y) * texelSize;
 			float closestDepthInLSpace = shadowMapArr.Sample(shadowSampler, float3(shadowTexCoords + texelOffset, shadowMapIndex)).x;
@@ -247,7 +274,7 @@ float ShadowTestPCF_Directional(
 		}
 	}
 
-	shadow /= (rowHalfSize * 2 + 1) * (rowHalfSize * 2 + 1);
+	shadow /= (ROW_HALF_SIZE * 2 + 1) * (ROW_HALF_SIZE * 2 + 1);
 
 	return 1.0f - shadow;
 }

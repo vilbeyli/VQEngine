@@ -74,17 +74,36 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 		++NumObjects;
 	}
 
+	// gradient spheres
+	{
+
+	}
 
 	// big cube
-	FGameObjectRepresentation obj = {};
-	XMFLOAT3 pos = { 0, 0, 0 };
-	XMFLOAT3 axis = UpVector;
-	XMFLOAT3 scale = { 500, 500, 500 };
-	obj.tf.SetPosition(pos);
-	obj.tf.SetScale(scale);
-	obj.BuiltinMeshName = "Cube";
-	obj.MaterialName = "Checkerboard";
-	scene.Objects.push_back(obj);
+	{
+		FGameObjectRepresentation obj = {};
+		XMFLOAT3 pos = { 0, 0, 0 };
+		XMFLOAT3 axis = UpVector;
+		XMFLOAT3 scale = { 500, 500, 500 };
+		obj.tf.SetPosition(pos);
+		obj.tf.SetScale(scale);
+		obj.BuiltinMeshName = "Cube";
+		obj.MaterialName = "Checkerboard";
+		scene.Objects.push_back(obj);
+	}
+
+	// platform cylinder
+	{
+		FGameObjectRepresentation obj = {};
+		XMFLOAT3 pos = { 0, -40, 0 };
+		XMFLOAT3 axis = UpVector;
+		XMFLOAT3 scale = { 100, 1, 100 };
+		obj.tf.SetPosition(pos);
+		obj.tf.SetScale(scale);
+		obj.BuiltinMeshName = "Cylinder";
+		obj.MaterialName = "Checkerboard_Grayscale";
+		scene.Objects.push_back(obj);
+	}
 }
 
 void StressTestScene::UnloadScene()

@@ -73,7 +73,7 @@
     </GameObject>
     <GameObject>
         <Transform>
-            <Position>-40 20 0</Position>
+            <Position>-20 20 0</Position>
             <Rotation>-90 0 0</Rotation>
             <Scale>10 10 10</Scale>
         </Transform>
@@ -84,7 +84,7 @@
     </GameObject>
     <GameObject>
         <Transform>
-            <Position>-20 20 0</Position>
+            <Position>-60 50 0</Position>
             <Quaternion>0 0 0 1</Quaternion>
             <Scale>10 10 10</Scale>
         </Transform>
@@ -97,7 +97,7 @@
     <!-- Top Row Objects -->
     <GameObject>
         <Transform>
-            <Position>-60 50 0</Position>
+            <Position>-40 20 0</Position>
             <Quaternion>0 0 0 1</Quaternion>
             <Scale>8 8 8</Scale>
         </Transform>
@@ -138,11 +138,11 @@
         <Enabled>true</Enabled>
         <Color>0.8 0.95 0.8</Color>
         <Range> 1000 </Range>
-        <Brightness> 10 </Brightness>
+        <Brightness> 4000 </Brightness>
         <Shadows>
-            <DepthBias> 0.001 </DepthBias>
+            <DepthBias> 0.0000005 </DepthBias>
             <NearPlane> 0.001 </NearPlane>
-            <FarPlane>  1500  </FarPlane>
+            <FarPlane>  2500  </FarPlane>
         </Shadows>
         <Transform>
             <Position>50 60 -90</Position>
@@ -165,10 +165,10 @@
         <Mobility> Dynamic </Mobility>
         <Enabled>true</Enabled>
         <Color>0.8 0.8 0.45</Color>
-        <Range> 40 </Range>
-        <Brightness> 500 </Brightness>
+        <Range> 60 </Range>
+        <Brightness> 350 </Brightness>
         <Shadows>
-            <DepthBias> 0.001 </DepthBias>
+            <DepthBias> 0.1 </DepthBias>
             <NearPlane> 0.001 </NearPlane>
             <FarPlane>  1500  </FarPlane>
         </Shadows>

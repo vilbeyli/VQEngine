@@ -223,7 +223,8 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 
 
 		{	// Main depth stencil view
-			D3D12_RESOURCE_DESC d = CD3DX12_RESOURCE_DESC::Tex2D(
+			TextureCreateDesc desc("SceneDepth");
+			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 				DXGI_FORMAT_R32_TYPELESS
 				, Width
 				, Height
@@ -233,11 +234,13 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, 0 // MSAA SampleQuality
 				, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
 			);
-			r.Tex_MainViewDepth = mRenderer.CreateTexture("SceneDepth", d, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+			desc.ResourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+			r.Tex_MainViewDepth = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeDSV(r.DSV_MainViewDepth, 0u, r.Tex_MainViewDepth);
 		}
 		{	// Main depth stencil view /w MSAA
-			D3D12_RESOURCE_DESC d = CD3DX12_RESOURCE_DESC::Tex2D(
+			TextureCreateDesc desc("SceneDepthMSAA");
+			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 				DXGI_FORMAT_R32_TYPELESS
 				, Width
 				, Height
@@ -247,12 +250,14 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, 0 // MSAA SampleQuality
 				, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
 			);
-			r.Tex_MainViewDepthMSAA = mRenderer.CreateTexture("SceneDepthMSAA", d, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+			desc.ResourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+			r.Tex_MainViewDepthMSAA = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeDSV(r.DSV_MainViewDepthMSAA, 0u, r.Tex_MainViewDepthMSAA);
 		}
 
 		{ // Main render target view w/ MSAA
-			D3D12_RESOURCE_DESC d = CD3DX12_RESOURCE_DESC::Tex2D(
+			TextureCreateDesc desc("SceneColorMSAA");
+			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 				MainColorRTFormat
 				, Width
 				, Height
@@ -263,12 +268,14 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
 			);
 
-			r.Tex_MainViewColorMSAA = mRenderer.CreateTexture("SceneColorMSAA", d, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
+			desc.ResourceState = D3D12_RESOURCE_STATE_RESOLVE_SOURCE;
+			r.Tex_MainViewColorMSAA = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeRTV(r.RTV_MainViewColorMSAA, 0u, r.Tex_MainViewColorMSAA);
 		}
 
 		{ // MSAA resolve target
-			D3D12_RESOURCE_DESC d = CD3DX12_RESOURCE_DESC::Tex2D(
+			TextureCreateDesc desc("SceneColor");
+			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 				MainColorRTFormat
 				, Width
 				, Height
@@ -279,13 +286,15 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
 			);
 
-			r.Tex_MainViewColor = mRenderer.CreateTexture("SceneColor", d, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			desc.ResourceState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+			r.Tex_MainViewColor = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeRTV(r.RTV_MainViewColor, 0u, r.Tex_MainViewColor);
 			mRenderer.InitializeSRV(r.SRV_MainViewColor, 0u, r.Tex_MainViewColor);
 		}
 
 		{ // Tonemapper UAV
-			D3D12_RESOURCE_DESC d = CD3DX12_RESOURCE_DESC::Tex2D(
+			TextureCreateDesc desc("TonemapperOut");
+			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 				MainColorRTFormat
 				, Width
 				, Height
@@ -295,7 +304,8 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, 0 // MSAA SampleQuality
 				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
 			);
-			r.Tex_PostProcess_TonemapperOut = mRenderer.CreateTexture("TonemapperOut", d, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			desc.ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+			r.Tex_PostProcess_TonemapperOut = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeUAV(r.UAV_PostProcess_TonemapperOut, 0u, r.Tex_PostProcess_TonemapperOut);
 			mRenderer.InitializeSRV(r.SRV_PostProcess_TonemapperOut, 0u, r.Tex_PostProcess_TonemapperOut);
 		}
@@ -325,12 +335,13 @@ void VQEngine::RenderThread_LoadResources()
 
 	// shadow map passes
 	{
+		TextureCreateDesc desc("ShadowMaps_Spot");
 		// initialize texture memory
 		constexpr UINT SHADOW_MAP_DIMENSION_SPOT = 1024;
 		constexpr UINT SHADOW_MAP_DIMENSION_POINT = 1024;
 		constexpr UINT SHADOW_MAP_DIMENSION_DIRECTIONAL = 2048;
 
-		D3D12_RESOURCE_DESC d = CD3DX12_RESOURCE_DESC::Tex2D(
+		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 			DXGI_FORMAT_R32_TYPELESS
 			, SHADOW_MAP_DIMENSION_SPOT
 			, SHADOW_MAP_DIMENSION_SPOT
@@ -340,18 +351,23 @@ void VQEngine::RenderThread_LoadResources()
 			, 0 // MSAA SampleQuality
 			, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
 		);
-		rsc.Tex_ShadowMaps_Spot = mRenderer.CreateTexture("ShadowMaps_Spot", d, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+		desc.ResourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+		rsc.Tex_ShadowMaps_Spot = mRenderer.CreateTexture(desc);
 
-		d.DepthOrArraySize = NUM_SHADOWING_LIGHTS__POINT * 6;
-		d.Width = SHADOW_MAP_DIMENSION_POINT;
-		d.Height = SHADOW_MAP_DIMENSION_POINT;
-		rsc.Tex_ShadowMaps_Point = mRenderer.CreateTexture("ShadowMaps_Point", d, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+		desc.d3d12Desc.DepthOrArraySize = NUM_SHADOWING_LIGHTS__POINT * 6;
+		desc.d3d12Desc.Width  = SHADOW_MAP_DIMENSION_POINT;
+		desc.d3d12Desc.Height = SHADOW_MAP_DIMENSION_POINT;
+		desc.TexName = "ShadowMaps_Point";
+		desc.bCubemap = true;
+		rsc.Tex_ShadowMaps_Point = mRenderer.CreateTexture(desc);
 
 
-		d.Width = SHADOW_MAP_DIMENSION_DIRECTIONAL;
-		d.Height = SHADOW_MAP_DIMENSION_DIRECTIONAL;
-		d.DepthOrArraySize = 1;
-		rsc.Tex_ShadowMaps_Directional = mRenderer.CreateTexture("ShadowMap_Directional", d, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+		desc.d3d12Desc.Width  = SHADOW_MAP_DIMENSION_DIRECTIONAL;
+		desc.d3d12Desc.Height = SHADOW_MAP_DIMENSION_DIRECTIONAL;
+		desc.d3d12Desc.DepthOrArraySize = 1;
+		desc.bCubemap = false;
+		desc.TexName = "ShadowMap_Directional";
+		rsc.Tex_ShadowMaps_Directional = mRenderer.CreateTexture(desc);
 		
 		// initialize DSVs
 		rsc.DSV_ShadowMaps_Spot        = mRenderer.CreateDSV(NUM_SHADOWING_LIGHTS__SPOT);
@@ -359,7 +375,8 @@ void VQEngine::RenderThread_LoadResources()
 		rsc.DSV_ShadowMaps_Directional = mRenderer.CreateDSV();
 
 		for (int i = 0; i < NUM_SHADOWING_LIGHTS__SPOT; ++i)      mRenderer.InitializeDSV(rsc.DSV_ShadowMaps_Spot , i, rsc.Tex_ShadowMaps_Spot , i);
-		for (int i = 0; i < NUM_SHADOWING_LIGHTS__POINT * 6; ++i) mRenderer.InitializeDSV(rsc.DSV_ShadowMaps_Point, i, rsc.Tex_ShadowMaps_Point, i);
+		for (int i = 0; i < NUM_SHADOWING_LIGHTS__POINT * 6; ++i) 
+			mRenderer.InitializeDSV(rsc.DSV_ShadowMaps_Point, i, rsc.Tex_ShadowMaps_Point, i);
 		mRenderer.InitializeDSV(rsc.DSV_ShadowMaps_Directional, 0, rsc.Tex_ShadowMaps_Directional);
 
 
@@ -367,11 +384,12 @@ void VQEngine::RenderThread_LoadResources()
 		rsc.SRV_ShadowMaps_Spot        = mRenderer.CreateSRV();
 		rsc.SRV_ShadowMaps_Point       = mRenderer.CreateSRV();
 		rsc.SRV_ShadowMaps_Directional = mRenderer.CreateSRV();
-		mRenderer.InitializeSRV(rsc.SRV_ShadowMaps_Spot, 0, rsc.Tex_ShadowMaps_Spot);
-#if 0
+		mRenderer.InitializeSRV(rsc.SRV_ShadowMaps_Spot , 0, rsc.Tex_ShadowMaps_Spot);
 		mRenderer.InitializeSRV(rsc.SRV_ShadowMaps_Point, 0, rsc.Tex_ShadowMaps_Point);
+#if 0
 		mRenderer.InitializeSRV(rsc.SRV_ShadowMaps_Directional, 0, rsc.Tex_ShadowMaps_Directional);
 #endif
+		int a = 5;
 	}
 }
 
@@ -641,6 +659,12 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	return hr;
 }
 
+
+//====================================================================================================
+//
+//
+//
+//====================================================================================================
 HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 {
 	HRESULT hr = S_OK;
@@ -735,42 +759,29 @@ void VQEngine::DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh)
 
 void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowView& SceneShadowView)
 {
-	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
-	SCOPED_GPU_MARKER(pCmd, "RenderShadowMaps");
-
-	// Bind PSO
-	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_PSO));
-	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(7));
-
-	// Set Viewport & Scissors
-	const float RenderResolutionX = 1024.0f; // TODO
-	const float RenderResolutionY = 1024.0f; // TODO
-	D3D12_VIEWPORT viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
-	D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
-	pCmd->RSSetViewports(1, &viewport);
-	pCmd->RSSetScissorRects(1, &scissorsRect);
-
-	for (int i = 0; i < SceneShadowView.NumSpotShadowViews; ++i)
+	using namespace DirectX;
+	struct FCBufferLightPS
 	{
-		const std::string marker = "Spot[" + std::to_string(i) + "]";
-		SCOPED_GPU_MARKER(pCmd, marker.c_str());
+		XMFLOAT3 vLightPos;
+		float fFarPlane;
+	};
+	struct FCBufferLightVS
+	{
+		XMMATRIX matWorldViewProj;
+		XMMATRIX matWorld;
+	};
 
-		// Bind Depth / clear
-		const DSV& dsv = mRenderer.GetDSV(mResources_MainWnd.DSV_ShadowMaps_Spot);
-		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle(i);
-		pCmd->OMSetRenderTargets(0, NULL, FALSE, &dsvHandle);
-
-		D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
-		pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, NULL);
-
-		const FSceneShadowView::FShadowView& SpotShadowView = SceneShadowView.ShadowViews_Spot[i];
-		for (const FShadowMeshRenderCommand& renderCmd : SpotShadowView.meshRenderCommands)
+	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
+	auto fnDrawRenderList = [&](const FSceneShadowView::FShadowView& shadowView)
+	{
+		for (const FShadowMeshRenderCommand& renderCmd : shadowView.meshRenderCommands)
 		{
 			// set constant buffer data
-			FFrameConstantBufferUnlit* pCBuffer = {};
+			FCBufferLightVS* pCBuffer = {};
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 			ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(decltype(pCBuffer)), (void**)(&pCBuffer), &cbAddr);
-			pCBuffer->matModelViewProj = renderCmd.WorldTransformationMatrix * SpotShadowView.matViewProj;
+			pCBuffer->matWorldViewProj = renderCmd.WorldTransformationMatrix * shadowView.matViewProj;
+			pCBuffer->matWorld = renderCmd.WorldTransformationMatrix;
 			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
 
 			// set IA
@@ -791,20 +802,165 @@ void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowVie
 			// draw
 			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 		}
+	};
+
+
+	constexpr bool B_CLEAR_DEPTH_BUFFERS_BEFORE_DRAW = true;
+	SCOPED_GPU_MARKER(pCmd, "RenderShadowMaps");
+
+
+	// CLEAR DEPTH BUFFERS
+	if constexpr (B_CLEAR_DEPTH_BUFFERS_BEFORE_DRAW)
+	{
+		SCOPED_GPU_MARKER(pCmd, "ClearShadowDepths");
+		D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
+
+		for (int i = 0; i < SceneShadowView.NumSpotShadowViews; ++i)
+		{
+			const std::string marker = "Spot[" + std::to_string(i) + "]";
+			SCOPED_GPU_MARKER(pCmd, marker.c_str());
+
+			const DSV& dsv = mRenderer.GetDSV(mResources_MainWnd.DSV_ShadowMaps_Spot);
+			pCmd->ClearDepthStencilView(dsv.GetCPUDescHandle(i), DSVClearFlags, 1.0f, 0, 0, NULL);
+		}
+		for (int i = 0; i < SceneShadowView.NumPointShadowViews; ++i)
+		{
+			const std::string marker = "Point[" + std::to_string(i) + "]";
+			SCOPED_GPU_MARKER(pCmd, marker.c_str());
+			for (int face = 0; face < 6; ++face)
+			{
+				const DSV& dsv = mRenderer.GetDSV(mResources_MainWnd.DSV_ShadowMaps_Point);
+				pCmd->ClearDepthStencilView(dsv.GetCPUDescHandle(face), DSVClearFlags, 1.0f, 0, 0, NULL);
+			}
+		}
+		if (!SceneShadowView.ShadowView_Directional.meshRenderCommands.empty())
+		{
+			SCOPED_GPU_MARKER(pCmd, "Directional");
+			const DSV& dsv = mRenderer.GetDSV(mResources_MainWnd.DSV_ShadowMaps_Directional);
+			pCmd->ClearDepthStencilView(dsv.GetCPUDescHandle(), DSVClearFlags, 1.0f, 0, 0, NULL);
+		}
 	}
 
+	// Set Viewport & Scissors
+	{
+		const float RenderResolutionX = 1024.0f; // TODO
+		const float RenderResolutionY = 1024.0f; // TODO
+		D3D12_VIEWPORT viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
+		D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
+		pCmd->RSSetViewports(1, &viewport);
+		pCmd->RSSetScissorRects(1, &scissorsRect);
+	}
+
+	//
+	// SPOT LIGHTS
+	//
+	if (SceneShadowView.NumSpotShadowViews > 0)
+	{
+		pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_PSO));
+		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(7));
+	}
+	for (int i = 0; i < SceneShadowView.NumSpotShadowViews; ++i)
+	{
+		const FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowViews_Spot[i];
+
+		if (ShadowView.meshRenderCommands.empty())
+			continue;
+
+		const std::string marker = "Spot[" + std::to_string(i) + "]";
+		SCOPED_GPU_MARKER(pCmd, marker.c_str());
+
+		// Bind Depth / clear
+		const DSV& dsv = mRenderer.GetDSV(mResources_MainWnd.DSV_ShadowMaps_Spot);
+		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle(i);
+		pCmd->OMSetRenderTargets(0, NULL, FALSE, &dsvHandle);
+
+		if constexpr (!B_CLEAR_DEPTH_BUFFERS_BEFORE_DRAW)
+		{
+			D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
+			pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, NULL);
+		}
+
+		fnDrawRenderList(ShadowView);
+	}
+
+
+	//
+	// POINT LIGHTS
+	//
+	if (SceneShadowView.NumPointShadowViews > 0)
+	{
+		pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_LINEAR_PSO));
+		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(8));
+	}
 	for (int i = 0; i < SceneShadowView.NumPointShadowViews; ++i)
 	{
 		const std::string marker = "Point[" + std::to_string(i) + "]";
 		SCOPED_GPU_MARKER(pCmd, marker.c_str());
+		FCBufferLightPS* pCBuffer = {};
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+		ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(decltype(pCBuffer)), (void**)(&pCBuffer), &cbAddr);
 
-		// TODO: point light cubemap face rendering
+		pCBuffer->vLightPos = SceneShadowView.PointLightLinearDepthParams[i].vWorldPos;
+		pCBuffer->fFarPlane = SceneShadowView.PointLightLinearDepthParams[i].fFarPlane;
+		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
+
+		for (int face = 0; face < 6; ++face)
+		{
+			const int iShadowView = i * 6 + face;
+			const FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowViews_Point[iShadowView];
+
+			if (ShadowView.meshRenderCommands.empty())
+				continue;
+
+			const std::string marker_face = "[Cubemap Face=" + std::to_string(face) + "]";
+			SCOPED_GPU_MARKER(pCmd, marker_face.c_str());
+		
+			// Bind Depth / clear
+			const DSV& dsv = mRenderer.GetDSV(mResources_MainWnd.DSV_ShadowMaps_Point);
+			D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle(face);
+			pCmd->OMSetRenderTargets(0, NULL, FALSE, &dsvHandle);
+			
+			if constexpr (!B_CLEAR_DEPTH_BUFFERS_BEFORE_DRAW)
+			{
+				D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
+				pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, NULL);
+			}
+
+			fnDrawRenderList(ShadowView);
+		}
 	}
-	
-	// TODO: directional shadow map pass
+
+	//
+	// DIRECTIONAL LIGHT
+	//
+	if(!SceneShadowView.ShadowView_Directional.meshRenderCommands.empty())
 	{
+		// TODO:
+		pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_LINEAR_PSO));
+		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(8));
+
+		const float RenderResolutionX = 2048.0f; // TODO
+		const float RenderResolutionY = 2048.0f; // TODO
+		D3D12_VIEWPORT viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
+		D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
+		pCmd->RSSetViewports(1, &viewport);
+		pCmd->RSSetScissorRects(1, &scissorsRect);
+
 		const std::string marker = "Directional";
 		SCOPED_GPU_MARKER(pCmd, marker.c_str());
+
+		// Bind Depth / clear
+		const DSV& dsv = mRenderer.GetDSV(mResources_MainWnd.DSV_ShadowMaps_Directional);
+		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle();
+		pCmd->OMSetRenderTargets(0, NULL, FALSE, &dsvHandle);
+
+		if constexpr (!B_CLEAR_DEPTH_BUFFERS_BEFORE_DRAW)
+		{
+			D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
+			pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, NULL);
+		}
+
+		fnDrawRenderList(SceneShadowView.ShadowView_Directional);
 	}
 }
 
@@ -840,6 +996,7 @@ void VQEngine::TransitionForSceneRendering(FWindowRenderContext& ctx)
 
 void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& SceneView)
 {
+	const bool bUseHDRRenderPath = this->ShouldRenderHDR(mpWinMain->GetHWND());
 	using namespace DirectX;
 
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
@@ -887,9 +1044,17 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 		pPerFrame->f2PointLightShadowMapDimensions = { 1024.0f, 1024.f }; // TODO
 		pPerFrame->f2SpotLightShadowMapDimensions  = { 1024.0f, 1024.f }; // TODO
 		
+		if (bUseHDRRenderPath)
+		{
+			// adjust ambient factor as the tonemapper changes the output curve for HDR displays 
+			// and makes the ambient lighting too strong.
+			pPerFrame->fAmbientLightingFactor *= 0.005f;
+		}
+
 		//pCmd->SetGraphicsRootDescriptorTable(PerFrameRSBindSlot, );
 		pCmd->SetGraphicsRootConstantBufferView(PerFrameRSBindSlot, cbAddr);
 		pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Spot).GetGPUDescHandle(0));
+		pCmd->SetGraphicsRootDescriptorTable(5, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Point).GetGPUDescHandle(0));
 	}
 
 	// set PerView constants

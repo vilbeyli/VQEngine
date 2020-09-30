@@ -27,6 +27,7 @@ struct VSInput
 struct PSInput
 {
 	float4 position : SV_POSITION;
+	float3 worldPosition : COLOR0;
 #if ALPHA_MASK
 	float2 uv       : TEXCOORD0;
 #endif
@@ -35,14 +36,22 @@ struct PSInput
 cbuffer CBuffer : register(b0)
 {
 	float4x4 matModelViewProj;
+	float4x4 matWorld;
 }
 
+cbuffer CBufferPx : register(b1)
+{
+	float3 vLightPosition;
+	float fFarPlane;
+}
 
 PSInput VSMain(VSInput vertex)
 {
 	PSInput result;
 	
 	result.position = mul(matModelViewProj, float4(vertex.position, 1));
+	result.worldPosition = mul(matWorld, float4(vertex.position, 1));
+	
 #if ALPHA_MASK
 	result.uv = vertex.uv;
 #endif
@@ -53,11 +62,15 @@ PSInput VSMain(VSInput vertex)
 #if ALPHA_MASK
 Texture2D    texDiffuseAlpha : register(t0);
 SamplerState LinearSampler   : register(s0);
-float4 PSMain(PSInput input) : SV_TARGET
+#endif
+float PSMain(PSInput In) : SV_DEPTH
 {
-	float alpha = texDiffuseAlpha.SampleLevel(LinearSampler, input.uv, 0).a;
+#if ALPHA_MASK
+	float alpha = texDiffuseAlpha.SampleLevel(LinearSampler, In.uv, 0).a;
 	if(alpha < 0.01f)
 		discard;
-	return 0.0f.xxxx;
-}
 #endif
+	
+	const float depth = length(vLightPosition - In.worldPosition);
+	return depth / fFarPlane;
+}

@@ -28,6 +28,7 @@
 #include "Shader.h"
 
 #include "../Application/Window.h"
+#include "../../Shaders/LightingConstantBufferData.h"
 
 #include "../../Libs/VQUtils/Source/Log.h"
 #include "../../Libs/VQUtils/Source/utils.h"
@@ -428,6 +429,9 @@ void VQRenderer::LoadRootSignatures()
 	HRESULT hr = {};
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
+	ComPtr<ID3DBlob> signature;
+	ComPtr<ID3DBlob> error;
+
 	// ROOT SIGNATURES 
 	//hardcoded for now. TODO: http://simonstechblog.blogspot.com/2019/06/d3d12-root-signature-management.html
 	// https://youtu.be/Wbnw87tYqVg?t=1903 : Root signature examples
@@ -446,8 +450,6 @@ void VQRenderer::LoadRootSignatures()
 		CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc;
 		rootSignatureDesc.Init(0, nullptr, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
-		ComPtr<ID3DBlob> signature;
-		ComPtr<ID3DBlob> error;
 		ThrowIfFailed(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
@@ -481,8 +483,6 @@ void VQRenderer::LoadRootSignatures()
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
-		ComPtr<ID3DBlob> signature;
-		ComPtr<ID3DBlob> error;
 		ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
@@ -519,8 +519,6 @@ void VQRenderer::LoadRootSignatures()
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
-		ComPtr<ID3DBlob> signature;
-		ComPtr<ID3DBlob> error;
 		ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
@@ -543,8 +541,6 @@ void VQRenderer::LoadRootSignatures()
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, NULL, D3D12_ROOT_SIGNATURE_FLAG_NONE);
 
-		ComPtr<ID3DBlob> signature;
-		ComPtr<ID3DBlob> error;
 		hr = D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error);
 		if (!SUCCEEDED(hr)) { ReportErrorAndReleaseBlob(error); assert(false); }
 		ID3D12RootSignature* pRS = nullptr;
@@ -587,8 +583,6 @@ void VQRenderer::LoadRootSignatures()
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, _countof(samplers), &samplers[0], D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
-		ComPtr<ID3DBlob> signature;
-		ComPtr<ID3DBlob> error;
 		ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
@@ -600,12 +594,12 @@ void VQRenderer::LoadRootSignatures()
 	{
 		CD3DX12_DESCRIPTOR_RANGE1 ranges[3];
 		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
-		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 5, 6 , 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
-		//ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6, 12, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
+		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, NUM_SHADOWING_LIGHTS__SPOT , 6 , 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
+		ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, NUM_SHADOWING_LIGHTS__POINT, 12, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
 		//ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC); // perView  cb's are DescRanges
 		//ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC); // perFrame cb's are DescRanges
 
-		CD3DX12_ROOT_PARAMETER1 rootParameters[5]; 
+		CD3DX12_ROOT_PARAMETER1 rootParameters[6]; 
 		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[1].InitAsConstantBufferView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL);
 #if 0
@@ -618,6 +612,7 @@ void VQRenderer::LoadRootSignatures()
 		rootParameters[3].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_PIXEL);
 #endif
 		rootParameters[4].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_PIXEL);
+		rootParameters[5].InitAsDescriptorTable(1, &ranges[2], D3D12_SHADER_VISIBILITY_PIXEL);
 
 		D3D12_STATIC_SAMPLER_DESC samplers[2] = {};
 		D3D12_STATIC_SAMPLER_DESC sampler = {};
@@ -643,8 +638,6 @@ void VQRenderer::LoadRootSignatures()
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, _countof(samplers), &samplers[0], D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
-		ComPtr<ID3DBlob> signature;
-		ComPtr<ID3DBlob> error;
 		ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
@@ -673,7 +666,7 @@ void VQRenderer::LoadRootSignatures()
 		SetName(pRS, "RootSignature_WireframeUnlit");
 	}
 
-	// DepthPass Root Signatures [7-8]
+	// DepthPass Root Signatures [7-9]
 	{
 
 		D3D12_STATIC_SAMPLER_DESC sampler = {};
@@ -697,8 +690,6 @@ void VQRenderer::LoadRootSignatures()
 			CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 			rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
-			ComPtr<ID3DBlob> signature;
-			ComPtr<ID3DBlob> error;
 			ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
 			ID3D12RootSignature* pRS = nullptr;
 			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
@@ -706,23 +697,36 @@ void VQRenderer::LoadRootSignatures()
 			SetName(pRS, "RootSignature_DepthOnlyVS");
 		}
 		{
-			CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
-			ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-
 			CD3DX12_ROOT_PARAMETER1 rootParameters[2];
 			rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_VERTEX);
-			rootParameters[1].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
+			rootParameters[1].InitAsConstantBufferView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_PIXEL);
 
 			CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 			rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
-			ComPtr<ID3DBlob> signature;
-			ComPtr<ID3DBlob> error;
 			ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
 			ID3D12RootSignature* pRS = nullptr;
 			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
 			mpBuiltinRootSignatures.push_back(pRS);
-			SetName(pRS, "RootSignature_DepthOnlyVSPS");
+			SetName(pRS, "RootSignature_LinearDepthVSPS");
+		}
+		{
+			CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
+			ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+
+			CD3DX12_ROOT_PARAMETER1 rootParameters[3];
+			rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_VERTEX);
+			rootParameters[1].InitAsConstantBufferView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_PIXEL);
+			rootParameters[2].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
+
+			CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+			rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+			ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
+			ID3D12RootSignature* pRS = nullptr;
+			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
+			mpBuiltinRootSignatures.push_back(pRS);
+			SetName(pRS, "RootSignature_MaskedDepthVSPS");
 		}
 		
 	}
@@ -1010,7 +1014,7 @@ void VQRenderer::LoadPSOs()
 		const std::wstring ShaderFilePath = GetAssetFullPath(L"DepthPass.hlsl");
 
 		FPSOLoadDesc psoLoadDesc = {};
-		psoLoadDesc.PSOName = "PSO_DepthPassVS";
+		psoLoadDesc.PSOName = "PSO_DepthOnlyVS";
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
 		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mpBuiltinRootSignatures[7];
 
@@ -1033,13 +1037,20 @@ void VQRenderer::LoadPSOs()
 
 		PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PASS_PSO, psoLoadDesc });
 		{
-			psoLoadDesc.PSOName = "PSO_DepthPassVSPS";
+			psoLoadDesc.PSOName = "PSO_LinearDepthVSPS";
+			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
+			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
+			psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mpBuiltinRootSignatures[8];
+			PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PASS_LINEAR_PSO, psoLoadDesc });
+		}
+		{
+			psoLoadDesc.PSOName = "PSO_MaskedDepthVSPS";
 			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
 			for (FShaderStageCompileDesc& shdDesc : psoLoadDesc.ShaderStageCompileDescs)
 			{
 				shdDesc.Macros.push_back({"ALPHA_MASK", "1"});
 			}
-			psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mpBuiltinRootSignatures[8];
+			psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mpBuiltinRootSignatures[9];
 			PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PASS_ALPHAMASKED_PSO, psoLoadDesc });
 		}
 	}
@@ -1077,18 +1088,24 @@ void VQRenderer::LoadDefaultResources()
 		textureDesc.SampleDesc.Quality = 0;
 		textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 		textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-	}	
+	}
+	TextureCreateDesc desc("Checkerboard");
+	desc.d3d12Desc = textureDesc;
+	desc.ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 
 	// programmatically generated textures
 	{
 		std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX);
-		TextureID texID = this->CreateTexture("Checkerboard", textureDesc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, texture.data());
+		desc.pData = texture.data();
+		TextureID texID = this->CreateTexture(desc);
 		mLookup_ProceduralTextureIDs[EProceduralTextures::CHECKERBOARD] = texID;
 		mLookup_ProceduralTextureSRVs[EProceduralTextures::CHECKERBOARD] = this->CreateAndInitializeSRV(texID);
 	}
 	{
+		desc.TexName = "Checkerboard_Gray";
 		std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX, true);
-		TextureID texID = this->CreateTexture("Checkerboard_Gray", textureDesc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, texture.data());
+		desc.pData = texture.data();
+		TextureID texID = this->CreateTexture(desc);
 		mLookup_ProceduralTextureIDs[EProceduralTextures::CHECKERBOARD_GRAYSCALE] = texID;
 		mLookup_ProceduralTextureSRVs[EProceduralTextures::CHECKERBOARD_GRAYSCALE] = this->CreateAndInitializeSRV(texID);
 	}

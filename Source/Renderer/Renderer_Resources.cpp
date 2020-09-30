@@ -101,8 +101,6 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 
 	const std::string FileNameAndExtension = DirectoryUtil::GetFileNameFromPath(pFilePath);
 	TextureCreateDesc tDesc(FileNameAndExtension);
-	tDesc.pAllocator = mpAllocator;
-	tDesc.pDevice = mDevice.GetDevicePtr();
 
 	Image image;
 	const bool bSuccess = Texture::ReadImageFromDisk(pFilePath, image);
@@ -123,8 +121,10 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 		tDesc.d3d12Desc.SampleDesc.Quality = 0;
 		tDesc.d3d12Desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 		tDesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+		
+		tDesc.pData = image.pData;
 
-		tex.Create(tDesc, image.pData);
+		tex.Create(mDevice.GetDevicePtr(), mpAllocator, tDesc);
 		ID = AddTexture_ThreadSafe(std::move(tex));
 		this->QueueTextureUpload(FTextureUploadDesc(std::move(image), ID, tDesc));
 
@@ -140,33 +140,27 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath)
 	return ID;
 }
 
-TextureID VQRenderer::CreateTexture(const std::string& name, const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES ResourceState, const void* pData)
+TextureID VQRenderer::CreateTexture(const TextureCreateDesc& desc)
 {
 	Texture tex;
 	Timer t; t.Start();
 
-	TextureCreateDesc tDesc(name);
-	tDesc.d3d12Desc = desc;
-	tDesc.pAllocator = mpAllocator;
-	tDesc.pDevice = mDevice.GetDevicePtr();
-	tDesc.ResourceState = ResourceState;
-
-	tex.Create(tDesc, pData);
+	tex.Create(mDevice.GetDevicePtr(), mpAllocator, desc);
 
 	TextureID ID = AddTexture_ThreadSafe(std::move(tex));
-	if (pData)
+	if (desc.pData)
 	{
-		this->QueueTextureUpload(FTextureUploadDesc(pData, ID, tDesc));
+		this->QueueTextureUpload(FTextureUploadDesc(desc.pData, ID, desc));
 
 		this->StartTextureUploads();
 		std::atomic<bool>& mbResident = mTextures.at(ID).mbResident;
 		while (!mbResident.load());  // busy wait here until the texture is made resident;
 	}
 
-	if (pData)
+	if (desc.pData)
 	{
 #if LOG_RESOURCE_CREATE
-		Log::Info("VQRenderer::CreateTexture(): [%.2fs] %s", t.StopGetDeltaTimeAndReset(), name.c_str());
+		Log::Info("VQRenderer::CreateTexture(): [%.2fs] %s", t.StopGetDeltaTimeAndReset(), desc.TexName.c_str());
 #endif
 	}
 

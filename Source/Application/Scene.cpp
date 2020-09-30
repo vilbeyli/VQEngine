@@ -642,8 +642,9 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView) con
 	int iSpot  = 0;
 	int iPoint = 0;
 
-	auto fnGatherMeshRenderParamsForLight = [&](const Light& l, std::vector<FShadowMeshRenderCommand>& vMeshRenderList)
+	auto fnGatherMeshRenderParamsForLight = [&](const Light& l, FSceneShadowView::FShadowView& ShadowView)
 	{
+		std::vector<FShadowMeshRenderCommand>& vMeshRenderList = ShadowView.meshRenderCommands;
 		vMeshRenderList.clear();
 		for (const GameObject* pObj : mpObjects)
 		{
@@ -681,19 +682,26 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView) con
 			{
 				FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowView_Directional;
 				ShadowView.matViewProj = l.GetViewProjectionMatrix();
-				fnGatherMeshRenderParamsForLight(l, ShadowView.meshRenderCommands);
+				fnGatherMeshRenderParamsForLight(l, ShadowView);
 			}	break;
 			case Light::EType::SPOT       : 
 			{
 				FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowViews_Spot[iSpot++];
 				ShadowView.matViewProj = l.GetViewProjectionMatrix();
-				fnGatherMeshRenderParamsForLight(l, ShadowView.meshRenderCommands);
+				fnGatherMeshRenderParamsForLight(l, ShadowView);
 			} break;
 			case Light::EType::POINT      : 
 			{
-				FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowViews_Point[iPoint++];
-				ShadowView.matViewProj = l.GetViewProjectionMatrix();
-				fnGatherMeshRenderParamsForLight(l, ShadowView.meshRenderCommands);
+				for (int face = 0; face < 6; ++face)
+				{
+					FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowViews_Point[(size_t)iPoint * 6 + face];
+					ShadowView.matViewProj = l.GetViewProjectionMatrix(static_cast<Texture::CubemapUtility::ECubeMapLookDirections>(face));
+					fnGatherMeshRenderParamsForLight(l, ShadowView);
+				}
+
+				SceneShadowView.PointLightLinearDepthParams[iPoint].fFarPlane = l.Range;
+				SceneShadowView.PointLightLinearDepthParams[iPoint].vWorldPos = l.Position;
+				++iPoint;
 			} break;
 			}
 		}

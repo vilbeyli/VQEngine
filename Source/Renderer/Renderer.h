@@ -119,6 +119,7 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	UNLIT_PSO,
 	UNLIT_PSO_MSAA_4,
 	DEPTH_PASS_PSO,
+	DEPTH_PASS_LINEAR_PSO,
 	DEPTH_PASS_ALPHAMASKED_PSO,
 
 	NUM_BUILTIN_PSOs
@@ -158,7 +159,7 @@ public:
 	// Resource management
 	BufferID                     CreateBuffer(const FBufferDesc& desc);
 	TextureID                    CreateTextureFromFile(const char* pFilePath);
-	TextureID                    CreateTexture(const std::string& name, const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES ResourceState, const void* pData = nullptr);
+	TextureID                    CreateTexture(const TextureCreateDesc& desc);
 	void                         UploadVertexAndIndexBufferHeaps();
 
 	// Allocates a ResourceView from the respective heap and returns a unique identifier.

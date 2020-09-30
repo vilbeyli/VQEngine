@@ -149,19 +149,22 @@ float4 PSMain(PSInput In) : SV_TARGET
 		: UnpackNormals(texNormals, PointSampler, uv, N, T);
 	
 	// illumination accumulators
-	const float3 Ia = SurfaceParams.diffuseColor * cbPerFrame.fAmbientLightingFactor; // ambient illumination
-	float3 IdIs = float3(0.0f, 0.0f, 0.0f); // diffuse & specular illumination
-	float3 Ie = SurfaceParams.emissiveColor * SurfaceParams.emissiveIntensity * 10.0f; // emissive illumination
+	float3 I_total = 
+	/* ambient  */   SurfaceParams.diffuseColor  * cbPerFrame.fAmbientLightingFactor
+	/* Emissive */ + SurfaceParams.emissiveColor * SurfaceParams.emissiveIntensity * 10.0f
+	;
+	
+	
 	float3 IEnv = 0.0f.xxx;                 // environment lighting illumination
 	
 	// Non-shadowing lights
 	for (int p = 0; p < cbPerFrame.Lights.numPointLights; ++p)
 	{
-		IdIs += CalculatePointLightIllumination(cbPerFrame.Lights.point_lights[p], SurfaceParams, P, N, V);
+		I_total += CalculatePointLightIllumination(cbPerFrame.Lights.point_lights[p], SurfaceParams, P, N, V);
 	}
 	for (int s = 0; s < cbPerFrame.Lights.numSpotLights; ++s)
 	{
-		IdIs += CalculateSpotLightIllumination(cbPerFrame.Lights.spot_lights[s], SurfaceParams, P, N, V);
+		I_total += CalculateSpotLightIllumination(cbPerFrame.Lights.spot_lights[s], SurfaceParams, P, N, V);
 	}
 	
 	
@@ -175,15 +178,15 @@ float4 PSMain(PSInput In) : SV_TARGET
 		if(D < l.range)
 		{
 			const float3 L = normalize(l.position - P);
-			
+			const float3 Lw = (l.position - P);
 			ShadowTestPCFData pcfData = (ShadowTestPCFData) 0;
 			pcfData.depthBias           = l.depthBias;
 			pcfData.NdotL               = saturate(dot(SurfaceParams.N, L));
 			pcfData.viewDistanceOfPixel = length(P - cbPerView.CameraPosition);
-			//pcfData.lightSpacePos       = mul(cbPerFrame.Lights.shadowViews[pc], float4(P, 1));
 		
-			IdIs += CalculatePointLightIllumination(cbPerFrame.Lights.point_casters[pc], SurfaceParams, P, N, V)
-			//		* OmnidirectionalShadowTestPCF(pcfData, texPointLightShadowMaps, PointSampler, PointLightShadowMapDimensions, pc, L, l.range)
+			I_total += CalculatePointLightIllumination(cbPerFrame.Lights.point_casters[pc], SurfaceParams, P, N, V)
+					* OmnidirectionalShadowTestPCF(pcfData, texPointLightShadowMaps, PointSampler, PointLightShadowMapDimensions, pc, Lw, l.range)
+					//* OmnidirectionalShadowTest(pcfData, texPointLightShadowMaps, PointSampler, PointLightShadowMapDimensions, pc, Lw, l.range)
 			;
 		}
 	}
@@ -201,13 +204,12 @@ float4 PSMain(PSInput In) : SV_TARGET
 		pcfData.lightSpacePos       = mul(cbPerFrame.Lights.shadowViews[sc], float4(P, 1));
 		pcfData.viewDistanceOfPixel = length(P - cbPerView.CameraPosition);
 		
-		IdIs += CalculateSpotLightIllumination(cbPerFrame.Lights.spot_casters[sc], SurfaceParams, P, N, V) 
+		I_total += CalculateSpotLightIllumination(cbPerFrame.Lights.spot_casters[sc], SurfaceParams, P, N, V)
 			  * ShadowTestPCF(pcfData, texSpotLightShadowMaps, PointSampler, SpotLightShadowMapDimensions, sc);
 	}
 	
 	if (cbPerFrame.Lights.directional.enabled)
-		IdIs += CalculateDirectionalLightIllumination(cbPerFrame.Lights.directional, SurfaceParams, P, V, cbPerFrame.Lights.shadowViewDirectional);
+		I_total += CalculateDirectionalLightIllumination(cbPerFrame.Lights.directional, SurfaceParams, P, V, cbPerFrame.Lights.shadowViewDirectional);
 	
-	float3 OutColor = Ia + IdIs + IEnv + Ie;
-	return float4(OutColor, 1);
+	return float4(I_total, 1);
 }
