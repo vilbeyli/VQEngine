@@ -85,8 +85,8 @@ SamplerState LinearSampler : register(s0);
 SamplerState PointSampler  : register(s1);
 
 Texture2D        texDirectionalLightShadowMap : register(t10);
-Texture2DArray   texSpotLightShadowMaps       : register(t11);
-TextureCubeArray texPointLightShadowMaps      : register(t17);
+Texture2DArray   texSpotLightShadowMaps       : register(t13);
+TextureCubeArray texPointLightShadowMaps      : register(t19);
 
 //---------------------------------------------------------------------------------------------------
 //
@@ -130,6 +130,7 @@ float4 PSMain(PSInput In) : SV_TARGET
 	// read material textures & cbuffer data
 	BRDF_Surface SurfaceParams = (BRDF_Surface)0;
 	SurfaceParams.diffuseColor      = HasDiffuseMap(cbPerObject.materialData.textureConfig)   ? AlbedoAlpha.rgb : cbPerObject.materialData.diffuse;
+	SurfaceParams.specularColor     = float3(1,1,1);
 	SurfaceParams.roughness         = HasRoughnessMap(cbPerObject.materialData.textureConfig) ? Roughness       : cbPerObject.materialData.roughness;
 	SurfaceParams.metalness         = HasMetallicMap(cbPerObject.materialData.textureConfig)  ? Metalness       : cbPerObject.materialData.metalness;
 	SurfaceParams.emissiveColor     = HasEmissiveMap(cbPerObject.materialData.textureConfig)  ? Emissive        : cbPerObject.materialData.emissiveColor;
@@ -185,9 +186,7 @@ float4 PSMain(PSInput In) : SV_TARGET
 			pcfData.viewDistanceOfPixel = length(P - cbPerView.CameraPosition);
 		
 			I_total += CalculatePointLightIllumination(cbPerFrame.Lights.point_casters[pc], SurfaceParams, P, N, V)
-					* OmnidirectionalShadowTestPCF(pcfData, texPointLightShadowMaps, PointSampler, PointLightShadowMapDimensions, pc, Lw, l.range)
-					//* OmnidirectionalShadowTest(pcfData, texPointLightShadowMaps, PointSampler, PointLightShadowMapDimensions, pc, Lw, l.range)
-			;
+					* OmnidirectionalShadowTestPCF(pcfData, texPointLightShadowMaps, PointSampler, PointLightShadowMapDimensions, pc, Lw, l.range);
 		}
 	}
 	

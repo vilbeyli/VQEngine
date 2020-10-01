@@ -263,13 +263,7 @@ float ShadowTestPCF_Directional(
 			// depth check
 			const float linearCurrentPx = LinearDepth(pxDepthInLSpace, lightProj);
 			const float linearClosestPx = LinearDepth(closestDepthInLSpace, lightProj);
-#if 1
-			//shadow += (pxDepthInLSpace - 0.000035 > closestDepthInLSpace) ? 1.0f : 0.0f;
 			shadow += (pxDepthInLSpace - pcfTestLightData.depthBias > closestDepthInLSpace) ? 1.0f : 0.0f;
-			//shadow += (pxDepthInLSpace - BIAS > closestDepthInLSpace) ? 1.0f : 0.0f;
-#else
-			shadow += (linearCurrentPx - 0.00050f > linearClosestPx) ? 1.0f : 0.0f;
-#endif
 		}
 	}
 

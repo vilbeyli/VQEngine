@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<MetallicMaterials>
+
+    <!-- METALLIC RED -->
+    <Material>
+        <Name>MetallicRed_VeryRough</Name>
+        <Diffuse>0.6 0.0 0.05</Diffuse>
+        <Metalness>1.0</Metalness>
+        <Roughness>0.95</Roughness>
+    </Material>
+    <Material>
+        <Name>MetallicRed_Rough</Name>
+        <Diffuse>0.6 0.0 0.05</Diffuse>
+        <Metalness>1.0</Metalness>
+        <Roughness>0.75</Roughness>
+    </Material>
+    <Material>
+        <Name>MetallicRed_Smooth</Name>
+        <Diffuse>0.6 0.0 0.05</Diffuse>
+        <Metalness>1.0</Metalness>
+        <Roughness>0.4</Roughness>
+    </Material>
+    <Material>
+        <Name>MetallicRed_VerySmooth</Name>
+        <Diffuse>0.6 0.0 0.05</Diffuse>
+        <Metalness>1.0</Metalness>
+        <Roughness>0.06</Roughness>
+    </Material>
+
+
+    <!-- GOLD -->
+    <Material>
+        <Name>Gold</Name>
+        <Diffuse>0.6 0.6 0.05</Diffuse>
+        <Metalness>1.0</Metalness>
+        <Roughness>0.06</Roughness>
+    </Material>
+
+</MetallicMaterials>

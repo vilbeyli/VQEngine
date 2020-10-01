@@ -89,7 +89,7 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 		obj.tf.SetScale(scale);
 		obj.BuiltinMeshName = "Cube";
 		obj.MaterialName = "Checkerboard";
-		scene.Objects.push_back(obj);
+		//scene.Objects.push_back(obj);
 	}
 
 	// platform cylinder

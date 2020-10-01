@@ -207,6 +207,7 @@ private: // Derived Scenes shouldn't access these functions
 	void Update(float dt, int FRAME_DATA_INDEX);
 	void PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX);
 	void StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene);
+	void LoadBuiltinMaterials(TaskID taskID);
 	void OnLoadComplete();
 	void Unload(); // serial-only for now. maybe MT later.
 	void RenderUI();
@@ -240,6 +241,7 @@ public:
 	MeshID     AddMesh(const Mesh& mesh);
 	ModelID    CreateModel();
 	MaterialID CreateMaterial(const std::string& UniqueMaterialName);
+	MaterialID LoadMaterial(const FMaterialRepresentation& matRep, TaskID taskID);
 
 	Material&  GetMaterial(MaterialID ID);
 	Model&     GetModel(ModelID);
@@ -254,13 +256,13 @@ protected:
 	//--------------------------------------------------------------
 
 	//
-	// SCENE VIEWS
+	// SCENE VIEWS PER FRAME
 	//
 	std::vector<FSceneView>       mFrameSceneViews;
 	std::vector<FSceneShadowView> mFrameShadowViews;
 
 	//
-	// SCENE RESOURCE CONTAINERS
+	// SCENE ELEMENT CONTAINERS
 	//
 	MeshLookup_t             mMeshes;
 	ModelLookup_t            mModels;

@@ -443,6 +443,8 @@ private:
 	static std::vector<FEnvironmentMapDescriptor>   ParseEnvironmentMapsFile();
 	static std::vector<FDisplayHDRProfile>          ParseHDRProfilesFile();
 	static FSceneRepresentation                     ParseSceneFile(const std::string& SceneFile);
+public:
+	static std::vector<FMaterialRepresentation>     ParseMaterialFile(const std::string& MaterialFilePath);
 
 public:
 	// Supported HDR Formats { DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_FORMAT_R16G16B16A16_FLOAT  }

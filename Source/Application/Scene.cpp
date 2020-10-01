@@ -24,6 +24,8 @@
 
 #include "Libs/VQUtils/Source/utils.h"
 
+#include <fstream>
+
 #define LOG_CACHED_RESOURCES_ON_LOAD 0
 #define LOG_RESOURCE_CREATE          1
 
@@ -102,6 +104,50 @@ MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 	return id;
 }
 
+MaterialID Scene::LoadMaterial(const FMaterialRepresentation& matRep, TaskID taskID)
+{
+	MaterialID id = this->CreateMaterial(matRep.Name);
+	Material& mat = this->GetMaterial(id);
+
+	auto fnAssignF  = [](float& dest, const float& src) { if (src != MATERIAL_UNINITIALIZED_VALUE) dest = src; };
+	auto fnAssignF3 = [](XMFLOAT3& dest, const XMFLOAT3& src) { if (src.x != MATERIAL_UNINITIALIZED_VALUE) dest = src; };
+	auto fnEnqueueTexLoad = [&](MaterialID matID, const std::string& path, AssetLoader::ETextureType type) -> bool
+	{
+		if (path.empty()) 
+			return false;
+
+		AssetLoader::FTextureLoadParams p = {};
+		p.MatID = matID;
+		p.TexturePath = path;
+		p.TexType = type;
+		mAssetLoader.QueueTextureLoad(taskID, p);
+		return true;
+	};
+
+	// immediate values
+	fnAssignF(mat.alpha, matRep.Alpha);
+	fnAssignF(mat.metalness, matRep.Metalness);
+	fnAssignF(mat.roughness, matRep.Roughness);
+	fnAssignF(mat.emissiveIntensity, matRep.EmissiveIntensity);
+	fnAssignF3(mat.emissiveColor, matRep.EmissiveColor);
+	fnAssignF3(mat.diffuse, matRep.DiffuseColor);
+
+	// async data (textures)
+	bool bHasTexture = false;
+	bHasTexture |= fnEnqueueTexLoad(id, matRep.DiffuseMapFilePath  , AssetLoader::ETextureType::DIFFUSE);
+	bHasTexture |= fnEnqueueTexLoad(id, matRep.NormalMapFilePath   , AssetLoader::ETextureType::NORMALS);
+	bHasTexture |= fnEnqueueTexLoad(id, matRep.EmissiveMapFilePath , AssetLoader::ETextureType::EMISSIVE);
+	bHasTexture |= fnEnqueueTexLoad(id, matRep.AlphaMaskMapFilePath, AssetLoader::ETextureType::ALPHA_MASK);
+	bHasTexture |= fnEnqueueTexLoad(id, matRep.MetallicMapFilePath , AssetLoader::ETextureType::METALNESS);
+	bHasTexture |= fnEnqueueTexLoad(id, matRep.RoughnessMapFilePath, AssetLoader::ETextureType::ROUGHNESS);
+
+	AssetLoader::FMaterialTextureAssignment MatTexAssignment = {};
+	MatTexAssignment.matID = id;
+	if(bHasTexture)
+		mMaterialAssignments.mAssignments.push_back(MatTexAssignment);
+	return id;
+}
+
 Material& Scene::GetMaterial(MaterialID ID)
 {
 	if (mMaterials.find(ID) == mMaterials.end())
@@ -123,6 +169,10 @@ Model& Scene::GetModel(ModelID id)
 }
 
 
+
+//
+//
+//
 Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const std::unique_ptr<Window>& pWin, VQRenderer& renderer)
 	: mInput(input)
 	, mpWindow(pWin)
@@ -139,11 +189,18 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 	, mMaterialAssignments(engine.GetAssetLoader().GetThreadPool_TextureLoad())
 {}
 
+
 void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& sceneRep)
 {
 	mRenderer.WaitForLoadCompletion();
 	
 	Log::Info("[Scene] Loading Scene: %s", sceneRep.SceneName.c_str());
+
+	const TaskID taskID = AssetLoader::GenerateModelLoadTaskID();
+	
+	if(mMaterials.empty()) 
+		LoadBuiltinMaterials(taskID);
+	
 
 	constexpr bool B_LOAD_GAMEOBJECTS_SERIAL = true;
 	auto fnDeserializeGameObject = [&](FGameObjectRepresentation& ObjRep)
@@ -214,45 +271,11 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	// scene-specific load 
 	this->LoadScene(sceneRep);
 
-	const TaskID taskID = AssetLoader::GenerateModelLoadTaskID();
 
 	// Create scene materials before deserializing gameobjects
 	for (const FMaterialRepresentation& matRep : sceneRep.Materials)
 	{
-		MaterialID id = this->CreateMaterial(matRep.Name);
-		Material& mat = this->GetMaterial(id);
-
-		auto fnAssignF  = [](float& dest, const float& src) { if (src != MATERIAL_UNINITIALIZED_VALUE) dest = src; };
-		auto fnAssignF3 = [](XMFLOAT3& dest, const XMFLOAT3& src) { if (src.x != MATERIAL_UNINITIALIZED_VALUE) dest = src; };
-		auto fnEnqueueTexLoad = [&](MaterialID matID, const std::string& path, AssetLoader::ETextureType type)
-		{
-			if (path.empty()) return;
-			AssetLoader::FTextureLoadParams p = {};
-			p.MatID = matID;
-			p.TexturePath = path;
-			p.TexType = type;
-			mAssetLoader.QueueTextureLoad(taskID, p);
-		};
-
-		// immediate values
-		fnAssignF(mat.alpha, matRep.Alpha);
-		fnAssignF(mat.metalness, matRep.Metalness);
-		fnAssignF(mat.roughness, matRep.Roughness);
-		fnAssignF(mat.emissiveIntensity, matRep.EmissiveIntensity);
-		fnAssignF3(mat.emissiveColor, matRep.EmissiveColor);
-		fnAssignF3(mat.diffuse, matRep.DiffuseColor);
-
-		// async data (textures)
-		fnEnqueueTexLoad(id, matRep.DiffuseMapFilePath  , AssetLoader::ETextureType::DIFFUSE);
-		fnEnqueueTexLoad(id, matRep.NormalMapFilePath   , AssetLoader::ETextureType::NORMALS);
-		fnEnqueueTexLoad(id, matRep.EmissiveMapFilePath , AssetLoader::ETextureType::EMISSIVE);
-		fnEnqueueTexLoad(id, matRep.AlphaMaskMapFilePath, AssetLoader::ETextureType::ALPHA_MASK);
-		fnEnqueueTexLoad(id, matRep.MetallicMapFilePath , AssetLoader::ETextureType::METALNESS);
-		fnEnqueueTexLoad(id, matRep.RoughnessMapFilePath, AssetLoader::ETextureType::ROUGHNESS);
-
-		AssetLoader::FMaterialTextureAssignment MatTexAssignment = {};
-		MatTexAssignment.matID = id;
-		mMaterialAssignments.mAssignments.push_back(MatTexAssignment);
+		this->LoadMaterial(matRep, taskID);
 	}
 	Log::Info("[Scene] Materials Created");
 
@@ -326,6 +349,21 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 
 	// assign scene rep
 	mSceneRepresentation = sceneRep;
+}
+
+void Scene::LoadBuiltinMaterials(TaskID taskID)
+{
+	const char* STR_MATERIALS_FOLDER = "Data/Materials/";
+
+	auto vMatFiles = DirectoryUtil::ListFilesInDirectory(STR_MATERIALS_FOLDER, "xml");
+	for (const std::string& filePath : vMatFiles)
+	{
+		std::vector<FMaterialRepresentation> vMaterialReps = VQEngine::ParseMaterialFile(filePath);
+		for (const FMaterialRepresentation& matRep : vMaterialReps)
+		{
+			LoadMaterial(matRep, taskID);
+		}
+	}
 }
 
 void Scene::OnLoadComplete()

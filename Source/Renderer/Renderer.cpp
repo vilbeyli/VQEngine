@@ -32,6 +32,7 @@
 
 #include "../../Libs/VQUtils/Source/Log.h"
 #include "../../Libs/VQUtils/Source/utils.h"
+#include "../../Libs/VQUtils/Source/Timer.h"
 #include "../../Libs/D3D12MA/src/Common.h"
 #include "../../Libs/D3D12MA/src/D3D12MemAlloc.h"
 
@@ -151,11 +152,23 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 
 void VQRenderer::Load()
 {
-	LoadRootSignatures();
-	LoadPSOs();
-	LoadDefaultResources();
+	Timer timer; timer.Start();
+	Log::Info("[Renderer] Loading...");
 	
-	Log::Info("[Renderer] Loaded.");
+	LoadRootSignatures();
+	float tRS = timer.Tick();
+	Log::Info("[Renderer]    RootSignatures=%.2fs", tRS);
+
+	LoadPSOs();
+	float tPSOs = timer.Tick();
+	Log::Info("[Renderer]    PSOs=%.2fs", tPSOs);
+
+	LoadDefaultResources();
+	float tDefaultRscs = timer.Tick();
+	Log::Info("[Renderer]    DefaultRscs=%.2fs", tDefaultRscs);
+
+	float total = tRS + tPSOs + tDefaultRscs;
+	Log::Info("[Renderer] Loaded in %.2fs.", total);
 	mbDefaultResourcesLoaded.store(true);
 }
 
@@ -597,8 +610,8 @@ void VQRenderer::LoadRootSignatures()
 		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
 		// shadow maps
 		ranges[3].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1                          , 10, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
-		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, NUM_SHADOWING_LIGHTS__SPOT , 11, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
-		ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, NUM_SHADOWING_LIGHTS__POINT, 17, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
+		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, NUM_SHADOWING_LIGHTS__SPOT , 13, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
+		ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, NUM_SHADOWING_LIGHTS__POINT, 19, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
 		//ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC); // perView  cb's are DescRanges
 		//ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC); // perFrame cb's are DescRanges
 

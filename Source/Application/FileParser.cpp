@@ -31,6 +31,7 @@ constexpr char* BUILD_CONFIG = "";
 #endif
 constexpr char* VQENGINE_VERSION = "v0.5.0";
 
+using namespace DirectX;
 
 static std::pair<std::string, std::string> ParseLineINI(const std::string& iniLine, bool* pbSectionTag)
 {
@@ -378,9 +379,15 @@ std::vector<FDisplayHDRProfile> VQEngine::ParseHDRProfilesFile()
 	return HDRProfiles;
 }
 
-using namespace DirectX;
+
+
 
 // xml parsing --------------------------------------------------
+using namespace tinyxml2;
+
+
+constexpr char* XML_TAG__MATERIAL = "Material";
+
 template<class TVec> 
 static TVec XMLParseFVec(const std::string& xyzw)
 {
@@ -424,6 +431,45 @@ static void XMLParseFloatVal(tinyxml2::XMLElement* pEle, float& dest)
 	}
 }
 
+static FMaterialRepresentation XMLParseMaterial(tinyxml2::XMLElement* pMat)
+{
+	FMaterialRepresentation mat;
+
+	XMLElement* pName    = pMat->FirstChildElement("Name");
+	//------------------------------------------------------------------
+	XMLElement* pDiff    = pMat->FirstChildElement("Diffuse");
+	XMLElement* pAlph    = pMat->FirstChildElement("Alpha");
+	XMLElement* pEmsv    = pMat->FirstChildElement("Emissive");
+	XMLElement* pEmsI    = pMat->FirstChildElement("EmissiveIntensity");
+	XMLElement* pRgh     = pMat->FirstChildElement("Roughness");
+	XMLElement* pMtl     = pMat->FirstChildElement("Metalness");
+	//------------------------------------------------------------------
+	XMLElement* pDiffMap = pMat->FirstChildElement("DiffuseMap");
+	XMLElement* pNrmlMap = pMat->FirstChildElement("NormalMap");
+	XMLElement* pEmsvMap = pMat->FirstChildElement("EmissiveMap");
+	XMLElement* pAlphMap = pMat->FirstChildElement("AlphaMaskMap");
+	XMLElement* pMtlMap  = pMat->FirstChildElement("MetallicMap");
+	XMLElement* pRghMap  = pMat->FirstChildElement("RoughnessMap");
+
+	if (pName) XMLParseStringVal(pName, mat.Name);
+	//------------------------------------------------------------------
+	if (pDiff) XMLParseFVecVal<XMFLOAT3>(pDiff, mat.DiffuseColor);
+	if (pAlph) XMLParseFloatVal(pAlph, mat.Alpha);
+	if (pEmsv) XMLParseFVecVal<XMFLOAT3>(pEmsI, mat.EmissiveColor);
+	if (pEmsI) XMLParseFloatVal(pEmsI, mat.EmissiveIntensity);
+	if (pRgh ) XMLParseFloatVal(pRgh , mat.Roughness);
+	if (pMtl ) XMLParseFloatVal(pMtl , mat.Metalness);
+	//-------------------------------------------------------------------
+	if (pDiffMap) XMLParseStringVal(pDiffMap, mat.DiffuseMapFilePath  );
+	if (pNrmlMap) XMLParseStringVal(pNrmlMap, mat.NormalMapFilePath   );
+	if (pEmsvMap) XMLParseStringVal(pEmsvMap, mat.EmissiveMapFilePath );
+	if (pAlphMap) XMLParseStringVal(pAlphMap, mat.AlphaMaskMapFilePath);
+	if (pMtlMap ) XMLParseStringVal(pMtlMap , mat.MetallicMapFilePath );
+	if (pRghMap ) XMLParseStringVal(pRghMap , mat.RoughnessMapFilePath);
+
+	return mat;
+}
+
 FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 {
 	using namespace tinyxml2;
@@ -433,7 +479,6 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 	constexpr char* XML_TAG__ENVIRONMENT_MAP_PRESET = "Preset";
 	constexpr char* XML_TAG__CAMERA                 = "Camera";
 	constexpr char* XML_TAG__GAMEOBJECT             = "GameObject";
-	constexpr char* XML_TAG__MATERIAL               = "Material";
 	constexpr char* XML_TAG__LIGHT                  = "Light";
 	//-----------------------------------------------------------------
 	constexpr char* SCENE_FILES_DIRECTORY           = "Data/Levels/";
@@ -491,44 +536,6 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 		}
 
 		return obj;
-	};
-	auto fnParseMaterial  = [&](XMLElement* pMat) -> FMaterialRepresentation
-	{
-		FMaterialRepresentation mat;
-
-		XMLElement* pName    = pMat->FirstChildElement("Name");
-		//------------------------------------------------------------------
-		XMLElement* pDiff    = pMat->FirstChildElement("Diffuse");
-		XMLElement* pAlph    = pMat->FirstChildElement("Alpha");
-		XMLElement* pEmsv    = pMat->FirstChildElement("Emissive");
-		XMLElement* pEmsI    = pMat->FirstChildElement("EmissiveIntensity");
-		XMLElement* pRgh     = pMat->FirstChildElement("Roughness");
-		XMLElement* pMtl     = pMat->FirstChildElement("Metalness");
-		//------------------------------------------------------------------
-		XMLElement* pDiffMap = pMat->FirstChildElement("DiffuseMap");
-		XMLElement* pNrmlMap = pMat->FirstChildElement("NormalMap");
-		XMLElement* pEmsvMap = pMat->FirstChildElement("EmissiveMap");
-		XMLElement* pAlphMap = pMat->FirstChildElement("AlphaMaskMap");
-		XMLElement* pMtlMap  = pMat->FirstChildElement("MetallicMap");
-		XMLElement* pRghMap  = pMat->FirstChildElement("RoughnessMap");
-
-		if (pName) XMLParseStringVal(pName, mat.Name);
-		//------------------------------------------------------------------
-		if (pDiff) XMLParseFVecVal<XMFLOAT3>(pDiff, mat.DiffuseColor);
-		if (pAlph) XMLParseFloatVal(pAlph, mat.Alpha);
-		if (pEmsv) XMLParseFVecVal<XMFLOAT3>(pEmsI, mat.EmissiveColor);
-		if (pEmsI) XMLParseFloatVal(pEmsI, mat.EmissiveIntensity);
-		if (pRgh ) XMLParseFloatVal(pRgh , mat.Roughness);
-		if (pMtl ) XMLParseFloatVal(pMtl , mat.Metalness);
-		//-------------------------------------------------------------------
-		if (pDiffMap) XMLParseStringVal(pDiffMap, mat.DiffuseMapFilePath  );
-		if (pNrmlMap) XMLParseStringVal(pNrmlMap, mat.NormalMapFilePath   );
-		if (pEmsvMap) XMLParseStringVal(pEmsvMap, mat.EmissiveMapFilePath );
-		if (pAlphMap) XMLParseStringVal(pAlphMap, mat.AlphaMaskMapFilePath);
-		if (pMtlMap ) XMLParseStringVal(pMtlMap , mat.MetallicMapFilePath );
-		if (pRghMap ) XMLParseStringVal(pRghMap , mat.RoughnessMapFilePath);
-
-		return mat;
 	};
 	auto fnParseCamera    = [&](XMLElement* pCam) ->FCameraParameters
 	{
@@ -724,7 +731,7 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 			// Materials
 			else if (XML_TAG__MATERIAL == CurrEle)
 			{
-				FMaterialRepresentation mat = fnParseMaterial(pCurrentSceneElement);
+				FMaterialRepresentation mat = XMLParseMaterial(pCurrentSceneElement);
 				SceneRep.Materials.push_back(mat);
 			}
 
@@ -749,3 +756,43 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 
 	return SceneRep;
 }
+
+
+std::vector<FMaterialRepresentation> VQEngine::ParseMaterialFile(const std::string& MaterialFilePath)
+{
+	std::vector<FMaterialRepresentation> matReps;
+
+	// open xml file
+	tinyxml2::XMLDocument doc;
+	doc.LoadFile(MaterialFilePath.c_str());
+
+	XMLElement* pRoot = doc.FirstChildElement();
+
+	if (!pRoot)
+	{
+		Log::Error("ParseMaterialFile() : Err");
+		return matReps;
+	}
+
+	assert(pRoot);
+
+	XMLElement* pCurrentSceneElement = pRoot->FirstChildElement();
+	if (!pCurrentSceneElement)
+	{
+		return matReps;
+	}
+
+	do
+	{
+		const std::string CurrEle = pCurrentSceneElement->Value();
+		if (XML_TAG__MATERIAL == CurrEle)
+		{
+			FMaterialRepresentation mat = XMLParseMaterial(pCurrentSceneElement);
+			matReps.push_back(mat);
+		}
+		pCurrentSceneElement = pCurrentSceneElement->NextSiblingElement();
+	} while (pCurrentSceneElement);
+
+	return matReps;
+}
+

@@ -46,17 +46,6 @@
             <Drag>9.5</Drag>
         </FirstPerson>
     </Camera>
-
-    <!-- MATERIALS -->
-    <Material>
-        <Name>Checkerboard</Name>
-        <DiffuseMap>Procedural/Checkerboard</DiffuseMap>
-    </Material>
-    <Material>
-        <Name>Checkerboard_Grayscale</Name>
-        <DiffuseMap>Procedural/Checkerboard_Grayscale</DiffuseMap>
-        <Roughness>0.09</Roughness>
-    </Material>
     
     <!-- OBJECTS -->
     <GameObject>
@@ -67,7 +56,7 @@
         </Transform>
         <Model>
             <Mesh>Cube</Mesh>
-            <MaterialName>Checkerboard</MaterialName>
+            <MaterialName>Green_VerySmooth</MaterialName>
         </Model>
     </GameObject>
     <GameObject>
@@ -78,6 +67,7 @@
         </Transform>
         <Model>
             <Mesh>Cylinder</Mesh>
+            <MaterialName>Checkerboard_Grayscale</MaterialName>
         </Model>
     </GameObject>
 
@@ -89,7 +79,7 @@
         </Transform>
         <Model>
             <Mesh>Cylinder</Mesh>
-            <MaterialName>Checkerboard_Grayscale</MaterialName>
+            <MaterialName>Red_VeryRough</MaterialName>
         </Model>
     </GameObject>
     <GameObject>
@@ -100,6 +90,7 @@
         </Transform>
         <Model>
             <Mesh>Cylinder</Mesh>
+            <MaterialName>Checkerboard_Grayscale</MaterialName>
         </Model>
     </GameObject>
     <GameObject>
@@ -110,7 +101,7 @@
         </Transform>
         <Model>
             <Mesh>Sphere</Mesh>
-            <MaterialName>Checkerboard_Grayscale</MaterialName>
+            <MaterialName>Blue_VerySmooth</MaterialName>
         </Model>
     </GameObject>
     <GameObject>
@@ -121,6 +112,7 @@
         </Transform>
         <Model>
             <Mesh>Cylinder</Mesh>
+            <MaterialName>Checkerboard_Grayscale</MaterialName>
         </Model>
     </GameObject>
     
@@ -142,7 +134,7 @@
         <Mobility> Stationary </Mobility>
         <Color>0.9 0.9 0.85</Color>
         <Range> 100 </Range>
-        <Brightness> 5 </Brightness>
+        <Brightness> 3 </Brightness>
         <Shadows>
             <DepthBias> 0.00045 </DepthBias>
             <NearPlane> 0.1 </NearPlane>
@@ -218,8 +210,8 @@
             <Scale> 0.1 0.1 0.1 </Scale>
         </Transform>
         <Spot>
-            <OuterConeAngleDegrees>30</OuterConeAngleDegrees>
-            <InnerConeAngleDegrees>25</InnerConeAngleDegrees>
+            <OuterConeAngleDegrees>22</OuterConeAngleDegrees>
+            <InnerConeAngleDegrees>18</InnerConeAngleDegrees>
         </Spot>
     </Light>
     <Light>
