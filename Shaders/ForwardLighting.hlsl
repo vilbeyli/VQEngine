@@ -119,13 +119,17 @@ float4 PSMain(PSInput In) : SV_TARGET
 	const float2 uv = In.uv;
 	
 	float4 AlbedoAlpha = texDiffuse.SampleLevel(LinearSampler, uv, 0);
-	float3 Normal    = texNormals.SampleLevel(PointSampler, uv, 0).rgb;
-	float3 Emissive  = texEmissive.SampleLevel(LinearSampler, uv, 0).rgb;
-	float3 Metalness = texMetalness.SampleLevel(LinearSampler, uv, 0).rgb;
-	float3 Roughness = texRoughness.SampleLevel(LinearSampler, uv, 0).rgb;
+	float3 Normal      = texNormals.SampleLevel(PointSampler, uv, 0).rgb;
+	float3 Emissive    = texEmissive.SampleLevel(LinearSampler, uv, 0).rgb;
+	float3 Metalness   = texMetalness.SampleLevel(LinearSampler, uv, 0).rgb;
+	float3 Roughness   = texRoughness.SampleLevel(LinearSampler, uv, 0).rgb;
 	
 	if (HasDiffuseMap(cbPerObject.materialData.textureConfig) && AlbedoAlpha.a < 0.01f)
 		discard;
+	
+	// ensure linear space
+	AlbedoAlpha.xyz = SRGBToLinear(AlbedoAlpha.xyz);
+	Emissive        = SRGBToLinear(Emissive);
 	
 	// read material textures & cbuffer data
 	BRDF_Surface SurfaceParams = (BRDF_Surface)0;
@@ -224,4 +228,5 @@ float4 PSMain(PSInput In) : SV_TARGET
 	}
 	
 	return float4(I_total, 1);
+	//return float4(SurfaceParams.N, 1); // debug line
 }

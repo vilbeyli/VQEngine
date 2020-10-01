@@ -445,9 +445,9 @@ std::vector<uint8> Texture::GenerateTexture_Checkerboard(uint Dimension, bool bU
         }
         else
         {
-            pData[n + 0] = bUseMidtones ? 0x1F : 0xff;    // R
-            pData[n + 1] = bUseMidtones ? 0x1F : 0xff;    // G
-            pData[n + 2] = bUseMidtones ? 0x1F : 0xff;    // B
+            pData[n + 0] = bUseMidtones ? 0x6F : 0xff;    // R
+            pData[n + 1] = bUseMidtones ? 0x6F : 0xff;    // G
+            pData[n + 2] = bUseMidtones ? 0x6F : 0xff;    // B
             pData[n + 3] = 0xff;    // A
         }
     }
