@@ -306,14 +306,14 @@ float3 ShadowTestDebug(float3 worldPos, float4 lightSpacePos, float3 illuminatio
 //----------------------------------------------------------
 // ILLUMINATION CALCULATION FUNCTIONS
 //----------------------------------------------------------
-float3 CalculatePointLightIllumination(in const PointLight l, in BRDF_Surface s, const in float3 P, const in float3 N, const in float3 V)
+float3 CalculatePointLightIllumination(in const PointLight l, in BRDF_Surface s, const in float3 P, const in float3 V)
 {
 	float3 IdIs = 0.0f.xxx;
 	
 	const float3 Lw = l.position;
 	const float3 Wi = normalize(Lw - P);
 	const float D = length(Lw - P);
-	const float NdotL = saturate(dot(N, Wi));
+	const float NdotL = saturate(dot(s.N, Wi));
 	const float3 radiance = AttenuationBRDF(D) * l.color * l.brightness;
 
 	if (D < l.range)
@@ -321,13 +321,13 @@ float3 CalculatePointLightIllumination(in const PointLight l, in BRDF_Surface s,
 	
 	return IdIs;
 }
-float3 CalculateSpotLightIllumination(in const SpotLight l, in BRDF_Surface s, const in float3 P, const in float3 N, const in float3 V)
+float3 CalculateSpotLightIllumination(in const SpotLight l, in BRDF_Surface s, const in float3 P, const in float3 V)
 {
 	float3 IdIs = 0.0f.xxx;
 	
 	const float3 Wi = normalize(l.position - P);
 	const float3 radiance = SpotlightIntensity(l, P) * l.color * l.brightness * AttenuationBRDF(length(l.position - P));
-	const float NdotL = saturate(dot(N, Wi));
+	const float NdotL = saturate(dot(s.N, Wi));
 	IdIs += BRDF(s, Wi, V) * radiance * NdotL;
 	
 	return IdIs;

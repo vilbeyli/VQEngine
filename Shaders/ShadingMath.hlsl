@@ -40,6 +40,15 @@ inline float3 UnpackNormals(Texture2D normalMap, SamplerState normalSampler, flo
 	return mul(SampledNormal, TBN);
 }
 
+inline float3 UnpackNormal(float3 SampledNormal, float3 worldNormal, float3 worldTangent)
+{
+	const float3 T = normalize(worldTangent - dot(worldNormal, worldTangent) * worldNormal);
+	const float3 N = normalize(worldNormal);
+	const float3 B = normalize(cross(T, N));
+	const float3x3 TBN = float3x3(T, B, N);
+	return mul(SampledNormal, TBN);
+}
+
 
 // additional sources: 
 // - Converting to/from cubemaps: http://paulbourke.net/miscellaneous/cubemaps/

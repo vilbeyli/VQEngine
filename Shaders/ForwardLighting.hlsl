@@ -143,12 +143,7 @@ float4 PSMain(PSInput In) : SV_TARGET
 	const float3 V = normalize(cbPerView.CameraPosition - P);
 	const float2 screenSpaceUV = In.position.xy / cbPerView.ScreenDimensions;
 	
-	const float3 B = normalize(cross(T, N));
-	float3x3 TBN = float3x3(T, B, N);
-	
-	SurfaceParams.N = length(Normal) < 0.01 
-		? normalize(In.vertNormal) 
-		: UnpackNormals(texNormals, PointSampler, uv, N, T);
+	SurfaceParams.N = length(Normal) < 0.01 ? N : UnpackNormal(Normal, N, T);
 	
 	// illumination accumulators
 	float3 I_total = 
@@ -161,11 +156,11 @@ float4 PSMain(PSInput In) : SV_TARGET
 	// Non-shadowing lights
 	for (int p = 0; p < cbPerFrame.Lights.numPointLights; ++p)
 	{
-		I_total += CalculatePointLightIllumination(cbPerFrame.Lights.point_lights[p], SurfaceParams, P, N, V);
+		I_total += CalculatePointLightIllumination(cbPerFrame.Lights.point_lights[p], SurfaceParams, P, V);
 	}
 	for (int s = 0; s < cbPerFrame.Lights.numSpotLights; ++s)
 	{
-		I_total += CalculateSpotLightIllumination(cbPerFrame.Lights.spot_lights[s], SurfaceParams, P, N, V);
+		I_total += CalculateSpotLightIllumination(cbPerFrame.Lights.spot_lights[s], SurfaceParams, P, V);
 	}
 	
 	
@@ -185,7 +180,7 @@ float4 PSMain(PSInput In) : SV_TARGET
 			pcfData.NdotL               = saturate(dot(SurfaceParams.N, L));
 			pcfData.viewDistanceOfPixel = length(P - cbPerView.CameraPosition);
 		
-			I_total += CalculatePointLightIllumination(cbPerFrame.Lights.point_casters[pc], SurfaceParams, P, N, V)
+			I_total += CalculatePointLightIllumination(cbPerFrame.Lights.point_casters[pc], SurfaceParams, P, V)
 					* OmnidirectionalShadowTestPCF(pcfData, texPointLightShadowMaps, PointSampler, PointLightShadowMapDimensions, pc, Lw, l.range);
 		}
 	}
@@ -203,7 +198,7 @@ float4 PSMain(PSInput In) : SV_TARGET
 		pcfData.lightSpacePos       = mul(cbPerFrame.Lights.shadowViews[sc], float4(P, 1));
 		pcfData.viewDistanceOfPixel = length(P - cbPerView.CameraPosition);
 		
-		I_total += CalculateSpotLightIllumination(cbPerFrame.Lights.spot_casters[sc], SurfaceParams, P, N, V)
+		I_total += CalculateSpotLightIllumination(cbPerFrame.Lights.spot_casters[sc], SurfaceParams, P, V)
 			  * ShadowTestPCF(pcfData, texSpotLightShadowMaps, PointSampler, SpotLightShadowMapDimensions, sc);
 	}
 	
