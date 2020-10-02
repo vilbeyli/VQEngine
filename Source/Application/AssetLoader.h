@@ -49,8 +49,20 @@ public:
 		HEIGHT,
 		METALNESS,
 		ROUGHNESS,
+		AMBIENT_OCCLUSION,
+		CUSTOM_MAP,
 
 		NUM_TEXTURE_TYPES
+	};
+	enum ECustomMapType
+	{
+		OCCLUSION_ROUGHNESS_METALNESS = 0,
+		ROUGHNESS_METALNESS,
+		METALNESS_ROUGHNESS,
+
+		UNKNOWN,
+
+		NUM_CUSTOM_MAP_TYPES
 	};
 	struct FTextureLoadParams
 	{
@@ -60,11 +72,11 @@ public:
 	};
 	struct FTextureLoadResult
 	{
-		ETextureType type; // material textures: diffuse/normal/alpha_mask/...
+		ETextureType   type; // material textures: diffuse/normal/alpha_mask/...
+		std::string TexturePath;
 		std::shared_future<TextureID> texLoadResult;
 	};
-	using TextureLoadResult_t  = FTextureLoadResult;
-	using TextureLoadResults_t = std::unordered_multimap<MaterialID, TextureLoadResult_t>;
+	using TextureLoadResults_t = std::unordered_multimap<MaterialID, FTextureLoadResult>;
 
 	//
 	// MODEL LOADING
@@ -90,7 +102,7 @@ public:
 		std::vector<AssetLoader::FTextureLoadResult> HeightMapIDs;
 		std::vector<AssetLoader::FTextureLoadResult> AlphaMapIDs;
 		std::vector<AssetLoader::FTextureLoadResult> EmissiveMapIDs;
-		std::vector<AssetLoader::FTextureLoadResult>& GetTextureMapCollection(ETextureType type);
+		std::vector<AssetLoader::FTextureLoadResult> CustomMapIDs;
 	};
 	struct FMaterialTextureAssignments
 	{

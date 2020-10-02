@@ -50,7 +50,7 @@ AssetLoader::AssetLoader(ThreadPool& WorkerThreads_Model, ThreadPool& WorkerThre
 {}
 
 //----------------------------------------------------------------------------------------------------------------
-// ASSET LOADER
+// MODEL LOADER
 //----------------------------------------------------------------------------------------------------------------
 void AssetLoader::QueueModelLoad(GameObject* pObject, const std::string& ModelPath, const std::string& ModelName)
 {
@@ -112,10 +112,78 @@ AssetLoader::ModelLoadResults_t AssetLoader::StartLoadingModels(Scene* pScene)
 	return ModelLoadResults;
 }
 
+//----------------------------------------------------------------------------------------------------------------
+// TEXTURE LOADER
+//----------------------------------------------------------------------------------------------------------------
 void AssetLoader::QueueTextureLoad(TaskID taskID, const FTextureLoadParams& TexLoadParam)
 {
 	FLoadTaskContext<FTextureLoadParams>& ctx = mLookup_TextureLoadContext[taskID];
 	ctx.LoadQueue.push(TexLoadParam);
+}
+
+static AssetLoader::ECustomMapType DetermineCustomMapType(const std::string& FilePath)
+{
+	AssetLoader::ECustomMapType t = AssetLoader::ECustomMapType::UNKNOWN;
+
+	// parse @CustomMapFileName 
+	std::string fileName = StrUtil::split(FilePath, { '/', '\\' }).back();
+	StrUtil::MakeLowercase(fileName);
+
+	// e.g. fileName=metal_tiles_02_2k_diffuse.png
+	//      case: FileName has word 'metal' in it, but isn't actually a metalness texture
+	// we're interested in this region: before extension, after last occurance of '_'
+	//   fileName=metal_tiles_02_2k_diffuse.png
+	//                              ^^^^^^^
+	// 
+	auto vTokens = StrUtil::split(fileName, { '.', '_' });
+	if (vTokens.size() < 3) // we expect at least 3 tokens: MAT_NAME, TEXTYPE, EXTENSION
+		return t; // not a proper texture type string token, such as procedural texture names
+
+	const std::string texTypeToken = vTokens[vTokens.size()-2];
+
+	if (texTypeToken.empty())
+		return t;
+
+	auto itOccl = texTypeToken.find("occlu");
+	auto itRghn = texTypeToken.find("roughness");
+	auto itRgh  = texTypeToken.find("rough");
+	auto itMtlc = texTypeToken.find("metallic");
+	auto itMtln = texTypeToken.find("metalness");
+	auto itMtl  = texTypeToken.find("metal");
+
+	bool bContainsAO = itOccl != std::string::npos;
+	bool bContainsRoughness = itRghn != std::string::npos || itRgh != std::string::npos;
+	bool bCountainsMetalness = itMtlc != std::string::npos 
+		|| itMtln != std::string::npos
+		|| itMtl  != std::string::npos;
+
+	bool bRoughMetal = false;
+	bool bMetalRough = false;
+
+	// determine type
+	if (bContainsAO && bContainsRoughness && bCountainsMetalness)
+	{
+		// TODO: ensure order
+		t = AssetLoader::ECustomMapType::OCCLUSION_ROUGHNESS_METALNESS;
+	}
+	else if (!bContainsAO && bContainsRoughness && bCountainsMetalness)
+	{
+		// determine rough/metal order
+		auto& itMtl_valid = itMtlc != std::string::npos 
+			? itMtlc 
+			: (itMtln != std::string::npos ? itMtln : itMtl);
+		auto& itRgh_valid = itRghn != std::string::npos 
+			? itRghn 
+			: itRgh;
+		bRoughMetal = itRgh_valid < itMtl_valid;
+		bMetalRough = itMtl_valid < itRgh_valid;
+
+		assert(bRoughMetal || bMetalRough);
+		if(bRoughMetal) t = AssetLoader::ECustomMapType::ROUGHNESS_METALNESS;
+		if(bMetalRough) t = AssetLoader::ECustomMapType::METALNESS_ROUGHNESS;
+	}
+
+	return t;
 }
 
 AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskID)
@@ -174,12 +242,12 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 			Lookup_TextureLoadResult[TexLoadParams.TexturePath] = texLoadResult;
 
 			// record load results
-			TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, TextureLoadResult_t{ TexLoadParams.TexType, std::move(texLoadResult) }));
+			TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, FTextureLoadResult{ TexLoadParams.TexType, TexLoadParams.TexturePath, std::move(texLoadResult) }));
 		}
 		// shared textures among materials
 		else
 		{
-			TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, TextureLoadResult_t{ TexLoadParams.TexType, Lookup_TextureLoadResult.at(TexLoadParams.TexturePath) }));
+			TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, FTextureLoadResult{ TexLoadParams.TexType, TexLoadParams.TexturePath, Lookup_TextureLoadResult.at(TexLoadParams.TexturePath) }));
 		}
 	} while (!ctx.LoadQueue.empty());
 
@@ -192,7 +260,6 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 
 	return std::move(TextureLoadResults);
 }
-
 
 
 static AssetLoader::ETextureType GetTextureType(aiTextureType aiType)
@@ -224,9 +291,10 @@ static AssetLoader::ETextureType GetTextureType(aiTextureType aiType)
 		break;
 	case aiTextureType_DIFFUSE_ROUGHNESS:
 		break;
-	case aiTextureType_AMBIENT_OCCLUSION:
-		break;
+	case aiTextureType_AMBIENT_OCCLUSION: return AssetLoader::ETextureType::AMBIENT_OCCLUSION; 
 	case aiTextureType_UNKNOWN:
+		// packed textures are unknown type for assimp, hence the engine assumes occl/rough/metal packed texture type
+		return AssetLoader::ETextureType::CUSTOM_MAP; break; 
 		break;
 	case _aiTextureType_Force32Bit:
 		break;
@@ -249,11 +317,13 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, VQRe
 			continue;
 		}
 
+		UINT OcclRoughMtlMap_ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
 		auto pair_itBeginEnd = mTextureLoadResults.equal_range(assignment.matID);
 		for (auto it = pair_itBeginEnd.first; it != pair_itBeginEnd.second; ++it)
 		{
 			const MaterialID& matID = it->first;
-			TextureLoadResult_t& result = it->second;
+			FTextureLoadResult& result = it->second;
 			
 			if (mWorkersThreads.IsExiting())
 				break;
@@ -263,14 +333,54 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, VQRe
 			result.texLoadResult.wait();
 			switch (result.type)
 			{
-			case DIFFUSE    : mat.TexDiffuseMap   = result.texLoadResult.get();  break;
-			case NORMALS    : mat.TexNormalMap    = result.texLoadResult.get();  break;
-			case ALPHA_MASK : mat.TexAlphaMaskMap = result.texLoadResult.get();  break;
-			case EMISSIVE   : mat.TexEmissiveMap  = result.texLoadResult.get();  break;
-			case METALNESS  : mat.TexMetallicMap  = result.texLoadResult.get();  break;
-			case ROUGHNESS  : mat.TexRoughnessMap = result.texLoadResult.get();  break;
-			case SPECULAR   : mat.TexSpecularMap  = result.texLoadResult.get(); /*pRenderer->InitializeSRV(mat.SRVMaterialMaps, 0, mat.TexSpecularMap);*/ break;
-			case HEIGHT     : mat.TexHeightMap    = result.texLoadResult.get(); /*pRenderer->InitializeSRV(mat.SRVMaterialMaps, 0, mat.TexHeightMap)  ;*/ break;
+			case DIFFUSE           : mat.TexDiffuseMap   = result.texLoadResult.get(); break;
+			case NORMALS           : mat.TexNormalMap    = result.texLoadResult.get(); break;
+			case ALPHA_MASK        : mat.TexAlphaMaskMap = result.texLoadResult.get(); break;
+			case EMISSIVE          : mat.TexEmissiveMap  = result.texLoadResult.get(); break;
+			case METALNESS         : mat.TexMetallicMap  = result.texLoadResult.get(); break;
+			case ROUGHNESS         : mat.TexRoughnessMap = result.texLoadResult.get(); break;
+			case SPECULAR          : assert(false); /*mat.TexSpecularMap  = result.texLoadResult.get();*/ break;
+			case HEIGHT            : mat.TexHeightMap    = result.texLoadResult.get(); break;
+			case AMBIENT_OCCLUSION : mat.TexAmbientOcclusionMap = result.texLoadResult.get(); break;
+			case CUSTOM_MAP        :
+			{
+				const ECustomMapType customMapType = DetermineCustomMapType(result.TexturePath);
+				switch (customMapType)
+				{
+				case OCCLUSION_ROUGHNESS_METALNESS:
+					OcclRoughMtlMap_ComponentMapping; // leave as is
+					mat.TexOcclusionRoughnessMetalnessMap = result.texLoadResult.get();
+					break;
+				case METALNESS_ROUGHNESS:
+					// turns out: even the file is named in reverse order, the common thing to do is to store
+					//            roughness in G and metalness in B channels. Hence we're not handling this case 
+					//            here.
+#if 0 
+					OcclRoughMtlMap_ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(
+						  D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_1
+						, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_2
+						, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1
+						, D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0
+					);
+					mat.TexOcclusionRoughnessMetalnessMap = result.texLoadResult.get();
+					break;
+#endif
+				case ROUGHNESS_METALNESS:
+					OcclRoughMtlMap_ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(
+						D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_1
+						, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1
+						, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_2
+						, D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0
+					);
+					mat.TexOcclusionRoughnessMetalnessMap = result.texLoadResult.get();
+					break;
+				default:
+				case UNKNOWN:
+					Log::Warning("Unknown custom map (%s) type for material MatID=%d!", result.TexturePath.c_str(), assignment.matID);
+					DetermineCustomMapType(result.TexturePath);
+					break;
+				}
+			} break;
 			default:
 				Log::Warning("TODO");
 				break;
@@ -279,10 +389,12 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, VQRe
 
 		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ALBEDO, mat.TexDiffuseMap);
 		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::NORMALS, mat.TexNormalMap);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ALPHA_MASK, mat.TexAlphaMaskMap);
 		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::EMISSIVE, mat.TexEmissiveMap);
+		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ALPHA_MASK, mat.TexAlphaMaskMap);
 		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::METALLIC, mat.TexMetallicMap);
 		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ROUGHNESS, mat.TexRoughnessMap);
+		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::OCCLUSION_ROUGHNESS_METALNESS, mat.TexOcclusionRoughnessMetalnessMap, OcclRoughMtlMap_ComponentMapping);
+		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::AMBIENT_OCCLUSION, mat.TexAmbientOcclusionMap);
 	}
 }
 
@@ -291,7 +403,7 @@ void AssetLoader::FMaterialTextureAssignments::WaitForTextureLoads()
 	for (auto it = mTextureLoadResults.begin(); it != mTextureLoadResults.end(); ++it)
 	{
 		const MaterialID& matID = it->first;
-		const TextureLoadResult_t& result = it->second;
+		const FTextureLoadResult& result = it->second;
 		assert(result.texLoadResult.valid());
 
 		if (mWorkersThreads.IsExiting())
@@ -299,22 +411,6 @@ void AssetLoader::FMaterialTextureAssignments::WaitForTextureLoads()
 
 		result.texLoadResult.wait();
 	}
-}
-
-std::vector<AssetLoader::FTextureLoadResult>& AssetLoader::FMaterialTextureAssignment::GetTextureMapCollection(ETextureType type)
-{
-	switch (type)
-	{
-	case AssetLoader::DIFFUSE    : return DiffuseIDs;
-	case AssetLoader::NORMALS    : return NormalsIDs;
-	case AssetLoader::SPECULAR   : assert(false); return DiffuseIDs; // currently not supported
-	case AssetLoader::ALPHA_MASK : return AlphaMapIDs;
-	case AssetLoader::EMISSIVE   : assert(false); return DiffuseIDs; // TODO
-	case AssetLoader::HEIGHT     : return HeightMapIDs;
-	case AssetLoader::METALNESS  : assert(false); return DiffuseIDs; // TODO
-	case AssetLoader::ROUGHNESS  : assert(false); return DiffuseIDs; // TODO
-	}
-	assert(false); return DiffuseIDs;
 }
 
 
@@ -463,7 +559,7 @@ static Model::Data ProcessAssimpNode(
 		std::vector<AssetLoader::FTextureLoadParams> occlRoughMetlMaps = GenerateTextureLoadParams(material, matID, aiTextureType_UNKNOWN, modelDirectory);
 
 		// queue texture load
-		std::array<decltype(diffuseMaps)*, 6> TexLoadParams = { &diffuseMaps, &specularMaps, &normalMaps, &heightMaps, &alphaMaps, &emissiveMaps };
+		std::array<decltype(diffuseMaps)*, 7> TexLoadParams = { &diffuseMaps, &specularMaps, &normalMaps, &heightMaps, &alphaMaps, &emissiveMaps, &occlRoughMetlMaps };
 		int iTexType = 0;
 		for (const auto* pvLoadParams : TexLoadParams)
 		{

@@ -74,15 +74,19 @@ cbuffer CBPerObject : register(b2)
 #endif
 }
 
-Texture2D texDiffuse   : register(t0);
-Texture2D texNormals   : register(t1);
-Texture2D texEmissive  : register(t2);
-Texture2D texAlphaMask : register(t3);
-Texture2D texMetalness : register(t4);
-Texture2D texRoughness : register(t5);
+Texture2D texDiffuse        : register(t0);
+Texture2D texNormals        : register(t1);
+Texture2D texEmissive       : register(t2);
+Texture2D texAlphaMask      : register(t3);
+Texture2D texMetalness      : register(t4);
+Texture2D texRoughness      : register(t5);
+Texture2D texOcclRoughMetal : register(t6);
+Texture2D texLocalAO        : register(t7);
+
 
 SamplerState LinearSampler : register(s0);
 SamplerState PointSampler  : register(s1);
+SamplerState AnisoSampler  : register(s2);
 
 Texture2D        texDirectionalLightShadowMap : register(t10);
 Texture2DArray   texSpotLightShadowMaps       : register(t13);
@@ -117,45 +121,65 @@ PSInput VSMain(VSInput vertex)
 float4 PSMain(PSInput In) : SV_TARGET
 {
 	const float2 uv = In.uv;
+	const int TEX_CFG = cbPerObject.materialData.textureConfig;
 	
-	float4 AlbedoAlpha = texDiffuse  .Sample(LinearSampler, uv);
-	float3 Normal      = texNormals  .Sample(LinearSampler, uv).rgb;
+	float4 AlbedoAlpha = texDiffuse  .Sample(AnisoSampler, uv);
+	float3 Normal      = texNormals  .Sample(AnisoSampler, uv).rgb;
 	float3 Emissive    = texEmissive .Sample(LinearSampler, uv).rgb;
-	float3 Metalness   = texMetalness.Sample(LinearSampler, uv).rgb;
-	float3 Roughness   = texRoughness.Sample(LinearSampler, uv).rgb;
+	float3 Metalness   = texMetalness.Sample(AnisoSampler, uv).rgb;
+	float3 Roughness   = texRoughness.Sample(AnisoSampler, uv).rgb;
+	float3 OcclRghMtl  = texOcclRoughMetal.Sample(AnisoSampler, uv).rgb;
+	float LocalAO      = texLocalAO.Sample(AnisoSampler, uv).r;
 	
-	if (HasDiffuseMap(cbPerObject.materialData.textureConfig) && AlbedoAlpha.a < 0.01f)
+	if (HasDiffuseMap(TEX_CFG) && AlbedoAlpha.a < 0.01f)
 		discard;
 	
 	// ensure linear space
 	AlbedoAlpha.xyz = SRGBToLinear(AlbedoAlpha.xyz);
 	Emissive        = SRGBToLinear(Emissive);
 	
-	// read material textures & cbuffer data
+	// read textures/cbuffer & assign sufrace material data
+	float ao = cbPerFrame.fAmbientLightingFactor;
 	BRDF_Surface SurfaceParams = (BRDF_Surface)0;
-	SurfaceParams.diffuseColor      = HasDiffuseMap(cbPerObject.materialData.textureConfig)   ? AlbedoAlpha.rgb : cbPerObject.materialData.diffuse;
+	SurfaceParams.diffuseColor      = HasDiffuseMap(TEX_CFG)   ? AlbedoAlpha.rgb : cbPerObject.materialData.diffuse;
 	SurfaceParams.specularColor     = float3(1,1,1);
-	SurfaceParams.roughness         = HasRoughnessMap(cbPerObject.materialData.textureConfig) ? Roughness       : cbPerObject.materialData.roughness;
-	SurfaceParams.metalness         = HasMetallicMap(cbPerObject.materialData.textureConfig)  ? Metalness       : cbPerObject.materialData.metalness;
-	SurfaceParams.emissiveColor     = HasEmissiveMap(cbPerObject.materialData.textureConfig)  ? Emissive        : cbPerObject.materialData.emissiveColor;
+	SurfaceParams.emissiveColor     = HasEmissiveMap(TEX_CFG)  ? Emissive        : cbPerObject.materialData.emissiveColor;
 	SurfaceParams.emissiveIntensity = cbPerObject.materialData.emissiveIntensity;
+	
+	const float3  N = normalize(In.vertNormal);
+	const float3  T = normalize(In.vertTangent);
+	SurfaceParams.N = length(Normal) < 0.01 ? N : UnpackNormal(Normal, N, T);
+	
+	bool bReadsRoughnessMapData = HasRoughnessMap(TEX_CFG) || HasOcclusionRoughnessMetalnessMap(TEX_CFG);
+	bool bReadsMetalnessMapData =  HasMetallicMap(TEX_CFG) || HasOcclusionRoughnessMetalnessMap(TEX_CFG);
+	
+	if (!bReadsRoughnessMapData) SurfaceParams.roughness = cbPerObject.materialData.roughness;
+	if (!bReadsMetalnessMapData) SurfaceParams.metalness = cbPerObject.materialData.metalness;
+	if (HasAmbientOcclusionMap(TEX_CFG)) ao *= LocalAO;
+	if (HasRoughnessMap(TEX_CFG) ) SurfaceParams.roughness = Roughness;
+	if (HasMetallicMap(TEX_CFG)  ) SurfaceParams.metalness = Metalness;
+	if (HasOcclusionRoughnessMetalnessMap(TEX_CFG))
+	{
+		ao *= OcclRghMtl.r;
+		SurfaceParams.roughness = OcclRghMtl.g;
+		SurfaceParams.metalness = OcclRghMtl.b;
+	}
 	
 	// lighting & surface parameters (World Space)
 	const float3 P = In.worldPos;
-	const float3 N = normalize(In.vertNormal);
-	const float3 T = normalize(In.vertTangent);
 	const float3 V = normalize(cbPerView.CameraPosition - P);
 	const float2 screenSpaceUV = In.position.xy / cbPerView.ScreenDimensions;
 	
-	SurfaceParams.N = length(Normal) < 0.01 ? N : UnpackNormal(Normal, N, T);
 	
 	// illumination accumulators
 	float3 I_total = 
-	/* ambient  */   SurfaceParams.diffuseColor  * cbPerFrame.fAmbientLightingFactor
+	/* ambient  */   SurfaceParams.diffuseColor  * ao
 	/* Emissive */ + SurfaceParams.emissiveColor * SurfaceParams.emissiveIntensity * 10.0f
 	;
 	
 	float3 IEnv = 0.0f.xxx; // environment lighting illumination
+	
+	// -------------------------------------------------------------------------------------------------------
 	
 	// Non-shadowing lights
 	for (int p = 0; p < cbPerFrame.Lights.numPointLights; ++p)
@@ -229,4 +253,6 @@ float4 PSMain(PSInput In) : SV_TARGET
 	
 	return float4(I_total, 1);
 	//return float4(SurfaceParams.N, 1); // debug line
+	//return float4(SurfaceParams.roughness.xxx, 1); // debug line
+	//return float4(SurfaceParams.metalness.xxx, 1); // debug line
 }

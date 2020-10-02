@@ -607,7 +607,7 @@ void VQRenderer::LoadRootSignatures()
 	{
 		CD3DX12_DESCRIPTOR_RANGE1 ranges[4];
 		// material textures
-		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
+		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
 		// shadow maps
 		ranges[3].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1                          , 10, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
 		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, NUM_SHADOWING_LIGHTS__SPOT , 13, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
@@ -631,7 +631,7 @@ void VQRenderer::LoadRootSignatures()
 		rootParameters[5].InitAsDescriptorTable(1, &ranges[2], D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[6].InitAsDescriptorTable(1, &ranges[3], D3D12_SHADER_VISIBILITY_PIXEL);
 
-		D3D12_STATIC_SAMPLER_DESC samplers[2] = {};
+		D3D12_STATIC_SAMPLER_DESC samplers[3] = {};
 		D3D12_STATIC_SAMPLER_DESC sampler = {};
 		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
 		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -651,6 +651,10 @@ void VQRenderer::LoadRootSignatures()
 		sampler.ShaderRegister = 1;
 		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
 		samplers[1] = sampler;
+
+		sampler.ShaderRegister = 2;
+		sampler.Filter = D3D12_FILTER_ANISOTROPIC;
+		samplers[2] = sampler;
 
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, _countof(samplers), &samplers[0], D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);

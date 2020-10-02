@@ -43,13 +43,14 @@ VQ_SHADER_DATA::MaterialData Material::GetCBufferData() const
 int Material::GetTextureConfig() const
 {
 	int textureConfig = 0;
-	textureConfig |= TexDiffuseMap   == -1 ? 0 : (1 << 0);
-	textureConfig |= TexNormalMap    == -1 ? 0 : (1 << 1);
-	textureConfig |= TexSpecularMap  == -1 ? 0 : (1 << 2);
-	textureConfig |= TexAlphaMaskMap == -1 ? 0 : (1 << 3);
-	textureConfig |= TexRoughnessMap == -1 ? 0 : (1 << 4);
-	textureConfig |= TexMetallicMap  == -1 ? 0 : (1 << 5);
-	textureConfig |= TexHeightMap    == -1 ? 0 : (1 << 6);
-	textureConfig |= TexEmissiveMap  == -1 ? 0 : (1 << 7);
+	textureConfig |= TexDiffuseMap                     == -1 ? 0 : (1 << 0);
+	textureConfig |= TexNormalMap                      == -1 ? 0 : (1 << 1);
+	textureConfig |= TexAmbientOcclusionMap            == -1 ? 0 : (1 << 2);
+	textureConfig |= TexAlphaMaskMap                   == -1 ? 0 : (1 << 3);
+	textureConfig |= TexRoughnessMap                   == -1 ? 0 : (1 << 4);
+	textureConfig |= TexMetallicMap                    == -1 ? 0 : (1 << 5);
+	textureConfig |= TexHeightMap                      == -1 ? 0 : (1 << 6);
+	textureConfig |= TexEmissiveMap                    == -1 ? 0 : (1 << 7);
+	textureConfig |= TexOcclusionRoughnessMetalnessMap == -1 ? 0 : (1 << 8);
 	return textureConfig;
 }

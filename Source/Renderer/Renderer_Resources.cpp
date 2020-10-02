@@ -569,13 +569,13 @@ void VQRenderer::InitializeDSV(DSV_ID dsvID, uint32 heapIndex, TextureID texID, 
 
 	mTextures.at(texID).InitializeDSV(heapIndex, &mDSVs.at(dsvID), ArraySlice);
 }
-void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID)
+void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, UINT ShaderComponentMapping)
 {
 	CHECK_RESOURCE_VIEW(SRV, srvID);
 	if (texID != INVALID_ID)
 	{
 		CHECK_TEXTURE(mTextures, texID);
-		mTextures.at(texID).InitializeSRV(heapIndex, &mSRVs.at(srvID));
+		mTextures.at(texID).InitializeSRV(heapIndex, &mSRVs.at(srvID), ShaderComponentMapping);
 	}
 	else // init NULL SRV
 	{
@@ -583,7 +583,7 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID)
 		// to achieve the effect of an "unbound" resource.
 		D3D12_SHADER_RESOURCE_VIEW_DESC nullSrvDesc = {};
 		nullSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-		nullSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		nullSrvDesc.Shader4ComponentMapping = ShaderComponentMapping;
 		nullSrvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 		nullSrvDesc.Texture2D.MipLevels = 1;
 		nullSrvDesc.Texture2D.MostDetailedMip = 0;

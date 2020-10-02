@@ -144,7 +144,7 @@
             <FarPlane>  15000  </FarPlane>
         </Shadows>
         <Transform>
-            <Rotation> 30 0 40 </Rotation>
+            <Rotation> 30 0 -40 </Rotation>
         </Transform>
         <Directional>
             <ViewPortX> 220 </ViewPortX>

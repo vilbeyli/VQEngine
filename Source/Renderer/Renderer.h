@@ -172,7 +172,7 @@ public:
 
 	// Initializes a ResourceView from given texture and the specified heap index
 	void                         InitializeDSV(DSV_ID dsvID, uint heapIndex, TextureID texID, int ArraySlice = 0);
-	void                         InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID);
+	void                         InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, UINT ShaderComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING);
 	void                         InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID);
 	void                         InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID);
 

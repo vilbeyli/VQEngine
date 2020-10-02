@@ -159,11 +159,12 @@ void Texture::Destroy()
 ID3D12Device* pDevice;\
 pTex->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice))\
 
-void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc)
+void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, UINT ShaderComponentMapping, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc)
 {
     GetDevice(pDevice, mpTexture);
+    const bool bCustomComponentMappingSpecified = ShaderComponentMapping != D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
-    if (mbTypelessTexture)
+    if (mbTypelessTexture || bCustomComponentMappingSpecified)
     {
         D3D12_RESOURCE_DESC resourceDesc = mpTexture->GetDesc();
 
@@ -273,7 +274,7 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, D3D12_SHADER_RESOURC
             
         }
 
-        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srvDesc.Shader4ComponentMapping = ShaderComponentMapping;
 
 
         // Create array SRV

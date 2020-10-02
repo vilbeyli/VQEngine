@@ -15,8 +15,8 @@
     
     <!-- CAMERAS -->
     <Camera>
-        <Position> 13.0 10.0 -22 </Position>
-        <Pitch> 20 </Pitch>
+        <Position> 0.0 10.0 -22 </Position>
+        <Pitch> 15 </Pitch>
         <Yaw> 0 </Yaw>
         
         <Projection>Perspective</Projection>
@@ -52,7 +52,7 @@
         <Transform>
             <Position>0 0 4</Position>
             <Quaternion>0 0 0 1</Quaternion>
-            <Scale>3 3 3</Scale>
+            <Scale>4 4 4</Scale>
         </Transform>
         <Model>
             <Mesh>Cube</Mesh>
@@ -93,6 +93,7 @@
             <MaterialName>Checkerboard_Grayscale</MaterialName>
         </Model>
     </GameObject>
+    
     <GameObject>
         <Transform>
             <Position>-25 1 4</Position>
@@ -116,15 +117,27 @@
         </Model>
     </GameObject>
     
+    <!-- Models -->
     <GameObject>
         <Transform>
-            <Position>13 5 20</Position>
+            <Position>13 13 20</Position>
             <Rotation>0 180 0</Rotation>
             <Scale>1000 1000 1000</Scale>
         </Transform>
         <Model>
             <Path>Data/Models/BoomBox/glTF/BoomBox.gltf</Path>
             <Name>BoomBox</Name>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>-13 13 20</Position>
+            <Rotation>-90 0 0</Rotation>
+            <Scale>10 10 10</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/DamagedHelmet/glTF/DamagedHelmet.gltf</Path>
+            <Name>DamagedHelmet</Name>
         </Model>
     </GameObject>
 
@@ -182,7 +195,7 @@
         <Enabled>false</Enabled>
         <Color>0.4 0.4 0.15</Color>
         <Range> 200 </Range>
-        <Brightness> 35 </Brightness>
+        <Brightness> 35 </Brightness>z
         <Shadows>
             <DepthBias> 0.05 </DepthBias>
             <NearPlane> 0.001 </NearPlane>
@@ -205,7 +218,7 @@
             <FarPlane>  1500  </FarPlane>
         </Shadows>
         <Transform>
-            <Position>22 20 4</Position>
+            <Position>22 26 4</Position>
             <Rotation> 90 0 -15 </Rotation>
             <Scale> 0.1 0.1 0.1 </Scale>
         </Transform>
