@@ -142,6 +142,7 @@ MaterialID Scene::LoadMaterial(const FMaterialRepresentation& matRep, TaskID tas
 	bHasTexture |= fnEnqueueTexLoad(id, matRep.AlphaMaskMapFilePath, AssetLoader::ETextureType::ALPHA_MASK);
 	bHasTexture |= fnEnqueueTexLoad(id, matRep.MetallicMapFilePath , AssetLoader::ETextureType::METALNESS);
 	bHasTexture |= fnEnqueueTexLoad(id, matRep.RoughnessMapFilePath, AssetLoader::ETextureType::ROUGHNESS);
+	bHasTexture |= fnEnqueueTexLoad(id, matRep.AOMapFilePath       , AssetLoader::ETextureType::AMBIENT_OCCLUSION);
 
 	AssetLoader::FMaterialTextureAssignment MatTexAssignment = {};
 	MatTexAssignment.matID = id;
@@ -671,6 +672,9 @@ void Scene::PrepareSceneMeshRenderParams(FSceneView& SceneView) const
 			meshRenderCmd.WorldTransformationMatrix = pTF->WorldTransformationMatrix();
 			meshRenderCmd.NormalTransformationMatrix = pTF->NormalMatrix(meshRenderCmd.WorldTransformationMatrix);
 			meshRenderCmd.matID = model.mData.mOpaqueMaterials.at(id);
+
+			meshRenderCmd.ModelName = model.mModelName;
+			meshRenderCmd.MaterialName = ""; // TODO
 
 			SceneView.meshRenderCommands.push_back(meshRenderCmd);
 		}

@@ -48,6 +48,7 @@ struct FMaterialRepresentation
 	std::string AlphaMaskMapFilePath;
 	std::string MetallicMapFilePath ;
 	std::string RoughnessMapFilePath;
+	std::string AOMapFilePath;
 
 	FMaterialRepresentation();
 };
@@ -93,6 +94,8 @@ struct FMeshRenderCommand
 	MaterialID matID  = INVALID_ID;
 	DirectX::XMMATRIX WorldTransformationMatrix; // ID ?
 	DirectX::XMMATRIX NormalTransformationMatrix; //ID ?
+	std::string ModelName;
+	std::string MaterialName;
 };
 struct FShadowMeshRenderCommand
 {

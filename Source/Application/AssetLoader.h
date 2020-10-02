@@ -96,13 +96,6 @@ public:
 	struct FMaterialTextureAssignment
 	{
 		MaterialID matID = INVALID_ID;
-		std::vector<AssetLoader::FTextureLoadResult> DiffuseIDs;
-		std::vector<AssetLoader::FTextureLoadResult> SpecularIDs;
-		std::vector<AssetLoader::FTextureLoadResult> NormalsIDs;
-		std::vector<AssetLoader::FTextureLoadResult> HeightMapIDs;
-		std::vector<AssetLoader::FTextureLoadResult> AlphaMapIDs;
-		std::vector<AssetLoader::FTextureLoadResult> EmissiveMapIDs;
-		std::vector<AssetLoader::FTextureLoadResult> CustomMapIDs;
 	};
 	struct FMaterialTextureAssignments
 	{

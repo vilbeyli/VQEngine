@@ -1084,6 +1084,7 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 	{
 		constexpr UINT PerObjRSBindSlot = 1;
 		SCOPED_GPU_MARKER(pCmd, "Geometry");
+
 		for (const FMeshRenderCommand& meshRenderCmd : SceneView.meshRenderCommands)
 		{
 			const Material& mat = mpScene->GetMaterial(meshRenderCmd.matID);
