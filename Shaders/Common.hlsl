@@ -15,37 +15,3 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
-
-struct PSInput
-{
-    float4 position : SV_POSITION;
-    float4 color : COLOR;
-	float2 uv : TEXCOORD0;
-};
-
-cbuffer CBuffer : register(b0)
-{
-	float4x4 matModelViewProj;
-}
-
-Texture2D    texColor;
-SamplerState Sampler;
-
-PSInput VSMain(float4 position : POSITION, float4 color : COLOR, float2 uv : TEXCOORD0)
-{
-    PSInput result;
-
-	result.position = mul(matModelViewProj, position);
-    result.color = color;
-	result.uv = uv;
-
-    return result;
-}
-
-float4 PSMain(PSInput input) : SV_TARGET
-{
-	float3 ColorTex  = texColor.SampleLevel(Sampler, input.uv, 0).rgb;
-	float3 ColorVert = input.color;
-	float3 Color = ColorVert * ColorTex;
-	return float4(Color, 1);
-}

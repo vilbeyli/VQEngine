@@ -18,7 +18,7 @@
 
 struct VSInput
 {
-	float4 position : POSITION;
+	float3 position : POSITION;
 	float3 normal   : NORMAL;
 	float3 tangent : TANGENT;
 	float2 uv : TEXCOORD0;
@@ -31,10 +31,6 @@ struct PSInput
 	float3 vertTangent : COLOR1;
 	float2 uv : TEXCOORD0;
 };
-
-struct PerFrame{};  // TODO
-struct PerView {};  // TODO
-struct PerObject{}; // TODO
 
 cbuffer CBuffer : register(b0)
 {
@@ -58,7 +54,7 @@ PSInput VSMain(VSInput vertex)
 {
 	PSInput result;
 	
-	result.position    = mul(matModelViewProj, vertex.position);
+	result.position    = mul(matModelViewProj, float4(vertex.position, 1));
 	result.uv          = vertex.uv;
 	result.vertNormal  = vertex.normal;
 	result.vertTangent = vertex.tangent;

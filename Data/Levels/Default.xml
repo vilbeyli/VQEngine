@@ -8,21 +8,21 @@
 
          // preset usage: defined in EnvironmentMaps.ini
          <Preset>Stadium01</Preset>
-    -->
     <EnvironmentMap>
         <Preset>Stadium01</Preset>
     </EnvironmentMap>
+    -->
     
     <!-- CAMERAS -->
     <Camera>
-        <Position> 0.0 3.0 -5 </Position>
+        <Position> 0.0 10.0 -22 </Position>
         <Pitch> 15 </Pitch>
         <Yaw> 0 </Yaw>
         
         <Projection>Perspective</Projection>
-        <FoV>60.0</FoV>
+        <FoV>70.0</FoV>
         <Near>0.01</Near>
-        <Far>1000</Far>
+        <Far>10000</Far>
 
         <FirstPerson>
             <TranslationSpeed>1000</TranslationSpeed>
@@ -46,39 +46,224 @@
             <Drag>9.5</Drag>
         </FirstPerson>
     </Camera>
-
-    <!-- MATERIALS -->
-    <Material>
-        <Name>Checkerboard</Name>
-        <DiffuseMap>Procedural/Checkerboard</DiffuseMap>
-    </Material>
-    <Material>
-        <Name>Checkerboard_Grayscale</Name>
-        <DiffuseMap>Procedural/Checkerboard_Grayscale</DiffuseMap>
-    </Material>
     
     <!-- OBJECTS -->
     <GameObject>
         <Transform>
             <Position>0 0 4</Position>
             <Quaternion>0 0 0 1</Quaternion>
-            <Scale>3 3 3</Scale>
+            <Scale>4 4 4</Scale>
         </Transform>
         <Model>
             <Mesh>Cube</Mesh>
-            <MaterialName>Checkerboard</MaterialName>
+            <MaterialName>Painted_metal_02</MaterialName>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>0 -5 4</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>10 0.1 10</Scale>
+        </Transform>
+        <Model>
+            <Mesh>Cylinder</Mesh>
+            <MaterialName>Checkerboard_Grayscale</MaterialName>
         </Model>
     </GameObject>
 
     <GameObject>
         <Transform>
-            <Position> 0.0 3.0 -14 </Position>
-            <Rotation>30 0 15</Rotation>
+            <Position>25 2 2</Position>
+            <Rotation>30 120 60</Rotation>
             <Scale>3.1 3.1 3.1</Scale>
         </Transform>
         <Model>
-            <Mesh>Cube</Mesh>
+            <Mesh>Cylinder</Mesh>
+            <MaterialName>Metal_tiles_03</MaterialName>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>25 -5 4</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>10 0.1 10</Scale>
+        </Transform>
+        <Model>
+            <Mesh>Cylinder</Mesh>
             <MaterialName>Checkerboard_Grayscale</MaterialName>
         </Model>
     </GameObject>
+    
+    <GameObject>
+        <Transform>
+            <Position>-25 1 4</Position>
+            <Rotation>0 0 0</Rotation>
+            <Scale>6 6 6</Scale>
+        </Transform>
+        <Model>
+            <Mesh>Sphere</Mesh>
+            <MaterialName>Marble_08</MaterialName>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>-25 -5 4</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>10 0.1 10</Scale>
+        </Transform>
+        <Model>
+            <Mesh>Cylinder</Mesh>
+            <MaterialName>Checkerboard_Grayscale</MaterialName>
+        </Model>
+    </GameObject>
+    
+    <!-- Models -->
+    <GameObject>
+        <Transform>
+            <Position>13 13 20</Position>
+            <Rotation>0 180 0</Rotation>
+            <Scale>1000 1000 1000</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/BoomBox/glTF/BoomBox.gltf</Path>
+            <Name>BoomBox</Name>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>-13 13 20</Position>
+            <Rotation>-90 0 0</Rotation>
+            <Scale>10 10 10</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/DamagedHelmet/glTF/DamagedHelmet.gltf</Path>
+            <Name>DamagedHelmet</Name>
+        </Model>
+    </GameObject>
+
+    <!-- LIGHTS -->
+    <Light> <!-- Directional Light -->
+        <Enabled>true</Enabled>
+        <Mobility> Stationary </Mobility>
+        <Color>0.9 0.9 0.85</Color>
+        <Range> 100 </Range>
+        <Brightness> 3 </Brightness>
+        <Shadows>
+            <DepthBias> 0.00045 </DepthBias>
+            <NearPlane> 0.1 </NearPlane>
+            <FarPlane>  15000  </FarPlane>
+        </Shadows>
+        <Transform>
+            <Rotation> 0 0 40 </Rotation>
+        </Transform>
+        <Directional>
+            <ViewPortX> 64 </ViewPortX>
+            <ViewPortY> 64 </ViewPortY>
+            <Distance> 100 </Distance>
+        </Directional>
+    </Light>
+
+    <Light>
+        <!-- Point Light -->
+        <Mobility> Dynamic </Mobility>
+        <Transform>
+            <Position>12.5 5 5</Position>
+            <Rotation> 0 0 0 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <Enabled>false</Enabled>
+        <Color>0.4 0.4 0.85</Color>
+        <Range> 20 </Range>
+        <Brightness> 1500 </Brightness>
+        <Shadows>
+            <DepthBias> 0.001 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  20  </FarPlane>
+        </Shadows>
+        <Point>
+            <Attenuation> 1 1 1 </Attenuation>
+        </Point>
+    </Light>
+    <Light>
+        <!-- Point Light -->
+        <Transform>
+            <Position>-12.5 3 0</Position>
+            <Rotation> 0 0 0 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <Mobility> Dynamic </Mobility>
+        <Enabled>false</Enabled>
+        <Color>0.4 0.4 0.15</Color>
+        <Range> 200 </Range>
+        <Brightness> 35 </Brightness>z
+        <Shadows>
+            <DepthBias> 0.05 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  200  </FarPlane>
+        </Shadows>
+        <Point>
+            <Attenuation> 1 1 1 </Attenuation>
+        </Point>
+    </Light>
+
+    <Light> <!-- Spot Light -->
+        <Mobility> Static </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.0 0.9 0.9</Color>
+        <Range> 35 </Range>
+        <Brightness> 300 </Brightness>
+        <Shadows>
+            <DepthBias> 0.000009 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  1500  </FarPlane>
+        </Shadows>
+        <Transform>
+            <Position>22 26 4</Position>
+            <Rotation> 90 0 -15 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <Spot>
+            <OuterConeAngleDegrees>22</OuterConeAngleDegrees>
+            <InnerConeAngleDegrees>18</InnerConeAngleDegrees>
+        </Spot>
+    </Light>
+    <Light>
+        <!-- Spot Light -->
+        <Mobility> Static </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.4 0.4 0.15</Color>
+        <Range> 35 </Range>
+        <Brightness> 1500 </Brightness>
+        <Shadows>
+            <DepthBias> 0.000005 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  1500  </FarPlane>
+        </Shadows>
+        <Transform>
+            <Position>-18 20 4</Position>
+            <Rotation> 90 0 15 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <Spot>
+            <OuterConeAngleDegrees>32</OuterConeAngleDegrees>
+            <InnerConeAngleDegrees>28</InnerConeAngleDegrees>
+        </Spot>
+    </Light>
+    
+    <Light> <!-- Area Light (WIP) -->
+        <Enabled>false</Enabled>
+        <Mobility> Stationary </Mobility>
+        <Color>0.08 1.0 0.15</Color>
+        <Range> 1500 </Range>
+        <Brightness> 500 </Brightness>
+        <Transform>
+            <Position>00 10 10</Position>
+            <Rotation> 0 15 0 </Rotation>
+            <Scale> 5 5 0.1 </Scale>
+        </Transform>
+        <Area>
+            <!-- TODO -->
+        </Area>
+    </Light>
+    
 </Scene>

@@ -31,6 +31,14 @@ class GameObject;
 class AssetLoader
 {
 public:
+	// 
+	// STATIC INTERFACE
+	// 
+	static TaskID GenerateModelLoadTaskID();
+
+	//
+	// TEXTURE LOADING
+	//
 	enum ETextureType
 	{
 		DIFFUSE = 0,
@@ -41,17 +49,20 @@ public:
 		HEIGHT,
 		METALNESS,
 		ROUGHNESS,
+		AMBIENT_OCCLUSION,
+		CUSTOM_MAP,
 
 		NUM_TEXTURE_TYPES
 	};
-	struct FModelLoadParams
+	enum ECustomMapType
 	{
-		using pfnImportModel_t = ModelID(*)(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName);
-		
-		GameObject*      pObject = nullptr;
-		std::string      ModelPath;
-		std::string      ModelName;
-		pfnImportModel_t pfnImportModel = nullptr;
+		OCCLUSION_ROUGHNESS_METALNESS = 0,
+		ROUGHNESS_METALNESS,
+		METALNESS_ROUGHNESS,
+
+		UNKNOWN,
+
+		NUM_CUSTOM_MAP_TYPES
 	};
 	struct FTextureLoadParams
 	{
@@ -61,22 +72,30 @@ public:
 	};
 	struct FTextureLoadResult
 	{
-		ETextureType type; // material textures: diffuse/normal/alpha_mask/...
+		ETextureType   type; // material textures: diffuse/normal/alpha_mask/...
+		std::string TexturePath;
 		std::shared_future<TextureID> texLoadResult;
+	};
+	using TextureLoadResults_t = std::unordered_multimap<MaterialID, FTextureLoadResult>;
+
+	//
+	// MODEL LOADING
+	//
+	struct FModelLoadParams
+	{
+		using pfnImportModel_t = ModelID(*)(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName);
+
+		GameObject* pObject = nullptr;
+		std::string      ModelPath;
+		std::string      ModelName;
+		pfnImportModel_t pfnImportModel = nullptr;
 	};
 	using ModelLoadResult_t    = std::shared_future<ModelID>;
 	using ModelLoadResults_t   = std::unordered_map<GameObject*, ModelLoadResult_t>;
-	using TextureLoadResult_t  = FTextureLoadResult;
-	using TextureLoadResults_t = std::unordered_multimap<MaterialID, TextureLoadResult_t>;
+
 	struct FMaterialTextureAssignment
 	{
 		MaterialID matID = INVALID_ID;
-		std::vector<AssetLoader::FTextureLoadResult> DiffuseIDs;
-		std::vector<AssetLoader::FTextureLoadResult> SpecularIDs;
-		std::vector<AssetLoader::FTextureLoadResult> NormalsIDs;
-		std::vector<AssetLoader::FTextureLoadResult> HeightMapIDs;
-		std::vector<AssetLoader::FTextureLoadResult> AlphaMapIDs;
-		std::vector<AssetLoader::FTextureLoadResult>& GetTextureMapCollection(ETextureType type);
 	};
 	struct FMaterialTextureAssignments
 	{
@@ -88,22 +107,27 @@ public:
 		std::vector<FMaterialTextureAssignment> mAssignments;
 		TextureLoadResults_t                    mTextureLoadResults;
 	};
-public:
-	using LoadTaskID = int;
-	static LoadTaskID GenerateLoadTaskID();
 
+	//
+	// CLASS INTERFACE
+	// 
 	AssetLoader(ThreadPool& WorkerThreads_Model, ThreadPool& WorkerThreads_Texture, VQRenderer& renderer);
+
 	inline const ThreadPool& GetThreadPool_TextureLoad() const { return mWorkers_TextureLoad; }
 
-	void QueueModelLoad(GameObject* pObject, const std::string& ModelPath, const std::string& ModelName);
-	ModelLoadResults_t StartLoadingModels(Scene* pScene);
 
-	void QueueTextureLoad(LoadTaskID taskID, const FTextureLoadParams& TexLoadParam);
-	TextureLoadResults_t StartLoadingTextures(LoadTaskID taskID);
+	void QueueModelLoad(GameObject* pObject, const std::string& ModelPath, const std::string& ModelName);
+	void QueueTextureLoad(TaskID taskID, const FTextureLoadParams& TexLoadParam);
+
+	ModelLoadResults_t   StartLoadingModels(Scene* pScene);
+	TextureLoadResults_t StartLoadingTextures(TaskID taskID);
 
 private:
 	static ModelID ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName = "NONE");
 
+	//
+	// DATA
+	//
 private:
 	ThreadPool& mWorkers_ModelLoad;
 	ThreadPool& mWorkers_TextureLoad;
@@ -111,11 +135,10 @@ private:
 
 	template<class T> struct FLoadTaskContext
 	{
-		std::mutex            Mtx;
 		std::queue<T>         LoadQueue;
 		std::set<std::string> UniquePaths;
 	};
-	std::unordered_map<LoadTaskID, FLoadTaskContext<FTextureLoadParams>> mLookup_TextureLoadContext;
+	std::unordered_map<TaskID, FLoadTaskContext<FTextureLoadParams>> mLookup_TextureLoadContext;
 
 	// TODO: use ConcurrentQueue<T> with ProcessElements(pfnProcess);
 	std::queue<FModelLoadParams> mModelLoadQueue;

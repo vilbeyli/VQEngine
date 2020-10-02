@@ -32,7 +32,7 @@ Join the [VQE Discord Channel](https://discord.gg/U7pd8TV)!
  ![](Screenshots/HDRDisplay.jpg)
  - [glTF](https://en.wikipedia.org/wiki/GlTF) [2.0](https://github.com/KhronosGroup/glTF/tree/master/specification/2.0) model loading using [assimp](https://github.com/assimp/assimp)
  - Multiple windows on multiple monitors
- - Physically-based Rendering (WIP)
+ - Physically-based Rendering
  - Real-time and offline Ray Tracing (WIP)
  - Automated build & testing
 
@@ -47,7 +47,7 @@ Make sure to have pre-requisites installed
 - [Visual Studio 2019](https://visualstudio.microsoft.com/downloads/)
 - [Windows 10 SDK 10.0.18362.0](https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk)
 
-To download the textures, run
+To download the PBR & HDRI textures, run
 
  - `Scripts/DownloadAssets.bat`
 
@@ -150,3 +150,4 @@ VQE supports the following command line parameters:
 - [assimp](https://github.com/assimp/assimp)
 - [WinPixEventRuntime](https://devblogs.microsoft.com/pix/winpixeventruntime/)
 - [Khronos glTF Sample Models](https://github.com/KhronosGroup/glTF-Sample-Models)
+- [cgbookcase PBR Textures](https://www.cgbookcase.com/)

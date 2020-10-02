@@ -25,7 +25,7 @@ constexpr char* BUILD_CONFIG = "-Debug";
 #else
 constexpr char* BUILD_CONFIG = "";
 #endif
-constexpr char* VQENGINE_VERSION = "v0.5.0";
+constexpr char* VQENGINE_VERSION = "v0.6.0";
 
 
 #define REPORT_SYSTEM_INFO 1

@@ -73,7 +73,7 @@
     </GameObject>
     <GameObject>
         <Transform>
-            <Position>-40 20 0</Position>
+            <Position>-20 20 0</Position>
             <Rotation>-90 0 0</Rotation>
             <Scale>10 10 10</Scale>
         </Transform>
@@ -84,7 +84,7 @@
     </GameObject>
     <GameObject>
         <Transform>
-            <Position>-20 20 0</Position>
+            <Position>-60 50 0</Position>
             <Quaternion>0 0 0 1</Quaternion>
             <Scale>10 10 10</Scale>
         </Transform>
@@ -97,7 +97,7 @@
     <!-- Top Row Objects -->
     <GameObject>
         <Transform>
-            <Position>-60 50 0</Position>
+            <Position>-40 20 0</Position>
             <Quaternion>0 0 0 1</Quaternion>
             <Scale>8 8 8</Scale>
         </Transform>
@@ -129,6 +129,95 @@
             <Name>FlightHelmet</Name>
         </Model>
     </GameObject>
+
+
+    <Light>
+        <!-- Directional Light -->
+        <Enabled>true</Enabled>
+        <Mobility> Stationary </Mobility>
+        <Color>0.9 0.9 0.85</Color>
+        <Range> 100 </Range>
+        <Brightness> 3 </Brightness>
+        <Shadows>
+            <DepthBias> 0.00015 </DepthBias>
+            <NearPlane> 0.1 </NearPlane>
+            <FarPlane>  15000  </FarPlane>
+        </Shadows>
+        <Transform>
+            <Rotation> 30 0 40 </Rotation>
+        </Transform>
+        <Directional>
+            <ViewPortX> 220 </ViewPortX>
+            <ViewPortY> 220 </ViewPortY>
+            <Distance> 1000 </Distance>
+        </Directional>
+    </Light>
+    <Light>
+        <!-- Spot Light -->
+        <Mobility> Static </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.8 0.95 0.8</Color>
+        <Range> 170 </Range>
+        <Brightness> 4000 </Brightness>
+        <Shadows>
+            <DepthBias> 0.0000005 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  2500  </FarPlane>
+        </Shadows>
+        <Transform>
+            <Position>50 60 -90</Position>
+            <Rotation> 30 -15 0</Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <Spot>
+            <OuterConeAngleDegrees>20</OuterConeAngleDegrees>
+            <InnerConeAngleDegrees>10</InnerConeAngleDegrees>
+        </Spot>
+    </Light>
+
+    <Light>
+        <Transform>
+            <Position>-39.7 48 0.05</Position>
+            <Rotation> 0 0 0 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <!-- Point Light -->
+        <Mobility> Dynamic </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.8 0.8 0.45</Color>
+        <Range> 60 </Range>
+        <Brightness> 350 </Brightness>
+        <Shadows>
+            <DepthBias> 0.1 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  1500  </FarPlane>
+        </Shadows>
+        <Point>
+            <Attenuation> 1 1 1 </Attenuation>
+        </Point>
+    </Light>
+    <Light>
+        <Transform>
+            <Position>-20 10 -40</Position>
+            <Rotation> 0 0 0 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <!-- Point Light -->
+        <Mobility> Dynamic </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.1 0.8 0.45</Color>
+        <Range> 90 </Range>
+        <Brightness> 650 </Brightness>
+        <Shadows>
+            <DepthBias> 0.1 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  1500  </FarPlane>
+        </Shadows>
+        <Point>
+            <Attenuation> 1 1 1 </Attenuation>
+        </Point>
+    </Light>
+    
     <PostProcess>
     <!-- TBA -->
     </PostProcess>

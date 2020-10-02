@@ -21,6 +21,7 @@ set (Headers
     "Common.h"
     "Texture.h"
     "HDR.h"
+    "Shader.h"
 )
 
 set (Source
@@ -34,6 +35,7 @@ set (Source
     "ResourceViews.cpp"
     "Buffer.cpp"
     "Texture.cpp"
+    "Shader.cpp"
 )
 
 

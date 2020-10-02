@@ -273,15 +273,24 @@ set ASSETS_DIR__HDRI=
 pushd %cd%
 cd !DATA_DIRECTORY!/Textures/HDRI
 set ASSETS_DIR__HDRI=%cd%
-
+cd ../PBR
+set ASSETS_DIR__PBR=%cd%
 popd
 
 
 echo [VQPackage] Checking Assets...
 if exist !ASSETS_DIR__HDRI!/*.hdr (
-    echo [VQPackage] Found .hdr files in Data/Textures/HDRI/ directory, skipping download.
+    echo [VQPackage] Found .hdr files in Data/Textures/HDRI/ directory, skipping HDRI download.
 ) else (
-    echo [VQPackage] Textures are missing, starting download...
+    echo [VQPackage] HDRI Textures are missing, starting download...
+    call %~dp0/../Scripts/DownloadAssets.bat
+)
+
+if exist !ASSETS_DIR__PBR!/*/*.png (
+    echo [VQPackage] Found PBR files in Data/Textures/PBR/ subdirectory, skipping PBR download.
+) else (
+    echo [VQPackage] PBR Textures are missing, starting download...
+    echo.
     call %~dp0/../Scripts/DownloadAssets.bat
 )
 

@@ -48,6 +48,7 @@ struct FMaterialRepresentation
 	std::string AlphaMaskMapFilePath;
 	std::string MetallicMapFilePath ;
 	std::string RoughnessMapFilePath;
+	std::string AOMapFilePath;
 
 	FMaterialRepresentation();
 };
@@ -69,7 +70,7 @@ struct FSceneRepresentation
 	std::vector<FMaterialRepresentation>   Materials;
 	std::vector<FCameraParameters>         Cameras;
 	std::vector<FGameObjectRepresentation> Objects;
-	//std::vector<LightRepresentation> Lights;
+	std::vector<Light>                     Lights;
 
 	char loadSuccess = 0;
 };
@@ -81,11 +82,31 @@ struct FPostProcessParameters
 	float         DisplayReferenceBrightnessLevel = 200.0f;
 	int           ToggleGammaCorrection = 1;
 };
+struct FSceneRenderParameters
+{
+	bool bDrawLightBounds = false;
+	bool bDrawLightMeshes = true;
+	float fAmbientLightingFactor = 0.005f;
+};
 struct FMeshRenderCommand
 {
 	MeshID     meshID = INVALID_ID;
 	MaterialID matID  = INVALID_ID;
-	DirectX::XMMATRIX WorldTransformationMatrix; // WorldTF ID ?
+	DirectX::XMMATRIX WorldTransformationMatrix; // ID ?
+	DirectX::XMMATRIX NormalTransformationMatrix; //ID ?
+	std::string ModelName;
+	std::string MaterialName;
+};
+struct FShadowMeshRenderCommand
+{
+	MeshID meshID = INVALID_ID;
+	DirectX::XMMATRIX WorldTransformationMatrix;
+};
+struct FLightRenderCommand
+{
+	MeshID meshID = INVALID_ID;
+	DirectX::XMFLOAT3 color;
+	DirectX::XMMATRIX WorldTransformationMatrix;
 };
 struct FSceneView
 {
@@ -104,9 +125,36 @@ struct FSceneView
 	//Settings::SceneRender sceneRenderSettings;
 	//EnvironmentMap	environmentMap;
 
+	VQ_SHADER_DATA::SceneLighting GPULightingData;
+
+	FSceneRenderParameters sceneParameters;
 	FPostProcessParameters postProcess;
 
-	std::vector<FMeshRenderCommand> meshRenderCommands;
+	std::vector<FMeshRenderCommand>  meshRenderCommands;
+	std::vector<FLightRenderCommand> lightRenderCommands;
+	std::vector<FLightRenderCommand> lightBoundsRenderCommands;
+
+};
+struct FSceneShadowView
+{
+	struct FShadowView
+	{
+		DirectX::XMMATRIX matViewProj;
+		std::vector<FShadowMeshRenderCommand> meshRenderCommands;
+	};
+	struct FPointLightLinearDepthParams
+	{
+		float fFarPlane;
+		DirectX::XMFLOAT3 vWorldPos;
+	};
+
+	std::array<FShadowView, NUM_SHADOWING_LIGHTS__SPOT>                   ShadowViews_Spot;
+	std::array<FShadowView, NUM_SHADOWING_LIGHTS__POINT * 6>              ShadowViews_Point;
+	std::array<FPointLightLinearDepthParams, NUM_SHADOWING_LIGHTS__POINT> PointLightLinearDepthParams;
+	FShadowView ShadowView_Directional;
+
+	int NumSpotShadowViews;
+	int NumPointShadowViews;
 };
 //------------------------------------------------------
 
@@ -125,11 +173,7 @@ constexpr size_t GAMEOBJECT_BYTE_ALIGNMENT = 64; // assumed typical cache-line s
 //----------------------------------------------------------------------------------------------------------------
 class Scene
 {
-	// Scene class contains the scene data and the logic to manipulate it. 
-	// Scene is essentially a small part of the Engine. Writing an entire interface
-	// for Scene to query scene data would be a waste of time without added benefit.
-	// Hence VQEngine is declared a friend and has easy acess to all data to 
-	// effectively orchestrate communication between its multiple threads.
+	// Engine has easy access to the scene as scene is essentially a part of the engine.
 	friend class VQEngine; 
 
 //----------------------------------------------------------------------------------------------------------------
@@ -162,6 +206,21 @@ protected:
 //----------------------------------------------------------------------------------------------------------------
 // ENGINE INTERFACE
 //----------------------------------------------------------------------------------------------------------------
+private: // Derived Scenes shouldn't access these functions
+	void Update(float dt, int FRAME_DATA_INDEX);
+	void PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX);
+	void StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene);
+	void LoadBuiltinMaterials(TaskID taskID);
+	void OnLoadComplete();
+	void Unload(); // serial-only for now. maybe MT later.
+	void RenderUI();
+	void HandleInput(FSceneView& SceneView);
+
+	void GatherSceneLightData(FSceneView& SceneView) const;
+	void PrepareLightMeshRenderParams(FSceneView& SceneView) const;
+	void PrepareSceneMeshRenderParams(FSceneView& SceneView) const;
+	void PrepareShadowMeshRenderParams(FSceneShadowView& ShadowView) const;
+
 public:
 	Scene(VQEngine& engine
 		, int NumFrameBuffers
@@ -170,21 +229,13 @@ public:
 		, VQRenderer& renderer
 	);
 
-private: // Derived Scenes shouldn't access these functions
-	void Update(float dt, int FRAME_DATA_INDEX);
-	void PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX);
-	void StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene);
-	void OnLoadComplete();
-	void Unload(); // serial-only for now. maybe MT later.
-	void RenderUI();
-	void HandleInput();
-
-public:
-	inline const FSceneView& GetSceneView(int FRAME_DATA_INDEX) const { return mFrameSceneViews[FRAME_DATA_INDEX]; }
+	inline const FSceneView&       GetSceneView (int FRAME_DATA_INDEX) const { return mFrameSceneViews[FRAME_DATA_INDEX]; }
+	inline const FSceneShadowView& GetShadowView(int FRAME_DATA_INDEX) const { return mFrameShadowViews[FRAME_DATA_INDEX]; }
 	inline       FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX)       { return mFrameSceneViews[FRAME_DATA_INDEX].postProcess; }
 	inline const FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX) const { return mFrameSceneViews[FRAME_DATA_INDEX].postProcess; }
 	inline const Camera& GetActiveCamera() const { return mCameras[mIndex_SelectedCamera]; }
 	inline       Camera& GetActiveCamera()       { return mCameras[mIndex_SelectedCamera]; }
+
 
 	// Mesh, Model, GameObj management
 	//TransformID CreateTransform(Transform** ppTransform);
@@ -193,6 +244,7 @@ public:
 	MeshID     AddMesh(const Mesh& mesh);
 	ModelID    CreateModel();
 	MaterialID CreateMaterial(const std::string& UniqueMaterialName);
+	MaterialID LoadMaterial(const FMaterialRepresentation& matRep, TaskID taskID);
 
 	Material&  GetMaterial(MaterialID ID);
 	Model&     GetModel(ModelID);
@@ -207,12 +259,13 @@ protected:
 	//--------------------------------------------------------------
 
 	//
-	// SCENE VIEWS
+	// SCENE VIEWS PER FRAME
 	//
-	std::vector<FSceneView> mFrameSceneViews;
+	std::vector<FSceneView>       mFrameSceneViews;
+	std::vector<FSceneShadowView> mFrameShadowViews;
 
 	//
-	// SCENE RESOURCE CONTAINERS
+	// SCENE ELEMENT CONTAINERS
 	//
 	MeshLookup_t             mMeshes;
 	ModelLookup_t            mModels;
@@ -222,8 +275,10 @@ protected:
 	std::vector<Camera>      mCameras;
 
 	Light                    mDirectionalLight;
-	std::vector<Light>       mLightsStatic;  // stationary lights
-	std::vector<Light>       mLightsDynamic; // moving lights
+
+	std::vector<Light>       mLightsStatic;      //     static lights (See Light::EMobility enum for details)
+	std::vector<Light>       mLightsStationary;  // stationary lights (See Light::EMobility enum for details)
+	std::vector<Light>       mLightsDynamic;     //     moving lights (See Light::EMobility enum for details)
 	//Skybox                   mSkybox;
 
 
@@ -233,7 +288,7 @@ protected:
 	BoundingBox              mSceneBoundingBox;
 	std::vector<BoundingBox> mMeshBoundingBoxes;
 	std::vector<BoundingBox> mGameObjectBoundingBoxes;
-	MaterialID               mDefaultMaterialID;
+	MaterialID               mDefaultMaterialID = INVALID_ID;
 
 
 	//
@@ -275,12 +330,5 @@ private:
 	std::unordered_map<std::string, MaterialID> mLoadedMaterials;
 	
 	//CPUProfiler*    mpCPUProfiler;
-	//ModelLoader     mModelLoader;
-	//MaterialPool    mMaterials;
-	//ModelLoadQueue  mModelLoadQueue;
-
 	//BoundingBox     mSceneBoundingBox;
-	//FSceneView       mSceneView;
-	//ShadowView      mShadowView;
-
 };
