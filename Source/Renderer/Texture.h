@@ -42,6 +42,7 @@ struct TextureCreateDesc
 	D3D12_RESOURCE_DESC   d3d12Desc = {};
 	D3D12_RESOURCE_STATES ResourceState = D3D12_RESOURCE_STATE_COMMON;
 	bool                  bCubemap = false;
+	bool                  bGenerateMips = false;
 };
 
 

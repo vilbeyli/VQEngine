@@ -118,11 +118,11 @@ float4 PSMain(PSInput In) : SV_TARGET
 {
 	const float2 uv = In.uv;
 	
-	float4 AlbedoAlpha = texDiffuse.SampleLevel(LinearSampler, uv, 0);
-	float3 Normal      = texNormals.SampleLevel(PointSampler, uv, 0).rgb;
-	float3 Emissive    = texEmissive.SampleLevel(LinearSampler, uv, 0).rgb;
-	float3 Metalness   = texMetalness.SampleLevel(LinearSampler, uv, 0).rgb;
-	float3 Roughness   = texRoughness.SampleLevel(LinearSampler, uv, 0).rgb;
+	float4 AlbedoAlpha = texDiffuse  .Sample(LinearSampler, uv);
+	float3 Normal      = texNormals  .Sample(LinearSampler, uv).rgb;
+	float3 Emissive    = texEmissive .Sample(LinearSampler, uv).rgb;
+	float3 Metalness   = texMetalness.Sample(LinearSampler, uv).rgb;
+	float3 Roughness   = texRoughness.Sample(LinearSampler, uv).rgb;
 	
 	if (HasDiffuseMap(cbPerObject.materialData.textureConfig) && AlbedoAlpha.a < 0.01f)
 		discard;

@@ -160,13 +160,14 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 			// dispatch worker thread
 			std::shared_future<TextureID> texLoadResult = std::move(mWorkers_TextureLoad.AddTask([this, TexLoadParams, ProcTex]()
 			{
+				constexpr bool GENERATE_MIPS = true;
 				const bool IS_PROCEDURAL = ProcTex != EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
 				if (IS_PROCEDURAL)
 				{
 					return mRenderer.GetProceduralTexture(ProcTex);
 				}
 
-				return mRenderer.CreateTextureFromFile(TexLoadParams.TexturePath.c_str());
+				return mRenderer.CreateTextureFromFile(TexLoadParams.TexturePath.c_str(), GENERATE_MIPS);
 			}));
 
 			// update results lookup for the shared textures (among different materials)
@@ -324,7 +325,6 @@ static std::vector<AssetLoader::FTextureLoadParams> GenerateTextureLoadParams(
 	  aiMaterial*        pMaterial
 	, MaterialID         matID
 	, aiTextureType      type
-	, const std::string& textureName
 	, const std::string& modelDirectory
 )
 {
@@ -454,13 +454,13 @@ static Model::Data ProcessAssimpNode(
 
 		// get texture paths to load
 		AssetLoader::FMaterialTextureAssignment MatTexAssignment = {};
-		std::vector<AssetLoader::FTextureLoadParams> diffuseMaps  = GenerateTextureLoadParams(material, matID, aiTextureType_DIFFUSE, "texture_diffuse", modelDirectory);
-		std::vector<AssetLoader::FTextureLoadParams> specularMaps = GenerateTextureLoadParams(material, matID, aiTextureType_SPECULAR, "texture_specular", modelDirectory);
-		std::vector<AssetLoader::FTextureLoadParams> normalMaps   = GenerateTextureLoadParams(material, matID, aiTextureType_NORMALS, "texture_normal", modelDirectory);
-		std::vector<AssetLoader::FTextureLoadParams> heightMaps   = GenerateTextureLoadParams(material, matID, aiTextureType_HEIGHT, "texture_height", modelDirectory);
-		std::vector<AssetLoader::FTextureLoadParams> alphaMaps    = GenerateTextureLoadParams(material, matID, aiTextureType_OPACITY, "texture_alpha", modelDirectory);
-		std::vector<AssetLoader::FTextureLoadParams> emissiveMaps = GenerateTextureLoadParams(material, matID, aiTextureType_EMISSIVE, "texture_emissive", modelDirectory);
-
+		std::vector<AssetLoader::FTextureLoadParams> diffuseMaps  = GenerateTextureLoadParams(material, matID, aiTextureType_DIFFUSE , modelDirectory);
+		std::vector<AssetLoader::FTextureLoadParams> specularMaps = GenerateTextureLoadParams(material, matID, aiTextureType_SPECULAR, modelDirectory);
+		std::vector<AssetLoader::FTextureLoadParams> normalMaps   = GenerateTextureLoadParams(material, matID, aiTextureType_NORMALS , modelDirectory);
+		std::vector<AssetLoader::FTextureLoadParams> heightMaps   = GenerateTextureLoadParams(material, matID, aiTextureType_HEIGHT  , modelDirectory);
+		std::vector<AssetLoader::FTextureLoadParams> alphaMaps    = GenerateTextureLoadParams(material, matID, aiTextureType_OPACITY , modelDirectory);
+		std::vector<AssetLoader::FTextureLoadParams> emissiveMaps = GenerateTextureLoadParams(material, matID, aiTextureType_EMISSIVE, modelDirectory);
+		std::vector<AssetLoader::FTextureLoadParams> occlRoughMetlMaps = GenerateTextureLoadParams(material, matID, aiTextureType_UNKNOWN, modelDirectory);
 
 		// queue texture load
 		std::array<decltype(diffuseMaps)*, 6> TexLoadParams = { &diffuseMaps, &specularMaps, &normalMaps, &heightMaps, &alphaMaps, &emissiveMaps };

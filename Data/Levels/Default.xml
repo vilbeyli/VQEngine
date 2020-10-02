@@ -56,7 +56,7 @@
         </Transform>
         <Model>
             <Mesh>Cube</Mesh>
-            <MaterialName>Green_VerySmooth</MaterialName>
+            <MaterialName>Painted_metal_02</MaterialName>
         </Model>
     </GameObject>
     <GameObject>
@@ -79,7 +79,7 @@
         </Transform>
         <Model>
             <Mesh>Cylinder</Mesh>
-            <MaterialName>Red_VeryRough</MaterialName>
+            <MaterialName>Metal_tiles_03</MaterialName>
         </Model>
     </GameObject>
     <GameObject>
@@ -101,7 +101,7 @@
         </Transform>
         <Model>
             <Mesh>Sphere</Mesh>
-            <MaterialName>Blue_VerySmooth</MaterialName>
+            <MaterialName>Marble_08</MaterialName>
         </Model>
     </GameObject>
     <GameObject>

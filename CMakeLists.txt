@@ -37,6 +37,13 @@ set (Config
     "Data/Scenes.ini"
 )
 
+set (Materials
+    "Data/Materials/RoughMaterials.xml"
+    "Data/Materials/PBRMaterials.xml"
+    "Data/Materials/MetallicMaterials.xml"
+    "Data/Materials/DefaultMaterials.xml"
+)
+
 set (Shaders
     "Shaders/hello-triangle.hlsl"
     "Shaders/hello-cube.hlsl"
@@ -138,8 +145,10 @@ source_group("Resource" FILES ${Resource})
 source_group("Icons"    FILES ${Icons})
 source_group("Shaders"  FILES ${Shaders})
 source_group("Scenes"   FILES ${Scenes})
+source_group("Materials" FILES ${Materials})
 
 set_source_files_properties(${Config} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${Materials} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Scenes} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(Data/Resources/VQE.rc PROPERTIES VS_TOOL_OVERRIDE "Resource compiler")
@@ -149,7 +158,7 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/VQUtils/Bin/)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/WinPixEventRuntime/bin/x64)
 
 # Create a library with the project name that is build with the Headers and Source files
-add_executable( ${PROJECT_NAME} ${HeaderVQE} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} )
+add_executable( ${PROJECT_NAME} ${HeaderVQE} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} ${Materials})
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY} )
 

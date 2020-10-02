@@ -158,7 +158,7 @@ public:
 
 	// Resource management
 	BufferID                     CreateBuffer(const FBufferDesc& desc);
-	TextureID                    CreateTextureFromFile(const char* pFilePath);
+	TextureID                    CreateTextureFromFile(const char* pFilePath, bool bGenerateMips = false);
 	TextureID                    CreateTexture(const TextureCreateDesc& desc);
 	void                         UploadVertexAndIndexBufferHeaps();
 
@@ -211,6 +211,7 @@ public:
 
 	// Texture Residency
 	void QueueTextureUpload(const FTextureUploadDesc& desc);
+	void ProcessTextureUpload(const FTextureUploadDesc& desc);
 	void ProcessTextureUploadQueue();
 	void TextureUploadThread_Main();
 	inline void StartTextureUploads() { mSignal_UploadThreadWorkReady.NotifyOne(); };
