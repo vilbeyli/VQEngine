@@ -290,6 +290,7 @@ if exist !ASSETS_DIR__PBR!/*/*.png (
     echo [VQPackage] Found PBR files in Data/Textures/PBR/ subdirectory, skipping PBR download.
 ) else (
     echo [VQPackage] PBR Textures are missing, starting download...
+    echo.
     call %~dp0/../Scripts/DownloadAssets.bat
 )
 
