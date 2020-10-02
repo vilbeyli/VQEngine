@@ -669,7 +669,7 @@ void VQRenderer::LoadRootSignatures()
 
 	// Wireframe/Unlit Root Signature : [6]
 	{
-		CD3DX12_DESCRIPTOR_RANGE1 ranges[3];
+		//CD3DX12_DESCRIPTOR_RANGE1 ranges[3];
 		//ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
 		
 		CD3DX12_ROOT_PARAMETER1 rootParameters[1];

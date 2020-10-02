@@ -82,21 +82,6 @@ struct FShaderStageCompileResult
 	EShaderStage ShaderStageEnum;
 };
 
-struct FShaderLoadDesc
-{
-	FShaderLoadDesc() = delete;
-	FShaderLoadDesc(const std::string& path, const std::string& entryPoint, const std::string& shaderModel, const std::string& cachePath_);
-
-	std::string fullPath;
-	std::string entryPoint;
-	std::string shaderModel;
-
-	std::string cachePath;
-	FileTimeStamp lastWriteTime;
-	FileTimeStamp cacheLastWriteTime;
-};
-
-
 
 //
 // SHADER
@@ -104,10 +89,6 @@ struct FShaderLoadDesc
 class Shader
 {
 	friend class Renderer;
-
-	using ShaderTextureLookup   = std::unordered_map<std::string, int>;
-	using ShaderSamplerLookup   = std::unordered_map<std::string, int>;
-	using ShaderDirectoryLookup = std::unordered_map<EShaderStage, FShaderLoadDesc>;
 
 public:
 	union ShaderBlobs
@@ -136,82 +117,6 @@ public:
 		};
 		ID3D12ShaderReflection* Reflections[EShaderStage::NUM_SHADER_STAGES] = { nullptr };
 	};
-	/*
-	struct ConstantBufferLayout
-	{	// information used to create GPU/CPU constant buffers
-		D3D11_SHADER_BUFFER_DESC					desc;
-		std::vector<D3D11_SHADER_VARIABLE_DESC>		variables;
-		std::vector<D3D11_SHADER_TYPE_DESC>			types;
-		unsigned									buffSize;
-		EShaderStage								stage;
-		unsigned									bufSlot;
-	};
-	struct FShaderStages
-	{
-		ID3D12VertexShader*   mVertexShader = nullptr;
-		ID3D12PixelShader*    mPixelShader = nullptr;
-		ID3D12GeometryShader* mGeometryShader = nullptr;
-		ID3D12HullShader*     mHullShader = nullptr;
-		ID3D12DomainShader*   mDomainShader = nullptr;
-		ID3D12ComputeShader*  mComputeShader = nullptr;
-	};
-	*/
-public:
-	//----------------------------------------------------------------------------------------------------------------
-	// MEMBER INTERFACE
-	//----------------------------------------------------------------------------------------------------------------
-	//Shader(const FShaderDesc& desc);
-	Shader(const std::string& shaderFileName);
-	~Shader();
-
-	bool Reload(ID3D12Device* device);
-	void ClearConstantBuffers();
-	//void UpdateConstants(ID3D12DeviceContext* context);
-
-	//----------------------------------------------------------------------------------------------------------------
-	// GETTERS
-	//----------------------------------------------------------------------------------------------------------------
-	const std::string& Name() const { return mName; }
-
-	//const std::vector<ConstantBufferLayout>& GetConstantBufferLayouts() const;
-	//const std::vector<ConstantBufferBinding      >& GetConstantBuffers() const;
-	//const TextureBinding& GetTextureBinding(const std::string& textureName) const;
-	//const SamplerBinding& GetSamplerBinding(const std::string& samplerName) const;
-
-	bool HasTextureBinding(const std::string& textureName) const;
-	bool HasSamplerBinding(const std::string& samplerName) const;
-
-	bool HasSourceFileBeenUpdated() const;
-
-private:
-	//----------------------------------------------------------------------------------------------------------------
-	// UTILITY FUNCTIONS
-	//----------------------------------------------------------------------------------------------------------------
-	void ReflectConstantBufferLayouts(ID3D12ShaderReflection* sRefl, EShaderStage type);
-	//bool CompileShaders(ID3D12Device* device, const FShaderDesc& desc);
-	void SetReflections(const ShaderBlobs& blobs);
-	void CreateShaderStage(ID3D12Device* pDevice, EShaderStage stage, void* pBuffer, const size_t szShaderBinary);
-	void CheckSignatures();
-	void LogConstantBufferLayouts() const;
-	void ReleaseResources();
-	size_t GeneratePreprocessorDefinitionsHash(const std::vector<FShaderMacro>& macros) const;
-
-private:
-	//----------------------------------------------------------------------------------------------------------------
-	// DATA
-	//----------------------------------------------------------------------------------------------------------------
-	//FShaderStages mStages;
-
-	ShaderReflections	mReflections;	// shader reflections, temporary?
-	//ID3D12InputLayout*	mpInputLayout = nullptr;
-
-	std::string	mName;
-
-	ShaderTextureLookup mShaderTextureLookup;
-	ShaderSamplerLookup mShaderSamplerLookup;
-
-	//FShaderDesc mDescriptor;	// used for shader reloading
-	ShaderDirectoryLookup mDirectories;
 };
 
 namespace ShaderUtils
@@ -241,46 +146,3 @@ namespace ShaderUtils
 
 	EShaderStage GetShaderStageEnumFromShaderModel(const std::string& ShaderModel);
 }
-
-#if 0
-enum ELayoutFormat
-{
-	FLOAT32_2 = DXGI_FORMAT_R32G32_FLOAT,
-	FLOAT32_3 = DXGI_FORMAT_R32G32B32_FLOAT,
-	FLOAT32_4 = DXGI_FORMAT_R32G32B32A32_FLOAT,
-
-	LAYOUT_FORMAT_COUNT
-};
-using CPUConstantID = int;
-using GPU_ConstantBufferSlotIndex = int;
-using ConstantBufferMapping = std::pair<GPU_ConstantBufferSlotIndex, CPUConstantID>;
-//using FileTimeStamp = std::experimental::filesystem::file_time_type;
-
-//----------------------------------------------------------------------------------------------------------------
-// SHADER DATA/RESOURCE INTERFACE STRUCTS
-//----------------------------------------------------------------------------------------------------------------
-struct ConstantBufferBinding
-{	
-	EShaderStage  shaderStage;
-	unsigned      bufferSlot;
-	//ID3D12Buffer* data;
-	//bool          dirty;
-};
-struct TextureBinding
-{
-	EShaderStage shaderStage;
-	unsigned     textureSlot;
-};
-struct SamplerBinding
-{
-	EShaderStage shaderStage;
-	unsigned     samplerSlot;
-	std::string  name;	// TODO: move this out
-};
-struct InputLayout
-{
-	std::string		semanticName;
-	ELayoutFormat	format;
-};
-
-#endif
