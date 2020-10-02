@@ -269,9 +269,7 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, UINT ShaderComponent
                         srvDesc.Texture2D.MipLevels = (mipLevel == -1) ? mMipMapCount : 1;
                     }
                 }
-                
             }
-            
         }
 
         srvDesc.Shader4ComponentMapping = ShaderComponentMapping;

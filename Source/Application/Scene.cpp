@@ -100,6 +100,8 @@ MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 3, INVALID_ID);
 		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 4, INVALID_ID);
 		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 5, INVALID_ID);
+		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 6, INVALID_ID);
+		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 7, INVALID_ID);
 	}
 	return id;
 }

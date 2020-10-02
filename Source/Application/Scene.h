@@ -285,7 +285,7 @@ protected:
 	BoundingBox              mSceneBoundingBox;
 	std::vector<BoundingBox> mMeshBoundingBoxes;
 	std::vector<BoundingBox> mGameObjectBoundingBoxes;
-	MaterialID               mDefaultMaterialID;
+	MaterialID               mDefaultMaterialID = INVALID_ID;
 
 
 	//
