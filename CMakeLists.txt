@@ -59,6 +59,7 @@ set (Shaders
     "Shaders/LightingConstantBufferData.h"
     "Shaders/Unlit.hlsl"
     "Shaders/DepthPass.hlsl"
+    "Shaders/CubemapConvolution.hlsl"
 )
 
 set (HeaderVQE 

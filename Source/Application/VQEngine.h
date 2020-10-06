@@ -66,10 +66,16 @@ struct FEnvironmentMapDescriptor
 };
 struct FEnvironmentMap
 {
-	TextureID Tex_HDREnvironment = INVALID_ID;
-	TextureID Tex_Irradiance     = INVALID_ID; // TODO: lighting
+	TextureID Tex_HDREnvironment = INVALID_ID; // skydome 
+	TextureID Tex_IrradianceDiff = INVALID_ID; // Kd
+	TextureID Tex_IrradianceSpec = INVALID_ID; // Ki
+
+	RTV_ID RTV_IrradianceDiff = INVALID_ID;
+	RTV_ID RTV_IrradianceSpec = INVALID_ID;
+
 	SRV_ID    SRV_HDREnvironment = INVALID_ID;
-	SRV_ID    SRV_Irradiance     = INVALID_ID; // TODO: lighting
+	SRV_ID    SRV_IrradianceDiff = INVALID_ID;
+	SRV_ID    SRV_IrradianceSpec = INVALID_ID;
 
 	//
 	// HDR10 Static Metadata Parameters -------------------------------
@@ -116,6 +122,8 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	DSV_ID    DSV_ShadowMaps_Directional     = INVALID_ID;
 
 	FEnvironmentMap EnvironmentMap;
+
+	SRV_ID SRV_NullCubemap = INVALID_ID;
 };
 struct FRenderingResources_DebugWindow : public FRenderingResources
 {
@@ -204,7 +212,6 @@ public:
 	void RenderThread_RenderDebugWindow();
 
 
-
 	// ---------------------------------------------------------
 	// Update Thread
 	// ---------------------------------------------------------
@@ -245,9 +252,10 @@ public:
 	// ---------------------------------------------------------
 	// Scene Interface
 	// ---------------------------------------------------------
-	void StartLoadingEnvironmentMap(int IndexEnvMap);
 	void StartLoadingScene(int IndexScene);
 	
+	void StartLoadingEnvironmentMap(int IndexEnvMap);
+	void RenderEnvironmentMapCubeFaces(FEnvironmentMap& env);
 	void UnloadEnvironmentMap();
 
 	// Getters
@@ -321,6 +329,7 @@ private:
 	std::atomic<uint64>             mNumUpdateLoopsExecuted;
 	std::atomic<bool>               mbLoadingLevel;
 	std::atomic<bool>               mbLoadingEnvironmentMap;
+	std::atomic<bool>               mbRenderEnvironmentMapIrradiance;
 	std::atomic<bool>               mbMainWindowHDRTransitionInProgress; // see DispatchHDRSwapchainTransitionEvents()
 
 	// system & settings

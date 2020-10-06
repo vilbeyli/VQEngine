@@ -74,6 +74,10 @@ cbuffer CBPerObject : register(b2)
 #endif
 }
 
+SamplerState LinearSampler : register(s0);
+SamplerState PointSampler  : register(s1);
+SamplerState AnisoSampler  : register(s2);
+
 Texture2D texDiffuse        : register(t0);
 Texture2D texNormals        : register(t1);
 Texture2D texEmissive       : register(t2);
@@ -83,14 +87,13 @@ Texture2D texRoughness      : register(t5);
 Texture2D texOcclRoughMetal : register(t6);
 Texture2D texLocalAO        : register(t7);
 
+TextureCube texEnvMapDiff   : register(t10);
+TextureCube texEnvMapSpec   : register(t11);
+Texture2D   texBRDFIntegral : register(t12);
 
-SamplerState LinearSampler : register(s0);
-SamplerState PointSampler  : register(s1);
-SamplerState AnisoSampler  : register(s2);
-
-Texture2D        texDirectionalLightShadowMap : register(t10);
-Texture2DArray   texSpotLightShadowMaps       : register(t13);
-TextureCubeArray texPointLightShadowMaps      : register(t19);
+Texture2D        texDirectionalLightShadowMap : register(t13);
+Texture2DArray   texSpotLightShadowMaps       : register(t16);
+TextureCubeArray texPointLightShadowMaps      : register(t22);
 
 //---------------------------------------------------------------------------------------------------
 //
@@ -177,7 +180,8 @@ float4 PSMain(PSInput In) : SV_TARGET
 	/* Emissive */ + SurfaceParams.emissiveColor * SurfaceParams.emissiveIntensity * 10.0f
 	;
 	
-	float3 IEnv = 0.0f.xxx; // environment lighting illumination
+	float3 IEnv = texEnvMapDiff.Sample(LinearSampler, SurfaceParams.N).rgb; // environment lighting illumination
+	I_total += IEnv * ao;
 	
 	// -------------------------------------------------------------------------------------------------------
 	

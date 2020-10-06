@@ -406,19 +406,6 @@ void VQEngine::StartLoadingScene(int IndexScene)
 	Log::Info("StartLoadingScene: %d", IndexScene);
 }
 
-void VQEngine::UnloadEnvironmentMap()
-{
-	FEnvironmentMap& env = mResources_MainWnd.EnvironmentMap;
-	if (env.Tex_HDREnvironment != INVALID_ID)
-	{
-		// GPU-sync assumed
-		mRenderer.GetWindowSwapChain(mpWinMain->GetHWND()).WaitForGPU();
-		mRenderer.DestroySRV(env.SRV_HDREnvironment);
-		mRenderer.DestroyTexture(env.Tex_HDREnvironment);
-		env.SRV_HDREnvironment = env.Tex_HDREnvironment = INVALID_ID;
-		env.MaxContentLightLevel = 0;
-	}
-}
 
 void VQEngine::WaitUntilRenderingFinishes()
 {
@@ -517,12 +504,53 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	const FEnvironmentMapDescriptor& desc = this->GetEnvironmentMapDesc(EnvMapName);
 	std::vector<std::string>::iterator it = std::find(mResourceNames.mEnvironmentMapPresetNames.begin(), mResourceNames.mEnvironmentMapPresetNames.end(), EnvMapName);
 	const size_t ActiveEnvMapIndex = it - mResourceNames.mEnvironmentMapPresetNames.begin();
+	
 	if (!desc.FilePath.empty()) // check whether the env map was found or not
 	{
 		Log::Info("Loading Environment Map: %s", EnvMapName.c_str());
+
+		// HDR map
 		env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(desc.FilePath.c_str());
 		env.SRV_HDREnvironment = mRenderer.CreateAndInitializeSRV(env.Tex_HDREnvironment);
 		env.MaxContentLightLevel = static_cast<int>(desc.MaxContentLightLevel);
+
+
+		// Create Irradiance Map Textures
+		TextureCreateDesc desc("EnvMap_IrradianceDiff");
+		desc.bCubemap = true;
+		desc.bGenerateMips = true;
+		desc.pData = nullptr;
+		desc.d3d12Desc.Height = 2048;
+		desc.d3d12Desc.Width = 2048;
+		desc.d3d12Desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		desc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+		desc.d3d12Desc.DepthOrArraySize = 6;
+		desc.d3d12Desc.MipLevels = 1;
+		desc.d3d12Desc.SampleDesc = { 1, 0 };
+		desc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+		desc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
+		env.Tex_IrradianceDiff = mRenderer.CreateTexture(desc);
+
+		desc.TexName = "EnvMap_IrradianceSpec";
+		desc.d3d12Desc.MipLevels = Image::CalculateMipLevelCount(desc.d3d12Desc.Width, desc.d3d12Desc.Height);
+		env.Tex_IrradianceSpec = mRenderer.CreateTexture(desc);
+		
+		const int& NUM_MIPS = desc.d3d12Desc.MipLevels;
+
+		// Create Irradiance Map RTVs
+		env.RTV_IrradianceDiff = mRenderer.CreateRTV(6);
+		env.RTV_IrradianceSpec = mRenderer.CreateRTV(6 * NUM_MIPS);
+		for (int face = 0; face < 6; ++face)  mRenderer.InitializeRTV(env.RTV_IrradianceDiff, face, env.Tex_IrradianceDiff, face, 0);
+		for(int mip=0; mip<NUM_MIPS; ++mip)for (int face = 0; face < 6; ++face)  mRenderer.InitializeRTV(env.RTV_IrradianceSpec, mip*6+face, env.Tex_IrradianceSpec, face, mip);
+
+		// Create Irradiance Map SRVs
+		env.SRV_IrradianceDiff = mRenderer.CreateSRV();
+		env.SRV_IrradianceSpec = mRenderer.CreateSRV();
+		mRenderer.InitializeSRV(env.SRV_IrradianceDiff, 0, env.Tex_IrradianceDiff);
+		mRenderer.InitializeSRV(env.SRV_IrradianceSpec, 0, env.Tex_IrradianceSpec);
+
+		// Queue irradiance cube face rendering
+		mbRenderEnvironmentMapIrradiance.store(true);
 
 		//assert(mpScene->mIndex_ActiveEnvironmentMapPreset == static_cast<int>(ActiveEnvMapIndex)); // Only false durin initialization
 		mpScene->mIndex_ActiveEnvironmentMapPreset = static_cast<int>(ActiveEnvMapIndex);
@@ -533,11 +561,31 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	}
 	else
 	{
-		Log::Warning("Have you run Scripts/DownloadAssets.bat?");
 		Log::Error("Couldn't find Environment Map: %s", EnvMapName.c_str());
+		Log::Warning("Have you run Scripts/DownloadAssets.bat?");
 	}
 }
 
+void VQEngine::UnloadEnvironmentMap()
+{
+	FEnvironmentMap& env = mResources_MainWnd.EnvironmentMap;
+	if (env.Tex_HDREnvironment != INVALID_ID)
+	{
+		// GPU-sync assumed
+		mRenderer.GetWindowSwapChain(mpWinMain->GetHWND()).WaitForGPU();
+		
+		mRenderer.DestroySRV(env.SRV_HDREnvironment);
+		mRenderer.DestroySRV(env.SRV_IrradianceDiff);
+		mRenderer.DestroySRV(env.SRV_IrradianceSpec);
+		mRenderer.DestroyTexture(env.Tex_HDREnvironment);
+		mRenderer.DestroyTexture(env.Tex_IrradianceDiff);
+		mRenderer.DestroyTexture(env.Tex_IrradianceSpec);
+		env.SRV_HDREnvironment = env.Tex_HDREnvironment = INVALID_ID;
+		env.SRV_IrradianceDiff = env.SRV_IrradianceSpec = INVALID_ID;
+		env.Tex_IrradianceDiff = env.Tex_IrradianceSpec = INVALID_ID;
+		env.MaxContentLightLevel = 0;
+	}
+}
 
 SRV_ID FLoadingScreenData::GetSelectedLoadingScreenSRV_ID() const
 {

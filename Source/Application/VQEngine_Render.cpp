@@ -206,6 +206,7 @@ void VQEngine::InitializeBuiltinMeshes()
 
 constexpr bool MSAA_ENABLE       = true;
 constexpr uint MSAA_SAMPLE_COUNT = 4;
+
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 //
 // LOAD
@@ -318,6 +319,18 @@ void VQEngine::RenderThread_LoadResources()
 {
 	FRenderingResources_MainWindow& rsc = mResources_MainWnd;
 
+	// null cubemap SRV
+	{
+		mResources_MainWnd.SRV_NullCubemap = mRenderer.CreateSRV();
+
+		D3D12_SHADER_RESOURCE_VIEW_DESC nullSRVDesc = {};
+		nullSRVDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		nullSRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		nullSRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+		nullSRVDesc.TextureCube.MipLevels = 1;
+		mRenderer.InitializeSRV(mResources_MainWnd.SRV_NullCubemap, 0, nullSRVDesc);
+	}
+
 	// scene color pass
 	{
 		rsc.DSV_MainViewDepthMSAA = mRenderer.CreateDSV();
@@ -417,15 +430,42 @@ void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 void VQEngine::RenderThread_PreRender()
 {
+	FWindowRenderContext& ctx = mRenderer.GetWindowRenderContext(mpWinMain->GetHWND());
+
+	const int NUM_BACK_BUFFERS  = ctx.SwapChain.GetNumBackBuffers();
+	const int BACK_BUFFER_INDEX = ctx.SwapChain.GetCurrentBackBufferIndex();
+	const int FRAME_DATA_INDEX  = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
+
+	// Dynamic constant buffer maintenance
+	ctx.mDynamicHeap_ConstantBuffer.OnBeginFrame();
+
+	// Command list allocators can only be reset when the associated 
+	// command lists have finished execution on the GPU; apps should use 
+	// fences to determine GPU execution progress.
+	ID3D12CommandAllocator* pCmdAlloc = ctx.mCommandAllocatorsGFX[BACK_BUFFER_INDEX];
+	ThrowIfFailed(pCmdAlloc->Reset());
+
+	// However, when ExecuteCommandList() is called on a particular command 
+	// list, that command list can then be reset at any time and must be before 
+	// re-recording.
+	ID3D12PipelineState* pInitialState = nullptr;
+	ThrowIfFailed(ctx.pCmdList_GFX->Reset(pCmdAlloc, pInitialState));
+
+
+	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
+	ctx.pCmdList_GFX->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 }
 
 void VQEngine::RenderThread_Render()
 {
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
-	const int FRAME_DATA_INDEX  = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
+	if (mbRenderEnvironmentMapIrradiance.load())
+	{
+		RenderEnvironmentMapCubeFaces(mResources_MainWnd.EnvironmentMap);
+		mbRenderEnvironmentMapIrradiance.store(false);
+	}
 
 	RenderThread_RenderMainWindow();
-	
+
 	if(mpWinDebug && !mpWinDebug->IsClosed())
 		RenderThread_RenderDebugWindow();
 }
@@ -559,6 +599,143 @@ void VQEngine::RenderThread_RenderDebugWindow()
 #endif
 }
 
+void VQEngine::RenderEnvironmentMapCubeFaces(FEnvironmentMap& env)
+{
+	using namespace DirectX;
+
+	FWindowRenderContext& ctx = mRenderer.GetWindowRenderContext(mpWinMain->GetHWND());
+	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
+
+	SCOPED_GPU_MARKER(pCmd, "RenderEnvironmentMapCubeFaces");
+
+	const int MIP_LEVELS = 12;
+	
+
+	const SRV& srvEnv = mRenderer.GetSRV(env.SRV_HDREnvironment);
+	const SRV& srvIrr = mRenderer.GetSRV(env.SRV_IrradianceDiff);
+	const SRV& srvSpc = mRenderer.GetSRV(env.SRV_IrradianceSpec);
+
+	const XMFLOAT4X4 f16proj = MakePerspectiveProjectionMatrix(PI_DIV2, 1.0f, 0.1f, 10.0f);
+	const XMMATRIX proj = XMLoadFloat4x4(&f16proj);
+	
+	struct cb0_t { XMMATRIX viewProj[6]; };
+	struct cb1_t { float Roughness; float ViewDimX; float ViewDimY; int MIP; };
+
+	// Diffuse Irradiance
+	pCmd->SetPipelineState(mRenderer.GetPSO( CUBEMAP_CONVOLUTION_DIFFUSE_PSO));
+	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(10));
+
+	pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());
+	pCmd->SetGraphicsRootDescriptorTable(3, srvIrr.GetGPUDescHandle());
+	
+	{
+		SCOPED_GPU_MARKER(pCmd, "DiffuseIrradianceCubemap");
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddr0 = {};
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddr1 = {};
+		cb0_t* pCB0 = {};
+		cb1_t* pCB1 = {};
+		ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(cb0_t), (void**)(&pCB0), &cbAddr0);
+		ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(cb1_t), (void**)(&pCB1), &cbAddr1);
+		for (int face = 0; face < 6; ++face)
+		{
+			pCB0->viewProj[face] = Texture::CubemapUtility::CalculateViewMatrix(face) * proj;
+		}
+
+		const RTV& rtv = mRenderer.GetRTV(env.RTV_IrradianceDiff);
+		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle();
+
+		pCB1->Roughness = 0.0f;
+		pCB1->ViewDimX = 2048.0f;
+		pCB1->ViewDimY = 2048.0f;
+		pCB1->MIP = 0;
+
+		pCmd->SetGraphicsRootConstantBufferView(0, cbAddr0);
+		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr1);
+
+		pCmd->OMSetRenderTargets(1, &rtvHandle, TRUE, NULL);
+
+		D3D12_VIEWPORT viewport{ 0.0f, 0.0f, pCB1->ViewDimX, pCB1->ViewDimY, 0.0f, 1.0f };
+		D3D12_RECT     scissorsRect{ 0, 0, (LONG)pCB1->ViewDimX, (LONG)pCB1->ViewDimY };
+		pCmd->RSSetViewports(1, &viewport);
+		pCmd->RSSetScissorRects(1, &scissorsRect);
+
+		const Mesh& mesh = mBuiltinMeshes[EBuiltInMeshes::CUBE];
+		const auto VBIBIDs      = mesh.GetIABufferIDs();
+		const uint32 NumIndices = mesh.GetNumIndices();
+		const uint32 NumInstances = 6; // 1 cube / face (cube is used for determining sample vector)
+		const BufferID& VB_ID = VBIBIDs.first;
+		const BufferID& IB_ID = VBIBIDs.second;
+		const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
+		const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
+
+		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pCmd->IASetVertexBuffers(0, 1, &vb);
+		pCmd->IASetIndexBuffer(&ib);
+
+		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
+	}
+
+	// Specular Irradiance
+	{
+		pCmd->SetPipelineState(mRenderer.GetPSO(CUBEMAP_CONVOLUTION_SPECULAR_PSO));
+		pCmd->SetGraphicsRootDescriptorTable(3, srvSpc.GetGPUDescHandle());
+		SCOPED_GPU_MARKER(pCmd, "SpecularIrradianceCubemap");
+		for (int mip = 0; mip < MIP_LEVELS; ++mip)
+		{
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr0 = {};
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr1 = {};
+			cb0_t* pCB0 = {};
+			cb1_t* pCB1 = {};
+			ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(cb0_t), (void**)(&pCB0), &cbAddr0);
+			ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(cb1_t), (void**)(&pCB1), &cbAddr1);
+			for (int face = 0; face < 6; ++face)
+			{
+				pCB0->viewProj[face] = Texture::CubemapUtility::CalculateViewMatrix(face) * proj;
+			}
+
+			const RTV& rtv = mRenderer.GetRTV(env.RTV_IrradianceSpec);
+			D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle(mip * 6);
+
+			pCB1->Roughness = 0.0f;
+			pCB1->ViewDimX = 2048 >> mip;
+			pCB1->ViewDimY = 2048 >> mip;
+			pCB1->MIP = mip;
+
+			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr0);
+			pCmd->SetGraphicsRootConstantBufferView(1, cbAddr1);
+
+			pCmd->OMSetRenderTargets(1, &rtvHandle, TRUE, NULL);
+
+			D3D12_VIEWPORT viewport{ 0.0f, 0.0f, pCB1->ViewDimX, pCB1->ViewDimY, 0.0f, 1.0f };
+			D3D12_RECT     scissorsRect{ 0, 0, (LONG)pCB1->ViewDimX, (LONG)pCB1->ViewDimY };
+			pCmd->RSSetViewports(1, &viewport);
+			pCmd->RSSetScissorRects(1, &scissorsRect);
+
+			const Mesh& mesh = mBuiltinMeshes[EBuiltInMeshes::CUBE];
+			const auto VBIBIDs = mesh.GetIABufferIDs();
+			const uint32 NumIndices = mesh.GetNumIndices();
+			const uint32 NumInstances = 6; // 1 cube / face (cube is used for determining sample vector)
+			const BufferID& VB_ID = VBIBIDs.first;
+			const BufferID& IB_ID = VBIBIDs.second;
+			const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
+			const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
+
+			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			pCmd->IASetVertexBuffers(0, 1, &vb);
+			pCmd->IASetIndexBuffer(&ib);
+
+			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
+		}
+	}
+
+	const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+	{
+		  CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(env.Tex_IrradianceDiff), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+		, CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(env.Tex_IrradianceSpec), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+	};
+	pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+}
+
 HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderContext& ctx)
 {
 	HRESULT hr = S_OK;
@@ -568,21 +745,6 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	assert(ctx.mCommandAllocatorsGFX.size() >= NUM_BACK_BUFFERS);
 	const bool bUseHDRRenderPath = this->ShouldRenderHDR(mpWinMain->GetHWND());
 	// ----------------------------------------------------------------------------
-
-	//
-	// PRE RENDER
-	//
-	// Command list allocators can only be reset when the associated 
-	// command lists have finished execution on the GPU; apps should use 
-	// fences to determine GPU execution progress.
-	ID3D12CommandAllocator* pCmdAlloc = ctx.mCommandAllocatorsGFX[BACK_BUFFER_INDEX];
-	ThrowIfFailed(pCmdAlloc->Reset());
-
-	// However, when ExecuteCommandList() is called on a particular command 
-	// list, that command list can then be reset at any time and must be before 
-	// re-recording.
-	ID3D12PipelineState* pInitialState = nullptr;
-	ThrowIfFailed(ctx.pCmdList_GFX->Reset(pCmdAlloc, pInitialState));
 
 	//
 	// RENDER
@@ -614,7 +776,6 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	const auto            VBIBIDs           = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE].GetIABufferIDs();
 	const BufferID&       IB_ID             = VBIBIDs.second;
 	const IBV&            ib                = mRenderer.GetIndexBufferView(IB_ID);
-	ID3D12DescriptorHeap* ppHeaps[]         = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 	D3D12_RECT            scissorsRect      { 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
 
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
@@ -624,7 +785,6 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	// hardcoded roog signature for now until shader reflection and rootsignature management is implemented
 	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(1));
 
-	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetShaderResourceView(mLoadingScreenData.GetSelectedLoadingScreenSRV_ID()).GetGPUDescHandle());
 
 	pCmd->RSSetViewports(1, &viewport);
@@ -674,25 +834,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	const FPostProcessParameters& PPParams  = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 	// ----------------------------------------------------------------------------
 
-
-	//
-	// PRE RENDER
-	//
-
-	// Dynamic constant buffer maintenance
-	ctx.mDynamicHeap_ConstantBuffer.OnBeginFrame();
-
-	// Command list allocators can only be reset when the associated 
-	// command lists have finished execution on the GPU; apps should use 
-	// fences to determine GPU execution progress.
-	ID3D12CommandAllocator* pCmdAlloc = ctx.mCommandAllocatorsGFX[BACK_BUFFER_INDEX];
-	ThrowIfFailed(pCmdAlloc->Reset());
-
-	// However, when ExecuteCommandList() is called on a particular command 
-	// list, that command list can then be reset at any time and must be before 
-	// re-recording.
-	ID3D12PipelineState* pInitialState = nullptr;
-	ThrowIfFailed(ctx.pCmdList_GFX->Reset(pCmdAlloc, pInitialState));
+	// PreRender() must be called before this function.
 
 	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
 
@@ -1001,6 +1143,9 @@ void VQEngine::TransitionForSceneRendering(FWindowRenderContext& ctx)
 void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& SceneView)
 {
 	const bool bUseHDRRenderPath = this->ShouldRenderHDR(mpWinMain->GetHWND());
+	const bool bHasEnvironmentMapHDRTexture = mResources_MainWnd.EnvironmentMap.SRV_HDREnvironment != INVALID_ID;
+	const bool bDrawEnvironmentMap = bHasEnvironmentMapHDRTexture && true;
+
 	using namespace DirectX;
 
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
@@ -1061,6 +1206,11 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 		pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Spot).GetGPUDescHandle(0));
 		pCmd->SetGraphicsRootDescriptorTable(5, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Point).GetGPUDescHandle(0));
 		pCmd->SetGraphicsRootDescriptorTable(6, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Directional).GetGPUDescHandle(0));
+		//pCmd->SetGraphicsRootDescriptorTable(7, mRenderer.GetSRV(mResources_MainWnd.SRV_NullCubemap).GetGPUDescHandle());
+		pCmd->SetGraphicsRootDescriptorTable(7, bDrawEnvironmentMap
+			? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_IrradianceDiff).GetGPUDescHandle(0)
+			: mRenderer.GetSRV(mResources_MainWnd.SRV_NullCubemap).GetGPUDescHandle()
+		);
 	}
 
 	// set PerView constants
@@ -1216,8 +1366,6 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 	}
 
 	// Draw Environment Map ---------------------------------------
-	const bool bHasEnvironmentMapHDRTexture = mResources_MainWnd.EnvironmentMap.SRV_HDREnvironment != INVALID_ID;
-	const bool bDrawEnvironmentMap = bHasEnvironmentMapHDRTexture && true;
 	if (bDrawEnvironmentMap)
 	{
 		SCOPED_GPU_MARKER(pCmd, "EnvironmentMap");

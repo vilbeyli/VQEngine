@@ -164,25 +164,26 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, UINT ShaderComponent
     GetDevice(pDevice, mpTexture);
     const bool bCustomComponentMappingSpecified = ShaderComponentMapping != D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
-    if (mbTypelessTexture || bCustomComponentMappingSpecified)
+    D3D12_RESOURCE_DESC resourceDesc = mpTexture->GetDesc();
+    const int NumCubes = this->mbCubemap ? resourceDesc.DepthOrArraySize / 6 : 0;
+    if (this->mbCubemap)
     {
-        D3D12_RESOURCE_DESC resourceDesc = mpTexture->GetDesc();
+        const bool bArraySizeMultipleOfSix = resourceDesc.DepthOrArraySize % 6 == 0;
+        if (!bArraySizeMultipleOfSix)
+        {
+            Log::Warning("Cubemap Texture's array size is not multiple of 6");
+        }
+        assert(bArraySizeMultipleOfSix);
+    }
+
+    if (mbTypelessTexture || bCustomComponentMappingSpecified || this->mbCubemap)
+    {
 
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
         int mipLevel        = 0; // TODO //= (mipLevel == -1) ? 0 : mipLevel
         int arraySize       = resourceDesc.DepthOrArraySize; // TODO
         int firstArraySlice = 0;
-        
-        const int NumCubes = this->mbCubemap ? resourceDesc.DepthOrArraySize / 6 : 0;
-        if (this->mbCubemap)
-        {
-            const bool bArraySizeMultipleOfSix = resourceDesc.DepthOrArraySize % 6 == 0;
-            if (!bArraySizeMultipleOfSix)
-            {
-                Log::Warning("Cubemap Texture's array size is not multiple of 6");
-            }
-            assert(bArraySizeMultipleOfSix);
-        }
+
 
 
         const bool bBufferSRV = resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER;

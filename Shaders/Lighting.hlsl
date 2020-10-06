@@ -352,3 +352,4 @@ float3 CalculateDirectionalLightIllumination(
 //    float2 uv_offset = ViewVectorInTangentSpace.xy / ViewVectorInTangentSpace.z * (height * heightIntensity);
 //    return uv - uv_offset;
 //}
+

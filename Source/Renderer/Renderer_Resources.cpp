@@ -423,7 +423,9 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 
 		this->StartTextureUploads();
 		std::atomic<bool>& mbResident = mTextures.at(ID).mbResident;
-		while (!mbResident.load());  // busy wait here until the texture is made resident;
+
+		// BUSY WAIT here until the texture is made resident;
+		while (!mbResident.load());  
 
 #if LOG_RESOURCE_CREATE
 		Log::Info("VQRenderer::CreateTextureFromFile(): [%.2fs] %s", t.StopGetDeltaTimeAndReset(), pFilePath);
@@ -467,8 +469,9 @@ SRV_ID VQRenderer::CreateAndInitializeSRV(TextureID texID)
 	{
 		std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 
+		Texture& tex = mTextures.at(texID);
 		mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
-		mTextures.at(texID).InitializeSRV(0, &SRV);
+		tex.InitializeSRV(0, &SRV);
 		Id = LAST_USED_SRV_ID++;
 		mSRVs[Id] = SRV;
 	}
@@ -579,7 +582,7 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, UI
 	}
 	else // init NULL SRV
 	{
-		// Describe and create 2 null SRVs. Null descriptors are needed in order 
+		// Describe and create null SRV. Null descriptors are needed in order 
 		// to achieve the effect of an "unbound" resource.
 		D3D12_SHADER_RESOURCE_VIEW_DESC nullSrvDesc = {};
 		nullSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
@@ -591,11 +594,66 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, UI
 		mDevice.GetDevicePtr()->CreateShaderResourceView(nullptr, &nullSrvDesc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
 	}
 }
+void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc)
+{
+	mDevice.GetDevicePtr()->CreateShaderResourceView(nullptr, &srvDesc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
+}
 void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID)
 {
 	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(RTV, rtvID);
 	mTextures.at(texID).InitializeRTV(heapIndex, &mRTVs.at(rtvID));
+}
+
+void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID, int arraySlice, int mipLevel)
+{
+	CHECK_TEXTURE(mTextures, texID);
+	CHECK_RESOURCE_VIEW(RTV, rtvID);
+	Texture& tex = mTextures.at(texID);
+
+	D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+	D3D12_RESOURCE_DESC rscDesc = tex.GetResource()->GetDesc();
+
+	rtvDesc.Format = rscDesc.Format;
+	
+	const bool& bCubemap = tex.mbCubemap;
+	const bool  bArray   = bCubemap ? (rscDesc.DepthOrArraySize/6 > 1) : rscDesc.DepthOrArraySize > 1;
+	const bool  bMSAA    = rscDesc.SampleDesc.Count > 1;
+
+	assert(arraySlice < rscDesc.DepthOrArraySize);
+	assert(mipLevel < rscDesc.MipLevels);
+
+	if (bArray || bCubemap)
+	{	
+		if (bMSAA)
+		{
+			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY;
+			rtvDesc.Texture2DMSArray.ArraySize = rscDesc.DepthOrArraySize - arraySlice;
+			rtvDesc.Texture2DMSArray.FirstArraySlice = arraySlice;
+		}
+		else
+		{
+			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+			rtvDesc.Texture2DArray.ArraySize = rscDesc.DepthOrArraySize - arraySlice;
+			rtvDesc.Texture2DArray.FirstArraySlice = arraySlice;
+			rtvDesc.Texture2DArray.MipSlice  = mipLevel;
+		}
+	}
+
+	else // non-array
+	{
+		if (bMSAA)
+		{
+			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMS;
+		}
+		else
+		{
+			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+			rtvDesc.Texture2D.MipSlice = mipLevel;
+		}
+	}
+
+	tex.InitializeRTV(heapIndex, &mRTVs.at(rtvID), &rtvDesc);
 }
 
 void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID)

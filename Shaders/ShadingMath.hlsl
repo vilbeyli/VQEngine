@@ -21,11 +21,11 @@
 #define _SHADING_MATH_H
 
 // Method for Hammersley Sequence creation
-#define USE_BIT_MANIPULATION	
-#define PI 3.14159265359f
-#define TWO_PI 6.28318530718f
+#define USE_BIT_MANIPULATION 1
+#define PI          3.14159265359f
+#define TWO_PI      6.28318530718f
 #define PI_OVER_TWO 1.5707963268f
-#define PI_SQUARED 9.86960440109f
+#define PI_SQUARED  9.86960440109f
 
 inline float3 UnpackNormals(Texture2D normalMap, SamplerState normalSampler, float2 uv, float3 worldNormal, float3 worldTangent)
 {
@@ -145,3 +145,5 @@ float3 ViewSpacePosition(in const float nonLinearDepth, const in float2 uv, cons
 }
 
 #endif
+
+

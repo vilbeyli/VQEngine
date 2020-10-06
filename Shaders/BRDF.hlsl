@@ -248,7 +248,7 @@ float2 IntegrateBRDF(float NdotV, float roughness)
 		if (NdotL > 0.0f)
 		{
 			const float G = GeometryEnvironmentMap(N, V, L, roughness);
-			const float G_Vis = (G * VdotH) / ((NdotH * NdotV) + 0.0001);
+			const float G_Vis = max((G * VdotH) / (NdotH * NdotV), 0.0001);
 			const float Fc = pow(1.0 - VdotH, 5.0f);
 
 			F0Scale += (1.0f - Fc) * G_Vis;
