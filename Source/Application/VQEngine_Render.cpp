@@ -697,8 +697,8 @@ void VQEngine::RenderEnvironmentMapCubeFaces(FEnvironmentMap& env)
 			D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle(mip * 6);
 
 			pCB1->Roughness = 0.0f;
-			pCB1->ViewDimX = 2048 >> mip;
-			pCB1->ViewDimY = 2048 >> mip;
+			pCB1->ViewDimX = static_cast<float>(2048 >> mip);
+			pCB1->ViewDimY = static_cast<float>(2048 >> mip);
 			pCB1->MIP = mip;
 
 			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr0);
