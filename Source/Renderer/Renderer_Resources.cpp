@@ -424,8 +424,12 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 		this->StartTextureUploads();
 		std::atomic<bool>& mbResident = mTextures.at(ID).mbResident;
 
-		// BUSY WAIT here until the texture is made resident;
-		while (!mbResident.load());  
+		// SYNC POINT - texture residency
+		//------------------------------------------------------------------------------
+		// NOTE: this isn't the best but good enough for small scenes for now.
+		// >60% of the CPU time is spent here during a scene load on the threads
+		while (!mbResident.load()); // BUSY WAIT here until the texture is made resident;
+		//------------------------------------------------------------------------------
 
 #if LOG_RESOURCE_CREATE
 		Log::Info("VQRenderer::CreateTextureFromFile(): [%.2fs] %s", t.StopGetDeltaTimeAndReset(), pFilePath);

@@ -210,7 +210,6 @@ private: // Derived Scenes shouldn't access these functions
 	void Update(float dt, int FRAME_DATA_INDEX);
 	void PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX);
 	void StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene);
-	void LoadBuiltinMaterials(TaskID taskID);
 	void OnLoadComplete();
 	void Unload(); // serial-only for now. maybe MT later.
 	void RenderUI();
@@ -221,6 +220,12 @@ private: // Derived Scenes shouldn't access these functions
 	void PrepareSceneMeshRenderParams(FSceneView& SceneView) const;
 	void PrepareShadowMeshRenderParams(FSceneShadowView& ShadowView) const;
 
+	void LoadBuiltinMaterials(TaskID taskID);
+	void LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes);
+	void LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects); // TODO: consider using FSceneRepresentation as the parameter and read the corresponding member
+	void LoadMaterials(const std::vector<FMaterialRepresentation>& Materials, TaskID taskID);
+	void LoadLights(const std::vector<Light>& SceneLights);
+	void LoadCameras(std::vector<FCameraParameters>& CameraParams);
 public:
 	Scene(VQEngine& engine
 		, int NumFrameBuffers

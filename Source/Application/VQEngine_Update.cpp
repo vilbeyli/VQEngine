@@ -476,13 +476,15 @@ void VQEngine::Load_SceneData_Dispatch()
 		mpScene->Unload();
 	}
 
+	// load scene representation from disk
 	const std::string SceneFilePath = "Data/Levels/" + SceneFileName + ".xml";
 	FSceneRepresentation SceneRep = VQEngine::ParseSceneFile(SceneFilePath);
 	fnCreateSceneInstance(SceneRep.SceneName, mpScene);
 
-	// start loading;
+	// start loading textures, models, materials with worker threads
 	mpScene->StartLoading(this->mBuiltinMeshes, SceneRep);
 
+	// start loading environment map textures
 	if (!SceneRep.EnvironmentMapPreset.empty()) 
 	{ 
 		mWorkers_TextureLoading.AddTask([=]() { LoadEnvironmentMap(SceneRep.EnvironmentMapPreset); });
