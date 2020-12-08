@@ -472,6 +472,19 @@ static FMaterialRepresentation XMLParseMaterial(tinyxml2::XMLElement* pMat)
 	return mat;
 }
 
+unsigned GetNumSiblings(XMLElement* pEle)
+{
+	assert(pEle);
+	unsigned numSiblings = 0;
+	while (pEle != nullptr)
+	{
+		numSiblings += StrUtil::split(pEle->FirstChild()->Value()).size();
+		//++numSiblings;
+		pEle = pEle->NextSiblingElement();
+	}
+	return numSiblings;
+}
+
 FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 {
 	using namespace tinyxml2;
@@ -495,8 +508,18 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 		XMLElement* pQuat = pTransform->FirstChildElement("Quaternion");
 		XMLElement* pRot  = pTransform->FirstChildElement("Rotation");
 		XMLElement* pScl  = pTransform->FirstChildElement("Scale");
+		const uint NumScaleValues = pScl ? GetNumSiblings(pScl) : 0;
+		
 		if (pPos) XMLParseFVecVal<XMFLOAT3>(pPos, tf._position);
-		if (pScl) XMLParseFVecVal<XMFLOAT3>(pScl, tf._scale);
+		if (pScl)
+		{
+			if (NumScaleValues == 3) XMLParseFVecVal<XMFLOAT3>(pScl, tf._scale);
+			else
+			{
+				float s; XMLParseFloatVal(pScl, s);
+				tf._scale = DirectX::XMFLOAT3(s, s, s);
+			}
+		}
 		if (pQuat)
 		{
 			XMFLOAT4 qf4; XMLParseFVecVal<XMFLOAT4>(pQuat, qf4);
@@ -700,7 +723,7 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 	// scene name
 	SceneRep.SceneName = DirectoryUtil::GetFileNameWithoutExtension(SceneFile);
 
-
+	// parse scene
 	XMLElement* pScene = doc.FirstChildElement(XML_TAG__SCENE);
 	if (pScene)
 	{

@@ -29,27 +29,41 @@
 #include <set>
 #include <cassert>
  
+#define GetDevice(pDevice, pTex)\
+ID3D12Device* pDevice;\
+pTex->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice))\
+
+
+
+
 Texture::Texture(const Texture& other)
-    : mpAlloc(other.mpAlloc)
-    , mpTexture(other.mpTexture)
-    , mbResident(other.mbResident.load())
-    , mbTypelessTexture(other.mbTypelessTexture)
+    : mpAlloc                (other.mpAlloc)
+    , mpTexture              (other.mpTexture)
+    , mbResident             (other.mbResident.load())
+    , mbTypelessTexture      (other.mbTypelessTexture)
     , mStructuredBufferStride(other.mStructuredBufferStride)
-    , mMipMapCount(other.mMipMapCount)
-    , mFormat(other.mFormat)
-    , mbCubemap(other.mbCubemap)
+    , mMipMapCount           (other.mMipMapCount)
+    , mFormat                (other.mFormat)
+    , mbCubemap              (other.mbCubemap)
+    , mWidth                 (other.mWidth         )
+    , mHeight                (other.mHeight        )
+    , mNumArraySlices        (other.mNumArraySlices)
 {}
 
 Texture& Texture::operator=(const Texture& other)
 {
-    mpAlloc = other.mpAlloc;
-    mpTexture = other.mpTexture;
-    mbResident = other.mbResident.load();
-    mbTypelessTexture = other.mbTypelessTexture;
+    mpAlloc                 = other.mpAlloc;
+    mpTexture               = other.mpTexture;
+    mbResident              = other.mbResident.load();
+    mbTypelessTexture       = other.mbTypelessTexture;
     mStructuredBufferStride = other.mStructuredBufferStride;
-    mMipMapCount = other.mMipMapCount;
-    mFormat = other.mFormat;
-    mbCubemap = other.mbCubemap;
+    mMipMapCount            = other.mMipMapCount;
+    mFormat                 = other.mFormat;
+    mbCubemap               = other.mbCubemap;
+    mWidth                  = other.mWidth;
+    mHeight                 = other.mHeight;
+    mNumArraySlices         = other.mNumArraySlices;
+    
     return *this;
 }
 
@@ -137,6 +151,9 @@ void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, cons
 
     this->mbTypelessTexture = bDepthStencilTexture;
     this->mbCubemap = desc.bCubemap;
+    this->mWidth = desc.d3d12Desc.Width;
+    this->mHeight = desc.d3d12Desc.Height;
+    this->mNumArraySlices = desc.d3d12Desc.DepthOrArraySize;
 }
 
 
@@ -155,9 +172,10 @@ void Texture::Destroy()
 }
 
 
-#define GetDevice(pDevice, pTex)\
-ID3D12Device* pDevice;\
-pTex->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice))\
+
+//
+// RESOURCE VIEW CREATION
+//
 
 void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, UINT ShaderComponentMapping, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc)
 {

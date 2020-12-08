@@ -192,7 +192,6 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 	, mMaterialAssignments(engine.GetAssetLoader().GetThreadPool_TextureLoad())
 {}
 
-
 void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& sceneRep)
 {
 	mRenderer.WaitForLoadCompletion();
@@ -203,14 +202,11 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 
 	mSceneRepresentation = sceneRep;
 
-	if(mMaterials.empty()) 
-		LoadBuiltinMaterials(taskID);
-	
 	LoadBuiltinMeshes(builtinMeshes);
 	
 	this->LoadScene(sceneRep); // scene-specific load 
 	
-	LoadMaterials(sceneRep.Materials, taskID);
+	LoadSceneMaterials(sceneRep.Materials, taskID);
 
 	LoadGameObjects(std::move(sceneRep.Objects));
 	LoadLights(sceneRep.Lights);
@@ -318,7 +314,7 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 
 }
 
-void Scene::LoadMaterials(const std::vector<FMaterialRepresentation>& Materials, TaskID taskID)
+void Scene::LoadSceneMaterials(const std::vector<FMaterialRepresentation>& Materials, TaskID taskID)
 {
 	// Create scene materials before deserializing gameobjects
 	uint NumMaterials = 0;
@@ -329,13 +325,13 @@ void Scene::LoadMaterials(const std::vector<FMaterialRepresentation>& Materials,
 	}
 	
 	if(NumMaterials > 0)
-		Log::Info("[Scene] Materials Created (%ud)", NumMaterials);
+		Log::Info("[Scene] Materials Created (%u)", NumMaterials);
 	
 	// kickoff background workers for texture loading
 	if (!mMaterialAssignments.mAssignments.empty())
 	{
 		mMaterialAssignments.mTextureLoadResults = mAssetLoader.StartLoadingTextures(taskID);
-		Log::Info("[Scene] Start loading textures... (%ud)", mMaterialAssignments.mTextureLoadResults.size());
+		Log::Info("[Scene] Start loading textures... (%u)", mMaterialAssignments.mTextureLoadResults.size());
 	}
 }
 
@@ -498,17 +494,42 @@ void Scene::RenderUI()
 	// TODO
 }
 
+static std::string DumpCameraInfo(int index, const Camera& cam)
+{
+	const XMFLOAT3 pos = cam.GetPositionF();
+	const float pitch  = cam.GetPitch();
+	const float yaw    = cam.GetYaw();
+
+	std::string info = std::string("[CAMERA INFO]\n")
+		+ "mIndex_SelectedCamera=" + std::to_string(index) + "\n"
+		+ "  Pos         : " + std::to_string(pos.x) + " " + std::to_string(pos.y) + " " + std::to_string(pos.z) + "\n"
+		+ "  Yaw (Deg)   : " + std::to_string(yaw*RAD2DEG) + "\n"
+		+ "  Pitch (Deg) : " + std::to_string(pitch*RAD2DEG) + "\n";
+;
+
+	return info;
+}
+
 void Scene::HandleInput(FSceneView& SceneView)
 {
 	const bool bIsShiftDown = mInput.IsKeyDown("Shift");
+	const bool bIsCtrlDown = mInput.IsKeyDown("Ctrl");
 	const int NumEnvMaps = static_cast<int>(mResourceNames.mEnvironmentMapPresetNames.size());
 
 	if (mInput.IsKeyTriggered("C"))
 	{
-		const int NumCameras = static_cast<int>(mCameras.size());
-		mIndex_SelectedCamera = bIsShiftDown 
-			? CircularDecrement(mIndex_SelectedCamera, NumCameras) 
-			: CircularIncrement(mIndex_SelectedCamera, NumCameras);
+		if (bIsCtrlDown) // CTRL + C : Dump Camera Info
+		{
+			std::string camInfo = DumpCameraInfo(mIndex_SelectedCamera, mCameras[mIndex_SelectedCamera]);
+			Log::Info(camInfo.c_str());
+		}
+		else
+		{
+			const int NumCameras = static_cast<int>(mCameras.size());
+			mIndex_SelectedCamera = bIsShiftDown
+				? CircularDecrement(mIndex_SelectedCamera, NumCameras)
+				: CircularIncrement(mIndex_SelectedCamera, NumCameras);
+		}
 	}
 
 	if (mInput.IsKeyTriggered("L"))

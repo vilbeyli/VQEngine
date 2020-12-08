@@ -180,8 +180,8 @@ float4 PSMain(PSInput In) : SV_TARGET
 	/* Emissive */ + SurfaceParams.emissiveColor * SurfaceParams.emissiveIntensity * 10.0f
 	;
 	
-	float3 IEnv = texEnvMapDiff.Sample(LinearSampler, SurfaceParams.N).rgb; // environment lighting illumination
-	I_total += IEnv * ao;
+	float3 IEnv = texEnvMapDiff.Sample(LinearSampler, SurfaceParams.N).rgb * SurfaceParams.diffuseColor; // environment lighting illumination
+	I_total += IEnv * ao; // scale down w/ AO
 	
 	// -------------------------------------------------------------------------------------------------------
 	

@@ -18,6 +18,11 @@
 
 #include "Camera.h"
 #include "Input.h"
+#include "Quaternion.h"
+
+#if _DEBUG
+#include "Libs/VQUtils/Source/Log.h"
+#endif
 
 #define CAMERA_DEBUG 1
 
@@ -171,11 +176,6 @@ XMMATRIX Camera::GetRotationMatrix() const
 	return XMMatrixRotationRollPitchYaw(mPitch, mYaw, 0.0f);
 }
 
-void Camera::SetPosition(float x, float y, float z)
-{
-	mPosition = XMFLOAT3(x, y, z);
-}
-
 void Camera::Rotate(float yaw, float pitch)
 {
 	mYaw   += yaw;
@@ -183,6 +183,64 @@ void Camera::Rotate(float yaw, float pitch)
 	
 	if (mPitch > +90.0f * DEG2RAD) mPitch = +90.0f * DEG2RAD;
 	if (mPitch < -90.0f * DEG2RAD) mPitch = -90.0f * DEG2RAD;
+}
+
+void Camera::LookAt(const XMVECTOR& target)
+{
+	// figure out target direction we want to look at
+	const XMFLOAT3 posF3 = this->GetPositionF();
+	XMVECTOR pos = XMLoadFloat3(&posF3);
+	XMVECTOR VTargetDirection = XMVector3Normalize(target - pos);
+
+	// figure out camera's direction
+	XMFLOAT3 dirF3(0, 0, 1);
+	XMVECTOR VSourceDir = XMLoadFloat3(&dirF3);
+
+	// YAW
+	//
+	// figure out the quadrant of the yaw rotation angle
+	XMVECTOR VTargetDirectionXZ = VTargetDirection;
+	VTargetDirectionXZ.m128_f32[1] = 0.0f;
+	VTargetDirectionXZ = XMVector3Normalize(VTargetDirectionXZ);
+	float f = std::atan2(VTargetDirectionXZ.m128_f32[2], VTargetDirectionXZ.m128_f32[0]);
+	f += PI_DIV2; if (f > PI) f -= 2*PI; // phase off: correct for X->Z rotation
+
+	XMVECTOR dotY    = XMVector3Dot(VTargetDirectionXZ, VSourceDir);
+	float yawRadians = std::acos(dotY.m128_f32[0]);
+
+	// correct yaw rotation phase: right after 180 degs
+	bool bQuadrandIIIorIV = std::signbit(f);
+	if(bQuadrandIIIorIV) 
+		yawRadians = PI * 2 - yawRadians;
+
+	mYaw = yawRadians;
+
+	// ------------------------------------------------------------------------
+
+	// PITCH
+	//
+	XMVECTOR dotX = XMVector3Dot(VTargetDirection, VTargetDirectionXZ);
+	bool bPositivePitch = std::signbit(VTargetDirection.m128_f32[1]);
+	float pitchRadians = std::acos(min(dotX.m128_f32[0], 1.0f));
+	assert(!std::isnan(pitchRadians));
+	if (!bPositivePitch)
+		pitchRadians *= -1.0f;
+
+	if (pitchRadians > PI_DIV2)
+		pitchRadians -= PI;
+	if (pitchRadians < -PI_DIV2)
+		pitchRadians += PI;
+
+	mPitch = pitchRadians;
+
+#if _DEBUG && 0
+	Log::Warning("LookAt(): Yaw=%.2f Pitch=%.2f | DotY=%.2f DotX=%.2f | bQuadrandIIIorIV=%d"
+		, yawRadians * RAD2DEG
+		, pitchRadians * RAD2DEG
+		, dotY.m128_f32[0]
+		, dotX.m128_f32[0], bQuadrandIIIorIV);
+#endif
+
 }
 
 //==============================================================================================================

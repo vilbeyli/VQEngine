@@ -507,65 +507,93 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	std::vector<std::string>::iterator it = std::find(mResourceNames.mEnvironmentMapPresetNames.begin(), mResourceNames.mEnvironmentMapPresetNames.end(), EnvMapName);
 	const size_t ActiveEnvMapIndex = it - mResourceNames.mEnvironmentMapPresetNames.begin();
 	
-	if (!desc.FilePath.empty()) // check whether the env map was found or not
-	{
-		Log::Info("Loading Environment Map: %s", EnvMapName.c_str());
-
-		// HDR map
-		env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(desc.FilePath.c_str());
-		env.SRV_HDREnvironment = mRenderer.CreateAndInitializeSRV(env.Tex_HDREnvironment);
-		env.MaxContentLightLevel = static_cast<int>(desc.MaxContentLightLevel);
-
-
-		// Create Irradiance Map Textures
-		TextureCreateDesc desc("EnvMap_IrradianceDiff");
-		desc.bCubemap = true;
-		desc.bGenerateMips = true;
-		desc.pData = nullptr;
-		desc.d3d12Desc.Height = 2048;
-		desc.d3d12Desc.Width = 2048;
-		desc.d3d12Desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-		desc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-		desc.d3d12Desc.DepthOrArraySize = 6;
-		desc.d3d12Desc.MipLevels = 1;
-		desc.d3d12Desc.SampleDesc = { 1, 0 };
-		desc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-		desc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
-		env.Tex_IrradianceDiff = mRenderer.CreateTexture(desc);
-
-		desc.TexName = "EnvMap_IrradianceSpec";
-		desc.d3d12Desc.MipLevels = Image::CalculateMipLevelCount(desc.d3d12Desc.Width, desc.d3d12Desc.Height);
-		env.Tex_IrradianceSpec = mRenderer.CreateTexture(desc);
-		
-		const int& NUM_MIPS = desc.d3d12Desc.MipLevels;
-
-		// Create Irradiance Map RTVs
-		env.RTV_IrradianceDiff = mRenderer.CreateRTV(6);
-		env.RTV_IrradianceSpec = mRenderer.CreateRTV(6 * NUM_MIPS);
-		for (int face = 0; face < 6; ++face)  mRenderer.InitializeRTV(env.RTV_IrradianceDiff, face, env.Tex_IrradianceDiff, face, 0);
-		for(int mip=0; mip<NUM_MIPS; ++mip)for (int face = 0; face < 6; ++face)  mRenderer.InitializeRTV(env.RTV_IrradianceSpec, mip*6+face, env.Tex_IrradianceSpec, face, mip);
-
-		// Create Irradiance Map SRVs
-		env.SRV_IrradianceDiff = mRenderer.CreateSRV();
-		env.SRV_IrradianceSpec = mRenderer.CreateSRV();
-		mRenderer.InitializeSRV(env.SRV_IrradianceDiff, 0, env.Tex_IrradianceDiff);
-		mRenderer.InitializeSRV(env.SRV_IrradianceSpec, 0, env.Tex_IrradianceSpec);
-
-		// Queue irradiance cube face rendering
-		mbRenderEnvironmentMapIrradiance.store(true);
-
-		//assert(mpScene->mIndex_ActiveEnvironmentMapPreset == static_cast<int>(ActiveEnvMapIndex)); // Only false durin initialization
-		mpScene->mIndex_ActiveEnvironmentMapPreset = static_cast<int>(ActiveEnvMapIndex);
-
-		// Update HDRMetaData when the nvironment map is loaded
-		HWND hwnd = mpWinMain->GetHWND();
-		mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetStaticHDRMetaDataEvent>(hwnd, this->GatherHDRMetaDataParameters(hwnd)));
-	}
-	else
+	if (desc.FilePath.empty()) // check whether the env map was found or not
 	{
 		Log::Error("Couldn't find Environment Map: %s", EnvMapName.c_str());
 		Log::Warning("Have you run Scripts/DownloadAssets.bat?");
+		return;
 	}
+
+
+	Log::Info("Loading Environment Map: %s", EnvMapName.c_str());
+
+	// HDR map
+	env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(desc.FilePath.c_str());
+	env.SRV_HDREnvironment = mRenderer.CreateAndInitializeSRV(env.Tex_HDREnvironment);
+	env.MaxContentLightLevel = static_cast<int>(desc.MaxContentLightLevel);
+
+	// HDR Map Downsampled 
+	int dummy;
+	mRenderer.GetTextureDimensions(env.Tex_HDREnvironment, env.HDREnvironmentSizeX, env.HDREnvironmentSizeY, dummy);
+	{
+		TextureCreateDesc tdesc("EnvMap_Downsampled");
+		tdesc.bCubemap = false;
+		tdesc.bGenerateMips = false;
+		tdesc.pData = nullptr;
+		tdesc.d3d12Desc.Width  = env.HDREnvironmentSizeX >> 3;
+		tdesc.d3d12Desc.Height = env.HDREnvironmentSizeY >> 3;
+		tdesc.d3d12Desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		tdesc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+		tdesc.d3d12Desc.DepthOrArraySize = 1;
+		tdesc.d3d12Desc.MipLevels = 1;
+		tdesc.d3d12Desc.SampleDesc = { 1, 0 };
+		tdesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+		tdesc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
+		env.Tex_HDREnvironmentDownsampled = mRenderer.CreateTexture(tdesc);
+		
+		env.SRV_HDREnvironmentDownsampled = mRenderer.CreateAndInitializeSRV(env.Tex_HDREnvironmentDownsampled);
+		env.RTV_HDREnvironmentDownsampled = mRenderer.CreateRTV();
+		mRenderer.InitializeRTV(env.RTV_HDREnvironmentDownsampled, 0, env.Tex_HDREnvironmentDownsampled);
+	}
+
+
+	// Create Irradiance Map Textures
+	TextureCreateDesc tdesc("EnvMap_IrradianceDiff");
+	tdesc.bCubemap = true;
+	tdesc.bGenerateMips = true;
+	tdesc.pData = nullptr;
+	tdesc.d3d12Desc.Height = 32;
+	tdesc.d3d12Desc.Width  = 32;
+	tdesc.d3d12Desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	tdesc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	tdesc.d3d12Desc.DepthOrArraySize = 6;
+	tdesc.d3d12Desc.MipLevels = 1;
+	tdesc.d3d12Desc.SampleDesc = { 1, 0 };
+	tdesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+	tdesc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
+	env.Tex_IrradianceDiff = mRenderer.CreateTexture(tdesc);
+
+	tdesc.TexName = "EnvMap_IrradianceSpec";
+	tdesc.d3d12Desc.MipLevels = Image::CalculateMipLevelCount(tdesc.d3d12Desc.Width, tdesc.d3d12Desc.Height);
+	env.Tex_IrradianceSpec = mRenderer.CreateTexture(tdesc);
+		
+	const int& NUM_MIPS = tdesc.d3d12Desc.MipLevels;
+
+	// Create Irradiance Map RTVs
+	env.RTV_IrradianceDiff = mRenderer.CreateRTV(6);
+	env.RTV_IrradianceSpec = mRenderer.CreateRTV(6 * NUM_MIPS);
+	for(int face = 0; face < 6; ++face)  
+		mRenderer.InitializeRTV(env.RTV_IrradianceDiff, face, env.Tex_IrradianceDiff, face, 0);
+	for(int mip=0; mip<NUM_MIPS; ++mip) 
+	for (int face = 0; face < 6; ++face)  
+		mRenderer.InitializeRTV(env.RTV_IrradianceSpec, mip*6+face, env.Tex_IrradianceSpec, face, mip);
+
+	// Create Irradiance Map SRVs
+	env.SRV_IrradianceDiff = mRenderer.CreateSRV();
+	env.SRV_IrradianceSpec = mRenderer.CreateSRV();
+	mRenderer.InitializeSRV(env.SRV_IrradianceDiff, 0, env.Tex_IrradianceDiff);
+	mRenderer.InitializeSRV(env.SRV_IrradianceSpec, 0, env.Tex_IrradianceSpec);
+
+	// Queue irradiance cube face rendering
+	mbRenderEnvironmentMapIrradiance.store(true);
+
+	//assert(mpScene->mIndex_ActiveEnvironmentMapPreset == static_cast<int>(ActiveEnvMapIndex)); // Only false durin initialization
+	mpScene->mIndex_ActiveEnvironmentMapPreset = static_cast<int>(ActiveEnvMapIndex);
+
+	// Update HDRMetaData when the nvironment map is loaded
+	HWND hwnd = mpWinMain->GetHWND();
+	mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetStaticHDRMetaDataEvent>(hwnd, this->GatherHDRMetaDataParameters(hwnd)));
+
 }
 
 void VQEngine::UnloadEnvironmentMap()
@@ -579,10 +607,13 @@ void VQEngine::UnloadEnvironmentMap()
 		mRenderer.DestroySRV(env.SRV_HDREnvironment);
 		mRenderer.DestroySRV(env.SRV_IrradianceDiff);
 		mRenderer.DestroySRV(env.SRV_IrradianceSpec);
+		mRenderer.DestroySRV(env.SRV_HDREnvironmentDownsampled);
 		mRenderer.DestroyTexture(env.Tex_HDREnvironment);
 		mRenderer.DestroyTexture(env.Tex_IrradianceDiff);
 		mRenderer.DestroyTexture(env.Tex_IrradianceSpec);
+		mRenderer.DestroyTexture(env.Tex_HDREnvironmentDownsampled);
 		env.SRV_HDREnvironment = env.Tex_HDREnvironment = INVALID_ID;
+		env.SRV_HDREnvironmentDownsampled = env.Tex_HDREnvironmentDownsampled = INVALID_ID;
 		env.SRV_IrradianceDiff = env.SRV_IrradianceSpec = INVALID_ID;
 		env.Tex_IrradianceDiff = env.Tex_IrradianceSpec = INVALID_ID;
 		env.MaxContentLightLevel = 0;

@@ -100,10 +100,14 @@ private:
 	ID3D12Resource*      mpTexture = nullptr;
 	std::atomic<bool>    mbResident = false;
 	
+	// some texture desc fields
 	bool mbTypelessTexture = false;
 	uint mStructuredBufferStride = 0;
-	int mMipMapCount = 1;
+	int  mMipMapCount = 1;
 	bool mbCubemap = false;
+	int  mWidth;
+	int  mHeight;
+	int  mNumArraySlices;
 
 	DXGI_FORMAT mFormat = DXGI_FORMAT_UNKNOWN;
 };

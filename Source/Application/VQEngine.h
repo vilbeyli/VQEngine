@@ -67,15 +67,18 @@ struct FEnvironmentMapDescriptor
 struct FEnvironmentMap
 {
 	TextureID Tex_HDREnvironment = INVALID_ID; // skydome 
+	TextureID Tex_HDREnvironmentDownsampled = INVALID_ID; // downsampled skydome for diffuse irradiance calculation
 	TextureID Tex_IrradianceDiff = INVALID_ID; // Kd
 	TextureID Tex_IrradianceSpec = INVALID_ID; // Ki
 
+	RTV_ID RTV_HDREnvironmentDownsampled = INVALID_ID;
 	RTV_ID RTV_IrradianceDiff = INVALID_ID;
 	RTV_ID RTV_IrradianceSpec = INVALID_ID;
 
-	SRV_ID    SRV_HDREnvironment = INVALID_ID;
-	SRV_ID    SRV_IrradianceDiff = INVALID_ID;
-	SRV_ID    SRV_IrradianceSpec = INVALID_ID;
+	SRV_ID SRV_HDREnvironment = INVALID_ID;
+	SRV_ID SRV_HDREnvironmentDownsampled = INVALID_ID;
+	SRV_ID SRV_IrradianceDiff = INVALID_ID;
+	SRV_ID SRV_IrradianceSpec = INVALID_ID;
 
 	//
 	// HDR10 Static Metadata Parameters -------------------------------
@@ -90,6 +93,10 @@ struct FEnvironmentMap
 	// the frame which has the brightest average luminance anywhere in 
 	// the content.
 	int MaxFrameAverageLightLevel = 0;
+
+	// TODO: these could be function calls with mRenderer as argument instead of data 
+	int HDREnvironmentSizeX = 0;
+	int HDREnvironmentSizeY = 0;
 };
 
 struct FRenderingResources{};

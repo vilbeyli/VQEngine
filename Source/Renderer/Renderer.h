@@ -122,6 +122,7 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	DEPTH_PASS_LINEAR_PSO,
 	DEPTH_PASS_ALPHAMASKED_PSO,
 	CUBEMAP_CONVOLUTION_DIFFUSE_PSO,
+	CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO,
 	CUBEMAP_CONVOLUTION_SPECULAR_PSO,
 
 	NUM_BUILTIN_PSOs
@@ -200,6 +201,7 @@ public:
 
 	const ID3D12Resource*        GetTextureResource(TextureID Id) const;
 	      ID3D12Resource*        GetTextureResource(TextureID Id);
+		  void                   GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices) const;
 
 	inline const VBV&            GetVBV(BufferID Id) const { return GetVertexBufferView(Id);    }
 	inline const IBV&            GetIBV(BufferID Id) const { return GetIndexBufferView(Id);     }

@@ -145,8 +145,11 @@ public:
 	// returns World Space frustum plane set 
 	FFrustumPlaneset GetViewFrustumPlanes() const;
 	
-	void SetPosition(float x, float y, float z);
+	inline void SetPosition(float x, float y, float z) { mPosition = DirectX::XMFLOAT3(x, y, z); }
+	inline void SetPosition(const DirectX::XMFLOAT3& p){ mPosition = p; }
 	void Rotate(float yaw, float pitch);
+	void LookAt(const DirectX::XMVECTOR& point);
+	void inline LookAt(const DirectX::XMFLOAT3& point) { DirectX::XMVECTOR p = XMLoadFloat3(&point); LookAt(p); }
 
 private:
 	//--------------------------

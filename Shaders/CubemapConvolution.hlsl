@@ -34,12 +34,11 @@ struct VSOut
 	float2 uv                 : TEXCOORD0;
 	uint instanceID           : SV_InstanceID;
 };
-
 struct GSOut
 {
 	float4 position             : SV_Position;
 	float2 uv                   : TEXCOORD0;
-	float3 CubemapLookDirection : TEXCOORD1;
+	float3 CubemapLookDirection : COLOR;
 	uint layer                  : SV_RenderTargetArrayIndex;
 };
 
@@ -60,6 +59,17 @@ SamplerState Sampler;
 TextureCube tEnvironmentMap : register(t1);
 
 
+GSOut VSMain_PerFace(VSInput VSIn)
+{
+	GSOut result;
+	
+	result.position = mul(matViewProj[0], float4(VSIn.position.xyz, 1.0f));
+	result.uv = VSIn.uv;
+	result.CubemapLookDirection = VSIn.position.xyz;
+	result.layer = 0;
+	
+	return result;
+}
 
 VSOut VSMain(VSInput VSIn, uint instID : SV_InstanceID)
 {
@@ -73,6 +83,11 @@ VSOut VSMain(VSInput VSIn, uint instID : SV_InstanceID)
 	return result;
 }
 
+// Note: GS path is not preferred as each draw takes x6 longer due to instanced drawing
+//       and that will limit the available time before a draw call takes too long to
+//       trigger a TDR since we're making a lot of texture lookups. Hence, draw-
+//       call per cube face is preferred.
+//       CS is even better with 'UV -> spherical look direction' calculation.
 [maxvertexcount(3)]
 void GSMain(triangle VSOut input[3], inout TriangleStream<GSOut> triOutStream)
 {
@@ -91,22 +106,25 @@ void GSMain(triangle VSOut input[3], inout TriangleStream<GSOut> triOutStream)
 }
 
 
+// https://learnopengl.com/PBR/IBL/Diffuse-irradiance
+// https://www.indiedb.com/features/using-image-based-lighting-ibl
 float4 PSMain_DiffuseIrradiance(GSOut In) : SV_TARGET
 {
 	float3 N = normalize(In.CubemapLookDirection);
 	
-	
+	// basis vectors
 	float3 up = float3(0, 1, 0);
-	const float3 right = cross(up, N);
-	up = cross(N, right);
+	const float3 right = normalize(cross(up, N));	
+	up = normalize(cross(N, right));
 	
 	float3 irradiance = 0.0f.xxx;
 	
-	const float SAMPLE_DELTA = 0.15f;
 	float numSamples = 0.0f;
-	for (float phi = 0.0f; phi < 2 * PI; phi += SAMPLE_DELTA)
+	for (float phi = 0.0f; phi < TWO_PI; phi += 0.025) // ~60 iterations
 	{
-		for (float theta = 0.0f; theta < 0.5 * PI; theta += SAMPLE_DELTA)
+		// theta = 0.0f doesn't yield any irradiance (sinTheta==0.0f)
+		// , so start from 0.1 -> not exactly from the pole
+		for (float theta = 0.10f; theta < PI_OVER_TWO; theta += 0.1) // ~15 iterations
 		{
 			const float sinTheta = sin(theta);
 			const float cosTheta = cos(theta);
@@ -114,9 +132,13 @@ float4 PSMain_DiffuseIrradiance(GSOut In) : SV_TARGET
 			const float sinPhi = sin(phi);
 			const float cosPhi = cos(phi);
 			
-			float3 tangent = float3(sinTheta * cosPhi, sinTheta * sinPhi, cosTheta);
+			float3 tangentSample = float3(
+			    sinTheta * cosPhi
+			  , sinTheta * sinPhi
+			  , cosTheta
+			);
 			
-			float3 sampleVec = tangent.x * right + tangent.y * up + tangent.z * N;
+			float3 sampleVec = tangentSample.x * right + tangentSample.y * up + tangentSample.z * N;
 			sampleVec = normalize(sampleVec);
 			
 			irradiance += texEquirectEnvironmentMap.Sample(Sampler, SphericalSample(sampleVec)) * cosTheta * sinTheta;

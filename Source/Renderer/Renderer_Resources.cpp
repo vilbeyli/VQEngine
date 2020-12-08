@@ -988,6 +988,15 @@ ID3D12Resource* VQRenderer::GetTextureResource(TextureID Id)
 	return mTextures.at(Id).GetResource();
 }
 
+void VQRenderer::GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices) const
+{
+	CHECK_TEXTURE(mTextures, Id);
+	const Texture& tex = mTextures.at(Id);
+	SizeX = tex.mWidth;
+	SizeY = tex.mHeight;
+	NumSlices = tex.mNumArraySlices;
+}
+
 void VQRenderer::QueueTextureUpload(const FTextureUploadDesc& desc)
 {
 	std::unique_lock<std::mutex> lk(mMtxTextureUploadQueue);

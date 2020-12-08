@@ -24,16 +24,15 @@
     -->
     
     <!-- ================================================================ -->
-    
-    <!--
+
     <EnvironmentMap>
-        <Preset>Stadium01</Preset>
+        <Preset>VeniceSunset</Preset>
     </EnvironmentMap>
-    -->
 
     <!-- 
     MATERIALS
     -->
+    <!--
     <Material>
         <Name>GreenMat</Name>
         <Diffuse>0 0.5 0</Diffuse>
@@ -53,10 +52,10 @@
         <Name>Checkerboard_Grayscale</Name>
         <DiffuseMap>Procedural/Checkerboard_Grayscale</DiffuseMap>
     </Material>
-    
+    -->
     <Camera>
-        <Position> 0.0 3.0 -5 </Position>
-        <Pitch> 15 </Pitch>
+        <Position> 0 5.110652 -17.442703 </Position>
+        <Pitch> 11 </Pitch>
         <Yaw> 0 </Yaw>
         <Projection>Perspective</Projection>
         <FoV>60.0</FoV>
@@ -73,38 +72,25 @@
 
     <GameObject>
         <Transform>
-            <Position> 0.0 3.0 14 </Position>
-            <Rotation>30 0 15</Rotation>
-            <Scale>3.1 3.1 3.1</Scale>
+            <Position> 5.10 0.0 0.0 </Position>
+            <Rotation>0 0 0</Rotation>
+            <Scale>5</Scale>
         </Transform>
         <Model>
-            <Mesh>Cube</Mesh>
-            <MaterialName>GreenMat</MaterialName>
+            <Mesh>Sphere</Mesh>
+            <!--<MaterialName>Small_tiles_01</MaterialName>-->
         </Model>
     </GameObject>
     
     <GameObject>
         <Transform>
-            <Position>0 0 0</Position>
+            <Position>-5.1 0 0</Position>
             <Quaternion>0 0 0 1</Quaternion>
-            <Scale>1 1 1</Scale>
+            <Scale>5</Scale>
         </Transform>
         <Model>
-            <Mesh>Triangle</Mesh>
-            <MaterialName>Checkerboard</MaterialName>
-        </Model>
-    </GameObject>
-
-
-    <GameObject>
-        <Transform>
-            <Position>-5 0 0</Position>
-            <Quaternion>0 0 0 1</Quaternion>
-            <Scale>1 1 1</Scale>
-        </Transform>
-        <Model>
-            <Mesh>Triangle</Mesh>
-            <MaterialName>Checkerboard_Grayscale</MaterialName>
+            <Mesh>Sphere</Mesh>
+            <!--<MaterialName>Checkerboard</MaterialName>-->
         </Model>
     </GameObject>
 

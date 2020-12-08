@@ -608,61 +608,78 @@ void VQEngine::RenderEnvironmentMapCubeFaces(FEnvironmentMap& env)
 
 	SCOPED_GPU_MARKER(pCmd, "RenderEnvironmentMapCubeFaces");
 
-	const int MIP_LEVELS = 12;
+	constexpr int MIP_LEVELS = 12;
+	constexpr int NUM_CUBE_FACES = 6;
 	
 
 	const SRV& srvEnv = mRenderer.GetSRV(env.SRV_HDREnvironment);
-	const SRV& srvIrr = mRenderer.GetSRV(env.SRV_IrradianceDiff);
-	const SRV& srvSpc = mRenderer.GetSRV(env.SRV_IrradianceSpec);
+	const SRV& srvEnvDown = mRenderer.GetSRV(env.SRV_HDREnvironmentDownsampled);
+	const SRV& srvIrrDiffuse   = mRenderer.GetSRV(env.SRV_IrradianceDiff);
+	const SRV& srvIrrSpcecular = mRenderer.GetSRV(env.SRV_IrradianceSpec);
 
 	const XMFLOAT4X4 f16proj = MakePerspectiveProjectionMatrix(PI_DIV2, 1.0f, 0.1f, 10.0f);
 	const XMMATRIX proj = XMLoadFloat4x4(&f16proj);
 	
-	struct cb0_t { XMMATRIX viewProj[6]; };
+	struct cb0_t { XMMATRIX viewProj[NUM_CUBE_FACES]; };
 	struct cb1_t { float Roughness; float ViewDimX; float ViewDimY; int MIP; };
 
-	// Diffuse Irradiance
-	pCmd->SetPipelineState(mRenderer.GetPSO( CUBEMAP_CONVOLUTION_DIFFUSE_PSO));
-	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(10));
-
-	pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());
-	pCmd->SetGraphicsRootDescriptorTable(3, srvIrr.GetGPUDescHandle());
-	
+	// Downsample
 	{
+		SCOPED_GPU_MARKER(pCmd, "EnvironmentMapDownsample");
+		
+		pCmd->SetPipelineState(mRenderer.GetPSO(HDR_FP16_SWAPCHAIN_PSO));
+		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(1));
+
+		pCmd->SetGraphicsRootDescriptorTable(0, srvEnv.GetGPUDescHandle());
+		
+		assert(env.HDREnvironmentSizeX != 0 && env.HDREnvironmentSizeY != 0);
+
+		// set viewport & render target
+		const float           RenderResolutionX = static_cast<float>(env.HDREnvironmentSizeX >> 3);
+		const float           RenderResolutionY = static_cast<float>(env.HDREnvironmentSizeY >> 3);
+		D3D12_VIEWPORT        viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
+		D3D12_RECT            scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
+		const RTV& rtv = mRenderer.GetRTV(env.RTV_HDREnvironmentDownsampled);
+		pCmd->RSSetViewports(1, &viewport);
+		pCmd->RSSetScissorRects(1, &scissorsRect);
+		pCmd->OMSetRenderTargets(1, &rtv.GetCPUDescHandle(), false, NULL);
+
+		// draw fullscreen triangle
+		const auto      VBIBIDs = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE].GetIABufferIDs();
+		const BufferID& IB_ID   = VBIBIDs.second;
+		const IBV&      ib      = mRenderer.GetIndexBufferView(IB_ID);
+		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pCmd->IASetVertexBuffers(0, 1, NULL);
+		pCmd->IASetIndexBuffer(&ib);
+		pCmd->DrawIndexedInstanced(3, 1, 0, 0, 0);
+
+		pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
+			  mRenderer.GetTextureResource(env.Tex_HDREnvironmentDownsampled)
+			, D3D12_RESOURCE_STATE_RENDER_TARGET
+			, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+		); // Transition resource for read
+	}
+
+	// Diffuse Irradiance
+	{
+
 		SCOPED_GPU_MARKER(pCmd, "DiffuseIrradianceCubemap");
-		D3D12_GPU_VIRTUAL_ADDRESS cbAddr0 = {};
-		D3D12_GPU_VIRTUAL_ADDRESS cbAddr1 = {};
-		cb0_t* pCB0 = {};
-		cb1_t* pCB1 = {};
-		ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(cb0_t), (void**)(&pCB0), &cbAddr0);
-		ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(cb1_t), (void**)(&pCB1), &cbAddr1);
-		for (int face = 0; face < 6; ++face)
-		{
-			pCB0->viewProj[face] = Texture::CubemapUtility::CalculateViewMatrix(face) * proj;
-		}
+		constexpr bool DRAW_CUBE_FACES_SEPARATELY = true;
 
 		const RTV& rtv = mRenderer.GetRTV(env.RTV_IrradianceDiff);
-		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle();
 
-		pCB1->Roughness = 0.0f;
-		pCB1->ViewDimX = 2048.0f;
-		pCB1->ViewDimY = 2048.0f;
-		pCB1->MIP = 0;
+		int w, h, d;
+		mRenderer.GetTextureDimensions(env.Tex_IrradianceDiff, w, h, d);
 
-		pCmd->SetGraphicsRootConstantBufferView(0, cbAddr0);
-		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr1);
 
-		pCmd->OMSetRenderTargets(1, &rtvHandle, TRUE, NULL);
-
-		D3D12_VIEWPORT viewport{ 0.0f, 0.0f, pCB1->ViewDimX, pCB1->ViewDimY, 0.0f, 1.0f };
-		D3D12_RECT     scissorsRect{ 0, 0, (LONG)pCB1->ViewDimX, (LONG)pCB1->ViewDimY };
+		D3D12_VIEWPORT viewport{ 0.0f, 0.0f, w, h, 0.0f, 1.0f };
+		D3D12_RECT     scissorsRect{ 0, 0, (LONG)w, (LONG)h };
 		pCmd->RSSetViewports(1, &viewport);
 		pCmd->RSSetScissorRects(1, &scissorsRect);
 
 		const Mesh& mesh = mBuiltinMeshes[EBuiltInMeshes::CUBE];
-		const auto VBIBIDs      = mesh.GetIABufferIDs();
+		const auto VBIBIDs = mesh.GetIABufferIDs();
 		const uint32 NumIndices = mesh.GetNumIndices();
-		const uint32 NumInstances = 6; // 1 cube / face (cube is used for determining sample vector)
 		const BufferID& VB_ID = VBIBIDs.first;
 		const BufferID& IB_ID = VBIBIDs.second;
 		const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
@@ -672,13 +689,72 @@ void VQEngine::RenderEnvironmentMapCubeFaces(FEnvironmentMap& env)
 		pCmd->IASetVertexBuffers(0, 1, &vb);
 		pCmd->IASetIndexBuffer(&ib);
 
-		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
+		if constexpr (DRAW_CUBE_FACES_SEPARATELY)
+		{
+			pCmd->SetPipelineState(mRenderer.GetPSO(CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO));
+			pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(10));
+			pCmd->SetGraphicsRootDescriptorTable(2, srvEnvDown.GetGPUDescHandle());
+			pCmd->SetGraphicsRootDescriptorTable(3, srvEnv.GetGPUDescHandle()); // ?
+
+			for (int face = 0; face < NUM_CUBE_FACES; ++face)
+			{
+				D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle(face);
+				
+				D3D12_GPU_VIRTUAL_ADDRESS cbAddr0 = {};
+				D3D12_GPU_VIRTUAL_ADDRESS cbAddr1 = {};
+				cb0_t* pCB0 = {};
+				cb1_t* pCB1 = {};
+				ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(cb0_t), (void**)(&pCB0), &cbAddr0);
+				ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(cb1_t), (void**)(&pCB1), &cbAddr1);
+				pCB1->ViewDimX = static_cast<float>(w);
+				pCB1->ViewDimY = static_cast<float>(h);
+				pCB1->Roughness = 0.0f;
+				pCB0->viewProj[0] = Texture::CubemapUtility::CalculateViewMatrix(face) * proj;
+
+				pCmd->SetGraphicsRootConstantBufferView(1, cbAddr1);
+				pCmd->SetGraphicsRootConstantBufferView(0, cbAddr0);
+				pCmd->OMSetRenderTargets(1, &rtvHandle, TRUE, NULL);
+				pCmd->DrawIndexedInstanced(NumIndices, 1, 0, 0, 0);
+			}
+
+		}
+
+		else
+		{
+			D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle();
+
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr0 = {};
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr1 = {};
+			cb0_t* pCB0 = {};
+			cb1_t* pCB1 = {};
+			ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(cb0_t), (void**)(&pCB0), &cbAddr0);
+			ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(cb1_t), (void**)(&pCB1), &cbAddr1);
+			pCB1->ViewDimX = static_cast<float>(w);
+			pCB1->ViewDimY = static_cast<float>(h);
+			pCB1->MIP = 0;
+			pCB1->Roughness = 0.0f;
+			for (int face = 0; face < NUM_CUBE_FACES; ++face)
+			{
+				pCB0->viewProj[face] = Texture::CubemapUtility::CalculateViewMatrix(face) * proj;
+			}
+
+			pCmd->SetPipelineState(mRenderer.GetPSO(CUBEMAP_CONVOLUTION_DIFFUSE_PSO));
+			pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(10));
+			pCmd->SetGraphicsRootDescriptorTable(2, srvEnvDown.GetGPUDescHandle());
+			pCmd->SetGraphicsRootDescriptorTable(3, srvEnv.GetGPUDescHandle()); // ?
+			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr0);
+			pCmd->SetGraphicsRootConstantBufferView(1, cbAddr1);
+			pCmd->OMSetRenderTargets(1, &rtvHandle, TRUE, NULL);
+			pCmd->DrawIndexedInstanced(NumIndices, NUM_CUBE_FACES, 0, 0, 0);
+		}
 	}
+	
 
 	// Specular Irradiance
+	if(false)
 	{
 		pCmd->SetPipelineState(mRenderer.GetPSO(CUBEMAP_CONVOLUTION_SPECULAR_PSO));
-		pCmd->SetGraphicsRootDescriptorTable(3, srvSpc.GetGPUDescHandle());
+		pCmd->SetGraphicsRootDescriptorTable(3, srvIrrSpcecular.GetGPUDescHandle());
 		SCOPED_GPU_MARKER(pCmd, "SpecularIrradianceCubemap");
 		for (int mip = 0; mip < MIP_LEVELS; ++mip)
 		{
@@ -834,10 +910,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	const FPostProcessParameters& PPParams  = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 	// ----------------------------------------------------------------------------
 
-	// PreRender() must be called before this function.
-
 	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
-
 
 	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
