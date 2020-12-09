@@ -202,6 +202,13 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 
 	mSceneRepresentation = sceneRep;
 
+	// ------------------------------------------------------------------------------------------------
+	// this is not very good: builtin materials will always be loaded even when they're not used!
+	// TODO: load materials that are only referenced by the scene.
+	if (mMaterials.empty())
+		LoadBuiltinMaterials(taskID);
+	// ------------------------------------------------------------------------------------------------
+
 	LoadBuiltinMeshes(builtinMeshes);
 	
 	this->LoadScene(sceneRep); // scene-specific load 
