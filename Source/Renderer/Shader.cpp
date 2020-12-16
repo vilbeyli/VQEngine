@@ -115,6 +115,9 @@ bool AreIncludesDirty(const std::string& srcPath, const std::string& cachePath)
 		std::string line;
 		while (getline(src, line))
 		{
+			if (line.size() >= 2 && line[0] == line[1] && line[1] == '/') // skip comment lines
+				continue;
+
 			const std::string includeFileName = GetIncludeFileName(line);
 			if (includeFileName.empty()) continue;
 
