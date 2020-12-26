@@ -523,15 +523,16 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	env.MaxContentLightLevel = static_cast<int>(desc.MaxContentLightLevel);
 
 	// HDR Map Downsampled 
-	int dummy;
-	mRenderer.GetTextureDimensions(env.Tex_HDREnvironment, env.HDREnvironmentSizeX, env.HDREnvironmentSizeY, dummy);
+	int HDREnvironmentSizeX = 0;
+	int HDREnvironmentSizeY = 0;
+	mRenderer.GetTextureDimensions(env.Tex_HDREnvironment, HDREnvironmentSizeX, HDREnvironmentSizeY);
 	{
 		TextureCreateDesc tdesc("EnvMap_Downsampled");
 		tdesc.bCubemap = false;
 		tdesc.bGenerateMips = false;
 		tdesc.pData = nullptr;
-		tdesc.d3d12Desc.Width  = env.HDREnvironmentSizeX >> 3;
-		tdesc.d3d12Desc.Height = env.HDREnvironmentSizeY >> 3;
+		tdesc.d3d12Desc.Width  = HDREnvironmentSizeX >> 3;
+		tdesc.d3d12Desc.Height = HDREnvironmentSizeY >> 3;
 		tdesc.d3d12Desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
 		tdesc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 		tdesc.d3d12Desc.DepthOrArraySize = 1;
@@ -563,26 +564,57 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	tdesc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
 	env.Tex_IrradianceDiff = mRenderer.CreateTexture(tdesc);
 
+	tdesc.TexName = "EnvMap_IrradianceDiffBlurred";
+	tdesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	tdesc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+	env.Tex_IrradianceDiffBlurred = mRenderer.CreateTexture(tdesc);
+
+	tdesc.TexName = "EnvMap_BlurImmediateTemp";
+	tdesc.bCubemap = false;
+	tdesc.d3d12Desc.DepthOrArraySize = 1;
+	env.Tex_BlurTemp = mRenderer.CreateTexture(tdesc);
+
 	tdesc.TexName = "EnvMap_IrradianceSpec";
+	tdesc.d3d12Desc.DepthOrArraySize = 6;
+	tdesc.bCubemap = true;
+	tdesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+	tdesc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
 	tdesc.d3d12Desc.MipLevels = Image::CalculateMipLevelCount(tdesc.d3d12Desc.Width, tdesc.d3d12Desc.Height);
 	env.Tex_IrradianceSpec = mRenderer.CreateTexture(tdesc);
-		
+
 	const int& NUM_MIPS = tdesc.d3d12Desc.MipLevels;
 
-	// Create Irradiance Map RTVs
+	// Create Irradiance Map RTVs & UAVs
 	env.RTV_IrradianceDiff = mRenderer.CreateRTV(6);
 	env.RTV_IrradianceSpec = mRenderer.CreateRTV(6 * NUM_MIPS);
-	for(int face = 0; face < 6; ++face)  
-		mRenderer.InitializeRTV(env.RTV_IrradianceDiff, face, env.Tex_IrradianceDiff, face, 0);
-	for(int mip=0; mip<NUM_MIPS; ++mip) 
-	for (int face = 0; face < 6; ++face)  
+	env.UAV_IrradianceDiffBlurred = mRenderer.CreateUAV(6);
+	env.UAV_BlurTemp = mRenderer.CreateUAV();
+	for (int face = 0; face < 6; ++face)
+	{
+		constexpr int MIP_LEVEL = 0;
+		mRenderer.InitializeRTV(env.RTV_IrradianceDiff, face, env.Tex_IrradianceDiff, face, MIP_LEVEL);
+		mRenderer.InitializeUAV(env.UAV_IrradianceDiffBlurred, face, env.Tex_IrradianceDiffBlurred);
+	}
+	mRenderer.InitializeUAV(env.UAV_BlurTemp, 0, env.Tex_BlurTemp);
+
+	for (int  mip = 0; mip<NUM_MIPS; ++mip ) 
+	for (int face = 0; face < 6    ; ++face)  
 		mRenderer.InitializeRTV(env.RTV_IrradianceSpec, mip*6+face, env.Tex_IrradianceSpec, face, mip);
 
-	// Create Irradiance Map SRVs
+	// Create Irradiance Map SRVs 
 	env.SRV_IrradianceDiff = mRenderer.CreateSRV();
 	env.SRV_IrradianceSpec = mRenderer.CreateSRV();
-	mRenderer.InitializeSRV(env.SRV_IrradianceDiff, 0, env.Tex_IrradianceDiff);
-	mRenderer.InitializeSRV(env.SRV_IrradianceSpec, 0, env.Tex_IrradianceSpec);
+	env.SRV_BlurTemp = mRenderer.CreateSRV();
+	mRenderer.InitializeSRV(env.SRV_IrradianceDiff, 0, env.Tex_IrradianceDiff, false, true);
+	mRenderer.InitializeSRV(env.SRV_IrradianceSpec, 0, env.Tex_IrradianceSpec, false, true);
+	mRenderer.InitializeSRV(env.SRV_BlurTemp , 0, env.Tex_BlurTemp);
+	for (int face = 0; face < 6; ++face)
+	{
+		env.SRV_IrradianceDiffFaces[face] = mRenderer.CreateSRV();
+		mRenderer.InitializeSRV(env.SRV_IrradianceDiffFaces[face], face, env.Tex_IrradianceDiff, false, false);
+	}
+	env.SRV_IrradianceDiffBlurred = mRenderer.CreateSRV();
+	mRenderer.InitializeSRV(env.SRV_IrradianceDiffBlurred, 0, env.Tex_IrradianceDiffBlurred, false, true);
 
 	// Queue irradiance cube face rendering
 	mbRenderEnvironmentMapIrradiance.store(true);
@@ -606,16 +638,21 @@ void VQEngine::UnloadEnvironmentMap()
 		
 		mRenderer.DestroySRV(env.SRV_HDREnvironment);
 		mRenderer.DestroySRV(env.SRV_IrradianceDiff);
+		for (int face = 0; face < 6; ++face) mRenderer.DestroySRV(env.SRV_IrradianceDiffFaces[face]);
 		mRenderer.DestroySRV(env.SRV_IrradianceSpec);
 		mRenderer.DestroySRV(env.SRV_HDREnvironmentDownsampled);
+		mRenderer.DestroySRV(env.SRV_BlurTemp);
+		mRenderer.DestroySRV(env.SRV_IrradianceDiffBlurred);
+		// mRenderer.DestroyUAV(); // TODO:?
 		mRenderer.DestroyTexture(env.Tex_HDREnvironment);
 		mRenderer.DestroyTexture(env.Tex_IrradianceDiff);
 		mRenderer.DestroyTexture(env.Tex_IrradianceSpec);
 		mRenderer.DestroyTexture(env.Tex_HDREnvironmentDownsampled);
+		mRenderer.DestroyTexture(env.Tex_IrradianceDiffBlurred);
+
 		env.SRV_HDREnvironment = env.Tex_HDREnvironment = INVALID_ID;
 		env.SRV_HDREnvironmentDownsampled = env.Tex_HDREnvironmentDownsampled = INVALID_ID;
 		env.SRV_IrradianceDiff = env.SRV_IrradianceSpec = INVALID_ID;
-		env.Tex_IrradianceDiff = env.Tex_IrradianceSpec = INVALID_ID;
 		env.MaxContentLightLevel = 0;
 	}
 }

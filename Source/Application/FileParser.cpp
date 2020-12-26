@@ -478,7 +478,7 @@ unsigned GetNumSiblings(XMLElement* pEle)
 	unsigned numSiblings = 0;
 	while (pEle != nullptr)
 	{
-		numSiblings += StrUtil::split(pEle->FirstChild()->Value()).size();
+		numSiblings += static_cast<int>(StrUtil::split(pEle->FirstChild()->Value()).size());
 		//++numSiblings;
 		pEle = pEle->NextSiblingElement();
 	}

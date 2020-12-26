@@ -114,17 +114,23 @@ float4 PSMain_DiffuseIrradiance(GSOut In) : SV_TARGET
 	
 	// basis vectors
 	float3 up = float3(0, 1, 0);
-	const float3 right = normalize(cross(up, N));	
+	
+	// if UP and N align (top and bottom of sphere),
+	// then we'll have 0 or almost 0 vector as the result of the cross product. 
+	// Normalizing here avoids the above case.
+	const float3 right = normalize(cross(up, N));
+	
 	up = normalize(cross(N, right));
 	
 	float3 irradiance = 0.0f.xxx;
 	
+	const float INTEGRATION_STEP = 0.025f;
 	float numSamples = 0.0f;
-	for (float phi = 0.0f; phi < TWO_PI; phi += 0.025) // ~60 iterations
+	for (float phi = 0.0f; phi < TWO_PI; phi += INTEGRATION_STEP) // ~60 iterations
 	{
 		// theta = 0.0f doesn't yield any irradiance (sinTheta==0.0f)
 		// , so start from 0.1 -> not exactly from the pole
-		for (float theta = 0.10f; theta < PI_OVER_TWO; theta += 0.1) // ~15 iterations
+		for (float theta = 0.10f; theta < PI_OVER_TWO; theta += INTEGRATION_STEP) // ~60 iterations
 		{
 			const float sinTheta = sin(theta);
 			const float cosTheta = cos(theta);

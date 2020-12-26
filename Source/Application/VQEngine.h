@@ -69,7 +69,11 @@ struct FEnvironmentMap
 	TextureID Tex_HDREnvironment = INVALID_ID; // skydome 
 	TextureID Tex_HDREnvironmentDownsampled = INVALID_ID; // downsampled skydome for diffuse irradiance calculation
 	TextureID Tex_IrradianceDiff = INVALID_ID; // Kd
-	TextureID Tex_IrradianceSpec = INVALID_ID; // Ki
+	TextureID Tex_IrradianceSpec = INVALID_ID; // Ks
+	
+	// temporary resources
+	TextureID Tex_BlurTemp = INVALID_ID;
+	TextureID Tex_IrradianceDiffBlurred = INVALID_ID; // Kd
 
 	RTV_ID RTV_HDREnvironmentDownsampled = INVALID_ID;
 	RTV_ID RTV_IrradianceDiff = INVALID_ID;
@@ -79,6 +83,13 @@ struct FEnvironmentMap
 	SRV_ID SRV_HDREnvironmentDownsampled = INVALID_ID;
 	SRV_ID SRV_IrradianceDiff = INVALID_ID;
 	SRV_ID SRV_IrradianceSpec = INVALID_ID;
+	SRV_ID SRV_IrradianceDiffFaces[6] = { INVALID_ID };
+	SRV_ID SRV_IrradianceDiffBlurred = INVALID_ID;
+
+	UAV_ID UAV_BlurTemp = INVALID_ID;
+	UAV_ID UAV_IrradianceDiffBlurred = INVALID_ID;
+
+	SRV_ID SRV_BlurTemp = INVALID_ID;
 
 	//
 	// HDR10 Static Metadata Parameters -------------------------------
@@ -93,40 +104,42 @@ struct FEnvironmentMap
 	// the frame which has the brightest average luminance anywhere in 
 	// the content.
 	int MaxFrameAverageLightLevel = 0;
-
-	// TODO: these could be function calls with mRenderer as argument instead of data 
-	int HDREnvironmentSizeX = 0;
-	int HDREnvironmentSizeY = 0;
 };
 
 struct FRenderingResources{};
 struct FRenderingResources_MainWindow : public FRenderingResources
 {
-	TextureID Tex_MainViewColorMSAA         = INVALID_ID;
-	TextureID Tex_MainViewColor             = INVALID_ID;
-	TextureID Tex_MainViewDepthMSAA         = INVALID_ID;
-	TextureID Tex_MainViewDepth             = INVALID_ID;
-	TextureID Tex_PostProcess_TonemapperOut = INVALID_ID;
-	TextureID Tex_ShadowMaps_Spot           = INVALID_ID;
-	TextureID Tex_ShadowMaps_Point          = INVALID_ID;
-	TextureID Tex_ShadowMaps_Directional    = INVALID_ID;
+	TextureID Tex_MainViewColorMSAA            = INVALID_ID;
+	TextureID Tex_MainViewColor                = INVALID_ID;
+	TextureID Tex_MainViewDepthMSAA            = INVALID_ID;
+	TextureID Tex_MainViewDepth                = INVALID_ID;
+	TextureID Tex_PostProcess_BlurIntermediate = INVALID_ID;
+	TextureID Tex_PostProcess_BlurOutput       = INVALID_ID;
+	TextureID Tex_PostProcess_TonemapperOut    = INVALID_ID;
+	TextureID Tex_ShadowMaps_Spot              = INVALID_ID;
+	TextureID Tex_ShadowMaps_Point             = INVALID_ID;
+	TextureID Tex_ShadowMaps_Directional       = INVALID_ID;
 
-	RTV_ID    RTV_MainViewColorMSAA         = INVALID_ID;
-	RTV_ID    RTV_MainViewColor             = INVALID_ID;
+	RTV_ID    RTV_MainViewColorMSAA            = INVALID_ID;
+	RTV_ID    RTV_MainViewColor                = INVALID_ID;
 
-	SRV_ID    SRV_MainViewColor             = INVALID_ID;
-	SRV_ID    SRV_PostProcess_TonemapperOut = INVALID_ID;
-	SRV_ID    SRV_ShadowMaps_Spot           = INVALID_ID;
-	SRV_ID    SRV_ShadowMaps_Point          = INVALID_ID;
-	SRV_ID    SRV_ShadowMaps_Directional    = INVALID_ID;
+	SRV_ID    SRV_MainViewColor                = INVALID_ID;
+	SRV_ID    SRV_PostProcess_BlurIntermediate = INVALID_ID;
+	SRV_ID    SRV_PostProcess_BlurOutput       = INVALID_ID;
+	SRV_ID    SRV_PostProcess_TonemapperOut    = INVALID_ID;
+	SRV_ID    SRV_ShadowMaps_Spot              = INVALID_ID;
+	SRV_ID    SRV_ShadowMaps_Point             = INVALID_ID;
+	SRV_ID    SRV_ShadowMaps_Directional       = INVALID_ID;
 
-	UAV_ID    UAV_PostProcess_TonemapperOut = INVALID_ID;
+	UAV_ID    UAV_PostProcess_BlurIntermediate = INVALID_ID;
+	UAV_ID    UAV_PostProcess_BlurOutput       = INVALID_ID;
+	UAV_ID    UAV_PostProcess_TonemapperOut    = INVALID_ID;
 
-	DSV_ID    DSV_MainViewDepthMSAA          = INVALID_ID;
-	DSV_ID    DSV_MainViewDepth              = INVALID_ID;
-	DSV_ID    DSV_ShadowMaps_Spot            = INVALID_ID;
-	DSV_ID    DSV_ShadowMaps_Point           = INVALID_ID;
-	DSV_ID    DSV_ShadowMaps_Directional     = INVALID_ID;
+	DSV_ID    DSV_MainViewDepthMSAA             = INVALID_ID;
+	DSV_ID    DSV_MainViewDepth                 = INVALID_ID;
+	DSV_ID    DSV_ShadowMaps_Spot               = INVALID_ID;
+	DSV_ID    DSV_ShadowMaps_Point              = INVALID_ID;
+	DSV_ID    DSV_ShadowMaps_Directional        = INVALID_ID;
 
 	FEnvironmentMap EnvironmentMap;
 

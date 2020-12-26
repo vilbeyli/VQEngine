@@ -151,8 +151,8 @@ void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, cons
 
     this->mbTypelessTexture = bDepthStencilTexture;
     this->mbCubemap = desc.bCubemap;
-    this->mWidth = desc.d3d12Desc.Width;
-    this->mHeight = desc.d3d12Desc.Height;
+    this->mWidth  = static_cast<int>(desc.d3d12Desc.Width );
+    this->mHeight = static_cast<int>(desc.d3d12Desc.Height);
     this->mNumArraySlices = desc.d3d12Desc.DepthOrArraySize;
 }
 
@@ -177,14 +177,28 @@ void Texture::Destroy()
 // RESOURCE VIEW CREATION
 //
 
-void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, UINT ShaderComponentMapping, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc)
+void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayView, bool bInitAsCubeView, UINT ShaderComponentMapping, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc)
 {
+    if (bInitAsCubeView)
+    {
+        if (!this->mbCubemap)
+        {
+            Log::Warning("Cubemap view requested on a non-cubemap resource");
+        }
+        assert(this->mbCubemap); // could this be an actual use case: view array[6] as cubemap?
+    }
+
+    //
+    // TODO: bool bInitAsArrayView needed so that InitializeSRV() can initialize a per-face SRV of a cubemap
+    //
+
     GetDevice(pDevice, mpTexture);
     const bool bCustomComponentMappingSpecified = ShaderComponentMapping != D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
     D3D12_RESOURCE_DESC resourceDesc = mpTexture->GetDesc();
     const int NumCubes = this->mbCubemap ? resourceDesc.DepthOrArraySize / 6 : 0;
-    if (this->mbCubemap)
+    const bool bInitializeAsCubemapView = this->mbCubemap && bInitAsCubeView;
+    if (bInitializeAsCubemapView)
     {
         const bool bArraySizeMultipleOfSix = resourceDesc.DepthOrArraySize % 6 == 0;
         if (!bArraySizeMultipleOfSix)
@@ -200,14 +214,14 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, UINT ShaderComponent
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
         int mipLevel        = 0; // TODO //= (mipLevel == -1) ? 0 : mipLevel
         int arraySize       = resourceDesc.DepthOrArraySize; // TODO
-        int firstArraySlice = 0;
+        int firstArraySlice = index;
 
 
 
         const bool bBufferSRV = resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER;
         const bool bDepthSRV = resourceDesc.Format == DXGI_FORMAT_R32_TYPELESS;
         const bool bMSAA = resourceDesc.SampleDesc.Count != 1;
-        const bool bArraySRV = resourceDesc.DepthOrArraySize > 1;
+        const bool bArraySRV = /*bInitAsArrayView &&*/ resourceDesc.DepthOrArraySize > 1;
 
         if (bBufferSRV)
         {
@@ -255,8 +269,8 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, UINT ShaderComponent
             {
                 if (bArraySRV)
                 {
-                    srvDesc.ViewDimension = this->mbCubemap ? D3D12_SRV_DIMENSION_TEXTURECUBEARRAY : D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
-                    if (this->mbCubemap)
+                    srvDesc.ViewDimension = bInitAsCubeView ? D3D12_SRV_DIMENSION_TEXTURECUBEARRAY : D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+                    if (bInitAsCubeView)
                     {
                         srvDesc.TextureCubeArray.MipLevels = 1;
                         srvDesc.TextureCubeArray.ResourceMinLODClamp = 0;
@@ -269,17 +283,17 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, UINT ShaderComponent
                         srvDesc.Texture2DArray.MostDetailedMip = (mipLevel == -1) ? 0 : mipLevel;
                         srvDesc.Texture2DArray.MipLevels = (mipLevel == -1) ? mMipMapCount : 1;
                         srvDesc.Texture2DArray.FirstArraySlice = (firstArraySlice == -1) ? 0 : firstArraySlice;
-                        srvDesc.Texture2DArray.ArraySize = (arraySize == -1) ? resourceDesc.DepthOrArraySize : arraySize;
+                        srvDesc.Texture2DArray.ArraySize = arraySize - srvDesc.Texture2DArray.FirstArraySlice;
                     }
                 }
 
                 else // single SRV
                 {
-                    srvDesc.ViewDimension = this->mbCubemap ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
-                    if (this->mbCubemap)
+                    srvDesc.ViewDimension = bInitAsCubeView ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
+                    if (bInitAsCubeView)
                     {
                         srvDesc.TextureCube.MostDetailedMip = mipLevel;
-                        srvDesc.TextureCube.MipLevels = 0;
+                        srvDesc.TextureCube.MipLevels = 1;
                         srvDesc.TextureCube.ResourceMinLODClamp = 0;
                     }
                     else
@@ -297,9 +311,8 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, UINT ShaderComponent
         // Create array SRV
         if (bArraySRV)
         {
-            if (this->mbCubemap)
+            if (bInitializeAsCubemapView)
             {
-
                 for (int cube = 0; cube < NumCubes; ++cube)
                 {
                     srvDesc.TextureCubeArray.First2DArrayFace = cube;
@@ -309,11 +322,11 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, UINT ShaderComponent
             }
             else
             {
-                for (int i = 0; i < resourceDesc.DepthOrArraySize; ++i)
+                //for (int i = 0; i < resourceDesc.DepthOrArraySize; ++i)
                 {
-                    srvDesc.Texture2DArray.FirstArraySlice = i;
-                    srvDesc.Texture2DArray.ArraySize = resourceDesc.DepthOrArraySize - i;
-                    pDevice->CreateShaderResourceView(mpTexture, &srvDesc, pRV->GetCPUDescHandle(index + i));
+                    srvDesc.Texture2DArray.FirstArraySlice = index;
+                    srvDesc.Texture2DArray.ArraySize = resourceDesc.DepthOrArraySize - index;
+                    pDevice->CreateShaderResourceView(mpTexture, &srvDesc, pRV->GetCPUDescHandle(0 /*+ i*/));
                 }
             }
         }
@@ -321,7 +334,7 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, UINT ShaderComponent
         // Create single SRV
         else 
         {
-            pDevice->CreateShaderResourceView(mpTexture, &srvDesc, pRV->GetCPUDescHandle(index));
+            pDevice->CreateShaderResourceView(mpTexture, &srvDesc, pRV->GetCPUDescHandle(0));
         }
     }
     else

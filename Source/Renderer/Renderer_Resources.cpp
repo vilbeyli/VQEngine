@@ -57,7 +57,6 @@ static BufferID  LAST_USED_CBV_ID = 0;
 
 namespace VQ_DXGI_UTILS
 {
-
 	size_t BitsPerPixel(DXGI_FORMAT fmt)
 	{
 		switch (fmt)
@@ -576,13 +575,13 @@ void VQRenderer::InitializeDSV(DSV_ID dsvID, uint32 heapIndex, TextureID texID, 
 
 	mTextures.at(texID).InitializeDSV(heapIndex, &mDSVs.at(dsvID), ArraySlice);
 }
-void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, UINT ShaderComponentMapping)
+void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bool bInitAsArrayView /*= false*/, bool bInitAsCubeView /*= false*/, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc /*=nullptr*/, UINT ShaderComponentMapping)
 {
 	CHECK_RESOURCE_VIEW(SRV, srvID);
 	if (texID != INVALID_ID)
 	{
 		CHECK_TEXTURE(mTextures, texID);
-		mTextures.at(texID).InitializeSRV(heapIndex, &mSRVs.at(srvID), ShaderComponentMapping);
+		mTextures.at(texID).InitializeSRV(heapIndex, &mSRVs.at(srvID), bInitAsArrayView, bInitAsCubeView, ShaderComponentMapping, pSRVDesc);
 	}
 	else // init NULL SRV
 	{
@@ -664,7 +663,35 @@ void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID)
 {
 	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(UAV, uavID);
-	mTextures.at(texID).InitializeUAV(heapIndex, &mUAVs.at(uavID));
+
+	Texture& tex = mTextures.at(texID);
+	D3D12_RESOURCE_DESC rscDesc = tex.GetResource()->GetDesc();
+	
+	const bool& bCubemap = tex.mbCubemap;
+	const bool  bArray   = bCubemap ? (rscDesc.DepthOrArraySize / 6 > 1) : rscDesc.DepthOrArraySize > 1;
+	const bool  bMSAA    = rscDesc.SampleDesc.Count > 1; // don't care?
+
+	int mipLevel = 0;	// TODO
+	int arraySlice = heapIndex; // TODO
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+	uavDesc.Format = tex.mFormat;
+	if (bArray || bCubemap)
+	{
+		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
+		uavDesc.Texture2DArray.ArraySize = rscDesc.DepthOrArraySize - arraySlice;
+		uavDesc.Texture2DArray.FirstArraySlice = arraySlice;
+		uavDesc.Texture2DArray.MipSlice = mipLevel;
+		
+	}
+	else // non-array
+	{
+		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+		uavDesc.Texture2D.MipSlice = mipLevel;
+	}
+
+
+	mTextures.at(texID).InitializeUAV(heapIndex, &mUAVs.at(uavID), &uavDesc);
 }
 
 void VQRenderer::EnqueueShaderLoadTask(TaskID PSOLoadTaskID, const FShaderStageCompileDesc& ShaderStageCompileDesc)
@@ -897,6 +924,7 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 		else
 		{
 			Log::Error(errMsg);
+			// MessageBox(NULL, "EXIT", "Exit", MB_OK); // TODO:
 			return Result;
 		}
 	}
@@ -1143,7 +1171,7 @@ TextureID VQRenderer::AddTexture_ThreadSafe(Texture&& tex)
 	
 	return Id;
 }
-void VQRenderer::DestroyTexture(TextureID texID)
+void VQRenderer::DestroyTexture(TextureID& texID)
 {
 	// Remove texID
 	std::lock_guard<std::mutex> lk(mMtxTextures);
@@ -1164,17 +1192,21 @@ void VQRenderer::DestroyTexture(TextureID texID)
 	}
 	if (bTexturePathRegistered)
 		mLoadedTexturePaths.erase(texPath);
+
+	texID = INVALID_ID; // invalidate the ID
 }
-void VQRenderer::DestroySRV(SRV_ID srvID)
+void VQRenderer::DestroySRV(SRV_ID& srvID)
 {
 	std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 	//mSRVs.at(srvID).Destroy(); // TODO
 	mSRVs.erase(srvID);
+	srvID = INVALID_ID;
 }
-void VQRenderer::DestroyDSV(DSV_ID dsvID)
+void VQRenderer::DestroyDSV(DSV_ID& dsvID)
 {
 	std::lock_guard<std::mutex> lk(mMtxDSVs);
 	//mDSVs.at(dsvID).Destroy(); // TODO
 	mDSVs.erase(dsvID);
+	dsvID = INVALID_ID;
 }
 

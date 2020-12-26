@@ -60,6 +60,7 @@ set (Shaders
     "Shaders/Unlit.hlsl"
     "Shaders/DepthPass.hlsl"
     "Shaders/CubemapConvolution.hlsl"
+    "Shaders/GaussianBlur.hlsl"
 )
 
 set (HeaderVQE 

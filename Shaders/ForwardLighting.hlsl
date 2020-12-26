@@ -181,6 +181,7 @@ float4 PSMain(PSInput In) : SV_TARGET
 	;
 	
 	float3 IEnv = texEnvMapDiff.Sample(LinearSampler, SurfaceParams.N).rgb * SurfaceParams.diffuseColor; // environment lighting illumination
+	IEnv += texEnvMapSpec.Sample(LinearSampler, SurfaceParams.N).rgb * 0.00001f;
 	I_total += IEnv * ao; // scale down w/ AO
 	
 	// -------------------------------------------------------------------------------------------------------

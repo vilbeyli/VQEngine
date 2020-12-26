@@ -124,7 +124,8 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	CUBEMAP_CONVOLUTION_DIFFUSE_PSO,
 	CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO,
 	CUBEMAP_CONVOLUTION_SPECULAR_PSO,
-
+	GAUSSIAN_BLUR_CS_NAIVE_X_PSO,
+	GAUSSIAN_BLUR_CS_NAIVE_Y_PSO,
 	NUM_BUILTIN_PSOs
 };
 
@@ -175,15 +176,15 @@ public:
 
 	// Initializes a ResourceView from given texture and the specified heap index
 	void                         InitializeDSV(DSV_ID dsvID, uint heapIndex, TextureID texID, int ArraySlice = 0);
-	void                         InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, UINT ShaderComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING);
+	void                         InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bool bInitAsArrayView = false, bool bInitAsCubeView = false, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc = nullptr, UINT ShaderComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING);
 	void                         InitializeSRV(SRV_ID srvID, uint heapIndex, D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc);
 	void                         InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID);
 	void                         InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID, int arraySlice, int mipLevel);
 	void                         InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID);
 
-	void                         DestroyTexture(TextureID texID);
-	void                         DestroySRV(SRV_ID srvID);
-	void                         DestroyDSV(DSV_ID dsvID);
+	void                         DestroyTexture(TextureID& texID);
+	void                         DestroySRV(SRV_ID& srvID);
+	void                         DestroyDSV(DSV_ID& dsvID);
 
 	// Getters: PSO, RootSignature, Heap
 	inline ID3D12PipelineState*  GetPSO(EBuiltinPSOs pso) const { return mPSOs.at(static_cast<PSO_ID>(pso)); }
@@ -201,6 +202,8 @@ public:
 
 	const ID3D12Resource*        GetTextureResource(TextureID Id) const;
 	      ID3D12Resource*        GetTextureResource(TextureID Id);
+
+		  inline void            GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, dummy); }
 		  void                   GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices) const;
 
 	inline const VBV&            GetVBV(BufferID Id) const { return GetVertexBufferView(Id);    }
