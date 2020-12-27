@@ -55,7 +55,6 @@ float3 SRGBToLinear(float3 c) { return pow(c, 2.2f); }
 
 // additional sources: 
 // - Converting to/from cubemaps: http://paulbourke.net/miscellaneous/cubemaps/
-// - Convolution: https://learnopengl.com/#!PBR/IBL/Diffuse-irradiance
 // - Projections: https://gamedev.stackexchange.com/questions/114412/how-to-get-uv-coordinates-for-sphere-cylindrical-projection
 float2 SphericalSample(float3 v)
 {
@@ -106,10 +105,10 @@ float VanDerCorpus(uint n, uint base)
 }
 #endif
 
-float2 Hammersley(int i, int count)
+float2 Hammersley(uint i, uint count)
 {
 #ifdef USE_BIT_MANIPULATION
-	return float2(float(i) / float(count), RadicalInverse_VdC(uint(i)));
+	return float2(float(i) / float(count), RadicalInverse_VdC(i));
 #else
 	// note: this crashes for some reason.
     return float2(float(i) / float(count), VanDerCorpus(uint(i), 2u));

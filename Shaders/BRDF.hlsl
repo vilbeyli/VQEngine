@@ -135,7 +135,19 @@ float GeometryEnvironmentMap(float3 N, float3 V, float3 L, float k)
 // Fresnel-Schlick approximation describes reflection
 inline float3 Fresnel(float3 N, float3 V, float3 F0)
 {	// F_Schlick(N, V, F0) = F0 - (1-F0)*(1 - dot(N,V))^5
+	// F0 is the specular reflectance at normal incidence.
 	return F0 + (float3(1, 1, 1) - F0) * pow(1.0f - max(0.0f, dot(N, V)), 5.0f);
+}
+
+// Fresnel-Schlick approx with a Spherical Gaussian approx
+// src: https://de45xmedrsdbp.cloudfront.net/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf
+inline float3 FresnelGaussian(float3 H, float3 V, float3 F0)
+{ 
+	// F0 is the specular reflectance at normal incidence.
+	const float c0 = -5.55373f;
+	const float c1 = -6.98316f;
+	const float VdotH = max(0.0f, dot(V, H));
+	return F0 + (float3(1, 1, 1) - F0) * pow(2.0f, (c0 * VdotH - c1) * VdotH);
 }
 
 // Fresnel-Schlick with roughness factored in used in image-based lighting 
@@ -143,6 +155,7 @@ inline float3 Fresnel(float3 N, float3 V, float3 F0)
 // src: https://seblagarde.wordpress.com/2011/08/17/hello-world/ 
 float3 FresnelWithRoughness(float cosTheta, float3 F0, float roughness)
 {
+	// F0 is the specular reflectance at normal incidence.
 	return F0 + (max((1.0f - roughness).xxx, F0) - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
@@ -182,9 +195,10 @@ float3 BRDF(in BRDF_Surface s, float3 Wi, float3 V)
 
 float3 EnvironmentBRDF(BRDF_Surface s, float3 V, float ao, float3 irradience, float3 envSpecular, float2 F0ScaleBias)
 {
+	const float NdotV = saturate(dot(s.N, V));
 	const float3 F0 = lerp(0.04f.xxx, s.diffuseColor, s.metalness);
 
-	const float3 Ks = FresnelWithRoughness(max(dot(s.N, V), 0.0), F0, s.roughness);
+	const float3 Ks = FresnelWithRoughness(NdotV, F0, s.roughness);
 	const float3 Kd = (1.0f.xxx - Ks) * (1.0f - s.metalness);
 
 	const float3 diffuse = irradience * s.diffuseColor;
@@ -194,13 +208,12 @@ float3 EnvironmentBRDF(BRDF_Surface s, float3 V, float ao, float3 irradience, fl
 }
 
 
-#define SAMPLE_COUNT 1024
-#define MAX_REFLECTION_LOD 7
 // Instead of uniformly or randomly (Monte Carlo) generating sample vectors over the integral's hemisphere, we'll generate 
 // sample vectors biased towards the general reflection orientation of the microsurface halfway vector based on the surface's roughness. 
 // This gives us a sample vector somewhat oriented around the expected microsurface's halfway vector based on some input roughness 
 // and the low-discrepancy sequence value Xi. Note that Epic Games uses the squared roughness for better visual results as based on 
 // Disney's original PBR research.
+// https://de45xmedrsdbp.cloudfront.net/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf
 float3 ImportanceSampleGGX(float2 Xi, float3 N, float roughness)
 {
 	const float a = roughness * roughness;
@@ -223,19 +236,19 @@ float3 ImportanceSampleGGX(float2 Xi, float3 N, float roughness)
 	const float3 sample = tangent * H.x + bitangent * H.y + N * H.z;
 	return normalize(sample);
 }
-
 float2 IntegrateBRDF(float NdotV, float roughness)
 {
 	float3 V;
-	V.x = sqrt(1.0f - NdotV * NdotV);
+	V.x = sqrt(1.0f - NdotV * NdotV); // sin ()
 	V.y = 0;
-	V.z = NdotV;
+	V.z = NdotV; // cos()
 
 	float F0Scale = 0;	// Integral1
 	float F0Bias = 0;	// Integral2
 
+	const uint SAMPLE_COUNT = 2048;
 	const float3 N = float3(0, 0, 1);
-	for (int i = 0; i < SAMPLE_COUNT; ++i)
+	for (uint i = 0; i < SAMPLE_COUNT; ++i)
 	{
 		const float2 Xi = Hammersley(i, SAMPLE_COUNT);
 		const float3 H = ImportanceSampleGGX(Xi, N, roughness);
@@ -248,7 +261,19 @@ float2 IntegrateBRDF(float NdotV, float roughness)
 		if (NdotL > 0.0f)
 		{
 			const float G = GeometryEnvironmentMap(N, V, L, roughness);
+			
+			// Split Sum Approx : Specular BRDF integration using Quasi Monte Carlo
+			// 
+			// Microfacet specular = D*G*F / (4*NoL*NoV)
+			// pdf = D * NoH / (4 * VoH)
+			// G_Vis = Microfacet specular / (pdf * F)
+			//
+			// We do this to move F0 out of the integral so we can factor F0
+			// in during the lighting pass, which just simplifies this LUT
+			// into a representation of a scale and a bias to the F0
+			// as in (F0 * scale + bias)
 			const float G_Vis = max((G * VdotH) / (NdotH * NdotV), 0.0001);
+			
 			const float Fc = pow(1.0 - VdotH, 5.0f);
 
 			F0Scale += (1.0f - Fc) * G_Vis;

@@ -1016,13 +1016,21 @@ ID3D12Resource* VQRenderer::GetTextureResource(TextureID Id)
 	return mTextures.at(Id).GetResource();
 }
 
-void VQRenderer::GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices) const
+void VQRenderer::GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices, int& NumMips) const
 {
 	CHECK_TEXTURE(mTextures, Id);
 	const Texture& tex = mTextures.at(Id);
 	SizeX = tex.mWidth;
 	SizeY = tex.mHeight;
 	NumSlices = tex.mNumArraySlices;
+	NumMips = tex.mMipMapCount;
+}
+
+uint VQRenderer::GetTextureMips(TextureID Id) const
+{
+	CHECK_TEXTURE(mTextures, Id);
+	const Texture& tex = mTextures.at(Id);
+	return tex.mMipMapCount;
 }
 
 void VQRenderer::QueueTextureUpload(const FTextureUploadDesc& desc)

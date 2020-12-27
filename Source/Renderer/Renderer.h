@@ -204,7 +204,9 @@ public:
 	      ID3D12Resource*        GetTextureResource(TextureID Id);
 
 		  inline void            GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, dummy); }
-		  void                   GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices) const;
+		  inline void            GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, NumSlices, dummy); }
+		  void                   GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices, int& NumMips) const;
+		  uint                   GetTextureMips(TextureID Id) const;
 
 	inline const VBV&            GetVBV(BufferID Id) const { return GetVertexBufferView(Id);    }
 	inline const IBV&            GetIBV(BufferID Id) const { return GetIndexBufferView(Id);     }

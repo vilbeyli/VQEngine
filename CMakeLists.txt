@@ -97,6 +97,7 @@ set (SourceVQE
     "Source/Application/VQEngine_Update.cpp"
     "Source/Application/VQEngine_WindowEvents.cpp"
     "Source/Application/VQEngine_EventHandlers.cpp"
+    "Source/Application/EnvironmentMap.cpp"
     "Source/Application/FileParser.cpp"
     "Source/Application/Events.cpp"
     "Source/Application/Mesh.cpp"

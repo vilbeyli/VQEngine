@@ -252,7 +252,7 @@ void VQEngine::InitializeHDRProfiles()
 
 void VQEngine::InitializeEnvironmentMaps()
 {
-	mbRenderEnvironmentMapIrradiance.store(false);
+	mbEnvironmentMapPreFilter.store(false);
 	std::vector<FEnvironmentMapDescriptor> descs = VQEngine::ParseEnvironmentMapsFile();
 	for (const FEnvironmentMapDescriptor& desc : descs)
 	{

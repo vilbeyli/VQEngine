@@ -153,14 +153,14 @@ float4 PSMain(PSInput In) : SV_TARGET
 	const float3  T = normalize(In.vertTangent);
 	SurfaceParams.N = length(Normal) < 0.01 ? N : UnpackNormal(Normal, N, T);
 	
-	bool bReadsRoughnessMapData = HasRoughnessMap(TEX_CFG) || HasOcclusionRoughnessMetalnessMap(TEX_CFG);
-	bool bReadsMetalnessMapData =  HasMetallicMap(TEX_CFG) || HasOcclusionRoughnessMetalnessMap(TEX_CFG);
+	const bool bReadsRoughnessMapData = HasRoughnessMap(TEX_CFG) || HasOcclusionRoughnessMetalnessMap(TEX_CFG);
+	const bool bReadsMetalnessMapData =  HasMetallicMap(TEX_CFG) || HasOcclusionRoughnessMetalnessMap(TEX_CFG);
 	
 	if (!bReadsRoughnessMapData) SurfaceParams.roughness = cbPerObject.materialData.roughness;
 	if (!bReadsMetalnessMapData) SurfaceParams.metalness = cbPerObject.materialData.metalness;
-	if (HasAmbientOcclusionMap(TEX_CFG)) ao *= LocalAO;
-	if (HasRoughnessMap(TEX_CFG) ) SurfaceParams.roughness = Roughness;
-	if (HasMetallicMap(TEX_CFG)  ) SurfaceParams.metalness = Metalness;
+	if (HasAmbientOcclusionMap           (TEX_CFG)) ao *= LocalAO;
+	if (HasRoughnessMap                  (TEX_CFG)) SurfaceParams.roughness = Roughness;
+	if (HasMetallicMap                   (TEX_CFG)) SurfaceParams.metalness = Metalness;
 	if (HasOcclusionRoughnessMetalnessMap(TEX_CFG))
 	{
 		ao *= OcclRghMtl.r;

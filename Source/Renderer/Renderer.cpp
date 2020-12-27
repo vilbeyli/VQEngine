@@ -691,7 +691,6 @@ void VQRenderer::LoadRootSignatures()
 
 	// DepthPass Root Signatures [7-9]
 	{
-
 		D3D12_STATIC_SAMPLER_DESC sampler = {};
 		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
 		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -1184,10 +1183,9 @@ void VQRenderer::LoadPSOs()
 		psoDesc.NumRenderTargets = 1;
 		PSOLoadDescs.push_back({ EBuiltinPSOs::CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO, psoLoadDesc });
 
-		psoLoadDesc.PSOName = "PSO_CubemapConvolutionVSGSPS_Specular";
+		psoLoadDesc.PSOName = "PSO_CubemapConvolutionVSPS_Specular";
 		psoLoadDesc.ShaderStageCompileDescs.clear();
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "GSMain", "gs_5_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain_PerFace", "vs_5_1" });
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain_SpecularIrradiance", "ps_5_1" });
 		PSOLoadDescs.push_back({ EBuiltinPSOs::CUBEMAP_CONVOLUTION_SPECULAR_PSO, psoLoadDesc });
 	}

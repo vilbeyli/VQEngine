@@ -17,7 +17,6 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "ShadingMath.hlsl"
-
 #include "BRDF.hlsl"
 
 struct VSInput
@@ -42,6 +41,7 @@ struct GSOut
 	uint layer                  : SV_RenderTargetArrayIndex;
 };
 
+
 cbuffer CBufferGS : register(b0)
 {
 	matrix matViewProj[6];
@@ -57,6 +57,7 @@ Texture2D texEquirectEnvironmentMap : register(t0);
 SamplerState Sampler;
 
 TextureCube tEnvironmentMap : register(t1);
+
 
 
 GSOut VSMain_PerFace(VSInput VSIn)
@@ -106,8 +107,8 @@ void GSMain(triangle VSOut input[3], inout TriangleStream<GSOut> triOutStream)
 }
 
 
-// https://learnopengl.com/PBR/IBL/Diffuse-irradiance
-// https://www.indiedb.com/features/using-image-based-lighting-ibl
+// src: https://learnopengl.com/PBR/IBL/Diffuse-irradiance
+// src: https://www.indiedb.com/features/using-image-based-lighting-ibl
 float4 PSMain_DiffuseIrradiance(GSOut In) : SV_TARGET
 {
 	float3 N = normalize(In.CubemapLookDirection);
@@ -157,18 +158,35 @@ float4 PSMain_DiffuseIrradiance(GSOut In) : SV_TARGET
 	return float4(irradiance, 1);
 }
 
+// src: https://learnopengl.com/PBR/IBL/Specular-IBL
+// src: https://de45xmedrsdbp.cloudfront.net/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf
 float4 PSMain_SpecularIrradiance(GSOut In) : SV_TARGET
 {
+	// approximation: Assume viewing angle of 0 degrees.
+	//                This results in the lack of isotropic (stretched out) reflections.
 	float3 N = normalize(In.CubemapLookDirection);
+	float3 R = N;
+	float3 V = R;
 	
-	float3 color;
+	float3 prefilteredColor = 0.0f.xxx;
+	float totalWeight = 0.0f;
 	
-	[branch]
-	if (MIP == 0)
-		color = texEquirectEnvironmentMap.Sample(Sampler, SphericalSample(N));
-	else
-		color = tEnvironmentMap.Sample(Sampler, N).rgb;
-	
-	//return float4(N, 1);
-	return float4(color, 1);
+	const uint NUM_SAMPLES = 2048u;
+	for (uint i = 0; i < NUM_SAMPLES; ++i)
+	{
+		float2 Xi = Hammersley(i, NUM_SAMPLES);
+		float3 H = ImportanceSampleGGX(Xi, N, Roughness);
+		float3 L = reflect(-V, H);
+
+		float NdotL = saturate(dot(N, L));
+		if (NdotL > 0.0f)
+		{
+			//prefilteredColor += tEnvironmentMap.Sample(Sampler, L).rgb * NdotL;
+			prefilteredColor += texEquirectEnvironmentMap.Sample(Sampler, SphericalSample(L)) * NdotL;
+			totalWeight += NdotL;
+		}
+	}
+	prefilteredColor /= totalWeight;
+
+	return float4(prefilteredColor, 1);
 }

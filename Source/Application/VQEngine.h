@@ -66,8 +66,8 @@ struct FEnvironmentMapDescriptor
 };
 struct FEnvironmentMap
 {
-	TextureID Tex_HDREnvironment = INVALID_ID; // skydome 
-	TextureID Tex_HDREnvironmentDownsampled = INVALID_ID; // downsampled skydome for diffuse irradiance calculation
+	TextureID Tex_HDREnvironment = INVALID_ID; // equirect input
+	TextureID Tex_HDREnvironmentDownsampled = INVALID_ID; // downsampled (1/8) skydome for diffuse irradiance calculation
 	TextureID Tex_IrradianceDiff = INVALID_ID; // Kd
 	TextureID Tex_IrradianceSpec = INVALID_ID; // Ks
 	
@@ -275,7 +275,7 @@ public:
 	void StartLoadingScene(int IndexScene);
 	
 	void StartLoadingEnvironmentMap(int IndexEnvMap);
-	void RenderEnvironmentMapCubeFaces(FEnvironmentMap& env);
+	void PreFilterEnvironmentMap(FEnvironmentMap& env);
 	void UnloadEnvironmentMap();
 
 	// Getters
@@ -349,7 +349,7 @@ private:
 	std::atomic<uint64>             mNumUpdateLoopsExecuted;
 	std::atomic<bool>               mbLoadingLevel;
 	std::atomic<bool>               mbLoadingEnvironmentMap;
-	std::atomic<bool>               mbRenderEnvironmentMapIrradiance;
+	std::atomic<bool>               mbEnvironmentMapPreFilter;
 	std::atomic<bool>               mbMainWindowHDRTransitionInProgress; // see DispatchHDRSwapchainTransitionEvents()
 
 	// system & settings
