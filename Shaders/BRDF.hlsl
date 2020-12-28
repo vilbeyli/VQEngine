@@ -57,7 +57,7 @@ struct BRDF_Surface
 };
 
 // Trowbridge-Reitz GGX Distribution
-inline float NormalDistributionGGX(float3 N, float3 H, float roughness)
+inline float NormalDistributionGGX(float NdotH, float roughness)
 {	// approximates microfacets :	approximates the amount the surface's microfacets are
 	//								aligned to the halfway vector influenced by the roughness
 	//								of the surface
@@ -67,7 +67,7 @@ inline float NormalDistributionGGX(float3 N, float3 H, float roughness)
 	// NDF_GGXTR(N, H, roughness) = roughness^2 / ( PI * ( dot(N, H))^2 * (roughness^2 - 1) + 1 )^2
 	const float a = roughness * roughness;
 	const float a2 = a * a;
-	const float nh2 = pow(max(dot(N, H), 0), 2);
+	const float nh2 = pow(NdotH, 2);
 	const float denom = (PI * pow((nh2 * (a2 - 1.0f) + 1.0f), 2));
 	if (denom < EPSILON) return 1.0f;
 	return a2 / denom;
@@ -170,7 +170,11 @@ float3 BRDF(in BRDF_Surface s, float3 Wi, float3 V)
 	const float3 Wo = normalize(V);
 	const float3 N = normalize(s.N);
 	const float3 H = normalize(Wo + Wi);
-
+	const float NdotH = saturate(dot(N, H));
+	const float VdotH = saturate(dot(Wo, H));
+	const float NdotV = saturate(dot(N, Wo));
+	const float NdotL = saturate(dot(N, Wi));
+	
 	// surface
 	const float3 albedo = s.diffuseColor;
 	const float  roughness = s.roughness;
@@ -180,9 +184,9 @@ float3 BRDF(in BRDF_Surface s, float3 Wi, float3 V)
 	// Fresnel_Cook-Torrence BRDF
 	const float3 F = Fresnel(H, V, F0);
 	const float  G = Geometry(N, Wo, Wi, roughness);
-	const float  NDF = NormalDistributionGGX(N, H, roughness);
-	const float  denom = (4.0f * max(0.0f, dot(Wo, N)) * max(0.0f, dot(Wi, N))) + 0.0001f;
-	const float3 specular = NDF * F * G / denom;
+	const float  D = NormalDistributionGGX(NdotH, roughness);
+	const float denom = (4.0f * NdotV * NdotL) + 0.0001f;
+	const float3 specular = D * F * G / denom;
 	const float3 Is = specular * s.specularColor;
 
 	// Diffuse BRDF
@@ -193,7 +197,7 @@ float3 BRDF(in BRDF_Surface s, float3 Wi, float3 V)
 	return (Id + Is);
 }
 
-float3 EnvironmentBRDF(BRDF_Surface s, float3 V, float ao, float3 irradience, float3 envSpecular, float2 F0ScaleBias)
+float3 EnvironmentBRDF(BRDF_Surface s, float3 V, float3 diffuseIrradiance, float3 preFileteredSpecular, float2 F0ScaleBias)
 {
 	const float NdotV = saturate(dot(s.N, V));
 	const float3 F0 = lerp(0.04f.xxx, s.diffuseColor, s.metalness);
@@ -201,10 +205,10 @@ float3 EnvironmentBRDF(BRDF_Surface s, float3 V, float ao, float3 irradience, fl
 	const float3 Ks = FresnelWithRoughness(NdotV, F0, s.roughness);
 	const float3 Kd = (1.0f.xxx - Ks) * (1.0f - s.metalness);
 
-	const float3 diffuse = irradience * s.diffuseColor;
-	const float3 specular = envSpecular * (Ks * F0ScaleBias.x + F0ScaleBias.y);
+	const float3 diffuse = diffuseIrradiance * s.diffuseColor;
+	const float3 specular = preFileteredSpecular * (Ks * F0ScaleBias.x + F0ScaleBias.y);
 
-	return (Kd * diffuse + specular) * ao;
+	return (Kd * diffuse + specular);
 }
 
 
@@ -236,7 +240,7 @@ float3 ImportanceSampleGGX(float2 Xi, float3 N, float roughness)
 	const float3 sample = tangent * H.x + bitangent * H.y + N * H.z;
 	return normalize(sample);
 }
-float2 IntegrateBRDF(float NdotV, float roughness)
+float2 IntegrateBRDF(float NdotV, float roughness, const int INTEGRATION_SAMPLE_COUNT)
 {
 	float3 V;
 	V.x = sqrt(1.0f - NdotV * NdotV); // sin ()
@@ -246,11 +250,10 @@ float2 IntegrateBRDF(float NdotV, float roughness)
 	float F0Scale = 0;	// Integral1
 	float F0Bias = 0;	// Integral2
 
-	const uint SAMPLE_COUNT = 2048;
 	const float3 N = float3(0, 0, 1);
-	for (uint i = 0; i < SAMPLE_COUNT; ++i)
+	for (uint i = 0; i < INTEGRATION_SAMPLE_COUNT; ++i)
 	{
-		const float2 Xi = Hammersley(i, SAMPLE_COUNT);
+		const float2 Xi = Hammersley(i, INTEGRATION_SAMPLE_COUNT);
 		const float3 H = ImportanceSampleGGX(Xi, N, roughness);
 		const float3 L = normalize(reflect(-V, H));
 
@@ -280,5 +283,5 @@ float2 IntegrateBRDF(float NdotV, float roughness)
 			F0Bias += Fc * G_Vis;
 		}
 	}
-	return float2(F0Scale, F0Bias) / SAMPLE_COUNT;
+	return float2(F0Scale, F0Bias) / INTEGRATION_SAMPLE_COUNT;
 }

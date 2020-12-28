@@ -605,7 +605,7 @@ void VQRenderer::LoadRootSignatures()
 
 	// ForwardLighting Root Signature : [5]
 	{
-		CD3DX12_DESCRIPTOR_RANGE1 ranges[6];
+		CD3DX12_DESCRIPTOR_RANGE1 ranges[7];
 		// material textures
 		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
 		// shadow maps
@@ -614,10 +614,11 @@ void VQRenderer::LoadRootSignatures()
 		ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, NUM_SHADOWING_LIGHTS__POINT, 22, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
 		ranges[4].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 10, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
 		ranges[5].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 11, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
+		ranges[6].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 12, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
 		//ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC); // perView  cb's are DescRanges
 		//ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC); // perFrame cb's are DescRanges
 
-		CD3DX12_ROOT_PARAMETER1 rootParameters[9]; 
+		CD3DX12_ROOT_PARAMETER1 rootParameters[10]; 
 		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[1].InitAsConstantBufferView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL);
 #if 0
@@ -629,11 +630,15 @@ void VQRenderer::LoadRootSignatures()
 		rootParameters[2].InitAsConstantBufferView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[3].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_PIXEL);
 #endif
+		// Shadowmap bindings
 		rootParameters[4].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[5].InitAsDescriptorTable(1, &ranges[2], D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[6].InitAsDescriptorTable(1, &ranges[3], D3D12_SHADER_VISIBILITY_PIXEL);
+		
+		// Environment map bindings
 		rootParameters[7].InitAsDescriptorTable(1, &ranges[4], D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[8].InitAsDescriptorTable(1, &ranges[5], D3D12_SHADER_VISIBILITY_PIXEL);
+		rootParameters[9].InitAsDescriptorTable(1, &ranges[6], D3D12_SHADER_VISIBILITY_PIXEL);
 
 		D3D12_STATIC_SAMPLER_DESC samplers[3] = {};
 		D3D12_STATIC_SAMPLER_DESC sampler = {};
@@ -818,6 +823,25 @@ void VQRenderer::LoadRootSignatures()
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
 		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_GaussianBlurCS");
+	}
+
+	// BRDF Integration CS Root Signature : [12]
+	{
+		CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
+		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
+
+		CD3DX12_ROOT_PARAMETER1 rootParameters[1];
+		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_ALL);
+
+		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, NULL, D3D12_ROOT_SIGNATURE_FLAG_NONE);
+
+		hr = D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error);
+		if (!SUCCEEDED(hr)) { ReportErrorAndReleaseBlob(error); assert(false); }
+		ID3D12RootSignature* pRS = nullptr;
+		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
+		mpBuiltinRootSignatures.push_back(pRS);
+		SetName(pRS, "RootSignature_BRDFIntegrationCS");
 	}
 }
 
@@ -1192,9 +1216,7 @@ void VQRenderer::LoadPSOs()
 
 	// GAUSSIAN BLUR CS PSOs
 	{
-
 		const std::wstring ShaderFilePath = GetAssetFullPath(L"GaussianBlur.hlsl");
-
 		{
 			FPSOLoadDesc psoLoadDesc = {};
 			psoLoadDesc.PSOName = "PSO_GaussianBlurNaiveXCS";
@@ -1208,6 +1230,18 @@ void VQRenderer::LoadPSOs()
 			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain_Y", "cs_5_1" });
 			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[11];
 			PSOLoadDescs.push_back({ EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_Y_PSO, psoLoadDesc });
+		}
+	}
+
+	// BRDF INTEGRATION CS PSO
+	{
+		const std::wstring ShaderFilePath = GetAssetFullPath(L"CubemapConvolution.hlsl");
+		{
+			FPSOLoadDesc psoLoadDesc = {};
+			psoLoadDesc.PSOName = "PSO_BRDFIntegrationCS";
+			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain_BRDFIntegration", "cs_5_1" });
+			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[12];
+			PSOLoadDescs.push_back({ EBuiltinPSOs::BRDF_INTEGRATION_CS_PSO, psoLoadDesc });
 		}
 	}
 
@@ -1264,6 +1298,19 @@ void VQRenderer::LoadDefaultResources()
 		TextureID texID = this->CreateTexture(desc);
 		mLookup_ProceduralTextureIDs[EProceduralTextures::CHECKERBOARD_GRAYSCALE] = texID;
 		mLookup_ProceduralTextureSRVs[EProceduralTextures::CHECKERBOARD_GRAYSCALE] = this->CreateAndInitializeSRV(texID);
+	}
+	{
+		desc.TexName = "IBL_BRDF_Integration";
+		desc.pData = nullptr;
+		desc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		desc.d3d12Desc.Width  = 1024;
+		desc.d3d12Desc.Height = 1024;
+		desc.d3d12Desc.Format = DXGI_FORMAT_R16G16_FLOAT;
+		desc.d3d12Desc.Flags = D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+		TextureID texID = this->CreateTexture(desc);
+		mLookup_ProceduralTextureIDs[EProceduralTextures::IBL_BRDF_INTEGRATION_LUT] = texID;
+		mLookup_ProceduralTextureSRVs[EProceduralTextures::IBL_BRDF_INTEGRATION_LUT] = this->CreateAndInitializeSRV(texID);
 	}
 }
 void VQRenderer::UploadVertexAndIndexBufferHeaps()

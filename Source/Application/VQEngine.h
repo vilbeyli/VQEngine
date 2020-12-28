@@ -91,6 +91,8 @@ struct FEnvironmentMap
 
 	SRV_ID SRV_BlurTemp = INVALID_ID;
 
+	SRV_ID SRV_BRDFIntegrationLUT = INVALID_ID;
+
 	//
 	// HDR10 Static Metadata Parameters -------------------------------
 	// https://docs.microsoft.com/en-us/windows/win32/api/dxgi1_5/ns-dxgi1_5-dxgi_hdr_metadata_hdr10
@@ -276,6 +278,7 @@ public:
 	
 	void StartLoadingEnvironmentMap(int IndexEnvMap);
 	void PreFilterEnvironmentMap(FEnvironmentMap& env);
+	void ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, SRV_ID& outSRV_ID);
 	void UnloadEnvironmentMap();
 
 	// Getters

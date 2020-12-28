@@ -213,10 +213,10 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayVie
     {
 
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-        int mipLevel        = 0; // TODO //= (mipLevel == -1) ? 0 : mipLevel
+        int mipLevel        = 0;// TODO resourceDesc.MipLevels;
         int arraySize       = resourceDesc.DepthOrArraySize; // TODO
         int firstArraySlice = index;
-
+        //assert(mipLevel > 0);
 
 
         const bool bBufferSRV = resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -273,7 +273,7 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayVie
                     srvDesc.ViewDimension = bInitAsCubeView ? D3D12_SRV_DIMENSION_TEXTURECUBEARRAY : D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
                     if (bInitAsCubeView)
                     {
-                        srvDesc.TextureCubeArray.MipLevels = 1;
+                        srvDesc.TextureCubeArray.MipLevels = resourceDesc.MipLevels;
                         srvDesc.TextureCubeArray.ResourceMinLODClamp = 0;
                         srvDesc.TextureCubeArray.MostDetailedMip = 0;
                         srvDesc.TextureCubeArray.First2DArrayFace = 0;
@@ -293,8 +293,8 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayVie
                     srvDesc.ViewDimension = bInitAsCubeView ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
                     if (bInitAsCubeView)
                     {
-                        srvDesc.TextureCube.MostDetailedMip = mipLevel;
-                        srvDesc.TextureCube.MipLevels = 1;
+                        srvDesc.TextureCube.MostDetailedMip = 0;
+                        srvDesc.TextureCube.MipLevels = resourceDesc.MipLevels;
                         srvDesc.TextureCube.ResourceMinLODClamp = 0;
                     }
                     else

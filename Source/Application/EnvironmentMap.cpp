@@ -225,10 +225,16 @@ void VQEngine::UnloadEnvironmentMap()
 #include "GPUMarker.h"
 void VQEngine::PreFilterEnvironmentMap(FEnvironmentMap& env)
 {
+	Log::Info("Environment Map: PreFilterEnvironmentMap");
 	using namespace DirectX;
 
 	FWindowRenderContext& ctx = mRenderer.GetWindowRenderContext(mpWinMain->GetHWND());
 	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
+
+	if (env.SRV_BRDFIntegrationLUT == INVALID_ID)
+	{
+		ComputeBRDFIntegrationLUT(pCmd, env.SRV_BRDFIntegrationLUT);
+	}
 
 	SCOPED_GPU_MARKER(pCmd, "RenderEnvironmentMapCubeFaces");
 
@@ -287,6 +293,7 @@ void VQEngine::PreFilterEnvironmentMap(FEnvironmentMap& env)
 
 	// Diffuse Irradiance Convolution
 	{
+		Log::Info("Environment Map:   DiffuseIrradianceCubemap");
 		SCOPED_GPU_MARKER(pCmd, "DiffuseIrradianceCubemap");
 
 		// Since calculating the diffuse irradiance integral takes a long time,
@@ -387,7 +394,7 @@ void VQEngine::PreFilterEnvironmentMap(FEnvironmentMap& env)
 	// Blur Diffuse Irradiance
 	for (int face = 0; face < NUM_CUBE_FACES; ++face)
 	{
-		std::string marker = "Blur Face[";
+		std::string marker = "CubeFace[";
 		marker += std::to_string(face);
 		marker += "]";
 		SCOPED_GPU_MARKER(pCmd, marker.c_str());
@@ -460,20 +467,23 @@ void VQEngine::PreFilterEnvironmentMap(FEnvironmentMap& env)
 	{
 		const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 		{
-			  CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(env.Tex_IrradianceDiffBlurred), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+			CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(env.Tex_IrradianceDiffBlurred), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+		  , CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(env.Tex_IrradianceDiff), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
 		};
 		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
 	}
 
+
 	// Specular Irradiance
 	if constexpr (true)
 	{
+		Log::Info("Environment Map:   SpecularIrradianceCubemap");
 		SCOPED_GPU_MARKER(pCmd, "SpecularIrradianceCubemap");
 
 		pCmd->SetPipelineState(mRenderer.GetPSO(CUBEMAP_CONVOLUTION_SPECULAR_PSO));
 		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(10));
 		pCmd->SetGraphicsRootDescriptorTable(2, srvEnvDown.GetGPUDescHandle());
-		pCmd->SetGraphicsRootDescriptorTable(3, srvEnvDown.GetGPUDescHandle()); // no need
+		pCmd->SetGraphicsRootDescriptorTable(3, srvIrrDiffuse.GetGPUDescHandle());
 
 		int w, h, d, MIP_LEVELS;
 		mRenderer.GetTextureDimensions(env.Tex_IrradianceSpec, w, h, d, MIP_LEVELS);
@@ -482,6 +492,10 @@ void VQEngine::PreFilterEnvironmentMap(FEnvironmentMap& env)
 		{
 			for (int face = 0; face < NUM_CUBE_FACES; ++face)
 			{
+				std::string marker = "CubeFace["; marker += std::to_string(face); marker += "]";
+				marker += ", MIP=" + std::to_string(mip);
+				SCOPED_GPU_MARKER(pCmd, marker.c_str());
+
 				const RTV& rtv = mRenderer.GetRTV(env.RTV_IrradianceSpec);
 				D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle(mip * 6 + face);
 
@@ -526,12 +540,50 @@ void VQEngine::PreFilterEnvironmentMap(FEnvironmentMap& env)
 				pCmd->DrawIndexedInstanced(NumIndices, 1, 0, 0, 0);
 			}
 		}
+
+		const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+		{
+			CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(env.Tex_IrradianceSpec), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+		};
+		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
 	}
+}
+
+void VQEngine::ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, SRV_ID& outSRV_ID)
+{
+	Log::Info("Environment Map:   ComputeBRDFIntegrationLUT");
+	SCOPED_GPU_MARKER(pCmd, "CreateBRDFIntegralLUT");
+
+	// Texture resource is created (on Renderer::LoadDefaultResources()) but not initialized at this point.
+	const TextureID TexBRDFLUT = mRenderer.GetProceduralTexture(EProceduralTextures::IBL_BRDF_INTEGRATION_LUT);
+	ID3D12Resource* pRscBRDFLUT = mRenderer.GetTextureResource(TexBRDFLUT);
+
+	int W, H;
+	mRenderer.GetTextureDimensions(TexBRDFLUT, W, H);
+
+	// Create & Initialize a UAV for the LUT 
+	UAV_ID uavBRDFLUT_ID = mRenderer.CreateUAV();
+	mRenderer.InitializeUAV(uavBRDFLUT_ID, 0, TexBRDFLUT);
+	const UAV& uavBRDFLUT = mRenderer.GetUAV(uavBRDFLUT_ID);
+
+	// Dispatch
+	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::BRDF_INTEGRATION_CS_PSO));
+	pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(12)); // hardcoded is bad :(
+	pCmd->SetComputeRootDescriptorTable(0, uavBRDFLUT.GetGPUDescHandle());
+
+	constexpr int THREAD_GROUP_X = 8;
+	constexpr int THREAD_GROUP_Y = 8;
+	const int DISPATCH_DIMENSION_X = (W + (THREAD_GROUP_X - 1)) / THREAD_GROUP_X;
+	const int DISPATCH_DIMENSION_Y = (H + (THREAD_GROUP_Y - 1)) / THREAD_GROUP_Y;
+	constexpr int DISPATCH_DIMENSION_Z = 1;
+	pCmd->Dispatch(DISPATCH_DIMENSION_X, DISPATCH_DIMENSION_Y, DISPATCH_DIMENSION_Z);
 
 	const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 	{
-		  CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(env.Tex_IrradianceDiff), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
-		, CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(env.Tex_IrradianceSpec), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+		  CD3DX12_RESOURCE_BARRIER::Transition(pRscBRDFLUT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
 	};
 	pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+	
+	outSRV_ID = mRenderer.GetProceduralTexture(EProceduralTextures::IBL_BRDF_INTEGRATION_LUT);
 }
+

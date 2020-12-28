@@ -143,29 +143,29 @@ float4 PSMain(PSInput In) : SV_TARGET
 	
 	// read textures/cbuffer & assign sufrace material data
 	float ao = cbPerFrame.fAmbientLightingFactor;
-	BRDF_Surface SurfaceParams = (BRDF_Surface)0;
-	SurfaceParams.diffuseColor      = HasDiffuseMap(TEX_CFG)   ? AlbedoAlpha.rgb : cbPerObject.materialData.diffuse;
-	SurfaceParams.specularColor     = float3(1,1,1);
-	SurfaceParams.emissiveColor     = HasEmissiveMap(TEX_CFG)  ? Emissive        : cbPerObject.materialData.emissiveColor;
-	SurfaceParams.emissiveIntensity = cbPerObject.materialData.emissiveIntensity;
+	BRDF_Surface Surface = (BRDF_Surface)0;
+	Surface.diffuseColor      = HasDiffuseMap(TEX_CFG)   ? AlbedoAlpha.rgb : cbPerObject.materialData.diffuse;
+	Surface.specularColor     = float3(1,1,1);
+	Surface.emissiveColor     = HasEmissiveMap(TEX_CFG)  ? Emissive        : cbPerObject.materialData.emissiveColor;
+	Surface.emissiveIntensity = cbPerObject.materialData.emissiveIntensity;
 	
 	const float3  N = normalize(In.vertNormal);
 	const float3  T = normalize(In.vertTangent);
-	SurfaceParams.N = length(Normal) < 0.01 ? N : UnpackNormal(Normal, N, T);
+	Surface.N = length(Normal) < 0.01 ? N : UnpackNormal(Normal, N, T);
 	
 	const bool bReadsRoughnessMapData = HasRoughnessMap(TEX_CFG) || HasOcclusionRoughnessMetalnessMap(TEX_CFG);
 	const bool bReadsMetalnessMapData =  HasMetallicMap(TEX_CFG) || HasOcclusionRoughnessMetalnessMap(TEX_CFG);
 	
-	if (!bReadsRoughnessMapData) SurfaceParams.roughness = cbPerObject.materialData.roughness;
-	if (!bReadsMetalnessMapData) SurfaceParams.metalness = cbPerObject.materialData.metalness;
+	if (!bReadsRoughnessMapData) Surface.roughness = cbPerObject.materialData.roughness;
+	if (!bReadsMetalnessMapData) Surface.metalness = cbPerObject.materialData.metalness;
 	if (HasAmbientOcclusionMap           (TEX_CFG)) ao *= LocalAO;
-	if (HasRoughnessMap                  (TEX_CFG)) SurfaceParams.roughness = Roughness;
-	if (HasMetallicMap                   (TEX_CFG)) SurfaceParams.metalness = Metalness;
+	if (HasRoughnessMap                  (TEX_CFG)) Surface.roughness = Roughness;
+	if (HasMetallicMap                   (TEX_CFG)) Surface.metalness = Metalness;
 	if (HasOcclusionRoughnessMetalnessMap(TEX_CFG))
 	{
-		ao *= OcclRghMtl.r;
-		SurfaceParams.roughness = OcclRghMtl.g;
-		SurfaceParams.metalness = OcclRghMtl.b;
+		//ao *= OcclRghMtl.r; // TODO: handle no occlusion map case
+		Surface.roughness = OcclRghMtl.g;
+		Surface.metalness = OcclRghMtl.b;
 	}
 	
 	// lighting & surface parameters (World Space)
@@ -176,24 +176,28 @@ float4 PSMain(PSInput In) : SV_TARGET
 	
 	// illumination accumulators
 	float3 I_total = 
-	/* ambient  */   SurfaceParams.diffuseColor  * ao
-	/* Emissive */ + SurfaceParams.emissiveColor * SurfaceParams.emissiveIntensity * 10.0f
+	/* ambient  */   Surface.diffuseColor  * ao
+	/* Emissive */ + Surface.emissiveColor * Surface.emissiveIntensity * 10.0f
 	;
-	
-	float3 IEnv = texEnvMapDiff.Sample(LinearSampler, SurfaceParams.N).rgb * SurfaceParams.diffuseColor; // environment lighting illumination
-	IEnv += texEnvMapSpec.Sample(LinearSampler, SurfaceParams.N).rgb * 0.00001f;
-	I_total += IEnv * ao; // scale down w/ AO
+
 	
 	// -------------------------------------------------------------------------------------------------------
+	
+	// Environment map
+	{
+		const int MAX_REFLECTION_LOD = 6;
+		I_total += CalculateEnvironmentMapIllumination(Surface, V, MAX_REFLECTION_LOD, texEnvMapDiff, texEnvMapSpec, texBRDFIntegral, LinearSampler);
+	}
+	
 	
 	// Non-shadowing lights
 	for (int p = 0; p < cbPerFrame.Lights.numPointLights; ++p)
 	{
-		I_total += CalculatePointLightIllumination(cbPerFrame.Lights.point_lights[p], SurfaceParams, P, V);
+		I_total += CalculatePointLightIllumination(cbPerFrame.Lights.point_lights[p], Surface, P, V);
 	}
 	for (int s = 0; s < cbPerFrame.Lights.numSpotLights; ++s)
 	{
-		I_total += CalculateSpotLightIllumination(cbPerFrame.Lights.spot_lights[s], SurfaceParams, P, V);
+		I_total += CalculateSpotLightIllumination(cbPerFrame.Lights.spot_lights[s], Surface, P, V);
 	}
 	
 	
@@ -210,10 +214,10 @@ float4 PSMain(PSInput In) : SV_TARGET
 			const float3 Lw = (l.position - P);
 			ShadowTestPCFData pcfData = (ShadowTestPCFData) 0;
 			pcfData.depthBias           = l.depthBias;
-			pcfData.NdotL               = saturate(dot(SurfaceParams.N, L));
+			pcfData.NdotL               = saturate(dot(Surface.N, L));
 			pcfData.viewDistanceOfPixel = length(P - cbPerView.CameraPosition);
 		
-			I_total += CalculatePointLightIllumination(cbPerFrame.Lights.point_casters[pc], SurfaceParams, P, V)
+			I_total += CalculatePointLightIllumination(cbPerFrame.Lights.point_casters[pc], Surface, P, V)
 					* OmnidirectionalShadowTestPCF(pcfData, texPointLightShadowMaps, PointSampler, PointLightShadowMapDimensions, pc, Lw, l.range);
 		}
 	}
@@ -227,11 +231,11 @@ float4 PSMain(PSInput In) : SV_TARGET
 		
 		ShadowTestPCFData pcfData = (ShadowTestPCFData) 0;
 		pcfData.depthBias           = l.depthBias;
-		pcfData.NdotL               = saturate(dot(SurfaceParams.N, L));
+		pcfData.NdotL               = saturate(dot(Surface.N, L));
 		pcfData.lightSpacePos       = mul(cbPerFrame.Lights.shadowViews[sc], float4(P, 1));
 		pcfData.viewDistanceOfPixel = length(P - cbPerView.CameraPosition);
 		
-		I_total += CalculateSpotLightIllumination(cbPerFrame.Lights.spot_casters[sc], SurfaceParams, P, V)
+		I_total += CalculateSpotLightIllumination(cbPerFrame.Lights.spot_casters[sc], Surface, P, V)
 			  * ShadowTestPCF(pcfData, texSpotLightShadowMaps, PointSampler, SpotLightShadowMapDimensions, sc);
 	}
 	
@@ -247,17 +251,17 @@ float4 PSMain(PSInput In) : SV_TARGET
 			{
 				const float3 L = normalize(-l.lightDirection);
 				pcfData.lightSpacePos = mul(cbPerFrame.Lights.shadowViewDirectional, float4(P, 1));
-				pcfData.NdotL = saturate(dot(SurfaceParams.N, L));
+				pcfData.NdotL = saturate(dot(Surface.N, L));
 				pcfData.depthBias = l.depthBias;
 				ShadowingFactor = ShadowTestPCF_Directional(pcfData, texDirectionalLightShadowMap, PointSampler, cbPerFrame.f2DirectionalLightShadowMapDimensions, cbPerFrame.Lights.shadowViewDirectional);
 			}
 			
-			I_total += CalculateDirectionalLightIllumination(l, SurfaceParams, V) * ShadowingFactor;
+			I_total += CalculateDirectionalLightIllumination(l, Surface, V) * ShadowingFactor;
 		}
 	}
 	
 	return float4(I_total, 1);
-	//return float4(SurfaceParams.N, 1); // debug line
-	//return float4(SurfaceParams.roughness.xxx, 1); // debug line
-	//return float4(SurfaceParams.metalness.xxx, 1); // debug line
+	//return float4(Surface.N, 1); // debug line
+	//return float4(Surface.roughness.xxx, 1); // debug line
+	//return float4(Surface.metalness.xxx, 1); // debug line
 }

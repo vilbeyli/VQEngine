@@ -488,12 +488,19 @@ void VQEngine::RenderThread_PreRender()
 
 void VQEngine::RenderThread_Render()
 {
+	//
+	// Handle one-time & infrequent events
+	//
 	if (mbEnvironmentMapPreFilter.load())
 	{
 		PreFilterEnvironmentMap(mResources_MainWnd.EnvironmentMap);
 		mbEnvironmentMapPreFilter.store(false);
 	}
 
+
+	//
+	// Render window contexts
+	//
 	RenderThread_RenderMainWindow();
 
 	if(mpWinDebug && !mpWinDebug->IsClosed())
@@ -1108,6 +1115,7 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 			? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_IrradianceSpec).GetGPUDescHandle(0)
 			: NullCubemapSRV.GetGPUDescHandle()
 		);
+		pCmd->SetGraphicsRootDescriptorTable(9, mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_BRDFIntegrationLUT).GetGPUDescHandle());
 	}
 
 	// set PerView constants

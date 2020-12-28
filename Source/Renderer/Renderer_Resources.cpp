@@ -988,7 +988,7 @@ const IBV& VQRenderer::GetIndexBufferView(BufferID Id) const
 }
 const CBV_SRV_UAV& VQRenderer::GetShaderResourceView(SRV_ID Id) const
 {
-	//assert(Id < mSRVs.size() && Id != INVALID_ID);
+	assert(Id < LAST_USED_SRV_ID && mSRVs.find(Id) != mSRVs.end());
 	return mSRVs.at(Id);
 }
 
@@ -1208,6 +1208,7 @@ void VQRenderer::DestroySRV(SRV_ID& srvID)
 	std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 	//mSRVs.at(srvID).Destroy(); // TODO
 	mSRVs.erase(srvID);
+	Log::Info("Erase SRV_ID=%d", srvID);
 	srvID = INVALID_ID;
 }
 void VQRenderer::DestroyDSV(DSV_ID& dsvID)

@@ -181,12 +181,46 @@ float4 PSMain_SpecularIrradiance(GSOut In) : SV_TARGET
 		float NdotL = saturate(dot(N, L));
 		if (NdotL > 0.0f)
 		{
-			//prefilteredColor += tEnvironmentMap.Sample(Sampler, L).rgb * NdotL;
+			#if 1
+			// simple convolution with NdotL
 			prefilteredColor += texEquirectEnvironmentMap.Sample(Sampler, SphericalSample(L)) * NdotL;
+			#else 
+			// factor in PDF to reduce 'spots' in the blurred slices with linear filtering between source image mips
+			const float NdotH = saturate(dot(N, H));
+			const float HdotV = saturate(dot(H, V));
+			
+			float D = NormalDistributionGGX(NdotH, Roughness);
+			float pdf = (D * NdotH / (4.0 * HdotV)) + 0.0001;
+
+			float resolution = 512.0; // resolution of source cubemap (per face) TODO: read from cbuffer
+			float saTexel = 4.0 * PI / (6.0 * resolution * resolution);
+			float saSample = 1.0 / (float(NUM_SAMPLES) * pdf + 0.0001);
+			
+			float mipLevel = Roughness == 0.0 ? 0.0 : 0.5 * log2(saSample / saTexel);
+			
+			prefilteredColor += texEquirectEnvironmentMap.SampleLevel(Sampler, SphericalSample(L), mipLevel) * NdotL;
+			#endif
 			totalWeight += NdotL;
 		}
 	}
-	prefilteredColor /= totalWeight;
+	prefilteredColor /= max(totalWeight, 0.001f);
 
 	return float4(prefilteredColor, 1);
+}
+
+RWTexture2D<float2> texBRDFLUT : register(u0);
+
+[numthreads(8, 8, 1)]
+void CSMain_BRDFIntegration(uint3 DispatchThreadID : SV_DispatchThreadID)
+{
+	uint2 px = DispatchThreadID.xy;
+	
+	const int IMAGE_SIZE_X = 1024; // TODO: receive from constant buffer?
+	const int IMAGE_SIZE_Y = 1024; // TODO: receive from constant buffer?
+	const float2 uv = float2((float(px.x) + 0.5f) / IMAGE_SIZE_X, (float(px.y) + 0.5f) / IMAGE_SIZE_Y);
+	
+	float Roughness = uv.y;
+	float NdotV = uv.x;
+	const int INTEGRATION_SAMPLE_COUNT = 2048;
+	texBRDFLUT[px] = IntegrateBRDF(NdotV, Roughness, INTEGRATION_SAMPLE_COUNT);
 }
