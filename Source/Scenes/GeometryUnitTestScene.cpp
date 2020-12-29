@@ -45,6 +45,7 @@ void GeometryUnitTestScene::InitializeScene()
 
 void GeometryUnitTestScene::LoadScene(FSceneRepresentation& scene)
 {
+
 }
 
 void GeometryUnitTestScene::UnloadScene()
