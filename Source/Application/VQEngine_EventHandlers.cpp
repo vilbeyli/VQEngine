@@ -180,20 +180,34 @@ void VQEngine::UpdateThread_HandleEvents()
 
 }
 
+#define A_CPU 1
+#include "Libs/FidelityFX/ffx_a.h"
+#include "Libs/FidelityFX/CAS/ffx_cas.h"
 void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent)
 {
 	std::shared_ptr<WindowResizeEvent> p = std::static_pointer_cast<WindowResizeEvent>(pEvent);
 
+	const float fWidth  = static_cast<float>(p->width );
+	const float fHeight = static_cast<float>(p->height);
 	if (p->hwnd == mpWinMain->GetHWND())
 	{
-		// TODO: all cameras?
-		Camera& cam = mpScene->GetActiveCamera();
-		
-		FProjectionMatrixParameters UpdatedProjectionMatrixParams = cam.GetProjectionParameters();
-		UpdatedProjectionMatrixParams.ViewportWidth  = static_cast<float>(p->width );
-		UpdatedProjectionMatrixParams.ViewportHeight = static_cast<float>(p->height);
+		SwapChain& Swapchain = mRenderer.GetWindowSwapChain(p->hwnd);
+		const int NUM_BACK_BUFFERS =  Swapchain.GetNumBackBuffers();
 
-		cam.SetProjectionMatrix(UpdatedProjectionMatrixParams);		
+		// Update Camera Projection Matrices
+		Camera& cam = mpScene->GetActiveCamera(); // TODO: all cameras?
+		FProjectionMatrixParameters UpdatedProjectionMatrixParams = cam.GetProjectionParameters();
+		UpdatedProjectionMatrixParams.ViewportWidth  = fWidth;
+		UpdatedProjectionMatrixParams.ViewportHeight = fHeight;
+		cam.SetProjectionMatrix(UpdatedProjectionMatrixParams);
+
+		// Update PostProcess Data
+		for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
+		{
+			FPostProcessParameters::FFFXCAS& CASParams = mpScene->GetPostProcessParameters(i).FFXCASParams;
+			CasSetup(&CASParams.CASConstantBlock[0], &CASParams.CASConstantBlock[4], CASParams.CASSharpen, fWidth, fHeight, fWidth, fHeight);
+		}
+		
 	}
 }
 
@@ -472,7 +486,7 @@ void VQEngine::RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent)
 	const int BACK_BUFFER_INDEX = Swapchain.GetCurrentBackBufferIndex();
 	const EDisplayCurve OutputDisplayCurve = Swapchain.IsHDRFormat() ? EDisplayCurve::Linear : EDisplayCurve::sRGB;
 	for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
-		mpScene->GetPostProcessParameters(i).OutputDisplayCurve = OutputDisplayCurve;
+		mpScene->GetPostProcessParameters(i).TonemapperParams.OutputDisplayCurve = OutputDisplayCurve;
 	
 	Log::Info("Set Swapchain Format: %s | OutputDisplayCurve: %s"
 		, VQRenderer::DXGIFormatAsString(pSwapchainEvent->format).data()

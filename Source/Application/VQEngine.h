@@ -64,7 +64,7 @@ struct FEnvironmentMapDescriptor
 	std::string FilePath;
 	float MaxContentLightLevel = 0.0f;
 };
-struct FEnvironmentMap
+struct FEnvironmentMapRenderingResources
 {
 	TextureID Tex_HDREnvironment = INVALID_ID; // equirect input
 	TextureID Tex_HDREnvironmentDownsampled = INVALID_ID; // downsampled (1/8) skydome for diffuse irradiance calculation
@@ -118,6 +118,7 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	TextureID Tex_PostProcess_BlurIntermediate = INVALID_ID;
 	TextureID Tex_PostProcess_BlurOutput       = INVALID_ID;
 	TextureID Tex_PostProcess_TonemapperOut    = INVALID_ID;
+	TextureID Tex_PostProcess_FFXCASOut        = INVALID_ID;
 	TextureID Tex_ShadowMaps_Spot              = INVALID_ID;
 	TextureID Tex_ShadowMaps_Point             = INVALID_ID;
 	TextureID Tex_ShadowMaps_Directional       = INVALID_ID;
@@ -129,6 +130,7 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	SRV_ID    SRV_PostProcess_BlurIntermediate = INVALID_ID;
 	SRV_ID    SRV_PostProcess_BlurOutput       = INVALID_ID;
 	SRV_ID    SRV_PostProcess_TonemapperOut    = INVALID_ID;
+	SRV_ID    SRV_PostProcess_FFXCASOut        = INVALID_ID;
 	SRV_ID    SRV_ShadowMaps_Spot              = INVALID_ID;
 	SRV_ID    SRV_ShadowMaps_Point             = INVALID_ID;
 	SRV_ID    SRV_ShadowMaps_Directional       = INVALID_ID;
@@ -136,6 +138,7 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	UAV_ID    UAV_PostProcess_BlurIntermediate = INVALID_ID;
 	UAV_ID    UAV_PostProcess_BlurOutput       = INVALID_ID;
 	UAV_ID    UAV_PostProcess_TonemapperOut    = INVALID_ID;
+	UAV_ID    UAV_PostProcess_FFXCASOut        = INVALID_ID;
 
 	DSV_ID    DSV_MainViewDepthMSAA             = INVALID_ID;
 	DSV_ID    DSV_MainViewDepth                 = INVALID_ID;
@@ -143,7 +146,7 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	DSV_ID    DSV_ShadowMaps_Point              = INVALID_ID;
 	DSV_ID    DSV_ShadowMaps_Directional        = INVALID_ID;
 
-	FEnvironmentMap EnvironmentMap;
+	FEnvironmentMapRenderingResources EnvironmentMap;
 
 	SRV_ID SRV_NullCubemap = INVALID_ID;
 };
@@ -277,7 +280,7 @@ public:
 	void StartLoadingScene(int IndexScene);
 	
 	void StartLoadingEnvironmentMap(int IndexEnvMap);
-	void PreFilterEnvironmentMap(FEnvironmentMap& env);
+	void PreFilterEnvironmentMap(FEnvironmentMapRenderingResources& env);
 	void ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, SRV_ID& outSRV_ID);
 	void UnloadEnvironmentMap();
 
@@ -428,9 +431,9 @@ private:
 	void                            RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowView& ShadowView);
 	void                            RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& SceneView);
 	void                            ResolveMSAA(FWindowRenderContext& ctx);
-	void                            TransitionForPostProcessing(FWindowRenderContext& ctx);
+	void                            TransitionForPostProcessing(FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
 	void                            RenderPostProcess(FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
-	void                            RenderUI(FWindowRenderContext& ctx);
+	void                            RenderUI(FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
 	void                            CompositUIToHDRSwapchain(FWindowRenderContext& ctx); // TODO
 	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
 

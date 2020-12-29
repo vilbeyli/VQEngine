@@ -392,7 +392,7 @@ void VQRenderer::InitializeHeaps()
 {
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
-	const uint32 UPLOAD_HEAP_SIZE = 513 * MEGABYTE; // TODO: from RendererSettings.ini
+	const uint32 UPLOAD_HEAP_SIZE = (512+256+128) * MEGABYTE; // TODO: from RendererSettings.ini
 	mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE, this->mGFXQueue.pQueue);
 
 	constexpr uint32 NumDescsCBV = 100;
@@ -1244,6 +1244,30 @@ void VQRenderer::LoadPSOs()
 			PSOLoadDescs.push_back({ EBuiltinPSOs::BRDF_INTEGRATION_CS_PSO, psoLoadDesc });
 		}
 	}
+
+	// AMD FidelityFX PSOs
+	{
+		const std::wstring ShaderFilePath = GetAssetFullPath(L"AMDFidelityFX.hlsl");
+
+		// FFX-CAS
+		{
+			FPSOLoadDesc psoLoadDesc = {};
+			psoLoadDesc.PSOName = "PSO_FFXCASCS";
+			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CAS_CSMain", "cs_5_1" });
+			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[3]; // share root signature with tonemapper pass
+			PSOLoadDescs.push_back({ EBuiltinPSOs::FFX_CAS_CS_PSO, psoLoadDesc });
+		}
+
+		// FFX-SPD
+		{
+			FPSOLoadDesc psoLoadDesc = {};
+			psoLoadDesc.PSOName = "PSO_FFXSPDCS";
+			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "SPD_CSMain", "cs_5_1" });
+			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[12];
+			//PSOLoadDescs.push_back({ EBuiltinPSOs::FFX_SPD_CS_PSO, psoLoadDesc });
+		}
+	}
+	
 
 	// ---------------------------------------------------------------------------------------------------------------1
 

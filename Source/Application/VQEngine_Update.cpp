@@ -247,11 +247,20 @@ void VQEngine::HandleEngineInput()
 				mSettings.gfx.bAntiAliasing = !mSettings.gfx.bAntiAliasing;
 				Log::Info("Toggle MSAA: %d", mSettings.gfx.bAntiAliasing);	
 			}
+			if (input.IsKeyTriggered("B"))
+			{
+				for (size_t i = 0; i < mpScene->mFrameSceneViews.size(); ++i)
+				{
+					FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
+					PPParams.bEnableCAS = !PPParams.bEnableCAS;
+				}
+				Log::Info("Toggle FFX-CAS: %d", mpScene->GetPostProcessParameters(FRAME_DATA_INDEX).bEnableCAS);
+			}
 			if (input.IsKeyTriggered("G"))
 			{
 				FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
-				PPParams.ToggleGammaCorrection = PPParams.ToggleGammaCorrection == 1 ? 0 : 1;
-				Log::Info("Tonemapper: ApplyGamma=%d (SDR-only)", PPParams.ToggleGammaCorrection);
+				PPParams.TonemapperParams.ToggleGammaCorrection = PPParams.TonemapperParams.ToggleGammaCorrection == 1 ? 0 : 1;
+				Log::Info("Tonemapper: ApplyGamma=%d (SDR-only)", PPParams.TonemapperParams.ToggleGammaCorrection);
 			}
 
 			// Scene switching

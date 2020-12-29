@@ -218,6 +218,7 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	LoadGameObjects(std::move(sceneRep.Objects));
 	LoadLights(sceneRep.Lights);
 	LoadCameras(sceneRep.Cameras);
+	LoadPostProcessSettings();
 }
 
 void Scene::LoadBuiltinMaterials(TaskID taskID)
@@ -388,6 +389,28 @@ void Scene::LoadCameras(std::vector<FCameraParameters>& CameraParams)
 	Log::Info("[Scene] Cameras initialized");
 }
 
+
+#define A_CPU 1
+#include "Libs/FidelityFX/ffx_a.h"
+#include "Libs/FidelityFX/CAS/ffx_cas.h"
+void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
+{
+	// TODO: remove hardcode
+
+	const float fWidth  = static_cast<float>(this->mpWindow->GetWidth());
+	const float fHeight = static_cast<float>(this->mpWindow->GetHeight());
+
+	// Update PostProcess Data
+	for (size_t i = 0; i < mFrameSceneViews.size(); ++i)
+	{
+		FPostProcessParameters& PPParams = this->GetPostProcessParameters(i);
+		FPostProcessParameters::FFFXCAS& CASParams = PPParams.FFXCASParams;
+		CasSetup(&CASParams.CASConstantBlock[0], &CASParams.CASConstantBlock[4], CASParams.CASSharpen, fWidth, fHeight, fWidth, fHeight);
+
+		PPParams.bEnableCAS = true; // TODO: read from scene PP settings
+	}
+}
+
 void Scene::OnLoadComplete()
 {
 	Log::Info("[Scene] OnLoadComplete()");
@@ -491,7 +514,7 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 	PrepareLightMeshRenderParams(SceneView);
 
 	// update post process settings for next frame
-	SceneViewNext.postProcess = SceneView.postProcess;
+	SceneViewNext.postProcessParameters = SceneView.postProcessParameters;
 	SceneViewNext.sceneParameters = SceneView.sceneParameters;
 }
 

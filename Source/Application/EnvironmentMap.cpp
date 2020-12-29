@@ -50,7 +50,7 @@ const FEnvironmentMapDescriptor& VQEngine::GetEnvironmentMapDesc(const std::stri
 void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 {
 	assert(EnvMapName.size() != 0);
-	FEnvironmentMap& env = mResources_MainWnd.EnvironmentMap;
+	FEnvironmentMapRenderingResources& env = mResources_MainWnd.EnvironmentMap;
 
 	// if already loaded, unload it
 	if (env.Tex_HDREnvironment != INVALID_ID)
@@ -96,7 +96,7 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 		tdesc.d3d12Desc.SampleDesc = { 1, 0 };
 		tdesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 		tdesc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
-		env.Tex_HDREnvironmentDownsampled = mRenderer.CreateTexture(tdesc);
+		env.Tex_HDREnvironmentDownsampled = mRenderer.CreateTexture(tdesc/*, true*/); // TODO: MIPS
 		
 		env.SRV_HDREnvironmentDownsampled = mRenderer.CreateAndInitializeSRV(env.Tex_HDREnvironmentDownsampled);
 		env.RTV_HDREnvironmentDownsampled = mRenderer.CreateRTV();
@@ -137,7 +137,7 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	tdesc.d3d12Desc.Width  = 256; // TODO: drive with gfx settings?
 	tdesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 	tdesc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
-	tdesc.d3d12Desc.MipLevels = Image::CalculateMipLevelCount(tdesc.d3d12Desc.Width, tdesc.d3d12Desc.Height) - 2; // 4x4 for the last mip level
+	tdesc.d3d12Desc.MipLevels = Image::CalculateMipLevelCount(tdesc.d3d12Desc.Width, tdesc.d3d12Desc.Height) - 1; // 2x2 for the last mip level
 	env.Tex_IrradianceSpec = mRenderer.CreateTexture(tdesc);
 
 	const int& NUM_MIPS = tdesc.d3d12Desc.MipLevels;
@@ -188,7 +188,7 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 
 void VQEngine::UnloadEnvironmentMap()
 {
-	FEnvironmentMap& env = mResources_MainWnd.EnvironmentMap;
+	FEnvironmentMapRenderingResources& env = mResources_MainWnd.EnvironmentMap;
 	if (env.Tex_HDREnvironment != INVALID_ID)
 	{
 		// GPU-sync assumed
@@ -223,7 +223,7 @@ void VQEngine::UnloadEnvironmentMap()
 //
 //-------------------------------------------------------------------------------------------------------------------------------------------------
 #include "GPUMarker.h"
-void VQEngine::PreFilterEnvironmentMap(FEnvironmentMap& env)
+void VQEngine::PreFilterEnvironmentMap(FEnvironmentMapRenderingResources& env)
 {
 	Log::Info("Environment Map: PreFilterEnvironmentMap");
 	using namespace DirectX;

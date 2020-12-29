@@ -77,10 +77,34 @@ struct FSceneRepresentation
 //------------------------------------------------------
 struct FPostProcessParameters
 {
-	EColorSpace   ContentColorSpace = EColorSpace::REC_709;
-	EDisplayCurve OutputDisplayCurve = EDisplayCurve::sRGB;
-	float         DisplayReferenceBrightnessLevel = 200.0f;
-	int           ToggleGammaCorrection = 1;
+	struct FTonemapper
+	{
+		EColorSpace   ContentColorSpace = EColorSpace::REC_709;
+		EDisplayCurve OutputDisplayCurve = EDisplayCurve::sRGB;
+		float         DisplayReferenceBrightnessLevel = 200.0f;
+		int           ToggleGammaCorrection = 1;
+	};
+	struct FFFXCAS
+	{
+		unsigned CASConstantBlock[8];
+		float CASSharpen = 0.8f;
+		FFFXCAS() = default;
+		FFFXCAS(const FFFXCAS& other) : CASSharpen(other.CASSharpen) { memcpy(CASConstantBlock, other.CASConstantBlock, sizeof(CASConstantBlock)); }
+	};
+	struct FBlurParams // Gaussian Blur Pass
+	{ 
+		int iImageSizeX;
+		int iImageSizeY;
+	};
+
+	inline bool IsFFXCASEnabled() const { return this->bEnableCAS && FFXCASParams.CASSharpen > 0.0f; }
+
+	FTonemapper TonemapperParams;
+	FBlurParams BlurParams;
+	FFFXCAS     FFXCASParams;
+
+	bool bEnableCAS;
+	bool bEnableGaussianBlur;
 };
 struct FSceneRenderParameters
 {
@@ -128,7 +152,7 @@ struct FSceneView
 	VQ_SHADER_DATA::SceneLighting GPULightingData;
 
 	FSceneRenderParameters sceneParameters;
-	FPostProcessParameters postProcess;
+	FPostProcessParameters postProcessParameters;
 
 	std::vector<FMeshRenderCommand>  meshRenderCommands;
 	std::vector<FLightRenderCommand> lightRenderCommands;
@@ -226,6 +250,7 @@ private: // Derived Scenes shouldn't access these functions
 	void LoadSceneMaterials(const std::vector<FMaterialRepresentation>& Materials, TaskID taskID);
 	void LoadLights(const std::vector<Light>& SceneLights);
 	void LoadCameras(std::vector<FCameraParameters>& CameraParams);
+	void LoadPostProcessSettings();
 public:
 	Scene(VQEngine& engine
 		, int NumFrameBuffers
@@ -236,8 +261,8 @@ public:
 
 	inline const FSceneView&       GetSceneView (int FRAME_DATA_INDEX) const { return mFrameSceneViews[FRAME_DATA_INDEX]; }
 	inline const FSceneShadowView& GetShadowView(int FRAME_DATA_INDEX) const { return mFrameShadowViews[FRAME_DATA_INDEX]; }
-	inline       FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX)       { return mFrameSceneViews[FRAME_DATA_INDEX].postProcess; }
-	inline const FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX) const { return mFrameSceneViews[FRAME_DATA_INDEX].postProcess; }
+	inline       FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX)       { return mFrameSceneViews[FRAME_DATA_INDEX].postProcessParameters; }
+	inline const FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX) const { return mFrameSceneViews[FRAME_DATA_INDEX].postProcessParameters; }
 	inline const Camera& GetActiveCamera() const { return mCameras[mIndex_SelectedCamera]; }
 	inline       Camera& GetActiveCamera()       { return mCameras[mIndex_SelectedCamera]; }
 

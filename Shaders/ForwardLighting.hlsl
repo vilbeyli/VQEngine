@@ -185,7 +185,7 @@ float4 PSMain(PSInput In) : SV_TARGET
 	
 	// Environment map
 	{
-		const int MAX_REFLECTION_LOD = 6;
+		const int MAX_REFLECTION_LOD = 7;
 		I_total += CalculateEnvironmentMapIllumination(Surface, V, MAX_REFLECTION_LOD, texEnvMapDiff, texEnvMapSpec, texBRDFIntegral, LinearSampler);
 	}
 	

@@ -127,6 +127,8 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	GAUSSIAN_BLUR_CS_NAIVE_X_PSO,
 	GAUSSIAN_BLUR_CS_NAIVE_Y_PSO,
 	BRDF_INTEGRATION_CS_PSO,
+	FFX_CAS_CS_PSO,
+	FFX_SPD_CS_PSO,
 	NUM_BUILTIN_PSOs
 };
 

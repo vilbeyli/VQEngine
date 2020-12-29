@@ -83,6 +83,7 @@ Or, if you're using a terminal,
 | **C** | Change scene camera |
 | **V** | Toggle VSync |
 | **M** | Toggle MSAA |
+| **B** | Toggle FidelityFX-CAS |
 | **Alt+Enter** | Toggle Fullscreen |
 | **Esc** | Release mouse |
 
@@ -151,3 +152,4 @@ VQE supports the following command line parameters:
 - [WinPixEventRuntime](https://devblogs.microsoft.com/pix/winpixeventruntime/)
 - [Khronos glTF Sample Models](https://github.com/KhronosGroup/glTF-Sample-Models)
 - [cgbookcase PBR Textures](https://www.cgbookcase.com/)
+- [AMD-FidelityFX](https://github.com/GPUOpen-Effects/FidelityFX)

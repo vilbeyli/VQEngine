@@ -181,7 +181,7 @@ float4 PSMain_SpecularIrradiance(GSOut In) : SV_TARGET
 		float NdotL = saturate(dot(N, L));
 		if (NdotL > 0.0f)
 		{
-			#if 1
+			#if 0
 			// simple convolution with NdotL
 			prefilteredColor += texEquirectEnvironmentMap.Sample(Sampler, SphericalSample(L)) * NdotL;
 			#else 
