@@ -44,25 +44,24 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 		matName += "][" + std::to_string(m) + "]";
 		return matName;
 	};
+	// roughness / metallic gradiant materials
+	for (int r = 0; r < NUM_ROUGHNESS_INSTANCES; ++r)
 	{
-		// roughness / metallic gradiant materials
-		for (int r = 0; r < NUM_ROUGHNESS_INSTANCES; ++r)
+		for (int m = 0; m < NUM_METALLIC_INSTANCES; ++m)
 		{
-			for (int m = 0; m < NUM_METALLIC_INSTANCES; ++m)
-			{
-				const float roughness = static_cast<float>(r) / (NUM_ROUGHNESS_INSTANCES - 1);
-				const float metallic  = static_cast<float>(m) / (NUM_METALLIC_INSTANCES - 1);
+			const float roughness = static_cast<float>(r) / (NUM_ROUGHNESS_INSTANCES - 1);
+			const float metallic  = static_cast<float>(m) / (NUM_METALLIC_INSTANCES - 1);
 
-				FMaterialRepresentation matR = {};
-				matR.DiffuseColor = XMFLOAT3(0.00f, 0.05f, 0.45f); // RGB
-				matR.Roughness = roughness;
-				matR.Metalness = metallic;
-				matR.Name = fnGetRoughnessMetallicMaterialName(r, m);
+			FMaterialRepresentation matR = {};
+			matR.DiffuseColor = XMFLOAT3(0.00f, 0.05f, 0.45f); // RGB
+			matR.Roughness = roughness;
+			matR.Metalness = metallic;
+			matR.Name = fnGetRoughnessMetallicMaterialName(r, m);
 
-				scene.Materials.push_back(matR);
-			}
+			scene.Materials.push_back(matR);
 		}
 	}
+	
 
 
 

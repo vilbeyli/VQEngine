@@ -125,13 +125,13 @@ float4 PSMain_DiffuseIrradiance(GSOut In) : SV_TARGET
 	
 	float3 irradiance = 0.0f.xxx;
 	
-	const float INTEGRATION_STEP = 0.025f;
+	const float INTEGRATION_STEP = 0.010f;
 	float numSamples = 0.0f;
-	for (float phi = 0.0f; phi < TWO_PI; phi += INTEGRATION_STEP) // ~60 iterations
+	for (float phi = 0.0f; phi < TWO_PI; phi += INTEGRATION_STEP)
 	{
 		// theta = 0.0f doesn't yield any irradiance (sinTheta==0.0f)
 		// , so start from 0.1 -> not exactly from the pole
-		for (float theta = 0.10f; theta < PI_OVER_TWO; theta += INTEGRATION_STEP) // ~60 iterations
+		for (float theta = 0.0f; theta < PI_OVER_TWO; theta += INTEGRATION_STEP)
 		{
 			const float sinTheta = sin(theta);
 			const float cosTheta = cos(theta);

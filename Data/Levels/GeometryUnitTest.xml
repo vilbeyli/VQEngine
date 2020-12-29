@@ -24,26 +24,29 @@
     -->
     
     <!-- ================================================================ -->
-
+    <PostProcess>
+        <FFXCAS>
+            <Sharpen>0.8</Sharpen>
+        </FFXCAS>
+    </PostProcess>
     <EnvironmentMap>
-        <Preset>VeniceSunset</Preset>
+        <Preset>VondelPark</Preset>
     </EnvironmentMap>
 
     <!-- 
     MATERIALS
     -->
+    <Material>
+        <Name>MatRough</Name>
+        <Diffuse>1 1 1</Diffuse>
+        <Roughness> 0.95 </Roughness>
+    </Material>
+    <Material>
+        <Name>MatSmooth</Name>
+        <Diffuse>1 1 1</Diffuse>
+        <Roughness> 0.04 </Roughness>
+    </Material>
     <!--
-    <Material>
-        <Name>GreenMat</Name>
-        <Diffuse>0 0.5 0</Diffuse>
-        <Alpha> 0.5 </Alpha>
-        <DiffuseMap>Data/Textures/PBR/cgbookcase/black-herringbone-tiles-01/Black_herringbone_tiles_01_2K_Base_Color.png</DiffuseMap>
-    </Material>
-    <Material>
-        <Name>RedMat</Name>
-        <Diffuse>0.8 0.0 0</Diffuse>
-        <Alpha> 1 </Alpha>
-    </Material>
     <Material>
         <Name>Checkerboard</Name>
         <DiffuseMap>Procedural/Checkerboard</DiffuseMap>
@@ -68,7 +71,36 @@
             <Drag>9.5</Drag>
         </FirstPerson>
     </Camera>
+    <Camera>
+        <Position> -7.859 51.15 -51.364 </Position>
+        <Pitch> -8.6 </Pitch>
+        <Yaw> 0.3 </Yaw>
+        <Projection>Perspective</Projection>
+        <FoV>60.0</FoV>
+        <Near>0.01</Near>
+        <Far>1000</Far>
 
+        <FirstPerson>
+            <TranslationSpeed>1000</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+    <Camera>
+        <Position> -6.975549 126.583725 -51.986942 </Position>
+        <Pitch> 7.84 </Pitch>
+        <Yaw> -0.8 </Yaw>
+        <Projection>Perspective</Projection>
+        <FoV>60.0</FoV>
+        <Near>0.01</Near>
+        <Far>1000</Far>
+
+        <FirstPerson>
+            <TranslationSpeed>1000</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
 
     <GameObject>
         <Transform>
@@ -78,7 +110,7 @@
         </Transform>
         <Model>
             <Mesh>Sphere</Mesh>
-            <!--<MaterialName>Small_tiles_01</MaterialName>-->
+            <MaterialName>MatSmooth</MaterialName>
         </Model>
     </GameObject>
     
@@ -90,7 +122,7 @@
         </Transform>
         <Model>
             <Mesh>Sphere</Mesh>
-            <!--<MaterialName>Checkerboard</MaterialName>-->
+            <MaterialName>MatRough</MaterialName>
         </Model>
     </GameObject>
 
