@@ -329,7 +329,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, 0 // MSAA SampleQuality
 				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
 			);
-			desc.ResourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+			desc.ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 			r.Tex_PostProcess_TonemapperOut = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeUAV(r.UAV_PostProcess_TonemapperOut, 0u, r.Tex_PostProcess_TonemapperOut);
 			mRenderer.InitializeSRV(r.SRV_PostProcess_TonemapperOut, 0u, r.Tex_PostProcess_TonemapperOut);
@@ -1135,8 +1135,8 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 			? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_IrradianceSpec).GetGPUDescHandle(0)
 			: NullCubemapSRV.GetGPUDescHandle()
 		);
-		//pCmd->SetGraphicsRootDescriptorTable(9, mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_BRDFIntegrationLUT).GetGPUDescHandle());
-		pCmd->SetGraphicsRootDescriptorTable(9, mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_HDREnvironment).GetGPUDescHandle());
+		pCmd->SetGraphicsRootDescriptorTable(9, mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_BRDFIntegrationLUT).GetGPUDescHandle());
+		//pCmd->SetGraphicsRootDescriptorTable(9, mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_HDREnvironment).GetGPUDescHandle());
 	}
 
 	// set PerView constants
@@ -1368,10 +1368,12 @@ void VQEngine::TransitionForPostProcessing(FWindowRenderContext& ctx, const FPos
 	auto pRscShadowMaps_Directional = mRenderer.GetTextureResource(rsc.Tex_ShadowMaps_Directional);
 
 	SCOPED_GPU_MARKER(pCmd, "TransitionForPostProcessing");
+	const bool bFFXCASEnabled = PPParams.IsFFXCASEnabled();
 	const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 	{
 		  CD3DX12_RESOURCE_BARRIER::Transition(pRscPostProcessInput , (bMSAA ? D3D12_RESOURCE_STATE_RESOLVE_DEST : D3D12_RESOURCE_STATE_RENDER_TARGET), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
-		, CD3DX12_RESOURCE_BARRIER::Transition(pRscPostProcessOut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+		, CD3DX12_RESOURCE_BARRIER::Transition(pRscFFXCASOut        , D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+		, CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut    , bFFXCASEnabled ? D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE : D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
 
 		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Spot       , D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE)
 		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Point      , D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE)
@@ -1541,13 +1543,27 @@ void VQEngine::RenderUI(FWindowRenderContext& ctx, const FPostProcessParameters&
 	SCOPED_GPU_MARKER(pCmd, "SwapchainPassthrough");
 	
 	// Transition Input & Output resources
-	CD3DX12_RESOURCE_BARRIER barriers[] =
+	// ignore the tonemapper barrier if CAS is enabeld as it'll already be issued.
+	CD3DX12_RESOURCE_BARRIER SwapChainTransition = CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	if (bFFXCASEnabled)
 	{
-		  CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT , D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET)
-		, CD3DX12_RESOURCE_BARRIER::Transition(pRscInput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
-		, CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
-	};
-	pCmd->ResourceBarrier(_countof(barriers) - (bFFXCASEnabled ? 0 : 1), barriers);
+		CD3DX12_RESOURCE_BARRIER barriers[] =
+		{
+			  SwapChainTransition
+			, CD3DX12_RESOURCE_BARRIER::Transition(pRscFFXCASOut    , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+		};
+		pCmd->ResourceBarrier(_countof(barriers), barriers);
+	}
+	else
+	{
+		CD3DX12_RESOURCE_BARRIER barriers[] =
+		{
+			  SwapChainTransition
+			, CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+			, CD3DX12_RESOURCE_BARRIER::Transition(pRscFFXCASOut    , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+		};
+		pCmd->ResourceBarrier(_countof(barriers), barriers);
+	}
 	
 
 	// TODO: UI rendering

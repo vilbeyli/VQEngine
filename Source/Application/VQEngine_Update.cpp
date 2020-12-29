@@ -249,12 +249,9 @@ void VQEngine::HandleEngineInput()
 			}
 			if (input.IsKeyTriggered("B"))
 			{
-				for (size_t i = 0; i < mpScene->mFrameSceneViews.size(); ++i)
-				{
-					FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
-					PPParams.bEnableCAS = !PPParams.bEnableCAS;
-				}
-				Log::Info("Toggle FFX-CAS: %d", mpScene->GetPostProcessParameters(FRAME_DATA_INDEX).bEnableCAS);
+				FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
+				PPParams.bEnableCAS = !PPParams.bEnableCAS;
+				Log::Info("Toggle FFX-CAS: %d", PPParams.bEnableCAS);
 			}
 			if (input.IsKeyTriggered("G"))
 			{
