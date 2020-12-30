@@ -118,9 +118,11 @@
     </GameObject>
     
     <!-- Models -->
+    
+    <!-- Bottom Row Objects -->
     <GameObject>
         <Transform>
-            <Position>13 13 20</Position>
+            <Position>-60 60 0</Position>
             <Rotation>0 180 0</Rotation>
             <Scale>1000 1000 1000</Scale>
         </Transform>
@@ -131,7 +133,7 @@
     </GameObject>
     <GameObject>
         <Transform>
-            <Position>-13 13 20</Position>
+            <Position>-20 60 0</Position>
             <Rotation>-90 0 0</Rotation>
             <Scale>10 10 10</Scale>
         </Transform>
@@ -141,6 +143,41 @@
         </Model>
     </GameObject>
 
+    <GameObject>
+        <Transform>
+            <Position>-40 60 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>8 8 8</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/SciFiHelmet/glTF/SciFiHelmet.gltf</Path>
+            <Name>SciFiHelmet</Name>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>0 40 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>50 50 50</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/FlightHelmet/glTF/FlightHelmet.gltf</Path>
+            <Name>FlightHelmet</Name>
+        </Model>
+    </GameObject>
+    <GameObject>
+        <Transform>
+            <Position>20 60 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>10 10 10</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/Suzanne/glTF/Suzanne.gltf</Path>
+            <Name>Suzanne</Name>
+        </Model>
+    </GameObject>
+
+    
     <!-- LIGHTS -->
     <Light> <!-- Directional Light -->
         <Enabled>true</Enabled>

@@ -74,7 +74,7 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	Log::Info("Loading Environment Map: %s", EnvMapName.c_str());
 
 	// HDR map
-	env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(desc.FilePath.c_str());
+	env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(desc.FilePath.c_str(), true);
 	env.SRV_HDREnvironment = mRenderer.CreateAndInitializeSRV(env.Tex_HDREnvironment);
 	env.MaxContentLightLevel = static_cast<int>(desc.MaxContentLightLevel);
 
@@ -88,7 +88,7 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 		tdesc.bGenerateMips = false;
 		tdesc.pData = nullptr;
 		tdesc.d3d12Desc.Width  = HDREnvironmentSizeX >> 3;
-		tdesc.d3d12Desc.Height = HDREnvironmentSizeY >> 3;
+		tdesc.d3d12Desc.Height = HDREnvironmentSizeY >> 3; // 4k -> 512
 		tdesc.d3d12Desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
 		tdesc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 		tdesc.d3d12Desc.DepthOrArraySize = 1;
@@ -482,7 +482,7 @@ void VQEngine::PreFilterEnvironmentMap(FEnvironmentMapRenderingResources& env)
 
 		pCmd->SetPipelineState(mRenderer.GetPSO(CUBEMAP_CONVOLUTION_SPECULAR_PSO));
 		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(10));
-		pCmd->SetGraphicsRootDescriptorTable(2, srvEnvDown.GetGPUDescHandle());
+		pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());
 		pCmd->SetGraphicsRootDescriptorTable(3, srvIrrDiffuse.GetGPUDescHandle());
 
 		int w, h, d, MIP_LEVELS;

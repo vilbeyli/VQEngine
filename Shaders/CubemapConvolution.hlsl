@@ -172,7 +172,9 @@ float4 PSMain_SpecularIrradiance(GSOut In) : SV_TARGET
 	float3 prefilteredColor = 0.0f.xxx;
 	float totalWeight = 0.0f;
 	
-	const uint NUM_SAMPLES = 2048u;
+	const uint NUM_SAMPLES = 512;
+	
+	[loop]
 	for (uint i = 0; i < NUM_SAMPLES; ++i)
 	{
 		float2 Xi = Hammersley(i, NUM_SAMPLES);
@@ -182,7 +184,7 @@ float4 PSMain_SpecularIrradiance(GSOut In) : SV_TARGET
 		float NdotL = saturate(dot(N, L));
 		if (NdotL > 0.0f)
 		{
-			#if 1
+			#if 0
 			// simple convolution with NdotL
 			prefilteredColor += texEquirectEnvironmentMap.Sample(Sampler, SphericalSample(L)) * NdotL;
 			#else 
@@ -192,17 +194,17 @@ float4 PSMain_SpecularIrradiance(GSOut In) : SV_TARGET
 			const float HdotV = saturate(dot(H, V));
 			
 			float D = NormalDistributionGGX(NdotH, Roughness);
-			float pdf = (D * NdotH / (4.0 * HdotV)) + 0.0001;
+			float pdf = (D * NdotH / (4.0 * HdotV)) + 0.00001;
 
 			// Solid angle represented by this sample
-			float fOmegaS = 1.0 / (NUM_SAMPLES * pdf);
+			float fOmegaS = 1.0 / ((NUM_SAMPLES * pdf));
 			
 			// Solid angle covered by 1 pixel with 6 faces that are EnvMapSize X EnvMapSize
-			float EnvMapSize = 512.0f; // TODO: read from cbuffer
+			float EnvMapSize = 4096.0f; // TODO: read from cbuffer
 			float fOmegaP = 4.0 * PI / (6.0 * EnvMapSize * EnvMapSize);
 			
 			// Original paper suggest biasing the mip to improve the results
-			float fMipBias = 1.0f;
+			float fMipBias = -1.0f;
 			float fMipLevel = Roughness == 0.0 
 				? 0.0 
 				: max(0.5 * log2(fOmegaS / fOmegaP) + fMipBias, 0.0f);
@@ -212,7 +214,7 @@ float4 PSMain_SpecularIrradiance(GSOut In) : SV_TARGET
 			totalWeight += NdotL;
 		}
 	}
-	prefilteredColor /= max(totalWeight, 0.001f);
+	prefilteredColor /= max(totalWeight, 0.0001f);
 
 	return float4(prefilteredColor, 1);
 }

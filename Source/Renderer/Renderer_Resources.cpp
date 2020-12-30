@@ -15,7 +15,7 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
-
+#define NOMINMAX
 #include "Renderer.h"
 #include "Device.h"
 #include "Texture.h"
@@ -276,33 +276,68 @@ namespace VQ_DXGI_UTILS
 		return 0;
 	}
 
-	void MipImage(void* pData, uint32_t width, uint32_t height)
+	void MipImage(void* pData, uint width, uint height, uint bytesPerPixel)
 	{
 		//compute mip so next call gets the lower mip    
 		int offsetsX[] = { 0,1,0,1 };
 		int offsetsY[] = { 0,0,1,1 };
 
-		uint32_t* pImg = (uint32_t*)pData;
 
+		assert(bytesPerPixel == 4 || bytesPerPixel == 16);
+		
+		if (bytesPerPixel == 4)
+		{
+			uint32_t* pImg = (uint32_t*)pData;
 #define GetByte(color, component) (((color) >> (8 * (component))) & 0xff)
 #define GetColor(ptr, x,y) (ptr[(x)+(y)*width])
 #define SetColor(ptr, x,y, col) ptr[(x)+(y)*width/2]=col;
 
-		for (uint32_t y = 0; y < height; y += 2)
-		{
-			for (uint32_t x = 0; x < width; x += 2)
+			for (uint32_t y = 0; y < height; y += 2)
 			{
-				uint32_t ccc = 0;
-				for (uint32_t c = 0; c < 4; c++)
+				for (uint32_t x = 0; x < width; x += 2)
 				{
-					uint32_t cc = 0;
-					for (uint32_t i = 0; i < 4; i++)
-						cc += GetByte(GetColor(pImg, x + offsetsX[i], y + offsetsY[i]), 3 - c);
+					uint32_t ccc = 0;
+					for (uint32_t c = 0; c < 4; c++)
+					{
+						uint32_t cc = 0;
+						for (uint32_t i = 0; i < 4; i++)
+							cc += GetByte(GetColor(pImg, x + offsetsX[i], y + offsetsY[i]), 3 - c);
 
-					ccc = (ccc << 8) | (cc / 4);
+						ccc = (ccc << 8) | (cc / 4);
+					}
+					SetColor(pImg, x / 2, y / 2, ccc);
 				}
-				SetColor(pImg, x / 2, y / 2, ccc);
 			}
+		}
+
+		if (bytesPerPixel == 16)
+		{
+			using std::min;
+			float* pImg = (float*)pData;
+			// each iteration handles 4 pixels from current level, writes out to a single pixel
+			for (uint32_t y = 0; y < height; y += 2) // [0, 2, 4, ...]
+			for (uint32_t x = 0; x < width ; x += 2) // [0, 2, 4, ...]
+			{
+				float rgb[4][3] = {}; // 4 samples of rgb
+				for (uint smp = 0; smp < 4; ++smp)
+				{
+					for (int ch = 0; ch < 3; ++ch) // color channel ~ rgba, care for RGB only
+						rgb[smp][ch] = pImg[(x + offsetsX[smp]) * 4 + (y + offsetsY[smp]) * 4 * width + ch];
+				}
+
+				// filter: use min filter rather than interpolation
+				float rgbFiltered[4];
+				for (int ch = 0; ch < 3; ++ch)
+					rgbFiltered[ch] = min(rgb[0][ch], min(rgb[1][ch], min(rgb[2][ch], rgb[3][ch])));
+				rgbFiltered[3] = 1.0f;
+
+				uint outX = x >> 1;
+				uint outY = y >> 1;
+
+				for (int ch = 0; ch < 4; ++ch)
+					pImg[(outX * 4) + 4 * outY * (width >> 1) + ch] = rgbFiltered[ch];
+			}
+			
 		}
 
 #if 0
@@ -1094,7 +1129,7 @@ void VQRenderer::ProcessTextureUpload(const FTextureUploadDesc& desc)
 
 			if (MIP_COUNT > 1)
 			{
-				VQ_DXGI_UTILS::MipImage(imgCopy.pData, placedTex2D[mip].Footprint.Width, num_rows[mip]);
+				VQ_DXGI_UTILS::MipImage(imgCopy.pData, placedTex2D[mip].Footprint.Width, num_rows[mip], bytePP);
 			}
 
 			D3D12_PLACED_SUBRESOURCE_FOOTPRINT slice = placedTex2D[mip];

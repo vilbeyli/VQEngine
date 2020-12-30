@@ -1136,7 +1136,6 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 			: NullCubemapSRV.GetGPUDescHandle()
 		);
 		pCmd->SetGraphicsRootDescriptorTable(9, mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_BRDFIntegrationLUT).GetGPUDescHandle());
-		//pCmd->SetGraphicsRootDescriptorTable(9, mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_HDREnvironment).GetGPUDescHandle());
 	}
 
 	// set PerView constants
