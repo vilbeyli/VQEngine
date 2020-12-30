@@ -160,6 +160,7 @@ float4 PSMain_DiffuseIrradiance(GSOut In) : SV_TARGET
 
 // src: https://learnopengl.com/PBR/IBL/Specular-IBL
 // src: https://de45xmedrsdbp.cloudfront.net/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf
+// src: https://placeholderart.wordpress.com/2015/07/28/implementation-notes-runtime-environment-map-filtering-for-image-based-lighting/
 float4 PSMain_SpecularIrradiance(GSOut In) : SV_TARGET
 {
 	// approximation: Assume viewing angle of 0 degrees.
@@ -181,10 +182,11 @@ float4 PSMain_SpecularIrradiance(GSOut In) : SV_TARGET
 		float NdotL = saturate(dot(N, L));
 		if (NdotL > 0.0f)
 		{
-			#if 0
+			#if 1
 			// simple convolution with NdotL
 			prefilteredColor += texEquirectEnvironmentMap.Sample(Sampler, SphericalSample(L)) * NdotL;
 			#else 
+			// https://placeholderart.wordpress.com/2015/07/28/implementation-notes-runtime-environment-map-filtering-for-image-based-lighting/
 			// factor in PDF to reduce 'spots' in the blurred slices with linear filtering between source image mips
 			const float NdotH = saturate(dot(N, H));
 			const float HdotV = saturate(dot(H, V));
@@ -192,13 +194,20 @@ float4 PSMain_SpecularIrradiance(GSOut In) : SV_TARGET
 			float D = NormalDistributionGGX(NdotH, Roughness);
 			float pdf = (D * NdotH / (4.0 * HdotV)) + 0.0001;
 
-			float resolution = 512.0; // resolution of source cubemap (per face) TODO: read from cbuffer
-			float saTexel = 4.0 * PI / (6.0 * resolution * resolution);
-			float saSample = 1.0 / (float(NUM_SAMPLES) * pdf + 0.0001);
+			// Solid angle represented by this sample
+			float fOmegaS = 1.0 / (NUM_SAMPLES * pdf);
 			
-			float mipLevel = Roughness == 0.0 ? 0.0 : 0.5 * log2(saSample / saTexel);
+			// Solid angle covered by 1 pixel with 6 faces that are EnvMapSize X EnvMapSize
+			float EnvMapSize = 512.0f; // TODO: read from cbuffer
+			float fOmegaP = 4.0 * PI / (6.0 * EnvMapSize * EnvMapSize);
 			
-			prefilteredColor += texEquirectEnvironmentMap.SampleLevel(Sampler, SphericalSample(L), mipLevel) * NdotL;
+			// Original paper suggest biasing the mip to improve the results
+			float fMipBias = 1.0f;
+			float fMipLevel = Roughness == 0.0 
+				? 0.0 
+				: max(0.5 * log2(fOmegaS / fOmegaP) + fMipBias, 0.0f);
+			
+			prefilteredColor += texEquirectEnvironmentMap.SampleLevel(Sampler, SphericalSample(L), fMipLevel) * NdotL;
 			#endif
 			totalWeight += NdotL;
 		}
