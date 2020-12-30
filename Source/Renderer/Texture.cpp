@@ -155,6 +155,7 @@ void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, cons
     this->mHeight = static_cast<int>(desc.d3d12Desc.Height);
     this->mNumArraySlices = desc.d3d12Desc.DepthOrArraySize;
     this->mMipMapCount = desc.d3d12Desc.MipLevels;
+    this->mFormat = desc.d3d12Desc.Format;
 }
 
 
