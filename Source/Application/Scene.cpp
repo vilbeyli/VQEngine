@@ -403,7 +403,7 @@ void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 	// Update PostProcess Data
 	for (size_t i = 0; i < mFrameSceneViews.size(); ++i)
 	{
-		FPostProcessParameters& PPParams = this->GetPostProcessParameters(i);
+		FPostProcessParameters& PPParams = this->GetPostProcessParameters(static_cast<int>(i));
 		FPostProcessParameters::FFFXCAS& CASParams = PPParams.FFXCASParams;
 		CasSetup(&CASParams.CASConstantBlock[0], &CASParams.CASConstantBlock[4], CASParams.CASSharpen, fWidth, fHeight, fWidth, fHeight);
 
