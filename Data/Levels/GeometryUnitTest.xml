@@ -43,7 +43,7 @@
     </Material>
     <Material>
         <Name>MatSmooth</Name>
-        <Diffuse>1 1 1</Diffuse>
+        <Diffuse>0.005 0.005 0.005</Diffuse>
         <Roughness> 0.04 </Roughness>
     </Material>
     <!--
@@ -72,9 +72,9 @@
         </FirstPerson>
     </Camera>
     <Camera>
-        <Position> -7.859 51.15 -51.364 </Position>
-        <Pitch> -8.6 </Pitch>
-        <Yaw> 0.3 </Yaw>
+        <Position> -37.090416 126.339813 -21.272799 </Position>
+        <Yaw> -0.6 </Yaw>
+        <Pitch> -3.69 </Pitch>
         <Projection>Perspective</Projection>
         <FoV>60.0</FoV>
         <Near>0.01</Near>
@@ -87,9 +87,24 @@
         </FirstPerson>
     </Camera>
     <Camera>
-        <Position> -6.975549 126.583725 -51.986942 </Position>
-        <Pitch> 7.84 </Pitch>
-        <Yaw> -0.8 </Yaw>
+        <Position> -39.056450 54.705864 -21.274244 </Position>
+        <Pitch> -3.799996 </Pitch>
+        <Yaw> 1.84 </Yaw>
+        <Projection>Perspective</Projection>
+        <FoV>60.0</FoV>
+        <Near>0.01</Near>
+        <Far>1000</Far>
+
+        <FirstPerson>
+            <TranslationSpeed>1000</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+    <Camera>
+        <Position> 20.885015 56.184666 -21.133247 </Position>
+        <Pitch> -0.009 </Pitch>
+        <Yaw> -0.05 </Yaw>
         <Projection>Perspective</Projection>
         <FoV>60.0</FoV>
         <Near>0.01</Near>
