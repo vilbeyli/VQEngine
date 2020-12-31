@@ -584,6 +584,6 @@ void VQEngine::ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, SRV_ID
 	};
 	pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
 	
-	outSRV_ID = mRenderer.GetProceduralTexture(EProceduralTextures::IBL_BRDF_INTEGRATION_LUT);
+	outSRV_ID = mRenderer.GetProceduralTextureSRV_ID(EProceduralTextures::IBL_BRDF_INTEGRATION_LUT);
 }
 
