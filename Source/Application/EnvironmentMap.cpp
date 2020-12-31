@@ -526,7 +526,7 @@ void VQEngine::PreFilterEnvironmentMap(FEnvironmentMapRenderingResources& env)
 				LONG Viewport[2] = {};
 				Viewport[0] = w >> mip;
 				Viewport[1] = h >> mip;
-				D3D12_VIEWPORT viewport{ 0.0f, 0.0f, Viewport[0], Viewport[1], 0.0f, 1.0f };
+				D3D12_VIEWPORT viewport{ 0.0f, 0.0f, (FLOAT)Viewport[0], (FLOAT)Viewport[1], 0.0f, 1.0f };
 				D3D12_RECT     scissorsRect{ 0, 0, Viewport[0], Viewport[1] };
 				pCmd->RSSetViewports(1, &viewport);
 				pCmd->RSSetScissorRects(1, &scissorsRect);
