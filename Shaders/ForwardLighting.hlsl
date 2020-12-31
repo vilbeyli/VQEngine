@@ -77,6 +77,7 @@ cbuffer CBPerObject : register(b2)
 SamplerState LinearSampler : register(s0);
 SamplerState PointSampler  : register(s1);
 SamplerState AnisoSampler  : register(s2);
+SamplerState ClampedLinearSampler : register(s3);
 
 Texture2D texDiffuse        : register(t0);
 Texture2D texNormals        : register(t1);
@@ -177,7 +178,7 @@ float4 PSMain(PSInput In) : SV_TARGET
 	// illumination accumulators
 	float3 I_total = 
 	/* ambient  */   Surface.diffuseColor  * ao
-	/* Emissive */ + Surface.emissiveColor * Surface.emissiveIntensity * 10.0f
+	/* Emissive */ + Surface.emissiveColor * Surface.emissiveIntensity * 100.0f
 	;
 
 	
@@ -186,7 +187,7 @@ float4 PSMain(PSInput In) : SV_TARGET
 	// Environment map
 	{
 		const int MAX_REFLECTION_LOD = 7;
-		I_total += CalculateEnvironmentMapIllumination(Surface, V, MAX_REFLECTION_LOD, texEnvMapDiff, texEnvMapSpec, texBRDFIntegral, LinearSampler);
+		I_total += CalculateEnvironmentMapIllumination(Surface, V, MAX_REFLECTION_LOD, texEnvMapDiff, texEnvMapSpec, texBRDFIntegral, ClampedLinearSampler);
 	}
 	
 	
