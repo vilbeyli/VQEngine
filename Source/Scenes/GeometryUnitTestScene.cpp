@@ -46,7 +46,7 @@ void GeometryUnitTestScene::InitializeScene()
 void GeometryUnitTestScene::LoadScene(FSceneRepresentation& scene)
 {
 	constexpr int NUM_ROUGHNESS_INSTANCES = 8; // [0-1] in 1.0f/NUM_ROUGHNESS_INSTANCES increments
-	constexpr int NUM_METALLIC_INSTANCES = 8;
+	constexpr int NUM_METALLIC_INSTANCES = 4;
 	auto fnGetRoughnessMetallicMaterialName = [](int r, int m)
 	{
 		std::string matName = "RoughnessMetallic[";

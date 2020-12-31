@@ -142,6 +142,22 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 
 	const int& NUM_MIPS = tdesc.d3d12Desc.MipLevels;
 
+	// Create Irradiance Map SRVs 
+	env.SRV_IrradianceDiff = mRenderer.CreateSRV();
+	env.SRV_IrradianceSpec = mRenderer.CreateSRV();
+	env.SRV_BlurTemp = mRenderer.CreateSRV();
+	mRenderer.InitializeSRV(env.SRV_IrradianceDiff, 0, env.Tex_IrradianceDiff, false, true);
+	mRenderer.InitializeSRV(env.SRV_IrradianceSpec, 0, env.Tex_IrradianceSpec, false, true);
+	mRenderer.InitializeSRV(env.SRV_BlurTemp, 0, env.Tex_BlurTemp);
+	for (int face = 0; face < 6; ++face)
+	{
+		env.SRV_IrradianceDiffFaces[face] = mRenderer.CreateSRV();
+		mRenderer.InitializeSRV(env.SRV_IrradianceDiffFaces[face], face, env.Tex_IrradianceDiff, false, false);
+	}
+	env.SRV_IrradianceDiffBlurred = mRenderer.CreateSRV();
+	mRenderer.InitializeSRV(env.SRV_IrradianceDiffBlurred, 0, env.Tex_IrradianceDiffBlurred, false, true);
+
+
 	// Create Irradiance Map RTVs & UAVs
 	env.RTV_IrradianceDiff = mRenderer.CreateRTV(6);
 	env.RTV_IrradianceSpec = mRenderer.CreateRTV(6 * NUM_MIPS);
@@ -159,20 +175,6 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	for (int face = 0; face < 6    ; ++face)  
 		mRenderer.InitializeRTV(env.RTV_IrradianceSpec, mip*6+face, env.Tex_IrradianceSpec, face, mip);
 
-	// Create Irradiance Map SRVs 
-	env.SRV_IrradianceDiff = mRenderer.CreateSRV();
-	env.SRV_IrradianceSpec = mRenderer.CreateSRV();
-	env.SRV_BlurTemp = mRenderer.CreateSRV();
-	mRenderer.InitializeSRV(env.SRV_IrradianceDiff, 0, env.Tex_IrradianceDiff, false, true);
-	mRenderer.InitializeSRV(env.SRV_IrradianceSpec, 0, env.Tex_IrradianceSpec, false, true);
-	mRenderer.InitializeSRV(env.SRV_BlurTemp , 0, env.Tex_BlurTemp);
-	for (int face = 0; face < 6; ++face)
-	{
-		env.SRV_IrradianceDiffFaces[face] = mRenderer.CreateSRV();
-		mRenderer.InitializeSRV(env.SRV_IrradianceDiffFaces[face], face, env.Tex_IrradianceDiff, false, false);
-	}
-	env.SRV_IrradianceDiffBlurred = mRenderer.CreateSRV();
-	mRenderer.InitializeSRV(env.SRV_IrradianceDiffBlurred, 0, env.Tex_IrradianceDiffBlurred, false, true);
 
 	// Queue irradiance cube face rendering
 	mbEnvironmentMapPreFilter.store(true);
@@ -488,6 +490,9 @@ void VQEngine::PreFilterEnvironmentMap(FEnvironmentMapRenderingResources& env)
 		int w, h, d, MIP_LEVELS;
 		mRenderer.GetTextureDimensions(env.Tex_IrradianceSpec, w, h, d, MIP_LEVELS);
 
+		int inpTexW, inpTexH;
+		mRenderer.GetTextureDimensions(env.Tex_HDREnvironment, inpTexW, inpTexH);
+
 		for (int mip = 0; mip < MIP_LEVELS; ++mip)
 		{
 			for (int face = 0; face < NUM_CUBE_FACES; ++face)
@@ -508,8 +513,8 @@ void VQEngine::PreFilterEnvironmentMap(FEnvironmentMapRenderingResources& env)
 				
 				pCB0->viewProj[0] = Texture::CubemapUtility::CalculateViewMatrix(face) * proj;
 				pCB1->Roughness = static_cast<float>(mip) / (MIP_LEVELS-1); // min(0.04, ) ?
-				pCB1->ViewDimX = static_cast<float>(w >> mip);
-				pCB1->ViewDimY = static_cast<float>(h >> mip);
+				pCB1->ViewDimX = static_cast<float>(inpTexW);
+				pCB1->ViewDimY = static_cast<float>(inpTexH);
 				pCB1->MIP = mip;
 
 				assert(pCB1->ViewDimX > 0);
@@ -518,9 +523,11 @@ void VQEngine::PreFilterEnvironmentMap(FEnvironmentMapRenderingResources& env)
 				pCmd->SetGraphicsRootConstantBufferView(0, cbAddr0);
 				pCmd->SetGraphicsRootConstantBufferView(1, cbAddr1);
 
-
-				D3D12_VIEWPORT viewport{ 0.0f, 0.0f, pCB1->ViewDimX, pCB1->ViewDimY, 0.0f, 1.0f };
-				D3D12_RECT     scissorsRect{ 0, 0, (LONG)pCB1->ViewDimX, (LONG)pCB1->ViewDimY };
+				LONG Viewport[2] = {};
+				Viewport[0] = w >> mip;
+				Viewport[1] = h >> mip;
+				D3D12_VIEWPORT viewport{ 0.0f, 0.0f, Viewport[0], Viewport[1], 0.0f, 1.0f };
+				D3D12_RECT     scissorsRect{ 0, 0, Viewport[0], Viewport[1] };
 				pCmd->RSSetViewports(1, &viewport);
 				pCmd->RSSetScissorRects(1, &scissorsRect);
 

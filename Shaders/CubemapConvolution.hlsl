@@ -194,14 +194,13 @@ float4 PSMain_SpecularIrradiance(GSOut In) : SV_TARGET
 			const float HdotV = saturate(dot(H, V));
 			
 			float D = NormalDistributionGGX(NdotH, Roughness);
-			float pdf = (D * NdotH / (4.0 * HdotV)) + 0.00001;
+			float pdf = (D * NdotH / (4.0 * HdotV));
 
 			// Solid angle represented by this sample
-			float fOmegaS = 1.0 / ((NUM_SAMPLES * pdf));
+			float fOmegaS = 1.0 / (max(NUM_SAMPLES * pdf, 0.00001f));
 			
 			// Solid angle covered by 1 pixel with 6 faces that are EnvMapSize X EnvMapSize
-			float EnvMapSize = 4096.0f; // TODO: read from cbuffer
-			float fOmegaP = 4.0 * PI / (6.0 * EnvMapSize * EnvMapSize);
+			float fOmegaP = 4.0 * PI / (6.0 * TextureDimensionsLOD0.x * TextureDimensionsLOD0.y);
 			
 			// Original paper suggest biasing the mip to improve the results
 			float fMipBias = -1.0f;

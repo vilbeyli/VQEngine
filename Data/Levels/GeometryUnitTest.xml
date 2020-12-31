@@ -30,7 +30,7 @@
         </FFXCAS>
     </PostProcess>
     <EnvironmentMap>
-        <Preset>VondelPark</Preset>
+        <Preset>Shanghai</Preset>
     </EnvironmentMap>
 
     <!-- 
@@ -72,9 +72,9 @@
         </FirstPerson>
     </Camera>
     <Camera>
-        <Position> -37.090416 126.339813 -21.272799 </Position>
-        <Yaw> -0.6 </Yaw>
-        <Pitch> -3.69 </Pitch>
+        <Position>-32.768074 79.071419 -26.835758</Position>
+        <Pitch> 2.26 </Pitch>
+        <Yaw> 4.649993 </Yaw>
         <Projection>Perspective</Projection>
         <FoV>60.0</FoV>
         <Near>0.01</Near>
