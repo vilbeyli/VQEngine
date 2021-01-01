@@ -12,7 +12,7 @@ Join the [VQE Discord Channel](https://discord.gg/U7pd8TV)!
 
 # Screenshots
 
-![](Screenshots/HelloEnvMap.png)
+![](Screenshots/HelloEnvMap1.png)
 <p align="center">
 <sub><i>Data-driven (XML) Scenes & glTF Model Loading, HDRI Environment Maps, UE4's PBR model w/ IBL </i></sub>
 </p>
