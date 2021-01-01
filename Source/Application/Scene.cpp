@@ -407,7 +407,7 @@ void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 		FPostProcessParameters::FFFXCAS& CASParams = PPParams.FFXCASParams;
 		CasSetup(&CASParams.CASConstantBlock[0], &CASParams.CASConstantBlock[4], CASParams.CASSharpen, fWidth, fHeight, fWidth, fHeight);
 
-		PPParams.bEnableCAS = false; // TODO: read from scene PP settings
+		PPParams.bEnableCAS = true; // TODO: read from scene PP settings
 	}
 }
 
