@@ -329,7 +329,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, 0 // MSAA SampleQuality
 				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
 			);
-			desc.ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
 			r.Tex_PostProcess_TonemapperOut = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeUAV(r.UAV_PostProcess_TonemapperOut, 0u, r.Tex_PostProcess_TonemapperOut);
 			mRenderer.InitializeSRV(r.SRV_PostProcess_TonemapperOut, 0u, r.Tex_PostProcess_TonemapperOut);
@@ -1367,12 +1367,11 @@ void VQEngine::TransitionForPostProcessing(FWindowRenderContext& ctx, const FPos
 	auto pRscShadowMaps_Directional = mRenderer.GetTextureResource(rsc.Tex_ShadowMaps_Directional);
 
 	SCOPED_GPU_MARKER(pCmd, "TransitionForPostProcessing");
-	const bool bFFXCASEnabled = PPParams.IsFFXCASEnabled();
 	const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 	{
 		  CD3DX12_RESOURCE_BARRIER::Transition(pRscPostProcessInput , (bMSAA ? D3D12_RESOURCE_STATE_RESOLVE_DEST : D3D12_RESOURCE_STATE_RENDER_TARGET), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
 		, CD3DX12_RESOURCE_BARRIER::Transition(pRscFFXCASOut        , D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
-		, CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut    , bFFXCASEnabled ? D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE : D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+		, CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut    , D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
 
 		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Spot       , D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE)
 		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Point      , D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE)
@@ -1501,8 +1500,10 @@ void VQEngine::RenderPostProcess(FWindowRenderContext& ctx, const FPostProcessPa
 			ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(FPostProcessParameters::FFFXCAS), (void**)&pConstBuffer, &cbAddr);
 			*pConstBuffer = PPParams.FFXCASParams;
 
-			pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::FFX_CAS_CS_PSO));
-			//pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(3)); // same root signature as tonemapper
+			ID3D12PipelineState* pPSO = mRenderer.GetPSO(EBuiltinPSOs::FFX_CAS_CS_PSO);
+			assert(pPSO);
+			pCmd->SetPipelineState(pPSO);
+			pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(3)); // same root signature as tonemapper
 			pCmd->SetComputeRootDescriptorTable(0, srv_TonemapperOut.GetGPUDescHandle());
 			pCmd->SetComputeRootDescriptorTable(1, uav_FFXCASOut.GetGPUDescHandle());
 			pCmd->SetComputeRootConstantBufferView(2, cbAddr);
@@ -1550,6 +1551,7 @@ void VQEngine::RenderUI(FWindowRenderContext& ctx, const FPostProcessParameters&
 		{
 			  SwapChainTransition
 			, CD3DX12_RESOURCE_BARRIER::Transition(pRscFFXCASOut    , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+			, CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
 		};
 		pCmd->ResourceBarrier(_countof(barriers), barriers);
 	}

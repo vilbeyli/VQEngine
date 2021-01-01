@@ -49,7 +49,7 @@
 #define A_GPU
 
 
-#include "../Libs/FidelityFX/ffx_a.h"
+#include "FidelityFX/ffx_a.h"
 
 
 
@@ -114,7 +114,7 @@ cbuffer             CASConstants     : register(b0)
 
 
 
-#include "../Libs/FidelityFX/CAS/ffx_cas.h"
+#include "FidelityFX/CAS/ffx_cas.h"
 
 //
 // CAS Main
@@ -169,8 +169,8 @@ void CAS_CSMain(uint3 LocalThreadId : SV_GroupThreadID, uint3 WorkGroupId : SV_G
     
 	CasFilter(c.r, c.g, c.b, gxy, CASConst0, CASConst1, sharpenOnly);
 	CASOutputTexture[ASU2(gxy)] = AF4(c, 1);
-    
-#endif
+
+#endif // FFXCAS_FP16
 }
 #endif
 
@@ -315,7 +315,7 @@ AH4 SpdReduce4H(AH4 v0, AH4 v1, AH4 v2, AH4 v3)
 }
 #endif // A_HALF
 
-#include "../Libs/FidelityFX/SPD/ffx_spd.h"
+#include "FidelityFX/SPD/ffx_spd.h"
 //
 // SPD Main
 //

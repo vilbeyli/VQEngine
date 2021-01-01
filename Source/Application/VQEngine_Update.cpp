@@ -249,6 +249,7 @@ void VQEngine::HandleEngineInput()
 			}
 			if (input.IsKeyTriggered("B"))
 			{
+				WaitUntilRenderingFinishes();
 				FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 				PPParams.bEnableCAS = !PPParams.bEnableCAS;
 				Log::Info("Toggle FFX-CAS: %d", PPParams.bEnableCAS);

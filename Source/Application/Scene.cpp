@@ -391,8 +391,8 @@ void Scene::LoadCameras(std::vector<FCameraParameters>& CameraParams)
 
 
 #define A_CPU 1
-#include "Libs/FidelityFX/ffx_a.h"
-#include "Libs/FidelityFX/CAS/ffx_cas.h"
+#include "Shaders/FidelityFX/ffx_a.h"
+#include "Shaders/FidelityFX/CAS/ffx_cas.h"
 void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 {
 	// TODO: remove hardcode
