@@ -88,7 +88,7 @@ VSOut VSMain(VSInput VSIn, uint instID : SV_InstanceID)
 //       and that will limit the available time before a draw call takes too long to
 //       trigger a TDR since we're making a lot of texture lookups. Hence, draw-
 //       call per cube face is preferred.
-//       CS is even better with 'UV -> spherical look direction' calculation.
+//       CS could be even better with 'UV -> spherical look direction' calculation.
 [maxvertexcount(3)]
 void GSMain(triangle VSOut input[3], inout TriangleStream<GSOut> triOutStream)
 {
@@ -150,7 +150,7 @@ float4 PSMain_DiffuseIrradiance(GSOut In) : SV_TARGET
 			
 			float mipLevel = 3; // source texture is 8K, diffuse irradiance could benefit from lower res so we use mip=3
 			
-			irradiance += texEquirectEnvironmentMap.SampleLevel(Sampler, SphericalSample(sampleVec), mipLevel) * cosTheta * sinTheta;
+			irradiance += texEquirectEnvironmentMap.SampleLevel(Sampler, DirectionToEquirectUV(sampleVec), mipLevel) * cosTheta * sinTheta;
 			numSamples += 1.0f;
 		}
 	}
@@ -188,7 +188,7 @@ float4 PSMain_SpecularIrradiance(GSOut In) : SV_TARGET
 		{
 			#if 0
 			// simple convolution with NdotL
-			prefilteredColor += texEquirectEnvironmentMap.Sample(Sampler, SphericalSample(L)) * NdotL;
+			prefilteredColor += texEquirectEnvironmentMap.Sample(Sampler, DirectionToEquirectUV(L)) * NdotL;
 			#else 
 			// https://placeholderart.wordpress.com/2015/07/28/implementation-notes-runtime-environment-map-filtering-for-image-based-lighting/
 			// factor in PDF to reduce 'spots' in the blurred slices with linear filtering between source image mips
@@ -210,7 +210,7 @@ float4 PSMain_SpecularIrradiance(GSOut In) : SV_TARGET
 				? 0.0 
 				: max(0.5 * log2(fOmegaS / fOmegaP) + fMipBias, 0.0f);
 			
-			prefilteredColor += texEquirectEnvironmentMap.SampleLevel(Sampler, SphericalSample(L), fMipLevel) * NdotL;
+			prefilteredColor += texEquirectEnvironmentMap.SampleLevel(Sampler, DirectionToEquirectUV(L), fMipLevel) * NdotL;
 			#endif
 			totalWeight += NdotL;
 		}

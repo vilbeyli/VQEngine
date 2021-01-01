@@ -56,7 +56,7 @@ float3 SRGBToLinear(float3 c) { return pow(c, 2.2f); }
 // additional sources: 
 // - Converting to/from cubemaps: http://paulbourke.net/miscellaneous/cubemaps/
 // - Projections: https://gamedev.stackexchange.com/questions/114412/how-to-get-uv-coordinates-for-sphere-cylindrical-projection
-float2 SphericalSample(float3 v)
+float2 DirectionToEquirectUV(float3 v)
 {
 	// https://msdn.microsoft.com/en-us/library/windows/desktop/bb509575(v=vs.85).aspx
 	// The signs of the x and y parameters are used to determine the quadrant of the return values 
@@ -149,7 +149,7 @@ float3 ViewSpacePosition(in const float nonLinearDepth, const in float2 uv, cons
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------
 //
-// SPHERICAL HARMONICS
+// SPHERICAL HARMONICS (WIP)
 //
 //-------------------------------------------------------------------------------------------------------------------------------------------------
 // Sources: 

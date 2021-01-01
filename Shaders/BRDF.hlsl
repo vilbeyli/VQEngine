@@ -25,25 +25,27 @@
 #define _DEBUG
 
 // ================================== BRDF NOTES =========================================
-//	src: https://learnopengl.com/#!PBR/Theory
-//	ref: http://blog.selfshadow.com/publications/s2012-shading-course/hoffman/s2012_pbs_physics_math_notes.pdf
+// https://learnopengl.com/#!PBR/Theory
+// http://blog.selfshadow.com/publications/s2012-shading-course/hoffman/s2012_pbs_physics_math_notes.pdf
+// https://graphicrants.blogspot.com/2013/08/specular-brdf-reference.html
 //
 // The Rendering Equation
 //
 //   Lo(p, w_o) = Le(p) + Integral_Omega()[fr(p, wi, wo) * L_i(p, wi) * dot(N, wi)]dwi
 //
 // Lo       : Radiance leaving surface point P along the direction w_o (V=eye)
-// Le       : Emissive Radiance leaving surface point p | we're not gonna use emissive materials for now 
-// Li       : Irradiance (Radiance coming) coming from a light source at point p 
-// fr()     : reflectance equation representing the material property
-// Integral : all incoming radiance over hemisphere omega, reflected towards the direction of w_o<->(V=eye) 
+// Le       : Emissive Radiance leaving surface point p
+// Li       : Irradiance coming from a light source at point p 
+// fr()     : Reflectance equation representing the material properties (metallic/roughness)
+// Integral : all incoming radiance over hemisphere (omega), reflected towards the direction of eye (w_o=V=viewVector) 
 //            by the surface material
 //
-// The integral is numerically solved.
+// The integral is numerically solved for a point light model.
 // 
 // BRDF : Bi-directional Reflectance Distribution Function
 // The Cook-Torrence BRDF : fr = kd * f_lambert + ks * f_cook-torrence
-//                              where f_lambert = albedo / PI;
+//                              where f_lambert       = albedo / PI;
+//                                    f_cook_torrence = N D F / 4 (NoV) (NoL)
 //
 struct BRDF_Surface
 {
@@ -52,12 +54,16 @@ struct BRDF_Surface
 	float3 diffuseColor;
 	float  metalness;
 	float3 specularColor;
-	float3 emissiveColor;
 	float  emissiveIntensity;
+	float3 emissiveColor;
 };
 
+//
+// List of all BRDF functions:  https://graphicrants.blogspot.com/2013/08/specular-brdf-reference.html
+//
+
 // Trowbridge-Reitz GGX Distribution
-inline float NormalDistributionGGX(float NdotH, float roughness)
+inline float NormalDistributionGGX(float NdotH, float roughness) 
 {	// approximates microfacets :	approximates the amount the surface's microfacets are
 	//								aligned to the halfway vector influenced by the roughness
 	//								of the surface
@@ -109,20 +115,11 @@ inline float Geometry_Smiths_SchlickGGX_EnvironmentMap(float3 N, float3 V, float
 	return NV / denom;
 }
 
-#ifdef _DEBUG
-// returns a multiplier [0, 1] measuring microfacet shadowing
-float Geometry(float3 N, float3 V, float3 L, float k)
-{	
-	float geomNV = Geometry_Smiths_SchlickGGX(N, V, k);
-	float geomNL = Geometry_Smiths_SchlickGGX(N, L, k);
-	return  geomNV * geomNL;
-}
-#else
-inline float Geometry(float3 N, float3 V, float3 L, float k)
+
+inline float Geometry_Smith(float3 N, float3 V, float3 L, float k)
 {	// essentially a multiplier [0, 1] measuring microfacet shadowing
 	return  Geometry_Smiths_SchlickGGX(N, V, k) * Geometry_Smiths_SchlickGGX(N, L, k);
 }
-#endif
 
 // returns a multiplier [0, 1] measuring microfacet shadowing
 float GeometryEnvironmentMap(float3 N, float3 V, float3 L, float k)
@@ -133,7 +130,7 @@ float GeometryEnvironmentMap(float3 N, float3 V, float3 L, float k)
 }
 
 // Fresnel-Schlick approximation describes reflection
-inline float3 Fresnel(float3 N, float3 V, float3 F0)
+inline float3 Fresnel_Schlick(float3 N, float3 V, float3 F0)
 {	// F_Schlick(N, V, F0) = F0 - (1-F0)*(1 - dot(N,V))^5
 	// F0 is the specular reflectance at normal incidence.
 	return F0 + (float3(1, 1, 1) - F0) * pow(1.0f - max(0.0f, dot(N, V)), 5.0f);
@@ -141,7 +138,7 @@ inline float3 Fresnel(float3 N, float3 V, float3 F0)
 
 // Fresnel-Schlick approx with a Spherical Gaussian approx
 // src: https://de45xmedrsdbp.cloudfront.net/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf
-inline float3 FresnelGaussian(float3 H, float3 V, float3 F0)
+inline float3 Fresnel_Gaussian(float3 H, float3 V, float3 F0)
 { 
 	// F0 is the specular reflectance at normal incidence.
 	const float c0 = -5.55373f;
@@ -182,8 +179,8 @@ float3 BRDF(in BRDF_Surface s, float3 Wi, float3 V)
 	const float3 F0 = lerp(float3(0.04f, 0.04f, 0.04f), albedo, metalness);
 
 	// Fresnel_Cook-Torrence BRDF
-	const float3 F = Fresnel(H, V, F0);
-	const float  G = Geometry(N, Wo, Wi, roughness);
+	const float3 F = Fresnel_Schlick(H, V, F0);
+	const float  G = Geometry_Smith(N, Wo, Wi, roughness);
 	const float  D = NormalDistributionGGX(NdotH, roughness);
 	const float denom = (4.0f * NdotV * NdotL) + 0.0001f;
 	const float3 specular = D * F * G / denom;

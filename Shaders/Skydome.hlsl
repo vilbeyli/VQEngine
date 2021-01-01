@@ -22,8 +22,8 @@
 
 struct PSInput
 {
-    float4 position : SV_POSITION;
-	float2 uv       : TEXCOORD0;
+	float4 position             : SV_POSITION;
+	float2 uv                   : TEXCOORD0;
 	float3 CubemapLookDirection : TEXCOORD1;
 };
 
@@ -39,18 +39,18 @@ SamplerState Sampler;
 
 PSInput VSMain(float4 position : POSITION, float2 uv : TEXCOORD0)
 {
-    PSInput result;
+	PSInput result;
 
 	result.position = mul(matViewProj, position).xyww; // Z=1 for depth testing
 	result.uv = uv;
 	result.CubemapLookDirection = normalize(position.xyz);
 
-    return result;
+	return result;
 }
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	float2 uv = SphericalSample(normalize(input.CubemapLookDirection));
+	float2 uv = DirectionToEquirectUV(normalize(input.CubemapLookDirection));
 	float3 ColorTex = texEquirectEnvironmentMap.SampleLevel(Sampler, uv, 0).rgb;
 	return float4(ColorTex, 1);
 }
