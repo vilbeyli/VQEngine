@@ -62,7 +62,7 @@ set (Shaders
     "Shaders/CubemapConvolution.hlsl"
     "Shaders/GaussianBlur.hlsl"
     "Shaders/AMDFidelityFX.hlsl"
-    "Libs/FidelityFX/ffx_a.h"
+    "Shaders/FidelityFX/ffx_a.h"
 )
 
 set (HeaderVQE 
@@ -120,9 +120,9 @@ set (SourceVQE
 )
 
 set (FFX
-    "Libs/FidelityFX/ffx_a.h"
-    "Libs/FidelityFX/CAS/ffx_cas.h"
-    "Libs/FidelityFX/SPD/ffx_spd.h"
+    "Shaders/FidelityFX/ffx_a.h"
+    "Shaders/FidelityFX/CAS/ffx_cas.h"
+    "Shaders/FidelityFX/SPD/ffx_spd.h"
 )
 
 set (PIXIncl 
@@ -155,7 +155,7 @@ source_group("Config"   FILES ${Config})
 source_group("Resource" FILES ${Resource})
 source_group("Icons"    FILES ${Icons})
 source_group("Shaders"  FILES ${Shaders})
-#source_group("Shaders/FidelityFX"  FILES ${FFX})
+source_group("AMD-FidelityFX"  FILES ${FFX})
 source_group("Scenes"   FILES ${Scenes})
 source_group("Materials" FILES ${Materials})
 
