@@ -148,7 +148,9 @@ float4 PSMain_DiffuseIrradiance(GSOut In) : SV_TARGET
 			float3 sampleVec = tangentSample.x * right + tangentSample.y * up + tangentSample.z * N;
 			sampleVec = normalize(sampleVec);
 			
-			irradiance += texEquirectEnvironmentMap.Sample(Sampler, SphericalSample(sampleVec)) * cosTheta * sinTheta;
+			float mipLevel = 3; // source texture is 8K, diffuse irradiance could benefit from lower res so we use mip=3
+			
+			irradiance += texEquirectEnvironmentMap.SampleLevel(Sampler, SphericalSample(sampleVec), mipLevel) * cosTheta * sinTheta;
 			numSamples += 1.0f;
 		}
 	}

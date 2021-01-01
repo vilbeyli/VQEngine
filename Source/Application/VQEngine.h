@@ -67,7 +67,6 @@ struct FEnvironmentMapDescriptor
 struct FEnvironmentMapRenderingResources
 {
 	TextureID Tex_HDREnvironment = INVALID_ID; // equirect input
-	TextureID Tex_HDREnvironmentDownsampled = INVALID_ID; // downsampled (1/8) skydome for diffuse irradiance calculation
 	TextureID Tex_IrradianceDiff = INVALID_ID; // Kd
 	TextureID Tex_IrradianceSpec = INVALID_ID; // Ks
 	
@@ -75,12 +74,10 @@ struct FEnvironmentMapRenderingResources
 	TextureID Tex_BlurTemp = INVALID_ID;
 	TextureID Tex_IrradianceDiffBlurred = INVALID_ID; // Kd
 
-	RTV_ID RTV_HDREnvironmentDownsampled = INVALID_ID;
 	RTV_ID RTV_IrradianceDiff = INVALID_ID;
 	RTV_ID RTV_IrradianceSpec = INVALID_ID;
 
 	SRV_ID SRV_HDREnvironment = INVALID_ID;
-	SRV_ID SRV_HDREnvironmentDownsampled = INVALID_ID;
 	SRV_ID SRV_IrradianceDiff = INVALID_ID;
 	SRV_ID SRV_IrradianceSpec = INVALID_ID;
 	SRV_ID SRV_IrradianceDiffFaces[6] = { INVALID_ID };

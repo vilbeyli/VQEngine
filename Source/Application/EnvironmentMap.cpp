@@ -82,27 +82,6 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	int HDREnvironmentSizeX = 0;
 	int HDREnvironmentSizeY = 0;
 	mRenderer.GetTextureDimensions(env.Tex_HDREnvironment, HDREnvironmentSizeX, HDREnvironmentSizeY);
-	{
-		TextureCreateDesc tdesc("EnvMap_Downsampled");
-		tdesc.bCubemap = false;
-		tdesc.bGenerateMips = false;
-		tdesc.pData = nullptr;
-		tdesc.d3d12Desc.Width  = HDREnvironmentSizeX >> 3;
-		tdesc.d3d12Desc.Height = HDREnvironmentSizeY >> 3; // 4k -> 512
-		tdesc.d3d12Desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-		tdesc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-		tdesc.d3d12Desc.DepthOrArraySize = 1;
-		tdesc.d3d12Desc.MipLevels = 1;
-		tdesc.d3d12Desc.SampleDesc = { 1, 0 };
-		tdesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-		tdesc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
-		env.Tex_HDREnvironmentDownsampled = mRenderer.CreateTexture(tdesc/*, true*/); // TODO: MIPS
-		
-		env.SRV_HDREnvironmentDownsampled = mRenderer.CreateAndInitializeSRV(env.Tex_HDREnvironmentDownsampled);
-		env.RTV_HDREnvironmentDownsampled = mRenderer.CreateRTV();
-		mRenderer.InitializeRTV(env.RTV_HDREnvironmentDownsampled, 0, env.Tex_HDREnvironmentDownsampled);
-	}
-
 
 	// Create Irradiance Map Textures
 	TextureCreateDesc tdesc("EnvMap_IrradianceDiff");
@@ -200,18 +179,15 @@ void VQEngine::UnloadEnvironmentMap()
 		mRenderer.DestroySRV(env.SRV_IrradianceDiff);
 		for (int face = 0; face < 6; ++face) mRenderer.DestroySRV(env.SRV_IrradianceDiffFaces[face]);
 		mRenderer.DestroySRV(env.SRV_IrradianceSpec);
-		mRenderer.DestroySRV(env.SRV_HDREnvironmentDownsampled);
 		mRenderer.DestroySRV(env.SRV_BlurTemp);
 		mRenderer.DestroySRV(env.SRV_IrradianceDiffBlurred);
 		// mRenderer.DestroyUAV(); // TODO:?
 		mRenderer.DestroyTexture(env.Tex_HDREnvironment);
 		mRenderer.DestroyTexture(env.Tex_IrradianceDiff);
 		mRenderer.DestroyTexture(env.Tex_IrradianceSpec);
-		mRenderer.DestroyTexture(env.Tex_HDREnvironmentDownsampled);
 		mRenderer.DestroyTexture(env.Tex_IrradianceDiffBlurred);
 
 		env.SRV_HDREnvironment = env.Tex_HDREnvironment = INVALID_ID;
-		env.SRV_HDREnvironmentDownsampled = env.Tex_HDREnvironmentDownsampled = INVALID_ID;
 		env.SRV_IrradianceDiff = env.SRV_IrradianceSpec = INVALID_ID;
 		env.MaxContentLightLevel = 0;
 	}
@@ -243,7 +219,6 @@ void VQEngine::PreFilterEnvironmentMap(FEnvironmentMapRenderingResources& env)
 	constexpr int NUM_CUBE_FACES = 6;
 	
 	const SRV& srvEnv = mRenderer.GetSRV(env.SRV_HDREnvironment);
-	const SRV& srvEnvDown = mRenderer.GetSRV(env.SRV_HDREnvironmentDownsampled);
 	const SRV& srvIrrDiffuse   = mRenderer.GetSRV(env.SRV_IrradianceDiff);
 	const SRV& srvIrrSpcecular = mRenderer.GetSRV(env.SRV_IrradianceSpec);
 
@@ -252,46 +227,6 @@ void VQEngine::PreFilterEnvironmentMap(FEnvironmentMapRenderingResources& env)
 	
 	struct cb0_t { XMMATRIX viewProj[NUM_CUBE_FACES]; };
 	struct cb1_t { float ViewDimX; float ViewDimY; float Roughness; int MIP; };
-
-	// Downsample
-	{
-		SCOPED_GPU_MARKER(pCmd, "EnvironmentMapDownsample");
-		
-		pCmd->SetPipelineState(mRenderer.GetPSO(HDR_FP16_SWAPCHAIN_PSO));
-		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(1));
-
-		pCmd->SetGraphicsRootDescriptorTable(0, srvEnv.GetGPUDescHandle());
-		
-
-		// set viewport & render target
-		int HDREnvironmentSizeX = 0; int HDREnvironmentSizeY = 0;
-		mRenderer.GetTextureDimensions(env.Tex_HDREnvironment, HDREnvironmentSizeX, HDREnvironmentSizeY);
-		assert(HDREnvironmentSizeX != 0 && HDREnvironmentSizeY != 0);
-
-		const float           RenderResolutionX = static_cast<float>(HDREnvironmentSizeX >> 3);
-		const float           RenderResolutionY = static_cast<float>(HDREnvironmentSizeY >> 3);
-		D3D12_VIEWPORT        viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
-		D3D12_RECT            scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
-		const RTV& rtv = mRenderer.GetRTV(env.RTV_HDREnvironmentDownsampled);
-		pCmd->RSSetViewports(1, &viewport);
-		pCmd->RSSetScissorRects(1, &scissorsRect);
-		pCmd->OMSetRenderTargets(1, &rtv.GetCPUDescHandle(), false, NULL);
-
-		// draw fullscreen triangle
-		const auto      VBIBIDs = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE].GetIABufferIDs();
-		const BufferID& IB_ID   = VBIBIDs.second;
-		const IBV&      ib      = mRenderer.GetIndexBufferView(IB_ID);
-		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		pCmd->IASetVertexBuffers(0, 1, NULL);
-		pCmd->IASetIndexBuffer(&ib);
-		pCmd->DrawIndexedInstanced(3, 1, 0, 0, 0);
-
-		pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-			  mRenderer.GetTextureResource(env.Tex_HDREnvironmentDownsampled)
-			, D3D12_RESOURCE_STATE_RENDER_TARGET
-			, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
-		); // Transition resource for read
-	}
 
 	// Diffuse Irradiance Convolution
 	{
@@ -332,7 +267,7 @@ void VQEngine::PreFilterEnvironmentMap(FEnvironmentMapRenderingResources& env)
 		{
 			pCmd->SetPipelineState(mRenderer.GetPSO(CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO));
 			pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(10));
-			pCmd->SetGraphicsRootDescriptorTable(2, srvEnvDown.GetGPUDescHandle());
+			pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());
 			pCmd->SetGraphicsRootDescriptorTable(3, srvEnv.GetGPUDescHandle());
 
 			for (int face = 0; face < NUM_CUBE_FACES; ++face)
@@ -378,8 +313,8 @@ void VQEngine::PreFilterEnvironmentMap(FEnvironmentMapRenderingResources& env)
 
 			pCmd->SetPipelineState(mRenderer.GetPSO(CUBEMAP_CONVOLUTION_DIFFUSE_PSO));
 			pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(10));
-			pCmd->SetGraphicsRootDescriptorTable(2, srvEnvDown.GetGPUDescHandle());
-			pCmd->SetGraphicsRootDescriptorTable(3, srvEnv.GetGPUDescHandle()); // ?
+			pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());
+			pCmd->SetGraphicsRootDescriptorTable(3, srvEnv.GetGPUDescHandle());
 			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr0);
 			pCmd->SetGraphicsRootConstantBufferView(1, cbAddr1);
 			pCmd->OMSetRenderTargets(1, &rtvHandle, TRUE, NULL);
