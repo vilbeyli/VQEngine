@@ -1515,7 +1515,10 @@ void VQEngine::RenderPostProcess(FWindowRenderContext& ctx, const FPostProcessPa
 			pCmd->SetComputeRootDescriptorTable(0, srv_TonemapperOut.GetGPUDescHandle());
 			pCmd->SetComputeRootDescriptorTable(1, uav_FFXCASOut.GetGPUDescHandle());
 			pCmd->SetComputeRootConstantBufferView(2, cbAddr);
-			pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
+			
+			// each FFX-CAS_CS thread processes 4 pixels.
+			// DispatchXY is calculated for 1px/thread, hence right shift by one each dimension here.
+			pCmd->Dispatch(DispatchX>>1, DispatchY>>1, DispatchZ);
 		}
 	}
 	
