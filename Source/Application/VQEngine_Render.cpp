@@ -546,17 +546,30 @@ void VQEngine::RenderThread_RenderMainWindow()
 		? RenderThread_RenderMainWindow_LoadingScreen(ctx)
 		: RenderThread_RenderMainWindow_Scene(ctx);
 
+	if (hr == DXGI_STATUS_OCCLUDED)     { RenderThread_HandleStatusOccluded(); }
+	if (hr == DXGI_ERROR_DEVICE_REMOVED){ RenderThread_HandleDeviceRemoved();  }
+}
+
+
+void VQEngine::RenderThread_HandleStatusOccluded()
+{
 	// TODO: remove copy paste and use encapsulation of context rendering properly
 	// currently check only for hr0 for the mainWindow
-	if (hr == DXGI_STATUS_OCCLUDED)
+	if (mpWinMain->IsFullscreen())
 	{
-		if (mpWinMain->IsFullscreen())
-		{
-			mpWinMain->SetFullscreen(false);
-			mpWinMain->Show();
-		}
+		mpWinMain->SetFullscreen(false);
+		mpWinMain->Show();
 	}
 }
+
+void VQEngine::RenderThread_HandleDeviceRemoved()
+{
+	MessageBox(NULL, "Device Removed.\n\nVQEngine will shutdown.", "VQEngine Renderer Error", MB_OK);
+	this->mbStopAllThreads.store(true);
+	RenderThread_SignalUpdateThread();
+}
+
+
 
 void VQEngine::RenderThread_RenderDebugWindow()
 {
@@ -661,7 +674,6 @@ void VQEngine::RenderThread_RenderDebugWindow()
 	//return hr;
 #endif
 }
-
 
 HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderContext& ctx)
 {
@@ -867,7 +879,7 @@ void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowVie
 	};
 
 
-	constexpr bool B_CLEAR_DEPTH_BUFFERS_BEFORE_DRAW = true;
+	constexpr bool B_CLEAR_DEPTH_BUFFERS_BEFORE_DRAW = false;
 	SCOPED_GPU_MARKER(pCmd, "RenderShadowMaps");
 
 

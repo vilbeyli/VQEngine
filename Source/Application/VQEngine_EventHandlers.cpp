@@ -244,11 +244,11 @@ void VQEngine::RenderThread_HandleEvents()
 
 		switch (pEvent->mType)
 		{
-		case EEventType::WINDOW_RESIZE_EVENT        : pLastResizeEventLookup[pEvent->hwnd] = std::static_pointer_cast<WindowResizeEvent>(pEvent); break;
-		case EEventType::TOGGLE_FULLSCREEN_EVENT    : RenderThread_HandleToggleFullscreenEvent(pEvent.get()); break;
-		case EEventType::WINDOW_CLOSE_EVENT         : RenderThread_HandleWindowCloseEvent(pEvent.get()); break;
-		case EEventType::SET_VSYNC_EVENT            : RenderThread_HandleSetVSyncEvent(pEvent.get()); break;
-		case EEventType::SET_SWAPCHAIN_FORMAT_EVENT : RenderThread_HandleSetSwapchainFormatEvent(pEvent.get()); break;
+		case EEventType::WINDOW_RESIZE_EVENT             : pLastResizeEventLookup[pEvent->hwnd] = std::static_pointer_cast<WindowResizeEvent>(pEvent); break;
+		case EEventType::TOGGLE_FULLSCREEN_EVENT         : RenderThread_HandleToggleFullscreenEvent(pEvent.get()); break;
+		case EEventType::WINDOW_CLOSE_EVENT              : RenderThread_HandleWindowCloseEvent(pEvent.get()); break;
+		case EEventType::SET_VSYNC_EVENT                 : RenderThread_HandleSetVSyncEvent(pEvent.get()); break;
+		case EEventType::SET_SWAPCHAIN_FORMAT_EVENT      : RenderThread_HandleSetSwapchainFormatEvent(pEvent.get()); break;
 		case EEventType::SET_HDR10_STATIC_METADATA_EVENT : RenderThread_HandleSetHDRMetaDataEvent(pEvent.get()); break;
 		}
 	}

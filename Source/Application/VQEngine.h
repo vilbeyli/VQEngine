@@ -235,6 +235,10 @@ public:
 	void RenderThread_RenderDebugWindow();
 
 
+	void RenderThread_HandleStatusOccluded();
+	void RenderThread_HandleDeviceRemoved();
+
+
 	// ---------------------------------------------------------
 	// Update Thread
 	// ---------------------------------------------------------
