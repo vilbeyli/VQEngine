@@ -146,6 +146,7 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	FEnvironmentMapRenderingResources EnvironmentMap;
 
 	SRV_ID SRV_NullCubemap = INVALID_ID;
+	SRV_ID SRV_NullTexture2D = INVALID_ID;
 };
 struct FRenderingResources_DebugWindow : public FRenderingResources
 {

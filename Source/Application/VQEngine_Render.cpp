@@ -364,6 +364,7 @@ void VQEngine::RenderThread_LoadResources()
 	// null cubemap SRV
 	{
 		mResources_MainWnd.SRV_NullCubemap = mRenderer.CreateSRV();
+		mResources_MainWnd.SRV_NullTexture2D = mRenderer.CreateSRV();
 
 		D3D12_SHADER_RESOURCE_VIEW_DESC nullSRVDesc = {};
 		nullSRVDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
@@ -371,6 +372,9 @@ void VQEngine::RenderThread_LoadResources()
 		nullSRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
 		nullSRVDesc.TextureCube.MipLevels = 1;
 		mRenderer.InitializeSRV(mResources_MainWnd.SRV_NullCubemap, 0, nullSRVDesc);
+		
+		nullSRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+		mRenderer.InitializeSRV(mResources_MainWnd.SRV_NullTexture2D, 0, nullSRVDesc);
 	}
 
 	// scene color pass
@@ -1102,6 +1106,7 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 	// set PerFrame constants
 	{
 		const CBV_SRV_UAV& NullCubemapSRV = mRenderer.GetSRV(mResources_MainWnd.SRV_NullCubemap);
+		const CBV_SRV_UAV& NullTex2DSRV   = mRenderer.GetSRV(mResources_MainWnd.SRV_NullTexture2D);
 
 		constexpr UINT PerFrameRSBindSlot = 3;
 		PerFrameData* pPerFrame = {};
@@ -1135,7 +1140,10 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 			? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_IrradianceSpec).GetGPUDescHandle(0)
 			: NullCubemapSRV.GetGPUDescHandle()
 		);
-		pCmd->SetGraphicsRootDescriptorTable(9, mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_BRDFIntegrationLUT).GetGPUDescHandle());
+		pCmd->SetGraphicsRootDescriptorTable(9, bDrawEnvironmentMap
+			? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_BRDFIntegrationLUT).GetGPUDescHandle()
+			: NullTex2DSRV.GetGPUDescHandle()
+		);
 	}
 
 	// set PerView constants
