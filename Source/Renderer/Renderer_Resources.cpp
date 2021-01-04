@@ -1243,7 +1243,7 @@ void VQRenderer::DestroySRV(SRV_ID& srvID)
 	std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 	//mSRVs.at(srvID).Destroy(); // TODO
 	mSRVs.erase(srvID);
-	Log::Info("Erase SRV_ID=%d", srvID);
+	//Log::Info("Erase SRV_ID=%d", srvID); // todo: verbose logging preprocessor ifdef
 	srvID = INVALID_ID;
 }
 void VQRenderer::DestroyDSV(DSV_ID& dsvID)

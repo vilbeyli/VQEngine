@@ -404,7 +404,7 @@ void VQRenderer::InitializeHeaps()
 	constexpr uint32 NumDescsDSV = 100;
 	mHeapDSV.Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, NumDescsDSV);
 
-	constexpr uint32 NumDescsRTV = 500;
+	constexpr uint32 NumDescsRTV = 1000;
 	mHeapRTV.Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, NumDescsRTV);
 
 	constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 64 * MEGABYTE;
