@@ -46,6 +46,22 @@
         </FirstPerson>
     </Camera>
 
+    <Camera>
+        <Position> -7.859 211.15 -51.364 </Position>
+        <Pitch> -8.6 </Pitch>
+        <Yaw> 0.3 </Yaw>
+        <Projection>Perspective</Projection>
+        <FoV>60.0</FoV>
+        <Near>0.01</Near>
+        <Far>1000</Far>
+
+        <FirstPerson>
+            <TranslationSpeed>1000</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+
     <!-- Sponza -->
     <GameObject>
         <Transform>

@@ -121,7 +121,14 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	DEPTH_PASS_PSO,
 	DEPTH_PASS_LINEAR_PSO,
 	DEPTH_PASS_ALPHAMASKED_PSO,
-
+	CUBEMAP_CONVOLUTION_DIFFUSE_PSO,
+	CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO,
+	CUBEMAP_CONVOLUTION_SPECULAR_PSO,
+	GAUSSIAN_BLUR_CS_NAIVE_X_PSO,
+	GAUSSIAN_BLUR_CS_NAIVE_Y_PSO,
+	BRDF_INTEGRATION_CS_PSO,
+	FFX_CAS_CS_PSO,
+	FFX_SPD_CS_PSO,
 	NUM_BUILTIN_PSOs
 };
 
@@ -129,6 +136,7 @@ enum EProceduralTextures
 {
 	  CHECKERBOARD = 0
 	, CHECKERBOARD_GRAYSCALE
+	, IBL_BRDF_INTEGRATION_LUT
 
 	, NUM_PROCEDURAL_TEXTURES
 };
@@ -163,22 +171,24 @@ public:
 	void                         UploadVertexAndIndexBufferHeaps();
 
 	// Allocates a ResourceView from the respective heap and returns a unique identifier.
-	SRV_ID                       CreateSRV(uint NumDescriptors = 1);
-	DSV_ID                       CreateDSV(uint NumDescriptors = 1);
-	RTV_ID                       CreateRTV(uint NumDescriptors = 1);
-	UAV_ID                       CreateUAV(uint NumDescriptors = 1);
+	SRV_ID                       CreateSRV(uint NumDescriptors = 1); // TODO: Rename to Alloc**V()
+	DSV_ID                       CreateDSV(uint NumDescriptors = 1); // TODO: Rename to Alloc**V()
+	RTV_ID                       CreateRTV(uint NumDescriptors = 1); // TODO: Rename to Alloc**V()
+	UAV_ID                       CreateUAV(uint NumDescriptors = 1); // TODO: Rename to Alloc**V()
 	SRV_ID                       CreateAndInitializeSRV(TextureID texID);
 	DSV_ID                       CreateAndInitializeDSV(TextureID texID);
 
 	// Initializes a ResourceView from given texture and the specified heap index
 	void                         InitializeDSV(DSV_ID dsvID, uint heapIndex, TextureID texID, int ArraySlice = 0);
-	void                         InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, UINT ShaderComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING);
+	void                         InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bool bInitAsArrayView = false, bool bInitAsCubeView = false, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc = nullptr, UINT ShaderComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING);
+	void                         InitializeSRV(SRV_ID srvID, uint heapIndex, D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc);
 	void                         InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID);
+	void                         InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID, int arraySlice, int mipLevel);
 	void                         InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID);
 
-	void                         DestroyTexture(TextureID texID);
-	void                         DestroySRV(SRV_ID srvID);
-	void                         DestroyDSV(DSV_ID dsvID);
+	void                         DestroyTexture(TextureID& texID);
+	void                         DestroySRV(SRV_ID& srvID);
+	void                         DestroyDSV(DSV_ID& dsvID);
 
 	// Getters: PSO, RootSignature, Heap
 	inline ID3D12PipelineState*  GetPSO(EBuiltinPSOs pso) const { return mPSOs.at(static_cast<PSO_ID>(pso)); }
@@ -196,6 +206,11 @@ public:
 
 	const ID3D12Resource*        GetTextureResource(TextureID Id) const;
 	      ID3D12Resource*        GetTextureResource(TextureID Id);
+
+		  inline void            GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, dummy); }
+		  inline void            GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, NumSlices, dummy); }
+		  void                   GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices, int& NumMips) const;
+		  uint                   GetTextureMips(TextureID Id) const;
 
 	inline const VBV&            GetVBV(BufferID Id) const { return GetVertexBufferView(Id);    }
 	inline const IBV&            GetIBV(BufferID Id) const { return GetIndexBufferView(Id);     }

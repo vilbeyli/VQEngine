@@ -48,6 +48,10 @@ class GeometryUnitTestScene : public Scene
 	DECLARE_SCENE_INTERFACE()
 
 	DECLARE_CTOR(GeometryUnitTestScene)
+
+private:
+	bool bAnimateCamera = false;
+	float fCameraAnimation_RotationSpeed = 0.0f; // rad/sec
 };
 
 class StressTestScene : public Scene

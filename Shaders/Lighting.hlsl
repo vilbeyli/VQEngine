@@ -345,6 +345,20 @@ float3 CalculateDirectionalLightIllumination(
 	return BRDF(s, Wi, V_World) * radiance * NdotL;
 }
 
+float3 CalculateEnvironmentMapIllumination(in const BRDF_Surface s, in const float3 V, in const int MAX_REFLECTION_LOD, TextureCube texEnvMapDiff, TextureCube texEnvMapSpec, Texture2D texBRDFIntegrationLUT, SamplerState smpEnvMap)
+{
+	const float NdotV = saturate(dot(s.N, V));
+	const float3 R = reflect(-V, s.N);
+	const int MIP_LEVEL = s.roughness * MAX_REFLECTION_LOD;
+	
+	const float3 IEnv_SpecularPreFilteredColor = texEnvMapSpec.SampleLevel(smpEnvMap, R, MIP_LEVEL);
+	const float2 F0ScaleBias                   = texBRDFIntegrationLUT.Sample(smpEnvMap, float2(NdotV, s.roughness)).rg;
+	const float3 IEnv_DiffuseIrradiance        = texEnvMapDiff.Sample(smpEnvMap, s.N).rgb;
+	const float AO = 1.0f; // TODO
+
+	return EnvironmentBRDF(s, V, IEnv_DiffuseIrradiance, IEnv_SpecularPreFilteredColor, F0ScaleBias) * AO;
+}
+
 //float2 ParallaxUVs(float2 uv, float3 ViewVectorInTangentSpace, Texture2D HeightMap, SamplerState Sampler)
 //{
 //    const float height = 1.0f - HeightMap.Sample(Sampler, uv).r;
@@ -352,3 +366,4 @@ float3 CalculateDirectionalLightIllumination(
 //    float2 uv_offset = ViewVectorInTangentSpace.xy / ViewVectorInTangentSpace.z * (height * heightIntensity);
 //    return uv - uv_offset;
 //}
+

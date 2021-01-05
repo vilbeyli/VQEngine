@@ -15,7 +15,7 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
-
+#define NOMINMAX
 #include "Renderer.h"
 #include "Device.h"
 #include "Texture.h"
@@ -57,7 +57,6 @@ static BufferID  LAST_USED_CBV_ID = 0;
 
 namespace VQ_DXGI_UTILS
 {
-
 	size_t BitsPerPixel(DXGI_FORMAT fmt)
 	{
 		switch (fmt)
@@ -277,33 +276,68 @@ namespace VQ_DXGI_UTILS
 		return 0;
 	}
 
-	void MipImage(void* pData, uint32_t width, uint32_t height)
+	void MipImage(void* pData, uint width, uint height, uint bytesPerPixel)
 	{
 		//compute mip so next call gets the lower mip    
 		int offsetsX[] = { 0,1,0,1 };
 		int offsetsY[] = { 0,0,1,1 };
 
-		uint32_t* pImg = (uint32_t*)pData;
 
+		assert(bytesPerPixel == 4 || bytesPerPixel == 16);
+		
+		if (bytesPerPixel == 4)
+		{
+			uint32_t* pImg = (uint32_t*)pData;
 #define GetByte(color, component) (((color) >> (8 * (component))) & 0xff)
 #define GetColor(ptr, x,y) (ptr[(x)+(y)*width])
 #define SetColor(ptr, x,y, col) ptr[(x)+(y)*width/2]=col;
 
-		for (uint32_t y = 0; y < height; y += 2)
-		{
-			for (uint32_t x = 0; x < width; x += 2)
+			for (uint32_t y = 0; y < height; y += 2)
 			{
-				uint32_t ccc = 0;
-				for (uint32_t c = 0; c < 4; c++)
+				for (uint32_t x = 0; x < width; x += 2)
 				{
-					uint32_t cc = 0;
-					for (uint32_t i = 0; i < 4; i++)
-						cc += GetByte(GetColor(pImg, x + offsetsX[i], y + offsetsY[i]), 3 - c);
+					uint32_t ccc = 0;
+					for (uint32_t c = 0; c < 4; c++)
+					{
+						uint32_t cc = 0;
+						for (uint32_t i = 0; i < 4; i++)
+							cc += GetByte(GetColor(pImg, x + offsetsX[i], y + offsetsY[i]), 3 - c);
 
-					ccc = (ccc << 8) | (cc / 4);
+						ccc = (ccc << 8) | (cc / 4);
+					}
+					SetColor(pImg, x / 2, y / 2, ccc);
 				}
-				SetColor(pImg, x / 2, y / 2, ccc);
 			}
+		}
+
+		if (bytesPerPixel == 16)
+		{
+			using std::min;
+			float* pImg = (float*)pData;
+			// each iteration handles 4 pixels from current level, writes out to a single pixel
+			for (uint32_t y = 0; y < height; y += 2) // [0, 2, 4, ...]
+			for (uint32_t x = 0; x < width ; x += 2) // [0, 2, 4, ...]
+			{
+				float rgb[4][3] = {}; // 4 samples of rgb
+				for (uint smp = 0; smp < 4; ++smp)
+				{
+					for (int ch = 0; ch < 3; ++ch) // color channel ~ rgba, care for RGB only
+						rgb[smp][ch] = pImg[(x + offsetsX[smp]) * 4 + (y + offsetsY[smp]) * 4 * width + ch];
+				}
+
+				// filter: use min filter rather than interpolation
+				float rgbFiltered[4];
+				for (int ch = 0; ch < 3; ++ch)
+					rgbFiltered[ch] = min(rgb[0][ch], min(rgb[1][ch], min(rgb[2][ch], rgb[3][ch])));
+				rgbFiltered[3] = 1.0f;
+
+				uint outX = x >> 1;
+				uint outY = y >> 1;
+
+				for (int ch = 0; ch < 4; ++ch)
+					pImg[(outX * 4) + 4 * outY * (width >> 1) + ch] = rgbFiltered[ch];
+			}
+			
 		}
 
 #if 0
@@ -423,7 +457,13 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 
 		this->StartTextureUploads();
 		std::atomic<bool>& mbResident = mTextures.at(ID).mbResident;
-		while (!mbResident.load());  // busy wait here until the texture is made resident;
+
+		// SYNC POINT - texture residency
+		//------------------------------------------------------------------------------
+		// NOTE: this isn't the best but good enough for small scenes for now.
+		// >60% of the CPU time is spent here during a scene load on the threads
+		while (!mbResident.load()); // BUSY WAIT here until the texture is made resident;
+		//------------------------------------------------------------------------------
 
 #if LOG_RESOURCE_CREATE
 		Log::Info("VQRenderer::CreateTextureFromFile(): [%.2fs] %s", t.StopGetDeltaTimeAndReset(), pFilePath);
@@ -467,8 +507,9 @@ SRV_ID VQRenderer::CreateAndInitializeSRV(TextureID texID)
 	{
 		std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 
+		Texture& tex = mTextures.at(texID);
 		mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
-		mTextures.at(texID).InitializeSRV(0, &SRV);
+		tex.InitializeSRV(0, &SRV);
 		Id = LAST_USED_SRV_ID++;
 		mSRVs[Id] = SRV;
 	}
@@ -569,17 +610,17 @@ void VQRenderer::InitializeDSV(DSV_ID dsvID, uint32 heapIndex, TextureID texID, 
 
 	mTextures.at(texID).InitializeDSV(heapIndex, &mDSVs.at(dsvID), ArraySlice);
 }
-void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, UINT ShaderComponentMapping)
+void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bool bInitAsArrayView /*= false*/, bool bInitAsCubeView /*= false*/, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc /*=nullptr*/, UINT ShaderComponentMapping)
 {
 	CHECK_RESOURCE_VIEW(SRV, srvID);
 	if (texID != INVALID_ID)
 	{
 		CHECK_TEXTURE(mTextures, texID);
-		mTextures.at(texID).InitializeSRV(heapIndex, &mSRVs.at(srvID), ShaderComponentMapping);
+		mTextures.at(texID).InitializeSRV(heapIndex, &mSRVs.at(srvID), bInitAsArrayView, bInitAsCubeView, ShaderComponentMapping, pSRVDesc);
 	}
 	else // init NULL SRV
 	{
-		// Describe and create 2 null SRVs. Null descriptors are needed in order 
+		// Describe and create null SRV. Null descriptors are needed in order 
 		// to achieve the effect of an "unbound" resource.
 		D3D12_SHADER_RESOURCE_VIEW_DESC nullSrvDesc = {};
 		nullSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
@@ -591,6 +632,10 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, UI
 		mDevice.GetDevicePtr()->CreateShaderResourceView(nullptr, &nullSrvDesc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
 	}
 }
+void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc)
+{
+	mDevice.GetDevicePtr()->CreateShaderResourceView(nullptr, &srvDesc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
+}
 void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID)
 {
 	CHECK_TEXTURE(mTextures, texID);
@@ -598,11 +643,90 @@ void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID)
 	mTextures.at(texID).InitializeRTV(heapIndex, &mRTVs.at(rtvID));
 }
 
+void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID, int arraySlice, int mipLevel)
+{
+	CHECK_TEXTURE(mTextures, texID);
+	CHECK_RESOURCE_VIEW(RTV, rtvID);
+	Texture& tex = mTextures.at(texID);
+
+	D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+	D3D12_RESOURCE_DESC rscDesc = tex.GetResource()->GetDesc();
+
+	rtvDesc.Format = rscDesc.Format;
+	
+	const bool& bCubemap = tex.mbCubemap;
+	const bool  bArray   = bCubemap ? (rscDesc.DepthOrArraySize/6 > 1) : rscDesc.DepthOrArraySize > 1;
+	const bool  bMSAA    = rscDesc.SampleDesc.Count > 1;
+
+	assert(arraySlice < rscDesc.DepthOrArraySize);
+	assert(mipLevel < rscDesc.MipLevels);
+
+	if (bArray || bCubemap)
+	{	
+		if (bMSAA)
+		{
+			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY;
+			rtvDesc.Texture2DMSArray.ArraySize = rscDesc.DepthOrArraySize - arraySlice;
+			rtvDesc.Texture2DMSArray.FirstArraySlice = arraySlice;
+		}
+		else
+		{
+			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+			rtvDesc.Texture2DArray.ArraySize = rscDesc.DepthOrArraySize - arraySlice;
+			rtvDesc.Texture2DArray.FirstArraySlice = arraySlice;
+			rtvDesc.Texture2DArray.MipSlice  = mipLevel;
+		}
+	}
+
+	else // non-array
+	{
+		if (bMSAA)
+		{
+			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMS;
+		}
+		else
+		{
+			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+			rtvDesc.Texture2D.MipSlice = mipLevel;
+		}
+	}
+
+	tex.InitializeRTV(heapIndex, &mRTVs.at(rtvID), &rtvDesc);
+}
+
 void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID)
 {
 	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(UAV, uavID);
-	mTextures.at(texID).InitializeUAV(heapIndex, &mUAVs.at(uavID));
+
+	Texture& tex = mTextures.at(texID);
+	D3D12_RESOURCE_DESC rscDesc = tex.GetResource()->GetDesc();
+	
+	const bool& bCubemap = tex.mbCubemap;
+	const bool  bArray   = bCubemap ? (rscDesc.DepthOrArraySize / 6 > 1) : rscDesc.DepthOrArraySize > 1;
+	const bool  bMSAA    = rscDesc.SampleDesc.Count > 1; // don't care?
+
+	int mipLevel = 0;	// TODO
+	int arraySlice = heapIndex; // TODO
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+	uavDesc.Format = tex.mFormat;
+	if (bArray || bCubemap)
+	{
+		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
+		uavDesc.Texture2DArray.ArraySize = rscDesc.DepthOrArraySize - arraySlice;
+		uavDesc.Texture2DArray.FirstArraySlice = arraySlice;
+		uavDesc.Texture2DArray.MipSlice = mipLevel;
+		
+	}
+	else // non-array
+	{
+		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+		uavDesc.Texture2D.MipSlice = mipLevel;
+	}
+
+
+	mTextures.at(texID).InitializeUAV(heapIndex, &mUAVs.at(uavID), &uavDesc);
 }
 
 void VQRenderer::EnqueueShaderLoadTask(TaskID PSOLoadTaskID, const FShaderStageCompileDesc& ShaderStageCompileDesc)
@@ -835,6 +959,7 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 		else
 		{
 			Log::Error(errMsg);
+			// MessageBox(NULL, "EXIT", "Exit", MB_OK); // TODO:
 			return Result;
 		}
 	}
@@ -898,7 +1023,7 @@ const IBV& VQRenderer::GetIndexBufferView(BufferID Id) const
 }
 const CBV_SRV_UAV& VQRenderer::GetShaderResourceView(SRV_ID Id) const
 {
-	//assert(Id < mSRVs.size() && Id != INVALID_ID);
+	assert(Id < LAST_USED_SRV_ID && mSRVs.find(Id) != mSRVs.end());
 	return mSRVs.at(Id);
 }
 
@@ -924,6 +1049,23 @@ ID3D12Resource* VQRenderer::GetTextureResource(TextureID Id)
 {
 	CHECK_TEXTURE(mTextures, Id);
 	return mTextures.at(Id).GetResource();
+}
+
+void VQRenderer::GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices, int& NumMips) const
+{
+	CHECK_TEXTURE(mTextures, Id);
+	const Texture& tex = mTextures.at(Id);
+	SizeX = tex.mWidth;
+	SizeY = tex.mHeight;
+	NumSlices = tex.mNumArraySlices;
+	NumMips = tex.mMipMapCount;
+}
+
+uint VQRenderer::GetTextureMips(TextureID Id) const
+{
+	CHECK_TEXTURE(mTextures, Id);
+	const Texture& tex = mTextures.at(Id);
+	return tex.mMipMapCount;
 }
 
 void VQRenderer::QueueTextureUpload(const FTextureUploadDesc& desc)
@@ -987,7 +1129,7 @@ void VQRenderer::ProcessTextureUpload(const FTextureUploadDesc& desc)
 
 			if (MIP_COUNT > 1)
 			{
-				VQ_DXGI_UTILS::MipImage(imgCopy.pData, placedTex2D[mip].Footprint.Width, num_rows[mip]);
+				VQ_DXGI_UTILS::MipImage(imgCopy.pData, placedTex2D[mip].Footprint.Width, num_rows[mip], bytePP);
 			}
 
 			D3D12_PLACED_SUBRESOURCE_FOOTPRINT slice = placedTex2D[mip];
@@ -1072,7 +1214,7 @@ TextureID VQRenderer::AddTexture_ThreadSafe(Texture&& tex)
 	
 	return Id;
 }
-void VQRenderer::DestroyTexture(TextureID texID)
+void VQRenderer::DestroyTexture(TextureID& texID)
 {
 	// Remove texID
 	std::lock_guard<std::mutex> lk(mMtxTextures);
@@ -1093,17 +1235,22 @@ void VQRenderer::DestroyTexture(TextureID texID)
 	}
 	if (bTexturePathRegistered)
 		mLoadedTexturePaths.erase(texPath);
+
+	texID = INVALID_ID; // invalidate the ID
 }
-void VQRenderer::DestroySRV(SRV_ID srvID)
+void VQRenderer::DestroySRV(SRV_ID& srvID)
 {
 	std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 	//mSRVs.at(srvID).Destroy(); // TODO
 	mSRVs.erase(srvID);
+	//Log::Info("Erase SRV_ID=%d", srvID); // todo: verbose logging preprocessor ifdef
+	srvID = INVALID_ID;
 }
-void VQRenderer::DestroyDSV(DSV_ID dsvID)
+void VQRenderer::DestroyDSV(DSV_ID& dsvID)
 {
 	std::lock_guard<std::mutex> lk(mMtxDSVs);
 	//mDSVs.at(dsvID).Destroy(); // TODO
 	mDSVs.erase(dsvID);
+	dsvID = INVALID_ID;
 }
 

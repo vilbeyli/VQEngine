@@ -95,7 +95,6 @@ std::string GetIncludeFileName(const std::string& line)
 
 bool AreIncludesDirty(const std::string& srcPath, const std::string& cachePath)
 {
-
 	const std::string ShaderSourceDir = DirectoryUtil::GetFolderPath(srcPath);
 	const std::string ShaderCacheDir = DirectoryUtil::GetFolderPath(cachePath);
 
@@ -108,13 +107,16 @@ bool AreIncludesDirty(const std::string& srcPath, const std::string& cachePath)
 		std::ifstream src = std::ifstream(includeFilePath.c_str());
 		if (!src.good())
 		{
-			Log::Error("[ShaderCompile] Cannot open source file: %s", includeFilePath.c_str());
+			Log::Error("[ShaderCompile] %s : Cannot open include file '%s'", srcPath.c_str(),  includeFilePath.c_str());
 			continue;
 		}
 
 		std::string line;
 		while (getline(src, line))
 		{
+			if (line.size() >= 2 && line[0] == line[1] && line[1] == '/') // skip comment lines
+				continue;
+
 			const std::string includeFileName = GetIncludeFileName(line);
 			if (includeFileName.empty()) continue;
 

@@ -192,71 +192,52 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 	, mMaterialAssignments(engine.GetAssetLoader().GetThreadPool_TextureLoad())
 {}
 
-
 void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& sceneRep)
 {
 	mRenderer.WaitForLoadCompletion();
 	
 	Log::Info("[Scene] Loading Scene: %s", sceneRep.SceneName.c_str());
-
 	const TaskID taskID = AssetLoader::GenerateModelLoadTaskID();
-	
-	if(mMaterials.empty()) 
+
+
+	mSceneRepresentation = sceneRep;
+
+	// ------------------------------------------------------------------------------------------------
+	// this is not very good: builtin materials will always be loaded even when they're not used!
+	// TODO: load materials that are only referenced by the scene.
+	if (mMaterials.empty())
 		LoadBuiltinMaterials(taskID);
+	// ------------------------------------------------------------------------------------------------
+
+	LoadBuiltinMeshes(builtinMeshes);
 	
+	this->LoadScene(sceneRep); // scene-specific load 
+	
+	LoadSceneMaterials(sceneRep.Materials, taskID);
 
-	constexpr bool B_LOAD_GAMEOBJECTS_SERIAL = true;
-	auto fnDeserializeGameObject = [&](FGameObjectRepresentation& ObjRep)
+	LoadGameObjects(std::move(sceneRep.Objects));
+	LoadLights(sceneRep.Lights);
+	LoadCameras(sceneRep.Cameras);
+	LoadPostProcessSettings();
+}
+
+void Scene::LoadBuiltinMaterials(TaskID taskID)
+{
+	const char* STR_MATERIALS_FOLDER = "Data/Materials/";
+
+	auto vMatFiles = DirectoryUtil::ListFilesInDirectory(STR_MATERIALS_FOLDER, "xml");
+	for (const std::string& filePath : vMatFiles)
 	{
-		// GameObject
-		GameObject* pObj = mGameObjectPool.Allocate(1);
-		pObj->mModelID = INVALID_ID;
-		pObj->mTransformID = INVALID_ID;
-
-		// Transform
-		Transform* pTransform = mTransformPool.Allocate(1);
-		*pTransform = std::move(ObjRep.tf);
-		mpTransforms.push_back(pTransform);
-
-		TransformID tID = static_cast<TransformID>(mpTransforms.size() - 1);
-		pObj->mTransformID = tID;
-
-		// Model
-		const bool bModelIsBuiltinMesh = !ObjRep.BuiltinMeshName.empty();
-		const bool bModelIsLoadedFromFile = !ObjRep.ModelFilePath.empty();
-		assert(bModelIsBuiltinMesh != bModelIsLoadedFromFile);
-
-		if (bModelIsBuiltinMesh)
+		std::vector<FMaterialRepresentation> vMaterialReps = VQEngine::ParseMaterialFile(filePath);
+		for (const FMaterialRepresentation& matRep : vMaterialReps)
 		{
-			ModelID mID = this->CreateModel();
-			Model& model = mModels.at(mID);
-
-			// create/get mesh
-			MeshID meshID = mEngine.GetBuiltInMeshID(ObjRep.BuiltinMeshName);
-			model.mData.mOpaueMeshIDs.push_back(meshID);
-
-			// material
-			MaterialID matID = this->mDefaultMaterialID;
-			if (!ObjRep.MaterialName.empty())
-			{
-				matID = this->CreateMaterial(ObjRep.MaterialName);
-			}
-			Material& mat = this->GetMaterial(matID);
-			const bool bTransparentMesh = mat.IsTransparent();
-			model.mData.mOpaqueMaterials[meshID] = matID; // todo: handle transparency
-
-			model.mbLoaded = true;
-			pObj->mModelID = mID;
+			LoadMaterial(matRep, taskID);
 		}
-		else
-		{
-			mAssetLoader.QueueModelLoad(pObj, ObjRep.ModelFilePath, ObjRep.ModelName);
-		}
+	}
+}
 
-
-		mpObjects.push_back(pObj);
-	};
-
+void Scene::LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes)
+{
 	// register builtin meshes to scene mesh lookup
 	// @mMeshes[0-NUM_BUILTIN_MESHES] are assigned here directly while the rest
 	// of the meshes used in the scene must use this->AddMesh(Mesh&&) interface;
@@ -270,32 +251,63 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 		this->mDefaultMaterialID = this->CreateMaterial("DefaultMaterial");
 		Material& mat = this->GetMaterial(this->mDefaultMaterialID);
 	}
+}
 
-	// scene-specific load 
-	this->LoadScene(sceneRep);
+void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects)
+{
+	constexpr bool B_LOAD_GAMEOBJECTS_SERIAL = true;
 
-
-	// Create scene materials before deserializing gameobjects
-	for (const FMaterialRepresentation& matRep : sceneRep.Materials)
-	{
-		this->LoadMaterial(matRep, taskID);
-	}
-	Log::Info("[Scene] Materials Created");
-
-	// kickoff background workers for texture loading
-	if (!mMaterialAssignments.mAssignments.empty())
-	{
-		mMaterialAssignments.mTextureLoadResults = mAssetLoader.StartLoadingTextures(taskID);
-		Log::Info("[Scene] Start loading textures...");
-	}
-
-	// load game objects
 	if constexpr (B_LOAD_GAMEOBJECTS_SERIAL)
 	{
-		// GAME OBJECTS
-		for (FGameObjectRepresentation& ObjRep : sceneRep.Objects)
+		for (FGameObjectRepresentation& ObjRep : GameObjects)
 		{
-			fnDeserializeGameObject(ObjRep);
+			// GameObject
+			GameObject* pObj = mGameObjectPool.Allocate(1);
+			pObj->mModelID = INVALID_ID;
+			pObj->mTransformID = INVALID_ID;
+
+			// Transform
+			Transform* pTransform = mTransformPool.Allocate(1);
+			*pTransform = std::move(ObjRep.tf);
+			mpTransforms.push_back(pTransform);
+
+			TransformID tID = static_cast<TransformID>(mpTransforms.size() - 1);
+			pObj->mTransformID = tID;
+
+			// Model
+			const bool bModelIsBuiltinMesh = !ObjRep.BuiltinMeshName.empty();
+			const bool bModelIsLoadedFromFile = !ObjRep.ModelFilePath.empty();
+			assert(bModelIsBuiltinMesh != bModelIsLoadedFromFile);
+
+			if (bModelIsBuiltinMesh)
+			{
+				ModelID mID = this->CreateModel();
+				Model& model = mModels.at(mID);
+
+				// create/get mesh
+				MeshID meshID = mEngine.GetBuiltInMeshID(ObjRep.BuiltinMeshName);
+				model.mData.mOpaueMeshIDs.push_back(meshID);
+
+				// material
+				MaterialID matID = this->mDefaultMaterialID;
+				if (!ObjRep.MaterialName.empty())
+				{
+					matID = this->CreateMaterial(ObjRep.MaterialName);
+				}
+				Material& mat = this->GetMaterial(matID);
+				const bool bTransparentMesh = mat.IsTransparent();
+				model.mData.mOpaqueMaterials[meshID] = matID; // todo: handle transparency
+
+				model.mbLoaded = true;
+				pObj->mModelID = mID;
+			}
+			else
+			{
+				mAssetLoader.QueueModelLoad(pObj, ObjRep.ModelFilePath, ObjRep.ModelName);
+			}
+
+
+			mpObjects.push_back(pObj);
 		}
 	}
 	else // THREADED LOAD
@@ -308,8 +320,32 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	mModelLoadResults = mAssetLoader.StartLoadingModels(this);
 	Log::Info("[Scene] Start loading models...");
 
-	// LIGHTS
-	for (const Light& l : sceneRep.Lights)
+}
+
+void Scene::LoadSceneMaterials(const std::vector<FMaterialRepresentation>& Materials, TaskID taskID)
+{
+	// Create scene materials before deserializing gameobjects
+	uint NumMaterials = 0;
+	for (const FMaterialRepresentation& matRep : Materials)
+	{
+		this->LoadMaterial(matRep, taskID);
+		++NumMaterials;
+	}
+	
+	if(NumMaterials > 0)
+		Log::Info("[Scene] Materials Created (%u)", NumMaterials);
+	
+	// kickoff background workers for texture loading
+	if (!mMaterialAssignments.mAssignments.empty())
+	{
+		mMaterialAssignments.mTextureLoadResults = mAssetLoader.StartLoadingTextures(taskID);
+		Log::Info("[Scene] Start loading textures... (%u)", mMaterialAssignments.mTextureLoadResults.size());
+	}
+}
+
+void Scene::LoadLights(const std::vector<Light>& SceneLights)
+{
+	for (const Light& l : SceneLights)
 	{
 		std::vector<Light>& LightContainer = [&]() -> std::vector<Light>& {
 			switch (l.Mobility)
@@ -326,12 +362,14 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 
 		LightContainer.push_back(l);
 	}
+}
 
-	// CAMERAS
-	for (FCameraParameters& param : sceneRep.Cameras)
+void Scene::LoadCameras(std::vector<FCameraParameters>& CameraParams)
+{
+	for (FCameraParameters& param : CameraParams)
 	{
-		param.ProjectionParams.ViewportWidth  = static_cast<float>( mpWindow->GetWidth()  );
-		param.ProjectionParams.ViewportHeight = static_cast<float>( mpWindow->GetHeight() );
+		param.ProjectionParams.ViewportWidth = static_cast<float>(mpWindow->GetWidth());
+		param.ProjectionParams.ViewportHeight = static_cast<float>(mpWindow->GetHeight());
 
 		Camera c;
 		c.InitializeCamera(param);
@@ -343,29 +381,33 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	// to prevent dangling pointers in @pController->mpCamera (circular ptrs)
 	for (size_t i = 0; i < mCameras.size(); ++i)
 	{
-		if (sceneRep.Cameras[i].bInitializeCameraController)
+		if (CameraParams[i].bInitializeCameraController)
 		{
-			mCameras[i].InitializeController(sceneRep.Cameras[i].bFirstPerson, sceneRep.Cameras[i]);
+			mCameras[i].InitializeController(CameraParams[i].bFirstPerson, CameraParams[i]);
 		}
 	}
 	Log::Info("[Scene] Cameras initialized");
-
-	// assign scene rep
-	mSceneRepresentation = sceneRep;
 }
 
-void Scene::LoadBuiltinMaterials(TaskID taskID)
-{
-	const char* STR_MATERIALS_FOLDER = "Data/Materials/";
 
-	auto vMatFiles = DirectoryUtil::ListFilesInDirectory(STR_MATERIALS_FOLDER, "xml");
-	for (const std::string& filePath : vMatFiles)
+#define A_CPU 1
+#include "Shaders/FidelityFX/ffx_a.h"
+#include "Shaders/FidelityFX/CAS/ffx_cas.h"
+void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
+{
+	// TODO: remove hardcode
+
+	const float fWidth  = static_cast<float>(this->mpWindow->GetWidth());
+	const float fHeight = static_cast<float>(this->mpWindow->GetHeight());
+
+	// Update PostProcess Data
+	for (size_t i = 0; i < mFrameSceneViews.size(); ++i)
 	{
-		std::vector<FMaterialRepresentation> vMaterialReps = VQEngine::ParseMaterialFile(filePath);
-		for (const FMaterialRepresentation& matRep : vMaterialReps)
-		{
-			LoadMaterial(matRep, taskID);
-		}
+		FPostProcessParameters& PPParams = this->GetPostProcessParameters(static_cast<int>(i));
+		FPostProcessParameters::FFFXCAS& CASParams = PPParams.FFXCASParams;
+		CasSetup(&CASParams.CASConstantBlock[0], &CASParams.CASConstantBlock[4], CASParams.CASSharpen, fWidth, fHeight, fWidth, fHeight);
+
+		PPParams.bEnableCAS = true; // TODO: read from scene PP settings
 	}
 }
 
@@ -472,7 +514,7 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 	PrepareLightMeshRenderParams(SceneView);
 
 	// update post process settings for next frame
-	SceneViewNext.postProcess = SceneView.postProcess;
+	SceneViewNext.postProcessParameters = SceneView.postProcessParameters;
 	SceneViewNext.sceneParameters = SceneView.sceneParameters;
 }
 
@@ -482,17 +524,42 @@ void Scene::RenderUI()
 	// TODO
 }
 
+static std::string DumpCameraInfo(int index, const Camera& cam)
+{
+	const XMFLOAT3 pos = cam.GetPositionF();
+	const float pitch  = cam.GetPitch();
+	const float yaw    = cam.GetYaw();
+
+	std::string info = std::string("[CAMERA INFO]\n")
+		+ "mIndex_SelectedCamera=" + std::to_string(index) + "\n"
+		+ "  Pos         : " + std::to_string(pos.x) + " " + std::to_string(pos.y) + " " + std::to_string(pos.z) + "\n"
+		+ "  Yaw (Deg)   : " + std::to_string(yaw*RAD2DEG) + "\n"
+		+ "  Pitch (Deg) : " + std::to_string(pitch*RAD2DEG) + "\n";
+;
+
+	return info;
+}
+
 void Scene::HandleInput(FSceneView& SceneView)
 {
 	const bool bIsShiftDown = mInput.IsKeyDown("Shift");
+	const bool bIsCtrlDown = mInput.IsKeyDown("Ctrl");
 	const int NumEnvMaps = static_cast<int>(mResourceNames.mEnvironmentMapPresetNames.size());
 
 	if (mInput.IsKeyTriggered("C"))
 	{
-		const int NumCameras = static_cast<int>(mCameras.size());
-		mIndex_SelectedCamera = bIsShiftDown 
-			? CircularDecrement(mIndex_SelectedCamera, NumCameras) 
-			: CircularIncrement(mIndex_SelectedCamera, NumCameras);
+		if (bIsCtrlDown) // CTRL + C : Dump Camera Info
+		{
+			std::string camInfo = DumpCameraInfo(mIndex_SelectedCamera, mCameras[mIndex_SelectedCamera]);
+			Log::Info(camInfo.c_str());
+		}
+		else
+		{
+			const int NumCameras = static_cast<int>(mCameras.size());
+			mIndex_SelectedCamera = bIsShiftDown
+				? CircularDecrement(mIndex_SelectedCamera, NumCameras)
+				: CircularIncrement(mIndex_SelectedCamera, NumCameras);
+		}
 	}
 
 	if (mInput.IsKeyTriggered("L"))

@@ -59,6 +59,9 @@ set (Shaders
     "Shaders/LightingConstantBufferData.h"
     "Shaders/Unlit.hlsl"
     "Shaders/DepthPass.hlsl"
+    "Shaders/CubemapConvolution.hlsl"
+    "Shaders/GaussianBlur.hlsl"
+    "Shaders/AMDFidelityFX.hlsl"
 )
 
 set (HeaderVQE 
@@ -95,6 +98,7 @@ set (SourceVQE
     "Source/Application/VQEngine_Update.cpp"
     "Source/Application/VQEngine_WindowEvents.cpp"
     "Source/Application/VQEngine_EventHandlers.cpp"
+    "Source/Application/EnvironmentMap.cpp"
     "Source/Application/FileParser.cpp"
     "Source/Application/Events.cpp"
     "Source/Application/Mesh.cpp"
@@ -112,6 +116,12 @@ set (SourceVQE
     "Source/Application/GameObject.cpp"
     "Source/Application/Memory.cpp"
     "Source/Application/GPUMarker.cpp"
+)
+
+set (FidelityFX
+    "Shaders/FidelityFX/ffx_a.h"
+    "Shaders/FidelityFX/CAS/ffx_cas.h"
+#    "Shaders/FidelityFX/SPD/ffx_spd.h"
 )
 
 set (PIXIncl 
@@ -144,6 +154,7 @@ source_group("Config"   FILES ${Config})
 source_group("Resource" FILES ${Resource})
 source_group("Icons"    FILES ${Icons})
 source_group("Shaders"  FILES ${Shaders})
+source_group("Shaders\\AMD-FidelityFX"  FILES ${FidelityFX})
 source_group("Scenes"   FILES ${Scenes})
 source_group("Materials" FILES ${Materials})
 
@@ -151,6 +162,7 @@ set_source_files_properties(${Config} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Materials} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Scenes} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${FidelityFX} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(Data/Resources/VQE.rc PROPERTIES VS_TOOL_OVERRIDE "Resource compiler")
 set_source_files_properties(Data/Icons/VQE32.ico  PROPERTIES VS_TOOL_OVERRIDE "Image")
 
@@ -158,7 +170,7 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/VQUtils/Bin/)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/WinPixEventRuntime/bin/x64)
 
 # Create a library with the project name that is build with the Headers and Source files
-add_executable( ${PROJECT_NAME} ${HeaderVQE} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} ${Materials})
+add_executable( ${PROJECT_NAME} ${HeaderVQE} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} ${Materials} ${FidelityFX})
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY} )
 

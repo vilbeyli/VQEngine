@@ -180,20 +180,34 @@ void VQEngine::UpdateThread_HandleEvents()
 
 }
 
+#define A_CPU 1
+#include "Shaders/FidelityFX/ffx_a.h"
+#include "Shaders/FidelityFX/CAS/ffx_cas.h"
 void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent)
 {
 	std::shared_ptr<WindowResizeEvent> p = std::static_pointer_cast<WindowResizeEvent>(pEvent);
 
+	const float fWidth  = static_cast<float>(p->width );
+	const float fHeight = static_cast<float>(p->height);
 	if (p->hwnd == mpWinMain->GetHWND())
 	{
-		// TODO: all cameras?
-		Camera& cam = mpScene->GetActiveCamera();
-		
-		FProjectionMatrixParameters UpdatedProjectionMatrixParams = cam.GetProjectionParameters();
-		UpdatedProjectionMatrixParams.ViewportWidth  = static_cast<float>(p->width );
-		UpdatedProjectionMatrixParams.ViewportHeight = static_cast<float>(p->height);
+		SwapChain& Swapchain = mRenderer.GetWindowSwapChain(p->hwnd);
+		const int NUM_BACK_BUFFERS =  Swapchain.GetNumBackBuffers();
 
-		cam.SetProjectionMatrix(UpdatedProjectionMatrixParams);		
+		// Update Camera Projection Matrices
+		Camera& cam = mpScene->GetActiveCamera(); // TODO: all cameras?
+		FProjectionMatrixParameters UpdatedProjectionMatrixParams = cam.GetProjectionParameters();
+		UpdatedProjectionMatrixParams.ViewportWidth  = fWidth;
+		UpdatedProjectionMatrixParams.ViewportHeight = fHeight;
+		cam.SetProjectionMatrix(UpdatedProjectionMatrixParams);
+
+		// Update PostProcess Data
+		for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
+		{
+			FPostProcessParameters::FFFXCAS& CASParams = mpScene->GetPostProcessParameters(i).FFXCASParams;
+			CasSetup(&CASParams.CASConstantBlock[0], &CASParams.CASConstantBlock[4], CASParams.CASSharpen, fWidth, fHeight, fWidth, fHeight);
+		}
+		
 	}
 }
 
@@ -230,11 +244,11 @@ void VQEngine::RenderThread_HandleEvents()
 
 		switch (pEvent->mType)
 		{
-		case EEventType::WINDOW_RESIZE_EVENT        : pLastResizeEventLookup[pEvent->hwnd] = std::static_pointer_cast<WindowResizeEvent>(pEvent); break;
-		case EEventType::TOGGLE_FULLSCREEN_EVENT    : RenderThread_HandleToggleFullscreenEvent(pEvent.get()); break;
-		case EEventType::WINDOW_CLOSE_EVENT         : RenderThread_HandleWindowCloseEvent(pEvent.get()); break;
-		case EEventType::SET_VSYNC_EVENT            : RenderThread_HandleSetVSyncEvent(pEvent.get()); break;
-		case EEventType::SET_SWAPCHAIN_FORMAT_EVENT : RenderThread_HandleSetSwapchainFormatEvent(pEvent.get()); break;
+		case EEventType::WINDOW_RESIZE_EVENT             : pLastResizeEventLookup[pEvent->hwnd] = std::static_pointer_cast<WindowResizeEvent>(pEvent); break;
+		case EEventType::TOGGLE_FULLSCREEN_EVENT         : RenderThread_HandleToggleFullscreenEvent(pEvent.get()); break;
+		case EEventType::WINDOW_CLOSE_EVENT              : RenderThread_HandleWindowCloseEvent(pEvent.get()); break;
+		case EEventType::SET_VSYNC_EVENT                 : RenderThread_HandleSetVSyncEvent(pEvent.get()); break;
+		case EEventType::SET_SWAPCHAIN_FORMAT_EVENT      : RenderThread_HandleSetSwapchainFormatEvent(pEvent.get()); break;
 		case EEventType::SET_HDR10_STATIC_METADATA_EVENT : RenderThread_HandleSetHDRMetaDataEvent(pEvent.get()); break;
 		}
 	}
@@ -472,7 +486,7 @@ void VQEngine::RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent)
 	const int BACK_BUFFER_INDEX = Swapchain.GetCurrentBackBufferIndex();
 	const EDisplayCurve OutputDisplayCurve = Swapchain.IsHDRFormat() ? EDisplayCurve::Linear : EDisplayCurve::sRGB;
 	for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
-		mpScene->GetPostProcessParameters(i).OutputDisplayCurve = OutputDisplayCurve;
+		mpScene->GetPostProcessParameters(i).TonemapperParams.OutputDisplayCurve = OutputDisplayCurve;
 	
 	Log::Info("Set Swapchain Format: %s | OutputDisplayCurve: %s"
 		, VQRenderer::DXGIFormatAsString(pSwapchainEvent->format).data()

@@ -247,11 +247,18 @@ void VQEngine::HandleEngineInput()
 				mSettings.gfx.bAntiAliasing = !mSettings.gfx.bAntiAliasing;
 				Log::Info("Toggle MSAA: %d", mSettings.gfx.bAntiAliasing);	
 			}
+			if (input.IsKeyTriggered("B"))
+			{
+				WaitUntilRenderingFinishes();
+				FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
+				PPParams.bEnableCAS = !PPParams.bEnableCAS;
+				Log::Info("Toggle FFX-CAS: %d", PPParams.bEnableCAS);
+			}
 			if (input.IsKeyTriggered("G"))
 			{
 				FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
-				PPParams.ToggleGammaCorrection = PPParams.ToggleGammaCorrection == 1 ? 0 : 1;
-				Log::Info("Tonemapper: ApplyGamma=%d (SDR-only)", PPParams.ToggleGammaCorrection);
+				PPParams.TonemapperParams.ToggleGammaCorrection = PPParams.TonemapperParams.ToggleGammaCorrection == 1 ? 0 : 1;
+				Log::Info("Tonemapper: ApplyGamma=%d (SDR-only)", PPParams.TonemapperParams.ToggleGammaCorrection);
 			}
 
 			// Scene switching
@@ -406,36 +413,10 @@ void VQEngine::StartLoadingScene(int IndexScene)
 	Log::Info("StartLoadingScene: %d", IndexScene);
 }
 
-void VQEngine::UnloadEnvironmentMap()
-{
-	FEnvironmentMap& env = mResources_MainWnd.EnvironmentMap;
-	if (env.Tex_HDREnvironment != INVALID_ID)
-	{
-		// GPU-sync assumed
-		mRenderer.GetWindowSwapChain(mpWinMain->GetHWND()).WaitForGPU();
-		mRenderer.DestroySRV(env.SRV_HDREnvironment);
-		mRenderer.DestroyTexture(env.Tex_HDREnvironment);
-		env.SRV_HDREnvironment = env.Tex_HDREnvironment = INVALID_ID;
-		env.MaxContentLightLevel = 0;
-	}
-}
 
 void VQEngine::WaitUntilRenderingFinishes()
 {
 	while (mNumRenderLoopsExecuted != mNumUpdateLoopsExecuted);
-}
-
-const FEnvironmentMapDescriptor& VQEngine::GetEnvironmentMapDesc(const std::string& EnvMapName) const
-{
-	static const FEnvironmentMapDescriptor DEFAULT_ENV_MAP_DESC = { "ENV_MAP_NOT_FOUND", "", 0.0f };
-	const bool bEnvMapNotFound = mLookup_EnvironmentMapDescriptors.find(EnvMapName) == mLookup_EnvironmentMapDescriptors.end();
-	if (bEnvMapNotFound)
-	{
-		Log::Error("Environment Map %s not found.", EnvMapName.c_str());
-	}
-	return  bEnvMapNotFound
-		? DEFAULT_ENV_MAP_DESC
-		: mLookup_EnvironmentMapDescriptors.at(EnvMapName);
 }
 
 // ---------------------------------------------------------------------
@@ -489,55 +470,20 @@ void VQEngine::Load_SceneData_Dispatch()
 		mpScene->Unload();
 	}
 
+	// load scene representation from disk
 	const std::string SceneFilePath = "Data/Levels/" + SceneFileName + ".xml";
 	FSceneRepresentation SceneRep = VQEngine::ParseSceneFile(SceneFilePath);
 	fnCreateSceneInstance(SceneRep.SceneName, mpScene);
 
-	// start loading;
+	// start loading textures, models, materials with worker threads
 	mpScene->StartLoading(this->mBuiltinMeshes, SceneRep);
 
+	// start loading environment map textures
 	if (!SceneRep.EnvironmentMapPreset.empty()) 
 	{ 
 		mWorkers_TextureLoading.AddTask([=]() { LoadEnvironmentMap(SceneRep.EnvironmentMapPreset); });
 	}
 }
-
-void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
-{
-	assert(EnvMapName.size() != 0);
-	FEnvironmentMap& env = mResources_MainWnd.EnvironmentMap;
-
-	// if already loaded, unload it
-	if (env.Tex_HDREnvironment != INVALID_ID)
-	{
-		assert(env.SRV_HDREnvironment != INVALID_ID);
-		UnloadEnvironmentMap();
-	}
-
-	const FEnvironmentMapDescriptor& desc = this->GetEnvironmentMapDesc(EnvMapName);
-	std::vector<std::string>::iterator it = std::find(mResourceNames.mEnvironmentMapPresetNames.begin(), mResourceNames.mEnvironmentMapPresetNames.end(), EnvMapName);
-	const size_t ActiveEnvMapIndex = it - mResourceNames.mEnvironmentMapPresetNames.begin();
-	if (!desc.FilePath.empty()) // check whether the env map was found or not
-	{
-		Log::Info("Loading Environment Map: %s", EnvMapName.c_str());
-		env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(desc.FilePath.c_str());
-		env.SRV_HDREnvironment = mRenderer.CreateAndInitializeSRV(env.Tex_HDREnvironment);
-		env.MaxContentLightLevel = static_cast<int>(desc.MaxContentLightLevel);
-
-		//assert(mpScene->mIndex_ActiveEnvironmentMapPreset == static_cast<int>(ActiveEnvMapIndex)); // Only false durin initialization
-		mpScene->mIndex_ActiveEnvironmentMapPreset = static_cast<int>(ActiveEnvMapIndex);
-
-		// Update HDRMetaData when the nvironment map is loaded
-		HWND hwnd = mpWinMain->GetHWND();
-		mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetStaticHDRMetaDataEvent>(hwnd, this->GatherHDRMetaDataParameters(hwnd)));
-	}
-	else
-	{
-		Log::Warning("Have you run Scripts/DownloadAssets.bat?");
-		Log::Error("Couldn't find Environment Map: %s", EnvMapName.c_str());
-	}
-}
-
 
 SRV_ID FLoadingScreenData::GetSelectedLoadingScreenSRV_ID() const
 {

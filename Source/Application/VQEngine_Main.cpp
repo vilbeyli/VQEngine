@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "VQEngine.h"
+#include "Libs/VQUtils/Source/utils.h"
 
 #include <cassert>
 
@@ -251,6 +252,7 @@ void VQEngine::InitializeHDRProfiles()
 
 void VQEngine::InitializeEnvironmentMaps()
 {
+	mbEnvironmentMapPreFilter.store(false);
 	std::vector<FEnvironmentMapDescriptor> descs = VQEngine::ParseEnvironmentMapsFile();
 	for (const FEnvironmentMapDescriptor& desc : descs)
 	{
@@ -274,11 +276,24 @@ void VQEngine::InitializeScenes()
 
 	// set the selected scene index
 	auto it2 = std::find_if(mSceneNames.begin(), mSceneNames.end(), [&](const std::string& scn) { return scn == mSettings.StartupScene; });
-	bool bSceneFound = it2 != mSceneNames.end();
-	if (!bSceneFound)
+	bool bSceneNameMatch = it2 != mSceneNames.end();
+	if (!bSceneNameMatch)
 	{
-		Log::Error("Couldn't find scene '%s' among scene file names", mSettings.StartupScene.c_str());
-		it2 = mSceneNames.begin();
+		// startup scene could be a std::string or an int index
+		// if SceneName didn't match, check for index
+		if (StrUtil::IsNumber(mSettings.StartupScene))
+		{
+			int iScene = StrUtil::ParseInt(mSettings.StartupScene);
+			bSceneNameMatch = iScene >= 0 && iScene < mSceneNames.size();
+			if (bSceneNameMatch)
+				it2 = mSceneNames.begin() + iScene;
+		}
+
+		if (!bSceneNameMatch)
+		{
+			it2 = mSceneNames.begin();
+			Log::Error("Couldn't find scene '%s' among scene file names, loading level '%s' by default.", mSettings.StartupScene.c_str(), it2->c_str());
+		}
 	}
 	mIndex_SelectedScene = static_cast<int>(it2 - mSceneNames.begin());
 
