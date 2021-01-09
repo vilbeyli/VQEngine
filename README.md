@@ -2,7 +2,7 @@
 
 # VQE
 
-VQE is **VQEngine**: A DX12 rewrite of [VQEngine-Vanilla](https://github.com/vilbeyli/VQEngine) for fast prototyping of rendering techniques and experimenting with cutting-edge technology.
+VQE is **VQEngine**: A DX12 rewrite of [VQEngine-DX11](https://github.com/vilbeyli/VQEngine) for fast prototyping of rendering techniques and experimenting with cutting-edge technology.
 
 Join the [VQE Discord Channel](https://discord.gg/U7pd8TV) for rendering, graphics and engine architecture discussions!
 
@@ -106,7 +106,7 @@ Or, if you're using a terminal,
 | :--: | :-- |
 | **WASD+EQ** | Camera movement |
 | **Page Up/Down** | Change Environment Map |
-| **1-4** |	Change scenes <br>**1** - *Environment Map Scene* <br>**2** - *Sponza* <br>**3** - *Geometry Test Scene* <br>**4** - *Stress Test Scene* |
+| **1-4** |	Change scenes <br>**1** - *Default Scene* <br>**2** - *Sponza* <br>**3** - *Geometry Test Scene* <br>**4** - *Stress Test Scene* |
 | **Shift+R** | Reload level |
 | **C** | Change scene camera |
 | **V** | Toggle VSync |
