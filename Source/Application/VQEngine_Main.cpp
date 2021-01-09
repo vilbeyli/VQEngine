@@ -77,16 +77,26 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	// offload system info acquisition to a thread as it takes a few seconds on Debug build
 	mWorkers_Update.AddTask([&]() 
 	{
-		this->mSysInfo = VQSystemInfo::GetSystemInfo();
+		// Offload GetMonitorInfo() into thread as it takes the longest
+		// Get others on the same thread.
+
+		this->mSysInfo.CPU  = VQSystemInfo::GetCPUInfo();
+		this->mSysInfo.GPUs = VQSystemInfo::GetGPUInfo();
+		this->mSysInfo.RAM  = VQSystemInfo::GetRAMInfo();
 		
-#if REPORT_SYSTEM_INFO 
-		ReportSystemInfo(this->mSysInfo);
-#endif
-		HWND hwnd = mpWinMain->GetHWND();
-		if (!mpWinMain->IsClosed())
+		mWorkers_Update.AddTask([&]()
 		{
-			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetStaticHDRMetaDataEvent>(hwnd, this->GatherHDRMetaDataParameters(hwnd)));
-		}
+			this->mSysInfo = VQSystemInfo::GetSystemInfo();
+
+#if REPORT_SYSTEM_INFO 
+			ReportSystemInfo(this->mSysInfo);
+#endif
+			HWND hwnd = mpWinMain->GetHWND();
+			if (!mpWinMain->IsClosed())
+			{
+				mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetStaticHDRMetaDataEvent>(hwnd, this->GatherHDRMetaDataParameters(hwnd)));
+			}
+		});
 	});
 	float f0 = t.Tick();
 

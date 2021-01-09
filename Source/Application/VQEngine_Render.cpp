@@ -145,7 +145,7 @@ void VQEngine::RenderThread_Inititalize()
 	//
 	// TODO: THREADED LOADING
 	// 
-	// load renderer resources
+	// load renderer resources, compile shaders, load PSOs
 	mRenderer.Load();
 
 	RenderThread_LoadResources();

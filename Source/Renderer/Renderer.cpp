@@ -1239,6 +1239,15 @@ void VQRenderer::LoadPSOs()
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain_DiffuseIrradiance", "ps_5_1" });
 		for (uint rt = 1; rt < psoDesc.NumRenderTargets; ++rt) psoDesc.RTVFormats[rt] = DXGI_FORMAT_UNKNOWN;
 		psoDesc.NumRenderTargets = 1;
+		// determine diffuse irradiance integration iteration count based on GPU dedicated memory size
+		const std::vector<FGPUInfo> iGPU = VQSystemInfo::GetGPUInfo();
+		assert(!iGPU.empty());
+		const bool bLowEndGPU = iGPU[0].DedicatedGPUMemory < 2.1 * GIGABYTE;
+		const bool bHighEndGPU = iGPU[0].DedicatedGPUMemory > 4.0 * GIGABYTE;
+		for (FShaderStageCompileDesc& shdDesc : psoLoadDesc.ShaderStageCompileDescs)
+		{
+			shdDesc.Macros.push_back({ "INTEGRATION_STEP_DIFFUSE_IRRADIANCE", (bLowEndGPU ? "0.050f" : (bHighEndGPU ? "0.010f" : "0.025f")) });
+		}
 		PSOLoadDescs.push_back({ EBuiltinPSOs::CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO, psoLoadDesc });
 
 		psoLoadDesc.PSOName = "PSO_CubemapConvolutionVSPS_Specular";
