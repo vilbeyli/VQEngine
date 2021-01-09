@@ -56,6 +56,7 @@ for %%i IN (%*) DO (
 set ALL_ASSETS_ALREADY_DOWNLOADED=1
 for %%f in (%HDRI_FILE_LIST%) do ( 
   if not exist %HDRI_TEXTURES_DESTINATION_PATH%%%f (
+    echo MISSING HDRI FILES!!!!
     %WGET_PATH% %HDRI_WEB_PATH%%%f -P %HDRI_TEXTURES_DESTINATION_PATH%
     set ALL_ASSETS_ALREADY_DOWNLOADED=0
     set HDRI_DOWNLOADED_FILES=!HDRI_DOWNLOADED_FILES!;%HDRI_TEXTURES_DESTINATION_PATH%%%f
@@ -90,5 +91,7 @@ if !ALL_ASSETS_ALREADY_DOWNLOADED! equ 1 (
     echo  - %%f
   )
 )
+
+git submodule update --init ../Data/Models
 
 exit /b 0
