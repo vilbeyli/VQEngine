@@ -23,15 +23,10 @@ struct PSInput
 	float2 uv : TEXCOORD0;
 };
 
-struct PerFrame{};  // TODO
-struct PerView {};  // TODO
-struct PerObject{}; // TODO
-
 cbuffer CBuffer : register(b0)
 {
 	float4x4 matModelViewProj;
 }
-
 
 Texture2D    texColor;
 SamplerState Sampler;

@@ -99,8 +99,10 @@ if !NEED_TO_INIT_SUBMODULES! neq 0 (
     :: attempt to initialize submodule
     cd ..
     echo.
-    git submodule init 
-    git submodule update
+    git submodule update --init Libs/D3D12MA
+    git submodule update --init Libs/VQUtils
+    git submodule update --init Libs/assimp
+    git submodule update --init Source/Renderer/Libs/D3DX12
     cd Build
 
     :: check if submodule initialized properly

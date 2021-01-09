@@ -64,12 +64,31 @@ struct FEnvironmentMapDescriptor
 	std::string FilePath;
 	float MaxContentLightLevel = 0.0f;
 };
-struct FEnvironmentMap
+struct FEnvironmentMapRenderingResources
 {
-	TextureID Tex_HDREnvironment = INVALID_ID;
-	TextureID Tex_Irradiance     = INVALID_ID; // TODO: lighting
-	SRV_ID    SRV_HDREnvironment = INVALID_ID;
-	SRV_ID    SRV_Irradiance     = INVALID_ID; // TODO: lighting
+	TextureID Tex_HDREnvironment = INVALID_ID; // equirect input
+	TextureID Tex_IrradianceDiff = INVALID_ID; // Kd
+	TextureID Tex_IrradianceSpec = INVALID_ID; // Ks
+	
+	// temporary resources
+	TextureID Tex_BlurTemp = INVALID_ID;
+	TextureID Tex_IrradianceDiffBlurred = INVALID_ID; // Kd
+
+	RTV_ID RTV_IrradianceDiff = INVALID_ID;
+	RTV_ID RTV_IrradianceSpec = INVALID_ID;
+
+	SRV_ID SRV_HDREnvironment = INVALID_ID;
+	SRV_ID SRV_IrradianceDiff = INVALID_ID;
+	SRV_ID SRV_IrradianceSpec = INVALID_ID;
+	SRV_ID SRV_IrradianceDiffFaces[6] = { INVALID_ID };
+	SRV_ID SRV_IrradianceDiffBlurred = INVALID_ID;
+
+	UAV_ID UAV_BlurTemp = INVALID_ID;
+	UAV_ID UAV_IrradianceDiffBlurred = INVALID_ID;
+
+	SRV_ID SRV_BlurTemp = INVALID_ID;
+
+	SRV_ID SRV_BRDFIntegrationLUT = INVALID_ID;
 
 	//
 	// HDR10 Static Metadata Parameters -------------------------------
@@ -89,21 +108,45 @@ struct FEnvironmentMap
 struct FRenderingResources{};
 struct FRenderingResources_MainWindow : public FRenderingResources
 {
-	TextureID Tex_MainViewColorMSAA  = INVALID_ID;
-	TextureID Tex_MainViewColor      = INVALID_ID;
-	TextureID Tex_MainViewDepthMSAA  = INVALID_ID;
-	TextureID Tex_MainViewDepth      = INVALID_ID;
-	TextureID Tex_PostProcess_TonemapperOut = INVALID_ID;
+	TextureID Tex_MainViewColorMSAA            = INVALID_ID;
+	TextureID Tex_MainViewColor                = INVALID_ID;
+	TextureID Tex_MainViewDepthMSAA            = INVALID_ID;
+	TextureID Tex_MainViewDepth                = INVALID_ID;
+	TextureID Tex_PostProcess_BlurIntermediate = INVALID_ID;
+	TextureID Tex_PostProcess_BlurOutput       = INVALID_ID;
+	TextureID Tex_PostProcess_TonemapperOut    = INVALID_ID;
+	TextureID Tex_PostProcess_FFXCASOut        = INVALID_ID;
+	TextureID Tex_ShadowMaps_Spot              = INVALID_ID;
+	TextureID Tex_ShadowMaps_Point             = INVALID_ID;
+	TextureID Tex_ShadowMaps_Directional       = INVALID_ID;
 
-	RTV_ID    RTV_MainViewColorMSAA  = INVALID_ID;
-	RTV_ID    RTV_MainViewColor      = INVALID_ID;
-	SRV_ID    SRV_MainViewColor      = INVALID_ID;
-	DSV_ID    DSV_MainViewDepthMSAA  = INVALID_ID;
-	DSV_ID    DSV_MainViewDepth      = INVALID_ID;
-	SRV_ID    SRV_PostProcess_TonemapperOut = INVALID_ID;
-	UAV_ID    UAV_PostProcess_TonemapperOut = INVALID_ID;
+	RTV_ID    RTV_MainViewColorMSAA            = INVALID_ID;
+	RTV_ID    RTV_MainViewColor                = INVALID_ID;
 
-	FEnvironmentMap EnvironmentMap;
+	SRV_ID    SRV_MainViewColor                = INVALID_ID;
+	SRV_ID    SRV_PostProcess_BlurIntermediate = INVALID_ID;
+	SRV_ID    SRV_PostProcess_BlurOutput       = INVALID_ID;
+	SRV_ID    SRV_PostProcess_TonemapperOut    = INVALID_ID;
+	SRV_ID    SRV_PostProcess_FFXCASOut        = INVALID_ID;
+	SRV_ID    SRV_ShadowMaps_Spot              = INVALID_ID;
+	SRV_ID    SRV_ShadowMaps_Point             = INVALID_ID;
+	SRV_ID    SRV_ShadowMaps_Directional       = INVALID_ID;
+
+	UAV_ID    UAV_PostProcess_BlurIntermediate = INVALID_ID;
+	UAV_ID    UAV_PostProcess_BlurOutput       = INVALID_ID;
+	UAV_ID    UAV_PostProcess_TonemapperOut    = INVALID_ID;
+	UAV_ID    UAV_PostProcess_FFXCASOut        = INVALID_ID;
+
+	DSV_ID    DSV_MainViewDepthMSAA             = INVALID_ID;
+	DSV_ID    DSV_MainViewDepth                 = INVALID_ID;
+	DSV_ID    DSV_ShadowMaps_Spot               = INVALID_ID;
+	DSV_ID    DSV_ShadowMaps_Point              = INVALID_ID;
+	DSV_ID    DSV_ShadowMaps_Directional        = INVALID_ID;
+
+	FEnvironmentMapRenderingResources EnvironmentMap;
+
+	SRV_ID SRV_NullCubemap = INVALID_ID;
+	SRV_ID SRV_NullTexture2D = INVALID_ID;
 };
 struct FRenderingResources_DebugWindow : public FRenderingResources
 {
@@ -176,6 +219,7 @@ public:
 	void RenderThread_SignalUpdateThread();
 
 	void RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height);
+	void RenderThread_LoadResources();
 	void RenderThread_UnloadWindowSizeDependentResources(HWND hwnd);
 
 	// PRE_RENDER()
@@ -190,6 +234,9 @@ public:
 	void RenderThread_RenderMainWindow();
 	void RenderThread_RenderDebugWindow();
 
+
+	void RenderThread_HandleStatusOccluded();
+	void RenderThread_HandleDeviceRemoved();
 
 
 	// ---------------------------------------------------------
@@ -232,9 +279,11 @@ public:
 	// ---------------------------------------------------------
 	// Scene Interface
 	// ---------------------------------------------------------
-	void StartLoadingEnvironmentMap(int IndexEnvMap);
 	void StartLoadingScene(int IndexScene);
 	
+	void StartLoadingEnvironmentMap(int IndexEnvMap);
+	void PreFilterEnvironmentMap(FEnvironmentMapRenderingResources& env);
+	void ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, SRV_ID& outSRV_ID);
 	void UnloadEnvironmentMap();
 
 	// Getters
@@ -308,6 +357,7 @@ private:
 	std::atomic<uint64>             mNumUpdateLoopsExecuted;
 	std::atomic<bool>               mbLoadingLevel;
 	std::atomic<bool>               mbLoadingEnvironmentMap;
+	std::atomic<bool>               mbEnvironmentMapPreFilter;
 	std::atomic<bool>               mbMainWindowHDRTransitionInProgress; // see DispatchHDRSwapchainTransitionEvents()
 
 	// system & settings
@@ -380,18 +430,19 @@ private:
 	// FRAME RENDERING PIPELINE
 	//
 	void                            TransitionForSceneRendering(FWindowRenderContext& ctx);
-	void                            RenderShadowMaps(FWindowRenderContext& ctx);
+	void                            RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowView& ShadowView);
 	void                            RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& SceneView);
 	void                            ResolveMSAA(FWindowRenderContext& ctx);
-	void                            TransitionForPostProcessing(FWindowRenderContext& ctx);
+	void                            TransitionForPostProcessing(FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
 	void                            RenderPostProcess(FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
-	void                            RenderUI(FWindowRenderContext& ctx);
+	void                            RenderUI(FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
 	void                            CompositUIToHDRSwapchain(FWindowRenderContext& ctx); // TODO
 	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
 
 	// temp
 	struct FFrameConstantBuffer  { DirectX::XMMATRIX matModelViewProj; };
 	struct FFrameConstantBuffer2 { DirectX::XMMATRIX matModelViewProj; int iTextureConfig; int iTextureOutput; };
+	struct FFrameConstantBufferUnlit { DirectX::XMMATRIX matModelViewProj; DirectX::XMFLOAT3 color; };
 
 	void                            DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh);
 
@@ -429,6 +480,8 @@ private:
 	static std::vector<FEnvironmentMapDescriptor>   ParseEnvironmentMapsFile();
 	static std::vector<FDisplayHDRProfile>          ParseHDRProfilesFile();
 	static FSceneRepresentation                     ParseSceneFile(const std::string& SceneFile);
+public:
+	static std::vector<FMaterialRepresentation>     ParseMaterialFile(const std::string& MaterialFilePath);
 
 public:
 	// Supported HDR Formats { DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_FORMAT_R16G16B16A16_FLOAT  }

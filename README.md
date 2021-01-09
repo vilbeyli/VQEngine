@@ -2,42 +2,70 @@
 
 # VQE
 
-VQE is **VQEngine**: A DX12 rewrite of [VQEngine-Vanilla](https://github.com/vilbeyli/VQEngine) for fast prototyping of rendering techniques and experimenting with cutting-edge technology.
+VQE is **VQEngine**: A DX12 rewrite of [VQEngine-DX11](https://github.com/vilbeyli/VQEngine) for fast prototyping of rendering techniques and experimenting with cutting-edge technology.
 
-
-Join the [VQE Discord Channel](https://discord.gg/U7pd8TV)!
+Join the [VQE Discord Channel](https://discord.gg/U7pd8TV) for rendering, graphics and engine architecture discussions!
 
 [![Discord Banner 2](https://discordapp.com/api/guilds/720409073756930079/widget.png?style=banner2)](https://discord.gg/U7pd8TV)
 
 
 # Screenshots
 
-![](Screenshots/HelloEnvMap.png)
+![](Screenshots/HelloEnvMap1.png)
 <p align="center">
-<sub><i>HDRI Environment Map Rendering</i></sub>
-</p>
-
-![](Screenshots/HelloModelLoading.png)
-<p align="center">
-<sub><i>Data-driven (XML) Scenes & glTF Model Loading</i></sub>
+<sub><i>Data-driven (XML) Scenes & glTF Model Loading, HDRI Environment Maps, UE4's PBR model w/ IBL </i></sub>
 </p>
 
 # Features
 
- - Multi-threaded architecture
+See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source & pre-built executables.
+
+## Graphics
+
+- Physically-based Rendering (PBR) 
+   - BRDF
+     - NDF : Trowbridge-Reitz GGX 
+     - G   : Smith
+     - F   : Fresnel_Schlick / Fresnel_Gaussian
+   - Image-based Lighting (IBL) w/ prefiltered environment cubemaps
+     - Load-time diffuse & specular irradiance cubemap convolution
+- Lighting & Shadow maps
+  - Point Lights
+  - Spot Lights
+  - Directional Light
+  - PCF Shadow Maps for Point/Spot/Directional lights
+- HDR Environment Maps from [HDRI Haven](https://hdrihaven.com/)
+- Anti Aliasing
+  - MSAA x4
+- PostProcess
+  - Tonemapping & Gamma correction
+  - [FidelityFX - Contrast Adaptive Sharpening (CAS)](https://github.com/GPUOpen-Effects/FidelityFX-CAS/)
+
+## Display
+
+ - HDR10 display support 
+ ![](Screenshots/HDRDisplay.jpg)
+ - Multiple window & monitor support
+ - Refresh Rate
+   - Custom 
+   - Auto (1.33 x monitor refresh rate) 
+   - Unlocked
+ - VSync
+ - Alt+Enter Borderless Fullscreen
+
+## Engine 
+
+ - Multi-threaded architecture based on [Natalya Tatarchuk's  Destiny's Multithreaded Rendering Architecture Talk](https://www.youtube.com/watch?v=0nTDFLMLX9k)
    - Main, Update & Render Threads
    - ThreadPool of worker threads
- - HDR Environment Maps from [HDRI Haven](https://hdrihaven.com/)
- - HDR display support
- ![](Screenshots/HDRDisplay.jpg)
- - [glTF](https://en.wikipedia.org/wiki/GlTF) [2.0](https://github.com/KhronosGroup/glTF/tree/master/specification/2.0) model loading using [assimp](https://github.com/assimp/assimp)
- - Multiple windows on multiple monitors
- - Physically-based Rendering (WIP)
- - Real-time and offline Ray Tracing (WIP)
- - Automated build & testing
+  - [glTF](https://en.wikipedia.org/wiki/GlTF) [2.0](https://github.com/KhronosGroup/glTF/tree/master/specification/2.0) model loading using [assimp](https://github.com/assimp/assimp)
+  - Shader system
+    - Shader cache
+    - Multi-threaded shader compilation
+    - Shader Model 5.0 (WIP: SM6.0)
+  - Automated build & testing scripts
 
 
-See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source & pre-built executables.
 
 # Build
 
@@ -47,7 +75,7 @@ Make sure to have pre-requisites installed
 - [Visual Studio 2019](https://visualstudio.microsoft.com/downloads/)
 - [Windows 10 SDK 10.0.18362.0](https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk)
 
-To download the textures, run
+To download the PBR & HDRI textures, run
 
  - `Scripts/DownloadAssets.bat`
 
@@ -78,11 +106,12 @@ Or, if you're using a terminal,
 | :--: | :-- |
 | **WASD+EQ** | Camera movement |
 | **Page Up/Down** | Change Environment Map |
-| **1-4** |	Change scenes <br>**1** - *Environment Map Scene* <br>**2** - *Sponza* <br>**3** - *Geometry Test Scene* <br>**4** - *Stress Test Scene* |
+| **1-4** |	Change scenes <br>**1** - *Default Scene* <br>**2** - *Sponza* <br>**3** - *Geometry Test Scene* <br>**4** - *Stress Test Scene* |
 | **Shift+R** | Reload level |
 | **C** | Change scene camera |
 | **V** | Toggle VSync |
 | **M** | Toggle MSAA |
+| **B** | Toggle FidelityFX-CAS |
 | **Alt+Enter** | Toggle Fullscreen |
 | **Esc** | Release mouse |
 
@@ -150,3 +179,5 @@ VQE supports the following command line parameters:
 - [assimp](https://github.com/assimp/assimp)
 - [WinPixEventRuntime](https://devblogs.microsoft.com/pix/winpixeventruntime/)
 - [Khronos glTF Sample Models](https://github.com/KhronosGroup/glTF-Sample-Models)
+- [cgbookcase PBR Textures](https://www.cgbookcase.com/)
+- [AMD-FidelityFX](https://github.com/GPUOpen-Effects/FidelityFX)

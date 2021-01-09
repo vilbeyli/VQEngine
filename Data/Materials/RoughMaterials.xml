@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<MetallicMaterials>
+
+    <!-- RED -->
+    <Material>
+        <Name>Red_VeryRough</Name>
+        <Diffuse>0.6 0.0 0.05</Diffuse>
+        <Metalness>0.0</Metalness>
+        <Roughness>0.95</Roughness>
+    </Material>
+    <Material>
+        <Name>Red_Rough</Name>
+        <Diffuse>0.6 0.0 0.05</Diffuse>
+        <Metalness>0.0</Metalness>
+        <Roughness>0.75</Roughness>
+    </Material>
+    <Material>
+        <Name>Red_Smooth</Name>
+        <Diffuse>0.6 0.0 0.05</Diffuse>
+        <Metalness>0.0</Metalness>
+        <Roughness>0.4</Roughness>
+    </Material>
+    <Material>
+        <Name>Red_VerySmooth</Name>
+        <Diffuse>0.6 0.0 0.05</Diffuse>
+        <Metalness>0.0</Metalness>
+        <Roughness>0.06</Roughness>
+    </Material>
+
+
+    <!-- BLUE -->
+    <Material>
+        <Name>Blue_VerySmooth</Name>
+        <Diffuse>0.0 0.0 0.65</Diffuse>
+        <Metalness>0.0</Metalness>
+        <Roughness>0.06</Roughness>
+    </Material>
+
+    <!-- GREEN -->
+    <Material>
+        <Name>Green_VerySmooth</Name>
+        <Diffuse>0.0 0.7 0.0</Diffuse>
+        <Metalness>0.0</Metalness>
+        <Roughness>0.06</Roughness>
+    </Material>
+
+
+</MetallicMaterials>

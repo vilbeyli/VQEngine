@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "VQEngine.h"
+#include "Libs/VQUtils/Source/utils.h"
 
 #include <cassert>
 
@@ -25,7 +26,7 @@ constexpr char* BUILD_CONFIG = "-Debug";
 #else
 constexpr char* BUILD_CONFIG = "";
 #endif
-constexpr char* VQENGINE_VERSION = "v0.5.0";
+constexpr char* VQENGINE_VERSION = "v0.6.0";
 
 
 #define REPORT_SYSTEM_INFO 1
@@ -76,16 +77,26 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	// offload system info acquisition to a thread as it takes a few seconds on Debug build
 	mWorkers_Update.AddTask([&]() 
 	{
-		this->mSysInfo = VQSystemInfo::GetSystemInfo();
+		// Offload GetMonitorInfo() into thread as it takes the longest
+		// Get others on the same thread.
+
+		this->mSysInfo.CPU  = VQSystemInfo::GetCPUInfo();
+		this->mSysInfo.GPUs = VQSystemInfo::GetGPUInfo();
+		this->mSysInfo.RAM  = VQSystemInfo::GetRAMInfo();
 		
-#if REPORT_SYSTEM_INFO 
-		ReportSystemInfo(this->mSysInfo);
-#endif
-		HWND hwnd = mpWinMain->GetHWND();
-		if (!mpWinMain->IsClosed())
+		mWorkers_Update.AddTask([&]()
 		{
-			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetStaticHDRMetaDataEvent>(hwnd, this->GatherHDRMetaDataParameters(hwnd)));
-		}
+			this->mSysInfo = VQSystemInfo::GetSystemInfo();
+
+#if REPORT_SYSTEM_INFO 
+			ReportSystemInfo(this->mSysInfo);
+#endif
+			HWND hwnd = mpWinMain->GetHWND();
+			if (!mpWinMain->IsClosed())
+			{
+				mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetStaticHDRMetaDataEvent>(hwnd, this->GatherHDRMetaDataParameters(hwnd)));
+			}
+		});
 	});
 	float f0 = t.Tick();
 
@@ -251,6 +262,7 @@ void VQEngine::InitializeHDRProfiles()
 
 void VQEngine::InitializeEnvironmentMaps()
 {
+	mbEnvironmentMapPreFilter.store(false);
 	std::vector<FEnvironmentMapDescriptor> descs = VQEngine::ParseEnvironmentMapsFile();
 	for (const FEnvironmentMapDescriptor& desc : descs)
 	{
@@ -274,11 +286,24 @@ void VQEngine::InitializeScenes()
 
 	// set the selected scene index
 	auto it2 = std::find_if(mSceneNames.begin(), mSceneNames.end(), [&](const std::string& scn) { return scn == mSettings.StartupScene; });
-	bool bSceneFound = it2 != mSceneNames.end();
-	if (!bSceneFound)
+	bool bSceneNameMatch = it2 != mSceneNames.end();
+	if (!bSceneNameMatch)
 	{
-		Log::Error("Couldn't find scene '%s' among scene file names", mSettings.StartupScene.c_str());
-		it2 = mSceneNames.begin();
+		// startup scene could be a std::string or an int index
+		// if SceneName didn't match, check for index
+		if (StrUtil::IsNumber(mSettings.StartupScene))
+		{
+			int iScene = StrUtil::ParseInt(mSettings.StartupScene);
+			bSceneNameMatch = iScene >= 0 && iScene < mSceneNames.size();
+			if (bSceneNameMatch)
+				it2 = mSceneNames.begin() + iScene;
+		}
+
+		if (!bSceneNameMatch)
+		{
+			it2 = mSceneNames.begin();
+			Log::Error("Couldn't find scene '%s' among scene file names, loading level '%s' by default.", mSettings.StartupScene.c_str(), it2->c_str());
+		}
 	}
 	mIndex_SelectedScene = static_cast<int>(it2 - mSceneNames.begin());
 

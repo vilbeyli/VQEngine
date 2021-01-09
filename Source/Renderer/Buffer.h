@@ -228,8 +228,8 @@ public:
     void Create(ID3D12Device* pDevice, uint32_t numberOfBackBuffers, uint32_t memTotalSize);
     void Destroy();
 
-    bool AllocIndexBuffer(uint32_t numbeOfIndices, uint32_t strideInBytes, void** pData, D3D12_INDEX_BUFFER_VIEW* pView);
-    bool AllocVertexBuffer(uint32_t numbeOfVertices, uint32_t strideInBytes, void** pData, D3D12_VERTEX_BUFFER_VIEW* pView);
+    bool AllocIndexBuffer   (uint32_t numbeOfIndices , uint32_t strideInBytes, void** pData, D3D12_INDEX_BUFFER_VIEW* pView);
+    bool AllocVertexBuffer  (uint32_t numbeOfVertices, uint32_t strideInBytes, void** pData, D3D12_VERTEX_BUFFER_VIEW* pView);
     bool AllocConstantBuffer(uint32_t size, void** pData, D3D12_GPU_VIRTUAL_ADDRESS* pBufferViewDesc);
     void OnBeginFrame();
 

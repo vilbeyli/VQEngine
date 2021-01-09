@@ -20,6 +20,7 @@
 #include <DirectXMath.h>
 
 #include "Types.h"
+#include "Shaders/LightingConstantBufferData.h"
 
 enum EMaterialTextureMapBindings
 {
@@ -31,6 +32,8 @@ enum EMaterialTextureMapBindings
 	ALPHA_MASK,
 	METALLIC,
 	ROUGHNESS,
+	OCCLUSION_ROUGHNESS_METALNESS,
+	AMBIENT_OCCLUSION,
 
 	NUM_MATERIAL_TEXTURE_MAP_BINDINGS
 };
@@ -60,42 +63,16 @@ struct Material // 56 Bytes
 	TextureID TexNormalMap    = INVALID_ID;
 	TextureID TexEmissiveMap  = INVALID_ID;
 	TextureID TexHeightMap    = INVALID_ID;
-	TextureID TexSpecularMap  = INVALID_ID;  // phong?
 	TextureID TexAlphaMaskMap = INVALID_ID;
 	TextureID TexMetallicMap  = INVALID_ID;
 	TextureID TexRoughnessMap = INVALID_ID;
+	TextureID TexOcclusionRoughnessMetalnessMap = INVALID_ID;
+	TextureID TexAmbientOcclusionMap = INVALID_ID;
 	
 	SRV_ID SRVMaterialMaps = INVALID_ID;
 	//------------------------------------------------------------
 
+	VQ_SHADER_DATA::MaterialData GetCBufferData() const;
+	int                          GetTextureConfig() const;
 	inline bool IsTransparent() const { return alpha != 1.0f; }
-
-#if 0
-	Material(MaterialID _ID);
-	~Material();
-
-	void SetMaterialConstants(Renderer* renderer, EShaders shader, bool bIsDeferredRendering) const;
-	int GetTextureConfig() const;
-	inline bool HasTexture() const { return GetTextureConfig() != 0; }
-
-	virtual SurfaceMaterial GetCBufferData() const = 0;
-	virtual void Clear() = 0;
-
-	static SurfaceMaterial GetDefaultMaterialCBufferData();
-};
-
-struct BRDF_Material : public Material
-{	// Cook-Torrence BRDF
-	float		metalness;
-	float		roughness;
-
-	BRDF_Material() : Material({ -1 }), metalness(0.0f), roughness(0.0f) {}
-
-	SurfaceMaterial GetCBufferData() const override;
-	void Clear() override;
-
-private:
-	friend class MaterialPool;	// only MaterialPool can create Material instances
-	BRDF_Material(MaterialID _ID) : Material(_ID), metalness(0.1f), roughness(0.6f) {}
-#endif
 };

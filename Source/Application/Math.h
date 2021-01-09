@@ -43,7 +43,7 @@ DirectX::XMFLOAT4X4 MakePerspectiveProjectionMatrixHFov(float fovx, float screen
 
 struct FFrustumPlaneset
 {	// plane equations: aX + bY + cZ + d = 0
-	DirectX::XMFLOAT4 abcd[6]; // r, l, t, b, n, f
+	DirectX::XMFLOAT4 abcd[6]; // planes[6]: r, l, t, b, n, f
 	enum EPlaneset
 	{
 		PL_RIGHT = 0,
