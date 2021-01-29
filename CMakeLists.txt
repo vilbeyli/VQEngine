@@ -70,6 +70,7 @@ set (Shaders
     "Shaders/CubemapConvolution.hlsl"
     "Shaders/GaussianBlur.hlsl"
     "Shaders/AMDFidelityFX.hlsl"
+    "Shaders/UI.hlsl"
 )
 
 #
