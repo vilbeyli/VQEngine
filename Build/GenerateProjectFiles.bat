@@ -71,9 +71,11 @@ set SUBMODULE_FILE=CMakeLists.txt
 set SUBMODULE_DIR0=..\Libs\VQUtils\
 set SUBMODULE_DIR1=..\Libs\D3D12MA\
 set SUBMODULE_DIR2=..\Source\Renderer\Libs\D3DX12\
+set SUBMODULE_DIR3=..\Libs\imgui\
 set SUBMODULE_FILE_PATH0=!SUBMODULE_DIR0!!SUBMODULE_FILE!
 set SUBMODULE_FILE_PATH1=!SUBMODULE_DIR1!!SUBMODULE_FILE!
 set SUBMODULE_FILE_PATH2=!SUBMODULE_DIR2!
+set SUBMODULE_FILE_PATH3=!SUBMODULE_DIR3!!SUBMODULE_FILE!
 
 :: walk thru submodule paths
 set MISSING_SUBMODULE_DIRS=
@@ -90,6 +92,10 @@ if not exist !SUBMODULE_FILE_PATH2! (
     set NEED_TO_INIT_SUBMODULES=1 
     set MISSING_SUBMODULE_DIRS=!MISSING_SUBMODULE_DIRS! !SUBMODULE_DIR2!,
 )
+if not exist !SUBMODULE_FILE_PATH3! ( 
+    set NEED_TO_INIT_SUBMODULES=1 
+    set MISSING_SUBMODULE_DIRS=!MISSING_SUBMODULE_DIRS! !SUBMODULE_DIR3!,
+)
 
 :: init submodules if necessary
 if !NEED_TO_INIT_SUBMODULES! neq 0 (
@@ -102,6 +108,7 @@ if !NEED_TO_INIT_SUBMODULES! neq 0 (
     git submodule update --init Libs/D3D12MA
     git submodule update --init Libs/VQUtils
     git submodule update --init Libs/assimp
+    git submodule update --init Libs/imgui
     git submodule update --init Source/Renderer/Libs/D3DX12
     cd Build
 
@@ -110,6 +117,7 @@ if !NEED_TO_INIT_SUBMODULES! neq 0 (
     if not exist !SUBMODULE_FILE_PATH0! ( set NEED_TO_INIT_SUBMODULES=1 )
     if not exist !SUBMODULE_FILE_PATH1! ( set NEED_TO_INIT_SUBMODULES=1 )
     if not exist !SUBMODULE_FILE_PATH2! ( set NEED_TO_INIT_SUBMODULES=1 )
+    if not exist !SUBMODULE_FILE_PATH3! ( set NEED_TO_INIT_SUBMODULES=1 )
     if !NEED_TO_INIT_SUBMODULES! neq 0 (
         echo.
         echo [VQBuild]    Could not initialize submodule. Make sure all the submodules are initialized and updated.
