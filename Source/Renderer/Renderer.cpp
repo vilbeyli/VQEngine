@@ -892,36 +892,6 @@ void VQRenderer::LoadPSOs()
 	// todo: enqueue load descs into the MT queue
 	std::vector< std::pair<PSO_ID, FPSOLoadDesc >> PSOLoadDescs; 
 
-	// HELLO WORLD TRIANGLE PSO
-	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"hello-triangle.hlsl");
-
-		FPSOLoadDesc psoLoadDesc = {};
-		psoLoadDesc.PSOName = "PSO_TonemapperCS";
-
-		// Shader description
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_0" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_0" });
-
-		// D3D12 description (without compiled / reflected data such as input layout, /*root signature*/ and shader bytecodes)
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
-		psoDesc.pRootSignature = mpBuiltinRootSignatures[0];
-		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-		psoDesc.DepthStencilState.DepthEnable = FALSE;
-		psoDesc.DepthStencilState.StencilEnable = FALSE;
-		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-		psoDesc.SampleMask = UINT_MAX;
-		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		psoDesc.NumRenderTargets = 1;
-		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-		psoDesc.SampleDesc.Count = 1;
-
-		// TODO: enqueue
-		PSOLoadDescs.push_back({ EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO, psoLoadDesc });
-		//mLookup_PSOLoadContext[taskID] = psoLoadDesc;
-	}
-
 	// FULLSCREEN TRIANGLE PSO
 	{
 		const std::wstring ShaderFilePath = GetAssetFullPath(L"FullscreenTriangle.hlsl");
@@ -956,12 +926,12 @@ void VQRenderer::LoadPSOs()
 		PSOLoadDescs.push_back({ EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO, psoLoadDesc });
 	}
 
-	// HELLO CUBE PSO
+	// UI PSO
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"hello-cube.hlsl");
+		const std::wstring ShaderFilePath = GetAssetFullPath(L"UI.hlsl");
 
 		FPSOLoadDesc psoLoadDesc = {};
-		psoLoadDesc.PSOName = "PSO_HelloCube";
+		psoLoadDesc.PSOName = "PSO_UI";
 
 		// Shader description
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_0" });
@@ -972,24 +942,26 @@ void VQRenderer::LoadPSOs()
 		psoDesc.pRootSignature = mpBuiltinRootSignatures[2];
 		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-		psoDesc.DepthStencilState.DepthEnable = TRUE;
+		psoDesc.BlendState.RenderTarget[0].BlendEnable = true;
+		psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+		psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+		psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+		psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+		psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+		psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+		psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+		psoDesc.DepthStencilState.DepthEnable = FALSE;
 		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
 		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
 		psoDesc.DepthStencilState.StencilEnable = FALSE;
-		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+		psoDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
 		psoDesc.SampleMask = UINT_MAX;
 		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 		psoDesc.NumRenderTargets = 1;
-		psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 		psoDesc.SampleDesc.Count = 1;
 
-		PSOLoadDescs.push_back({ EBuiltinPSOs::HELLO_WORLD_CUBE_PSO, psoLoadDesc });
-
-		// MSAA PSO
-		psoLoadDesc.PSOName = "PSO_HelloCube_MSAA4";
-		psoDesc.SampleDesc.Count = 4;
-		PSOLoadDescs.push_back({ EBuiltinPSOs::HELLO_WORLD_CUBE_PSO_MSAA_4, psoLoadDesc });
+		PSOLoadDescs.push_back({ EBuiltinPSOs::UI_PSO, psoLoadDesc });
 	}
 
 	// SKYDOME PSO

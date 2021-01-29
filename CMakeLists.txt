@@ -138,6 +138,7 @@ set (SourceVQE
     "Source/Engine/Geometry.h"
     "Source/Engine/AssetLoader.h"
     "Source/Engine/GPUMarker.h"
+    "Source/Engine/VQUI.h"
 
     "Source/Engine/Main.cpp"
     "Source/Engine/VQEngine_Main.cpp"
@@ -145,6 +146,7 @@ set (SourceVQE
     "Source/Engine/VQEngine_RenderCommands.cpp"
     "Source/Engine/VQEngine_Update.cpp"
     "Source/Engine/VQEngine_Simulation.cpp"
+    "Source/Engine/VQUI.cpp"
     "Source/Engine/EnvironmentMap.cpp"
     "Source/Engine/Geometry.cpp"
     "Source/Engine/Math.cpp"
@@ -192,6 +194,7 @@ add_subdirectory(Source/Renderer)
 #    -DASSIMP_INSTALL=OFF
 #)
 add_subdirectory(Libs/assimp)
+add_subdirectory(Libs/imgui)
 
 source_group("Config"   FILES ${Config})
 source_group("Resource" FILES ${Resource})
@@ -253,12 +256,13 @@ set_target_properties(zlibstatic PROPERTIES FOLDER Libs/assimp)
 #set_target_properties(VQRenderer PROPERTIES FOLDER Libs)
 #set_target_properties(VQUtils PROPERTIES FOLDER Libs)
 set_target_properties(D3D12MA PROPERTIES FOLDER Libs)
+set_target_properties(ImGUI PROPERTIES FOLDER Libs)
 
 # Make sure the compiler can find include files for the libraries
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${Includes})
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${LibsIncl})
 
-target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer assimp WinPixEventRuntime)
+target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer assimp WinPixEventRuntime ImGUI)
 
 
 add_custom_command(TARGET ${PROJECT_NAME} PRE_BUILD

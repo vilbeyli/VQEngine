@@ -311,7 +311,7 @@ private: // Derived Scenes shouldn't access these functions
 	void StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene);
 	void OnLoadComplete();
 	void Unload(); // serial-only for now. maybe MT later.
-	void RenderUI();
+	void RenderUI(FWindowRenderContext& ctx);
 	void HandleInput(FSceneView& SceneView);
 
 	void GatherSceneLightData(FSceneView& SceneView) const;

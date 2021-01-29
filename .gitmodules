@@ -13,3 +13,6 @@
 [submodule "Data/Models"]
 	path = Data/Models
 	url = https://github.com/vilbeyli/VQModels.git
+[submodule ".\\Libs\\imgui"]
+	path = .\\Libs\\imgui
+	url = https://github.com/vilbeyli/imgui.git

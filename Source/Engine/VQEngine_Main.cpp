@@ -125,6 +125,7 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 void VQEngine::Exit()
 {
 	ExitThreads();
+	ExitUI();
 
 	mRenderer.Unload();
 	mRenderer.Exit();
@@ -321,6 +322,7 @@ void VQEngine::InitializeScenes()
 	this->StartLoadingScene(mIndex_SelectedScene);
 }
 
+
 void VQEngine::InitializeThreads()
 {
 	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
@@ -367,7 +369,6 @@ void VQEngine::ExitThreads()
 	mWorkers_Simulation.Exit();
 #endif
 }
-
 
 
 
