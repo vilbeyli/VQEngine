@@ -179,13 +179,8 @@ class VQEngine : public IWindowOwner
 {
 public:
 	VQEngine();
-	// ---------------------------------------------------------
-	// Main Thread
-	// ---------------------------------------------------------
-	bool Initialize(const FStartupParameters& Params);
-	void Exit();
 
-	// OS event callbacks for the application
+	// OS Window Events
 	void OnWindowCreate(HWND hWnd) override;
 	void OnWindowResize(HWND hWnd) override;
 	void OnWindowMinimize(HWND hwnd) override;
@@ -198,16 +193,24 @@ public:
 	void OnWindowMove(HWND hwnd_, int x, int y) override;
 	void OnDisplayChange(HWND hwnd_, int ImageDepthBitsPerPixel, int ScreenWidth, int ScreenHeight) override;
 
+	// Keyboard Input Events
 	void OnKeyDown(HWND hwnd, WPARAM wParam) override;
 	void OnKeyUp(HWND hwnd, WPARAM wParam) override;
-
+	
+	// Mouse Input Events
 	void OnMouseButtonDown(HWND hwnd, WPARAM wParam, bool bIsDoubleClick) override;
 	void OnMouseButtonUp(HWND hwnd, WPARAM wParam) override;
 	void OnMouseScroll(HWND hwnd, short scroll) override;
 	void OnMouseMove(HWND hwnd, long x, long y) override;
 	void OnMouseInput(HWND hwnd, LPARAM lParam) override;
 
+
+	// ---------------------------------------------------------
+	// Main Thread
+	// ---------------------------------------------------------
 	void MainThread_Tick();
+	bool Initialize(const FStartupParameters& Params);
+	void Exit();
 
 	// ---------------------------------------------------------
 	// Render Thread
@@ -230,7 +233,7 @@ public:
 	// - Records command lists in parallel per FSceneView
 	// - Submits commands to the GPU
 	// - Presents SwapChain
-	void RenderThread_Render();
+	void RenderThread_RenderFrame();
 	void RenderThread_RenderMainWindow();
 	void RenderThread_RenderDebugWindow();
 

@@ -53,7 +53,7 @@ void VQEngine::RenderThread_Main()
 #endif
 
 		RenderThread_PreRender();
-		RenderThread_Render();
+		RenderThread_RenderFrame();
 
 		++mNumRenderLoopsExecuted;
 
@@ -512,7 +512,7 @@ void VQEngine::RenderThread_PreRender()
 	ctx.pCmdList_GFX->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 }
 
-void VQEngine::RenderThread_Render()
+void VQEngine::RenderThread_RenderFrame()
 {
 	//
 	// Handle one-time & infrequent events
