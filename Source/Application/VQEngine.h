@@ -453,6 +453,7 @@ private:
 	FWindowSettings&                GetWindowSettings(HWND hwnd);
 
 	const FEnvironmentMapDescriptor& GetEnvironmentMapDesc(const std::string& EnvMapName) const;
+           FEnvironmentMapDescriptor GetEnvironmentMapDescCopy(const std::string& EnvMapName) const;
 
 	void                            RegisterWindowForInput(const std::unique_ptr<Window>& pWnd);
 	void                            UnregisterWindowForInput(const std::unique_ptr<Window>& pWnd);

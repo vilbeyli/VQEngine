@@ -29,6 +29,8 @@
 
 using namespace DirectX;
 
+static const FEnvironmentMapDescriptor DEFAULT_ENV_MAP_DESC = { "ENV_MAP_NOT_FOUND", "", 0.0f };
+
 //-------------------------------------------------------------------------------------------------------------------------------------------------
 //
 // UPDATE THREAD
@@ -36,17 +38,90 @@ using namespace DirectX;
 //-------------------------------------------------------------------------------------------------------------------------------------------------
 const FEnvironmentMapDescriptor& VQEngine::GetEnvironmentMapDesc(const std::string& EnvMapName) const
 {
-	static const FEnvironmentMapDescriptor DEFAULT_ENV_MAP_DESC = { "ENV_MAP_NOT_FOUND", "", 0.0f };
 	const bool bEnvMapNotFound = mLookup_EnvironmentMapDescriptors.find(EnvMapName) == mLookup_EnvironmentMapDescriptors.end();
 	if (bEnvMapNotFound)
 	{
 		Log::Error("Environment Map %s not found.", EnvMapName.c_str());
 	}
-	return  bEnvMapNotFound
+	return bEnvMapNotFound
 		? DEFAULT_ENV_MAP_DESC
 		: mLookup_EnvironmentMapDescriptors.at(EnvMapName);
 }
 
+FEnvironmentMapDescriptor VQEngine::GetEnvironmentMapDescCopy(const std::string& EnvMapName) const
+{
+	const bool bEnvMapNotFound = mLookup_EnvironmentMapDescriptors.find(EnvMapName) == mLookup_EnvironmentMapDescriptors.end();
+	if (bEnvMapNotFound)
+	{
+		Log::Error("Environment Map %s not found.", EnvMapName.c_str());
+		return DEFAULT_ENV_MAP_DESC;
+	}
+	return mLookup_EnvironmentMapDescriptors.at(EnvMapName);
+}
+
+
+
+// replaces %resolution% with the actual file name
+// assumes no other '%' in environment map file path
+std::string DetermineResolution_HDRI(FEnvironmentMapDescriptor& inEnvMapDesc, unsigned MonitorResolutionY)
+{
+	std::string resolution = "1k";
+	const size_t iReplacementToken = inEnvMapDesc.FilePath.find('%');
+	const bool bHasReplacementToken = iReplacementToken != std::string::npos;
+
+	if (bHasReplacementToken)
+	{
+		     if (MonitorResolutionY <= 720 ) { resolution = "1k"; }
+		else if (MonitorResolutionY <= 1080) { resolution = "2k"; }
+		else if (MonitorResolutionY <= 1440) { resolution = "4k"; } 
+		else if (MonitorResolutionY <= 2160) { resolution = "8k"; }
+
+		const size_t lenReplacementToken = inEnvMapDesc.FilePath.find_last_of('%') - iReplacementToken + 1; // +1 to include the last '%' in "%resolution%'
+		inEnvMapDesc.FilePath.replace(iReplacementToken, lenReplacementToken, resolution.c_str());
+	}
+
+	return resolution;
+}
+std::string FindEnvironmentMapToDownsizeFrom(const std::string& FolderPath, const std::string& EnvMapName, const std::string& TargetResolution)
+{
+	assert(TargetResolution.size() >= 2);
+	const unsigned NextHigherResolution = (TargetResolution[0] - '0') * 2; // downsample from next higher resolution (resolutions scale *2 each time)
+	assert(NextHigherResolution <= 8); // up to 8k env map supported
+
+	
+	// walk in HDRI/ directory
+	std::vector<std::string> files = DirectoryUtil::GetFilesInPath(FolderPath);
+	for (const std::string& FilePath : files) 
+	{
+		const std::string FileName = DirectoryUtil::GetFileNameWithoutExtension(FilePath);
+#if 1
+		// find the '_8k.hdr' file with matching env map name
+		// assumes DownloadAssets.bat packages the project with 8k HDRI textures
+		if (FileName.find(EnvMapName) != std::string::npos)
+		{
+			return FilePath;
+		}
+#else
+		// find next higher resolution (e.g. 1k -> 2k, or 2k -> 4k)
+		const std::string HiResResolution = std::to_string(NextHigherResolution) + "k";
+
+		const bool bEnvMapFileWithDifferentResolutionFound = FileName.find(EnvMapName) != std::string::npos;
+		if (bEnvMapFileWithDifferentResolutionFound)
+		{
+			const std::string FileResolution = StrUtil::split(FileName, '_').back(); 
+			
+			// we have a candidate env map file, but it may not be the resolution we're looking for
+			const bool bEnvMapFileWithTargetResolutionFound = FileResolution[0] == HiResResolution[0];
+			if (bEnvMapFileWithTargetResolutionFound)
+			{
+				return FilePath;
+			}
+		}
+#endif
+	}
+
+	return "";
+}
 void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 {
 	assert(EnvMapName.size() != 0);
@@ -59,7 +134,7 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 		UnloadEnvironmentMap();
 	}
 
-	const FEnvironmentMapDescriptor& desc = this->GetEnvironmentMapDesc(EnvMapName);
+	FEnvironmentMapDescriptor desc = this->GetEnvironmentMapDescCopy(EnvMapName); // copy because we'll update the FilePath down below
 	std::vector<std::string>::iterator it = std::find(mResourceNames.mEnvironmentMapPresetNames.begin(), mResourceNames.mEnvironmentMapPresetNames.end(), EnvMapName);
 	const size_t ActiveEnvMapIndex = it - mResourceNames.mEnvironmentMapPresetNames.begin();
 	
@@ -70,8 +145,84 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 		return;
 	}
 
+	// Pick an environment map resolution based on the monitor swapchain is on
+	// so we can avoid loading 8k textures for a 1080p laptop for example.
+	const unsigned MonitorResolutionY = mRenderer.GetWindowSwapChain(mpWinMain->GetHWND()).GetContainingMonitorDesc().DesktopCoordinates.bottom;
+	DetermineResolution_HDRI(desc, MonitorResolutionY);
+	const std::string EnvMapResolution = StrUtil::split(DirectoryUtil::GetFileNameWithoutExtension(desc.FilePath), '_').back(); // file_name_4k.png -> "4k"
+	Log::Info("Loading Environment Map: %s (%s)", EnvMapName.c_str(), EnvMapResolution.c_str());
 
-	Log::Info("Loading Environment Map: %s", EnvMapName.c_str());
+
+	// if the lowres texture doesn't exist, run a downsample pass (on CPU) on the available texture and save to disk
+	if (!DirectoryUtil::FileExists(desc.FilePath)) // desc.FilePath: "FolderPath/file_name_4k.hdr"
+	{
+		const std::string EnvMapFolder = DirectoryUtil::GetFolderPath(desc.FilePath);
+		const std::string EnvMapNameWithDesiredResolution = DirectoryUtil::GetFileNameWithoutExtension(desc.FilePath);                     // "file_name_4k"
+		const std::string EnvMapName = std::string(EnvMapNameWithDesiredResolution, 0, EnvMapNameWithDesiredResolution.find_last_of('_')); // "file_name"
+		const std::string EnvMapDesiredResolution = StrUtil::split(EnvMapNameWithDesiredResolution, '_').back();                           // "4k"
+		const std::string EnvMapFilePath_HiRes = FindEnvironmentMapToDownsizeFrom(EnvMapFolder, EnvMapName, EnvMapDesiredResolution);
+		const std::string EnvMapSourceResolution = StrUtil::split(EnvMapFilePath_HiRes, '_').back();
+		
+		Log::Info("[EnvironmentMap] Target resolution texture (%s) doesn't exist on disk. ", desc.FilePath.c_str());
+		if (!EnvMapFilePath_HiRes.empty())
+		{
+			Log::Info("[EnvironmentMap] Downsizing from (%s) for target resolution (%s)", EnvMapFilePath_HiRes.c_str(), EnvMapDesiredResolution.c_str());
+
+			Image LoadedHiResEnvMapImage = Image::LoadFromFile(EnvMapFilePath_HiRes.c_str());
+			if (LoadedHiResEnvMapImage.IsValid())
+			{
+#if 1
+				const int ResSrc = EnvMapSourceResolution[0] - '0';
+				const int ResDst = EnvMapDesiredResolution[0] - '0';
+				const int NumDownsize = std::log2f((float)ResSrc / ResDst);
+
+				// do the chain downsizing
+				std::vector<Image> DownSizedImages(NumDownsize);
+				DownSizedImages[0] = Image::DownsizeToHalfResolution(LoadedHiResEnvMapImage);
+				for (int i = 1; i < NumDownsize; ++i) { DownSizedImages[i] = Image::DownsizeToHalfResolution(DownSizedImages[i-1]); }
+
+				// only write out the last one
+				const Image& TargetDownsizedImage = DownSizedImages.back();
+				if (TargetDownsizedImage.IsValid())
+				{
+					const bool bSaveSuccess = TargetDownsizedImage.SaveToDisk(desc.FilePath.c_str());
+					if (bSaveSuccess) { Log::Info("[EnvironmentMap] Saved to disk: %s", desc.FilePath.c_str()); }
+					else              { Log::Error("Error saving to file: %s", desc.FilePath.c_str());          }
+				}
+
+				// cleanup
+				for (int i = 0; i < NumDownsize; ++i) { DownSizedImages[i].Destroy(); }
+#else
+				Image DownSizedImage = Image::DownsizeToHalfResolution(LoadedHiResEnvMapImage);
+				if (DownSizedImage.IsValid())
+				{
+					const bool bSaveSuccess = DownSizedImage.SaveToDisk(desc.FilePath.c_str());
+					if (bSaveSuccess) 
+					{ 
+						Log::Info("[EnvironmentMap] Saved to disk: %s", desc.FilePath.c_str()); 
+					}
+					else 
+					{
+						Log::Error("Error saving to file: %s", desc.FilePath.c_str());
+					}
+				}
+				DownSizedImage.Destroy();
+#endif
+			}
+			LoadedHiResEnvMapImage.Destroy();
+		}
+		else
+		{
+			Log::Error("[EnvironmentMap] EnvMapFile to downsize from is not found: %s", EnvMapName.c_str());
+		}
+
+
+		
+	}
+
+
+	// Load environment map resources ------------------------------------------------------------
+
 
 	// HDR map
 	env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(desc.FilePath.c_str(), true);
@@ -83,7 +234,7 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	int HDREnvironmentSizeY = 0;
 	mRenderer.GetTextureDimensions(env.Tex_HDREnvironment, HDREnvironmentSizeX, HDREnvironmentSizeY);
 
-	// Create Irradiance Map Textures
+	// Create Irradiance Map Textures 
 	TextureCreateDesc tdesc("EnvMap_IrradianceDiff");
 	tdesc.bCubemap = true;
 	tdesc.bGenerateMips = true;

@@ -67,35 +67,6 @@ Texture& Texture::operator=(const Texture& other)
     return *this;
 }
 
-
-bool Texture::ReadImageFromDisk(const std::string& FilePath, Image& img)
-{
-    if (FilePath.empty())
-    {
-        Log::Error("Cannot load Image from file: empty FilePath provided.");
-        return false;
-    }
-
-    // process file path
-    const std::vector<std::string> FilePathTokens = StrUtil::split(FilePath, { '/', '\\' });
-    assert(FilePathTokens.size() >= 1);
-
-    const std::string& FileNameAndExtension = FilePathTokens.back();
-    const std::vector<std::string> FileNameTokens = StrUtil::split(FileNameAndExtension, '.');
-    assert(FileNameTokens.size() == 2);
-
-    const std::string FileDirectory = FilePath.substr(0, FilePath.find(FileNameAndExtension));
-    const std::string FileName = FileNameTokens.front();
-    const std::string FileExtension = StrUtil::GetLowercased(FileNameTokens.back());
-
-    static const std::set<std::string> S_HDR_FORMATS = { "hdr", /*"exr"*/ };
-    assert(FileExtension != "exr"); // TODO: add exr loading support to Image class
-    const bool bHDR = S_HDR_FORMATS.find(FileExtension) != S_HDR_FORMATS.end();
-
-    img = Image::LoadFromFile(FilePath.c_str(), bHDR);
-    return img.pData && img.BytesPerPixel > 0;
-}
-
 //
 // TEXTURE
 //
