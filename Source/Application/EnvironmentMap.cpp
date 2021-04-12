@@ -99,7 +99,16 @@ std::string FindEnvironmentMapToDownsizeFrom(const std::string& FolderPath, cons
 		// assumes DownloadAssets.bat packages the project with 8k HDRI textures
 		if (FileName.find(EnvMapName) != std::string::npos)
 		{
-			return FilePath;
+			// validate file name: 'FILE_NAME_8k' -> ensure the last bit is the resolution
+			auto vStrTokens = StrUtil::split(FileName, '_');
+			const std::string& resolutionToken = vStrTokens.back();
+			const bool bIsValidFileName = resolutionToken.size() >= 2 
+				&& std::isalnum(resolutionToken[resolutionToken.size() - 2]) 
+				&& std::isalnum(resolutionToken[0]) 
+				&& resolutionToken.back() == 'k';
+			
+			if(bIsValidFileName)
+				return FilePath;
 		}
 #else
 		// find next higher resolution (e.g. 1k -> 2k, or 2k -> 4k)
