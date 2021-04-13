@@ -131,6 +131,74 @@ std::string FindEnvironmentMapToDownsizeFrom(const std::string& FolderPath, cons
 
 	return "";
 }
+bool CreateEnvironmentMapTextureFromHiResAndSaveToDisk(const std::string& TargetFilePath)
+{
+	const std::string EnvMapFolder = DirectoryUtil::GetFolderPath(TargetFilePath);
+	const std::string EnvMapNameWithDesiredResolution = DirectoryUtil::GetFileNameWithoutExtension(TargetFilePath);                    // "file_name_4k"
+	const std::string EnvMapName = std::string(EnvMapNameWithDesiredResolution, 0, EnvMapNameWithDesiredResolution.find_last_of('_')); // "file_name"
+	const std::string EnvMapDesiredResolution = StrUtil::split(EnvMapNameWithDesiredResolution, '_').back();                           // "4k"
+	const std::string EnvMapFilePath_HiRes = FindEnvironmentMapToDownsizeFrom(EnvMapFolder, EnvMapName, EnvMapDesiredResolution);
+	const std::string EnvMapSourceResolution = StrUtil::split(EnvMapFilePath_HiRes, '_').back();
+	
+	if (!EnvMapFilePath_HiRes.empty())
+	{
+		Log::Info("[EnvironmentMap] Downsizing from (%s) for target resolution (%s)", EnvMapFilePath_HiRes.c_str(), EnvMapDesiredResolution.c_str());
+
+		Image LoadedHiResEnvMapImage = Image::LoadFromFile(EnvMapFilePath_HiRes.c_str());
+		if (LoadedHiResEnvMapImage.IsValid())
+		{
+			const int ResSrc = EnvMapSourceResolution[0] - '0';
+			const int ResDst = EnvMapDesiredResolution[0] - '0';
+
+#if 1	// call 1x resize to the source image
+			static const std::unordered_map<int, unsigned> LookupResolutionX { {8, 8192}, {4, 4096}, {2, 2048}, {1, 1024} };
+			static const std::unordered_map<int, unsigned> LookupResolutionY { {8, 4096}, {4, 2048}, {2, 1024}, {1, 512 } };
+
+			const unsigned TargetWidth  = LookupResolutionX.at(ResDst);
+			const unsigned TargetHeight = LookupResolutionY.at(ResDst);
+			Image DownsizedImage = Image::CreateResizedImage(LoadedHiResEnvMapImage, TargetWidth, TargetHeight);
+
+			if (DownsizedImage.IsValid() && DownsizedImage.SaveToDisk(TargetFilePath.c_str()))
+			{
+				Log::Info("[EnvironmentMap] Saved to disk: %s", TargetFilePath.c_str());
+			}
+			else
+			{
+				Log::Error("Error saving to file: %s", TargetFilePath.c_str());
+			}
+			DownsizedImage.Destroy();
+
+#else	// Halve the resolution on each iteration until we reach to target resolution
+			const int NumDownsize = std::log2f((float)ResSrc / ResDst);
+
+			// do the chain downsizing
+			std::vector<Image> DownSizedImages(NumDownsize);
+			DownSizedImages[0] = Image::CreateHalfResolutionFromImage(LoadedHiResEnvMapImage);
+			for (int i = 1; i < NumDownsize; ++i) { DownSizedImages[i] = Image::CreateHalfResolutionFromImage(DownSizedImages[i - 1]); }
+
+			// only write out the last one
+			const Image& TargetDownsizedImage = DownSizedImages.back();
+			if (TargetDownsizedImage.IsValid())
+			{
+				const bool bSaveSuccess = TargetDownsizedImage.SaveToDisk(TargetFilePath.c_str());
+				if (bSaveSuccess) { Log::Info("[EnvironmentMap] Saved to disk: %s", TargetFilePath.c_str()); }
+				else { Log::Error("Error saving to file: %s", TargetFilePath.c_str()); }
+			}
+
+			// cleanup
+			for (int i = 0; i < NumDownsize; ++i) { DownSizedImages[i].Destroy(); }
+#endif
+		}
+		LoadedHiResEnvMapImage.Destroy();
+	}
+	else
+	{
+		Log::Error("[EnvironmentMap] EnvMapFile to downsize from is not found: %s", EnvMapName.c_str());
+		return false;
+	}
+
+	return true;
+}
 void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 {
 	assert(EnvMapName.size() != 0);
@@ -161,72 +229,11 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	const std::string EnvMapResolution = StrUtil::split(DirectoryUtil::GetFileNameWithoutExtension(desc.FilePath), '_').back(); // file_name_4k.png -> "4k"
 	Log::Info("Loading Environment Map: %s (%s)", EnvMapName.c_str(), EnvMapResolution.c_str());
 
-
 	// if the lowres texture doesn't exist, run a downsample pass (on CPU) on the available texture and save to disk
 	if (!DirectoryUtil::FileExists(desc.FilePath)) // desc.FilePath: "FolderPath/file_name_4k.hdr"
 	{
-		const std::string EnvMapFolder = DirectoryUtil::GetFolderPath(desc.FilePath);
-		const std::string EnvMapNameWithDesiredResolution = DirectoryUtil::GetFileNameWithoutExtension(desc.FilePath);                     // "file_name_4k"
-		const std::string EnvMapName = std::string(EnvMapNameWithDesiredResolution, 0, EnvMapNameWithDesiredResolution.find_last_of('_')); // "file_name"
-		const std::string EnvMapDesiredResolution = StrUtil::split(EnvMapNameWithDesiredResolution, '_').back();                           // "4k"
-		const std::string EnvMapFilePath_HiRes = FindEnvironmentMapToDownsizeFrom(EnvMapFolder, EnvMapName, EnvMapDesiredResolution);
-		const std::string EnvMapSourceResolution = StrUtil::split(EnvMapFilePath_HiRes, '_').back();
-		
 		Log::Info("[EnvironmentMap] Target resolution texture (%s) doesn't exist on disk. ", desc.FilePath.c_str());
-		if (!EnvMapFilePath_HiRes.empty())
-		{
-			Log::Info("[EnvironmentMap] Downsizing from (%s) for target resolution (%s)", EnvMapFilePath_HiRes.c_str(), EnvMapDesiredResolution.c_str());
-
-			Image LoadedHiResEnvMapImage = Image::LoadFromFile(EnvMapFilePath_HiRes.c_str());
-			if (LoadedHiResEnvMapImage.IsValid())
-			{
-#if 1
-				const int ResSrc = EnvMapSourceResolution[0] - '0';
-				const int ResDst = EnvMapDesiredResolution[0] - '0';
-				const int NumDownsize = std::log2f((float)ResSrc / ResDst);
-
-				// do the chain downsizing
-				std::vector<Image> DownSizedImages(NumDownsize);
-				DownSizedImages[0] = Image::DownsizeToHalfResolution(LoadedHiResEnvMapImage);
-				for (int i = 1; i < NumDownsize; ++i) { DownSizedImages[i] = Image::DownsizeToHalfResolution(DownSizedImages[i-1]); }
-
-				// only write out the last one
-				const Image& TargetDownsizedImage = DownSizedImages.back();
-				if (TargetDownsizedImage.IsValid())
-				{
-					const bool bSaveSuccess = TargetDownsizedImage.SaveToDisk(desc.FilePath.c_str());
-					if (bSaveSuccess) { Log::Info("[EnvironmentMap] Saved to disk: %s", desc.FilePath.c_str()); }
-					else              { Log::Error("Error saving to file: %s", desc.FilePath.c_str());          }
-				}
-
-				// cleanup
-				for (int i = 0; i < NumDownsize; ++i) { DownSizedImages[i].Destroy(); }
-#else
-				Image DownSizedImage = Image::DownsizeToHalfResolution(LoadedHiResEnvMapImage);
-				if (DownSizedImage.IsValid())
-				{
-					const bool bSaveSuccess = DownSizedImage.SaveToDisk(desc.FilePath.c_str());
-					if (bSaveSuccess) 
-					{ 
-						Log::Info("[EnvironmentMap] Saved to disk: %s", desc.FilePath.c_str()); 
-					}
-					else 
-					{
-						Log::Error("Error saving to file: %s", desc.FilePath.c_str());
-					}
-				}
-				DownSizedImage.Destroy();
-#endif
-			}
-			LoadedHiResEnvMapImage.Destroy();
-		}
-		else
-		{
-			Log::Error("[EnvironmentMap] EnvMapFile to downsize from is not found: %s", EnvMapName.c_str());
-		}
-
-
-		
+		CreateEnvironmentMapTextureFromHiResAndSaveToDisk(desc.FilePath);
 	}
 
 
