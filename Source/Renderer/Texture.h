@@ -90,8 +90,6 @@ public:
 
 	inline const ID3D12Resource* GetResource() const { return mpTexture; }
 	inline       ID3D12Resource* GetResource()       { return mpTexture; }
-public:
-	static bool ReadImageFromDisk(const std::string& path, Image& img);
 
 private:
 	friend class VQRenderer;
