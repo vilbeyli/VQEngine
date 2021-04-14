@@ -202,17 +202,11 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 
 	mSceneRepresentation = sceneRep;
 
-	// ------------------------------------------------------------------------------------------------
-	// this is not very good: builtin materials will always be loaded even when they're not used!
-	// TODO: load materials that are only referenced by the scene.
-	if (mMaterials.empty())
-		LoadBuiltinMaterials(taskID);
-	// ------------------------------------------------------------------------------------------------
-
 	LoadBuiltinMeshes(builtinMeshes);
 	
 	this->LoadScene(sceneRep); // scene-specific load 
-	
+
+	LoadBuiltinMaterials(taskID, sceneRep.Objects);
 	LoadSceneMaterials(sceneRep.Materials, taskID);
 
 	LoadGameObjects(std::move(sceneRep.Objects));
@@ -221,18 +215,51 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	LoadPostProcessSettings();
 }
 
-void Scene::LoadBuiltinMaterials(TaskID taskID)
+void Scene::LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRepresentation>& GameObjsToBeLoaded)
 {
 	const char* STR_MATERIALS_FOLDER = "Data/Materials/";
-
 	auto vMatFiles = DirectoryUtil::ListFilesInDirectory(STR_MATERIALS_FOLDER, "xml");
-	for (const std::string& filePath : vMatFiles)
+
+	// Parse builtin materials and build material map
+	std::unordered_map<std::string, FMaterialRepresentation> MaterialMap;
 	{
-		std::vector<FMaterialRepresentation> vMaterialReps = VQEngine::ParseMaterialFile(filePath);
-		for (const FMaterialRepresentation& matRep : vMaterialReps)
+		std::vector<FMaterialRepresentation> vBuiltinMaterialReps;
+		for (const std::string& filePath : vMatFiles) // for each material file
 		{
-			LoadMaterial(matRep, taskID);
+			std::vector<FMaterialRepresentation> vMaterialReps = VQEngine::ParseMaterialFile(filePath); // get all materials in an xml file
+			vBuiltinMaterialReps.insert(vBuiltinMaterialReps.end(), vMaterialReps.begin(), vMaterialReps.end());
 		}
+
+		// build map
+		for (FMaterialRepresentation& rep : vBuiltinMaterialReps)
+		{
+			MaterialMap[StrUtil::GetLowercased(rep.Name)] = std::move(rep); // ensure lowercase comparison
+		}
+		vBuiltinMaterialReps.clear();
+	}
+
+	// look at which materials to be loaded from game objects that use builtin meshes
+	std::set<std::string> vBuiltinMatsToLoad; // unique names
+	for (const FGameObjectRepresentation& ObjRep : GameObjsToBeLoaded)
+	{
+		// Note: assumes only builtin meshes can load builtin materials.
+		//       models go their own path.
+		if (!ObjRep.BuiltinMeshName.empty() && !ObjRep.MaterialName.empty())
+		{
+			vBuiltinMatsToLoad.emplace(StrUtil::GetLowercased(ObjRep.MaterialName)); // ensure lowercase comparison
+		}
+	}
+
+
+	// load the referenced builtin materials
+	for (const std::string& matName : vBuiltinMatsToLoad)
+	{
+		auto it = MaterialMap.find(matName);
+		const bool bMaterialFound = it != MaterialMap.end();
+		if (bMaterialFound)
+			LoadMaterial(it->second, taskID);
+		else
+			Log::Warning("Failed to load material: %s", matName.c_str());
 	}
 }
 

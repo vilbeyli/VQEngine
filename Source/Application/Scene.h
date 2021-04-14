@@ -244,7 +244,7 @@ private: // Derived Scenes shouldn't access these functions
 	void PrepareSceneMeshRenderParams(FSceneView& SceneView) const;
 	void PrepareShadowMeshRenderParams(FSceneShadowView& ShadowView) const;
 
-	void LoadBuiltinMaterials(TaskID taskID);
+	void LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRepresentation>& GameObjsToBeLoaded);
 	void LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes);
 	void LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects); // TODO: consider using FSceneRepresentation as the parameter and read the corresponding member
 	void LoadSceneMaterials(const std::vector<FMaterialRepresentation>& Materials, TaskID taskID);
