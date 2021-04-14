@@ -256,10 +256,8 @@ void Scene::LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRep
 	{
 		auto it = MaterialMap.find(matName);
 		const bool bMaterialFound = it != MaterialMap.end();
-		if (bMaterialFound)
+		if (bMaterialFound) // only the matching builtin materials, scene-specific materials won't be found here
 			LoadMaterial(it->second, taskID);
-		else
-			Log::Warning("Failed to load material: %s", matName.c_str());
 	}
 }
 
