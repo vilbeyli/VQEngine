@@ -1529,8 +1529,11 @@ void VQEngine::RenderPostProcess(FWindowRenderContext& ctx, const FPostProcessPa
 			pCmd->SetComputeRootConstantBufferView(2, cbAddr);
 			
 			// each FFX-CAS_CS thread processes 4 pixels.
-			// DispatchXY is calculated for 1px/thread, hence right shift by one each dimension here.
-			pCmd->Dispatch(DispatchX>>1, DispatchY>>1, DispatchZ);
+			// workgroup is 64 threads, hence 256 (16x16) pixels are processed per thread group that is dispatched
+ 			constexpr int CAS_WORKGROUP_WORK_DIMENSION = 16;
+			const int CASDispatchX = (InputImageWidth  + (CAS_WORKGROUP_WORK_DIMENSION - 1)) / CAS_WORKGROUP_WORK_DIMENSION;
+			const int CASDispatchY = (InputImageHeight + (CAS_WORKGROUP_WORK_DIMENSION - 1)) / CAS_WORKGROUP_WORK_DIMENSION;
+			pCmd->Dispatch(CASDispatchX, CASDispatchY, DispatchZ);
 		}
 	}
 	
