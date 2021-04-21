@@ -349,3 +349,9 @@ $RECYCLE.BIN/
 !Libs/WinPixEventRuntime/bin
 !Libs/WinPixEventRuntime/bin/x64/
 !Libs/WinPixEventRuntime/bin/x64/*
+!Libs/DirectXCompiler/lib
+!Libs/DirectXCompiler/lib/x64/
+!Libs/DirectXCompiler/lib/x64/*
+!Libs/DirectXCompiler/bin
+!Libs/DirectXCompiler/bin/x64/
+!Libs/DirectXCompiler/bin/x64/*
