@@ -124,8 +124,8 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 
 		// check if loading is done
 		const int NumActiveTasks = mWorkers_ModelLoading.GetNumActiveTasks() + mWorkers_TextureLoading.GetNumActiveTasks();
-		const bool bLoadDone = NumActiveTasks == 0;
-		if (bLoadDone)
+		const bool bLoadTasksFinished = NumActiveTasks == 0;
+		if (bLoadTasksFinished)
 		{
 			if (mbLoadingLevel)
 			{
@@ -134,7 +134,6 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 			// OnEnvMapLoaded = noop
 
 			WaitUntilRenderingFinishes();
-			Log::Info("Loading completed, starting scene simulation");
 			mAppState = EAppState::SIMULATING;
 
 			if (mbLoadingLevel)
@@ -147,6 +146,10 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 			}
 
 			mLoadingScreenData.RotateLoadingScreenImage();
+
+			float dt_loading = mTimer.StopGetDeltaTimeAndReset();
+			Log::Info("Loading completed in %.2fs, starting scene simulation", dt_loading);
+			mTimer.Start();
 		}
 	}
 

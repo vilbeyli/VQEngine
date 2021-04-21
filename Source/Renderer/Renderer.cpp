@@ -410,8 +410,8 @@ void VQRenderer::InitializeHeaps()
 	mStaticHeap_IndexBuffer .Create(pDevice, EBufferType::INDEX_BUFFER , STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticIndexBufferPool");
 }
 
-std::string VQRenderer::ShaderCacheDirectory = "ShaderCache";
-std::string VQRenderer::PSOCacheDirectory    = "PSOCache";
+std::string VQRenderer::ShaderCacheDirectory = "Cache/Shaders";
+std::string VQRenderer::PSOCacheDirectory    = "Cache/PSOs";
 void VQRenderer::InitializeShaderAndPSOCacheDirectory()
 {
 	DirectoryUtil::CreateFolderIfItDoesntExist(VQRenderer::ShaderCacheDirectory);
