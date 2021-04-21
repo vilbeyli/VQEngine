@@ -827,7 +827,7 @@ ID3D12PipelineState* VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
 		for (std::shared_future<FShaderStageCompileResult>& TaskResult : shaderCompileResults)
 		{
 			FShaderStageCompileResult ShaderCompileResult = TaskResult.get();
-			if (ShaderCompileResult.pBlob == nullptr)
+			if (ShaderCompileResult.ShaderBlob.IsNull())
 			{
 				Log::Error("PSO Compile failed: PSOLoadTaskID=%d", PSOLoadTaskID);
 				return nullptr;
@@ -844,7 +844,7 @@ ID3D12PipelineState* VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
 			{
 				FShaderStageCompileResult ShaderCompileResult = TaskResult.get();
 
-				CD3DX12_SHADER_BYTECODE ShaderByteCode(ShaderCompileResult.pBlob);
+				CD3DX12_SHADER_BYTECODE ShaderByteCode(ShaderCompileResult.ShaderBlob.GetByteCode(), ShaderCompileResult.ShaderBlob.GetByteCodeSize());
 				d3d12ComputePSODesc.CS = ShaderByteCode;
 			}
 
@@ -862,7 +862,7 @@ ID3D12PipelineState* VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
 			{
 				FShaderStageCompileResult ShaderCompileResult = TaskResult.get();
 
-				CD3DX12_SHADER_BYTECODE ShaderByteCode(ShaderCompileResult.pBlob);
+				CD3DX12_SHADER_BYTECODE ShaderByteCode(ShaderCompileResult.ShaderBlob.GetByteCode(), ShaderCompileResult.ShaderBlob.GetByteCodeSize());
 				switch (ShaderCompileResult.ShaderStageEnum)
 				{
 				case EShaderStage::VS: d3d12GraphicsPSODesc.VS = ShaderByteCode; break;
@@ -955,21 +955,21 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 
 	// load the shader d3dblob
 	FShaderStageCompileResult Result = {};
-	ID3DBlob*& pShaderBlob = Result.pBlob;
+	Shader::FBlob& ShaderBlob = Result.ShaderBlob;
 	Result.ShaderStageEnum = ShaderUtils::GetShaderStageEnumFromShaderModel(ShaderStageCompileDesc.ShaderModel);
 
 	if (bUseCachedShaders)
 	{
-		pShaderBlob = CompileFromCachedBinary(CachedShaderBinaryPath);
+		ShaderBlob = CompileFromCachedBinary(CachedShaderBinaryPath);
 	}
 	else
 	{
 		std::string errMsg;
-		pShaderBlob = CompileFromSource(ShaderStageCompileDesc, errMsg);
-		const bool bCompileSuccessful = pShaderBlob != nullptr;
+		ShaderBlob = CompileFromSource(ShaderStageCompileDesc, errMsg);
+		const bool bCompileSuccessful = !ShaderBlob.IsNull();
 		if (bCompileSuccessful)
 		{
-			CacheShaderBinary(CachedShaderBinaryPath, pShaderBlob);
+			CacheShaderBinary(CachedShaderBinaryPath, ShaderBlob.GetByteCodeSize(), ShaderBlob.GetByteCode());
 		}
 		else
 		{

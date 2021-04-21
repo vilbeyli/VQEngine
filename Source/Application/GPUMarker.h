@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "WinPixEventRuntime/pix3.h"
+#include "WinPixEventRuntime/Include/WinPixEventRuntime/pix3.h"
 
 #define SCOPED_GPU_MARKER(pCmd, pStr) ScopedGPUMarker GPUMarker(pCmd,pStr)
 

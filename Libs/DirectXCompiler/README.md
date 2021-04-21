@@ -1,0 +1,1 @@
+Grab the latest from: https://github.com/microsoft/DirectXShaderCompiler/releases

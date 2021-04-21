@@ -124,8 +124,8 @@ set (FidelityFX
 #    "Shaders/FidelityFX/SPD/ffx_spd.h"
 )
 
-set (PIXIncl 
-    "Libs/WinPixEventRuntime/Include"
+set (LibsIncl
+    "Libs/"
 )
 
 # ouput exe to bin directory
@@ -168,6 +168,7 @@ set_source_files_properties(Data/Icons/VQE32.ico  PROPERTIES VS_TOOL_OVERRIDE "I
 
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/VQUtils/Bin/)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/WinPixEventRuntime/bin/x64)
+link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/DirectXCompiler/lib/x64)
 
 # Create a library with the project name that is build with the Headers and Source files
 add_executable( ${PROJECT_NAME} ${HeaderVQE} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} ${Materials} ${FidelityFX})
@@ -201,7 +202,7 @@ set_target_properties(D3D12MA PROPERTIES FOLDER Libs)
 
 # Make sure the compiler can find include files for the libraries
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${Includes})
-target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${PIXIncl})
+target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${LibsIncl})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer assimp WinPixEventRuntime)
 
@@ -209,5 +210,15 @@ target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer assimp WinPixEv
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "${CMAKE_CURRENT_SOURCE_DIR}/Libs/WinPixEventRuntime/bin/x64/WinPixEventRuntime.dll"
+    $<TARGET_FILE_DIR:${PROJECT_NAME}>
+)
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_CURRENT_SOURCE_DIR}/Libs/DirectXCompiler/bin/x64/dxcompiler.dll"
+    $<TARGET_FILE_DIR:${PROJECT_NAME}>
+)
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_CURRENT_SOURCE_DIR}/Libs/DirectXCompiler/bin/x64/dxil.dll"
     $<TARGET_FILE_DIR:${PROJECT_NAME}>
 )

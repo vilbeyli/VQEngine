@@ -39,9 +39,6 @@
 #include <cassert>
 #include <atomic>
 
-#include <wrl.h>
-#include <D3Dcompiler.h>
-#pragma comment(lib, "D3DCompiler.lib")
 
 using namespace Microsoft::WRL;
 using namespace VQSystemInfo;
@@ -1296,7 +1293,7 @@ void VQRenderer::LoadPSOs()
 		{
 			FPSOLoadDesc psoLoadDesc = {};
 			psoLoadDesc.PSOName = "PSO_FFXCASCS";
-			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CAS_CSMain", "cs_5_1", {{"FFXCAS_CS", "1"}} });
+			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CAS_CSMain", "cs_6_1", {{"FFXCAS_CS", "1"}} });
 			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[3]; // share root signature with tonemapper pass
 			PSOLoadDescs.push_back({ EBuiltinPSOs::FFX_CAS_CS_PSO, psoLoadDesc });
 		}
@@ -1307,7 +1304,7 @@ void VQRenderer::LoadPSOs()
 			psoLoadDesc.PSOName = "PSO_FFXSPDCS";
 			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "SPD_CSMain", "cs_6_0", {{"FFXSPD_CS", "1"}} });
 			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[13];
-			//PSOLoadDescs.push_back({ EBuiltinPSOs::FFX_SPD_CS_PSO, psoLoadDesc }); // TODO: SM6.0 requires DXIL compiler, which VQE doesn't have yet.
+			//PSOLoadDescs.push_back({ EBuiltinPSOs::FFX_SPD_CS_PSO, psoLoadDesc }); 
 		}
 	}
 	
