@@ -181,7 +181,7 @@ void VQEngine::UpdateThread_HandleEvents()
 }
 
 #define A_CPU 1
-#include "Shaders/FidelityFX/ffx_a.h"
+#include "Shaders/FidelityFX/CAS/ffx_a.h"
 #include "Shaders/FidelityFX/CAS/ffx_cas.h"
 void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent)
 {

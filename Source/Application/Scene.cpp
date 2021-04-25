@@ -416,7 +416,7 @@ void Scene::LoadCameras(std::vector<FCameraParameters>& CameraParams)
 
 
 #define A_CPU 1
-#include "Shaders/FidelityFX/ffx_a.h"
+#include "Shaders/FidelityFX/CAS/ffx_a.h"
 #include "Shaders/FidelityFX/CAS/ffx_cas.h"
 void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 {

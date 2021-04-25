@@ -71,10 +71,11 @@ std::string DetermineResolution_HDRI(FEnvironmentMapDescriptor& inEnvMapDesc, un
 
 	if (bHasReplacementToken)
 	{
-		     if (MonitorResolutionY <= 720 ) { resolution = "1k"; }
+		if (MonitorResolutionY <= 720) { resolution = "1k"; }
 		else if (MonitorResolutionY <= 1080) { resolution = "2k"; }
-		else if (MonitorResolutionY <= 1440) { resolution = "4k"; } 
+		else if (MonitorResolutionY <= 1440) { resolution = "4k"; }
 		else if (MonitorResolutionY <= 2160) { resolution = "8k"; }
+		else { resolution = "8k"; }
 
 		const size_t lenReplacementToken = inEnvMapDesc.FilePath.find_last_of('%') - iReplacementToken + 1; // +1 to include the last '%' in "%resolution%'
 		inEnvMapDesc.FilePath.replace(iReplacementToken, lenReplacementToken, resolution.c_str());

@@ -49,7 +49,7 @@
 #define A_GPU
 
 
-#include "FidelityFX/ffx_a.h"
+#include "FidelityFX/CAS/ffx_a.h"
 
 
 

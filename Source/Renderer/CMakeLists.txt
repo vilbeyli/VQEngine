@@ -5,8 +5,13 @@ project (VQRenderer)
 add_compile_options(/MP)
 add_compile_options(/std:c++17)
 
-set (Lib_headers
+set (LibHeadersD3D12X
     "Libs/D3DX12/d3dx12.h"
+)
+set (LibFFX
+    "Libs/FidelityFX/CACAO/ffx_cacao.h"
+    "Libs/FidelityFX/CACAO/ffx_cacao.cpp"
+    "Libs/FidelityFX/CACAO/ffx_cacao_defines.h"
 )
 
 set (Headers
@@ -39,8 +44,10 @@ set (Source
 )
 
 
-source_group("Libs"   FILES ${Lib_headers})
-set_source_files_properties(${Lib_headers} PROPERTIES VS_TOOL_OVERRIDE "Text")
+source_group("Libs\\D3D12X"              FILES ${LibHeadersD3D12X})
+source_group("Libs\\FidelityFX\\CACAO"   FILES ${LibFFX})
+set_source_files_properties(${LibHeadersD3D12X} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${LibFFX} PROPERTIES VS_TOOL_OVERRIDE "Text")
 
 # set ouput directory
 SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/Bin)
@@ -53,6 +60,6 @@ endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 
 # add_link_options(/SUBSYSTEM:WINDOWS)
 
-add_library(${PROJECT_NAME} STATIC ${Headers} ${Source} ${Lib_headers} )
+add_library(${PROJECT_NAME} STATIC ${Headers} ${Source} ${LibHeadersD3D12X} ${LibFFX} )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE D3D12MA )

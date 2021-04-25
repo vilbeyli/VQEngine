@@ -81,6 +81,7 @@ set (HeaderVQE
     "Source/Application/Camera.h"
     "Source/Application/Input.h"
     "Source/Application/AssetLoader.h"
+    "Source/Application/AmbientOcclusion.h"
     "Source/Application/Scene.h"
     "Source/Application/Light.h"
     "Source/Application/GameObject.h"
@@ -111,6 +112,7 @@ set (SourceVQE
     "Source/Application/Camera.cpp"
     "Source/Application/Input.cpp"
     "Source/Application/AssetLoader.cpp"
+    "Source/Application/AmbientOcclusion.cpp"
     "Source/Application/Scene.cpp"
     "Source/Application/Light.cpp"
     "Source/Application/GameObject.cpp"
@@ -118,9 +120,10 @@ set (SourceVQE
     "Source/Application/GPUMarker.cpp"
 )
 
-set (FidelityFX
-    "Shaders/FidelityFX/ffx_a.h"
+set (FidelityFXShaders
+    "Shaders/FidelityFX/CAS/ffx_a.h"
     "Shaders/FidelityFX/CAS/ffx_cas.h"
+    "Shaders/FidelityFX/CACAO/ffx_cacao.hlsl"
 #    "Shaders/FidelityFX/SPD/ffx_spd.h"
 )
 
@@ -154,7 +157,7 @@ source_group("Config"   FILES ${Config})
 source_group("Resource" FILES ${Resource})
 source_group("Icons"    FILES ${Icons})
 source_group("Shaders"  FILES ${Shaders})
-source_group("Shaders\\AMD-FidelityFX"  FILES ${FidelityFX})
+source_group("Shaders\\AMD-FidelityFX"  FILES ${FidelityFXShaders})
 source_group("Scenes"   FILES ${Scenes})
 source_group("Materials" FILES ${Materials})
 
@@ -162,7 +165,7 @@ set_source_files_properties(${Config} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Materials} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Scenes} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${FidelityFX} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${FidelityFXShaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(Data/Resources/VQE.rc PROPERTIES VS_TOOL_OVERRIDE "Resource compiler")
 set_source_files_properties(Data/Icons/VQE32.ico  PROPERTIES VS_TOOL_OVERRIDE "Image")
 
@@ -171,7 +174,7 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/WinPixEventRuntime/bin/x64)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/DirectXCompiler/lib/x64)
 
 # Create a library with the project name that is build with the Headers and Source files
-add_executable( ${PROJECT_NAME} ${HeaderVQE} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} ${Materials} ${FidelityFX})
+add_executable( ${PROJECT_NAME} ${HeaderVQE} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} ${Materials} ${FidelityFXShaders})
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY} )
 
