@@ -17,33 +17,25 @@
 //	Contact: volkanilbeyli@gmail.com
 #pragma once
 
-#include <d3d12.h>
-#include "../Engine/Core/Types.h"
-#include "../../Libs/VQUtils/Source/Log.h"
-#include <cassert>
+#include "RenderPass.h"
 
-#define KILOBYTE 1024ull
-#define MEGABYTE (1024ull*KILOBYTE)
-#define GIGABYTE (1024ull*MEGABYTE)
-#define TERABYTE (1024ull*GIGABYTE)
 
-template<class T>
-T AlignOffset(const T& uOffset, const T& uAlign) { return ((uOffset + (uAlign - 1)) & ~(uAlign - 1)); }
-
-template<class... Args>
-void SetName(ID3D12Object* pObj, const char* format, Args&&... args)
+struct FDepthPrePass : public IRenderPass
 {
-	char bufName[240];
-	sprintf_s(bufName, format, args...);
-	std::string Name = bufName;
-	std::wstring wName(Name.begin(), Name.end());
-	pObj->SetName(wName.c_str());
-}
-
-inline void ThrowIfFailed(HRESULT hr)
-{
-	if (FAILED(hr))
+	struct FDrawParameters
 	{
-		assert(false);// throw HrException(hr);
-	}
-}
+
+	};
+
+
+	FDepthPrePass();
+
+	bool Initialize(ID3D12Device* pDevice) override;
+	void Exit() override;
+
+	void OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const void* pRscParameters = nullptr) override;
+	void OnDestroyWindowSizeDependentResources() override;
+
+	void RecordCommands(const void* pDrawParameters = nullptr) override;
+};
+

@@ -15,35 +15,31 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
-#pragma once
 
-#include <d3d12.h>
-#include "../Engine/Core/Types.h"
-#include "../../Libs/VQUtils/Source/Log.h"
-#include <cassert>
+#include "DepthPrePass.h"
 
-#define KILOBYTE 1024ull
-#define MEGABYTE (1024ull*KILOBYTE)
-#define GIGABYTE (1024ull*MEGABYTE)
-#define TERABYTE (1024ull*GIGABYTE)
-
-template<class T>
-T AlignOffset(const T& uOffset, const T& uAlign) { return ((uOffset + (uAlign - 1)) & ~(uAlign - 1)); }
-
-template<class... Args>
-void SetName(ID3D12Object* pObj, const char* format, Args&&... args)
+FDepthPrePass::FDepthPrePass()
 {
-	char bufName[240];
-	sprintf_s(bufName, format, args...);
-	std::string Name = bufName;
-	std::wstring wName(Name.begin(), Name.end());
-	pObj->SetName(wName.c_str());
 }
 
-inline void ThrowIfFailed(HRESULT hr)
+bool FDepthPrePass::Initialize(ID3D12Device* pDevice)
 {
-	if (FAILED(hr))
-	{
-		assert(false);// throw HrException(hr);
-	}
+	return true;
+}
+
+void FDepthPrePass::Exit()
+{
+}
+
+void FDepthPrePass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const void* pRscParameters)
+{
+
+}
+
+void FDepthPrePass::OnDestroyWindowSizeDependentResources()
+{
+}
+
+void FDepthPrePass::RecordCommands(const void* pDrawParameters)
+{
 }

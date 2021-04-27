@@ -27,7 +27,7 @@
 #include "Texture.h"
 #include "Shader.h"
 
-#include "../Application/Window.h"
+#include "../Engine/Core/Window.h"
 #include "../../Shaders/LightingConstantBufferData.h"
 
 #include "../../Libs/VQUtils/Source/Log.h"
@@ -602,9 +602,10 @@ void VQRenderer::LoadRootSignatures()
 
 	// ForwardLighting Root Signature : [5]
 	{
-		CD3DX12_DESCRIPTOR_RANGE1 ranges[7];
+		CD3DX12_DESCRIPTOR_RANGE1 ranges[8];
 		// material textures
 		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
+		ranges[7].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 8, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
 		// shadow maps
 		ranges[3].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1                          , 13, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
 		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, NUM_SHADOWING_LIGHTS__SPOT , 16, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
@@ -615,7 +616,7 @@ void VQRenderer::LoadRootSignatures()
 		//ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC); // perView  cb's are DescRanges
 		//ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC); // perFrame cb's are DescRanges
 
-		CD3DX12_ROOT_PARAMETER1 rootParameters[10]; 
+		CD3DX12_ROOT_PARAMETER1 rootParameters[11]; 
 		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[1].InitAsConstantBufferView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL);
 #if 0
@@ -636,6 +637,9 @@ void VQRenderer::LoadRootSignatures()
 		rootParameters[7].InitAsDescriptorTable(1, &ranges[4], D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[8].InitAsDescriptorTable(1, &ranges[5], D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[9].InitAsDescriptorTable(1, &ranges[6], D3D12_SHADER_VISIBILITY_PIXEL);
+
+		// SSAO map binding
+		rootParameters[10].InitAsDescriptorTable(1, &ranges[7], D3D12_SHADER_VISIBILITY_PIXEL);
 
 		D3D12_STATIC_SAMPLER_DESC samplers[4] = {};
 		D3D12_STATIC_SAMPLER_DESC sampler = {};
@@ -676,6 +680,7 @@ void VQRenderer::LoadRootSignatures()
 		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, _countof(samplers), &samplers[0], D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 		ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
+		
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
 		mpBuiltinRootSignatures.push_back(pRS);
@@ -701,7 +706,7 @@ void VQRenderer::LoadRootSignatures()
 		SetName(pRS, "RootSignature_WireframeUnlit");
 	}
 
-	// DepthPass Root Signatures [7-9]
+	// ShadowDepthPass Root Signatures [7-9]
 	{
 		D3D12_STATIC_SAMPLER_DESC sampler = {};
 		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -873,6 +878,63 @@ void VQRenderer::LoadRootSignatures()
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
 		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_FFX-SPD_CS");
+	}
+
+	// DepthPrePass Root Signature : [14]
+	{
+		CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
+		// material textures
+		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
+		
+		CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
+		rootParameters[1].InitAsConstantBufferView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_VERTEX);
+
+
+		D3D12_STATIC_SAMPLER_DESC samplers[4] = {};
+		D3D12_STATIC_SAMPLER_DESC sampler = {};
+		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.MipLODBias = 0;
+		sampler.MaxAnisotropy = 0;
+		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+		sampler.MinLOD = 0.0f;
+		sampler.MaxLOD = D3D12_FLOAT32_MAX;
+		sampler.ShaderRegister = 0;
+		sampler.RegisterSpace = 0;
+		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		samplers[0] = sampler;
+
+		sampler.ShaderRegister = 3;
+		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		samplers[3] = sampler;
+
+
+		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.ShaderRegister = 1;
+		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+		samplers[1] = sampler;
+
+		sampler.ShaderRegister = 2;
+		sampler.Filter = D3D12_FILTER_ANISOTROPIC;
+		samplers[2] = sampler;
+
+		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, _countof(samplers), &samplers[0], D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+		ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
+
+		ID3D12RootSignature* pRS = nullptr;
+		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
+		mpBuiltinRootSignatures.push_back(pRS);
+		SetName(pRS, "RootSignature_DepthPrePass");
 	}
 }
 
@@ -1068,6 +1130,41 @@ void VQRenderer::LoadPSOs()
 		PSOLoadDescs.push_back({ EBuiltinPSOs::TONEMAPPER_PSO, psoLoadDesc });
 	}
 
+	// DEPTH PREPASS PSO
+	{
+		const std::wstring ShaderFilePath = GetAssetFullPath(L"DepthPrePass.hlsl");
+
+		FPSOLoadDesc psoLoadDesc = {};
+		psoLoadDesc.PSOName = "PSO_FDepthPrePassVSPS";
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
+		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mpBuiltinRootSignatures[14];
+
+
+		// PSO description
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
+		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+		psoDesc.DepthStencilState.DepthEnable = TRUE;
+		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+		psoDesc.DepthStencilState.StencilEnable = FALSE;
+		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+		psoDesc.SampleMask = UINT_MAX;
+		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+		psoDesc.NumRenderTargets = 1;
+		psoDesc.RTVFormats[0] = DXGI_FORMAT_R10G10B10A2_UNORM;
+		psoDesc.SampleDesc.Count = 1;
+
+		PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PREPASS_PSO, psoLoadDesc });
+
+		// MSAA PSO
+		psoLoadDesc.PSOName = "PSO_FDepthPrePassVSPS_MSAA4";
+		psoDesc.SampleDesc.Count = 4;
+		PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PREPASS_PSO_MSAA_4, psoLoadDesc });
+	}
+
 	// FORWARD LIGHTING PSO
 	{
 		const std::wstring ShaderFilePath = GetAssetFullPath(L"ForwardLighting.hlsl");
@@ -1084,8 +1181,8 @@ void VQRenderer::LoadPSOs()
 		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
 		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 		psoDesc.DepthStencilState.DepthEnable = TRUE;
-		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_EQUAL;
+		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
 		psoDesc.DepthStencilState.StencilEnable = FALSE;
 		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 		psoDesc.SampleMask = UINT_MAX;
@@ -1154,7 +1251,7 @@ void VQRenderer::LoadPSOs()
 
 	// SHADOWMAP PSOs
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"DepthPass.hlsl");
+		const std::wstring ShaderFilePath = GetAssetFullPath(L"ShadowDepthPass.hlsl");
 
 		FPSOLoadDesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_DepthOnlyVS";
@@ -1307,7 +1404,17 @@ void VQRenderer::LoadPSOs()
 			//PSOLoadDescs.push_back({ EBuiltinPSOs::FFX_SPD_CS_PSO, psoLoadDesc }); 
 		}
 	}
-	
+
+	// Depth Resolve PSO
+	{
+		const std::wstring ShaderFilePath = GetAssetFullPath(L"DepthResolve.hlsl");
+
+		FPSOLoadDesc psoLoadDesc = {};
+		psoLoadDesc.PSOName = "PSO_DepthResolveCS";
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_5_0" });
+		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[3]; // share root signature with tonemapper pass
+		PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_RESOLVE, psoLoadDesc });
+	}
 
 	// ---------------------------------------------------------------------------------------------------------------1
 

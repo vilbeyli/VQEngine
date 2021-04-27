@@ -17,33 +17,15 @@
 //	Contact: volkanilbeyli@gmail.com
 #pragma once
 
-#include <d3d12.h>
-#include "../Engine/Core/Types.h"
-#include "../../Libs/VQUtils/Source/Log.h"
-#include <cassert>
-
-#define KILOBYTE 1024ull
-#define MEGABYTE (1024ull*KILOBYTE)
-#define GIGABYTE (1024ull*MEGABYTE)
-#define TERABYTE (1024ull*GIGABYTE)
-
-template<class T>
-T AlignOffset(const T& uOffset, const T& uAlign) { return ((uOffset + (uAlign - 1)) & ~(uAlign - 1)); }
-
-template<class... Args>
-void SetName(ID3D12Object* pObj, const char* format, Args&&... args)
+struct ID3D12Device;
+struct IRenderPass
 {
-	char bufName[240];
-	sprintf_s(bufName, format, args...);
-	std::string Name = bufName;
-	std::wstring wName(Name.begin(), Name.end());
-	pObj->SetName(wName.c_str());
-}
+	virtual bool Initialize(ID3D12Device* pDevice) = 0;
+	virtual void Exit() = 0;
 
-inline void ThrowIfFailed(HRESULT hr)
-{
-	if (FAILED(hr))
-	{
-		assert(false);// throw HrException(hr);
-	}
-}
+	virtual void OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const void* pRscParameters = nullptr) = 0;
+	virtual void OnDestroyWindowSizeDependentResources() = 0;
+
+	virtual void RecordCommands(const void* pDrawParameters = nullptr) = 0;
+};
+

@@ -14,6 +14,7 @@
 # Precompiled Headers
 *.gch
 *.pch
+Libs/FidelityFX/CACAO/PrecompiledShadersDXIL/*
 
 # Compiled Dynamic libraries
 *.so

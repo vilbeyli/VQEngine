@@ -74,10 +74,10 @@ void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, cons
 {
     HRESULT hr = {};
 
-    const bool bDepthStencilTexture    = desc.d3d12Desc.Format == DXGI_FORMAT_R32_TYPELESS; // TODO: change this?
     const bool bRenderTargetTexture    = (desc.d3d12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0;
     const bool bUnorderedAccessTexture = (desc.d3d12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) != 0;
-
+    const bool bDepthStencilTexture    = (desc.d3d12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0;
+    
     // determine resource state & optimal clear value
     D3D12_RESOURCE_STATES ResourceState = desc.pData 
         ? D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_COPY_DEST
@@ -99,7 +99,7 @@ void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, cons
     }
     if (bUnorderedAccessTexture)
     {
-
+        // no-op
     }
 
 
@@ -120,7 +120,7 @@ void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, cons
     }
     SetName(mpTexture, desc.TexName.c_str());
 
-    this->mbTypelessTexture = bDepthStencilTexture;
+    this->mbTypelessTexture = bDepthStencilTexture; // TODO: check format?
     this->mbCubemap = desc.bCubemap;
     this->mWidth  = static_cast<int>(desc.d3d12Desc.Width );
     this->mHeight = static_cast<int>(desc.d3d12Desc.Height);
@@ -232,9 +232,6 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayVie
                 else
                 {
                     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
-                    assert(mipLevel == -1);
-                    assert(arraySize == -1);
-                    assert(firstArraySlice == -1);
                 }
             }
 
@@ -459,7 +456,7 @@ std::vector<uint8> Texture::GenerateTexture_Checkerboard(uint Dimension, bool bU
     return data;
 }
 
-#include "../Application/Math.h"
+#include "../Engine/Math.h"
 DirectX::XMMATRIX Texture::CubemapUtility::CalculateViewMatrix(Texture::CubemapUtility::ECubeMapLookDirections cubeFace, const DirectX::XMFLOAT3& position)
 {
     using namespace DirectX;

@@ -20,7 +20,7 @@
 #include "Device.h"
 #include "Renderer.h"
 
-#include "../Application/Platform.h" // CHECK_HR
+#include "../Engine/Core/Platform.h" // CHECK_HR
 #include "../../Libs/VQUtils/Source/Log.h"
 #include "../../Libs/VQUtils/Source/utils.h"
 

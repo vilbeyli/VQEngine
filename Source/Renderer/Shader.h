@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "../Application/Types.h"
+#include "../Engine/Core/Types.h"
 
 #include <atlbase.h>
 #include <d3dcompiler.h>

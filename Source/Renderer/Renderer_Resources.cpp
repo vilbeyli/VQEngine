@@ -20,7 +20,7 @@
 #include "Device.h"
 #include "Texture.h"
 
-#include "../Application/Window.h"
+#include "../Engine/Core/Window.h"
 
 #include "../../Libs/VQUtils/Source/Log.h"
 #include "../../Libs/VQUtils/Source/utils.h"
@@ -1066,6 +1066,12 @@ ID3D12Resource* VQRenderer::GetTextureResource(TextureID Id)
 	return mTextures.at(Id).GetResource();
 }
 
+DXGI_FORMAT VQRenderer::GetTextureFormat(TextureID Id) const
+{
+	CHECK_TEXTURE(mTextures, Id);
+	return mTextures.at(Id).GetFormat();
+}
+
 void VQRenderer::GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices, int& NumMips) const
 {
 	CHECK_TEXTURE(mTextures, Id);
@@ -1081,6 +1087,14 @@ uint VQRenderer::GetTextureMips(TextureID Id) const
 	CHECK_TEXTURE(mTextures, Id);
 	const Texture& tex = mTextures.at(Id);
 	return tex.mMipMapCount;
+}
+
+uint VQRenderer::GetTextureSampleCount(TextureID Id) const
+{
+	CHECK_TEXTURE(mTextures, Id);
+	const Texture& tex = mTextures.at(Id);
+	assert(false);
+	return 0; // TODO:
 }
 
 void VQRenderer::QueueTextureUpload(const FTextureUploadDesc& desc)

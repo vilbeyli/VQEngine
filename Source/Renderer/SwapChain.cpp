@@ -22,8 +22,8 @@
 #include "Common.h"
 #include "Renderer.h"
 
-#include "../Application/Platform.h" // CHECK_HR
-#include "../Application/Window.h"
+#include "../Engine/Core/Platform.h" // CHECK_HR
+#include "../Engine/Core/Window.h"
 #include "../../Libs/VQUtils/Source/Log.h"
 #include "../../Libs/VQUtils/Source/utils.h"
 #include "../../Libs/VQUtils/Source/SystemInfo.h"

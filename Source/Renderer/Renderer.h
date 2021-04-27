@@ -27,9 +27,9 @@
 #include "Texture.h"
 #include "Shader.h"
 
-#include "../Application/Platform.h"
-#include "../Application/Settings.h"
-#include "../Application/Types.h"
+#include "../Engine/Core/Types.h"
+#include "../Engine/Core/Platform.h"
+#include "../Engine/Settings.h"
 
 #define VQUTILS_SYSTEMINFO_INCLUDE_D3D12 1
 #include "../../Libs/VQUtils/Source/SystemInfo.h" // FGPUInfo
@@ -112,6 +112,8 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	SKYDOME_PSO_MSAA_4,
 	OBJECT_PSO,
 	OBJECT_PSO_MSAA_4,
+	DEPTH_PREPASS_PSO,
+	DEPTH_PREPASS_PSO_MSAA_4,
 	FORWARD_LIGHTING_PSO,
 	FORWARD_LIGHTING_PSO_MSAA_4,
 	WIREFRAME_PSO,
@@ -121,6 +123,7 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	DEPTH_PASS_PSO,
 	DEPTH_PASS_LINEAR_PSO,
 	DEPTH_PASS_ALPHAMASKED_PSO,
+	DEPTH_RESOLVE,
 	CUBEMAP_CONVOLUTION_DIFFUSE_PSO,
 	CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO,
 	CUBEMAP_CONVOLUTION_SPECULAR_PSO,
@@ -206,11 +209,13 @@ public:
 
 	const ID3D12Resource*        GetTextureResource(TextureID Id) const;
 	      ID3D12Resource*        GetTextureResource(TextureID Id);
+	DXGI_FORMAT                  GetTextureFormat(TextureID Id) const;
 
-		  inline void            GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, dummy); }
-		  inline void            GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, NumSlices, dummy); }
-		  void                   GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices, int& NumMips) const;
-		  uint                   GetTextureMips(TextureID Id) const;
+	inline void                  GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, dummy); }
+	inline void                  GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, NumSlices, dummy); }
+	void                         GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices, int& NumMips) const;
+	uint                         GetTextureMips(TextureID Id) const;
+	uint                         GetTextureSampleCount(TextureID) const;
 
 	inline const VBV&            GetVBV(BufferID Id) const { return GetVertexBufferView(Id);    }
 	inline const IBV&            GetIBV(BufferID Id) const { return GetIndexBufferView(Id);     }

@@ -80,7 +80,6 @@ public:
 	Texture& operator=(const Texture& other);
 
 	void Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, const TextureCreateDesc& desc);
-
 	void Destroy();
 
 	void InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayView = false, bool bInitAsCubeView = false, UINT ShaderComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc = nullptr);
@@ -90,6 +89,7 @@ public:
 
 	inline const ID3D12Resource* GetResource() const { return mpTexture; }
 	inline       ID3D12Resource* GetResource()       { return mpTexture; }
+	inline       DXGI_FORMAT     GetFormat()   const { return mFormat; }
 
 private:
 	friend class VQRenderer;
@@ -103,9 +103,9 @@ private:
 	uint mStructuredBufferStride = 0;
 	int  mMipMapCount = 1;
 	bool mbCubemap = false;
-	int  mWidth;
-	int  mHeight;
-	int  mNumArraySlices;
+	int  mWidth = 0;
+	int  mHeight = 0;
+	int  mNumArraySlices = 1;
 
 	DXGI_FORMAT mFormat = DXGI_FORMAT_UNKNOWN;
 };

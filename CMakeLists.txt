@@ -11,6 +11,9 @@ add_compile_options(/MP)
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
 
+#
+# DATA
+#
 set (Resource 
     "Data/Resources/VQE.rc"
     "Data/Resources/resource.h"
@@ -44,6 +47,9 @@ set (Materials
     "Data/Materials/DefaultMaterials.xml"
 )
 
+#
+# SHADERS
+#
 set (Shaders
     "Shaders/hello-triangle.hlsl"
     "Shaders/hello-cube.hlsl"
@@ -58,77 +64,104 @@ set (Shaders
     "Shaders/Lighting.hlsl"
     "Shaders/LightingConstantBufferData.h"
     "Shaders/Unlit.hlsl"
-    "Shaders/DepthPass.hlsl"
+    "Shaders/ShadowDepthPass.hlsl"
+    "Shaders/DepthPrePass.hlsl"
+    "Shaders/DepthResolve.hlsl"
     "Shaders/CubemapConvolution.hlsl"
     "Shaders/GaussianBlur.hlsl"
     "Shaders/AMDFidelityFX.hlsl"
 )
 
-set (HeaderVQE 
-    "Source/Application/Platform.h"
-    "Source/Application/Window.h"
-    "Source/Application/Settings.h"
-    "Source/Application/Types.h"
-    "Source/Application/Math.h"
-    "Source/Application/VQEngine.h"
-    "Source/Application/Events.h"
-    "Source/Application/Mesh.h"
-    "Source/Application/Material.h"
-    "Source/Application/Model.h"
-    "Source/Application/Geometry.h"
-    "Source/Application/Transform.h"
-    "Source/Application/Quaternion.h"
-    "Source/Application/Camera.h"
-    "Source/Application/Input.h"
-    "Source/Application/AssetLoader.h"
-    "Source/Application/AmbientOcclusion.h"
-    "Source/Application/Scene.h"
-    "Source/Application/Light.h"
-    "Source/Application/GameObject.h"
-    "Source/Application/Memory.h"
-    "Source/Application/GPUMarker.h"
+#
+# SOURCE
+#
+set (RenderPassFiles
+    "Source/Engine/RenderPass/RenderPass.h"
+    "Source/Engine/RenderPass/AmbientOcclusion.h"
+    "Source/Engine/RenderPass/DepthPrePass.h"
+    
+    "Source/Engine/RenderPass/AmbientOcclusion.cpp"
+    "Source/Engine/RenderPass/DepthPrePass.cpp"
+)
+
+set (CoreFiles 
+    "Source/Engine/Core/Platform.h"
+    "Source/Engine/Core/Window.h"
+    "Source/Engine/Core/Input.h"
+    "Source/Engine/Core/Events.h"
+    "Source/Engine/Core/Types.h"
+    "Source/Engine/Core/Memory.h"
+
+    "Source/Engine/Core/Platform.cpp"
+    "Source/Engine/Core/Window.cpp"
+    "Source/Engine/Core/Input.cpp"
+    "Source/Engine/Core/Events.cpp"
+    "Source/Engine/Core/VQEngine_WindowEvents.cpp"
+    "Source/Engine/Core/VQEngine_EventHandlers.cpp"
+    "Source/Engine/Core/FileParser.cpp"
+    "Source/Engine/Core/Memory.cpp"
+
+)
+
+set (SceneFiles   
     "Shaders/LightingConstantBufferData.h"
+    
+    "Source/Engine/Scene/Transform.h"
+    "Source/Engine/Scene/Quaternion.h"
+    "Source/Engine/Scene/Scene.h"
+    "Source/Engine/Scene/Light.h"
+    "Source/Engine/Scene/Camera.h"
+    "Source/Engine/Scene/Mesh.h"
+    "Source/Engine/Scene/Material.h"
+    "Source/Engine/Scene/Model.h"
+    "Source/Engine/Scene/GameObject.h"
+
+    "Source/Engine/Scene/Scene.cpp"
+    "Source/Engine/Scene/Light.cpp"
+    "Source/Engine/Scene/Camera.cpp"
+    "Source/Engine/Scene/Mesh.cpp"
+    "Source/Engine/Scene/Material.cpp"
+    "Source/Engine/Scene/Model.cpp"
+    "Source/Engine/Scene/GameObject.cpp"
+    "Source/Engine/Scene/Transform.cpp"
+    "Source/Engine/Scene/Quaternion.cpp"
+    
 )
 
 set (SourceVQE 
-    "Source/Application/Platform.cpp"
-    "Source/Application/Window.cpp"
-    "Source/Application/Main.cpp"
-    "Source/Application/VQEngine_Main.cpp"
-    "Source/Application/VQEngine_Render.cpp"
-    "Source/Application/VQEngine_Update.cpp"
-    "Source/Application/VQEngine_WindowEvents.cpp"
-    "Source/Application/VQEngine_EventHandlers.cpp"
-    "Source/Application/EnvironmentMap.cpp"
-    "Source/Application/FileParser.cpp"
-    "Source/Application/Events.cpp"
-    "Source/Application/Mesh.cpp"
-    "Source/Application/Material.cpp"
-    "Source/Application/Model.cpp"
-    "Source/Application/Geometry.cpp"
-    "Source/Application/Transform.cpp"
-    "Source/Application/Math.cpp"
-    "Source/Application/Quaternion.cpp"
-    "Source/Application/Camera.cpp"
-    "Source/Application/Input.cpp"
-    "Source/Application/AssetLoader.cpp"
-    "Source/Application/AmbientOcclusion.cpp"
-    "Source/Application/Scene.cpp"
-    "Source/Application/Light.cpp"
-    "Source/Application/GameObject.cpp"
-    "Source/Application/Memory.cpp"
-    "Source/Application/GPUMarker.cpp"
+    "Source/Engine/VQEngine.h"
+    "Source/Engine/Settings.h"
+    "Source/Engine/Math.h"
+    "Source/Engine/Geometry.h"
+    "Source/Engine/AssetLoader.h"
+    "Source/Engine/GPUMarker.h"
+
+    "Source/Engine/Main.cpp"
+    "Source/Engine/VQEngine_Main.cpp"
+    "Source/Engine/VQEngine_Render.cpp"
+    "Source/Engine/VQEngine_Update.cpp"
+    "Source/Engine/EnvironmentMap.cpp"
+    "Source/Engine/Geometry.cpp"
+    "Source/Engine/Math.cpp"
+    "Source/Engine/AssetLoader.cpp"
+    "Source/Engine/GPUMarker.cpp"
 )
 
 set (FidelityFXShaders
     "Shaders/FidelityFX/CAS/ffx_a.h"
     "Shaders/FidelityFX/CAS/ffx_cas.h"
-    "Shaders/FidelityFX/CACAO/ffx_cacao.hlsl"
 #    "Shaders/FidelityFX/SPD/ffx_spd.h"
 )
 
 set (LibsIncl
     "Libs/"
+)
+
+set (LibFFX
+    "Libs/FidelityFX/CACAO/ffx_cacao.h"
+    "Libs/FidelityFX/CACAO/ffx_cacao.cpp"
+    "Libs/FidelityFX/CACAO/ffx_cacao.hlsl"
+    "Libs/FidelityFX/CACAO/ffx_cacao_defines.h"
 )
 
 # ouput exe to bin directory
@@ -160,12 +193,21 @@ source_group("Shaders"  FILES ${Shaders})
 source_group("Shaders\\AMD-FidelityFX"  FILES ${FidelityFXShaders})
 source_group("Scenes"   FILES ${Scenes})
 source_group("Materials" FILES ${Materials})
+source_group("Source\\RenderPass" FILES ${RenderPassFiles})
+source_group("Source\\Core" FILES ${CoreFiles})
+source_group("Source\\Scene" FILES ${SceneFiles})
+source_group("Source" FILES ${SourceVQE})
+source_group("Libs\\FidelityFX\\CACAO"   FILES ${LibFFX})
 
 set_source_files_properties(${Config} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Materials} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Scenes} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${FidelityFXShaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${CoreFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${RenderPassFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${SceneFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${LibFFX} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(Data/Resources/VQE.rc PROPERTIES VS_TOOL_OVERRIDE "Resource compiler")
 set_source_files_properties(Data/Icons/VQE32.ico  PROPERTIES VS_TOOL_OVERRIDE "Image")
 
@@ -173,8 +215,10 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/VQUtils/Bin/)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/WinPixEventRuntime/bin/x64)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/DirectXCompiler/lib/x64)
 
+add_definitions(-DFFX_CACAO_ENABLE_D3D12)
+
 # Create a library with the project name that is build with the Headers and Source files
-add_executable( ${PROJECT_NAME} ${HeaderVQE} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} ${Materials} ${FidelityFXShaders})
+add_executable( ${PROJECT_NAME} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} ${Materials} ${FidelityFXShaders} ${LibFFX} ${RenderPassFiles} ${CoreFiles} ${SceneFiles})
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY} )
 
@@ -209,6 +253,9 @@ target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${
 
 target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer assimp WinPixEventRuntime)
 
+
+add_custom_command(TARGET ${PROJECT_NAME} PRE_BUILD
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Libs/FidelityFX/CACAO/build_shaders_dxil.bat)
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
