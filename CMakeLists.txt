@@ -198,7 +198,7 @@ source_group("Source\\RenderPass" FILES ${RenderPassFiles})
 source_group("Source\\Core" FILES ${CoreFiles})
 source_group("Source\\Scene" FILES ${SceneFiles})
 source_group("Source" FILES ${SourceVQE})
-source_group("Libs\\FidelityFX\\CACAO"   FILES ${LibFFX})
+source_group("Libs\\AMDFidelityFX\\CACAO"   FILES ${LibFFX})
 
 set_source_files_properties(${Config} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Materials} PROPERTIES VS_TOOL_OVERRIDE "Text")
@@ -256,7 +256,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer assimp WinPixEv
 
 
 add_custom_command(TARGET ${PROJECT_NAME} PRE_BUILD
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Libs/FidelityFX/CACAO/build_shaders_dxil.bat)
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Libs/AMDFidelityFX/CACAO/build_shaders_dxil.bat)
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different

@@ -27,11 +27,11 @@
 #include <stdio.h>  // snprintf
 
 #ifdef FFX_CACAO_ENABLE_D3D12
-#include <d3dx12.h>
+#include "../Source/Renderer/Libs/D3DX12/d3dx12.h"
 #endif
 
 // Define symbol to enable DirectX debug markers created using Cauldron
-#define FFX_CACAO_ENABLE_CAULDRON_DEBUG
+//#define FFX_CACAO_ENABLE_CAULDRON_DEBUG
 
 #define FFX_CACAO_ASSERT(exp) assert(exp)
 #define FFX_CACAO_ARRAY_SIZE(xs) (sizeof(xs)/sizeof(xs[0]))

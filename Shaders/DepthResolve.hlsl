@@ -33,10 +33,15 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	}
  
 	float result = 1;
-	for (uint i = 0; i < SampleCount; ++i)
-	{
-		result = min(result, input.Load(dispatchThreadId.xy, i).r);
-	}
- 
+	
+	if (SampleCount == 2)
+		[unroll] for (uint i = 0; i < 2; ++i) { result = min(result, input.Load(dispatchThreadId.xy, i).r); }
+	else if (SampleCount == 4)
+		[unroll] for (uint j = 0; j < 4; ++j) { result = min(result, input.Load(dispatchThreadId.xy, j).r); }
+	else if (SampleCount == 8)
+		[unroll] for (uint k = 0; k < 8; ++k) { result = min(result, input.Load(dispatchThreadId.xy, k).r); }
+	else if (SampleCount == 16)
+		[unroll] for (uint l = 0; l < 16; ++l) { result = min(result, input.Load(dispatchThreadId.xy, l).r); }
+	
 	output[dispatchThreadId.xy] = result;
 }

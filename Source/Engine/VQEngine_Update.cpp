@@ -42,9 +42,10 @@ void VQEngine::UpdateThread_Main()
 
 	bool bQuit = false;
 	float dt = 0.0f;
+	float dt_RenderWaitTime = 0.0f;
 	while (!mbStopAllThreads && !bQuit)
 	{
-		UpdateThread_WaitForRenderThread();
+		dt_RenderWaitTime = UpdateThread_WaitForRenderThread();
 
 		UpdateThread_HandleEvents();
 
@@ -61,6 +62,16 @@ void VQEngine::UpdateThread_Main()
 		++mNumUpdateLoopsExecuted;
 
 		UpdateThread_SignalRenderThread();
+
+		// UpdateThread_Logging()
+		constexpr int LOGGING_PERIOD = 4; // seconds
+		static float LAST_LOG_TIME = 0;
+		const float TotalTime = mTimer.TotalTime();
+		if (TotalTime - LAST_LOG_TIME > 4)
+		{
+			Log::Info("UpdateThread_Main() : dt=%.2f ms", (dt * 1000.0f) - (dt_RenderWaitTime * 1000.0f));
+			LAST_LOG_TIME = TotalTime;
+		}
 	}
 
 	UpdateThread_Exit();
@@ -184,16 +195,20 @@ void VQEngine::UpdateThread_PostUpdate()
 	}
 }
 
-void VQEngine::UpdateThread_WaitForRenderThread()
+float VQEngine::UpdateThread_WaitForRenderThread()
 {
 #if DEBUG_LOG_THREAD_SYNC_VERBOSE
 	Log::Info("u:wait : u=%llu, r=%llu", mNumUpdateLoopsExecuted.load(), mNumRenderLoopsExecuted.load());
 #endif
 
 	if (mbStopAllThreads)
-		return;
+		return 0.0f;
 
+	Timer t;
+	t.Start();
 	mpSemUpdate->Wait();
+	t.Stop();
+	return t.DeltaTime();
 }
 
 void VQEngine::UpdateThread_SignalRenderThread()

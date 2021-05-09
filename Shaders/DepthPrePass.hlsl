@@ -119,6 +119,6 @@ float4 PSMain(PSInput In) : SV_TARGET
 	const float3 N = normalize(In.vertNormal);
 	const float3 T = normalize(In.vertTangent);
 	float3 SurfaceN = length(Normal) < 0.01 ? N : UnpackNormal(Normal, N, T);
-	
+	SurfaceN = (SurfaceN + 1.0f.xxx) * 0.5; // FidelityFX-CACAO needs packed normals
 	return float4(SurfaceN, 1);
 }

@@ -21,11 +21,13 @@
 
 // #define FFX_CACAO_ENABLE_PROFILING 1
 // #define FFX_CACAO_ENABLE_NATIVE_RESOLUTION 1 
-#include "FidelityFX/CACAO/ffx_cacao.h"
+#include "AMDFidelityFX/CACAO/ffx_cacao.h"
 
 #include <DirectXMath.h>
+#include <dxgiformat.h>
 
-
+struct ID3D12Resource;
+struct ID3D12GraphicsCommandList;
 struct FAmbientOcclusionPass : public IRenderPass
 {
 	enum EMethod
@@ -67,5 +69,5 @@ struct FAmbientOcclusionPass : public IRenderPass
 	//------------------------------------------------------
 
 	EMethod Method;
-	FfxCacaoSettings AOSettings;
+	FFX_CACAO_Settings AOSettings;
 };

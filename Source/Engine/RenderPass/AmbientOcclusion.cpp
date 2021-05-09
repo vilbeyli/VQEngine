@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "AmbientOcclusion.h"
+#include "AMDFidelityFX/CACAO/ffx_cacao_impl.h"
 
 #include "Libs/VQUtils/Source/Log.h"
 
@@ -24,9 +25,9 @@
 
 #include <cassert>
 
-static FfxCacaoD3D12Context* pFFXCacaoContext = nullptr; // assumes only 1 CACAO context;
+static FFX_CACAO_D3D12Context* pFFX_CACAO_Context = nullptr; // assumes only 1 CACAO context;
 
-static void LogFFXCACAOStatus(FfxCacaoStatus hr, const std::string& functionName)
+static void LogFFX_CACAO_Status(FFX_CACAO_Status hr, const std::string& functionName)
 {
 }
 
@@ -38,18 +39,18 @@ FAmbientOcclusionPass::FAmbientOcclusionPass(EMethod InMethod)
 
 bool FAmbientOcclusionPass::Initialize(ID3D12Device* pDevice)
 {
-	pFFXCacaoContext = nullptr;
-	const size_t SIZE_CONTEXT = ffxCacaoD3D12GetContextSize();
+	pFFX_CACAO_Context = nullptr;
+	const size_t SIZE_CONTEXT = FFX_CACAO_D3D12GetContextSize();
 
-	pFFXCacaoContext = (FfxCacaoD3D12Context*)malloc(SIZE_CONTEXT);
-	FfxCacaoStatus hr = ffxCacaoD3D12InitContext(pFFXCacaoContext, pDevice);
+	pFFX_CACAO_Context = (FFX_CACAO_D3D12Context*)malloc(SIZE_CONTEXT);
+	FFX_CACAO_Status hr = FFX_CACAO_D3D12InitContext(pFFX_CACAO_Context, pDevice);
 	
 	bool bResult = false;
 	switch (hr)
 	{
 	case FFX_CACAO_STATUS_OK:
 		Log::Info("FFX-CACAO Context initialized.");
-		ffxCacaoD3D12UpdateSettings(pFFXCacaoContext, &AOSettings);
+		FFX_CACAO_D3D12UpdateSettings(pFFX_CACAO_Context, &AOSettings);
 		bResult = true;
 		break;
 	case FFX_CACAO_STATUS_INVALID_ARGUMENT:
@@ -71,21 +72,21 @@ bool FAmbientOcclusionPass::Initialize(ID3D12Device* pDevice)
 
 void FAmbientOcclusionPass::Exit()
 {
-	FfxCacaoStatus hr = ffxCacaoD3D12DestroyContext(pFFXCacaoContext);
-	free(pFFXCacaoContext);
+	FFX_CACAO_Status hr = FFX_CACAO_D3D12DestroyContext(pFFX_CACAO_Context);
+	free(pFFX_CACAO_Context);
 }
 
 void FAmbientOcclusionPass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const void* pRscParameters /*= nullptr*/)
 {
 	const FResourceParameters* pParams = static_cast<const FResourceParameters*>(pRscParameters);
 	
-	assert(pFFXCacaoContext);
+	assert(pFFX_CACAO_Context);
 	assert(pParams);
 	assert(pParams->pRscNormalBuffer);
 	assert(pParams->pRscOutput);
 	assert(pParams->pRscDepthBuffer);
 
-	FfxCacaoD3D12ScreenSizeInfo iScreenSize = {};
+	FFX_CACAO_D3D12ScreenSizeInfo iScreenSize = {};
 	iScreenSize.height = Height;
 	iScreenSize.width = Width;
 
@@ -116,21 +117,21 @@ void FAmbientOcclusionPass::OnCreateWindowSizeDependentResources(unsigned Width,
 	iScreenSize.depthBufferSrvDesc.Texture2D.PlaneSlice = 0;
 	iScreenSize.depthBufferSrvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
 
-	FfxCacaoStatus hr = ffxCacaoD3D12InitScreenSizeDependentResources(pFFXCacaoContext, &iScreenSize);
+	FFX_CACAO_Status hr = FFX_CACAO_D3D12InitScreenSizeDependentResources(pFFX_CACAO_Context, &iScreenSize);
 
 	if (hr != FFX_CACAO_STATUS_OK)
 	{
-		Log::Error("FAmbientOcclusionPass::OnCreateWindowSizeDependentResources(): error ffxCacaoD3D12InitScreenSizeDependentResources()");
+		Log::Error("FAmbientOcclusionPass::OnCreateWindowSizeDependentResources(): error FFX_CACAO_D3D12InitScreenSizeDependentResources()");
 	}
 }
 
 void FAmbientOcclusionPass::OnDestroyWindowSizeDependentResources()
 {
-	FfxCacaoStatus hr = ffxCacaoD3D12DestroyScreenSizeDependentResources(pFFXCacaoContext);
+	FFX_CACAO_Status hr = FFX_CACAO_D3D12DestroyScreenSizeDependentResources(pFFX_CACAO_Context);
 
 	if (hr != FFX_CACAO_STATUS_OK)
 	{
-		Log::Error("FAmbientOcclusionPass::OnDestroyWindowSizeDependentResources(): error ffxCacaoD3D12DestroyScreenSizeDependentResources()");
+		Log::Error("FAmbientOcclusionPass::OnDestroyWindowSizeDependentResources(): error FFX_CACAO_D3D12DestroyScreenSizeDependentResources()");
 	}
 }
 
@@ -140,8 +141,8 @@ void FAmbientOcclusionPass::RecordCommands(const void* pDrawParameters /*= nullp
 	using namespace DirectX;
 
 
-	FfxCacaoMatrix4x4 proj;
-	FfxCacaoMatrix4x4 normalsWorldToView;
+	FFX_CACAO_Matrix4x4 proj;
+	FFX_CACAO_Matrix4x4 normalsWorldToView;
 #if 0
 	// TODO: reinterpret?
 	memcpy(&proj, &pParameters->matProj, sizeof(float) * 16);
@@ -157,7 +158,9 @@ void FAmbientOcclusionPass::RecordCommands(const void* pDrawParameters /*= nullp
 	{
 		XMFLOAT4X4 p;
 		XMMATRIX xView = XMLoadFloat4x4(&pParameters->matNormalToView);
-		XMMATRIX xNormalsWorldToView = XMMATRIX(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1) * XMMatrixInverse(NULL, xView); // should be transpose(inverse(view)), but XMM is row-major and HLSL is column-major
+		XMVECTOR Det = XMMatrixDeterminant(xView);
+		XMMATRIX xNormalsWorldToView = XMMATRIX(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1) * XMMatrixInverse(&Det, xView); // should be transpose(inverse(view)), but XMM is row-major and HLSL is column-major
+		//xNormalsWorldToView = XMMatrixTranspose(xNormalsWorldToView);
 		XMStoreFloat4x4(&p, xNormalsWorldToView);
 
 		normalsWorldToView.elements[0][0] = p._11; normalsWorldToView.elements[0][1] = p._12; normalsWorldToView.elements[0][2] = p._13; normalsWorldToView.elements[0][3] = p._14;
@@ -167,10 +170,10 @@ void FAmbientOcclusionPass::RecordCommands(const void* pDrawParameters /*= nullp
 	}
 #endif
 
-	FfxCacaoStatus hr = ffxCacaoD3D12Draw(pFFXCacaoContext, pParameters->pCmd, &proj, &normalsWorldToView);
+	FFX_CACAO_Status hr = FFX_CACAO_D3D12Draw(pFFX_CACAO_Context, pParameters->pCmd, &proj, &normalsWorldToView);
 
 	if (hr != FFX_CACAO_STATUS_OK)
 	{
-		Log::Error("FAmbientOcclusionPass::RecordCommands(): error ffxCacaoD3D12Draw()");
+		Log::Error("FAmbientOcclusionPass::RecordCommands(): error FFX_CACAO_D3D12Draw()");
 	}
 }

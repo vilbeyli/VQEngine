@@ -260,11 +260,11 @@ public:
 	// ---------------------------------------------------------
 	// Update Thread
 	// ---------------------------------------------------------
-	void UpdateThread_Main();
-	void UpdateThread_Inititalize();
-	void UpdateThread_Exit();
-	void UpdateThread_WaitForRenderThread();
-	void UpdateThread_SignalRenderThread();
+	void  UpdateThread_Main();
+	void  UpdateThread_Inititalize();
+	void  UpdateThread_Exit();
+	float UpdateThread_WaitForRenderThread();
+	void  UpdateThread_SignalRenderThread();
 
 	// PreUpdate()
 	// - Updates timer

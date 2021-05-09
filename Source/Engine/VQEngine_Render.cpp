@@ -64,6 +64,7 @@ void VQEngine::RenderThread_Main()
 
 		RenderThread_HandleEvents();
 
+		// RenderThread_FramePacing()
 		if (mEffectiveFrameRateLimit_ms != 0.0f)
 		{
 			const float TimeBudgetLeft_ms = mEffectiveFrameRateLimit_ms - dt;
@@ -72,6 +73,16 @@ void VQEngine::RenderThread_Main()
 				Sleep((DWORD)TimeBudgetLeft_ms);
 			}
 			//Log::Info("RenderThread_Main() : dt=%.2f, Sleep=%.2f", dt, TimeBudgetLeft_ms);
+		}
+
+		// RenderThread_Logging()
+		constexpr int LOGGING_PERIOD = 4; // seconds
+		static float LAST_LOG_TIME = mTimerRender.TotalTime();
+		const float TotalTime = mTimerRender.TotalTime();
+		if (TotalTime - LAST_LOG_TIME > 4 )
+		{
+			Log::Info("RenderThread_Main() : dt=%.2f ms", dt * 1000.0f);
+			LAST_LOG_TIME = TotalTime;
 		}
 	}
 
