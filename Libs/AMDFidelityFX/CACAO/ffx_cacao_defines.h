@@ -1,4 +1,4 @@
-// Modifications Copyright © 2020. Advanced Micro Devices, Inc. All Rights Reserved.
+// Modifications Copyright © 2021. Advanced Micro Devices, Inc. All Rights Reserved.
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Copyright (c) 2016, Intel Corporation
@@ -20,41 +20,38 @@
 
 // Defines for constants common to both CACAO.cpp and CACAO.hlsl
 
-// ====================================================================
-// Prepare shader dimensions
+#ifndef FFX_CACAO_DEFINES_H
+#define FFX_CACAO_DEFINES_H
 
-#define PREPARE_DEPTHS_AND_MIPS_WIDTH  8
-#define PREPARE_DEPTHS_AND_MIPS_HEIGHT 8
+// ============================================================================
+// Prepare
 
-#define PREPARE_DEPTHS_WIDTH  8
-#define PREPARE_DEPTHS_HEIGHT 8
+#define FFX_CACAO_PREPARE_DEPTHS_AND_MIPS_WIDTH  8
+#define FFX_CACAO_PREPARE_DEPTHS_AND_MIPS_HEIGHT 8
 
-#define PREPARE_DEPTHS_HALF_WIDTH  8
-#define PREPARE_DEPTHS_HALF_HEIGHT 8
+#define FFX_CACAO_PREPARE_DEPTHS_WIDTH  8
+#define FFX_CACAO_PREPARE_DEPTHS_HEIGHT 8
 
-#define PREPARE_DEPTHS_NORMALS_AND_MIPS_WIDTH  8
-#define PREPARE_DEPTHS_NORMALS_AND_MIPS_HEIGHT 8
+#define FFX_CACAO_PREPARE_DEPTHS_HALF_WIDTH  8
+#define FFX_CACAO_PREPARE_DEPTHS_HALF_HEIGHT 8
 
-#define PREPARE_DEPTHS_AND_NORMALS_WIDTH  8
-#define PREPARE_DEPTHS_AND_NORMALS_HEIGHT 8
-
-#define PREPARE_DEPTHS_AND_NORMALS_HALF_WIDTH  8
-#define PREPARE_DEPTHS_AND_NORMALS_HALF_HEIGHT 8
-
-#define PREPARE_NORMALS_WIDTH  8
-#define PREPARE_NORMALS_HEIGHT 8
+#define FFX_CACAO_PREPARE_NORMALS_WIDTH  8
+#define FFX_CACAO_PREPARE_NORMALS_HEIGHT 8
 
 #define PREPARE_NORMALS_FROM_INPUT_NORMALS_WIDTH  8
 #define PREPARE_NORMALS_FROM_INPUT_NORMALS_HEIGHT 8
 
-// ====================================================================
-// Generate SSAO shader dimensions
+// ============================================================================
+// SSAO Generation
 
-#define GENERATE_WIDTH  8
-#define GENERATE_HEIGHT 8
+#define FFX_CACAO_GENERATE_SPARSE_WIDTH  4
+#define FFX_CACAO_GENERATE_SPARSE_HEIGHT 16
 
-// ====================================================================
-// Importance map shader dimensions
+#define FFX_CACAO_GENERATE_WIDTH  8
+#define FFX_CACAO_GENERATE_HEIGHT 8
+
+// ============================================================================
+// Importance Map
 
 #define IMPORTANCE_MAP_WIDTH  8
 #define IMPORTANCE_MAP_HEIGHT 8
@@ -65,29 +62,22 @@
 #define IMPORTANCE_MAP_B_WIDTH  8
 #define IMPORTANCE_MAP_B_HEIGHT 8
 
-// ====================================================================
-// Blur shader dimensions
+// ============================================================================
+// Edge Sensitive Blur
 
-#define BLUR_WIDTH  16
-#define BLUR_HEIGHT 16
+#define FFX_CACAO_BLUR_WIDTH  16
+#define FFX_CACAO_BLUR_HEIGHT 16
 
-// ====================================================================
-// Apply shader dimensions
+// ============================================================================
+// Apply
 
-#define APPLY_WIDTH  8
-#define APPLY_HEIGHT 8
+#define FFX_CACAO_APPLY_WIDTH  8
+#define FFX_CACAO_APPLY_HEIGHT 8
 
-// ====================================================================
-// Reinterleave shader dimensions
+// ============================================================================
+// Bilateral Upscale
 
-#define REINTERLEAVE_WIDTH  16
-#define REINTERLEAVE_HEIGHT 8
+#define FFX_CACAO_BILATERAL_UPSCALE_WIDTH  8
+#define FFX_CACAO_BILATERAL_UPSCALE_HEIGHT 8
 
-// ====================================================================
-// Upscale
-
-#define UPSCALE_WIDTH 8
-#define UPSCALE_HEIGHT 8
-
-#define BILATERAL_UPSCALE_WIDTH  8
-#define BILATERAL_UPSCALE_HEIGHT 8
+#endif

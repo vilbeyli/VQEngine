@@ -148,8 +148,8 @@ set (SourceVQE
 )
 
 set (FidelityFXShaders
-    "Shaders/FidelityFX/CAS/ffx_a.h"
-    "Shaders/FidelityFX/CAS/ffx_cas.h"
+    "Shaders/AMDFidelityFX/CAS/ffx_a.h"
+    "Shaders/AMDFidelityFX/CAS/ffx_cas.h"
 #    "Shaders/FidelityFX/SPD/ffx_spd.h"
 )
 
@@ -158,10 +158,11 @@ set (LibsIncl
 )
 
 set (LibFFX
-    "Libs/FidelityFX/CACAO/ffx_cacao.h"
-    "Libs/FidelityFX/CACAO/ffx_cacao.cpp"
-    "Libs/FidelityFX/CACAO/ffx_cacao.hlsl"
-    "Libs/FidelityFX/CACAO/ffx_cacao_defines.h"
+    "Libs/AMDFidelityFX/CACAO/ffx_cacao_defines.h"
+    "Libs/AMDFidelityFX/CACAO/ffx_cacao.cpp"
+    "Libs/AMDFidelityFX/CACAO/ffx_cacao.h"
+    "Libs/AMDFidelityFX/CACAO/ffx_cacao_impl.cpp"
+    "Libs/AMDFidelityFX/CACAO/ffx_cacao_impl.h"
 )
 
 # ouput exe to bin directory
