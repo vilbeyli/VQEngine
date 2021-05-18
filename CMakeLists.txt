@@ -117,6 +117,7 @@ set (SceneFiles
     "Source/Engine/Scene/GameObject.h"
 
     "Source/Engine/Scene/Scene.cpp"
+    "Source/Engine/Scene/SceneLoading.cpp"
     "Source/Engine/Scene/Light.cpp"
     "Source/Engine/Scene/Camera.cpp"
     "Source/Engine/Scene/Mesh.cpp"
@@ -132,6 +133,7 @@ set (SourceVQE
     "Source/Engine/VQEngine.h"
     "Source/Engine/Settings.h"
     "Source/Engine/Math.h"
+    "Source/Engine/Culling.h"
     "Source/Engine/Geometry.h"
     "Source/Engine/AssetLoader.h"
     "Source/Engine/GPUMarker.h"
@@ -143,6 +145,7 @@ set (SourceVQE
     "Source/Engine/EnvironmentMap.cpp"
     "Source/Engine/Geometry.cpp"
     "Source/Engine/Math.cpp"
+    "Source/Engine/Culling.cpp"
     "Source/Engine/AssetLoader.cpp"
     "Source/Engine/GPUMarker.cpp"
 )

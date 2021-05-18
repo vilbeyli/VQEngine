@@ -113,6 +113,7 @@ private:
 // ---------------------------------------------------------
 // CAMERA
 // ---------------------------------------------------------
+#include "../Culling.h"
 class Camera
 {
 	friend class OrbitController;
@@ -141,9 +142,7 @@ public:
 	DirectX::XMMATRIX GetRotationMatrix() const;
 	inline const FProjectionMatrixParameters& GetProjectionParameters() const { return mProjParams; }
 	inline       FProjectionMatrixParameters& GetProjectionParameters()       { return mProjParams; }
-
-	// returns World Space frustum plane set 
-	FFrustumPlaneset GetViewFrustumPlanes() const;
+	inline FFrustumPlaneset GetViewFrustumPlanesInWorldSpace() const { return FFrustumPlaneset::ExtractFromMatrix(GetViewMatrix() * GetProjectionMatrix()); }
 	
 	inline void SetPosition(float x, float y, float z) { mPosition = DirectX::XMFLOAT3(x, y, z); }
 	inline void SetPosition(const DirectX::XMFLOAT3& p){ mPosition = p; }

@@ -895,13 +895,13 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	//
 	// RENDER
 	//
-	RenderShadowMaps(ctx, SceneShadowView);
-
 	RenderDepthPrePass(ctx, SceneView);
 
-	TransitionForSceneRendering(ctx);
-	
 	RenderAmbientOcclusion(ctx, SceneView);
+
+	RenderShadowMaps(ctx, SceneShadowView);
+
+	TransitionForSceneRendering(ctx);
 
 	RenderSceneColor(ctx, SceneView);
 	
@@ -1122,43 +1122,43 @@ void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowVie
 	{
 		pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_LINEAR_PSO));
 		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(8));
-	}
-	for (int i = 0; i < SceneShadowView.NumPointShadowViews; ++i)
-	{
-		const std::string marker = "Point[" + std::to_string(i) + "]";
-		SCOPED_GPU_MARKER(pCmd, marker.c_str());
-
-		FCBufferLightPS* pCBuffer = {};
-		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(decltype(pCBuffer)), (void**)(&pCBuffer), &cbAddr);
-
-		pCBuffer->vLightPos = SceneShadowView.PointLightLinearDepthParams[i].vWorldPos;
-		pCBuffer->fFarPlane = SceneShadowView.PointLightLinearDepthParams[i].fFarPlane;
-		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
-
-		for (int face = 0; face < 6; ++face)
+		for (int i = 0; i < SceneShadowView.NumPointShadowViews; ++i)
 		{
-			const int iShadowView = i * 6 + face;
-			const FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowViews_Point[iShadowView];
+			const std::string marker = "Point[" + std::to_string(i) + "]";
+			SCOPED_GPU_MARKER(pCmd, marker.c_str());
 
-			if (ShadowView.meshRenderCommands.empty())
-				continue;
+			FCBufferLightPS* pCBuffer = {};
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+			ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(decltype(pCBuffer)), (void**)(&pCBuffer), &cbAddr);
 
-			const std::string marker_face = "[Cubemap Face=" + std::to_string(face) + "]";
-			SCOPED_GPU_MARKER(pCmd, marker_face.c_str());
-		
-			// Bind Depth / clear
-			const DSV& dsv = mRenderer.GetDSV(mResources_MainWnd.DSV_ShadowMaps_Point);
-			D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle(iShadowView);
-			pCmd->OMSetRenderTargets(0, NULL, FALSE, &dsvHandle);
-			
-			if constexpr (!B_CLEAR_DEPTH_BUFFERS_BEFORE_DRAW)
+			pCBuffer->vLightPos = SceneShadowView.PointLightLinearDepthParams[i].vWorldPos;
+			pCBuffer->fFarPlane = SceneShadowView.PointLightLinearDepthParams[i].fFarPlane;
+			pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
+
+			for (int face = 0; face < 6; ++face)
 			{
-				D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
-				pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, NULL);
-			}
+				const int iShadowView = i * 6 + face;
+				const FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowViews_Point[iShadowView];
 
-			fnDrawRenderList(ShadowView);
+				if (ShadowView.meshRenderCommands.empty())
+					continue;
+
+				const std::string marker_face = "[Cubemap Face=" + std::to_string(face) + "]";
+				SCOPED_GPU_MARKER(pCmd, marker_face.c_str());
+		
+				// Bind Depth / clear
+				const DSV& dsv = mRenderer.GetDSV(mResources_MainWnd.DSV_ShadowMaps_Point);
+				D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle(iShadowView);
+				pCmd->OMSetRenderTargets(0, NULL, FALSE, &dsvHandle);
+			
+				if constexpr (!B_CLEAR_DEPTH_BUFFERS_BEFORE_DRAW)
+				{
+					D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
+					pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, NULL);
+				}
+
+				fnDrawRenderList(ShadowView);
+			}
 		}
 	}
 
@@ -1361,15 +1361,12 @@ void VQEngine::TransitionForSceneRendering(FWindowRenderContext& ctx)
 		? CD3DX12_RESOURCE_BARRIER::Transition(pRscColorMSAA, D3D12_RESOURCE_STATE_RESOLVE_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET)
 		: CD3DX12_RESOURCE_BARRIER::Transition(pRscColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-	const CD3DX12_RESOURCE_BARRIER pBarriers[] =
-	{
-		  ColorTransition
-		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Spot       , D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
-		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Point      , D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
-		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Directional, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
-	};
-
-	pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+	std::vector<CD3DX12_RESOURCE_BARRIER> vBarriers;
+	vBarriers.push_back(ColorTransition);
+	vBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Spot, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
+	vBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Point, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
+	vBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Directional, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
+	pCmd->ResourceBarrier((UINT)vBarriers.size(), vBarriers.data());
 }
 
 void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& SceneView)
@@ -1607,6 +1604,13 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 			// draw
 			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 		}
+	}
+
+	// Draw Bounding Boxes ----------------------------------------
+	if (!SceneView.boundingBoxRenderCommands.empty())
+	{
+		SCOPED_GPU_MARKER(pCmd, "BoundingBoxes");
+		// TODO: bounding box drawing
 	}
 
 	// Draw Environment Map ---------------------------------------

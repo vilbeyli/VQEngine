@@ -44,6 +44,7 @@ using MeshRenderSettingsLookup_t = std::unordered_map<MeshID, MeshRenderSettings
 //
 // MODEL 
 //
+// A collection of opaque and transparent meshIDs with materials associated with them
 struct Model
 {
 public:

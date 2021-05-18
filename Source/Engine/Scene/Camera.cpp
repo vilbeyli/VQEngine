@@ -166,10 +166,6 @@ XMMATRIX Camera::GetProjectionMatrix() const
 	return  XMLoadFloat4x4(&mMatProj);
 }
 
-FFrustumPlaneset Camera::GetViewFrustumPlanes() const
-{
-	return FFrustumPlaneset::ExtractFromMatrix(GetViewMatrix() * GetProjectionMatrix());
-}
 
 XMMATRIX Camera::GetRotationMatrix() const
 {

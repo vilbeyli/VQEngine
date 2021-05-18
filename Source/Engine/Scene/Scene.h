@@ -30,6 +30,7 @@
 class Input;
 struct Material;
 struct FResourceNames;
+struct FFrustumPlaneset;
 
 //------------------------------------------------------
 #define MATERIAL_UNINITIALIZED_VALUE -1.0f
@@ -113,25 +114,30 @@ struct FSceneRenderParameters
 	float fAmbientLightingFactor = 0.105f;
 	bool bScreenSpaceAO = true;
 };
-struct FMeshRenderCommand
+struct FMeshRenderCommandBase
 {
-	MeshID     meshID = INVALID_ID;
+	MeshID meshID = INVALID_ID;
+	DirectX::XMMATRIX WorldTransformationMatrix;
+};
+struct FMeshRenderCommand : public FMeshRenderCommandBase
+{
 	MaterialID matID  = INVALID_ID;
-	DirectX::XMMATRIX WorldTransformationMatrix; // ID ?
 	DirectX::XMMATRIX NormalTransformationMatrix; //ID ?
 	std::string ModelName;
 	std::string MaterialName;
 };
-struct FShadowMeshRenderCommand
+struct FShadowMeshRenderCommand : public FMeshRenderCommandBase
 {
-	MeshID meshID = INVALID_ID;
-	DirectX::XMMATRIX WorldTransformationMatrix;
+	MaterialID matID = INVALID_ID;
+	std::string ModelName;
 };
-struct FLightRenderCommand
+struct FLightRenderCommand : public FMeshRenderCommandBase
 {
-	MeshID meshID = INVALID_ID;
 	DirectX::XMFLOAT3 color;
-	DirectX::XMMATRIX WorldTransformationMatrix;
+};
+struct FBoundingBoxRenderCommand : public FMeshRenderCommandBase
+{
+	DirectX::XMFLOAT3 Color;
 };
 struct FSceneView
 {
@@ -158,6 +164,7 @@ struct FSceneView
 	std::vector<FMeshRenderCommand>  meshRenderCommands;
 	std::vector<FLightRenderCommand> lightRenderCommands;
 	std::vector<FLightRenderCommand> lightBoundsRenderCommands;
+	std::vector<FBoundingBoxRenderCommand> boundingBoxRenderCommands;
 
 };
 struct FSceneShadowView
@@ -181,6 +188,54 @@ struct FSceneShadowView
 	int NumSpotShadowViews;
 	int NumPointShadowViews;
 };
+
+using MeshLookup_t = std::unordered_map<MeshID, Mesh>;
+using ModelLookup_t = std::unordered_map<ModelID, Model>;
+using MaterialLookup_t = std::unordered_map<MaterialID, Material>;
+
+class SceneBoundingBoxHierarchy
+{
+public:
+	SceneBoundingBoxHierarchy(
+		const MeshLookup_t& Meshes
+		, const ModelLookup_t& Models
+		, const MaterialLookup_t& Materials
+		, const std::vector<Transform*>& pTransforms
+	)
+		: mMeshes(Meshes)
+		, mModels(Models)
+		, mMaterials(Materials)
+		, mpTransforms(pTransforms)
+	{}
+	SceneBoundingBoxHierarchy() = delete;
+
+
+	void Build(const std::vector<GameObject*>& pObjects);
+	void Clear();
+
+private:
+	friend class Scene;
+	FBoundingBox              mSceneBoundingBox;
+
+	// list of game object bounding boxes for coarse culling
+	std::vector<FBoundingBox> mGameObjectBoundingBoxes;
+	std::vector<const GameObject*> mGameObjectBoundingBoxGameObjectPointerMapping;
+
+	// list of mesh bounding boxes for fine culling
+	//------------------------------------------------------
+	// these are same size containers, mapping bounding boxes to gameobjects and meshIDs
+	std::vector<FBoundingBox>      mMeshBoundingBoxes;
+	std::vector<MeshID>            mMeshBoundingBoxMeshIDMapping;
+	std::vector<const GameObject*> mMeshBoundingBoxGameObjectPointerMapping; 
+	//------------------------------------------------------
+
+	// scene data container references
+	const MeshLookup_t& mMeshes;
+	const ModelLookup_t& mModels;
+	const MaterialLookup_t& mMaterials;
+	const std::vector<Transform*>& mpTransforms;
+};
+
 //------------------------------------------------------
 
 constexpr size_t NUM_GAMEOBJECT_POOL_SIZE = 4096;
@@ -243,7 +298,7 @@ private: // Derived Scenes shouldn't access these functions
 	void GatherSceneLightData(FSceneView& SceneView) const;
 	void PrepareLightMeshRenderParams(FSceneView& SceneView) const;
 	void PrepareSceneMeshRenderParams(FSceneView& SceneView) const;
-	void PrepareShadowMeshRenderParams(FSceneShadowView& ShadowView) const;
+	void PrepareShadowMeshRenderParams(FSceneShadowView& ShadowView, const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace) const;
 
 	void LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRepresentation>& GameObjsToBeLoaded);
 	void LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes);
@@ -284,10 +339,6 @@ public:
 // SCENE DATA
 //----------------------------------------------------------------------------------------------------------------
 protected:
-	using MeshLookup_t     = std::unordered_map<MeshID, Mesh>;
-	using ModelLookup_t    = std::unordered_map<ModelID, Model>;
-	using MaterialLookup_t = std::unordered_map<MaterialID, Material>;
-	//--------------------------------------------------------------
 
 	//
 	// SCENE VIEWS PER FRAME
@@ -304,6 +355,7 @@ protected:
 	std::vector<GameObject*> mpObjects;
 	std::vector<Transform*>  mpTransforms;
 	std::vector<Camera>      mCameras;
+	
 
 	Light                    mDirectionalLight;
 
@@ -314,12 +366,14 @@ protected:
 
 
 	//
-	// DATA
+	// CULLING DATA
 	//
-	BoundingBox              mSceneBoundingBox;
-	std::vector<BoundingBox> mMeshBoundingBoxes;
-	std::vector<BoundingBox> mGameObjectBoundingBoxes;
-	MaterialID               mDefaultMaterialID = INVALID_ID;
+	SceneBoundingBoxHierarchy mBoundingBoxHierarchy;
+
+	//
+	// MATERIAL DATA
+	//
+	MaterialID                mDefaultMaterialID = INVALID_ID;
 
 
 	//
@@ -361,5 +415,5 @@ private:
 	std::unordered_map<std::string, MaterialID> mLoadedMaterials;
 	
 	//CPUProfiler*    mpCPUProfiler;
-	//BoundingBox     mSceneBoundingBox;
+	//FBoundingBox     mSceneBoundingBox;
 };

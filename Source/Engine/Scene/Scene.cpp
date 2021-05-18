@@ -87,7 +87,7 @@ MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 	mMaterials[id] = Material();
 	mLoadedMaterials[UniqueMaterialName] = id;
 #if LOG_RESOURCE_CREATE
-	Log::Info("Scene::CreateMaterial() ID=%d - %s", id,  UniqueMaterialName.c_str());
+	Log::Info("Scene::CreateMaterial() ID=%d - %s", id, UniqueMaterialName.c_str());
 #endif
 
 	Material& mat = mMaterials.at(id);
@@ -103,51 +103,6 @@ MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 6, INVALID_ID);
 		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 7, INVALID_ID);
 	}
-	return id;
-}
-
-MaterialID Scene::LoadMaterial(const FMaterialRepresentation& matRep, TaskID taskID)
-{
-	MaterialID id = this->CreateMaterial(matRep.Name);
-	Material& mat = this->GetMaterial(id);
-
-	auto fnAssignF  = [](float& dest, const float& src) { if (src != MATERIAL_UNINITIALIZED_VALUE) dest = src; };
-	auto fnAssignF3 = [](XMFLOAT3& dest, const XMFLOAT3& src) { if (src.x != MATERIAL_UNINITIALIZED_VALUE) dest = src; };
-	auto fnEnqueueTexLoad = [&](MaterialID matID, const std::string& path, AssetLoader::ETextureType type) -> bool
-	{
-		if (path.empty()) 
-			return false;
-
-		AssetLoader::FTextureLoadParams p = {};
-		p.MatID = matID;
-		p.TexturePath = path;
-		p.TexType = type;
-		mAssetLoader.QueueTextureLoad(taskID, p);
-		return true;
-	};
-
-	// immediate values
-	fnAssignF(mat.alpha, matRep.Alpha);
-	fnAssignF(mat.metalness, matRep.Metalness);
-	fnAssignF(mat.roughness, matRep.Roughness);
-	fnAssignF(mat.emissiveIntensity, matRep.EmissiveIntensity);
-	fnAssignF3(mat.emissiveColor, matRep.EmissiveColor);
-	fnAssignF3(mat.diffuse, matRep.DiffuseColor);
-
-	// async data (textures)
-	bool bHasTexture = false;
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.DiffuseMapFilePath  , AssetLoader::ETextureType::DIFFUSE);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.NormalMapFilePath   , AssetLoader::ETextureType::NORMALS);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.EmissiveMapFilePath , AssetLoader::ETextureType::EMISSIVE);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.AlphaMaskMapFilePath, AssetLoader::ETextureType::ALPHA_MASK);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.MetallicMapFilePath , AssetLoader::ETextureType::METALNESS);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.RoughnessMapFilePath, AssetLoader::ETextureType::ROUGHNESS);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.AOMapFilePath       , AssetLoader::ETextureType::AMBIENT_OCCLUSION);
-
-	AssetLoader::FMaterialTextureAssignment MatTexAssignment = {};
-	MatTexAssignment.matID = id;
-	if(bHasTexture)
-		mMaterialAssignments.mAssignments.push_back(MatTexAssignment);
 	return id;
 }
 
@@ -172,10 +127,6 @@ Model& Scene::GetModel(ModelID id)
 }
 
 
-
-//
-//
-//
 Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const std::unique_ptr<Window>& pWin, VQRenderer& renderer)
 	: mInput(input)
 	, mpWindow(pWin)
@@ -190,314 +141,8 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 	, mAssetLoader(engine.GetAssetLoader())
 	, mRenderer(renderer)
 	, mMaterialAssignments(engine.GetAssetLoader().GetThreadPool_TextureLoad())
+	, mBoundingBoxHierarchy(mMeshes, mModels, mMaterials, mpTransforms)
 {}
-
-void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& sceneRep)
-{
-	mRenderer.WaitForLoadCompletion();
-	
-	Log::Info("[Scene] Loading Scene: %s", sceneRep.SceneName.c_str());
-	const TaskID taskID = AssetLoader::GenerateModelLoadTaskID();
-
-
-	mSceneRepresentation = sceneRep;
-
-	LoadBuiltinMeshes(builtinMeshes);
-	
-	this->LoadScene(sceneRep); // scene-specific load 
-
-	LoadBuiltinMaterials(taskID, sceneRep.Objects);
-	LoadSceneMaterials(sceneRep.Materials, taskID);
-
-	LoadGameObjects(std::move(sceneRep.Objects));
-	LoadLights(sceneRep.Lights);
-	LoadCameras(sceneRep.Cameras);
-	LoadPostProcessSettings();
-}
-
-void Scene::LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRepresentation>& GameObjsToBeLoaded)
-{
-	const char* STR_MATERIALS_FOLDER = "Data/Materials/";
-	auto vMatFiles = DirectoryUtil::ListFilesInDirectory(STR_MATERIALS_FOLDER, "xml");
-
-	// Parse builtin materials and build material map
-	std::unordered_map<std::string, FMaterialRepresentation> MaterialMap;
-	{
-		std::vector<FMaterialRepresentation> vBuiltinMaterialReps;
-		for (const std::string& filePath : vMatFiles) // for each material file
-		{
-			std::vector<FMaterialRepresentation> vMaterialReps = VQEngine::ParseMaterialFile(filePath); // get all materials in an xml file
-			vBuiltinMaterialReps.insert(vBuiltinMaterialReps.end(), vMaterialReps.begin(), vMaterialReps.end());
-		}
-
-		// build map
-		for (FMaterialRepresentation& rep : vBuiltinMaterialReps)
-		{
-			MaterialMap[StrUtil::GetLowercased(rep.Name)] = std::move(rep); // ensure lowercase comparison
-		}
-		vBuiltinMaterialReps.clear();
-	}
-
-	// look at which materials to be loaded from game objects that use builtin meshes
-	std::set<std::string> vBuiltinMatsToLoad; // unique names
-	for (const FGameObjectRepresentation& ObjRep : GameObjsToBeLoaded)
-	{
-		// Note: assumes only builtin meshes can load builtin materials.
-		//       models go their own path.
-		if (!ObjRep.BuiltinMeshName.empty() && !ObjRep.MaterialName.empty())
-		{
-			vBuiltinMatsToLoad.emplace(StrUtil::GetLowercased(ObjRep.MaterialName)); // ensure lowercase comparison
-		}
-	}
-
-
-	// load the referenced builtin materials
-	for (const std::string& matName : vBuiltinMatsToLoad)
-	{
-		auto it = MaterialMap.find(matName);
-		const bool bMaterialFound = it != MaterialMap.end();
-		if (bMaterialFound) // only the matching builtin materials, scene-specific materials won't be found here
-			LoadMaterial(it->second, taskID);
-	}
-}
-
-void Scene::LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes)
-{
-	// register builtin meshes to scene mesh lookup
-	// @mMeshes[0-NUM_BUILTIN_MESHES] are assigned here directly while the rest
-	// of the meshes used in the scene must use this->AddMesh(Mesh&&) interface;
-	for (size_t i = 0; i < builtinMeshes.size(); ++i)
-	{
-		this->mMeshes[(int)i] = builtinMeshes[i];
-	}
-
-	// register builtin materials 
-	{
-		this->mDefaultMaterialID = this->CreateMaterial("DefaultMaterial");
-		Material& mat = this->GetMaterial(this->mDefaultMaterialID);
-	}
-}
-
-void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects)
-{
-	constexpr bool B_LOAD_GAMEOBJECTS_SERIAL = true;
-
-	if constexpr (B_LOAD_GAMEOBJECTS_SERIAL)
-	{
-		for (FGameObjectRepresentation& ObjRep : GameObjects)
-		{
-			// GameObject
-			GameObject* pObj = mGameObjectPool.Allocate(1);
-			pObj->mModelID = INVALID_ID;
-			pObj->mTransformID = INVALID_ID;
-
-			// Transform
-			Transform* pTransform = mTransformPool.Allocate(1);
-			*pTransform = std::move(ObjRep.tf);
-			mpTransforms.push_back(pTransform);
-
-			TransformID tID = static_cast<TransformID>(mpTransforms.size() - 1);
-			pObj->mTransformID = tID;
-
-			// Model
-			const bool bModelIsBuiltinMesh = !ObjRep.BuiltinMeshName.empty();
-			const bool bModelIsLoadedFromFile = !ObjRep.ModelFilePath.empty();
-			assert(bModelIsBuiltinMesh != bModelIsLoadedFromFile);
-
-			if (bModelIsBuiltinMesh)
-			{
-				ModelID mID = this->CreateModel();
-				Model& model = mModels.at(mID);
-
-				// create/get mesh
-				MeshID meshID = mEngine.GetBuiltInMeshID(ObjRep.BuiltinMeshName);
-				model.mData.mOpaueMeshIDs.push_back(meshID);
-
-				// material
-				MaterialID matID = this->mDefaultMaterialID;
-				if (!ObjRep.MaterialName.empty())
-				{
-					matID = this->CreateMaterial(ObjRep.MaterialName);
-				}
-				Material& mat = this->GetMaterial(matID);
-				const bool bTransparentMesh = mat.IsTransparent();
-				model.mData.mOpaqueMaterials[meshID] = matID; // todo: handle transparency
-
-				model.mbLoaded = true;
-				pObj->mModelID = mID;
-			}
-			else
-			{
-				mAssetLoader.QueueModelLoad(pObj, ObjRep.ModelFilePath, ObjRep.ModelName);
-			}
-
-
-			mpObjects.push_back(pObj);
-		}
-	}
-	else // THREADED LOAD
-	{
-		// dispatch workers
-		assert(false); // TODO: profile first
-	}
-
-	// kickoff workers for loading models
-	mModelLoadResults = mAssetLoader.StartLoadingModels(this);
-	Log::Info("[Scene] Start loading models...");
-
-}
-
-void Scene::LoadSceneMaterials(const std::vector<FMaterialRepresentation>& Materials, TaskID taskID)
-{
-	// Create scene materials before deserializing gameobjects
-	uint NumMaterials = 0;
-	for (const FMaterialRepresentation& matRep : Materials)
-	{
-		this->LoadMaterial(matRep, taskID);
-		++NumMaterials;
-	}
-	
-	if(NumMaterials > 0)
-		Log::Info("[Scene] Materials Created (%u)", NumMaterials);
-	
-	// kickoff background workers for texture loading
-	if (!mMaterialAssignments.mAssignments.empty())
-	{
-		mMaterialAssignments.mTextureLoadResults = mAssetLoader.StartLoadingTextures(taskID);
-		Log::Info("[Scene] Start loading textures... (%u)", mMaterialAssignments.mTextureLoadResults.size());
-	}
-}
-
-void Scene::LoadLights(const std::vector<Light>& SceneLights)
-{
-	for (const Light& l : SceneLights)
-	{
-		std::vector<Light>& LightContainer = [&]() -> std::vector<Light>& {
-			switch (l.Mobility)
-			{
-			case Light::EMobility::DYNAMIC   : return mLightsDynamic;
-			case Light::EMobility::STATIC    : return mLightsStatic;
-			case Light::EMobility::STATIONARY: return mLightsStationary;
-			default:
-				Log::Warning("Invalid light mobility!");
-				break;
-			}
-			return mLightsStationary;
-		}();
-
-		LightContainer.push_back(l);
-	}
-}
-
-void Scene::LoadCameras(std::vector<FCameraParameters>& CameraParams)
-{
-	for (FCameraParameters& param : CameraParams)
-	{
-		param.ProjectionParams.ViewportWidth = static_cast<float>(mpWindow->GetWidth());
-		param.ProjectionParams.ViewportHeight = static_cast<float>(mpWindow->GetHeight());
-
-		Camera c;
-		c.InitializeCamera(param);
-		mCameras.emplace_back(std::move(c));
-	}
-
-	// CAMERA CONTROLLERS
-	// controllers need to be initialized after mCameras are populated in order
-	// to prevent dangling pointers in @pController->mpCamera (circular ptrs)
-	for (size_t i = 0; i < mCameras.size(); ++i)
-	{
-		if (CameraParams[i].bInitializeCameraController)
-		{
-			mCameras[i].InitializeController(CameraParams[i].bFirstPerson, CameraParams[i]);
-		}
-	}
-	Log::Info("[Scene] Cameras initialized");
-}
-
-
-#define A_CPU 1
-#include "Shaders/AMDFidelityFX/CAS/ffx_a.h"
-#include "Shaders/AMDFidelityFX/CAS/ffx_cas.h"
-void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
-{
-	// TODO: remove hardcode
-
-	const float fWidth  = static_cast<float>(this->mpWindow->GetWidth());
-	const float fHeight = static_cast<float>(this->mpWindow->GetHeight());
-
-	// Update PostProcess Data
-	for (size_t i = 0; i < mFrameSceneViews.size(); ++i)
-	{
-		FPostProcessParameters& PPParams = this->GetPostProcessParameters(static_cast<int>(i));
-		FPostProcessParameters::FFFXCAS& CASParams = PPParams.FFXCASParams;
-		CasSetup(&CASParams.CASConstantBlock[0], &CASParams.CASConstantBlock[4], CASParams.CASSharpen, fWidth, fHeight, fWidth, fHeight);
-
-		PPParams.bEnableCAS = true; // TODO: read from scene PP settings
-	}
-}
-
-void Scene::OnLoadComplete()
-{
-	Log::Info("[Scene] OnLoadComplete()");
-
-	// Assign model data 
-	for (auto it = mModelLoadResults.begin(); it != mModelLoadResults.end(); ++it)
-	{
-		GameObject* pObj = it->first;
-		AssetLoader::ModelLoadResult_t res = std::move(it->second);
-
-		assert(res.valid());
-		///res.wait(); // we should already have the results ready in OnLoadComplete()
-
-		pObj->mModelID = res.get();
-	}
-
-	mMaterialAssignments.DoAssignments(this, &mRenderer);
-
-	Log::Info("[Scene] %s loaded.", mSceneRepresentation.SceneName.c_str());
-	mSceneRepresentation.loadSuccess = 1;
-	this->InitializeScene();
-}
-
-void Scene::Unload()
-{
-	this->UnloadScene();
-
-	mSceneRepresentation = {};
-
-	const size_t sz = mFrameSceneViews.size();
-	mFrameSceneViews.clear();
-	mFrameShadowViews.clear();
-	mFrameSceneViews.resize(sz);
-	mFrameShadowViews.resize(sz);
-
-	//mMeshes.clear(); // TODO
-	
-	for (Transform* pTf : mpTransforms) mTransformPool.Free(pTf);
-	mpTransforms.clear();
-
-	for (GameObject* pObj : mpObjects) mGameObjectPool.Free(pObj);
-	mpObjects.clear();
-
-	mCameras.clear();
-
-	mDirectionalLight = {};
-	mLightsStatic.clear();
-	mLightsDynamic.clear();
-
-	mSceneBoundingBox = {};
-	mMeshBoundingBoxes.clear();
-	mGameObjectBoundingBoxes.clear();
-
-	mIndex_SelectedCamera = 0;
-	mIndex_ActiveEnvironmentMapPreset = -1;
-	mEngine.UnloadEnvironmentMap();
-
-	mLightsDynamic.clear();
-	mLightsStatic.clear();
-	mLightsStationary.clear();
-}
-
 
 
 void Scene::Update(float dt, int FRAME_DATA_INDEX)
@@ -531,12 +176,12 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 	SceneView.MainViewCameraYaw = cam.GetYaw();
 	SceneView.MainViewCameraPitch = cam.GetPitch();
 
-	// TODO: compute mesh visibility 
-	// TODO: cull lights
+	mBoundingBoxHierarchy.Build(mpObjects);
 	PrepareSceneMeshRenderParams(SceneView);
 	GatherSceneLightData(SceneView);
-	PrepareShadowMeshRenderParams(ShadowView);
+	PrepareShadowMeshRenderParams(ShadowView, cam.GetViewFrustumPlanesInWorldSpace());
 	PrepareLightMeshRenderParams(SceneView);
+	// TODO: Prepare BoundingBoxRenderParams
 
 	// update post process settings for next frame
 	SceneViewNext.postProcessParameters = SceneView.postProcessParameters;
@@ -552,15 +197,15 @@ void Scene::RenderUI()
 static std::string DumpCameraInfo(int index, const Camera& cam)
 {
 	const XMFLOAT3 pos = cam.GetPositionF();
-	const float pitch  = cam.GetPitch();
-	const float yaw    = cam.GetYaw();
+	const float pitch = cam.GetPitch();
+	const float yaw = cam.GetYaw();
 
 	std::string info = std::string("[CAMERA INFO]\n")
 		+ "mIndex_SelectedCamera=" + std::to_string(index) + "\n"
 		+ "  Pos         : " + std::to_string(pos.x) + " " + std::to_string(pos.y) + " " + std::to_string(pos.z) + "\n"
-		+ "  Yaw (Deg)   : " + std::to_string(yaw*RAD2DEG) + "\n"
-		+ "  Pitch (Deg) : " + std::to_string(pitch*RAD2DEG) + "\n";
-;
+		+ "  Yaw (Deg)   : " + std::to_string(yaw * RAD2DEG) + "\n"
+		+ "  Pitch (Deg) : " + std::to_string(pitch * RAD2DEG) + "\n";
+	;
 
 	return info;
 }
@@ -604,44 +249,45 @@ void Scene::HandleInput(FSceneView& SceneView)
 	}
 }
 
+
 void Scene::GatherSceneLightData(FSceneView& SceneView) const
 {
 	SceneView.lightBoundsRenderCommands.clear();
 	SceneView.lightRenderCommands.clear();
 
 	VQ_SHADER_DATA::SceneLighting& data = SceneView.GPULightingData;
-	
+
 	int iGPUSpot = 0;  int iGPUSpotShadow = 0;
 	int iGPUPoint = 0; int iGPUPointShadow = 0;
-	auto fnGatherLightData = [&](const std::vector<Light>& vLights) 
+	auto fnGatherLightData = [&](const std::vector<Light>& vLights)
 	{
 		for (const Light& l : vLights)
 		{
 			if (!l.bEnabled) continue;
 			switch (l.Type)
 			{
-			case Light::EType::DIRECTIONAL: 
-				l.GetGPUData(&data.directional); 
+			case Light::EType::DIRECTIONAL:
+				l.GetGPUData(&data.directional);
 				if (l.bCastingShadows)
 				{
 					data.shadowViewDirectional = l.GetViewProjectionMatrix();
 				}
 				break;
-			case Light::EType::SPOT       : 
-				l.GetGPUData(l.bCastingShadows ? &data.spot_casters[iGPUSpotShadow++]   : &data.spot_lights[iGPUSpot++]  ); 
+			case Light::EType::SPOT:
+				l.GetGPUData(l.bCastingShadows ? &data.spot_casters[iGPUSpotShadow++] : &data.spot_lights[iGPUSpot++]);
 				if (l.bCastingShadows)
 				{
 					data.shadowViews[iGPUSpotShadow - 1] = l.GetViewProjectionMatrix();
 				}
 				break;
-			case Light::EType::POINT      : 
-				l.GetGPUData(l.bCastingShadows ? &data.point_casters[iGPUPointShadow++] : &data.point_lights[iGPUPoint++]); 
+			case Light::EType::POINT:
+				l.GetGPUData(l.bCastingShadows ? &data.point_casters[iGPUPointShadow++] : &data.point_lights[iGPUPoint++]);
 				// TODO: 
 				break;
 			default:
 				break;
 			}
-			
+
 		}
 	};
 	fnGatherLightData(mLightsStatic);
@@ -663,7 +309,7 @@ void Scene::PrepareLightMeshRenderParams(FSceneView& SceneView) const
 	{
 		for (const Light& l : vLights)
 		{
-			if (!l.bEnabled) 
+			if (!l.bEnabled)
 				continue;
 
 			FLightRenderCommand cmd;
@@ -672,11 +318,11 @@ void Scene::PrepareLightMeshRenderParams(FSceneView& SceneView) const
 
 			switch (l.Type)
 			{
-			case Light::EType::DIRECTIONAL: 
+			case Light::EType::DIRECTIONAL:
 				continue; // don't draw directional light mesh
 				break;
 
-			case Light::EType::SPOT       :
+			case Light::EType::SPOT:
 			{
 				// light mesh
 				if (SceneView.sceneParameters.bDrawLightMeshes)
@@ -711,7 +357,7 @@ void Scene::PrepareLightMeshRenderParams(FSceneView& SceneView) const
 				}
 			}	break;
 
-			case Light::EType::POINT      : 
+			case Light::EType::POINT:
 			{
 				// light mesh
 				if (SceneView.sceneParameters.bDrawLightMeshes)
@@ -740,9 +386,83 @@ void Scene::PrepareLightMeshRenderParams(FSceneView& SceneView) const
 	fnGatherLightRenderData(mLightsDynamic);
 }
 
+#define ENABLE_VIEW_FRUSTUM_CULLING 1
 void Scene::PrepareSceneMeshRenderParams(FSceneView& SceneView) const
 {
 	SceneView.meshRenderCommands.clear();
+
+#if ENABLE_VIEW_FRUSTUM_CULLING
+
+	FFrustumCullWorkerContext GameObjectFrustumCullWorkerContext;
+	
+	for (const GameObject* pObj : mpObjects)
+	{
+		
+	}
+	
+	const size_t GameObjectWorkSize = 1; // would need a new Process() function for: mpObjects.size(); 
+	GameObjectFrustumCullWorkerContext.AddWorkerItem(FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj)
+		, mBoundingBoxHierarchy.mGameObjectBoundingBoxes
+		, mBoundingBoxHierarchy.mGameObjectBoundingBoxGameObjectPointerMapping
+	);
+
+	const size_t MeshWorkSize = 1; // would need a new Process() function for: mBoundingBoxHierarchy.mMeshBoundingBoxes.size();
+	FFrustumCullWorkerContext MeshFrustumCullWorkerContext; // TODO: populate after culling game objects?
+	MeshFrustumCullWorkerContext.AddWorkerItem(FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj)
+		, mBoundingBoxHierarchy.mMeshBoundingBoxes
+		, mBoundingBoxHierarchy.mMeshBoundingBoxGameObjectPointerMapping
+	);
+
+	constexpr bool SINGLE_THREADED_CULL = true;
+	//-----------------------------------------------------------------------------------------
+	//
+	// SINGLE THREAD CULL
+	//
+	if constexpr (SINGLE_THREADED_CULL)
+	{
+		GameObjectFrustumCullWorkerContext.Process(0, GameObjectWorkSize - 1);
+		MeshFrustumCullWorkerContext.Process(0, MeshWorkSize - 1);
+	}
+	//
+	// THREADED CULL
+	//
+	else
+	{
+		assert(false); // TODO
+	}
+	//-----------------------------------------------------------------------------------------
+	
+	// TODO: we have a culled list of game object boundin box indices
+	//for (size_t iFrustum = 0; iFrustum < NumFrustumsToCull; ++iFrustum)
+	{
+		//const std::vector<size_t>& CulledBoundingBoxIndexList_Obj = GameObjectFrustumCullWorkerContext.vCulledBoundingBoxIndexLists[iFrustum];
+
+		std::vector<FMeshRenderCommand>& vMeshRenderList = SceneView.meshRenderCommands;
+		vMeshRenderList.clear();
+
+		const std::vector<size_t>& CulledBoundingBoxIndexList_Msh = MeshFrustumCullWorkerContext.vCulledBoundingBoxIndexLists[0];
+		for (const size_t& BBIndex : CulledBoundingBoxIndexList_Msh)
+		{
+			assert(BBIndex < mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping.size());
+			MeshID meshID = mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping[BBIndex];
+
+			const GameObject* pGameObject = MeshFrustumCullWorkerContext.vGameObjectPointerLists[0][BBIndex];
+			
+			Transform* const& pTF = mpTransforms.at(pGameObject->mTransformID);
+			const Model& model = mModels.at(pGameObject->mModelID);
+
+			// record ShadowMeshRenderCommand
+			FMeshRenderCommand meshRenderCmd;
+			meshRenderCmd.meshID = meshID;
+			meshRenderCmd.WorldTransformationMatrix = pTF->WorldTransformationMatrix();
+			meshRenderCmd.NormalTransformationMatrix = pTF->NormalMatrix(meshRenderCmd.WorldTransformationMatrix);
+			meshRenderCmd.matID = model.mData.mOpaqueMaterials.at(meshID);
+			vMeshRenderList.push_back(meshRenderCmd);
+		}
+	}
+
+#else // no culling, render all game objects
+	
 	for (const GameObject* pObj : mpObjects)
 	{
 		Transform* const& pTF = mpTransforms.at(pObj->mTransformID);
@@ -771,11 +491,191 @@ void Scene::PrepareSceneMeshRenderParams(FSceneView& SceneView) const
 			SceneView.meshRenderCommands.push_back(meshRenderCmd);
 		}
 	}
+#endif
+
+
 }
 
-void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView) const
+#include "../Culling.h"
+// returns true if culled
+static bool DistanceCullLight(const Light& l, const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace)
 {
-	int iSpot  = 0;
+	bool bCulled = false;
+	switch (l.Type)
+	{
+	case Light::EType::DIRECTIONAL: break; // no culling for directional lights
+	case Light::EType::SPOT: 
+		bCulled = !IsFrustumIntersectingFrustum(MainViewFrustumPlanesInWorldSpace, FFrustumPlaneset::ExtractFromMatrix(l.GetViewProjectionMatrix()));
+		break; 
+	case Light::EType::POINT:
+		bCulled = !IsSphereIntersectingFurstum(MainViewFrustumPlanesInWorldSpace, FSphere(l.GetTransform()._position, l.Range));
+		break;
+	default: assert(false); break; // unknown light type for culling
+	}
+	return bCulled;
+}
+
+static std::vector<size_t> GetActiveAndCulledLightIndices(const std::vector<Light> vLights, const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace)
+{
+	constexpr bool bCULL_LIGHTS = false; // TODO: finish Intersection Test implementations
+
+	std::vector<size_t> ActiveLightIndices;
+
+	for (size_t i = 0; i < vLights.size(); ++i)
+	{
+		const Light& l = vLights[i];
+
+		// skip disabled and non-shadow casting lights
+		if (!l.bEnabled || !l.bCastingShadows)
+			continue;
+
+		// skip culled lights if culling is enabled
+		if constexpr (bCULL_LIGHTS)
+		{
+			if (DistanceCullLight(l, MainViewFrustumPlanesInWorldSpace))
+				continue;
+		}
+
+		ActiveLightIndices.push_back(i);
+	}
+
+	return ActiveLightIndices;
+}
+
+void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace) const
+{
+#if ENABLE_VIEW_FRUSTUM_CULLING
+	constexpr bool bCULL_LIGHT_VIEWS = false;
+
+	auto fnGatherShadowingLightFrustumCullParameters = [&](
+		const std::vector<Light>& vLights
+		, const std::vector<size_t>& vActiveLightIndices
+		, FFrustumCullWorkerContext& DispatchContext
+		, const std::vector<FBoundingBox>& BoundingBoxList
+		, const std::vector<const GameObject*>& pGameObjects
+		, std::unordered_map<size_t, FSceneShadowView::FShadowView*>& FrustumIndex_pShadowViewLookup
+	)
+	{
+		// prepare frustum cull work context
+		int iLight = 0;
+		int iPoint = 0;
+		int iSpot = 0;
+		for(const size_t& LightIndex : vActiveLightIndices)
+		{
+			const Light& l = vLights[LightIndex];
+			switch (l.Type)
+			{
+			case Light::EType::DIRECTIONAL: // TODO: calculate frustum cull parameters
+			{
+				FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowView_Directional;
+				ShadowView.matViewProj = l.GetViewProjectionMatrix();
+				// TODO: gather params
+			}	break;
+			case Light::EType::SPOT:
+			{
+				XMMATRIX matViewProj = l.GetViewProjectionMatrix();
+				const size_t FrustumIndex = DispatchContext.AddWorkerItem(FFrustumPlaneset::ExtractFromMatrix(matViewProj), BoundingBoxList, pGameObjects);
+
+				FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowViews_Spot[iSpot];
+				ShadowView.matViewProj = matViewProj;
+				FrustumIndex_pShadowViewLookup[FrustumIndex] = &ShadowView;
+				++iSpot;
+				SceneShadowView.NumSpotShadowViews = iSpot;
+			} break;
+			case Light::EType::POINT:
+			{
+				for (int face = 0; face < 6; ++face)
+				{
+					XMMATRIX matViewProj = l.GetViewProjectionMatrix(static_cast<Texture::CubemapUtility::ECubeMapLookDirections>(face));
+					const size_t FrustumIndex = DispatchContext.AddWorkerItem(FFrustumPlaneset::ExtractFromMatrix(matViewProj), BoundingBoxList, pGameObjects);
+					FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowViews_Point[iPoint * 6 + face];
+					ShadowView.matViewProj = matViewProj;
+					FrustumIndex_pShadowViewLookup[FrustumIndex] = &ShadowView;
+				}
+				SceneShadowView.PointLightLinearDepthParams[iPoint].fFarPlane = l.Range;
+				SceneShadowView.PointLightLinearDepthParams[iPoint].vWorldPos = l.Position;
+				++iPoint;
+				SceneShadowView.NumPointShadowViews = iPoint;
+			} break;
+			}
+			++iLight;
+		}
+	};
+
+	const std::vector<size_t> vActiveLightIndices_Static     = GetActiveAndCulledLightIndices(mLightsStatic, MainViewFrustumPlanesInWorldSpace);
+	const std::vector<size_t> vActiveLightIndices_Stationary = GetActiveAndCulledLightIndices(mLightsStationary, MainViewFrustumPlanesInWorldSpace);
+	const std::vector<size_t> vActiveLightIndices_Dynamic    = GetActiveAndCulledLightIndices(mLightsDynamic, MainViewFrustumPlanesInWorldSpace);
+	
+	std::unordered_map<size_t, FSceneShadowView::FShadowView*> FrustumIndex_pShadowViewLookup;
+	
+	FFrustumCullWorkerContext GameObjectFrustumCullWorkerContext;
+	fnGatherShadowingLightFrustumCullParameters(mLightsStatic    , vActiveLightIndices_Static    , GameObjectFrustumCullWorkerContext, mBoundingBoxHierarchy.mGameObjectBoundingBoxes, mBoundingBoxHierarchy.mGameObjectBoundingBoxGameObjectPointerMapping, FrustumIndex_pShadowViewLookup);
+	fnGatherShadowingLightFrustumCullParameters(mLightsStationary, vActiveLightIndices_Stationary, GameObjectFrustumCullWorkerContext, mBoundingBoxHierarchy.mGameObjectBoundingBoxes, mBoundingBoxHierarchy.mGameObjectBoundingBoxGameObjectPointerMapping, FrustumIndex_pShadowViewLookup);
+	fnGatherShadowingLightFrustumCullParameters(mLightsDynamic   , vActiveLightIndices_Dynamic   , GameObjectFrustumCullWorkerContext, mBoundingBoxHierarchy.mGameObjectBoundingBoxes, mBoundingBoxHierarchy.mGameObjectBoundingBoxGameObjectPointerMapping, FrustumIndex_pShadowViewLookup);
+	
+	FFrustumCullWorkerContext MeshFrustumCullWorkerContext; // TODO: populate after culling game objects?
+	fnGatherShadowingLightFrustumCullParameters(mLightsStatic    , vActiveLightIndices_Static    , MeshFrustumCullWorkerContext, mBoundingBoxHierarchy.mMeshBoundingBoxes, mBoundingBoxHierarchy.mMeshBoundingBoxGameObjectPointerMapping, FrustumIndex_pShadowViewLookup);
+	fnGatherShadowingLightFrustumCullParameters(mLightsStationary, vActiveLightIndices_Stationary, MeshFrustumCullWorkerContext, mBoundingBoxHierarchy.mMeshBoundingBoxes, mBoundingBoxHierarchy.mMeshBoundingBoxGameObjectPointerMapping, FrustumIndex_pShadowViewLookup);
+	fnGatherShadowingLightFrustumCullParameters(mLightsDynamic   , vActiveLightIndices_Dynamic   , MeshFrustumCullWorkerContext, mBoundingBoxHierarchy.mMeshBoundingBoxes, mBoundingBoxHierarchy.mMeshBoundingBoxGameObjectPointerMapping, FrustumIndex_pShadowViewLookup);
+
+	const size_t NumFrustumsToCull = GameObjectFrustumCullWorkerContext.vBoundingBoxLists.size() == 0 
+		? MeshFrustumCullWorkerContext.vBoundingBoxLists.size()
+		: GameObjectFrustumCullWorkerContext.vBoundingBoxLists.size();
+	if (NumFrustumsToCull == 0)
+	{
+		return;
+	}
+
+	assert(NumFrustumsToCull != 0);
+	constexpr bool SINGLE_THREADED_CULL = true;
+
+	//-----------------------------------------------------------------------------------------
+	//
+	// SINGLE THREAD CULL
+	//
+	if constexpr (SINGLE_THREADED_CULL)
+	{
+		GameObjectFrustumCullWorkerContext.Process(0, NumFrustumsToCull - 1);
+		MeshFrustumCullWorkerContext.Process(0, NumFrustumsToCull - 1);
+	}
+	//
+	// THREADED CULL
+	//
+	else
+	{
+		assert(false); // TODO
+	}
+	//-----------------------------------------------------------------------------------------
+
+
+	// TODO: we have a culled list of game object boundin box indices
+	for (size_t iFrustum = 0; iFrustum < NumFrustumsToCull; ++iFrustum)
+	{
+		//const std::vector<size_t>& CulledBoundingBoxIndexList_Obj = GameObjectFrustumCullWorkerContext.vCulledBoundingBoxIndexLists[iFrustum];
+		
+		std::vector<FShadowMeshRenderCommand>& vMeshRenderList = FrustumIndex_pShadowViewLookup.at(iFrustum)->meshRenderCommands;
+		vMeshRenderList.clear();
+
+		const std::vector<size_t>& CulledBoundingBoxIndexList_Msh = MeshFrustumCullWorkerContext.vCulledBoundingBoxIndexLists[iFrustum];
+		for (const size_t& BBIndex : CulledBoundingBoxIndexList_Msh)
+		{
+			assert(BBIndex < mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping.size());
+			MeshID meshID = mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping[BBIndex];
+
+			const GameObject* pGameObject = MeshFrustumCullWorkerContext.vGameObjectPointerLists[iFrustum][BBIndex];
+			Transform* const& pTF = mpTransforms.at(pGameObject->mTransformID);
+
+			// record ShadowMeshRenderCommand
+			FShadowMeshRenderCommand meshRenderCmd;
+			meshRenderCmd.meshID = meshID;
+			meshRenderCmd.WorldTransformationMatrix = pTF->WorldTransformationMatrix();
+			vMeshRenderList.push_back(meshRenderCmd);
+		}
+		
+	}
+
+#else
+	int iSpot = 0;
 	int iPoint = 0;
 
 	auto fnGatherMeshRenderParamsForLight = [&](const Light& l, FSceneShadowView::FShadowView& ShadowView)
@@ -814,20 +714,21 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView) con
 
 			switch (l.Type)
 			{
-			case Light::EType::DIRECTIONAL: 
+			case Light::EType::DIRECTIONAL:
 			{
 				FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowView_Directional;
 				ShadowView.matViewProj = l.GetViewProjectionMatrix();
 				fnGatherMeshRenderParamsForLight(l, ShadowView);
 			}	break;
-			case Light::EType::SPOT       : 
+			case Light::EType::SPOT:
 			{
 				FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowViews_Spot[iSpot++];
 				ShadowView.matViewProj = l.GetViewProjectionMatrix();
 				fnGatherMeshRenderParamsForLight(l, ShadowView);
 			} break;
-			case Light::EType::POINT      : 
+			case Light::EType::POINT:
 			{
+
 				for (int face = 0; face < 6; ++face)
 				{
 					FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowViews_Point[(size_t)iPoint * 6 + face];
@@ -848,7 +749,7 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView) con
 	fnGatherShadowingLightData(mLightsDynamic);
 	SceneShadowView.NumPointShadowViews = iPoint;
 	SceneShadowView.NumSpotShadowViews = iSpot;
-
+#endif
 }
 
 FMaterialRepresentation::FMaterialRepresentation()

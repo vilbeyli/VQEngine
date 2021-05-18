@@ -19,17 +19,12 @@
 #pragma once
 
 #include "../Core/Types.h"
+#include "../Culling.h"
 
-#include <vector>
-
-struct BoundingBox {};
 class GameObject
 {
 public:
-	TransformID mTransformID = INVALID_ID;
-	ModelID     mModelID = INVALID_ID;
-
-	// Todo: move to scene and rename to @BoundingBoxes_GameObjects;
-	BoundingBox mBoundingBox;
-	std::vector<BoundingBox> mMeshBoundingBoxes;
+	TransformID  mTransformID = INVALID_ID;
+	ModelID      mModelID     = INVALID_ID;
+	FBoundingBox mLocalSpaceBoundingBox;
 };
