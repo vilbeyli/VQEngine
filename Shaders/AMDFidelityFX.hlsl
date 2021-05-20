@@ -49,7 +49,7 @@
 #define A_GPU
 
 
-#include "FidelityFX/CAS/ffx_a.h"
+#include "AMDFidelityFX/CAS/ffx_a.h"
 
 
 
@@ -114,7 +114,7 @@ cbuffer             CASConstants     : register(b0)
 
 
 
-#include "FidelityFX/CAS/ffx_cas.h"
+#include "AMDFidelityFX/CAS/ffx_cas.h"
 
 //
 // CAS Main
@@ -315,7 +315,7 @@ AH4 SpdReduce4H(AH4 v0, AH4 v1, AH4 v2, AH4 v3)
 }
 #endif // A_HALF
 
-#include "FidelityFX/SPD/ffx_spd.h"
+#include "AMDFidelityFX/SPD/ffx_spd.h"
 //
 // SPD Main
 //
