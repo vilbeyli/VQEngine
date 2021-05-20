@@ -210,16 +210,25 @@ public:
 	SceneBoundingBoxHierarchy() = delete;
 
 
-	void Build(const std::vector<GameObject*>& pObjects);
+	void BuildGameObjectBoundingBoxes(const std::vector<GameObject*>& pObjects);
+	void BuildGameObjectBoundingBoxes(const std::vector<GameObject*>& pObjects, const std::vector<size_t>& Indices);
+	void BuildMeshBoundingBoxes(const std::vector<GameObject*>& pObjects);
+	void BuildMeshBoundingBoxes(const std::vector<GameObject*>& pObjects, const std::vector<size_t>& Indices);
 	void Clear();
 
 private:
+	void BuildMeshBoundingBox(const GameObject* pObj);
+	void BuildGameObjectBoundingBox(const GameObject* pObj);
+
+private:
 	friend class Scene;
-	FBoundingBox              mSceneBoundingBox;
+	FBoundingBox mSceneBoundingBox;
 
 	// list of game object bounding boxes for coarse culling
-	std::vector<FBoundingBox> mGameObjectBoundingBoxes;
+	//------------------------------------------------------
+	std::vector<FBoundingBox>      mGameObjectBoundingBoxes;
 	std::vector<const GameObject*> mGameObjectBoundingBoxGameObjectPointerMapping;
+	//------------------------------------------------------
 
 	// list of mesh bounding boxes for fine culling
 	//------------------------------------------------------
@@ -288,7 +297,7 @@ protected:
 //----------------------------------------------------------------------------------------------------------------
 private: // Derived Scenes shouldn't access these functions
 	void Update(float dt, int FRAME_DATA_INDEX);
-	void PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX);
+	void PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX, ThreadPool& UpdateWorkerThreadPool);
 	void StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene);
 	void OnLoadComplete();
 	void Unload(); // serial-only for now. maybe MT later.
@@ -298,7 +307,7 @@ private: // Derived Scenes shouldn't access these functions
 	void GatherSceneLightData(FSceneView& SceneView) const;
 	void PrepareLightMeshRenderParams(FSceneView& SceneView) const;
 	void PrepareSceneMeshRenderParams(FSceneView& SceneView) const;
-	void PrepareShadowMeshRenderParams(FSceneShadowView& ShadowView, const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace) const;
+	void PrepareShadowMeshRenderParams(FSceneShadowView& ShadowView, const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, ThreadPool& UpdateWorkerThreadPool) const;
 
 	void LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRepresentation>& GameObjsToBeLoaded);
 	void LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes);

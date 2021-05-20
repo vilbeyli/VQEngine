@@ -156,7 +156,7 @@ void Scene::Update(float dt, int FRAME_DATA_INDEX)
 	this->UpdateScene(dt, SceneView);
 }
 
-void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
+void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX, ThreadPool& UpdateWorkerThreadPool)
 {
 	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
 	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
@@ -176,10 +176,12 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX)
 	SceneView.MainViewCameraYaw = cam.GetYaw();
 	SceneView.MainViewCameraPitch = cam.GetPitch();
 
-	mBoundingBoxHierarchy.Build(mpObjects);
+	mBoundingBoxHierarchy.Clear();
+	mBoundingBoxHierarchy.BuildGameObjectBoundingBoxes(mpObjects);
+	mBoundingBoxHierarchy.BuildMeshBoundingBoxes(mpObjects);
 	PrepareSceneMeshRenderParams(SceneView);
 	GatherSceneLightData(SceneView);
-	PrepareShadowMeshRenderParams(ShadowView, cam.GetViewFrustumPlanesInWorldSpace());
+	PrepareShadowMeshRenderParams(ShadowView, cam.GetViewFrustumPlanesInWorldSpace(), UpdateWorkerThreadPool);
 	PrepareLightMeshRenderParams(SceneView);
 	// TODO: Prepare BoundingBoxRenderParams
 
@@ -395,18 +397,11 @@ void Scene::PrepareSceneMeshRenderParams(FSceneView& SceneView) const
 
 	FFrustumCullWorkerContext GameObjectFrustumCullWorkerContext;
 	
-	for (const GameObject* pObj : mpObjects)
-	{
-		
-	}
-	
-	const size_t GameObjectWorkSize = 1; // would need a new Process() function for: mpObjects.size(); 
 	GameObjectFrustumCullWorkerContext.AddWorkerItem(FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj)
 		, mBoundingBoxHierarchy.mGameObjectBoundingBoxes
 		, mBoundingBoxHierarchy.mGameObjectBoundingBoxGameObjectPointerMapping
 	);
 
-	const size_t MeshWorkSize = 1; // would need a new Process() function for: mBoundingBoxHierarchy.mMeshBoundingBoxes.size();
 	FFrustumCullWorkerContext MeshFrustumCullWorkerContext; // TODO: populate after culling game objects?
 	MeshFrustumCullWorkerContext.AddWorkerItem(FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj)
 		, mBoundingBoxHierarchy.mMeshBoundingBoxes
@@ -415,20 +410,21 @@ void Scene::PrepareSceneMeshRenderParams(FSceneView& SceneView) const
 
 	constexpr bool SINGLE_THREADED_CULL = true;
 	//-----------------------------------------------------------------------------------------
-	//
-	// SINGLE THREAD CULL
-	//
 	if constexpr (SINGLE_THREADED_CULL)
 	{
-		GameObjectFrustumCullWorkerContext.Process(0, GameObjectWorkSize - 1);
-		MeshFrustumCullWorkerContext.Process(0, MeshWorkSize - 1);
+		GameObjectFrustumCullWorkerContext.ProcessWorkItems_SingleThreaded();
+		MeshFrustumCullWorkerContext.ProcessWorkItems_SingleThreaded();
 	}
-	//
-	// THREADED CULL
-	//
 	else
 	{
-		assert(false); // TODO
+		const size_t NumThreadsToDistributeIncludingThisThread = ThreadPool::sHardwareThreadCount - 1; // -1 to leave RenderThread a physical core
+		
+		// The current FFrustumCullWorkerContext doesn't support threading a single list
+		// TODO: keep an eye on the perf here, find a way to thread of necessary
+		#if 0
+		GameObjectFrustumCullWorkerContext.ProcessWorkItems_MultiThreaded(NumThreadsToDistributeIncludingThisThread, UpdateWorkerThreadPool);
+		MeshFrustumCullWorkerContext.ProcessWorkItems_MultiThreaded(NumThreadsToDistributeIncludingThisThread, UpdateWorkerThreadPool);
+		#endif
 	}
 	//-----------------------------------------------------------------------------------------
 	
@@ -440,7 +436,7 @@ void Scene::PrepareSceneMeshRenderParams(FSceneView& SceneView) const
 		std::vector<FMeshRenderCommand>& vMeshRenderList = SceneView.meshRenderCommands;
 		vMeshRenderList.clear();
 
-		const std::vector<size_t>& CulledBoundingBoxIndexList_Msh = MeshFrustumCullWorkerContext.vCulledBoundingBoxIndexLists[0];
+		const std::vector<size_t>& CulledBoundingBoxIndexList_Msh = MeshFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[0];
 		for (const size_t& BBIndex : CulledBoundingBoxIndexList_Msh)
 		{
 			assert(BBIndex < mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping.size());
@@ -491,7 +487,7 @@ void Scene::PrepareSceneMeshRenderParams(FSceneView& SceneView) const
 			SceneView.meshRenderCommands.push_back(meshRenderCmd);
 		}
 	}
-#endif
+#endif // ENABLE_VIEW_FRUSTUM_CULLING
 
 
 }
@@ -542,11 +538,15 @@ static std::vector<size_t> GetActiveAndCulledLightIndices(const std::vector<Ligh
 	return ActiveLightIndices;
 }
 
-void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace) const
+void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, ThreadPool& UpdateWorkerThreadPool) const
 {
 #if ENABLE_VIEW_FRUSTUM_CULLING
-	constexpr bool bCULL_LIGHT_VIEWS = false;
+	constexpr bool bCULL_LIGHT_VIEWS    = false;
+	constexpr bool bSINGLE_THREADED_CULL = true;
 
+	int iLight = 0;
+	int iPoint = 0;
+	int iSpot = 0;
 	auto fnGatherShadowingLightFrustumCullParameters = [&](
 		const std::vector<Light>& vLights
 		, const std::vector<size_t>& vActiveLightIndices
@@ -557,9 +557,6 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 	)
 	{
 		// prepare frustum cull work context
-		int iLight = 0;
-		int iPoint = 0;
-		int iSpot = 0;
 		for(const size_t& LightIndex : vActiveLightIndices)
 		{
 			const Light& l = vLights[LightIndex];
@@ -602,61 +599,68 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 		}
 	};
 
+	static const size_t HW_CORE_COUNT = ThreadPool::sHardwareThreadCount / 2;
+	const size_t NumThreadsToDistributeIncludingThisThread = HW_CORE_COUNT - 1; // -1 to leave RenderThread a physical core
+
+	// distance-cull and get active shadowing lights from various light containers
 	const std::vector<size_t> vActiveLightIndices_Static     = GetActiveAndCulledLightIndices(mLightsStatic, MainViewFrustumPlanesInWorldSpace);
 	const std::vector<size_t> vActiveLightIndices_Stationary = GetActiveAndCulledLightIndices(mLightsStationary, MainViewFrustumPlanesInWorldSpace);
 	const std::vector<size_t> vActiveLightIndices_Dynamic    = GetActiveAndCulledLightIndices(mLightsDynamic, MainViewFrustumPlanesInWorldSpace);
 	
+	// frustum cull memory containers
 	std::unordered_map<size_t, FSceneShadowView::FShadowView*> FrustumIndex_pShadowViewLookup;
-	
+	FFrustumCullWorkerContext MeshFrustumCullWorkerContext;
+
+#if 0 
 	FFrustumCullWorkerContext GameObjectFrustumCullWorkerContext;
+
+	//------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	//
+	// Coarse Culling : cull the game object bounding boxes against view frustums
+	//
 	fnGatherShadowingLightFrustumCullParameters(mLightsStatic    , vActiveLightIndices_Static    , GameObjectFrustumCullWorkerContext, mBoundingBoxHierarchy.mGameObjectBoundingBoxes, mBoundingBoxHierarchy.mGameObjectBoundingBoxGameObjectPointerMapping, FrustumIndex_pShadowViewLookup);
 	fnGatherShadowingLightFrustumCullParameters(mLightsStationary, vActiveLightIndices_Stationary, GameObjectFrustumCullWorkerContext, mBoundingBoxHierarchy.mGameObjectBoundingBoxes, mBoundingBoxHierarchy.mGameObjectBoundingBoxGameObjectPointerMapping, FrustumIndex_pShadowViewLookup);
-	fnGatherShadowingLightFrustumCullParameters(mLightsDynamic   , vActiveLightIndices_Dynamic   , GameObjectFrustumCullWorkerContext, mBoundingBoxHierarchy.mGameObjectBoundingBoxes, mBoundingBoxHierarchy.mGameObjectBoundingBoxGameObjectPointerMapping, FrustumIndex_pShadowViewLookup);
-	
-	FFrustumCullWorkerContext MeshFrustumCullWorkerContext; // TODO: populate after culling game objects?
+	fnGatherShadowingLightFrustumCullParameters(mLightsDynamic   , vActiveLightIndices_Dynamic   , GameObjectFrustumCullWorkerContext, mBoundingBoxHierarchy.mGameObjectBoundingBoxes, mBoundingBoxHierarchy.mGameObjectBoundingBoxGameObjectPointerMapping, FrustumIndex_pShadowViewLookup)
+	if constexpr (bSINGLE_THREADED_CULL) GameObjectFrustumCullWorkerContext.ProcessWorkItems_SingleThreaded();
+	else                                 GameObjectFrustumCullWorkerContext.ProcessWorkItems_MultiThreaded(NumThreadsToDistributeIncludingThisThread, UpdateWorkerThreadPool);
+	//------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+	const_cast<SceneBoundingBoxHierarchy&>(mBoundingBoxHierarchy).BuildMeshBoundingBoxes()
+
+	//
+	// TODO: Determine meshes to cull
+	//
+	const size_t NumGameObjectFrustums = GameObjectFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView.size();
+	for (size_t iFrustum = 0; iFrustum < NumGameObjectFrustums; ++iFrustum)
+	{
+		const std::vector<size_t>& CulledBoundingBoxIndexList_Obj = GameObjectFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[iFrustum];
+
+		
+	}
+#endif
+
+	//------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	//
+	// Fine Culling : cull the mesh bounding boxes against view frustums
+	//
 	fnGatherShadowingLightFrustumCullParameters(mLightsStatic    , vActiveLightIndices_Static    , MeshFrustumCullWorkerContext, mBoundingBoxHierarchy.mMeshBoundingBoxes, mBoundingBoxHierarchy.mMeshBoundingBoxGameObjectPointerMapping, FrustumIndex_pShadowViewLookup);
 	fnGatherShadowingLightFrustumCullParameters(mLightsStationary, vActiveLightIndices_Stationary, MeshFrustumCullWorkerContext, mBoundingBoxHierarchy.mMeshBoundingBoxes, mBoundingBoxHierarchy.mMeshBoundingBoxGameObjectPointerMapping, FrustumIndex_pShadowViewLookup);
 	fnGatherShadowingLightFrustumCullParameters(mLightsDynamic   , vActiveLightIndices_Dynamic   , MeshFrustumCullWorkerContext, mBoundingBoxHierarchy.mMeshBoundingBoxes, mBoundingBoxHierarchy.mMeshBoundingBoxGameObjectPointerMapping, FrustumIndex_pShadowViewLookup);
+	if constexpr (bSINGLE_THREADED_CULL) MeshFrustumCullWorkerContext.ProcessWorkItems_SingleThreaded();
+	else                                 MeshFrustumCullWorkerContext.ProcessWorkItems_MultiThreaded(NumThreadsToDistributeIncludingThisThread, UpdateWorkerThreadPool);
+	//------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-	const size_t NumFrustumsToCull = GameObjectFrustumCullWorkerContext.vBoundingBoxLists.size() == 0 
-		? MeshFrustumCullWorkerContext.vBoundingBoxLists.size()
-		: GameObjectFrustumCullWorkerContext.vBoundingBoxLists.size();
-	if (NumFrustumsToCull == 0)
-	{
-		return;
-	}
 
-	assert(NumFrustumsToCull != 0);
-	constexpr bool SINGLE_THREADED_CULL = true;
-
-	//-----------------------------------------------------------------------------------------
 	//
-	// SINGLE THREAD CULL
+	//  Record Mesh Render Commands
 	//
-	if constexpr (SINGLE_THREADED_CULL)
+	const size_t NumMeshFrustums = MeshFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView.size();
+	for (size_t iFrustum = 0; iFrustum < NumMeshFrustums; ++iFrustum)
 	{
-		GameObjectFrustumCullWorkerContext.Process(0, NumFrustumsToCull - 1);
-		MeshFrustumCullWorkerContext.Process(0, NumFrustumsToCull - 1);
-	}
-	//
-	// THREADED CULL
-	//
-	else
-	{
-		assert(false); // TODO
-	}
-	//-----------------------------------------------------------------------------------------
-
-
-	// TODO: we have a culled list of game object boundin box indices
-	for (size_t iFrustum = 0; iFrustum < NumFrustumsToCull; ++iFrustum)
-	{
-		//const std::vector<size_t>& CulledBoundingBoxIndexList_Obj = GameObjectFrustumCullWorkerContext.vCulledBoundingBoxIndexLists[iFrustum];
-		
 		std::vector<FShadowMeshRenderCommand>& vMeshRenderList = FrustumIndex_pShadowViewLookup.at(iFrustum)->meshRenderCommands;
 		vMeshRenderList.clear();
 
-		const std::vector<size_t>& CulledBoundingBoxIndexList_Msh = MeshFrustumCullWorkerContext.vCulledBoundingBoxIndexLists[iFrustum];
+		const std::vector<size_t>& CulledBoundingBoxIndexList_Msh = MeshFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[iFrustum];
 		for (const size_t& BBIndex : CulledBoundingBoxIndexList_Msh)
 		{
 			assert(BBIndex < mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping.size());
@@ -671,10 +675,9 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 			meshRenderCmd.WorldTransformationMatrix = pTF->WorldTransformationMatrix();
 			vMeshRenderList.push_back(meshRenderCmd);
 		}
-		
 	}
 
-#else
+#else // ENABLE_VIEW_FRUSTUM_CULLING
 	int iSpot = 0;
 	int iPoint = 0;
 
@@ -749,7 +752,7 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 	fnGatherShadowingLightData(mLightsDynamic);
 	SceneShadowView.NumPointShadowViews = iPoint;
 	SceneShadowView.NumSpotShadowViews = iSpot;
-#endif
+#endif // ENABLE_VIEW_FRUSTUM_CULLING
 }
 
 FMaterialRepresentation::FMaterialRepresentation()

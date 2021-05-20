@@ -397,8 +397,8 @@ private:
 #endif
 
 	// RenderPasses (WIP design)
-	FDepthPrePass         mRenderPass_DepthPrePass;
-	FAmbientOcclusionPass mRenderPass_AO;
+	FDepthPrePass                   mRenderPass_DepthPrePass;
+	FAmbientOcclusionPass           mRenderPass_AO;
 
 	// timer / profiler
 	Timer                           mTimer;

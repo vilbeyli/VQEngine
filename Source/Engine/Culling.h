@@ -23,6 +23,7 @@
 #include "Core/Types.h"
 
 class GameObject;
+class ThreadPool;
 
 //------------------------------------------------------------------------------------------------------------------------------
 //
@@ -135,10 +136,14 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 {
 	// Struct of Arrays for fast thread access
 	
+	using IndexList_t = std::vector<size_t>;
+
 	// Hot Data : used during culling --------------------------------------------------------------------------------------
 	/*in */ std::vector<FFrustumPlaneset         > vFrustumPlanes;
 	/*in */ std::vector<std::vector<FBoundingBox>> vBoundingBoxLists;
-	/*out*/ std::vector<std::vector<size_t      >> vCulledBoundingBoxIndexLists; // store the index of the surviving bounding box in a list, per view frustum
+
+	// store the index of the surviving bounding box in a list, per view frustum
+	/*out*/ std::vector<IndexList_t> vCulledBoundingBoxIndexListPerView; 
 	// Hot Data ------------------------------------------------------------------------------------------------------------
 	
 	// Cold Data : used after culling
@@ -148,5 +153,10 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 
 
 	size_t AddWorkerItem(FFrustumPlaneset&& FrustumPlaneSet, std::vector<FBoundingBox> vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects);
+
+	void ProcessWorkItems_SingleThreaded();
+	void ProcessWorkItems_MultiThreaded(const size_t NumThreadsIncludingThisThread, ThreadPool& WorkerThreadPool);
+
+private:
 	void Process(size_t iRangeBegin, size_t iRangeEnd) override;
 };

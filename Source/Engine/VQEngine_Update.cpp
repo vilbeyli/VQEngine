@@ -185,7 +185,7 @@ void VQEngine::UpdateThread_PostUpdate()
 		return;
 	}
 
-	mpScene->PostUpdate(FRAME_DATA_INDEX, FRAME_DATA_NEXT_INDEX);
+	mpScene->PostUpdate(FRAME_DATA_INDEX, FRAME_DATA_NEXT_INDEX, mWorkers_Update);
 
 	// input post update
 	for (auto it = mInputStates.begin(); it != mInputStates.end(); ++it)
