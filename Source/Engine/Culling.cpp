@@ -20,6 +20,12 @@
 #include "Math.h"
 #include "Libs/VQUtils/Source/Multithreading.h"
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
+#include "GPUMarker.h"
+
 using namespace DirectX;
 
 //------------------------------------------------------------------------------------------------------------------------------
@@ -117,6 +123,7 @@ bool IsFrustumIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes0, const 
 //------------------------------------------------------------------------------------------------------------------------------
 size_t FFrustumCullWorkerContext::AddWorkerItem(FFrustumPlaneset&& FrustumPlaneSet, std::vector<FBoundingBox> vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects)
 {
+	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::AddWorkerItem()");
 	vFrustumPlanes.emplace_back(FrustumPlaneSet);
 	vBoundingBoxLists.push_back(vBoundingBoxList);
 	vGameObjectPointerLists.push_back(pGameObjects);
@@ -331,7 +338,7 @@ void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBox(const GameObject* pOb
 	Transform* const& pTF = mpTransforms.at(pObj->mTransformID);
 	assert(pTF);
 
-	XMMATRIX matWorld = pTF->WorldTransformationMatrix();
+	XMMATRIX matWorld = pTF->matWorldTransformation();
 	FBoundingBox AABB_Obj = CalculateAxisAlignedBoundingBox(matWorld, pObj->mLocalSpaceBoundingBox);
 	mGameObjectBoundingBoxes.push_back(AABB_Obj);
 	mGameObjectBoundingBoxGameObjectPointerMapping.push_back(pObj);
@@ -359,7 +366,7 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBox(const GameObject* pObj)
 
 	const Model& model = mModels.at(pObj->mModelID);
 
-	XMMATRIX matWorld = pTF->WorldTransformationMatrix();
+	XMMATRIX matWorld = pTF->matWorldTransformation();
 
 	bool bAtLeastOneMesh = false;
 	for (MeshID mesh : model.mData.mOpaueMeshIDs)

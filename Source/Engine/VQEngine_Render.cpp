@@ -67,6 +67,7 @@ void VQEngine::RenderThread_Main()
 		// RenderThread_FramePacing()
 		if (mEffectiveFrameRateLimit_ms != 0.0f)
 		{
+			SCOPED_CPU_MARKER("FramePacing");
 			const float TimeBudgetLeft_ms = mEffectiveFrameRateLimit_ms - dt;
 			if (TimeBudgetLeft_ms > 0.0f)
 			{
@@ -93,6 +94,8 @@ void VQEngine::RenderThread_Main()
 
 void VQEngine::RenderThread_WaitForUpdateThread()
 {
+	SCOPED_CPU_MARKER("RenderThread_WaitForUpdateThread()");
+
 #if DEBUG_LOG_THREAD_SYNC_VERBOSE
 	Log::Info("r:wait : u=%llu, r=%llu", mNumUpdateLoopsExecuted.load(), mNumRenderLoopsExecuted.load());
 #endif
@@ -600,6 +603,7 @@ void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 void VQEngine::RenderThread_PreRender()
 {
+	SCOPED_CPU_MARKER("RenderThread_PreRender()");
 	FWindowRenderContext& ctx = mRenderer.GetWindowRenderContext(mpWinMain->GetHWND());
 
 	const int NUM_BACK_BUFFERS  = ctx.SwapChain.GetNumBackBuffers();
@@ -628,6 +632,8 @@ void VQEngine::RenderThread_PreRender()
 
 void VQEngine::RenderThread_RenderFrame()
 {
+	SCOPED_CPU_MARKER("RenderThread_RenderFrame()");
+
 	//
 	// Handle one-time & infrequent events
 	//
@@ -876,6 +882,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 //====================================================================================================
 HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 {
+	SCOPED_CPU_MARKER("RenderThread_RenderMainWindow_Scene()");
 	HRESULT hr = S_OK;
 	const int NUM_BACK_BUFFERS  = ctx.SwapChain.GetNumBackBuffers();
 	const int BACK_BUFFER_INDEX = ctx.SwapChain.GetCurrentBackBufferIndex();
@@ -949,6 +956,30 @@ void VQEngine::DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh)
 	pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 }
 
+void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView::FShadowView& shadowView)
+{
+	using namespace DirectX;
+	struct FCBufferLightVS
+	{
+		XMMATRIX matWorldViewProj;
+		XMMATRIX matWorld;
+	};
+
+	for (const FShadowMeshRenderCommand& renderCmd : shadowView.meshRenderCommands)
+	{
+		// set constant buffer data
+		FCBufferLightVS* pCBuffer = {};
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(pCBuffer)), (void**)(&pCBuffer), &cbAddr);
+		pCBuffer->matWorldViewProj = renderCmd.matWorldViewProj;
+		pCBuffer->matWorld = renderCmd.matWorldTransformation;
+		pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
+
+		const Mesh& mesh = mpScene->mMeshes.at(renderCmd.meshID);
+		DrawMesh(pCmd, mesh);
+	}
+}
+
 void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowView& SceneShadowView)
 {
 	using namespace DirectX;
@@ -957,45 +988,9 @@ void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowVie
 		XMFLOAT3 vLightPos;
 		float fFarPlane;
 	};
-	struct FCBufferLightVS
-	{
-		XMMATRIX matWorldViewProj;
-		XMMATRIX matWorld;
-	};
 
 	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
-	auto fnDrawRenderList = [&](const FSceneShadowView::FShadowView& shadowView)
-	{
-		for (const FShadowMeshRenderCommand& renderCmd : shadowView.meshRenderCommands)
-		{
-			// set constant buffer data
-			FCBufferLightVS* pCBuffer = {};
-			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-			ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(decltype(pCBuffer)), (void**)(&pCBuffer), &cbAddr);
-			pCBuffer->matWorldViewProj = renderCmd.WorldTransformationMatrix * shadowView.matViewProj;
-			pCBuffer->matWorld = renderCmd.WorldTransformationMatrix;
-			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
-
-			// set IA
-			const Mesh& mesh = mpScene->mMeshes.at(renderCmd.meshID);
-
-			const auto VBIBIDs = mesh.GetIABufferIDs();
-			const uint32 NumIndices = mesh.GetNumIndices();
-			const uint32 NumInstances = 1;
-			const BufferID& VB_ID = VBIBIDs.first;
-			const BufferID& IB_ID = VBIBIDs.second;
-			const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
-			const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
-
-			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			pCmd->IASetVertexBuffers(0, 1, &vb);
-			pCmd->IASetIndexBuffer(&ib);
-
-			// draw
-			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
-		}
-	};
-
+	DynamicBufferHeap* pCBufferHeap = &ctx.mDynamicHeap_ConstantBuffer;
 
 	constexpr bool B_CLEAR_DEPTH_BUFFERS_BEFORE_DRAW = false;
 	SCOPED_GPU_MARKER(pCmd, "RenderShadowMaps");
@@ -1063,8 +1058,8 @@ void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowVie
 			D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
 			pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, NULL);
 		}
-
-		fnDrawRenderList(SceneShadowView.ShadowView_Directional);
+		
+		DrawShadowViewMeshList(pCmd, pCBufferHeap, SceneShadowView.ShadowView_Directional);
 	}
 
 	// Set Viewport & Scissors
@@ -1111,7 +1106,7 @@ void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowVie
 			pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, NULL);
 		}
 
-		fnDrawRenderList(ShadowView);
+		DrawShadowViewMeshList(pCmd, pCBufferHeap, ShadowView);
 	}
 
 
@@ -1157,7 +1152,7 @@ void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowVie
 					pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, NULL);
 				}
 
-				fnDrawRenderList(ShadowView);
+				DrawShadowViewMeshList(pCmd, pCBufferHeap, ShadowView);
 			}
 		}
 	}
@@ -1223,9 +1218,9 @@ void VQEngine::RenderDepthPrePass(FWindowRenderContext& ctx, const FSceneView& S
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 		ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(decltype(pPerObj)), (void**)(&pPerObj), &cbAddr);
 
-		pPerObj->matWorldViewProj = meshRenderCmd.WorldTransformationMatrix * SceneView.viewProj;
-		pPerObj->matWorld = meshRenderCmd.WorldTransformationMatrix;
-		pPerObj->matNormal = meshRenderCmd.NormalTransformationMatrix;
+		pPerObj->matWorldViewProj = meshRenderCmd.matWorldTransformation * SceneView.viewProj;
+		pPerObj->matWorld = meshRenderCmd.matWorldTransformation;
+		pPerObj->matNormal = meshRenderCmd.matNormalTransformation;
 		pPerObj->materialData = std::move(mat.GetCBufferData());
 
 		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
@@ -1486,9 +1481,9 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 			ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(decltype(pPerObj)), (void**)(&pPerObj), &cbAddr);
 
 
-			pPerObj->matWorldViewProj = meshRenderCmd.WorldTransformationMatrix * SceneView.viewProj;
-			pPerObj->matWorld         = meshRenderCmd.WorldTransformationMatrix;
-			pPerObj->matNormal        = meshRenderCmd.NormalTransformationMatrix;
+			pPerObj->matWorldViewProj = meshRenderCmd.matWorldTransformation * SceneView.viewProj;
+			pPerObj->matWorld         = meshRenderCmd.matWorldTransformation;
+			pPerObj->matNormal        = meshRenderCmd.matNormalTransformation;
 			pPerObj->materialData = std::move(mat.GetCBufferData());
 
 			pCmd->SetGraphicsRootConstantBufferView(PerObjRSBindSlot, cbAddr);
@@ -1543,7 +1538,7 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 			ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(decltype(pCBuffer)), (void**)(&pCBuffer), &cbAddr);
 			pCBuffer->color            = lightBoundRenderCmd.color;
-			pCBuffer->matModelViewProj = lightBoundRenderCmd.WorldTransformationMatrix * SceneView.viewProj;
+			pCBuffer->matModelViewProj = lightBoundRenderCmd.matWorldTransformation * SceneView.viewProj;
 			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
 
 			// set IA
@@ -1583,7 +1578,7 @@ void VQEngine::RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& Sce
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 			ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(decltype(pCBuffer)), (void**)(&pCBuffer), &cbAddr);
 			pCBuffer->color            = lightRenderCmd.color;
-			pCBuffer->matModelViewProj = lightRenderCmd.WorldTransformationMatrix * SceneView.viewProj;
+			pCBuffer->matModelViewProj = lightRenderCmd.matWorldTransformation * SceneView.viewProj;
 			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
 
 			// set IA
@@ -1967,10 +1962,22 @@ HRESULT VQEngine::PresentFrame(FWindowRenderContext& ctx)
 	}
 	pCmd->Close();
 
+
 	ID3D12CommandList* ppCommandLists[] = { pCmd };
-	ctx.PresentQueue.pQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
-	hr = ctx.SwapChain.Present();
-	ctx.SwapChain.MoveToNextFrame();
+
+	{
+		SCOPED_CPU_MARKER("ExecuteCommandLists()");
+		ctx.PresentQueue.pQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+	}
+	{
+		SCOPED_CPU_MARKER("SwapchainPresent");
+		hr = ctx.SwapChain.Present();
+	}
+	{
+		SCOPED_CPU_MARKER("SwapchainMoveToNextFrame");
+		ctx.SwapChain.MoveToNextFrame();
+	}
+
 	return hr;
 }
 

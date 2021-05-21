@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "../VQEngine.h"
+#include "../GPUMarker.h"
 
 #define VERBOSE_LOGGING 0
 
@@ -220,6 +221,8 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 void VQEngine::RenderThread_HandleEvents()
 {
+	SCOPED_CPU_MARKER("RenderThread_HandleEvents()");
+
 	// do not process events anymore if we're exiting
 	if (mbStopAllThreads)
 		return;

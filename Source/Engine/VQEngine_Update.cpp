@@ -23,6 +23,7 @@
 #include "Scene/Scene.h" // TODO: this name collision is bad - rename to world?
 #include "../Scenes/Scenes.h"
 
+#include "GPUMarker.h"
 
 #include "Libs/VQUtils/Source/utils.h"
 
@@ -100,6 +101,8 @@ void VQEngine::UpdateThread_Exit()
 
 void VQEngine::UpdateThread_PreUpdate(float& dt)
 {
+	SCOPED_CPU_MARKER("UpdateThread_PreUpdate()");
+
 	// update timer
 	dt = mTimer.Tick();
 
@@ -111,6 +114,7 @@ void VQEngine::UpdateThread_PreUpdate(float& dt)
 
 void VQEngine::UpdateThread_UpdateAppState(const float dt)
 {
+	SCOPED_CPU_MARKER("UpdateThread_UpdateAppState()");
 	assert(mbRenderThreadInitialized);
 
 
@@ -176,6 +180,7 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 
 void VQEngine::UpdateThread_PostUpdate()
 {
+	SCOPED_CPU_MARKER("UpdateThread_PostUpdate()");
 	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
 	const int FRAME_DATA_NEXT_INDEX = ((mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS) + 1) % NUM_BACK_BUFFERS;
@@ -197,6 +202,8 @@ void VQEngine::UpdateThread_PostUpdate()
 
 float VQEngine::UpdateThread_WaitForRenderThread()
 {
+	SCOPED_CPU_MARKER("UpdateThread_WaitForRenderThread()");
+
 #if DEBUG_LOG_THREAD_SYNC_VERBOSE
 	Log::Info("u:wait : u=%llu, r=%llu", mNumUpdateLoopsExecuted.load(), mNumRenderLoopsExecuted.load());
 #endif

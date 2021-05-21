@@ -79,7 +79,7 @@ public:
 	inline void ResetScale() { _scale = DirectX::XMFLOAT3(1, 1, 1); }
 	inline void Reset() { ResetScale(); ResetRotation(); ResetPosition(); }
 	
-	DirectX::XMMATRIX WorldTransformationMatrix() const;
+	DirectX::XMMATRIX matWorldTransformation() const;
 	DirectX::XMMATRIX WorldTransformationMatrix_NoScale() const;
 	DirectX::XMMATRIX RotationMatrix() const;
 

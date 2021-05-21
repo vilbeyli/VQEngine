@@ -90,7 +90,7 @@ void Light::GetGPUData(VQ_SHADER_DATA::DirectionalLight * pLight) const
 	tf._rotation = this->RotationQuaternion;
 	XMFLOAT3 FWD_F3(0, -1, 0); // default orientation looks down for directional lights
 	XMVECTOR FWD = XMLoadFloat3(&FWD_F3);
-	FWD = XMVector3Transform(FWD, tf.NormalMatrix(tf.WorldTransformationMatrix()));
+	FWD = XMVector3Transform(FWD, tf.NormalMatrix(tf.matWorldTransformation()));
 
 	XMStoreFloat3(&pLight->lightDirection, FWD);
 }
@@ -127,7 +127,7 @@ DirectX::XMMATRIX Light::GetWorldTransformationMatrix() const
 	tf._position = this->Position;
 	tf._rotation = this->RotationQuaternion;
 	tf._scale = XMFLOAT3(LightMeshScale, LightMeshScale, LightMeshScale);
-	return tf.WorldTransformationMatrix();
+	return tf.matWorldTransformation();
 }
 
 DirectX::XMMATRIX Light::GetViewProjectionMatrix(Texture::CubemapUtility::ECubeMapLookDirections PointLightFace) const

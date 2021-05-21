@@ -69,7 +69,7 @@ void Transform::RotateAroundPointAndAxis(const XMVECTOR& axis, float angle, cons
 	XMStoreFloat3(&_position, R);
 }
 
-XMMATRIX Transform::WorldTransformationMatrix() const
+XMMATRIX Transform::matWorldTransformation() const
 {
 	XMVECTOR scale = XMLoadFloat3(&_scale);
 	XMVECTOR translation = XMLoadFloat3(&_position);

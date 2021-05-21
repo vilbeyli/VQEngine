@@ -469,7 +469,7 @@ private:
 	struct FFrameConstantBufferUnlit { DirectX::XMMATRIX matModelViewProj; DirectX::XMFLOAT3 color; };
 
 	void                            DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh);
-
+	void                            DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView::FShadowView& shadowView);
 
 	std::unique_ptr<Window>&        GetWindow(HWND hwnd);
 	const std::unique_ptr<Window>&  GetWindow(HWND hwnd) const;

@@ -117,17 +117,18 @@ struct FSceneRenderParameters
 struct FMeshRenderCommandBase
 {
 	MeshID meshID = INVALID_ID;
-	DirectX::XMMATRIX WorldTransformationMatrix;
+	DirectX::XMMATRIX matWorldTransformation;
 };
 struct FMeshRenderCommand : public FMeshRenderCommandBase
 {
 	MaterialID matID  = INVALID_ID;
-	DirectX::XMMATRIX NormalTransformationMatrix; //ID ?
+	DirectX::XMMATRIX matNormalTransformation; //ID ?
 	std::string ModelName;
 	std::string MaterialName;
 };
 struct FShadowMeshRenderCommand : public FMeshRenderCommandBase
 {
+	DirectX::XMMATRIX matWorldViewProj;
 	MaterialID matID = INVALID_ID;
 	std::string ModelName;
 };
@@ -305,9 +306,15 @@ private: // Derived Scenes shouldn't access these functions
 	void HandleInput(FSceneView& SceneView);
 
 	void GatherSceneLightData(FSceneView& SceneView) const;
+
 	void PrepareLightMeshRenderParams(FSceneView& SceneView) const;
 	void PrepareSceneMeshRenderParams(FSceneView& SceneView) const;
 	void PrepareShadowMeshRenderParams(FSceneShadowView& ShadowView, const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, ThreadPool& UpdateWorkerThreadPool) const;
+	
+	// WIP----
+	void GatherSpotLightFrustumParameters(FSceneShadowView& SceneShadowView, size_t iShadowView, const Light& l);
+	void GatherPointLightFrustumParameters();
+	// WIP----
 
 	void LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRepresentation>& GameObjsToBeLoaded);
 	void LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes);
