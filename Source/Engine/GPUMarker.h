@@ -18,14 +18,24 @@
 
 #pragma once
 
+#define USE_PIX 1
 #include "WinPixEventRuntime/Include/WinPixEventRuntime/pix3.h"
 
 #define SCOPED_GPU_MARKER(pCmd, pStr) ScopedGPUMarker GPUMarker(pCmd,pStr)
+#define SCOPED_CPU_MARKER(pStr)       ScopedMarker    CPUMarker(pStr)
 
 struct ID3D12GraphicsCommandList;
 struct ID3D12CommandQueue;
 
-class ScopedGPUMarker
+
+class ScopedMarker
+{
+public:
+	ScopedMarker(const char* pLabel, unsigned PIXColor = PIX_COLOR_DEFAULT);
+	~ScopedMarker();
+};
+
+class ScopedGPUMarker// : public ScopedMarker
 {
 public:
 	ScopedGPUMarker(ID3D12GraphicsCommandList* pCmdList, const char* pLabel, unsigned PIXColor = PIX_COLOR_DEFAULT);
@@ -42,3 +52,4 @@ private:
 		ID3D12CommandQueue* mpCmdQueue;
 	};
 };
+
