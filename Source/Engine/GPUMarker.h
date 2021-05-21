@@ -21,8 +21,9 @@
 #define USE_PIX 1
 #include "WinPixEventRuntime/Include/WinPixEventRuntime/pix3.h"
 
-#define SCOPED_GPU_MARKER(pCmd, pStr) ScopedGPUMarker GPUMarker(pCmd,pStr)
-#define SCOPED_CPU_MARKER(pStr)       ScopedMarker    CPUMarker(pStr)
+#define SCOPED_GPU_MARKER(pCmd, pStr)       ScopedGPUMarker GPUMarker(pCmd,pStr)
+#define SCOPED_CPU_MARKER(pStr)             ScopedMarker    CPUMarker(pStr)
+#define SCOPED_CPU_MARKER_C(pStr, PIXColor) ScopedMarker    CPUMarker(pStr, PIXColor)
 
 struct ID3D12GraphicsCommandList;
 struct ID3D12CommandQueue;

@@ -207,29 +207,36 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 	const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, NumThreadsIncludingThisThread);
 	
 	// dispatch worker threads
-	size_t currRange = 0;
-	for (const std::pair<size_t, size_t>& Range : vRanges)
 	{
-		if (currRange == 0)
+		SCOPED_CPU_MARKER("Process_DispatchWorkers");
+		size_t currRange = 0;
+		for (const std::pair<size_t, size_t>& Range : vRanges)
 		{
-			++currRange; // skip the first range, and do it on this thread after dispatches
-			continue;
-		}
-		const size_t& iBegin = Range.first;
-		const size_t& iEnd   = Range.second; // inclusive
+			if (currRange == 0)
+			{
+				++currRange; // skip the first range, and do it on this thread after dispatches
+				continue;
+			}
+			const size_t& iBegin = Range.first;
+			const size_t& iEnd = Range.second; // inclusive
 
-		WorkerThreadPool.AddTask([=]() { this->Process(iBegin, iEnd); });
+			WorkerThreadPool.AddTask([=]() { this->Process(iBegin, iEnd); });
+		}
 	}
 
 	// process the remaining work on this thread
 	{
+		SCOPED_CPU_MARKER("Process_ThisThread");
 		const size_t& iBegin = vRanges.begin()->first;
 		const size_t& iEnd   = vRanges.begin()->second; // inclusive
 		this->Process(iBegin, iEnd);
 	}
 
 	// Sync point -------------------------------------------------
-	while(WorkerThreadPool.GetNumActiveTasks() != 0); // busy-wait is bad...
+	{
+		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS", 0xFFFF0000);
+		while (WorkerThreadPool.GetNumActiveTasks() != 0); // busy-wait is bad...
+	}
 	// Sync point -------------------------------------------------
 
 	return;

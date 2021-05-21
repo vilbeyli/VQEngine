@@ -908,17 +908,17 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	//
 	// RENDER
 	//
-	RenderDepthPrePass(ctx, SceneView);
-
-	RenderAmbientOcclusion(ctx, SceneView);
-	
 	auto pCmd_ShadowMapThread = ctx.pCmdList_GFX2;
 	auto pCBHeap_ShadowMapThread = &ctx.mDynamicHeap_ConstantBuffer2;
 	auto pSceneShadowView = &SceneShadowView;
-	mWorkers_Render.AddTask([=]() 
+	mWorkers_Render.AddTask([=]()
 	{
 		RenderShadowMaps(pCmd_ShadowMapThread, pCBHeap_ShadowMapThread, *pSceneShadowView);
 	});
+
+	RenderDepthPrePass(ctx, SceneView);
+
+	RenderAmbientOcclusion(ctx, SceneView);
 	
 	TransitionForSceneRendering(ctx);
 
@@ -937,7 +937,10 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		CompositUIToHDRSwapchain(ctx);
 	}
 
-	while (mWorkers_Render.GetNumActiveTasks() != 0);
+	{
+		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS", 0xFFFF0000);
+		while (mWorkers_Render.GetNumActiveTasks() != 0);
+	}
 
 	hr = PresentFrame(ctx);
 
