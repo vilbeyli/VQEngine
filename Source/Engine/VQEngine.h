@@ -451,7 +451,7 @@ private:
 	// FRAME RENDERING PIPELINE
 	//
 	void                            TransitionForSceneRendering(FWindowRenderContext& ctx);
-	void                            RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowView& ShadowView);
+	void                            RenderShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView& ShadowView);
 	void                            RenderDepthPrePass(FWindowRenderContext& ctx, const FSceneView& SceneView);
 	void                            RenderAmbientOcclusion(FWindowRenderContext& ctx, const FSceneView& SceneView);
 	void                            RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& SceneView);

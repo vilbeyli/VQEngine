@@ -66,12 +66,15 @@ struct FWindowRenderContext
 	// 1x allocator per command-recording-thread, multiplied by num swapchain backbuffers
 	// Source: https://gpuopen.com/performance/
 	std::vector<ID3D12CommandAllocator*> mCommandAllocatorsGFX;
+	std::vector<ID3D12CommandAllocator*> mCommandAllocatorsGFX2;
 	std::vector<ID3D12CommandAllocator*> mCommandAllocatorsCompute;
 	std::vector<ID3D12CommandAllocator*> mCommandAllocatorsCopy;
 
 	DynamicBufferHeap mDynamicHeap_ConstantBuffer;
+	DynamicBufferHeap mDynamicHeap_ConstantBuffer2;
 
 	ID3D12GraphicsCommandList* pCmdList_GFX = nullptr;
+	ID3D12GraphicsCommandList* pCmdList_GFX2 = nullptr;
 
 	int MainRTResolutionX = -1;
 	int MainRTResolutionY = -1;

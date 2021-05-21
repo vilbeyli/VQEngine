@@ -612,22 +612,28 @@ void VQEngine::RenderThread_PreRender()
 
 	// Dynamic constant buffer maintenance
 	ctx.mDynamicHeap_ConstantBuffer.OnBeginFrame();
+	ctx.mDynamicHeap_ConstantBuffer2.OnBeginFrame();
 
 	// Command list allocators can only be reset when the associated 
 	// command lists have finished execution on the GPU; apps should use 
 	// fences to determine GPU execution progress.
 	ID3D12CommandAllocator* pCmdAlloc = ctx.mCommandAllocatorsGFX[BACK_BUFFER_INDEX];
+	ID3D12CommandAllocator* pCmdAlloc2 = ctx.mCommandAllocatorsGFX2[BACK_BUFFER_INDEX];
 	ThrowIfFailed(pCmdAlloc->Reset());
+	ThrowIfFailed(pCmdAlloc2->Reset());
 
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
 	ID3D12PipelineState* pInitialState = nullptr;
 	ThrowIfFailed(ctx.pCmdList_GFX->Reset(pCmdAlloc, pInitialState));
+	ctx.pCmdList_GFX2->Close();
+	ThrowIfFailed(ctx.pCmdList_GFX2->Reset(pCmdAlloc2, pInitialState));
 
 
 	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 	ctx.pCmdList_GFX->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+	ctx.pCmdList_GFX2->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 }
 
 void VQEngine::RenderThread_RenderFrame()
@@ -905,9 +911,15 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	RenderDepthPrePass(ctx, SceneView);
 
 	RenderAmbientOcclusion(ctx, SceneView);
-
-	RenderShadowMaps(ctx, SceneShadowView);
-
+	
+	auto pCmd_ShadowMapThread = ctx.pCmdList_GFX2;
+	auto pCBHeap_ShadowMapThread = &ctx.mDynamicHeap_ConstantBuffer2;
+	auto pSceneShadowView = &SceneShadowView;
+	mWorkers_Render.AddTask([=]() 
+	{
+		RenderShadowMaps(pCmd_ShadowMapThread, pCBHeap_ShadowMapThread, *pSceneShadowView);
+	});
+	
 	TransitionForSceneRendering(ctx);
 
 	RenderSceneColor(ctx, SceneView);
@@ -924,6 +936,8 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	{
 		CompositUIToHDRSwapchain(ctx);
 	}
+
+	while (mWorkers_Render.GetNumActiveTasks() != 0);
 
 	hr = PresentFrame(ctx);
 
@@ -980,7 +994,7 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 	}
 }
 
-void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowView& SceneShadowView)
+void VQEngine::RenderShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView& SceneShadowView)
 {
 	using namespace DirectX;
 	struct FCBufferLightPS
@@ -988,9 +1002,6 @@ void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowVie
 		XMFLOAT3 vLightPos;
 		float fFarPlane;
 	};
-
-	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
-	DynamicBufferHeap* pCBufferHeap = &ctx.mDynamicHeap_ConstantBuffer;
 
 	constexpr bool B_CLEAR_DEPTH_BUFFERS_BEFORE_DRAW = false;
 	SCOPED_GPU_MARKER(pCmd, "RenderShadowMaps");
@@ -1124,7 +1135,7 @@ void VQEngine::RenderShadowMaps(FWindowRenderContext& ctx, const FSceneShadowVie
 
 			FCBufferLightPS* pCBuffer = {};
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-			ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(decltype(pCBuffer)), (void**)(&pCBuffer), &cbAddr);
+			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(pCBuffer)), (void**)(&pCBuffer), &cbAddr);
 
 			pCBuffer->vLightPos = SceneShadowView.PointLightLinearDepthParams[i].vWorldPos;
 			pCBuffer->fFarPlane = SceneShadowView.PointLightLinearDepthParams[i].fFarPlane;
@@ -1961,9 +1972,10 @@ HRESULT VQEngine::PresentFrame(FWindowRenderContext& ctx)
 		);
 	}
 	pCmd->Close();
+	ctx.pCmdList_GFX2->Close();
 
 
-	ID3D12CommandList* ppCommandLists[] = { pCmd };
+	ID3D12CommandList* ppCommandLists[] = { ctx.pCmdList_GFX2, pCmd };
 
 	{
 		SCOPED_CPU_MARKER("ExecuteCommandLists()");

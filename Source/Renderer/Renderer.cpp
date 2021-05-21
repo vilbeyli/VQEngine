@@ -219,12 +219,16 @@ void VQRenderer::Exit()
 		for (ID3D12CommandAllocator* pCmdAlloc : ctx.mCommandAllocatorsCopy)    if (pCmdAlloc) pCmdAlloc->Release();
 
 		ctx.mDynamicHeap_ConstantBuffer.Destroy();
+		ctx.mDynamicHeap_ConstantBuffer2.Destroy();
 
 		ctx.SwapChain.Destroy(); // syncs GPU before releasing resources
 
 		ctx.PresentQueue.Destroy();
 		if (ctx.pCmdList_GFX)
 			ctx.pCmdList_GFX->Release();
+
+		if (ctx.pCmdList_GFX2)
+			ctx.pCmdList_GFX2->Release();
 	}
 
 	mGFXQueue.Destroy();
@@ -291,26 +295,33 @@ void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuf
 
 	// Create command allocators
 	ctx.mCommandAllocatorsGFX.resize(NumSwapchainBuffers);
+	ctx.mCommandAllocatorsGFX2.resize(NumSwapchainBuffers);
 	ctx.mCommandAllocatorsCompute.resize(NumSwapchainBuffers);
 	ctx.mCommandAllocatorsCopy.resize(NumSwapchainBuffers);
 	for (int f = 0; f < NumSwapchainBuffers; ++f)
 	{
 		ID3D12CommandAllocator* pCmdAlloc = {};
 		pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&ctx.mCommandAllocatorsGFX[f]));
+		pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&ctx.mCommandAllocatorsGFX2[f]));
 		pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&ctx.mCommandAllocatorsCompute[f]));
 		pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&ctx.mCommandAllocatorsCopy[f]));
 		SetName(ctx.mCommandAllocatorsGFX[f], "RenderContext::CmdAllocGFX[%d]", f);
+		SetName(ctx.mCommandAllocatorsGFX2[f], "RenderContext::CmdAllocGFX2[%d]", f);
 		SetName(ctx.mCommandAllocatorsCompute[f], "RenderContext::CmdAllocCompute[%d]", f);
 		SetName(ctx.mCommandAllocatorsCopy[f], "RenderContext::CmdAllocCopy[%d]", f);
 	}
 
 	// Create command lists
 	pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, ctx.mCommandAllocatorsGFX[0], nullptr, IID_PPV_ARGS(&ctx.pCmdList_GFX));
+	pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, ctx.mCommandAllocatorsGFX2[0], nullptr, IID_PPV_ARGS(&ctx.pCmdList_GFX2));
 	ctx.pCmdList_GFX->SetName(L"RenderContext::CmdListGFX");
+	ctx.pCmdList_GFX2->SetName(L"RenderContext::CmdListGFX2");
 	ctx.pCmdList_GFX->Close();
+	ctx.pCmdList_GFX2->Close();
 
 	// Create dynamic buffer heap
 	ctx.mDynamicHeap_ConstantBuffer.Create(pDevice, NumSwapchainBuffers, 16 * MEGABYTE);
+	ctx.mDynamicHeap_ConstantBuffer2.Create(pDevice, NumSwapchainBuffers, 16 * MEGABYTE);
 
 	// Save other context data
 	ctx.MainRTResolutionX = pWin->GetWidth();
