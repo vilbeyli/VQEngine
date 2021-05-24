@@ -304,7 +304,8 @@ protected:
 // ENGINE INTERFACE
 //----------------------------------------------------------------------------------------------------------------
 private: // Derived Scenes shouldn't access these functions
-	void Update(float dt, int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX);
+	void PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX);
+	void Update(float dt, int FRAME_DATA_INDEX);
 	void PostUpdate(int FRAME_DATA_INDEX, ThreadPool& UpdateWorkerThreadPool);
 	void StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene);
 	void OnLoadComplete();

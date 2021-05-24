@@ -110,7 +110,12 @@ void VQEngine::UpdateThread_PreUpdate(float& dt)
 	// update timer
 	dt = mTimer.Tick();
 
-	// TODO: perf entry
+	if (mpScene)
+	{
+		const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
+		const int FRAME_DATA_PREV_INDEX = (FRAME_DATA_INDEX == 0) ? (NUM_BACK_BUFFERS - 1) : (FRAME_DATA_INDEX - 1);
+		mpScene->PreUpdate(FRAME_DATA_INDEX, FRAME_DATA_PREV_INDEX);
+	}
 
 	// system-wide input (esc/mouse click on wnd)
 	HandleEngineInput();
@@ -456,9 +461,8 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 
 	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(hwnd);
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
-	const int FRAME_DATA_PREV_INDEX = (FRAME_DATA_INDEX == 0) ? (NUM_BACK_BUFFERS - 1) : (FRAME_DATA_INDEX - 1);
 
-	mpScene->Update(dt, FRAME_DATA_INDEX, FRAME_DATA_PREV_INDEX);
+	mpScene->Update(dt, FRAME_DATA_INDEX);
 }
 
 void VQEngine::UpdateThread_UpdateScene_DebugWnd(const float dt)

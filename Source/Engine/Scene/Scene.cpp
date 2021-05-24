@@ -157,20 +157,30 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 {}
 
 
-void Scene::Update(float dt, int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX)
+void Scene::PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX)
+{
+	if (std::max(FRAME_DATA_INDEX, FRAME_DATA_PREV_INDEX) >= mFrameSceneViews.size())
+	{
+		Log::Warning("Scene::PreUpdate(): Frame data is not yet allocated!");
+		return;
+	}
+	assert(std::max(FRAME_DATA_INDEX, FRAME_DATA_PREV_INDEX) < mFrameSceneViews.size());
+	FSceneView& SceneViewCurr = mFrameSceneViews[FRAME_DATA_INDEX];
+	FSceneView& SceneViewPrev = mFrameSceneViews[FRAME_DATA_PREV_INDEX];
+	SceneViewCurr.postProcessParameters = SceneViewPrev.postProcessParameters;
+	SceneViewCurr.sceneParameters = SceneViewPrev.sceneParameters;
+}
+
+void Scene::Update(float dt, int FRAME_DATA_INDEX)
 {
 	SCOPED_CPU_MARKER("Scene::Update()");
 	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
-	const FSceneView& SceneViewPrev = mFrameSceneViews[FRAME_DATA_PREV_INDEX];
 	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
 	Camera& Cam = this->mCameras[this->mIndex_SelectedCamera];
 
 	Cam.Update(dt, mInput);
 	this->HandleInput(SceneView);
 	this->UpdateScene(dt, SceneView);
-
-	SceneView.postProcessParameters = SceneViewPrev.postProcessParameters;
-	SceneView.sceneParameters = SceneViewPrev.sceneParameters;
 }
 
 void Scene::PostUpdate(int FRAME_DATA_INDEX, ThreadPool& UpdateWorkerThreadPool)
