@@ -4,6 +4,8 @@
 
 #include "../Engine/Core/Input.h"
 
+#include "../Libs/VQUtils/Source/utils.h"
+
 using namespace DirectX;
 
 
@@ -88,10 +90,14 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 	{
 		FGameObjectRepresentation obj = {};
 
-		XMFLOAT3 pos = {x*distance, y*distance, z*distance};
+		XMFLOAT3 pos = {x*distance, 8 + y*distance, z*distance};
 		XMFLOAT3 axis = UpVector;
 		float rotationAngle = 15.0f; // TODO: rand?
-		XMFLOAT3 scale = { 1, 1, 1 };
+		XMFLOAT3 scale = { 
+			  1.2f - MathUtil::RandF(0, 0.4)
+			, 1.2f - MathUtil::RandF(0, 0.4)
+			, 1.2f - MathUtil::RandF(0, 0.4) 
+		};
 
 		obj.tf.SetPosition(pos);
 		obj.tf.RotateAroundAxisDegrees(axis, rotationAngle);
