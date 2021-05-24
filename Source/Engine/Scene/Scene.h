@@ -100,6 +100,11 @@ struct FPostProcessParameters
 
 	inline bool IsFFXCASEnabled() const { return this->bEnableCAS && FFXCASParams.CASSharpen > 0.0f; }
 
+	int SceneRTWidth = 0;
+	int SceneRTHeight = 0;
+	int DisplayResolutionWidth = 0;
+	int DisplayResolutionHeight = 0;
+
 	FTonemapper TonemapperParams;
 	FBlurParams BlurParams;
 	FFFXCAS     FFXCASParams;
@@ -111,7 +116,7 @@ struct FSceneRenderParameters
 {
 	bool bDrawLightBounds = false;
 	bool bDrawLightMeshes = true;
-	float fAmbientLightingFactor = 0.105f;
+	float fAmbientLightingFactor = 0.055f;
 	bool bScreenSpaceAO = true;
 };
 struct FMeshRenderCommandBase
@@ -151,6 +156,8 @@ struct FSceneView
 	DirectX::XMVECTOR     cameraPosition;
 	float                 MainViewCameraYaw = 0.0f;
 	float                 MainViewCameraPitch = 0.0f;
+	int                   SceneRTWidth = 0;
+	int                   SceneRTHeight = 0;
 	//bool                  bIsPBRLightingUsed;
 	//bool                  bIsDeferredRendering;
 	//bool                  bIsIBLEnabled;
@@ -297,8 +304,9 @@ protected:
 // ENGINE INTERFACE
 //----------------------------------------------------------------------------------------------------------------
 private: // Derived Scenes shouldn't access these functions
+	void PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX);
 	void Update(float dt, int FRAME_DATA_INDEX);
-	void PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX, ThreadPool& UpdateWorkerThreadPool);
+	void PostUpdate(int FRAME_DATA_INDEX, ThreadPool& UpdateWorkerThreadPool);
 	void StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene);
 	void OnLoadComplete();
 	void Unload(); // serial-only for now. maybe MT later.
@@ -308,8 +316,8 @@ private: // Derived Scenes shouldn't access these functions
 	void GatherSceneLightData(FSceneView& SceneView) const;
 
 	void PrepareLightMeshRenderParams(FSceneView& SceneView) const;
-	void PrepareSceneMeshRenderParams(FSceneView& SceneView) const;
-	void PrepareShadowMeshRenderParams(FSceneShadowView& ShadowView, const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, ThreadPool& UpdateWorkerThreadPool) const;
+	void PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<FMeshRenderCommand>& MeshRenderCommands) const;
+	void PrepareShadowMeshRenderParams(FSceneShadowView& ShadowView, const FFrustumPlaneset& ViewFrustumPlanesInWorldSpace, ThreadPool& UpdateWorkerThreadPool) const;
 	
 	// WIP----
 	void GatherSpotLightFrustumParameters(FSceneShadowView& SceneShadowView, size_t iShadowView, const Light& l);

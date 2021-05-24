@@ -26,6 +26,7 @@
 #include "Device.h"
 #include "Texture.h"
 #include "Shader.h"
+#include "WindowRenderContext.h"
 
 #include "../Engine/Core/Window.h"
 #include "../../Shaders/LightingConstantBufferData.h"
@@ -126,9 +127,9 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 	assert(bDeviceCreateSucceeded);
 
 	// Create Command Queues of different types
-	mGFXQueue.Create(pVQDevice, CommandQueue::ECommandQueueType::GFX);
-	mComputeQueue.Create(pVQDevice, CommandQueue::ECommandQueueType::COMPUTE);
-	mCopyQueue.Create(pVQDevice, CommandQueue::ECommandQueueType::COPY);
+	mGFXQueue.Create(pVQDevice, CommandQueue::EType::GFX);
+	mComputeQueue.Create(pVQDevice, CommandQueue::EType::COMPUTE);
+	mCopyQueue.Create(pVQDevice, CommandQueue::EType::COPY);
 
 	// Initialize memory
 	InitializeD3D12MA();
@@ -183,6 +184,7 @@ void VQRenderer::Exit()
 	mbExitUploadThread.store(true);
 	mSignal_UploadThreadWorkReady.NotifyAll();
 
+	// clean up memory
 	mHeapUpload.Destroy();
 	mHeapCBV_SRV_UAV.Destroy();
 	mHeapDSV.Destroy();
@@ -190,20 +192,19 @@ void VQRenderer::Exit()
 	mStaticHeap_VertexBuffer.Destroy();
 	mStaticHeap_IndexBuffer.Destroy();
 
+	// clean up textures
 	for (std::unordered_map<TextureID, Texture>::iterator it = mTextures.begin(); it != mTextures.end(); ++it)
 	{
 		it->second.Destroy();
 	}
-
 	mTextures.clear();
-	
 	mpAllocator->Release();
 	
+	// clean up root signatures and PSOs
 	for (auto* p : mpBuiltinRootSignatures)
 	{
 		if (p) p->Release();
 	}
-
 	for (std::pair<PSO_ID, ID3D12PipelineState*> pPSO : mPSOs)
 	{
 		if (pPSO.second)
@@ -211,32 +212,21 @@ void VQRenderer::Exit()
 	}
 	mPSOs.clear();
 
+	// clean up contexts
+	size_t NumBackBuffers = 0;
 	for (std::unordered_map<HWND, FWindowRenderContext>::iterator it = mRenderContextLookup.begin(); it != mRenderContextLookup.end(); ++it)
 	{
 		auto& ctx = it->second;
-		for (ID3D12CommandAllocator* pCmdAlloc : ctx.mCommandAllocatorsGFX)     if (pCmdAlloc) pCmdAlloc->Release();
-		for (ID3D12CommandAllocator* pCmdAlloc : ctx.mCommandAllocatorsCompute) if (pCmdAlloc) pCmdAlloc->Release();
-		for (ID3D12CommandAllocator* pCmdAlloc : ctx.mCommandAllocatorsCopy)    if (pCmdAlloc) pCmdAlloc->Release();
-
-		ctx.mDynamicHeap_ConstantBuffer.Destroy();
-		ctx.mDynamicHeap_ConstantBuffer2.Destroy();
-
-		ctx.SwapChain.Destroy(); // syncs GPU before releasing resources
-
-		ctx.PresentQueue.Destroy();
-		if (ctx.pCmdList_GFX)
-			ctx.pCmdList_GFX->Release();
-
-		if (ctx.pCmdList_GFX2)
-			ctx.pCmdList_GFX2->Release();
+		ctx.CleanupContext();
 	}
 
+	// cleanp up device
 	mGFXQueue.Destroy();
 	mComputeQueue.Destroy();
 	mCopyQueue.Destroy();
-
 	mDevice.Destroy();
 
+	// clean up remaining threads
 	mTextureUploadThread.join();
 }
 
@@ -245,19 +235,20 @@ void VQRenderer::OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h)
 	if (!CheckContext(hwnd)) return;
 	FWindowRenderContext& ctx = mRenderContextLookup.at(hwnd);
 
-	ctx.MainRTResolutionX = w; // TODO: RenderScale
-	ctx.MainRTResolutionY = h; // TODO: RenderScale
+	ctx.WindowDisplayResolutionX = w; // TODO: RenderScale
+	ctx.WindowDisplayResolutionY = h; // TODO: RenderScale
 }
+
 
 SwapChain& VQRenderer::GetWindowSwapChain(HWND hwnd) { return mRenderContextLookup.at(hwnd).SwapChain; }
 
-short VQRenderer::GetSwapChainBackBufferCount(Window* pWnd) const { return pWnd ? this->GetSwapChainBackBufferCount(pWnd->GetHWND()) : 0; }
-short VQRenderer::GetSwapChainBackBufferCount(HWND hwnd) const
+unsigned short VQRenderer::GetSwapChainBackBufferCount(Window* pWnd) const { return pWnd ? this->GetSwapChainBackBufferCount(pWnd->GetHWND()) : 0; }
+unsigned short VQRenderer::GetSwapChainBackBufferCount(HWND hwnd) const
 {
 	if (!CheckContext(hwnd)) return 0;
 
 	const FWindowRenderContext& ctx = mRenderContextLookup.at(hwnd);
-	return ctx.SwapChain.GetNumBackBuffers();
+	return ctx.GetNumSwapchainBuffers();
 	
 }
 
@@ -268,65 +259,11 @@ void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuf
 	ID3D12Device* pDevice = pVQDevice->GetDevicePtr();
 
 	FWindowRenderContext ctx = {};
-
-	ctx.pDevice = pVQDevice;
-	char c[127] = {}; sprintf_s(c, "PresentQueue<0x%p>", pWin->GetHWND());
-	ctx.PresentQueue.Create(ctx.pDevice, CommandQueue::ECommandQueueType::GFX, c); // Create the GFX queue for presenting the SwapChain
-
-	// Create the SwapChain
-	FSwapChainCreateDesc swapChainDesc = {};
-	swapChainDesc.numBackBuffers = NumSwapchainBuffers;
-	swapChainDesc.pDevice        = ctx.pDevice->GetDevicePtr();
-	swapChainDesc.pWindow        = pWin;
-	swapChainDesc.pCmdQueue      = &ctx.PresentQueue;
-	swapChainDesc.bVSync         = bVSync;
-	swapChainDesc.bHDR           = bHDRSwapchain;
-	swapChainDesc.bitDepth       = bHDRSwapchain ? _16 : _8; // currently no support for HDR10 / R10G10B10A2 signals
-	swapChainDesc.bFullscreen    = false; // TODO: exclusive fullscreen to be deprecated. App shouldn't make dxgi mode changes.
-	ctx.SwapChain.Create(swapChainDesc);
-	if (bHDRSwapchain)
-	{
-		FSetHDRMetaDataParams p = {}; // default
-		// Set default HDRMetaData - the engine is likely loading resources at this stage 
-		// and all the HDRMetaData parts are not ready yet.
-		// Engine dispatches an event to set HDR MetaData when mSystemInfo is initialized.
-		ctx.SwapChain.SetHDRMetaData(p);
-	}
-
-	// Create command allocators
-	ctx.mCommandAllocatorsGFX.resize(NumSwapchainBuffers);
-	ctx.mCommandAllocatorsGFX2.resize(NumSwapchainBuffers);
-	ctx.mCommandAllocatorsCompute.resize(NumSwapchainBuffers);
-	ctx.mCommandAllocatorsCopy.resize(NumSwapchainBuffers);
-	for (int f = 0; f < NumSwapchainBuffers; ++f)
-	{
-		ID3D12CommandAllocator* pCmdAlloc = {};
-		pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&ctx.mCommandAllocatorsGFX[f]));
-		pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&ctx.mCommandAllocatorsGFX2[f]));
-		pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&ctx.mCommandAllocatorsCompute[f]));
-		pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&ctx.mCommandAllocatorsCopy[f]));
-		SetName(ctx.mCommandAllocatorsGFX[f], "RenderContext::CmdAllocGFX[%d]", f);
-		SetName(ctx.mCommandAllocatorsGFX2[f], "RenderContext::CmdAllocGFX2[%d]", f);
-		SetName(ctx.mCommandAllocatorsCompute[f], "RenderContext::CmdAllocCompute[%d]", f);
-		SetName(ctx.mCommandAllocatorsCopy[f], "RenderContext::CmdAllocCopy[%d]", f);
-	}
-
-	// Create command lists
-	pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, ctx.mCommandAllocatorsGFX[0], nullptr, IID_PPV_ARGS(&ctx.pCmdList_GFX));
-	pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, ctx.mCommandAllocatorsGFX2[0], nullptr, IID_PPV_ARGS(&ctx.pCmdList_GFX2));
-	ctx.pCmdList_GFX->SetName(L"RenderContext::CmdListGFX");
-	ctx.pCmdList_GFX2->SetName(L"RenderContext::CmdListGFX2");
-	ctx.pCmdList_GFX->Close();
-	ctx.pCmdList_GFX2->Close();
-
-	// Create dynamic buffer heap
-	ctx.mDynamicHeap_ConstantBuffer.Create(pDevice, NumSwapchainBuffers, 16 * MEGABYTE);
-	ctx.mDynamicHeap_ConstantBuffer2.Create(pDevice, NumSwapchainBuffers, 16 * MEGABYTE);
+	ctx.InitializeContext(pWin, pVQDevice, NumSwapchainBuffers, bVSync, bHDRSwapchain);
 
 	// Save other context data
-	ctx.MainRTResolutionX = pWin->GetWidth();
-	ctx.MainRTResolutionY = pWin->GetHeight();
-
+	ctx.WindowDisplayResolutionX = pWin->GetWidth();
+	ctx.WindowDisplayResolutionY = pWin->GetHeight();
 
 	// save the render context
 	this->mRenderContextLookup.emplace(pWin->GetHWND(), std::move(ctx));

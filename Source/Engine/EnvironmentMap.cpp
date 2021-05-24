@@ -369,13 +369,13 @@ void VQEngine::UnloadEnvironmentMap()
 //
 //-------------------------------------------------------------------------------------------------------------------------------------------------
 #include "GPUMarker.h"
-void VQEngine::PreFilterEnvironmentMap(FEnvironmentMapRenderingResources& env)
+void VQEngine::PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, FEnvironmentMapRenderingResources& env)
 {
 	Log::Info("Environment Map: PreFilterEnvironmentMap");
 	using namespace DirectX;
 
 	FWindowRenderContext& ctx = mRenderer.GetWindowRenderContext(mpWinMain->GetHWND());
-	ID3D12GraphicsCommandList*& pCmd = ctx.pCmdList_GFX;
+	DynamicBufferHeap& cbHeap = ctx.GetConstantBufferHeap(0);
 
 	if (env.SRV_BRDFIntegrationLUT == INVALID_ID)
 	{
@@ -446,8 +446,8 @@ void VQEngine::PreFilterEnvironmentMap(FEnvironmentMapRenderingResources& env)
 				D3D12_GPU_VIRTUAL_ADDRESS cbAddr1 = {};
 				cb0_t* pCB0 = {};
 				cb1_t* pCB1 = {};
-				ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(cb0_t), (void**)(&pCB0), &cbAddr0);
-				ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(cb1_t), (void**)(&pCB1), &cbAddr1);
+				cbHeap.AllocConstantBuffer(sizeof(cb0_t), (void**)(&pCB0), &cbAddr0);
+				cbHeap.AllocConstantBuffer(sizeof(cb1_t), (void**)(&pCB1), &cbAddr1);
 				pCB1->ViewDimX = static_cast<float>(w);
 				pCB1->ViewDimY = static_cast<float>(h);
 				pCB1->Roughness = 0.0f;
@@ -468,8 +468,8 @@ void VQEngine::PreFilterEnvironmentMap(FEnvironmentMapRenderingResources& env)
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr1 = {};
 			cb0_t* pCB0 = {};
 			cb1_t* pCB1 = {};
-			ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(cb0_t), (void**)(&pCB0), &cbAddr0);
-			ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(cb1_t), (void**)(&pCB1), &cbAddr1);
+			cbHeap.AllocConstantBuffer(sizeof(cb0_t), (void**)(&pCB0), &cbAddr0);
+			cbHeap.AllocConstantBuffer(sizeof(cb1_t), (void**)(&pCB1), &cbAddr1);
 			pCB1->ViewDimX = static_cast<float>(w);
 			pCB1->ViewDimY = static_cast<float>(h);
 			pCB1->MIP = 0;
@@ -530,7 +530,7 @@ void VQEngine::PreFilterEnvironmentMap(FEnvironmentMapRenderingResources& env)
 		FBlurParams* pBlurParams = nullptr;
 
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(FBlurParams), (void**)&pBlurParams, &cbAddr);
+		cbHeap.AllocConstantBuffer(sizeof(FBlurParams), (void**)&pBlurParams, &cbAddr);
 		pBlurParams->iImageSizeX = InputImageWidth;
 		pBlurParams->iImageSizeY = InputImageHeight;
 
@@ -611,8 +611,8 @@ void VQEngine::PreFilterEnvironmentMap(FEnvironmentMapRenderingResources& env)
 				D3D12_GPU_VIRTUAL_ADDRESS cbAddr1 = {};
 				cb0_t* pCB0 = {};
 				cb1_t* pCB1 = {};
-				ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(cb0_t), (void**)(&pCB0), &cbAddr0);
-				ctx.mDynamicHeap_ConstantBuffer.AllocConstantBuffer(sizeof(cb1_t), (void**)(&pCB1), &cbAddr1);
+				cbHeap.AllocConstantBuffer(sizeof(cb0_t), (void**)(&pCB0), &cbAddr0);
+				cbHeap.AllocConstantBuffer(sizeof(cb1_t), (void**)(&pCB1), &cbAddr1);
 				
 				pCB0->viewProj[0] = Texture::CubemapUtility::CalculateViewMatrix(face) * proj;
 				pCB1->Roughness = static_cast<float>(mip) / (MIP_LEVELS-1); // min(0.04, ) ?

@@ -46,6 +46,8 @@ void VQEngine::UpdateThread_Main()
 	float dt_RenderWaitTime = 0.0f;
 	while (!mbStopAllThreads && !bQuit)
 	{
+		SCOPED_CPU_MARKER_C("UpdateThread_Main()", 0xFF000077);
+
 		dt_RenderWaitTime = UpdateThread_WaitForRenderThread();
 
 		UpdateThread_HandleEvents();
@@ -103,10 +105,17 @@ void VQEngine::UpdateThread_PreUpdate(float& dt)
 {
 	SCOPED_CPU_MARKER("UpdateThread_PreUpdate()");
 
+	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
+
 	// update timer
 	dt = mTimer.Tick();
 
-	// TODO: perf entry
+	if (mpScene)
+	{
+		const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
+		const int FRAME_DATA_PREV_INDEX = (FRAME_DATA_INDEX == 0) ? (NUM_BACK_BUFFERS - 1) : (FRAME_DATA_INDEX - 1);
+		mpScene->PreUpdate(FRAME_DATA_INDEX, FRAME_DATA_PREV_INDEX);
+	}
 
 	// system-wide input (esc/mouse click on wnd)
 	HandleEngineInput();
@@ -183,14 +192,13 @@ void VQEngine::UpdateThread_PostUpdate()
 	SCOPED_CPU_MARKER("UpdateThread_PostUpdate()");
 	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
-	const int FRAME_DATA_NEXT_INDEX = ((mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS) + 1) % NUM_BACK_BUFFERS;
 
 	if (mbLoadingLevel)
 	{
 		return;
 	}
 
-	mpScene->PostUpdate(FRAME_DATA_INDEX, FRAME_DATA_NEXT_INDEX, mWorkers_Update);
+	mpScene->PostUpdate(FRAME_DATA_INDEX, mWorkers_Update);
 
 	// input post update
 	for (auto it = mInputStates.begin(); it != mInputStates.end(); ++it)

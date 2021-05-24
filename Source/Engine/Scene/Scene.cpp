@@ -32,6 +32,16 @@
 #define LOG_CACHED_RESOURCES_ON_LOAD 0
 #define LOG_RESOURCE_CREATE          1
 
+// Culling
+#define ENABLE_VIEW_FRUSTUM_CULLING 1
+
+// Multithreading
+#define UPDATE_THREAD__ENABLE_WORKERS 1
+#if UPDATE_THREAD__ENABLE_WORKERS
+	#define ENABLE_THREADED_SHADOW_FRUSTUM_GATHER 0
+#endif
+
+
 using namespace DirectX;
 
 static MeshID LAST_USED_MESH_ID = EBuiltInMeshes::NUM_BUILTIN_MESHES;
@@ -148,8 +158,23 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 {}
 
 
+void Scene::PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX)
+{
+	if (std::max(FRAME_DATA_INDEX, FRAME_DATA_PREV_INDEX) >= mFrameSceneViews.size())
+	{
+		Log::Warning("Scene::PreUpdate(): Frame data is not yet allocated!");
+		return;
+	}
+	assert(std::max(FRAME_DATA_INDEX, FRAME_DATA_PREV_INDEX) < mFrameSceneViews.size());
+	FSceneView& SceneViewCurr = mFrameSceneViews[FRAME_DATA_INDEX];
+	FSceneView& SceneViewPrev = mFrameSceneViews[FRAME_DATA_PREV_INDEX];
+	SceneViewCurr.postProcessParameters = SceneViewPrev.postProcessParameters;
+	SceneViewCurr.sceneParameters = SceneViewPrev.sceneParameters;
+}
+
 void Scene::Update(float dt, int FRAME_DATA_INDEX)
 {
+	SCOPED_CPU_MARKER("Scene::Update()");
 	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
 	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
 	Camera& Cam = this->mCameras[this->mIndex_SelectedCamera];
@@ -159,13 +184,12 @@ void Scene::Update(float dt, int FRAME_DATA_INDEX)
 	this->UpdateScene(dt, SceneView);
 }
 
-void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX, ThreadPool& UpdateWorkerThreadPool)
+void Scene::PostUpdate(int FRAME_DATA_INDEX, ThreadPool& UpdateWorkerThreadPool)
 {
 	SCOPED_CPU_MARKER("Scene::PostUpdate()");
 	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
 	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
 	FSceneShadowView& ShadowView = mFrameShadowViews[FRAME_DATA_INDEX];
-	FSceneView& SceneViewNext = mFrameSceneViews[FRAME_DATA_NEXT_INDEX];
 
 	const Camera& cam = mCameras[mIndex_SelectedCamera];
 	const XMFLOAT3 camPos = cam.GetPositionF();
@@ -180,21 +204,37 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX, ThreadPo
 	SceneView.MainViewCameraYaw = cam.GetYaw();
 	SceneView.MainViewCameraPitch = cam.GetPitch();
 
-	mBoundingBoxHierarchy.Clear();
-	mBoundingBoxHierarchy.BuildGameObjectBoundingBoxes(mpObjects);
-	mBoundingBoxHierarchy.BuildMeshBoundingBoxes(mpObjects);
+	const FFrustumPlaneset ViewFrustumPlanes = FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj);
 
+	{
+		SCOPED_CPU_MARKER("BuildBoundingBoxHierarchy");
+		mBoundingBoxHierarchy.Clear();
+		mBoundingBoxHierarchy.BuildGameObjectBoundingBoxes(mpObjects);
+		mBoundingBoxHierarchy.BuildMeshBoundingBoxes(mpObjects);
+	}
 
-
-	PrepareSceneMeshRenderParams(SceneView);
-	GatherSceneLightData(SceneView);
-	PrepareShadowMeshRenderParams(ShadowView, cam.GetViewFrustumPlanesInWorldSpace(), UpdateWorkerThreadPool);
-	PrepareLightMeshRenderParams(SceneView);
-	// TODO: Prepare BoundingBoxRenderParams
-
-	// update post process settings for next frame
-	SceneViewNext.postProcessParameters = SceneView.postProcessParameters;
-	SceneViewNext.sceneParameters = SceneView.sceneParameters;
+	if constexpr (!UPDATE_THREAD__ENABLE_WORKERS)
+	{
+		PrepareSceneMeshRenderParams(ViewFrustumPlanes, SceneView.meshRenderCommands);
+		GatherSceneLightData(SceneView);
+		PrepareShadowMeshRenderParams(ShadowView, ViewFrustumPlanes, UpdateWorkerThreadPool);
+		PrepareLightMeshRenderParams(SceneView);
+		// TODO: Prepare BoundingBoxRenderParams
+	}
+	else
+	{
+		UpdateWorkerThreadPool.AddTask([=, &SceneView]()
+		{
+			PrepareSceneMeshRenderParams(ViewFrustumPlanes, SceneView.meshRenderCommands);
+		});
+		GatherSceneLightData(SceneView);
+		PrepareShadowMeshRenderParams(ShadowView, ViewFrustumPlanes, UpdateWorkerThreadPool);
+		PrepareLightMeshRenderParams(SceneView);
+		{
+			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
+			while (UpdateWorkerThreadPool.GetNumActiveTasks() != 0);
+		}
+	}
 }
 
 
@@ -397,55 +437,57 @@ void Scene::PrepareLightMeshRenderParams(FSceneView& SceneView) const
 	fnGatherLightRenderData(mLightsDynamic);
 }
 
-#define ENABLE_VIEW_FRUSTUM_CULLING 1
-#define ENABLE_THREADED_SHADOW_FRUSTUM_GATHER 0
-void Scene::PrepareSceneMeshRenderParams(FSceneView& SceneView) const
+
+void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<FMeshRenderCommand>& MeshRenderCommands) const
 {
 	SCOPED_CPU_MARKER("Scene::PrepareSceneMeshRenderParams()");
-	SceneView.meshRenderCommands.clear();
 
 #if ENABLE_VIEW_FRUSTUM_CULLING
 
 	FFrustumCullWorkerContext GameObjectFrustumCullWorkerContext;
 	
-	GameObjectFrustumCullWorkerContext.AddWorkerItem(FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj)
+	GameObjectFrustumCullWorkerContext.AddWorkerItem(MainViewFrustumPlanesInWorldSpace
 		, mBoundingBoxHierarchy.mGameObjectBoundingBoxes
 		, mBoundingBoxHierarchy.mGameObjectBoundingBoxGameObjectPointerMapping
 	);
 
 	FFrustumCullWorkerContext MeshFrustumCullWorkerContext; // TODO: populate after culling game objects?
-	MeshFrustumCullWorkerContext.AddWorkerItem(FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj)
+	MeshFrustumCullWorkerContext.AddWorkerItem(MainViewFrustumPlanesInWorldSpace
 		, mBoundingBoxHierarchy.mMeshBoundingBoxes
 		, mBoundingBoxHierarchy.mMeshBoundingBoxGameObjectPointerMapping
 	);
 
-	constexpr bool SINGLE_THREADED_CULL = true;
+	constexpr bool SINGLE_THREADED_CULL = true; // !UPDATE_THREAD__ENABLE_WORKERS;
 	//-----------------------------------------------------------------------------------------
-	if constexpr (SINGLE_THREADED_CULL)
 	{
-		GameObjectFrustumCullWorkerContext.ProcessWorkItems_SingleThreaded();
-		MeshFrustumCullWorkerContext.ProcessWorkItems_SingleThreaded();
-	}
-	else
-	{
-		const size_t NumThreadsToDistributeIncludingThisThread = ThreadPool::sHardwareThreadCount - 1; // -1 to leave RenderThread a physical core
-		
-		// The current FFrustumCullWorkerContext doesn't support threading a single list
-		// TODO: keep an eye on the perf here, find a way to thread of necessary
-		#if 0
-		GameObjectFrustumCullWorkerContext.ProcessWorkItems_MultiThreaded(NumThreadsIncludingThisThread, UpdateWorkerThreadPool);
-		MeshFrustumCullWorkerContext.ProcessWorkItems_MultiThreaded(NumThreadsIncludingThisThread, UpdateWorkerThreadPool);
-		#endif
+		SCOPED_CPU_MARKER("CullMainViewFrustum");
+		if constexpr (SINGLE_THREADED_CULL)
+		{
+			GameObjectFrustumCullWorkerContext.ProcessWorkItems_SingleThreaded();
+			MeshFrustumCullWorkerContext.ProcessWorkItems_SingleThreaded();
+		}
+		else
+		{
+			const size_t NumThreadsToDistributeIncludingThisThread = ThreadPool::sHardwareThreadCount - 1; // -1 to leave RenderThread a physical core
+
+			// The current FFrustumCullWorkerContext doesn't support threading a single list
+			// TODO: keep an eye on the perf here, find a way to thread of necessary
+			assert(false);
+#if 0
+			GameObjectFrustumCullWorkerContext.ProcessWorkItems_MultiThreaded(NumThreadsIncludingThisThread, UpdateWorkerThreadPool);
+			MeshFrustumCullWorkerContext.ProcessWorkItems_MultiThreaded(NumThreadsIncludingThisThread, UpdateWorkerThreadPool);
+#endif
+		}
 	}
 	//-----------------------------------------------------------------------------------------
 	
 	// TODO: we have a culled list of game object boundin box indices
 	//for (size_t iFrustum = 0; iFrustum < NumFrustumsToCull; ++iFrustum)
 	{
+		SCOPED_CPU_MARKER("RecordShadowMeshRenderCommand");
 		//const std::vector<size_t>& CulledBoundingBoxIndexList_Obj = GameObjectFrustumCullWorkerContext.vCulledBoundingBoxIndexLists[iFrustum];
 
-		std::vector<FMeshRenderCommand>& vMeshRenderList = SceneView.meshRenderCommands;
-		vMeshRenderList.clear();
+		MeshRenderCommands.clear();
 
 		const std::vector<size_t>& CulledBoundingBoxIndexList_Msh = MeshFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[0];
 		for (const size_t& BBIndex : CulledBoundingBoxIndexList_Msh)
@@ -464,7 +506,7 @@ void Scene::PrepareSceneMeshRenderParams(FSceneView& SceneView) const
 			meshRenderCmd.matWorldTransformation = pTF->matWorldTransformation();
 			meshRenderCmd.matNormalTransformation = pTF->NormalMatrix(meshRenderCmd.matWorldTransformation);
 			meshRenderCmd.matID = model.mData.mOpaqueMaterials.at(meshID);
-			vMeshRenderList.push_back(meshRenderCmd);
+			MeshRenderCommands.push_back(meshRenderCmd);
 		}
 	}
 
@@ -573,13 +615,13 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 	SCOPED_CPU_MARKER("Scene::PrepareShadowMeshRenderParams()");
 #if ENABLE_VIEW_FRUSTUM_CULLING
 	constexpr bool bCULL_LIGHT_VIEWS     = false;
-	constexpr bool bSINGLE_THREADED_CULL = false;
+	constexpr bool bSINGLE_THREADED_CULL = !UPDATE_THREAD__ENABLE_WORKERS;
 
-#if ENABLE_THREADED_SHADOW_FRUSTUM_GATHER
+	#if ENABLE_THREADED_SHADOW_FRUSTUM_GATHER
 
 	// TODO: gathering point light faces takes long and can be threaded
 
-#else
+	#else
 
 	int iLight = 0;
 	int iPoint = 0;
@@ -638,7 +680,7 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 			++iLight;
 		}
 	};
-#endif
+	#endif // ENABLE_THREADED_SHADOW_FRUSTUM_GATHER
 
 	static const size_t HW_CORE_COUNT = ThreadPool::sHardwareThreadCount / 2;
 	const size_t NumThreadsIncludingThisThread = HW_CORE_COUNT - 1; // -1 to leave RenderThread a physical core

@@ -152,7 +152,8 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	//std::vector<int> vLightMovementTypeID; // index to access light type vectors: [0]:static, [1]:stationary, [2]:dynamic
 
 
-	size_t AddWorkerItem(FFrustumPlaneset&& FrustumPlaneSet, std::vector<FBoundingBox> vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects);
+	size_t AddWorkerItem(     FFrustumPlaneset&& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects);
+	size_t AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects);
 
 	void ProcessWorkItems_SingleThreaded();
 	void ProcessWorkItems_MultiThreaded(const size_t NumThreadsIncludingThisThread, ThreadPool& WorkerThreadPool);

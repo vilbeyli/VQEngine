@@ -121,7 +121,16 @@ bool IsFrustumIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes0, const 
 // THREADING
 //
 //------------------------------------------------------------------------------------------------------------------------------
-size_t FFrustumCullWorkerContext::AddWorkerItem(FFrustumPlaneset&& FrustumPlaneSet, std::vector<FBoundingBox> vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects)
+size_t FFrustumCullWorkerContext::AddWorkerItem(FFrustumPlaneset&& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects)
+{
+	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::AddWorkerItem()");
+	vFrustumPlanes.emplace_back(FrustumPlaneSet);
+	vBoundingBoxLists.push_back(vBoundingBoxList);
+	vGameObjectPointerLists.push_back(pGameObjects);
+	assert(vFrustumPlanes.size() == vBoundingBoxLists.size());
+	return vFrustumPlanes.size() - 1;
+}
+size_t FFrustumCullWorkerContext::AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects)
 {
 	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::AddWorkerItem()");
 	vFrustumPlanes.emplace_back(FrustumPlaneSet);
@@ -220,7 +229,11 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 			const size_t& iBegin = Range.first;
 			const size_t& iEnd = Range.second; // inclusive
 
-			WorkerThreadPool.AddTask([=]() { this->Process(iBegin, iEnd); });
+			WorkerThreadPool.AddTask([=]() 
+			{
+				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+				this->Process(iBegin, iEnd); 
+			});
 		}
 	}
 
@@ -417,5 +430,6 @@ void SceneBoundingBoxHierarchy::Clear()
 	mMeshBoundingBoxes.clear();
 	mMeshBoundingBoxMeshIDMapping.clear();
 	mMeshBoundingBoxGameObjectPointerMapping.clear();
+	mGameObjectBoundingBoxGameObjectPointerMapping.clear();
 }
 

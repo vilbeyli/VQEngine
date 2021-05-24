@@ -11,6 +11,7 @@ set (LibHeadersD3D12X
 
 set (Headers
     "Renderer.h"
+    "WindowRenderContext.h"
     "Device.h"
     "SwapChain.h"
     "CommandQueue.h"
@@ -27,6 +28,7 @@ set (Headers
 set (Source
     "Renderer.cpp"
     "Renderer_Resources.cpp"
+    "WindowRenderContext.cpp"
     "Device.cpp"
     "SwapChain.cpp"
     "CommandQueue.cpp"

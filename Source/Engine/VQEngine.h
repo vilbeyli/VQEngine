@@ -300,7 +300,7 @@ public:
 	void StartLoadingScene(int IndexScene);
 	
 	void StartLoadingEnvironmentMap(int IndexEnvMap);
-	void PreFilterEnvironmentMap(FEnvironmentMapRenderingResources& env);
+	void PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, FEnvironmentMapRenderingResources& env);
 	void ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, SRV_ID& outSRV_ID);
 	void UnloadEnvironmentMap();
 
@@ -450,17 +450,19 @@ private:
 	//
 	// FRAME RENDERING PIPELINE
 	//
-	void                            TransitionForSceneRendering(FWindowRenderContext& ctx);
-	void                            RenderShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView& ShadowView);
-	void                            RenderDepthPrePass(FWindowRenderContext& ctx, const FSceneView& SceneView);
-	void                            RenderAmbientOcclusion(FWindowRenderContext& ctx, const FSceneView& SceneView);
-	void                            RenderSceneColor(FWindowRenderContext& ctx, const FSceneView& SceneView);
-	void                            ResolveMSAA(FWindowRenderContext& ctx);
-	void                            ResolveDepth(FWindowRenderContext& ctx, TextureID DepthTexture, SRV_ID SRVDepthTexture, UAV_ID UAVDepthResolveTexture);
-	void                            TransitionForPostProcessing(FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
-	void                            RenderPostProcess(FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
-	void                            RenderUI(FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
-	void                            CompositUIToHDRSwapchain(FWindowRenderContext& ctx); // TODO
+	void                            TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx);
+	void                            RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView& ShadowView);
+	void                            RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView& ShadowView);
+	void                            RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView& ShadowView, size_t iBegin, size_t NumPointLights);
+	void                            RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
+	void                            RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView);
+	void                            RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
+	void                            ResolveMSAA(ID3D12GraphicsCommandList* pCmd);
+	void                            ResolveDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTexture, SRV_ID SRVDepthTexture, UAV_ID UAVDepthResolveTexture);
+	void                            TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams);
+	void                            RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams);
+	void                            RenderUI(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
+	void                            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx); // TODO
 	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
 
 	// temp
