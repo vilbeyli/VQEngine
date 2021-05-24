@@ -148,24 +148,27 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 {}
 
 
-void Scene::Update(float dt, int FRAME_DATA_INDEX)
+void Scene::Update(float dt, int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX)
 {
 	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
+	const FSceneView& SceneViewPrev = mFrameSceneViews[FRAME_DATA_PREV_INDEX];
 	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
 	Camera& Cam = this->mCameras[this->mIndex_SelectedCamera];
 
 	Cam.Update(dt, mInput);
 	this->HandleInput(SceneView);
 	this->UpdateScene(dt, SceneView);
+
+	SceneView.postProcessParameters = SceneViewPrev.postProcessParameters;
+	SceneView.sceneParameters = SceneViewPrev.sceneParameters;
 }
 
-void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX, ThreadPool& UpdateWorkerThreadPool)
+void Scene::PostUpdate(int FRAME_DATA_INDEX, ThreadPool& UpdateWorkerThreadPool)
 {
 	SCOPED_CPU_MARKER("Scene::PostUpdate()");
 	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
 	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
 	FSceneShadowView& ShadowView = mFrameShadowViews[FRAME_DATA_INDEX];
-	FSceneView& SceneViewNext = mFrameSceneViews[FRAME_DATA_NEXT_INDEX];
 
 	const Camera& cam = mCameras[mIndex_SelectedCamera];
 	const XMFLOAT3 camPos = cam.GetPositionF();
@@ -180,21 +183,39 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_NEXT_INDEX, ThreadPo
 	SceneView.MainViewCameraYaw = cam.GetYaw();
 	SceneView.MainViewCameraPitch = cam.GetPitch();
 
-	mBoundingBoxHierarchy.Clear();
-	mBoundingBoxHierarchy.BuildGameObjectBoundingBoxes(mpObjects);
-	mBoundingBoxHierarchy.BuildMeshBoundingBoxes(mpObjects);
+	const FFrustumPlaneset ViewFrustumPlanes = FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj);
+
+	{
+		SCOPED_CPU_MARKER("BuildBoundingBoxHierarchy");
+		mBoundingBoxHierarchy.Clear();
+		mBoundingBoxHierarchy.BuildGameObjectBoundingBoxes(mpObjects);
+		mBoundingBoxHierarchy.BuildMeshBoundingBoxes(mpObjects);
+	}
+	constexpr bool bSINGLE_THREADED_POST_UPDATE = false;
 
 
-
-	PrepareSceneMeshRenderParams(SceneView);
-	GatherSceneLightData(SceneView);
-	PrepareShadowMeshRenderParams(ShadowView, cam.GetViewFrustumPlanesInWorldSpace(), UpdateWorkerThreadPool);
-	PrepareLightMeshRenderParams(SceneView);
-	// TODO: Prepare BoundingBoxRenderParams
-
-	// update post process settings for next frame
-	SceneViewNext.postProcessParameters = SceneView.postProcessParameters;
-	SceneViewNext.sceneParameters = SceneView.sceneParameters;
+	if constexpr (bSINGLE_THREADED_POST_UPDATE)
+	{
+		PrepareSceneMeshRenderParams(ViewFrustumPlanes, SceneView.meshRenderCommands);
+		GatherSceneLightData(SceneView);
+		PrepareShadowMeshRenderParams(ShadowView, ViewFrustumPlanes, UpdateWorkerThreadPool);
+		PrepareLightMeshRenderParams(SceneView);
+		// TODO: Prepare BoundingBoxRenderParams
+	}
+	else
+	{
+		UpdateWorkerThreadPool.AddTask([=, &SceneView]()
+		{
+			PrepareSceneMeshRenderParams(ViewFrustumPlanes, SceneView.meshRenderCommands);
+		});
+		GatherSceneLightData(SceneView);
+		PrepareShadowMeshRenderParams(ShadowView, cam.GetViewFrustumPlanesInWorldSpace(), UpdateWorkerThreadPool);
+		PrepareLightMeshRenderParams(SceneView);
+		{
+			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
+			while (UpdateWorkerThreadPool.GetNumActiveTasks() != 0);
+		}
+	}
 }
 
 
@@ -399,22 +420,22 @@ void Scene::PrepareLightMeshRenderParams(FSceneView& SceneView) const
 
 #define ENABLE_VIEW_FRUSTUM_CULLING 1
 #define ENABLE_THREADED_SHADOW_FRUSTUM_GATHER 0
-void Scene::PrepareSceneMeshRenderParams(FSceneView& SceneView) const
+
+void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<FMeshRenderCommand>& MeshRenderCommands) const
 {
 	SCOPED_CPU_MARKER("Scene::PrepareSceneMeshRenderParams()");
-	SceneView.meshRenderCommands.clear();
 
 #if ENABLE_VIEW_FRUSTUM_CULLING
 
 	FFrustumCullWorkerContext GameObjectFrustumCullWorkerContext;
 	
-	GameObjectFrustumCullWorkerContext.AddWorkerItem(FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj)
+	GameObjectFrustumCullWorkerContext.AddWorkerItem(MainViewFrustumPlanesInWorldSpace
 		, mBoundingBoxHierarchy.mGameObjectBoundingBoxes
 		, mBoundingBoxHierarchy.mGameObjectBoundingBoxGameObjectPointerMapping
 	);
 
 	FFrustumCullWorkerContext MeshFrustumCullWorkerContext; // TODO: populate after culling game objects?
-	MeshFrustumCullWorkerContext.AddWorkerItem(FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj)
+	MeshFrustumCullWorkerContext.AddWorkerItem(MainViewFrustumPlanesInWorldSpace
 		, mBoundingBoxHierarchy.mMeshBoundingBoxes
 		, mBoundingBoxHierarchy.mMeshBoundingBoxGameObjectPointerMapping
 	);
@@ -444,8 +465,7 @@ void Scene::PrepareSceneMeshRenderParams(FSceneView& SceneView) const
 	{
 		//const std::vector<size_t>& CulledBoundingBoxIndexList_Obj = GameObjectFrustumCullWorkerContext.vCulledBoundingBoxIndexLists[iFrustum];
 
-		std::vector<FMeshRenderCommand>& vMeshRenderList = SceneView.meshRenderCommands;
-		vMeshRenderList.clear();
+		MeshRenderCommands.clear();
 
 		const std::vector<size_t>& CulledBoundingBoxIndexList_Msh = MeshFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[0];
 		for (const size_t& BBIndex : CulledBoundingBoxIndexList_Msh)
@@ -464,7 +484,7 @@ void Scene::PrepareSceneMeshRenderParams(FSceneView& SceneView) const
 			meshRenderCmd.matWorldTransformation = pTF->matWorldTransformation();
 			meshRenderCmd.matNormalTransformation = pTF->NormalMatrix(meshRenderCmd.matWorldTransformation);
 			meshRenderCmd.matID = model.mData.mOpaqueMaterials.at(meshID);
-			vMeshRenderList.push_back(meshRenderCmd);
+			MeshRenderCommands.push_back(meshRenderCmd);
 		}
 	}
 

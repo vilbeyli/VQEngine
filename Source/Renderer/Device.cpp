@@ -76,11 +76,15 @@ bool Device::Create(const FDeviceCreateDesc& desc)
     // throws COM error but returns S_OK : Microsoft C++ exception: _com_error at memory location 0x
     this->mpAdapter = std::move(adapter.pAdapter);
     hr = D3D12CreateDevice(this->mpAdapter, adapter.MaxSupportedFeatureLevel, IID_PPV_ARGS(&mpDevice));
-
     if (!SUCCEEDED(hr))
     {
         Log::Error("Device::Create(): D3D12CreateDevice() failed.");
 	    return false;
+    }
+    hr = D3D12CreateDevice(this->mpAdapter, adapter.MaxSupportedFeatureLevel, IID_PPV_ARGS(&mpDevice4));
+    if (!SUCCEEDED(hr))
+    {
+        Log::Error("Device::Create(): D3D12CreateDevice4() failed.");
     }
 
     return true;
@@ -90,6 +94,8 @@ void Device::Destroy()
 {
     mpAdapter->Release();
     mpDevice->Release();
+    if (mpDevice4)
+        mpDevice4->Release();
     
 
 #ifdef _DEBUG

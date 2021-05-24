@@ -19,6 +19,7 @@
 #pragma once
 
 #include "Common.h"
+#include "../../Libs/VQUtils/Source/Image.h"
 
 #include <DirectXMath.h>
 
@@ -108,4 +109,17 @@ private:
 	int  mNumArraySlices = 1;
 
 	DXGI_FORMAT mFormat = DXGI_FORMAT_UNKNOWN;
+};
+
+
+struct FTextureUploadDesc
+{
+	FTextureUploadDesc(Image&& img_, TextureID texID, const TextureCreateDesc& tDesc) : img(img_), id(texID), desc(tDesc), pData(nullptr) {}
+	FTextureUploadDesc(const void* pData_, TextureID texID, const TextureCreateDesc& tDesc) : img({  }), id(texID), desc(tDesc), pData(pData_) {}
+	FTextureUploadDesc() = delete;
+
+	Image img;
+	const void* pData;
+	TextureID id;
+	TextureCreateDesc desc;
 };
