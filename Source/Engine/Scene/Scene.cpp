@@ -32,6 +32,15 @@
 #define LOG_CACHED_RESOURCES_ON_LOAD 0
 #define LOG_RESOURCE_CREATE          1
 
+// Culling
+#define ENABLE_VIEW_FRUSTUM_CULLING 1
+
+// Multithreading
+#define UPDATE_THREAD__ENABLE_WORKERS         1
+#define ENABLE_THREADED_SHADOW_FRUSTUM_GATHER 0
+
+
+
 using namespace DirectX;
 
 static MeshID LAST_USED_MESH_ID = EBuiltInMeshes::NUM_BUILTIN_MESHES;
@@ -192,10 +201,8 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, ThreadPool& UpdateWorkerThreadPool)
 		mBoundingBoxHierarchy.BuildGameObjectBoundingBoxes(mpObjects);
 		mBoundingBoxHierarchy.BuildMeshBoundingBoxes(mpObjects);
 	}
-	constexpr bool bSINGLE_THREADED_POST_UPDATE = false;
 
-
-	if constexpr (bSINGLE_THREADED_POST_UPDATE)
+	if constexpr (!UPDATE_THREAD__ENABLE_WORKERS)
 	{
 		PrepareSceneMeshRenderParams(ViewFrustumPlanes, SceneView.meshRenderCommands);
 		GatherSceneLightData(SceneView);
@@ -210,7 +217,7 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, ThreadPool& UpdateWorkerThreadPool)
 			PrepareSceneMeshRenderParams(ViewFrustumPlanes, SceneView.meshRenderCommands);
 		});
 		GatherSceneLightData(SceneView);
-		PrepareShadowMeshRenderParams(ShadowView, cam.GetViewFrustumPlanesInWorldSpace(), UpdateWorkerThreadPool);
+		PrepareShadowMeshRenderParams(ShadowView, ViewFrustumPlanes, UpdateWorkerThreadPool);
 		PrepareLightMeshRenderParams(SceneView);
 		{
 			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
@@ -419,8 +426,6 @@ void Scene::PrepareLightMeshRenderParams(FSceneView& SceneView) const
 	fnGatherLightRenderData(mLightsDynamic);
 }
 
-#define ENABLE_VIEW_FRUSTUM_CULLING 1
-#define ENABLE_THREADED_SHADOW_FRUSTUM_GATHER 0
 
 void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<FMeshRenderCommand>& MeshRenderCommands) const
 {
@@ -441,23 +446,27 @@ void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustum
 		, mBoundingBoxHierarchy.mMeshBoundingBoxGameObjectPointerMapping
 	);
 
-	constexpr bool SINGLE_THREADED_CULL = true;
+	constexpr bool SINGLE_THREADED_CULL = true; // !UPDATE_THREAD__ENABLE_WORKERS;
 	//-----------------------------------------------------------------------------------------
-	if constexpr (SINGLE_THREADED_CULL)
 	{
-		GameObjectFrustumCullWorkerContext.ProcessWorkItems_SingleThreaded();
-		MeshFrustumCullWorkerContext.ProcessWorkItems_SingleThreaded();
-	}
-	else
-	{
-		const size_t NumThreadsToDistributeIncludingThisThread = ThreadPool::sHardwareThreadCount - 1; // -1 to leave RenderThread a physical core
-		
-		// The current FFrustumCullWorkerContext doesn't support threading a single list
-		// TODO: keep an eye on the perf here, find a way to thread of necessary
-		#if 0
-		GameObjectFrustumCullWorkerContext.ProcessWorkItems_MultiThreaded(NumThreadsIncludingThisThread, UpdateWorkerThreadPool);
-		MeshFrustumCullWorkerContext.ProcessWorkItems_MultiThreaded(NumThreadsIncludingThisThread, UpdateWorkerThreadPool);
-		#endif
+		SCOPED_CPU_MARKER("CullMainViewFrustum");
+		if constexpr (SINGLE_THREADED_CULL)
+		{
+			GameObjectFrustumCullWorkerContext.ProcessWorkItems_SingleThreaded();
+			MeshFrustumCullWorkerContext.ProcessWorkItems_SingleThreaded();
+		}
+		else
+		{
+			const size_t NumThreadsToDistributeIncludingThisThread = ThreadPool::sHardwareThreadCount - 1; // -1 to leave RenderThread a physical core
+
+			// The current FFrustumCullWorkerContext doesn't support threading a single list
+			// TODO: keep an eye on the perf here, find a way to thread of necessary
+			assert(false);
+#if 0
+			GameObjectFrustumCullWorkerContext.ProcessWorkItems_MultiThreaded(NumThreadsIncludingThisThread, UpdateWorkerThreadPool);
+			MeshFrustumCullWorkerContext.ProcessWorkItems_MultiThreaded(NumThreadsIncludingThisThread, UpdateWorkerThreadPool);
+#endif
+		}
 	}
 	//-----------------------------------------------------------------------------------------
 	
@@ -595,13 +604,13 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 	SCOPED_CPU_MARKER("Scene::PrepareShadowMeshRenderParams()");
 #if ENABLE_VIEW_FRUSTUM_CULLING
 	constexpr bool bCULL_LIGHT_VIEWS     = false;
-	constexpr bool bSINGLE_THREADED_CULL = false;
+	constexpr bool bSINGLE_THREADED_CULL = !UPDATE_THREAD__ENABLE_WORKERS;
 
-#if ENABLE_THREADED_SHADOW_FRUSTUM_GATHER
+	#if ENABLE_THREADED_SHADOW_FRUSTUM_GATHER
 
 	// TODO: gathering point light faces takes long and can be threaded
 
-#else
+	#else
 
 	int iLight = 0;
 	int iPoint = 0;
@@ -660,7 +669,7 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 			++iLight;
 		}
 	};
-#endif
+	#endif // ENABLE_THREADED_SHADOW_FRUSTUM_GATHER
 
 	static const size_t HW_CORE_COUNT = ThreadPool::sHardwareThreadCount / 2;
 	const size_t NumThreadsIncludingThisThread = HW_CORE_COUNT - 1; // -1 to leave RenderThread a physical core

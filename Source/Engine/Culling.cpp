@@ -430,5 +430,6 @@ void SceneBoundingBoxHierarchy::Clear()
 	mMeshBoundingBoxes.clear();
 	mMeshBoundingBoxMeshIDMapping.clear();
 	mMeshBoundingBoxGameObjectPointerMapping.clear();
+	mGameObjectBoundingBoxGameObjectPointerMapping.clear();
 }
 
