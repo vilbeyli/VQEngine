@@ -32,7 +32,7 @@
 //
 // MULTI THREADING
 //
-#define RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING 0 // WIP: Experimental: theres still bugs with MT recording
+#define RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING 1
 #define MARKER_COLOR  0xFF00FF00 
 #define RENDER_WORKER_CPU_MARKER   SCOPED_CPU_MARKER_C("RenderWorker", MARKER_COLOR)
 
@@ -900,7 +900,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	}
 	{
 		SCOPED_CPU_MARKER("ExecuteCommandLists()");
-		ctx.PresentQueue.pQueue->ExecuteCommandLists((UINT)NumCmdLists, (ID3D12CommandList**)vCmdLists.data());
+		ctx.PresentQueue.pQueue->ExecuteCommandLists(NumCmdLists, (ID3D12CommandList**)vCmdLists.data());
 	}
 
 	//
@@ -978,9 +978,9 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	{
 		constexpr size_t iCmdZPrePassThread = 0;
 		constexpr size_t iCmdPointLightsThread = 1;
-		const     size_t iCmdSpots = iCmdPointLightsThread + SceneShadowView.NumPointShadowViews;
-		const     size_t iCmdDirectional = iCmdSpots + (SceneShadowView.ShadowView_Directional.meshRenderCommands.empty() ? 0 : 1);
-		const     size_t iCmdRenderThread = iCmdDirectional + 1; // this thread
+		const     size_t iCmdSpots        = iCmdPointLightsThread + SceneShadowView.NumPointShadowViews;
+		const     size_t iCmdDirectional  = iCmdSpots + (SceneShadowView.NumSpotShadowViews > 0 ? 1 : 0);
+		const     size_t iCmdRenderThread = iCmdDirectional + (SceneShadowView.ShadowView_Directional.meshRenderCommands.empty() ? 0 : 1);
 
 		ID3D12GraphicsCommandList* pCmd_ThisThread = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdRenderThread);
 		DynamicBufferHeap& CBHeap_This = ctx.GetConstantBufferHeap(iCmdRenderThread);
@@ -1072,7 +1072,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 void VQEngine::DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh)
 {
-	SCOPED_GPU_MARKER(pCmd, "DrawMesh");
+	SCOPED_CPU_MARKER("DrawMesh");
 	using namespace DirectX;
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 
@@ -1103,7 +1103,7 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 
 	for (const FShadowMeshRenderCommand& renderCmd : shadowView.meshRenderCommands)
 	{
-		SCOPED_GPU_MARKER(pCmd, "Process_ShadowMeshRenderCommand");
+		SCOPED_CPU_MARKER("Process_ShadowMeshRenderCommand");
 		// set constant buffer data
 		FCBufferLightVS* pCBuffer = {};
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
@@ -1213,6 +1213,16 @@ void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 		float fFarPlane;
 	};
 	
+#if RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING
+	// Set Viewport & Scissors
+	const float RenderResolutionX = 1024.0f; // TODO
+	const float RenderResolutionY = 1024.0f; // TODO
+	D3D12_VIEWPORT viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
+	D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
+	pCmd->RSSetViewports(1, &viewport);
+	pCmd->RSSetScissorRects(1, &scissorsRect);
+#endif
+
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_LINEAR_PSO));
 	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(8));
 	for (size_t i = iBegin; i < iBegin + NumPointLights; ++i)

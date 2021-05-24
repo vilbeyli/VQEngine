@@ -65,7 +65,7 @@ public:
 	inline unsigned short     GetCurrentSwapchainBufferIndex() const { return SwapChain.GetCurrentBackBufferIndex(); }
 
 	ID3D12CommandList* GetCommandListPtr(CommandQueue::EType eQueueType, int THREAD_INDEX);
-	inline size_t GetNumCurrentlyRecordingThreads(CommandQueue::EType eQueueType) const { return mNumCurrentlyRecordingThreads[eQueueType]; }
+	inline UINT GetNumCurrentlyRecordingThreads(CommandQueue::EType eQueueType) const { return mNumCurrentlyRecordingThreads[eQueueType]; }
 
 	// returns the current back buffer's command allocators
 	std::vector<ID3D12CommandAllocator*>& GetCommandAllocators(CommandQueue::EType eQueueType);
@@ -107,6 +107,6 @@ private:
 	// constant buffers per recording thread
 	std::vector<DynamicBufferHeap> mDynamicHeap_ConstantBuffer;
 
-	size_t mNumCurrentlyRecordingThreads[CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES];
+	UINT mNumCurrentlyRecordingThreads[CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES];
 };
 

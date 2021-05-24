@@ -150,6 +150,7 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 
 void Scene::Update(float dt, int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX)
 {
+	SCOPED_CPU_MARKER("Scene::Update()");
 	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
 	const FSceneView& SceneViewPrev = mFrameSceneViews[FRAME_DATA_PREV_INDEX];
 	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];

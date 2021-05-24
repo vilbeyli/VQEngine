@@ -124,7 +124,7 @@ void FWindowRenderContext::AllocateCommandLists(CommandQueue::EType eQueueType, 
 	std::vector<ID3D12CommandAllocator*>& vCmdAllocators = GetCommandAllocators(eQueueType);
 	const size_t NumAlreadyAllocatedCommandLists = vCmdAllocators.size();
 
-	mNumCurrentlyRecordingThreads[eQueueType] = NumRecordingThreads;
+	mNumCurrentlyRecordingThreads[eQueueType] = static_cast<UINT>(NumRecordingThreads);
 
 	// we need to create new command list allocators
 	if (NumAlreadyAllocatedCommandLists < NumRecordingThreads)
