@@ -179,6 +179,8 @@ void Camera::Rotate(float yaw, float pitch)
 	
 	if (mPitch > +90.0f * DEG2RAD) mPitch = +90.0f * DEG2RAD;
 	if (mPitch < -90.0f * DEG2RAD) mPitch = -90.0f * DEG2RAD;
+	if (mYaw > ( XM_PI*2.0f)) mYaw -= (XM_PI * 2.0f);
+	if (mYaw < (-XM_PI*2.0f)) mYaw += (XM_PI * 2.0f);
 }
 
 void Camera::LookAt(const XMVECTOR& target)

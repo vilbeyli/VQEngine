@@ -116,7 +116,7 @@ struct FSceneRenderParameters
 {
 	bool bDrawLightBounds = false;
 	bool bDrawLightMeshes = true;
-	float fAmbientLightingFactor = 0.105f;
+	float fAmbientLightingFactor = 0.055f;
 	bool bScreenSpaceAO = true;
 };
 struct FMeshRenderCommandBase
