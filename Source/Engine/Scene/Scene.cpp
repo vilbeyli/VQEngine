@@ -464,6 +464,7 @@ void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustum
 	// TODO: we have a culled list of game object boundin box indices
 	//for (size_t iFrustum = 0; iFrustum < NumFrustumsToCull; ++iFrustum)
 	{
+		SCOPED_CPU_MARKER("RecordShadowMeshRenderCommand");
 		//const std::vector<size_t>& CulledBoundingBoxIndexList_Obj = GameObjectFrustumCullWorkerContext.vCulledBoundingBoxIndexLists[iFrustum];
 
 		MeshRenderCommands.clear();

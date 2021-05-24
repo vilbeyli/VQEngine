@@ -64,7 +64,7 @@ public:
 	inline unsigned short     GetNumSwapchainBuffers() const { return SwapChain.GetNumBackBuffers(); }
 	inline unsigned short     GetCurrentSwapchainBufferIndex() const { return SwapChain.GetCurrentBackBufferIndex(); }
 
-	ID3D12CommandList* GetCommandListPtr(CommandQueue::EType eQueueType, int THREAD_INDEX);
+	ID3D12CommandList* GetCommandListPtr(CommandQueue::EType eQueueType, size_t THREAD_INDEX);
 	inline UINT GetNumCurrentlyRecordingThreads(CommandQueue::EType eQueueType) const { return mNumCurrentlyRecordingThreads[eQueueType]; }
 
 	// returns the current back buffer's command allocators

@@ -190,7 +190,7 @@ void FWindowRenderContext::ResetCommandLists(CommandQueue::EType eQueueType, siz
 	}
 }
 
-ID3D12CommandList* FWindowRenderContext::GetCommandListPtr(CommandQueue::EType eQueueType, int THREAD_INDEX)
+ID3D12CommandList* FWindowRenderContext::GetCommandListPtr(CommandQueue::EType eQueueType, size_t THREAD_INDEX)
 {
 	int BACK_BUFFER_INDEX = SwapChain.GetCurrentBackBufferIndex();
 	switch (eQueueType)

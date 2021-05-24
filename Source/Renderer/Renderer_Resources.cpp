@@ -471,7 +471,7 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 		this->QueueTextureUpload(FTextureUploadDesc(std::move(image), ID, tDesc));
 
 		this->StartTextureUploads();
-		std::atomic<bool>& mbResident = mTextures.at(ID).mbResident;
+		std::atomic<bool>& mbResident = mTextures.at(ID).mbResident; // Is this safe?
 
 		// SYNC POINT - texture residency
 		//------------------------------------------------------------------------------

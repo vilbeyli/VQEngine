@@ -642,7 +642,7 @@ void VQEngine::RenderThread_PreRender()
 	const uint32_t NumCmdRecordingThreads_CMP = 0;
 	const uint32_t NumCmdRecordingThreads_CPY = 0;
 	const uint32_t NumCmdRecordingThreads = NumCmdRecordingThreads_GFX + NumCmdRecordingThreads_CPY + NumCmdRecordingThreads_CMP;
-	const uint32_t ConstantBufferBytesPerThread = 4 * MEGABYTE;
+	const uint32_t ConstantBufferBytesPerThread = 8 * MEGABYTE;
 
 	ctx.AllocateCommandLists(CommandQueue::EType::GFX, NumCmdRecordingThreads_GFX);
 	ctx.ResetCommandLists(CommandQueue::EType::GFX, NumCmdRecordingThreads_GFX);
@@ -674,6 +674,7 @@ void VQEngine::RenderThread_RenderFrame()
 
 void VQEngine::RenderThread_RenderMainWindow()
 {
+	SCOPED_CPU_MARKER("RenderThread_RenderMainWindow()");
 	FWindowRenderContext& ctx = mRenderer.GetWindowRenderContext(mpWinMain->GetHWND());
 
 	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
@@ -697,6 +698,11 @@ void VQEngine::RenderThread_RenderMainWindow()
 
 	if (hr == DXGI_STATUS_OCCLUDED)     { RenderThread_HandleStatusOccluded(); }
 	if (hr == DXGI_ERROR_DEVICE_REMOVED){ RenderThread_HandleDeviceRemoved();  }
+
+	{
+		SCOPED_CPU_MARKER("SwapchainMoveToNextFrame");
+		ctx.SwapChain.MoveToNextFrame();
+	}
 }
 
 
@@ -892,22 +898,8 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	); // Transition SwapChain for Present
 
 
-	std::vector<ID3D12GraphicsCommandList*>& vCmdLists = ctx.GetGFXCommandListPtrs();
-	const UINT NumCmdLists = ctx.GetNumCurrentlyRecordingThreads(CommandQueue::EType::GFX);
-	for(size_t iCmd = 0; iCmd < NumCmdLists; ++iCmd)
-	{
-		vCmdLists[iCmd]->Close();
-	}
-	{
-		SCOPED_CPU_MARKER("ExecuteCommandLists()");
-		ctx.PresentQueue.pQueue->ExecuteCommandLists(NumCmdLists, (ID3D12CommandList**)vCmdLists.data());
-	}
+	PresentFrame(ctx);
 
-	//
-	// PRESENT
-	//
-	hr = ctx.SwapChain.Present();
-	ctx.SwapChain.MoveToNextFrame();
 	return hr;
 }
 
@@ -1238,9 +1230,9 @@ void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 		pCBuffer->fFarPlane = SceneShadowView.PointLightLinearDepthParams[i].fFarPlane;
 		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
 
-		for (int face = 0; face < 6; ++face)
+		for (size_t face = 0; face < 6; ++face)
 		{
-			const int iShadowView = i * 6 + face;
+			const size_t iShadowView = i * 6 + face;
 			const FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowViews_Point[iShadowView];
 
 			if (ShadowView.meshRenderCommands.empty())
@@ -1251,7 +1243,7 @@ void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 
 			// Bind Depth / clear
 			const DSV& dsv = mRenderer.GetDSV(mResources_MainWnd.DSV_ShadowMaps_Point);
-			D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle(iShadowView);
+			D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle((uint32_t)iShadowView);
 			D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
 			pCmd->OMSetRenderTargets(0, NULL, FALSE, &dsvHandle);
 			pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, NULL);
@@ -2060,8 +2052,6 @@ HRESULT VQEngine::PresentFrame(FWindowRenderContext& ctx)
 	{
 		pCmd->Close();
 	}
-
-
 	{
 		SCOPED_CPU_MARKER("ExecuteCommandLists()");
 		PresentQueue.pQueue->ExecuteCommandLists((UINT)vCmdLists.size(), (ID3D12CommandList**)vCmdLists.data());
@@ -2070,11 +2060,6 @@ HRESULT VQEngine::PresentFrame(FWindowRenderContext& ctx)
 		SCOPED_CPU_MARKER("SwapchainPresent");
 		hr = swapchain.Present();
 	}
-	{
-		SCOPED_CPU_MARKER("SwapchainMoveToNextFrame");
-		swapchain.MoveToNextFrame();
-	}
-
 	return hr;
 }
 
