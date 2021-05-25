@@ -121,44 +121,55 @@ void FWindowRenderContext::CleanupContext()
 
 void FWindowRenderContext::AllocateCommandLists(CommandQueue::EType eQueueType, size_t NumRecordingThreads)
 {
+	ID3D12Device* pD3DDevice = pDevice->GetDevicePtr();
+
+	D3D12_COMMAND_LIST_TYPE CMD_LIST_TYPE;
+	switch (eQueueType)
+	{
+	case CommandQueue::EType::GFX    : CMD_LIST_TYPE = D3D12_COMMAND_LIST_TYPE_DIRECT ; break;
+	case CommandQueue::EType::COMPUTE: CMD_LIST_TYPE = D3D12_COMMAND_LIST_TYPE_COMPUTE; break;
+	case CommandQueue::EType::COPY   : CMD_LIST_TYPE = D3D12_COMMAND_LIST_TYPE_COPY   ; break;
+	default: assert(false); break;
+	}
+	
 	std::vector<ID3D12CommandAllocator*>& vCmdAllocators = GetCommandAllocators(eQueueType);
-	const size_t NumAlreadyAllocatedCommandLists = vCmdAllocators.size();
+	std::vector<ID3D12CommandList*>&      vCmdListPtrs   = GetCommandListPtrs(eQueueType);
 
 	mNumCurrentlyRecordingThreads[eQueueType] = static_cast<UINT>(NumRecordingThreads);
 
 	// we need to create new command list allocators
-	if (NumAlreadyAllocatedCommandLists < NumRecordingThreads)
+	const size_t NumAlreadyAllocatedCommandListAllocators = vCmdAllocators.size();
+	if (NumAlreadyAllocatedCommandListAllocators < NumRecordingThreads)
 	{
-		ID3D12Device* pD3DDevice = pDevice->GetDevicePtr();
-		std::vector<ID3D12CommandList*>& vCmdListPtrs = GetCommandListPtrs(eQueueType);
-
 		// create command allocators and command lists for the new threads
 		vCmdAllocators.resize(NumRecordingThreads);
+
+		assert(NumAlreadyAllocatedCommandListAllocators >= 1);
+		for (size_t iNewCmdListAlloc = NumAlreadyAllocatedCommandListAllocators; iNewCmdListAlloc < NumRecordingThreads; ++iNewCmdListAlloc)
+		{
+			// create the command allocator
+			ID3D12CommandAllocator*& pAlloc = vCmdAllocators[iNewCmdListAlloc];
+			pD3DDevice->CreateCommandAllocator(CMD_LIST_TYPE, IID_PPV_ARGS(&pAlloc));
+			SetName(pAlloc, "CmdListAlloc[%d]", (int)iNewCmdListAlloc);
+		}
+	}
+
+	// we need to create new command lists
+	const size_t NumAlreadyAllocatedCommandLists = vCmdListPtrs.size();
+	if (NumAlreadyAllocatedCommandLists < NumRecordingThreads)
+	{
+		// create command allocators and command lists for the new threads
 		vCmdListPtrs.resize(NumRecordingThreads);
 
 		assert(NumAlreadyAllocatedCommandLists >= 1);
 		for (size_t iNewCmdListAlloc = NumAlreadyAllocatedCommandLists; iNewCmdListAlloc < NumRecordingThreads; ++iNewCmdListAlloc)
 		{
-			// create the command allocator
-			ID3D12CommandAllocator*& pAlloc = vCmdAllocators[iNewCmdListAlloc];
-			switch (eQueueType)
-			{
-			case CommandQueue::EType::GFX    : pD3DDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT , IID_PPV_ARGS(&pAlloc)); break;
-			case CommandQueue::EType::COMPUTE: pD3DDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&pAlloc)); break;
-			case CommandQueue::EType::COPY   : pD3DDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY   , IID_PPV_ARGS(&pAlloc)); break;
-			default: assert(false); break;
-			}
-
 			// create the command list
 			ID3D12CommandList* pCmd = nullptr;
-			switch (eQueueType)
-			{
-			case CommandQueue::EType::GFX    : pD3DDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT , pAlloc, nullptr, IID_PPV_ARGS(&vCmdListPtrs[iNewCmdListAlloc])); pCmd = vCmdListPtrs[iNewCmdListAlloc]; break;
-			case CommandQueue::EType::COMPUTE: pD3DDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, pAlloc, nullptr, IID_PPV_ARGS(&vCmdListPtrs[iNewCmdListAlloc])); pCmd = vCmdListPtrs[iNewCmdListAlloc]; break;
-			case CommandQueue::EType::COPY   : pD3DDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY   , pAlloc, nullptr, IID_PPV_ARGS(&vCmdListPtrs[iNewCmdListAlloc])); pCmd = vCmdListPtrs[iNewCmdListAlloc]; break;
-			default: assert(false); break;
-			}
-			
+			pD3DDevice->CreateCommandList(0, CMD_LIST_TYPE, vCmdAllocators[iNewCmdListAlloc], nullptr, IID_PPV_ARGS(&vCmdListPtrs[iNewCmdListAlloc]));
+			pCmd = vCmdListPtrs[iNewCmdListAlloc];
+			SetName(pCmd, "pCmd[%d]", (int)iNewCmdListAlloc);
+
 			// close if gfx command list
 			if (eQueueType == CommandQueue::EType::GFX)
 			{
@@ -168,9 +179,29 @@ void FWindowRenderContext::AllocateCommandLists(CommandQueue::EType eQueueType, 
 		}
 	}
 }
+void FWindowRenderContext::AllocateConstantBufferMemory(uint32_t NumHeaps, uint32_t MemoryPerHeap)
+{
+	const size_t NumAlreadyAllocatedHeaps = mDynamicHeap_ConstantBuffer.size();
+
+	// we need to create new dynamic memory heaps
+	if (NumAlreadyAllocatedHeaps < NumHeaps)
+	{
+		assert(NumAlreadyAllocatedHeaps >= 1);
+		const uint32_t NumBackBuffers = SwapChain.GetNumBackBuffers();
+
+		mDynamicHeap_ConstantBuffer.resize(NumHeaps);
+
+		for (uint32_t iHeap = (uint32_t)NumAlreadyAllocatedHeaps; iHeap < NumHeaps; ++iHeap)
+		{
+			mDynamicHeap_ConstantBuffer[iHeap].Create(pDevice->GetDevicePtr(), NumBackBuffers, MemoryPerHeap);
+		}
+	}
+}
 
 void FWindowRenderContext::ResetCommandLists(CommandQueue::EType eQueueType, size_t NumRecordingThreads)
 {
+	assert(eQueueType == CommandQueue::EType::GFX); // Reset() is ID3D12GraphicsCommandList function
+
 	std::vector<ID3D12CommandAllocator*>& vCmdAllocators = GetCommandAllocators(eQueueType);
 	assert(NumRecordingThreads <= vCmdAllocators.size());
 
@@ -216,22 +247,3 @@ std::vector<ID3D12CommandAllocator*>& FWindowRenderContext::GetCommandAllocators
 	return mCommandAllocatorsGFX[BACK_BUFFER_INDEX];
 }
 
-
-void FWindowRenderContext::AllocateConstantBufferMemory(uint32_t NumHeaps, uint32_t MemoryPerHeap)
-{
-	const size_t NumAlreadyAllocatedHeaps = mDynamicHeap_ConstantBuffer.size();
-
-	// we need to create new dynamic memory heaps
-	if (NumAlreadyAllocatedHeaps < NumHeaps)
-	{
-		assert(NumAlreadyAllocatedHeaps >= 1);
-		const uint32_t NumBackBuffers = SwapChain.GetNumBackBuffers();
-
-		mDynamicHeap_ConstantBuffer.resize(NumHeaps);
-
-		for (uint32_t iHeap = (uint32_t)NumAlreadyAllocatedHeaps; iHeap < NumHeaps; ++iHeap)
-		{
-			mDynamicHeap_ConstantBuffer[iHeap].Create(pDevice->GetDevicePtr(), NumBackBuffers, MemoryPerHeap);
-		}
-	}
-}
