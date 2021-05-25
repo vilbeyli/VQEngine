@@ -137,7 +137,7 @@ void FWindowRenderContext::AllocateCommandLists(CommandQueue::EType eQueueType, 
 		vCmdListPtrs.resize(NumRecordingThreads);
 
 		assert(NumAlreadyAllocatedCommandLists >= 1);
-		for (size_t iNewCmdListAlloc = NumAlreadyAllocatedCommandLists - 1; iNewCmdListAlloc < NumRecordingThreads; ++iNewCmdListAlloc)
+		for (size_t iNewCmdListAlloc = NumAlreadyAllocatedCommandLists; iNewCmdListAlloc < NumRecordingThreads; ++iNewCmdListAlloc)
 		{
 			// create the command allocator
 			ID3D12CommandAllocator*& pAlloc = vCmdAllocators[iNewCmdListAlloc];
@@ -229,7 +229,7 @@ void FWindowRenderContext::AllocateConstantBufferMemory(uint32_t NumHeaps, uint3
 
 		mDynamicHeap_ConstantBuffer.resize(NumHeaps);
 
-		for (uint32_t iHeap = (uint32_t)NumAlreadyAllocatedHeaps - 1; iHeap < NumHeaps; ++iHeap)
+		for (uint32_t iHeap = (uint32_t)NumAlreadyAllocatedHeaps; iHeap < NumHeaps; ++iHeap)
 		{
 			mDynamicHeap_ConstantBuffer[iHeap].Create(pDevice->GetDevicePtr(), NumBackBuffers, MemoryPerHeap);
 		}

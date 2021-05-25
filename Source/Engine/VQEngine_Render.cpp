@@ -276,7 +276,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			mRenderer.InitializeSRV(r.SRV_SceneDepthMSAA, 0u, r.Tex_SceneDepthMSAA);
 		}
 		{	// Scene depth stencil resolve target
-			TextureCreateDesc desc("SceneDepth");
+			TextureCreateDesc desc("SceneDepthResolve");
 			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 				DXGI_FORMAT_R32_FLOAT
 				, Width
@@ -288,8 +288,24 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
 			);
 			desc.ResourceState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+			r.Tex_SceneDepthResolve = mRenderer.CreateTexture(desc);
+			mRenderer.InitializeUAV(r.UAV_SceneDepth, 0u, r.Tex_SceneDepthResolve);
+		}
+		{	// Scene depth stencil target (for MSAA off)
+			TextureCreateDesc desc("SceneDepth");
+			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
+				DXGI_FORMAT_R32_TYPELESS
+				, Width
+				, Height
+				, 1 // Array Size
+				, 1 // MIP levels
+				, 1 // MSAA SampleCount
+				, 0 // MSAA SampleQuality
+				, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+			);
+			desc.ResourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 			r.Tex_SceneDepth = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeUAV(r.UAV_SceneDepth, 0u, r.Tex_SceneDepth);
+			mRenderer.InitializeDSV(r.DSV_SceneDepth, 0u, r.Tex_SceneDepth);
 		}
 
 		{ // Main render target view w/ MSAA
@@ -448,7 +464,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 
 			FAmbientOcclusionPass::FResourceParameters params;
 			params.pRscNormalBuffer = mRenderer.GetTextureResource(r.Tex_SceneNormals);
-			params.pRscDepthBuffer  = mRenderer.GetTextureResource(r.Tex_SceneDepth);
+			params.pRscDepthBuffer  = mRenderer.GetTextureResource(r.Tex_SceneDepthResolve);
 			params.pRscOutput       = mRenderer.GetTextureResource(r.Tex_AmbientOcclusion);
 			params.FmtNormalBuffer = mRenderer.GetTextureFormat(r.Tex_SceneNormals);
 			params.FmtDepthBuffer  = DXGI_FORMAT_R32_FLOAT; //mRenderer.GetTextureFormat(r.Tex_SceneDepth); /*R32_TYPELESS*/
@@ -486,6 +502,7 @@ void VQEngine::RenderThread_LoadResources()
 	// depth pre pass
 	{
 		rsc.DSV_SceneDepthMSAA = mRenderer.CreateDSV();
+		rsc.DSV_SceneDepth = mRenderer.CreateDSV();
 		rsc.UAV_SceneDepth = mRenderer.CreateUAV();
 		rsc.RTV_SceneNormals = mRenderer.CreateRTV();
 		rsc.RTV_SceneNormalsMSAA = mRenderer.CreateRTV();
@@ -590,6 +607,7 @@ void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 		mRenderer.DestroyTexture(r.Tex_SceneNormalsMSAA);
 
 		mRenderer.DestroyTexture(r.Tex_SceneDepth);
+		mRenderer.DestroyTexture(r.Tex_SceneDepthResolve);
 		mRenderer.DestroyTexture(r.Tex_SceneColor);
 		mRenderer.DestroyTexture(r.Tex_SceneNormals);
 
@@ -1261,10 +1279,22 @@ void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
 {
 	using namespace VQ_SHADER_DATA;
-
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
+	const auto& rsc = mResources_MainWnd;
+	auto pRscNormals     = mRenderer.GetTextureResource(rsc.Tex_SceneNormals);
+	auto pRscNormalsMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneNormalsMSAA);
+	auto pRscDepthResolve= mRenderer.GetTextureResource(rsc.Tex_SceneDepthResolve);
+	auto pRscDepthMSAA   = mRenderer.GetTextureResource(rsc.Tex_SceneDepthMSAA);
+	auto pRscDepth       = mRenderer.GetTextureResource(rsc.Tex_SceneDepth);
 
-	const DSV& dsvColor = mRenderer.GetDSV(mResources_MainWnd.DSV_SceneDepthMSAA); //mRenderer.GetDSV(bMSAA ? mResources_MainWnd.DSV_SceneDepthMSAA : mResources_MainWnd.DSV_SceneDepth); // TODO: do we want non-msaa target?
+	if (!bMSAA)
+	{
+		std::vector<CD3DX12_RESOURCE_BARRIER> Barriers;
+		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
+		pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
+	}
+
+	const DSV& dsvColor   = mRenderer.GetDSV(bMSAA ? mResources_MainWnd.DSV_SceneDepthMSAA : mResources_MainWnd.DSV_SceneDepth);
 	const RTV& rtvNormals = mRenderer.GetRTV(bMSAA ? mResources_MainWnd.RTV_SceneNormalsMSAA : mResources_MainWnd.RTV_SceneNormals);
 
 	D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
@@ -1301,7 +1331,6 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 		}
 
 		const Material& mat = mpScene->GetMaterial(meshRenderCmd.matID);
-		
 		const Mesh& mesh = mpScene->mMeshes.at(meshRenderCmd.meshID);
 		const auto VBIBIDs = mesh.GetIABufferIDs();
 		const uint32 NumIndices = mesh.GetNumIndices();
@@ -1339,15 +1368,10 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 	}
 
 	// resolve if MSAA
-	const auto& rsc = mResources_MainWnd;
-	auto pRscNormals     = mRenderer.GetTextureResource(rsc.Tex_SceneNormals);
-	auto pRscNormalsMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneNormalsMSAA);
-	auto pRscDepth       = mRenderer.GetTextureResource(rsc.Tex_SceneDepth);
-	auto pRscDepthMSAA   = mRenderer.GetTextureResource(rsc.Tex_SceneDepthMSAA);
 
 	if (bMSAA)
 	{
-		DXGI_FORMAT fmtDepth = DXGI_FORMAT_D32_FLOAT; // mRenderer.GetTextureFormat(mResources_MainWnd.Tex_SceneNormals);
+		DXGI_FORMAT fmtDepth = DXGI_FORMAT_D32_FLOAT;
 
 		// transition for resolve
 		const CD3DX12_RESOURCE_BARRIER pBarriers[] =
@@ -1356,7 +1380,7 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 				, CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals     , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RESOLVE_DEST)
 				
 				, CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA   , D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
-				, CD3DX12_RESOURCE_BARRIER::Transition(pRscDepth       , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+				, CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
 		};
 		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
 
@@ -1373,18 +1397,16 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 	// transition for shader read
 	{
 		std::vector<CD3DX12_RESOURCE_BARRIER> Barriers;
-
 		if (bMSAA)
 		{
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA, D3D12_RESOURCE_STATE_RESOLVE_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
+			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA, D3D12_RESOURCE_STATE_RESOLVE_SOURCE           , D3D12_RESOURCE_STATE_RENDER_TARGET));
 			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA  , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepth      , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_UNORDERED_ACCESS         , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
 		}
 		else
 		{
-			// TODO: need proper pRscDepth for Non-MSAA path (current one is UAV and not a DSV)
-			assert(false);
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_COPY_SOURCE));
+			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST));
 		}
 
 		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, 
@@ -1393,6 +1415,19 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 		));
 
 		pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
+
+
+		Barriers.clear();
+
+		// FFX-CACAO expects TexDepthResolve (UAV) to contain depth buffer data, but we've written to TexDepth (DSV) when !bMSAA.
+		// Here we just copy TexDepth into TexDepthResolve to keep MSAA-toggle functionality on the fly with Key M.
+		if (!bMSAA)
+		{
+			pCmd->CopyResource(pRscDepthResolve, pRscDepth);
+			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepth, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
+			pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
+		}
 	}
 }
 
@@ -1473,7 +1508,8 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 
 	const RTV& rtvColor = mRenderer.GetRTV(bMSAA ? mResources_MainWnd.RTV_SceneColorMSAA : mResources_MainWnd.RTV_SceneColor);
-	const DSV& dsvColor = mRenderer.GetDSV(/*bMSAA ? */mResources_MainWnd.DSV_SceneDepthMSAA /*: mResources_MainWnd.DSV_SceneDepth*/);
+	const DSV& dsvColor = mRenderer.GetDSV(bMSAA ? mResources_MainWnd.DSV_SceneDepthMSAA : mResources_MainWnd.DSV_SceneDepth);
+	auto pRscDepth = mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneDepth);
 
 	SCOPED_GPU_MARKER(pCmd, "RenderSceneColor");
 
@@ -1666,6 +1702,7 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 		);
 		if(SceneView.lightBoundsRenderCommands.empty())
 			pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(6)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
+
 		for (const FLightRenderCommand& lightRenderCmd : SceneView.lightRenderCommands)
 		{
 			// set constant buffer data

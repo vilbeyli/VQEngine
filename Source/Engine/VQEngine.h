@@ -119,6 +119,7 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	TextureID Tex_SceneColor                   = INVALID_ID;
 	TextureID Tex_SceneDepthMSAA               = INVALID_ID;
 	TextureID Tex_SceneDepth                   = INVALID_ID;
+	TextureID Tex_SceneDepthResolve            = INVALID_ID;
 	TextureID Tex_SceneNormalsMSAA             = INVALID_ID;
 	TextureID Tex_SceneNormals                 = INVALID_ID;
 	TextureID Tex_AmbientOcclusion             = INVALID_ID;
@@ -153,14 +154,15 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	UAV_ID    UAV_PostProcess_FFXCASOut        = INVALID_ID;
 	UAV_ID    UAV_SceneDepth                   = INVALID_ID;
 
-	DSV_ID    DSV_SceneDepthMSAA                = INVALID_ID;
-	DSV_ID    DSV_ShadowMaps_Spot               = INVALID_ID;
-	DSV_ID    DSV_ShadowMaps_Point              = INVALID_ID;
-	DSV_ID    DSV_ShadowMaps_Directional        = INVALID_ID;
+	DSV_ID    DSV_SceneDepth                   = INVALID_ID;
+	DSV_ID    DSV_SceneDepthMSAA               = INVALID_ID;
+	DSV_ID    DSV_ShadowMaps_Spot              = INVALID_ID;
+	DSV_ID    DSV_ShadowMaps_Point             = INVALID_ID;
+	DSV_ID    DSV_ShadowMaps_Directional       = INVALID_ID;
 
 	FEnvironmentMapRenderingResources EnvironmentMap;
 
-	SRV_ID SRV_NullCubemap = INVALID_ID;
+	SRV_ID SRV_NullCubemap   = INVALID_ID;
 	SRV_ID SRV_NullTexture2D = INVALID_ID;
 };
 struct FRenderingResources_DebugWindow : public FRenderingResources
