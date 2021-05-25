@@ -94,9 +94,9 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 		XMFLOAT3 axis = UpVector;
 		float rotationAngle = 15.0f; // TODO: rand?
 		XMFLOAT3 scale = { 
-			  1.2f - MathUtil::RandF(0, 0.4)
-			, 1.2f - MathUtil::RandF(0, 0.4)
-			, 1.2f - MathUtil::RandF(0, 0.4) 
+			  1.2f - MathUtil::RandF(0.f, 0.4f)
+			, 1.2f - MathUtil::RandF(0.f, 0.4f)
+			, 1.2f - MathUtil::RandF(0.f, 0.4f) 
 		};
 
 		obj.tf.SetPosition(pos);

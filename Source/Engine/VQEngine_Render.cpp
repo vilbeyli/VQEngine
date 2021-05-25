@@ -1301,6 +1301,7 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 		}
 
 		const Material& mat = mpScene->GetMaterial(meshRenderCmd.matID);
+		
 		const Mesh& mesh = mpScene->mMeshes.at(meshRenderCmd.meshID);
 		const auto VBIBIDs = mesh.GetIABufferIDs();
 		const uint32 NumIndices = mesh.GetNumIndices();
@@ -2052,13 +2053,14 @@ HRESULT VQEngine::PresentFrame(FWindowRenderContext& ctx)
 	ID3D12Resource* pSwapChainRT = swapchain.GetCurrentBackBufferRenderTarget();
 
 	std::vector<ID3D12GraphicsCommandList*>& vCmdLists = ctx.GetGFXCommandListPtrs();
-	for (ID3D12GraphicsCommandList* pCmd : vCmdLists)
+	const UINT NumCommandLists = ctx.GetNumCurrentlyRecordingThreads(CommandQueue::EType::GFX);
+	for (UINT i=0; i< NumCommandLists; ++i )
 	{
-		pCmd->Close();
+		vCmdLists[i]->Close();
 	}
 	{
 		SCOPED_CPU_MARKER("ExecuteCommandLists()");
-		PresentQueue.pQueue->ExecuteCommandLists((UINT)vCmdLists.size(), (ID3D12CommandList**)vCmdLists.data());
+		PresentQueue.pQueue->ExecuteCommandLists(NumCommandLists, (ID3D12CommandList**)vCmdLists.data());
 	}
 	{
 		SCOPED_CPU_MARKER("SwapchainPresent");

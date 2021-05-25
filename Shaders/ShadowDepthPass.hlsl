@@ -19,7 +19,7 @@
 struct VSInput
 {
 	float3 position : POSITION;
-#if ALPHA_MASK
+#if ENABLE_ALPHA_MASK
 	float2 uv       : TEXCOORD0;
 #endif
 };
@@ -28,7 +28,7 @@ struct PSInput
 {
 	float4 position : SV_POSITION;
 	float3 worldPosition : COLOR0;
-#if ALPHA_MASK
+#if ENABLE_ALPHA_MASK
 	float2 uv       : TEXCOORD0;
 #endif
 };
@@ -52,20 +52,20 @@ PSInput VSMain(VSInput vertex)
 	result.position = mul(matModelViewProj, float4(vertex.position, 1));
 	result.worldPosition = mul(matWorld, float4(vertex.position, 1));
 	
-#if ALPHA_MASK
+#if ENABLE_ALPHA_MASK
 	result.uv = vertex.uv;
 #endif
 	
     return result;
 }
 
-#if ALPHA_MASK
+#if ENABLE_ALPHA_MASK
 Texture2D    texDiffuseAlpha : register(t0);
 SamplerState LinearSampler   : register(s0);
 #endif
 float PSMain(PSInput In) : SV_DEPTH
 {
-#if ALPHA_MASK
+#if ENABLE_ALPHA_MASK
 	float alpha = texDiffuseAlpha.SampleLevel(LinearSampler, In.uv, 0).a;
 	if(alpha < 0.01f)
 		discard;

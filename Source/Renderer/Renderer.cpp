@@ -836,7 +836,7 @@ void VQRenderer::LoadRootSignatures()
 		
 		CD3DX12_ROOT_PARAMETER1 rootParameters[2];
 		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
-		rootParameters[1].InitAsConstantBufferView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_VERTEX);
+		rootParameters[1].InitAsConstantBufferView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL); // VS-PS
 
 
 		D3D12_STATIC_SAMPLER_DESC samplers[4] = {};
@@ -1078,7 +1078,7 @@ void VQRenderer::LoadPSOs()
 		PSOLoadDescs.push_back({ EBuiltinPSOs::TONEMAPPER_PSO, psoLoadDesc });
 	}
 
-	// DEPTH PREPASS PSO
+	// DEPTH PREPASS PSOs
 	{
 		const std::wstring ShaderFilePath = GetAssetFullPath(L"DepthPrePass.hlsl");
 
@@ -1107,10 +1107,25 @@ void VQRenderer::LoadPSOs()
 
 		PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PREPASS_PSO, psoLoadDesc });
 
+
 		// MSAA PSO
 		psoLoadDesc.PSOName = "PSO_FDepthPrePassVSPS_MSAA4";
 		psoDesc.SampleDesc.Count = 4;
 		PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PREPASS_PSO_MSAA_4, psoLoadDesc });
+
+		//{
+		//	psoLoadDesc.ShaderStageCompileDescs.clear();
+		//	psoLoadDesc.PSOName = "PSO_FDepthPrePassVSPS_AlphaMasked";
+		//	psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1", { {"ENABLE_ALPHA_MASK","1"} } });
+		//	psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1", { {"ENABLE_ALPHA_MASK","1"} } });
+		//	psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mpBuiltinRootSignatures[14];
+		//	psoDesc.SampleDesc.Count = 1;
+		//	PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PREPASS_ALPHA_MASKED_PSO, psoLoadDesc });
+		//
+		//	psoLoadDesc.PSOName = "PSO_FDepthPrePassVSPS_AlphaMasked_MSAA4";
+		//	psoDesc.SampleDesc.Count = 4;
+		//	PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PREPASS_ALPHA_MASKED_PSO_MSAA_4, psoLoadDesc });
+		//}
 	}
 
 	// FORWARD LIGHTING PSO

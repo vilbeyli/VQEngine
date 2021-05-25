@@ -109,11 +109,9 @@ float4 PSMain(PSInput In) : SV_TARGET
 	
 	const int TEX_CFG = cbPerObject.materialData.textureConfig;	
 	
-#if ALPHA_MASKED
 	float4 AlbedoAlpha = texDiffuse.Sample(AnisoSampler, uv);
 	if (HasDiffuseMap(TEX_CFG) && AlbedoAlpha.a < 0.01f)
 		discard;
-#endif
 	
 	float3 Normal = texNormals.Sample(AnisoSampler, uv).rgb;
 	const float3 N = normalize(In.vertNormal);
