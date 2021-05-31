@@ -324,7 +324,7 @@ void Scene::OnLoadComplete()
 {
 	Log::Info("[Scene] OnLoadComplete()");
 
-	// Assign model data 
+	// Assign model data to game objects
 	for (auto it = mModelLoadResults.begin(); it != mModelLoadResults.end(); ++it)
 	{
 		GameObject* pObj = it->first;
@@ -336,7 +336,11 @@ void Scene::OnLoadComplete()
 		pObj->mModelID = res.get();
 	}
 
+	// assign material data
 	mMaterialAssignments.DoAssignments(this, &mRenderer);
+
+	// calculate local-space game object AABBs
+	CalculateGameObjectLocalSpaceBoundingBoxes();
 
 	Log::Info("[Scene] %s loaded.", mSceneRepresentation.SceneName.c_str());
 	mSceneRepresentation.loadSuccess = 1;
@@ -378,4 +382,51 @@ void Scene::Unload()
 	mLightsDynamic.clear();
 	mLightsStatic.clear();
 	mLightsStationary.clear();
+}
+
+
+void Scene::CalculateGameObjectLocalSpaceBoundingBoxes()
+{
+	constexpr float max_f = std::numeric_limits<float>::max();
+	constexpr float min_f = -(max_f - 1.0f);
+
+	for (GameObject* pGameObj : mpObjects)
+	{
+		FBoundingBox& AABB = pGameObj->mLocalSpaceBoundingBox;
+
+		// reset AABB
+		AABB.ExtentMin = XMFLOAT3(max_f, max_f, max_f);
+		AABB.ExtentMax = XMFLOAT3(min_f, min_f, min_f);
+
+		// load
+		XMVECTOR vMins = XMLoadFloat3(&AABB.ExtentMin);
+		XMVECTOR vMaxs = XMLoadFloat3(&AABB.ExtentMax);
+
+		// go through all meshes and generate the AABB
+		const Model& model = mModels.at(pGameObj->mModelID);
+		auto fnProcessMeshAABB = [&vMins, &vMaxs](const FBoundingBox& AABB_Mesh)
+		{
+			XMVECTOR vMinMesh = XMLoadFloat3(&AABB_Mesh.ExtentMin);
+			XMVECTOR vMaxMesh = XMLoadFloat3(&AABB_Mesh.ExtentMax);
+
+			vMins = XMVectorMin(vMins, vMinMesh);
+			vMins = XMVectorMin(vMins, vMaxMesh);
+			vMaxs = XMVectorMax(vMaxs, vMinMesh);
+			vMaxs = XMVectorMax(vMaxs, vMaxMesh);
+		};
+		for (MeshID mesh : model.mData.mOpaueMeshIDs)
+		{
+			const FBoundingBox& AABB_Mesh = mMeshes.at(mesh).GetLocalSpaceBoundingBox();
+			fnProcessMeshAABB(AABB_Mesh);
+		}
+		for (MeshID mesh : model.mData.mTransparentMeshIDs)
+		{
+			const FBoundingBox& AABB_Mesh = mMeshes.at(mesh).GetLocalSpaceBoundingBox();
+			fnProcessMeshAABB(AABB_Mesh);
+		}
+
+		// store 
+		XMStoreFloat3(&AABB.ExtentMin, vMins);
+		XMStoreFloat3(&AABB.ExtentMax, vMaxs);
+	}
 }

@@ -331,6 +331,8 @@ private: // Derived Scenes shouldn't access these functions
 	void LoadLights(const std::vector<Light>& SceneLights);
 	void LoadCameras(std::vector<FCameraParameters>& CameraParams);
 	void LoadPostProcessSettings();
+
+	void CalculateGameObjectLocalSpaceBoundingBoxes();
 public:
 	Scene(VQEngine& engine
 		, int NumFrameBuffers

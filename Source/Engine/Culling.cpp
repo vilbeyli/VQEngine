@@ -18,7 +18,10 @@
 
 #include "Culling.h"
 #include "Math.h"
+#include "Scene/Scene.h"
 #include "Libs/VQUtils/Source/Multithreading.h"
+
+#include <algorithm>
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -160,7 +163,6 @@ void FFrustumCullWorkerContext::ProcessWorkItems_SingleThreaded()
 	this->Process(0, szFP - 1);
 }
 
-#include <algorithm>
 static std::vector<std::pair<size_t, size_t>> PartitionWorkItemsIntoRanges(size_t NumWorkItems, size_t NumWorkerThreadCount)
 {
 	std::vector<std::pair<size_t, size_t>> vRanges(NumWorkerThreadCount); // each worker thread gets a range
@@ -277,6 +279,12 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 	}
 }
 
+
+//------------------------------------------------------------------------------------------------------------------------------
+//
+// BOX HIERARCHY
+//
+//------------------------------------------------------------------------------------------------------------------------------
 std::array<DirectX::XMFLOAT4, 8> FBoundingBox::GetCornerPointsV4() const
 {
 	return std::array<XMFLOAT4, 8>
@@ -308,8 +316,6 @@ std::array<DirectX::XMFLOAT3, 8> FBoundingBox::GetCornerPointsV3() const
 		XMFLOAT3(ExtentMin.x, ExtentMax.y, ExtentMax.z)
 	};
 }
-
-
 
 static FBoundingBox GetAxisAligned(const FBoundingBox& WorldBoundingBox)
 {
@@ -349,15 +355,22 @@ static FBoundingBox CalculateAxisAlignedBoundingBox(const XMMATRIX& MWorld, cons
 	return GetAxisAligned(WorldTransformedBB);
 }
 
-#include "Scene/Scene.h"
 
 
+//------------------------------------------------------------------------------------------------------------------------------
+//
+// SCENE BOUNDING BOX HIERARCHY
+//
+//------------------------------------------------------------------------------------------------------------------------------
 void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBox(const GameObject* pObj)
 {
 	assert(pObj);
 	Transform* const& pTF = mpTransforms.at(pObj->mTransformID);
 	assert(pTF);
 
+	// assumes static meshes: 
+	// - no VB/IB change
+	// - no dynamic vertex animations, morphing etc
 	XMMATRIX matWorld = pTF->matWorldTransformation();
 	FBoundingBox AABB_Obj = CalculateAxisAlignedBoundingBox(matWorld, pObj->mLocalSpaceBoundingBox);
 	mGameObjectBoundingBoxes.push_back(AABB_Obj);
@@ -388,6 +401,9 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBox(const GameObject* pObj)
 
 	XMMATRIX matWorld = pTF->matWorldTransformation();
 
+	// assumes static meshes: 
+	// - no VB/IB change
+	// - no dynamic vertex animations, morphing etc
 	bool bAtLeastOneMesh = false;
 	for (MeshID mesh : model.mData.mOpaueMeshIDs)
 	{

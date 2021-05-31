@@ -91,7 +91,7 @@ void FWindowRenderContext::InitializeContext(const Window* pWin, Device* pVQDevi
 
 	// create 1 constant buffer
 	this->mDynamicHeap_ConstantBuffer.resize(1);
-	this->mDynamicHeap_ConstantBuffer[0].Create(pDevice, NumSwapchainBuffers, 8 * MEGABYTE);
+	this->mDynamicHeap_ConstantBuffer[0].Create(pDevice, NumSwapchainBuffers, 12 * MEGABYTE);
 }
 
 void FWindowRenderContext::CleanupContext()

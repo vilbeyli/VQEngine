@@ -653,6 +653,7 @@ void VQEngine::RenderThread_PreRender()
 	const FSceneView&       SceneView       = mpScene->GetSceneView(FRAME_DATA_INDEX);
 	const FSceneShadowView& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
 
+#if RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING
 	const uint32_t NumCmdRecordingThreads_GFX
 		= 1 // worker thrd: DepthPrePass
 		+ 1 // this thread: AO+SceneColor+PostProcess+Submit+Present
@@ -660,9 +661,10 @@ void VQEngine::RenderThread_PreRender()
 	const uint32_t NumCmdRecordingThreads_CMP = 0;
 	const uint32_t NumCmdRecordingThreads_CPY = 0;
 	const uint32_t NumCmdRecordingThreads = NumCmdRecordingThreads_GFX + NumCmdRecordingThreads_CPY + NumCmdRecordingThreads_CMP;
-#if RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING
 	const uint32_t ConstantBufferBytesPerThread = 4 * MEGABYTE;
 #else
+	const uint32_t NumCmdRecordingThreads_GFX = 1;
+	const uint32_t NumCmdRecordingThreads = NumCmdRecordingThreads_GFX;
 	const uint32_t ConstantBufferBytesPerThread = 12 * MEGABYTE;
 #endif
 
