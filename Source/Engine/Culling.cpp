@@ -89,7 +89,7 @@ bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes, con
 
 	// this is a hotspot: GetCornerPointsV4() creating the bounding box on the stack may slow it down.
 	//                    TODO: test with a pre-generated set of corners instead of doing it on the fly.
-	const std::array<XMFLOAT4, 8> vPoints = BBox.GetCornerPointsV4();
+	const std::array<XMFLOAT4, 8> vPoints = BBox.GetCornerPointsF4(); // TODO: optimize XMLoadFloat4
 
 	for (int p = 0; p < 6; ++p)	// for each plane
 	{
@@ -285,7 +285,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 // BOX HIERARCHY
 //
 //------------------------------------------------------------------------------------------------------------------------------
-std::array<DirectX::XMFLOAT4, 8> FBoundingBox::GetCornerPointsV4() const
+std::array<DirectX::XMFLOAT4, 8> FBoundingBox::GetCornerPointsF4() const
 {
 	return std::array<XMFLOAT4, 8>
 	{
@@ -300,8 +300,7 @@ std::array<DirectX::XMFLOAT4, 8> FBoundingBox::GetCornerPointsV4() const
 		XMFLOAT4(ExtentMin.x, ExtentMax.y, ExtentMax.z, 1.0f)
 	};
 }
-
-std::array<DirectX::XMFLOAT3, 8> FBoundingBox::GetCornerPointsV3() const
+std::array<DirectX::XMFLOAT3, 8> FBoundingBox::GetCornerPointsF3() const
 {
 	return std::array<XMFLOAT3, 8>
 	{
@@ -316,16 +315,44 @@ std::array<DirectX::XMFLOAT3, 8> FBoundingBox::GetCornerPointsV3() const
 		XMFLOAT3(ExtentMin.x, ExtentMax.y, ExtentMax.z)
 	};
 }
+std::array<DirectX::XMVECTOR, 8> FBoundingBox::GetCornerPointsV4() const
+{
+	std::array<DirectX::XMFLOAT4, 8> Points_F4 = GetCornerPointsF4();
+	std::array<DirectX::XMVECTOR, 8> Points_V;
+	for(int i=0; i<8; ++i) Points_V[i] = XMLoadFloat4(&Points_F4[i]);
+	return Points_V;
+}
+std::array<DirectX::XMVECTOR, 8> FBoundingBox::GetCornerPointsV3() const
+{
+	std::array<DirectX::XMFLOAT3, 8> Points_F3 = GetCornerPointsF3();
+	std::array<DirectX::XMVECTOR, 8> Points_V;
+	for (int i = 0; i < 8; ++i) Points_V[i] = XMLoadFloat3(&Points_F3[i]);
+	return Points_V;
+}
 
+static constexpr float max_f = std::numeric_limits<float>::max();
+static constexpr float min_f = -(max_f - 1.0f);
+static const XMFLOAT3 MINS = XMFLOAT3(max_f, max_f, max_f);
+static const XMFLOAT3 MAXS = XMFLOAT3(min_f, min_f, min_f);
+static FBoundingBox GetAxisAligned(const std::array<DirectX::XMVECTOR, 8>& CornerPoints)
+{
+	XMVECTOR vMins = XMLoadFloat3(&MINS);
+	XMVECTOR vMaxs = XMLoadFloat3(&MAXS);
+
+	FBoundingBox AABB;
+	for (const XMVECTOR& vPoint : CornerPoints)
+	{
+		vMins = XMVectorMin(vMins, vPoint);
+		vMaxs = XMVectorMax(vMaxs, vPoint);
+	}
+	XMStoreFloat3(&AABB.ExtentMax, vMaxs);
+	XMStoreFloat3(&AABB.ExtentMin, vMins);
+	return AABB;
+}
 static FBoundingBox GetAxisAligned(const std::array<DirectX::XMFLOAT3, 8>& CornerPoints)
 {
-	constexpr float max_f = std::numeric_limits<float>::max();
-	constexpr float min_f = -(max_f - 1.0f);
-
-	XMFLOAT3 mins = XMFLOAT3(max_f, max_f, max_f);
-	XMFLOAT3 maxs = XMFLOAT3(min_f, min_f, min_f);
-	XMVECTOR vMins = XMLoadFloat3(&mins);
-	XMVECTOR vMaxs = XMLoadFloat3(&maxs);
+	XMVECTOR vMins = XMLoadFloat3(&MINS);
+	XMVECTOR vMaxs = XMLoadFloat3(&MAXS);
 
 	FBoundingBox AABB;
 	const std::array<XMFLOAT3, 8> vPoints = CornerPoints;
@@ -339,25 +366,15 @@ static FBoundingBox GetAxisAligned(const std::array<DirectX::XMFLOAT3, 8>& Corne
 	XMStoreFloat3(&AABB.ExtentMin, vMins);
 	return AABB;
 }
-static FBoundingBox GetAxisAligned(const FBoundingBox& WorldBoundingBox) { return GetAxisAligned(WorldBoundingBox.GetCornerPointsV3()); }
+static FBoundingBox GetAxisAligned(const FBoundingBox& WorldBoundingBox) { return GetAxisAligned(WorldBoundingBox.GetCornerPointsV4()); }
 static FBoundingBox CalculateAxisAlignedBoundingBox(const XMMATRIX& MWorld, const FBoundingBox& LocalSpaceAxisAlignedBoundingBox)
 {
-	const FBoundingBox& bb = LocalSpaceAxisAlignedBoundingBox; // shorthand
-	XMVECTOR vMin = XMLoadFloat3(&bb.ExtentMin);
-	XMVECTOR vMax = XMLoadFloat3(&bb.ExtentMax);
-	vMin.m128_f32[3] = vMax.m128_f32[3] = 1.0f;
-
-	// transform BB corners
-	std::array<XMFLOAT3, 8> vPoints = bb.GetCornerPointsV3();
-	for (int i = 0; i < 8; ++i)
+	std::array<XMVECTOR, 8> vPoints = LocalSpaceAxisAlignedBoundingBox.GetCornerPointsV4();
+	for (int i = 0; i < 8; ++i) // transform points to world space
 	{
-		XMVECTOR vPoint = XMLoadFloat3(&vPoints[i]);
-		vPoint.m128_f32[3] = 1.0f; // transforming a point
-		vPoint = XMVector4Transform(vPoint, MWorld);
-		XMStoreFloat3(&vPoints[i], vPoint);
+		vPoints[i] = XMVector4Transform(vPoints[i], MWorld);
 	}
 	return GetAxisAligned(vPoints);
-
 }
 
 

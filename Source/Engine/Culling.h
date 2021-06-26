@@ -106,8 +106,10 @@ struct FBoundingBox
 	DirectX::XMFLOAT3 ExtentMin;
 	DirectX::XMFLOAT3 ExtentMax;
 
-	std::array<DirectX::XMFLOAT4, 8> GetCornerPointsV4() const;
-	std::array<DirectX::XMFLOAT3, 8> GetCornerPointsV3() const;
+	std::array<DirectX::XMVECTOR, 8> GetCornerPointsV4() const;
+	std::array<DirectX::XMVECTOR, 8> GetCornerPointsV3() const;
+	std::array<DirectX::XMFLOAT4, 8> GetCornerPointsF4() const;
+	std::array<DirectX::XMFLOAT3, 8> GetCornerPointsF3() const;
 };
 
 //------------------------------------------------------------------------------------------------------------------------------
