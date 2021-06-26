@@ -317,7 +317,7 @@ std::array<DirectX::XMFLOAT3, 8> FBoundingBox::GetCornerPointsV3() const
 	};
 }
 
-static FBoundingBox GetAxisAligned(const FBoundingBox& WorldBoundingBox)
+static FBoundingBox GetAxisAligned(const std::array<DirectX::XMFLOAT3, 8>& CornerPoints)
 {
 	constexpr float max_f = std::numeric_limits<float>::max();
 	constexpr float min_f = -(max_f - 1.0f);
@@ -328,7 +328,7 @@ static FBoundingBox GetAxisAligned(const FBoundingBox& WorldBoundingBox)
 	XMVECTOR vMaxs = XMLoadFloat3(&maxs);
 
 	FBoundingBox AABB;
-	const std::array<XMFLOAT3, 8> vPoints = WorldBoundingBox.GetCornerPointsV3();
+	const std::array<XMFLOAT3, 8> vPoints = CornerPoints;
 	for (const XMFLOAT3& f3Point : vPoints)
 	{
 		XMVECTOR vPoint = XMLoadFloat3(&f3Point);
@@ -339,20 +339,25 @@ static FBoundingBox GetAxisAligned(const FBoundingBox& WorldBoundingBox)
 	XMStoreFloat3(&AABB.ExtentMin, vMins);
 	return AABB;
 }
+static FBoundingBox GetAxisAligned(const FBoundingBox& WorldBoundingBox) { return GetAxisAligned(WorldBoundingBox.GetCornerPointsV3()); }
 static FBoundingBox CalculateAxisAlignedBoundingBox(const XMMATRIX& MWorld, const FBoundingBox& LocalSpaceAxisAlignedBoundingBox)
 {
 	const FBoundingBox& bb = LocalSpaceAxisAlignedBoundingBox; // shorthand
-
-	// transformed local space bounding box, no longer necessarily axis-aligned
-	FBoundingBox WorldTransformedBB;
 	XMVECTOR vMin = XMLoadFloat3(&bb.ExtentMin);
 	XMVECTOR vMax = XMLoadFloat3(&bb.ExtentMax);
-	vMin = XMVector3Transform(vMin, MWorld);
-	vMax = XMVector3Transform(vMax, MWorld);
-	XMStoreFloat3(&WorldTransformedBB.ExtentMin, vMin);
-	XMStoreFloat3(&WorldTransformedBB.ExtentMax, vMax);
+	vMin.m128_f32[3] = vMax.m128_f32[3] = 1.0f;
 
-	return GetAxisAligned(WorldTransformedBB);
+	// transform BB corners
+	std::array<XMFLOAT3, 8> vPoints = bb.GetCornerPointsV3();
+	for (int i = 0; i < 8; ++i)
+	{
+		XMVECTOR vPoint = XMLoadFloat3(&vPoints[i]);
+		vPoint.m128_f32[3] = 1.0f; // transforming a point
+		vPoint = XMVector4Transform(vPoint, MWorld);
+		XMStoreFloat3(&vPoints[i], vPoint);
+	}
+	return GetAxisAligned(vPoints);
+
 }
 
 

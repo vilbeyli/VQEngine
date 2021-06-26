@@ -697,6 +697,7 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 
 	FFrustumCullWorkerContext GameObjectFrustumCullWorkerContext;
 
+#if 0
 	//------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	//
 	// Coarse Culling : cull the game object bounding boxes against view frustums
@@ -708,7 +709,6 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 	else                                 GameObjectFrustumCullWorkerContext.ProcessWorkItems_MultiThreaded(NumThreadsIncludingThisThread, UpdateWorkerThreadPool);
 	//------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-#if 0
 	const_cast<SceneBoundingBoxHierarchy&>(mBoundingBoxHierarchy).BuildMeshBoundingBoxes()
 
 	//
@@ -855,14 +855,17 @@ void Scene::PrepareBoundingBoxRenderParams(FSceneView& SceneView) const
 {
 	SceneView.boundingBoxRenderCommands.clear();
 
-	const XMFLOAT3 BBColor = XMFLOAT3(0.0f, 0.2f, 0.8f);
+	
+	const XMFLOAT3 BBColor_GameObj = XMFLOAT3(0.0f, 0.2f, 0.8f);
+	const XMFLOAT3 BBColor_Mesh    = XMFLOAT3(0.0f, 0.8f, 0.2f);
+
 	const XMMATRIX IdentityMat = XMMatrixIdentity();
 	const XMVECTOR IdentityQuaternion = XMQuaternionIdentity();
 	const XMVECTOR ZeroVector = XMVectorZero();
 
-	// Main View Game Object Bounding Boxes
-	for (const FBoundingBox& BB : mBoundingBoxHierarchy.mGameObjectBoundingBoxes)
+	auto fnCreateBoundingBoxRenderCommand = [&ZeroVector, &IdentityQuaternion, &IdentityMat](const FBoundingBox& BB, const XMFLOAT3& Color)
 	{
+
 		XMVECTOR BBMax = XMLoadFloat3(&BB.ExtentMax);
 		XMVECTOR BBMin = XMLoadFloat3(&BB.ExtentMin);
 		XMVECTOR ScaleVec = (BBMax - BBMin) * 0.5f;
@@ -870,10 +873,20 @@ void Scene::PrepareBoundingBoxRenderParams(FSceneView& SceneView) const
 		XMMATRIX MatTransform = XMMatrixTransformation(ZeroVector, IdentityQuaternion, ScaleVec, ZeroVector, IdentityQuaternion, BBOrigin);
 
 		FBoundingBoxRenderCommand cmd = {};
-		cmd.color = BBColor;
+		cmd.color = Color;
 		cmd.matWorldTransformation = MatTransform;
 		cmd.meshID = EBuiltInMeshes::CUBE;
-		SceneView.boundingBoxRenderCommands.push_back(cmd);
+		return cmd;
+	};
+
+	// Main View Game Object Bounding Boxes
+	for (const FBoundingBox& BB : mBoundingBoxHierarchy.mGameObjectBoundingBoxes)
+	{
+		SceneView.boundingBoxRenderCommands.push_back(fnCreateBoundingBoxRenderCommand(BB, BBColor_GameObj));
+	}
+	for (const FBoundingBox& BB : mBoundingBoxHierarchy.mMeshBoundingBoxes)
+	{
+		SceneView.boundingBoxRenderCommands.push_back(fnCreateBoundingBoxRenderCommand(BB, BBColor_Mesh));
 	}
 
 
