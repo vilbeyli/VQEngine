@@ -219,7 +219,7 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, ThreadPool& UpdateWorkerThreadPool)
 		GatherSceneLightData(SceneView);
 		PrepareShadowMeshRenderParams(ShadowView, ViewFrustumPlanes, UpdateWorkerThreadPool);
 		PrepareLightMeshRenderParams(SceneView);
-		// TODO: Prepare BoundingBoxRenderParams
+		PrepareBoundingBoxRenderParams(SceneView);
 	}
 	else
 	{
@@ -234,6 +234,7 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, ThreadPool& UpdateWorkerThreadPool)
 			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
 			while (UpdateWorkerThreadPool.GetNumActiveTasks() != 0);
 		}
+		PrepareBoundingBoxRenderParams(SceneView);
 	}
 }
 
@@ -848,6 +849,39 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 	SceneShadowView.NumSpotShadowViews = iSpot;
 #endif // ENABLE_VIEW_FRUSTUM_CULLING
 }
+
+
+void Scene::PrepareBoundingBoxRenderParams(FSceneView& SceneView) const
+{
+	SceneView.boundingBoxRenderCommands.clear();
+
+	const XMFLOAT3 BBColor = XMFLOAT3(0.0f, 0.2f, 0.8f);
+	const XMMATRIX IdentityMat = XMMatrixIdentity();
+	const XMVECTOR IdentityQuaternion = XMQuaternionIdentity();
+	const XMVECTOR ZeroVector = XMVectorZero();
+
+	// Main View Game Object Bounding Boxes
+	for (const FBoundingBox& BB : mBoundingBoxHierarchy.mGameObjectBoundingBoxes)
+	{
+		XMVECTOR BBMax = XMLoadFloat3(&BB.ExtentMax);
+		XMVECTOR BBMin = XMLoadFloat3(&BB.ExtentMin);
+		XMVECTOR ScaleVec = (BBMax - BBMin) * 0.5f;
+		XMVECTOR BBOrigin = (BBMax + BBMin) * 0.5f;
+		XMMATRIX MatTransform = XMMatrixTransformation(ZeroVector, IdentityQuaternion, ScaleVec, ZeroVector, IdentityQuaternion, BBOrigin);
+
+		FBoundingBoxRenderCommand cmd = {};
+		cmd.color = BBColor;
+		cmd.matWorldTransformation = MatTransform;
+		cmd.meshID = EBuiltInMeshes::CUBE;
+		SceneView.boundingBoxRenderCommands.push_back(cmd);
+	}
+
+
+	// Light View Bounding Boxes 
+	// TODO
+	
+}
+
 
 FMaterialRepresentation::FMaterialRepresentation()
 	: DiffuseColor(MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE)

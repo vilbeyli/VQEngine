@@ -137,14 +137,13 @@ struct FShadowMeshRenderCommand : public FMeshRenderCommandBase
 	MaterialID matID = INVALID_ID;
 	std::string ModelName;
 };
-struct FLightRenderCommand : public FMeshRenderCommandBase
+struct FWireframeRenderCommand : public FMeshRenderCommandBase
 {
 	DirectX::XMFLOAT3 color;
 };
-struct FBoundingBoxRenderCommand : public FMeshRenderCommandBase
-{
-	DirectX::XMFLOAT3 Color;
-};
+using FLightRenderCommand = FWireframeRenderCommand;
+using FBoundingBoxRenderCommand = FWireframeRenderCommand;
+
 struct FSceneView
 {
 	DirectX::XMMATRIX     view;
@@ -318,6 +317,7 @@ private: // Derived Scenes shouldn't access these functions
 	void PrepareLightMeshRenderParams(FSceneView& SceneView) const;
 	void PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<FMeshRenderCommand>& MeshRenderCommands) const;
 	void PrepareShadowMeshRenderParams(FSceneShadowView& ShadowView, const FFrustumPlaneset& ViewFrustumPlanesInWorldSpace, ThreadPool& UpdateWorkerThreadPool) const;
+	void PrepareBoundingBoxRenderParams(FSceneView& SceneView) const;
 	
 	// WIP----
 	void GatherSpotLightFrustumParameters(FSceneShadowView& SceneShadowView, size_t iShadowView, const Light& l);

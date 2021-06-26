@@ -937,11 +937,11 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 {
 	SCOPED_CPU_MARKER("RenderThread_RenderMainWindow_Scene()");
 	HRESULT hr = S_OK;
-	const int NUM_BACK_BUFFERS  = ctx.GetNumSwapchainBuffers();
-	const int BACK_BUFFER_INDEX = ctx.GetCurrentSwapchainBufferIndex();
-	const int FRAME_DATA_INDEX  = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
-	const bool bUseHDRRenderPath = this->ShouldRenderHDR(mpWinMain->GetHWND());
-	const FSceneView&       SceneView       = mpScene->GetSceneView(FRAME_DATA_INDEX);
+	const int NUM_BACK_BUFFERS              = ctx.GetNumSwapchainBuffers();
+	const int BACK_BUFFER_INDEX             = ctx.GetCurrentSwapchainBufferIndex();
+	const int FRAME_DATA_INDEX              = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
+	const bool bUseHDRRenderPath            = this->ShouldRenderHDR(mpWinMain->GetHWND());
+	const FSceneView& SceneView             = mpScene->GetSceneView(FRAME_DATA_INDEX);
 	const FSceneShadowView& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
 	const FPostProcessParameters& PPParams  = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 
@@ -1739,7 +1739,40 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 	if (!SceneView.boundingBoxRenderCommands.empty())
 	{
 		SCOPED_GPU_MARKER(pCmd, "BoundingBoxes");
-		// TODO: bounding box drawing
+
+		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA
+			? EBuiltinPSOs::WIREFRAME_PSO_MSAA_4
+			: EBuiltinPSOs::WIREFRAME_PSO)
+		);
+		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(6)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
+		for(const FBoundingBoxRenderCommand& BBRenderCmd: SceneView.boundingBoxRenderCommands)
+		{
+			// set constant buffer data
+			FFrameConstantBufferUnlit* pCBuffer = {};
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(pCBuffer)), (void**)(&pCBuffer), &cbAddr);
+			pCBuffer->color = BBRenderCmd.color;
+			pCBuffer->matModelViewProj = BBRenderCmd.matWorldTransformation * SceneView.viewProj;
+			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
+
+			// set IA
+			const Mesh& mesh = mpScene->mMeshes.at(BBRenderCmd.meshID);
+
+			const auto VBIBIDs = mesh.GetIABufferIDs();
+			const uint32 NumIndices = mesh.GetNumIndices();
+			const uint32 NumInstances = 1;
+			const BufferID& VB_ID = VBIBIDs.first;
+			const BufferID& IB_ID = VBIBIDs.second;
+			const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
+			const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
+
+			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			pCmd->IASetVertexBuffers(0, 1, &vb);
+			pCmd->IASetIndexBuffer(&ib);
+
+			// draw
+			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
+		}
 	}
 
 	// Draw Environment Map ---------------------------------------
