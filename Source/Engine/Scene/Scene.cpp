@@ -260,6 +260,7 @@ static std::string DumpCameraInfo(int index, const Camera& cam)
 	return info;
 }
 
+static void ToggleBool(bool& b) { b = !b; }
 void Scene::HandleInput(FSceneView& SceneView)
 {
 	const bool bIsShiftDown = mInput.IsKeyDown("Shift");
@@ -284,7 +285,12 @@ void Scene::HandleInput(FSceneView& SceneView)
 
 	if (mInput.IsKeyTriggered("L"))
 	{
-		SceneView.sceneParameters.bDrawLightBounds = !SceneView.sceneParameters.bDrawLightBounds;
+		ToggleBool(SceneView.sceneParameters.bDrawLightBounds);
+	}
+	if (mInput.IsKeyTriggered("N"))
+	{
+		if(bIsShiftDown) ToggleBool(SceneView.sceneParameters.bDrawGameObjectBoundingBoxes);
+		else             ToggleBool(SceneView.sceneParameters.bDrawMeshBoundingBoxes);
 	}
 
 	if (mInput.IsKeyTriggered("PageUp"))
@@ -879,14 +885,21 @@ void Scene::PrepareBoundingBoxRenderParams(FSceneView& SceneView) const
 		return cmd;
 	};
 
-	// Main View Game Object Bounding Boxes
-	for (const FBoundingBox& BB : mBoundingBoxHierarchy.mGameObjectBoundingBoxes)
+
+	if (SceneView.sceneParameters.bDrawGameObjectBoundingBoxes)
 	{
-		SceneView.boundingBoxRenderCommands.push_back(fnCreateBoundingBoxRenderCommand(BB, BBColor_GameObj));
+		for (const FBoundingBox& BB : mBoundingBoxHierarchy.mGameObjectBoundingBoxes)
+		{
+			SceneView.boundingBoxRenderCommands.push_back(fnCreateBoundingBoxRenderCommand(BB, BBColor_GameObj));
+		}
 	}
-	for (const FBoundingBox& BB : mBoundingBoxHierarchy.mMeshBoundingBoxes)
+
+	if (SceneView.sceneParameters.bDrawMeshBoundingBoxes)
 	{
-		SceneView.boundingBoxRenderCommands.push_back(fnCreateBoundingBoxRenderCommand(BB, BBColor_Mesh));
+		for (const FBoundingBox& BB : mBoundingBoxHierarchy.mMeshBoundingBoxes)
+		{
+			SceneView.boundingBoxRenderCommands.push_back(fnCreateBoundingBoxRenderCommand(BB, BBColor_Mesh));
+		}
 	}
 
 

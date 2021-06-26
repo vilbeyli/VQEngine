@@ -115,6 +115,8 @@ struct FPostProcessParameters
 struct FSceneRenderParameters
 {
 	bool bDrawLightBounds = false;
+	bool bDrawMeshBoundingBoxes = false;
+	bool bDrawGameObjectBoundingBoxes = false;
 	bool bDrawLightMeshes = true;
 	float fAmbientLightingFactor = 0.055f;
 	bool bScreenSpaceAO = true;
