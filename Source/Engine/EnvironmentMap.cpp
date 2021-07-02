@@ -71,10 +71,10 @@ std::string DetermineResolution_HDRI(FEnvironmentMapDescriptor& inEnvMapDesc, un
 
 	if (bHasReplacementToken)
 	{
-		if (MonitorResolutionY <= 720) { resolution = "1k"; }
-		else if (MonitorResolutionY <= 1080) { resolution = "2k"; }
+		     if (MonitorResolutionY <  720) { resolution = "1k"; }
+		else if (MonitorResolutionY < 1080) { resolution = "2k"; }
 		else if (MonitorResolutionY <= 1440) { resolution = "4k"; }
-		else if (MonitorResolutionY <= 2160) { resolution = "8k"; }
+		else if (MonitorResolutionY < 2160) { resolution = "8k"; }
 		else { resolution = "8k"; }
 
 		const size_t lenReplacementToken = inEnvMapDesc.FilePath.find_last_of('%') - iReplacementToken + 1; // +1 to include the last '%' in "%resolution%'
@@ -234,6 +234,11 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	if (!DirectoryUtil::FileExists(desc.FilePath)) // desc.FilePath: "FolderPath/file_name_4k.hdr"
 	{
 		Log::Info("[EnvironmentMap] Target resolution texture (%s) doesn't exist on disk. ", desc.FilePath.c_str());
+
+		// Note: Downsizing the 8K source texture doesn't look well, a native version of the
+		//       down-sized HDRI should be downloaded, either through packaging or during execution.
+		//       VQE will keep using 8K source textures for now while limiting the number of them
+		//       to reduce download size.
 		CreateEnvironmentMapTextureFromHiResAndSaveToDisk(desc.FilePath);
 	}
 
