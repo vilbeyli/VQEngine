@@ -25,7 +25,7 @@
 #include <d3d12.h>
 #include <cassert>
 
-void CommandQueue::Create(Device* pDevice, ECommandQueueType type, const char* pName /*= nullptr*/)
+void CommandQueue::Create(Device* pDevice, EType type, const char* pName /*= nullptr*/)
 {
 	HRESULT hr = {};
 	ID3D12Device* pDevice_ = pDevice->GetDevicePtr();

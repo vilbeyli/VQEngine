@@ -18,10 +18,13 @@
 
 #pragma once
 
-#include "../Application/Types.h"
+#include "../Engine/Core/Types.h"
 
+#include <atlbase.h>
 #include <d3dcompiler.h>
 #include <d3d12.h>
+
+#include "../../Libs/DirectXCompiler/inc/dxcapi.h"
 
 #include <string>
 #include <array>
@@ -34,6 +37,8 @@
 struct ID3D12Device;
 
 using FileTimeStamp = std::filesystem::file_time_type;
+
+//using namespace;
 
 //
 // HELPER STRUCTS/ENUMS
@@ -69,18 +74,8 @@ struct FShaderMacro
 	std::string Name;
 	std::string Value;
 };
-struct FShaderStageCompileDesc
-{
-	std::wstring FilePath;
-	std::string EntryPoint;
-	std::string ShaderModel;
-	std::vector<FShaderMacro> Macros;
-};
-struct FShaderStageCompileResult
-{
-	ID3DBlob* pBlob = nullptr;
-	EShaderStage ShaderStageEnum;
-};
+
+struct FShaderStageCompileDesc;
 
 
 //
@@ -91,18 +86,27 @@ class Shader
 	friend class Renderer;
 
 public:
+	struct FBlob
+	{
+		inline bool IsNull() const { return !pD3DBlob && !pBlobDxc; }
+		const void* GetByteCode() const;
+		size_t GetByteCodeSize() const;
+
+		CComPtr<ID3DBlob> pD3DBlob = nullptr;
+		CComPtr<IDxcBlob> pBlobDxc = nullptr;
+	};
 	union ShaderBlobs
 	{
 		struct
 		{
-			ID3DBlob* vs;
-			ID3DBlob* gs;
-			ID3DBlob* ds;
-			ID3DBlob* hs;
-			ID3DBlob* ps;
-			ID3DBlob* cs;
+			FBlob* vs;
+			FBlob* gs;
+			FBlob* ds;
+			FBlob* hs;
+			FBlob* ps;
+			FBlob* cs;
 		};
-		ID3DBlob* ShaderBlobs[EShaderStage::NUM_SHADER_STAGES];
+		FBlob* ShaderBlobs[EShaderStage::NUM_SHADER_STAGES];
 	};
 	union ShaderReflections
 	{
@@ -123,15 +127,15 @@ namespace ShaderUtils
 {
 	// Compiles shader from source file with the given file path, entry point, shader model & macro definitions
 	//
-	ID3DBlob* CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompileDesc, std::string& OutErrorString);
+	Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompileDesc, std::string& OutErrorString);
 	
 	// Reads in cached shader binary from given @ShaderBinaryFilePath 
 	//
-	ID3DBlob* CompileFromCachedBinary(const std::string& ShaderBinaryFilePath);
+	Shader::FBlob CompileFromCachedBinary(const std::string& ShaderBinaryFilePath);
 	
 	// Writes out compiled ID3DBlob into @ShaderBinaryFilePath
 	//
-	void CacheShaderBinary(const std::string& ShaderBinaryFilePath, ID3DBlob* pCompiledBinary);
+	void CacheShaderBinary(const std::string& ShaderBinaryFilePath, size_t ShaderBinarySize, const void* pShaderBinary);
 
 	// Concatenates given FShaderMacros and generates a hash from the resulting string
 	//
@@ -146,3 +150,17 @@ namespace ShaderUtils
 
 	EShaderStage GetShaderStageEnumFromShaderModel(const std::string& ShaderModel);
 }
+
+
+struct FShaderStageCompileDesc
+{
+	std::wstring FilePath;
+	std::string EntryPoint;
+	std::string ShaderModel;
+	std::vector<FShaderMacro> Macros;
+};
+struct FShaderStageCompileResult
+{
+	Shader::FBlob ShaderBlob;
+	EShaderStage ShaderStageEnum;
+};

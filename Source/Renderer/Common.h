@@ -18,7 +18,7 @@
 #pragma once
 
 #include <d3d12.h>
-#include "../Application/Types.h"
+#include "../Engine/Core/Types.h"
 #include "../../Libs/VQUtils/Source/Log.h"
 #include <cassert>
 

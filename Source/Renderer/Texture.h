@@ -19,6 +19,7 @@
 #pragma once
 
 #include "Common.h"
+#include "../../Libs/VQUtils/Source/Image.h"
 
 #include <DirectXMath.h>
 
@@ -80,7 +81,6 @@ public:
 	Texture& operator=(const Texture& other);
 
 	void Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, const TextureCreateDesc& desc);
-
 	void Destroy();
 
 	void InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayView = false, bool bInitAsCubeView = false, UINT ShaderComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc = nullptr);
@@ -90,8 +90,7 @@ public:
 
 	inline const ID3D12Resource* GetResource() const { return mpTexture; }
 	inline       ID3D12Resource* GetResource()       { return mpTexture; }
-public:
-	static bool ReadImageFromDisk(const std::string& path, Image& img);
+	inline       DXGI_FORMAT     GetFormat()   const { return mFormat; }
 
 private:
 	friend class VQRenderer;
@@ -105,9 +104,22 @@ private:
 	uint mStructuredBufferStride = 0;
 	int  mMipMapCount = 1;
 	bool mbCubemap = false;
-	int  mWidth;
-	int  mHeight;
-	int  mNumArraySlices;
+	int  mWidth = 0;
+	int  mHeight = 0;
+	int  mNumArraySlices = 1;
 
 	DXGI_FORMAT mFormat = DXGI_FORMAT_UNKNOWN;
+};
+
+
+struct FTextureUploadDesc
+{
+	FTextureUploadDesc(Image&& img_, TextureID texID, const TextureCreateDesc& tDesc) : img(img_), id(texID), desc(tDesc), pData(nullptr) {}
+	FTextureUploadDesc(const void* pData_, TextureID texID, const TextureCreateDesc& tDesc) : img({  }), id(texID), desc(tDesc), pData(pData_) {}
+	FTextureUploadDesc() = delete;
+
+	Image img;
+	const void* pData;
+	TextureID id;
+	TextureCreateDesc desc;
 };

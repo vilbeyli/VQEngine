@@ -20,6 +20,8 @@
 
 #if defined(XBOX) || defined(_XBOX_ONE) || defined(_DURANGO)
 # define PIX_XBOX
+#else
+#include "AmdDxExt\AmdPix3.h"
 #endif
 
 #if _MSC_VER < 1800
@@ -233,7 +235,8 @@ namespace PIXEventsDetail
 #if PIX_XBOX
         PIXBeginEvent(color, formatString, args...);
 #else
-        PIXBeginEventOnContextCpu(context, color, formatString, args...);
+        // PIXBeginEventOnContextCpu(context, color, formatString, args...);
+        RgpPIXBeginEventOnContextCpu(context, color, formatString, args...);
 #endif
 
         // TODO: we've already encoded this once for the CPU event - figure out way to avoid doing it again
@@ -305,7 +308,8 @@ namespace PIXEventsDetail
 #if PIX_XBOX
         PIXSetMarker(color, formatString, args...);
 #else
-        PIXSetMarkerOnContextCpu(context, color, formatString, args...);
+        // PIXSetMarkerOnContextCpu(context, color, formatString, args...);
+        RgpPIXSetMarkerOnContextCpu(context, color, formatString, args...);
 #endif
 
         UINT64 buffer[PIXEventsGraphicsRecordSpaceQwords];
@@ -405,7 +409,8 @@ namespace PIXEventsDetail
 #if PIX_XBOX
         PIXEndEvent();
 #else
-        PIXEndEventOnContextCpu(context);
+        // PIXEndEventOnContextCpu(context);
+        RgpPIXEndEventOnContextCpu(context);
 #endif
         PIXEndGPUEventOnContext(context);
     }
