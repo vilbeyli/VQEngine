@@ -131,6 +131,7 @@ set (SceneFiles
 
 set (SourceVQE 
     "Source/Engine/VQEngine.h"
+    "Source/Engine/VQEngine_RenderCommon.h"
     "Source/Engine/Settings.h"
     "Source/Engine/Math.h"
     "Source/Engine/Culling.h"
@@ -141,6 +142,7 @@ set (SourceVQE
     "Source/Engine/Main.cpp"
     "Source/Engine/VQEngine_Main.cpp"
     "Source/Engine/VQEngine_Render.cpp"
+    "Source/Engine/VQEngine_RenderCommands.cpp"
     "Source/Engine/VQEngine_Update.cpp"
     "Source/Engine/EnvironmentMap.cpp"
     "Source/Engine/Geometry.cpp"
