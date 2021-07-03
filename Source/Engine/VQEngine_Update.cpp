@@ -20,8 +20,8 @@
 
 #include "VQEngine.h"
 #include "Math.h"
-#include "Scene/Scene.h" // TODO: this name collision is bad - rename to world?
-#include "../Scenes/Scenes.h"
+#include "Scene/Scene.h"
+#include "../Scenes/Scenes.h" // scene instances
 
 #include "GPUMarker.h"
 
