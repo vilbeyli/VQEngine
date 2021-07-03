@@ -694,6 +694,23 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 			: EBuiltinPSOs::WIREFRAME_PSO)
 		);
 		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(6)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
+
+
+		// set IA
+		const Mesh& mesh = mpScene->mMeshes.at(SceneView.boundingBoxRenderCommands.begin()->meshID);
+
+		const auto VBIBIDs = mesh.GetIABufferIDs();
+		const uint32 NumIndices = mesh.GetNumIndices();
+		const uint32 NumInstances = 1;
+		const BufferID& VB_ID = VBIBIDs.first;
+		const BufferID& IB_ID = VBIBIDs.second;
+		const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
+		const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
+
+		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pCmd->IASetVertexBuffers(0, 1, &vb);
+		pCmd->IASetIndexBuffer(&ib);
+
 		for(const FBoundingBoxRenderCommand& BBRenderCmd: SceneView.boundingBoxRenderCommands)
 		{
 			// set constant buffer data
@@ -703,23 +720,6 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 			pCBuffer->color = BBRenderCmd.color;
 			pCBuffer->matModelViewProj = BBRenderCmd.matWorldTransformation * SceneView.viewProj;
 			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
-
-			// set IA
-			const Mesh& mesh = mpScene->mMeshes.at(BBRenderCmd.meshID);
-
-			const auto VBIBIDs = mesh.GetIABufferIDs();
-			const uint32 NumIndices = mesh.GetNumIndices();
-			const uint32 NumInstances = 1;
-			const BufferID& VB_ID = VBIBIDs.first;
-			const BufferID& IB_ID = VBIBIDs.second;
-			const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
-			const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
-
-			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			pCmd->IASetVertexBuffers(0, 1, &vb);
-			pCmd->IASetIndexBuffer(&ib);
-
-			// draw
 			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 		}
 	}
