@@ -5,12 +5,13 @@ project (VQRenderer)
 add_compile_options(/MP)
 add_compile_options(/std:c++17)
 
-set (Lib_headers
+set (LibHeadersD3D12X
     "Libs/D3DX12/d3dx12.h"
 )
 
 set (Headers
     "Renderer.h"
+    "WindowRenderContext.h"
     "Device.h"
     "SwapChain.h"
     "CommandQueue.h"
@@ -27,6 +28,7 @@ set (Headers
 set (Source
     "Renderer.cpp"
     "Renderer_Resources.cpp"
+    "WindowRenderContext.cpp"
     "Device.cpp"
     "SwapChain.cpp"
     "CommandQueue.cpp"
@@ -39,8 +41,8 @@ set (Source
 )
 
 
-source_group("Libs"   FILES ${Lib_headers})
-set_source_files_properties(${Lib_headers} PROPERTIES VS_TOOL_OVERRIDE "Text")
+source_group("Libs\\D3D12X"              FILES ${LibHeadersD3D12X})
+set_source_files_properties(${LibHeadersD3D12X} PROPERTIES VS_TOOL_OVERRIDE "Text")
 
 # set ouput directory
 SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/Bin)
@@ -53,6 +55,7 @@ endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 
 # add_link_options(/SUBSYSTEM:WINDOWS)
 
-add_library(${PROJECT_NAME} STATIC ${Headers} ${Source} ${Lib_headers} )
+add_library(${PROJECT_NAME} STATIC ${Headers} ${Source} ${LibHeadersD3D12X} )
+add_definitions(-DFFX_CACAO_ENABLE_D3D12)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE D3D12MA )

@@ -20,7 +20,7 @@
 #include "Device.h"
 #include "Texture.h"
 
-#include "../Application/Window.h"
+#include "../Engine/Core/Window.h"
 
 #include "../../Libs/VQUtils/Source/Log.h"
 #include "../../Libs/VQUtils/Source/utils.h"
@@ -427,9 +427,24 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 	const std::string FileNameAndExtension = DirectoryUtil::GetFileNameFromPath(pFilePath);
 	TextureCreateDesc tDesc(FileNameAndExtension);
 
+	auto fnLoadImageFromDisk = [](const std::string& FilePath, Image& img)
+	{
+		if (FilePath.empty())
+		{
+			Log::Error("Cannot load Image from file: empty FilePath provided.");
+			return false;
+		}
+
+		// process file path
+		const std::vector<std::string> FilePathTokens = StrUtil::split(FilePath, { '/', '\\' });
+		assert(FilePathTokens.size() >= 1);
+
+		img = Image::LoadFromFile(FilePath.c_str());
+		return img.pData && img.BytesPerPixel > 0;
+	};
+
 	Image image;
-	const bool bSuccess = Texture::ReadImageFromDisk(pFilePath, image);
-	const bool bHDR = image.BytesPerPixel > 4;
+	const bool bSuccess = fnLoadImageFromDisk(pFilePath, image);
 	const int MipLevels = bGenerateMips ? image.CalculateMipLevelCount() : 1;
 	if (bSuccess)
 	{
@@ -437,7 +452,7 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 		tDesc.d3d12Desc = {};
 		tDesc.d3d12Desc.Width = image.Width;
 		tDesc.d3d12Desc.Height = image.Height;
-		tDesc.d3d12Desc.Format = bHDR ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
+		tDesc.d3d12Desc.Format = image.IsHDR() ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
 		tDesc.d3d12Desc.DepthOrArraySize = 1;
 		tDesc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 		tDesc.d3d12Desc.Alignment = 0;
@@ -456,7 +471,7 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 		this->QueueTextureUpload(FTextureUploadDesc(std::move(image), ID, tDesc));
 
 		this->StartTextureUploads();
-		std::atomic<bool>& mbResident = mTextures.at(ID).mbResident;
+		std::atomic<bool>& mbResident = mTextures.at(ID).mbResident; // Is this safe?
 
 		// SYNC POINT - texture residency
 		//------------------------------------------------------------------------------
@@ -812,7 +827,7 @@ ID3D12PipelineState* VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
 		for (std::shared_future<FShaderStageCompileResult>& TaskResult : shaderCompileResults)
 		{
 			FShaderStageCompileResult ShaderCompileResult = TaskResult.get();
-			if (ShaderCompileResult.pBlob == nullptr)
+			if (ShaderCompileResult.ShaderBlob.IsNull())
 			{
 				Log::Error("PSO Compile failed: PSOLoadTaskID=%d", PSOLoadTaskID);
 				return nullptr;
@@ -829,7 +844,7 @@ ID3D12PipelineState* VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
 			{
 				FShaderStageCompileResult ShaderCompileResult = TaskResult.get();
 
-				CD3DX12_SHADER_BYTECODE ShaderByteCode(ShaderCompileResult.pBlob);
+				CD3DX12_SHADER_BYTECODE ShaderByteCode(ShaderCompileResult.ShaderBlob.GetByteCode(), ShaderCompileResult.ShaderBlob.GetByteCodeSize());
 				d3d12ComputePSODesc.CS = ShaderByteCode;
 			}
 
@@ -847,7 +862,7 @@ ID3D12PipelineState* VQRenderer::LoadPSO(const FPSOLoadDesc& psoLoadDesc)
 			{
 				FShaderStageCompileResult ShaderCompileResult = TaskResult.get();
 
-				CD3DX12_SHADER_BYTECODE ShaderByteCode(ShaderCompileResult.pBlob);
+				CD3DX12_SHADER_BYTECODE ShaderByteCode(ShaderCompileResult.ShaderBlob.GetByteCode(), ShaderCompileResult.ShaderBlob.GetByteCodeSize());
 				switch (ShaderCompileResult.ShaderStageEnum)
 				{
 				case EShaderStage::VS: d3d12GraphicsPSODesc.VS = ShaderByteCode; break;
@@ -940,21 +955,21 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 
 	// load the shader d3dblob
 	FShaderStageCompileResult Result = {};
-	ID3DBlob*& pShaderBlob = Result.pBlob;
+	Shader::FBlob& ShaderBlob = Result.ShaderBlob;
 	Result.ShaderStageEnum = ShaderUtils::GetShaderStageEnumFromShaderModel(ShaderStageCompileDesc.ShaderModel);
 
 	if (bUseCachedShaders)
 	{
-		pShaderBlob = CompileFromCachedBinary(CachedShaderBinaryPath);
+		ShaderBlob = CompileFromCachedBinary(CachedShaderBinaryPath);
 	}
 	else
 	{
 		std::string errMsg;
-		pShaderBlob = CompileFromSource(ShaderStageCompileDesc, errMsg);
-		const bool bCompileSuccessful = pShaderBlob != nullptr;
+		ShaderBlob = CompileFromSource(ShaderStageCompileDesc, errMsg);
+		const bool bCompileSuccessful = !ShaderBlob.IsNull();
 		if (bCompileSuccessful)
 		{
-			CacheShaderBinary(CachedShaderBinaryPath, pShaderBlob);
+			CacheShaderBinary(CachedShaderBinaryPath, ShaderBlob.GetByteCodeSize(), ShaderBlob.GetByteCode());
 		}
 		else
 		{
@@ -1051,6 +1066,12 @@ ID3D12Resource* VQRenderer::GetTextureResource(TextureID Id)
 	return mTextures.at(Id).GetResource();
 }
 
+DXGI_FORMAT VQRenderer::GetTextureFormat(TextureID Id) const
+{
+	CHECK_TEXTURE(mTextures, Id);
+	return mTextures.at(Id).GetFormat();
+}
+
 void VQRenderer::GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices, int& NumMips) const
 {
 	CHECK_TEXTURE(mTextures, Id);
@@ -1066,6 +1087,14 @@ uint VQRenderer::GetTextureMips(TextureID Id) const
 	CHECK_TEXTURE(mTextures, Id);
 	const Texture& tex = mTextures.at(Id);
 	return tex.mMipMapCount;
+}
+
+uint VQRenderer::GetTextureSampleCount(TextureID Id) const
+{
+	CHECK_TEXTURE(mTextures, Id);
+	const Texture& tex = mTextures.at(Id);
+	assert(false);
+	return 0; // TODO:
 }
 
 void VQRenderer::QueueTextureUpload(const FTextureUploadDesc& desc)

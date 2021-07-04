@@ -12,35 +12,36 @@ cd ../PBR
 set PBR_TEXTURES_DESTINATION_PATH=%cd%/
 popd
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
+set MAIN_SCREEN_RESOLUTION_Y=0
 :: HDRI Files
+set HDRI_RESOLUTION=8k
 set HDRI_WEB_PATH=https://hdrihaven.com/files/hdris/
-set HDRI_FILE_LIST=venice_sunset_8k.hdr
-set HDRI_FILE_LIST=%HDRI_FILE_LIST%;gym_entrance_8k.hdr
-set HDRI_FILE_LIST=%HDRI_FILE_LIST%;shanghai_bund_8k.hdr
-set HDRI_FILE_LIST=%HDRI_FILE_LIST%;stadium_01_8k.hdr
-set HDRI_FILE_LIST=%HDRI_FILE_LIST%;sunny_vondelpark_8k.hdr
-set HDRI_FILE_LIST=%HDRI_FILE_LIST%;winter_evening_8k.hdr
+set HDRI_FILE_LIST=venice_sunset_!HDRI_RESOLUTION!.hdr
+set HDRI_FILE_LIST=%HDRI_FILE_LIST%;gym_entrance_!HDRI_RESOLUTION!.hdr
+set HDRI_FILE_LIST=%HDRI_FILE_LIST%;stadium_01_!HDRI_RESOLUTION!.hdr
+set HDRI_FILE_LIST=%HDRI_FILE_LIST%;sunny_vondelpark_!HDRI_RESOLUTION!.hdr
 set HDRI_DOWNLOADED_FILES=
 :: PBR Files
+set PBR_RESOLUTION=2K
 set PBR_WEB_PATH=https://cdn.cgbookcase.cloud/file/cgbookcase/textures/downloads/
-set PBR_FILE_LIST=Metal_tiles_03/Metal_tiles_03_2K_Base_Color.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Metal_tiles_03/Metal_tiles_03_2K_Roughness.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Metal_tiles_03/Metal_tiles_03_2K_Metallic.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Metal_tiles_03/Metal_tiles_03_2K_Normal.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Painted_metal_02/Painted_metal_02_2K_Base_Color.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Painted_metal_02/Painted_metal_02_2K_Metallic.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Painted_metal_02/Painted_metal_02_2K_Normal.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Painted_metal_02/Painted_metal_02_2K_Roughness.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Marble_08/Marble_08_2K_Roughness.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Marble_08/Marble_08_2K_Normal.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Marble_08/Marble_08_2K_Base_Color.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Small_tiles_01/Small_tiles_01_2K_Roughness.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Small_tiles_01/Small_tiles_01_2K_Normal.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Small_tiles_01/Small_tiles_01_2K_Base_Color.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Black_herringbone_tiles_01/Black_herringbone_tiles_01_2K_Roughness.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Black_herringbone_tiles_01/Black_herringbone_tiles_01_2K_Normal.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Black_herringbone_tiles_01/Black_herringbone_tiles_01_2K_Base_Color.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Black_herringbone_tiles_01/Black_herringbone_tiles_01_2K_AO.png
+set PBR_FILE_LIST=Metal_tiles_03/Metal_tiles_03_!PBR_RESOLUTION!_Base_Color.png
+set PBR_FILE_LIST=%PBR_FILE_LIST%;Metal_tiles_03/Metal_tiles_03_!PBR_RESOLUTION!_Roughness.png
+set PBR_FILE_LIST=%PBR_FILE_LIST%;Metal_tiles_03/Metal_tiles_03_!PBR_RESOLUTION!_Metallic.png
+set PBR_FILE_LIST=%PBR_FILE_LIST%;Metal_tiles_03/Metal_tiles_03_!PBR_RESOLUTION!_Normal.png
+set PBR_FILE_LIST=%PBR_FILE_LIST%;Painted_metal_02/Painted_metal_02_!PBR_RESOLUTION!_Base_Color.png
+set PBR_FILE_LIST=%PBR_FILE_LIST%;Painted_metal_02/Painted_metal_02_!PBR_RESOLUTION!_Metallic.png
+set PBR_FILE_LIST=%PBR_FILE_LIST%;Painted_metal_02/Painted_metal_02_!PBR_RESOLUTION!_Normal.png
+set PBR_FILE_LIST=%PBR_FILE_LIST%;Painted_metal_02/Painted_metal_02_!PBR_RESOLUTION!_Roughness.png
+set PBR_FILE_LIST=%PBR_FILE_LIST%;Marble_08/Marble_08_!PBR_RESOLUTION!_Roughness.png
+set PBR_FILE_LIST=%PBR_FILE_LIST%;Marble_08/Marble_08_!PBR_RESOLUTION!_Normal.png
+set PBR_FILE_LIST=%PBR_FILE_LIST%;Marble_08/Marble_08_!PBR_RESOLUTION!_Base_Color.png
+set PBR_FILE_LIST=%PBR_FILE_LIST%;Small_tiles_01/Small_tiles_01_!PBR_RESOLUTION!_Roughness.png
+set PBR_FILE_LIST=%PBR_FILE_LIST%;Small_tiles_01/Small_tiles_01_!PBR_RESOLUTION!_Normal.png
+set PBR_FILE_LIST=%PBR_FILE_LIST%;Small_tiles_01/Small_tiles_01_!PBR_RESOLUTION!_Base_Color.png
+set PBR_FILE_LIST=%PBR_FILE_LIST%;Black_herringbone_tiles_01/Black_herringbone_tiles_01_!PBR_RESOLUTION!_Roughness.png
+set PBR_FILE_LIST=%PBR_FILE_LIST%;Black_herringbone_tiles_01/Black_herringbone_tiles_01_!PBR_RESOLUTION!_Normal.png
+set PBR_FILE_LIST=%PBR_FILE_LIST%;Black_herringbone_tiles_01/Black_herringbone_tiles_01_!PBR_RESOLUTION!_Base_Color.png
+set PBR_FILE_LIST=%PBR_FILE_LIST%;Black_herringbone_tiles_01/Black_herringbone_tiles_01_!PBR_RESOLUTION!_AO.png
 set PBR_DOWNLOADED_FILES=
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
 :: parameter scan
@@ -52,6 +53,11 @@ for %%i IN (%*) DO (
 ::
 :: MAIN()
 ::
+call :GetMainScreenResolution
+::call :DetermineResolution_PBR
+::call :DetermineResolution_HDRI
+::exit /b 0
+
 :: Download the HDR textures that doesn't already exist using wget and store them in the HDRI_DOWNLOADED_FILES 'list'
 set ALL_ASSETS_ALREADY_DOWNLOADED=1
 for %%f in (%HDRI_FILE_LIST%) do ( 
@@ -94,4 +100,42 @@ if !ALL_ASSETS_ALREADY_DOWNLOADED! equ 1 (
 
 git submodule update --init ../Data/Models
 
+exit /b 0
+
+
+::
+:: DetermineResolution_PBR()
+::
+:DetermineResolution_PBR
+if !MAIN_SCREEN_RESOLUTION_Y! geq 720  set PBR_RESOLUTION=1K
+if !MAIN_SCREEN_RESOLUTION_Y! geq 1080 set PBR_RESOLUTION=1K
+if !MAIN_SCREEN_RESOLUTION_Y! geq 1440 set PBR_RESOLUTION=1K
+if !MAIN_SCREEN_RESOLUTION_Y! geq 2160 set PBR_RESOLUTION=2K
+echo PBR Resolution : !PBR_RESOLUTION!
+exit /b 0
+
+
+::
+:: DetermineResolution_EnvironmentMaps()
+::
+:DetermineResolution_HDRI
+if !MAIN_SCREEN_RESOLUTION_Y! geq 720  set HDRI_RESOLUTION=1k
+if !MAIN_SCREEN_RESOLUTION_Y! geq 1080 set HDRI_RESOLUTION=2k
+if !MAIN_SCREEN_RESOLUTION_Y! geq 1440 set HDRI_RESOLUTION=4k
+if !MAIN_SCREEN_RESOLUTION_Y! geq 2160 set HDRI_RESOLUTION=8k
+echo HDRI Resolution: !HDRI_RESOLUTION!
+exit /b 0
+
+::
+:: GetMainScreenResolution()
+::
+:GetMainScreenResolution
+:: https://stackoverflow.com/a/58515127/2034041
+for /f delims^= %%I in ('
+wmic.exe path Win32_VideoController get CurrentHorizontalResolution^,CurrentVerticalResolution^|findstr /b [0-9]
+')do for /f tokens^=1-2 %%a in ('echo\%%I')do set "w=%%a" && set "h=%%b" && call echo=!w!x!h!
+set MAIN_SCREEN_RESOLUTION_Y=!h!
+if !MAIN_SCREEN_RESOLUTION_Y! lss 480 (
+  echo Warning: MAIN_SCREEN_RESOLUTION_Y=!MAIN_SCREEN_RESOLUTION_Y! < 480
+) 
 exit /b 0

@@ -14,6 +14,7 @@
 # Precompiled Headers
 *.gch
 *.pch
+Libs/AMDFidelityFX/CACAO/PrecompiledShadersDXIL/*
 
 # Compiled Dynamic libraries
 *.so
@@ -62,8 +63,7 @@ bld/
 [Oo]bj/
 [Ll]og/
 Build/_artifacts/
-ShaderCache/
-PSOCache/
+Cache/
 Data/Textures/PBR/*/*.png
 
 # Visual Studio 2015 cache/options directory
@@ -350,3 +350,9 @@ $RECYCLE.BIN/
 !Libs/WinPixEventRuntime/bin
 !Libs/WinPixEventRuntime/bin/x64/
 !Libs/WinPixEventRuntime/bin/x64/*
+!Libs/DirectXCompiler/lib
+!Libs/DirectXCompiler/lib/x64/
+!Libs/DirectXCompiler/lib/x64/*
+!Libs/DirectXCompiler/bin
+!Libs/DirectXCompiler/bin/x64/
+!Libs/DirectXCompiler/bin/x64/*

@@ -65,7 +65,7 @@
     <!-- Sponza -->
     <GameObject>
         <Transform>
-            <Position>40 20 0</Position>
+            <Position>37.342506 -37.411995 50.120293</Position>
             <Quaternion>0 0 0 1</Quaternion>
             <Scale>0.02 0.02 0.02</Scale>
         </Transform>
@@ -75,10 +75,10 @@
         </Model>
     </GameObject>
     
-    <!-- Bottom Row Objects -->
+    <!-- MODELS  -->
     <GameObject>
         <Transform>
-            <Position>-60 20 0</Position>
+            <Position>-52.264450 -28.750481 -16.790693</Position>
             <Rotation>0 180 0</Rotation>
             <Scale>1000 1000 1000</Scale>
         </Transform>
@@ -89,7 +89,7 @@
     </GameObject>
     <GameObject>
         <Transform>
-            <Position>-20 20 0</Position>
+            <Position>20.351274 -29.875536 -20.422892</Position>
             <Rotation>-90 0 0</Rotation>
             <Scale>10 10 10</Scale>
         </Transform>
@@ -100,7 +100,7 @@
     </GameObject>
     <GameObject>
         <Transform>
-            <Position>-60 50 0</Position>
+            <Position> 43.290043 -26.247017 22.711443</Position>
             <Quaternion>0 0 0 1</Quaternion>
             <Scale>10 10 10</Scale>
         </Transform>
@@ -109,11 +109,9 @@
             <Name>Suzanne</Name>
         </Model>
     </GameObject>
-    
-    <!-- Top Row Objects -->
     <GameObject>
         <Transform>
-            <Position>-40 20 0</Position>
+            <Position>-20.176908 -29.498375 -16.502298</Position>
             <Quaternion>0 0 0 1</Quaternion>
             <Scale>8 8 8</Scale>
         </Transform>
@@ -125,7 +123,7 @@
     
     <GameObject>
         <Transform>
-            <Position>-40 50 0</Position>
+            <Position>-0.854319 -25.785706 -9.183292</Position>
             <Quaternion>0 0 0 1</Quaternion>
             <Scale>1 1 1</Scale>
         </Transform>
@@ -136,7 +134,7 @@
     </GameObject>
     <GameObject>
         <Transform>
-            <Position>-20 40 0</Position>
+            <Position> 67.946915 -38.125233 -27.481918</Position>
             <Quaternion>0 0 0 1</Quaternion>
             <Scale>50 50 50</Scale>
         </Transform>
@@ -147,8 +145,8 @@
     </GameObject>
 
 
+     <!-- Directional Light -->
     <Light>
-        <!-- Directional Light -->
         <Enabled>true</Enabled>
         <Mobility> Stationary </Mobility>
         <Color>0.9 0.9 0.85</Color>
@@ -168,21 +166,22 @@
             <Distance> 1000 </Distance>
         </Directional>
     </Light>
+
+    <!-- Spot Light 0 : sponza + suzanne -->
     <Light>
-        <!-- Spot Light -->
         <Mobility> Static </Mobility>
         <Enabled>true</Enabled>
         <Color>0.8 0.95 0.8</Color>
         <Range> 170 </Range>
         <Brightness> 4000 </Brightness>
         <Shadows>
-            <DepthBias> 0.0000005 </DepthBias>
+            <DepthBias> 0.000005 </DepthBias>
             <NearPlane> 0.001 </NearPlane>
             <FarPlane>  2500  </FarPlane>
         </Shadows>
         <Transform>
-            <Position>50 60 -90</Position>
-            <Rotation> 30 -15 0</Rotation>
+            <Position>42.452068 -29.518433 -35.796946</Position>
+            <Rotation> -2.8 1.6 0</Rotation>
             <Scale> 0.1 0.1 0.1 </Scale>
         </Transform>
         <Spot>
@@ -190,14 +189,102 @@
             <InnerConeAngleDegrees>10</InnerConeAngleDegrees>
         </Spot>
     </Light>
+    <!-- Spot Light 1: flight helmet-->
+    <Light>
+        <Mobility> Dynamic </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.8 0.95 0.8</Color>
+        <Range> 170 </Range>
+        <Brightness> 4000 </Brightness>
+        <Shadows>
+            <DepthBias> 0.000005 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  2500  </FarPlane>
+        </Shadows>
+        <Transform>
+            <Position>49.134449 -36.237762 -56.050865</Position>
+            <Rotation> -20 31.7 0</Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <Spot>
+            <OuterConeAngleDegrees>35</OuterConeAngleDegrees>
+            <InnerConeAngleDegrees>25</InnerConeAngleDegrees>
+        </Spot>
+    </Light>
+    <!-- Spot Light 2: spheres-->
+    <Light>
+        <Mobility> Dynamic </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.8 0.95 0.8</Color>
+        <Range> 350 </Range>
+        <Brightness> 16000 </Brightness>
+        <Shadows>
+            <DepthBias> 0.00005 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  2500  </FarPlane>
+        </Shadows>
+        <Transform>
+            <Position>73.078217 334.961395 -62.330444</Position>
+            <Rotation> 37 -52.8 0</Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <Spot>
+            <OuterConeAngleDegrees>35</OuterConeAngleDegrees>
+            <InnerConeAngleDegrees>25</InnerConeAngleDegrees>
+        </Spot>
+    </Light>
+    <!-- Spot Light 3: cube array edge -->
+    <Light>
+        <Mobility> Dynamic </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.8 0.95 0.8</Color>
+        <Range> 170 </Range>
+        <Brightness> 4000 </Brightness>
+        <Shadows>
+            <DepthBias> 0.00008 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  2500  </FarPlane>
+        </Shadows>
+        <Transform>
+            <Position>-32.181713 17.983950 26.802666</Position>
+            <Rotation> 75 -50 0</Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <Spot>
+            <OuterConeAngleDegrees>20</OuterConeAngleDegrees>
+            <InnerConeAngleDegrees>10</InnerConeAngleDegrees>
+        </Spot>
+    </Light>
+    <!-- Spot Light 4: sponza lion-->
+    <Light>
+        <Mobility> Stationary </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.9 0.70 0.6</Color>
+        <Range> 170 </Range>
+        <Brightness> 800 </Brightness>
+        <Shadows>
+            <DepthBias> 0.000005 </DepthBias>
+            <NearPlane> 0.01 </NearPlane>
+            <FarPlane>  2000  </FarPlane>
+        </Shadows>
+        <Transform>
+            <Position> 55.849209 -36.575748 44.046825 </Position>
+            <Rotation> -10 50 0</Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <Spot>
+            <OuterConeAngleDegrees>35</OuterConeAngleDegrees>
+            <InnerConeAngleDegrees>10</InnerConeAngleDegrees>
+        </Spot>
+    </Light>
 
+    <!-- Point Light 0: lantern-->
     <Light>
         <Transform>
-            <Position>-39.7 48 0.05</Position>
+            <Position>-1.087897 -26.171801 -10.937208</Position>
             <Rotation> 0 0 0 </Rotation>
             <Scale> 0.1 0.1 0.1 </Scale>
         </Transform>
-        <!-- Point Light -->
         <Mobility> Dynamic </Mobility>
         <Enabled>true</Enabled>
         <Color>0.8 0.8 0.45</Color>
@@ -212,18 +299,85 @@
             <Attenuation> 1 1 1 </Attenuation>
         </Point>
     </Light>
+
+    <!-- Point Light 1: among cubes yellow-->
     <Light>
         <Transform>
-            <Position>-20 10 -40</Position>
+            <Position>-32.925575 -6.814330 -26.487299</Position>
             <Rotation> 0 0 0 </Rotation>
             <Scale> 0.1 0.1 0.1 </Scale>
         </Transform>
-        <!-- Point Light -->
         <Mobility> Dynamic </Mobility>
         <Enabled>true</Enabled>
-        <Color>0.1 0.8 0.45</Color>
-        <Range> 90 </Range>
-        <Brightness> 650 </Brightness>
+        <Color>0.8 0.8 0.45</Color>
+        <Range> 120 </Range>
+        <Brightness> 2650 </Brightness>
+        <Shadows>
+            <DepthBias> 0.2 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  1500  </FarPlane>
+        </Shadows>
+        <Point>
+            <Attenuation> 1 1 1 </Attenuation>
+        </Point>
+    </Light>
+
+    <!-- Point Light 2: sponza chandlier -->
+    <Light>
+        <Transform>
+            <Position>24.891169 -34.178284 54.613510</Position>
+            <Rotation> 0 0 0 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <Mobility> Dynamic </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.65 0.65 0.65</Color>
+        <Range> 120 </Range>
+        <Brightness> 50 </Brightness>
+        <Shadows>
+            <DepthBias> 0.1 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  1500  </FarPlane>
+        </Shadows>
+        <Point>
+            <Attenuation> 1 1 1 </Attenuation>
+        </Point>
+    </Light>
+
+    <!-- Point Light 3: among cubes purple-->
+    <Light>
+        <Transform>
+            <Position>28.418453 -3.951593 -2.427866</Position>
+            <Rotation> 0 0 0 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <Mobility> Dynamic </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.1 0.05 0.45</Color>
+        <Range> 50 </Range>
+        <Brightness> 1650 </Brightness>
+        <Shadows>
+            <DepthBias> 0.1 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  1500  </FarPlane>
+        </Shadows>
+        <Point>
+            <Attenuation> 1 1 1 </Attenuation>
+        </Point>
+    </Light>
+
+    <!-- Point Light 4: sponza upstairs corner-->
+    <Light>
+        <Transform>
+            <Position>10.336638 -28.031893 40.012817</Position>
+            <Rotation> 0 0 0 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <Mobility> Dynamic </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.1 0.7 0.05</Color>
+        <Range> 70 </Range>
+        <Brightness> 1250 </Brightness>
         <Shadows>
             <DepthBias> 0.1 </DepthBias>
             <NearPlane> 0.001 </NearPlane>

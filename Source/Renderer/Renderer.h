@@ -26,10 +26,11 @@
 #include "Buffer.h"
 #include "Texture.h"
 #include "Shader.h"
+#include "WindowRenderContext.h"
 
-#include "../Application/Platform.h"
-#include "../Application/Settings.h"
-#include "../Application/Types.h"
+#include "../Engine/Core/Types.h"
+#include "../Engine/Core/Platform.h"
+#include "../Engine/Settings.h"
 
 #define VQUTILS_SYSTEMINFO_INCLUDE_D3D12 1
 #include "../../Libs/VQUtils/Source/SystemInfo.h" // FGPUInfo
@@ -47,47 +48,11 @@ class Window;
 struct ID3D12RootSignature;
 struct ID3D12PipelineState;
 
-
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 //
 // TYPE DEFINITIONS
 //
-// Encapsulates the swapchain and window association.
-// Each SwapChain is:
-// - associated with a Window (HWND)
-// - associated with a Graphics Queue for Present()
-// - created with a Device
-struct FWindowRenderContext
-{
-	Device*      pDevice = nullptr;
-	SwapChain    SwapChain;
-	CommandQueue PresentQueue;
-
-
-	// 1x allocator per command-recording-thread, multiplied by num swapchain backbuffers
-	// Source: https://gpuopen.com/performance/
-	std::vector<ID3D12CommandAllocator*> mCommandAllocatorsGFX;
-	std::vector<ID3D12CommandAllocator*> mCommandAllocatorsCompute;
-	std::vector<ID3D12CommandAllocator*> mCommandAllocatorsCopy;
-
-	DynamicBufferHeap mDynamicHeap_ConstantBuffer;
-
-	ID3D12GraphicsCommandList* pCmdList_GFX = nullptr;
-
-	int MainRTResolutionX = -1;
-	int MainRTResolutionY = -1;
-};
-
-struct FTextureUploadDesc
-{
-	FTextureUploadDesc(Image&& img_      , TextureID texID, const TextureCreateDesc& tDesc) : img(img_), id(texID), desc(tDesc), pData(nullptr) {}
-	FTextureUploadDesc(const void* pData_, TextureID texID, const TextureCreateDesc& tDesc) : img({  }), id(texID), desc(tDesc), pData(pData_)  {}
-	FTextureUploadDesc() = delete;
-
-	Image img;
-	const void* pData;
-	TextureID id;
-	TextureCreateDesc desc;
-};
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 struct FPSOLoadDesc
 {
@@ -112,6 +77,8 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	SKYDOME_PSO_MSAA_4,
 	OBJECT_PSO,
 	OBJECT_PSO_MSAA_4,
+	DEPTH_PREPASS_PSO,
+	DEPTH_PREPASS_PSO_MSAA_4,
 	FORWARD_LIGHTING_PSO,
 	FORWARD_LIGHTING_PSO_MSAA_4,
 	WIREFRAME_PSO,
@@ -121,6 +88,7 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	DEPTH_PASS_PSO,
 	DEPTH_PASS_LINEAR_PSO,
 	DEPTH_PASS_ALPHAMASKED_PSO,
+	DEPTH_RESOLVE,
 	CUBEMAP_CONVOLUTION_DIFFUSE_PSO,
 	CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO,
 	CUBEMAP_CONVOLUTION_SPECULAR_PSO,
@@ -141,10 +109,11 @@ enum EProceduralTextures
 	, NUM_PROCEDURAL_TEXTURES
 };
 
-
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 //
 // RENDERER
 //
+//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 class VQRenderer
 {
 public:
@@ -156,11 +125,13 @@ public:
 
 	void                         OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h);
 
+	inline ID3D12Device* GetDevicePtr() { return mDevice.GetDevicePtr(); };
+
 	// Swapchain-interface
 	void                         InitializeRenderContext(const Window* pWnd, int NumSwapchainBuffers, bool bVSync, bool bHDRSwapchain);
 	inline short                 GetSwapChainBackBufferCount(std::unique_ptr<Window>& pWnd) const { return GetSwapChainBackBufferCount(pWnd.get()); };
-	short                        GetSwapChainBackBufferCount(Window* pWnd) const;
-	short                        GetSwapChainBackBufferCount(HWND hwnd) const;
+	unsigned short               GetSwapChainBackBufferCount(Window* pWnd) const;
+	unsigned short               GetSwapChainBackBufferCount(HWND hwnd) const;
 	SwapChain&                   GetWindowSwapChain(HWND hwnd);
 	FWindowRenderContext&        GetWindowRenderContext(HWND hwnd);
 
@@ -206,11 +177,13 @@ public:
 
 	const ID3D12Resource*        GetTextureResource(TextureID Id) const;
 	      ID3D12Resource*        GetTextureResource(TextureID Id);
+	DXGI_FORMAT                  GetTextureFormat(TextureID Id) const;
 
-		  inline void            GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, dummy); }
-		  inline void            GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, NumSlices, dummy); }
-		  void                   GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices, int& NumMips) const;
-		  uint                   GetTextureMips(TextureID Id) const;
+	inline void                  GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, dummy); }
+	inline void                  GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, NumSlices, dummy); }
+	void                         GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices, int& NumMips) const;
+	uint                         GetTextureMips(TextureID Id) const;
+	uint                         GetTextureSampleCount(TextureID) const;
 
 	inline const VBV&            GetVBV(BufferID Id) const { return GetVertexBufferView(Id);    }
 	inline const IBV&            GetIBV(BufferID Id) const { return GetIndexBufferView(Id);     }
@@ -235,20 +208,21 @@ private:
 	using PSOArray_t = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
 	
 	// GPU
-	Device                                         mDevice; 
-	CommandQueue                                   mGFXQueue;
-	CommandQueue                                   mComputeQueue;
-	CommandQueue                                   mCopyQueue;
+	Device       mDevice; 
+	CommandQueue mGFXQueue;
+	CommandQueue mComputeQueue;
+	CommandQueue mCopyQueue;
 
 	// memory
-	D3D12MA::Allocator*                            mpAllocator;
-	StaticResourceViewHeap                         mHeapRTV;
-	StaticResourceViewHeap                         mHeapDSV;
-	StaticResourceViewHeap                         mHeapCBV_SRV_UAV;
-	StaticResourceViewHeap                         mHeapSampler;
-	UploadHeap                                     mHeapUpload;
-	StaticBufferHeap                               mStaticHeap_VertexBuffer;
-	StaticBufferHeap                               mStaticHeap_IndexBuffer;
+	D3D12MA::Allocator*            mpAllocator;
+	StaticResourceViewHeap         mHeapRTV;
+	StaticResourceViewHeap         mHeapDSV;
+	StaticResourceViewHeap         mHeapCBV_SRV_UAV;
+	StaticResourceViewHeap         mHeapSampler;
+	UploadHeap                     mHeapUpload;
+	StaticBufferHeap               mStaticHeap_VertexBuffer;
+	StaticBufferHeap               mStaticHeap_IndexBuffer;
+	// constant buffers are handled in FRenderContext objects
 
 	// resources & views
 	std::unordered_map<std::string, TextureID>     mLoadedTexturePaths;
@@ -273,10 +247,8 @@ private:
 	mutable std::mutex                             mMtxIBVs;
 
 
-	// root signatures
-	std::vector<ID3D12RootSignature*>              mpBuiltinRootSignatures;
-
-	// PSOs
+	// root signatures & PSOs
+	std::vector<ID3D12RootSignature*> mpBuiltinRootSignatures;
 	std::unordered_map<PSO_ID, ID3D12PipelineState*> mPSOs;
 
 	// data
@@ -339,8 +311,8 @@ private:
 //
 public:
 	static std::vector< VQSystemInfo::FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters = false, IDXGIFactory6* pFactory = nullptr);
-	static const std::string_view& DXGIFormatAsString(DXGI_FORMAT format);
-	static EProceduralTextures GetProceduralTextureEnumFromName(const std::string& ProceduralTextureName);
+	static const std::string_view&               DXGIFormatAsString(DXGI_FORMAT format);
+	static EProceduralTextures                   GetProceduralTextureEnumFromName(const std::string& ProceduralTextureName);
 
 	static std::string PSOCacheDirectory;
 	static std::string ShaderCacheDirectory;

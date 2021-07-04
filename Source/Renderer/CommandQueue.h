@@ -24,7 +24,7 @@ class Device;
 class CommandQueue
 {
 public:
-	enum ECommandQueueType
+	enum EType
 	{
 		GFX = 0,
 		COMPUTE,
@@ -34,7 +34,7 @@ public:
 	};
 
 public:
-	void Create(Device* pDevice, ECommandQueueType type, const char* pName = nullptr);
+	void Create(Device* pDevice, EType type, const char* pName = nullptr);
 	void Destroy();
 
 	ID3D12CommandQueue* pQueue;

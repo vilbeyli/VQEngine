@@ -209,10 +209,10 @@ private:
     RingBuffer m_mem;
 
     //this is the external ring buffer (I could have reused the RingBuffer class though)
-    uint32_t m_backBufferIndex;
-    uint32_t m_numberOfBackBuffers;
+    uint32_t m_backBufferIndex = 0;
+    uint32_t m_numberOfBackBuffers = 0;
 
-    uint32_t m_memAllocatedInFrame;
+    uint32_t m_memAllocatedInFrame = 0;
     uint32_t m_allocatedMemPerBackBuffer[4];
 };
 
@@ -234,7 +234,7 @@ public:
     void OnBeginFrame();
 
 private:
-    uint32_t            m_memTotalSize;
+    uint32_t            m_memTotalSize = 0;
     RingBufferWithTabs  m_mem;
     char* m_pData = nullptr;
     ID3D12Resource* m_pBuffer = nullptr;

@@ -19,6 +19,7 @@
 #pragma once
 
 struct IDXGIFactory6;
+struct ID3D12Device4;
 struct ID3D12Device;
 struct IDXGIAdapter;
 
@@ -41,16 +42,18 @@ public:
 	bool Create(const FDeviceCreateDesc& desc);
 	void Destroy();
 
-	inline ID3D12Device* GetDevicePtr()  const { return mpDevice; }
-	inline IDXGIAdapter* GetAdapterPtr() const { return mpAdapter; }
+	inline ID3D12Device*  GetDevicePtr()  const { return mpDevice; }
+	inline ID3D12Device4* GetDevice4Ptr() const { return mpDevice4; }
+	inline IDXGIAdapter*  GetAdapterPtr() const { return mpAdapter; }
 
 	unsigned GetDeviceMemoryMax() const;
 	unsigned GetDeviceMemoryAvailable() const;
 	
 	const FDeviceCapabilities& GetDeviceCapabilities() const { return mDeviceCapabilities; }
 private:
-	ID3D12Device* mpDevice  = nullptr;
-	IDXGIAdapter* mpAdapter = nullptr;
+	ID3D12Device*  mpDevice = nullptr;
+	ID3D12Device4* mpDevice4  = nullptr;
+	IDXGIAdapter*  mpAdapter = nullptr;
 	// TODO: Multi-adapter systems: https://docs.microsoft.com/en-us/windows/win32/direct3d12/multi-engine
 
 	FDeviceCapabilities mDeviceCapabilities;

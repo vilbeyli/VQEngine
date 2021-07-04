@@ -1,8 +1,6 @@
-// TBA
-
-#include "../Application/Scene.h"
-
 #pragma once
+
+#include "../Engine/Scene/Scene.h"
 
 class VQEngine;
 

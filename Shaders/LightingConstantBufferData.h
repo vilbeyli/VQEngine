@@ -165,7 +165,9 @@ struct PerViewData
 	matrix matProjInverse;
 
 	float3 CameraPosition;
+	float  pad0;
 	float2 ScreenDimensions;
+	float2 pad1;
 };
 struct PerObjectData
 {

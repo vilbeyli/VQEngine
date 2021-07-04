@@ -13,7 +13,7 @@ Join the [VQE Discord Channel](https://discord.gg/U7pd8TV) for rendering, graphi
 
 ![](Screenshots/HelloEnvMap1.png)
 <p align="center">
-<sub><i>Data-driven (XML) Scenes & glTF Model Loading, HDRI Environment Maps, UE4's PBR model w/ IBL </i></sub>
+<sub><i>Data-driven (XML) Scenes & glTF Model Loading, HDRI Environment Maps, UE4's PBR model w/ IBL, AMD/FidelityFX CACAO </i></sub>
 </p>
 
 # Features
@@ -35,6 +35,8 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
   - Directional Light
   - PCF Shadow Maps for Point/Spot/Directional lights
 - HDR Environment Maps from [HDRI Haven](https://hdrihaven.com/)
+- Ambient Occlusion
+  - [FidelityFX - Combined Adaptive Compute Ambient Occlusion (CACAO)](https://github.com/GPUOpen-Effects/FidelityFX-CACAO)
 - Anti Aliasing
   - MSAA x4
 - PostProcess
@@ -62,7 +64,7 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
   - Shader system
     - Shader cache
     - Multi-threaded shader compilation
-    - Shader Model 5.0 (WIP: SM6.0)
+    - Shader Model 5.0 (DXBC) & 6.0 (DXIL)
   - Automated build & testing scripts
 
 
@@ -111,7 +113,10 @@ Or, if you're using a terminal,
 | **C** | Change scene camera |
 | **V** | Toggle VSync |
 | **M** | Toggle MSAA |
+| **G** | Toggle tonemapping gamma |
 | **B** | Toggle FidelityFX-CAS |
+| **N** | Toggle object bounding boxes |
+| **Shift+N** | Toggle mesh bounding boxes |
 | **Alt+Enter** | Toggle Fullscreen |
 | **Esc** | Release mouse |
 

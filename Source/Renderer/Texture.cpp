@@ -67,35 +67,6 @@ Texture& Texture::operator=(const Texture& other)
     return *this;
 }
 
-
-bool Texture::ReadImageFromDisk(const std::string& FilePath, Image& img)
-{
-    if (FilePath.empty())
-    {
-        Log::Error("Cannot load Image from file: empty FilePath provided.");
-        return false;
-    }
-
-    // process file path
-    const std::vector<std::string> FilePathTokens = StrUtil::split(FilePath, { '/', '\\' });
-    assert(FilePathTokens.size() >= 1);
-
-    const std::string& FileNameAndExtension = FilePathTokens.back();
-    const std::vector<std::string> FileNameTokens = StrUtil::split(FileNameAndExtension, '.');
-    assert(FileNameTokens.size() == 2);
-
-    const std::string FileDirectory = FilePath.substr(0, FilePath.find(FileNameAndExtension));
-    const std::string FileName = FileNameTokens.front();
-    const std::string FileExtension = StrUtil::GetLowercased(FileNameTokens.back());
-
-    static const std::set<std::string> S_HDR_FORMATS = { "hdr", /*"exr"*/ };
-    assert(FileExtension != "exr"); // TODO: add exr loading support to Image class
-    const bool bHDR = S_HDR_FORMATS.find(FileExtension) != S_HDR_FORMATS.end();
-
-    img = Image::LoadFromFile(FilePath.c_str(), bHDR);
-    return img.pData && img.BytesPerPixel > 0;
-}
-
 //
 // TEXTURE
 //
@@ -103,10 +74,10 @@ void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, cons
 {
     HRESULT hr = {};
 
-    const bool bDepthStencilTexture    = desc.d3d12Desc.Format == DXGI_FORMAT_R32_TYPELESS; // TODO: change this?
     const bool bRenderTargetTexture    = (desc.d3d12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0;
     const bool bUnorderedAccessTexture = (desc.d3d12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) != 0;
-
+    const bool bDepthStencilTexture    = (desc.d3d12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0;
+    
     // determine resource state & optimal clear value
     D3D12_RESOURCE_STATES ResourceState = desc.pData 
         ? D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_COPY_DEST
@@ -128,7 +99,7 @@ void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, cons
     }
     if (bUnorderedAccessTexture)
     {
-
+        // no-op
     }
 
 
@@ -149,7 +120,7 @@ void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, cons
     }
     SetName(mpTexture, desc.TexName.c_str());
 
-    this->mbTypelessTexture = bDepthStencilTexture;
+    this->mbTypelessTexture = bDepthStencilTexture; // TODO: check format?
     this->mbCubemap = desc.bCubemap;
     this->mWidth  = static_cast<int>(desc.d3d12Desc.Width );
     this->mHeight = static_cast<int>(desc.d3d12Desc.Height);
@@ -261,9 +232,6 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayVie
                 else
                 {
                     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
-                    assert(mipLevel == -1);
-                    assert(arraySize == -1);
-                    assert(firstArraySlice == -1);
                 }
             }
 
@@ -488,7 +456,7 @@ std::vector<uint8> Texture::GenerateTexture_Checkerboard(uint Dimension, bool bU
     return data;
 }
 
-#include "../Application/Math.h"
+#include "../Engine/Math.h"
 DirectX::XMMATRIX Texture::CubemapUtility::CalculateViewMatrix(Texture::CubemapUtility::ECubeMapLookDirections cubeFace, const DirectX::XMFLOAT3& position)
 {
     using namespace DirectX;

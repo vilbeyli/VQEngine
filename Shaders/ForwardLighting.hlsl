@@ -88,6 +88,8 @@ Texture2D texRoughness      : register(t5);
 Texture2D texOcclRoughMetal : register(t6);
 Texture2D texLocalAO        : register(t7);
 
+Texture2D texScreenSpaceAO  : register(t8);
+
 TextureCube texEnvMapDiff   : register(t10);
 TextureCube texEnvMapSpec   : register(t11);
 Texture2D   texBRDFIntegral : register(t12);
@@ -95,6 +97,8 @@ Texture2D   texBRDFIntegral : register(t12);
 Texture2D        texDirectionalLightShadowMap : register(t13);
 Texture2DArray   texSpotLightShadowMaps       : register(t16);
 TextureCubeArray texPointLightShadowMaps      : register(t22);
+
+
 
 //---------------------------------------------------------------------------------------------------
 //
@@ -168,6 +172,10 @@ float4 PSMain(PSInput In) : SV_TARGET
 		Surface.roughness = OcclRghMtl.g;
 		Surface.metalness = OcclRghMtl.b;
 	}
+
+	// apply SSAO
+	const float2 ScreenSpaceUV = (float2(In.position.xy) + 0.5f.xx) / float2(cbPerView.ScreenDimensions);
+	ao *= texScreenSpaceAO.Sample(PointSampler, ScreenSpaceUV);
 	
 	// lighting & surface parameters (World Space)
 	const float3 P = In.worldPos;
