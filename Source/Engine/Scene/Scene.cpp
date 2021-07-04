@@ -29,31 +29,39 @@
 
 #include <fstream>
 
+//-------------------------------------------------------------------------------
+// LOGGING
+//-------------------------------------------------------------------------------
 #define LOG_CACHED_RESOURCES_ON_LOAD 0
 #define LOG_RESOURCE_CREATE          1
+//-------------------------------------------------------------------------------
 
+
+//-------------------------------------------------------------------------------
 // Culling
+//-------------------------------------------------------------------------------
 #define ENABLE_VIEW_FRUSTUM_CULLING 1
+//-------------------------------------------------------------------------------
 
+
+//-------------------------------------------------------------------------------
 // Multithreading
+//-------------------------------------------------------------------------------
 #define UPDATE_THREAD__ENABLE_WORKERS 1
 #if UPDATE_THREAD__ENABLE_WORKERS
 	#define ENABLE_THREADED_SHADOW_FRUSTUM_GATHER 0
 #endif
-
+//-------------------------------------------------------------------------------
 
 using namespace DirectX;
 
 static MeshID LAST_USED_MESH_ID = EBuiltInMeshes::NUM_BUILTIN_MESHES;
 
-//MeshID Scene::CreateMesh()
-//{
-//	ModelID id = LAST_USED_MESH_ID++;
+//-------------------------------------------------------------------------------
 //
-//	mMeshes[id] = Mesh();
-//	return id;
-//}
-
+// RESOURCE MANAGEMENT
+//
+//-------------------------------------------------------------------------------
 MeshID Scene::AddMesh(Mesh&& mesh)
 {
 	std::lock_guard<std::mutex> lk(mMtx_Meshes);
@@ -140,6 +148,78 @@ Model& Scene::GetModel(ModelID id)
 }
 
 
+//-------------------------------------------------------------------------------
+//
+// STATIC HELPERS
+//
+//-------------------------------------------------------------------------------
+// returns true if culled
+static bool ShouldCullLight(const Light& l, const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace)
+{
+	bool bCulled = false;
+	switch (l.Type)
+	{
+	case Light::EType::DIRECTIONAL: break; // no culling for directional lights
+	case Light::EType::SPOT:
+		bCulled = !IsFrustumIntersectingFrustum(MainViewFrustumPlanesInWorldSpace, FFrustumPlaneset::ExtractFromMatrix(l.GetViewProjectionMatrix()));
+		break;
+	case Light::EType::POINT:
+		bCulled = !IsSphereIntersectingFurstum(MainViewFrustumPlanesInWorldSpace, FSphere(l.GetTransform()._position, l.Range));
+		break;
+	default: assert(false); break; // unknown light type for culling
+	}
+	return bCulled;
+}
+static std::vector<size_t> GetActiveAndCulledLightIndices(const std::vector<Light> vLights, const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace)
+{
+	SCOPED_CPU_MARKER("GetActiveAndCulledLightIndices()");
+	constexpr bool bCULL_LIGHTS = false; // TODO: finish Intersection Test implementations
+
+	std::vector<size_t> ActiveLightIndices;
+
+	for (size_t i = 0; i < vLights.size(); ++i)
+	{
+		const Light& l = vLights[i];
+
+		// skip disabled and non-shadow casting lights
+		if (!l.bEnabled || !l.bCastingShadows)
+			continue;
+
+		// skip culled lights if culling is enabled
+		if constexpr (bCULL_LIGHTS)
+		{
+			if (ShouldCullLight(l, MainViewFrustumPlanesInWorldSpace))
+				continue;
+		}
+
+		ActiveLightIndices.push_back(i);
+	}
+
+	return ActiveLightIndices;
+}
+static std::string DumpCameraInfo(int index, const Camera& cam)
+{
+	const XMFLOAT3 pos = cam.GetPositionF();
+	const float pitch = cam.GetPitch();
+	const float yaw = cam.GetYaw();
+
+	std::string info = std::string("[CAMERA INFO]\n")
+		+ "mIndex_SelectedCamera=" + std::to_string(index) + "\n"
+		+ "  Pos         : " + std::to_string(pos.x) + " " + std::to_string(pos.y) + " " + std::to_string(pos.z) + "\n"
+		+ "  Yaw (Deg)   : " + std::to_string(yaw * RAD2DEG) + "\n"
+		+ "  Pitch (Deg) : " + std::to_string(pitch * RAD2DEG) + "\n";
+	;
+
+	return info;
+}
+static void ToggleBool(bool& b) { b = !b; }
+
+
+//-------------------------------------------------------------------------------
+//
+// SCENE
+//
+//-------------------------------------------------------------------------------
 Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const std::unique_ptr<Window>& pWin, VQRenderer& renderer)
 	: mInput(input)
 	, mpWindow(pWin)
@@ -244,23 +324,6 @@ void Scene::RenderUI()
 	// TODO
 }
 
-static std::string DumpCameraInfo(int index, const Camera& cam)
-{
-	const XMFLOAT3 pos = cam.GetPositionF();
-	const float pitch = cam.GetPitch();
-	const float yaw = cam.GetYaw();
-
-	std::string info = std::string("[CAMERA INFO]\n")
-		+ "mIndex_SelectedCamera=" + std::to_string(index) + "\n"
-		+ "  Pos         : " + std::to_string(pos.x) + " " + std::to_string(pos.y) + " " + std::to_string(pos.z) + "\n"
-		+ "  Yaw (Deg)   : " + std::to_string(yaw * RAD2DEG) + "\n"
-		+ "  Pitch (Deg) : " + std::to_string(pitch * RAD2DEG) + "\n";
-	;
-
-	return info;
-}
-
-static void ToggleBool(bool& b) { b = !b; }
 void Scene::HandleInput(FSceneView& SceneView)
 {
 	const bool bIsShiftDown = mInput.IsKeyDown("Shift");
@@ -552,51 +615,6 @@ void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustum
 
 }
 
-// returns true if culled
-static bool DistanceCullLight(const Light& l, const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace)
-{
-	bool bCulled = false;
-	switch (l.Type)
-	{
-	case Light::EType::DIRECTIONAL: break; // no culling for directional lights
-	case Light::EType::SPOT: 
-		bCulled = !IsFrustumIntersectingFrustum(MainViewFrustumPlanesInWorldSpace, FFrustumPlaneset::ExtractFromMatrix(l.GetViewProjectionMatrix()));
-		break; 
-	case Light::EType::POINT:
-		bCulled = !IsSphereIntersectingFurstum(MainViewFrustumPlanesInWorldSpace, FSphere(l.GetTransform()._position, l.Range));
-		break;
-	default: assert(false); break; // unknown light type for culling
-	}
-	return bCulled;
-}
-
-static std::vector<size_t> GetActiveAndCulledLightIndices(const std::vector<Light> vLights, const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace)
-{
-	SCOPED_CPU_MARKER("GetActiveAndCulledLightIndices()");
-	constexpr bool bCULL_LIGHTS = false; // TODO: finish Intersection Test implementations
-
-	std::vector<size_t> ActiveLightIndices;
-
-	for (size_t i = 0; i < vLights.size(); ++i)
-	{
-		const Light& l = vLights[i];
-
-		// skip disabled and non-shadow casting lights
-		if (!l.bEnabled || !l.bCastingShadows)
-			continue;
-
-		// skip culled lights if culling is enabled
-		if constexpr (bCULL_LIGHTS)
-		{
-			if (DistanceCullLight(l, MainViewFrustumPlanesInWorldSpace))
-				continue;
-		}
-
-		ActiveLightIndices.push_back(i);
-	}
-
-	return ActiveLightIndices;
-}
 
 void Scene::GatherSpotLightFrustumParameters(
 	FSceneShadowView& SceneShadowView
@@ -604,7 +622,7 @@ void Scene::GatherSpotLightFrustumParameters(
 	, const Light& l
 )
 {
-	assert(false);
+	assert(false); // todo
 	FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowViews_Spot[iShadowView];
 
 	XMMATRIX matViewProj = l.GetViewProjectionMatrix();
@@ -627,6 +645,7 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 	#if ENABLE_THREADED_SHADOW_FRUSTUM_GATHER
 
 	// TODO: gathering point light faces takes long and can be threaded
+	assert(false);
 
 	#else
 
@@ -909,6 +928,11 @@ void Scene::PrepareBoundingBoxRenderParams(FSceneView& SceneView) const
 }
 
 
+//-------------------------------------------------------------------------------
+//
+// MATERIAL REPRESENTATION
+//
+//-------------------------------------------------------------------------------
 FMaterialRepresentation::FMaterialRepresentation()
 	: DiffuseColor(MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE)
 	, EmissiveColor(MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE)

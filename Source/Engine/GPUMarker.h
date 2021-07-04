@@ -19,6 +19,10 @@
 #pragma once
 
 #define USE_PIX 1
+#if USE_PIX 
+	// Enable PIX markers for RGP, must be included before pix3.h
+	#define VQE_ENABLE_RGP_PIX 0
+#endif
 #include "WinPixEventRuntime/Include/WinPixEventRuntime/pix3.h"
 
 #define SCOPED_GPU_MARKER(pCmd, pStr)       ScopedGPUMarker GPUMarker(pCmd,pStr)

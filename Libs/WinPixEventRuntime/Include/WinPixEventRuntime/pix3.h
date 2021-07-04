@@ -11,7 +11,6 @@
 #ifndef _PIX3_H_
 #define _PIX3_H_
 
-
 #include <sal.h>
 
 #ifndef __cplusplus
