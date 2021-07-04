@@ -235,8 +235,8 @@ void VQRenderer::OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h)
 	if (!CheckContext(hwnd)) return;
 	FWindowRenderContext& ctx = mRenderContextLookup.at(hwnd);
 
-	ctx.WindowDisplayResolutionX = w; // TODO: RenderScale
-	ctx.WindowDisplayResolutionY = h; // TODO: RenderScale
+	ctx.WindowDisplayResolutionX = w;
+	ctx.WindowDisplayResolutionY = h;
 }
 
 
