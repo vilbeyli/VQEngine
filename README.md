@@ -64,7 +64,7 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
   - Shader system
     - Shader cache
     - Multi-threaded shader compilation
-    - Shader Model 5.0 (WIP: SM6.0)
+    - Shader Model 5.0 (DXBC) & 6.0 (DXIL)
   - Automated build & testing scripts
 
 
