@@ -58,6 +58,24 @@ struct FPostProcessParameters
 		float CASSharpen = 0.8f;
 		FFFXCAS() = default;
 		FFFXCAS(const FFFXCAS& other) : CASSharpen(other.CASSharpen) { memcpy(CASConstantBlock, other.CASConstantBlock, sizeof(CASConstantBlock)); }
+		void UpdateCASConstantBlock();
+	};
+	struct FFSR_EASU
+	{
+		unsigned EASUConstantBlock[16];
+		FFSR_EASU() { memset(EASUConstantBlock, 0, sizeof(EASUConstantBlock)); };
+		FFSR_EASU(const FFSR_EASU& other) { memcpy(EASUConstantBlock, other.EASUConstantBlock, sizeof(EASUConstantBlock)); }
+		void UpdateEASUConstantBlock(float InputWidth         , float InputHeight,
+			                         float InputContainerWidth, float InputContainerHeight,
+			                         float OutputWidth        , float OutputHeight);
+	};
+	struct FFSR_RCAS
+	{
+		unsigned RCASConstantBlock[4];
+		float RCASSharpnessStops = 0.2f;
+		FFSR_RCAS() { memset(RCASConstantBlock, 0, sizeof(RCASConstantBlock)); };
+		FFSR_RCAS(const FFSR_RCAS& other) : RCASSharpnessStops(other.RCASSharpnessStops) { memcpy(RCASConstantBlock, other.RCASConstantBlock, sizeof(RCASConstantBlock)); }
+		void UpdateRCASConstantBlock();
 	};
 	struct FBlurParams // Gaussian Blur Pass
 	{ 
@@ -65,7 +83,8 @@ struct FPostProcessParameters
 		int iImageSizeY;
 	};
 
-	inline bool IsFFXCASEnabled() const { return this->bEnableCAS && FFXCASParams.CASSharpen > 0.0f; }
+	inline bool IsFFXCASEnabled() const { return !this->bEnableFSR && this->bEnableCAS && FFXCASParams.CASSharpen > 0.0f; }
+	inline bool IsFSREnabled() const { return this->bEnableFSR; }
 
 	int SceneRTWidth = 0;
 	int SceneRTHeight = 0;
@@ -75,8 +94,11 @@ struct FPostProcessParameters
 	FTonemapper TonemapperParams;
 	FBlurParams BlurParams;
 	FFFXCAS     FFXCASParams;
+	FFSR_RCAS   FFSR_RCASParams;
+	FFSR_EASU   FFSR_EASUParams;
 
 	bool bEnableCAS;
+	bool bEnableFSR;
 	bool bEnableGaussianBlur;
 };
 struct FSceneRenderParameters

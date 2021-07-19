@@ -298,10 +298,6 @@ void Scene::LoadCameras(std::vector<FCameraParameters>& CameraParams)
 	Log::Info("[Scene] Cameras initialized");
 }
 
-
-#define A_CPU 1
-#include "Shaders/AMDFidelityFX/CAS/ffx_a.h"
-#include "Shaders/AMDFidelityFX/CAS/ffx_cas.h"
 void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 {
 	// TODO: remove hardcode
@@ -313,10 +309,12 @@ void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 	for (size_t i = 0; i < mFrameSceneViews.size(); ++i)
 	{
 		FPostProcessParameters& PPParams = this->GetPostProcessParameters(static_cast<int>(i));
-		FPostProcessParameters::FFFXCAS& CASParams = PPParams.FFXCASParams;
-		CasSetup(&CASParams.CASConstantBlock[0], &CASParams.CASConstantBlock[4], CASParams.CASSharpen, fWidth, fHeight, fWidth, fHeight);
 
+		// Update FidelityFX constant blocks
 		PPParams.bEnableCAS = true; // TODO: read from scene PP settings
+		PPParams.FFXCASParams.UpdateCASConstantBlock();
+		PPParams.FFSR_EASUParams.UpdateEASUConstantBlock(fWidth, fHeight, fWidth, fHeight, fWidth, fHeight);
+		PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
 	}
 }
 

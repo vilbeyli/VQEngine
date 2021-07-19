@@ -884,6 +884,48 @@ void VQRenderer::LoadRootSignatures()
 		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_DepthPrePass");
 	}
+
+	// FSR1 Root Signature : [15]
+	{
+		CD3DX12_DESCRIPTOR_RANGE1 ranges[3];
+		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
+		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
+		//ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
+
+		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
+		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_ALL);
+		rootParameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_ALL);
+		rootParameters[2].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL);
+		//rootParameters[3].InitAsDescriptorTable(1, &ranges[2], D3D12_SHADER_VISIBILITY_ALL);
+
+		D3D12_STATIC_SAMPLER_DESC samplers[1] = {};
+		D3D12_STATIC_SAMPLER_DESC sampler = {};
+		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.MipLODBias = 0;
+		sampler.MaxAnisotropy = 0;
+		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+		sampler.MinLOD = 0.0f;
+		sampler.MaxLOD = D3D12_FLOAT32_MAX;
+		sampler.ShaderRegister = 0;
+		sampler.RegisterSpace = 0;
+		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+		samplers[0] = sampler;
+
+		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, _countof(samplers), samplers, D3D12_ROOT_SIGNATURE_FLAG_NONE);
+
+		hr = D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error);
+		if (!SUCCEEDED(hr)) { ReportErrorAndReleaseBlob(error); assert(false); }
+		ID3D12RootSignature* pRS = nullptr;
+		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
+		mpBuiltinRootSignatures.push_back(pRS);
+		SetName(pRS, "RootSignature_FidelityFX_SuperResolution");
+	}
+
 }
 
 void VQRenderer::LoadPSOs()
@@ -1337,6 +1379,23 @@ void VQRenderer::LoadPSOs()
 			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "SPD_CSMain", "cs_6_0", {{"FFXSPD_CS", "1"}} });
 			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[13];
 			//PSOLoadDescs.push_back({ EBuiltinPSOs::FFX_SPD_CS_PSO, psoLoadDesc }); 
+		}
+
+		// FSR / EASU 
+		{
+			FPSOLoadDesc psoLoadDesc = {};
+			psoLoadDesc.PSOName = "PSO_FSR_EASU_CS";
+			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "FSR_EASU_CSMain", "cs_6_2", {{"FSR_EASU_CS", "1"}} });
+			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[15]; // share root signature with tonemapper pass
+			PSOLoadDescs.push_back({ EBuiltinPSOs::FFX_FSR1_EASU_CS_PSO, psoLoadDesc });
+		}
+		// FSR / EASU 
+		{
+			FPSOLoadDesc psoLoadDesc = {};
+			psoLoadDesc.PSOName = "PSO_FSR_RCAS_CS";
+			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "FSR_RCAS_CSMain", "cs_6_2", {{"FSR_RCAS_CS", "1"}} });
+			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[15]; // share root signature with tonemapper pass
+			PSOLoadDescs.push_back({ EBuiltinPSOs::FFX_FSR1_RCAS_CS_PSO, psoLoadDesc });
 		}
 	}
 

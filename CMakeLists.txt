@@ -159,12 +159,18 @@ set (SourceVQE
     "Source/Engine/GPUMarker.cpp"
 )
 
-set (FidelityFXShaders
+set (FFX_CAS_Shaders
     "Shaders/AMDFidelityFX/CAS/ffx_a.h"
     "Shaders/AMDFidelityFX/CAS/ffx_cas.h"
-#    "Shaders/FidelityFX/SPD/ffx_spd.h"
 )
-
+set (FFX_FSR_Shaders
+    "Shaders/AMDFidelityFX/FSR1.0/ffx_a.h"
+    "Shaders/AMDFidelityFX/FSR1.0/ffx_fsr1.h"
+)
+set (FFX_SPD_Shaders
+    "Shaders/FidelityFX/SPD/ffx_a.h"
+    "Shaders/FidelityFX/SPD/ffx_spd.h"
+)
 set (LibsIncl
     "Libs/"
 )
@@ -204,20 +210,22 @@ source_group("Config"   FILES ${Config})
 source_group("Resource" FILES ${Resource})
 source_group("Icons"    FILES ${Icons})
 source_group("Shaders"  FILES ${Shaders})
-source_group("Shaders\\AMD-FidelityFX"  FILES ${FidelityFXShaders})
+source_group("Shaders\\AMD-FidelityFX\\CAS"  FILES ${FFX_CAS_Shaders})
+source_group("Shaders\\AMD-FidelityFX\\FSR1" FILES ${FFX_FSR_Shaders})
 source_group("Scenes"   FILES ${Scenes})
 source_group("Materials" FILES ${Materials})
 source_group("Source\\RenderPass" FILES ${RenderPassFiles})
 source_group("Source\\Core" FILES ${CoreFiles})
 source_group("Source\\Scene" FILES ${SceneFiles})
 source_group("Source" FILES ${SourceVQE})
-source_group("Libs\\AMDFidelityFX\\CACAO"   FILES ${LibFFX})
+source_group("Libs\\AMD-FidelityFX\\CACAO"   FILES ${LibFFX})
 
 set_source_files_properties(${Config} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Materials} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Scenes} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${FidelityFXShaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${FFX_CAS_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${FFX_FSR_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${CoreFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${RenderPassFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${SceneFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
@@ -232,7 +240,7 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/DirectXCompiler/lib/x64)
 add_definitions(-DFFX_CACAO_ENABLE_D3D12)
 
 # Create a library with the project name that is build with the Headers and Source files
-add_executable( ${PROJECT_NAME} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} ${Materials} ${FidelityFXShaders} ${LibFFX} ${RenderPassFiles} ${CoreFiles} ${SceneFiles})
+add_executable( ${PROJECT_NAME} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} ${Materials} ${FFX_FSR_Shaders} ${FFX_CAS_Shaders} ${LibFFX} ${RenderPassFiles} ${CoreFiles} ${SceneFiles})
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY} )
 

@@ -299,7 +299,7 @@ const uint32_t DBG_WINDOW_SIZE_Y         = 150;
 const uint32_t PP_WINDOW_PADDING_X       = 10;
 const uint32_t PP_WINDOW_PADDING_Y       = 10;
 const uint32_t PP_WINDOW_SIZE_X          = 350;
-const uint32_t PP_WINDOW_SIZE_Y          = 150;
+const uint32_t PP_WINDOW_SIZE_Y          = 230;
 //---------------------------------------------
 const uint32_t GFX_WINDOW_PADDING_X      = 10;
 const uint32_t GFX_WINDOW_PADDING_Y      = 10;
@@ -613,6 +613,7 @@ void VQEngine::DrawDebugPanelWindow(FSceneRenderParameters& SceneParams)
 }
 void VQEngine::DrawPostProcessControlsWindow(FPostProcessParameters& PPParams)
 {
+	const bool bFSREnabled = PPParams.IsFSREnabled();
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
 
@@ -622,17 +623,42 @@ void VQEngine::DrawPostProcessControlsWindow(FPostProcessParameters& PPParams)
 	ImGui::SetNextWindowSize(ImVec2(PP_WINDOW_SIZE_X, PP_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
 
 	ImGui::Begin("Post Processing (F3)", &mUIState.bWindowVisible_PostProcessControls);
-	
-	ImGui::Text("FidelityFX CAS");
+
+	ImGui::Text("FidelityFX Super Resolution");
 	ImGui::Separator();
-	ImGui::Checkbox("Enabled ##0 (B)", &PPParams.bEnableCAS);
+	ImGui::Checkbox("Enabled ##1 (J)", &PPParams.bEnableFSR);
 	{
-		BeginDisabledUIState(PPParams.bEnableCAS);
-		ImGui::SliderFloat("Sharpening", &PPParams.FFXCASParams.CASSharpen, 0.0f, 1.0f, "%.1f");
-		EndDisabledUIState(PPParams.bEnableCAS);
+		BeginDisabledUIState(PPParams.bEnableFSR);
+		if (ImGui::SliderFloat("Sharpen Stops", &PPParams.FFSR_RCASParams.RCASSharpnessStops, 0.0f, 2.0f, "%.1f"))
+		{
+			PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
+		}
+		EndDisabledUIState(PPParams.bEnableFSR);
 	}
 
 	ImGuiSpacing3();
+
+	if (!bFSREnabled)
+	{
+		ImGui::Text("FidelityFX CAS");
+		ImGui::Separator();
+		bool bCASEnabled = PPParams.IsFFXCASEnabled();
+		bool bCASEnabledBefore = bCASEnabled;
+		BeginDisabledUIState(!bFSREnabled);
+		ImGui::Checkbox("Enabled ##0 (B)", &bCASEnabled);
+		{
+			BeginDisabledUIState(bCASEnabled);
+			ImGui::SliderFloat("Sharpening", &PPParams.FFXCASParams.CASSharpen, 0.0f, 1.0f, "%.1f");
+			EndDisabledUIState(bCASEnabled);
+		}
+		EndDisabledUIState(!bFSREnabled);
+		if (bCASEnabledBefore != bCASEnabled)
+		{
+			PPParams.bEnableCAS = bCASEnabled;
+		}
+		ImGuiSpacing3();
+	}
+
 
 	const bool bHDR = this->ShouldRenderHDR(mpWinMain->GetHWND());
 	ImGui::Text((bHDR ? "HDR Tonemapper" : "Tonemapper"));

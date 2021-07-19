@@ -252,8 +252,6 @@ void VQEngine::UpdateThread_SignalRenderThread(){}
 void VQEngine::WaitUntilRenderingFinishes(){}
 #endif
 
-
-
 // -------------------------------------------------------------------
 #if !VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 constexpr int FRAME_DATA_INDEX = 0;

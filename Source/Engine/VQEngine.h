@@ -141,6 +141,8 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	TextureID Tex_PostProcess_BlurOutput       = INVALID_ID;
 	TextureID Tex_PostProcess_TonemapperOut    = INVALID_ID;
 	TextureID Tex_PostProcess_FFXCASOut        = INVALID_ID;
+	TextureID Tex_PostProcess_FSR_EASUOut      = INVALID_ID;
+	TextureID Tex_PostProcess_FSR_RCASOut      = INVALID_ID;
 
 	RTV_ID    RTV_SceneColorMSAA               = INVALID_ID;
 	RTV_ID    RTV_SceneColor                   = INVALID_ID;
@@ -151,6 +153,8 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	SRV_ID    SRV_PostProcess_BlurOutput       = INVALID_ID;
 	SRV_ID    SRV_PostProcess_TonemapperOut    = INVALID_ID;
 	SRV_ID    SRV_PostProcess_FFXCASOut        = INVALID_ID;
+	SRV_ID    SRV_PostProcess_FSR_EASUOut      = INVALID_ID;
+	SRV_ID    SRV_PostProcess_FSR_RCASOut      = INVALID_ID;
 	SRV_ID    SRV_ShadowMaps_Spot              = INVALID_ID;
 	SRV_ID    SRV_ShadowMaps_Point             = INVALID_ID;
 	SRV_ID    SRV_ShadowMaps_Directional       = INVALID_ID;
@@ -165,6 +169,8 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	UAV_ID    UAV_PostProcess_BlurOutput       = INVALID_ID;
 	UAV_ID    UAV_PostProcess_TonemapperOut    = INVALID_ID;
 	UAV_ID    UAV_PostProcess_FFXCASOut        = INVALID_ID;
+	UAV_ID    UAV_PostProcess_FSR_EASUOut      = INVALID_ID;
+	UAV_ID    UAV_PostProcess_FSR_RCASOut      = INVALID_ID;
 	UAV_ID    UAV_SceneDepth                   = INVALID_ID;
 
 	DSV_ID    DSV_SceneDepth                   = INVALID_ID;

@@ -1064,3 +1064,40 @@ FMaterialRepresentation::FMaterialRepresentation()
 	: DiffuseColor(MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE)
 	, EmissiveColor(MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE)
 {}
+
+
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#define A_CPU 1
+//#include "Shaders/AMDFidelityFX/CAS/ffx_a.h"
+#include "Shaders/AMDFidelityFX/FSR1.0/ffx_a.h"
+#include "Shaders/AMDFidelityFX/CAS/ffx_cas.h"
+#include "Shaders/AMDFidelityFX/FSR1.0/ffx_fsr1.h"
+void FPostProcessParameters::FFSR_RCAS::UpdateRCASConstantBlock()
+{
+	FsrRcasCon(reinterpret_cast<AU1*>(&this->RCASConstantBlock[0]), this->RCASSharpnessStops);
+}
+
+void FPostProcessParameters::FFSR_EASU::UpdateEASUConstantBlock(float InputWidth, float InputHeight, float InputContainerWidth, float InputContainerHeight, float OutputWidth, float OutputHeight)
+{
+	FsrEasuCon(
+		  reinterpret_cast<AU1*>(&this->EASUConstantBlock[0])
+		, reinterpret_cast<AU1*>(&this->EASUConstantBlock[4])
+		, reinterpret_cast<AU1*>(&this->EASUConstantBlock[8])
+		, reinterpret_cast<AU1*>(&this->EASUConstantBlock[12])
+		// This the rendered image resolution being upscaled
+		, static_cast<AF1>(InputWidth)
+		, static_cast<AF1>(InputHeight)
+
+		// This is the resolution of the resource containing the input image (useful for dynamic resolution)
+		, static_cast<AF1>(InputContainerWidth)
+		, static_cast<AF1>(InputContainerHeight)
+
+		// This is the display resolution which the input image gets upscaled to
+		, static_cast<AF1>(OutputWidth)
+		, static_cast<AF1>(OutputHeight)
+	);
+}
+
+void FPostProcessParameters::FFFXCAS::UpdateCASConstantBlock()
+{
+}

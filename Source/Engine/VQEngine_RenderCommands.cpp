@@ -834,24 +834,32 @@ void VQEngine::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, cons
 	auto pRscPostProcessInput = mRenderer.GetTextureResource(rsc.Tex_SceneColor);
 	auto pRscTonemapperOut    = mRenderer.GetTextureResource(rsc.Tex_PostProcess_TonemapperOut);
 	auto pRscFFXCASOut        = mRenderer.GetTextureResource(rsc.Tex_PostProcess_FFXCASOut);
-	auto pRscPostProcessOut   = PPParams.IsFFXCASEnabled() ? pRscFFXCASOut : pRscTonemapperOut;
+	auto pRscFSROut           = mRenderer.GetTextureResource(rsc.Tex_PostProcess_FSR_RCASOut); // TODO: handle RCAS=off
+	auto pRscPostProcessOut   = (PPParams.IsFSREnabled() 
+		? pRscFSROut 
+		: (PPParams.IsFFXCASEnabled() 
+			? pRscFFXCASOut 
+			: pRscTonemapperOut)
+	);
 
 	auto pRscShadowMaps_Spot = mRenderer.GetTextureResource(rsc.Tex_ShadowMaps_Spot);
 	auto pRscShadowMaps_Point = mRenderer.GetTextureResource(rsc.Tex_ShadowMaps_Point);
 	auto pRscShadowMaps_Directional = mRenderer.GetTextureResource(rsc.Tex_ShadowMaps_Directional);
 
 	SCOPED_GPU_MARKER(pCmd, "TransitionForPostProcessing");
-	const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+	std::vector<CD3DX12_RESOURCE_BARRIER> barriers =
 	{
 		  CD3DX12_RESOURCE_BARRIER::Transition(pRscPostProcessInput , (bMSAA ? D3D12_RESOURCE_STATE_RESOLVE_DEST : D3D12_RESOURCE_STATE_RENDER_TARGET), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
-		, CD3DX12_RESOURCE_BARRIER::Transition(pRscFFXCASOut        , D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
-		, CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut    , D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+		, CD3DX12_RESOURCE_BARRIER::Transition(pRscPostProcessOut   , D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
 
 		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Spot       , D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE)
 		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Point      , D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE)
 		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Directional, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE)
 	};
-	pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+	if (PPParams.IsFSREnabled() || PPParams.IsFFXCASEnabled())
+		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+
+	pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
 }
 
 void VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams)
@@ -863,6 +871,11 @@ void VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 	const UAV& uav_TonemapperOut = mRenderer.GetUAV(mResources_MainWnd.UAV_PostProcess_TonemapperOut);
 	const SRV& srv_TonemapperOut = mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_TonemapperOut);
 	const UAV& uav_FFXCASOut     = mRenderer.GetUAV(mResources_MainWnd.UAV_PostProcess_FFXCASOut);
+	const UAV& uav_FSR_EASUOut   = mRenderer.GetUAV(mResources_MainWnd.UAV_PostProcess_FSR_EASUOut);
+	const SRV& srv_FSR_EASUOut   = mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_FSR_EASUOut);
+	const UAV& uav_FSR_RCASOut   = mRenderer.GetUAV(mResources_MainWnd.UAV_PostProcess_FSR_RCASOut);
+	const SRV& srv_FSR_RCASOut   = mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_FSR_RCASOut);
+
 
 	constexpr bool PP_ENABLE_BLUR_PASS = false;
 
@@ -958,8 +971,7 @@ void VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 			pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
 		}
 
-		const bool bFFXCASEnabled = PPParams.IsFFXCASEnabled();
-		if(bFFXCASEnabled)
+		if(PPParams.IsFFXCASEnabled())
 		{
 			const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 			{
@@ -989,6 +1001,94 @@ void VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 			const int CASDispatchY = (InputImageHeight + (CAS_WORKGROUP_WORK_DIMENSION - 1)) / CAS_WORKGROUP_WORK_DIMENSION;
 			pCmd->Dispatch(CASDispatchX, CASDispatchY, DispatchZ);
 		}
+
+		if (PPParams.IsFSREnabled()) // FSR & CAS are mutually exclusive
+		{
+			const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+			{
+				CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut
+				, D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+					, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+				)
+			};
+			pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+
+			{
+				SCOPED_GPU_MARKER(pCmd, "FSR-EASU_CS");
+
+				FPostProcessParameters::FFSR_EASU* pConstBuffer = {};
+				D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+				pCBufferHeap->AllocConstantBuffer(sizeof(FPostProcessParameters::FFSR_EASU), (void**)&pConstBuffer, &cbAddr);
+				*pConstBuffer = PPParams.FFSR_EASUParams;
+
+				ID3D12PipelineState* pPSO = mRenderer.GetPSO(EBuiltinPSOs::FFX_FSR1_EASU_CS_PSO);
+				assert(pPSO);
+				pCmd->SetPipelineState(pPSO);
+				pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(15));
+				pCmd->SetComputeRootDescriptorTable(0, srv_TonemapperOut.GetGPUDescHandle());
+				pCmd->SetComputeRootDescriptorTable(1, uav_FSR_EASUOut.GetGPUDescHandle());
+				pCmd->SetComputeRootConstantBufferView(2, cbAddr);
+
+				// each FSR-EASU_CS thread processes 4 pixels.
+				// workgroup is 64 threads, hence 256 (16x16) pixels are processed per thread group that is dispatched
+				constexpr int WORKGROUP_WORK_DIMENSION = 16;
+				const int DispatchX = (InputImageWidth + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
+				const int DispatchY = (InputImageHeight + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
+				pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
+			}
+			const bool bFFX_RCAS_Enabled = true;
+			if (bFFX_RCAS_Enabled)
+			{
+				ID3D12Resource* pRscEASUOut = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_FSR_EASUOut);
+				ID3D12Resource* pRscRCASOut = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_FSR_RCASOut);
+
+				SCOPED_GPU_MARKER(pCmd, "FSR-RCAS_CS");
+				{
+					std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
+					barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscEASUOut
+						, D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+						, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+					));
+					pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
+				}
+
+				ID3D12PipelineState* pPSO = mRenderer.GetPSO(EBuiltinPSOs::FFX_FSR1_RCAS_CS_PSO);
+
+				FPostProcessParameters::FFSR_RCAS* pConstBuffer = {};
+				D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+				pCBufferHeap->AllocConstantBuffer(sizeof(FPostProcessParameters::FFSR_RCAS), (void**)&pConstBuffer, &cbAddr);
+				*pConstBuffer = PPParams.FFSR_RCASParams;
+
+				pCmd->SetPipelineState(pPSO);
+				pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(15));
+				pCmd->SetComputeRootDescriptorTable(0, srv_FSR_EASUOut.GetGPUDescHandle());
+				pCmd->SetComputeRootDescriptorTable(1, uav_FSR_RCASOut.GetGPUDescHandle());
+				pCmd->SetComputeRootConstantBufferView(2, cbAddr);
+
+				// each FSR-EASU_CS thread processes 4 pixels.
+				// workgroup is 64 threads, hence 256 (16x16) pixels are processed per thread group that is dispatched
+				constexpr int WORKGROUP_WORK_DIMENSION = 16;
+				const int DispatchX = (InputImageWidth + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
+				const int DispatchY = (InputImageHeight + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
+				pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
+
+				{
+					const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+					{
+						CD3DX12_RESOURCE_BARRIER::Transition(pRscEASUOut
+							, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+							, D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+						),
+						CD3DX12_RESOURCE_BARRIER::Transition(pRscRCASOut
+							, D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+							, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+						)
+					};
+					pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+				}
+
+			}
+		}
 	}
 	
 }
@@ -1009,42 +1109,49 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBu
 
 
 	const bool bFFXCASEnabled = PPParams.IsFFXCASEnabled();
+	const bool bFSREnabled = PPParams.IsFSREnabled();
 	const SRV& srv_ColorIn = bFFXCASEnabled 
 		? mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_FFXCASOut)
-		: mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_TonemapperOut);
+		: (bFSREnabled 
+			? mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_FSR_RCASOut) 
+			: mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_TonemapperOut));
 
+	ID3D12Resource* pRscFSR1Out       = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_FSR_RCASOut);
 	ID3D12Resource* pRscTonemapperOut = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_TonemapperOut);
 	ID3D12Resource* pRscFFXCASOut     = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_FFXCASOut);
-	ID3D12Resource* pRscInput = bFFXCASEnabled ? pRscFFXCASOut : pRscTonemapperOut;
+	ID3D12Resource* pRscInput = bFFXCASEnabled ? pRscFFXCASOut : (bFSREnabled ? pRscFSR1Out : pRscTonemapperOut);
 
 	ID3D12Resource*          pSwapChainRT = swapchain.GetCurrentBackBufferRenderTarget();
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = swapchain.GetCurrentBackBufferRTVHandle();
 
 	{
 		SCOPED_GPU_MARKER(pCmd, "SwapchainPassthrough");
+
+		std::vector< CD3DX12_RESOURCE_BARRIER> barriers;
 		// Transition Input & Output resources
 		// ignore the tonemapper barrier if CAS is enabeld as it'll already be issued.
 		CD3DX12_RESOURCE_BARRIER SwapChainTransition = CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		
+		barriers.push_back(SwapChainTransition);
 		if (bFFXCASEnabled)
 		{
-			CD3DX12_RESOURCE_BARRIER barriers[] =
-			{
-				  SwapChainTransition
-				, CD3DX12_RESOURCE_BARRIER::Transition(pRscFFXCASOut    , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
-				, CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
-			};
-			pCmd->ResourceBarrier(_countof(barriers), barriers);
+			barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscFFXCASOut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
+			barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
 		}
 		else
 		{
-			CD3DX12_RESOURCE_BARRIER barriers[] =
+			if (bFSREnabled)
 			{
-				  SwapChainTransition
-				, CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
-				, CD3DX12_RESOURCE_BARRIER::Transition(pRscFFXCASOut    , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
-			};
-			pCmd->ResourceBarrier(_countof(barriers), barriers);
+				//barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscFSR1Out      , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
+				barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
+			}
+			else
+			{
+				barriers.push_back( CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
+				//barriers.push_back( CD3DX12_RESOURCE_BARRIER::Transition(pRscFFXCASOut    , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
+			}
 		}
+		pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
 
 
 		//       Currently a passthrough pass fullscreen triangle pso

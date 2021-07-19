@@ -416,6 +416,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
 			);
 
+			desc.bGenerateMips = false;
 			r.Tex_PostProcess_TonemapperOut = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeUAV(r.UAV_PostProcess_TonemapperOut, 0u, r.Tex_PostProcess_TonemapperOut);
 			mRenderer.InitializeSRV(r.SRV_PostProcess_TonemapperOut, 0u, r.Tex_PostProcess_TonemapperOut);
@@ -437,6 +438,41 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			r.Tex_PostProcess_FFXCASOut = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeUAV(r.UAV_PostProcess_FFXCASOut, 0u, r.Tex_PostProcess_FFXCASOut);
 			mRenderer.InitializeSRV(r.SRV_PostProcess_FFXCASOut, 0u, r.Tex_PostProcess_FFXCASOut);
+		}
+
+		{ // FSR1-EASU Resources
+			TextureCreateDesc desc("FSR_EASU_Out");
+			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
+				MainColorRTFormat
+				, Width
+				, Height
+				, 1 // Array Size
+				, 0 // MIP levels
+				, 1 // MSAA SampleCount
+				, 0 // MSAA SampleQuality
+				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+			);
+			desc.ResourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+			r.Tex_PostProcess_FSR_EASUOut = mRenderer.CreateTexture(desc);
+			mRenderer.InitializeUAV(r.UAV_PostProcess_FSR_EASUOut, 0u, r.Tex_PostProcess_FSR_EASUOut);
+			mRenderer.InitializeSRV(r.SRV_PostProcess_FSR_EASUOut, 0u, r.Tex_PostProcess_FSR_EASUOut);
+		}
+		{ // FSR1-RCAS Resources
+			TextureCreateDesc desc("FSR_RCAS_Out");
+			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
+				MainColorRTFormat
+				, Width
+				, Height
+				, 1 // Array Size
+				, 0 // MIP levels
+				, 1 // MSAA SampleCount
+				, 0 // MSAA SampleQuality
+				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+			);
+			desc.ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+			r.Tex_PostProcess_FSR_RCASOut = mRenderer.CreateTexture(desc);
+			mRenderer.InitializeUAV(r.UAV_PostProcess_FSR_RCASOut, 0u, r.Tex_PostProcess_FSR_RCASOut);
+			mRenderer.InitializeSRV(r.SRV_PostProcess_FSR_RCASOut, 0u, r.Tex_PostProcess_FSR_RCASOut);
 		}
 		
 		{ // FFX-CACAO Resources
@@ -524,11 +560,15 @@ void VQEngine::RenderThread_LoadResources()
 		rsc.UAV_PostProcess_BlurIntermediate = mRenderer.CreateUAV(); 
 		rsc.UAV_PostProcess_BlurOutput       = mRenderer.CreateUAV();
 		rsc.UAV_PostProcess_FFXCASOut        = mRenderer.CreateUAV();
+		rsc.UAV_PostProcess_FSR_EASUOut      = mRenderer.CreateUAV();
+		rsc.UAV_PostProcess_FSR_RCASOut      = mRenderer.CreateUAV();
 
 		rsc.SRV_PostProcess_TonemapperOut    = mRenderer.CreateSRV();
 		rsc.SRV_PostProcess_BlurIntermediate = mRenderer.CreateSRV(); 
 		rsc.SRV_PostProcess_BlurOutput       = mRenderer.CreateSRV();
 		rsc.SRV_PostProcess_FFXCASOut        = mRenderer.CreateSRV();
+		rsc.SRV_PostProcess_FSR_EASUOut      = mRenderer.CreateSRV();
+		rsc.SRV_PostProcess_FSR_RCASOut      = mRenderer.CreateSRV();
 	}
 
 	// shadow map passes
