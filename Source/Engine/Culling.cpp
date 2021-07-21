@@ -165,14 +165,19 @@ void FFrustumCullWorkerContext::ProcessWorkItems_SingleThreaded()
 
 static std::vector<std::pair<size_t, size_t>> PartitionWorkItemsIntoRanges(size_t NumWorkItems, size_t NumWorkerThreadCount)
 {
-	std::vector<std::pair<size_t, size_t>> vRanges(NumWorkerThreadCount); // each worker thread gets a range
-
 	// @NumWorkItems is distributed as equally as possible between all @NumWorkerThreadCount threads.
 	// Two numbers are determined
 	// - WorkItemChunkSize: number of work items each thread will get equally
 	// - WorkItemRemainderSize : number of +1's to be added to each worker
 	const size_t WorkItemChunkSize = NumWorkItems / NumWorkerThreadCount; // amount of work each worker is to get, 
 	const size_t RemainingWorkItems = NumWorkItems % NumWorkerThreadCount;
+
+
+	std::vector<std::pair<size_t, size_t>> vRanges(WorkItemChunkSize == 0 
+		? NumWorkItems  // if NumWorkItems < NumWorkerThreadCount, then only create ranges according to NumWorkItems
+		: NumWorkerThreadCount // each worker thread gets a range
+	); 
+
 
 	size_t iBegin = 0;
 	size_t iEndExclusive = iBegin + WorkItemChunkSize + (RemainingWorkItems > 0 ? 1 : 0);
@@ -230,6 +235,7 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 			}
 			const size_t& iBegin = Range.first;
 			const size_t& iEnd = Range.second; // inclusive
+			assert(iBegin <= iEnd); // ensure work context bounds
 
 			WorkerThreadPool.AddTask([=]() 
 			{
