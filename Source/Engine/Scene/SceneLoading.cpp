@@ -403,6 +403,11 @@ void Scene::CalculateGameObjectLocalSpaceBoundingBoxes()
 		XMVECTOR vMaxs = XMLoadFloat3(&AABB.ExtentMax);
 
 		// go through all meshes and generate the AABB
+		if (pGameObj->mModelID == -1)
+		{
+			Log::Warning("Game object doesn't have a valid model ID!");
+			continue;
+		}
 		const Model& model = mModels.at(pGameObj->mModelID);
 		auto fnProcessMeshAABB = [&vMins, &vMaxs](const FBoundingBox& AABB_Mesh)
 		{
