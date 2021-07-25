@@ -79,11 +79,11 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Volkan Ilbeyli @vilbeyli - GitHub/VQE"
             VALUE "FileDescription", "VQEngine Renderer Application"
-            VALUE "FileVersion", "0.7.0.0"
+            VALUE "FileVersion", "0.8.0.0"
             VALUE "InternalName", "VQE.exe"
             VALUE "OriginalFilename", "VQE.exe"
             VALUE "ProductName", "VQEngine"
-            VALUE "ProductVersion", "0.7.0.0"
+            VALUE "ProductVersion", "0.8.0.0"
         END
     END
     BLOCK "VarFileInfo"
