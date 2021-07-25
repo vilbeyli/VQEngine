@@ -46,6 +46,18 @@ void VQEngine::SimulationThread_Main()
 		dt = mTimer.Tick(); // update timer
 
 		SimulationThread_Tick(dt);
+
+		float FrameLimiterTimeSpent = FramePacing(dt);
+
+		// SimulationThread_Logging()
+		constexpr int LOGGING_PERIOD = 4; // seconds
+		static float LAST_LOG_TIME = mTimer.TotalTime();
+		const float TotalTime = mTimer.TotalTime();
+		if (TotalTime - LAST_LOG_TIME > 4)
+		{
+			Log::Info("SimulationThread_Tick() : dt=%.2f ms (Sleep=%.2f)", dt * 1000.0f, FrameLimiterTimeSpent);
+			LAST_LOG_TIME = TotalTime;
+		}
 	}
 
 	SimulationThread_Exit();

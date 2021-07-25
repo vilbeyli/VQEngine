@@ -221,11 +221,9 @@ public:
 	void OnWindowMove(HWND hwnd_, int x, int y) override;
 	void OnDisplayChange(HWND hwnd_, int ImageDepthBitsPerPixel, int ScreenWidth, int ScreenHeight) override;
 
-	// Keyboard Input Events
+	// Keyboard & Mouse Events
 	void OnKeyDown(HWND hwnd, WPARAM wParam) override;
 	void OnKeyUp(HWND hwnd, WPARAM wParam) override;
-	
-	// Mouse Input Events
 	void OnMouseButtonDown(HWND hwnd, WPARAM wParam, bool bIsDoubleClick) override;
 	void OnMouseButtonUp(HWND hwnd, WPARAM wParam) override;
 	void OnMouseScroll(HWND hwnd, short scroll) override;
@@ -309,6 +307,7 @@ public:
 	void SimulationThread_Initialize();
 	void SimulationThread_Exit();
 	void SimulationThread_Tick(const float dt);
+
 //-----------------------------------------------------------------------
 	
 	void                       SetWindowName(HWND hwnd, const std::string& name);
@@ -469,6 +468,9 @@ private:
 	HRESULT                         RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderContext& ctx);
 	HRESULT                         RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx);
 
+	//
+	// EVENTS
+	//
 	void                            UpdateThread_HandleEvents();
 	void                            RenderThread_HandleEvents();
 	void                            MainThread_HandleEvents();
@@ -527,6 +529,7 @@ private:
 	bool                            ShouldRenderHDR(HWND hwnd) const;
 
 	void                            CalculateEffectiveFrameRateLimit(HWND hwnd);
+	float                           FramePacing(const float dt);
 	const FDisplayHDRProfile*       GetHDRProfileIfExists(const wchar_t* pwStrLogicalDisplayName);
 	FSetHDRMetaDataParams           GatherHDRMetaDataParameters(HWND hwnd);
 

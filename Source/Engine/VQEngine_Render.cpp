@@ -48,19 +48,7 @@ void VQEngine::RenderThread_Main()
 
 		RenderThread_Tick();
 
-		// RenderThread_FramePacing()
-		float SleepTime = 0.0f;
-		if (mEffectiveFrameRateLimit_ms != 0.0f)
-		{
-			SCOPED_CPU_MARKER_C("Sleep (FrameLimiter)", 0xFF552200);
-			const float TimeBudgetLeft_ms = mEffectiveFrameRateLimit_ms - dt;
-			if (TimeBudgetLeft_ms > 0.0f)
-			{
-				SleepTime = mTimerRender.TotalTime();
-				Sleep((DWORD)TimeBudgetLeft_ms);
-				SleepTime = mTimerRender.TotalTime() - SleepTime;
-			}
-		}
+		float SleepTime = FramePacing(dt);
 
 		// RenderThread_Logging()
 		constexpr int LOGGING_PERIOD = 4; // seconds

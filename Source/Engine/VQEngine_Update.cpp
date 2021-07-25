@@ -389,6 +389,23 @@ void VQEngine::CalculateEffectiveFrameRateLimit(HWND hwnd)
 	else                    Log::Info("FrameRateLimit : %.2fms | %d FPS", mEffectiveFrameRateLimit_ms, static_cast<int>(1000.0f / mEffectiveFrameRateLimit_ms));
 }
 
+float VQEngine::FramePacing(float dt)
+{
+	float SleepTime = 0.0f;
+	if (mEffectiveFrameRateLimit_ms != 0.0f)
+	{
+		SCOPED_CPU_MARKER_C("Sleep (FrameLimiter)", 0xFF552200);
+		const float TimeBudgetLeft_ms = mEffectiveFrameRateLimit_ms - dt;
+		if (TimeBudgetLeft_ms > 0.0f)
+		{
+			SleepTime = mTimerRender.TotalTime();
+			Sleep((DWORD)TimeBudgetLeft_ms);
+			SleepTime = mTimerRender.TotalTime() - SleepTime;
+		}
+	}
+	return SleepTime;
+}
+
 const FDisplayHDRProfile* VQEngine::GetHDRProfileIfExists(const wchar_t* pwStrLogicalDisplayName)
 {
 	const FDisplayHDRProfile* pProfile = nullptr;
