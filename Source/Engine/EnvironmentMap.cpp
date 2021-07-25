@@ -334,10 +334,10 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	//assert(mpScene->mIndex_ActiveEnvironmentMapPreset == static_cast<int>(ActiveEnvMapIndex)); // Only false durin initialization
 	mpScene->mIndex_ActiveEnvironmentMapPreset = static_cast<int>(ActiveEnvMapIndex);
 
-	// Update HDRMetaData when the nvironment map is loaded
+	// Update HDRMetaData when the environment map is loaded
 	HWND hwnd = mpWinMain->GetHWND();
-	mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetStaticHDRMetaDataEvent>(hwnd, this->GatherHDRMetaDataParameters(hwnd)));
 
+	mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetStaticHDRMetaDataEvent>(hwnd, this->GatherHDRMetaDataParameters(hwnd)));
 }
 
 void VQEngine::UnloadEnvironmentMap()

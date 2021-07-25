@@ -33,6 +33,7 @@
 // MAIN
 //
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 void VQEngine::RenderThread_Main()
 {
 	Log::Info("RenderThread Created.");
@@ -40,52 +41,34 @@ void VQEngine::RenderThread_Main()
 
 	RenderThread_HandleEvents();
 
-	bool bQuit = false;
 	float dt = 0.0f;
-	while (!this->mbStopAllThreads && !bQuit)
+	while (!this->mbStopAllThreads)
 	{
-		SCOPED_CPU_MARKER_C("RenderThread_Main()", 0xFF007700);
-		dt = mTimerRender.Tick();
+		float dt = mTimerRender.Tick();
 
-		RenderThread_HandleEvents();
-
-		if (this->mbStopAllThreads || bQuit)
-			break; // HandleEvents() can set @this->mbStopAllThreads true with WindowCloseEvent;
-
-		RenderThread_WaitForUpdateThread();
-
-#if DEBUG_LOG_THREAD_SYNC_VERBOSE
-		Log::Info(/*"RenderThread_Tick() : */"r%d (u=%llu)", mNumRenderLoopsExecuted.load(), mNumUpdateLoopsExecuted.load());
-#endif
-
-		RenderThread_PreRender();
-		RenderThread_RenderFrame();
-
-		++mNumRenderLoopsExecuted;
-
-		RenderThread_SignalUpdateThread();
-
-		RenderThread_HandleEvents();
+		RenderThread_Tick();
 
 		// RenderThread_FramePacing()
+		float SleepTime = 0.0f;
 		if (mEffectiveFrameRateLimit_ms != 0.0f)
 		{
 			SCOPED_CPU_MARKER_C("Sleep (FrameLimiter)", 0xFF552200);
 			const float TimeBudgetLeft_ms = mEffectiveFrameRateLimit_ms - dt;
 			if (TimeBudgetLeft_ms > 0.0f)
 			{
+				SleepTime = mTimerRender.TotalTime();
 				Sleep((DWORD)TimeBudgetLeft_ms);
+				SleepTime = mTimerRender.TotalTime() - SleepTime;
 			}
-			//Log::Info("RenderThread_Main() : dt=%.2f, Sleep=%.2f", dt, TimeBudgetLeft_ms);
 		}
 
 		// RenderThread_Logging()
 		constexpr int LOGGING_PERIOD = 4; // seconds
 		static float LAST_LOG_TIME = mTimerRender.TotalTime();
 		const float TotalTime = mTimerRender.TotalTime();
-		if (TotalTime - LAST_LOG_TIME > 4 )
+		if (TotalTime - LAST_LOG_TIME > 4)
 		{
-			Log::Info("RenderThread_Main() : dt=%.2f ms", dt * 1000.0f);
+			Log::Info("RenderTick() : dt=%.2f ms (Sleep=%.2f)", dt * 1000.0f, SleepTime);
 			LAST_LOG_TIME = TotalTime;
 		}
 	}
@@ -93,7 +76,6 @@ void VQEngine::RenderThread_Main()
 	RenderThread_Exit();
 	Log::Info("RenderThread_Main() : Exit");
 }
-
 
 void VQEngine::RenderThread_WaitForUpdateThread()
 {
@@ -110,7 +92,37 @@ void VQEngine::RenderThread_SignalUpdateThread()
 {
 	mpSemUpdate->Signal();
 }
+#endif
 
+
+void VQEngine::RenderThread_Tick()
+{
+	SCOPED_CPU_MARKER_C("RenderThread_Tick()", 0xFF007700);
+
+	RenderThread_HandleEvents();
+
+	if (this->mbStopAllThreads)
+		return; // HandleEvents() can set @this->mbStopAllThreads true with WindowCloseEvent;
+
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	RenderThread_WaitForUpdateThread();
+#endif
+
+#if DEBUG_LOG_THREAD_SYNC_VERBOSE
+	Log::Info(/*"RenderThread_Tick() : */"r%d (u=%llu)", mNumRenderLoopsExecuted.load(), mNumUpdateLoopsExecuted.load());
+#endif
+
+	RenderThread_PreRender();
+	RenderThread_RenderFrame();
+
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	++mNumRenderLoopsExecuted;
+
+	RenderThread_SignalUpdateThread();
+#endif
+
+	RenderThread_HandleEvents();
+}
 
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -131,7 +143,9 @@ void VQEngine::RenderThread_Inititalize()
 {
 	const bool bExclusiveFullscreen_MainWnd = CheckInitialSwapchainResizeRequired(mInitialSwapchainResizeRequiredWindowLookup, mSettings.WndMain, mpWinMain->GetHWND());
 
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mNumRenderLoopsExecuted.store(0);
+#endif
 
 	// Initialize Renderer: Device, Queues, Heaps
 	mRenderer.Initialize(mSettings.gfx);
@@ -160,7 +174,10 @@ void VQEngine::RenderThread_Inititalize()
 
 	// initialize builtin meshes
 	InitializeBuiltinMeshes();
+
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mbRenderThreadInitialized.store(true);
+#endif
 
 	//
 	// TODO: THREADED LOADING
@@ -187,7 +204,9 @@ void VQEngine::RenderThread_Inititalize()
 
 void VQEngine::RenderThread_Exit()
 {
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mpSemUpdate->Signal();
+#endif
 	mRenderPass_AO.Exit();
 }
 
@@ -636,7 +655,11 @@ void VQEngine::RenderThread_PreRender()
 	
 	const int NUM_BACK_BUFFERS  = ctx.GetNumSwapchainBuffers();
 	const int BACK_BUFFER_INDEX = ctx.GetCurrentSwapchainBufferIndex();
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	const int FRAME_DATA_INDEX  = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
+#else
+	const int FRAME_DATA_INDEX = 0;
+#endif
 	
 	const FSceneView&       SceneView       = mpScene->GetSceneView(FRAME_DATA_INDEX);
 	const FSceneShadowView& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
@@ -689,10 +712,6 @@ void VQEngine::RenderThread_RenderMainWindow()
 	SCOPED_CPU_MARKER("RenderThread_RenderMainWindow()");
 	FWindowRenderContext& ctx = mRenderer.GetWindowRenderContext(mpWinMain->GetHWND());
 
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
-	const int FRAME_DATA_INDEX = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
-
-
 	//
 	// Handle one-time & infrequent events
 	//
@@ -702,6 +721,7 @@ void VQEngine::RenderThread_RenderMainWindow()
 		PreFilterEnvironmentMap(pCmd, mResources_MainWnd.EnvironmentMap);
 		mbEnvironmentMapPreFilter.store(false);
 	}
+
 
 	HRESULT hr = S_OK; 
 	hr = mbLoadingLevel || mbLoadingEnvironmentMap
@@ -733,7 +753,9 @@ void VQEngine::RenderThread_HandleDeviceRemoved()
 {
 	MessageBox(NULL, "Device Removed.\n\nVQEngine will shutdown.", "VQEngine Renderer Error", MB_OK);
 	this->mbStopAllThreads.store(true);
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	RenderThread_SignalUpdateThread();
+#endif
 }
 
 
@@ -845,9 +867,6 @@ void VQEngine::RenderThread_RenderDebugWindow()
 HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderContext& ctx)
 {
 	HRESULT hr = S_OK;
-	const int NUM_BACK_BUFFERS = ctx.SwapChain.GetNumBackBuffers();
-	const int BACK_BUFFER_INDEX = ctx.SwapChain.GetCurrentBackBufferIndex();
-	const int FRAME_DATA_INDEX = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
 	const bool bUseHDRRenderPath = this->ShouldRenderHDR(mpWinMain->GetHWND());
 	// ----------------------------------------------------------------------------
 
@@ -923,11 +942,21 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 //====================================================================================================
 HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 {
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	ThreadPool& WorkerThreads = mWorkers_Render;
+#else
+	ThreadPool& WorkerThreads = mWorkers_Simulation;
+#endif
+
 	SCOPED_CPU_MARKER("RenderThread_RenderMainWindow_Scene()");
 	HRESULT hr = S_OK;
 	const int NUM_BACK_BUFFERS              = ctx.GetNumSwapchainBuffers();
 	const int BACK_BUFFER_INDEX             = ctx.GetCurrentSwapchainBufferIndex();
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	const int FRAME_DATA_INDEX              = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
+#else
+	const int FRAME_DATA_INDEX = 0;
+#endif
 	const bool bUseHDRRenderPath            = this->ShouldRenderHDR(mpWinMain->GetHWND());
 	const FSceneView& SceneView             = mpScene->GetSceneView(FRAME_DATA_INDEX);
 	const FSceneShadowView& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
@@ -996,7 +1025,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 			{
 				ID3D12GraphicsCommandList* pCmd_ZPrePass = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdZPrePassThread);
 				DynamicBufferHeap& CBHeap_WorkerZPrePass = ctx.GetConstantBufferHeap(iCmdZPrePassThread);
-				mWorkers_Render.AddTask([=, &CBHeap_WorkerZPrePass, &SceneView]()
+				WorkerThreads.AddTask([=, &CBHeap_WorkerZPrePass, &SceneView]()
 				{
 					RENDER_WORKER_CPU_MARKER;
 					RenderDepthPrePass(pCmd_ZPrePass, &CBHeap_WorkerZPrePass, SceneView);
@@ -1006,7 +1035,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 			{
 				ID3D12GraphicsCommandList* pCmd_Spots = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdSpots);
 				DynamicBufferHeap& CBHeap_Spots = ctx.GetConstantBufferHeap(iCmdSpots);
-				mWorkers_Render.AddTask([=, &CBHeap_Spots, &SceneShadowView]()
+				WorkerThreads.AddTask([=, &CBHeap_Spots, &SceneShadowView]()
 				{
 					RENDER_WORKER_CPU_MARKER;
 					RenderSpotShadowMaps(pCmd_Spots, &CBHeap_Spots, SceneShadowView);
@@ -1019,7 +1048,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 					const size_t iPointWorker = iCmdPointLightsThread + iPoint;
 					ID3D12GraphicsCommandList* pCmd_Point = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iPointWorker);
 					DynamicBufferHeap& CBHeap_Point = ctx.GetConstantBufferHeap(iPointWorker);
-					mWorkers_Render.AddTask([=, &CBHeap_Point, &SceneShadowView]()
+					WorkerThreads.AddTask([=, &CBHeap_Point, &SceneShadowView]()
 					{
 						RENDER_WORKER_CPU_MARKER;
 						RenderPointShadowMaps(pCmd_Point, &CBHeap_Point, SceneShadowView, iPoint, 1);
@@ -1031,7 +1060,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 			{
 				ID3D12GraphicsCommandList* pCmd_Directional = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdDirectional);
 				DynamicBufferHeap& CBHeap_Directional = ctx.GetConstantBufferHeap(iCmdDirectional);
-				mWorkers_Render.AddTask([=, &CBHeap_Directional, &SceneShadowView]()
+				WorkerThreads.AddTask([=, &CBHeap_Directional, &SceneShadowView]()
 				{
 					RENDER_WORKER_CPU_MARKER;
 					RenderDirectionalShadowMaps(pCmd_Directional, &CBHeap_Directional, SceneShadowView);
@@ -1060,7 +1089,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		{
 			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS", 0xFFFF0000);
-			while (mWorkers_Render.GetNumActiveTasks() != 0);
+			while (WorkerThreads.GetNumActiveTasks() != 0);
 		}
 	}
 

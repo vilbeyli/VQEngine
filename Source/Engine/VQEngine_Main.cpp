@@ -44,6 +44,10 @@ VQEngine::VQEngine()
 
 void VQEngine::MainThread_Tick()
 {
+#if !VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	const uint64& mNumRenderLoopsExecuted = mNumSimulationTicks;
+#endif
+
 	if (this->mSettings.bAutomatedTestRun)
 	{
 		if (this->mSettings.NumAutomatedTestFrames <= mNumRenderLoopsExecuted)
@@ -62,6 +66,12 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	Timer  t;  t.Reset();  t.Start();
 	Timer t2; t2.Reset(); t2.Start();
 
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	ThreadPool& WorkerThreads = mWorkers_Update;
+#else
+	ThreadPool& WorkerThreads = mWorkers_Simulation;
+#endif
+
 	InitializeEngineSettings(Params);
 	InitializeEnvironmentMaps();
 	InitializeHDRProfiles();
@@ -76,7 +86,7 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	float f4 = t.Tick();
 
 	// offload system info acquisition to a thread as it takes a few seconds on Debug build
-	mWorkers_Update.AddTask([&]() 
+	WorkerThreads.AddTask([&]()
 	{
 		// Offload GetMonitorInfo() into thread as it takes the longest
 		// Get others on the same thread.
@@ -85,7 +95,7 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 		this->mSysInfo.GPUs = VQSystemInfo::GetGPUInfo();
 		this->mSysInfo.RAM  = VQSystemInfo::GetRAMInfo();
 		
-		mWorkers_Update.AddTask([&]()
+		WorkerThreads.AddTask([&]()
 		{
 			this->mSysInfo = VQSystemInfo::GetSystemInfo();
 
@@ -319,18 +329,25 @@ void VQEngine::InitializeThreads()
 	const size_t NumRuntimeWorkers = HWCores - 2; // reserve 2 cores for Update + Render threads
 	const size_t NumLoadtimeWorkers    = HWThreads;
 
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mpSemUpdate.reset(new Semaphore(NUM_SWAPCHAIN_BACKBUFFERS, NUM_SWAPCHAIN_BACKBUFFERS));
 	mpSemRender.reset(new Semaphore(0                        , NUM_SWAPCHAIN_BACKBUFFERS));
 	
 	mbRenderThreadInitialized.store(false);
+#endif
 	mbStopAllThreads.store(false);
 
 	mWorkers_ModelLoading.Initialize(NumLoadtimeWorkers, "LoadWorkers_Model");
 	mWorkers_TextureLoading.Initialize(NumLoadtimeWorkers, "LoadWorkers_Texture");
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mRenderThread = std::thread(&VQEngine::RenderThread_Main, this);
 	mUpdateThread = std::thread(&VQEngine::UpdateThread_Main, this);
 	mWorkers_Update.Initialize(NumRuntimeWorkers, "UpdateWorkers");
 	mWorkers_Render.Initialize(NumRuntimeWorkers, "RenderWorkers");
+#else
+	mSimulationThread = std::thread(&VQEngine::SimulationThread_Main, this);
+	mWorkers_Simulation.Initialize(NumRuntimeWorkers, "SimulationWorkers");
+#endif
 }
 
 void VQEngine::ExitThreads()
@@ -338,11 +355,17 @@ void VQEngine::ExitThreads()
 	mWorkers_ModelLoading.Exit();
 	mWorkers_TextureLoading.Exit();
 	mbStopAllThreads.store(true);
+
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mRenderThread.join();
 	mUpdateThread.join();
 
 	mWorkers_Update.Exit();
 	mWorkers_Render.Exit();
+#else
+	mSimulationThread.join();
+	mWorkers_Simulation.Exit();
+#endif
 }
 
 

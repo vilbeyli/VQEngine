@@ -40,8 +40,19 @@
 
 #include <memory>
 
+
+//--------------------------------------------------------------------
+// MUILTI-THREADING 
+//--------------------------------------------------------------------
+
+// Pipelined - saparate Update & Render threads
+// Otherwise, Simulation thread for update + render
+#define VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS 0
+
+
 // Outputs Render/Update thread sync values on each Tick()
 #define DEBUG_LOG_THREAD_SYNC_VERBOSE 0
+//--------------------------------------------------------------------
 
 //
 // DATA STRUCTS
@@ -233,10 +244,13 @@ public:
 	// Render Thread
 	// ---------------------------------------------------------
 	void RenderThread_Main();
+	void RenderThread_Tick();
 	void RenderThread_Inititalize();
 	void RenderThread_Exit();
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	void RenderThread_WaitForUpdateThread();
 	void RenderThread_SignalUpdateThread();
+#endif
 
 	void RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height);
 	void RenderThread_LoadResources();
@@ -264,14 +278,14 @@ public:
 	// ---------------------------------------------------------
 	void  UpdateThread_Main();
 	void  UpdateThread_Inititalize();
+	void  UpdateThread_Tick(const float dt);
 	void  UpdateThread_Exit();
 	float UpdateThread_WaitForRenderThread();
 	void  UpdateThread_SignalRenderThread();
 
 	// PreUpdate()
-	// - Updates timer
 	// - Updates input state reading from Main Thread's input queue
-	void UpdateThread_PreUpdate(float& dt);
+	void UpdateThread_PreUpdate();
 	
 	// Update()
 	// - Updates program state (init/load/sim/unload/exit)
@@ -287,6 +301,14 @@ public:
 	void UpdateThread_PostUpdate();
 
 
+
+	// ---------------------------------------------------------
+	// Simulation Thread
+	// ---------------------------------------------------------
+	void SimulationThread_Main();
+	void SimulationThread_Initialize();
+	void SimulationThread_Exit();
+	void SimulationThread_Tick(const float dt);
 //-----------------------------------------------------------------------
 	
 	void                       SetWindowName(HWND hwnd, const std::string& name);
@@ -326,17 +348,24 @@ private:
 	//-------------------------------------------------------------------------------------------------
 
 	// threads
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	std::thread                     mRenderThread;
 	std::thread                     mUpdateThread;
 	ThreadPool                      mWorkers_Update;
 	ThreadPool                      mWorkers_Render;
+#else
+	std::thread                     mSimulationThread;
+	ThreadPool                      mWorkers_Simulation;
+#endif
 	ThreadPool                      mWorkers_ModelLoading;
 	ThreadPool                      mWorkers_TextureLoading;
 
 	// sync
 	std::atomic<bool>               mbStopAllThreads;
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	std::unique_ptr<Semaphore>      mpSemUpdate;
 	std::unique_ptr<Semaphore>      mpSemRender;
+#endif
 	
 	// windows
 #if 0 // TODO
@@ -352,9 +381,9 @@ private:
 	std::unordered_map<HWND, Input> mInputStates;
 
 	// events 
+	EventQueue_t                    mEventQueue_VQEToWin_Main;
 	EventQueue_t                    mEventQueue_WinToVQE_Renderer;
 	EventQueue_t                    mEventQueue_WinToVQE_Update;
-	EventQueue_t                    mEventQueue_VQEToWin_Main;
 
 	// render
 	VQRenderer                      mRenderer;
@@ -372,9 +401,13 @@ private:
 
 	// state
 	EAppState                       mAppState;
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	std::atomic<bool>               mbRenderThreadInitialized;
 	std::atomic<uint64>             mNumRenderLoopsExecuted;
 	std::atomic<uint64>             mNumUpdateLoopsExecuted;
+#else
+	uint64							mNumSimulationTicks;
+#endif
 	std::atomic<bool>               mbLoadingLevel;
 	std::atomic<bool>               mbLoadingEnvironmentMap;
 	std::atomic<bool>               mbEnvironmentMapPreFilter;

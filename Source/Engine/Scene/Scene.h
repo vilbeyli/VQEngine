@@ -306,8 +306,8 @@ protected:
 //----------------------------------------------------------------------------------------------------------------
 private: // Derived Scenes shouldn't access these functions
 	void PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX);
-	void Update(float dt, int FRAME_DATA_INDEX);
-	void PostUpdate(int FRAME_DATA_INDEX, ThreadPool& UpdateWorkerThreadPool);
+	void Update(float dt, int FRAME_DATA_INDEX = 0);
+	void PostUpdate(ThreadPool& UpdateWorkerThreadPool, int FRAME_DATA_INDEX = 0);
 	void StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene);
 	void OnLoadComplete();
 	void Unload(); // serial-only for now. maybe MT later.
@@ -343,10 +343,11 @@ public:
 		, VQRenderer& renderer
 	);
 
-	inline const FSceneView&       GetSceneView (int FRAME_DATA_INDEX) const { return mFrameSceneViews[FRAME_DATA_INDEX]; }
-	inline const FSceneShadowView& GetShadowView(int FRAME_DATA_INDEX) const { return mFrameShadowViews[FRAME_DATA_INDEX]; }
-	inline       FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX)       { return mFrameSceneViews[FRAME_DATA_INDEX].postProcessParameters; }
-	inline const FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX) const { return mFrameSceneViews[FRAME_DATA_INDEX].postProcessParameters; }
+	const FSceneView&       GetSceneView (int FRAME_DATA_INDEX) const;
+	const FSceneShadowView& GetShadowView(int FRAME_DATA_INDEX) const;
+	      FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX)       ;
+	const FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX) const ;
+
 	inline const Camera& GetActiveCamera() const { return mCameras[mIndex_SelectedCamera]; }
 	inline       Camera& GetActiveCamera()       { return mCameras[mIndex_SelectedCamera]; }
 
@@ -369,10 +370,10 @@ public:
 protected:
 
 	//
-	// SCENE VIEWS PER FRAME
+	// VIEWS
 	//
-	std::vector<FSceneView>       mFrameSceneViews;
-	std::vector<FSceneShadowView> mFrameShadowViews;
+	std::vector<FSceneView>       mFrameSceneViews ; // per-frame in flight (usually 3 if Render & Update threads are separate)
+	std::vector<FSceneShadowView> mFrameShadowViews; // per-frame in flight (usually 3 if Render & Update threads are separate)
 
 	//
 	// SCENE ELEMENT CONTAINERS

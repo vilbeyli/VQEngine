@@ -224,8 +224,13 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 	: mInput(input)
 	, mpWindow(pWin)
 	, mEngine(engine)
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	, mFrameSceneViews(NumFrameBuffers)
 	, mFrameShadowViews(NumFrameBuffers)
+#else
+	, mFrameSceneViews(1)
+	, mFrameShadowViews(1)
+#endif
 	, mIndex_SelectedCamera(0)
 	, mIndex_ActiveEnvironmentMapPreset(0)
 	, mGameObjectPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
@@ -240,6 +245,7 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 
 void Scene::PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX)
 {
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	if (std::max(FRAME_DATA_INDEX, FRAME_DATA_PREV_INDEX) >= mFrameSceneViews.size())
 	{
 		Log::Warning("Scene::PreUpdate(): Frame data is not yet allocated!");
@@ -248,15 +254,19 @@ void Scene::PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX)
 	assert(std::max(FRAME_DATA_INDEX, FRAME_DATA_PREV_INDEX) < mFrameSceneViews.size());
 	FSceneView& SceneViewCurr = mFrameSceneViews[FRAME_DATA_INDEX];
 	FSceneView& SceneViewPrev = mFrameSceneViews[FRAME_DATA_PREV_INDEX];
+	// bring over the parameters from the last frame
 	SceneViewCurr.postProcessParameters = SceneViewPrev.postProcessParameters;
 	SceneViewCurr.sceneParameters = SceneViewPrev.sceneParameters;
+#endif
 }
 
 void Scene::Update(float dt, int FRAME_DATA_INDEX)
 {
 	SCOPED_CPU_MARKER("Scene::Update()");
+
 	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
 	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
+
 	Camera& Cam = this->mCameras[this->mIndex_SelectedCamera];
 
 	Cam.Update(dt, mInput);
@@ -264,7 +274,7 @@ void Scene::Update(float dt, int FRAME_DATA_INDEX)
 	this->UpdateScene(dt, SceneView);
 }
 
-void Scene::PostUpdate(int FRAME_DATA_INDEX, ThreadPool& UpdateWorkerThreadPool)
+void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, int FRAME_DATA_INDEX)
 {
 	SCOPED_CPU_MARKER("Scene::PostUpdate()");
 	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
@@ -272,7 +282,7 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, ThreadPool& UpdateWorkerThreadPool)
 	FSceneShadowView& ShadowView = mFrameShadowViews[FRAME_DATA_INDEX];
 
 	const Camera& cam = mCameras[mIndex_SelectedCamera];
-	const XMFLOAT3 camPos = cam.GetPositionF();
+	const XMFLOAT3 camPos = cam.GetPositionF(); 
 
 	// extract scene view
 	SceneView.proj = cam.GetProjectionMatrix();
@@ -316,6 +326,41 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, ThreadPool& UpdateWorkerThreadPool)
 		}
 		PrepareBoundingBoxRenderParams(SceneView);
 	}
+}
+
+
+
+const FSceneView& Scene::GetSceneView(int FRAME_DATA_INDEX) const 
+{
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	return mFrameSceneViews[FRAME_DATA_INDEX]; 
+#else
+	return mFrameSceneViews[0];
+#endif
+}
+const FSceneShadowView& Scene::GetShadowView(int FRAME_DATA_INDEX) const 
+{
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	return mFrameShadowViews[FRAME_DATA_INDEX]; 
+#else
+	return mFrameShadowViews[0];
+#endif
+}
+FPostProcessParameters& Scene::GetPostProcessParameters(int FRAME_DATA_INDEX) 
+{
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	return mFrameSceneViews[FRAME_DATA_INDEX].postProcessParameters; 
+#else
+	return mFrameSceneViews[0].postProcessParameters;
+#endif
+}
+const FPostProcessParameters& Scene::GetPostProcessParameters(int FRAME_DATA_INDEX) const 
+{
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	return mFrameSceneViews[FRAME_DATA_INDEX].postProcessParameters; 
+#else
+	return mFrameSceneViews[0].postProcessParameters;
+#endif
 }
 
 

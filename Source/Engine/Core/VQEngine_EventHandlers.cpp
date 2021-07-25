@@ -232,6 +232,7 @@ void VQEngine::RenderThread_HandleEvents()
 	//   while we're spinning on the queue items below, and cause render thread to stall while, say, resizing.
 	mEventQueue_WinToVQE_Renderer.SwapBuffers();
 	std::queue<EventPtr_t>& q = mEventQueue_WinToVQE_Renderer.GetBackContainer();
+
 	if (q.empty())
 		return;
 
@@ -290,7 +291,9 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 
 	const FSetHDRMetaDataParams HDRMetaData = this->GatherHDRMetaDataParameters(hwnd);
 
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mEventQueue_WinToVQE_Update.AddItem(pResizeEvent);
+#endif
 
 	Swapchain.WaitForGPU();
 	Swapchain.Resize(WIDTH, HEIGHT, Swapchain.GetFormat());
@@ -326,7 +329,9 @@ void VQEngine::RenderThread_HandleWindowCloseEvent(const IEvent* pEvent)
 	if (hwnd == mpWinMain->GetHWND())
 	{
 		mbStopAllThreads.store(true);
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 		RenderThread_SignalUpdateThread();
+#endif
 	}
 }
 

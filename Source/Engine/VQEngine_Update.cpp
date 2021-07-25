@@ -41,30 +41,13 @@ void VQEngine::UpdateThread_Main()
 
 	UpdateThread_Inititalize();
 
-	bool bQuit = false;
 	float dt = 0.0f;
-	float dt_RenderWaitTime = 0.0f;
+	bool bQuit = false;
 	while (!mbStopAllThreads && !bQuit)
 	{
-		SCOPED_CPU_MARKER_C("UpdateThread_Main()", 0xFF000077);
+		dt = mTimer.Tick(); // update timer
 
-		dt_RenderWaitTime = UpdateThread_WaitForRenderThread();
-
-		UpdateThread_HandleEvents();
-
-		UpdateThread_PreUpdate(dt);
-
-#if DEBUG_LOG_THREAD_SYNC_VERBOSE
-		Log::Info(/*"UpdateThread_Tick() : */"u%d (r=%llu)", mNumUpdateLoopsExecuted.load(), mNumRenderLoopsExecuted.load());
-#endif
-
-		UpdateThread_UpdateAppState(dt);
-
-		UpdateThread_PostUpdate();
-
-		++mNumUpdateLoopsExecuted;
-
-		UpdateThread_SignalRenderThread();
+		UpdateThread_Tick(dt);
 
 		// UpdateThread_Logging()
 		constexpr int LOGGING_PERIOD = 4; // seconds
@@ -72,7 +55,7 @@ void VQEngine::UpdateThread_Main()
 		const float TotalTime = mTimer.TotalTime();
 		if (TotalTime - LAST_LOG_TIME > 4)
 		{
-			Log::Info("UpdateThread_Main() : dt=%.2f ms", (dt * 1000.0f) - (dt_RenderWaitTime * 1000.0f));
+			Log::Info("UpdateTick() : dt=%.2f ms", (dt * 1000.0f) /* - (dt_RenderWaitTime * 1000.0f)*/);
 			LAST_LOG_TIME = TotalTime;
 		}
 	}
@@ -83,11 +66,16 @@ void VQEngine::UpdateThread_Main()
 
 void VQEngine::UpdateThread_Inititalize()
 {
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mNumUpdateLoopsExecuted.store(0);
+#endif
 	mbLoadingEnvironmentMap.store(false);
 
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	// TODO: remove busy lock
 	// busy lock until render thread is initialized
 	while (!mbRenderThreadInitialized); 
+#endif
 
 	// immediately load loading screen texture
 	LoadLoadingScreenData();
@@ -96,25 +84,53 @@ void VQEngine::UpdateThread_Inititalize()
 	mTimer.Start();
 }
 
+void VQEngine::UpdateThread_Tick(const float dt)
+{
+	float dt_RenderWaitTime = 0.0f;
+
+	SCOPED_CPU_MARKER_C("UpdateThread_Tick()", 0xFF000077);
+
+	dt_RenderWaitTime = UpdateThread_WaitForRenderThread();
+
+	UpdateThread_HandleEvents();
+
+	UpdateThread_PreUpdate();
+
+#if DEBUG_LOG_THREAD_SYNC_VERBOSE
+	Log::Info(/*"UpdateThread_Tick() : */"u%d (r=%llu)", mNumUpdateLoopsExecuted.load(), mNumRenderLoopsExecuted.load());
+#endif
+
+	UpdateThread_UpdateAppState(dt);
+
+	UpdateThread_PostUpdate();
+
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	++mNumUpdateLoopsExecuted;
+
+	UpdateThread_SignalRenderThread();
+#endif
+}
+
 void VQEngine::UpdateThread_Exit()
 {
 	mpScene->Unload();
 }
 
-void VQEngine::UpdateThread_PreUpdate(float& dt)
+void VQEngine::UpdateThread_PreUpdate()
 {
 	SCOPED_CPU_MARKER("UpdateThread_PreUpdate()");
 
 	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
 
-	// update timer
-	dt = mTimer.Tick();
-
 	if (mpScene)
 	{
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 		const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
 		const int FRAME_DATA_PREV_INDEX = (FRAME_DATA_INDEX == 0) ? (NUM_BACK_BUFFERS - 1) : (FRAME_DATA_INDEX - 1);
 		mpScene->PreUpdate(FRAME_DATA_INDEX, FRAME_DATA_PREV_INDEX);
+#else
+		mpScene->PreUpdate(0, 0);
+#endif
 	}
 
 	// system-wide input (esc/mouse click on wnd)
@@ -124,8 +140,10 @@ void VQEngine::UpdateThread_PreUpdate(float& dt)
 void VQEngine::UpdateThread_UpdateAppState(const float dt)
 {
 	SCOPED_CPU_MARKER("UpdateThread_UpdateAppState()");
-	assert(mbRenderThreadInitialized);
 
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	assert(mbRenderThreadInitialized);
+#endif
 
 	if (mAppState == EAppState::INITIALIZING)
 	{
@@ -190,15 +208,22 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 void VQEngine::UpdateThread_PostUpdate()
 {
 	SCOPED_CPU_MARKER("UpdateThread_PostUpdate()");
+
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
+	ThreadPool& mWorkerThreads = mWorkers_Update;
+#else
+	const int FRAME_DATA_INDEX = 0;
+	ThreadPool& mWorkerThreads = mWorkers_Simulation;
+#endif
 
 	if (mbLoadingLevel)
 	{
 		return;
 	}
 
-	mpScene->PostUpdate(FRAME_DATA_INDEX, mWorkers_Update);
+	mpScene->PostUpdate(mWorkerThreads, FRAME_DATA_INDEX);
 
 	// input post update
 	for (auto it = mInputStates.begin(); it != mInputStates.end(); ++it)
@@ -208,6 +233,7 @@ void VQEngine::UpdateThread_PostUpdate()
 	}
 }
 
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 float VQEngine::UpdateThread_WaitForRenderThread()
 {
 	SCOPED_CPU_MARKER("UpdateThread_WaitForRenderThread()");
@@ -225,18 +251,33 @@ float VQEngine::UpdateThread_WaitForRenderThread()
 	t.Stop();
 	return t.DeltaTime();
 }
-
 void VQEngine::UpdateThread_SignalRenderThread()
 {
 	mpSemRender->Signal();
 }
 
+void VQEngine::WaitUntilRenderingFinishes()
+{
+	while (mNumRenderLoopsExecuted != mNumUpdateLoopsExecuted);
+}
+#else
+float VQEngine::UpdateThread_WaitForRenderThread() { return 0.0f; }
+void VQEngine::UpdateThread_SignalRenderThread(){}
+void VQEngine::WaitUntilRenderingFinishes(){}
+#endif
+
+
+
 // -------------------------------------------------------------------
 
 void VQEngine::HandleEngineInput()
 {
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
+#else
+	const int FRAME_DATA_INDEX = 0;
+#endif
 
 	for (decltype(mInputStates)::iterator it = mInputStates.begin(); it != mInputStates.end(); ++it)
 	{
@@ -344,7 +385,7 @@ void VQEngine::CalculateEffectiveFrameRateLimit(HWND hwnd)
 		mEffectiveFrameRateLimit_ms = 1000.0f / mSettings.gfx.MaxFrameRate;
 	}
 	const bool bUnlimitedFrameRate = mEffectiveFrameRateLimit_ms == 0.0f;
-	if(bUnlimitedFrameRate) Log::Info("FrameRateLimit : Unlimited");
+	if (bUnlimitedFrameRate) Log::Info("FrameRateLimit : Unlimited");
 	else                    Log::Info("FrameRateLimit : %.2fms | %d FPS", mEffectiveFrameRateLimit_ms, static_cast<int>(1000.0f / mEffectiveFrameRateLimit_ms));
 }
 
@@ -366,101 +407,19 @@ const FDisplayHDRProfile* VQEngine::GetHDRProfileIfExists(const wchar_t* pwStrLo
 	return pProfile;
 }
 
-FSetHDRMetaDataParams VQEngine::GatherHDRMetaDataParameters(HWND hwnd)
-{
-	FSetHDRMetaDataParams params;
-
-	while (!mbRenderThreadInitialized); // wait until renderer is initialized
-
-	const SwapChain& Swapchain = mRenderer.GetWindowSwapChain(hwnd);
-	const DXGI_OUTPUT_DESC1 desc = Swapchain.GetContainingMonitorDesc();
-	const FDisplayHDRProfile* pProfile = GetHDRProfileIfExists(desc.DeviceName);
-
-	params.MaxOutputNits = pProfile ? pProfile->MaxBrightness : desc.MaxLuminance;
-	params.MinOutputNits = pProfile ? pProfile->MinBrightness : desc.MinLuminance;
-	
-	const bool bHDREnvironmentMap = mResources_MainWnd.EnvironmentMap.Tex_HDREnvironment != INVALID_ID;
-	if (bHDREnvironmentMap)
-	{
-		params.MaxContentLightLevel = static_cast<float>(mResources_MainWnd.EnvironmentMap.MaxContentLightLevel);
-	}
-
-	params.MaxFrameAverageLightLevel = 80.0f; // TODO: dynamic calculation using histograms?
-
-	return params;
-}
-
-void VQEngine::SetWindowName(HWND hwnd, const std::string& name){	mWinNameLookup[hwnd] = name; }
-void VQEngine::SetWindowName(const std::unique_ptr<Window>& pWin, const std::string& name) { SetWindowName(pWin->GetHWND(), name); }
-
-const std::string& VQEngine::GetWindowName(HWND hwnd) const
-{
-#if _DEBUG
-	auto it = mWinNameLookup.find(hwnd);
-	if (it == mWinNameLookup.end())
-	{
-		Log::Error("Couldn't find window<%x> name: HWND not called with SetWindowName()!", hwnd);
-		assert(false); // gonna crash at .at() call anyways.
-	}
-#endif
-	return mWinNameLookup.at(hwnd);
-}
-
-
-MeshID VQEngine::GetBuiltInMeshID(const std::string& MeshName) const
-{
-	const auto it = std::find(mResourceNames.mBuiltinMeshNames.begin(), mResourceNames.mBuiltinMeshNames.end(), MeshName);
-	if (it == mResourceNames.mBuiltinMeshNames.end())
-	{
-		Log::Error("Builtin Mesh Not Found: %s", MeshName.c_str());
-		return INVALID_ID;
-	}
-	return static_cast<MeshID>(it - mResourceNames.mBuiltinMeshNames.begin());
-}
-
-void VQEngine::StartLoadingEnvironmentMap(int IndexEnvMap)
-{
-	this->WaitUntilRenderingFinishes();
-	mAppState = EAppState::LOADING;
-	mbLoadingEnvironmentMap = true;
-	mWorkers_TextureLoading.AddTask([&, IndexEnvMap]()
-	{
-		LoadEnvironmentMap(mResourceNames.mEnvironmentMapPresetNames[IndexEnvMap]);
-	});
-}
-
-void VQEngine::StartLoadingScene(int IndexScene)
-{
-	assert(IndexScene >= 0 && IndexScene < mResourceNames.mSceneNames.size());
-
-	// get scene representation 
-	const std::string& SceneName = mResourceNames.mSceneNames[IndexScene];
-
-
-
-	// queue the selected scene for loading
-	mQueue_SceneLoad.push(mResourceNames.mSceneNames[IndexScene]);
-
-	mAppState = INITIALIZING;
-	mbLoadingLevel.store(true);    // thread-safe
-	Log::Info("StartLoadingScene: %d", IndexScene);
-}
-
-
-void VQEngine::WaitUntilRenderingFinishes()
-{
-	while (mNumRenderLoopsExecuted != mNumUpdateLoopsExecuted);
-}
-
 // ---------------------------------------------------------------------
 
 void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 {
 	std::unique_ptr<Window>& pWin = mpWinMain;
-	HWND hwnd                     = pWin->GetHWND();
+	HWND hwnd = pWin->GetHWND();
 
 	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(hwnd);
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
+#else
+	const int FRAME_DATA_INDEX = 0;
+#endif
 
 	mpScene->Update(dt, FRAME_DATA_INDEX);
 }
@@ -470,8 +429,8 @@ void VQEngine::UpdateThread_UpdateScene_DebugWnd(const float dt)
 	if (!mpWinDebug) return;
 
 	std::unique_ptr<Window>& pWin = mpWinDebug;
-	HWND hwnd                     = pWin->GetHWND();
-	const Input& input            = mInputStates.at(hwnd);
+	HWND hwnd = pWin->GetHWND();
+	const Input& input = mInputStates.at(hwnd);
 
 
 }
@@ -484,14 +443,14 @@ void VQEngine::Load_SceneData_Dispatch()
 
 	const std::string SceneFileName = mQueue_SceneLoad.front();
 	mQueue_SceneLoad.pop();
-	
+
 
 	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
-	const Input& input                  = mInputStates.at(mpWinMain->GetHWND());
+	const Input& input = mInputStates.at(mpWinMain->GetHWND());
 
 	auto fnCreateSceneInstance = [&](const std::string& SceneType, std::unique_ptr<Scene>& pScene) -> void
 	{
-		     if (SceneType == "Default")          pScene = std::make_unique<DefaultScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
+		if (SceneType == "Default")          pScene = std::make_unique<DefaultScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 		else if (SceneType == "Sponza")           pScene = std::make_unique<SponzaScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 		else if (SceneType == "StressTest")       pScene = std::make_unique<StressTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 		else if (SceneType == "GeometryUnitTest") pScene = std::make_unique<GeometryUnitTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
@@ -512,8 +471,8 @@ void VQEngine::Load_SceneData_Dispatch()
 	mpScene->StartLoading(this->mBuiltinMeshes, SceneRep);
 
 	// start loading environment map textures
-	if (!SceneRep.EnvironmentMapPreset.empty()) 
-	{ 
+	if (!SceneRep.EnvironmentMapPreset.empty())
+	{
 		mWorkers_TextureLoading.AddTask([=]() { LoadEnvironmentMap(SceneRep.EnvironmentMapPreset); });
 	}
 }
@@ -548,12 +507,12 @@ void VQEngine::LoadLoadingScreenData()
 		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(i) + ".png");
 
 		mWorkers_TextureLoading.AddTask([this, &data, LoadingScreenTextureFilePath]()
-		{
-			const TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
-			const SRV_ID srvID = mRenderer.CreateAndInitializeSRV(texID);
-			std::lock_guard<std::mutex> lk(data.Mtx);
-			data.SRVs.push_back(srvID);
-		});
+			{
+				const TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
+				const SRV_ID srvID = mRenderer.CreateAndInitializeSRV(texID);
+				std::lock_guard<std::mutex> lk(data.Mtx);
+				data.SRVs.push_back(srvID);
+			});
 
 	}
 
@@ -567,5 +526,88 @@ void VQEngine::LoadLoadingScreenData()
 		data.SelectedLoadingScreenSRVIndex = static_cast<int>(data.SRVs.size() - 1);
 	}
 
+}
+
+
+FSetHDRMetaDataParams VQEngine::GatherHDRMetaDataParameters(HWND hwnd)
+{
+	FSetHDRMetaDataParams params;
+
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	while (!mbRenderThreadInitialized); // wait until renderer is initialized
+#endif
+
+	const SwapChain& Swapchain = mRenderer.GetWindowSwapChain(hwnd);
+	const DXGI_OUTPUT_DESC1 desc = Swapchain.GetContainingMonitorDesc();
+	const FDisplayHDRProfile* pProfile = GetHDRProfileIfExists(desc.DeviceName);
+
+	params.MaxOutputNits = pProfile ? pProfile->MaxBrightness : desc.MaxLuminance;
+	params.MinOutputNits = pProfile ? pProfile->MinBrightness : desc.MinLuminance;
+
+	const bool bHDREnvironmentMap = mResources_MainWnd.EnvironmentMap.Tex_HDREnvironment != INVALID_ID;
+	if (bHDREnvironmentMap)
+	{
+		params.MaxContentLightLevel = static_cast<float>(mResources_MainWnd.EnvironmentMap.MaxContentLightLevel);
+	}
+
+	params.MaxFrameAverageLightLevel = 80.0f; // TODO: dynamic calculation using histograms?
+
+	return params;
+}
+
+void VQEngine::SetWindowName(HWND hwnd, const std::string& name) { mWinNameLookup[hwnd] = name; }
+void VQEngine::SetWindowName(const std::unique_ptr<Window>& pWin, const std::string& name) { SetWindowName(pWin->GetHWND(), name); }
+
+const std::string& VQEngine::GetWindowName(HWND hwnd) const
+{
+#if _DEBUG
+	auto it = mWinNameLookup.find(hwnd);
+	if (it == mWinNameLookup.end())
+	{
+		Log::Error("Couldn't find window<%x> name: HWND not called with SetWindowName()!", hwnd);
+		assert(false); // gonna crash at .at() call anyways.
+	}
+#endif
+	return mWinNameLookup.at(hwnd);
+}
+
+
+MeshID VQEngine::GetBuiltInMeshID(const std::string& MeshName) const
+{
+	const auto it = std::find(mResourceNames.mBuiltinMeshNames.begin(), mResourceNames.mBuiltinMeshNames.end(), MeshName);
+	if (it == mResourceNames.mBuiltinMeshNames.end())
+	{
+		Log::Error("Builtin Mesh Not Found: %s", MeshName.c_str());
+		return INVALID_ID;
+	}
+	return static_cast<MeshID>(it - mResourceNames.mBuiltinMeshNames.begin());
+}
+
+void VQEngine::StartLoadingEnvironmentMap(int IndexEnvMap)
+{
+	this->WaitUntilRenderingFinishes();
+	mAppState = EAppState::LOADING;
+	mbLoadingEnvironmentMap = true;
+	mWorkers_TextureLoading.AddTask([&, IndexEnvMap]()
+		{
+			LoadEnvironmentMap(mResourceNames.mEnvironmentMapPresetNames[IndexEnvMap]);
+		});
+}
+
+void VQEngine::StartLoadingScene(int IndexScene)
+{
+	assert(IndexScene >= 0 && IndexScene < mResourceNames.mSceneNames.size());
+
+	// get scene representation 
+	const std::string& SceneName = mResourceNames.mSceneNames[IndexScene];
+
+
+
+	// queue the selected scene for loading
+	mQueue_SceneLoad.push(mResourceNames.mSceneNames[IndexScene]);
+
+	mAppState = INITIALIZING;
+	mbLoadingLevel.store(true);    // thread-safe
+	Log::Info("StartLoadingScene: %d", IndexScene);
 }
 

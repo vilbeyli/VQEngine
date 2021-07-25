@@ -144,6 +144,7 @@ set (SourceVQE
     "Source/Engine/VQEngine_Render.cpp"
     "Source/Engine/VQEngine_RenderCommands.cpp"
     "Source/Engine/VQEngine_Update.cpp"
+    "Source/Engine/VQEngine_Simulation.cpp"
     "Source/Engine/EnvironmentMap.cpp"
     "Source/Engine/Geometry.cpp"
     "Source/Engine/Math.cpp"
