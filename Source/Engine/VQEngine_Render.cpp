@@ -987,7 +987,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		RenderPostProcess(pCmd, &CBHeap, PPParams);
 
-		RenderUI(pCmd, ctx, PPParams);
+		RenderUI(pCmd, &CBHeap, ctx, PPParams);
 
 		if (bUseHDRRenderPath)
 		{
@@ -1068,7 +1068,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		RenderPostProcess(pCmd_ThisThread, &CBHeap_This, PPParams);
 
-		RenderUI(pCmd_ThisThread, ctx, PPParams);
+		RenderUI(pCmd_ThisThread, &CBHeap_This, ctx, PPParams);
 
 		if (bUseHDRRenderPath)
 		{

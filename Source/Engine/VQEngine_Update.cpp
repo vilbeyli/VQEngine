@@ -77,6 +77,8 @@ void VQEngine::UpdateThread_Inititalize()
 	while (!mbRenderThreadInitialized); 
 #endif
 
+	InitializeUI(mpWinMain->GetHWND());
+
 	// immediately load loading screen texture
 	LoadLoadingScreenData();
 
@@ -114,6 +116,7 @@ void VQEngine::UpdateThread_Tick(const float dt)
 void VQEngine::UpdateThread_Exit()
 {
 	mpScene->Unload();
+	ExitUI();
 }
 
 void VQEngine::UpdateThread_PreUpdate()
