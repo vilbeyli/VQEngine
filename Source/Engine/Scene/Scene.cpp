@@ -27,11 +27,6 @@
 
 #include "Libs/VQUtils/Source/utils.h"
 
-#include "imgui.h"
-// To use the 'disabled UI state' functionality (ImGuiItemFlags_Disabled), include internal header
-// https://github.com/ocornut/imgui/issues/211#issuecomment-339241929
-#include "Libs/imgui/imgui_internal.h"
-
 #include <fstream>
 
 //-------------------------------------------------------------------------------
@@ -369,78 +364,9 @@ const FPostProcessParameters& Scene::GetPostProcessParameters(int FRAME_DATA_IND
 }
 
 
-void Scene::RenderUI(uint32_t W, uint32_t H)
+void Scene::RenderUI(FUIState& UIState, uint32_t W, uint32_t H)
 {
-	auto fnDisableUIStateBegin = [](const bool& bEnable)
-	{
-		if (!bEnable)
-		{
-			ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
-			ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
-		}
-	};
-	auto fnDisableUIStateEnd = [](const bool& bEnable)
-	{
-		if (!bEnable)
-		{
-			ImGui::PopItemFlag();
-			ImGui::PopStyleVar();
-		}
-	};
-
-	ImGuiIO& io = ImGui::GetIO();
-
-	// Setup display size (every frame to accommodate for window resizing)
-	RECT rect;
-	GetClientRect(mpWindow->GetHWND(), &rect);
-	io.DisplaySize = ImVec2((float)(rect.right - rect.left), (float)(rect.bottom - rect.top));
-
-	// Read keyboard modifiers inputs
-	io.KeyCtrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
-	io.KeyShift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-	io.KeyAlt = (GetKeyState(VK_MENU) & 0x8000) != 0;
-	io.KeySuper = false;
-	// io.KeysDown : filled by WM_KEYDOWN/WM_KEYUP events
-	// io.MousePos : filled by WM_MOUSEMOVE events
-	// io.MouseDown : filled by WM_*BUTTON* events
-	// io.MouseWheel : filled by WM_MOUSEWHEEL events
-
-	// Hide OS mouse cursor if ImGui is drawing it
-	if (io.MouseDrawCursor)
-		SetCursor(NULL);    // Start the frame
-
-	ImGui::NewFrame();
-	ImGuiStyle& style = ImGui::GetStyle();
-	style.FrameBorderSize = 1.0f;
-
-	const uint32_t PROFILER_WINDOW_PADDIG_X = 10;
-	const uint32_t PROFILER_WINDOW_PADDIG_Y = 10;
-	const uint32_t PROFILER_WINDOW_SIZE_X = 330;
-	const uint32_t PROFILER_WINDOW_SIZE_Y = 400;
-	const uint32_t PROFILER_WINDOW_POS_X = W - PROFILER_WINDOW_PADDIG_X - PROFILER_WINDOW_SIZE_X;
-	const uint32_t PROFILER_WINDOW_POS_Y = PROFILER_WINDOW_PADDIG_Y;
-
-	const uint32_t CONTROLS_WINDOW_POS_X = 10;
-	const uint32_t CONTROLS_WINDOW_POS_Y = 10;
-	const uint32_t CONTROLW_WINDOW_SIZE_X = 350;
-	const uint32_t CONTROLW_WINDOW_SIZE_Y = 650;
-
-	ImGui::SetNextWindowPos(ImVec2((float)PROFILER_WINDOW_POS_X, (float)PROFILER_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
-	ImGui::SetNextWindowSize(ImVec2(PROFILER_WINDOW_SIZE_X, PROFILER_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
-
-	static bool bShowProfilerWindow = true;
-	ImGui::Begin("PROFILER (F2)", &bShowProfilerWindow);
-
-	ImGui::Text("Resolution : %ix%i", W, H);
-	ImGui::Text("API        : %s", "DirectX 12");
-	//ImGui::Text("GPU        : %s", );
-	//ImGui::Text("CPU        : %s", m_systemInfo.mCPUName.c_str());
-	//ImGui::Text("FPS        : %d (%.2f ms)", fps, frameTime_ms);
-
-
 	this->RenderSceneUI();
-
-	ImGui::End();
 }
 
 void Scene::HandleInput(FSceneView& SceneView)

@@ -31,6 +31,7 @@
 #include "RenderPass/DepthPrePass.h"
 #include "Settings.h"
 #include "AssetLoader.h"
+#include "VQUI.h"
 
 
 #include "Libs/VQUtils/Source/Multithreading.h"
@@ -424,6 +425,7 @@ private:
 	int                             mIndex_SelectedScene;
 	std::unique_ptr<Scene>          mpScene;
 	ImGuiContext*                   mpImGuiContext;
+	FUIState						mUIState;
 
 #if 0
 	RenderingResourcesLookup_t      mRenderingResources;
@@ -506,11 +508,17 @@ private:
 	void                            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx); // TODO
 	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
 
-	// temp
-	struct FFrameConstantBuffer  { DirectX::XMMATRIX matModelViewProj; };
-	struct FFrameConstantBuffer2 { DirectX::XMMATRIX matModelViewProj; int iTextureConfig; int iTextureOutput; };
-	struct FFrameConstantBufferUnlit { DirectX::XMMATRIX matModelViewProj; DirectX::XMFLOAT3 color; };
+	//
+	// UI
+	//
+	void UpdateUIState(HWND hwnd);
+	void DrawProfilerWindow();
+	void DrawSceneControlsWindow();
+	void DrawPostProcessControlsWindow();
 
+	//
+	// RENDER HELPERS
+	//
 	void                            DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh);
 	void                            DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView::FShadowView& shadowView);
 
@@ -540,7 +548,16 @@ private:
 	// Busy waits until render thread catches up with update thread
 	void                            WaitUntilRenderingFinishes();
 
+	// temp data
+	struct FFrameConstantBuffer { DirectX::XMMATRIX matModelViewProj; };
+	struct FFrameConstantBuffer2 { DirectX::XMMATRIX matModelViewProj; int iTextureConfig; int iTextureOutput; };
+	struct FFrameConstantBufferUnlit { DirectX::XMMATRIX matModelViewProj; DirectX::XMFLOAT3 color; };
 
+// ------------------------------------------------------------------------------------------------------
+//
+// VQENGINE STATIC
+// 
+// ------------------------------------------------------------------------------------------------------
 private:
 	// Reads EngineSettings.ini from next to the executable and returns a 
 	// FStartupParameters struct as it readily has override booleans for engine settings

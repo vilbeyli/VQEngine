@@ -1056,8 +1056,6 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBu
 
 		pCmd->DrawIndexedInstanced(3, 1, 0, 0, 0);
 	}
-
-	mpScene->RenderUI(mpWinMain->GetWidth(), mpWinMain->GetHeight());
 	{
 		SCOPED_GPU_MARKER(pCmd, "UI");
 
@@ -1205,3 +1203,4 @@ HRESULT VQEngine::PresentFrame(FWindowRenderContext& ctx)
 	}
 	return hr;
 }
+

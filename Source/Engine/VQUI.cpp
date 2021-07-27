@@ -19,13 +19,28 @@
 #include "VQEngine.h"
 #include "GPUMarker.h"
 
-#include "Libs/imgui/imgui.h"
+#include "VQUtils/Source/utils.h"
 
-#include "../Renderer/Renderer.h"
-#include "../Renderer/Device.h"
-#include "../Renderer/ResourceHeaps.h"
-#include "../Renderer/Buffer.h"
-#include "../Renderer/Libs/D3DX12/d3dx12.h"
+#include "Libs/imgui/imgui.h"
+// To use the 'disabled UI state' functionality (ImGuiItemFlags_Disabled), include internal header
+// https://github.com/ocornut/imgui/issues/211#issuecomment-339241929
+#include "Libs/imgui/imgui_internal.h"
+static void BeginDisabledUIState(bool bEnable)
+{
+    if (!bEnable)
+    {
+        ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.5f);
+    }
+}
+static void EndDisabledUIState(bool bEnable)
+{
+    if (!bEnable)
+    {
+        ImGui::PopItemFlag();
+        ImGui::PopStyleVar();
+    }
+}
 
 struct VERTEX_CONSTANT_BUFFER
 {
@@ -105,3 +120,89 @@ void VQEngine::ExitUI()
 {
     ImGui::DestroyContext(mpImGuiContext);
 }
+
+
+
+void VQEngine::UpdateUIState(HWND hwnd)
+{
+    SCOPED_CPU_MARKER_C("UpdateUIState()", 0xFF007777);
+
+    ImGuiIO& io = ImGui::GetIO();
+
+    // Setup display size (every frame to accommodate for window resizing)
+    RECT rect;
+    GetClientRect(hwnd, &rect);
+    io.DisplaySize = ImVec2((float)(rect.right - rect.left), (float)(rect.bottom - rect.top));
+
+    // Read keyboard modifiers inputs
+    io.KeyCtrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+    io.KeyShift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+    io.KeyAlt = (GetKeyState(VK_MENU) & 0x8000) != 0;
+    io.KeySuper = false;
+    // io.KeysDown : filled by WM_KEYDOWN/WM_KEYUP events
+    // io.MousePos : filled by WM_MOUSEMOVE events
+    // io.MouseDown : filled by WM_*BUTTON* events
+    // io.MouseWheel : filled by WM_MOUSEWHEEL events
+
+    // Hide OS mouse cursor if ImGui is drawing it
+    if (io.MouseDrawCursor)
+        SetCursor(NULL);  
+
+    // Start the frame -----------------------------------------------
+    ImGui::NewFrame();
+
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.FrameBorderSize = 1.0f;
+
+
+    DrawProfilerWindow();
+    DrawSceneControlsWindow();
+    DrawPostProcessControlsWindow();
+}
+
+void VQEngine::DrawProfilerWindow()
+{
+    const uint32 W = mpWinMain->GetWidth();
+    const uint32 H = mpWinMain->GetHeight();
+
+    const uint32_t PROFILER_WINDOW_PADDIG_X = 10;
+    const uint32_t PROFILER_WINDOW_PADDIG_Y = 10;
+    const uint32_t PROFILER_WINDOW_SIZE_X = 330;
+    const uint32_t PROFILER_WINDOW_SIZE_Y = 400;
+    const uint32_t PROFILER_WINDOW_POS_X = W - PROFILER_WINDOW_PADDIG_X - PROFILER_WINDOW_SIZE_X;
+    const uint32_t PROFILER_WINDOW_POS_Y = PROFILER_WINDOW_PADDIG_Y;
+
+    ImGui::SetNextWindowPos(ImVec2((float)PROFILER_WINDOW_POS_X, (float)PROFILER_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(PROFILER_WINDOW_SIZE_X, PROFILER_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
+
+    ImGui::Begin("PROFILER (F2)", &mUIState.bWindowVisible_Profiler);
+
+    ImGui::Text("Resolution : %ix%i", W, H);
+    ImGui::Text("API        : %s", "DirectX 12");
+    ImGui::Text("GPU        : %s", mSysInfo.GPUs.back().DeviceName.c_str());
+    ImGui::Text("CPU        : %s", mSysInfo.CPU.DeviceName.c_str());
+    ImGui::Text("RAM        : 0B used of %s", StrUtil::FormatByte(mSysInfo.RAM.TotalPhysicalMemory).c_str());
+    //ImGui::Text("FPS        : %d (%.2f ms)", fps, frameTime_ms);
+    ImGui::End();
+}
+
+void VQEngine::DrawSceneControlsWindow()
+{
+    const uint32_t CONTROLS_WINDOW_POS_X = 10;
+    const uint32_t CONTROLS_WINDOW_POS_Y = 10;
+    const uint32_t CONTROLS_WINDOW_SIZE_X = 350;
+    const uint32_t CONTROLS_WINDOW_SIZE_Y = 650;
+
+    // TODO
+}
+
+void VQEngine::DrawPostProcessControlsWindow()
+{
+    const uint32_t CONTROLS_WINDOW_POS_X = 10;
+    const uint32_t CONTROLS_WINDOW_POS_Y = 10;
+    const uint32_t CONTROLS_WINDOW_SIZE_X = 350;
+    const uint32_t CONTROLS_WINDOW_SIZE_Y = 650;
+
+    // TODO
+}
+

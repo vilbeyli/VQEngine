@@ -31,6 +31,7 @@ class Input;
 struct Material;
 struct FResourceNames;
 struct FFrustumPlaneset;
+struct FUIState;
 
 //------------------------------------------------------
 #define MATERIAL_UNINITIALIZED_VALUE -1.0f
@@ -311,7 +312,7 @@ private: // Derived Scenes shouldn't access these functions
 	void StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene);
 	void OnLoadComplete();
 	void Unload(); // serial-only for now. maybe MT later.
-	void RenderUI(uint32_t W, uint32_t H);
+	void RenderUI(FUIState& UIState, uint32_t W, uint32_t H);
 	void HandleInput(FSceneView& SceneView);
 
 	void GatherSceneLightData(FSceneView& SceneView) const;
