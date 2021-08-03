@@ -272,14 +272,15 @@ void VQEngine::WaitUntilRenderingFinishes(){}
 
 
 // -------------------------------------------------------------------
+#if !VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+constexpr int FRAME_DATA_INDEX = 0;
+#endif
 
 void VQEngine::HandleEngineInput()
 {
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
-#else
-	const int FRAME_DATA_INDEX = 0;
 #endif
 
 	for (decltype(mInputStates)::iterator it = mInputStates.begin(); it != mInputStates.end(); ++it)
@@ -311,19 +312,87 @@ void VQEngine::HandleEngineInput()
 					mEventQueue_VQEToWin_Main.AddItem(std::make_shared<SetMouseCaptureEvent>(hwnd, true, false));
 			}
 		}
+
 		if (pWin == mpWinMain) 
 		{
-			// Graphics Settings Controls
-			if (input.IsKeyTriggered("V"))
-			{
-				auto& SwapChain = mRenderer.GetWindowSwapChain(hwnd);
-				mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetVSyncEvent>(hwnd, !SwapChain.IsVSyncOn()));
-			}
-			if (input.IsKeyTriggered("M"))
-			{
-				mSettings.gfx.bAntiAliasing = !mSettings.gfx.bAntiAliasing;
-				Log::Info("Toggle MSAA: %d", mSettings.gfx.bAntiAliasing);	
-			}
+			HandleMainWindowInput(input, hwnd);
+		}
+
+		HandleUIInput();
+	}
+}
+
+
+void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
+{
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
+	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
+#endif
+	const bool bIsShiftDown = input.IsKeyDown("Shift");
+	//const bool bIsAltDown = input.IsKeyDown("Alt"); // Alt+Z detection doesn't work, TODO: fix
+	const bool bIsAltDown = (GetKeyState(VK_MENU) & 0x8000) != 0; // Alt+Z detection doesn't work, TODO: fix
+
+	// UI
+	auto Toggle = [](bool& b) {b = !b; };
+	if ( (bIsAltDown && input.IsKeyTriggered("Z")) // Alt+Z detection doesn't work, TODO: fix
+		|| (bIsShiftDown && input.IsKeyTriggered("Z"))) // woraround: use shift+z for now
+	{
+		Toggle(mUIState.bHideAllWindows);
+	}
+
+	// Graphics Settings Controls
+	if (input.IsKeyTriggered("V"))
+	{
+		auto& SwapChain = mRenderer.GetWindowSwapChain(hwnd);
+		mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetVSyncEvent>(hwnd, !SwapChain.IsVSyncOn()));
+	}
+	if (input.IsKeyTriggered("M"))
+	{
+		mSettings.gfx.bAntiAliasing = !mSettings.gfx.bAntiAliasing;
+		Log::Info("Toggle MSAA: %d", mSettings.gfx.bAntiAliasing);	
+	}
+
+	if (input.IsKeyTriggered("G"))
+	{
+		FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
+		PPParams.TonemapperParams.ToggleGammaCorrection = PPParams.TonemapperParams.ToggleGammaCorrection == 1 ? 0 : 1;
+		Log::Info("Tonemapper: ApplyGamma=%d (SDR-only)", PPParams.TonemapperParams.ToggleGammaCorrection);
+	}
+
+	// Scene switching
+	if (bIsShiftDown)
+	{
+		const int NumScenes = static_cast<int>(mResourceNames.mSceneNames.size());
+		if (input.IsKeyTriggered("PageUp") && !mbLoadingLevel)  { mIndex_SelectedScene = CircularIncrement(mIndex_SelectedScene, NumScenes);     this->StartLoadingScene(mIndex_SelectedScene); }
+		if (input.IsKeyTriggered("PageDown") && !mbLoadingLevel){ mIndex_SelectedScene = CircularDecrement(mIndex_SelectedScene, NumScenes - 1); this->StartLoadingScene(mIndex_SelectedScene); }
+		if (input.IsKeyTriggered("R") && !mbLoadingLevel)       { this->StartLoadingScene(mIndex_SelectedScene); } // reload scene
+	}
+	if (input.IsKeyTriggered("1") && !mbLoadingLevel) { mIndex_SelectedScene = 0; this->StartLoadingScene(mIndex_SelectedScene); }
+	if (input.IsKeyTriggered("2") && !mbLoadingLevel) { mIndex_SelectedScene = 1; this->StartLoadingScene(mIndex_SelectedScene); }
+	if (input.IsKeyTriggered("3") && !mbLoadingLevel) { mIndex_SelectedScene = 2; this->StartLoadingScene(mIndex_SelectedScene); }
+	if (input.IsKeyTriggered("4") && !mbLoadingLevel) { mIndex_SelectedScene = 3; this->StartLoadingScene(mIndex_SelectedScene); }
+}
+
+static void Toggle(bool& b) { b = !b; }
+
+void VQEngine::HandleUIInput()
+{
+	for (decltype(mInputStates)::iterator it = mInputStates.begin(); it != mInputStates.end(); ++it)
+	{
+		HWND   hwnd = it->first;
+		Input& input = it->second;
+		auto& pWin = this->GetWindow(hwnd);
+		const bool bIsShiftDown = input.IsKeyDown("Shift");
+
+		if (pWin == mpWinMain)
+		{
+			if (input.IsKeyTriggered("F1")) Toggle(mUIState.bWindowVisible_SceneControls);
+			if (input.IsKeyTriggered("F2")) Toggle(mUIState.bWindowVisible_Profiler);
+			if (input.IsKeyTriggered("F3")) Toggle(mUIState.bWindowVisible_PostProcessControls);
+			if (input.IsKeyTriggered("F4")) Toggle(mUIState.bWindowVisible_DebugPanel);
+			if (input.IsKeyTriggered("F5")) Toggle(mUIState.bWindowVisible_GraphicsSettingsPanel);
+
 			if (input.IsKeyTriggered("B"))
 			{
 				WaitUntilRenderingFinishes();
@@ -331,25 +400,6 @@ void VQEngine::HandleEngineInput()
 				PPParams.bEnableCAS = !PPParams.bEnableCAS;
 				Log::Info("Toggle FFX-CAS: %d", PPParams.bEnableCAS);
 			}
-			if (input.IsKeyTriggered("G"))
-			{
-				FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
-				PPParams.TonemapperParams.ToggleGammaCorrection = PPParams.TonemapperParams.ToggleGammaCorrection == 1 ? 0 : 1;
-				Log::Info("Tonemapper: ApplyGamma=%d (SDR-only)", PPParams.TonemapperParams.ToggleGammaCorrection);
-			}
-
-			// Scene switching
-			if (bIsShiftDown)
-			{
-				const int NumScenes = static_cast<int>(mResourceNames.mSceneNames.size());
-				if (input.IsKeyTriggered("PageUp") && !mbLoadingLevel)  { mIndex_SelectedScene = CircularIncrement(mIndex_SelectedScene, NumScenes);     this->StartLoadingScene(mIndex_SelectedScene); }
-				if (input.IsKeyTriggered("PageDown") && !mbLoadingLevel){ mIndex_SelectedScene = CircularDecrement(mIndex_SelectedScene, NumScenes - 1); this->StartLoadingScene(mIndex_SelectedScene); }
-				if (input.IsKeyTriggered("R") && !mbLoadingLevel)       { this->StartLoadingScene(mIndex_SelectedScene); } // reload scene
-			}
-			if (input.IsKeyTriggered("1") && !mbLoadingLevel) { mIndex_SelectedScene = 0; this->StartLoadingScene(mIndex_SelectedScene); }
-			if (input.IsKeyTriggered("2") && !mbLoadingLevel) { mIndex_SelectedScene = 1; this->StartLoadingScene(mIndex_SelectedScene); }
-			if (input.IsKeyTriggered("3") && !mbLoadingLevel) { mIndex_SelectedScene = 2; this->StartLoadingScene(mIndex_SelectedScene); }
-			if (input.IsKeyTriggered("4") && !mbLoadingLevel) { mIndex_SelectedScene = 3; this->StartLoadingScene(mIndex_SelectedScene); }
 		}
 	}
 }
@@ -605,13 +655,14 @@ MeshID VQEngine::GetBuiltInMeshID(const std::string& MeshName) const
 
 void VQEngine::StartLoadingEnvironmentMap(int IndexEnvMap)
 {
+	assert(IndexEnvMap >= 0 && IndexEnvMap < mResourceNames.mEnvironmentMapPresetNames.size());
 	this->WaitUntilRenderingFinishes();
 	mAppState = EAppState::LOADING;
 	mbLoadingEnvironmentMap = true;
 	mWorkers_TextureLoading.AddTask([&, IndexEnvMap]()
-		{
-			LoadEnvironmentMap(mResourceNames.mEnvironmentMapPresetNames[IndexEnvMap]);
-		});
+	{
+		LoadEnvironmentMap(mResourceNames.mEnvironmentMapPresetNames[IndexEnvMap]);
+	});
 }
 
 void VQEngine::StartLoadingScene(int IndexScene)

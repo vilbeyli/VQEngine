@@ -21,4 +21,10 @@ struct FUIState
 	bool bWindowVisible_Profiler;
 	bool bWindowVisible_SceneControls;
 	bool bWindowVisible_PostProcessControls;
+	bool bWindowVisible_DebugPanel;
+	bool bWindowVisible_GraphicsSettingsPanel;
+
+	bool bHideAllWindows;
+	bool bUIOnSeparateWindow;
+	bool bProfiler_ShowEngineStats;
 };

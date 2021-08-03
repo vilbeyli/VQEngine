@@ -93,7 +93,7 @@ void VQEngine::SimulationThread_Tick(const float dt)
 	// ui
 	if (!(mbLoadingLevel || mbLoadingEnvironmentMap))
 	{
-		UpdateUIState(mpWinMain->GetHWND());
+		UpdateUIState(mpWinMain->GetHWND(), dt);
 	}
 
 	// render

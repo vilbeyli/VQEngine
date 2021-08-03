@@ -144,16 +144,25 @@ struct FSceneShadowView
 
 struct FSceneStats
 {
+	// lights -----------------------
 	uint NumDirectionalLights;
 	uint NumStaticLights;
 	uint NumDynamicLights;
 	uint NumStationaryLights;
-
-	uint NumMeshRenderCommands;
-	uint NumBoundingBoxRenderCommands;
+	uint NumSpotLights;
+	uint NumPointLights;
+	uint NumDisabledSpotLights;
+	uint NumDisabledPointLights;
+	uint NumDisabledDirectionalLights;
 	uint NumShadowingPointLights;
 	uint NumShadowingSpotLights;
 
+	// render cmds ------------------
+	uint NumMeshRenderCommands;
+	uint NumShadowMeshRenderCommands;
+	uint NumBoundingBoxRenderCommands;
+
+	// scene ------------------------
 	uint NumMeshes;
 	uint NumModels;
 	uint NumMaterials;
@@ -310,8 +319,9 @@ public:
 
 	inline const Camera& GetActiveCamera() const { return mCameras[mIndex_SelectedCamera]; }
 	inline       Camera& GetActiveCamera() { return mCameras[mIndex_SelectedCamera]; }
-	inline       int&    GetActiveCameraIndex() { return mIndex_SelectedCamera; }
 
+	inline       int&    GetActiveCameraIndex() { return mIndex_SelectedCamera; }
+	inline       int&    GetActiveEnvironmentMapPresetIndex() { return mIndex_ActiveEnvironmentMapPreset; }
 
 	// Mesh, Model, GameObj management
 	//TransformID CreateTransform(Transform** ppTransform);

@@ -153,21 +153,62 @@ FSceneStats Scene::GetSceneRenderStats(int FRAME_DATA_INDEX) const
 	const FSceneView& view = mFrameSceneViews[FRAME_DATA_INDEX];
 	const FSceneShadowView& shadowView = mFrameShadowViews[FRAME_DATA_INDEX];
 
-	stats.NumDirectionalLights = mDirectionalLight.bEnabled ? 1 : 0;
 	stats.NumStaticLights      = mLightsStatic.size();
 	stats.NumDynamicLights     = mLightsDynamic.size();
 	stats.NumStationaryLights  = mLightsStationary.size();
+	stats.NumShadowingPointLights = shadowView.NumPointShadowViews;
+	stats.NumShadowingSpotLights = shadowView.NumSpotShadowViews;
+	auto fnCountLights = [&stats](const std::vector<Light>& vLights)
+	{
+		for (const Light& l : vLights)
+		{
+			switch (l.Type)
+			{
+			case Light::EType::DIRECTIONAL: 
+				++stats.NumDirectionalLights;
+				if (!l.bEnabled) ++stats.NumDisabledDirectionalLights;
+				break;
+			case Light::EType::POINT: 
+				++stats.NumPointLights; 
+				if (!l.bEnabled) ++stats.NumDisabledPointLights;
+				break;
+			case Light::EType::SPOT: 
+				++stats.NumSpotLights; 
+				if (!l.bEnabled) ++stats.NumDisabledSpotLights;
+				break;
 
-	stats.NumMeshRenderCommands        = view.meshRenderCommands.size() + view.lightRenderCommands.size() + view.lightBoundsRenderCommands.size() + view.boundingBoxRenderCommands.size();
+			//case Light::EType::DIRECTIONAL: break;
+			default:
+				//assert(false); // Area lights are WIP atm, so will hit this on Default scene, as defined in the Default.xml
+				break;
+			}
+		}
+	};
+	fnCountLights(mLightsStationary);
+	fnCountLights(mLightsDynamic);
+	fnCountLights(mLightsStatic);
+
+
+	stats.NumMeshRenderCommands        = view.meshRenderCommands.size() + view.lightRenderCommands.size() + view.lightBoundsRenderCommands.size() /*+ view.boundingBoxRenderCommands.size()*/;
 	stats.NumBoundingBoxRenderCommands = view.boundingBoxRenderCommands.size();
-	stats.NumShadowingPointLights      = shadowView.NumPointShadowViews;
-	stats.NumShadowingSpotLights       = shadowView.NumSpotShadowViews;
+	auto fnCountShadowMeshRenderCommands = [](const FSceneShadowView& shadowView) -> uint
+	{
+		uint NumShadowRenderCmds = 0;
+		for (int i = 0; i < shadowView.NumPointShadowViews; ++i)
+		for (int face = 0; face < 6; ++face)
+			NumShadowRenderCmds += shadowView.ShadowViews_Point[i * 6 + face].meshRenderCommands.size();
+		for (int i = 0; i < shadowView.NumSpotShadowViews; ++i)
+			NumShadowRenderCmds += shadowView.ShadowViews_Spot[i].meshRenderCommands.size();
+		NumShadowRenderCmds += shadowView.ShadowView_Directional.meshRenderCommands.size();
+		return NumShadowRenderCmds;
+	};
+	stats.NumShadowMeshRenderCommands = fnCountShadowMeshRenderCommands(shadowView);
 	
-	stats.NumMeshes    = this->mMeshes.size();
-	stats.NumModels    = this->mModels.size();
-	stats.NumMaterials = this->mMaterials.size();
-	stats.NumObjects   = this->mpObjects.size();
-	stats.NumCameras   = this->mCameras.size();
+	stats.NumMeshes    = static_cast<uint>(this->mMeshes.size());
+	stats.NumModels    = static_cast<uint>(this->mModels.size());
+	stats.NumMaterials = static_cast<uint>(this->mMaterials.size());
+	stats.NumObjects   = static_cast<uint>(this->mpObjects.size());
+	stats.NumCameras   = static_cast<uint>(this->mCameras.size());
 
 	return stats;
 }
@@ -257,7 +298,7 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 	, mFrameShadowViews(1)
 #endif
 	, mIndex_SelectedCamera(0)
-	, mIndex_ActiveEnvironmentMapPreset(0)
+	, mIndex_ActiveEnvironmentMapPreset(-1)
 	, mGameObjectPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
 	, mTransformPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
 	, mResourceNames(engine.GetResourceNames())
@@ -423,7 +464,6 @@ void Scene::HandleInput(FSceneView& SceneView)
 				: CircularIncrement(mIndex_SelectedCamera, NumCameras);
 		}
 	}
-
 	if (mInput.IsKeyTriggered("L"))
 	{
 		ToggleBool(SceneView.sceneParameters.bDrawLightBounds);
@@ -434,6 +474,13 @@ void Scene::HandleInput(FSceneView& SceneView)
 		else             ToggleBool(SceneView.sceneParameters.bDrawMeshBoundingBoxes);
 	}
 
+	
+	// if there's no EnvMap selected and the user wants the change the env map,
+	// temporarily assign 0 so that Circular*crement() can work
+	if ((mInput.IsKeyTriggered("PageUp")|| mInput.IsKeyTriggered("PageDown")) && mIndex_ActiveEnvironmentMapPreset == -1)
+	{
+		mIndex_ActiveEnvironmentMapPreset = 0;
+	}
 	if (mInput.IsKeyTriggered("PageUp"))
 	{
 		mIndex_ActiveEnvironmentMapPreset = CircularIncrement(mIndex_ActiveEnvironmentMapPreset, NumEnvMaps);
@@ -457,11 +504,13 @@ void Scene::GatherSceneLightData(FSceneView& SceneView) const
 
 	int iGPUSpot = 0;  int iGPUSpotShadow = 0;
 	int iGPUPoint = 0; int iGPUPointShadow = 0;
-	auto fnGatherLightData = [&](const std::vector<Light>& vLights)
+	auto fnGatherLightData = [&](const std::vector<Light>& vLights, Light::EMobility eLightMobility)
 	{
 		for (const Light& l : vLights)
 		{
 			if (!l.bEnabled) continue;
+			if (l.Mobility != eLightMobility) continue;
+
 			switch (l.Type)
 			{
 			case Light::EType::DIRECTIONAL:
@@ -488,9 +537,9 @@ void Scene::GatherSceneLightData(FSceneView& SceneView) const
 
 		}
 	};
-	fnGatherLightData(mLightsStatic);
-	fnGatherLightData(mLightsStationary);
-	fnGatherLightData(mLightsDynamic);
+	fnGatherLightData(mLightsStatic, Light::EMobility::STATIC);
+	fnGatherLightData(mLightsStationary, Light::EMobility::STATIONARY);
+	fnGatherLightData(mLightsDynamic, Light::EMobility::DYNAMIC);
 
 	data.numPointCasters = iGPUPointShadow;
 	data.numPointLights = iGPUPoint;

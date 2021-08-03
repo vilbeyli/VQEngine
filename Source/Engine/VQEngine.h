@@ -202,6 +202,12 @@ struct FResourceNames
 	std::vector<std::string>    mSceneNames;
 };
 
+struct FRenderStats
+{
+	uint NumDraws;
+	uint NumDispatches;
+};
+
 //
 // VQENGINE
 //
@@ -407,7 +413,7 @@ private:
 	std::atomic<uint64>             mNumRenderLoopsExecuted;
 	std::atomic<uint64>             mNumUpdateLoopsExecuted;
 #else
-	uint64							mNumSimulationTicks;
+	uint64                          mNumSimulationTicks;
 #endif
 	std::atomic<bool>               mbLoadingLevel;
 	std::atomic<bool>               mbLoadingEnvironmentMap;
@@ -425,7 +431,8 @@ private:
 	int                             mIndex_SelectedScene;
 	std::unique_ptr<Scene>          mpScene;
 	ImGuiContext*                   mpImGuiContext;
-	FUIState						mUIState;
+	FUIState                        mUIState;
+	FRenderStats                    mRenderStats;
 
 #if 0
 	RenderingResourcesLookup_t      mRenderingResources;
@@ -511,10 +518,12 @@ private:
 	//
 	// UI
 	//
-	void UpdateUIState(HWND hwnd);
-	void DrawProfilerWindow();
-	void DrawSceneControlsWindow();
-	void DrawPostProcessControlsWindow();
+	void UpdateUIState(HWND hwnd, float dt);
+	void DrawProfilerWindow(const FSceneStats& FrameStats, float dt);
+	void DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderParameters& SceneRenderParams);
+	void DrawPostProcessControlsWindow(FPostProcessParameters& PPParams);
+	void DrawDebugPanelWindow(FSceneRenderParameters& SceneParams);
+	void DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams);
 
 	//
 	// RENDER HELPERS
@@ -534,6 +543,8 @@ private:
 	void                            UnregisterWindowForInput(const std::unique_ptr<Window>& pWnd);
 
 	void                            HandleEngineInput();
+	void                            HandleMainWindowInput(Input& input, HWND hwnd);
+	void                            HandleUIInput();
 	
 	void                            DispatchHDRSwapchainTransitionEvents(HWND hwnd);
 
