@@ -91,6 +91,7 @@ set (CoreFiles
     "Source/Engine/Core/Input.h"
     "Source/Engine/Core/Events.h"
     "Source/Engine/Core/Types.h"
+    "Source/Engine/Core/RenderCommands.h"
     "Source/Engine/Core/Memory.h"
 
     "Source/Engine/Core/Platform.cpp"
@@ -116,6 +117,7 @@ set (SceneFiles
     "Source/Engine/Scene/Material.h"
     "Source/Engine/Scene/Model.h"
     "Source/Engine/Scene/GameObject.h"
+    "Source/Engine/Scene/Serialization.h"
 
     "Source/Engine/Scene/Scene.cpp"
     "Source/Engine/Scene/SceneLoading.cpp"

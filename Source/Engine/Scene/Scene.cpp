@@ -147,6 +147,31 @@ Model& Scene::GetModel(ModelID id)
 	return mModels.at(id);
 }
 
+FSceneStats Scene::GetSceneRenderStats(int FRAME_DATA_INDEX) const
+{
+	FSceneStats stats = {};
+	const FSceneView& view = mFrameSceneViews[FRAME_DATA_INDEX];
+	const FSceneShadowView& shadowView = mFrameShadowViews[FRAME_DATA_INDEX];
+
+	stats.NumDirectionalLights = mDirectionalLight.bEnabled ? 1 : 0;
+	stats.NumStaticLights      = mLightsStatic.size();
+	stats.NumDynamicLights     = mLightsDynamic.size();
+	stats.NumStationaryLights  = mLightsStationary.size();
+
+	stats.NumMeshRenderCommands        = view.meshRenderCommands.size() + view.lightRenderCommands.size() + view.lightBoundsRenderCommands.size() + view.boundingBoxRenderCommands.size();
+	stats.NumBoundingBoxRenderCommands = view.boundingBoxRenderCommands.size();
+	stats.NumShadowingPointLights      = shadowView.NumPointShadowViews;
+	stats.NumShadowingSpotLights       = shadowView.NumSpotShadowViews;
+	
+	stats.NumMeshes    = this->mMeshes.size();
+	stats.NumModels    = this->mModels.size();
+	stats.NumMaterials = this->mMaterials.size();
+	stats.NumObjects   = this->mpObjects.size();
+	stats.NumCameras   = this->mCameras.size();
+
+	return stats;
+}
+
 
 //-------------------------------------------------------------------------------
 //
@@ -330,7 +355,15 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, int FRAME_DATA_INDEX)
 
 
 
-const FSceneView& Scene::GetSceneView(int FRAME_DATA_INDEX) const 
+FSceneView& Scene::GetSceneView(int FRAME_DATA_INDEX)
+{
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	return mFrameSceneViews[FRAME_DATA_INDEX];
+#else
+	return mFrameSceneViews[0];
+#endif
+}
+const FSceneView& Scene::GetSceneView(int FRAME_DATA_INDEX) const
 {
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	return mFrameSceneViews[FRAME_DATA_INDEX]; 

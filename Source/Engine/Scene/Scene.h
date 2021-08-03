@@ -24,59 +24,25 @@
 #include "Light.h"
 #include "Transform.h"
 #include "GameObject.h"
+#include "Serialization.h"
 #include "../Core/Memory.h"
+#include "../Core/RenderCommands.h"
 #include "../AssetLoader.h"
 
+// fwd decl
 class Input;
 struct Material;
 struct FResourceNames;
 struct FFrustumPlaneset;
 struct FUIState;
 
-//------------------------------------------------------
-#define MATERIAL_UNINITIALIZED_VALUE -1.0f
-struct FMaterialRepresentation
-{
-	std::string Name;
-	DirectX::XMFLOAT3 DiffuseColor;
-	float Alpha             = MATERIAL_UNINITIALIZED_VALUE;
-	DirectX::XMFLOAT3 EmissiveColor;
-	float EmissiveIntensity = MATERIAL_UNINITIALIZED_VALUE;
-	float Metalness         = MATERIAL_UNINITIALIZED_VALUE;
-	float Roughness         = MATERIAL_UNINITIALIZED_VALUE;
-	std::string DiffuseMapFilePath  ;
-	std::string NormalMapFilePath   ;
-	std::string EmissiveMapFilePath ;
-	std::string AlphaMaskMapFilePath;
-	std::string MetallicMapFilePath ;
-	std::string RoughnessMapFilePath;
-	std::string AOMapFilePath;
+// typedefs
+using MeshLookup_t     = std::unordered_map<MeshID, Mesh>;
+using ModelLookup_t    = std::unordered_map<ModelID, Model>;
+using MaterialLookup_t = std::unordered_map<MaterialID, Material>;
 
-	FMaterialRepresentation();
-};
-struct FGameObjectRepresentation
-{
-	Transform tf;
-	
-	std::string ModelName;
-	std::string ModelFilePath;
-	
-	std::string BuiltinMeshName;
-	std::string MaterialName;
-};
-struct FSceneRepresentation
-{
-	std::string SceneName;
-	std::string EnvironmentMapPreset;
 
-	std::vector<FMaterialRepresentation>   Materials;
-	std::vector<FCameraParameters>         Cameras;
-	std::vector<FGameObjectRepresentation> Objects;
-	std::vector<Light>                     Lights;
-
-	char loadSuccess = 0;
-};
-//------------------------------------------------------
+//--- Pass Parameters ---
 struct FPostProcessParameters
 {
 	struct FTonemapper
@@ -122,30 +88,7 @@ struct FSceneRenderParameters
 	float fAmbientLightingFactor = 0.055f;
 	bool bScreenSpaceAO = true;
 };
-struct FMeshRenderCommandBase
-{
-	MeshID meshID = INVALID_ID;
-	DirectX::XMMATRIX matWorldTransformation;
-};
-struct FMeshRenderCommand : public FMeshRenderCommandBase
-{
-	MaterialID matID  = INVALID_ID;
-	DirectX::XMMATRIX matNormalTransformation; //ID ?
-	std::string ModelName;
-	std::string MaterialName;
-};
-struct FShadowMeshRenderCommand : public FMeshRenderCommandBase
-{
-	DirectX::XMMATRIX matWorldViewProj;
-	MaterialID matID = INVALID_ID;
-	std::string ModelName;
-};
-struct FWireframeRenderCommand : public FMeshRenderCommandBase
-{
-	DirectX::XMFLOAT3 color;
-};
-using FLightRenderCommand = FWireframeRenderCommand;
-using FBoundingBoxRenderCommand = FWireframeRenderCommand;
+//--- Pass Parameters ---
 
 struct FSceneView
 {
@@ -199,9 +142,24 @@ struct FSceneShadowView
 	int NumPointShadowViews;
 };
 
-using MeshLookup_t = std::unordered_map<MeshID, Mesh>;
-using ModelLookup_t = std::unordered_map<ModelID, Model>;
-using MaterialLookup_t = std::unordered_map<MaterialID, Material>;
+struct FSceneStats
+{
+	uint NumDirectionalLights;
+	uint NumStaticLights;
+	uint NumDynamicLights;
+	uint NumStationaryLights;
+
+	uint NumMeshRenderCommands;
+	uint NumBoundingBoxRenderCommands;
+	uint NumShadowingPointLights;
+	uint NumShadowingSpotLights;
+
+	uint NumMeshes;
+	uint NumModels;
+	uint NumMaterials;
+	uint NumObjects;
+	uint NumCameras;
+};
 
 class SceneBoundingBoxHierarchy
 {
@@ -344,13 +302,15 @@ public:
 		, VQRenderer& renderer
 	);
 
+	      FSceneView&       GetSceneView (int FRAME_DATA_INDEX);
 	const FSceneView&       GetSceneView (int FRAME_DATA_INDEX) const;
 	const FSceneShadowView& GetShadowView(int FRAME_DATA_INDEX) const;
 	      FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX)       ;
 	const FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX) const ;
 
 	inline const Camera& GetActiveCamera() const { return mCameras[mIndex_SelectedCamera]; }
-	inline       Camera& GetActiveCamera()       { return mCameras[mIndex_SelectedCamera]; }
+	inline       Camera& GetActiveCamera() { return mCameras[mIndex_SelectedCamera]; }
+	inline       int&    GetActiveCameraIndex() { return mIndex_SelectedCamera; }
 
 
 	// Mesh, Model, GameObj management
@@ -364,6 +324,7 @@ public:
 
 	Material&  GetMaterial(MaterialID ID);
 	Model&     GetModel(ModelID);
+	FSceneStats GetSceneRenderStats(int FRAME_DATA_INDEX) const;
 
 //----------------------------------------------------------------------------------------------------------------
 // SCENE DATA
