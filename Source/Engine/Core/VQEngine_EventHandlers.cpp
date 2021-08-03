@@ -100,6 +100,10 @@ void VQEngine::SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse)
 
 	if(mInputStates.find(hwnd) != mInputStates.end())
 		mInputStates.at(hwnd).SetInputBypassing(!bCaptureMouse);
+	else
+	{
+		Log::Error("Warning: couldn't find InputState for hwnd=0x%x", hwnd);
+	}
 	
 	pWin->SetMouseCapture(bCaptureMouse);
 
@@ -422,10 +426,10 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 
 void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
 {
-	const SetVSyncEvent*         pToggleFSEvent = static_cast<const SetVSyncEvent*>(pEvent);
-	HWND                                   hwnd = pToggleFSEvent->hwnd;
-	const bool                      bVsyncState = pToggleFSEvent->bToggleValue;
-	SwapChain&                        Swapchain = mRenderer.GetWindowSwapChain(pToggleFSEvent->hwnd);
+	const SetVSyncEvent*      pToggleVSyncEvent = static_cast<const SetVSyncEvent*>(pEvent);
+	HWND                                   hwnd = pToggleVSyncEvent->hwnd;
+	const bool                      bVsyncState = pToggleVSyncEvent->bToggleValue;
+	SwapChain&                        Swapchain = mRenderer.GetWindowSwapChain(pToggleVSyncEvent->hwnd);
 	const FWindowSettings&          WndSettings = GetWindowSettings(hwnd);
 	std::unique_ptr<Window>&               pWnd = GetWindow(hwnd);
 	const bool   bExclusiveFullscreenTransition = WndSettings.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN;
@@ -461,6 +465,7 @@ void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
 		Swapchain.EnsureSwapChainColorSpace(Swapchain.GetFormat() == DXGI_FORMAT_R16G16B16A16_FLOAT ? _16 : _8, false);
 	}
 
+	mSettings.gfx.bVsync = bVsyncState;
 	Log::Info("Toggle VSync: %d", bVsyncState);
 }
 
