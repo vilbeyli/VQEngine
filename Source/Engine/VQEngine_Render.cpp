@@ -1032,7 +1032,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 			}
 			if (SceneShadowView.NumPointShadowViews > 0)
 			{
-				for (int iPoint = 0; iPoint < SceneShadowView.NumPointShadowViews; ++iPoint)
+				for (uint iPoint = 0; iPoint < SceneShadowView.NumPointShadowViews; ++iPoint)
 				{
 					const size_t iPointWorker = iCmdPointLightsThread + iPoint;
 					ID3D12GraphicsCommandList* pCmd_Point = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iPointWorker);

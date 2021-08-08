@@ -96,6 +96,27 @@ enum EDisplayCurve
 	, NUM_DISPLAY_CURVES
 };
 
+inline std::string GetColorSpaceString(EColorSpace cs)
+{
+	switch (cs)
+	{
+	case REC_709 : return "Rec709";
+	case REC_2020: return "Rec2020";
+	case DCI_P3  : return "DCI P3";
+	}
+	return "";
+}
+inline std::string GetDisplayCurveString(EDisplayCurve dc)
+{
+	switch (dc)
+	{
+	case sRGB: return "sRGB";
+	case ST2084: return "ST2084 (PQ)";
+	case Linear: return "scRGB";
+	}
+	return "";
+}
+
 struct FDisplayHDRProfile
 {
 	std::string DisplayName;

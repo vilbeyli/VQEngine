@@ -153,11 +153,11 @@ FSceneStats Scene::GetSceneRenderStats(int FRAME_DATA_INDEX) const
 	const FSceneView& view = mFrameSceneViews[FRAME_DATA_INDEX];
 	const FSceneShadowView& shadowView = mFrameShadowViews[FRAME_DATA_INDEX];
 
-	stats.NumStaticLights      = mLightsStatic.size();
-	stats.NumDynamicLights     = mLightsDynamic.size();
-	stats.NumStationaryLights  = mLightsStationary.size();
+	stats.NumStaticLights         = static_cast<uint>(mLightsStatic.size()    );
+	stats.NumDynamicLights        = static_cast<uint>(mLightsDynamic.size()   );
+	stats.NumStationaryLights     = static_cast<uint>(mLightsStationary.size());
 	stats.NumShadowingPointLights = shadowView.NumPointShadowViews;
-	stats.NumShadowingSpotLights = shadowView.NumSpotShadowViews;
+	stats.NumShadowingSpotLights  = shadowView.NumSpotShadowViews;
 	auto fnCountLights = [&stats](const std::vector<Light>& vLights)
 	{
 		for (const Light& l : vLights)
@@ -189,17 +189,17 @@ FSceneStats Scene::GetSceneRenderStats(int FRAME_DATA_INDEX) const
 	fnCountLights(mLightsStatic);
 
 
-	stats.NumMeshRenderCommands        = view.meshRenderCommands.size() + view.lightRenderCommands.size() + view.lightBoundsRenderCommands.size() /*+ view.boundingBoxRenderCommands.size()*/;
-	stats.NumBoundingBoxRenderCommands = view.boundingBoxRenderCommands.size();
+	stats.NumMeshRenderCommands        = static_cast<uint>(view.meshRenderCommands.size() + view.lightRenderCommands.size() + view.lightBoundsRenderCommands.size() /*+ view.boundingBoxRenderCommands.size()*/);
+	stats.NumBoundingBoxRenderCommands = static_cast<uint>(view.boundingBoxRenderCommands.size());
 	auto fnCountShadowMeshRenderCommands = [](const FSceneShadowView& shadowView) -> uint
 	{
 		uint NumShadowRenderCmds = 0;
-		for (int i = 0; i < shadowView.NumPointShadowViews; ++i)
-		for (int face = 0; face < 6; ++face)
-			NumShadowRenderCmds += shadowView.ShadowViews_Point[i * 6 + face].meshRenderCommands.size();
-		for (int i = 0; i < shadowView.NumSpotShadowViews; ++i)
-			NumShadowRenderCmds += shadowView.ShadowViews_Spot[i].meshRenderCommands.size();
-		NumShadowRenderCmds += shadowView.ShadowView_Directional.meshRenderCommands.size();
+		for (uint i = 0; i < shadowView.NumPointShadowViews; ++i)
+		for (uint face = 0; face < 6u; ++face)
+			NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowViews_Point[i * 6 + face].meshRenderCommands.size());
+		for (uint i = 0; i < shadowView.NumSpotShadowViews; ++i)
+			NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowViews_Spot[i].meshRenderCommands.size());
+		NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowView_Directional.meshRenderCommands.size());
 		return NumShadowRenderCmds;
 	};
 	stats.NumShadowMeshRenderCommands = fnCountShadowMeshRenderCommands(shadowView);

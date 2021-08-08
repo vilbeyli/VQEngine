@@ -145,7 +145,7 @@ void VQEngine::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuff
 		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(7));
 	}
 	
-	for (int i = 0; i < SceneShadowView.NumSpotShadowViews; ++i)
+	for (uint i = 0; i < SceneShadowView.NumSpotShadowViews; ++i)
 	{
 		const FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowViews_Spot[i];
 

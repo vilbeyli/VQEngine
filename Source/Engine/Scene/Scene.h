@@ -138,8 +138,8 @@ struct FSceneShadowView
 	std::array<FPointLightLinearDepthParams, NUM_SHADOWING_LIGHTS__POINT> PointLightLinearDepthParams;
 	FShadowView ShadowView_Directional;
 
-	int NumSpotShadowViews;
-	int NumPointShadowViews;
+	uint NumSpotShadowViews;
+	uint NumPointShadowViews;
 };
 
 struct FSceneStats
@@ -319,6 +319,7 @@ public:
 
 	inline const Camera& GetActiveCamera() const { return mCameras[mIndex_SelectedCamera]; }
 	inline       Camera& GetActiveCamera() { return mCameras[mIndex_SelectedCamera]; }
+	inline       size_t  GetNumSceneCameras() const { return mCameras.size(); }
 
 	inline       int&    GetActiveCameraIndex() { return mIndex_SelectedCamera; }
 	inline       int&    GetActiveEnvironmentMapPresetIndex() { return mIndex_ActiveEnvironmentMapPreset; }
