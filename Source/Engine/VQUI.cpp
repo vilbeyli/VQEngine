@@ -266,6 +266,17 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 		if (mUIState.bWindowVisible_DebugPanel)            DrawDebugPanelWindow(SceneParams);
 		if (mUIState.bWindowVisible_GraphicsSettingsPanel) DrawGraphicsSettingsWindow(SceneParams);
 	}
+
+	// If we fired an event that would trigget a loading level,
+	// i.e. changing the scene or the environment map, call ImGui::EndFrame()
+	// here to prevent calling NewFrame(); before Render/EndFrame is called.
+	// Render() won't be called if we're changing the level because the appstate
+	// will cause VQengine rendering the loading screen (which doesn't call ImGui::Render())
+	// and ImGui crashing on double NewFrame().
+	if (!mQueue_SceneLoad.empty() || mbLoadingEnvironmentMap.load())
+	{
+		ImGui::EndFrame();
+	}
 }
 
 // ============================================================================================================================
@@ -544,24 +555,14 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 
 	if (ImGui::Combo("Scene", &mIndex_SelectedScene, pStrSceneNames, (int)std::min(_countof(pStrSceneNames), mResourceNames.mSceneNames.size())))
 	{
-		// TODO: move StarLoadingScene() into some queue and issue at the end of frame as doing it 
-		//       immediately causes ImGui missing EndFrame()/Render()
-		// 
-		#if 0
 		this->StartLoadingScene(mIndex_SelectedScene);
-		#endif
 	}
 	ImGui::Combo("Camera (C)", &iSelectedCamera, pStrCameraNames, _countof(pStrCameraNames));
 	MathUtil::Clamp(iSelectedCamera, 0, (int)mpScene->GetNumSceneCameras()-1);
 	if (ImGui::Combo("HDRI Map (Page Up/Down)", &iEnvMap, pStrEnvMapNames, (int)std::min(_countof(pStrEnvMapNames), mResourceNames.mEnvironmentMapPresetNames.size()+1)))
 	{
-		// TODO: move StartLoadingEnvironmentMap() into some queue and issue at the end of frame as doing it 
-		//       immediately causes ImGui missing EndFrame()/Render()
-		//
-		#if 0
 		if(iSelectedEnvMap != iEnvMap)
 			StartLoadingEnvironmentMap(iEnvMap);
-		#endif
 	}
 
 	const float MaxAmbientLighting = this->ShouldRenderHDR(mpWinMain->GetHWND()) ? 150.0f : 2.0f;

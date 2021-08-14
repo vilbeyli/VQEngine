@@ -148,64 +148,50 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 	assert(mbRenderThreadInitialized);
 #endif
 
-	if (mAppState == EAppState::INITIALIZING)
+	switch (mAppState)
 	{
-		// start loading
+	case EAppState::INITIALIZING:
 		Log::Info("UpdateThread: loading...");
-
-		// start load level
-		Load_SceneData_Dispatch();
-
-		// set state
-		mAppState = EAppState::LOADING;// not thread-safe
-		
-	}
-
-
-	if (mbLoadingLevel || mbLoadingEnvironmentMap)
-	{
-		// animate loading screen
-
-
-		// check if loading is done
-		const int NumActiveTasks = mWorkers_ModelLoading.GetNumActiveTasks() + mWorkers_TextureLoading.GetNumActiveTasks();
-		const bool bLoadTasksFinished = NumActiveTasks == 0;
-		if (bLoadTasksFinished)
+		Load_SceneData_Dispatch(); // start load level
+		mAppState = EAppState::LOADING;
+		break;
+	case EAppState::LOADING:
+		if (mbLoadingLevel || mbLoadingEnvironmentMap)
 		{
-			if (mbLoadingLevel)
-			{
-				mpScene->OnLoadComplete();
-			}
-			// OnEnvMapLoaded = noop
+			// animate loading screen
 
-			WaitUntilRenderingFinishes();
-			mAppState = EAppState::SIMULATING;
 
-			if (mbLoadingLevel)
+			// check if loading is done
+			const int NumActiveTasks = mWorkers_ModelLoading.GetNumActiveTasks() + mWorkers_TextureLoading.GetNumActiveTasks();
+			const bool bLoadTasksFinished = NumActiveTasks == 0;
+			if (bLoadTasksFinished)
 			{
+				if (mbLoadingLevel)
+				{
+					mpScene->OnLoadComplete();
+				}
+				// OnEnvMapLoaded = noop
+
+				WaitUntilRenderingFinishes();
+				mAppState = EAppState::SIMULATING;
+
 				mbLoadingLevel.store(false);
-			}
-			if (mbLoadingEnvironmentMap)
-			{
 				mbLoadingEnvironmentMap.store(false);
+
+				mLoadingScreenData.RotateLoadingScreenImage();
+
+				float dt_loading = mTimer.StopGetDeltaTimeAndReset();
+				Log::Info("Loading completed in %.2fs, starting scene simulation", dt_loading);
+				mTimer.Start();
 			}
-
-			mLoadingScreenData.RotateLoadingScreenImage();
-
-			float dt_loading = mTimer.StopGetDeltaTimeAndReset();
-			Log::Info("Loading completed in %.2fs, starting scene simulation", dt_loading);
-			mTimer.Start();
 		}
-	}
-
-
-	else
-	{
+		break;
+	case EAppState::SIMULATING:
 		// TODO: threaded?
 		UpdateThread_UpdateScene_MainWnd(dt);
 		UpdateThread_UpdateScene_DebugWnd(dt);
+		break;
 	}
-
 }
 
 void VQEngine::UpdateThread_PostUpdate()
@@ -484,8 +470,8 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 	std::unique_ptr<Window>& pWin = mpWinMain;
 	HWND hwnd = pWin->GetHWND();
 
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(hwnd);
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(hwnd);
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
 #else
 	const int FRAME_DATA_INDEX = 0;
@@ -672,13 +658,11 @@ void VQEngine::StartLoadingScene(int IndexScene)
 	// get scene representation 
 	const std::string& SceneName = mResourceNames.mSceneNames[IndexScene];
 
-
-
 	// queue the selected scene for loading
 	mQueue_SceneLoad.push(mResourceNames.mSceneNames[IndexScene]);
 
 	mAppState = INITIALIZING;
-	mbLoadingLevel.store(true);    // thread-safe
+	mbLoadingLevel.store(true); // thread-safe
 	Log::Info("StartLoadingScene: %d", IndexScene);
 }
 
