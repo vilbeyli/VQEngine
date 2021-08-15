@@ -562,8 +562,20 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 	MathUtil::Clamp(iSelectedCamera, 0, (int)mpScene->GetNumSceneCameras()-1);
 	if (ImGui::Combo("HDRI Map (Page Up/Down)", &iEnvMap, pStrEnvMapNames, (int)std::min(_countof(pStrEnvMapNames), mResourceNames.mEnvironmentMapPresetNames.size()+1)))
 	{
-		if(iSelectedEnvMap != iEnvMap)
-			StartLoadingEnvironmentMap(iEnvMap);
+		if (iSelectedEnvMap != iEnvMap)
+		{
+			const bool bUnloadEnvMap = mResourceNames.mEnvironmentMapPresetNames.size() == iEnvMap;
+			if (bUnloadEnvMap)
+			{
+				this->WaitUntilRenderingFinishes();
+				UnloadEnvironmentMap();
+				iSelectedEnvMap = INVALID_ID; // update iSelectedEnvMap
+			}
+			else
+			{
+				StartLoadingEnvironmentMap(iEnvMap); // update iSelectedEnvMap internally
+			}
+		}
 	}
 
 	const float MaxAmbientLighting = this->ShouldRenderHDR(mpWinMain->GetHWND()) ? 150.0f : 2.0f;
