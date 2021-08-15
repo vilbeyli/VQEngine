@@ -178,7 +178,7 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 				mbLoadingLevel.store(false);
 				mbLoadingEnvironmentMap.store(false);
 
-				mLoadingScreenData.RotateLoadingScreenImage();
+				mLoadingScreenData.RotateLoadingScreenImageIndex();
 
 				float dt_loading = mTimer.StopGetDeltaTimeAndReset();
 				Log::Info("Loading completed in %.2fs, starting scene simulation", dt_loading);
@@ -538,7 +538,7 @@ SRV_ID FLoadingScreenData::GetSelectedLoadingScreenSRV_ID() const
 	assert(SelectedLoadingScreenSRVIndex < SRVs.size());
 	return SRVs[SelectedLoadingScreenSRVIndex];
 }
-void FLoadingScreenData::RotateLoadingScreenImage()
+void FLoadingScreenData::RotateLoadingScreenImageIndex()
 {
 	SelectedLoadingScreenSRVIndex = (int)MathUtil::RandU(0, (int)SRVs.size());
 }

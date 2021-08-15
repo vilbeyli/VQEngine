@@ -68,7 +68,7 @@ struct FLoadingScreenData
 	std::vector<SRV_ID> SRVs;
 
 	SRV_ID GetSelectedLoadingScreenSRV_ID() const;
-	void RotateLoadingScreenImage();
+	void RotateLoadingScreenImageIndex();
 
 	// TODO: animation resources
 };
