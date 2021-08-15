@@ -389,6 +389,7 @@ void VQEngine::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSc
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 
 	ID3D12Resource* pRscAmbientOcclusion = mRenderer.GetTextureResource(rsc.Tex_AmbientOcclusion);
+	const UAV& uav = mRenderer.GetUAV(rsc.UAV_FFXCACAO_Out);
 
 	const char* pStrPass[FAmbientOcclusionPass::EMethod::NUM_AMBIENT_OCCLUSION_METHODS] =
 	{
@@ -396,6 +397,8 @@ void VQEngine::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSc
 	};
 	SCOPED_GPU_MARKER(pCmd, pStrPass[mRenderPass_AO.Method]);
 	
+	static bool sbScreenSpaceAO_Previous = false;
+	const bool bSSAOToggledOff = sbScreenSpaceAO_Previous && !SceneView.sceneParameters.bScreenSpaceAO;
 
 	if (SceneView.sceneParameters.bScreenSpaceAO)
 	{
@@ -412,12 +415,17 @@ void VQEngine::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSc
 		ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 	}
-	else
+	
+	// clear UAV only once
+	if(bSSAOToggledOff)
 	{
 		pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscAmbientOcclusion, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-		// TODO: clear to 1
+		const FLOAT clearValue[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+		pCmd->ClearUnorderedAccessViewFloat(uav.GetGPUDescHandle(), uav.GetCPUDescHandle(), pRscAmbientOcclusion, clearValue, 0, NULL);
 		pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscAmbientOcclusion, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_GENERIC_READ));
 	}
+
+	sbScreenSpaceAO_Previous = SceneView.sceneParameters.bScreenSpaceAO;
 }
 
 void VQEngine::TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx)

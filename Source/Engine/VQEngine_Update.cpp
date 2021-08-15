@@ -347,17 +347,20 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 	}
 
 	// Scene switching
-	if (bIsShiftDown)
+	if (!mbLoadingLevel)
 	{
-		const int NumScenes = static_cast<int>(mResourceNames.mSceneNames.size());
-		if (input.IsKeyTriggered("PageUp") && !mbLoadingLevel)  { mIndex_SelectedScene = CircularIncrement(mIndex_SelectedScene, NumScenes);     this->StartLoadingScene(mIndex_SelectedScene); }
-		if (input.IsKeyTriggered("PageDown") && !mbLoadingLevel){ mIndex_SelectedScene = CircularDecrement(mIndex_SelectedScene, NumScenes - 1); this->StartLoadingScene(mIndex_SelectedScene); }
-		if (input.IsKeyTriggered("R") && !mbLoadingLevel)       { this->StartLoadingScene(mIndex_SelectedScene); } // reload scene
+		if (bIsShiftDown)
+		{
+			const int NumScenes = static_cast<int>(mResourceNames.mSceneNames.size());
+			if (input.IsKeyTriggered("PageUp"))  { mIndex_SelectedScene = CircularIncrement(mIndex_SelectedScene, NumScenes);     this->StartLoadingScene(mIndex_SelectedScene); }
+			if (input.IsKeyTriggered("PageDown")){ mIndex_SelectedScene = CircularDecrement(mIndex_SelectedScene, NumScenes - 1); this->StartLoadingScene(mIndex_SelectedScene); }
+			if (input.IsKeyTriggered("R"))       { this->StartLoadingScene(mIndex_SelectedScene); } // reload scene
+		}
+		if (input.IsKeyTriggered("1")) { mIndex_SelectedScene = 0; this->StartLoadingScene(mIndex_SelectedScene); }
+		if (input.IsKeyTriggered("2")) { mIndex_SelectedScene = 1; this->StartLoadingScene(mIndex_SelectedScene); }
+		if (input.IsKeyTriggered("3")) { mIndex_SelectedScene = 2; this->StartLoadingScene(mIndex_SelectedScene); }
+		if (input.IsKeyTriggered("4")) { mIndex_SelectedScene = 3; this->StartLoadingScene(mIndex_SelectedScene); }
 	}
-	if (input.IsKeyTriggered("1") && !mbLoadingLevel) { mIndex_SelectedScene = 0; this->StartLoadingScene(mIndex_SelectedScene); }
-	if (input.IsKeyTriggered("2") && !mbLoadingLevel) { mIndex_SelectedScene = 1; this->StartLoadingScene(mIndex_SelectedScene); }
-	if (input.IsKeyTriggered("3") && !mbLoadingLevel) { mIndex_SelectedScene = 2; this->StartLoadingScene(mIndex_SelectedScene); }
-	if (input.IsKeyTriggered("4") && !mbLoadingLevel) { mIndex_SelectedScene = 3; this->StartLoadingScene(mIndex_SelectedScene); }
 }
 
 static void Toggle(bool& b) { b = !b; }
@@ -506,7 +509,7 @@ void VQEngine::Load_SceneData_Dispatch()
 
 	auto fnCreateSceneInstance = [&](const std::string& SceneType, std::unique_ptr<Scene>& pScene) -> void
 	{
-		if (SceneType == "Default")          pScene = std::make_unique<DefaultScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
+		     if (SceneType == "Default")          pScene = std::make_unique<DefaultScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 		else if (SceneType == "Sponza")           pScene = std::make_unique<SponzaScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 		else if (SceneType == "StressTest")       pScene = std::make_unique<StressTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 		else if (SceneType == "GeometryUnitTest") pScene = std::make_unique<GeometryUnitTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);

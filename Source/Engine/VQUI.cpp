@@ -168,6 +168,7 @@ void VQEngine::InitializeUI(HWND hwnd)
 
 	ImGuiIO& io = ImGui::GetIO();
 	io.IniFilename = nullptr; // don't save out to a .ini file
+
 	// Get UI texture 
 	//
 	unsigned char* pixels;

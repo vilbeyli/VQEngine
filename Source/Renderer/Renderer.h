@@ -213,13 +213,18 @@ private:
 
 	// memory
 	D3D12MA::Allocator*            mpAllocator;
-	StaticResourceViewHeap         mHeapRTV;
-	StaticResourceViewHeap         mHeapDSV;
+	// CPU-visible heaps ----------------------------------------
+	StaticResourceViewHeap         mHeapRTV; 
+	StaticResourceViewHeap         mHeapDSV; 
+	StaticResourceViewHeap         mHeapUAV; // CPU-visible heap (TODO: fix SSAO UAV clear error msg)
+	UploadHeap                     mHeapUpload;
+	// CPU-visible heaps ----------------------------------------
+	// GPU-visible heaps ----------------------------------------
 	StaticResourceViewHeap         mHeapCBV_SRV_UAV;
 	StaticResourceViewHeap         mHeapSampler;
-	UploadHeap                     mHeapUpload;
 	StaticBufferHeap               mStaticHeap_VertexBuffer;
 	StaticBufferHeap               mStaticHeap_IndexBuffer;
+	// GPU-visible heaps ----------------------------------------
 	// constant buffers are handled in FRenderContext objects
 
 	// resources & views
