@@ -167,7 +167,7 @@ void VQEngine::InitializeUI(HWND hwnd)
 	ImGui::SetCurrentContext(mpImGuiContext);
 
 	ImGuiIO& io = ImGui::GetIO();
-
+	io.IniFilename = nullptr; // don't save out to a .ini file
 	// Get UI texture 
 	//
 	unsigned char* pixels;
@@ -267,9 +267,9 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 		if (mUIState.bWindowVisible_GraphicsSettingsPanel) DrawGraphicsSettingsWindow(SceneParams);
 	}
 
-	// If we fired an event that would trigget a loading level,
+	// If we fired an event that would trigger loading,
 	// i.e. changing the scene or the environment map, call ImGui::EndFrame()
-	// here to prevent calling NewFrame(); before Render/EndFrame is called.
+	// here to prevent calling NewFrame() before Render/EndFrame is called.
 	// Render() won't be called if we're changing the level because the appstate
 	// will cause VQengine rendering the loading screen (which doesn't call ImGui::Render())
 	// and ImGui crashing on double NewFrame().
@@ -653,21 +653,21 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 	// static data - labels
 	static const char* pStrAALabels[] =
 	{
-		  "No AA"
+		  "None ##0"
 		, "MSAAx4"
 		, ""
 	};
 	static const char* pStrSSAOLabels[] =
 	{
-		"FidelityFX CACAO"
-		, "None"
+		"None ##1"
+		, "FidelityFX CACAO"
 		, ""
 	};
 	// static data
 
 
 	int iAALabel = gfx.bAntiAliasing ? 1 : 0;
-	int iSSAOLabel = SceneRenderParams.bScreenSpaceAO ? 0 : 1;
+	int iSSAOLabel = SceneRenderParams.bScreenSpaceAO ? 1 : 0;
 
 	const uint32_t GFX_WINDOW_POS_X = GFX_WINDOW_PADDING_X;
 	const uint32_t GFX_WINDOW_POS_Y = H - PP_WINDOW_PADDING_Y - PP_WINDOW_SIZE_Y - GFX_WINDOW_PADDING_Y - GFX_WINDOW_SIZE_Y;
@@ -693,13 +693,15 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 
 	ImGui::Text("RENDERING");
 	ImGui::Separator();
-	if (ImGui::Combo("AntiAliasing (M)", &iAALabel, pStrAALabels, _countof(pStrAALabels)))
+	if (ImGui::Combo("AntiAliasing (M)", &iAALabel, pStrAALabels, _countof(pStrAALabels)-1))
 	{
-		Log::Info("AA Changed");
+		gfx.bAntiAliasing = iAALabel;
+		Log::Info("AA Changed: %d", gfx.bAntiAliasing);
 	}
-	if (ImGui::Combo("Ambient Occlusion", &iSSAOLabel, pStrSSAOLabels, _countof(pStrSSAOLabels)))
+	if (ImGui::Combo("Ambient Occlusion", &iSSAOLabel, pStrSSAOLabels, _countof(pStrSSAOLabels)-1))
 	{
-		Log::Info("AO Changed");
+		SceneRenderParams.bScreenSpaceAO = iSSAOLabel == 1;
+		Log::Info("AO Changed: %d", SceneRenderParams.bScreenSpaceAO);
 	}
 
 	ImGui::End();
