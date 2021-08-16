@@ -367,6 +367,19 @@ static void InitializeStaticCStringData_SceneControls(
 
 constexpr int FPS_GRAPH_MAX_FPS_THRESHOLDS[] = { 800, 240, 120, 90, 66, 45, 30, 15, 10, 5, 4, 3, 2, 1 };
 constexpr const char* FPS_GRAPH_MAX_FPS_THRESHOLDS_STR[] = { "800", "240", "120", "90", "66", "45", "30", "15", "10", "5", "4", "3", "2", "1" };
+static size_t DetermineChartMaxValueIndex(int RecentHighestFPS)
+{
+	size_t iFPSGraphMaxValue = 0;
+	for (size_t i = _countof(FPS_GRAPH_MAX_FPS_THRESHOLDS) - 1; i >= 0; --i)
+	{
+		if (RecentHighestFPS < FPS_GRAPH_MAX_FPS_THRESHOLDS[i]) // FPS_GRAPH_MAX_FPS_THRESHOLDS are in decreasing order
+		{
+			iFPSGraphMaxValue = std::min(_countof(FPS_GRAPH_MAX_FPS_THRESHOLDS) - 1, i);
+			break;
+		}
+	}
+	return iFPSGraphMaxValue;
+}
 
 //
 // Helpers
@@ -392,38 +405,28 @@ static ImVec4 SelectFPSColor(int FPS)
 	}
 	return FPSColors[iColor];
 }
+
 static void DrawFPSChart(int fps)
 {
-	// ui
-	const ImVec2 GRAPH_SIZE = ImVec2(0, 60);
-
 	// data
 	constexpr size_t FPS_HISTORY_SIZE = 160;
-	static float FPS_HISTORY[FPS_HISTORY_SIZE] = {};
-	static size_t FPS_HISTORY_INDEX = 0;
-
-	static float RECENT_HIGHEST_FPS = 0.0f;
-
-
+	static float  FPS_HISTORY[FPS_HISTORY_SIZE] = {};
+	
 	// update data
-	FPS_HISTORY[FPS_HISTORY_INDEX] = static_cast<float>(fps);
-	// TODO: proper sliding average
-
-	FPS_HISTORY_INDEX = CircularIncrement(FPS_HISTORY_INDEX, FPS_HISTORY_SIZE);
-	RECENT_HIGHEST_FPS = FPS_HISTORY[FPS_HISTORY_INDEX];
-	size_t iFPSGraphMaxValue = 0;
-	for (int i = _countof(FPS_GRAPH_MAX_FPS_THRESHOLDS)-1; i >= 0; --i)
+	float RecentHighestFPS = 0.0f;
+	for (size_t i = 1; i < FPS_HISTORY_SIZE; ++i) 
 	{
-		if (RECENT_HIGHEST_FPS < FPS_GRAPH_MAX_FPS_THRESHOLDS[i]) // FPS_GRAPH_MAX_FPS_THRESHOLDS are in decreasing order
-		{
-			iFPSGraphMaxValue = std::min((int)_countof(FPS_GRAPH_MAX_FPS_THRESHOLDS) - 1, i);
-			break;
-		}
+		FPS_HISTORY[i - 1] = FPS_HISTORY[i]; // slide
+		RecentHighestFPS = std::max(RecentHighestFPS, FPS_HISTORY[i]);
 	}
+	FPS_HISTORY[FPS_HISTORY_SIZE-1] = static_cast<float>(fps); // log the last fps
+	RecentHighestFPS = std::max(RecentHighestFPS, FPS_HISTORY[FPS_HISTORY_SIZE - 1]);
 
-	//ImGui::PlotHistogram("FPS Histo", FPS_HISTORY, IM_ARRAYSIZE(FPS_HISTORY));
+	const size_t iFPSGraphMaxValue = DetermineChartMaxValueIndex(RecentHighestFPS);
+
+	// ui
+	const ImVec2 GRAPH_SIZE = ImVec2(0, 60);
 	ImGui::PlotLines(FPS_GRAPH_MAX_FPS_THRESHOLDS_STR[iFPSGraphMaxValue], FPS_HISTORY, FPS_HISTORY_SIZE, 0, "FPS", 0.0f, (float)FPS_GRAPH_MAX_FPS_THRESHOLDS[iFPSGraphMaxValue], GRAPH_SIZE);
-
 }
 static void DrawFrameTimeChart()
 {
