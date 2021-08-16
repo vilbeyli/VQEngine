@@ -370,11 +370,11 @@ constexpr const char* FPS_GRAPH_MAX_FPS_THRESHOLDS_STR[] = { "800", "240", "120"
 static size_t DetermineChartMaxValueIndex(int RecentHighestFPS)
 {
 	size_t iFPSGraphMaxValue = 0;
-	for (size_t i = _countof(FPS_GRAPH_MAX_FPS_THRESHOLDS) - 1; i >= 0; --i)
+	for (int i = _countof(FPS_GRAPH_MAX_FPS_THRESHOLDS) - 1; i >= 0; --i)
 	{
 		if (RecentHighestFPS < FPS_GRAPH_MAX_FPS_THRESHOLDS[i]) // FPS_GRAPH_MAX_FPS_THRESHOLDS are in decreasing order
 		{
-			iFPSGraphMaxValue = std::min(_countof(FPS_GRAPH_MAX_FPS_THRESHOLDS) - 1, i);
+			iFPSGraphMaxValue = std::min((int)_countof(FPS_GRAPH_MAX_FPS_THRESHOLDS) - 1, i);
 			break;
 		}
 	}
@@ -422,7 +422,7 @@ static void DrawFPSChart(int fps)
 	FPS_HISTORY[FPS_HISTORY_SIZE-1] = static_cast<float>(fps); // log the last fps
 	RecentHighestFPS = std::max(RecentHighestFPS, FPS_HISTORY[FPS_HISTORY_SIZE - 1]);
 
-	const size_t iFPSGraphMaxValue = DetermineChartMaxValueIndex(RecentHighestFPS);
+	const size_t iFPSGraphMaxValue = DetermineChartMaxValueIndex(static_cast<int>(RecentHighestFPS));
 
 	// ui
 	const ImVec2 GRAPH_SIZE = ImVec2(0, 60);
