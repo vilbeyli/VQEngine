@@ -135,9 +135,6 @@ void VQEngine::UpdateThread_PreUpdate()
 		mpScene->PreUpdate(0, 0);
 #endif
 	}
-
-	// system-wide input (esc/mouse click on wnd)
-	HandleEngineInput();
 }
 
 void VQEngine::UpdateThread_UpdateAppState(const float dt)
@@ -262,137 +259,6 @@ void VQEngine::WaitUntilRenderingFinishes(){}
 constexpr int FRAME_DATA_INDEX = 0;
 #endif
 
-void VQEngine::HandleEngineInput()
-{
-#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
-	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
-#endif
-
-	for (decltype(mInputStates)::iterator it = mInputStates.begin(); it != mInputStates.end(); ++it)
-	{
-		HWND   hwnd  = it->first;
-		Input& input = it->second;
-		auto&  pWin  = this->GetWindow(hwnd);
-		const bool bIsShiftDown = input.IsKeyDown("Shift");
-
-		//
-		// Process-level input handling
-		//
-		if (input.IsKeyTriggered("Esc"))
-		{
-			if (pWin->IsMouseCaptured())
-			{
-				mEventQueue_VQEToWin_Main.AddItem(std::make_shared<SetMouseCaptureEvent>(hwnd, false, true));
-			}
-		}
-		if (input.IsAnyMouseDown())
-		{
-			Input& inp = mInputStates.at(hwnd); // non const ref
-			if (inp.GetInputBypassing())
-			{
-				inp.SetInputBypassing(false);
-
-				// capture mouse only when main window is clicked
-				if(hwnd == mpWinMain->GetHWND())
-					mEventQueue_VQEToWin_Main.AddItem(std::make_shared<SetMouseCaptureEvent>(hwnd, true, false));
-			}
-		}
-
-		if (pWin == mpWinMain) 
-		{
-			HandleMainWindowInput(input, hwnd);
-		}
-
-		HandleUIInput();
-	}
-}
-
-
-void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
-{
-#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
-	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
-#endif
-	const bool bIsShiftDown = input.IsKeyDown("Shift");
-	//const bool bIsAltDown = input.IsKeyDown("Alt"); // Alt+Z detection doesn't work, TODO: fix
-	const bool bIsAltDown = (GetKeyState(VK_MENU) & 0x8000) != 0; // Alt+Z detection doesn't work, TODO: fix
-
-	// UI
-	auto Toggle = [](bool& b) {b = !b; };
-	if ( (bIsAltDown && input.IsKeyTriggered("Z")) // Alt+Z detection doesn't work, TODO: fix
-		|| (bIsShiftDown && input.IsKeyTriggered("Z"))) // woraround: use shift+z for now
-	{
-		Toggle(mUIState.bHideAllWindows);
-	}
-
-	// Graphics Settings Controls
-	if (input.IsKeyTriggered("V"))
-	{
-		auto& SwapChain = mRenderer.GetWindowSwapChain(hwnd);
-		mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetVSyncEvent>(hwnd, !SwapChain.IsVSyncOn()));
-	}
-	if (input.IsKeyTriggered("M"))
-	{
-		mSettings.gfx.bAntiAliasing = !mSettings.gfx.bAntiAliasing;
-		Log::Info("Toggle MSAA: %d", mSettings.gfx.bAntiAliasing);	
-	}
-
-	if (input.IsKeyTriggered("G"))
-	{
-		FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
-		PPParams.TonemapperParams.ToggleGammaCorrection = PPParams.TonemapperParams.ToggleGammaCorrection == 1 ? 0 : 1;
-		Log::Info("Tonemapper: ApplyGamma=%d (SDR-only)", PPParams.TonemapperParams.ToggleGammaCorrection);
-	}
-
-	// Scene switching
-	if (!mbLoadingLevel)
-	{
-		if (bIsShiftDown)
-		{
-			const int NumScenes = static_cast<int>(mResourceNames.mSceneNames.size());
-			if (input.IsKeyTriggered("PageUp"))  { mIndex_SelectedScene = CircularIncrement(mIndex_SelectedScene, NumScenes);     this->StartLoadingScene(mIndex_SelectedScene); }
-			if (input.IsKeyTriggered("PageDown")){ mIndex_SelectedScene = CircularDecrement(mIndex_SelectedScene, NumScenes - 1); this->StartLoadingScene(mIndex_SelectedScene); }
-			if (input.IsKeyTriggered("R"))       { this->StartLoadingScene(mIndex_SelectedScene); } // reload scene
-		}
-		if (input.IsKeyTriggered("1")) { mIndex_SelectedScene = 0; this->StartLoadingScene(mIndex_SelectedScene); }
-		if (input.IsKeyTriggered("2")) { mIndex_SelectedScene = 1; this->StartLoadingScene(mIndex_SelectedScene); }
-		if (input.IsKeyTriggered("3")) { mIndex_SelectedScene = 2; this->StartLoadingScene(mIndex_SelectedScene); }
-		if (input.IsKeyTriggered("4")) { mIndex_SelectedScene = 3; this->StartLoadingScene(mIndex_SelectedScene); }
-	}
-}
-
-static void Toggle(bool& b) { b = !b; }
-
-void VQEngine::HandleUIInput()
-{
-	for (decltype(mInputStates)::iterator it = mInputStates.begin(); it != mInputStates.end(); ++it)
-	{
-		HWND   hwnd = it->first;
-		Input& input = it->second;
-		auto& pWin = this->GetWindow(hwnd);
-		const bool bIsShiftDown = input.IsKeyDown("Shift");
-
-		if (pWin == mpWinMain)
-		{
-			if (input.IsKeyTriggered("F1")) Toggle(mUIState.bWindowVisible_SceneControls);
-			if (input.IsKeyTriggered("F2")) Toggle(mUIState.bWindowVisible_Profiler);
-			if (input.IsKeyTriggered("F3")) Toggle(mUIState.bWindowVisible_PostProcessControls);
-			if (input.IsKeyTriggered("F4")) Toggle(mUIState.bWindowVisible_DebugPanel);
-			if (input.IsKeyTriggered("F5")) Toggle(mUIState.bWindowVisible_GraphicsSettingsPanel);
-
-			if (input.IsKeyTriggered("B"))
-			{
-				WaitUntilRenderingFinishes();
-				FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
-				PPParams.bEnableCAS = !PPParams.bEnableCAS;
-				Log::Info("Toggle FFX-CAS: %d", PPParams.bEnableCAS);
-			}
-		}
-	}
-}
-
 bool VQEngine::IsWindowRegistered(HWND hwnd) const
 {
 	auto it = mWinNameLookup.find(hwnd);
@@ -428,7 +294,7 @@ void VQEngine::CalculateEffectiveFrameRateLimit(HWND hwnd)
 	}
 	const bool bUnlimitedFrameRate = mEffectiveFrameRateLimit_ms == 0.0f;
 	if (bUnlimitedFrameRate) Log::Info("FrameRateLimit : Unlimited");
-	else                    Log::Info("FrameRateLimit : %.2fms | %d FPS", mEffectiveFrameRateLimit_ms, static_cast<int>(1000.0f / mEffectiveFrameRateLimit_ms));
+	else                     Log::Info("FrameRateLimit : %.2fms | %d FPS", mEffectiveFrameRateLimit_ms, static_cast<int>(1000.0f / mEffectiveFrameRateLimit_ms));
 }
 
 float VQEngine::FramePacing(float dt)
@@ -481,6 +347,19 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 #endif
 
 	mpScene->Update(dt, FRAME_DATA_INDEX);
+
+	HandleEngineInput(); // system-wide input (esc/mouse click on wnd)
+	for (decltype(mInputStates)::iterator it = mInputStates.begin(); it != mInputStates.end(); ++it)
+	{
+		HWND   hwnd = it->first;
+		Input& input = it->second;
+		auto& pWin = this->GetWindow(hwnd);
+		const bool bIsShiftDown = input.IsKeyDown("Shift");
+
+		if (pWin == mpWinMain)
+			HandleMainWindowInput(input, hwnd);
+	}
+	HandleUIInput();
 }
 
 void VQEngine::UpdateThread_UpdateScene_DebugWnd(const float dt)

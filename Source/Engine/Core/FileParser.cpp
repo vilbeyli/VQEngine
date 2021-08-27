@@ -575,6 +575,7 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 		XMLElement* pTSpeed = pFP ? pFP->FirstChildElement("TranslationSpeed") : nullptr;
 		XMLElement* pASpeed = pFP ? pFP->FirstChildElement("AngularSpeed")     : nullptr;
 		XMLElement* pDrag   = pFP ? pFP->FirstChildElement("Drag")             : nullptr;
+
 		XMLElement* pOrbit = pCam->FirstChildElement("Orbit");
 
 		// transform ----------------------------------------
@@ -605,7 +606,7 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 		if (pFP)
 		{
 			cam.bInitializeCameraController = true;
-			cam.bFirstPerson = true;
+			cam.ControllerType = ECameraControllerType::FirstPerson;
 			if(pTSpeed)  XMLParseFloatVal(pTSpeed, cam.TranslationSpeed);
 			if(pASpeed)  XMLParseFloatVal(pASpeed, cam.AngularSpeed);
 			if(pDrag  )  XMLParseFloatVal(pDrag  , cam.Drag);
@@ -613,7 +614,7 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 		if (pOrbit)
 		{
 			cam.bInitializeCameraController = true;
-			cam.bFirstPerson = false;
+			cam.ControllerType = ECameraControllerType::ORBIT;
 		}
 
 		return cam;

@@ -229,7 +229,6 @@ void VQEngine::UpdateThread_HandleEvents()
 				  p->data.relativeX
 				, p->data.relativeY
 				, static_cast<short>(p->data.scrollDelta)
-				, GetWindow(p->hwnd)->IsMouseCaptured()
 			);
 			UpdateImGui_MousePosition(pEvent->hwnd);
 		} break;
@@ -266,7 +265,6 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 			FPostProcessParameters::FFFXCAS& CASParams = mpScene->GetPostProcessParameters(i).FFXCASParams;
 			CasSetup(&CASParams.CASConstantBlock[0], &CASParams.CASConstantBlock[4], CASParams.CASSharpen, fWidth, fHeight, fWidth, fHeight);
 		}
-		
 	}
 }
 
@@ -428,6 +426,11 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 	RenderThread_UnloadWindowSizeDependentResources(hwnd);
 	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT);
 
+
+	//const bool bCapture = true;
+	//const bool bVisible = true;
+	//mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bCapture, bVisible));
+
 	//
 	// EXCLUSIVE FULLSCREEN
 	//
@@ -455,10 +458,6 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 				Swapchain.Resize(WndSettings.Width, WndSettings.Height, Swapchain.GetFormat());
 			}
 		}
-
-		const bool bCapture = true;
-		const bool bVisible = true;
-		mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bCapture, bVisible));
 	}
 
 	//
@@ -467,13 +466,6 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 	else
 	{
 		pWnd->ToggleWindowedFullscreen(&Swapchain);
-
-		const bool bCapture = true;
-		const bool bVisible = true;
-		
-		// only capture/release mouse for the main window
-		if(hwnd == mpWinMain->GetHWND())
-			mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bFullscreenStateToSet, bVisible));
 	}
 
 }

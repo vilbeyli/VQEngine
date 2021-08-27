@@ -33,24 +33,11 @@ Camera::Camera()
 	, mYaw(0.0f)
 	, mPosition(0,0,0)
 	, mVelocity(0,0,0)
+	, mProjParams({})
+	, mControllerIndex(0)
 {
 	XMStoreFloat4x4(&mMatProj, XMMatrixIdentity());
 	XMStoreFloat4x4(&mMatView, XMMatrixIdentity());
-}
-
-Camera::~Camera(void)
-{}
-
-Camera::Camera(Camera && other)
-{
-	mPosition = other.mPosition;
-	mYaw = other.mYaw;
-	mVelocity = other.mVelocity;
-	mPitch = other.mPitch;
-	mProjParams = other.mProjParams;
-	mMatProj = other.mMatProj;
-	mMatView = other.mMatView;
-	pController = std::move(other.pController);
 }
 
 Camera Camera::Clone()
@@ -63,9 +50,12 @@ Camera Camera::Clone()
 	c.mProjParams = this->mProjParams;
 	c.mMatProj = this->mMatProj;
 	c.mMatView = this->mMatView;
-	c.pController = std::move(this->pController->Clone(&c));
-	return c; // is this dangling too?
+	c.mControllerIndex = this->mControllerIndex;
+	for (size_t i = 0; i < this->mpControllers.size(); ++i)
+		c.mpControllers.push_back(std::move(this->mpControllers[i]->Clone(&c)));
+	return c;
 }
+
 
 void Camera::InitializeCamera(const FCameraParameters& data)
 {
@@ -80,16 +70,10 @@ void Camera::InitializeCamera(const FCameraParameters& data)
 	UpdateViewMatrix();
 }
 
-void Camera::InitializeController(bool bFirstPersonController, const FCameraParameters& data)
+void Camera::InitializeController(const FCameraParameters& data)
 {
-	if (bFirstPersonController)
-	{
-		pController = std::make_unique<FirstPersonController>(this, data.TranslationSpeed, data.AngularSpeed, data.Drag);
-	}
-	else
-	{
-		pController = std::make_unique<OrbitController>(this);
-	}
+
+	assert(false);
 }
 
 void Camera::SetProjectionMatrix(const FProjectionMatrixParameters& params)
@@ -117,6 +101,19 @@ void Camera::UpdateViewMatrix()
 	lookAt = pos + lookAt;
 
 	XMStoreFloat4x4(&mMatView, XMMatrixLookAtLH(pos, lookAt, up));
+}
+
+void Camera::Update(float dt, const Input& input)
+{
+	assert(mControllerIndex < mpControllers.size());
+	const bool bMouseDown = input.IsAnyMouseDown();
+	const bool bMouseLeftDown  = input.IsMouseTriggered(Input::EMouseButtons::MOUSE_BUTTON_LEFT);
+	const bool bMouseRightDown = input.IsMouseTriggered(Input::EMouseButtons::MOUSE_BUTTON_RIGHT);
+
+	if (bMouseLeftDown)  mControllerIndex = static_cast<size_t>(ECameraControllerType::ORBIT);
+	if (bMouseRightDown) mControllerIndex = static_cast<size_t>(ECameraControllerType::FirstPerson);
+
+	mpControllers[mControllerIndex]->UpdateCamera(input, dt);
 }
 
 XMFLOAT3 Camera::GetPositionF() const
@@ -241,8 +238,9 @@ void Camera::LookAt(const XMVECTOR& target)
 
 }
 
-//==============================================================================================================
-
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 OrbitController::OrbitController(Camera* pCam)
 	: CameraController(pCam)
@@ -250,7 +248,6 @@ OrbitController::OrbitController(Camera* pCam)
 }
 
 void OrbitController::UpdateCamera(const Input& input, float dt)
-
 {
 }
 
@@ -260,6 +257,8 @@ CameraController* OrbitController::Clone_impl(Camera* pNewCam)
 	p->mF3LookAt = this->mF3LookAt;
 	return p;
 }
+
+//--------------------------------------------------------------------------------------------------------------------
 
 FirstPersonController::FirstPersonController(Camera* pCam
 	, float moveSpeed    /*= 1000.0f*/
