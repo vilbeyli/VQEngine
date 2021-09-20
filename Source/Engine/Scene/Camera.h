@@ -111,7 +111,7 @@ private:
 enum ECameraControllerType
 {
 	ORBIT = 0,
-	FirstPerson,
+	FIRST_PERSON,
 
 	NUM_CAMERA_CONTROLLER_TYPES
 };

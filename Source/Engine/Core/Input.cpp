@@ -459,6 +459,12 @@ bool Input::IsMouseTriggered(EMouseButtons mbtn) const
 	return !mbIgnoreInput && bButtonTriggered;
 }
 
+bool Input::IsMouseReleased(EMouseButtons mbtn) const
+{
+	const bool bButtonReleased = !mMouseButtons.at(mbtn) && mMouseButtonsPrevious.at(mbtn);
+	return !mbIgnoreInput && bButtonReleased;
+}
+
 bool Input::IsMouseScrollUp() const
 {
 	return mMouseScroll > 0 && !mbIgnoreInput;

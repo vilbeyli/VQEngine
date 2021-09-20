@@ -606,7 +606,7 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 		if (pFP)
 		{
 			cam.bInitializeCameraController = true;
-			cam.ControllerType = ECameraControllerType::FirstPerson;
+			cam.ControllerType = ECameraControllerType::FIRST_PERSON;
 			if(pTSpeed)  XMLParseFloatVal(pTSpeed, cam.TranslationSpeed);
 			if(pASpeed)  XMLParseFloatVal(pASpeed, cam.AngularSpeed);
 			if(pDrag  )  XMLParseFloatVal(pDrag  , cam.Drag);

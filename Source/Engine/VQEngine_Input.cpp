@@ -117,6 +117,24 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 	const bool bIsShiftDown = input.IsKeyDown("Shift");
 	//const bool bIsAltDown = input.IsKeyDown("Alt"); // Alt+Z detection doesn't work, TODO: fix
 	const bool bIsAltDown = (GetKeyState(VK_MENU) & 0x8000) != 0; // Alt+Z detection doesn't work, TODO: fix
+	const bool bMouseLeftTriggered = input.IsMouseTriggered(Input::EMouseButtons::MOUSE_BUTTON_LEFT);
+	const bool bMouseRightTriggered = input.IsMouseTriggered(Input::EMouseButtons::MOUSE_BUTTON_RIGHT);
+	const bool bMouseLeftReleased = input.IsMouseReleased(Input::EMouseButtons::MOUSE_BUTTON_LEFT);
+	const bool bMouseRightReleased = input.IsMouseReleased(Input::EMouseButtons::MOUSE_BUTTON_RIGHT);
+
+	// Mouse Capture & Visibility
+	if (bMouseLeftTriggered || bMouseRightTriggered)
+	{
+		const bool bCapture = true;
+		const bool bVisible = false;
+		mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bCapture, bVisible));
+	}
+	if (bMouseLeftReleased || bMouseRightReleased)
+	{
+		const bool bCapture = false;
+		const bool bVisible = true;
+		mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bCapture, bVisible));
+	}
 
 	// UI
 	auto Toggle = [](bool& b) {b = !b; };

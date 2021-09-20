@@ -87,6 +87,7 @@ public:
 	bool IsMouseUp(EMouseButtons) const;
 	bool IsMouseDoubleClick(EMouseButtons) const;
 	bool IsMouseTriggered(EMouseButtons) const;
+	bool IsMouseReleased(EMouseButtons) const;
 	bool IsMouseScrollUp() const;
 	bool IsMouseScrollDown() const;
 	bool IsAnyMouseDown() const; // @mbIgnoreInput doesn't affect this

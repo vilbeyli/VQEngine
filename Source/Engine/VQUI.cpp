@@ -384,23 +384,23 @@ static size_t DetermineChartMaxValueIndex(int RecentHighestFPS)
 //
 // Helpers
 //
-static ImVec4 SelectFPSColor(int FirstPerson)
+static ImVec4 SelectFPSColor(int FPS)
 {
 	constexpr int FPS_THRESHOLDS[] ={30, 45, 60, 144, 500};
 	static const ImVec4 FPSColors[6] =
 	{
-		  ImVec4(0.8f, 0.0f, 0.0f, 1.0f) // RED    | FirstPerson < 30
-		, ImVec4(0.6f, 0.3f, 0.0f, 1.0f) // ORANGE | 30 < FirstPerson < 45
-		, ImVec4(0.8f, 0.8f, 0.0f, 1.0f) // YELLOW | 45 < FirstPerson < 60
-		, ImVec4(0.0f, 0.8f, 0.0f, 1.0f) // GREEN  | 60 < FirstPerson < 144 
-		, ImVec4(0.0f, 0.8f, 0.7f, 1.0f) // CYAN   | 144 < FirstPerson < 500
-		, ImVec4(0.4f, 0.1f, 0.8f, 1.0f) // PURPLE | 500 < FirstPerson
+		  ImVec4(0.8f, 0.0f, 0.0f, 1.0f) // RED    | FPS < 30
+		, ImVec4(0.6f, 0.3f, 0.0f, 1.0f) // ORANGE | 30 < FPS < 45
+		, ImVec4(0.8f, 0.8f, 0.0f, 1.0f) // YELLOW | 45 < FPS < 60
+		, ImVec4(0.0f, 0.8f, 0.0f, 1.0f) // GREEN  | 60 < FPS < 144 
+		, ImVec4(0.0f, 0.8f, 0.7f, 1.0f) // CYAN   | 144 < FPS < 500
+		, ImVec4(0.4f, 0.1f, 0.8f, 1.0f) // PURPLE | 500 < FPS
 	};
 
 	int iColor = 0;
 	for (int iThr = 0; iThr < _countof(FPS_THRESHOLDS); ++iThr)
 	{
-		if (FirstPerson > FPS_THRESHOLDS[iThr])
+		if (FPS > FPS_THRESHOLDS[iThr])
 			iColor = std::min(iThr+1, (int)_countof(FPS_THRESHOLDS));
 	}
 	return FPSColors[iColor];
