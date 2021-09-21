@@ -97,9 +97,10 @@ void VQEngine::HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWin
 void VQEngine::SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse)
 {
 	auto& pWin = this->GetWindow(hwnd);
-
-	if(mInputStates.find(hwnd) != mInputStates.end())
-		mInputStates.at(hwnd).SetInputBypassing(!bCaptureMouse);
+	if (mInputStates.find(hwnd) == mInputStates.end())
+	{
+		Log::Error("Warning: couldn't find InputState for hwnd=0x%x", hwnd);
+	}
 	
 	pWin->SetMouseCapture(bCaptureMouse);
 
@@ -126,6 +127,55 @@ void VQEngine::SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse)
 // UPDATE THREAD
 //
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
+#include "imgui.h"
+static void UpdateImGui_KeyUp(KeyCode key, bool bIsMouseKey)
+{
+	ImGuiIO& io = ImGui::GetIO();
+	if (bIsMouseKey)
+	{
+		const Input::EMouseButtons mouseBtn = static_cast<Input::EMouseButtons>(key);
+		int btn = 0;
+		if (mouseBtn & Input::EMouseButtons::MOUSE_BUTTON_LEFT  ) btn = 0;
+		if (mouseBtn & Input::EMouseButtons::MOUSE_BUTTON_RIGHT ) btn = 1;
+		if (mouseBtn & Input::EMouseButtons::MOUSE_BUTTON_MIDDLE) btn = 2;
+		io.MouseDown[btn] = false;
+	}
+}
+static void UpdateImGui_KeyDown(KeyDownEventData data)
+{
+	ImGuiIO& io = ImGui::GetIO();
+	const auto& key = data.mouse.wparam;
+	if (data.mouse.bMouse)
+	{
+		const Input::EMouseButtons mouseBtn = static_cast<Input::EMouseButtons>(key);
+		int btn = 0;
+		if (mouseBtn & Input::EMouseButtons::MOUSE_BUTTON_LEFT  ) btn = 0;
+		if (mouseBtn & Input::EMouseButtons::MOUSE_BUTTON_RIGHT ) btn = 1;
+		if (mouseBtn & Input::EMouseButtons::MOUSE_BUTTON_MIDDLE) btn = 2;
+		io.MouseDown[btn] = true;
+	}
+}
+static void UpdateImGui_MousePosition(HWND hwnd)
+{
+	ImGuiIO& io = ImGui::GetIO();
+	POINT cursor_point;
+	if (GetCursorPos(&cursor_point))
+	{
+		if (ScreenToClient(hwnd, &cursor_point))
+		{
+			io.MousePos.x = static_cast<float>(cursor_point.x);
+			io.MousePos.y = static_cast<float>(cursor_point.y);
+			//Log::Info("io.MousePos.xy = %.2f %.2f", io.MousePos.x, io.MousePos.y);
+		}
+	}
+}
+static void UpdateImGui_MousePosition1(long x, long y)
+{
+	ImGuiIO& io = ImGui::GetIO();
+	io.MousePos.x = static_cast<float>(x);
+	io.MousePos.y = static_cast<float>(y);
+}
+
 void VQEngine::UpdateThread_HandleEvents()
 {
 	// Swap event recording buffers so we can read & process a limited number of events safely.
@@ -148,17 +198,22 @@ void VQEngine::UpdateThread_HandleEvents()
 		{
 			std::shared_ptr<KeyDownEvent> p = std::static_pointer_cast<KeyDownEvent>(pEvent);
 			mInputStates.at(p->hwnd).UpdateKeyDown(p->data);
+			Log::Info("KeyDownEvent;");
+			UpdateImGui_KeyDown(p->data);
+
 		} break;
 		case KEY_UP_EVENT:
 		{
 			std::shared_ptr<KeyUpEvent> p = std::static_pointer_cast<KeyUpEvent>(pEvent);
 			mInputStates.at(p->hwnd).UpdateKeyUp(p->wparam, p->bMouseEvent);
+			UpdateImGui_KeyUp(p->wparam, p->bMouseEvent);
 		} break;
 
 		case MOUSE_MOVE_EVENT:
 		{
 			std::shared_ptr<MouseMoveEvent> p = std::static_pointer_cast<MouseMoveEvent>(pEvent);
 			mInputStates.at(p->hwnd).UpdateMousePos(p->x, p->y, 0);
+			UpdateImGui_MousePosition1(p->x, p->y);
 		} break;
 		case MOUSE_SCROLL_EVENT:
 		{
@@ -172,8 +227,8 @@ void VQEngine::UpdateThread_HandleEvents()
 				  p->data.relativeX
 				, p->data.relativeY
 				, static_cast<short>(p->data.scrollDelta)
-				, GetWindow(p->hwnd)->IsMouseCaptured()
 			);
+			UpdateImGui_MousePosition(pEvent->hwnd);
 		} break;
 		case WINDOW_RESIZE_EVENT: UpdateThread_HandleWindowResizeEvent(pEvent);  break;
 		}
@@ -208,7 +263,6 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 			FPostProcessParameters::FFFXCAS& CASParams = mpScene->GetPostProcessParameters(i).FFXCASParams;
 			CasSetup(&CASParams.CASConstantBlock[0], &CASParams.CASConstantBlock[4], CASParams.CASSharpen, fWidth, fHeight, fWidth, fHeight);
 		}
-		
 	}
 }
 
@@ -370,6 +424,11 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 	RenderThread_UnloadWindowSizeDependentResources(hwnd);
 	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT);
 
+
+	//const bool bCapture = true;
+	//const bool bVisible = true;
+	//mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bCapture, bVisible));
+
 	//
 	// EXCLUSIVE FULLSCREEN
 	//
@@ -397,10 +456,6 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 				Swapchain.Resize(WndSettings.Width, WndSettings.Height, Swapchain.GetFormat());
 			}
 		}
-
-		const bool bCapture = true;
-		const bool bVisible = true;
-		mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bCapture, bVisible));
 	}
 
 	//
@@ -409,23 +464,16 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 	else
 	{
 		pWnd->ToggleWindowedFullscreen(&Swapchain);
-
-		const bool bCapture = true;
-		const bool bVisible = true;
-		
-		// only capture/release mouse for the main window
-		if(hwnd == mpWinMain->GetHWND())
-			mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bFullscreenStateToSet, bVisible));
 	}
 
 }
 
 void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
 {
-	const SetVSyncEvent*         pToggleFSEvent = static_cast<const SetVSyncEvent*>(pEvent);
-	HWND                                   hwnd = pToggleFSEvent->hwnd;
-	const bool                      bVsyncState = pToggleFSEvent->bToggleValue;
-	SwapChain&                        Swapchain = mRenderer.GetWindowSwapChain(pToggleFSEvent->hwnd);
+	const SetVSyncEvent*      pToggleVSyncEvent = static_cast<const SetVSyncEvent*>(pEvent);
+	HWND                                   hwnd = pToggleVSyncEvent->hwnd;
+	const bool                      bVsyncState = pToggleVSyncEvent->bToggleValue;
+	SwapChain&                        Swapchain = mRenderer.GetWindowSwapChain(pToggleVSyncEvent->hwnd);
 	const FWindowSettings&          WndSettings = GetWindowSettings(hwnd);
 	std::unique_ptr<Window>&               pWnd = GetWindow(hwnd);
 	const bool   bExclusiveFullscreenTransition = WndSettings.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN;
@@ -461,6 +509,7 @@ void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
 		Swapchain.EnsureSwapChainColorSpace(Swapchain.GetFormat() == DXGI_FORMAT_R16G16B16A16_FLOAT ? _16 : _8, false);
 	}
 
+	mSettings.gfx.bVsync = bVsyncState;
 	Log::Info("Toggle VSync: %d", bVsyncState);
 }
 

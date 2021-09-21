@@ -31,6 +31,7 @@
 #include "RenderPass/DepthPrePass.h"
 #include "Settings.h"
 #include "AssetLoader.h"
+#include "VQUI.h"
 
 
 #include "Libs/VQUtils/Source/Multithreading.h"
@@ -39,7 +40,6 @@
 #include "Source/Renderer/Renderer.h"
 
 #include <memory>
-
 
 //--------------------------------------------------------------------
 // MUILTI-THREADING 
@@ -54,6 +54,8 @@
 #define DEBUG_LOG_THREAD_SYNC_VERBOSE 0
 //--------------------------------------------------------------------
 
+struct ImGuiContext;
+
 //
 // DATA STRUCTS
 //
@@ -66,7 +68,7 @@ struct FLoadingScreenData
 	std::vector<SRV_ID> SRVs;
 
 	SRV_ID GetSelectedLoadingScreenSRV_ID() const;
-	void RotateLoadingScreenImage();
+	void RotateLoadingScreenImageIndex();
 
 	// TODO: animation resources
 };
@@ -198,6 +200,12 @@ struct FResourceNames
 	BuiltinMeshNameArray_t      mBuiltinMeshNames;
 	std::vector<std::string>    mEnvironmentMapPresetNames;
 	std::vector<std::string>    mSceneNames;
+};
+
+struct FRenderStats
+{
+	uint NumDraws;
+	uint NumDispatches;
 };
 
 //
@@ -405,7 +413,7 @@ private:
 	std::atomic<uint64>             mNumRenderLoopsExecuted;
 	std::atomic<uint64>             mNumUpdateLoopsExecuted;
 #else
-	uint64							mNumSimulationTicks;
+	uint64                          mNumSimulationTicks;
 #endif
 	std::atomic<bool>               mbLoadingLevel;
 	std::atomic<bool>               mbLoadingEnvironmentMap;
@@ -422,6 +430,9 @@ private:
 	
 	int                             mIndex_SelectedScene;
 	std::unique_ptr<Scene>          mpScene;
+	ImGuiContext*                   mpImGuiContext;
+	FUIState                        mUIState;
+	FRenderStats                    mRenderStats;
 
 #if 0
 	RenderingResourcesLookup_t      mRenderingResources;
@@ -452,9 +463,11 @@ private:
 	void                            InitializeHDRProfiles();
 	void                            InitializeEnvironmentMaps();
 	void                            InitializeScenes();
-
+	void                            InitializeUI(HWND hwnd);
 	void                            InitializeThreads();
+
 	void                            ExitThreads();
+	void                            ExitUI();
 
 	void                            HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWindowSettings& settings);
 	void                            SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse);
@@ -498,15 +511,23 @@ private:
 	void                            ResolveDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTexture, SRV_ID SRVDepthTexture, UAV_ID UAVDepthResolveTexture);
 	void                            TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams);
 	void                            RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams);
-	void                            RenderUI(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
+	void                            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
 	void                            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx); // TODO
 	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
 
-	// temp
-	struct FFrameConstantBuffer  { DirectX::XMMATRIX matModelViewProj; };
-	struct FFrameConstantBuffer2 { DirectX::XMMATRIX matModelViewProj; int iTextureConfig; int iTextureOutput; };
-	struct FFrameConstantBufferUnlit { DirectX::XMMATRIX matModelViewProj; DirectX::XMFLOAT3 color; };
+	//
+	// UI
+	//
+	void UpdateUIState(HWND hwnd, float dt);
+	void DrawProfilerWindow(const FSceneStats& FrameStats, float dt);
+	void DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderParameters& SceneRenderParams);
+	void DrawPostProcessControlsWindow(FPostProcessParameters& PPParams);
+	void DrawDebugPanelWindow(FSceneRenderParameters& SceneParams);
+	void DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams);
 
+	//
+	// RENDER HELPERS
+	//
 	void                            DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh);
 	void                            DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView::FShadowView& shadowView);
 
@@ -522,6 +543,8 @@ private:
 	void                            UnregisterWindowForInput(const std::unique_ptr<Window>& pWnd);
 
 	void                            HandleEngineInput();
+	void                            HandleMainWindowInput(Input& input, HWND hwnd);
+	void                            HandleUIInput();
 	
 	void                            DispatchHDRSwapchainTransitionEvents(HWND hwnd);
 
@@ -536,7 +559,16 @@ private:
 	// Busy waits until render thread catches up with update thread
 	void                            WaitUntilRenderingFinishes();
 
+	// temp data
+	struct FFrameConstantBuffer { DirectX::XMMATRIX matModelViewProj; };
+	struct FFrameConstantBuffer2 { DirectX::XMMATRIX matModelViewProj; int iTextureConfig; int iTextureOutput; };
+	struct FFrameConstantBufferUnlit { DirectX::XMMATRIX matModelViewProj; DirectX::XMFLOAT3 color; };
 
+// ------------------------------------------------------------------------------------------------------
+//
+// VQENGINE STATIC
+// 
+// ------------------------------------------------------------------------------------------------------
 private:
 	// Reads EngineSettings.ini from next to the executable and returns a 
 	// FStartupParameters struct as it readily has override booleans for engine settings

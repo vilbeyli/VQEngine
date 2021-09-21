@@ -292,7 +292,7 @@ void Scene::LoadCameras(std::vector<FCameraParameters>& CameraParams)
 	{
 		if (CameraParams[i].bInitializeCameraController)
 		{
-			mCameras[i].InitializeController(CameraParams[i].bFirstPerson, CameraParams[i]);
+			mCameras[i].InitializeController(CameraParams[i]);
 		}
 	}
 	Log::Info("[Scene] Cameras initialized");

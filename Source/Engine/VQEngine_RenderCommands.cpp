@@ -28,6 +28,7 @@
 
 #include "VQEngine_RenderCommon.h"
 
+#include "imgui.h"
 //
 // DRAW COMMANDS
 //
@@ -144,7 +145,7 @@ void VQEngine::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuff
 		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(7));
 	}
 	
-	for (int i = 0; i < SceneShadowView.NumSpotShadowViews; ++i)
+	for (uint i = 0; i < SceneShadowView.NumSpotShadowViews; ++i)
 	{
 		const FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowViews_Spot[i];
 
@@ -388,6 +389,7 @@ void VQEngine::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSc
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 
 	ID3D12Resource* pRscAmbientOcclusion = mRenderer.GetTextureResource(rsc.Tex_AmbientOcclusion);
+	const UAV& uav = mRenderer.GetUAV(rsc.UAV_FFXCACAO_Out);
 
 	const char* pStrPass[FAmbientOcclusionPass::EMethod::NUM_AMBIENT_OCCLUSION_METHODS] =
 	{
@@ -395,6 +397,8 @@ void VQEngine::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSc
 	};
 	SCOPED_GPU_MARKER(pCmd, pStrPass[mRenderPass_AO.Method]);
 	
+	static bool sbScreenSpaceAO_Previous = false;
+	const bool bSSAOToggledOff = sbScreenSpaceAO_Previous && !SceneView.sceneParameters.bScreenSpaceAO;
 
 	if (SceneView.sceneParameters.bScreenSpaceAO)
 	{
@@ -411,12 +415,17 @@ void VQEngine::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSc
 		ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 	}
-	else
+	
+	// clear UAV only once
+	if(bSSAOToggledOff)
 	{
 		pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscAmbientOcclusion, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-		// TODO: clear to 1
+		const FLOAT clearValue[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+		pCmd->ClearUnorderedAccessViewFloat(uav.GetGPUDescHandle(), uav.GetCPUDescHandle(), pRscAmbientOcclusion, clearValue, 0, NULL);
 		pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscAmbientOcclusion, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_GENERIC_READ));
 	}
+
+	sbScreenSpaceAO_Previous = SceneView.sceneParameters.bScreenSpaceAO;
 }
 
 void VQEngine::TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx)
@@ -984,7 +993,7 @@ void VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 	
 }
 
-void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams)
+void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams)
 {
 	const bool bUseHDRRenderPath = this->ShouldRenderHDR(mpWinMain->GetHWND());
 
@@ -1038,7 +1047,6 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& c
 		}
 
 
-		// TODO: UI rendering
 		//       Currently a passthrough pass fullscreen triangle pso
 		pCmd->SetPipelineState(mRenderer.GetPSO(bUseHDRRenderPath ? EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO : EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO));
 		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(1)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
@@ -1056,6 +1064,116 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& c
 
 		pCmd->DrawIndexedInstanced(3, 1, 0, 0, 0);
 	}
+	{
+		SCOPED_GPU_MARKER(pCmd, "UI");
+
+		struct cb
+		{
+			float matTransformation[4][4];
+		};
+
+		ImGuiIO& io = ImGui::GetIO();
+
+		ImGui::Render();
+
+		ImDrawData* draw_data = ImGui::GetDrawData();
+
+		// Create and grow vertex/index buffers if needed
+		char* pVertices = NULL;
+		D3D12_VERTEX_BUFFER_VIEW VerticesView;
+
+		pCBufferHeap->AllocVertexBuffer(draw_data->TotalVtxCount, sizeof(ImDrawVert), (void**)&pVertices, &VerticesView);
+
+		char* pIndices = NULL;
+		D3D12_INDEX_BUFFER_VIEW IndicesView;
+		pCBufferHeap->AllocIndexBuffer(draw_data->TotalIdxCount, sizeof(ImDrawIdx), (void**)&pIndices, &IndicesView);
+
+		ImDrawVert* vtx_dst = (ImDrawVert*)pVertices;
+		ImDrawIdx* idx_dst = (ImDrawIdx*)pIndices;
+		for (int n = 0; n < draw_data->CmdListsCount; n++)
+		{
+			const ImDrawList* cmd_list = draw_data->CmdLists[n];
+			memcpy(vtx_dst, cmd_list->VtxBuffer.Data, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert));
+			memcpy(idx_dst, cmd_list->IdxBuffer.Data, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx));
+			vtx_dst += cmd_list->VtxBuffer.Size;
+			idx_dst += cmd_list->IdxBuffer.Size;
+		}
+
+		// Setup orthographic projection matrix into our constant buffer
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+		{
+			cb* constant_buffer;
+			pCBufferHeap->AllocConstantBuffer(sizeof(cb), (void**)&constant_buffer, &cbAddr);
+
+			float L = 0.0f;
+			float R = io.DisplaySize.x;
+			float B = io.DisplaySize.y;
+			float T = 0.0f;
+			float proj[4][4] =
+			{
+				{ 2.0f / (R - L)   , 0.0f             , 0.0f  ,  0.0f },
+				{ 0.0f             , 2.0f / (T - B)   , 0.0f  ,  0.0f },
+				{ 0.0f             , 0.0f             , 0.5f  ,  0.0f },
+				{ (R + L) / (L - R), (T + B) / (B - T), 0.5f  ,  1.0f },
+			};
+			memcpy(constant_buffer->matTransformation, proj, sizeof(proj));
+		}
+
+		// Setup viewport
+		D3D12_VIEWPORT vp;
+		memset(&vp, 0, sizeof(D3D12_VIEWPORT));
+		vp.Width = io.DisplaySize.x;
+		vp.Height = io.DisplaySize.y;
+		vp.MinDepth = 0.0f;
+		vp.MaxDepth = 1.0f;
+		vp.TopLeftX = vp.TopLeftY = 0.0f;
+		pCmd->RSSetViewports(1, &vp);
+
+		// set pipeline & render state
+		pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::UI_PSO));
+		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(2));
+		pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
+
+		pCmd->IASetIndexBuffer(&IndicesView);
+		pCmd->IASetVertexBuffers(0, 1, &VerticesView);
+		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
+
+		// Render command lists
+		int vtx_offset = 0;
+		int idx_offset = 0;
+		for (int n = 0; n < draw_data->CmdListsCount; n++)
+		{
+			const ImDrawList* drawList = draw_data->CmdLists[n];
+			for (int cmd_i = 0; cmd_i < drawList->CmdBuffer.Size; cmd_i++)
+			{
+				const ImDrawCmd* pcmd = &drawList->CmdBuffer[cmd_i];
+				if (pcmd->UserCallback)
+				{
+					pcmd->UserCallback(drawList, pcmd);
+				}
+				else
+				{
+					const D3D12_RECT r =
+					{
+						(LONG)pcmd->ClipRect.x,
+						(LONG)pcmd->ClipRect.y,
+						(LONG)pcmd->ClipRect.z,
+						(LONG)pcmd->ClipRect.w
+					};
+					pCmd->RSSetScissorRects(1, &r);
+					pCmd->SetGraphicsRootDescriptorTable(0, ((CBV_SRV_UAV*)(pcmd->TextureId))->GetGPUDescHandle());
+
+					pCmd->DrawIndexedInstanced(pcmd->ElemCount, 1, idx_offset, vtx_offset, 0);
+				}
+				idx_offset += pcmd->ElemCount;
+			}
+			vtx_offset += drawList->VtxBuffer.Size;
+		}
+	}
+
+
 	{
 		SCOPED_GPU_MARKER(pCmd, "SwapchainTransitionToPresent");
 		// Transition SwapChain for Present
@@ -1093,3 +1211,4 @@ HRESULT VQEngine::PresentFrame(FWindowRenderContext& ctx)
 	}
 	return hr;
 }
+

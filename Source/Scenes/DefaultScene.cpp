@@ -9,10 +9,14 @@ using namespace DirectX;
 static void Toggle(bool& b) { b = !b; }
 
 
+#include "Libs/imgui/imgui.h"
+
 void DefaultScene::UpdateScene(float dt, FSceneView& SceneView)
 {
 	assert(pObject);
 	assert(mIndex_SelectedCamera < mCameras.size());
+	ImGuiIO& io = ImGui::GetIO();
+	const bool& bMouseInputUsedByUI = io.WantCaptureMouse;
 
 	Camera& cam = mCameras[mIndex_SelectedCamera];
 
@@ -29,19 +33,26 @@ void DefaultScene::UpdateScene(float dt, FSceneView& SceneView)
 
 	Transform* pTF = mpTransforms[pObject->mTransformID];
 	constexpr float MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER = 1.0f;
-	if (mInput.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_LEFT))   pTF->RotateAroundAxisRadians(ZAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
-	if (mInput.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_RIGHT))  pTF->RotateAroundAxisRadians(YAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
-	if (mInput.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE)) pTF->RotateAroundAxisRadians(XAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
+	if (!bMouseInputUsedByUI)
+	{
+		if (mInput.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_LEFT))   pTF->RotateAroundAxisRadians(ZAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
+		if (mInput.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_RIGHT))  pTF->RotateAroundAxisRadians(YAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
+		if (mInput.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE)) pTF->RotateAroundAxisRadians(XAxis, dt * PI * MOUSE_BUTTON_ROTATION_SPEED_MULTIPLIER);
 
-	constexpr float DOUBLE_CLICK_MULTIPLIER = 4.0f;
-	if (mInput.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_LEFT))   pTF->RotateAroundAxisRadians(ZAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
-	if (mInput.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_RIGHT))  pTF->RotateAroundAxisRadians(YAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
-	if (mInput.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE)) pTF->RotateAroundAxisRadians(XAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
+		constexpr float DOUBLE_CLICK_MULTIPLIER = 4.0f;
+		if (mInput.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_LEFT))   pTF->RotateAroundAxisRadians(ZAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
+		if (mInput.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_RIGHT))  pTF->RotateAroundAxisRadians(YAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
+		if (mInput.IsMouseDoubleClick(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE)) pTF->RotateAroundAxisRadians(XAxis, dt * PI * DOUBLE_CLICK_MULTIPLIER);
 
-	constexpr float SCROLL_SCALE_DELTA = 1.1f;
-	const float CubeScale = pTF->_scale.x;
-	if (mInput.IsMouseScrollUp()) pTF->SetUniformScale(CubeScale * SCROLL_SCALE_DELTA);
-	if (mInput.IsMouseScrollDown()) pTF->SetUniformScale(std::max(0.5f, CubeScale / SCROLL_SCALE_DELTA));
+		constexpr float SCROLL_SCALE_DELTA = 1.1f;
+		const float CubeScale = pTF->_scale.x;
+		if (mInput.IsMouseScrollUp())
+		{
+			Log::Info("ScrollUp");
+			pTF->SetUniformScale(CubeScale * SCROLL_SCALE_DELTA);
+		}
+		if (mInput.IsMouseScrollDown()) pTF->SetUniformScale(std::max(0.5f, CubeScale / SCROLL_SCALE_DELTA));
+	}
 
 	// update scene data
 	if (this->bObjectAnimation)

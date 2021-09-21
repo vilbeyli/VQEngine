@@ -77,6 +77,8 @@ void VQEngine::UpdateThread_Inititalize()
 	while (!mbRenderThreadInitialized); 
 #endif
 
+	InitializeUI(mpWinMain->GetHWND());
+
 	// immediately load loading screen texture
 	LoadLoadingScreenData();
 
@@ -114,6 +116,7 @@ void VQEngine::UpdateThread_Tick(const float dt)
 void VQEngine::UpdateThread_Exit()
 {
 	mpScene->Unload();
+	ExitUI();
 }
 
 void VQEngine::UpdateThread_PreUpdate()
@@ -132,9 +135,6 @@ void VQEngine::UpdateThread_PreUpdate()
 		mpScene->PreUpdate(0, 0);
 #endif
 	}
-
-	// system-wide input (esc/mouse click on wnd)
-	HandleEngineInput();
 }
 
 void VQEngine::UpdateThread_UpdateAppState(const float dt)
@@ -145,64 +145,50 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 	assert(mbRenderThreadInitialized);
 #endif
 
-	if (mAppState == EAppState::INITIALIZING)
+	switch (mAppState)
 	{
-		// start loading
+	case EAppState::INITIALIZING:
 		Log::Info("UpdateThread: loading...");
-
-		// start load level
-		Load_SceneData_Dispatch();
-
-		// set state
-		mAppState = EAppState::LOADING;// not thread-safe
-		
-	}
-
-
-	if (mbLoadingLevel || mbLoadingEnvironmentMap)
-	{
-		// animate loading screen
-
-
-		// check if loading is done
-		const int NumActiveTasks = mWorkers_ModelLoading.GetNumActiveTasks() + mWorkers_TextureLoading.GetNumActiveTasks();
-		const bool bLoadTasksFinished = NumActiveTasks == 0;
-		if (bLoadTasksFinished)
+		Load_SceneData_Dispatch(); // start load level
+		mAppState = EAppState::LOADING;
+		break;
+	case EAppState::LOADING:
+		if (mbLoadingLevel || mbLoadingEnvironmentMap)
 		{
-			if (mbLoadingLevel)
-			{
-				mpScene->OnLoadComplete();
-			}
-			// OnEnvMapLoaded = noop
+			// animate loading screen
 
-			WaitUntilRenderingFinishes();
-			mAppState = EAppState::SIMULATING;
 
-			if (mbLoadingLevel)
+			// check if loading is done
+			const int NumActiveTasks = mWorkers_ModelLoading.GetNumActiveTasks() + mWorkers_TextureLoading.GetNumActiveTasks();
+			const bool bLoadTasksFinished = NumActiveTasks == 0;
+			if (bLoadTasksFinished)
 			{
+				if (mbLoadingLevel)
+				{
+					mpScene->OnLoadComplete();
+				}
+				// OnEnvMapLoaded = noop
+
+				WaitUntilRenderingFinishes();
+				mAppState = EAppState::SIMULATING;
+
 				mbLoadingLevel.store(false);
-			}
-			if (mbLoadingEnvironmentMap)
-			{
 				mbLoadingEnvironmentMap.store(false);
+
+				mLoadingScreenData.RotateLoadingScreenImageIndex();
+
+				float dt_loading = mTimer.StopGetDeltaTimeAndReset();
+				Log::Info("Loading completed in %.2fs, starting scene simulation", dt_loading);
+				mTimer.Start();
 			}
-
-			mLoadingScreenData.RotateLoadingScreenImage();
-
-			float dt_loading = mTimer.StopGetDeltaTimeAndReset();
-			Log::Info("Loading completed in %.2fs, starting scene simulation", dt_loading);
-			mTimer.Start();
 		}
-	}
-
-
-	else
-	{
+		break;
+	case EAppState::SIMULATING:
 		// TODO: threaded?
 		UpdateThread_UpdateScene_MainWnd(dt);
 		UpdateThread_UpdateScene_DebugWnd(dt);
+		break;
 	}
-
 }
 
 void VQEngine::UpdateThread_PostUpdate()
@@ -269,87 +255,9 @@ void VQEngine::WaitUntilRenderingFinishes(){}
 
 
 // -------------------------------------------------------------------
-
-void VQEngine::HandleEngineInput()
-{
-#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
-	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
-#else
-	const int FRAME_DATA_INDEX = 0;
+#if !VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+constexpr int FRAME_DATA_INDEX = 0;
 #endif
-
-	for (decltype(mInputStates)::iterator it = mInputStates.begin(); it != mInputStates.end(); ++it)
-	{
-		HWND   hwnd  = it->first;
-		Input& input = it->second;
-		auto&  pWin  = this->GetWindow(hwnd);
-		const bool bIsShiftDown = input.IsKeyDown("Shift");
-
-		//
-		// Process-level input handling
-		//
-		if (input.IsKeyTriggered("Esc"))
-		{
-			if (pWin->IsMouseCaptured())
-			{
-				mEventQueue_VQEToWin_Main.AddItem(std::make_shared<SetMouseCaptureEvent>(hwnd, false, true));
-			}
-		}
-		if (input.IsAnyMouseDown())
-		{
-			Input& inp = mInputStates.at(hwnd); // non const ref
-			if (inp.GetInputBypassing())
-			{
-				inp.SetInputBypassing(false);
-
-				// capture mouse only when main window is clicked
-				if(hwnd == mpWinMain->GetHWND())
-					mEventQueue_VQEToWin_Main.AddItem(std::make_shared<SetMouseCaptureEvent>(hwnd, true, false));
-			}
-		}
-		if (pWin == mpWinMain) 
-		{
-			// Graphics Settings Controls
-			if (input.IsKeyTriggered("V"))
-			{
-				auto& SwapChain = mRenderer.GetWindowSwapChain(hwnd);
-				mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetVSyncEvent>(hwnd, !SwapChain.IsVSyncOn()));
-			}
-			if (input.IsKeyTriggered("M"))
-			{
-				mSettings.gfx.bAntiAliasing = !mSettings.gfx.bAntiAliasing;
-				Log::Info("Toggle MSAA: %d", mSettings.gfx.bAntiAliasing);	
-			}
-			if (input.IsKeyTriggered("B"))
-			{
-				WaitUntilRenderingFinishes();
-				FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
-				PPParams.bEnableCAS = !PPParams.bEnableCAS;
-				Log::Info("Toggle FFX-CAS: %d", PPParams.bEnableCAS);
-			}
-			if (input.IsKeyTriggered("G"))
-			{
-				FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
-				PPParams.TonemapperParams.ToggleGammaCorrection = PPParams.TonemapperParams.ToggleGammaCorrection == 1 ? 0 : 1;
-				Log::Info("Tonemapper: ApplyGamma=%d (SDR-only)", PPParams.TonemapperParams.ToggleGammaCorrection);
-			}
-
-			// Scene switching
-			if (bIsShiftDown)
-			{
-				const int NumScenes = static_cast<int>(mResourceNames.mSceneNames.size());
-				if (input.IsKeyTriggered("PageUp") && !mbLoadingLevel)  { mIndex_SelectedScene = CircularIncrement(mIndex_SelectedScene, NumScenes);     this->StartLoadingScene(mIndex_SelectedScene); }
-				if (input.IsKeyTriggered("PageDown") && !mbLoadingLevel){ mIndex_SelectedScene = CircularDecrement(mIndex_SelectedScene, NumScenes - 1); this->StartLoadingScene(mIndex_SelectedScene); }
-				if (input.IsKeyTriggered("R") && !mbLoadingLevel)       { this->StartLoadingScene(mIndex_SelectedScene); } // reload scene
-			}
-			if (input.IsKeyTriggered("1") && !mbLoadingLevel) { mIndex_SelectedScene = 0; this->StartLoadingScene(mIndex_SelectedScene); }
-			if (input.IsKeyTriggered("2") && !mbLoadingLevel) { mIndex_SelectedScene = 1; this->StartLoadingScene(mIndex_SelectedScene); }
-			if (input.IsKeyTriggered("3") && !mbLoadingLevel) { mIndex_SelectedScene = 2; this->StartLoadingScene(mIndex_SelectedScene); }
-			if (input.IsKeyTriggered("4") && !mbLoadingLevel) { mIndex_SelectedScene = 3; this->StartLoadingScene(mIndex_SelectedScene); }
-		}
-	}
-}
 
 bool VQEngine::IsWindowRegistered(HWND hwnd) const
 {
@@ -386,7 +294,7 @@ void VQEngine::CalculateEffectiveFrameRateLimit(HWND hwnd)
 	}
 	const bool bUnlimitedFrameRate = mEffectiveFrameRateLimit_ms == 0.0f;
 	if (bUnlimitedFrameRate) Log::Info("FrameRateLimit : Unlimited");
-	else                    Log::Info("FrameRateLimit : %.2fms | %d FPS", mEffectiveFrameRateLimit_ms, static_cast<int>(1000.0f / mEffectiveFrameRateLimit_ms));
+	else                     Log::Info("FrameRateLimit : %.2fms | %d FPS", mEffectiveFrameRateLimit_ms, static_cast<int>(1000.0f / mEffectiveFrameRateLimit_ms));
 }
 
 float VQEngine::FramePacing(float dt)
@@ -431,14 +339,27 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 	std::unique_ptr<Window>& pWin = mpWinMain;
 	HWND hwnd = pWin->GetHWND();
 
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(hwnd);
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(hwnd);
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
 #else
 	const int FRAME_DATA_INDEX = 0;
 #endif
 
 	mpScene->Update(dt, FRAME_DATA_INDEX);
+
+	HandleEngineInput(); // system-wide input (esc/mouse click on wnd)
+	for (decltype(mInputStates)::iterator it = mInputStates.begin(); it != mInputStates.end(); ++it)
+	{
+		HWND   hwnd = it->first;
+		Input& input = it->second;
+		auto& pWin = this->GetWindow(hwnd);
+		const bool bIsShiftDown = input.IsKeyDown("Shift");
+
+		if (pWin == mpWinMain)
+			HandleMainWindowInput(input, hwnd);
+	}
+	HandleUIInput();
 }
 
 void VQEngine::UpdateThread_UpdateScene_DebugWnd(const float dt)
@@ -467,7 +388,7 @@ void VQEngine::Load_SceneData_Dispatch()
 
 	auto fnCreateSceneInstance = [&](const std::string& SceneType, std::unique_ptr<Scene>& pScene) -> void
 	{
-		if (SceneType == "Default")          pScene = std::make_unique<DefaultScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
+		     if (SceneType == "Default")          pScene = std::make_unique<DefaultScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 		else if (SceneType == "Sponza")           pScene = std::make_unique<SponzaScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 		else if (SceneType == "StressTest")       pScene = std::make_unique<StressTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 		else if (SceneType == "GeometryUnitTest") pScene = std::make_unique<GeometryUnitTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
@@ -499,7 +420,7 @@ SRV_ID FLoadingScreenData::GetSelectedLoadingScreenSRV_ID() const
 	assert(SelectedLoadingScreenSRVIndex < SRVs.size());
 	return SRVs[SelectedLoadingScreenSRVIndex];
 }
-void FLoadingScreenData::RotateLoadingScreenImage()
+void FLoadingScreenData::RotateLoadingScreenImageIndex()
 {
 	SelectedLoadingScreenSRVIndex = (int)MathUtil::RandU(0, (int)SRVs.size());
 }
@@ -602,13 +523,14 @@ MeshID VQEngine::GetBuiltInMeshID(const std::string& MeshName) const
 
 void VQEngine::StartLoadingEnvironmentMap(int IndexEnvMap)
 {
+	assert(IndexEnvMap >= 0 && IndexEnvMap < mResourceNames.mEnvironmentMapPresetNames.size());
 	this->WaitUntilRenderingFinishes();
 	mAppState = EAppState::LOADING;
 	mbLoadingEnvironmentMap = true;
 	mWorkers_TextureLoading.AddTask([&, IndexEnvMap]()
-		{
-			LoadEnvironmentMap(mResourceNames.mEnvironmentMapPresetNames[IndexEnvMap]);
-		});
+	{
+		LoadEnvironmentMap(mResourceNames.mEnvironmentMapPresetNames[IndexEnvMap]);
+	});
 }
 
 void VQEngine::StartLoadingScene(int IndexScene)
@@ -618,13 +540,11 @@ void VQEngine::StartLoadingScene(int IndexScene)
 	// get scene representation 
 	const std::string& SceneName = mResourceNames.mSceneNames[IndexScene];
 
-
-
 	// queue the selected scene for loading
 	mQueue_SceneLoad.push(mResourceNames.mSceneNames[IndexScene]);
 
 	mAppState = INITIALIZING;
-	mbLoadingLevel.store(true);    // thread-safe
+	mbLoadingLevel.store(true); // thread-safe
 	Log::Info("StartLoadingScene: %d", IndexScene);
 }
 

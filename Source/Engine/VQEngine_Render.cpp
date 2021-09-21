@@ -949,6 +949,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	const FSceneView& SceneView             = mpScene->GetSceneView(FRAME_DATA_INDEX);
 	const FSceneShadowView& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
 	const FPostProcessParameters& PPParams  = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
+	mRenderStats = {};
 
 
 	// TODO: undo const cast and assign in a proper spot -------------------------------------------------
@@ -987,7 +988,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		RenderPostProcess(pCmd, &CBHeap, PPParams);
 
-		RenderUI(pCmd, ctx, PPParams);
+		RenderUI(pCmd, &CBHeap, ctx, PPParams);
 
 		if (bUseHDRRenderPath)
 		{
@@ -1031,7 +1032,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 			}
 			if (SceneShadowView.NumPointShadowViews > 0)
 			{
-				for (int iPoint = 0; iPoint < SceneShadowView.NumPointShadowViews; ++iPoint)
+				for (uint iPoint = 0; iPoint < SceneShadowView.NumPointShadowViews; ++iPoint)
 				{
 					const size_t iPointWorker = iCmdPointLightsThread + iPoint;
 					ID3D12GraphicsCommandList* pCmd_Point = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iPointWorker);
@@ -1068,7 +1069,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		RenderPostProcess(pCmd_ThisThread, &CBHeap_This, PPParams);
 
-		RenderUI(pCmd_ThisThread, ctx, PPParams);
+		RenderUI(pCmd_ThisThread, &CBHeap_This, ctx, PPParams);
 
 		if (bUseHDRRenderPath)
 		{

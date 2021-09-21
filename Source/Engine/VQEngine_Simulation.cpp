@@ -87,9 +87,17 @@ void VQEngine::SimulationThread_Tick(const float dt)
 {
 	SCOPED_CPU_MARKER_C("SimulationThread_Tick()", 0xFF007777);
 
+	// world update
 	UpdateThread_Tick(dt);
+
+	// ui
+	if (!(mbLoadingLevel || mbLoadingEnvironmentMap))
+	{
+		UpdateUIState(mpWinMain->GetHWND(), dt);
+	}
+
+	// render
 	RenderThread_Tick();
-	//Log::Info("RenderTick() : dt=%.2f ms (Sleep=%.2f)", dt * 1000.0f, SleepTime);
 
 	++mNumSimulationTicks;
 }
