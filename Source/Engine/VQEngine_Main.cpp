@@ -263,7 +263,9 @@ void VQEngine::InitializeWindows(const FStartupParameters& Params)
 		Log::Info("Created debug window<0x%x>: %dx%d", mpWinDebug->GetHWND(), mpWinDebug->GetWidth(), mpWinDebug->GetHeight());
 	}
 
-	//this->SetMouseCaptureForWindow(mpWinMain->GetHWND(), true);
+#if 0
+	this->SetMouseCaptureForWindow(mpWinMain->GetHWND(), true);
+#endif
 }
 
 void VQEngine::InitializeHDRProfiles()
@@ -320,7 +322,6 @@ void VQEngine::InitializeScenes()
 
 	this->StartLoadingScene(mIndex_SelectedScene);
 }
-
 
 void VQEngine::InitializeThreads()
 {
