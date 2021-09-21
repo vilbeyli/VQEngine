@@ -97,10 +97,7 @@ void VQEngine::HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWin
 void VQEngine::SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse)
 {
 	auto& pWin = this->GetWindow(hwnd);
-
-	if(mInputStates.find(hwnd) != mInputStates.end())
-		mInputStates.at(hwnd).SetInputBypassing(!bCaptureMouse);
-	else
+	if (mInputStates.find(hwnd) == mInputStates.end())
 	{
 		Log::Error("Warning: couldn't find InputState for hwnd=0x%x", hwnd);
 	}
@@ -201,6 +198,7 @@ void VQEngine::UpdateThread_HandleEvents()
 		{
 			std::shared_ptr<KeyDownEvent> p = std::static_pointer_cast<KeyDownEvent>(pEvent);
 			mInputStates.at(p->hwnd).UpdateKeyDown(p->data);
+			Log::Info("KeyDownEvent;");
 			UpdateImGui_KeyDown(p->data);
 
 		} break;
