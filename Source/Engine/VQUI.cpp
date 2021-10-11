@@ -677,8 +677,10 @@ void VQEngine::DrawPostProcessControlsWindow(FPostProcessParameters& PPParams)
 			}
 		}
 
-		if (ImGui::SliderFloat("Sharpen Stops", &PPParams.FFSR_RCASParams.RCASSharpnessStops, 0.0f, 2.0f, "%.2f"))
+		float LinearSharpness = PPParams.FFSR_RCASParams.GetLinearSharpness();
+		if (ImGui::SliderFloat("Sharpness", &LinearSharpness, 0.01f, 1.00f, "%.2f"))
 		{
+			PPParams.FFSR_RCASParams.SetLinearSharpness(LinearSharpness);
 			PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
 		}
 	}
@@ -696,7 +698,7 @@ void VQEngine::DrawPostProcessControlsWindow(FPostProcessParameters& PPParams)
 		ImGui::Checkbox("Enabled (B) ##0", &bCASEnabled);
 		{
 			BeginDisabledUIState(bCASEnabled);
-			if (ImGui::SliderFloat("Sharpening", &PPParams.FFXCASParams.CASSharpen, 0.0f, 1.0f, "%.1f"))
+			if (ImGui::SliderFloat("Sharpening", &PPParams.FFXCASParams.CASSharpen, 0.0f, 1.0f, "%.2f"))
 			{
 				PPParams.FFXCASParams.UpdateCASConstantBlock(W,H,W,H);
 			}

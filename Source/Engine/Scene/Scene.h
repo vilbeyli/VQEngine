@@ -73,10 +73,10 @@ struct FPostProcessParameters
 
 			NUM_FSR_PRESET_OPTIONS
 		};
-		float GetScreenPercentage() const;
 
-		FFSR_EASU() : SelectedFSRPreset(EPresets::ULTRA_QUALITY), fCustomScaling(1.0f) { memset(EASUConstantBlock, 0, sizeof(EASUConstantBlock)); };
-		FFSR_EASU(const FFSR_EASU& other) { memcpy(EASUConstantBlock, other.EASUConstantBlock, sizeof(EASUConstantBlock));  } // TODO: move to impl
+		float GetScreenPercentage() const;
+		FFSR_EASU();
+		FFSR_EASU(const FFSR_EASU& other);
 		void UpdateEASUConstantBlock(uint InputWidth          , uint InputHeight,
 			                         uint InputContainerWidth , uint InputContainerHeight,
 			                         uint OutputWidth         , uint OutputHeight);
@@ -88,11 +88,14 @@ struct FPostProcessParameters
 	};
 	struct FFSR_RCAS
 	{
+		FFSR_RCAS();
+		FFSR_RCAS(const FFSR_RCAS& other);
+		float GetLinearSharpness() const;
+		void  SetLinearSharpness(float Sharpness);
+		void UpdateRCASConstantBlock();
+
 		unsigned RCASConstantBlock[4];
 		float RCASSharpnessStops = 0.2f;
-		FFSR_RCAS() { memset(RCASConstantBlock, 0, sizeof(RCASConstantBlock)); };
-		FFSR_RCAS(const FFSR_RCAS& other) : RCASSharpnessStops(other.RCASSharpnessStops) { memcpy(RCASConstantBlock, other.RCASConstantBlock, sizeof(RCASConstantBlock)); }
-		void UpdateRCASConstantBlock();
 	};
 	struct FBlurParams // Gaussian Blur Pass
 	{ 

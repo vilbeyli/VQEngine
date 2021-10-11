@@ -1073,6 +1073,21 @@ FMaterialRepresentation::FMaterialRepresentation()
 #include "Shaders/AMDFidelityFX/CAS/ffx_cas.h"
 #include "Shaders/AMDFidelityFX/FSR1.0/ffx_fsr1.h"
 #define FFX_DEBUG_LOG 1
+
+
+FPostProcessParameters::FFSR_RCAS::FFSR_RCAS()
+{
+	memset(RCASConstantBlock, 0, sizeof(RCASConstantBlock));
+}
+
+FPostProcessParameters::FFSR_RCAS::FFSR_RCAS(const FFSR_RCAS& other)
+	: RCASSharpnessStops(other.RCASSharpnessStops) 
+{ 
+	memcpy(RCASConstantBlock, other.RCASConstantBlock, sizeof(RCASConstantBlock)); 
+}
+
+float FPostProcessParameters::FFSR_RCAS::GetLinearSharpness() const { return std::powf(0.5f, this->RCASSharpnessStops); }
+void FPostProcessParameters::FFSR_RCAS::SetLinearSharpness(float Sharpness) { this->RCASSharpnessStops = std::log10f(Sharpness) / std::log10f(0.5f); }
 void FPostProcessParameters::FFSR_RCAS::UpdateRCASConstantBlock()
 {
 #if FFX_DEBUG_LOG
@@ -1092,6 +1107,19 @@ float FPostProcessParameters::FFSR_EASU::GetScreenPercentage() const
 	case FPostProcessParameters::FFSR_EASU::CUSTOM       : return fCustomScaling;
 	}
 	return 1.0f;
+}
+
+FPostProcessParameters::FFSR_EASU::FFSR_EASU()
+	: SelectedFSRPreset(EPresets::ULTRA_QUALITY)
+	, fCustomScaling(1.0f) 
+{
+	memset(EASUConstantBlock, 0, sizeof(EASUConstantBlock));
+}
+FPostProcessParameters::FFSR_EASU::FFSR_EASU(const FFSR_EASU& other)
+{
+	memcpy(EASUConstantBlock, other.EASUConstantBlock, sizeof(EASUConstantBlock));
+	this->SelectedFSRPreset = other.SelectedFSRPreset;
+	this->fCustomScaling = other.fCustomScaling;
 }
 
 void FPostProcessParameters::FFSR_EASU::UpdateEASUConstantBlock(
