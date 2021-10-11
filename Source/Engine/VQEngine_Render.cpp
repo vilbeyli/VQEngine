@@ -258,8 +258,11 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 
 	if (hwnd == mpWinMain->GetHWND())
 	{
+		const bool bHDR = this->ShouldRenderHDR(hwnd);
 
 		constexpr DXGI_FORMAT MainColorRTFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		const     DXGI_FORMAT TonemapperOutputFormat = bHDR ? VQEngine::PREFERRED_HDR_FORMAT : DXGI_FORMAT_R8G8B8A8_UNORM;
+
 		FRenderingResources_MainWindow& r = mResources_MainWnd;
 
 
@@ -416,7 +419,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 		{ // Tonemapper Resources
 			TextureCreateDesc desc("TonemapperOut");
 			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				MainColorRTFormat
+				TonemapperOutputFormat
 				, RenderResolutionX
 				, RenderResolutionY
 				, 1 // Array Size
@@ -435,7 +438,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 		{ // FFX-CAS Resources
 			TextureCreateDesc desc("FFXCAS_Out");
 			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				MainColorRTFormat
+				TonemapperOutputFormat
 				, RenderResolutionX
 				, RenderResolutionY
 				, 1 // Array Size
@@ -453,7 +456,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 		{ // FSR1-EASU Resources
 			TextureCreateDesc desc("FSR_EASU_Out");
 			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				MainColorRTFormat
+				TonemapperOutputFormat
 				, Width
 				, Height
 				, 1 // Array Size
@@ -470,7 +473,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 		{ // FSR1-RCAS Resources
 			TextureCreateDesc desc("FSR_RCAS_Out");
 			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				MainColorRTFormat
+				TonemapperOutputFormat
 				, Width
 				, Height
 				, 1 // Array Size
