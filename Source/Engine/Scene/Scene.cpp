@@ -1081,14 +1081,15 @@ void FPostProcessParameters::FFSR_RCAS::UpdateRCASConstantBlock()
 	FsrRcasCon(reinterpret_cast<AU1*>(&this->RCASConstantBlock[0]), this->RCASSharpnessStops);
 }
 
-float FPostProcessParameters::FFSR_EASU::GetScreenPercentage(EPresets ePreset)
+float FPostProcessParameters::FFSR_EASU::GetScreenPercentage() const
 {
-	switch (ePreset)
+	switch (this->SelectedFSRPreset)
 	{
 	case FPostProcessParameters::FFSR_EASU::ULTRA_QUALITY: return 0.77f;
 	case FPostProcessParameters::FFSR_EASU::QUALITY      : return 0.67f;
 	case FPostProcessParameters::FFSR_EASU::BALANCED     : return 0.58f;
 	case FPostProcessParameters::FFSR_EASU::PERFORMANCE  : return 0.50f;
+	case FPostProcessParameters::FFSR_EASU::CUSTOM       : return fCustomScaling;
 	}
 	return 1.0f;
 }

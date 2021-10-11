@@ -217,11 +217,13 @@ void VQEngine::OnWindowResize(HWND hWnd)
 #endif
 
 	mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<WindowResizeEvent>(w, h, hWnd));
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<WindowResizeEvent>(w, h, hWnd));
 }
 
 void VQEngine::OnToggleFullscreen(HWND hWnd)
 {
 	mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<ToggleFullscreenEvent>(hWnd));
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<ToggleFullscreenEvent>(hWnd));
 }
 
 //------------------------------------------------------------------------------------

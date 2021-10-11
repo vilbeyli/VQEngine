@@ -184,7 +184,14 @@ void VQEngine::RenderThread_Inititalize()
 	const bool bFullscreen = mpWinMain->IsFullscreen();
 	const int W = bFullscreen ? mpWinMain->GetFullscreenWidth() : mpWinMain->GetWidth();
 	const int H = bFullscreen ? mpWinMain->GetFullscreenHeight() : mpWinMain->GetHeight();
-	RenderThread_LoadWindowSizeDependentResources(mpWinMain->GetHWND(), W, H);
+
+	//const auto& PPParams = this->mpScene->GetPostProcessParameters(0);
+	//const bool bFSREnabled = PPParams.IsFSREnabled();
+	//const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
+	//
+	//const float fResolutionScale = bUpscaling ? PPParams.FFSR_EASUParams.GetScreenPercentage() : 1.0f;
+	const float fResolutionScale = 1.0f; // TODO ??
+	RenderThread_LoadWindowSizeDependentResources(mpWinMain->GetHWND(), W, H, fResolutionScale);
 
 	mTimerRender.Reset();
 	mTimerRender.Start();
@@ -242,9 +249,12 @@ void VQEngine::InitializeBuiltinMeshes()
 // LOAD
 //
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
-void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height)
+void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height, float fResolutionScale)
 {
 	assert(Width >= 1 && Height >= 1);
+
+	const uint RenderResolutionX = static_cast<uint>(Width * fResolutionScale);
+	const uint RenderResolutionY = static_cast<uint>(Height * fResolutionScale);
 
 	if (hwnd == mpWinMain->GetHWND())
 	{
@@ -257,8 +267,8 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			TextureCreateDesc desc("SceneDepthMSAA");
 			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 				DXGI_FORMAT_R32_TYPELESS
-				, Width
-				, Height
+				, RenderResolutionX
+				, RenderResolutionY
 				, 1 // Array Size
 				, 1 // MIP levels
 				, MSAA_SAMPLE_COUNT // MSAA SampleCount
@@ -274,8 +284,8 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			TextureCreateDesc desc("SceneDepthResolve");
 			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 				DXGI_FORMAT_R32_FLOAT
-				, Width
-				, Height
+				, RenderResolutionX
+				, RenderResolutionY
 				, 1 // Array Size
 				, 1 // MIP levels
 				, 1 // MSAA SampleCount
@@ -290,8 +300,8 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			TextureCreateDesc desc("SceneDepth");
 			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 				DXGI_FORMAT_R32_TYPELESS
-				, Width
-				, Height
+				, RenderResolutionX
+				, RenderResolutionY
 				, 1 // Array Size
 				, 1 // MIP levels
 				, 1 // MSAA SampleCount
@@ -307,8 +317,8 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			TextureCreateDesc desc("SceneColorMSAA");
 			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 				MainColorRTFormat
-				, Width
-				, Height
+				, RenderResolutionX
+				, RenderResolutionY
 				, 1 // Array Size
 				, 1 // MIP levels
 				, MSAA_SAMPLE_COUNT // MSAA SampleCount
@@ -324,8 +334,8 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			TextureCreateDesc desc("SceneColor");
 			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 				MainColorRTFormat
-				, Width
-				, Height
+				, RenderResolutionX
+				, RenderResolutionY
 				, 1 // Array Size
 				, 0 // MIP levels
 				, 1 // MSAA SampleCount
@@ -343,8 +353,8 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			TextureCreateDesc desc("SceneNormals");
 			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 				DXGI_FORMAT_R10G10B10A2_UNORM
-				, Width
-				, Height
+				, RenderResolutionX
+				, RenderResolutionY
 				, 1 // Array Size
 				, 0 // MIP levels
 				, 1 // MSAA SampleCount
@@ -363,8 +373,8 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			TextureCreateDesc desc("SceneNormalsMSAA");
 			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 				DXGI_FORMAT_R10G10B10A2_UNORM
-				, Width
-				, Height
+				, RenderResolutionX
+				, RenderResolutionY
 				, 1 // Array Size
 				, 1 // MIP levels
 				, MSAA_SAMPLE_COUNT // MSAA SampleCount
@@ -383,8 +393,8 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			TextureCreateDesc desc("BlurIntermediate");
 			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 				MainColorRTFormat
-				, Width
-				, Height
+				, RenderResolutionX
+				, RenderResolutionY
 				, 1 // Array Size
 				, 0 // MIP levels
 				, 1 // MSAA SampleCount
@@ -407,8 +417,8 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			TextureCreateDesc desc("TonemapperOut");
 			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 				MainColorRTFormat
-				, Width
-				, Height
+				, RenderResolutionX
+				, RenderResolutionY
 				, 1 // Array Size
 				, 0 // MIP levels
 				, 1 // MSAA SampleCount
@@ -426,8 +436,8 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			TextureCreateDesc desc("FFXCAS_Out");
 			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 				MainColorRTFormat
-				, Width
-				, Height
+				, RenderResolutionX
+				, RenderResolutionY
 				, 1 // Array Size
 				, 0 // MIP levels
 				, 1 // MSAA SampleCount
@@ -479,8 +489,8 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			TextureCreateDesc desc("FFXCACAO_Out");
 			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 				DXGI_FORMAT_R8_UNORM
-				, Width
-				, Height
+				, RenderResolutionX
+				, RenderResolutionY
 				, 1 // Array Size
 				, 0 // MIP levels
 				, 1 // MSAA SampleCount
@@ -500,7 +510,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			params.FmtNormalBuffer = mRenderer.GetTextureFormat(r.Tex_SceneNormals);
 			params.FmtDepthBuffer  = DXGI_FORMAT_R32_FLOAT; //mRenderer.GetTextureFormat(r.Tex_SceneDepth); /*R32_TYPELESS*/
 			params.FmtOutput       = desc.d3d12Desc.Format;
-			mRenderPass_AO.OnCreateWindowSizeDependentResources(Width, Height, static_cast<const void*>(&params));
+			mRenderPass_AO.OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY, static_cast<const void*>(&params));
 		}
 
 	} // main window resources
@@ -652,6 +662,8 @@ void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 		mRenderer.DestroyTexture(r.Tex_PostProcess_BlurIntermediate);
 		mRenderer.DestroyTexture(r.Tex_PostProcess_TonemapperOut);
 		mRenderer.DestroyTexture(r.Tex_PostProcess_FFXCASOut);
+		mRenderer.DestroyTexture(r.Tex_PostProcess_FSR_EASUOut);
+		mRenderer.DestroyTexture(r.Tex_PostProcess_FSR_RCASOut);
 
 		mRenderPass_AO.OnDestroyWindowSizeDependentResources();
 	}
@@ -993,8 +1005,8 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 
 	// TODO: undo const cast and assign in a proper spot -------------------------------------------------
-	const_cast<FSceneView&>(SceneView).SceneRTWidth  = ctx.WindowDisplayResolutionX;
-	const_cast<FSceneView&>(SceneView).SceneRTHeight = ctx.WindowDisplayResolutionY;
+	const_cast<FSceneView&>(SceneView).SceneRTWidth  = static_cast<int>(ctx.WindowDisplayResolutionX * (PPParams.IsFSREnabled() ? PPParams.FFSR_EASUParams.GetScreenPercentage() : 1.0f));
+	const_cast<FSceneView&>(SceneView).SceneRTHeight = static_cast<int>(ctx.WindowDisplayResolutionY * (PPParams.IsFSREnabled() ? PPParams.FFSR_EASUParams.GetScreenPercentage() : 1.0f));
 	const_cast<FPostProcessParameters&>(PPParams).SceneRTWidth  = SceneView.SceneRTWidth;
 	const_cast<FPostProcessParameters&>(PPParams).SceneRTHeight = SceneView.SceneRTHeight;
 	const_cast<FPostProcessParameters&>(PPParams).DisplayResolutionWidth  = ctx.WindowDisplayResolutionX;

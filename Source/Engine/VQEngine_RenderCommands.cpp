@@ -886,8 +886,8 @@ void VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 	assert(PPParams.SceneRTHeight != 0);
 	constexpr int DispatchGroupDimensionX = 8;
 	constexpr int DispatchGroupDimensionY = 8;
-	const     int DispatchX = (InputImageWidth  + (DispatchGroupDimensionX - 1)) / DispatchGroupDimensionX;
-	const     int DispatchY = (InputImageHeight + (DispatchGroupDimensionY - 1)) / DispatchGroupDimensionY;
+	const     int DispatchRenderX = (InputImageWidth  + (DispatchGroupDimensionX - 1)) / DispatchGroupDimensionX;
+	const     int DispatchRenderY = (InputImageHeight + (DispatchGroupDimensionY - 1)) / DispatchGroupDimensionY;
 	constexpr int DispatchZ = 1;
 
 	// cmds
@@ -925,7 +925,7 @@ void VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 				pCmd->SetComputeRootDescriptorTable(0, srv_ColorIn.GetGPUDescHandle());
 				pCmd->SetComputeRootDescriptorTable(1, uav_BlurIntermediate.GetGPUDescHandle());
 				pCmd->SetComputeRootConstantBufferView(2, cbAddr);
-				pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
+				pCmd->Dispatch(DispatchRenderX, DispatchRenderY, DispatchZ);
 
 				const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 				{
@@ -943,7 +943,7 @@ void VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 				pCmd->SetComputeRootDescriptorTable(0, srv_blurIntermediate.GetGPUDescHandle());
 				pCmd->SetComputeRootDescriptorTable(1, uav_BlurOutput.GetGPUDescHandle());
 				pCmd->SetComputeRootConstantBufferView(2, cbAddr);
-				pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
+				pCmd->Dispatch(DispatchRenderX, DispatchRenderY, DispatchZ);
 
 				const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 				{
@@ -968,7 +968,7 @@ void VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 			pCmd->SetComputeRootDescriptorTable(0, PP_ENABLE_BLUR_PASS ? srv_blurOutput.GetGPUDescHandle() : srv_ColorIn.GetGPUDescHandle());
 			pCmd->SetComputeRootDescriptorTable(1, uav_TonemapperOut.GetGPUDescHandle());
 			pCmd->SetComputeRootConstantBufferView(2, cbAddr);
-			pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
+			pCmd->Dispatch(DispatchRenderX, DispatchRenderY, DispatchZ);
 		}
 
 		if(PPParams.IsFFXCASEnabled())
@@ -979,12 +979,14 @@ void VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 			};
 			pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
 
-			SCOPED_GPU_MARKER(pCmd, "FFX-CAS_CS");
+			SCOPED_GPU_MARKER(pCmd, "FFX-CAS CS");
 
-			FPostProcessParameters::FFFXCAS* pConstBuffer = {};
+			unsigned* pConstBuffer = {};
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-			pCBufferHeap->AllocConstantBuffer(sizeof(FPostProcessParameters::FFFXCAS), (void**)&pConstBuffer, &cbAddr);
-			*pConstBuffer = PPParams.FFXCASParams;
+			const size_t cbSize = sizeof(unsigned) * 8;
+			pCBufferHeap->AllocConstantBuffer(cbSize, (void**)&pConstBuffer, &cbAddr);
+			memcpy(pConstBuffer, PPParams.FFXCASParams.CASConstantBlock, cbSize);
+			
 
 			ID3D12PipelineState* pPSO = mRenderer.GetPSO(EBuiltinPSOs::FFX_CAS_CS_PSO);
 			assert(pPSO);
@@ -1014,12 +1016,13 @@ void VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 			pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
 
 			{
-				SCOPED_GPU_MARKER(pCmd, "FSR-EASU_CS");
+				SCOPED_GPU_MARKER(pCmd, "FSR-EASU CS");
 
-				FPostProcessParameters::FFSR_EASU* pConstBuffer = {};
+				unsigned* pConstBuffer = {};
 				D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-				pCBufferHeap->AllocConstantBuffer(sizeof(FPostProcessParameters::FFSR_EASU), (void**)&pConstBuffer, &cbAddr);
-				*pConstBuffer = PPParams.FFSR_EASUParams;
+				const size_t cbSize = sizeof(unsigned) * 16;
+				pCBufferHeap->AllocConstantBuffer(cbSize, (void**)&pConstBuffer, &cbAddr);
+				memcpy(pConstBuffer, PPParams.FFSR_EASUParams.EASUConstantBlock, cbSize);
 
 				ID3D12PipelineState* pPSO = mRenderer.GetPSO(EBuiltinPSOs::FFX_FSR1_EASU_CS_PSO);
 				assert(pPSO);
@@ -1032,17 +1035,17 @@ void VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 				// each FSR-EASU_CS thread processes 4 pixels.
 				// workgroup is 64 threads, hence 256 (16x16) pixels are processed per thread group that is dispatched
 				constexpr int WORKGROUP_WORK_DIMENSION = 16;
-				const int DispatchX = (InputImageWidth + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
-				const int DispatchY = (InputImageHeight + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
+				const int DispatchX = (PPParams.DisplayResolutionWidth  + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
+				const int DispatchY = (PPParams.DisplayResolutionHeight + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
 				pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
 			}
-			const bool bFFX_RCAS_Enabled = true;
+			const bool bFFX_RCAS_Enabled = true; // TODO: drive with UI ?
 			if (bFFX_RCAS_Enabled)
 			{
 				ID3D12Resource* pRscEASUOut = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_FSR_EASUOut);
 				ID3D12Resource* pRscRCASOut = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_FSR_RCASOut);
 
-				SCOPED_GPU_MARKER(pCmd, "FSR-RCAS_CS");
+				SCOPED_GPU_MARKER(pCmd, "FSR-RCAS CS");
 				{
 					std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
 					barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscEASUOut
@@ -1068,8 +1071,8 @@ void VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 				// each FSR-EASU_CS thread processes 4 pixels.
 				// workgroup is 64 threads, hence 256 (16x16) pixels are processed per thread group that is dispatched
 				constexpr int WORKGROUP_WORK_DIMENSION = 16;
-				const int DispatchX = (InputImageWidth + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
-				const int DispatchY = (InputImageHeight + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
+				const int DispatchX = (PPParams.DisplayResolutionWidth + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
+				const int DispatchY = (PPParams.DisplayResolutionHeight + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
 				pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
 
 				{
@@ -1097,8 +1100,8 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBu
 {
 	const bool bUseHDRRenderPath = this->ShouldRenderHDR(mpWinMain->GetHWND());
 
-	const float           RenderResolutionX = static_cast<float>(PPParams.SceneRTWidth);
-	const float           RenderResolutionY = static_cast<float>(PPParams.SceneRTHeight);
+	const float           RenderResolutionX = static_cast<float>(PPParams.DisplayResolutionWidth);
+	const float           RenderResolutionY = static_cast<float>(PPParams.DisplayResolutionHeight);
 	D3D12_VIEWPORT                  viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
 	const auto                      VBIBIDs = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE].GetIABufferIDs();
 	const BufferID&                   IB_ID = VBIBIDs.second;

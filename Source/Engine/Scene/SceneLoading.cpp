@@ -312,9 +312,19 @@ void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 
 		// Update FidelityFX constant blocks
 		PPParams.bEnableCAS = true; // TODO: read from scene PP settings
-		PPParams.FFXCASParams.UpdateCASConstantBlock(fWidth, fHeight, fWidth, fHeight);
-		PPParams.FFSR_EASUParams.UpdateEASUConstantBlock(fWidth, fHeight, fWidth, fHeight, fWidth, fHeight);
-		PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
+		if (PPParams.IsFFXCASEnabled())
+		{
+			PPParams.FFXCASParams.UpdateCASConstantBlock(fWidth, fHeight, fWidth, fHeight);
+		}
+
+		if (PPParams.IsFSREnabled())
+		{
+			const float fResolutionScale = PPParams.FFSR_EASUParams.GetScreenPercentage();
+			const uint InputWidth = static_cast<uint>(fResolutionScale * fWidth);
+			const uint InputHeight = static_cast<uint>(fResolutionScale * fHeight);
+			PPParams.FFSR_EASUParams.UpdateEASUConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, fWidth, fHeight);
+			PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
+		}
 	}
 }
 

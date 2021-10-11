@@ -629,23 +629,37 @@ void VQEngine::DrawDebugPanelWindow(FSceneRenderParameters& SceneParams)
 }
 void VQEngine::DrawPostProcessControlsWindow(FPostProcessParameters& PPParams)
 {
+	// constants
 	const bool bFSREnabled = PPParams.IsFSREnabled();
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
 
+	// fns
+	auto fnSendWindowResizeEvents = [&]()
+	{
+		mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<WindowResizeEvent>(W, H, mpWinMain->GetHWND()));
+		mEventQueue_WinToVQE_Update.AddItem(std::make_unique<WindowResizeEvent>(W, H, mpWinMain->GetHWND()));
+	};
+
+	// set window positions
 	const uint32_t PP_WINDOW_POS_X = W - PP_WINDOW_PADDING_X - PP_WINDOW_SIZE_X;
 	const uint32_t PP_WINDOW_POS_Y = H - PP_WINDOW_PADDING_Y - PP_WINDOW_SIZE_Y;
 	ImGui::SetNextWindowPos(ImVec2((float)PP_WINDOW_POS_X, (float)PP_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(PP_WINDOW_SIZE_X, PP_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
 
+	// one time initialization
 	InitializeStaticCStringData_PostProcessingControls();
 
+
+	// start drawing the window
 	ImGui::Begin("Post Processing (F3)", &mUIState.bWindowVisible_PostProcessControls);
 
 	ImGui::Text("FidelityFX Super Resolution");
 	ImGui::Separator();
-	ImGui::Checkbox("Enabled ##1 (J)", &PPParams.bEnableFSR);
-	bool bUpscalingResolutionChanged = false;
+	if (ImGui::Checkbox("Enabled (J) ##1", &PPParams.bEnableFSR))
+	{
+		fnSendWindowResizeEvents();
+	}
 	BeginDisabledUIState(PPParams.bEnableFSR);
 	{
 		int iFSROption = PPParams.FFSR_EASUParams.SelectedFSRPreset;
@@ -653,18 +667,13 @@ void VQEngine::DrawPostProcessControlsWindow(FPostProcessParameters& PPParams)
 		{
 			// update the PPParams data
 			PPParams.FFSR_EASUParams.SelectedFSRPreset = static_cast<FPostProcessParameters::FFSR_EASU::EPresets>(iFSROption);
-
-			// TODO: queue a upscaling event, resize render-resolution dependent resources
-			//PPParams.FFSR_EASUParams.UpdateEASUConstantBlock(); // todo
-			Log::Info("TODO: queue a upscaling event, resize render-resolution dependent resources");
+			fnSendWindowResizeEvents();
 		}
 		if (PPParams.FFSR_EASUParams.SelectedFSRPreset == FPostProcessParameters::FFSR_EASU::EPresets::CUSTOM)
 		{
 			if (ImGui::SliderFloat("Resolution Scale", &PPParams.FFSR_EASUParams.fCustomScaling, 0.50f, 1.0f, "%.2f"))
 			{
-				bUpscalingResolutionChanged = true; 
-
-				Log::Info("TODO: queue a upscaling event, resize render-resolution dependent resources");
+				fnSendWindowResizeEvents();
 			}
 		}
 
@@ -672,7 +681,6 @@ void VQEngine::DrawPostProcessControlsWindow(FPostProcessParameters& PPParams)
 		{
 			PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
 		}
-
 	}
 	EndDisabledUIState(PPParams.bEnableFSR);
 
@@ -685,7 +693,7 @@ void VQEngine::DrawPostProcessControlsWindow(FPostProcessParameters& PPParams)
 		bool bCASEnabled = PPParams.IsFFXCASEnabled();
 		bool bCASEnabledBefore = bCASEnabled;
 		BeginDisabledUIState(!bFSREnabled);
-		ImGui::Checkbox("Enabled ##0 (B)", &bCASEnabled);
+		ImGui::Checkbox("Enabled (B) ##0", &bCASEnabled);
 		{
 			BeginDisabledUIState(bCASEnabled);
 			if (ImGui::SliderFloat("Sharpening", &PPParams.FFXCASParams.CASSharpen, 0.0f, 1.0f, "%.1f"))
