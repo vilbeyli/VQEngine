@@ -54,20 +54,39 @@ struct FPostProcessParameters
 	};
 	struct FFFXCAS
 	{
-		unsigned CASConstantBlock[8];
 		float CASSharpen = 0.8f;
 		FFFXCAS() = default;
 		FFFXCAS(const FFFXCAS& other) : CASSharpen(other.CASSharpen) { memcpy(CASConstantBlock, other.CASConstantBlock, sizeof(CASConstantBlock)); }
-		void UpdateCASConstantBlock();
+		void UpdateCASConstantBlock(uint InputWidth, uint InputHeight, uint OutputWidth, uint OutputHeight);
+		
+		private:
+		unsigned CASConstantBlock[8];
 	};
 	struct FFSR_EASU
 	{
-		unsigned EASUConstantBlock[16];
+		enum EPresets
+		{
+			ULTRA_QUALITY = 0,
+			QUALITY,
+			BALANCED,
+			PERFORMANCE,
+			CUSTOM,
+
+			NUM_FSR_PRESET_OPTIONS
+		};
+		static float GetScreenPercentage(EPresets ePreset);
+
 		FFSR_EASU() { memset(EASUConstantBlock, 0, sizeof(EASUConstantBlock)); };
 		FFSR_EASU(const FFSR_EASU& other) { memcpy(EASUConstantBlock, other.EASUConstantBlock, sizeof(EASUConstantBlock)); }
-		void UpdateEASUConstantBlock(float InputWidth         , float InputHeight,
-			                         float InputContainerWidth, float InputContainerHeight,
-			                         float OutputWidth        , float OutputHeight);
+		void UpdateEASUConstantBlock(uint InputWidth          , uint InputHeight,
+			                         uint InputContainerWidth , uint InputContainerHeight,
+			                         uint OutputWidth         , uint OutputHeight);
+		
+		EPresets SelectedFSRPreset;
+		float    fCustomScaling;
+
+		private:
+		unsigned EASUConstantBlock[16];
 	};
 	struct FFSR_RCAS
 	{

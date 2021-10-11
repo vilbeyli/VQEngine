@@ -235,10 +235,6 @@ void VQEngine::UpdateThread_HandleEvents()
 
 }
 
-#define A_CPU 1
-#include "Shaders/AMDFidelityFX/FSR1.0/ffx_a.h"
-#include "Shaders/AMDFidelityFX/CAS/ffx_cas.h"
-#include "Shaders/AMDFidelityFX/FSR1.0/ffx_fsr1.h"
 void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent)
 {
 	std::shared_ptr<WindowResizeEvent> p = std::static_pointer_cast<WindowResizeEvent>(pEvent);
@@ -261,32 +257,11 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 		for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
 		{
 			FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(i);
-			FPostProcessParameters::FFFXCAS& CASParams = PPParams.FFXCASParams;
-			CasSetup(&CASParams.CASConstantBlock[0], &CASParams.CASConstantBlock[4], CASParams.CASSharpen, fWidth, fHeight, fWidth, fHeight);
 
-			// FSR1 / EASU
-			FPostProcessParameters::FFSR_EASU& FSR_EASU_Params = PPParams.FFSR_EASUParams;
-			FsrEasuCon(
-				reinterpret_cast<AU1*>(&FSR_EASU_Params.EASUConstantBlock[0])
-				, reinterpret_cast<AU1*>(&FSR_EASU_Params.EASUConstantBlock[4])
-				, reinterpret_cast<AU1*>(&FSR_EASU_Params.EASUConstantBlock[8])
-				, reinterpret_cast<AU1*>(&FSR_EASU_Params.EASUConstantBlock[12])
-				// This the rendered image resolution being upscaled
-				, static_cast<AF1>(fWidth)
-				, static_cast<AF1>(fHeight)
-
-				// This is the resolution of the resource containing the input image (useful for dynamic resolution)
-				, static_cast<AF1>(fWidth)
-				, static_cast<AF1>(fHeight)
-
-				// This is the display resolution which the input image gets upscaled to
-				, static_cast<AF1>(fWidth)
-				, static_cast<AF1>(fHeight)
-			);
-
-			// FSR1 / RCAS
-			FPostProcessParameters::FFSR_RCAS& FSR_RCAS_Params = PPParams.FFSR_RCASParams;
-			FsrRcasCon(reinterpret_cast<AU1*>(&PPParams.FFSR_RCASParams.RCASConstantBlock[0]), PPParams.FFSR_RCASParams.RCASSharpnessStops);
+			// Update FidelityFX constant blocks
+			PPParams.FFXCASParams.UpdateCASConstantBlock(fWidth, fHeight, fWidth, fHeight);
+			PPParams.FFSR_EASUParams.UpdateEASUConstantBlock(fWidth, fHeight, fWidth, fHeight, fWidth, fHeight);
+			PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
 		}
 	}
 }

@@ -1072,32 +1072,76 @@ FMaterialRepresentation::FMaterialRepresentation()
 #include "Shaders/AMDFidelityFX/FSR1.0/ffx_a.h"
 #include "Shaders/AMDFidelityFX/CAS/ffx_cas.h"
 #include "Shaders/AMDFidelityFX/FSR1.0/ffx_fsr1.h"
+#define FFX_DEBUG_LOG 1
 void FPostProcessParameters::FFSR_RCAS::UpdateRCASConstantBlock()
 {
+#if FFX_DEBUG_LOG
+	Log::Info("[FidelityFX][FSR-RCAS]: FsrRcasCon() called with SharpnessStops=%.2f", this->RCASSharpnessStops);
+#endif
 	FsrRcasCon(reinterpret_cast<AU1*>(&this->RCASConstantBlock[0]), this->RCASSharpnessStops);
 }
 
-void FPostProcessParameters::FFSR_EASU::UpdateEASUConstantBlock(float InputWidth, float InputHeight, float InputContainerWidth, float InputContainerHeight, float OutputWidth, float OutputHeight)
+float FPostProcessParameters::FFSR_EASU::GetScreenPercentage(EPresets ePreset)
 {
+	switch (ePreset)
+	{
+	case FPostProcessParameters::FFSR_EASU::ULTRA_QUALITY: return 0.77f;
+	case FPostProcessParameters::FFSR_EASU::QUALITY      : return 0.67f;
+	case FPostProcessParameters::FFSR_EASU::BALANCED     : return 0.58f;
+	case FPostProcessParameters::FFSR_EASU::PERFORMANCE  : return 0.50f;
+	}
+	return 1.0f;
+}
+
+void FPostProcessParameters::FFSR_EASU::UpdateEASUConstantBlock(
+	  uint InputWidth
+	, uint InputHeight
+	, uint InputContainerWidth
+	, uint InputContainerHeight
+	, uint OutputWidth
+	, uint OutputHeight)
+{
+#if FFX_DEBUG_LOG
+	Log::Info("[FidelityFX][Super Resolution]: FsrEasuCon() called with InputResolution=%ux%u, ContainerDimensions=%ux%u, OutputResolution==%ux%u",
+		  InputWidth
+		, InputHeight
+		, InputContainerWidth
+		, InputContainerHeight
+		, OutputWidth
+		, OutputHeight);
+#endif
 	FsrEasuCon(
 		  reinterpret_cast<AU1*>(&this->EASUConstantBlock[0])
 		, reinterpret_cast<AU1*>(&this->EASUConstantBlock[4])
 		, reinterpret_cast<AU1*>(&this->EASUConstantBlock[8])
 		, reinterpret_cast<AU1*>(&this->EASUConstantBlock[12])
-		// This the rendered image resolution being upscaled
-		, static_cast<AF1>(InputWidth)
+		, static_cast<AF1>(InputWidth) // This the rendered image resolution being upscaled
 		, static_cast<AF1>(InputHeight)
-
-		// This is the resolution of the resource containing the input image (useful for dynamic resolution)
-		, static_cast<AF1>(InputContainerWidth)
+		, static_cast<AF1>(InputContainerWidth) // This is the resolution of the resource containing the input image (useful for dynamic resolution)
 		, static_cast<AF1>(InputContainerHeight)
-
-		// This is the display resolution which the input image gets upscaled to
-		, static_cast<AF1>(OutputWidth)
+		, static_cast<AF1>(OutputWidth) // This is the display resolution which the input image gets upscaled to
 		, static_cast<AF1>(OutputHeight)
 	);
 }
 
-void FPostProcessParameters::FFFXCAS::UpdateCASConstantBlock()
+void FPostProcessParameters::FFFXCAS::UpdateCASConstantBlock(
+	  uint InputWidth
+	, uint InputHeight
+	, uint OutputWidth
+	, uint OutputHeight)
 {
+#if FFX_DEBUG_LOG
+	Log::Info("[FidelityFX][CAS]: CasSetup() called with Sharpness=%.2f, InputResolution=%ux%u, OutputResolution==%ux%u",
+		  this->CASSharpen
+		, InputWidth
+		, InputHeight
+		, OutputWidth
+		, OutputHeight);
+#endif
+	CasSetup(&this->CASConstantBlock[0], &this->CASConstantBlock[4], this->CASSharpen, 
+		static_cast<AF1>(InputWidth), 
+		static_cast<AF1>(InputHeight),   // input resolution
+		static_cast<AF1>(OutputWidth), 
+		static_cast<AF1>(OutputHeight)  // output resolution
+	);
 }

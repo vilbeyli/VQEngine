@@ -302,8 +302,8 @@ void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 {
 	// TODO: remove hardcode
 
-	const float fWidth = static_cast<float>(this->mpWindow->GetWidth());
-	const float fHeight = static_cast<float>(this->mpWindow->GetHeight());
+	const uint fWidth  = this->mpWindow->GetWidth();
+	const uint fHeight = this->mpWindow->GetHeight();
 
 	// Update PostProcess Data
 	for (size_t i = 0; i < mFrameSceneViews.size(); ++i)
@@ -312,7 +312,7 @@ void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 
 		// Update FidelityFX constant blocks
 		PPParams.bEnableCAS = true; // TODO: read from scene PP settings
-		PPParams.FFXCASParams.UpdateCASConstantBlock();
+		PPParams.FFXCASParams.UpdateCASConstantBlock(fWidth, fHeight, fWidth, fHeight);
 		PPParams.FFSR_EASUParams.UpdateEASUConstantBlock(fWidth, fHeight, fWidth, fHeight, fWidth, fHeight);
 		PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
 	}

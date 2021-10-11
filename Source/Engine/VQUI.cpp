@@ -314,12 +314,14 @@ const uint32_t PROFILER_WINDOW_SIZE_Y    = 650;
 
 
 // Dropdown data ----------------------------------------------------------------------------------------------
-constexpr size_t NUM_MAX_ENV_MAP_NAMES = 10;
-constexpr size_t NUM_MAX_LEVEL_NAMES   = 8;
-constexpr size_t NUM_MAX_CAMERA_NAMES  = 10;
+constexpr size_t NUM_MAX_ENV_MAP_NAMES    = 10;
+constexpr size_t NUM_MAX_LEVEL_NAMES      = 8;
+constexpr size_t NUM_MAX_CAMERA_NAMES     = 10;
+constexpr size_t NUM_MAX_FSR_OPTION_NAMES = FPostProcessParameters::FFSR_EASU::EPresets::NUM_FSR_PRESET_OPTIONS;
 static const char* pStrSceneNames [NUM_MAX_LEVEL_NAMES  ] = {};
 static const char* pStrEnvMapNames[NUM_MAX_ENV_MAP_NAMES] = {};
 static const char* pStrCameraNames[NUM_MAX_CAMERA_NAMES ] = {};
+static const char* pStrFSROptionNames[NUM_MAX_FSR_OPTION_NAMES] = {};
 
 template<size_t NUM_ARRAY_SIZE> 
 static void FillCStrArray(const char* (&pCStrArray)[NUM_ARRAY_SIZE], const std::vector<std::string>& StrVector)
@@ -361,6 +363,20 @@ static void InitializeStaticCStringData_SceneControls(
 		pStrCameraNames[3] = "Secondary Camera 2";
 		pStrCameraNames[4] = "Secondary Camera 3";
 	};
+}
+static void InitializeStaticCStringData_PostProcessingControls()
+{
+	static bool bFSRNamesInitialized = false;
+
+	if (!bFSRNamesInitialized)
+	{
+		pStrFSROptionNames[0] = "Ultra Quality";
+		pStrFSROptionNames[1] = "Quality";
+		pStrFSROptionNames[2] = "Balanced";
+		pStrFSROptionNames[3] = "Performance";
+		pStrFSROptionNames[4] = "Custom";
+		bFSRNamesInitialized = true;
+	}
 }
 // Dropdown data ----------------------------------------------------------------------------------------------
 
@@ -622,19 +638,43 @@ void VQEngine::DrawPostProcessControlsWindow(FPostProcessParameters& PPParams)
 	ImGui::SetNextWindowPos(ImVec2((float)PP_WINDOW_POS_X, (float)PP_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(PP_WINDOW_SIZE_X, PP_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
 
+	InitializeStaticCStringData_PostProcessingControls();
+
 	ImGui::Begin("Post Processing (F3)", &mUIState.bWindowVisible_PostProcessControls);
 
 	ImGui::Text("FidelityFX Super Resolution");
 	ImGui::Separator();
 	ImGui::Checkbox("Enabled ##1 (J)", &PPParams.bEnableFSR);
+	bool bUpscalingResolutionChanged = false;
+	BeginDisabledUIState(PPParams.bEnableFSR);
 	{
-		BeginDisabledUIState(PPParams.bEnableFSR);
-		if (ImGui::SliderFloat("Sharpen Stops", &PPParams.FFSR_RCASParams.RCASSharpnessStops, 0.0f, 2.0f, "%.1f"))
+		int iFSROption = PPParams.FFSR_EASUParams.SelectedFSRPreset;
+		if (ImGui::Combo("Preset", &iFSROption, pStrFSROptionNames, _countof(pStrFSROptionNames)))
+		{
+			// update the PPParams data
+			PPParams.FFSR_EASUParams.SelectedFSRPreset = static_cast<FPostProcessParameters::FFSR_EASU::EPresets>(iFSROption);
+
+			// TODO: queue a upscaling event, resize render-resolution dependent resources
+			//PPParams.FFSR_EASUParams.UpdateEASUConstantBlock(); // todo
+			Log::Info("TODO: queue a upscaling event, resize render-resolution dependent resources");
+		}
+		if (PPParams.FFSR_EASUParams.SelectedFSRPreset == FPostProcessParameters::FFSR_EASU::EPresets::CUSTOM)
+		{
+			if (ImGui::SliderFloat("Resolution Scale", &PPParams.FFSR_EASUParams.fCustomScaling, 0.50f, 1.0f, "%.2f"))
+			{
+				bUpscalingResolutionChanged = true; 
+
+				Log::Info("TODO: queue a upscaling event, resize render-resolution dependent resources");
+			}
+		}
+
+		if (ImGui::SliderFloat("Sharpen Stops", &PPParams.FFSR_RCASParams.RCASSharpnessStops, 0.0f, 2.0f, "%.2f"))
 		{
 			PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
 		}
-		EndDisabledUIState(PPParams.bEnableFSR);
+
 	}
+	EndDisabledUIState(PPParams.bEnableFSR);
 
 	ImGuiSpacing3();
 
@@ -648,7 +688,10 @@ void VQEngine::DrawPostProcessControlsWindow(FPostProcessParameters& PPParams)
 		ImGui::Checkbox("Enabled ##0 (B)", &bCASEnabled);
 		{
 			BeginDisabledUIState(bCASEnabled);
-			ImGui::SliderFloat("Sharpening", &PPParams.FFXCASParams.CASSharpen, 0.0f, 1.0f, "%.1f");
+			if (ImGui::SliderFloat("Sharpening", &PPParams.FFXCASParams.CASSharpen, 0.0f, 1.0f, "%.1f"))
+			{
+				PPParams.FFXCASParams.UpdateCASConstantBlock(W,H,W,H);
+			}
 			EndDisabledUIState(bCASEnabled);
 		}
 		EndDisabledUIState(!bFSREnabled);
