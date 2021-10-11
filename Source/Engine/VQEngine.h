@@ -398,14 +398,12 @@ private:
 	EventQueue_t                    mEventQueue_WinToVQE_Renderer;
 	EventQueue_t                    mEventQueue_WinToVQE_Update;
 
-	// render
+	// renderer
 	VQRenderer                      mRenderer;
+
+	// assets 
 	AssetLoader                     mAssetLoader;
-
-	// data: geometry
 	BuiltinMeshArray_t              mBuiltinMeshes;
-
-	// data: environment maps & HDR profiles
 	std::vector<FDisplayHDRProfile> mDisplayHDRProfiles;
 	EnvironmentMapDescLookup_t      mLookup_EnvironmentMapDescriptors;
 
@@ -433,13 +431,15 @@ private:
 	// scene
 	FLoadingScreenData              mLoadingScreenData;
 	std::queue<std::string>         mQueue_SceneLoad;
-	
 	int                             mIndex_SelectedScene;
 	std::unique_ptr<Scene>          mpScene;
+	
+	// ui
 	ImGuiContext*                   mpImGuiContext;
 	FUIState                        mUIState;
 	FRenderStats                    mRenderStats;
 
+	// rendering resources per window
 #if 0
 	RenderingResourcesLookup_t      mRenderingResources;
 #else
