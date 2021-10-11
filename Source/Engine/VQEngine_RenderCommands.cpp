@@ -831,13 +831,16 @@ void VQEngine::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, cons
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 	const auto& rsc = mResources_MainWnd;
 
+	const bool bCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.FFXCASParams.CASSharpen > 0.0f;
+	const bool bFSREnabled = PPParams.IsFSREnabled();
+
 	auto pRscPostProcessInput = mRenderer.GetTextureResource(rsc.Tex_SceneColor);
 	auto pRscTonemapperOut    = mRenderer.GetTextureResource(rsc.Tex_PostProcess_TonemapperOut);
 	auto pRscFFXCASOut        = mRenderer.GetTextureResource(rsc.Tex_PostProcess_FFXCASOut);
 	auto pRscFSROut           = mRenderer.GetTextureResource(rsc.Tex_PostProcess_FSR_RCASOut); // TODO: handle RCAS=off
-	auto pRscPostProcessOut   = (PPParams.IsFSREnabled() 
+	auto pRscPostProcessOut   = (bFSREnabled
 		? pRscFSROut 
-		: (PPParams.IsFFXCASEnabled() 
+		: (bCASEnabled
 			? pRscFFXCASOut 
 			: pRscTonemapperOut)
 	);
@@ -856,7 +859,7 @@ void VQEngine::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, cons
 		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Point      , D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE)
 		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Directional, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE)
 	};
-	if (PPParams.IsFSREnabled() || PPParams.IsFFXCASEnabled())
+	if (bFSREnabled || bCASEnabled)
 		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
 
 	pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
@@ -971,7 +974,7 @@ void VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 			pCmd->Dispatch(DispatchRenderX, DispatchRenderY, DispatchZ);
 		}
 
-		if(PPParams.IsFFXCASEnabled())
+		if(PPParams.IsFFXCASEnabled() && PPParams.FFXCASParams.CASSharpen > 0.0f)
 		{
 			const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 			{
@@ -996,7 +999,7 @@ void VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 			pCmd->SetComputeRootDescriptorTable(1, uav_FFXCASOut.GetGPUDescHandle());
 			pCmd->SetComputeRootConstantBufferView(2, cbAddr);
 			
-			// each FFX-CAS_CS thread processes 4 pixels.
+			// each FFX-CAS CS thread processes 4 pixels.
 			// workgroup is 64 threads, hence 256 (16x16) pixels are processed per thread group that is dispatched
  			constexpr int CAS_WORKGROUP_WORK_DIMENSION = 16;
 			const int CASDispatchX = (InputImageWidth  + (CAS_WORKGROUP_WORK_DIMENSION - 1)) / CAS_WORKGROUP_WORK_DIMENSION;
@@ -1032,7 +1035,7 @@ void VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 				pCmd->SetComputeRootDescriptorTable(1, uav_FSR_EASUOut.GetGPUDescHandle());
 				pCmd->SetComputeRootConstantBufferView(2, cbAddr);
 
-				// each FSR-EASU_CS thread processes 4 pixels.
+				// each FSR-EASU CS thread processes 4 pixels.
 				// workgroup is 64 threads, hence 256 (16x16) pixels are processed per thread group that is dispatched
 				constexpr int WORKGROUP_WORK_DIMENSION = 16;
 				const int DispatchX = (PPParams.DisplayResolutionWidth  + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
@@ -1068,7 +1071,7 @@ void VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 				pCmd->SetComputeRootDescriptorTable(1, uav_FSR_RCASOut.GetGPUDescHandle());
 				pCmd->SetComputeRootConstantBufferView(2, cbAddr);
 
-				// each FSR-EASU_CS thread processes 4 pixels.
+				// each FSR-RCAS CS thread processes 4 pixels.
 				// workgroup is 64 threads, hence 256 (16x16) pixels are processed per thread group that is dispatched
 				constexpr int WORKGROUP_WORK_DIMENSION = 16;
 				const int DispatchX = (PPParams.DisplayResolutionWidth + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
@@ -1111,7 +1114,7 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBu
 	SwapChain&                    swapchain = ctx.SwapChain;
 
 
-	const bool bFFXCASEnabled = PPParams.IsFFXCASEnabled();
+	const bool bFFXCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.FFXCASParams.CASSharpen > 0.0f;
 	const bool bFSREnabled = PPParams.IsFSREnabled();
 	const SRV& srv_ColorIn = bFFXCASEnabled 
 		? mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_FFXCASOut)
