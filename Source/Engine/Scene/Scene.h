@@ -103,7 +103,7 @@ struct FPostProcessParameters
 		int iImageSizeY;
 	};
 
-	inline bool IsFFXCASEnabled() const { return !this->bEnableFSR; }
+	inline bool IsFFXCASEnabled() const { return !this->bEnableFSR && this->bEnableCAS; }
 	inline bool IsFSREnabled() const { return this->bEnableFSR; }
 
 	int SceneRTWidth = 0;
