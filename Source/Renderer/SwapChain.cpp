@@ -476,7 +476,7 @@ HRESULT SwapChain::Present()
             break;
         case DXGI_ERROR_DEVICE_REMOVED:
             Log::Error("SwapChain::Present(): DXGI_ERROR_DEVICE_REMOVED");
-            // TODO: call HandleDeviceReset()
+            MessageBox(NULL, "DXGI_ERROR_DEVICE_REMOVED", "VQEngine: Error Presenting to Window", MB_OK);
             break;
         case DXGI_ERROR_INVALID_CALL:
             Log::Error("SwapChain::Present(): DXGI_ERROR_INVALID_CALL");
@@ -489,6 +489,8 @@ HRESULT SwapChain::Present()
             assert(false); // unhandled Present() return code
             break;
         }
+
+        
     }
 
     return hr;
