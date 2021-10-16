@@ -71,6 +71,7 @@ set (Shaders
     "Shaders/GaussianBlur.hlsl"
     "Shaders/AMDFidelityFX.hlsl"
     "Shaders/UI.hlsl"
+    "Shaders/UIHDRComposite.hlsl"
 )
 
 #

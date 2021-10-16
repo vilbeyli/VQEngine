@@ -266,7 +266,12 @@ bool VQEngine::IsWindowRegistered(HWND hwnd) const
 bool VQEngine::ShouldRenderHDR(HWND hwnd) const
 {
 	const auto& pWin = this->GetWindow(hwnd);
-	return mSettings.WndMain.bEnableHDR && pWin->GetIsOnHDRCapableDisplay();
+	return IsHDRSettingOn() && pWin->GetIsOnHDRCapableDisplay();
+}
+
+bool VQEngine::IsHDRSettingOn() const
+{
+	return mSettings.WndMain.bEnableHDR;
 }
 
 void VQEngine::CalculateEffectiveFrameRateLimit(HWND hwnd)
@@ -367,8 +372,6 @@ void VQEngine::UpdateThread_UpdateScene_DebugWnd(const float dt)
 	std::unique_ptr<Window>& pWin = mpWinDebug;
 	HWND hwnd = pWin->GetHWND();
 	const Input& input = mInputStates.at(hwnd);
-
-
 }
 
 

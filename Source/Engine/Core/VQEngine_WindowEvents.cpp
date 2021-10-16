@@ -265,6 +265,8 @@ void VQEngine::DispatchHDRSwapchainTransitionEvents(HWND hwnd)
 		return;
 
 	auto& pWin = GetWindow(hwnd);
+	const uint32 W = pWin->GetWidth();
+	const uint32 H = pWin->GetHeight();
 	const bool bCurrentMonitorSupportsHDR = VQSystemInfo::FMonitorInfo::CheckHDRSupport(hwnd);
 	const bool bCurrentMonitorWasSupportingHDR = pWin->GetIsOnHDRCapableDisplay();
 	// Note: pWin->SetIsOnHDRCapableDisplay() is called from the Render Thread when handling SwapchainFormatEvent.
@@ -275,10 +277,15 @@ void VQEngine::DispatchHDRSwapchainTransitionEvents(HWND hwnd)
 		Log::Info("OnWindowMove<%0x, %s>() : Window moved to %s monitor."
 			, hwnd
 			, GetWindowName(hwnd).c_str()
-			, (bCurrentMonitorSupportsHDR ? "HDR-capable" : "Non-HDR-capable")
+			, (bCurrentMonitorSupportsHDR ? "HDR-capable" : "SDR")
 		);
 		mbMainWindowHDRTransitionInProgress.store(true);
 		mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetSwapchainFormatEvent>(hwnd, FORMAT));
+
+		// recycle resize events to reload frame-dependent resources in order to
+		// update tonemapper PSO so it has the right HDR or SDR output
+		mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<WindowResizeEvent>(W, H, hwnd));
+		mEventQueue_WinToVQE_Update.AddItem(std::make_unique<WindowResizeEvent>(W, H, hwnd));
 	}
 }
 

@@ -340,7 +340,7 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	const bool         bIsWindowMinimized = WIDTH == 0 && HEIGHT == 0;
 	const bool                  bIsClosed = pWnd->IsClosed();
 	const bool      bFullscreenTransition = pWnd->GetFullscreenHeight() == HEIGHT && pWnd->GetFullscreenWidth() == WIDTH;
-
+	const bool          bUseHDRRenderPath = this->ShouldRenderHDR(hwnd);
 
 	if (bIsClosed || bIsWindowMinimized)
 	{
@@ -374,14 +374,13 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	mRenderer.OnWindowSizeChanged(hwnd, WIDTH, HEIGHT);
 
 	const auto& PPParams = this->mpScene->GetPostProcessParameters(0);
-	const bool bFSREnabled = PPParams.IsFSREnabled();
+	const bool bFSREnabled = PPParams.IsFSREnabled() && !bUseHDRRenderPath; // TODO: remove this when FSR-HDR is implemented
 	const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
 
 	const float fResolutionScale = bUpscaling ? PPParams.FFSR_EASUParams.GetScreenPercentage() : 1.0f;
 
 	RenderThread_UnloadWindowSizeDependentResources(hwnd);
 	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT, fResolutionScale);
-
 }
 
 void VQEngine::RenderThread_HandleWindowCloseEvent(const IEvent* pEvent)

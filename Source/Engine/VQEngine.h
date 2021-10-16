@@ -143,11 +143,13 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	TextureID Tex_PostProcess_FFXCASOut        = INVALID_ID;
 	TextureID Tex_PostProcess_FSR_EASUOut      = INVALID_ID;
 	TextureID Tex_PostProcess_FSR_RCASOut      = INVALID_ID;
+	TextureID Tex_UI_SDR                       = INVALID_ID;
 
 	RTV_ID    RTV_SceneColorMSAA               = INVALID_ID;
 	RTV_ID    RTV_SceneColor                   = INVALID_ID;
 	RTV_ID    RTV_SceneNormalsMSAA             = INVALID_ID;
 	RTV_ID    RTV_SceneNormals                 = INVALID_ID;
+	RTV_ID    RTV_UI_SDR                       = INVALID_ID;
 
 	SRV_ID    SRV_PostProcess_BlurIntermediate = INVALID_ID;
 	SRV_ID    SRV_PostProcess_BlurOutput       = INVALID_ID;
@@ -163,6 +165,7 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	SRV_ID    SRV_SceneDepth                   = INVALID_ID;
 	SRV_ID    SRV_SceneDepthMSAA               = INVALID_ID;
 	SRV_ID    SRV_FFXCACAO_Out                 = INVALID_ID;
+	SRV_ID    SRV_UI_SDR                       = INVALID_ID;
 
 	UAV_ID    UAV_FFXCACAO_Out                 = INVALID_ID;
 	UAV_ID    UAV_PostProcess_BlurIntermediate = INVALID_ID;
@@ -518,7 +521,7 @@ private:
 	void                            TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams);
 	void                            RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams);
 	void                            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
-	void                            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx); // TODO
+	void                            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
 	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
 
 	//
@@ -556,6 +559,7 @@ private:
 
 	bool                            IsWindowRegistered(HWND hwnd) const;
 	bool                            ShouldRenderHDR(HWND hwnd) const;
+	bool                            IsHDRSettingOn() const;
 
 	void                            CalculateEffectiveFrameRateLimit(HWND hwnd);
 	float                           FramePacing(const float dt);

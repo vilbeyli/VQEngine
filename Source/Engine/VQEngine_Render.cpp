@@ -258,10 +258,11 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 
 	if (hwnd == mpWinMain->GetHWND())
 	{
-		const bool bHDR = this->ShouldRenderHDR(hwnd);
+		const bool bHDR = this->IsHDRSettingOn();
+		const bool bRenderingHDR = this->ShouldRenderHDR(hwnd);
 
 		constexpr DXGI_FORMAT MainColorRTFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
-		const     DXGI_FORMAT TonemapperOutputFormat = bHDR ? VQEngine::PREFERRED_HDR_FORMAT : DXGI_FORMAT_R8G8B8A8_UNORM;
+		const     DXGI_FORMAT TonemapperOutputFormat = bRenderingHDR ? VQEngine::PREFERRED_HDR_FORMAT : DXGI_FORMAT_R8G8B8A8_UNORM;
 
 		FRenderingResources_MainWindow& r = mResources_MainWnd;
 
@@ -423,13 +424,12 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, RenderResolutionX
 				, RenderResolutionY
 				, 1 // Array Size
-				, 0 // MIP levels
+				, 1 // MIP levels
 				, 1 // MSAA SampleCount
 				, 0 // MSAA SampleQuality
 				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
 			);
 
-			desc.bGenerateMips = false;
 			r.Tex_PostProcess_TonemapperOut = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeUAV(r.UAV_PostProcess_TonemapperOut, 0u, r.Tex_PostProcess_TonemapperOut);
 			mRenderer.InitializeSRV(r.SRV_PostProcess_TonemapperOut, 0u, r.Tex_PostProcess_TonemapperOut);
@@ -442,7 +442,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, RenderResolutionX
 				, RenderResolutionY
 				, 1 // Array Size
-				, 0 // MIP levels
+				, 1 // MIP levels
 				, 1 // MSAA SampleCount
 				, 0 // MSAA SampleQuality
 				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
@@ -460,7 +460,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, Width
 				, Height
 				, 1 // Array Size
-				, 0 // MIP levels
+				, 1 // MIP levels
 				, 1 // MSAA SampleCount
 				, 0 // MSAA SampleQuality
 				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
@@ -477,7 +477,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, Width
 				, Height
 				, 1 // Array Size
-				, 0 // MIP levels
+				, 1 // MIP levels
 				, 1 // MSAA SampleCount
 				, 0 // MSAA SampleQuality
 				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
@@ -487,7 +487,26 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			mRenderer.InitializeUAV(r.UAV_PostProcess_FSR_RCASOut, 0u, r.Tex_PostProcess_FSR_RCASOut);
 			mRenderer.InitializeSRV(r.SRV_PostProcess_FSR_RCASOut, 0u, r.Tex_PostProcess_FSR_RCASOut);
 		}
-		
+
+		{ // UI Resources
+			TextureCreateDesc desc("UI_SDR");
+			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
+				DXGI_FORMAT_R8G8B8A8_UNORM
+				, Width
+				, Height
+				, 1 // Array Size
+				, 1 // MIP levels
+				, 1 // MSAA SampleCount
+				, 0 // MSAA SampleQuality
+				, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
+			);
+			desc.ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+			r.Tex_UI_SDR = mRenderer.CreateTexture(desc);
+			mRenderer.InitializeRTV(r.RTV_UI_SDR, 0u, r.Tex_UI_SDR);
+			mRenderer.InitializeSRV(r.SRV_UI_SDR, 0u, r.Tex_UI_SDR);
+		}
+
+
 		{ // FFX-CACAO Resources
 			TextureCreateDesc desc("FFXCACAO_Out");
 			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
@@ -495,7 +514,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, RenderResolutionX
 				, RenderResolutionY
 				, 1 // Array Size
-				, 0 // MIP levels
+				, 1 // MIP levels
 				, 1 // MSAA SampleCount
 				, 0 // MSAA SampleQuality
 				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
@@ -582,6 +601,12 @@ void VQEngine::RenderThread_LoadResources()
 		rsc.SRV_PostProcess_FFXCASOut        = mRenderer.CreateSRV();
 		rsc.SRV_PostProcess_FSR_EASUOut      = mRenderer.CreateSRV();
 		rsc.SRV_PostProcess_FSR_RCASOut      = mRenderer.CreateSRV();
+	}
+
+	// UI HDR pass
+	{
+		rsc.RTV_UI_SDR = mRenderer.CreateRTV();
+		rsc.SRV_UI_SDR = mRenderer.CreateSRV();
 	}
 
 	// shadow map passes
@@ -1004,16 +1029,43 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	const FSceneView& SceneView             = mpScene->GetSceneView(FRAME_DATA_INDEX);
 	const FSceneShadowView& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
 	const FPostProcessParameters& PPParams  = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
+	const uint32 W = mpWinMain->GetWidth();
+	const uint32 H = mpWinMain->GetHeight();
 	mRenderStats = {};
 
 
 	// TODO: undo const cast and assign in a proper spot -------------------------------------------------
-	const_cast<FSceneView&>(SceneView).SceneRTWidth  = static_cast<int>(ctx.WindowDisplayResolutionX * (PPParams.IsFSREnabled() ? PPParams.FFSR_EASUParams.GetScreenPercentage() : 1.0f));
-	const_cast<FSceneView&>(SceneView).SceneRTHeight = static_cast<int>(ctx.WindowDisplayResolutionY * (PPParams.IsFSREnabled() ? PPParams.FFSR_EASUParams.GetScreenPercentage() : 1.0f));
-	const_cast<FPostProcessParameters&>(PPParams).SceneRTWidth  = SceneView.SceneRTWidth;
-	const_cast<FPostProcessParameters&>(PPParams).SceneRTHeight = SceneView.SceneRTHeight;
-	const_cast<FPostProcessParameters&>(PPParams).DisplayResolutionWidth  = ctx.WindowDisplayResolutionX;
-	const_cast<FPostProcessParameters&>(PPParams).DisplayResolutionHeight = ctx.WindowDisplayResolutionY;
+	FSceneView& RefSceneView = const_cast<FSceneView&>(SceneView);
+	FPostProcessParameters& RefPPParams = const_cast<FPostProcessParameters&>(PPParams);
+
+	RefSceneView.SceneRTWidth  = static_cast<int>(ctx.WindowDisplayResolutionX * (PPParams.IsFSREnabled() ? PPParams.FFSR_EASUParams.GetScreenPercentage() : 1.0f));
+	RefSceneView.SceneRTHeight = static_cast<int>(ctx.WindowDisplayResolutionY * (PPParams.IsFSREnabled() ? PPParams.FFSR_EASUParams.GetScreenPercentage() : 1.0f));
+	RefPPParams.SceneRTWidth  = SceneView.SceneRTWidth;
+	RefPPParams.SceneRTHeight = SceneView.SceneRTHeight;
+	RefPPParams.DisplayResolutionWidth  = ctx.WindowDisplayResolutionX;
+	RefPPParams.DisplayResolutionHeight = ctx.WindowDisplayResolutionY;
+
+
+	if (bUseHDRRenderPath)
+	{
+		if (RefPPParams.IsFFXCASEnabled())
+		{
+			Log::Warning("FidelityFX CAS HDR not implemented, turning CAS off");
+			RefPPParams.bEnableCAS = false;
+		}
+		if (RefPPParams.IsFSREnabled())
+		{
+			// TODO: HDR conversion pass to handle color range and precision/packing, shader variants etc.
+			Log::Warning("FidelityFX Super Resolution HDR not implemented yet, turning FSR off"); 
+			RefPPParams.bEnableFSR = false;
+#if 0
+			// this causes UI pass PSO to not match the render target format
+			mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<WindowResizeEvent>(W, H, mpWinMain->GetHWND()));
+			mEventQueue_WinToVQE_Update.AddItem(std::make_unique<WindowResizeEvent>(W, H, mpWinMain->GetHWND()));
+#endif
+		}
+	}
+
 	assert(PPParams.DisplayResolutionHeight != 0);
 	assert(PPParams.DisplayResolutionWidth != 0);
 	// TODO: undo const cast and assign in a proper spot -------------------------------------------------
@@ -1047,7 +1099,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		if (bUseHDRRenderPath)
 		{
-			CompositUIToHDRSwapchain(pCmd, ctx);
+			CompositUIToHDRSwapchain(pCmd, &CBHeap, ctx, PPParams);
 		}
 	}
 
@@ -1128,7 +1180,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		if (bUseHDRRenderPath)
 		{
-			CompositUIToHDRSwapchain(pCmd_ThisThread, ctx);
+			CompositUIToHDRSwapchain(pCmd_ThisThread, &CBHeap_This, ctx, PPParams);
 		}
 
 		{

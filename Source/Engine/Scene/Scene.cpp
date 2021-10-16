@@ -1169,7 +1169,7 @@ void FPostProcessParameters::FFFXCAS::UpdateCASConstantBlock(
 #endif
 	CasSetup(&this->CASConstantBlock[0], &this->CASConstantBlock[4], this->CASSharpen, 
 		static_cast<AF1>(InputWidth), 
-		static_cast<AF1>(InputHeight),   // input resolution
+		static_cast<AF1>(InputHeight),  // input resolution
 		static_cast<AF1>(OutputWidth), 
 		static_cast<AF1>(OutputHeight)  // output resolution
 	);
