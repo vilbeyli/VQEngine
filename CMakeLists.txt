@@ -130,8 +130,12 @@ set (SceneFiles
     "Source/Engine/Scene/Model.cpp"
     "Source/Engine/Scene/GameObject.cpp"
     "Source/Engine/Scene/Transform.cpp"
-    "Source/Engine/Scene/Quaternion.cpp"
-    
+    "Source/Engine/Scene/Quaternion.cpp"    
+)
+
+set (PostProcessFiles
+    "Source/Engine/PostProcess/PostProcess.h"
+    "Source/Engine/PostProcess/PostProcess.cpp"
 )
 
 set (SourceVQE 
@@ -219,6 +223,7 @@ source_group("Materials" FILES ${Materials})
 source_group("Source\\RenderPass" FILES ${RenderPassFiles})
 source_group("Source\\Core" FILES ${CoreFiles})
 source_group("Source\\Scene" FILES ${SceneFiles})
+source_group("Source\\PostProcess" FILES ${PostProcessFiles})
 source_group("Source" FILES ${SourceVQE})
 source_group("Libs\\AMD-FidelityFX\\CACAO"   FILES ${LibFFX})
 
@@ -242,7 +247,7 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/DirectXCompiler/lib/x64)
 add_definitions(-DFFX_CACAO_ENABLE_D3D12)
 
 # Create a library with the project name that is build with the Headers and Source files
-add_executable( ${PROJECT_NAME} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} ${Materials} ${FFX_FSR_Shaders} ${FFX_CAS_Shaders} ${LibFFX} ${RenderPassFiles} ${CoreFiles} ${SceneFiles})
+add_executable( ${PROJECT_NAME} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} ${Materials} ${FFX_FSR_Shaders} ${FFX_CAS_Shaders} ${LibFFX} ${RenderPassFiles} ${CoreFiles} ${PostProcessFiles} ${SceneFiles})
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY} )
 

@@ -57,20 +57,18 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float4 UITexSample = UITexture.Load(int3(input.position.xy, 0));
 	float4 ColorTexSample = SceneHDRTexture.Load(int3(input.position.xy, 0));
 
+	// check if the pixel is completely black (= UI pass didn't write on top)
 	bool bIsUIPixel = dot(UITexSample.rgb, UITexSample.rgb) != 0;
+
+	// de-gamma the SDR UI content and get to linear space
 	float3 LinearUIColor = SRGBToLinear(UITexSample.rgb);
 
-	float3 OutColor = float3(0, 0, 0);
+	float3 OutColor = OutColor = ColorTexSample.rgb;
 	if (bIsUIPixel)
 	{
 		// UI is currently not transparent
 		OutColor = LinearUIColor.rgb * Brightness /* + ColorTexSample.rgb * (1.0f - UITexSample.a)*/;
 	}
-	else
-	{
-		OutColor = ColorTexSample.rgb;
-	}
-
 	float  OutAlpha = 1.0f;
 
 	return float4(OutColor, OutAlpha);
