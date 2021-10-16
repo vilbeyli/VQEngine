@@ -51,6 +51,7 @@ struct FPostProcessParameters
 		EDisplayCurve OutputDisplayCurve = EDisplayCurve::sRGB;
 		float         DisplayReferenceBrightnessLevel = 200.0f;
 		int           ToggleGammaCorrection = 1;
+		float         UIHDRBrightness = 1.0f;
 	};
 	struct FFFXCAS
 	{

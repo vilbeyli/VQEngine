@@ -1352,7 +1352,7 @@ void VQEngine::CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, Dynamic
 	D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 	const size_t cbSize = sizeof(float) * 1;
 	pCBufferHeap->AllocConstantBuffer(cbSize, (void**)&pConstBuffer, &cbAddr);
-	*pConstBuffer = 1.0f;
+	*pConstBuffer = PPParams.TonemapperParams.UIHDRBrightness;
 
 
 	// set states
@@ -1361,7 +1361,7 @@ void VQEngine::CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, Dynamic
 	pCmd->SetGraphicsRootDescriptorTable(0, srv_SceneColor.GetGPUDescHandle());
 	pCmd->SetGraphicsRootDescriptorTable(1, srv_UI_SDR.GetGPUDescHandle());
 	//pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
-	pCmd->SetGraphicsRoot32BitConstant(2, (UINT)(1.0f), 0);
+	pCmd->SetGraphicsRoot32BitConstant(2, *((UINT*)pConstBuffer), 0);
 	pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	pCmd->IASetVertexBuffers(0, 1, NULL);
 	pCmd->IASetIndexBuffer(&ib);

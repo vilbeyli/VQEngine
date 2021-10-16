@@ -299,7 +299,7 @@ const uint32_t DBG_WINDOW_SIZE_Y         = 150;
 const uint32_t PP_WINDOW_PADDING_X       = 10;
 const uint32_t PP_WINDOW_PADDING_Y       = 10;
 const uint32_t PP_WINDOW_SIZE_X          = 350;
-const uint32_t PP_WINDOW_SIZE_Y          = 230;
+const uint32_t PP_WINDOW_SIZE_Y          = 300;
 //---------------------------------------------
 const uint32_t GFX_WINDOW_PADDING_X      = 10;
 const uint32_t GFX_WINDOW_PADDING_Y      = 10;
@@ -309,7 +309,7 @@ const uint32_t GFX_WINDOW_SIZE_Y         = 200;
 const uint32_t PROFILER_WINDOW_PADDIG_X  = 10;
 const uint32_t PROFILER_WINDOW_PADDIG_Y  = 10;
 const uint32_t PROFILER_WINDOW_SIZE_X    = 330;
-const uint32_t PROFILER_WINDOW_SIZE_Y    = 650;
+const uint32_t PROFILER_WINDOW_SIZE_Y    = 850;
 //---------------------------------------------
 
 
@@ -610,7 +610,7 @@ void VQEngine::DrawDebugPanelWindow(FSceneRenderParameters& SceneParams)
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
 
-	const uint32_t DBG_WINDOW_POS_X = DBG_WINDOW_PADDING_X;
+	const uint32_t DBG_WINDOW_POS_X = W - PROFILER_WINDOW_SIZE_X - DBG_WINDOW_SIZE_X - DBG_WINDOW_PADDING_X*2;
 	const uint32_t DBG_WINDOW_POS_Y = H - DBG_WINDOW_SIZE_Y - DBG_WINDOW_PADDING_Y;
 	ImGui::SetNextWindowPos(ImVec2((float)DBG_WINDOW_POS_X, (float)DBG_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(DBG_WINDOW_SIZE_X, DBG_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
@@ -642,7 +642,7 @@ void VQEngine::DrawPostProcessControlsWindow(FPostProcessParameters& PPParams)
 	};
 
 	// set window positions
-	const uint32_t PP_WINDOW_POS_X = W - PP_WINDOW_PADDING_X - PP_WINDOW_SIZE_X;
+	const uint32_t PP_WINDOW_POS_X = PP_WINDOW_PADDING_X;
 	const uint32_t PP_WINDOW_POS_Y = H - PP_WINDOW_PADDING_Y - PP_WINDOW_SIZE_Y;
 	ImGui::SetNextWindowPos(ImVec2((float)PP_WINDOW_POS_X, (float)PP_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(PP_WINDOW_SIZE_X, PP_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
@@ -714,7 +714,7 @@ void VQEngine::DrawPostProcessControlsWindow(FPostProcessParameters& PPParams)
 
 
 	const bool bHDR = this->ShouldRenderHDR(mpWinMain->GetHWND());
-	ImGui::Text((bHDR ? "HDR Tonemapper" : "Tonemapper"));
+	ImGui::Text((bHDR ? "Tonemapper (HDR)" : "Tonemapper"));
 	ImGui::Separator();
 	{
 		if (bHDR)
@@ -723,6 +723,7 @@ void VQEngine::DrawPostProcessControlsWindow(FPostProcessParameters& PPParams)
 			const std::string strColorSpace   = GetColorSpaceString(PPParams.TonemapperParams.ContentColorSpace);
 			ImGui::Text("OutputDevice : %s", strDispalyCurve.c_str() );
 			ImGui::Text("Color Space  : %s", strColorSpace.c_str() );
+			ImGui::SliderFloat("UI Brightness", &PPParams.TonemapperParams.UIHDRBrightness, 0.1f, 20.f, "%.1f");
 		}
 		else
 		{
@@ -765,7 +766,7 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 	int iSSAOLabel = SceneRenderParams.bScreenSpaceAO ? 1 : 0;
 
 	const uint32_t GFX_WINDOW_POS_X = GFX_WINDOW_PADDING_X;
-	const uint32_t GFX_WINDOW_POS_Y = H - PP_WINDOW_PADDING_Y - PP_WINDOW_SIZE_Y - GFX_WINDOW_PADDING_Y - GFX_WINDOW_SIZE_Y;
+	const uint32_t GFX_WINDOW_POS_Y = H - PP_WINDOW_PADDING_Y - PP_WINDOW_SIZE_Y - GFX_WINDOW_PADDING_Y*3 - GFX_WINDOW_SIZE_Y;
 	ImGui::SetNextWindowPos(ImVec2((float)GFX_WINDOW_POS_X, (float)GFX_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(GFX_WINDOW_SIZE_X, GFX_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
 

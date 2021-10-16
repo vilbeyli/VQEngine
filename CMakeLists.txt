@@ -72,6 +72,7 @@ set (Shaders
     "Shaders/AMDFidelityFX.hlsl"
     "Shaders/UI.hlsl"
     "Shaders/UIHDRComposite.hlsl"
+    "Shaders/HDR.hlsl"
 )
 
 #

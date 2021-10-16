@@ -16,6 +16,8 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
+#include "HDR.hlsl"
+
 struct PSInput
 {
 	float4 position : SV_POSITION;
@@ -51,10 +53,24 @@ PSInput VSMain(uint id : SV_VertexID)
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
+	// sample source images: UI<SDR> + PostProcessed Scene<HDR>
 	float4 UITexSample = UITexture.Load(int3(input.position.xy, 0));
 	float4 ColorTexSample = SceneHDRTexture.Load(int3(input.position.xy, 0));
 
-	float3 OutColor = UITexSample.rgb /** Brightness*/ + ColorTexSample.rgb;
+	bool bIsUIPixel = dot(UITexSample.rgb, UITexSample.rgb) != 0;
+	float3 LinearUIColor = SRGBToLinear(UITexSample.rgb);
+
+	float3 OutColor = float3(0, 0, 0);
+	if (bIsUIPixel)
+	{
+		// UI is currently not transparent
+		OutColor = LinearUIColor.rgb * Brightness /* + ColorTexSample.rgb * (1.0f - UITexSample.a)*/;
+	}
+	else
+	{
+		OutColor = ColorTexSample.rgb;
+	}
+
 	float  OutAlpha = 1.0f;
 
 	return float4(OutColor, OutAlpha);
