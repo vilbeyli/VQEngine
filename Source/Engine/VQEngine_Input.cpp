@@ -145,22 +145,34 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 	}
 
 	// Graphics Settings Controls
-	if (input.IsKeyTriggered("V"))
+	if (input.IsKeyTriggered("V")) // Vsync
 	{
 		auto& SwapChain = mRenderer.GetWindowSwapChain(hwnd);
 		mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetVSyncEvent>(hwnd, !SwapChain.IsVSyncOn()));
 	}
-	if (input.IsKeyTriggered("M"))
+	if (input.IsKeyTriggered("M")) // MSAA
 	{
 		mSettings.gfx.bAntiAliasing = !mSettings.gfx.bAntiAliasing;
 		Log::Info("Toggle MSAA: %d", mSettings.gfx.bAntiAliasing);
 	}
 
-	if (input.IsKeyTriggered("G"))
+	if (input.IsKeyTriggered("G")) // Gamma
 	{
 		FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 		PPParams.TonemapperParams.ToggleGammaCorrection = PPParams.TonemapperParams.ToggleGammaCorrection == 1 ? 0 : 1;
 		Log::Info("Tonemapper: ApplyGamma=%d (SDR-only)", PPParams.TonemapperParams.ToggleGammaCorrection);
+	}
+	if (input.IsKeyTriggered("J")) // FSR
+	{
+		WaitUntilRenderingFinishes();
+		FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
+		PPParams.bEnableFSR = !PPParams.bEnableFSR;
+
+		const uint32 W = mpWinMain->GetWidth();
+		const uint32 H = mpWinMain->GetHeight();
+		mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<WindowResizeEvent>(W, H, hwnd));
+		mEventQueue_WinToVQE_Update.AddItem(std::make_unique<WindowResizeEvent>(W, H, hwnd));
+		Log::Info("Toggle FSR: %d", PPParams.bEnableFSR);
 	}
 
 	// Scene switching

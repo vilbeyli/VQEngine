@@ -299,7 +299,7 @@ const uint32_t DBG_WINDOW_SIZE_Y         = 150;
 const uint32_t PP_WINDOW_PADDING_X       = 10;
 const uint32_t PP_WINDOW_PADDING_Y       = 10;
 const uint32_t PP_WINDOW_SIZE_X          = 350;
-const uint32_t PP_WINDOW_SIZE_Y          = 150;
+const uint32_t PP_WINDOW_SIZE_Y          = 300;
 //---------------------------------------------
 const uint32_t GFX_WINDOW_PADDING_X      = 10;
 const uint32_t GFX_WINDOW_PADDING_Y      = 10;
@@ -309,17 +309,19 @@ const uint32_t GFX_WINDOW_SIZE_Y         = 200;
 const uint32_t PROFILER_WINDOW_PADDIG_X  = 10;
 const uint32_t PROFILER_WINDOW_PADDIG_Y  = 10;
 const uint32_t PROFILER_WINDOW_SIZE_X    = 330;
-const uint32_t PROFILER_WINDOW_SIZE_Y    = 650;
+const uint32_t PROFILER_WINDOW_SIZE_Y    = 850;
 //---------------------------------------------
 
 
 // Dropdown data ----------------------------------------------------------------------------------------------
-constexpr size_t NUM_MAX_ENV_MAP_NAMES = 10;
-constexpr size_t NUM_MAX_LEVEL_NAMES   = 8;
-constexpr size_t NUM_MAX_CAMERA_NAMES  = 10;
+constexpr size_t NUM_MAX_ENV_MAP_NAMES    = 10;
+constexpr size_t NUM_MAX_LEVEL_NAMES      = 8;
+constexpr size_t NUM_MAX_CAMERA_NAMES     = 10;
+constexpr size_t NUM_MAX_FSR_OPTION_NAMES = FPostProcessParameters::FFSR_EASU::EPresets::NUM_FSR_PRESET_OPTIONS;
 static const char* pStrSceneNames [NUM_MAX_LEVEL_NAMES  ] = {};
 static const char* pStrEnvMapNames[NUM_MAX_ENV_MAP_NAMES] = {};
 static const char* pStrCameraNames[NUM_MAX_CAMERA_NAMES ] = {};
+static const char* pStrFSROptionNames[NUM_MAX_FSR_OPTION_NAMES] = {};
 
 template<size_t NUM_ARRAY_SIZE> 
 static void FillCStrArray(const char* (&pCStrArray)[NUM_ARRAY_SIZE], const std::vector<std::string>& StrVector)
@@ -361,6 +363,20 @@ static void InitializeStaticCStringData_SceneControls(
 		pStrCameraNames[3] = "Secondary Camera 2";
 		pStrCameraNames[4] = "Secondary Camera 3";
 	};
+}
+static void InitializeStaticCStringData_PostProcessingControls()
+{
+	static bool bFSRNamesInitialized = false;
+
+	if (!bFSRNamesInitialized)
+	{
+		pStrFSROptionNames[0] = "Ultra Quality";
+		pStrFSROptionNames[1] = "Quality";
+		pStrFSROptionNames[2] = "Balanced";
+		pStrFSROptionNames[3] = "Performance";
+		pStrFSROptionNames[4] = "Custom";
+		bFSRNamesInitialized = true;
+	}
 }
 // Dropdown data ----------------------------------------------------------------------------------------------
 
@@ -594,7 +610,7 @@ void VQEngine::DrawDebugPanelWindow(FSceneRenderParameters& SceneParams)
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
 
-	const uint32_t DBG_WINDOW_POS_X = DBG_WINDOW_PADDING_X;
+	const uint32_t DBG_WINDOW_POS_X = W - PROFILER_WINDOW_SIZE_X - DBG_WINDOW_SIZE_X - DBG_WINDOW_PADDING_X*2;
 	const uint32_t DBG_WINDOW_POS_Y = H - DBG_WINDOW_SIZE_Y - DBG_WINDOW_PADDING_Y;
 	ImGui::SetNextWindowPos(ImVec2((float)DBG_WINDOW_POS_X, (float)DBG_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(DBG_WINDOW_SIZE_X, DBG_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
@@ -613,29 +629,92 @@ void VQEngine::DrawDebugPanelWindow(FSceneRenderParameters& SceneParams)
 }
 void VQEngine::DrawPostProcessControlsWindow(FPostProcessParameters& PPParams)
 {
+	// constants
+	const bool bFSREnabled = PPParams.IsFSREnabled();
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
 
-	const uint32_t PP_WINDOW_POS_X = W - PP_WINDOW_PADDING_X - PP_WINDOW_SIZE_X;
+	// fns
+	auto fnSendWindowResizeEvents = [&]()
+	{
+		mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<WindowResizeEvent>(W, H, mpWinMain->GetHWND()));
+		mEventQueue_WinToVQE_Update.AddItem(std::make_unique<WindowResizeEvent>(W, H, mpWinMain->GetHWND()));
+	};
+
+	// set window positions
+	const uint32_t PP_WINDOW_POS_X = PP_WINDOW_PADDING_X;
 	const uint32_t PP_WINDOW_POS_Y = H - PP_WINDOW_PADDING_Y - PP_WINDOW_SIZE_Y;
 	ImGui::SetNextWindowPos(ImVec2((float)PP_WINDOW_POS_X, (float)PP_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(PP_WINDOW_SIZE_X, PP_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
 
+	// one time initialization
+	InitializeStaticCStringData_PostProcessingControls();
+
+
+	// start drawing the window
 	ImGui::Begin("Post Processing (F3)", &mUIState.bWindowVisible_PostProcessControls);
-	
-	ImGui::Text("FidelityFX CAS");
+
+	ImGui::Text("FidelityFX Super Resolution");
 	ImGui::Separator();
-	ImGui::Checkbox("Enabled ##0 (B)", &PPParams.bEnableCAS);
+	if (ImGui::Checkbox("Enabled (J) ##1", &PPParams.bEnableFSR))
 	{
-		BeginDisabledUIState(PPParams.bEnableCAS);
-		ImGui::SliderFloat("Sharpening", &PPParams.FFXCASParams.CASSharpen, 0.0f, 1.0f, "%.1f");
-		EndDisabledUIState(PPParams.bEnableCAS);
+		fnSendWindowResizeEvents();
 	}
+	BeginDisabledUIState(PPParams.bEnableFSR);
+	{
+		int iFSROption = PPParams.FFSR_EASUParams.SelectedFSRPreset;
+		if (ImGui::Combo("Preset", &iFSROption, pStrFSROptionNames, _countof(pStrFSROptionNames)))
+		{
+			// update the PPParams data
+			PPParams.FFSR_EASUParams.SelectedFSRPreset = static_cast<FPostProcessParameters::FFSR_EASU::EPresets>(iFSROption);
+			fnSendWindowResizeEvents();
+		}
+		if (PPParams.FFSR_EASUParams.SelectedFSRPreset == FPostProcessParameters::FFSR_EASU::EPresets::CUSTOM)
+		{
+			if (ImGui::SliderFloat("Resolution Scale", &PPParams.FFSR_EASUParams.fCustomScaling, 0.50f, 1.0f, "%.2f"))
+			{
+				fnSendWindowResizeEvents();
+			}
+		}
+
+		float LinearSharpness = PPParams.FFSR_RCASParams.GetLinearSharpness();
+		if (ImGui::SliderFloat("Sharpness", &LinearSharpness, 0.01f, 1.00f, "%.2f"))
+		{
+			PPParams.FFSR_RCASParams.SetLinearSharpness(LinearSharpness);
+			PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
+		}
+	}
+	EndDisabledUIState(PPParams.bEnableFSR);
 
 	ImGuiSpacing3();
 
+	if (!bFSREnabled)
+	{
+		ImGui::Text("FidelityFX CAS");
+		ImGui::Separator();
+		bool bCASEnabled = PPParams.IsFFXCASEnabled();
+		bool bCASEnabledBefore = bCASEnabled;
+		BeginDisabledUIState(!bFSREnabled);
+		ImGui::Checkbox("Enabled (B) ##0", &bCASEnabled);
+		{
+			BeginDisabledUIState(bCASEnabled);
+			if (ImGui::SliderFloat("Sharpening", &PPParams.FFXCASParams.CASSharpen, 0.0f, 1.0f, "%.2f"))
+			{
+				PPParams.FFXCASParams.UpdateCASConstantBlock(W,H,W,H);
+			}
+			EndDisabledUIState(bCASEnabled);
+		}
+		EndDisabledUIState(!bFSREnabled);
+		if (bCASEnabledBefore != bCASEnabled)
+		{
+			PPParams.bEnableCAS = bCASEnabled;
+		}
+		ImGuiSpacing3();
+	}
+
+
 	const bool bHDR = this->ShouldRenderHDR(mpWinMain->GetHWND());
-	ImGui::Text((bHDR ? "HDR Tonemapper" : "Tonemapper"));
+	ImGui::Text((bHDR ? "Tonemapper (HDR)" : "Tonemapper"));
 	ImGui::Separator();
 	{
 		if (bHDR)
@@ -644,6 +723,7 @@ void VQEngine::DrawPostProcessControlsWindow(FPostProcessParameters& PPParams)
 			const std::string strColorSpace   = GetColorSpaceString(PPParams.TonemapperParams.ContentColorSpace);
 			ImGui::Text("OutputDevice : %s", strDispalyCurve.c_str() );
 			ImGui::Text("Color Space  : %s", strColorSpace.c_str() );
+			ImGui::SliderFloat("UI Brightness", &PPParams.TonemapperParams.UIHDRBrightness, 0.1f, 20.f, "%.1f");
 		}
 		else
 		{
@@ -686,7 +766,7 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 	int iSSAOLabel = SceneRenderParams.bScreenSpaceAO ? 1 : 0;
 
 	const uint32_t GFX_WINDOW_POS_X = GFX_WINDOW_PADDING_X;
-	const uint32_t GFX_WINDOW_POS_Y = H - PP_WINDOW_PADDING_Y - PP_WINDOW_SIZE_Y - GFX_WINDOW_PADDING_Y - GFX_WINDOW_SIZE_Y;
+	const uint32_t GFX_WINDOW_POS_Y = H - PP_WINDOW_PADDING_Y - PP_WINDOW_SIZE_Y - GFX_WINDOW_PADDING_Y*3 - GFX_WINDOW_SIZE_Y;
 	ImGui::SetNextWindowPos(ImVec2((float)GFX_WINDOW_POS_X, (float)GFX_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(GFX_WINDOW_SIZE_X, GFX_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
 

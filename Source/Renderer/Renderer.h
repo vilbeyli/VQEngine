@@ -69,6 +69,7 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 {
 	FULLSCREEN_TRIANGLE_PSO = 0,
 	UI_PSO,
+	UI_HDR_scRGB_PSO,
 	TONEMAPPER_PSO,
 	HDR_FP16_SWAPCHAIN_PSO,
 	SKYDOME_PSO,
@@ -95,6 +96,8 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	BRDF_INTEGRATION_CS_PSO,
 	FFX_CAS_CS_PSO,
 	FFX_SPD_CS_PSO,
+	FFX_FSR1_EASU_CS_PSO,
+	FFX_FSR1_RCAS_CS_PSO,
 	NUM_BUILTIN_PSOs
 };
 

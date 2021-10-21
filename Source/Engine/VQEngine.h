@@ -141,16 +141,22 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	TextureID Tex_PostProcess_BlurOutput       = INVALID_ID;
 	TextureID Tex_PostProcess_TonemapperOut    = INVALID_ID;
 	TextureID Tex_PostProcess_FFXCASOut        = INVALID_ID;
+	TextureID Tex_PostProcess_FSR_EASUOut      = INVALID_ID;
+	TextureID Tex_PostProcess_FSR_RCASOut      = INVALID_ID;
+	TextureID Tex_UI_SDR                       = INVALID_ID;
 
 	RTV_ID    RTV_SceneColorMSAA               = INVALID_ID;
 	RTV_ID    RTV_SceneColor                   = INVALID_ID;
 	RTV_ID    RTV_SceneNormalsMSAA             = INVALID_ID;
 	RTV_ID    RTV_SceneNormals                 = INVALID_ID;
+	RTV_ID    RTV_UI_SDR                       = INVALID_ID;
 
 	SRV_ID    SRV_PostProcess_BlurIntermediate = INVALID_ID;
 	SRV_ID    SRV_PostProcess_BlurOutput       = INVALID_ID;
 	SRV_ID    SRV_PostProcess_TonemapperOut    = INVALID_ID;
 	SRV_ID    SRV_PostProcess_FFXCASOut        = INVALID_ID;
+	SRV_ID    SRV_PostProcess_FSR_EASUOut      = INVALID_ID;
+	SRV_ID    SRV_PostProcess_FSR_RCASOut      = INVALID_ID;
 	SRV_ID    SRV_ShadowMaps_Spot              = INVALID_ID;
 	SRV_ID    SRV_ShadowMaps_Point             = INVALID_ID;
 	SRV_ID    SRV_ShadowMaps_Directional       = INVALID_ID;
@@ -159,12 +165,15 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	SRV_ID    SRV_SceneDepth                   = INVALID_ID;
 	SRV_ID    SRV_SceneDepthMSAA               = INVALID_ID;
 	SRV_ID    SRV_FFXCACAO_Out                 = INVALID_ID;
+	SRV_ID    SRV_UI_SDR                       = INVALID_ID;
 
 	UAV_ID    UAV_FFXCACAO_Out                 = INVALID_ID;
 	UAV_ID    UAV_PostProcess_BlurIntermediate = INVALID_ID;
 	UAV_ID    UAV_PostProcess_BlurOutput       = INVALID_ID;
 	UAV_ID    UAV_PostProcess_TonemapperOut    = INVALID_ID;
 	UAV_ID    UAV_PostProcess_FFXCASOut        = INVALID_ID;
+	UAV_ID    UAV_PostProcess_FSR_EASUOut      = INVALID_ID;
+	UAV_ID    UAV_PostProcess_FSR_RCASOut      = INVALID_ID;
 	UAV_ID    UAV_SceneDepth                   = INVALID_ID;
 
 	DSV_ID    DSV_SceneDepth                   = INVALID_ID;
@@ -258,7 +267,7 @@ public:
 	void RenderThread_SignalUpdateThread();
 #endif
 
-	void RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height);
+	void RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height, float ResolutionScale);
 	void RenderThread_LoadResources();
 	void RenderThread_UnloadWindowSizeDependentResources(HWND hwnd);
 
@@ -392,14 +401,12 @@ private:
 	EventQueue_t                    mEventQueue_WinToVQE_Renderer;
 	EventQueue_t                    mEventQueue_WinToVQE_Update;
 
-	// render
+	// renderer
 	VQRenderer                      mRenderer;
+
+	// assets 
 	AssetLoader                     mAssetLoader;
-
-	// data: geometry
 	BuiltinMeshArray_t              mBuiltinMeshes;
-
-	// data: environment maps & HDR profiles
 	std::vector<FDisplayHDRProfile> mDisplayHDRProfiles;
 	EnvironmentMapDescLookup_t      mLookup_EnvironmentMapDescriptors;
 
@@ -427,13 +434,15 @@ private:
 	// scene
 	FLoadingScreenData              mLoadingScreenData;
 	std::queue<std::string>         mQueue_SceneLoad;
-	
 	int                             mIndex_SelectedScene;
 	std::unique_ptr<Scene>          mpScene;
+	
+	// ui
 	ImGuiContext*                   mpImGuiContext;
 	FUIState                        mUIState;
 	FRenderStats                    mRenderStats;
 
+	// rendering resources per window
 #if 0
 	RenderingResourcesLookup_t      mRenderingResources;
 #else
@@ -512,7 +521,7 @@ private:
 	void                            TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams);
 	void                            RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams);
 	void                            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
-	void                            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx); // TODO
+	void                            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
 	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
 
 	//
@@ -550,6 +559,7 @@ private:
 
 	bool                            IsWindowRegistered(HWND hwnd) const;
 	bool                            ShouldRenderHDR(HWND hwnd) const;
+	bool                            IsHDRSettingOn() const;
 
 	void                            CalculateEffectiveFrameRateLimit(HWND hwnd);
 	float                           FramePacing(const float dt);

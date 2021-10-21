@@ -252,8 +252,6 @@ void VQEngine::UpdateThread_SignalRenderThread(){}
 void VQEngine::WaitUntilRenderingFinishes(){}
 #endif
 
-
-
 // -------------------------------------------------------------------
 #if !VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 constexpr int FRAME_DATA_INDEX = 0;
@@ -268,7 +266,12 @@ bool VQEngine::IsWindowRegistered(HWND hwnd) const
 bool VQEngine::ShouldRenderHDR(HWND hwnd) const
 {
 	const auto& pWin = this->GetWindow(hwnd);
-	return mSettings.WndMain.bEnableHDR && pWin->GetIsOnHDRCapableDisplay();
+	return IsHDRSettingOn() && pWin->GetIsOnHDRCapableDisplay();
+}
+
+bool VQEngine::IsHDRSettingOn() const
+{
+	return mSettings.WndMain.bEnableHDR;
 }
 
 void VQEngine::CalculateEffectiveFrameRateLimit(HWND hwnd)
@@ -369,8 +372,6 @@ void VQEngine::UpdateThread_UpdateScene_DebugWnd(const float dt)
 	std::unique_ptr<Window>& pWin = mpWinDebug;
 	HWND hwnd = pWin->GetHWND();
 	const Input& input = mInputStates.at(hwnd);
-
-
 }
 
 
@@ -394,16 +395,35 @@ void VQEngine::Load_SceneData_Dispatch()
 		else if (SceneType == "GeometryUnitTest") pScene = std::make_unique<GeometryUnitTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 	};
 
+	const bool bUpscalingEnabled = mpScene ? mpScene->GetPostProcessParameters(0).IsFSREnabled() : false;
 	if (mpScene)
 	{
 		this->WaitUntilRenderingFinishes();
-		mpScene->Unload();
+		mpScene->Unload(); // is this really necessary when we fnCreateSceneInstance() ?
 	}
 
 	// load scene representation from disk
 	const std::string SceneFilePath = "Data/Levels/" + SceneFileName + ".xml";
 	FSceneRepresentation SceneRep = VQEngine::ParseSceneFile(SceneFilePath);
 	fnCreateSceneInstance(SceneRep.SceneName, mpScene);
+
+	//----------------------------------------------------------------------
+	// Workaround
+	// ----------
+	// PostProcess settings won't carry over when the level is changed.
+	// When Upscaling is enabled in the previous scene, the next scene won't
+	// know about it, hence we just pre-emptively send a WindowResize event
+	// to re-initialize the render-resolution-dependent resources with their
+	// proper size.
+	if (bUpscalingEnabled)
+	{
+		const uint32 W = mpWinMain->GetWidth();
+		const uint32 H = mpWinMain->GetHeight();
+		mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<WindowResizeEvent>(W, H, mpWinMain->GetHWND()));
+		mEventQueue_WinToVQE_Update.AddItem(std::make_unique<WindowResizeEvent>(W, H, mpWinMain->GetHWND()));
+	}
+	//----------------------------------------------------------------------
+	
 
 	// start loading textures, models, materials with worker threads
 	mpScene->StartLoading(this->mBuiltinMeshes, SceneRep);

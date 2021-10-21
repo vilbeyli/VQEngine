@@ -198,7 +198,6 @@ void VQEngine::UpdateThread_HandleEvents()
 		{
 			std::shared_ptr<KeyDownEvent> p = std::static_pointer_cast<KeyDownEvent>(pEvent);
 			mInputStates.at(p->hwnd).UpdateKeyDown(p->data);
-			Log::Info("KeyDownEvent;");
 			UpdateImGui_KeyDown(p->data);
 
 		} break;
@@ -236,15 +235,13 @@ void VQEngine::UpdateThread_HandleEvents()
 
 }
 
-#define A_CPU 1
-#include "Shaders/AMDFidelityFX/CAS/ffx_a.h"
-#include "Shaders/AMDFidelityFX/CAS/ffx_cas.h"
 void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent)
 {
 	std::shared_ptr<WindowResizeEvent> p = std::static_pointer_cast<WindowResizeEvent>(pEvent);
 
-	const float fWidth  = static_cast<float>(p->width );
-	const float fHeight = static_cast<float>(p->height);
+	const uint uWidth  = p->width ;
+	const uint uHeight = p->height;
+
 	if (p->hwnd == mpWinMain->GetHWND())
 	{
 		SwapChain& Swapchain = mRenderer.GetWindowSwapChain(p->hwnd);
@@ -253,15 +250,28 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 		// Update Camera Projection Matrices
 		Camera& cam = mpScene->GetActiveCamera(); // TODO: all cameras?
 		FProjectionMatrixParameters UpdatedProjectionMatrixParams = cam.GetProjectionParameters();
-		UpdatedProjectionMatrixParams.ViewportWidth  = fWidth;
-		UpdatedProjectionMatrixParams.ViewportHeight = fHeight;
+		UpdatedProjectionMatrixParams.ViewportWidth  = static_cast<float>(uWidth);
+		UpdatedProjectionMatrixParams.ViewportHeight = static_cast<float>(uHeight);
 		cam.SetProjectionMatrix(UpdatedProjectionMatrixParams);
 
 		// Update PostProcess Data
 		for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
 		{
-			FPostProcessParameters::FFFXCAS& CASParams = mpScene->GetPostProcessParameters(i).FFXCASParams;
-			CasSetup(&CASParams.CASConstantBlock[0], &CASParams.CASConstantBlock[4], CASParams.CASSharpen, fWidth, fHeight, fWidth, fHeight);
+			FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(i);
+
+			// Update FidelityFX constant blocks
+			if (PPParams.IsFFXCASEnabled())
+			{
+				PPParams.FFXCASParams.UpdateCASConstantBlock(uWidth, uHeight, uWidth, uHeight);
+			}
+			if (PPParams.IsFSREnabled())
+			{
+				const float fResolutionScale = PPParams.FFSR_EASUParams.GetScreenPercentage();
+				const uint InputWidth  = static_cast<uint>(fResolutionScale * uWidth);
+				const uint InputHeight = static_cast<uint>(fResolutionScale * uHeight);
+				PPParams.FFSR_EASUParams.UpdateEASUConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, uWidth, uHeight);
+				PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
+			}
 		}
 	}
 }
@@ -330,7 +340,7 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	const bool         bIsWindowMinimized = WIDTH == 0 && HEIGHT == 0;
 	const bool                  bIsClosed = pWnd->IsClosed();
 	const bool      bFullscreenTransition = pWnd->GetFullscreenHeight() == HEIGHT && pWnd->GetFullscreenWidth() == WIDTH;
-
+	const bool          bUseHDRRenderPath = this->ShouldRenderHDR(hwnd);
 
 	if (bIsClosed || bIsWindowMinimized)
 	{
@@ -363,9 +373,14 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	pWnd->OnResize(WIDTH, HEIGHT);
 	mRenderer.OnWindowSizeChanged(hwnd, WIDTH, HEIGHT);
 
-	RenderThread_UnloadWindowSizeDependentResources(hwnd);
-	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT);
+	const auto& PPParams = this->mpScene->GetPostProcessParameters(0);
+	const bool bFSREnabled = PPParams.IsFSREnabled() && !bUseHDRRenderPath; // TODO: remove this when FSR-HDR is implemented
+	const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
 
+	const float fResolutionScale = bUpscaling ? PPParams.FFSR_EASUParams.GetScreenPercentage() : 1.0f;
+
+	RenderThread_UnloadWindowSizeDependentResources(hwnd);
+	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT, fResolutionScale);
 }
 
 void VQEngine::RenderThread_HandleWindowCloseEvent(const IEvent* pEvent)
@@ -420,9 +435,14 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 
 	Swapchain.WaitForGPU(); // make sure GPU is finished
 
+	const auto& PPParams = this->mpScene->GetPostProcessParameters(0);
+	const bool bFSREnabled = PPParams.IsFSREnabled();
+	const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
+
+	const float fResolutionScale = bUpscaling ? PPParams.FFSR_EASUParams.GetScreenPercentage() : 1.0f;
 
 	RenderThread_UnloadWindowSizeDependentResources(hwnd);
-	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT);
+	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT, fResolutionScale);
 
 
 	//const bool bCapture = true;

@@ -298,25 +298,33 @@ void Scene::LoadCameras(std::vector<FCameraParameters>& CameraParams)
 	Log::Info("[Scene] Cameras initialized");
 }
 
-
-#define A_CPU 1
-#include "Shaders/AMDFidelityFX/CAS/ffx_a.h"
-#include "Shaders/AMDFidelityFX/CAS/ffx_cas.h"
 void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 {
 	// TODO: remove hardcode
 
-	const float fWidth = static_cast<float>(this->mpWindow->GetWidth());
-	const float fHeight = static_cast<float>(this->mpWindow->GetHeight());
+	const uint fWidth  = this->mpWindow->GetWidth();
+	const uint fHeight = this->mpWindow->GetHeight();
 
 	// Update PostProcess Data
 	for (size_t i = 0; i < mFrameSceneViews.size(); ++i)
 	{
 		FPostProcessParameters& PPParams = this->GetPostProcessParameters(static_cast<int>(i));
-		FPostProcessParameters::FFFXCAS& CASParams = PPParams.FFXCASParams;
-		CasSetup(&CASParams.CASConstantBlock[0], &CASParams.CASConstantBlock[4], CASParams.CASSharpen, fWidth, fHeight, fWidth, fHeight);
 
+		// Update FidelityFX constant blocks
 		PPParams.bEnableCAS = true; // TODO: read from scene PP settings
+		if (PPParams.IsFFXCASEnabled())
+		{
+			PPParams.FFXCASParams.UpdateCASConstantBlock(fWidth, fHeight, fWidth, fHeight);
+		}
+
+		if (PPParams.IsFSREnabled())
+		{
+			const float fResolutionScale = PPParams.FFSR_EASUParams.GetScreenPercentage();
+			const uint InputWidth = static_cast<uint>(fResolutionScale * fWidth);
+			const uint InputHeight = static_cast<uint>(fResolutionScale * fHeight);
+			PPParams.FFSR_EASUParams.UpdateEASUConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, fWidth, fHeight);
+			PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
+		}
 	}
 }
 

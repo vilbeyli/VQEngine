@@ -28,6 +28,7 @@
 #include "../Core/Memory.h"
 #include "../Core/RenderCommands.h"
 #include "../AssetLoader.h"
+#include "../PostProcess/PostProcess.h"
 
 // fwd decl
 class Input;
@@ -43,42 +44,7 @@ using MaterialLookup_t = std::unordered_map<MaterialID, Material>;
 
 
 //--- Pass Parameters ---
-struct FPostProcessParameters
-{
-	struct FTonemapper
-	{
-		EColorSpace   ContentColorSpace = EColorSpace::REC_709;
-		EDisplayCurve OutputDisplayCurve = EDisplayCurve::sRGB;
-		float         DisplayReferenceBrightnessLevel = 200.0f;
-		int           ToggleGammaCorrection = 1;
-	};
-	struct FFFXCAS
-	{
-		unsigned CASConstantBlock[8];
-		float CASSharpen = 0.8f;
-		FFFXCAS() = default;
-		FFFXCAS(const FFFXCAS& other) : CASSharpen(other.CASSharpen) { memcpy(CASConstantBlock, other.CASConstantBlock, sizeof(CASConstantBlock)); }
-	};
-	struct FBlurParams // Gaussian Blur Pass
-	{ 
-		int iImageSizeX;
-		int iImageSizeY;
-	};
-
-	inline bool IsFFXCASEnabled() const { return this->bEnableCAS && FFXCASParams.CASSharpen > 0.0f; }
-
-	int SceneRTWidth = 0;
-	int SceneRTHeight = 0;
-	int DisplayResolutionWidth = 0;
-	int DisplayResolutionHeight = 0;
-
-	FTonemapper TonemapperParams;
-	FBlurParams BlurParams;
-	FFFXCAS     FFXCASParams;
-
-	bool bEnableCAS;
-	bool bEnableGaussianBlur;
-};
+struct FPostProcessParameters;
 struct FSceneRenderParameters
 {
 	bool bDrawLightBounds = false;
