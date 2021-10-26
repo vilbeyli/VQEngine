@@ -654,7 +654,7 @@ void VQEngine::DrawPostProcessControlsWindow(FPostProcessParameters& PPParams)
 	// start drawing the window
 	ImGui::Begin("Post Processing (F3)", &mUIState.bWindowVisible_PostProcessControls);
 
-	ImGui::Text("FidelityFX Super Resolution");
+	ImGui::Text("FidelityFX Super Resolution 1.0");
 	ImGui::Separator();
 	if (ImGui::Checkbox("Enabled (J) ##1", &PPParams.bEnableFSR))
 	{
