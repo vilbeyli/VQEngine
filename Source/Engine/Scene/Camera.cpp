@@ -115,14 +115,15 @@ void Camera::Update(float dt, const Input& input)
 	const bool bMouseDown = input.IsAnyMouseDown();
 	const bool bMouseLeftDown  = input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_LEFT);
 	const bool bMouseRightDown = input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_RIGHT);
-	
+	const bool bMouseScrollInput = input.IsMouseScrollUp() || input.IsMouseScrollDown();
+
 	const ImGuiIO& io = ImGui::GetIO();
 
 	if (bMouseLeftDown)  mControllerIndex = static_cast<size_t>(ECameraControllerType::ORBIT);
 	if (bMouseRightDown) mControllerIndex = static_cast<size_t>(ECameraControllerType::FIRST_PERSON);
 	
 	const bool bMouseInputUsedByUI = io.MouseDownOwned[0] || io.MouseDownOwned[1];
-	const bool bUseInput = (bMouseLeftDown || bMouseRightDown) && !bMouseInputUsedByUI;
+	const bool bUseInput = (bMouseLeftDown || bMouseRightDown || (bMouseScrollInput && mControllerIndex == ECameraControllerType::ORBIT)) && !bMouseInputUsedByUI;
 	mpControllers[mControllerIndex]->UpdateCamera(input, dt, bUseInput);
 }
 
