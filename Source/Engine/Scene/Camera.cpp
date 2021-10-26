@@ -120,9 +120,10 @@ void Camera::Update(float dt, const Input& input)
 
 	if (bMouseLeftDown)  mControllerIndex = static_cast<size_t>(ECameraControllerType::ORBIT);
 	if (bMouseRightDown) mControllerIndex = static_cast<size_t>(ECameraControllerType::FIRST_PERSON);
+	
 	const bool bMouseInputUsedByUI = io.MouseDownOwned[0] || io.MouseDownOwned[1];
-	if ((bMouseLeftDown || bMouseRightDown) && !bMouseInputUsedByUI)
-		mpControllers[mControllerIndex]->UpdateCamera(input, dt);
+	const bool bUseInput = (bMouseLeftDown || bMouseRightDown) && !bMouseInputUsedByUI;
+	mpControllers[mControllerIndex]->UpdateCamera(input, dt, bUseInput);
 }
 
 XMFLOAT3 Camera::GetPositionF() const { return mPosition; }
@@ -239,7 +240,7 @@ OrbitController::OrbitController(Camera* pCam)
 {
 }
 
-void OrbitController::UpdateCamera(const Input& input, float dt)
+void OrbitController::UpdateCamera(const Input& input, float dt, bool bUseInput)
 {
 	const XMVECTOR vZERO = XMVectorZero();
 	const XMFLOAT3 f3ZERO = XMFLOAT3(0, 0, 0);
@@ -257,6 +258,7 @@ void OrbitController::UpdateCamera(const Input& input, float dt)
 	tf.RotateAroundAxisDegrees(RightVector, pCam->GetPitch());
 
 	// calculate camera orbit movement & update the camera
+	if(bUseInput)
 	{
 		XMVECTOR vPOSITION = XMLoadFloat3(&pCam->mPosition);
 
@@ -273,6 +275,7 @@ void OrbitController::UpdateCamera(const Input& input, float dt)
 		constexpr float fROTATION_SPEED = 10.0f; // todo: drive by some config?
 		const float fRotAngleAzimuth = camInput.DeltaMouseXY[0] * fROTATION_SPEED * dt * DEG2RAD;
 		const float fRotAnglePolar   = camInput.DeltaMouseXY[1] * fROTATION_SPEED * dt * DEG2RAD;
+		const bool bRotate = camInput.DeltaMouseXY[0] != 0.0f || camInput.DeltaMouseXY[1] != 0.0f;
 		vLOOK_AT_POSITION = vZERO; // look at the origin
 		tf.RotateAroundPointAndAxis(vROTATION_AXIS_AZIMUTH, fRotAngleAzimuth, vLOOK_AT_POSITION);
 		tf.RotateAroundPointAndAxis(vROTATION_AXIS_POLAR  , -fRotAnglePolar, vLOOK_AT_POSITION);
@@ -293,7 +296,10 @@ void OrbitController::UpdateCamera(const Input& input, float dt)
 
 		// update the camera
 		pCam->mPosition = tf._position;
-		pCam->LookAt(vLOOK_AT_POSITION);
+		if (bRotate)
+		{
+			pCam->LookAt(vLOOK_AT_POSITION);
+		}
 		pCam->UpdateViewMatrix();
 	}
 }
@@ -318,7 +324,7 @@ FirstPersonController::FirstPersonController(Camera* pCam
 	, Drag(drag)
 {}
 
-void FirstPersonController::UpdateCamera(const Input& input, float dt)
+void FirstPersonController::UpdateCamera(const Input& input, float dt, bool bUseInput)
 {
 	constexpr float CAMERA_MOVEMENT_SPEED_MULTIPLER = 0.75f;
 	constexpr float CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER = 2.0f;
@@ -342,7 +348,8 @@ void FirstPersonController::UpdateCamera(const Input& input, float dt)
 	const float RotationSpeed = this->AngularSpeedDeg * DEG2RAD; // rotation doesn't depend on time
 	const float dy = camInput.DeltaMouseXY[1] * RotationSpeed;
 	const float dx = camInput.DeltaMouseXY[0] * RotationSpeed;
-	this->mpCamera->Rotate(dx, dy);
+	if(bUseInput)
+		this->mpCamera->Rotate(dx, dy);
 
 
 	//this->mpCamera->Move(dt, camInput);

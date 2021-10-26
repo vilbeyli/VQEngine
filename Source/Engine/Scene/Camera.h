@@ -74,7 +74,7 @@ struct FCameraInput
 class CameraController
 {
 public:
-	virtual void UpdateCamera(const Input& input, float dt) = 0;
+	virtual void UpdateCamera(const Input& input, float dt, bool bUseInput) = 0;
 	inline std::unique_ptr<CameraController> Clone(Camera* pNewCam) { return std::unique_ptr<CameraController>(Clone_impl(pNewCam)); }
 protected:
 	virtual CameraController* Clone_impl(Camera* pNewCam) = 0;
@@ -90,7 +90,7 @@ class FirstPersonController : public CameraController
 public: 
 	FirstPersonController() = delete;
 	FirstPersonController(Camera* pCam, float moveSpeed = 1000.0f, float angularSpeed = 0.05f, float drag = 9.5f);
-	void UpdateCamera(const Input& input, float dt) override;
+	void UpdateCamera(const Input& input, float dt, bool bUseInput) override;
 protected:
 	CameraController* Clone_impl(Camera* pNewCam) override;
 private:
@@ -102,7 +102,7 @@ class OrbitController : public CameraController
 {
 public:
 	OrbitController(Camera* pCam);
-	void UpdateCamera(const Input& input, float dt) override;
+	void UpdateCamera(const Input& input, float dt, bool bUseInput) override;
 protected:
 	CameraController* Clone_impl(Camera* pNewCam) override;
 private:
