@@ -185,12 +185,8 @@ void VQEngine::RenderThread_Inititalize()
 	const int W = bFullscreen ? mpWinMain->GetFullscreenWidth() : mpWinMain->GetWidth();
 	const int H = bFullscreen ? mpWinMain->GetFullscreenHeight() : mpWinMain->GetHeight();
 
-	//const auto& PPParams = this->mpScene->GetPostProcessParameters(0);
-	//const bool bFSREnabled = PPParams.IsFSREnabled();
-	//const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
-	//
-	//const float fResolutionScale = bUpscaling ? PPParams.FFSR_EASUParams.GetScreenPercentage() : 1.0f;
-	const float fResolutionScale = 1.0f; // TODO ??
+	// Post process parameters are not initialized at this stage to determine the resolution scale
+	const float fResolutionScale = 1.0f;
 	RenderThread_LoadWindowSizeDependentResources(mpWinMain->GetHWND(), W, H, fResolutionScale);
 
 	mTimerRender.Reset();
