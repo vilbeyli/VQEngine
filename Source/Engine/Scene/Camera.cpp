@@ -20,6 +20,7 @@
 #include "Quaternion.h"
 #include "Transform.h"
 #include "../Core/Input.h"
+#include "imgui.h" // io
 
 #if _DEBUG
 #include "Libs/VQUtils/Source/Log.h"
@@ -108,7 +109,6 @@ void Camera::UpdateViewMatrix()
 	XMStoreFloat4x4(&mMatView, XMMatrixLookAtLH(pos, lookAt, up));
 }
 
-#include "imgui.h"
 void Camera::Update(float dt, const Input& input)
 {
 	assert(mControllerIndex < mpControllers.size());

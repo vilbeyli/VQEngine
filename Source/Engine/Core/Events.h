@@ -75,12 +75,14 @@ struct IEvent
 // -------------------------------------------------------------------------------------
 struct SetMouseCaptureEvent : public IEvent
 {
-	SetMouseCaptureEvent(HWND hwnd_, bool bCap, bool bVis) 
+	SetMouseCaptureEvent(HWND hwnd_, bool bCaptureIn, bool bVisibleIn, bool bReleaseAtCapturedPositionIn) 
 		: IEvent(EEventType::MOUSE_CAPTURE_EVENT, hwnd_)
-		, bCapture(bCap)
-		, bVisible(bVis) 
+		, bCapture(bCaptureIn)
+		, bReleaseAtCapturedPosition(bReleaseAtCapturedPositionIn)
+		, bVisible(bVisibleIn)
 	{}
 	bool bCapture = false;
+	bool bReleaseAtCapturedPosition = true;
 	bool bVisible = false;
 };
 

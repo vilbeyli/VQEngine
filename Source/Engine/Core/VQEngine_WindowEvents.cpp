@@ -355,7 +355,7 @@ void VQEngine::OnWindowLoseFocus(HWND hwnd)
 
 	// make sure the mouse becomes visible when Main Window is not the one that is focused
 	if(hwnd == mpWinMain->GetHWND() && mpWinMain->IsMouseCaptured())
-		this->SetMouseCaptureForWindow(mpWinMain->GetHWND(), false);
+		this->SetMouseCaptureForWindow(mpWinMain->GetHWND(), false, true);
 }
 
 
