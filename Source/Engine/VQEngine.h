@@ -479,8 +479,8 @@ private:
 	void                            ExitUI();
 
 	void                            HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWindowSettings& settings);
-	void                            SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse);
-	inline void                     SetMouseCaptureForWindow(Window* pWin, bool bCaptureMouse) { this->SetMouseCaptureForWindow(pWin->GetHWND(), bCaptureMouse); };
+	void                            SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse, bool bReleaseAtCapturedPosition);
+	inline void                     SetMouseCaptureForWindow(Window* pWin, bool bCaptureMouse, bool bReleaseAtCapturedPosition) { this->SetMouseCaptureForWindow(pWin->GetHWND(), bCaptureMouse, bReleaseAtCapturedPosition); };
 
 	void                            InitializeBuiltinMeshes();
 	void                            LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete
@@ -546,7 +546,7 @@ private:
 	FWindowSettings&                GetWindowSettings(HWND hwnd);
 
 	const FEnvironmentMapDescriptor& GetEnvironmentMapDesc(const std::string& EnvMapName) const;
-           FEnvironmentMapDescriptor GetEnvironmentMapDescCopy(const std::string& EnvMapName) const;
+          FEnvironmentMapDescriptor GetEnvironmentMapDescCopy(const std::string& EnvMapName) const;
 
 	void                            RegisterWindowForInput(const std::unique_ptr<Window>& pWnd);
 	void                            UnregisterWindowForInput(const std::unique_ptr<Window>& pWnd);
@@ -554,6 +554,7 @@ private:
 	void                            HandleEngineInput();
 	void                            HandleMainWindowInput(Input& input, HWND hwnd);
 	void                            HandleUIInput();
+
 	
 	void                            DispatchHDRSwapchainTransitionEvents(HWND hwnd);
 

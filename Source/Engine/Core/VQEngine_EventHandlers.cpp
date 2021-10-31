@@ -47,7 +47,7 @@ void VQEngine::MainThread_HandleEvents()
 		case MOUSE_CAPTURE_EVENT:
 		{
 			std::shared_ptr<SetMouseCaptureEvent> p = std::static_pointer_cast<SetMouseCaptureEvent>(pEvent);
-			this->SetMouseCaptureForWindow(p->hwnd, p->bCapture);
+			this->SetMouseCaptureForWindow(p->hwnd, p->bCapture, p->bReleaseAtCapturedPosition);
 		} break;
 		case HANDLE_WINDOW_TRANSITIONS_EVENT:
 		{
@@ -90,11 +90,11 @@ void VQEngine::HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWin
 		pWin->ToggleWindowedFullscreen(&mRenderer.GetWindowSwapChain(hwnd));
 		
 		if (bHandlingMainWindowTransition)
-			SetMouseCaptureForWindow(hwnd, true);
+			SetMouseCaptureForWindow(hwnd, true, true);
 	}
 }
 
-void VQEngine::SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse)
+void VQEngine::SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse, bool bReleaseAtCapturedPosition)
 {
 	auto& pWin = this->GetWindow(hwnd);
 	if (mInputStates.find(hwnd) == mInputStates.end())
@@ -112,10 +112,13 @@ void VQEngine::SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse)
 #endif
 	}
 	else
-	{ 
-		SetCursorPos(this->mMouseCapturePosition.x, this->mMouseCapturePosition.y);
+	{
+		if (bReleaseAtCapturedPosition)
+		{
+			SetCursorPos(this->mMouseCapturePosition.x, this->mMouseCapturePosition.y);
+		}
 #if VERBOSE_LOGGING
-		Log::Info("Releasing Mouse: Setting Position=(%d, %d)", this->mMouseCapturePosition.x, this->mMouseCapturePosition.y);
+		Log::Info("Releasing Mouse: Setting Position=(%d, %d), bReleaseAtCapturedPosition=%d", this->mMouseCapturePosition.x, this->mMouseCapturePosition.y, bReleaseAtCapturedPosition);
 #endif
 	}
 }
@@ -227,7 +230,10 @@ void VQEngine::UpdateThread_HandleEvents()
 				, p->data.relativeY
 				, static_cast<short>(p->data.scrollDelta)
 			);
+
+			ImGuiIO& io = ImGui::GetIO();
 			UpdateImGui_MousePosition(pEvent->hwnd);
+			io.MouseWheel += p->data.scrollDelta;
 		} break;
 		case WINDOW_RESIZE_EVENT: UpdateThread_HandleWindowResizeEvent(pEvent);  break;
 		}

@@ -24,6 +24,7 @@
 #include "../Scenes/Scenes.h" // scene instances
 
 #include "GPUMarker.h"
+#include "imgui.h" // io
 
 #include "Libs/VQUtils/Source/utils.h"
 
@@ -61,19 +62,10 @@ void VQEngine::HandleEngineInput()
 		{
 			if (pWin->IsMouseCaptured())
 			{
-				mEventQueue_VQEToWin_Main.AddItem(std::make_shared<SetMouseCaptureEvent>(hwnd, false, true));
-			}
-		}
-		if (input.IsAnyMouseDown())
-		{
-			Input& inp = mInputStates.at(hwnd);
-			if (inp.GetInputBypassing())
-			{
-				inp.SetInputBypassing(false);
-
-				// capture mouse only when main window is clicked
-				if (hwnd == mpWinMain->GetHWND())
-					mEventQueue_VQEToWin_Main.AddItem(std::make_shared<SetMouseCaptureEvent>(hwnd, true, false));
+				constexpr bool CAPTURE_MOUSE = false;
+				constexpr bool MOUSE_VISIBLE = true;
+				constexpr bool RELEASE_WHERE_CAPTURED = true;
+				mEventQueue_VQEToWin_Main.AddItem(std::make_shared<SetMouseCaptureEvent>(hwnd, CAPTURE_MOUSE, MOUSE_VISIBLE, RELEASE_WHERE_CAPTURED));
 			}
 		}
 	}
@@ -121,25 +113,33 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 	const bool bMouseRightTriggered = input.IsMouseTriggered(Input::EMouseButtons::MOUSE_BUTTON_RIGHT);
 	const bool bMouseLeftReleased = input.IsMouseReleased(Input::EMouseButtons::MOUSE_BUTTON_LEFT);
 	const bool bMouseRightReleased = input.IsMouseReleased(Input::EMouseButtons::MOUSE_BUTTON_RIGHT);
+	const ImGuiIO& io = ImGui::GetIO();
+	const bool bMouseInputUsedByUI = io.WantCaptureMouse;
 
 	// Mouse Capture & Visibility
 	if (bMouseLeftTriggered || bMouseRightTriggered)
 	{
+
 		const bool bCapture = true;
-		const bool bVisible = false;
-		mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bCapture, bVisible));
+		const bool bVisible = !bCapture; // visible=false if capture=true
+		const bool bReleaseWhereCaptured = false; // doesn't matter for this event
+		mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bCapture, bVisible, bReleaseWhereCaptured));
 	}
 	if (bMouseLeftReleased || bMouseRightReleased)
 	{
 		const bool bCapture = false;
-		const bool bVisible = true;
-		mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bCapture, bVisible));
+		const bool bVisible = !bCapture; // visible=false if capture=true
+
+		// release where captured if camera is updated
+		// if UI is interacted with (click & drag), then don't update the release positionDown(Input::EMouseButtons::MOUSE_BUTTON_RIGHT);
+		const bool bReleaseWhereCaptured = !bMouseInputUsedByUI;
+		mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bCapture, bVisible, bReleaseWhereCaptured));
 	}
 
 	// UI
 	auto Toggle = [](bool& b) {b = !b; };
 	if ((bIsAltDown && input.IsKeyTriggered("Z")) // Alt+Z detection doesn't work, TODO: fix
-		|| (bIsShiftDown && input.IsKeyTriggered("Z"))) // woraround: use shift+z for now
+		|| (bIsShiftDown && input.IsKeyTriggered("Z"))) // workaround: use shift+z for now
 	{
 		Toggle(mUIState.bHideAllWindows);
 	}
