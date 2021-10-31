@@ -230,7 +230,10 @@ void VQEngine::UpdateThread_HandleEvents()
 				, p->data.relativeY
 				, static_cast<short>(p->data.scrollDelta)
 			);
+
+			ImGuiIO& io = ImGui::GetIO();
 			UpdateImGui_MousePosition(pEvent->hwnd);
+			io.MouseWheel += p->data.scrollDelta;
 		} break;
 		case WINDOW_RESIZE_EVENT: UpdateThread_HandleWindowResizeEvent(pEvent);  break;
 		}

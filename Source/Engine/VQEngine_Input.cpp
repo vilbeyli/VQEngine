@@ -139,7 +139,7 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 	// UI
 	auto Toggle = [](bool& b) {b = !b; };
 	if ((bIsAltDown && input.IsKeyTriggered("Z")) // Alt+Z detection doesn't work, TODO: fix
-		|| (bIsShiftDown && input.IsKeyTriggered("Z"))) // woraround: use shift+z for now
+		|| (bIsShiftDown && input.IsKeyTriggered("Z"))) // workaround: use shift+z for now
 	{
 		Toggle(mUIState.bHideAllWindows);
 	}

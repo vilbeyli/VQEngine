@@ -51,64 +51,7 @@ static        bool IsAnyMouseButtonDown()
 			return true;
 	return false;
 }
-#if 0
-LRESULT ImGUI_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-	ImGuiIO& io = ImGui::GetIO();
-	switch (msg)
-	{
-	case WM_LBUTTONDOWN:
-	case WM_RBUTTONDOWN:
-	case WM_MBUTTONDOWN:
-	{
-		int button = 0;
-		if (msg == WM_LBUTTONDOWN) button = 0;
-		else if (msg == WM_RBUTTONDOWN) button = 1;
-		else if (msg == WM_MBUTTONDOWN) button = 2;
-		if (!IsAnyMouseButtonDown() && GetCapture() == NULL)
-			;// SetCapture(hwnd);
-		io.MouseDown[button] = true;
-		return 0;
-	}
-	case WM_LBUTTONUP:
-	case WM_RBUTTONUP:
-	case WM_MBUTTONUP:
-	{
-		int button = 0;
-		if (msg == WM_LBUTTONUP) button = 0;
-		else if (msg == WM_RBUTTONUP) button = 1;
-		else if (msg == WM_MBUTTONUP) button = 2;
-		io.MouseDown[button] = false;
-		if (!IsAnyMouseButtonDown() && GetCapture() == hwnd)
-			ReleaseCapture();
-		return 0;
-	}
-	case WM_MOUSEWHEEL:
-		io.MouseWheel += GET_WHEEL_DELTA_WPARAM(wParam) > 0 ? +1.0f : -1.0f;
-		return 0;
-	case WM_MOUSEMOVE:
-		io.MousePos.x = (signed short)(lParam);
-		io.MousePos.y = (signed short)(lParam >> 16);
-		return 0;
-	case WM_KEYDOWN:
-	case WM_SYSKEYDOWN:
-		if (wParam < 256)
-			io.KeysDown[wParam] = true;
-		return 0;
-	case WM_KEYUP:
-	case WM_SYSKEYUP:
-		if (wParam < 256)
-			io.KeysDown[wParam] = false;
-		return 0;
-	case WM_CHAR:
-		// You can also use ToAscii()+GetKeyboardState() to retrieve characters.
-		if (wParam > 0 && wParam < 0x10000)
-			io.AddInputCharacter((unsigned short)wParam);
-		return 0;
-	}
-	return 0;
-}
-#endif
+
 static void UpdateImGUIState(HWND hwnd)
 {
 	ImGuiIO& io = ImGui::GetIO();
@@ -123,10 +66,12 @@ static void UpdateImGUIState(HWND hwnd)
 	io.KeyShift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
 	io.KeyAlt = (GetKeyState(VK_MENU) & 0x8000) != 0;
 	io.KeySuper = false;
-	// io.KeysDown : filled by WM_KEYDOWN/WM_KEYUP events
-	// io.MousePos : filled by WM_MOUSEMOVE events
-	// io.MouseDown : filled by WM_*BUTTON* events
-	// io.MouseWheel : filled by WM_MOUSEWHEEL events
+	// filled by UpdateThread_HandleEvents() -----------------
+	// io.KeysDown   : tied to WM_KEYDOWN/WM_KEYUP events
+	// io.MousePos   : tied to WM_MOUSEMOVE events
+	// io.MouseDown  : tied to WM_*BUTTON* events
+	// io.MouseWheel : tied to WM_MOUSEWHEEL / raw input events
+	// --------------------------------------------------------
 
 	// Hide OS mouse cursor if ImGui is drawing it
 	if (io.MouseDrawCursor)
@@ -272,8 +217,8 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 	// i.e. changing the scene or the environment map, call ImGui::EndFrame()
 	// here to prevent calling NewFrame() before Render/EndFrame is called.
 	// Render() won't be called if we're changing the level because the appstate
-	// will cause VQengine rendering the loading screen (which doesn't call ImGui::Render())
-	// and ImGui crashing on double NewFrame().
+	// will cause VQengine to render the loading screen which doesn't call ImGui::Render(),
+	// and as a result ImGui crashes on a double NewFrame() call.
 	if (!mQueue_SceneLoad.empty() || mbLoadingEnvironmentMap.load())
 	{
 		ImGui::EndFrame();
