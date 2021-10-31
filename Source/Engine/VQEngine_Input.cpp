@@ -114,7 +114,7 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 	const bool bMouseLeftReleased = input.IsMouseReleased(Input::EMouseButtons::MOUSE_BUTTON_LEFT);
 	const bool bMouseRightReleased = input.IsMouseReleased(Input::EMouseButtons::MOUSE_BUTTON_RIGHT);
 	const ImGuiIO& io = ImGui::GetIO();
-	const bool bMouseInputUsedByUI = io.MouseDownOwned[0] || io.MouseDownOwned[1];
+	const bool bMouseInputUsedByUI = io.WantCaptureMouse;
 
 	// Mouse Capture & Visibility
 	if (bMouseLeftTriggered || bMouseRightTriggered)

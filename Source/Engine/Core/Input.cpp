@@ -323,10 +323,13 @@ void Input::UpdateKeyDown(KeyDownEventData data)
 			if (mouseBtn & EMouseButtons::MOUSE_BUTTON_LEFT)   mMouseButtonDoubleClicks[EMouseButtons::MOUSE_BUTTON_LEFT] = true;
 			if (mouseBtn & EMouseButtons::MOUSE_BUTTON_RIGHT)  mMouseButtonDoubleClicks[EMouseButtons::MOUSE_BUTTON_RIGHT] = true;
 			if (mouseBtn & EMouseButtons::MOUSE_BUTTON_MIDDLE) mMouseButtonDoubleClicks[EMouseButtons::MOUSE_BUTTON_MIDDLE] = true;
-#if VERBOSE_LOGGING
-			Log::Info("Double Click!!");
-#endif
 		}
+#if VERBOSE_LOGGING
+		if (data.mouse.bDoubleClick) Log::Info("Double Click!!");
+		if (mouseBtn & EMouseButtons::MOUSE_BUTTON_LEFT)   Log::Info("Mouse Button Down: Left");
+		if (mouseBtn & EMouseButtons::MOUSE_BUTTON_RIGHT)  Log::Info("Mouse Button Down: Right");
+		if (mouseBtn & EMouseButtons::MOUSE_BUTTON_MIDDLE) Log::Info("Mouse Button Down: Middle");
+#endif
 	}
 
 	// KEYBOARD KEY
@@ -345,7 +348,7 @@ void Input::UpdateKeyUp(KeyCode key, bool bIsMouseKey)
 		mMouseButtons[mouseBtn] = false;
 		mMouseButtonDoubleClicks[mouseBtn] = false;
 #if VERBOSE_LOGGING
-		Log::Info("Mouse Key Up %x", key);
+		Log::Info("Mouse Button Up %x", key);
 #endif
 	}
 	else
@@ -473,7 +476,8 @@ bool Input::IsMouseScrollUp() const
 bool Input::IsMouseScrollDown() const
 {
 #if VERBOSE_LOGGING
-	Log::Info("Input::IsMouseScrollDown() : scroll=%d", mMouseScroll);
+	if(mMouseScroll)
+		Log::Info("Input::IsMouseScrollDown() : scroll=%d", mMouseScroll);
 #endif
 	return mMouseScroll < 0 && !mbIgnoreInput;
 }

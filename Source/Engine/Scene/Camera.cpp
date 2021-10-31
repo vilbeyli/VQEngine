@@ -122,7 +122,7 @@ void Camera::Update(float dt, const Input& input)
 	if (bMouseLeftDown)  mControllerIndex = static_cast<size_t>(ECameraControllerType::ORBIT);
 	if (bMouseRightDown) mControllerIndex = static_cast<size_t>(ECameraControllerType::FIRST_PERSON);
 	
-	const bool bMouseInputUsedByUI = io.MouseDownOwned[0] || io.MouseDownOwned[1];
+	const bool bMouseInputUsedByUI = io.WantCaptureMouse;
 	const bool bUseInput = (bMouseLeftDown || bMouseRightDown || (bMouseScrollInput && mControllerIndex == ECameraControllerType::ORBIT)) && !bMouseInputUsedByUI;
 	mpControllers[mControllerIndex]->UpdateCamera(input, dt, bUseInput);
 }
