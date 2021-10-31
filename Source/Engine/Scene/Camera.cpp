@@ -301,8 +301,13 @@ void OrbitController::UpdateCamera(const Input& input, float dt, bool bUseInput)
 		{
 			pCam->LookAt(vLOOK_AT_POSITION);
 		}
-		pCam->UpdateViewMatrix();
 	}
+
+	// update the view matrix regardless of the bUseInput in case the
+	// Scene objects are animating the camera in their Update() functions
+	// programmatically. Otherwise, the environment map will sample from
+	// incorrect directions.
+	pCam->UpdateViewMatrix();
 }
 
 CameraController* OrbitController::Clone_impl(Camera* pNewCam)
