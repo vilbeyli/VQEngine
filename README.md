@@ -1,10 +1,10 @@
 ![](Data/Icons/VQEngine-icon.png)
 
-# VQE
+# VQEngine
 
-VQE is **VQEngine**: A DX12 rewrite of [VQEngine-DX11](https://github.com/vilbeyli/VQEngine) for fast prototyping of rendering techniques and experimenting with cutting-edge technology.
+VQEngine is a DirectX12 renderer for prototyping of rendering techniques and experimenting with cutting edge technology.
 
-Join the [VQE Discord Channel](https://discord.gg/U7pd8TV) for rendering, graphics and engine architecture discussions!
+Join the [VQE Discord Channel](https://discord.gg/U7pd8TV) for graphics, math and engine discussions!
 
 [![Discord Banner 2](https://discordapp.com/api/guilds/720409073756930079/widget.png?style=banner2)](https://discord.gg/U7pd8TV)
 
@@ -42,10 +42,11 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
 - PostProcess
   - Tonemapping & Gamma correction
   - [FidelityFX - Contrast Adaptive Sharpening (CAS)](https://github.com/GPUOpen-Effects/FidelityFX-CAS/)
+  - [FidelityFX - Super Resolution 1.0](https://github.com/GPUOpen-Effects/FidelityFX-FSR)
 
 ## Display
 
- - HDR10 display support 
+ - HDR display support with [scRGB HDR](https://docs.microsoft.com/en-us/windows/win32/direct3darticles/high-dynamic-range#setting-up-your-directx-swap-chain) pipeline
  ![](Screenshots/HDRDisplay.jpg)
  - Multiple window & monitor support
  - Refresh Rate
@@ -57,15 +58,18 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
 
 ## Engine 
 
- - Multi-threaded architecture based on [Natalya Tatarchuk's  Destiny's Multithreaded Rendering Architecture Talk](https://www.youtube.com/watch?v=0nTDFLMLX9k)
-   - Main, Update & Render Threads
-   - ThreadPool of worker threads
-  - [glTF](https://en.wikipedia.org/wiki/GlTF) [2.0](https://github.com/KhronosGroup/glTF/tree/master/specification/2.0) model loading using [assimp](https://github.com/assimp/assimp)
-  - Shader system
-    - Shader cache
-    - Multi-threaded shader compilation
-    - Shader Model 5.0 (DXBC) & 6.0 (DXIL)
-  - Automated build & testing scripts
+- Multi-threading 
+  - Worker threads
+    - Parallel command list recording
+    - Culling
+    - Asset loading
+  - Main + Simulation threads to decouple OS events from the update loop
+- [glTF](https://en.wikipedia.org/wiki/GlTF) [2.0](https://github.com/KhronosGroup/glTF/tree/master/specification/2.0) model loading using [assimp](https://github.com/assimp/assimp)
+- Shader system
+  - Shader cache
+  - Multi-threaded shader compilation
+  - Shader Model 5.0 (DXBC) & 6.0 (DXIL)
+- Automated build & testing scripts
 
 
 
