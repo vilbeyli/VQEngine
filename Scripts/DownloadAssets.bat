@@ -13,9 +13,10 @@ set PBR_TEXTURES_DESTINATION_PATH=%cd%/
 popd
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
 set MAIN_SCREEN_RESOLUTION_Y=0
+
 :: HDRI Files
 set HDRI_RESOLUTION=8k
-set HDRI_WEB_PATH=https://hdrihaven.com/files/hdris/
+set HDRI_WEB_PATH=https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/!HDRI_RESOLUTION!/
 set HDRI_FILE_LIST=venice_sunset_!HDRI_RESOLUTION!.hdr
 set HDRI_FILE_LIST=%HDRI_FILE_LIST%;gym_entrance_!HDRI_RESOLUTION!.hdr
 set HDRI_FILE_LIST=%HDRI_FILE_LIST%;stadium_01_!HDRI_RESOLUTION!.hdr
