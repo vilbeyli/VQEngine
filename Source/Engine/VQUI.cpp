@@ -260,6 +260,7 @@ static const char* pStrSceneNames [NUM_MAX_LEVEL_NAMES  ] = {};
 static const char* pStrEnvMapNames[NUM_MAX_ENV_MAP_NAMES] = {};
 static const char* pStrCameraNames[NUM_MAX_CAMERA_NAMES ] = {};
 static const char* pStrFSROptionNames[NUM_MAX_FSR_OPTION_NAMES] = {};
+static const char* pStrMaxFrameRateOptionNames[3] = {}; // see Settings.h:FGraphicsSettings
 
 template<size_t NUM_ARRAY_SIZE> 
 static void FillCStrArray(const char* (&pCStrArray)[NUM_ARRAY_SIZE], const std::vector<std::string>& StrVector)
@@ -316,6 +317,18 @@ static void InitializeStaticCStringData_PostProcessingControls()
 		bFSRNamesInitialized = true;
 	}
 }
+static void InitializeStaticCStringData_GraphicsSettings()
+{
+	static bool GraphicsSettingsDropdownDataInitialized = false;
+	if (!GraphicsSettingsDropdownDataInitialized)
+	{
+		pStrMaxFrameRateOptionNames[0] = "Auto (Refresh Rate x 1.15)";
+		pStrMaxFrameRateOptionNames[1] = "Unlimited";
+		pStrMaxFrameRateOptionNames[2] = "Custom";
+		GraphicsSettingsDropdownDataInitialized = true;
+	} 
+}
+
 // Dropdown data ----------------------------------------------------------------------------------------------
 
 
@@ -590,96 +603,88 @@ void VQEngine::DrawPostProcessSettings(FPostProcessParameters& PPParams)
 	// one time initialization
 	InitializeStaticCStringData_PostProcessingControls();
 
-#define USE_COLLAPSING_HEADER_PP 1
-#if USE_COLLAPSING_HEADER_PP
 	if (ImGui::CollapsingHeader("POST PROCESSING", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-#else
-	ImGui::Text("POST PROCESSING");
-	ImGui::Separator();
-#endif
 
-	ImGui::Text("FidelityFX Super Resolution 1.0");
-	ImGui::Separator();
-	if (ImGui::Checkbox("Enabled (J) ##1", &PPParams.bEnableFSR))
-	{
-		fnSendWindowResizeEvents();
-	}
-	BeginDisabledUIState(PPParams.bEnableFSR);
-	{
-		int iFSROption = PPParams.FFSR_EASUParams.SelectedFSRPreset;
-		if (ImGui::Combo("Preset", &iFSROption, pStrFSROptionNames, _countof(pStrFSROptionNames)))
+		ImGui::Text("FidelityFX Super Resolution 1.0");
+		ImGui::Separator();
+		if (ImGui::Checkbox("Enabled (J) ##1", &PPParams.bEnableFSR))
 		{
-			// update the PPParams data
-			PPParams.FFSR_EASUParams.SelectedFSRPreset = static_cast<FPostProcessParameters::FFSR_EASU::EPresets>(iFSROption);
 			fnSendWindowResizeEvents();
 		}
-		if (PPParams.FFSR_EASUParams.SelectedFSRPreset == FPostProcessParameters::FFSR_EASU::EPresets::CUSTOM)
+		BeginDisabledUIState(PPParams.bEnableFSR);
 		{
-			if (ImGui::SliderFloat("Resolution Scale", &PPParams.FFSR_EASUParams.fCustomScaling, 0.50f, 1.0f, "%.2f"))
+			int iFSROption = PPParams.FFSR_EASUParams.SelectedFSRPreset;
+			if (ImGui::Combo("Preset", &iFSROption, pStrFSROptionNames, _countof(pStrFSROptionNames)))
 			{
+				// update the PPParams data
+				PPParams.FFSR_EASUParams.SelectedFSRPreset = static_cast<FPostProcessParameters::FFSR_EASU::EPresets>(iFSROption);
 				fnSendWindowResizeEvents();
 			}
-		}
-
-		float LinearSharpness = PPParams.FFSR_RCASParams.GetLinearSharpness();
-		if (ImGui::SliderFloat("Sharpness", &LinearSharpness, 0.01f, 1.00f, "%.2f"))
-		{
-			PPParams.FFSR_RCASParams.SetLinearSharpness(LinearSharpness);
-			PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
-		}
-	}
-	EndDisabledUIState(PPParams.bEnableFSR);
-
-	ImGuiSpacing3();
-
-	if (!bFSREnabled)
-	{
-		ImGui::Text("FidelityFX CAS");
-		ImGui::Separator();
-		bool bCASEnabled = PPParams.IsFFXCASEnabled();
-		bool bCASEnabledBefore = bCASEnabled;
-		BeginDisabledUIState(!bFSREnabled);
-		ImGui::Checkbox("Enabled (B) ##0", &bCASEnabled);
-		{
-			BeginDisabledUIState(bCASEnabled);
-			if (ImGui::SliderFloat("Sharpening", &PPParams.FFXCASParams.CASSharpen, 0.0f, 1.0f, "%.2f"))
+			if (PPParams.FFSR_EASUParams.SelectedFSRPreset == FPostProcessParameters::FFSR_EASU::EPresets::CUSTOM)
 			{
-				PPParams.FFXCASParams.UpdateCASConstantBlock(W,H,W,H);
+				if (ImGui::SliderFloat("Resolution Scale", &PPParams.FFSR_EASUParams.fCustomScaling, 0.50f, 1.0f, "%.2f"))
+				{
+					fnSendWindowResizeEvents();
+				}
 			}
-			EndDisabledUIState(bCASEnabled);
+
+			float LinearSharpness = PPParams.FFSR_RCASParams.GetLinearSharpness();
+			if (ImGui::SliderFloat("Sharpness", &LinearSharpness, 0.01f, 1.00f, "%.2f"))
+			{
+				PPParams.FFSR_RCASParams.SetLinearSharpness(LinearSharpness);
+				PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
+			}
 		}
-		EndDisabledUIState(!bFSREnabled);
-		if (bCASEnabledBefore != bCASEnabled)
-		{
-			PPParams.bEnableCAS = bCASEnabled;
-		}
+		EndDisabledUIState(PPParams.bEnableFSR);
+
 		ImGuiSpacing3();
-	}
+
+		if (!bFSREnabled)
+		{
+			ImGui::Text("FidelityFX CAS");
+			ImGui::Separator();
+			bool bCASEnabled = PPParams.IsFFXCASEnabled();
+			bool bCASEnabledBefore = bCASEnabled;
+			BeginDisabledUIState(!bFSREnabled);
+			ImGui::Checkbox("Enabled (B) ##0", &bCASEnabled);
+			{
+				BeginDisabledUIState(bCASEnabled);
+				if (ImGui::SliderFloat("Sharpening", &PPParams.FFXCASParams.CASSharpen, 0.0f, 1.0f, "%.2f"))
+				{
+					PPParams.FFXCASParams.UpdateCASConstantBlock(W,H,W,H);
+				}
+				EndDisabledUIState(bCASEnabled);
+			}
+			EndDisabledUIState(!bFSREnabled);
+			if (bCASEnabledBefore != bCASEnabled)
+			{
+				PPParams.bEnableCAS = bCASEnabled;
+			}
+			ImGuiSpacing3();
+		}
 
 
-	const bool bHDR = this->ShouldRenderHDR(mpWinMain->GetHWND());
-	ImGui::Text((bHDR ? "Tonemapper (HDR)" : "Tonemapper"));
-	ImGui::Separator();
-	{
-		if (bHDR)
+		const bool bHDR = this->ShouldRenderHDR(mpWinMain->GetHWND());
+		ImGui::Text((bHDR ? "Tonemapper (HDR)" : "Tonemapper"));
+		ImGui::Separator();
 		{
-			const std::string strDispalyCurve = GetDisplayCurveString(PPParams.TonemapperParams.OutputDisplayCurve);
-			const std::string strColorSpace   = GetColorSpaceString(PPParams.TonemapperParams.ContentColorSpace);
-			ImGui::Text("OutputDevice : %s", strDispalyCurve.c_str() );
-			ImGui::Text("Color Space  : %s", strColorSpace.c_str() );
-			ImGui::SliderFloat("UI Brightness", &PPParams.TonemapperParams.UIHDRBrightness, 0.1f, 20.f, "%.1f");
-		}
-		else
-		{
-			bool bGamma = PPParams.TonemapperParams.ToggleGammaCorrection;
-			ImGui::Checkbox("[SDR] Apply Gamma (G)", &bGamma);
-			PPParams.TonemapperParams.ToggleGammaCorrection = bGamma ? 1 : 0;
+			if (bHDR)
+			{
+				const std::string strDispalyCurve = GetDisplayCurveString(PPParams.TonemapperParams.OutputDisplayCurve);
+				const std::string strColorSpace   = GetColorSpaceString(PPParams.TonemapperParams.ContentColorSpace);
+				ImGui::Text("OutputDevice : %s", strDispalyCurve.c_str() );
+				ImGui::Text("Color Space  : %s", strColorSpace.c_str() );
+				ImGui::SliderFloat("UI Brightness", &PPParams.TonemapperParams.UIHDRBrightness, 0.1f, 20.f, "%.1f");
+			}
+			else
+			{
+				bool bGamma = PPParams.TonemapperParams.ToggleGammaCorrection;
+				ImGui::Checkbox("[SDR] Apply Gamma (G)", &bGamma);
+				PPParams.TonemapperParams.ToggleGammaCorrection = bGamma ? 1 : 0;
+			}
 		}
 	}
-#if USE_COLLAPSING_HEADER_PP
-	}
-#endif
 }
 
 
@@ -704,6 +709,7 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 		, "FidelityFX CACAO"
 		, ""
 	};
+	InitializeStaticCStringData_GraphicsSettings();
 	// static data
 
 
@@ -720,8 +726,29 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 	
 	if (ImGui::CollapsingHeader("DISPLAY", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		//ImGui::Text("DISPLAY");
-		//ImGui::Separator();
+		static int iLimiter = mSettings.gfx.MaxFrameRate == -1 ? 0 : (mSettings.gfx.MaxFrameRate == 0 ? 1 : 2); // see Settings.h
+		static int CustomFrameLimit = mSettings.gfx.MaxFrameRate;
+		if (ImGui::Combo("Frame Rate Limit", &iLimiter, pStrMaxFrameRateOptionNames, _countof(pStrMaxFrameRateOptionNames)))
+		{
+			switch (iLimiter)
+			{
+			case 0: mSettings.gfx.MaxFrameRate = -1; break;
+			case 1: mSettings.gfx.MaxFrameRate =  0; break;
+			case 2: mSettings.gfx.MaxFrameRate = CustomFrameLimit; break;
+			default:
+				break;
+			}
+			SetEffectiveFrameRateLimit();
+		}
+		if (iLimiter == 2) // custom
+		{
+			if (ImGui::SliderInt("Max Frames", &CustomFrameLimit, 10, 1000))
+			{
+				mSettings.gfx.MaxFrameRate = CustomFrameLimit;
+				SetEffectiveFrameRateLimit();
+			}
+		}
+
 		if (ImGui::Checkbox("VSync (V)", &gfx.bVsync))
 		{
 			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetVSyncEvent>(hwnd, gfx.bVsync));
@@ -737,8 +764,6 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 	
 	if (ImGui::CollapsingHeader("RENDERING", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		//ImGui::Text("RENDERING");
-		//ImGui::Separator();
 		if (ImGui::Combo("AntiAliasing (M)", &iAALabel, pStrAALabels, _countof(pStrAALabels) - 1))
 		{
 			gfx.bAntiAliasing = iAALabel;
