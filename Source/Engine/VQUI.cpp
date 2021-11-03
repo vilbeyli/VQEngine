@@ -233,7 +233,7 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 const uint32_t CONTROLS_WINDOW_PADDING_X = 10;
 const uint32_t CONTROLS_WINDOW_PADDING_Y = 10;
 const uint32_t CONTROLS_WINDOW_SIZE_X    = 380;
-const uint32_t CONTROLS_WINDOW_SIZE_Y    = 200;
+const uint32_t CONTROLS_WINDOW_SIZE_Y    = 320;
 //---------------------------------------------
 const uint32_t GFX_WINDOW_PADDING_X      = 10;
 const uint32_t GFX_WINDOW_PADDING_Y      = 10;
@@ -528,8 +528,48 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 
 	ImGui::Text("Help");
 	ImGui::Separator();
-	ImGui::Button("Show Keyboard Controls");
-	
+	static bool bShowKeyboardControlsWindow = false;
+
+
+	if (ImGui::Button((bShowKeyboardControlsWindow ? "Hide Key Mapping" : "Show Key Mapping")))
+	{
+		bShowKeyboardControlsWindow = !bShowKeyboardControlsWindow;
+	}
+	if (bShowKeyboardControlsWindow)
+	{
+		// have to update this part as new keyboard controls are added to the engine :/
+		ImGui::BeginChild("ScrollingControlsWindow", ImVec2(0, 150), true);
+		ImGui::Text("USER INTERFACE--------------------------------");
+		ImGui::Text("       F1-F4 : Toggle UI windows");
+		ImGui::Text("     Shift+Z : Show/Hide ALL UI windows");
+		ImGui::Text("");
+		ImGui::Text("CAMERA ---------------------------------------");
+		ImGui::Text(" Right Click : Free Camera");
+		ImGui::Text("  Left Click : Orbit Camera");
+		ImGui::Text("      Scroll : Adjust distance (Orbit Camera)");
+		ImGui::Text("      WASDEQ : Move Camera (Free Camera)");
+		ImGui::Text("");
+		ImGui::Text("DISPLAY ---------------------------------------");
+		ImGui::Text("   Alt+Enter : Toggle fullscreen");
+		ImGui::Text("           V : Toggle VSync");
+		ImGui::Text("           M : Toggle MSAA");
+		ImGui::Text("");
+		ImGui::Text("SCENE  ----------------------------------------");
+		ImGui::Text("     Shift+R : Reload level");
+		ImGui::Text("Page Up/Down : Change the HDRI Environment Map");
+		ImGui::Text("           C : Cycle scene cameras");
+		ImGui::Text("           G : Toggle gamma correction");
+		ImGui::Text("           B : Toggle FidelityFX Sharpening");
+		ImGui::Text("           J : Toggle FidelityFX Super Resolution 1.0");
+		ImGui::Text("");
+		ImGui::Text("DEBUG  ----------------------------------------");
+		ImGui::Text("           N : Toggle Mesh bounding boxes");
+		ImGui::Text("           L : Toggle Light bounding volumes");
+		ImGui::Text("     Shift+N : Toggle GameObject bounding boxes");
+		ImGui::EndChild();
+	}
+
+
 	ImGuiSpacing3();
 
 	ImGui::Text("Editor");
