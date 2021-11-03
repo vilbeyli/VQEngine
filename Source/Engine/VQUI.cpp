@@ -539,22 +539,22 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 	{
 		// have to update this part as new keyboard controls are added to the engine :/
 		ImGui::BeginChild("ScrollingControlsWindow", ImVec2(0, 150), true);
-		ImGui::Text("USER INTERFACE--------------------------------");
-		ImGui::Text("       F1-F4 : Toggle UI windows");
-		ImGui::Text("     Shift+Z : Show/Hide ALL UI windows");
-		ImGui::Text("");
 		ImGui::Text("CAMERA ---------------------------------------");
 		ImGui::Text(" Right Click : Free Camera");
 		ImGui::Text("  Left Click : Orbit Camera");
 		ImGui::Text("      Scroll : Adjust distance (Orbit Camera)");
 		ImGui::Text("      WASDEQ : Move Camera (Free Camera)");
+		ImGui::Text("       Space : Toggle animation (if available)");
 		ImGui::Text("");
 		ImGui::Text("DISPLAY ---------------------------------------");
+		ImGui::Text("          F3 : Toggle Graphics Settings UI window");
 		ImGui::Text("   Alt+Enter : Toggle fullscreen");
 		ImGui::Text("           V : Toggle VSync");
 		ImGui::Text("           M : Toggle MSAA");
 		ImGui::Text("");
 		ImGui::Text("SCENE  ----------------------------------------");
+		ImGui::Text("          F1 : Toggle Scene Controls UI window");
+		ImGui::Text("     Shift+Z : Show/Hide ALL UI windows");
 		ImGui::Text("     Shift+R : Reload level");
 		ImGui::Text("Page Up/Down : Change the HDRI Environment Map");
 		ImGui::Text("           C : Cycle scene cameras");
@@ -563,6 +563,8 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 		ImGui::Text("           J : Toggle FidelityFX Super Resolution 1.0");
 		ImGui::Text("");
 		ImGui::Text("DEBUG  ----------------------------------------");
+		ImGui::Text("          F2 : Toggle Profiler UI window");
+		ImGui::Text("          F4 : Toggle Debug UI window");
 		ImGui::Text("           N : Toggle Mesh bounding boxes");
 		ImGui::Text("           L : Toggle Light bounding volumes");
 		ImGui::Text("     Shift+N : Toggle GameObject bounding boxes");
