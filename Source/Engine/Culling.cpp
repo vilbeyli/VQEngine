@@ -38,8 +38,13 @@ using namespace DirectX;
 //------------------------------------------------------------------------------------------------------------------------------
 bool IsSphereIntersectingFurstum(const FFrustumPlaneset& FrustumPlanes, const FSphere& Sphere)
 {
+#if 1 
+	// approximate sphere as a bounding box and utilize bounding box 
+	// until the implementaiton is complete for sphere-frustum check below
+	return IsBoundingBoxIntersectingFrustum(FrustumPlanes, FBoundingBox(Sphere));
+#else
 	bool bIntersecting = true;
-	
+
 	// check each frustum plane against sphere
 	for (size_t i = 0; i < 6; ++i)
 	{
@@ -79,8 +84,8 @@ bool IsSphereIntersectingFurstum(const FFrustumPlaneset& FrustumPlanes, const FS
 	}
 
 	assert(false); // not done yet
-	return true; // TODO: remove
-	return bIntersecting; 
+	return bIntersecting;
+#endif
 }
 
 bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes, const FBoundingBox& BBox)
@@ -113,6 +118,7 @@ bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes, con
 
 bool IsFrustumIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes0, const FFrustumPlaneset& FrustumPlanes1)
 {
+	return true; // TODO:
 	assert(false); // not done yet
 	return true;
 }
@@ -321,6 +327,14 @@ std::array<DirectX::XMFLOAT3, 8> FBoundingBox::GetCornerPointsF3() const
 		XMFLOAT3(ExtentMin.x, ExtentMax.y, ExtentMax.z)
 	};
 }
+FBoundingBox::FBoundingBox(const FSphere& s)
+{
+	const XMFLOAT3& P = s.CenterPosition;
+	const float   & R = s.Radius;
+	this->ExtentMax = XMFLOAT3(P.x + R, P.y + R, P.z + R);
+	this->ExtentMin = XMFLOAT3(P.x - R, P.y - R, P.z - R);
+}
+
 std::array<DirectX::XMVECTOR, 8> FBoundingBox::GetCornerPointsV4() const
 {
 	std::array<DirectX::XMFLOAT4, 8> Points_F4 = GetCornerPointsF4();

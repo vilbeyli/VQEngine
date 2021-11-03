@@ -41,6 +41,7 @@
 // Culling
 //-------------------------------------------------------------------------------
 #define ENABLE_VIEW_FRUSTUM_CULLING 1
+#define ENABLE_LIGHT_CULLING        1
 //-------------------------------------------------------------------------------
 
 
@@ -239,7 +240,7 @@ static bool ShouldCullLight(const Light& l, const FFrustumPlaneset& MainViewFrus
 static std::vector<size_t> GetActiveAndCulledLightIndices(const std::vector<Light> vLights, const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace)
 {
 	SCOPED_CPU_MARKER("GetActiveAndCulledLightIndices()");
-	constexpr bool bCULL_LIGHTS = false; // TODO: finish Intersection Test implementations
+	constexpr bool bCULL_LIGHTS = true;
 
 	std::vector<size_t> ActiveLightIndices;
 
@@ -251,12 +252,10 @@ static std::vector<size_t> GetActiveAndCulledLightIndices(const std::vector<Ligh
 		if (!l.bEnabled || !l.bCastingShadows)
 			continue;
 
-		// skip culled lights if culling is enabled
-		if constexpr (bCULL_LIGHTS)
-		{
-			if (ShouldCullLight(l, MainViewFrustumPlanesInWorldSpace))
-				continue;
-		}
+#if ENABLE_LIGHT_CULLING	
+		if (ShouldCullLight(l, MainViewFrustumPlanesInWorldSpace))
+			continue;
+#endif
 
 		ActiveLightIndices.push_back(i);
 	}
