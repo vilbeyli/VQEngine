@@ -309,9 +309,29 @@ float VQEngine::FramePacing(float dt)
 		const float TimeBudgetLeft_ms = mEffectiveFrameRateLimit_ms - dt;
 		if (TimeBudgetLeft_ms > 0.0f)
 		{
+#if 0
+			// ------------------------------------------------------------------
+			//                          WARNING
+			// ------------------------------------------------------------------
+			// The OS call for Sleep(ms) doesn't yield back in time and the frame
+			// time limiter doesn't work as precise, resulting in frame times of
+			// 20, 30, 60 and 1000. This is because OS doesn't guarantee exact
+			// timing for the Sleep(), hence we should use it with Sleep(0)
+			// with an accumulator
 			SleepTime = mTimerRender.TotalTime();
 			Sleep((DWORD)TimeBudgetLeft_ms);
 			SleepTime = mTimerRender.TotalTime() - SleepTime;
+			// ------------------------------------------------------------------
+#else
+			float Acc = TimeBudgetLeft_ms / 1000;
+			Timer SleepTimer;
+			SleepTimer.Start();
+			while (Acc > 0.0f)
+			{
+				Sleep(0);
+				Acc -= SleepTimer.Tick();
+			}
+#endif
 		}
 	}
 	return SleepTime;
