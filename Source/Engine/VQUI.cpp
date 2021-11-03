@@ -252,6 +252,7 @@ const uint32_t DBG_WINDOW_SIZE_Y         = 150;
 //---------------------------------------------
 
 // Dropdown data ----------------------------------------------------------------------------------------------
+const     ImVec4 UI_COLLAPSING_HEADER_COLOR_VALUE = ImVec4(0.0, 0.00, 0.0, 0.7f);
 constexpr size_t NUM_MAX_ENV_MAP_NAMES    = 10;
 constexpr size_t NUM_MAX_LEVEL_NAMES      = 8;
 constexpr size_t NUM_MAX_CAMERA_NAMES     = 10;
@@ -261,6 +262,7 @@ static const char* pStrEnvMapNames[NUM_MAX_ENV_MAP_NAMES] = {};
 static const char* pStrCameraNames[NUM_MAX_CAMERA_NAMES ] = {};
 static const char* pStrFSROptionNames[NUM_MAX_FSR_OPTION_NAMES] = {};
 static const char* pStrMaxFrameRateOptionNames[3] = {}; // see Settings.h:FGraphicsSettings
+
 
 template<size_t NUM_ARRAY_SIZE> 
 static void FillCStrArray(const char* (&pCStrArray)[NUM_ARRAY_SIZE], const std::vector<std::string>& StrVector)
@@ -603,9 +605,10 @@ void VQEngine::DrawPostProcessSettings(FPostProcessParameters& PPParams)
 	// one time initialization
 	InitializeStaticCStringData_PostProcessingControls();
 
+	ImGui::PushStyleColor(ImGuiCol_Header, UI_COLLAPSING_HEADER_COLOR_VALUE);
 	if (ImGui::CollapsingHeader("POST PROCESSING", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-
+		ImGui::PopStyleColor();
 		ImGui::Text("FidelityFX Super Resolution 1.0");
 		ImGui::Separator();
 		if (ImGui::Checkbox("Enabled (J) ##1", &PPParams.bEnableFSR))
@@ -685,6 +688,10 @@ void VQEngine::DrawPostProcessSettings(FPostProcessParameters& PPParams)
 			}
 		}
 	}
+	else
+	{
+		ImGui::PopStyleColor();
+	}
 }
 
 
@@ -724,28 +731,33 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 
 	ImGui::Begin("GRAPHICS SETTINGS (F3)", &mUIState.bWindowVisible_GraphicsSettingsPanel);
 	
+	ImGui::PushStyleColor(ImGuiCol_Header, UI_COLLAPSING_HEADER_COLOR_VALUE);
 	if (ImGui::CollapsingHeader("DISPLAY", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		static int iLimiter = mSettings.gfx.MaxFrameRate == -1 ? 0 : (mSettings.gfx.MaxFrameRate == 0 ? 1 : 2); // see Settings.h
-		static int CustomFrameLimit = mSettings.gfx.MaxFrameRate;
-		if (ImGui::Combo("Frame Rate Limit", &iLimiter, pStrMaxFrameRateOptionNames, _countof(pStrMaxFrameRateOptionNames)))
+		ImGui::PopStyleColor();
+		if (!gfx.bVsync)
 		{
-			switch (iLimiter)
+			static int iLimiter = mSettings.gfx.MaxFrameRate == -1 ? 0 : (mSettings.gfx.MaxFrameRate == 0 ? 1 : 2); // see Settings.h
+			static int CustomFrameLimit = mSettings.gfx.MaxFrameRate;
+			if (ImGui::Combo("FrameRate Limit", &iLimiter, pStrMaxFrameRateOptionNames, _countof(pStrMaxFrameRateOptionNames)))
 			{
-			case 0: mSettings.gfx.MaxFrameRate = -1; break;
-			case 1: mSettings.gfx.MaxFrameRate =  0; break;
-			case 2: mSettings.gfx.MaxFrameRate = CustomFrameLimit; break;
-			default:
-				break;
-			}
-			SetEffectiveFrameRateLimit();
-		}
-		if (iLimiter == 2) // custom
-		{
-			if (ImGui::SliderInt("Max Frames", &CustomFrameLimit, 10, 1000))
-			{
-				mSettings.gfx.MaxFrameRate = CustomFrameLimit;
+				switch (iLimiter)
+				{
+				case 0: mSettings.gfx.MaxFrameRate = -1; break;
+				case 1: mSettings.gfx.MaxFrameRate = 0; break;
+				case 2: mSettings.gfx.MaxFrameRate = CustomFrameLimit; break;
+				default:
+					break;
+				}
 				SetEffectiveFrameRateLimit();
+			}
+			if (iLimiter == 2) // custom frame limit value
+			{
+				if (ImGui::SliderInt("MaxFrames", &CustomFrameLimit, 10, 1000))
+				{
+					mSettings.gfx.MaxFrameRate = CustomFrameLimit;
+					SetEffectiveFrameRateLimit();
+				}
 			}
 		}
 
@@ -759,11 +771,17 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<ToggleFullscreenEvent>(hwnd));
 		}
 	}
+	else
+	{
+		ImGui::PopStyleColor();
+	}
 
 	ImGuiSpacing(6);
-	
+
+	ImGui::PushStyleColor(ImGuiCol_Header, UI_COLLAPSING_HEADER_COLOR_VALUE);
 	if (ImGui::CollapsingHeader("RENDERING", ImGuiTreeNodeFlags_DefaultOpen))
 	{
+		ImGui::PopStyleColor();
 		if (ImGui::Combo("AntiAliasing (M)", &iAALabel, pStrAALabels, _countof(pStrAALabels) - 1))
 		{
 			gfx.bAntiAliasing = iAALabel;
@@ -774,6 +792,10 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 			SceneRenderParams.bScreenSpaceAO = iSSAOLabel == 1;
 			Log::Info("AO Changed: %d", SceneRenderParams.bScreenSpaceAO);
 		}
+	}
+	else
+	{
+		ImGui::PopStyleColor();
 	}
 	
 	ImGuiSpacing(6);
