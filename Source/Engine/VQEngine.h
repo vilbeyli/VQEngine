@@ -530,9 +530,9 @@ private:
 	void UpdateUIState(HWND hwnd, float dt);
 	void DrawProfilerWindow(const FSceneStats& FrameStats, float dt);
 	void DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderParameters& SceneRenderParams);
-	void DrawPostProcessControlsWindow(FPostProcessParameters& PPParams);
+	void DrawPostProcessSettings(FPostProcessParameters& PPParams);
 	void DrawDebugPanelWindow(FSceneRenderParameters& SceneParams);
-	void DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams);
+	void DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams, FPostProcessParameters& PPParams);
 
 	//
 	// RENDER HELPERS
@@ -562,7 +562,7 @@ private:
 	bool                            ShouldRenderHDR(HWND hwnd) const;
 	bool                            IsHDRSettingOn() const;
 
-	void                            CalculateEffectiveFrameRateLimit(HWND hwnd);
+	void                            SetEffectiveFrameRateLimit();
 	float                           FramePacing(const float dt);
 	const FDisplayHDRProfile*       GetHDRProfileIfExists(const wchar_t* pwStrLogicalDisplayName);
 	FSetHDRMetaDataParams           GatherHDRMetaDataParameters(HWND hwnd);

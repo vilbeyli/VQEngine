@@ -43,6 +43,7 @@ static        void EndDisabledUIState(bool bEnable)
 	}
 }
 static inline void ImGuiSpacing3() { ImGui::Spacing(); ImGui::Spacing(); ImGui::Spacing(); }
+static inline void ImGuiSpacing(int NumSpaces) { for (int i = 0; i < NumSpaces; ++i) ImGui::Spacing(); }
 static        bool IsAnyMouseButtonDown()
 {
 	ImGuiIO& io = ImGui::GetIO();
@@ -100,7 +101,6 @@ static void InitializeEngineUIState(FUIState& s)
 	s.bHideAllWindows = false;
 	s.bWindowVisible_DebugPanel = true;
 	s.bWindowVisible_GraphicsSettingsPanel = true;
-	s.bWindowVisible_PostProcessControls = true;
 	s.bWindowVisible_SceneControls = true;
 	s.bWindowVisible_Profiler = true;
 	s.bProfiler_ShowEngineStats = true;
@@ -207,10 +207,9 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 	if (!mUIState.bHideAllWindows)
 	{
 		if (mUIState.bWindowVisible_SceneControls)         DrawSceneControlsWindow(mpScene->GetActiveCameraIndex(), mpScene->GetActiveEnvironmentMapPresetIndex(), SceneParams);
-		if (mUIState.bWindowVisible_PostProcessControls)   DrawPostProcessControlsWindow(PPParams);
 		if (mUIState.bWindowVisible_Profiler)              DrawProfilerWindow(mpScene->GetSceneRenderStats(FRAME_DATA_INDEX), dt);
 		if (mUIState.bWindowVisible_DebugPanel)            DrawDebugPanelWindow(SceneParams);
-		if (mUIState.bWindowVisible_GraphicsSettingsPanel) DrawGraphicsSettingsWindow(SceneParams);
+		if (mUIState.bWindowVisible_GraphicsSettingsPanel) DrawGraphicsSettingsWindow(SceneParams, PPParams);
 	}
 
 	// If we fired an event that would trigger loading,
@@ -233,30 +232,24 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 //---------------------------------------------
 const uint32_t CONTROLS_WINDOW_PADDING_X = 10;
 const uint32_t CONTROLS_WINDOW_PADDING_Y = 10;
-const uint32_t CONTROLS_WINDOW_SIZE_X    = 320;
+const uint32_t CONTROLS_WINDOW_SIZE_X    = 380;
 const uint32_t CONTROLS_WINDOW_SIZE_Y    = 200;
-//---------------------------------------------
-const uint32_t DBG_WINDOW_PADDING_X      = 10;
-const uint32_t DBG_WINDOW_PADDING_Y      = 10;
-const uint32_t DBG_WINDOW_SIZE_X         = 350;
-const uint32_t DBG_WINDOW_SIZE_Y         = 150;
-//---------------------------------------------
-const uint32_t PP_WINDOW_PADDING_X       = 10;
-const uint32_t PP_WINDOW_PADDING_Y       = 10;
-const uint32_t PP_WINDOW_SIZE_X          = 350;
-const uint32_t PP_WINDOW_SIZE_Y          = 300;
 //---------------------------------------------
 const uint32_t GFX_WINDOW_PADDING_X      = 10;
 const uint32_t GFX_WINDOW_PADDING_Y      = 10;
-const uint32_t GFX_WINDOW_SIZE_X         = 350;
-const uint32_t GFX_WINDOW_SIZE_Y         = 200;
+const uint32_t GFX_WINDOW_SIZE_X         = 380;
+const uint32_t GFX_WINDOW_SIZE_Y         = 500;
 //---------------------------------------------
 const uint32_t PROFILER_WINDOW_PADDIG_X  = 10;
 const uint32_t PROFILER_WINDOW_PADDIG_Y  = 10;
 const uint32_t PROFILER_WINDOW_SIZE_X    = 330;
 const uint32_t PROFILER_WINDOW_SIZE_Y    = 850;
 //---------------------------------------------
-
+const uint32_t DBG_WINDOW_PADDING_X      = 10;
+const uint32_t DBG_WINDOW_PADDING_Y      = 10;
+const uint32_t DBG_WINDOW_SIZE_X         = 330;
+const uint32_t DBG_WINDOW_SIZE_Y         = 150;
+//---------------------------------------------
 
 // Dropdown data ----------------------------------------------------------------------------------------------
 constexpr size_t NUM_MAX_ENV_MAP_NAMES    = 10;
@@ -518,6 +511,14 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 
 	ImGui::Begin("SCENE CONTROLS (F1)", &mUIState.bWindowVisible_SceneControls);
 
+	ImGui::Text("Help");
+	ImGui::Separator();
+	ImGui::Button("Show Keyboard Controls");
+	
+	ImGuiSpacing3();
+
+	ImGui::Text("Editor");
+	ImGui::Separator();
 	if (ImGui::Combo("Scene", &mIndex_SelectedScene, pStrSceneNames, (int)std::min(_countof(pStrSceneNames), mResourceNames.mSceneNames.size())))
 	{
 		this->StartLoadingScene(mIndex_SelectedScene);
@@ -572,7 +573,7 @@ void VQEngine::DrawDebugPanelWindow(FSceneRenderParameters& SceneParams)
 
 	ImGui::End();
 }
-void VQEngine::DrawPostProcessControlsWindow(FPostProcessParameters& PPParams)
+void VQEngine::DrawPostProcessSettings(FPostProcessParameters& PPParams)
 {
 	// constants
 	const bool bFSREnabled = PPParams.IsFSREnabled();
@@ -586,18 +587,17 @@ void VQEngine::DrawPostProcessControlsWindow(FPostProcessParameters& PPParams)
 		mEventQueue_WinToVQE_Update.AddItem(std::make_unique<WindowResizeEvent>(W, H, mpWinMain->GetHWND()));
 	};
 
-	// set window positions
-	const uint32_t PP_WINDOW_POS_X = PP_WINDOW_PADDING_X;
-	const uint32_t PP_WINDOW_POS_Y = H - PP_WINDOW_PADDING_Y - PP_WINDOW_SIZE_Y;
-	ImGui::SetNextWindowPos(ImVec2((float)PP_WINDOW_POS_X, (float)PP_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
-	ImGui::SetNextWindowSize(ImVec2(PP_WINDOW_SIZE_X, PP_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
-
 	// one time initialization
 	InitializeStaticCStringData_PostProcessingControls();
 
-
-	// start drawing the window
-	ImGui::Begin("Post Processing (F3)", &mUIState.bWindowVisible_PostProcessControls);
+#define USE_COLLAPSING_HEADER_PP 1
+#if USE_COLLAPSING_HEADER_PP
+	if (ImGui::CollapsingHeader("POST PROCESSING", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+#else
+	ImGui::Text("POST PROCESSING");
+	ImGui::Separator();
+#endif
 
 	ImGui::Text("FidelityFX Super Resolution 1.0");
 	ImGui::Separator();
@@ -677,13 +677,13 @@ void VQEngine::DrawPostProcessControlsWindow(FPostProcessParameters& PPParams)
 			PPParams.TonemapperParams.ToggleGammaCorrection = bGamma ? 1 : 0;
 		}
 	}
-
-
-	ImGui::End();
+#if USE_COLLAPSING_HEADER_PP
+	}
+#endif
 }
 
 
-void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams)
+void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams, FPostProcessParameters& PPParams)
 {
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
@@ -711,39 +711,49 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 	int iSSAOLabel = SceneRenderParams.bScreenSpaceAO ? 1 : 0;
 
 	const uint32_t GFX_WINDOW_POS_X = GFX_WINDOW_PADDING_X;
-	const uint32_t GFX_WINDOW_POS_Y = H - PP_WINDOW_PADDING_Y - PP_WINDOW_SIZE_Y - GFX_WINDOW_PADDING_Y*3 - GFX_WINDOW_SIZE_Y;
+	const uint32_t GFX_WINDOW_POS_Y = H - GFX_WINDOW_PADDING_Y*2 - GFX_WINDOW_SIZE_Y;
 	ImGui::SetNextWindowPos(ImVec2((float)GFX_WINDOW_POS_X, (float)GFX_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(GFX_WINDOW_SIZE_X, GFX_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
 
-	ImGui::Begin("GRAPHICS SETTINGS (F5)", &mUIState.bWindowVisible_DebugPanel);
-	ImGui::Separator();
 
-	ImGui::Text("DISPLAY");
-	ImGui::Separator();
-	if (ImGui::Checkbox("VSync (V)", &gfx.bVsync))
+	ImGui::Begin("GRAPHICS SETTINGS (F3)", &mUIState.bWindowVisible_GraphicsSettingsPanel);
+	
+	if (ImGui::CollapsingHeader("DISPLAY", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetVSyncEvent>(hwnd, gfx.bVsync));
-	}
-	bool bFS = mpWinMain->IsFullscreen();
-	if (ImGui::Checkbox("Fullscreen (Alt+Enter)", &bFS))
-	{
-		mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<ToggleFullscreenEvent>(hwnd));
+		//ImGui::Text("DISPLAY");
+		//ImGui::Separator();
+		if (ImGui::Checkbox("VSync (V)", &gfx.bVsync))
+		{
+			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetVSyncEvent>(hwnd, gfx.bVsync));
+		}
+		bool bFS = mpWinMain->IsFullscreen();
+		if (ImGui::Checkbox("Fullscreen (Alt+Enter)", &bFS))
+		{
+			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<ToggleFullscreenEvent>(hwnd));
+		}
 	}
 
-	ImGuiSpacing3();
+	ImGuiSpacing(6);
+	
+	if (ImGui::CollapsingHeader("RENDERING", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		//ImGui::Text("RENDERING");
+		//ImGui::Separator();
+		if (ImGui::Combo("AntiAliasing (M)", &iAALabel, pStrAALabels, _countof(pStrAALabels) - 1))
+		{
+			gfx.bAntiAliasing = iAALabel;
+			Log::Info("AA Changed: %d", gfx.bAntiAliasing);
+		}
+		if (ImGui::Combo("Ambient Occlusion", &iSSAOLabel, pStrSSAOLabels, _countof(pStrSSAOLabels) - 1))
+		{
+			SceneRenderParams.bScreenSpaceAO = iSSAOLabel == 1;
+			Log::Info("AO Changed: %d", SceneRenderParams.bScreenSpaceAO);
+		}
+	}
+	
+	ImGuiSpacing(6);
 
-	ImGui::Text("RENDERING");
-	ImGui::Separator();
-	if (ImGui::Combo("AntiAliasing (M)", &iAALabel, pStrAALabels, _countof(pStrAALabels)-1))
-	{
-		gfx.bAntiAliasing = iAALabel;
-		Log::Info("AA Changed: %d", gfx.bAntiAliasing);
-	}
-	if (ImGui::Combo("Ambient Occlusion", &iSSAOLabel, pStrSSAOLabels, _countof(pStrSSAOLabels)-1))
-	{
-		SceneRenderParams.bScreenSpaceAO = iSSAOLabel == 1;
-		Log::Info("AO Changed: %d", SceneRenderParams.bScreenSpaceAO);
-	}
+	DrawPostProcessSettings(PPParams);
 
 	ImGui::End();
 }
