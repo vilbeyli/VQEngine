@@ -273,9 +273,9 @@ void OrbitController::UpdateCamera(const Input& input, float dt, bool bUseInput)
 		XMVECTOR vLOOK_AT_POSITION = vPOSITION + vLOOK_DIRECTION * fLOOK_AT_DISTANCE;
 
 		// do orbit rotation around the look target point
-		constexpr float fROTATION_SPEED = 10.0f; // todo: drive by some config?
-		const float fRotAngleAzimuth = camInput.DeltaMouseXY[0] * fROTATION_SPEED * dt * DEG2RAD;
-		const float fRotAnglePolar   = camInput.DeltaMouseXY[1] * fROTATION_SPEED * dt * DEG2RAD;
+		constexpr float fROTATION_SPEED = 1.0f; // todo: drive by some config?
+		const float fRotAngleAzimuth = camInput.DeltaMouseXY[0] * fROTATION_SPEED * DEG2RAD;
+		const float fRotAnglePolar   = camInput.DeltaMouseXY[1] * fROTATION_SPEED * DEG2RAD;
 		const bool bRotate = camInput.DeltaMouseXY[0] != 0.0f || camInput.DeltaMouseXY[1] != 0.0f;
 		vLOOK_AT_POSITION = vZERO; // look at the origin
 		tf.RotateAroundPointAndAxis(vROTATION_AXIS_AZIMUTH, fRotAngleAzimuth, vLOOK_AT_POSITION);
