@@ -99,10 +99,11 @@ static void InitializeEngineUIState(FUIState& s)
 	s.bUIOnSeparateWindow = false;
 	
 	s.bHideAllWindows = false;
-	s.bWindowVisible_DebugPanel = true;
-	s.bWindowVisible_GraphicsSettingsPanel = true;
+	s.bWindowVisible_KeyMappings = false;
 	s.bWindowVisible_SceneControls = true;
-	s.bWindowVisible_Profiler = true;
+	s.bWindowVisible_GraphicsSettingsPanel = false;
+	s.bWindowVisible_Profiler = false;
+	s.bWindowVisible_DebugPanel = false;
 	s.bProfiler_ShowEngineStats = true;
 }
 
@@ -206,6 +207,7 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 
 	if (!mUIState.bHideAllWindows)
 	{
+		if (mUIState.bWindowVisible_KeyMappings)           DrawKeyMappingsWindow();
 		if (mUIState.bWindowVisible_SceneControls)         DrawSceneControlsWindow(mpScene->GetActiveCameraIndex(), mpScene->GetActiveEnvironmentMapPresetIndex(), SceneParams);
 		if (mUIState.bWindowVisible_Profiler)              DrawProfilerWindow(mpScene->GetSceneRenderStats(FRAME_DATA_INDEX), dt);
 		if (mUIState.bWindowVisible_DebugPanel)            DrawDebugPanelWindow(SceneParams);
@@ -406,6 +408,124 @@ static void DrawFrameTimeChart()
 //
 // VQEngine UI Drawing
 //
+
+void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderParameters& SceneRenderParams)
+{
+	const uint32 W = mpWinMain->GetWidth();
+	const uint32 H = mpWinMain->GetHeight();
+
+	const uint32_t CONTROLS_WINDOW_POS_X = CONTROLS_WINDOW_PADDING_X;
+	const uint32_t CONTROLS_WINDOW_POS_Y = CONTROLS_WINDOW_PADDING_Y;
+	ImGui::SetNextWindowPos(ImVec2((float)CONTROLS_WINDOW_POS_X, (float)CONTROLS_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(CONTROLS_WINDOW_SIZE_X, CONTROLS_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
+
+	InitializeStaticCStringData_SceneControls(mResourceNames.mEnvironmentMapPresetNames, mResourceNames.mSceneNames);
+
+	int iEnvMap = iSelectedEnvMap == -1 ? static_cast<int>(mResourceNames.mEnvironmentMapPresetNames.size()) : iSelectedEnvMap;
+	assert(iSelectedCamera < _countof(pStrCameraNames) && iSelectedCamera >= 0);
+
+
+	ImGui::Begin("SCENE CONTROLS", &mUIState.bWindowVisible_SceneControls);
+
+	ImGui::Text("Help");
+	ImGui::Separator();
+	
+
+	if (ImGui::Button((mUIState.bWindowVisible_KeyMappings ? "Hide Key Mapping" : "Show Key Mapping")))
+	{
+		mUIState.bWindowVisible_KeyMappings = !mUIState.bWindowVisible_KeyMappings;
+	}
+
+	ImGui::Checkbox("Show Scene Controls (F1)", &mUIState.bWindowVisible_SceneControls);
+	ImGui::Checkbox("Show Graphics Settings (F3)", &mUIState.bWindowVisible_GraphicsSettingsPanel);
+	ImGui::Checkbox("Show Profiler (F2)", &mUIState.bWindowVisible_Profiler);
+	ImGui::Checkbox("Show Debug (F4)", &mUIState.bWindowVisible_DebugPanel);
+
+	ImGuiSpacing3();
+
+	ImGui::Text("Editor");
+	ImGui::Separator();
+	if (ImGui::Combo("Scene", &mIndex_SelectedScene, pStrSceneNames, (int)std::min(_countof(pStrSceneNames), mResourceNames.mSceneNames.size())))
+	{
+		this->StartLoadingScene(mIndex_SelectedScene);
+	}
+	ImGui::Combo("Camera (C)", &iSelectedCamera, pStrCameraNames, _countof(pStrCameraNames));
+	MathUtil::Clamp(iSelectedCamera, 0, (int)mpScene->GetNumSceneCameras()-1);
+	if (ImGui::Combo("HDRI Map (Page Up/Down)", &iEnvMap, pStrEnvMapNames, (int)std::min(_countof(pStrEnvMapNames), mResourceNames.mEnvironmentMapPresetNames.size()+1)))
+	{
+		if (iSelectedEnvMap != iEnvMap)
+		{
+			const bool bUnloadEnvMap = mResourceNames.mEnvironmentMapPresetNames.size() == iEnvMap;
+			if (bUnloadEnvMap)
+			{
+				this->WaitUntilRenderingFinishes();
+				UnloadEnvironmentMap();
+				iSelectedEnvMap = INVALID_ID; // update iSelectedEnvMap
+			}
+			else
+			{
+				StartLoadingEnvironmentMap(iEnvMap); // update iSelectedEnvMap internally
+			}
+		}
+	}
+
+	const float MaxAmbientLighting = this->ShouldRenderHDR(mpWinMain->GetHWND()) ? 150.0f : 2.0f;
+	MathUtil::Clamp(SceneRenderParams.fAmbientLightingFactor, 0.0f, MaxAmbientLighting);
+	ImGui::SliderFloat("Ambient Lighting Factor", &SceneRenderParams.fAmbientLightingFactor, 0.0f, MaxAmbientLighting, "%.3f");
+
+	ImGui::End();
+}
+void VQEngine::DrawKeyMappingsWindow()
+{
+	const uint32 W = mpWinMain->GetWidth();
+	const uint32 H = mpWinMain->GetHeight();
+
+	
+	const uint32_t KEYMAPPINGS_WINDOW_POS_X = (W >> 1) - 150;
+	const uint32_t KEYMAPPINGS_WINDOW_POS_Y = 20;
+
+	if (mUIState.bWindowVisible_KeyMappings)
+	{
+
+		ImGui::SetNextWindowPos(ImVec2((float)KEYMAPPINGS_WINDOW_POS_X, (float)KEYMAPPINGS_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
+		
+		ImGui::Begin("KEY MAPPINGS", &mUIState.bWindowVisible_KeyMappings);
+		ImGui::Text("CAMERA ---------------------------------------");
+		ImGui::Text(" Right Click : Free Camera");
+		ImGui::Text("  Left Click : Orbit Camera");
+		ImGui::Text("      Scroll : Adjust distance (Orbit Camera)");
+		ImGui::Text("      WASDEQ : Move Camera (Free Camera)");
+		ImGui::Text("       Space : Toggle animation (if available)");
+		ImGui::Text("");
+		ImGui::Text("DISPLAY ---------------------------------------");
+		ImGui::Text("          F3 : Toggle Graphics Settings UI window");
+		ImGui::Text("   Alt+Enter : Toggle fullscreen");
+		ImGui::Text("           V : Toggle VSync");
+		ImGui::Text("           M : Toggle MSAA");
+		ImGui::Text("");
+		ImGui::Text("SCENE  ----------------------------------------");
+		ImGui::Text("          F1 : Toggle Scene Controls UI window");
+		ImGui::Text("     Shift+Z : Show/Hide ALL UI windows");
+		ImGui::Text("     Shift+R : Reload level");
+		ImGui::Text("Page Up/Down : Change the HDRI Environment Map");
+		ImGui::Text("           C : Cycle scene cameras");
+		ImGui::Text("           G : Toggle gamma correction");
+		ImGui::Text("           B : Toggle FidelityFX Sharpening");
+		ImGui::Text("           J : Toggle FidelityFX Super Resolution 1.0");
+		ImGui::Text("");
+		ImGui::Text("DEBUG  ----------------------------------------");
+		ImGui::Text("          F2 : Toggle Profiler UI window");
+		ImGui::Text("          F4 : Toggle Debug UI window");
+		ImGui::Text("           N : Toggle Mesh bounding boxes");
+		ImGui::Text("           L : Toggle Light bounding volumes");
+		ImGui::Text("     Shift+N : Toggle GameObject bounding boxes");
+		
+
+		ImGui::End();
+	}
+}
+
+
 void VQEngine::DrawProfilerWindow(const FSceneStats& FrameStats, float dt)
 {
 	const FSceneStats& s = FrameStats; // shorthand rename
@@ -423,7 +543,7 @@ void VQEngine::DrawProfilerWindow(const FSceneStats& FrameStats, float dt)
 	ImGui::SetNextWindowPos(ImVec2((float)PROFILER_WINDOW_POS_X, (float)PROFILER_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(PROFILER_WINDOW_SIZE_X, PROFILER_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
 
-	ImGui::Begin("PROFILER (F2)", &mUIState.bWindowVisible_Profiler);
+	ImGui::Begin("PROFILER", &mUIState.bWindowVisible_Profiler);
 
 
 	ImGui::Text("PERFORMANCE");
@@ -508,106 +628,6 @@ void VQEngine::DrawProfilerWindow(const FSceneStats& FrameStats, float dt)
 	ImGui::End();
 }
 
-void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderParameters& SceneRenderParams)
-{
-	const uint32 W = mpWinMain->GetWidth();
-	const uint32 H = mpWinMain->GetHeight();
-
-	const uint32_t CONTROLS_WINDOW_POS_X = CONTROLS_WINDOW_PADDING_X;
-	const uint32_t CONTROLS_WINDOW_POS_Y = CONTROLS_WINDOW_PADDING_Y;
-	ImGui::SetNextWindowPos(ImVec2((float)CONTROLS_WINDOW_POS_X, (float)CONTROLS_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
-	ImGui::SetNextWindowSize(ImVec2(CONTROLS_WINDOW_SIZE_X, CONTROLS_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
-
-	InitializeStaticCStringData_SceneControls(mResourceNames.mEnvironmentMapPresetNames, mResourceNames.mSceneNames);
-
-	int iEnvMap = iSelectedEnvMap == -1 ? static_cast<int>(mResourceNames.mEnvironmentMapPresetNames.size()) : iSelectedEnvMap;
-	assert(iSelectedCamera < _countof(pStrCameraNames) && iSelectedCamera >= 0);
-
-
-	ImGui::Begin("SCENE CONTROLS (F1)", &mUIState.bWindowVisible_SceneControls);
-
-	ImGui::Text("Help");
-	ImGui::Separator();
-	static bool bShowKeyboardControlsWindow = false;
-
-
-	if (ImGui::Button((bShowKeyboardControlsWindow ? "Hide Key Mapping" : "Show Key Mapping")))
-	{
-		bShowKeyboardControlsWindow = !bShowKeyboardControlsWindow;
-	}
-	if (bShowKeyboardControlsWindow)
-	{
-		// have to update this part as new keyboard controls are added to the engine :/
-		ImGui::BeginChild("ScrollingControlsWindow", ImVec2(0, 150), true);
-		ImGui::Text("CAMERA ---------------------------------------");
-		ImGui::Text(" Right Click : Free Camera");
-		ImGui::Text("  Left Click : Orbit Camera");
-		ImGui::Text("      Scroll : Adjust distance (Orbit Camera)");
-		ImGui::Text("      WASDEQ : Move Camera (Free Camera)");
-		ImGui::Text("       Space : Toggle animation (if available)");
-		ImGui::Text("");
-		ImGui::Text("DISPLAY ---------------------------------------");
-		ImGui::Text("          F3 : Toggle Graphics Settings UI window");
-		ImGui::Text("   Alt+Enter : Toggle fullscreen");
-		ImGui::Text("           V : Toggle VSync");
-		ImGui::Text("           M : Toggle MSAA");
-		ImGui::Text("");
-		ImGui::Text("SCENE  ----------------------------------------");
-		ImGui::Text("          F1 : Toggle Scene Controls UI window");
-		ImGui::Text("     Shift+Z : Show/Hide ALL UI windows");
-		ImGui::Text("     Shift+R : Reload level");
-		ImGui::Text("Page Up/Down : Change the HDRI Environment Map");
-		ImGui::Text("           C : Cycle scene cameras");
-		ImGui::Text("           G : Toggle gamma correction");
-		ImGui::Text("           B : Toggle FidelityFX Sharpening");
-		ImGui::Text("           J : Toggle FidelityFX Super Resolution 1.0");
-		ImGui::Text("");
-		ImGui::Text("DEBUG  ----------------------------------------");
-		ImGui::Text("          F2 : Toggle Profiler UI window");
-		ImGui::Text("          F4 : Toggle Debug UI window");
-		ImGui::Text("           N : Toggle Mesh bounding boxes");
-		ImGui::Text("           L : Toggle Light bounding volumes");
-		ImGui::Text("     Shift+N : Toggle GameObject bounding boxes");
-		ImGui::EndChild();
-	}
-
-
-	ImGuiSpacing3();
-
-	ImGui::Text("Editor");
-	ImGui::Separator();
-	if (ImGui::Combo("Scene", &mIndex_SelectedScene, pStrSceneNames, (int)std::min(_countof(pStrSceneNames), mResourceNames.mSceneNames.size())))
-	{
-		this->StartLoadingScene(mIndex_SelectedScene);
-	}
-	ImGui::Combo("Camera (C)", &iSelectedCamera, pStrCameraNames, _countof(pStrCameraNames));
-	MathUtil::Clamp(iSelectedCamera, 0, (int)mpScene->GetNumSceneCameras()-1);
-	if (ImGui::Combo("HDRI Map (Page Up/Down)", &iEnvMap, pStrEnvMapNames, (int)std::min(_countof(pStrEnvMapNames), mResourceNames.mEnvironmentMapPresetNames.size()+1)))
-	{
-		if (iSelectedEnvMap != iEnvMap)
-		{
-			const bool bUnloadEnvMap = mResourceNames.mEnvironmentMapPresetNames.size() == iEnvMap;
-			if (bUnloadEnvMap)
-			{
-				this->WaitUntilRenderingFinishes();
-				UnloadEnvironmentMap();
-				iSelectedEnvMap = INVALID_ID; // update iSelectedEnvMap
-			}
-			else
-			{
-				StartLoadingEnvironmentMap(iEnvMap); // update iSelectedEnvMap internally
-			}
-		}
-	}
-
-	const float MaxAmbientLighting = this->ShouldRenderHDR(mpWinMain->GetHWND()) ? 150.0f : 2.0f;
-	MathUtil::Clamp(SceneRenderParams.fAmbientLightingFactor, 0.0f, MaxAmbientLighting);
-	ImGui::SliderFloat("Ambient Lighting Factor", &SceneRenderParams.fAmbientLightingFactor, 0.0f, MaxAmbientLighting, "%.3f");
-
-	ImGui::End();
-
-}
-
 void VQEngine::DrawDebugPanelWindow(FSceneRenderParameters& SceneParams)
 {
 	const uint32 W = mpWinMain->GetWidth();
@@ -619,7 +639,7 @@ void VQEngine::DrawDebugPanelWindow(FSceneRenderParameters& SceneParams)
 	ImGui::SetNextWindowSize(ImVec2(DBG_WINDOW_SIZE_X, DBG_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
 
 
-	ImGui::Begin("DEBUG PANEL (F4)", &mUIState.bWindowVisible_DebugPanel);
+	ImGui::Begin("DEBUG PANEL", &mUIState.bWindowVisible_DebugPanel);
 
 	ImGui::Text("Debug Draw");
 	ImGui::Separator();
@@ -630,6 +650,7 @@ void VQEngine::DrawDebugPanelWindow(FSceneRenderParameters& SceneParams)
 
 	ImGui::End();
 }
+
 void VQEngine::DrawPostProcessSettings(FPostProcessParameters& PPParams)
 {
 	// constants
@@ -771,7 +792,7 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 	ImGui::SetNextWindowSize(ImVec2(GFX_WINDOW_SIZE_X, GFX_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
 
 
-	ImGui::Begin("GRAPHICS SETTINGS (F3)", &mUIState.bWindowVisible_GraphicsSettingsPanel);
+	ImGui::Begin("GRAPHICS SETTINGS", &mUIState.bWindowVisible_GraphicsSettingsPanel);
 	
 	ImGui::PushStyleColor(ImGuiCol_Header, UI_COLLAPSING_HEADER_COLOR_VALUE);
 	if (ImGui::CollapsingHeader("DISPLAY", ImGuiTreeNodeFlags_DefaultOpen))

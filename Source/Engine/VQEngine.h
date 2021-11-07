@@ -532,6 +532,7 @@ private:
 	void DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderParameters& SceneRenderParams);
 	void DrawPostProcessSettings(FPostProcessParameters& PPParams);
 	void DrawDebugPanelWindow(FSceneRenderParameters& SceneParams);
+	void DrawKeyMappingsWindow();
 	void DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams, FPostProcessParameters& PPParams);
 
 	//
