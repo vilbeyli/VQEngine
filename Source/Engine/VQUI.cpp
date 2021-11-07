@@ -489,22 +489,32 @@ void VQEngine::DrawKeyMappingsWindow()
 
 		ImGui::SetNextWindowPos(ImVec2((float)KEYMAPPINGS_WINDOW_POS_X, (float)KEYMAPPINGS_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
 		
+		const float fHeaderGray = 0.6f;
+		//const ImVec4 ColHeader_Gray(fHeaderGray, fHeaderGray, fHeaderGray, 1.0f);
+		const ImVec4 ColHeader(0, 0.9, 0, 1.0f);
+
 		ImGui::Begin("KEY MAPPINGS", &mUIState.bWindowVisible_KeyMappings);
-		ImGui::Text("CAMERA ---------------------------------------");
-		ImGui::Text(" Right Click : Free Camera");
-		ImGui::Text("  Left Click : Orbit Camera");
-		ImGui::Text("      Scroll : Adjust distance (Orbit Camera)");
-		ImGui::Text("      WASDEQ : Move Camera (Free Camera)");
-		ImGui::Text("       Space : Toggle animation (if available)");
+		ImGui::PushStyleColor(ImGuiCol_Text, ColHeader);
+		ImGui::Text("------------------ CAMERA ----------------------");
+		ImGui::PopStyleColor(1);
+		ImGui::Text       (" Right Click : Free Camera");
+		ImGui::Text       ("  Left Click : Orbit Camera");
+		ImGui::Text       ("      Scroll : Adjust distance (Orbit Camera)");
+		ImGui::Text       ("      WASDEQ : Move Camera (Free Camera)");
+		ImGui::Text       ("       Space : Toggle animation (if available)");
 		ImGui::Text("");
-		ImGui::Text("DISPLAY ---------------------------------------");
-		ImGui::Text("          F3 : Toggle Graphics Settings UI window");
+
+		ImGui::PushStyleColor(ImGuiCol_Text, ColHeader);
+		ImGui::Text("------------------ DISPLAY ---------------------");
+		ImGui::PopStyleColor(1);
 		ImGui::Text("   Alt+Enter : Toggle fullscreen");
 		ImGui::Text("           V : Toggle VSync");
 		ImGui::Text("           M : Toggle MSAA");
 		ImGui::Text("");
-		ImGui::Text("SCENE  ----------------------------------------");
-		ImGui::Text("          F1 : Toggle Scene Controls UI window");
+
+		ImGui::PushStyleColor(ImGuiCol_Text, ColHeader);
+		ImGui::Text("------------------ SCENE -----------------------");
+		ImGui::PopStyleColor(1);
 		ImGui::Text("     Shift+Z : Show/Hide ALL UI windows");
 		ImGui::Text("     Shift+R : Reload level");
 		ImGui::Text("Page Up/Down : Change the HDRI Environment Map");
@@ -513,9 +523,10 @@ void VQEngine::DrawKeyMappingsWindow()
 		ImGui::Text("           B : Toggle FidelityFX Sharpening");
 		ImGui::Text("           J : Toggle FidelityFX Super Resolution 1.0");
 		ImGui::Text("");
-		ImGui::Text("DEBUG  ----------------------------------------");
-		ImGui::Text("          F2 : Toggle Profiler UI window");
-		ImGui::Text("          F4 : Toggle Debug UI window");
+
+		ImGui::PushStyleColor(ImGuiCol_Text, ColHeader);
+		ImGui::Text("------------------ DEBUG  ----------------------");
+		ImGui::PopStyleColor(1);
 		ImGui::Text("           N : Toggle Mesh bounding boxes");
 		ImGui::Text("           L : Toggle Light bounding volumes");
 		ImGui::Text("     Shift+N : Toggle GameObject bounding boxes");
