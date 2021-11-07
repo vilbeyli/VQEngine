@@ -22,11 +22,10 @@
 #include "../Core/Input.h"
 #include "imgui.h" // io
 
-#if _DEBUG
+#define CAMERA_DEBUG 0
+#if CAMERA_DEBUG
 #include "Libs/VQUtils/Source/Log.h"
 #endif
-
-#define CAMERA_DEBUG 1
 
 using namespace DirectX;
 
@@ -262,10 +261,14 @@ void OrbitController::UpdateCamera(const Input& input, float dt, bool bUseInput)
 	if(bUseInput)
 	{
 		XMVECTOR vPOSITION = XMLoadFloat3(&pCam->mPosition);
+		const float fCamYaw = pCam->GetYaw();
+		const float fCamPitch = pCam->GetPitch();
+
+		const float fCamPitchRad = fCamPitch;
 
 		// calculate camera directions
 		const XMMATRIX mROT_CAM = pCam->GetRotationMatrix();
-		const XMMATRIX mROT_CAM_Y_ONLY = XMMatrixRotationRollPitchYaw(0, pCam->GetYaw(), 0);
+		const XMMATRIX mROT_CAM_Y_ONLY = XMMatrixRotationRollPitchYaw(0, fCamYaw, 0);
 		constexpr float fLOOK_AT_DISTANCE = 5.0f; // currently unused - todo: instead of fixing on (0,0,0)
 		XMVECTOR vLOOK_DIRECTION = XMLoadFloat3(&ForwardVector);
 		vLOOK_DIRECTION          = XMVector3TransformCoord(vLOOK_DIRECTION, mROT_CAM);
@@ -275,10 +278,14 @@ void OrbitController::UpdateCamera(const Input& input, float dt, bool bUseInput)
 		// do orbit rotation around the look target point
 		constexpr float fROTATION_SPEED = 1.0f; // todo: drive by some config?
 		const float fRotAngleAzimuth = camInput.DeltaMouseXY[0] * fROTATION_SPEED * DEG2RAD;
-		const float fRotAnglePolar   = camInput.DeltaMouseXY[1] * fROTATION_SPEED * DEG2RAD;
+		      float fRotAnglePolar   = camInput.DeltaMouseXY[1] * fROTATION_SPEED * DEG2RAD;
 		const bool bRotate = camInput.DeltaMouseXY[0] != 0.0f || camInput.DeltaMouseXY[1] != 0.0f;
 		vLOOK_AT_POSITION = vZERO; // look at the origin
 		tf.RotateAroundPointAndAxis(vROTATION_AXIS_AZIMUTH, fRotAngleAzimuth, vLOOK_AT_POSITION);
+		
+		// cap polar rotation in [-89.5, +89.5] degrees
+		if (XM_PIDIV2 - (fCamPitchRad +fRotAnglePolar) <= (0.5f) * DEG2RAD) fRotAnglePolar = 0;
+		if ((fCamPitchRad+ fRotAnglePolar) + XM_PIDIV2 <= (0.5f) * DEG2RAD) fRotAnglePolar = 0;
 		tf.RotateAroundPointAndAxis(vROTATION_AXIS_POLAR  , -fRotAnglePolar, vLOOK_AT_POSITION);
 
 		// translate camera based on mouse wheel input
