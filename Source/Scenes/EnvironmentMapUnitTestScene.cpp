@@ -4,7 +4,7 @@
 
 using namespace DirectX;
 
-void GeometryUnitTestScene::UpdateScene(float dt, FSceneView& SceneView)
+void EnvironmentMapUnitTestScene::UpdateScene(float dt, FSceneView& SceneView)
 {
 	if (mInput.IsKeyTriggered("Space"))
 		bAnimateCamera = !bAnimateCamera;
@@ -36,14 +36,14 @@ void GeometryUnitTestScene::UpdateScene(float dt, FSceneView& SceneView)
 }
 
 
-void GeometryUnitTestScene::InitializeScene()
+void EnvironmentMapUnitTestScene::InitializeScene()
 {
 	bAnimateCamera = true;
-	fCameraAnimation_RotationSpeed = PI / 2.0f;
+	fCameraAnimation_RotationSpeed = PI / 4.0f;
 }
 
 
-void GeometryUnitTestScene::LoadScene(FSceneRepresentation& scene)
+void EnvironmentMapUnitTestScene::LoadScene(FSceneRepresentation& scene)
 {
 	constexpr int NUM_ROUGHNESS_INSTANCES = 8; // [0-1] in 1.0f/NUM_ROUGHNESS_INSTANCES increments
 	constexpr int NUM_METALLIC_INSTANCES = 4;
@@ -103,12 +103,12 @@ void GeometryUnitTestScene::LoadScene(FSceneRepresentation& scene)
 	}
 }
 
-void GeometryUnitTestScene::UnloadScene()
+void EnvironmentMapUnitTestScene::UnloadScene()
 {
 
 }
 
-void GeometryUnitTestScene::RenderSceneUI() const
+void EnvironmentMapUnitTestScene::RenderSceneUI() const
 {
 }
 

@@ -41,11 +41,11 @@ class SponzaScene : public Scene
 	DECLARE_CTOR(SponzaScene)
 };
 
-class GeometryUnitTestScene : public Scene
+class EnvironmentMapUnitTestScene : public Scene
 {
 	DECLARE_SCENE_INTERFACE()
 
-	DECLARE_CTOR(GeometryUnitTestScene)
+	DECLARE_CTOR(EnvironmentMapUnitTestScene)
 
 private:
 	bool bAnimateCamera = false;
