@@ -533,6 +533,7 @@ void VQEngine::DrawKeyMappingsWindow()
 		ImGui::Text("           N : Toggle Mesh bounding boxes");
 		ImGui::Text("           L : Toggle Light bounding volumes");
 		ImGui::Text("     Shift+N : Toggle GameObject bounding boxes");
+		ImGui::Text("      Ctrl+C : Log active camera values");
 
 		ImGui::End();
 	}
