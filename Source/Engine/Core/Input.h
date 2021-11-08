@@ -65,7 +65,7 @@ public:
 	void UpdateKeyDown(KeyDownEventData);
 	void UpdateKeyUp(KeyCode, bool bIsMouseKey);
 	void UpdateMousePos(long x, long y, short scroll);
-	void UpdateMousePos_Raw(int relativeX, int relativeY, short scroll, bool bMouseCaptured);
+	void UpdateMousePos_Raw(int relativeX, int relativeY, short scroll);
 	void PostUpdate();
 
 	// state check
@@ -87,6 +87,7 @@ public:
 	bool IsMouseUp(EMouseButtons) const;
 	bool IsMouseDoubleClick(EMouseButtons) const;
 	bool IsMouseTriggered(EMouseButtons) const;
+	bool IsMouseReleased(EMouseButtons) const;
 	bool IsMouseScrollUp() const;
 	bool IsMouseScrollDown() const;
 	bool IsAnyMouseDown() const; // @mbIgnoreInput doesn't affect this

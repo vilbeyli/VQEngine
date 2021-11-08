@@ -28,7 +28,6 @@ constexpr int MIN_WINDOW_SIZE = 128; // make sure window cannot be resized small
 #define LOG_CALLBACKS             0
 static void LogWndMsg(UINT uMsg, HWND hwnd);
 
-
 // ===================================================================================================================================
 // WINDOW PROCEDURE
 // ===================================================================================================================================
@@ -179,7 +178,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 
 #if ENABLE_RAW_INPUT // https://msdn.microsoft.com/en-us/library/windows/desktop/ee418864.aspx
-	case WM_INPUT: if (pWindow->pOwner) pWindow->pOwner->OnMouseInput(hwnd, lParam);
+	case WM_INPUT: if (pWindow->pOwner) pWindow->pOwner->OnMouseInput(hwnd, lParam); return 0;
 #else
 		
 	case WM_MOUSEMOVE  : if (pWindow->pOwner) pWindow->pOwner->OnMouseMove(hwnd, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)); return 0; 
@@ -218,11 +217,13 @@ void VQEngine::OnWindowResize(HWND hWnd)
 #endif
 
 	mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<WindowResizeEvent>(w, h, hWnd));
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<WindowResizeEvent>(w, h, hWnd));
 }
 
 void VQEngine::OnToggleFullscreen(HWND hWnd)
 {
 	mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<ToggleFullscreenEvent>(hWnd));
+	mEventQueue_WinToVQE_Update.AddItem(std::make_unique<ToggleFullscreenEvent>(hWnd));
 }
 
 //------------------------------------------------------------------------------------
@@ -264,6 +265,8 @@ void VQEngine::DispatchHDRSwapchainTransitionEvents(HWND hwnd)
 		return;
 
 	auto& pWin = GetWindow(hwnd);
+	const uint32 W = pWin->GetWidth();
+	const uint32 H = pWin->GetHeight();
 	const bool bCurrentMonitorSupportsHDR = VQSystemInfo::FMonitorInfo::CheckHDRSupport(hwnd);
 	const bool bCurrentMonitorWasSupportingHDR = pWin->GetIsOnHDRCapableDisplay();
 	// Note: pWin->SetIsOnHDRCapableDisplay() is called from the Render Thread when handling SwapchainFormatEvent.
@@ -274,10 +277,15 @@ void VQEngine::DispatchHDRSwapchainTransitionEvents(HWND hwnd)
 		Log::Info("OnWindowMove<%0x, %s>() : Window moved to %s monitor."
 			, hwnd
 			, GetWindowName(hwnd).c_str()
-			, (bCurrentMonitorSupportsHDR ? "HDR-capable" : "Non-HDR-capable")
+			, (bCurrentMonitorSupportsHDR ? "HDR-capable" : "SDR")
 		);
 		mbMainWindowHDRTransitionInProgress.store(true);
 		mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetSwapchainFormatEvent>(hwnd, FORMAT));
+
+		// recycle resize events to reload frame-dependent resources in order to
+		// update tonemapper PSO so it has the right HDR or SDR output
+		mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<WindowResizeEvent>(W, H, hwnd));
+		mEventQueue_WinToVQE_Update.AddItem(std::make_unique<WindowResizeEvent>(W, H, hwnd));
 	}
 }
 
@@ -347,7 +355,7 @@ void VQEngine::OnWindowLoseFocus(HWND hwnd)
 
 	// make sure the mouse becomes visible when Main Window is not the one that is focused
 	if(hwnd == mpWinMain->GetHWND() && mpWinMain->IsMouseCaptured())
-		this->SetMouseCaptureForWindow(mpWinMain->GetHWND(), false);
+		this->SetMouseCaptureForWindow(mpWinMain->GetHWND(), false, true);
 }
 
 

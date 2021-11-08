@@ -67,10 +67,9 @@ struct FPSOLoadDesc
 
 enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is integrated
 {
-	HELLO_WORLD_TRIANGLE_PSO = 0,
-	FULLSCREEN_TRIANGLE_PSO,
-	HELLO_WORLD_CUBE_PSO,
-	HELLO_WORLD_CUBE_PSO_MSAA_4,
+	FULLSCREEN_TRIANGLE_PSO = 0,
+	UI_PSO,
+	UI_HDR_scRGB_PSO,
 	TONEMAPPER_PSO,
 	HDR_FP16_SWAPCHAIN_PSO,
 	SKYDOME_PSO,
@@ -97,6 +96,8 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	BRDF_INTEGRATION_CS_PSO,
 	FFX_CAS_CS_PSO,
 	FFX_SPD_CS_PSO,
+	FFX_FSR1_EASU_CS_PSO,
+	FFX_FSR1_RCAS_CS_PSO,
 	NUM_BUILTIN_PSOs
 };
 
@@ -215,13 +216,18 @@ private:
 
 	// memory
 	D3D12MA::Allocator*            mpAllocator;
-	StaticResourceViewHeap         mHeapRTV;
-	StaticResourceViewHeap         mHeapDSV;
+	// CPU-visible heaps ----------------------------------------
+	StaticResourceViewHeap         mHeapRTV; 
+	StaticResourceViewHeap         mHeapDSV; 
+	StaticResourceViewHeap         mHeapUAV; // CPU-visible heap (TODO: fix SSAO UAV clear error msg)
+	UploadHeap                     mHeapUpload;
+	// CPU-visible heaps ----------------------------------------
+	// GPU-visible heaps ----------------------------------------
 	StaticResourceViewHeap         mHeapCBV_SRV_UAV;
 	StaticResourceViewHeap         mHeapSampler;
-	UploadHeap                     mHeapUpload;
 	StaticBufferHeap               mStaticHeap_VertexBuffer;
 	StaticBufferHeap               mStaticHeap_IndexBuffer;
+	// GPU-visible heaps ----------------------------------------
 	// constant buffers are handled in FRenderContext objects
 
 	// resources & views

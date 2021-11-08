@@ -13,9 +13,10 @@ set PBR_TEXTURES_DESTINATION_PATH=%cd%/
 popd
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
 set MAIN_SCREEN_RESOLUTION_Y=0
+
 :: HDRI Files
 set HDRI_RESOLUTION=8k
-set HDRI_WEB_PATH=https://hdrihaven.com/files/hdris/
+set HDRI_WEB_PATH=https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/!HDRI_RESOLUTION!/
 set HDRI_FILE_LIST=venice_sunset_!HDRI_RESOLUTION!.hdr
 set HDRI_FILE_LIST=%HDRI_FILE_LIST%;gym_entrance_!HDRI_RESOLUTION!.hdr
 set HDRI_FILE_LIST=%HDRI_FILE_LIST%;stadium_01_!HDRI_RESOLUTION!.hdr
@@ -60,22 +61,42 @@ call :GetMainScreenResolution
 
 :: Download the HDR textures that doesn't already exist using wget and store them in the HDRI_DOWNLOADED_FILES 'list'
 set ALL_ASSETS_ALREADY_DOWNLOADED=1
+set ERROR_DURING_DOWNLOAD=0
+set ERROR_DURING_DOWNLOAD_FILE_LIST=
+
 for %%f in (%HDRI_FILE_LIST%) do ( 
   if not exist %HDRI_TEXTURES_DESTINATION_PATH%%%f (
-    echo MISSING HDRI FILES!!!!
     %WGET_PATH% %HDRI_WEB_PATH%%%f -P %HDRI_TEXTURES_DESTINATION_PATH%
-    set ALL_ASSETS_ALREADY_DOWNLOADED=0
-    set HDRI_DOWNLOADED_FILES=!HDRI_DOWNLOADED_FILES!;%HDRI_TEXTURES_DESTINATION_PATH%%%f
+    if !ERRORLEVEL! neq 0 (
+      echo ---------------------------------------------------------------------------
+      echo ERROR downloading: %HDRI_WEB_PATH%%%f
+      echo ---------------------------------------------------------------------------
+      set ALL_ASSETS_ALREADY_DOWNLOADED=0
+      set ERROR_DURING_DOWNLOAD=1
+      set ERROR_DURING_DOWNLOAD_FILE_LIST=!ERROR_DURING_DOWNLOAD_FILE_LIST!;%HDRI_WEB_PATH%%%f
+    ) else (
+      set ALL_ASSETS_ALREADY_DOWNLOADED=0
+      set HDRI_DOWNLOADED_FILES=!HDRI_DOWNLOADED_FILES!;%HDRI_TEXTURES_DESTINATION_PATH%%%f
+    )
   )
 )
 :: print output status msg
 if !ALL_ASSETS_ALREADY_DOWNLOADED! equ 1 (
   echo All HDRI assets already downloaded.
 ) else (
-  echo.
-  echo Downloaded HDRI textures to: !HDRI_TEXTURES_DESTINATION_PATH!
-  for %%f in (%HDRI_DOWNLOADED_FILES%) do (
-    echo  - %%f
+  if !ERROR_DURING_DOWNLOAD! equ 1 (
+    echo.
+    echo Failed downloading HDRI textures
+    for %%f in (%ERROR_DURING_DOWNLOAD_FILE_LIST%) do (
+      echo  - %%f
+    )
+    echo.
+  ) else (
+    echo.
+    echo Downloaded HDRI textures to: !HDRI_TEXTURES_DESTINATION_PATH!
+    for %%f in (%HDRI_DOWNLOADED_FILES%) do (
+      echo  - %%f
+    )
   )
 )
 

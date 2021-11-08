@@ -41,6 +41,7 @@
 // Culling
 //-------------------------------------------------------------------------------
 #define ENABLE_VIEW_FRUSTUM_CULLING 1
+#define ENABLE_LIGHT_CULLING        1
 //-------------------------------------------------------------------------------
 
 
@@ -147,6 +148,72 @@ Model& Scene::GetModel(ModelID id)
 	return mModels.at(id);
 }
 
+FSceneStats Scene::GetSceneRenderStats(int FRAME_DATA_INDEX) const
+{
+	FSceneStats stats = {};
+	const FSceneView& view = mFrameSceneViews[FRAME_DATA_INDEX];
+	const FSceneShadowView& shadowView = mFrameShadowViews[FRAME_DATA_INDEX];
+
+	stats.NumStaticLights         = static_cast<uint>(mLightsStatic.size()    );
+	stats.NumDynamicLights        = static_cast<uint>(mLightsDynamic.size()   );
+	stats.NumStationaryLights     = static_cast<uint>(mLightsStationary.size());
+	stats.NumShadowingPointLights = shadowView.NumPointShadowViews;
+	stats.NumShadowingSpotLights  = shadowView.NumSpotShadowViews;
+	auto fnCountLights = [&stats](const std::vector<Light>& vLights)
+	{
+		for (const Light& l : vLights)
+		{
+			switch (l.Type)
+			{
+			case Light::EType::DIRECTIONAL: 
+				++stats.NumDirectionalLights;
+				if (!l.bEnabled) ++stats.NumDisabledDirectionalLights;
+				break;
+			case Light::EType::POINT: 
+				++stats.NumPointLights; 
+				if (!l.bEnabled) ++stats.NumDisabledPointLights;
+				break;
+			case Light::EType::SPOT: 
+				++stats.NumSpotLights; 
+				if (!l.bEnabled) ++stats.NumDisabledSpotLights;
+				break;
+
+			//case Light::EType::DIRECTIONAL: break;
+			default:
+				//assert(false); // Area lights are WIP atm, so will hit this on Default scene, as defined in the Default.xml
+				break;
+			}
+		}
+	};
+	fnCountLights(mLightsStationary);
+	fnCountLights(mLightsDynamic);
+	fnCountLights(mLightsStatic);
+
+
+	stats.NumMeshRenderCommands        = static_cast<uint>(view.meshRenderCommands.size() + view.lightRenderCommands.size() + view.lightBoundsRenderCommands.size() /*+ view.boundingBoxRenderCommands.size()*/);
+	stats.NumBoundingBoxRenderCommands = static_cast<uint>(view.boundingBoxRenderCommands.size());
+	auto fnCountShadowMeshRenderCommands = [](const FSceneShadowView& shadowView) -> uint
+	{
+		uint NumShadowRenderCmds = 0;
+		for (uint i = 0; i < shadowView.NumPointShadowViews; ++i)
+		for (uint face = 0; face < 6u; ++face)
+			NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowViews_Point[i * 6 + face].meshRenderCommands.size());
+		for (uint i = 0; i < shadowView.NumSpotShadowViews; ++i)
+			NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowViews_Spot[i].meshRenderCommands.size());
+		NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowView_Directional.meshRenderCommands.size());
+		return NumShadowRenderCmds;
+	};
+	stats.NumShadowMeshRenderCommands = fnCountShadowMeshRenderCommands(shadowView);
+	
+	stats.NumMeshes    = static_cast<uint>(this->mMeshes.size());
+	stats.NumModels    = static_cast<uint>(this->mModels.size());
+	stats.NumMaterials = static_cast<uint>(this->mMaterials.size());
+	stats.NumObjects   = static_cast<uint>(this->mpObjects.size());
+	stats.NumCameras   = static_cast<uint>(this->mCameras.size());
+
+	return stats;
+}
+
 
 //-------------------------------------------------------------------------------
 //
@@ -173,7 +240,7 @@ static bool ShouldCullLight(const Light& l, const FFrustumPlaneset& MainViewFrus
 static std::vector<size_t> GetActiveAndCulledLightIndices(const std::vector<Light> vLights, const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace)
 {
 	SCOPED_CPU_MARKER("GetActiveAndCulledLightIndices()");
-	constexpr bool bCULL_LIGHTS = false; // TODO: finish Intersection Test implementations
+	constexpr bool bCULL_LIGHTS = true;
 
 	std::vector<size_t> ActiveLightIndices;
 
@@ -185,12 +252,10 @@ static std::vector<size_t> GetActiveAndCulledLightIndices(const std::vector<Ligh
 		if (!l.bEnabled || !l.bCastingShadows)
 			continue;
 
-		// skip culled lights if culling is enabled
-		if constexpr (bCULL_LIGHTS)
-		{
-			if (ShouldCullLight(l, MainViewFrustumPlanesInWorldSpace))
-				continue;
-		}
+#if ENABLE_LIGHT_CULLING	
+		if (ShouldCullLight(l, MainViewFrustumPlanesInWorldSpace))
+			continue;
+#endif
 
 		ActiveLightIndices.push_back(i);
 	}
@@ -224,10 +289,15 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 	: mInput(input)
 	, mpWindow(pWin)
 	, mEngine(engine)
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	, mFrameSceneViews(NumFrameBuffers)
 	, mFrameShadowViews(NumFrameBuffers)
+#else
+	, mFrameSceneViews(1)
+	, mFrameShadowViews(1)
+#endif
 	, mIndex_SelectedCamera(0)
-	, mIndex_ActiveEnvironmentMapPreset(0)
+	, mIndex_ActiveEnvironmentMapPreset(-1)
 	, mGameObjectPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
 	, mTransformPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
 	, mResourceNames(engine.GetResourceNames())
@@ -240,6 +310,7 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 
 void Scene::PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX)
 {
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	if (std::max(FRAME_DATA_INDEX, FRAME_DATA_PREV_INDEX) >= mFrameSceneViews.size())
 	{
 		Log::Warning("Scene::PreUpdate(): Frame data is not yet allocated!");
@@ -248,15 +319,19 @@ void Scene::PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX)
 	assert(std::max(FRAME_DATA_INDEX, FRAME_DATA_PREV_INDEX) < mFrameSceneViews.size());
 	FSceneView& SceneViewCurr = mFrameSceneViews[FRAME_DATA_INDEX];
 	FSceneView& SceneViewPrev = mFrameSceneViews[FRAME_DATA_PREV_INDEX];
+	// bring over the parameters from the last frame
 	SceneViewCurr.postProcessParameters = SceneViewPrev.postProcessParameters;
 	SceneViewCurr.sceneParameters = SceneViewPrev.sceneParameters;
+#endif
 }
 
 void Scene::Update(float dt, int FRAME_DATA_INDEX)
 {
 	SCOPED_CPU_MARKER("Scene::Update()");
+
 	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
 	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
+
 	Camera& Cam = this->mCameras[this->mIndex_SelectedCamera];
 
 	Cam.Update(dt, mInput);
@@ -264,7 +339,7 @@ void Scene::Update(float dt, int FRAME_DATA_INDEX)
 	this->UpdateScene(dt, SceneView);
 }
 
-void Scene::PostUpdate(int FRAME_DATA_INDEX, ThreadPool& UpdateWorkerThreadPool)
+void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, int FRAME_DATA_INDEX)
 {
 	SCOPED_CPU_MARKER("Scene::PostUpdate()");
 	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
@@ -272,7 +347,7 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, ThreadPool& UpdateWorkerThreadPool)
 	FSceneShadowView& ShadowView = mFrameShadowViews[FRAME_DATA_INDEX];
 
 	const Camera& cam = mCameras[mIndex_SelectedCamera];
-	const XMFLOAT3 camPos = cam.GetPositionF();
+	const XMFLOAT3 camPos = cam.GetPositionF(); 
 
 	// extract scene view
 	SceneView.proj = cam.GetProjectionMatrix();
@@ -319,9 +394,52 @@ void Scene::PostUpdate(int FRAME_DATA_INDEX, ThreadPool& UpdateWorkerThreadPool)
 }
 
 
-void Scene::RenderUI()
+
+FSceneView& Scene::GetSceneView(int FRAME_DATA_INDEX)
 {
-	// TODO
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	return mFrameSceneViews[FRAME_DATA_INDEX];
+#else
+	return mFrameSceneViews[0];
+#endif
+}
+const FSceneView& Scene::GetSceneView(int FRAME_DATA_INDEX) const
+{
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	return mFrameSceneViews[FRAME_DATA_INDEX]; 
+#else
+	return mFrameSceneViews[0];
+#endif
+}
+const FSceneShadowView& Scene::GetShadowView(int FRAME_DATA_INDEX) const 
+{
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	return mFrameShadowViews[FRAME_DATA_INDEX]; 
+#else
+	return mFrameShadowViews[0];
+#endif
+}
+FPostProcessParameters& Scene::GetPostProcessParameters(int FRAME_DATA_INDEX) 
+{
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	return mFrameSceneViews[FRAME_DATA_INDEX].postProcessParameters; 
+#else
+	return mFrameSceneViews[0].postProcessParameters;
+#endif
+}
+const FPostProcessParameters& Scene::GetPostProcessParameters(int FRAME_DATA_INDEX) const 
+{
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	return mFrameSceneViews[FRAME_DATA_INDEX].postProcessParameters; 
+#else
+	return mFrameSceneViews[0].postProcessParameters;
+#endif
+}
+
+
+void Scene::RenderUI(FUIState& UIState, uint32_t W, uint32_t H)
+{
+	this->RenderSceneUI();
 }
 
 void Scene::HandleInput(FSceneView& SceneView)
@@ -345,7 +463,6 @@ void Scene::HandleInput(FSceneView& SceneView)
 				: CircularIncrement(mIndex_SelectedCamera, NumCameras);
 		}
 	}
-
 	if (mInput.IsKeyTriggered("L"))
 	{
 		ToggleBool(SceneView.sceneParameters.bDrawLightBounds);
@@ -356,6 +473,13 @@ void Scene::HandleInput(FSceneView& SceneView)
 		else             ToggleBool(SceneView.sceneParameters.bDrawMeshBoundingBoxes);
 	}
 
+	
+	// if there's no EnvMap selected and the user wants the change the env map,
+	// temporarily assign 0 so that Circular*crement() can work
+	if ((mInput.IsKeyTriggered("PageUp")|| mInput.IsKeyTriggered("PageDown")) && mIndex_ActiveEnvironmentMapPreset == -1)
+	{
+		mIndex_ActiveEnvironmentMapPreset = 0;
+	}
 	if (mInput.IsKeyTriggered("PageUp"))
 	{
 		mIndex_ActiveEnvironmentMapPreset = CircularIncrement(mIndex_ActiveEnvironmentMapPreset, NumEnvMaps);
@@ -379,11 +503,13 @@ void Scene::GatherSceneLightData(FSceneView& SceneView) const
 
 	int iGPUSpot = 0;  int iGPUSpotShadow = 0;
 	int iGPUPoint = 0; int iGPUPointShadow = 0;
-	auto fnGatherLightData = [&](const std::vector<Light>& vLights)
+	auto fnGatherLightData = [&](const std::vector<Light>& vLights, Light::EMobility eLightMobility)
 	{
 		for (const Light& l : vLights)
 		{
 			if (!l.bEnabled) continue;
+			if (l.Mobility != eLightMobility) continue;
+
 			switch (l.Type)
 			{
 			case Light::EType::DIRECTIONAL:
@@ -410,9 +536,9 @@ void Scene::GatherSceneLightData(FSceneView& SceneView) const
 
 		}
 	};
-	fnGatherLightData(mLightsStatic);
-	fnGatherLightData(mLightsStationary);
-	fnGatherLightData(mLightsDynamic);
+	fnGatherLightData(mLightsStatic, Light::EMobility::STATIC);
+	fnGatherLightData(mLightsStationary, Light::EMobility::STATIONARY);
+	fnGatherLightData(mLightsDynamic, Light::EMobility::DYNAMIC);
 
 	data.numPointCasters = iGPUPointShadow;
 	data.numPointLights = iGPUPoint;
@@ -582,6 +708,7 @@ void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustum
 
 #else // no culling, render all game objects
 	
+	MeshRenderCommands.clear();
 	for (const GameObject* pObj : mpObjects)
 	{
 		Transform* const& pTF = mpTransforms.at(pObj->mTransformID);
@@ -607,7 +734,7 @@ void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustum
 			meshRenderCmd.ModelName = model.mModelName;
 			meshRenderCmd.MaterialName = ""; // TODO
 
-			SceneView.meshRenderCommands.push_back(meshRenderCmd);
+			MeshRenderCommands.push_back(meshRenderCmd);
 		}
 	}
 #endif // ENABLE_VIEW_FRUSTUM_CULLING
@@ -670,11 +797,12 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 
 			switch (l.Type)
 			{
-			case Light::EType::DIRECTIONAL: // TODO: calculate frustum cull parameters
+			case Light::EType::DIRECTIONAL:
 			{
 				FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowView_Directional;
 				ShadowView.matViewProj = l.GetViewProjectionMatrix();
-				// TODO: gather params
+				const size_t FrustumIndex = DispatchContext.AddWorkerItem(FFrustumPlaneset::ExtractFromMatrix(ShadowView.matViewProj), BoundingBoxList, pGameObjects);
+				FrustumIndex_pShadowViewLookup[FrustumIndex] = &ShadowView;
 			}	break;
 			case Light::EType::SPOT:
 			{
@@ -937,3 +1065,4 @@ FMaterialRepresentation::FMaterialRepresentation()
 	: DiffuseColor(MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE)
 	, EmissiveColor(MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE)
 {}
+

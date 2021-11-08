@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Scene>
+    <!-- 
+    ENVIRONMENT MAP
+        Environment maps are defined in Data/EnvironmentMaps.ini 
+        Custom env map usage: specify path & MaxCLL
+         <path>Textures/HDRI/env_map.hdr</path>
+         <MaxCLL>1200</MaxCLL>
+
+        Presets are defined in EnvironmentMaps.ini. Usage:
+         <Preset>Stadium01</Preset>
+    -->
+    <!-- 
+    CAMERA
+        Contains 3 main data fields
+         - Translational Data   : Position, Yaw, Pitch
+         - Camera Viewport Data : Projection Type <perspective/orthogonal>, FoV in Degrees, Near & Far Planes
+         - Camera Type Data     : First Person <TranslationSpeed, AngularSpeed, Drag> / Orbit < TBA >
+    -->
+
+    <!-- 
+    GAME OBJECT
+        Transform & Model container
+    -->
+    
+    <!-- ================================================================ -->
+    <PostProcess>
+        <FFXCAS>
+            <Sharpen>0.8</Sharpen>
+        </FFXCAS>
+    </PostProcess>
+    <EnvironmentMap>
+        <Preset>GymEntrance</Preset>
+    </EnvironmentMap>
+
+    <!-- 
+    MATERIALS
+    -->
+    <Material>
+        <Name>MatRough</Name>
+        <Diffuse>1 1 1</Diffuse>
+        <Roughness> 0.95 </Roughness>
+    </Material>
+    <Material>
+        <Name>MatSmooth</Name>
+        <Diffuse>0.005 0.005 0.005</Diffuse>
+        <Roughness> 0.04 </Roughness>
+    </Material>
+    <!--
+    <Material>
+        <Name>Checkerboard</Name>
+        <DiffuseMap>Procedural/Checkerboard</DiffuseMap>
+    </Material>
+    <Material>
+        <Name>Checkerboard_Grayscale</Name>
+        <DiffuseMap>Procedural/Checkerboard_Grayscale</DiffuseMap>
+    </Material>
+    -->
+    <Camera>
+        <Position> 0 5.110652 -17.442703 </Position>
+        <Pitch> 11 </Pitch>
+        <Yaw> 0 </Yaw>
+        <Projection>Perspective</Projection>
+        <FoV>60.0</FoV>
+        <Near>0.01</Near>
+        <Far>1000</Far>
+
+        <FirstPerson>
+            <TranslationSpeed>1000</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+    <Camera>
+        <Position>-32.768074 79.071419 -26.835758</Position>
+        <Pitch> 2.26 </Pitch>
+        <Yaw> 4.649993 </Yaw>
+        <Projection>Perspective</Projection>
+        <FoV>60.0</FoV>
+        <Near>0.01</Near>
+        <Far>1000</Far>
+
+        <FirstPerson>
+            <TranslationSpeed>1000</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+    <Camera>
+        <Position> -39.056450 54.705864 -21.274244 </Position>
+        <Pitch> -3.799996 </Pitch>
+        <Yaw> 1.84 </Yaw>
+        <Projection>Perspective</Projection>
+        <FoV>60.0</FoV>
+        <Near>0.01</Near>
+        <Far>1000</Far>
+
+        <FirstPerson>
+            <TranslationSpeed>1000</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+    <Camera>
+        <Position> 20.885015 56.184666 -21.133247 </Position>
+        <Pitch> -0.009 </Pitch>
+        <Yaw> -0.05 </Yaw>
+        <Projection>Perspective</Projection>
+        <FoV>60.0</FoV>
+        <Near>0.01</Near>
+        <Far>1000</Far>
+
+        <FirstPerson>
+            <TranslationSpeed>1000</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+
+    <GameObject>
+        <Transform>
+            <Position> 5.10 0.0 0.0 </Position>
+            <Rotation>0 0 0</Rotation>
+            <Scale>5</Scale>
+        </Transform>
+        <Model>
+            <Mesh>Sphere</Mesh>
+            <MaterialName>MatSmooth</MaterialName>
+        </Model>
+    </GameObject>
+    
+    <GameObject>
+        <Transform>
+            <Position>-5.1 0 0</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>5</Scale>
+        </Transform>
+        <Model>
+            <Mesh>Sphere</Mesh>
+            <MaterialName>MatRough</MaterialName>
+        </Model>
+    </GameObject>
+
+    <PostProcess>
+    <!-- TBA -->
+    </PostProcess>
+</Scene>

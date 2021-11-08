@@ -87,7 +87,11 @@ std::string FindEnvironmentMapToDownsizeFrom(const std::string& FolderPath, cons
 {
 	assert(TargetResolution.size() >= 2);
 	const unsigned NextHigherResolution = (TargetResolution[0] - '0') * 2; // downsample from next higher resolution (resolutions scale *2 each time)
-	assert(NextHigherResolution <= 8); // up to 8k env map supported
+	if (NextHigherResolution > 8) // up to 8k env map supported
+	{
+		Log::Warning("FindEnvironmentMapToDownsizeFrom() NextHigherResolution requested is larger than 8k: %s", EnvMapName.c_str());
+		return "";
+	}
 
 	
 	// walk in HDRI/ directory
@@ -139,7 +143,7 @@ bool CreateEnvironmentMapTextureFromHiResAndSaveToDisk(const std::string& Target
 	const std::string EnvMapName = std::string(EnvMapNameWithDesiredResolution, 0, EnvMapNameWithDesiredResolution.find_last_of('_')); // "file_name"
 	const std::string EnvMapDesiredResolution = StrUtil::split(EnvMapNameWithDesiredResolution, '_').back();                           // "4k"
 	const std::string EnvMapFilePath_HiRes = FindEnvironmentMapToDownsizeFrom(EnvMapFolder, EnvMapName, EnvMapDesiredResolution);
-	const std::string EnvMapSourceResolution = StrUtil::split(EnvMapFilePath_HiRes, '_').back();
+	const std::string EnvMapSourceResolution = !EnvMapFilePath_HiRes.empty() ? StrUtil::split(EnvMapFilePath_HiRes, '_').back() : "";
 	
 	if (!EnvMapFilePath_HiRes.empty())
 	{
@@ -218,7 +222,13 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	
 	if (desc.FilePath.empty()) // check whether the env map was found or not
 	{
-		Log::Error("Couldn't find Environment Map: %s", EnvMapName.c_str());
+		Log::Error("Environment Map file path empty");
+		return;
+	}
+	
+	if (!DirectoryUtil::FileExists(desc.FilePath)) // check whether the env map was found or not
+	{
+		Log::Error("Couldn't find Environment Map %s: %s", EnvMapName.c_str(), desc.FilePath.c_str());
 		Log::Warning("Have you run Scripts/DownloadAssets.bat?");
 		return;
 	}
@@ -334,10 +344,10 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	//assert(mpScene->mIndex_ActiveEnvironmentMapPreset == static_cast<int>(ActiveEnvMapIndex)); // Only false durin initialization
 	mpScene->mIndex_ActiveEnvironmentMapPreset = static_cast<int>(ActiveEnvMapIndex);
 
-	// Update HDRMetaData when the nvironment map is loaded
+	// Update HDRMetaData when the environment map is loaded
 	HWND hwnd = mpWinMain->GetHWND();
-	mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetStaticHDRMetaDataEvent>(hwnd, this->GatherHDRMetaDataParameters(hwnd)));
 
+	mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetStaticHDRMetaDataEvent>(hwnd, this->GatherHDRMetaDataParameters(hwnd)));
 }
 
 void VQEngine::UnloadEnvironmentMap()

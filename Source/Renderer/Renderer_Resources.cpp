@@ -965,6 +965,16 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 	else
 	{
 		std::string errMsg;
+		
+		// check if file exists
+		const std::string ShaderFilePath = StrUtil::UnicodeToASCII<512>(ShaderStageCompileDesc.FilePath.c_str());
+		if (!DirectoryUtil::FileExists(ShaderFilePath))
+		{
+			Log::Error("Shader file doesn't exist: %s", ShaderFilePath.c_str());
+			MessageBox(NULL, "Shader file doesn't exist", "Shader Compiler Error", MB_OK); // TODO:
+			return Result; // no crash until runtime
+		}
+
 		ShaderBlob = CompileFromSource(ShaderStageCompileDesc, errMsg);
 		const bool bCompileSuccessful = !ShaderBlob.IsNull();
 		if (bCompileSuccessful)
@@ -974,8 +984,8 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 		else
 		{
 			Log::Error(errMsg);
-			// MessageBox(NULL, "EXIT", "Exit", MB_OK); // TODO:
-			return Result;
+			MessageBox(NULL, "Couldn't compile shader.", "Shader Compiler Error", MB_OK); // TODO:
+			return Result; // no crash until runtime
 		}
 	}
 

@@ -169,7 +169,6 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 	}
 }
 
-
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR pScmdl, int iCmdShow)
 {
 	SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);

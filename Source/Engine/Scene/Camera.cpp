@@ -18,13 +18,14 @@
 
 #include "Camera.h"
 #include "Quaternion.h"
+#include "Transform.h"
 #include "../Core/Input.h"
+#include "imgui.h" // io
 
-#if _DEBUG
+#define CAMERA_DEBUG 0
+#if CAMERA_DEBUG
 #include "Libs/VQUtils/Source/Log.h"
 #endif
-
-#define CAMERA_DEBUG 1
 
 using namespace DirectX;
 
@@ -33,24 +34,11 @@ Camera::Camera()
 	, mYaw(0.0f)
 	, mPosition(0,0,0)
 	, mVelocity(0,0,0)
+	, mProjParams({})
+	, mControllerIndex(0)
 {
 	XMStoreFloat4x4(&mMatProj, XMMatrixIdentity());
 	XMStoreFloat4x4(&mMatView, XMMatrixIdentity());
-}
-
-Camera::~Camera(void)
-{}
-
-Camera::Camera(Camera && other)
-{
-	mPosition = other.mPosition;
-	mYaw = other.mYaw;
-	mVelocity = other.mVelocity;
-	mPitch = other.mPitch;
-	mProjParams = other.mProjParams;
-	mMatProj = other.mMatProj;
-	mMatView = other.mMatView;
-	pController = std::move(other.pController);
 }
 
 Camera Camera::Clone()
@@ -63,9 +51,12 @@ Camera Camera::Clone()
 	c.mProjParams = this->mProjParams;
 	c.mMatProj = this->mMatProj;
 	c.mMatView = this->mMatView;
-	c.pController = std::move(this->pController->Clone(&c));
-	return c; // is this dangling too?
+	c.mControllerIndex = this->mControllerIndex;
+	for (size_t i = 0; i < this->mpControllers.size(); ++i)
+		c.mpControllers.push_back(std::move(this->mpControllers[i]->Clone(&c)));
+	return c;
 }
+
 
 void Camera::InitializeCamera(const FCameraParameters& data)
 {
@@ -80,16 +71,14 @@ void Camera::InitializeCamera(const FCameraParameters& data)
 	UpdateViewMatrix();
 }
 
-void Camera::InitializeController(bool bFirstPersonController, const FCameraParameters& data)
+void Camera::InitializeController(const FCameraParameters& data)
 {
-	if (bFirstPersonController)
-	{
-		pController = std::make_unique<FirstPersonController>(this, data.TranslationSpeed, data.AngularSpeed, data.Drag);
-	}
-	else
-	{
-		pController = std::make_unique<OrbitController>(this);
-	}
+	mControllerIndex = 0;
+	
+	// initialize in ECameraControllerType order ----
+	mpControllers.emplace_back(new OrbitController(this));
+	mpControllers.emplace_back(new FirstPersonController(this, data.TranslationSpeed, data.AngularSpeed, data.Drag));
+	// initialize in ECameraControllerType order ----
 }
 
 void Camera::SetProjectionMatrix(const FProjectionMatrixParameters& params)
@@ -119,16 +108,26 @@ void Camera::UpdateViewMatrix()
 	XMStoreFloat4x4(&mMatView, XMMatrixLookAtLH(pos, lookAt, up));
 }
 
-XMFLOAT3 Camera::GetPositionF() const
+void Camera::Update(float dt, const Input& input)
 {
-	return mPosition;
+	assert(mControllerIndex < mpControllers.size());
+	const bool bMouseDown = input.IsAnyMouseDown();
+	const bool bMouseLeftDown  = input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_LEFT);
+	const bool bMouseRightDown = input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_RIGHT);
+	const bool bMouseScrollInput = input.IsMouseScrollUp() || input.IsMouseScrollDown();
+
+	const ImGuiIO& io = ImGui::GetIO();
+
+	if (bMouseLeftDown)  mControllerIndex = static_cast<size_t>(ECameraControllerType::ORBIT);
+	if (bMouseRightDown) mControllerIndex = static_cast<size_t>(ECameraControllerType::FIRST_PERSON);
+	
+	const bool bMouseInputUsedByUI = io.WantCaptureMouse;
+	const bool bUseInput = (bMouseLeftDown || bMouseRightDown || (bMouseScrollInput && mControllerIndex == ECameraControllerType::ORBIT)) && !bMouseInputUsedByUI;
+	mpControllers[mControllerIndex]->UpdateCamera(input, dt, bUseInput);
 }
 
-XMMATRIX Camera::GetViewMatrix() const
-{
-	return XMLoadFloat4x4(&mMatView);
-}
-
+XMFLOAT3 Camera::GetPositionF() const { return mPosition; }
+XMMATRIX Camera::GetViewMatrix() const{ return XMLoadFloat4x4(&mMatView); }
 XMMATRIX Camera::GetViewInverseMatrix() const
 {
 	const XMVECTOR up     = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
@@ -160,17 +159,8 @@ XMMATRIX Camera::GetViewInverseMatrix() const
 
 	return test;
 }
-
-XMMATRIX Camera::GetProjectionMatrix() const
-{
-	return  XMLoadFloat4x4(&mMatProj);
-}
-
-
-XMMATRIX Camera::GetRotationMatrix() const
-{
-	return XMMatrixRotationRollPitchYaw(mPitch, mYaw, 0.0f);
-}
+XMMATRIX Camera::GetProjectionMatrix() const { return  XMLoadFloat4x4(&mMatProj); }
+XMMATRIX Camera::GetRotationMatrix() const   { return XMMatrixRotationRollPitchYaw(mPitch, mYaw, 0.0f); }
 
 void Camera::Rotate(float yaw, float pitch)
 {
@@ -241,17 +231,92 @@ void Camera::LookAt(const XMVECTOR& target)
 
 }
 
-//==============================================================================================================
-
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 OrbitController::OrbitController(Camera* pCam)
 	: CameraController(pCam)
 {
 }
 
-void OrbitController::UpdateCamera(const Input& input, float dt)
-
+void OrbitController::UpdateCamera(const Input& input, float dt, bool bUseInput)
 {
+	const bool bMouseLeftDown = input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_LEFT);
+	const XMVECTOR vZERO = XMVectorZero();
+	const XMFLOAT3 f3ZERO = XMFLOAT3(0, 0, 0);
+	const XMVECTOR vROTATION_AXIS_AZIMUTH = XMLoadFloat3(&UpVector);
+	      XMVECTOR vROTATION_AXIS_POLAR   = XMLoadFloat3(&LeftVector);
+	Camera* pCam = this->mpCamera;
+
+	// generate the FCameraInput data
+	FCameraInput camInput(vZERO);
+	camInput.DeltaMouseXY = input.GetMouseDelta();
+
+	// build camera transform
+	Transform tf(pCam->mPosition);
+	tf.RotateAroundAxisDegrees(UpVector   , pCam->GetYaw());
+	tf.RotateAroundAxisDegrees(RightVector, pCam->GetPitch());
+	// calculate camera orbit movement & update the camera
+	if(bUseInput)
+	{
+		XMVECTOR vPOSITION = XMLoadFloat3(&pCam->mPosition);
+		const float fCamYaw = pCam->GetYaw();
+		const float fCamPitch = pCam->GetPitch();
+		const bool bRotate = camInput.DeltaMouseXY[0] != 0.0f || camInput.DeltaMouseXY[1] != 0.0f;
+
+		// calculate camera directions
+		const XMMATRIX mROT_CAM = pCam->GetRotationMatrix();
+		const XMMATRIX mROT_CAM_Y_ONLY = XMMatrixRotationRollPitchYaw(0, fCamYaw, 0);
+		constexpr float fLOOK_AT_DISTANCE = 5.0f; // currently unused - todo: instead of fixing on (0,0,0)
+		XMVECTOR vLOOK_DIRECTION = XMLoadFloat3(&ForwardVector);
+		vLOOK_DIRECTION          = XMVector3TransformCoord(vLOOK_DIRECTION, mROT_CAM);
+		vROTATION_AXIS_POLAR     = XMVector3TransformCoord(vROTATION_AXIS_POLAR, mROT_CAM_Y_ONLY);
+		
+		XMVECTOR vLOOK_AT_POSITION = vZERO; // look at the origin
+		//vLOOK_AT_POSITION = vPOSITION + vLOOK_DIRECTION * fLOOK_AT_DISTANCE; // look ahead
+
+		if (bMouseLeftDown)
+		{
+			// do orbit rotation around the look target point
+			constexpr float fROTATION_SPEED = 1.0f; // todo: drive by some config?
+			const float fRotAngleAzimuth = camInput.DeltaMouseXY[0] * fROTATION_SPEED * DEG2RAD;
+			float fRotAnglePolar = camInput.DeltaMouseXY[1] * fROTATION_SPEED * DEG2RAD;
+			tf.RotateAroundPointAndAxis(vROTATION_AXIS_AZIMUTH, fRotAngleAzimuth, vLOOK_AT_POSITION);
+
+			// cap polar rotation in [-89.5, +89.5] degrees
+			if (XM_PIDIV2 - (fCamPitch + fRotAnglePolar) <= (0.5f) * DEG2RAD) fRotAnglePolar = 0;
+			if ((fCamPitch + fRotAnglePolar) + XM_PIDIV2 <= (0.5f) * DEG2RAD) fRotAnglePolar = 0;
+			tf.RotateAroundPointAndAxis(vROTATION_AXIS_POLAR, -fRotAnglePolar, vLOOK_AT_POSITION);
+		}
+
+		// translate camera based on mouse wheel input
+		constexpr float CAMERA_MOVEMENT_SPEED_MULTIPLER = 5.0f;
+		constexpr float CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER = 4.0f;
+		XMVECTOR LocalSpaceTranslation = XMVectorSet(0, 0, 0, 0);
+		if (input.IsMouseScrollUp()  ) LocalSpaceTranslation += XMLoadFloat3(&ForwardVector);
+		if (input.IsMouseScrollDown()) LocalSpaceTranslation += XMLoadFloat3(&BackVector);
+		if (input.IsKeyDown(VK_SHIFT)) LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER;
+		LocalSpaceTranslation *= CAMERA_MOVEMENT_SPEED_MULTIPLER;
+
+		const XMVECTOR WorldSpaceTranslation = XMVector3TransformCoord(LocalSpaceTranslation, mROT_CAM);
+		vPOSITION = XMLoadFloat3(&tf._position);
+		vPOSITION += WorldSpaceTranslation;
+		XMStoreFloat3(&tf._position, vPOSITION);
+
+		// update the camera
+		pCam->mPosition = tf._position;
+		if (bRotate)
+		{
+			pCam->LookAt(vLOOK_AT_POSITION);
+		}
+	}
+
+	// update the view matrix regardless of the bUseInput in case the
+	// Scene objects are animating the camera in their Update() functions
+	// programmatically. Otherwise, the environment map will sample from
+	// incorrect directions.
+	pCam->UpdateViewMatrix();
 }
 
 CameraController* OrbitController::Clone_impl(Camera* pNewCam)
@@ -260,6 +325,8 @@ CameraController* OrbitController::Clone_impl(Camera* pNewCam)
 	p->mF3LookAt = this->mF3LookAt;
 	return p;
 }
+
+//--------------------------------------------------------------------------------------------------------------------
 
 FirstPersonController::FirstPersonController(Camera* pCam
 	, float moveSpeed    /*= 1000.0f*/
@@ -272,7 +339,7 @@ FirstPersonController::FirstPersonController(Camera* pCam
 	, Drag(drag)
 {}
 
-void FirstPersonController::UpdateCamera(const Input& input, float dt)
+void FirstPersonController::UpdateCamera(const Input& input, float dt, bool bUseInput)
 {
 	constexpr float CAMERA_MOVEMENT_SPEED_MULTIPLER = 0.75f;
 	constexpr float CAMERA_MOVEMENT_SPEED_SHIFT_MULTIPLER = 2.0f;
@@ -296,7 +363,8 @@ void FirstPersonController::UpdateCamera(const Input& input, float dt)
 	const float RotationSpeed = this->AngularSpeedDeg * DEG2RAD; // rotation doesn't depend on time
 	const float dy = camInput.DeltaMouseXY[1] * RotationSpeed;
 	const float dx = camInput.DeltaMouseXY[0] * RotationSpeed;
-	this->mpCamera->Rotate(dx, dy);
+	if(bUseInput)
+		this->mpCamera->Rotate(dx, dy);
 
 
 	//this->mpCamera->Move(dt, camInput);

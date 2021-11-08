@@ -49,8 +49,6 @@
 #define A_GPU
 
 
-#include "AMDFidelityFX/CAS/ffx_a.h"
-
 
 
 //--------------------------------------------------------------------------------------
@@ -59,8 +57,10 @@
 //
 //--------------------------------------------------------------------------------------
 #if FFXCAS_CS || FFXCAS_PS
+#include "AMDFidelityFX/CAS/ffx_a.h"
+
 //
-// CAS App-side Defines
+// App-side Defines
 //
 #ifndef FFXCAS_FP16
 #define FFXCAS_FP16 0
@@ -70,7 +70,7 @@
 #endif 
 
 //
-// CAS Shader Resources
+// Shader Resources
 //
 Texture2D           CASInputTexture  : register(t0);
 RWTexture2D<float3> CASOutputTexture : register(u0);
@@ -110,7 +110,7 @@ cbuffer             CASConstants     : register(b0)
 	// In this case, our input is already linear and between 0 and 1 so its empty
 	void CasInput(inout AF1 r, inout AF1 g, inout AF1 b){}
 
-#endif 
+#endif // FFXCAS_FP16
 
 
 
@@ -172,7 +172,210 @@ void CAS_CSMain(uint3 LocalThreadId : SV_GroupThreadID, uint3 WorkGroupId : SV_G
 
 #endif // FFXCAS_FP16
 }
+#endif // FFXCAS_CS || FFXCAS_PS
+
+
+
+
+//--------------------------------------------------------------------------------------
+//
+// FidelityFX SUPER RESOLUTION 1.0 / EASU
+//
+//--------------------------------------------------------------------------------------
+#if FSR_EASU_CS || FSR_EASU_PS
+#include "AMDFidelityFX/FSR1.0/ffx_a.h"
+
+//
+// App-side Defines
+//
+#ifndef FSR_FP16
+#define FSR_FP16 0
 #endif
+
+//
+// Shader Resources
+//
+Texture2D           FSRInputTexture  : register(t0);
+RWTexture2D<float3> FSROutputTexture : register(u0);
+cbuffer             FSRConstants     : register(b0)
+{
+	uint4 FSRConst0;
+	uint4 FSRConst1;
+	uint4 FSRConst2;
+	uint4 FSRConst3;
+};
+
+SamplerState samLinearClamp : register(s0);
+//{ 
+//	AddressU = CLAMP; 
+//	AddressV = CLAMP; 
+//	AddressW = CLAMP; 
+//	Filter = MIN_MAG_MIP_LINEAR; 
+//};
+
+//
+// FSR Defines & Callbacks
+//
+#if FSR_FP16
+
+	#define A_HALF 1
+	#define FSR_EASU_H 1
+
+	// EASU -----
+	AH4 FsrEasuRH(AF2 p) { AH4 res = FSRInputTexture.GatherRed(samLinearClamp, p, int2(0, 0)); return res; }
+	AH4 FsrEasuGH(AF2 p) { AH4 res = FSRInputTexture.GatherGreen(samLinearClamp, p, int2(0, 0)); return res; }
+	AH4 FsrEasuBH(AF2 p) { AH4 res = FSRInputTexture.GatherBlue(samLinearClamp, p, int2(0, 0)); return res; }
+
+#else // FP32
+
+	// EASU -----
+	#define FSR_EASU_F 1
+	AF4 FsrEasuRF(AF2 p) { AF4 res = FSRInputTexture.GatherRed(samLinearClamp, p, int2(0, 0)); return res; }
+	AF4 FsrEasuGF(AF2 p) { AF4 res = FSRInputTexture.GatherGreen(samLinearClamp, p, int2(0, 0)); return res; }
+	AF4 FsrEasuBF(AF2 p) { AF4 res = FSRInputTexture.GatherBlue(samLinearClamp, p, int2(0, 0)); return res; }
+
+#endif // FSR_FP16
+
+
+
+#include "AMDFidelityFX/FSR1.0/ffx_fsr1.h"
+
+
+//
+// EASU
+//
+[numthreads(64, 1, 1)]
+void FSR_EASU_CSMain(uint3 LocalThreadId : SV_GroupThreadID, uint3 WorkGroupId : SV_GroupID)
+{
+	// Do remapping of local xy in workgroup : 64x1 to 8x8 with rotated 2x2 pixel quads in quad linear.
+	AU2 gxy = ARmp8x8(LocalThreadId.x) + AU2(WorkGroupId.x << 4u, WorkGroupId.y << 4u);
+
+#if FSR_FP16
+	AH3 c;
+
+	FsrEasuH(c, gxy, FSRConst0, FSRConst1, FSRConst2, FSRConst3);
+	FSROutputTexture[ASU2(gxy)] = AH4(c, 1);
+
+	gxy.x += 8u;
+	FsrEasuH(c, gxy, FSRConst0, FSRConst1, FSRConst2, FSRConst3);
+	FSROutputTexture[ASU2(gxy)] = AH4(c, 1);
+
+	gxy.y += 8u;
+	FsrEasuH(c, gxy, FSRConst0, FSRConst1, FSRConst2, FSRConst3);
+	FSROutputTexture[ASU2(gxy)] = AH4(c, 1);
+
+	gxy.x -= 8u;
+	FsrEasuH(c, gxy, FSRConst0, FSRConst1, FSRConst2, FSRConst3);
+	FSROutputTexture[ASU2(gxy)] = AH4(c, 1);
+#else
+	AF3 c;
+
+	FsrEasuF(c, gxy, FSRConst0, FSRConst1, FSRConst2, FSRConst3);
+	FSROutputTexture[ASU2(gxy)] = AF4(c, 1);
+
+	gxy.x += 8u;
+	FsrEasuF(c, gxy, FSRConst0, FSRConst1, FSRConst2, FSRConst3);
+	FSROutputTexture[ASU2(gxy)] = AF4(c, 1);
+
+	gxy.y += 8u;
+	FsrEasuF(c, gxy, FSRConst0, FSRConst1, FSRConst2, FSRConst3);
+	FSROutputTexture[ASU2(gxy)] = AF4(c, 1);
+
+	gxy.x -= 8u;
+	FsrEasuF(c, gxy, FSRConst0, FSRConst1, FSRConst2, FSRConst3);
+	FSROutputTexture[ASU2(gxy)] = AF4(c, 1);
+#endif
+}
+
+#endif // FFXCAS_CS || FFXCAS_PS
+
+
+
+//--------------------------------------------------------------------------------------
+//
+// FidelityFX SUPER RESOLUTION 1.0 / RCAS
+//
+//--------------------------------------------------------------------------------------
+#if FSR_RCAS_CS || FSR_RCAS_PS
+Texture2D           RCASInputTexture  : register(t0);
+RWTexture2D<float3> RCASOutputTexture : register(u0);
+cbuffer             RCASConstants : register(b0)
+{
+	uint4 RCASConst0;
+}
+
+#include "AMDFidelityFX/FSR1.0/ffx_a.h"
+
+
+//
+// FSR Defines & Callbacks
+//
+#if FSR_FP16
+
+	#define A_HALF 1
+	#define FSR_RCAS_H 1
+
+	// RCAS -----
+	AH4 FsrRcasLoadH(ASW2 p) { return FSRInputTexture.Load(ASW3(ASW2(p), 0)); }
+	void FsrRcasInputH(inout AH1 r, inout AH1 g, inout AH1 b) {}
+
+#else
+
+	// RCAS -----
+	#define FSR_RCAS_F 1
+	AF4 FsrRcasLoadF(ASU2 p) { return RCASInputTexture.Load(int3(ASU2(p), 0)); }
+	void FsrRcasInputF(inout AF1 r, inout AF1 g, inout AF1 b) {}
+
+#endif // FSR_FP16
+
+#include "AMDFidelityFX/FSR1.0/ffx_fsr1.h"
+//
+// RCAS
+//
+[numthreads(64, 1, 1)]
+void FSR_RCAS_CSMain(uint3 LocalThreadId : SV_GroupThreadID, uint3 WorkGroupId : SV_GroupID)
+{
+	// Do remapping of local xy in workgroup : 64x1 to 8x8 with rotated 2x2 pixel quads in quad linear.
+	AU2 gxy = ARmp8x8(LocalThreadId.x) + AU2(WorkGroupId.x << 4u, WorkGroupId.y << 4u);
+
+#if FSR_FP16
+	AH3 c;
+
+	FsrRcasH(c.r, c.g, c.b, gxy, Const0);
+	RCASOutputTexture[ASU2(gxy)] = AH4(c, 1);
+
+	gxy.x += 8u;
+	FsrRcasH(c.r, c.g, c.b, gxy, Const0);
+	RCASOutputTexture[ASU2(gxy)] = AH4(c, 1);
+
+	gxy.y += 8u;
+	FsrRcasH(c.r, c.g, c.b, gxy, Const0);
+	RCASOutputTexture[ASU2(gxy)] = AH4(c, 1);
+
+	gxy.x -= 8u;
+	FsrRcasH(c.r, c.g, c.b, gxy, Const0);
+	RCASOutputTexture[ASU2(gxy)] = AH4(c, 1);
+#else
+	AF3 c;
+
+	FsrRcasF(c.r, c.g, c.b, gxy, RCASConst0);
+	RCASOutputTexture[ASU2(gxy)] = AF4(c, 1);
+
+	gxy.x += 8u;
+	FsrRcasF(c.r, c.g, c.b, gxy, RCASConst0);
+	RCASOutputTexture[ASU2(gxy)] = AF4(c, 1);
+
+	gxy.y += 8u;
+	FsrRcasF(c.r, c.g, c.b, gxy, RCASConst0);
+	RCASOutputTexture[ASU2(gxy)] = AF4(c, 1);
+
+	gxy.x -= 8u;
+	FsrRcasF(c.r, c.g, c.b, gxy, RCASConst0);
+	RCASOutputTexture[ASU2(gxy)] = AF4(c, 1);
+#endif
+}
+#endif // FSR_RCAS_CS || FSR_RCAS_PS
+
 
 //--------------------------------------------------------------------------------------
 //

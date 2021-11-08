@@ -18,6 +18,7 @@
 
 #include "../VQEngine.h"
 #include "../GPUMarker.h"
+#include "Windows.h"
 
 #define VERBOSE_LOGGING 0
 
@@ -47,7 +48,7 @@ void VQEngine::MainThread_HandleEvents()
 		case MOUSE_CAPTURE_EVENT:
 		{
 			std::shared_ptr<SetMouseCaptureEvent> p = std::static_pointer_cast<SetMouseCaptureEvent>(pEvent);
-			this->SetMouseCaptureForWindow(p->hwnd, p->bCapture);
+			this->SetMouseCaptureForWindow(p->hwnd, p->bCapture, p->bReleaseAtCapturedPosition);
 		} break;
 		case HANDLE_WINDOW_TRANSITIONS_EVENT:
 		{
@@ -90,16 +91,17 @@ void VQEngine::HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWin
 		pWin->ToggleWindowedFullscreen(&mRenderer.GetWindowSwapChain(hwnd));
 		
 		if (bHandlingMainWindowTransition)
-			SetMouseCaptureForWindow(hwnd, true);
+			SetMouseCaptureForWindow(hwnd, true, true);
 	}
 }
 
-void VQEngine::SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse)
+void VQEngine::SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse, bool bReleaseAtCapturedPosition)
 {
 	auto& pWin = this->GetWindow(hwnd);
-
-	if(mInputStates.find(hwnd) != mInputStates.end())
-		mInputStates.at(hwnd).SetInputBypassing(!bCaptureMouse);
+	if (mInputStates.find(hwnd) == mInputStates.end())
+	{
+		Log::Error("Warning: couldn't find InputState for hwnd=0x%x", hwnd);
+	}
 	
 	pWin->SetMouseCapture(bCaptureMouse);
 
@@ -111,10 +113,13 @@ void VQEngine::SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse)
 #endif
 	}
 	else
-	{ 
-		SetCursorPos(this->mMouseCapturePosition.x, this->mMouseCapturePosition.y);
+	{
+		if (bReleaseAtCapturedPosition)
+		{
+			SetCursorPos(this->mMouseCapturePosition.x, this->mMouseCapturePosition.y);
+		}
 #if VERBOSE_LOGGING
-		Log::Info("Releasing Mouse: Setting Position=(%d, %d)", this->mMouseCapturePosition.x, this->mMouseCapturePosition.y);
+		Log::Info("Releasing Mouse: Setting Position=(%d, %d), bReleaseAtCapturedPosition=%d", this->mMouseCapturePosition.x, this->mMouseCapturePosition.y, bReleaseAtCapturedPosition);
 #endif
 	}
 }
@@ -126,6 +131,55 @@ void VQEngine::SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse)
 // UPDATE THREAD
 //
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
+#include "imgui.h"
+static void UpdateImGui_KeyUp(KeyCode key, bool bIsMouseKey)
+{
+	ImGuiIO& io = ImGui::GetIO();
+	if (bIsMouseKey)
+	{
+		const Input::EMouseButtons mouseBtn = static_cast<Input::EMouseButtons>(key);
+		int btn = 0;
+		if (mouseBtn & Input::EMouseButtons::MOUSE_BUTTON_LEFT  ) btn = 0;
+		if (mouseBtn & Input::EMouseButtons::MOUSE_BUTTON_RIGHT ) btn = 1;
+		if (mouseBtn & Input::EMouseButtons::MOUSE_BUTTON_MIDDLE) btn = 2;
+		io.MouseDown[btn] = false;
+	}
+}
+static void UpdateImGui_KeyDown(KeyDownEventData data)
+{
+	ImGuiIO& io = ImGui::GetIO();
+	const auto& key = data.mouse.wparam;
+	if (data.mouse.bMouse)
+	{
+		const Input::EMouseButtons mouseBtn = static_cast<Input::EMouseButtons>(key);
+		int btn = 0;
+		if (mouseBtn & Input::EMouseButtons::MOUSE_BUTTON_LEFT  ) btn = 0;
+		if (mouseBtn & Input::EMouseButtons::MOUSE_BUTTON_RIGHT ) btn = 1;
+		if (mouseBtn & Input::EMouseButtons::MOUSE_BUTTON_MIDDLE) btn = 2;
+		io.MouseDown[btn] = true;
+	}
+}
+static void UpdateImGui_MousePosition(HWND hwnd)
+{
+	ImGuiIO& io = ImGui::GetIO();
+	POINT cursor_point;
+	if (GetCursorPos(&cursor_point))
+	{
+		if (ScreenToClient(hwnd, &cursor_point))
+		{
+			io.MousePos.x = static_cast<float>(cursor_point.x);
+			io.MousePos.y = static_cast<float>(cursor_point.y);
+			//Log::Info("io.MousePos.xy = %.2f %.2f", io.MousePos.x, io.MousePos.y);
+		}
+	}
+}
+static void UpdateImGui_MousePosition1(long x, long y)
+{
+	ImGuiIO& io = ImGui::GetIO();
+	io.MousePos.x = static_cast<float>(x);
+	io.MousePos.y = static_cast<float>(y);
+}
+
 void VQEngine::UpdateThread_HandleEvents()
 {
 	// Swap event recording buffers so we can read & process a limited number of events safely.
@@ -148,17 +202,21 @@ void VQEngine::UpdateThread_HandleEvents()
 		{
 			std::shared_ptr<KeyDownEvent> p = std::static_pointer_cast<KeyDownEvent>(pEvent);
 			mInputStates.at(p->hwnd).UpdateKeyDown(p->data);
+			UpdateImGui_KeyDown(p->data);
+
 		} break;
 		case KEY_UP_EVENT:
 		{
 			std::shared_ptr<KeyUpEvent> p = std::static_pointer_cast<KeyUpEvent>(pEvent);
 			mInputStates.at(p->hwnd).UpdateKeyUp(p->wparam, p->bMouseEvent);
+			UpdateImGui_KeyUp(p->wparam, p->bMouseEvent);
 		} break;
 
 		case MOUSE_MOVE_EVENT:
 		{
 			std::shared_ptr<MouseMoveEvent> p = std::static_pointer_cast<MouseMoveEvent>(pEvent);
 			mInputStates.at(p->hwnd).UpdateMousePos(p->x, p->y, 0);
+			UpdateImGui_MousePosition1(p->x, p->y);
 		} break;
 		case MOUSE_SCROLL_EVENT:
 		{
@@ -168,12 +226,31 @@ void VQEngine::UpdateThread_HandleEvents()
 		case MOUSE_INPUT_EVENT:
 		{
 			std::shared_ptr<MouseInputEvent> p = std::static_pointer_cast<MouseInputEvent>(pEvent);
+
+			// discard the scroll event if its outside the application window
+			if (p->data.scrollDelta)
+			{
+				POINT pt; GetCursorPos(&pt);
+				ScreenToClient(p->hwnd, &pt);
+				
+				const bool bOutOfWindow = pt.x < 0 || pt.y < 0 
+					|| pt.x > this->GetWindow(p->hwnd)->GetWidth() 
+					|| pt.y > this->GetWindow(p->hwnd)->GetHeight();
+				if (bOutOfWindow)
+				{
+					p->data.scrollDelta = 0;
+				}
+			}
+
 			mInputStates.at(p->hwnd).UpdateMousePos_Raw(
 				  p->data.relativeX
 				, p->data.relativeY
 				, static_cast<short>(p->data.scrollDelta)
-				, GetWindow(p->hwnd)->IsMouseCaptured()
 			);
+
+			ImGuiIO& io = ImGui::GetIO();
+			UpdateImGui_MousePosition(pEvent->hwnd);
+			io.MouseWheel += p->data.scrollDelta;
 		} break;
 		case WINDOW_RESIZE_EVENT: UpdateThread_HandleWindowResizeEvent(pEvent);  break;
 		}
@@ -181,15 +258,13 @@ void VQEngine::UpdateThread_HandleEvents()
 
 }
 
-#define A_CPU 1
-#include "Shaders/AMDFidelityFX/CAS/ffx_a.h"
-#include "Shaders/AMDFidelityFX/CAS/ffx_cas.h"
 void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent)
 {
 	std::shared_ptr<WindowResizeEvent> p = std::static_pointer_cast<WindowResizeEvent>(pEvent);
 
-	const float fWidth  = static_cast<float>(p->width );
-	const float fHeight = static_cast<float>(p->height);
+	const uint uWidth  = p->width ;
+	const uint uHeight = p->height;
+
 	if (p->hwnd == mpWinMain->GetHWND())
 	{
 		SwapChain& Swapchain = mRenderer.GetWindowSwapChain(p->hwnd);
@@ -198,17 +273,29 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 		// Update Camera Projection Matrices
 		Camera& cam = mpScene->GetActiveCamera(); // TODO: all cameras?
 		FProjectionMatrixParameters UpdatedProjectionMatrixParams = cam.GetProjectionParameters();
-		UpdatedProjectionMatrixParams.ViewportWidth  = fWidth;
-		UpdatedProjectionMatrixParams.ViewportHeight = fHeight;
+		UpdatedProjectionMatrixParams.ViewportWidth  = static_cast<float>(uWidth);
+		UpdatedProjectionMatrixParams.ViewportHeight = static_cast<float>(uHeight);
 		cam.SetProjectionMatrix(UpdatedProjectionMatrixParams);
 
 		// Update PostProcess Data
 		for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
 		{
-			FPostProcessParameters::FFFXCAS& CASParams = mpScene->GetPostProcessParameters(i).FFXCASParams;
-			CasSetup(&CASParams.CASConstantBlock[0], &CASParams.CASConstantBlock[4], CASParams.CASSharpen, fWidth, fHeight, fWidth, fHeight);
+			FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(i);
+
+			// Update FidelityFX constant blocks
+			if (PPParams.IsFFXCASEnabled())
+			{
+				PPParams.FFXCASParams.UpdateCASConstantBlock(uWidth, uHeight, uWidth, uHeight);
+			}
+			if (PPParams.IsFSREnabled())
+			{
+				const float fResolutionScale = PPParams.FFSR_EASUParams.GetScreenPercentage();
+				const uint InputWidth  = static_cast<uint>(fResolutionScale * uWidth);
+				const uint InputHeight = static_cast<uint>(fResolutionScale * uHeight);
+				PPParams.FFSR_EASUParams.UpdateEASUConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, uWidth, uHeight);
+				PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
+			}
 		}
-		
 	}
 }
 
@@ -232,6 +319,7 @@ void VQEngine::RenderThread_HandleEvents()
 	//   while we're spinning on the queue items below, and cause render thread to stall while, say, resizing.
 	mEventQueue_WinToVQE_Renderer.SwapBuffers();
 	std::queue<EventPtr_t>& q = mEventQueue_WinToVQE_Renderer.GetBackContainer();
+
 	if (q.empty())
 		return;
 
@@ -275,7 +363,7 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	const bool         bIsWindowMinimized = WIDTH == 0 && HEIGHT == 0;
 	const bool                  bIsClosed = pWnd->IsClosed();
 	const bool      bFullscreenTransition = pWnd->GetFullscreenHeight() == HEIGHT && pWnd->GetFullscreenWidth() == WIDTH;
-
+	const bool          bUseHDRRenderPath = this->ShouldRenderHDR(hwnd);
 
 	if (bIsClosed || bIsWindowMinimized)
 	{
@@ -290,7 +378,9 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 
 	const FSetHDRMetaDataParams HDRMetaData = this->GatherHDRMetaDataParameters(hwnd);
 
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mEventQueue_WinToVQE_Update.AddItem(pResizeEvent);
+#endif
 
 	Swapchain.WaitForGPU();
 	Swapchain.Resize(WIDTH, HEIGHT, Swapchain.GetFormat());
@@ -306,9 +396,14 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	pWnd->OnResize(WIDTH, HEIGHT);
 	mRenderer.OnWindowSizeChanged(hwnd, WIDTH, HEIGHT);
 
-	RenderThread_UnloadWindowSizeDependentResources(hwnd);
-	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT);
+	const auto& PPParams = this->mpScene->GetPostProcessParameters(0);
+	const bool bFSREnabled = PPParams.IsFSREnabled() && !bUseHDRRenderPath; // TODO: remove this when FSR-HDR is implemented
+	const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
 
+	const float fResolutionScale = bUpscaling ? PPParams.FFSR_EASUParams.GetScreenPercentage() : 1.0f;
+
+	RenderThread_UnloadWindowSizeDependentResources(hwnd);
+	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT, fResolutionScale);
 }
 
 void VQEngine::RenderThread_HandleWindowCloseEvent(const IEvent* pEvent)
@@ -326,7 +421,9 @@ void VQEngine::RenderThread_HandleWindowCloseEvent(const IEvent* pEvent)
 	if (hwnd == mpWinMain->GetHWND())
 	{
 		mbStopAllThreads.store(true);
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 		RenderThread_SignalUpdateThread();
+#endif
 	}
 }
 
@@ -361,9 +458,19 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 
 	Swapchain.WaitForGPU(); // make sure GPU is finished
 
+	const auto& PPParams = this->mpScene->GetPostProcessParameters(0);
+	const bool bFSREnabled = PPParams.IsFSREnabled();
+	const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
+
+	const float fResolutionScale = bUpscaling ? PPParams.FFSR_EASUParams.GetScreenPercentage() : 1.0f;
 
 	RenderThread_UnloadWindowSizeDependentResources(hwnd);
-	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT);
+	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT, fResolutionScale);
+
+
+	//const bool bCapture = true;
+	//const bool bVisible = true;
+	//mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bCapture, bVisible));
 
 	//
 	// EXCLUSIVE FULLSCREEN
@@ -392,10 +499,6 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 				Swapchain.Resize(WndSettings.Width, WndSettings.Height, Swapchain.GetFormat());
 			}
 		}
-
-		const bool bCapture = true;
-		const bool bVisible = true;
-		mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bCapture, bVisible));
 	}
 
 	//
@@ -404,23 +507,16 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 	else
 	{
 		pWnd->ToggleWindowedFullscreen(&Swapchain);
-
-		const bool bCapture = true;
-		const bool bVisible = true;
-		
-		// only capture/release mouse for the main window
-		if(hwnd == mpWinMain->GetHWND())
-			mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bFullscreenStateToSet, bVisible));
 	}
 
 }
 
 void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
 {
-	const SetVSyncEvent*         pToggleFSEvent = static_cast<const SetVSyncEvent*>(pEvent);
-	HWND                                   hwnd = pToggleFSEvent->hwnd;
-	const bool                      bVsyncState = pToggleFSEvent->bToggleValue;
-	SwapChain&                        Swapchain = mRenderer.GetWindowSwapChain(pToggleFSEvent->hwnd);
+	const SetVSyncEvent*      pToggleVSyncEvent = static_cast<const SetVSyncEvent*>(pEvent);
+	HWND                                   hwnd = pToggleVSyncEvent->hwnd;
+	const bool                      bVsyncState = pToggleVSyncEvent->bToggleValue;
+	SwapChain&                        Swapchain = mRenderer.GetWindowSwapChain(pToggleVSyncEvent->hwnd);
 	const FWindowSettings&          WndSettings = GetWindowSettings(hwnd);
 	std::unique_ptr<Window>&               pWnd = GetWindow(hwnd);
 	const bool   bExclusiveFullscreenTransition = WndSettings.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN;
@@ -456,6 +552,7 @@ void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
 		Swapchain.EnsureSwapChainColorSpace(Swapchain.GetFormat() == DXGI_FORMAT_R16G16B16A16_FLOAT ? _16 : _8, false);
 	}
 
+	mSettings.gfx.bVsync = bVsyncState;
 	Log::Info("Toggle VSync: %d", bVsyncState);
 }
 

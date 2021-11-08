@@ -115,7 +115,7 @@ void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, cons
         IID_PPV_ARGS(&mpTexture));
     if (FAILED(hr))
     {
-        Log::Error("Couldn't create texture: ", desc.TexName.c_str());
+        Log::Error("Couldn't create texture: %s", desc.TexName.c_str());
         return;
     }
     SetName(mpTexture, desc.TexName.c_str());

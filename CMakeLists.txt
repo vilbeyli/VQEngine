@@ -23,12 +23,12 @@ set (Resource
 set (Scenes 
     "Data/Levels/Default.xml"
     "Data/Levels/Sponza.xml"
-    "Data/Levels/GeometryUnitTest.xml"
+    "Data/Levels/EnvironmentMapUnitTest.xml"
     "Data/Levels/StressTest.xml"
     "Source/Scenes/Scenes.h"
     "Source/Scenes/DefaultScene.cpp"
     "Source/Scenes/SponzaScene.cpp"
-    "Source/Scenes/GeometryUnitTestScene.cpp"
+    "Source/Scenes/EnvironmentMapUnitTestScene.cpp"
     "Source/Scenes/StressTestScene.cpp"
 )
 
@@ -70,6 +70,9 @@ set (Shaders
     "Shaders/CubemapConvolution.hlsl"
     "Shaders/GaussianBlur.hlsl"
     "Shaders/AMDFidelityFX.hlsl"
+    "Shaders/UI.hlsl"
+    "Shaders/UIHDRComposite.hlsl"
+    "Shaders/HDR.hlsl"
 )
 
 #
@@ -90,6 +93,7 @@ set (CoreFiles
     "Source/Engine/Core/Input.h"
     "Source/Engine/Core/Events.h"
     "Source/Engine/Core/Types.h"
+    "Source/Engine/Core/RenderCommands.h"
     "Source/Engine/Core/Memory.h"
 
     "Source/Engine/Core/Platform.cpp"
@@ -115,6 +119,7 @@ set (SceneFiles
     "Source/Engine/Scene/Material.h"
     "Source/Engine/Scene/Model.h"
     "Source/Engine/Scene/GameObject.h"
+    "Source/Engine/Scene/Serialization.h"
 
     "Source/Engine/Scene/Scene.cpp"
     "Source/Engine/Scene/SceneLoading.cpp"
@@ -125,8 +130,12 @@ set (SceneFiles
     "Source/Engine/Scene/Model.cpp"
     "Source/Engine/Scene/GameObject.cpp"
     "Source/Engine/Scene/Transform.cpp"
-    "Source/Engine/Scene/Quaternion.cpp"
-    
+    "Source/Engine/Scene/Quaternion.cpp"    
+)
+
+set (PostProcessFiles
+    "Source/Engine/PostProcess/PostProcess.h"
+    "Source/Engine/PostProcess/PostProcess.cpp"
 )
 
 set (SourceVQE 
@@ -138,12 +147,16 @@ set (SourceVQE
     "Source/Engine/Geometry.h"
     "Source/Engine/AssetLoader.h"
     "Source/Engine/GPUMarker.h"
+    "Source/Engine/VQUI.h"
 
     "Source/Engine/Main.cpp"
     "Source/Engine/VQEngine_Main.cpp"
     "Source/Engine/VQEngine_Render.cpp"
     "Source/Engine/VQEngine_RenderCommands.cpp"
     "Source/Engine/VQEngine_Update.cpp"
+    "Source/Engine/VQEngine_Input.cpp"
+    "Source/Engine/VQEngine_Simulation.cpp"
+    "Source/Engine/VQUI.cpp"
     "Source/Engine/EnvironmentMap.cpp"
     "Source/Engine/Geometry.cpp"
     "Source/Engine/Math.cpp"
@@ -152,12 +165,18 @@ set (SourceVQE
     "Source/Engine/GPUMarker.cpp"
 )
 
-set (FidelityFXShaders
+set (FFX_CAS_Shaders
     "Shaders/AMDFidelityFX/CAS/ffx_a.h"
     "Shaders/AMDFidelityFX/CAS/ffx_cas.h"
-#    "Shaders/FidelityFX/SPD/ffx_spd.h"
 )
-
+set (FFX_FSR_Shaders
+    "Shaders/AMDFidelityFX/FSR1.0/ffx_a.h"
+    "Shaders/AMDFidelityFX/FSR1.0/ffx_fsr1.h"
+)
+set (FFX_SPD_Shaders
+    "Shaders/FidelityFX/SPD/ffx_a.h"
+    "Shaders/FidelityFX/SPD/ffx_spd.h"
+)
 set (LibsIncl
     "Libs/"
 )
@@ -191,25 +210,29 @@ add_subdirectory(Source/Renderer)
 #    -DASSIMP_INSTALL=OFF
 #)
 add_subdirectory(Libs/assimp)
+add_subdirectory(Libs/imgui)
 
 source_group("Config"   FILES ${Config})
 source_group("Resource" FILES ${Resource})
 source_group("Icons"    FILES ${Icons})
 source_group("Shaders"  FILES ${Shaders})
-source_group("Shaders\\AMD-FidelityFX"  FILES ${FidelityFXShaders})
+source_group("Shaders\\AMD-FidelityFX\\CAS"  FILES ${FFX_CAS_Shaders})
+source_group("Shaders\\AMD-FidelityFX\\FSR1" FILES ${FFX_FSR_Shaders})
 source_group("Scenes"   FILES ${Scenes})
 source_group("Materials" FILES ${Materials})
 source_group("Source\\RenderPass" FILES ${RenderPassFiles})
 source_group("Source\\Core" FILES ${CoreFiles})
 source_group("Source\\Scene" FILES ${SceneFiles})
+source_group("Source\\PostProcess" FILES ${PostProcessFiles})
 source_group("Source" FILES ${SourceVQE})
-source_group("Libs\\AMDFidelityFX\\CACAO"   FILES ${LibFFX})
+source_group("Libs\\AMD-FidelityFX\\CACAO"   FILES ${LibFFX})
 
 set_source_files_properties(${Config} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Materials} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Scenes} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${FidelityFXShaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${FFX_CAS_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${FFX_FSR_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${CoreFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${RenderPassFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${SceneFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
@@ -224,7 +247,7 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/DirectXCompiler/lib/x64)
 add_definitions(-DFFX_CACAO_ENABLE_D3D12)
 
 # Create a library with the project name that is build with the Headers and Source files
-add_executable( ${PROJECT_NAME} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} ${Materials} ${FidelityFXShaders} ${LibFFX} ${RenderPassFiles} ${CoreFiles} ${SceneFiles})
+add_executable( ${PROJECT_NAME} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} ${Materials} ${FFX_FSR_Shaders} ${FFX_CAS_Shaders} ${LibFFX} ${RenderPassFiles} ${CoreFiles} ${PostProcessFiles} ${SceneFiles})
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY} )
 
@@ -252,12 +275,13 @@ set_target_properties(zlibstatic PROPERTIES FOLDER Libs/assimp)
 #set_target_properties(VQRenderer PROPERTIES FOLDER Libs)
 #set_target_properties(VQUtils PROPERTIES FOLDER Libs)
 set_target_properties(D3D12MA PROPERTIES FOLDER Libs)
+set_target_properties(ImGUI PROPERTIES FOLDER Libs)
 
 # Make sure the compiler can find include files for the libraries
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${Includes})
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${LibsIncl})
 
-target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer assimp WinPixEventRuntime)
+target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer assimp WinPixEventRuntime ImGUI)
 
 
 add_custom_command(TARGET ${PROJECT_NAME} PRE_BUILD

@@ -38,8 +38,13 @@ using namespace DirectX;
 //------------------------------------------------------------------------------------------------------------------------------
 bool IsSphereIntersectingFurstum(const FFrustumPlaneset& FrustumPlanes, const FSphere& Sphere)
 {
+#if 1 
+	// approximate sphere as a bounding box and utilize bounding box 
+	// until the implementaiton is complete for sphere-frustum check below
+	return IsBoundingBoxIntersectingFrustum(FrustumPlanes, FBoundingBox(Sphere));
+#else
 	bool bIntersecting = true;
-	
+
 	// check each frustum plane against sphere
 	for (size_t i = 0; i < 6; ++i)
 	{
@@ -79,8 +84,8 @@ bool IsSphereIntersectingFurstum(const FFrustumPlaneset& FrustumPlanes, const FS
 	}
 
 	assert(false); // not done yet
-	return true; // TODO: remove
-	return bIntersecting; 
+	return bIntersecting;
+#endif
 }
 
 bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes, const FBoundingBox& BBox)
@@ -113,6 +118,7 @@ bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes, con
 
 bool IsFrustumIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes0, const FFrustumPlaneset& FrustumPlanes1)
 {
+	return true; // TODO:
 	assert(false); // not done yet
 	return true;
 }
@@ -165,14 +171,19 @@ void FFrustumCullWorkerContext::ProcessWorkItems_SingleThreaded()
 
 static std::vector<std::pair<size_t, size_t>> PartitionWorkItemsIntoRanges(size_t NumWorkItems, size_t NumWorkerThreadCount)
 {
-	std::vector<std::pair<size_t, size_t>> vRanges(NumWorkerThreadCount); // each worker thread gets a range
-
 	// @NumWorkItems is distributed as equally as possible between all @NumWorkerThreadCount threads.
 	// Two numbers are determined
 	// - WorkItemChunkSize: number of work items each thread will get equally
 	// - WorkItemRemainderSize : number of +1's to be added to each worker
 	const size_t WorkItemChunkSize = NumWorkItems / NumWorkerThreadCount; // amount of work each worker is to get, 
 	const size_t RemainingWorkItems = NumWorkItems % NumWorkerThreadCount;
+
+
+	std::vector<std::pair<size_t, size_t>> vRanges(WorkItemChunkSize == 0 
+		? NumWorkItems  // if NumWorkItems < NumWorkerThreadCount, then only create ranges according to NumWorkItems
+		: NumWorkerThreadCount // each worker thread gets a range
+	); 
+
 
 	size_t iBegin = 0;
 	size_t iEndExclusive = iBegin + WorkItemChunkSize + (RemainingWorkItems > 0 ? 1 : 0);
@@ -230,6 +241,7 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 			}
 			const size_t& iBegin = Range.first;
 			const size_t& iEnd = Range.second; // inclusive
+			assert(iBegin <= iEnd); // ensure work context bounds
 
 			WorkerThreadPool.AddTask([=]() 
 			{
@@ -315,6 +327,14 @@ std::array<DirectX::XMFLOAT3, 8> FBoundingBox::GetCornerPointsF3() const
 		XMFLOAT3(ExtentMin.x, ExtentMax.y, ExtentMax.z)
 	};
 }
+FBoundingBox::FBoundingBox(const FSphere& s)
+{
+	const XMFLOAT3& P = s.CenterPosition;
+	const float   & R = s.Radius;
+	this->ExtentMax = XMFLOAT3(P.x + R, P.y + R, P.z + R);
+	this->ExtentMin = XMFLOAT3(P.x - R, P.y - R, P.z - R);
+}
+
 std::array<DirectX::XMVECTOR, 8> FBoundingBox::GetCornerPointsV4() const
 {
 	std::array<DirectX::XMFLOAT4, 8> Points_F4 = GetCornerPointsF4();

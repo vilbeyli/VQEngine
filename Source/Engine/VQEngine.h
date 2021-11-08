@@ -31,6 +31,7 @@
 #include "RenderPass/DepthPrePass.h"
 #include "Settings.h"
 #include "AssetLoader.h"
+#include "VQUI.h"
 
 
 #include "Libs/VQUtils/Source/Multithreading.h"
@@ -40,8 +41,20 @@
 
 #include <memory>
 
+//--------------------------------------------------------------------
+// MUILTI-THREADING 
+//--------------------------------------------------------------------
+
+// Pipelined - saparate Update & Render threads
+// Otherwise, Simulation thread for update + render
+#define VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS 0
+
+
 // Outputs Render/Update thread sync values on each Tick()
 #define DEBUG_LOG_THREAD_SYNC_VERBOSE 0
+//--------------------------------------------------------------------
+
+struct ImGuiContext;
 
 //
 // DATA STRUCTS
@@ -55,7 +68,7 @@ struct FLoadingScreenData
 	std::vector<SRV_ID> SRVs;
 
 	SRV_ID GetSelectedLoadingScreenSRV_ID() const;
-	void RotateLoadingScreenImage();
+	void RotateLoadingScreenImageIndex();
 
 	// TODO: animation resources
 };
@@ -128,16 +141,22 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	TextureID Tex_PostProcess_BlurOutput       = INVALID_ID;
 	TextureID Tex_PostProcess_TonemapperOut    = INVALID_ID;
 	TextureID Tex_PostProcess_FFXCASOut        = INVALID_ID;
+	TextureID Tex_PostProcess_FSR_EASUOut      = INVALID_ID;
+	TextureID Tex_PostProcess_FSR_RCASOut      = INVALID_ID;
+	TextureID Tex_UI_SDR                       = INVALID_ID;
 
 	RTV_ID    RTV_SceneColorMSAA               = INVALID_ID;
 	RTV_ID    RTV_SceneColor                   = INVALID_ID;
 	RTV_ID    RTV_SceneNormalsMSAA             = INVALID_ID;
 	RTV_ID    RTV_SceneNormals                 = INVALID_ID;
+	RTV_ID    RTV_UI_SDR                       = INVALID_ID;
 
 	SRV_ID    SRV_PostProcess_BlurIntermediate = INVALID_ID;
 	SRV_ID    SRV_PostProcess_BlurOutput       = INVALID_ID;
 	SRV_ID    SRV_PostProcess_TonemapperOut    = INVALID_ID;
 	SRV_ID    SRV_PostProcess_FFXCASOut        = INVALID_ID;
+	SRV_ID    SRV_PostProcess_FSR_EASUOut      = INVALID_ID;
+	SRV_ID    SRV_PostProcess_FSR_RCASOut      = INVALID_ID;
 	SRV_ID    SRV_ShadowMaps_Spot              = INVALID_ID;
 	SRV_ID    SRV_ShadowMaps_Point             = INVALID_ID;
 	SRV_ID    SRV_ShadowMaps_Directional       = INVALID_ID;
@@ -146,12 +165,15 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	SRV_ID    SRV_SceneDepth                   = INVALID_ID;
 	SRV_ID    SRV_SceneDepthMSAA               = INVALID_ID;
 	SRV_ID    SRV_FFXCACAO_Out                 = INVALID_ID;
+	SRV_ID    SRV_UI_SDR                       = INVALID_ID;
 
 	UAV_ID    UAV_FFXCACAO_Out                 = INVALID_ID;
 	UAV_ID    UAV_PostProcess_BlurIntermediate = INVALID_ID;
 	UAV_ID    UAV_PostProcess_BlurOutput       = INVALID_ID;
 	UAV_ID    UAV_PostProcess_TonemapperOut    = INVALID_ID;
 	UAV_ID    UAV_PostProcess_FFXCASOut        = INVALID_ID;
+	UAV_ID    UAV_PostProcess_FSR_EASUOut      = INVALID_ID;
+	UAV_ID    UAV_PostProcess_FSR_RCASOut      = INVALID_ID;
 	UAV_ID    UAV_SceneDepth                   = INVALID_ID;
 
 	DSV_ID    DSV_SceneDepth                   = INVALID_ID;
@@ -189,6 +211,12 @@ struct FResourceNames
 	std::vector<std::string>    mSceneNames;
 };
 
+struct FRenderStats
+{
+	uint NumDraws;
+	uint NumDispatches;
+};
+
 //
 // VQENGINE
 //
@@ -210,11 +238,9 @@ public:
 	void OnWindowMove(HWND hwnd_, int x, int y) override;
 	void OnDisplayChange(HWND hwnd_, int ImageDepthBitsPerPixel, int ScreenWidth, int ScreenHeight) override;
 
-	// Keyboard Input Events
+	// Keyboard & Mouse Events
 	void OnKeyDown(HWND hwnd, WPARAM wParam) override;
 	void OnKeyUp(HWND hwnd, WPARAM wParam) override;
-	
-	// Mouse Input Events
 	void OnMouseButtonDown(HWND hwnd, WPARAM wParam, bool bIsDoubleClick) override;
 	void OnMouseButtonUp(HWND hwnd, WPARAM wParam) override;
 	void OnMouseScroll(HWND hwnd, short scroll) override;
@@ -233,12 +259,15 @@ public:
 	// Render Thread
 	// ---------------------------------------------------------
 	void RenderThread_Main();
+	void RenderThread_Tick();
 	void RenderThread_Inititalize();
 	void RenderThread_Exit();
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	void RenderThread_WaitForUpdateThread();
 	void RenderThread_SignalUpdateThread();
+#endif
 
-	void RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height);
+	void RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height, float ResolutionScale);
 	void RenderThread_LoadResources();
 	void RenderThread_UnloadWindowSizeDependentResources(HWND hwnd);
 
@@ -264,14 +293,14 @@ public:
 	// ---------------------------------------------------------
 	void  UpdateThread_Main();
 	void  UpdateThread_Inititalize();
+	void  UpdateThread_Tick(const float dt);
 	void  UpdateThread_Exit();
 	float UpdateThread_WaitForRenderThread();
 	void  UpdateThread_SignalRenderThread();
 
 	// PreUpdate()
-	// - Updates timer
 	// - Updates input state reading from Main Thread's input queue
-	void UpdateThread_PreUpdate(float& dt);
+	void UpdateThread_PreUpdate();
 	
 	// Update()
 	// - Updates program state (init/load/sim/unload/exit)
@@ -286,6 +315,15 @@ public:
 	// - Computes visibility per FSceneView
 	void UpdateThread_PostUpdate();
 
+
+
+	// ---------------------------------------------------------
+	// Simulation Thread
+	// ---------------------------------------------------------
+	void SimulationThread_Main();
+	void SimulationThread_Initialize();
+	void SimulationThread_Exit();
+	void SimulationThread_Tick(const float dt);
 
 //-----------------------------------------------------------------------
 	
@@ -326,17 +364,24 @@ private:
 	//-------------------------------------------------------------------------------------------------
 
 	// threads
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	std::thread                     mRenderThread;
 	std::thread                     mUpdateThread;
 	ThreadPool                      mWorkers_Update;
 	ThreadPool                      mWorkers_Render;
+#else
+	std::thread                     mSimulationThread;
+	ThreadPool                      mWorkers_Simulation;
+#endif
 	ThreadPool                      mWorkers_ModelLoading;
 	ThreadPool                      mWorkers_TextureLoading;
 
 	// sync
 	std::atomic<bool>               mbStopAllThreads;
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	std::unique_ptr<Semaphore>      mpSemUpdate;
 	std::unique_ptr<Semaphore>      mpSemRender;
+#endif
 	
 	// windows
 #if 0 // TODO
@@ -352,18 +397,16 @@ private:
 	std::unordered_map<HWND, Input> mInputStates;
 
 	// events 
+	EventQueue_t                    mEventQueue_VQEToWin_Main;
 	EventQueue_t                    mEventQueue_WinToVQE_Renderer;
 	EventQueue_t                    mEventQueue_WinToVQE_Update;
-	EventQueue_t                    mEventQueue_VQEToWin_Main;
 
-	// render
+	// renderer
 	VQRenderer                      mRenderer;
+
+	// assets 
 	AssetLoader                     mAssetLoader;
-
-	// data: geometry
 	BuiltinMeshArray_t              mBuiltinMeshes;
-
-	// data: environment maps & HDR profiles
 	std::vector<FDisplayHDRProfile> mDisplayHDRProfiles;
 	EnvironmentMapDescLookup_t      mLookup_EnvironmentMapDescriptors;
 
@@ -372,9 +415,13 @@ private:
 
 	// state
 	EAppState                       mAppState;
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	std::atomic<bool>               mbRenderThreadInitialized;
 	std::atomic<uint64>             mNumRenderLoopsExecuted;
 	std::atomic<uint64>             mNumUpdateLoopsExecuted;
+#else
+	uint64                          mNumSimulationTicks;
+#endif
 	std::atomic<bool>               mbLoadingLevel;
 	std::atomic<bool>               mbLoadingEnvironmentMap;
 	std::atomic<bool>               mbEnvironmentMapPreFilter;
@@ -387,10 +434,15 @@ private:
 	// scene
 	FLoadingScreenData              mLoadingScreenData;
 	std::queue<std::string>         mQueue_SceneLoad;
-	
 	int                             mIndex_SelectedScene;
 	std::unique_ptr<Scene>          mpScene;
+	
+	// ui
+	ImGuiContext*                   mpImGuiContext;
+	FUIState                        mUIState;
+	FRenderStats                    mRenderStats;
 
+	// rendering resources per window
 #if 0
 	RenderingResourcesLookup_t      mRenderingResources;
 #else
@@ -420,13 +472,15 @@ private:
 	void                            InitializeHDRProfiles();
 	void                            InitializeEnvironmentMaps();
 	void                            InitializeScenes();
-
+	void                            InitializeUI(HWND hwnd);
 	void                            InitializeThreads();
+
 	void                            ExitThreads();
+	void                            ExitUI();
 
 	void                            HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWindowSettings& settings);
-	void                            SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse);
-	inline void                     SetMouseCaptureForWindow(Window* pWin, bool bCaptureMouse) { this->SetMouseCaptureForWindow(pWin->GetHWND(), bCaptureMouse); };
+	void                            SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse, bool bReleaseAtCapturedPosition);
+	inline void                     SetMouseCaptureForWindow(Window* pWin, bool bCaptureMouse, bool bReleaseAtCapturedPosition) { this->SetMouseCaptureForWindow(pWin->GetHWND(), bCaptureMouse, bReleaseAtCapturedPosition); };
 
 	void                            InitializeBuiltinMeshes();
 	void                            LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete
@@ -436,6 +490,9 @@ private:
 	HRESULT                         RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderContext& ctx);
 	HRESULT                         RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx);
 
+	//
+	// EVENTS
+	//
 	void                            UpdateThread_HandleEvents();
 	void                            RenderThread_HandleEvents();
 	void                            MainThread_HandleEvents();
@@ -463,15 +520,24 @@ private:
 	void                            ResolveDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTexture, SRV_ID SRVDepthTexture, UAV_ID UAVDepthResolveTexture);
 	void                            TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams);
 	void                            RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams);
-	void                            RenderUI(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
-	void                            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx); // TODO
+	void                            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
+	void                            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
 	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
 
-	// temp
-	struct FFrameConstantBuffer  { DirectX::XMMATRIX matModelViewProj; };
-	struct FFrameConstantBuffer2 { DirectX::XMMATRIX matModelViewProj; int iTextureConfig; int iTextureOutput; };
-	struct FFrameConstantBufferUnlit { DirectX::XMMATRIX matModelViewProj; DirectX::XMFLOAT3 color; };
+	//
+	// UI
+	//
+	void UpdateUIState(HWND hwnd, float dt);
+	void DrawProfilerWindow(const FSceneStats& FrameStats, float dt);
+	void DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderParameters& SceneRenderParams);
+	void DrawPostProcessSettings(FPostProcessParameters& PPParams);
+	void DrawDebugPanelWindow(FSceneRenderParameters& SceneParams);
+	void DrawKeyMappingsWindow();
+	void DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams, FPostProcessParameters& PPParams);
 
+	//
+	// RENDER HELPERS
+	//
 	void                            DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh);
 	void                            DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView::FShadowView& shadowView);
 
@@ -481,26 +547,40 @@ private:
 	FWindowSettings&                GetWindowSettings(HWND hwnd);
 
 	const FEnvironmentMapDescriptor& GetEnvironmentMapDesc(const std::string& EnvMapName) const;
-           FEnvironmentMapDescriptor GetEnvironmentMapDescCopy(const std::string& EnvMapName) const;
+          FEnvironmentMapDescriptor GetEnvironmentMapDescCopy(const std::string& EnvMapName) const;
 
 	void                            RegisterWindowForInput(const std::unique_ptr<Window>& pWnd);
 	void                            UnregisterWindowForInput(const std::unique_ptr<Window>& pWnd);
 
 	void                            HandleEngineInput();
+	void                            HandleMainWindowInput(Input& input, HWND hwnd);
+	void                            HandleUIInput();
+
 	
 	void                            DispatchHDRSwapchainTransitionEvents(HWND hwnd);
 
 	bool                            IsWindowRegistered(HWND hwnd) const;
 	bool                            ShouldRenderHDR(HWND hwnd) const;
+	bool                            IsHDRSettingOn() const;
 
-	void                            CalculateEffectiveFrameRateLimit(HWND hwnd);
+	void                            SetEffectiveFrameRateLimit();
+	float                           FramePacing(const float dt);
 	const FDisplayHDRProfile*       GetHDRProfileIfExists(const wchar_t* pwStrLogicalDisplayName);
 	FSetHDRMetaDataParams           GatherHDRMetaDataParameters(HWND hwnd);
 
 	// Busy waits until render thread catches up with update thread
 	void                            WaitUntilRenderingFinishes();
 
+	// temp data
+	struct FFrameConstantBuffer { DirectX::XMMATRIX matModelViewProj; };
+	struct FFrameConstantBuffer2 { DirectX::XMMATRIX matModelViewProj; int iTextureConfig; int iTextureOutput; };
+	struct FFrameConstantBufferUnlit { DirectX::XMMATRIX matModelViewProj; DirectX::XMFLOAT3 color; };
 
+// ------------------------------------------------------------------------------------------------------
+//
+// VQENGINE STATIC
+// 
+// ------------------------------------------------------------------------------------------------------
 private:
 	// Reads EngineSettings.ini from next to the executable and returns a 
 	// FStartupParameters struct as it readily has override booleans for engine settings

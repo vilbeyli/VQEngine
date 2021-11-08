@@ -47,6 +47,7 @@ static const Input::KeyMapping KEY_MAP = []()
 	m["K"] = 'K';		m["k"] = 'K';	m["V"] = 'V';	m["v"] = 'V';
 	m["M"] = 'M';		m["m"] = 'M';	m["G"] = 'G';	m["g"] = 'G';
 	m["L"] = 'L';		m["l"] = 'L';
+	m["Z"] = 'Z';		m["z"] = 'Z';
 
 	m["\\"] = 220;		m[";"] = 186;
 	m["'"] = 222;
@@ -322,10 +323,13 @@ void Input::UpdateKeyDown(KeyDownEventData data)
 			if (mouseBtn & EMouseButtons::MOUSE_BUTTON_LEFT)   mMouseButtonDoubleClicks[EMouseButtons::MOUSE_BUTTON_LEFT] = true;
 			if (mouseBtn & EMouseButtons::MOUSE_BUTTON_RIGHT)  mMouseButtonDoubleClicks[EMouseButtons::MOUSE_BUTTON_RIGHT] = true;
 			if (mouseBtn & EMouseButtons::MOUSE_BUTTON_MIDDLE) mMouseButtonDoubleClicks[EMouseButtons::MOUSE_BUTTON_MIDDLE] = true;
-#if VERBOSE_LOGGING
-			Log::Info("Double Click!!");
-#endif
 		}
+#if VERBOSE_LOGGING
+		if (data.mouse.bDoubleClick) Log::Info("Double Click!!");
+		if (mouseBtn & EMouseButtons::MOUSE_BUTTON_LEFT)   Log::Info("Mouse Button Down: Left");
+		if (mouseBtn & EMouseButtons::MOUSE_BUTTON_RIGHT)  Log::Info("Mouse Button Down: Right");
+		if (mouseBtn & EMouseButtons::MOUSE_BUTTON_MIDDLE) Log::Info("Mouse Button Down: Middle");
+#endif
 	}
 
 	// KEYBOARD KEY
@@ -344,7 +348,7 @@ void Input::UpdateKeyUp(KeyCode key, bool bIsMouseKey)
 		mMouseButtons[mouseBtn] = false;
 		mMouseButtonDoubleClicks[mouseBtn] = false;
 #if VERBOSE_LOGGING
-		Log::Info("Mouse Key Up %x", key);
+		Log::Info("Mouse Button Up %x", key);
 #endif
 	}
 	else
@@ -369,31 +373,28 @@ void Input::UpdateMousePos(long x, long y, short scroll)
 	mMouseScroll = scroll;
 }
 
-void Input::UpdateMousePos_Raw(int relativeX, int relativeY, short scroll, bool bMouseCaptured)
+void Input::UpdateMousePos_Raw(int relativeX, int relativeY, short scroll)
 {
-	if (bMouseCaptured)
-	{
-		mMouseDelta[0] += static_cast<float>(relativeX);
-		mMouseDelta[1] += static_cast<float>(relativeY);
+	mMouseDelta[0] += static_cast<float>(relativeX);
+	mMouseDelta[1] += static_cast<float>(relativeY);
 
-		// unused for now
-		mMousePosition[0] = 0;
-		mMousePosition[1] = 0;
+	// unused for now
+	mMousePosition[0] = 0;
+	mMousePosition[1] = 0;
 
-		mMouseScroll = scroll;
+	mMouseScroll = scroll;
 
 #if VERBOSE_LOGGING
-		if (scroll != 0)
-		{
-			Log::Info("Scroll: %d", mMouseScroll);
-		}
-		Log::Info("Mouse Delta: (%.2f, %.2f)",//\tMouse Position: (%d, %d)\tMouse Scroll: (%d)",
-			mMouseDelta[0], mMouseDelta[1]
-			//,mMousePosition[0], mMousePosition[1]
-			//,(int)scroll
-		);
-#endif
+	if (scroll != 0)
+	{
+		Log::Info("Scroll: %d", mMouseScroll);
 	}
+	Log::Info("Mouse Delta: (%.2f, %.2f)",//\tMouse Position: (%d, %d)\tMouse Scroll: (%d)",
+		mMouseDelta[0], mMouseDelta[1]
+		//,mMousePosition[0], mMousePosition[1]
+		//,(int)scroll
+	);
+#endif
 }
 
 
@@ -461,6 +462,12 @@ bool Input::IsMouseTriggered(EMouseButtons mbtn) const
 	return !mbIgnoreInput && bButtonTriggered;
 }
 
+bool Input::IsMouseReleased(EMouseButtons mbtn) const
+{
+	const bool bButtonReleased = !mMouseButtons.at(mbtn) && mMouseButtonsPrevious.at(mbtn);
+	return !mbIgnoreInput && bButtonReleased;
+}
+
 bool Input::IsMouseScrollUp() const
 {
 	return mMouseScroll > 0 && !mbIgnoreInput;
@@ -469,7 +476,8 @@ bool Input::IsMouseScrollUp() const
 bool Input::IsMouseScrollDown() const
 {
 #if VERBOSE_LOGGING
-	//Log::Info("Input::IsMouseScrollDown() : scroll=%d", mMouseScroll);
+	if(mMouseScroll)
+		Log::Info("Input::IsMouseScrollDown() : scroll=%d", mMouseScroll);
 #endif
 	return mMouseScroll < 0 && !mbIgnoreInput;
 }

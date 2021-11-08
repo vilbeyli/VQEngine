@@ -105,6 +105,8 @@ struct FBoundingBox
 {
 	DirectX::XMFLOAT3 ExtentMin;
 	DirectX::XMFLOAT3 ExtentMax;
+	FBoundingBox():ExtentMin(0,0,0),ExtentMax(0,0,0){}
+	FBoundingBox(const FSphere& s); // makes a bounding box encapsulating the sphere
 
 	std::array<DirectX::XMVECTOR, 8> GetCornerPointsV4() const;
 	std::array<DirectX::XMVECTOR, 8> GetCornerPointsV3() const;

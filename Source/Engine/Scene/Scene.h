@@ -24,94 +24,27 @@
 #include "Light.h"
 #include "Transform.h"
 #include "GameObject.h"
+#include "Serialization.h"
 #include "../Core/Memory.h"
+#include "../Core/RenderCommands.h"
 #include "../AssetLoader.h"
+#include "../PostProcess/PostProcess.h"
 
+// fwd decl
 class Input;
 struct Material;
 struct FResourceNames;
 struct FFrustumPlaneset;
+struct FUIState;
 
-//------------------------------------------------------
-#define MATERIAL_UNINITIALIZED_VALUE -1.0f
-struct FMaterialRepresentation
-{
-	std::string Name;
-	DirectX::XMFLOAT3 DiffuseColor;
-	float Alpha             = MATERIAL_UNINITIALIZED_VALUE;
-	DirectX::XMFLOAT3 EmissiveColor;
-	float EmissiveIntensity = MATERIAL_UNINITIALIZED_VALUE;
-	float Metalness         = MATERIAL_UNINITIALIZED_VALUE;
-	float Roughness         = MATERIAL_UNINITIALIZED_VALUE;
-	std::string DiffuseMapFilePath  ;
-	std::string NormalMapFilePath   ;
-	std::string EmissiveMapFilePath ;
-	std::string AlphaMaskMapFilePath;
-	std::string MetallicMapFilePath ;
-	std::string RoughnessMapFilePath;
-	std::string AOMapFilePath;
+// typedefs
+using MeshLookup_t     = std::unordered_map<MeshID, Mesh>;
+using ModelLookup_t    = std::unordered_map<ModelID, Model>;
+using MaterialLookup_t = std::unordered_map<MaterialID, Material>;
 
-	FMaterialRepresentation();
-};
-struct FGameObjectRepresentation
-{
-	Transform tf;
-	
-	std::string ModelName;
-	std::string ModelFilePath;
-	
-	std::string BuiltinMeshName;
-	std::string MaterialName;
-};
-struct FSceneRepresentation
-{
-	std::string SceneName;
-	std::string EnvironmentMapPreset;
 
-	std::vector<FMaterialRepresentation>   Materials;
-	std::vector<FCameraParameters>         Cameras;
-	std::vector<FGameObjectRepresentation> Objects;
-	std::vector<Light>                     Lights;
-
-	char loadSuccess = 0;
-};
-//------------------------------------------------------
-struct FPostProcessParameters
-{
-	struct FTonemapper
-	{
-		EColorSpace   ContentColorSpace = EColorSpace::REC_709;
-		EDisplayCurve OutputDisplayCurve = EDisplayCurve::sRGB;
-		float         DisplayReferenceBrightnessLevel = 200.0f;
-		int           ToggleGammaCorrection = 1;
-	};
-	struct FFFXCAS
-	{
-		unsigned CASConstantBlock[8];
-		float CASSharpen = 0.8f;
-		FFFXCAS() = default;
-		FFFXCAS(const FFFXCAS& other) : CASSharpen(other.CASSharpen) { memcpy(CASConstantBlock, other.CASConstantBlock, sizeof(CASConstantBlock)); }
-	};
-	struct FBlurParams // Gaussian Blur Pass
-	{ 
-		int iImageSizeX;
-		int iImageSizeY;
-	};
-
-	inline bool IsFFXCASEnabled() const { return this->bEnableCAS && FFXCASParams.CASSharpen > 0.0f; }
-
-	int SceneRTWidth = 0;
-	int SceneRTHeight = 0;
-	int DisplayResolutionWidth = 0;
-	int DisplayResolutionHeight = 0;
-
-	FTonemapper TonemapperParams;
-	FBlurParams BlurParams;
-	FFFXCAS     FFXCASParams;
-
-	bool bEnableCAS;
-	bool bEnableGaussianBlur;
-};
+//--- Pass Parameters ---
+struct FPostProcessParameters;
 struct FSceneRenderParameters
 {
 	bool bDrawLightBounds = false;
@@ -121,30 +54,7 @@ struct FSceneRenderParameters
 	float fAmbientLightingFactor = 0.055f;
 	bool bScreenSpaceAO = true;
 };
-struct FMeshRenderCommandBase
-{
-	MeshID meshID = INVALID_ID;
-	DirectX::XMMATRIX matWorldTransformation;
-};
-struct FMeshRenderCommand : public FMeshRenderCommandBase
-{
-	MaterialID matID  = INVALID_ID;
-	DirectX::XMMATRIX matNormalTransformation; //ID ?
-	std::string ModelName;
-	std::string MaterialName;
-};
-struct FShadowMeshRenderCommand : public FMeshRenderCommandBase
-{
-	DirectX::XMMATRIX matWorldViewProj;
-	MaterialID matID = INVALID_ID;
-	std::string ModelName;
-};
-struct FWireframeRenderCommand : public FMeshRenderCommandBase
-{
-	DirectX::XMFLOAT3 color;
-};
-using FLightRenderCommand = FWireframeRenderCommand;
-using FBoundingBoxRenderCommand = FWireframeRenderCommand;
+//--- Pass Parameters ---
 
 struct FSceneView
 {
@@ -194,13 +104,37 @@ struct FSceneShadowView
 	std::array<FPointLightLinearDepthParams, NUM_SHADOWING_LIGHTS__POINT> PointLightLinearDepthParams;
 	FShadowView ShadowView_Directional;
 
-	int NumSpotShadowViews;
-	int NumPointShadowViews;
+	uint NumSpotShadowViews;
+	uint NumPointShadowViews;
 };
 
-using MeshLookup_t = std::unordered_map<MeshID, Mesh>;
-using ModelLookup_t = std::unordered_map<ModelID, Model>;
-using MaterialLookup_t = std::unordered_map<MaterialID, Material>;
+struct FSceneStats
+{
+	// lights -----------------------
+	uint NumDirectionalLights;
+	uint NumStaticLights;
+	uint NumDynamicLights;
+	uint NumStationaryLights;
+	uint NumSpotLights;
+	uint NumPointLights;
+	uint NumDisabledSpotLights;
+	uint NumDisabledPointLights;
+	uint NumDisabledDirectionalLights;
+	uint NumShadowingPointLights;
+	uint NumShadowingSpotLights;
+
+	// render cmds ------------------
+	uint NumMeshRenderCommands;
+	uint NumShadowMeshRenderCommands;
+	uint NumBoundingBoxRenderCommands;
+
+	// scene ------------------------
+	uint NumMeshes;
+	uint NumModels;
+	uint NumMaterials;
+	uint NumObjects;
+	uint NumCameras;
+};
 
 class SceneBoundingBoxHierarchy
 {
@@ -256,7 +190,7 @@ private:
 
 //------------------------------------------------------
 
-constexpr size_t NUM_GAMEOBJECT_POOL_SIZE = 4096;
+constexpr size_t NUM_GAMEOBJECT_POOL_SIZE = 1024 * 8;
 constexpr size_t GAMEOBJECT_BYTE_ALIGNMENT = 64; // assumed typical cache-line size
 
 //----------------------------------------------------------------------------------------------------------------
@@ -306,12 +240,12 @@ protected:
 //----------------------------------------------------------------------------------------------------------------
 private: // Derived Scenes shouldn't access these functions
 	void PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX);
-	void Update(float dt, int FRAME_DATA_INDEX);
-	void PostUpdate(int FRAME_DATA_INDEX, ThreadPool& UpdateWorkerThreadPool);
+	void Update(float dt, int FRAME_DATA_INDEX = 0);
+	void PostUpdate(ThreadPool& UpdateWorkerThreadPool, int FRAME_DATA_INDEX = 0);
 	void StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene);
 	void OnLoadComplete();
 	void Unload(); // serial-only for now. maybe MT later.
-	void RenderUI();
+	void RenderUI(FUIState& UIState, uint32_t W, uint32_t H);
 	void HandleInput(FSceneView& SceneView);
 
 	void GatherSceneLightData(FSceneView& SceneView) const;
@@ -343,13 +277,18 @@ public:
 		, VQRenderer& renderer
 	);
 
-	inline const FSceneView&       GetSceneView (int FRAME_DATA_INDEX) const { return mFrameSceneViews[FRAME_DATA_INDEX]; }
-	inline const FSceneShadowView& GetShadowView(int FRAME_DATA_INDEX) const { return mFrameShadowViews[FRAME_DATA_INDEX]; }
-	inline       FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX)       { return mFrameSceneViews[FRAME_DATA_INDEX].postProcessParameters; }
-	inline const FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX) const { return mFrameSceneViews[FRAME_DATA_INDEX].postProcessParameters; }
-	inline const Camera& GetActiveCamera() const { return mCameras[mIndex_SelectedCamera]; }
-	inline       Camera& GetActiveCamera()       { return mCameras[mIndex_SelectedCamera]; }
+	      FSceneView&       GetSceneView (int FRAME_DATA_INDEX);
+	const FSceneView&       GetSceneView (int FRAME_DATA_INDEX) const;
+	const FSceneShadowView& GetShadowView(int FRAME_DATA_INDEX) const;
+	      FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX)       ;
+	const FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX) const ;
 
+	inline const Camera& GetActiveCamera() const { return mCameras[mIndex_SelectedCamera]; }
+	inline       Camera& GetActiveCamera() { return mCameras[mIndex_SelectedCamera]; }
+	inline       size_t  GetNumSceneCameras() const { return mCameras.size(); }
+
+	inline       int&    GetActiveCameraIndex() { return mIndex_SelectedCamera; }
+	inline       int&    GetActiveEnvironmentMapPresetIndex() { return mIndex_ActiveEnvironmentMapPreset; }
 
 	// Mesh, Model, GameObj management
 	//TransformID CreateTransform(Transform** ppTransform);
@@ -362,6 +301,7 @@ public:
 
 	Material&  GetMaterial(MaterialID ID);
 	Model&     GetModel(ModelID);
+	FSceneStats GetSceneRenderStats(int FRAME_DATA_INDEX) const;
 
 //----------------------------------------------------------------------------------------------------------------
 // SCENE DATA
@@ -369,10 +309,10 @@ public:
 protected:
 
 	//
-	// SCENE VIEWS PER FRAME
+	// VIEWS
 	//
-	std::vector<FSceneView>       mFrameSceneViews;
-	std::vector<FSceneShadowView> mFrameShadowViews;
+	std::vector<FSceneView>       mFrameSceneViews ; // per-frame in flight (usually 3 if Render & Update threads are separate)
+	std::vector<FSceneShadowView> mFrameShadowViews; // per-frame in flight (usually 3 if Render & Update threads are separate)
 
 	//
 	// SCENE ELEMENT CONTAINERS

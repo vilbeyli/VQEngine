@@ -32,7 +32,11 @@ struct FDeviceCreateDesc
 
 struct FDeviceCapabilities
 {
-	bool bSupportTearing = false;
+	bool bSupportsHardwareRayTracing = false;
+	bool bSupportsWaveOps = false;
+	bool bSupportsFP16 = false;
+	bool bSupportsMeshShaders = false;
+	bool bSupportsSamplerFeedback = false;
 	unsigned SupportedMaxMultiSampleQualityLevel = 0;
 };
 

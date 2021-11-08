@@ -81,8 +81,7 @@ std::string GetCompileError(ID3DBlob*& errorMessage, const std::string& shdPath)
 	}
 	else
 	{
-		Log::Error(shdPath);
-		return ("Error: " + shdPath);
+		return ("Error compiling shader: " + shdPath);
 	}
 }
 
