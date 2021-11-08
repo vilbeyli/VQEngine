@@ -42,7 +42,7 @@ void DefaultScene::UpdateScene(float dt, FSceneView& SceneView)
 void DefaultScene::InitializeScene()
 {
 	assert(!mpObjects.empty());
-	this->pObject = mpObjects.front();
+	this->pObject = mpObjects[1];
 	this->bObjectAnimation = true;
 }
 

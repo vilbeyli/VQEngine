@@ -47,6 +47,18 @@
         </FirstPerson>
     </Camera>
     
+    <!-- GROUND PLANE -->
+    <GameObject>
+        <Transform>
+            <Position>0 -5.5 0</Position>
+            <Scale>100 0.01 100</Scale>
+        </Transform>
+        <Model>
+            <Mesh>Cube</Mesh>
+            <MaterialName>Checkerboard</MaterialName>
+        </Model>
+    </GameObject>
+    
     <!-- OBJECTS -->
     <GameObject>
         <Transform>
@@ -118,8 +130,7 @@
     </GameObject>
     
     <!-- Models -->
-    
-    <!-- Bottom Row Objects -->
+<!-- 
     <GameObject>
         <Transform>
             <Position>-60 60 0</Position>
@@ -176,15 +187,15 @@
             <Name>Suzanne</Name>
         </Model>
     </GameObject>
-
+-->
     
     <!-- LIGHTS -->
     <Light> <!-- Directional Light -->
         <Enabled>true</Enabled>
         <Mobility> Stationary </Mobility>
-        <Color>0.9 0.9 0.85</Color>
+        <Color>1 1 1</Color>
         <Range> 100 </Range>
-        <Brightness> 3 </Brightness>
+        <Brightness> 0.90 </Brightness>
         <Shadows>
             <DepthBias> 0.00045 </DepthBias>
             <NearPlane> 0.1 </NearPlane>
@@ -194,9 +205,9 @@
             <Rotation> 0 0 40 </Rotation>
         </Transform>
         <Directional>
-            <ViewPortX> 64 </ViewPortX>
-            <ViewPortY> 64 </ViewPortY>
-            <Distance> 100 </Distance>
+            <ViewPortX> 256 </ViewPortX>
+            <ViewPortY> 256 </ViewPortY>
+            <Distance> 120 </Distance>
         </Directional>
     </Light>
 
@@ -246,9 +257,9 @@
     <Light> <!-- Spot Light -->
         <Mobility> Static </Mobility>
         <Enabled>true</Enabled>
-        <Color>0.0 0.9 0.9</Color>
+        <Color>0.9 0.9 0.9</Color>
         <Range> 35 </Range>
-        <Brightness> 300 </Brightness>
+        <Brightness> 1500 </Brightness>
         <Shadows>
             <DepthBias> 0.000009 </DepthBias>
             <NearPlane> 0.001 </NearPlane>
@@ -261,7 +272,7 @@
         </Transform>
         <Spot>
             <OuterConeAngleDegrees>22</OuterConeAngleDegrees>
-            <InnerConeAngleDegrees>18</InnerConeAngleDegrees>
+            <InnerConeAngleDegrees>20</InnerConeAngleDegrees>
         </Spot>
     </Light>
     <Light>
@@ -270,7 +281,7 @@
         <Enabled>true</Enabled>
         <Color>0.4 0.4 0.15</Color>
         <Range> 35 </Range>
-        <Brightness> 1500 </Brightness>
+        <Brightness> 1000 </Brightness>
         <Shadows>
             <DepthBias> 0.000005 </DepthBias>
             <NearPlane> 0.001 </NearPlane>
