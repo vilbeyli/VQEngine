@@ -519,6 +519,8 @@ void VQEngine::DrawKeyMappingsWindow()
 		ImGui::Text("     Shift+Z : Show/Hide ALL UI windows");
 		ImGui::Text("     Shift+R : Reload level");
 		ImGui::Text("Page Up/Down : Change the HDRI Environment Map");
+		ImGui::Text("         1-4 : Change between available scenes");
+		ImGui::Text("           R : Reset camera");
 		ImGui::Text("           C : Cycle scene cameras");
 		ImGui::Text("           G : Toggle gamma correction");
 		ImGui::Text("           B : Toggle FidelityFX Sharpening");
