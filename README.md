@@ -190,3 +190,4 @@ VQE supports the following command line parameters:
 - [Khronos glTF Sample Models](https://github.com/KhronosGroup/glTF-Sample-Models)
 - [cgbookcase PBR Textures](https://www.cgbookcase.com/)
 - [AMD-FidelityFX](https://github.com/GPUOpen-Effects/FidelityFX)
+- [Dear ImGui](https://github.com/ocornut/imgui)
