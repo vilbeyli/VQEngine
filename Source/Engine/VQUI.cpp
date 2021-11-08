@@ -491,7 +491,7 @@ void VQEngine::DrawKeyMappingsWindow()
 		
 		const float fHeaderGray = 0.6f;
 		//const ImVec4 ColHeader_Gray(fHeaderGray, fHeaderGray, fHeaderGray, 1.0f);
-		const ImVec4 ColHeader(0, 0.9, 0, 1.0f);
+		const ImVec4 ColHeader(0.0f, 0.9f, 0.0f, 1.0f);
 
 		ImGui::Begin("KEY MAPPINGS", &mUIState.bWindowVisible_KeyMappings);
 
