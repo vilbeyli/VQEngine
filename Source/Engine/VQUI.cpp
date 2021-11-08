@@ -494,14 +494,15 @@ void VQEngine::DrawKeyMappingsWindow()
 		const ImVec4 ColHeader(0, 0.9, 0, 1.0f);
 
 		ImGui::Begin("KEY MAPPINGS", &mUIState.bWindowVisible_KeyMappings);
+
 		ImGui::PushStyleColor(ImGuiCol_Text, ColHeader);
 		ImGui::Text("------------------ CAMERA ----------------------");
 		ImGui::PopStyleColor(1);
-		ImGui::Text       (" Right Click : Free Camera");
-		ImGui::Text       ("  Left Click : Orbit Camera");
-		ImGui::Text       ("      Scroll : Adjust distance (Orbit Camera)");
-		ImGui::Text       ("      WASDEQ : Move Camera (Free Camera)");
-		ImGui::Text       ("       Space : Toggle animation (if available)");
+		ImGui::Text(" Right Click : Free Camera");
+		ImGui::Text("  Left Click : Orbit Camera");
+		ImGui::Text("      Scroll : Adjust distance (Orbit Camera)");
+		ImGui::Text("      WASDEQ : Move Camera (Free Camera)");
+		ImGui::Text("       Space : Toggle animation (if available)");
 		ImGui::Text("");
 
 		ImGui::PushStyleColor(ImGuiCol_Text, ColHeader);
@@ -530,7 +531,6 @@ void VQEngine::DrawKeyMappingsWindow()
 		ImGui::Text("           N : Toggle Mesh bounding boxes");
 		ImGui::Text("           L : Toggle Light bounding volumes");
 		ImGui::Text("     Shift+N : Toggle GameObject bounding boxes");
-		
 
 		ImGui::End();
 	}
