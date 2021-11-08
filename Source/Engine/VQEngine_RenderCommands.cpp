@@ -1178,7 +1178,7 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBu
 		const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
 		pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, NULL);
 	}
-
+#if !VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	{
 		SCOPED_GPU_MARKER(pCmd, "UI");
 
@@ -1287,6 +1287,7 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBu
 			vtx_offset += drawList->VtxBuffer.Size;
 		}
 	}
+#endif
 
 	if(!bHDR)
 	{

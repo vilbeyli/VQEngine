@@ -90,6 +90,10 @@ void VQEngine::HandleUIInput()
 			if (input.IsKeyTriggered("B"))
 			{
 				WaitUntilRenderingFinishes();
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+				const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
+				const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
+#endif
 				FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 				PPParams.bEnableCAS = !PPParams.bEnableCAS;
 				Log::Info("Toggle FFX-CAS: %d", PPParams.bEnableCAS);
