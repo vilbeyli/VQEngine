@@ -39,6 +39,72 @@
 
 using namespace VQSystemInfo;
 
+static void CheckDeviceFeatureSupport(ID3D12Device4* pDevice, FDeviceCapabilities& dc)
+{
+    HRESULT hr;
+    {
+        D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS ftQualityLevels = {};
+        hr = pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &ftQualityLevels, sizeof(ftQualityLevels));
+        if (!SUCCEEDED(hr))
+        {
+            Log::Warning("Device::CheckFeatureSupport(): MSAA Quality Levels failed.");
+        }
+        else
+        {
+            dc.SupportedMaxMultiSampleQualityLevel = ftQualityLevels.NumQualityLevels;
+        }
+    }
+    {
+        D3D12_FEATURE_DATA_D3D12_OPTIONS5 ftOpt5 = {};
+        hr = pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &ftOpt5, sizeof(ftOpt5));
+        if (!SUCCEEDED(hr))
+        {
+            Log::Warning("Device::CheckFeatureSupport(): HW Ray Tracing failed.");
+        }
+        else
+        {
+            dc.bSupportsHardwareRayTracing = ftOpt5.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
+        }
+    }
+    {
+        D3D12_FEATURE_DATA_D3D12_OPTIONS1 ftOpt1 = {};
+        hr = pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS1, &ftOpt1, sizeof(ftOpt1));
+        if (!SUCCEEDED(hr))
+        {
+            Log::Warning("Device::CheckFeatureSupport(): Wave ops failed.");
+        }
+        else
+        {
+            dc.bSupportsWaveOps = ftOpt1.WaveOps;
+        }
+    }
+    {
+        D3D12_FEATURE_DATA_D3D12_OPTIONS4 ftOpt4 = {};
+        hr = pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS4, &ftOpt4, sizeof(ftOpt4));
+        if (!SUCCEEDED(hr))
+        {
+            Log::Warning("Device::CheckFeatureSupport(): Half-precision floating point shader ops failed.");
+        }
+        else
+        {
+            dc.bSupportsFP16 = ftOpt4.Native16BitShaderOpsSupported;
+        }
+    }
+    {
+        D3D12_FEATURE_DATA_D3D12_OPTIONS7 ftOpt7 = {};
+        hr = pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &ftOpt7, sizeof(ftOpt7));
+        if (!SUCCEEDED(hr))
+        {
+            Log::Warning("Device::CheckFeatureSupport(): Mesh Shaders & Sampler Feedback failed.");
+        }
+        else
+        {
+            dc.bSupportsMeshShaders = ftOpt7.MeshShaderTier != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED;
+            dc.bSupportsSamplerFeedback = ftOpt7.SamplerFeedbackTier != D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED;
+        }
+    }
+}
+
 bool Device::Create(const FDeviceCreateDesc& desc)
 {
     HRESULT hr = {};
@@ -86,8 +152,10 @@ bool Device::Create(const FDeviceCreateDesc& desc)
     {
         Log::Error("Device::Create(): D3D12CreateDevice4() failed.");
     }
+    const bool bDeviceCreated = true;
 
-    return true;
+    CheckDeviceFeatureSupport(this->mpDevice4, this->mDeviceCapabilities);
+    return bDeviceCreated;
 }
 
 void Device::Destroy()
