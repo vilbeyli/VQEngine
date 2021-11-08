@@ -18,6 +18,7 @@
 
 #include "../VQEngine.h"
 #include "../GPUMarker.h"
+#include "Windows.h"
 
 #define VERBOSE_LOGGING 0
 
@@ -225,6 +226,22 @@ void VQEngine::UpdateThread_HandleEvents()
 		case MOUSE_INPUT_EVENT:
 		{
 			std::shared_ptr<MouseInputEvent> p = std::static_pointer_cast<MouseInputEvent>(pEvent);
+
+			// discard the scroll event if its outside the application window
+			if (p->data.scrollDelta)
+			{
+				POINT pt; GetCursorPos(&pt);
+				ScreenToClient(p->hwnd, &pt);
+				
+				const bool bOutOfWindow = pt.x < 0 || pt.y < 0 
+					|| pt.x > this->GetWindow(p->hwnd)->GetWidth() 
+					|| pt.y > this->GetWindow(p->hwnd)->GetHeight();
+				if (bOutOfWindow)
+				{
+					p->data.scrollDelta = 0;
+				}
+			}
+
 			mInputStates.at(p->hwnd).UpdateMousePos_Raw(
 				  p->data.relativeX
 				, p->data.relativeY
