@@ -90,6 +90,11 @@ static void CheckDeviceFeatureSupport(ID3D12Device4* pDevice, FDeviceCapabilitie
             dc.bSupportsFP16 = ftOpt4.Native16BitShaderOpsSupported;
         }
     }
+#if 0
+    // https://www.appveyor.com/docs/windows-images-software/#visual-studio-2019
+    // AppVeyor (CI) currently doesn't support WinSDK Windows 10 SDK 10.0.19041, which means
+    // it cannot compile and package the code below. As we're not currently using this info,
+    // leave out this code snippet for the v0.8.0 release.
     {
         D3D12_FEATURE_DATA_D3D12_OPTIONS7 ftOpt7 = {};
         hr = pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &ftOpt7, sizeof(ftOpt7));
@@ -103,6 +108,7 @@ static void CheckDeviceFeatureSupport(ID3D12Device4* pDevice, FDeviceCapabilitie
             dc.bSupportsSamplerFeedback = ftOpt7.SamplerFeedbackTier != D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED;
         }
     }
+#endif
 }
 
 bool Device::Create(const FDeviceCreateDesc& desc)
