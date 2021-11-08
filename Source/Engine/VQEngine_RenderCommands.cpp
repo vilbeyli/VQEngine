@@ -136,14 +136,8 @@ void VQEngine::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuff
 	//
 	// SPOT LIGHTS
 	//
-	
-	// set PSO & RS only when we're going to render Spot views AND directional light shadows hasn't rendered
-	// to save a context roll as the PSO and RS will already be what we want
-	if (SceneShadowView.ShadowView_Directional.meshRenderCommands.empty())
-	{
-		pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_PSO));
-		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(7));
-	}
+	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_PSO));
+	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(7));
 	
 	for (uint i = 0; i < SceneShadowView.NumSpotShadowViews; ++i)
 	{

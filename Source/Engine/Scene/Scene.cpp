@@ -708,6 +708,7 @@ void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustum
 
 #else // no culling, render all game objects
 	
+	MeshRenderCommands.clear();
 	for (const GameObject* pObj : mpObjects)
 	{
 		Transform* const& pTF = mpTransforms.at(pObj->mTransformID);
@@ -733,7 +734,7 @@ void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustum
 			meshRenderCmd.ModelName = model.mModelName;
 			meshRenderCmd.MaterialName = ""; // TODO
 
-			SceneView.meshRenderCommands.push_back(meshRenderCmd);
+			MeshRenderCommands.push_back(meshRenderCmd);
 		}
 	}
 #endif // ENABLE_VIEW_FRUSTUM_CULLING
@@ -796,11 +797,12 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 
 			switch (l.Type)
 			{
-			case Light::EType::DIRECTIONAL: // TODO: calculate frustum cull parameters
+			case Light::EType::DIRECTIONAL:
 			{
 				FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowView_Directional;
 				ShadowView.matViewProj = l.GetViewProjectionMatrix();
-				// TODO: gather params
+				const size_t FrustumIndex = DispatchContext.AddWorkerItem(FFrustumPlaneset::ExtractFromMatrix(ShadowView.matViewProj), BoundingBoxList, pGameObjects);
+				FrustumIndex_pShadowViewLookup[FrustumIndex] = &ShadowView;
 			}	break;
 			case Light::EType::SPOT:
 			{
