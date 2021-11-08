@@ -190,7 +190,7 @@ private:
 
 //------------------------------------------------------
 
-constexpr size_t NUM_GAMEOBJECT_POOL_SIZE = 4096;
+constexpr size_t NUM_GAMEOBJECT_POOL_SIZE = 1024 * 8;
 constexpr size_t GAMEOBJECT_BYTE_ALIGNMENT = 64; // assumed typical cache-line size
 
 //----------------------------------------------------------------------------------------------------------------

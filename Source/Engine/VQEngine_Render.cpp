@@ -736,11 +736,11 @@ void VQEngine::RenderThread_PreRender()
 	const uint32_t NumCmdRecordingThreads_CMP = 0;
 	const uint32_t NumCmdRecordingThreads_CPY = 0;
 	const uint32_t NumCmdRecordingThreads = NumCmdRecordingThreads_GFX + NumCmdRecordingThreads_CPY + NumCmdRecordingThreads_CMP;
-	const uint32_t ConstantBufferBytesPerThread = 4 * MEGABYTE;
+	const uint32_t ConstantBufferBytesPerThread = 6 * MEGABYTE;
 #else
 	const uint32_t NumCmdRecordingThreads_GFX = 1;
 	const uint32_t NumCmdRecordingThreads = NumCmdRecordingThreads_GFX;
-	const uint32_t ConstantBufferBytesPerThread = 12 * MEGABYTE;
+	const uint32_t ConstantBufferBytesPerThread = 18 * MEGABYTE;
 #endif
 
 	ctx.AllocateCommandLists(CommandQueue::EType::GFX, NumCmdRecordingThreads_GFX);

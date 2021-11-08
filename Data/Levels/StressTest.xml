@@ -31,7 +31,7 @@
     </EnvironmentMap>
     -->
     <Camera>
-        <Position> 0.0 24.0 -93 </Position>
+        <Position> 7.872289 -16.696192 -100.599899 </Position>
         <Pitch> 15 </Pitch>
         <Yaw> 0 </Yaw>
         <Projection>Perspective</Projection>

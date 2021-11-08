@@ -72,21 +72,15 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 	//
 	
 	// small cubes
-	constexpr int NUM_OBJECTS = 1024;
-
-	constexpr int DIMENSION_X = 16;
+	constexpr int DIMENSION_X = 32;
 	constexpr int DIMENSION_Y = 4;
-	constexpr int DIMENSION_Z = 16;
-#if 0
-	for (int i = 0; i < NUM_OBJECTS; ++i)
-#else
+	constexpr int DIMENSION_Z = 32;
+
 	int NumObjects = 0;
 	constexpr float distance = 5.0f;
 	for(int x=-DIMENSION_X/2; x<DIMENSION_X/2; ++x)
 	for(int y=-DIMENSION_Y/2; y<DIMENSION_Y/2; ++y)
 	for(int z=-DIMENSION_Z/2; z<DIMENSION_Z/2; ++z)
-
-#endif
 	{
 		FGameObjectRepresentation obj = {};
 
@@ -102,7 +96,7 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 		obj.tf.SetPosition(pos);
 		obj.tf.RotateAroundAxisDegrees(axis, rotationAngle);
 		obj.tf.SetScale(scale);
-		obj.BuiltinMeshName = "Cube";
+		obj.BuiltinMeshName = (MathUtil::RandI(0, 2) == 0 ? "Cube" : "Sphere");
 
 		obj.MaterialName = NumObjects%2==0 ? "Checkerboard_Grayscale" : "Checkerboard";
 
