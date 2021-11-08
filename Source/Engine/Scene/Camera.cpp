@@ -242,6 +242,7 @@ OrbitController::OrbitController(Camera* pCam)
 
 void OrbitController::UpdateCamera(const Input& input, float dt, bool bUseInput)
 {
+	const bool bMouseLeftDown = input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_LEFT);
 	const XMVECTOR vZERO = XMVectorZero();
 	const XMFLOAT3 f3ZERO = XMFLOAT3(0, 0, 0);
 	const XMVECTOR vROTATION_AXIS_AZIMUTH = XMLoadFloat3(&UpVector);
@@ -256,15 +257,13 @@ void OrbitController::UpdateCamera(const Input& input, float dt, bool bUseInput)
 	Transform tf(pCam->mPosition);
 	tf.RotateAroundAxisDegrees(UpVector   , pCam->GetYaw());
 	tf.RotateAroundAxisDegrees(RightVector, pCam->GetPitch());
-
 	// calculate camera orbit movement & update the camera
 	if(bUseInput)
 	{
 		XMVECTOR vPOSITION = XMLoadFloat3(&pCam->mPosition);
 		const float fCamYaw = pCam->GetYaw();
 		const float fCamPitch = pCam->GetPitch();
-
-		const float fCamPitchRad = fCamPitch;
+		const bool bRotate = camInput.DeltaMouseXY[0] != 0.0f || camInput.DeltaMouseXY[1] != 0.0f;
 
 		// calculate camera directions
 		const XMMATRIX mROT_CAM = pCam->GetRotationMatrix();
@@ -273,20 +272,23 @@ void OrbitController::UpdateCamera(const Input& input, float dt, bool bUseInput)
 		XMVECTOR vLOOK_DIRECTION = XMLoadFloat3(&ForwardVector);
 		vLOOK_DIRECTION          = XMVector3TransformCoord(vLOOK_DIRECTION, mROT_CAM);
 		vROTATION_AXIS_POLAR     = XMVector3TransformCoord(vROTATION_AXIS_POLAR, mROT_CAM_Y_ONLY);
-		XMVECTOR vLOOK_AT_POSITION = vPOSITION + vLOOK_DIRECTION * fLOOK_AT_DISTANCE;
-
-		// do orbit rotation around the look target point
-		constexpr float fROTATION_SPEED = 1.0f; // todo: drive by some config?
-		const float fRotAngleAzimuth = camInput.DeltaMouseXY[0] * fROTATION_SPEED * DEG2RAD;
-		      float fRotAnglePolar   = camInput.DeltaMouseXY[1] * fROTATION_SPEED * DEG2RAD;
-		const bool bRotate = camInput.DeltaMouseXY[0] != 0.0f || camInput.DeltaMouseXY[1] != 0.0f;
-		vLOOK_AT_POSITION = vZERO; // look at the origin
-		tf.RotateAroundPointAndAxis(vROTATION_AXIS_AZIMUTH, fRotAngleAzimuth, vLOOK_AT_POSITION);
 		
-		// cap polar rotation in [-89.5, +89.5] degrees
-		if (XM_PIDIV2 - (fCamPitchRad +fRotAnglePolar) <= (0.5f) * DEG2RAD) fRotAnglePolar = 0;
-		if ((fCamPitchRad+ fRotAnglePolar) + XM_PIDIV2 <= (0.5f) * DEG2RAD) fRotAnglePolar = 0;
-		tf.RotateAroundPointAndAxis(vROTATION_AXIS_POLAR  , -fRotAnglePolar, vLOOK_AT_POSITION);
+		XMVECTOR vLOOK_AT_POSITION = vZERO; // look at the origin
+		//vLOOK_AT_POSITION = vPOSITION + vLOOK_DIRECTION * fLOOK_AT_DISTANCE; // look ahead
+
+		if (bMouseLeftDown)
+		{
+			// do orbit rotation around the look target point
+			constexpr float fROTATION_SPEED = 1.0f; // todo: drive by some config?
+			const float fRotAngleAzimuth = camInput.DeltaMouseXY[0] * fROTATION_SPEED * DEG2RAD;
+			float fRotAnglePolar = camInput.DeltaMouseXY[1] * fROTATION_SPEED * DEG2RAD;
+			tf.RotateAroundPointAndAxis(vROTATION_AXIS_AZIMUTH, fRotAngleAzimuth, vLOOK_AT_POSITION);
+
+			// cap polar rotation in [-89.5, +89.5] degrees
+			if (XM_PIDIV2 - (fCamPitch + fRotAnglePolar) <= (0.5f) * DEG2RAD) fRotAnglePolar = 0;
+			if ((fCamPitch + fRotAnglePolar) + XM_PIDIV2 <= (0.5f) * DEG2RAD) fRotAnglePolar = 0;
+			tf.RotateAroundPointAndAxis(vROTATION_AXIS_POLAR, -fRotAnglePolar, vLOOK_AT_POSITION);
+		}
 
 		// translate camera based on mouse wheel input
 		constexpr float CAMERA_MOVEMENT_SPEED_MULTIPLER = 5.0f;
