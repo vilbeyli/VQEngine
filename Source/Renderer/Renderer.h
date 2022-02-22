@@ -65,7 +65,7 @@ struct FPSOLoadDesc
 	std::vector<FShaderStageCompileDesc> ShaderStageCompileDescs;
 };
 
-enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is integrated
+enum EBuiltinPSOs // TODO: remove the hardcoded PSOs when a generic Shader solution is integrated
 {
 	FULLSCREEN_TRIANGLE_PSO = 0,
 	UI_PSO,

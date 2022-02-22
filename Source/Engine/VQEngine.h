@@ -254,6 +254,7 @@ public:
 	void MainThread_Tick();
 	bool Initialize(const FStartupParameters& Params);
 	void Exit();
+	inline bool ShouldExit() const { return mbExitApp.load(); }
 
 	// ---------------------------------------------------------
 	// Render Thread
@@ -426,6 +427,7 @@ private:
 	std::atomic<bool>               mbLoadingEnvironmentMap;
 	std::atomic<bool>               mbEnvironmentMapPreFilter;
 	std::atomic<bool>               mbMainWindowHDRTransitionInProgress; // see DispatchHDRSwapchainTransitionEvents()
+	std::atomic<bool>               mbExitApp;
 
 	// system & settings
 	FEngineSettings                 mSettings;
@@ -473,7 +475,7 @@ private:
 	void                            InitializeEnvironmentMaps();
 	void                            InitializeScenes();
 	void                            InitializeUI(HWND hwnd);
-	void                            InitializeThreads();
+	void                            InitializeEngineThreads();
 
 	void                            ExitThreads();
 	void                            ExitUI();

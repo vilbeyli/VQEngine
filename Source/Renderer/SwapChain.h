@@ -60,7 +60,7 @@ class SwapChain
 public:
 	bool Create(const FSwapChainCreateDesc& desc);
 	void Destroy();
-	void Resize(int w, int h, DXGI_FORMAT format);
+	HRESULT Resize(int w, int h, DXGI_FORMAT format);
 
 	HRESULT Present();
 	void MoveToNextFrame();

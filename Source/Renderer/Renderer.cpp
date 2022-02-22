@@ -178,6 +178,7 @@ void VQRenderer::Unload()
 
 void VQRenderer::Exit()
 {
+	Log::Info("VQRenderer::Exit()");
 	mWorkers_PSOLoad.Exit();
 	mWorkers_ShaderLoad.Exit();
 

@@ -383,7 +383,13 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 #endif
 
 	Swapchain.WaitForGPU();
-	Swapchain.Resize(WIDTH, HEIGHT, Swapchain.GetFormat());
+	HRESULT hr = Swapchain.Resize(WIDTH, HEIGHT, Swapchain.GetFormat());
+	if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
+	{
+		Log::Error("Device removed during Swpchain.Resize(%d, %d)", WIDTH, HEIGHT);
+		// TODO: recreate the swapchain?
+	}
+
 	if (bFullscreenTransition)
 	{
 		const FSetHDRMetaDataParams HDRMetaData = this->GatherHDRMetaDataParameters(hwnd);
@@ -394,7 +400,7 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	}
 	Swapchain.EnsureSwapChainColorSpace(Swapchain.GetFormat() == DXGI_FORMAT_R16G16B16A16_FLOAT ? _16 : _8, false);
 	pWnd->OnResize(WIDTH, HEIGHT);
-	mRenderer.OnWindowSizeChanged(hwnd, WIDTH, HEIGHT);
+	mRenderer.OnWindowSizeChanged(hwnd, WIDTH, HEIGHT); // updates render context
 
 	const auto& PPParams = this->mpScene->GetPostProcessParameters(0);
 	const bool bFSREnabled = PPParams.IsFSREnabled() && !bUseHDRRenderPath; // TODO: remove this when FSR-HDR is implemented

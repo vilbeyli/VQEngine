@@ -81,7 +81,8 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	InitializeInput();
 	InitializeScenes();
 	float f2 = t.Tick();
-	InitializeThreads();
+	//mRenderer.Initialize(mSettings.gfx); // Device, Queues, Heaps, Renderer Worker Threads
+	InitializeEngineThreads();
 	SetEffectiveFrameRateLimit();
 	float f4 = t.Tick();
 
@@ -114,10 +115,10 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 #if 0
 	Log::Info("[PERF] VQEngine::Initialize() : %.3fs", t2.StopGetDeltaTimeAndReset());
 	Log::Info("[PERF]    DispatchSysInfo : %.3fs", f0);
-	Log::Info("[PERF]    Settings       : %.3fs", f1);
-	Log::Info("[PERF]    Scenes         : %.3fs", f2);
-	Log::Info("[PERF]    Windows        : %.3fs", f3);
-	Log::Info("[PERF]    Threads        : %.3fs", f4);
+	Log::Info("[PERF]    Settings        : %.3fs", f1);
+	Log::Info("[PERF]    Scenes          : %.3fs", f2);
+	Log::Info("[PERF]    Windows         : %.3fs", f3);
+	Log::Info("[PERF]    Threads         : %.3fs", f4);
 #endif
 	return true; 
 }
@@ -323,7 +324,7 @@ void VQEngine::InitializeScenes()
 	this->StartLoadingScene(mIndex_SelectedScene);
 }
 
-void VQEngine::InitializeThreads()
+void VQEngine::InitializeEngineThreads()
 {
 	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
 	const size_t HWThreads  = ThreadPool::sHardwareThreadCount;

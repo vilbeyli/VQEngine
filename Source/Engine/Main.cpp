@@ -189,7 +189,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR pScmdl, int iCmdSh
 
 		MSG msg;
 		bool bQuit = false;
-		while (!bQuit)
+		while (!bQuit && !Engine.ShouldExit())
 		{
 			// https://docs.microsoft.com/en-us/windows/win32/learnwin32/window-messages
 			// http://www.directxtutorial.com/Lesson.aspx?lessonid=9-1-4
@@ -198,7 +198,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR pScmdl, int iCmdSh
 				TranslateMessage(&msg);
 				DispatchMessage(&msg);
 
-				if (msg.message == WM_QUIT)
+				if (msg.message == WM_QUIT) // Alt+F4 & X button
 				{
 					Log::Info("WM_QUIT!");
 					bQuit = true;

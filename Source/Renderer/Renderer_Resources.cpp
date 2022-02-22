@@ -523,6 +523,11 @@ SRV_ID VQRenderer::CreateAndInitializeSRV(TextureID texID)
 		std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 
 		Texture& tex = mTextures.at(texID);
+		if (!tex.mpTexture)
+		{
+			Log::Error("Texture ID=%d failed initializing, cannot create the SRV", texID);
+			return INVALID_ID;
+		}
 		mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
 		tex.InitializeSRV(0, &SRV);
 		Id = LAST_USED_SRV_ID++;
