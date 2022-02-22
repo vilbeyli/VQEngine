@@ -81,7 +81,10 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	InitializeInput();
 	InitializeScenes();
 	float f2 = t.Tick();
-	//mRenderer.Initialize(mSettings.gfx); // Device, Queues, Heaps, Renderer Worker Threads
+	// -------------------------------------------------------------------------------------
+	// Note: Device should be initialized from WinMain thread, otherwise device will be lost
+	mRenderer.Initialize(mSettings.gfx); // Device, Queues, Heaps, Renderer Worker Threads
+	// -------------------------------------------------------------------------------------
 	InitializeEngineThreads();
 	SetEffectiveFrameRateLimit();
 	float f4 = t.Tick();

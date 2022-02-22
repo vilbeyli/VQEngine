@@ -164,7 +164,7 @@ void VQEngine::RenderThread_Inititalize()
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mNumRenderLoopsExecuted.store(0);
 #endif
-	mRenderer.Initialize(mSettings.gfx);
+
 	// Initialize swapchains for each rendering window
 	// all windows use the same number of swapchains as the main window
 	const int NUM_SWAPCHAIN_BUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
