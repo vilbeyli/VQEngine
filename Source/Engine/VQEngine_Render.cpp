@@ -815,8 +815,8 @@ void VQEngine::RenderThread_HandleStatusOccluded()
 
 void VQEngine::RenderThread_HandleDeviceRemoved()
 {
-	MessageBox(NULL, "Device Removed.\n\nVQEngine will shutdown.", "VQEngine Renderer Error", MB_OK);
 	this->mbStopAllThreads.store(true);
+	MessageBox(NULL, "Device Removed.\n\nVQEngine will shutdown.", "VQEngine Renderer Error", MB_OK);
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	RenderThread_SignalUpdateThread();
 #endif
@@ -993,7 +993,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	); // Transition SwapChain for Present
 
 
-	PresentFrame(ctx);
+	hr = PresentFrame(ctx);
 
 	return hr;
 }
