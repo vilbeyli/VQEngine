@@ -136,10 +136,13 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	TextureID Tex_SceneNormalsMSAA             = INVALID_ID;
 	TextureID Tex_SceneNormals                 = INVALID_ID;
 	TextureID Tex_AmbientOcclusion             = INVALID_ID;
+	TextureID Tex_SceneVisualization           = INVALID_ID;
+	TextureID Tex_SceneVisualizationMSAA       = INVALID_ID;
 
 	TextureID Tex_PostProcess_BlurIntermediate = INVALID_ID;
 	TextureID Tex_PostProcess_BlurOutput       = INVALID_ID;
 	TextureID Tex_PostProcess_TonemapperOut    = INVALID_ID;
+	TextureID Tex_PostProcess_VisualizationOut = INVALID_ID;
 	TextureID Tex_PostProcess_FFXCASOut        = INVALID_ID;
 	TextureID Tex_PostProcess_FSR_EASUOut      = INVALID_ID;
 	TextureID Tex_PostProcess_FSR_RCASOut      = INVALID_ID;
@@ -150,10 +153,13 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	RTV_ID    RTV_SceneNormalsMSAA             = INVALID_ID;
 	RTV_ID    RTV_SceneNormals                 = INVALID_ID;
 	RTV_ID    RTV_UI_SDR                       = INVALID_ID;
+	RTV_ID    RTV_SceneVisualization           = INVALID_ID;
+	RTV_ID    RTV_SceneVisualizationMSAA       = INVALID_ID;
 
 	SRV_ID    SRV_PostProcess_BlurIntermediate = INVALID_ID;
 	SRV_ID    SRV_PostProcess_BlurOutput       = INVALID_ID;
 	SRV_ID    SRV_PostProcess_TonemapperOut    = INVALID_ID;
+	SRV_ID    SRV_PostProcess_VisualizationOut = INVALID_ID;
 	SRV_ID    SRV_PostProcess_FFXCASOut        = INVALID_ID;
 	SRV_ID    SRV_PostProcess_FSR_EASUOut      = INVALID_ID;
 	SRV_ID    SRV_PostProcess_FSR_RCASOut      = INVALID_ID;
@@ -166,11 +172,14 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	SRV_ID    SRV_SceneDepthMSAA               = INVALID_ID;
 	SRV_ID    SRV_FFXCACAO_Out                 = INVALID_ID;
 	SRV_ID    SRV_UI_SDR                       = INVALID_ID;
+	SRV_ID    SRV_SceneVisualization           = INVALID_ID;
+	SRV_ID    SRV_SceneVisualizationMSAA       = INVALID_ID;
 
 	UAV_ID    UAV_FFXCACAO_Out                 = INVALID_ID;
 	UAV_ID    UAV_PostProcess_BlurIntermediate = INVALID_ID;
 	UAV_ID    UAV_PostProcess_BlurOutput       = INVALID_ID;
 	UAV_ID    UAV_PostProcess_TonemapperOut    = INVALID_ID;
+	UAV_ID    UAV_PostProcess_VisualizationOut = INVALID_ID;
 	UAV_ID    UAV_PostProcess_FFXCASOut        = INVALID_ID;
 	UAV_ID    UAV_PostProcess_FSR_EASUOut      = INVALID_ID;
 	UAV_ID    UAV_PostProcess_FSR_RCASOut      = INVALID_ID;
@@ -511,18 +520,18 @@ private:
 	//
 	// FRAME RENDERING PIPELINE
 	//
-	void                            TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx);
+	void                            TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
 	void                            RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView& ShadowView);
 	void                            RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView& ShadowView);
 	void                            RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView& ShadowView, size_t iBegin, size_t NumPointLights);
 	void                            RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
 	void                            RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView);
-	void                            RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
-	void                            ResolveMSAA(ID3D12GraphicsCommandList* pCmd);
+	void                            RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FPostProcessParameters& PPParams);
+	void                            ResolveMSAA(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams);
 	void                            ResolveDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTexture, SRV_ID SRVDepthTexture, UAV_ID UAVDepthResolveTexture);
 	void                            TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams);
-	void                            RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams);
-	void                            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
+	ID3D12Resource*                 RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams);
+	void                            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, ID3D12Resource* pRscIn);
 	void                            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
 	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
 
@@ -533,7 +542,7 @@ private:
 	void DrawProfilerWindow(const FSceneStats& FrameStats, float dt);
 	void DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderParameters& SceneRenderParams);
 	void DrawPostProcessSettings(FPostProcessParameters& PPParams);
-	void DrawDebugPanelWindow(FSceneRenderParameters& SceneParams);
+	void DrawDebugPanelWindow(FSceneRenderParameters& SceneParams, FPostProcessParameters& PPParams);
 	void DrawKeyMappingsWindow();
 	void DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams, FPostProcessParameters& PPParams);
 

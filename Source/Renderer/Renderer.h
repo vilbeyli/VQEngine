@@ -68,6 +68,7 @@ struct FPSOLoadDesc
 enum EBuiltinPSOs // TODO: remove the hardcoded PSOs when a generic Shader solution is integrated
 {
 	FULLSCREEN_TRIANGLE_PSO = 0,
+	VIZUALIZATION_CS_PSO,
 	UI_PSO,
 	UI_HDR_scRGB_PSO,
 	TONEMAPPER_PSO,
@@ -79,7 +80,9 @@ enum EBuiltinPSOs // TODO: remove the hardcoded PSOs when a generic Shader solut
 	DEPTH_PREPASS_PSO,
 	DEPTH_PREPASS_PSO_MSAA_4,
 	FORWARD_LIGHTING_PSO,
+	FORWARD_LIGHTING_AND_VIZ_PSO,
 	FORWARD_LIGHTING_PSO_MSAA_4,
+	FORWARD_LIGHTING_AND_VIZ_PSO_MSAA_4,
 	WIREFRAME_PSO,
 	WIREFRAME_PSO_MSAA_4,
 	UNLIT_PSO,

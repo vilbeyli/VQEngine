@@ -46,6 +46,14 @@ struct PSInput
 #endif
 };
 
+struct PSOutput
+{
+	float4 color : SV_TARGET0;
+#if OUTPUT_ROUGHNESS || OUTPUT_METALLIC
+	float4 albedo_metallic : SV_TARGET1;
+#endif
+};
+
 #ifdef INSTANCED
 	#ifndef INSTANCE_COUNT
 	#define INSTANCE_COUNT 50 // 50 instances assumed per default, this should be provided by the app
@@ -126,8 +134,10 @@ PSInput VSMain(VSInput vertex)
 }
 
 
-float4 PSMain(PSInput In) : SV_TARGET
+PSOutput PSMain(PSInput In)
 {
+	PSOutput o = (PSOutput)0;
+
 	const float2 uv = In.uv;
 	const int TEX_CFG = cbPerObject.materialData.textureConfig;
 	
@@ -269,8 +279,28 @@ float4 PSMain(PSInput In) : SV_TARGET
 		}
 	}
 	
-	return float4(I_total, 1);
-	//return float4(Surface.N, 1); // debug line
-	//return float4(Surface.roughness.xxx, 1); // debug line
-	//return float4(Surface.metalness.xxx, 1); // debug line
+	// write out
+	o.color = float4(I_total, 1);
+
+	#if OUTPUT_ROUGHNESS || OUTPUT_METALLIC || OUTPUT_ALBEDO
+	o.albedo_metallic = float4(
+	
+	// RGB CHANNEL
+	#if OUTPUT_ROUGHNESS || OUTPUT_METALLIC
+		Surface.roughness.r, Surface.metalness.r, 0,
+	#elif OUTPUT_ALBEDO
+		Surface.diffuseColor, // TODO: add support for albedo colors
+	#endif
+	
+	// A CHANNEL 
+	#ifdef INSTANCED
+			In.instanceID
+	#else
+			0.0f
+	#endif // INSTANCED	
+
+		);
+	#endif
+
+	return o;
 }

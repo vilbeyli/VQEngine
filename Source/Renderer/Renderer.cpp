@@ -990,6 +990,19 @@ void VQRenderer::LoadPSOs()
 		psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
 		PSOLoadDescs.push_back({ EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO, psoLoadDesc });
 	}
+	
+	// DEBUG VISUALIZATION PSO
+	{
+		const std::wstring ShaderFilePath = GetAssetFullPath(L"Visualization.hlsl");
+
+		FPSOLoadDesc psoLoadDesc = {};
+		psoLoadDesc.PSOName = "PSO_Visualization";
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_5_1" });
+		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[3];
+
+		PSOLoadDescs.push_back({ EBuiltinPSOs::VIZUALIZATION_CS_PSO, psoLoadDesc });
+	}
+
 
 	// UI PSO
 	{
@@ -1235,6 +1248,17 @@ void VQRenderer::LoadPSOs()
 		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS_MSAA4";
 		psoDesc.SampleDesc.Count = 4;
 		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_PSO_MSAA_4, psoLoadDesc });
+
+		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS_Viz";
+		psoLoadDesc.ShaderStageCompileDescs[1].Macros.push_back({ "OUTPUT_ROUGHNESS", "1" });
+		psoDesc.NumRenderTargets = 2;
+		psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16B16A16_FLOAT; // rgba16f vs rgba8unorm 
+		psoDesc.SampleDesc.Count = 1;
+		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_PSO, psoLoadDesc });
+
+		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS_MSAA4_Viz";
+		psoDesc.SampleDesc.Count = 4;
+		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_PSO_MSAA_4, psoLoadDesc });
 	}
 
 	// WIREFRAME/UNLIT PSOs

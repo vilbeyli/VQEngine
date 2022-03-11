@@ -103,7 +103,7 @@ static void InitializeEngineUIState(FUIState& s)
 	s.bWindowVisible_SceneControls = true;
 	s.bWindowVisible_GraphicsSettingsPanel = false;
 	s.bWindowVisible_Profiler = false;
-	s.bWindowVisible_DebugPanel = false;
+	s.bWindowVisible_DebugPanel = true;
 	s.bProfiler_ShowEngineStats = true;
 }
 
@@ -210,7 +210,7 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 		if (mUIState.bWindowVisible_KeyMappings)           DrawKeyMappingsWindow();
 		if (mUIState.bWindowVisible_SceneControls)         DrawSceneControlsWindow(mpScene->GetActiveCameraIndex(), mpScene->GetActiveEnvironmentMapPresetIndex(), SceneParams);
 		if (mUIState.bWindowVisible_Profiler)              DrawProfilerWindow(mpScene->GetSceneRenderStats(FRAME_DATA_INDEX), dt);
-		if (mUIState.bWindowVisible_DebugPanel)            DrawDebugPanelWindow(SceneParams);
+		if (mUIState.bWindowVisible_DebugPanel)            DrawDebugPanelWindow(SceneParams, PPParams);
 		if (mUIState.bWindowVisible_GraphicsSettingsPanel) DrawGraphicsSettingsWindow(SceneParams, PPParams);
 	}
 
@@ -253,15 +253,18 @@ const uint32_t DBG_WINDOW_SIZE_X         = 330;
 const uint32_t DBG_WINDOW_SIZE_Y         = 150;
 //---------------------------------------------
 
+
 // Dropdown data ----------------------------------------------------------------------------------------------
 const     ImVec4 UI_COLLAPSING_HEADER_COLOR_VALUE = ImVec4(0.0, 0.00, 0.0, 0.7f);
 constexpr size_t NUM_MAX_ENV_MAP_NAMES    = 10;
 constexpr size_t NUM_MAX_LEVEL_NAMES      = 8;
 constexpr size_t NUM_MAX_CAMERA_NAMES     = 10;
+constexpr size_t NUM_MAX_DRAW_MODE_NAMES  = static_cast<size_t>(EDrawMode::NUM_DRAW_MODES);
 constexpr size_t NUM_MAX_FSR_OPTION_NAMES = FPostProcessParameters::FFSR_EASU::EPresets::NUM_FSR_PRESET_OPTIONS;
 static const char* pStrSceneNames [NUM_MAX_LEVEL_NAMES  ] = {};
 static const char* pStrEnvMapNames[NUM_MAX_ENV_MAP_NAMES] = {};
-static const char* pStrCameraNames[NUM_MAX_CAMERA_NAMES ] = {};
+static const char* pStrCameraNames[NUM_MAX_CAMERA_NAMES] = {};
+static const char* pStrDrawModes  [NUM_MAX_DRAW_MODE_NAMES] = {};
 static const char* pStrFSROptionNames[NUM_MAX_FSR_OPTION_NAMES] = {};
 static const char* pStrMaxFrameRateOptionNames[3] = {}; // see Settings.h:FGraphicsSettings
 
@@ -331,6 +334,33 @@ static void InitializeStaticCStringData_GraphicsSettings()
 		pStrMaxFrameRateOptionNames[2] = "Custom";
 		GraphicsSettingsDropdownDataInitialized = true;
 	} 
+}
+static void InitializeStaticCStringData_EDrawMode()
+{
+	static bool EDrawModeDropdownDataInitialized = false;
+	if (!EDrawModeDropdownDataInitialized)
+	{
+		auto fnToStr = [](EDrawMode m) {
+			switch (m)
+			{
+			case EDrawMode::LIT_AND_POSTPROCESSED: return "LIT_AND_POSTPROCESSED";
+			//case EDrawMode::WIREFRAME: return "WIREFRAME";
+			//case EDrawMode::NO_MATERIALS: return "NO_MATERIALS";
+			case EDrawMode::DEPTH: return "DEPTH";
+			case EDrawMode::NORMALS: return "NORMALS";
+			case EDrawMode::ROUGHNESS: return "ROUGHNESS";
+			case EDrawMode::METALLIC: return "METALLIC";
+			case EDrawMode::AO: return "AO";
+			case EDrawMode::ALBEDO: return "ALBEDO (WIP)";
+			case EDrawMode::NUM_DRAW_MODES: return "NUM_DRAW_MODES";
+			}
+			return "";
+		};
+		for (int i = 0; i < (int)EDrawMode::NUM_DRAW_MODES; ++i)
+			pStrDrawModes[i] = fnToStr((EDrawMode)i);
+		
+		EDrawModeDropdownDataInitialized = true;
+	}
 }
 
 // Dropdown data ----------------------------------------------------------------------------------------------
@@ -642,21 +672,25 @@ void VQEngine::DrawProfilerWindow(const FSceneStats& FrameStats, float dt)
 	ImGui::End();
 }
 
-void VQEngine::DrawDebugPanelWindow(FSceneRenderParameters& SceneParams)
+void VQEngine::DrawDebugPanelWindow(FSceneRenderParameters& SceneParams, FPostProcessParameters& PPParams)
 {
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
 
-	const uint32_t DBG_WINDOW_POS_X = W - PROFILER_WINDOW_SIZE_X - DBG_WINDOW_SIZE_X - DBG_WINDOW_PADDING_X*2;
+	const uint32_t DBG_WINDOW_POS_X = std::min(W - PROFILER_WINDOW_SIZE_X - DBG_WINDOW_SIZE_X - DBG_WINDOW_PADDING_X*2, 30u);
 	const uint32_t DBG_WINDOW_POS_Y = H - DBG_WINDOW_SIZE_Y - DBG_WINDOW_PADDING_Y;
 	ImGui::SetNextWindowPos(ImVec2((float)DBG_WINDOW_POS_X, (float)DBG_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(DBG_WINDOW_SIZE_X, DBG_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
 
+	InitializeStaticCStringData_EDrawMode();
 
 	ImGui::Begin("DEBUG PANEL", &mUIState.bWindowVisible_DebugPanel);
 
 	ImGui::Text("Debug Draw");
 	ImGui::Separator();
+	int iDrawMode = (int)PPParams.eDrawMode;
+	ImGui::Combo("Draw Mode", &iDrawMode, pStrDrawModes, _countof(pStrDrawModes));
+	PPParams.eDrawMode = (EDrawMode)iDrawMode;
 	ImGui::Checkbox("Show GameObject Bounding Boxes (Shift+N)", &SceneParams.bDrawGameObjectBoundingBoxes);
 	ImGui::Checkbox("Show Mesh Bounding Boxes (N)", &SceneParams.bDrawMeshBoundingBoxes);
 	ImGui::Checkbox("Show Light Bounding Volumes (L)", &SceneParams.bDrawLightBounds);

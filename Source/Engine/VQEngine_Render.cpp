@@ -187,7 +187,6 @@ void VQEngine::RenderThread_Inititalize()
 		mEventQueue_VQEToWin_Main.AddItem(std::make_shared<HandleWindowTransitionsEvent>(mpWinDebug->GetHWND()));
 	}
 
-	// initialize builtin meshes
 	InitializeBuiltinMeshes();
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
@@ -322,6 +321,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			desc.ResourceState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 			r.Tex_SceneDepthResolve = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeUAV(r.UAV_SceneDepth, 0u, r.Tex_SceneDepthResolve);
+			mRenderer.InitializeSRV(r.SRV_SceneDepth, 0u, r.Tex_SceneDepthResolve);
 		}
 		{	// Scene depth stencil target (for MSAA off)
 			TextureCreateDesc desc("SceneDepth");
@@ -356,6 +356,12 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			desc.ResourceState = D3D12_RESOURCE_STATE_RESOLVE_SOURCE;
 			r.Tex_SceneColorMSAA = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeRTV(r.RTV_SceneColorMSAA, 0u, r.Tex_SceneColorMSAA);
+
+			// scene visualization
+			desc.TexName = "SceneVizMSAA";
+			r.Tex_SceneVisualizationMSAA = mRenderer.CreateTexture(desc);
+			mRenderer.InitializeRTV(r.RTV_SceneVisualizationMSAA, 0u, r.Tex_SceneVisualizationMSAA);
+			mRenderer.InitializeSRV(r.SRV_SceneVisualizationMSAA, 0u, r.Tex_SceneVisualizationMSAA);
 		}
 		{ // MSAA resolve target
 			TextureCreateDesc desc("SceneColor");
@@ -374,8 +380,13 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			r.Tex_SceneColor = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeRTV(r.RTV_SceneColor, 0u, r.Tex_SceneColor);
 			mRenderer.InitializeSRV(r.SRV_SceneColor, 0u, r.Tex_SceneColor);
+			
+			// scene visualization
+			desc.TexName = "SceneViz";
+			r.Tex_SceneVisualization = mRenderer.CreateTexture(desc);
+			mRenderer.InitializeRTV(r.RTV_SceneVisualization, 0u, r.Tex_SceneVisualization);
+			mRenderer.InitializeSRV(r.SRV_SceneVisualization, 0u, r.Tex_SceneVisualization);
 		}
-
 		{ // Scene Normals
 			TextureCreateDesc desc("SceneNormals");
 			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
@@ -456,6 +467,24 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			r.Tex_PostProcess_TonemapperOut = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeUAV(r.UAV_PostProcess_TonemapperOut, 0u, r.Tex_PostProcess_TonemapperOut);
 			mRenderer.InitializeSRV(r.SRV_PostProcess_TonemapperOut, 0u, r.Tex_PostProcess_TonemapperOut);
+		}
+
+		{ // Visualization Resources
+			TextureCreateDesc desc("VizOut");
+			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
+				TonemapperOutputFormat
+				, RenderResolutionX
+				, RenderResolutionY
+				, 1 // Array Size
+				, 1 // MIP levels
+				, 1 // MSAA SampleCount
+				, 0 // MSAA SampleQuality
+				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+			);
+
+			r.Tex_PostProcess_VisualizationOut = mRenderer.CreateTexture(desc);
+			mRenderer.InitializeUAV(r.UAV_PostProcess_VisualizationOut, 0u, r.Tex_PostProcess_VisualizationOut);
+			mRenderer.InitializeSRV(r.SRV_PostProcess_VisualizationOut, 0u, r.Tex_PostProcess_VisualizationOut);
 		}
 
 		{ // FFX-CAS Resources
@@ -594,13 +623,18 @@ void VQEngine::RenderThread_LoadResources()
 		rsc.RTV_SceneNormalsMSAA = mRenderer.CreateRTV();
 		rsc.SRV_SceneNormals = mRenderer.CreateSRV();
 		rsc.SRV_SceneDepthMSAA = mRenderer.CreateSRV();
+		rsc.SRV_SceneDepth = mRenderer.CreateSRV();
 	}
 
 	// scene color pass
 	{
 		rsc.RTV_SceneColorMSAA = mRenderer.CreateRTV();
 		rsc.RTV_SceneColor = mRenderer.CreateRTV();
+		rsc.RTV_SceneVisualization = mRenderer.CreateRTV();
+		rsc.RTV_SceneVisualizationMSAA = mRenderer.CreateRTV();
 		rsc.SRV_SceneColor = mRenderer.CreateSRV();
+		rsc.SRV_SceneVisualization = mRenderer.CreateSRV();
+		rsc.SRV_SceneVisualizationMSAA = mRenderer.CreateSRV();
 	}
 
 	// ambient occlusion pass
@@ -612,6 +646,7 @@ void VQEngine::RenderThread_LoadResources()
 	// post process pass
 	{
 		rsc.UAV_PostProcess_TonemapperOut    = mRenderer.CreateUAV();
+		rsc.UAV_PostProcess_VisualizationOut = mRenderer.CreateUAV();
 		rsc.UAV_PostProcess_BlurIntermediate = mRenderer.CreateUAV(); 
 		rsc.UAV_PostProcess_BlurOutput       = mRenderer.CreateUAV();
 		rsc.UAV_PostProcess_FFXCASOut        = mRenderer.CreateUAV();
@@ -619,6 +654,7 @@ void VQEngine::RenderThread_LoadResources()
 		rsc.UAV_PostProcess_FSR_RCASOut      = mRenderer.CreateUAV();
 
 		rsc.SRV_PostProcess_TonemapperOut    = mRenderer.CreateSRV();
+		rsc.SRV_PostProcess_VisualizationOut = mRenderer.CreateSRV();
 		rsc.SRV_PostProcess_BlurIntermediate = mRenderer.CreateSRV(); 
 		rsc.SRV_PostProcess_BlurOutput       = mRenderer.CreateSRV();
 		rsc.SRV_PostProcess_FFXCASOut        = mRenderer.CreateSRV();
@@ -706,12 +742,15 @@ void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 		mRenderer.DestroyTexture(r.Tex_SceneDepthResolve);
 		mRenderer.DestroyTexture(r.Tex_SceneColor);
 		mRenderer.DestroyTexture(r.Tex_SceneNormals);
+		mRenderer.DestroyTexture(r.Tex_SceneVisualization);
+		mRenderer.DestroyTexture(r.Tex_SceneVisualizationMSAA);
 
 		mRenderer.DestroyTexture(r.Tex_AmbientOcclusion);
 
 		mRenderer.DestroyTexture(r.Tex_PostProcess_BlurOutput);
 		mRenderer.DestroyTexture(r.Tex_PostProcess_BlurIntermediate);
 		mRenderer.DestroyTexture(r.Tex_PostProcess_TonemapperOut);
+		mRenderer.DestroyTexture(r.Tex_PostProcess_VisualizationOut);
 		mRenderer.DestroyTexture(r.Tex_PostProcess_FFXCASOut);
 		mRenderer.DestroyTexture(r.Tex_PostProcess_FSR_EASUOut);
 		mRenderer.DestroyTexture(r.Tex_PostProcess_FSR_RCASOut);
@@ -1099,7 +1138,8 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	assert(PPParams.DisplayResolutionHeight != 0);
 	assert(PPParams.DisplayResolutionWidth != 0);
 	// TODO: undo const cast and assign in a proper spot -------------------------------------------------
-	
+
+	ID3D12Resource* pRsc = nullptr;
 	if constexpr (!RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING)
 	{
 		constexpr size_t THREAD_INDEX = 0;
@@ -1115,17 +1155,17 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		RenderAmbientOcclusion(pCmd, SceneView);
 
-		TransitionForSceneRendering(pCmd, ctx);
+		TransitionForSceneRendering(pCmd, ctx, PPParams);
 
-		RenderSceneColor(pCmd, &CBHeap, SceneView);
+		RenderSceneColor(pCmd, &CBHeap, SceneView, PPParams);
 
-		ResolveMSAA(pCmd);
+		ResolveMSAA(pCmd, PPParams);
 
 		TransitionForPostProcessing(pCmd, PPParams);
 
-		RenderPostProcess(pCmd, &CBHeap, PPParams);
+		pRsc = RenderPostProcess(pCmd, &CBHeap, PPParams);
 
-		RenderUI(pCmd, &CBHeap, ctx, PPParams);
+		RenderUI(pCmd, &CBHeap, ctx, PPParams, pRsc);
 
 		if (bUseHDRRenderPath)
 		{
@@ -1196,17 +1236,17 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		RenderAmbientOcclusion(pCmd_ThisThread, SceneView);
 
-		TransitionForSceneRendering(pCmd_ThisThread, ctx);
+		TransitionForSceneRendering(pCmd_ThisThread, ctx, PPParams);
 
-		RenderSceneColor(pCmd_ThisThread, &CBHeap_This, SceneView);
+		RenderSceneColor(pCmd_ThisThread, &CBHeap_This, SceneView, PPParams);
 
-		ResolveMSAA(pCmd_ThisThread);
+		ResolveMSAA(pCmd_ThisThread, PPParams);
 
 		TransitionForPostProcessing(pCmd_ThisThread, PPParams);
 
-		RenderPostProcess(pCmd_ThisThread, &CBHeap_This, PPParams);
+		pRsc = RenderPostProcess(pCmd_ThisThread, &CBHeap_This, PPParams);
 
-		RenderUI(pCmd_ThisThread, &CBHeap_This, ctx, PPParams);
+		RenderUI(pCmd_ThisThread, &CBHeap_This, ctx, PPParams, pRsc);
 
 		if (bUseHDRRenderPath)
 		{

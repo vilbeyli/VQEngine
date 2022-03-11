@@ -73,6 +73,7 @@ set (Shaders
     "Shaders/UI.hlsl"
     "Shaders/UIHDRComposite.hlsl"
     "Shaders/HDR.hlsl"
+    "Shaders/Visualization.hlsl"
 )
 
 #
