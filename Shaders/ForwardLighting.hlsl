@@ -205,7 +205,7 @@ PSOutput PSMain(PSInput In)
 	// Environment map
 	{
 		const int MAX_REFLECTION_LOD = 7;
-		I_total += CalculateEnvironmentMapIllumination(Surface, V, MAX_REFLECTION_LOD, texEnvMapDiff, texEnvMapSpec, texBRDFIntegral, ClampedLinearSampler);
+		I_total += CalculateEnvironmentMapIllumination(Surface, V, MAX_REFLECTION_LOD, texEnvMapDiff, texEnvMapSpec, texBRDFIntegral, ClampedLinearSampler, cbPerFrame.fHDRIOffsetInRadians);
 	}
 	
 	

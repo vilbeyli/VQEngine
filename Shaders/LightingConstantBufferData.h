@@ -157,6 +157,7 @@ struct PerFrameData
 	float2 f2SpotLightShadowMapDimensions;
 	float2 f2DirectionalLightShadowMapDimensions;
 	float fAmbientLightingFactor;
+	float fHDRIOffsetInRadians;
 };
 struct PerViewData
 {

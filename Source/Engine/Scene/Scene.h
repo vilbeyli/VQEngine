@@ -51,6 +51,7 @@ struct FSceneRenderParameters
 	bool bDrawMeshBoundingBoxes = false;
 	bool bDrawGameObjectBoundingBoxes = false;
 	bool bDrawLightMeshes = true;
+	float fYawSliderValue = 0.0f;
 	float fAmbientLightingFactor = 0.055f;
 	bool bScreenSpaceAO = true;
 };
@@ -67,6 +68,7 @@ struct FSceneView
 	DirectX::XMVECTOR     cameraPosition;
 	float                 MainViewCameraYaw = 0.0f;
 	float                 MainViewCameraPitch = 0.0f;
+	float                 HDRIYawOffset = 0.0f;
 	int                   SceneRTWidth = 0;
 	int                   SceneRTHeight = 0;
 	//bool                  bIsPBRLightingUsed;

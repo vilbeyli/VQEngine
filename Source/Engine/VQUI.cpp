@@ -499,6 +499,8 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 		}
 	}
 
+	ImGui::SliderFloat("HDRI Rotation", &SceneRenderParams.fYawSliderValue, 0.0f, 1.0f);
+
 	const float MaxAmbientLighting = this->ShouldRenderHDR(mpWinMain->GetHWND()) ? 150.0f : 2.0f;
 	MathUtil::Clamp(SceneRenderParams.fAmbientLightingFactor, 0.0f, MaxAmbientLighting);
 	ImGui::SliderFloat("Ambient Lighting Factor", &SceneRenderParams.fAmbientLightingFactor, 0.0f, MaxAmbientLighting, "%.3f");

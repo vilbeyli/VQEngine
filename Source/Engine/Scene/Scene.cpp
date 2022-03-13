@@ -358,6 +358,7 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, int FRAME_DATA_INDEX)
 	SceneView.cameraPosition = XMLoadFloat3(&camPos);
 	SceneView.MainViewCameraYaw = cam.GetYaw();
 	SceneView.MainViewCameraPitch = cam.GetPitch();
+	SceneView.HDRIYawOffset = SceneView.sceneParameters.fYawSliderValue * XM_PI * 2.0f;
 
 	const FFrustumPlaneset ViewFrustumPlanes = FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj);
 
