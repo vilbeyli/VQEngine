@@ -345,15 +345,23 @@ float3 CalculateDirectionalLightIllumination(
 	return BRDF(s, Wi, V_World) * radiance * NdotL;
 }
 
-float3 CalculateEnvironmentMapIllumination(in const BRDF_Surface s, in const float3 V, in const int MAX_REFLECTION_LOD, TextureCube texEnvMapDiff, TextureCube texEnvMapSpec, Texture2D texBRDFIntegrationLUT, SamplerState smpEnvMap)
+float3 CalculateEnvironmentMapIllumination(in const BRDF_Surface s, in const float3 V, in const int MAX_REFLECTION_LOD, TextureCube texEnvMapDiff, TextureCube texEnvMapSpec, Texture2D texBRDFIntegrationLUT, SamplerState smpEnvMap, float fHDRIOffsetRad)
 {
+	const float cosB = cos(-fHDRIOffsetRad);
+	const float sinB = sin(-fHDRIOffsetRad);
+	float3x3 m = {
+		cosB, 0, sinB,
+		0, 1, 0,
+		-sinB, 0, cosB
+	};
+
 	const float NdotV = saturate(dot(s.N, V));
-	const float3 R = reflect(-V, s.N);
+	const float3 R = mul(reflect(-V, s.N), m);
 	const int MIP_LEVEL = s.roughness * MAX_REFLECTION_LOD;
 	
 	const float3 IEnv_SpecularPreFilteredColor = texEnvMapSpec.SampleLevel(smpEnvMap, R, MIP_LEVEL);
 	const float2 F0ScaleBias                   = texBRDFIntegrationLUT.Sample(smpEnvMap, float2(NdotV, s.roughness)).rg;
-	const float3 IEnv_DiffuseIrradiance        = texEnvMapDiff.Sample(smpEnvMap, s.N).rgb;
+	const float3 IEnv_DiffuseIrradiance        = texEnvMapDiff.Sample(smpEnvMap, mul(s.N, m)).rgb;
 	const float AO = 1.0f; // TODO
 
 	return EnvironmentBRDF(s, V, IEnv_DiffuseIrradiance, IEnv_SpecularPreFilteredColor, F0ScaleBias) * AO;

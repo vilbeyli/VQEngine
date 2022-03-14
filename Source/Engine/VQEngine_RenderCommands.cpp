@@ -530,6 +530,7 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 		pPerFrame->f2PointLightShadowMapDimensions = { 1024.0f, 1024.f }; // TODO
 		pPerFrame->f2SpotLightShadowMapDimensions  = { 1024.0f, 1024.f }; // TODO
 		pPerFrame->f2DirectionalLightShadowMapDimensions  = { 2048.0f, 2048.0f }; // TODO
+		pPerFrame->fHDRIOffsetInRadians = SceneView.HDRIYawOffset;
 		
 		if (bUseHDRRenderPath)
 		{
@@ -768,7 +769,7 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 		p.ProjectionParams.bPerspectiveProjection = true;
 		p.ProjectionParams.FieldOfView = p.ProjectionParams.FieldOfView * RAD2DEG; // TODO: remove the need for this conversion
 		p.x = p.y = p.z = 0;
-		p.Yaw   = SceneView.MainViewCameraYaw   * RAD2DEG;
+		p.Yaw   = (SceneView.MainViewCameraYaw + SceneView.HDRIYawOffset)   * RAD2DEG;
 		p.Pitch = SceneView.MainViewCameraPitch * RAD2DEG;
 		skyCam.InitializeCamera(p);
 
