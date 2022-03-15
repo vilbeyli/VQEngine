@@ -204,9 +204,10 @@ bool CreateEnvironmentMapTextureFromHiResAndSaveToDisk(const std::string& Target
 
 	return true;
 }
-void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
+void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMapMip0Resolution)
 {
 	assert(EnvMapName.size() != 0);
+	constexpr int DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION = 64;
 	FEnvironmentMapRenderingResources& env = mResources_MainWnd.EnvironmentMap;
 
 	// if already loaded, unload it
@@ -238,7 +239,7 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	const unsigned MonitorResolutionY = mRenderer.GetWindowSwapChain(mpWinMain->GetHWND()).GetContainingMonitorDesc().DesktopCoordinates.bottom;
 	DetermineResolution_HDRI(desc, MonitorResolutionY);
 	const std::string EnvMapResolution = StrUtil::split(DirectoryUtil::GetFileNameWithoutExtension(desc.FilePath), '_').back(); // file_name_4k.png -> "4k"
-	Log::Info("Loading Environment Map: %s (%s)", EnvMapName.c_str(), EnvMapResolution.c_str());
+	Log::Info("Loading Environment Map: %s (%s | Diff:%dx%d | Spec:%dx%d)", EnvMapName.c_str(), EnvMapResolution.c_str(), DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION, DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION, SpecularMapMip0Resolution, SpecularMapMip0Resolution);
 
 	// if the lowres texture doesn't exist, run a downsample pass (on CPU) on the available texture and save to disk
 	if (!DirectoryUtil::FileExists(desc.FilePath)) // desc.FilePath: "FolderPath/file_name_4k.hdr"
@@ -271,8 +272,8 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	tdesc.bCubemap = true;
 	tdesc.bGenerateMips = true;
 	tdesc.pData = nullptr;
-	tdesc.d3d12Desc.Height = 64; // TODO: drive with gfx settings?
-	tdesc.d3d12Desc.Width  = 64; // TODO: drive with gfx settings?
+	tdesc.d3d12Desc.Height = DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION; // TODO: drive with gfx settings?
+	tdesc.d3d12Desc.Width  = DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION; // TODO: drive with gfx settings?
 	tdesc.d3d12Desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
 	tdesc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 	tdesc.d3d12Desc.DepthOrArraySize = 6;
@@ -295,8 +296,8 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	tdesc.TexName = "EnvMap_IrradianceSpec";
 	tdesc.d3d12Desc.DepthOrArraySize = 6;
 	tdesc.bCubemap = true;
-	tdesc.d3d12Desc.Height = 256; // TODO: drive with gfx settings?
-	tdesc.d3d12Desc.Width  = 256; // TODO: drive with gfx settings?
+	tdesc.d3d12Desc.Height = SpecularMapMip0Resolution;
+	tdesc.d3d12Desc.Width  = SpecularMapMip0Resolution;
 	tdesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 	tdesc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
 	tdesc.d3d12Desc.MipLevels = Image::CalculateMipLevelCount(tdesc.d3d12Desc.Width, tdesc.d3d12Desc.Height) - 1; // 2x2 for the last mip level

@@ -186,6 +186,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	if (paramFile.bOverrideGFXSetting_bUseTripleBuffering)         s.gfx.bUseTripleBuffering = pf.gfx.bUseTripleBuffering;
 	if (paramFile.bOverrideGFXSetting_RenderScale)                 s.gfx.RenderScale         = pf.gfx.RenderScale;
 	if (paramFile.bOverrideGFXSetting_bMaxFrameRate)               s.gfx.MaxFrameRate        = pf.gfx.MaxFrameRate;
+	if (paramFile.bOverrideGFXSetting_EnvironmentMapResolution)    s.gfx.EnvironmentMapResolution = pf.gfx.EnvironmentMapResolution;
 
 	if (paramFile.bOverrideENGSetting_MainWindowWidth)             s.WndMain.Width            = pf.WndMain.Width;
 	if (paramFile.bOverrideENGSetting_MainWindowHeight)            s.WndMain.Height           = pf.WndMain.Height;

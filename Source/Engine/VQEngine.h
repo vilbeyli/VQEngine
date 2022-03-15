@@ -496,7 +496,7 @@ private:
 	void                            InitializeBuiltinMeshes();
 	void                            LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete
 	void                            Load_SceneData_Dispatch();
-	void                            LoadEnvironmentMap(const std::string& EnvMapName);
+	void                            LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMapMip0Resolution);
 
 	HRESULT                         RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderContext& ctx);
 	HRESULT                         RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx);

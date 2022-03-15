@@ -37,6 +37,7 @@ struct FGraphicsSettings
 
 	float RenderScale = 1.0f;
 	int   MaxFrameRate = -1; // -1: Auto (RefreshRate x 1.15) | 0: Unlimited | <int>: specified value
+	int   EnvironmentMapResolution = 256;
 };
 
 struct FWindowSettings

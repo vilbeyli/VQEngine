@@ -123,6 +123,11 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 				else
 					params.EngineSettings.gfx.MaxFrameRate = StrUtil::ParseInt(SettingValue);
 			}
+			if (SettingName == "EnvironmentMapResolution")
+			{
+				params.EngineSettings.gfx.EnvironmentMapResolution = StrUtil::ParseInt(SettingValue);
+				params.bOverrideGFXSetting_EnvironmentMapResolution = true;
+			}
 
 			// 
 			// Engine

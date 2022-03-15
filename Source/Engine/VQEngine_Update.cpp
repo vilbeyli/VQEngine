@@ -451,7 +451,7 @@ void VQEngine::Load_SceneData_Dispatch()
 	// start loading environment map textures
 	if (!SceneRep.EnvironmentMapPreset.empty())
 	{
-		mWorkers_TextureLoading.AddTask([=]() { LoadEnvironmentMap(SceneRep.EnvironmentMapPreset); });
+		mWorkers_TextureLoading.AddTask([=]() { LoadEnvironmentMap(SceneRep.EnvironmentMapPreset, mSettings.gfx.EnvironmentMapResolution); });
 	}
 }
 
@@ -569,7 +569,7 @@ void VQEngine::StartLoadingEnvironmentMap(int IndexEnvMap)
 	mbLoadingEnvironmentMap = true;
 	mWorkers_TextureLoading.AddTask([&, IndexEnvMap]()
 	{
-		LoadEnvironmentMap(mResourceNames.mEnvironmentMapPresetNames[IndexEnvMap]);
+		LoadEnvironmentMap(mResourceNames.mEnvironmentMapPresetNames[IndexEnvMap], mSettings.gfx.EnvironmentMapResolution);
 	});
 }
 
