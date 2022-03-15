@@ -957,8 +957,8 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 		case EDrawMode::NORMALS  : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneNormals); break;
 		case EDrawMode::AO       : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_FFXCACAO_Out); break;
 		case EDrawMode::ALBEDO   : // same as below
-		case EDrawMode::ROUGHNESS: // same as below
 		case EDrawMode::METALLIC : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneVisualization); break;
+		case EDrawMode::ROUGHNESS: srv_ColorIn; break;
 		}
 
 		pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::VIZUALIZATION_CS_PSO));

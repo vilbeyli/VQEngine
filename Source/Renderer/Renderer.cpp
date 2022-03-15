@@ -1250,7 +1250,7 @@ void VQRenderer::LoadPSOs()
 		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_PSO_MSAA_4, psoLoadDesc });
 
 		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS_Viz";
-		psoLoadDesc.ShaderStageCompileDescs[1].Macros.push_back({ "OUTPUT_ROUGHNESS", "1" });
+		psoLoadDesc.ShaderStageCompileDescs[1].Macros.push_back({ "OUTPUT_ALBEDO", "1" });
 		psoDesc.NumRenderTargets = 2;
 		psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16B16A16_FLOAT; // rgba16f vs rgba8unorm 
 		psoDesc.SampleDesc.Count = 1;

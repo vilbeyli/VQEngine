@@ -75,7 +75,7 @@ enum class EDrawMode
 
     if (iDrawMode == DEPTH)
     {
-        OutRGB = pow(texInA.rrr, 30); // TODO: figure out a good depth vizualization
+        OutRGB = pow(texInA.rrr, 500); // TODO: figure out a good depth vizualization
     }
     else if (iDrawMode == NORMALS)
     {
@@ -83,7 +83,7 @@ enum class EDrawMode
     }
     else if (iDrawMode == ROUGHNESS)
     {
-        OutRGB = texInA.rrr;
+        OutRGB = texInA.aaa;
     }
     else if (iDrawMode == METALLIC)
     {

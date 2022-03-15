@@ -49,7 +49,7 @@ struct PSInput
 struct PSOutput
 {
 	float4 color : SV_TARGET0;
-#if OUTPUT_ROUGHNESS || OUTPUT_METALLIC
+#if OUTPUT_METALLIC || OUTPUT_ALBEDO
 	float4 albedo_metallic : SV_TARGET1;
 #endif
 };
@@ -280,26 +280,10 @@ PSOutput PSMain(PSInput In)
 	}
 	
 	// write out
-	o.color = float4(I_total, 1);
+	o.color = float4(I_total, Surface.roughness.r);
 
-	#if OUTPUT_ROUGHNESS || OUTPUT_METALLIC || OUTPUT_ALBEDO
-	o.albedo_metallic = float4(
-	
-	// RGB CHANNEL
-	#if OUTPUT_ROUGHNESS || OUTPUT_METALLIC
-		Surface.roughness.r, Surface.metalness.r, 0,
-	#elif OUTPUT_ALBEDO
-		Surface.diffuseColor, // TODO: add support for albedo colors
-	#endif
-	
-	// A CHANNEL 
-	#ifdef INSTANCED
-			In.instanceID
-	#else
-			0.0f
-	#endif // INSTANCED	
-
-		);
+	#if OUTPUT_METALLIC || OUTPUT_ALBEDO
+	o.albedo_metallic = float4(Surface.diffuseColor, Surface.metalness);
 	#endif
 
 	return o;

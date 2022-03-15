@@ -351,7 +351,7 @@ static void InitializeStaticCStringData_EDrawMode()
 			case EDrawMode::ROUGHNESS: return "ROUGHNESS";
 			case EDrawMode::METALLIC: return "METALLIC";
 			case EDrawMode::AO: return "AO";
-			case EDrawMode::ALBEDO: return "ALBEDO (WIP)";
+			case EDrawMode::ALBEDO: return "ALBEDO";
 			case EDrawMode::NUM_DRAW_MODES: return "NUM_DRAW_MODES";
 			}
 			return "";
