@@ -25,6 +25,7 @@ RWTexture2D<float4> texOut;
 cbuffer VizParams : register(b0)
 {
     int iDrawMode;
+    int iUnpackNormals;
 }
 
 //
@@ -75,11 +76,11 @@ enum class EDrawMode
 
     if (iDrawMode == DEPTH)
     {
-        OutRGB = pow(texInA.rrr, 500); // TODO: figure out a good depth vizualization
+        OutRGB = pow(texInA.rrr, 500);
     }
     else if (iDrawMode == NORMALS)
     {
-        OutRGB = (texInA - 0.5f.xxx) * 2.0f; // unpack normals
+        OutRGB = ((texInA - 0.5f.xxx) * 2.0f) * iUnpackNormals + (1 - iUnpackNormals) * texInA.rgb;
     }
     else if (iDrawMode == ROUGHNESS)
     {

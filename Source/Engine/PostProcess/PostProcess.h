@@ -119,6 +119,7 @@ struct FPostProcessParameters
 	FFSR_EASU   FFSR_EASUParams  = {};
 	EDrawMode   eDrawMode = EDrawMode::LIT_AND_POSTPROCESSED;
 
+	bool bVisualization_UnpackNormals = false;
 	bool bEnableCAS = false;
 	bool bEnableFSR = false;
 	bool bEnableGaussianBlur = false;

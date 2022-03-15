@@ -693,6 +693,10 @@ void VQEngine::DrawDebugPanelWindow(FSceneRenderParameters& SceneParams, FPostPr
 	int iDrawMode = (int)PPParams.eDrawMode;
 	ImGui::Combo("Draw Mode", &iDrawMode, pStrDrawModes, _countof(pStrDrawModes));
 	PPParams.eDrawMode = (EDrawMode)iDrawMode;
+	if (PPParams.eDrawMode == EDrawMode::NORMALS)
+	{
+		ImGui::Checkbox("Unpack Normals", &PPParams.bVisualization_UnpackNormals);
+	}
 	ImGui::Checkbox("Show GameObject Bounding Boxes (Shift+N)", &SceneParams.bDrawGameObjectBoundingBoxes);
 	ImGui::Checkbox("Show Mesh Bounding Boxes (N)", &SceneParams.bDrawMeshBoundingBoxes);
 	ImGui::Checkbox("Show Light Bounding Volumes (L)", &SceneParams.bDrawLightBounds);
