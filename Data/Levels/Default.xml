@@ -55,7 +55,7 @@
         </Transform>
         <Model>
             <Mesh>Cube</Mesh>
-            <MaterialName>Checkerboard</MaterialName>
+            <MaterialName>Checkerboard_Glossy</MaterialName>
         </Model>
     </GameObject>
     
@@ -79,7 +79,7 @@
         </Transform>
         <Model>
             <Mesh>Cylinder</Mesh>
-            <MaterialName>Checkerboard_Grayscale</MaterialName>
+            <MaterialName>Black_VeryRough</MaterialName>
         </Model>
     </GameObject>
 
@@ -102,7 +102,7 @@
         </Transform>
         <Model>
             <Mesh>Cylinder</Mesh>
-            <MaterialName>Checkerboard_Grayscale</MaterialName>
+            <MaterialName>Black_VeryRough</MaterialName>
         </Model>
     </GameObject>
     
@@ -125,7 +125,7 @@
         </Transform>
         <Model>
             <Mesh>Cylinder</Mesh>
-            <MaterialName>Checkerboard_Grayscale</MaterialName>
+            <MaterialName>Black_VeryRough</MaterialName>
         </Model>
     </GameObject>
     

@@ -46,4 +46,18 @@
     </Material>
 
 
+    <!-- BLACK -->
+    <Material>
+        <Name>Black_VerySmooth</Name>
+        <Diffuse>0.05 0.05 0.05</Diffuse>
+        <Metalness>0.0</Metalness>
+        <Roughness>0.06</Roughness>
+    </Material>
+    <Material>
+        <Name>Black_VeryRough</Name>
+        <Diffuse>0.001 0.001 0.001</Diffuse>
+        <Metalness>0.0</Metalness>
+        <Roughness>0.90</Roughness>
+    </Material>
+
 </MetallicMaterials>

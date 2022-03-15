@@ -11,5 +11,10 @@
         <DiffuseMap>Procedural/Checkerboard_Grayscale</DiffuseMap>
         <Roughness>0.85</Roughness>
     </Material>
+    <Material>
+        <Name>Checkerboard_Glossy</Name>
+        <DiffuseMap>Procedural/Checkerboard</DiffuseMap>
+        <RoughnessMap>Procedural/Checkerboard</RoughnessMap>
+    </Material>
 
 </DefaultMaterials>
