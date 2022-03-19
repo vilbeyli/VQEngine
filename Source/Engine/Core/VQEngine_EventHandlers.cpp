@@ -270,30 +270,33 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 		SwapChain& Swapchain = mRenderer.GetWindowSwapChain(p->hwnd);
 		const int NUM_BACK_BUFFERS =  Swapchain.GetNumBackBuffers();
 
-		// Update Camera Projection Matrices
-		Camera& cam = mpScene->GetActiveCamera(); // TODO: all cameras?
-		FProjectionMatrixParameters UpdatedProjectionMatrixParams = cam.GetProjectionParameters();
-		UpdatedProjectionMatrixParams.ViewportWidth  = static_cast<float>(uWidth);
-		UpdatedProjectionMatrixParams.ViewportHeight = static_cast<float>(uHeight);
-		cam.SetProjectionMatrix(UpdatedProjectionMatrixParams);
-
-		// Update PostProcess Data
-		for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
+		if ((uWidth | uHeight) != 0)
 		{
-			FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(i);
+			// Update Camera Projection Matrices
+			Camera& cam = mpScene->GetActiveCamera(); // TODO: all cameras?
+			FProjectionMatrixParameters UpdatedProjectionMatrixParams = cam.GetProjectionParameters();
+			UpdatedProjectionMatrixParams.ViewportWidth = static_cast<float>(uWidth);
+			UpdatedProjectionMatrixParams.ViewportHeight = static_cast<float>(uHeight);
+			cam.SetProjectionMatrix(UpdatedProjectionMatrixParams);
 
-			// Update FidelityFX constant blocks
-			if (PPParams.IsFFXCASEnabled())
+			// Update PostProcess Data
+			for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
 			{
-				PPParams.FFXCASParams.UpdateCASConstantBlock(uWidth, uHeight, uWidth, uHeight);
-			}
-			if (PPParams.IsFSREnabled())
-			{
-				const float fResolutionScale = PPParams.FFSR_EASUParams.GetScreenPercentage();
-				const uint InputWidth  = static_cast<uint>(fResolutionScale * uWidth);
-				const uint InputHeight = static_cast<uint>(fResolutionScale * uHeight);
-				PPParams.FFSR_EASUParams.UpdateEASUConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, uWidth, uHeight);
-				PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
+				FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(i);
+
+				// Update FidelityFX constant blocks
+				if (PPParams.IsFFXCASEnabled())
+				{
+					PPParams.FFXCASParams.UpdateCASConstantBlock(uWidth, uHeight, uWidth, uHeight);
+				}
+				if (PPParams.IsFSREnabled())
+				{
+					const float fResolutionScale = PPParams.FFSR_EASUParams.GetScreenPercentage();
+					const uint InputWidth  = static_cast<uint>(fResolutionScale * uWidth);
+					const uint InputHeight = static_cast<uint>(fResolutionScale * uHeight);
+					PPParams.FFSR_EASUParams.UpdateEASUConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, uWidth, uHeight);
+					PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
+				}
 			}
 		}
 	}
