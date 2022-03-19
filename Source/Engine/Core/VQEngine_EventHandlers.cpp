@@ -270,7 +270,7 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 		SwapChain& Swapchain = mRenderer.GetWindowSwapChain(p->hwnd);
 		const int NUM_BACK_BUFFERS =  Swapchain.GetNumBackBuffers();
 
-		if ((uWidth | uHeight) != 0)
+		if ((uWidth | uHeight) != 0 && mpScene)
 		{
 			// Update Camera Projection Matrices
 			Camera& cam = mpScene->GetActiveCamera(); // TODO: all cameras?

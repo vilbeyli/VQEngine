@@ -109,7 +109,7 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 		if (paramName == "-Fullscreen" || paramName == "-FullScreen" || paramName == "-fullscreen")
 		{
 			refStartupParams.bOverrideENGSetting_bDisplayMode = true;
-			refStartupParams.EngineSettings.WndMain.DisplayMode = EDisplayMode::EXCLUSIVE_FULLSCREEN;
+			refStartupParams.EngineSettings.WndMain.DisplayMode = EDisplayMode::BORDERLESS_FULLSCREEN;
 		}
 		if (paramName == "-VSync" || paramName == "-vsync" || paramName == "-Vsync")
 		{
