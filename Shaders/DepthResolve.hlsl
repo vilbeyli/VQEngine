@@ -15,8 +15,13 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
-Texture2DMS<float> input  : register(t0);
-RWTexture2D<float> output : register(u0);
+
+Texture2DMS<float>  texDepthMS   : register(t0);
+Texture2DMS<float3> texNormalsMS : register(t1);
+
+RWTexture2D<float>  outDepth   : register(u0);
+RWTexture2D<float3> outNormals : register(u1);
+
 cbuffer DepthResolveParameters : register(b0)
 {
 	uint ImageSizeX;
@@ -32,11 +37,18 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 		return;
 	}
  
-	float result = 1;
-	     if (SampleCount == 2) [unroll] for (uint i = 0; i <  2; ++i) { result = min(result, input.Load(dispatchThreadId.xy, i).r); }
-	else if (SampleCount == 4) [unroll] for (uint j = 0; j <  4; ++j) { result = min(result, input.Load(dispatchThreadId.xy, j).r); }
-	else if (SampleCount == 8) [unroll] for (uint k = 0; k <  8; ++k) { result = min(result, input.Load(dispatchThreadId.xy, k).r); }
-	else if (SampleCount == 16)[unroll] for (uint l = 0; l < 16; ++l) { result = min(result, input.Load(dispatchThreadId.xy, l).r); }
+	float3 result = 1.0f.xxx;
+	     if (SampleCount == 2) [unroll] for (uint i = 0; i <  2; ++i) { result.r = min(result.r, texDepthMS.Load(dispatchThreadId.xy, i).r); }
+	else if (SampleCount == 4) [unroll] for (uint j = 0; j <  4; ++j) { result.r = min(result.r, texDepthMS.Load(dispatchThreadId.xy, j).r); }
+	else if (SampleCount == 8) [unroll] for (uint k = 0; k <  8; ++k) { result.r = min(result.r, texDepthMS.Load(dispatchThreadId.xy, k).r); }
+	else if (SampleCount == 16)[unroll] for (uint l = 0; l < 16; ++l) { result.r = min(result.r, texDepthMS.Load(dispatchThreadId.xy, l).r); }
 
-	output[dispatchThreadId.xy] = result;
+	outDepth[dispatchThreadId.xy] = result.r;
+
+	     if (SampleCount == 2) [unroll] for (uint i = 0; i <  2; ++i) { result.rgb = min(result.rgb, texNormalsMS.Load(dispatchThreadId.xy, i).rgb); }
+	else if (SampleCount == 4) [unroll] for (uint j = 0; j <  4; ++j) { result.rgb = min(result.rgb, texNormalsMS.Load(dispatchThreadId.xy, j).rgb); }
+	else if (SampleCount == 8) [unroll] for (uint k = 0; k <  8; ++k) { result.rgb = min(result.rgb, texNormalsMS.Load(dispatchThreadId.xy, k).rgb); }
+	else if (SampleCount == 16)[unroll] for (uint l = 0; l < 16; ++l) { result.rgb = min(result.rgb, texNormalsMS.Load(dispatchThreadId.xy, l).rgb); }
+
+	outNormals[dispatchThreadId.xy] = result.rgb;
 }

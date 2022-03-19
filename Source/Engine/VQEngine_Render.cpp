@@ -397,12 +397,13 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, 0 // MIP levels
 				, 1 // MSAA SampleCount
 				, 0 // MSAA SampleQuality
-				, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
+				, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
 			);
 			desc.ResourceState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 			r.Tex_SceneNormals = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeRTV(r.RTV_SceneNormals, 0u, r.Tex_SceneNormals);
 			mRenderer.InitializeSRV(r.SRV_SceneNormals, 0u, r.Tex_SceneNormals);
+			mRenderer.InitializeUAV(r.UAV_SceneNormals, 0u, r.Tex_SceneNormals);
 
 			//mRenderPass_DepthPrePass.OnCreateWindowSizeDependentResources(Width, Height, nullptr);
 		}
@@ -422,6 +423,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			desc.ResourceState = D3D12_RESOURCE_STATE_RENDER_TARGET;
 			r.Tex_SceneNormalsMSAA = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeRTV(r.RTV_SceneNormalsMSAA, 0u, r.Tex_SceneNormalsMSAA);
+			mRenderer.InitializeSRV(r.SRV_SceneNormalsMSAA, 0u, r.Tex_SceneNormalsMSAA);
 
 			//mRenderPass_DepthPrePass.OnCreateWindowSizeDependentResources(Width, Height, nullptr);
 		}
@@ -619,9 +621,11 @@ void VQEngine::RenderThread_LoadResources()
 		rsc.DSV_SceneDepthMSAA = mRenderer.CreateDSV();
 		rsc.DSV_SceneDepth = mRenderer.CreateDSV();
 		rsc.UAV_SceneDepth = mRenderer.CreateUAV();
+		rsc.UAV_SceneNormals = mRenderer.CreateUAV();
 		rsc.RTV_SceneNormals = mRenderer.CreateRTV();
 		rsc.RTV_SceneNormalsMSAA = mRenderer.CreateRTV();
 		rsc.SRV_SceneNormals = mRenderer.CreateSRV();
+		rsc.SRV_SceneNormalsMSAA = mRenderer.CreateSRV();
 		rsc.SRV_SceneDepthMSAA = mRenderer.CreateSRV();
 		rsc.SRV_SceneDepth = mRenderer.CreateSRV();
 	}

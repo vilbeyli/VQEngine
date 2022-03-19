@@ -314,30 +314,21 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 	}
 
 	// resolve if MSAA
-
 	if (bMSAA)
 	{
 		DXGI_FORMAT fmtDepth = DXGI_FORMAT_D32_FLOAT;
 
-		// transition for resolve
+		// transition for resolve first
 		const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 		{
-				  CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA , D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE)
-				, CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals     , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RESOLVE_DEST)
-				
-				, CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA   , D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
-				, CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+			  CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA , D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+			, CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA   , D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+			, CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals     , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+			, CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)			
 		};
 		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
 
-		// resolve
-		{
-			ResolveDepth(pCmd, pCBufferHeap, rsc.Tex_SceneDepthMSAA, rsc.SRV_SceneDepthMSAA, rsc.UAV_SceneDepth);
-		}
-		{
-			SCOPED_GPU_MARKER(pCmd, "ResolveSceneNormalsMSAA");
-			pCmd->ResolveSubresource(pRscNormals, 0, pRscNormalsMSAA, 0, mRenderer.GetTextureFormat(mResources_MainWnd.Tex_SceneNormalsMSAA));
-		}
+		ResolveDepthAndNormals(pCmd, pCBufferHeap, rsc.Tex_SceneDepthMSAA, rsc.SRV_SceneDepthMSAA, rsc.UAV_SceneDepth, rsc.Tex_SceneNormalsMSAA, rsc.SRV_SceneNormalsMSAA, rsc.UAV_SceneNormals);
 	}
 
 	// transition for shader read
@@ -345,23 +336,19 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 		std::vector<CD3DX12_RESOURCE_BARRIER> Barriers;
 		if (bMSAA)
 		{
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA, D3D12_RESOURCE_STATE_RESOLVE_SOURCE           , D3D12_RESOURCE_STATE_RENDER_TARGET));
+			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
 			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA  , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_UNORDERED_ACCESS         , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
 		}
 		else
 		{
 			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_COPY_SOURCE));
 			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST));
+			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
 		}
 
-		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, 
-			bMSAA ? D3D12_RESOURCE_STATE_RESOLVE_DEST : D3D12_RESOURCE_STATE_RENDER_TARGET,
-			D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-		));
-
 		pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
-
 
 		Barriers.clear();
 
@@ -823,10 +810,12 @@ void VQEngine::ResolveMSAA(ID3D12GraphicsCommandList* pCmd, const FPostProcessPa
 	}
 }
 
-void VQEngine::ResolveDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTexture, SRV_ID SRVDepthTexture, UAV_ID UAVDepthResolveTexture)
+void VQEngine::ResolveDepthAndNormals(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTexture, SRV_ID SRVDepth, UAV_ID UAVDepthResolve, TextureID NormalTexture, SRV_ID SRVNormal, UAV_ID UAVNormalResolve)
 {
-	const SRV& srvMSAADepthSource = mRenderer.GetSRV(SRVDepthTexture);
-	const UAV& uavDepthResolveTarget = mRenderer.GetUAV(UAVDepthResolveTexture);
+	const SRV& srvMSAADepthSource = mRenderer.GetSRV(SRVDepth);
+	const SRV& srvMSAANormalSource = mRenderer.GetSRV(SRVNormal);
+	const UAV& uavDepthResolveTarget = mRenderer.GetUAV(UAVDepthResolve);
+	const UAV& uavNormalResolveTarget = mRenderer.GetUAV(UAVNormalResolve);
 	
 	int W, H;
 	int NumSamples = 4; // TODO: generic?
@@ -848,12 +837,14 @@ void VQEngine::ResolveDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* 
 	pCBufferHeap->AllocConstantBuffer(sizeof(FParams), (void**)&pConstBuffer, &cbAddr);
 	*pConstBuffer = CBuffer;
 
-	SCOPED_GPU_MARKER(pCmd, "ResolveDepth");
+	SCOPED_GPU_MARKER(pCmd, "ResolveDepthAndNormals");
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_RESOLVE));
-	pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(3));
+	pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(17));
 	pCmd->SetComputeRootDescriptorTable(0, srvMSAADepthSource.GetGPUDescHandle());
-	pCmd->SetComputeRootDescriptorTable(1, uavDepthResolveTarget.GetGPUDescHandle());
-	pCmd->SetComputeRootConstantBufferView(2, cbAddr);
+	pCmd->SetComputeRootDescriptorTable(1, srvMSAANormalSource.GetGPUDescHandle());
+	pCmd->SetComputeRootDescriptorTable(2, uavDepthResolveTarget.GetGPUDescHandle());
+	pCmd->SetComputeRootDescriptorTable(3, uavNormalResolveTarget.GetGPUDescHandle());
+	pCmd->SetComputeRootConstantBufferView(4, cbAddr);
 	pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
 }
 
