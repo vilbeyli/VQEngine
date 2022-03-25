@@ -1516,7 +1516,7 @@ void VQRenderer::LoadPSOs()
 
 		FPSOLoadDesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_DepthResolveCS";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_5_0" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_0" });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[17];
 		PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_RESOLVE, psoLoadDesc });
 	}
