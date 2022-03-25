@@ -383,6 +383,100 @@ static void ReportErrorAndReleaseBlob(ComPtr<ID3DBlob>& pBlob)
 	}
 }
 
+static enum EDefaultSampler
+{
+	POINT_BORDER = 0,
+	POINT_WRAP,
+	POINT_CLAMP,
+
+	BILINEAR_BORDER,
+	BILINEAR_WRAP,
+	BILINEAR_CLAMP,
+	
+	TRILINEAR_BORDER,
+	TRILINEAR_WRAP,
+	TRILINEAR_CLAMP,
+	
+	ANISOTROPIC_BORDER,
+	ANISOTROPIC_WRAP,
+	ANISOTROPIC_CLAMP,
+
+	NUM_DEFAULT_SAMPLERS
+};
+static D3D12_STATIC_SAMPLER_DESC GetDefaultSamplerDesc(EDefaultSampler eSampler, D3D12_SHADER_VISIBILITY eShaderVisibility, UINT uShaderRegister = 0, UINT uRegisterSpace = 0)
+{
+	D3D12_STATIC_SAMPLER_DESC desc = {};
+
+	switch (eSampler) // Address Mode
+	{
+	case POINT_BORDER:
+	case BILINEAR_BORDER:
+	case TRILINEAR_BORDER:
+	case ANISOTROPIC_BORDER:
+		desc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+		desc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+		desc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+		break;
+
+	case POINT_WRAP:
+	case BILINEAR_WRAP:
+	case TRILINEAR_WRAP:
+	case ANISOTROPIC_WRAP:
+		desc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		desc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		desc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		break;
+
+	case POINT_CLAMP:
+	case BILINEAR_CLAMP:
+	case TRILINEAR_CLAMP:
+	case ANISOTROPIC_CLAMP:
+		desc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		desc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		desc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		break;
+	}
+
+	switch (eSampler) // Filter
+	{
+	case POINT_BORDER:
+	case POINT_WRAP:
+	case POINT_CLAMP:
+		desc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+		break;
+
+	case BILINEAR_BORDER:
+	case BILINEAR_WRAP:
+	case BILINEAR_CLAMP:
+		desc.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+		break;
+
+	case TRILINEAR_BORDER:
+	case TRILINEAR_WRAP:
+	case TRILINEAR_CLAMP:
+		desc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+		break;
+
+	case ANISOTROPIC_BORDER:
+	case ANISOTROPIC_WRAP:
+	case ANISOTROPIC_CLAMP:
+		desc.Filter = D3D12_FILTER_ANISOTROPIC;
+		break;
+	}
+
+	desc.MipLODBias = 0;
+	desc.MaxAnisotropy = 0;
+	desc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+	desc.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+
+	desc.MinLOD = 0.0f;
+	desc.MaxLOD = D3D12_FLOAT32_MAX;
+	desc.ShaderRegister = uShaderRegister;
+	desc.RegisterSpace = uRegisterSpace;
+	desc.ShaderVisibility = eShaderVisibility;
+	return desc;
+}
+
 void VQRenderer::LoadRootSignatures()
 {
 	HRESULT hr = {};
@@ -424,20 +518,7 @@ void VQRenderer::LoadRootSignatures()
 		CD3DX12_ROOT_PARAMETER1 rootParameters[1];
 		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
 
-		D3D12_STATIC_SAMPLER_DESC sampler = {};
-		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-		sampler.MipLODBias = 0;
-		sampler.MaxAnisotropy = 0;
-		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-		sampler.MinLOD = 0.0f;
-		sampler.MaxLOD = D3D12_FLOAT32_MAX;
-		sampler.ShaderRegister = 0;
-		sampler.RegisterSpace = 0;
-		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		D3D12_STATIC_SAMPLER_DESC sampler = GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_BORDER, D3D12_SHADER_VISIBILITY_PIXEL);
 
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
@@ -460,21 +541,7 @@ void VQRenderer::LoadRootSignatures()
 		//rootParameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_VERTEX); // InitAsCBufferView?
 		rootParameters[1].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_VERTEX);
 
-		D3D12_STATIC_SAMPLER_DESC sampler = {};
-		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.MipLODBias = 0;
-		sampler.MaxAnisotropy = 0;
-		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-		sampler.MinLOD = 0.0f;
-		sampler.MaxLOD = D3D12_FLOAT32_MAX;
-		sampler.ShaderRegister = 0;
-		sampler.RegisterSpace = 0;
-		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
+		D3D12_STATIC_SAMPLER_DESC sampler = GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_WRAP, D3D12_SHADER_VISIBILITY_PIXEL);
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 1, &sampler, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
@@ -518,26 +585,10 @@ void VQRenderer::LoadRootSignatures()
 		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[1].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL);
 
-		D3D12_STATIC_SAMPLER_DESC samplers[2] = {};
-		D3D12_STATIC_SAMPLER_DESC sampler = {};
-		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.MipLODBias = 0;
-		sampler.MaxAnisotropy = 0;
-		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-		sampler.MinLOD = 0.0f;
-		sampler.MaxLOD = D3D12_FLOAT32_MAX;
-		sampler.ShaderRegister = 0;
-		sampler.RegisterSpace = 0;
-		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-		samplers[0] = sampler;
-
-		sampler.ShaderRegister = 1;
-		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-		samplers[1] = sampler;
+		D3D12_STATIC_SAMPLER_DESC samplers[2] = {
+			GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_WRAP, D3D12_SHADER_VISIBILITY_PIXEL, 0),
+			GetDefaultSamplerDesc(EDefaultSampler::POINT_WRAP    , D3D12_SHADER_VISIBILITY_PIXEL, 1) 
+		};
 
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, _countof(samplers), &samplers[0], D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
@@ -590,40 +641,13 @@ void VQRenderer::LoadRootSignatures()
 		// SSAO map binding
 		rootParameters[10].InitAsDescriptorTable(1, &ranges[7], D3D12_SHADER_VISIBILITY_PIXEL);
 
-		D3D12_STATIC_SAMPLER_DESC samplers[4] = {};
-		D3D12_STATIC_SAMPLER_DESC sampler = {};
-		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.MipLODBias = 0;
-		sampler.MaxAnisotropy = 0;
-		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-		sampler.MinLOD = 0.0f;
-		sampler.MaxLOD = D3D12_FLOAT32_MAX;
-		sampler.ShaderRegister = 0;
-		sampler.RegisterSpace = 0;
-		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-		samplers[0] = sampler;
-
-		sampler.ShaderRegister = 3;
-		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-		samplers[3] = sampler;
-
-
-		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.ShaderRegister = 1;
-		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-		samplers[1] = sampler;
-
-		sampler.ShaderRegister = 2;
-		sampler.Filter = D3D12_FILTER_ANISOTROPIC;
-		samplers[2] = sampler;
+		D3D12_STATIC_SAMPLER_DESC samplers[4] = 
+		{
+			GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_WRAP , D3D12_SHADER_VISIBILITY_PIXEL, 0),
+			GetDefaultSamplerDesc(EDefaultSampler::POINT_WRAP, D3D12_SHADER_VISIBILITY_PIXEL, 1),
+			GetDefaultSamplerDesc(EDefaultSampler::ANISOTROPIC_WRAP, D3D12_SHADER_VISIBILITY_PIXEL, 2),
+			GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_CLAMP, D3D12_SHADER_VISIBILITY_PIXEL, 3),
+		};
 
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, _countof(samplers), &samplers[0], D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
@@ -657,20 +681,7 @@ void VQRenderer::LoadRootSignatures()
 
 	// ShadowDepthPass Root Signatures [7-9]
 	{
-		D3D12_STATIC_SAMPLER_DESC sampler = {};
-		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.MipLODBias = 0;
-		sampler.MaxAnisotropy = 0;
-		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-		sampler.MinLOD = 0.0f;
-		sampler.MaxLOD = D3D12_FLOAT32_MAX;
-		sampler.ShaderRegister = 0;
-		sampler.RegisterSpace = 0;
-		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		D3D12_STATIC_SAMPLER_DESC sampler = GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_WRAP, D3D12_SHADER_VISIBILITY_PIXEL, 0);
 		{
 			CD3DX12_ROOT_PARAMETER1 rootParameters[1];
 			rootParameters[0].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_VERTEX);
@@ -733,22 +744,7 @@ void VQRenderer::LoadRootSignatures()
 		rootParameters[2].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[3].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_PIXEL);
 
-		D3D12_STATIC_SAMPLER_DESC samplers[1] = {};
-		D3D12_STATIC_SAMPLER_DESC sampler = {};
-		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.MipLODBias = 0;
-		sampler.MaxAnisotropy = 0;
-		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-		sampler.MinLOD = 0.0f;
-		sampler.MaxLOD = D3D12_FLOAT32_MAX;
-		sampler.ShaderRegister = 0;
-		sampler.RegisterSpace = 0;
-		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-		samplers[0] = sampler;
+		D3D12_STATIC_SAMPLER_DESC samplers[1] = { GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_WRAP , D3D12_SHADER_VISIBILITY_PIXEL, 0) };
 
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 		rootSignatureDesc.Init_1_1(
@@ -840,40 +836,13 @@ void VQRenderer::LoadRootSignatures()
 		rootParameters[1].InitAsConstantBufferView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL); // VS-PS
 
 
-		D3D12_STATIC_SAMPLER_DESC samplers[4] = {};
-		D3D12_STATIC_SAMPLER_DESC sampler = {};
-		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.MipLODBias = 0;
-		sampler.MaxAnisotropy = 0;
-		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-		sampler.MinLOD = 0.0f;
-		sampler.MaxLOD = D3D12_FLOAT32_MAX;
-		sampler.ShaderRegister = 0;
-		sampler.RegisterSpace = 0;
-		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-		samplers[0] = sampler;
-
-		sampler.ShaderRegister = 3;
-		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-		samplers[3] = sampler;
-
-
-		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.ShaderRegister = 1;
-		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-		samplers[1] = sampler;
-
-		sampler.ShaderRegister = 2;
-		sampler.Filter = D3D12_FILTER_ANISOTROPIC;
-		samplers[2] = sampler;
+		D3D12_STATIC_SAMPLER_DESC samplers[4] = 
+		{
+			GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_WRAP  , D3D12_SHADER_VISIBILITY_PIXEL, 0),
+			GetDefaultSamplerDesc(EDefaultSampler::POINT_WRAP      , D3D12_SHADER_VISIBILITY_PIXEL, 1),
+			GetDefaultSamplerDesc(EDefaultSampler::ANISOTROPIC_WRAP, D3D12_SHADER_VISIBILITY_PIXEL, 2),
+			GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_CLAMP , D3D12_SHADER_VISIBILITY_PIXEL, 3),
+		};
 
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, _countof(samplers), &samplers[0], D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
@@ -899,22 +868,7 @@ void VQRenderer::LoadRootSignatures()
 		rootParameters[2].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL);
 		//rootParameters[3].InitAsDescriptorTable(1, &ranges[2], D3D12_SHADER_VISIBILITY_ALL);
 
-		D3D12_STATIC_SAMPLER_DESC samplers[1] = {};
-		D3D12_STATIC_SAMPLER_DESC sampler = {};
-		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		sampler.MipLODBias = 0;
-		sampler.MaxAnisotropy = 0;
-		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-		sampler.MinLOD = 0.0f;
-		sampler.MaxLOD = D3D12_FLOAT32_MAX;
-		sampler.ShaderRegister = 0;
-		sampler.RegisterSpace = 0;
-		sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-		samplers[0] = sampler;
+		D3D12_STATIC_SAMPLER_DESC samplers[1] = { GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_WRAP, D3D12_SHADER_VISIBILITY_PIXEL, 1) };
 
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, _countof(samplers), samplers, D3D12_ROOT_SIGNATURE_FLAG_NONE);
