@@ -383,7 +383,7 @@ static void ReportErrorAndReleaseBlob(ComPtr<ID3DBlob>& pBlob)
 	}
 }
 
-static enum EDefaultSampler
+enum EDefaultSampler
 {
 	POINT_BORDER = 0,
 	POINT_WRAP,
@@ -868,7 +868,7 @@ void VQRenderer::LoadRootSignatures()
 		rootParameters[2].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL);
 		//rootParameters[3].InitAsDescriptorTable(1, &ranges[2], D3D12_SHADER_VISIBILITY_ALL);
 
-		D3D12_STATIC_SAMPLER_DESC samplers[1] = { GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_WRAP, D3D12_SHADER_VISIBILITY_PIXEL, 1) };
+		D3D12_STATIC_SAMPLER_DESC samplers[1] = { GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_WRAP, D3D12_SHADER_VISIBILITY_ALL, 0) };
 
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, _countof(samplers), samplers, D3D12_ROOT_SIGNATURE_FLAG_NONE);
