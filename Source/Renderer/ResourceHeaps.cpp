@@ -50,12 +50,14 @@
 // StaticResourceViewHeap
 //
 //--------------------------------------------------------------------------------------
-void StaticResourceViewHeap::Create(ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP_TYPE heapType, uint32 descriptorCount, bool forceCPUVisible)
+
+#include "../../Libs/VQUtils/Source/utils.h"
+void StaticResourceViewHeap::Create(ID3D12Device* pDevice, const std::string& ResourceName, D3D12_DESCRIPTOR_HEAP_TYPE heapType, uint32 descriptorCount, bool forceCPUVisible)
 {
-    mDescriptorCount = descriptorCount;
-    mIndex = 0;
+    this->mDescriptorCount = descriptorCount;
+    this->mIndex = 0;
         
-    mDescriptorElementSize = pDevice->GetDescriptorHandleIncrementSize(heapType);
+    this->mDescriptorElementSize = pDevice->GetDescriptorHandleIncrementSize(heapType);
 
     D3D12_DESCRIPTOR_HEAP_DESC descHeap;
     descHeap.NumDescriptors = descriptorCount;
@@ -71,7 +73,8 @@ void StaticResourceViewHeap::Create(ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP
     descHeap.NodeMask = 0;
 
     pDevice->CreateDescriptorHeap(&descHeap, IID_PPV_ARGS(&mpHeap));
-    mpHeap->SetName(L"StaticHeap");
+    this->mbGPUVisible = descHeap.Flags == D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    this->mpHeap->SetName(StrUtil::ASCIIToUnicode(ResourceName).c_str());
 }
 
 void StaticResourceViewHeap::Destroy()
@@ -90,8 +93,9 @@ bool StaticResourceViewHeap::AllocDescriptor(uint32 size, ResourceView* pRV)
     D3D12_CPU_DESCRIPTOR_HANDLE CPUView = mpHeap->GetCPUDescriptorHandleForHeapStart();
     CPUView.ptr += mIndex * mDescriptorElementSize;
 
-    D3D12_GPU_DESCRIPTOR_HANDLE GPUView = mpHeap->GetGPUDescriptorHandleForHeapStart();
-    GPUView.ptr += mIndex * mDescriptorElementSize;
+    
+    D3D12_GPU_DESCRIPTOR_HANDLE GPUView = mbGPUVisible ? mpHeap->GetGPUDescriptorHandleForHeapStart() : D3D12_GPU_DESCRIPTOR_HANDLE{};
+    GPUView.ptr += mbGPUVisible ? mIndex * mDescriptorElementSize : GPUView.ptr;
 
     mIndex += size;
 

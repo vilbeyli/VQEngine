@@ -101,6 +101,7 @@ enum EBuiltinPSOs // TODO: remove the hardcoded PSOs when a generic Shader solut
 	FFX_SPD_CS_PSO,
 	FFX_FSR1_EASU_CS_PSO,
 	FFX_FSR1_RCAS_CS_PSO,
+	DOWNSAMPLE_DEPTH_CS_PSO,
 	NUM_BUILTIN_PSOs
 };
 
@@ -159,7 +160,8 @@ public:
 	void                         InitializeSRV(SRV_ID srvID, uint heapIndex, D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc);
 	void                         InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID);
 	void                         InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID, int arraySlice, int mipLevel);
-	void                         InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID);
+	void                         InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, uint arraySlice = 0, uint mipSlice = 0);
+	void                         InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID texID, DXGI_FORMAT bufferUAVFormatOverride = DXGI_FORMAT::DXGI_FORMAT_UNKNOWN);
 
 	void                         DestroyTexture(TextureID& texID);
 	void                         DestroySRV(SRV_ID& srvID);
@@ -257,7 +259,7 @@ private:
 
 
 	// root signatures & PSOs
-	std::vector<ID3D12RootSignature*> mpBuiltinRootSignatures;
+	std::vector<ID3D12RootSignature*> mpBuiltinRootSignatures; // TODO: unordered_map
 	std::unordered_map<PSO_ID, ID3D12PipelineState*> mPSOs;
 
 	// data

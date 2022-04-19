@@ -120,7 +120,7 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 	// Create the device
 	FDeviceCreateDesc deviceDesc = {};
 	deviceDesc.bEnableDebugLayer = ENABLE_DEBUG_LAYER;
-	deviceDesc.bEnableValidationLayer = ENABLE_VALIDATION_LAYER;
+	deviceDesc.bEnableGPUValidationLayer = ENABLE_VALIDATION_LAYER;
 	const bool bDeviceCreateSucceeded = mDevice.Create(deviceDesc);
 	ID3D12Device* pDevice = pVQDevice->GetDevicePtr();
 
@@ -345,13 +345,13 @@ void VQRenderer::InitializeHeaps()
 	constexpr uint32 NumDescsSRV = 3800;
 	constexpr uint32 NumDescsUAV = 100;
 	constexpr bool   bCPUVisible = false;
-	mHeapCBV_SRV_UAV.Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, NumDescsCBV + NumDescsSRV + NumDescsUAV, bCPUVisible);
+	mHeapCBV_SRV_UAV.Create(pDevice, "HeapCBV_SRV_UAV", D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, NumDescsCBV + NumDescsSRV + NumDescsUAV, bCPUVisible);
 
 	constexpr uint32 NumDescsDSV = 100;
-	mHeapDSV.Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, NumDescsDSV);
+	mHeapDSV.Create(pDevice, "HeapDSV", D3D12_DESCRIPTOR_HEAP_TYPE_DSV, NumDescsDSV);
 
 	constexpr uint32 NumDescsRTV = 1000;
-	mHeapRTV.Create(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, NumDescsRTV);
+	mHeapRTV.Create(pDevice, "HeapRTV", D3D12_DESCRIPTOR_HEAP_TYPE_RTV, NumDescsRTV);
 
 	constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 64 * MEGABYTE;
 	constexpr bool USE_GPU_MEMORY = true;
@@ -929,13 +929,38 @@ void VQRenderer::LoadRootSignatures()
 		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_DepthAndNormalResolve");
 	}
+
+	// DownsampleDepth Root Signature : [18]
+	{
+		CD3DX12_DESCRIPTOR_RANGE1 ranges[4];
+		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1 , 0 , 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
+		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 13, 0 , 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
+		ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1 , 13, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
+		// CBV ?
+
+		CD3DX12_ROOT_PARAMETER1 rootParameters[4];
+		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_ALL);
+		rootParameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_ALL);
+		rootParameters[2].InitAsDescriptorTable(1, &ranges[2], D3D12_SHADER_VISIBILITY_ALL);
+		rootParameters[3].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL);
+
+		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, NULL, D3D12_ROOT_SIGNATURE_FLAG_NONE);
+
+		hr = D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error);
+		if (!SUCCEEDED(hr)) { ReportErrorAndReleaseBlob(error); assert(false); }
+		ID3D12RootSignature* pRS = nullptr;
+		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
+		mpBuiltinRootSignatures.push_back(pRS);
+		SetName(pRS, "RootSignature_DownsampleDepth");
+	}
 }
 
 void VQRenderer::LoadPSOs()
 {
 	// temp: singl thread pso load from vector
 	// todo: enqueue load descs into the MT queue
-	std::vector< std::pair<PSO_ID, FPSOLoadDesc >> PSOLoadDescs; 
+	std::vector< std::pair<PSO_ID, FPSOLoadDesc >> PSOLoadDescs;
 
 	// FULLSCREEN TRIANGLE PSO
 	{
@@ -970,7 +995,7 @@ void VQRenderer::LoadPSOs()
 		psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
 		PSOLoadDescs.push_back({ EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO, psoLoadDesc });
 	}
-	
+
 	// DEBUG VISUALIZATION PSO
 	{
 		const std::wstring ShaderFilePath = GetAssetFullPath(L"Visualization.hlsl");
@@ -1140,7 +1165,7 @@ void VQRenderer::LoadPSOs()
 
 		FPSOLoadDesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_TonemapperCS";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_5_1"});
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_5_1" });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[3];
 
 		PSOLoadDescs.push_back({ EBuiltinPSOs::TONEMAPPER_PSO, psoLoadDesc });
@@ -1330,7 +1355,7 @@ void VQRenderer::LoadPSOs()
 			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
 			for (FShaderStageCompileDesc& shdDesc : psoLoadDesc.ShaderStageCompileDescs)
 			{
-				shdDesc.Macros.push_back({"ALPHA_MASK", "1"});
+				shdDesc.Macros.push_back({ "ALPHA_MASK", "1" });
 			}
 			psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mpBuiltinRootSignatures[9];
 			PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PASS_ALPHAMASKED_PSO, psoLoadDesc });
@@ -1364,7 +1389,7 @@ void VQRenderer::LoadPSOs()
 		psoDesc.SampleMask = UINT_MAX;
 		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 		psoDesc.NumRenderTargets = 6;
-		for(uint rt=0; rt<psoDesc.NumRenderTargets; ++rt) psoDesc.RTVFormats[rt] = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		for (uint rt = 0; rt < psoDesc.NumRenderTargets; ++rt) psoDesc.RTVFormats[rt] = DXGI_FORMAT_R16G16B16A16_FLOAT;
 		psoDesc.SampleDesc.Count = 1;
 
 		PSOLoadDescs.push_back({ EBuiltinPSOs::CUBEMAP_CONVOLUTION_DIFFUSE_PSO, psoLoadDesc });
@@ -1473,6 +1498,17 @@ void VQRenderer::LoadPSOs()
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_0" });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[17];
 		PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_RESOLVE, psoLoadDesc });
+	}
+
+	// DepthDownsampleCS PSO
+	{
+		const std::wstring ShaderFilePath = GetAssetFullPath(L"DownsampleDepth.hlsl");
+
+		FPSOLoadDesc psoLoadDesc = {};
+		psoLoadDesc.PSOName = "PSO_DownsampleDepthCS";
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_0" });
+		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[18];
+		PSOLoadDescs.push_back({ EBuiltinPSOs::DOWNSAMPLE_DEPTH_CS_PSO, psoLoadDesc });
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------1

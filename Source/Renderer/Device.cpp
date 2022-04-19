@@ -90,6 +90,72 @@ static void CheckDeviceFeatureSupport(ID3D12Device4* pDevice, FDeviceCapabilitie
             dc.bSupportsFP16 = ftOpt4.Native16BitShaderOpsSupported;
         }
     }
+    {
+        // https://docs.microsoft.com/en-us/windows/win32/direct3d12/typed-unordered-access-view-loads#supported-formats-and-api-calls
+        D3D12_FEATURE_DATA_D3D12_OPTIONS ftOpt0;
+        ZeroMemory(&ftOpt0, sizeof(ftOpt0));
+        HRESULT hr = pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &ftOpt0, sizeof(ftOpt0));
+        if (SUCCEEDED(hr))
+        {
+            // TypedUAVLoadAdditionalFormats contains a Boolean that tells you whether the feature is supported or not
+            if (ftOpt0.TypedUAVLoadAdditionalFormats)
+            {
+                // Can assume "all-or-nothing" subset is supported (e.g. R32G32B32A32_FLOAT)
+                dc.bSupportsTypedUAVLoads = true;
+
+                // Cannot assume other formats are supported, so we check:
+                std::vector<DXGI_FORMAT> formatQueries =
+                {
+                      DXGI_FORMAT_R16G16B16A16_UNORM
+                    , DXGI_FORMAT_R16G16B16A16_SNORM
+                    , DXGI_FORMAT_R32G32_FLOAT
+                    , DXGI_FORMAT_R32G32_UINT
+                    , DXGI_FORMAT_R32G32_SINT
+                    , DXGI_FORMAT_R10G10B10A2_UNORM
+                    , DXGI_FORMAT_R10G10B10A2_UINT
+                    , DXGI_FORMAT_R11G11B10_FLOAT
+                    , DXGI_FORMAT_R8G8B8A8_SNORM
+                    , DXGI_FORMAT_R16G16_FLOAT
+                    , DXGI_FORMAT_R16G16_UNORM
+                    , DXGI_FORMAT_R16G16_UINT
+                    , DXGI_FORMAT_R16G16_SNORM
+                    , DXGI_FORMAT_R16G16_SINT
+                    , DXGI_FORMAT_R8G8_UNORM
+                    , DXGI_FORMAT_R8G8_UINT
+                    , DXGI_FORMAT_R8G8_SNORM
+                    , DXGI_FORMAT_R8G8_SINT
+                    , DXGI_FORMAT_R16_UNORM
+                    , DXGI_FORMAT_R16_SNORM
+                    , DXGI_FORMAT_R8_SNORM
+                    , DXGI_FORMAT_A8_UNORM
+                    , DXGI_FORMAT_B5G6R5_UNORM
+                    , DXGI_FORMAT_B5G5R5A1_UNORM
+                    , DXGI_FORMAT_B4G4R4A4_UNORM
+                };
+
+                for (DXGI_FORMAT fmt : formatQueries)
+                {
+
+                    D3D12_FEATURE_DATA_FORMAT_SUPPORT ftDataSupport0 =
+                    {
+                          fmt
+                        , D3D12_FORMAT_SUPPORT1_NONE
+                        , D3D12_FORMAT_SUPPORT2_NONE
+                    };
+                    hr = pDevice->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &ftDataSupport0, sizeof(ftDataSupport0));
+
+                    if (SUCCEEDED(hr) && (ftDataSupport0.Support2 & D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD) != 0)
+                    {
+                        dc.TypedUAVLoadFormatSupportMap[fmt] = true;
+                    }
+                    else
+                    {
+                        Log::Warning("Device::CheckFeatureSupport(): Typed UAV load for DXGI_FORMAT:%d failed.", fmt);
+                    }
+                }
+            }
+        }
+    }
 #if 0
     // https://www.appveyor.com/docs/windows-images-software/#visual-studio-2019
     // AppVeyor (CI) currently doesn't support WinSDK Windows 10 SDK 10.0.19041, which means
@@ -123,13 +189,13 @@ bool Device::Create(const FDeviceCreateDesc& desc)
         if (hr == S_OK)
         {
             pDebugController->EnableDebugLayer();
-            if (desc.bEnableValidationLayer)
+            if (desc.bEnableGPUValidationLayer)
             {
                 pDebugController->SetEnableGPUBasedValidation(TRUE);
                 pDebugController->SetEnableSynchronizedCommandQueueValidation(TRUE);
             }
             pDebugController->Release();
-            Log::Info("Device::Create(): Enabled Debug %s", (desc.bEnableValidationLayer ? "and Validation layers" : "layer"));
+            Log::Info("Device::Create(): Enabled Debug %s", (desc.bEnableGPUValidationLayer ? "and GPU Validation layers" : "layer"));
         }
         else
         {

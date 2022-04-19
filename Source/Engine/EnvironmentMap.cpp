@@ -330,9 +330,9 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 	{
 		constexpr int MIP_LEVEL = 0;
 		mRenderer.InitializeRTV(env.RTV_IrradianceDiff, face, env.Tex_IrradianceDiff, face, MIP_LEVEL);
-		mRenderer.InitializeUAV(env.UAV_IrradianceDiffBlurred, face, env.Tex_IrradianceDiffBlurred);
+		mRenderer.InitializeUAV(env.UAV_IrradianceDiffBlurred, face, env.Tex_IrradianceDiffBlurred, face, MIP_LEVEL);
 	}
-	mRenderer.InitializeUAV(env.UAV_BlurTemp, 0, env.Tex_BlurTemp);
+	mRenderer.InitializeUAV(env.UAV_BlurTemp, 0, env.Tex_BlurTemp, 0, 0);
 
 	for (int  mip = 0; mip<NUM_MIPS; ++mip ) 
 	for (int face = 0; face < 6    ; ++face)  

@@ -523,7 +523,7 @@ SRV_ID VQRenderer::CreateAndInitializeSRV(TextureID texID)
 		std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 
 		Texture& tex = mTextures.at(texID);
-		if (!tex.mpTexture)
+		if (!tex.mpResource)
 		{
 			Log::Error("Texture ID=%d failed initializing, cannot create the SRV", texID);
 			return INVALID_ID;
@@ -714,7 +714,115 @@ void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID, in
 	tex.InitializeRTV(heapIndex, &mRTVs.at(rtvID), &rtvDesc);
 }
 
-void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID)
+static UINT GetDXGIFormatByteSize(DXGI_FORMAT format)
+{
+	switch (format)
+	{
+	case(DXGI_FORMAT_A8_UNORM):
+		return 1;
+
+	case(DXGI_FORMAT_R10G10B10A2_TYPELESS):
+	case(DXGI_FORMAT_R10G10B10A2_UNORM):
+	case(DXGI_FORMAT_R10G10B10A2_UINT):
+	case(DXGI_FORMAT_R11G11B10_FLOAT):
+	case(DXGI_FORMAT_R8G8B8A8_TYPELESS):
+	case(DXGI_FORMAT_R8G8B8A8_UNORM):
+	case(DXGI_FORMAT_R8G8B8A8_UNORM_SRGB):
+	case(DXGI_FORMAT_R8G8B8A8_UINT):
+	case(DXGI_FORMAT_R8G8B8A8_SNORM):
+	case(DXGI_FORMAT_R8G8B8A8_SINT):
+	case(DXGI_FORMAT_B8G8R8A8_UNORM):
+	case(DXGI_FORMAT_B8G8R8X8_UNORM):
+	case(DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM):
+	case(DXGI_FORMAT_B8G8R8A8_TYPELESS):
+	case(DXGI_FORMAT_B8G8R8A8_UNORM_SRGB):
+	case(DXGI_FORMAT_B8G8R8X8_TYPELESS):
+	case(DXGI_FORMAT_B8G8R8X8_UNORM_SRGB):
+	case(DXGI_FORMAT_R16G16_TYPELESS):
+	case(DXGI_FORMAT_R16G16_FLOAT):
+	case(DXGI_FORMAT_R16G16_UNORM):
+	case(DXGI_FORMAT_R16G16_UINT):
+	case(DXGI_FORMAT_R16G16_SNORM):
+	case(DXGI_FORMAT_R16G16_SINT):
+	case(DXGI_FORMAT_R32_TYPELESS):
+	case(DXGI_FORMAT_D32_FLOAT):
+	case(DXGI_FORMAT_R32_FLOAT):
+	case(DXGI_FORMAT_R32_UINT):
+	case(DXGI_FORMAT_R32_SINT):
+		return 4;
+
+	case(DXGI_FORMAT_BC1_TYPELESS):
+	case(DXGI_FORMAT_BC1_UNORM):
+	case(DXGI_FORMAT_BC1_UNORM_SRGB):
+	case(DXGI_FORMAT_BC4_TYPELESS):
+	case(DXGI_FORMAT_BC4_UNORM):
+	case(DXGI_FORMAT_BC4_SNORM):
+	case(DXGI_FORMAT_R16G16B16A16_FLOAT):
+	case(DXGI_FORMAT_R16G16B16A16_TYPELESS):
+		return 8;
+
+	case(DXGI_FORMAT_BC2_TYPELESS):
+	case(DXGI_FORMAT_BC2_UNORM):
+	case(DXGI_FORMAT_BC2_UNORM_SRGB):
+	case(DXGI_FORMAT_BC3_TYPELESS):
+	case(DXGI_FORMAT_BC3_UNORM):
+	case(DXGI_FORMAT_BC3_UNORM_SRGB):
+	case(DXGI_FORMAT_BC5_TYPELESS):
+	case(DXGI_FORMAT_BC5_UNORM):
+	case(DXGI_FORMAT_BC5_SNORM):
+	case(DXGI_FORMAT_BC6H_TYPELESS):
+	case(DXGI_FORMAT_BC6H_UF16):
+	case(DXGI_FORMAT_BC6H_SF16):
+	case(DXGI_FORMAT_BC7_TYPELESS):
+	case(DXGI_FORMAT_BC7_UNORM):
+	case(DXGI_FORMAT_BC7_UNORM_SRGB):
+	case(DXGI_FORMAT_R32G32B32A32_FLOAT):
+	case(DXGI_FORMAT_R32G32B32A32_TYPELESS):
+		return 16;
+
+	default:
+		assert(false);
+		break;
+	}
+	return 0;
+}
+static D3D12_UAV_DIMENSION GetUAVDimensionFromResourceDimension(D3D12_RESOURCE_DIMENSION rscDim, bool bArrayOrCubemap)
+{
+	switch (rscDim)
+{
+		case D3D12_RESOURCE_DIMENSION_UNKNOWN   : return D3D12_UAV_DIMENSION_UNKNOWN;
+		case D3D12_RESOURCE_DIMENSION_BUFFER    : return D3D12_UAV_DIMENSION_BUFFER;
+		case D3D12_RESOURCE_DIMENSION_TEXTURE1D : return bArrayOrCubemap ? D3D12_UAV_DIMENSION_TEXTURE1DARRAY : D3D12_UAV_DIMENSION_TEXTURE1D;
+		case D3D12_RESOURCE_DIMENSION_TEXTURE2D : return bArrayOrCubemap ? D3D12_UAV_DIMENSION_TEXTURE2DARRAY : D3D12_UAV_DIMENSION_TEXTURE2D;
+		case D3D12_RESOURCE_DIMENSION_TEXTURE3D : return D3D12_UAV_DIMENSION_TEXTURE3D;
+	}
+	return D3D12_UAV_DIMENSION_UNKNOWN;
+}
+
+void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID texID, DXGI_FORMAT bufferUAVFormatOverride)
+{
+	CHECK_TEXTURE(mTextures, texID);
+	CHECK_RESOURCE_VIEW(UAV, uavID);
+
+	Texture& tex = mTextures.at(texID);
+	D3D12_RESOURCE_DESC rscDesc = tex.GetResource()->GetDesc();
+	
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+	uavDesc.ViewDimension = GetUAVDimensionFromResourceDimension(rscDesc.Dimension, false);
+	assert(uavDesc.ViewDimension == D3D12_UAV_DIMENSION_BUFFER); // this function must be called on Buffer resources
+	
+	// https://docs.microsoft.com/en-gb/windows/win32/direct3d12/typed-unordered-access-view-loads
+	// tex.mFormat will be UNKNOWN if it is created for a buffer
+	// This will trigger a device remove if we want to use a typed UAV (buffer).
+	// In this case, we'll need to provide the data type of the RWBuffer to create the UAV.
+	uavDesc.Format = bufferUAVFormatOverride;
+
+	// tex.Width should be representing the Bytes of the Buffer UAV.
+	uavDesc.Buffer.NumElements = tex.mWidth / GetDXGIFormatByteSize(bufferUAVFormatOverride);
+
+	mTextures.at(texID).InitializeUAV(heapIndex, &mUAVs.at(uavID), &uavDesc);
+}
+void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, uint arraySlice /*=0*/, uint mipSlice /*=0*/)
 {
 	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(UAV, uavID);
@@ -726,25 +834,39 @@ void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID)
 	const bool  bArray   = bCubemap ? (rscDesc.DepthOrArraySize / 6 > 1) : rscDesc.DepthOrArraySize > 1;
 	const bool  bMSAA    = rscDesc.SampleDesc.Count > 1; // don't care?
 
-	int mipLevel = 0;	// TODO
-	int arraySlice = heapIndex; // TODO
-
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-	uavDesc.Format = tex.mFormat;
+	uavDesc.ViewDimension = GetUAVDimensionFromResourceDimension(rscDesc.Dimension, bArray || bCubemap);
+	uavDesc.Format = tex.mFormat; 
+
 	if (bArray || bCubemap)
 	{
-		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
-		uavDesc.Texture2DArray.ArraySize = rscDesc.DepthOrArraySize - arraySlice;
-		uavDesc.Texture2DArray.FirstArraySlice = arraySlice;
-		uavDesc.Texture2DArray.MipSlice = mipLevel;
-		
+		switch (uavDesc.ViewDimension)
+		{
+		case D3D12_UAV_DIMENSION_TEXTURE2DARRAY:
+		{
+			uavDesc.Texture2DArray.ArraySize = rscDesc.DepthOrArraySize - arraySlice;
+			uavDesc.Texture2DArray.FirstArraySlice = arraySlice;
+			uavDesc.Texture2DArray.MipSlice = mipSlice;
+		} break;
+
+		case D3D12_UAV_DIMENSION_TEXTURE1DARRAY:
+		{
+			uavDesc.Texture1DArray.ArraySize = rscDesc.DepthOrArraySize - arraySlice;
+			uavDesc.Texture1DArray.FirstArraySlice = arraySlice;
+			uavDesc.Texture1DArray.MipSlice = mipSlice;
+		} break;
+
+		}
 	}
 	else // non-array
 	{
-		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-		uavDesc.Texture2D.MipSlice = mipLevel;
+		switch (uavDesc.ViewDimension)
+		{
+			case D3D12_UAV_DIMENSION_TEXTURE3D: uavDesc.Texture3D.MipSlice = mipSlice; break;
+			case D3D12_UAV_DIMENSION_TEXTURE2D: uavDesc.Texture2D.MipSlice = mipSlice; break;
+			case D3D12_UAV_DIMENSION_TEXTURE1D: uavDesc.Texture1D.MipSlice = mipSlice; break;
+		}
 	}
-
 
 	mTextures.at(texID).InitializeUAV(heapIndex, &mUAVs.at(uavID), &uavDesc);
 }

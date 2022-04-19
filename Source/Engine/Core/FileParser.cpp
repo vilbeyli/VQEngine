@@ -128,6 +128,11 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 				params.EngineSettings.gfx.EnvironmentMapResolution = StrUtil::ParseInt(SettingValue);
 				params.bOverrideGFXSetting_EnvironmentMapResolution = true;
 			}
+			if (SettingName == "Reflections")
+			{
+				params.bOverrideGFXSettings_Reflections = true;
+				params.EngineSettings.gfx.Reflections = static_cast<EReflections>(StrUtil::ParseInt(SettingValue));
+			}
 
 			// 
 			// Engine

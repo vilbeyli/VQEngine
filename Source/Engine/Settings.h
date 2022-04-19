@@ -29,11 +29,21 @@ enum EDisplayMode
 	NUM_DISPLAY_MODES
 };
 
+enum EReflections
+{
+	REFLECTIONS_OFF,
+	SCREEN_SPACE_REFLECTIONS__FFX,
+	RAY_TRACED_REFLECTIONS,
+
+	NUM_REFLECTION_SETTINGS
+};
+
 struct FGraphicsSettings
 {
 	bool bVsync              = false;
 	bool bUseTripleBuffering = false;
 	bool bAntiAliasing       = false;
+	EReflections Reflections = EReflections::REFLECTIONS_OFF;
 
 	float RenderScale = 1.0f;
 	int   MaxFrameRate = -1; // -1: Auto (RefreshRate x 1.15) | 0: Unlimited | <int>: specified value

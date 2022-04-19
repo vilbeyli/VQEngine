@@ -810,7 +810,7 @@ void VQEngine::ResolveMSAA(ID3D12GraphicsCommandList* pCmd, const FPostProcessPa
 	}
 }
 
-void VQEngine::ResolveDepthAndNormals(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTexture, SRV_ID SRVDepth, UAV_ID UAVDepthResolve, TextureID NormalTexture, SRV_ID SRVNormal, UAV_ID UAVNormalResolve)
+void VQEngine::ResolveDepthAndNormals(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTextureID, SRV_ID SRVDepth, UAV_ID UAVDepthResolve, TextureID NormalTexture, SRV_ID SRVNormal, UAV_ID UAVNormalResolve)
 {
 	const SRV& srvMSAADepthSource = mRenderer.GetSRV(SRVDepth);
 	const SRV& srvMSAANormalSource = mRenderer.GetSRV(SRVNormal);
@@ -819,7 +819,7 @@ void VQEngine::ResolveDepthAndNormals(ID3D12GraphicsCommandList* pCmd, DynamicBu
 	
 	int W, H;
 	int NumSamples = 4; // TODO: generic?
-	mRenderer.GetTextureDimensions(DepthTexture, W, H);
+	mRenderer.GetTextureDimensions(DepthTextureID, W, H);
 
 	constexpr int DispatchGroupDimensionX = 8;
 	constexpr int DispatchGroupDimensionY = 8;
@@ -845,6 +845,38 @@ void VQEngine::ResolveDepthAndNormals(ID3D12GraphicsCommandList* pCmd, DynamicBu
 	pCmd->SetComputeRootDescriptorTable(2, uavDepthResolveTarget.GetGPUDescHandle());
 	pCmd->SetComputeRootDescriptorTable(3, uavNormalResolveTarget.GetGPUDescHandle());
 	pCmd->SetComputeRootConstantBufferView(4, cbAddr);
+	pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
+}
+
+void VQEngine::DownsampleDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTextureID, SRV_ID SRVDepth)
+{
+	int W, H;
+	mRenderer.GetTextureDimensions(DepthTextureID, W, H);
+
+	struct FParams { uint params[4]; } CBuffer;
+	CBuffer.params[0] = W;
+	CBuffer.params[1] = H;
+	CBuffer.params[2] = 0xDEADBEEF;
+	CBuffer.params[3] = 0xDEADC0DE;
+
+	FParams* pConstBuffer = {};
+	D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+	pCBufferHeap->AllocConstantBuffer(sizeof(FParams), (void**)&pConstBuffer, &cbAddr);
+	*pConstBuffer = CBuffer;
+
+	constexpr int DispatchGroupDimensionX = 64; // even though the threadgroup dims are 32x8, they work on 64x64 region
+	constexpr int DispatchGroupDimensionY = 64; // even though the threadgroup dims are 32x8, they work on 64x64 region
+	const     int DispatchX = (W + (DispatchGroupDimensionX - 1)) / DispatchGroupDimensionX; // DIV_AND_ROUND_UP()
+	const     int DispatchY = (H + (DispatchGroupDimensionY - 1)) / DispatchGroupDimensionY; // DIV_AND_ROUND_UP()
+	constexpr int DispatchZ = 1;
+
+	SCOPED_GPU_MARKER(pCmd, "DownsampleDepth");
+	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DOWNSAMPLE_DEPTH_CS_PSO));
+	pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(18));
+	pCmd->SetComputeRootDescriptorTable(0, mRenderer.GetSRV(SRVDepth).GetGPUDescHandle());
+	pCmd->SetComputeRootDescriptorTable(1, mRenderer.GetUAV(mResources_MainWnd.UAV_DownsampledSceneDepth).GetGPUDescHandle());
+	pCmd->SetComputeRootDescriptorTable(2, mRenderer.GetUAV(mResources_MainWnd.UAV_DownsampledSceneDepthAtomicCounter).GetGPUDescHandle());
+	pCmd->SetComputeRootConstantBufferView(3, cbAddr);
 	pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
 }
 

@@ -320,8 +320,8 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			);
 			desc.ResourceState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 			r.Tex_SceneDepthResolve = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeUAV(r.UAV_SceneDepth, 0u, r.Tex_SceneDepthResolve);
-			mRenderer.InitializeSRV(r.SRV_SceneDepth, 0u, r.Tex_SceneDepthResolve);
+			mRenderer.InitializeUAV(r.UAV_SceneDepth, 0u, r.Tex_SceneDepthResolve, 0u, 0u);
+			mRenderer.InitializeSRV(r.SRV_SceneDepth, 0u, r.Tex_SceneDepthResolve, 0u, 0u);
 		}
 		{	// Scene depth stencil target (for MSAA off)
 			TextureCreateDesc desc("SceneDepth");
@@ -338,6 +338,31 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			desc.ResourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 			r.Tex_SceneDepth = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeDSV(r.DSV_SceneDepth, 0u, r.Tex_SceneDepth);
+		}
+		{
+			TextureCreateDesc desc("DownsampledSceneDepth");
+			const int NumMIPs = Image::CalculateMipLevelCount(RenderResolutionX, RenderResolutionY);
+			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
+				DXGI_FORMAT_R32_FLOAT
+				, RenderResolutionX
+				, RenderResolutionY
+				, 1 // Array Size
+				, NumMIPs
+				, 1 // MSAA SampleCount
+				, 0 // MSAA SampleQuality
+				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+			);
+			desc.ResourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+			r.Tex_DownsampledSceneDepth = mRenderer.CreateTexture(desc);
+			for(int mip=0; mip<13; ++mip) // 13 comes from downsampledepth.hlsl resource count, TODO: fix magic number
+				mRenderer.InitializeUAV(r.UAV_DownsampledSceneDepth, mip, r.Tex_DownsampledSceneDepth, 0, min(mip, NumMIPs - 1));
+		}
+		{
+			TextureCreateDesc desc("DownsampledSceneDepthAtomicCounter");
+			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(4, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+			desc.ResourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+			r.Tex_DownsampledSceneDepthAtomicCounter = mRenderer.CreateTexture(desc);
+			mRenderer.InitializeUAVForBuffer(r.UAV_DownsampledSceneDepthAtomicCounter, 0u, r.Tex_DownsampledSceneDepthAtomicCounter, DXGI_FORMAT_R32_UINT);
 		}
 
 		{ // Main render target view w/ MSAA
@@ -588,7 +613,6 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			params.FmtOutput       = desc.d3d12Desc.Format;
 			mRenderPass_AO.OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY, static_cast<const void*>(&params));
 		}
-
 	} // main window resources
 
 
@@ -597,6 +621,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 }
 
 void VQEngine::RenderThread_LoadResources()
+
 {
 	FRenderingResources_MainWindow& rsc = mResources_MainWnd;
 
@@ -639,6 +664,12 @@ void VQEngine::RenderThread_LoadResources()
 		rsc.SRV_SceneColor = mRenderer.CreateSRV();
 		rsc.SRV_SceneVisualization = mRenderer.CreateSRV();
 		rsc.SRV_SceneVisualizationMSAA = mRenderer.CreateSRV();
+	}
+
+	// reflection passes
+	{
+		rsc.UAV_DownsampledSceneDepth = mRenderer.CreateUAV(13);
+		rsc.UAV_DownsampledSceneDepthAtomicCounter = mRenderer.CreateUAV(1);
 	}
 
 	// ambient occlusion pass
@@ -750,6 +781,7 @@ void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 		mRenderer.DestroyTexture(r.Tex_SceneVisualizationMSAA);
 
 		mRenderer.DestroyTexture(r.Tex_AmbientOcclusion);
+		// TODO: destroy SSR resources?
 
 		mRenderer.DestroyTexture(r.Tex_PostProcess_BlurOutput);
 		mRenderer.DestroyTexture(r.Tex_PostProcess_BlurIntermediate);
@@ -1098,7 +1130,10 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 #else
 	const int FRAME_DATA_INDEX = 0;
 #endif
-	const bool bUseHDRRenderPath            = this->ShouldRenderHDR(mpWinMain->GetHWND());
+	const bool bReflectionsEnabled = mSettings.gfx.Reflections != EReflections::REFLECTIONS_OFF;
+	const bool bDownsampleDepth    = mSettings.gfx.Reflections == EReflections::SCREEN_SPACE_REFLECTIONS__FFX;
+	const bool bUseHDRRenderPath   = this->ShouldRenderHDR(mpWinMain->GetHWND());
+
 	const FSceneView& SceneView             = mpScene->GetSceneView(FRAME_DATA_INDEX);
 	const FSceneShadowView& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
 	const FPostProcessParameters& PPParams  = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
@@ -1106,6 +1141,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	const uint32 H = mpWinMain->GetHeight();
 	mRenderStats = {};
 
+	const auto& rsc = mResources_MainWnd;
 
 	// TODO: undo const cast and assign in a proper spot -------------------------------------------------
 	FSceneView& RefSceneView = const_cast<FSceneView&>(SceneView);
@@ -1118,7 +1154,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	RefPPParams.DisplayResolutionWidth  = ctx.WindowDisplayResolutionX;
 	RefPPParams.DisplayResolutionHeight = ctx.WindowDisplayResolutionY;
 
-
+	// do some settings override for some render paths
 	if (bUseHDRRenderPath)
 	{
 		if (RefPPParams.IsFFXCASEnabled())
@@ -1156,6 +1192,11 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		RenderPointShadowMaps(pCmd, &CBHeap, SceneShadowView, 0, SceneShadowView.NumPointShadowViews);
 
 		RenderDepthPrePass(pCmd, &CBHeap, SceneView);
+
+		if (bDownsampleDepth)
+		{
+			DownsampleDepth(pCmd, &CBHeap, rsc.Tex_SceneDepth, rsc.SRV_SceneDepth);
+		}
 
 		RenderAmbientOcclusion(pCmd, SceneView);
 
@@ -1199,6 +1240,11 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 				{
 					RENDER_WORKER_CPU_MARKER;
 					RenderDepthPrePass(pCmd_ZPrePass, &CBHeap_WorkerZPrePass, SceneView);
+
+					if (bDownsampleDepth)
+					{
+						DownsampleDepth(pCmd_ZPrePass, &CBHeap_WorkerZPrePass, rsc.Tex_SceneDepth, rsc.SRV_SceneDepth);
+					}
 				});
 			}
 			if (SceneShadowView.NumSpotShadowViews > 0)

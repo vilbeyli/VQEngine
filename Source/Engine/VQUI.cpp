@@ -833,12 +833,20 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 		, "FidelityFX CACAO"
 		, ""
 	};
+	static const char* pStrReflectionsLabels[]
+	{
+		  "Off ##0"
+		, "FidelityFX SSSR"
+		, "Ray Traced"
+		, ""
+	};
 	InitializeStaticCStringData_GraphicsSettings();
 	// static data
 
 
 	int iAALabel = gfx.bAntiAliasing ? 1 : 0;
 	int iSSAOLabel = SceneRenderParams.bScreenSpaceAO ? 1 : 0;
+	int iReflections = gfx.Reflections;
 
 	const uint32_t GFX_WINDOW_POS_X = GFX_WINDOW_PADDING_X;
 	const uint32_t GFX_WINDOW_POS_Y = H - GFX_WINDOW_PADDING_Y*2 - GFX_WINDOW_SIZE_Y;
@@ -908,6 +916,10 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 		{
 			SceneRenderParams.bScreenSpaceAO = iSSAOLabel == 1;
 			Log::Info("AO Changed: %d", SceneRenderParams.bScreenSpaceAO);
+		}
+		if (ImGui::Combo("Reflections", (int*)&gfx.Reflections, pStrReflectionsLabels, _countof(pStrReflectionsLabels)-1))
+		{
+			Log::Info("Reflections Changed: %d", gfx.Reflections);
 		}
 	}
 	else

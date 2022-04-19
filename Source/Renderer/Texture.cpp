@@ -38,7 +38,7 @@ pTex->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice))\
 
 Texture::Texture(const Texture& other)
     : mpAlloc                (other.mpAlloc)
-    , mpTexture              (other.mpTexture)
+    , mpResource             (other.mpResource)
     , mbResident             (other.mbResident.load())
     , mbTypelessTexture      (other.mbTypelessTexture)
     , mStructuredBufferStride(other.mStructuredBufferStride)
@@ -53,7 +53,7 @@ Texture::Texture(const Texture& other)
 Texture& Texture::operator=(const Texture& other)
 {
     mpAlloc                 = other.mpAlloc;
-    mpTexture               = other.mpTexture;
+    mpResource              = other.mpResource;
     mbResident              = other.mbResident.load();
     mbTypelessTexture       = other.mbTypelessTexture;
     mStructuredBufferStride = other.mStructuredBufferStride;
@@ -112,13 +112,13 @@ void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, cons
         ResourceState,
         pClearValue,
         &mpAlloc,
-        IID_PPV_ARGS(&mpTexture));
+        IID_PPV_ARGS(&mpResource));
     if (FAILED(hr))
     {
         Log::Error("Couldn't create texture: %s", desc.TexName.c_str());
         return;
     }
-    SetName(mpTexture, desc.TexName.c_str());
+    SetName(mpResource, desc.TexName.c_str());
 
     this->mbTypelessTexture = bDepthStencilTexture; // TODO: check format?
     this->mbCubemap = desc.bCubemap;
@@ -132,10 +132,10 @@ void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, cons
 
 void Texture::Destroy()
 {
-    if (mpTexture)
+    if (mpResource)
     {
-        mpTexture->Release(); 
-        mpTexture = nullptr;
+        mpResource->Release(); 
+        mpResource = nullptr;
     }
     if (mpAlloc)
     {
@@ -165,10 +165,10 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayVie
     // TODO: bool bInitAsArrayView needed so that InitializeSRV() can initialize a per-face SRV of a cubemap
     //
 
-    GetDevice(pDevice, mpTexture);
+    GetDevice(pDevice, mpResource);
     const bool bCustomComponentMappingSpecified = ShaderComponentMapping != D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
-    D3D12_RESOURCE_DESC resourceDesc = mpTexture->GetDesc();
+    D3D12_RESOURCE_DESC resourceDesc = mpResource->GetDesc();
     const int NumCubes = this->mbCubemap ? resourceDesc.DepthOrArraySize / 6 : 0;
     const bool bInitializeAsCubemapView = this->mbCubemap && bInitAsCubeView;
     if (bInitializeAsCubemapView)
@@ -215,7 +215,7 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayVie
             }
             else
             {
-                D3D12_RESOURCE_DESC desc = mpTexture->GetDesc();
+                D3D12_RESOURCE_DESC desc = mpResource->GetDesc();
                 srvDesc.Format = desc.Format;
             }
 
@@ -287,7 +287,7 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayVie
                 {
                     srvDesc.TextureCubeArray.First2DArrayFace = cube;
                     srvDesc.TextureCubeArray.NumCubes = NumCubes - cube;
-                    pDevice->CreateShaderResourceView(mpTexture, &srvDesc, pRV->GetCPUDescHandle(index + cube));
+                    pDevice->CreateShaderResourceView(mpResource, &srvDesc, pRV->GetCPUDescHandle(index + cube));
                 }
             }
             else
@@ -296,7 +296,7 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayVie
                 {
                     srvDesc.Texture2DArray.FirstArraySlice = index;
                     srvDesc.Texture2DArray.ArraySize = resourceDesc.DepthOrArraySize - index;
-                    pDevice->CreateShaderResourceView(mpTexture, &srvDesc, pRV->GetCPUDescHandle(0 /*+ i*/));
+                    pDevice->CreateShaderResourceView(mpResource, &srvDesc, pRV->GetCPUDescHandle(0 /*+ i*/));
                 }
             }
         }
@@ -304,12 +304,12 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayVie
         // Create single SRV
         else 
         {
-            pDevice->CreateShaderResourceView(mpTexture, &srvDesc, pRV->GetCPUDescHandle(0));
+            pDevice->CreateShaderResourceView(mpResource, &srvDesc, pRV->GetCPUDescHandle(0));
         }
     }
     else
     {
-        pDevice->CreateShaderResourceView(mpTexture, pSRVDesc, pRV->GetCPUDescHandle(index));
+        pDevice->CreateShaderResourceView(mpResource, pSRVDesc, pRV->GetCPUDescHandle(index));
     }
 
     pDevice->Release();
@@ -317,8 +317,8 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayVie
 
 void Texture::InitializeDSV(uint32 index, DSV* pRV, int ArraySlice /*= 1*/)
 {
-    GetDevice(pDevice, mpTexture);
-    D3D12_RESOURCE_DESC texDesc = mpTexture->GetDesc();
+    GetDevice(pDevice, mpResource);
+    D3D12_RESOURCE_DESC texDesc = mpResource->GetDesc();
 
     D3D12_DEPTH_STENCIL_VIEW_DESC DSViewDesc = {};
     DSViewDesc.Format = DXGI_FORMAT_D32_FLOAT;
@@ -342,23 +342,25 @@ void Texture::InitializeDSV(uint32 index, DSV* pRV, int ArraySlice /*= 1*/)
         DSViewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS;
     }
 
-    pDevice->CreateDepthStencilView(mpTexture, &DSViewDesc, pRV->GetCPUDescHandle(index));
+    pDevice->CreateDepthStencilView(mpResource, &DSViewDesc, pRV->GetCPUDescHandle(index));
     pDevice->Release();
 }
 
 void Texture::InitializeRTV(uint32 index, RTV* pRV, D3D12_RENDER_TARGET_VIEW_DESC* pRTVDesc)
 {
-    GetDevice(pDevice, mpTexture);
-    pDevice->CreateRenderTargetView(mpTexture, pRTVDesc, pRV->GetCPUDescHandle(index));
+    assert(mpResource);
+    GetDevice(pDevice, mpResource);
+    pDevice->CreateRenderTargetView(mpResource, pRTVDesc, pRV->GetCPUDescHandle(index));
     pDevice->Release();
 }
 
 void Texture::InitializeUAV(uint32 index, CBV_SRV_UAV* pRV, D3D12_UNORDERED_ACCESS_VIEW_DESC* pUAVDesc, const Texture* pCounterTexture /*= nullptr*/)
 {
-    GetDevice(pDevice, mpTexture);
+    assert(mpResource);
+    GetDevice(pDevice, mpResource);
     pDevice->CreateUnorderedAccessView(
-          mpTexture
-        , pCounterTexture ? pCounterTexture->mpTexture : NULL
+          mpResource
+        , pCounterTexture ? pCounterTexture->mpResource : NULL
         , pUAVDesc
         , pRV->GetCPUDescHandle(index)
     );

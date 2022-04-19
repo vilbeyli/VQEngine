@@ -70,6 +70,7 @@ set (Shaders
     "Shaders/CubemapConvolution.hlsl"
     "Shaders/GaussianBlur.hlsl"
     "Shaders/AMDFidelityFX.hlsl"
+    "Shaders/DownsampleDepth.hlsl"
     "Shaders/UI.hlsl"
     "Shaders/UIHDRComposite.hlsl"
     "Shaders/HDR.hlsl"
@@ -175,8 +176,11 @@ set (FFX_FSR_Shaders
     "Shaders/AMDFidelityFX/FSR1.0/ffx_fsr1.h"
 )
 set (FFX_SPD_Shaders
-    "Shaders/FidelityFX/SPD/ffx_a.h"
-    "Shaders/FidelityFX/SPD/ffx_spd.h"
+    "Shaders/AMDFidelityFX/SPD/ffx_a.h"
+    "Shaders/AMDFidelityFX/SPD/ffx_spd.h"
+)
+set (FFX_CACAO_Shaders
+    "Shaders/AMDFidelityFX/CACAO/ffx_cacao.hlsl"
 )
 set (LibsIncl
     "Libs/"
@@ -217,8 +221,10 @@ source_group("Config"   FILES ${Config})
 source_group("Resource" FILES ${Resource})
 source_group("Icons"    FILES ${Icons})
 source_group("Shaders"  FILES ${Shaders})
-source_group("Shaders\\AMD-FidelityFX\\CAS"  FILES ${FFX_CAS_Shaders})
-source_group("Shaders\\AMD-FidelityFX\\FSR1" FILES ${FFX_FSR_Shaders})
+source_group("Shaders\\AMD-FidelityFX\\CAS"   FILES ${FFX_CAS_Shaders})
+source_group("Shaders\\AMD-FidelityFX\\FSR1"  FILES ${FFX_FSR_Shaders})
+source_group("Shaders\\AMD-FidelityFX\\SPD"   FILES ${FFX_SPD_Shaders})
+source_group("Shaders\\AMD-FidelityFX\\CACAO" FILES ${FFX_CACAO_Shaders})
 source_group("Scenes"   FILES ${Scenes})
 source_group("Materials" FILES ${Materials})
 source_group("Source\\RenderPass" FILES ${RenderPassFiles})
@@ -234,6 +240,8 @@ set_source_files_properties(${Scenes} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${FFX_CAS_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${FFX_FSR_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${FFX_SPD_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${FFX_CACAO_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${CoreFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${RenderPassFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${SceneFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
@@ -248,7 +256,7 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/DirectXCompiler/lib/x64)
 add_definitions(-DFFX_CACAO_ENABLE_D3D12)
 
 # Create a library with the project name that is build with the Headers and Source files
-add_executable( ${PROJECT_NAME} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} ${Materials} ${FFX_FSR_Shaders} ${FFX_CAS_Shaders} ${LibFFX} ${RenderPassFiles} ${CoreFiles} ${PostProcessFiles} ${SceneFiles})
+add_executable( ${PROJECT_NAME} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} ${Materials} ${FFX_FSR_Shaders} ${FFX_CAS_Shaders} ${FFX_CACAO_Shaders} ${FFX_SPD_Shaders} ${LibFFX} ${RenderPassFiles} ${CoreFiles} ${PostProcessFiles} ${SceneFiles})
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY} )
 

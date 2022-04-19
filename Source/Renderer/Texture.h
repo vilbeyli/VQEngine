@@ -38,6 +38,7 @@ struct Image;
 struct TextureCreateDesc
 {
 	TextureCreateDesc(const std::string& name) : TexName(name) {}
+
 	std::string           TexName;
 	const void*           pData = nullptr;
 	D3D12_RESOURCE_DESC   d3d12Desc = {};
@@ -88,15 +89,15 @@ public:
 	void InitializeRTV(uint32 index, RTV* pRV, D3D12_RENDER_TARGET_VIEW_DESC* pRTVDesc = nullptr);
 	void InitializeUAV(uint32 index, CBV_SRV_UAV* pRV, D3D12_UNORDERED_ACCESS_VIEW_DESC* pUAVDesc = nullptr, const Texture* pCounterTexture = nullptr);
 
-	inline const ID3D12Resource* GetResource() const { return mpTexture; }
-	inline       ID3D12Resource* GetResource()       { return mpTexture; }
+	inline const ID3D12Resource* GetResource() const { return mpResource; }
+	inline       ID3D12Resource* GetResource()       { return mpResource; }
 	inline       DXGI_FORMAT     GetFormat()   const { return mFormat; }
 
 private:
 	friend class VQRenderer;
 
 	D3D12MA::Allocation* mpAlloc = nullptr;
-	ID3D12Resource*      mpTexture = nullptr;
+	ID3D12Resource*      mpResource = nullptr;
 	std::atomic<bool>    mbResident = false;
 	
 	// some texture desc fields

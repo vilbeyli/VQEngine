@@ -139,6 +139,9 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	TextureID Tex_SceneVisualization           = INVALID_ID;
 	TextureID Tex_SceneVisualizationMSAA       = INVALID_ID;
 
+	TextureID Tex_DownsampledSceneDepth        = INVALID_ID;
+	TextureID Tex_DownsampledSceneDepthAtomicCounter = INVALID_ID;
+
 	TextureID Tex_PostProcess_BlurIntermediate = INVALID_ID;
 	TextureID Tex_PostProcess_BlurOutput       = INVALID_ID;
 	TextureID Tex_PostProcess_TonemapperOut    = INVALID_ID;
@@ -186,6 +189,9 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	UAV_ID    UAV_PostProcess_FSR_RCASOut      = INVALID_ID;
 	UAV_ID    UAV_SceneDepth                   = INVALID_ID;
 	UAV_ID    UAV_SceneNormals                 = INVALID_ID;
+
+	UAV_ID    UAV_DownsampledSceneDepth        = INVALID_ID;
+	UAV_ID    UAV_DownsampledSceneDepthAtomicCounter = INVALID_ID;
 
 	DSV_ID    DSV_SceneDepth                   = INVALID_ID;
 	DSV_ID    DSV_SceneDepthMSAA               = INVALID_ID;
@@ -530,7 +536,9 @@ private:
 	void                            RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView);
 	void                            RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FPostProcessParameters& PPParams);
 	void                            ResolveMSAA(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams);
-	void                            ResolveDepthAndNormals(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTexture, SRV_ID SRVDepth, UAV_ID UAVDepthResolve, TextureID NormalTexture, SRV_ID SRVNormal, UAV_ID UAVNormalResolve);
+	void                            ResolveDepthAndNormals(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTextureID, SRV_ID SRVDepth, UAV_ID UAVDepthResolve, TextureID NormalTexture, SRV_ID SRVNormal, UAV_ID UAVNormalResolve);
+	void                            DownsampleDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTextureID, SRV_ID SRVDepth);
+	void                            RenderReflections(ID3D12GraphicsCommandList* pCmd);
 	void                            TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams);
 	ID3D12Resource*                 RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams);
 	void                            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, ID3D12Resource* pRscIn);
