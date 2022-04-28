@@ -106,13 +106,13 @@ bool AreIncludesDirty(const std::string& srcPath, const std::string& cachePath)
 	includeStack.push(srcPath);
 	while (!includeStack.empty())
 	{
-		const std::string includeFilePath = includeStack.top();
+		const std::string topIncludeFilePath = includeStack.top();
 		includeStack.pop();
-		std::ifstream src = std::ifstream(includeFilePath.c_str());
+		std::ifstream src = std::ifstream(topIncludeFilePath.c_str());
 		if (!src.good())
 		{
-			Log::Error("[ShaderCompile] %s : Cannot open include file '%s'", srcPath.c_str(),  includeFilePath.c_str());
-			continue;
+			Log::Error("[ShaderCompile] %s : Cannot open include file '%s'", srcPath.c_str(),  topIncludeFilePath.c_str());
+			return false;
 		}
 
 		std::string line;
@@ -124,8 +124,9 @@ bool AreIncludesDirty(const std::string& srcPath, const std::string& cachePath)
 			const std::string includeFileName = GetIncludeFileName(line);
 			if (includeFileName.empty()) continue;
 
-			const std::string includeSourcePath = ShaderSourceDir + includeFileName;
-			const std::string includeCachePath = ShaderCacheDir + includeFileName;
+			const std::string currIncludeDir = DirectoryUtil::GetFolderPath(topIncludeFilePath);
+			const std::string includeSourcePath = currIncludeDir + includeFileName;
+			const std::string includeCachePath = currIncludeDir + includeFileName;
 
 			if (DirectoryUtil::IsFileNewer(includeSourcePath, cachePath))
 				return true;
@@ -359,16 +360,15 @@ Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompil
 		// IDxcCompiler3::Compile will always return an error buffer, but its length will be zero if there are no warnings or errors.
 		if (pErrors != nullptr && pErrors->GetStringLength() != 0)
 		{
-			std::string msg = pErrors->GetStringPointer();
-			if(FAILED(hr)) { Log::Error(msg);   }
-			else           { Log::Warning(msg); }
+			OutErrorString = pErrors->GetStringPointer();
+			if(FAILED(hr)) { Log::Error(OutErrorString);   }
+			else           { Log::Warning(OutErrorString); }
 		}
 
 		// Quit if the compilation failed.
 		if (FAILED(hr))
 		{
-			wprintf(L"Compilation Failed\n");
-			assert(false); // TODO:
+			return {};
 		}
 		
 		CComPtr<IDxcBlobUtf16> pShaderName = nullptr;
