@@ -159,6 +159,12 @@ static bool CheckInitialSwapchainResizeRequired(std::unordered_map<HWND, bool>& 
 }
 void VQEngine::RenderThread_Inititalize()
 {
+	mRenderPasses = // manual render pass registration for now (early in dev)
+	{
+		&mRenderPass_AO,
+		&mRenderPass_SSR
+	};
+
 	const bool bExclusiveFullscreen_MainWnd = CheckInitialSwapchainResizeRequired(mInitialSwapchainResizeRequiredWindowLookup, mSettings.WndMain, mpWinMain->GetHWND());
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
@@ -193,18 +199,30 @@ void VQEngine::RenderThread_Inititalize()
 	mbRenderThreadInitialized.store(true);
 #endif
 
-	//
-	// TODO: THREADED LOADING
-	// 
-	// load renderer resources, compile shaders, load PSOs
-	mRenderer.Load();
-
+	// load builtin resources, compile shaders, load PSOs
+	mRenderer.Load(); // TODO: THREADED LOADING
 	RenderThread_LoadResources();
 
 	// initialize render passes
+	std::vector<FPSOCreationTaskParameters> RenderPassPSOLoadDescs;
+	for (IRenderPass* pPass : mRenderPasses)
 	{
-		mRenderPass_AO.Initialize(mRenderer.GetDevicePtr());
+		pPass->Initialize(); // initialize the render pass
+
+		// collect its PSO load descriptors so we can dispatch PSO compilation workers
+		const auto vPassPSODescs = pPass->CollectPSOCreationParameters();
+		RenderPassPSOLoadDescs.insert(RenderPassPSOLoadDescs.end()
+			, std::make_move_iterator(vPassPSODescs.begin())
+			, std::make_move_iterator(vPassPSODescs.end())
+		);
 	}
+
+	// compile PSOs (single-threaded)
+	for (auto& pr : RenderPassPSOLoadDescs)
+	{
+		*pr.pID = mRenderer.CreatePSO_OnThisThread(pr.Desc);
+	}
+
 
 	// load window resources
 	const bool bFullscreen = mpWinMain->IsFullscreen();
@@ -224,7 +242,10 @@ void VQEngine::RenderThread_Exit()
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mpSemUpdate->Signal();
 #endif
-	mRenderPass_AO.Exit();
+	for (IRenderPass* pPass : mRenderPasses)
+	{
+		pPass->Destroy();
+	}
 }
 
 void VQEngine::InitializeBuiltinMeshes()
@@ -357,13 +378,6 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			for(int mip=0; mip<13; ++mip) // 13 comes from downsampledepth.hlsl resource count, TODO: fix magic number
 				mRenderer.InitializeUAV(r.UAV_DownsampledSceneDepth, mip, r.Tex_DownsampledSceneDepth, 0, min(mip, NumMIPs - 1));
 		}
-		{
-			TextureCreateDesc desc("DownsampledSceneDepthAtomicCounter");
-			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(4, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-			desc.ResourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-			r.Tex_DownsampledSceneDepthAtomicCounter = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeUAVForBuffer(r.UAV_DownsampledSceneDepthAtomicCounter, 0u, r.Tex_DownsampledSceneDepthAtomicCounter, DXGI_FORMAT_R32_UINT);
-		}
 
 		{ // Main render target view w/ MSAA
 			TextureCreateDesc desc("SceneColorMSAA");
@@ -430,7 +444,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			mRenderer.InitializeSRV(r.SRV_SceneNormals, 0u, r.Tex_SceneNormals);
 			mRenderer.InitializeUAV(r.UAV_SceneNormals, 0u, r.Tex_SceneNormals);
 
-			//mRenderPass_DepthPrePass.OnCreateWindowSizeDependentResources(Width, Height, nullptr);
+			//mRenderPass_ZPrePass.OnCreateWindowSizeDependentResources(Width, Height, nullptr);
 		}
 		
 		{ // Scene Normals /w MSAA
@@ -450,7 +464,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			mRenderer.InitializeRTV(r.RTV_SceneNormalsMSAA, 0u, r.Tex_SceneNormalsMSAA);
 			mRenderer.InitializeSRV(r.SRV_SceneNormalsMSAA, 0u, r.Tex_SceneNormalsMSAA);
 
-			//mRenderPass_DepthPrePass.OnCreateWindowSizeDependentResources(Width, Height, nullptr);
+			//mRenderPass_ZPrePass.OnCreateWindowSizeDependentResources(Width, Height, nullptr);
 		}
 
 
@@ -604,14 +618,27 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			mRenderer.InitializeSRV(r.SRV_FFXCACAO_Out, 0u, r.Tex_AmbientOcclusion);
 
 
-			FAmbientOcclusionPass::FResourceParameters params;
+			AmbientOcclusionPass::FResourceParameters params;
 			params.pRscNormalBuffer = mRenderer.GetTextureResource(r.Tex_SceneNormals);
 			params.pRscDepthBuffer  = mRenderer.GetTextureResource(r.Tex_SceneDepthResolve);
 			params.pRscOutput       = mRenderer.GetTextureResource(r.Tex_AmbientOcclusion);
-			params.FmtNormalBuffer = mRenderer.GetTextureFormat(r.Tex_SceneNormals);
-			params.FmtDepthBuffer  = DXGI_FORMAT_R32_FLOAT; //mRenderer.GetTextureFormat(r.Tex_SceneDepth); /*R32_TYPELESS*/
-			params.FmtOutput       = desc.d3d12Desc.Format;
-			mRenderPass_AO.OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY, static_cast<const void*>(&params));
+			params.FmtNormalBuffer  = mRenderer.GetTextureFormat(r.Tex_SceneNormals);
+			params.FmtDepthBuffer   = DXGI_FORMAT_R32_FLOAT; //mRenderer.GetTextureFormat(r.Tex_SceneDepth); /*R32_TYPELESS*/
+			params.FmtOutput        = desc.d3d12Desc.Format;
+			mRenderPass_AO.OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY, &params);
+		}
+
+		{ // FFX-SSSR Resources
+			ScreenSpaceReflectionsPass::FResourceParameters params;
+			params.NormalBufferFormat = mRenderer.GetTextureFormat(r.Tex_SceneNormals);
+			params.TexEnvironmentMap = r.EnvironmentMap.Tex_HDREnvironment;
+			params.TexNormals = r.Tex_SceneNormals;
+			params.TexHierarchicalDepthBuffer = r.Tex_DownsampledSceneDepth;
+			params.TexSceneColor = r.Tex_SceneColor;
+			params.SRVEnvMap = r.EnvironmentMap.SRV_HDREnvironment;
+			params.TexSpecularRoughness; // TODO:
+			params.TexMotionVectors; // TODO:
+			mRenderPass_SSR.OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY, &params);
 		}
 	} // main window resources
 
@@ -670,6 +697,13 @@ void VQEngine::RenderThread_LoadResources()
 	{
 		rsc.UAV_DownsampledSceneDepth = mRenderer.CreateUAV(13);
 		rsc.UAV_DownsampledSceneDepthAtomicCounter = mRenderer.CreateUAV(1);
+
+		TextureCreateDesc desc("DownsampledSceneDepthAtomicCounter");
+		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(4, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+		desc.ResourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		rsc.Tex_DownsampledSceneDepthAtomicCounter = mRenderer.CreateTexture(desc);
+		mRenderer.InitializeUAVForBuffer(rsc.UAV_DownsampledSceneDepthAtomicCounter, 0u, rsc.Tex_DownsampledSceneDepthAtomicCounter, DXGI_FORMAT_R32_UINT);
+
 	}
 
 	// ambient occlusion pass
@@ -819,9 +853,9 @@ void VQEngine::RenderThread_PreRender()
 	SCOPED_CPU_MARKER("RenderThread_PreRender()");
 	FWindowRenderContext& ctx = mRenderer.GetWindowRenderContext(mpWinMain->GetHWND());
 	
-	const int NUM_BACK_BUFFERS  = ctx.GetNumSwapchainBuffers();
-	const int BACK_BUFFER_INDEX = ctx.GetCurrentSwapchainBufferIndex();
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	const int NUM_BACK_BUFFERS = ctx.GetNumSwapchainBuffers();
+	const int BACK_BUFFER_INDEX = ctx.GetCurrentSwapchainBufferIndex();
 	const int FRAME_DATA_INDEX  = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
 #else
 	const int FRAME_DATA_INDEX = 0;
@@ -1002,7 +1036,7 @@ void VQEngine::RenderThread_RenderDebugWindow()
 
 
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO));
-	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(0));
+	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(0));
 
 	pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	pCmd->IASetVertexBuffers(0, 1, &vbv);
@@ -1081,9 +1115,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
 
 	pCmd->SetPipelineState(mRenderer.GetPSO(bUseHDRRenderPath ? EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO : EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO));
-
-	// hardcoded roog signature for now until shader reflection and rootsignature management is implemented
-	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(1));
+	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FullScreenTriangle));
 
 	pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetShaderResourceView(mLoadingScreenData.GetSelectedLoadingScreenSRV_ID()).GetGPUDescHandle());
 
@@ -1206,6 +1238,12 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		ResolveMSAA(pCmd, PPParams);
 
+		if (bReflectionsEnabled)
+		{
+			RenderReflections(pCmd, &CBHeap, SceneView);
+			CompositeReflections(pCmd, &CBHeap, SceneView);
+		}
+
 		TransitionForPostProcessing(pCmd, PPParams);
 
 		pRsc = RenderPostProcess(pCmd, &CBHeap, PPParams);
@@ -1291,6 +1329,12 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		RenderSceneColor(pCmd_ThisThread, &CBHeap_This, SceneView, PPParams);
 
 		ResolveMSAA(pCmd_ThisThread, PPParams);
+
+		if (bReflectionsEnabled)
+		{
+			RenderReflections(pCmd_ThisThread, &CBHeap_This, SceneView);
+			CompositeReflections(pCmd_ThisThread, &CBHeap_This, SceneView);
+		}
 
 		TransitionForPostProcessing(pCmd_ThisThread, PPParams);
 

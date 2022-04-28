@@ -15,36 +15,12 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
+#pragma once
 
-#include "DepthPrePass.h"
+#include "RenderPass.h"
 
-DepthPrePass::DepthPrePass()
+IRenderPass::~IRenderPass() {}
+
+RenderPassBase::~RenderPassBase()
 {
-}
-
-bool DepthPrePass::Initialize()
-{
-	return true;
-}
-
-void DepthPrePass::Destroy()
-{
-}
-
-void DepthPrePass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const IRenderPassResourceCollection* pRscParameters)
-{
-
-}
-
-void DepthPrePass::OnDestroyWindowSizeDependentResources()
-{
-}
-
-void DepthPrePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameters)
-{
-}
-
-std::vector<FPSOCreationTaskParameters> DepthPrePass::CollectPSOCreationParameters()
-{
-	return std::vector<FPSOCreationTaskParameters>();
 }

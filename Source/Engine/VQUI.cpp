@@ -917,9 +917,42 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 			SceneRenderParams.bScreenSpaceAO = iSSAOLabel == 1;
 			Log::Info("AO Changed: %d", SceneRenderParams.bScreenSpaceAO);
 		}
-		if (ImGui::Combo("Reflections", (int*)&gfx.Reflections, pStrReflectionsLabels, _countof(pStrReflectionsLabels)-1))
+		int iRefl = gfx.Reflections;
+		if (ImGui::Combo("Reflections", &iRefl, pStrReflectionsLabels, _countof(pStrReflectionsLabels)-1))
 		{
+			gfx.Reflections = static_cast<EReflections>(iRefl);
 			Log::Info("Reflections Changed: %d", gfx.Reflections);
+		}
+		switch (gfx.Reflections)
+		{
+		case EReflections::SCREEN_SPACE_REFLECTIONS__FFX:
+		{
+			FSceneRenderParameters::FFFX_SSSR_UIParameters& FFXParams = SceneRenderParams.FFX_SSSRParameters;
+
+			ImGui::Checkbox("Apply Screen Space Reflections", &FFXParams.bApplyScreenSpaceReflections);
+			ImGui::Checkbox("Show Reflection Target", &FFXParams.bShowReflectionTarget);
+			ImGui::Checkbox("Show Intersection Results", &FFXParams.bShowIntersectionResults);
+			ImGui::SliderFloat("Target Frametime (ms)", &FFXParams.targetFrameTime, 0.0f, 50.0f);
+			ImGui::SliderInt("Max Traversal Iterations", &FFXParams.maxTraversalIterations, 0, 256);
+			ImGui::SliderInt("Min Traversal Occupancy", &FFXParams.minTraversalOccupancy, 0, 32);
+			ImGui::SliderInt("Most Detailed Level", &FFXParams.mostDetailedDepthHierarchyMipLevel, 0, 5);
+			ImGui::SliderFloat("Depth Buffer Thickness", &FFXParams.depthBufferThickness, 0.0f, 0.03f);
+			ImGui::SliderFloat("Roughness Threshold", &FFXParams.roughnessThreshold, 0.0f, 1.f);
+			ImGui::SliderFloat("Temporal Stability", &FFXParams.temporalStability, 0.0f, 1.0f);
+			ImGui::SliderFloat("Temporal Variance Threshold", &FFXParams.temporalVarianceThreshold, 0.0f, 0.01f);
+			ImGui::Checkbox("Enable Variance Guided Tracing", &FFXParams.bEnableTemporalVarianceGuidedTracing);
+
+			ImGui::Text("Samples per Quad"); ImGui::SameLine();
+			ImGui::RadioButton("1", &FFXParams.samplesPerQuad, 1); ImGui::SameLine();
+			ImGui::RadioButton("2", &FFXParams.samplesPerQuad, 2); ImGui::SameLine();
+			ImGui::RadioButton("4", &FFXParams.samplesPerQuad, 4);
+
+		}
+		break;
+		case EReflections::RAY_TRACED_REFLECTIONS:
+			break;
+		default:
+			break;
 		}
 	}
 	else

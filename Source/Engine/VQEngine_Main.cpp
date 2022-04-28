@@ -37,9 +37,12 @@ void ReportSystemInfo(const VQSystemInfo::FSystemInfo& i, bool bDetailed = false
 	Log::Info("\n%s", sysInfo.c_str());
 }
 #endif
+
+// TODO: heed to W4 warnings, initialize the variables
 VQEngine::VQEngine()
 	: mAssetLoader(mWorkers_ModelLoading, mWorkers_TextureLoading, mRenderer)
-	, mRenderPass_AO(FAmbientOcclusionPass::EMethod::FFX_CACAO)
+	, mRenderPass_AO(mRenderer, AmbientOcclusionPass::EMethod::FFX_CACAO)
+	, mRenderPass_SSR(mRenderer)
 {}
 
 void VQEngine::MainThread_Tick()
@@ -127,12 +130,12 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	return true; 
 }
 
-void VQEngine::Exit()
+void VQEngine::Destroy()
 {
 	ExitThreads();
 
 	mRenderer.Unload();
-	mRenderer.Exit();
+	mRenderer.Destroy();
 }
 
 
@@ -360,8 +363,8 @@ void VQEngine::InitializeEngineThreads()
 
 void VQEngine::ExitThreads()
 {
-	mWorkers_ModelLoading.Exit();
-	mWorkers_TextureLoading.Exit();
+	mWorkers_ModelLoading.Destroy();
+	mWorkers_TextureLoading.Destroy();
 	mbStopAllThreads.store(true);
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
@@ -372,7 +375,7 @@ void VQEngine::ExitThreads()
 	mWorkers_Render.Exit();
 #else
 	mSimulationThread.join();
-	mWorkers_Simulation.Exit();
+	mWorkers_Simulation.Destroy();
 #endif
 }
 

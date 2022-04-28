@@ -29,6 +29,7 @@
 #include "Scene/Transform.h"
 #include "RenderPass/AmbientOcclusion.h"
 #include "RenderPass/DepthPrePass.h"
+#include "RenderPass/ScreenSpaceReflections.h"
 #include "Settings.h"
 #include "AssetLoader.h"
 #include "VQUI.h"
@@ -59,6 +60,8 @@ struct ImGuiContext;
 //
 // DATA STRUCTS
 //
+
+
 struct FLoadingScreenData
 {
 	std::array<float, 4> SwapChainClearColor;
@@ -270,7 +273,7 @@ public:
 	// ---------------------------------------------------------
 	void MainThread_Tick();
 	bool Initialize(const FStartupParameters& Params);
-	void Exit();
+	void Destroy();
 	inline bool ShouldExit() const { return mbExitApp.load(); }
 
 	// ---------------------------------------------------------
@@ -470,8 +473,10 @@ private:
 #endif
 
 	// RenderPasses (WIP design)
-	FDepthPrePass                   mRenderPass_DepthPrePass;
-	FAmbientOcclusionPass           mRenderPass_AO;
+	std::vector<IRenderPass*>      mRenderPasses;
+	DepthPrePass                   mRenderPass_ZPrePass;
+	AmbientOcclusionPass           mRenderPass_AO;
+	ScreenSpaceReflectionsPass     mRenderPass_SSR;
 
 	// timer / profiler
 	Timer                           mTimer;
@@ -538,7 +543,8 @@ private:
 	void                            ResolveMSAA(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams);
 	void                            ResolveDepthAndNormals(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTextureID, SRV_ID SRVDepth, UAV_ID UAVDepthResolve, TextureID NormalTexture, SRV_ID SRVNormal, UAV_ID UAVNormalResolve);
 	void                            DownsampleDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTextureID, SRV_ID SRVDepth);
-	void                            RenderReflections(ID3D12GraphicsCommandList* pCmd);
+	void                            RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
+	void                            CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
 	void                            TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams);
 	ID3D12Resource*                 RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams);
 	void                            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, ID3D12Resource* pRscIn);
@@ -548,13 +554,13 @@ private:
 	//
 	// UI
 	//
-	void UpdateUIState(HWND hwnd, float dt);
-	void DrawProfilerWindow(const FSceneStats& FrameStats, float dt);
-	void DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderParameters& SceneRenderParams);
-	void DrawPostProcessSettings(FPostProcessParameters& PPParams);
-	void DrawDebugPanelWindow(FSceneRenderParameters& SceneParams, FPostProcessParameters& PPParams);
-	void DrawKeyMappingsWindow();
-	void DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams, FPostProcessParameters& PPParams);
+	void                            UpdateUIState(HWND hwnd, float dt);
+	void                            DrawProfilerWindow(const FSceneStats& FrameStats, float dt);
+	void                            DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderParameters& SceneRenderParams);
+	void                            DrawPostProcessSettings(FPostProcessParameters& PPParams);
+	void                            DrawDebugPanelWindow(FSceneRenderParameters& SceneParams, FPostProcessParameters& PPParams);
+	void                            DrawKeyMappingsWindow();
+	void                            DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams, FPostProcessParameters& PPParams);
 
 	//
 	// RENDER HELPERS

@@ -47,6 +47,23 @@ using MaterialLookup_t = std::unordered_map<MaterialID, Material>;
 struct FPostProcessParameters;
 struct FSceneRenderParameters
 {
+	struct FFFX_SSSR_UIParameters
+	{
+		bool    bApplyScreenSpaceReflections = true;
+		bool    bShowIntersectionResults = false;
+		bool    bEnableTemporalVarianceGuidedTracing = true;
+		bool    bShowReflectionTarget = false;
+		float   targetFrameTime = 0;
+		int     maxTraversalIterations = 128;
+		int     mostDetailedDepthHierarchyMipLevel = 0;
+		int     minTraversalOccupancy = 4;
+		float   depthBufferThickness = 0.015f;
+		float   roughnessThreshold = 0.2f;
+		float   temporalStability = 0.7f;
+		float   temporalVarianceThreshold = 0.0f;
+		int     samplesPerQuad = 1;
+	};
+
 	bool bDrawLightBounds = false;
 	bool bDrawMeshBoundingBoxes = false;
 	bool bDrawGameObjectBoundingBoxes = false;
@@ -54,6 +71,7 @@ struct FSceneRenderParameters
 	float fYawSliderValue = 0.0f;
 	float fAmbientLightingFactor = 0.055f;
 	bool bScreenSpaceAO = true;
+	FFFX_SSSR_UIParameters FFX_SSSRParameters = {};
 };
 //--- Pass Parameters ---
 

@@ -22,6 +22,7 @@
 #include "Libs/VQUtils/Source/Log.h"
 
 #include "../../Renderer/Libs/D3DX12/d3dx12.h"
+#include "../../Renderer/Renderer.h"
 
 #include <cassert>
 
@@ -31,19 +32,24 @@ static void LogFFX_CACAO_Status(FFX_CACAO_Status hr, const std::string& function
 {
 }
 
-FAmbientOcclusionPass::FAmbientOcclusionPass(EMethod InMethod)
-	: Method(InMethod)
+AmbientOcclusionPass::AmbientOcclusionPass(VQRenderer& Renderer, EMethod InMethod)
+	: RenderPassBase(Renderer)
+	, Method(InMethod)
 	, AOSettings(FFX_CACAO_DEFAULT_SETTINGS)
 {
 }
 
-bool FAmbientOcclusionPass::Initialize(ID3D12Device* pDevice)
+AmbientOcclusionPass::~AmbientOcclusionPass()
+{
+}
+
+bool AmbientOcclusionPass::Initialize()
 {
 	pFFX_CACAO_Context = nullptr;
 	const size_t SIZE_CONTEXT = FFX_CACAO_D3D12GetContextSize();
 
 	pFFX_CACAO_Context = (FFX_CACAO_D3D12Context*)malloc(SIZE_CONTEXT);
-	FFX_CACAO_Status hr = FFX_CACAO_D3D12InitContext(pFFX_CACAO_Context, pDevice);
+	FFX_CACAO_Status hr = FFX_CACAO_D3D12InitContext(pFFX_CACAO_Context, mRenderer.GetDevicePtr());
 	
 	bool bResult = false;
 	switch (hr)
@@ -70,13 +76,13 @@ bool FAmbientOcclusionPass::Initialize(ID3D12Device* pDevice)
 	return bResult;
 }
 
-void FAmbientOcclusionPass::Exit()
+void AmbientOcclusionPass::Destroy()
 {
 	FFX_CACAO_Status hr = FFX_CACAO_D3D12DestroyContext(pFFX_CACAO_Context);
 	free(pFFX_CACAO_Context);
 }
 
-void FAmbientOcclusionPass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const void* pRscParameters /*= nullptr*/)
+void AmbientOcclusionPass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const IRenderPassResourceCollection* pRscParameters /*= nullptr*/)
 {
 	const FResourceParameters* pParams = static_cast<const FResourceParameters*>(pRscParameters);
 	
@@ -121,21 +127,21 @@ void FAmbientOcclusionPass::OnCreateWindowSizeDependentResources(unsigned Width,
 
 	if (hr != FFX_CACAO_STATUS_OK)
 	{
-		Log::Error("FAmbientOcclusionPass::OnCreateWindowSizeDependentResources(): error FFX_CACAO_D3D12InitScreenSizeDependentResources()");
+		Log::Error("AmbientOcclusionPass::OnCreateWindowSizeDependentResources(): error FFX_CACAO_D3D12InitScreenSizeDependentResources()");
 	}
 }
 
-void FAmbientOcclusionPass::OnDestroyWindowSizeDependentResources()
+void AmbientOcclusionPass::OnDestroyWindowSizeDependentResources()
 {
 	FFX_CACAO_Status hr = FFX_CACAO_D3D12DestroyScreenSizeDependentResources(pFFX_CACAO_Context);
 
 	if (hr != FFX_CACAO_STATUS_OK)
 	{
-		Log::Error("FAmbientOcclusionPass::OnDestroyWindowSizeDependentResources(): error FFX_CACAO_D3D12DestroyScreenSizeDependentResources()");
+		Log::Error("AmbientOcclusionPass::OnDestroyWindowSizeDependentResources(): error FFX_CACAO_D3D12DestroyScreenSizeDependentResources()");
 	}
 }
 
-void FAmbientOcclusionPass::RecordCommands(const void* pDrawParameters /*= nullptr*/)
+void AmbientOcclusionPass::RecordCommands(const IRenderPassDrawParameters* pDrawParameters /*= nullptr*/)
 {
 	const FDrawParameters* pParameters = static_cast<const FDrawParameters*>(pDrawParameters);
 	using namespace DirectX;
@@ -174,6 +180,11 @@ void FAmbientOcclusionPass::RecordCommands(const void* pDrawParameters /*= nullp
 
 	if (hr != FFX_CACAO_STATUS_OK)
 	{
-		Log::Error("FAmbientOcclusionPass::RecordCommands(): error FFX_CACAO_D3D12Draw()");
+		Log::Error("AmbientOcclusionPass::RecordCommands(): error FFX_CACAO_D3D12Draw()");
 	}
+}
+
+std::vector<FPSOCreationTaskParameters> AmbientOcclusionPass::CollectPSOCreationParameters()
+{
+	return std::vector<FPSOCreationTaskParameters>();
 }

@@ -93,7 +93,7 @@ void VQEngine::RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, Dyna
 		SCOPED_GPU_MARKER(pCmd, marker.c_str());
 
 		pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_PSO));
-		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(7));
+		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ShadowPassDepthOnlyVS));
 
 		const float RenderResolutionX = 2048.0f; // TODO
 		const float RenderResolutionY = 2048.0f; // TODO
@@ -137,7 +137,7 @@ void VQEngine::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuff
 	// SPOT LIGHTS
 	//
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_PSO));
-	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(7));
+	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ShadowPassDepthOnlyVS));
 	
 	for (uint i = 0; i < SceneShadowView.NumSpotShadowViews; ++i)
 	{
@@ -184,7 +184,7 @@ void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 #endif
 
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_LINEAR_PSO));
-	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(8));
+	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ShadowPassLinearDepthVSPS));
 	for (size_t i = iBegin; i < iBegin + NumPointLights; ++i)
 	{
 		const std::string marker = "Point[" + std::to_string(i) + "]";
@@ -265,7 +265,7 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 	pCmd->RSSetScissorRects(1, &scissorsRect);
 
 	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::DEPTH_PREPASS_PSO_MSAA_4 : EBuiltinPSOs::DEPTH_PREPASS_PSO));
-	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(14)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
+	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ZPrePass));
 
 	// draw meshes
 	for (const FMeshRenderCommand& meshRenderCmd : SceneView.meshRenderCommands)
@@ -372,18 +372,18 @@ void VQEngine::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSc
 	ID3D12Resource* pRscAmbientOcclusion = mRenderer.GetTextureResource(rsc.Tex_AmbientOcclusion);
 	const UAV& uav = mRenderer.GetUAV(rsc.UAV_FFXCACAO_Out);
 
-	const char* pStrPass[FAmbientOcclusionPass::EMethod::NUM_AMBIENT_OCCLUSION_METHODS] =
+	const char* pStrPass[AmbientOcclusionPass::EMethod::NUM_AMBIENT_OCCLUSION_METHODS] =
 	{
 		"Ambient Occlusion (FidelityFX CACAO)"
 	};
-	SCOPED_GPU_MARKER(pCmd, pStrPass[mRenderPass_AO.Method]);
+	SCOPED_GPU_MARKER(pCmd, pStrPass[mRenderPass_AO.GetMethod()]);
 	
 	static bool sbScreenSpaceAO_Previous = false;
 	const bool bSSAOToggledOff = sbScreenSpaceAO_Previous && !SceneView.sceneParameters.bScreenSpaceAO;
 
 	if (SceneView.sceneParameters.bScreenSpaceAO)
 	{
-		FAmbientOcclusionPass::FDrawParameters drawParams = {};
+		AmbientOcclusionPass::FDrawParameters drawParams = {};
 		DirectX::XMStoreFloat4x4(&drawParams.matNormalToView, SceneView.view);
 		DirectX::XMStoreFloat4x4(&drawParams.matProj, SceneView.proj);
 		drawParams.pCmd = pCmd;
@@ -499,7 +499,7 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 		? (bUseVisualizationRenderTarget ? EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_PSO_MSAA_4 : EBuiltinPSOs::FORWARD_LIGHTING_PSO_MSAA_4 )
 		: (bUseVisualizationRenderTarget ? EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_PSO : EBuiltinPSOs::FORWARD_LIGHTING_PSO))
 	);
-	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(5)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
+	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ForwardLighting));
 
 	// set PerFrame constants
 	{
@@ -630,7 +630,7 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 			: EBuiltinPSOs::WIREFRAME_PSO)
 		);
 
-		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(6)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
+		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ShadowPassDepthOnlyVS));
 		for (const FLightRenderCommand& lightBoundRenderCmd : SceneView.lightBoundsRenderCommands)
 		{
 			// set constant buffer data
@@ -670,7 +670,7 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 			: EBuiltinPSOs::UNLIT_PSO)
 		);
 		if(SceneView.lightBoundsRenderCommands.empty())
-			pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(6)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
+			pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
 
 		for (const FLightRenderCommand& lightRenderCmd : SceneView.lightRenderCommands)
 		{
@@ -711,7 +711,7 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 			? EBuiltinPSOs::WIREFRAME_PSO_MSAA_4
 			: EBuiltinPSOs::WIREFRAME_PSO)
 		);
-		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(6)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
+		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
 
 
 		// set IA
@@ -766,9 +766,7 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 		pConstBuffer->matModelViewProj = skyCam.GetViewMatrix() * skyCam.GetProjectionMatrix();
 
 		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::SKYDOME_PSO_MSAA_4 : EBuiltinPSOs::SKYDOME_PSO));
-
-		// hardcoded root signature for now until shader reflection and rootsignature management is implemented
-		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(2));
+		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__HelloWorldCube));
 
 		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 		pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_HDREnvironment).GetGPUDescHandle());
@@ -839,7 +837,7 @@ void VQEngine::ResolveDepthAndNormals(ID3D12GraphicsCommandList* pCmd, DynamicBu
 
 	SCOPED_GPU_MARKER(pCmd, "ResolveDepthAndNormals");
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_RESOLVE));
-	pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(17));
+	pCmd->SetComputeRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__DepthAndNormalResolveCS));
 	pCmd->SetComputeRootDescriptorTable(0, srvMSAADepthSource.GetGPUDescHandle());
 	pCmd->SetComputeRootDescriptorTable(1, srvMSAANormalSource.GetGPUDescHandle());
 	pCmd->SetComputeRootDescriptorTable(2, uavDepthResolveTarget.GetGPUDescHandle());
@@ -872,12 +870,64 @@ void VQEngine::DownsampleDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHea
 
 	SCOPED_GPU_MARKER(pCmd, "DownsampleDepth");
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DOWNSAMPLE_DEPTH_CS_PSO));
-	pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(18));
+	pCmd->SetComputeRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__DownsampleDepthCS));
 	pCmd->SetComputeRootDescriptorTable(0, mRenderer.GetSRV(SRVDepth).GetGPUDescHandle());
 	pCmd->SetComputeRootDescriptorTable(1, mRenderer.GetUAV(mResources_MainWnd.UAV_DownsampledSceneDepth).GetGPUDescHandle());
 	pCmd->SetComputeRootDescriptorTable(2, mRenderer.GetUAV(mResources_MainWnd.UAV_DownsampledSceneDepthAtomicCounter).GetGPUDescHandle());
 	pCmd->SetComputeRootConstantBufferView(3, cbAddr);
 	pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
+}
+
+void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
+{
+	const FSceneRenderParameters::FFFX_SSSR_UIParameters& UIParams = SceneView.sceneParameters.FFX_SSSRParameters;
+
+	switch (mSettings.gfx.Reflections)
+	{
+	case EReflections::SCREEN_SPACE_REFLECTIONS__FFX:
+	{
+		ScreenSpaceReflectionsPass::FDrawParameters params = {};
+		params.pCmd = pCmd;
+		params.pCBufferHeap = pCBufferHeap;
+		params.ffxCBuffer.invViewProjection          = {}; // TODO: invert
+		params.ffxCBuffer.projection                 = SceneView.proj;
+		params.ffxCBuffer.invProjection              = SceneView.projInverse;
+		params.ffxCBuffer.view                       = SceneView.view;
+		params.ffxCBuffer.invView                    = SceneView.viewInverse;
+		params.ffxCBuffer.prevViewProjection         = {}; // TODO: prev
+		params.ffxCBuffer.bufferDimensions[0]        = SceneView.SceneRTWidth;
+		params.ffxCBuffer.bufferDimensions[1]        = SceneView.SceneRTHeight;
+		params.ffxCBuffer.inverseBufferDimensions[0] = 1.0f / params.ffxCBuffer.bufferDimensions[0];
+		params.ffxCBuffer.inverseBufferDimensions[1] = 1.0f / params.ffxCBuffer.bufferDimensions[1];
+		params.ffxCBuffer.frameIndex                 = static_cast<uint32>(mNumSimulationTicks);
+		params.ffxCBuffer.temporalStabilityFactor    = UIParams.temporalStability;
+		params.ffxCBuffer.depthBufferThickness       = UIParams.depthBufferThickness;
+		params.ffxCBuffer.roughnessThreshold         = UIParams.roughnessThreshold;
+		params.ffxCBuffer.varianceThreshold          = UIParams.temporalVarianceThreshold;
+		params.ffxCBuffer.maxTraversalIntersections  = UIParams.maxTraversalIterations;
+		params.ffxCBuffer.minTraversalOccupancy      = UIParams.minTraversalOccupancy;
+		params.ffxCBuffer.mostDetailedMip            = UIParams.mostDetailedDepthHierarchyMipLevel;
+		params.ffxCBuffer.samplesPerQuad             = UIParams.samplesPerQuad;
+		params.ffxCBuffer.temporalVarianceGuidedTracingEnabled = UIParams.bEnableTemporalVarianceGuidedTracing;
+
+		SCOPED_GPU_MARKER(pCmd, "RenderReflections_FFX-SSSR");
+		mRenderPass_SSR.RecordCommands(&params);
+	} break;
+
+	case EReflections::RAY_TRACED_REFLECTIONS:
+	default:
+		Log::Warning("RenderReflections(): unrecognized setting or missing implementation for reflection enum: %d", mSettings.gfx.Reflections);
+		return;
+
+	case EReflections::REFLECTIONS_OFF:
+		Log::Error("RenderReflections(): called with REFLECTIONS_OFF, why?");
+		return;
+	}
+}
+
+void VQEngine::CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
+{
+	SCOPED_GPU_MARKER(pCmd, "CompositeReflections");
 }
 
 void VQEngine::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams)
@@ -986,7 +1036,7 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 		}
 
 		pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::VIZUALIZATION_CS_PSO));
-		pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(3)); // single input computeRS
+		pCmd->SetComputeRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1));
 		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 		pCmd->SetComputeRootDescriptorTable(0, SRVIn.GetGPUDescHandle());
 		pCmd->SetComputeRootDescriptorTable(1, uav_VisualizationOut.GetGPUDescHandle());
@@ -1020,7 +1070,7 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 			{
 				SCOPED_GPU_MARKER(pCmd, "BlurX");
 				pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_X_PSO));
-				pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(11));
+				pCmd->SetComputeRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1));
 
 				const int FFXDispatchGroupDimension = 16;
 				const     int FFXDispatchX = (InputImageWidth  + (FFXDispatchGroupDimension - 1)) / FFXDispatchGroupDimension;
@@ -1067,7 +1117,7 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 			*pConstBuffer = PPParams.TonemapperParams;
 
 			pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::TONEMAPPER_PSO));
-			pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(3)); // compute RS
+			pCmd->SetComputeRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1));
 			pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 			pCmd->SetComputeRootDescriptorTable(0, PP_ENABLE_BLUR_PASS ? srv_blurOutput.GetGPUDescHandle() : srv_ColorIn.GetGPUDescHandle());
 			pCmd->SetComputeRootDescriptorTable(1, uav_TonemapperOut.GetGPUDescHandle());
@@ -1097,7 +1147,7 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 			ID3D12PipelineState* pPSO = mRenderer.GetPSO(EBuiltinPSOs::FFX_CAS_CS_PSO);
 			assert(pPSO);
 			pCmd->SetPipelineState(pPSO);
-			pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(3)); // same root signature as tonemapper
+			pCmd->SetComputeRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1));
 			pCmd->SetComputeRootDescriptorTable(0, srv_TonemapperOut.GetGPUDescHandle());
 			pCmd->SetComputeRootDescriptorTable(1, uav_FFXCASOut.GetGPUDescHandle());
 			pCmd->SetComputeRootConstantBufferView(2, cbAddr);
@@ -1139,7 +1189,7 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 				ID3D12PipelineState* pPSO = mRenderer.GetPSO(EBuiltinPSOs::FFX_FSR1_EASU_CS_PSO);
 				assert(pPSO);
 				pCmd->SetPipelineState(pPSO);
-				pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(15));
+				pCmd->SetComputeRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FFX_FSR1));
 				pCmd->SetComputeRootDescriptorTable(0, srv_TonemapperOut.GetGPUDescHandle());
 				pCmd->SetComputeRootDescriptorTable(1, uav_FSR_EASUOut.GetGPUDescHandle());
 				pCmd->SetComputeRootConstantBufferView(2, cbAddr);
@@ -1176,7 +1226,7 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 				*pConstBuffer = PPParams.FFSR_RCASParams;
 
 				pCmd->SetPipelineState(pPSO);
-				pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(15));
+				pCmd->SetComputeRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FFX_FSR1));
 				pCmd->SetComputeRootDescriptorTable(0, srv_FSR_EASUOut.GetGPUDescHandle());
 				pCmd->SetComputeRootDescriptorTable(1, uav_FSR_RCASOut.GetGPUDescHandle());
 				pCmd->SetComputeRootConstantBufferView(2, cbAddr);
@@ -1278,7 +1328,7 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBu
 	{
 		SCOPED_GPU_MARKER(pCmd, "SwapchainPassthrough");
 		pCmd->SetPipelineState(mRenderer.GetPSO(bHDR ? EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO : EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO));
-		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(1)); // hardcoded root signature for now until shader reflection and rootsignature management is implemented
+		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FullScreenTriangle));
 		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 		pCmd->SetGraphicsRootDescriptorTable(0, srv_ColorIn.GetGPUDescHandle());
 
@@ -1367,7 +1417,7 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBu
 
 		// set pipeline & render state
 		pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::UI_PSO));
-		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(2));
+		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__HelloWorldCube));
 		pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
 
 		pCmd->IASetIndexBuffer(&IndicesView);
@@ -1473,7 +1523,7 @@ void VQEngine::CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, Dynamic
 
 	// set states
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::UI_HDR_scRGB_PSO)); // TODO: HDR10/PQ PSO?
-	pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(16));
+	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__UI_HDR_Composite));
 	pCmd->SetGraphicsRootDescriptorTable(0, srv_SceneColor.GetGPUDescHandle());
 	pCmd->SetGraphicsRootDescriptorTable(1, srv_UI_SDR.GetGPUDescHandle());
 	//pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);

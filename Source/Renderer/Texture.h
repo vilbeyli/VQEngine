@@ -38,6 +38,14 @@ struct Image;
 struct TextureCreateDesc
 {
 	TextureCreateDesc(const std::string& name) : TexName(name) {}
+	TextureCreateDesc(const std::string& name, const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES state, bool bTexIsCubemap = false, bool bGenerateTexMips = false)
+		: TexName(name)
+		, d3d12Desc(desc)
+		, ResourceState(state)
+		, bCubemap(bTexIsCubemap)
+		, bGenerateMips(bGenerateTexMips)
+		, pData(nullptr)
+	{}
 
 	std::string           TexName;
 	const void*           pData = nullptr;

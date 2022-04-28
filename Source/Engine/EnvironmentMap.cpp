@@ -450,7 +450,7 @@ void VQEngine::PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, FEnviron
 		if constexpr (DRAW_CUBE_FACES_SEPARATELY)
 		{
 			pCmd->SetPipelineState(mRenderer.GetPSO(CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO));
-			pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(10));
+			pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ConvolutionCubemap));
 			pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());
 			pCmd->SetGraphicsRootDescriptorTable(3, srvEnv.GetGPUDescHandle());
 
@@ -496,7 +496,7 @@ void VQEngine::PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, FEnviron
 			}
 
 			pCmd->SetPipelineState(mRenderer.GetPSO(CUBEMAP_CONVOLUTION_DIFFUSE_PSO));
-			pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(10));
+			pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ConvolutionCubemap));
 			pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());
 			pCmd->SetGraphicsRootDescriptorTable(3, srvEnv.GetGPUDescHandle());
 			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr0);
@@ -553,7 +553,7 @@ void VQEngine::PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, FEnviron
 		{
 			SCOPED_GPU_MARKER(pCmd, "BlurX");
 			pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_X_PSO));
-			pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(11));
+			pCmd->SetComputeRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1));
 
 			pCmd->SetComputeRootDescriptorTable(0, srv.GetGPUDescHandle());
 			pCmd->SetComputeRootDescriptorTable(1, uav_BlurIntermediate.GetGPUDescHandle());
@@ -602,7 +602,7 @@ void VQEngine::PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, FEnviron
 		SCOPED_GPU_MARKER(pCmd, "SpecularIrradianceCubemap");
 
 		pCmd->SetPipelineState(mRenderer.GetPSO(CUBEMAP_CONVOLUTION_SPECULAR_PSO));
-		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(10));
+		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ConvolutionCubemap));
 		pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());
 		pCmd->SetGraphicsRootDescriptorTable(3, srvIrrDiffuse.GetGPUDescHandle());
 
@@ -694,7 +694,7 @@ void VQEngine::ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, SRV_ID
 
 	// Dispatch
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::BRDF_INTEGRATION_CS_PSO));
-	pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(12)); // hardcoded is bad :(
+	pCmd->SetComputeRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__BRDFIntegrationCS));
 	pCmd->SetComputeRootDescriptorTable(0, uavBRDFLUT.GetGPUDescHandle());
 
 	constexpr int THREAD_GROUP_X = 8;

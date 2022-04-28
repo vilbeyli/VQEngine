@@ -209,10 +209,10 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR pScmdl, int iCmdSh
 			Engine.MainThread_Tick();
 		}
 
-		Engine.Exit();
+		Engine.Destroy();
 	}
 
-	Log::Exit();
+	Log::Destroy();
 
 	//MessageBox(NULL, "EXIT", "Exit", MB_OK); // quick debugging
 

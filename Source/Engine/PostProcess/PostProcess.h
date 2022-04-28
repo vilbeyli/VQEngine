@@ -35,7 +35,7 @@ enum class EDrawMode
 	ROUGHNESS,
 	METALLIC,
 	AO,
-	ALBEDO, // TODO: add support
+	ALBEDO,
 
 	NUM_DRAW_MODES,
 };

@@ -309,6 +309,12 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayVie
     }
     else
     {
+        // TODO: prevent device removed on buffer SRV with incorrect params
+        if constexpr (false)
+        {
+            pDevice->Release();
+            return;
+        }
         pDevice->CreateShaderResourceView(mpResource, pSRVDesc, pRV->GetCPUDescHandle(index));
     }
 

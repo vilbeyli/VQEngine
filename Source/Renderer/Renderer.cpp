@@ -52,6 +52,10 @@ using namespace VQSystemInfo;
 	#define ENABLE_VALIDATION_LAYER 0
 #endif
 
+std::string VQRenderer::ShaderSourceFileDirectory = "Shaders";
+std::string VQRenderer::PSOCacheDirectory    = "Cache/PSOs";
+std::string VQRenderer::ShaderCacheDirectory = "Cache/Shaders";
+
 const std::string_view& VQRenderer::DXGIFormatAsString(DXGI_FORMAT format)
 {
 	static std::unordered_map<DXGI_FORMAT, std::string_view> DXGI_FORMAT_STRING_TRANSLATION =
@@ -71,6 +75,18 @@ EProceduralTextures VQRenderer::GetProceduralTextureEnumFromName(const std::stri
 		, { "Checkerboard_Grayscale", EProceduralTextures::CHECKERBOARD_GRAYSCALE }
 	};
 	return MAP.at(ProceduralTextureName);
+}
+
+std::wstring VQRenderer::GetFullPathOfShader(LPCWSTR shaderFileName)
+{
+	std::wstring dir = StrUtil::ASCIIToUnicode(VQRenderer::ShaderSourceFileDirectory) + L"/";
+	return dir + shaderFileName;
+}
+
+std::wstring VQRenderer::GetFullPathOfShader(const std::string& shaderFileName)
+{
+	std::wstring dir = StrUtil::ASCIIToUnicode(VQRenderer::ShaderSourceFileDirectory) + L"/";
+	return dir + StrUtil::ASCIIToUnicode(shaderFileName);
 }
 
 
@@ -153,11 +169,11 @@ void VQRenderer::Load()
 	Timer timer; timer.Start();
 	Log::Info("[Renderer] Loading...");
 	
-	LoadRootSignatures();
+	LoadBuiltinRootSignatures();
 	float tRS = timer.Tick();
 	Log::Info("[Renderer]    RootSignatures=%.2fs", tRS);
 
-	LoadPSOs();
+	LoadBuiltinPSOs();
 	float tPSOs = timer.Tick();
 	Log::Info("[Renderer]    PSOs=%.2fs", tPSOs);
 
@@ -176,11 +192,11 @@ void VQRenderer::Unload()
 }
 
 
-void VQRenderer::Exit()
+void VQRenderer::Destroy()
 {
 	Log::Info("VQRenderer::Exit()");
-	mWorkers_PSOLoad.Exit();
-	mWorkers_ShaderLoad.Exit();
+	mWorkers_PSOLoad.Destroy();
+	mWorkers_ShaderLoad.Destroy();
 
 	mbExitUploadThread.store(true);
 	mSignal_UploadThreadWorkReady.NotifyAll();
@@ -202,9 +218,9 @@ void VQRenderer::Exit()
 	mpAllocator->Release();
 	
 	// clean up root signatures and PSOs
-	for (auto* p : mpBuiltinRootSignatures)
+	for (auto& pr : mRootSignatureLookup)
 	{
-		if (p) p->Release();
+		if (pr.second) pr.second->Release();
 	}
 	for (std::pair<PSO_ID, ID3D12PipelineState*> pPSO : mPSOs)
 	{
@@ -359,20 +375,11 @@ void VQRenderer::InitializeHeaps()
 	mStaticHeap_IndexBuffer .Create(pDevice, EBufferType::INDEX_BUFFER , STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticIndexBufferPool");
 }
 
-std::string VQRenderer::ShaderCacheDirectory = "Cache/Shaders";
-std::string VQRenderer::PSOCacheDirectory    = "Cache/PSOs";
 void VQRenderer::InitializeShaderAndPSOCacheDirectory()
 {
 	DirectoryUtil::CreateFolderIfItDoesntExist(VQRenderer::ShaderCacheDirectory);
 	DirectoryUtil::CreateFolderIfItDoesntExist(VQRenderer::PSOCacheDirectory);
 }
-
-static std::wstring GetAssetFullPath(LPCWSTR assetName)
-{
-	std::wstring fullPath = L"Shaders/";
-	return fullPath + assetName;
-}
-
 
 static void ReportErrorAndReleaseBlob(ComPtr<ID3DBlob>& pBlob)
 {
@@ -477,7 +484,7 @@ static D3D12_STATIC_SAMPLER_DESC GetDefaultSamplerDesc(EDefaultSampler eSampler,
 	return desc;
 }
 
-void VQRenderer::LoadRootSignatures()
+void VQRenderer::LoadBuiltinRootSignatures()
 {
 	HRESULT hr = {};
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
@@ -506,8 +513,8 @@ void VQRenderer::LoadRootSignatures()
 		ThrowIfFailed(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error));
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_HelloWorldTriangle");
+		mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__HelloWorldTriangle] = pRS;
 	}
 
 	// Fullscreen-Triangle Root Signature : [1]
@@ -526,8 +533,8 @@ void VQRenderer::LoadRootSignatures()
 		ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_FSTriangle");
+		mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__FullScreenTriangle] = pRS;
 	}
 
 	// Hello-World-Cube Root Signature : [2]
@@ -548,8 +555,8 @@ void VQRenderer::LoadRootSignatures()
 		ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_HelloWorldCube");
+		mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__HelloWorldCube] = pRS;
 	}
 
 	// Tonemapper Root Signature : [3]
@@ -557,7 +564,6 @@ void VQRenderer::LoadRootSignatures()
 		CD3DX12_DESCRIPTOR_RANGE1 ranges[3];
 		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
 		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
-		//ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
 
 		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
 		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_ALL);
@@ -571,8 +577,8 @@ void VQRenderer::LoadRootSignatures()
 		if (!SUCCEEDED(hr)) { ReportErrorAndReleaseBlob(error); assert(false); }
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_Tonemapper");
+		mRootSignatureLookup[EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1] = pRS;
 	}
 
 	// Object Root Signature : [4]
@@ -596,8 +602,8 @@ void VQRenderer::LoadRootSignatures()
 		ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_Object");
+		mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__Object] = pRS;
 	}
 
 	// ForwardLighting Root Signature : [5]
@@ -656,8 +662,8 @@ void VQRenderer::LoadRootSignatures()
 		
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_ForwardLighting");
+		mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__ForwardLighting] = pRS;
 	}
 
 
@@ -675,8 +681,8 @@ void VQRenderer::LoadRootSignatures()
 		ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_WireframeUnlit");
+		mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__WireframeUnlit] = pRS;
 	}
 
 	// ShadowDepthPass Root Signatures [7-9]
@@ -692,8 +698,8 @@ void VQRenderer::LoadRootSignatures()
 			ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
 			ID3D12RootSignature* pRS = nullptr;
 			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-			mpBuiltinRootSignatures.push_back(pRS);
 			SetName(pRS, "RootSignature_DepthOnlyVS");
+			mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__ShadowPassDepthOnlyVS] = pRS;
 		}
 		{
 			CD3DX12_ROOT_PARAMETER1 rootParameters[2];
@@ -706,8 +712,8 @@ void VQRenderer::LoadRootSignatures()
 			ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
 			ID3D12RootSignature* pRS = nullptr;
 			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-			mpBuiltinRootSignatures.push_back(pRS);
 			SetName(pRS, "RootSignature_LinearDepthVSPS");
+			mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__ShadowPassLinearDepthVSPS] = pRS;
 		}
 		{
 			CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
@@ -724,8 +730,8 @@ void VQRenderer::LoadRootSignatures()
 			ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
 			ID3D12RootSignature* pRS = nullptr;
 			ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-			mpBuiltinRootSignatures.push_back(pRS);
 			SetName(pRS, "RootSignature_MaskedDepthVSPS");
+			mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__ShadowPassMaskedDepthVSPS] = pRS;
 		}
 		
 	}
@@ -756,30 +762,8 @@ void VQRenderer::LoadRootSignatures()
 		ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_ConvolutionCubemap");
-	}
-
-	// Gaussian Blur CS Root Signature : [11]
-	{
-		CD3DX12_DESCRIPTOR_RANGE1 ranges[3];
-		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
-		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
-
-		CD3DX12_ROOT_PARAMETER1 rootParameters[3];
-		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_ALL);
-		rootParameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_ALL);
-		rootParameters[2].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL);
-
-		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
-		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, NULL, D3D12_ROOT_SIGNATURE_FLAG_NONE);
-
-		hr = D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error);
-		if (!SUCCEEDED(hr)) { ReportErrorAndReleaseBlob(error); assert(false); }
-		ID3D12RootSignature* pRS = nullptr;
-		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-		mpBuiltinRootSignatures.push_back(pRS);
-		SetName(pRS, "RootSignature_GaussianBlurCS");
+		mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__ConvolutionCubemap] = pRS;
 	}
 
 	// BRDF Integration CS Root Signature : [12]
@@ -797,8 +781,8 @@ void VQRenderer::LoadRootSignatures()
 		if (!SUCCEEDED(hr)) { ReportErrorAndReleaseBlob(error); assert(false); }
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_BRDFIntegrationCS");
+		mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__BRDFIntegrationCS] = pRS;
 	}
 	
 	// FFX-SPD CS Root Signature : [13]
@@ -821,8 +805,8 @@ void VQRenderer::LoadRootSignatures()
 		if (!SUCCEEDED(hr)) { ReportErrorAndReleaseBlob(error); assert(false); }
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_FFX-SPD_CS");
+		mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__FFX_SPD_CS] = pRS;
 	}
 
 	// DepthPrePass Root Signature : [14]
@@ -851,8 +835,8 @@ void VQRenderer::LoadRootSignatures()
 
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_DepthPrePass");
+		mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__ZPrePass] = pRS;
 	}
 
 	// FSR1 Root Signature : [15]
@@ -877,8 +861,8 @@ void VQRenderer::LoadRootSignatures()
 		if (!SUCCEEDED(hr)) { ReportErrorAndReleaseBlob(error); assert(false); }
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_FidelityFX_SuperResolution");
+		mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__FFX_FSR1] = pRS;
 	}
 
 	// UIHDRComposite Root Signature : [16]
@@ -900,8 +884,8 @@ void VQRenderer::LoadRootSignatures()
 		ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_UIHDRComposite");
+		mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__UI_HDR_Composite] = pRS;
 	}
 
 	// DepthAndNormalResolve Root Signature : [17]
@@ -926,8 +910,8 @@ void VQRenderer::LoadRootSignatures()
 		if (!SUCCEEDED(hr)) { ReportErrorAndReleaseBlob(error); assert(false); }
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_DepthAndNormalResolve");
+		mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__DepthAndNormalResolveCS] = pRS;
 	}
 
 	// DownsampleDepth Root Signature : [18]
@@ -951,22 +935,35 @@ void VQRenderer::LoadRootSignatures()
 		if (!SUCCEEDED(hr)) { ReportErrorAndReleaseBlob(error); assert(false); }
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-		mpBuiltinRootSignatures.push_back(pRS);
 		SetName(pRS, "RootSignature_DownsampleDepth");
+		mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__DownsampleDepthCS] = pRS;
 	}
 }
 
-void VQRenderer::LoadPSOs()
+//FPSOLoadDesc::FPSOLoadDesc(FPSOLoadDesc&& o)
+//	: PSOName(o.PSOName)
+//	, ShaderStageCompileDescs(o.ShaderStageCompileDescs)
+//{
+//	const bool bComputePSO = std::find_if(o.ShaderStageCompileDescs.begin(), o.ShaderStageCompileDescs.end() // check if ShaderModel has cs_*_*
+//		, [](const FShaderStageCompileDesc& desc) { return ShaderUtils::GetShaderStageEnumFromShaderModel(desc.ShaderModel) == EShaderStage::CS; }
+//	) != o.ShaderStageCompileDescs.end();
+//	if (bComputePSO)
+//		this->D3D12ComputeDesc = o.D3D12ComputeDesc;
+//	else
+//		this->D3D12GraphicsDesc = o.D3D12GraphicsDesc;
+//}
+
+void VQRenderer::LoadBuiltinPSOs()
 {
 	// temp: singl thread pso load from vector
 	// todo: enqueue load descs into the MT queue
-	std::vector< std::pair<PSO_ID, FPSOLoadDesc >> PSOLoadDescs;
+	std::vector< std::pair<PSO_ID, FPSODesc >> PSOLoadDescs;
 
 	// FULLSCREEN TRIANGLE PSO
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"FullscreenTriangle.hlsl");
+		const std::wstring ShaderFilePath = GetFullPathOfShader(L"FullscreenTriangle.hlsl");
 
-		FPSOLoadDesc psoLoadDesc = {};
+		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_FullscreenTriangle";
 
 		// Shader description
@@ -975,7 +972,7 @@ void VQRenderer::LoadPSOs()
 
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
 		psoDesc.InputLayout = { };
-		psoDesc.pRootSignature = mpBuiltinRootSignatures[1];
+		psoDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__FullScreenTriangle);
 		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
@@ -998,12 +995,12 @@ void VQRenderer::LoadPSOs()
 
 	// DEBUG VISUALIZATION PSO
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"Visualization.hlsl");
+		const std::wstring ShaderFilePath = GetFullPathOfShader(L"Visualization.hlsl");
 
-		FPSOLoadDesc psoLoadDesc = {};
+		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_Visualization";
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_5_1" });
-		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[3];
+		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1);
 
 		PSOLoadDescs.push_back({ EBuiltinPSOs::VIZUALIZATION_CS_PSO, psoLoadDesc });
 	}
@@ -1011,9 +1008,9 @@ void VQRenderer::LoadPSOs()
 
 	// UI PSO
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"UI.hlsl");
+		const std::wstring ShaderFilePath = GetFullPathOfShader(L"UI.hlsl");
 
-		FPSOLoadDesc psoLoadDesc = {};
+		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_UI";
 
 		// Shader description
@@ -1022,7 +1019,7 @@ void VQRenderer::LoadPSOs()
 
 		// PSO description
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
-		psoDesc.pRootSignature = mpBuiltinRootSignatures[2];
+		psoDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__HelloWorldCube);
 		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 		psoDesc.BlendState.RenderTarget[0].BlendEnable = true;
@@ -1049,9 +1046,9 @@ void VQRenderer::LoadPSOs()
 
 	// UIHDRComposition PSO
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"UIHDRComposite.hlsl");
+		const std::wstring ShaderFilePath = GetFullPathOfShader(L"UIHDRComposite.hlsl");
 
-		FPSOLoadDesc psoLoadDesc = {};
+		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_UI_HDR";
 
 		// Shader description
@@ -1060,7 +1057,7 @@ void VQRenderer::LoadPSOs()
 
 		// PSO description
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
-		psoDesc.pRootSignature = mpBuiltinRootSignatures[16];
+		psoDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__UI_HDR_Composite);
 		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 		psoDesc.BlendState.RenderTarget[0].BlendEnable = false;
@@ -1087,9 +1084,9 @@ void VQRenderer::LoadPSOs()
 
 	// SKYDOME PSO
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"Skydome.hlsl");
+		const std::wstring ShaderFilePath = GetFullPathOfShader(L"Skydome.hlsl");
 
-		FPSOLoadDesc psoLoadDesc = {};
+		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_Skydome";
 
 		// Shader description
@@ -1098,7 +1095,7 @@ void VQRenderer::LoadPSOs()
 
 		// PSO description
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
-		psoDesc.pRootSignature = mpBuiltinRootSignatures[2];
+		psoDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__HelloWorldCube);
 		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
@@ -1124,9 +1121,9 @@ void VQRenderer::LoadPSOs()
 
 	// OBJECT PSO
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"Object.hlsl");
+		const std::wstring ShaderFilePath = GetFullPathOfShader(L"Object.hlsl");
 
-		FPSOLoadDesc psoLoadDesc = {};
+		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_Object";
 
 		// Shader description
@@ -1135,7 +1132,7 @@ void VQRenderer::LoadPSOs()
 
 		// PSO description
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
-		psoDesc.pRootSignature = mpBuiltinRootSignatures[4];
+		psoDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__Object);
 		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
@@ -1161,25 +1158,25 @@ void VQRenderer::LoadPSOs()
 
 	// TONEMAPPER CS PSO
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"Tonemapper.hlsl");
+		const std::wstring ShaderFilePath = GetFullPathOfShader(L"Tonemapper.hlsl");
 
-		FPSOLoadDesc psoLoadDesc = {};
+		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_TonemapperCS";
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_5_1" });
-		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[3];
+		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1);
 
 		PSOLoadDescs.push_back({ EBuiltinPSOs::TONEMAPPER_PSO, psoLoadDesc });
 	}
 
 	// DEPTH PREPASS PSOs
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"DepthPrePass.hlsl");
+		const std::wstring ShaderFilePath = GetFullPathOfShader(L"DepthPrePass.hlsl");
 
-		FPSOLoadDesc psoLoadDesc = {};
+		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_FDepthPrePassVSPS";
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
-		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mpBuiltinRootSignatures[14];
+		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ZPrePass);
 
 
 		// PSO description
@@ -1211,7 +1208,7 @@ void VQRenderer::LoadPSOs()
 		//	psoLoadDesc.PSOName = "PSO_FDepthPrePassVSPS_AlphaMasked";
 		//	psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1", { {"ENABLE_ALPHA_MASK","1"} } });
 		//	psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1", { {"ENABLE_ALPHA_MASK","1"} } });
-		//	psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mpBuiltinRootSignatures[14];
+		//	psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ZPrePass);
 		//	psoDesc.SampleDesc.Count = 1;
 		//	PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PREPASS_ALPHA_MASKED_PSO, psoLoadDesc });
 		//
@@ -1223,13 +1220,13 @@ void VQRenderer::LoadPSOs()
 
 	// FORWARD LIGHTING PSO
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"ForwardLighting.hlsl");
+		const std::wstring ShaderFilePath = GetFullPathOfShader(L"ForwardLighting.hlsl");
 
-		FPSOLoadDesc psoLoadDesc = {};
+		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS";
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
-		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mpBuiltinRootSignatures[5];
+		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ForwardLighting);
 
 		// PSO description
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
@@ -1268,13 +1265,13 @@ void VQRenderer::LoadPSOs()
 
 	// WIREFRAME/UNLIT PSOs
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"Unlit.hlsl");
+		const std::wstring ShaderFilePath = GetFullPathOfShader(L"Unlit.hlsl");
 
-		FPSOLoadDesc psoLoadDesc = {};
+		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_UnlitVSPS";
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
-		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mpBuiltinRootSignatures[6];
+		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__WireframeUnlit);
 
 		// PSO description
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
@@ -1318,12 +1315,12 @@ void VQRenderer::LoadPSOs()
 
 	// SHADOWMAP PSOs
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"ShadowDepthPass.hlsl");
+		const std::wstring ShaderFilePath = GetFullPathOfShader(L"ShadowDepthPass.hlsl");
 
-		FPSOLoadDesc psoLoadDesc = {};
+		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_DepthOnlyVS";
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
-		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mpBuiltinRootSignatures[7];
+		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ShadowPassDepthOnlyVS);
 
 		// PSO description
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
@@ -1347,7 +1344,7 @@ void VQRenderer::LoadPSOs()
 			psoLoadDesc.PSOName = "PSO_LinearDepthVSPS";
 			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
 			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
-			psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mpBuiltinRootSignatures[8];
+			psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ShadowPassLinearDepthVSPS);
 			PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PASS_LINEAR_PSO, psoLoadDesc });
 		}
 		{
@@ -1357,7 +1354,7 @@ void VQRenderer::LoadPSOs()
 			{
 				shdDesc.Macros.push_back({ "ALPHA_MASK", "1" });
 			}
-			psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mpBuiltinRootSignatures[9];
+			psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ShadowPassMaskedDepthVSPS);
 			PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PASS_ALPHAMASKED_PSO, psoLoadDesc });
 		}
 	}
@@ -1365,14 +1362,14 @@ void VQRenderer::LoadPSOs()
 
 	// CUBEMAP CONVOLUTION PSOs
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"CubemapConvolution.hlsl");
+		const std::wstring ShaderFilePath = GetFullPathOfShader(L"CubemapConvolution.hlsl");
 
-		FPSOLoadDesc psoLoadDesc = {};
+		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_CubemapConvolutionVSGSPS_Diffuse";
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "GSMain", "gs_5_1" });
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain_DiffuseIrradiance", "ps_5_1" });
-		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mpBuiltinRootSignatures[10];
+		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ConvolutionCubemap);
 
 		// PSO description
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
@@ -1420,94 +1417,94 @@ void VQRenderer::LoadPSOs()
 
 	// GAUSSIAN BLUR CS PSOs
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"GaussianBlur.hlsl");
+		const std::wstring ShaderFilePath = GetFullPathOfShader(L"GaussianBlur.hlsl");
 		{
-			FPSOLoadDesc psoLoadDesc = {};
+			FPSODesc psoLoadDesc = {};
 			psoLoadDesc.PSOName = "PSO_GaussianBlurNaiveXCS";
 			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain_X", "cs_5_1" });
-			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[11];
+			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1);
 			PSOLoadDescs.push_back({ EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_X_PSO, psoLoadDesc });
 		}
 		{
-			FPSOLoadDesc psoLoadDesc = {};
+			FPSODesc psoLoadDesc = {};
 			psoLoadDesc.PSOName = "PSO_GaussianBlurNaiveYCS";
 			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain_Y", "cs_5_1" });
-			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[11];
+			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1);
 			PSOLoadDescs.push_back({ EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_Y_PSO, psoLoadDesc });
 		}
 	}
 
 	// BRDF INTEGRATION CS PSO
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"CubemapConvolution.hlsl");
+		const std::wstring ShaderFilePath = GetFullPathOfShader(L"CubemapConvolution.hlsl");
 		{
-			FPSOLoadDesc psoLoadDesc = {};
+			FPSODesc psoLoadDesc = {};
 			psoLoadDesc.PSOName = "PSO_BRDFIntegrationCS";
 			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain_BRDFIntegration", "cs_5_1" });
-			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[12];
+			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__BRDFIntegrationCS);
 			PSOLoadDescs.push_back({ EBuiltinPSOs::BRDF_INTEGRATION_CS_PSO, psoLoadDesc });
 		}
 	}
 
 	// AMD FidelityFX PSOs
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"AMDFidelityFX.hlsl");
+		const std::wstring ShaderFilePath = GetFullPathOfShader(L"AMDFidelityFX.hlsl");
 
 		// FFX-CAS
 		{
-			FPSOLoadDesc psoLoadDesc = {};
+			FPSODesc psoLoadDesc = {};
 			psoLoadDesc.PSOName = "PSO_FFXCASCS";
 			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CAS_CSMain", "cs_6_1", {{"FFXCAS_CS", "1"}} });
-			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[3]; // share root signature with tonemapper pass
+			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1); // share root signature with tonemapper pass
 			PSOLoadDescs.push_back({ EBuiltinPSOs::FFX_CAS_CS_PSO, psoLoadDesc });
 		}
 
 		// FFX-SPD
 		{
-			FPSOLoadDesc psoLoadDesc = {};
+			FPSODesc psoLoadDesc = {};
 			psoLoadDesc.PSOName = "PSO_FFXSPDCS";
 			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "SPD_CSMain", "cs_6_0", {{"FFXSPD_CS", "1"}} });
-			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[13];
+			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__FFX_SPD_CS);
 			//PSOLoadDescs.push_back({ EBuiltinPSOs::FFX_SPD_CS_PSO, psoLoadDesc }); 
 		}
 
 		// FSR / EASU 
 		{
-			FPSOLoadDesc psoLoadDesc = {};
+			FPSODesc psoLoadDesc = {};
 			psoLoadDesc.PSOName = "PSO_FSR_EASU_CS";
 			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "FSR_EASU_CSMain", "cs_6_2", {{"FSR_EASU_CS", "1"}} });
-			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[15]; // share root signature with tonemapper pass
+			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__FFX_FSR1);
 			PSOLoadDescs.push_back({ EBuiltinPSOs::FFX_FSR1_EASU_CS_PSO, psoLoadDesc });
 		}
 		// FSR / EASU 
 		{
-			FPSOLoadDesc psoLoadDesc = {};
+			FPSODesc psoLoadDesc = {};
 			psoLoadDesc.PSOName = "PSO_FSR_RCAS_CS";
 			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "FSR_RCAS_CSMain", "cs_6_2", {{"FSR_RCAS_CS", "1"}} });
-			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[15]; // share root signature with tonemapper pass
+			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__FFX_FSR1);
 			PSOLoadDescs.push_back({ EBuiltinPSOs::FFX_FSR1_RCAS_CS_PSO, psoLoadDesc });
 		}
 	}
 
 	// Depth Resolve PSO
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"DepthResolve.hlsl");
+		const std::wstring ShaderFilePath = GetFullPathOfShader(L"DepthResolve.hlsl");
 
-		FPSOLoadDesc psoLoadDesc = {};
+		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_DepthResolveCS";
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_0" });
-		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[17];
+		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__DepthAndNormalResolveCS);
 		PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_RESOLVE, psoLoadDesc });
 	}
 
 	// DepthDownsampleCS PSO
 	{
-		const std::wstring ShaderFilePath = GetAssetFullPath(L"DownsampleDepth.hlsl");
+		const std::wstring ShaderFilePath = GetFullPathOfShader(L"DownsampleDepth.hlsl");
 
-		FPSOLoadDesc psoLoadDesc = {};
+		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_DownsampleDepthCS";
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_0" });
-		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mpBuiltinRootSignatures[18];
+		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__DownsampleDepthCS);
 		PSOLoadDescs.push_back({ EBuiltinPSOs::DOWNSAMPLE_DEPTH_CS_PSO, psoLoadDesc });
 	}
 
@@ -1515,7 +1512,7 @@ void VQRenderer::LoadPSOs()
 
 	// TODO: threaded PSO loading
 	// single threaded PSO loading for now (shader compilation is still MTd)
-	for (const std::pair<PSO_ID, FPSOLoadDesc>& psoLoadDescIDPair : PSOLoadDescs)
+	for (const std::pair<PSO_ID, FPSODesc>& psoLoadDescIDPair : PSOLoadDescs)
 	{
 		mPSOs[psoLoadDescIDPair.first] = this->LoadPSO(psoLoadDescIDPair.second);
 	}
@@ -1587,7 +1584,14 @@ void VQRenderer::UploadVertexAndIndexBufferHeaps()
 }
 
 
-ID3D12DescriptorHeap* VQRenderer::GetDescHeap(EResourceHeapType HeapType) 
+ID3D12PipelineState* VQRenderer::GetPSO(PSO_ID psoID) const
+{
+	assert(psoID >= EBuiltinPSOs::NUM_BUILTIN_PSOs);
+
+	return mPSOs.at(psoID);
+}
+
+ID3D12DescriptorHeap* VQRenderer::GetDescHeap(EResourceHeapType HeapType)
 {
 	ID3D12DescriptorHeap* pHeap = nullptr;
 	switch (HeapType)
@@ -1612,7 +1616,10 @@ TextureID VQRenderer::GetProceduralTexture(EProceduralTextures tex) const
 	return mLookup_ProceduralTextureIDs.at(tex);
 }
 
-
+ID3D12RootSignature* VQRenderer::GetBuiltinRootSignature(EBuiltinRootSignatures eRootSignature) const
+{
+	return mRootSignatureLookup.at((RS_ID)eRootSignature);
+}
 
 
 // ================================================================================================================================================
