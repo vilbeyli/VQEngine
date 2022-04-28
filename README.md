@@ -35,6 +35,8 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
   - Directional Light
   - PCF Shadow Maps for Point/Spot/Directional lights
 - HDR Environment Maps from [HDRI Haven](https://hdrihaven.com/)
+- Reflections
+  - [FidelityFX - Stochastic Screen Space Reflections (SSSR)](https://github.com/GPUOpen-Effects/FidelityFX-SSSR)
 - Ambient Occlusion
   - [FidelityFX - Combined Adaptive Compute Ambient Occlusion (CACAO)](https://github.com/GPUOpen-Effects/FidelityFX-CACAO)
 - Anti Aliasing
