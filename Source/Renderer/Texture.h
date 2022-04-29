@@ -94,8 +94,6 @@ public:
 
 	void InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayView = false, bool bInitAsCubeView = false, UINT ShaderComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc = nullptr);
 	void InitializeDSV(uint32 index, DSV* pRV, int ArraySlice = 1);
-	void InitializeRTV(uint32 index, RTV* pRV, D3D12_RENDER_TARGET_VIEW_DESC* pRTVDesc = nullptr);
-	void InitializeUAV(uint32 index, CBV_SRV_UAV* pRV, D3D12_UNORDERED_ACCESS_VIEW_DESC* pUAVDesc = nullptr, const Texture* pCounterTexture = nullptr);
 
 	inline const ID3D12Resource* GetResource() const { return mpResource; }
 	inline       ID3D12Resource* GetResource()       { return mpResource; }

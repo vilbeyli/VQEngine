@@ -1014,9 +1014,9 @@ void ScreenSpaceReflectionsPass::InitializeResourceViews(const FResourceParamete
 		}
 		//==============================PrepareBlueNoise=============================================
 		{
-			mRenderer.InitializeSRV(SRVBlueNoisePassInputs [i], 0, TexBlueNoiseSobolBuffer         , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
-			mRenderer.InitializeSRV(SRVBlueNoisePassInputs [i], 1, TexBlueNoiseRankingTileBuffer   , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
-			mRenderer.InitializeSRV(SRVBlueNoisePassInputs [i], 2, TexBlueNoiseScramblingTileBuffer, DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
+			mRenderer.InitializeSRVForBuffer(SRVBlueNoisePassInputs [i], 0, TexBlueNoiseSobolBuffer         , DXGI_FORMAT_R32_UINT);
+			mRenderer.InitializeSRVForBuffer(SRVBlueNoisePassInputs [i], 1, TexBlueNoiseRankingTileBuffer   , DXGI_FORMAT_R32_UINT);
+			mRenderer.InitializeSRVForBuffer(SRVBlueNoisePassInputs [i], 2, TexBlueNoiseScramblingTileBuffer, DXGI_FORMAT_R32_UINT);
 			mRenderer.InitializeUAV(UAVBlueNoisePassOutputs[i], 0, TexReflectionDenoiserBlueNoise);
 		}
 		//==============================PrepareIndirectArgs==========================================
@@ -1032,7 +1032,7 @@ void ScreenSpaceReflectionsPass::InitializeResourceViews(const FResourceParamete
 			mRenderer.InitializeSRV(SRVIntersectionInputs[i], 3, TexExtractedRoughness              , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
 			mRenderer.InitializeSRV(SRVIntersectionInputs[i], 4, pParams->TexEnvironmentMap         , DONT_USE_ARRAY_VIEW, true);
 			mRenderer.InitializeSRV(SRVIntersectionInputs[i], 5, TexReflectionDenoiserBlueNoise     , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
-			mRenderer.InitializeSRV(SRVIntersectionInputs[i], 6, TexRayList                         , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
+			mRenderer.InitializeSRVForBuffer(SRVIntersectionInputs[i], 6, TexRayList                , DXGI_FORMAT_R32_UINT);
 
 			mRenderer.InitializeUAV         (UAVIntersectionOutputs[i], 0, TexRadiance[i]);
 			mRenderer.InitializeUAVForBuffer(UAVIntersectionOutputs[i], 1, TexRayCounter, DXGI_FORMAT_R32_UINT);
@@ -1054,7 +1054,7 @@ void ScreenSpaceReflectionsPass::InitializeResourceViews(const FResourceParamete
 			mRenderer.InitializeSRV(SRVReprojectPassInputs[i], 10, TexVariance[1-i]         , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
 			mRenderer.InitializeSRV(SRVReprojectPassInputs[i], 11, TexSampleCount[1-i]      , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
 			mRenderer.InitializeSRV(SRVReprojectPassInputs[i], 12, TexReflectionDenoiserBlueNoise, DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
-			mRenderer.InitializeSRV(SRVReprojectPassInputs[i], 13, TexDenoiserTileList      , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
+			mRenderer.InitializeSRVForBuffer(SRVReprojectPassInputs[i], 13, TexDenoiserTileList  , DXGI_FORMAT_R32_UINT);
 
 			mRenderer.InitializeUAV(UAVReprojectPassOutputs[i], 0, TexReprojectedRadiance);
 			mRenderer.InitializeUAV(UAVReprojectPassOutputs[i], 1, TexAvgRadiance[i]);
@@ -1070,7 +1070,7 @@ void ScreenSpaceReflectionsPass::InitializeResourceViews(const FResourceParamete
 			mRenderer.InitializeSRV(SRVPrefilterPassInputs[i], 4, TexRadiance[i]                     , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
 			mRenderer.InitializeSRV(SRVPrefilterPassInputs[i], 5, TexVariance[i]                     , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
 			mRenderer.InitializeSRV(SRVPrefilterPassInputs[i], 6, TexSampleCount[i]                  , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
-			mRenderer.InitializeSRV(SRVPrefilterPassInputs[i], 7, TexDenoiserTileList                , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
+			mRenderer.InitializeSRVForBuffer(SRVPrefilterPassInputs[i], 7, TexDenoiserTileList       , DXGI_FORMAT_R32_UINT);
 
 			mRenderer.InitializeUAV(UAVPrefilterPassOutputs[i], 0, TexRadiance[1-i]);
 			mRenderer.InitializeUAV(UAVPrefilterPassOutputs[i], 1, TexVariance[1-i]);
@@ -1084,7 +1084,7 @@ void ScreenSpaceReflectionsPass::InitializeResourceViews(const FResourceParamete
 			mRenderer.InitializeSRV(SRVTemporalResolveInputs[i], 3, TexReprojectedRadiance, DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
 			mRenderer.InitializeSRV(SRVTemporalResolveInputs[i], 4, TexVariance[1-i]      , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
 			mRenderer.InitializeSRV(SRVTemporalResolveInputs[i], 5, TexSampleCount[1-i]   , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
-			mRenderer.InitializeSRV(SRVTemporalResolveInputs[i], 6, TexDenoiserTileList   , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
+			mRenderer.InitializeSRVForBuffer(SRVTemporalResolveInputs[i], 6, TexDenoiserTileList, DXGI_FORMAT_R32_UINT);
 
 			mRenderer.InitializeUAV(UAVTemporalResolveOutputs[i], 0, TexRadiance[i]);
 			mRenderer.InitializeUAV(UAVTemporalResolveOutputs[i], 1, TexVariance[i]);

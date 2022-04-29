@@ -838,7 +838,8 @@ void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID)
 {
 	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(RTV, rtvID);
-	mTextures.at(texID).InitializeRTV(heapIndex, &mRTVs.at(rtvID));
+	D3D12_RENDER_TARGET_VIEW_DESC* pRTVDesc = nullptr; // unused
+	mDevice.GetDevicePtr()->CreateRenderTargetView(mTextures.at(texID).GetResource(), pRTVDesc, mRTVs.at(rtvID).GetCPUDescHandle(heapIndex));
 }
 
 void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID, int arraySlice, int mipLevel)
@@ -889,10 +890,10 @@ void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID, in
 		}
 	}
 
-	tex.InitializeRTV(heapIndex, &mRTVs.at(rtvID), &rtvDesc);
+	mDevice.GetDevicePtr()->CreateRenderTargetView(mTextures.at(texID).GetResource(), &rtvDesc, mRTVs.at(rtvID).GetCPUDescHandle(heapIndex));
 }
 
-void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID texID, DXGI_FORMAT bufferUAVFormatOverride)
+void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID texID, DXGI_FORMAT bufferViewFormatOverride)
 {
 	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(UAV, uavID);
@@ -908,12 +909,38 @@ void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID 
 	// tex.mFormat will be UNKNOWN if it is created for a buffer
 	// This will trigger a device remove if we want to use a typed UAV (buffer).
 	// In this case, we'll need to provide the data type of the RWBuffer to create the UAV.
-	uavDesc.Format = bufferUAVFormatOverride;
+	uavDesc.Format = bufferViewFormatOverride;
 
 	// tex.Width should be representing the Bytes of the Buffer UAV.
-	uavDesc.Buffer.NumElements = tex.mWidth / GetDXGIFormatByteSize(bufferUAVFormatOverride);
+	uavDesc.Buffer.NumElements = tex.mWidth / GetDXGIFormatByteSize(bufferViewFormatOverride);
 
-	mTextures.at(texID).InitializeUAV(heapIndex, &mUAVs.at(uavID), &uavDesc);
+	// create the UAV
+	ID3D12Resource* pRsc = mTextures.at(texID).GetResource();
+	ID3D12Resource* pRscCounter = nullptr; // TODO: find a use case for this parameter and implement proper interface
+	assert(pRsc);
+	mDevice.GetDevicePtr()->CreateUnorderedAccessView(
+		pRsc,
+		pRscCounter,
+		&uavDesc,
+		mUAVs.at(uavID).GetCPUDescHandle(heapIndex)
+	);
+}
+void VQRenderer::InitializeSRVForBuffer(SRV_ID srvID, uint heapIndex, TextureID texID, DXGI_FORMAT bufferViewFormatOverride)
+{
+	Texture& tex = mTextures.at(texID);
+	D3D12_RESOURCE_DESC rscDesc = tex.GetResource()->GetDesc();
+	assert(rscDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC desc;
+	desc.Buffer.NumElements = tex.mWidth / GetDXGIFormatByteSize(bufferViewFormatOverride);
+	desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAGS::D3D12_BUFFER_SRV_FLAG_NONE;
+	desc.Buffer.FirstElement = 0;
+	desc.Buffer.StructureByteStride = GetDXGIFormatByteSize(bufferViewFormatOverride);
+	desc.Format = DXGI_FORMAT_UNKNOWN;
+	desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	mDevice.GetDevicePtr()->CreateShaderResourceView(nullptr, &desc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
+
 }
 void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, uint arraySlice /*=0*/, uint mipSlice /*=0*/)
 {
@@ -972,7 +999,16 @@ void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, ui
 		}
 	}
 
-	mTextures.at(texID).InitializeUAV(heapIndex, &mUAVs.at(uavID), &uavDesc);
+	// create the UAV
+	ID3D12Resource* pRsc = mTextures.at(texID).GetResource();
+	ID3D12Resource* pRscCounter = nullptr; // TODO: find a use case for this parameter and implement proper interface
+	assert(pRsc);
+	mDevice.GetDevicePtr()->CreateUnorderedAccessView(
+		pRsc,
+		pRscCounter,
+		&uavDesc,
+		mUAVs.at(uavID).GetCPUDescHandle(heapIndex)
+	);
 }
 
 void VQRenderer::DestroySRV(SRV_ID& srvID)

@@ -128,9 +128,9 @@ private:
 	std::array<TextureID, 2> TexSampleCount;
 	std::array<TextureID, 2> TexAvgRadiance;
 	TextureID TexReprojectedRadiance;
-	short iBuffer;
 
 	// R/W ping-pong resource views for all subpasses
+	short iBuffer;
 	std::array<UAV_ID, 2> UAVClassifyTilesOutputs;
 	std::array<SRV_ID, 2> SRVClassifyTilesInputs;
 	std::array<UAV_ID, 2> UAVPrepareIndirectArgsPass;

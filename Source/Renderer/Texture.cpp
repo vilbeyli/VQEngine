@@ -169,6 +169,7 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayVie
     const bool bCustomComponentMappingSpecified = ShaderComponentMapping != D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
     D3D12_RESOURCE_DESC resourceDesc = mpResource->GetDesc();
+    const bool bBufferSRV = resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER;
     const int NumCubes = this->mbCubemap ? resourceDesc.DepthOrArraySize / 6 : 0;
     const bool bInitializeAsCubemapView = this->mbCubemap && bInitAsCubeView;
     if (bInitializeAsCubemapView)
@@ -181,7 +182,7 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayVie
         assert(bArraySizeMultipleOfSix);
     }
 
-    if (mbTypelessTexture || bCustomComponentMappingSpecified || this->mbCubemap)
+    if (mbTypelessTexture || bCustomComponentMappingSpecified || this->mbCubemap || bBufferSRV)
     {
 
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -190,87 +191,70 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayVie
         int firstArraySlice = index;
         //assert(mipLevel > 0);
 
-
-        const bool bBufferSRV = resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER;
         const bool bDepthSRV = resourceDesc.Format == DXGI_FORMAT_R32_TYPELESS;
         const bool bMSAA = resourceDesc.SampleDesc.Count != 1;
         const bool bArraySRV = /*bInitAsArrayView &&*/ resourceDesc.DepthOrArraySize > 1;
 
-        if (bBufferSRV)
+        if (bDepthSRV)
         {
-            srvDesc.Format = mFormat;
-            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-            srvDesc.Buffer.FirstElement = 0;
-            srvDesc.Buffer.NumElements = (UINT)resourceDesc.Width;
-            srvDesc.Buffer.StructureByteStride = mStructuredBufferStride;
-            srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+            srvDesc.Format = DXGI_FORMAT_R32_FLOAT; //special case for the depth buffer
         }
-
-        // Texture SRV
         else
         {
-            if (bDepthSRV)
+            D3D12_RESOURCE_DESC desc = mpResource->GetDesc();
+            srvDesc.Format = desc.Format;
+        }
+
+        if (bMSAA)
+        {
+            assert(!this->mbCubemap); // no need so far, implement MS cubemaps if this is hit.
+            if (bArraySRV)
             {
-                srvDesc.Format = DXGI_FORMAT_R32_FLOAT; //special case for the depth buffer
+                srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY;
+                srvDesc.Texture2DMSArray.FirstArraySlice = (firstArraySlice == -1) ? 0 : firstArraySlice;
+                srvDesc.Texture2DMSArray.ArraySize = (arraySize == -1) ? resourceDesc.DepthOrArraySize : arraySize;
+                assert(mipLevel == -1);
             }
             else
             {
-                D3D12_RESOURCE_DESC desc = mpResource->GetDesc();
-                srvDesc.Format = desc.Format;
+                srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
             }
-
-            if (bMSAA)
+        }
+        else // non-MSAA Texture SRV
+        {
+            if (bArraySRV)
             {
-                assert(!this->mbCubemap); // no need so far, implement MS cubemaps if this is hit.
-                if (bArraySRV)
+                srvDesc.ViewDimension = bInitAsCubeView ? D3D12_SRV_DIMENSION_TEXTURECUBEARRAY : D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+                if (bInitAsCubeView)
                 {
-                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY;
-                    srvDesc.Texture2DMSArray.FirstArraySlice = (firstArraySlice == -1) ? 0 : firstArraySlice;
-                    srvDesc.Texture2DMSArray.ArraySize = (arraySize == -1) ? resourceDesc.DepthOrArraySize : arraySize;
-                    assert(mipLevel == -1);
+                    srvDesc.TextureCubeArray.MipLevels = resourceDesc.MipLevels;
+                    srvDesc.TextureCubeArray.ResourceMinLODClamp = 0;
+                    srvDesc.TextureCubeArray.MostDetailedMip = 0;
+                    srvDesc.TextureCubeArray.First2DArrayFace = 0;
+                    srvDesc.TextureCubeArray.NumCubes = NumCubes;
                 }
                 else
                 {
-                    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
+                    srvDesc.Texture2DArray.MostDetailedMip = (mipLevel == -1) ? 0 : mipLevel;
+                    srvDesc.Texture2DArray.MipLevels = (mipLevel == -1) ? mMipMapCount : 1;
+                    srvDesc.Texture2DArray.FirstArraySlice = (firstArraySlice == -1) ? 0 : firstArraySlice;
+                    srvDesc.Texture2DArray.ArraySize = arraySize - srvDesc.Texture2DArray.FirstArraySlice;
                 }
             }
 
-            else // non-MSAA SRV
+            else // single SRV
             {
-                if (bArraySRV)
+                srvDesc.ViewDimension = bInitAsCubeView ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
+                if (bInitAsCubeView)
                 {
-                    srvDesc.ViewDimension = bInitAsCubeView ? D3D12_SRV_DIMENSION_TEXTURECUBEARRAY : D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
-                    if (bInitAsCubeView)
-                    {
-                        srvDesc.TextureCubeArray.MipLevels = resourceDesc.MipLevels;
-                        srvDesc.TextureCubeArray.ResourceMinLODClamp = 0;
-                        srvDesc.TextureCubeArray.MostDetailedMip = 0;
-                        srvDesc.TextureCubeArray.First2DArrayFace = 0;
-                        srvDesc.TextureCubeArray.NumCubes = NumCubes;
-                    }
-                    else
-                    {
-                        srvDesc.Texture2DArray.MostDetailedMip = (mipLevel == -1) ? 0 : mipLevel;
-                        srvDesc.Texture2DArray.MipLevels = (mipLevel == -1) ? mMipMapCount : 1;
-                        srvDesc.Texture2DArray.FirstArraySlice = (firstArraySlice == -1) ? 0 : firstArraySlice;
-                        srvDesc.Texture2DArray.ArraySize = arraySize - srvDesc.Texture2DArray.FirstArraySlice;
-                    }
+                    srvDesc.TextureCube.MostDetailedMip = 0;
+                    srvDesc.TextureCube.MipLevels = resourceDesc.MipLevels;
+                    srvDesc.TextureCube.ResourceMinLODClamp = 0;
                 }
-
-                else // single SRV
+                else
                 {
-                    srvDesc.ViewDimension = bInitAsCubeView ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
-                    if (bInitAsCubeView)
-                    {
-                        srvDesc.TextureCube.MostDetailedMip = 0;
-                        srvDesc.TextureCube.MipLevels = resourceDesc.MipLevels;
-                        srvDesc.TextureCube.ResourceMinLODClamp = 0;
-                    }
-                    else
-                    {
-                        srvDesc.Texture2D.MostDetailedMip = mipLevel;
-                        srvDesc.Texture2D.MipLevels = (mipLevel == -1) ? mMipMapCount : 1;
-                    }
+                    srvDesc.Texture2D.MostDetailedMip = mipLevel;
+                    srvDesc.Texture2D.MipLevels = (mipLevel == -1) ? mMipMapCount : 1;
                 }
             }
         }
@@ -309,10 +293,10 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayVie
     }
     else
     {
-        // TODO: prevent device removed on buffer SRV with incorrect params
-        if constexpr (false)
+        if (!pSRVDesc && bBufferSRV)
         {
-            pDevice->Release();
+            Log::Error("CreateSRV() for RWBuffer cannot have null SRVDescriptor, specify a SRV "
+                "format for a buffer (as it has no format from the pResource's point of view).");
             return;
         }
         pDevice->CreateShaderResourceView(mpResource, pSRVDesc, pRV->GetCPUDescHandle(index));
@@ -352,70 +336,7 @@ void Texture::InitializeDSV(uint32 index, DSV* pRV, int ArraySlice /*= 1*/)
     pDevice->Release();
 }
 
-void Texture::InitializeRTV(uint32 index, RTV* pRV, D3D12_RENDER_TARGET_VIEW_DESC* pRTVDesc)
-{
-    assert(mpResource);
-    GetDevice(pDevice, mpResource);
-    pDevice->CreateRenderTargetView(mpResource, pRTVDesc, pRV->GetCPUDescHandle(index));
-    pDevice->Release();
-}
 
-void Texture::InitializeUAV(uint32 index, CBV_SRV_UAV* pRV, D3D12_UNORDERED_ACCESS_VIEW_DESC* pUAVDesc, const Texture* pCounterTexture /*= nullptr*/)
-{
-    assert(mpResource);
-    GetDevice(pDevice, mpResource);
-    pDevice->CreateUnorderedAccessView(
-          mpResource
-        , pCounterTexture ? pCounterTexture->mpResource : NULL
-        , pUAVDesc
-        , pRV->GetCPUDescHandle(index)
-    );
-    pDevice->Release();
-}
-
-
-#if 0
-void Texture::CreateUAV(uint32_t index, Texture* pCounterTex, CBV_SRV_UAV* pRV, D3D12_UNORDERED_ACCESS_VIEW_DESC* pUavDesc)
-{
-    ID3D12Device* pDevice;
-    m_pResource->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice));
-
-    pDevice->CreateUnorderedAccessView(m_pResource, pCounterTex ? pCounterTex->GetResource() : NULL, pUavDesc, pRV->GetCPUDescHandle(index));
-
-    pDevice->Release();
-}
-
-void Texture::CreateRTV(uint32_t index, RTV* pRV, int mipLevel, int arraySize, int firstArraySlice)
-{
-    D3D12_RESOURCE_DESC texDesc = m_pResource->GetDesc();
-    D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-    rtvDesc.Format = texDesc.Format;
-    if (texDesc.DepthOrArraySize == 1)
-    {
-        assert(arraySize == -1);
-        assert(firstArraySlice == -1);
-        if (texDesc.SampleDesc.Count == 1)
-        {
-            rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-            rtvDesc.Texture2D.MipSlice = (mipLevel == -1) ? 0 : mipLevel;
-        }
-        else
-        {
-            rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMS;
-            assert(mipLevel == -1);
-        }
-    }
-    else
-    {
-        rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
-        rtvDesc.Texture2DArray.ArraySize = arraySize;
-        rtvDesc.Texture2DArray.FirstArraySlice = firstArraySlice;
-        rtvDesc.Texture2DArray.MipSlice = (mipLevel == -1) ? 0 : mipLevel;
-    }
-
-    CreateRTV(index, pRV, &rtvDesc);
-}
-#endif
 
 // ================================================================================================================================================
 
