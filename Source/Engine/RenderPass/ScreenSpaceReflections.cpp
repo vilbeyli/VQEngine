@@ -143,8 +143,8 @@ void ScreenSpaceReflectionsPass::OnCreateWindowSizeDependentResources(unsigned W
 			, TextureCreateDesc("Reflection Denoiser - Extracted Roughness History Texture", descs[EDescs::ROUGHNESS_TEXTURE], rscStateSRV)
 			, TextureCreateDesc("Reflection Denoiser - Radiance 0"                         , descs[EDescs::RADIANCE]         , rscStateSRV)
 			, TextureCreateDesc("Reflection Denoiser - Radiance 1"                         , descs[EDescs::RADIANCE]         , rscStateSRV)
-			, TextureCreateDesc("Reflection Denoiser - Variance 0"                         , descs[EDescs::RADIANCE]         , rscStateSRV)
-			, TextureCreateDesc("Reflection Denoiser - Variance 1"                         , descs[EDescs::RADIANCE]         , rscStateSRV)
+			, TextureCreateDesc("Reflection Denoiser - Variance 0"                         , descs[EDescs::VARIANCE]         , rscStateSRV)
+			, TextureCreateDesc("Reflection Denoiser - Variance 1"                         , descs[EDescs::VARIANCE]         , rscStateSRV)
 			, TextureCreateDesc("Reflection Denoiser - SampleCount 0"                      , descs[EDescs::SAMPLE_COUNT]     , rscStateSRV)
 			, TextureCreateDesc("Reflection Denoiser - SampleCount 1"                      , descs[EDescs::SAMPLE_COUNT]     , rscStateSRV)
 			, TextureCreateDesc("Reflection Denoiser - Average Radiance 0"                 , descs[EDescs::AVERAGE_RADIANCE] , rscStateSRV)
@@ -218,6 +218,10 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 	ID3D12Resource* pRscDepthHierarchy = mRenderer.GetTextureResource(pParams->TexDepthHierarchy);
 	ID3D12Resource* pRscNormals        = mRenderer.GetTextureResource(pParams->TexNormals);
 
+	ID3D12Resource* pRscRoughnessExtract = mRenderer.GetTextureResource(TexExtractedRoughness);
+	ID3D12Resource* pRscRoughnessHistory = mRenderer.GetTextureResource(TexRoughnessHistory);
+	ID3D12Resource* pRscDepthHistory     = mRenderer.GetTextureResource(TexDepthHistory);
+	ID3D12Resource* pRscNormalsHistory   = mRenderer.GetTextureResource(TexNormalsHistory);
 
 	//Set Constantbuffer data
 	FFX_SSSRConstants* pCB_CPU = nullptr;
@@ -238,8 +242,10 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 		D3D12_RESOURCE_BARRIER barriers[] = {
 			CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexRayList)                    , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 			CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexDenoiserTileList)           , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
-			CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexExtractedRoughness)         , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+			CD3DX12_RESOURCE_BARRIER::Transition(pRscRoughnessExtract                                        , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 			CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexReflectionDenoiserBlueNoise), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+			CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthHierarchy                                          , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+			//CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexRadiance[iBuffer]), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 		};
 		pCmd->ResourceBarrier(_countof(barriers), barriers);
 	}
@@ -279,7 +285,7 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexRayList)                     , D3D12_RESOURCE_STATE_UNORDERED_ACCESS         , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexDenoiserTileList)            , D3D12_RESOURCE_STATE_UNORDERED_ACCESS         , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexIntersectionPassIndirectArgs), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT        , D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
-				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexExtractedRoughness)          , D3D12_RESOURCE_STATE_UNORDERED_ACCESS         , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+				CD3DX12_RESOURCE_BARRIER::Transition(pRscRoughnessExtract                                         , D3D12_RESOURCE_STATE_UNORDERED_ACCESS         , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexRadiance[iBuffer])           , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexReflectionDenoiserBlueNoise) , D3D12_RESOURCE_STATE_UNORDERED_ACCESS         , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		};
@@ -411,30 +417,31 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 
 		// Also, copy the depth buffer for the next frame. This is optional if the engine already keeps a copy around. 
 		{
+			SCOPED_GPU_MARKER(pCmd, "CopyHistoryTextures");
 			{
 				D3D12_RESOURCE_BARRIER barriers[] = {
-					CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthHierarchy        , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_SOURCE),
-					CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals       , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_SOURCE),
-					CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexDepthHistory)      , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST),
-					CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexNormalsHistory)    , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST),
-					CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexRoughnessHistory)  , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST),
-					CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexExtractedRoughness), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_SOURCE),
+					CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthHierarchy  , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_SOURCE),
+					CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals         , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_SOURCE),
+					CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthHistory    , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST),
+					CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsHistory  , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST),
+					CD3DX12_RESOURCE_BARRIER::Transition(pRscRoughnessHistory, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST),
+					CD3DX12_RESOURCE_BARRIER::Transition(pRscRoughnessExtract, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_SOURCE),
 				};
 				pCmd->ResourceBarrier(_countof(barriers), barriers);
 			}
 
-			CopyToTexture(pCmd, mRenderer.GetTextureResource(pParams->TexDepthHierarchy), mRenderer.GetTextureResource(TexDepthHistory), W, H);
-			CopyToTexture(pCmd, mRenderer.GetTextureResource(pParams->TexNormals)       , mRenderer.GetTextureResource(TexNormalsHistory), W, H);
-			CopyToTexture(pCmd, mRenderer.GetTextureResource(TexExtractedRoughness)     , mRenderer.GetTextureResource(TexRoughnessHistory), W, H);
+			CopyToTexture(pCmd, pRscDepthHierarchy  , pRscDepthHistory    , W, H);
+			CopyToTexture(pCmd, pRscNormals         , pRscNormalsHistory  , W, H);
+			CopyToTexture(pCmd, pRscRoughnessExtract, pRscRoughnessHistory, W, H);
 
 			{
 				D3D12_RESOURCE_BARRIER barriers[] = {
-					CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthHierarchy, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-					CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals       , D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-					CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexExtractedRoughness), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-					CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexDepthHistory)      , D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-					CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexNormalsHistory)    , D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-					CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexRoughnessHistory)  , D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+					CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthHierarchy  , D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS/*D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE*/),
+					CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals         , D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+					CD3DX12_RESOURCE_BARRIER::Transition(pRscRoughnessExtract, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+					CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthHistory    , D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+					CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsHistory  , D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+					CD3DX12_RESOURCE_BARRIER::Transition(pRscRoughnessHistory, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 				};
 				pCmd->ResourceBarrier(_countof(barriers), barriers);
 			}
@@ -865,8 +872,9 @@ void ScreenSpaceReflectionsPass::CreateResources()
 {
 	//==============================Create Tile Classification-related buffers============================================
 	{
+		const unsigned NumCounters = 1;
 		TextureCreateDesc desc("FFX_SSSR - Ray Counter");
-		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(1ull * ELEMENT_BYTE_SIZE, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS); // 4B - single uint variable
+		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(NumCounters * ELEMENT_BYTE_SIZE, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS); // 4B - single uint variable
 		desc.ResourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 		TexRayCounter = mRenderer.CreateTexture(desc);
 	}
@@ -1011,7 +1019,7 @@ void ScreenSpaceReflectionsPass::InitializeResourceViews(const FResourceParamete
 	{
 		//==============================ClassifyTiles==========================================
 		{
-			mRenderer.InitializeSRV(SRVClassifyTilesInputs[i], 0, pParams->TexSceneColorRoughness      , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
+			mRenderer.InitializeSRV(SRVClassifyTilesInputs[i], 0, pParams->TexSceneColorRoughness    , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
 			mRenderer.InitializeSRV(SRVClassifyTilesInputs[i], 1, pParams->TexHierarchicalDepthBuffer, DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
 			mRenderer.InitializeSRV(SRVClassifyTilesInputs[i], 2, TexVariance[1-i]                   , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
 			mRenderer.InitializeSRV(SRVClassifyTilesInputs[i], 3, pParams->TexNormals                , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);

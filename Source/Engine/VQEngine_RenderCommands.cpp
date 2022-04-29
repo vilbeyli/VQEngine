@@ -22,6 +22,7 @@
 
 #include <d3d12.h>
 #include <dxgi.h>
+#include <DirectXMath.h>
 
 #include "RenderPass/AmbientOcclusion.h"
 #include "RenderPass/DepthPrePass.h"
@@ -878,7 +879,6 @@ void VQEngine::DownsampleDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHea
 	pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
 }
 
-#include <DirectXMath.h>
 void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
 {
 	const FSceneRenderParameters::FFFX_SSSR_UIParameters& UIParams = SceneView.sceneParameters.FFX_SSSRParameters;

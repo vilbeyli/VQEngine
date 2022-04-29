@@ -256,7 +256,7 @@ bool DynamicBufferHeap::AllocConstantBuffer(uint32_t size, void** pData, D3D12_G
 
     *pData = (void*)(m_pData + memOffset);
 #if _DEBUG
-    memset(*pData, 0x77, size);
+    memset(*pData, 0x77, size); // see 0x7777777777 in your cbuffers? you forgot to set data.
 #endif
     *pBufferViewDesc = m_pBuffer->GetGPUVirtualAddress() + memOffset;
 
