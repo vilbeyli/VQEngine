@@ -57,6 +57,9 @@ static const FBlueNoiseSamplerStateCPU g_blueNoiseSamplerState = { _1spp::sobol_
 
 constexpr int BLUE_NOISE_TEXTURE_DIM = 128;
 
+constexpr bool DONT_USE_ARRAY_VIEW   = false;
+constexpr bool DONT_USE_CUBEMAP_VIEW = false;
+
 ScreenSpaceReflectionsPass::ScreenSpaceReflectionsPass(VQRenderer& Renderer)
 	: RenderPassBase(Renderer)
 	, mpCommandSignature(nullptr)
@@ -130,22 +133,23 @@ void ScreenSpaceReflectionsPass::OnCreateWindowSizeDependentResources(unsigned W
 			, CD3DX12_RESOURCE_DESC::Tex2D(pParams->NormalBufferFormat   , Width, Height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
 			, CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8_UNORM          , Width, Height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
 		};
-		const D3D12_RESOURCE_STATES rscState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+		const D3D12_RESOURCE_STATES rscStateSRV = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+		const D3D12_RESOURCE_STATES rscStateUAV = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 		std::vector<TextureCreateDesc> texCreateDescs =
 		{
-			  TextureCreateDesc("Reflection Denoiser - Extracted Roughness Texture"        , descs[EDescs::ROUGHNESS_TEXTURE], rscState)
-			, TextureCreateDesc("Reflection Denoiser - Depth Buffer History"               , descs[EDescs::DEPTH_HISTORY]    , rscState)
-			, TextureCreateDesc("Reflection Denoiser - Normal Buffer History"              , descs[EDescs::NORMAL_HISTORY]   , rscState)
-			, TextureCreateDesc("Reflection Denoiser - Extracted Roughness History Texture", descs[EDescs::ROUGHNESS_TEXTURE], rscState)
-			, TextureCreateDesc("Reflection Denoiser - Radiance 0"                         , descs[EDescs::RADIANCE]         , rscState)
-			, TextureCreateDesc("Reflection Denoiser - Radiance 1"                         , descs[EDescs::RADIANCE]         , rscState)
-			, TextureCreateDesc("Reflection Denoiser - Variance 0"                         , descs[EDescs::RADIANCE]         , rscState)
-			, TextureCreateDesc("Reflection Denoiser - Variance 1"                         , descs[EDescs::RADIANCE]         , rscState)
-			, TextureCreateDesc("Reflection Denoiser - SampleCount 0"                      , descs[EDescs::SAMPLE_COUNT]     , rscState)
-			, TextureCreateDesc("Reflection Denoiser - SampleCount 1"                      , descs[EDescs::SAMPLE_COUNT]     , rscState)
-			, TextureCreateDesc("Reflection Denoiser - Average Radiance 0"                 , descs[EDescs::AVERAGE_RADIANCE] , rscState)
-			, TextureCreateDesc("Reflection Denoiser - Average Radiance 1"                 , descs[EDescs::AVERAGE_RADIANCE] , rscState)
-			, TextureCreateDesc("Reflection Denoiser - Reprojected Radiance"               , descs[EDescs::RADIANCE]         , rscState)
+			  TextureCreateDesc("Reflection Denoiser - Extracted Roughness Texture"        , descs[EDescs::ROUGHNESS_TEXTURE], rscStateSRV)
+			, TextureCreateDesc("Reflection Denoiser - Depth Buffer History"               , descs[EDescs::DEPTH_HISTORY]    , rscStateSRV)
+			, TextureCreateDesc("Reflection Denoiser - Normal Buffer History"              , descs[EDescs::NORMAL_HISTORY]   , rscStateSRV)
+			, TextureCreateDesc("Reflection Denoiser - Extracted Roughness History Texture", descs[EDescs::ROUGHNESS_TEXTURE], rscStateSRV)
+			, TextureCreateDesc("Reflection Denoiser - Radiance 0"                         , descs[EDescs::RADIANCE]         , rscStateSRV)
+			, TextureCreateDesc("Reflection Denoiser - Radiance 1"                         , descs[EDescs::RADIANCE]         , rscStateSRV)
+			, TextureCreateDesc("Reflection Denoiser - Variance 0"                         , descs[EDescs::RADIANCE]         , rscStateSRV)
+			, TextureCreateDesc("Reflection Denoiser - Variance 1"                         , descs[EDescs::RADIANCE]         , rscStateSRV)
+			, TextureCreateDesc("Reflection Denoiser - SampleCount 0"                      , descs[EDescs::SAMPLE_COUNT]     , rscStateSRV)
+			, TextureCreateDesc("Reflection Denoiser - SampleCount 1"                      , descs[EDescs::SAMPLE_COUNT]     , rscStateSRV)
+			, TextureCreateDesc("Reflection Denoiser - Average Radiance 0"                 , descs[EDescs::AVERAGE_RADIANCE] , rscStateSRV)
+			, TextureCreateDesc("Reflection Denoiser - Average Radiance 1"                 , descs[EDescs::AVERAGE_RADIANCE] , rscStateSRV)
+			, TextureCreateDesc("Reflection Denoiser - Reprojected Radiance"               , descs[EDescs::RADIANCE]         , rscStateSRV)
 		};
 
 		int i = 0;
@@ -222,6 +226,8 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 	{
 		Log::Warning("AllocConstantBuffer() failed for ScreenSpaceReflectionsPass::RecordCommands!");
 	}
+	*pCB_CPU = pParams->ffxCBuffer;
+	pCB_CPU->prevViewProjection = MatPreviousViewProjection;
 
 	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
@@ -245,8 +251,8 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 		pCmd->SetComputeRootConstantBufferView(1, cbAddr);
 		//pCmd->SetComputeRootDescriptorTable(2, m_classifyTilesPass.descriptorTables_Sampler[iBuffer].GetGPU());
 		pCmd->SetPipelineState(mRenderer.GetPSO(PSOClassifyTilesPass));
-		const UINT DISPATCH_X = DIV_AND_ROUND_UP(pParams->ffxCBuffer.bufferDimensions[0], 8u);
-		const UINT DISPATCH_Y = DIV_AND_ROUND_UP(pParams->ffxCBuffer.bufferDimensions[1], 8u);
+		const UINT DISPATCH_X = DIV_AND_ROUND_UP(W, 8u);
+		const UINT DISPATCH_Y = DIV_AND_ROUND_UP(H, 8u);
 		const UINT DISPATCH_Z = 1;
 		pCmd->Dispatch(DISPATCH_X, DISPATCH_Y, DISPATCH_Z);
 	}
@@ -436,6 +442,7 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 	}
 
 	iBuffer = 1 - iBuffer;
+	MatPreviousViewProjection = pParams->ffxCBuffer.view * pParams->ffxCBuffer.projection;
 }
 
 
@@ -993,14 +1000,18 @@ void ScreenSpaceReflectionsPass::DeallocateResourceViews()
 
 void ScreenSpaceReflectionsPass::InitializeResourceViews(const FResourceParameters* pParams)
 {
-	constexpr bool DONT_USE_ARRAY_VIEW = false;
-	constexpr bool DONT_USE_CUBEMAP_VIEW = false;
+	assert(pParams->TexEnvironmentMap);
+	assert(pParams->TexHierarchicalDepthBuffer);
+	assert(pParams->TexMotionVectors);
+	assert(pParams->TexNormals);
+	assert(pParams->TexSceneColor);
+	assert(pParams->TexSceneColorRoughness);
 
 	for (size_t i = 0; i < 2; i++)
 	{
 		//==============================ClassifyTiles==========================================
 		{
-			mRenderer.InitializeSRV(SRVClassifyTilesInputs[i], 0, pParams->TexSpecularRoughness      , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
+			mRenderer.InitializeSRV(SRVClassifyTilesInputs[i], 0, pParams->TexSceneColorRoughness      , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
 			mRenderer.InitializeSRV(SRVClassifyTilesInputs[i], 1, pParams->TexHierarchicalDepthBuffer, DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
 			mRenderer.InitializeSRV(SRVClassifyTilesInputs[i], 2, TexVariance[1-i]                   , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
 			mRenderer.InitializeSRV(SRVClassifyTilesInputs[i], 3, pParams->TexNormals                , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);

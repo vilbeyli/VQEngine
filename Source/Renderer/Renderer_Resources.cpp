@@ -928,7 +928,8 @@ void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID 
 void VQRenderer::InitializeSRVForBuffer(SRV_ID srvID, uint heapIndex, TextureID texID, DXGI_FORMAT bufferViewFormatOverride)
 {
 	Texture& tex = mTextures.at(texID);
-	D3D12_RESOURCE_DESC rscDesc = tex.GetResource()->GetDesc();
+	ID3D12Resource* pRsc = tex.GetResource();
+	D3D12_RESOURCE_DESC rscDesc = pRsc->GetDesc();
 	assert(rscDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER);
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC desc;
@@ -936,10 +937,11 @@ void VQRenderer::InitializeSRVForBuffer(SRV_ID srvID, uint heapIndex, TextureID 
 	desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAGS::D3D12_BUFFER_SRV_FLAG_NONE;
 	desc.Buffer.FirstElement = 0;
 	desc.Buffer.StructureByteStride = GetDXGIFormatByteSize(bufferViewFormatOverride);
+	
 	desc.Format = DXGI_FORMAT_UNKNOWN;
 	desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
 	desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	mDevice.GetDevicePtr()->CreateShaderResourceView(nullptr, &desc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
+	mDevice.GetDevicePtr()->CreateShaderResourceView(pRsc, &desc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
 
 }
 void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, uint arraySlice /*=0*/, uint mipSlice /*=0*/)

@@ -636,7 +636,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			params.TexHierarchicalDepthBuffer = r.Tex_DownsampledSceneDepth;
 			params.TexSceneColor = r.Tex_SceneColor;
 			params.SRVEnvMap = r.EnvironmentMap.SRV_HDREnvironment;
-			params.TexSpecularRoughness; // TODO:
+			params.TexSceneColorRoughness = r.Tex_SceneColor;
 			params.TexMotionVectors; // TODO:
 			mRenderPass_SSR.OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY, &params);
 		}
@@ -1238,13 +1238,13 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		ResolveMSAA(pCmd, PPParams);
 
+		TransitionForPostProcessing(pCmd, PPParams);
+
 		if (bReflectionsEnabled)
 		{
 			RenderReflections(pCmd, &CBHeap, SceneView);
 			CompositeReflections(pCmd, &CBHeap, SceneView);
 		}
-
-		TransitionForPostProcessing(pCmd, PPParams);
 
 		pRsc = RenderPostProcess(pCmd, &CBHeap, PPParams);
 
@@ -1330,13 +1330,13 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		ResolveMSAA(pCmd_ThisThread, PPParams);
 
+		TransitionForPostProcessing(pCmd_ThisThread, PPParams);
+
 		if (bReflectionsEnabled)
 		{
 			RenderReflections(pCmd_ThisThread, &CBHeap_This, SceneView);
 			CompositeReflections(pCmd_ThisThread, &CBHeap_This, SceneView);
 		}
-
-		TransitionForPostProcessing(pCmd_ThisThread, PPParams);
 
 		pRsc = RenderPostProcess(pCmd_ThisThread, &CBHeap_This, PPParams);
 

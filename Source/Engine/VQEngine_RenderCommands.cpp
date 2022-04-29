@@ -878,6 +878,7 @@ void VQEngine::DownsampleDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHea
 	pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
 }
 
+#include <DirectXMath.h>
 void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
 {
 	const FSceneRenderParameters::FFFX_SSSR_UIParameters& UIParams = SceneView.sceneParameters.FFX_SSSRParameters;
@@ -887,14 +888,14 @@ void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 	case EReflections::SCREEN_SPACE_REFLECTIONS__FFX:
 	{
 		ScreenSpaceReflectionsPass::FDrawParameters params = {};
+		
 		params.pCmd = pCmd;
 		params.pCBufferHeap = pCBufferHeap;
-		params.ffxCBuffer.invViewProjection          = {}; // TODO: invert
+		params.ffxCBuffer.invViewProjection          = DirectX::XMMatrixInverse(nullptr, SceneView.view * SceneView.proj);
 		params.ffxCBuffer.projection                 = SceneView.proj;
 		params.ffxCBuffer.invProjection              = SceneView.projInverse;
 		params.ffxCBuffer.view                       = SceneView.view;
 		params.ffxCBuffer.invView                    = SceneView.viewInverse;
-		params.ffxCBuffer.prevViewProjection         = {}; // TODO: prev
 		params.ffxCBuffer.bufferDimensions[0]        = SceneView.SceneRTWidth;
 		params.ffxCBuffer.bufferDimensions[1]        = SceneView.SceneRTHeight;
 		params.ffxCBuffer.inverseBufferDimensions[0] = 1.0f / params.ffxCBuffer.bufferDimensions[0];
@@ -909,7 +910,8 @@ void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 		params.ffxCBuffer.mostDetailedMip            = UIParams.mostDetailedDepthHierarchyMipLevel;
 		params.ffxCBuffer.samplesPerQuad             = UIParams.samplesPerQuad;
 		params.ffxCBuffer.temporalVarianceGuidedTracingEnabled = UIParams.bEnableTemporalVarianceGuidedTracing;
-
+		params.TexDepthHierarchy = mResources_MainWnd.Tex_DownsampledSceneDepth;
+		params.TexNormals = mResources_MainWnd.Tex_SceneNormals;
 		SCOPED_GPU_MARKER(pCmd, "RenderReflections_FFX-SSSR");
 		mRenderPass_SSR.RecordCommands(&params);
 	} break;

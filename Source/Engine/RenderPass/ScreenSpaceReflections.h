@@ -20,6 +20,7 @@
 #include "RenderPass.h"
 
 #include <unordered_map>
+#include <DirectXMath.h>
 
 class DynamicBufferHeap;
 struct ID3D12GraphicsCommandList;
@@ -31,7 +32,7 @@ public:
 	struct FResourceParameters : public IRenderPassResourceCollection
 	{
 		DXGI_FORMAT NormalBufferFormat = DXGI_FORMAT_UNKNOWN;
-		TextureID TexSpecularRoughness = INVALID_ID;
+		TextureID TexSceneColorRoughness = INVALID_ID;
 		TextureID TexHierarchicalDepthBuffer = INVALID_ID;
 		TextureID TexNormals = INVALID_ID;
 		TextureID TexEnvironmentMap = INVALID_ID;
@@ -155,4 +156,7 @@ private:
 	PSO_ID PSOPrefilterPass = INVALID_ID;
 	PSO_ID PSOResolveTemporalPass = INVALID_ID;
 	PSO_ID PSOIntersectPass = INVALID_ID;
+
+	// data
+	DirectX::XMMATRIX MatPreviousViewProjection;
 };
