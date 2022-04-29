@@ -1356,6 +1356,7 @@ void VQRenderer::ProcessTextureUpload(const FTextureUploadDesc& desc)
 	if (bBufferResource)
 	{
 		const UINT64 SourceRscOffset = pUploadBufferMem - mHeapUpload.BasePtr();
+		memcpy(pUploadBufferMem, pData, d3dDesc.Width);
 		pCmd->CopyBufferRegion(pResc, 0, mHeapUpload.GetResource(), SourceRscOffset, d3dDesc.Width);
 	}
 	else // textures
