@@ -73,7 +73,7 @@ bool IsBaseRay(uint2 dispatch_thread_id, uint samples_per_quad) {
 
 groupshared uint g_TileCount;
 
-float3 SampleEnvironmentMap(uint2 dispatch_thread_id, float roughness) {
+float3 SampleEnvironmentMap(uint2 dispatch_thread_id, float roughness, float mip_count) {
     float2 uv = (dispatch_thread_id + 0.5) * g_inv_buffer_dimensions;
     float3 world_space_normal = normalize(2.0 * g_normal.Load(int3(dispatch_thread_id, 0)).xyz - 1.0);
     float  z = g_depth_buffer.Load(int3(dispatch_thread_id, 0));
@@ -84,7 +84,6 @@ float3 SampleEnvironmentMap(uint2 dispatch_thread_id, float roughness) {
     float3 view_space_reflected_direction = reflect(view_space_ray_direction, view_space_surface_normal);
     float3 world_space_reflected_direction = mul(g_inv_view, float4(view_space_reflected_direction, 0)).xyz;
 
-    const float mip_count = 10;
     return g_environment_map.SampleLevel(g_environment_map_sampler, world_space_reflected_direction, roughness * (mip_count - 1)).xyz;
 }
 
@@ -143,7 +142,7 @@ void ClassifyTiles(uint2 dispatch_thread_id, uint2 group_thread_id, float roughn
     if (is_reflective_surface && !is_glossy_reflection)
     {
         // Fall back to environment map without preparing a ray
-        intersection_output.xyz = SampleEnvironmentMap(dispatch_thread_id, roughness);
+        intersection_output.xyz = SampleEnvironmentMap(dispatch_thread_id, roughness, g_env_map_mip_count);
     }
     g_intersection_output[dispatch_thread_id] = intersection_output;
 

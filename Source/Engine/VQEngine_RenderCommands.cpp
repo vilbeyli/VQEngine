@@ -882,15 +882,19 @@ void VQEngine::DownsampleDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHea
 void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
 {
 	const FSceneRenderParameters::FFFX_SSSR_UIParameters& UIParams = SceneView.sceneParameters.FFX_SSSRParameters;
+	
+	int EnvMapSpecIrrCubemapDimX, EnvMapSpecIrrCubemapDimY;
+	mRenderer.GetTextureDimensions(mResources_MainWnd.EnvironmentMap.Tex_IrradianceSpec, EnvMapSpecIrrCubemapDimX, EnvMapSpecIrrCubemapDimY);
 
 	switch (mSettings.gfx.Reflections)
 	{
 	case EReflections::SCREEN_SPACE_REFLECTIONS__FFX:
 	{
 		ScreenSpaceReflectionsPass::FDrawParameters params = {};
-		
+		// ---- cmd recording ----
 		params.pCmd = pCmd;
 		params.pCBufferHeap = pCBufferHeap;
+		// ---- cbuffer ----
 		params.ffxCBuffer.invViewProjection          = DirectX::XMMatrixInverse(nullptr, SceneView.view * SceneView.proj);
 		params.ffxCBuffer.projection                 = SceneView.proj;
 		params.ffxCBuffer.invProjection              = SceneView.projInverse;
@@ -910,10 +914,13 @@ void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 		params.ffxCBuffer.mostDetailedMip            = UIParams.mostDetailedDepthHierarchyMipLevel;
 		params.ffxCBuffer.samplesPerQuad             = UIParams.samplesPerQuad;
 		params.ffxCBuffer.temporalVarianceGuidedTracingEnabled = UIParams.bEnableTemporalVarianceGuidedTracing;
+		params.ffxCBuffer.envMapSpecularIrradianceCubemapMipLevelCount = Image::CalculateMipLevelCount(EnvMapSpecIrrCubemapDimX, EnvMapSpecIrrCubemapDimY);
+		// ---- resources ----
 		params.TexDepthHierarchy = mResources_MainWnd.Tex_DownsampledSceneDepth;
 		params.TexNormals = mResources_MainWnd.Tex_SceneNormals;
 		params.SRVEnvironmentSpecularIrradianceCubemap = mResources_MainWnd.EnvironmentMap.SRV_IrradianceSpec;
 		SCOPED_GPU_MARKER(pCmd, "RenderReflections_FFX-SSSR");
+
 		mRenderPass_SSR.RecordCommands(&params);
 	} break;
 

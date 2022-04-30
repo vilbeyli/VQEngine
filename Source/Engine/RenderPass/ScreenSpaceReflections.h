@@ -59,6 +59,7 @@ public:
 		uint32 mostDetailedMip;
 		uint32 samplesPerQuad;
 		uint32 temporalVarianceGuidedTracingEnabled;
+		uint32 envMapSpecularIrradianceCubemapMipLevelCount;
 	};
 	struct FDrawParameters : public IRenderPassDrawParameters
 	{

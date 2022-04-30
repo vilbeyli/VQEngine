@@ -26,11 +26,11 @@ Texture2D<float4> g_lit_scene                                         : register
 Texture2D<float> g_depth_buffer_hierarchy                             : register(t1);
 Texture2D<float4> g_normal                                            : register(t2);
 Texture2D<float> g_roughness                                          : register(t3);
-TextureCube g_environment_map                                         : register(t4);
-Texture2D<float2> g_blue_noise_texture                                : register(t5);
-Buffer<uint> g_ray_list                                               : register(t6);
+Texture2D<float2> g_blue_noise_texture                                : register(t4);
+Buffer<uint> g_ray_list                                               : register(t5);
 
 SamplerState g_environment_map_sampler                                : register(s0);
+TextureCube g_environment_map                                         : register(t0, space1);
 
 RWTexture2D<float4> g_intersection_output                             : register(u0);
 RWBuffer<uint> g_ray_counter                                          : register(u1);

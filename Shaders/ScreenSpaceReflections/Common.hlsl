@@ -24,7 +24,7 @@ static const float g_roughness_sigma_min = 0.01f;
 static const float g_roughness_sigma_max = 0.02f;
 static const float g_depth_sigma = 0.02f;
 
-[[vk::binding(0, 0)]] cbuffer Constants : register(b0) {
+cbuffer Constants : register(b0) {
     float4x4 g_inv_view_proj;
     float4x4 g_proj;
     float4x4 g_inv_proj;
@@ -43,6 +43,7 @@ static const float g_depth_sigma = 0.02f;
     uint g_most_detailed_mip;
     uint g_samples_per_quad;
     uint g_temporal_variance_guided_tracing_enabled;
+    uint g_env_map_mip_count;
 };
 
 //=== Common functions of the SssrSample ===
