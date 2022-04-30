@@ -912,7 +912,9 @@ void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID 
 	uavDesc.Format = bufferViewFormatOverride;
 
 	// tex.Width should be representing the Bytes of the Buffer UAV.
+	constexpr UINT StructByteStride = 0; // TODO: get as a parameter?
 	uavDesc.Buffer.NumElements = tex.mWidth / GetDXGIFormatByteSize(bufferViewFormatOverride);
+	uavDesc.Buffer.StructureByteStride = StructByteStride;
 
 	// create the UAV
 	ID3D12Resource* pRsc = mTextures.at(texID).GetResource();
@@ -1239,7 +1241,8 @@ ID3D12PipelineState* VQRenderer::LoadPSO(const FPSODesc& psoLoadDesc)
 
 	// Check PSO compile result
 	assert(hr == S_OK);
-	SetName(pPSO, psoLoadDesc.PSOName.c_str());
+	if(hr == S_OK)
+		SetName(pPSO, psoLoadDesc.PSOName.c_str());
 
 	// release reflections
 	for(auto it = ShaderReflections.begin(); it != ShaderReflections.end(); ++it)

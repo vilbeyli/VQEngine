@@ -631,11 +631,9 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 		{ // FFX-SSSR Resources
 			ScreenSpaceReflectionsPass::FResourceParameters params;
 			params.NormalBufferFormat = mRenderer.GetTextureFormat(r.Tex_SceneNormals);
-			params.TexEnvironmentMap = r.EnvironmentMap.Tex_HDREnvironment;
 			params.TexNormals = r.Tex_SceneNormals;
 			params.TexHierarchicalDepthBuffer = r.Tex_DownsampledSceneDepth;
 			params.TexSceneColor = r.Tex_SceneColor;
-			params.SRVEnvMap = r.EnvironmentMap.SRV_HDREnvironment;
 			params.TexSceneColorRoughness = r.Tex_SceneColor;
 			params.TexMotionVectors; // TODO:
 			mRenderPass_SSR.OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY, &params);
@@ -703,7 +701,6 @@ void VQEngine::RenderThread_LoadResources()
 		desc.ResourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 		rsc.Tex_DownsampledSceneDepthAtomicCounter = mRenderer.CreateTexture(desc);
 		mRenderer.InitializeUAVForBuffer(rsc.UAV_DownsampledSceneDepthAtomicCounter, 0u, rsc.Tex_DownsampledSceneDepthAtomicCounter, DXGI_FORMAT_R32_UINT);
-
 	}
 
 	// ambient occlusion pass

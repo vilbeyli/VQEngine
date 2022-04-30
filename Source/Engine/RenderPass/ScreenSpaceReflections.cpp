@@ -105,6 +105,7 @@ void ScreenSpaceReflectionsPass::OnCreateWindowSizeDependentResources(unsigned W
 		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(NumPixels * ELEMENT_BYTE_SIZE, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS); // 4B - single uint variable
 		desc.ResourceState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 		TexRayList = mRenderer.CreateTexture(desc);
+		desc.TexName = "FFX_DNSR - Denoiser Tile List"; 
 		TexDenoiserTileList = mRenderer.CreateTexture(desc);
 	}
 	//==============================Create denoising-related resources==============================
@@ -254,8 +255,10 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 		SCOPED_GPU_MARKER(pCmd, "FFX DNSR ClassifyTiles");
 		pCmd->SetComputeRootSignature(mSubpassRootSignatureLookup.at(ESubpass::CLASSIFY_TILES));
 		pCmd->SetComputeRootDescriptorTable(0, mRenderer.GetSRV(SRVClassifyTilesInputs[iBuffer]).GetGPUDescHandle());
-		pCmd->SetComputeRootConstantBufferView(1, cbAddr);
-		//pCmd->SetComputeRootDescriptorTable(2, m_classifyTilesPass.descriptorTables_Sampler[iBuffer].GetGPU());
+		pCmd->SetComputeRootDescriptorTable(1, mRenderer.GetSRV(pParams->SRVEnvironmentSpecularIrradianceCubemap).GetGPUDescHandle());
+
+		pCmd->SetComputeRootConstantBufferView(2, cbAddr);
+		//pCmd->SetComputeRootDescriptorTable(3, m_classifyTilesPass.descriptorTables_Sampler[iBuffer].GetGPU());
 		pCmd->SetPipelineState(mRenderer.GetPSO(PSOClassifyTilesPass));
 		const UINT DISPATCH_X = DIV_AND_ROUND_UP(W, 8u);
 		const UINT DISPATCH_Y = DIV_AND_ROUND_UP(H, 8u);
@@ -581,12 +584,13 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 	
 	//==============================RootSignature ClassifyReflectionTilesPass============================================
 	{
-		const UINT srvCount = 5;
+		const UINT srvCount = 4;
 		const UINT uavCount = 5;
 
-		CD3DX12_ROOT_PARAMETER RTSlot[3] = {};
+		CD3DX12_ROOT_PARAMETER RTSlot[4] = {};
 
 		int parameterCount = 0;
+		CD3DX12_DESCRIPTOR_RANGE DescRange_3[1] = {};
 		CD3DX12_DESCRIPTOR_RANGE DescRange_1[2] = {};
 		{
 			//Param 0
@@ -595,11 +599,20 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 			DescRange_1[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, uavCount, 0, 0, srvCount);
 			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_1[0], D3D12_SHADER_VISIBILITY_ALL);
 		}
-		//Param 1
+
+		// Param 1
+		{
+			int rangeCount = 0;
+			int space = 1;
+			DescRange_3[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, space, 0);
+			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_3[0], D3D12_SHADER_VISIBILITY_ALL);
+		}
+
+		//Param 2
 		RTSlot[parameterCount++].InitAsConstantBufferView(0);
 		CD3DX12_DESCRIPTOR_RANGE DescRange_2[1] = {};
 		{
-			//Param 2
+			//Param 3
 			int rangeCount = 0;
 			DescRange_2[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 0, 0, 0);
 			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_2[0], D3D12_SHADER_VISIBILITY_ALL); // g_environment_map_sampler
@@ -615,7 +628,12 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 
 		ID3DBlob* pOutBlob = nullptr;
 		ID3DBlob* pErrorBlob = nullptr;
-		ThrowIfFailed(D3D12SerializeRootSignature(&descRootSignature, D3D_ROOT_SIGNATURE_VERSION_1, &pOutBlob, &pErrorBlob));
+		HRESULT hr = D3D12SerializeRootSignature(&descRootSignature, D3D_ROOT_SIGNATURE_VERSION_1, &pOutBlob, &pErrorBlob);
+		if (FAILED(hr))
+		{
+			int a = 5;
+
+		}
 		ThrowIfFailed(
 			pDevice->CreateRootSignature(0, pOutBlob->GetBufferPointer(), pOutBlob->GetBufferSize(), IID_PPV_ARGS(&mSubpassRootSignatureLookup[ESubpass::CLASSIFY_TILES]))
 		);
@@ -664,7 +682,7 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 		if (pErrorBlob)
 			pErrorBlob->Release();
 	}
-	//==============================RootSignature SetupReprojectPass============================================
+	//==============================RootSignature ReprojectPass============================================
 	{
 		const UINT srvCount = 14;
 		const UINT uavCount = 4;
@@ -705,7 +723,7 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 		if (pErrorBlob)
 			pErrorBlob->Release();
 	}
-	//==============================RootSignature SetupPrefilterPass============================================
+	//==============================RootSignature PrefilterPass============================================
 	{
 		const UINT srvCount = 8;
 		const UINT uavCount = 3;
@@ -745,7 +763,7 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 		if (pErrorBlob)
 			pErrorBlob->Release();
 	}
-	//==============================RootSignature SetupResolveTemporalPass============================================
+	//==============================RootSignature ResolveTemporalPass============================================
 	{
 		const UINT srvCount = 7;
 		const UINT uavCount = 3;
@@ -786,7 +804,7 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 		if (pErrorBlob)
 			pErrorBlob->Release();
 	}
-	//==============================RootSignature SetupIntersectionPass============================================
+	//==============================RootSignature IntersectionPass============================================
 	{
 		const UINT srvCount = 7;
 		const UINT uavCount = 2;
@@ -803,6 +821,16 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 			DescRange_1[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, uavCount, 0, 0, srvCount);
 			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_1[0], D3D12_SHADER_VISIBILITY_ALL);
 		}
+		
+		// Param 1
+		{
+			//CD3DX12_DESCRIPTOR_RANGE DescRange_2[1] = {};
+			//int rangeCount = 0;
+			//int space = 1;
+			//DescRange_2[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, space, 0);
+			//RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_2[0], D3D12_SHADER_VISIBILITY_ALL);
+		}
+
 		//Param 1
 		RTSlot[parameterCount++].InitAsConstantBufferView(0);
 		{
@@ -872,7 +900,7 @@ void ScreenSpaceReflectionsPass::CreateResources()
 {
 	//==============================Create Tile Classification-related buffers============================================
 	{
-		const unsigned NumCounters = 1;
+		const unsigned NumCounters = 4; // ray and tile counters, 4 in total
 		TextureCreateDesc desc("FFX_SSSR - Ray Counter");
 		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(NumCounters * ELEMENT_BYTE_SIZE, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS); // 4B - single uint variable
 		desc.ResourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -945,7 +973,7 @@ void ScreenSpaceReflectionsPass::AllocateResourceViews()
 	{
 		//==============================ClassifyTiles==========================================
 		{
-			const UINT srvCount = 5;
+			const UINT srvCount = 4;
 			const UINT uavCount = 5;
 			SRVClassifyTilesInputs[i] = mRenderer.CreateSRV(srvCount);
 			UAVClassifyTilesOutputs[i] = mRenderer.CreateUAV(uavCount);
@@ -1008,7 +1036,6 @@ void ScreenSpaceReflectionsPass::DeallocateResourceViews()
 
 void ScreenSpaceReflectionsPass::InitializeResourceViews(const FResourceParameters* pParams)
 {
-	assert(pParams->TexEnvironmentMap);
 	assert(pParams->TexHierarchicalDepthBuffer);
 	assert(pParams->TexMotionVectors);
 	assert(pParams->TexNormals);
@@ -1023,7 +1050,6 @@ void ScreenSpaceReflectionsPass::InitializeResourceViews(const FResourceParamete
 			mRenderer.InitializeSRV(SRVClassifyTilesInputs[i], 1, pParams->TexHierarchicalDepthBuffer, DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
 			mRenderer.InitializeSRV(SRVClassifyTilesInputs[i], 2, TexVariance[1-i]                   , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
 			mRenderer.InitializeSRV(SRVClassifyTilesInputs[i], 3, pParams->TexNormals                , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
-			mRenderer.InitializeSRV(SRVClassifyTilesInputs[i], 4, pParams->TexEnvironmentMap         , DONT_USE_ARRAY_VIEW, true);
 
 			mRenderer.InitializeUAVForBuffer(UAVClassifyTilesOutputs[i], 0, TexRayList           , DXGI_FORMAT_R32_UINT);
 			mRenderer.InitializeUAVForBuffer(UAVClassifyTilesOutputs[i], 1, TexRayCounter        , DXGI_FORMAT_R32_UINT);
@@ -1049,9 +1075,8 @@ void ScreenSpaceReflectionsPass::InitializeResourceViews(const FResourceParamete
 			mRenderer.InitializeSRV(SRVIntersectionInputs[i], 1, pParams->TexHierarchicalDepthBuffer, DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
 			mRenderer.InitializeSRV(SRVIntersectionInputs[i], 2, pParams->TexNormals                , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
 			mRenderer.InitializeSRV(SRVIntersectionInputs[i], 3, TexExtractedRoughness              , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
-			mRenderer.InitializeSRV(SRVIntersectionInputs[i], 4, pParams->TexEnvironmentMap         , DONT_USE_ARRAY_VIEW, true);
-			mRenderer.InitializeSRV(SRVIntersectionInputs[i], 5, TexReflectionDenoiserBlueNoise     , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
-			mRenderer.InitializeSRVForBuffer(SRVIntersectionInputs[i], 6, TexRayList                , DXGI_FORMAT_R32_UINT);
+			mRenderer.InitializeSRV(SRVIntersectionInputs[i], 4, TexReflectionDenoiserBlueNoise     , DONT_USE_ARRAY_VIEW, DONT_USE_CUBEMAP_VIEW);
+			mRenderer.InitializeSRVForBuffer(SRVIntersectionInputs[i], 5, TexRayList                , DXGI_FORMAT_R32_UINT);
 
 			mRenderer.InitializeUAV         (UAVIntersectionOutputs[i], 0, TexRadiance[i]);
 			mRenderer.InitializeUAVForBuffer(UAVIntersectionOutputs[i], 1, TexRayCounter, DXGI_FORMAT_R32_UINT);

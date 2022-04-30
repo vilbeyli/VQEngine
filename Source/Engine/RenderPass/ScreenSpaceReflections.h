@@ -35,10 +35,8 @@ public:
 		TextureID TexSceneColorRoughness = INVALID_ID;
 		TextureID TexHierarchicalDepthBuffer = INVALID_ID;
 		TextureID TexNormals = INVALID_ID;
-		TextureID TexEnvironmentMap = INVALID_ID;
 		TextureID TexSceneColor = INVALID_ID;
 		TextureID TexMotionVectors = INVALID_ID;
-		SRV_ID SRVEnvMap = INVALID_ID;
 	};
 
 	struct FFX_SSSRConstants
@@ -69,6 +67,7 @@ public:
 		FFX_SSSRConstants ffxCBuffer;
 		TextureID TexDepthHierarchy = INVALID_ID;
 		TextureID TexNormals = INVALID_ID;
+		SRV_ID SRVEnvironmentSpecularIrradianceCubemap = INVALID_ID;
 	};
 
 

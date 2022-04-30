@@ -912,6 +912,7 @@ void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 		params.ffxCBuffer.temporalVarianceGuidedTracingEnabled = UIParams.bEnableTemporalVarianceGuidedTracing;
 		params.TexDepthHierarchy = mResources_MainWnd.Tex_DownsampledSceneDepth;
 		params.TexNormals = mResources_MainWnd.Tex_SceneNormals;
+		params.SRVEnvironmentSpecularIrradianceCubemap = mResources_MainWnd.EnvironmentMap.SRV_IrradianceSpec;
 		SCOPED_GPU_MARKER(pCmd, "RenderReflections_FFX-SSSR");
 		mRenderPass_SSR.RecordCommands(&params);
 	} break;

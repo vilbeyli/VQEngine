@@ -27,7 +27,6 @@ Texture2D<float4> g_roughness                         : register(t0);
 Texture2D<float> g_depth_buffer                       : register(t1);
 Texture2D<float> g_variance_history                   : register(t2);
 Texture2D<float4> g_normal                            : register(t3);
-TextureCube g_environment_map                         : register(t4);
 
 SamplerState g_environment_map_sampler                : register(s0);
 
@@ -35,8 +34,9 @@ RWBuffer<uint> g_ray_list                             : register(u0);
 globallycoherent RWBuffer<uint> g_ray_counter         : register(u1);
 RWTexture2D<float4> g_intersection_output             : register(u2);
 RWTexture2D<float> g_extracted_roughness              : register(u3);
-
 RWBuffer<uint> g_denoiser_tile_list                   : register(u4);
+
+TextureCube g_environment_map                         : register(t0, space1);
 
 void IncrementRayCounter(uint value, out uint original_value) {
     InterlockedAdd(g_ray_counter[0], value, original_value);
@@ -154,7 +154,6 @@ void ClassifyTiles(uint2 dispatch_thread_id, uint2 group_thread_id, float roughn
         IncrementDenoiserTileCounter(tile_offset);
         StoreDenoiserTile(tile_offset, dispatch_thread_id.xy);
     }
-
 }
 
 
