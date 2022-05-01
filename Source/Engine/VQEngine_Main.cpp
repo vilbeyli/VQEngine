@@ -41,8 +41,10 @@ void ReportSystemInfo(const VQSystemInfo::FSystemInfo& i, bool bDetailed = false
 // TODO: heed to W4 warnings, initialize the variables
 VQEngine::VQEngine()
 	: mAssetLoader(mWorkers_ModelLoading, mWorkers_TextureLoading, mRenderer)
+	, mRenderPass_ZPrePass(mRenderer)
 	, mRenderPass_AO(mRenderer, AmbientOcclusionPass::EMethod::FFX_CACAO)
 	, mRenderPass_SSR(mRenderer)
+	, mRenderPass_ApplyReflections(mRenderer)
 {}
 
 void VQEngine::MainThread_Tick()

@@ -18,7 +18,8 @@
 
 #include "DepthPrePass.h"
 
-DepthPrePass::DepthPrePass()
+DepthPrePass::DepthPrePass(VQRenderer& Renderer)
+	: RenderPassBase(Renderer)
 {
 }
 

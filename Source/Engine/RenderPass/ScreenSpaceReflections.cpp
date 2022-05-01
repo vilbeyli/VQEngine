@@ -92,7 +92,6 @@ void ScreenSpaceReflectionsPass::Destroy()
 }
 
 constexpr uint32_t ELEMENT_BYTE_SIZE = 4;
-#define DIV_AND_ROUND_UP(x, y) ((x)+(y)-1)/(y)
 
 void ScreenSpaceReflectionsPass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const IRenderPassResourceCollection* pRscParameters)
 {
@@ -532,6 +531,36 @@ std::vector<FPSOCreationTaskParameters> ScreenSpaceReflectionsPass::CollectPSOCr
 	return PSODescs;
 }
 
+SRV_ID ScreenSpaceReflectionsPass::GetPassOutputSRV(int iOutput) const
+{
+	// once the commands are recorded, ibuffer will flip. 
+	// This assumes is called after RecordCommands() GetPassOutputSRV(), hence ^1
+	return SRVScreenSpaceReflectionOutput[iBuffer ^ 1]; 
+}
+
+void ScreenSpaceReflectionsPass::ClearHistoryBuffers(ID3D12GraphicsCommandList* pCmd)
+{
+	UINT clear[4] = { 0,0,0,0 };
+	for (int i = 0; i < 2; ++i)
+	{
+		{
+			const UAV& uav = mRenderer.GetUAV(UAVTemporalResolveOutputs[i]);
+
+			ID3D12Resource* pRsc[3] = 
+			{
+				mRenderer.GetTextureResource(TexRadiance[i])
+				, mRenderer.GetTextureResource(TexVariance[i])
+				, mRenderer.GetTextureResource(TexSampleCount[i])
+			};
+			for (int rsc = 0; rsc < 3; ++rsc)
+			{
+				pCmd->ClearUnorderedAccessViewUint(uav.GetGPUDescHandle(rsc), uav.GetCPUDescHandle(rsc), pRsc[rsc], clear, 0, nullptr);
+
+			}
+		}
+	}
+}
+
 
 
 
@@ -955,6 +984,7 @@ void ScreenSpaceReflectionsPass::AllocateResourceViews()
 {
 	for (size_t i = 0; i < 2; i++)
 	{
+		SRVScreenSpaceReflectionOutput[i] = mRenderer.CreateSRV();
 		//==============================ClassifyTiles==========================================
 		{
 			const UINT srvCount = 4;
@@ -1117,6 +1147,10 @@ void ScreenSpaceReflectionsPass::InitializeResourceViews(const FResourceParamete
 			mRenderer.InitializeUAV(UAVTemporalResolveOutputs[i], 0, TexRadiance[i]);
 			mRenderer.InitializeUAV(UAVTemporalResolveOutputs[i], 1, TexVariance[i]);
 			mRenderer.InitializeUAV(UAVTemporalResolveOutputs[i], 2, TexSampleCount[i]);
+		}
+		//==============================Output ResourceViews==========================================
+		{
+			mRenderer.InitializeSRV(SRVScreenSpaceReflectionOutput[i], 0, TexRadiance[i]);
 		}
 	}
 }

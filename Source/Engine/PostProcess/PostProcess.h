@@ -36,6 +36,7 @@ enum class EDrawMode
 	METALLIC,
 	AO,
 	ALBEDO,
+	REFLECTIONS,
 
 	NUM_DRAW_MODES,
 };

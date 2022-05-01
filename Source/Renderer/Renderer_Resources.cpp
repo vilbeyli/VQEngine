@@ -596,6 +596,9 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 
 TextureID VQRenderer::CreateTexture(const TextureCreateDesc& desc)
 {
+	if (desc.d3d12Desc.MipLevels == 0) assert( desc.bGenerateMips);
+	if (desc.d3d12Desc.MipLevels == 1) assert(!desc.bGenerateMips);
+	//if (desc.d3d12Desc.MipLevels >  1) assert( desc.bGenerateMips);
 	Texture tex;
 	Timer t; t.Start();
 
@@ -1518,12 +1521,23 @@ DXGI_FORMAT VQRenderer::GetTextureFormat(TextureID Id) const
 
 void VQRenderer::GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices, int& NumMips) const
 {
-	CHECK_TEXTURE(mTextures, Id);
-	const Texture& tex = mTextures.at(Id);
-	SizeX = tex.mWidth;
-	SizeY = tex.mHeight;
-	NumSlices = tex.mNumArraySlices;
-	NumMips = tex.mMipMapCount;
+	if (Id != INVALID_ID)
+	{
+		CHECK_TEXTURE(mTextures, Id);
+		const Texture& tex = mTextures.at(Id);
+		SizeX = tex.mWidth;
+		SizeY = tex.mHeight;
+		NumSlices = tex.mNumArraySlices;
+		NumMips = tex.mMipMapCount;
+	}
+	else
+	{
+		Log::Warning("GetTextureDimensions() called on uninitialized texture w/ TexID=INVALID_ID");
+		SizeX     = 0;
+		SizeY     = 0;
+		NumSlices = 0;
+		NumMips   = 0;
+	}
 }
 
 uint VQRenderer::GetTextureMips(TextureID Id) const

@@ -68,3 +68,5 @@ using TransformID = ID_TYPE;
 
 using TaskID = ID_TYPE;
 
+
+#define DIV_AND_ROUND_UP(x,d) ((x+d-1)/d)

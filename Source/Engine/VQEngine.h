@@ -23,17 +23,20 @@
 #include "Core/Window.h"
 #include "Core/Events.h"
 #include "Core/Input.h"
+
 #include "Scene/Scene.h"
 #include "Scene/Mesh.h"
 #include "Scene/Camera.h"
 #include "Scene/Transform.h"
-#include "RenderPass/AmbientOcclusion.h"
-#include "RenderPass/DepthPrePass.h"
-#include "RenderPass/ScreenSpaceReflections.h"
+
 #include "Settings.h"
 #include "AssetLoader.h"
 #include "VQUI.h"
 
+#include "RenderPass/AmbientOcclusion.h"
+#include "RenderPass/DepthPrePass.h"
+#include "RenderPass/ScreenSpaceReflections.h"
+#include "RenderPass/ApplyReflections.h"
 
 #include "Libs/VQUtils/Source/Multithreading.h"
 #include "Libs/VQUtils/Source/Timer.h"
@@ -191,6 +194,7 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	UAV_ID    UAV_PostProcess_FSR_EASUOut      = INVALID_ID;
 	UAV_ID    UAV_PostProcess_FSR_RCASOut      = INVALID_ID;
 	UAV_ID    UAV_SceneDepth                   = INVALID_ID;
+	UAV_ID    UAV_SceneColor                   = INVALID_ID;
 	UAV_ID    UAV_SceneNormals                 = INVALID_ID;
 
 	UAV_ID    UAV_DownsampledSceneDepth        = INVALID_ID;
@@ -473,10 +477,11 @@ private:
 #endif
 
 	// RenderPasses (WIP design)
-	std::vector<IRenderPass*>      mRenderPasses;
-	DepthPrePass                   mRenderPass_ZPrePass;
-	AmbientOcclusionPass           mRenderPass_AO;
-	ScreenSpaceReflectionsPass     mRenderPass_SSR;
+	std::vector<IRenderPass*>       mRenderPasses;
+	DepthPrePass                    mRenderPass_ZPrePass;
+	AmbientOcclusionPass            mRenderPass_AO;
+	ScreenSpaceReflectionsPass      mRenderPass_SSR;
+	ApplyReflectionsPass            mRenderPass_ApplyReflections;
 
 	// timer / profiler
 	Timer                           mTimer;

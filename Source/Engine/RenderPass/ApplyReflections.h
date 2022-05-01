@@ -19,15 +19,23 @@
 
 #include "RenderPass.h"
 
-class DepthPrePass : public RenderPassBase
+class ApplyReflectionsPass : public RenderPassBase
 {
 public:
 	struct FResourceCollection : public IRenderPassResourceCollection {};
-	struct FDrawParameters : public IRenderPassDrawParameters{};
+	struct FDrawParameters : public IRenderPassDrawParameters
+	{
+		ID3D12GraphicsCommandList* pCmd = nullptr;
+		DynamicBufferHeap* pCBufferHeap = nullptr;
+		SRV_ID SRVReflectionRadiance = INVALID_ID;
+		UAV_ID UAVSceneRadiance      = INVALID_ID;
+		int iSceneRTWidth = 0;
+		int iSceneRTHeight = 0;
+	};
 
-	DepthPrePass(VQRenderer& Renderer);
-	DepthPrePass() = delete;
-	virtual ~DepthPrePass() override {}
+	ApplyReflectionsPass(VQRenderer& Renderer);
+	ApplyReflectionsPass() = delete;
+	virtual ~ApplyReflectionsPass() override {}
 
 	virtual bool Initialize() override;
 	virtual void Destroy() override;
@@ -37,6 +45,6 @@ public:
 
 	virtual std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() override;
 private:
-
+	PSO_ID PSOApplyReflectionsPass;
 };
 

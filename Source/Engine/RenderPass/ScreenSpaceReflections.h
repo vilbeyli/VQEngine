@@ -86,6 +86,8 @@ public:
 
 	virtual std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() override;
 
+	SRV_ID GetPassOutputSRV(int iOutput = 0) const;
+	void ClearHistoryBuffers(ID3D12GraphicsCommandList* pCmd);
 private:
 	void LoadRootSignatures();
 	void CreateResources();
@@ -145,6 +147,8 @@ private:
 	std::array<SRV_ID, 2> SRVReprojectPassInputs;
 	std::array<UAV_ID, 2> UAVBlueNoisePassOutputs;
 	std::array<SRV_ID, 2> SRVBlueNoisePassInputs;
+
+	std::array<SRV_ID, 2> SRVScreenSpaceReflectionOutput; // ~ Radiance[]
 
 	// root signatures, pipeline state objects, command signatures
 	ID3D12CommandSignature* mpCommandSignature = nullptr;

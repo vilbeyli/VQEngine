@@ -162,7 +162,9 @@ void VQEngine::RenderThread_Inititalize()
 	mRenderPasses = // manual render pass registration for now (early in dev)
 	{
 		&mRenderPass_AO,
-		&mRenderPass_SSR
+		&mRenderPass_SSR,
+		&mRenderPass_ApplyReflections,
+		&mRenderPass_ZPrePass
 	};
 
 	const bool bExclusiveFullscreen_MainWnd = CheckInitialSwapchainResizeRequired(mInitialSwapchainResizeRequiredWindowLookup, mSettings.WndMain, mpWinMain->GetHWND());
@@ -409,16 +411,17 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, RenderResolutionX
 				, RenderResolutionY
 				, 1 // Array Size
-				, 0 // MIP levels
+				, 1 // MIP levels
 				, 1 // MSAA SampleCount
 				, 0 // MSAA SampleQuality
-				, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
+				, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
 			);
 
 			desc.ResourceState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 			r.Tex_SceneColor = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeRTV(r.RTV_SceneColor, 0u, r.Tex_SceneColor);
 			mRenderer.InitializeSRV(r.SRV_SceneColor, 0u, r.Tex_SceneColor);
+			mRenderer.InitializeUAV(r.UAV_SceneColor, 0u, r.Tex_SceneColor);
 			
 			// scene visualization
 			desc.TexName = "SceneViz";
@@ -433,7 +436,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, RenderResolutionX
 				, RenderResolutionY
 				, 1 // Array Size
-				, 0 // MIP levels
+				, 1 // MIP levels
 				, 1 // MSAA SampleCount
 				, 0 // MSAA SampleQuality
 				, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
@@ -475,7 +478,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, RenderResolutionX
 				, RenderResolutionY
 				, 1 // Array Size
-				, 0 // MIP levels
+				, 1 // MIP levels
 				, 1 // MSAA SampleCount
 				, 0 // MSAA SampleQuality
 				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
@@ -671,6 +674,7 @@ void VQEngine::RenderThread_LoadResources()
 		rsc.DSV_SceneDepthMSAA = mRenderer.CreateDSV();
 		rsc.DSV_SceneDepth = mRenderer.CreateDSV();
 		rsc.UAV_SceneDepth = mRenderer.CreateUAV();
+		rsc.UAV_SceneColor = mRenderer.CreateUAV();
 		rsc.UAV_SceneNormals = mRenderer.CreateUAV();
 		rsc.RTV_SceneNormals = mRenderer.CreateRTV();
 		rsc.RTV_SceneNormalsMSAA = mRenderer.CreateRTV();

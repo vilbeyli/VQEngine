@@ -883,8 +883,13 @@ void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 {
 	const FSceneRenderParameters::FFFX_SSSR_UIParameters& UIParams = SceneView.sceneParameters.FFX_SSSRParameters;
 	
-	int EnvMapSpecIrrCubemapDimX, EnvMapSpecIrrCubemapDimY;
-	mRenderer.GetTextureDimensions(mResources_MainWnd.EnvironmentMap.Tex_IrradianceSpec, EnvMapSpecIrrCubemapDimX, EnvMapSpecIrrCubemapDimY);
+	const bool bHasEnvironmentMap = mResources_MainWnd.EnvironmentMap.SRV_IrradianceSpec != INVALID_ID;
+	int EnvMapSpecIrrCubemapDimX = 0;
+	int EnvMapSpecIrrCubemapDimY = 0;
+	if (bHasEnvironmentMap)
+	{
+		mRenderer.GetTextureDimensions(mResources_MainWnd.EnvironmentMap.Tex_IrradianceSpec, EnvMapSpecIrrCubemapDimX, EnvMapSpecIrrCubemapDimY);
+	}
 
 	switch (mSettings.gfx.Reflections)
 	{
@@ -914,13 +919,13 @@ void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 		params.ffxCBuffer.mostDetailedMip            = UIParams.mostDetailedDepthHierarchyMipLevel;
 		params.ffxCBuffer.samplesPerQuad             = UIParams.samplesPerQuad;
 		params.ffxCBuffer.temporalVarianceGuidedTracingEnabled = UIParams.bEnableTemporalVarianceGuidedTracing;
-		params.ffxCBuffer.envMapSpecularIrradianceCubemapMipLevelCount = Image::CalculateMipLevelCount(EnvMapSpecIrrCubemapDimX, EnvMapSpecIrrCubemapDimY);
+		params.ffxCBuffer.envMapSpecularIrradianceCubemapMipLevelCount = Image::CalculateMipLevelCount(EnvMapSpecIrrCubemapDimX, EnvMapSpecIrrCubemapDimY) -1; //-1 because EnvMap cubemaps end in 2x2
 		// ---- resources ----
 		params.TexDepthHierarchy = mResources_MainWnd.Tex_DownsampledSceneDepth;
 		params.TexNormals = mResources_MainWnd.Tex_SceneNormals;
-		params.SRVEnvironmentSpecularIrradianceCubemap = mResources_MainWnd.EnvironmentMap.SRV_IrradianceSpec;
+		params.SRVEnvironmentSpecularIrradianceCubemap = bHasEnvironmentMap ? mResources_MainWnd.EnvironmentMap.SRV_IrradianceSpec : mResources_MainWnd.SRV_NullCubemap;
+		
 		SCOPED_GPU_MARKER(pCmd, "RenderReflections_FFX-SSSR");
-
 		mRenderPass_SSR.RecordCommands(&params);
 	} break;
 
@@ -938,6 +943,15 @@ void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 void VQEngine::CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
 {
 	SCOPED_GPU_MARKER(pCmd, "CompositeReflections");
+	
+	ApplyReflectionsPass::FDrawParameters params;
+	params.pCmd = pCmd;
+	params.pCBufferHeap = pCBufferHeap;
+	params.SRVReflectionRadiance = mRenderPass_SSR.GetPassOutputSRV();
+	params.UAVSceneRadiance = mResources_MainWnd.UAV_SceneColor;
+	params.iSceneRTWidth  = SceneView.SceneRTWidth;
+	params.iSceneRTHeight = SceneView.SceneRTHeight;
+	mRenderPass_ApplyReflections.RecordCommands(&params);
 }
 
 void VQEngine::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams)
@@ -1037,12 +1051,13 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 		SRV SRVIn = srv_ColorIn;
 		switch (PPParams.eDrawMode)
 		{
-		case EDrawMode::DEPTH    : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneDepth); break;
-		case EDrawMode::NORMALS  : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneNormals); break;
-		case EDrawMode::AO       : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_FFXCACAO_Out); break;
-		case EDrawMode::ALBEDO   : // same as below
-		case EDrawMode::METALLIC : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneVisualization); break;
-		case EDrawMode::ROUGHNESS: srv_ColorIn; break;
+		case EDrawMode::DEPTH      : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneDepth); break;
+		case EDrawMode::NORMALS    : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneNormals); break;
+		case EDrawMode::AO         : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_FFXCACAO_Out); break;
+		case EDrawMode::ALBEDO     : // same as below
+		case EDrawMode::METALLIC   : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneVisualization); break;
+		case EDrawMode::ROUGHNESS  : srv_ColorIn; break;
+		case EDrawMode::REFLECTIONS: SRVIn = mRenderer.GetSRV(mRenderPass_SSR.GetPassOutputSRV()); break;
 		}
 
 		pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::VIZUALIZATION_CS_PSO));

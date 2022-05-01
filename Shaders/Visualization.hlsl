@@ -44,6 +44,7 @@ void CSMain(
 
 
 /*
+// In PostProcess.h
 enum class EDrawMode
 {
 	LIT_AND_POSTPROCESSED = 0,
@@ -72,7 +73,8 @@ enum class EDrawMode
 #define	METALLIC 4
 #define	AO 5
 #define ALBEDO 6
-#define	NUM_DRAW_MODES 7
+#define REFLECTIONS 7
+#define	NUM_DRAW_MODES 8
 
     if (iDrawMode == DEPTH)
     {
@@ -95,6 +97,10 @@ enum class EDrawMode
         OutRGB = texInA.rrr;
     }
     else if (iDrawMode == ALBEDO)
+    {
+        OutRGB = texInA.rgb;
+    }
+    else if (iDrawMode == REFLECTIONS)
     {
         OutRGB = texInA.rgb;
     }
