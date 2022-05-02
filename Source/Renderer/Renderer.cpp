@@ -1246,14 +1246,33 @@ void VQRenderer::LoadBuiltinPSOs()
 
 		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_PSO, psoLoadDesc });
 
-		// MSAA PSO
+		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS_MV";
+		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "OUTPUT_MOTION_VECTORS", "1" });
+		psoLoadDesc.ShaderStageCompileDescs[1].Macros.push_back({ "OUTPUT_MOTION_VECTORS", "1" });
+		psoDesc.NumRenderTargets = 2;
+		psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;
+		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_AND_MV_PSO, psoLoadDesc });
+		psoLoadDesc.ShaderStageCompileDescs[0].Macros.pop_back();
+		psoLoadDesc.ShaderStageCompileDescs[1].Macros.pop_back();
+
+		// MSAA PSOs
 		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS_MSAA4";
 		psoDesc.SampleDesc.Count = 4;
+		psoDesc.NumRenderTargets = 1;
+		psoDesc.RTVFormats[1] = DXGI_FORMAT_UNKNOWN;
 		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_PSO_MSAA_4, psoLoadDesc });
+
+		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS_MV_MSAA4";
+		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "OUTPUT_MOTION_VECTORS", "1" });
+		psoLoadDesc.ShaderStageCompileDescs[1].Macros.push_back({ "OUTPUT_MOTION_VECTORS", "1" });
+		psoDesc.NumRenderTargets = 2;
+		psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;
+		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_AND_MV_PSO_MSAA_4, psoLoadDesc });
+		psoLoadDesc.ShaderStageCompileDescs[0].Macros.pop_back();
+		psoLoadDesc.ShaderStageCompileDescs[1].Macros.pop_back();
 
 		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS_Viz";
 		psoLoadDesc.ShaderStageCompileDescs[1].Macros.push_back({ "OUTPUT_ALBEDO", "1" });
-		psoDesc.NumRenderTargets = 2;
 		psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16B16A16_FLOAT; // rgba16f vs rgba8unorm 
 		psoDesc.SampleDesc.Count = 1;
 		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_PSO, psoLoadDesc });
@@ -1261,6 +1280,19 @@ void VQRenderer::LoadBuiltinPSOs()
 		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS_MSAA4_Viz";
 		psoDesc.SampleDesc.Count = 4;
 		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_PSO_MSAA_4, psoLoadDesc });
+
+		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS_Viz_MV";
+		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "OUTPUT_MOTION_VECTORS", "1" });
+		psoLoadDesc.ShaderStageCompileDescs[1].Macros.push_back({ "OUTPUT_MOTION_VECTORS", "1" });
+		psoDesc.NumRenderTargets = 3;
+		psoDesc.RTVFormats[2] = DXGI_FORMAT_R16G16_FLOAT;
+		psoDesc.SampleDesc.Count = 1;
+		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_AND_MV_PSO, psoLoadDesc });
+
+		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS_MSAA4_Viz_MV";
+		psoDesc.SampleDesc.Count = 4;
+		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_AND_MV_PSO_MSAA_4, psoLoadDesc });
+		// ^ lol this is not maintainable, gotta refactor all this into render passes and proper shader perms
 	}
 
 	// WIREFRAME/UNLIT PSOs

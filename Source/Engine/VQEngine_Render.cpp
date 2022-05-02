@@ -403,6 +403,12 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			r.Tex_SceneVisualizationMSAA = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeRTV(r.RTV_SceneVisualizationMSAA, 0u, r.Tex_SceneVisualizationMSAA);
 			mRenderer.InitializeSRV(r.SRV_SceneVisualizationMSAA, 0u, r.Tex_SceneVisualizationMSAA);
+
+			// motion vectors
+			desc.TexName = "SceneMotionVectorsMSAA";
+			desc.d3d12Desc.Format = DXGI_FORMAT_R16G16_FLOAT;
+			r.Tex_SceneMotionVectorsMSAA = mRenderer.CreateTexture(desc);
+			mRenderer.InitializeRTV(r.RTV_SceneMotionVectorsMSAA, 0u, r.Tex_SceneMotionVectorsMSAA);
 		}
 		{ // MSAA resolve target
 			TextureCreateDesc desc("SceneColor");
@@ -425,9 +431,17 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			
 			// scene visualization
 			desc.TexName = "SceneViz";
+			desc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 			r.Tex_SceneVisualization = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeRTV(r.RTV_SceneVisualization, 0u, r.Tex_SceneVisualization);
 			mRenderer.InitializeSRV(r.SRV_SceneVisualization, 0u, r.Tex_SceneVisualization);
+
+			// motion vectors
+			desc.TexName = "SceneMotionVectors";
+			desc.d3d12Desc.Format = DXGI_FORMAT_R16G16_FLOAT;
+			r.Tex_SceneMotionVectors = mRenderer.CreateTexture(desc);
+			mRenderer.InitializeRTV(r.RTV_SceneMotionVectors, 0u, r.Tex_SceneMotionVectors);
+			mRenderer.InitializeSRV(r.SRV_SceneMotionVectors, 0u, r.Tex_SceneMotionVectors);
 		}
 		{ // Scene Normals
 			TextureCreateDesc desc("SceneNormals");
@@ -530,6 +544,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			mRenderer.InitializeUAV(r.UAV_PostProcess_VisualizationOut, 0u, r.Tex_PostProcess_VisualizationOut);
 			mRenderer.InitializeSRV(r.SRV_PostProcess_VisualizationOut, 0u, r.Tex_PostProcess_VisualizationOut);
 		}
+
 
 		{ // FFX-CAS Resources
 			TextureCreateDesc desc("FFXCAS_Out");
@@ -638,7 +653,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			params.TexHierarchicalDepthBuffer = r.Tex_DownsampledSceneDepth;
 			params.TexSceneColor = r.Tex_SceneColor;
 			params.TexSceneColorRoughness = r.Tex_SceneColor;
-			params.TexMotionVectors; // TODO:
+			params.TexMotionVectors = r.Tex_SceneMotionVectors;
 			mRenderPass_SSR.OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY, &params);
 		}
 	} // main window resources
@@ -690,8 +705,11 @@ void VQEngine::RenderThread_LoadResources()
 		rsc.RTV_SceneColor = mRenderer.CreateRTV();
 		rsc.RTV_SceneVisualization = mRenderer.CreateRTV();
 		rsc.RTV_SceneVisualizationMSAA = mRenderer.CreateRTV();
+		rsc.RTV_SceneMotionVectors = mRenderer.CreateRTV();
+		rsc.RTV_SceneMotionVectorsMSAA = mRenderer.CreateRTV();
 		rsc.SRV_SceneColor = mRenderer.CreateSRV();
 		rsc.SRV_SceneVisualization = mRenderer.CreateSRV();
+		rsc.SRV_SceneMotionVectors = mRenderer.CreateSRV();
 		rsc.SRV_SceneVisualizationMSAA = mRenderer.CreateSRV();
 	}
 

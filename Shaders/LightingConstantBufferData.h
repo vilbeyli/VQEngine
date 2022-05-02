@@ -162,8 +162,9 @@ struct PerFrameData
 struct PerViewData
 {
 	matrix matView;
-	matrix matViewToWorld;
+	matrix matViewToWorld; // i.e. matViewInverse
 	matrix matProjInverse;
+	//matrix matViewProjPrev; // TODO: motion vector support
 
 	float3 CameraPosition;
 	float  pad0;
@@ -174,8 +175,10 @@ struct PerObjectData
 {
 	matrix matWorldViewProj;
 	matrix matWorld;
+	//matrix matWorldViewProjPrev;  // TODO: motion vector support
 	//float3x3 matNormal;
 	matrix matNormal;
+
 
 	MaterialData materialData;
 };

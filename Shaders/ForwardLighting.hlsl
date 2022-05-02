@@ -16,6 +16,9 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
+#define PS_OUTPUT_ALBEDO_METALLIC   (OUTPUT_METALLIC || OUTPUT_ALBEDO)
+#define PS_OUTPUT_MOTION_VECTORS    (OUTPUT_MOTION_VECTORS)
+
 #include "Lighting.hlsl"
 
 //---------------------------------------------------------------------------------------------------
@@ -44,13 +47,24 @@ struct PSInput
 #ifdef INSTANCED
 	uint instanceID    : SV_InstanceID;
 #endif
+#if PS_OUTPUT_MOTION_VECTORS
+	float4 svPositionCurr : TEXCOORD1;
+	float4 svPositionPrev : TEXCOORD2;
+#endif
 };
+
 
 struct PSOutput
 {
 	float4 color : SV_TARGET0;
-#if OUTPUT_METALLIC || OUTPUT_ALBEDO
+#if PS_OUTPUT_ALBEDO_METALLIC
 	float4 albedo_metallic : SV_TARGET1;
+#endif
+
+#if PS_OUTPUT_ALBEDO_METALLIC && PS_OUTPUT_MOTION_VECTORS
+	float2 motion_vectors : SV_TARGET2;
+#elif !PS_OUTPUT_ALBEDO_METALLIC && PS_OUTPUT_MOTION_VECTORS
+	float2 motion_vectors : SV_TARGET1;
 #endif
 };
 
@@ -116,19 +130,30 @@ TextureCubeArray texPointLightShadowMaps      : register(t22);
 PSInput VSMain(VSInput vertex)
 {
 	PSInput result;
-	
+	float4 vPosition = float4(vertex.position, 1.0f);
+
 #ifdef INSTANCED
-	result.position    = mul(cbPerObject[vertex.instanceID].matWorldViewProj, float4(vertex.position, 1.0f));
+	result.position    = mul(cbPerObject[vertex.instanceID].matWorldViewProj, vPosition);
 	result.vertNormal  = mul(cbPerObject[vertex.instanceID].matNormal, vertex.normal );
 	result.vertTangent = mul(cbPerObject[vertex.instanceID].matNormal, vertex.tangent);
-	result.worldPos    = mul(cbPerObject[vertex.instanceID].matWorld, float4(vertex.position, 1.0f));
+	result.worldPos    = mul(cbPerObject[vertex.instanceID].matWorld, vPosition);
+
+	#if PS_OUTPUT_MOTION_VECTORS
+	result.svPositionCurr = result.position;
+	result.svPositionPrev = result.position; // TODO: mul(cbPerObject[vertex.instanceID].matWorldViewProjPrev, vPosition);
+	#endif
 #else
-	result.position    = mul(cbPerObject.matWorldViewProj, float4(vertex.position, 1.0f));
+	result.position    = mul(cbPerObject.matWorldViewProj, vPosition);
 	result.vertNormal  = mul(cbPerObject.matNormal, vertex.normal );
 	result.vertTangent = mul(cbPerObject.matNormal, vertex.tangent);
-	result.worldPos    = mul(cbPerObject.matWorld, float4(vertex.position, 1.0f));
+	result.worldPos    = mul(cbPerObject.matWorld, vPosition);
+
+	#if PS_OUTPUT_MOTION_VECTORS
+	result.svPositionCurr = result.position;
+	result.svPositionPrev = result.position; // TODO: mul(cbPerObject.matWorldViewProjPrev, vPosition);
+	#endif
 #endif
-	result.uv          = vertex.uv;
+	result.uv = vertex.uv;
 	
 	return result;
 }
@@ -282,8 +307,12 @@ PSOutput PSMain(PSInput In)
 	// write out
 	o.color = float4(I_total, Surface.roughness.r);
 
-	#if OUTPUT_METALLIC || OUTPUT_ALBEDO
+	#if PS_OUTPUT_ALBEDO_METALLIC
 	o.albedo_metallic = float4(Surface.diffuseColor, Surface.metalness);
+	#endif
+	#if PS_OUTPUT_MOTION_VECTORS
+	o.motion_vectors = float2(0.77777777777777, 0.8888888888888888); // debug output
+	//o.motion_vectors = float2(In.svPositionCurr.xy / In.svPositionCurr.w, In.svPositionPrev.xy / In.svPositionPrev.w);
 	#endif
 
 	return o;

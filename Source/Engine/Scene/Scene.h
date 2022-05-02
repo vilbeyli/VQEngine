@@ -79,6 +79,7 @@ struct FSceneView
 {
 	DirectX::XMMATRIX     view;
 	DirectX::XMMATRIX     viewProj;
+	DirectX::XMMATRIX     viewProjPrev;
 	DirectX::XMMATRIX     viewInverse;
 	DirectX::XMMATRIX     proj;
 	DirectX::XMMATRIX     projInverse;
@@ -344,13 +345,17 @@ protected:
 	std::vector<Transform*>  mpTransforms;
 	std::vector<Camera>      mCameras;
 	
-
 	Light                    mDirectionalLight;
 
 	std::vector<Light>       mLightsStatic;      //     static lights (See Light::EMobility enum for details)
 	std::vector<Light>       mLightsStationary;  // stationary lights (See Light::EMobility enum for details)
 	std::vector<Light>       mLightsDynamic;     //     moving lights (See Light::EMobility enum for details)
 	//Skybox                   mSkybox;
+
+	//
+	// AUX DATA
+	//
+	//std::unordered_map<TransformID, DirectX::XMMATRIX> mWorldMatrixHistory;
 
 
 	//

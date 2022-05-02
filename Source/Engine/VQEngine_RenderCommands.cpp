@@ -410,7 +410,10 @@ void VQEngine::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSc
 	sbScreenSpaceAO_Previous = SceneView.sceneParameters.bScreenSpaceAO;
 }
 
-
+static bool ShouldUseMotionVectorsTarget(const FEngineSettings& settings)
+{
+	return settings.gfx.Reflections == EReflections::SCREEN_SPACE_REFLECTIONS__FFX;
+}
 static bool ShouldUseVisualizationTarget(EDrawMode eDrawMode)
 {
 	return eDrawMode == EDrawMode::ALBEDO
@@ -463,6 +466,7 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 	const bool bHasEnvironmentMapHDRTexture = mResources_MainWnd.EnvironmentMap.SRV_HDREnvironment != INVALID_ID;
 	const bool bDrawEnvironmentMap = bHasEnvironmentMapHDRTexture && true;
 	const bool bUseVisualizationRenderTarget = ShouldUseVisualizationTarget(PPParams.eDrawMode);
+	const bool bRenderMotionVectors = ShouldUseMotionVectorsTarget(mSettings);
 
 	using namespace DirectX;
 
@@ -470,6 +474,7 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 
 	const RTV& rtvColor = mRenderer.GetRTV(bMSAA ? mResources_MainWnd.RTV_SceneColorMSAA : mResources_MainWnd.RTV_SceneColor);
 	const RTV& rtvColorViz = mRenderer.GetRTV(bMSAA ? mResources_MainWnd.RTV_SceneVisualizationMSAA : mResources_MainWnd.RTV_SceneVisualization);
+	const RTV& rtvMoVec = mRenderer.GetRTV(bMSAA ? mResources_MainWnd.RTV_SceneMotionVectorsMSAA : mResources_MainWnd.RTV_SceneMotionVectors);
 
 	const DSV& dsvColor = mRenderer.GetDSV(bMSAA ? mResources_MainWnd.DSV_SceneDepthMSAA : mResources_MainWnd.DSV_SceneDepth);
 	auto pRscDepth = mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneDepth);
@@ -477,16 +482,17 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 	SCOPED_GPU_MARKER(pCmd, "RenderSceneColor");
 
 	// Clear Depth & Render targets
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[] = { rtvColor.GetCPUDescHandle(), rtvColorViz.GetCPUDescHandle() };
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvColor.GetCPUDescHandle();
 	const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
 	
-	pCmd->ClearRenderTargetView(rtvHandles[0], clearColor, 0, nullptr);
-	if(bUseVisualizationRenderTarget) 
-		pCmd->ClearRenderTargetView(rtvHandles[1], clearColor, 0, nullptr);
+	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvHandles(1, rtvColor.GetCPUDescHandle());
+	if (bUseVisualizationRenderTarget) rtvHandles.push_back(rtvColorViz.GetCPUDescHandle());
+	if (bRenderMotionVectors)          rtvHandles.push_back(rtvMoVec.GetCPUDescHandle());
 
-	pCmd->OMSetRenderTargets(bUseVisualizationRenderTarget ? 2 : 1, rtvHandles, FALSE, &dsvHandle);
-
+	for (D3D12_CPU_DESCRIPTOR_HANDLE& rtv : rtvHandles)
+		pCmd->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
+	
+	pCmd->OMSetRenderTargets((UINT)rtvHandles.size(), rtvHandles.data(), FALSE, &dsvHandle);
 
 	// Set Viewport & Scissors
 	const float RenderResolutionX = static_cast<float>(SceneView.SceneRTWidth);
@@ -497,9 +503,13 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 	pCmd->RSSetScissorRects(1, &scissorsRect);
 
 	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA 
-		? (bUseVisualizationRenderTarget ? EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_PSO_MSAA_4 : EBuiltinPSOs::FORWARD_LIGHTING_PSO_MSAA_4 )
-		: (bUseVisualizationRenderTarget ? EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_PSO : EBuiltinPSOs::FORWARD_LIGHTING_PSO))
-	);
+		? (bUseVisualizationRenderTarget 
+			? (bRenderMotionVectors ? EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_AND_MV_PSO_MSAA_4 : EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_PSO_MSAA_4)
+			: (bRenderMotionVectors ? EBuiltinPSOs::FORWARD_LIGHTING_AND_MV_PSO_MSAA_4 : EBuiltinPSOs::FORWARD_LIGHTING_PSO_MSAA_4) )
+		: (bUseVisualizationRenderTarget 
+			? (bRenderMotionVectors ? EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_AND_MV_PSO : EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_PSO)
+			: (bRenderMotionVectors ? EBuiltinPSOs::FORWARD_LIGHTING_AND_MV_PSO : EBuiltinPSOs::FORWARD_LIGHTING_PSO))
+	));
 	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ForwardLighting));
 
 	// set PerFrame constants
@@ -583,6 +593,7 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 
 
 			pPerObj->matWorldViewProj = meshRenderCmd.matWorldTransformation * SceneView.viewProj;
+			// pPerObj->matWorldViewProjPrev = ; // TODO: motion vectors need previous!
 			pPerObj->matWorld         = meshRenderCmd.matWorldTransformation;
 			pPerObj->matNormal        = meshRenderCmd.matNormalTransformation;
 			pPerObj->materialData = std::move(mat.GetCBufferData());
@@ -787,25 +798,43 @@ void VQEngine::ResolveMSAA(ID3D12GraphicsCommandList* pCmd, const FPostProcessPa
 	SCOPED_GPU_MARKER(pCmd, "ResolveMSAA");
 	auto pRscColor     = mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneColor);
 	auto pRscColorMSAA = mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneColorMSAA);
-	auto pRscViz = mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneVisualization);
-	auto pRscVizMSAA = mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneVisualizationMSAA);
+	auto pRscViz       = mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneVisualization);
+	auto pRscVizMSAA   = mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneVisualizationMSAA);
+	auto pRscMoVec     = mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneMotionVectors);
+	auto pRscMoVecMSAA = mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneMotionVectorsMSAA);
 
-	std::vector< CD3DX12_RESOURCE_BARRIER> barriers;
-	barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColorMSAA, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE));
-	barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RESOLVE_DEST));
-	if (ShouldUseVisualizationTarget(PPParams.eDrawMode))
+	const bool bUseVizualization = ShouldUseVisualizationTarget(PPParams.eDrawMode);
+	const bool bRenderMotionVectors = ShouldUseMotionVectorsTarget(mSettings);
+
+	// transition barriers
 	{
-		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscVizMSAA, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE));
-		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscViz, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RESOLVE_DEST));
+		std::vector< CD3DX12_RESOURCE_BARRIER> barriers;
+		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColorMSAA, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE));
+		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RESOLVE_DEST));
+		if (bUseVizualization)
+		{
+			barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscVizMSAA, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE));
+			barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscViz, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RESOLVE_DEST));
+		}
+		if (bRenderMotionVectors)
+		{
+			barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscMoVecMSAA, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE));
+			barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscMoVec, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RESOLVE_DEST));
+		}
+		pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
 	}
 
-
-	pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
-
-	pCmd->ResolveSubresource(pRscColor, 0, pRscColorMSAA, 0, mRenderer.GetTextureFormat(mResources_MainWnd.Tex_SceneColor));
-	if (ShouldUseVisualizationTarget(PPParams.eDrawMode))
+	// resolve MSAA
 	{
-		pCmd->ResolveSubresource(pRscViz, 0, pRscVizMSAA, 0, mRenderer.GetTextureFormat(mResources_MainWnd.Tex_SceneVisualization));
+		pCmd->ResolveSubresource(pRscColor, 0, pRscColorMSAA, 0, mRenderer.GetTextureFormat(mResources_MainWnd.Tex_SceneColor));
+		if (bUseVizualization)
+		{
+			pCmd->ResolveSubresource(pRscViz, 0, pRscVizMSAA, 0, mRenderer.GetTextureFormat(mResources_MainWnd.Tex_SceneVisualization));
+		}
+		if (bRenderMotionVectors)
+		{
+			pCmd->ResolveSubresource(pRscMoVec, 0, pRscMoVecMSAA, 0, mRenderer.GetTextureFormat(mResources_MainWnd.Tex_SceneMotionVectors));
+		}
 	}
 }
 
@@ -961,8 +990,8 @@ void VQEngine::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, cons
 
 	const bool bCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.FFXCASParams.CASSharpen > 0.0f;
 	const bool bFSREnabled = PPParams.IsFSREnabled();
-	const bool bVizualizationEnabled = PPParams.eDrawMode != EDrawMode::LIT_AND_POSTPROCESSED;
-	
+	const bool bVizualizationEnabled = ShouldUseVisualizationTarget(PPParams.eDrawMode);
+	const bool bMotionVectorsEnabled = ShouldUseMotionVectorsTarget(mSettings);
 
 	auto pRscPostProcessInput = mRenderer.GetTextureResource(rsc.Tex_SceneColor);
 	auto pRscTonemapperOut    = mRenderer.GetTextureResource(rsc.Tex_PostProcess_TonemapperOut);
@@ -970,6 +999,8 @@ void VQEngine::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, cons
 	auto pRscFSROut           = mRenderer.GetTextureResource(rsc.Tex_PostProcess_FSR_RCASOut); // TODO: handle RCAS=off
 	auto pRscVizMSAA          = mRenderer.GetTextureResource(rsc.Tex_SceneVisualizationMSAA);
 	auto pRscViz              = mRenderer.GetTextureResource(rsc.Tex_SceneVisualization);
+	auto pRscMoVecMSAA        = mRenderer.GetTextureResource(rsc.Tex_SceneMotionVectorsMSAA);
+	auto pRscMoVec            = mRenderer.GetTextureResource(rsc.Tex_SceneMotionVectors);
 	auto pRscVizOut           = mRenderer.GetTextureResource(rsc.Tex_PostProcess_VisualizationOut);
 	auto pRscPostProcessOut   = bVizualizationEnabled ? pRscVizOut
 		: (bFSREnabled
@@ -995,9 +1026,13 @@ void VQEngine::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, cons
 	};
 	if ((bFSREnabled || bCASEnabled) && !bVizualizationEnabled)
 		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-	if (ShouldUseVisualizationTarget(PPParams.eDrawMode))
+	if (bVizualizationEnabled)
 	{
 		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscViz, (bMSAA ? D3D12_RESOURCE_STATE_RESOLVE_DEST : D3D12_RESOURCE_STATE_RENDER_TARGET), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+	}
+	if (bMotionVectorsEnabled)
+	{
+		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscMoVec, (bMSAA ? D3D12_RESOURCE_STATE_RESOLVE_DEST : D3D12_RESOURCE_STATE_RENDER_TARGET), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
 	}
 	pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
 }
