@@ -74,7 +74,8 @@ enum class EDrawMode
 #define	AO 5
 #define ALBEDO 6
 #define REFLECTIONS 7
-#define	NUM_DRAW_MODES 8
+#define	MOTION_VECTORS 8
+#define	NUM_DRAW_MODES 9
 
     if (iDrawMode == DEPTH)
     {
@@ -103,6 +104,10 @@ enum class EDrawMode
     else if (iDrawMode == REFLECTIONS)
     {
         OutRGB = texInA.rgb;
+    }
+    else if (iDrawMode == MOTION_VECTORS)
+    {
+        OutRGB = float3(texInA.rg, 0.0f);
     }
     else
     {

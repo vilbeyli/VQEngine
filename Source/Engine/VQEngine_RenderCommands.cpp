@@ -1086,13 +1086,14 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 		SRV SRVIn = srv_ColorIn;
 		switch (PPParams.eDrawMode)
 		{
-		case EDrawMode::DEPTH      : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneDepth); break;
-		case EDrawMode::NORMALS    : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneNormals); break;
-		case EDrawMode::AO         : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_FFXCACAO_Out); break;
-		case EDrawMode::ALBEDO     : // same as below
-		case EDrawMode::METALLIC   : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneVisualization); break;
-		case EDrawMode::ROUGHNESS  : srv_ColorIn; break;
-		case EDrawMode::REFLECTIONS: SRVIn = mRenderer.GetSRV(mRenderPass_SSR.GetPassOutputSRV()); break;
+		case EDrawMode::DEPTH         : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneDepth); break;
+		case EDrawMode::NORMALS       : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneNormals); break;
+		case EDrawMode::AO            : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_FFXCACAO_Out); break;
+		case EDrawMode::ALBEDO        : // same as below
+		case EDrawMode::METALLIC      : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneVisualization); break;
+		case EDrawMode::ROUGHNESS     : srv_ColorIn; break;
+		case EDrawMode::REFLECTIONS   : SRVIn = mRenderer.GetSRV(mRenderPass_SSR.GetPassOutputSRV()); break;
+		case EDrawMode::MOTION_VECTORS: SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneMotionVectors); break;
 		}
 
 		pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::VIZUALIZATION_CS_PSO));

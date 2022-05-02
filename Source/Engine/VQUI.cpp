@@ -353,6 +353,7 @@ static void InitializeStaticCStringData_EDrawMode()
 			case EDrawMode::AO: return "AO";
 			case EDrawMode::ALBEDO: return "ALBEDO";
 			case EDrawMode::REFLECTIONS: return "REFLECTIONS";
+			case EDrawMode::MOTION_VECTORS: return "MOTION_VECTORS";
 			case EDrawMode::NUM_DRAW_MODES: return "NUM_DRAW_MODES";
 			}
 			return "";

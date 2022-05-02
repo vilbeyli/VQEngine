@@ -37,6 +37,7 @@ enum class EDrawMode
 	AO,
 	ALBEDO,
 	REFLECTIONS,
+	MOTION_VECTORS,
 
 	NUM_DRAW_MODES,
 };
