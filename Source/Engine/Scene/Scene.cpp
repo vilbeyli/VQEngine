@@ -349,12 +349,21 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, int FRAME_DATA_INDEX)
 	const Camera& cam = mCameras[mIndex_SelectedCamera];
 	const XMFLOAT3 camPos = cam.GetPositionF(); 
 
+	const XMMATRIX MatView = cam.GetViewMatrix();
+	const XMMATRIX MatProj = cam.GetProjectionMatrix();
+	const XMMATRIX MatViewProj = MatView * MatProj;
+	const XMMATRIX MatViewProjPrev = mViewProjectionMatrixHistory.find(&cam) != mViewProjectionMatrixHistory.end() 
+		? mViewProjectionMatrixHistory.at(&cam)
+		: XMMatrixIdentity();
+	mViewProjectionMatrixHistory[&cam] = MatViewProj;
+	
 	// extract scene view
-	SceneView.proj = cam.GetProjectionMatrix();
+	SceneView.proj = MatProj;
 	SceneView.projInverse = XMMatrixInverse(NULL, SceneView.proj);
-	SceneView.view = cam.GetViewMatrix();
+	SceneView.view = MatView;
 	SceneView.viewInverse = cam.GetViewInverseMatrix();
-	SceneView.viewProj = SceneView.view * SceneView.proj;
+	SceneView.viewProj = MatViewProj;
+	SceneView.viewProjPrev = MatViewProjPrev;
 	SceneView.cameraPosition = XMLoadFloat3(&camPos);
 	SceneView.MainViewCameraYaw = cam.GetYaw();
 	SceneView.MainViewCameraPitch = cam.GetPitch();
@@ -635,7 +644,7 @@ void Scene::PrepareLightMeshRenderParams(FSceneView& SceneView) const
 }
 
 
-void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<FMeshRenderCommand>& MeshRenderCommands) const
+void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<FMeshRenderCommand>& MeshRenderCommands)
 {
 	SCOPED_CPU_MARKER("Scene::PrepareSceneMeshRenderParams()");
 
@@ -697,12 +706,21 @@ void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustum
 			Transform* const& pTF = mpTransforms.at(pGameObject->mTransformID);
 			const Model& model = mModels.at(pGameObject->mModelID);
 
+			const XMMATRIX matWorld = pTF->matWorldTransformation();
+			XMMATRIX matWorldHistory = matWorld;
+			if (mTransformWorldMatrixHistory.find(pTF) != mTransformWorldMatrixHistory.end())
+			{
+				matWorldHistory = mTransformWorldMatrixHistory.at(pTF);
+			}
+			mTransformWorldMatrixHistory[pTF] = matWorld;
+
 			// record ShadowMeshRenderCommand
 			FMeshRenderCommand meshRenderCmd;
 			meshRenderCmd.meshID = meshID;
-			meshRenderCmd.matWorldTransformation = pTF->matWorldTransformation();
+			meshRenderCmd.matWorldTransformation = matWorld;
 			meshRenderCmd.matNormalTransformation = pTF->NormalMatrix(meshRenderCmd.matWorldTransformation);
 			meshRenderCmd.matID = model.mData.mOpaqueMaterials.at(meshID);
+			meshRenderCmd.matWorldTransformationPrev = matWorldHistory;
 			MeshRenderCommands.push_back(meshRenderCmd);
 		}
 	}

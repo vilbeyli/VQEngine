@@ -97,6 +97,9 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	LoadLights(sceneRep.Lights);
 	LoadCameras(sceneRep.Cameras);
 	LoadPostProcessSettings();
+
+	mTransformWorldMatrixHistory.clear();
+	mViewProjectionMatrixHistory.clear();
 }
 
 void Scene::LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRepresentation>& GameObjsToBeLoaded)

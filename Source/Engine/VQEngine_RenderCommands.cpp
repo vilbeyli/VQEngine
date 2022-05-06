@@ -70,7 +70,7 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 		// set constant buffer data
 		FCBufferLightVS* pCBuffer = {};
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(pCBuffer)), (void**)(&pCBuffer), &cbAddr);
+		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
 		pCBuffer->matWorldViewProj = renderCmd.matWorldViewProj;
 		pCBuffer->matWorld = renderCmd.matWorldTransformation;
 		pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
@@ -193,7 +193,7 @@ void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 
 		FCBufferLightPS* pCBuffer = {};
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(pCBuffer)), (void**)(&pCBuffer), &cbAddr);
+		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
 
 		pCBuffer->vLightPos = SceneShadowView.PointLightLinearDepthParams[i].vWorldPos;
 		pCBuffer->fFarPlane = SceneShadowView.PointLightLinearDepthParams[i].fFarPlane;
@@ -291,10 +291,11 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 		// set constant buffer data
 		PerObjectData* pPerObj = {};
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(pPerObj)), (void**)(&pPerObj), &cbAddr);
+		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pPerObj)), (void**)(&pPerObj), &cbAddr);
 
 		pPerObj->matWorldViewProj = meshRenderCmd.matWorldTransformation * SceneView.viewProj;
 		pPerObj->matWorld = meshRenderCmd.matWorldTransformation;
+		pPerObj->matWorldViewProjPrev = meshRenderCmd.matWorldTransformation;
 		pPerObj->matNormal = meshRenderCmd.matNormalTransformation;
 		pPerObj->materialData = std::move(mat.GetCBufferData());
 
@@ -410,9 +411,13 @@ void VQEngine::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSc
 	sbScreenSpaceAO_Previous = SceneView.sceneParameters.bScreenSpaceAO;
 }
 
-static bool ShouldUseMotionVectorsTarget(const FEngineSettings& settings)
+static bool IsFFX_SSSREnabled(const FEngineSettings& settings)
 {
 	return settings.gfx.Reflections == EReflections::SCREEN_SPACE_REFLECTIONS__FFX;
+}
+static bool ShouldUseMotionVectorsTarget(const FEngineSettings& settings)
+{
+	return IsFFX_SSSREnabled(settings);
 }
 static bool ShouldUseVisualizationTarget(EDrawMode eDrawMode)
 {
@@ -562,12 +567,14 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 		constexpr UINT PerViewRSBindSlot = 2;
 		PerViewData* pPerView = {};
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(pPerView)), (void**)(&pPerView), &cbAddr);
+		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pPerView)), (void**)(&pPerView), &cbAddr);
 
 		assert(pPerView);
 		XMStoreFloat3(&pPerView->CameraPosition, SceneView.cameraPosition);
 		pPerView->ScreenDimensions.x = RenderResolutionX;
 		pPerView->ScreenDimensions.y = RenderResolutionY;
+		pPerView->MaxEnvMapLODLevels = mResources_MainWnd.EnvironmentMap.GetNumSpecularIrradianceCubemapLODLevels(mRenderer);
+		pPerView->EnvironmentMapDiffuseOnlyIllumination = IsFFX_SSSREnabled(mSettings);
 
 		// TODO: PreView data
 
@@ -589,11 +596,11 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 			// set constant buffer data
 			PerObjectData* pPerObj = {};
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(pPerObj)), (void**)(&pPerObj), &cbAddr);
+			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pPerObj)), (void**)(&pPerObj), &cbAddr);
 
 
 			pPerObj->matWorldViewProj = meshRenderCmd.matWorldTransformation * SceneView.viewProj;
-			// pPerObj->matWorldViewProjPrev = ; // TODO: motion vectors need previous!
+			pPerObj->matWorldViewProjPrev = meshRenderCmd.matWorldTransformationPrev * SceneView.viewProjPrev;
 			pPerObj->matWorld         = meshRenderCmd.matWorldTransformation;
 			pPerObj->matNormal        = meshRenderCmd.matNormalTransformation;
 			pPerObj->materialData = std::move(mat.GetCBufferData());
@@ -648,7 +655,7 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 			// set constant buffer data
 			FFrameConstantBufferUnlit* pCBuffer = {};
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(pCBuffer)), (void**)(&pCBuffer), &cbAddr);
+			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
 			pCBuffer->color            = lightBoundRenderCmd.color;
 			pCBuffer->matModelViewProj = lightBoundRenderCmd.matWorldTransformation * SceneView.viewProj;
 			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
@@ -689,7 +696,7 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 			// set constant buffer data
 			FFrameConstantBufferUnlit* pCBuffer = {};
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(pCBuffer)), (void**)(&pCBuffer), &cbAddr);
+			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
 			pCBuffer->color            = lightRenderCmd.color;
 			pCBuffer->matModelViewProj = lightRenderCmd.matWorldTransformation * SceneView.viewProj;
 			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
@@ -746,7 +753,7 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 			// set constant buffer data
 			FFrameConstantBufferUnlit* pCBuffer = {};
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(pCBuffer)), (void**)(&pCBuffer), &cbAddr);
+			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
 			pCBuffer->color = BBRenderCmd.color;
 			pCBuffer->matModelViewProj = BBRenderCmd.matWorldTransformation * SceneView.viewProj;
 			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
@@ -948,12 +955,12 @@ void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 		params.ffxCBuffer.mostDetailedMip            = UIParams.mostDetailedDepthHierarchyMipLevel;
 		params.ffxCBuffer.samplesPerQuad             = UIParams.samplesPerQuad;
 		params.ffxCBuffer.temporalVarianceGuidedTracingEnabled = UIParams.bEnableTemporalVarianceGuidedTracing;
-		params.ffxCBuffer.envMapSpecularIrradianceCubemapMipLevelCount = Image::CalculateMipLevelCount(EnvMapSpecIrrCubemapDimX, EnvMapSpecIrrCubemapDimY) -1; //-1 because EnvMap cubemaps end in 2x2
-		// ---- resources ----
+		params.ffxCBuffer.envMapSpecularIrradianceCubemapMipLevelCount = mResources_MainWnd.EnvironmentMap.GetNumSpecularIrradianceCubemapLODLevels(mRenderer);
 		params.TexDepthHierarchy = mResources_MainWnd.Tex_DownsampledSceneDepth;
 		params.TexNormals = mResources_MainWnd.Tex_SceneNormals;
 		params.SRVEnvironmentSpecularIrradianceCubemap = bHasEnvironmentMap ? mResources_MainWnd.EnvironmentMap.SRV_IrradianceSpec : mResources_MainWnd.SRV_NullCubemap;
-		
+		params.SRVBRDFIntegrationLUT = bHasEnvironmentMap ? mResources_MainWnd.EnvironmentMap.SRV_BRDFIntegrationLUT : mResources_MainWnd.SRV_NullTexture2D;
+
 		SCOPED_GPU_MARKER(pCmd, "RenderReflections_FFX-SSSR");
 		mRenderPass_SSR.RecordCommands(&params);
 	} break;

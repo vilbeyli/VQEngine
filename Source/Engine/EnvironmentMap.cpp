@@ -31,6 +31,13 @@ using namespace DirectX;
 
 static const FEnvironmentMapDescriptor DEFAULT_ENV_MAP_DESC = { "ENV_MAP_NOT_FOUND", "", 0.0f };
 
+
+int FEnvironmentMapRenderingResources::GetNumSpecularIrradianceCubemapLODLevels(const VQRenderer& Renderer) const
+{
+	return Renderer.GetTextureMips(Tex_IrradianceSpec);
+}
+
+
 //-------------------------------------------------------------------------------------------------------------------------------------------------
 //
 // UPDATE THREAD

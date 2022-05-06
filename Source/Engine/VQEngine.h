@@ -125,6 +125,8 @@ struct FEnvironmentMapRenderingResources
 	// the frame which has the brightest average luminance anywhere in 
 	// the content.
 	int MaxFrameAverageLightLevel = 0;
+
+	int GetNumSpecularIrradianceCubemapLODLevels(const VQRenderer& Renderer) const;
 };
 
 struct FRenderingResources{};

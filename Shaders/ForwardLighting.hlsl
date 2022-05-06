@@ -140,7 +140,7 @@ PSInput VSMain(VSInput vertex)
 
 	#if PS_OUTPUT_MOTION_VECTORS
 	result.svPositionCurr = result.position;
-	result.svPositionPrev = result.position; // TODO: mul(cbPerObject[vertex.instanceID].matWorldViewProjPrev, vPosition);
+	result.svPositionPrev = mul(cbPerObject[vertex.instanceID].matWorldViewProjPrev, vPosition);
 	#endif
 #else
 	result.position    = mul(cbPerObject.matWorldViewProj, vPosition);
@@ -150,7 +150,7 @@ PSInput VSMain(VSInput vertex)
 
 	#if PS_OUTPUT_MOTION_VECTORS
 	result.svPositionCurr = result.position;
-	result.svPositionPrev = result.position; // TODO: mul(cbPerObject.matWorldViewProjPrev, vPosition);
+	result.svPositionPrev = mul(cbPerObject.matWorldViewProjPrev, vPosition);
 	#endif
 #endif
 	result.uv = vertex.uv;
@@ -228,9 +228,13 @@ PSOutput PSMain(PSInput In)
 	// -------------------------------------------------------------------------------------------------------
 	
 	// Environment map
+	if(cbPerView.EnvironmentMapDiffuseOnlyIllumination)
 	{
-		const int MAX_REFLECTION_LOD = 7;
-		I_total += CalculateEnvironmentMapIllumination(Surface, V, MAX_REFLECTION_LOD, texEnvMapDiff, texEnvMapSpec, texBRDFIntegral, ClampedLinearSampler, cbPerFrame.fHDRIOffsetInRadians);
+		I_total += CalculateEnvironmentMapIllumination_DiffuseOnly(Surface, V, texEnvMapDiff, ClampedLinearSampler, cbPerFrame.fHDRIOffsetInRadians);
+	}
+	else
+	{
+		I_total += CalculateEnvironmentMapIllumination(Surface, V, cbPerView.MaxEnvMapLODLevels, texEnvMapDiff, texEnvMapSpec, texBRDFIntegral, ClampedLinearSampler, cbPerFrame.fHDRIOffsetInRadians);
 	}
 	
 	
@@ -311,8 +315,8 @@ PSOutput PSMain(PSInput In)
 	o.albedo_metallic = float4(Surface.diffuseColor, Surface.metalness);
 	#endif
 	#if PS_OUTPUT_MOTION_VECTORS
-	o.motion_vectors = float2(0.77777777777777, 0.8888888888888888); // debug output
-	//o.motion_vectors = float2(In.svPositionCurr.xy / In.svPositionCurr.w, In.svPositionPrev.xy / In.svPositionPrev.w);
+	//o.motion_vectors = float2(0.77777777777777, 0.8888888888888888); // debug output
+	o.motion_vectors = float2(In.svPositionCurr.xy / In.svPositionCurr.w - In.svPositionPrev.xy / In.svPositionPrev.w);
 	#endif
 
 	return o;

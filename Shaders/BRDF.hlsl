@@ -182,7 +182,7 @@ float3 BRDF(in BRDF_Surface s, float3 Wi, float3 V)
 	const float3 F = Fresnel_Schlick(H, V, F0);
 	const float  G = Geometry_Smith(N, Wo, Wi, roughness);
 	const float  D = NormalDistributionGGX(NdotH, roughness);
-	const float denom = (4.0f * NdotV * NdotL) + 0.0001f;
+	const float denom = max(4.0f * NdotV * NdotL, 0.0001f);
 	const float3 specular = D * F * G / denom;
 	const float3 Is = specular * s.specularColor;
 
@@ -194,19 +194,19 @@ float3 BRDF(in BRDF_Surface s, float3 Wi, float3 V)
 	return (Id + Is);
 }
 
-float3 EnvironmentBRDF(BRDF_Surface s, float3 V, float3 diffuseIrradiance, float3 preFileteredSpecular, float2 F0ScaleBias)
+float3 EnvironmentBRDF(float NdotV, float roughness, float metallic, float3 diffuseColor, float3 diffuseIrradiance, float3 preFileteredSpecular, float2 F0ScaleBias)
 {
-	const float NdotV = saturate(dot(s.N, V));
-	const float3 F0 = lerp(0.04f.xxx, s.diffuseColor, s.metalness);
+	const float3 F0 = lerp(0.04f.xxx, diffuseColor, metallic);
 
-	const float3 Ks = FresnelWithRoughness(NdotV, F0, s.roughness);
-	const float3 Kd = (1.0f.xxx - Ks) * (1.0f - s.metalness);
+	const float3 Ks = FresnelWithRoughness(NdotV, F0, roughness);
+	const float3 Kd = (1.0f.xxx - Ks) * (1.0f - metallic);
 
-	const float3 diffuse = diffuseIrradiance * s.diffuseColor;
+	const float3 diffuse = diffuseIrradiance * diffuseColor;
 	const float3 specular = preFileteredSpecular * (Ks * F0ScaleBias.x + F0ScaleBias.y);
 
 	return (Kd * diffuse + specular);
 }
+
 
 
 // Instead of uniformly or randomly (Monte Carlo) generating sample vectors over the integral's hemisphere, we'll generate 

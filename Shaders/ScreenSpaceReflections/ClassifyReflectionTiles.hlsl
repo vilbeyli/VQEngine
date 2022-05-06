@@ -22,6 +22,7 @@ THE SOFTWARE.
 
 #include "Common.hlsl"
 #include "../AMDFidelityFX/DNSR/ffx_denoiser_reflections_common.h"
+#include "../BRDF.hlsl"
 
 Texture2D<float4> g_roughness                         : register(t0);
 Texture2D<float> g_depth_buffer                       : register(t1);
@@ -37,6 +38,7 @@ RWTexture2D<float> g_extracted_roughness              : register(u3);
 RWBuffer<uint> g_denoiser_tile_list                   : register(u4);
 
 TextureCube g_environment_map                         : register(t0, space1);
+Texture2D   texBRDFIntegrationLUT                     : register(t6, space1);
 
 void IncrementRayCounter(uint value, out uint original_value) {
     InterlockedAdd(g_ray_counter[0], value, original_value);
@@ -84,7 +86,11 @@ float3 SampleEnvironmentMap(uint2 dispatch_thread_id, float roughness, float mip
     float3 view_space_reflected_direction = reflect(view_space_ray_direction, view_space_surface_normal);
     float3 world_space_reflected_direction = mul(g_inv_view, float4(view_space_reflected_direction, 0)).xyz;
 
-    return g_environment_map.SampleLevel(g_environment_map_sampler, world_space_reflected_direction, roughness * (mip_count - 1)).xyz;
+    const float3 preFilteredSpecular = g_environment_map.SampleLevel(g_environment_map_sampler, world_space_reflected_direction, roughness * (mip_count - 1)).xyz;
+    const float NdotV = saturate(dot(view_space_surface_normal, view_space_ray_direction));
+
+    float2 F0ScaleBias = texBRDFIntegrationLUT.SampleLevel(g_environment_map_sampler, float2(NdotV, roughness), 0).rg;
+    return EnvironmentBRDF(NdotV, roughness, 1.0f, float3(0,0,0), float3(0,0,0), preFilteredSpecular, F0ScaleBias);
 }
 
 void ClassifyTiles(uint2 dispatch_thread_id, uint2 group_thread_id, float roughness) {

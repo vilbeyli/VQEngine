@@ -107,7 +107,7 @@ enum class EDrawMode
     }
     else if (iDrawMode == MOTION_VECTORS)
     {
-        OutRGB = float3(texInA.rg, 0.0f);
+        OutRGB = float3(texInA.rg * float2(0.5, -0.5), 0.0f)  * 10000;
     }
     else
     {

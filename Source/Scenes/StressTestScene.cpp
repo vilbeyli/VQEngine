@@ -30,10 +30,12 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 	matRep.Alpha = 1.0f;
 	matRep.DiffuseColor = { 1, 1, 1 };
 	matRep.DiffuseMapFilePath = "Procedural/Checkerboard";
+	matRep.RoughnessMapFilePath = "Procedural/Checkerboard";
 	matRep.Name = "Checkerboard";
 	scene.Materials.push_back(matRep);
 	
 	matRep.DiffuseMapFilePath = "Procedural/Checkerboard_Grayscale";
+	matRep.RoughnessMapFilePath = "Procedural/Checkerboard";
 	matRep.Name = "Checkerboard_Grayscale";
 	scene.Materials.push_back(matRep);
 

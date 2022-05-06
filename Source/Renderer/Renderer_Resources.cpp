@@ -1542,6 +1542,7 @@ void VQRenderer::GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int&
 
 uint VQRenderer::GetTextureMips(TextureID Id) const
 {
+	if (Id == INVALID_ID) return 0;
 	CHECK_TEXTURE(mTextures, Id);
 	const Texture& tex = mTextures.at(Id);
 	return tex.mMipMapCount;

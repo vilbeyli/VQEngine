@@ -69,6 +69,7 @@ public:
 		TextureID TexDepthHierarchy = INVALID_ID;
 		TextureID TexNormals = INVALID_ID;
 		SRV_ID SRVEnvironmentSpecularIrradianceCubemap = INVALID_ID;
+		SRV_ID SRVBRDFIntegrationLUT = INVALID_ID;
 	};
 
 
@@ -163,4 +164,5 @@ private:
 
 	// data
 	DirectX::XMMATRIX MatPreviousViewProjection;
+	bool bClearHistoryBuffers;
 };

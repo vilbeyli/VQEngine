@@ -164,18 +164,18 @@ struct PerViewData
 	matrix matView;
 	matrix matViewToWorld; // i.e. matViewInverse
 	matrix matProjInverse;
-	//matrix matViewProjPrev; // TODO: motion vector support
 
 	float3 CameraPosition;
-	float  pad0;
+	float  MaxEnvMapLODLevels;
 	float2 ScreenDimensions;
-	float2 pad1;
+	int    EnvironmentMapDiffuseOnlyIllumination;
+	float pad1;
 };
 struct PerObjectData
 {
 	matrix matWorldViewProj;
 	matrix matWorld;
-	//matrix matWorldViewProjPrev;  // TODO: motion vector support
+	matrix matWorldViewProjPrev;
 	//float3x3 matNormal;
 	matrix matNormal;
 

@@ -21,6 +21,7 @@ THE SOFTWARE.
 ********************************************************************/
 
 #include "Common.hlsl"
+#include "../BRDF.hlsl"
 
 Texture2D<float4> g_lit_scene                                         : register(t0);
 Texture2D<float> g_depth_buffer_hierarchy                             : register(t1);
@@ -31,6 +32,7 @@ Buffer<uint> g_ray_list                                               : register
 
 SamplerState g_environment_map_sampler                                : register(s0);
 TextureCube g_environment_map                                         : register(t0, space1);
+Texture2D texBRDFIntegrationLUT                                       : register(t1, space1);
 
 RWTexture2D<float4> g_intersection_output                             : register(u0);
 RWBuffer<uint> g_ray_counter                                          : register(u1);
@@ -127,12 +129,14 @@ float3 SampleReflectionVector(float3 view_direction, float3 normal, float roughn
     return mul(reflected_direction_tbn, inv_tbn_transform);
 }
 
-float3 SampleEnvironmentMap(float3 direction) {
-    return g_environment_map.SampleLevel(g_environment_map_sampler, direction, 0).xyz;
+float3 SampleEnvironmentMap(float3 direction, float NdotV, float roughness) {
+    float3 preFilteredSpecular = g_environment_map.SampleLevel(g_environment_map_sampler, direction, 0).xyz;
+    float2 F0ScaleBias = texBRDFIntegrationLUT.SampleLevel(g_environment_map_sampler, float2(NdotV, roughness), 0).rg;
+    return EnvironmentBRDF(NdotV, roughness, 1.0f, float3(0, 0, 0), float3(0, 0, 0), preFilteredSpecular, F0ScaleBias);
 }
 
 bool IsMirrorReflection(float roughness) {
-    return roughness < 0.0001;
+    return roughness < 0.041;
 }
 
 #include "../AMDFidelityFX/SSSR/ffx_sssr.h"
@@ -189,7 +193,7 @@ void CSMain(uint group_index : SV_GroupIndex, uint group_id : SV_GroupID) {
 
     // Sample environment map.
     float3 world_space_reflected_direction = mul(g_inv_view, float4(view_space_reflected_direction, 0)).xyz;
-    float3 environment_lookup = SampleEnvironmentMap(world_space_reflected_direction);
+    float3 environment_lookup = SampleEnvironmentMap(world_space_reflected_direction, saturate(dot(view_space_surface_normal, view_space_ray_direction)), roughness);
     reflection_radiance = lerp(environment_lookup, reflection_radiance, confidence);
 
     float4 new_sample = float4(reflection_radiance, world_ray_length);

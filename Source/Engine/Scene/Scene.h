@@ -272,7 +272,7 @@ private: // Derived Scenes shouldn't access these functions
 	void GatherSceneLightData(FSceneView& SceneView) const;
 
 	void PrepareLightMeshRenderParams(FSceneView& SceneView) const;
-	void PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<FMeshRenderCommand>& MeshRenderCommands) const;
+	void PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<FMeshRenderCommand>& MeshRenderCommands);
 	void PrepareShadowMeshRenderParams(FSceneShadowView& ShadowView, const FFrustumPlaneset& ViewFrustumPlanesInWorldSpace, ThreadPool& UpdateWorkerThreadPool) const;
 	void PrepareBoundingBoxRenderParams(FSceneView& SceneView) const;
 	
@@ -355,7 +355,8 @@ protected:
 	//
 	// AUX DATA
 	//
-	//std::unordered_map<TransformID, DirectX::XMMATRIX> mWorldMatrixHistory;
+	std::unordered_map<const Transform*, DirectX::XMMATRIX> mTransformWorldMatrixHistory; // history for motion vectors
+	std::unordered_map<const Camera*   , DirectX::XMMATRIX> mViewProjectionMatrixHistory; // history for motion vectors
 
 
 	//
