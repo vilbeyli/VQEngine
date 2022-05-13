@@ -931,14 +931,12 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 		{
 			FSceneRenderParameters::FFFX_SSSR_UIParameters& FFXParams = SceneRenderParams.FFX_SSSRParameters;
 
-			ImGui::Checkbox("Apply Screen Space Reflections", &FFXParams.bApplyScreenSpaceReflections);
 			ImGui::Checkbox("Show Reflection Target", &FFXParams.bShowReflectionTarget);
-			ImGui::Checkbox("Show Intersection Results", &FFXParams.bShowIntersectionResults);
 			ImGui::SliderFloat("Target Frametime (ms)", &FFXParams.targetFrameTime, 0.0f, 50.0f);
 			ImGui::SliderInt("Max Traversal Iterations", &FFXParams.maxTraversalIterations, 0, 256);
 			ImGui::SliderInt("Min Traversal Occupancy", &FFXParams.minTraversalOccupancy, 0, 32);
 			ImGui::SliderInt("Most Detailed Level", &FFXParams.mostDetailedDepthHierarchyMipLevel, 0, 5);
-			ImGui::SliderFloat("Depth Buffer Thickness", &FFXParams.depthBufferThickness, 0.0f, 0.03f);
+			ImGui::SliderFloat("Depth Buffer Thickness", &FFXParams.depthBufferThickness, 0.0f, 5.0f);
 			ImGui::SliderFloat("Roughness Threshold", &FFXParams.roughnessThreshold, 0.0f, 1.f);
 			ImGui::SliderFloat("Temporal Stability", &FFXParams.temporalStability, 0.0f, 1.0f);
 			ImGui::SliderFloat("Temporal Variance Threshold", &FFXParams.temporalVarianceThreshold, 0.0f, 0.01f);

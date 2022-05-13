@@ -49,15 +49,13 @@ struct FSceneRenderParameters
 {
 	struct FFFX_SSSR_UIParameters
 	{
-		bool    bApplyScreenSpaceReflections = true;
-		bool    bShowIntersectionResults = false;
 		bool    bEnableTemporalVarianceGuidedTracing = true;
 		bool    bShowReflectionTarget = false;
 		float   targetFrameTime = 0;
 		int     maxTraversalIterations = 128;
 		int     mostDetailedDepthHierarchyMipLevel = 0;
 		int     minTraversalOccupancy = 4;
-		float   depthBufferThickness = 0.015f;
+		float   depthBufferThickness = 0.45f;
 		float   roughnessThreshold = 0.2f;
 		float   temporalStability = 0.7f;
 		float   temporalVarianceThreshold = 0.0f;
