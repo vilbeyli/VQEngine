@@ -462,8 +462,6 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			mRenderer.InitializeRTV(r.RTV_SceneNormals, 0u, r.Tex_SceneNormals);
 			mRenderer.InitializeSRV(r.SRV_SceneNormals, 0u, r.Tex_SceneNormals);
 			mRenderer.InitializeUAV(r.UAV_SceneNormals, 0u, r.Tex_SceneNormals);
-
-			//mRenderPass_ZPrePass.OnCreateWindowSizeDependentResources(Width, Height, nullptr);
 		}
 		
 		{ // Scene Normals /w MSAA
@@ -482,9 +480,9 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			r.Tex_SceneNormalsMSAA = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeRTV(r.RTV_SceneNormalsMSAA, 0u, r.Tex_SceneNormalsMSAA);
 			mRenderer.InitializeSRV(r.SRV_SceneNormalsMSAA, 0u, r.Tex_SceneNormalsMSAA);
-
-			//mRenderPass_ZPrePass.OnCreateWindowSizeDependentResources(Width, Height, nullptr);
 		}
+
+		mRenderPass_DepthResolve.OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY);
 
 
 		{ // BlurIntermediate UAV & SRV
@@ -847,7 +845,8 @@ void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 		mRenderer.DestroyTexture(r.Tex_PostProcess_FSR_EASUOut);
 		mRenderer.DestroyTexture(r.Tex_PostProcess_FSR_RCASOut);
 
-		mRenderPass_AO.OnDestroyWindowSizeDependentResources();
+		for(auto* pRenderPass : mRenderPasses)
+			pRenderPass->OnDestroyWindowSizeDependentResources();
 	}
 
 	// TODO: generic implementation of other window procedures for unload
@@ -1258,7 +1257,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		RenderSceneColor(pCmd, &CBHeap, SceneView, PPParams);
 
-		ResolveMSAA(pCmd, PPParams);
+		ResolveMSAA(pCmd, &CBHeap, PPParams);
 
 		TransitionForPostProcessing(pCmd, PPParams);
 
@@ -1350,7 +1349,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		RenderSceneColor(pCmd_ThisThread, &CBHeap_This, SceneView, PPParams);
 
-		ResolveMSAA(pCmd_ThisThread, PPParams);
+		ResolveMSAA(pCmd_ThisThread, &CBHeap_This, PPParams);
 
 		TransitionForPostProcessing(pCmd_ThisThread, PPParams);
 

@@ -104,6 +104,8 @@ void DepthMSAAResolvePass::RecordCommands(const IRenderPassDrawParameters* pDraw
 	const     int DispatchX = DIV_AND_ROUND_UP(W, DispatchGroupDimensionX);
 	const     int DispatchY = DIV_AND_ROUND_UP(H, DispatchGroupDimensionY);
 	constexpr int DispatchZ = 1;
+	assert(DispatchX != 0);
+	assert(DispatchY != 0);
 	pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
 }
 
