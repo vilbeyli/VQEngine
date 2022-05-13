@@ -164,7 +164,8 @@ void VQEngine::RenderThread_Inititalize()
 		&mRenderPass_AO,
 		&mRenderPass_SSR,
 		&mRenderPass_ApplyReflections,
-		&mRenderPass_ZPrePass
+		&mRenderPass_ZPrePass,
+		&mRenderPass_DepthResolve
 	};
 
 	const bool bExclusiveFullscreen_MainWnd = CheckInitialSwapchainResizeRequired(mInitialSwapchainResizeRequiredWindowLookup, mSettings.WndMain, mpWinMain->GetHWND());
@@ -397,6 +398,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			desc.ResourceState = D3D12_RESOURCE_STATE_RESOLVE_SOURCE;
 			r.Tex_SceneColorMSAA = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeRTV(r.RTV_SceneColorMSAA, 0u, r.Tex_SceneColorMSAA);
+			mRenderer.InitializeSRV(r.SRV_SceneColorMSAA, 0u, r.Tex_SceneColorMSAA);
 
 			// scene visualization
 			desc.TexName = "SceneVizMSAA";
@@ -708,6 +710,7 @@ void VQEngine::RenderThread_LoadResources()
 		rsc.RTV_SceneMotionVectors = mRenderer.CreateRTV();
 		rsc.RTV_SceneMotionVectorsMSAA = mRenderer.CreateRTV();
 		rsc.SRV_SceneColor = mRenderer.CreateSRV();
+		rsc.SRV_SceneColorMSAA = mRenderer.CreateSRV();
 		rsc.SRV_SceneVisualization = mRenderer.CreateSRV();
 		rsc.SRV_SceneMotionVectors = mRenderer.CreateSRV();
 		rsc.SRV_SceneVisualizationMSAA = mRenderer.CreateSRV();

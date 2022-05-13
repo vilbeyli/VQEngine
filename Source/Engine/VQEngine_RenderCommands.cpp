@@ -330,7 +330,17 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 		};
 		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
 
-		ResolveDepthAndNormals(pCmd, pCBufferHeap, rsc.Tex_SceneDepthMSAA, rsc.SRV_SceneDepthMSAA, rsc.UAV_SceneDepth, rsc.Tex_SceneNormalsMSAA, rsc.SRV_SceneNormalsMSAA, rsc.UAV_SceneNormals);
+		DepthMSAAResolvePass::FDrawParameters params;
+		params.pCmd = pCmd;
+		params.pCBufferHeap = pCBufferHeap;
+		params.SRV_MSAADepth         = rsc.SRV_SceneDepthMSAA;
+		params.SRV_MSAANormals       = rsc.SRV_SceneNormalsMSAA;
+		params.SRV_MSAARoughness     = rsc.SRV_SceneColorMSAA;
+		params.UAV_ResolvedDepth     = rsc.UAV_SceneDepth;
+		params.UAV_ResolvedNormals   = rsc.UAV_SceneNormals;
+		params.UAV_ResolvedRoughness = INVALID_ID;
+
+		mRenderPass_DepthResolve.RecordCommands(&params);
 	}
 
 	// transition for shader read
@@ -573,7 +583,7 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 		XMStoreFloat3(&pPerView->CameraPosition, SceneView.cameraPosition);
 		pPerView->ScreenDimensions.x = RenderResolutionX;
 		pPerView->ScreenDimensions.y = RenderResolutionY;
-		pPerView->MaxEnvMapLODLevels = mResources_MainWnd.EnvironmentMap.GetNumSpecularIrradianceCubemapLODLevels(mRenderer);
+		pPerView->MaxEnvMapLODLevels = static_cast<float>(mResources_MainWnd.EnvironmentMap.GetNumSpecularIrradianceCubemapLODLevels(mRenderer));
 		pPerView->EnvironmentMapDiffuseOnlyIllumination = IsFFX_SSSREnabled(mSettings);
 
 		// TODO: PreView data
@@ -843,44 +853,6 @@ void VQEngine::ResolveMSAA(ID3D12GraphicsCommandList* pCmd, const FPostProcessPa
 			pCmd->ResolveSubresource(pRscMoVec, 0, pRscMoVecMSAA, 0, mRenderer.GetTextureFormat(mResources_MainWnd.Tex_SceneMotionVectors));
 		}
 	}
-}
-
-void VQEngine::ResolveDepthAndNormals(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTextureID, SRV_ID SRVDepth, UAV_ID UAVDepthResolve, TextureID NormalTexture, SRV_ID SRVNormal, UAV_ID UAVNormalResolve)
-{
-	const SRV& srvMSAADepthSource = mRenderer.GetSRV(SRVDepth);
-	const SRV& srvMSAANormalSource = mRenderer.GetSRV(SRVNormal);
-	const UAV& uavDepthResolveTarget = mRenderer.GetUAV(UAVDepthResolve);
-	const UAV& uavNormalResolveTarget = mRenderer.GetUAV(UAVNormalResolve);
-	
-	int W, H;
-	int NumSamples = 4; // TODO: generic?
-	mRenderer.GetTextureDimensions(DepthTextureID, W, H);
-
-	constexpr int DispatchGroupDimensionX = 8;
-	constexpr int DispatchGroupDimensionY = 8;
-	const     int DispatchX = (W + (DispatchGroupDimensionX - 1)) / DispatchGroupDimensionX;
-	const     int DispatchY = (H + (DispatchGroupDimensionY - 1)) / DispatchGroupDimensionY;
-	constexpr int DispatchZ = 1;
-
-	struct FParams { uint params[4]; } CBuffer;
-	CBuffer.params[0] = W;
-	CBuffer.params[1] = H;
-	CBuffer.params[2] = NumSamples; // MSAA Sample Count
-	CBuffer.params[3] = 0xDEADC0DE;
-	FParams* pConstBuffer = {};
-	D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-	pCBufferHeap->AllocConstantBuffer(sizeof(FParams), (void**)&pConstBuffer, &cbAddr);
-	*pConstBuffer = CBuffer;
-
-	SCOPED_GPU_MARKER(pCmd, "ResolveDepthAndNormals");
-	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_RESOLVE));
-	pCmd->SetComputeRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__DepthAndNormalResolveCS));
-	pCmd->SetComputeRootDescriptorTable(0, srvMSAADepthSource.GetGPUDescHandle());
-	pCmd->SetComputeRootDescriptorTable(1, srvMSAANormalSource.GetGPUDescHandle());
-	pCmd->SetComputeRootDescriptorTable(2, uavDepthResolveTarget.GetGPUDescHandle());
-	pCmd->SetComputeRootDescriptorTable(3, uavNormalResolveTarget.GetGPUDescHandle());
-	pCmd->SetComputeRootConstantBufferView(4, cbAddr);
-	pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
 }
 
 void VQEngine::DownsampleDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTextureID, SRV_ID SRVDepth)

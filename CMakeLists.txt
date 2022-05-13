@@ -97,12 +97,14 @@ set (RenderPassFiles
     "Source/Engine/RenderPass/AmbientOcclusion.h"
     "Source/Engine/RenderPass/ApplyReflections.h"
     "Source/Engine/RenderPass/DepthPrePass.h"
+    "Source/Engine/RenderPass/DepthMSAAResolve.h"
     "Source/Engine/RenderPass/ScreenSpaceReflections.h"
     
     "Source/Engine/RenderPass/RenderPass.cpp"
     "Source/Engine/RenderPass/AmbientOcclusion.cpp"
     "Source/Engine/RenderPass/ApplyReflections.cpp"
     "Source/Engine/RenderPass/DepthPrePass.cpp"
+    "Source/Engine/RenderPass/DepthMSAAResolve.cpp"
     "Source/Engine/RenderPass/ScreenSpaceReflections.cpp"
 )
 

@@ -35,6 +35,7 @@
 
 #include "RenderPass/AmbientOcclusion.h"
 #include "RenderPass/DepthPrePass.h"
+#include "RenderPass/DepthMSAAResolve.h"
 #include "RenderPass/ScreenSpaceReflections.h"
 #include "RenderPass/ApplyReflections.h"
 
@@ -182,6 +183,7 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	SRV_ID    SRV_ShadowMaps_Point                   = INVALID_ID;
 	SRV_ID    SRV_ShadowMaps_Directional             = INVALID_ID;
 	SRV_ID    SRV_SceneColor                         = INVALID_ID;
+	SRV_ID    SRV_SceneColorMSAA                     = INVALID_ID;
 	SRV_ID    SRV_SceneNormals                       = INVALID_ID;
 	SRV_ID    SRV_SceneNormalsMSAA                   = INVALID_ID;
 	SRV_ID    SRV_SceneDepth                         = INVALID_ID;
@@ -488,6 +490,7 @@ private:
 	DepthPrePass                    mRenderPass_ZPrePass;
 	AmbientOcclusionPass            mRenderPass_AO;
 	ScreenSpaceReflectionsPass      mRenderPass_SSR;
+	DepthMSAAResolvePass            mRenderPass_DepthResolve;
 	ApplyReflectionsPass            mRenderPass_ApplyReflections;
 
 	// timer / profiler
@@ -553,7 +556,6 @@ private:
 	void                            RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView);
 	void                            RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FPostProcessParameters& PPParams);
 	void                            ResolveMSAA(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams);
-	void                            ResolveDepthAndNormals(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTextureID, SRV_ID SRVDepth, UAV_ID UAVDepthResolve, TextureID NormalTexture, SRV_ID SRVNormal, UAV_ID UAVNormalResolve);
 	void                            DownsampleDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTextureID, SRV_ID SRVDepth);
 	void                            RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
 	void                            CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);

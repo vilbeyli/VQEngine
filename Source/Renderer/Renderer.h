@@ -64,7 +64,7 @@ struct FPSODesc
 
 struct FPSOCreationTaskParameters
 {
-	PSO_ID* pID = nullptr; // PSO_ID to set
+	PSO_ID* pID = nullptr; // ID to be set by the task once the PSO loads
 	FPSODesc Desc = {};
 };
 
@@ -132,7 +132,6 @@ enum EBuiltinRootSignatures
 	LEGACY__ZPrePass,
 	LEGACY__FFX_FSR1,
 	LEGACY__UI_HDR_Composite,
-	LEGACY__DepthAndNormalResolveCS,
 	LEGACY__DownsampleDepthCS,
 
 	NUM_BUILTIN_ROOT_SIGNATURES

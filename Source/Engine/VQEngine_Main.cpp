@@ -45,6 +45,7 @@ VQEngine::VQEngine()
 	, mRenderPass_AO(mRenderer, AmbientOcclusionPass::EMethod::FFX_CACAO)
 	, mRenderPass_SSR(mRenderer)
 	, mRenderPass_ApplyReflections(mRenderer)
+	, mRenderPass_DepthResolve(mRenderer)
 {}
 
 void VQEngine::MainThread_Tick()

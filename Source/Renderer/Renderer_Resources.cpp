@@ -62,16 +62,16 @@ assert(m ## RV_t ## s.find(id) != m ## RV_t ## s.end());
 
 
 // TODO: initialize from functions?
-static TextureID LAST_USED_TEXTURE_ID = 0;
-static SRV_ID    LAST_USED_SRV_ID = 0;
-static UAV_ID    LAST_USED_UAV_ID = 0;
-static DSV_ID    LAST_USED_DSV_ID = 0;
-static RTV_ID    LAST_USED_RTV_ID = 0;
-static BufferID  LAST_USED_VBV_ID = 0;
-static BufferID  LAST_USED_IBV_ID = 0;
-static BufferID  LAST_USED_CBV_ID = 0;
-static PSO_ID    LAST_USED_PSO_ID_OFFSET = 0; // TODO: atomic id
-static std::atomic<TaskID> LAST_USED_TASK_ID = 0;
+static TextureID LAST_USED_TEXTURE_ID        = 1;
+static SRV_ID    LAST_USED_SRV_ID            = 1;
+static UAV_ID    LAST_USED_UAV_ID            = 1;
+static DSV_ID    LAST_USED_DSV_ID            = 1;
+static RTV_ID    LAST_USED_RTV_ID            = 1;
+static BufferID  LAST_USED_VBV_ID            = 1;
+static BufferID  LAST_USED_IBV_ID            = 1;
+static BufferID  LAST_USED_CBV_ID            = 1;
+static PSO_ID    LAST_USED_PSO_ID_OFFSET     = 1; // TODO: atomic id
+static std::atomic<TaskID> LAST_USED_TASK_ID = 1;
 
 namespace VQ_DXGI_UTILS
 {
