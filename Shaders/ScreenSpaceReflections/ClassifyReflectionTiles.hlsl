@@ -87,7 +87,7 @@ float3 SampleEnvironmentMap(uint2 dispatch_thread_id, float roughness, float mip
     float3 world_space_reflected_direction = mul(g_inv_view, float4(view_space_reflected_direction, 0)).xyz;
 
     const float3 preFilteredSpecular = g_environment_map.SampleLevel(g_environment_map_sampler, world_space_reflected_direction, roughness * (mip_count - 1)).xyz;
-    const float NdotV = saturate(dot(view_space_surface_normal, view_space_ray_direction));
+    const float NdotV = saturate(dot(view_space_surface_normal, -view_space_ray_direction));
 
     float2 F0ScaleBias = texBRDFIntegrationLUT.SampleLevel(g_environment_map_sampler, float2(NdotV, roughness), 0).rg;
     return EnvironmentBRDF(NdotV, roughness, 1.0f, float3(0,0,0), float3(0,0,0), preFilteredSpecular, F0ScaleBias);

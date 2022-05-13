@@ -193,7 +193,7 @@ void CSMain(uint group_index : SV_GroupIndex, uint group_id : SV_GroupID) {
 
     // Sample environment map.
     float3 world_space_reflected_direction = mul(g_inv_view, float4(view_space_reflected_direction, 0)).xyz;
-    float3 environment_lookup = SampleEnvironmentMap(world_space_reflected_direction, saturate(dot(view_space_surface_normal, view_space_ray_direction)), roughness);
+    float3 environment_lookup = SampleEnvironmentMap(world_space_reflected_direction, saturate(dot(view_space_surface_normal, -view_space_ray_direction)), roughness);
     reflection_radiance = lerp(environment_lookup, reflection_radiance, confidence);
 
     float4 new_sample = float4(reflection_radiance, world_ray_length);

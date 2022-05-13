@@ -22,7 +22,6 @@ THE SOFTWARE.
 
 static const float g_roughness_sigma_min = 0.01f;
 static const float g_roughness_sigma_max = 0.02f;
-static const float g_depth_sigma = 0.02f;
 
 cbuffer Constants : register(b0) {
     float4x4 g_inv_view_proj;
@@ -110,7 +109,7 @@ bool FFX_DNSR_Reflections_IsGlossyReflection(float roughness) {
 }
 
 bool FFX_DNSR_Reflections_IsMirrorReflection(float roughness) {
-    return roughness < 0.0001;
+    return roughness < 0.04;
 }
 
 float3 FFX_DNSR_Reflections_ScreenSpaceToViewSpace(float3 screen_uv_coord) {
