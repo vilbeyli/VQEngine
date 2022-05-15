@@ -839,7 +839,7 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 	{
 		  "Off ##0"
 		, "FidelityFX SSSR"
-		, "Ray Traced"
+		//, "Ray Traced" // TODO: enable when ray tracing is added
 		, ""
 	};
 	InitializeStaticCStringData_GraphicsSettings();
