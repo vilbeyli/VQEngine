@@ -20,8 +20,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ********************************************************************/
 
-[[vk::binding(0, 1)]] RWBuffer<uint> g_ray_counter      : register(u0);
-[[vk::binding(1, 1)]] RWBuffer<uint> g_intersect_args   : register(u1);
+RWBuffer<uint> g_ray_counter      : register(u0);
+RWBuffer<uint> g_intersect_args   : register(u1);
 
 [numthreads(1, 1, 1)]
 void CSMain() {

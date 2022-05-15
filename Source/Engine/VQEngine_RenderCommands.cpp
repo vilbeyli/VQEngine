@@ -348,8 +348,8 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 		std::vector<CD3DX12_RESOURCE_BARRIER> Barriers;
 		if (bMSAA)
 		{
+			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
 			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA  , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
 			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
 			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
 		}
@@ -444,6 +444,8 @@ void VQEngine::TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWin
 	auto pRscColorMSAA       = mRenderer.GetTextureResource(rsc.Tex_SceneColorMSAA);
 	auto pRscViz             = mRenderer.GetTextureResource(rsc.Tex_SceneVisualization);
 	auto pRscVizMSAA         = mRenderer.GetTextureResource(rsc.Tex_SceneVisualizationMSAA);
+	auto pRscMoVecMSAA       = mRenderer.GetTextureResource(rsc.Tex_SceneMotionVectorsMSAA);
+	auto pRscMoVec           = mRenderer.GetTextureResource(rsc.Tex_SceneMotionVectors);
 	auto pRscNormals         = mRenderer.GetTextureResource(rsc.Tex_SceneNormals);
 	auto pRscNormalsMSAA     = mRenderer.GetTextureResource(rsc.Tex_SceneNormalsMSAA);
 	auto pRscShadowMaps_Spot = mRenderer.GetTextureResource(rsc.Tex_ShadowMaps_Spot);
@@ -467,6 +469,13 @@ void VQEngine::TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWin
 		vBarriers.push_back(bMSAA
 			? CD3DX12_RESOURCE_BARRIER::Transition(pRscVizMSAA, D3D12_RESOURCE_STATE_RESOLVE_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET)
 			: CD3DX12_RESOURCE_BARRIER::Transition(pRscViz, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET)
+		);
+	}
+	if (ShouldUseMotionVectorsTarget(mSettings))
+	{
+		vBarriers.push_back(bMSAA
+			? CD3DX12_RESOURCE_BARRIER::Transition(pRscMoVecMSAA, D3D12_RESOURCE_STATE_RESOLVE_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET)
+			: CD3DX12_RESOURCE_BARRIER::Transition(pRscMoVec, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET)
 		);
 	}
 
@@ -805,23 +814,27 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 	}
 }
 
-void VQEngine::ResolveMSAA(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams)
+void VQEngine::ResolveMSAA(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams)
 {
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 
 	if (!bMSAA)
 		return;
 
+	const FRenderingResources_MainWindow& rsc = mResources_MainWnd; // shorthand
+
 	SCOPED_GPU_MARKER(pCmd, "ResolveMSAA");
-	auto pRscColor     = mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneColor);
-	auto pRscColorMSAA = mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneColorMSAA);
-	auto pRscViz       = mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneVisualization);
-	auto pRscVizMSAA   = mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneVisualizationMSAA);
-	auto pRscMoVec     = mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneMotionVectors);
-	auto pRscMoVecMSAA = mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneMotionVectorsMSAA);
+	auto pRscColor     = mRenderer.GetTextureResource(rsc.Tex_SceneColor);
+	auto pRscColorMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneColorMSAA);
+	auto pRscViz       = mRenderer.GetTextureResource(rsc.Tex_SceneVisualization);
+	auto pRscVizMSAA   = mRenderer.GetTextureResource(rsc.Tex_SceneVisualizationMSAA);
+	auto pRscMoVec     = mRenderer.GetTextureResource(rsc.Tex_SceneMotionVectors);
+	auto pRscMoVecMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneMotionVectorsMSAA);
+	auto pRscDepthMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneDepthMSAA);
 
 	const bool bUseVizualization = ShouldUseVisualizationTarget(PPParams.eDrawMode);
 	const bool bRenderMotionVectors = ShouldUseMotionVectorsTarget(mSettings);
+	const bool bResolveRoughness = IsFFX_SSSREnabled(mSettings) && false;
 
 	// transition barriers
 	{
@@ -843,14 +856,50 @@ void VQEngine::ResolveMSAA(ID3D12GraphicsCommandList* pCmd, const FPostProcessPa
 
 	// resolve MSAA
 	{
-		pCmd->ResolveSubresource(pRscColor, 0, pRscColorMSAA, 0, mRenderer.GetTextureFormat(mResources_MainWnd.Tex_SceneColor));
+		pCmd->ResolveSubresource(pRscColor, 0, pRscColorMSAA, 0, mRenderer.GetTextureFormat(rsc.Tex_SceneColor));
 		if (bUseVizualization)
 		{
-			pCmd->ResolveSubresource(pRscViz, 0, pRscVizMSAA, 0, mRenderer.GetTextureFormat(mResources_MainWnd.Tex_SceneVisualization));
+			pCmd->ResolveSubresource(pRscViz, 0, pRscVizMSAA, 0, mRenderer.GetTextureFormat(rsc.Tex_SceneVisualization));
 		}
 		if (bRenderMotionVectors)
 		{
-			pCmd->ResolveSubresource(pRscMoVec, 0, pRscMoVecMSAA, 0, mRenderer.GetTextureFormat(mResources_MainWnd.Tex_SceneMotionVectors));
+			pCmd->ResolveSubresource(pRscMoVec, 0, pRscMoVecMSAA, 0, mRenderer.GetTextureFormat(rsc.Tex_SceneMotionVectors));
+		}
+
+
+		if (bResolveRoughness)
+		{
+			// TODO: remove redundant resource transitions
+			{
+				std::vector< CD3DX12_RESOURCE_BARRIER> barriers;
+				barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+				barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColorMSAA, D3D12_RESOURCE_STATE_RESOLVE_SOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+				barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColor, D3D12_RESOURCE_STATE_RESOLVE_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+				pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
+			}
+
+			// since roughness is stored in A channel of the SceneColor texture, and is wrongly resolved by pCmd->ResolveSubresource(),
+			// we will run a custom resolve pass on SceneColorMSAA and overwrite the incorrect resolved roughness.
+			DepthMSAAResolvePass::FDrawParameters params;
+			params.pCmd = pCmd;
+			params.pCBufferHeap          = pCBufferHeap;
+			params.SRV_MSAADepth         = rsc.SRV_SceneDepthMSAA;
+			params.SRV_MSAANormals       = INVALID_ID;
+			params.SRV_MSAARoughness     = rsc.SRV_SceneColorMSAA;
+			params.UAV_ResolvedDepth     = INVALID_ID;
+			params.UAV_ResolvedNormals   = INVALID_ID;
+			params.UAV_ResolvedRoughness = rsc.UAV_SceneColor;
+
+			mRenderPass_DepthResolve.RecordCommands(&params);
+
+			// TODO: remove redundant resource transitions
+			{
+				std::vector< CD3DX12_RESOURCE_BARRIER> barriers;
+				barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColorMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RESOLVE_SOURCE));
+				barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColor, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_RESOLVE_DEST));
+				barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
+				pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
+			}
 		}
 	}
 }
@@ -933,8 +982,26 @@ void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 		params.SRVEnvironmentSpecularIrradianceCubemap = bHasEnvironmentMap ? mResources_MainWnd.EnvironmentMap.SRV_IrradianceSpec : mResources_MainWnd.SRV_NullCubemap;
 		params.SRVBRDFIntegrationLUT = bHasEnvironmentMap ? mResources_MainWnd.EnvironmentMap.SRV_BRDFIntegrationLUT : mResources_MainWnd.SRV_NullTexture2D;
 
+		if (bHasEnvironmentMap)
+		{
+			D3D12_RESOURCE_BARRIER barriers[] = {
+				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(mResources_MainWnd.EnvironmentMap.Tex_IrradianceSpec), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(mResources_MainWnd.EnvironmentMap.SRV_BRDFIntegrationLUT), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+			};
+			pCmd->ResourceBarrier(_countof(barriers), barriers);
+		}
+
 		SCOPED_GPU_MARKER(pCmd, "RenderReflections_FFX-SSSR");
 		mRenderPass_SSR.RecordCommands(&params);
+
+		if (bHasEnvironmentMap)
+		{
+			D3D12_RESOURCE_BARRIER barriers[] = {
+	CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(mResources_MainWnd.EnvironmentMap.Tex_IrradianceSpec),	D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+	CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(mResources_MainWnd.EnvironmentMap.SRV_BRDFIntegrationLUT),	D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+			};
+			pCmd->ResourceBarrier(_countof(barriers), barriers);
+		}
 	} break;
 
 	case EReflections::RAY_TRACED_REFLECTIONS:
@@ -959,7 +1026,20 @@ void VQEngine::CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBuff
 	params.UAVSceneRadiance = mResources_MainWnd.UAV_SceneColor;
 	params.iSceneRTWidth  = SceneView.SceneRTWidth;
 	params.iSceneRTHeight = SceneView.SceneRTHeight;
+	
+	{			
+		D3D12_RESOURCE_BARRIER barriers[] = {
+	CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneColor), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+		};
+		pCmd->ResourceBarrier(_countof(barriers), barriers);
+	}
 	mRenderPass_ApplyReflections.RecordCommands(&params);
+	{
+		D3D12_RESOURCE_BARRIER barriers[] = {
+	CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneColor), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		};
+		pCmd->ResourceBarrier(_countof(barriers), barriers);
+	}
 }
 
 void VQEngine::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams)

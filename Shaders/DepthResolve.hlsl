@@ -20,9 +20,9 @@ Texture2DMS<half>   texDepthMS   : register(t0);
 Texture2DMS<float3> texNormalsMS : register(t1);
 Texture2DMS<half4>  texSceneColorRoughnessMS: register(t2);
 
-RWTexture2D<half>   outDepth     : register(u0);
-RWTexture2D<float3> outNormals   : register(u1);
-RWTexture2D<float>  outRoughness : register(u2);
+RWTexture2D<half>    outDepth     : register(u0);
+RWTexture2D<float3>  outNormals   : register(u1);
+RWTexture2D<float4>  outSceneColorRoughness : register(u2);
 
 
 cbuffer DepthResolveParameters : register(b0)
@@ -87,6 +87,6 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	outNormals[dispatchThreadId.xy] = Normal;
 #endif
 #if OUTPUT_ROUGHNESS
-	outRoughness[dispatchThreadId.xy] = Roughness;
+	outSceneColorRoughness[dispatchThreadId.xy] = float4(outSceneColorRoughness[dispatchThreadId.xy].rgb, Roughness);
 #endif
 }

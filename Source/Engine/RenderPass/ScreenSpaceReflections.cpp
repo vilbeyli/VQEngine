@@ -252,7 +252,7 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 			CD3DX12_RESOURCE_BARRIER::Transition(pRscRoughnessExtract                                        , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 			CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexReflectionDenoiserBlueNoise), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 			CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthHierarchy                                          , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-			//CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexRadiance[iBuffer]), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+			CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexRadiance[iBuffer]), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 		};
 		pCmd->ResourceBarrier(_countof(barriers), barriers);
 	}
@@ -294,7 +294,7 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexDenoiserTileList)            , D3D12_RESOURCE_STATE_UNORDERED_ACCESS         , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexIntersectionPassIndirectArgs), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT        , D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 				CD3DX12_RESOURCE_BARRIER::Transition(pRscRoughnessExtract                                         , D3D12_RESOURCE_STATE_UNORDERED_ACCESS         , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexRadiance[iBuffer])           , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+				//CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexRadiance[iBuffer])           , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexReflectionDenoiserBlueNoise) , D3D12_RESOURCE_STATE_UNORDERED_ACCESS         , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		};
 		pCmd->ResourceBarrier(_countof(barriers), barriers);
@@ -345,10 +345,11 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 		// Ensure that the intersection pass is done.
 		{
 			D3D12_RESOURCE_BARRIER barriers[] = {
-				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexRadiance[iBuffer])   , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+				//CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexRadiance[iBuffer])   , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexReprojectedRadiance) , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexAvgRadiance[iBuffer]), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexVariance[iBuffer])   , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexRadiance[iBuffer])   , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexSampleCount[iBuffer]), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 			};
 			pCmd->ResourceBarrier(_countof(barriers), barriers);
@@ -547,24 +548,24 @@ SRV_ID ScreenSpaceReflectionsPass::GetPassOutputSRV(int iOutput) const
 
 void ScreenSpaceReflectionsPass::ClearHistoryBuffers(ID3D12GraphicsCommandList* pCmd)
 {
+	return; // TODO: fix dx12/dxgi errors with UAV clearing
 	UINT clear[4] = { 0,0,0,0 };
 	for (int i = 0; i < 2; ++i)
 	{
+		const UAV& uav = mRenderer.GetUAV(UAVTemporalResolveOutputs[i]);
+
+		ID3D12Resource* pRsc[3] = 
 		{
-			const UAV& uav = mRenderer.GetUAV(UAVTemporalResolveOutputs[i]);
+			mRenderer.GetTextureResource(TexRadiance[i])
+			, mRenderer.GetTextureResource(TexVariance[i])
+			, mRenderer.GetTextureResource(TexSampleCount[i])
+		};
+		for (int rsc = 0; rsc < 3; ++rsc)
+		{
+			pCmd->ClearUnorderedAccessViewUint(uav.GetGPUDescHandle(rsc), uav.GetCPUDescHandle(rsc), pRsc[rsc], clear, 0, nullptr);
 
-			ID3D12Resource* pRsc[3] = 
-			{
-				mRenderer.GetTextureResource(TexRadiance[i])
-				, mRenderer.GetTextureResource(TexVariance[i])
-				, mRenderer.GetTextureResource(TexSampleCount[i])
-			};
-			for (int rsc = 0; rsc < 3; ++rsc)
-			{
-				pCmd->ClearUnorderedAccessViewUint(uav.GetGPUDescHandle(rsc), uav.GetCPUDescHandle(rsc), pRsc[rsc], clear, 0, nullptr);
-
-			}
 		}
+		
 	}
 }
 

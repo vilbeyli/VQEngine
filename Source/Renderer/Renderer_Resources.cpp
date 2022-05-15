@@ -611,7 +611,7 @@ TextureID VQRenderer::CreateTexture(const TextureCreateDesc& desc)
 
 		this->StartTextureUploads();
 		std::atomic<bool>& mbResident = mTextures.at(ID).mbResident;
-		while (!mbResident.load());  // busy wait here until the texture is made resident;
+		while (!mbResident.load());  // busy wait here until the texture is made resident; (very not ideal)
 	}
 
 	if (desc.pData)

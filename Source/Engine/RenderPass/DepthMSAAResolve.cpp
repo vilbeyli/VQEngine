@@ -56,7 +56,7 @@ void DepthMSAAResolvePass::RecordCommands(const IRenderPassDrawParameters* pDraw
 	assert(bWriteOutDepth || bWriteOutNormals || bWriteOutRoughness);
 
 #if _DEBUG
-	// ensure INVALID uavs are initialized as intended. i.e. prevent potential {} initalizations of IDs
+	// prevent potential {} initalization of IDs pointing to a valid resource (id==0)
 	if (bWriteOutDepth)     assert(pParams->UAV_ResolvedDepth > 0);
 	if (bWriteOutNormals)   assert(pParams->UAV_ResolvedNormals > 0);
 	if (bWriteOutRoughness) assert(pParams->UAV_ResolvedRoughness > 0);
@@ -88,10 +88,10 @@ void DepthMSAAResolvePass::RecordCommands(const IRenderPassDrawParameters* pDraw
 	*pConstBuffer = CBuffer;
 
 	// record commands
-	SCOPED_GPU_MARKER(pCmd, "MSAAResolve<Depth=%d, Normals=%d, Roughness=%d"); // TODO: string formatting
+	SCOPED_GPU_MARKER(pCmd, "MSAAResolve<Depth=%d, Normals=%d, Roughness=%d>"); // TODO: string formatting
 	pCmd->SetPipelineState(mRenderer.GetPSO(mPSO[iDepth][iNorml][iRoghn]));
 	pCmd->SetComputeRootSignature(mpRS);
-	if (bWriteOutDepth)     pCmd->SetComputeRootDescriptorTable(0, mRenderer.GetSRV(pParams->SRV_MSAADepth).GetGPUDescHandle());
+	if (true/*always*/)     pCmd->SetComputeRootDescriptorTable(0, mRenderer.GetSRV(pParams->SRV_MSAADepth).GetGPUDescHandle());
 	if (bWriteOutNormals)   pCmd->SetComputeRootDescriptorTable(1, mRenderer.GetSRV(pParams->SRV_MSAANormals).GetGPUDescHandle());
 	if (bWriteOutRoughness) pCmd->SetComputeRootDescriptorTable(2, mRenderer.GetSRV(pParams->SRV_MSAARoughness).GetGPUDescHandle());
 	if (bWriteOutDepth)     pCmd->SetComputeRootDescriptorTable(3, mRenderer.GetUAV(pParams->UAV_ResolvedDepth).GetGPUDescHandle());

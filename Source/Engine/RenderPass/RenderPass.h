@@ -68,6 +68,7 @@ public:
 	virtual void OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const IRenderPassResourceCollection* pRscParameters = nullptr) = 0;
 	virtual void OnDestroyWindowSizeDependentResources() = 0;
 
+	// TODO: shouldn't this be const? #threaded_access
 	virtual void RecordCommands(const IRenderPassDrawParameters* pDrawParameters = nullptr) = 0;
 
 	virtual std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() = 0;
