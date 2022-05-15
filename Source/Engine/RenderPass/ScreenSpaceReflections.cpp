@@ -68,7 +68,7 @@ ScreenSpaceReflectionsPass::ScreenSpaceReflectionsPass(VQRenderer& Renderer)
 
 ScreenSpaceReflectionsPass::~ScreenSpaceReflectionsPass()
 {
-	// TODO: decide how we want to clean up accidental leaks.
+	// TODO: decide how we want to clean up leaks.
 	// 
 	//OnDestroyWindowSizeDependentResources();
 	//DestroyResources();
@@ -294,7 +294,6 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexDenoiserTileList)            , D3D12_RESOURCE_STATE_UNORDERED_ACCESS         , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexIntersectionPassIndirectArgs), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT        , D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 				CD3DX12_RESOURCE_BARRIER::Transition(pRscRoughnessExtract                                         , D3D12_RESOURCE_STATE_UNORDERED_ACCESS         , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-				//CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexRadiance[iBuffer])           , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexReflectionDenoiserBlueNoise) , D3D12_RESOURCE_STATE_UNORDERED_ACCESS         , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		};
 		pCmd->ResourceBarrier(_countof(barriers), barriers);
@@ -345,7 +344,6 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 		// Ensure that the intersection pass is done.
 		{
 			D3D12_RESOURCE_BARRIER barriers[] = {
-				//CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexRadiance[iBuffer])   , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexReprojectedRadiance) , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexAvgRadiance[iBuffer]), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexVariance[iBuffer])   , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),

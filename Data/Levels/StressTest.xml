@@ -36,7 +36,7 @@
         <Yaw> 0 </Yaw>
         <Projection>Perspective</Projection>
         <FoV>60.0</FoV>
-        <Near>0.01</Near>
+        <Near>0.1</Near>
         <Far>1000</Far>
 
         <FirstPerson>

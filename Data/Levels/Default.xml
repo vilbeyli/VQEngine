@@ -21,9 +21,12 @@
         
         <Projection>Perspective</Projection>
         <FoV>70.0</FoV>
+        <!--
         <Near>0.01</Near>
         <Far>10000</Far>
-
+        -->
+        <Near>0.1</Near>
+        <Far>1000</Far>
         <FirstPerson>
             <TranslationSpeed>1000</TranslationSpeed>
             <AngularSpeed>0.05</AngularSpeed>
@@ -50,12 +53,13 @@
     <!-- GROUND PLANE -->
     <GameObject>
         <Transform>
-            <Position>0 -5.5 0</Position>
+            <Position>0 -5.0 0</Position>
             <Scale>100 0.01 100</Scale>
         </Transform>
         <Model>
             <Mesh>Cube</Mesh>
-            <MaterialName>Checkerboard_Glossy</MaterialName>
+            <!--<MaterialName>Checkerboard_Glossy</MaterialName>-->
+            <MaterialName>Black_VerySmooth</MaterialName>
         </Model>
     </GameObject>
     
