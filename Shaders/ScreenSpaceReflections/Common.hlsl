@@ -30,6 +30,7 @@ cbuffer Constants : register(b0) {
     float4x4 g_view;
     float4x4 g_inv_view;
     float4x4 g_prev_view_proj;
+    float4x4 g_envMapRotation;
     uint2 g_buffer_dimensions;
     float2 g_inv_buffer_dimensions;
     float g_temporal_stability_factor;

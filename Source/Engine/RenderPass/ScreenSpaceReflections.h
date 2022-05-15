@@ -47,6 +47,7 @@ public:
 		DirectX::XMMATRIX /*XMFLOAT4X4*/ view;
 		DirectX::XMMATRIX /*XMFLOAT4X4*/ invView;
 		DirectX::XMMATRIX /*XMFLOAT4X4*/ prevViewProjection;
+		DirectX::XMMATRIX /*XMFLOAT4X4*/ envMapRotation;
 		uint32 bufferDimensions[2];
 		float inverseBufferDimensions[2];
 		float temporalStabilityFactor;

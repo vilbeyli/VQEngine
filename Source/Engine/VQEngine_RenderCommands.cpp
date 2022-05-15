@@ -936,6 +936,17 @@ void VQEngine::DownsampleDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHea
 	pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
 }
 
+static DirectX::XMMATRIX GetHDRIRotationMatrix(float fHDIROffsetInRadians)
+{
+	const float cosB = cos(-fHDIROffsetInRadians);
+	const float sinB = sin(-fHDIROffsetInRadians);
+	DirectX::XMMATRIX m;
+	m.r[0] = { cosB, 0, sinB, 0 };
+	m.r[1] = { 0, 1, 0, 0 };
+	m.r[2] = { -sinB, 0, cosB, 0 };
+	m.r[3] = { 0, 0, 0, 0 };
+	return m;
+}
 void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
 {
 	const FSceneRenderParameters::FFFX_SSSR_UIParameters& UIParams = SceneView.sceneParameters.FFX_SSSRParameters;
@@ -947,7 +958,7 @@ void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 	{
 		mRenderer.GetTextureDimensions(mResources_MainWnd.EnvironmentMap.Tex_IrradianceSpec, EnvMapSpecIrrCubemapDimX, EnvMapSpecIrrCubemapDimY);
 	}
-
+	
 	switch (mSettings.gfx.Reflections)
 	{
 	case EReflections::SCREEN_SPACE_REFLECTIONS__FFX:
@@ -964,6 +975,7 @@ void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 		params.ffxCBuffer.invView                    = SceneView.viewInverse;
 		params.ffxCBuffer.bufferDimensions[0]        = SceneView.SceneRTWidth;
 		params.ffxCBuffer.bufferDimensions[1]        = SceneView.SceneRTHeight;
+		params.ffxCBuffer.envMapRotation             = GetHDRIRotationMatrix(SceneView.HDRIYawOffset);
 		params.ffxCBuffer.inverseBufferDimensions[0] = 1.0f / params.ffxCBuffer.bufferDimensions[0];
 		params.ffxCBuffer.inverseBufferDimensions[1] = 1.0f / params.ffxCBuffer.bufferDimensions[1];
 		params.ffxCBuffer.frameIndex                 = static_cast<uint32>(mNumSimulationTicks);

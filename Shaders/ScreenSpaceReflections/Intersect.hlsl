@@ -130,6 +130,7 @@ float3 SampleReflectionVector(float3 view_direction, float3 normal, float roughn
 }
 
 float3 SampleEnvironmentMap(float3 direction, float NdotV, float roughness) {
+    direction = mul(g_envMapRotation, direction);
     float3 preFilteredSpecular = g_environment_map.SampleLevel(g_environment_map_sampler, direction, 0).xyz;
     float2 F0ScaleBias = texBRDFIntegrationLUT.SampleLevel(g_environment_map_sampler, float2(NdotV, roughness), 0).rg;
     return EnvironmentBRDF(NdotV, roughness, 1.0f, float3(0, 0, 0), float3(0, 0, 0), preFilteredSpecular, F0ScaleBias);
