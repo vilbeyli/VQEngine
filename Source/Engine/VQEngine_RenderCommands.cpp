@@ -849,6 +849,7 @@ void VQEngine::ResolveMSAA(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* p
 
 	// transition barriers
 	{
+		SCOPED_GPU_MARKER(pCmd, "TransitionBarriers");
 		std::vector< CD3DX12_RESOURCE_BARRIER> barriers;
 		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColorMSAA, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE));
 		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RESOLVE_DEST));
@@ -867,6 +868,7 @@ void VQEngine::ResolveMSAA(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* p
 
 	// resolve MSAA
 	{
+		SCOPED_GPU_MARKER(pCmd, "Resolve");
 		pCmd->ResolveSubresource(pRscColor, 0, pRscColorMSAA, 0, mRenderer.GetTextureFormat(rsc.Tex_SceneColor));
 		if (bUseVizualization)
 		{
@@ -1158,7 +1160,8 @@ void VQEngine::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, cons
 
 	const bool bCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.FFXCASParams.CASSharpen > 0.0f;
 	const bool bFSREnabled = PPParams.IsFSREnabled();
-	const bool bVizualizationEnabled = ShouldUseVisualizationTarget(PPParams.eDrawMode);
+	const bool bVizualizationEnabled = PPParams.eDrawMode != EDrawMode::LIT_AND_POSTPROCESSED;
+	const bool bVizualizationSceneTargetUsed = ShouldUseVisualizationTarget(PPParams.eDrawMode);
 	const bool bMotionVectorsEnabled = ShouldUseMotionVectorsTarget(mSettings);
 
 	auto pRscPostProcessInput = mRenderer.GetTextureResource(rsc.Tex_SceneColor);
@@ -1194,10 +1197,12 @@ void VQEngine::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, cons
 	};
 	if ((bFSREnabled || bCASEnabled) && !bVizualizationEnabled)
 		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-	if (bVizualizationEnabled)
+	
+	if (bMSAA && bVizualizationSceneTargetUsed)
 	{
-		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscViz, (bMSAA ? D3D12_RESOURCE_STATE_RESOLVE_DEST : D3D12_RESOURCE_STATE_RENDER_TARGET), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscViz, D3D12_RESOURCE_STATE_RESOLVE_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
 	}
+
 	if (bMotionVectorsEnabled)
 	{
 		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscMoVec, (bMSAA ? D3D12_RESOURCE_STATE_RESOLVE_DEST : D3D12_RESOURCE_STATE_RENDER_TARGET), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
@@ -1210,18 +1215,19 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 	ID3D12DescriptorHeap*       ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 
 	const bool bHDR = this->ShouldRenderHDR(mpWinMain->GetHWND());
+	const auto& rsc = mResources_MainWnd;
 
 	// pass io
-	const SRV& srv_ColorIn          = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneColor);
-	const UAV& uav_TonemapperOut    = mRenderer.GetUAV(mResources_MainWnd.UAV_PostProcess_TonemapperOut);
-	const UAV& uav_VisualizationOut = mRenderer.GetUAV(mResources_MainWnd.UAV_PostProcess_VisualizationOut);
-	const SRV& srv_TonemapperOut    = mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_TonemapperOut);
-	const UAV& uav_FFXCASOut        = mRenderer.GetUAV(mResources_MainWnd.UAV_PostProcess_FFXCASOut);
-	const UAV& uav_FSR_EASUOut      = mRenderer.GetUAV(mResources_MainWnd.UAV_PostProcess_FSR_EASUOut);
-	const SRV& srv_FSR_EASUOut      = mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_FSR_EASUOut);
-	const UAV& uav_FSR_RCASOut      = mRenderer.GetUAV(mResources_MainWnd.UAV_PostProcess_FSR_RCASOut);
-	const SRV& srv_FSR_RCASOut      = mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_FSR_RCASOut);
-	ID3D12Resource* pRscTonemapperOut = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_TonemapperOut);
+	const SRV& srv_ColorIn          = mRenderer.GetSRV(rsc.SRV_SceneColor);
+	const UAV& uav_TonemapperOut    = mRenderer.GetUAV(rsc.UAV_PostProcess_TonemapperOut);
+	const UAV& uav_VisualizationOut = mRenderer.GetUAV(rsc.UAV_PostProcess_VisualizationOut);
+	const SRV& srv_TonemapperOut    = mRenderer.GetSRV(rsc.SRV_PostProcess_TonemapperOut);
+	const UAV& uav_FFXCASOut        = mRenderer.GetUAV(rsc.UAV_PostProcess_FFXCASOut);
+	const UAV& uav_FSR_EASUOut      = mRenderer.GetUAV(rsc.UAV_PostProcess_FSR_EASUOut);
+	const SRV& srv_FSR_EASUOut      = mRenderer.GetSRV(rsc.SRV_PostProcess_FSR_EASUOut);
+	const UAV& uav_FSR_RCASOut      = mRenderer.GetUAV(rsc.UAV_PostProcess_FSR_RCASOut);
+	const SRV& srv_FSR_RCASOut      = mRenderer.GetSRV(rsc.SRV_PostProcess_FSR_RCASOut);
+	ID3D12Resource* pRscTonemapperOut = mRenderer.GetTextureResource(rsc.Tex_PostProcess_TonemapperOut);
 
 
 	constexpr bool PP_ENABLE_BLUR_PASS = false;
@@ -1254,14 +1260,14 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 		SRV SRVIn = srv_ColorIn;
 		switch (PPParams.eDrawMode)
 		{
-		case EDrawMode::DEPTH         : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneDepth); break;
-		case EDrawMode::NORMALS       : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneNormals); break;
-		case EDrawMode::AO            : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_FFXCACAO_Out); break;
+		case EDrawMode::DEPTH         : SRVIn = mRenderer.GetSRV(rsc.SRV_SceneDepth); break;
+		case EDrawMode::NORMALS       : SRVIn = mRenderer.GetSRV(rsc.SRV_SceneNormals); break;
+		case EDrawMode::AO            : SRVIn = mRenderer.GetSRV(rsc.SRV_FFXCACAO_Out); break;
 		case EDrawMode::ALBEDO        : // same as below
-		case EDrawMode::METALLIC      : SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneVisualization); break;
+		case EDrawMode::METALLIC      : SRVIn = mRenderer.GetSRV(rsc.SRV_SceneVisualization); break;
 		case EDrawMode::ROUGHNESS     : srv_ColorIn; break;
 		case EDrawMode::REFLECTIONS   : SRVIn = mRenderer.GetSRV(mRenderPass_SSR.GetPassOutputSRV()); break;
-		case EDrawMode::MOTION_VECTORS: SRVIn = mRenderer.GetSRV(mResources_MainWnd.SRV_SceneMotionVectors); break;
+		case EDrawMode::MOTION_VECTORS: SRVIn = mRenderer.GetSRV(rsc.SRV_SceneMotionVectors); break;
 		}
 
 		pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::VIZUALIZATION_CS_PSO));
@@ -1272,21 +1278,21 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 		pCmd->SetComputeRootConstantBufferView(2, cbAddr);
 		pCmd->Dispatch(DispatchRenderX, DispatchRenderY, DispatchZ);
 
-		pRscOutput = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_VisualizationOut);
+		pRscOutput = mRenderer.GetTextureResource(rsc.Tex_PostProcess_VisualizationOut);
 	}
 	else
 	{
 		SCOPED_GPU_MARKER(pCmd, "RenderPostProcess");
-		const SRV& srv_blurOutput         = mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_BlurOutput);
+		const SRV& srv_blurOutput         = mRenderer.GetSRV(rsc.SRV_PostProcess_BlurOutput);
 
 		if constexpr (PP_ENABLE_BLUR_PASS && PPParams.bEnableGaussianBlur)
 		{
 			SCOPED_GPU_MARKER(pCmd, "BlurCS");
-			const UAV& uav_BlurIntermediate = mRenderer.GetUAV(mResources_MainWnd.UAV_PostProcess_BlurIntermediate);
-			const UAV& uav_BlurOutput       = mRenderer.GetUAV(mResources_MainWnd.UAV_PostProcess_BlurOutput);
-			const SRV& srv_blurIntermediate = mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_BlurIntermediate);
-			auto pRscBlurIntermediate = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_BlurIntermediate);
-			auto pRscBlurOutput       = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_BlurOutput);
+			const UAV& uav_BlurIntermediate = mRenderer.GetUAV(rsc.UAV_PostProcess_BlurIntermediate);
+			const UAV& uav_BlurOutput       = mRenderer.GetUAV(rsc.UAV_PostProcess_BlurOutput);
+			const SRV& srv_blurIntermediate = mRenderer.GetSRV(rsc.SRV_PostProcess_BlurIntermediate);
+			auto pRscBlurIntermediate = mRenderer.GetTextureResource(rsc.Tex_PostProcess_BlurIntermediate);
+			auto pRscBlurOutput       = mRenderer.GetTextureResource(rsc.Tex_PostProcess_BlurOutput);
 
 
 			FPostProcessParameters::FBlurParams* pBlurParams = nullptr;
@@ -1357,7 +1363,7 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 
 		if(PPParams.IsFFXCASEnabled() && PPParams.FFXCASParams.CASSharpen > 0.0f)
 		{
-			ID3D12Resource* pRscFFXCASOut = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_FFXCASOut);
+			ID3D12Resource* pRscFFXCASOut = mRenderer.GetTextureResource(rsc.Tex_PostProcess_FFXCASOut);
 			const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 			{
 				CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
@@ -1431,11 +1437,11 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 				pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
 			}
 			const bool bFFX_RCAS_Enabled = true; // TODO: drive with UI ?
-			ID3D12Resource* pRscFSR1Out = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_FSR_RCASOut);
+			ID3D12Resource* pRscFSR1Out = mRenderer.GetTextureResource(rsc.Tex_PostProcess_FSR_RCASOut);
 			if (bFFX_RCAS_Enabled)
 			{
-				ID3D12Resource* pRscEASUOut = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_FSR_EASUOut);
-				ID3D12Resource* pRscRCASOut = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_FSR_RCASOut);
+				ID3D12Resource* pRscEASUOut = mRenderer.GetTextureResource(rsc.Tex_PostProcess_FSR_EASUOut);
+				ID3D12Resource* pRscRCASOut = mRenderer.GetTextureResource(rsc.Tex_PostProcess_FSR_RCASOut);
 
 				SCOPED_GPU_MARKER(pCmd, "FSR-RCAS CS");
 				{

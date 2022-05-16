@@ -546,7 +546,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 				, 0 // MSAA SampleQuality
 				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
 			);
-
+			desc.ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 			r.Tex_PostProcess_VisualizationOut = mRenderer.CreateTexture(desc);
 			mRenderer.InitializeUAV(r.UAV_PostProcess_VisualizationOut, 0u, r.Tex_PostProcess_VisualizationOut);
 			mRenderer.InitializeSRV(r.SRV_PostProcess_VisualizationOut, 0u, r.Tex_PostProcess_VisualizationOut);
