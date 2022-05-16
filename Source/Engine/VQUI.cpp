@@ -697,8 +697,15 @@ void VQEngine::DrawDebugPanelWindow(FSceneRenderParameters& SceneParams, FPostPr
 	PPParams.eDrawMode = (EDrawMode)iDrawMode;
 	if (PPParams.eDrawMode == EDrawMode::NORMALS)
 	{
-		ImGui::Checkbox("Unpack Normals", &PPParams.bVisualization_UnpackNormals);
+		bool bUnpackNormals = PPParams.VizParams.iUnpackNormals;
+		ImGui::Checkbox("Unpack Normals", &bUnpackNormals);
+		PPParams.VizParams.iUnpackNormals = bUnpackNormals;
 	}
+	if (PPParams.eDrawMode == EDrawMode::MOTION_VECTORS)
+	{
+		ImGui::SliderFloat("MoVec Intensity", &PPParams.VizParams.fInputStrength, 0.0f, 200.0f);
+	}
+
 	ImGui::Checkbox("Show GameObject Bounding Boxes (Shift+N)", &SceneParams.bDrawGameObjectBoundingBoxes);
 	ImGui::Checkbox("Show Mesh Bounding Boxes (N)", &SceneParams.bDrawMeshBoundingBoxes);
 	ImGui::Checkbox("Show Light Bounding Volumes (L)", &SceneParams.bDrawLightBounds);

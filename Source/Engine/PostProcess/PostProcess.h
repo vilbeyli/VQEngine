@@ -101,6 +101,12 @@ struct FPostProcessParameters
 		int iImageSizeX;
 		int iImageSizeY;
 	};
+	struct FVizualizationParams
+	{
+		int iDrawMode = 0;
+		int iUnpackNormals = 0;
+		float fInputStrength = 100.0f;
+	};
 
 	//-------------------------------------------------------------------------------------------
 	//-------------------------------------------------------------------------------------------
@@ -120,8 +126,8 @@ struct FPostProcessParameters
 	FFSR_RCAS   FFSR_RCASParams  = {};
 	FFSR_EASU   FFSR_EASUParams  = {};
 	EDrawMode   eDrawMode = EDrawMode::LIT_AND_POSTPROCESSED;
+	FVizualizationParams VizParams = {};
 
-	bool bVisualization_UnpackNormals = false;
 	bool bEnableCAS = false;
 	bool bEnableFSR = false;
 	bool bEnableGaussianBlur = false;

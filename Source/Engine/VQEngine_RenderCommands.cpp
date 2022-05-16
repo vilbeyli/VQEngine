@@ -1250,12 +1250,12 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 		SCOPED_GPU_MARKER(pCmd, "RenderPostProcess_DebugViz");
 
 		// cbuffer
-		struct cbuffer_t { int iDrawMode = 0; int iUnpackNormals = 0; };
+		using cbuffer_t = FPostProcessParameters::FVizualizationParams;
 		cbuffer_t* pConstBuffer = {};
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 		pCBufferHeap->AllocConstantBuffer(sizeof(cbuffer_t), (void**)&pConstBuffer, &cbAddr);
-		pConstBuffer->iDrawMode = static_cast<int>(PPParams.eDrawMode);
-		pConstBuffer->iUnpackNormals = PPParams.bVisualization_UnpackNormals;
+		memcpy(pConstBuffer, &PPParams.VizParams, sizeof(PPParams.VizParams));
+		pConstBuffer->iDrawMode = static_cast<int>(PPParams.eDrawMode); // iDrawMode is not connected to the UI
 
 		SRV SRVIn = srv_ColorIn;
 		switch (PPParams.eDrawMode)

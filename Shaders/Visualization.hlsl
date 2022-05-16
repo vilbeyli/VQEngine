@@ -26,6 +26,7 @@ cbuffer VizParams : register(b0)
 {
     int iDrawMode;
     int iUnpackNormals;
+    float fInputStrength;
 }
 
 //
@@ -107,7 +108,7 @@ enum class EDrawMode
     }
     else if (iDrawMode == MOTION_VECTORS)
     {
-        OutRGB = float3(texInA.rg * float2(0.5, -0.5), 0.0f)  * 10000;
+        OutRGB = float3(texInA.rg * float2(0.5, -0.5) * fInputStrength, 0.0f) + 0.5f.rrr;
     }
     else
     {
