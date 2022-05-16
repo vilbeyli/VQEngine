@@ -139,6 +139,7 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 
 	TextureID Tex_SceneColorMSAA                     = INVALID_ID;
 	TextureID Tex_SceneColor                         = INVALID_ID;
+	TextureID Tex_SceneColorBoundingVolumes          = INVALID_ID;
 	TextureID Tex_SceneDepthMSAA                     = INVALID_ID;
 	TextureID Tex_SceneDepth                         = INVALID_ID;
 	TextureID Tex_SceneDepthResolve                  = INVALID_ID;
@@ -164,6 +165,7 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 
 	RTV_ID    RTV_SceneColorMSAA                     = INVALID_ID;
 	RTV_ID    RTV_SceneColor                         = INVALID_ID;
+	RTV_ID    RTV_SceneColorBoundingVolumes          = INVALID_ID;
 	RTV_ID    RTV_SceneNormalsMSAA                   = INVALID_ID;
 	RTV_ID    RTV_SceneNormals                       = INVALID_ID;
 	RTV_ID    RTV_UI_SDR                             = INVALID_ID;
@@ -183,6 +185,7 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	SRV_ID    SRV_ShadowMaps_Point                   = INVALID_ID;
 	SRV_ID    SRV_ShadowMaps_Directional             = INVALID_ID;
 	SRV_ID    SRV_SceneColor                         = INVALID_ID;
+	SRV_ID    SRV_SceneColorBoundingVolumes          = INVALID_ID;
 	SRV_ID    SRV_SceneColorMSAA                     = INVALID_ID;
 	SRV_ID    SRV_SceneNormals                       = INVALID_ID;
 	SRV_ID    SRV_SceneNormalsMSAA                   = INVALID_ID;
@@ -555,9 +558,12 @@ private:
 	void                            RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
 	void                            RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView);
 	void                            RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FPostProcessParameters& PPParams);
+	void                            RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA);
+	void                            RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA);
 	void                            ResolveMSAA(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams);
 	void                            DownsampleDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTextureID, SRV_ID SRVDepth);
 	void                            RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
+	void                            RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA);
 	void                            CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
 	void                            TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams);
 	ID3D12Resource*                 RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams);
@@ -604,7 +610,7 @@ private:
 	bool                            ShouldRenderHDR(HWND hwnd) const;
 	bool                            IsHDRSettingOn() const;
 
-	void                            SetEffectiveFrameRateLimit();
+	void                            SetEffectiveFrameRateLimit(); // TODO: take in int, and framepace the loading screen
 	float                           FramePacing(const float dt);
 	const FDisplayHDRProfile*       GetHDRProfileIfExists(const wchar_t* pwStrLogicalDisplayName);
 	FSetHDRMetaDataParams           GatherHDRMetaDataParameters(HWND hwnd);

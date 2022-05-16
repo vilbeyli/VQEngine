@@ -48,6 +48,8 @@ void ApplyReflectionsPass::RecordCommands(const IRenderPassDrawParameters* pDraw
 	assert(pParams->pCmd);
 	assert(pParams->pCBufferHeap);
 
+	const bool bCompositeColor2 = pParams->SRVBoundingVolumes != INVALID_ID;
+
 	ID3D12GraphicsCommandList* pCmd = pParams->pCmd;
 
 	constexpr int NUM_THREADS_X = 8;
@@ -56,12 +58,12 @@ void ApplyReflectionsPass::RecordCommands(const IRenderPassDrawParameters* pDraw
 	const int DispatchY = DIV_AND_ROUND_UP(pParams->iSceneRTHeight, NUM_THREADS_Y);
 	const int DispatchZ = 1;
 
-	pCmd->SetPipelineState(mRenderer.GetPSO(PSOApplyReflectionsPass));
-	pCmd->SetComputeRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1));
-	//pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+	pCmd->SetPipelineState(mRenderer.GetPSO(PSOApplyReflectionsPass[bCompositeColor2 ? 1 : 0]));
+	pCmd->SetComputeRootSignature(mRenderer.GetBuiltinRootSignature(bCompositeColor2 ? EBuiltinRootSignatures::CS__SRV2_UAV1_ROOTCBV1 : EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1));
 	pCmd->SetComputeRootDescriptorTable(0, mRenderer.GetSRV(pParams->SRVReflectionRadiance).GetGPUDescHandle());
-	pCmd->SetComputeRootDescriptorTable(1, mRenderer.GetUAV(pParams->UAVSceneRadiance).GetGPUDescHandle());
-	//pCmd->SetComputeRootConstantBufferView(2, cbAddr);
+	if(bCompositeColor2) 
+		pCmd->SetComputeRootDescriptorTable(1, mRenderer.GetSRV(pParams->SRVBoundingVolumes).GetGPUDescHandle());
+	pCmd->SetComputeRootDescriptorTable(bCompositeColor2 ? 2 : 1, mRenderer.GetUAV(pParams->UAVSceneRadiance).GetGPUDescHandle());
 	pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
 }
 
@@ -75,7 +77,12 @@ std::vector<FPSOCreationTaskParameters> ApplyReflectionsPass::CollectPSOCreation
 		psoLoadDesc.PSOName = "[PSO] ApplyReflections";
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_5_0" });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1);
-		PSODescs.push_back({ &PSOApplyReflectionsPass, psoLoadDesc });
+		PSODescs.push_back({ &PSOApplyReflectionsPass[0], psoLoadDesc});
+
+		psoLoadDesc.PSOName = "[PSO] ApplyReflectionsAndBoundingVolumes";
+		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV2_UAV1_ROOTCBV1);
+		psoLoadDesc.ShaderStageCompileDescs.back().Macros.push_back({ "COMPOSITE_BOUNDING_VOLUMES", "1" });
+		PSODescs.push_back({ &PSOApplyReflectionsPass[1], psoLoadDesc});
 	}
 
 	return PSODescs;

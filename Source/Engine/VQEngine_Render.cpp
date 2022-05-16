@@ -431,6 +431,13 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			mRenderer.InitializeSRV(r.SRV_SceneColor, 0u, r.Tex_SceneColor);
 			mRenderer.InitializeUAV(r.UAV_SceneColor, 0u, r.Tex_SceneColor);
 			
+			// scene bounding volumes
+			desc.TexName = "SceneBVs";
+			desc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+			r.Tex_SceneColorBoundingVolumes = mRenderer.CreateTexture(desc);
+			mRenderer.InitializeRTV(r.RTV_SceneColorBoundingVolumes, 0u, r.Tex_SceneColorBoundingVolumes);
+			mRenderer.InitializeSRV(r.SRV_SceneColorBoundingVolumes, 0u, r.Tex_SceneColorBoundingVolumes);
+
 			// scene visualization
 			desc.TexName = "SceneViz";
 			desc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
@@ -703,12 +710,14 @@ void VQEngine::RenderThread_LoadResources()
 	{
 		rsc.RTV_SceneColorMSAA = mRenderer.CreateRTV();
 		rsc.RTV_SceneColor = mRenderer.CreateRTV();
+		rsc.RTV_SceneColorBoundingVolumes = mRenderer.CreateRTV();
 		rsc.RTV_SceneVisualization = mRenderer.CreateRTV();
 		rsc.RTV_SceneVisualizationMSAA = mRenderer.CreateRTV();
 		rsc.RTV_SceneMotionVectors = mRenderer.CreateRTV();
 		rsc.RTV_SceneMotionVectorsMSAA = mRenderer.CreateRTV();
 		rsc.SRV_SceneColor = mRenderer.CreateSRV();
 		rsc.SRV_SceneColorMSAA = mRenderer.CreateSRV();
+		rsc.SRV_SceneColorBoundingVolumes = mRenderer.CreateSRV();
 		rsc.SRV_SceneVisualization = mRenderer.CreateSRV();
 		rsc.SRV_SceneMotionVectors = mRenderer.CreateSRV();
 		rsc.SRV_SceneVisualizationMSAA = mRenderer.CreateSRV();
@@ -830,6 +839,7 @@ void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 		mRenderer.DestroyTexture(r.Tex_SceneDepth);
 		mRenderer.DestroyTexture(r.Tex_SceneDepthResolve);
 		mRenderer.DestroyTexture(r.Tex_SceneColor);
+		mRenderer.DestroyTexture(r.Tex_SceneColorBoundingVolumes);
 		mRenderer.DestroyTexture(r.Tex_SceneNormals);
 		mRenderer.DestroyTexture(r.Tex_SceneVisualization);
 		mRenderer.DestroyTexture(r.Tex_SceneVisualizationMSAA);
@@ -1186,6 +1196,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	const bool bReflectionsEnabled = mSettings.gfx.Reflections != EReflections::REFLECTIONS_OFF && mSettings.gfx.Reflections == EReflections::SCREEN_SPACE_REFLECTIONS__FFX; // TODO: remove the && after RayTracing is added
 	const bool bDownsampleDepth    = mSettings.gfx.Reflections == EReflections::SCREEN_SPACE_REFLECTIONS__FFX;
 	const bool bUseHDRRenderPath   = this->ShouldRenderHDR(mpWinMain->GetHWND());
+	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 
 	const FSceneView& SceneView             = mpScene->GetSceneView(FRAME_DATA_INDEX);
 	const FSceneShadowView& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
@@ -1264,6 +1275,10 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		if (bReflectionsEnabled)
 		{
 			RenderReflections(pCmd, &CBHeap, SceneView);
+			
+			// render scene-debugging stuff that shouldn't be in reflections: bounding volumes, etc
+			RenderSceneBoundingVolumes(pCmd, &CBHeap, SceneView, bMSAA);
+
 			CompositeReflections(pCmd, &CBHeap, SceneView);
 		}
 
@@ -1356,6 +1371,10 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		if (bReflectionsEnabled)
 		{
 			RenderReflections(pCmd_ThisThread, &CBHeap_This, SceneView);
+			
+			// render scene-debugging stuff that shouldn't be in reflections: bounding volumes, etc
+			RenderSceneBoundingVolumes(pCmd_ThisThread, &CBHeap_This, SceneView, bMSAA);
+
 			CompositeReflections(pCmd_ThisThread, &CBHeap_This, SceneView);
 		}
 

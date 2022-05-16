@@ -28,6 +28,7 @@ public:
 		ID3D12GraphicsCommandList* pCmd = nullptr;
 		DynamicBufferHeap* pCBufferHeap = nullptr;
 		SRV_ID SRVReflectionRadiance = INVALID_ID;
+		SRV_ID SRVBoundingVolumes = INVALID_ID;
 		UAV_ID UAVSceneRadiance      = INVALID_ID;
 		int iSceneRTWidth = 0;
 		int iSceneRTHeight = 0;
@@ -45,6 +46,6 @@ public:
 
 	virtual std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() override;
 private:
-	PSO_ID PSOApplyReflectionsPass;
+	std::array<PSO_ID,2> PSOApplyReflectionsPass;
 };
 

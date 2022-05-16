@@ -369,7 +369,7 @@ void VQRenderer::InitializeHeaps()
 	constexpr uint32 NumDescsRTV = 1000;
 	mHeapRTV.Create(pDevice, "HeapRTV", D3D12_DESCRIPTOR_HEAP_TYPE_RTV, NumDescsRTV);
 
-	constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 64 * MEGABYTE;
+	constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 256 * MEGABYTE;
 	constexpr bool USE_GPU_MEMORY = true;
 	mStaticHeap_VertexBuffer.Create(pDevice, EBufferType::VERTEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticVertexBufferPool");
 	mStaticHeap_IndexBuffer .Create(pDevice, EBufferType::INDEX_BUFFER , STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticIndexBufferPool");
@@ -577,8 +577,30 @@ void VQRenderer::LoadBuiltinRootSignatures()
 		if (!SUCCEEDED(hr)) { ReportErrorAndReleaseBlob(error); assert(false); }
 		ID3D12RootSignature* pRS = nullptr;
 		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
-		SetName(pRS, "RootSignature_Tonemapper");
+		SetName(pRS, "CS__SRV1_UAV1_ROOTCBV1");
 		mRootSignatureLookup[EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1] = pRS;
+	}
+	{
+		CD3DX12_DESCRIPTOR_RANGE1 ranges[3];
+		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
+		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
+		ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_NONE);
+
+		CD3DX12_ROOT_PARAMETER1 rootParameters[4];
+		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_ALL);
+		rootParameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_ALL);
+		rootParameters[2].InitAsDescriptorTable(1, &ranges[2], D3D12_SHADER_VISIBILITY_ALL);
+		rootParameters[3].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL);
+
+		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, NULL, D3D12_ROOT_SIGNATURE_FLAG_NONE);
+
+		hr = D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error);
+		if (!SUCCEEDED(hr)) { ReportErrorAndReleaseBlob(error); assert(false); }
+		ID3D12RootSignature* pRS = nullptr;
+		ThrowIfFailed(pDevice->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&pRS)));
+		SetName(pRS, "CS__SRV2_UAV1_ROOTCBV1");
+		mRootSignatureLookup[EBuiltinRootSignatures::CS__SRV2_UAV1_ROOTCBV1] = pRS;
 	}
 
 	// Object Root Signature : [4]

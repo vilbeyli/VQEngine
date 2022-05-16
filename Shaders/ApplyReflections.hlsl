@@ -16,8 +16,12 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-Texture2D TexIn;
-RWTexture2D<float4> TexOut;
+Texture2D<float4> TexReflectionRadiance;
+#if COMPOSITE_BOUNDING_VOLUMES
+Texture2D<float3> TexBoundingVolumes;
+#endif
+
+RWTexture2D<float4> TexSceneColor;
 
 cbuffer ApplyReflectionParams : register(b0)
 {
@@ -31,8 +35,14 @@ void CSMain(
     , uint3 DispatchThreadID : SV_DispatchThreadID
 )
 {
-    float3 ReflectionRadiance = TexIn [DispatchThreadID.xy].rgb;
-    float4 SceneRadianceAndRoughness = TexOut[DispatchThreadID.xy];
-    float3 SceneRadiance = SceneRadianceAndRoughness.rgb;
-    TexOut[DispatchThreadID.xy] = float4(SceneRadiance + ReflectionRadiance, SceneRadianceAndRoughness.a);
+    const float3 ReflectionRadiance = TexReflectionRadiance[DispatchThreadID.xy].rgb;
+    const float4 SceneRadianceAndRoughness = TexSceneColor[DispatchThreadID.xy];
+    const float3 SceneRadiance = SceneRadianceAndRoughness.rgb;
+
+    float3 FinalComposite = SceneRadiance + ReflectionRadiance;
+#if COMPOSITE_BOUNDING_VOLUMES
+    FinalComposite += TexBoundingVolumes[DispatchThreadID.xy].rgb;
+#endif
+
+    TexSceneColor[DispatchThreadID.xy] = float4(FinalComposite, SceneRadianceAndRoughness.a);
 }

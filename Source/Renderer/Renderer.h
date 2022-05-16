@@ -115,6 +115,7 @@ enum EBuiltinPSOs // TODO: remove the hardcoded PSOs when a generic Shader solut
 enum EBuiltinRootSignatures
 {
 	CS__SRV1_UAV1_ROOTCBV1,
+	CS__SRV2_UAV1_ROOTCBV1,
 	//--------------------------
 	LEGACY__HelloWorldTriangle,
 	LEGACY__FullScreenTriangle,
