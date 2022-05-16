@@ -50,13 +50,12 @@ struct FSceneRenderParameters
 	struct FFFX_SSSR_UIParameters
 	{
 		bool    bEnableTemporalVarianceGuidedTracing = true;
-		float   targetFrameTime = 0;
 		int     maxTraversalIterations = 128;
 		int     mostDetailedDepthHierarchyMipLevel = 0;
 		int     minTraversalOccupancy = 4;
 		float   depthBufferThickness = 0.45f;
 		float   roughnessThreshold = 0.2f;
-		float   temporalStability = 0.7f;
+		float   temporalStability = 0.25f;
 		float   temporalVarianceThreshold = 0.0f;
 		int     samplesPerQuad = 1;
 	};

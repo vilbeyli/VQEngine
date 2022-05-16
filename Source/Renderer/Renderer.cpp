@@ -358,7 +358,7 @@ void VQRenderer::InitializeHeaps()
 	mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE, this->mGFXQueue.pQueue);
 
 	constexpr uint32 NumDescsCBV = 100;
-	constexpr uint32 NumDescsSRV = 3800;
+	constexpr uint32 NumDescsSRV = 8192;
 	constexpr uint32 NumDescsUAV = 100;
 	constexpr bool   bCPUVisible = false;
 	mHeapCBV_SRV_UAV.Create(pDevice, "HeapCBV_SRV_UAV", D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, NumDescsCBV + NumDescsSRV + NumDescsUAV, bCPUVisible);
