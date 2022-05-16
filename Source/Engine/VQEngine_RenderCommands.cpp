@@ -1198,9 +1198,12 @@ void VQEngine::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, cons
 	if ((bFSREnabled || bCASEnabled) && !bVizualizationEnabled)
 		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
 	
-	if (bMSAA && bVizualizationSceneTargetUsed)
+	if (bVizualizationSceneTargetUsed)
 	{
-		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscViz, D3D12_RESOURCE_STATE_RESOLVE_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+		barriers.push_back(bMSAA
+			? CD3DX12_RESOURCE_BARRIER::Transition(pRscViz, D3D12_RESOURCE_STATE_RESOLVE_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+			: CD3DX12_RESOURCE_BARRIER::Transition(pRscViz, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+		);
 	}
 
 	if (bMotionVectorsEnabled)
