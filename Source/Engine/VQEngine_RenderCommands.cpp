@@ -1050,10 +1050,12 @@ void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dynam
 	const auto& rsc = mResources_MainWnd;
 	const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
 	ID3D12Resource* pRscColorMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneColorMSAA);
+	ID3D12Resource* pRscColor = mRenderer.GetTextureResource(rsc.Tex_SceneColor);
 	ID3D12Resource* pRscColorBB = mRenderer.GetTextureResource(rsc.Tex_SceneColorBoundingVolumes);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = mRenderer.GetRTV(rsc.RTV_SceneColorMSAA).GetCPUDescHandle();
-	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = mRenderer.GetDSV(rsc.DSV_SceneDepthMSAA).GetCPUDescHandle();
+
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = bMSAA ? mRenderer.GetRTV(rsc.RTV_SceneColorMSAA).GetCPUDescHandle(): mRenderer.GetRTV(rsc.RTV_SceneColor).GetCPUDescHandle();
+	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = bMSAA ? mRenderer.GetDSV(rsc.DSV_SceneDepthMSAA).GetCPUDescHandle(): mRenderer.GetDSV(rsc.DSV_SceneDepth).GetCPUDescHandle();
 
 	const float RenderResolutionX = static_cast<float>(SceneView.SceneRTWidth);
 	const float RenderResolutionY = static_cast<float>(SceneView.SceneRTHeight);
@@ -1062,17 +1064,27 @@ void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dynam
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	// transition MSAA RT
+	
+	if(bMSAA)
 	{
+		// transition MSAA RT
 		std::vector< CD3DX12_RESOURCE_BARRIER> barriers;
 		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColorMSAA, D3D12_RESOURCE_STATE_RESOLVE_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
 		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColorBB  , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RESOLVE_DEST));
 		pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
-	}
 
-	// clear MSAA RT 
-	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+		// clear MSAA RT 
+		pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+	}
+	else
+	{
+		std::vector< CD3DX12_RESOURCE_BARRIER> barriers;
+		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
+		pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
+	}
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+	
+
 
 	// Set Viewport & Scissors
 	pCmd->RSSetViewports(1, &viewport);
@@ -1082,6 +1094,7 @@ void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dynam
 	RenderLightBounds(pCmd, pCBufferHeap, SceneView, bMSAA);
 
 	// resolve MSAA RT 
+	if (bMSAA)
 	{
 		{
 			std::vector< CD3DX12_RESOURCE_BARRIER> barriers;
@@ -1097,6 +1110,12 @@ void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dynam
 			pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
 		}
 	}
+	else
+	{
+		std::vector< CD3DX12_RESOURCE_BARRIER> barriers;
+		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColor, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+		pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
+	}
 }
 
 void VQEngine::CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
@@ -1104,13 +1123,15 @@ void VQEngine::CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBuff
 	const bool bNoBoundingVolumeToRender = SceneView.boundingBoxRenderCommands.empty()
 		&& SceneView.lightBoundsRenderCommands.empty();
 
+	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
+
 	SCOPED_GPU_MARKER(pCmd, "CompositeReflections");
 	
 	ApplyReflectionsPass::FDrawParameters params;
 	params.pCmd = pCmd;
 	params.pCBufferHeap = pCBufferHeap;
 	params.SRVReflectionRadiance = mRenderPass_SSR.GetPassOutputSRV();
-	params.SRVBoundingVolumes = bNoBoundingVolumeToRender ? INVALID_ID : mResources_MainWnd.SRV_SceneColorBoundingVolumes;
+	params.SRVBoundingVolumes = (bNoBoundingVolumeToRender || !bMSAA) ? INVALID_ID : mResources_MainWnd.SRV_SceneColorBoundingVolumes;
 	params.UAVSceneRadiance = mResources_MainWnd.UAV_SceneColor;
 	params.iSceneRTWidth  = SceneView.SceneRTWidth;
 	params.iSceneRTHeight = SceneView.SceneRTHeight;
