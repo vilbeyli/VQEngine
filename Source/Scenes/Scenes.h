@@ -57,4 +57,5 @@ class StressTestScene : public Scene
 	DECLARE_SCENE_INTERFACE()
 
 	DECLARE_CTOR(StressTestScene)
+	bool bAnimateEnvironmentMapRotation = false;
 };

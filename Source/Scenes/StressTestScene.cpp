@@ -31,7 +31,16 @@ static const std::array< XMFLOAT3, NUM_RND_COLORS> Colors =
 
 void StressTestScene::UpdateScene(float dt, FSceneView& SceneView)
 {
+	if (mInput.IsKeyTriggered("Space"))
+		bAnimateEnvironmentMapRotation = !bAnimateEnvironmentMapRotation;
 
+	constexpr float HDRI_ROTATION_SPEED = 0.01f;
+	if (bAnimateEnvironmentMapRotation)
+	{
+		SceneView.sceneParameters.fYawSliderValue += HDRI_ROTATION_SPEED * dt;
+		if (SceneView.sceneParameters.fYawSliderValue > 1.0f)
+			SceneView.sceneParameters.fYawSliderValue = 0.0f;
+	}
 }
 
 

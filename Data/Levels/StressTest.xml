@@ -74,7 +74,7 @@
             <Name>Sponza</Name>
         </Model>
     </GameObject>
-    
+
     <!-- MODELS  -->
     <GameObject>
         <Transform>
@@ -89,7 +89,7 @@
     </GameObject>
     <GameObject>
         <Transform>
-            <Position>20.351274 -29.875536 -20.422892</Position>
+            <Position>-20.176908 -29.498375 -16.502298</Position>
             <Rotation>-90 0 0</Rotation>
             <Scale>10 10 10</Scale>
         </Transform>
@@ -111,7 +111,7 @@
     </GameObject>
     <GameObject>
         <Transform>
-            <Position>-20.176908 -29.498375 -16.502298</Position>
+            <Position>20.351274 -29.875536 -20.422892</Position>
             <Quaternion>0 0 0 1</Quaternion>
             <Scale>8 8 8</Scale>
         </Transform>
