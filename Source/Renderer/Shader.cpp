@@ -340,10 +340,9 @@ Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompil
 		Source.Encoding = DXC_CP_ACP;  // Assume BOM says UTF8 or UTF16 or this is ANSI text.
 		
 		// build args: support compile flags from D3DCompile
-		UINT CompileFlags = SHADER_COMPILE_FLAGS;
 		for (const auto& prFlag : D3DCompilerFlagCompatiblityLookup)
 		{
-			if (CompileFlags & prFlag.first)
+			if (SHADER_COMPILE_FLAGS & prFlag.first) // process built-in flags
 			{
 				ppArgs.push_back(prFlag.second);
 				if (prFlag.first == D3DCOMPILE_DEBUG)
@@ -351,6 +350,18 @@ Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompil
 					ppArgs.push_back(L"-Qembed_debug");
 				}
 			}
+		}
+
+		// build args: add NativeFP16
+		if (ShaderStageCompileDesc.bUseNative16bit)
+		{
+			ppArgs.push_back(L"-enable-16bit-types");
+		}
+
+		// build args: take in the user-provided compiler flags
+		for(const std::wstring& flag : ShaderStageCompileDesc.DXCompilerFlags)
+		{
+			ppArgs.push_back(flag.c_str());
 		}
 
 

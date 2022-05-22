@@ -244,7 +244,8 @@ public:
 	inline const SRV_ID          GetProceduralTextureSRV_ID(EProceduralTextures tex) const { return mLookup_ProceduralTextureSRVs.at(tex); }
 	TextureID                    GetProceduralTexture(EProceduralTextures tex) const;
 	
-	inline ID3D12Device*         GetDevicePtr() { return mDevice.GetDevicePtr(); };
+	inline ID3D12Device*         GetDevicePtr() { return mDevice.GetDevicePtr(); }
+	inline FDeviceCapabilities   GetDeviceCapabilities() const { return mDevice.GetDeviceCapabilities(); }
 
 private:
 	using PSOArray_t = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
@@ -295,7 +296,7 @@ private:
 
 
 	// root signatures & PSOs
-	std::unordered_map<RS_ID, ID3D12RootSignature*> mRootSignatureLookup;
+	std::unordered_map<RS_ID , ID3D12RootSignature*> mRootSignatureLookup;
 	std::unordered_map<PSO_ID, ID3D12PipelineState*> mPSOs;
 
 	// data
