@@ -162,6 +162,7 @@ void ScreenSpaceReflectionsPass::OnCreateWindowSizeDependentResources(unsigned W
 	}
 	iBuffer = 0;
 	bClearHistoryBuffers = true;
+	MatPreviousViewProjection = DirectX::XMMatrixIdentity();
 
 	InitializeResourceViews(pParams);
 }
@@ -237,12 +238,6 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 
-	if (this->bClearHistoryBuffers)
-	{
-		this->ClearHistoryBuffers(pCmd);
-		this->bClearHistoryBuffers = false;
-	}
-
 	// Ensure that the ray list is in UA state
 	{
 		SCOPED_GPU_MARKER(pCmd, "TransitionRayListResources");
@@ -255,6 +250,12 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 			CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexRadiance[iBuffer]), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 		};
 		pCmd->ResourceBarrier(_countof(barriers), barriers);
+	}
+
+	if (this->bClearHistoryBuffers)
+	{
+		this->ClearHistoryBuffers(pCmd);
+		this->bClearHistoryBuffers = false;
 	}
 	
 	{
@@ -463,12 +464,21 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 
 std::vector<FPSOCreationTaskParameters> ScreenSpaceReflectionsPass::CollectPSOCreationParameters() /*override*/
 {
+	const bool bUseFP16Types = mRenderer.GetDeviceCapabilities().bSupportsFP16;
+	if (!bUseFP16Types)
+	{
+		Log::Warning("------------------------------------------------------------------------------------------");
+		Log::Warning("ScreenSpaceReflectionsPass / FidelityFX SSSR requires Native16BitShaderOps, but the current GPU doesn't support it.");
+		Log::Warning("Reflections may look incorrect or buggy.");
+		Log::Warning("------------------------------------------------------------------------------------------");
+	}
+
 	std::vector<FPSOCreationTaskParameters> PSODescs;
 	{
 		const std::wstring ShaderFilePath = VQRenderer::GetFullPathOfShader("ScreenSpaceReflections/ClassifyReflectionTiles.hlsl");
 		FPSODesc psoLoadDesc = {}; //"-enable-16bit-types -T cs_6_2 /Zi /Zss"
 		psoLoadDesc.PSOName = "[PSO] Reflection Denoiser - ClassifyReflectionTiles";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2", {}, bUseFP16Types });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mSubpassRootSignatureLookup.at(ESubpass::CLASSIFY_TILES);
 		psoLoadDesc.D3D12ComputeDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 		psoLoadDesc.D3D12ComputeDesc.NodeMask = 0;
@@ -478,7 +488,7 @@ std::vector<FPSOCreationTaskParameters> ScreenSpaceReflectionsPass::CollectPSOCr
 		const std::wstring ShaderFilePath = VQRenderer::GetFullPathOfShader("ScreenSpaceReflections/PrepareBlueNoiseTexture.hlsl");
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "[PSO] Reflection Denoiser - Prepare Blue Noise Texture";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2", {}, bUseFP16Types });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mSubpassRootSignatureLookup.at(ESubpass::BLUE_NOISE);
 		psoLoadDesc.D3D12ComputeDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 		psoLoadDesc.D3D12ComputeDesc.NodeMask = 0;
@@ -488,7 +498,7 @@ std::vector<FPSOCreationTaskParameters> ScreenSpaceReflectionsPass::CollectPSOCr
 		const std::wstring ShaderFilePath = VQRenderer::GetFullPathOfShader("ScreenSpaceReflections/Reproject.hlsl");
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "[PSO] Reflection Denoiser - Reproject";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2", {}, bUseFP16Types });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mSubpassRootSignatureLookup.at(ESubpass::REPROJECT);
 		psoLoadDesc.D3D12ComputeDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 		psoLoadDesc.D3D12ComputeDesc.NodeMask = 0;
@@ -498,7 +508,7 @@ std::vector<FPSOCreationTaskParameters> ScreenSpaceReflectionsPass::CollectPSOCr
 		const std::wstring ShaderFilePath = VQRenderer::GetFullPathOfShader("ScreenSpaceReflections/Prefilter.hlsl");
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "[PSO] Reflection Denoiser - Prefilter";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2", {}, bUseFP16Types });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mSubpassRootSignatureLookup.at(ESubpass::PREFILTER);
 		psoLoadDesc.D3D12ComputeDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 		psoLoadDesc.D3D12ComputeDesc.NodeMask = 0;
@@ -508,7 +518,7 @@ std::vector<FPSOCreationTaskParameters> ScreenSpaceReflectionsPass::CollectPSOCr
 		const std::wstring ShaderFilePath = VQRenderer::GetFullPathOfShader("ScreenSpaceReflections/ResolveTemporal.hlsl");
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "[PSO] Reflection Denoiser - Temporal Resolve";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2", {}, bUseFP16Types });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mSubpassRootSignatureLookup.at(ESubpass::RESOLVE_TEMPORAL);
 		psoLoadDesc.D3D12ComputeDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 		psoLoadDesc.D3D12ComputeDesc.NodeMask = 0;
@@ -518,7 +528,7 @@ std::vector<FPSOCreationTaskParameters> ScreenSpaceReflectionsPass::CollectPSOCr
 		const std::wstring ShaderFilePath = VQRenderer::GetFullPathOfShader("ScreenSpaceReflections/Intersect.hlsl");
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "[PSO] SSSR - Intersection";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2", {}, bUseFP16Types });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mSubpassRootSignatureLookup.at(ESubpass::INTERSECTION);
 		psoLoadDesc.D3D12ComputeDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 		psoLoadDesc.D3D12ComputeDesc.NodeMask = 0;
@@ -528,7 +538,7 @@ std::vector<FPSOCreationTaskParameters> ScreenSpaceReflectionsPass::CollectPSOCr
 		const std::wstring ShaderFilePath = VQRenderer::GetFullPathOfShader("ScreenSpaceReflections/PrepareIndirectArgs.hlsl");
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "[PSO] PrepareIndirectArgs";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2", {}, bUseFP16Types });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mSubpassRootSignatureLookup.at(ESubpass::PREPARE_INDIRECT_ARGS);
 		psoLoadDesc.D3D12ComputeDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 		psoLoadDesc.D3D12ComputeDesc.NodeMask = 0;
@@ -546,24 +556,28 @@ SRV_ID ScreenSpaceReflectionsPass::GetPassOutputSRV(int iOutput) const
 
 void ScreenSpaceReflectionsPass::ClearHistoryBuffers(ID3D12GraphicsCommandList* pCmd)
 {
-	return; // TODO: fix dx12/dxgi errors with UAV clearing
+	return;
+
+	// TODO: fix dx12/dxgi errors with UAV clearing
 	UINT clear[4] = { 0,0,0,0 };
 	for (int i = 0; i < 2; ++i)
 	{
 		const UAV& uav = mRenderer.GetUAV(UAVTemporalResolveOutputs[i]);
-
-		ID3D12Resource* pRsc[3] = 
+		std::vector<ID3D12Resource*> pRsc = 
 		{
 			mRenderer.GetTextureResource(TexRadiance[i])
 			, mRenderer.GetTextureResource(TexVariance[i])
 			, mRenderer.GetTextureResource(TexSampleCount[i])
 		};
-		for (int rsc = 0; rsc < 3; ++rsc)
+		for (int rsc = 0; rsc < pRsc.size(); ++rsc)
 		{
 			pCmd->ClearUnorderedAccessViewUint(uav.GetGPUDescHandle(rsc), uav.GetCPUDescHandle(rsc), pRsc[rsc], clear, 0, nullptr);
-
 		}
-		
+	}
+
+	{
+		const UAV& uav = mRenderer.GetUAV(UAVReprojectPassOutputs[0]);
+		pCmd->ClearUnorderedAccessViewUint(uav.GetGPUDescHandle(), uav.GetCPUDescHandle(), mRenderer.GetTextureResource(TexReprojectedRadiance), clear, 0, nullptr);
 	}
 }
 
