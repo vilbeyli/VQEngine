@@ -52,9 +52,14 @@ using namespace VQSystemInfo;
 	#define ENABLE_VALIDATION_LAYER 0
 #endif
 
+// initialize statics
 std::string VQRenderer::ShaderSourceFileDirectory = "Shaders";
 std::string VQRenderer::PSOCacheDirectory    = "Cache/PSOs";
+#if _DEBUG
+std::string VQRenderer::ShaderCacheDirectory = "Cache/Shaders/Debug";
+#else
 std::string VQRenderer::ShaderCacheDirectory = "Cache/Shaders";
+#endif
 
 const std::string_view& VQRenderer::DXGIFormatAsString(DXGI_FORMAT format)
 {

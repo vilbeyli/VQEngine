@@ -43,12 +43,13 @@ static const std::unordered_map<EShaderStage, const char*> DEFAULT_SHADER_ENTRY_
 ID3DInclude* const SHADER_INCLUDE_HANDLER = D3D_COMPILE_STANDARD_FILE_INCLUDE; // use default include handler for using #include in shader files
 
 #if defined( _DEBUG ) || defined ( FORCE_DEBUG )
-const UINT SHADER_COMPILE_FLAGS = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION | D3DCOMPILE_DEBUG_NAME_FOR_BINARY;
+const UINT SHADER_COMPILE_FLAGS = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_DEBUG | D3DCOMPILE_DEBUG_NAME_FOR_BINARY;
 #else
-const UINT SHADER_COMPILE_FLAGS = D3DCOMPILE_ENABLE_STRICTNESS;
+// strict IEEE floating point rules -- can disable some optimizations
+const UINT SHADER_COMPILE_FLAGS = D3DCOMPILE_OPTIMIZATION_LEVEL3;
 #endif
 
-static std::unordered_map <EShaderStage, std::string> SHADER_STAGE_STRING_LOOKUP =
+static const std::unordered_map <EShaderStage, std::string> SHADER_STAGE_STRING_LOOKUP =
 {
 	{EShaderStage::VS, "VS"},
 	{EShaderStage::GS, "GS"},
@@ -56,6 +57,32 @@ static std::unordered_map <EShaderStage, std::string> SHADER_STAGE_STRING_LOOKUP
 	{EShaderStage::HS, "HS"},
 	{EShaderStage::PS, "PS"},
 	{EShaderStage::CS, "CS"}
+};
+
+// --------------------------------------------------------------------------------
+// List of DXC compiler arguments for backwards compatibility 
+// --------------------------------------------------------------------------------
+static const std::unordered_map<UINT, LPCWSTR> D3DCompilerFlagCompatiblityLookup =
+{
+	 { D3DCOMPILE_DEBUG                         , DXC_ARG_DEBUG }
+	,{ D3DCOMPILE_SKIP_VALIDATION               , DXC_ARG_SKIP_VALIDATION }
+	,{ D3DCOMPILE_SKIP_OPTIMIZATION             , DXC_ARG_SKIP_OPTIMIZATIONS }
+	,{ D3DCOMPILE_PACK_MATRIX_ROW_MAJOR         , DXC_ARG_PACK_MATRIX_ROW_MAJOR }
+	,{ D3DCOMPILE_PACK_MATRIX_COLUMN_MAJOR      , DXC_ARG_PACK_MATRIX_COLUMN_MAJOR }
+	,{ D3DCOMPILE_AVOID_FLOW_CONTROL            , DXC_ARG_AVOID_FLOW_CONTROL }
+	,{ D3DCOMPILE_PREFER_FLOW_CONTROL           , DXC_ARG_PREFER_FLOW_CONTROL }
+	,{ D3DCOMPILE_ENABLE_STRICTNESS             , DXC_ARG_ENABLE_STRICTNESS }
+	,{ D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY, DXC_ARG_ENABLE_BACKWARDS_COMPATIBILITY }
+	,{ D3DCOMPILE_IEEE_STRICTNESS               , DXC_ARG_IEEE_STRICTNESS }
+	,{ D3DCOMPILE_OPTIMIZATION_LEVEL0           , DXC_ARG_OPTIMIZATION_LEVEL0 }
+	,{ D3DCOMPILE_OPTIMIZATION_LEVEL1           , DXC_ARG_OPTIMIZATION_LEVEL1 }
+	,{ D3DCOMPILE_OPTIMIZATION_LEVEL2           , DXC_ARG_OPTIMIZATION_LEVEL2 }
+	,{ D3DCOMPILE_OPTIMIZATION_LEVEL3           , DXC_ARG_OPTIMIZATION_LEVEL3 }
+	,{ D3DCOMPILE_WARNINGS_ARE_ERRORS           , DXC_ARG_WARNINGS_ARE_ERRORS }
+	,{ D3DCOMPILE_RESOURCES_MAY_ALIAS           , DXC_ARG_RESOURCES_MAY_ALIAS }
+	,{ D3DCOMPILE_ALL_RESOURCES_BOUND           , DXC_ARG_ALL_RESOURCES_BOUND }
+	,{ D3DCOMPILE_DEBUG_NAME_FOR_SOURCE         , DXC_ARG_DEBUG_NAME_FOR_SOURCE }
+	,{ D3DCOMPILE_DEBUG_NAME_FOR_BINARY         , DXC_ARG_DEBUG_NAME_FOR_BINARY }
 };
 
 
@@ -313,12 +340,19 @@ Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompil
 		Source.Encoding = DXC_CP_ACP;  // Assume BOM says UTF8 or UTF16 or this is ANSI text.
 		
 		// build args: support compile flags from D3DCompile
-		UINT CompileFlags = 0; // TODO
-		if (CompileFlags & D3DCOMPILE_DEBUG)                      ppArgs.push_back(L"-Zi");
-		if (CompileFlags & D3DCOMPILE_OPTIMIZATION_LEVEL0)        ppArgs.push_back(L"-O0");
-		if (CompileFlags & D3DCOMPILE_SKIP_OPTIMIZATION)          ppArgs.push_back(L"-0d");
-		if (CompileFlags & D3DCOMPILE_DEBUG_NAME_FOR_SOURCE)      ppArgs.push_back(L"-Zss");
-		else if (CompileFlags & D3DCOMPILE_DEBUG_NAME_FOR_BINARY) ppArgs.push_back(L"-Zsb");
+		UINT CompileFlags = SHADER_COMPILE_FLAGS;
+		for (const auto& prFlag : D3DCompilerFlagCompatiblityLookup)
+		{
+			if (CompileFlags & prFlag.first)
+			{
+				ppArgs.push_back(prFlag.second);
+				if (prFlag.first == D3DCOMPILE_DEBUG)
+				{
+					ppArgs.push_back(L"-Qembed_debug");
+				}
+			}
+		}
+
 
 		// build args: defines
 		for (const std::wstring& unicodeDefineArg : unicodeDefineArgs)
