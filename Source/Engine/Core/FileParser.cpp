@@ -53,7 +53,8 @@ static std::pair<std::string, std::string> ParseLineINI(const std::string& iniLi
 
 static std::unordered_map<std::string, EDisplayMode> S_LOOKUP_STR_TO_DISPLAYMODE =
 {
-	  { "Fullscreen"           , EDisplayMode::EXCLUSIVE_FULLSCREEN   }
+	  //{ "Fullscreen"           , EDisplayMode::EXCLUSIVE_FULLSCREEN   }
+	  { "Fullscreen"           , EDisplayMode::BORDERLESS_FULLSCREEN  }
 	, { "Borderless"           , EDisplayMode::BORDERLESS_FULLSCREEN  }
 	, { "BorderlessFullscreen" , EDisplayMode::BORDERLESS_FULLSCREEN  }
 	, { "BorderlessWindowed"   , EDisplayMode::BORDERLESS_FULLSCREEN  }
