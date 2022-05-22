@@ -1573,7 +1573,7 @@ void VQRenderer::LoadDefaultResources()
 		desc.pData = texture.data();
 		TextureID texID = this->CreateTexture(desc);
 		mLookup_ProceduralTextureIDs[EProceduralTextures::CHECKERBOARD] = texID;
-		mLookup_ProceduralTextureSRVs[EProceduralTextures::CHECKERBOARD] = this->CreateAndInitializeSRV(texID);
+		mLookup_ProceduralTextureSRVs[EProceduralTextures::CHECKERBOARD] = this->AllocateAndInitializeSRV(texID);
 	}
 	{
 		desc.TexName = "Checkerboard_Gray";
@@ -1581,7 +1581,7 @@ void VQRenderer::LoadDefaultResources()
 		desc.pData = texture.data();
 		TextureID texID = this->CreateTexture(desc);
 		mLookup_ProceduralTextureIDs[EProceduralTextures::CHECKERBOARD_GRAYSCALE] = texID;
-		mLookup_ProceduralTextureSRVs[EProceduralTextures::CHECKERBOARD_GRAYSCALE] = this->CreateAndInitializeSRV(texID);
+		mLookup_ProceduralTextureSRVs[EProceduralTextures::CHECKERBOARD_GRAYSCALE] = this->AllocateAndInitializeSRV(texID);
 	}
 	{
 		desc.TexName = "IBL_BRDF_Integration";
@@ -1594,7 +1594,7 @@ void VQRenderer::LoadDefaultResources()
 
 		TextureID texID = this->CreateTexture(desc);
 		mLookup_ProceduralTextureIDs[EProceduralTextures::IBL_BRDF_INTEGRATION_LUT] = texID;
-		mLookup_ProceduralTextureSRVs[EProceduralTextures::IBL_BRDF_INTEGRATION_LUT] = this->CreateAndInitializeSRV(texID);
+		mLookup_ProceduralTextureSRVs[EProceduralTextures::IBL_BRDF_INTEGRATION_LUT] = this->AllocateAndInitializeSRV(texID);
 	}
 }
 void VQRenderer::UploadVertexAndIndexBufferHeaps()

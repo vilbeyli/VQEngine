@@ -266,7 +266,7 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 
 	// HDR map
 	env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(desc.FilePath.c_str(), true);
-	env.SRV_HDREnvironment = mRenderer.CreateAndInitializeSRV(env.Tex_HDREnvironment);
+	env.SRV_HDREnvironment = mRenderer.AllocateAndInitializeSRV(env.Tex_HDREnvironment);
 	env.MaxContentLightLevel = static_cast<int>(desc.MaxContentLightLevel);
 
 	// HDR Map Downsampled 
@@ -313,26 +313,26 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 	const int& NUM_MIPS = tdesc.d3d12Desc.MipLevels;
 
 	// Create Irradiance Map SRVs 
-	env.SRV_IrradianceDiff = mRenderer.CreateSRV();
-	env.SRV_IrradianceSpec = mRenderer.CreateSRV();
-	env.SRV_BlurTemp = mRenderer.CreateSRV();
+	env.SRV_IrradianceDiff = mRenderer.AllocateSRV();
+	env.SRV_IrradianceSpec = mRenderer.AllocateSRV();
+	env.SRV_BlurTemp = mRenderer.AllocateSRV();
 	mRenderer.InitializeSRV(env.SRV_IrradianceDiff, 0, env.Tex_IrradianceDiff, false, true);
 	mRenderer.InitializeSRV(env.SRV_IrradianceSpec, 0, env.Tex_IrradianceSpec, false, true);
 	mRenderer.InitializeSRV(env.SRV_BlurTemp, 0, env.Tex_BlurTemp);
 	for (int face = 0; face < 6; ++face)
 	{
-		env.SRV_IrradianceDiffFaces[face] = mRenderer.CreateSRV();
+		env.SRV_IrradianceDiffFaces[face] = mRenderer.AllocateSRV();
 		mRenderer.InitializeSRV(env.SRV_IrradianceDiffFaces[face], face, env.Tex_IrradianceDiff, false, false);
 	}
-	env.SRV_IrradianceDiffBlurred = mRenderer.CreateSRV();
+	env.SRV_IrradianceDiffBlurred = mRenderer.AllocateSRV();
 	mRenderer.InitializeSRV(env.SRV_IrradianceDiffBlurred, 0, env.Tex_IrradianceDiffBlurred, false, true);
 
 
 	// Create Irradiance Map RTVs & UAVs
-	env.RTV_IrradianceDiff = mRenderer.CreateRTV(6);
-	env.RTV_IrradianceSpec = mRenderer.CreateRTV(6 * NUM_MIPS);
-	env.UAV_IrradianceDiffBlurred = mRenderer.CreateUAV(6);
-	env.UAV_BlurTemp = mRenderer.CreateUAV();
+	env.RTV_IrradianceDiff = mRenderer.AllocateRTV(6);
+	env.RTV_IrradianceSpec = mRenderer.AllocateRTV(6 * NUM_MIPS);
+	env.UAV_IrradianceDiffBlurred = mRenderer.AllocateUAV(6);
+	env.UAV_BlurTemp = mRenderer.AllocateUAV();
 	for (int face = 0; face < 6; ++face)
 	{
 		constexpr int MIP_LEVEL = 0;
@@ -695,7 +695,7 @@ void VQEngine::ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, SRV_ID
 	mRenderer.GetTextureDimensions(TexBRDFLUT, W, H);
 
 	// Create & Initialize a UAV for the LUT 
-	UAV_ID uavBRDFLUT_ID = mRenderer.CreateUAV();
+	UAV_ID uavBRDFLUT_ID = mRenderer.AllocateUAV();
 	mRenderer.InitializeUAV(uavBRDFLUT_ID, 0, TexBRDFLUT);
 	const UAV& uavBRDFLUT = mRenderer.GetUAV(uavBRDFLUT_ID);
 

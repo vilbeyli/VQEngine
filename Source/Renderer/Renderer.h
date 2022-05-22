@@ -177,12 +177,12 @@ public:
 	void                         UploadVertexAndIndexBufferHeaps();
 
 	// Allocates a ResourceView from the respective heap and returns a unique identifier.
-	SRV_ID                       CreateSRV(uint NumDescriptors = 1); // TODO: Rename to Alloc**V()
-	DSV_ID                       CreateDSV(uint NumDescriptors = 1); // TODO: Rename to Alloc**V()
-	RTV_ID                       CreateRTV(uint NumDescriptors = 1); // TODO: Rename to Alloc**V()
-	UAV_ID                       CreateUAV(uint NumDescriptors = 1); // TODO: Rename to Alloc**V()
-	SRV_ID                       CreateAndInitializeSRV(TextureID texID);
-	DSV_ID                       CreateAndInitializeDSV(TextureID texID);
+	SRV_ID                       AllocateSRV(uint NumDescriptors = 1);
+	DSV_ID                       AllocateDSV(uint NumDescriptors = 1);
+	RTV_ID                       AllocateRTV(uint NumDescriptors = 1);
+	UAV_ID                       AllocateUAV(uint NumDescriptors = 1);
+	SRV_ID                       AllocateAndInitializeSRV(TextureID texID);
+	DSV_ID                       AllocateAndInitializeDSV(TextureID texID);
 
 	// Initializes a ResourceView from given texture and the specified heap index
 	void                         InitializeDSV(DSV_ID dsvID, uint heapIndex, TextureID texID, int ArraySlice = 0);

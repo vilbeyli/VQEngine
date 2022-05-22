@@ -709,7 +709,7 @@ TextureID VQRenderer::AddTexture_ThreadSafe(Texture&& tex)
 // RESOURCE VIEW CREATION
 //
 // -----------------------------------------------------------------------------------------------------------------
-SRV_ID VQRenderer::CreateAndInitializeSRV(TextureID texID)
+SRV_ID VQRenderer::AllocateAndInitializeSRV(TextureID texID)
 {
 	SRV_ID Id = INVALID_ID;
 	CBV_SRV_UAV SRV = {};
@@ -731,7 +731,7 @@ SRV_ID VQRenderer::CreateAndInitializeSRV(TextureID texID)
 
 	return Id;
 }
-DSV_ID VQRenderer::CreateAndInitializeDSV(TextureID texID)
+DSV_ID VQRenderer::AllocateAndInitializeDSV(TextureID texID)
 {
 	assert(mTextures.find(texID) != mTextures.end());
 
@@ -749,7 +749,7 @@ DSV_ID VQRenderer::CreateAndInitializeDSV(TextureID texID)
 }
 
 
-DSV_ID VQRenderer::CreateDSV(uint NumDescriptors /*= 1*/)
+DSV_ID VQRenderer::AllocateDSV(uint NumDescriptors /*= 1*/)
 {
 	DSV dsv = {};
 	DSV_ID Id = INVALID_ID;
@@ -762,7 +762,7 @@ DSV_ID VQRenderer::CreateDSV(uint NumDescriptors /*= 1*/)
 
 	return Id;
 }
-RTV_ID VQRenderer::CreateRTV(uint NumDescriptors /*= 1*/)
+RTV_ID VQRenderer::AllocateRTV(uint NumDescriptors /*= 1*/)
 {
 	RTV rtv = {};
 	RTV_ID Id = INVALID_ID;
@@ -775,7 +775,7 @@ RTV_ID VQRenderer::CreateRTV(uint NumDescriptors /*= 1*/)
 
 	return Id;
 }
-SRV_ID VQRenderer::CreateSRV(uint NumDescriptors)
+SRV_ID VQRenderer::AllocateSRV(uint NumDescriptors)
 {
 	CBV_SRV_UAV srv = {};
 	SRV_ID Id = INVALID_ID;
@@ -788,7 +788,7 @@ SRV_ID VQRenderer::CreateSRV(uint NumDescriptors)
 
 	return Id;
 }
-UAV_ID VQRenderer::CreateUAV(uint NumDescriptors)
+UAV_ID VQRenderer::AllocateUAV(uint NumDescriptors)
 {
 	CBV_SRV_UAV uav = {};
 	UAV_ID Id = INVALID_ID;

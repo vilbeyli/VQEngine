@@ -1020,13 +1020,13 @@ void ScreenSpaceReflectionsPass::AllocateResourceViews()
 {
 	for (size_t i = 0; i < 2; i++)
 	{
-		SRVScreenSpaceReflectionOutput[i] = mRenderer.CreateSRV();
+		SRVScreenSpaceReflectionOutput[i] = mRenderer.AllocateSRV();
 		//==============================ClassifyTiles==========================================
 		{
 			const UINT srvCount = 4;
 			const UINT uavCount = 5;
-			SRVClassifyTilesInputs[i] = mRenderer.CreateSRV(srvCount);
-			UAVClassifyTilesOutputs[i] = mRenderer.CreateUAV(uavCount);
+			SRVClassifyTilesInputs[i] = mRenderer.AllocateSRV(srvCount);
+			UAVClassifyTilesOutputs[i] = mRenderer.AllocateUAV(uavCount);
 			
 			//m_pResourceViewHeaps->AllocSamplerDescriptor(1, &shaderpass.descriptorTables_Sampler[i]);
 		}
@@ -1034,14 +1034,14 @@ void ScreenSpaceReflectionsPass::AllocateResourceViews()
 		{
 			const UINT srvCount = 0;
 			const UINT uavCount = 2;
-			UAVPrepareIndirectArgsPass[i] = mRenderer.CreateUAV(uavCount);
+			UAVPrepareIndirectArgsPass[i] = mRenderer.AllocateUAV(uavCount);
 		}
 		//==============================Intersection==========================================
 		{
 			const UINT srvCount = 6;
 			const UINT uavCount = 2;
-			SRVIntersectionInputs[i] = mRenderer.CreateSRV(srvCount);
-			UAVIntersectionOutputs[i] = mRenderer.CreateUAV(uavCount);
+			SRVIntersectionInputs[i] = mRenderer.AllocateSRV(srvCount);
+			UAVIntersectionOutputs[i] = mRenderer.AllocateUAV(uavCount);
 
 			//m_pResourceViewHeaps->AllocSamplerDescriptor(1, &shaderpass.descriptorTables_Sampler[i]);
 		}
@@ -1049,29 +1049,29 @@ void ScreenSpaceReflectionsPass::AllocateResourceViews()
 		{
 			const UINT srvCount = 7;
 			const UINT uavCount = 3;
-			SRVTemporalResolveInputs[i] = mRenderer.CreateSRV(srvCount);
-			UAVTemporalResolveOutputs[i] = mRenderer.CreateUAV(uavCount);
+			SRVTemporalResolveInputs[i] = mRenderer.AllocateSRV(srvCount);
+			UAVTemporalResolveOutputs[i] = mRenderer.AllocateUAV(uavCount);
 		}
 		//==============================Prefilter==========================================
 		{
 			const UINT srvCount = 8;
 			const UINT uavCount = 3;
-			SRVPrefilterPassInputs[i] = mRenderer.CreateSRV(srvCount);
-			UAVPrefilterPassOutputs[i] = mRenderer.CreateUAV(uavCount);
+			SRVPrefilterPassInputs[i] = mRenderer.AllocateSRV(srvCount);
+			UAVPrefilterPassOutputs[i] = mRenderer.AllocateUAV(uavCount);
 		}
 		//==============================Reproject==========================================
 		{
 			const UINT srvCount = 14;
 			const UINT uavCount = 4;
-			SRVReprojectPassInputs[i] = mRenderer.CreateSRV(srvCount);
-			UAVReprojectPassOutputs[i] = mRenderer.CreateUAV(uavCount);
+			SRVReprojectPassInputs[i] = mRenderer.AllocateSRV(srvCount);
+			UAVReprojectPassOutputs[i] = mRenderer.AllocateUAV(uavCount);
 		}
 		//==============================PrepareBlueNoise=============================================
 		{
 			const UINT srvCount = 3;
 			const UINT uavCount = 1;
-			SRVBlueNoisePassInputs[i] = mRenderer.CreateSRV(srvCount);
-			UAVBlueNoisePassOutputs[i] = mRenderer.CreateUAV(uavCount);
+			SRVBlueNoisePassInputs[i] = mRenderer.AllocateSRV(srvCount);
+			UAVBlueNoisePassOutputs[i] = mRenderer.AllocateUAV(uavCount);
 		}
 	}
 }

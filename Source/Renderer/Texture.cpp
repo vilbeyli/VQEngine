@@ -295,7 +295,7 @@ void Texture::InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayVie
     {
         if (!pSRVDesc && bBufferSRV)
         {
-            Log::Error("CreateSRV() for RWBuffer cannot have null SRVDescriptor, specify a SRV "
+            Log::Error("AllocateSRV() for RWBuffer cannot have null SRVDescriptor, specify a SRV "
                 "format for a buffer (as it has no format from the pResource's point of view).");
             return;
         }

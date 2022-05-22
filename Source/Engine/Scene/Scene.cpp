@@ -115,7 +115,7 @@ MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 	Material& mat = mMaterials.at(id);
 	if (mat.SRVMaterialMaps == INVALID_ID)
 	{
-		mat.SRVMaterialMaps = mRenderer.CreateSRV(NUM_MATERIAL_TEXTURE_MAP_BINDINGS);
+		mat.SRVMaterialMaps = mRenderer.AllocateSRV(NUM_MATERIAL_TEXTURE_MAP_BINDINGS);
 		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 0, INVALID_ID);
 		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 1, INVALID_ID);
 		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 2, INVALID_ID);
