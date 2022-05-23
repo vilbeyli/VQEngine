@@ -37,11 +37,13 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
 - HDR Environment Maps from [HDRI Haven](https://hdrihaven.com/)
 - Reflections
   - [FidelityFX - Stochastic Screen Space Reflections (SSSR)](https://github.com/GPUOpen-Effects/FidelityFX-SSSR)
+  - [FidelityFX - Denoiser (DNSR)](https://github.com/GPUOpen-Effects/FidelityFX-Denoiser)
 - Ambient Occlusion
   - [FidelityFX - Combined Adaptive Compute Ambient Occlusion (CACAO)](https://github.com/GPUOpen-Effects/FidelityFX-CACAO)
 - Anti Aliasing
   - MSAA x4
 - PostProcess
+  - [FidelityFX - Single Pass Downsampler (SPD)]((https://github.com/GPUOpen-Effects/FidelityFX-SPD/))
   - Tonemapping & Gamma correction
   - [FidelityFX - Contrast Adaptive Sharpening (CAS)](https://github.com/GPUOpen-Effects/FidelityFX-CAS/)
   - [FidelityFX - Super Resolution 1.0](https://github.com/GPUOpen-Effects/FidelityFX-FSR)
