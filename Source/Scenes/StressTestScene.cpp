@@ -175,9 +175,9 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 	//
 	
 	// small cubes
-	constexpr int DIMENSION_X = 32;
+	constexpr int DIMENSION_X = 64;
 	constexpr int DIMENSION_Y = 4;
-	constexpr int DIMENSION_Z = 32;
+	constexpr int DIMENSION_Z = 48;
 
 	int NumObjects = 0;
 	constexpr float distance = 10.0f;
