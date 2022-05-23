@@ -26,6 +26,7 @@ struct FMeshRenderCommandBase
 {
 	MeshID meshID = INVALID_ID;
 	DirectX::XMMATRIX matWorldTransformation;
+	DirectX::XMMATRIX matWorldTransformationPrev;
 };
 struct FMeshRenderCommand : public FMeshRenderCommandBase
 {

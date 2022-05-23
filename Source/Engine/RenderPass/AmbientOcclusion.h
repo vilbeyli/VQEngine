@@ -28,17 +28,19 @@
 
 struct ID3D12Resource;
 struct ID3D12GraphicsCommandList;
-struct FAmbientOcclusionPass : public IRenderPass
+class AmbientOcclusionPass : public RenderPassBase
 {
+public:
 	enum EMethod
 	{
 		FFX_CACAO = 0,
+		// RayTracedAO,
 		// TODO: do we want to bring back vq-dx11 ssao?
 
 		NUM_AMBIENT_OCCLUSION_METHODS
 	};
 
-	struct FResourceParameters
+	struct FResourceParameters : public IRenderPassResourceCollection
 	{
 		ID3D12Resource* pRscNormalBuffer = nullptr;
 		ID3D12Resource* pRscDepthBuffer  = nullptr;
@@ -47,7 +49,7 @@ struct FAmbientOcclusionPass : public IRenderPass
 		DXGI_FORMAT     FmtDepthBuffer  = DXGI_FORMAT_UNKNOWN;
 		DXGI_FORMAT     FmtOutput       = DXGI_FORMAT_UNKNOWN;
 	};
-	struct FDrawParameters
+	struct FDrawParameters : public IRenderPassDrawParameters
 	{
 		ID3D12GraphicsCommandList* pCmd = nullptr;
 		DirectX::XMFLOAT4X4 matProj;
@@ -56,18 +58,23 @@ struct FAmbientOcclusionPass : public IRenderPass
 
 	//------------------------------------------------------
 
-	FAmbientOcclusionPass(EMethod InMethod);
+	AmbientOcclusionPass(VQRenderer& Renderer, EMethod InMethod);
+	AmbientOcclusionPass() = delete;
+	AmbientOcclusionPass(const AmbientOcclusionPass&) = delete;
+	virtual ~AmbientOcclusionPass() override;
 
-	bool Initialize(ID3D12Device* pDevice) override;
-	void Exit() override;
+	virtual bool Initialize() override;
+	virtual void Destroy() override;
+	virtual void OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const IRenderPassResourceCollection* pRscParameters = nullptr) override;
+	virtual void OnDestroyWindowSizeDependentResources() override;
+	virtual void RecordCommands(const IRenderPassDrawParameters* pDrawParameters = nullptr) override;
 
-	void OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const void* pRscParameters = nullptr) override;
-	void OnDestroyWindowSizeDependentResources() override;
 
-	void RecordCommands(const void* pDrawParameters = nullptr) override;
+	virtual std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() override;
 
-	//------------------------------------------------------
+	inline EMethod GetMethod() const { return this->Method; }
 
+private:
 	EMethod Method;
 	FFX_CACAO_Settings AOSettings;
 };

@@ -19,23 +19,24 @@
 
 #include "RenderPass.h"
 
-
-struct FDepthPrePass : public IRenderPass
+class DepthPrePass : public RenderPassBase
 {
-	struct FDrawParameters
-	{
+public:
+	struct FResourceCollection : public IRenderPassResourceCollection {};
+	struct FDrawParameters : public IRenderPassDrawParameters{};
 
-	};
+	DepthPrePass(VQRenderer& Renderer);
+	DepthPrePass() = delete;
+	virtual ~DepthPrePass() override {}
 
+	virtual bool Initialize() override;
+	virtual void Destroy() override;
+	virtual void OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const IRenderPassResourceCollection* pRscParameters = nullptr) override;
+	virtual void OnDestroyWindowSizeDependentResources() override;
+	virtual void RecordCommands(const IRenderPassDrawParameters* pDrawParameters = nullptr) override;
 
-	FDepthPrePass();
+	virtual std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() override;
+private:
 
-	bool Initialize(ID3D12Device* pDevice) override;
-	void Exit() override;
-
-	void OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const void* pRscParameters = nullptr) override;
-	void OnDestroyWindowSizeDependentResources() override;
-
-	void RecordCommands(const void* pDrawParameters = nullptr) override;
 };
 

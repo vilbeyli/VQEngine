@@ -151,7 +151,7 @@ set CMAKE_ASSIMP_PARAMETERS=!CMAKE_ASSIMP_PARAMETERS! -DASSIMP_INSTALL=OFF
 set CMAKE_ASSIMP_PARAMETERS=!CMAKE_ASSIMP_PARAMETERS! !ASSIMP_IMPORT_FORMATS!
 
 
-cmake ..\.. -G "Visual Studio 16 2019" -A x64 !CMAKE_ASSIMP_PARAMETERS!
+cmake ..\.. -G "Visual Studio 17 2022" -A x64 !CMAKE_ASSIMP_PARAMETERS!
 
 if !errorlevel! EQU 0 (
     echo [VQBuild] Success!
@@ -160,18 +160,22 @@ if !errorlevel! EQU 0 (
     )
 ) else (
     echo.
-    echo [VQBuild] cmake VS2019 failed, retrying with VS 2017...
+    echo [VQBuild] cmake VS2022 failed, retrying with VS2019...
     echo [VQBuild] removing %~dp0SolutionFiles ...
     rmdir /S /Q  %~dp0SolutionFiles
-    cmake ..\.. -G "Visual Studio 15 2017" -A x64 !CMAKE_ASSIMP_PARAMETERS!
-    if !errorlevel! NEQ 0 (
-        echo [VQBuild] cmake VS2017 failed, retrying without specifying VS version...
-        echo [VQBuild] removing %~dp0SolutionFiles ...
+    cmake ..\.. -G "Visual Studio 16 2019" -A x64 !CMAKE_ASSIMP_PARAMETERS!
+    if !errorlevel! NEQ 0 (    
+        echo [VQBuild] cmake VS2019 failed, retrying with VS2017...
         rmdir /S /Q  %~dp0SolutionFiles
-        cmake ..\..
+        cmake ..\.. -G "Visual Studio 15 2017" -A x64 !CMAKE_ASSIMP_PARAMETERS!
         if !errorlevel! NEQ 0 (
-            echo [VQBuild] GenerateSolutions.bat: Error with CMake. No solution file generated after retrying. 
-            exit /b -1
+            echo [VQBuild] removing %~dp0SolutionFiles ...
+            rmdir /S /Q  %~dp0SolutionFiles
+            cmake ..\..
+            if !errorlevel! NEQ 0 (
+                echo [VQBuild] GenerateSolutions.bat: Error with CMake. No solution file generated after retrying. 
+                exit /b -1
+            )
         )
     )
     echo. 

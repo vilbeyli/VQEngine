@@ -18,6 +18,9 @@
 
 #pragma once
 
+#include <dxgiformat.h>
+#include <unordered_map>
+
 struct IDXGIFactory6;
 struct ID3D12Device4;
 struct ID3D12Device;
@@ -26,7 +29,7 @@ struct IDXGIAdapter;
 struct FDeviceCreateDesc
 {
 	bool bEnableDebugLayer = false;
-	bool bEnableValidationLayer = false;
+	bool bEnableGPUValidationLayer = false;
 	IDXGIFactory6* pFactory = nullptr;
 };
 
@@ -37,7 +40,10 @@ struct FDeviceCapabilities
 	bool bSupportsFP16 = false;
 	bool bSupportsMeshShaders = false;
 	bool bSupportsSamplerFeedback = false;
+	bool bSupportsTypedUAVLoads = false;
 	unsigned SupportedMaxMultiSampleQualityLevel = 0;
+
+	std::unordered_map<DXGI_FORMAT, bool> TypedUAVLoadFormatSupportMap;
 };
 
 class Device 

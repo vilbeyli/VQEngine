@@ -4,7 +4,7 @@
 
     <!-- Tile_BlackHerringbone -->
     <Material>
-        <Name>Tile_BlackHerringbone</Name>
+        <Name>Black_herringbone_tiles_01</Name>
           <DiffuseMap>Data/Textures/PBR/Black_herringbone_tiles_01/Black_herringbone_tiles_01_2K_Base_Color.png</DiffuseMap>
            <NormalMap>Data/Textures/PBR/Black_herringbone_tiles_01/Black_herringbone_tiles_01_2K_Normal.png</NormalMap>
         <RoughnessMap>Data/Textures/PBR/Black_herringbone_tiles_01/Black_herringbone_tiles_01_2K_Roughness.png</RoughnessMap>

@@ -43,6 +43,8 @@ struct FStartupParameters
 	uint8 bOverrideGFXSetting_bAA                         : 1;
 	uint8 bOverrideGFXSetting_bMaxFrameRate               : 1;
 	uint8 bOverrideGFXSetting_bHDR                        : 1;
+	uint8 bOverrideGFXSetting_EnvironmentMapResolution    : 1;
+	uint8 bOverrideGFXSettings_Reflections                : 1;
 
 	uint8 bOverrideENGSetting_MainWindowHeight            : 1;
 	uint8 bOverrideENGSetting_MainWindowWidth             : 1;

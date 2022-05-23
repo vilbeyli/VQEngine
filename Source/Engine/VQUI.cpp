@@ -127,7 +127,7 @@ void VQEngine::InitializeUI(HWND hwnd)
 	rDescs.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height, 1, 1);
 	rDescs.pData = pixels;
 	TextureID texUI = mRenderer.CreateTexture(rDescs);
-	SRV_ID srvUI = mRenderer.CreateAndInitializeSRV(texUI);
+	SRV_ID srvUI = mRenderer.AllocateAndInitializeSRV(texUI);
 
 	// Tell ImGUI what the image view is
 	//
@@ -210,7 +210,7 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 		if (mUIState.bWindowVisible_KeyMappings)           DrawKeyMappingsWindow();
 		if (mUIState.bWindowVisible_SceneControls)         DrawSceneControlsWindow(mpScene->GetActiveCameraIndex(), mpScene->GetActiveEnvironmentMapPresetIndex(), SceneParams);
 		if (mUIState.bWindowVisible_Profiler)              DrawProfilerWindow(mpScene->GetSceneRenderStats(FRAME_DATA_INDEX), dt);
-		if (mUIState.bWindowVisible_DebugPanel)            DrawDebugPanelWindow(SceneParams);
+		if (mUIState.bWindowVisible_DebugPanel)            DrawDebugPanelWindow(SceneParams, PPParams);
 		if (mUIState.bWindowVisible_GraphicsSettingsPanel) DrawGraphicsSettingsWindow(SceneParams, PPParams);
 	}
 
@@ -235,7 +235,7 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 const uint32_t CONTROLS_WINDOW_PADDING_X = 10;
 const uint32_t CONTROLS_WINDOW_PADDING_Y = 10;
 const uint32_t CONTROLS_WINDOW_SIZE_X    = 380;
-const uint32_t CONTROLS_WINDOW_SIZE_Y    = 320;
+const uint32_t CONTROLS_WINDOW_SIZE_Y    = 360;
 //---------------------------------------------
 const uint32_t GFX_WINDOW_PADDING_X      = 10;
 const uint32_t GFX_WINDOW_PADDING_Y      = 10;
@@ -250,18 +250,21 @@ const uint32_t PROFILER_WINDOW_SIZE_Y    = 850;
 const uint32_t DBG_WINDOW_PADDING_X      = 10;
 const uint32_t DBG_WINDOW_PADDING_Y      = 10;
 const uint32_t DBG_WINDOW_SIZE_X         = 330;
-const uint32_t DBG_WINDOW_SIZE_Y         = 150;
+const uint32_t DBG_WINDOW_SIZE_Y         = 180;
 //---------------------------------------------
+
 
 // Dropdown data ----------------------------------------------------------------------------------------------
 const     ImVec4 UI_COLLAPSING_HEADER_COLOR_VALUE = ImVec4(0.0, 0.00, 0.0, 0.7f);
 constexpr size_t NUM_MAX_ENV_MAP_NAMES    = 10;
 constexpr size_t NUM_MAX_LEVEL_NAMES      = 8;
 constexpr size_t NUM_MAX_CAMERA_NAMES     = 10;
+constexpr size_t NUM_MAX_DRAW_MODE_NAMES  = static_cast<size_t>(EDrawMode::NUM_DRAW_MODES);
 constexpr size_t NUM_MAX_FSR_OPTION_NAMES = FPostProcessParameters::FFSR_EASU::EPresets::NUM_FSR_PRESET_OPTIONS;
 static const char* pStrSceneNames [NUM_MAX_LEVEL_NAMES  ] = {};
 static const char* pStrEnvMapNames[NUM_MAX_ENV_MAP_NAMES] = {};
-static const char* pStrCameraNames[NUM_MAX_CAMERA_NAMES ] = {};
+static const char* pStrCameraNames[NUM_MAX_CAMERA_NAMES] = {};
+static const char* pStrDrawModes  [NUM_MAX_DRAW_MODE_NAMES] = {};
 static const char* pStrFSROptionNames[NUM_MAX_FSR_OPTION_NAMES] = {};
 static const char* pStrMaxFrameRateOptionNames[3] = {}; // see Settings.h:FGraphicsSettings
 
@@ -331,6 +334,35 @@ static void InitializeStaticCStringData_GraphicsSettings()
 		pStrMaxFrameRateOptionNames[2] = "Custom";
 		GraphicsSettingsDropdownDataInitialized = true;
 	} 
+}
+static void InitializeStaticCStringData_EDrawMode()
+{
+	static bool EDrawModeDropdownDataInitialized = false;
+	if (!EDrawModeDropdownDataInitialized)
+	{
+		auto fnToStr = [](EDrawMode m) {
+			switch (m)
+			{
+			case EDrawMode::LIT_AND_POSTPROCESSED: return "LIT_AND_POSTPROCESSED";
+			//case EDrawMode::WIREFRAME: return "WIREFRAME";
+			//case EDrawMode::NO_MATERIALS: return "NO_MATERIALS";
+			case EDrawMode::DEPTH: return "DEPTH";
+			case EDrawMode::NORMALS: return "NORMALS";
+			case EDrawMode::ROUGHNESS: return "ROUGHNESS";
+			case EDrawMode::METALLIC: return "METALLIC";
+			case EDrawMode::AO: return "AO";
+			case EDrawMode::ALBEDO: return "ALBEDO";
+			case EDrawMode::REFLECTIONS: return "REFLECTIONS";
+			case EDrawMode::MOTION_VECTORS: return "MOTION_VECTORS";
+			case EDrawMode::NUM_DRAW_MODES: return "NUM_DRAW_MODES";
+			}
+			return "";
+		};
+		for (int i = 0; i < (int)EDrawMode::NUM_DRAW_MODES; ++i)
+			pStrDrawModes[i] = fnToStr((EDrawMode)i);
+		
+		EDrawModeDropdownDataInitialized = true;
+	}
 }
 
 // Dropdown data ----------------------------------------------------------------------------------------------
@@ -430,12 +462,15 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 	ImGui::Text("Help");
 	ImGui::Separator();
 	
-
 	if (ImGui::Button((mUIState.bWindowVisible_KeyMappings ? "Hide Key Mapping" : "Show Key Mapping")))
 	{
 		mUIState.bWindowVisible_KeyMappings = !mUIState.bWindowVisible_KeyMappings;
 	}
 
+	ImGuiSpacing3();
+	
+	ImGui::Text("Windows");
+	ImGui::Separator();
 	ImGui::Checkbox("Show Scene Controls (F1)", &mUIState.bWindowVisible_SceneControls);
 	ImGui::Checkbox("Show Graphics Settings (F3)", &mUIState.bWindowVisible_GraphicsSettingsPanel);
 	ImGui::Checkbox("Show Profiler (F2)", &mUIState.bWindowVisible_Profiler);
@@ -469,6 +504,8 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 		}
 	}
 
+	ImGui::SliderFloat("HDRI Rotation", &SceneRenderParams.fYawSliderValue, 0.0f, 1.0f);
+
 	const float MaxAmbientLighting = this->ShouldRenderHDR(mpWinMain->GetHWND()) ? 150.0f : 2.0f;
 	MathUtil::Clamp(SceneRenderParams.fAmbientLightingFactor, 0.0f, MaxAmbientLighting);
 	ImGui::SliderFloat("Ambient Lighting Factor", &SceneRenderParams.fAmbientLightingFactor, 0.0f, MaxAmbientLighting, "%.3f");
@@ -496,6 +533,15 @@ void VQEngine::DrawKeyMappingsWindow()
 		ImGui::Begin("KEY MAPPINGS", &mUIState.bWindowVisible_KeyMappings);
 
 		ImGui::PushStyleColor(ImGuiCol_Text, ColHeader);
+		ImGui::Text("------------------ UI ----------------------");
+		ImGui::PopStyleColor(1);
+		ImGui::Text("          F1 : Toggle Scene Window");
+		ImGui::Text("          F2 : Toggle Profiler Window");
+		ImGui::Text("          F3 : Toggle Graphics Settings Window");
+		ImGui::Text("          F4 : Toggle Debug Window");
+		ImGui::Text("     Shift+Z : Show/Hide ALL UI windows");
+
+		ImGui::PushStyleColor(ImGuiCol_Text, ColHeader);
 		ImGui::Text("------------------ CAMERA ----------------------");
 		ImGui::PopStyleColor(1);
 		ImGui::Text(" Right Click : Free Camera");
@@ -516,7 +562,6 @@ void VQEngine::DrawKeyMappingsWindow()
 		ImGui::PushStyleColor(ImGuiCol_Text, ColHeader);
 		ImGui::Text("------------------ SCENE -----------------------");
 		ImGui::PopStyleColor(1);
-		ImGui::Text("     Shift+Z : Show/Hide ALL UI windows");
 		ImGui::Text("     Shift+R : Reload level");
 		ImGui::Text("Page Up/Down : Change the HDRI Environment Map");
 		ImGui::Text("         1-4 : Change between available scenes");
@@ -642,21 +687,36 @@ void VQEngine::DrawProfilerWindow(const FSceneStats& FrameStats, float dt)
 	ImGui::End();
 }
 
-void VQEngine::DrawDebugPanelWindow(FSceneRenderParameters& SceneParams)
+void VQEngine::DrawDebugPanelWindow(FSceneRenderParameters& SceneParams, FPostProcessParameters& PPParams)
 {
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
 
-	const uint32_t DBG_WINDOW_POS_X = W - PROFILER_WINDOW_SIZE_X - DBG_WINDOW_SIZE_X - DBG_WINDOW_PADDING_X*2;
+	const uint32_t DBG_WINDOW_POS_X = std::min(W - PROFILER_WINDOW_SIZE_X - DBG_WINDOW_SIZE_X - DBG_WINDOW_PADDING_X*2, GFX_WINDOW_SIZE_X + GFX_WINDOW_PADDING_X + DBG_WINDOW_PADDING_X);
 	const uint32_t DBG_WINDOW_POS_Y = H - DBG_WINDOW_SIZE_Y - DBG_WINDOW_PADDING_Y;
 	ImGui::SetNextWindowPos(ImVec2((float)DBG_WINDOW_POS_X, (float)DBG_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(DBG_WINDOW_SIZE_X, DBG_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
 
+	InitializeStaticCStringData_EDrawMode();
 
 	ImGui::Begin("DEBUG PANEL", &mUIState.bWindowVisible_DebugPanel);
 
 	ImGui::Text("Debug Draw");
 	ImGui::Separator();
+	int iDrawMode = (int)PPParams.eDrawMode;
+	ImGui::Combo("Draw Mode", &iDrawMode, pStrDrawModes, _countof(pStrDrawModes));
+	PPParams.eDrawMode = (EDrawMode)iDrawMode;
+	if (PPParams.eDrawMode == EDrawMode::NORMALS)
+	{
+		bool bUnpackNormals = PPParams.VizParams.iUnpackNormals;
+		ImGui::Checkbox("Unpack Normals", &bUnpackNormals);
+		PPParams.VizParams.iUnpackNormals = bUnpackNormals;
+	}
+	if (PPParams.eDrawMode == EDrawMode::MOTION_VECTORS)
+	{
+		ImGui::SliderFloat("MoVec Intensity", &PPParams.VizParams.fInputStrength, 0.0f, 200.0f);
+	}
+
 	ImGui::Checkbox("Show GameObject Bounding Boxes (Shift+N)", &SceneParams.bDrawGameObjectBoundingBoxes);
 	ImGui::Checkbox("Show Mesh Bounding Boxes (N)", &SceneParams.bDrawMeshBoundingBoxes);
 	ImGui::Checkbox("Show Light Bounding Volumes (L)", &SceneParams.bDrawLightBounds);
@@ -793,12 +853,20 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 		, "FidelityFX CACAO"
 		, ""
 	};
+	static const char* pStrReflectionsLabels[]
+	{
+		  "Off ##0"
+		, "FidelityFX SSSR"
+		//, "Ray Traced" // TODO: enable when ray tracing is added
+		, ""
+	};
 	InitializeStaticCStringData_GraphicsSettings();
 	// static data
 
 
 	int iAALabel = gfx.bAntiAliasing ? 1 : 0;
 	int iSSAOLabel = SceneRenderParams.bScreenSpaceAO ? 1 : 0;
+	int iReflections = gfx.Reflections;
 
 	const uint32_t GFX_WINDOW_POS_X = GFX_WINDOW_PADDING_X;
 	const uint32_t GFX_WINDOW_POS_Y = H - GFX_WINDOW_PADDING_Y*2 - GFX_WINDOW_SIZE_Y;
@@ -868,6 +936,39 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 		{
 			SceneRenderParams.bScreenSpaceAO = iSSAOLabel == 1;
 			Log::Info("AO Changed: %d", SceneRenderParams.bScreenSpaceAO);
+		}
+		int iRefl = gfx.Reflections;
+		if (ImGui::Combo("Reflections", &iRefl, pStrReflectionsLabels, _countof(pStrReflectionsLabels)-1))
+		{
+			gfx.Reflections = static_cast<EReflections>(iRefl);
+			Log::Info("Reflections Changed: %d", gfx.Reflections);
+		}
+		switch (gfx.Reflections)
+		{
+		case EReflections::SCREEN_SPACE_REFLECTIONS__FFX:
+		{
+			FSceneRenderParameters::FFFX_SSSR_UIParameters& FFXParams = SceneRenderParams.FFX_SSSRParameters;
+
+			ImGui::SliderInt("Max Traversal Iterations", &FFXParams.maxTraversalIterations, 0, 256);
+			ImGui::SliderInt("Min Traversal Occupancy", &FFXParams.minTraversalOccupancy, 0, 32);
+			ImGui::SliderInt("Most Detailed Level", &FFXParams.mostDetailedDepthHierarchyMipLevel, 0, 5);
+			ImGui::SliderFloat("Depth Buffer Thickness", &FFXParams.depthBufferThickness, 0.0f, 5.0f);
+			ImGui::SliderFloat("Roughness Threshold", &FFXParams.roughnessThreshold, 0.0f, 1.f);
+			ImGui::SliderFloat("Temporal Stability", &FFXParams.temporalStability, 0.0f, 1.0f);
+			ImGui::SliderFloat("Temporal Variance Threshold", &FFXParams.temporalVarianceThreshold, 0.0f, 0.01f);
+			ImGui::Checkbox("Enable Variance Guided Tracing", &FFXParams.bEnableTemporalVarianceGuidedTracing);
+
+			ImGui::Text("Samples per Quad"); ImGui::SameLine();
+			ImGui::RadioButton("1", &FFXParams.samplesPerQuad, 1); ImGui::SameLine();
+			ImGui::RadioButton("2", &FFXParams.samplesPerQuad, 2); ImGui::SameLine();
+			ImGui::RadioButton("4", &FFXParams.samplesPerQuad, 4);
+
+		}
+		break;
+		case EReflections::RAY_TRACED_REFLECTIONS:
+			break;
+		default:
+			break;
 		}
 	}
 	else

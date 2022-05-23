@@ -24,6 +24,23 @@
 // fwd decl
 struct FUIState;
 
+enum class EDrawMode
+{
+	LIT_AND_POSTPROCESSED = 0,
+	//WIREFRAME,    // TODO: add support
+	//NO_MATERIALS, // TODO: add support
+
+	DEPTH,
+	NORMALS,
+	ROUGHNESS,
+	METALLIC,
+	AO,
+	ALBEDO,
+	REFLECTIONS,
+	MOTION_VECTORS,
+
+	NUM_DRAW_MODES,
+};
 struct FPostProcessParameters
 {
 	struct FTonemapper
@@ -84,6 +101,12 @@ struct FPostProcessParameters
 		int iImageSizeX;
 		int iImageSizeY;
 	};
+	struct FVizualizationParams
+	{
+		int iDrawMode = 0;
+		int iUnpackNormals = 0;
+		float fInputStrength = 100.0f;
+	};
 
 	//-------------------------------------------------------------------------------------------
 	//-------------------------------------------------------------------------------------------
@@ -97,13 +120,15 @@ struct FPostProcessParameters
 	int DisplayResolutionWidth = 0;
 	int DisplayResolutionHeight = 0;
 
-	FTonemapper TonemapperParams;
-	FBlurParams BlurParams;
-	FFFXCAS     FFXCASParams;
-	FFSR_RCAS   FFSR_RCASParams;
-	FFSR_EASU   FFSR_EASUParams;
+	FTonemapper TonemapperParams = {};
+	FBlurParams BlurParams       = {};
+	FFFXCAS     FFXCASParams     = {};
+	FFSR_RCAS   FFSR_RCASParams  = {};
+	FFSR_EASU   FFSR_EASUParams  = {};
+	EDrawMode   eDrawMode = EDrawMode::LIT_AND_POSTPROCESSED;
+	FVizualizationParams VizParams = {};
 
-	bool bEnableCAS;
-	bool bEnableFSR;
-	bool bEnableGaussianBlur;
+	bool bEnableCAS = false;
+	bool bEnableFSR = false;
+	bool bEnableGaussianBlur = false;
 };

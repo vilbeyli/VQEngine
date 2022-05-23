@@ -3,13 +3,13 @@
 setlocal enabledelayedexpansion
 
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
-set SEVEN_ZIP_PATH=%~dp0../Tools/7z.exe
-set WGET_PATH=%~dp0../Tools/wget.exe
-pushd %~dp0
-cd ../Data/Textures/HDRI
-set HDRI_TEXTURES_DESTINATION_PATH=%cd%/
-cd ../PBR
-set PBR_TEXTURES_DESTINATION_PATH=%cd%/
+set SEVEN_ZIP_PATH="%~dp0../Tools/7z.exe"
+set WGET_PATH="%~dp0../Tools/wget.exe"
+pushd "%~dp0"
+cd "../Data/Textures/HDRI"
+set HDRI_TEXTURES_DESTINATION_PATH="%cd%/"
+cd "../PBR"
+set PBR_TEXTURES_DESTINATION_PATH="%cd%/"
 popd
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
 set MAIN_SCREEN_RESOLUTION_Y=0

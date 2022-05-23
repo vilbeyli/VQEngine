@@ -46,4 +46,46 @@
     </Material>
 
 
+    <!-- BLACK -->
+    <Material>
+        <Name>Black_VerySmooth</Name>
+        <Diffuse>0.001 0.001 0.001</Diffuse>
+        <Metalness>0.0</Metalness>
+        <Roughness>0.01</Roughness>
+    </Material>
+    <Material>
+        <Name>Black_VeryRough</Name>
+        <Diffuse>0.001 0.001 0.001</Diffuse>
+        <Metalness>0.0</Metalness>
+        <Roughness>0.90</Roughness>
+    </Material>
+
+    <!-- WHITE -->
+    <Material>
+        <Name>White_VerySmooth</Name>
+        <Diffuse>1 1 1</Diffuse>
+        <Metalness>0.0</Metalness>
+        <Roughness>0.01</Roughness>
+    </Material>
+    <Material>
+        <Name>White_VeryRough</Name>
+        <Diffuse>1 1 1</Diffuse>
+        <Metalness>0.0</Metalness>
+        <Roughness>0.90</Roughness>
+    </Material>
+
+    <!-- DARK GRAY -->
+    <Material>
+        <Name>DarkGray_VerySmooth</Name>
+        <Diffuse>0.1 0.1 0.1</Diffuse>
+        <Metalness>0.0</Metalness>
+        <Roughness>0.01</Roughness>
+    </Material>
+    <Material>
+        <Name>DarkGray_VeryRough</Name>
+        <Diffuse>0.1 0.1 0.1</Diffuse>
+        <Metalness>0.0</Metalness>
+        <Roughness>0.90</Roughness>
+    </Material>
+
 </MetallicMaterials>

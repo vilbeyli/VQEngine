@@ -47,12 +47,27 @@ using MaterialLookup_t = std::unordered_map<MaterialID, Material>;
 struct FPostProcessParameters;
 struct FSceneRenderParameters
 {
+	struct FFFX_SSSR_UIParameters
+	{
+		bool    bEnableTemporalVarianceGuidedTracing = true;
+		int     maxTraversalIterations = 128;
+		int     mostDetailedDepthHierarchyMipLevel = 0;
+		int     minTraversalOccupancy = 4;
+		float   depthBufferThickness = 0.45f;
+		float   roughnessThreshold = 0.2f;
+		float   temporalStability = 0.25f;
+		float   temporalVarianceThreshold = 0.0f;
+		int     samplesPerQuad = 1;
+	};
+
 	bool bDrawLightBounds = false;
 	bool bDrawMeshBoundingBoxes = false;
 	bool bDrawGameObjectBoundingBoxes = false;
 	bool bDrawLightMeshes = true;
+	float fYawSliderValue = 0.0f;
 	float fAmbientLightingFactor = 0.055f;
 	bool bScreenSpaceAO = true;
+	FFFX_SSSR_UIParameters FFX_SSSRParameters = {};
 };
 //--- Pass Parameters ---
 
@@ -60,6 +75,7 @@ struct FSceneView
 {
 	DirectX::XMMATRIX     view;
 	DirectX::XMMATRIX     viewProj;
+	DirectX::XMMATRIX     viewProjPrev;
 	DirectX::XMMATRIX     viewInverse;
 	DirectX::XMMATRIX     proj;
 	DirectX::XMMATRIX     projInverse;
@@ -67,6 +83,7 @@ struct FSceneView
 	DirectX::XMVECTOR     cameraPosition;
 	float                 MainViewCameraYaw = 0.0f;
 	float                 MainViewCameraPitch = 0.0f;
+	float                 HDRIYawOffset = 0.0f;
 	int                   SceneRTWidth = 0;
 	int                   SceneRTHeight = 0;
 	//bool                  bIsPBRLightingUsed;
@@ -190,7 +207,7 @@ private:
 
 //------------------------------------------------------
 
-constexpr size_t NUM_GAMEOBJECT_POOL_SIZE = 1024 * 8;
+constexpr size_t NUM_GAMEOBJECT_POOL_SIZE = 1024 * 64;
 constexpr size_t GAMEOBJECT_BYTE_ALIGNMENT = 64; // assumed typical cache-line size
 
 //----------------------------------------------------------------------------------------------------------------
@@ -251,7 +268,7 @@ private: // Derived Scenes shouldn't access these functions
 	void GatherSceneLightData(FSceneView& SceneView) const;
 
 	void PrepareLightMeshRenderParams(FSceneView& SceneView) const;
-	void PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<FMeshRenderCommand>& MeshRenderCommands) const;
+	void PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<FMeshRenderCommand>& MeshRenderCommands);
 	void PrepareShadowMeshRenderParams(FSceneShadowView& ShadowView, const FFrustumPlaneset& ViewFrustumPlanesInWorldSpace, ThreadPool& UpdateWorkerThreadPool) const;
 	void PrepareBoundingBoxRenderParams(FSceneView& SceneView) const;
 	
@@ -324,13 +341,18 @@ protected:
 	std::vector<Transform*>  mpTransforms;
 	std::vector<Camera>      mCameras;
 	
-
 	Light                    mDirectionalLight;
 
 	std::vector<Light>       mLightsStatic;      //     static lights (See Light::EMobility enum for details)
 	std::vector<Light>       mLightsStationary;  // stationary lights (See Light::EMobility enum for details)
 	std::vector<Light>       mLightsDynamic;     //     moving lights (See Light::EMobility enum for details)
 	//Skybox                   mSkybox;
+
+	//
+	// AUX DATA
+	//
+	std::unordered_map<const Transform*, DirectX::XMMATRIX> mTransformWorldMatrixHistory; // history for motion vectors
+	std::unordered_map<const Camera*   , DirectX::XMMATRIX> mViewProjectionMatrixHistory; // history for motion vectors
 
 
 	//

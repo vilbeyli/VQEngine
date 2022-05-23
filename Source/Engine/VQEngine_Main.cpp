@@ -26,7 +26,7 @@ constexpr char* BUILD_CONFIG = "-Debug";
 #else
 constexpr char* BUILD_CONFIG = "";
 #endif
-constexpr char* VQENGINE_VERSION = "v0.8.0";
+constexpr char* VQENGINE_VERSION = "v0.9.0";
 
 
 #define REPORT_SYSTEM_INFO 1
@@ -37,9 +37,15 @@ void ReportSystemInfo(const VQSystemInfo::FSystemInfo& i, bool bDetailed = false
 	Log::Info("\n%s", sysInfo.c_str());
 }
 #endif
+
+// TODO: heed to W4 warnings, initialize the variables
 VQEngine::VQEngine()
 	: mAssetLoader(mWorkers_ModelLoading, mWorkers_TextureLoading, mRenderer)
-	, mRenderPass_AO(FAmbientOcclusionPass::EMethod::FFX_CACAO)
+	, mRenderPass_ZPrePass(mRenderer)
+	, mRenderPass_AO(mRenderer, AmbientOcclusionPass::EMethod::FFX_CACAO)
+	, mRenderPass_SSR(mRenderer)
+	, mRenderPass_ApplyReflections(mRenderer)
+	, mRenderPass_DepthResolve(mRenderer)
 {}
 
 void VQEngine::MainThread_Tick()
@@ -81,7 +87,12 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	InitializeInput();
 	InitializeScenes();
 	float f2 = t.Tick();
-	InitializeThreads();
+	// --------------------------------------------------------
+	// Note: Device should be initialized from WinMain thread, 
+	// otherwise device may be lost if launched from RenderDoc
+	mRenderer.Initialize(mSettings.gfx); // Device, Queues, Heaps, WorkerThreads
+	// --------------------------------------------------------
+	InitializeEngineThreads();
 	SetEffectiveFrameRateLimit();
 	float f4 = t.Tick();
 
@@ -114,20 +125,20 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 #if 0
 	Log::Info("[PERF] VQEngine::Initialize() : %.3fs", t2.StopGetDeltaTimeAndReset());
 	Log::Info("[PERF]    DispatchSysInfo : %.3fs", f0);
-	Log::Info("[PERF]    Settings       : %.3fs", f1);
-	Log::Info("[PERF]    Scenes         : %.3fs", f2);
-	Log::Info("[PERF]    Windows        : %.3fs", f3);
-	Log::Info("[PERF]    Threads        : %.3fs", f4);
+	Log::Info("[PERF]    Settings        : %.3fs", f1);
+	Log::Info("[PERF]    Scenes          : %.3fs", f2);
+	Log::Info("[PERF]    Windows         : %.3fs", f3);
+	Log::Info("[PERF]    Threads         : %.3fs", f4);
 #endif
 	return true; 
 }
 
-void VQEngine::Exit()
+void VQEngine::Destroy()
 {
 	ExitThreads();
 
 	mRenderer.Unload();
-	mRenderer.Exit();
+	mRenderer.Destroy();
 }
 
 
@@ -181,6 +192,8 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	if (paramFile.bOverrideGFXSetting_bUseTripleBuffering)         s.gfx.bUseTripleBuffering = pf.gfx.bUseTripleBuffering;
 	if (paramFile.bOverrideGFXSetting_RenderScale)                 s.gfx.RenderScale         = pf.gfx.RenderScale;
 	if (paramFile.bOverrideGFXSetting_bMaxFrameRate)               s.gfx.MaxFrameRate        = pf.gfx.MaxFrameRate;
+	if (paramFile.bOverrideGFXSetting_EnvironmentMapResolution)    s.gfx.EnvironmentMapResolution = pf.gfx.EnvironmentMapResolution;
+	if (paramFile.bOverrideGFXSettings_Reflections)                s.gfx.Reflections = pf.gfx.Reflections;
 
 	if (paramFile.bOverrideENGSetting_MainWindowWidth)             s.WndMain.Width            = pf.WndMain.Width;
 	if (paramFile.bOverrideENGSetting_MainWindowHeight)            s.WndMain.Height           = pf.WndMain.Height;
@@ -203,12 +216,14 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 
 	if (paramFile.bOverrideENGSetting_StartupScene)              s.StartupScene = pf.StartupScene;
 
+
 	// Override #1 : if there's command line params
 	if (Params.bOverrideGFXSetting_bVSync)                      s.gfx.bVsync               = p.gfx.bVsync;
 	if (Params.bOverrideGFXSetting_bAA)                         s.gfx.bAntiAliasing        = p.gfx.bAntiAliasing;
 	if (Params.bOverrideGFXSetting_bUseTripleBuffering)         s.gfx.bUseTripleBuffering  = p.gfx.bUseTripleBuffering;
 	if (Params.bOverrideGFXSetting_RenderScale)                 s.gfx.RenderScale          = p.gfx.RenderScale;
 	if (Params.bOverrideGFXSetting_bMaxFrameRate)               s.gfx.MaxFrameRate         = p.gfx.MaxFrameRate;
+	if (Params.bOverrideGFXSettings_Reflections)                s.gfx.Reflections          = p.gfx.Reflections;
 
 	if (Params.bOverrideENGSetting_MainWindowWidth)             s.WndMain.Width            = p.WndMain.Width;
 	if (Params.bOverrideENGSetting_MainWindowHeight)            s.WndMain.Height           = p.WndMain.Height;
@@ -323,7 +338,7 @@ void VQEngine::InitializeScenes()
 	this->StartLoadingScene(mIndex_SelectedScene);
 }
 
-void VQEngine::InitializeThreads()
+void VQEngine::InitializeEngineThreads()
 {
 	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
 	const size_t HWThreads  = ThreadPool::sHardwareThreadCount;
@@ -354,8 +369,8 @@ void VQEngine::InitializeThreads()
 
 void VQEngine::ExitThreads()
 {
-	mWorkers_ModelLoading.Exit();
-	mWorkers_TextureLoading.Exit();
+	mWorkers_ModelLoading.Destroy();
+	mWorkers_TextureLoading.Destroy();
 	mbStopAllThreads.store(true);
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
@@ -366,7 +381,7 @@ void VQEngine::ExitThreads()
 	mWorkers_Render.Exit();
 #else
 	mSimulationThread.join();
-	mWorkers_Simulation.Exit();
+	mWorkers_Simulation.Destroy();
 #endif
 }
 

@@ -345,7 +345,7 @@ void SwapChain::Destroy()
     if (this->mpSwapChain)   this->mpSwapChain->Release();
 }
 
-void SwapChain::Resize(int w, int h, DXGI_FORMAT format)
+HRESULT SwapChain::Resize(int w, int h, DXGI_FORMAT format)
 {
 #if LOG_SWAPCHAIN_VERBOSE
     Log::Info("SwapChain<hwnd=0x%x> Resize: %dx%d", mHwnd, w, h);
@@ -357,16 +357,20 @@ void SwapChain::Resize(int w, int h, DXGI_FORMAT format)
         mFenceValues[i] = mFenceValues[mpSwapChain->GetCurrentBackBufferIndex()];
     }
 
-    mpSwapChain->ResizeBuffers(
+    HRESULT hr = mpSwapChain->ResizeBuffers(
         (UINT)this->mFenceValues.size(),
         w, h,
         format,
         this->mbVSync ? 0 : (DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING /*| DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH*/)
     );
-    this->mFormat = format;
+    if (hr == S_OK)
+    {
+        CreateRenderTargetViews();
+    }
 
-    CreateRenderTargetViews();
     this->mICurrentBackBuffer = mpSwapChain->GetCurrentBackBufferIndex();
+    this->mFormat = format;
+    return hr;
 }
 
 // https://docs.microsoft.com/de-de/windows/win32/direct3darticles/dxgi-best-practices#full-screen-issues
@@ -476,7 +480,6 @@ HRESULT SwapChain::Present()
             break;
         case DXGI_ERROR_DEVICE_REMOVED:
             Log::Error("SwapChain::Present(): DXGI_ERROR_DEVICE_REMOVED");
-            MessageBox(NULL, "DXGI_ERROR_DEVICE_REMOVED", "VQEngine: Error Presenting to Window", MB_OK);
             break;
         case DXGI_ERROR_INVALID_CALL:
             Log::Error("SwapChain::Present(): DXGI_ERROR_INVALID_CALL");
@@ -548,7 +551,12 @@ void SwapChain::MoveToNextFrame()
 void SwapChain::WaitForGPU()
 {
     ID3D12Fence* pFence;
-    ThrowIfFailed(mpDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&pFence)));
+    HRESULT hr = mpDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&pFence));
+    if (hr != S_OK)
+    {
+        Log::Error("WaitForGPU(): Failed to CreateFence()");
+        return;
+    }
 
     ID3D12CommandQueue* queue = mpPresentQueue;
 
@@ -601,6 +609,7 @@ void SwapChain::CreateRenderTargetViews()
         hr = this->mpSwapChain->GetBuffer(i, IID_PPV_ARGS(&this->mRenderTargets[i]));
         if (FAILED(hr))
         {
+            Log::Error("Swapchain->GetBuffer(%d, ...) failed", i);
             assert(false);
         }
 

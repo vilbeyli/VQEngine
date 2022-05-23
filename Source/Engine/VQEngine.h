@@ -23,16 +23,21 @@
 #include "Core/Window.h"
 #include "Core/Events.h"
 #include "Core/Input.h"
+
 #include "Scene/Scene.h"
 #include "Scene/Mesh.h"
 #include "Scene/Camera.h"
 #include "Scene/Transform.h"
-#include "RenderPass/AmbientOcclusion.h"
-#include "RenderPass/DepthPrePass.h"
+
 #include "Settings.h"
 #include "AssetLoader.h"
 #include "VQUI.h"
 
+#include "RenderPass/AmbientOcclusion.h"
+#include "RenderPass/DepthPrePass.h"
+#include "RenderPass/DepthMSAAResolve.h"
+#include "RenderPass/ScreenSpaceReflections.h"
+#include "RenderPass/ApplyReflections.h"
 
 #include "Libs/VQUtils/Source/Multithreading.h"
 #include "Libs/VQUtils/Source/Timer.h"
@@ -59,6 +64,8 @@ struct ImGuiContext;
 //
 // DATA STRUCTS
 //
+
+
 struct FLoadingScreenData
 {
 	std::array<float, 4> SwapChainClearColor;
@@ -119,68 +126,97 @@ struct FEnvironmentMapRenderingResources
 	// the frame which has the brightest average luminance anywhere in 
 	// the content.
 	int MaxFrameAverageLightLevel = 0;
+
+	int GetNumSpecularIrradianceCubemapLODLevels(const VQRenderer& Renderer) const;
 };
 
 struct FRenderingResources{};
 struct FRenderingResources_MainWindow : public FRenderingResources
 {
-	TextureID Tex_ShadowMaps_Spot              = INVALID_ID;
-	TextureID Tex_ShadowMaps_Point             = INVALID_ID;
-	TextureID Tex_ShadowMaps_Directional       = INVALID_ID;
+	TextureID Tex_ShadowMaps_Spot                    = INVALID_ID;
+	TextureID Tex_ShadowMaps_Point                   = INVALID_ID;
+	TextureID Tex_ShadowMaps_Directional             = INVALID_ID;
 
-	TextureID Tex_SceneColorMSAA               = INVALID_ID;
-	TextureID Tex_SceneColor                   = INVALID_ID;
-	TextureID Tex_SceneDepthMSAA               = INVALID_ID;
-	TextureID Tex_SceneDepth                   = INVALID_ID;
-	TextureID Tex_SceneDepthResolve            = INVALID_ID;
-	TextureID Tex_SceneNormalsMSAA             = INVALID_ID;
-	TextureID Tex_SceneNormals                 = INVALID_ID;
-	TextureID Tex_AmbientOcclusion             = INVALID_ID;
+	TextureID Tex_SceneColorMSAA                     = INVALID_ID;
+	TextureID Tex_SceneColor                         = INVALID_ID;
+	TextureID Tex_SceneColorBoundingVolumes          = INVALID_ID;
+	TextureID Tex_SceneDepthMSAA                     = INVALID_ID;
+	TextureID Tex_SceneDepth                         = INVALID_ID;
+	TextureID Tex_SceneDepthResolve                  = INVALID_ID;
+	TextureID Tex_SceneNormalsMSAA                   = INVALID_ID;
+	TextureID Tex_SceneNormals                       = INVALID_ID;
+	TextureID Tex_AmbientOcclusion                   = INVALID_ID;
+	TextureID Tex_SceneVisualization                 = INVALID_ID;
+	TextureID Tex_SceneVisualizationMSAA             = INVALID_ID;
+	TextureID Tex_SceneMotionVectors                 = INVALID_ID;
+	TextureID Tex_SceneMotionVectorsMSAA             = INVALID_ID;
 
-	TextureID Tex_PostProcess_BlurIntermediate = INVALID_ID;
-	TextureID Tex_PostProcess_BlurOutput       = INVALID_ID;
-	TextureID Tex_PostProcess_TonemapperOut    = INVALID_ID;
-	TextureID Tex_PostProcess_FFXCASOut        = INVALID_ID;
-	TextureID Tex_PostProcess_FSR_EASUOut      = INVALID_ID;
-	TextureID Tex_PostProcess_FSR_RCASOut      = INVALID_ID;
-	TextureID Tex_UI_SDR                       = INVALID_ID;
+	TextureID Tex_DownsampledSceneDepth              = INVALID_ID;
+	TextureID Tex_DownsampledSceneDepthAtomicCounter = INVALID_ID;
 
-	RTV_ID    RTV_SceneColorMSAA               = INVALID_ID;
-	RTV_ID    RTV_SceneColor                   = INVALID_ID;
-	RTV_ID    RTV_SceneNormalsMSAA             = INVALID_ID;
-	RTV_ID    RTV_SceneNormals                 = INVALID_ID;
-	RTV_ID    RTV_UI_SDR                       = INVALID_ID;
+	TextureID Tex_PostProcess_BlurIntermediate       = INVALID_ID;
+	TextureID Tex_PostProcess_BlurOutput             = INVALID_ID;
+	TextureID Tex_PostProcess_TonemapperOut          = INVALID_ID;
+	TextureID Tex_PostProcess_VisualizationOut       = INVALID_ID;
+	TextureID Tex_PostProcess_FFXCASOut              = INVALID_ID;
+	TextureID Tex_PostProcess_FSR_EASUOut            = INVALID_ID;
+	TextureID Tex_PostProcess_FSR_RCASOut            = INVALID_ID;
+	TextureID Tex_UI_SDR                             = INVALID_ID;
 
-	SRV_ID    SRV_PostProcess_BlurIntermediate = INVALID_ID;
-	SRV_ID    SRV_PostProcess_BlurOutput       = INVALID_ID;
-	SRV_ID    SRV_PostProcess_TonemapperOut    = INVALID_ID;
-	SRV_ID    SRV_PostProcess_FFXCASOut        = INVALID_ID;
-	SRV_ID    SRV_PostProcess_FSR_EASUOut      = INVALID_ID;
-	SRV_ID    SRV_PostProcess_FSR_RCASOut      = INVALID_ID;
-	SRV_ID    SRV_ShadowMaps_Spot              = INVALID_ID;
-	SRV_ID    SRV_ShadowMaps_Point             = INVALID_ID;
-	SRV_ID    SRV_ShadowMaps_Directional       = INVALID_ID;
-	SRV_ID    SRV_SceneColor                   = INVALID_ID;
-	SRV_ID    SRV_SceneNormals                 = INVALID_ID;
-	SRV_ID    SRV_SceneDepth                   = INVALID_ID;
-	SRV_ID    SRV_SceneDepthMSAA               = INVALID_ID;
-	SRV_ID    SRV_FFXCACAO_Out                 = INVALID_ID;
-	SRV_ID    SRV_UI_SDR                       = INVALID_ID;
+	RTV_ID    RTV_SceneColorMSAA                     = INVALID_ID;
+	RTV_ID    RTV_SceneColor                         = INVALID_ID;
+	RTV_ID    RTV_SceneColorBoundingVolumes          = INVALID_ID;
+	RTV_ID    RTV_SceneNormalsMSAA                   = INVALID_ID;
+	RTV_ID    RTV_SceneNormals                       = INVALID_ID;
+	RTV_ID    RTV_UI_SDR                             = INVALID_ID;
+	RTV_ID    RTV_SceneVisualization                 = INVALID_ID;
+	RTV_ID    RTV_SceneVisualizationMSAA             = INVALID_ID;
+	RTV_ID    RTV_SceneMotionVectors                 = INVALID_ID;
+	RTV_ID    RTV_SceneMotionVectorsMSAA             = INVALID_ID;
 
-	UAV_ID    UAV_FFXCACAO_Out                 = INVALID_ID;
-	UAV_ID    UAV_PostProcess_BlurIntermediate = INVALID_ID;
-	UAV_ID    UAV_PostProcess_BlurOutput       = INVALID_ID;
-	UAV_ID    UAV_PostProcess_TonemapperOut    = INVALID_ID;
-	UAV_ID    UAV_PostProcess_FFXCASOut        = INVALID_ID;
-	UAV_ID    UAV_PostProcess_FSR_EASUOut      = INVALID_ID;
-	UAV_ID    UAV_PostProcess_FSR_RCASOut      = INVALID_ID;
-	UAV_ID    UAV_SceneDepth                   = INVALID_ID;
+	SRV_ID    SRV_PostProcess_BlurIntermediate       = INVALID_ID;
+	SRV_ID    SRV_PostProcess_BlurOutput             = INVALID_ID;
+	SRV_ID    SRV_PostProcess_TonemapperOut          = INVALID_ID;
+	SRV_ID    SRV_PostProcess_VisualizationOut       = INVALID_ID;
+	SRV_ID    SRV_PostProcess_FFXCASOut              = INVALID_ID;
+	SRV_ID    SRV_PostProcess_FSR_EASUOut            = INVALID_ID;
+	SRV_ID    SRV_PostProcess_FSR_RCASOut            = INVALID_ID;
+	SRV_ID    SRV_ShadowMaps_Spot                    = INVALID_ID;
+	SRV_ID    SRV_ShadowMaps_Point                   = INVALID_ID;
+	SRV_ID    SRV_ShadowMaps_Directional             = INVALID_ID;
+	SRV_ID    SRV_SceneColor                         = INVALID_ID;
+	SRV_ID    SRV_SceneColorBoundingVolumes          = INVALID_ID;
+	SRV_ID    SRV_SceneColorMSAA                     = INVALID_ID;
+	SRV_ID    SRV_SceneNormals                       = INVALID_ID;
+	SRV_ID    SRV_SceneNormalsMSAA                   = INVALID_ID;
+	SRV_ID    SRV_SceneDepth                         = INVALID_ID;
+	SRV_ID    SRV_SceneDepthMSAA                     = INVALID_ID;
+	SRV_ID    SRV_FFXCACAO_Out                       = INVALID_ID;
+	SRV_ID    SRV_UI_SDR                             = INVALID_ID;
+	SRV_ID    SRV_SceneVisualization                 = INVALID_ID;
+	SRV_ID    SRV_SceneVisualizationMSAA             = INVALID_ID;
+	SRV_ID    SRV_SceneMotionVectors                 = INVALID_ID;
 
-	DSV_ID    DSV_SceneDepth                   = INVALID_ID;
-	DSV_ID    DSV_SceneDepthMSAA               = INVALID_ID;
-	DSV_ID    DSV_ShadowMaps_Spot              = INVALID_ID;
-	DSV_ID    DSV_ShadowMaps_Point             = INVALID_ID;
-	DSV_ID    DSV_ShadowMaps_Directional       = INVALID_ID;
+	UAV_ID    UAV_FFXCACAO_Out                       = INVALID_ID;
+	UAV_ID    UAV_PostProcess_BlurIntermediate       = INVALID_ID;
+	UAV_ID    UAV_PostProcess_BlurOutput             = INVALID_ID;
+	UAV_ID    UAV_PostProcess_TonemapperOut          = INVALID_ID;
+	UAV_ID    UAV_PostProcess_VisualizationOut       = INVALID_ID;
+	UAV_ID    UAV_PostProcess_FFXCASOut              = INVALID_ID;
+	UAV_ID    UAV_PostProcess_FSR_EASUOut            = INVALID_ID;
+	UAV_ID    UAV_PostProcess_FSR_RCASOut            = INVALID_ID;
+	UAV_ID    UAV_SceneDepth                         = INVALID_ID;
+	UAV_ID    UAV_SceneColor                         = INVALID_ID;
+	UAV_ID    UAV_SceneNormals                       = INVALID_ID;
+
+	UAV_ID    UAV_DownsampledSceneDepth              = INVALID_ID;
+	UAV_ID    UAV_DownsampledSceneDepthAtomicCounter = INVALID_ID;
+
+	DSV_ID    DSV_SceneDepth                         = INVALID_ID;
+	DSV_ID    DSV_SceneDepthMSAA                     = INVALID_ID;
+	DSV_ID    DSV_ShadowMaps_Spot                    = INVALID_ID;
+	DSV_ID    DSV_ShadowMaps_Point                   = INVALID_ID;
+	DSV_ID    DSV_ShadowMaps_Directional             = INVALID_ID;
 
 	FEnvironmentMapRenderingResources EnvironmentMap;
 
@@ -253,7 +289,8 @@ public:
 	// ---------------------------------------------------------
 	void MainThread_Tick();
 	bool Initialize(const FStartupParameters& Params);
-	void Exit();
+	void Destroy();
+	inline bool ShouldExit() const { return mbExitApp.load(); }
 
 	// ---------------------------------------------------------
 	// Render Thread
@@ -426,6 +463,7 @@ private:
 	std::atomic<bool>               mbLoadingEnvironmentMap;
 	std::atomic<bool>               mbEnvironmentMapPreFilter;
 	std::atomic<bool>               mbMainWindowHDRTransitionInProgress; // see DispatchHDRSwapchainTransitionEvents()
+	std::atomic<bool>               mbExitApp;
 
 	// system & settings
 	FEngineSettings                 mSettings;
@@ -451,8 +489,12 @@ private:
 #endif
 
 	// RenderPasses (WIP design)
-	FDepthPrePass                   mRenderPass_DepthPrePass;
-	FAmbientOcclusionPass           mRenderPass_AO;
+	std::vector<IRenderPass*>       mRenderPasses;
+	DepthPrePass                    mRenderPass_ZPrePass;
+	AmbientOcclusionPass            mRenderPass_AO;
+	ScreenSpaceReflectionsPass      mRenderPass_SSR;
+	DepthMSAAResolvePass            mRenderPass_DepthResolve;
+	ApplyReflectionsPass            mRenderPass_ApplyReflections;
 
 	// timer / profiler
 	Timer                           mTimer;
@@ -473,7 +515,7 @@ private:
 	void                            InitializeEnvironmentMaps();
 	void                            InitializeScenes();
 	void                            InitializeUI(HWND hwnd);
-	void                            InitializeThreads();
+	void                            InitializeEngineThreads();
 
 	void                            ExitThreads();
 	void                            ExitUI();
@@ -485,7 +527,7 @@ private:
 	void                            InitializeBuiltinMeshes();
 	void                            LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete
 	void                            Load_SceneData_Dispatch();
-	void                            LoadEnvironmentMap(const std::string& EnvMapName);
+	void                            LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMapMip0Resolution);
 
 	HRESULT                         RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderContext& ctx);
 	HRESULT                         RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx);
@@ -509,31 +551,36 @@ private:
 	//
 	// FRAME RENDERING PIPELINE
 	//
-	void                            TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx);
+	void                            TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
 	void                            RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView& ShadowView);
 	void                            RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView& ShadowView);
 	void                            RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView& ShadowView, size_t iBegin, size_t NumPointLights);
 	void                            RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
 	void                            RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView);
-	void                            RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
-	void                            ResolveMSAA(ID3D12GraphicsCommandList* pCmd);
-	void                            ResolveDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTexture, SRV_ID SRVDepthTexture, UAV_ID UAVDepthResolveTexture);
+	void                            RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FPostProcessParameters& PPParams);
+	void                            RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA);
+	void                            RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA);
+	void                            ResolveMSAA(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams);
+	void                            DownsampleDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTextureID, SRV_ID SRVDepth);
+	void                            RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
+	void                            RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA);
+	void                            CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
 	void                            TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams);
-	void                            RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams);
-	void                            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
+	ID3D12Resource*                 RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams);
+	void                            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, ID3D12Resource* pRscIn);
 	void                            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
 	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
 
 	//
 	// UI
 	//
-	void UpdateUIState(HWND hwnd, float dt);
-	void DrawProfilerWindow(const FSceneStats& FrameStats, float dt);
-	void DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderParameters& SceneRenderParams);
-	void DrawPostProcessSettings(FPostProcessParameters& PPParams);
-	void DrawDebugPanelWindow(FSceneRenderParameters& SceneParams);
-	void DrawKeyMappingsWindow();
-	void DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams, FPostProcessParameters& PPParams);
+	void                            UpdateUIState(HWND hwnd, float dt);
+	void                            DrawProfilerWindow(const FSceneStats& FrameStats, float dt);
+	void                            DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderParameters& SceneRenderParams);
+	void                            DrawPostProcessSettings(FPostProcessParameters& PPParams);
+	void                            DrawDebugPanelWindow(FSceneRenderParameters& SceneParams, FPostProcessParameters& PPParams);
+	void                            DrawKeyMappingsWindow();
+	void                            DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams, FPostProcessParameters& PPParams);
 
 	//
 	// RENDER HELPERS
@@ -563,7 +610,7 @@ private:
 	bool                            ShouldRenderHDR(HWND hwnd) const;
 	bool                            IsHDRSettingOn() const;
 
-	void                            SetEffectiveFrameRateLimit();
+	void                            SetEffectiveFrameRateLimit(); // TODO: take in int, and framepace the loading screen
 	float                           FramePacing(const float dt);
 	const FDisplayHDRProfile*       GetHDRProfileIfExists(const wchar_t* pwStrLogicalDisplayName);
 	FSetHDRMetaDataParams           GatherHDRMetaDataParameters(HWND hwnd);

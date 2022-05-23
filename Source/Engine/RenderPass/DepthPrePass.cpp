@@ -18,28 +18,34 @@
 
 #include "DepthPrePass.h"
 
-FDepthPrePass::FDepthPrePass()
+DepthPrePass::DepthPrePass(VQRenderer& Renderer)
+	: RenderPassBase(Renderer)
 {
 }
 
-bool FDepthPrePass::Initialize(ID3D12Device* pDevice)
+bool DepthPrePass::Initialize()
 {
 	return true;
 }
 
-void FDepthPrePass::Exit()
+void DepthPrePass::Destroy()
 {
 }
 
-void FDepthPrePass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const void* pRscParameters)
+void DepthPrePass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const IRenderPassResourceCollection* pRscParameters)
 {
 
 }
 
-void FDepthPrePass::OnDestroyWindowSizeDependentResources()
+void DepthPrePass::OnDestroyWindowSizeDependentResources()
 {
 }
 
-void FDepthPrePass::RecordCommands(const void* pDrawParameters)
+void DepthPrePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameters)
 {
+}
+
+std::vector<FPSOCreationTaskParameters> DepthPrePass::CollectPSOCreationParameters()
+{
+	return std::vector<FPSOCreationTaskParameters>();
 }

@@ -68,7 +68,7 @@ private:
 	void*  mpAlloc         = nullptr;
 
 	// header
-	size_t mNumBlocks = 0;
+	size_t mNumMaxBlocks = 0;
 	size_t mNumUsedBlocks = 0;
 	size_t mAllocSize = 0;
 };
@@ -81,7 +81,7 @@ private:
 //
 template<class TObject>
 inline MemoryPool<TObject>::MemoryPool(size_t NumBlocks, size_t Alignment)
-	: mNumBlocks(NumBlocks)
+	: mNumMaxBlocks(NumBlocks)
 {
 	// calc alloc size
 	const size_t AlignedObjSize = AlignTo(sizeof(TObject), Alignment);
@@ -99,7 +99,7 @@ inline MemoryPool<TObject>::MemoryPool(size_t NumBlocks, size_t Alignment)
 	// setup list structure
 	Block* pWalk = this->mpNextFreeBlock;
 	Block* pNextBlock = (Block*)(((unsigned char*)this->mpNextFreeBlock) + AlignedObjSize);
-	for (size_t i = 1; i < NumBlocks; ++i)
+	for (size_t i = 0; i < NumBlocks; ++i)
 	{
 		if (i == NumBlocks - 1)
 		{
@@ -145,17 +145,40 @@ inline MemoryPool<TObject>::~MemoryPool()
 template<class TObject>
 inline TObject* MemoryPool<TObject>::Allocate(size_t NumBlocks)
 {
-	// TODO: alloc NumBlocks?
-	//for (size_t i = 0; i < NumBlocks; ++i)
-	//{
-	//	;
-	//}
-
 	if (!mpNextFreeBlock)
 	{
-		assert(this->mNumUsedBlocks == this->mNumBlocks);
-		Log::Error("MemoryPool is out of memory");
+		assert(this->mNumUsedBlocks == this->mNumMaxBlocks);
+		Log::Warning("MemoryPool is out of memory (%s), perhaps consider a larger initial size?", StrUtil::FormatByte(this->mAllocSize).c_str());
+#if 1
 		assert(mpNextFreeBlock); // if you hit this, allocate a bigger pool on startup
+#else
+		// --------------------------------------------------------------------
+		// TODO: FIX DANGLING POINTERS IN SCENE GAME OBJECT POINTER VECTOR
+		// --------------------------------------------------------------------
+		// dynamically grow (double) the pool size
+		{
+			const size_t Alignment = mAllocSize / mNumMaxBlocks;
+			MemoryPool<TObject> NewPool(mNumMaxBlocks * 2, Alignment);
+			Log::Info("\tAllocated new pool of size: %s", StrUtil::FormatByte(NewPool.mAllocSize).c_str());
+
+			// advance the next free block pointer in the new pool before we copy the entire allocation
+			for (int b = 0; b < mNumUsedBlocks; ++b)
+				NewPool.mpNextFreeBlock = NewPool.mpNextFreeBlock->pNext;
+			
+			// copy the current objects to the new pool
+			memcpy(NewPool.mpAlloc, this->mpAlloc, this->mAllocSize);
+			
+			// free the memory of the 'old'
+			free(mpAlloc);
+			mpAlloc = nullptr;
+			
+			// update the pointers
+			std::swap(mpAlloc, NewPool.mpAlloc);
+			mNumMaxBlocks = NewPool.mNumMaxBlocks;
+			mAllocSize = NewPool.mAllocSize;
+			mpNextFreeBlock = NewPool.mpNextFreeBlock;
+		}
+#endif
 	}
 
 	++this->mNumUsedBlocks;

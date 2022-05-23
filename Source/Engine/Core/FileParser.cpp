@@ -53,7 +53,8 @@ static std::pair<std::string, std::string> ParseLineINI(const std::string& iniLi
 
 static std::unordered_map<std::string, EDisplayMode> S_LOOKUP_STR_TO_DISPLAYMODE =
 {
-	  { "Fullscreen"           , EDisplayMode::EXCLUSIVE_FULLSCREEN   }
+	  //{ "Fullscreen"           , EDisplayMode::EXCLUSIVE_FULLSCREEN   }
+	  { "Fullscreen"           , EDisplayMode::BORDERLESS_FULLSCREEN  }
 	, { "Borderless"           , EDisplayMode::BORDERLESS_FULLSCREEN  }
 	, { "BorderlessFullscreen" , EDisplayMode::BORDERLESS_FULLSCREEN  }
 	, { "BorderlessWindowed"   , EDisplayMode::BORDERLESS_FULLSCREEN  }
@@ -122,6 +123,16 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 					params.EngineSettings.gfx.MaxFrameRate = -1;
 				else
 					params.EngineSettings.gfx.MaxFrameRate = StrUtil::ParseInt(SettingValue);
+			}
+			if (SettingName == "EnvironmentMapResolution")
+			{
+				params.EngineSettings.gfx.EnvironmentMapResolution = StrUtil::ParseInt(SettingValue);
+				params.bOverrideGFXSetting_EnvironmentMapResolution = true;
+			}
+			if (SettingName == "Reflections")
+			{
+				params.bOverrideGFXSettings_Reflections = true;
+				params.EngineSettings.gfx.Reflections = static_cast<EReflections>(StrUtil::ParseInt(SettingValue));
 			}
 
 			// 

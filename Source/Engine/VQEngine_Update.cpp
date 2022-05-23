@@ -451,7 +451,7 @@ void VQEngine::Load_SceneData_Dispatch()
 	// start loading environment map textures
 	if (!SceneRep.EnvironmentMapPreset.empty())
 	{
-		mWorkers_TextureLoading.AddTask([=]() { LoadEnvironmentMap(SceneRep.EnvironmentMapPreset); });
+		mWorkers_TextureLoading.AddTask([=]() { LoadEnvironmentMap(SceneRep.EnvironmentMapPreset, mSettings.gfx.EnvironmentMapResolution); });
 	}
 }
 
@@ -487,7 +487,7 @@ void VQEngine::LoadLoadingScreenData()
 		mWorkers_TextureLoading.AddTask([this, &data, LoadingScreenTextureFilePath]()
 			{
 				const TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
-				const SRV_ID srvID = mRenderer.CreateAndInitializeSRV(texID);
+				const SRV_ID srvID = mRenderer.AllocateAndInitializeSRV(texID);
 				std::lock_guard<std::mutex> lk(data.Mtx);
 				data.SRVs.push_back(srvID);
 			});
@@ -498,7 +498,7 @@ void VQEngine::LoadLoadingScreenData()
 	{
 		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(SelectedLoadingScreenIndex) + ".png");
 		TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
-		SRV_ID    srvID = mRenderer.CreateAndInitializeSRV(texID);
+		SRV_ID    srvID = mRenderer.AllocateAndInitializeSRV(texID);
 		std::lock_guard<std::mutex> lk(data.Mtx);
 		data.SRVs.push_back(srvID);
 		data.SelectedLoadingScreenSRVIndex = static_cast<int>(data.SRVs.size() - 1);
@@ -569,7 +569,7 @@ void VQEngine::StartLoadingEnvironmentMap(int IndexEnvMap)
 	mbLoadingEnvironmentMap = true;
 	mWorkers_TextureLoading.AddTask([&, IndexEnvMap]()
 	{
-		LoadEnvironmentMap(mResourceNames.mEnvironmentMapPresetNames[IndexEnvMap]);
+		LoadEnvironmentMap(mResourceNames.mEnvironmentMapPresetNames[IndexEnvMap], mSettings.gfx.EnvironmentMapResolution);
 	});
 }
 
@@ -582,6 +582,9 @@ void VQEngine::StartLoadingScene(int IndexScene)
 
 	// queue the selected scene for loading
 	mQueue_SceneLoad.push(mResourceNames.mSceneNames[IndexScene]);
+
+	// signal clearing history buffers to the render passes
+	mRenderPass_SSR.ClearHistoryBuffers();
 
 	mAppState = INITIALIZING;
 	mbLoadingLevel.store(true); // thread-safe

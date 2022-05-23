@@ -29,6 +29,15 @@
     </Material>
 
 
+    <!-- BLACK -->
+    <Material>
+        <Name>MetallicBlack_VerySmooth</Name>
+        <Diffuse>0.05 0.05 0.05</Diffuse>
+        <Metalness>1.0</Metalness>
+        <Roughness>0.06</Roughness>
+    </Material>
+
+
     <!-- GOLD -->
     <Material>
         <Name>Gold</Name>

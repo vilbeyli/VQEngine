@@ -158,6 +158,8 @@ struct FShaderStageCompileDesc
 	std::string EntryPoint;
 	std::string ShaderModel;
 	std::vector<FShaderMacro> Macros;
+	bool bUseNative16bit = false;
+	std::vector<std::wstring> DXCompilerFlags;
 };
 struct FShaderStageCompileResult
 {

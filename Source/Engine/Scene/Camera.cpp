@@ -154,10 +154,8 @@ XMMATRIX Camera::GetViewInverseMatrix() const
 	// XMMATRIX rotMatrix = XMMatrixTranspose(R) * T.inverse();
 
 	XMMATRIX view = XMLoadFloat4x4(&mMatView);
-	XMVECTOR det = XMMatrixDeterminant(view);
-	XMMATRIX test = XMMatrixInverse(&det, view);
-
-	return test;
+	XMMATRIX ViewInverse = XMMatrixInverse(nullptr, view);
+	return ViewInverse;
 }
 XMMATRIX Camera::GetProjectionMatrix() const { return  XMLoadFloat4x4(&mMatProj); }
 XMMATRIX Camera::GetRotationMatrix() const   { return XMMatrixRotationRollPitchYaw(mPitch, mYaw, 0.0f); }

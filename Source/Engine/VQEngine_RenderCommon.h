@@ -20,7 +20,6 @@
 
 #include "Core/Types.h"
 
-#define DIV_AND_ROUND_UP(x,d) ((x+d-1)/d)
 
 //
 // MULTI THREADING

@@ -54,20 +54,25 @@ struct ID3D12PipelineState;
 //
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-struct FPSOLoadDesc
+struct FPSODesc
 {
 	std::string PSOName;
-	union
-	{
-		D3D12_COMPUTE_PIPELINE_STATE_DESC  D3D12ComputeDesc;
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC D3D12GraphicsDesc;
-	};
+	D3D12_COMPUTE_PIPELINE_STATE_DESC  D3D12ComputeDesc;
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC D3D12GraphicsDesc;
 	std::vector<FShaderStageCompileDesc> ShaderStageCompileDescs;
 };
 
-enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is integrated
+struct FPSOCreationTaskParameters
+{
+	PSO_ID* pID = nullptr; // ID to be set by the task once the PSO loads
+	FPSODesc Desc = {};
+};
+
+
+enum EBuiltinPSOs // TODO: remove the hardcoded PSOs when a generic Shader solution is integrated
 {
 	FULLSCREEN_TRIANGLE_PSO = 0,
+	VIZUALIZATION_CS_PSO,
 	UI_PSO,
 	UI_HDR_scRGB_PSO,
 	TONEMAPPER_PSO,
@@ -79,7 +84,13 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	DEPTH_PREPASS_PSO,
 	DEPTH_PREPASS_PSO_MSAA_4,
 	FORWARD_LIGHTING_PSO,
+	FORWARD_LIGHTING_AND_MV_PSO,
+	FORWARD_LIGHTING_AND_VIZ_PSO,
+	FORWARD_LIGHTING_AND_VIZ_AND_MV_PSO,
 	FORWARD_LIGHTING_PSO_MSAA_4,
+	FORWARD_LIGHTING_AND_MV_PSO_MSAA_4,
+	FORWARD_LIGHTING_AND_VIZ_PSO_MSAA_4,
+	FORWARD_LIGHTING_AND_VIZ_AND_MV_PSO_MSAA_4,
 	WIREFRAME_PSO,
 	WIREFRAME_PSO_MSAA_4,
 	UNLIT_PSO,
@@ -87,7 +98,6 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	DEPTH_PASS_PSO,
 	DEPTH_PASS_LINEAR_PSO,
 	DEPTH_PASS_ALPHAMASKED_PSO,
-	DEPTH_RESOLVE,
 	CUBEMAP_CONVOLUTION_DIFFUSE_PSO,
 	CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO,
 	CUBEMAP_CONVOLUTION_SPECULAR_PSO,
@@ -98,7 +108,33 @@ enum EBuiltinPSOs // TODO: hardcoded PSOs until a generic Shader solution is int
 	FFX_SPD_CS_PSO,
 	FFX_FSR1_EASU_CS_PSO,
 	FFX_FSR1_RCAS_CS_PSO,
+	DOWNSAMPLE_DEPTH_CS_PSO,
 	NUM_BUILTIN_PSOs
+};
+
+enum EBuiltinRootSignatures
+{
+	CS__SRV1_UAV1_ROOTCBV1,
+	CS__SRV2_UAV1_ROOTCBV1,
+	//--------------------------
+	LEGACY__HelloWorldTriangle,
+	LEGACY__FullScreenTriangle,
+	LEGACY__HelloWorldCube,
+	LEGACY__Object,
+	LEGACY__ForwardLighting,
+	LEGACY__WireframeUnlit,
+	LEGACY__ShadowPassDepthOnlyVS,
+	LEGACY__ShadowPassLinearDepthVSPS,
+	LEGACY__ShadowPassMaskedDepthVSPS,
+	LEGACY__ConvolutionCubemap,
+	LEGACY__BRDFIntegrationCS,
+	LEGACY__FFX_SPD_CS,
+	LEGACY__ZPrePass,
+	LEGACY__FFX_FSR1,
+	LEGACY__UI_HDR_Composite,
+	LEGACY__DownsampleDepthCS,
+
+	NUM_BUILTIN_ROOT_SIGNATURES
 };
 
 enum EProceduralTextures
@@ -121,12 +157,10 @@ public:
 	void                         Initialize(const FGraphicsSettings& Settings);
 	void                         Load();
 	void                         Unload();
-	void                         Exit();
+	void                         Destroy();
 	inline void                  WaitForLoadCompletion() const { while (!mbDefaultResourcesLoaded); };
 
 	void                         OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h);
-
-	inline ID3D12Device* GetDevicePtr() { return mDevice.GetDevicePtr(); };
 
 	// Swapchain-interface
 	void                         InitializeRenderContext(const Window* pWnd, int NumSwapchainBuffers, bool bVSync, bool bHDRSwapchain);
@@ -143,12 +177,12 @@ public:
 	void                         UploadVertexAndIndexBufferHeaps();
 
 	// Allocates a ResourceView from the respective heap and returns a unique identifier.
-	SRV_ID                       CreateSRV(uint NumDescriptors = 1); // TODO: Rename to Alloc**V()
-	DSV_ID                       CreateDSV(uint NumDescriptors = 1); // TODO: Rename to Alloc**V()
-	RTV_ID                       CreateRTV(uint NumDescriptors = 1); // TODO: Rename to Alloc**V()
-	UAV_ID                       CreateUAV(uint NumDescriptors = 1); // TODO: Rename to Alloc**V()
-	SRV_ID                       CreateAndInitializeSRV(TextureID texID);
-	DSV_ID                       CreateAndInitializeDSV(TextureID texID);
+	SRV_ID                       AllocateSRV(uint NumDescriptors = 1);
+	DSV_ID                       AllocateDSV(uint NumDescriptors = 1);
+	RTV_ID                       AllocateRTV(uint NumDescriptors = 1);
+	UAV_ID                       AllocateUAV(uint NumDescriptors = 1);
+	SRV_ID                       AllocateAndInitializeSRV(TextureID texID);
+	DSV_ID                       AllocateAndInitializeDSV(TextureID texID);
 
 	// Initializes a ResourceView from given texture and the specified heap index
 	void                         InitializeDSV(DSV_ID dsvID, uint heapIndex, TextureID texID, int ArraySlice = 0);
@@ -156,15 +190,27 @@ public:
 	void                         InitializeSRV(SRV_ID srvID, uint heapIndex, D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc);
 	void                         InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID);
 	void                         InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID, int arraySlice, int mipLevel);
-	void                         InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID);
+	void                         InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, uint arraySlice = 0, uint mipSlice = 0);
+	void                         InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID texID, DXGI_FORMAT bufferViewFormatOverride);
+	void                         InitializeSRVForBuffer(SRV_ID uavID, uint heapIndex, TextureID texID, DXGI_FORMAT bufferViewFormatOverride);
 
 	void                         DestroyTexture(TextureID& texID);
 	void                         DestroySRV(SRV_ID& srvID);
 	void                         DestroyDSV(DSV_ID& dsvID);
 
+	// Pipeline State Object creation functions
+	PSO_ID                       CreatePSO_OnThisThread(const FPSODesc& psoLoadDesc);
+	void                         EnqueueTask_CreatePSO(FPSOCreationTaskParameters&& params);
+	void                         StartPSOCreationTasks();
+	void                         WaitForPSOCreationTaskQueueCompletion();
+	//void AbortTasks(); // ?
+
+
 	// Getters: PSO, RootSignature, Heap
 	inline ID3D12PipelineState*  GetPSO(EBuiltinPSOs pso) const { return mPSOs.at(static_cast<PSO_ID>(pso)); }
-	inline ID3D12RootSignature*  GetRootSignature(int idx) const { return mpBuiltinRootSignatures[idx]; }
+	       ID3D12PipelineState*  GetPSO(PSO_ID psoID) const;
+		   ID3D12RootSignature*  GetBuiltinRootSignature(EBuiltinRootSignatures eRootSignature) const;
+
 	ID3D12DescriptorHeap*        GetDescHeap(EResourceHeapType HeapType);
 
 	// Getters: Resource Views
@@ -197,13 +243,9 @@ public:
 	inline const SRV&            GetProceduralTextureSRV(EProceduralTextures tex) const { return GetSRV(GetProceduralTextureSRV_ID(tex)); }
 	inline const SRV_ID          GetProceduralTextureSRV_ID(EProceduralTextures tex) const { return mLookup_ProceduralTextureSRVs.at(tex); }
 	TextureID                    GetProceduralTexture(EProceduralTextures tex) const;
-
-	// Texture Residency
-	void QueueTextureUpload(const FTextureUploadDesc& desc);
-	void ProcessTextureUpload(const FTextureUploadDesc& desc);
-	void ProcessTextureUploadQueue();
-	void TextureUploadThread_Main();
-	inline void StartTextureUploads() { mSignal_UploadThreadWorkReady.NotifyOne(); };
+	
+	inline ID3D12Device*         GetDevicePtr() { return mDevice.GetDevicePtr(); }
+	inline FDeviceCapabilities   GetDeviceCapabilities() const { return mDevice.GetDeviceCapabilities(); }
 
 private:
 	using PSOArray_t = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
@@ -254,7 +296,7 @@ private:
 
 
 	// root signatures & PSOs
-	std::vector<ID3D12RootSignature*> mpBuiltinRootSignatures;
+	std::unordered_map<RS_ID , ID3D12RootSignature*> mRootSignatureLookup;
 	std::unordered_map<PSO_ID, ID3D12PipelineState*> mPSOs;
 
 	// data
@@ -276,19 +318,15 @@ private:
 	
 	// Multithreaded PSO Loading
 	ThreadPool mWorkers_PSOLoad; // Loading a PSO will use one worker from shaderLoad pool for each shader stage to be compiled
-	struct FPSOLoadTaskContext
-	{
-		std::queue<FPSOLoadDesc> LoadQueue;
-		std::set<std::hash<FPSOLoadDesc>> UniquePSOHashes;
-	};
-	std::unordered_map <TaskID, FPSOLoadTaskContext> mLookup_PSOLoadContext;
+	struct FPSOCreationTaskExecutionContext{ std::queue<FPSOCreationTaskParameters> TaskQueue; };
+	std::unordered_map <TaskID, FPSOCreationTaskExecutionContext> mLookup_PSOCreationContext;
 
 	// Multithreaded Shader Loading
 	ThreadPool mWorkers_ShaderLoad;
-	struct FShaderLoadTaskContext { std::queue<FShaderStageCompileDesc> LoadQueue; };
+	struct FShaderLoadTaskContext { std::queue<FShaderStageCompileDesc> TaskQueue; };
 	std::unordered_map < TaskID, FShaderLoadTaskContext> mLookup_ShaderLoadContext;
 	
-	void EnqueueShaderLoadTask(TaskID PSOLoadTaskID, const FShaderStageCompileDesc&);
+	void EnqueueTask_ShaderLoad(TaskID PSOLoadTaskID, const FShaderStageCompileDesc&);
 	std::vector<std::shared_future<FShaderStageCompileResult>> StartShaderLoadTasks(TaskID PSOLoadTaskID);
 
 private:
@@ -296,12 +334,12 @@ private:
 	void InitializeHeaps();
 	
 
-	void LoadRootSignatures();
-	void LoadPSOs();
+	void LoadBuiltinRootSignatures();
+	void LoadBuiltinPSOs();
 	void LoadDefaultResources();
 	
 
-	ID3D12PipelineState* LoadPSO(const FPSOLoadDesc& psoLoadDesc);
+	ID3D12PipelineState* LoadPSO(const FPSODesc& psoLoadDesc);
 	FShaderStageCompileResult LoadShader(const FShaderStageCompileDesc& shaderStageDesc);
 
 	BufferID CreateVertexBuffer(const FBufferDesc& desc);
@@ -312,6 +350,13 @@ private:
 
 	TextureID AddTexture_ThreadSafe(Texture&& tex);
 
+	// Texture Residency
+	void QueueTextureUpload(const FTextureUploadDesc& desc);
+	void ProcessTextureUpload(const FTextureUploadDesc& desc);
+	void ProcessTextureUploadQueue();
+	void TextureUploadThread_Main();
+	inline void StartTextureUploads() { mSignal_UploadThreadWorkReady.NotifyOne(); };
+
 //
 // STATIC PUBLIC DATA/INTERFACE
 //
@@ -320,6 +365,9 @@ public:
 	static const std::string_view&               DXGIFormatAsString(DXGI_FORMAT format);
 	static EProceduralTextures                   GetProceduralTextureEnumFromName(const std::string& ProceduralTextureName);
 
+	static std::string ShaderSourceFileDirectory;
+	static std::wstring GetFullPathOfShader(LPCWSTR shaderFileName);
+	static std::wstring GetFullPathOfShader(const std::string& shaderFileName);
 	static std::string PSOCacheDirectory;
 	static std::string ShaderCacheDirectory;
 	static void InitializeShaderAndPSOCacheDirectory();

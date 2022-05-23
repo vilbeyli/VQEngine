@@ -31,6 +31,13 @@ using namespace DirectX;
 
 static const FEnvironmentMapDescriptor DEFAULT_ENV_MAP_DESC = { "ENV_MAP_NOT_FOUND", "", 0.0f };
 
+
+int FEnvironmentMapRenderingResources::GetNumSpecularIrradianceCubemapLODLevels(const VQRenderer& Renderer) const
+{
+	return Renderer.GetTextureMips(Tex_IrradianceSpec);
+}
+
+
 //-------------------------------------------------------------------------------------------------------------------------------------------------
 //
 // UPDATE THREAD
@@ -204,9 +211,10 @@ bool CreateEnvironmentMapTextureFromHiResAndSaveToDisk(const std::string& Target
 
 	return true;
 }
-void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
+void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMapMip0Resolution)
 {
 	assert(EnvMapName.size() != 0);
+	constexpr int DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION = 64;
 	FEnvironmentMapRenderingResources& env = mResources_MainWnd.EnvironmentMap;
 
 	// if already loaded, unload it
@@ -238,7 +246,7 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	const unsigned MonitorResolutionY = mRenderer.GetWindowSwapChain(mpWinMain->GetHWND()).GetContainingMonitorDesc().DesktopCoordinates.bottom;
 	DetermineResolution_HDRI(desc, MonitorResolutionY);
 	const std::string EnvMapResolution = StrUtil::split(DirectoryUtil::GetFileNameWithoutExtension(desc.FilePath), '_').back(); // file_name_4k.png -> "4k"
-	Log::Info("Loading Environment Map: %s (%s)", EnvMapName.c_str(), EnvMapResolution.c_str());
+	Log::Info("Loading Environment Map: %s (%s | Diff:%dx%d | Spec:%dx%d)", EnvMapName.c_str(), EnvMapResolution.c_str(), DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION, DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION, SpecularMapMip0Resolution, SpecularMapMip0Resolution);
 
 	// if the lowres texture doesn't exist, run a downsample pass (on CPU) on the available texture and save to disk
 	if (!DirectoryUtil::FileExists(desc.FilePath)) // desc.FilePath: "FolderPath/file_name_4k.hdr"
@@ -258,7 +266,7 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 
 	// HDR map
 	env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(desc.FilePath.c_str(), true);
-	env.SRV_HDREnvironment = mRenderer.CreateAndInitializeSRV(env.Tex_HDREnvironment);
+	env.SRV_HDREnvironment = mRenderer.AllocateAndInitializeSRV(env.Tex_HDREnvironment);
 	env.MaxContentLightLevel = static_cast<int>(desc.MaxContentLightLevel);
 
 	// HDR Map Downsampled 
@@ -269,10 +277,9 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	// Create Irradiance Map Textures 
 	TextureCreateDesc tdesc("EnvMap_IrradianceDiff");
 	tdesc.bCubemap = true;
-	tdesc.bGenerateMips = true;
 	tdesc.pData = nullptr;
-	tdesc.d3d12Desc.Height = 64; // TODO: drive with gfx settings?
-	tdesc.d3d12Desc.Width  = 64; // TODO: drive with gfx settings?
+	tdesc.d3d12Desc.Height = DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION; // TODO: drive with gfx settings?
+	tdesc.d3d12Desc.Width  = DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION; // TODO: drive with gfx settings?
 	tdesc.d3d12Desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
 	tdesc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 	tdesc.d3d12Desc.DepthOrArraySize = 6;
@@ -294,9 +301,10 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 
 	tdesc.TexName = "EnvMap_IrradianceSpec";
 	tdesc.d3d12Desc.DepthOrArraySize = 6;
+	tdesc.bGenerateMips = true;
 	tdesc.bCubemap = true;
-	tdesc.d3d12Desc.Height = 256; // TODO: drive with gfx settings?
-	tdesc.d3d12Desc.Width  = 256; // TODO: drive with gfx settings?
+	tdesc.d3d12Desc.Height = SpecularMapMip0Resolution;
+	tdesc.d3d12Desc.Width  = SpecularMapMip0Resolution;
 	tdesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 	tdesc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
 	tdesc.d3d12Desc.MipLevels = Image::CalculateMipLevelCount(tdesc.d3d12Desc.Width, tdesc.d3d12Desc.Height) - 1; // 2x2 for the last mip level
@@ -305,33 +313,33 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName)
 	const int& NUM_MIPS = tdesc.d3d12Desc.MipLevels;
 
 	// Create Irradiance Map SRVs 
-	env.SRV_IrradianceDiff = mRenderer.CreateSRV();
-	env.SRV_IrradianceSpec = mRenderer.CreateSRV();
-	env.SRV_BlurTemp = mRenderer.CreateSRV();
+	env.SRV_IrradianceDiff = mRenderer.AllocateSRV();
+	env.SRV_IrradianceSpec = mRenderer.AllocateSRV();
+	env.SRV_BlurTemp = mRenderer.AllocateSRV();
 	mRenderer.InitializeSRV(env.SRV_IrradianceDiff, 0, env.Tex_IrradianceDiff, false, true);
 	mRenderer.InitializeSRV(env.SRV_IrradianceSpec, 0, env.Tex_IrradianceSpec, false, true);
 	mRenderer.InitializeSRV(env.SRV_BlurTemp, 0, env.Tex_BlurTemp);
 	for (int face = 0; face < 6; ++face)
 	{
-		env.SRV_IrradianceDiffFaces[face] = mRenderer.CreateSRV();
+		env.SRV_IrradianceDiffFaces[face] = mRenderer.AllocateSRV();
 		mRenderer.InitializeSRV(env.SRV_IrradianceDiffFaces[face], face, env.Tex_IrradianceDiff, false, false);
 	}
-	env.SRV_IrradianceDiffBlurred = mRenderer.CreateSRV();
+	env.SRV_IrradianceDiffBlurred = mRenderer.AllocateSRV();
 	mRenderer.InitializeSRV(env.SRV_IrradianceDiffBlurred, 0, env.Tex_IrradianceDiffBlurred, false, true);
 
 
 	// Create Irradiance Map RTVs & UAVs
-	env.RTV_IrradianceDiff = mRenderer.CreateRTV(6);
-	env.RTV_IrradianceSpec = mRenderer.CreateRTV(6 * NUM_MIPS);
-	env.UAV_IrradianceDiffBlurred = mRenderer.CreateUAV(6);
-	env.UAV_BlurTemp = mRenderer.CreateUAV();
+	env.RTV_IrradianceDiff = mRenderer.AllocateRTV(6);
+	env.RTV_IrradianceSpec = mRenderer.AllocateRTV(6 * NUM_MIPS);
+	env.UAV_IrradianceDiffBlurred = mRenderer.AllocateUAV(6);
+	env.UAV_BlurTemp = mRenderer.AllocateUAV();
 	for (int face = 0; face < 6; ++face)
 	{
 		constexpr int MIP_LEVEL = 0;
 		mRenderer.InitializeRTV(env.RTV_IrradianceDiff, face, env.Tex_IrradianceDiff, face, MIP_LEVEL);
-		mRenderer.InitializeUAV(env.UAV_IrradianceDiffBlurred, face, env.Tex_IrradianceDiffBlurred);
+		mRenderer.InitializeUAV(env.UAV_IrradianceDiffBlurred, face, env.Tex_IrradianceDiffBlurred, face, MIP_LEVEL);
 	}
-	mRenderer.InitializeUAV(env.UAV_BlurTemp, 0, env.Tex_BlurTemp);
+	mRenderer.InitializeUAV(env.UAV_BlurTemp, 0, env.Tex_BlurTemp, 0, 0);
 
 	for (int  mip = 0; mip<NUM_MIPS; ++mip ) 
 	for (int face = 0; face < 6    ; ++face)  
@@ -449,7 +457,7 @@ void VQEngine::PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, FEnviron
 		if constexpr (DRAW_CUBE_FACES_SEPARATELY)
 		{
 			pCmd->SetPipelineState(mRenderer.GetPSO(CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO));
-			pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(10));
+			pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ConvolutionCubemap));
 			pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());
 			pCmd->SetGraphicsRootDescriptorTable(3, srvEnv.GetGPUDescHandle());
 
@@ -495,7 +503,7 @@ void VQEngine::PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, FEnviron
 			}
 
 			pCmd->SetPipelineState(mRenderer.GetPSO(CUBEMAP_CONVOLUTION_DIFFUSE_PSO));
-			pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(10));
+			pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ConvolutionCubemap));
 			pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());
 			pCmd->SetGraphicsRootDescriptorTable(3, srvEnv.GetGPUDescHandle());
 			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr0);
@@ -552,7 +560,7 @@ void VQEngine::PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, FEnviron
 		{
 			SCOPED_GPU_MARKER(pCmd, "BlurX");
 			pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_X_PSO));
-			pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(11));
+			pCmd->SetComputeRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1));
 
 			pCmd->SetComputeRootDescriptorTable(0, srv.GetGPUDescHandle());
 			pCmd->SetComputeRootDescriptorTable(1, uav_BlurIntermediate.GetGPUDescHandle());
@@ -601,7 +609,7 @@ void VQEngine::PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, FEnviron
 		SCOPED_GPU_MARKER(pCmd, "SpecularIrradianceCubemap");
 
 		pCmd->SetPipelineState(mRenderer.GetPSO(CUBEMAP_CONVOLUTION_SPECULAR_PSO));
-		pCmd->SetGraphicsRootSignature(mRenderer.GetRootSignature(10));
+		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ConvolutionCubemap));
 		pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());
 		pCmd->SetGraphicsRootDescriptorTable(3, srvIrrDiffuse.GetGPUDescHandle());
 
@@ -687,13 +695,13 @@ void VQEngine::ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, SRV_ID
 	mRenderer.GetTextureDimensions(TexBRDFLUT, W, H);
 
 	// Create & Initialize a UAV for the LUT 
-	UAV_ID uavBRDFLUT_ID = mRenderer.CreateUAV();
+	UAV_ID uavBRDFLUT_ID = mRenderer.AllocateUAV();
 	mRenderer.InitializeUAV(uavBRDFLUT_ID, 0, TexBRDFLUT);
 	const UAV& uavBRDFLUT = mRenderer.GetUAV(uavBRDFLUT_ID);
 
 	// Dispatch
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::BRDF_INTEGRATION_CS_PSO));
-	pCmd->SetComputeRootSignature(mRenderer.GetRootSignature(12)); // hardcoded is bad :(
+	pCmd->SetComputeRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__BRDFIntegrationCS));
 	pCmd->SetComputeRootDescriptorTable(0, uavBRDFLUT.GetGPUDescHandle());
 
 	constexpr int THREAD_GROUP_X = 8;

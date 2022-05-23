@@ -270,30 +270,33 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 		SwapChain& Swapchain = mRenderer.GetWindowSwapChain(p->hwnd);
 		const int NUM_BACK_BUFFERS =  Swapchain.GetNumBackBuffers();
 
-		// Update Camera Projection Matrices
-		Camera& cam = mpScene->GetActiveCamera(); // TODO: all cameras?
-		FProjectionMatrixParameters UpdatedProjectionMatrixParams = cam.GetProjectionParameters();
-		UpdatedProjectionMatrixParams.ViewportWidth  = static_cast<float>(uWidth);
-		UpdatedProjectionMatrixParams.ViewportHeight = static_cast<float>(uHeight);
-		cam.SetProjectionMatrix(UpdatedProjectionMatrixParams);
-
-		// Update PostProcess Data
-		for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
+		if ((uWidth | uHeight) != 0 && mpScene)
 		{
-			FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(i);
+			// Update Camera Projection Matrices
+			Camera& cam = mpScene->GetActiveCamera(); // TODO: all cameras?
+			FProjectionMatrixParameters UpdatedProjectionMatrixParams = cam.GetProjectionParameters();
+			UpdatedProjectionMatrixParams.ViewportWidth = static_cast<float>(uWidth);
+			UpdatedProjectionMatrixParams.ViewportHeight = static_cast<float>(uHeight);
+			cam.SetProjectionMatrix(UpdatedProjectionMatrixParams);
 
-			// Update FidelityFX constant blocks
-			if (PPParams.IsFFXCASEnabled())
+			// Update PostProcess Data
+			for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
 			{
-				PPParams.FFXCASParams.UpdateCASConstantBlock(uWidth, uHeight, uWidth, uHeight);
-			}
-			if (PPParams.IsFSREnabled())
-			{
-				const float fResolutionScale = PPParams.FFSR_EASUParams.GetScreenPercentage();
-				const uint InputWidth  = static_cast<uint>(fResolutionScale * uWidth);
-				const uint InputHeight = static_cast<uint>(fResolutionScale * uHeight);
-				PPParams.FFSR_EASUParams.UpdateEASUConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, uWidth, uHeight);
-				PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
+				FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(i);
+
+				// Update FidelityFX constant blocks
+				if (PPParams.IsFFXCASEnabled())
+				{
+					PPParams.FFXCASParams.UpdateCASConstantBlock(uWidth, uHeight, uWidth, uHeight);
+				}
+				if (PPParams.IsFSREnabled())
+				{
+					const float fResolutionScale = PPParams.FFSR_EASUParams.GetScreenPercentage();
+					const uint InputWidth  = static_cast<uint>(fResolutionScale * uWidth);
+					const uint InputHeight = static_cast<uint>(fResolutionScale * uHeight);
+					PPParams.FFSR_EASUParams.UpdateEASUConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, uWidth, uHeight);
+					PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
+				}
 			}
 		}
 	}
@@ -383,7 +386,13 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 #endif
 
 	Swapchain.WaitForGPU();
-	Swapchain.Resize(WIDTH, HEIGHT, Swapchain.GetFormat());
+	HRESULT hr = Swapchain.Resize(WIDTH, HEIGHT, Swapchain.GetFormat());
+	if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
+	{
+		Log::Error("Device removed during Swpchain.Resize(%d, %d)", WIDTH, HEIGHT);
+		// TODO: recreate the swapchain?
+	}
+
 	if (bFullscreenTransition)
 	{
 		const FSetHDRMetaDataParams HDRMetaData = this->GatherHDRMetaDataParameters(hwnd);
@@ -394,7 +403,7 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	}
 	Swapchain.EnsureSwapChainColorSpace(Swapchain.GetFormat() == DXGI_FORMAT_R16G16B16A16_FLOAT ? _16 : _8, false);
 	pWnd->OnResize(WIDTH, HEIGHT);
-	mRenderer.OnWindowSizeChanged(hwnd, WIDTH, HEIGHT);
+	mRenderer.OnWindowSizeChanged(hwnd, WIDTH, HEIGHT); // updates render context
 
 	const auto& PPParams = this->mpScene->GetPostProcessParameters(0);
 	const bool bFSREnabled = PPParams.IsFSREnabled() && !bUseHDRRenderPath; // TODO: remove this when FSR-HDR is implemented
@@ -463,14 +472,6 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 	const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
 
 	const float fResolutionScale = bUpscaling ? PPParams.FFSR_EASUParams.GetScreenPercentage() : 1.0f;
-
-	RenderThread_UnloadWindowSizeDependentResources(hwnd);
-	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT, fResolutionScale);
-
-
-	//const bool bCapture = true;
-	//const bool bVisible = true;
-	//mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bCapture, bVisible));
 
 	//
 	// EXCLUSIVE FULLSCREEN

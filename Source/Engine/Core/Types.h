@@ -34,8 +34,19 @@ using fp32 = float;
 
 // -------------------------------------
 
+constexpr int INVALID_ID = -1;
+#if 1
 using ID_TYPE = int;
-constexpr ID_TYPE INVALID_ID = -1;
+#else
+struct ID_TYPE // int w/ default value -1
+{
+	ID_TYPE() : _id(INVALID_ID) {}
+	ID_TYPE(int id) : _id(id) {}
+	operator int() { return _id; }
+	ID_TYPE& operator++() { return _id; }
+	int _id;
+};
+#endif
 
 using BufferID = ID_TYPE;
 using TextureID = ID_TYPE;
@@ -46,7 +57,8 @@ using CBV_ID = ID_TYPE;
 using RTV_ID = ID_TYPE;
 using DSV_ID = ID_TYPE;
 
-using PSO_ID = ID_TYPE;
+using PSO_ID = ID_TYPE; // pipeline state object
+using RS_ID = ID_TYPE;  // root signature
 
 using EnvironmentMapID = ID_TYPE;
 using MeshID = ID_TYPE;
@@ -56,3 +68,5 @@ using TransformID = ID_TYPE;
 
 using TaskID = ID_TYPE;
 
+
+#define DIV_AND_ROUND_UP(x,d) ((x+d-1)/d)

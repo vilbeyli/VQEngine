@@ -42,6 +42,7 @@
 #include "Common.h"
 
 #include <d3d12.h>
+#include <string>
 
 class ResourceView;
 
@@ -58,7 +59,7 @@ enum EResourceHeapType
 class StaticResourceViewHeap
 {
 public:
-    void Create(ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP_TYPE heapType, uint32 descriptorCount, bool forceCPUVisible = false);
+    void Create(ID3D12Device* pDevice, const std::string& ResourceName, D3D12_DESCRIPTOR_HEAP_TYPE heapType, uint32 descriptorCount, bool forceCPUVisible = false);
     void Destroy();
     bool AllocDescriptor(uint32 size, ResourceView* pRV);
     
@@ -71,6 +72,7 @@ private:
     uint32 mDescriptorElementSize;
 
     ID3D12DescriptorHeap *mpHeap;
+    bool mbGPUVisible;
 };
 
 // Creates one Upload heap and suballocates memory from the heap

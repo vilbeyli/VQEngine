@@ -70,9 +70,23 @@ set (Shaders
     "Shaders/CubemapConvolution.hlsl"
     "Shaders/GaussianBlur.hlsl"
     "Shaders/AMDFidelityFX.hlsl"
+    "Shaders/DownsampleDepth.hlsl"
     "Shaders/UI.hlsl"
     "Shaders/UIHDRComposite.hlsl"
     "Shaders/HDR.hlsl"
+    "Shaders/Visualization.hlsl"
+    "Shaders/ApplyReflections.hlsl"
+)
+
+set (ShadersScreenSpaceReflections
+    "Shaders/ScreenSpaceReflections/ClassifyReflectionTiles.hlsl"
+    "Shaders/ScreenSpaceReflections/Intersect.hlsl"
+    "Shaders/ScreenSpaceReflections/Prefilter.hlsl"
+    "Shaders/ScreenSpaceReflections/PrepareBlueNoiseTexture.hlsl"
+    "Shaders/ScreenSpaceReflections/PrepareIndirectArgs.hlsl"
+    "Shaders/ScreenSpaceReflections/Reproject.hlsl"
+    "Shaders/ScreenSpaceReflections/ResolveTemporal.hlsl"
+    "Shaders/ScreenSpaceReflections/Common.hlsl"
 )
 
 #
@@ -81,10 +95,17 @@ set (Shaders
 set (RenderPassFiles
     "Source/Engine/RenderPass/RenderPass.h"
     "Source/Engine/RenderPass/AmbientOcclusion.h"
+    "Source/Engine/RenderPass/ApplyReflections.h"
     "Source/Engine/RenderPass/DepthPrePass.h"
+    "Source/Engine/RenderPass/DepthMSAAResolve.h"
+    "Source/Engine/RenderPass/ScreenSpaceReflections.h"
     
+    "Source/Engine/RenderPass/RenderPass.cpp"
     "Source/Engine/RenderPass/AmbientOcclusion.cpp"
+    "Source/Engine/RenderPass/ApplyReflections.cpp"
     "Source/Engine/RenderPass/DepthPrePass.cpp"
+    "Source/Engine/RenderPass/DepthMSAAResolve.cpp"
+    "Source/Engine/RenderPass/ScreenSpaceReflections.cpp"
 )
 
 set (CoreFiles 
@@ -104,7 +125,6 @@ set (CoreFiles
     "Source/Engine/Core/VQEngine_EventHandlers.cpp"
     "Source/Engine/Core/FileParser.cpp"
     "Source/Engine/Core/Memory.cpp"
-
 )
 
 set (SceneFiles   
@@ -174,19 +194,49 @@ set (FFX_FSR_Shaders
     "Shaders/AMDFidelityFX/FSR1.0/ffx_fsr1.h"
 )
 set (FFX_SPD_Shaders
-    "Shaders/FidelityFX/SPD/ffx_a.h"
-    "Shaders/FidelityFX/SPD/ffx_spd.h"
+    "Shaders/AMDFidelityFX/SPD/ffx_a.h"
+    "Shaders/AMDFidelityFX/SPD/ffx_spd.h"
 )
+set (FFX_CACAO_Shaders
+    "Shaders/AMDFidelityFX/CACAO/ffx_cacao.hlsl"
+)
+set (FFX_SSSR_Shaders
+    "Shaders/AMDFidelityFX/SSSR/ffx_sssr.h"
+)
+set (FFX_DNSR_Shaders
+    "Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_common.h"
+    "Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_config.h"
+    "Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_prefilter.h"
+    "Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_reproject.h"
+    "Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_resolve_temporal.h"
+    "Shaders/AMDFidelityFX/DNSR/ffx_denoiser_shadows_filter.h"
+    "Shaders/AMDFidelityFX/DNSR/ffx_denoiser_shadows_prepare.h"
+    "Shaders/AMDFidelityFX/DNSR/ffx_denoiser_shadows_tileclassification.h"
+    "Shaders/AMDFidelityFX/DNSR/ffx_denoiser_shadows_util.h"
+)
+
 set (LibsIncl
     "Libs/"
 )
 
-set (LibFFX
+set (LibFFX_CACAO
     "Libs/AMDFidelityFX/CACAO/ffx_cacao_defines.h"
     "Libs/AMDFidelityFX/CACAO/ffx_cacao.cpp"
     "Libs/AMDFidelityFX/CACAO/ffx_cacao.h"
     "Libs/AMDFidelityFX/CACAO/ffx_cacao_impl.cpp"
     "Libs/AMDFidelityFX/CACAO/ffx_cacao_impl.h"
+)
+
+set (LibFFX_SSSR
+    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_128spp.cpp"
+    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_16spp.cpp"
+    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_1spp.cpp"
+    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_256spp.cpp"
+    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_2spp.cpp"
+    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_32spp.cpp"
+    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_4spp.cpp"
+    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_64spp.cpp"
+    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_8spp.cpp"
 )
 
 # ouput exe to bin directory
@@ -216,8 +266,13 @@ source_group("Config"   FILES ${Config})
 source_group("Resource" FILES ${Resource})
 source_group("Icons"    FILES ${Icons})
 source_group("Shaders"  FILES ${Shaders})
-source_group("Shaders\\AMD-FidelityFX\\CAS"  FILES ${FFX_CAS_Shaders})
-source_group("Shaders\\AMD-FidelityFX\\FSR1" FILES ${FFX_FSR_Shaders})
+source_group("Shaders\\ScreenSpaceReflections"  FILES ${ShadersScreenSpaceReflections})
+source_group("Shaders\\AMD-FidelityFX\\CAS"   FILES ${FFX_CAS_Shaders})
+source_group("Shaders\\AMD-FidelityFX\\FSR1"  FILES ${FFX_FSR_Shaders})
+source_group("Shaders\\AMD-FidelityFX\\SPD"   FILES ${FFX_SPD_Shaders})
+source_group("Shaders\\AMD-FidelityFX\\CACAO" FILES ${FFX_CACAO_Shaders})
+source_group("Shaders\\AMD-FidelityFX\\SSSR" FILES ${FFX_SSSR_Shaders})
+source_group("Shaders\\AMD-FidelityFX\\DNSR" FILES ${FFX_DNSR_Shaders})
 source_group("Scenes"   FILES ${Scenes})
 source_group("Materials" FILES ${Materials})
 source_group("Source\\RenderPass" FILES ${RenderPassFiles})
@@ -225,18 +280,25 @@ source_group("Source\\Core" FILES ${CoreFiles})
 source_group("Source\\Scene" FILES ${SceneFiles})
 source_group("Source\\PostProcess" FILES ${PostProcessFiles})
 source_group("Source" FILES ${SourceVQE})
-source_group("Libs\\AMD-FidelityFX\\CACAO"   FILES ${LibFFX})
+source_group("Libs\\AMD-FidelityFX\\CACAO"   FILES ${LibFFX_CACAO})
+source_group("Libs\\AMD-FidelityFX\\SSSR"   FILES ${LibFFX_SSSR})
 
 set_source_files_properties(${Config} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Materials} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Scenes} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${ShadersScreenSpaceReflections} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${FFX_CAS_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${FFX_FSR_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${FFX_SPD_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${FFX_CACAO_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${FFX_SSSR_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${FFX_DNSR_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${CoreFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${RenderPassFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${SceneFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${LibFFX} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${LibFFX_CACAO} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${LibFFX_SSSR} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(Data/Resources/VQE.rc PROPERTIES VS_TOOL_OVERRIDE "Resource compiler")
 set_source_files_properties(Data/Icons/VQE32.ico  PROPERTIES VS_TOOL_OVERRIDE "Image")
 
@@ -247,7 +309,27 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/DirectXCompiler/lib/x64)
 add_definitions(-DFFX_CACAO_ENABLE_D3D12)
 
 # Create a library with the project name that is build with the Headers and Source files
-add_executable( ${PROJECT_NAME} ${SourceVQE} ${Config} ${Scenes} ${Resource} ${Shaders} ${Materials} ${FFX_FSR_Shaders} ${FFX_CAS_Shaders} ${LibFFX} ${RenderPassFiles} ${CoreFiles} ${PostProcessFiles} ${SceneFiles})
+add_executable( ${PROJECT_NAME} 
+    ${SourceVQE} 
+    ${Config} 
+    ${Scenes} 
+    ${Resource} 
+    ${Materials} 
+    ${Shaders} 
+        ${ShadersScreenSpaceReflections} 
+        ${FFX_FSR_Shaders} 
+        ${FFX_CAS_Shaders} 
+        ${FFX_CACAO_Shaders} 
+        ${FFX_SSSR_Shaders} 
+        ${FFX_DNSR_Shaders} 
+        ${FFX_SPD_Shaders} 
+    ${LibFFX_CACAO} 
+    ${LibFFX_SSSR} 
+    ${RenderPassFiles} 
+    ${CoreFiles} 
+    ${PostProcessFiles} 
+    ${SceneFiles}
+)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY} )
 

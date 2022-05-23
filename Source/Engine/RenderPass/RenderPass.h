@@ -17,15 +17,68 @@
 //	Contact: volkanilbeyli@gmail.com
 #pragma once
 
-struct ID3D12Device;
-struct IRenderPass
-{
-	virtual bool Initialize(ID3D12Device* pDevice) = 0;
-	virtual void Exit() = 0;
+#include "../../Renderer/Renderer.h"
 
-	virtual void OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const void* pRscParameters = nullptr) = 0;
+#include "../Core/Types.h"
+#include <DirectXMath.h>
+#include <dxgiformat.h>
+
+#include <vector>
+#include <array>
+
+struct IRenderPassResourceCollection {};
+struct IRenderPassDrawParameters {};
+struct ID3D12RootSignature;
+class IRenderPass
+{
+public:
+	virtual ~IRenderPass() = 0;
+
+	virtual bool Initialize() = 0;
+	virtual void Destroy() = 0;
+
+	virtual void OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const IRenderPassResourceCollection* pRscParameters = nullptr) = 0;
 	virtual void OnDestroyWindowSizeDependentResources() = 0;
 
-	virtual void RecordCommands(const void* pDrawParameters = nullptr) = 0;
+	virtual void RecordCommands(const IRenderPassDrawParameters* pDrawParameters = nullptr) = 0;
+
+	
+	//virtual std::vector<ID3D12RootSignature*> CreateAllPassRootSignatures();
+	virtual std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() = 0;
 };
 
+
+
+
+class VQRenderer;
+
+// Base class for render passes.
+// Keeps references of the common resources necessary for rendering/resource management.
+// No instantiation of base class is allowed, only the derived can call the protected ctor.
+class RenderPassBase : public IRenderPass
+{
+public:
+	RenderPassBase() = delete;
+	RenderPassBase(const RenderPassBase&) = delete;
+	virtual ~RenderPassBase() = 0;
+
+	virtual bool Initialize() = 0;
+	virtual void Destroy() = 0;
+
+	virtual void OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const IRenderPassResourceCollection* pRscParameters = nullptr) = 0;
+	virtual void OnDestroyWindowSizeDependentResources() = 0;
+
+	// TODO: shouldn't this be const? #threaded_access
+	virtual void RecordCommands(const IRenderPassDrawParameters* pDrawParameters = nullptr) = 0;
+
+	virtual std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() = 0;
+
+protected:
+	RenderPassBase(VQRenderer& RendererIn)
+		: mRenderer(RendererIn)
+	{};
+
+protected:
+	VQRenderer& mRenderer;
+	// TODO: consider using a { subpassID<uint>, pRS } lookup in basepass?
+};
