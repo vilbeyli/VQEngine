@@ -15,9 +15,9 @@
     
     <!-- CAMERAS -->
     <Camera>
-        <Position> 0.0 10.0 -22 </Position>
-        <Pitch> 15 </Pitch>
-        <Yaw> 0 </Yaw>
+        <Position> -0.935758 5.132592 -30.181700 </Position>
+        <Pitch> 11.949983 </Pitch>
+        <Yaw> -0.7 </Yaw>
         
         <Projection>Perspective</Projection>
         <FoV>70.0</FoV>
@@ -58,15 +58,14 @@
         </Transform>
         <Model>
             <Mesh>Cube</Mesh>
-            <!--<MaterialName>Checkerboard_Glossy</MaterialName>-->
-            <MaterialName>Black_VerySmooth</MaterialName>
+            <MaterialName>Black_herringbone_tiles_01</MaterialName>
         </Model>
     </GameObject>
     
     <!-- OBJECTS -->
     <GameObject>
         <Transform>
-            <Position>0 0 4</Position>
+            <Position>-25 0 4</Position>
             <Quaternion>0 0 0 1</Quaternion>
             <Scale>4 4 4</Scale>
         </Transform>
@@ -77,13 +76,13 @@
     </GameObject>
     <GameObject>
         <Transform>
-            <Position>0 -5 4</Position>
+            <Position>-25 -5 4</Position>
             <Quaternion>0 0 0 1</Quaternion>
             <Scale>10 0.1 10</Scale>
         </Transform>
         <Model>
             <Mesh>Cylinder</Mesh>
-            <MaterialName>Black_VeryRough</MaterialName>
+            <MaterialName>DarkGray_VeryRough</MaterialName>
         </Model>
     </GameObject>
 
@@ -106,15 +105,15 @@
         </Transform>
         <Model>
             <Mesh>Cylinder</Mesh>
-            <MaterialName>Black_VeryRough</MaterialName>
+            <MaterialName>DarkGray_VeryRough</MaterialName>
         </Model>
     </GameObject>
-    
+
     <GameObject>
         <Transform>
-            <Position>-25 1 4</Position>
+            <Position>0 5 4</Position>
             <Rotation>0 0 0</Rotation>
-            <Scale>6 6 6</Scale>
+            <Scale>12 12 12</Scale>
         </Transform>
         <Model>
             <Mesh>Sphere</Mesh>
@@ -123,9 +122,9 @@
     </GameObject>
     <GameObject>
         <Transform>
-            <Position>-25 -5 4</Position>
+            <Position>0 -5 4</Position>
             <Quaternion>0 0 0 1</Quaternion>
-            <Scale>10 0.1 10</Scale>
+            <Scale>13 0.15 13</Scale>
         </Transform>
         <Model>
             <Mesh>Cylinder</Mesh>

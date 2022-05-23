@@ -16,5 +16,17 @@
         <DiffuseMap>Procedural/Checkerboard</DiffuseMap>
         <RoughnessMap>Procedural/Checkerboard</RoughnessMap>
     </Material>
+    <Material>
+        <Name>Checkerboard_Rough</Name>
+        <DiffuseMap>Procedural/Checkerboard</DiffuseMap>
+        <RoughnessMap>Procedural/Checkerboard_Grayscale</RoughnessMap>
+    </Material>
+    
+    <Material>
+        <Name>Checkerboard_Metallic</Name>
+        <DiffuseMap>Procedural/Checkerboard</DiffuseMap>
+        <RoughnessMap>Procedural/Checkerboard</RoughnessMap>
+        <MetallicMap>Procedural/Checkerboard_Grayscale</MetallicMap>
+    </Material>
 
 </DefaultMaterials>
