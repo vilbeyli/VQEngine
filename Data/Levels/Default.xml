@@ -8,10 +8,10 @@
 
          // preset usage: defined in EnvironmentMaps.ini
          <Preset>Stadium01</Preset>
-    <EnvironmentMap>
-        <Preset>Stadium01</Preset>
-    </EnvironmentMap>
     -->
+     <EnvironmentMap>
+         <Preset>GymEntrance</Preset>
+     </EnvironmentMap>
     
     <!-- CAMERAS -->
     <Camera>
@@ -89,12 +89,12 @@
     <GameObject>
         <Transform>
             <Position>25 2 2</Position>
-            <Rotation>30 120 60</Rotation>
-            <Scale>3.1 3.1 3.1</Scale>
+            <Rotation>0 230 0</Rotation>
+            <Scale>800 800 800</Scale>
         </Transform>
         <Model>
-            <Mesh>Cylinder</Mesh>
-            <MaterialName>Metal_tiles_03</MaterialName>
+            <Path>Data/Models/BoomBox/glTF/BoomBox.gltf</Path>
+            <Name>BoomBox</Name>
         </Model>
     </GameObject>
     <GameObject>
