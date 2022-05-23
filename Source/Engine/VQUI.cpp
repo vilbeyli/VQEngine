@@ -103,7 +103,7 @@ static void InitializeEngineUIState(FUIState& s)
 	s.bWindowVisible_SceneControls = true;
 	s.bWindowVisible_GraphicsSettingsPanel = false;
 	s.bWindowVisible_Profiler = false;
-	s.bWindowVisible_DebugPanel = true;
+	s.bWindowVisible_DebugPanel = false;
 	s.bProfiler_ShowEngineStats = true;
 }
 
@@ -235,7 +235,7 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 const uint32_t CONTROLS_WINDOW_PADDING_X = 10;
 const uint32_t CONTROLS_WINDOW_PADDING_Y = 10;
 const uint32_t CONTROLS_WINDOW_SIZE_X    = 380;
-const uint32_t CONTROLS_WINDOW_SIZE_Y    = 320;
+const uint32_t CONTROLS_WINDOW_SIZE_Y    = 360;
 //---------------------------------------------
 const uint32_t GFX_WINDOW_PADDING_X      = 10;
 const uint32_t GFX_WINDOW_PADDING_Y      = 10;
@@ -250,7 +250,7 @@ const uint32_t PROFILER_WINDOW_SIZE_Y    = 850;
 const uint32_t DBG_WINDOW_PADDING_X      = 10;
 const uint32_t DBG_WINDOW_PADDING_Y      = 10;
 const uint32_t DBG_WINDOW_SIZE_X         = 330;
-const uint32_t DBG_WINDOW_SIZE_Y         = 150;
+const uint32_t DBG_WINDOW_SIZE_Y         = 180;
 //---------------------------------------------
 
 
@@ -462,12 +462,15 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 	ImGui::Text("Help");
 	ImGui::Separator();
 	
-
 	if (ImGui::Button((mUIState.bWindowVisible_KeyMappings ? "Hide Key Mapping" : "Show Key Mapping")))
 	{
 		mUIState.bWindowVisible_KeyMappings = !mUIState.bWindowVisible_KeyMappings;
 	}
 
+	ImGuiSpacing3();
+	
+	ImGui::Text("Windows");
+	ImGui::Separator();
 	ImGui::Checkbox("Show Scene Controls (F1)", &mUIState.bWindowVisible_SceneControls);
 	ImGui::Checkbox("Show Graphics Settings (F3)", &mUIState.bWindowVisible_GraphicsSettingsPanel);
 	ImGui::Checkbox("Show Profiler (F2)", &mUIState.bWindowVisible_Profiler);
@@ -530,6 +533,15 @@ void VQEngine::DrawKeyMappingsWindow()
 		ImGui::Begin("KEY MAPPINGS", &mUIState.bWindowVisible_KeyMappings);
 
 		ImGui::PushStyleColor(ImGuiCol_Text, ColHeader);
+		ImGui::Text("------------------ UI ----------------------");
+		ImGui::PopStyleColor(1);
+		ImGui::Text("          F1 : Toggle Scene Window");
+		ImGui::Text("          F2 : Toggle Profiler Window");
+		ImGui::Text("          F3 : Toggle Graphics Settings Window");
+		ImGui::Text("          F4 : Toggle Debug Window");
+		ImGui::Text("     Shift+Z : Show/Hide ALL UI windows");
+
+		ImGui::PushStyleColor(ImGuiCol_Text, ColHeader);
 		ImGui::Text("------------------ CAMERA ----------------------");
 		ImGui::PopStyleColor(1);
 		ImGui::Text(" Right Click : Free Camera");
@@ -550,7 +562,6 @@ void VQEngine::DrawKeyMappingsWindow()
 		ImGui::PushStyleColor(ImGuiCol_Text, ColHeader);
 		ImGui::Text("------------------ SCENE -----------------------");
 		ImGui::PopStyleColor(1);
-		ImGui::Text("     Shift+Z : Show/Hide ALL UI windows");
 		ImGui::Text("     Shift+R : Reload level");
 		ImGui::Text("Page Up/Down : Change the HDRI Environment Map");
 		ImGui::Text("         1-4 : Change between available scenes");
@@ -681,7 +692,7 @@ void VQEngine::DrawDebugPanelWindow(FSceneRenderParameters& SceneParams, FPostPr
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
 
-	const uint32_t DBG_WINDOW_POS_X = std::min(W - PROFILER_WINDOW_SIZE_X - DBG_WINDOW_SIZE_X - DBG_WINDOW_PADDING_X*2, 30u);
+	const uint32_t DBG_WINDOW_POS_X = std::min(W - PROFILER_WINDOW_SIZE_X - DBG_WINDOW_SIZE_X - DBG_WINDOW_PADDING_X*2, GFX_WINDOW_SIZE_X + GFX_WINDOW_PADDING_X + DBG_WINDOW_PADDING_X);
 	const uint32_t DBG_WINDOW_POS_Y = H - DBG_WINDOW_SIZE_Y - DBG_WINDOW_PADDING_Y;
 	ImGui::SetNextWindowPos(ImVec2((float)DBG_WINDOW_POS_X, (float)DBG_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(DBG_WINDOW_SIZE_X, DBG_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
