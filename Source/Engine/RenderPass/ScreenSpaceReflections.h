@@ -89,7 +89,7 @@ public:
 	virtual std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() override;
 
 	SRV_ID GetPassOutputSRV(int iOutput = 0) const;
-	void ClearHistoryBuffers(ID3D12GraphicsCommandList* pCmd);
+	inline void ClearHistoryBuffers() { this->bClearHistoryBuffers = true; }
 private:
 	void LoadRootSignatures();
 	void CreateResources();
@@ -97,6 +97,7 @@ private:
 	void AllocateResourceViews();
 	void DeallocateResourceViews();
 	void InitializeResourceViews(const FResourceParameters* pParams);
+	void ClearHistoryBuffers(ID3D12GraphicsCommandList* pCmd);
 
 	enum ESubpass
 	{

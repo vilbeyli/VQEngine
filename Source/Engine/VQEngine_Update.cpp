@@ -583,6 +583,9 @@ void VQEngine::StartLoadingScene(int IndexScene)
 	// queue the selected scene for loading
 	mQueue_SceneLoad.push(mResourceNames.mSceneNames[IndexScene]);
 
+	// signal clearing history buffers to the render passes
+	mRenderPass_SSR.ClearHistoryBuffers();
+
 	mAppState = INITIALIZING;
 	mbLoadingLevel.store(true); // thread-safe
 	Log::Info("StartLoadingScene: %d", IndexScene);
