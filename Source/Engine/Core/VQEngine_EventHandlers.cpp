@@ -473,14 +473,6 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 
 	const float fResolutionScale = bUpscaling ? PPParams.FFSR_EASUParams.GetScreenPercentage() : 1.0f;
 
-	RenderThread_UnloadWindowSizeDependentResources(hwnd);
-	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT, fResolutionScale);
-
-
-	//const bool bCapture = true;
-	//const bool bVisible = true;
-	//mEventQueue_VQEToWin_Main.AddItem(std::make_shared< SetMouseCaptureEvent>(hwnd, bCapture, bVisible));
-
 	//
 	// EXCLUSIVE FULLSCREEN
 	//

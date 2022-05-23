@@ -556,8 +556,6 @@ SRV_ID ScreenSpaceReflectionsPass::GetPassOutputSRV(int iOutput) const
 
 void ScreenSpaceReflectionsPass::ClearHistoryBuffers(ID3D12GraphicsCommandList* pCmd)
 {
-	return;
-
 	// TODO: fix dx12/dxgi errors with UAV clearing
 	UINT clear[4] = { 0,0,0,0 };
 	for (int i = 0; i < 2; ++i)
@@ -575,9 +573,14 @@ void ScreenSpaceReflectionsPass::ClearHistoryBuffers(ID3D12GraphicsCommandList* 
 		}
 	}
 
+	for (int i = 0; i < 2; ++i)
 	{
 		const UAV& uav = mRenderer.GetUAV(UAVReprojectPassOutputs[0]);
-		pCmd->ClearUnorderedAccessViewUint(uav.GetGPUDescHandle(), uav.GetCPUDescHandle(), mRenderer.GetTextureResource(TexReprojectedRadiance), clear, 0, nullptr);
+		pCmd->ClearUnorderedAccessViewUint(uav.GetGPUDescHandle(1), uav.GetCPUDescHandle(1), mRenderer.GetTextureResource(TexAvgRadiance[i]), clear, 0, nullptr);
+		if(i == 0)
+		{
+			pCmd->ClearUnorderedAccessViewUint(uav.GetGPUDescHandle(), uav.GetCPUDescHandle(), mRenderer.GetTextureResource(TexReprojectedRadiance), clear, 0, nullptr);
+		}
 	}
 }
 
