@@ -4,7 +4,7 @@
 
 VQEngine is a DirectX12 renderer for prototyping of rendering techniques and experimenting with cutting edge technology.
 
-Join the [VQE Discord Channel](https://discord.gg/U7pd8TV) for graphics, math and engine discussions!
+Join the [VQE Discord Channel](https://discord.gg/U7pd8TV) for graphics, math and engine chatter!
 
 [![Discord Banner 2](https://discordapp.com/api/guilds/720409073756930079/widget.png?style=banner2)](https://discord.gg/U7pd8TV)
 
@@ -13,7 +13,7 @@ Join the [VQE Discord Channel](https://discord.gg/U7pd8TV) for graphics, math an
 
 ![](Screenshots/HelloEnvMap1.png)
 <p align="center">
-<sub><i>Data-driven (XML) Scenes & glTF Model Loading, HDRI Environment Maps, UE4's PBR model w/ IBL, ImGui UI & debug drawing, AMD FidelityFX CACAO, CAS, FSR1 </i></sub>
+<sub><i>Data-driven (XML) Scenes & glTF Model Loading, HDRI Environment Maps, UE4's PBR model w/ IBL, ImGui UI & debug drawing, AMD FidelityFX CACAO, CAS, FSR1, SSSR, DNSR, SPD </i></sub>
 </p>
 
 # Features
@@ -122,6 +122,7 @@ Or, if you're using a terminal,
 | **V** | Toggle VSync |
 | **M** | Toggle MSAA |
 | **G** | Toggle tonemapping gamma |
+| **J** | Toggle FidelityFX-SuperResolution1 |
 | **B** | Toggle FidelityFX-CAS |
 | **N** | Toggle object bounding boxes |
 | **Shift+N** | Toggle mesh bounding boxes |
