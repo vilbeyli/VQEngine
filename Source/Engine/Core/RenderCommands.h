@@ -22,6 +22,9 @@
 #include <DirectXMath.h>
 #include <string>
 
+// ------------------------------------------------------------------------------------
+// SINGLE DRAW COMMANDS
+// ------------------------------------------------------------------------------------
 struct FMeshRenderCommandBase
 {
 	MeshID meshID = INVALID_ID;
@@ -47,3 +50,23 @@ struct FWireframeRenderCommand : public FMeshRenderCommandBase
 };
 using FLightRenderCommand = FWireframeRenderCommand;
 using FBoundingBoxRenderCommand = FWireframeRenderCommand;
+
+
+// ------------------------------------------------------------------------------------
+// INSTANCED DRAW COMMANDS
+// ------------------------------------------------------------------------------------
+struct FInstancedMeshRenderCommandBase
+{
+	MeshID meshID = INVALID_ID;
+	std::vector<DirectX::XMMATRIX> matWorldTransformations;
+};
+struct FInstancedMotionVectorMesh
+{
+	std::vector<DirectX::XMMATRIX> matWorldTransformationsPrev;
+};
+struct FInstancedWireframeRenderCommand : public FInstancedMeshRenderCommandBase
+{
+	// single color for all instances, ideally we could make the color an instance data
+	DirectX::XMFLOAT3 color; 
+};
+using FInstancedBoundingBoxRenderCommand = FInstancedWireframeRenderCommand;

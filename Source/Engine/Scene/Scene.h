@@ -71,6 +71,9 @@ struct FSceneRenderParameters
 };
 //--- Pass Parameters ---
 
+
+#define RENDER_INSTANCED_BOUNDING_BOXES 1
+
 struct FSceneView
 {
 	DirectX::XMMATRIX     view;
@@ -100,8 +103,12 @@ struct FSceneView
 	std::vector<FMeshRenderCommand>  meshRenderCommands;
 	std::vector<FLightRenderCommand> lightRenderCommands;
 	std::vector<FLightRenderCommand> lightBoundsRenderCommands;
-	std::vector<FBoundingBoxRenderCommand> boundingBoxRenderCommands;
 
+#if RENDER_INSTANCED_BOUNDING_BOXES
+	std::vector<FInstancedBoundingBoxRenderCommand> boundingBoxRenderCommands;
+#else
+	std::vector<FBoundingBoxRenderCommand> boundingBoxRenderCommands;
+#endif
 };
 struct FSceneShadowView
 {

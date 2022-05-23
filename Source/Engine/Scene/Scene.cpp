@@ -1023,30 +1023,81 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 }
 
 
+
+static const XMMATRIX IdentityMat = XMMatrixIdentity();
+static const XMVECTOR IdentityQuaternion = XMQuaternionIdentity();
+static const XMVECTOR ZeroVector = XMVectorZero();
+static XMMATRIX GetBBTransformMatrix(const FBoundingBox& BB)
+{
+	XMVECTOR BBMax = XMLoadFloat3(&BB.ExtentMax);
+	XMVECTOR BBMin = XMLoadFloat3(&BB.ExtentMin);
+	XMVECTOR ScaleVec = (BBMax - BBMin) * 0.5f;
+	XMVECTOR BBOrigin = (BBMax + BBMin) * 0.5f;
+	XMMATRIX MatTransform = XMMatrixTransformation(ZeroVector, IdentityQuaternion, ScaleVec, ZeroVector, IdentityQuaternion, BBOrigin);
+	return MatTransform;
+}
+
 void Scene::PrepareBoundingBoxRenderParams(FSceneView& SceneView) const
 {
 	SceneView.boundingBoxRenderCommands.clear();
 
-	
 	const XMFLOAT3 BBColor_GameObj = XMFLOAT3(0.0f, 0.2f, 0.8f);
 	const XMFLOAT3 BBColor_Mesh    = XMFLOAT3(0.0f, 0.8f, 0.2f);
 
-	const XMMATRIX IdentityMat = XMMatrixIdentity();
-	const XMVECTOR IdentityQuaternion = XMQuaternionIdentity();
-	const XMVECTOR ZeroVector = XMVectorZero();
 
-	auto fnCreateBoundingBoxRenderCommand = [&ZeroVector, &IdentityQuaternion, &IdentityMat](const FBoundingBox& BB, const XMFLOAT3& Color)
+#if RENDER_INSTANCED_BOUNDING_BOXES // Record instanced rendering commands
+
+	auto fnCreateBoundingBoxRenderCommand = [&SceneView]
+		(const std::vector<FBoundingBox>& BBs, const XMFLOAT3& Color)
 	{
+		std::vector< FInstancedBoundingBoxRenderCommand> cmds;
 
-		XMVECTOR BBMax = XMLoadFloat3(&BB.ExtentMax);
-		XMVECTOR BBMin = XMLoadFloat3(&BB.ExtentMin);
-		XMVECTOR ScaleVec = (BBMax - BBMin) * 0.5f;
-		XMVECTOR BBOrigin = (BBMax + BBMin) * 0.5f;
-		XMMATRIX MatTransform = XMMatrixTransformation(ZeroVector, IdentityQuaternion, ScaleVec, ZeroVector, IdentityQuaternion, BBOrigin);
+		FInstancedBoundingBoxRenderCommand cmd;
+		cmd.meshID = EBuiltInMeshes::CUBE;
+		cmd.color = Color;
 
+		int NumBBs = BBs.size();
+		int iBB = 0;
+		while (NumBBs > 0)
+		{
+			int NumBatchSize = 0;
+			while (NumBatchSize < NUM_UNLIT_INSTANCED_DRAW_MAX_INSTANCE_COUNT && iBB < BBs.size())
+			{
+				cmd.matWorldTransformations.push_back(GetBBTransformMatrix(BBs[iBB]) * SceneView.viewProj);
+				++NumBatchSize;
+				++iBB;
+			}
+
+			NumBBs -= NumBatchSize;
+			cmds.push_back(cmd);
+			cmd.matWorldTransformations.clear();
+		}
+
+		return cmds;
+	};
+
+	std::vector<FInstancedBoundingBoxRenderCommand>& cmds = SceneView.boundingBoxRenderCommands;
+	{
+		if (SceneView.sceneParameters.bDrawGameObjectBoundingBoxes)
+		{
+			std::vector<FInstancedBoundingBoxRenderCommand> cmds_gameObjs = fnCreateBoundingBoxRenderCommand(mBoundingBoxHierarchy.mGameObjectBoundingBoxes, BBColor_GameObj);
+			cmds.insert(cmds.end(), cmds_gameObjs.begin(), cmds_gameObjs.end());
+		}
+
+		if (SceneView.sceneParameters.bDrawMeshBoundingBoxes)
+		{
+			std::vector<FInstancedBoundingBoxRenderCommand> cmds_meshes = fnCreateBoundingBoxRenderCommand(mBoundingBoxHierarchy.mMeshBoundingBoxes, BBColor_Mesh);
+			cmds.insert(cmds.end(), cmds_meshes.begin(), cmds_meshes.end());
+		}
+	}
+
+#else // Render bounding boxes one by one (this is bad! dont do this)
+	
+	auto fnCreateBoundingBoxRenderCommand = [](const FBoundingBox& BB, const XMFLOAT3& Color)
+	{
 		FBoundingBoxRenderCommand cmd = {};
 		cmd.color = Color;
-		cmd.matWorldTransformation = MatTransform;
+		cmd.matWorldTransformation = fnGetBBTransformMatrix(BB);
 		cmd.meshID = EBuiltInMeshes::CUBE;
 		return cmd;
 	};
@@ -1067,11 +1118,8 @@ void Scene::PrepareBoundingBoxRenderParams(FSceneView& SceneView) const
 			SceneView.boundingBoxRenderCommands.push_back(fnCreateBoundingBoxRenderCommand(BB, BBColor_Mesh));
 		}
 	}
+#endif
 
-
-	// Light View Bounding Boxes 
-	// TODO
-	
 }
 
 

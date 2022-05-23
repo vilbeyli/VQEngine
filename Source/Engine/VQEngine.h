@@ -254,6 +254,9 @@ struct FRenderStats
 	uint NumDispatches;
 };
 
+
+constexpr size_t NUM_UNLIT_INSTANCED_DRAW_MAX_INSTANCE_COUNT = 512;
+
 //
 // VQENGINE
 //
@@ -624,6 +627,8 @@ private:
 	struct FFrameConstantBuffer { DirectX::XMMATRIX matModelViewProj; };
 	struct FFrameConstantBuffer2 { DirectX::XMMATRIX matModelViewProj; int iTextureConfig; int iTextureOutput; };
 	struct FFrameConstantBufferUnlit { DirectX::XMMATRIX matModelViewProj; DirectX::XMFLOAT3 color; };
+
+	struct FFrameConstantBufferUnlitInstanced { DirectX::XMMATRIX matModelViewProj[NUM_UNLIT_INSTANCED_DRAW_MAX_INSTANCE_COUNT]; DirectX::XMFLOAT3 color; };
 
 // ------------------------------------------------------------------------------------------------------
 //

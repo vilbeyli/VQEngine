@@ -16,6 +16,12 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
+#if INSTANCED_DRAW
+#ifndef INSTANCE_COUNT
+#define INSTANCE_COUNT 512
+#endif
+#endif
+
 struct VSInput
 {
 	float3 position : POSITION;
@@ -32,16 +38,25 @@ struct PSInput
 
 cbuffer CBuffer : register(b0)
 {
+#if INSTANCED_DRAW
+	float4x4 matModelViewProj[INSTANCE_COUNT];
+#else
 	float4x4 matModelViewProj;
+#endif
+
 	float3 color;
 }
 
 
-PSInput VSMain(VSInput vertex)
+PSInput VSMain(VSInput vertex, uint instID : SV_InstanceID)
 {
 	PSInput result;
 	
-	result.position    = mul(matModelViewProj, float4(vertex.position, 1));
+#if INSTANCED_DRAW
+	result.position = mul(matModelViewProj[instID], float4(vertex.position, 1));
+#else
+	result.position = mul(matModelViewProj, float4(vertex.position, 1));
+#endif
 	result.color = color;
 	
     return result;

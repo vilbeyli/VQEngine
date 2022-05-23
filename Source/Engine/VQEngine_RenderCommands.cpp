@@ -747,19 +747,13 @@ void VQEngine::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 	{
 		SCOPED_GPU_MARKER(pCmd, "BoundingBoxes");
 
-		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA
-			? EBuiltinPSOs::WIREFRAME_PSO_MSAA_4
-			: EBuiltinPSOs::WIREFRAME_PSO)
-		);
-		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
 
+		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
 
 		// set IA
 		const Mesh& mesh = mpScene->mMeshes.at(SceneView.boundingBoxRenderCommands.begin()->meshID);
-
 		const auto VBIBIDs = mesh.GetIABufferIDs();
 		const uint32 NumIndices = mesh.GetNumIndices();
-		const uint32 NumInstances = 1;
 		const BufferID& VB_ID = VBIBIDs.first;
 		const BufferID& IB_ID = VBIBIDs.second;
 		const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
@@ -769,6 +763,37 @@ void VQEngine::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 		pCmd->IASetVertexBuffers(0, 1, &vb);
 		pCmd->IASetIndexBuffer(&ib);
 
+#if RENDER_INSTANCED_BOUNDING_BOXES
+		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA
+			? EBuiltinPSOs::WIREFRAME_INSTANCED_MSAA4_PSO
+			: EBuiltinPSOs::WIREFRAME_INSTANCED_PSO)
+		);
+
+		for (const FInstancedBoundingBoxRenderCommand& BBRenderCmd : SceneView.boundingBoxRenderCommands)
+		{
+			const int NumInstances = BBRenderCmd.matWorldTransformations.size();
+			if (NumInstances == 0)
+				continue; // shouldnt happen
+
+			assert(NumInstances <= NUM_UNLIT_INSTANCED_DRAW_MAX_INSTANCE_COUNT);
+
+			FFrameConstantBufferUnlitInstanced* pCBuffer = {};
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
+			pCBuffer->color = BBRenderCmd.color;
+			memcpy(pCBuffer->matModelViewProj, BBRenderCmd.matWorldTransformations.data(), sizeof(DirectX::XMMATRIX)* NumInstances);
+
+			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
+			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
+		}
+
+#else	
+		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA
+			? EBuiltinPSOs::WIREFRAME_PSO_MSAA_4
+			: EBuiltinPSOs::WIREFRAME_PSO)
+		);
+
+		const uint32 NumInstances = 1;
 		for (const FBoundingBoxRenderCommand& BBRenderCmd : SceneView.boundingBoxRenderCommands)
 		{
 			// set constant buffer data
@@ -780,6 +805,7 @@ void VQEngine::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
 			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 		}
+#endif
 	}
 }
 

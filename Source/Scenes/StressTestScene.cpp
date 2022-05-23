@@ -174,10 +174,16 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 	// OBJECTS
 	//
 	
-	// small cubes
+	// object chunk
+#if _DEBUG
+	constexpr int DIMENSION_X = 16;
+	constexpr int DIMENSION_Y = 2;
+	constexpr int DIMENSION_Z = 12;
+#else
 	constexpr int DIMENSION_X = 64;
 	constexpr int DIMENSION_Y = 4;
 	constexpr int DIMENSION_Z = 48;
+#endif
 
 	int NumObjects = 0;
 	constexpr float distance = 10.0f;

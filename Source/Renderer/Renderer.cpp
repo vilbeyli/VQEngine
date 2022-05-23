@@ -1337,11 +1337,20 @@ void VQRenderer::LoadBuiltinPSOs()
 		psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
 		psoDesc.SampleDesc.Count = 1;
 		PSOLoadDescs.push_back({ EBuiltinPSOs::WIREFRAME_PSO, psoLoadDesc });
+
+		psoLoadDesc.PSOName = "PSO_Wireframe_VSPS_Instanced";
+		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCED_DRAW", "1" });
+		PSOLoadDescs.push_back({ EBuiltinPSOs::WIREFRAME_INSTANCED_PSO, psoLoadDesc });
+		psoLoadDesc.ShaderStageCompileDescs[0].Macros.pop_back();
 		{
 			// MSAA
 			psoLoadDesc.PSOName = "PSO_WireframeVSPS_MSAA4";
 			psoDesc.SampleDesc.Count = 4;
 			PSOLoadDescs.push_back({ EBuiltinPSOs::WIREFRAME_PSO_MSAA_4, psoLoadDesc });
+
+			psoLoadDesc.PSOName = "PSO_WireframeVSPS_Instanced_MSAA4";
+			psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCED_DRAW", "1" });
+			PSOLoadDescs.push_back({ EBuiltinPSOs::WIREFRAME_INSTANCED_MSAA4_PSO, psoLoadDesc });
 		}
 	}
 
