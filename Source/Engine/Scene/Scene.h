@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 #pragma once
 
+// TODO: move all instanced definitions into a single loation (the other is in LightConstantBufferData.h)
 #define RENDER_INSTANCED_BOUNDING_BOXES 1
 #define RENDER_INSTANCED_SHADOW_MESHES  1
 

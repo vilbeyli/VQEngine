@@ -874,6 +874,7 @@ void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustum
 
 
 	#else
+		MeshRenderCommands.clear();
 		for (const size_t& BBIndex : CulledBoundingBoxIndexList_Msh)
 		{
 			assert(BBIndex < mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping.size());
@@ -1104,6 +1105,7 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 			FSceneShadowView::FShadowView* pShadowView = nullptr;
 		};
 
+#if RENDER_INSTANCED_SHADOW_MESHES
 		auto fnRecordShadowMeshRenderCommandsForFrustum = [&](size_t iFrustum, FSceneShadowView::FShadowView* pShadowView, const std::vector<size_t>& CulledBoundingBoxIndexList_Msh)
 		{
 			SCOPED_CPU_MARKER("ProcessShadowFrustumRenderCommands");
@@ -1162,21 +1164,19 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 				}
 			}
 		};
-
 		auto fnRecordShadowMeshRenderCommandsForFrustumW = [&](const FFrustumRenderCommandRecorderContext& ctx)
 		{
 			fnRecordShadowMeshRenderCommandsForFrustum(ctx.iFrustum, ctx.pShadowView, *ctx.pObjIndices);
 		};
+#endif
 
-		// TODO: multi thread each view
 		SCOPED_CPU_MARKER("RecordShadowMeshRenderCommands");
 		const size_t NumMeshFrustums = MeshFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView.size();
-		const int NumPoolWorkers = UpdateWorkerThreadPool.GetThreadPoolSize();
-		const int NumFrustumsThisThread = ((NumMeshFrustums + (NumPoolWorkers - 1)) / NumPoolWorkers)/2;
-
-		std::vector< FFrustumRenderCommandRecorderContext> WorkerContexts(NumMeshFrustums);
-
+		
 #if RENDER_INSTANCED_SHADOW_MESHES
+		const int NumPoolWorkers = UpdateWorkerThreadPool.GetThreadPoolSize();
+		const int NumFrustumsThisThread = ((NumMeshFrustums + (NumPoolWorkers - 1)) / NumPoolWorkers) / 2;
+		std::vector< FFrustumRenderCommandRecorderContext> WorkerContexts(NumMeshFrustums);
 		{
 			SCOPED_CPU_MARKER("PrepareWorkerContexts");
 			for (size_t iFrustum = 0; iFrustum < NumMeshFrustums; ++iFrustum)
@@ -1385,11 +1385,11 @@ void Scene::PrepareBoundingBoxRenderParams(FSceneView& SceneView) const
 
 #else // Render bounding boxes one by one (this is bad! dont do this)
 	
-	auto fnCreateBoundingBoxRenderCommand = [](const FBoundingBox& BB, const XMFLOAT3& Color
+	auto fnCreateBoundingBoxRenderCommand = [](const FBoundingBox& BB, const XMFLOAT3& Color)
 	{
 		FBoundingBoxRenderCommand cmd = {};
 		cmd.color = Color;
-		cmd.matWorldTransformation = fnGetBBTransformMatrix(BB);
+		cmd.matWorldTransformation = GetBBTransformMatrix(BB);
 		cmd.meshID = EBuiltInMeshes::CUBE;
 		return cmd;
 	};
