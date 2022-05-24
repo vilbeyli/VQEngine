@@ -67,9 +67,9 @@ struct FInstancedMotionVectorMeshCommand
 };
 struct FInstancedMeshRenderCommand : public FInstancedMeshRenderCommandBase, public FInstancedMotionVectorMeshCommand
 {
-	MaterialID matID = INVALID_ID;
 	std::vector<DirectX::XMMATRIX> matNormal;
 	std::vector<DirectX::XMMATRIX> matWorld;
+	MaterialID matID = INVALID_ID;
 };
 struct FInstancedWireframeRenderCommand : public FInstancedMeshRenderCommandBase
 {
