@@ -73,6 +73,7 @@ struct FSceneRenderParameters
 
 
 #define RENDER_INSTANCED_BOUNDING_BOXES 1
+#define RENDER_INSTANCED_SHADOW_MESHES  1
 
 struct FSceneView
 {
@@ -115,7 +116,11 @@ struct FSceneShadowView
 	struct FShadowView
 	{
 		DirectX::XMMATRIX matViewProj;
+#if RENDER_INSTANCED_SHADOW_MESHES
+		std::vector<FInstancedShadowMeshRenderCommand> meshRenderCommands;
+#else
 		std::vector<FShadowMeshRenderCommand> meshRenderCommands;
+#endif
 	};
 	struct FPointLightLinearDepthParams
 	{

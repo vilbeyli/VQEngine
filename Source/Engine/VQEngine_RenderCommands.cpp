@@ -33,7 +33,7 @@
 //
 // DRAW COMMANDS
 //
-void VQEngine::DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh)
+void VQEngine::DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh, uint32 NumInstances /*= 1*/)
 {
 	SCOPED_CPU_MARKER("DrawMesh");
 	using namespace DirectX;
@@ -42,7 +42,6 @@ void VQEngine::DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh)
 	// Draw Object -----------------------------------------------
 	const auto VBIBIDs = mesh.GetIABufferIDs();
 	const uint32 NumIndices = mesh.GetNumIndices();
-	const uint32 NumInstances = 1;
 	const BufferID& VB_ID = VBIBIDs.first;
 	const BufferID& IB_ID = VBIBIDs.second;
 	const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
@@ -58,6 +57,33 @@ void VQEngine::DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh)
 void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView::FShadowView& shadowView)
 {
 	using namespace DirectX;
+
+#if RENDER_INSTANCED_SHADOW_MESHES
+	struct FCBufferLightVS
+	{
+		XMMATRIX matWorldViewProj[MAX_INSTANCE_COUNT__SHADOW_MESHES];
+		XMMATRIX matWorld        [MAX_INSTANCE_COUNT__SHADOW_MESHES];
+	};
+
+	for (const FInstancedShadowMeshRenderCommand& renderCmd : shadowView.meshRenderCommands)
+	{
+		SCOPED_CPU_MARKER("Process_ShadowMeshRenderCommand");
+		
+		// set constant buffer data
+		FCBufferLightVS* pCBuffer = {};
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
+		if (renderCmd.matWorldTransformations.empty())
+			Log::Error("EMPTY COMMAND LIST WHYT??");
+		memcpy(pCBuffer->matWorld        , renderCmd.matWorldTransformations.data()        , renderCmd.matWorldTransformations.size() * sizeof(XMMATRIX));
+		memcpy(pCBuffer->matWorldViewProj, renderCmd.matWorldViewProjTransformations.data(), renderCmd.matWorldViewProjTransformations.size() * sizeof(XMMATRIX));
+		pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
+		
+		const Mesh& mesh = mpScene->mMeshes.at(renderCmd.meshID);
+		DrawMesh(pCmd, mesh, renderCmd.matWorldTransformations.size());
+	}
+
+#else 
 	struct FCBufferLightVS
 	{
 		XMMATRIX matWorldViewProj;
@@ -78,6 +104,7 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 		const Mesh& mesh = mpScene->mMeshes.at(renderCmd.meshID);
 		DrawMesh(pCmd, mesh);
 	}
+#endif
 }
 
 
@@ -775,7 +802,7 @@ void VQEngine::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 			if (NumInstances == 0)
 				continue; // shouldnt happen
 
-			assert(NumInstances <= NUM_UNLIT_INSTANCED_DRAW_MAX_INSTANCE_COUNT);
+			assert(NumInstances <= MAX_INSTANCE_COUNT__UNLIT_SHADER);
 
 			FFrameConstantBufferUnlitInstanced* pCBuffer = {};
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};

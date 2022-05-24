@@ -918,15 +918,70 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 	//  Record Mesh Render Commands
 	//
 	{
-		SCOPED_CPU_MARKER("RecordMeshRenderCommands");
-		const size_t NumMeshFrustums = MeshFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView.size();
+		SCOPED_CPU_MARKER("RecordMeshRenderCommands");		const size_t NumMeshFrustums = MeshFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView.size();
 		for (size_t iFrustum = 0; iFrustum < NumMeshFrustums; ++iFrustum)
 		{
 			FSceneShadowView::FShadowView*& pShadowView = FrustumIndex_pShadowViewLookup.at(iFrustum);
+			const std::vector<size_t>& CulledBoundingBoxIndexList_Msh = MeshFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[iFrustum];
+
+#if RENDER_INSTANCED_SHADOW_MESHES
+			// clear previous render commands
+			pShadowView->meshRenderCommands.clear();
+
+			// record instance data
+			struct FInstanceData { XMMATRIX matWorld, matWorldViewProj; };
+			std::unordered_map<MeshID, std::vector<FInstanceData>> MeshInstanceTransformListLookup;
+			for (const size_t& BBIndex : CulledBoundingBoxIndexList_Msh)
+			{
+				assert(BBIndex < mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping.size());
+				MeshID meshID = mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping[BBIndex];
+
+				const GameObject* pGameObject = MeshFrustumCullWorkerContext.vGameObjectPointerLists[iFrustum][BBIndex];
+				Transform* const& pTF = mpTransforms.at(pGameObject->mTransformID);
+
+				XMMATRIX matWorld = pTF->matWorldTransformation();
+				MeshInstanceTransformListLookup[meshID].push_back({ matWorld, matWorld * pShadowView->matViewProj });
+			}
+
+			// chunk-up instance data per-mesh and record commands
+			std::vector< FInstancedShadowMeshRenderCommand> cmds;
+			for (auto it = MeshInstanceTransformListLookup.begin(); it != MeshInstanceTransformListLookup.end(); ++it) // for-each mesh
+			{
+				const MeshID meshID = it->first;
+				const std::vector<FInstanceData>& instData = it->second;
+
+				FInstancedShadowMeshRenderCommand cmd;
+				cmd.meshID = meshID;
+
+				int NumInstancesToProces = instData.size();
+				int iInst = 0;
+				while (NumInstancesToProces > 0)
+				{
+					int BatchSize = 0;
+					while (BatchSize < MAX_INSTANCE_COUNT__SHADOW_MESHES && iInst < instData.size())
+					{
+						cmd.matWorldTransformations.push_back(instData[iInst].matWorld);
+						cmd.matWorldViewProjTransformations.push_back(instData[iInst].matWorldViewProj);
+
+						++BatchSize;
+						++iInst;
+					}
+
+					NumInstancesToProces -= BatchSize;
+					cmds.push_back(cmd);
+					cmd.matWorldTransformations.clear();
+					cmd.matWorldViewProjTransformations.clear();
+				}
+			}
+
+			pShadowView->meshRenderCommands.insert(pShadowView->meshRenderCommands.end(), cmds.begin(), cmds.end());
+
+#else // 1-by-1 mesh drawing
+			// get and clear the rendering list
 			std::vector<FShadowMeshRenderCommand>& vMeshRenderList = pShadowView->meshRenderCommands;
 			vMeshRenderList.clear();
 
-			const std::vector<size_t>& CulledBoundingBoxIndexList_Msh = MeshFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[iFrustum];
+			// record commands
 			for (const size_t& BBIndex : CulledBoundingBoxIndexList_Msh)
 			{
 				assert(BBIndex < mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping.size());
@@ -942,8 +997,10 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 				meshRenderCmd.matWorldViewProj = meshRenderCmd.matWorldTransformation * pShadowView->matViewProj;
 				vMeshRenderList.push_back(meshRenderCmd);
 			}
-		}
+#endif
+		} // for-each frustum
 	}
+
 #else // ENABLE_VIEW_FRUSTUM_CULLING
 	int iSpot = 0;
 	int iPoint = 0;
@@ -1056,19 +1113,19 @@ void Scene::PrepareBoundingBoxRenderParams(FSceneView& SceneView) const
 		cmd.meshID = EBuiltInMeshes::CUBE;
 		cmd.color = Color;
 
-		int NumBBs = BBs.size();
+		int NumBBsToProcess = BBs.size();
 		int iBB = 0;
-		while (NumBBs > 0)
+		while (NumBBsToProcess > 0)
 		{
-			int NumBatchSize = 0;
-			while (NumBatchSize < NUM_UNLIT_INSTANCED_DRAW_MAX_INSTANCE_COUNT && iBB < BBs.size())
+			int BatchSize = 0;
+			while (BatchSize < MAX_INSTANCE_COUNT__UNLIT_SHADER && iBB < BBs.size())
 			{
 				cmd.matWorldTransformations.push_back(GetBBTransformMatrix(BBs[iBB]) * SceneView.viewProj);
-				++NumBatchSize;
+				++BatchSize;
 				++iBB;
 			}
 
-			NumBBs -= NumBatchSize;
+			NumBBsToProcess -= BatchSize;
 			cmds.push_back(cmd);
 			cmd.matWorldTransformations.clear();
 		}

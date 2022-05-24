@@ -42,7 +42,6 @@ struct FShadowMeshRenderCommand : public FMeshRenderCommandBase
 {
 	DirectX::XMMATRIX matWorldViewProj;
 	MaterialID matID = INVALID_ID;
-	std::string ModelName;
 };
 struct FWireframeRenderCommand : public FMeshRenderCommandBase
 {
@@ -64,9 +63,16 @@ struct FInstancedMotionVectorMesh
 {
 	std::vector<DirectX::XMMATRIX> matWorldTransformationsPrev;
 };
+
 struct FInstancedWireframeRenderCommand : public FInstancedMeshRenderCommandBase
 {
 	// single color for all instances, ideally we could make the color an instance data
 	DirectX::XMFLOAT3 color; 
 };
+struct FInstancedShadowMeshRenderCommand : public FInstancedMeshRenderCommandBase
+{
+	std::vector<DirectX::XMMATRIX> matWorldViewProjTransformations;
+	MaterialID matID = INVALID_ID;
+};
+
 using FInstancedBoundingBoxRenderCommand = FInstancedWireframeRenderCommand;

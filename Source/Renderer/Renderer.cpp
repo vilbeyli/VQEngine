@@ -1340,7 +1340,9 @@ void VQRenderer::LoadBuiltinPSOs()
 
 		psoLoadDesc.PSOName = "PSO_Wireframe_VSPS_Instanced";
 		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCED_DRAW", "1" });
+		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__UNLIT_SHADER) });
 		PSOLoadDescs.push_back({ EBuiltinPSOs::WIREFRAME_INSTANCED_PSO, psoLoadDesc });
+		psoLoadDesc.ShaderStageCompileDescs[0].Macros.pop_back();
 		psoLoadDesc.ShaderStageCompileDescs[0].Macros.pop_back();
 		{
 			// MSAA
@@ -1350,6 +1352,7 @@ void VQRenderer::LoadBuiltinPSOs()
 
 			psoLoadDesc.PSOName = "PSO_WireframeVSPS_Instanced_MSAA4";
 			psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCED_DRAW", "1" });
+			psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__UNLIT_SHADER) });
 			PSOLoadDescs.push_back({ EBuiltinPSOs::WIREFRAME_INSTANCED_MSAA4_PSO, psoLoadDesc });
 		}
 	}
@@ -1361,12 +1364,12 @@ void VQRenderer::LoadBuiltinPSOs()
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_DepthOnlyVS";
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
+		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCED_DRAW", "1" });
+		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__SHADOW_MESHES) });
 		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ShadowPassDepthOnlyVS);
 
 		// PSO description
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
-
-		// unlit
 		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
 		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
@@ -1383,10 +1386,10 @@ void VQRenderer::LoadBuiltinPSOs()
 		PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PASS_PSO, psoLoadDesc });
 		{
 			psoLoadDesc.PSOName = "PSO_LinearDepthVSPS";
-			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
 			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
 			psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ShadowPassLinearDepthVSPS);
 			PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PASS_LINEAR_PSO, psoLoadDesc });
+			psoLoadDesc.ShaderStageCompileDescs.pop_back();
 		}
 		{
 			psoLoadDesc.PSOName = "PSO_MaskedDepthVSPS";
@@ -1397,6 +1400,7 @@ void VQRenderer::LoadBuiltinPSOs()
 			}
 			psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ShadowPassMaskedDepthVSPS);
 			PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PASS_ALPHAMASKED_PSO, psoLoadDesc });
+			psoLoadDesc.ShaderStageCompileDescs.pop_back();
 		}
 	}
 

@@ -69,6 +69,9 @@ struct FPSOCreationTaskParameters
 };
 
 
+constexpr size_t MAX_INSTANCE_COUNT__UNLIT_SHADER = 512;
+constexpr size_t MAX_INSTANCE_COUNT__SHADOW_MESHES = 128;
+
 enum EBuiltinPSOs // TODO: remove the hardcoded PSOs when a generic Shader solution is integrated
 {
 	FULLSCREEN_TRIANGLE_PSO = 0,
