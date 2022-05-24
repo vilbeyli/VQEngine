@@ -16,6 +16,12 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
+#if INSTANCED_DRAW
+	#ifndef INSTANCED_COUNT
+	#define INSTANCE_COUNT 128
+	#endif
+#endif
+
 struct VSInput
 {
 	float3 position : POSITION;
@@ -35,8 +41,13 @@ struct PSInput
 
 cbuffer CBuffer : register(b0)
 {
+#if INSTANCED_DRAW
+	float4x4 matModelViewProj[INSTANCE_COUNT];
+	float4x4 matWorld        [INSTANCE_COUNT];
+#else
 	float4x4 matModelViewProj;
 	float4x4 matWorld;
+#endif
 }
 
 cbuffer CBufferPx : register(b1)
@@ -45,12 +56,17 @@ cbuffer CBufferPx : register(b1)
 	float fFarPlane;
 }
 
-PSInput VSMain(VSInput vertex)
+PSInput VSMain(VSInput vertex, uint instID : SV_InstanceID)
 {
 	PSInput result;
-	
+
+#if INSTANCED_DRAW
+	result.position = mul(matModelViewProj[instID], float4(vertex.position, 1));
+	result.worldPosition = mul(matWorld[instID], float4(vertex.position, 1));
+#else
 	result.position = mul(matModelViewProj, float4(vertex.position, 1));
 	result.worldPosition = mul(matWorld, float4(vertex.position, 1));
+#endif
 	
 #if ENABLE_ALPHA_MASK
 	result.uv = vertex.uv;

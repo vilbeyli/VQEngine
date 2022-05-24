@@ -17,6 +17,10 @@
 //	Contact: volkanilbeyli@gmail.com
 #pragma once
 
+#define RENDER_INSTANCED_BOUNDING_BOXES 1
+#define RENDER_INSTANCED_SHADOW_MESHES  1
+
+
 #include "Camera.h"
 #include "Mesh.h"
 #include "Material.h"
@@ -29,6 +33,13 @@
 #include "../Core/RenderCommands.h"
 #include "../AssetLoader.h"
 #include "../PostProcess/PostProcess.h"
+
+#if RENDER_INSTANCED_SCENE_MESHES
+using MeshRenderCommand_t = FInstancedMeshRenderCommand;
+#else
+using MeshRenderCommand_t = FMeshRenderCommand;
+#endif
+
 
 // fwd decl
 class Input;
@@ -72,9 +83,6 @@ struct FSceneRenderParameters
 //--- Pass Parameters ---
 
 
-#define RENDER_INSTANCED_BOUNDING_BOXES 1
-#define RENDER_INSTANCED_SHADOW_MESHES  1
-
 struct FSceneView
 {
 	DirectX::XMMATRIX     view;
@@ -101,7 +109,7 @@ struct FSceneView
 	FSceneRenderParameters sceneParameters;
 	FPostProcessParameters postProcessParameters;
 
-	std::vector<FMeshRenderCommand>  meshRenderCommands;
+	std::vector<MeshRenderCommand_t>  meshRenderCommands;
 	std::vector<FLightRenderCommand> lightRenderCommands;
 	std::vector<FLightRenderCommand> lightBoundsRenderCommands;
 
@@ -280,7 +288,7 @@ private: // Derived Scenes shouldn't access these functions
 	void GatherSceneLightData(FSceneView& SceneView) const;
 
 	void PrepareLightMeshRenderParams(FSceneView& SceneView) const;
-	void PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<FMeshRenderCommand>& MeshRenderCommands);
+	void PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<MeshRenderCommand_t>& MeshRenderCommands, const DirectX::XMMATRIX& matViewProj, const DirectX::XMMATRIX& matViewProjHistory);
 	void PrepareShadowMeshRenderParams(FSceneShadowView& ShadowView, const FFrustumPlaneset& ViewFrustumPlanesInWorldSpace, ThreadPool& UpdateWorkerThreadPool) const;
 	void PrepareBoundingBoxRenderParams(FSceneView& SceneView) const;
 	

@@ -380,7 +380,7 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, int FRAME_DATA_INDEX)
 
 	if constexpr (!UPDATE_THREAD__ENABLE_WORKERS)
 	{
-		PrepareSceneMeshRenderParams(ViewFrustumPlanes, SceneView.meshRenderCommands);
+		PrepareSceneMeshRenderParams(ViewFrustumPlanes, SceneView.meshRenderCommands, SceneView.viewProj, SceneView.viewProjPrev);
 		GatherSceneLightData(SceneView);
 		PrepareShadowMeshRenderParams(ShadowView, ViewFrustumPlanes, UpdateWorkerThreadPool);
 		PrepareLightMeshRenderParams(SceneView);
@@ -390,7 +390,7 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, int FRAME_DATA_INDEX)
 	{
 		UpdateWorkerThreadPool.AddTask([=, &SceneView]()
 		{
-			PrepareSceneMeshRenderParams(ViewFrustumPlanes, SceneView.meshRenderCommands);
+			PrepareSceneMeshRenderParams(ViewFrustumPlanes, SceneView.meshRenderCommands, SceneView.viewProj, SceneView.viewProjPrev);
 		});
 		GatherSceneLightData(SceneView);
 		PrepareShadowMeshRenderParams(ShadowView, ViewFrustumPlanes, UpdateWorkerThreadPool);
@@ -644,7 +644,7 @@ void Scene::PrepareLightMeshRenderParams(FSceneView& SceneView) const
 }
 
 
-void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<FMeshRenderCommand>& MeshRenderCommands)
+void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<MeshRenderCommand_t>& MeshRenderCommands, const DirectX::XMMATRIX& matViewProj, const DirectX::XMMATRIX& matViewProjHistory)
 {
 	SCOPED_CPU_MARKER("Scene::PrepareSceneMeshRenderParams()");
 
@@ -690,12 +690,126 @@ void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustum
 	// TODO: we have a culled list of game object boundin box indices
 	//for (size_t iFrustum = 0; iFrustum < NumFrustumsToCull; ++iFrustum)
 	{
-		SCOPED_CPU_MARKER("RecordShadowMeshRenderCommand");
+		SCOPED_CPU_MARKER("RecordSceneMeshRenderCommand");
 		//const std::vector<size_t>& CulledBoundingBoxIndexList_Obj = GameObjectFrustumCullWorkerContext.vCulledBoundingBoxIndexLists[iFrustum];
 
-		MeshRenderCommands.clear();
+		{
+			SCOPED_CPU_MARKER("MeshRenderCommands.clear()");
+			MeshRenderCommands.clear();
+		}
 
 		const std::vector<size_t>& CulledBoundingBoxIndexList_Msh = MeshFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[0];
+	#if RENDER_INSTANCED_SCENE_MESHES
+		//--------------------------------------------------------------------------------------------------------------------------------------------
+		// collect instance data based on Material, and then Mesh.
+		//--------------------------------------------------------------------------------------------------------------------------------------------
+		// MAT0
+		//	+----MESH0
+		//	       +----Inst0
+		//	       +----Inst1
+		//	+----MESH1
+		//	       +----Inst0
+		//	       +----Inst1
+		//	       +----Inst2
+		//	+----MESH2
+		//	       +----Inst0
+		//
+		// MAT1
+		//	+----MESH37
+		//	       +----Inst0
+		//	       +----Inst1
+		//	       +----Inst2
+		//	+----MESH225
+		//	       +----Inst0
+		//	       +----Inst1
+		struct FInstanceData { XMMATRIX mWorld, mWorldViewProj, mWorldViewProjPrev, mNormal; };
+		std::unordered_map < MaterialID, std::unordered_map<MeshID, std::vector<FInstanceData>>> MaterialMeshInstanceDataLookup;
+		//--------------------------------------------------------------------------------------------------------------------------------------------
+
+		// collect instance data from culled mesh BB list
+		{
+			SCOPED_CPU_MARKER("CollectInstanceData");
+			for (const size_t& BBIndex : CulledBoundingBoxIndexList_Msh)
+			{
+				assert(BBIndex < mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping.size());
+				MeshID meshID = mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping[BBIndex];
+
+				// read game object data
+				const GameObject* pGameObject = MeshFrustumCullWorkerContext.vGameObjectPointerLists[0][BBIndex];
+				Transform* const& pTF = mpTransforms.at(pGameObject->mTransformID);
+				const Model& model = mModels.at(pGameObject->mModelID);
+				const XMMATRIX matWorld = pTF->matWorldTransformation();
+				const XMMATRIX matWorldHistory =
+					mTransformWorldMatrixHistory.find(pTF) != mTransformWorldMatrixHistory.end()
+					? mTransformWorldMatrixHistory.at(pTF)
+					: matWorld;
+				const MaterialID matID = model.mData.mOpaqueMaterials.at(meshID);
+				const XMMATRIX matNormal = pTF->NormalMatrix(matWorld);
+
+				// record instance data
+				MaterialMeshInstanceDataLookup[matID][meshID].push_back(FInstanceData{ matWorld, matWorld * matViewProj, matWorldHistory * matViewProjHistory, matNormal });
+			}
+		}
+		
+
+		// chunk-up instance and record commands
+		{
+			SCOPED_CPU_MARKER("ChunkDataUp");
+
+			// for-each material
+			for (auto itMat = MaterialMeshInstanceDataLookup.begin(); itMat != MaterialMeshInstanceDataLookup.end(); ++itMat)
+			{
+				SCOPED_CPU_MARKER("Material");
+				const MaterialID matID = itMat->first;
+				const std::unordered_map<MeshID, std::vector<FInstanceData>>& meshInstanceDataLookup = itMat->second;
+
+				// for-each mesh
+				for (auto itMesh = meshInstanceDataLookup.begin(); itMesh != meshInstanceDataLookup.end(); ++itMesh)
+				{
+					SCOPED_CPU_MARKER("Mesh");
+					const MeshID meshID = itMesh->first;
+					const std::vector<FInstanceData>& instData = itMesh->second;
+
+					FInstancedMeshRenderCommand cmd;
+					cmd.meshID = meshID;
+					cmd.matID = matID;
+
+					int NumInstancesToProces = (int)instData.size();
+					int iInst = 0;
+					while (NumInstancesToProces > 0)
+					{
+						SCOPED_CPU_MARKER("InstanceBatch");
+						const int ThisBatchSize = std::min(MAX_INSTANCE_COUNT__SCENE_MESHES, NumInstancesToProces);
+						cmd.matWorld.resize(ThisBatchSize);
+						cmd.matWorldViewProj.resize(ThisBatchSize);
+						cmd.matWorldViewProjPrev.resize(ThisBatchSize);
+						cmd.matNormal.resize(ThisBatchSize);
+
+						int iBatch = 0;
+						while (iBatch < MAX_INSTANCE_COUNT__SCENE_MESHES && iInst < instData.size())
+						{
+							SCOPED_CPU_MARKER("InstanceDataCopy");
+							cmd.matWorld[iBatch] = instData[iInst].mWorld;
+							cmd.matWorldViewProj[iBatch] = instData[iInst].mWorldViewProj;
+							cmd.matWorldViewProjPrev[iBatch] = instData[iInst].mWorldViewProjPrev;
+							cmd.matNormal[iBatch] = instData[iInst].mNormal;
+
+							++iBatch;
+							++iInst;
+						}
+
+						NumInstancesToProces -= iBatch;
+						{
+							SCOPED_CPU_MARKER("MeshRenderCommands.push_back(cmd)");
+							MeshRenderCommands.push_back(cmd);
+						}
+					}
+				}
+			}
+		}
+
+
+	#else
 		for (const size_t& BBIndex : CulledBoundingBoxIndexList_Msh)
 		{
 			assert(BBIndex < mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping.size());
@@ -723,6 +837,7 @@ void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustum
 			meshRenderCmd.matWorldTransformationPrev = matWorldHistory;
 			MeshRenderCommands.push_back(meshRenderCmd);
 		}
+	#endif
 	}
 
 #else // no culling, render all game objects
@@ -918,9 +1033,11 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 	//  Record Mesh Render Commands
 	//
 	{
-		SCOPED_CPU_MARKER("RecordMeshRenderCommands");		const size_t NumMeshFrustums = MeshFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView.size();
+		SCOPED_CPU_MARKER("RecordShadowMeshRenderCommands");
+		const size_t NumMeshFrustums = MeshFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView.size();
 		for (size_t iFrustum = 0; iFrustum < NumMeshFrustums; ++iFrustum)
 		{
+			SCOPED_CPU_MARKER("Frustum");
 			FSceneShadowView::FShadowView*& pShadowView = FrustumIndex_pShadowViewLookup.at(iFrustum);
 			const std::vector<size_t>& CulledBoundingBoxIndexList_Msh = MeshFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[iFrustum];
 
@@ -931,50 +1048,53 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 			// record instance data
 			struct FInstanceData { XMMATRIX matWorld, matWorldViewProj; };
 			std::unordered_map<MeshID, std::vector<FInstanceData>> MeshInstanceTransformListLookup;
-			for (const size_t& BBIndex : CulledBoundingBoxIndexList_Msh)
 			{
-				assert(BBIndex < mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping.size());
-				MeshID meshID = mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping[BBIndex];
-
-				const GameObject* pGameObject = MeshFrustumCullWorkerContext.vGameObjectPointerLists[iFrustum][BBIndex];
-				Transform* const& pTF = mpTransforms.at(pGameObject->mTransformID);
-
-				XMMATRIX matWorld = pTF->matWorldTransformation();
-				MeshInstanceTransformListLookup[meshID].push_back({ matWorld, matWorld * pShadowView->matViewProj });
-			}
-
-			// chunk-up instance data per-mesh and record commands
-			std::vector< FInstancedShadowMeshRenderCommand> cmds;
-			for (auto it = MeshInstanceTransformListLookup.begin(); it != MeshInstanceTransformListLookup.end(); ++it) // for-each mesh
-			{
-				const MeshID meshID = it->first;
-				const std::vector<FInstanceData>& instData = it->second;
-
-				FInstancedShadowMeshRenderCommand cmd;
-				cmd.meshID = meshID;
-
-				int NumInstancesToProces = instData.size();
-				int iInst = 0;
-				while (NumInstancesToProces > 0)
+				SCOPED_CPU_MARKER("RecordInstanceData");
+				for (const size_t& BBIndex : CulledBoundingBoxIndexList_Msh)
 				{
-					int BatchSize = 0;
-					while (BatchSize < MAX_INSTANCE_COUNT__SHADOW_MESHES && iInst < instData.size())
-					{
-						cmd.matWorldTransformations.push_back(instData[iInst].matWorld);
-						cmd.matWorldViewProjTransformations.push_back(instData[iInst].matWorldViewProj);
+					assert(BBIndex < mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping.size());
+					MeshID meshID = mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping[BBIndex];
 
-						++BatchSize;
-						++iInst;
-					}
+					const GameObject* pGameObject = MeshFrustumCullWorkerContext.vGameObjectPointerLists[iFrustum][BBIndex];
+					Transform* const& pTF = mpTransforms.at(pGameObject->mTransformID);
 
-					NumInstancesToProces -= BatchSize;
-					cmds.push_back(cmd);
-					cmd.matWorldTransformations.clear();
-					cmd.matWorldViewProjTransformations.clear();
+					XMMATRIX matWorld = pTF->matWorldTransformation();
+					MeshInstanceTransformListLookup[meshID].push_back({ matWorld, matWorld * pShadowView->matViewProj });
 				}
 			}
 
-			pShadowView->meshRenderCommands.insert(pShadowView->meshRenderCommands.end(), cmds.begin(), cmds.end());
+			// chunk-up instance data per-mesh and record commands
+			{
+				SCOPED_CPU_MARKER("ChunkUpData");
+				for (auto it = MeshInstanceTransformListLookup.begin(); it != MeshInstanceTransformListLookup.end(); ++it) // for-each mesh
+				{
+					const MeshID meshID = it->first;
+					const std::vector<FInstanceData>& instData = it->second;
+
+					FInstancedShadowMeshRenderCommand cmd;
+					cmd.meshID = meshID;
+
+					int NumInstancesToProces = (int)instData.size();
+					int iInst = 0;
+					while (NumInstancesToProces > 0)
+					{
+						int BatchSize = 0;
+						while (BatchSize < MAX_INSTANCE_COUNT__SHADOW_MESHES && iInst < instData.size())
+						{
+							cmd.matWorldViewProj.push_back(instData[iInst].matWorld);
+							cmd.matWorldViewProjTransformations.push_back(instData[iInst].matWorldViewProj);
+
+							++BatchSize;
+							++iInst;
+						}
+
+						NumInstancesToProces -= BatchSize;
+						pShadowView->meshRenderCommands.push_back(cmd);
+						cmd.matWorldViewProj.clear();
+						cmd.matWorldViewProjTransformations.clear();
+					}
+				}
+			}
 
 #else // 1-by-1 mesh drawing
 			// get and clear the rendering list
@@ -1113,21 +1233,21 @@ void Scene::PrepareBoundingBoxRenderParams(FSceneView& SceneView) const
 		cmd.meshID = EBuiltInMeshes::CUBE;
 		cmd.color = Color;
 
-		int NumBBsToProcess = BBs.size();
+		int NumBBsToProcess = (int)BBs.size();
 		int iBB = 0;
 		while (NumBBsToProcess > 0)
 		{
 			int BatchSize = 0;
 			while (BatchSize < MAX_INSTANCE_COUNT__UNLIT_SHADER && iBB < BBs.size())
 			{
-				cmd.matWorldTransformations.push_back(GetBBTransformMatrix(BBs[iBB]) * SceneView.viewProj);
+				cmd.matWorldViewProj.push_back(GetBBTransformMatrix(BBs[iBB]) * SceneView.viewProj);
 				++BatchSize;
 				++iBB;
 			}
 
 			NumBBsToProcess -= BatchSize;
 			cmds.push_back(cmd);
-			cmd.matWorldTransformations.clear();
+			cmd.matWorldViewProj.clear();
 		}
 
 		return cmds;

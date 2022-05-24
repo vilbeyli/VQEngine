@@ -150,6 +150,18 @@ struct MaterialData
 //----------------------------------------------------------
 // SHADER CONSTANT BUFFER INTERFACE
 //----------------------------------------------------------
+#define RENDER_INSTANCED_SCENE_MESHES    1
+#define MAX_INSTANCE_COUNT__SCENE_MESHES 64
+
+#ifndef INSTANCE_COUNT
+#define INSTANCE_COUNT  MAX_INSTANCE_COUNT__SCENE_MESHES
+#endif
+
+// adapter for C++ code
+#if RENDER_INSTANCED_SCENE_MESHES
+#define INSTANCED_DRAW 1
+#endif
+
 struct PerFrameData
 {
 	SceneLighting Lights;
@@ -173,12 +185,17 @@ struct PerViewData
 };
 struct PerObjectData
 {
+#if INSTANCED_DRAW
+	matrix matWorldViewProj    [INSTANCE_COUNT];
+	matrix matWorld            [INSTANCE_COUNT];
+	matrix matWorldViewProjPrev[INSTANCE_COUNT];
+	matrix matNormal           [INSTANCE_COUNT];
+#else
 	matrix matWorldViewProj;
 	matrix matWorld;
 	matrix matWorldViewProjPrev;
-	//float3x3 matNormal;
 	matrix matNormal;
-
+#endif
 
 	MaterialData materialData;
 };

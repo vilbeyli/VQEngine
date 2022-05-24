@@ -35,6 +35,8 @@ struct FMeshRenderCommand : public FMeshRenderCommandBase
 {
 	MaterialID matID = INVALID_ID;
 	DirectX::XMMATRIX matNormalTransformation; //ID ?
+	
+	// debug data
 	std::string ModelName;
 	std::string MaterialName;
 };
@@ -57,13 +59,18 @@ using FBoundingBoxRenderCommand = FWireframeRenderCommand;
 struct FInstancedMeshRenderCommandBase
 {
 	MeshID meshID = INVALID_ID;
-	std::vector<DirectX::XMMATRIX> matWorldTransformations;
+	std::vector<DirectX::XMMATRIX> matWorldViewProj;
 };
-struct FInstancedMotionVectorMesh
+struct FInstancedMotionVectorMeshCommand
 {
-	std::vector<DirectX::XMMATRIX> matWorldTransformationsPrev;
+	std::vector<DirectX::XMMATRIX> matWorldViewProjPrev;
 };
-
+struct FInstancedMeshRenderCommand : public FInstancedMeshRenderCommandBase, public FInstancedMotionVectorMeshCommand
+{
+	MaterialID matID = INVALID_ID;
+	std::vector<DirectX::XMMATRIX> matNormal;
+	std::vector<DirectX::XMMATRIX> matWorld;
+};
 struct FInstancedWireframeRenderCommand : public FInstancedMeshRenderCommandBase
 {
 	// single color for all instances, ideally we could make the color an instance data

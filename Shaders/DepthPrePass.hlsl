@@ -29,9 +29,7 @@ struct VSInput
 	float3 normal   : NORMAL;
 	float3 tangent  : TANGENT;
 	float2 uv       : TEXCOORD0;
-#ifdef INSTANCED
 	uint instanceID : SV_InstanceID;
-#endif
 };
 
 struct PSInput
@@ -40,17 +38,12 @@ struct PSInput
 	float3 vertNormal  : COLOR0;
 	float3 vertTangent : COLOR1;
 	float2 uv          : TEXCOORD0;
-#ifdef INSTANCED
+#if INSTANCED_DRAW
 	uint instanceID    : SV_InstanceID;
 #endif
 };
 
 
-#ifdef INSTANCED
-	#ifndef INSTANCE_COUNT
-	#define INSTANCE_COUNT 50 // 50 instances assumed per default, this should be provided by the app
-	#endif
-#endif
 
 //---------------------------------------------------------------------------------------------------
 //
@@ -59,11 +52,7 @@ struct PSInput
 //---------------------------------------------------------------------------------------------------
 cbuffer CBPerObject : register(b2)
 {
-#ifdef INSTANCED
-	PerObjectData cbPerObject[INSTANCE_COUNT];
-#else
 	PerObjectData cbPerObject;
-#endif
 }
 
 SamplerState LinearSampler : register(s0);
@@ -89,13 +78,14 @@ PSInput VSMain(VSInput vertex)
 {
 	PSInput result;
 	
-#ifdef INSTANCED
-	result.position    = mul(cbPerObject[vertex.instanceID].matWorldViewProj, float4(vertex.position, 1.0f));
-	result.vertNormal  = mul(cbPerObject[vertex.instanceID].matNormal, vertex.normal );
+#if INSTANCED_DRAW
+	result.position    = mul(cbPerObject.matWorldViewProj[vertex.instanceID], float4(vertex.position, 1.0f));
+	result.vertNormal  = mul(cbPerObject.matNormal       [vertex.instanceID], float4(vertex.normal  , 0.0f));
+	result.vertTangent = mul(cbPerObject.matNormal       [vertex.instanceID], float4(vertex.tangent , 0.0f));
 #else
 	result.position    = mul(cbPerObject.matWorldViewProj, float4(vertex.position, 1.0f));
-	result.vertNormal  = mul(cbPerObject.matNormal, float4(vertex.normal , 0.0f));
-	result.vertTangent = mul(cbPerObject.matNormal, float4(vertex.tangent, 0.0f));
+	result.vertNormal  = mul(cbPerObject.matNormal       , float4(vertex.normal  , 0.0f));
+	result.vertTangent = mul(cbPerObject.matNormal       , float4(vertex.tangent , 0.0f));
 #endif
 	result.uv          = vertex.uv;
 	

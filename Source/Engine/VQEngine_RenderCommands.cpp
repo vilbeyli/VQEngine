@@ -73,14 +73,14 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 		FCBufferLightVS* pCBuffer = {};
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
-		if (renderCmd.matWorldTransformations.empty())
+		if (renderCmd.matWorldViewProj.empty())
 			Log::Error("EMPTY COMMAND LIST WHYT??");
-		memcpy(pCBuffer->matWorld        , renderCmd.matWorldTransformations.data()        , renderCmd.matWorldTransformations.size() * sizeof(XMMATRIX));
+		memcpy(pCBuffer->matWorld        , renderCmd.matWorldViewProj.data()        , renderCmd.matWorldViewProj.size() * sizeof(XMMATRIX));
 		memcpy(pCBuffer->matWorldViewProj, renderCmd.matWorldViewProjTransformations.data(), renderCmd.matWorldViewProjTransformations.size() * sizeof(XMMATRIX));
 		pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
 		
 		const Mesh& mesh = mpScene->mMeshes.at(renderCmd.meshID);
-		DrawMesh(pCmd, mesh, renderCmd.matWorldTransformations.size());
+		DrawMesh(pCmd, mesh, (uint32)renderCmd.matWorldViewProj.size());
 	}
 
 #else 
@@ -296,7 +296,7 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ZPrePass));
 
 	// draw meshes
-	for (const FMeshRenderCommand& meshRenderCmd : SceneView.meshRenderCommands)
+	for (const MeshRenderCommand_t& meshRenderCmd : SceneView.meshRenderCommands)
 	{
 		if (mpScene->mMeshes.find(meshRenderCmd.meshID) == mpScene->mMeshes.end())
 		{
@@ -308,7 +308,6 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 		const Mesh& mesh = mpScene->mMeshes.at(meshRenderCmd.meshID);
 		const auto VBIBIDs = mesh.GetIABufferIDs();
 		const uint32 NumIndices = mesh.GetNumIndices();
-		const uint32 NumInstances = 1;
 		const BufferID& VB_ID = VBIBIDs.first;
 		const BufferID& IB_ID = VBIBIDs.second;
 		const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
@@ -316,14 +315,25 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 
 
 		// set constant buffer data
-		PerObjectData* pPerObj = {};
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pPerObj)), (void**)(&pPerObj), &cbAddr);
-
+		PerObjectData* pPerObj = {};
+		const size_t sz = sizeof(PerObjectData);
+		pCBufferHeap->AllocConstantBuffer(sz, (void**)(&pPerObj), &cbAddr);
+		
+#if RENDER_INSTANCED_SCENE_MESHES
+		const uint32 NumInstances = (uint32)meshRenderCmd.matNormal.size();
+		memcpy(pPerObj->matWorldViewProj    , meshRenderCmd.matWorldViewProj.data()    , sizeof(DirectX::XMMATRIX) * NumInstances);
+		memcpy(pPerObj->matWorldViewProjPrev, meshRenderCmd.matWorldViewProjPrev.data(), sizeof(DirectX::XMMATRIX) * NumInstances);
+		memcpy(pPerObj->matNormal           , meshRenderCmd.matNormal.data()           , sizeof(DirectX::XMMATRIX) * NumInstances);
+		memcpy(pPerObj->matWorld            , meshRenderCmd.matWorld.data()            , sizeof(DirectX::XMMATRIX) * NumInstances);
+#else
+		const uint32 NumInstances = 1;
 		pPerObj->matWorldViewProj = meshRenderCmd.matWorldTransformation * SceneView.viewProj;
-		pPerObj->matWorld = meshRenderCmd.matWorldTransformation;
 		pPerObj->matWorldViewProjPrev = meshRenderCmd.matWorldTransformation;
+		pPerObj->matWorld = meshRenderCmd.matWorldTransformation;
 		pPerObj->matNormal = meshRenderCmd.matNormalTransformation;
+#endif
+
 		pPerObj->materialData = std::move(mat.GetCBufferData());
 
 		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
@@ -338,7 +348,6 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		pCmd->IASetVertexBuffers(0, 1, &vb);
 		pCmd->IASetIndexBuffer(&ib);
-
 		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 	}
 
@@ -636,20 +645,42 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 		constexpr UINT PerObjRSBindSlot = 1;
 		SCOPED_GPU_MARKER(pCmd, "Geometry");
 
-		for (const FMeshRenderCommand& meshRenderCmd : SceneView.meshRenderCommands)
+		for (const MeshRenderCommand_t& meshRenderCmd : SceneView.meshRenderCommands)
 		{
+			if (mpScene->mMeshes.find(meshRenderCmd.meshID) == mpScene->mMeshes.end())
+			{
+				Log::Warning("MeshID=%d couldn't be found", meshRenderCmd.meshID);
+				continue; // skip drawing this mesh
+			}
+
+			const Mesh& mesh = mpScene->mMeshes.at(meshRenderCmd.meshID);
 			const Material& mat = mpScene->GetMaterial(meshRenderCmd.matID);
+
+			const auto VBIBIDs = mesh.GetIABufferIDs();
+			const uint32 NumIndices = mesh.GetNumIndices();
+			const BufferID& VB_ID = VBIBIDs.first;
+			const BufferID& IB_ID = VBIBIDs.second;
+			const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
+			const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
 
 			// set constant buffer data
 			PerObjectData* pPerObj = {};
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pPerObj)), (void**)(&pPerObj), &cbAddr);
 
-
+#if RENDER_INSTANCED_SCENE_MESHES
+			const uint32 NumInstances = (uint32)meshRenderCmd.matNormal.size();
+			memcpy(pPerObj->matWorldViewProj    , meshRenderCmd.matWorldViewProj.data()    , sizeof(DirectX::XMMATRIX) * NumInstances);
+			memcpy(pPerObj->matWorldViewProjPrev, meshRenderCmd.matWorldViewProjPrev.data(), sizeof(DirectX::XMMATRIX) * NumInstances);
+			memcpy(pPerObj->matNormal           , meshRenderCmd.matNormal.data()           , sizeof(DirectX::XMMATRIX) * NumInstances);
+			memcpy(pPerObj->matWorld            , meshRenderCmd.matWorld.data()            , sizeof(DirectX::XMMATRIX) * NumInstances);
+#else
+			const uint32 NumInstances = 1;
 			pPerObj->matWorldViewProj = meshRenderCmd.matWorldTransformation * SceneView.viewProj;
 			pPerObj->matWorldViewProjPrev = meshRenderCmd.matWorldTransformationPrev * SceneView.viewProjPrev;
 			pPerObj->matWorld         = meshRenderCmd.matWorldTransformation;
 			pPerObj->matNormal        = meshRenderCmd.matNormalTransformation;
+#endif
 			pPerObj->materialData = std::move(mat.GetCBufferData());
 
 			pCmd->SetGraphicsRootConstantBufferView(PerObjRSBindSlot, cbAddr);
@@ -661,23 +692,6 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 				//pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
 
 			}
-
-			// draw mesh
-			if (mpScene->mMeshes.find(meshRenderCmd.meshID) == mpScene->mMeshes.end())
-			{
-				Log::Warning("MeshID=%d couldn't be found", meshRenderCmd.meshID);
-				continue; // skip drawing this mesh
-			}
-
-			const Mesh& mesh = mpScene->mMeshes.at(meshRenderCmd.meshID);
-
-			const auto VBIBIDs = mesh.GetIABufferIDs();
-			const uint32 NumIndices = mesh.GetNumIndices();
-			const uint32 NumInstances = 1;
-			const BufferID& VB_ID = VBIBIDs.first;
-			const BufferID& IB_ID = VBIBIDs.second;
-			const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
-			const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
 
 			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			pCmd->IASetVertexBuffers(0, 1, &vb);
@@ -798,7 +812,7 @@ void VQEngine::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 
 		for (const FInstancedBoundingBoxRenderCommand& BBRenderCmd : SceneView.boundingBoxRenderCommands)
 		{
-			const int NumInstances = BBRenderCmd.matWorldTransformations.size();
+			const int NumInstances = (int)BBRenderCmd.matWorldViewProj.size();
 			if (NumInstances == 0)
 				continue; // shouldnt happen
 
@@ -808,7 +822,7 @@ void VQEngine::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
 			pCBuffer->color = BBRenderCmd.color;
-			memcpy(pCBuffer->matModelViewProj, BBRenderCmd.matWorldTransformations.data(), sizeof(DirectX::XMMATRIX)* NumInstances);
+			memcpy(pCBuffer->matModelViewProj, BBRenderCmd.matWorldViewProj.data(), sizeof(DirectX::XMMATRIX)* NumInstances);
 
 			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
 			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);

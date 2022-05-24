@@ -32,7 +32,7 @@ struct VSInput
 	float3 normal   : NORMAL;
 	float3 tangent  : TANGENT;
 	float2 uv       : TEXCOORD0;
-#ifdef INSTANCED
+#if INSTANCED_DRAW
 	uint instanceID : SV_InstanceID;
 #endif
 };
@@ -44,9 +44,6 @@ struct PSInput
 	float3 vertNormal  : COLOR0;
 	float3 vertTangent : COLOR1;
 	float2 uv          : TEXCOORD0;
-#ifdef INSTANCED
-	uint instanceID    : SV_InstanceID;
-#endif
 #if PS_OUTPUT_MOTION_VECTORS
 	float4 svPositionCurr : TEXCOORD1;
 	float4 svPositionPrev : TEXCOORD2;
@@ -68,11 +65,6 @@ struct PSOutput
 #endif
 };
 
-#ifdef INSTANCED
-	#ifndef INSTANCE_COUNT
-	#define INSTANCE_COUNT 50 // 50 instances assumed per default, this should be provided by the app
-	#endif
-#endif
 
 //---------------------------------------------------------------------------------------------------
 //
@@ -89,11 +81,7 @@ cbuffer CBPerView : register(b1)
 }
 cbuffer CBPerObject : register(b2)
 {
-#ifdef INSTANCED
-	PerObjectData cbPerObject[INSTANCE_COUNT];
-#else
 	PerObjectData cbPerObject;
-#endif
 }
 
 SamplerState LinearSampler : register(s0);
@@ -132,15 +120,14 @@ PSInput VSMain(VSInput vertex)
 	PSInput result;
 	float4 vPosition = float4(vertex.position, 1.0f);
 
-#ifdef INSTANCED
-	result.position    = mul(cbPerObject[vertex.instanceID].matWorldViewProj, vPosition);
-	result.vertNormal  = mul(cbPerObject[vertex.instanceID].matNormal, vertex.normal );
-	result.vertTangent = mul(cbPerObject[vertex.instanceID].matNormal, vertex.tangent);
-	result.worldPos    = mul(cbPerObject[vertex.instanceID].matWorld, vPosition);
+#if INSTANCED_DRAW
+	result.position    = mul(cbPerObject.matWorldViewProj[vertex.instanceID], vPosition);
+	result.vertNormal  = mul(cbPerObject.matNormal       [vertex.instanceID], vertex.normal );
+	result.vertTangent = mul(cbPerObject.matNormal       [vertex.instanceID], vertex.tangent);
+	result.worldPos    = mul(cbPerObject.matWorld        [vertex.instanceID], vPosition);
 
 	#if PS_OUTPUT_MOTION_VECTORS
-	result.svPositionCurr = result.position;
-	result.svPositionPrev = mul(cbPerObject[vertex.instanceID].matWorldViewProjPrev, vPosition);
+	result.svPositionPrev = mul(cbPerObject.matWorldViewProjPrev[vertex.instanceID], vPosition);
 	#endif
 #else
 	result.position    = mul(cbPerObject.matWorldViewProj, vPosition);
@@ -149,11 +136,14 @@ PSInput VSMain(VSInput vertex)
 	result.worldPos    = mul(cbPerObject.matWorld, vPosition);
 
 	#if PS_OUTPUT_MOTION_VECTORS
-	result.svPositionCurr = result.position;
 	result.svPositionPrev = mul(cbPerObject.matWorldViewProjPrev, vPosition);
 	#endif
 #endif
 	result.uv = vertex.uv;
+
+#if PS_OUTPUT_MOTION_VECTORS
+	result.svPositionCurr = result.position;
+#endif
 	
 	return result;
 }

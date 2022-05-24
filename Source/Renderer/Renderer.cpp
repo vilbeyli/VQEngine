@@ -1177,7 +1177,8 @@ void VQRenderer::LoadBuiltinPSOs()
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
 		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ZPrePass);
-
+		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({"INSTANCED_DRAW", std::to_string(RENDER_INSTANCED_SCENE_MESHES) });
+		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({"INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__SCENE_MESHES)});
 
 		// PSO description
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
@@ -1203,19 +1204,6 @@ void VQRenderer::LoadBuiltinPSOs()
 		psoDesc.SampleDesc.Count = 4;
 		PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PREPASS_PSO_MSAA_4, psoLoadDesc });
 
-		//{
-		//	psoLoadDesc.ShaderStageCompileDescs.clear();
-		//	psoLoadDesc.PSOName = "PSO_FDepthPrePassVSPS_AlphaMasked";
-		//	psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1", { {"ENABLE_ALPHA_MASK","1"} } });
-		//	psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1", { {"ENABLE_ALPHA_MASK","1"} } });
-		//	psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ZPrePass);
-		//	psoDesc.SampleDesc.Count = 1;
-		//	PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PREPASS_ALPHA_MASKED_PSO, psoLoadDesc });
-		//
-		//	psoLoadDesc.PSOName = "PSO_FDepthPrePassVSPS_AlphaMasked_MSAA4";
-		//	psoDesc.SampleDesc.Count = 4;
-		//	PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PREPASS_ALPHA_MASKED_PSO_MSAA_4, psoLoadDesc });
-		//}
 	}
 
 	// FORWARD LIGHTING PSO
@@ -1227,6 +1215,8 @@ void VQRenderer::LoadBuiltinPSOs()
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
 		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ForwardLighting);
+		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCED_DRAW", std::to_string(RENDER_INSTANCED_SCENE_MESHES) });
+		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__SCENE_MESHES) });
 
 		// PSO description
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
