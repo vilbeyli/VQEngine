@@ -60,6 +60,7 @@
 //--------------------------------------------------------------------
 
 struct ImGuiContext;
+class AssetBrowser;
 
 //
 // DATA STRUCTS
@@ -479,6 +480,7 @@ private:
 	ImGuiContext*                   mpImGuiContext;
 	FUIState                        mUIState;
 	FRenderStats                    mRenderStats;
+	AssetBrowser* 			        mAssetBrowser;
 
 	// rendering resources per window
 #if 0

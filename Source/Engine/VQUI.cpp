@@ -19,13 +19,10 @@
 #include <utility>
 #include "VQEngine.h"
 #include "GPUMarker.h"
+#include "Editor/VQAssetBrowser.h"
 
 #include "VQUtils/Source/utils.h"
 
-#include "Libs/imgui/imgui.h"
-// To use the 'disabled UI state' functionality (ImGuiItemFlags_Disabled), include internal header
-// https://github.com/ocornut/imgui/issues/211#issuecomment-339241929
-#include "Libs/imgui/imgui_internal.h"
 static        void BeginDisabledUIState(bool bEnable)
 {
 	if (!bEnable)
@@ -104,23 +101,38 @@ static void InitializeEngineUIState(FUIState& s)
 	s.bWindowVisible_GraphicsSettingsPanel = false;
 	s.bWindowVisible_Profiler = false;
 	s.bWindowVisible_DebugPanel = false;
+	s.bWindowVisible_AssetBrowser = true; // for now true for testing
 	s.bProfiler_ShowEngineStats = true;
 }
 
 void VQEngine::InitializeUI(HWND hwnd)
 {
+	mAssetBrowser = new AssetBrowser(mRenderer);
+
 	mpImGuiContext = ImGui::CreateContext();
 	ImGui::SetCurrentContext(mpImGuiContext);
 
 	ImGuiIO& io = ImGui::GetIO();
 	io.IniFilename = nullptr; // don't save out to a .ini file
 
+	// load LiberationSans font and marge with icon font
+	io.Fonts->Clear();
+	ImFont* LiberationSans = io.Fonts->AddFontFromFileTTF("Data/Fonts/LiberationSans-Regular.ttf", 13);
+	static const ImWchar icons_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+	ImFontConfig icons_config;
+	icons_config.MergeMode = true;
+
+	ImFont* IconFont = io.Fonts->AddFontFromFileTTF("Data/Fonts/" FONT_ICON_FILE_NAME_FAS, 13.0f, &icons_config, icons_ranges);
+	io.Fonts->Build();
+	VQEditor::DarkTheme();
+
 	// Get UI texture 
 	//
 	unsigned char* pixels;
 	int width, height;
+	
 	io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
-
+	
 	// Create the texture object
 	//
 	TextureCreateDesc rDescs("texUI");
@@ -132,7 +144,6 @@ void VQEngine::InitializeUI(HWND hwnd)
 	// Tell ImGUI what the image view is
 	//
 	io.Fonts->TexID = (ImTextureID)&mRenderer.GetSRV(srvUI);
-
 
 	// Create sampler
 	//
@@ -212,6 +223,7 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 		if (mUIState.bWindowVisible_Profiler)              DrawProfilerWindow(mpScene->GetSceneRenderStats(FRAME_DATA_INDEX), dt);
 		if (mUIState.bWindowVisible_DebugPanel)            DrawDebugPanelWindow(SceneParams, PPParams);
 		if (mUIState.bWindowVisible_GraphicsSettingsPanel) DrawGraphicsSettingsWindow(SceneParams, PPParams);
+		if (mUIState.bWindowVisible_AssetBrowser)          mAssetBrowser->DrawWindow();
 	}
 
 	// If we fired an event that would trigger loading,
