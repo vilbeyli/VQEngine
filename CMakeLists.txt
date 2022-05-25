@@ -177,6 +177,9 @@ set (SourceVQE
     "Source/Engine/Geometry.h"
     "Source/Engine/AssetLoader.h"
     "Source/Engine/GPUMarker.h"
+    "Source/Engine/Editor/VQEditor.h"
+    "Source/Engine/Editor/VQAssetBrowser.h"
+    "Source/Engine/Editor/FontAwesome4.h"
 
     "Source/Engine/Main.cpp"
     "Source/Engine/VQEngine_Main.cpp"
@@ -185,6 +188,8 @@ set (SourceVQE
     "Source/Engine/VQEngine_Update.cpp"
     "Source/Engine/VQEngine_Input.cpp"
     "Source/Engine/VQEngine_Simulation.cpp"
+    "Source/Engine/Editor/VQEditor.cpp"
+    "Source/Engine/Editor/VQAssetBrowser.cpp"
     "Source/Engine/EnvironmentMap.cpp"
     "Source/Engine/Geometry.cpp"
     "Source/Engine/Math.cpp"
