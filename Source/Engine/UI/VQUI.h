@@ -38,6 +38,7 @@ struct FUIState
 	bool bWindowVisible_SceneControls;
 	bool bWindowVisible_DebugPanel;
 	bool bWindowVisible_GraphicsSettingsPanel;
+	bool bWindowVisible_AssetBrowser; // new added
 	bool bHideAllWindows; // masks all the windows above
 
 	bool bUIOnSeparateWindow;
