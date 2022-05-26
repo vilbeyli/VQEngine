@@ -26,7 +26,7 @@
 
 CBV_SRV_UAV* AssetBrowser::ExtensionToIcon(std::string& extension) const
 {
-	switch (StringHash::Basic(extension.c_str())) // StringToHash Function is located in Helper.hpp
+	switch (StringHash::Basic(extension.c_str())) // StringToHash Function is located in VQAssetBrowser.h
 	{
 		// is material ?
 		case MatHash:  { extension = "Material"; return mMaterialIcon.GetTextureSRV(mRenderer);  }
@@ -47,11 +47,11 @@ AssetBrowser::~AssetBrowser()
 
 AssetBrowser::AssetBrowser(VQRenderer& renderer)
 : mRenderer(renderer) 
-, mFileIcon 	(AssetBrowser::TextureSRVPair(renderer, "Data/Icons/file.png"         ))
-, mFolderIcon	(AssetBrowser::TextureSRVPair(renderer, "Data/Icons/folder.png"       ))
-, mMeshIcon 	(AssetBrowser::TextureSRVPair(renderer, "Data/Icons/mesh.png"         ))
-, mMaterialIcon (AssetBrowser::TextureSRVPair(renderer, "Data/Icons/Material_Icon.png"))
-, mCurrentPath  (std::filesystem::current_path() / "Data")
+, mFileIcon 		(AssetBrowser::TextureSRVPair(renderer, "Data/Icons/file.png"         ))
+, mFolderIcon		(AssetBrowser::TextureSRVPair(renderer, "Data/Icons/folder.png"       ))
+, mMeshIcon 		(AssetBrowser::TextureSRVPair(renderer, "Data/Icons/mesh.png"         ))
+, mMaterialIcon 	(AssetBrowser::TextureSRVPair(renderer, "Data/Icons/Material_Icon.png"))
+, mCurrentPath  	(std::filesystem::current_path() / "Data")
 {
 	mFolderIconTexture = mFolderIcon.GetTextureSRV(renderer);
 
@@ -223,8 +223,6 @@ void AssetBrowser::SearchProcess(const char* SearchText)
 
 void AssetBrowser::DrawWindow()
 {
-	static bool searching = false;
-	
 	ImGui::Begin("Resources");
 	
 	if (ImGui::BeginTable("table-content-browser", 2, ImGuiTableFlags_Resizable))

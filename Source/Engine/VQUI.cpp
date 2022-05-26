@@ -101,7 +101,7 @@ static void InitializeEngineUIState(FUIState& s)
 	s.bWindowVisible_GraphicsSettingsPanel = false;
 	s.bWindowVisible_Profiler = false;
 	s.bWindowVisible_DebugPanel = false;
-	s.bWindowVisible_AssetBrowser = true; // for now true for testing
+	s.bWindowVisible_AssetBrowser = true; 
 	s.bProfiler_ShowEngineStats = true;
 }
 
