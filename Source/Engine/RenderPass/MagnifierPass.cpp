@@ -84,8 +84,8 @@ void MagnifierPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamet
 	ID3D12GraphicsCommandList* pCmd = pParams->pCmd;
 	assert(pCmd);
 
-	const float W = pParams->pCBufferParams->uImageWidth;
-	const float H = pParams->pCBufferParams->uImageHeight;
+	const float W = static_cast<float>(pParams->pCBufferParams->uImageWidth);
+	const float H = static_cast<float>(pParams->pCBufferParams->uImageHeight);
 
 	if (bOutputsToSwapchain)
 	{

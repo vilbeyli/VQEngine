@@ -153,12 +153,6 @@ static void InitializeEngineUIState(FUIState& s)
 	s.mpMagnifierState = new FMagnifierUIState(); 
 	s.mpMagnifierState->pMagnifierParams = new FMagnifierParameters();
 }
-void FUIState::GetMouseScreenPosition(int& X, int& Y) const
-{
-	ImGuiIO& io = ImGui::GetIO();
-	X=static_cast<int>(io.MousePos.x);
-	Y=static_cast<int>(io.MousePos.y);
-}
 FUIState::~FUIState()
 {
 	if (mpMagnifierState != nullptr)
@@ -173,6 +167,17 @@ FUIState::~FUIState()
 		mpMagnifierState = nullptr;
 	}
 }
+
+void FUIState::GetMouseScreenPosition(int& X, int& Y) const
+{
+	ImGuiIO& io = ImGui::GetIO();
+	X = static_cast<int>(io.MousePos.x);
+	Y = static_cast<int>(io.MousePos.y);
+}
+
+//----------------------------------------------------------------
+//----------------------------------------------------------------
+//----------------------------------------------------------------
 
 void VQEngine::InitializeUI(HWND hwnd)
 {
