@@ -16,6 +16,21 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
+struct FMagnifierParameters;
+struct FMagnifierUIState
+{
+	bool  bUseMagnifier = false;
+	bool  bLockMagnifierPosition = false;
+	bool  bLockMagnifierPositionHistory = false;
+	int   LockedMagnifiedScreenPositionX = 0;
+	int   LockedMagnifiedScreenPositionY = 0;
+	FMagnifierParameters* pMagnifierParams = nullptr;
+
+	void ToggleMagnifierLock();
+	void AdjustMagnifierSize(float increment = 0.05f);
+	void AdjustMagnifierMagnification(float increment = 1.00f);
+};
+
 struct FUIState
 {
 	bool bWindowVisible_KeyMappings;
@@ -27,4 +42,9 @@ struct FUIState
 
 	bool bUIOnSeparateWindow;
 	bool bProfiler_ShowEngineStats;
+	FMagnifierUIState* mpMagnifierState = nullptr;
+	
+	void GetMouseScreenPosition(int& X, int& Y) const;
+
+	~FUIState();
 };

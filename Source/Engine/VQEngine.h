@@ -38,6 +38,7 @@
 #include "RenderPass/DepthMSAAResolve.h"
 #include "RenderPass/ScreenSpaceReflections.h"
 #include "RenderPass/ApplyReflections.h"
+#include "RenderPass/MagnifierPass.h"
 
 #include "Libs/VQUtils/Source/Multithreading.h"
 #include "Libs/VQUtils/Source/Timer.h"
@@ -495,6 +496,7 @@ private:
 	ScreenSpaceReflectionsPass      mRenderPass_SSR;
 	DepthMSAAResolvePass            mRenderPass_DepthResolve;
 	ApplyReflectionsPass            mRenderPass_ApplyReflections;
+	MagnifierPass                   mRenderPass_Magnifier;
 
 	// timer / profiler
 	Timer                           mTimer;

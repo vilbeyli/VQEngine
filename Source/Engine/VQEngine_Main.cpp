@@ -46,6 +46,7 @@ VQEngine::VQEngine()
 	, mRenderPass_SSR(mRenderer)
 	, mRenderPass_ApplyReflections(mRenderer)
 	, mRenderPass_DepthResolve(mRenderer)
+	, mRenderPass_Magnifier(mRenderer, true) // true: outputs to swapchain
 {}
 
 void VQEngine::MainThread_Tick()

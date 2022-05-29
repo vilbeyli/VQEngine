@@ -165,7 +165,8 @@ void VQEngine::RenderThread_Inititalize()
 		&mRenderPass_SSR,
 		&mRenderPass_ApplyReflections,
 		&mRenderPass_ZPrePass,
-		&mRenderPass_DepthResolve
+		&mRenderPass_DepthResolve,
+		&mRenderPass_Magnifier
 	};
 
 	const bool bExclusiveFullscreen_MainWnd = CheckInitialSwapchainResizeRequired(mInitialSwapchainResizeRequiredWindowLookup, mSettings.WndMain, mpWinMain->GetHWND());
@@ -662,6 +663,11 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			params.TexSceneColorRoughness = r.Tex_SceneColor;
 			params.TexMotionVectors = r.Tex_SceneMotionVectors;
 			mRenderPass_SSR.OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY, &params);
+		}
+
+		// Magnifier pass
+		{
+			mRenderPass_Magnifier.OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY, nullptr);
 		}
 	} // main window resources
 

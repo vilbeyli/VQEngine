@@ -357,6 +357,24 @@ const FDisplayHDRProfile* VQEngine::GetHDRProfileIfExists(const wchar_t* pwStrLo
 
 // ---------------------------------------------------------------------
 
+// since the MagnifierPass is used for swapchain passthrough, we gotta
+// update the pass paramteres in an update loop.
+static void UpdateMagnifierParameters(FMagnifierUIState* pMagnifierUIState, const FUIState& ui, int W, int H)
+{
+	int MouseX, MouseY = 0;
+	ui.GetMouseScreenPosition(MouseX, MouseY);
+
+	FMagnifierParameters& params = *pMagnifierUIState->pMagnifierParams;
+	const bool bLocked = pMagnifierUIState->bLockMagnifierPosition;
+	params.uImageHeight = H;
+	params.uImageWidth  = W;
+	params.iMousePos[0] = bLocked ? pMagnifierUIState->LockedMagnifiedScreenPositionX : MouseX;
+	params.iMousePos[1] = bLocked ? pMagnifierUIState->LockedMagnifiedScreenPositionY : MouseY;
+	memcpy(params.fBorderColorRGB, bLocked ? MAGNIFIER_BORDER_COLOR__LOCKED : MAGNIFIER_BORDER_COLOR__FREE, sizeof(float) * 3);
+
+	MagnifierPass::KeepMagnifierOnScreen(*pMagnifierUIState->pMagnifierParams);
+}
+
 void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 {
 	std::unique_ptr<Window>& pWin = mpWinMain;
@@ -377,12 +395,12 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 		HWND   hwnd = it->first;
 		Input& input = it->second;
 		auto& pWin = this->GetWindow(hwnd);
-		const bool bIsShiftDown = input.IsKeyDown("Shift");
 
 		if (pWin == mpWinMain)
 			HandleMainWindowInput(input, hwnd);
 	}
 	HandleUIInput();
+	UpdateMagnifierParameters(mUIState.mpMagnifierState, mUIState, mpWinMain->GetWidth(), mpWinMain->GetHeight());
 }
 
 void VQEngine::UpdateThread_UpdateScene_DebugWnd(const float dt)

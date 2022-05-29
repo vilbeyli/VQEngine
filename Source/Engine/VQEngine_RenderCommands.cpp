@@ -1562,24 +1562,39 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBu
 		pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
 	}
 
-	if(!bHDR)
+	if (!bHDR)
 	{
-		SCOPED_GPU_MARKER(pCmd, "SwapchainPassthrough");
-		pCmd->SetPipelineState(mRenderer.GetPSO(bHDR ? EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO : EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO));
-		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FullScreenTriangle));
-		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-		pCmd->SetGraphicsRootDescriptorTable(0, srv_ColorIn.GetGPUDescHandle());
+		if (mUIState.mpMagnifierState->bUseMagnifier)
+		{
+			SCOPED_GPU_MARKER(pCmd, "MagnifierPass");
+			MagnifierPass::FDrawParameters MagnifierDrawParams;
+			MagnifierDrawParams.pCmd = pCmd;
+			MagnifierDrawParams.pCBufferHeap = pCBufferHeap;
+			MagnifierDrawParams.IndexBufferView = ib;
+			MagnifierDrawParams.RTV = rtvHandle;
+			MagnifierDrawParams.SRVColorInput = srv_ColorIn;
+			MagnifierDrawParams.pCBufferParams = mUIState.mpMagnifierState->pMagnifierParams;
+			mRenderPass_Magnifier.RecordCommands(&MagnifierDrawParams);
+		}
+		else
+		{
+			SCOPED_GPU_MARKER(pCmd, "SwapchainPassthrough");
+			pCmd->SetPipelineState(mRenderer.GetPSO(bHDR ? EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO : EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO));
+			pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FullScreenTriangle));
+			pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+			pCmd->SetGraphicsRootDescriptorTable(0, srv_ColorIn.GetGPUDescHandle());
 
-		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		pCmd->IASetVertexBuffers(0, 1, NULL);
-		pCmd->IASetIndexBuffer(&ib);
+			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			pCmd->IASetVertexBuffers(0, 1, NULL);
+			pCmd->IASetIndexBuffer(&ib);
 
-		pCmd->RSSetViewports(1, &viewport);
-		pCmd->RSSetScissorRects(1, &scissorsRect);
+			pCmd->RSSetViewports(1, &viewport);
+			pCmd->RSSetScissorRects(1, &scissorsRect);
 
-		pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
+			pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
 
-		pCmd->DrawIndexedInstanced(3, 1, 0, 0, 0);
+			pCmd->DrawIndexedInstanced(3, 1, 0, 0, 0);
+		}
 	}
 	else
 	{

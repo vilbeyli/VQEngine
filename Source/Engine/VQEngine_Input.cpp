@@ -98,6 +98,19 @@ void VQEngine::HandleUIInput()
 				PPParams.bEnableCAS = !PPParams.bEnableCAS;
 				Log::Info("Toggle FFX-CAS: %d", PPParams.bEnableCAS);
 			}
+
+			/* MAGNIFIER CONTROLS */
+			const bool bMidMouseTriggered = input.IsMouseTriggered(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE);
+			if (bMidMouseTriggered)
+			{
+				if (bIsShiftDown)
+				{
+					if (mUIState.mpMagnifierState->bUseMagnifier)
+						mUIState.mpMagnifierState->ToggleMagnifierLock();
+				}
+				else
+					mUIState.mpMagnifierState->bUseMagnifier ^= 1;
+			}
 		}
 	}
 }

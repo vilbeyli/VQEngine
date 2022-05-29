@@ -76,6 +76,7 @@ set (Shaders
     "Shaders/HDR.hlsl"
     "Shaders/Visualization.hlsl"
     "Shaders/ApplyReflections.hlsl"
+    "Shaders/Magnifier.hlsl"
 )
 
 set (ShadersScreenSpaceReflections
@@ -99,6 +100,7 @@ set (RenderPassFiles
     "Source/Engine/RenderPass/DepthPrePass.h"
     "Source/Engine/RenderPass/DepthMSAAResolve.h"
     "Source/Engine/RenderPass/ScreenSpaceReflections.h"
+    "Source/Engine/RenderPass/MagnifierPass.h"
     
     "Source/Engine/RenderPass/RenderPass.cpp"
     "Source/Engine/RenderPass/AmbientOcclusion.cpp"
@@ -106,6 +108,7 @@ set (RenderPassFiles
     "Source/Engine/RenderPass/DepthPrePass.cpp"
     "Source/Engine/RenderPass/DepthMSAAResolve.cpp"
     "Source/Engine/RenderPass/ScreenSpaceReflections.cpp"
+    "Source/Engine/RenderPass/MagnifierPass.cpp"
 )
 
 set (CoreFiles 
