@@ -87,10 +87,11 @@ PSInput VSMain(uint id : SV_VertexID)
 
 float4 PSMain(PSInput Input) : SV_Target
 {
-    const float2 uv = Input.uv;
-    float4 outColor = srcColor.SampleLevel(samPoint, uv, 0);
+    const float2 ImageSize = float2(uImageWidth, uImageHeight);
 
-    const float2 ImageSize                 = float2(uImageWidth, uImageHeight);
+    const float2 uv = Input.uv;
+    float4 outColor = srcColor.Load(int3(uv*(ImageSize-0.5f.xx),0));
+
     const float  AspectRatio               = ImageSize.x / ImageSize.y;
     const float  AspectRatioInv            = ImageSize.y / ImageSize.x;
     const float2 MagnifierAreaCenter       = float2(iMousePosX, iMousePosY);
@@ -140,7 +141,7 @@ float4 PSMain(PSInput Input) : SV_Target
         float2 sampleUVOffsetFromCenter = uv - uvMagnifierOnScreen;
         sampleUVOffsetFromCenter /= fMagnificationAmount;
         const float2 magnifierUV = uvMagnifiedArea + sampleUVOffsetFromCenter;
-        outColor = srcColor.SampleLevel(samPoint, magnifierUV, 0);
+        outColor = srcColor.Load(int3(magnifierUV*ImageSize-0.5f.xx,0));
         return outColor;
     }
 
