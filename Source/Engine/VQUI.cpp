@@ -910,38 +910,32 @@ void VQEngine::DrawPostProcessSettings(FPostProcessParameters& PPParams)
 		//
 		ImGuiSpacing3();
 		ImGuiIO& io = ImGui::GetIO();
-		if (bHDR)
+
+		ImGui::Text("Magnifier");
+		ImGui::Separator();
 		{
-			// TODO: HDR magnifier
-		}
-		else
-		{
-			ImGui::Text("Magnifier");
-			ImGui::Separator();
-			{
-				ImGui::Checkbox("Show Magnifier", &mUIState.mpMagnifierState->bUseMagnifier);
+			ImGui::Checkbox("Show Magnifier (Middle Mouse)", &mUIState.mpMagnifierState->bUseMagnifier);
 				
-				BeginDisabledUIState(mUIState.mpMagnifierState->bUseMagnifier);
-				{
-					FMagnifierParameters& params = *mUIState.mpMagnifierState->pMagnifierParams;
+			BeginDisabledUIState(mUIState.mpMagnifierState->bUseMagnifier);
+			{
+				FMagnifierParameters& params = *mUIState.mpMagnifierState->pMagnifierParams;
 
-					// Use a local bool state here to track locked state through the UI widget,
-					// and then call ToggleMagnifierLockedState() to update the persistent state (m_UIstate).
-					// The keyboard input for toggling lock directly operates on the persistent state.
-					const bool bIsMagnifierCurrentlyLocked = mUIState.mpMagnifierState->bLockMagnifierPosition;
-					bool bMagnifierToggle = bIsMagnifierCurrentlyLocked;
-					ImGui::Checkbox("Lock Position", &bMagnifierToggle);
+				// Use a local bool state here to track locked state through the UI widget,
+				// and then call ToggleMagnifierLockedState() to update the persistent state (m_UIstate).
+				// The keyboard input for toggling lock directly operates on the persistent state.
+				const bool bIsMagnifierCurrentlyLocked = mUIState.mpMagnifierState->bLockMagnifierPosition;
+				bool bMagnifierToggle = bIsMagnifierCurrentlyLocked;
+				ImGui::Checkbox("Lock Position (Shift + Middle Mouse)", &bMagnifierToggle);
 
-					if (bMagnifierToggle != bIsMagnifierCurrentlyLocked)
-						mUIState.mpMagnifierState->ToggleMagnifierLock();
+				if (bMagnifierToggle != bIsMagnifierCurrentlyLocked)
+					mUIState.mpMagnifierState->ToggleMagnifierLock();
 
-					ImGui::SliderFloat("Screen Size", &params.fMagnifierScreenRadius, MAGNIFIER_RADIUS_MIN, MAGNIFIER_RADIUS_MAX);
-					ImGui::SliderFloat("Magnification", &params.fMagnificationAmount, MAGNIFICATION_AMOUNT_MIN, MAGNIFICATION_AMOUNT_MAX);
-					ImGui::SliderInt("OffsetX", &params.iMagnifierOffset[0], -(int)W, W);
-					ImGui::SliderInt("OffsetY", &params.iMagnifierOffset[1], -(int)H, H);
-				}
-				EndDisabledUIState(mUIState.mpMagnifierState->bUseMagnifier);
+				ImGui::SliderFloat("Screen Size", &params.fMagnifierScreenRadius, MAGNIFIER_RADIUS_MIN, MAGNIFIER_RADIUS_MAX);
+				ImGui::SliderFloat("Magnification", &params.fMagnificationAmount, MAGNIFICATION_AMOUNT_MIN, MAGNIFICATION_AMOUNT_MAX);
+				ImGui::SliderInt("OffsetX", &params.iMagnifierOffset[0], -(int)W, W);
+				ImGui::SliderInt("OffsetY", &params.iMagnifierOffset[1], -(int)H, H);
 			}
+			EndDisabledUIState(mUIState.mpMagnifierState->bUseMagnifier);
 		}
 	}
 	else

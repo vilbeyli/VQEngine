@@ -37,30 +37,7 @@ void MagnifierPass::OnCreateWindowSizeDependentResources(unsigned Width, unsigne
 {
 	if (!bOutputsToSwapchain)
 	{
-#if 0 // TODO: support for CS
-		TextureCreateDesc desc = {};
-		desc.Width = Width;
-		desc.Height = Height;
-		desc.MipLevels = 1;
-		desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-		desc.DepthOrArraySize = 1;
-		desc.SampleDesc.Count = 1;
-		desc.SampleDesc.Quality = 0;
-		desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-
-		constexpr D3D12_RESOURCE_STATES RSC_STATE = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
-		const D3D12_CLEAR_VALUE CLR_VAL = { desc.Format, 0.0f, 0.0f, 0.0f, 1.0f };
-
-		desc.Format = pTexture->GetFormat();
-
-		m_TexPassOutput.Init(m_pDevice, "TexMagnifierOutput", &desc, RSC_STATE, NULL);
-		TexPassOutput = mRenderer.CreateTexture();
-
-		m_TexPassOutput.CreateSRV(0, &m_SRVOutput);
-		m_TexPassOutput.CreateUAV(0, &m_UAVOutput);
-		m_TexPassOutput.CreateRTV(0, &m_RTVOutput);
-		m_TexPassOutput.CreateRTV(0, &m_RTVOutputSrgb, -1, -1, -1, ConvertIntoGammaFormat(desc.Format));
-#endif
+		// TODO: support for CS
 	}
 }
 

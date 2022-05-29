@@ -1598,9 +1598,16 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBu
 	}
 	else
 	{
-		pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
-		const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-		pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, NULL);
+		if (mUIState.mpMagnifierState->bUseMagnifier)
+		{
+			// TODO: make magnifier work w/ HDR when the new HDR monitor arrives
+		}
+		else
+		{
+			pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
+			const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+			pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, NULL);
+		}
 	}
 #if !VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	{
