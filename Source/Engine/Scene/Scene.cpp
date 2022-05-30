@@ -644,7 +644,7 @@ void Scene::PrepareLightMeshRenderParams(FSceneView& SceneView) const
 }
 
 
-void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<MeshRenderCommand_t>& MeshRenderCommands, const DirectX::XMMATRIX& matViewProj, const DirectX::XMMATRIX& matViewProjHistory)
+void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<MeshRenderCommand_t>& MeshRenderCommands, const DirectX::XMMATRIX matViewProj, const DirectX::XMMATRIX matViewProjHistory)
 {
 	SCOPED_CPU_MARKER("Scene::PrepareSceneMeshRenderParams()");
 
@@ -696,65 +696,20 @@ void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustum
 		const std::vector<size_t>& CulledBoundingBoxIndexList_Msh = MeshFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[0];
 
 	#if RENDER_INSTANCED_SCENE_MESHES
-		//--------------------------------------------------------------------------------------------------------------------------------------------
-		// collect instance data based on Material, and then Mesh.
-		//--------------------------------------------------------------------------------------------------------------------------------------------
-		// MAT0
-		//	+----MESH0
-		//	       +----Inst0
-		//	       +----Inst1
-		//	+----MESH1
-		//	       +----Inst0
-		//	       +----Inst1
-		//	       +----Inst2
-		//	+----MESH2
-		//	       +----Inst0
-		//
-		// MAT1
-		//	+----MESH37
-		//	       +----Inst0
-		//	       +----Inst1
-		//	       +----Inst2
-		//	+----MESH225
-		//	       +----Inst0
-		//	       +----Inst1
-		struct FInstanceData { XMMATRIX mWorld, mWorldViewProj, mWorldViewProjPrev, mNormal; };
-		std::unordered_map < MaterialID, std::unordered_map<MeshID, std::vector<FInstanceData>>> MaterialMeshInstanceDataLookup;
-		std::unordered_map < MaterialID, std::unordered_map<MeshID, int>> MaterialMeshCountLookup;
-		//--------------------------------------------------------------------------------------------------------------------------------------------
-
 		{
-			SCOPED_CPU_MARKER("CountInstanceData");
-			for (const size_t& BBIndex : CulledBoundingBoxIndexList_Msh)
+			SCOPED_CPU_MARKER("MarkInstanceDataStale");
+			// for-each material
+			for (auto itMat = MaterialMeshInstanceDataLookup.begin(); itMat != MaterialMeshInstanceDataLookup.end(); ++itMat)
 			{
-				assert(BBIndex < mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping.size());
-				MeshID meshID = mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping[BBIndex];
+				const MaterialID matID = itMat->first;
+				std::unordered_map<MeshID, FMeshInstanceData>& meshInstanceDataLookup = itMat->second;
 
-				// read game object data
-				const GameObject* pGameObject = MeshFrustumCullWorkerContext.vGameObjectPointerLists[0][BBIndex];
-				const Model& model = mModels.at(pGameObject->mModelID);
-				const MaterialID matID = model.mData.mOpaqueMaterials.at(meshID);
-
-				MaterialMeshCountLookup[matID][meshID] += 1;
-			}
-		}
-		{
-			SCOPED_CPU_MARKER("ResizeInstanceData");
-			for (auto it = MaterialMeshCountLookup.begin(); it != MaterialMeshCountLookup.end(); ++it)
-			{
-				MaterialID matID = it->first;
-				auto& mapMeshCount = it->second;
-				
-				for (auto itMesh = mapMeshCount.begin(); itMesh != mapMeshCount.end(); ++itMesh)
+				// for-each mesh
+				for (auto itMesh = meshInstanceDataLookup.begin(); itMesh != meshInstanceDataLookup.end(); ++itMesh)
 				{
-					MeshID meshID = itMesh->first;
-					const int NumMeshes = itMesh->second;
-
-					MaterialMeshCountLookup[matID][meshID] = 0;
-					MaterialMeshInstanceDataLookup[matID][meshID].resize(NumMeshes);
+					meshInstanceDataLookup[itMesh->first].NumValidData = 0;
 				}
 			}
-			
 		}
 
 		// collect instance data from culled mesh BB list
@@ -778,8 +733,18 @@ void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustum
 				const XMMATRIX matNormal = pTF->NormalMatrix(matWorld);
 
 				// record instance data
-				MaterialMeshInstanceDataLookup[matID][meshID][MaterialMeshCountLookup[matID][meshID]] =  FInstanceData{ matWorld, matWorld * matViewProj, matWorldHistory * matViewProjHistory, matNormal };
-				MaterialMeshCountLookup[matID][meshID] += 1;
+				FMeshInstanceData& d = MaterialMeshInstanceDataLookup[matID][meshID];
+
+				// if we're seeing this materia/mesh combo the first time, 
+				// allocate some memory for instance data, enough for 1 batch
+				if (d.InstanceData.empty() || d.InstanceData.size() == d.NumValidData)
+				{
+					SCOPED_CPU_MARKER("MemAlloc");
+					d.InstanceData.resize(d.InstanceData.empty() ? MAX_INSTANCE_COUNT__SCENE_MESHES : d.InstanceData.size() * 2);
+				}
+
+				d.InstanceData[d.NumValidData] = { matWorld, matWorld * matViewProj, matWorldHistory * matViewProjHistory, matNormal };
+				d.NumValidData++;
 			}
 		}
 		
@@ -789,19 +754,19 @@ void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustum
 			for (auto itMat = MaterialMeshInstanceDataLookup.begin(); itMat != MaterialMeshInstanceDataLookup.end(); ++itMat)
 			{
 				const MaterialID matID = itMat->first;
-				const std::unordered_map<MeshID, std::vector<FInstanceData>>& meshInstanceDataLookup = itMat->second;
+				const std::unordered_map<MeshID, FMeshInstanceData>& meshInstanceDataLookup = itMat->second;
 				for (auto itMesh = meshInstanceDataLookup.begin(); itMesh != meshInstanceDataLookup.end(); ++itMesh)
 				{
 					const MeshID meshID = itMesh->first;
-					const std::vector<FInstanceData>& instData = itMesh->second;
+					const FMeshInstanceData& instData = itMesh->second;
 
-					int NumInstancesToProces = (int)instData.size();
+					int NumInstancesToProces = (int)instData.NumValidData;
 					int iInst = 0;
 					while (NumInstancesToProces > 0)
 					{
 						const int ThisBatchSize = std::min(MAX_INSTANCE_COUNT__SCENE_MESHES, NumInstancesToProces);
 						int iBatch = 0;
-						while (iBatch < MAX_INSTANCE_COUNT__SCENE_MESHES && iInst < instData.size())
+						while (iBatch < MAX_INSTANCE_COUNT__SCENE_MESHES && iInst < instData.NumValidData)
 						{
 							++iBatch;
 							++iInst;
@@ -810,7 +775,6 @@ void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustum
 						++NumInstancedRenderCommands;
 					}
 				}
-
 			}
 		}
 		{
@@ -828,45 +792,43 @@ void Scene::PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustum
 			{
 				SCOPED_CPU_MARKER("Material");
 				const MaterialID matID = itMat->first;
-				const std::unordered_map<MeshID, std::vector<FInstanceData>>& meshInstanceDataLookup = itMat->second;
+				const std::unordered_map<MeshID, FMeshInstanceData>& meshInstanceDataLookup = itMat->second;
 
 				// for-each mesh
 				for (auto itMesh = meshInstanceDataLookup.begin(); itMesh != meshInstanceDataLookup.end(); ++itMesh)
 				{
 					SCOPED_CPU_MARKER("Mesh");
 					const MeshID meshID = itMesh->first;
-					const std::vector<FInstanceData>& instData = itMesh->second;
+					const FMeshInstanceData& MeshInstanceData = itMesh->second;
 
-					FInstancedMeshRenderCommand cmd;
-					cmd.meshID = meshID;
-					cmd.matID = matID;
 
-					int NumInstancesToProces = (int)instData.size();
+					int NumInstancesToProces = (int)MeshInstanceData.NumValidData;
 					int iInst = 0;
 					while (NumInstancesToProces > 0)
 					{
-						SCOPED_CPU_MARKER("InstanceBatch");
 						const int ThisBatchSize = std::min(MAX_INSTANCE_COUNT__SCENE_MESHES, NumInstancesToProces);
+						FInstancedMeshRenderCommand& cmd = MeshRenderCommands[NumInstancedRenderCommands];
+						cmd.meshID = meshID;
+						cmd.matID = matID;
 						cmd.matWorld.resize(ThisBatchSize);
 						cmd.matWorldViewProj.resize(ThisBatchSize);
 						cmd.matWorldViewProjPrev.resize(ThisBatchSize);
 						cmd.matNormal.resize(ThisBatchSize);
 
 						int iBatch = 0;
-						while (iBatch < MAX_INSTANCE_COUNT__SCENE_MESHES && iInst < instData.size())
+						while (iBatch < MAX_INSTANCE_COUNT__SCENE_MESHES && iInst < MeshInstanceData.NumValidData)
 						{
-							SCOPED_CPU_MARKER("InstanceDataCopy");
-							cmd.matWorld[iBatch] = instData[iInst].mWorld;
-							cmd.matWorldViewProj[iBatch] = instData[iInst].mWorldViewProj;
-							cmd.matWorldViewProjPrev[iBatch] = instData[iInst].mWorldViewProjPrev;
-							cmd.matNormal[iBatch] = instData[iInst].mNormal;
+							cmd.matWorld[iBatch] = MeshInstanceData.InstanceData[iInst].mWorld;
+							cmd.matWorldViewProj[iBatch] = MeshInstanceData.InstanceData[iInst].mWorldViewProj;
+							cmd.matWorldViewProjPrev[iBatch] = MeshInstanceData.InstanceData[iInst].mWorldViewProjPrev;
+							cmd.matNormal[iBatch] = MeshInstanceData.InstanceData[iInst].mNormal;
 
 							++iBatch;
 							++iInst;
 						}
 
 						NumInstancesToProces -= iBatch;
-						MeshRenderCommands[NumInstancedRenderCommands++] = cmd;
+						++NumInstancedRenderCommands;
 					}
 				}
 			}
@@ -1106,16 +1068,20 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 		};
 
 #if RENDER_INSTANCED_SHADOW_MESHES
-		auto fnRecordShadowMeshRenderCommandsForFrustum = [&](size_t iFrustum, FSceneShadowView::FShadowView* pShadowView, const std::vector<size_t>& CulledBoundingBoxIndexList_Msh)
+		auto fnRecordShadowMeshRenderCommandsForFrustum = [&](size_t iFrustum, FSceneShadowView::FShadowView* pShadowView, const std::vector<size_t>& CulledBoundingBoxIndexList_Msh, XMMATRIX matViewProj)
 		{
 			SCOPED_CPU_MARKER("ProcessShadowFrustumRenderCommands");
 
-			// clear previous render commands
-			pShadowView->meshRenderCommands.clear();
+			{
+				SCOPED_CPU_MARKER("MarkInstanceDataStale");
+				// for-each mesh
+				for (auto itMesh = pShadowView->ShadowMeshInstanceDataLookup.begin(); itMesh != pShadowView->ShadowMeshInstanceDataLookup.end(); ++itMesh)
+				{
+					itMesh->second.NumValidData = 0;
+				}
+			}
 
 			// record instance data
-			struct FInstanceData { XMMATRIX matWorld, matWorldViewProj; };
-			std::unordered_map<MeshID, std::vector<FInstanceData>> MeshInstanceTransformListLookup;
 			{
 				SCOPED_CPU_MARKER("RecordInstanceData");
 				for (const size_t& BBIndex : CulledBoundingBoxIndexList_Msh)
@@ -1127,46 +1093,94 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 					Transform* const& pTF = mpTransforms.at(pGameObject->mTransformID);
 
 					XMMATRIX matWorld = pTF->matWorldTransformation();
-					MeshInstanceTransformListLookup[meshID].push_back({ matWorld, matWorld * pShadowView->matViewProj });
+					
+					FSceneShadowView::FShadowView::FShadowMeshInstanceData& d = pShadowView->ShadowMeshInstanceDataLookup[meshID];
+
+					// allocate some memory if we're just creating this instance data entry.
+					// a minimum of BATCH_SIZE is a good initial size for the vector
+					if (d.InstanceData.empty() || d.InstanceData.size() == d.NumValidData)
+					{
+						SCOPED_CPU_MARKER("MemAlloc");
+						d.InstanceData.resize(d.InstanceData.empty() ? MAX_INSTANCE_COUNT__SHADOW_MESHES : d.InstanceData.size() * 2);
+					}
+
+					d.InstanceData[d.NumValidData++] = { matWorld, matWorld * matViewProj };	
 				}
+			}
+
+			int NumInstancedRenderCommands = 0;
+			{
+				SCOPED_CPU_MARKER("CountBatches");
+				for (auto itMesh = pShadowView->ShadowMeshInstanceDataLookup.begin(); itMesh != pShadowView->ShadowMeshInstanceDataLookup.end(); ++itMesh)
+				{
+					const FSceneShadowView::FShadowView::FShadowMeshInstanceData& instData = itMesh->second;
+					size_t NumInstancesToProces = instData.NumValidData;
+					int iInst = 0;
+					while (NumInstancesToProces > 0)
+					{
+						const int ThisBatchSize = std::min(MAX_INSTANCE_COUNT__SHADOW_MESHES, NumInstancesToProces);
+						int iBatch = 0;
+						while (iBatch < MAX_INSTANCE_COUNT__SHADOW_MESHES && iInst < instData.NumValidData)
+						{
+							++iBatch;
+							++iInst;
+						}
+						NumInstancesToProces -= iBatch;
+						++NumInstancedRenderCommands;
+					}
+					
+				}
+			}
+
+			// resize the render command list
+			{
+				SCOPED_CPU_MARKER("Resize");
+				pShadowView->meshRenderCommands.resize(NumInstancedRenderCommands);
 			}
 
 			// chunk-up instance data per-mesh and record commands
 			{
 				SCOPED_CPU_MARKER("ChunkUpData");
-				for (auto it = MeshInstanceTransformListLookup.begin(); it != MeshInstanceTransformListLookup.end(); ++it) // for-each mesh
+
+				NumInstancedRenderCommands = 0;
+
+				// for-each mesh
+				for (auto it = pShadowView->ShadowMeshInstanceDataLookup.begin(); it != pShadowView->ShadowMeshInstanceDataLookup.end(); ++it)
 				{
+					SCOPED_CPU_MARKER("Mesh");
 					const MeshID meshID = it->first;
-					const std::vector<FInstanceData>& instData = it->second;
+					const FSceneShadowView::FShadowView::FShadowMeshInstanceData& instData = it->second;
 
-					FInstancedShadowMeshRenderCommand cmd;
-					cmd.meshID = meshID;
 
-					int NumInstancesToProces = (int)instData.size();
+					int NumInstancesToProces = (int)instData.NumValidData;
 					int iInst = 0;
 					while (NumInstancesToProces > 0)
 					{
-						int BatchSize = 0;
-						while (BatchSize < MAX_INSTANCE_COUNT__SHADOW_MESHES && iInst < instData.size())
-						{
-							cmd.matWorldViewProj.push_back(instData[iInst].matWorld);
-							cmd.matWorldViewProjTransformations.push_back(instData[iInst].matWorldViewProj);
+						const int ThisBatchSize = std::min(MAX_INSTANCE_COUNT__SCENE_MESHES, NumInstancesToProces);
+						FInstancedShadowMeshRenderCommand& cmd = pShadowView->meshRenderCommands[NumInstancedRenderCommands];
+						cmd.meshID = meshID;
+						cmd.matWorldViewProj.resize(ThisBatchSize);
+						cmd.matWorldViewProjTransformations.resize(ThisBatchSize);
 
-							++BatchSize;
+						int iBatch = 0;
+						while (iBatch < MAX_INSTANCE_COUNT__SHADOW_MESHES && iInst < instData.NumValidData)
+						{
+							cmd.matWorldViewProj.push_back(instData.InstanceData[iInst].matWorld);
+							cmd.matWorldViewProjTransformations.push_back(instData.InstanceData[iInst].matWorldViewProj);
+
+							++iBatch;
 							++iInst;
 						}
 
-						NumInstancesToProces -= BatchSize;
-						pShadowView->meshRenderCommands.push_back(cmd);
-						cmd.matWorldViewProj.clear();
-						cmd.matWorldViewProjTransformations.clear();
+						NumInstancesToProces -= iBatch;
+						++NumInstancedRenderCommands;
 					}
 				}
 			}
 		};
 		auto fnRecordShadowMeshRenderCommandsForFrustumW = [&](const FFrustumRenderCommandRecorderContext& ctx)
 		{
-			fnRecordShadowMeshRenderCommandsForFrustum(ctx.iFrustum, ctx.pShadowView, *ctx.pObjIndices);
+			fnRecordShadowMeshRenderCommandsForFrustum(ctx.iFrustum, ctx.pShadowView, *ctx.pObjIndices, ctx.pShadowView->matViewProj);
 		};
 #endif
 
@@ -1331,7 +1345,12 @@ static XMMATRIX GetBBTransformMatrix(const FBoundingBox& BB)
 
 void Scene::PrepareBoundingBoxRenderParams(FSceneView& SceneView) const
 {
-	SceneView.boundingBoxRenderCommands.clear();
+	SCOPED_CPU_MARKER("Scene::PrepareBoundingBoxRenderParams()");
+
+	{
+		SCOPED_CPU_MARKER("ClearCmds", 0xFFFF0000); // TODO: reuse vector data, dont clear
+		SceneView.boundingBoxRenderCommands.clear();
+	}
 
 	const XMFLOAT3 BBColor_GameObj = XMFLOAT3(0.0f, 0.2f, 0.8f);
 	const XMFLOAT3 BBColor_Mesh    = XMFLOAT3(0.0f, 0.8f, 0.2f);
@@ -1352,15 +1371,15 @@ void Scene::PrepareBoundingBoxRenderParams(FSceneView& SceneView) const
 		int iBB = 0;
 		while (NumBBsToProcess > 0)
 		{
-			int BatchSize = 0;
-			while (BatchSize < MAX_INSTANCE_COUNT__UNLIT_SHADER && iBB < BBs.size())
+			int iBatch = 0;
+			while (iBatch < MAX_INSTANCE_COUNT__UNLIT_SHADER && iBB < BBs.size())
 			{
 				cmd.matWorldViewProj.push_back(GetBBTransformMatrix(BBs[iBB]) * SceneView.viewProj);
-				++BatchSize;
+				++iBatch;
 				++iBB;
 			}
 
-			NumBBsToProcess -= BatchSize;
+			NumBBsToProcess -= iBatch;
 			cmds.push_back(cmd);
 			cmd.matWorldViewProj.clear();
 		}
@@ -1372,12 +1391,14 @@ void Scene::PrepareBoundingBoxRenderParams(FSceneView& SceneView) const
 	{
 		if (SceneView.sceneParameters.bDrawGameObjectBoundingBoxes)
 		{
+			SCOPED_CPU_MARKER("RecordBBCommands_GameObj");
 			std::vector<FInstancedBoundingBoxRenderCommand> cmds_gameObjs = fnCreateBoundingBoxRenderCommand(mBoundingBoxHierarchy.mGameObjectBoundingBoxes, BBColor_GameObj);
 			cmds.insert(cmds.end(), cmds_gameObjs.begin(), cmds_gameObjs.end());
 		}
 
 		if (SceneView.sceneParameters.bDrawMeshBoundingBoxes)
 		{
+			SCOPED_CPU_MARKER("RecordBBCommands_Mesh");
 			std::vector<FInstancedBoundingBoxRenderCommand> cmds_meshes = fnCreateBoundingBoxRenderCommand(mBoundingBoxHierarchy.mMeshBoundingBoxes, BBColor_Mesh);
 			cmds.insert(cmds.end(), cmds_meshes.begin(), cmds_meshes.end());
 		}

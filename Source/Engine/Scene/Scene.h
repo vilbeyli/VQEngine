@@ -126,6 +126,18 @@ struct FSceneShadowView
 	{
 		DirectX::XMMATRIX matViewProj;
 #if RENDER_INSTANCED_SHADOW_MESHES
+		//--------------------------------------------------------------------------------------------------------------------------------------------
+		//	+----SHADOW_MESH0
+		//	       +----ShadowInstData0
+		//	       +----ShadowInstData1
+		//	+----SHADOW_MESH1
+		//	       +----ShadowInstData0
+		//	       +----ShadowInstData1
+		//	       +----ShadowInstData2
+		struct FShadowInstanceData { DirectX::XMMATRIX matWorld, matWorldViewProj; };
+		struct FShadowMeshInstanceData { size_t NumValidData = 0; std::vector<FShadowInstanceData> InstanceData; };
+		std::unordered_map<MeshID, FShadowMeshInstanceData> ShadowMeshInstanceDataLookup;
+		//--------------------------------------------------------------------------------------------------------------------------------------------
 		std::vector<FInstancedShadowMeshRenderCommand> meshRenderCommands;
 #else
 		std::vector<FShadowMeshRenderCommand> meshRenderCommands;
@@ -289,7 +301,7 @@ private: // Derived Scenes shouldn't access these functions
 	void GatherSceneLightData(FSceneView& SceneView) const;
 
 	void PrepareLightMeshRenderParams(FSceneView& SceneView) const;
-	void PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<MeshRenderCommand_t>& MeshRenderCommands, const DirectX::XMMATRIX& matViewProj, const DirectX::XMMATRIX& matViewProjHistory);
+	void PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<MeshRenderCommand_t>& MeshRenderCommands, const DirectX::XMMATRIX matViewProj, const DirectX::XMMATRIX matViewProjHistory);
 	void PrepareShadowMeshRenderParams(FSceneShadowView& ShadowView, const FFrustumPlaneset& ViewFrustumPlanesInWorldSpace, ThreadPool& UpdateWorkerThreadPool) const;
 	void PrepareBoundingBoxRenderParams(FSceneView& SceneView) const;
 	
@@ -331,14 +343,14 @@ public:
 	// Mesh, Model, GameObj management
 	//TransformID CreateTransform(Transform** ppTransform);
 	//GameObject* CreateObject(TransformID tfID, ModelID modelID);
-	MeshID     AddMesh(Mesh&& mesh);
-	MeshID     AddMesh(const Mesh& mesh);
-	ModelID    CreateModel();
-	MaterialID CreateMaterial(const std::string& UniqueMaterialName);
-	MaterialID LoadMaterial(const FMaterialRepresentation& matRep, TaskID taskID);
+	MeshID      AddMesh(Mesh&& mesh);
+	MeshID      AddMesh(const Mesh& mesh);
+	ModelID     CreateModel();
+	MaterialID  CreateMaterial(const std::string& UniqueMaterialName);
+	MaterialID  LoadMaterial(const FMaterialRepresentation& matRep, TaskID taskID);
 
-	Material&  GetMaterial(MaterialID ID);
-	Model&     GetModel(ModelID);
+	Material&   GetMaterial(MaterialID ID);
+	Model&      GetModel(ModelID);
 	FSceneStats GetSceneRenderStats(int FRAME_DATA_INDEX) const;
 
 //----------------------------------------------------------------------------------------------------------------
@@ -349,8 +361,8 @@ protected:
 	//
 	// VIEWS
 	//
-	std::vector<FSceneView>       mFrameSceneViews ; // per-frame in flight (usually 3 if Render & Update threads are separate)
-	std::vector<FSceneShadowView> mFrameShadowViews; // per-frame in flight (usually 3 if Render & Update threads are separate)
+	std::vector<FSceneView>       mFrameSceneViews ; // per-frame data (usually 3 if Render & Update threads are separate)
+	std::vector<FSceneShadowView> mFrameShadowViews; // per-frame data (usually 3 if Render & Update threads are separate)
 
 	//
 	// SCENE ELEMENT CONTAINERS
@@ -375,6 +387,36 @@ protected:
 	std::unordered_map<const Transform*, DirectX::XMMATRIX> mTransformWorldMatrixHistory; // history for motion vectors
 	std::unordered_map<const Camera*   , DirectX::XMMATRIX> mViewProjectionMatrixHistory; // history for motion vectors
 
+#if RENDER_INSTANCED_SCENE_MESHES
+	//--------------------------------------------------------------------------------------------------------------------------------------------
+	// collect instance data based on Material, and then Mesh.
+	// In order to avoid clear/resize, we will track if the data is @bStale
+	// and if it is not stale, we also keep track of the number of valid instance data.
+	//--------------------------------------------------------------------------------------------------------------------------------------------
+	// MAT0
+	//	+----MESH0
+	//	       +----InstData0
+	//	       +----InstData1
+	//	+----MESH1
+	//	       +----InstData0
+	//	       +----InstData1
+	//	       +----InstData2
+	//	+----MESH2
+	//	       +----InstData0
+	//
+	// MAT1
+	//	+----MESH37
+	//	       +----InstData0
+	//	       +----InstData1
+	//	       +----InstData2
+	//	+----MESH225
+	//	       +----InstData0
+	//	       +----InstData1
+	struct FInstanceData { DirectX::XMMATRIX mWorld, mWorldViewProj, mWorldViewProjPrev, mNormal; }; // transformation matrixes used in the shader
+	struct FMeshInstanceData { size_t NumValidData = 0; std::vector<FInstanceData> InstanceData; };
+	std::unordered_map < MaterialID, std::unordered_map<MeshID, FMeshInstanceData>> MaterialMeshInstanceDataLookup;
+	//--------------------------------------------------------------------------------------------------------------------------------------------
+#endif
 
 	//
 	// CULLING DATA

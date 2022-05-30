@@ -68,7 +68,9 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 	for (const FInstancedShadowMeshRenderCommand& renderCmd : shadowView.meshRenderCommands)
 	{
 		SCOPED_CPU_MARKER("Process_ShadowMeshRenderCommand");
-		
+		//if (renderCmd.matWorldViewProj.empty())
+		//	continue;
+
 		// set constant buffer data
 		FCBufferLightVS* pCBuffer = {};
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
