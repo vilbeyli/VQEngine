@@ -100,6 +100,19 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 
 	mTransformWorldMatrixHistory.clear();
 	mViewProjectionMatrixHistory.clear();
+	mBoundingBoxHierarchy.Clear();
+	MaterialMeshInstanceDataLookup.clear();
+	for (FSceneShadowView& view : mFrameShadowViews)
+	{
+		for(FSceneShadowView::FShadowView& sv : view.ShadowViews_Spot ) sv.ShadowMeshInstanceDataLookup.clear();
+		for(FSceneShadowView::FShadowView& sv : view.ShadowViews_Point) sv.ShadowMeshInstanceDataLookup.clear();
+		view.ShadowView_Directional.ShadowMeshInstanceDataLookup.clear();
+	}
+	for (int i = 0; i < 2; ++i)
+	{
+		MeshFrustumCullWorkerContext[i].ClearMemory();
+		GameObjectFrustumCullWorkerContext[i].ClearMemory();
+	}
 }
 
 void Scene::LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRepresentation>& GameObjsToBeLoaded)

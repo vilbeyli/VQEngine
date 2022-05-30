@@ -130,23 +130,51 @@ bool IsFrustumIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes0, const 
 // THREADING
 //
 //------------------------------------------------------------------------------------------------------------------------------
+void FFrustumCullWorkerContext::AllocInputMemoryIfNecessary()
+{
+	if (vFrustumPlanes.size() == NumValidInputElements)
+	{
+		SCOPED_CPU_MARKER("AllocMem");
+		const size_t sz = vFrustumPlanes.empty() ? 1 : vFrustumPlanes.size() * 2;
+		vFrustumPlanes.resize(sz);
+		vBoundingBoxLists.resize(sz);
+		vGameObjectPointerLists.resize(sz);
+	}
+}
+void FFrustumCullWorkerContext::ClearMemory()
+{
+	vFrustumPlanes.clear();
+	vBoundingBoxLists.clear();
+	vGameObjectPointerLists.clear();
+	vCulledBoundingBoxIndexListPerView.clear();
+	NumValidInputElements = 0;
+}
+
+
 size_t FFrustumCullWorkerContext::AddWorkerItem(FFrustumPlaneset&& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects)
 {
 	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::AddWorkerItem()");
-	vFrustumPlanes.emplace_back(FrustumPlaneSet);
-	vBoundingBoxLists.push_back(vBoundingBoxList);
-	vGameObjectPointerLists.push_back(pGameObjects);
-	assert(vFrustumPlanes.size() == vBoundingBoxLists.size());
-	return vFrustumPlanes.size() - 1;
+
+	const size_t i = NumValidInputElements;
+	AllocInputMemoryIfNecessary();
+
+	vFrustumPlanes[i] = FrustumPlaneSet;
+	vBoundingBoxLists[i] = vBoundingBoxList;
+	vGameObjectPointerLists[i] = pGameObjects;
+	return NumValidInputElements++;
 }
 size_t FFrustumCullWorkerContext::AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects)
 {
 	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::AddWorkerItem()");
-	vFrustumPlanes.emplace_back(FrustumPlaneSet);
-	vBoundingBoxLists.push_back(vBoundingBoxList);
-	vGameObjectPointerLists.push_back(pGameObjects);
-	assert(vFrustumPlanes.size() == vBoundingBoxLists.size());
-	return vFrustumPlanes.size() - 1;
+
+	const size_t i = NumValidInputElements;
+	AllocInputMemoryIfNecessary();
+
+	vFrustumPlanes[i] = FrustumPlaneSet;
+	vBoundingBoxLists[i] = vBoundingBoxList;
+	vGameObjectPointerLists[i] = pGameObjects;
+
+	return NumValidInputElements++;
 }
 
 void FFrustumCullWorkerContext::ProcessWorkItems_SingleThreaded()
@@ -202,11 +230,11 @@ static std::vector<std::pair<size_t, size_t>> PartitionWorkItemsIntoRanges(size_
 
 void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumThreadsIncludingThisThread, ThreadPool& WorkerThreadPool)
 {
-	const size_t szFP = vFrustumPlanes.size();
-	const size_t szBB = vBoundingBoxLists.size();
-	assert(szFP == szBB); // ensure matching input vector length
+	//const size_t szFP = vFrustumPlanes.size();
+	//const size_t szBB = vBoundingBoxLists.size();
+	//assert(szFP == szBB); // ensure matching input vector length
 
-	const size_t& NumWorkItems = szFP;
+	const size_t& NumWorkItems = NumValidInputElements;
 	if (NumWorkItems == 0)
 	{
 		// LogWarning?
@@ -223,7 +251,7 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 #endif
 
 	// allocate context memory
-	vCulledBoundingBoxIndexListPerView.resize(szFP); // prepare worker output memory, each worker will then populate the vector
+	vCulledBoundingBoxIndexListPerView.resize(NumValidInputElements); // prepare worker output memory, each worker will then populate the vector
 
 	// distribute ranges of work into worker threads
 	const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, NumThreadsIncludingThisThread);
@@ -280,6 +308,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 	// process each frustum
 	for (size_t iWork = iRangeBegin; iWork <= iRangeEnd; ++iWork)
 	{
+		vCulledBoundingBoxIndexListPerView[iWork].clear();
 		// process bounding box list per frustum
 		for (size_t bb = 0; bb < vBoundingBoxLists[iWork].size(); ++bb)
 		{
@@ -404,7 +433,22 @@ static FBoundingBox CalculateAxisAlignedBoundingBox(const XMMATRIX& MWorld, cons
 // SCENE BOUNDING BOX HIERARCHY
 //
 //------------------------------------------------------------------------------------------------------------------------------
-void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBox(const GameObject* pObj)
+#define BOUNDING_BOX_HIERARCHY__MULTI_THREADED_BUILD 0
+void SceneBoundingBoxHierarchy::Build(const std::vector<GameObject*>& pObjects, ThreadPool& UpdateWorkerThreadPool)
+{
+	SCOPED_CPU_MARKER("BuildBoundingBoxHierarchy");
+	this->Resize(pObjects.size());
+
+#if BOUNDING_BOX_HIERARCHY__MULTI_THREADED_BUILD
+
+#else
+	this->BuildGameObjectBoundingBoxes(pObjects);
+	this->BuildMeshBoundingBoxes(pObjects);
+#endif
+}
+
+
+void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBox(const GameObject* pObj, size_t iBB)
 {
 	assert(pObj);
 	Transform* const& pTF = mpTransforms.at(pObj->mTransformID);
@@ -414,21 +458,24 @@ void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBox(const GameObject* pOb
 	// - no VB/IB change
 	// - no dynamic vertex animations, morphing etc
 	XMMATRIX matWorld = pTF->matWorldTransformation();
-	FBoundingBox AABB_Obj = CalculateAxisAlignedBoundingBox(matWorld, pObj->mLocalSpaceBoundingBox);
-	mGameObjectBoundingBoxes.push_back(AABB_Obj);
-	mGameObjectBoundingBoxGameObjectPointerMapping.push_back(pObj);
+	mGameObjectBoundingBoxes[iBB] = CalculateAxisAlignedBoundingBox(matWorld, pObj->mLocalSpaceBoundingBox);
+	mGameObjectBoundingBoxGameObjectPointerMapping[iBB] = pObj;
 }
 void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBoxes(const std::vector<GameObject*>& pObjects)
 {
+	SCOPED_CPU_MARKER("BuildGameObjectBoundingBoxes");
+	size_t iBB = 0;
 	for (const GameObject* pObj : pObjects)
-		BuildGameObjectBoundingBox(pObj);
+		BuildGameObjectBoundingBox(pObj, iBB++);
 }
 void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBoxes(const std::vector<GameObject*>& pObjects, const std::vector<size_t>& Indices)
 {
+	SCOPED_CPU_MARKER("BuildGameObjectBoundingBoxes");
+	size_t iBB = 0;
 	for (const size_t& Index : Indices)
 	{
 		assert(Index < Indices.size());
-		BuildGameObjectBoundingBox(pObjects[Index]);
+		BuildGameObjectBoundingBox(pObjects[Index], iBB++);
 	}
 }
 
@@ -447,36 +494,68 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBox(const GameObject* pObj)
 	// - no VB/IB change
 	// - no dynamic vertex animations, morphing etc
 	bool bAtLeastOneMesh = false;
-	for (MeshID mesh : model.mData.mOpaueMeshIDs)
+	auto fnProcessMeshes = [&](const std::vector<MeshID>& meshIDs)
 	{
-		FBoundingBox AABB = CalculateAxisAlignedBoundingBox(matWorld, mMeshes.at(mesh).GetLocalSpaceBoundingBox());
-		mMeshBoundingBoxes.push_back(AABB);
-		mMeshBoundingBoxMeshIDMapping.push_back(mesh);
-		mMeshBoundingBoxGameObjectPointerMapping.push_back(pObj);
-		bAtLeastOneMesh = true;
+		for (MeshID mesh : meshIDs)
+		{
+			FBoundingBox AABB = CalculateAxisAlignedBoundingBox(matWorld, mMeshes.at(mesh).GetLocalSpaceBoundingBox());
+			const size_t i = mNumValidMeshBoundingBoxes;
+			if (i == mMeshBoundingBoxes.size())
+			{
+				SCOPED_CPU_MARKER("MemAlloc");
+				const size_t sz = mMeshBoundingBoxes.empty() ? 1 : mMeshBoundingBoxes.size() * 2;
+				mMeshBoundingBoxes.resize(sz);
+				mMeshBoundingBoxMeshIDMapping.resize(sz);
+				mMeshBoundingBoxGameObjectPointerMapping.resize(sz);
+			}
+
+			mMeshBoundingBoxes[i] = std::move(AABB);
+			mMeshBoundingBoxMeshIDMapping[i] = mesh;
+			mMeshBoundingBoxGameObjectPointerMapping[i] = pObj;
+			++mNumValidMeshBoundingBoxes;
+			bAtLeastOneMesh = true;
+		}
+	};
+	{
+		//SCOPED_CPU_MARKER("ProcessOpaqueMeshes");
+		fnProcessMeshes(model.mData.mOpaueMeshIDs);
 	}
-	for (MeshID mesh : model.mData.mTransparentMeshIDs)
 	{
-		FBoundingBox AABB = CalculateAxisAlignedBoundingBox(matWorld, mMeshes.at(mesh).GetLocalSpaceBoundingBox());
-		mMeshBoundingBoxes.push_back(AABB);
-		mMeshBoundingBoxMeshIDMapping.push_back(mesh);
-		mMeshBoundingBoxGameObjectPointerMapping.push_back(pObj);
-		bAtLeastOneMesh = true;
+		//SCOPED_CPU_MARKER("ProcessTransparentMeshes");
+		fnProcessMeshes(model.mData.mTransparentMeshIDs);
 	}
 
 	assert(bAtLeastOneMesh);
 }
 void SceneBoundingBoxHierarchy::BuildMeshBoundingBoxes(const std::vector<GameObject*>& pObjects)
 {
+	SCOPED_CPU_MARKER("BuildMeshBoundingBoxes");
 	for (const GameObject* pObj : pObjects)
 		BuildMeshBoundingBox(pObj);
+
+	{
+		SCOPED_CPU_MARKER("BuildMeshBoundingBoxes_Rsz");
+		const size_t sz = mNumValidMeshBoundingBoxes;
+		mMeshBoundingBoxes.resize(sz);
+		mMeshBoundingBoxMeshIDMapping.resize(sz);
+		mMeshBoundingBoxGameObjectPointerMapping.resize(sz);
+	}
 }
 void SceneBoundingBoxHierarchy::BuildMeshBoundingBoxes(const std::vector<GameObject*>& pObjects, const std::vector<size_t>& Indices)
 {
+	SCOPED_CPU_MARKER("BuildMeshBoundingBoxes");
 	for (const size_t& Index : Indices)
 	{
 		assert(Index < Indices.size());
 		BuildMeshBoundingBox(pObjects[Index]);
+	}
+
+	{
+		SCOPED_CPU_MARKER("BuildMeshBoundingBoxes_Rsz");
+		const size_t sz = mNumValidMeshBoundingBoxes;
+		mMeshBoundingBoxes.resize(sz);
+		mMeshBoundingBoxMeshIDMapping.resize(sz);
+		mMeshBoundingBoxGameObjectPointerMapping.resize(sz);
 	}
 }
 
@@ -489,5 +568,13 @@ void SceneBoundingBoxHierarchy::Clear()
 	mMeshBoundingBoxMeshIDMapping.clear();
 	mMeshBoundingBoxGameObjectPointerMapping.clear();
 	mGameObjectBoundingBoxGameObjectPointerMapping.clear();
+}
+
+void SceneBoundingBoxHierarchy::Resize(size_t sz)
+{
+	mGameObjectBoundingBoxes.resize(sz);
+	mGameObjectBoundingBoxGameObjectPointerMapping.resize(sz);
+
+	mNumValidMeshBoundingBoxes = 0;
 }
 

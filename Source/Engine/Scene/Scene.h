@@ -202,16 +202,18 @@ public:
 	{}
 	SceneBoundingBoxHierarchy() = delete;
 
+	void Build(const std::vector<GameObject*>& pObjects, ThreadPool& UpdateWorkerThreadPool);
+	void Clear();
+	void Resize(size_t sz);
 
+private:
 	void BuildGameObjectBoundingBoxes(const std::vector<GameObject*>& pObjects);
 	void BuildGameObjectBoundingBoxes(const std::vector<GameObject*>& pObjects, const std::vector<size_t>& Indices);
 	void BuildMeshBoundingBoxes(const std::vector<GameObject*>& pObjects);
 	void BuildMeshBoundingBoxes(const std::vector<GameObject*>& pObjects, const std::vector<size_t>& Indices);
-	void Clear();
 
-private:
 	void BuildMeshBoundingBox(const GameObject* pObj);
-	void BuildGameObjectBoundingBox(const GameObject* pObj);
+	void BuildGameObjectBoundingBox(const GameObject* pObj, size_t iBB);
 
 private:
 	friend class Scene;
@@ -226,6 +228,7 @@ private:
 	// list of mesh bounding boxes for fine culling
 	//------------------------------------------------------
 	// these are same size containers, mapping bounding boxes to gameobjects and meshIDs
+	size_t mNumValidMeshBoundingBoxes = 0;
 	std::vector<FBoundingBox>      mMeshBoundingBoxes;
 	std::vector<MeshID>            mMeshBoundingBoxMeshIDMapping;
 	std::vector<const GameObject*> mMeshBoundingBoxGameObjectPointerMapping; 
@@ -422,6 +425,8 @@ protected:
 	// CULLING DATA
 	//
 	SceneBoundingBoxHierarchy mBoundingBoxHierarchy;
+	mutable FFrustumCullWorkerContext MeshFrustumCullWorkerContext[2]; // 1 for scene view, 1 for shadow views
+	mutable FFrustumCullWorkerContext GameObjectFrustumCullWorkerContext[2]; // 1 for scene view, 1 for shadow views
 
 	//
 	// MATERIAL DATA
