@@ -22,42 +22,62 @@
 #include <fstream>
 #include <filesystem>
 #include "../Core/Types.h"
-#include "../../Libs/VQUtils/Source/Log.h"
 
-CBV_SRV_UAV* AssetBrowser::ExtensionToIcon(std::string& extension) const
+const CBV_SRV_UAV* AssetBrowser::ExtensionToIcon(std::string& extension) const
 {
-	switch (StringHash::Basic(extension.c_str())) // StringToHash Function is located in VQAssetBrowser.h
+	if (extension == ".xml")
 	{
-		// is material ?
-		case MatHash:  { extension = "Material"; return mMaterialIcon.GetTextureSRV(mRenderer);  }
-		// is mesh ?
-		case GltfHash:
-		case GlbHash : { extension = "MESH";     return mMeshIcon.GetTextureSRV(mRenderer);   }
+		extension = "Material"; 
+		return mMaterialIcon.GetTextureSRV(mRenderer);
 	}
+
+	if (extension == ".gltf" || extension == ".glb") 
+	{
+		extension = "MESH";
+		return mMeshIcon.GetTextureSRV(mRenderer);
+	}
+	
 	return mFileIcon.GetTextureSRV(mRenderer);
 }
 
 AssetBrowser::~AssetBrowser()
 {
+	DeleteTreeRec(mpRootTree);
+
 	for (TextureSRVPair& icon : mTextureIcons)
 	{
 		icon.Dispose(mRenderer);
 	}
 }
 
+void AssetBrowser::DeleteTreeRec(FolderTree* tree) const 
+{
+	for (int i = 0; i < tree->mFolders.size(); ++i)
+	{
+		DeleteTreeRec(tree->mFolders[i]);
+	}
+	delete tree;
+}
+
+
 AssetBrowser::AssetBrowser(VQRenderer& renderer)
 : mRenderer(renderer) 
-, mFileIcon 		(AssetBrowser::TextureSRVPair(renderer, "Data/Icons/file.png"         ))
-, mFolderIcon		(AssetBrowser::TextureSRVPair(renderer, "Data/Icons/folder.png"       ))
-, mMeshIcon 		(AssetBrowser::TextureSRVPair(renderer, "Data/Icons/mesh.png"         ))
-, mMaterialIcon 	(AssetBrowser::TextureSRVPair(renderer, "Data/Icons/Material_Icon.png"))
-, mCurrentPath  	(std::filesystem::current_path() / "Data")
 {
-	mFolderIconTexture = mFolderIcon.GetTextureSRV(renderer);
+	Log::Info("sa");
+	mFileIcon		= TextureSRVPair(renderer, "Data/Icons/file.png");
+	Log::Info("as");
+	mFolderIcon		= TextureSRVPair(renderer, "Data/Icons/folder.png");
+	mMeshIcon		= TextureSRVPair(renderer, "Data/Icons/mesh.png");
+	mMaterialIcon	= TextureSRVPair(renderer, "Data/Icons/Material_Icon.png");
+	mCurrentPath	= std::filesystem::current_path() / "Data";
+
+	Log::Info("Merhabalar");
+	
+	mpFolderIconTexture = mFolderIcon.GetTextureSRV(renderer);
 
 	FolderTree* rootNode = CreateTreeRec(nullptr, mCurrentPath);
-	mRootTree	 = rootNode;
-	mCurrentTree = mRootTree;
+	mpRootTree	  = rootNode;
+	mpCurrentTree = mpRootTree;
 }
 
 AssetBrowser::FolderTree* AssetBrowser::CreateTreeRec(FolderTree* parent, const std::filesystem::path& path)
@@ -72,143 +92,143 @@ AssetBrowser::FolderTree* AssetBrowser::CreateTreeRec(FolderTree* parent, const 
 		std::string fileName  = pathChace.filename().u8string();
 		std::string filePath  = pathChace.u8string();
 		std::string extension = pathChace.extension().u8string();
-		CBV_SRV_UAV* icon = ExtensionToIcon(extension);
+		const CBV_SRV_UAV* icon = ExtensionToIcon(extension);
 	
-		// if extension is texture we need to import textures from location 
-		// if (extension == ".png" || extension == ".jpg") 
-		// {
-		// 	auto texture = AssetBrowser::TextureSRVPair(mRenderer, filePath.c_str());
-		// 	
-		// 	// we are pushing to mTextureIcons because when we destruct AssetBrowser we want to dispose all of the textures and srv's
-		// 	mTextureIcons.push_back(std::move(texture));
-		// 	// get last pushed texture because we use move constructor
-		// 	icon = mTextureIcons[mTextureIcons.size()-1].GetTextureSRV(mRenderer);
-		// 	extension = "TEXTURE";
-		// }
+		// todo: if extension is texture we need to import textures from path
 	
 		FileRecord record = FileRecord(filePath, fileName, extension);
-		record.texture = icon;
-		tree->files.push_back(std::move(record));
+		record.mpTexture = icon;
+		tree->mFiles.push_back(std::move(record));
 	}
 	
 	for (const auto& directory : std::filesystem::directory_iterator(path))
 	{
 		if (!directory.is_directory()) continue;
-		tree->folders.push_back( CreateTreeRec(tree, directory.path()) );
+		tree->mFolders.push_back( CreateTreeRec(tree, directory.path()) );
 	}
-	tree->parent = parent;
+	tree->mpParent = parent;
 	return tree;
 }
 
-void AssetBrowser::TreeDrawRec(FolderTree* tree, int& id)
+void AssetBrowser::TreeDrawRec(FolderTree* tree, int& id) 
 {
-	static auto flags = ImGuiTreeNodeFlags_OpenOnArrow;//: ImGuiTreeNodeFlags_OpenOnArrow;
+	static ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow;
 
 	ImGui::PushID(id++);
-	if (ImGui::TreeNodeEx(tree->name.c_str(), flags))
+	if (ImGui::TreeNodeEx(tree->mName.c_str(), flags))
 	{
-		for (FolderTree* folder : tree->folders)
+		for (FolderTree* folder : tree->mFolders)
 		{
 			TreeDrawRec(folder, id);
 		}
 		ImGui::TreePop();
 	}
-	if (ImGui::IsItemClicked()) { mCurrentTree = tree; }
+
+	if (ImGui::IsItemClicked()) 
+	{
+		mpCurrentTree = tree; 
+	}
 	ImGui::PopID();
 }
 
-void AssetBrowser::DrawFolders(std::vector<FolderTree*>& folders, int& id)
+void AssetBrowser::DrawFolders(const std::vector<FolderTree*>& folders, int& id) 
 {
-	FolderTree* folderRec = mCurrentTree;
+	FolderTree* folderRec = mpCurrentTree;
 	ImGui::TableNextColumn();
 
 	// todo scroll and zoom in and out
-	for (FolderTree* folder : mCurrentTree->folders)
+	for (FolderTree* folder : mpCurrentTree->mFolders)
 	{
 		ImGui::PushID(id++);
 
-		if (VQEditor::GUI::ImageButton(mFolderIconTexture, VQEditor::filesize))
+		if (VQEditor::GUI::ImageButton(mpFolderIconTexture, VQEditor::filesize))
 		{
 			folderRec = folder;
 		}
 
 		if (ImGui::IsItemHovered()) {
 			ImGui::BeginTooltip();
-			ImGui::Text(folder->name.c_str());
+			ImGui::Text(folder->mName.c_str());
 			ImGui::EndTooltip();
 		}
 
-		ImGui::TextWrapped("%s", folder->name.c_str());
+		ImGui::TextWrapped("%s", folder->mName.c_str());
 
 		ImGui::PopID();
 		ImGui::TableNextColumn();
 	}
 
-	mCurrentTree = folderRec;
+	mpCurrentTree = folderRec;
 }
 
-void AssetBrowser::DrawFiles(const std::vector<FileRecord>& files, int& id)
-{
-	for (FileRecord& file : mCurrentTree->files)
+void AssetBrowser::DrawFiles(const std::vector<FileRecord>& files, int& id) const
+{ 
+	for (const FileRecord& file : mpCurrentTree->mFiles)
 	{
 		ImGui::PushID(id++);
 
-		CBV_SRV_UAV* icon = file.texture;
+		const CBV_SRV_UAV* icon = file.mpTexture;
 	
-		VQEditor::GUI::ImageButton(file.texture, VQEditor::filesize, { 0, 0 }, { 1, 1 });
+		VQEditor::GUI::ImageButton(file.mpTexture, VQEditor::filesize, { 0, 0 }, { 1, 1 });
 		
 		if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) // IsMouseDoubleClicked is not working
 		{
-			ShellExecute(0, 0, file.path.c_str(), 0, 0, SW_SHOW);
+			ShellExecute(0, 0, file.mPath.c_str(), 0, 0, SW_SHOW);
 		}
 		
-		VQEditor::GUI::DragUIElementString(file.path.c_str(), file.extension.c_str(), file.texture);
+		VQEditor::GUI::DragUIElementString(file.mPath.c_str(), file.mExtension.c_str(), file.mpTexture);
 		
 		if (ImGui::IsItemHovered())
 		{
 			ImGui::BeginTooltip();
-			ImGui::Text(file.name.c_str());
+			ImGui::Text(file.mName.c_str());
 			ImGui::EndTooltip();
 		}
 
 		// ImGui::TextWrapped("%s", file.name.substr(0, std::min<int>(10, file.name.size())).c_str());
-		ImGui::TextWrapped("%s", file.name.c_str());
+		ImGui::TextWrapped("%s", file.mName.c_str());
 
 		ImGui::PopID();
 		ImGui::TableNextColumn();
 	}
 }
 
+bool AssetBrowser::FindInString(const std::string& str, const char* key, int len) const
+{
+	for (int i = 0; i + len <= str.size(); ++i)
+	{
+		bool containsKey = true;
+
+		for (int j = 0; j < len; ++j)
+		{
+			if (tolower(key[j]) != tolower(str[i + j]))
+			{
+				containsKey = false;
+				break;
+			}
+		}
+				
+		if (containsKey) return true;
+	}
+	return false;
+}
+
 void AssetBrowser::RecursiveSearch(const char* key, const int len, FolderTree* tree)
 {
-	for (FolderTree* folder : tree->folders)
+	for (FolderTree* folder : tree->mFolders)
 	{
-		// search keyword in folder if we find add to list
-		// I think this search method better than folder.name.tolower().find(key)
-		for (int i = 0; i + len <= folder->name.size(); ++i)
+		if (FindInString(folder->mName, key, len))
 		{
-			for (int j = 0; j < len; ++j)
-				if (tolower(key[j]) != tolower(folder->name[i + j]))
-					goto next_index_folder;
 			mSearchFolders.push_back(folder);
-			break;
-			next_index_folder: {}
-		}
+		} 
 		RecursiveSearch(key, len, folder);
 	}
 
-	for (FileRecord& file : tree->files)
+	for (FileRecord& file : tree->mFiles)
 	{
-		// search keyword in file if we find add to list
-		// I think this search method better than file.name.tolower().find(key)
-		for (int i = 0; i + len <= file.name.size(); ++i)
+		if (FindInString(file.mName, key, len))
 		{
-			for (int j = 0; j < len; ++j)
-				if (tolower(key[j]) != tolower(file.name[i + j]))
-					goto next_index_file;
 			mSearchFiles.push_back(file);
-			break;
-			next_index_file: {}
 		}
 	}
 }
@@ -218,7 +238,7 @@ void AssetBrowser::SearchProcess(const char* SearchText)
 	const int len = strlen(SearchText);
 	mSearchFolders.clear();
 	mSearchFiles.clear();
-	RecursiveSearch(SearchText, len, mRootTree);
+	RecursiveSearch(SearchText, len, mpRootTree);
 }
 
 void AssetBrowser::DrawWindow()
@@ -239,10 +259,11 @@ void AssetBrowser::DrawWindow()
 		ImGui::TableNextColumn();
 
 		int id = 0;
+		bool searching = false;
 		// Draw file tree. Left side of AssetBrowser
 		ImGui::BeginChild("resource-file-list");
 		{
-			TreeDrawRec(mRootTree, id);
+			TreeDrawRec(mpRootTree, id);
 		}
 		ImGui::EndChild();
 	
@@ -252,9 +273,9 @@ void AssetBrowser::DrawWindow()
 		ImGui::BeginChild("resource-file-folder-view-container");
 		float regionAvail = ImGui::GetContentRegionAvail().x;
 		{
-			if (VQEditor::GUI::IconButton(ICON_FA_ARROW_LEFT) && mCurrentTree->parent) {
+			if (VQEditor::GUI::IconButton(ICON_FA_ARROW_LEFT) && mpCurrentTree->mpParent) {
 				mCurrentPath = mCurrentPath.parent_path();
-				mCurrentTree = mCurrentTree->parent;
+				mpCurrentTree = mpCurrentTree->mpParent;
 			}
 			
 			ImGui::SameLine();
@@ -266,20 +287,27 @@ void AssetBrowser::DrawWindow()
 			{
 				SearchProcess(SearchText);
 			}
+			searching = std::strlen(SearchText);
 		}
 		ImGui::Separator();
 
+		float columnSize = VQEditor::filesize + 30;
+		int columnCount = std::max<int>(1, (int)std::floor<int>(regionAvail / columnSize));
+		
 		// Draw files/folders
+		if (ImGui::BeginTable("files-folders-Table", columnCount))
 		{
-			float columnSize = VQEditor::filesize + 30;
-			int columnCount = std::max<int>(1, (int)std::floor<int>(regionAvail / columnSize));
-
-			if (ImGui::BeginTable("files-folders-Table", columnCount))
+			if (!searching) // !searching is optimization because most of the time we are not searching
 			{
-				DrawFolders(mCurrentTree->folders, id);
-				DrawFiles(mCurrentTree->files, id);
-				ImGui::EndTable();
+				DrawFolders(mpCurrentTree->mFolders, id);
+				DrawFiles(mpCurrentTree->mFiles, id);
 			}
+			else
+			{
+				DrawFolders(mSearchFolders, id);
+				DrawFiles(mSearchFiles, id);
+			}
+			ImGui::EndTable();
 		}
 
 		ImGui::EndChild(); // "resource-file-folder-view-container"

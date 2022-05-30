@@ -480,7 +480,7 @@ private:
 	ImGuiContext*                   mpImGuiContext;
 	FUIState                        mUIState;
 	FRenderStats                    mRenderStats;
-	AssetBrowser* 			        mAssetBrowser;
+	AssetBrowser*					mpAssetBrowser; // fix: I think you didn't use any raw pointer probably we need to fix this. I have incomplate type and undifined type error when I use std::unique_ptr idk how to fix.
 
 	// rendering resources per window
 #if 0

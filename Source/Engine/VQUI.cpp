@@ -107,7 +107,8 @@ static void InitializeEngineUIState(FUIState& s)
 
 void VQEngine::InitializeUI(HWND hwnd)
 {
-	mAssetBrowser = new AssetBrowser(mRenderer);
+	// we need to construct asset browser after vqrenderer initialization thats why we didn't initialize in constructor
+	mpAssetBrowser = new AssetBrowser(mRenderer); 
 
 	mpImGuiContext = ImGui::CreateContext();
 	ImGui::SetCurrentContext(mpImGuiContext);
@@ -223,7 +224,7 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 		if (mUIState.bWindowVisible_Profiler)              DrawProfilerWindow(mpScene->GetSceneRenderStats(FRAME_DATA_INDEX), dt);
 		if (mUIState.bWindowVisible_DebugPanel)            DrawDebugPanelWindow(SceneParams, PPParams);
 		if (mUIState.bWindowVisible_GraphicsSettingsPanel) DrawGraphicsSettingsWindow(SceneParams, PPParams);
-		if (mUIState.bWindowVisible_AssetBrowser)          mAssetBrowser->DrawWindow();
+		if (mUIState.bWindowVisible_AssetBrowser)          mpAssetBrowser->DrawWindow();
 	}
 
 	// If we fired an event that would trigger loading,

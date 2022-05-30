@@ -50,11 +50,11 @@ namespace VQEditor
 	// contains helper/wrapper functions for imgui
 	namespace GUI
 	{
-		inline bool ImageButton(CBV_SRV_UAV* texture, const float& size, const ImVec2& uv0 = ImVec2(0, 0), const ImVec2& uv1 = ImVec2(1, 1))
+		inline bool ImageButton(ImTextureID texture, const float& size, const ImVec2& uv0 = ImVec2(0, 0), const ImVec2& uv1 = ImVec2(1, 1))
 		{
 			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.30f, 0.30f, 0.30f, 0.65f));
 			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
-			bool clicked = ImGui::ImageButton((void*)texture, { size , size }, uv0, uv1);
+			bool clicked = ImGui::ImageButton((const void*)texture, { size , size }, uv0, uv1);
 			ImGui::PopStyleColor(1);
 			ImGui::PopStyleVar(1);
 			return clicked;
@@ -82,11 +82,11 @@ namespace VQEditor
 
 		void RightClickPopUp(const char* name, const TitleAndAction* menuItems, const int& count);
 
-		bool DragUIElementString(const char* file, const char* type, CBV_SRV_UAV* texture);
+		bool DragUIElementString(const char* file, const char* type, const CBV_SRV_UAV* texture);
 		void DropUIElementString(const char* type, const FileCallback& callback);
 
 		template<typename T>
-		bool DragUIElement(const T* file, const char* type, CBV_SRV_UAV* texture);
+		bool DragUIElement(const T* file, const char* type, const CBV_SRV_UAV* texture);
 		template<typename T>
 		void DropUIElement(const char* type, const std::function<T>& callback);
 	}

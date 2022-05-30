@@ -1,4 +1,5 @@
 #include "VQEditor.h"
+#include "Libs/VQUtils/Source/Log.h"
 
 namespace VQEditor
 {
@@ -13,17 +14,7 @@ namespace VQEditor
 		ImGui::GetFont()->FontSize -= 3;
 	}
 
-	// void GUI::TextureField(const char* name, Texture*& texture)
-	// {
-	// 	ImGui::Text(name);
-	// 	ImGui::SameLine();
-	// 	ImGui::Image((void*)texture->resourceView, { filesize, filesize }, { 0, 1 }, { 1, 0 });
-	// 
-	// 	if (ImGui::BeginDragDropTarget())
-	// 		if (const ImGuiPayload* payloadPtr = ImGui::AcceptDragDropPayload("TEXTURE"))
-	// 			if (payloadPtr->Data)
-	// 				AssetManager::TryGetTexture(texture, (const char*)payloadPtr->Data);
-	// }
+	// todo: void GUI::TextureField
 
 	// Usage:
 	// static int value = 0;
@@ -32,7 +23,7 @@ namespace VQEditor
 	/// <summary> note this is not usefull for bitfields | flags </summary> 
 	/// <param name="count"> number of names </param>
 	bool GUI::EnumField(int& value, const char** names, const int& count, const char* label,
-		const Action& onSellect, const ImGuiComboFlags& flags)
+		const Action& onSelect, const ImGuiComboFlags& flags)
 	{
 		if (!ImGui::BeginCombo(label, names[value], flags)) return false;
 		for (char i = 0; i < count; i++)
@@ -40,8 +31,15 @@ namespace VQEditor
 			if (ImGui::Selectable(names[i], i == value))
 			{
 				value = i;
-				if (onSellect) onSellect();
-				else { ImGui::EndCombo(); return true; }
+				if (onSelect)
+				{
+					onSelect();
+				}
+				else 
+				{ 
+					ImGui::EndCombo(); 
+					return true; 
+				}
 			}
 		}
 		ImGui::EndCombo();
@@ -58,11 +56,10 @@ namespace VQEditor
 		ImGui::EndPopup();
 	}
 
-	bool GUI::DragUIElementString(const char* file, const char* type, CBV_SRV_UAV* texture)
+	bool GUI::DragUIElementString(const char* file, const char* type, const CBV_SRV_UAV* texture)
 	{
 		if (ImGui::IsItemFocused() && ImGui::IsAnyMouseDown() && ImGui::BeginDragDropSource())
 		{
-			// std::cout << "drag type: " << type << std::endl;
 			ImGui::SetDragDropPayload(type, file, strlen(file)+1);
 			if (texture != nullptr)
 			{
@@ -83,7 +80,7 @@ namespace VQEditor
 	}
 
 	template<typename T>
-	inline bool GUI::DragUIElement(const T* file, const char* type, CBV_SRV_UAV* texture)
+	inline bool GUI::DragUIElement(const T* file, const char* type, const CBV_SRV_UAV* texture)
 	{
 		if (ImGui::IsItemFocused() && ImGui::IsAnyMouseDown() && ImGui::BeginDragDropSource())
 		{
@@ -108,7 +105,7 @@ namespace VQEditor
 				if (payloadPtr->Data)
 				{
 					callback((char*)payloadPtr->Data);
-					std::cout << "dropped data type of: " << typeid(T).name << std::endl;
+					Log::Info("dropped data type of: " + typeid(T).name);
 				}
 			}
 		}
