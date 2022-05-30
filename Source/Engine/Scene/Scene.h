@@ -204,12 +204,16 @@ public:
 
 	void Build(const std::vector<GameObject*>& pObjects, ThreadPool& UpdateWorkerThreadPool);
 	void Clear();
-	void Resize(size_t sz);
+	void ResizeGameObjectBoundingBoxContainer(size_t sz);
 
 private:
+	void ResizeGameMeshBoxContainer();
+
 	void BuildGameObjectBoundingBoxes(const std::vector<GameObject*>& pObjects);
+	void BuildGameObjectBoundingBoxes_Range(const std::vector<GameObject*>& pObjects, size_t iBegin, size_t iEnd);
 	void BuildGameObjectBoundingBoxes(const std::vector<GameObject*>& pObjects, const std::vector<size_t>& Indices);
 	void BuildMeshBoundingBoxes(const std::vector<GameObject*>& pObjects);
+	void BuildMeshBoundingBoxes_Range(const std::vector<GameObject*>& pObjects, size_t iBegin, size_t iEnd);
 	void BuildMeshBoundingBoxes(const std::vector<GameObject*>& pObjects, const std::vector<size_t>& Indices);
 
 	void BuildMeshBoundingBox(const GameObject* pObj);

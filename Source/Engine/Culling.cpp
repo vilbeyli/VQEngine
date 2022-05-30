@@ -228,6 +228,32 @@ static std::vector<std::pair<size_t, size_t>> PartitionWorkItemsIntoRanges(size_
 	return vRanges;
 }
 
+
+static void DispatchWorkers(ThreadPool& WorkerThreadPool, size_t NumWorkItems, void (*pfnProcess)(size_t iBegin, size_t iEnd))
+{
+	SCOPED_CPU_MARKER("DispatchWorkers");
+	const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, WorkerThreadPool.GetThreadPoolSize());
+	size_t currRange = 0;
+	for (const std::pair<size_t, size_t>& Range : vRanges)
+	{
+		if (currRange == 0)
+		{
+			++currRange; // skip the first range, and do it on this thread after dispatches
+			continue;
+		}
+		const size_t& iBegin = Range.first;
+		const size_t& iEnd = Range.second; // inclusive
+		assert(iBegin <= iEnd); // ensure work context bounds
+
+		WorkerThreadPool.AddTask([=]()
+		{
+			SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+			pfnProcess(iBegin, iEnd);
+		});
+	}
+}
+
+
 void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumThreadsIncludingThisThread, ThreadPool& WorkerThreadPool)
 {
 	//const size_t szFP = vFrustumPlanes.size();
@@ -257,6 +283,7 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 	const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, NumThreadsIncludingThisThread);
 	
 	// dispatch worker threads
+	// DispatchWorkers(WorkerThreadPool, NumWorkItems, Process); // TODO: make this a single funciton
 	{
 		SCOPED_CPU_MARKER("Process_DispatchWorkers");
 		size_t currRange = 0;
@@ -433,13 +460,73 @@ static FBoundingBox CalculateAxisAlignedBoundingBox(const XMMATRIX& MWorld, cons
 // SCENE BOUNDING BOX HIERARCHY
 //
 //------------------------------------------------------------------------------------------------------------------------------
-#define BOUNDING_BOX_HIERARCHY__MULTI_THREADED_BUILD 0
-void SceneBoundingBoxHierarchy::Build(const std::vector<GameObject*>& pObjects, ThreadPool& UpdateWorkerThreadPool)
+#define BOUNDING_BOX_HIERARCHY__MULTI_THREADED_BUILD 1
+void SceneBoundingBoxHierarchy::Build(const std::vector<GameObject*>& pObjects, ThreadPool& WorkerThreadPool)
 {
 	SCOPED_CPU_MARKER("BuildBoundingBoxHierarchy");
-	this->Resize(pObjects.size());
+	this->ResizeGameObjectBoundingBoxContainer(pObjects.size());
 
 #if BOUNDING_BOX_HIERARCHY__MULTI_THREADED_BUILD
+
+	// dispatch gameobject bounding box workers
+	{
+		const size_t NumWorkItems = pObjects.size();
+		const size_t NumWorkItemsPerAvailableWorkerThread = DIV_AND_ROUND_UP(NumWorkItems, WorkerThreadPool.GetThreadPoolSize());
+		const size_t NumDesiredMinimumWorkItemsPerThread = 256;
+		size_t NumWorkersToUse = WorkerThreadPool.GetThreadPoolSize(); // start with all threads
+
+		// if per-thread work amount is too little, then use less threads
+		if (NumWorkItemsPerAvailableWorkerThread < NumDesiredMinimumWorkItemsPerThread)
+		{
+			const float OffRatio = float(NumDesiredMinimumWorkItemsPerThread) / float(NumWorkItemsPerAvailableWorkerThread);
+			NumWorkersToUse /= OffRatio;
+			NumWorkersToUse = std::max((size_t)1, NumWorkersToUse);
+		}
+
+		const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, NumWorkersToUse);
+		
+		// dispatch worker threads
+		{
+			SCOPED_CPU_MARKER("DispatchWorkers");
+			size_t currRange = 0;
+			for (const std::pair<size_t, size_t>& Range : vRanges)
+			{
+				if (currRange == 0)
+				{
+					++currRange; // skip the first range, and do it on this thread after dispatches
+					continue;
+				}
+				const size_t& iBegin = Range.first;
+				const size_t& iEnd = Range.second; // inclusive
+				assert(iBegin <= iEnd); // ensure work context bounds
+
+				WorkerThreadPool.AddTask([=]()
+				{
+					SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+					this->BuildGameObjectBoundingBoxes_Range(pObjects, iBegin, iEnd);
+				});
+			}
+		}
+	}
+
+
+	// dispatch mesh bounding box workers
+	{
+#if 0
+		// TODO: threaded meshes
+		// the NumValidMeshBBs relies on the access being linear.
+		// threaded access will cause racing condition.
+		// looking into properly vectorizing the execution context.
+#else
+		this->BuildMeshBoundingBoxes(pObjects);
+#endif
+	}
+	
+	// Sync point -------------------------------------------------
+	{
+		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS", 0xFFFF0000);
+		while (WorkerThreadPool.GetNumActiveTasks() != 0); // busy-wait is bad...
+	}
 
 #else
 	this->BuildGameObjectBoundingBoxes(pObjects);
@@ -467,6 +554,14 @@ void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBoxes(const std::vector<G
 	size_t iBB = 0;
 	for (const GameObject* pObj : pObjects)
 		BuildGameObjectBoundingBox(pObj, iBB++);
+}
+void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBoxes_Range(const std::vector<GameObject*>& pObjects, size_t iBegin, size_t iEnd)
+{
+	SCOPED_CPU_MARKER("BuildGameObjectBoundingBoxes_Range");
+	for (size_t i = iBegin; i < iEnd; ++i)
+	{
+		BuildGameObjectBoundingBox(pObjects[i], i);
+	}
 }
 void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBoxes(const std::vector<GameObject*>& pObjects, const std::vector<size_t>& Indices)
 {
@@ -516,14 +611,8 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBox(const GameObject* pObj)
 			bAtLeastOneMesh = true;
 		}
 	};
-	{
-		//SCOPED_CPU_MARKER("ProcessOpaqueMeshes");
-		fnProcessMeshes(model.mData.mOpaueMeshIDs);
-	}
-	{
-		//SCOPED_CPU_MARKER("ProcessTransparentMeshes");
-		fnProcessMeshes(model.mData.mTransparentMeshIDs);
-	}
+	fnProcessMeshes(model.mData.mOpaueMeshIDs);
+	fnProcessMeshes(model.mData.mTransparentMeshIDs);
 
 	assert(bAtLeastOneMesh);
 }
@@ -532,13 +621,14 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBoxes(const std::vector<GameObj
 	SCOPED_CPU_MARKER("BuildMeshBoundingBoxes");
 	for (const GameObject* pObj : pObjects)
 		BuildMeshBoundingBox(pObj);
-
+	ResizeGameMeshBoxContainer();
+}
+void SceneBoundingBoxHierarchy::BuildMeshBoundingBoxes_Range(const std::vector<GameObject*>& pObjects, size_t iBegin, size_t iEnd)
+{
+	SCOPED_CPU_MARKER("BuildMeshBoundingBoxes_Range");
+	for (size_t i = iBegin; i < iEnd; ++i)
 	{
-		SCOPED_CPU_MARKER("BuildMeshBoundingBoxes_Rsz");
-		const size_t sz = mNumValidMeshBoundingBoxes;
-		mMeshBoundingBoxes.resize(sz);
-		mMeshBoundingBoxMeshIDMapping.resize(sz);
-		mMeshBoundingBoxGameObjectPointerMapping.resize(sz);
+		BuildMeshBoundingBox(pObjects[i]);
 	}
 }
 void SceneBoundingBoxHierarchy::BuildMeshBoundingBoxes(const std::vector<GameObject*>& pObjects, const std::vector<size_t>& Indices)
@@ -550,13 +640,7 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBoxes(const std::vector<GameObj
 		BuildMeshBoundingBox(pObjects[Index]);
 	}
 
-	{
-		SCOPED_CPU_MARKER("BuildMeshBoundingBoxes_Rsz");
-		const size_t sz = mNumValidMeshBoundingBoxes;
-		mMeshBoundingBoxes.resize(sz);
-		mMeshBoundingBoxMeshIDMapping.resize(sz);
-		mMeshBoundingBoxGameObjectPointerMapping.resize(sz);
-	}
+	ResizeGameMeshBoxContainer();
 }
 
 
@@ -570,11 +654,20 @@ void SceneBoundingBoxHierarchy::Clear()
 	mGameObjectBoundingBoxGameObjectPointerMapping.clear();
 }
 
-void SceneBoundingBoxHierarchy::Resize(size_t sz)
+void SceneBoundingBoxHierarchy::ResizeGameObjectBoundingBoxContainer(size_t sz)
 {
 	mGameObjectBoundingBoxes.resize(sz);
 	mGameObjectBoundingBoxGameObjectPointerMapping.resize(sz);
 
 	mNumValidMeshBoundingBoxes = 0;
+}
+
+void SceneBoundingBoxHierarchy::ResizeGameMeshBoxContainer()
+{
+	SCOPED_CPU_MARKER("BuildMeshBoundingBoxes_Rsz");
+	const size_t sz = mNumValidMeshBoundingBoxes;
+	mMeshBoundingBoxes.resize(sz);
+	mMeshBoundingBoxMeshIDMapping.resize(sz);
+	mMeshBoundingBoxGameObjectPointerMapping.resize(sz);
 }
 
