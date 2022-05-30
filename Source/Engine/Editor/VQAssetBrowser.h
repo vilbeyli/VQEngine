@@ -65,7 +65,7 @@ public:
 		TextureSRVPair() {}
 
 		TextureSRVPair(VQRenderer& vqRenderer, const char* filename)
-		, mTextureId(vqRenderer.CreateTextureFromFile(filename, true))
+		: mTextureId(vqRenderer.CreateTextureFromFile(filename, true))
 		, mSrv(vqRenderer.AllocateSRV(1))
 		{
 			vqRenderer.InitializeSRV(mSrv, 0, mTextureId);
