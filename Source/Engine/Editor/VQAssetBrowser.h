@@ -65,14 +65,9 @@ public:
 		TextureSRVPair() {}
 
 		TextureSRVPair(VQRenderer& vqRenderer, const char* filename)
+		, mTextureId(vqRenderer.CreateTextureFromFile(filename, true))
+		, mSrv(vqRenderer.AllocateSRV(1))
 		{
-			Log::Info("bir");
-
-			mTextureId = vqRenderer.CreateTextureFromFile(filename, true);
-			Log::Info("iki");
-
-			mSrv = vqRenderer.AllocateSRV(1);
-			Log::Info("uc");
 			vqRenderer.InitializeSRV(mSrv, 0, mTextureId);
 		}
 
