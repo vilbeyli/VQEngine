@@ -18,6 +18,8 @@
 
 #include "VQEngine.h"
 #include "Libs/VQUtils/Source/utils.h"
+#include "Editor/VQEditor.h"
+#include "Editor/VQAssetBrowser.h"
 
 #include <cassert>
 
@@ -132,11 +134,17 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	Log::Info("[PERF]    Windows         : %.3fs", f3);
 	Log::Info("[PERF]    Threads         : %.3fs", f4);
 #endif
+	
 	return true; 
 }
 
 void VQEngine::Destroy()
 {
+	// fix: I think you didn't use any raw pointer probably we need to fix this.
+	// I have incomplate type and undifined type error when I use std::unique_ptr idk how to fix. 
+	mpAssetBrowser->~AssetBrowser();
+	mpAssetBrowser = nullptr;
+
 	ExitThreads();
 
 	mRenderer.Unload();
