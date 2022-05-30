@@ -62,17 +62,12 @@ void AssetBrowser::DeleteTreeRec(FolderTree* tree) const
 
 AssetBrowser::AssetBrowser(VQRenderer& renderer)
 : mRenderer(renderer) 
+, mFileIcon		(TextureSRVPair(renderer, "Data/Icons/file.png"))
+, mFolderIcon	(TextureSRVPair(renderer, "Data/Icons/folder.png"))
+, mMeshIcon		(TextureSRVPair(renderer, "Data/Icons/mesh.png"))
+, mMaterialIcon	(TextureSRVPair(renderer, "Data/Icons/Material_Icon.png"))
+, mCurrentPath	(std::filesystem::current_path() / "Data")
 {
-	Log::Info("sa");
-	mFileIcon		= TextureSRVPair(renderer, "Data/Icons/file.png");
-	Log::Info("as");
-	mFolderIcon		= TextureSRVPair(renderer, "Data/Icons/folder.png");
-	mMeshIcon		= TextureSRVPair(renderer, "Data/Icons/mesh.png");
-	mMaterialIcon	= TextureSRVPair(renderer, "Data/Icons/Material_Icon.png");
-	mCurrentPath	= std::filesystem::current_path() / "Data";
-
-	Log::Info("Merhabalar");
-	
 	mpFolderIconTexture = mFolderIcon.GetTextureSRV(renderer);
 
 	FolderTree* rootNode = CreateTreeRec(nullptr, mCurrentPath);
@@ -213,7 +208,7 @@ bool AssetBrowser::FindInString(const std::string& str, const char* key, int len
 	return false;
 }
 
-void AssetBrowser::RecursiveSearch(const char* key, const int len, FolderTree* tree)
+void AssetBrowser::RecursiveSearch(const char* key, const size_t len, FolderTree* tree)
 {
 	for (FolderTree* folder : tree->mFolders)
 	{

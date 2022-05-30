@@ -94,10 +94,10 @@ private:
 
 	void DrawFiles      (const std::vector<FileRecord>& files, int& id) const;
 
-	void RecursiveSearch(const char* key, const int len, FolderTree* tree);
+	void RecursiveSearch(const char* key, const size_t len, FolderTree* tree);
 
 	void SearchProcess	(const char* SearchText);
-	
+
 	bool FindInString	(const std::string& str, const char* key, int len) const;
 
 	void DeleteTreeRec(FolderTree* tree) const;
