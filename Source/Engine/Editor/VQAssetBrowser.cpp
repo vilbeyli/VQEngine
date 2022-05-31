@@ -23,23 +23,6 @@
 #include <filesystem>
 #include "../Core/Types.h"
 
-const CBV_SRV_UAV* AssetBrowser::ExtensionToIcon(std::string& extension) const
-{
-	if (extension == ".xml")
-	{
-		extension = "Material"; 
-		return mMaterialIcon.GetTextureSRV(mRenderer);
-	}
-
-	if (extension == ".gltf" || extension == ".glb") 
-	{
-		extension = "MESH";
-		return mMeshIcon.GetTextureSRV(mRenderer);
-	}
-	
-	return mFileIcon.GetTextureSRV(mRenderer);
-}
-
 AssetBrowser::~AssetBrowser()
 {
 	DeleteTreeRec(mpRootTree);
@@ -87,12 +70,29 @@ AssetBrowser::FolderTree* AssetBrowser::CreateTreeRec(FolderTree* parent, const 
 		std::string fileName  = pathChace.filename().u8string();
 		std::string filePath  = pathChace.u8string();
 		std::string extension = pathChace.extension().u8string();
-		const CBV_SRV_UAV* icon = ExtensionToIcon(extension);
-	
-		// todo: if extension is texture we need to import textures from path
-	
-		FileRecord record = FileRecord(filePath, fileName, extension);
-		record.mpTexture = icon;
+		
+		CBV_SRV_UAV icon = mFileIcon.GetTextureSRV(mRenderer);
+
+		if (extension == ".xml")
+		{
+			extension = "Material";
+			icon = mMaterialIcon.GetTextureSRV(mRenderer);
+		}
+
+		if (extension == ".gltf" || extension == ".glb")
+		{
+			extension = "MESH";
+			icon = mMeshIcon.GetTextureSRV(mRenderer);
+		}
+
+		if (extension == ".png" || extension == ".jpg")
+		{
+			extension = "TEXTURE";
+			// todo: if extension is texture we need to import textures from path
+		}
+
+		FileRecord record = FileRecord(filePath, fileName, extension, icon);
+		
 		tree->mFiles.push_back(std::move(record));
 	}
 	
@@ -107,7 +107,7 @@ AssetBrowser::FolderTree* AssetBrowser::CreateTreeRec(FolderTree* parent, const 
 
 void AssetBrowser::TreeDrawRec(FolderTree* tree, int& id) 
 {
-	static ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow;
+	static const ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow;
 
 	ImGui::PushID(id++);
 	if (ImGui::TreeNodeEx(tree->mName.c_str(), flags))
@@ -162,16 +162,14 @@ void AssetBrowser::DrawFiles(const std::vector<FileRecord>& files, int& id) cons
 	{
 		ImGui::PushID(id++);
 
-		const CBV_SRV_UAV* icon = file.mpTexture;
-	
-		VQEditor::GUI::ImageButton(file.mpTexture, VQEditor::filesize, { 0, 0 }, { 1, 1 });
+		VQEditor::GUI::ImageButton(file.mTexture, VQEditor::filesize, { 0, 0 }, { 1, 1 });
 		
 		if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) // IsMouseDoubleClicked is not working
 		{
 			ShellExecute(0, 0, file.mPath.c_str(), 0, 0, SW_SHOW);
 		}
 		
-		VQEditor::GUI::DragUIElementString(file.mPath.c_str(), file.mExtension.c_str(), file.mpTexture);
+		VQEditor::GUI::DragUIElementString(file.mPath.c_str(), file.mExtension.c_str(), file.mTexture);
 		
 		if (ImGui::IsItemHovered())
 		{
@@ -188,7 +186,7 @@ void AssetBrowser::DrawFiles(const std::vector<FileRecord>& files, int& id) cons
 	}
 }
 
-bool AssetBrowser::FindInString(const std::string& str, const char* key, int len) const
+bool AssetBrowser::FindInString(const std::string& str, const char* key, const size_t len) const
 {
 	for (int i = 0; i + len <= str.size(); ++i)
 	{
@@ -230,7 +228,7 @@ void AssetBrowser::RecursiveSearch(const char* key, const size_t len, FolderTree
 
 void AssetBrowser::SearchProcess(const char* SearchText)
 {
-	const int len = strlen(SearchText);
+	const size_t len = strlen(SearchText);
 	mSearchFolders.clear();
 	mSearchFiles.clear();
 	RecursiveSearch(SearchText, len, mpRootTree);
@@ -287,12 +285,12 @@ void AssetBrowser::DrawWindow()
 		ImGui::Separator();
 
 		float columnSize = VQEditor::filesize + 30;
-		int columnCount = std::max<int>(1, (int)std::floor<int>(regionAvail / columnSize));
+		int columnCount = std::max<int>(1, int(regionAvail / columnSize));
 		
 		// Draw files/folders
 		if (ImGui::BeginTable("files-folders-Table", columnCount))
 		{
-			if (!searching) // !searching is optimization because most of the time we are not searching
+			if (!searching) 
 			{
 				DrawFolders(mpCurrentTree->mFolders, id);
 				DrawFiles(mpCurrentTree->mFiles, id);
