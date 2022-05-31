@@ -18,6 +18,7 @@
 
 #pragma once
 #include "VQEditor.h"
+#include <string>
 #include "../../Renderer/Renderer.h"
 #include "../../Libs/VQUtils/Source/Log.h"
 
@@ -30,19 +31,24 @@ public:
 		std::string mPath;
 		std::string mName;
 		std::string mExtension;
-		const CBV_SRV_UAV* mpTexture = nullptr;
+		
+		CBV_SRV_UAV mTexture;
+
 		FileRecord() {}
-		FileRecord(std::string _path, std::string _name, std::string _extension)
-		:	mPath(std::move(_path)),
-			mName(std::move(_name)),
-			mExtension(std::move(_extension)) {}
+		
+		FileRecord(std::string& _path, std::string& _name, std::string& _extension, CBV_SRV_UAV& texture)
+		:	mPath		(std::move(_path)) 
+		,	mName		(std::move(_name))
+		,   mExtension	(std::move(_extension))
+		,	mTexture	(std::move(texture))
+		{}
 	};
 
 	class FolderTree
 	{
 	public:
 		FolderTree() : mpParent(nullptr) {}
-		FolderTree(std::filesystem::path _path, std::string _name) : mPath(_path), mName(std::move(_name)) {}
+		FolderTree(std::filesystem::path _path, std::string& _name) : mPath(_path), mName(std::move(_name)) {}
 	public:
 		std::filesystem::path mPath;
 		FolderTree* mpParent = nullptr;
@@ -57,9 +63,9 @@ public:
 		TextureID mTextureId;
 		SRV_ID mSrv;
 		
-		const CBV_SRV_UAV* GetTextureSRV(VQRenderer& renderer) const
+		inline const CBV_SRV_UAV GetTextureSRV(VQRenderer& renderer) const
 		{ 
-			return &renderer.GetSRV(mSrv);
+			return renderer.GetSRV(mSrv);
 		}
 		
 		TextureSRVPair() {}
@@ -79,8 +85,6 @@ public:
 
 private:
 
-	const CBV_SRV_UAV* ExtensionToIcon(std::string& extension) const;
-	
 	FolderTree* CreateTreeRec(FolderTree* parent, const std::filesystem::path& path);
 
 	void TreeDrawRec	(FolderTree* tree, int& id);
@@ -93,7 +97,7 @@ private:
 
 	void SearchProcess	(const char* SearchText);
 
-	bool FindInString	(const std::string& str, const char* key, int len) const;
+	bool FindInString	(const std::string& str, const char* key, const size_t len) const;
 
 	void DeleteTreeRec(FolderTree* tree) const;
 
@@ -114,8 +118,8 @@ private:
 	TextureSRVPair mFolderIcon  ;
 	TextureSRVPair mMeshIcon	;  
 	TextureSRVPair mMaterialIcon;
-
-	const CBV_SRV_UAV* mpFolderIconTexture;
+	
+	CBV_SRV_UAV mpFolderIconTexture;
 
 	FolderTree* mpRootTree;
 	FolderTree* mpCurrentTree;

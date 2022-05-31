@@ -56,15 +56,12 @@ namespace VQEditor
 		ImGui::EndPopup();
 	}
 
-	bool GUI::DragUIElementString(const char* file, const char* type, const CBV_SRV_UAV* texture)
+	bool GUI::DragUIElementString(const char* file, const char* type, const CBV_SRV_UAV& texture)
 	{
 		if (ImGui::IsItemFocused() && ImGui::IsAnyMouseDown() && ImGui::BeginDragDropSource())
 		{
-			ImGui::SetDragDropPayload(type, file, strlen(file)+1);
-			if (texture != nullptr)
-			{
-				ImGui::Image((void*)texture, { filesize, filesize }, { 0, 1 }, { 1, 0 });
-			}
+			ImGui::SetDragDropPayload(type, file, strlen(file) + 1);
+			ImGui::Image((ImTextureID)&texture, { filesize, filesize }, { 0, 1 }, { 1, 0 });
 			ImGui::EndDragDropSource();
 			return true;
 		}
@@ -80,15 +77,12 @@ namespace VQEditor
 	}
 
 	template<typename T>
-	inline bool GUI::DragUIElement(const T* file, const char* type, const CBV_SRV_UAV* texture)
+	inline bool GUI::DragUIElement(const T* file, const char* type, const CBV_SRV_UAV& texture)
 	{
 		if (ImGui::IsItemFocused() && ImGui::IsAnyMouseDown() && ImGui::BeginDragDropSource())
 		{
 			ImGui::SetDragDropPayload(type, file, sizeof(T));
-			if (texture != nullptr)
-			{
-				ImGui::Image((void*)texture, { filesize, filesize }, { 0, 1 }, { 1, 0 });
-			}
+			ImGui::Image((ImTextureID)&texture, { filesize, filesize }, { 0, 1 }, { 1, 0 });
 			ImGui::EndDragDropSource();
 			return true;
 		}
