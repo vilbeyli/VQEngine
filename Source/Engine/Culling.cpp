@@ -201,30 +201,25 @@ static std::vector<std::pair<size_t, size_t>> PartitionWorkItemsIntoRanges(size_
 {
 	// @NumWorkItems is distributed as equally as possible between all @NumWorkerThreadCount threads.
 	// Two numbers are determined
-	// - WorkItemChunkSize: number of work items each thread will get equally
-	// - WorkItemRemainderSize : number of +1's to be added to each worker
-	const size_t WorkItemChunkSize = NumWorkItems / NumWorkerThreadCount; // amount of work each worker is to get, 
-	const size_t RemainingWorkItems = NumWorkItems % NumWorkerThreadCount;
+	// - NumWorkItemPerThread: number of work items each thread will get equally
+	// - NumWorkItemPerThread_Extra : number of +1's to be added to each worker
+	const size_t NumWorkItemPerThread = NumWorkItems / NumWorkerThreadCount; // amount of work each worker is to get, 
+	const size_t NumWorkItemPerThread_Extra = NumWorkItems % NumWorkerThreadCount;
 
-
-	std::vector<std::pair<size_t, size_t>> vRanges(WorkItemChunkSize == 0 
+	std::vector<std::pair<size_t, size_t>> vRanges(NumWorkItemPerThread == 0 
 		? NumWorkItems  // if NumWorkItems < NumWorkerThreadCount, then only create ranges according to NumWorkItems
 		: NumWorkerThreadCount // each worker thread gets a range
 	); 
 
-
-	size_t iBegin = 0;
-	size_t iEndExclusive = iBegin + WorkItemChunkSize + (RemainingWorkItems > 0 ? 1 : 0);
-	size_t currRangeIndex = 0;
-	for (std::pair<size_t, size_t>& Range : vRanges)
+	size_t iRange = 0;
+	for (auto& range : vRanges)
 	{
-		Range.first = iBegin;
-		Range.second =  std::clamp<size_t>(iEndExclusive - 1, 0, NumWorkItems-1);
-
-		iBegin = iEndExclusive;
-		iEndExclusive = iBegin + WorkItemChunkSize + (RemainingWorkItems > currRangeIndex ? 1 : 0);
-		++currRangeIndex;
+		range.first = iRange != 0 ? vRanges[iRange - 1].second + 1 : 0;
+		range.second = range.first + NumWorkItemPerThread-1 + (NumWorkItemPerThread_Extra > iRange ? 1 : 0);
+		assert(range.first <= range.second); // ensure work context bounds
+		++iRange;
 	}
+
 	return vRanges;
 }
 
@@ -460,7 +455,7 @@ static FBoundingBox CalculateAxisAlignedBoundingBox(const XMMATRIX& MWorld, cons
 // SCENE BOUNDING BOX HIERARCHY
 //
 //------------------------------------------------------------------------------------------------------------------------------
-#define BOUNDING_BOX_HIERARCHY__MULTI_THREADED_BUILD 1
+#define BOUNDING_BOX_HIERARCHY__MULTI_THREADED_BUILD 0
 void SceneBoundingBoxHierarchy::Build(const std::vector<GameObject*>& pObjects, ThreadPool& WorkerThreadPool)
 {
 	SCOPED_CPU_MARKER("BuildBoundingBoxHierarchy");
@@ -512,11 +507,13 @@ void SceneBoundingBoxHierarchy::Build(const std::vector<GameObject*>& pObjects, 
 
 	// dispatch mesh bounding box workers
 	{
-#if 0
+#if 1
 		// TODO: threaded meshes
 		// the NumValidMeshBBs relies on the access being linear.
 		// threaded access will cause racing condition.
 		// looking into properly vectorizing the execution context.
+		CountGameObjectMeshes(pObjects);
+		ResizeGameMeshBoxContainer(mNumValidMeshBoundingBoxes);
 #else
 		this->BuildMeshBoundingBoxes(pObjects);
 #endif
@@ -529,6 +526,8 @@ void SceneBoundingBoxHierarchy::Build(const std::vector<GameObject*>& pObjects, 
 	}
 
 #else
+	this->CountGameObjectMeshes(pObjects);
+	this->ResizeGameMeshBoxContainer(mNumValidMeshBoundingBoxes);
 	this->BuildGameObjectBoundingBoxes(pObjects);
 	this->BuildMeshBoundingBoxes(pObjects);
 #endif
@@ -575,7 +574,7 @@ void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBoxes(const std::vector<G
 }
 
 
-void SceneBoundingBoxHierarchy::BuildMeshBoundingBox(const GameObject* pObj)
+void SceneBoundingBoxHierarchy::BuildMeshBoundingBox(const GameObject* pObj, size_t iBB_Begin, size_t iBB_End)
 {
 	assert(pObj);
 	Transform* const& pTF = mpTransforms.at(pObj->mTransformID);
@@ -589,25 +588,17 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBox(const GameObject* pObj)
 	// - no VB/IB change
 	// - no dynamic vertex animations, morphing etc
 	bool bAtLeastOneMesh = false;
+	size_t iMesh = iBB_Begin;
 	auto fnProcessMeshes = [&](const std::vector<MeshID>& meshIDs)
 	{
 		for (MeshID mesh : meshIDs)
 		{
 			FBoundingBox AABB = CalculateAxisAlignedBoundingBox(matWorld, mMeshes.at(mesh).GetLocalSpaceBoundingBox());
-			const size_t i = mNumValidMeshBoundingBoxes;
-			if (i == mMeshBoundingBoxes.size())
-			{
-				SCOPED_CPU_MARKER("MemAlloc");
-				const size_t sz = mMeshBoundingBoxes.empty() ? 1 : mMeshBoundingBoxes.size() * 2;
-				mMeshBoundingBoxes.resize(sz);
-				mMeshBoundingBoxMeshIDMapping.resize(sz);
-				mMeshBoundingBoxGameObjectPointerMapping.resize(sz);
-			}
 
-			mMeshBoundingBoxes[i] = std::move(AABB);
-			mMeshBoundingBoxMeshIDMapping[i] = mesh;
-			mMeshBoundingBoxGameObjectPointerMapping[i] = pObj;
-			++mNumValidMeshBoundingBoxes;
+			mMeshBoundingBoxes[iMesh] = std::move(AABB);
+			mMeshBoundingBoxMeshIDMapping[iMesh] = mesh;
+			mMeshBoundingBoxGameObjectPointerMapping[iMesh] = pObj;
+			++iMesh;
 			bAtLeastOneMesh = true;
 		}
 	};
@@ -618,31 +609,19 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBox(const GameObject* pObj)
 }
 void SceneBoundingBoxHierarchy::BuildMeshBoundingBoxes(const std::vector<GameObject*>& pObjects)
 {
-	SCOPED_CPU_MARKER("BuildMeshBoundingBoxes");
-	for (const GameObject* pObj : pObjects)
-		BuildMeshBoundingBox(pObj);
-	ResizeGameMeshBoxContainer();
-}
-void SceneBoundingBoxHierarchy::BuildMeshBoundingBoxes_Range(const std::vector<GameObject*>& pObjects, size_t iBegin, size_t iEnd)
-{
-	SCOPED_CPU_MARKER("BuildMeshBoundingBoxes_Range");
-	for (size_t i = iBegin; i < iEnd; ++i)
+	CountGameObjectMeshes(pObjects);
+	ResizeGameMeshBoxContainer(mNumValidMeshBoundingBoxes);
 	{
-		BuildMeshBoundingBox(pObjects[i]);
+		SCOPED_CPU_MARKER("BuildMeshBoundingBoxes");
+		size_t i = 0;
+		for (const GameObject* pObj : pObjects)
+		{
+			const size_t NumMeshes = mCache_GameObjectMeshNumMeshes.at(pObj);
+			BuildMeshBoundingBox(pObj, i, i+NumMeshes);
+			i += NumMeshes;
+		}
 	}
 }
-void SceneBoundingBoxHierarchy::BuildMeshBoundingBoxes(const std::vector<GameObject*>& pObjects, const std::vector<size_t>& Indices)
-{
-	SCOPED_CPU_MARKER("BuildMeshBoundingBoxes");
-	for (const size_t& Index : Indices)
-	{
-		assert(Index < Indices.size());
-		BuildMeshBoundingBox(pObjects[Index]);
-	}
-
-	ResizeGameMeshBoxContainer();
-}
-
 
 void SceneBoundingBoxHierarchy::Clear()
 {
@@ -662,12 +641,26 @@ void SceneBoundingBoxHierarchy::ResizeGameObjectBoundingBoxContainer(size_t sz)
 	mNumValidMeshBoundingBoxes = 0;
 }
 
-void SceneBoundingBoxHierarchy::ResizeGameMeshBoxContainer()
+void SceneBoundingBoxHierarchy::CountGameObjectMeshes(const std::vector<GameObject*>& pObjects)
+{
+	SCOPED_CPU_MARKER("CountGameObjectMeshes");
+	mNumValidMeshBoundingBoxes = 0;
+
+	// count total number of meshes in all game objects
+	for (const GameObject* pObj : pObjects)
+	{
+		const Model& model = mModels.at(pObj->mModelID);
+		const size_t NumMeshes = model.mData.mOpaueMeshIDs.size() + model.mData.mTransparentMeshIDs.size();
+		mNumValidMeshBoundingBoxes += NumMeshes;
+		mCache_GameObjectMeshNumMeshes[pObj] = NumMeshes;
+	}
+}
+
+void SceneBoundingBoxHierarchy::ResizeGameMeshBoxContainer(size_t size)
 {
 	SCOPED_CPU_MARKER("BuildMeshBoundingBoxes_Rsz");
-	const size_t sz = mNumValidMeshBoundingBoxes;
-	mMeshBoundingBoxes.resize(sz);
-	mMeshBoundingBoxMeshIDMapping.resize(sz);
-	mMeshBoundingBoxGameObjectPointerMapping.resize(sz);
+	mMeshBoundingBoxes.resize(size);
+	mMeshBoundingBoxMeshIDMapping.resize(size);
+	mMeshBoundingBoxGameObjectPointerMapping.resize(size);
 }
 
