@@ -212,10 +212,8 @@ private:
 
 	void BuildGameObjectBoundingBoxes(const std::vector<GameObject*>& pObjects);
 	void BuildGameObjectBoundingBoxes_Range(const std::vector<GameObject*>& pObjects, size_t iBegin, size_t iEnd);
-	void BuildGameObjectBoundingBoxes(const std::vector<GameObject*>& pObjects, const std::vector<size_t>& Indices);
 	void BuildMeshBoundingBoxes(const std::vector<GameObject*>& pObjects);
-	void BuildMeshBoundingBoxes_Range(const std::vector<GameObject*>& pObjects, size_t iBegin, size_t iEnd);
-	void BuildMeshBoundingBoxes(const std::vector<GameObject*>& pObjects, const std::vector<size_t>& Indices);
+	void BuildMeshBoundingBoxes_Range(const std::vector<GameObject*>& pObjects, size_t iBegin, size_t iEnd, size_t iMeshBB);
 
 	void BuildMeshBoundingBox(const GameObject* pObj, size_t iBB_Begin, size_t iBB_End);
 	void BuildGameObjectBoundingBox(const GameObject* pObj, size_t iBB);
@@ -228,7 +226,6 @@ private:
 	//------------------------------------------------------
 	std::vector<FBoundingBox>      mGameObjectBoundingBoxes;
 	std::vector<const GameObject*> mGameObjectBoundingBoxGameObjectPointerMapping;
-	std::unordered_map<const GameObject*, size_t> mCache_GameObjectMeshNumMeshes;
 	//------------------------------------------------------
 
 	// list of mesh bounding boxes for fine culling
