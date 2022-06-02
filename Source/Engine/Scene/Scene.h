@@ -226,6 +226,7 @@ private:
 	//------------------------------------------------------
 	std::vector<FBoundingBox>      mGameObjectBoundingBoxes;
 	std::vector<const GameObject*> mGameObjectBoundingBoxGameObjectPointerMapping;
+	std::vector<size_t>            mGameObjectNumMeshes;
 	//------------------------------------------------------
 
 	// list of mesh bounding boxes for fine culling

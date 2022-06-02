@@ -385,6 +385,7 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, int FRAME_DATA_INDEX)
 	{
 		UpdateWorkerThreadPool.AddTask([=, &SceneView]()
 		{
+			SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
 			PrepareSceneMeshRenderParams(ViewFrustumPlanes, SceneView.meshRenderCommands, SceneView.viewProj, SceneView.viewProjPrev);
 		});
 		GatherSceneLightData(SceneView);
@@ -1199,6 +1200,7 @@ void Scene::PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, con
 			{
 				UpdateWorkerThreadPool.AddTask([=]() 
 				{
+					SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
 					fnRecordShadowMeshRenderCommandsForFrustumW(WorkerContexts[iFrustum]);
 				});
 			}
