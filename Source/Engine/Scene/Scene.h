@@ -186,6 +186,8 @@ struct FSceneStats
 	uint NumCameras;
 };
 
+
+// For the time being, this is simply a flat list of bounding boxes -- there is not much of a hierarchy to speak of.
 class SceneBoundingBoxHierarchy
 {
 public:
@@ -306,16 +308,31 @@ private: // Derived Scenes shouldn't access these functions
 	void HandleInput(FSceneView& SceneView);
 
 	void GatherSceneLightData(FSceneView& SceneView) const;
+	void GatherShadowViewData(FSceneShadowView& SceneShadowView, const std::vector<Light>& vLights, const std::vector<size_t>& vActiveLightIndices);
 
 	void PrepareLightMeshRenderParams(FSceneView& SceneView) const;
 	void PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<MeshRenderCommand_t>& MeshRenderCommands, const DirectX::XMMATRIX matViewProj, const DirectX::XMMATRIX matViewProjHistory);
-	void PrepareShadowMeshRenderParams(FSceneShadowView& ShadowView, const FFrustumPlaneset& ViewFrustumPlanesInWorldSpace, ThreadPool& UpdateWorkerThreadPool) const;
+	void PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, const FFrustumPlaneset& ViewFrustumPlanesInWorldSpace, ThreadPool& UpdateWorkerThreadPool) const;
 	void PrepareBoundingBoxRenderParams(FSceneView& SceneView) const;
 	
-	// WIP----
-	void GatherSpotLightFrustumParameters(FSceneShadowView& SceneShadowView, size_t iShadowView, const Light& l);
-	void GatherPointLightFrustumParameters();
-	// WIP----
+	void BatchInstanceData_SceneMeshes(
+		  std::vector<MeshRenderCommand_t>* pMeshRenderCommands
+		, const std::vector<const GameObject*>& MeshBoundingBoxGameObjectPointers
+		, const std::vector<size_t>& CulledBoundingBoxIndexList_Msh
+		, const DirectX::XMMATRIX matViewProj
+		, const DirectX::XMMATRIX matViewProjHistory
+	);
+	void BatchInstanceData_ShadowMeshes(
+		  size_t iFrustum
+		, FSceneShadowView::FShadowView* pShadowView
+		, const std::vector<size_t>* pCulledBoundingBoxIndexList_Msh
+		, DirectX::XMMATRIX matViewProj
+	) const;
+
+
+	void GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShadowView& SceneShadowView, ThreadPool& UpdateWorkerThreadPool);
+	void CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
+	void BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
 
 	void LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRepresentation>& GameObjsToBeLoaded);
 	void LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes);
@@ -326,6 +343,7 @@ private: // Derived Scenes shouldn't access these functions
 	void LoadPostProcessSettings();
 
 	void CalculateGameObjectLocalSpaceBoundingBoxes();
+
 public:
 	Scene(VQEngine& engine
 		, int NumFrameBuffers
@@ -429,8 +447,15 @@ protected:
 	// CULLING DATA
 	//
 	SceneBoundingBoxHierarchy mBoundingBoxHierarchy;
-	mutable FFrustumCullWorkerContext MeshFrustumCullWorkerContext[2]; // 1 for scene view, 1 for shadow views
-	mutable FFrustumCullWorkerContext GameObjectFrustumCullWorkerContext[2]; // 1 for scene view, 1 for shadow views
+	/*TODO: remove*/mutable FFrustumCullWorkerContext MeshFrustumCullWorkerContext[2]; // 1 for scene view, 1 for shadow views
+	/*TODO: remove*/mutable FFrustumCullWorkerContext GameObjectFrustumCullWorkerContext[2]; // 1 for scene view, 1 for shadow views
+	mutable FFrustumCullWorkerContext mFrustumCullWorkerContext;
+	std::unordered_map<size_t, FSceneShadowView::FShadowView*> mFrustumIndex_pShadowViewLookup;
+
+	std::vector<size_t> mActiveLightIndices_Static;
+	std::vector<size_t> mActiveLightIndices_Stationary;
+	std::vector<size_t> mActiveLightIndices_Dynamic;
+
 
 	//
 	// MATERIAL DATA

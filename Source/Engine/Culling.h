@@ -21,6 +21,8 @@
 #include <array>
 #include <vector>
 #include "Core/Types.h"
+#include <atomic>
+#include <mutex>
 
 class GameObject;
 class ThreadPool;
@@ -155,7 +157,8 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 
 	//std::vector<int> vLightMovementTypeID; // index to access light type vectors: [0]:static, [1]:stationary, [2]:dynamic
 
-	size_t NumValidInputElements = 0;
+	std::atomic<size_t> NumValidInputElements = 0;
+	std::mutex mMutex;
 
 	size_t AddWorkerItem(     FFrustumPlaneset&& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects);
 	size_t AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects);
@@ -165,8 +168,8 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	void ProcessWorkItems_SingleThreaded();
 	void ProcessWorkItems_MultiThreaded(const size_t NumThreadsIncludingThisThread, ThreadPool& WorkerThreadPool);
 
+	void AllocInputMemoryIfNecessary(size_t sz);
 private:
 	void Process(size_t iRangeBegin, size_t iRangeEnd) override;
 
-	void AllocInputMemoryIfNecessary();
 };

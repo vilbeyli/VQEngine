@@ -130,12 +130,12 @@ bool IsFrustumIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes0, const 
 // THREADING
 //
 //------------------------------------------------------------------------------------------------------------------------------
-void FFrustumCullWorkerContext::AllocInputMemoryIfNecessary()
+void FFrustumCullWorkerContext::AllocInputMemoryIfNecessary(size_t sz)
 {
-	if (vFrustumPlanes.size() == NumValidInputElements)
+	std::unique_lock<std::mutex> lk(mMutex);
+	if (vFrustumPlanes.size() < sz)
 	{
 		SCOPED_CPU_MARKER("AllocMem");
-		const size_t sz = vFrustumPlanes.empty() ? 1 : vFrustumPlanes.size() * 2;
 		vFrustumPlanes.resize(sz);
 		vBoundingBoxLists.resize(sz);
 		vGameObjectPointerLists.resize(sz);
@@ -153,28 +153,28 @@ void FFrustumCullWorkerContext::ClearMemory()
 
 size_t FFrustumCullWorkerContext::AddWorkerItem(FFrustumPlaneset&& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects)
 {
+	assert(false);
 	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::AddWorkerItem()");
-
-	const size_t i = NumValidInputElements;
-	AllocInputMemoryIfNecessary();
+	const size_t i = NumValidInputElements++;
+	AllocInputMemoryIfNecessary(i);
 
 	vFrustumPlanes[i] = FrustumPlaneSet;
 	vBoundingBoxLists[i] = vBoundingBoxList;
 	vGameObjectPointerLists[i] = pGameObjects;
-	return NumValidInputElements++;
+	return i;
 }
 size_t FFrustumCullWorkerContext::AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects)
 {
 	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::AddWorkerItem()");
 
-	const size_t i = NumValidInputElements;
-	AllocInputMemoryIfNecessary();
+	const size_t i = NumValidInputElements++;
+	//AllocInputMemoryIfNecessary(i);
 
 	vFrustumPlanes[i] = FrustumPlaneSet;
 	vBoundingBoxLists[i] = vBoundingBoxList;
 	vGameObjectPointerLists[i] = pGameObjects;
 
-	return NumValidInputElements++;
+	return i;
 }
 
 void FFrustumCullWorkerContext::ProcessWorkItems_SingleThreaded()
@@ -196,33 +196,6 @@ void FFrustumCullWorkerContext::ProcessWorkItems_SingleThreaded()
 	// process all items on this thread
 	this->Process(0, szFP - 1);
 }
-
-static std::vector<std::pair<size_t, size_t>> PartitionWorkItemsIntoRanges(size_t NumWorkItems, size_t NumWorkerThreadCount)
-{
-	// @NumWorkItems is distributed as equally as possible between all @NumWorkerThreadCount threads.
-	// Two numbers are determined
-	// - NumWorkItemPerThread: number of work items each thread will get equally
-	// - NumWorkItemPerThread_Extra : number of +1's to be added to each worker
-	const size_t NumWorkItemPerThread = NumWorkItems / NumWorkerThreadCount; // amount of work each worker is to get, 
-	const size_t NumWorkItemPerThread_Extra = NumWorkItems % NumWorkerThreadCount;
-
-	std::vector<std::pair<size_t, size_t>> vRanges(NumWorkItemPerThread == 0 
-		? NumWorkItems  // if NumWorkItems < NumWorkerThreadCount, then only create ranges according to NumWorkItems
-		: NumWorkerThreadCount // each worker thread gets a range
-	); 
-
-	size_t iRange = 0;
-	for (auto& range : vRanges)
-	{
-		range.first = iRange != 0 ? vRanges[iRange - 1].second + 1 : 0;
-		range.second = range.first + NumWorkItemPerThread-1 + (NumWorkItemPerThread_Extra > iRange ? 1 : 0);
-		assert(range.first <= range.second); // ensure work context bounds
-		++iRange;
-	}
-
-	return vRanges;
-}
-
 
 static void DispatchWorkers(ThreadPool& WorkerThreadPool, size_t NumWorkItems, void (*pfnProcess)(size_t iBegin, size_t iEnd))
 {
@@ -481,7 +454,7 @@ void SceneBoundingBoxHierarchy::Build(const std::vector<GameObject*>& pObjects, 
 		if (NumWorkItemsPerAvailableWorkerThread < NumDesiredMinimumWorkItemsPerThread)
 		{
 			const float OffRatio = float(NumDesiredMinimumWorkItemsPerThread) / float(NumWorkItemsPerAvailableWorkerThread);
-			NumWorkersToUse /= OffRatio;
+			NumWorkersToUse = static_cast<size_t>(NumWorkersToUse / OffRatio); // clamp down
 			NumWorkersToUse = std::max((size_t)1, NumWorkersToUse);
 		}
 
