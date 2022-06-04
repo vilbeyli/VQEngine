@@ -251,10 +251,9 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 		size_t currRange = 0;
 		for (const std::pair<size_t, size_t>& Range : vRanges)
 		{
-			if (currRange == 0)
+			if (currRange == vRanges.size()-1)
 			{
-				++currRange; // skip the first range, and do it on this thread after dispatches
-				continue;
+				continue; // skip the last range, and do it on this thread after dispatches
 			}
 			const size_t& iBegin = Range.first;
 			const size_t& iEnd = Range.second; // inclusive
@@ -265,14 +264,15 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
 				this->Process(iBegin, iEnd); 
 			});
+			++currRange;
 		}
 	}
 
 	// process the remaining work on this thread
 	{
 		SCOPED_CPU_MARKER("Process_ThisThread");
-		const size_t& iBegin = vRanges.begin()->first;
-		const size_t& iEnd   = vRanges.begin()->second; // inclusive
+		const size_t& iBegin = vRanges.back().first;
+		const size_t& iEnd   = vRanges.back().second; // inclusive
 		this->Process(iBegin, iEnd);
 	}
 
@@ -507,7 +507,7 @@ void SceneBoundingBoxHierarchy::Build(const std::vector<GameObject*>& pObjects, 
 		{
 			SCOPED_CPU_MARKER("PrepareRanges");
 			const size_t NumObjs = pObjects.size();
-			const size_t ThreadBBBatchCapacity = mNumValidMeshBoundingBoxes / WorkerThreadPool.GetThreadPoolSize();
+			const size_t ThreadBBBatchCapacity = mNumValidMeshBoundingBoxes / (WorkerThreadPool.GetThreadPoolSize()+1);
 
 			size_t iBegin = 0;
 			size_t iEnd = 0;

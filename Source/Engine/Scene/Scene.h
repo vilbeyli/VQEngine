@@ -114,6 +114,37 @@ struct FSceneView
 	std::vector<FLightRenderCommand> lightRenderCommands;
 	std::vector<FLightRenderCommand> lightBoundsRenderCommands;
 
+#if RENDER_INSTANCED_SCENE_MESHES
+	//--------------------------------------------------------------------------------------------------------------------------------------------
+	// collect instance data based on Material, and then Mesh.
+	// In order to avoid clear/resize, we will track if the data is @bStale
+	// and if it is not stale, we also keep track of the number of valid instance data.
+	//--------------------------------------------------------------------------------------------------------------------------------------------
+	// MAT0
+	//	+----MESH0
+	//	       +----InstData0
+	//	       +----InstData1
+	//	+----MESH1
+	//	       +----InstData0
+	//	       +----InstData1
+	//	       +----InstData2
+	//	+----MESH2
+	//	       +----InstData0
+	//
+	// MAT1
+	//	+----MESH37
+	//	       +----InstData0
+	//	       +----InstData1
+	//	       +----InstData2
+	//	+----MESH225
+	//	       +----InstData0
+	//	       +----InstData1
+	struct FInstanceData { DirectX::XMMATRIX mWorld, mWorldViewProj, mWorldViewProjPrev, mNormal; }; // transformation matrixes used in the shader
+	struct FMeshInstanceData { size_t NumValidData = 0; std::vector<FInstanceData> InstanceData; };
+	std::unordered_map < MaterialID, std::unordered_map<MeshID, FMeshInstanceData>> MaterialMeshInstanceDataLookup;
+	//--------------------------------------------------------------------------------------------------------------------------------------------
+#endif
+
 #if RENDER_INSTANCED_BOUNDING_BOXES
 	std::vector<FInstancedBoundingBoxRenderCommand> boundingBoxRenderCommands;
 #else
@@ -320,10 +351,11 @@ private: // Derived Scenes shouldn't access these functions
 	) const;
 	void BatchInstanceData_SceneMeshes(
 		  std::vector<MeshRenderCommand_t>* pMeshRenderCommands
+		, std::unordered_map < MaterialID, std::unordered_map<MeshID, FSceneView::FMeshInstanceData>>& MaterialMeshInstanceDataLookup
 		, const std::vector<const GameObject*>& MeshBoundingBoxGameObjectPointers
 		, const std::vector<size_t>& CulledBoundingBoxIndexList_Msh
-		, const DirectX::XMMATRIX matViewProj
-		, const DirectX::XMMATRIX matViewProjHistory
+		, const DirectX::XMMATRIX& matViewProj
+		, const DirectX::XMMATRIX& matViewProjHistory
 	);
 	void BatchInstanceData_ShadowMeshes(
 		  size_t iFrustum
@@ -414,37 +446,6 @@ protected:
 	//
 	std::unordered_map<const Transform*, DirectX::XMMATRIX> mTransformWorldMatrixHistory; // history for motion vectors
 	std::unordered_map<const Camera*   , DirectX::XMMATRIX> mViewProjectionMatrixHistory; // history for motion vectors
-
-#if RENDER_INSTANCED_SCENE_MESHES
-	//--------------------------------------------------------------------------------------------------------------------------------------------
-	// collect instance data based on Material, and then Mesh.
-	// In order to avoid clear/resize, we will track if the data is @bStale
-	// and if it is not stale, we also keep track of the number of valid instance data.
-	//--------------------------------------------------------------------------------------------------------------------------------------------
-	// MAT0
-	//	+----MESH0
-	//	       +----InstData0
-	//	       +----InstData1
-	//	+----MESH1
-	//	       +----InstData0
-	//	       +----InstData1
-	//	       +----InstData2
-	//	+----MESH2
-	//	       +----InstData0
-	//
-	// MAT1
-	//	+----MESH37
-	//	       +----InstData0
-	//	       +----InstData1
-	//	       +----InstData2
-	//	+----MESH225
-	//	       +----InstData0
-	//	       +----InstData1
-	struct FInstanceData { DirectX::XMMATRIX mWorld, mWorldViewProj, mWorldViewProjPrev, mNormal; }; // transformation matrixes used in the shader
-	struct FMeshInstanceData { size_t NumValidData = 0; std::vector<FInstanceData> InstanceData; };
-	std::unordered_map < MaterialID, std::unordered_map<MeshID, FMeshInstanceData>> MaterialMeshInstanceDataLookup;
-	//--------------------------------------------------------------------------------------------------------------------------------------------
-#endif
 
 	//
 	// CULLING DATA

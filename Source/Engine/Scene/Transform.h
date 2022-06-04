@@ -91,5 +91,7 @@ public:
 	DirectX::XMFLOAT3       _position;
 	Quaternion              _rotation;
 	DirectX::XMFLOAT3       _scale;
+
+	DirectX::XMFLOAT3       _positionPrev;
 };
 

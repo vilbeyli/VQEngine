@@ -101,7 +101,10 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	mTransformWorldMatrixHistory.clear();
 	mViewProjectionMatrixHistory.clear();
 	mBoundingBoxHierarchy.Clear();
-	MaterialMeshInstanceDataLookup.clear();
+	for (FSceneView& view : mFrameSceneViews)
+	{
+		view.MaterialMeshInstanceDataLookup.clear();
+	}
 	for (FSceneShadowView& view : mFrameShadowViews)
 	{
 		for(FSceneShadowView::FShadowView& sv : view.ShadowViews_Spot ) sv.ShadowMeshInstanceDataLookup.clear();
