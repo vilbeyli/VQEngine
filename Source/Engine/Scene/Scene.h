@@ -308,13 +308,16 @@ private: // Derived Scenes shouldn't access these functions
 	void HandleInput(FSceneView& SceneView);
 
 	void GatherSceneLightData(FSceneView& SceneView) const;
-	void GatherShadowViewData(FSceneShadowView& SceneShadowView, const std::vector<Light>& vLights, const std::vector<size_t>& vActiveLightIndices);
+	void GatherShadowViewData(FSceneShadowView& SceneShadowView
+		, const std::vector<Light>& vLights
+		, const std::vector<size_t>& vActiveLightIndices
+	);
 
 	void PrepareLightMeshRenderParams(FSceneView& SceneView) const;
-	void PrepareSceneMeshRenderParams(const FFrustumPlaneset& MainViewFrustumPlanesInWorldSpace, std::vector<MeshRenderCommand_t>& MeshRenderCommands, const DirectX::XMMATRIX matViewProj, const DirectX::XMMATRIX matViewProjHistory);
-	void PrepareShadowMeshRenderParams(FSceneShadowView& SceneShadowView, const FFrustumPlaneset& ViewFrustumPlanesInWorldSpace, ThreadPool& UpdateWorkerThreadPool) const;
-	void PrepareBoundingBoxRenderParams(FSceneView& SceneView) const;
-	
+	void BatchInstanceData_BoundingBox(FSceneView& SceneView
+		, ThreadPool& UpdateWorkerThreadPool
+		, const DirectX::XMMATRIX matViewProj
+	) const;
 	void BatchInstanceData_SceneMeshes(
 		  std::vector<MeshRenderCommand_t>* pMeshRenderCommands
 		, const std::vector<const GameObject*>& MeshBoundingBoxGameObjectPointers

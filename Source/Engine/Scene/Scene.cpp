@@ -391,8 +391,6 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, int FRAME_DATA_INDEX)
 
 	BatchInstanceData(SceneView, UpdateWorkerThreadPool);
 
-	PrepareBoundingBoxRenderParams(SceneView);
-	PrepareLightMeshRenderParams(SceneView);
 }
 
 
@@ -621,7 +619,7 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 
 	{
 		SCOPED_CPU_MARKER("InitFrustumCullWorkerContexts");
-#if 0
+#if 0 // debug-single threaded
 		for (size_t i = 0; i < FrustumPlanesets.size(); ++i)
 			mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i], BVH.mMeshBoundingBoxes, BVH.mMeshBoundingBoxGameObjectPointerMapping, i);
 #else
@@ -699,6 +697,144 @@ void Scene::CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerTh
 #endif
 }
 
+
+
+static const XMMATRIX IdentityMat = XMMatrixIdentity();
+static const XMVECTOR IdentityQuaternion = XMQuaternionIdentity();
+static const XMVECTOR ZeroVector = XMVectorZero();
+static XMMATRIX GetBBTransformMatrix(const FBoundingBox& BB)
+{
+	XMVECTOR BBMax = XMLoadFloat3(&BB.ExtentMax);
+	XMVECTOR BBMin = XMLoadFloat3(&BB.ExtentMin);
+	XMVECTOR ScaleVec = (BBMax - BBMin) * 0.5f;
+	XMVECTOR BBOrigin = (BBMax + BBMin) * 0.5f;
+	XMMATRIX MatTransform = XMMatrixTransformation(ZeroVector, IdentityQuaternion, ScaleVec, ZeroVector, IdentityQuaternion, BBOrigin);
+	return MatTransform;
+}
+static void BatchBoundingBoxRenderCommandData(
+	std::vector<FInstancedBoundingBoxRenderCommand>& cmds
+	, const std::vector<FBoundingBox>& BBs
+	, const XMMATRIX viewProj
+	, const XMFLOAT3 Color
+	, size_t iBegin
+)
+{
+	SCOPED_CPU_MARKER("BatchBoundingBoxRenderCommandData");
+	int NumBBsToProcess = (int)BBs.size();
+	size_t i = 0;
+	int iBB = 0;
+	while (NumBBsToProcess > 0)
+	{
+		FInstancedBoundingBoxRenderCommand& cmd = cmds[iBegin + i];
+		cmd.matWorldViewProj.resize(std::min(MAX_INSTANCE_COUNT__UNLIT_SHADER, (size_t)NumBBsToProcess));
+		cmd.meshID = EBuiltInMeshes::CUBE;
+		cmd.color = Color;
+
+		int iBatch = 0;
+		while (iBatch < MAX_INSTANCE_COUNT__UNLIT_SHADER && iBB < BBs.size())
+		{
+			cmd.matWorldViewProj[iBatch] = GetBBTransformMatrix(BBs[iBB]) * viewProj;
+			++iBatch;
+			++iBB;
+		}
+
+		NumBBsToProcess -= iBatch;
+		++i;
+	}
+}
+void Scene::BatchInstanceData_BoundingBox(FSceneView& SceneView
+	, ThreadPool& UpdateWorkerThreadPool
+	, const DirectX::XMMATRIX matViewProj) const
+{
+	SCOPED_CPU_MARKER("BoundingBox");
+	const bool bDrawGameObjectBBs = SceneView.sceneParameters.bDrawGameObjectBoundingBoxes;
+	const bool bDrawMeshBBs = SceneView.sceneParameters.bDrawMeshBoundingBoxes;
+	{
+		SCOPED_CPU_MARKER("AllocMem");
+		SceneView.boundingBoxRenderCommands.resize(
+			  (bDrawGameObjectBBs ? mBoundingBoxHierarchy.mGameObjectBoundingBoxes.size() : 0)
+			+ (bDrawMeshBBs       ? mBoundingBoxHierarchy.mMeshBoundingBoxes.size()       : 0)
+		);
+	}
+
+	const XMFLOAT3 BBColor_GameObj = XMFLOAT3(0.0f, 0.2f, 0.8f);
+	const XMFLOAT3 BBColor_Mesh = XMFLOAT3(0.0f, 0.8f, 0.2f);
+
+	auto fnBatch = [&UpdateWorkerThreadPool](
+		std::vector<FInstancedBoundingBoxRenderCommand>& cmds
+		, const std::vector<FBoundingBox>& BBs
+		, size_t iBoundingBox
+		, const XMFLOAT3 BBColor
+		, const XMMATRIX matViewProj
+		, const char* strMarker = ""
+	)
+	{
+		SCOPED_CPU_MARKER(strMarker);
+		constexpr size_t MIN_NUM_BOUNDING_BOX_FOR_THREADING = 128;
+		if (BBs.size() < MIN_NUM_BOUNDING_BOX_FOR_THREADING)
+		{
+			BatchBoundingBoxRenderCommandData(cmds
+				, BBs
+				, matViewProj
+				, BBColor
+				, iBoundingBox
+			);
+		}
+		else
+		{
+			SCOPED_CPU_MARKER("Dispatch");
+			UpdateWorkerThreadPool.AddTask([=, &BBs, &cmds]()
+			{
+				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+				BatchBoundingBoxRenderCommandData(cmds
+					, BBs
+					, matViewProj
+					, BBColor
+					, iBoundingBox
+				);
+			});
+		}
+	};
+	
+	// --------------------------------------------------------------
+	// Game Object Bounding Boxes
+	// --------------------------------------------------------------
+	size_t iBoundingBox = 0;
+	if (SceneView.sceneParameters.bDrawGameObjectBoundingBoxes)
+	{
+#if RENDER_INSTANCED_BOUNDING_BOXES 
+		fnBatch(SceneView.boundingBoxRenderCommands
+			, mBoundingBoxHierarchy.mGameObjectBoundingBoxes
+			, iBoundingBox
+			, BBColor_GameObj
+			, matViewProj
+			, "GameObj"
+		);
+#else
+	BatchBoundingBoxRenderCommandData(SceneView.boundingBoxRenderCommands, SceneView, mBoundingBoxHierarchy.mGameObjectBoundingBoxes, BBColor_GameObj, 0);
+#endif
+	}
+
+
+	// --------------------------------------------------------------
+	// Mesh Bounding Boxes
+	// --------------------------------------------------------------
+	if (SceneView.sceneParameters.bDrawMeshBoundingBoxes)
+	{
+		iBoundingBox += (SceneView.sceneParameters.bDrawGameObjectBoundingBoxes ? mBoundingBoxHierarchy.mGameObjectBoundingBoxes.size() : 0);
+#if RENDER_INSTANCED_BOUNDING_BOXES 
+		fnBatch(SceneView.boundingBoxRenderCommands
+			, mBoundingBoxHierarchy.mMeshBoundingBoxes
+			, iBoundingBox
+			, BBColor_Mesh
+			, matViewProj
+			, "Meshes"
+		);
+#else
+		BatchBoundingBoxRenderCommandData(SceneView.boundingBoxRenderCommands, SceneView, mBoundingBoxHierarchy.mGameObjectBoundingBoxes, BBColor_GameObj, 0);
+#endif
+	}
+}
 
 void Scene::BatchInstanceData_SceneMeshes(std::vector<MeshRenderCommand_t>* pMeshRenderCommands, const std::vector<const GameObject*>& MeshBoundingBoxGameObjectPointers, const std::vector<size_t>& CulledBoundingBoxIndexList_Msh, const DirectX::XMMATRIX matViewProj, const DirectX::XMMATRIX matViewProjHistory)
 {
@@ -806,10 +942,8 @@ void Scene::BatchInstanceData_SceneMeshes(std::vector<MeshRenderCommand_t>* pMes
 			// for-each mesh
 			for (auto itMesh = meshInstanceDataLookup.begin(); itMesh != meshInstanceDataLookup.end(); ++itMesh)
 			{
-				SCOPED_CPU_MARKER("Mesh");
 				const MeshID meshID = itMesh->first;
 				const FMeshInstanceData& MeshInstanceData = itMesh->second;
-
 
 				int NumInstancesToProces = (int)MeshInstanceData.NumValidData;
 				int iInst = 0;
@@ -827,11 +961,10 @@ void Scene::BatchInstanceData_SceneMeshes(std::vector<MeshRenderCommand_t>* pMes
 					int iBatch = 0;
 					while (iBatch < MAX_INSTANCE_COUNT__SCENE_MESHES && iInst < MeshInstanceData.NumValidData)
 					{
-						cmd.matWorld[iBatch] = MeshInstanceData.InstanceData[iInst].mWorld;
-						cmd.matWorldViewProj[iBatch] = MeshInstanceData.InstanceData[iInst].mWorldViewProj;
+						cmd.matWorld            [iBatch] = MeshInstanceData.InstanceData[iInst].mWorld;
+						cmd.matWorldViewProj    [iBatch] = MeshInstanceData.InstanceData[iInst].mWorldViewProj;
 						cmd.matWorldViewProjPrev[iBatch] = MeshInstanceData.InstanceData[iInst].mWorldViewProjPrev;
-						cmd.matNormal[iBatch] = MeshInstanceData.InstanceData[iInst].mNormal;
-
+						cmd.matNormal           [iBatch] = MeshInstanceData.InstanceData[iInst].mNormal;
 						++iBatch;
 						++iInst;
 					}
@@ -1040,6 +1173,10 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 			});
 		}
 	}
+	
+	BatchInstanceData_BoundingBox(SceneView, UpdateWorkerThreadPool, SceneView.viewProj);
+	PrepareLightMeshRenderParams(SceneView);
+	
 	{
 		SCOPED_CPU_MARKER("ThisThread_ShadowViews");
 		for (size_t iFrustum = 1; iFrustum <= NumFrustumsThisThread; ++iFrustum)
@@ -1143,112 +1280,6 @@ void Scene::PrepareLightMeshRenderParams(FSceneView& SceneView) const
 	fnGatherLightRenderData(mLightsStationary);
 	fnGatherLightRenderData(mLightsDynamic);
 }
-
-static const XMMATRIX IdentityMat = XMMatrixIdentity();
-static const XMVECTOR IdentityQuaternion = XMQuaternionIdentity();
-static const XMVECTOR ZeroVector = XMVectorZero();
-static XMMATRIX GetBBTransformMatrix(const FBoundingBox& BB)
-{
-	XMVECTOR BBMax = XMLoadFloat3(&BB.ExtentMax);
-	XMVECTOR BBMin = XMLoadFloat3(&BB.ExtentMin);
-	XMVECTOR ScaleVec = (BBMax - BBMin) * 0.5f;
-	XMVECTOR BBOrigin = (BBMax + BBMin) * 0.5f;
-	XMMATRIX MatTransform = XMMatrixTransformation(ZeroVector, IdentityQuaternion, ScaleVec, ZeroVector, IdentityQuaternion, BBOrigin);
-	return MatTransform;
-}
-
-void Scene::PrepareBoundingBoxRenderParams(FSceneView& SceneView) const
-{
-	SCOPED_CPU_MARKER("Scene::PrepareBoundingBoxRenderParams()");
-
-	{
-		SCOPED_CPU_MARKER_C("ClearCmds", 0xFFFF0000); // TODO: reuse vector data, dont clear
-		SceneView.boundingBoxRenderCommands.clear();
-	}
-
-	const XMFLOAT3 BBColor_GameObj = XMFLOAT3(0.0f, 0.2f, 0.8f);
-	const XMFLOAT3 BBColor_Mesh    = XMFLOAT3(0.0f, 0.8f, 0.2f);
-
-
-#if RENDER_INSTANCED_BOUNDING_BOXES // Record instanced rendering commands
-
-	auto fnCreateBoundingBoxRenderCommand = [&SceneView]
-		(const std::vector<FBoundingBox>& BBs, const XMFLOAT3& Color)
-	{
-		std::vector< FInstancedBoundingBoxRenderCommand> cmds;
-
-		FInstancedBoundingBoxRenderCommand cmd;
-		cmd.meshID = EBuiltInMeshes::CUBE;
-		cmd.color = Color;
-
-		int NumBBsToProcess = (int)BBs.size();
-		int iBB = 0;
-		while (NumBBsToProcess > 0)
-		{
-			int iBatch = 0;
-			while (iBatch < MAX_INSTANCE_COUNT__UNLIT_SHADER && iBB < BBs.size())
-			{
-				cmd.matWorldViewProj.push_back(GetBBTransformMatrix(BBs[iBB]) * SceneView.viewProj);
-				++iBatch;
-				++iBB;
-			}
-
-			NumBBsToProcess -= iBatch;
-			cmds.push_back(cmd);
-			cmd.matWorldViewProj.clear();
-		}
-
-		return cmds;
-	};
-
-	std::vector<FInstancedBoundingBoxRenderCommand>& cmds = SceneView.boundingBoxRenderCommands;
-	{
-		if (SceneView.sceneParameters.bDrawGameObjectBoundingBoxes)
-		{
-			SCOPED_CPU_MARKER("RecordBBCommands_GameObj");
-			std::vector<FInstancedBoundingBoxRenderCommand> cmds_gameObjs = fnCreateBoundingBoxRenderCommand(mBoundingBoxHierarchy.mGameObjectBoundingBoxes, BBColor_GameObj);
-			cmds.insert(cmds.end(), cmds_gameObjs.begin(), cmds_gameObjs.end());
-		}
-
-		if (SceneView.sceneParameters.bDrawMeshBoundingBoxes)
-		{
-			SCOPED_CPU_MARKER("RecordBBCommands_Mesh");
-			std::vector<FInstancedBoundingBoxRenderCommand> cmds_meshes = fnCreateBoundingBoxRenderCommand(mBoundingBoxHierarchy.mMeshBoundingBoxes, BBColor_Mesh);
-			cmds.insert(cmds.end(), cmds_meshes.begin(), cmds_meshes.end());
-		}
-	}
-
-#else // Render bounding boxes one by one (this is bad! dont do this)
-	
-	auto fnCreateBoundingBoxRenderCommand = [](const FBoundingBox& BB, const XMFLOAT3& Color)
-	{
-		FBoundingBoxRenderCommand cmd = {};
-		cmd.color = Color;
-		cmd.matWorldTransformation = GetBBTransformMatrix(BB);
-		cmd.meshID = EBuiltInMeshes::CUBE;
-		return cmd;
-	};
-
-
-	if (SceneView.sceneParameters.bDrawGameObjectBoundingBoxes)
-	{
-		for (const FBoundingBox& BB : mBoundingBoxHierarchy.mGameObjectBoundingBoxes)
-		{
-			SceneView.boundingBoxRenderCommands.push_back(fnCreateBoundingBoxRenderCommand(BB, BBColor_GameObj));
-		}
-	}
-
-	if (SceneView.sceneParameters.bDrawMeshBoundingBoxes)
-	{
-		for (const FBoundingBox& BB : mBoundingBoxHierarchy.mMeshBoundingBoxes)
-		{
-			SceneView.boundingBoxRenderCommands.push_back(fnCreateBoundingBoxRenderCommand(BB, BBColor_Mesh));
-		}
-	}
-#endif
-
-}
-
 
 //-------------------------------------------------------------------------------
 //
