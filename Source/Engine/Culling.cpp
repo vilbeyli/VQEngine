@@ -163,18 +163,12 @@ size_t FFrustumCullWorkerContext::AddWorkerItem(FFrustumPlaneset&& FrustumPlaneS
 	vGameObjectPointerLists[i] = pGameObjects;
 	return i;
 }
-size_t FFrustumCullWorkerContext::AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects)
+void FFrustumCullWorkerContext::AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects, size_t i)
 {
 	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::AddWorkerItem()");
-
-	const size_t i = NumValidInputElements++;
-	//AllocInputMemoryIfNecessary(i);
-
 	vFrustumPlanes[i] = FrustumPlaneSet;
 	vBoundingBoxLists[i] = vBoundingBoxList;
 	vGameObjectPointerLists[i] = pGameObjects;
-
-	return i;
 }
 
 void FFrustumCullWorkerContext::ProcessWorkItems_SingleThreaded()

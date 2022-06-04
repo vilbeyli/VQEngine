@@ -161,7 +161,7 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	std::mutex mMutex;
 
 	size_t AddWorkerItem(     FFrustumPlaneset&& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects);
-	size_t AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects);
+	void AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects, size_t i);
 	inline void InvalidateContextData() { NumValidInputElements = 0; }
 	void ClearMemory();
 

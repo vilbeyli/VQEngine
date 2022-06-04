@@ -447,8 +447,6 @@ protected:
 	// CULLING DATA
 	//
 	SceneBoundingBoxHierarchy mBoundingBoxHierarchy;
-	/*TODO: remove*/mutable FFrustumCullWorkerContext MeshFrustumCullWorkerContext[2]; // 1 for scene view, 1 for shadow views
-	/*TODO: remove*/mutable FFrustumCullWorkerContext GameObjectFrustumCullWorkerContext[2]; // 1 for scene view, 1 for shadow views
 	mutable FFrustumCullWorkerContext mFrustumCullWorkerContext;
 	std::unordered_map<size_t, FSceneShadowView::FShadowView*> mFrustumIndex_pShadowViewLookup;
 

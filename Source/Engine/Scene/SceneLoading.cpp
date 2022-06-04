@@ -108,11 +108,7 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 		for(FSceneShadowView::FShadowView& sv : view.ShadowViews_Point) sv.ShadowMeshInstanceDataLookup.clear();
 		view.ShadowView_Directional.ShadowMeshInstanceDataLookup.clear();
 	}
-	for (int i = 0; i < 2; ++i)
-	{
-		MeshFrustumCullWorkerContext[i].ClearMemory();
-		GameObjectFrustumCullWorkerContext[i].ClearMemory();
-	}
+	mFrustumCullWorkerContext.ClearMemory();
 }
 
 
