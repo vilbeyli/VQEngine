@@ -20,7 +20,9 @@
 #include "../Core/Types.h"
 
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
+#include <array>
 
 class VQRenderer;
 
@@ -50,12 +52,36 @@ struct Model
 public:
 	struct Data
 	{
-		std::vector<MeshID>  mOpaueMeshIDs;
-		std::vector<MeshID>  mTransparentMeshIDs;
-		MeshMaterialLookup_t mOpaqueMaterials;
-		MeshMaterialLookup_t mTransparentMaterials;
-		inline bool HasMaterial() const { return !mOpaqueMaterials.empty() || !mTransparentMaterials.empty(); }
+		enum EMeshType
+		{
+			OPAQUE_MESH = 0,
+			TRANSPARENT_MESH,
+			TRANSLUCENT_MESH,
+
+			NUM_MESH_TYPES
+		};
+
+		inline bool HasMaterial() const { return mMaterials.empty(); }
 		bool AddMaterial(MeshID meshID, MaterialID matID, bool bTransparent = false);
+
+		inline size_t GetNumOpaqueMeshes() const { return mMeshMaterialIDPairsPerMeshType[OPAQUE_MESH].size(); }
+		inline size_t GetNumTransparentMeshes() const { return mMeshMaterialIDPairsPerMeshType[TRANSPARENT_MESH].size(); }
+		inline size_t GetNumTranslucentMeshes() const { return mMeshMaterialIDPairsPerMeshType[TRANSLUCENT_MESH].size(); }
+		inline size_t GetNumMeshesOfType(EMeshType eMeshType) const { return mMeshMaterialIDPairsPerMeshType[eMeshType].size(); }
+		size_t GetNumMeshesOfAllTypes() const;
+		
+		inline const std::vector<std::pair<MeshID, MaterialID>>& GetMeshMaterialIDPairs(EMeshType eMeshType) const { return mMeshMaterialIDPairsPerMeshType[eMeshType]; }
+		inline       std::vector<std::pair<MeshID, MaterialID>>& GetMeshMaterialIDPairs(EMeshType eMeshType)       { return mMeshMaterialIDPairsPerMeshType[eMeshType]; } // TODO: remove this if possible
+		inline       std::unordered_set<MaterialID>& GetMaterials() { return mMaterials; };
+
+		Data() {};
+		Data(MeshID meshID, MaterialID matID, EMeshType eType);
+		void AddMesh(MeshID meshID, MaterialID matID, EMeshType eType);
+
+	private:
+		std::array<std::vector<std::pair<MeshID, MaterialID>>, NUM_MESH_TYPES> mMeshMaterialIDPairsPerMeshType;
+
+		std::unordered_set<MaterialID> mMaterials;
 	};
 
 	//---------------------------------------

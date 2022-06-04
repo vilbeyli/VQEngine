@@ -633,30 +633,26 @@ static Model::Data ProcessAssimpNode(
 		
 		Mesh mesh = ProcessAssimpMesh(pRenderer, pAiMesh, pAiScene, ModelName);
 		MeshID id = pScene->AddMesh(std::move(mesh));
-		modelData.mOpaueMeshIDs.push_back(id);
-		
-		modelData.mOpaqueMaterials[modelData.mOpaueMeshIDs.back()] = matID;
-		if (mat.IsTransparent())
-		{
-			modelData.mTransparentMeshIDs.push_back(modelData.mOpaueMeshIDs.back());
-		}
+
+#if 0 // TODO: make sure this case works
+		modelData.AddMesh(id, matID, mat.IsTransparent() ? Model::Data::EMeshType::TRANSPARENT_MESH : Model::Data::EMeshType::OPAQUE_MESH);
+#else
+		modelData.AddMesh(id, matID, Model::Data::EMeshType::OPAQUE_MESH);
+		if(mat.IsTransparent())
+			modelData.AddMesh(id, matID, Model::Data::EMeshType::TRANSPARENT_MESH);
+#endif
 	} // for: NumMeshes
 
 	for (unsigned int i = 0; i < pNode->mNumChildren; i++)
 	{	// then do the same for each of its children
 		Model::Data childModelData = ProcessAssimpNode(ModelName, pNode->mChildren[i], pAiScene, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
-		std::vector<MeshID>& ChildMeshes = childModelData.mOpaueMeshIDs;
-		std::vector<MeshID>& ChildMeshesTransparent = childModelData.mTransparentMeshIDs;
+		const std::vector<std::pair<MeshID, MaterialID>>& ChildMeshes = childModelData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH);
+		const std::vector<std::pair<MeshID, MaterialID>>& ChildMeshesTransparent = childModelData.GetMeshMaterialIDPairs(Model::Data::EMeshType::TRANSPARENT_MESH);
 
-		std::copy(ChildMeshes.begin(), ChildMeshes.end(), std::back_inserter(modelData.mOpaueMeshIDs));
-		std::copy(ChildMeshesTransparent.begin(), ChildMeshesTransparent.end(), std::back_inserter(modelData.mTransparentMeshIDs));
-		for (auto& kvp : childModelData.mOpaqueMaterials)
-		{
-#if _DEBUG
-			assert(modelData.mOpaqueMaterials.find(kvp.first) == modelData.mOpaqueMaterials.end());
-#endif
-			modelData.mOpaqueMaterials[kvp.first] = kvp.second;
-		}
+		std::copy(ChildMeshes.begin(), ChildMeshes.end(), std::back_inserter(modelData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH)));
+		std::copy(ChildMeshesTransparent.begin(), ChildMeshesTransparent.end(), std::back_inserter(modelData.GetMeshMaterialIDPairs(Model::Data::EMeshType::TRANSPARENT_MESH)));
+		std::unordered_set<MaterialID>& childMats = childModelData.GetMaterials();
+		modelData.GetMaterials().insert(childMats.begin(), childMats.end());
 	} // for: NumChildren
 
 	return modelData;

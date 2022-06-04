@@ -581,7 +581,7 @@ void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBox(const GameObject* pOb
 	mGameObjectBoundingBoxGameObjectPointerMapping[iBB] = pObj;
 	
 	const Model& model = mModels.at(pObj->mModelID);
-	mGameObjectNumMeshes[iBB] = model.mData.mOpaueMeshIDs.size() + model.mData.mTransparentMeshIDs.size();
+	mGameObjectNumMeshes[iBB] = model.mData.GetNumMeshesOfAllTypes();
 }
 void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBoxes(const std::vector<GameObject*>& pObjects)
 {
@@ -615,10 +615,11 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBox(const GameObject* pObj, siz
 	// - no dynamic vertex animations, morphing etc
 	bool bAtLeastOneMesh = false;
 	size_t iMesh = iBB_Begin;
-	auto fnProcessMeshes = [&](const std::vector<MeshID>& meshIDs)
+	auto fnProcessMeshes = [&](const std::vector<std::pair<MeshID, MaterialID>>& meshIDs)
 	{
-		for (MeshID mesh : meshIDs)
+		for (const std::pair<MeshID, MaterialID>& meshMaterialIDPair : meshIDs)
 		{
+			MeshID mesh = meshMaterialIDPair.first;
 			FBoundingBox AABB = CalculateAxisAlignedBoundingBox(matWorld, mMeshes.at(mesh).GetLocalSpaceBoundingBox());
 
 			mMeshBoundingBoxes[iMesh] = std::move(AABB);
@@ -628,8 +629,10 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBox(const GameObject* pObj, siz
 			bAtLeastOneMesh = true;
 		}
 	};
-	fnProcessMeshes(model.mData.mOpaueMeshIDs);
-	fnProcessMeshes(model.mData.mTransparentMeshIDs);
+	fnProcessMeshes(model.mData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH));
+	fnProcessMeshes(model.mData.GetMeshMaterialIDPairs(Model::Data::EMeshType::TRANSPARENT_MESH));
+
+
 
 	assert(bAtLeastOneMesh);
 }
@@ -640,7 +643,7 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBoxes(const std::vector<GameObj
 	for (const GameObject* pObj : pObjects)
 	{
 		const Model& model = mModels.at(pObj->mModelID);
-		const size_t NumMeshes = model.mData.mOpaueMeshIDs.size() + model.mData.mTransparentMeshIDs.size();
+		const size_t NumMeshes = model.mData.GetNumMeshesOfAllTypes();
 		BuildMeshBoundingBox(pObj, i, i + NumMeshes);
 		i += NumMeshes;
 	}
@@ -653,7 +656,7 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBoxes_Range(const std::vector<G
 	for (size_t i = iBegin; i<iEnd; ++i)
 	{
 		const Model& model = mModels.at(pObjects[i]->mModelID);
-		const size_t NumMeshes = model.mData.mOpaueMeshIDs.size() + model.mData.mTransparentMeshIDs.size();
+		const size_t NumMeshes = model.mData.GetNumMeshesOfAllTypes();
 		BuildMeshBoundingBox(pObjects[i], iMeshBB + iMeshBBOffset, 0);
 		iMeshBBOffset += NumMeshes;
 	}
@@ -686,7 +689,7 @@ void SceneBoundingBoxHierarchy::CountGameObjectMeshes(const std::vector<GameObje
 	for (const GameObject* pObj : pObjects)
 	{
 		const Model& model = mModels.at(pObj->mModelID);
-		const size_t NumMeshes = model.mData.mOpaueMeshIDs.size() + model.mData.mTransparentMeshIDs.size();
+		const size_t NumMeshes = model.mData.GetNumMeshesOfAllTypes();
 		mNumValidMeshBoundingBoxes += NumMeshes;
 	}
 }

@@ -117,8 +117,8 @@ struct FSceneView
 #if RENDER_INSTANCED_SCENE_MESHES
 	//--------------------------------------------------------------------------------------------------------------------------------------------
 	// collect instance data based on Material, and then Mesh.
-	// In order to avoid clear/resize, we will track if the data is @bStale
-	// and if it is not stale, we also keep track of the number of valid instance data.
+	// In order to avoid clear, we also keep track of the number 
+	// of valid instance data.
 	//--------------------------------------------------------------------------------------------------------------------------------------------
 	// MAT0
 	//	+----MESH0
@@ -427,9 +427,9 @@ protected:
 	//
 	// SCENE ELEMENT CONTAINERS
 	//
-	MeshLookup_t             mMeshes;
-	ModelLookup_t            mModels;
-	MaterialLookup_t         mMaterials;
+	std::unordered_map<MeshID, Mesh>         mMeshes;
+	std::unordered_map<ModelID, Model>       mModels;
+	std::unordered_map<MaterialID, Material> mMaterials;
 	std::vector<GameObject*> mpObjects;
 	std::vector<Transform*>  mpTransforms;
 	std::vector<Camera>      mCameras;
@@ -444,7 +444,6 @@ protected:
 	//
 	// AUX DATA
 	//
-	std::unordered_map<const Transform*, DirectX::XMMATRIX> mTransformWorldMatrixHistory; // history for motion vectors
 	std::unordered_map<const Camera*   , DirectX::XMMATRIX> mViewProjectionMatrixHistory; // history for motion vectors
 
 	//

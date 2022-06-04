@@ -98,7 +98,6 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	LoadCameras(sceneRep.Cameras);
 	LoadPostProcessSettings();
 
-	mTransformWorldMatrixHistory.clear();
 	mViewProjectionMatrixHistory.clear();
 	mBoundingBoxHierarchy.Clear();
 	for (FSceneView& view : mFrameSceneViews)
@@ -212,7 +211,6 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 
 				// create/get mesh
 				MeshID meshID = mEngine.GetBuiltInMeshID(ObjRep.BuiltinMeshName);
-				model.mData.mOpaueMeshIDs.push_back(meshID);
 
 				// material
 				MaterialID matID = this->mDefaultMaterialID;
@@ -222,7 +220,9 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 				}
 				Material& mat = this->GetMaterial(matID);
 				const bool bTransparentMesh = mat.IsTransparent();
-				model.mData.mOpaqueMaterials[meshID] = matID; // todo: handle transparency
+
+				// model data
+				model.mData = Model::Data(meshID, matID, Model::Data::OPAQUE_MESH);
 
 				model.mbLoaded = true;
 				pObj->mModelID = mID;
@@ -231,7 +231,6 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 			{
 				mAssetLoader.QueueModelLoad(pObj, ObjRep.ModelFilePath, ObjRep.ModelName);
 			}
-
 
 			mpObjects.push_back(pObj);
 		}
@@ -444,13 +443,15 @@ void Scene::CalculateGameObjectLocalSpaceBoundingBoxes()
 			vMaxs = XMVectorMax(vMaxs, vMinMesh);
 			vMaxs = XMVectorMax(vMaxs, vMaxMesh);
 		};
-		for (MeshID mesh : model.mData.mOpaueMeshIDs)
+		for (std::pair<MeshID, MaterialID> meshMaterialIDPair : model.mData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH))
 		{
+			MeshID mesh = meshMaterialIDPair.first;
 			const FBoundingBox& AABB_Mesh = mMeshes.at(mesh).GetLocalSpaceBoundingBox();
 			fnProcessMeshAABB(AABB_Mesh);
 		}
-		for (MeshID mesh : model.mData.mTransparentMeshIDs)
+		for (std::pair<MeshID, MaterialID> meshMaterialIDPair : model.mData.GetMeshMaterialIDPairs(Model::Data::EMeshType::TRANSPARENT_MESH))
 		{
+			MeshID mesh = meshMaterialIDPair.first;
 			const FBoundingBox& AABB_Mesh = mMeshes.at(mesh).GetLocalSpaceBoundingBox();
 			fnProcessMeshAABB(AABB_Mesh);
 		}

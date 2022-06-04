@@ -862,7 +862,6 @@ static void CollectInstanceData(
 	, const DirectX::XMMATRIX matViewProjHistory
 	, const std::vector<Transform*>& mpTransforms
 	, const ModelLookup_t& mModels
-	, const std::unordered_map<const Transform*, DirectX::XMMATRIX>& mTransformWorldMatrixHistory
 )
 {
 	SCOPED_CPU_MARKER("CollectInstanceData");
@@ -875,14 +874,19 @@ static void CollectInstanceData(
 		// read game object data
 		const GameObject* pGameObject = MeshBoundingBoxGameObjectPointers[BBIndex];
 		Transform* const& pTF = mpTransforms.at(pGameObject->mTransformID);
-		const Model& model = mModels.at(pGameObject->mModelID);
 		const XMMATRIX matWorld = pTF->matWorldTransformation();
-		const XMMATRIX matWorldHistory =
-			  mTransformWorldMatrixHistory.find(pTF) != mTransformWorldMatrixHistory.end()
-			? mTransformWorldMatrixHistory.at(pTF)
-			: matWorld;
-		const MaterialID matID = model.mData.mOpaqueMaterials.at(meshID);
+		const XMMATRIX matWorldHistory = pTF->matWorldTransformationPrev();
 		const XMMATRIX matNormal = pTF->NormalMatrix(matWorld);
+		const Model& model = mModels.at(pGameObject->mModelID);
+		
+		MaterialID matID = INVALID_ID;
+		const auto& vMeshMatIDPairs = model.mData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH);
+		for(const auto& pr : vMeshMatIDPairs)
+			if (pr.first == meshID)
+			{
+				matID = pr.second;
+				break;
+			}
 
 		{
 			//SCOPED_CPU_MARKER("WriteMap");
@@ -927,7 +931,6 @@ void Scene::BatchInstanceData_SceneMeshes(
 		, matViewProjHistory
 		, mpTransforms
 		, mModels
-		, mTransformWorldMatrixHistory
 	);
 
 	int NumInstancedRenderCommands = 0;
@@ -972,7 +975,6 @@ void Scene::BatchInstanceData_SceneMeshes(
 		// for-each material
 		for (auto itMat = MaterialMeshInstanceDataLookup.begin(); itMat != MaterialMeshInstanceDataLookup.end(); ++itMat)
 		{
-			SCOPED_CPU_MARKER("Material");
 			const MaterialID matID = itMat->first;
 			const std::unordered_map<MeshID, FSceneView::FMeshInstanceData>& meshInstanceDataLookup = itMat->second;
 

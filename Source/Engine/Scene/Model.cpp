@@ -25,3 +25,22 @@ bool Model::Data::AddMaterial(MeshID meshID, MaterialID matID, bool bTransparent
 	assert(false);
 	return false;
 }
+
+size_t Model::Data::GetNumMeshesOfAllTypes() const
+{
+	size_t NumMeshes = 0;
+	for (const auto& vPairs : mMeshMaterialIDPairsPerMeshType) NumMeshes += vPairs.size();
+	return NumMeshes;
+}
+
+Model::Data::Data(MeshID meshID, MaterialID matID, EMeshType eType)
+{
+	AddMesh(meshID, matID, eType);
+}
+
+void Model::Data::AddMesh(MeshID meshID, MaterialID matID, EMeshType eType)
+{
+	mMeshMaterialIDPairsPerMeshType[eType].push_back({ meshID, matID });
+	if (matID != INVALID_ID)
+		mMaterials.emplace(matID);
+}
