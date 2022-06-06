@@ -122,7 +122,7 @@ struct FBoundingBox
 //
 //------------------------------------------------------------------------------------------------------------------------------
 bool IsSphereIntersectingFurstum(const FFrustumPlaneset& FrustumPlanes, const FSphere& Sphere);
-bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes, const FBoundingBox& BBox);
+bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset FrustumPlanes, const FBoundingBox& BBox);
 bool IsFrustumIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes0, const FFrustumPlaneset& FrustumPlanes1);
 
 
@@ -154,14 +154,19 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	
 	// Cold Data : used after culling
 	/*in */ std::vector<std::vector<const GameObject*>> vGameObjectPointerLists; // Associates BoundingBoxes with pGameObjects
+	/*in */ std::vector<std::vector<MaterialID>>        vMaterialIDLists; // Associates BoundingBoxes with MaterialIDs
 
 	//std::vector<int> vLightMovementTypeID; // index to access light type vectors: [0]:static, [1]:stationary, [2]:dynamic
 
 	std::atomic<size_t> NumValidInputElements = 0;
 	std::mutex mMutex;
 
-	size_t AddWorkerItem(     FFrustumPlaneset&& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects);
-	void AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects, size_t i);
+	void AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet
+		, const std::vector<FBoundingBox>& vBoundingBoxList
+		, const std::vector<const GameObject*>& pGameObjects
+		, const std::vector<MaterialID>& vMaterials
+		, const  size_t i
+	);
 	inline void InvalidateContextData() { NumValidInputElements = 0; }
 	void ClearMemory();
 

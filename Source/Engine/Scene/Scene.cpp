@@ -643,12 +643,22 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 				{
 					SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
 					for (size_t i = Range.first; i <= Range.second; ++i)
-						mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i], BVH.mMeshBoundingBoxes, BVH.mMeshBoundingBoxGameObjectPointerMapping, i);
+						mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i]
+							, BVH.mMeshBoundingBoxes
+							, BVH.mMeshBoundingBoxGameObjectPointerMapping
+							, BVH.mMeshBoundingBoxMaterialIDMapping
+							, i
+						);
 				});
 			}
 
 			for (size_t i = vRanges[0].first; i <= vRanges[0].second; ++i)
-				mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i], BVH.mMeshBoundingBoxes, BVH.mMeshBoundingBoxGameObjectPointerMapping, i);
+				mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i]
+					, BVH.mMeshBoundingBoxes
+					, BVH.mMeshBoundingBoxGameObjectPointerMapping
+					, BVH.mMeshBoundingBoxMaterialIDMapping
+					, i
+				);
 		}
 #endif
 	}
@@ -855,6 +865,7 @@ static void CollectInstanceData(
 	  std::unordered_map<MaterialID, std::unordered_map<MeshID, FSceneView::FMeshInstanceData>>& MaterialMeshInstanceDataLookup
 	, const std::vector<const GameObject*>& MeshBoundingBoxGameObjectPointers
 	, const std::vector<MeshID           >& MeshBoundingBoxMeshIDMapping
+	, const std::vector<MaterialID       >& mMeshBoundingBoxMaterialIDMapping
 	, const std::vector<size_t           >& CulledBoundingBoxIndexList_Msh
 	, size_t iBegin
 	, size_t iEnd
@@ -877,17 +888,9 @@ static void CollectInstanceData(
 		const XMMATRIX matWorld = pTF->matWorldTransformation();
 		const XMMATRIX matWorldHistory = pTF->matWorldTransformationPrev();
 		const XMMATRIX matNormal = pTF->NormalMatrix(matWorld);
-		const Model& model = mModels.at(pGameObject->mModelID);
 		
-		MaterialID matID = INVALID_ID;
-		const auto& vMeshMatIDPairs = model.mData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH);
-		for(const auto& pr : vMeshMatIDPairs)
-			if (pr.first == meshID)
-			{
-				matID = pr.second;
-				break;
-			}
-
+		MaterialID matID = mMeshBoundingBoxMaterialIDMapping[BBIndex];
+		
 		{
 			//SCOPED_CPU_MARKER("WriteMap");
 			// 
@@ -911,6 +914,7 @@ void Scene::BatchInstanceData_SceneMeshes(
 	  std::vector<MeshRenderCommand_t>* pMeshRenderCommands
 	, std::unordered_map < MaterialID, std::unordered_map<MeshID, FSceneView::FMeshInstanceData>>& MaterialMeshInstanceDataLookup
 	, const std::vector<const GameObject*>& MeshBoundingBoxGameObjectPointers
+	, const std::vector<MaterialID>& MeshBoundingBoxMaterialIDs
 	, const std::vector<size_t>& CulledBoundingBoxIndexList_Msh
 	, const DirectX::XMMATRIX& matViewProj
 	, const DirectX::XMMATRIX& matViewProjHistory
@@ -924,6 +928,7 @@ void Scene::BatchInstanceData_SceneMeshes(
 	CollectInstanceData(MaterialMeshInstanceDataLookup
 		, MeshBoundingBoxGameObjectPointers
 		, mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping
+		, MeshBoundingBoxMaterialIDs
 		, CulledBoundingBoxIndexList_Msh
 		, 0
 		, CulledBoundingBoxIndexList_Msh.size()
@@ -1186,6 +1191,7 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 			BatchInstanceData_SceneMeshes(&SceneView.meshRenderCommands
 				, SceneView.MaterialMeshInstanceDataLookup
 				, mFrustumCullWorkerContext.vGameObjectPointerLists[0]
+				, mFrustumCullWorkerContext.vMaterialIDLists[0]
 				, mFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[0]
 				, SceneView.viewProj
 				, SceneView.viewProjPrev

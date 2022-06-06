@@ -88,7 +88,7 @@ bool IsSphereIntersectingFurstum(const FFrustumPlaneset& FrustumPlanes, const FS
 #endif
 }
 
-bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes, const FBoundingBox& BBox)
+bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset FrustumPlanes, const FBoundingBox& BBox)
 {
 	constexpr float EPSILON = 0.000002f;
 	const XMVECTOR V_EPSILON = XMVectorSet(EPSILON, EPSILON, EPSILON, EPSILON);
@@ -141,6 +141,7 @@ void FFrustumCullWorkerContext::AllocInputMemoryIfNecessary(size_t sz)
 		vFrustumPlanes.resize(sz);
 		vBoundingBoxLists.resize(sz);
 		vGameObjectPointerLists.resize(sz);
+		vMaterialIDLists.resize(sz);
 	}
 }
 void FFrustumCullWorkerContext::ClearMemory()
@@ -149,28 +150,23 @@ void FFrustumCullWorkerContext::ClearMemory()
 	vBoundingBoxLists.clear();
 	vGameObjectPointerLists.clear();
 	vCulledBoundingBoxIndexListPerView.clear();
+	vMaterialIDLists.clear();
 	NumValidInputElements = 0;
 }
 
-
-size_t FFrustumCullWorkerContext::AddWorkerItem(FFrustumPlaneset&& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects)
-{
-	assert(false);
-	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::AddWorkerItem()");
-	const size_t i = NumValidInputElements++;
-	AllocInputMemoryIfNecessary(i);
-
-	vFrustumPlanes[i] = FrustumPlaneSet;
-	vBoundingBoxLists[i] = vBoundingBoxList;
-	vGameObjectPointerLists[i] = pGameObjects;
-	return i;
-}
-void FFrustumCullWorkerContext::AddWorkerItem(const FFrustumPlaneset FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects, size_t i)
+void FFrustumCullWorkerContext::AddWorkerItem(
+	const FFrustumPlaneset& FrustumPlaneSet
+	, const std::vector<FBoundingBox>& vBoundingBoxList
+	, const std::vector<const GameObject*>& pGameObjects
+	, const std::vector<MaterialID>& vMaterials
+	, size_t i
+)
 {
 	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::AddWorkerItem()");
 	vFrustumPlanes[i] = FrustumPlaneSet;
 	vBoundingBoxLists[i] = vBoundingBoxList;
 	vGameObjectPointerLists[i] = pGameObjects;
+	vMaterialIDLists[i] = vMaterials;
 }
 
 void FFrustumCullWorkerContext::ProcessWorkItems_SingleThreaded()
@@ -622,10 +618,12 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBox(const GameObject* pObj, siz
 		for (const std::pair<MeshID, MaterialID>& meshMaterialIDPair : meshIDs)
 		{
 			MeshID mesh = meshMaterialIDPair.first;
+			MaterialID mat = meshMaterialIDPair.second;
 			FBoundingBox AABB = CalculateAxisAlignedBoundingBox(matWorld, mMeshes.at(mesh).GetLocalSpaceBoundingBox());
 
 			mMeshBoundingBoxes[iMesh] = std::move(AABB);
 			mMeshBoundingBoxMeshIDMapping[iMesh] = mesh;
+			mMeshBoundingBoxMaterialIDMapping[iMesh] = mat;
 			mMeshBoundingBoxGameObjectPointerMapping[iMesh] = pObj;
 			++iMesh;
 			bAtLeastOneMesh = true;
@@ -670,6 +668,7 @@ void SceneBoundingBoxHierarchy::Clear()
 	mGameObjectBoundingBoxes.clear();
 	mMeshBoundingBoxes.clear();
 	mMeshBoundingBoxMeshIDMapping.clear();
+	mMeshBoundingBoxMaterialIDMapping.clear();
 	mMeshBoundingBoxGameObjectPointerMapping.clear();
 	mGameObjectBoundingBoxGameObjectPointerMapping.clear();
 }
@@ -701,6 +700,7 @@ void SceneBoundingBoxHierarchy::ResizeGameMeshBoxContainer(size_t size)
 	SCOPED_CPU_MARKER("BuildMeshBoundingBoxes_Rsz");
 	mMeshBoundingBoxes.resize(size);
 	mMeshBoundingBoxMeshIDMapping.resize(size);
+	mMeshBoundingBoxMaterialIDMapping.resize(size);
 	mMeshBoundingBoxGameObjectPointerMapping.resize(size);
 }
 

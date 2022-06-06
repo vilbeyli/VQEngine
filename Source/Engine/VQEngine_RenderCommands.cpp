@@ -35,7 +35,6 @@
 //
 void VQEngine::DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh, uint32 NumInstances /*= 1*/)
 {
-	SCOPED_CPU_MARKER("DrawMesh");
 	using namespace DirectX;
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 
