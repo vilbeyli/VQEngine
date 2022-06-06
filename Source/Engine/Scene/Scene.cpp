@@ -865,7 +865,7 @@ static void CollectInstanceData(
 )
 {
 	SCOPED_CPU_MARKER("CollectInstanceData");
-	for (size_t i = iBegin; i <= iEnd; ++i)
+	for (size_t i = iBegin; i < iEnd; ++i)
 	{
 		const size_t BBIndex = CulledBoundingBoxIndexList_Msh[i];
 		assert(BBIndex < MeshBoundingBoxMeshIDMapping.size());
@@ -926,7 +926,7 @@ void Scene::BatchInstanceData_SceneMeshes(
 		, mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping
 		, CulledBoundingBoxIndexList_Msh
 		, 0
-		, CulledBoundingBoxIndexList_Msh.size()-1
+		, CulledBoundingBoxIndexList_Msh.size()
 		, matViewProj
 		, matViewProjHistory
 		, mpTransforms
