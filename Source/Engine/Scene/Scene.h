@@ -269,7 +269,8 @@ private:
 	std::vector<FBoundingBox>      mMeshBoundingBoxes;
 	std::vector<MeshID>            mMeshBoundingBoxMeshIDMapping;
 	std::vector<MaterialID>        mMeshBoundingBoxMaterialIDMapping;
-	std::vector<const GameObject*> mMeshBoundingBoxGameObjectPointerMapping; 
+	std::vector<Transform>         mMeshTransforms;
+	std::vector<const GameObject*> mMeshBoundingBoxGameObjectPointerMapping;
 	//------------------------------------------------------
 
 	// scene data container references
@@ -353,8 +354,6 @@ private: // Derived Scenes shouldn't access these functions
 	void BatchInstanceData_SceneMeshes(
 		  std::vector<MeshRenderCommand_t>* pMeshRenderCommands
 		, std::unordered_map < MaterialID, std::unordered_map<MeshID, FSceneView::FMeshInstanceData>>& MaterialMeshInstanceDataLookup
-		, const std::vector<const GameObject*>& MeshBoundingBoxGameObjectPointers
-		, const std::vector<MaterialID>& MeshBoundingBoxMaterialIDs
 		, const std::vector<size_t>& CulledBoundingBoxIndexList_Msh
 		, const DirectX::XMMATRIX& matViewProj
 		, const DirectX::XMMATRIX& matViewProjHistory

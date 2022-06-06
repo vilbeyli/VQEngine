@@ -140,17 +140,13 @@ void FFrustumCullWorkerContext::AllocInputMemoryIfNecessary(size_t sz)
 		SCOPED_CPU_MARKER("AllocMem");
 		vFrustumPlanes.resize(sz);
 		vBoundingBoxLists.resize(sz);
-		vGameObjectPointerLists.resize(sz);
-		vMaterialIDLists.resize(sz);
 	}
 }
 void FFrustumCullWorkerContext::ClearMemory()
 {
 	vFrustumPlanes.clear();
 	vBoundingBoxLists.clear();
-	vGameObjectPointerLists.clear();
 	vCulledBoundingBoxIndexListPerView.clear();
-	vMaterialIDLists.clear();
 	NumValidInputElements = 0;
 }
 
@@ -165,8 +161,6 @@ void FFrustumCullWorkerContext::AddWorkerItem(
 	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::AddWorkerItem()");
 	vFrustumPlanes[i] = FrustumPlaneSet;
 	vBoundingBoxLists[i] = vBoundingBoxList;
-	vGameObjectPointerLists[i] = pGameObjects;
-	vMaterialIDLists[i] = vMaterials;
 }
 
 void FFrustumCullWorkerContext::ProcessWorkItems_SingleThreaded()
@@ -296,19 +290,17 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 	for (size_t iWork = iRangeBegin; iWork <= iRangeEnd; ++iWork)
 	{
 		{
-			{
-				SCOPED_CPU_MARKER("Clear");
-				vCulledBoundingBoxIndexListPerView[iWork].clear();
-			}
+			SCOPED_CPU_MARKER("Clear");
+			vCulledBoundingBoxIndexListPerView[iWork].clear();
+		}
 
-			SCOPED_CPU_MARKER("CullFrustum");
-			// process bounding box list per frustum
-			for (size_t bb = 0; bb < vBoundingBoxLists[iWork].size(); ++bb)
+		SCOPED_CPU_MARKER("CullFrustum");
+		// process bounding box list per frustum
+		for (size_t bb = 0; bb < vBoundingBoxLists[iWork].size(); ++bb)
+		{
+			if (IsBoundingBoxIntersectingFrustum(vFrustumPlanes[iWork], vBoundingBoxLists[iWork][bb]))
 			{
-				if (IsBoundingBoxIntersectingFrustum(vFrustumPlanes[iWork], vBoundingBoxLists[iWork][bb]))
-				{
-					vCulledBoundingBoxIndexListPerView[iWork].push_back(bb); // grows as we go (no pre-alloc)
-				}
+				vCulledBoundingBoxIndexListPerView[iWork].push_back(bb); // grows as we go (no pre-alloc)
 			}
 		}
 	}
@@ -625,6 +617,7 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBox(const GameObject* pObj, siz
 			mMeshBoundingBoxMeshIDMapping[iMesh] = mesh;
 			mMeshBoundingBoxMaterialIDMapping[iMesh] = mat;
 			mMeshBoundingBoxGameObjectPointerMapping[iMesh] = pObj;
+			mMeshTransforms[iMesh] = *mpTransforms.at(pObj->mTransformID);
 			++iMesh;
 			bAtLeastOneMesh = true;
 		}
@@ -669,6 +662,7 @@ void SceneBoundingBoxHierarchy::Clear()
 	mMeshBoundingBoxes.clear();
 	mMeshBoundingBoxMeshIDMapping.clear();
 	mMeshBoundingBoxMaterialIDMapping.clear();
+	mMeshTransforms.clear();
 	mMeshBoundingBoxGameObjectPointerMapping.clear();
 	mGameObjectBoundingBoxGameObjectPointerMapping.clear();
 }
@@ -701,6 +695,7 @@ void SceneBoundingBoxHierarchy::ResizeGameMeshBoxContainer(size_t size)
 	mMeshBoundingBoxes.resize(size);
 	mMeshBoundingBoxMeshIDMapping.resize(size);
 	mMeshBoundingBoxMaterialIDMapping.resize(size);
+	mMeshTransforms.resize(size);
 	mMeshBoundingBoxGameObjectPointerMapping.resize(size);
 }
 

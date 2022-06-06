@@ -151,10 +151,6 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	// store the index of the surviving bounding box in a list, per view frustum
 	/*out*/ std::vector<IndexList_t> vCulledBoundingBoxIndexListPerView; 
 	// Hot Data ------------------------------------------------------------------------------------------------------------
-	
-	// Cold Data : used after culling
-	/*in */ std::vector<std::vector<const GameObject*>> vGameObjectPointerLists; // Associates BoundingBoxes with pGameObjects
-	/*in */ std::vector<std::vector<MaterialID>>        vMaterialIDLists; // Associates BoundingBoxes with MaterialIDs
 
 	//std::vector<int> vLightMovementTypeID; // index to access light type vectors: [0]:static, [1]:stationary, [2]:dynamic
 
