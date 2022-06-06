@@ -28,8 +28,6 @@
 #include "../../Libs/VQUtils/Source/Image.h"
 #include "../../Libs/D3D12MA/src/Common.h"
 
-#include "../Engine/GPUMarker.h"
-
 #include <cassert>
 #include <atomic>
 
@@ -1458,7 +1456,6 @@ void VQRenderer::ProcessTextureUploadQueue()
 
 void VQRenderer::TextureUploadThread_Main()
 {
-	SCOPED_CPU_MARKER("TextureUploadThread_Main()");
 	while (!mbExitUploadThread)
 	{
 		mSignal_UploadThreadWorkReady.Wait([&]() { return mbExitUploadThread.load() || !mTextureUploadQueue.empty(); });
