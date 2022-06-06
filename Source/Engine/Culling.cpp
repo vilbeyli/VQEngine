@@ -91,7 +91,8 @@ bool IsSphereIntersectingFurstum(const FFrustumPlaneset& FrustumPlanes, const FS
 bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes, const FBoundingBox& BBox)
 {
 	constexpr float EPSILON = 0.000002f;
-
+	const XMVECTOR V_EPSILON = XMVectorSet(EPSILON, EPSILON, EPSILON, EPSILON);
+	
 	// this is a hotspot: GetCornerPointsV4() creating the bounding box on the stack may slow it down.
 	//                    TODO: test with a pre-generated set of corners instead of doing it on the fly.
 	const std::array<XMFLOAT4, 8> vPoints = BBox.GetCornerPointsF4(); // TODO: optimize XMLoadFloat4
@@ -103,9 +104,10 @@ bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes, con
 		{
 			XMVECTOR vPoint = XMLoadFloat4(&f4Point);
 			XMVECTOR vPlane = XMLoadFloat4(&FrustumPlanes.abcd[p]);
-			if (XMVector4Dot(vPoint, vPlane).m128_f32[0] > EPSILON)
+			XMVECTOR cmp = XMVectorGreater(XMVector4Dot(vPoint, vPlane), V_EPSILON);
+			bInside = cmp.m128_u32[0];
+			if (bInside)
 			{
-				bInside = true;
 				break;
 			}
 		}
@@ -163,7 +165,7 @@ size_t FFrustumCullWorkerContext::AddWorkerItem(FFrustumPlaneset&& FrustumPlaneS
 	vGameObjectPointerLists[i] = pGameObjects;
 	return i;
 }
-void FFrustumCullWorkerContext::AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects, size_t i)
+void FFrustumCullWorkerContext::AddWorkerItem(const FFrustumPlaneset FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects, size_t i)
 {
 	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::AddWorkerItem()");
 	vFrustumPlanes[i] = FrustumPlaneSet;
