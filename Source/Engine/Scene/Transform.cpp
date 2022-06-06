@@ -78,7 +78,7 @@ XMMATRIX Transform::matWorldTransformation() const
 	XMVECTOR scale = XMLoadFloat3(&_scale);
 	XMVECTOR translation = XMLoadFloat3(&_position);
 
-	Quaternion Q = _rotation;
+	const Quaternion& Q = _rotation;
 	XMVECTOR rotation = XMVectorSet(Q.V.x, Q.V.y, Q.V.z, Q.S);
 	XMVECTOR rotOrigin = XMVectorZero();
 	return XMMatrixAffineTransformation(scale, rotOrigin, rotation, translation);
@@ -89,7 +89,7 @@ DirectX::XMMATRIX Transform::matWorldTransformationPrev() const
 	XMVECTOR scale = XMLoadFloat3(&_scale);
 	XMVECTOR translation = XMLoadFloat3(&_positionPrev);
 
-	Quaternion Q = _rotation;
+	const Quaternion& Q = _rotation;
 	XMVECTOR rotation = XMVectorSet(Q.V.x, Q.V.y, Q.V.z, Q.S);
 	XMVECTOR rotOrigin = XMVectorZero();
 	return XMMatrixAffineTransformation(scale, rotOrigin, rotation, translation);
@@ -99,7 +99,7 @@ DirectX::XMMATRIX Transform::WorldTransformationMatrix_NoScale() const
 {
 	XMVECTOR scale = XMVectorSet(1.0f, 1.0f, 1.0f, 0.0f);
 	XMVECTOR translation = XMLoadFloat3(&_position);
-	Quaternion Q = _rotation;
+	const Quaternion& Q = _rotation;
 	XMVECTOR rotation = XMVectorSet(Q.V.x, Q.V.y, Q.V.z, Q.S);
 	XMVECTOR rotOrigin = XMVectorZero();
 	return XMMatrixAffineTransformation(scale, rotOrigin, rotation, translation);
