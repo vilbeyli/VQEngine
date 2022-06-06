@@ -134,7 +134,6 @@ bool IsFrustumIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes0, const 
 //------------------------------------------------------------------------------------------------------------------------------
 void FFrustumCullWorkerContext::AllocInputMemoryIfNecessary(size_t sz)
 {
-	std::unique_lock<std::mutex> lk(mMutex);
 	if (vFrustumPlanes.size() < sz)
 	{
 		SCOPED_CPU_MARKER("AllocMem");

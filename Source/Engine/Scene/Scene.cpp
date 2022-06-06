@@ -48,7 +48,7 @@
 //-------------------------------------------------------------------------------
 // Multithreading
 //-------------------------------------------------------------------------------
-#define UPDATE_THREAD__ENABLE_WORKERS 1 // TODO: fix single-threaded path
+#define UPDATE_THREAD__ENABLE_WORKERS 1
 //-------------------------------------------------------------------------------
 
 using namespace DirectX;
@@ -614,45 +614,41 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 	}
 
 	mFrustumCullWorkerContext.InvalidateContextData();
+	mFrustumCullWorkerContext.AllocInputMemoryIfNecessary(FrustumPlanesets.size());
+	mFrustumCullWorkerContext.NumValidInputElements = FrustumPlanesets.size();
 
 #if UPDATE_THREAD__ENABLE_WORKERS
-
 	{
 		SCOPED_CPU_MARKER("InitFrustumCullWorkerContexts");
 #if 0 // debug-single threaded
 		for (size_t i = 0; i < FrustumPlanesets.size(); ++i)
 			mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i], BVH.mMeshBoundingBoxes, BVH.mMeshBoundingBoxGameObjectPointerMapping, i);
 #else
+		const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(FrustumPlanesets.size(), UpdateWorkerThreadPool.GetThreadPoolSize()+1);
 		{
-			mFrustumCullWorkerContext.AllocInputMemoryIfNecessary(FrustumPlanesets.size());
-			mFrustumCullWorkerContext.NumValidInputElements = FrustumPlanesets.size();
-
-			const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(FrustumPlanesets.size(), UpdateWorkerThreadPool.GetThreadPoolSize()+1);
+			SCOPED_CPU_MARKER("DispatchWorkers");
+			size_t currRange = 0;
+			for (const std::pair<size_t, size_t>& Range : vRanges)
 			{
-				SCOPED_CPU_MARKER("DispatchWorkers");
-				size_t currRange = 0;
-				for (const std::pair<size_t, size_t>& Range : vRanges)
+				if (currRange == 0)
 				{
-					if (currRange == 0)
-					{
-						++currRange; // skip the first range, and do it on this thread after dispatches
-						continue;
-					}
-					const size_t& iBegin = Range.first;
-					const size_t& iEnd = Range.second; // inclusive
-					assert(iBegin <= iEnd); // ensure work context bounds
-					UpdateWorkerThreadPool.AddTask([Range, &FrustumPlanesets, &BVH, this]()
-						{
-							SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
-							for (size_t i = Range.first; i <= Range.second; ++i)
-								mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i]
-									, BVH.mMeshBoundingBoxes
-									, BVH.mMeshBoundingBoxGameObjectPointerMapping
-									, BVH.mMeshBoundingBoxMaterialIDMapping
-									, i
-								);
-						});
+					++currRange; // skip the first range, and do it on this thread after dispatches
+					continue;
 				}
+				const size_t& iBegin = Range.first;
+				const size_t& iEnd = Range.second; // inclusive
+				assert(iBegin <= iEnd); // ensure work context bounds
+				UpdateWorkerThreadPool.AddTask([Range, &FrustumPlanesets, &BVH, this]()
+					{
+						SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+						for (size_t i = Range.first; i <= Range.second; ++i)
+							mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i]
+								, BVH.mMeshBoundingBoxes
+								, BVH.mMeshBoundingBoxGameObjectPointerMapping
+								, BVH.mMeshBoundingBoxMaterialIDMapping
+								, i
+							);
+					});
 			}
 
 			for (size_t i = vRanges[0].first; i <= vRanges[0].second; ++i)
@@ -675,12 +671,24 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 #else
 	{
 		SCOPED_CPU_MARKER("InitWorkerContext_MainView");
-		mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[0], BVH.mMeshBoundingBoxes, BVH.mMeshBoundingBoxGameObjectPointerMapping);
+		mFrustumCullWorkerContext.AddWorkerItem(
+			FrustumPlanesets[0]
+			, BVH.mMeshBoundingBoxes
+			, BVH.mMeshBoundingBoxGameObjectPointerMapping
+			, BVH.mMeshBoundingBoxMaterialIDMapping
+			, 0
+		);
 	}
 	{
 		SCOPED_CPU_MARKER("InitWorkerContext_ShadowViews");
 		for(size_t i=1; i<FrustumPlanesets.size(); ++i)
-			mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i], BVH.mMeshBoundingBoxes, BVH.mMeshBoundingBoxGameObjectPointerMapping);
+			mFrustumCullWorkerContext.AddWorkerItem(
+				FrustumPlanesets[i]
+				, BVH.mMeshBoundingBoxes
+				, BVH.mMeshBoundingBoxGameObjectPointerMapping
+				, BVH.mMeshBoundingBoxMaterialIDMapping
+				, i
+			);
 	}
 #endif
 }
@@ -774,8 +782,9 @@ void Scene::BatchInstanceData_BoundingBox(FSceneView& SceneView
 	)
 	{
 		SCOPED_CPU_MARKER(strMarker);
+
 		constexpr size_t MIN_NUM_BOUNDING_BOX_FOR_THREADING = 128;
-		if (BBs.size() < MIN_NUM_BOUNDING_BOX_FOR_THREADING)
+		if (BBs.size() < MIN_NUM_BOUNDING_BOX_FOR_THREADING || !UPDATE_THREAD__ENABLE_WORKERS)
 		{
 			BatchBoundingBoxRenderCommandData(cmds
 				, BBs
@@ -880,8 +889,8 @@ void Scene::BatchInstanceData_SceneMeshes(
 
 	{
 		SCOPED_CPU_MARKER("CollectInstanceData");
-		const std::vector<MeshID>& MeshBB_MeshID = mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping;
-		const std::vector<MaterialID>& MeshBB_MatID = mBoundingBoxHierarchy.mMeshBoundingBoxMaterialIDMapping;
+		const std::vector<MeshID>& MeshBB_MeshID        = mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping;
+		const std::vector<MaterialID>& MeshBB_MatID     = mBoundingBoxHierarchy.mMeshBoundingBoxMaterialIDMapping;
 		const std::vector<Transform>& MeshBB_Transforms = mBoundingBoxHierarchy.mMeshTransforms;
 
 		const size_t iBegin = 0;
@@ -1161,7 +1170,17 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 
 	// TODO: move outside of this function scope to save alloc-realloc time
 	std::vector< FFrustumRenderCommandRecorderContext> WorkerContexts(NumShadowMeshFrustums); 
+	{
+		SCOPED_CPU_MARKER("PrepareShadowViewWorkerContexts");
+		for (size_t iFrustum = 1; iFrustum <= NumShadowMeshFrustums; ++iFrustum) // iFrustum==0 is for mainView, start from 1
+		{
+			FSceneShadowView::FShadowView* pShadowView = mFrustumIndex_pShadowViewLookup.at(iFrustum);
+			const std::vector<size_t>& CulledBoundingBoxIndexList_Msh = mFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[iFrustum];
+			WorkerContexts[iFrustum - 1] = { iFrustum, &CulledBoundingBoxIndexList_Msh, pShadowView };
+		}
+	}
 
+#if UPDATE_THREAD__ENABLE_WORKERS
 	{
 		SCOPED_CPU_MARKER("DispatchWorker_MainView");
 		UpdateWorkerThreadPool.AddTask([&]()
@@ -1174,15 +1193,6 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 				, SceneView.viewProjPrev
 			);
 		});
-	}
-	{
-		SCOPED_CPU_MARKER("PrepareShadowViewWorkerContexts");
-		for (size_t iFrustum = 1; iFrustum <= NumShadowMeshFrustums; ++iFrustum) // iFrustum==0 is for mainView, start from 1
-		{
-			FSceneShadowView::FShadowView* pShadowView = mFrustumIndex_pShadowViewLookup.at(iFrustum);
-			const std::vector<size_t>& CulledBoundingBoxIndexList_Msh = mFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[iFrustum];
-			WorkerContexts[iFrustum-1] = { iFrustum, &CulledBoundingBoxIndexList_Msh, pShadowView };
-		}
 	}
 	{
 		SCOPED_CPU_MARKER("DispatchWorkers_ShadowViews");
@@ -1212,7 +1222,22 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
 		while (UpdateWorkerThreadPool.GetNumActiveTasks() != 0);
 	}
-	
+#else
+	BatchInstanceData_SceneMeshes(&SceneView.meshRenderCommands
+		, SceneView.MaterialMeshInstanceDataLookup
+		, mFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[0]
+		, SceneView.viewProj
+		, SceneView.viewProjPrev
+	);
+	for (size_t iFrustum = 1; iFrustum <= NumShadowMeshFrustums; ++iFrustum)
+	{
+		const FFrustumRenderCommandRecorderContext& ctx = WorkerContexts[iFrustum - 1];
+		BatchInstanceData_ShadowMeshes(ctx.iFrustum, ctx.pShadowView, ctx.pObjIndices, ctx.pShadowView->matViewProj);
+	}
+	BatchInstanceData_BoundingBox(SceneView, UpdateWorkerThreadPool, SceneView.viewProj);
+	PrepareLightMeshRenderParams(SceneView);
+
+#endif
 }
 
 

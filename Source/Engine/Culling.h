@@ -154,8 +154,7 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 
 	//std::vector<int> vLightMovementTypeID; // index to access light type vectors: [0]:static, [1]:stationary, [2]:dynamic
 
-	std::atomic<size_t> NumValidInputElements = 0;
-	std::mutex mMutex;
+	size_t NumValidInputElements = 0;
 
 	void AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet
 		, const std::vector<FBoundingBox>& vBoundingBoxList
