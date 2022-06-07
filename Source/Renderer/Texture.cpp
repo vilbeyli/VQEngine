@@ -347,7 +347,7 @@ void Texture::InitializeDSV(uint32 index, DSV* pRV, int ArraySlice /*= 1*/)
 // from Microsoft's D3D12HelloTexture
 std::vector<uint8> Texture::GenerateTexture_Checkerboard(uint Dimension, bool bUseMidtones /*= false*/)
 {
-    constexpr UINT TexturePixelSizeInBytes = 4; // byte/px
+    const UINT TexturePixelSizeInBytes = 4; // byte/px
     const UINT& TextureWidth = Dimension;
     const UINT& TextureHeight = Dimension;
 
