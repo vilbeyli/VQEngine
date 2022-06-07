@@ -92,10 +92,10 @@ bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset FrustumPlanes, cons
 {
 	constexpr float EPSILON = 0.000002f;
 	const XMVECTOR V_EPSILON = XMVectorSet(EPSILON, EPSILON, EPSILON, EPSILON);
-	
-	// this is a hotspot: GetCornerPointsV4() creating the bounding box on the stack may slow it down.
-	//                    TODO: test with a pre-generated set of corners instead of doing it on the fly.
-	const std::array<XMFLOAT4, 8> vPoints = BBox.GetCornerPointsF4(); // TODO: optimize XMLoadFloat4
+
+	// storing these points in worker context is simply too expensive,
+	// both when initializing the context and using it here
+	const std::array<XMFLOAT4, 8> vPoints = BBox.GetCornerPointsF4();
 
 	for (int p = 0; p < 6; ++p)	// for each plane
 	{
@@ -105,8 +105,7 @@ bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset FrustumPlanes, cons
 			XMVECTOR vPoint = XMLoadFloat4(&f4Point);
 			XMVECTOR vPlane = XMLoadFloat4(&FrustumPlanes.abcd[p]);
 			XMVECTOR cmp = XMVectorGreater(XMVector4Dot(vPoint, vPlane), V_EPSILON);
-			bInside = cmp.m128_u32[0];
-			if (bInside)
+			if (cmp.m128_u32[0]) // is point inside frustum ?
 			{
 				break;
 			}

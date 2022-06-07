@@ -306,6 +306,7 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 
 void Scene::PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX)
 {
+	SCOPED_CPU_MARKER("Scene::PreUpdate()");
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	if (std::max(FRAME_DATA_INDEX, FRAME_DATA_PREV_INDEX) >= mFrameSceneViews.size())
 	{
@@ -319,6 +320,14 @@ void Scene::PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX)
 	SceneViewCurr.postProcessParameters = SceneViewPrev.postProcessParameters;
 	SceneViewCurr.sceneParameters = SceneViewPrev.sceneParameters;
 #endif
+
+	{
+		SCOPED_CPU_MARKER("UpdateTransforms");
+		for (Transform* pTF : mpTransforms)
+		{
+			pTF->_positionPrev = pTF->_position;
+		}
+	}
 }
 
 void Scene::Update(float dt, int FRAME_DATA_INDEX)
