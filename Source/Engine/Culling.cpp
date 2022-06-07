@@ -105,7 +105,7 @@ bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset FrustumPlanes, cons
 			XMVECTOR vPoint = XMLoadFloat4(&f4Point);
 			XMVECTOR vPlane = XMLoadFloat4(&FrustumPlanes.abcd[p]);
 			XMVECTOR cmp = XMVectorGreater(XMVector4Dot(vPoint, vPlane), V_EPSILON);
-			if (cmp.m128_u32[0]) // is point inside frustum ?
+			if (bInside = cmp.m128_u32[0]) // is point inside frustum ?
 			{
 				break;
 			}
@@ -420,6 +420,9 @@ static FBoundingBox CalculateAxisAlignedBoundingBox(const XMMATRIX& MWorld, cons
 #define BOUNDING_BOX_HIERARCHY__MULTI_THREADED_BUILD 1
 void SceneBoundingBoxHierarchy::Build(const std::vector<GameObject*>& pObjects, ThreadPool& WorkerThreadPool)
 {
+	constexpr size_t NumDesiredMinimumWorkItemsPerThread = 256;
+	const size_t NumWorkerThreadsAvailable = WorkerThreadPool.GetThreadPoolSize();
+
 	SCOPED_CPU_MARKER("BuildBoundingBoxHierarchy");
 	this->ResizeGameObjectBoundingBoxContainer(pObjects.size());
 
@@ -429,16 +432,7 @@ void SceneBoundingBoxHierarchy::Build(const std::vector<GameObject*>& pObjects, 
 	{
 		const size_t NumWorkItems = pObjects.size();
 		const size_t NumWorkItemsPerAvailableWorkerThread = DIV_AND_ROUND_UP(NumWorkItems, WorkerThreadPool.GetThreadPoolSize());
-		const size_t NumDesiredMinimumWorkItemsPerThread = 256;
-		size_t NumWorkersToUse = WorkerThreadPool.GetThreadPoolSize(); // start with all threads
-
-		// if per-thread work amount is too little, then use less threads
-		if (NumWorkItemsPerAvailableWorkerThread < NumDesiredMinimumWorkItemsPerThread)
-		{
-			const float OffRatio = float(NumDesiredMinimumWorkItemsPerThread) / float(NumWorkItemsPerAvailableWorkerThread);
-			NumWorkersToUse = static_cast<size_t>(NumWorkersToUse / OffRatio); // clamp down
-			NumWorkersToUse = std::max((size_t)1, NumWorkersToUse);
-		}
+		const size_t NumWorkersToUse = CalculateNumThreadsToUse(NumWorkItems, NumWorkerThreadsAvailable, NumDesiredMinimumWorkItemsPerThread);
 
 		const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, NumWorkersToUse+1);
 		
@@ -495,7 +489,10 @@ void SceneBoundingBoxHierarchy::Build(const std::vector<GameObject*>& pObjects, 
 		{
 			SCOPED_CPU_MARKER("PrepareRanges");
 			const size_t NumObjs = pObjects.size();
-			const size_t ThreadBBBatchCapacity = mNumValidMeshBoundingBoxes / (WorkerThreadPool.GetThreadPoolSize()+1);
+			const size_t&NumWorkItems = mNumValidMeshBoundingBoxes;
+			const size_t NumWorkerThreadsToUse = CalculateNumThreadsToUse(NumWorkItems, NumWorkerThreadsAvailable, NumDesiredMinimumWorkItemsPerThread);
+
+			const size_t ThreadBBBatchCapacity = mNumValidMeshBoundingBoxes / (NumWorkerThreadsToUse+1);
 
 			size_t iBegin = 0;
 			size_t iEnd = 0;
@@ -520,7 +517,7 @@ void SceneBoundingBoxHierarchy::Build(const std::vector<GameObject*>& pObjects, 
 		}
 		{
 			SCOPED_CPU_MARKER("DispatchWorkers");
-			for (size_t i = 0; i < vRanges.size() - 1; ++i)
+			for (size_t i = 1; i < vRanges.size(); ++i)
 			{
 				WorkerThreadPool.AddTask([=]()
 				{
@@ -532,7 +529,7 @@ void SceneBoundingBoxHierarchy::Build(const std::vector<GameObject*>& pObjects, 
 		}
 		{
 			SCOPED_CPU_MARKER("Process_ThisThread");
-			this->BuildMeshBoundingBoxes_Range(pObjects, get<0>(vRanges.back()), get<1>(vRanges.back()), get<2>(vRanges.back()));
+			this->BuildMeshBoundingBoxes_Range(pObjects, get<0>(vRanges.front()), get<1>(vRanges.front()), get<2>(vRanges.front()));
 		}
 #else
 		this->BuildMeshBoundingBoxes(pObjects);

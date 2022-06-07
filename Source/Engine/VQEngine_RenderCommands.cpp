@@ -66,7 +66,7 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 
 	for (const FInstancedShadowMeshRenderCommand& renderCmd : shadowView.meshRenderCommands)
 	{
-		SCOPED_CPU_MARKER("Process_ShadowMeshRenderCommand");
+		// SCOPED_CPU_MARKER("Process_ShadowMeshRenderCommand"); // too granular
 		//if (renderCmd.matWorldViewProj.empty())
 		//	continue;
 

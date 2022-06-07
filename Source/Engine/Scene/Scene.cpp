@@ -599,6 +599,7 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 {
 	SCOPED_CPU_MARKER("GatherFrustumCullParameters");
 	const SceneBoundingBoxHierarchy& BVH = mBoundingBoxHierarchy;
+	const size_t NumWorkerThreadsAvailable = UpdateWorkerThreadPool.GetThreadPoolSize();
 
 	std::vector< FFrustumPlaneset> FrustumPlanesets(1 + SceneShadowView.NumSpotShadowViews + SceneShadowView.NumPointShadowViews * 6);
 	size_t iFrustum = 0;
@@ -626,6 +627,22 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 	mFrustumCullWorkerContext.AllocInputMemoryIfNecessary(FrustumPlanesets.size());
 	mFrustumCullWorkerContext.NumValidInputElements = FrustumPlanesets.size();
 
+
+	constexpr size_t MINIMUM_WORK_SIZE_PER_THREAD = 256;
+	const size_t NumFrustums = FrustumPlanesets.size();
+
+	size_t NumFrustums_Threaded = 0;
+	for (size_t i = 0; i < NumFrustums; ++i)
+	{
+		if (BVH.mMeshBoundingBoxes.size() >= MINIMUM_WORK_SIZE_PER_THREAD)
+		{
+			++NumFrustums_Threaded;
+		}
+	}
+	const size_t NumWorkerThreads = CalculateNumThreadsToUse(NumFrustums_Threaded, NumWorkerThreadsAvailable, 1);
+
+	const size_t NumThreads = 1 + NumWorkerThreads;
+
 #if UPDATE_THREAD__ENABLE_WORKERS
 	{
 		SCOPED_CPU_MARKER("InitFrustumCullWorkerContexts");
@@ -633,12 +650,12 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 		for (size_t i = 0; i < FrustumPlanesets.size(); ++i)
 			mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i], BVH.mMeshBoundingBoxes, BVH.mMeshBoundingBoxGameObjectPointerMapping, i);
 #else
-		const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(FrustumPlanesets.size(), UpdateWorkerThreadPool.GetThreadPoolSize()+1);
+		const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NumFrustums, NumThreads);
 		{
-			SCOPED_CPU_MARKER("DispatchWorkers");
 			size_t currRange = 0;
 			for (const std::pair<size_t, size_t>& Range : vRanges)
 			{
+				SCOPED_CPU_MARKER("DispatchWorkers");
 				if (currRange == 0)
 				{
 					++currRange; // skip the first range, and do it on this thread after dispatches
@@ -648,16 +665,16 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 				const size_t& iEnd = Range.second; // inclusive
 				assert(iBegin <= iEnd); // ensure work context bounds
 				UpdateWorkerThreadPool.AddTask([Range, &FrustumPlanesets, &BVH, this]()
-					{
-						SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
-						for (size_t i = Range.first; i <= Range.second; ++i)
-							mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i]
-								, BVH.mMeshBoundingBoxes
-								, BVH.mMeshBoundingBoxGameObjectPointerMapping
-								, BVH.mMeshBoundingBoxMaterialIDMapping
-								, i
-							);
-					});
+				{
+					SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+					for (size_t i = Range.first; i <= Range.second; ++i)
+						mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i]
+							, BVH.mMeshBoundingBoxes
+							, BVH.mMeshBoundingBoxGameObjectPointerMapping
+							, BVH.mMeshBoundingBoxMaterialIDMapping
+							, i
+						);
+				});
 			}
 
 			for (size_t i = vRanges[0].first; i <= vRanges[0].second; ++i)
@@ -672,6 +689,7 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 	}
 
 	// ---------------------------------------------------SYNC ---------------------------------------------------
+	if(NumThreads>1)
 	{
 		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
 		while (UpdateWorkerThreadPool.GetNumActiveTasks() != 0);
@@ -703,25 +721,86 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 }
 
 
+static void MarkInstanceDataStale(std::unordered_map < MaterialID, std::unordered_map<MeshID, FSceneView::FMeshInstanceData>>& MaterialMeshInstanceDataLookup)
+{
+	SCOPED_CPU_MARKER("MarkInstanceDataStale");
+	// for-each material
+	for (auto itMat = MaterialMeshInstanceDataLookup.begin(); itMat != MaterialMeshInstanceDataLookup.end(); ++itMat)
+	{
+		const MaterialID matID = itMat->first;
+		std::unordered_map<MeshID, FSceneView::FMeshInstanceData>& meshInstanceDataLookup = itMat->second;
+
+		// for-each mesh
+		for (auto itMesh = meshInstanceDataLookup.begin(); itMesh != meshInstanceDataLookup.end(); ++itMesh)
+		{
+			meshInstanceDataLookup[itMesh->first].NumValidData = 0;
+		}
+	}
+}
 
 void Scene::CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool)
 {
 	SCOPED_CPU_MARKER("CullFrustums");
+	const size_t  NumThreadsAvailable = UpdateWorkerThreadPool.GetThreadPoolSize();
 
-#if UPDATE_THREAD__ENABLE_WORKERS 
+	constexpr size_t MIN_NUM_MESHES_FOR_THREADING_FRUSTUM = 128;
 
-	mFrustumCullWorkerContext.ProcessWorkItems_MultiThreaded(UpdateWorkerThreadPool.GetThreadPoolSize()+1, UpdateWorkerThreadPool);
-
-	// ---------------------------------------------------SYNC ---------------------------------------------------
+	const size_t& NumFrustums = mFrustumCullWorkerContext.NumValidInputElements;
+	
+	size_t NumAllBBs = 0;
+	size_t NumBBs_Threaded = 0;
+	size_t NumFrustums_Threaded = 0;
+	for (size_t i=0; i< NumFrustums; ++i)
 	{
-		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
-		while (UpdateWorkerThreadPool.GetNumActiveTasks() != 0);
+		const size_t NumBBs = mFrustumCullWorkerContext.vBoundingBoxLists[i].size();
+		NumAllBBs += NumBBs;
+		if (MIN_NUM_MESHES_FOR_THREADING_FRUSTUM <= NumBBs)
+		{
+			NumBBs_Threaded += NumBBs;
+			NumFrustums_Threaded += 1;
+		}
 	}
-	// --------------------------------------------------- SYNC ---------------------------------------------------
 
-#else
-	mFrustumCullWorkerContext.ProcessWorkItems_SingleThreaded();
+	const size_t NumWorkerThreadsToUse = NumFrustums_Threaded > 0 ? NumThreadsAvailable : 0;
+	const size_t  NumThreads = NumWorkerThreadsToUse + 1;
+	const bool bThreadTheWork = NumWorkerThreadsToUse > 0;
+
+	if (UPDATE_THREAD__ENABLE_WORKERS && bThreadTheWork)
+	{
+		UpdateWorkerThreadPool.AddTask([&]()
+		{
+			SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+			MarkInstanceDataStale(((FSceneView&)SceneView).MaterialMeshInstanceDataLookup);
+		});
+
+		mFrustumCullWorkerContext.ProcessWorkItems_MultiThreaded(NumThreads, UpdateWorkerThreadPool);
+
+		// ---------------------------------------------------SYNC ---------------------------------------------------
+		{
+			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
+			while (UpdateWorkerThreadPool.GetNumActiveTasks() != 0);
+		}
+		// --------------------------------------------------- SYNC ---------------------------------------------------
+	}
+	else
+	{
+#if UPDATE_THREAD__ENABLE_WORKERS
+		UpdateWorkerThreadPool.AddTask([&]()
+		{
+			SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+			MarkInstanceDataStale(((FSceneView&)SceneView).MaterialMeshInstanceDataLookup);
+		});
 #endif
+		mFrustumCullWorkerContext.ProcessWorkItems_SingleThreaded();
+
+#if UPDATE_THREAD__ENABLE_WORKERS
+		{
+			// wait for the MarkInstanceDataStale() worker to finish
+			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
+			while (UpdateWorkerThreadPool.GetNumActiveTasks() != 0);
+		}
+#endif
+	}
 }
 
 
@@ -866,22 +945,6 @@ void Scene::BatchInstanceData_BoundingBox(FSceneView& SceneView
 	}
 }
 
-static void MarkInstanceDataStale(std::unordered_map < MaterialID, std::unordered_map<MeshID, FSceneView::FMeshInstanceData>>& MaterialMeshInstanceDataLookup)
-{
-	SCOPED_CPU_MARKER("MarkInstanceDataStale");
-	// for-each material
-	for (auto itMat = MaterialMeshInstanceDataLookup.begin(); itMat != MaterialMeshInstanceDataLookup.end(); ++itMat)
-	{
-		const MaterialID matID = itMat->first;
-		std::unordered_map<MeshID, FSceneView::FMeshInstanceData>& meshInstanceDataLookup = itMat->second;
-
-		// for-each mesh
-		for (auto itMesh = meshInstanceDataLookup.begin(); itMesh != meshInstanceDataLookup.end(); ++itMesh)
-		{
-			meshInstanceDataLookup[itMesh->first].NumValidData = 0;
-		}
-	}
-}
 
 void Scene::BatchInstanceData_SceneMeshes(
 	  std::vector<MeshRenderCommand_t>* pMeshRenderCommands
@@ -894,7 +957,14 @@ void Scene::BatchInstanceData_SceneMeshes(
 	SCOPED_CPU_MARKER("BatchInstanceData_SceneMeshes");
 
 #if RENDER_INSTANCED_SCENE_MESHES
+
+#if !UPDATE_THREAD__ENABLE_WORKERS
+	// mark the data stale here only if the update threads are not enabled.
+	// otherwise, in order to pipeline the work better, this function is 
+	// offloaded to workers somewhere before this threading phase 
+	// (instance batching) begins.
 	MarkInstanceDataStale(MaterialMeshInstanceDataLookup);
+#endif
 
 	{
 		SCOPED_CPU_MARKER("CollectInstanceData");
@@ -1173,39 +1243,70 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 {
 	SCOPED_CPU_MARKER("BatchInstanceData");
 	FFrustumCullWorkerContext& ctx = mFrustumCullWorkerContext;
-	const int NumShadowMeshFrustums = ctx.NumValidInputElements - 1; // exclude main view
-	const int NumPoolWorkers = UpdateWorkerThreadPool.GetThreadPoolSize();
-	const int NumFrustumsThisThread = DIV_AND_ROUND_UP(NumShadowMeshFrustums, NumPoolWorkers) / 2;
+	const size_t NumWorkerThreads = UpdateWorkerThreadPool.GetThreadPoolSize();
 
-	// TODO: move outside of this function scope to save alloc-realloc time
-	std::vector< FFrustumRenderCommandRecorderContext> WorkerContexts(NumShadowMeshFrustums); 
+	// count the work and decide whether we'll use the worker threads or not
+	constexpr size_t NUM_MIN_SHADOW_MESHES_FOR_THREADING = 64;
+	constexpr size_t NUM_MIN_SCENE_MESHES_FOR_THREADING = 128;
+
+#if UPDATE_THREAD__ENABLE_WORKERS
+	const size_t NumSceneViewMeshes = mFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[0].size();
+	const bool bUseWorkerThreadForMainView = NUM_MIN_SCENE_MESHES_FOR_THREADING <= NumSceneViewMeshes;
+
+	// Main View --------------------------------------------------------------------------------
+	if (bUseWorkerThreadForMainView)
+	{
+		SCOPED_CPU_MARKER("DispatchWorker_MainView");
+		UpdateWorkerThreadPool.AddTask([&]()
+			{
+				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+				BatchInstanceData_SceneMeshes(&SceneView.meshRenderCommands
+					, SceneView.MaterialMeshInstanceDataLookup
+					, mFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[0]
+					, SceneView.viewProj
+					, SceneView.viewProjPrev
+				);
+			});
+	}
+	else
+	{
+		BatchInstanceData_SceneMeshes(&SceneView.meshRenderCommands
+			, SceneView.MaterialMeshInstanceDataLookup
+			, mFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[0]
+			, SceneView.viewProj
+			, SceneView.viewProjPrev
+		);
+	}
+	// Main View --------------------------------------------------------------------------------
+
+	const size_t NumShadowMeshFrustums = ctx.NumValidInputElements - 1; // exclude main view
+	size_t NumShadowFrustumsWithNumMeshesLargerThanMinNumMeshesPerThread = 0;
+	size_t NumShadowMeshes = 0;
+	size_t NumShadowMeshes_Threaded = 0;
+	std::vector< FFrustumRenderCommandRecorderContext> WorkerContexts;
 	{
 		SCOPED_CPU_MARKER("PrepareShadowViewWorkerContexts");
+		WorkerContexts.resize(NumShadowMeshFrustums);
 		for (size_t iFrustum = 1; iFrustum <= NumShadowMeshFrustums; ++iFrustum) // iFrustum==0 is for mainView, start from 1
 		{
 			FSceneShadowView::FShadowView* pShadowView = mFrustumIndex_pShadowViewLookup.at(iFrustum);
 			const std::vector<size_t>& CulledBoundingBoxIndexList_Msh = mFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[iFrustum];
 			WorkerContexts[iFrustum - 1] = { iFrustum, &CulledBoundingBoxIndexList_Msh, pShadowView };
+			const size_t NumMeshes = CulledBoundingBoxIndexList_Msh.size();
+			NumShadowMeshes += NumMeshes;
+			NumShadowFrustumsWithNumMeshesLargerThanMinNumMeshesPerThread += NumMeshes >= NUM_MIN_SHADOW_MESHES_FOR_THREADING ? 1 : 0;
+			NumShadowMeshes_Threaded += NumMeshes >= NUM_MIN_SHADOW_MESHES_FOR_THREADING ? NumMeshes : 0;
 		}
 	}
-
-#if UPDATE_THREAD__ENABLE_WORKERS
-	{
-		SCOPED_CPU_MARKER("DispatchWorker_MainView");
-		UpdateWorkerThreadPool.AddTask([&]()
-		{
-			SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
-			BatchInstanceData_SceneMeshes(&SceneView.meshRenderCommands
-				, SceneView.MaterialMeshInstanceDataLookup
-				, mFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[0]
-				, SceneView.viewProj
-				, SceneView.viewProjPrev
-			);
-		});
-	}
+	const size_t NumShadowMeshesRemaining = NumShadowMeshes - NumShadowMeshes_Threaded;
+	const size_t NumWorkersForFrustumsBelowThreadingThreshold = DIV_AND_ROUND_UP(NumShadowMeshesRemaining, NUM_MIN_SHADOW_MESHES_FOR_THREADING);
+	const size_t NumShadowFrustumBatchWorkers = NumShadowFrustumsWithNumMeshesLargerThanMinNumMeshesPerThread;
+	const size_t NumShadowFrustumsThisThread = NumShadowMeshFrustums - NumShadowFrustumBatchWorkers;
+	const bool bUseWorkerThreadsForShadowViews = NumShadowFrustumBatchWorkers >= 1;
+	if(bUseWorkerThreadsForShadowViews)
 	{
 		SCOPED_CPU_MARKER("DispatchWorkers_ShadowViews");
-		for (size_t iFrustum = 1+NumFrustumsThisThread; iFrustum <= NumShadowMeshFrustums; ++iFrustum)
+		for (size_t iFrustum = 1+NumShadowFrustumsThisThread; iFrustum <= NumShadowMeshFrustums; ++iFrustum)
 		{
 			UpdateWorkerThreadPool.AddTask([=]()
 			{
@@ -1221,12 +1322,17 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 	
 	{
 		SCOPED_CPU_MARKER("ThisThread_ShadowViews");
-		for (size_t iFrustum = 1; iFrustum <= NumFrustumsThisThread; ++iFrustum)
+		for (size_t iFrustum = 1; iFrustum <= NumShadowFrustumsThisThread; ++iFrustum)
 		{
 			FFrustumRenderCommandRecorderContext& ctx = WorkerContexts[iFrustum-1];
 			BatchInstanceData_ShadowMeshes(ctx.iFrustum, ctx.pShadowView, ctx.pObjIndices, ctx.pShadowView->matViewProj);
 		}
 	}
+	{
+		SCOPED_CPU_MARKER_C("ClearLocalContext", 0xFF880000);
+		WorkerContexts.clear();
+	}
+	if(bUseWorkerThreadsForShadowViews || bUseWorkerThreadForMainView)
 	{
 		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
 		while (UpdateWorkerThreadPool.GetNumActiveTasks() != 0);
