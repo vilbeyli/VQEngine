@@ -594,6 +594,13 @@ void Scene::GatherShadowViewData(FSceneShadowView& SceneShadowView, const std::v
 
 
 
+static std::string fnMark(const std::string& marker, size_t iB, size_t iE)
+{
+	const size_t num = iE - iB;
+	std::stringstream ss;
+	ss << marker << "[" << iB << ", " << iE << "]: " << num;
+	return ss.str();
+};
 
 void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShadowView& SceneShadowView, ThreadPool& UpdateWorkerThreadPool)
 {
@@ -653,37 +660,45 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 		const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NumFrustums, NumThreads);
 		{
 			size_t currRange = 0;
-			for (const std::pair<size_t, size_t>& Range : vRanges)
 			{
 				SCOPED_CPU_MARKER("DispatchWorkers");
-				if (currRange == 0)
+				for (const std::pair<size_t, size_t>& Range : vRanges)
 				{
-					++currRange; // skip the first range, and do it on this thread after dispatches
-					continue;
+					if (currRange == 0)
+					{
+						++currRange; // skip the first range, and do it on this thread after dispatches
+						continue;
+					}
+					const size_t& iBegin = Range.first;
+					const size_t& iEnd = Range.second; // inclusive
+					assert(iBegin <= iEnd); // ensure work context bounds
+					UpdateWorkerThreadPool.AddTask([Range, &FrustumPlanesets, &BVH, this]()
+					{
+						SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+						{
+							SCOPED_CPU_MARKER(fnMark("InitWorkerContexts", Range.first, Range.second).c_str());
+							for (size_t i = Range.first; i <= Range.second; ++i)
+								mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i]
+									, BVH.mMeshBoundingBoxes
+									, BVH.mMeshBoundingBoxGameObjectPointerMapping
+									, BVH.mMeshBoundingBoxMaterialIDMapping
+									, i
+								);
+						}
+					});
 				}
-				const size_t& iBegin = Range.first;
-				const size_t& iEnd = Range.second; // inclusive
-				assert(iBegin <= iEnd); // ensure work context bounds
-				UpdateWorkerThreadPool.AddTask([Range, &FrustumPlanesets, &BVH, this]()
-				{
-					SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
-					for (size_t i = Range.first; i <= Range.second; ++i)
-						mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i]
-							, BVH.mMeshBoundingBoxes
-							, BVH.mMeshBoundingBoxGameObjectPointerMapping
-							, BVH.mMeshBoundingBoxMaterialIDMapping
-							, i
-						);
-				});
 			}
 
+			SCOPED_CPU_MARKER(fnMark("InitWorkerContexts", vRanges[0].first, vRanges[0].second).c_str());
 			for (size_t i = vRanges[0].first; i <= vRanges[0].second; ++i)
+			{
 				mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i]
 					, BVH.mMeshBoundingBoxes
 					, BVH.mMeshBoundingBoxGameObjectPointerMapping
 					, BVH.mMeshBoundingBoxMaterialIDMapping
 					, i
 				);
+			}
 		}
 #endif
 	}
@@ -1170,7 +1185,7 @@ void Scene::BatchInstanceData_ShadowMeshes(size_t iFrustum, FSceneShadowView::FS
 			int iInst = 0;
 			while (NumInstancesToProces > 0)
 			{
-				const int ThisBatchSize = std::min(MAX_INSTANCE_COUNT__SHADOW_MESHES, NumInstancesToProces);
+				const size_t ThisBatchSize = std::min(MAX_INSTANCE_COUNT__SHADOW_MESHES, NumInstancesToProces);
 				int iBatch = 0;
 				while (iBatch < MAX_INSTANCE_COUNT__SHADOW_MESHES && iInst < instData.NumValidData)
 				{
