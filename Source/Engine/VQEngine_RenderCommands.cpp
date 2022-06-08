@@ -76,6 +76,18 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
 		if (renderCmd.matWorldViewProj.empty())
 			Log::Error("EMPTY COMMAND LIST WHYT??");
+		
+		const size_t memcpySrcSize = renderCmd.matWorldViewProj.size() * sizeof(XMMATRIX);
+		const size_t memcpyDstSize = _countof(pCBuffer->matWorld) * sizeof(XMMATRIX);
+		if (memcpyDstSize < memcpySrcSize)
+		{
+			Log::Error("Batch data too big (%d: %s) for destination cbuffer (%d: %s): "
+				, renderCmd.matWorldViewProj.size()
+				, StrUtil::FormatByte(memcpySrcSize)
+				, _countof(pCBuffer->matWorld)
+				, StrUtil::FormatByte(memcpyDstSize)
+			);
+		}
 		memcpy(pCBuffer->matWorld        , renderCmd.matWorldViewProj.data()        , renderCmd.matWorldViewProj.size() * sizeof(XMMATRIX));
 		memcpy(pCBuffer->matWorldViewProj, renderCmd.matWorldViewProjTransformations.data(), renderCmd.matWorldViewProjTransformations.size() * sizeof(XMMATRIX));
 		pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);

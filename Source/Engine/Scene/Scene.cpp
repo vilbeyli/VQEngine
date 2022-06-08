@@ -1006,7 +1006,7 @@ void Scene::BatchInstanceData_SceneMeshes(
 				// record instance data
 				FSceneView::FMeshInstanceData& d = MaterialMeshInstanceDataLookup[matID][meshID];
 
-				// if we're seeing this materia/mesh combo the first time, 
+				// if we're seeing this material/mesh combo the first time, 
 				// allocate some memory for instance data, enough for 1 batch
 				if (d.InstanceData.empty() || d.InstanceData.size() == d.NumValidData)
 				{
@@ -1219,22 +1219,21 @@ void Scene::BatchInstanceData_ShadowMeshes(size_t iFrustum, FSceneShadowView::FS
 			const FSceneShadowView::FShadowView::FShadowMeshInstanceData& instData = it->second;
 
 
-			int NumInstancesToProces = (int)instData.NumValidData;
-			int iInst = 0;
+			size_t NumInstancesToProces = instData.NumValidData;
+			size_t iInst = 0;
 			while (NumInstancesToProces > 0)
 			{
-				const int ThisBatchSize = std::min(MAX_INSTANCE_COUNT__SCENE_MESHES, NumInstancesToProces);
+				const size_t ThisBatchSize = std::min(MAX_INSTANCE_COUNT__SHADOW_MESHES, NumInstancesToProces);
 				FInstancedShadowMeshRenderCommand& cmd = pShadowView->meshRenderCommands[NumInstancedRenderCommands];
 				cmd.meshID = meshID;
 				cmd.matWorldViewProj.resize(ThisBatchSize);
 				cmd.matWorldViewProjTransformations.resize(ThisBatchSize);
 
-				int iBatch = 0;
+				size_t iBatch = 0;
 				while (iBatch < MAX_INSTANCE_COUNT__SHADOW_MESHES && iInst < instData.NumValidData)
 				{
-					cmd.matWorldViewProj.push_back(instData.InstanceData[iInst].matWorld);
-					cmd.matWorldViewProjTransformations.push_back(instData.InstanceData[iInst].matWorldViewProj);
-
+					cmd.matWorldViewProj[iBatch] = instData.InstanceData[iInst].matWorld;
+					cmd.matWorldViewProjTransformations[iBatch] = instData.InstanceData[iInst].matWorldViewProj;
 					++iBatch;
 					++iInst;
 				}
