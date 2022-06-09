@@ -20,6 +20,7 @@
 #include "Device.h"
 #include "Texture.h"
 
+#include "../Engine/GPUMarker.h"
 #include "../Engine/Core/Window.h"
 
 #include "../../Libs/VQUtils/Source/Log.h"
@@ -507,6 +508,7 @@ BufferID VQRenderer::CreateBuffer(const FBufferDesc& desc)
 
 TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerateMips /*= false*/)
 {
+	SCOPED_CPU_MARKER("VQRenderer::CreateTextureFromFile()");
 	// check if we've already loaded the texture
 	auto it = mLoadedTexturePaths.find(pFilePath);
 	if (it != mLoadedTexturePaths.end())
@@ -535,6 +537,7 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 
 	auto fnLoadImageFromDisk = [](const std::string& FilePath, Image& img)
 	{
+		SCOPED_CPU_MARKER("fnLoadImageFromDisk()");
 		if (FilePath.empty())
 		{
 			Log::Error("Cannot load Image from file: empty FilePath provided.");
@@ -545,7 +548,10 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 		const std::vector<std::string> FilePathTokens = StrUtil::split(FilePath, { '/', '\\' });
 		assert(FilePathTokens.size() >= 1);
 
-		img = Image::LoadFromFile(FilePath.c_str());
+		{
+			SCOPED_CPU_MARKER("Image::LoadFromFile()");
+			img = Image::LoadFromFile(FilePath.c_str());
+		}
 		return img.pData && img.BytesPerPixel > 0;
 	};
 
@@ -577,14 +583,14 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 		this->QueueTextureUpload(FTextureUploadDesc(std::move(image), ID, tDesc));
 
 		this->StartTextureUploads();
-		std::atomic<bool>& mbResident = mTextures.at(ID).mbResident; // Is this safe?
+
+		Texture& refTex = mTextures.at(ID);
 
 		// SYNC POINT - texture residency
-		//------------------------------------------------------------------------------
-		// NOTE: this isn't the best but good enough for small scenes for now.
-		// >60% of the CPU time is spent here during a scene load on the threads
-		while (!mbResident.load()); // BUSY WAIT here until the texture is made resident;
-		//------------------------------------------------------------------------------
+		{
+			SCOPED_CPU_MARKER_C("WAIT_RESIDENT", 0xFFFF0000);
+			refTex.mSignalResident.Wait();
+		}
 
 #if LOG_RESOURCE_CREATE
 		Log::Info("VQRenderer::CreateTextureFromFile(): [%.2fs] %s", t.StopGetDeltaTimeAndReset(), pFilePath);
@@ -596,6 +602,7 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 
 TextureID VQRenderer::CreateTexture(const TextureCreateDesc& desc)
 {
+	SCOPED_CPU_MARKER("VQRenderer::CreateTexture()");
 	if (desc.d3d12Desc.MipLevels == 0) assert( desc.bGenerateMips);
 	if (desc.d3d12Desc.MipLevels == 1) assert(!desc.bGenerateMips);
 	//if (desc.d3d12Desc.MipLevels >  1) assert( desc.bGenerateMips);
@@ -610,8 +617,11 @@ TextureID VQRenderer::CreateTexture(const TextureCreateDesc& desc)
 		this->QueueTextureUpload(FTextureUploadDesc(desc.pData, ID, desc));
 
 		this->StartTextureUploads();
-		std::atomic<bool>& mbResident = mTextures.at(ID).mbResident;
-		while (!mbResident.load());  // busy wait here until the texture is made resident; (very not ideal)
+
+		{
+			SCOPED_CPU_MARKER_C("WAIT_RESIDENT", 0xFFFF0000);
+			mTextures.at(ID).mSignalResident.Wait();
+		}
 	}
 
 	if (desc.pData)
@@ -1330,8 +1340,10 @@ void VQRenderer::QueueTextureUpload(const FTextureUploadDesc& desc)
 }
 
 
+
 void VQRenderer::ProcessTextureUpload(const FTextureUploadDesc& desc)
 {
+	SCOPED_CPU_MARKER("ProcessTextureUpload()");
 	ID3D12GraphicsCommandList* pCmd = mHeapUpload.GetCommandList();
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 	const D3D12_RESOURCE_DESC& d3dDesc = desc.desc.d3d12Desc;
@@ -1352,6 +1364,7 @@ void VQRenderer::ProcessTextureUpload(const FTextureUploadDesc& desc)
 	UINT8* pUploadBufferMem = mHeapUpload.Suballocate(SIZE_T(UplHeapSize), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 	if (pUploadBufferMem == NULL)
 	{
+		SCOPED_CPU_MARKER("UploadToGPUAndWait()");
 		mHeapUpload.UploadToGPUAndWait(); // We ran out of mem in the upload heap, upload contents and try allocating again
 		pUploadBufferMem = mHeapUpload.Suballocate(SIZE_T(UplHeapSize), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 		assert(pUploadBufferMem);
@@ -1370,14 +1383,18 @@ void VQRenderer::ProcessTextureUpload(const FTextureUploadDesc& desc)
 		const int szArray = 1; // array size (not impl for now)
 		const UINT bytePP = static_cast<UINT>(VQ_DXGI_UTILS::GetPixelByteSize(d3dDesc.Format));
 		const UINT imgSizeInBytes = bytePP * placedSubresource[0].Footprint.Width * placedSubresource[0].Footprint.Height;
-
-		//---------------------------------------------------------------------------------------------
-		// Note: the img copy is used here to enable writing MIP levels on top of the available memory.
-		//       This will slow things down, ideally we should be able to use the img in the @desc,
-		//       but const correctness has to be revisited.
-		Image imgCopy = Image::CreateEmptyImage(imgSizeInBytes);
-		memcpy(imgCopy.pData, pData, imgSizeInBytes);
-		//---------------------------------------------------------------------------------------------
+		
+		Image imgCopy;
+		{
+			//---------------------------------------------------------------------------------------------
+			// Note: the img copy is used here to enable writing MIP levels on top of the available memory.
+			//       This will slow things down, ideally we should be able to use the img in the @desc,
+			//       but const correctness has to be revisited.
+			SCOPED_CPU_MARKER_C("ImageCopy", 0xFFFF0000);
+			imgCopy = Image::CreateEmptyImage(imgSizeInBytes);
+			memcpy(imgCopy.pData, pData, imgSizeInBytes);
+			//---------------------------------------------------------------------------------------------
+		}
 
 		for (int a = 0; a < szArray; ++a)
 		{
@@ -1392,6 +1409,7 @@ void VQRenderer::ProcessTextureUpload(const FTextureUploadDesc& desc)
 
 				if (MIP_COUNT > 1)
 				{
+					SCOPED_CPU_MARKER("MipImage");
 					VQ_DXGI_UTILS::MipImage(imgCopy.pData, placedSubresource[mip].Footprint.Width, num_rows[mip], bytePP);
 				}
 
@@ -1403,7 +1421,10 @@ void VQRenderer::ProcessTextureUpload(const FTextureUploadDesc& desc)
 				pCmd->CopyTextureRegion(&Dst, 0, 0, 0, &Src, NULL);
 			}
 		}
-		imgCopy.Destroy();
+		{
+			SCOPED_CPU_MARKER("DestroyImageCopy");
+			imgCopy.Destroy();
+		}
 	}
 
 
@@ -1422,7 +1443,7 @@ void VQRenderer::ProcessTextureUploadQueue()
 	if (mTextureUploadQueue.empty())
 		return;
 
-	std::vector<std::atomic<bool>*> vTexResidentBools;
+	std::vector<Signal*> vTexResidentSignals;
 	std::vector<Image> vImages;
 
 	while (!mTextureUploadQueue.empty())
@@ -1436,7 +1457,7 @@ void VQRenderer::ProcessTextureUploadQueue()
 		{
 			std::unique_lock<std::mutex> lk(mMtxTextures);
 			Texture& tex = mTextures.at(desc.id);
-			vTexResidentBools.push_back(&tex.mbResident);
+			vTexResidentSignals.push_back(&tex.mSignalResident);
 		}
 
 		if (desc.img.pData)
@@ -1445,19 +1466,29 @@ void VQRenderer::ProcessTextureUploadQueue()
 		}
 	}
 
-	mHeapUpload.UploadToGPUAndWait();
+	{
+		SCOPED_CPU_MARKER("UploadToGPUAndWait()");
+		mHeapUpload.UploadToGPUAndWait();
+	}
 
-	for (std::atomic<bool>* pbResident : vTexResidentBools)
-		pbResident->store(true);
+	{
+		SCOPED_CPU_MARKER("NotifyResidentSignals");
+		for (Signal* pSignal : vTexResidentSignals)
+			pSignal->NotifyOne();
+	}
 
-	for (Image& img : vImages)
-		img.Destroy(); // free the image memory
+	{
+		SCOPED_CPU_MARKER("FreeImageMemory");
+		for (Image& img : vImages)
+			img.Destroy(); // free the image memory
+	}
 }
 
 void VQRenderer::TextureUploadThread_Main()
 {
 	while (!mbExitUploadThread)
 	{
+		SCOPED_CPU_MARKER_C("TextureUploadThread_Main()", 0xFF33AAFF);
 		mSignal_UploadThreadWorkReady.Wait([&]() { return mbExitUploadThread.load() || !mTextureUploadQueue.empty(); });
 
 		if (mbExitUploadThread)

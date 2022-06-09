@@ -39,7 +39,6 @@ pTex->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice))\
 Texture::Texture(const Texture& other)
     : mpAlloc                (other.mpAlloc)
     , mpResource             (other.mpResource)
-    , mbResident             (other.mbResident.load())
     , mbTypelessTexture      (other.mbTypelessTexture)
     , mStructuredBufferStride(other.mStructuredBufferStride)
     , mMipMapCount           (other.mMipMapCount)
@@ -54,7 +53,6 @@ Texture& Texture::operator=(const Texture& other)
 {
     mpAlloc                 = other.mpAlloc;
     mpResource              = other.mpResource;
-    mbResident              = other.mbResident.load();
     mbTypelessTexture       = other.mbTypelessTexture;
     mStructuredBufferStride = other.mStructuredBufferStride;
     mMipMapCount            = other.mMipMapCount;

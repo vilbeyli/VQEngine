@@ -59,3 +59,4 @@ add_library(${PROJECT_NAME} STATIC ${Headers} ${Source} ${LibHeadersD3D12X} )
 add_definitions(-DFFX_CACAO_ENABLE_D3D12)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE D3D12MA )
+target_include_directories(${PROJECT_NAME} PUBLIC "../../Libs/")

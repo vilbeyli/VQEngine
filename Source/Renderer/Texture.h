@@ -20,6 +20,7 @@
 
 #include "Common.h"
 #include "../../Libs/VQUtils/Source/Image.h"
+#include "../../Libs/VQUtils/Source/Multithreading.h"
 
 #include <DirectXMath.h>
 
@@ -104,8 +105,8 @@ private:
 
 	D3D12MA::Allocation* mpAlloc = nullptr;
 	ID3D12Resource*      mpResource = nullptr;
-	std::atomic<bool>    mbResident = false;
-	
+	Signal               mSignalResident;
+
 	// some texture desc fields
 	bool mbTypelessTexture = false;
 	uint mStructuredBufferStride = 0;
