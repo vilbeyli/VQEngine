@@ -94,7 +94,7 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	mRenderer.Initialize(mSettings.gfx); // Device, Queues, Heaps, WorkerThreads
 	// --------------------------------------------------------
 	InitializeEngineThreads();
-	SetEffectiveFrameRateLimit();
+	SetEffectiveFrameRateLimit(mSettings.gfx.MaxFrameRate);
 	float f4 = t.Tick();
 
 	// offload system info acquisition to a thread as it takes a few seconds on Debug build

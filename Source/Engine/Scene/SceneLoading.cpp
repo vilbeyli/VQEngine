@@ -21,6 +21,7 @@
 #include "Scene.h"
 #include "../Core/Window.h"
 #include "../VQEngine.h"
+#include "../GPUMarker.h"
 
 #include "Libs/VQUtils/Source/utils.h"
 
@@ -78,6 +79,8 @@ MaterialID Scene::LoadMaterial(const FMaterialRepresentation& matRep, TaskID tas
 
 void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& sceneRep)
 {
+	SCOPED_CPU_MARKER("Scene::StartLoading()");
+
 	mRenderer.WaitForLoadCompletion();
 
 	Log::Info("[Scene] Loading Scene: %s", sceneRep.SceneName.c_str());
@@ -88,7 +91,10 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 
 	LoadBuiltinMeshes(builtinMeshes);
 
-	this->LoadScene(sceneRep); // scene-specific load 
+	{
+		SCOPED_CPU_MARKER("LoadScene()");
+		this->LoadScene(sceneRep); // scene-specific load 
+	}
 
 	LoadBuiltinMaterials(taskID, sceneRep.Objects);
 	LoadSceneMaterials(sceneRep.Materials, taskID);
@@ -98,17 +104,26 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	LoadCameras(sceneRep.Cameras);
 	LoadPostProcessSettings();
 
-	mViewProjectionMatrixHistory.clear();
-	mBoundingBoxHierarchy.Clear();
-	for (FSceneView& view : mFrameSceneViews)
 	{
-		view.MaterialMeshInstanceDataLookup.clear();
+		SCOPED_CPU_MARKER("ClearHistoryData");
+		mViewProjectionMatrixHistory.clear();
 	}
-	for (FSceneShadowView& view : mFrameShadowViews)
+	mBoundingBoxHierarchy.Clear();
 	{
-		for(FSceneShadowView::FShadowView& sv : view.ShadowViews_Spot ) sv.ShadowMeshInstanceDataLookup.clear();
-		for(FSceneShadowView::FShadowView& sv : view.ShadowViews_Point) sv.ShadowMeshInstanceDataLookup.clear();
-		view.ShadowView_Directional.ShadowMeshInstanceDataLookup.clear();
+		SCOPED_CPU_MARKER("ClearSceneViews");
+		for (FSceneView& view : mFrameSceneViews)
+		{
+			view.MaterialMeshInstanceDataLookup.clear();
+		}
+	}
+	{
+		SCOPED_CPU_MARKER("ClearShadowViews");
+		for (FSceneShadowView& view : mFrameShadowViews)
+		{
+			for (FSceneShadowView::FShadowView& sv : view.ShadowViews_Spot) sv.ShadowMeshInstanceDataLookup.clear();
+			for (FSceneShadowView::FShadowView& sv : view.ShadowViews_Point) sv.ShadowMeshInstanceDataLookup.clear();
+			view.ShadowView_Directional.ShadowMeshInstanceDataLookup.clear();
+		}
 	}
 	mFrustumCullWorkerContext.ClearMemory();
 }
@@ -117,6 +132,8 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 
 void Scene::LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRepresentation>& GameObjsToBeLoaded)
 {
+	SCOPED_CPU_MARKER("Scene::LoadBuiltinMaterials()");
+
 	const char* STR_MATERIALS_FOLDER = "Data/Materials/";
 	auto vMatFiles = DirectoryUtil::ListFilesInDirectory(STR_MATERIALS_FOLDER, "xml");
 
@@ -163,6 +180,8 @@ void Scene::LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRep
 
 void Scene::LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes)
 {
+	SCOPED_CPU_MARKER("Scene::LoadBuiltinMeshes()");
+
 	// register builtin meshes to scene mesh lookup
 	// @mMeshes[0-NUM_BUILTIN_MESHES] are assigned here directly while the rest
 	// of the meshes used in the scene must use this->AddMesh(Mesh&&) interface;
@@ -180,6 +199,7 @@ void Scene::LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes)
 
 void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects)
 {
+	SCOPED_CPU_MARKER("Scene::LoadGameObjects()");
 	constexpr bool B_LOAD_GAMEOBJECTS_SERIAL = true;
 
 	if constexpr (B_LOAD_GAMEOBJECTS_SERIAL)
@@ -249,6 +269,7 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 
 void Scene::LoadSceneMaterials(const std::vector<FMaterialRepresentation>& Materials, TaskID taskID)
 {
+	SCOPED_CPU_MARKER("Scene::LoadSceneMaterials()");
 	// Create scene materials before deserializing gameobjects
 	uint NumMaterials = 0;
 	for (const FMaterialRepresentation& matRep : Materials)
@@ -270,6 +291,7 @@ void Scene::LoadSceneMaterials(const std::vector<FMaterialRepresentation>& Mater
 
 void Scene::LoadLights(const std::vector<Light>& SceneLights)
 {
+	SCOPED_CPU_MARKER("Scene::LoadLights()");
 	for (const Light& l : SceneLights)
 	{
 		std::vector<Light>& LightContainer = [&]() -> std::vector<Light>&{
@@ -291,6 +313,7 @@ void Scene::LoadLights(const std::vector<Light>& SceneLights)
 
 void Scene::LoadCameras(std::vector<FCameraParameters>& CameraParams)
 {
+	SCOPED_CPU_MARKER("Scene::LoadCameras()");
 	for (FCameraParameters& param : CameraParams)
 	{
 		param.ProjectionParams.ViewportWidth = static_cast<float>(mpWindow->GetWidth());
@@ -316,6 +339,7 @@ void Scene::LoadCameras(std::vector<FCameraParameters>& CameraParams)
 
 void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 {
+	SCOPED_CPU_MARKER("Scene::LoadPostProcessSettings()");
 	// TODO: remove hardcode
 
 	const uint fWidth  = this->mpWindow->GetWidth();
@@ -346,6 +370,7 @@ void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 
 void Scene::OnLoadComplete()
 {
+	SCOPED_CPU_MARKER("Scene::OnLoadComplete()");
 	Log::Info("[Scene] OnLoadComplete()");
 
 	// Assign model data to game objects
@@ -373,6 +398,8 @@ void Scene::OnLoadComplete()
 
 void Scene::Unload()
 {
+	SCOPED_CPU_MARKER("Scene::Unload()");
+
 	this->UnloadScene();
 
 	mSceneRepresentation = {};

@@ -614,7 +614,7 @@ private:
 	bool                            ShouldRenderHDR(HWND hwnd) const;
 	bool                            IsHDRSettingOn() const;
 
-	void                            SetEffectiveFrameRateLimit(); // TODO: take in int, and framepace the loading screen
+	void                            SetEffectiveFrameRateLimit(int FrameRateLimitEnumVal);
 	float                           FramePacing(const float dt);
 	const FDisplayHDRProfile*       GetHDRProfileIfExists(const wchar_t* pwStrLogicalDisplayName);
 	FSetHDRMetaDataParams           GatherHDRMetaDataParameters(HWND hwnd);

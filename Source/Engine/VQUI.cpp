@@ -1007,14 +1007,14 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 				default:
 					break;
 				}
-				SetEffectiveFrameRateLimit();
+				SetEffectiveFrameRateLimit(mSettings.gfx.MaxFrameRate);
 			}
 			if (iLimiter == 2) // custom frame limit value
 			{
 				if (ImGui::SliderInt("MaxFrames", &CustomFrameLimit, 10, 1000))
 				{
 					mSettings.gfx.MaxFrameRate = CustomFrameLimit;
-					SetEffectiveFrameRateLimit();
+					SetEffectiveFrameRateLimit(mSettings.gfx.MaxFrameRate);
 				}
 			}
 		}

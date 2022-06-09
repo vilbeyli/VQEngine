@@ -142,6 +142,8 @@ void FFrustumCullWorkerContext::AllocInputMemoryIfNecessary(size_t sz)
 }
 void FFrustumCullWorkerContext::ClearMemory()
 {
+
+	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::ClearMemory()");
 	vFrustumPlanes.clear();
 	vBoundingBoxLists.clear();
 	vCulledBoundingBoxIndexListPerView.clear();
@@ -652,6 +654,8 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBoxes_Range(const std::vector<G
 
 void SceneBoundingBoxHierarchy::Clear()
 {
+
+	SCOPED_CPU_MARKER("SceneBoundingBoxHierarchy::Clear()");
 	mSceneBoundingBox = {};
 	mGameObjectBoundingBoxes.clear();
 	mMeshBoundingBoxes.clear();

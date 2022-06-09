@@ -148,9 +148,12 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 	switch (mAppState)
 	{
 	case EAppState::INITIALIZING:
+	{
+		SCOPED_CPU_MARKER("EAppState::INITIALIZING");
 		Log::Info("UpdateThread: loading...");
 		Load_SceneData_Dispatch(); // start load level
 		mAppState = EAppState::LOADING;
+	}
 		break;
 	case EAppState::LOADING:
 		if (mbLoadingLevel || mbLoadingEnvironmentMap)
@@ -165,6 +168,7 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 			{
 				if (mbLoadingLevel)
 				{
+					SCOPED_CPU_MARKER("Scene->OnLoadComplete()");
 					mpScene->OnLoadComplete();
 				}
 				// OnEnvMapLoaded = noop
@@ -178,9 +182,12 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 				mLoadingScreenData.RotateLoadingScreenImageIndex();
 
 				float dt_loading = mTimer.StopGetDeltaTimeAndReset();
+				SetEffectiveFrameRateLimit(mSettings.gfx.MaxFrameRate);
 				Log::Info("Loading completed in %.2fs, starting scene simulation", dt_loading);
 				mTimer.Start();
 			}
+
+			float FrameLimiterTimeSpent = FramePacing(dt);
 		}
 		break;
 	case EAppState::SIMULATING:
@@ -274,9 +281,9 @@ bool VQEngine::IsHDRSettingOn() const
 	return mSettings.WndMain.bEnableHDR;
 }
 
-void VQEngine::SetEffectiveFrameRateLimit()
+void VQEngine::SetEffectiveFrameRateLimit(int FrameRateLimitEnumVal)
 {
-	if (mSettings.gfx.MaxFrameRate == -1)
+	if (FrameRateLimitEnumVal == -1)
 	{
 		// Get monitor refresh rate (primary monitor?)
 		DWM_TIMING_INFO dti = {};
@@ -287,13 +294,13 @@ void VQEngine::SetEffectiveFrameRateLimit()
 		Log::Info("Getting Monitor Refresh Rate: %.1fHz", DisplayRefreshRate);
 		mEffectiveFrameRateLimit_ms = 1000.0f / (DisplayRefreshRate * 1.15f);
 	}
-	else if (mSettings.gfx.MaxFrameRate == 0)
+	else if (FrameRateLimitEnumVal == 0)
 	{
 		mEffectiveFrameRateLimit_ms = 0.0f;
 	}
 	else
 	{
-		mEffectiveFrameRateLimit_ms = 1000.0f / mSettings.gfx.MaxFrameRate;
+		mEffectiveFrameRateLimit_ms = 1000.0f / FrameRateLimitEnumVal;
 	}
 	const bool bUnlimitedFrameRate = mEffectiveFrameRateLimit_ms == 0.0f;
 	if (bUnlimitedFrameRate) Log::Info("FrameRateLimit : Unlimited");
@@ -427,6 +434,7 @@ void VQEngine::Load_SceneData_Dispatch()
 
 	auto fnCreateSceneInstance = [&](const std::string& SceneType, std::unique_ptr<Scene>& pScene) -> void
 	{
+		SCOPED_CPU_MARKER("fnCreateSceneInstance");
 		     if (SceneType == "Default")          pScene = std::make_unique<DefaultScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 		else if (SceneType == "Sponza")           pScene = std::make_unique<SponzaScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 		else if (SceneType == "StressTest")       pScene = std::make_unique<StressTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
@@ -606,6 +614,7 @@ void VQEngine::StartLoadingScene(int IndexScene)
 
 	mAppState = INITIALIZING;
 	mbLoadingLevel.store(true); // thread-safe
+	SetEffectiveFrameRateLimit(-1); // set to monitor refresh rate to not max out frame rate during loading screen
 	Log::Info("StartLoadingScene: %d", IndexScene);
 }
 
