@@ -265,6 +265,7 @@ void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 
 void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
 {
+	using namespace DirectX;
 	using namespace VQ_SHADER_DATA;
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 	const auto& rsc = mResources_MainWnd;
@@ -335,10 +336,23 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 		
 #if RENDER_INSTANCED_SCENE_MESHES
 		const uint32 NumInstances = (uint32)meshRenderCmd.matNormal.size();
-		memcpy(pPerObj->matWorldViewProj    , meshRenderCmd.matWorldViewProj.data()    , sizeof(DirectX::XMMATRIX) * NumInstances);
-		memcpy(pPerObj->matWorldViewProjPrev, meshRenderCmd.matWorldViewProjPrev.data(), sizeof(DirectX::XMMATRIX) * NumInstances);
-		memcpy(pPerObj->matNormal           , meshRenderCmd.matNormal.data()           , sizeof(DirectX::XMMATRIX) * NumInstances);
-		memcpy(pPerObj->matWorld            , meshRenderCmd.matWorld.data()            , sizeof(DirectX::XMMATRIX) * NumInstances);
+		
+		const size_t memcpySrcSize = meshRenderCmd.matWorldViewProj.size() * sizeof(XMMATRIX);
+		const size_t memcpyDstSize = _countof(pPerObj->matWorldViewProj) * sizeof(XMMATRIX);
+		if (memcpyDstSize < memcpySrcSize)
+		{
+			Log::Error("Batch data (scene) too big (%d: %s) for destination cbuffer (%d: %s): "
+				, meshRenderCmd.matWorldViewProj.size()
+				, StrUtil::FormatByte(memcpySrcSize)
+				, _countof(pPerObj->matWorldViewProj)
+				, StrUtil::FormatByte(memcpyDstSize)
+			);
+		}
+
+		memcpy(pPerObj->matWorldViewProj    , meshRenderCmd.matWorldViewProj.data()    , sizeof(XMMATRIX) * NumInstances);
+		memcpy(pPerObj->matWorldViewProjPrev, meshRenderCmd.matWorldViewProjPrev.data(), sizeof(XMMATRIX) * NumInstances);
+		memcpy(pPerObj->matNormal           , meshRenderCmd.matNormal.data()           , sizeof(XMMATRIX) * NumInstances);
+		memcpy(pPerObj->matWorld            , meshRenderCmd.matWorld.data()            , sizeof(XMMATRIX) * NumInstances);
 #else
 		const uint32 NumInstances = 1;
 		pPerObj->matWorldViewProj = meshRenderCmd.matWorldTransformation * SceneView.viewProj;

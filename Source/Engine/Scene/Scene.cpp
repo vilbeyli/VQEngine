@@ -912,13 +912,12 @@ void Scene::BatchInstanceData_BoundingBox(FSceneView& SceneView
 		}
 	};
 
+	const size_t NumGameObjectBBRenderCmds = (bDrawGameObjectBBs ? DIV_AND_ROUND_UP(mBoundingBoxHierarchy.mGameObjectBoundingBoxes.size(), MAX_INSTANCE_COUNT__UNLIT_SHADER) : 0);
+	const size_t NumMeshBBRenderCmds       = (bDrawMeshBBs       ? DIV_AND_ROUND_UP(mBoundingBoxHierarchy.mMeshBoundingBoxes.size(), MAX_INSTANCE_COUNT__UNLIT_SHADER) : 0);
 
 	{
 		SCOPED_CPU_MARKER("AllocMem");
-		SceneView.boundingBoxRenderCommands.resize(
-			(bDrawGameObjectBBs ? mBoundingBoxHierarchy.mGameObjectBoundingBoxes.size() : 0)
-			+ (bDrawMeshBBs ? mBoundingBoxHierarchy.mMeshBoundingBoxes.size() : 0)
-		);
+		SceneView.boundingBoxRenderCommands.resize(NumGameObjectBBRenderCmds + NumMeshBBRenderCmds);
 	}
 	// --------------------------------------------------------------
 	// Game Object Bounding Boxes
@@ -945,7 +944,8 @@ void Scene::BatchInstanceData_BoundingBox(FSceneView& SceneView
 	// --------------------------------------------------------------
 	if (SceneView.sceneParameters.bDrawMeshBoundingBoxes)
 	{
-		iBoundingBox += (SceneView.sceneParameters.bDrawGameObjectBoundingBoxes ? mBoundingBoxHierarchy.mGameObjectBoundingBoxes.size() : 0);
+		iBoundingBox = NumGameObjectBBRenderCmds;
+
 #if RENDER_INSTANCED_BOUNDING_BOXES 
 		fnBatch(SceneView.boundingBoxRenderCommands
 			, mBoundingBoxHierarchy.mMeshBoundingBoxes
@@ -1214,10 +1214,9 @@ void Scene::BatchInstanceData_ShadowMeshes(size_t iFrustum, FSceneShadowView::FS
 		// for-each mesh
 		for (auto it = pShadowView->ShadowMeshInstanceDataLookup.begin(); it != pShadowView->ShadowMeshInstanceDataLookup.end(); ++it)
 		{
-			SCOPED_CPU_MARKER("Mesh");
+			// SCOPED_CPU_MARKER("Mesh"); // too granular
 			const MeshID meshID = it->first;
 			const FSceneShadowView::FShadowView::FShadowMeshInstanceData& instData = it->second;
-
 
 			size_t NumInstancesToProces = instData.NumValidData;
 			size_t iInst = 0;
