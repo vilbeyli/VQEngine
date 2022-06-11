@@ -102,9 +102,9 @@ MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 	{
 		std::unique_lock<std::mutex> lk(mMtx_Materials);
 		id = LAST_USED_MATERIAL_ID++;
+		mMaterials[id] = Material();
+		mLoadedMaterials[UniqueMaterialName] = id;
 	}
-	mMaterials[id] = Material();
-	mLoadedMaterials[UniqueMaterialName] = id;
 #if LOG_RESOURCE_CREATE
 	Log::Info("Scene::CreateMaterial() ID=%d - %s", id, UniqueMaterialName.c_str());
 #endif
@@ -320,6 +320,7 @@ void Scene::PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX)
 	SceneViewCurr.postProcessParameters = SceneViewPrev.postProcessParameters;
 	SceneViewCurr.sceneParameters = SceneViewPrev.sceneParameters;
 #endif
+
 
 	{
 		SCOPED_CPU_MARKER("UpdateTransforms");
