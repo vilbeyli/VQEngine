@@ -73,7 +73,7 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 	auto fnGetRandomNormalMapFile = []() -> std::string
 	{
 		const size_t NUM_RND_MAPS = 5;
-		std::array<std::string, NUM_RND_MAPS> maps =
+		static std::array<const char*, NUM_RND_MAPS> maps =
 		{
 			  "Data/Textures/PBR/Black_herringbone_tiles_01/Black_herringbone_tiles_01_2K_Normal.png"
 			, "Data/Textures/PBR/Marble_08/Marble_08_2K_Normal.png"
@@ -86,7 +86,7 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 	auto fnGetRandomRoughnessMetallicMapFile = []() -> std::string
 	{
 		const size_t NUM_RND_MAPS = 10;
-		std::array<std::string, NUM_RND_MAPS> maps =
+		static std::array<const char*, NUM_RND_MAPS> maps =
 		{
 			  "Data/Textures/PBR/Black_herringbone_tiles_01/Black_herringbone_tiles_01_2K_Roughness.png"
 			, "Data/Textures/PBR/Marble_08/Marble_08_2K_Roughness.png"
@@ -108,18 +108,29 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 	//
 	if constexpr (ENABLE_MATERIALS)
 	{
-		FMaterialRepresentation matRep = {};
-		matRep.Alpha = 1.0f;
-		matRep.DiffuseColor = { 1, 1, 1 };
-		matRep.DiffuseMapFilePath = "Procedural/Checkerboard";
-		matRep.RoughnessMapFilePath = "Procedural/Checkerboard";
-		matRep.Name = "Checkerboard";
-		scene.Materials.push_back(matRep);
-	
-		matRep.DiffuseMapFilePath = "Procedural/Checkerboard_Grayscale";
-		matRep.RoughnessMapFilePath = "Procedural/Checkerboard";
-		matRep.Name = "Checkerboard_Grayscale";
-		scene.Materials.push_back(matRep);
+		const size_t NumMaterials = 2
+			+ NUM_ROUGHNESS_INSTANCES * NUM_METALLIC_INSTANCES
+			+ NUM_ROUGHNESS_INSTANCES * NUM_METALLIC_INSTANCES * NUM_RND_COLORS;
+
+		size_t iMat = scene.Materials.size();
+		scene.Materials.resize(scene.Materials.size() + NumMaterials);
+
+		{
+			FMaterialRepresentation& matR = scene.Materials[iMat++];
+			matR.Alpha = 1.0f;
+			matR.DiffuseColor = { 1, 1, 1 };
+			matR.DiffuseMapFilePath = "Procedural/Checkerboard";
+			matR.RoughnessMapFilePath = "Procedural/Checkerboard";
+			matR.Name = "Checkerboard";
+		}
+		{
+			FMaterialRepresentation& matR = scene.Materials[iMat++];
+			matR.Alpha = 1.0f;
+			matR.DiffuseColor = { 1, 1, 1 };
+			matR.DiffuseMapFilePath = "Procedural/Checkerboard_Grayscale";
+			matR.RoughnessMapFilePath = "Procedural/Checkerboard";
+			matR.Name = "Checkerboard_Grayscale";
+		}
 
 		// roughness / metallic gradiant materials for spheres
 		for (int r = 0; r < NUM_ROUGHNESS_INSTANCES; ++r)
@@ -129,13 +140,11 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 				const float roughness = static_cast<float>(r) / (NUM_ROUGHNESS_INSTANCES - 1);
 				const float metallic  = static_cast<float>(m) / (NUM_METALLIC_INSTANCES - 1);
 
-				FMaterialRepresentation matR = {};
+				FMaterialRepresentation& matR = scene.Materials[iMat++];
 				matR.DiffuseColor = XMFLOAT3(0.00f, 0.05f, 0.45f); // blue spheres
 				matR.Roughness = roughness;
 				matR.Metalness = metallic;
 				matR.Name = fnGetRoughnessMetallicMaterialName(r, m);
-
-				scene.Materials.push_back(matR);
 			}
 		}
 
@@ -148,7 +157,7 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 					const float roughness = static_cast<float>(r) / (NUM_ROUGHNESS_INSTANCES - 1);
 					const float metallic = static_cast<float>(m) / (NUM_METALLIC_INSTANCES - 1);
 
-					FMaterialRepresentation matR = {};
+					FMaterialRepresentation& matR = scene.Materials[iMat++];
 					matR.DiffuseColor = Colors[c];
 					matR.Roughness = roughness;
 					matR.Metalness = metallic;
@@ -163,7 +172,6 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 
 					//matR.MetallicMapFilePath  = (MathUtil::RandF(0.0f, 1.0f) < 0.30f) ? fnGetRandomRoughnessMetallicMapFile() : "";
 					matR.Name = fnGetInstanceCloudMaterialName(r, m, c);
-					scene.Materials.push_back(matR);
 				}
 			}
 		}
@@ -174,6 +182,8 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 	// OBJECTS
 	//
 	
+	// TODO: pre-alloc
+
 	// object chunk
 #if _DEBUG
 	constexpr int DIMENSION_X = 16;
@@ -185,6 +195,14 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 	constexpr int DIMENSION_Z = 48;
 #endif
 
+	const size_t NumObjectsToAllocate
+		= DIMENSION_X * DIMENSION_Y * DIMENSION_Z // randomized objects 
+		+ NUM_ROUGHNESS_INSTANCES * NUM_METALLIC_INSTANCES // gradient spheres
+		+ 1 // platform cylinder
+	;
+	size_t iObj = scene.Objects.size();
+	scene.Objects.resize(scene.Objects.size() + NumObjectsToAllocate);
+
 	int NumObjects = 0;
 	constexpr float distance = 10.0f;
 	constexpr float yOffset = 25.0f;
@@ -195,7 +213,7 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 	for(int y=-DIMENSION_Y/2; y<DIMENSION_Y/2; ++y)
 	for(int z=-DIMENSION_Z/2; z<DIMENSION_Z/2; ++z)
 	{
-		FGameObjectRepresentation obj = {};
+		FGameObjectRepresentation& obj = scene.Objects[iObj++];
 
 		XMFLOAT3 pos = {x*distance, yOffset + y*distance + MathUtil::RandF(-4.0f, 4.0f), z * distance};
 		XMFLOAT3 scaleRndXYZ = { 
@@ -229,7 +247,6 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 				);
 		}
 
-		scene.Objects.push_back(obj);
 		++NumObjects;
 	}
 
@@ -251,7 +268,7 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 
 				XMFLOAT3 pos = XMFLOAT3(x, y, 0);
 
-				FGameObjectRepresentation obj = {};
+				FGameObjectRepresentation& obj = scene.Objects[iObj++];
 				obj.tf.SetPosition(pos);
 				obj.tf.SetScale(scale);
 				obj.BuiltinMeshName = "Sphere";
@@ -259,15 +276,14 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 				{
 					obj.MaterialName = fnGetRoughnessMetallicMaterialName(r, m);
 				}
-
-				scene.Objects.push_back(obj);
 			}
 		}
 	}
 
 	// big cube
+	if constexpr (false)
 	{
-		FGameObjectRepresentation obj = {};
+		FGameObjectRepresentation& obj = scene.Objects[iObj++];
 		XMFLOAT3 pos = { 0, 0, 0 };
 		XMFLOAT3 axis = UpVector;
 		XMFLOAT3 scale = { 500, 500, 500 };
@@ -278,12 +294,12 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 		{
 			obj.MaterialName = "Checkerboard";
 		}
-		//scene.Objects.push_back(obj);
+		//scene.Objects.[iObj++]= (obj);
 	}
 
 	// platform cylinder
 	{
-		FGameObjectRepresentation obj = {};
+		FGameObjectRepresentation& obj = scene.Objects[iObj++];
 		XMFLOAT3 pos = { 0, -40, 0 };
 		XMFLOAT3 axis = UpVector;
 		XMFLOAT3 scale = { 100, 1, 100 };
@@ -294,7 +310,6 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 		{
 			obj.MaterialName = "Checkerboard_Grayscale";
 		}
-		scene.Objects.push_back(obj);
 	}
 }
 
