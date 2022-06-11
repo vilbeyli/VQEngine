@@ -244,14 +244,10 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 				const bool IS_PROCEDURAL = ProcTex != EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
 				if (IS_PROCEDURAL)
 				{
-					SCOPED_CPU_MARKER("GetProceduralTexture()");
 					return mRenderer.GetProceduralTexture(ProcTex);
 				}
-
-				{
-					SCOPED_CPU_MARKER("CreateTextureFromFile()");
-					return mRenderer.CreateTextureFromFile(TexLoadParams.TexturePath.c_str(), GENERATE_MIPS);
-				}
+				
+				return mRenderer.CreateTextureFromFile(TexLoadParams.TexturePath.c_str(), GENERATE_MIPS);
 			}));
 
 			// update results lookup for the shared textures (among different materials)
@@ -438,7 +434,7 @@ void AssetLoader::FMaterialTextureAssignments::WaitForTextureLoads()
 // ASSIMP HELPER FUNCTIONS
 //----------------------------------------------------------------------------------------------------------------
 static std::vector<AssetLoader::FTextureLoadParams> GenerateTextureLoadParams(
-	  aiMaterial*        pMaterial
+	  const aiMaterial*  pMaterial
 	, MaterialID         matID
 	, aiTextureType      type
 	, const std::string& modelDirectory
@@ -463,7 +459,7 @@ static std::vector<AssetLoader::FTextureLoadParams> GenerateTextureLoadParams(
 
 static Mesh ProcessAssimpMesh(
 	VQRenderer*          pRenderer
-	, aiMesh*            pMesh
+	, const aiMesh*      pMesh
 	, const aiScene*     pScene
 	, const std::string& ModelName
 )
@@ -472,57 +468,211 @@ static Mesh ProcessAssimpMesh(
 	std::vector<FVertexWithNormalAndTangent> Vertices;
 	std::vector<unsigned> Indices;
 
-	// Walk through each of the mesh's vertices
-	for (unsigned int i = 0; i < pMesh->mNumVertices; i++)
 	{
-		FVertexWithNormalAndTangent Vert;
+		SCOPED_CPU_MARKER("MemAlloc");
+		size_t NumIndices = 0;
+		for (unsigned int i = 0; i < pMesh->mNumFaces; i++) NumIndices += pMesh->mFaces[i].mNumIndices;
+		Indices.resize(NumIndices);
+		Vertices.resize(pMesh->mNumVertices);
+	}
 
-		// POSITIONS
-		Vert.position[0] = pMesh->mVertices[i].x;
-		Vert.position[1] = pMesh->mVertices[i].y;
-		Vert.position[2] = pMesh->mVertices[i].z;
-
-		// TEXTURE COORDINATES
-		// a vertex can contain up to 8 different texture coordinates. We thus make the assumption that we won't 
-		// use models where a vertex can have multiple texture coordinates so we always take the first set (0).
-		Vert.uv[0] = pMesh->mTextureCoords[0] ? pMesh->mTextureCoords[0][i].x : 0;
-		Vert.uv[1] = pMesh->mTextureCoords[0] ? pMesh->mTextureCoords[0][i].y : 0;
-
-		// NORMALS
-		if (pMesh->mNormals)
+	{
+		SCOPED_CPU_MARKER("Verts");
+		// Walk through each of the mesh's vertices
+		for (unsigned int i = 0; i < pMesh->mNumVertices; i++)
 		{
-			Vert.normal[0] = pMesh->mNormals[i].x;
-			Vert.normal[1] = pMesh->mNormals[i].y;
-			Vert.normal[2] = pMesh->mNormals[i].z;
-		}
-	
-		// TANGENT
-		if (pMesh->mTangents)
-		{
-			Vert.tangent[0] = pMesh->mTangents[i].x;
-			Vert.tangent[1] = pMesh->mTangents[i].y;
-			Vert.tangent[2] = pMesh->mTangents[i].z;
-		}
+			FVertexWithNormalAndTangent& Vert = Vertices[i];
 
-		// BITANGENT ( NOT USED )
-		// Vert.bitangent = XMFLOAT3(
-		// 	mesh->mBitangents[i].x,
-		// 	mesh->mBitangents[i].y,
-		// 	mesh->mBitangents[i].z
-		// );
-		Vertices.push_back(Vert);
+			// POSITIONS
+			Vert.position[0] = pMesh->mVertices[i].x;
+			Vert.position[1] = pMesh->mVertices[i].y;
+			Vert.position[2] = pMesh->mVertices[i].z;
+
+			// TEXTURE COORDINATES
+			// a vertex can contain up to 8 different texture coordinates. We thus make the assumption that we won't 
+			// use models where a vertex can have multiple texture coordinates so we always take the first set (0).
+			Vert.uv[0] = pMesh->mTextureCoords[0] ? pMesh->mTextureCoords[0][i].x : 0;
+			Vert.uv[1] = pMesh->mTextureCoords[0] ? pMesh->mTextureCoords[0][i].y : 0;
+
+			// NORMALS
+			if (pMesh->mNormals)
+			{
+				Vert.normal[0] = pMesh->mNormals[i].x;
+				Vert.normal[1] = pMesh->mNormals[i].y;
+				Vert.normal[2] = pMesh->mNormals[i].z;
+			}
+
+			// TANGENT
+			if (pMesh->mTangents)
+			{
+				Vert.tangent[0] = pMesh->mTangents[i].x;
+				Vert.tangent[1] = pMesh->mTangents[i].y;
+				Vert.tangent[2] = pMesh->mTangents[i].z;
+			}
+
+			// BITANGENT ( NOT USED )
+			// Vert.bitangent = XMFLOAT3(
+			// 	mesh->mBitangents[i].x,
+			// 	mesh->mBitangents[i].y,
+			// 	mesh->mBitangents[i].z
+			// );
+		}
 	}
 
 	// now walk through each of the mesh's faces (a face is a mesh its triangle) and retrieve the corresponding vertex indices.
-	for (unsigned int i = 0; i < pMesh->mNumFaces; i++)
 	{
-		aiFace face = pMesh->mFaces[i];
-		// retrieve all indices of the face and store them in the indices vector
-		for (unsigned int j = 0; j < face.mNumIndices; j++)
-			Indices.push_back(face.mIndices[j]);
+		SCOPED_CPU_MARKER("Indices");
+		size_t iIdx = 0;
+		for (unsigned int i = 0; i < pMesh->mNumFaces; i++)
+		{
+			aiFace face = pMesh->mFaces[i];
+			memcpy(&Indices[iIdx], face.mIndices, sizeof(unsigned) * face.mNumIndices);
+			iIdx += face.mNumIndices;
+		}
 	}
 
-	return Mesh(pRenderer, Vertices, Indices, ModelName);;
+	return Mesh(pRenderer, Vertices, Indices, ModelName);
+}
+
+static std::string CreateUniqueMaterialName(const aiMaterial* material, size_t iMat, const std::string& modelDirectory)
+{
+	std::string uniqueMatName;
+	aiString matName;
+	if (aiReturn_SUCCESS != material->Get(AI_MATKEY_NAME, matName))
+	{ // material doesn't have a name, use generic name Material#
+		matName = std::string("Material#") + std::to_string(iMat);
+	}
+
+	// Data/Models/%MODEL_NAME%/... : index 2 will give model name
+	auto vFolders = DirectoryUtil::GetFlattenedFolderHierarchy(modelDirectory);
+	assert(vFolders.size() > 2);
+	const std::string ModelFolderName = vFolders[2];
+	uniqueMatName = matName.C_Str();
+
+	// modelDirectory = "Data/Models/%MODEL_NAME%/"
+	// Materials use the following unique naming: %MODEL_NAME%/%MATERIAL_NAME%
+	uniqueMatName = ModelFolderName + "/" + uniqueMatName;
+
+	return uniqueMatName;
+}
+
+static void QueueUpTextureLoadRequests(
+	AssetLoader* pAssetLoader,
+	const std::string& modelDirectory,
+	const aiMaterial* material,
+	MaterialID matID,
+	TaskID taskID
+)
+{
+	SCOPED_CPU_MARKER("QueueUpTextureLoadRequests");
+
+	// get texture paths to load
+	std::vector<AssetLoader::FTextureLoadParams> diffuseMaps;
+	std::vector<AssetLoader::FTextureLoadParams> specularMaps;
+	std::vector<AssetLoader::FTextureLoadParams> normalMaps;
+	std::vector<AssetLoader::FTextureLoadParams> heightMaps;
+	std::vector<AssetLoader::FTextureLoadParams> alphaMaps;
+	std::vector<AssetLoader::FTextureLoadParams> emissiveMaps;
+	std::vector<AssetLoader::FTextureLoadParams> occlRoughMetlMaps;
+	std::vector<AssetLoader::FTextureLoadParams> aoMaps;
+	{
+		diffuseMaps = GenerateTextureLoadParams(material, matID, aiTextureType_DIFFUSE, modelDirectory);
+		specularMaps = GenerateTextureLoadParams(material, matID, aiTextureType_SPECULAR, modelDirectory);
+		normalMaps = GenerateTextureLoadParams(material, matID, aiTextureType_NORMALS, modelDirectory);
+		heightMaps = GenerateTextureLoadParams(material, matID, aiTextureType_HEIGHT, modelDirectory);
+		alphaMaps = GenerateTextureLoadParams(material, matID, aiTextureType_OPACITY, modelDirectory);
+		emissiveMaps = GenerateTextureLoadParams(material, matID, aiTextureType_EMISSIVE, modelDirectory);
+		occlRoughMetlMaps = GenerateTextureLoadParams(material, matID, aiTextureType_UNKNOWN, modelDirectory);
+		aoMaps = GenerateTextureLoadParams(material, matID, aiTextureType_AMBIENT_OCCLUSION, modelDirectory);
+	}
+
+
+	// queue texture load
+	std::array<decltype(diffuseMaps)*, 8> TexLoadParams = { &diffuseMaps, &specularMaps, &normalMaps, &heightMaps, &alphaMaps, &emissiveMaps, &occlRoughMetlMaps, &aoMaps };
+	int iTexType = 0;
+	for (const auto* pvLoadParams : TexLoadParams)
+	{
+		int iTex = 0;
+		for (const AssetLoader::FTextureLoadParams& param : *pvLoadParams)
+		{
+			pAssetLoader->QueueTextureLoad(taskID, param);
+			++iTex;
+		}
+		++iTexType;
+	}
+}
+
+static MaterialID ProcessAssimpMaterial(
+	  const aiMaterial* material
+	, size_t aiMatIndex
+	, const std::string& modelDirectory
+	, Scene* pScene
+	, AssetLoader* pAssetLoader
+	, AssetLoader::FMaterialTextureAssignments& MaterialTextureAssignments
+	, TaskID taskID
+)
+{
+	// Create new Material, every material assumed to have a name 
+	const std::string matName = CreateUniqueMaterialName(material, aiMatIndex, modelDirectory);
+	MaterialID matID = pScene->CreateMaterial(matName);
+	Material& mat = pScene->GetMaterial(matID);
+
+	QueueUpTextureLoadRequests(pAssetLoader, modelDirectory, material, matID, taskID);
+	MaterialTextureAssignments.mAssignments.push_back({ matID });
+
+	// MATERIAL - http://assimp.sourceforge.net/lib_html/materials.html
+	aiColor3D color(0.f, 0.f, 0.f);
+	if (aiReturn_SUCCESS == material->Get(AI_MATKEY_COLOR_DIFFUSE, color))
+	{
+		mat.diffuse = XMFLOAT3(color.r, color.g, color.b);
+	}
+
+	aiColor3D specular(0.f, 0.f, 0.f);
+	if (aiReturn_SUCCESS == material->Get(AI_MATKEY_COLOR_SPECULAR, specular))
+	{
+		mat.specular = XMFLOAT3(specular.r, specular.g, specular.b);
+	}
+
+	aiColor3D transparent(0.0f, 0.0f, 0.0f);
+	if (aiReturn_SUCCESS == material->Get(AI_MATKEY_COLOR_TRANSPARENT, transparent))
+	{	// Defines the transparent color of the material, this is the color to be multiplied 
+		// with the color of translucent light to construct the final 'destination color' 
+		// for a particular position in the screen buffer. T
+		//
+		int a = 5;
+	}
+
+	float opacity = 0.0f;
+	if (aiReturn_SUCCESS == material->Get(AI_MATKEY_OPACITY, opacity))
+	{
+		mat.alpha = opacity;
+	}
+
+	float shininess = 0.0f;
+	if (aiReturn_SUCCESS == material->Get(AI_MATKEY_SHININESS, shininess))
+	{
+		// Phong Shininess -> Beckmann BRDF Roughness conversion
+		//
+		// https://simonstechblog.blogspot.com/2011/12/microfacet-brdf.html
+		// https://computergraphics.stackexchange.com/questions/1515/what-is-the-accepted-method-of-converting-shininess-to-roughness-and-vice-versa
+		//
+		mat.roughness = sqrtf(2.0f / (2.0f + shininess));
+	}
+
+	aiColor3D emissiveIntensity(0.0f, 0.0f, 0.0f);
+	if (aiReturn_SUCCESS == material->Get(AI_MATKEY_COLOR_EMISSIVE, emissiveIntensity))
+	{
+		mat.emissiveIntensity = emissiveIntensity.r;
+	}
+
+	// other material keys to consider
+	//
+	// AI_MATKEY_TWOSIDED
+	// AI_MATKEY_ENABLE_WIREFRAME
+	// AI_MATKEY_BLEND_FUNC
+	// AI_MATKEY_BUMPSCALING
+
+	return matID;
 }
 
 static Model::Data ProcessAssimpNode(
@@ -540,144 +690,27 @@ static Model::Data ProcessAssimpNode(
 	SCOPED_CPU_MARKER("ProcessAssimpNode()");
 	Model::Data modelData;
 
-	{
-		SCOPED_CPU_MARKER("Meshes");
-		for (unsigned int i = 0; i < pNode->mNumMeshes; i++)
-		{	// process all the node's meshes (if any)
-			aiMesh* pAiMesh = pAiScene->mMeshes[pNode->mMeshes[i]];
+	for (unsigned int i = 0; i < pNode->mNumMeshes; i++)
+	{	// process all the node's meshes (if any)
+		aiMesh* pAiMesh = pAiScene->mMeshes[pNode->mMeshes[i]];
+		aiMaterial* material = pAiScene->mMaterials[pAiMesh->mMaterialIndex];
 
-			// MATERIAL - http://assimp.sourceforge.net/lib_html/materials.html
-			aiMaterial* material = pAiScene->mMaterials[pAiMesh->mMaterialIndex];
+		// generate data
+		MaterialID matID = ProcessAssimpMaterial(material, pAiMesh->mMaterialIndex, modelDirectory, pScene, pAssetLoader, MaterialTextureAssignments, taskID);
+		Mesh mesh = ProcessAssimpMesh(pRenderer, pAiMesh, pAiScene, ModelName);
 
-			// Every material assumed to have a name 
-			std::string uniqueMatName;
-			{
-				aiString matName;
-				if (aiReturn_SUCCESS != material->Get(AI_MATKEY_NAME, matName))
-					// material doesn't have a name, use generic name Material#
-				{
-					matName = std::string("Material#") + std::to_string(pAiMesh->mMaterialIndex);
-				}
-
-				// Data/Models/%MODEL_NAME%/... : index 2 will give model name
-				auto vFolders = DirectoryUtil::GetFlattenedFolderHierarchy(modelDirectory);
-				assert(vFolders.size() > 2);
-				const std::string ModelFolderName = vFolders[2];
-				uniqueMatName = matName.C_Str();
-				// modelDirectory = "Data/Models/%MODEL_NAME%/"
-				// Materials use the following unique naming: %MODEL_NAME%/%MATERIAL_NAME%
-				uniqueMatName = ModelFolderName + "/" + uniqueMatName;
-			}
-
-			// Create new Material
-			MaterialID matID = pScene->CreateMaterial(uniqueMatName);
-			Material& mat = pScene->GetMaterial(matID);
-
-			// get texture paths to load
-			AssetLoader::FMaterialTextureAssignment MatTexAssignment = {};
-			std::vector<AssetLoader::FTextureLoadParams> diffuseMaps;
-			std::vector<AssetLoader::FTextureLoadParams> specularMaps;
-			std::vector<AssetLoader::FTextureLoadParams> normalMaps;
-			std::vector<AssetLoader::FTextureLoadParams> heightMaps;
-			std::vector<AssetLoader::FTextureLoadParams> alphaMaps;
-			std::vector<AssetLoader::FTextureLoadParams> emissiveMaps;
-			std::vector<AssetLoader::FTextureLoadParams> occlRoughMetlMaps;
-			std::vector<AssetLoader::FTextureLoadParams> aoMaps;
-			{
-				SCOPED_CPU_MARKER("GenerateTextureLoadParams");
-				diffuseMaps = GenerateTextureLoadParams(material, matID, aiTextureType_DIFFUSE, modelDirectory);
-				specularMaps = GenerateTextureLoadParams(material, matID, aiTextureType_SPECULAR, modelDirectory);
-				normalMaps = GenerateTextureLoadParams(material, matID, aiTextureType_NORMALS, modelDirectory);
-				heightMaps = GenerateTextureLoadParams(material, matID, aiTextureType_HEIGHT, modelDirectory);
-				alphaMaps = GenerateTextureLoadParams(material, matID, aiTextureType_OPACITY, modelDirectory);
-				emissiveMaps = GenerateTextureLoadParams(material, matID, aiTextureType_EMISSIVE, modelDirectory);
-				occlRoughMetlMaps = GenerateTextureLoadParams(material, matID, aiTextureType_UNKNOWN, modelDirectory);
-				aoMaps = GenerateTextureLoadParams(material, matID, aiTextureType_AMBIENT_OCCLUSION, modelDirectory);
-			}
-
-
-			// queue texture load
-			std::array<decltype(diffuseMaps)*, 8> TexLoadParams = { &diffuseMaps, &specularMaps, &normalMaps, &heightMaps, &alphaMaps, &emissiveMaps, &occlRoughMetlMaps, &aoMaps };
-			int iTexType = 0;
-			for (const auto* pvLoadParams : TexLoadParams)
-			{
-				int iTex = 0;
-				for (const AssetLoader::FTextureLoadParams& param : *pvLoadParams)
-				{
-					pAssetLoader->QueueTextureLoad(taskID, param);
-					++iTex;
-				}
-				++iTexType;
-			}
-
-
-			// unflatten the material texture assignments
-			MatTexAssignment.matID = matID;
-			MaterialTextureAssignments.mAssignments.push_back(std::move(MatTexAssignment));
-
-			aiColor3D color(0.f, 0.f, 0.f);
-			if (aiReturn_SUCCESS == material->Get(AI_MATKEY_COLOR_DIFFUSE, color))
-			{
-				mat.diffuse = XMFLOAT3(color.r, color.g, color.b);
-			}
-
-			aiColor3D specular(0.f, 0.f, 0.f);
-			if (aiReturn_SUCCESS == material->Get(AI_MATKEY_COLOR_SPECULAR, specular))
-			{
-				mat.specular = XMFLOAT3(specular.r, specular.g, specular.b);
-			}
-
-			aiColor3D transparent(0.0f, 0.0f, 0.0f);
-			if (aiReturn_SUCCESS == material->Get(AI_MATKEY_COLOR_TRANSPARENT, transparent))
-			{	// Defines the transparent color of the material, this is the color to be multiplied 
-				// with the color of translucent light to construct the final 'destination color' 
-				// for a particular position in the screen buffer. T
-				//
-				int a = 5;
-			}
-
-			float opacity = 0.0f;
-			if (aiReturn_SUCCESS == material->Get(AI_MATKEY_OPACITY, opacity))
-			{
-				mat.alpha = opacity;
-			}
-
-			float shininess = 0.0f;
-			if (aiReturn_SUCCESS == material->Get(AI_MATKEY_SHININESS, shininess))
-			{
-				// Phong Shininess -> Beckmann BRDF Roughness conversion
-				//
-				// https://simonstechblog.blogspot.com/2011/12/microfacet-brdf.html
-				// https://computergraphics.stackexchange.com/questions/1515/what-is-the-accepted-method-of-converting-shininess-to-roughness-and-vice-versa
-				//
-				mat.roughness = sqrtf(2.0f / (2.0f + shininess));
-			}
-
-			aiColor3D emissiveIntensity(0.0f, 0.0f, 0.0f);
-			if (aiReturn_SUCCESS == material->Get(AI_MATKEY_COLOR_EMISSIVE, emissiveIntensity))
-			{
-				mat.emissiveIntensity = emissiveIntensity.r;
-			}
-
-			// other material keys to consider
-			//
-			// AI_MATKEY_TWOSIDED
-			// AI_MATKEY_ENABLE_WIREFRAME
-			// AI_MATKEY_BLEND_FUNC
-			// AI_MATKEY_BUMPSCALING
-
-			Mesh mesh = ProcessAssimpMesh(pRenderer, pAiMesh, pAiScene, ModelName);
-			MeshID id = pScene->AddMesh(std::move(mesh));
+		MeshID id = pScene->AddMesh(std::move(mesh));
+		Material& mat = pScene->GetMaterial(matID);
 
 #if 0 // TODO: make sure this case works
-			modelData.AddMesh(id, matID, mat.IsTransparent() ? Model::Data::EMeshType::TRANSPARENT_MESH : Model::Data::EMeshType::OPAQUE_MESH);
+		modelData.AddMesh(id, matID, mat.IsTransparent() ? Model::Data::EMeshType::TRANSPARENT_MESH : Model::Data::EMeshType::OPAQUE_MESH);
 #else
-			modelData.AddMesh(id, matID, Model::Data::EMeshType::OPAQUE_MESH);
-			if (mat.IsTransparent())
-				modelData.AddMesh(id, matID, Model::Data::EMeshType::TRANSPARENT_MESH);
+		modelData.AddMesh(id, matID, Model::Data::EMeshType::OPAQUE_MESH);
+		if (mat.IsTransparent())
+			modelData.AddMesh(id, matID, Model::Data::EMeshType::TRANSPARENT_MESH);
 #endif
-		} // for: NumMeshes
-	}
+	} // for: NumMeshes
+	
 	
 	{
 		SCOPED_CPU_MARKER("Children");

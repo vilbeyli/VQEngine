@@ -186,8 +186,6 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 				Log::Info("Loading completed in %.2fs, starting scene simulation", dt_loading);
 				mTimer.Start();
 			}
-
-			float FrameLimiterTimeSpent = FramePacing(dt);
 		}
 		break;
 	case EAppState::SIMULATING:
