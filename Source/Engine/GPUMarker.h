@@ -25,9 +25,12 @@
 #endif
 #include "WinPixEventRuntime/Include/WinPixEventRuntime/pix3.h"
 
-#define SCOPED_GPU_MARKER(pCmd, pStr)       ScopedGPUMarker GPUMarker(pCmd,pStr)
-#define SCOPED_CPU_MARKER(pStr)             ScopedMarker    CPUMarker(pStr)
-#define SCOPED_CPU_MARKER_C(pStr, PIXColor) ScopedMarker    CPUMarker(pStr, PIXColor)
+#define SCOPED_GPU_MARKER(pCmd, pStr)             ScopedGPUMarker GPUMarker(pCmd,pStr)
+
+#define SCOPED_CPU_MARKER(pStr)                   ScopedMarker    CPUMarker(pStr)
+#define SCOPED_CPU_MARKER_C(pStr, PIXColor)       ScopedMarker    CPUMarker(pStr, PIXColor)
+#define SCOPED_CPU_MARKER_F(pStr, ...)            ScopedMarker    CPUMarker(PIX_COLOR_DEFAULT, pStr, __VA_ARGS__)
+#define SCOPED_CPU_MARKER_CF(PIXColor, pStr, ...) ScopedMarker    CPUMarker(PIXColor, pStr, __VA_ARGS__)
 
 struct ID3D12GraphicsCommandList;
 struct ID3D12CommandQueue;
@@ -37,6 +40,8 @@ class ScopedMarker
 {
 public:
 	ScopedMarker(const char* pLabel, unsigned PIXColor = PIX_COLOR_DEFAULT);
+	template<class ... Args>
+	ScopedMarker(unsigned PIXColor, const char* pLabel, Args&&... args);
 	~ScopedMarker();
 };
 
@@ -58,3 +63,11 @@ private:
 	};
 };
 
+
+template<class ...Args>
+inline ScopedMarker::ScopedMarker(unsigned PIXColor, const char* pFormat, Args && ...args)
+{
+	char buf[256];
+	sprintf_s(buf, pFormat, args...);
+	PIXBeginEvent(PIXColor, buf);
+}
