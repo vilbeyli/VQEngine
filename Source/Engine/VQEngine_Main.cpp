@@ -40,7 +40,7 @@ void ReportSystemInfo(const VQSystemInfo::FSystemInfo& i, bool bDetailed = false
 
 // TODO: heed to W4 warnings, initialize the variables
 VQEngine::VQEngine()
-	: mAssetLoader(mWorkers_ModelLoading, mWorkers_TextureLoading, mRenderer)
+	: mAssetLoader(mWorkers_ModelLoading, mWorkers_TextureLoading, mWorkers_MeshLoading, mRenderer)
 	, mRenderPass_ZPrePass(mRenderer)
 	, mRenderPass_AO(mRenderer, AmbientOcclusionPass::EMethod::FFX_CACAO)
 	, mRenderPass_SSR(mRenderer)
@@ -355,8 +355,10 @@ void VQEngine::InitializeEngineThreads()
 #endif
 	mbStopAllThreads.store(false);
 
-	mWorkers_ModelLoading.Initialize(NumLoadtimeWorkers, "LoadWorkers_Model");
-	mWorkers_TextureLoading.Initialize(NumLoadtimeWorkers, "LoadWorkers_Texture");
+	mWorkers_ModelLoading.Initialize(NumLoadtimeWorkers  , "LoadWorkers_Model"  , 0xFFDDAA00);
+	mWorkers_TextureLoading.Initialize(NumLoadtimeWorkers, "LoadWorkers_Texture", 0xFFCC0077);
+	mWorkers_MeshLoading.Initialize(HWCores              , "LoadWorkers_Mesh"   , 0xFFEE2266);
+
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mRenderThread = std::thread(&VQEngine::RenderThread_Main, this);
 	mUpdateThread = std::thread(&VQEngine::UpdateThread_Main, this);
@@ -372,6 +374,7 @@ void VQEngine::ExitThreads()
 {
 	mWorkers_ModelLoading.Destroy();
 	mWorkers_TextureLoading.Destroy();
+	mWorkers_MeshLoading.Destroy();
 	mbStopAllThreads.store(true);
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS

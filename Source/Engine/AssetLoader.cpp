@@ -47,9 +47,10 @@ TaskID AssetLoader::GenerateModelLoadTaskID()
 	return id;
 }
 
-AssetLoader::AssetLoader(ThreadPool& WorkerThreads_Model, ThreadPool& WorkerThreads_Texture, VQRenderer& renderer)
+AssetLoader::AssetLoader(ThreadPool& WorkerThreads_Model, ThreadPool& WorkerThreads_Texture, ThreadPool& WorkerThreads_Mesh, VQRenderer& renderer)
 	: mWorkers_ModelLoad(WorkerThreads_Model)
 	, mWorkers_TextureLoad(WorkerThreads_Texture)
+	, mWorkers_MeshLoad(WorkerThreads_Mesh)
 	, mRenderer(renderer)
 {}
 
@@ -209,64 +210,63 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 	
 	std::unordered_map<std::string, std::shared_future<TextureID>> Lookup_TextureLoadResult;
 
-	// process model load queue
-	do
+	// process texture load queue
 	{
-		SCOPED_CPU_MARKER("ProcessQueueItem");
-		FTextureLoadParams TexLoadParams = std::move(ctx.LoadQueue.front());
-		ctx.LoadQueue.pop();
-
-		// handle duplicate texture load paths
-		if (ctx.UniquePaths.find(TexLoadParams.TexturePath) == ctx.UniquePaths.end())
+		SCOPED_CPU_MARKER("DispatchTextureWorkers");
+		do
 		{
-			ctx.UniquePaths.insert(TexLoadParams.TexturePath);
+			FTextureLoadParams TexLoadParams = std::move(ctx.LoadQueue.front());
+			ctx.LoadQueue.pop();
 
-			// determine whether we'll load file OR use a procedurally generated texture
-			auto vPathTokens = StrUtil::split(TexLoadParams.TexturePath, '/');
-			assert(!vPathTokens.empty());
-			const bool bProceduralTexture = vPathTokens[0] == "Procedural";
-
-			EProceduralTextures ProcTex = bProceduralTexture 
-				? VQRenderer::GetProceduralTextureEnumFromName(vPathTokens[1])
-				: EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
-
-			// check whether Exit signal is given to the app before dispatching workers
-			if (mWorkers_TextureLoad.IsExiting())
+			// handle duplicate texture load paths
+			if (ctx.UniquePaths.find(TexLoadParams.TexturePath) == ctx.UniquePaths.end())
 			{
-				break;
-			}
+				ctx.UniquePaths.insert(TexLoadParams.TexturePath);
 
-			// dispatch worker thread
-			std::shared_future<TextureID> texLoadResult = std::move(mWorkers_TextureLoad.AddTask([this, TexLoadParams, ProcTex]()
-			{
-				SCOPED_CPU_MARKER_C("TextureLoadWorker", 0xFFCC0077);
-				constexpr bool GENERATE_MIPS = true;
-				const bool IS_PROCEDURAL = ProcTex != EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
-				if (IS_PROCEDURAL)
+				// determine whether we'll load file OR use a procedurally generated texture
+				auto vPathTokens = StrUtil::split(TexLoadParams.TexturePath, '/');
+				assert(!vPathTokens.empty());
+				const bool bProceduralTexture = vPathTokens[0] == "Procedural";
+
+				EProceduralTextures ProcTex = bProceduralTexture
+					? VQRenderer::GetProceduralTextureEnumFromName(vPathTokens[1])
+					: EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
+
+				// check whether Exit signal is given to the app before dispatching workers
+				if (mWorkers_TextureLoad.IsExiting())
 				{
-					return mRenderer.GetProceduralTexture(ProcTex);
+					break;
 				}
-				
-				return mRenderer.CreateTextureFromFile(TexLoadParams.TexturePath.c_str(), GENERATE_MIPS);
-			}));
 
-			// update results lookup for the shared textures (among different materials)
-			Lookup_TextureLoadResult[TexLoadParams.TexturePath] = texLoadResult;
+				// dispatch worker thread
+				std::shared_future<TextureID> texLoadResult = std::move(mWorkers_TextureLoad.AddTask([this, TexLoadParams, ProcTex]()
+				{
+					SCOPED_CPU_MARKER_C("TextureLoadWorker", mWorkers_TextureLoad.mMarkerColor);
+					constexpr bool GENERATE_MIPS = true;
+					const bool IS_PROCEDURAL = ProcTex != EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
+					if (IS_PROCEDURAL)
+					{
+						return mRenderer.GetProceduralTexture(ProcTex);
+					}
 
-			// record load results
-			TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, FTextureLoadResult{ TexLoadParams.TexType, TexLoadParams.TexturePath, std::move(texLoadResult) }));
-		}
-		// shared textures among materials
-		else
-		{
-			TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, FTextureLoadResult{ TexLoadParams.TexType, TexLoadParams.TexturePath, Lookup_TextureLoadResult.at(TexLoadParams.TexturePath) }));
-		}
-	} while (!ctx.LoadQueue.empty());
+					return mRenderer.CreateTextureFromFile(TexLoadParams.TexturePath.c_str(), GENERATE_MIPS);
+				}));
+
+				// update results lookup for the shared textures (among different materials)
+				Lookup_TextureLoadResult[TexLoadParams.TexturePath] = texLoadResult;
+
+				// record load results
+				TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, FTextureLoadResult{ TexLoadParams.TexType, TexLoadParams.TexturePath, std::move(texLoadResult) }));
+			}
+			// shared textures among materials
+			else
+			{
+				TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, FTextureLoadResult{ TexLoadParams.TexType, TexLoadParams.TexturePath, Lookup_TextureLoadResult.at(TexLoadParams.TexturePath) }));
+			}
+		} while (!ctx.LoadQueue.empty());
+	}
 
 	ctx.UniquePaths.clear();
-
-	// Currently mRenderer.CreateTextureFromFile() starts the texture uploads
-	///mRenderer.StartTextureUploads();
 
 	mLookup_TextureLoadContext.erase(taskID);
 
@@ -391,7 +391,7 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, VQRe
 					break;
 				default:
 				case UNKNOWN:
-					Log::Warning("Unknown custom map (%s) type for material MatID=%d!", result.TexturePath.c_str(), assignment.matID);
+					//Log::Warning("Unknown custom map (%s) type for material MatID=%d!", result.TexturePath.c_str(), assignment.matID);
 					DetermineCustomMapType(result.TexturePath);
 					break;
 				}
@@ -460,7 +460,6 @@ static std::vector<AssetLoader::FTextureLoadParams> GenerateTextureLoadParams(
 static Mesh ProcessAssimpMesh(
 	VQRenderer*          pRenderer
 	, const aiMesh*      pMesh
-	, const aiScene*     pScene
 	, const std::string& ModelName
 )
 {
@@ -675,6 +674,8 @@ static MaterialID ProcessAssimpMaterial(
 	return matID;
 }
 
+
+#define THREADED_ASSIMP_MESH_LOAD 1
 static Model::Data ProcessAssimpNode(
 	const std::string& ModelName,
 	aiNode* const      pNode,
@@ -689,29 +690,109 @@ static Model::Data ProcessAssimpNode(
 {
 	SCOPED_CPU_MARKER("ProcessAssimpNode()");
 	Model::Data modelData;
+	
+	ThreadPool& WorkerThreadPool = pAssetLoader->mWorkers_MeshLoad;
 
-	for (unsigned int i = 0; i < pNode->mNumMeshes; i++)
-	{	// process all the node's meshes (if any)
-		aiMesh* pAiMesh = pAiScene->mMeshes[pNode->mMeshes[i]];
-		aiMaterial* material = pAiScene->mMaterials[pAiMesh->mMaterialIndex];
+	std::vector<Mesh> NodeMeshData(pNode->mNumMeshes);
+	std::vector<MaterialID> NodeMaterialIDs(pNode->mNumMeshes, INVALID_ID);
+	const bool bThreaded = THREADED_ASSIMP_MESH_LOAD && NodeMeshData.size() > 1;
 
-		// generate data
-		MaterialID matID = ProcessAssimpMaterial(material, pAiMesh->mMaterialIndex, modelDirectory, pScene, pAssetLoader, MaterialTextureAssignments, taskID);
-		Mesh mesh = ProcessAssimpMesh(pRenderer, pAiMesh, pAiScene, ModelName);
+	if (bThreaded)
+	{
+		constexpr size_t NumMinWorkItemsPerThread = 1;
+		const size_t NumWorkItems = NodeMeshData.size();
+		const size_t NumThreadsToUse = CalculateNumThreadsToUse(NumWorkItems, WorkerThreadPool.GetThreadPoolSize() + 1, NumMinWorkItemsPerThread);
+		const size_t NumWorkerThreadsToUse = NumThreadsToUse - 1;
+		auto vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, NumThreadsToUse);
 
-		MeshID id = pScene->AddMesh(std::move(mesh));
-		Material& mat = pScene->GetMaterial(matID);
+		// synchronization
+		std::atomic<int> WorkerCounter(NumWorkerThreadsToUse);
+		Signal WorkerSignal;
+		{
+			SCOPED_CPU_MARKER("DispatchMeshWorkers");
+			for (size_t iRange = 1; iRange < vRanges.size(); ++iRange)
+			{
+				WorkerThreadPool.AddTask([=, &NodeMeshData, &WorkerSignal, &WorkerCounter]()
+				{
+					SCOPED_CPU_MARKER_C("MeshWorker", 0xFF0000FF);
+					for (size_t i = vRanges[iRange].first; i <= vRanges[iRange].second; ++i)
+					{
+						aiMesh* pAiMesh = pAiScene->mMeshes[pNode->mMeshes[i]];
+						NodeMeshData[i] = ProcessAssimpMesh(pRenderer, pAiMesh, ModelName);
+					}
+					WorkerCounter.fetch_sub(1);
+					WorkerSignal.NotifyOne();
+				});
+			}
+		}
+		{
+			SCOPED_CPU_MARKER("ThisThread_Mesh");
+			for (size_t i = vRanges[0].first; i <= vRanges[0].second; ++i)
+			{
+				aiMesh* pAiMesh = pAiScene->mMeshes[pNode->mMeshes[i]];
+				NodeMeshData[i] = ProcessAssimpMesh(pRenderer, pAiMesh, ModelName);
+			}
+		}
+		{
+			SCOPED_CPU_MARKER("ProcessMaterials");
+			for (unsigned int i = 0; i < pNode->mNumMeshes; i++)
+			{
+				aiMesh* pAiMesh = pAiScene->mMeshes[pNode->mMeshes[i]];
+				aiMaterial* material = pAiScene->mMaterials[pAiMesh->mMaterialIndex];
+				NodeMaterialIDs[i] = ProcessAssimpMaterial(material, pAiMesh->mMaterialIndex, modelDirectory, pScene, pAssetLoader, MaterialTextureAssignments, taskID);
+			}
+		}
+		{
+			SCOPED_CPU_MARKER_C("WAIT_MESH_WORKERS", 0xFFAA0000);
+			WorkerSignal.Wait([&]() { return WorkerCounter.load() == 0; });
+		}
+		{
+			SCOPED_CPU_MARKER("UpdateSceneData");
+			for (unsigned int i = 0; i < pNode->mNumMeshes; i++)
+			{	
+				aiMesh* pAiMesh = pAiScene->mMeshes[pNode->mMeshes[i]];
+				aiMaterial* material = pAiScene->mMaterials[pAiMesh->mMaterialIndex];
+
+				MeshID id = pScene->AddMesh(std::move(NodeMeshData[i]));
+				MaterialID matID = NodeMaterialIDs[i];
+				Material& mat = pScene->GetMaterial(matID);
+
+	#if 0 // TODO: make sure this case works
+				modelData.AddMesh(id, matID, mat.IsTransparent() ? Model::Data::EMeshType::TRANSPARENT_MESH : Model::Data::EMeshType::OPAQUE_MESH);
+	#else
+				modelData.AddMesh(id, matID, Model::Data::EMeshType::OPAQUE_MESH);
+				if (mat.IsTransparent())
+					modelData.AddMesh(id, matID, Model::Data::EMeshType::TRANSPARENT_MESH);
+	#endif
+			} // for: NumMeshes
+		}
+	}
+	else
+	{
+		for (unsigned int i = 0; i < pNode->mNumMeshes; i++)
+		{	// process all the node's meshes (if any)
+			aiMesh* pAiMesh = pAiScene->mMeshes[pNode->mMeshes[i]];
+			aiMaterial* material = pAiScene->mMaterials[pAiMesh->mMaterialIndex];
+			Mesh& mesh = NodeMeshData[i];
+
+			// generate data
+			MaterialID matID = ProcessAssimpMaterial(material, pAiMesh->mMaterialIndex, modelDirectory, pScene, pAssetLoader, MaterialTextureAssignments, taskID);
+			mesh = ProcessAssimpMesh(pRenderer, pAiMesh, ModelName);
+
+			MeshID id = pScene->AddMesh(std::move(mesh));
+			Material& mat = pScene->GetMaterial(matID);
 
 #if 0 // TODO: make sure this case works
-		modelData.AddMesh(id, matID, mat.IsTransparent() ? Model::Data::EMeshType::TRANSPARENT_MESH : Model::Data::EMeshType::OPAQUE_MESH);
+			modelData.AddMesh(id, matID, mat.IsTransparent() ? Model::Data::EMeshType::TRANSPARENT_MESH : Model::Data::EMeshType::OPAQUE_MESH);
 #else
-		modelData.AddMesh(id, matID, Model::Data::EMeshType::OPAQUE_MESH);
-		if (mat.IsTransparent())
-			modelData.AddMesh(id, matID, Model::Data::EMeshType::TRANSPARENT_MESH);
+			modelData.AddMesh(id, matID, Model::Data::EMeshType::OPAQUE_MESH);
+			if (mat.IsTransparent())
+				modelData.AddMesh(id, matID, Model::Data::EMeshType::TRANSPARENT_MESH);
 #endif
-	} // for: NumMeshes
-	
-	
+		} // for: NumMeshes
+	}
+
+
 	{
 		SCOPED_CPU_MARKER("Children");
 		for (unsigned int i = 0; i < pNode->mNumChildren; i++)
@@ -781,7 +862,8 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 		SCOPED_CPU_MARKER("UploadVertexAndIndexBufferHeaps()");
 		pRenderer->UploadVertexAndIndexBufferHeaps(); // load VB/IBs
 	}
-	if (!MaterialTextureAssignments.mAssignments.empty())
+
+	if (!MaterialTextureAssignments.mAssignments.empty()) // dispatch texture workers
 		MaterialTextureAssignments.mTextureLoadResults = pAssetLoader->StartLoadingTextures(taskID);
 
 	// cache the imported model in Scene
@@ -798,7 +880,12 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 	MaterialTextureAssignments.DoAssignments(pScene, pRenderer);
 
 	t.Stop();
-	Log::Info("   [%.2fs] Loaded Model '%s'.", fTimeReadFile + t.DeltaTime(), ModelName.c_str());
+	Log::Info("   [%.2fs] Loaded Model '%s': %d meshes, %d materials"
+		, fTimeReadFile + t.DeltaTime()
+		, ModelName.c_str()
+		, model.mData.GetNumMeshesOfAllTypes()
+		, model.mData.GetMaterials().size()
+	);
 	return mID;
 }
 

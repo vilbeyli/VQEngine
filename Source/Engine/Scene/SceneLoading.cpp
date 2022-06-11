@@ -308,7 +308,7 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 			}
 		}
 		{
-			SCOPED_CPU_MARKER_F("Range: [%d, %d] ", ranges[0].first, ranges[0].second);
+			SCOPED_CPU_MARKER_F("Range[%d,%d] ", ranges[0].first, ranges[0].second);
 			for (size_t i = ranges.front().first; i <= ranges.front().second; ++i)
 			{
 				BuildGameObject(GameObjects[i], iObj++, iTF++);

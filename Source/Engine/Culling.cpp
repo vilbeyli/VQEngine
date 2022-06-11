@@ -199,9 +199,9 @@ static void DispatchWorkers(ThreadPool& WorkerThreadPool, size_t NumWorkItems, v
 		const size_t& iEnd = Range.second; // inclusive
 		assert(iBegin <= iEnd); // ensure work context bounds
 
-		WorkerThreadPool.AddTask([=]()
+		WorkerThreadPool.AddTask([=, &WorkerThreadPool]()
 		{
-			SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+			SCOPED_CPU_MARKER_C("UpdateWorker", WorkerThreadPool.mMarkerColor);
 			pfnProcess(iBegin, iEnd);
 		});
 	}

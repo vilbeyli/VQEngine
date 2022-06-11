@@ -111,7 +111,12 @@ public:
 	//
 	// CLASS INTERFACE
 	// 
-	AssetLoader(ThreadPool& WorkerThreads_Model, ThreadPool& WorkerThreads_Texture, VQRenderer& renderer);
+	AssetLoader(
+		  ThreadPool& WorkerThreads_Model
+		, ThreadPool& WorkerThreads_Texture
+		, ThreadPool& WorkerThreads_Mesh
+		, VQRenderer& renderer
+	);
 
 	inline const ThreadPool& GetThreadPool_TextureLoad() const { return mWorkers_TextureLoad; }
 
@@ -128,9 +133,11 @@ private:
 	//
 	// DATA
 	//
-private:
+public:
 	ThreadPool& mWorkers_ModelLoad;
 	ThreadPool& mWorkers_TextureLoad;
+	ThreadPool& mWorkers_MeshLoad;
+private:
 	VQRenderer& mRenderer;
 
 	template<class T> struct FLoadTaskContext
