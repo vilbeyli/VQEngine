@@ -77,7 +77,7 @@ MaterialID Scene::LoadMaterial(const FMaterialRepresentation& matRep, TaskID tas
 	return id;
 }
 
-void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& sceneRep)
+void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& sceneRep, ThreadPool& UpdateWorkerThreadPool)
 {
 	SCOPED_CPU_MARKER("Scene::StartLoading()");
 
@@ -98,8 +98,8 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 
 	LoadBuiltinMaterials(taskID, sceneRep.Objects);
 	LoadSceneMaterials(sceneRep.Materials, taskID);
-
-	LoadGameObjects(std::move(sceneRep.Objects));
+	
+	LoadGameObjects(std::move(sceneRep.Objects), UpdateWorkerThreadPool);
 	LoadLights(sceneRep.Lights);
 	LoadCameras(sceneRep.Cameras);
 	LoadPostProcessSettings();
@@ -197,68 +197,127 @@ void Scene::LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes)
 	}
 }
 
-void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects)
-{
-	SCOPED_CPU_MARKER("Scene::LoadGameObjects()");
-	constexpr bool B_LOAD_GAMEOBJECTS_SERIAL = true;
 
-	if constexpr (B_LOAD_GAMEOBJECTS_SERIAL)
+void Scene::BuildGameObject(const FGameObjectRepresentation& ObjRep, size_t iObj, size_t iTF)
+{
+	SCOPED_CPU_MARKER("BuildGameObject");
+
+	// GameObject
+	GameObject* pObj = mpObjects[iObj];
+	pObj->mModelID = INVALID_ID;
+	pObj->mTransformID = INVALID_ID;
+
+	// Transform
+	Transform* pTransform = mpTransforms[iTF];
+	*pTransform = ObjRep.tf;
+	mpTransforms[iTF] = pTransform;
+	pObj->mTransformID = (TransformID)iTF;
+
+	// Model
+	const bool bModelIsBuiltinMesh = !ObjRep.BuiltinMeshName.empty();
+	const bool bModelIsLoadedFromFile = !ObjRep.ModelFilePath.empty();
+	assert(bModelIsBuiltinMesh != bModelIsLoadedFromFile);
+
+	if (bModelIsBuiltinMesh)
+	{
+		ModelID mID = this->CreateModel();
+		Model& model = mModels.at(mID);
+
+		// create/get mesh
+		MeshID meshID = mEngine.GetBuiltInMeshID(ObjRep.BuiltinMeshName);
+
+		// material
+		MaterialID matID = this->mDefaultMaterialID;
+		if (!ObjRep.MaterialName.empty())
+		{
+			matID = this->CreateMaterial(ObjRep.MaterialName);
+		}
+		Material& mat = this->GetMaterial(matID);
+		const bool bTransparentMesh = mat.IsTransparent();
+
+		// model data
+		model.mData = Model::Data(meshID, matID, Model::Data::OPAQUE_MESH);
+
+		model.mbLoaded = true;
+		pObj->mModelID = mID;
+	}
+	else
+	{
+		mAssetLoader.QueueModelLoad(pObj, ObjRep.ModelFilePath, ObjRep.ModelName);
+	}
+
+	mpObjects[iObj] = pObj;
+}
+
+void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects, ThreadPool& WorkerThreadPool)
+{
+	const size_t NumGameObjects = GameObjects.size();
+
+	SCOPED_CPU_MARKER_F("Scene::LoadGameObjects(N=%d)", NumGameObjects);
+	constexpr bool B_LOAD_GAMEOBJECTS_SERIAL = false;
+	constexpr size_t NUM_GAMEOBJECTS_THRESHOLD_FOR_THREADED_LOAD = 1024;
+
+
+	size_t iTF = mpTransforms.size();
+	size_t iObj = mpObjects.size();
+	{
+		SCOPED_CPU_MARKER("MemAlloc");
+		mpTransforms.resize(mpTransforms.size() + NumGameObjects);
+		mpObjects.resize   (mpObjects.size()    + NumGameObjects);
+		Transform*  pTFArray  = mTransformPool.Allocate(NumGameObjects);
+		GameObject* pObjArray = mGameObjectPool.Allocate(NumGameObjects);
+		for (size_t i = 0; i < mpTransforms.size(); ++i)
+		{
+			mpTransforms[i] = &pTFArray[i];
+			mpObjects[i] = &pObjArray[i];
+		}
+	}
+
+	if (B_LOAD_GAMEOBJECTS_SERIAL || NumGameObjects < NUM_GAMEOBJECTS_THRESHOLD_FOR_THREADED_LOAD)
 	{
 		for (FGameObjectRepresentation& ObjRep : GameObjects)
 		{
-			// GameObject
-			GameObject* pObj = mGameObjectPool.Allocate(1);
-			pObj->mModelID = INVALID_ID;
-			pObj->mTransformID = INVALID_ID;
-
-			// Transform
-			Transform* pTransform = mTransformPool.Allocate(1);
-			*pTransform = std::move(ObjRep.tf);
-			mpTransforms.push_back(pTransform);
-
-			TransformID tID = static_cast<TransformID>(mpTransforms.size() - 1);
-			pObj->mTransformID = tID;
-
-			// Model
-			const bool bModelIsBuiltinMesh = !ObjRep.BuiltinMeshName.empty();
-			const bool bModelIsLoadedFromFile = !ObjRep.ModelFilePath.empty();
-			assert(bModelIsBuiltinMesh != bModelIsLoadedFromFile);
-
-			if (bModelIsBuiltinMesh)
-			{
-				ModelID mID = this->CreateModel();
-				Model& model = mModels.at(mID);
-
-				// create/get mesh
-				MeshID meshID = mEngine.GetBuiltInMeshID(ObjRep.BuiltinMeshName);
-
-				// material
-				MaterialID matID = this->mDefaultMaterialID;
-				if (!ObjRep.MaterialName.empty())
-				{
-					matID = this->CreateMaterial(ObjRep.MaterialName);
-				}
-				Material& mat = this->GetMaterial(matID);
-				const bool bTransparentMesh = mat.IsTransparent();
-
-				// model data
-				model.mData = Model::Data(meshID, matID, Model::Data::OPAQUE_MESH);
-
-				model.mbLoaded = true;
-				pObj->mModelID = mID;
-			}
-			else
-			{
-				mAssetLoader.QueueModelLoad(pObj, ObjRep.ModelFilePath, ObjRep.ModelName);
-			}
-
-			mpObjects.push_back(pObj);
+			BuildGameObject(ObjRep, iObj++, iTF++);
 		}
 	}
 	else // THREADED LOAD
 	{
-		// dispatch workers
-		assert(false); // TODO: profile first
+		const size_t NumAvailableWorkers = WorkerThreadPool.GetThreadPoolSize();
+		const size_t NumThreads = NumAvailableWorkers + 1;
+		const std::vector<FGameObjectRepresentation>* pObjects = &GameObjects;
+
+		std::vector<std::pair<size_t, size_t>> ranges = PartitionWorkItemsIntoRanges(NumGameObjects, NumThreads);
+		{
+			SCOPED_CPU_MARKER("DispatchThreads");
+			for (size_t iRange = 1; iRange < ranges.size(); ++iRange)
+			{
+				WorkerThreadPool.AddTask([=]()
+				{
+					SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+					{
+						SCOPED_CPU_MARKER_F("Range: [%d, %d]", ranges[iRange].first, ranges[iRange].second);
+						const size_t NumItems_PrevRange = (ranges[iRange - 1].second - ranges[iRange - 1].first + 1);
+						const size_t Offset = (ranges[iRange - 1].second - ranges[0].first + 1);
+						size_t iTF_Thread  = iTF  + Offset;
+						size_t iObj_Thread = iObj + Offset;
+
+						for (size_t i = ranges[iRange].first; i <= ranges[iRange].second; ++i)
+							BuildGameObject((*pObjects)[i], iObj_Thread++, iTF_Thread++);
+					}
+				});
+			}
+		}
+		{
+			SCOPED_CPU_MARKER_F("Range: [%d, %d] ", ranges[0].first, ranges[0].second);
+			for (size_t i = ranges.front().first; i <= ranges.front().second; ++i)
+			{
+				BuildGameObject(GameObjects[i], iObj++, iTF++);
+			}
+		}
+		{
+			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
+			while (WorkerThreadPool.GetNumActiveTasks() != 0);
+		}
 	}
 
 	// kickoff workers for loading models
@@ -440,9 +499,18 @@ void Scene::CalculateGameObjectLocalSpaceBoundingBoxes()
 {
 	constexpr float max_f = std::numeric_limits<float>::max();
 	constexpr float min_f = -(max_f - 1.0f);
-
+	
+	size_t i = 0;
 	for (GameObject* pGameObj : mpObjects)
 	{
+		if (!pGameObj)
+		{
+			Log::Warning("nullptr gameobj[%d]", i);
+			++i;
+			continue;
+		}
+		++i;
+		assert(pGameObj);
 		FBoundingBox& AABB = pGameObj->mLocalSpaceBoundingBox;
 
 		// reset AABB

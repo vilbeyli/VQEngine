@@ -537,7 +537,6 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 
 	auto fnLoadImageFromDisk = [](const std::string& FilePath, Image& img)
 	{
-		SCOPED_CPU_MARKER("fnLoadImageFromDisk()");
 		if (FilePath.empty())
 		{
 			Log::Error("Cannot load Image from file: empty FilePath provided.");

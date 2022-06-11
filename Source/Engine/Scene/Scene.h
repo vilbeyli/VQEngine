@@ -334,7 +334,7 @@ private: // Derived Scenes shouldn't access these functions
 	void PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX);
 	void Update(float dt, int FRAME_DATA_INDEX = 0);
 	void PostUpdate(ThreadPool& UpdateWorkerThreadPool, int FRAME_DATA_INDEX = 0);
-	void StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene);
+	void StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene, ThreadPool& UpdateWorkerThreadPool);
 	void OnLoadComplete();
 	void Unload(); // serial-only for now. maybe MT later.
 	void RenderUI(FUIState& UIState, uint32_t W, uint32_t H);
@@ -370,9 +370,11 @@ private: // Derived Scenes shouldn't access these functions
 	void CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
 	void BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
 
+	void BuildGameObject(const FGameObjectRepresentation& rep, size_t iObj, size_t iTF);
+	
 	void LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRepresentation>& GameObjsToBeLoaded);
 	void LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes);
-	void LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects); // TODO: consider using FSceneRepresentation as the parameter and read the corresponding member
+	void LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects, ThreadPool& WorkerThreadPool); // TODO: consider using FSceneRepresentation as the parameter and read the corresponding member
 	void LoadSceneMaterials(const std::vector<FMaterialRepresentation>& Materials, TaskID taskID);
 	void LoadLights(const std::vector<Light>& SceneLights);
 	void LoadCameras(std::vector<FCameraParameters>& CameraParams);
@@ -493,6 +495,8 @@ private:
 	MemoryPool<GameObject> mGameObjectPool;
 	MemoryPool<Transform>  mTransformPool;
 
+	std::mutex mMtx_GameObjects;
+	std::mutex mMtx_Transforms;
 	std::mutex mMtx_Meshes;
 	std::mutex mMtx_Models;
 	std::mutex mMtx_Materials;

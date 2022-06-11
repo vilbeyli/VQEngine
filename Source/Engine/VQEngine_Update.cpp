@@ -153,8 +153,8 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 		Log::Info("UpdateThread: loading...");
 		Load_SceneData_Dispatch(); // start load level
 		mAppState = EAppState::LOADING;
-	}
 		break;
+	}
 	case EAppState::LOADING:
 		if (mbLoadingLevel || mbLoadingEnvironmentMap)
 		{
@@ -472,7 +472,7 @@ void VQEngine::Load_SceneData_Dispatch()
 	
 
 	// start loading textures, models, materials with worker threads
-	mpScene->StartLoading(this->mBuiltinMeshes, SceneRep);
+	mpScene->StartLoading(this->mBuiltinMeshes, SceneRep, mWorkers_Simulation);
 
 	// start loading environment map textures
 	if (!SceneRep.EnvironmentMapPreset.empty())
