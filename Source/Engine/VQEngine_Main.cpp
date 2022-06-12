@@ -345,7 +345,6 @@ void VQEngine::InitializeEngineThreads()
 	const size_t HWThreads  = ThreadPool::sHardwareThreadCount;
 	const size_t HWCores    = HWThreads / 2;
 	const size_t NumRuntimeWorkers = HWCores - 2; // reserve 2 cores for Update + Render threads
-	const size_t NumLoadtimeWorkers    = HWThreads;
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mpSemUpdate.reset(new Semaphore(NUM_SWAPCHAIN_BACKBUFFERS, NUM_SWAPCHAIN_BACKBUFFERS));
@@ -355,9 +354,9 @@ void VQEngine::InitializeEngineThreads()
 #endif
 	mbStopAllThreads.store(false);
 
-	mWorkers_ModelLoading.Initialize(NumLoadtimeWorkers  , "LoadWorkers_Model"  , 0xFFDDAA00);
-	mWorkers_TextureLoading.Initialize(NumLoadtimeWorkers, "LoadWorkers_Texture", 0xFFCC0077);
-	mWorkers_MeshLoading.Initialize(HWCores              , "LoadWorkers_Mesh"   , 0xFFEE2266);
+	mWorkers_ModelLoading.Initialize(HWCores    , "LoadWorkers_Model"  , 0xFFDDAA00);
+	mWorkers_TextureLoading.Initialize(HWThreads, "LoadWorkers_Texture", 0xFFCC0077);
+	mWorkers_MeshLoading.Initialize(HWCores     , "LoadWorkers_Mesh"   , 0xFFEE2266);
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mRenderThread = std::thread(&VQEngine::RenderThread_Main, this);
