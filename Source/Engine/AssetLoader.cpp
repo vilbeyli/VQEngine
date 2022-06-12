@@ -706,7 +706,7 @@ static Model::Data ProcessAssimpNode(
 		auto vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, NumThreadsToUse);
 
 		// synchronization
-		std::atomic<int> WorkerCounter(NumWorkerThreadsToUse);
+		std::atomic<int> WorkerCounter((int)NumWorkerThreadsToUse);
 		Signal WorkerSignal;
 		{
 			SCOPED_CPU_MARKER("DispatchMeshWorkers");
@@ -839,16 +839,16 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 	t.Start();
 
 	// Import Assimp Scene
-	Importer importer;
+	Importer* importer = new Importer();
 	const aiScene* pAiScene = nullptr;
 	{
 		SCOPED_CPU_MARKER("ReadFile()");
-		pAiScene = importer.ReadFile(objFilePath, ASSIMP_LOAD_FLAGS);
+		pAiScene = importer->ReadFile(objFilePath, ASSIMP_LOAD_FLAGS);
 	}
 
 	if (!pAiScene || pAiScene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !pAiScene->mRootNode)
 	{
-		Log::Error("Assimp error: %s", importer.GetErrorString());
+		Log::Error("Assimp error: %s", importer->GetErrorString());
 		return INVALID_ID;
 	}
 	t.Tick(); float fTimeReadFile = t.DeltaTime();
@@ -870,6 +870,15 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 	ModelID mID = pScene->CreateModel();
 	Model& model = pScene->GetModel(mID);
 	model = Model(objFilePath, ModelName, std::move(data));
+	
+	// async clear, we don't need to block this thread for cleaning up.
+	// Don't use ModelLoad workers because app state changes from Loading
+	// into Simulating uses ModelLoad worker's task count.
+	pAssetLoader->mWorkers_MeshLoad.AddTask([=]()
+	{
+		SCOPED_CPU_MARKER("CleanUpImporter");
+		delete importer;
+	});
 
 	// SYNC POINT : wait for textures to load
 	{
