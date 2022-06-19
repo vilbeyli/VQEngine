@@ -258,7 +258,7 @@ void AssetBrowser::DrawWindow()
 	if (ImGui::BeginTable("table-content-browser", 2, ImGuiTableFlags_Resizable))
 	{
 		// right click to AssetBrowser 
-		if (ImGui::BeginPopupContextWindow("Resource Opinions"))
+		if (ImGui::BeginPopupContextWindow("Resource Options"))
 		{
 			if (ImGui::MenuItem("Open File Location")) {
 				ShellExecute(0, 0, mCurrentPath.u8string().c_str(), 0, 0, SW_SHOW);
