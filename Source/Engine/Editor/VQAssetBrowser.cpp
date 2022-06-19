@@ -17,11 +17,28 @@
 //	Contact: volkanilbeyli@gmail.com, anilcangulkaya7@gmail.com
 
 #include "VQAssetBrowser.h"
-#include <vector>
-#include <string>
-#include <fstream>
-#include <filesystem>
 #include "../Core/Types.h"
+#include "../../Libs/VQUtils/Source/Log.h"
+#include "../../Renderer/Renderer.h"
+
+const CBV_SRV_UAV AssetBrowser::TextureSRVPair::GetTextureSRV(VQRenderer& renderer) const
+{
+	return renderer.GetSRV(mSrv);
+}
+
+AssetBrowser::TextureSRVPair::TextureSRVPair(VQRenderer& vqRenderer, const char* filename)
+	: mTextureId(vqRenderer.CreateTextureFromFile(filename, true))
+	, mSrv(vqRenderer.AllocateSRV(1))
+{
+	vqRenderer.InitializeSRV(mSrv, 0, mTextureId);
+}
+
+void AssetBrowser::TextureSRVPair::Dispose(VQRenderer& renderer) {
+	renderer.DestroySRV(mSrv);
+	renderer.DestroyTexture(mTextureId);
+}
+
+
 
 AssetBrowser::~AssetBrowser()
 {
@@ -283,6 +300,8 @@ void AssetBrowser::DrawWindow()
 			searching = std::strlen(SearchText);
 		}
 		ImGui::Separator();
+
+		
 
 		float columnSize = VQEditor::filesize + 30;
 		int columnCount = std::max<int>(1, int(regionAvail / columnSize));

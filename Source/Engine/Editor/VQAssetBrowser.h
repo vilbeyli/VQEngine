@@ -18,16 +18,16 @@
 
 #pragma once
 #include "VQEditor.h"
-#include <string>
-#include "../../Renderer/Renderer.h"
-#include "../../Libs/VQUtils/Source/Log.h"
+
+#include <filesystem>
+
+class VQRenderer;
 
 class AssetBrowser
 {
 public:
-	class FileRecord
+	struct FileRecord
 	{
-	public:
 		std::string mPath;
 		std::string mName;
 		std::string mExtension;
@@ -44,12 +44,11 @@ public:
 		{}
 	};
 
-	class FolderTree
+	struct FolderTree
 	{
-	public:
 		FolderTree() : mpParent(nullptr) {}
 		FolderTree(std::filesystem::path _path, std::string& _name) : mPath(_path), mName(std::move(_name)) {}
-	public:
+
 		std::filesystem::path mPath;
 		FolderTree* mpParent = nullptr;
 		std::string mName;
@@ -57,30 +56,18 @@ public:
 		std::vector<FileRecord> mFiles;
 	};
 
-	class TextureSRVPair
+	struct TextureSRVPair
 	{
-	public:
 		TextureID mTextureId;
 		SRV_ID mSrv;
 		
-		inline const CBV_SRV_UAV GetTextureSRV(VQRenderer& renderer) const
-		{ 
-			return renderer.GetSRV(mSrv);
-		}
+		const CBV_SRV_UAV GetTextureSRV(VQRenderer& renderer) const;
 		
 		TextureSRVPair() {}
 
-		TextureSRVPair(VQRenderer& vqRenderer, const char* filename)
-		: mTextureId(vqRenderer.CreateTextureFromFile(filename, true))
-		, mSrv(vqRenderer.AllocateSRV(1))
-		{
-			vqRenderer.InitializeSRV(mSrv, 0, mTextureId);
-		}
-
-		void Dispose(VQRenderer& renderer) {
-			renderer.DestroySRV(mSrv);
-			renderer.DestroyTexture(mTextureId);
-		}
+		TextureSRVPair(VQRenderer& vqRenderer, const char* filename);
+		
+		void Dispose(VQRenderer& renderer);
 	};
 
 private:

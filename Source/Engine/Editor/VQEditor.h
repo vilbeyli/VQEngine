@@ -17,20 +17,18 @@
 //	Contact: volkanilbeyli@gmail.com, anilcangulkaya7@gmail.com
 
 #pragma once
-#include "FontAwesome4.h"
-
-#include "Libs/imgui/imgui.h"
-// To use the 'disabled UI state' functionality (ImGuiItemFlags_Disabled), include internal header
-// https://github.com/ocornut/imgui/issues/211#issuecomment-339241929
-#include "Libs/imgui/imgui_internal.h"
-#include <functional>
 #include "../../Renderer/ResourceViews.h"
 
-typedef void(*Action)();
+#include "Libs/imgui/imgui.h"
+#include "FontAwesome4.h"
+
+#include <functional>
 
 namespace VQEditor
 {
-	constexpr float filesize = 35;
+	typedef void(*Action)();
+
+	constexpr float filesize = 35.0f;
 	constexpr float miniSize = 12.5f;
 
 	void DeepDarkTheme();
