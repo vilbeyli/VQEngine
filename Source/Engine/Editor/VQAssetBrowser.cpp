@@ -251,8 +251,19 @@ void AssetBrowser::SearchProcess(const char* SearchText)
 	RecursiveSearch(SearchText, len, mpRootTree);
 }
 
-void AssetBrowser::DrawWindow()
+void AssetBrowser::DrawWindow(uint WinSizeX, uint WinSizeY)
 {
+	constexpr uint ASSETBROWSER_WINDOW_SIZE_X = 720;
+	constexpr uint ASSETBROWSER_WINDOW_SIZE_Y = 300;	
+	constexpr uint ASSETBROWSER_MARGIN_X = 10;
+	constexpr uint ASSETBROWSER_MARGIN_Y = 10;
+	// matches the GFX_WINDOW_PADDING_X, need to find a better way to track positioning/layouting
+	const uint ASSETBROWSER_WINDOW_POS_X = 450 + ASSETBROWSER_MARGIN_X;
+	const uint ASSETBROWSER_WINDOW_POS_Y = WinSizeY - ASSETBROWSER_WINDOW_SIZE_Y - ASSETBROWSER_MARGIN_Y;
+
+	ImGui::SetNextWindowPos(ImVec2((float)ASSETBROWSER_WINDOW_POS_X, (float)ASSETBROWSER_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(ASSETBROWSER_WINDOW_SIZE_X, ASSETBROWSER_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
+
 	ImGui::Begin("Resources");
 	
 	if (ImGui::BeginTable("table-content-browser", 2, ImGuiTableFlags_Resizable))

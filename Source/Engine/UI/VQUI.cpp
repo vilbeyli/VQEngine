@@ -310,7 +310,7 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 		if (mUIState.bWindowVisible_Profiler)              DrawProfilerWindow(mpScene->GetSceneRenderStats(FRAME_DATA_INDEX), dt);
 		if (mUIState.bWindowVisible_DebugPanel)            DrawDebugPanelWindow(SceneParams, PPParams);
 		if (mUIState.bWindowVisible_GraphicsSettingsPanel) DrawGraphicsSettingsWindow(SceneParams, PPParams);
-		if (mUIState.bWindowVisible_AssetBrowser)          mpAssetBrowser->DrawWindow();
+		if (mUIState.bWindowVisible_AssetBrowser)          mpAssetBrowser->DrawWindow(mpWinMain->GetWidth(), mpWinMain->GetHeight());
 	}
 
 	// If we fired an event that would trigger loading,

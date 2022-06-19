@@ -94,7 +94,7 @@ public:
 	
 	~AssetBrowser();
 
-	void DrawWindow();
+	void DrawWindow(uint WinSizeX, uint WinSizeY);
 
 	std::filesystem::path GetCurrentPath() const { return mCurrentPath; }
 
