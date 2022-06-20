@@ -31,7 +31,7 @@
 
 #include "Settings.h"
 #include "AssetLoader.h"
-#include "VQUI.h"
+#include "UI/VQUI.h"
 
 #include "RenderPass/AmbientOcclusion.h"
 #include "RenderPass/DepthPrePass.h"
@@ -519,6 +519,7 @@ private:
 	void                            InitializeHDRProfiles();
 	void                            InitializeEnvironmentMaps();
 	void                            InitializeScenes();
+	void                            InitializeImGUI(HWND hwnd);
 	void                            InitializeUI(HWND hwnd);
 	void                            InitializeEngineThreads();
 

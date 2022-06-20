@@ -119,6 +119,7 @@ set (CoreFiles
     "Source/Engine/Core/Types.h"
     "Source/Engine/Core/RenderCommands.h"
     "Source/Engine/Core/Memory.h"
+    "Source/Engine/Core/imgui_impl_win32.h"
 
     "Source/Engine/Core/Platform.cpp"
     "Source/Engine/Core/Window.cpp"
@@ -128,6 +129,7 @@ set (CoreFiles
     "Source/Engine/Core/VQEngine_EventHandlers.cpp"
     "Source/Engine/Core/FileParser.cpp"
     "Source/Engine/Core/Memory.cpp"
+    "Source/Engine/Core/imgui_impl_win32.cpp"
 )
 
 set (SceneFiles   
@@ -161,6 +163,11 @@ set (PostProcessFiles
     "Source/Engine/PostProcess/PostProcess.cpp"
 )
 
+set (UIFiles
+    "Source/Engine/UI/VQUI.cpp"
+    "Source/Engine/UI/VQUI.h"
+)
+
 set (SourceVQE 
     "Source/Engine/VQEngine.h"
     "Source/Engine/VQEngine_RenderCommon.h"
@@ -170,7 +177,6 @@ set (SourceVQE
     "Source/Engine/Geometry.h"
     "Source/Engine/AssetLoader.h"
     "Source/Engine/GPUMarker.h"
-    "Source/Engine/VQUI.h"
 
     "Source/Engine/Main.cpp"
     "Source/Engine/VQEngine_Main.cpp"
@@ -179,7 +185,6 @@ set (SourceVQE
     "Source/Engine/VQEngine_Update.cpp"
     "Source/Engine/VQEngine_Input.cpp"
     "Source/Engine/VQEngine_Simulation.cpp"
-    "Source/Engine/VQUI.cpp"
     "Source/Engine/EnvironmentMap.cpp"
     "Source/Engine/Geometry.cpp"
     "Source/Engine/Math.cpp"
@@ -281,6 +286,7 @@ source_group("Materials" FILES ${Materials})
 source_group("Source\\RenderPass" FILES ${RenderPassFiles})
 source_group("Source\\Core" FILES ${CoreFiles})
 source_group("Source\\Scene" FILES ${SceneFiles})
+source_group("Source\\UI" FILES ${UIFiles})
 source_group("Source\\PostProcess" FILES ${PostProcessFiles})
 source_group("Source" FILES ${SourceVQE})
 source_group("Libs\\AMD-FidelityFX\\CACAO"   FILES ${LibFFX_CACAO})
@@ -300,6 +306,8 @@ set_source_files_properties(${FFX_DNSR_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Tex
 set_source_files_properties(${CoreFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${RenderPassFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${SceneFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${UIFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${PostProcessFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${LibFFX_CACAO} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${LibFFX_SSSR} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(Data/Resources/VQE.rc PROPERTIES VS_TOOL_OVERRIDE "Resource compiler")
@@ -330,6 +338,7 @@ add_executable( ${PROJECT_NAME}
     ${LibFFX_SSSR} 
     ${RenderPassFiles} 
     ${CoreFiles} 
+    ${UIFiles} 
     ${PostProcessFiles} 
     ${SceneFiles}
 )

@@ -18,6 +18,7 @@
 
 #include "../VQEngine.h"
 #include "Input.h"
+#include "imgui.h"
 
 #include <Windowsx.h>
 
@@ -30,7 +31,9 @@ static void LogWndMsg(UINT uMsg, HWND hwnd);
 
 // ===================================================================================================================================
 // WINDOW PROCEDURE
+
 // ===================================================================================================================================
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	LogWndMsg(uMsg, hwnd);
@@ -47,6 +50,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		return DefWindowProc(hwnd, uMsg, wParam, lParam);
 	}
 
+	if (ImGui_ImplWin32_WndProcHandler(hwnd, uMsg, wParam, lParam))
+		return 0;
+
+	const ImGuiIO& io = ImGui::GetIO();
 
 	switch (uMsg) // HANDLE EVENTS
 	{
@@ -135,8 +142,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	//
 	// KEYBOARD
 	//
-	case WM_KEYDOWN: if (pWindow->pOwner) pWindow->pOwner->OnKeyDown(hwnd, wParam); return 0;
-	case WM_KEYUP:   if (pWindow->pOwner) pWindow->pOwner->OnKeyUp(hwnd, wParam);   return 0;
+	case WM_KEYDOWN: if (pWindow->pOwner && !io.WantCaptureKeyboard) pWindow->pOwner->OnKeyDown(hwnd, wParam); return 0;
+	case WM_KEYUP:   if (pWindow->pOwner && !io.WantCaptureKeyboard) pWindow->pOwner->OnKeyUp(hwnd, wParam);   return 0;
 	case WM_SYSKEYDOWN:
 		if ((wParam == VK_RETURN) && (lParam & (1 << 29))) // Handle ALT+ENTER
 		{

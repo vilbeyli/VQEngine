@@ -17,10 +17,10 @@
 //	Contact: volkanilbeyli@gmail.com
 #define NOMINMAX
 #include <utility>
-#include "VQEngine.h"
-#include "GPUMarker.h"
+#include "../VQEngine.h"
+#include "../GPUMarker.h"
 
-#include "RenderPass/MagnifierPass.h"
+#include "../RenderPass/MagnifierPass.h"
 
 #include "VQUtils/Source/utils.h"
 
@@ -179,7 +179,7 @@ void FUIState::GetMouseScreenPosition(int& X, int& Y) const
 //----------------------------------------------------------------
 //----------------------------------------------------------------
 
-void VQEngine::InitializeUI(HWND hwnd)
+void VQEngine::InitializeImGUI(HWND hwnd)
 {
 	mpImGuiContext = ImGui::CreateContext();
 	ImGui::SetCurrentContext(mpImGuiContext);
@@ -187,6 +187,38 @@ void VQEngine::InitializeUI(HWND hwnd)
 	ImGuiIO& io = ImGui::GetIO();
 	io.IniFilename = nullptr; // don't save out to a .ini file
 
+
+#if 0 // do we need imgui keymapping?
+	io.KeyMap[ImGuiKey_Tab] = VK_TAB;
+	io.KeyMap[ImGuiKey_LeftArrow] = VK_LEFT;
+	io.KeyMap[ImGuiKey_RightArrow] = VK_RIGHT;
+	io.KeyMap[ImGuiKey_UpArrow] = VK_UP;
+	io.KeyMap[ImGuiKey_DownArrow] = VK_DOWN;
+	io.KeyMap[ImGuiKey_PageUp] = VK_PRIOR;
+	io.KeyMap[ImGuiKey_PageDown] = VK_NEXT;
+	io.KeyMap[ImGuiKey_Home] = VK_HOME;
+	io.KeyMap[ImGuiKey_End] = VK_END;
+	io.KeyMap[ImGuiKey_Delete] = VK_DELETE;
+	io.KeyMap[ImGuiKey_Backspace] = VK_BACK;
+	io.KeyMap[ImGuiKey_Enter] = VK_RETURN;
+	io.KeyMap[ImGuiKey_Escape] = VK_ESCAPE;
+	io.KeyMap[ImGuiKey_A] = 'A';
+	io.KeyMap[ImGuiKey_C] = 'C';
+	io.KeyMap[ImGuiKey_V] = 'V';
+	io.KeyMap[ImGuiKey_X] = 'X';
+	io.KeyMap[ImGuiKey_Y] = 'Y';
+	io.KeyMap[ImGuiKey_Z] = 'Z';
+
+#endif
+	io.ImeWindowHandle = hwnd;
+	// Hide OS mouse cursor if ImGui is drawing it
+	if (io.MouseDrawCursor)
+		SetCursor(NULL);
+}
+
+void VQEngine::InitializeUI(HWND hwnd)
+{
+	ImGuiIO& io = ImGui::GetIO();
 	// Get UI texture 
 	//
 	unsigned char* pixels;
@@ -221,33 +253,6 @@ void VQEngine::InitializeUI(HWND hwnd)
 	SamplerDesc.ShaderRegister = 0;
 	SamplerDesc.RegisterSpace = 0;
 	SamplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-#if 0 // do we need imgui keymapping?
-	io.KeyMap[ImGuiKey_Tab] = VK_TAB;
-	io.KeyMap[ImGuiKey_LeftArrow] = VK_LEFT;
-	io.KeyMap[ImGuiKey_RightArrow] = VK_RIGHT;
-	io.KeyMap[ImGuiKey_UpArrow] = VK_UP;
-	io.KeyMap[ImGuiKey_DownArrow] = VK_DOWN;
-	io.KeyMap[ImGuiKey_PageUp] = VK_PRIOR;
-	io.KeyMap[ImGuiKey_PageDown] = VK_NEXT;
-	io.KeyMap[ImGuiKey_Home] = VK_HOME;
-	io.KeyMap[ImGuiKey_End] = VK_END;
-	io.KeyMap[ImGuiKey_Delete] = VK_DELETE;
-	io.KeyMap[ImGuiKey_Backspace] = VK_BACK;
-	io.KeyMap[ImGuiKey_Enter] = VK_RETURN;
-	io.KeyMap[ImGuiKey_Escape] = VK_ESCAPE;
-	io.KeyMap[ImGuiKey_A] = 'A';
-	io.KeyMap[ImGuiKey_C] = 'C';
-	io.KeyMap[ImGuiKey_V] = 'V';
-	io.KeyMap[ImGuiKey_X] = 'X';
-	io.KeyMap[ImGuiKey_Y] = 'Y';
-	io.KeyMap[ImGuiKey_Z] = 'Z';
-
-#endif
-	io.ImeWindowHandle = hwnd;
-	// Hide OS mouse cursor if ImGui is drawing it
-	if (io.MouseDrawCursor)
-		SetCursor(NULL);
 
 	InitializeEngineUIState(mUIState);
 }
@@ -601,8 +606,14 @@ void VQEngine::DrawKeyMappingsWindow()
 		const float fHeaderGray = 0.6f;
 		//const ImVec4 ColHeader_Gray(fHeaderGray, fHeaderGray, fHeaderGray, 1.0f);
 		const ImVec4 ColHeader(0.0f, 0.9f, 0.0f, 1.0f);
+		
 
 		ImGui::Begin("KEY MAPPINGS", &mUIState.bWindowVisible_KeyMappings);
+
+		static char SearchText[128];
+		if (ImGui::InputText("Search", SearchText, 128))
+		{
+		}
 
 		ImGui::PushStyleColor(ImGuiCol_Text, ColHeader);
 		ImGui::Text("------------------ UI ----------------------");

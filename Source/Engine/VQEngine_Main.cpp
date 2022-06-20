@@ -86,6 +86,7 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	InitializeWindows(Params);
 	float f3 = t.Tick();
 	InitializeInput();
+	InitializeImGUI(mpWinMain->GetHWND());
 	InitializeScenes();
 	float f2 = t.Tick();
 	// --------------------------------------------------------
