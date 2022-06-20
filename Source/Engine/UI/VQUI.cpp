@@ -24,6 +24,7 @@
 
 #include "VQUtils/Source/utils.h"
 
+#include "../Core/imgui_impl_win32.h"
 #include "Libs/imgui/imgui.h"
 // To use the 'disabled UI state' functionality (ImGuiItemFlags_Disabled), include internal header
 // https://github.com/ocornut/imgui/issues/211#issuecomment-339241929
@@ -183,6 +184,7 @@ void VQEngine::InitializeImGUI(HWND hwnd)
 {
 	mpImGuiContext = ImGui::CreateContext();
 	ImGui::SetCurrentContext(mpImGuiContext);
+	ImGui_ImplWin32_Init(hwnd);
 
 	ImGuiIO& io = ImGui::GetIO();
 	io.IniFilename = nullptr; // don't save out to a .ini file
