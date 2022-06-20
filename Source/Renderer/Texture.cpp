@@ -76,8 +76,9 @@ void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, cons
     const bool bUnorderedAccessTexture = (desc.d3d12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) != 0;
     const bool bDepthStencilTexture    = (desc.d3d12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0;
     
+
     // determine resource state & optimal clear value
-    D3D12_RESOURCE_STATES ResourceState = desc.pData 
+    D3D12_RESOURCE_STATES ResourceState = (!desc.pDataArray.empty() && desc.pDataArray[0])
         ? D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_COPY_DEST
         : desc.ResourceState;
     D3D12_CLEAR_VALUE* pClearValue = nullptr;

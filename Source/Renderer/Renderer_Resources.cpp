@@ -295,21 +295,25 @@ namespace VQ_DXGI_UTILS
 		return 0;
 	}
 
-	void MipImage(void* pData, uint width, uint height, uint bytesPerPixel)
+	void MipImage(const void* pDataSrc, void* pDataDst, uint width, uint height, uint bytesPerPixel)
 	{
-		//compute mip so next call gets the lower mip    
+		assert(pDataDst);
+		assert(pDataSrc);
+
+		SCOPED_CPU_MARKER("MipImage");
+
+#define GetByte(color, component) (((color) >> (8 * (component))) & 0xff)
+#define GetColor(ptr, x,y) (ptr[(x)+(y)*width])
+#define SetColor(ptr, x,y, col) ptr[(x)+(y)*width/2]=col;
+
 		int offsetsX[] = { 0,1,0,1 };
 		int offsetsY[] = { 0,0,1,1 };
-
-
 		assert(bytesPerPixel == 4 || bytesPerPixel == 16);
 		
 		if (bytesPerPixel == 4)
 		{
-			uint32_t* pImg = (uint32_t*)pData;
-#define GetByte(color, component) (((color) >> (8 * (component))) & 0xff)
-#define GetColor(ptr, x,y) (ptr[(x)+(y)*width])
-#define SetColor(ptr, x,y, col) ptr[(x)+(y)*width/2]=col;
+			const uint32_t* pImgSrc = (const uint32_t*)pDataSrc;
+			uint32_t* pImgDst = (uint32_t*)pDataDst;
 
 			for (uint32_t y = 0; y < height; y += 2)
 			{
@@ -319,12 +323,13 @@ namespace VQ_DXGI_UTILS
 					for (uint32_t c = 0; c < 4; c++)
 					{
 						uint32_t cc = 0;
-						for (uint32_t i = 0; i < 4; i++)
-							cc += GetByte(GetColor(pImg, x + offsetsX[i], y + offsetsY[i]), 3 - c);
-
-						ccc = (ccc << 8) | (cc / 4);
+						cc += GetByte(GetColor(pImgSrc, x + offsetsX[0], y + offsetsY[0]), 3 - c);
+						cc += GetByte(GetColor(pImgSrc, x + offsetsX[1], y + offsetsY[1]), 3 - c);
+						cc += GetByte(GetColor(pImgSrc, x + offsetsX[2], y + offsetsY[2]), 3 - c);
+						cc += GetByte(GetColor(pImgSrc, x + offsetsX[3], y + offsetsY[3]), 3 - c);
+						ccc = (ccc << 8) | (cc / 4); // ABGR
 					}
-					SetColor(pImg, x / 2, y / 2, ccc);
+					SetColor(pImgDst, x / 2, y / 2, ccc);
 				}
 			}
 		}
@@ -332,7 +337,8 @@ namespace VQ_DXGI_UTILS
 		if (bytesPerPixel == 16)
 		{
 			using std::min;
-			float* pImg = (float*)pData;
+			const float* pImgSrc = (const float*)pDataSrc;
+			float* pImgDst = (float*)pDataSrc;
 			// each iteration handles 4 pixels from current level, writes out to a single pixel
 			for (uint32_t y = 0; y < height; y += 2) // [0, 2, 4, ...]
 			for (uint32_t x = 0; x < width ; x += 2) // [0, 2, 4, ...]
@@ -341,7 +347,7 @@ namespace VQ_DXGI_UTILS
 				for (uint smp = 0; smp < 4; ++smp)
 				{
 					for (int ch = 0; ch < 3; ++ch) // color channel ~ rgba, care for RGB only
-						rgb[smp][ch] = pImg[(x + offsetsX[smp]) * 4 + (y + offsetsY[smp]) * 4 * width + ch];
+						rgb[smp][ch] = pImgSrc[(x + offsetsX[smp]) * 4 + (y + offsetsY[smp]) * 4 * width + ch];
 				}
 
 				// filter: use min filter rather than interpolation
@@ -354,9 +360,8 @@ namespace VQ_DXGI_UTILS
 				uint outY = y >> 1;
 
 				for (int ch = 0; ch < 4; ++ch)
-					pImg[(outX * 4) + 4 * outY * (width >> 1) + ch] = rgbFiltered[ch];
+					pImgDst[(outX * 4) + 4 * outY * (width >> 1) + ch] = rgbFiltered[ch];
 			}
-			
 		}
 
 #if 0
@@ -390,7 +395,7 @@ namespace VQ_DXGI_UTILS
 #endif
 	}
 
-	void CopyPixels(void* pData, void* pDest, uint32_t stride, uint32_t bytesWidth, uint32_t height)
+	void CopyPixels(const void* pData, void* pDest, uint32_t stride, uint32_t bytesWidth, uint32_t height)
 	{
 		for (uint32_t y = 0; y < height; y++)
 		{
@@ -554,16 +559,16 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 		return img.pData && img.BytesPerPixel > 0;
 	};
 
-	Image image;
-	const bool bSuccess = fnLoadImageFromDisk(pFilePath, image);
-	const int MipLevels = bGenerateMips ? image.CalculateMipLevelCount() : 1;
+	std::vector<Image> images(1);
+	const bool bSuccess = fnLoadImageFromDisk(pFilePath, images[0]);
+	const int MipLevels = bGenerateMips ? images[0].CalculateMipLevelCount() : 1;
 	if (bSuccess)
 	{
 		// Fill D3D12 Descriptor
 		tDesc.d3d12Desc = {};
-		tDesc.d3d12Desc.Width = image.Width;
-		tDesc.d3d12Desc.Height = image.Height;
-		tDesc.d3d12Desc.Format = image.IsHDR() ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
+		tDesc.d3d12Desc.Width  = images[0].Width;
+		tDesc.d3d12Desc.Height = images[0].Height;
+		tDesc.d3d12Desc.Format = images[0].IsHDR() ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
 		tDesc.d3d12Desc.DepthOrArraySize = 1;
 		tDesc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 		tDesc.d3d12Desc.Alignment = 0;
@@ -574,12 +579,40 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 		tDesc.d3d12Desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 		tDesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
 		
-		tDesc.pData = image.pData;
+		tDesc.pDataArray.push_back( images[0].pData );
 		tDesc.bGenerateMips = bGenerateMips;
 
 		tex.Create(mDevice.GetDevicePtr(), mpAllocator, tDesc);
 		ID = AddTexture_ThreadSafe(std::move(tex));
-		this->QueueTextureUpload(FTextureUploadDesc(std::move(image), ID, tDesc));
+
+		const bool bGenerateMips_ = MipLevels > 1 && images[0].pData;
+		
+		if(bGenerateMips_ && bGenerateMips)
+		{
+			UINT64 UplHeapSize;
+			uint32_t num_rows[D3D12_REQ_MIP_LEVELS] = { 0 };
+			UINT64 row_size_in_bytes[D3D12_REQ_MIP_LEVELS] = { 0 };
+			D3D12_PLACED_SUBRESOURCE_FOOTPRINT placedSubresource[D3D12_REQ_MIP_LEVELS];
+			mDevice.GetDevicePtr()->GetCopyableFootprints(&tDesc.d3d12Desc, 0, MipLevels, 0, placedSubresource, num_rows, row_size_in_bytes, &UplHeapSize);
+			const UINT bytePP = static_cast<UINT>(VQ_DXGI_UTILS::GetPixelByteSize(tDesc.d3d12Desc.Format));
+			const UINT imgSizeInBytes = bytePP * placedSubresource[0].Footprint.Width * placedSubresource[0].Footprint.Height;
+			images.resize(MipLevels);
+			tDesc.pDataArray.resize(MipLevels);
+			for (uint mip = 1; mip < MipLevels; ++mip)
+			{
+				// mip0 : 1/1
+				// mip1 : 1/4   2^2
+				// mip2 : 1/16  2^4
+				// mip3 : 1/64  2^6
+				images[mip] = Image::CreateEmptyImage(imgSizeInBytes / std::pow(2, mip*2));
+
+				VQ_DXGI_UTILS::MipImage(images[mip-1].pData, images[mip].pData, placedSubresource[mip-1].Footprint.Width, num_rows[mip-1], bytePP);
+				tDesc.pDataArray[mip] = images[mip].pData;
+			}
+
+		}
+
+		this->QueueTextureUpload(FTextureUploadDesc(std::move(images), ID, tDesc));
 
 		this->StartTextureUploads();
 
@@ -589,6 +622,10 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 		{
 			SCOPED_CPU_MARKER_C("WAIT_RESIDENT", 0xFFFF0000);
 			refTex.mSignalResident.Wait();
+		}
+		{
+			SCOPED_CPU_MARKER("CleanupImages");
+			for (Image& i : images) i.Destroy();
 		}
 
 #if LOG_RESOURCE_CREATE
@@ -611,9 +648,11 @@ TextureID VQRenderer::CreateTexture(const TextureCreateDesc& desc)
 	tex.Create(mDevice.GetDevicePtr(), mpAllocator, desc);
 
 	TextureID ID = AddTexture_ThreadSafe(std::move(tex));
-	if (desc.pData)
+	const bool bValidData = !desc.pDataArray.empty() && desc.pDataArray[0];
+	if (bValidData)
 	{
-		this->QueueTextureUpload(FTextureUploadDesc(desc.pData, ID, desc));
+
+		this->QueueTextureUpload(FTextureUploadDesc(desc.pDataArray, ID, desc));
 
 		this->StartTextureUploads();
 
@@ -623,7 +662,7 @@ TextureID VQRenderer::CreateTexture(const TextureCreateDesc& desc)
 		}
 	}
 
-	if (desc.pData)
+	if (bValidData)
 	{
 #if LOG_RESOURCE_CREATE
 		Log::Info("VQRenderer::CreateTexture() w/ pData: [%.2fs] %s", t.StopGetDeltaTimeAndReset(), desc.TexName.c_str());
@@ -1348,10 +1387,10 @@ void VQRenderer::ProcessTextureUpload(const FTextureUploadDesc& desc)
 	const D3D12_RESOURCE_DESC& d3dDesc = desc.desc.d3d12Desc;
 	//--------------------------------------------------------------
 	ID3D12Resource* pResc = GetTextureResource(desc.id);
-	const void* pData = desc.img.pData ? desc.img.pData : desc.pData;
+	const void* pData = !desc.imgs.empty() ? desc.imgs[0].pData : desc.pDataArr[0];
 	assert(pData);
 
-	const uint MIP_COUNT = desc.desc.bGenerateMips ? desc.img.CalculateMipLevelCount() : 1;
+	const uint MIP_COUNT = desc.desc.d3d12Desc.MipLevels;
 
 	UINT64 UplHeapSize;
 	uint32_t num_rows[D3D12_REQ_MIP_LEVELS] = { 0 };
@@ -1383,34 +1422,16 @@ void VQRenderer::ProcessTextureUpload(const FTextureUploadDesc& desc)
 		const UINT bytePP = static_cast<UINT>(VQ_DXGI_UTILS::GetPixelByteSize(d3dDesc.Format));
 		const UINT imgSizeInBytes = bytePP * placedSubresource[0].Footprint.Width * placedSubresource[0].Footprint.Height;
 		
-		Image imgCopy;
-		{
-			//---------------------------------------------------------------------------------------------
-			// Note: the img copy is used here to enable writing MIP levels on top of the available memory.
-			//       This will slow things down, ideally we should be able to use the img in the @desc,
-			//       but const correctness has to be revisited.
-			SCOPED_CPU_MARKER_C("ImageCopy", 0xFFFF0000);
-			imgCopy = Image::CreateEmptyImage(imgSizeInBytes);
-			memcpy(imgCopy.pData, pData, imgSizeInBytes);
-			//---------------------------------------------------------------------------------------------
-		}
-
 		for (int a = 0; a < szArray; ++a)
 		{
 			for (uint mip = 0; mip < MIP_COUNT; ++mip)
 			{
-				VQ_DXGI_UTILS::CopyPixels(imgCopy.pData
+				VQ_DXGI_UTILS::CopyPixels((mip == 0 ? pData : desc.imgs[mip].pData)
 					, pUploadBufferMem + placedSubresource[mip].Offset
 					, placedSubresource[mip].Footprint.RowPitch
 					, placedSubresource[mip].Footprint.Width * bytePP
 					, num_rows[mip]
 				);
-
-				if (MIP_COUNT > 1)
-				{
-					SCOPED_CPU_MARKER("MipImage");
-					VQ_DXGI_UTILS::MipImage(imgCopy.pData, placedSubresource[mip].Footprint.Width, num_rows[mip], bytePP);
-				}
 
 				D3D12_PLACED_SUBRESOURCE_FOOTPRINT slice = placedSubresource[mip];
 				slice.Offset += (pUploadBufferMem - mHeapUpload.BasePtr());
@@ -1419,10 +1440,6 @@ void VQRenderer::ProcessTextureUpload(const FTextureUploadDesc& desc)
 				CD3DX12_TEXTURE_COPY_LOCATION Src(mHeapUpload.GetResource(), slice);
 				pCmd->CopyTextureRegion(&Dst, 0, 0, 0, &Src, NULL);
 			}
-		}
-		{
-			SCOPED_CPU_MARKER("DestroyImageCopy");
-			imgCopy.Destroy();
 		}
 	}
 
@@ -1443,7 +1460,6 @@ void VQRenderer::ProcessTextureUploadQueue()
 		return;
 
 	std::vector<Signal*> vTexResidentSignals;
-	std::vector<Image> vImages;
 
 	while (!mTextureUploadQueue.empty())
 	{
@@ -1458,11 +1474,6 @@ void VQRenderer::ProcessTextureUploadQueue()
 			Texture& tex = mTextures.at(desc.id);
 			vTexResidentSignals.push_back(&tex.mSignalResident);
 		}
-
-		if (desc.img.pData)
-		{
-			vImages.push_back(std::move(desc.img));
-		}
 	}
 
 	{
@@ -1474,12 +1485,6 @@ void VQRenderer::ProcessTextureUploadQueue()
 		SCOPED_CPU_MARKER("NotifyResidentSignals");
 		for (Signal* pSignal : vTexResidentSignals)
 			pSignal->NotifyOne();
-	}
-
-	{
-		SCOPED_CPU_MARKER("FreeImageMemory");
-		for (Image& img : vImages)
-			img.Destroy(); // free the image memory
 	}
 }
 

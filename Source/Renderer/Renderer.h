@@ -377,3 +377,17 @@ public:
 	static std::string ShaderCacheDirectory;
 	static void InitializeShaderAndPSOCacheDirectory();
 };
+
+
+namespace VQ_DXGI_UTILS
+{
+	size_t BitsPerPixel(DXGI_FORMAT fmt);
+
+	//--------------------------------------------------------------------------------------
+	// return the byte size of a pixel (or block if block compressed)
+	//--------------------------------------------------------------------------------------
+	size_t GetPixelByteSize(DXGI_FORMAT fmt);
+
+	void MipImage(void* pData, uint width, uint height, uint bytesPerPixel);
+	void CopyPixels(const void* pData, void* pDest, uint32_t stride, uint32_t bytesWidth, uint32_t height);
+}

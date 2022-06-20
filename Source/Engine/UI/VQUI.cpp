@@ -231,7 +231,7 @@ void VQEngine::InitializeUI(HWND hwnd)
 	//
 	TextureCreateDesc rDescs("texUI");
 	rDescs.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height, 1, 1);
-	rDescs.pData = pixels;
+	rDescs.pDataArray.push_back( pixels );
 	TextureID texUI = mRenderer.CreateTexture(rDescs);
 	SRV_ID srvUI = mRenderer.AllocateAndInitializeSRV(texUI);
 

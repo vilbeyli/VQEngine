@@ -1573,22 +1573,23 @@ void VQRenderer::LoadDefaultResources()
 	// programmatically generated textures
 	{
 		std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX);
-		desc.pData = texture.data();
+		desc.pDataArray.push_back( texture.data() );
 		TextureID texID = this->CreateTexture(desc);
 		mLookup_ProceduralTextureIDs[EProceduralTextures::CHECKERBOARD] = texID;
 		mLookup_ProceduralTextureSRVs[EProceduralTextures::CHECKERBOARD] = this->AllocateAndInitializeSRV(texID);
+		desc.pDataArray.pop_back();
 	}
 	{
 		desc.TexName = "Checkerboard_Gray";
 		std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX, true);
-		desc.pData = texture.data();
+		desc.pDataArray.push_back( texture.data() );
 		TextureID texID = this->CreateTexture(desc);
 		mLookup_ProceduralTextureIDs[EProceduralTextures::CHECKERBOARD_GRAYSCALE] = texID;
 		mLookup_ProceduralTextureSRVs[EProceduralTextures::CHECKERBOARD_GRAYSCALE] = this->AllocateAndInitializeSRV(texID);
+		desc.pDataArray.pop_back();
 	}
 	{
 		desc.TexName = "IBL_BRDF_Integration";
-		desc.pData = nullptr;
 		desc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 		desc.d3d12Desc.Width  = 1024;
 		desc.d3d12Desc.Height = 1024;

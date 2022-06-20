@@ -981,21 +981,24 @@ void ScreenSpaceReflectionsPass::CreateResources()
 	//==============================Blue Noise buffers============================================
 	{
 		TextureCreateDesc desc("FFX_SSSR - Sobol Buffer");
-		desc.pData = (void*)&g_blueNoiseSamplerState.sobolBuffer;
+		desc.pDataArray.push_back( (void*)&g_blueNoiseSamplerState.sobolBuffer );
 		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(ELEMENT_BYTE_SIZE * _countof(g_blueNoiseSamplerState.sobolBuffer), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 		TexBlueNoiseSobolBuffer = mRenderer.CreateTexture(desc);
+		desc.pDataArray.pop_back();
 	}
 	{
 		TextureCreateDesc desc("FFX_SSSR - Ranking Tile Buffer");
-		desc.pData = (void*)&g_blueNoiseSamplerState.rankingTileBuffer;
+		desc.pDataArray.push_back( (void*)&g_blueNoiseSamplerState.rankingTileBuffer );
 		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(ELEMENT_BYTE_SIZE * _countof(g_blueNoiseSamplerState.rankingTileBuffer), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 		TexBlueNoiseRankingTileBuffer = mRenderer.CreateTexture(desc);
+		desc.pDataArray.pop_back();
 	}
 	{
 		TextureCreateDesc desc("FFX_SSSR - Scrambling Tile Buffer");
-		desc.pData = (void*)&g_blueNoiseSamplerState.scramblingTileBuffer;
+		desc.pDataArray.push_back( (void*)&g_blueNoiseSamplerState.scramblingTileBuffer );
 		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(ELEMENT_BYTE_SIZE * _countof(g_blueNoiseSamplerState.scramblingTileBuffer), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 		TexBlueNoiseScramblingTileBuffer = mRenderer.CreateTexture(desc);
+		desc.pDataArray.pop_back();
 	}
 	{			
 		TextureCreateDesc desc("Reflection Denoiser - Blue Noise Texture");

@@ -45,11 +45,10 @@ struct TextureCreateDesc
 		, ResourceState(state)
 		, bCubemap(bTexIsCubemap)
 		, bGenerateMips(bGenerateTexMips)
-		, pData(nullptr)
 	{}
 
 	std::string           TexName;
-	const void*           pData = nullptr;
+	std::vector<const void*> pDataArray; // mips, arrays
 	D3D12_RESOURCE_DESC   d3d12Desc = {};
 	D3D12_RESOURCE_STATES ResourceState = D3D12_RESOURCE_STATE_COMMON;
 	bool                  bCubemap = false;
@@ -122,12 +121,16 @@ private:
 
 struct FTextureUploadDesc
 {
-	FTextureUploadDesc(Image&& img_, TextureID texID, const TextureCreateDesc& tDesc) : img(img_), id(texID), desc(tDesc), pData(nullptr) {}
-	FTextureUploadDesc(const void* pData_, TextureID texID, const TextureCreateDesc& tDesc) : img({  }), id(texID), desc(tDesc), pData(pData_) {}
+	FTextureUploadDesc(std::vector<Image>&& imgs_, TextureID texID, const TextureCreateDesc& tDesc) : imgs(imgs_), id(texID), desc(tDesc), pDataArr(tDesc.pDataArray) {}
+	FTextureUploadDesc(Image&& img_, TextureID texID, const TextureCreateDesc& tDesc) : imgs(1, img_), id(texID), desc(tDesc), pDataArr(1, img_.pData) {}
+
+	FTextureUploadDesc(const void* pData_, TextureID texID, const TextureCreateDesc& tDesc) : imgs({  }), id(texID), desc(tDesc), pDataArr(1, pData_) {}
+	FTextureUploadDesc(std::vector<const void*> pDataArr, TextureID texID, const TextureCreateDesc& tDesc) : imgs({  }), id(texID), desc(tDesc), pDataArr(pDataArr) {}
+
 	FTextureUploadDesc() = delete;
 
-	Image img;
-	const void* pData;
+	std::vector<Image> imgs;
+	std::vector<const void*> pDataArr;
 	TextureID id;
 	TextureCreateDesc desc;
 };

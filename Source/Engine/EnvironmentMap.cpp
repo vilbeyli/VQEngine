@@ -277,7 +277,6 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 	// Create Irradiance Map Textures 
 	TextureCreateDesc tdesc("EnvMap_IrradianceDiff");
 	tdesc.bCubemap = true;
-	tdesc.pData = nullptr;
 	tdesc.d3d12Desc.Height = DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION; // TODO: drive with gfx settings?
 	tdesc.d3d12Desc.Width  = DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION; // TODO: drive with gfx settings?
 	tdesc.d3d12Desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
