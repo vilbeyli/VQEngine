@@ -185,9 +185,6 @@ void FUIState::GetMouseScreenPosition(int& X, int& Y) const
 
 void VQEngine::InitializeImGUI(HWND hwnd)
 {
-	// we need to construct asset browser after vqrenderer initialization thats why we didn't initialize in constructor
-	mpAssetBrowser = new AssetBrowser(mRenderer); 
-
 	mpImGuiContext = ImGui::CreateContext();
 	ImGui::SetCurrentContext(mpImGuiContext);
 	ImGui_ImplWin32_Init(hwnd);
@@ -225,7 +222,6 @@ void VQEngine::InitializeImGUI(HWND hwnd)
 	io.KeyMap[ImGuiKey_X] = 'X';
 	io.KeyMap[ImGuiKey_Y] = 'Y';
 	io.KeyMap[ImGuiKey_Z] = 'Z';
-
 #endif
 	io.ImeWindowHandle = hwnd;
 
@@ -238,6 +234,8 @@ void VQEngine::InitializeUI(HWND hwnd)
 {
 	ImGuiIO& io = ImGui::GetIO();
 
+	// we need to construct asset browser after vqrenderer initialization thats why we didn't initialize in constructor
+	mpAssetBrowser = new AssetBrowser(mRenderer);
 	VQEditor::DarkTheme();
 
 	// Get UI texture 

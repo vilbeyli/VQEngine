@@ -155,7 +155,7 @@ set (SceneFiles
     "Source/Engine/Scene/Model.cpp"
     "Source/Engine/Scene/GameObject.cpp"
     "Source/Engine/Scene/Transform.cpp"
-    "Source/Engine/Scene/Quaternion.cpp"    
+    "Source/Engine/Scene/Quaternion.cpp"
 )
 
 set (PostProcessFiles
@@ -177,9 +177,6 @@ set (SourceVQE
     "Source/Engine/Geometry.h"
     "Source/Engine/AssetLoader.h"
     "Source/Engine/GPUMarker.h"
-    "Source/Engine/Editor/VQEditor.h"
-    "Source/Engine/Editor/VQAssetBrowser.h"
-    "Source/Engine/Editor/FontAwesome4.h"
 
     "Source/Engine/Main.cpp"
     "Source/Engine/VQEngine_Main.cpp"
@@ -188,8 +185,6 @@ set (SourceVQE
     "Source/Engine/VQEngine_Update.cpp"
     "Source/Engine/VQEngine_Input.cpp"
     "Source/Engine/VQEngine_Simulation.cpp"
-    "Source/Engine/Editor/VQEditor.cpp"
-    "Source/Engine/Editor/VQAssetBrowser.cpp"
     "Source/Engine/EnvironmentMap.cpp"
     "Source/Engine/Geometry.cpp"
     "Source/Engine/Math.cpp"
@@ -320,12 +315,9 @@ set_source_files_properties(${FFX_DNSR_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Tex
 set_source_files_properties(${CoreFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${RenderPassFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${SceneFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
-<<<<<<< HEAD
 set_source_files_properties(${UIFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${PostProcessFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
-=======
 set_source_files_properties(${EditorFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
->>>>>>> f15b68e (Move editor files into its own filter-folder)
 set_source_files_properties(${LibFFX_CACAO} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${LibFFX_SSSR} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(Data/Resources/VQE.rc PROPERTIES VS_TOOL_OVERRIDE "Resource compiler")
