@@ -338,7 +338,7 @@ namespace VQ_DXGI_UTILS
 		{
 			using std::min;
 			const float* pImgSrc = (const float*)pDataSrc;
-			float* pImgDst = (float*)pDataSrc;
+			      float* pImgDst = (      float*)pDataDst;
 			// each iteration handles 4 pixels from current level, writes out to a single pixel
 			for (uint32_t y = 0; y < height; y += 2) // [0, 2, 4, ...]
 			for (uint32_t x = 0; x < width ; x += 2) // [0, 2, 4, ...]
