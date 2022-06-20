@@ -198,6 +198,14 @@ set (SourceVQE
     "Source/Engine/GPUMarker.cpp"
 )
 
+set(EditorFiles
+    "Source/Engine/Editor/VQEditor.h"
+    "Source/Engine/Editor/VQAssetBrowser.h"
+    "Source/Engine/Editor/FontAwesome4.h" # TODO: move to libs
+    "Source/Engine/Editor/VQEditor.cpp"
+    "Source/Engine/Editor/VQAssetBrowser.cpp"
+)
+
 set (FFX_CAS_Shaders
     "Shaders/AMDFidelityFX/CAS/ffx_a.h"
     "Shaders/AMDFidelityFX/CAS/ffx_cas.h"
@@ -293,6 +301,7 @@ source_group("Source\\Core" FILES ${CoreFiles})
 source_group("Source\\Scene" FILES ${SceneFiles})
 source_group("Source\\UI" FILES ${UIFiles})
 source_group("Source\\PostProcess" FILES ${PostProcessFiles})
+source_group("Source\\Editor" FILES ${EditorFiles})
 source_group("Source" FILES ${SourceVQE})
 source_group("Libs\\AMD-FidelityFX\\CACAO"   FILES ${LibFFX_CACAO})
 source_group("Libs\\AMD-FidelityFX\\SSSR"   FILES ${LibFFX_SSSR})
@@ -311,8 +320,12 @@ set_source_files_properties(${FFX_DNSR_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Tex
 set_source_files_properties(${CoreFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${RenderPassFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${SceneFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
+<<<<<<< HEAD
 set_source_files_properties(${UIFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${PostProcessFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
+=======
+set_source_files_properties(${EditorFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
+>>>>>>> f15b68e (Move editor files into its own filter-folder)
 set_source_files_properties(${LibFFX_CACAO} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${LibFFX_SSSR} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(Data/Resources/VQE.rc PROPERTIES VS_TOOL_OVERRIDE "Resource compiler")
@@ -346,6 +359,7 @@ add_executable( ${PROJECT_NAME}
     ${UIFiles} 
     ${PostProcessFiles} 
     ${SceneFiles}
+    ${EditorFiles}
 )
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_HOME_DIRECTORY} )
