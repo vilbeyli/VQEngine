@@ -351,8 +351,8 @@ std::vector<uint8> Texture::GenerateTexture_Checkerboard(uint Dimension, bool bU
     const UINT& TextureHeight = Dimension;
 
     const UINT rowPitch = TextureWidth * TexturePixelSizeInBytes;
-    const UINT cellPitch = rowPitch >> 3;        // The width of a cell in the checkboard texture.
-    const UINT cellHeight = TextureWidth >> 3;    // The height of a cell in the checkerboard texture.
+    const UINT cellPitch = rowPitch / 8;      // The width of a cell in the checkboard texture.
+    const UINT cellHeight = TextureWidth / 8; // The height of a cell in the checkerboard texture.
     const UINT textureSize = rowPitch * TextureHeight;
 
     std::vector<UINT8> data(textureSize);
