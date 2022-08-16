@@ -1468,9 +1468,9 @@ void VQRenderer::ProcessTextureUploadQueue()
 
 		ProcessTextureUpload(desc);
 
-		assert(mTextures.find(desc.id) != mTextures.end());
 		{
 			std::unique_lock<std::mutex> lk(mMtxTextures);
+			assert(mTextures.find(desc.id) != mTextures.end());
 			Texture& tex = mTextures.at(desc.id);
 			vTexResidentSignals.push_back(&tex.mSignalResident);
 		}
