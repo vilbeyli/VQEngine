@@ -607,4 +607,8 @@ void VQEngine::RenderThread_HandleSetHDRMetaDataEvent(const IEvent* pEvent)
 		Swapchain.WaitForGPU();
 		Swapchain.SetHDRMetaData(pSetMetaDataEvent->payload);
 	}
+
+	const EDisplayCurve OutputDisplayCurve = Swapchain.IsHDRFormat() ? EDisplayCurve::Linear : EDisplayCurve::sRGB;
+	for (int i = 0; i < Swapchain.GetNumBackBuffers(); ++i)
+		mpScene->GetPostProcessParameters(i).TonemapperParams.OutputDisplayCurve = OutputDisplayCurve;
 }
