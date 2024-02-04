@@ -23,6 +23,7 @@
 #include <unordered_set>
 #include <vector>
 #include <array>
+#include <string>
 
 class VQRenderer;
 
