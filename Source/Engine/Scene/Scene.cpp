@@ -1384,8 +1384,20 @@ void Scene::PrepareLightMeshRenderParams(FSceneView& SceneView) const
 			if (!l.bEnabled)
 				continue;
 
+			XMVECTOR lightPosition = XMLoadFloat3(&l.Position);
+			XMVECTOR lightToCamera = SceneView.cameraPosition - lightPosition;
+			XMVECTOR dot = XMVector3Dot(lightToCamera, lightToCamera);
+
+			const float distanceSq = dot.m128_f32[0];
+			const float attenuation = 1.0f / distanceSq;
+			const float attenuatedBrightness = l.Brightness * attenuation;
+
 			FLightRenderCommand cmd;
-			cmd.color = XMFLOAT3(l.Color.x * l.Brightness, l.Color.y * l.Brightness, l.Color.z * l.Brightness);
+			cmd.color = XMFLOAT3(
+				  l.Color.x * attenuatedBrightness
+				, l.Color.y * attenuatedBrightness
+				, l.Color.z * attenuatedBrightness
+			);
 			cmd.matWorldTransformation = l.GetWorldTransformationMatrix();
 
 			switch (l.Type)
