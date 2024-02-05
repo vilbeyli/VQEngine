@@ -211,7 +211,7 @@ PSOutput PSMain(PSInput In)
 	// illumination accumulators
 	float3 I_total = 
 	/* ambient  */   Surface.diffuseColor  * ao
-	/* Emissive */ + Surface.emissiveColor * Surface.emissiveIntensity * 100.0f
+	/* Emissive */ + Surface.emissiveColor * Surface.emissiveIntensity
 	;
 
 	
