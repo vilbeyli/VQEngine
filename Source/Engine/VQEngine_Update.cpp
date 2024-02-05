@@ -405,7 +405,7 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 			HandleMainWindowInput(input, hwnd);
 	}
 	HandleUIInput();
-	UpdateMagnifierParameters(mUIState.mpMagnifierState, mUIState, mpWinMain->GetWidth(), mpWinMain->GetHeight());
+	UpdateMagnifierParameters(mUIState.mpMagnifierState.get(), mUIState, mpWinMain->GetWidth(), mpWinMain->GetHeight());
 }
 
 void VQEngine::UpdateThread_UpdateScene_DebugWnd(const float dt)

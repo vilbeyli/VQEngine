@@ -492,11 +492,11 @@ static bool ShouldUseMotionVectorsTarget(const FEngineSettings& settings)
 {
 	return IsFFX_SSSREnabled(settings);
 }
-static bool ShouldUseVisualizationTarget(EDrawMode eDrawMode)
+static bool ShouldUseVisualizationTarget(EDrawMode DrawModeEnum)
 {
-	return eDrawMode == EDrawMode::ALBEDO
-		|| eDrawMode == EDrawMode::ROUGHNESS
-		|| eDrawMode == EDrawMode::METALLIC;
+	return DrawModeEnum == EDrawMode::ALBEDO
+		|| DrawModeEnum == EDrawMode::ROUGHNESS
+		|| DrawModeEnum == EDrawMode::METALLIC;
 }
 void VQEngine::TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams)
 {
@@ -527,7 +527,7 @@ void VQEngine::TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWin
 	vBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Point, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
 	vBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Directional, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
 
-	if (ShouldUseVisualizationTarget(PPParams.eDrawMode))
+	if (ShouldUseVisualizationTarget(PPParams.DrawModeEnum))
 	{
 		vBarriers.push_back(bMSAA
 			? CD3DX12_RESOURCE_BARRIER::Transition(pRscVizMSAA, D3D12_RESOURCE_STATE_RESOLVE_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET)
@@ -552,7 +552,7 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 	const bool bUseHDRRenderPath = this->ShouldRenderHDR(mpWinMain->GetHWND());
 	const bool bHasEnvironmentMapHDRTexture = mResources_MainWnd.EnvironmentMap.SRV_HDREnvironment != INVALID_ID;
 	const bool bDrawEnvironmentMap = bHasEnvironmentMapHDRTexture && true;
-	const bool bUseVisualizationRenderTarget = ShouldUseVisualizationTarget(PPParams.eDrawMode);
+	const bool bUseVisualizationRenderTarget = ShouldUseVisualizationTarget(PPParams.DrawModeEnum);
 	const bool bRenderMotionVectors = ShouldUseMotionVectorsTarget(mSettings);
 	const bool bRenderScreenSpaceReflections = IsFFX_SSSREnabled(mSettings);
 
@@ -937,7 +937,7 @@ void VQEngine::ResolveMSAA(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* p
 	auto pRscMoVecMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneMotionVectorsMSAA);
 	auto pRscDepthMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneDepthMSAA);
 
-	const bool bUseVizualization = ShouldUseVisualizationTarget(PPParams.eDrawMode);
+	const bool bUseVizualization = ShouldUseVisualizationTarget(PPParams.DrawModeEnum);
 	const bool bRenderMotionVectors = ShouldUseMotionVectorsTarget(mSettings);
 	const bool bResolveRoughness = IsFFX_SSSREnabled(mSettings) && false;
 
@@ -1252,10 +1252,10 @@ void VQEngine::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, cons
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 	const auto& rsc = mResources_MainWnd;
 
-	const bool bCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.FFXCASParams.CASSharpen > 0.0f;
+	const bool bCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f;
 	const bool bFSREnabled = PPParams.IsFSREnabled();
-	const bool bVizualizationEnabled = PPParams.eDrawMode != EDrawMode::LIT_AND_POSTPROCESSED;
-	const bool bVizualizationSceneTargetUsed = ShouldUseVisualizationTarget(PPParams.eDrawMode);
+	const bool bVizualizationEnabled = PPParams.DrawModeEnum != EDrawMode::LIT_AND_POSTPROCESSED;
+	const bool bVizualizationSceneTargetUsed = ShouldUseVisualizationTarget(PPParams.DrawModeEnum);
 	const bool bMotionVectorsEnabled = ShouldUseMotionVectorsTarget(mSettings);
 
 	auto pRscPostProcessInput = mRenderer.GetTextureResource(rsc.Tex_SceneColor);
@@ -1342,7 +1342,7 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 
 	// cmds
 	ID3D12Resource* pRscOutput = nullptr;
-	if (PPParams.eDrawMode != EDrawMode::LIT_AND_POSTPROCESSED)
+	if (PPParams.DrawModeEnum != EDrawMode::LIT_AND_POSTPROCESSED)
 	{
 		SCOPED_GPU_MARKER(pCmd, "RenderPostProcess_DebugViz");
 
@@ -1352,10 +1352,10 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 		pCBufferHeap->AllocConstantBuffer(sizeof(cbuffer_t), (void**)&pConstBuffer, &cbAddr);
 		memcpy(pConstBuffer, &PPParams.VizParams, sizeof(PPParams.VizParams));
-		pConstBuffer->iDrawMode = static_cast<int>(PPParams.eDrawMode); // iDrawMode is not connected to the UI
+		pConstBuffer->iDrawMode = static_cast<int>(PPParams.DrawModeEnum); // iDrawMode is not connected to the UI
 
 		SRV SRVIn = srv_ColorIn;
-		switch (PPParams.eDrawMode)
+		switch (PPParams.DrawModeEnum)
 		{
 		case EDrawMode::DEPTH         : SRVIn = mRenderer.GetSRV(rsc.SRV_SceneDepth); break;
 		case EDrawMode::NORMALS       : SRVIn = mRenderer.GetSRV(rsc.SRV_SceneNormals); break;
@@ -1458,7 +1458,8 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 			pRscOutput = pRscTonemapperOut;
 		}
 
-		if(PPParams.IsFFXCASEnabled() && PPParams.FFXCASParams.CASSharpen > 0.0f)
+#if !DISABLE_FIDELITYFX_CAS
+		if(PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f)
 		{
 			ID3D12Resource* pRscFFXCASOut = mRenderer.GetTextureResource(rsc.Tex_PostProcess_FFXCASOut);
 			const CD3DX12_RESOURCE_BARRIER pBarriers[] =
@@ -1492,6 +1493,7 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 			pCmd->Dispatch(CASDispatchX, CASDispatchY, DispatchZ);
 			pRscOutput = pRscFFXCASOut;
 		}
+#endif
 
 		if (PPParams.IsFSREnabled()) // FSR & CAS are mutually exclusive
 		{
@@ -1516,7 +1518,7 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 				D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 				const size_t cbSize = sizeof(unsigned) * 16;
 				pCBufferHeap->AllocConstantBuffer(cbSize, (void**)&pConstBuffer, &cbAddr);
-				memcpy(pConstBuffer, PPParams.FFSR_EASUParams.EASUConstantBlock, cbSize);
+				memcpy(pConstBuffer, PPParams.FSR_EASUParams.EASUConstantBlock, cbSize);
 
 				ID3D12PipelineState* pPSO = mRenderer.GetPSO(EBuiltinPSOs::FFX_FSR1_EASU_CS_PSO);
 				assert(pPSO);
@@ -1552,10 +1554,10 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 
 				ID3D12PipelineState* pPSO = mRenderer.GetPSO(EBuiltinPSOs::FFX_FSR1_RCAS_CS_PSO);
 
-				FPostProcessParameters::FFSR_RCAS* pConstBuffer = {};
+				FPostProcessParameters::FFSR1_RCAS* pConstBuffer = {};
 				D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-				pCBufferHeap->AllocConstantBuffer(sizeof(FPostProcessParameters::FFSR_RCAS), (void**)&pConstBuffer, &cbAddr);
-				*pConstBuffer = PPParams.FFSR_RCASParams;
+				pCBufferHeap->AllocConstantBuffer(sizeof(FPostProcessParameters::FFSR1_RCAS), (void**)&pConstBuffer, &cbAddr);
+				*pConstBuffer = PPParams.FSR_RCASParams;
 
 				pCmd->SetPipelineState(pPSO);
 				pCmd->SetComputeRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FFX_FSR1));
@@ -1600,9 +1602,9 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBu
 	D3D12_RECT                 scissorsRect { 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
 	SwapChain&                    swapchain = ctx.SwapChain;
 
-	const bool bVizualizationEnabled = PPParams.eDrawMode != EDrawMode::LIT_AND_POSTPROCESSED;
+	const bool bVizualizationEnabled = PPParams.DrawModeEnum != EDrawMode::LIT_AND_POSTPROCESSED;
 	const bool bHDR = this->ShouldRenderHDR(mpWinMain->GetHWND());
-	const bool bFFXCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.FFXCASParams.CASSharpen > 0.0f;
+	const bool bFFXCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f;
 	const bool bFSREnabled = PPParams.IsFSREnabled();
 	const SRV& srv_ColorIn = bVizualizationEnabled ?
 		mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_VisualizationOut) : (
@@ -1834,7 +1836,7 @@ void VQEngine::CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, Dynamic
 	const BufferID& IB_ID = VBIBIDs.second;
 	const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
 	const bool bHDR = this->ShouldRenderHDR(mpWinMain->GetHWND());
-	const bool bFFXCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.FFXCASParams.CASSharpen > 0.0f;
+	const bool bFFXCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f;
 	const bool bFSREnabled = PPParams.IsFSREnabled();
 
 	SwapChain& swapchain = ctx.SwapChain;

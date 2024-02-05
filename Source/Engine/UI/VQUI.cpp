@@ -82,6 +82,46 @@ static void UpdateImGUIState(HWND hwnd)
 		SetCursor(NULL);
 }
 
+
+
+// static data - labels
+static const char* szAALabels[] =
+{
+	  "None ##0"
+	, "MSAAx4"
+	, ""
+};
+static const char* szSSAOLabels[] =
+{
+	"None ##1"
+	, "FidelityFX CACAO"
+	, ""
+};
+static const char* szReflectionsLabels[]
+{
+	  "Off ##0"
+	, "FidelityFX SSSR"
+	//, "Ray Traced" // TODO: enable when ray tracing is added
+	, ""
+};
+
+static bool ImGui_LeftAlignedCombo(const char* szLabel, int* pLabelIndex, const char** pszLabels, size_t numLabels)
+{
+	float fullWidth = ImGui::GetContentRegionAvail().x; // Get available width
+	float halfWidth = fullWidth * 0.5f; // Calculate half width
+	float comboWidth = fullWidth - halfWidth; // Remaining width for the combo
+
+	ImGui::Text(szLabel);
+	float spacing = fullWidth - ImGui::CalcTextSize(szLabel).x - comboWidth;
+	ImGui::SameLine(/*spacing*/);
+	ImGui::SetNextItemWidth(comboWidth);
+	return ImGui::Combo("##hidden_label", pLabelIndex, pszLabels, numLabels);
+}
+static bool ImGui_RightAlignedCombo(const char* szLabel, int* pLabelIndex, const char** pszLabels, size_t numLabels)
+{
+	return ImGui::Combo(szLabel, pLabelIndex, pszLabels, numLabels);
+}
+
 // -----------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------
@@ -151,8 +191,9 @@ static void InitializeEngineUIState(FUIState& s)
 	// couldn't bother using smart pointers due to inlined default destructors.
 	// There's never a smooth way to work with them -- either too verbose or breaks compilation.
 	// Raw ptrs will do for now
-	s.mpMagnifierState = new FMagnifierUIState(); 
-	s.mpMagnifierState->pMagnifierParams = new FMagnifierParameters();
+	
+	s.mpMagnifierState = std::make_unique<FMagnifierUIState>();
+	s.mpMagnifierState->pMagnifierParams = std::make_unique<FMagnifierParameters>();
 }
 FUIState::~FUIState()
 {
@@ -160,11 +201,11 @@ FUIState::~FUIState()
 	{
 		if (mpMagnifierState->pMagnifierParams)
 		{
-			delete mpMagnifierState->pMagnifierParams;
+			//delete mpMagnifierState->pMagnifierParams;
 			mpMagnifierState->pMagnifierParams = nullptr;
 		}
 
-		delete mpMagnifierState;
+		//delete mpMagnifierState;
 		mpMagnifierState = nullptr;
 	}
 }
@@ -339,13 +380,14 @@ constexpr size_t NUM_MAX_ENV_MAP_NAMES    = 10;
 constexpr size_t NUM_MAX_LEVEL_NAMES      = 8;
 constexpr size_t NUM_MAX_CAMERA_NAMES     = 10;
 constexpr size_t NUM_MAX_DRAW_MODE_NAMES  = static_cast<size_t>(EDrawMode::NUM_DRAW_MODES);
-constexpr size_t NUM_MAX_FSR_OPTION_NAMES = FPostProcessParameters::FFSR_EASU::EPresets::NUM_FSR_PRESET_OPTIONS;
-static const char* pStrSceneNames [NUM_MAX_LEVEL_NAMES  ] = {};
-static const char* pStrEnvMapNames[NUM_MAX_ENV_MAP_NAMES] = {};
-static const char* pStrCameraNames[NUM_MAX_CAMERA_NAMES] = {};
-static const char* pStrDrawModes  [NUM_MAX_DRAW_MODE_NAMES] = {};
-static const char* pStrFSROptionNames[NUM_MAX_FSR_OPTION_NAMES] = {};
-static const char* pStrMaxFrameRateOptionNames[3] = {}; // see Settings.h:FGraphicsSettings
+constexpr size_t NUM_MAX_FSR_OPTION_NAMES = AMD_FidelityFX_SuperResolution1::EPreset::NUM_FSR1_PRESET_OPTIONS;
+static const char* szSceneNames [NUM_MAX_LEVEL_NAMES  ] = {};
+static const char* szEnvMapNames[NUM_MAX_ENV_MAP_NAMES] = {};
+static const char* szCameraNames[NUM_MAX_CAMERA_NAMES] = {};
+static const char* szDrawModes  [NUM_MAX_DRAW_MODE_NAMES] = {};
+static const char* szUpscalingLabels[FPostProcessParameters::EUpscalingAlgorithm::NUM_UPSCALING_ALGORITHMS] = {};
+static const char* szUpscalingQualityLabels[NUM_MAX_FSR_OPTION_NAMES] = {};
+static const char* szMaxFrameRateOptionLabels[3] = {}; // see Settings.h:FGraphicsSettings
 
 
 template<size_t NUM_ARRAY_SIZE> 
@@ -369,38 +411,43 @@ static void InitializeStaticCStringData_SceneControls(
 	static bool bCameraNamesInitialized = false;
 	if (!bLevelNamesInitialized)
 	{
-		FillCStrArray<NUM_MAX_LEVEL_NAMES>(pStrSceneNames, vNames_Levels);
+		FillCStrArray<NUM_MAX_LEVEL_NAMES>(szSceneNames, vNames_Levels);
 		bLevelNamesInitialized = true;
 	}
 
 	if (!bEnvMapNamesInitialized)
 	{
-		FillCStrArray<NUM_MAX_ENV_MAP_NAMES>(pStrEnvMapNames, vNames_EnvMap);
+		FillCStrArray<NUM_MAX_ENV_MAP_NAMES>(szEnvMapNames, vNames_EnvMap);
 		bEnvMapNamesInitialized = true;
 	}
 
 	// TODO: initialize from scene cameras
 	{
-		for (int i = 0; i < NUM_MAX_CAMERA_NAMES; ++i) pStrCameraNames[i] = "";
-		pStrCameraNames[0] = "Main Camera";
-		pStrCameraNames[1] = "Secondary Camera 0";
-		pStrCameraNames[2] = "Secondary Camera 1";
-		pStrCameraNames[3] = "Secondary Camera 2";
-		pStrCameraNames[4] = "Secondary Camera 3";
+		for (int i = 0; i < NUM_MAX_CAMERA_NAMES; ++i) szCameraNames[i] = "";
+		szCameraNames[0] = "Main Camera";
+		szCameraNames[1] = "Secondary Camera 0";
+		szCameraNames[2] = "Secondary Camera 1";
+		szCameraNames[3] = "Secondary Camera 2";
+		szCameraNames[4] = "Secondary Camera 3";
 	};
 }
 static void InitializeStaticCStringData_PostProcessingControls()
 {
-	static bool bFSRNamesInitialized = false;
+	static bool bPostPRocessLabelsInitialized = false;
 
-	if (!bFSRNamesInitialized)
+	if (!bPostPRocessLabelsInitialized)
 	{
-		pStrFSROptionNames[0] = "Ultra Quality";
-		pStrFSROptionNames[1] = "Quality";
-		pStrFSROptionNames[2] = "Balanced";
-		pStrFSROptionNames[3] = "Performance";
-		pStrFSROptionNames[4] = "Custom";
-		bFSRNamesInitialized = true;
+		using namespace AMD_FidelityFX_SuperResolution1;
+		szUpscalingQualityLabels[EPreset::ULTRA_QUALITY] = "Ultra Quality";
+		szUpscalingQualityLabels[EPreset::QUALITY] = "Quality";
+		szUpscalingQualityLabels[EPreset::BALANCED] = "Balanced";
+		szUpscalingQualityLabels[EPreset::PERFORMANCE] = "Performance";
+		szUpscalingQualityLabels[EPreset::CUSTOM] = "Custom";
+
+		szUpscalingLabels[FPostProcessParameters::EUpscalingAlgorithm::NONE] = "None";
+		szUpscalingLabels[FPostProcessParameters::EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION1] = "AMD FSR1";
+
+		bPostPRocessLabelsInitialized = true;
 	}
 }
 static void InitializeStaticCStringData_GraphicsSettings()
@@ -408,9 +455,9 @@ static void InitializeStaticCStringData_GraphicsSettings()
 	static bool GraphicsSettingsDropdownDataInitialized = false;
 	if (!GraphicsSettingsDropdownDataInitialized)
 	{
-		pStrMaxFrameRateOptionNames[0] = "Auto (Refresh Rate x 1.15)";
-		pStrMaxFrameRateOptionNames[1] = "Unlimited";
-		pStrMaxFrameRateOptionNames[2] = "Custom";
+		szMaxFrameRateOptionLabels[0] = "Auto (Refresh Rate x 1.15)";
+		szMaxFrameRateOptionLabels[1] = "Unlimited";
+		szMaxFrameRateOptionLabels[2] = "Custom";
 		GraphicsSettingsDropdownDataInitialized = true;
 	} 
 }
@@ -438,7 +485,7 @@ static void InitializeStaticCStringData_EDrawMode()
 			return "";
 		};
 		for (int i = 0; i < (int)EDrawMode::NUM_DRAW_MODES; ++i)
-			pStrDrawModes[i] = fnToStr((EDrawMode)i);
+			szDrawModes[i] = fnToStr((EDrawMode)i);
 		
 		EDrawModeDropdownDataInitialized = true;
 	}
@@ -533,7 +580,7 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 	InitializeStaticCStringData_SceneControls(mResourceNames.mEnvironmentMapPresetNames, mResourceNames.mSceneNames);
 
 	int iEnvMap = iSelectedEnvMap == -1 ? static_cast<int>(mResourceNames.mEnvironmentMapPresetNames.size()) : iSelectedEnvMap;
-	assert(iSelectedCamera < _countof(pStrCameraNames) && iSelectedCamera >= 0);
+	assert(iSelectedCamera < _countof(szCameraNames) && iSelectedCamera >= 0);
 
 
 	ImGui::Begin("SCENE CONTROLS", &mUIState.bWindowVisible_SceneControls);
@@ -550,22 +597,32 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 	
 	ImGui::Text("Windows");
 	ImGui::Separator();
-	ImGui::Checkbox("Show Scene Controls (F1)", &mUIState.bWindowVisible_SceneControls);
-	ImGui::Checkbox("Show Graphics Settings (F3)", &mUIState.bWindowVisible_GraphicsSettingsPanel);
-	ImGui::Checkbox("Show Profiler (F2)", &mUIState.bWindowVisible_Profiler);
-	ImGui::Checkbox("Show Debug (F4)", &mUIState.bWindowVisible_DebugPanel);
-
+	
+	float fullWidth = ImGui::GetContentRegionAvail().x; // Get available width
+	float halfWidth = fullWidth * 0.5f; // Calculate half width
+	ImGui::PushItemWidth(halfWidth);
+	ImGui::Checkbox("Editor (F1)", &mUIState.bWindowVisible_SceneControls);
+	ImGui::SameLine();
+	ImGui::Checkbox("Settings (F3)", &mUIState.bWindowVisible_GraphicsSettingsPanel);
+	
+	
+	ImGui::Checkbox("Profiler (F2)", &mUIState.bWindowVisible_Profiler);
+	ImGui::SameLine();
+	ImGui::Checkbox("Debug (F4)", &mUIState.bWindowVisible_DebugPanel);
+	ImGui::PopItemWidth();
 	ImGuiSpacing3();
 
-	ImGui::Text("Editor");
+	ImGui::Text("Scene");
 	ImGui::Separator();
-	if (ImGui::Combo("Scene", &mIndex_SelectedScene, pStrSceneNames, (int)std::min(_countof(pStrSceneNames), mResourceNames.mSceneNames.size())))
+	if (ImGui_RightAlignedCombo("Scene File", &mIndex_SelectedScene, szSceneNames, (int)std::min(_countof(szSceneNames), mResourceNames.mSceneNames.size())))
 	{
 		this->StartLoadingScene(mIndex_SelectedScene);
 	}
-	ImGui::Combo("Camera (C)", &iSelectedCamera, pStrCameraNames, _countof(pStrCameraNames));
+	ImGui_RightAlignedCombo("Camera (C)", &iSelectedCamera, szCameraNames, _countof(szCameraNames));
 	MathUtil::Clamp(iSelectedCamera, 0, (int)mpScene->GetNumSceneCameras()-1);
-	if (ImGui::Combo("HDRI Map (Page Up/Down)", &iEnvMap, pStrEnvMapNames, (int)std::min(_countof(pStrEnvMapNames), mResourceNames.mEnvironmentMapPresetNames.size()+1)))
+
+
+	if (ImGui_RightAlignedCombo("HDRI Map (Page Up/Down)", &iEnvMap, szEnvMapNames, (int)std::min(_countof(szEnvMapNames), mResourceNames.mEnvironmentMapPresetNames.size()+1)))
 	{
 		if (iSelectedEnvMap != iEnvMap)
 		{
@@ -788,16 +845,16 @@ void VQEngine::DrawDebugPanelWindow(FSceneRenderParameters& SceneParams, FPostPr
 
 	ImGui::Text("Debug Draw");
 	ImGui::Separator();
-	int iDrawMode = (int)PPParams.eDrawMode;
-	ImGui::Combo("Draw Mode", &iDrawMode, pStrDrawModes, _countof(pStrDrawModes));
-	PPParams.eDrawMode = (EDrawMode)iDrawMode;
-	if (PPParams.eDrawMode == EDrawMode::NORMALS)
+	int iDrawMode = (int)PPParams.DrawModeEnum;
+	ImGui_RightAlignedCombo("Draw Mode", &iDrawMode, szDrawModes, _countof(szDrawModes));
+	PPParams.DrawModeEnum = (EDrawMode)iDrawMode;
+	if (PPParams.DrawModeEnum == EDrawMode::NORMALS)
 	{
 		bool bUnpackNormals = PPParams.VizParams.iUnpackNormals;
 		ImGui::Checkbox("Unpack Normals", &bUnpackNormals);
 		PPParams.VizParams.iUnpackNormals = bUnpackNormals;
 	}
-	if (PPParams.eDrawMode == EDrawMode::MOTION_VECTORS)
+	if (PPParams.DrawModeEnum == EDrawMode::MOTION_VECTORS)
 	{
 		ImGui::SliderFloat("MoVec Intensity", &PPParams.VizParams.fInputStrength, 0.0f, 200.0f);
 	}
@@ -806,6 +863,43 @@ void VQEngine::DrawDebugPanelWindow(FSceneRenderParameters& SceneParams, FPostPr
 	ImGui::Checkbox("Show Mesh Bounding Boxes (N)", &SceneParams.bDrawMeshBoundingBoxes);
 	ImGui::Checkbox("Show Light Bounding Volumes (L)", &SceneParams.bDrawLightBounds);
 	ImGui::Checkbox("Draw Lights", &SceneParams.bDrawLightMeshes);
+
+
+	//
+	// MAGNIFIER
+	//
+	ImGuiSpacing3();
+	ImGuiIO& io = ImGui::GetIO();
+
+	ImGui::Text("Magnifier");
+	ImGui::Separator();
+	{
+		ImGui::Checkbox("Show Magnifier (Middle Mouse)", &mUIState.mpMagnifierState->bUseMagnifier);
+
+		BeginDisabledUIState(mUIState.mpMagnifierState->bUseMagnifier);
+		{
+			FMagnifierParameters& params = *mUIState.mpMagnifierState->pMagnifierParams;
+
+			// Use a local bool state here to track locked state through the UI widget,
+			// and then call ToggleMagnifierLockedState() to update the persistent state (m_UIstate).
+			// The keyboard input for toggling lock directly operates on the persistent state.
+			const bool bIsMagnifierCurrentlyLocked = mUIState.mpMagnifierState->bLockMagnifierPosition;
+			bool bMagnifierToggle = bIsMagnifierCurrentlyLocked;
+			ImGui::Checkbox("Lock Position (Shift + Middle Mouse)", &bMagnifierToggle);
+
+			if (bMagnifierToggle != bIsMagnifierCurrentlyLocked)
+				mUIState.mpMagnifierState->ToggleMagnifierLock();
+
+			ImGui::SliderFloat("Screen Size", &params.fMagnifierScreenRadius, MAGNIFIER_RADIUS_MIN, MAGNIFIER_RADIUS_MAX);
+			ImGui::SliderFloat("Magnification", &params.fMagnificationAmount, MAGNIFICATION_AMOUNT_MIN, MAGNIFICATION_AMOUNT_MAX);
+			if (bMagnifierToggle)
+			{
+				ImGui::SliderInt("OffsetX", &params.iMagnifierOffset[0], -(int)W, W);
+				ImGui::SliderInt("OffsetY", &params.iMagnifierOffset[1], -(int)H, H);
+			}
+		}
+		EndDisabledUIState(mUIState.mpMagnifierState->bUseMagnifier);
+	}
 
 	ImGui::End();
 }
@@ -827,136 +921,75 @@ void VQEngine::DrawPostProcessSettings(FPostProcessParameters& PPParams)
 	// one time initialization
 	InitializeStaticCStringData_PostProcessingControls();
 
-	ImGui::PushStyleColor(ImGuiCol_Header, UI_COLLAPSING_HEADER_COLOR_VALUE);
-	if (ImGui::CollapsingHeader("POST PROCESSING", ImGuiTreeNodeFlags_DefaultOpen))
+	ImGui::Text("Upscaling");
+	ImGui::Separator();
+	// upscaling dropdown : None / FidelityFX Super Resolution 1.0
+	if (ImGui_RightAlignedCombo("Algorithm", (int*) &PPParams.UpscalingAlgorithm, szUpscalingLabels, _countof(szUpscalingLabels)))
 	{
-		//
-		// FIDELITYFX - SUPER RESOLUTION
-		//
-		ImGui::PopStyleColor();
-		ImGui::Text("FidelityFX Super Resolution 1.0");
-		ImGui::Separator();
-		if (ImGui::Checkbox("Enabled (J) ##1", &PPParams.bEnableFSR))
+		fnSendWindowResizeEvents();
+	}
+
+	if (PPParams.UpscalingAlgorithm != FPostProcessParameters::EUpscalingAlgorithm::NONE)
+	{
+		// preset: ultra quality / quality / balanced / performance / custom
+		if (ImGui_RightAlignedCombo("Quality", (int*)&PPParams.UpscalingQualityPresetEnum, szUpscalingQualityLabels, _countof(szUpscalingQualityLabels)))
 		{
+			if (PPParams.UpscalingQualityPresetEnum != AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
+			{
+				PPParams.ResolutionScale = AMD_FidelityFX_SuperResolution1::GetAMDFSR1ScreenPercentage(PPParams.UpscalingQualityPresetEnum);
+			}
+			
 			fnSendWindowResizeEvents();
 		}
-		BeginDisabledUIState(PPParams.bEnableFSR);
+
+		// resolution scale
+		if (PPParams.UpscalingQualityPresetEnum == AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
 		{
-			int iFSROption = PPParams.FFSR_EASUParams.SelectedFSRPreset;
-			if (ImGui::Combo("Preset", &iFSROption, pStrFSROptionNames, _countof(pStrFSROptionNames)))
+			// if we are to support resolution scale > 1.0f, we'll need to stop using FSR1 upscaling
+			// and use a linear min filter for AA
+			if (ImGui::SliderFloat("Resolution Scale", &PPParams.ResolutionScale, 0.25f, 1.00f, "%.2f"))
 			{
-				// update the PPParams data
-				PPParams.FFSR_EASUParams.SelectedFSRPreset = static_cast<FPostProcessParameters::FFSR_EASU::EPresets>(iFSROption);
 				fnSendWindowResizeEvents();
 			}
-			if (PPParams.FFSR_EASUParams.SelectedFSRPreset == FPostProcessParameters::FFSR_EASU::EPresets::CUSTOM)
-			{
-				if (ImGui::SliderFloat("Resolution Scale", &PPParams.FFSR_EASUParams.fCustomScaling, 0.50f, 1.0f, "%.2f"))
-				{
-					fnSendWindowResizeEvents();
-				}
-			}
-
-			float LinearSharpness = PPParams.FFSR_RCASParams.GetLinearSharpness();
-			if (ImGui::SliderFloat("Sharpness", &LinearSharpness, 0.01f, 1.00f, "%.2f"))
-			{
-				PPParams.FFSR_RCASParams.SetLinearSharpness(LinearSharpness);
-				PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
-			}
-		}
-		EndDisabledUIState(PPParams.bEnableFSR);
-
-		ImGuiSpacing3();
-
-		//
-		// FIDELITYFX - CAS
-		//
-		if (!bFSREnabled)
-		{
-			ImGui::Text("FidelityFX CAS");
-			ImGui::Separator();
-			bool bCASEnabled = PPParams.IsFFXCASEnabled();
-			bool bCASEnabledBefore = bCASEnabled;
-			BeginDisabledUIState(!bFSREnabled);
-			ImGui::Checkbox("Enabled (B) ##0", &bCASEnabled);
-			{
-				BeginDisabledUIState(bCASEnabled);
-				if (ImGui::SliderFloat("Sharpening", &PPParams.FFXCASParams.CASSharpen, 0.0f, 1.0f, "%.2f"))
-				{
-					PPParams.FFXCASParams.UpdateCASConstantBlock(W,H,W,H);
-				}
-				EndDisabledUIState(bCASEnabled);
-			}
-			EndDisabledUIState(!bFSREnabled);
-			if (bCASEnabledBefore != bCASEnabled)
-			{
-				PPParams.bEnableCAS = bCASEnabled;
-			}
-			ImGuiSpacing3();
-		}
-
-		//
-		// TONEMAPPER
-		//
-		const bool bHDR = this->ShouldRenderHDR(mpWinMain->GetHWND());
-		ImGui::Text((bHDR ? "Tonemapper (HDR)" : "Tonemapper"));
-		ImGui::Separator();
-		{
-			if (bHDR)
-			{
-				const std::string strDispalyCurve = GetDisplayCurveString(PPParams.TonemapperParams.OutputDisplayCurve);
-				const std::string strColorSpace   = GetColorSpaceString(PPParams.TonemapperParams.ContentColorSpace);
-				ImGui::Text("OutputDevice : %s", strDispalyCurve.c_str() );
-				ImGui::Text("Color Space  : %s", strColorSpace.c_str() );
-				ImGui::SliderFloat("UI Brightness", &PPParams.TonemapperParams.UIHDRBrightness, 0.1f, 20.f, "%.1f");
-			}
-			else
-			{
-				bool bGamma = PPParams.TonemapperParams.ToggleGammaCorrection;
-				ImGui::Checkbox("[SDR] Apply Gamma (G)", &bGamma);
-				PPParams.TonemapperParams.ToggleGammaCorrection = bGamma ? 1 : 0;
-			}
-		}
-
-		//
-		// MAGNIFIER
-		//
-		ImGuiSpacing3();
-		ImGuiIO& io = ImGui::GetIO();
-
-		ImGui::Text("Magnifier");
-		ImGui::Separator();
-		{
-			ImGui::Checkbox("Show Magnifier (Middle Mouse)", &mUIState.mpMagnifierState->bUseMagnifier);
-				
-			BeginDisabledUIState(mUIState.mpMagnifierState->bUseMagnifier);
-			{
-				FMagnifierParameters& params = *mUIState.mpMagnifierState->pMagnifierParams;
-
-				// Use a local bool state here to track locked state through the UI widget,
-				// and then call ToggleMagnifierLockedState() to update the persistent state (m_UIstate).
-				// The keyboard input for toggling lock directly operates on the persistent state.
-				const bool bIsMagnifierCurrentlyLocked = mUIState.mpMagnifierState->bLockMagnifierPosition;
-				bool bMagnifierToggle = bIsMagnifierCurrentlyLocked;
-				ImGui::Checkbox("Lock Position (Shift + Middle Mouse)", &bMagnifierToggle);
-
-				if (bMagnifierToggle != bIsMagnifierCurrentlyLocked)
-					mUIState.mpMagnifierState->ToggleMagnifierLock();
-
-				ImGui::SliderFloat("Screen Size", &params.fMagnifierScreenRadius, MAGNIFIER_RADIUS_MIN, MAGNIFIER_RADIUS_MAX);
-				ImGui::SliderFloat("Magnification", &params.fMagnificationAmount, MAGNIFICATION_AMOUNT_MIN, MAGNIFICATION_AMOUNT_MAX);
-				ImGui::SliderInt("OffsetX", &params.iMagnifierOffset[0], -(int)W, W);
-				ImGui::SliderInt("OffsetY", &params.iMagnifierOffset[1], -(int)H, H);
-			}
-			EndDisabledUIState(mUIState.mpMagnifierState->bUseMagnifier);
 		}
 	}
-	else
+
+	ImGuiSpacing3();
+
+	ImGui::Text("Sharpness");
+	ImGui::Separator();
+	float LinearSharpness = PPParams.FSR_RCASParams.GetLinearSharpness();
+	if (ImGui::SliderFloat("Amount##", &LinearSharpness, 0.01f, 1.00f, "%.2f"))
 	{
-		ImGui::PopStyleColor();
+		PPParams.FSR_RCASParams.SetLinearSharpness(LinearSharpness);
+		PPParams.FSR_RCASParams.UpdateRCASConstantBlock();
 	}
-}
 
+	//
+	// TONEMAPPER
+	//
+	ImGuiSpacing3();
+	const bool bHDR = this->ShouldRenderHDR(mpWinMain->GetHWND());
+	ImGui::Text((bHDR ? "Tonemapper (HDR)" : "Tonemapper"));
+	ImGui::Separator();
+	{
+		if (bHDR)
+		{
+			const std::string strDispalyCurve = GetDisplayCurveString(PPParams.TonemapperParams.OutputDisplayCurve);
+			const std::string strColorSpace   = GetColorSpaceString(PPParams.TonemapperParams.ContentColorSpace);
+			ImGui::Text("OutputDevice : %s", strDispalyCurve.c_str() );
+			ImGui::Text("Color Space  : %s", strColorSpace.c_str() );
+			ImGui::SliderFloat("UI Brightness", &PPParams.TonemapperParams.UIHDRBrightness, 0.1f, 20.f, "%.1f");
+		}
+		else
+		{
+			bool bGamma = PPParams.TonemapperParams.ToggleGammaCorrection;
+			ImGui::Checkbox("[SDR] Apply Gamma (G)", &bGamma);
+			PPParams.TonemapperParams.ToggleGammaCorrection = bGamma ? 1 : 0;
+		}
+	}
+
+}
 
 void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams, FPostProcessParameters& PPParams)
 {
@@ -966,26 +999,6 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 
 	FGraphicsSettings& gfx = mSettings.gfx;
 
-	// static data - labels
-	static const char* pStrAALabels[] =
-	{
-		  "None ##0"
-		, "MSAAx4"
-		, ""
-	};
-	static const char* pStrSSAOLabels[] =
-	{
-		"None ##1"
-		, "FidelityFX CACAO"
-		, ""
-	};
-	static const char* pStrReflectionsLabels[]
-	{
-		  "Off ##0"
-		, "FidelityFX SSSR"
-		//, "Ray Traced" // TODO: enable when ray tracing is added
-		, ""
-	};
 	InitializeStaticCStringData_GraphicsSettings();
 	// static data
 
@@ -1002,15 +1015,15 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 
 	ImGui::Begin("GRAPHICS SETTINGS", &mUIState.bWindowVisible_GraphicsSettingsPanel);
 	
-	ImGui::PushStyleColor(ImGuiCol_Header, UI_COLLAPSING_HEADER_COLOR_VALUE);
-	if (ImGui::CollapsingHeader("DISPLAY", ImGuiTreeNodeFlags_DefaultOpen))
+	ImGui::BeginTabBar("s*", ImGuiTabBarFlags_None);
+	
+	if (ImGui::BeginTabItem("Display"))
 	{
-		ImGui::PopStyleColor();
-		if (!gfx.bVsync)
+		BeginDisabledUIState(!gfx.bVsync);
 		{
 			static int iLimiter = mSettings.gfx.MaxFrameRate == -1 ? 0 : (mSettings.gfx.MaxFrameRate == 0 ? 1 : 2); // see Settings.h
 			static int CustomFrameLimit = mSettings.gfx.MaxFrameRate;
-			if (ImGui::Combo("FrameRate Limit", &iLimiter, pStrMaxFrameRateOptionNames, _countof(pStrMaxFrameRateOptionNames)))
+			if (ImGui_RightAlignedCombo("FrameRate Limit", &iLimiter, szMaxFrameRateOptionLabels, _countof(szMaxFrameRateOptionLabels)))
 			{
 				switch (iLimiter)
 				{
@@ -1031,6 +1044,7 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 				}
 			}
 		}
+		EndDisabledUIState(!gfx.bVsync);
 
 		if (ImGui::Checkbox("VSync (V)", &gfx.bVsync))
 		{
@@ -1041,30 +1055,28 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 		{
 			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<ToggleFullscreenEvent>(hwnd));
 		}
-	}
-	else
-	{
-		ImGui::PopStyleColor();
+
+		ImGui::EndTabItem();
 	}
 
-	ImGuiSpacing(6);
+	//ImGuiSpacing(6);
 
-	ImGui::PushStyleColor(ImGuiCol_Header, UI_COLLAPSING_HEADER_COLOR_VALUE);
-	if (ImGui::CollapsingHeader("RENDERING", ImGuiTreeNodeFlags_DefaultOpen))
+
+	if (ImGui::BeginTabItem("Rendering"))
 	{
-		ImGui::PopStyleColor();
-		if (ImGui::Combo("AntiAliasing (M)", &iAALabel, pStrAALabels, _countof(pStrAALabels) - 1))
+		if (ImGui_RightAlignedCombo("AntiAliasing (M)", &iAALabel, szAALabels, _countof(szAALabels) - 1))
 		{
 			gfx.bAntiAliasing = iAALabel;
 			Log::Info("AA Changed: %d", gfx.bAntiAliasing);
 		}
-		if (ImGui::Combo("Ambient Occlusion", &iSSAOLabel, pStrSSAOLabels, _countof(pStrSSAOLabels) - 1))
+
+		if (ImGui_RightAlignedCombo("Ambient Occlusion", &iSSAOLabel, szSSAOLabels, _countof(szSSAOLabels) - 1))
 		{
 			SceneRenderParams.bScreenSpaceAO = iSSAOLabel == 1;
 			Log::Info("AO Changed: %d", SceneRenderParams.bScreenSpaceAO);
 		}
 		int iRefl = gfx.Reflections;
-		if (ImGui::Combo("Reflections", &iRefl, pStrReflectionsLabels, _countof(pStrReflectionsLabels)-1))
+		if (ImGui_RightAlignedCombo("Reflections", &iRefl, szReflectionsLabels, _countof(szReflectionsLabels)-1))
 		{
 			gfx.Reflections = static_cast<EReflections>(iRefl);
 			Log::Info("Reflections Changed: %d", gfx.Reflections);
@@ -1075,20 +1087,28 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 		{
 			FSceneRenderParameters::FFFX_SSSR_UIParameters& FFXParams = SceneRenderParams.FFX_SSSRParameters;
 
-			ImGui::SliderInt("Max Traversal Iterations", &FFXParams.maxTraversalIterations, 0, 256);
-			ImGui::SliderInt("Min Traversal Occupancy", &FFXParams.minTraversalOccupancy, 0, 32);
-			ImGui::SliderInt("Most Detailed Level", &FFXParams.mostDetailedDepthHierarchyMipLevel, 0, 5);
-			ImGui::SliderFloat("Depth Buffer Thickness", &FFXParams.depthBufferThickness, 0.0f, 5.0f);
-			ImGui::SliderFloat("Roughness Threshold", &FFXParams.roughnessThreshold, 0.0f, 1.f);
-			ImGui::SliderFloat("Temporal Stability", &FFXParams.temporalStability, 0.0f, 1.0f);
-			ImGui::SliderFloat("Temporal Variance Threshold", &FFXParams.temporalVarianceThreshold, 0.0f, 0.01f);
-			ImGui::Checkbox("Enable Variance Guided Tracing", &FFXParams.bEnableTemporalVarianceGuidedTracing);
-
-			ImGui::Text("Samples per Quad"); ImGui::SameLine();
-			ImGui::RadioButton("1", &FFXParams.samplesPerQuad, 1); ImGui::SameLine();
-			ImGui::RadioButton("2", &FFXParams.samplesPerQuad, 2); ImGui::SameLine();
-			ImGui::RadioButton("4", &FFXParams.samplesPerQuad, 4);
-
+			ImGui::PushStyleColor(ImGuiCol_Header, UI_COLLAPSING_HEADER_COLOR_VALUE);
+			if (ImGui::CollapsingHeader("SSSR Settings"))
+			{
+				ImGui::PopStyleColor();
+				ImGui::SliderFloat("Roughness Threshold", &FFXParams.roughnessThreshold, 0.0f, 1.f);
+				ImGui::SliderInt("Max Traversal Iterations", &FFXParams.maxTraversalIterations, 0, 256);
+				ImGui::SliderInt("Min Traversal Occupancy", &FFXParams.minTraversalOccupancy, 0, 32);
+				ImGui::SliderInt("Most Detailed Level", &FFXParams.mostDetailedDepthHierarchyMipLevel, 0, 5);
+				ImGui::SliderFloat("Depth Buffer Thickness", &FFXParams.depthBufferThickness, 0.0f, 5.0f);
+				ImGui::SliderFloat("Temporal Stability", &FFXParams.temporalStability, 0.0f, 1.0f);
+				ImGui::SliderFloat("Temporal Variance Threshold", &FFXParams.temporalVarianceThreshold, 0.0f, 0.01f);
+				ImGui::Checkbox("Enable Variance Guided Tracing", &FFXParams.bEnableTemporalVarianceGuidedTracing);
+				ImGui::Text("Samples per Quad"); ImGui::SameLine();
+				ImGui::RadioButton("1", &FFXParams.samplesPerQuad, 1); ImGui::SameLine();
+				ImGui::RadioButton("2", &FFXParams.samplesPerQuad, 2); ImGui::SameLine();
+				ImGui::RadioButton("4", &FFXParams.samplesPerQuad, 4);
+				ImGui::Separator();
+			}
+			else
+			{
+				ImGui::PopStyleColor();
+			}
 		}
 		break;
 		case EReflections::RAY_TRACED_REFLECTIONS:
@@ -1096,15 +1116,23 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 		default:
 			break;
 		}
+
+		ImGui::EndTabItem();
 	}
-	else
+
+	// ImGuiSpacing(6);
+
+	if (ImGui::BeginTabItem("Post Processing"))
 	{
-		ImGui::PopStyleColor();
+		DrawPostProcessSettings(PPParams);
+		ImGui::EndTabItem();
 	}
-	
-	ImGuiSpacing(6);
 
-	DrawPostProcessSettings(PPParams);
-
+	ImGui::EndTabBar();
 	ImGui::End();
+}
+
+void VQEngine::DrawMaterialEditor()
+{
+
 }

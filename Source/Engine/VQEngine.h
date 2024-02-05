@@ -587,6 +587,7 @@ private:
 	void                            DrawDebugPanelWindow(FSceneRenderParameters& SceneParams, FPostProcessParameters& PPParams);
 	void                            DrawKeyMappingsWindow();
 	void                            DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams, FPostProcessParameters& PPParams);
+	void                            DrawMaterialEditor();
 
 	//
 	// RENDER HELPERS

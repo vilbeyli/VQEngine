@@ -1217,8 +1217,8 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	FSceneView& RefSceneView = const_cast<FSceneView&>(SceneView);
 	FPostProcessParameters& RefPPParams = const_cast<FPostProcessParameters&>(PPParams);
 
-	RefSceneView.SceneRTWidth  = static_cast<int>(ctx.WindowDisplayResolutionX * (PPParams.IsFSREnabled() ? PPParams.FFSR_EASUParams.GetScreenPercentage() : 1.0f));
-	RefSceneView.SceneRTHeight = static_cast<int>(ctx.WindowDisplayResolutionY * (PPParams.IsFSREnabled() ? PPParams.FFSR_EASUParams.GetScreenPercentage() : 1.0f));
+	RefSceneView.SceneRTWidth  = static_cast<int>(ctx.WindowDisplayResolutionX * (PPParams.IsFSREnabled() ? PPParams.ResolutionScale : 1.0f));
+	RefSceneView.SceneRTHeight = static_cast<int>(ctx.WindowDisplayResolutionY * (PPParams.IsFSREnabled() ? PPParams.ResolutionScale : 1.0f));
 	RefPPParams.SceneRTWidth  = SceneView.SceneRTWidth;
 	RefPPParams.SceneRTHeight = SceneView.SceneRTHeight;
 	RefPPParams.DisplayResolutionWidth  = ctx.WindowDisplayResolutionX;
@@ -1227,16 +1227,19 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	// do some settings override for some render paths
 	if (bUseHDRRenderPath)
 	{
+#if !DISABLE_FIDELITYFX_CAS
 		if (RefPPParams.IsFFXCASEnabled())
 		{
 			Log::Warning("FidelityFX CAS HDR not implemented, turning CAS off");
 			RefPPParams.bEnableCAS = false;
 		}
+#endif
 		if (RefPPParams.IsFSREnabled())
 		{
 			// TODO: HDR conversion pass to handle color range and precision/packing, shader variants etc.
 			Log::Warning("FidelityFX Super Resolution HDR not implemented yet, turning FSR off"); 
-			RefPPParams.bEnableFSR = false;
+			// RefPPParams.bEnableFSR = false;
+			RefPPParams.UpscalingAlgorithm = FPostProcessParameters::EUpscalingAlgorithm::NONE; // TODO: enable resolution scaling for HDR
 #if 0
 			// this causes UI pass PSO to not match the render target format
 			mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<WindowResizeEvent>(W, H, mpWinMain->GetHWND()));

@@ -284,18 +284,19 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 			{
 				FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(i);
 
+#if !DISABLE_FIDELITYFX_CAS
 				// Update FidelityFX constant blocks
 				if (PPParams.IsFFXCASEnabled())
 				{
 					PPParams.FFXCASParams.UpdateCASConstantBlock(uWidth, uHeight, uWidth, uHeight);
 				}
+#endif
 				if (PPParams.IsFSREnabled())
 				{
-					const float fResolutionScale = PPParams.FFSR_EASUParams.GetScreenPercentage();
-					const uint InputWidth  = static_cast<uint>(fResolutionScale * uWidth);
-					const uint InputHeight = static_cast<uint>(fResolutionScale * uHeight);
-					PPParams.FFSR_EASUParams.UpdateEASUConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, uWidth, uHeight);
-					PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
+					const uint InputWidth  = static_cast<uint>(PPParams.ResolutionScale * uWidth);
+					const uint InputHeight = static_cast<uint>(PPParams.ResolutionScale * uHeight);
+					PPParams.FSR_EASUParams.UpdateEASUConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, uWidth, uHeight);
+					PPParams.FSR_RCASParams.UpdateRCASConstantBlock();
 				}
 			}
 		}
@@ -409,7 +410,7 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	const bool bFSREnabled = PPParams.IsFSREnabled() && !bUseHDRRenderPath; // TODO: remove this when FSR-HDR is implemented
 	const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
 
-	const float fResolutionScale = bUpscaling ? PPParams.FFSR_EASUParams.GetScreenPercentage() : 1.0f;
+	const float fResolutionScale = bUpscaling ? PPParams.ResolutionScale : 1.0f;
 
 	RenderThread_UnloadWindowSizeDependentResources(hwnd);
 	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT, fResolutionScale);
@@ -471,7 +472,7 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 	const bool bFSREnabled = PPParams.IsFSREnabled();
 	const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
 
-	const float fResolutionScale = bUpscaling ? PPParams.FFSR_EASUParams.GetScreenPercentage() : 1.0f;
+	const float fResolutionScale = bUpscaling ? PPParams.ResolutionScale : 1.0f;
 
 	//
 	// EXCLUSIVE FULLSCREEN

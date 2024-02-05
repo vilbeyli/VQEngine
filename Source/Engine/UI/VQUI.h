@@ -16,6 +16,8 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
+#include <memory>
+
 struct FMagnifierParameters;
 struct FMagnifierUIState
 {
@@ -24,7 +26,7 @@ struct FMagnifierUIState
 	bool  bLockMagnifierPositionHistory = false;
 	int   LockedMagnifiedScreenPositionX = 0;
 	int   LockedMagnifiedScreenPositionY = 0;
-	FMagnifierParameters* pMagnifierParams = nullptr;
+	std::shared_ptr<FMagnifierParameters> pMagnifierParams = nullptr;
 
 	void ToggleMagnifierLock();
 	void AdjustMagnifierSize(float increment = 0.05f);
@@ -42,7 +44,7 @@ struct FUIState
 
 	bool bUIOnSeparateWindow;
 	bool bProfiler_ShowEngineStats;
-	FMagnifierUIState* mpMagnifierState = nullptr;
+	std::unique_ptr<FMagnifierUIState> mpMagnifierState = nullptr;
 	
 	void GetMouseScreenPosition(int& X, int& Y) const;
 
