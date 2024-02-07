@@ -588,6 +588,7 @@ private:
 	void                            DrawKeyMappingsWindow();
 	void                            DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams, FPostProcessParameters& PPParams);
 	void                            DrawMaterialEditor();
+	void                            DrawLightEditor();
 
 	//
 	// RENDER HELPERS

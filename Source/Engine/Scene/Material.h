@@ -41,14 +41,14 @@ enum EMaterialTextureMapBindings
 struct Material // 56 Bytes
 {
 	//------------------------------------------------------------
-	MaterialID        ID                = INVALID_ID;  // 4  Bytes
 	DirectX::XMFLOAT3 diffuse           = {1, 1, 1};   // 12 Bytes
-	//------------------------------------------------------------
 	float             alpha             = 1.0f;        // 4  Bytes
+	//------------------------------------------------------------
 	DirectX::XMFLOAT3 specular          = { 1, 1, 1 }; // 12 Bytes
+	float             emissiveIntensity = 0.0f;        // 4 Bytes
 	//------------------------------------------------------------
 	DirectX::XMFLOAT3 emissiveColor     = { 1, 1, 1 }; // 12 Bytes
-	float             emissiveIntensity = 0.0f;        // 4 Bytes
+	float pad1;                                        // 4 Byter
 	//------------------------------------------------------------
 	DirectX::XMFLOAT2 tiling            = { 1, 1 };    // 8 Bytes
 	DirectX::XMFLOAT2 uv_bias           = { 0, 0 };    // 8 Bytes
@@ -56,7 +56,7 @@ struct Material // 56 Bytes
 	// Cook-Torrence BRDF
 	float metalness                     = 0.0f;        // 4 Bytes
 	float roughness                     = 0.8f;        // 4 Bytes
-	float pad0, pad1;                                  // 8 Bytes
+	float pad0, pad2;                                  // 8 Bytes
 	//------------------------------------------------------------
 
 	TextureID TexDiffuseMap   = INVALID_ID;
@@ -68,7 +68,7 @@ struct Material // 56 Bytes
 	TextureID TexRoughnessMap = INVALID_ID;
 	TextureID TexOcclusionRoughnessMetalnessMap = INVALID_ID;
 	TextureID TexAmbientOcclusionMap = INVALID_ID;
-	
+
 	SRV_ID SRVMaterialMaps = INVALID_ID;
 	//------------------------------------------------------------
 

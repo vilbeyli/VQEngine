@@ -1805,7 +1805,8 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBu
 						(LONG)pcmd->ClipRect.w
 					};
 					pCmd->RSSetScissorRects(1, &r);
-					pCmd->SetGraphicsRootDescriptorTable(0, ((const CBV_SRV_UAV*)(pcmd->TextureId))->GetGPUDescHandle());
+					D3D12_GPU_DESCRIPTOR_HANDLE h = { (UINT64)(pcmd->TextureId) };
+					pCmd->SetGraphicsRootDescriptorTable(0, h);
 
 					pCmd->DrawIndexedInstanced(pcmd->ElemCount, 1, idx_offset, vtx_offset, 0);
 				}

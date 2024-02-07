@@ -444,6 +444,7 @@ void VQEngine::Load_SceneData_Dispatch()
 	{
 		this->WaitUntilRenderingFinishes();
 		mpScene->Unload(); // is this really necessary when we fnCreateSceneInstance() ?
+		mUIState.SelectedMaterialIndex = INVALID_ID;
 	}
 
 	// load scene representation from disk

@@ -28,6 +28,7 @@
 #include "Libs/imgui/imgui.h"
 // To use the 'disabled UI state' functionality (ImGuiItemFlags_Disabled), include internal header
 // https://github.com/ocornut/imgui/issues/211#issuecomment-339241929
+
 #include "Libs/imgui/imgui_internal.h"
 static        void BeginDisabledUIState(bool bEnable)
 {
@@ -278,7 +279,7 @@ void VQEngine::InitializeUI(HWND hwnd)
 
 	// Tell ImGUI what the image view is
 	//
-	io.Fonts->TexID = (ImTextureID)&mRenderer.GetSRV(srvUI);
+	io.Fonts->TexID = (ImTextureID)mRenderer.GetSRV(srvUI).GetGPUDescHandle().ptr;
 
 
 	// Create sampler
@@ -332,6 +333,8 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 		if (mUIState.bWindowVisible_Profiler)              DrawProfilerWindow(mpScene->GetSceneRenderStats(FRAME_DATA_INDEX), dt);
 		if (mUIState.bWindowVisible_DebugPanel)            DrawDebugPanelWindow(SceneParams, PPParams);
 		if (mUIState.bWindowVisible_GraphicsSettingsPanel) DrawGraphicsSettingsWindow(SceneParams, PPParams);
+		if (mUIState.bWindowVisible_MaterialEditor)        DrawMaterialEditor();
+		if (mUIState.bWindowVisible_LightEditor)           DrawLightEditor();
 	}
 
 	// If we fired an event that would trigger loading,
@@ -370,9 +373,18 @@ const uint32_t PROFILER_WINDOW_SIZE_Y    = 850;
 const uint32_t DBG_WINDOW_PADDING_X      = 10;
 const uint32_t DBG_WINDOW_PADDING_Y      = 10;
 const uint32_t DBG_WINDOW_SIZE_X         = 330;
-const uint32_t DBG_WINDOW_SIZE_Y         = 180;
+const uint32_t DBG_WINDOW_SIZE_Y         = 380;
 //---------------------------------------------
-
+const uint32_t MATERIAL_WINDOW_PADDING_X = 10;
+const uint32_t MATERIAL_WINDOW_PADDING_Y = 10;
+const uint32_t MATERIAL_WINDOW_SIZE_X    = 550;
+const uint32_t MATERIAL_WINDOW_SIZE_Y    = 400;
+//---------------------------------------------
+const uint32_t LIGHTS_WINDOW_PADDING_X   = 10;
+const uint32_t LIGHTS_WINDOW_PADDING_Y   = 10;
+const uint32_t LIGHTS_WINDOW_SIZE_X      = 250;
+const uint32_t LIGHTS_WINDOW_SIZE_Y      = 400;
+//---------------------------------------------
 
 // Dropdown data ----------------------------------------------------------------------------------------------
 const     ImVec4 UI_COLLAPSING_HEADER_COLOR_VALUE = ImVec4(0.0, 0.00, 0.0, 0.7f);
@@ -592,24 +604,33 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 	{
 		mUIState.bWindowVisible_KeyMappings = !mUIState.bWindowVisible_KeyMappings;
 	}
+	
+	if (ImGui::BeginTable("ButtonCheckboxesTable", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_NoBordersInBody)) {
+		ImGui::TableSetupColumn("##", ImGuiTableColumnFlags_NoResize);
+		ImGui::TableSetupColumn("##", ImGuiTableColumnFlags_NoResize);
 
-	ImGuiSpacing3();
-	
-	ImGui::Text("Windows");
-	ImGui::Separator();
-	
-	float fullWidth = ImGui::GetContentRegionAvail().x; // Get available width
-	float halfWidth = fullWidth * 0.5f; // Calculate half width
-	ImGui::PushItemWidth(halfWidth);
-	ImGui::Checkbox("Editor (F1)", &mUIState.bWindowVisible_SceneControls);
-	ImGui::SameLine();
-	ImGui::Checkbox("Settings (F3)", &mUIState.bWindowVisible_GraphicsSettingsPanel);
-	
-	
-	ImGui::Checkbox("Profiler (F2)", &mUIState.bWindowVisible_Profiler);
-	ImGui::SameLine();
-	ImGui::Checkbox("Debug (F4)", &mUIState.bWindowVisible_DebugPanel);
-	ImGui::PopItemWidth();
+		ImGui::TableNextRow();
+		ImGui::TableSetColumnIndex(0);
+		ImGui::Checkbox("F1: Editor", &mUIState.bWindowVisible_SceneControls);
+		ImGui::TableSetColumnIndex(1);
+		ImGui::Checkbox("F2: Settings", &mUIState.bWindowVisible_GraphicsSettingsPanel);
+
+		ImGui::TableNextRow();
+		ImGui::TableSetColumnIndex(0);
+		ImGui::Checkbox("F3: Profiler", &mUIState.bWindowVisible_Profiler);
+		ImGui::TableSetColumnIndex(1);
+		ImGui::Checkbox("F4: Debug", &mUIState.bWindowVisible_DebugPanel);
+
+		ImGui::TableNextRow();
+		ImGui::TableSetColumnIndex(0);
+		ImGui::Checkbox("F5: Materials", &mUIState.bWindowVisible_MaterialEditor);
+		ImGui::TableSetColumnIndex(1);
+		ImGui::Checkbox("F6: Lights", &mUIState.bWindowVisible_LightEditor);
+ 
+		ImGui::EndTable();
+	}
+
+
 	ImGuiSpacing3();
 
 	ImGui::Text("Scene");
@@ -1132,7 +1153,240 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 	ImGui::End();
 }
 
+static void DrawTextureViewer(
+	const char* szTextureName,
+	const char* szTexturePath,
+	ImTextureID ImTexID,
+	const char* szTextureFormat,
+	int TexSizeX,
+	int TexSizeY,
+	int TexMIPs
+)
+{
+	const int largeTextureViewSize = 64 * 4;
+
+	ImGui::BeginTooltip();
+
+	ImGui::Text("%s", szTextureName);
+	ImGui::Separator();
+
+	if (ImGui::BeginTable("Texture View Table", 2))
+	{
+		ImGui::TableSetupColumn("Texture Large View", ImGuiTableColumnFlags_WidthFixed, largeTextureViewSize + 4);
+		ImGui::TableSetupColumn("Texture Details", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+
+		ImGui::TableNextRow();
+
+		ImGui::TableSetColumnIndex(0);
+		ImGui::Image(ImTexID, ImVec2(largeTextureViewSize, largeTextureViewSize));
+		ImGui::TableSetColumnIndex(1);
+		ImGui::Text("Format : %s", szTextureFormat);
+		ImGui::Text("Size   : %dx%d", TexSizeX, TexSizeY);
+		ImGui::Text("Mips   : %d", TexMIPs);
+		//ImGui::Text("Samples: %d", TexSamples);
+		ImGui::EndTable();
+	}
+
+	ImGui::Text("%s", szTexturePath);
+
+	ImGui::EndTooltip();
+}
+
 void VQEngine::DrawMaterialEditor()
 {
+	const uint32 W = mpWinMain->GetWidth();
+	const uint32 H = mpWinMain->GetHeight();
+	const uint32_t MATERIAL_WINDOW_POS_X = MATERIAL_WINDOW_PADDING_X + GFX_WINDOW_SIZE_X + GFX_WINDOW_PADDING_X;
+	const uint32_t MATERIAL_WINDOW_POS_Y = H - MATERIAL_WINDOW_PADDING_Y * 2 - MATERIAL_WINDOW_SIZE_Y;
+	
+	const std::vector<FMaterialRepresentation>& matReps = mpScene->GetMaterialRepresentations();
+	const std::vector<MaterialID> matIDs = mpScene->GetMaterialIDs();
+	
+	std::vector<const char*> szMaterialNames(matIDs.size() + 1, nullptr);
+	std::vector<MaterialID> MaterialIDs(matIDs.size() + 1, INVALID_ID);
+	{
+		int iMatName = 0;
+		for (MaterialID matID : matIDs)
+		{
+			const std::string& matName = mpScene->GetMaterialName(matID);
+			szMaterialNames[iMatName] = matName.c_str();
+			MaterialIDs[iMatName++] = matID;
+		}
+		szMaterialNames[iMatName] = "";
+	}
 
+	ImGui::SetNextWindowPos(ImVec2((float)MATERIAL_WINDOW_POS_X, (float)MATERIAL_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(MATERIAL_WINDOW_SIZE_X, MATERIAL_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
+
+	ImGui::Begin("MATERIAL EDITOR", &mUIState.bWindowVisible_MaterialEditor);
+	
+	if (!ImGui::BeginTable("MaterialEditorTableLayout", 2, ImGuiTableFlags_Resizable, ImVec2(-1, -1)))
+	{
+		ImGui::End();
+		return;
+	}
+
+	ImGui::TableSetupColumn(mpScene->GetMaterialName(mUIState.SelectedMaterialIndex).c_str(), ImGuiTableColumnFlags_WidthStretch, 0.7f); // 70% width
+	ImGui::TableSetupColumn("Materials", ImGuiTableColumnFlags_WidthStretch, 0.3f); // 30% width
+	ImGui::TableHeadersRow();	
+	ImGui::TableNextRow();
+	
+
+	// draw selector
+	ImGui::TableSetColumnIndex(1);
+	ImGui::SetNextItemWidth(-1); // Make the controls take the full width of the column
+	ImGui::ListBox("##", &mUIState.SelectedMaterialIndex, szMaterialNames.data(), szMaterialNames.size(), szMaterialNames.size());
+	if (ImGui::Button("Unselect##", ImVec2(-1, 0)))
+	{
+		mUIState.SelectedMaterialIndex = szMaterialNames.size() - 1;
+	}
+
+
+	// draw editor
+	ImGui::TableSetColumnIndex(0);
+
+	ImGui::Text("ID : %d", mUIState.SelectedMaterialIndex);
+	ImGuiSpacing(2);
+	if (mUIState.SelectedMaterialIndex != szMaterialNames.size() - 1 && mUIState.SelectedMaterialIndex != INVALID_ID)
+	{
+		Material& mat = mpScene->GetMaterial(MaterialIDs[mUIState.SelectedMaterialIndex]);
+
+		if (ImGui::BeginTable("MaterialEditorTable", 2, ImGuiTableFlags_Resizable,ImVec2(0, -1))) {
+			ImGui::TableSetupColumn("Property", ImGuiTableColumnFlags_WidthFixed, 135.0f);
+			ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+			//ImGui::TableHeadersRow();
+
+			// Diffuse Color & Alpha
+			DirectX::XMFLOAT4 ColorAlpha(mat.diffuse.x, mat.diffuse.y, mat.diffuse.z, mat.alpha);
+
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::Text("Diffuse, Alpha");
+			ImGui::TableSetColumnIndex(1);
+			if (ImGui::ColorEdit4("##diffuse", reinterpret_cast<float*>(&ColorAlpha), ImGuiColorEditFlags_DefaultOptions_ | ImGuiColorEditFlags_NoLabel))
+			{
+				mat.diffuse = DirectX::XMFLOAT3(ColorAlpha.x, ColorAlpha.y, ColorAlpha.z);
+				mat.alpha = ColorAlpha.w;
+			}
+
+			// Emissive Color
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::Text("Emissive Color");
+			ImGui::TableSetColumnIndex(1);
+			ImGui::ColorEdit3("##emissiveColor", reinterpret_cast<float*>(&mat.emissiveColor), ImGuiColorEditFlags_DefaultOptions_ | ImGuiColorEditFlags_NoLabel);
+
+			// Emissive Intensity
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::Text("Emissive Intensity");
+			ImGui::TableSetColumnIndex(1);
+			ImGui::DragFloat("##emissiveIntensity", &mat.emissiveIntensity, 0.01f, 0.0f, 1000.0f, "%.2f");
+
+			// Metalness
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::Text("Metalness");
+			ImGui::TableSetColumnIndex(1);
+			ImGui::DragFloat("##metalness", &mat.metalness, 0.01f, 0.00f, 1.0f, "%.2f");
+			
+			// Roughness
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::Text("Roughness");
+			ImGui::TableSetColumnIndex(1);
+			ImGui::DragFloat("##roughness", &mat.roughness, 0.01f, 0.04f, 1.0f, "%.2f");
+
+			// Tiling
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::Text("Tiling");
+			ImGui::TableSetColumnIndex(1);
+			ImGui::DragFloat2("##tiling", reinterpret_cast<float*>(&mat.tiling), 0.05f, 0.0f, 10.0f, "%.2f");
+			
+			// UV Bias
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::Text("UV Bias");
+			ImGui::TableSetColumnIndex(1);
+			ImGui::DragFloat2("##uv_bias", reinterpret_cast<float*>(&mat.uv_bias), 0.05f, -10.0f, 10.0f, "%.2f");
+
+			// Texture
+			static const char* textureLabels[] = 
+			{
+				"Diffuse Map", "Normal Map", "Emissive Map", /*"Height Map", */"Alpha Mask Map",
+				"Metallic Map", "Roughness Map", "Occlusion Roughness Metalness Map", "Ambient Occlusion Map"
+			};
+			int textureIDs[] = 
+			{
+				mat.TexDiffuseMap, mat.TexNormalMap, mat.TexEmissiveMap, mat.TexHeightMap,
+				mat.TexAlphaMaskMap, mat.TexMetallicMap, mat.TexRoughnessMap,
+				mat.TexOcclusionRoughnessMetalnessMap, mat.TexAmbientOcclusionMap
+			};
+			for (int i = 0; i < _countof(textureLabels); ++i) 
+			{
+				if (textureIDs[i] == INVALID_ID)
+					continue;
+
+				const std::string_view& textureFormat = mRenderer.DXGIFormatAsString(mRenderer.GetTextureFormat(textureIDs[i]));
+				const std::string& texturePath = mpScene->GetTexturePath(textureIDs[i]);
+				const std::string textureName = mpScene->GetTextureName(textureIDs[i]);
+				int textureSizeX, textureSizeY;
+				mRenderer.GetTextureDimensions(textureIDs[i], textureSizeX, textureSizeY);
+				int textureMIPs = mRenderer.GetTextureMips(textureIDs[i]);
+
+				const CBV_SRV_UAV& srv = mRenderer.GetShaderResourceView(mat.SRVMaterialMaps);
+				ImTextureID ImTexID = (ImTextureID)srv.GetGPUDescHandle(i).ptr;
+
+				const int texturePreviewSize = 64;
+
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				ImGui::Text("%s", textureLabels[i]);
+
+				ImGui::TableSetColumnIndex(1);
+				ImGui::Image(ImTexID, ImVec2(texturePreviewSize, texturePreviewSize));
+				if (ImGui::IsItemHovered())
+				{
+					DrawTextureViewer(
+						textureName.c_str(), 
+						texturePath.c_str(), 
+						ImTexID, 
+						textureFormat.data(), 
+						textureSizeX, 
+						textureSizeY, 
+						textureMIPs
+					);
+				}
+				//ImGui::Text("%s\nPath: %s", textureName.c_str(), texturePath.c_str());
+
+			}
+
+			ImGui::EndTable();
+		}
+	}
+	
+
+	ImGui::EndTable();
+
+	ImGui::End();
+}
+
+void VQEngine::DrawLightEditor()
+{
+	const uint32 W = mpWinMain->GetWidth();
+	const uint32 H = mpWinMain->GetHeight();
+	const uint32_t LIGHTS_WINDOW_POS_X = LIGHTS_WINDOW_PADDING_X 
+		+ GFX_WINDOW_SIZE_X + GFX_WINDOW_PADDING_X 
+		+ MATERIAL_WINDOW_SIZE_X + MATERIAL_WINDOW_PADDING_X;
+	const uint32_t LIGHTS_WINDOW_POS_Y = H - LIGHTS_WINDOW_PADDING_Y * 2 - LIGHTS_WINDOW_SIZE_Y;
+	ImGui::SetNextWindowPos(ImVec2((float)LIGHTS_WINDOW_POS_X, (float)LIGHTS_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(LIGHTS_WINDOW_SIZE_X, LIGHTS_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
+
+	ImGui::Begin("LIGHT EDITOR", &mUIState.bWindowVisible_LightEditor);
+
+	
+	// ImGui::EndTable();
+
+	ImGui::End();
 }

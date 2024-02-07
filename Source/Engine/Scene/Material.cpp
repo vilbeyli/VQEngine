@@ -33,7 +33,7 @@ VQ_SHADER_DATA::MaterialData Material::GetCBufferData() const
 	d.roughness = this->roughness;
 	
 	d.metalness = this->metalness;
-	d.uvScale = this->tiling;
+	d.uvScaleOffset = float4(this->tiling.x, this->tiling.y, this->uv_bias.x, this->uv_bias.y);
 
 	d.textureConfig = this->GetTextureConfig();
 	

@@ -42,6 +42,12 @@ struct FUIState
 	bool bWindowVisible_GraphicsSettingsPanel;
 	bool bHideAllWindows; // masks all the windows above
 
+	bool bWindowVisible_MaterialEditor;
+	int  SelectedMaterialIndex = -1;
+
+	bool bWindowVisible_LightEditor;
+	int SelectedLightIndex = -1;
+
 	bool bUIOnSeparateWindow;
 	bool bProfiler_ShowEngineStats;
 	std::unique_ptr<FMagnifierUIState> mpMagnifierState = nullptr;

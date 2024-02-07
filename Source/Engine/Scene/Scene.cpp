@@ -87,13 +87,22 @@ ModelID Scene::CreateModel()
 
 MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 {
-	auto it = mLoadedMaterials.find(UniqueMaterialName);
-	if (it != mLoadedMaterials.end())
+	int iMat = -1;
+	for (auto it = mMaterialNames.begin(); it != mMaterialNames.end(); ++it)
+	{
+		if (it->second == UniqueMaterialName)
+		{
+			iMat = it->first;
+			break;
+		}
+	}
+
+	if( iMat != -1)
 	{
 #if LOG_CACHED_RESOURCES_ON_LOAD
 		Log::Info("Material already loaded: %s", UniqueMaterialName.c_str());
 #endif
-		return it->second;
+		return iMat;
 	}
 
 	static MaterialID LAST_USED_MATERIAL_ID = 0;
@@ -103,7 +112,14 @@ MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 		std::unique_lock<std::mutex> lk(mMtx_Materials);
 		id = LAST_USED_MATERIAL_ID++;
 		mMaterials[id] = Material();
-		mLoadedMaterials[UniqueMaterialName] = id;
+		mLoadedMaterials.emplace(id);
+		mMaterialNames[id] = UniqueMaterialName;
+		if (UniqueMaterialName == "")
+		{
+#if LOG_RESOURCE_CREATE
+			Log::Info("Scene::CreateMaterial() ID=%d - <empty string>", id, UniqueMaterialName.c_str());
+#endif
+		}
 	}
 #if LOG_RESOURCE_CREATE
 	Log::Info("Scene::CreateMaterial() ID=%d - %s", id, UniqueMaterialName.c_str());
@@ -123,6 +139,44 @@ MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 7, INVALID_ID);
 	}
 	return id;
+}
+
+const std::string& Scene::GetMaterialName(MaterialID ID) const
+{
+	auto it = mMaterialNames.find(ID);
+	if (it != mMaterialNames.end())
+	{
+		return it->second;
+	}
+	return mInvalidMaterialName;
+}
+
+const std::string& Scene::GetTexturePath(TextureID ID) const
+{
+	auto it = mTexturePaths.find(ID);
+	if (it != mTexturePaths.end())
+	{
+		return it->second;
+	}
+	return mInvalidTexturePath;
+}
+
+const std::string Scene::GetTextureName(TextureID ID) const
+{
+	const std::string& path = GetTexturePath(ID);
+	const std::string fileNameAndExtension = StrUtil::split(path, '/').back();
+	return StrUtil::split(fileNameAndExtension, '.').front();
+}
+
+std::vector<MaterialID> Scene::GetMaterialIDs() const
+{
+	std::vector<MaterialID> ids(mMaterials.size());
+	size_t i = 0;
+	for (const auto& kvp : mMaterials)
+	{
+		ids[i++] = kvp.first;
+	}
+	return ids;
 }
 
 Material& Scene::GetMaterial(MaterialID ID)
@@ -302,6 +356,8 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 	, mRenderer(renderer)
 	, mMaterialAssignments(engine.GetAssetLoader().GetThreadPool_TextureLoad())
 	, mBoundingBoxHierarchy(mMeshes, mModels, mMaterials, mpTransforms)
+	, mInvalidMaterialName("INVALID MATERIAL")
+	, mInvalidTexturePath("INVALID PATH")
 {}
 
 void Scene::PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX)

@@ -299,6 +299,7 @@ class Scene
 {
 	// Engine has easy access to the scene as scene is essentially a part of the engine.
 	friend class VQEngine; 
+	friend class AssetLoader;
 
 //----------------------------------------------------------------------------------------------------------------
 // SCENE INTERFACE
@@ -412,6 +413,11 @@ public:
 	MaterialID  CreateMaterial(const std::string& UniqueMaterialName);
 	MaterialID  LoadMaterial(const FMaterialRepresentation& matRep, TaskID taskID);
 
+	const std::vector<FMaterialRepresentation>& GetMaterialRepresentations() const { return mSceneRepresentation.Materials; }
+	const std::string& GetMaterialName(MaterialID ID) const;
+	const std::string& GetTexturePath(TextureID) const;
+	const std::string  GetTextureName(TextureID) const;
+	std::vector<MaterialID> GetMaterialIDs() const;
 	Material&   GetMaterial(MaterialID ID);
 	Model&      GetModel(ModelID);
 	FSceneStats GetSceneRenderStats(int FRAME_DATA_INDEX) const;
@@ -465,6 +471,8 @@ protected:
 	// MATERIAL DATA
 	//
 	MaterialID                mDefaultMaterialID = INVALID_ID;
+	const std::string         mInvalidMaterialName;
+	const std::string         mInvalidTexturePath;
 
 
 	//
@@ -505,7 +513,9 @@ private:
 	AssetLoader::FMaterialTextureAssignments mMaterialAssignments;
 	
 	// cache
-	std::unordered_map<std::string, MaterialID> mLoadedMaterials;
+	std::unordered_set<MaterialID> mLoadedMaterials;
+	std::unordered_map<MaterialID, std::string> mMaterialNames;
+	std::unordered_map<TextureID, std::string> mTexturePaths;
 	
 	//CPUProfiler*    mpCPUProfiler;
 	//FBoundingBox     mSceneBoundingBox;

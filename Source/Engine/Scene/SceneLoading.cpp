@@ -446,7 +446,7 @@ void Scene::OnLoadComplete()
 	}
 
 	// assign material data
-	mMaterialAssignments.DoAssignments(this, &mRenderer);
+	mMaterialAssignments.DoAssignments(this, this->mTexturePaths, &mRenderer);
 
 	// calculate local-space game object AABBs
 	CalculateGameObjectLocalSpaceBoundingBoxes();
@@ -479,6 +479,9 @@ void Scene::Unload()
 	mpObjects.clear();
 
 	mCameras.clear();
+	mMaterials.clear();
+	mMaterialNames.clear();
+	mLoadedMaterials.clear();
 
 	mDirectionalLight = {};
 	mLightsStatic.clear();
