@@ -363,9 +363,12 @@ void VQEngine::InitializeEngineThreads()
 	mRenderThread = std::thread(&VQEngine::RenderThread_Main, this);
 	mUpdateThread = std::thread(&VQEngine::UpdateThread_Main, this);
 	mWorkers_Update.Initialize(NumRuntimeWorkers, "UpdateWorkers");
+	SetThreadDescription(mWorkers_Update.native_handle(), StrUtil::ASCIIToUnicode("Update Thread").c_str());
 	mWorkers_Render.Initialize(NumRuntimeWorkers, "RenderWorkers");
+	SetThreadDescription(mWorkers_Render.native_handle(), StrUtil::ASCIIToUnicode("Render Thread").c_str());
 #else
 	mSimulationThread = std::thread(&VQEngine::SimulationThread_Main, this);
+	SetThreadDescription(mSimulationThread.native_handle(), StrUtil::ASCIIToUnicode("Simulation Thread").c_str());
 	mWorkers_Simulation.Initialize(NumRuntimeWorkers, "SimulationWorkers");
 #endif
 }

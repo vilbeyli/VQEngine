@@ -409,6 +409,7 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 			// store the loaded texture path if we have a successful texture creation
 			if (loadedTextureID != INVALID_ID)
 			{
+				// TODO: needs to be mutexed.
 				TexturePaths[loadedTextureID] = result.TexturePath;
 			}
 		}
