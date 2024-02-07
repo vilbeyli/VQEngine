@@ -153,7 +153,7 @@ PSOutput PSMain(PSInput In)
 {
 	PSOutput o = (PSOutput)0;
 
-	const float2 uv = In.uv;
+	const float2 uv = In.uv * cbPerObject.materialData.uvScaleOffset.xy + cbPerObject.materialData.uvScaleOffset.zw;
 	const int TEX_CFG = cbPerObject.materialData.textureConfig;
 	
 	float4 AlbedoAlpha = texDiffuse  .Sample(AnisoSampler, uv);
@@ -173,10 +173,10 @@ PSOutput PSMain(PSInput In)
 	
 	// read textures/cbuffer & assign sufrace material data
 	float ao = cbPerFrame.fAmbientLightingFactor;
-	BRDF_Surface Surface = (BRDF_Surface)0;
-	Surface.diffuseColor      = HasDiffuseMap(TEX_CFG)   ? AlbedoAlpha.rgb : cbPerObject.materialData.diffuse;
+	BRDF_Surface Surface      = (BRDF_Surface)0;
+	Surface.diffuseColor      = HasDiffuseMap(TEX_CFG)   ? AlbedoAlpha.rgb * cbPerObject.materialData.diffuse : cbPerObject.materialData.diffuse;
 	Surface.specularColor     = float3(1,1,1);
-	Surface.emissiveColor     = HasEmissiveMap(TEX_CFG)  ? Emissive        : cbPerObject.materialData.emissiveColor;
+	Surface.emissiveColor     = HasEmissiveMap(TEX_CFG) ? Emissive * cbPerObject.materialData.emissiveColor : cbPerObject.materialData.emissiveColor;
 	Surface.emissiveIntensity = cbPerObject.materialData.emissiveIntensity;
 	
 	const float3  N = normalize(In.vertNormal);
@@ -189,13 +189,13 @@ PSOutput PSMain(PSInput In)
 	if (!bReadsRoughnessMapData) Surface.roughness = cbPerObject.materialData.roughness;
 	if (!bReadsMetalnessMapData) Surface.metalness = cbPerObject.materialData.metalness;
 	if (HasAmbientOcclusionMap           (TEX_CFG)) ao *= LocalAO;
-	if (HasRoughnessMap                  (TEX_CFG)) Surface.roughness = Roughness;
-	if (HasMetallicMap                   (TEX_CFG)) Surface.metalness = Metalness;
+	if (HasRoughnessMap                  (TEX_CFG)) Surface.roughness = Roughness * cbPerObject.materialData.roughness;
+	if (HasMetallicMap                   (TEX_CFG)) Surface.metalness = Metalness * cbPerObject.materialData.metalness;
 	if (HasOcclusionRoughnessMetalnessMap(TEX_CFG))
 	{
 		//ao *= OcclRghMtl.r; // TODO: handle no occlusion map case
-		Surface.roughness = OcclRghMtl.g;
-		Surface.metalness = OcclRghMtl.b;
+		Surface.roughness = OcclRghMtl.g * cbPerObject.materialData.roughness;
+		Surface.metalness = OcclRghMtl.b * cbPerObject.materialData.metalness;
 	}
 
 	// apply SSAO

@@ -24,6 +24,7 @@
 #include <array>
 #include <DirectXMath.h>
 // HLSL types for CPU
+#define float4   DirectX::XMFLOAT4
 #define float3   DirectX::XMFLOAT3
 #define float2   DirectX::XMFLOAT2
 #define matrix   DirectX::XMMATRIX
@@ -140,7 +141,7 @@ struct MaterialData
     float3 specular;
     float roughness;
 
-	float2 uvScale;
+	float4 uvScaleOffset;
     float metalness;
 	int textureConfig;
 };
