@@ -334,7 +334,7 @@ protected:
 private: // Derived Scenes shouldn't access these functions
 	void PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX);
 	void Update(float dt, int FRAME_DATA_INDEX = 0);
-	void PostUpdate(ThreadPool& UpdateWorkerThreadPool, int FRAME_DATA_INDEX = 0);
+	void PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UIState, int FRAME_DATA_INDEX = 0);
 	void StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene, ThreadPool& UpdateWorkerThreadPool);
 	void OnLoadComplete();
 	void Unload(); // serial-only for now. maybe MT later.
@@ -415,10 +415,16 @@ public:
 
 	const std::vector<FMaterialRepresentation>& GetMaterialRepresentations() const { return mSceneRepresentation.Materials; }
 	const std::string& GetMaterialName(MaterialID ID) const;
-	const std::string& GetTexturePath(TextureID) const;
-	const std::string  GetTextureName(TextureID) const;
 	std::vector<MaterialID> GetMaterialIDs() const;
 	Material&   GetMaterial(MaterialID ID);
+
+	const std::string& GetTexturePath(TextureID) const;
+	std::string GetTextureName(TextureID) const;
+
+	std::vector<const Light*> GetLightsOfType(Light::EType eType) const;
+	std::vector<const Light*> GetLights() const;
+	std::vector<Light*> GetLights();
+	
 	Model&      GetModel(ModelID);
 	FSceneStats GetSceneRenderStats(int FRAME_DATA_INDEX) const;
 
@@ -443,8 +449,6 @@ protected:
 	std::vector<Transform*>  mpTransforms;
 	std::vector<Camera>      mCameras;
 	
-	Light                    mDirectionalLight;
-
 	std::vector<Light>       mLightsStatic;      //     static lights (See Light::EMobility enum for details)
 	std::vector<Light>       mLightsStationary;  // stationary lights (See Light::EMobility enum for details)
 	std::vector<Light>       mLightsDynamic;     //     moving lights (See Light::EMobility enum for details)
@@ -471,8 +475,6 @@ protected:
 	// MATERIAL DATA
 	//
 	MaterialID                mDefaultMaterialID = INVALID_ID;
-	const std::string         mInvalidMaterialName;
-	const std::string         mInvalidTexturePath;
 
 
 	//
@@ -516,6 +518,8 @@ private:
 	std::unordered_set<MaterialID> mLoadedMaterials;
 	std::unordered_map<MaterialID, std::string> mMaterialNames;
 	std::unordered_map<TextureID, std::string> mTexturePaths;
+	const std::string         mInvalidMaterialName;
+	const std::string         mInvalidTexturePath;
 	
 	//CPUProfiler*    mpCPUProfiler;
 	//FBoundingBox     mSceneBoundingBox;

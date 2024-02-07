@@ -483,19 +483,15 @@ void Scene::Unload()
 	mMaterialNames.clear();
 	mLoadedMaterials.clear();
 
-	mDirectionalLight = {};
 	mLightsStatic.clear();
 	mLightsDynamic.clear();
+	mLightsStationary.clear();
 
 	mBoundingBoxHierarchy.Clear();
 
 	mIndex_SelectedCamera = 0;
 	mIndex_ActiveEnvironmentMapPreset = -1;
 	mEngine.UnloadEnvironmentMap();
-
-	mLightsDynamic.clear();
-	mLightsStatic.clear();
-	mLightsStationary.clear();
 }
 
 

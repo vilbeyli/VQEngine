@@ -33,7 +33,7 @@ struct VSInput
 struct PSInput
 {
 	float4 position : SV_POSITION;
-	float3 color : COLOR0;
+	float4 color : COLOR0;
 };
 
 cbuffer CBuffer : register(b0)
@@ -44,7 +44,7 @@ cbuffer CBuffer : register(b0)
 	float4x4 matModelViewProj;
 #endif
 
-	float3 color;
+	float4 color;
 }
 
 
@@ -64,5 +64,5 @@ PSInput VSMain(VSInput vertex, uint instID : SV_InstanceID)
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	return float4(input.color, 1);
+	return float4(input.color);
 }

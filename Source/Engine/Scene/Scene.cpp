@@ -161,11 +161,38 @@ const std::string& Scene::GetTexturePath(TextureID ID) const
 	return mInvalidTexturePath;
 }
 
-const std::string Scene::GetTextureName(TextureID ID) const
+std::string Scene::GetTextureName(TextureID ID) const
 {
 	const std::string& path = GetTexturePath(ID);
 	const std::string fileNameAndExtension = StrUtil::split(path, '/').back();
 	return StrUtil::split(fileNameAndExtension, '.').front();
+}
+
+std::vector<const Light*> Scene::GetLightsOfType(Light::EType eType) const
+{
+	std::vector<const Light*> lights;
+	for (const Light& l : mLightsStatic    ) if(l.Type == eType) lights.push_back(&l);
+	for (const Light& l : mLightsStationary) if(l.Type == eType) lights.push_back(&l);
+	for (const Light& l : mLightsDynamic   ) if(l.Type == eType) lights.push_back(&l);
+	return lights;
+}
+
+std::vector<const Light*> Scene::GetLights() const
+{
+	std::vector<const Light*> lights;
+	for (const Light& l : mLightsStatic    ) lights.push_back(&l);
+	for (const Light& l : mLightsStationary) lights.push_back(&l);
+	for (const Light& l : mLightsDynamic   ) lights.push_back(&l);
+	return lights;
+}
+
+std::vector<Light*> Scene::GetLights()
+{
+	std::vector<Light*> lights;
+	for (Light& l : mLightsStatic    ) lights.push_back(&l);
+	for (Light& l : mLightsStationary) lights.push_back(&l);
+	for (Light& l : mLightsDynamic   ) lights.push_back(&l);
+	return lights;
 }
 
 std::vector<MaterialID> Scene::GetMaterialIDs() const
@@ -331,6 +358,67 @@ static std::string DumpCameraInfo(int index, const Camera& cam)
 static void ToggleBool(bool& b) { b = !b; }
 
 
+static void RecordRenderLightBoundsCommand(const Light& l,
+	std::vector<FLightRenderCommand>& cmds,
+	const XMVECTOR& CameraPosition
+)
+{
+	const XMVECTOR lightPosition = XMLoadFloat3(&l.Position);
+	const XMVECTOR lightToCamera = CameraPosition - lightPosition;
+	const XMVECTOR dot = XMVector3Dot(lightToCamera, lightToCamera);
+
+	const float distanceSq = dot.m128_f32[0];
+	const float attenuation = 1.0f / distanceSq;
+	const float attenuatedBrightness = l.Brightness * attenuation;
+
+	FLightRenderCommand cmd;
+	cmd.color = XMFLOAT4(
+		l.Color.x //* attenuatedBrightness
+		, l.Color.y //* attenuatedBrightness
+		, l.Color.z //* attenuatedBrightness
+		, 0.1f
+	);
+
+	switch (l.Type)
+	{
+	case Light::EType::DIRECTIONAL:
+		break; // don't draw directional light mesh
+
+	case Light::EType::SPOT:
+	{
+		Transform tf = l.GetTransform();
+		tf.SetScale(1, 1, 1); // reset scale as it holds the scale value for light's render mesh
+		tf.RotateAroundLocalXAxisDegrees(-90.0f); // align with spot light's local space
+
+		XMMATRIX alignConeToSpotLightTransformation = XMMatrixIdentity();
+		alignConeToSpotLightTransformation.r[3].m128_f32[0] = 0.0f;
+		alignConeToSpotLightTransformation.r[3].m128_f32[1] = -l.Range;
+		alignConeToSpotLightTransformation.r[3].m128_f32[2] = 0.0f;
+
+		const float coneBaseRadius = std::tanf(l.SpotOuterConeAngleDegrees * DEG2RAD) * l.Range;
+		XMMATRIX scaleConeToRange = XMMatrixIdentity();
+		scaleConeToRange.r[0].m128_f32[0] = coneBaseRadius;
+		scaleConeToRange.r[1].m128_f32[1] = l.Range;
+		scaleConeToRange.r[2].m128_f32[2] = coneBaseRadius;
+
+		//wvp = alignConeToSpotLightTransformation * tf.WorldTransformationMatrix() * viewProj;
+		cmd.meshID = EBuiltInMeshes::CONE;
+		cmd.matWorldTransformation = scaleConeToRange * alignConeToSpotLightTransformation * tf.matWorldTransformation();
+		cmds.push_back(cmd);
+	}	break;
+
+	case Light::EType::POINT:
+	{
+		Transform tf = l.GetTransform();
+		tf._scale = XMFLOAT3(l.Range, l.Range, l.Range);
+		
+		cmd.meshID = EBuiltInMeshes::SPHERE;
+		cmd.matWorldTransformation = tf.matWorldTransformation();
+		cmds.push_back(cmd);
+	}  break;
+	} // swicth
+}
+
 //-------------------------------------------------------------------------------
 //
 // SCENE
@@ -401,7 +489,7 @@ void Scene::Update(float dt, int FRAME_DATA_INDEX)
 	this->UpdateScene(dt, SceneView);
 }
 
-void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, int FRAME_DATA_INDEX)
+void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UIState, int FRAME_DATA_INDEX)
 {
 	SCOPED_CPU_MARKER("Scene::PostUpdate()");
 	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
@@ -457,6 +545,15 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, int FRAME_DATA_INDEX)
 
 	BatchInstanceData(SceneView, UpdateWorkerThreadPool);
 
+	const auto lights = this->GetLights(); // todo: this is unnecessary copying, don't do this
+	if (UIState.SelectedLightIndex < lights.size() && UIState.SelectedLightIndex >= 0)
+	{
+		const Light& l = *lights[UIState.SelectedLightIndex];
+		if (l.bEnabled)
+		{
+			RecordRenderLightBoundsCommand(l, SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
+		}
+	}
 }
 
 
@@ -1425,105 +1522,84 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 #endif
 }
 
+static void RecordRenderLightBoundsCommands(
+	const std::vector<Light>& vLights, 
+	std::vector<FLightRenderCommand>& cmds,
+	const XMVECTOR& CameraPosition
+)
+{
+	for (const Light& l : vLights)
+	{
+		if (!l.bEnabled)
+			continue;
 
+		RecordRenderLightBoundsCommand(l, cmds, CameraPosition);
+	}
+}
+
+static void RecordRenderLightMeshCommands(
+	const std::vector<Light>& vLights,
+	std::vector<FLightRenderCommand>& cmds,
+	const XMVECTOR& CameraPosition,
+	bool bAttenuateLight = true
+)
+{
+	for (const Light& l : vLights)
+	{
+		if (!l.bEnabled)
+			continue;
+
+		XMVECTOR lightPosition = XMLoadFloat3(&l.Position);
+		XMVECTOR lightToCamera = CameraPosition - lightPosition;
+		XMVECTOR dot = XMVector3Dot(lightToCamera, lightToCamera);
+
+		const float distanceSq = dot.m128_f32[0];
+		const float attenuation = 1.0f / distanceSq;
+		const float attenuatedBrightness = l.Brightness * attenuation;
+		FLightRenderCommand cmd;
+		cmd.color = XMFLOAT4(
+			  l.Color.x * bAttenuateLight ? attenuatedBrightness : 1.0f
+			, l.Color.y * bAttenuateLight ? attenuatedBrightness : 1.0f
+			, l.Color.z * bAttenuateLight ? attenuatedBrightness : 1.0f
+			, 1.0f
+		);
+		cmd.matWorldTransformation = l.GetWorldTransformationMatrix();
+
+		switch (l.Type)
+		{
+		case Light::EType::DIRECTIONAL:
+			continue; // don't draw directional light mesh
+			break;
+		case Light::EType::SPOT:
+		{
+			cmd.meshID = EBuiltInMeshes::SPHERE;
+			cmds.push_back(cmd);
+		}	break;
+
+		case Light::EType::POINT:
+		{
+			cmd.meshID = EBuiltInMeshes::SPHERE;
+			cmds.push_back(cmd);
+		}  break;
+		}
+	} 
+}
 
 void Scene::PrepareLightMeshRenderParams(FSceneView& SceneView) const
 {
 	SCOPED_CPU_MARKER("Scene::PrepareLightMeshRenderParams()");
-	if (!SceneView.sceneParameters.bDrawLightBounds && !SceneView.sceneParameters.bDrawLightMeshes)
-		return;
-
-	auto fnGatherLightRenderData = [&](const std::vector<Light>& vLights)
+	if (SceneView.sceneParameters.bDrawLightMeshes)
 	{
-		for (const Light& l : vLights)
-		{
-			if (!l.bEnabled)
-				continue;
-
-			XMVECTOR lightPosition = XMLoadFloat3(&l.Position);
-			XMVECTOR lightToCamera = SceneView.cameraPosition - lightPosition;
-			XMVECTOR dot = XMVector3Dot(lightToCamera, lightToCamera);
-
-			const float distanceSq = dot.m128_f32[0];
-			const float attenuation = 1.0f / distanceSq;
-			const float attenuatedBrightness = l.Brightness * attenuation;
-
-			FLightRenderCommand cmd;
-			cmd.color = XMFLOAT3(
-				  l.Color.x * attenuatedBrightness
-				, l.Color.y * attenuatedBrightness
-				, l.Color.z * attenuatedBrightness
-			);
-			cmd.matWorldTransformation = l.GetWorldTransformationMatrix();
-
-			switch (l.Type)
-			{
-			case Light::EType::DIRECTIONAL:
-				continue; // don't draw directional light mesh
-				break;
-
-			case Light::EType::SPOT:
-			{
-				// light mesh
-				if (SceneView.sceneParameters.bDrawLightMeshes)
-				{
-					cmd.meshID = EBuiltInMeshes::SPHERE;
-					SceneView.lightRenderCommands.push_back(cmd);
-				}
-
-				// light bounds
-				if (SceneView.sceneParameters.bDrawLightBounds)
-				{
-					cmd.meshID = EBuiltInMeshes::CONE;
-					Transform tf = l.GetTransform();
-					tf.SetScale(1, 1, 1); // reset scale as it holds the scale value for light's render mesh
-					tf.RotateAroundLocalXAxisDegrees(-90.0f); // align with spot light's local space
-
-					XMMATRIX alignConeToSpotLightTransformation = XMMatrixIdentity();
-					alignConeToSpotLightTransformation.r[3].m128_f32[0] = 0.0f;
-					alignConeToSpotLightTransformation.r[3].m128_f32[1] = -l.Range;
-					alignConeToSpotLightTransformation.r[3].m128_f32[2] = 0.0f;
-
-					const float coneBaseRadius = std::tanf(l.SpotOuterConeAngleDegrees * DEG2RAD) * l.Range;
-					XMMATRIX scaleConeToRange = XMMatrixIdentity();
-					scaleConeToRange.r[0].m128_f32[0] = coneBaseRadius;
-					scaleConeToRange.r[1].m128_f32[1] = l.Range;
-					scaleConeToRange.r[2].m128_f32[2] = coneBaseRadius;
-
-					//wvp = alignConeToSpotLightTransformation * tf.WorldTransformationMatrix() * viewProj;
-					cmd.matWorldTransformation = scaleConeToRange * alignConeToSpotLightTransformation * tf.matWorldTransformation();
-					cmd.color = l.Color;  // drop the brightness multiplier for bounds rendering
-					SceneView.lightBoundsRenderCommands.push_back(cmd);
-				}
-			}	break;
-
-			case Light::EType::POINT:
-			{
-				// light mesh
-				if (SceneView.sceneParameters.bDrawLightMeshes)
-				{
-					cmd.meshID = EBuiltInMeshes::SPHERE;
-					SceneView.lightRenderCommands.push_back(cmd);
-				}
-
-				// light bounds
-				if (SceneView.sceneParameters.bDrawLightBounds)
-				{
-					Transform tf = l.GetTransform();
-					tf._scale = XMFLOAT3(l.Range, l.Range, l.Range);
-					cmd.matWorldTransformation = tf.matWorldTransformation();
-					cmd.color = l.Color; // drop the brightness multiplier for bounds rendering
-					SceneView.lightBoundsRenderCommands.push_back(cmd);
-				}
-			}  break;
-			} // swicth
-		} // for: Lights
-	};
-
-
-	fnGatherLightRenderData(mLightsStatic);
-	fnGatherLightRenderData(mLightsStationary);
-	fnGatherLightRenderData(mLightsDynamic);
+		RecordRenderLightMeshCommands(mLightsStatic    , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
+		RecordRenderLightMeshCommands(mLightsDynamic   , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
+		RecordRenderLightMeshCommands(mLightsStationary, SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
+	}
+	if (SceneView.sceneParameters.bDrawLightBounds)
+	{
+		RecordRenderLightBoundsCommands(mLightsStatic    , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
+		RecordRenderLightBoundsCommands(mLightsDynamic   , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
+		RecordRenderLightBoundsCommands(mLightsStationary, SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
+	}
 }
 
 //-------------------------------------------------------------------------------

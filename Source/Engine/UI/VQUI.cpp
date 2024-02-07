@@ -312,7 +312,7 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 
 	// Data for the UI controller to update
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
+	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCountmpWinMain->GetHWND());
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
 #endif
 	FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
@@ -382,7 +382,7 @@ const uint32_t MATERIAL_WINDOW_SIZE_Y    = 400;
 //---------------------------------------------
 const uint32_t LIGHTS_WINDOW_PADDING_X   = 10;
 const uint32_t LIGHTS_WINDOW_PADDING_Y   = 10;
-const uint32_t LIGHTS_WINDOW_SIZE_X      = 250;
+const uint32_t LIGHTS_WINDOW_SIZE_X      = 550;
 const uint32_t LIGHTS_WINDOW_SIZE_Y      = 400;
 //---------------------------------------------
 
@@ -655,13 +655,16 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 				iSelectedEnvMap = INVALID_ID; // update iSelectedEnvMap
 			}
 			else
-			{
+			{ 
 				StartLoadingEnvironmentMap(iEnvMap); // update iSelectedEnvMap internally
 			}
 		}
 	}
 
-	ImGui::SliderFloat("HDRI Rotation", &SceneRenderParams.fYawSliderValue, 0.0f, 1.0f);
+	if (iSelectedEnvMap != INVALID_ID)
+	{
+		ImGui::SliderFloat("HDRI Rotation", &SceneRenderParams.fYawSliderValue, 0.0f, 1.0f);
+	}
 
 	const float MaxAmbientLighting = this->ShouldRenderHDR(mpWinMain->GetHWND()) ? 150.0f : 2.0f;
 	MathUtil::Clamp(SceneRenderParams.fAmbientLightingFactor, 0.0f, MaxAmbientLighting);
@@ -1252,7 +1255,7 @@ void VQEngine::DrawMaterialEditor()
 		Material& mat = mpScene->GetMaterial(MaterialIDs[mUIState.SelectedMaterialIndex]);
 
 		if (ImGui::BeginTable("MaterialEditorTable", 2, ImGuiTableFlags_Resizable,ImVec2(0, -1))) {
-			ImGui::TableSetupColumn("Property", ImGuiTableColumnFlags_WidthFixed, 135.0f);
+			ImGui::TableSetupColumn("Property", ImGuiTableColumnFlags_WidthFixed, 150.0f);
 			ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch, 1.0f);
 			//ImGui::TableHeadersRow();
 
@@ -1372,6 +1375,14 @@ void VQEngine::DrawMaterialEditor()
 	ImGui::End();
 }
 
+const char* LightTypeToString(Light::EType type) {
+	switch (type) {
+	case Light::EType::DIRECTIONAL: return "Directional";
+	case Light::EType::SPOT: return "Spot";
+	case Light::EType::POINT: return "Point";
+	default: return "Unknown";
+	}
+}
 void VQEngine::DrawLightEditor()
 {
 	const uint32 W = mpWinMain->GetWidth();
@@ -1380,13 +1391,139 @@ void VQEngine::DrawLightEditor()
 		+ GFX_WINDOW_SIZE_X + GFX_WINDOW_PADDING_X 
 		+ MATERIAL_WINDOW_SIZE_X + MATERIAL_WINDOW_PADDING_X;
 	const uint32_t LIGHTS_WINDOW_POS_Y = H - LIGHTS_WINDOW_PADDING_Y * 2 - LIGHTS_WINDOW_SIZE_Y;
+	
+	const std::vector<Light*> Lights = mpScene->GetLights();
+
+	// build light names
+	int iSpt = 0; int iPnt = 0; // this naming scheme isnt great: changing light type renames them...
+	std::vector<std::string> LightNames;
+	for (Light* l : Lights)
+	{
+		std::string LightName;
+		switch (l->GetType())
+		{
+			case Light::EType::POINT       : LightName += "Point #" + std::to_string(iPnt++); break;
+			case Light::EType::SPOT        : LightName += "Spot #" + std::to_string(iSpt++); break;
+			case Light::EType::DIRECTIONAL : LightName += "Directional"; break;
+			default: 
+				Log::Error("DrawLightEditor(): undefined light type");
+				break;
+		}
+		LightNames.push_back(LightName);
+	}
+	LightNames.push_back("");
+	
+	// validate selected light index
+	if (mUIState.SelectedLightIndex >= LightNames.size())
+	{
+		Log::Warning("SelectedLightIndex > LightNames.size() : capping SelectedLightIndex ");
+		mUIState.SelectedLightIndex = LightNames.size() - 1;
+	}
+	if (mUIState.SelectedLightIndex < 0)
+	{
+		// Log::Warning("SelectedLightIndex negative : Setting to 0");
+		// mUIState.SelectedLightIndex = 0;
+	}
+
+	// get pointers to light name data 
+	const std::string& SelectedLightName = mUIState.SelectedLightIndex >= 0 ?  LightNames[mUIState.SelectedLightIndex] : LightNames.back();
+	std::vector<const char*> szLightNames(LightNames.size());
+	for (int i = 0; i < LightNames.size(); ++i)
+		szLightNames[i] = LightNames[i].c_str();
+	
+	// draw
 	ImGui::SetNextWindowPos(ImVec2((float)LIGHTS_WINDOW_POS_X, (float)LIGHTS_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(LIGHTS_WINDOW_SIZE_X, LIGHTS_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
 
 	ImGui::Begin("LIGHT EDITOR", &mUIState.bWindowVisible_LightEditor);
 
-	
-	// ImGui::EndTable();
+	if (!ImGui::BeginTable("LightEditorTableLayout", 2, ImGuiTableFlags_Resizable, ImVec2(-1, -1)))
+	{
+		ImGui::End();
+		return;
+	}
 
+	ImGui::TableSetupColumn(SelectedLightName.c_str(), ImGuiTableColumnFlags_WidthStretch, 0.7f); // 70% width
+	ImGui::TableSetupColumn("Lights", ImGuiTableColumnFlags_WidthStretch, 0.3f); // 30% width
+	ImGui::TableHeadersRow();
+	ImGui::TableNextRow();
+
+	// draw selector
+	ImGui::TableSetColumnIndex(1);
+	ImGui::SetNextItemWidth(-1); // Make the controls take the full width of the column
+	ImGui::ListBox("##", &mUIState.SelectedLightIndex, szLightNames.data(), szLightNames.size(), szLightNames.size());
+	if (ImGui::Button("Unselect##", ImVec2(-1, 0)))
+	{
+		mUIState.SelectedLightIndex = szLightNames.size() - 1;
+	}
+
+
+	// draw editor
+	const bool bValidLight = mUIState.SelectedLightIndex != szLightNames.size() - 1 && mUIState.SelectedLightIndex != INVALID_ID;
+	
+
+	ImGui::TableSetColumnIndex(0);
+
+	if (bValidLight)
+	{
+		Light* l = Lights[mUIState.SelectedLightIndex];
+
+		ImGui::Checkbox("Enabled", &l->bEnabled);
+		ImGuiSpacing(2);
+
+		ImGui::ColorEdit3("Color", reinterpret_cast<float*>(&l->Color));
+		ImGui::DragFloat("Brightness", &l->Brightness, 0.1f, 0.0f, 10000.0f, "%.1f");
+		if (l->Type != Light::EType::DIRECTIONAL) {
+			ImGui::DragFloat("Range", &l->Range, 0.5f, 0.0f, 10000.0f, "%.1f");
+		}
+
+		ImGuiSpacing(2);
+
+		// Light type specific properties
+		if (ImGui::BeginCombo("Type", LightTypeToString(l->Type))) {
+			if (ImGui::Selectable("Directional", l->Type == Light::EType::DIRECTIONAL)) { l->Type = Light::EType::DIRECTIONAL; }
+			if (ImGui::Selectable("Spot"       , l->Type == Light::EType::SPOT       )) { l->Type = Light::EType::SPOT; }
+			if (ImGui::Selectable("Point"      , l->Type == Light::EType::POINT      )) { l->Type = Light::EType::POINT; }
+			ImGui::EndCombo();
+		}
+		switch (l->Type) {
+		case Light::EType::DIRECTIONAL:
+			ImGui::DragInt("Viewport X", &l->ViewportX, 1, 0, 2048);
+			ImGui::DragInt("Viewport Y", &l->ViewportY, 1, 0, 2048);
+			ImGui::DragFloat("Distance From Origin", &l->DistanceFromOrigin, 0.5f, 0.0f, 10000.0f, "%.1f");
+			break;
+		case Light::EType::SPOT:
+			ImGui::DragFloat("Outer Cone Angle", &l->SpotOuterConeAngleDegrees, 0.1f, 0.0f, 180.0f, "%.1f deg");
+			ImGui::DragFloat("Inner Cone Angle", &l->SpotInnerConeAngleDegrees, 0.1f, 0.0f, 180.0f, "%.1f deg");
+			break;
+		case Light::EType::POINT:
+			// Point lights have no additional specific properties in this example
+			break;
+		}
+
+		ImGuiSpacing(2);
+
+		ImGui::Text("Transform");
+		if (l->Type != Light::EType::DIRECTIONAL) {
+			ImGui::DragFloat3("Position", reinterpret_cast<float*>(&l->Position), 0.1f);
+		}
+		if (l->Type != Light::EType::POINT) {
+			auto eulerRotation = Quaternion::ToEulerDeg(l->RotationQuaternion);
+			if (ImGui::DragFloat3("Rotation", reinterpret_cast<float*>(&eulerRotation), 0.1f)) {
+				// l->RotationQuaternion = Quaternion::FromEulerDeg(eulerRotation); // TODO:
+			}
+		}
+
+		ImGuiSpacing(2);
+
+		ImGui::Checkbox("Cast Shadows", &l->bCastingShadows);
+		if (l->bCastingShadows) {
+			ImGui::DragFloat("Depth Bias", &l->ShadowData.DepthBias, 0.005f, 0.0f, 1.0f, "%.3f");
+			ImGui::DragFloat("Near Plane", &l->ShadowData.NearPlane, 0.1f, 0.1f, 100.0f, "%.1f");
+			ImGui::DragFloat("Far Plane", &l->ShadowData.FarPlane, 1.0f, 1.0f, 10000.0f, "%.1f");
+		}
+	}
+
+	ImGui::EndTable();
 	ImGui::End();
 }

@@ -434,6 +434,14 @@ static void XMLParseFloatVal(tinyxml2::XMLElement* pEle, float& dest)
 		dest = StrUtil::ParseFloat(pNode->Value());
 	}
 }
+static void XMLParseIntVal(tinyxml2::XMLElement* pEle, int& dest)
+{
+	tinyxml2::XMLNode* pNode = pEle->FirstChild();
+	if (pNode)
+	{
+		dest = StrUtil::ParseInt(pNode->Value());
+	}
+}
 
 static FMaterialRepresentation XMLParseMaterial(tinyxml2::XMLElement* pMat)
 {
@@ -679,8 +687,8 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 		if(pBias)       { XMLParseFloatVal(pBias          , l.ShadowData.DepthBias); }
 		if(pConeOuter)  { XMLParseFloatVal(pConeOuter     , l.SpotOuterConeAngleDegrees); }
 		if(pConeInner)  { XMLParseFloatVal(pConeInner     , l.SpotInnerConeAngleDegrees); }
-		if(pViewPortX)  { XMLParseFloatVal(pViewPortX     , l.ViewportX); }
-		if(pViewPortY)  { XMLParseFloatVal(pViewPortY     , l.ViewportY); }
+		if(pViewPortX)  { XMLParseIntVal  (pViewPortX     , l.ViewportX); }
+		if(pViewPortY)  { XMLParseIntVal  (pViewPortY     , l.ViewportY); }
 		if(pDistance)   { XMLParseFloatVal(pDistance      , l.DistanceFromOrigin); }
 		if(pMobility)   
 		{
@@ -691,7 +699,7 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 			if (mobilityEnumStr == "dynamic")    l.Mobility = Light::EMobility::DYNAMIC;
 			if (mobilityEnumStr == "stationary") l.Mobility = Light::EMobility::STATIONARY;
 		}
-		if(pEnabled)    
+		if(pEnabled)
 		{ 
 			std::string val; XMLParseStringVal(pEnabled, val);
 			l.bEnabled = StrUtil::ParseBool(val); 

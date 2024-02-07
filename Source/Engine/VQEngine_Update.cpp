@@ -213,8 +213,8 @@ void VQEngine::UpdateThread_PostUpdate()
 	{
 		return;
 	}
-
-	mpScene->PostUpdate(mWorkerThreads, FRAME_DATA_INDEX);
+	
+	mpScene->PostUpdate(mWorkerThreads, mUIState, FRAME_DATA_INDEX);
 
 	// input post update
 	for (auto it = mInputStates.begin(); it != mInputStates.end(); ++it)

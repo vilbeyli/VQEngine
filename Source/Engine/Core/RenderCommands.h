@@ -47,7 +47,7 @@ struct FShadowMeshRenderCommand : public FMeshRenderCommandBase
 };
 struct FWireframeRenderCommand : public FMeshRenderCommandBase
 {
-	DirectX::XMFLOAT3 color;
+	DirectX::XMFLOAT4 color;
 };
 using FLightRenderCommand = FWireframeRenderCommand;
 using FBoundingBoxRenderCommand = FWireframeRenderCommand;

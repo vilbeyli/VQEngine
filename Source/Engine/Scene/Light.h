@@ -93,12 +93,17 @@ struct Light
 	// ===========================================================================================================
 	
 	Light();
+
 	void GetGPUData(VQ_SHADER_DATA::DirectionalLight* pLight) const;
 	void GetGPUData(VQ_SHADER_DATA::PointLight*       pLight) const;
 	void GetGPUData(VQ_SHADER_DATA::SpotLight*        pLight) const;
+
 	DirectX::XMMATRIX GetWorldTransformationMatrix() const;
 	DirectX::XMMATRIX GetViewProjectionMatrix(Texture::CubemapUtility::ECubeMapLookDirections lookDir = Texture::CubemapUtility::ECubeMapLookDirections::CUBEMAP_LOOK_FRONT) const;
 	Transform GetTransform() const;
+
+	EMobility GetMobility() const { return Mobility; }
+	EType     GetType() const { return Type;  }
 
 	//
 	// DATA
@@ -128,8 +133,8 @@ public:
 		//    
 		struct
 		{
-			float ViewportX;
-			float ViewportY;
+			int ViewportX;
+			int ViewportY;
 			float DistanceFromOrigin;
 		};
 
