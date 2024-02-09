@@ -882,38 +882,62 @@ void VQEngine::RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 	if (!SceneView.lightBoundsRenderCommands.empty())
 	{
 		SCOPED_GPU_MARKER(pCmd, "LightBounds");
-		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA
-			? EBuiltinPSOs::WIREFRAME_PSO_MSAA_4
-			: EBuiltinPSOs::WIREFRAME_PSO)
-		);
+		const uint32 NumInstances = 1;
 
+		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::UNLIT_PSO_MSAA_4: EBuiltinPSOs::UNLIT_PSO));
 		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
+
+		std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddresses(SceneView.lightBoundsRenderCommands.size());
+		int iCbAddress = 0;
 		for (const FLightRenderCommand& lightBoundRenderCmd : SceneView.lightBoundsRenderCommands)
 		{
 			// set constant buffer data
 			FFrameConstantBufferUnlit* pCBuffer = {};
-			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+			D3D12_GPU_VIRTUAL_ADDRESS& cbAddr = cbAddresses[iCbAddress++];
 			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
 			pCBuffer->color = lightBoundRenderCmd.color;
+			pCBuffer->color.w *= 0.01f;
 			pCBuffer->matModelViewProj = lightBoundRenderCmd.matWorldTransformation * SceneView.viewProj;
-			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
 
 			// set IA
 			const Mesh& mesh = mpScene->mMeshes.at(lightBoundRenderCmd.meshID);
 
 			const auto VBIBIDs = mesh.GetIABufferIDs();
 			const uint32 NumIndices = mesh.GetNumIndices();
-			const uint32 NumInstances = 1;
 			const BufferID& VB_ID = VBIBIDs.first;
 			const BufferID& IB_ID = VBIBIDs.second;
 			const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
 			const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
 
+			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
 			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			pCmd->IASetVertexBuffers(0, 1, &vb);
 			pCmd->IASetIndexBuffer(&ib);
+			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
+		}
 
-			// draw
+		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::WIREFRAME_PSO_MSAA_4 : EBuiltinPSOs::WIREFRAME_PSO));
+		for (const FLightRenderCommand& lightBoundRenderCmd : SceneView.lightBoundsRenderCommands)
+		{
+			FFrameConstantBufferUnlit* pCBuffer = {};
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
+			pCBuffer->color = lightBoundRenderCmd.color;
+			pCBuffer->matModelViewProj = lightBoundRenderCmd.matWorldTransformation * SceneView.viewProj;
+
+			const Mesh& mesh = mpScene->mMeshes.at(lightBoundRenderCmd.meshID);
+
+			const auto VBIBIDs = mesh.GetIABufferIDs();
+			const uint32 NumIndices = mesh.GetNumIndices();
+			const BufferID& VB_ID = VBIBIDs.first;
+			const BufferID& IB_ID = VBIBIDs.second;
+			const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
+			const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
+
+			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
+			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			pCmd->IASetVertexBuffers(0, 1, &vb);
+			pCmd->IASetIndexBuffer(&ib);
 			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 		}
 	}

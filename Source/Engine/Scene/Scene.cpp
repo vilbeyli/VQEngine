@@ -376,7 +376,7 @@ static void RecordRenderLightBoundsCommand(const Light& l,
 		l.Color.x //* attenuatedBrightness
 		, l.Color.y //* attenuatedBrightness
 		, l.Color.z //* attenuatedBrightness
-		, 0.1f
+		, 0.45f
 	);
 
 	switch (l.Type)
@@ -990,7 +990,7 @@ static void BatchBoundingBoxRenderCommandData(
 	std::vector<FInstancedBoundingBoxRenderCommand>& cmds
 	, const std::vector<FBoundingBox>& BBs
 	, const XMMATRIX viewProj
-	, const XMFLOAT3 Color
+	, const XMFLOAT4 Color
 	, size_t iBegin
 )
 {
@@ -1025,15 +1025,15 @@ void Scene::BatchInstanceData_BoundingBox(FSceneView& SceneView
 	const bool bDrawGameObjectBBs = SceneView.sceneParameters.bDrawGameObjectBoundingBoxes;
 	const bool bDrawMeshBBs = SceneView.sceneParameters.bDrawMeshBoundingBoxes;
 
-	const XMFLOAT3 BBColor_GameObj = XMFLOAT3(0.0f, 0.2f, 0.8f);
-	const XMFLOAT3 BBColor_Mesh = XMFLOAT3(0.0f, 0.8f, 0.2f);
-
+	const float Transparency = 0.75f;
+	const XMFLOAT4 BBColor_GameObj = XMFLOAT4(0.0f, 0.2f, 0.8f, Transparency);
+	const XMFLOAT4 BBColor_Mesh = XMFLOAT4(0.0f, 0.8f, 0.2f, Transparency);
 
 	auto fnBatch = [&UpdateWorkerThreadPool](
 		std::vector<FInstancedBoundingBoxRenderCommand>& cmds
 		, const std::vector<FBoundingBox>& BBs
 		, size_t iBoundingBox
-		, const XMFLOAT3 BBColor
+		, const XMFLOAT4 BBColor
 		, const XMMATRIX matViewProj
 		, const char* strMarker = ""
 	)

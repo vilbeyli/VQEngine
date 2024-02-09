@@ -74,7 +74,7 @@ struct FInstancedMeshRenderCommand : public FInstancedMeshRenderCommandBase, pub
 struct FInstancedWireframeRenderCommand : public FInstancedMeshRenderCommandBase
 {
 	// single color for all instances, ideally we could make the color an instance data
-	DirectX::XMFLOAT3 color; 
+	DirectX::XMFLOAT4 color; 
 };
 struct FInstancedShadowMeshRenderCommand : public FInstancedMeshRenderCommandBase
 {

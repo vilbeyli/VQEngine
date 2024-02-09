@@ -240,9 +240,10 @@ public:
 	void ResizeGameObjectBoundingBoxContainer(size_t sz);
 
 private:
-	void CountGameObjectMeshes(const std::vector<GameObject*>& pObjects);
 	void ResizeGameMeshBoxContainer(size_t size);
 
+	void BuildGameObjectBoundingSpheres(const std::vector<GameObject*>& pObjects);
+	void BuildGameObjectBoundingSpheres_Range(const std::vector<GameObject*>& pObjects, size_t iBegin, size_t iEnd);
 	void BuildGameObjectBoundingBoxes(const std::vector<GameObject*>& pObjects);
 	void BuildGameObjectBoundingBoxes_Range(const std::vector<GameObject*>& pObjects, size_t iBegin, size_t iEnd);
 	void BuildMeshBoundingBoxes(const std::vector<GameObject*>& pObjects);

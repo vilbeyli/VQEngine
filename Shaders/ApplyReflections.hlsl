@@ -18,7 +18,7 @@
 
 Texture2D<float4> TexReflectionRadiance;
 #if COMPOSITE_BOUNDING_VOLUMES
-Texture2D<float3> TexBoundingVolumes;
+Texture2D<float4> TexBoundingVolumes;
 #endif
 
 RWTexture2D<float4> TexSceneColor;
@@ -40,9 +40,12 @@ void CSMain(
     const float3 SceneRadiance = SceneRadianceAndRoughness.rgb;
 
     float3 FinalComposite = SceneRadiance + ReflectionRadiance;
+	float FinalAlpha = SceneRadianceAndRoughness.a;
 #if COMPOSITE_BOUNDING_VOLUMES
-    FinalComposite += TexBoundingVolumes[DispatchThreadID.xy].rgb;
+    float4 BVColor = TexBoundingVolumes[DispatchThreadID.xy].rgba;
+    FinalComposite = BVColor.rgb * BVColor.a + FinalComposite * (1.0f - BVColor.a);
+    FinalAlpha = BVColor.a;
 #endif
 
-    TexSceneColor[DispatchThreadID.xy] = float4(FinalComposite, SceneRadianceAndRoughness.a);
+    TexSceneColor[DispatchThreadID.xy] = float4(FinalComposite, FinalAlpha);
 }

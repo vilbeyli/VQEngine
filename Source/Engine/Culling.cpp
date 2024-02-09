@@ -674,18 +674,17 @@ void SceneBoundingBoxHierarchy::ResizeGameObjectBoundingBoxContainer(size_t sz)
 	mGameObjectNumMeshes.resize(sz);
 }
 
-void SceneBoundingBoxHierarchy::CountGameObjectMeshes(const std::vector<GameObject*>& pObjects)
+static size_t CountGameObjectMeshes(const std::vector<GameObject*>& pObjects, const ModelLookup_t& Models)
 {
 	SCOPED_CPU_MARKER("CountGameObjectMeshes");
-	mNumValidMeshBoundingBoxes = 0;
-
-	// count total number of meshes in all game objects
-	for (const GameObject* pObj : pObjects)
+	size_t count = 0;
+	for (const GameObject* pObj : pObjects) // count total number of meshes in all game objects
 	{
-		const Model& model = mModels.at(pObj->mModelID);
+		const Model& model = Models.at(pObj->mModelID);
 		const size_t NumMeshes = model.mData.GetNumMeshesOfAllTypes();
-		mNumValidMeshBoundingBoxes += NumMeshes;
+		count += NumMeshes;
 	}
+	return count;
 }
 
 void SceneBoundingBoxHierarchy::ResizeGameMeshBoxContainer(size_t size)
