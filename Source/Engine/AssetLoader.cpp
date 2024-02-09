@@ -357,8 +357,8 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 			case NORMALS           : mat.TexNormalMap           = loadedTextureID; break;
 			case ALPHA_MASK        : mat.TexAlphaMaskMap        = loadedTextureID; break;
 			case EMISSIVE          : mat.TexEmissiveMap         = loadedTextureID; break;
-			case METALNESS         : mat.TexMetallicMap         = loadedTextureID; break;
-			case ROUGHNESS         : mat.TexRoughnessMap        = loadedTextureID; break;
+			case METALNESS         : mat.TexMetallicMap         = loadedTextureID; mat.metalness = 1.0f; break;
+			case ROUGHNESS         : mat.TexRoughnessMap        = loadedTextureID; mat.roughness = 1.0f; break;
 			case HEIGHT            : mat.TexHeightMap           = loadedTextureID; break;
 			case AMBIENT_OCCLUSION : mat.TexAmbientOcclusionMap = loadedTextureID; break;
 			case SPECULAR          : assert(false); /*mat.TexSpecularMap  = result.texLoadResult.get();*/ break;

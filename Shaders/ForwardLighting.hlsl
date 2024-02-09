@@ -41,8 +41,8 @@ struct PSInput
 {
     float4 position    : SV_POSITION;
 	float3 worldPos    : POSITION1;
-	float3 vertNormal  : COLOR0;
-	float3 vertTangent : COLOR1;
+	min16float3 vertNormal  : COLOR0;
+	min16float3 vertTangent : COLOR1;
 	float2 uv          : TEXCOORD0;
 #if PS_OUTPUT_MOTION_VECTORS
 	float4 svPositionCurr : TEXCOORD1;
@@ -157,7 +157,7 @@ PSOutput PSMain(PSInput In)
 	const int TEX_CFG = cbPerObject.materialData.textureConfig;
 	
 	float4 AlbedoAlpha = texDiffuse  .Sample(AnisoSampler, uv);
-	float3 Normal      = texNormals  .Sample(AnisoSampler, uv).rgb;
+	float3 Normal      = texNormals.Sample(AnisoSampler, uv).rgb;
 	float3 Emissive    = texEmissive .Sample(LinearSampler, uv).rgb;
 	float3 Metalness   = texMetalness.Sample(AnisoSampler, uv).rgb;
 	float3 Roughness   = texRoughness.Sample(AnisoSampler, uv).rgb;
@@ -174,28 +174,25 @@ PSOutput PSMain(PSInput In)
 	// read textures/cbuffer & assign sufrace material data
 	float ao = cbPerFrame.fAmbientLightingFactor;
 	BRDF_Surface Surface      = (BRDF_Surface)0;
-	Surface.diffuseColor      = HasDiffuseMap(TEX_CFG)   ? AlbedoAlpha.rgb * cbPerObject.materialData.diffuse : cbPerObject.materialData.diffuse;
+	Surface.diffuseColor      = HasDiffuseMap(TEX_CFG)  ? AlbedoAlpha.rgb * cbPerObject.materialData.diffuse : cbPerObject.materialData.diffuse;
 	Surface.specularColor     = float3(1,1,1);
 	Surface.emissiveColor     = HasEmissiveMap(TEX_CFG) ? Emissive * cbPerObject.materialData.emissiveColor : cbPerObject.materialData.emissiveColor;
 	Surface.emissiveIntensity = cbPerObject.materialData.emissiveIntensity;
+	Surface.roughness         = cbPerObject.materialData.roughness;
+	Surface.metalness         = cbPerObject.materialData.metalness;
 	
-	const float3  N = normalize(In.vertNormal);
-	const float3  T = normalize(In.vertTangent);
+	const float3 N = normalize(In.vertNormal);
+	const float3 T = normalize(In.vertTangent);
 	Surface.N = length(Normal) < 0.01 ? N : UnpackNormal(Normal, N, T);
 	
-	const bool bReadsRoughnessMapData = HasRoughnessMap(TEX_CFG) || HasOcclusionRoughnessMetalnessMap(TEX_CFG);
-	const bool bReadsMetalnessMapData =  HasMetallicMap(TEX_CFG) || HasOcclusionRoughnessMetalnessMap(TEX_CFG);
-	
-	if (!bReadsRoughnessMapData) Surface.roughness = cbPerObject.materialData.roughness;
-	if (!bReadsMetalnessMapData) Surface.metalness = cbPerObject.materialData.metalness;
 	if (HasAmbientOcclusionMap           (TEX_CFG)) ao *= LocalAO;
-	if (HasRoughnessMap                  (TEX_CFG)) Surface.roughness = Roughness * cbPerObject.materialData.roughness;
-	if (HasMetallicMap                   (TEX_CFG)) Surface.metalness = Metalness * cbPerObject.materialData.metalness;
+	if (HasRoughnessMap                  (TEX_CFG)) Surface.roughness *= Roughness;
+	if (HasMetallicMap                   (TEX_CFG)) Surface.metalness *= Metalness;
 	if (HasOcclusionRoughnessMetalnessMap(TEX_CFG))
 	{
 		//ao *= OcclRghMtl.r; // TODO: handle no occlusion map case
-		Surface.roughness = OcclRghMtl.g * cbPerObject.materialData.roughness;
-		Surface.metalness = OcclRghMtl.b * cbPerObject.materialData.metalness;
+		Surface.roughness *= OcclRghMtl.g;
+		Surface.metalness *= OcclRghMtl.b;
 	}
 
 	// apply SSAO

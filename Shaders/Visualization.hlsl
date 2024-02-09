@@ -92,7 +92,7 @@ enum class EDrawMode
     }
     else if (iDrawMode == METALLIC)
     {
-        OutRGB = texInA.ggg;
+        OutRGB = texInA.aaa;
     }
     else if (iDrawMode == AO)
     {

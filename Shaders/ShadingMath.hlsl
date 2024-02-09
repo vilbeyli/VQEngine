@@ -51,6 +51,17 @@ inline float3 UnpackNormal(float3 SampledNormal, float3 worldNormal, float3 worl
 	return mul(SampledNormal, TBN);
 }
 
+inline half3 UnpackNormal_FP16(half3 SampledNormal, half3 worldNormal, half3 worldTangent)
+{
+	SampledNormal = SampledNormal * 2.0f - 1.0f;
+	const half3 T = normalize(worldTangent - dot(worldNormal, worldTangent) * worldNormal);
+	const half3 N = normalize(worldNormal);
+	const half3 B = normalize(cross(T, N));
+	const half3x3 TBN = half3x3(T, B, N);
+	return mul(SampledNormal, TBN);
+}
+
+
 float3 SRGBToLinear(float3 c) { return pow(c, 2.2f); }
 
 // additional sources: 
