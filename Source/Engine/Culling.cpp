@@ -137,7 +137,6 @@ void FFrustumCullWorkerContext::AllocInputMemoryIfNecessary(size_t sz)
 	{
 		SCOPED_CPU_MARKER("AllocMem");
 		vFrustumPlanes.resize(sz);
-		vBoundingBoxLists.resize(sz);
 	}
 }
 void FFrustumCullWorkerContext::ClearMemory()
@@ -145,14 +144,14 @@ void FFrustumCullWorkerContext::ClearMemory()
 
 	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::ClearMemory()");
 	vFrustumPlanes.clear();
-	vBoundingBoxLists.clear();
+	vBoundingBoxList.clear();
 	vCulledBoundingBoxIndexListPerView.clear();
 	NumValidInputElements = 0;
 }
 
 void FFrustumCullWorkerContext::AddWorkerItem(
 	const FFrustumPlaneset& FrustumPlaneSet
-	, const std::vector<FBoundingBox>& vBoundingBoxList
+	, const std::vector<FBoundingBox>& vBoundingBoxListIn
 	, const std::vector<size_t>& vGameObjectHandles
 	, const std::vector<MaterialID>& vMaterials
 	, size_t i
@@ -160,14 +159,12 @@ void FFrustumCullWorkerContext::AddWorkerItem(
 {
 	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::AddWorkerItem()");
 	vFrustumPlanes[i] = FrustumPlaneSet;
-	vBoundingBoxLists[i] = vBoundingBoxList;
+	vBoundingBoxList = vBoundingBoxListIn;
 }
 
 void FFrustumCullWorkerContext::ProcessWorkItems_SingleThreaded()
 {
 	const size_t szFP = vFrustumPlanes.size();
-	const size_t szBB = vBoundingBoxLists.size();
-	assert(szFP == szBB); // ensure matching input vector length
 	
 	const size_t& NumWorkItems = szFP;
 	if (NumWorkItems == 0)
@@ -281,7 +278,6 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 {
 	const size_t szFP = vFrustumPlanes.size();
-	const size_t szBB = vBoundingBoxLists.size();
 	assert(iRangeBegin <= szFP); // ensure work context bounds
 	assert(iRangeEnd < szFP); // ensure work context bounds
 	assert(iRangeBegin <= iRangeEnd); // ensure work context bounds
@@ -296,9 +292,9 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 
 		SCOPED_CPU_MARKER("CullFrustum");
 		// process bounding box list per frustum
-		for (size_t bb = 0; bb < vBoundingBoxLists[iWork].size(); ++bb)
+		for (size_t bb = 0; bb < vBoundingBoxList.size(); ++bb)
 		{
-			if (IsBoundingBoxIntersectingFrustum(vFrustumPlanes[iWork], vBoundingBoxLists[iWork][bb]))
+			if (IsBoundingBoxIntersectingFrustum(vFrustumPlanes[iWork], vBoundingBoxList[bb]))
 			{
 				vCulledBoundingBoxIndexListPerView[iWork].push_back(bb); // grows as we go (no pre-alloc)
 			}

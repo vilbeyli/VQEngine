@@ -35,7 +35,7 @@ public:
 	struct FDrawParameters : public IRenderPassDrawParameters 
 	{
 		ID3D12GraphicsCommandList* pCmd = nullptr;
-		DynamicBufferHeap* pCBufferHeap = nullptr;
+		std::vector< D3D12_GPU_VIRTUAL_ADDRESS> CBAddresses;
 		const FSceneView* pSceneView = nullptr;
 		const std::unordered_map<MeshID, Mesh>* pMeshes = nullptr;
 		const std::unordered_map<MaterialID, Material>* pMaterials = nullptr;
@@ -53,6 +53,8 @@ public:
 
 	virtual std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() override;
 
+	int4 ReadBackPixel(float2 uv) const;
+
 private:
 	PSO_ID PSOOpaque = INVALID_ID;
 	PSO_ID PSOAlphaMasked = INVALID_ID;
@@ -62,7 +64,8 @@ private:
 
 	TextureID TEXPassOutput = INVALID_ID;
 	RTV_ID RTVPassOutput = INVALID_ID;
-	
+	TextureID TEXPassOutputCPUReadback = INVALID_ID;
+
 	TextureID TEXPassOutputDepth = INVALID_ID;
 	DSV_ID DSVPassOutput = INVALID_ID;
 };

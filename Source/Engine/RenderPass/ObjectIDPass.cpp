@@ -79,6 +79,17 @@ void ObjectIDPass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned
 		TEXPassOutput = mRenderer.CreateTexture(desc);
 		mRenderer.InitializeRTV(RTVPassOutput, 0u, TEXPassOutput);
 		//mRenderer.InitializeSRV(SRVPassOutput, 0u, TEXPassOutput);
+
+		desc.TexName = "ObjectID_CPU_READBACK";
+		desc.bCPUReadback = true;
+		desc.ResourceState = D3D12_RESOURCE_STATE_COPY_DEST;
+		desc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		desc.d3d12Desc.Format = DXGI_FORMAT_UNKNOWN;
+		desc.d3d12Desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+		desc.d3d12Desc.Width = mOutputResolutionX * mOutputResolutionY * 16; // 4B/p = 16B/rgba
+		desc.d3d12Desc.Height = 1;
+		desc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+		TEXPassOutputCPUReadback = mRenderer.CreateTexture(desc);
 	}
 }
 
@@ -86,6 +97,7 @@ void ObjectIDPass::OnDestroyWindowSizeDependentResources()
 {
 	mRenderer.DestroyTexture(TEXPassOutputDepth);
 	mRenderer.DestroyTexture(TEXPassOutput);
+	mRenderer.DestroyTexture(TEXPassOutputCPUReadback);
 }
 
 
@@ -104,7 +116,6 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	const FDrawParameters* pParams = static_cast<const FDrawParameters*>(pDrawParameters);
 	assert(pParams);
 	assert(pParams->pCmd);
-	assert(pParams->pCBufferHeap);
 	assert(pParams->pSceneView);
 	assert(pParams->pMeshes);
 	assert(pParams->pMaterials);
@@ -127,6 +138,7 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ZPrePass));
 
 	// draw meshes
+	int iCB = 0;
 	for (const MeshRenderCommand_t& meshRenderCmd : pParams->pSceneView->meshRenderCommands)
 	{
 		using namespace VQ_SHADER_DATA;
@@ -158,8 +170,30 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		pCmd->IASetVertexBuffers(0, 1, &vb);
 		pCmd->IASetIndexBuffer(&ib);
+		pCmd->SetGraphicsRootConstantBufferView(1, pParams->CBAddresses[iCB++]);
 		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 	}
+
+	auto pRscRT = mRenderer.GetTextureResource(TEXPassOutput);
+	auto pRscCPU = mRenderer.GetTextureResource(TEXPassOutputCPUReadback);
+	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscRT,
+		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE));
+
+	//pCmd->CopyResource(pRscCPU, pRscRT);
+	D3D12_TEXTURE_COPY_LOCATION srcLoc = {};
+	srcLoc.pResource = pRscRT;
+	srcLoc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+	srcLoc.SubresourceIndex = 0; // Assuming copying from the first mip level
+
+	D3D12_TEXTURE_COPY_LOCATION dstLoc = {};
+	dstLoc.pResource = pRscCPU;
+	dstLoc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+	mRenderer.GetDevicePtr()->GetCopyableFootprints(&pRscRT->GetDesc(), 0, 1, 0, &dstLoc.PlacedFootprint, nullptr, nullptr, nullptr);
+	
+	pCmd->CopyTextureRegion(&dstLoc, 0, 0, 0, &srcLoc, nullptr);
+
+	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscRT,
+		D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
 }
 
 std::vector<FPSOCreationTaskParameters> ObjectIDPass::CollectPSOCreationParameters()
@@ -182,12 +216,13 @@ std::vector<FPSOCreationTaskParameters> ObjectIDPass::CollectPSOCreationParamete
 	psoDesc.DepthStencilState.DepthEnable = true;
 	psoDesc.DepthStencilState.StencilEnable = FALSE;
 	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK::D3D12_DEPTH_WRITE_MASK_ALL;
+	psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC::D3D12_COMPARISON_FUNC_LESS;
 	psoDesc.SampleMask = UINT_MAX;
 	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 	psoDesc.NumRenderTargets = 1;
+	psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R32G32B32A32_SINT;
 	psoDesc.SampleDesc.Count = 1;
-	psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC::D3D12_COMPARISON_FUNC_LESS;
 
 	std::vector<FPSOCreationTaskParameters> params;
 	params.push_back({ &PSOOpaque, psoLoadDesc });
@@ -199,4 +234,31 @@ std::vector<FPSOCreationTaskParameters> ObjectIDPass::CollectPSOCreationParamete
 	params.push_back({ &PSOAlphaMasked, psoLoadDesc });
 
 	return params;
+}
+
+int4 ObjectIDPass::ReadBackPixel(float2 uv) const
+{
+	const int pixelX = static_cast<int>(uv.x * mOutputResolutionX);
+	const int pixelY = static_cast<int>(uv.y * mOutputResolutionY);
+	const int bytesPerPixel = 4 * 4; // 32bit/channel , RGBA
+
+	auto pRsc = mRenderer.GetTextureResource(TEXPassOutputCPUReadback);
+
+	unsigned char* pData = nullptr; 
+	D3D12_RANGE readRange = { 0, mOutputResolutionX * mOutputResolutionY * bytesPerPixel }; // Only request the read for the necessary range
+	HRESULT hr = pRsc->Map(0, &readRange, reinterpret_cast<void**>(&pData));
+	if (SUCCEEDED(hr)) 
+	{
+		const int pixelIndex = (pixelY * mOutputResolutionX + pixelX) * bytesPerPixel;
+		const int r = pData[pixelIndex + 0];
+		const int g = pData[pixelIndex + 4];
+		const int b = pData[pixelIndex + 8];
+		const int a = pData[pixelIndex + 12];
+
+		pRsc->Unmap(0, nullptr);
+		//Log::Info("\t[%d, %d] | [%.2f, %.2f] = (%d, %d, %d, %d)", pixelX, pixelY, uv.x, uv.y, r, g, b, a);
+		return int4(r, g, b, a);
+	}
+	
+	return int4(-1, -1, -1, -1);
 }

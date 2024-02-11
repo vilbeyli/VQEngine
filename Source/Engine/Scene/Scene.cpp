@@ -932,7 +932,7 @@ void Scene::CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerTh
 	size_t NumFrustums_Threaded = 0;
 	for (size_t i=0; i< NumFrustums; ++i)
 	{
-		const size_t NumBBs = mFrustumCullWorkerContext.vBoundingBoxLists[i].size();
+		const size_t NumBBs = mFrustumCullWorkerContext.vBoundingBoxList.size();
 		NumAllBBs += NumBBs;
 		if (MIN_NUM_MESHES_FOR_THREADING_FRUSTUM <= NumBBs)
 		{
@@ -1156,12 +1156,14 @@ void Scene::BatchInstanceData_SceneMeshes(
 		{
 			assert(iBB < MeshBB_MeshID.size());
 			MeshID meshID = MeshBB_MeshID[iBB];
+			size_t objID = mBoundingBoxHierarchy.mMeshGameObjectHandles[iBB];
 
 			// read game object data
 			const Transform& tf = *MeshBB_Transforms[iBB];
 			const XMMATRIX matWorld = tf.matWorldTransformation();
 			const XMMATRIX matWorldHistory = tf.matWorldTransformationPrev();
 			const XMMATRIX matNormal = tf.NormalMatrix(matWorld);
+			const XMMATRIX matWVP = matWorld * matViewProj;
 
 			MaterialID matID = MeshBB_MatID[iBB];
 			{
@@ -1177,7 +1179,7 @@ void Scene::BatchInstanceData_SceneMeshes(
 				}
 
 				d.InstanceData[d.NumValidData++] = { 
-					matWorld, matWorld * matViewProj, 
+					matWorld, matWVP,
 					matWorldHistory * matViewProjHistory, 
 					matNormal,
 					(int)mBoundingBoxHierarchy.mMeshGameObjectHandles[iBB]

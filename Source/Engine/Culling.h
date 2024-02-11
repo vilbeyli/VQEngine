@@ -145,8 +145,8 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	using IndexList_t = std::vector<size_t>;
 
 	// Hot Data : used during culling --------------------------------------------------------------------------------------
-	/*in */ std::vector<FFrustumPlaneset         > vFrustumPlanes;
-	/*in */ std::vector<std::vector<FBoundingBox>> vBoundingBoxLists;
+	/*in */ std::vector<FFrustumPlaneset> vFrustumPlanes;
+	/*in */ std::vector<FBoundingBox    > vBoundingBoxList;
 
 	// store the index of the surviving bounding box in a list, per view frustum
 	/*out*/ std::vector<IndexList_t> vCulledBoundingBoxIndexListPerView; 

@@ -104,7 +104,7 @@ void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, cons
 
     // Create resource
     D3D12MA::ALLOCATION_DESC textureAllocDesc = {};
-    textureAllocDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
+    textureAllocDesc.HeapType = desc.bCPUReadback ? D3D12_HEAP_TYPE_READBACK : D3D12_HEAP_TYPE_DEFAULT;
     hr = pAllocator->CreateResource(
         &textureAllocDesc,
         &desc.d3d12Desc,

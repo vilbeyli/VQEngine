@@ -309,6 +309,9 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::DEPTH_PREPASS_PSO_MSAA_4 : EBuiltinPSOs::DEPTH_PREPASS_PSO));
 	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ZPrePass));
 
+	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddresses(SceneView.meshRenderCommands.size());
+	int iCB = 0;
+
 	// draw meshes
 	for (const MeshRenderCommand_t& meshRenderCmd : SceneView.meshRenderCommands)
 	{
@@ -333,7 +336,8 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 		PerObjectData* pPerObj = {};
 		const size_t sz = sizeof(PerObjectData);
 		pCBufferHeap->AllocConstantBuffer(sz, (void**)(&pPerObj), &cbAddr);
-		
+		cbAddresses[iCB++] = cbAddr;
+
 #if RENDER_INSTANCED_SCENE_MESHES
 		const uint32 NumInstances = (uint32)meshRenderCmd.matNormal.size();
 		
@@ -380,7 +384,7 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 	}
 
 	// overlap obj id draws with MSAA barrier
-	RenderObjectIDPass(pCmd, pCBufferHeap, SceneView);
+	RenderObjectIDPass(pCmd, std::move(cbAddresses), SceneView);
 
 	// resolve if MSAA
 	if (bMSAA)
@@ -443,12 +447,12 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 	}
 }
 
-void VQEngine::RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
+void VQEngine::RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, std::vector< D3D12_GPU_VIRTUAL_ADDRESS>&& CBAddresses, const FSceneView& SceneView)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderObjectIDPass");
 	ObjectIDPass::FDrawParameters params;
 	params.pCmd = pCmd;
-	params.pCBufferHeap = pCBufferHeap;
+	params.CBAddresses = CBAddresses;
 	params.pSceneView = &SceneView;
 	params.pMeshes = &mpScene->mMeshes;
 	params.pMaterials = &mpScene->mMaterials;
