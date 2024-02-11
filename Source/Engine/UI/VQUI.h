@@ -38,7 +38,6 @@ struct FUIState
 	bool bWindowVisible_KeyMappings;
 	bool bWindowVisible_Profiler;
 	bool bWindowVisible_SceneControls;
-	bool bWindowVisible_DebugPanel;
 	bool bWindowVisible_GraphicsSettingsPanel;
 	bool bHideAllWindows; // masks all the windows above
 

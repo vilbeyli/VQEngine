@@ -166,7 +166,8 @@ void VQEngine::RenderThread_Inititalize()
 		&mRenderPass_ApplyReflections,
 		&mRenderPass_ZPrePass,
 		&mRenderPass_DepthResolve,
-		&mRenderPass_Magnifier
+		&mRenderPass_Magnifier,
+		&mRenderPass_ObjectID
 	};
 
 	const bool bExclusiveFullscreen_MainWnd = CheckInitialSwapchainResizeRequired(mInitialSwapchainResizeRequiredWindowLookup, mSettings.WndMain, mpWinMain->GetHWND());
@@ -669,6 +670,10 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 		{
 			mRenderPass_Magnifier.OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY, nullptr);
 		}
+
+		{
+			mRenderPass_ObjectID.OnCreateWindowSizeDependentResources(Width, Height, nullptr);
+		}
 	} // main window resources
 
 
@@ -909,7 +914,7 @@ void VQEngine::RenderThread_PreRender()
 	const uint32_t NumCmdRecordingThreads_CMP = 0;
 	const uint32_t NumCmdRecordingThreads_CPY = 0;
 	const uint32_t NumCmdRecordingThreads = NumCmdRecordingThreads_GFX + NumCmdRecordingThreads_CPY + NumCmdRecordingThreads_CMP;
-	const uint32_t ConstantBufferBytesPerThread = 128 * MEGABYTE;
+	const uint32_t ConstantBufferBytesPerThread = (128) * MEGABYTE;
 #else
 	const uint32_t NumCmdRecordingThreads_GFX = 1;
 	const uint32_t NumCmdRecordingThreads = NumCmdRecordingThreads_GFX;
@@ -1323,7 +1328,6 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 				{
 					RENDER_WORKER_CPU_MARKER;
 					RenderDepthPrePass(pCmd_ZPrePass, &CBHeap_WorkerZPrePass, SceneView);
-
 					if (bDownsampleDepth)
 					{
 						DownsampleDepth(pCmd_ZPrePass, &CBHeap_WorkerZPrePass, rsc.Tex_SceneDepth, rsc.SRV_SceneDepth);

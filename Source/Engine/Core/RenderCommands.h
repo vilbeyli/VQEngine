@@ -58,6 +58,7 @@ using FBoundingBoxRenderCommand = FWireframeRenderCommand;
 // ------------------------------------------------------------------------------------
 struct FInstancedMeshRenderCommandBase
 {
+	int objectID = INVALID_ID;
 	MeshID meshID = INVALID_ID;
 	std::vector<DirectX::XMMATRIX> matWorldViewProj;
 };

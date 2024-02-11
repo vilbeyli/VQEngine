@@ -153,7 +153,7 @@ void FFrustumCullWorkerContext::ClearMemory()
 void FFrustumCullWorkerContext::AddWorkerItem(
 	const FFrustumPlaneset& FrustumPlaneSet
 	, const std::vector<FBoundingBox>& vBoundingBoxList
-	, const std::vector<const GameObject*>& pGameObjects
+	, const std::vector<size_t>& vGameObjectHandles
 	, const std::vector<MaterialID>& vMaterials
 	, size_t i
 )
@@ -420,19 +420,21 @@ static FBoundingBox CalculateAxisAlignedBoundingBox(const XMMATRIX& MWorld, cons
 //
 //------------------------------------------------------------------------------------------------------------------------------
 #define BOUNDING_BOX_HIERARCHY__MULTI_THREADED_BUILD 1
-void SceneBoundingBoxHierarchy::Build(const std::vector<GameObject*>& pObjects, ThreadPool& WorkerThreadPool)
+void SceneBoundingBoxHierarchy::Build(const Scene* pScene, const std::vector<size_t>& vGameObjectHandles, ThreadPool& WorkerThreadPool)
 {
+	assert(pScene);
+
 	constexpr size_t NumDesiredMinimumWorkItemsPerThread = 256;
 	const size_t NumWorkerThreadsAvailable = WorkerThreadPool.GetThreadPoolSize();
 
 	SCOPED_CPU_MARKER("BuildBoundingBoxHierarchy");
-	this->ResizeGameObjectBoundingBoxContainer(pObjects.size());
+	this->ResizeGameObjectBoundingBoxContainer(vGameObjectHandles.size());
 
 #if BOUNDING_BOX_HIERARCHY__MULTI_THREADED_BUILD
 
 	// dispatch gameobject bounding box workers
 	{
-		const size_t NumWorkItems = pObjects.size();
+		const size_t NumWorkItems = vGameObjectHandles.size();
 		const size_t NumWorkItemsPerAvailableWorkerThread = DIV_AND_ROUND_UP(NumWorkItems, WorkerThreadPool.GetThreadPoolSize());
 		const size_t NumWorkersToUse = CalculateNumThreadsToUse(NumWorkItems, NumWorkerThreadsAvailable, NumDesiredMinimumWorkItemsPerThread);
 
@@ -456,14 +458,14 @@ void SceneBoundingBoxHierarchy::Build(const std::vector<GameObject*>& pObjects, 
 				WorkerThreadPool.AddTask([=]()
 				{
 					SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
-					this->BuildGameObjectBoundingBoxes_Range(pObjects, iBegin, iEnd);
+					this->BuildGameObjectBoundingBoxes_Range(pScene, vGameObjectHandles, iBegin, iEnd);
 				});
 			}
 		}
 
 		// this thread
 		{
-			this->BuildGameObjectBoundingBoxes_Range(pObjects, vRanges[0].first, vRanges[0].second);
+			this->BuildGameObjectBoundingBoxes_Range(pScene, vGameObjectHandles, vRanges[0].first, vRanges[0].second);
 		}
 	}
 
@@ -490,9 +492,9 @@ void SceneBoundingBoxHierarchy::Build(const std::vector<GameObject*>& pObjects, 
 		std::vector<std::tuple<size_t, size_t, size_t>> vRanges;
 		{
 			SCOPED_CPU_MARKER("PrepareRanges");
-			const size_t NumObjs = pObjects.size();
-			const size_t&NumWorkItems = mNumValidMeshBoundingBoxes;
-			const size_t NumWorkerThreadsToUse = CalculateNumThreadsToUse(NumWorkItems, NumWorkerThreadsAvailable, NumDesiredMinimumWorkItemsPerThread);
+			const size_t  NumObjs = vGameObjectHandles.size();
+			const size_t& NumWorkItems = mNumValidMeshBoundingBoxes;
+			const size_t  NumWorkerThreadsToUse = CalculateNumThreadsToUse(NumWorkItems, NumWorkerThreadsAvailable, NumDesiredMinimumWorkItemsPerThread);
 
 			const size_t ThreadBBBatchCapacity = mNumValidMeshBoundingBoxes / (NumWorkerThreadsToUse+1);
 
@@ -524,14 +526,14 @@ void SceneBoundingBoxHierarchy::Build(const std::vector<GameObject*>& pObjects, 
 				WorkerThreadPool.AddTask([=]()
 				{
 					SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
-					this->BuildMeshBoundingBoxes_Range(pObjects, get<0>(vRanges[i]), get<1>(vRanges[i]), get<2>(vRanges[i]));
+					this->BuildMeshBoundingBoxes_Range(pScene, vGameObjectHandles, get<0>(vRanges[i]), get<1>(vRanges[i]), get<2>(vRanges[i]));
 				});
 			}
 
 		}
 		{
 			SCOPED_CPU_MARKER("Process_ThisThread");
-			this->BuildMeshBoundingBoxes_Range(pObjects, get<0>(vRanges.front()), get<1>(vRanges.front()), get<2>(vRanges.front()));
+			this->BuildMeshBoundingBoxes_Range(pScene, vGameObjectHandles, get<0>(vRanges.front()), get<1>(vRanges.front()), get<2>(vRanges.front()));
 		}
 #else
 		this->BuildMeshBoundingBoxes(pObjects);
@@ -553,49 +555,53 @@ void SceneBoundingBoxHierarchy::Build(const std::vector<GameObject*>& pObjects, 
 }
 
 
-void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBox(const GameObject* pObj, size_t iBB)
+void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBox(const Scene* pScene, size_t ObjectHandle, size_t iBB)
 {
-	assert(pObj);
-	Transform* const& pTF = mpTransforms.at(pObj->mTransformID);
+	const Transform* pTF = pScene->GetGameObjectTransform(ObjectHandle);
 	assert(pTF);
 
+	const GameObject* pObj = pScene->GetGameObject(ObjectHandle);
+	assert(pObj);
 
 	// assumes static meshes: 
 	// - no VB/IB change
 	// - no dynamic vertex animations, morphing etc
 	XMMATRIX matWorld = pTF->matWorldTransformation();
 	mGameObjectBoundingBoxes[iBB] = CalculateAxisAlignedBoundingBox(matWorld, pObj->mLocalSpaceBoundingBox);
-	mGameObjectBoundingBoxGameObjectPointerMapping[iBB] = pObj;
+	mGameObjectHandles[iBB] = ObjectHandle;
 	
 	const Model& model = mModels.at(pObj->mModelID);
 	mGameObjectNumMeshes[iBB] = model.mData.GetNumMeshesOfAllTypes();
 }
-void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBoxes(const std::vector<GameObject*>& pObjects)
+
+void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBoxes(const Scene* pScene, const std::vector<size_t>& GameObjectHandles)
 {
 	SCOPED_CPU_MARKER("BuildGameObjectBoundingBoxes");
 	size_t iBB = 0;
-	for (const GameObject* pObj : pObjects)
-		BuildGameObjectBoundingBox(pObj, iBB++);
+	for (size_t Handle : GameObjectHandles)
+		BuildGameObjectBoundingBox(pScene, Handle, iBB++);
 }
-void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBoxes_Range(const std::vector<GameObject*>& pObjects, size_t iBegin, size_t iEnd)
+void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBoxes_Range(const Scene* pScene, const std::vector<size_t>& GameObjectHandles, size_t iBegin, size_t iEnd)
 {
 	SCOPED_CPU_MARKER("BuildGameObjectBoundingBoxes_Range");
 	for (size_t i = iBegin; i <= iEnd; ++i)
 	{
-		BuildGameObjectBoundingBox(pObjects[i], i);
+		BuildGameObjectBoundingBox(pScene, GameObjectHandles[i], i);
 	}
 }
 
 
-void SceneBoundingBoxHierarchy::BuildMeshBoundingBox(const GameObject* pObj, size_t iBB_Begin, size_t iBB_End)
+void SceneBoundingBoxHierarchy::BuildMeshBoundingBox(const Scene* pScene, size_t ObjectHandle, size_t iBB_Begin, size_t iBB_End)
 {
-	assert(pObj);
-	Transform* const& pTF = mpTransforms.at(pObj->mTransformID);
+	const Transform* pTF = pScene->GetGameObjectTransform(ObjectHandle);
 	assert(pTF);
+
+	const GameObject* pObj = pScene->GetGameObject(ObjectHandle);
+	assert(pObj);
 
 	const Model& model = mModels.at(pObj->mModelID);
 
-	XMMATRIX matWorld = pTF->matWorldTransformation();
+	const XMMATRIX matWorld = pTF->matWorldTransformation();
 
 	// assumes static meshes: 
 	// - no VB/IB change
@@ -613,8 +619,8 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBox(const GameObject* pObj, siz
 			mMeshBoundingBoxes[iMesh] = std::move(AABB);
 			mMeshBoundingBoxMeshIDMapping[iMesh] = mesh;
 			mMeshBoundingBoxMaterialIDMapping[iMesh] = mat;
-			mMeshBoundingBoxGameObjectPointerMapping[iMesh] = pObj;
-			mMeshTransforms[iMesh] = *mpTransforms.at(pObj->mTransformID);
+			mMeshGameObjectHandles[iMesh] = ObjectHandle;
+			mMeshTransforms[iMesh] = pTF;
 			++iMesh;
 			bAtLeastOneMesh = true;
 		}
@@ -626,60 +632,71 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBox(const GameObject* pObj, siz
 
 	assert(bAtLeastOneMesh);
 }
-void SceneBoundingBoxHierarchy::BuildMeshBoundingBoxes(const std::vector<GameObject*>& pObjects)
+void SceneBoundingBoxHierarchy::BuildMeshBoundingBoxes(const Scene* pScene, const std::vector<size_t>& GameObjectHandles)
 {
+
 	SCOPED_CPU_MARKER("BuildMeshBoundingBoxes");
 	size_t i = 0;
-	for (const GameObject* pObj : pObjects)
+	for (size_t ObjectHandle : GameObjectHandles)
 	{
+		const GameObject* pObj = pScene->GetGameObject(ObjectHandle);
+		assert(pObj);
+
 		const Model& model = mModels.at(pObj->mModelID);
 		const size_t NumMeshes = model.mData.GetNumMeshesOfAllTypes();
-		BuildMeshBoundingBox(pObj, i, i + NumMeshes);
+		BuildMeshBoundingBox(pScene, ObjectHandle, i, i + NumMeshes);
 		i += NumMeshes;
 	}
 	
 }
-void SceneBoundingBoxHierarchy::BuildMeshBoundingBoxes_Range(const std::vector<GameObject*>& pObjects, size_t iBegin, size_t iEnd, size_t iMeshBB)
+void SceneBoundingBoxHierarchy::BuildMeshBoundingBoxes_Range(const Scene* pScene, const std::vector<size_t>& GameObjectHandles, size_t iBegin, size_t iEnd, size_t iMeshBB)
 {
 	SCOPED_CPU_MARKER("BuildMeshBoundingBoxes_Range");
 	size_t iMeshBBOffset = 0;
 	for (size_t i = iBegin; i<iEnd; ++i)
 	{
-		const Model& model = mModels.at(pObjects[i]->mModelID);
+		const GameObject* pObj = pScene->GetGameObject(GameObjectHandles[i]);
+		assert(pObj);
+
+		const Model& model = mModels.at(pObj->mModelID);
 		const size_t NumMeshes = model.mData.GetNumMeshesOfAllTypes();
-		BuildMeshBoundingBox(pObjects[i], iMeshBB + iMeshBBOffset, 0);
+		BuildMeshBoundingBox(pScene, GameObjectHandles[i], iMeshBB + iMeshBBOffset, 0);
 		iMeshBBOffset += NumMeshes;
 	}
 }
 
 void SceneBoundingBoxHierarchy::Clear()
 {
-
 	SCOPED_CPU_MARKER("SceneBoundingBoxHierarchy::Clear()");
 	mSceneBoundingBox = {};
+	
 	mGameObjectBoundingBoxes.clear();
+	mGameObjectHandles.clear();
+	
 	mMeshBoundingBoxes.clear();
 	mMeshBoundingBoxMeshIDMapping.clear();
 	mMeshBoundingBoxMaterialIDMapping.clear();
 	mMeshTransforms.clear();
-	mMeshBoundingBoxGameObjectPointerMapping.clear();
-	mGameObjectBoundingBoxGameObjectPointerMapping.clear();
+	mMeshGameObjectHandles.clear();
 }
 
 void SceneBoundingBoxHierarchy::ResizeGameObjectBoundingBoxContainer(size_t sz)
 {
 	SCOPED_CPU_MARKER("ResizeGameObjectBoundingBoxContainer");
 	mGameObjectBoundingBoxes.resize(sz);
-	mGameObjectBoundingBoxGameObjectPointerMapping.resize(sz);
+	mGameObjectHandles.resize(sz);
 	mGameObjectNumMeshes.resize(sz);
 }
 
-static size_t CountGameObjectMeshes(const std::vector<GameObject*>& pObjects, const ModelLookup_t& Models)
+static size_t CountGameObjectMeshes(const Scene* pScene, const std::vector<size_t>& GameObjectHandles, const ModelLookup_t& Models)
 {
 	SCOPED_CPU_MARKER("CountGameObjectMeshes");
 	size_t count = 0;
-	for (const GameObject* pObj : pObjects) // count total number of meshes in all game objects
+	for (size_t ObjectHandle : GameObjectHandles) // count total number of meshes in all game objects
 	{
+		const GameObject* pObj = pScene->GetGameObject(ObjectHandle);
+		assert(pObj);
+
 		const Model& model = Models.at(pObj->mModelID);
 		const size_t NumMeshes = model.mData.GetNumMeshesOfAllTypes();
 		count += NumMeshes;
@@ -694,6 +711,6 @@ void SceneBoundingBoxHierarchy::ResizeGameMeshBoxContainer(size_t size)
 	mMeshBoundingBoxMeshIDMapping.resize(size);
 	mMeshBoundingBoxMaterialIDMapping.resize(size);
 	mMeshTransforms.resize(size);
-	mMeshBoundingBoxGameObjectPointerMapping.resize(size);
+	mMeshGameObjectHandles.resize(size);
 }
 

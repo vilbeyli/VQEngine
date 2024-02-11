@@ -1,5 +1,5 @@
 //	VQE
-//	Copyright(C) 2020  - Volkan Ilbeyli
+//	Copyright(C) 2024  - Volkan Ilbeyli
 //
 //	This program is free software : you can redistribute it and / or modify
 //	it under the terms of the GNU General Public License as published by
@@ -16,14 +16,4 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-#pragma once
-
-#include "../Core/Types.h"
-#include "../Culling.h"
-
-class GameObject
-{
-public:
-	ModelID      mModelID     = INVALID_ID;
-	FBoundingBox mLocalSpaceBoundingBox;
-};
+#include "ObjectPicker.h"

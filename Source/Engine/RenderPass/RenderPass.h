@@ -29,6 +29,9 @@
 struct IRenderPassResourceCollection {};
 struct IRenderPassDrawParameters {};
 struct ID3D12RootSignature;
+class VQRenderer;
+
+// Interface for Render Passes
 class IRenderPass
 {
 public:
@@ -42,15 +45,10 @@ public:
 
 	virtual void RecordCommands(const IRenderPassDrawParameters* pDrawParameters = nullptr) = 0;
 
-	
 	//virtual std::vector<ID3D12RootSignature*> CreateAllPassRootSignatures();
 	virtual std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() = 0;
 };
 
-
-
-
-class VQRenderer;
 
 // Base class for render passes.
 // Keeps references of the common resources necessary for rendering/resource management.
@@ -74,9 +72,7 @@ public:
 	virtual std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() = 0;
 
 protected:
-	RenderPassBase(VQRenderer& RendererIn)
-		: mRenderer(RendererIn)
-	{};
+	RenderPassBase(VQRenderer& RendererIn) : mRenderer(RendererIn) {};
 
 protected:
 	VQRenderer& mRenderer;

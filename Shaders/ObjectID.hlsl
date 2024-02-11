@@ -16,16 +16,22 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
+#define VQ_GPU 1
+#include "LightingConstantBufferData.h"
+
 #if INSTANCED_DRAW
-#ifndef INSTANCE_COUNT
-#define INSTANCE_COUNT 512
-#endif
+	#ifndef INSTANCE_COUNT
+	#define INSTANCE_COUNT 512
+	#endif
 #endif
 
 struct VSInput
 {
 	float3 position : POSITION;
 	float2 uv       : TEXCOORD0;
+#if INSTANCED_DRAW
+	uint instanceID : SV_InstanceID;
+#endif
 };
 
 struct PSInput
@@ -45,28 +51,29 @@ SamplerState LinearSampler : register(s0);
 Texture2D texDiffuse : register(t0);
 
 
-PSInput VSMain(VSInput vertex, uint instID : SV_InstanceID)
+PSInput VSMain(VSInput VSIn)
 {
 	PSInput result;
 	
 #if INSTANCED_DRAW
-	result.position = mul(matModelViewProj[instID], float4(vertex.position, 1));
+	result.position = mul(cbPerObject.matWorldViewProj[VSIn.instanceID], float4(VSIn.position, 1));
 #else
-	result.position = mul(matModelViewProj, float4(vertex.position, 1));
+	result.position = mul(cbPerObject.matWorldViewProj, float4(VSIn.position, 1));
 #endif
 	
-	result.uv = vertex.uv;
+	result.uv = VSIn.uv;
     return result;
 }
 
-float4 PSMain(PSInput input) : SV_TARGET
+int4 PSMain(PSInput In) : SV_TARGET
 {
-	const float2 uv = In.uv;
-	const int TEX_CFG = cbPerObject.materialData.textureConfig;
-	
+	const float2 uv = In.uv * cbPerObject.materialData.uvScaleOffset.xy + cbPerObject.materialData.uvScaleOffset.zw;
+
+#if ALPHA_MASK
 	float4 AlbedoAlpha = texDiffuse.Sample(AnisoSampler, uv);
-	if (HasDiffuseMap(TEX_CFG) && AlbedoAlpha.a < 0.01f)
+	if (AlbedoAlpha.a < 0.01f)
 		discard;
+#endif
 	
-	return float4(ObjIDMeshIDMaterialID, 1.0f);
+	return cbPerObject.ObjIDMeshIDMaterialID;
 }

@@ -362,6 +362,7 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 #endif
 
 		pPerObj->materialData = std::move(mat.GetCBufferData());
+		pPerObj->ObjIDMeshIDMaterialID = int4(meshRenderCmd.objectID, meshRenderCmd.meshID, meshRenderCmd.matID, -111);
 
 		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
 
@@ -377,6 +378,9 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 		pCmd->IASetIndexBuffer(&ib);
 		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 	}
+
+	// overlap obj id draws with MSAA barrier
+	RenderObjectIDPass(pCmd, pCBufferHeap, SceneView);
 
 	// resolve if MSAA
 	if (bMSAA)
@@ -437,6 +441,18 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 			pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
 		}
 	}
+}
+
+void VQEngine::RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
+{
+	SCOPED_GPU_MARKER(pCmd, "RenderObjectIDPass");
+	ObjectIDPass::FDrawParameters params;
+	params.pCmd = pCmd;
+	params.pCBufferHeap = pCBufferHeap;
+	params.pSceneView = &SceneView;
+	params.pMeshes = &mpScene->mMeshes;
+	params.pMaterials = &mpScene->mMaterials;
+	mRenderPass_ObjectID.RecordCommands(&params);
 }
 
 void VQEngine::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView)

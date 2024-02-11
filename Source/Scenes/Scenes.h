@@ -30,8 +30,8 @@ class DefaultScene : public Scene
 	DECLARE_CTOR(DefaultScene)
 
 private:
-	GameObject* pObject = nullptr;
-	bool        bObjectAnimation = false;
+	size_t hObject = -1;
+	bool bObjectAnimation = false;
 };
 
 class SponzaScene : public Scene

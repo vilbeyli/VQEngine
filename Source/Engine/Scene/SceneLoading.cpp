@@ -198,20 +198,17 @@ void Scene::LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes)
 }
 
 
-void Scene::BuildGameObject(const FGameObjectRepresentation& ObjRep, size_t iObj, size_t iTF)
+void Scene::BuildGameObject(const FGameObjectRepresentation& ObjRep, size_t iObj)
 {
 	SCOPED_CPU_MARKER("BuildGameObject");
 
 	// GameObject
-	GameObject* pObj = mpObjects[iObj];
+	GameObject* pObj = mGameObjectPool.Get(iObj);
 	pObj->mModelID = INVALID_ID;
-	pObj->mTransformID = INVALID_ID;
 
 	// Transform
-	Transform* pTransform = mpTransforms[iTF];
+	Transform* pTransform = mGameObjectTransformPool.Get(iObj);
 	*pTransform = ObjRep.tf;
-	mpTransforms[iTF] = pTransform;
-	pObj->mTransformID = (TransformID)iTF;
 
 	// Model
 	const bool bModelIsBuiltinMesh = !ObjRep.BuiltinMeshName.empty();
@@ -245,8 +242,6 @@ void Scene::BuildGameObject(const FGameObjectRepresentation& ObjRep, size_t iObj
 	{
 		mAssetLoader.QueueModelLoad(pObj, ObjRep.ModelFilePath, ObjRep.ModelName);
 	}
-
-	mpObjects[iObj] = pObj;
 }
 
 void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects, ThreadPool& WorkerThreadPool)
@@ -257,27 +252,21 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 	constexpr bool B_LOAD_GAMEOBJECTS_SERIAL = false;
 	constexpr size_t NUM_GAMEOBJECTS_THRESHOLD_FOR_THREADED_LOAD = 1024;
 
-
-	size_t iTF = mpTransforms.size();
-	size_t iObj = mpObjects.size();
 	{
 		SCOPED_CPU_MARKER("MemAlloc");
-		mpTransforms.resize(mpTransforms.size() + NumGameObjects);
-		mpObjects.resize   (mpObjects.size()    + NumGameObjects);
-		Transform*  pTFArray  = mTransformPool.Allocate(NumGameObjects);
-		GameObject* pObjArray = mGameObjectPool.Allocate(NumGameObjects);
-		for (size_t i = 0; i < mpTransforms.size(); ++i)
-		{
-			mpTransforms[i] = &pTFArray[i];
-			mpObjects[i] = &pObjArray[i];
-		}
+		mGameObjectHandles.resize(NumGameObjects, INVALID_HANDLE);
+		mTransformHandles.resize(NumGameObjects, INVALID_HANDLE);
+		
+		mGameObjectHandles = mGameObjectPool.Allocate(NumGameObjects);
+		mTransformHandles = mGameObjectTransformPool.Allocate(NumGameObjects); 
 	}
 
+	size_t iObj = 0;
 	if (B_LOAD_GAMEOBJECTS_SERIAL || NumGameObjects < NUM_GAMEOBJECTS_THRESHOLD_FOR_THREADED_LOAD)
 	{
 		for (FGameObjectRepresentation& ObjRep : GameObjects)
 		{
-			BuildGameObject(ObjRep, iObj++, iTF++);
+			BuildGameObject(ObjRep, iObj++);
 		}
 	}
 	else // THREADED LOAD
@@ -298,11 +287,10 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 						SCOPED_CPU_MARKER_F("Range: [%d, %d]", ranges[iRange].first, ranges[iRange].second);
 						const size_t NumItems_PrevRange = (ranges[iRange - 1].second - ranges[iRange - 1].first + 1);
 						const size_t Offset = (ranges[iRange - 1].second - ranges[0].first + 1);
-						size_t iTF_Thread  = iTF  + Offset;
 						size_t iObj_Thread = iObj + Offset;
 
 						for (size_t i = ranges[iRange].first; i <= ranges[iRange].second; ++i)
-							BuildGameObject((*pObjects)[i], iObj_Thread++, iTF_Thread++);
+							BuildGameObject((*pObjects)[i], iObj_Thread++);
 					}
 				});
 			}
@@ -311,7 +299,7 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 			SCOPED_CPU_MARKER_F("Range[%d,%d] ", ranges[0].first, ranges[0].second);
 			for (size_t i = ranges.front().first; i <= ranges.front().second; ++i)
 			{
-				BuildGameObject(GameObjects[i], iObj++, iTF++);
+				BuildGameObject(GameObjects[i], iObj++);
 			}
 		}
 		{
@@ -471,12 +459,13 @@ void Scene::Unload()
 	mFrameShadowViews.resize(sz);
 
 	//mMeshes.clear(); // TODO
-
-	for (Transform* pTf : mpTransforms) mTransformPool.Free(pTf);
-	mpTransforms.clear();
-
-	for (GameObject* pObj : mpObjects) mGameObjectPool.Free(pObj);
-	mpObjects.clear();
+	
+	for (size_t hTransform : mTransformHandles)
+		mGameObjectTransformPool.Free(hTransform);
+	for (size_t hObject : mGameObjectHandles)
+		mGameObjectPool.Free(hObject);
+	mTransformHandles.clear();
+	mGameObjectHandles.clear();
 
 	mCameras.clear();
 	mMaterials.clear();
@@ -501,8 +490,9 @@ void Scene::CalculateGameObjectLocalSpaceBoundingBoxes()
 	constexpr float min_f = -(max_f - 1.0f);
 	
 	size_t i = 0;
-	for (GameObject* pGameObj : mpObjects)
+	for (size_t hObj : mGameObjectHandles)
 	{
+		GameObject* pGameObj = mGameObjectPool.Get(hObj);
 		if (!pGameObj)
 		{
 			Log::Warning("nullptr gameobj[%d]", i);

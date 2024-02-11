@@ -139,7 +139,7 @@ struct FSceneView
 	//	+----MESH225
 	//	       +----InstData0
 	//	       +----InstData1
-	struct FInstanceData { DirectX::XMMATRIX mWorld, mWorldViewProj, mWorldViewProjPrev, mNormal; }; // transformation matrixes used in the shader
+	struct FInstanceData { DirectX::XMMATRIX mWorld, mWorldViewProj, mWorldViewProjPrev, mNormal; int objID; }; // transformation matrixes used in the shader
 	struct FMeshInstanceData { size_t NumValidData = 0; std::vector<FInstanceData> InstanceData; };
 	std::unordered_map < MaterialID, std::unordered_map<MeshID, FMeshInstanceData>> MaterialMeshInstanceDataLookup;
 	//--------------------------------------------------------------------------------------------------------------------------------------------
@@ -226,31 +226,33 @@ public:
 		const MeshLookup_t& Meshes
 		, const ModelLookup_t& Models
 		, const MaterialLookup_t& Materials
-		, const std::vector<Transform*>& pTransforms
+		, const std::vector<size_t>& TransformHandles
 	)
 		: mMeshes(Meshes)
 		, mModels(Models)
 		, mMaterials(Materials)
-		, mpTransforms(pTransforms)
+		, mTransformHandles(TransformHandles)
 	{}
 	SceneBoundingBoxHierarchy() = delete;
 
-	void Build(const std::vector<GameObject*>& pObjects, ThreadPool& UpdateWorkerThreadPool);
+	void Build(const Scene* pScene, const std::vector<size_t>& GameObjectHandles, ThreadPool& UpdateWorkerThreadPool);
 	void Clear();
 	void ResizeGameObjectBoundingBoxContainer(size_t sz);
 
 private:
 	void ResizeGameMeshBoxContainer(size_t size);
 
-	void BuildGameObjectBoundingSpheres(const std::vector<GameObject*>& pObjects);
-	void BuildGameObjectBoundingSpheres_Range(const std::vector<GameObject*>& pObjects, size_t iBegin, size_t iEnd);
-	void BuildGameObjectBoundingBoxes(const std::vector<GameObject*>& pObjects);
-	void BuildGameObjectBoundingBoxes_Range(const std::vector<GameObject*>& pObjects, size_t iBegin, size_t iEnd);
-	void BuildMeshBoundingBoxes(const std::vector<GameObject*>& pObjects);
-	void BuildMeshBoundingBoxes_Range(const std::vector<GameObject*>& pObjects, size_t iBegin, size_t iEnd, size_t iMeshBB);
+	void BuildGameObjectBoundingSpheres(const std::vector<size_t>& GameObjectHandles);
+	void BuildGameObjectBoundingSpheres_Range(const std::vector<size_t>& GameObjectHandles, size_t iBegin, size_t iEnd);
+	
+	void BuildGameObjectBoundingBox(const Scene* pScene, size_t ObjectHandle, size_t iBB);
+	void BuildGameObjectBoundingBoxes(const Scene* pScene, const std::vector<size_t>& GameObjectHandles);
+	void BuildGameObjectBoundingBoxes_Range(const Scene* pScene, const std::vector<size_t>& GameObjectHandles, size_t iBegin, size_t iEnd);
+	
+	void BuildMeshBoundingBox(const Scene* pScene, size_t ObjectHandle, size_t iBB_Begin, size_t iBB_End);
+	void BuildMeshBoundingBoxes(const Scene* pScene, const std::vector<size_t>& GameObjectHandles);
+	void BuildMeshBoundingBoxes_Range(const Scene* pScene, const std::vector<size_t>& GameObjectHandles, size_t iBegin, size_t iEnd, size_t iMeshBB);
 
-	void BuildMeshBoundingBox(const GameObject* pObj, size_t iBB_Begin, size_t iBB_End);
-	void BuildGameObjectBoundingBox(const GameObject* pObj, size_t iBB);
 
 private:
 	friend class Scene;
@@ -259,7 +261,7 @@ private:
 	// list of game object bounding boxes for coarse culling
 	//------------------------------------------------------
 	std::vector<FBoundingBox>      mGameObjectBoundingBoxes;
-	std::vector<const GameObject*> mGameObjectBoundingBoxGameObjectPointerMapping;
+	std::vector<size_t>            mGameObjectHandles;
 	std::vector<size_t>            mGameObjectNumMeshes;
 	//------------------------------------------------------
 
@@ -270,15 +272,16 @@ private:
 	std::vector<FBoundingBox>      mMeshBoundingBoxes;
 	std::vector<MeshID>            mMeshBoundingBoxMeshIDMapping;
 	std::vector<MaterialID>        mMeshBoundingBoxMaterialIDMapping;
-	std::vector<Transform>         mMeshTransforms;
-	std::vector<const GameObject*> mMeshBoundingBoxGameObjectPointerMapping;
+	std::vector<const Transform*>  mMeshTransforms;
+	std::vector<size_t>            mMeshGameObjectHandles;
 	//------------------------------------------------------
+
 
 	// scene data container references
 	const MeshLookup_t& mMeshes;
 	const ModelLookup_t& mModels;
 	const MaterialLookup_t& mMaterials;
-	const std::vector<Transform*>& mpTransforms;
+	const std::vector<size_t>& mTransformHandles;
 };
 
 //------------------------------------------------------
@@ -372,7 +375,7 @@ private: // Derived Scenes shouldn't access these functions
 	void CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
 	void BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
 
-	void BuildGameObject(const FGameObjectRepresentation& rep, size_t iObj, size_t iTF);
+	void BuildGameObject(const FGameObjectRepresentation& rep, size_t iObj);
 	
 	void LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRepresentation>& GameObjsToBeLoaded);
 	void LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes);
@@ -417,7 +420,8 @@ public:
 	const std::vector<FMaterialRepresentation>& GetMaterialRepresentations() const { return mSceneRepresentation.Materials; }
 	const std::string& GetMaterialName(MaterialID ID) const;
 	std::vector<MaterialID> GetMaterialIDs() const;
-	Material&   GetMaterial(MaterialID ID);
+	const Material& GetMaterial(MaterialID ID) const;
+	Material& GetMaterial(MaterialID ID);
 
 	const std::string& GetTexturePath(TextureID) const;
 	std::string GetTextureName(TextureID) const;
@@ -428,6 +432,9 @@ public:
 	
 	Model&      GetModel(ModelID);
 	FSceneStats GetSceneRenderStats(int FRAME_DATA_INDEX) const;
+	
+	GameObject* GetGameObject(size_t hObject) const;
+	Transform* GetGameObjectTransform(size_t hObject) const;
 
 //----------------------------------------------------------------------------------------------------------------
 // SCENE DATA
@@ -446,19 +453,20 @@ protected:
 	std::unordered_map<MeshID, Mesh>         mMeshes;
 	std::unordered_map<ModelID, Model>       mModels;
 	std::unordered_map<MaterialID, Material> mMaterials;
-	std::vector<GameObject*> mpObjects;
-	std::vector<Transform*>  mpTransforms;
-	std::vector<Camera>      mCameras;
+	std::vector<size_t>                      mGameObjectHandles;
+	std::vector<size_t>                      mTransformHandles;
+	std::vector<Camera>                      mCameras;
 	
-	std::vector<Light>       mLightsStatic;      //     static lights (See Light::EMobility enum for details)
-	std::vector<Light>       mLightsStationary;  // stationary lights (See Light::EMobility enum for details)
-	std::vector<Light>       mLightsDynamic;     //     moving lights (See Light::EMobility enum for details)
-	//Skybox                   mSkybox;
+	// See Light::EMobility enum for details
+	std::vector<Light> mLightsStatic;
+	std::vector<Light> mLightsStationary;
+	std::vector<Light> mLightsDynamic;
+	//Skybox             mSkybox;
 
 	//
 	// AUX DATA
 	//
-	std::unordered_map<const Camera*   , DirectX::XMMATRIX> mViewProjectionMatrixHistory; // history for motion vectors
+	std::unordered_map<const Camera*, DirectX::XMMATRIX> mViewProjectionMatrixHistory; // history for motion vectors
 
 	//
 	// CULLING DATA
@@ -504,10 +512,10 @@ protected:
 //----------------------------------------------------------------------------------------------------------------
 private:
 	MemoryPool<GameObject> mGameObjectPool;
-	MemoryPool<Transform>  mTransformPool;
+	MemoryPool<Transform>  mGameObjectTransformPool;
 
 	std::mutex mMtx_GameObjects;
-	std::mutex mMtx_Transforms;
+	std::mutex mMtx_GameObjectTransforms;
 	std::mutex mMtx_Meshes;
 	std::mutex mMtx_Models;
 	std::mutex mMtx_Materials;
@@ -519,9 +527,9 @@ private:
 	std::unordered_set<MaterialID> mLoadedMaterials;
 	std::unordered_map<MaterialID, std::string> mMaterialNames;
 	std::unordered_map<TextureID, std::string> mTexturePaths;
-	const std::string         mInvalidMaterialName;
-	const std::string         mInvalidTexturePath;
+	const std::string mInvalidMaterialName;
+	const std::string mInvalidTexturePath;
 	
-	//CPUProfiler*    mpCPUProfiler;
-	//FBoundingBox     mSceneBoundingBox;
+	//CPUProfiler* mpCPUProfiler;
+	//FBoundingBox mSceneBoundingBox;
 };

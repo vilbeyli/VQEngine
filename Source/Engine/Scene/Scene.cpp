@@ -286,10 +286,20 @@ FSceneStats Scene::GetSceneRenderStats(int FRAME_DATA_INDEX) const
 	stats.NumMeshes    = static_cast<uint>(this->mMeshes.size());
 	stats.NumModels    = static_cast<uint>(this->mModels.size());
 	stats.NumMaterials = static_cast<uint>(this->mMaterials.size());
-	stats.NumObjects   = static_cast<uint>(this->mpObjects.size());
+	stats.NumObjects   = static_cast<uint>(this->mGameObjectHandles.size());
 	stats.NumCameras   = static_cast<uint>(this->mCameras.size());
 
 	return stats;
+}
+
+GameObject* Scene::GetGameObject(size_t hObject) const
+{
+	return mGameObjectPool.Get(hObject);
+}
+
+Transform* Scene::GetGameObjectTransform(size_t hObject) const
+{
+	return mGameObjectTransformPool.Get(hObject);
 }
 
 
@@ -438,12 +448,12 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 	, mIndex_SelectedCamera(0)
 	, mIndex_ActiveEnvironmentMapPreset(-1)
 	, mGameObjectPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
-	, mTransformPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
+	, mGameObjectTransformPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
 	, mResourceNames(engine.GetResourceNames())
 	, mAssetLoader(engine.GetAssetLoader())
 	, mRenderer(renderer)
 	, mMaterialAssignments(engine.GetAssetLoader().GetThreadPool_TextureLoad())
-	, mBoundingBoxHierarchy(mMeshes, mModels, mMaterials, mpTransforms)
+	, mBoundingBoxHierarchy(mMeshes, mModels, mMaterials, mTransformHandles)
 	, mInvalidMaterialName("INVALID MATERIAL")
 	, mInvalidTexturePath("INVALID PATH")
 {}
@@ -468,8 +478,9 @@ void Scene::PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX)
 
 	{
 		SCOPED_CPU_MARKER("UpdateTransforms");
-		for (Transform* pTF : mpTransforms)
+		for (size_t Handle : mTransformHandles)
 		{
+			Transform* pTF = mGameObjectTransformPool.Get(Handle);
 			pTF->_positionPrev = pTF->_position;
 		}
 	}
@@ -532,7 +543,7 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 		mActiveLightIndices_Dynamic    = GetActiveAndCulledLightIndices(mLightsDynamic, ViewFrustumPlanes);
 	}
 
-	mBoundingBoxHierarchy.Build(mpObjects, UpdateWorkerThreadPool);
+	mBoundingBoxHierarchy.Build(this, mGameObjectHandles, UpdateWorkerThreadPool);
 
 	GatherSceneLightData(SceneView);
 	GatherShadowViewData(ShadowView, mLightsStatic, mActiveLightIndices_Static);
@@ -809,7 +820,7 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 		SCOPED_CPU_MARKER("InitFrustumCullWorkerContexts");
 #if 0 // debug-single threaded
 		for (size_t i = 0; i < FrustumPlanesets.size(); ++i)
-			mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i], BVH.mMeshBoundingBoxes, BVH.mMeshBoundingBoxGameObjectPointerMapping, i);
+			mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i], BVH.mMeshBoundingBoxes, BVH.mGameObjectHandles, i);
 #else
 		const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NumFrustums, NumThreads);
 		{
@@ -834,7 +845,7 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 							for (size_t i = Range.first; i <= Range.second; ++i)
 								mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i]
 									, BVH.mMeshBoundingBoxes
-									, BVH.mMeshBoundingBoxGameObjectPointerMapping
+									, BVH.mGameObjectHandles
 									, BVH.mMeshBoundingBoxMaterialIDMapping
 									, i
 								);
@@ -848,7 +859,7 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 			{
 				mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i]
 					, BVH.mMeshBoundingBoxes
-					, BVH.mMeshBoundingBoxGameObjectPointerMapping
+					, BVH.mGameObjectHandles
 					, BVH.mMeshBoundingBoxMaterialIDMapping
 					, i
 				);
@@ -870,7 +881,7 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 		mFrustumCullWorkerContext.AddWorkerItem(
 			FrustumPlanesets[0]
 			, BVH.mMeshBoundingBoxes
-			, BVH.mMeshBoundingBoxGameObjectPointerMapping
+			, BVH.mGameObjectHandles
 			, BVH.mMeshBoundingBoxMaterialIDMapping
 			, 0
 		);
@@ -881,7 +892,7 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 			mFrustumCullWorkerContext.AddWorkerItem(
 				FrustumPlanesets[i]
 				, BVH.mMeshBoundingBoxes
-				, BVH.mMeshBoundingBoxGameObjectPointerMapping
+				, BVH.mGameObjectHandles
 				, BVH.mMeshBoundingBoxMaterialIDMapping
 				, i
 			);
@@ -1139,23 +1150,20 @@ void Scene::BatchInstanceData_SceneMeshes(
 		SCOPED_CPU_MARKER("CollectInstanceData");
 		const std::vector<MeshID>& MeshBB_MeshID        = mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping;
 		const std::vector<MaterialID>& MeshBB_MatID     = mBoundingBoxHierarchy.mMeshBoundingBoxMaterialIDMapping;
-		const std::vector<Transform>& MeshBB_Transforms = mBoundingBoxHierarchy.mMeshTransforms;
+		const std::vector<const Transform*>& MeshBB_Transforms = mBoundingBoxHierarchy.mMeshTransforms;
 
-		const size_t iBegin = 0;
-		const size_t iEnd = CulledBoundingBoxIndexList_Msh.size();
-		for (size_t i = iBegin; i < iEnd; ++i)
+		for (size_t iBB : CulledBoundingBoxIndexList_Msh)
 		{
-			const size_t BBIndex = CulledBoundingBoxIndexList_Msh[i];
-			assert(BBIndex < MeshBB_MeshID.size());
-			MeshID meshID = MeshBB_MeshID[BBIndex];
+			assert(iBB < MeshBB_MeshID.size());
+			MeshID meshID = MeshBB_MeshID[iBB];
 
 			// read game object data
-			const Transform& tf = MeshBB_Transforms[BBIndex];
+			const Transform& tf = *MeshBB_Transforms[iBB];
 			const XMMATRIX matWorld = tf.matWorldTransformation();
 			const XMMATRIX matWorldHistory = tf.matWorldTransformationPrev();
 			const XMMATRIX matNormal = tf.NormalMatrix(matWorld);
 
-			MaterialID matID = MeshBB_MatID[BBIndex];
+			MaterialID matID = MeshBB_MatID[iBB];
 			{
 				// record instance data
 				FSceneView::FMeshInstanceData& d = MaterialMeshInstanceDataLookup[matID][meshID];
@@ -1168,7 +1176,12 @@ void Scene::BatchInstanceData_SceneMeshes(
 					d.InstanceData.resize(d.InstanceData.empty() ? MAX_INSTANCE_COUNT__SCENE_MESHES : d.InstanceData.size() * 2);
 				}
 
-				d.InstanceData[d.NumValidData++] = { matWorld, matWorld * matViewProj, matWorldHistory * matViewProjHistory, matNormal };
+				d.InstanceData[d.NumValidData++] = { 
+					matWorld, matWorld * matViewProj, 
+					matWorldHistory * matViewProjHistory, 
+					matNormal,
+					(int)mBoundingBoxHierarchy.mMeshGameObjectHandles[iBB]
+				};
 			}
 		}
 	}
@@ -1236,6 +1249,7 @@ void Scene::BatchInstanceData_SceneMeshes(
 					cmd.matWorldViewProj.resize(ThisBatchSize);
 					cmd.matWorldViewProjPrev.resize(ThisBatchSize);
 					cmd.matNormal.resize(ThisBatchSize);
+					cmd.objectID = MeshInstanceData.InstanceData[iInst].objID;
 
 					int iBatch = 0;
 					while (iBatch < MAX_INSTANCE_COUNT__SCENE_MESHES && iInst < MeshInstanceData.NumValidData)
@@ -1258,12 +1272,12 @@ void Scene::BatchInstanceData_SceneMeshes(
 
 #else
 	MeshRenderCommands.clear();
-	for (const size_t& BBIndex : CulledBoundingBoxIndexList_Msh)
+	for (const size_t& iBB : CulledBoundingBoxIndexList_Msh)
 	{
-		assert(BBIndex < mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping.size());
-		MeshID meshID = mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping[BBIndex];
+		assert(iBB < mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping.size());
+		MeshID meshID = mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping[iBB];
 
-		const GameObject* pGameObject = MeshFrustumCullWorkerContext[WORKER_CONTEXT_INDEX].vGameObjectPointerLists[0][BBIndex];
+		const GameObject* pGameObject = MeshFrustumCullWorkerContext[WORKER_CONTEXT_INDEX].vGameObjectPointerLists[0][iBB];
 
 		Transform* const& pTF = mpTransforms.at(pGameObject->mTransformID);
 		const Model& model = mModels.at(pGameObject->mModelID);
@@ -1310,9 +1324,9 @@ void Scene::BatchInstanceData_ShadowMeshes(size_t iFrustum, FSceneShadowView::FS
 			MeshID meshID = mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping[BBIndex];
 
 			
-			const GameObject* pGameObject = mBoundingBoxHierarchy.mMeshBoundingBoxGameObjectPointerMapping[BBIndex];
+			//const GameObject* pGameObject = mBoundingBoxHierarchy.mGameObjectHandles[BBIndex];
 			
-			Transform const TF = mBoundingBoxHierarchy.mMeshTransforms[BBIndex];
+			Transform const& TF = *mBoundingBoxHierarchy.mMeshTransforms[BBIndex];
 			XMMATRIX matWorld = TF.matWorldTransformation();
 
 			FSceneShadowView::FShadowView::FShadowMeshInstanceData& d = pShadowView->ShadowMeshInstanceDataLookup[meshID];

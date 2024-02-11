@@ -158,7 +158,7 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 
 	void AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet
 		, const std::vector<FBoundingBox>& vBoundingBoxList
-		, const std::vector<const GameObject*>& pGameObjects
+		, const std::vector<size_t>& vGameObjectHandles
 		, const std::vector<MaterialID>& vMaterials
 		, const  size_t i
 	);
