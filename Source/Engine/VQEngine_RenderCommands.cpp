@@ -263,7 +263,7 @@ void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 	}
 }
 
-void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
+void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, ID3D12CommandList* pCmdCopy, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
 {
 	using namespace DirectX;
 	using namespace VQ_SHADER_DATA;
@@ -383,8 +383,9 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 	}
 
-	// overlap obj id draws with MSAA barrier
-	RenderObjectIDPass(pCmd, std::move(cbAddresses), SceneView);
+	// draw to non-MSAA objectID render target using the same constant buffer values
+	// also handles gfx-copy signaling
+	RenderObjectIDPass(pCmd, pCmdCopy, std::move(cbAddresses), SceneView);
 
 	// resolve if MSAA
 	if (bMSAA)
@@ -447,16 +448,26 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 	}
 }
 
-void VQEngine::RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, std::vector< D3D12_GPU_VIRTUAL_ADDRESS>&& CBAddresses, const FSceneView& SceneView)
+void VQEngine::RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, ID3D12CommandList* pCmdCopy, std::vector< D3D12_GPU_VIRTUAL_ADDRESS>&& CBAddresses, const FSceneView& SceneView)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderObjectIDPass");
 	ObjectIDPass::FDrawParameters params;
 	params.pCmd = pCmd;
+	params.pCmdCopy = pCmdCopy;
 	params.CBAddresses = CBAddresses;
 	params.pSceneView = &SceneView;
 	params.pMeshes = &mpScene->mMeshes;
 	params.pMaterials = &mpScene->mMaterials;
 	mRenderPass_ObjectID.RecordCommands(&params);
+
+#if OBJECTID_PASS__USE_ASYNC_COPY
+	FWindowRenderContext& ctx = mRenderer.GetWindowRenderContext(mpWinMain->GetHWND());
+	constexpr size_t iCmdZPrePassThread = 0; // SHOULD MATCH VQEngine_Renderer.cpp
+	pCmd->Reset(ctx.GetCommandAllocators(CommandQueue::EType::GFX)[iCmdZPrePassThread], nullptr);
+	
+	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
+	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+#endif
 }
 
 void VQEngine::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView)
@@ -1955,17 +1966,21 @@ HRESULT VQEngine::PresentFrame(FWindowRenderContext& ctx)
 	CommandQueue& PresentQueue = ctx.PresentQueue;
 	SwapChain& swapchain = ctx.SwapChain;
 	ID3D12Resource* pSwapChainRT = swapchain.GetCurrentBackBufferRenderTarget();
-
-	std::vector<ID3D12GraphicsCommandList*>& vCmdLists = ctx.GetGFXCommandListPtrs();
+	
+	// close gfx cmd lists
+	std::vector<ID3D12CommandList*>& vCmdLists = ctx.GetGFXCommandListPtrs();
 	const UINT NumCommandLists = ctx.GetNumCurrentlyRecordingThreads(CommandQueue::EType::GFX);
 	for (UINT i = 0; i < NumCommandLists; ++i)
 	{
-		vCmdLists[i]->Close();
+		static_cast<ID3D12GraphicsCommandList*>(vCmdLists[i])->Close();
 	}
+
 	{
 		SCOPED_CPU_MARKER("ExecuteCommandLists()");
 		PresentQueue.pQueue->ExecuteCommandLists(NumCommandLists, (ID3D12CommandList**)vCmdLists.data());
 	}
+	
+
 	{
 		SCOPED_CPU_MARKER("SwapchainPresent");
 		hr = swapchain.Present();

@@ -21,8 +21,11 @@
 
 #include "../Scene/Mesh.h"
 #include "../Scene/Material.h"
+#include "../../Renderer/Fence.h"
 
 #include <unordered_map>
+
+#define OBJECTID_PASS__USE_ASYNC_COPY 0
 
 struct FSceneView;
 class DynamicBufferHeap;
@@ -35,6 +38,7 @@ public:
 	struct FDrawParameters : public IRenderPassDrawParameters 
 	{
 		ID3D12GraphicsCommandList* pCmd = nullptr;
+		ID3D12CommandList* pCmdCopy = nullptr;
 		std::vector< D3D12_GPU_VIRTUAL_ADDRESS> CBAddresses;
 		const FSceneView* pSceneView = nullptr;
 		const std::unordered_map<MeshID, Mesh>* pMeshes = nullptr;
@@ -54,6 +58,7 @@ public:
 	virtual std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() override;
 
 	int4 ReadBackPixel(float2 uv) const;
+	void WaitForCopyComplete() const;
 
 private:
 	PSO_ID PSOOpaque = INVALID_ID;
@@ -68,4 +73,6 @@ private:
 
 	TextureID TEXPassOutputDepth = INVALID_ID;
 	DSV_ID DSVPassOutput = INVALID_ID;
+
+	Fence CopyFence;
 };

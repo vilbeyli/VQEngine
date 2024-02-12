@@ -394,6 +394,8 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 
 	mpScene->Update(dt, FRAME_DATA_INDEX);
 
+	mRenderPass_ObjectID.WaitForCopyComplete(); // CopyQ --> CPU signaling / sync
+
 	HandleEngineInput(); // system-wide input (esc/mouse click on wnd)
 	for (decltype(mInputStates)::iterator it = mInputStates.begin(); it != mInputStates.end(); ++it)
 	{

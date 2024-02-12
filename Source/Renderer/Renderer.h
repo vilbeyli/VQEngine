@@ -251,15 +251,14 @@ public:
 	
 	inline ID3D12Device*         GetDevicePtr() { return mDevice.GetDevicePtr(); }
 	inline FDeviceCapabilities   GetDeviceCapabilities() const { return mDevice.GetDeviceCapabilities(); }
+	inline CommandQueue&         GetCommandQueue(CommandQueue::EType eType) { return mCmdQueues[(int)eType]; }
 
 private:
 	using PSOArray_t = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
 	
 	// GPU
 	Device       mDevice; 
-	CommandQueue mGFXQueue;
-	CommandQueue mComputeQueue;
-	CommandQueue mCopyQueue;
+	std::array<CommandQueue, CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES> mCmdQueues;
 
 	// memory
 	D3D12MA::Allocator*            mpAllocator;
@@ -312,6 +311,7 @@ private:
 	std::unordered_map<EProceduralTextures, SRV_ID>    mLookup_ProceduralTextureSRVs;
 	std::unordered_map<EProceduralTextures, TextureID> mLookup_ProceduralTextureIDs;
 
+	// texture uploading
 	std::atomic<bool>              mbExitUploadThread;
 	Signal                         mSignal_UploadThreadWorkReady;
 	std::thread                    mTextureUploadThread;

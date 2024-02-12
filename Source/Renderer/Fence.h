@@ -33,12 +33,12 @@ public:
     void Signal(ID3D12CommandQueue* pCommandQueue);
     inline UINT64 GetValue() const { return mFenceValue; }
 
-    void WaitOnCPU(UINT64 olderFence);
+    void WaitOnCPU(UINT64 olderFence) const;
     void WaitOnGPU(ID3D12CommandQueue* pCommandQueue);
 
 private:
     HANDLE       mHEvent = 0;
-    ID3D12Fence* mpFence = nullptr;
+    ID3D12Fence* ptr = nullptr;
     UINT64       mFenceValue = 0;
 };
 

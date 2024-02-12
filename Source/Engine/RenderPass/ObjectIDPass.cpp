@@ -34,11 +34,14 @@ bool ObjectIDPass::Initialize()
 {
 	RTVPassOutput = mRenderer.AllocateRTV();
 	DSVPassOutput = mRenderer.AllocateDSV();
+	CopyFence.Create(mRenderer.GetDevicePtr(), "ObjectID::CopyFence");
 	return true;
 }
 
 void ObjectIDPass::Destroy()
 {
+	mRenderer.DestroyDSV(DSVPassOutput);
+	CopyFence.Destroy();
 }
 
 void ObjectIDPass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const IRenderPassResourceCollection* pRscParameters)
@@ -75,7 +78,7 @@ void ObjectIDPass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned
 			, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
 		);
 
-		desc.ResourceState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		desc.ResourceState = D3D12_RESOURCE_STATE_COMMON;
 		TEXPassOutput = mRenderer.CreateTexture(desc);
 		mRenderer.InitializeRTV(RTVPassOutput, 0u, TEXPassOutput);
 		//mRenderer.InitializeSRV(SRVPassOutput, 0u, TEXPassOutput);
@@ -116,11 +119,16 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	const FDrawParameters* pParams = static_cast<const FDrawParameters*>(pDrawParameters);
 	assert(pParams);
 	assert(pParams->pCmd);
+	assert(pParams->pCmdCopy);
 	assert(pParams->pSceneView);
 	assert(pParams->pMeshes);
 	assert(pParams->pMaterials);
 	ID3D12GraphicsCommandList* pCmd = pParams->pCmd;
-
+	ID3D12GraphicsCommandList* pCmdCpy = static_cast<ID3D12GraphicsCommandList*>(pParams->pCmdCopy);
+	auto pRscRT = mRenderer.GetTextureResource(TEXPassOutput);
+	auto pRscCPU = mRenderer.GetTextureResource(TEXPassOutputCPUReadback);
+	
+	//mRenderer
 	const DSV& dsv = mRenderer.GetDSV(DSVPassOutput);
 	const RTV& rtv = mRenderer.GetRTV(RTVPassOutput);
 
@@ -128,6 +136,11 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle();
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle();
+
+#if OBJECTID_PASS__USE_ASYNC_COPY
+	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscRT,
+		D3D12_RESOURCE_STATE_COMMON,  D3D12_RESOURCE_STATE_RENDER_TARGET));
+#endif
 
 	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 	pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, nullptr);
@@ -174,10 +187,51 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 	}
 
-	auto pRscRT = mRenderer.GetTextureResource(TEXPassOutput);
-	auto pRscCPU = mRenderer.GetTextureResource(TEXPassOutputCPUReadback);
+
+	// transition output to copy source
 	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscRT,
-		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE));
+		D3D12_RESOURCE_STATE_RENDER_TARGET, 
+#if OBJECTID_PASS__USE_ASYNC_COPY
+		D3D12_RESOURCE_STATE_COMMON
+#else
+		D3D12_RESOURCE_STATE_COPY_SOURCE
+#endif
+	));
+
+#if OBJECTID_PASS__USE_ASYNC_COPY
+
+	CommandQueue& GFXCmdQ = mRenderer.GetCommandQueue(CommandQueue::EType::GFX);
+	CommandQueue& CPYCmdQ = mRenderer.GetCommandQueue(CommandQueue::EType::COPY);
+
+	// EXECUTE and SIGNAL
+	pCmd->Close();
+	GFXCmdQ.pQueue->ExecuteCommandLists(1, (ID3D12CommandList*const*)&pCmd);
+	CopyFence.Signal(GFXCmdQ.pQueue);
+
+	CopyFence.WaitOnGPU(CPYCmdQ.pQueue); // wait for render target done
+
+	// record copy command
+	{
+		//pCmdCpy->CopyResource(pRscCPU, pRscRT);
+		D3D12_TEXTURE_COPY_LOCATION srcLoc = {};
+		srcLoc.pResource = pRscRT;
+		srcLoc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+		srcLoc.SubresourceIndex = 0; // Assuming copying from the first mip level
+
+		D3D12_TEXTURE_COPY_LOCATION dstLoc = {};
+		dstLoc.pResource = pRscCPU;
+		dstLoc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+		mRenderer.GetDevicePtr()->GetCopyableFootprints(&pRscRT->GetDesc(), 0, 1, 0, &dstLoc.PlacedFootprint, nullptr, nullptr, nullptr);
+
+		pCmdCpy->CopyTextureRegion(&dstLoc, 0, 0, 0, &srcLoc, nullptr);
+	}
+
+	pCmdCpy->Close();
+	CPYCmdQ.pQueue->ExecuteCommandLists(1, (ID3D12CommandList* const *)&pCmdCpy);
+	
+	CopyFence.Signal(CPYCmdQ.pQueue);
+
+#else
 
 	//pCmd->CopyResource(pRscCPU, pRscRT);
 	D3D12_TEXTURE_COPY_LOCATION srcLoc = {};
@@ -194,6 +248,7 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 
 	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscRT,
 		D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
+#endif
 }
 
 std::vector<FPSOCreationTaskParameters> ObjectIDPass::CollectPSOCreationParameters()
@@ -261,4 +316,9 @@ int4 ObjectIDPass::ReadBackPixel(float2 uv) const
 	}
 	
 	return int4(-1, -1, -1, -1);
+}
+
+void ObjectIDPass::WaitForCopyComplete() const
+{
+	CopyFence.WaitOnCPU(CopyFence.GetValue());
 }

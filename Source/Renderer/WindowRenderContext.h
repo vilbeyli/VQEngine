@@ -52,6 +52,7 @@ struct ID3D12PipelineState;
 class FWindowRenderContext
 {
 public:
+	FWindowRenderContext(CommandQueue& PresentQueueIn) : PresentQueue(PresentQueueIn) {}
 	void InitializeContext(const Window* pWin, Device* pDevice, int NumSwapchainBuffers, bool bVSync, bool bHDRSwapchain);
 	void CleanupContext();
 
@@ -64,45 +65,31 @@ public:
 	inline unsigned short     GetNumSwapchainBuffers() const { return SwapChain.GetNumBackBuffers(); }
 	inline unsigned short     GetCurrentSwapchainBufferIndex() const { return SwapChain.GetCurrentBackBufferIndex(); }
 
-	ID3D12CommandList* GetCommandListPtr(CommandQueue::EType eQueueType, size_t THREAD_INDEX);
+	inline ID3D12CommandList* GetCommandListPtr(CommandQueue::EType eQueueType, size_t THREAD_INDEX) { return GetCommandListPtrs(eQueueType)[THREAD_INDEX]; };
 	inline UINT GetNumCurrentlyRecordingThreads(CommandQueue::EType eQueueType) const { return mNumCurrentlyRecordingThreads[eQueueType]; }
 
 	// returns the current back buffer's command allocators
-	std::vector<ID3D12CommandAllocator*>& GetCommandAllocators(CommandQueue::EType eQueueType);
+	inline std::vector<ID3D12CommandAllocator*>& GetCommandAllocators(CommandQueue::EType eQueueType) { return mCommandAllocators[eQueueType][SwapChain.GetCurrentBackBufferIndex()]; };
 
-	// :(
-	inline std::vector<ID3D12GraphicsCommandList*>& GetGFXCommandListPtrs() { return mpCmdGFX; }
-	inline std::vector<ID3D12CommandList*>& GetComputeCommandListPtrs() { return mpCmdCompute; }
-	inline std::vector<ID3D12CommandList*>& GetCopyCommandListPtrs() { return mpCmdCopy; }
-	inline std::vector<ID3D12CommandList*>& GetCommandListPtrs(CommandQueue::EType eQueueType)
-	{
-		switch (eQueueType)
-		{
-		case CommandQueue::EType::GFX    : return (std::vector<ID3D12CommandList*>&)mpCmdGFX;
-		case CommandQueue::EType::COMPUTE: return mpCmdCompute;
-		case CommandQueue::EType::COPY   : return mpCmdCopy;
-		}
-		return mpCmdCompute; // shouldn't happen
-	}
+	inline std::vector<ID3D12CommandList*>& GetCommandListPtrs(CommandQueue::EType eQueueType){ return mpCmds[eQueueType]; }
+	inline std::vector<ID3D12CommandList*>& GetGFXCommandListPtrs() { return GetCommandListPtrs(CommandQueue::EType::GFX); }
+	inline std::vector<ID3D12CommandList*>& GetComputeCommandListPtrs() { return GetCommandListPtrs(CommandQueue::EType::COMPUTE); }
+	inline std::vector<ID3D12CommandList*>& GetCopyCommandListPtrs() { return GetCommandListPtrs(CommandQueue::EType::COPY); }
 
 public:
 	int WindowDisplayResolutionX = -1;
 	int WindowDisplayResolutionY = -1;
 
-	Device*      pDevice = nullptr;
-	SwapChain    SwapChain;
-	CommandQueue PresentQueue;
+	Device*       pDevice = nullptr;
+	SwapChain     SwapChain;
+	CommandQueue& PresentQueue;
 
 private:
 	// command list allocators per back buffer, per recording thread
-	std::vector<std::vector<ID3D12CommandAllocator*>>   mCommandAllocatorsGFX;     
-	std::vector<std::vector<ID3D12CommandAllocator*>>   mCommandAllocatorsCompute;
-	std::vector<std::vector<ID3D12CommandAllocator*>>   mCommandAllocatorsCopy;
+	std::vector<std::vector<ID3D12CommandAllocator*>> mCommandAllocators[CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES] ;
 
 	// command lists per recording thread
-	std::vector<ID3D12GraphicsCommandList*> mpCmdGFX;
-	std::vector<ID3D12CommandList*>         mpCmdCompute;
-	std::vector<ID3D12CommandList*>         mpCmdCopy;
+	std::vector<ID3D12CommandList*> mpCmds[CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES];
 	
 	// constant buffers per recording thread
 	std::vector<DynamicBufferHeap> mDynamicHeap_ConstantBuffer;

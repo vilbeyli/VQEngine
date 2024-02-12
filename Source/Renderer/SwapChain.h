@@ -104,7 +104,7 @@ private:
 	bool                         mbVSync = false;
 
 	HANDLE                       mHEvent = 0;
-	ID3D12Fence*                 mpFence = nullptr;
+	ID3D12Fence*                 ptr = nullptr;
 	std::vector<UINT64>          mFenceValues;
 
 	std::vector<ID3D12Resource*> mRenderTargets;

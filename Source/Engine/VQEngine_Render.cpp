@@ -920,20 +920,39 @@ void VQEngine::RenderThread_PreRender()
 	const uint32_t NumCmdRecordingThreads = NumCmdRecordingThreads_GFX;
 	const uint32_t ConstantBufferBytesPerThread = 36 * MEGABYTE;
 #endif
-
-	ctx.AllocateCommandLists(CommandQueue::EType::GFX, NumCmdRecordingThreads_GFX);
-	ctx.ResetCommandLists(CommandQueue::EType::GFX, NumCmdRecordingThreads_GFX);
-	ctx.AllocateConstantBufferMemory(NumCmdRecordingThreads, ConstantBufferBytesPerThread);
+	{
+		SCOPED_CPU_MARKER("AllocCmdLists");
+		ctx.AllocateCommandLists(CommandQueue::EType::GFX, NumCmdRecordingThreads_GFX);
+#if OBJECTID_PASS__USE_ASYNC_COPY
+		ctx.AllocateCommandLists(CommandQueue::EType::COPY, 1);
+#endif
+	}
+	{
+		SCOPED_CPU_MARKER("ResetCmdLists");
+		ctx.ResetCommandLists(CommandQueue::EType::GFX, NumCmdRecordingThreads_GFX);
+#if OBJECTID_PASS__USE_ASYNC_COPY
+		if(mAppState == EAppState::SIMULATING)
+			ctx.ResetCommandLists(CommandQueue::EType::COPY, 1);
+#endif
+	}
+	{
+		SCOPED_CPU_MARKER("AllocCBMem");
+		ctx.AllocateConstantBufferMemory(NumCmdRecordingThreads, ConstantBufferBytesPerThread);
+	}
 
 	for (size_t iThread = 0; iThread < NumCmdRecordingThreads; ++iThread)
+	{
+		SCOPED_CPU_MARKER("CB[%d].BeginFrame", iThread);
 		ctx.GetConstantBufferHeap(iThread).OnBeginFrame();
+	}
 
 	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 
 	auto& vpGFXCmds = ctx.GetGFXCommandListPtrs();
 	for (uint32_t iGFX = 0; iGFX < NumCmdRecordingThreads_GFX; ++iGFX)
 	{
-		vpGFXCmds[iGFX]->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+		SCOPED_CPU_MARKER("Cmd[%d].SetDescHeap", iThread);
+		static_cast<ID3D12GraphicsCommandList*>(vpGFXCmds[iGFX])->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 	}
 }
 
@@ -1258,6 +1277,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	// TODO: undo const cast and assign in a proper spot -------------------------------------------------
 
 	ID3D12Resource* pRsc = nullptr;
+	ID3D12CommandList* pCmdCpy = (ID3D12CommandList*)ctx.GetCommandListPtr(CommandQueue::EType::COPY, 0);
 	if constexpr (!RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING)
 	{
 		constexpr size_t THREAD_INDEX = 0;
@@ -1269,7 +1289,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		RenderDirectionalShadowMaps(pCmd, &CBHeap, SceneShadowView);
 		RenderPointShadowMaps(pCmd, &CBHeap, SceneShadowView, 0, SceneShadowView.NumPointShadowViews);
 
-		RenderDepthPrePass(pCmd, &CBHeap, SceneView);
+		RenderDepthPrePass(pCmd, pCmdCpy, &CBHeap, SceneView);
 
 		if (bDownsampleDepth)
 		{
@@ -1327,7 +1347,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 				WorkerThreads.AddTask([=, &CBHeap_WorkerZPrePass, &SceneView]()
 				{
 					RENDER_WORKER_CPU_MARKER;
-					RenderDepthPrePass(pCmd_ZPrePass, &CBHeap_WorkerZPrePass, SceneView);
+					RenderDepthPrePass(pCmd_ZPrePass, pCmdCpy, &CBHeap_WorkerZPrePass, SceneView);
 					if (bDownsampleDepth)
 					{
 						DownsampleDepth(pCmd_ZPrePass, &CBHeap_WorkerZPrePass, rsc.Tex_SceneDepth, rsc.SRV_SceneDepth);

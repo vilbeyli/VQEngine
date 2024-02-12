@@ -102,7 +102,7 @@ private:
     UINT8*                     mpDataEnd   = nullptr; 
     UINT8*                     mpDataBegin = nullptr;
 
-    ID3D12Fence*               mpFence = nullptr;
+    ID3D12Fence*               ptr = nullptr;
     UINT64                     mFenceValue = 0;
     HANDLE                     mHEvent;
 };

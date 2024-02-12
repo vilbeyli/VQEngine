@@ -148,9 +148,10 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 	assert(bDeviceCreateSucceeded);
 
 	// Create Command Queues of different types
-	mGFXQueue.Create(pVQDevice, CommandQueue::EType::GFX);
-	mComputeQueue.Create(pVQDevice, CommandQueue::EType::COMPUTE);
-	mCopyQueue.Create(pVQDevice, CommandQueue::EType::COPY);
+	for (int i = 0; i < CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES; ++i)
+	{
+		mCmdQueues[i].Create(pVQDevice, (CommandQueue::EType)i);
+	}
 
 	// Initialize memory
 	InitializeD3D12MA();
@@ -243,9 +244,10 @@ void VQRenderer::Destroy()
 	}
 
 	// cleanp up device
-	mGFXQueue.Destroy();
-	mComputeQueue.Destroy();
-	mCopyQueue.Destroy();
+	for (int i = 0; i < CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES; ++i)
+	{
+		mCmdQueues[i].Destroy();
+	}
 	mDevice.Destroy();
 
 	// clean up remaining threads
@@ -280,7 +282,7 @@ void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuf
 	Device*       pVQDevice = &mDevice;
 	ID3D12Device* pDevice = pVQDevice->GetDevicePtr();
 
-	FWindowRenderContext ctx = {};
+	FWindowRenderContext ctx = FWindowRenderContext(mCmdQueues[CommandQueue::EType::GFX]);
 	ctx.InitializeContext(pWin, pVQDevice, NumSwapchainBuffers, bVSync, bHDRSwapchain);
 
 	// Save other context data
@@ -360,7 +362,7 @@ void VQRenderer::InitializeHeaps()
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
 	const uint32 UPLOAD_HEAP_SIZE = (512+256+128) * MEGABYTE; // TODO: from RendererSettings.ini
-	mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE, this->mGFXQueue.pQueue);
+	mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE, this->mCmdQueues[CommandQueue::EType::GFX].pQueue);
 
 	constexpr uint32 NumDescsCBV = 100;
 	constexpr uint32 NumDescsSRV = 8192;
