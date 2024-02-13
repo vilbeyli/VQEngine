@@ -730,7 +730,7 @@ void Scene::PickObject(const ObjectIDPass& ObjectIDRenderPass, int MouseClickPos
 		int4 px = ObjectIDRenderPass.ReadBackPixel(MouseClickPositionX, MouseClickPositionY);
 
 		size_t hObj = px.x;
-		Log::Info("Picked: Obj[%d] Mesh[%d] Material[%d]", px.x, px.y, px.z);
+		Log::Info("Picked(%d, %d): Obj[%d] Mesh[%d] Material[%d]", MouseClickPositionX, MouseClickPositionY,  px.x, px.y, px.z);
 
 		auto it = std::find(this->mSelectedObjects.begin(), this->mSelectedObjects.end(), hObj);
 		const bool bFound = it != this->mSelectedObjects.end();

@@ -82,6 +82,8 @@ public:
 	inline const std::array<float, 2>& GetMouseDelta() const { return mMouseDelta; }
 	inline float MouseDeltaX() const { return mMouseDelta[0] && !mbIgnoreInput; };
 	inline float MouseDeltaY() const { return mMouseDelta[1] && !mbIgnoreInput; };
+	inline long GetMousePosX() const { return mMousePosition[0]; }
+	inline long GetMousePosY() const { return mMousePosition[1]; }
 
 	bool IsMouseDown(EMouseButtons) const;
 	bool IsMouseUp(EMouseButtons) const;

@@ -198,6 +198,7 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 	}
 }
 
+#include "imgui.h"
 void VQEngine::UpdateThread_PostUpdate()
 {
 	SCOPED_CPU_MARKER("UpdateThread_PostUpdate()");
@@ -218,7 +219,14 @@ void VQEngine::UpdateThread_PostUpdate()
 	
 	mpScene->PostUpdate(mWorkerThreads, mUIState, FRAME_DATA_INDEX);
 
-	mpScene->PickObject(mRenderPass_ObjectID, mpWinMain->GetWidth(), mpWinMain->GetHeight());
+	ImGuiIO& io = ImGui::GetIO();
+	if (!io.WantCaptureMouse)
+	{
+		mpScene->PickObject(mRenderPass_ObjectID, 
+			io.MouseClickedPos->x, 
+			io.MouseClickedPos->y
+		);
+	}
 
 	// input post update
 	for (auto it = mInputStates.begin(); it != mInputStates.end(); ++it)
