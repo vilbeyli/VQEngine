@@ -1256,6 +1256,15 @@ static void DrawTextureViewer(
 	ImGui::EndTooltip();
 }
 
+static void StartDrawingMaterialEditorRow(const char* szLabel)
+{
+	ImGui::TableNextRow();
+	ImGui::TableSetColumnIndex(0);
+	ImGui::Text(szLabel);
+	ImGui::TableSetColumnIndex(1);
+	ImGui::SetNextItemWidth(-1);
+}
+
 void VQEngine::DrawMaterialEditor()
 {
 	const uint32 W = mpWinMain->GetWidth();
@@ -1292,14 +1301,14 @@ void VQEngine::DrawMaterialEditor()
 
 	ImGui::TableSetupColumn(mpScene->GetMaterialName(mUIState.SelectedMaterialIndex).c_str(), ImGuiTableColumnFlags_WidthStretch, 0.7f); // 70% width
 	ImGui::TableSetupColumn("Materials", ImGuiTableColumnFlags_WidthStretch, 0.3f); // 30% width
-	ImGui::TableHeadersRow();	
+	ImGui::TableHeadersRow();
 	ImGui::TableNextRow();
 	
 
 	// draw selector
 	ImGui::TableSetColumnIndex(1);
 	ImGui::SetNextItemWidth(-1); // Make the controls take the full width of the column
-	ImGui::ListBox("##", &mUIState.SelectedMaterialIndex, szMaterialNames.data(), szMaterialNames.size(), szMaterialNames.size());
+	ImGui::ListBox("##", &mUIState.SelectedMaterialIndex, szMaterialNames.data(), szMaterialNames.size(), 18);
 	if (ImGui::Button("Unselect##", ImVec2(-1, 0)))
 	{
 		mUIState.SelectedMaterialIndex = szMaterialNames.size() - 1;
@@ -1322,57 +1331,29 @@ void VQEngine::DrawMaterialEditor()
 
 			// Diffuse Color & Alpha
 			DirectX::XMFLOAT4 ColorAlpha(mat.diffuse.x, mat.diffuse.y, mat.diffuse.z, mat.alpha);
-
-			ImGui::TableNextRow();
-			ImGui::TableSetColumnIndex(0);
-			ImGui::Text("Diffuse, Alpha");
-			ImGui::TableSetColumnIndex(1);
+			StartDrawingMaterialEditorRow("Diffuse, Alpha");
 			if (ImGui::ColorEdit4("##diffuse", reinterpret_cast<float*>(&ColorAlpha), ImGuiColorEditFlags_DefaultOptions_ | ImGuiColorEditFlags_NoLabel))
 			{
 				mat.diffuse = DirectX::XMFLOAT3(ColorAlpha.x, ColorAlpha.y, ColorAlpha.z);
 				mat.alpha = ColorAlpha.w;
 			}
 
-			// Emissive Color
-			ImGui::TableNextRow();
-			ImGui::TableSetColumnIndex(0);
-			ImGui::Text("Emissive Color");
-			ImGui::TableSetColumnIndex(1);
+			StartDrawingMaterialEditorRow("Emmissive Color");
 			ImGui::ColorEdit3("##emissiveColor", reinterpret_cast<float*>(&mat.emissiveColor), ImGuiColorEditFlags_DefaultOptions_ | ImGuiColorEditFlags_NoLabel);
 
-			// Emissive Intensity
-			ImGui::TableNextRow();
-			ImGui::TableSetColumnIndex(0);
-			ImGui::Text("Emissive Intensity");
-			ImGui::TableSetColumnIndex(1);
+			StartDrawingMaterialEditorRow("Emmissive Intensity");
 			ImGui::DragFloat("##emissiveIntensity", &mat.emissiveIntensity, 0.01f, 0.0f, 1000.0f, "%.2f");
 
-			// Metalness
-			ImGui::TableNextRow();
-			ImGui::TableSetColumnIndex(0);
-			ImGui::Text("Metalness");
-			ImGui::TableSetColumnIndex(1);
+			StartDrawingMaterialEditorRow("Metalness");
 			ImGui::DragFloat("##metalness", &mat.metalness, 0.01f, 0.00f, 1.0f, "%.2f");
 			
-			// Roughness
-			ImGui::TableNextRow();
-			ImGui::TableSetColumnIndex(0);
-			ImGui::Text("Roughness");
-			ImGui::TableSetColumnIndex(1);
+			StartDrawingMaterialEditorRow("Roughness");
 			ImGui::DragFloat("##roughness", &mat.roughness, 0.01f, 0.04f, 1.0f, "%.2f");
 
-			// Tiling
-			ImGui::TableNextRow();
-			ImGui::TableSetColumnIndex(0);
-			ImGui::Text("Tiling");
-			ImGui::TableSetColumnIndex(1);
+			StartDrawingMaterialEditorRow("Tiling");
 			ImGui::DragFloat2("##tiling", reinterpret_cast<float*>(&mat.tiling), 0.05f, 0.0f, 10.0f, "%.2f");
 			
-			// UV Bias
-			ImGui::TableNextRow();
-			ImGui::TableSetColumnIndex(0);
-			ImGui::Text("UV Bias");
-			ImGui::TableSetColumnIndex(1);
+			StartDrawingMaterialEditorRow("UV Bias");
 			ImGui::DragFloat2("##uv_bias", reinterpret_cast<float*>(&mat.uv_bias), 0.05f, -10.0f, 10.0f, "%.2f");
 
 			// Texture
