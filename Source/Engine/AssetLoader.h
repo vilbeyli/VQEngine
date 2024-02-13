@@ -100,7 +100,12 @@ public:
 	struct FMaterialTextureAssignments
 	{
 		FMaterialTextureAssignments(const ThreadPool& workers) : mWorkersThreads(workers) {}
-		void DoAssignments(Scene* pScene, std::unordered_map<TextureID, std::string>& TexturePaths, VQRenderer* pRenderer);
+		void DoAssignments(
+			Scene* pScene, 
+			std::mutex& mtxTexturePaths,
+			std::unordered_map<TextureID, std::string>& TexturePaths, 
+			VQRenderer* pRenderer
+		);
 		void WaitForTextureLoads();
 
 		const ThreadPool&                       mWorkersThreads; // to check if pool IsExiting()

@@ -44,6 +44,7 @@ using MeshRenderCommand_t = FMeshRenderCommand;
 
 // fwd decl
 class Input;
+class ObjectIDPass;
 struct Material;
 struct FResourceNames;
 struct FFrustumPlaneset;
@@ -340,11 +341,14 @@ private: // Derived Scenes shouldn't access these functions
 	void PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX);
 	void Update(float dt, int FRAME_DATA_INDEX = 0);
 	void PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UIState, int FRAME_DATA_INDEX = 0);
+	
 	void StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene, ThreadPool& UpdateWorkerThreadPool);
 	void OnLoadComplete();
 	void Unload(); // serial-only for now. maybe MT later.
+	
 	void RenderUI(FUIState& UIState, uint32_t W, uint32_t H);
 	void HandleInput(FSceneView& SceneView);
+	void PickObject(const ObjectIDPass& ObjectIDRenderPass, int MouseClickPositionX, int MouseClickPositionY);
 
 	void GatherSceneLightData(FSceneView& SceneView) const;
 	void GatherShadowViewData(FSceneShadowView& SceneShadowView
@@ -530,6 +534,8 @@ private:
 	std::unordered_set<MaterialID> mLoadedMaterials;
 	std::unordered_map<MaterialID, std::string> mMaterialNames;
 	std::unordered_map<TextureID, std::string> mTexturePaths;
+	std::mutex mMtxTexturePaths;
+
 	const std::string mInvalidMaterialName;
 	const std::string mInvalidTexturePath;
 	

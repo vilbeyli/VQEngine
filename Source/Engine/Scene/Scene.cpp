@@ -24,6 +24,7 @@
 #include "../Core/Window.h"
 #include "../VQEngine.h"
 #include "../Culling.h"
+#include "../RenderPass/ObjectIDPass.h"
 
 #include "Libs/VQUtils/Source/utils.h"
 
@@ -615,34 +616,6 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 		}
 	}
 
-#if 0
-	// Picker
-	if (bMouseLeftTriggered)
-	{
-		float uvX = io.MousePos.x / mpWinMain->GetWidth();
-		float uvY = io.MousePos.y / mpWinMain->GetHeight();
-		int4 px = mRenderPass_ObjectID.ReadBackPixel(float2(uvX, uvY));
-
-		size_t hObj = px.x;
-		Log::Info("Picked: Obj[%d] Mesh[%d] Material[%d]", px.x, px.y, px.z);
-
-		auto it = std::find(mSelectedObjects.begin(), mSelectedObjects.end(), hObj);
-		if (bIsShiftDown)
-		{
-			if (it != mSelectedObjects.end())
-			{
-				mSelectedObjects.erase(it);
-			}
-		}
-		else
-		{
-			if (it == mSelectedObjects.end())
-			{
-				mSelectedObjects.push_back(hObj);
-			}
-		}
-	}
-#endif
 }
 
 
@@ -740,6 +713,42 @@ void Scene::HandleInput(FSceneView& SceneView)
 	{
 		mIndex_ActiveEnvironmentMapPreset = CircularDecrement(mIndex_ActiveEnvironmentMapPreset, NumEnvMaps - 1);
 		mEngine.StartLoadingEnvironmentMap(mIndex_ActiveEnvironmentMapPreset);
+	}
+}
+
+void Scene::PickObject(const ObjectIDPass& ObjectIDRenderPass, int MouseClickPositionX, int MouseClickPositionY)
+{
+	const bool bMouseLeftTriggered = mInput.IsMouseTriggered(Input::EMouseButtons::MOUSE_BUTTON_LEFT);
+	if (bMouseLeftTriggered)
+	{
+		{
+			SCOPED_CPU_MARKER_C("WAIT_COPY_Q", 0xFFFF0000);
+			ObjectIDRenderPass.WaitForCopyComplete(); // CopyQ --> CPU signaling / sync
+		}
+		//float uvX = io.MousePos.x / mpWinMain->GetWidth();
+		//float uvY = io.MousePos.y / mpWinMain->GetHeight();
+		int4 px = ObjectIDRenderPass.ReadBackPixel(MouseClickPositionX, MouseClickPositionY);
+
+		size_t hObj = px.x;
+		Log::Info("Picked: Obj[%d] Mesh[%d] Material[%d]", px.x, px.y, px.z);
+
+		auto it = std::find(this->mSelectedObjects.begin(), this->mSelectedObjects.end(), hObj);
+		const bool bFound = it != this->mSelectedObjects.end();
+		const bool bIsShiftDown = mInput.IsKeyDown("Shift");
+		if (bIsShiftDown)
+		{
+			if (bFound)
+			{
+				this->mSelectedObjects.erase(it);
+			}
+		}
+		else
+		{
+			if (!bFound)
+			{
+				this->mSelectedObjects.push_back(hObj);
+			}
+		}
 	}
 }
 

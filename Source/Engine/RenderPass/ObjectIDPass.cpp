@@ -291,20 +291,17 @@ std::vector<FPSOCreationTaskParameters> ObjectIDPass::CollectPSOCreationParamete
 	return params;
 }
 
-int4 ObjectIDPass::ReadBackPixel(float2 uv) const
+int4 ObjectIDPass::ReadBackPixel(const int2& screenCoords) const
 {
-	const int pixelX = static_cast<int>(uv.x * mOutputResolutionX);
-	const int pixelY = static_cast<int>(uv.y * mOutputResolutionY);
+	auto pRsc = mRenderer.GetTextureResource(TEXPassOutputCPUReadback);
 	const int bytesPerPixel = 4 * 4; // 32bit/channel , RGBA
 
-	auto pRsc = mRenderer.GetTextureResource(TEXPassOutputCPUReadback);
-
-	unsigned char* pData = nullptr; 
+	unsigned char* pData = nullptr;
 	D3D12_RANGE readRange = { 0, mOutputResolutionX * mOutputResolutionY * bytesPerPixel }; // Only request the read for the necessary range
 	HRESULT hr = pRsc->Map(0, &readRange, reinterpret_cast<void**>(&pData));
-	if (SUCCEEDED(hr)) 
+	if (SUCCEEDED(hr))
 	{
-		const int pixelIndex = (pixelY * mOutputResolutionX + pixelX) * bytesPerPixel;
+		const int pixelIndex = (screenCoords.y * mOutputResolutionX + screenCoords.x) * bytesPerPixel;
 		const int r = pData[pixelIndex + 0];
 		const int g = pData[pixelIndex + 4];
 		const int b = pData[pixelIndex + 8];
@@ -314,7 +311,7 @@ int4 ObjectIDPass::ReadBackPixel(float2 uv) const
 		//Log::Info("\t[%d, %d] | [%.2f, %.2f] = (%d, %d, %d, %d)", pixelX, pixelY, uv.x, uv.y, r, g, b, a);
 		return int4(r, g, b, a);
 	}
-	
+
 	return int4(-1, -1, -1, -1);
 }
 

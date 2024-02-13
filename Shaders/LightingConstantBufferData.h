@@ -29,6 +29,7 @@
 #define float2   DirectX::XMFLOAT2
 #define matrix   DirectX::XMMATRIX
 #define float3x3 DirectX::XMFLOAT3X3
+#define int2     DirectX::XMINT2
 #define int3     DirectX::XMINT3
 #define int4     DirectX::XMINT4
 namespace VQ_SHADER_DATA {

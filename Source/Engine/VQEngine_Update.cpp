@@ -156,6 +156,8 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 		break;
 	}
 	case EAppState::LOADING:
+	{
+		SCOPED_CPU_MARKER("UpdateThread_Loading()");
 		if (mbLoadingLevel || mbLoadingEnvironmentMap)
 		{
 			// animate loading screen
@@ -187,7 +189,7 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 				mTimer.Start();
 			}
 		}
-		break;
+	}	break;
 	case EAppState::SIMULATING:
 		// TODO: threaded?
 		UpdateThread_UpdateScene_MainWnd(dt);
@@ -215,6 +217,8 @@ void VQEngine::UpdateThread_PostUpdate()
 	}
 	
 	mpScene->PostUpdate(mWorkerThreads, mUIState, FRAME_DATA_INDEX);
+
+	mpScene->PickObject(mRenderPass_ObjectID, mpWinMain->GetWidth(), mpWinMain->GetHeight());
 
 	// input post update
 	for (auto it = mInputStates.begin(); it != mInputStates.end(); ++it)
@@ -393,8 +397,6 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 #endif
 
 	mpScene->Update(dt, FRAME_DATA_INDEX);
-
-	mRenderPass_ObjectID.WaitForCopyComplete(); // CopyQ --> CPU signaling / sync
 
 	HandleEngineInput(); // system-wide input (esc/mouse click on wnd)
 	for (decltype(mInputStates)::iterator it = mInputStates.begin(); it != mInputStates.end(); ++it)

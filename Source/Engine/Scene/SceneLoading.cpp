@@ -434,7 +434,7 @@ void Scene::OnLoadComplete()
 	}
 
 	// assign material data
-	mMaterialAssignments.DoAssignments(this, this->mTexturePaths, &mRenderer);
+	mMaterialAssignments.DoAssignments(this, this->mMtxTexturePaths, this->mTexturePaths, &mRenderer);
 
 	// calculate local-space game object AABBs
 	CalculateGameObjectLocalSpaceBoundingBoxes();

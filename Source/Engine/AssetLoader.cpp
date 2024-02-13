@@ -318,7 +318,7 @@ static AssetLoader::ETextureType GetTextureType(aiTextureType aiType)
 	return AssetLoader::ETextureType::NUM_TEXTURE_TYPES;
 }
 
-void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std::unordered_map<TextureID, std::string>& TexturePaths, VQRenderer* pRenderer)
+void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std::mutex& mtxTexturePaths, std::unordered_map<TextureID, std::string>& TexturePaths, VQRenderer* pRenderer)
 {
 	SCOPED_CPU_MARKER("FMaterialTextureAssignments::DoAssignments()");
 
@@ -409,7 +409,7 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 			// store the loaded texture path if we have a successful texture creation
 			if (loadedTextureID != INVALID_ID)
 			{
-				// TODO: needs to be mutexed.
+				std::lock_guard<std::mutex> lk(mtxTexturePaths);
 				TexturePaths[loadedTextureID] = result.TexturePath;
 			}
 		}
@@ -899,7 +899,7 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 	}
 
 	// assign TextureIDs to the materials;
-	MaterialTextureAssignments.DoAssignments(pScene, pScene->mTexturePaths, pRenderer);
+	MaterialTextureAssignments.DoAssignments(pScene, pScene->mMtxTexturePaths,  pScene->mTexturePaths, pRenderer);
 
 	t.Stop();
 	Log::Info("   [%.2fs] Loaded Model '%s': %d meshes, %d materials"
