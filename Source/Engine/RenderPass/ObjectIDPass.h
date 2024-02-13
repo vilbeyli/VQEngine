@@ -25,7 +25,7 @@
 
 #include <unordered_map>
 
-#define OBJECTID_PASS__USE_ASYNC_COPY 0
+#define OBJECTID_PASS__USE_ASYNC_COPY 1
 
 struct FSceneView;
 class DynamicBufferHeap;

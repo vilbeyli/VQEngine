@@ -940,19 +940,23 @@ void VQEngine::RenderThread_PreRender()
 		ctx.AllocateConstantBufferMemory(NumCmdRecordingThreads, ConstantBufferBytesPerThread);
 	}
 
-	for (size_t iThread = 0; iThread < NumCmdRecordingThreads; ++iThread)
 	{
-		SCOPED_CPU_MARKER("CB[%d].BeginFrame", iThread);
-		ctx.GetConstantBufferHeap(iThread).OnBeginFrame();
+		SCOPED_CPU_MARKER("CB.BeginFrame");
+		for (size_t iThread = 0; iThread < NumCmdRecordingThreads; ++iThread)
+		{
+			ctx.GetConstantBufferHeap(iThread).OnBeginFrame();
+		}
 	}
 
 	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
-
-	auto& vpGFXCmds = ctx.GetGFXCommandListPtrs();
-	for (uint32_t iGFX = 0; iGFX < NumCmdRecordingThreads_GFX; ++iGFX)
+	
 	{
-		SCOPED_CPU_MARKER("Cmd[%d].SetDescHeap", iThread);
-		static_cast<ID3D12GraphicsCommandList*>(vpGFXCmds[iGFX])->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+		SCOPED_CPU_MARKER("Cmd.SetDescHeap");
+		auto& vpGFXCmds = ctx.GetGFXCommandListPtrs();
+		for (uint32_t iGFX = 0; iGFX < NumCmdRecordingThreads_GFX; ++iGFX)
+		{
+			static_cast<ID3D12GraphicsCommandList*>(vpGFXCmds[iGFX])->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+		}
 	}
 }
 

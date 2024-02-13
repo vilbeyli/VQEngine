@@ -113,6 +113,7 @@ struct FSceneView
 	std::vector<MeshRenderCommand_t>  meshRenderCommands;
 	std::vector<FLightRenderCommand> lightRenderCommands;
 	std::vector<FLightRenderCommand> lightBoundsRenderCommands;
+	std::vector<FOutlineRenderCommand> outlineRenderCommands;
 
 #if RENDER_INSTANCED_SCENE_MESHES
 	//--------------------------------------------------------------------------------------------------------------------------------------------
@@ -351,7 +352,7 @@ private: // Derived Scenes shouldn't access these functions
 		, const std::vector<size_t>& vActiveLightIndices
 	);
 
-	void PrepareLightMeshRenderParams(FSceneView& SceneView) const;
+	void RecordRenderLightMeshCommands(FSceneView& SceneView) const;
 	void BatchInstanceData_BoundingBox(FSceneView& SceneView
 		, ThreadPool& UpdateWorkerThreadPool
 		, const DirectX::XMMATRIX matViewProj
@@ -431,6 +432,7 @@ public:
 	std::vector<Light*> GetLights();
 	
 	Model&      GetModel(ModelID);
+	const Model& GetModel(ModelID) const;
 	FSceneStats GetSceneRenderStats(int FRAME_DATA_INDEX) const;
 	
 	GameObject* GetGameObject(size_t hObject) const;
@@ -490,6 +492,7 @@ protected:
 	// SCENE STATE
 	//
 	int                      mIndex_SelectedCamera;
+	std::vector<size_t>      mSelectedObjects;
 
 public:
 	int                      mIndex_ActiveEnvironmentMapPreset;

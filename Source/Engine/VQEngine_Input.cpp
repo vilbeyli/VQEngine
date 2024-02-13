@@ -163,15 +163,6 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 		Toggle(mUIState.bHideAllWindows);
 	}
 
-	// Picker
-	if (bMouseLeftTriggered)
-	{
-		float uvX = io.MousePos.x / mpWinMain->GetWidth();
-		float uvY = io.MousePos.y / mpWinMain->GetHeight();
-		int4 px = mRenderPass_ObjectID.ReadBackPixel(float2(uvX, uvY));
-		Log::Info("Picked: Obj[%d] Mesh[%d] Material[%d]", px.x, px.y, px.z);
-	}
-
 	// Graphics Settings Controls
 	if (input.IsKeyTriggered("V")) // Vsync
 	{

@@ -804,6 +804,7 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 	{
 		RenderLightBounds(pCmd, pCBufferHeap, SceneView, bMSAA);
 		RenderBoundingBoxes(pCmd, pCBufferHeap, SceneView, bMSAA);
+		RenderOutline(pCmd, pCBufferHeap, SceneView, bMSAA);
 	}
 	
 	// Draw Environment Map ---------------------------------------
@@ -905,6 +906,36 @@ void VQEngine::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 		}
 #endif
+	}
+}
+
+void VQEngine::RenderOutline(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA)
+{
+	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::OUTLINE_PSO_MSAA_4 : EBuiltinPSOs::OUTLINE_PSO));
+	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
+
+	for (const FOutlineRenderCommand& cmd : SceneView.outlineRenderCommands)
+	{
+		FFrameConstantBufferOutline* pCBuffer = {};
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
+		pCBuffer->matModelViewProj = cmd.matWorldViewProj;
+		pCBuffer->color = cmd.color;
+		pCBuffer->scale = cmd.scale;
+
+		const Mesh& mesh = mpScene->mMeshes.at(cmd.meshID);
+		const auto VBIBIDs = mesh.GetIABufferIDs();
+		const uint32 NumIndices = mesh.GetNumIndices();
+		const BufferID& VB_ID = VBIBIDs.first;
+		const BufferID& IB_ID = VBIBIDs.second;
+		const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
+		const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
+
+		pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
+		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pCmd->IASetVertexBuffers(0, 1, &vb);
+		pCmd->IASetIndexBuffer(&ib);
+		pCmd->DrawIndexedInstanced(NumIndices, 1, 0, 0, 0);
 	}
 }
 
@@ -1243,6 +1274,7 @@ void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dynam
 
 	RenderBoundingBoxes(pCmd, pCBufferHeap, SceneView, bMSAA);
 	RenderLightBounds(pCmd, pCBufferHeap, SceneView, bMSAA);
+	RenderOutline(pCmd, pCBufferHeap, SceneView, bMSAA);
 
 	// resolve MSAA RT 
 	if (bMSAA)

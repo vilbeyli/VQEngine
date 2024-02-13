@@ -49,6 +49,13 @@ struct FWireframeRenderCommand : public FMeshRenderCommandBase
 {
 	DirectX::XMFLOAT4 color;
 };
+struct FOutlineRenderCommand
+{
+	MeshID meshID = INVALID_ID;
+	DirectX::XMMATRIX matWorldViewProj;
+	DirectX::XMFLOAT4 color;
+	float scale;
+};
 using FLightRenderCommand = FWireframeRenderCommand;
 using FBoundingBoxRenderCommand = FWireframeRenderCommand;
 

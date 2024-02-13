@@ -226,6 +226,16 @@ Model& Scene::GetModel(ModelID id)
 	return mModels.at(id);
 }
 
+const Model& Scene::GetModel(ModelID id) const
+{
+	if (mModels.find(id) == mModels.end())
+	{
+		Log::Error("Model not created. Did you call Scene::CreateModel()? (modelID=%d)", id);
+		assert(false);
+	}
+	return mModels.at(id);
+}
+
 FSceneStats Scene::GetSceneRenderStats(int FRAME_DATA_INDEX) const
 {
 	FSceneStats stats = {};
@@ -500,6 +510,42 @@ void Scene::Update(float dt, int FRAME_DATA_INDEX)
 	this->UpdateScene(dt, SceneView);
 }
 
+static void RecordOutlineRenderCommands(
+	std::vector<FOutlineRenderCommand>& cmds,
+	const std::vector<size_t>& objHandles,
+	const Scene* pScene,
+	const XMMATRIX& matViewProj
+)
+{
+	const float4 SelectionColor = float4(1.0f, 0.647f, 0.1f, 1.0f);
+
+	cmds.clear();
+	for (size_t hObj : objHandles)
+	{
+		const GameObject* pObj = pScene->GetGameObject(hObj);
+		if (!pObj)
+		{
+			Log::Warning("pObj NULL in RecordOutlineRenderCommands");
+			continue;
+		}
+
+		const Transform& tf = *pScene->GetGameObjectTransform(hObj);
+		const XMMATRIX matWorld = tf.matWorldTransformation();
+		const Model& model = pScene->GetModel(pObj->mModelID);
+		for (const auto& pair : model.mData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH))
+		{
+			MeshID meshID = pair.first;
+
+			FOutlineRenderCommand cmd = {};
+			cmd.color = SelectionColor;
+			cmd.matWorldViewProj = matWorld * matViewProj;
+			cmd.meshID = meshID;
+			cmd.scale = 1.0f;
+			cmds.push_back(cmd);
+		}
+	}
+}
+
 void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UIState, int FRAME_DATA_INDEX)
 {
 	SCOPED_CPU_MARKER("Scene::PostUpdate()");
@@ -555,6 +601,9 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 	CullFrustums(SceneView, UpdateWorkerThreadPool);
 
 	BatchInstanceData(SceneView, UpdateWorkerThreadPool);
+	
+	RecordRenderLightMeshCommands(SceneView);
+	RecordOutlineRenderCommands(SceneView.outlineRenderCommands, mSelectedObjects, this, MatViewProj);
 
 	const auto lights = this->GetLights(); // todo: this is unnecessary copying, don't do this
 	if (UIState.SelectedLightIndex < lights.size() && UIState.SelectedLightIndex >= 0)
@@ -565,6 +614,35 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 			RecordRenderLightBoundsCommand(l, SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
 		}
 	}
+
+#if 0
+	// Picker
+	if (bMouseLeftTriggered)
+	{
+		float uvX = io.MousePos.x / mpWinMain->GetWidth();
+		float uvY = io.MousePos.y / mpWinMain->GetHeight();
+		int4 px = mRenderPass_ObjectID.ReadBackPixel(float2(uvX, uvY));
+
+		size_t hObj = px.x;
+		Log::Info("Picked: Obj[%d] Mesh[%d] Material[%d]", px.x, px.y, px.z);
+
+		auto it = std::find(mSelectedObjects.begin(), mSelectedObjects.end(), hObj);
+		if (bIsShiftDown)
+		{
+			if (it != mSelectedObjects.end())
+			{
+				mSelectedObjects.erase(it);
+			}
+		}
+		else
+		{
+			if (it == mSelectedObjects.end())
+			{
+				mSelectedObjects.push_back(hObj);
+			}
+		}
+	}
+#endif
 }
 
 
@@ -1462,6 +1540,7 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 	}
 	// Main View --------------------------------------------------------------------------------
 
+	// Shadow Views --------------------------------------------------------------------------------
 	const size_t NumShadowMeshFrustums = ctx.NumValidInputElements - 1; // exclude main view
 	size_t NumShadowFrustumsWithNumMeshesLargerThanMinNumMeshesPerThread = 0;
 	size_t NumShadowMeshes = 0;
@@ -1499,10 +1578,10 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 			});
 		}
 	}
+	// Shadow Views --------------------------------------------------------------------------------
 	
 	BatchInstanceData_BoundingBox(SceneView, UpdateWorkerThreadPool, SceneView.viewProj);
-	PrepareLightMeshRenderParams(SceneView);
-	
+
 	{
 		SCOPED_CPU_MARKER("ThisThread_ShadowViews");
 		for (size_t iFrustum = 1; iFrustum <= NumShadowFrustumsThisThread; ++iFrustum)
@@ -1511,6 +1590,7 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 			BatchInstanceData_ShadowMeshes(ctx.iFrustum, ctx.pShadowView, ctx.pObjIndices, ctx.pShadowView->matViewProj);
 		}
 	}
+
 	{
 		SCOPED_CPU_MARKER_C("ClearLocalContext", 0xFF880000);
 		WorkerContexts.clear();
@@ -1533,7 +1613,7 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 		BatchInstanceData_ShadowMeshes(ctx.iFrustum, ctx.pShadowView, ctx.pObjIndices, ctx.pShadowView->matViewProj);
 	}
 	BatchInstanceData_BoundingBox(SceneView, UpdateWorkerThreadPool, SceneView.viewProj);
-	PrepareLightMeshRenderParams(SceneView);
+	RecordRenderLightMeshCommands(SceneView);
 
 #endif
 }
@@ -1601,20 +1681,21 @@ static void RecordRenderLightMeshCommands(
 	} 
 }
 
-void Scene::PrepareLightMeshRenderParams(FSceneView& SceneView) const
+
+void Scene::RecordRenderLightMeshCommands(FSceneView& SceneView) const
 {
-	SCOPED_CPU_MARKER("Scene::PrepareLightMeshRenderParams()");
+	SCOPED_CPU_MARKER("Scene::RecordRenderLightMeshCommands()");
 	if (SceneView.sceneParameters.bDrawLightMeshes)
 	{
-		RecordRenderLightMeshCommands(mLightsStatic    , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
-		RecordRenderLightMeshCommands(mLightsDynamic   , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
-		RecordRenderLightMeshCommands(mLightsStationary, SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
+		::RecordRenderLightMeshCommands(mLightsStatic    , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
+		::RecordRenderLightMeshCommands(mLightsDynamic   , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
+		::RecordRenderLightMeshCommands(mLightsStationary, SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
 	}
 	if (SceneView.sceneParameters.bDrawLightBounds)
 	{
-		RecordRenderLightBoundsCommands(mLightsStatic    , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
-		RecordRenderLightBoundsCommands(mLightsDynamic   , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
-		RecordRenderLightBoundsCommands(mLightsStationary, SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
+		::RecordRenderLightBoundsCommands(mLightsStatic    , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
+		::RecordRenderLightBoundsCommands(mLightsDynamic   , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
+		::RecordRenderLightBoundsCommands(mLightsStationary, SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
 	}
 }
 
