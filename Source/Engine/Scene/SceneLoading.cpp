@@ -197,7 +197,7 @@ void Scene::LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes)
 	}
 }
 
-
+// multi threaded code
 void Scene::BuildGameObject(const FGameObjectRepresentation& ObjRep, size_t iObj)
 {
 	SCOPED_CPU_MARKER("BuildGameObject");
@@ -218,6 +218,8 @@ void Scene::BuildGameObject(const FGameObjectRepresentation& ObjRep, size_t iObj
 	if (bModelIsBuiltinMesh)
 	{
 		ModelID mID = this->CreateModel();
+
+		std::unique_lock<std::mutex> lk(mMtx_Models);
 		Model& model = mModels.at(mID);
 
 		// create/get mesh

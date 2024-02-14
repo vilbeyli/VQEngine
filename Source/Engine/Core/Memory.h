@@ -265,7 +265,7 @@ inline void MemoryPool<TObject>::PrintDebugInfo() const
 	Log::Info("-----------------");
 	Log::Info("Memory Pool");
 	Log::Info("Allocation Size : %s", StrUtil::FormatByte(this->mAllocSize).c_str());
-	Log::Info("Total # Blocks  : %d", this->mNumBlocks);
+	Log::Info("Total # Blocks  : %d", this->mNumMaxBlocks);
 	Log::Info("Used  # Blocks  : %d", this->mNumUsedBlocks);
 	Log::Info("Next Available  : 0x%x %s", this->mpNextFreeBlock, (this->mpNextFreeBlock == this->mpAlloc ? "(HEAD)" : ""));
 	Log::Info("-----------------");
