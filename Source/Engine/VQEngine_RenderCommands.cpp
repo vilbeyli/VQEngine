@@ -357,16 +357,23 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, ID3D12Command
 		memcpy(pPerObj->matWorldViewProjPrev, meshRenderCmd.matWorldViewProjPrev.data(), sizeof(XMMATRIX) * NumInstances);
 		memcpy(pPerObj->matNormal           , meshRenderCmd.matNormal.data()           , sizeof(XMMATRIX) * NumInstances);
 		memcpy(pPerObj->matWorld            , meshRenderCmd.matWorld.data()            , sizeof(XMMATRIX) * NumInstances);
+		//memcpy(pPerObj->ObjID               , meshRenderCmd.objectID.data()            , sizeof(int) * NumInstances); // not 16B aligned
+		for (int i = 0; i < NumInstances; ++i)
+		{
+			pPerObj->ObjID[i].x = meshRenderCmd.objectID[i];
+		}
 #else
 		const uint32 NumInstances = 1;
 		pPerObj->matWorldViewProj = meshRenderCmd.matWorldTransformation * SceneView.viewProj;
 		pPerObj->matWorldViewProjPrev = meshRenderCmd.matWorldTransformation;
 		pPerObj->matWorld = meshRenderCmd.matWorldTransformation;
 		pPerObj->matNormal = meshRenderCmd.matNormalTransformation;
+		pPerObj->objID = meshRenderCmd.objectID;
 #endif
 
 		pPerObj->materialData = std::move(mat.GetCBufferData());
-		pPerObj->ObjIDMeshIDMaterialID = int4(meshRenderCmd.objectID, meshRenderCmd.meshID, meshRenderCmd.matID, -111);
+		pPerObj->meshID = meshRenderCmd.meshID;
+		pPerObj->materialID = meshRenderCmd.matID;
 
 		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
 
@@ -916,12 +923,10 @@ void VQEngine::RenderOutline(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap*
 
 	for (const FOutlineRenderCommand& cmd : SceneView.outlineRenderCommands)
 	{
-		FFrameConstantBufferOutline* pCBuffer = {};
+		FOutlineRenderCommand::FConstantBuffer* pCBuffer = {};
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
-		pCBuffer->matModelViewProj = cmd.matWorldViewProj;
-		pCBuffer->color = cmd.color;
-		pCBuffer->scale = cmd.scale;
+		memcpy(pCBuffer, &cmd.cb, sizeof(cmd.cb));
 
 		const Mesh& mesh = mpScene->mMeshes.at(cmd.meshID);
 		const auto VBIBIDs = mesh.GetIABufferIDs();
@@ -1220,11 +1225,16 @@ void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 	}
 }
 
+static bool ShouldSkipBoundsPass(const FSceneView& SceneView)
+{
+	return SceneView.boundingBoxRenderCommands.empty()
+		&& SceneView.lightBoundsRenderCommands.empty()
+		&& SceneView.outlineRenderCommands.empty();
+}
 void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderSceneBoundingVolumes");
-	const bool bNoBoundingVolumeToRender = SceneView.boundingBoxRenderCommands.empty() 
-		&& SceneView.lightBoundsRenderCommands.empty();
+	const bool bNoBoundingVolumeToRender = ShouldSkipBoundsPass(SceneView);
 
 	if (bNoBoundingVolumeToRender)
 		return;
@@ -1303,8 +1313,7 @@ void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dynam
 
 void VQEngine::CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
 {
-	const bool bNoBoundingVolumeToRender = SceneView.boundingBoxRenderCommands.empty()
-		&& SceneView.lightBoundsRenderCommands.empty();
+	const bool bNoBoundingVolumeToRender = ShouldSkipBoundsPass(SceneView);
 
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 

@@ -154,7 +154,7 @@ struct MaterialData
 //----------------------------------------------------------
 // SHADER CONSTANT BUFFER INTERFACE
 //----------------------------------------------------------
-#define RENDER_INSTANCED_SCENE_MESHES    1
+#define RENDER_INSTANCED_SCENE_MESHES    1  // 0 is broken, TODO: fix
 #define MAX_INSTANCE_COUNT__SCENE_MESHES 64
 
 #ifndef INSTANCE_COUNT
@@ -204,7 +204,15 @@ struct PerObjectData
 	MaterialData materialData;
 	float2 pad2;
 
-	int4 ObjIDMeshIDMaterialID;
+	int meshID;
+	int materialID;
+	int2 pad3;
+
+#if INSTANCED_DRAW
+	int4 ObjID[INSTANCE_COUNT]; // int[] causes alignment issues as each element is aligned to 16B on the GPU. use int4.x
+#else
+	int ObjID;
+#endif
 };
 
 

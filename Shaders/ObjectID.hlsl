@@ -21,7 +21,7 @@
 
 #if INSTANCED_DRAW
 	#ifndef INSTANCE_COUNT
-	#define INSTANCE_COUNT 512
+	#define INSTANCE_COUNT 64
 	#endif
 #endif
 
@@ -38,6 +38,9 @@ struct PSInput
 {
 	float4 position : SV_POSITION;
 	float2 uv       : TEXCOORD0;
+#if INSTANCED_DRAW
+	uint instanceID : INSTANCEID;
+#endif
 };
 
 cbuffer CBPerObject : register(b2)
@@ -62,6 +65,9 @@ PSInput VSMain(VSInput VSIn)
 #endif
 	
 	result.uv = VSIn.uv;
+#if INSTANCED_DRAW
+	result.instanceID = VSIn.instanceID;
+#endif
     return result;
 }
 
@@ -74,6 +80,10 @@ int4 PSMain(PSInput In) : SV_TARGET
 	if (AlbedoAlpha.a < 0.01f)
 		discard;
 #endif
-	
-	return cbPerObject.ObjIDMeshIDMaterialID;
+#if INSTANCED_DRAW
+	int objID = cbPerObject.ObjID[In.instanceID].x;
+#else
+	int objID = cbPerObject.ObjID;
+#endif
+	return int4(objID, cbPerObject.meshID, cbPerObject.materialID, -111);
 }

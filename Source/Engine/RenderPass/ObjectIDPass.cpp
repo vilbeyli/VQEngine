@@ -133,7 +133,7 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	const RTV& rtv = mRenderer.GetRTV(RTVPassOutput);
 
 	D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
-	const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	const float clearColor[] = { 0, 0, 0, 0 };
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle();
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle();
 
@@ -294,18 +294,20 @@ std::vector<FPSOCreationTaskParameters> ObjectIDPass::CollectPSOCreationParamete
 int4 ObjectIDPass::ReadBackPixel(const int2& screenCoords) const
 {
 	auto pRsc = mRenderer.GetTextureResource(TEXPassOutputCPUReadback);
-	const int bytesPerPixel = 4 * 4; // 32bit/channel , RGBA
+	const int bytesPerChannel = 4; // 32bit/channel
+	const int numChannels = 4; // RGBA
+	const int bytesPerPixel = bytesPerChannel * numChannels;
 
-	unsigned char* pData = nullptr;
+	unsigned int* pData = nullptr;
 	D3D12_RANGE readRange = { 0, mOutputResolutionX * mOutputResolutionY * bytesPerPixel }; // Only request the read for the necessary range
 	HRESULT hr = pRsc->Map(0, &readRange, reinterpret_cast<void**>(&pData));
 	if (SUCCEEDED(hr))
 	{
-		const int pixelIndex = (screenCoords.y * mOutputResolutionX + screenCoords.x) * bytesPerPixel;
-		const int r = pData[pixelIndex + 0];
-		const int g = pData[pixelIndex + 4];
-		const int b = pData[pixelIndex + 8];
-		const int a = pData[pixelIndex + 12];
+		const int pixelIndex = (screenCoords.y * mOutputResolutionX + screenCoords.x) * bytesPerChannel;
+		const int r = pData[pixelIndex + 0]; 
+		const int g = pData[pixelIndex + 1];
+		const int b = pData[pixelIndex + 2];
+		const int a = pData[pixelIndex + 3];
 
 		pRsc->Unmap(0, nullptr);
 		//Log::Info("\t[%d, %d] | [%.2f, %.2f] = (%d, %d, %d, %d)", pixelX, pixelY, uv.x, uv.y, r, g, b, a);

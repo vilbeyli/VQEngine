@@ -51,9 +51,9 @@ struct FWireframeRenderCommand : public FMeshRenderCommandBase
 };
 struct FOutlineRenderCommand
 {
+	struct FConstantBuffer { DirectX::XMMATRIX matWorldViewProj; DirectX::XMMATRIX matNormalViewProj; DirectX::XMFLOAT4 color; float scale; };
 	MeshID meshID = INVALID_ID;
-	DirectX::XMMATRIX matWorldViewProj;
-	DirectX::XMFLOAT4 color;
+	FConstantBuffer cb;
 	float scale;
 };
 using FLightRenderCommand = FWireframeRenderCommand;
@@ -65,7 +65,6 @@ using FBoundingBoxRenderCommand = FWireframeRenderCommand;
 // ------------------------------------------------------------------------------------
 struct FInstancedMeshRenderCommandBase
 {
-	int objectID = INVALID_ID;
 	MeshID meshID = INVALID_ID;
 	std::vector<DirectX::XMMATRIX> matWorldViewProj;
 };
@@ -77,6 +76,7 @@ struct FInstancedMeshRenderCommand : public FInstancedMeshRenderCommandBase, pub
 {
 	std::vector<DirectX::XMMATRIX> matNormal;
 	std::vector<DirectX::XMMATRIX> matWorld;
+	std::vector<int> objectID;
 	MaterialID matID = INVALID_ID;
 };
 struct FInstancedWireframeRenderCommand : public FInstancedMeshRenderCommandBase

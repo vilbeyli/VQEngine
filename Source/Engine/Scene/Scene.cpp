@@ -106,7 +106,7 @@ MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 		return iMat;
 	}
 
-	static MaterialID LAST_USED_MATERIAL_ID = 0;
+	static MaterialID LAST_USED_MATERIAL_ID = 1;
 	MaterialID id = INVALID_ID;
 	// critical section
 	{
@@ -526,22 +526,24 @@ static void RecordOutlineRenderCommands(
 		const GameObject* pObj = pScene->GetGameObject(hObj);
 		if (!pObj)
 		{
-			Log::Warning("pObj NULL in RecordOutlineRenderCommands");
+			//Log::Warning("pObj NULL in RecordOutlineRenderCommands");
 			continue;
 		}
 
 		const Transform& tf = *pScene->GetGameObjectTransform(hObj);
 		const XMMATRIX matWorld = tf.matWorldTransformation();
+		const XMMATRIX matNormal = tf.NormalMatrix(matWorld);
 		const Model& model = pScene->GetModel(pObj->mModelID);
 		for (const auto& pair : model.mData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH))
 		{
 			MeshID meshID = pair.first;
 
 			FOutlineRenderCommand cmd = {};
-			cmd.color = SelectionColor;
-			cmd.matWorldViewProj = matWorld * matViewProj;
 			cmd.meshID = meshID;
-			cmd.scale = 1.0f;
+			cmd.cb.color = SelectionColor;
+			cmd.cb.matWorldViewProj = matWorld * matViewProj;
+			cmd.cb.matNormalViewProj = matNormal * matViewProj;
+			cmd.cb.scale = 1.0f;
 			cmds.push_back(cmd);
 		}
 	}
@@ -607,10 +609,10 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 	RecordOutlineRenderCommands(SceneView.outlineRenderCommands, mSelectedObjects, this, MatViewProj);
 
 	const auto lights = this->GetLights(); // todo: this is unnecessary copying, don't do this
-	if (UIState.SelectedLightIndex < lights.size() && UIState.SelectedLightIndex >= 0)
+	if (UIState.SelectedLightIndex >= 0 && UIState.SelectedLightIndex < lights.size())
 	{
 		const Light& l = *lights[UIState.SelectedLightIndex];
-		if (l.bEnabled)
+		if (l.bEnabled && UIState.bDrawLightVolume)
 		{
 			RecordRenderLightBoundsCommand(l, SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
 		}
@@ -729,8 +731,11 @@ void Scene::PickObject(const ObjectIDPass& ObjectIDRenderPass, int MouseClickPos
 		//float uvY = io.MousePos.y / mpWinMain->GetHeight();
 		int4 px = ObjectIDRenderPass.ReadBackPixel(MouseClickPositionX, MouseClickPositionY);
 
-		size_t hObj = px.x;
-		Log::Info("Picked(%d, %d): Obj[%d] Mesh[%d] Material[%d]", MouseClickPositionX, MouseClickPositionY,  px.x, px.y, px.z);
+		// objectID starts from 0, shader writes with an offset of 1.
+		// we remove the offset here so that we can clear RT to 0 and 
+		// not select object when clicked on area with no rendered pixels (no obj id).
+		size_t hObj = px.x - 1;
+		Log::Info("Picked(%d, %d): Obj[%d] Mesh[%d] Material[%d]", MouseClickPositionX, MouseClickPositionY, hObj, px.y, px.z);
 
 		auto it = std::find(this->mSelectedObjects.begin(), this->mSelectedObjects.end(), hObj);
 		const bool bFound = it != this->mSelectedObjects.end();
@@ -741,12 +746,19 @@ void Scene::PickObject(const ObjectIDPass& ObjectIDRenderPass, int MouseClickPos
 			{
 				this->mSelectedObjects.erase(it);
 			}
+			else
+			{
+				if (hObj != INVALID_ID)
+					this->mSelectedObjects.push_back(hObj);
+			}
 		}
 		else
 		{
 			if (!bFound)
 			{
-				this->mSelectedObjects.push_back(hObj);
+				this->mSelectedObjects.clear();
+				if(hObj != INVALID_ID)
+					this->mSelectedObjects.push_back(hObj);
 			}
 		}
 	}
@@ -911,6 +923,8 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 #else
 		const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NumFrustums, NumThreads);
 		{
+			mFrustumCullWorkerContext.vBoundingBoxList = BVH.mMeshBoundingBoxes;
+
 			size_t currRange = 0;
 			{
 				SCOPED_CPU_MARKER("DispatchWorkers");
@@ -1254,6 +1268,7 @@ void Scene::BatchInstanceData_SceneMeshes(
 
 			MaterialID matID = MeshBB_MatID[iBB];
 			{
+				SCOPED_CPU_MARKER("WriteInstanceData");
 				// record instance data
 				FSceneView::FMeshInstanceData& d = MaterialMeshInstanceDataLookup[matID][meshID];
 
@@ -1269,7 +1284,7 @@ void Scene::BatchInstanceData_SceneMeshes(
 					matWorld, matWVP,
 					matWorldHistory * matViewProjHistory, 
 					matNormal,
-					(int)mBoundingBoxHierarchy.mMeshGameObjectHandles[iBB]
+					(int)objID
 				};
 			}
 		}
@@ -1338,7 +1353,7 @@ void Scene::BatchInstanceData_SceneMeshes(
 					cmd.matWorldViewProj.resize(ThisBatchSize);
 					cmd.matWorldViewProjPrev.resize(ThisBatchSize);
 					cmd.matNormal.resize(ThisBatchSize);
-					cmd.objectID = MeshInstanceData.InstanceData[iInst].objID;
+					cmd.objectID.resize(ThisBatchSize);
 
 					int iBatch = 0;
 					while (iBatch < MAX_INSTANCE_COUNT__SCENE_MESHES && iInst < MeshInstanceData.NumValidData)
@@ -1347,6 +1362,7 @@ void Scene::BatchInstanceData_SceneMeshes(
 						cmd.matWorldViewProj    [iBatch] = MeshInstanceData.InstanceData[iInst].mWorldViewProj;
 						cmd.matWorldViewProjPrev[iBatch] = MeshInstanceData.InstanceData[iInst].mWorldViewProjPrev;
 						cmd.matNormal           [iBatch] = MeshInstanceData.InstanceData[iInst].mNormal;
+						cmd.objectID            [iBatch] = MeshInstanceData.InstanceData[iInst].objID +1;
 						++iBatch;
 						++iInst;
 					}

@@ -634,7 +634,6 @@ private:
 	struct FFrameConstantBuffer { DirectX::XMMATRIX matModelViewProj; };
 	struct FFrameConstantBuffer2 { DirectX::XMMATRIX matModelViewProj; int iTextureConfig; int iTextureOutput; };
 	struct FFrameConstantBufferUnlit { DirectX::XMMATRIX matModelViewProj; DirectX::XMFLOAT4 color; };
-	struct FFrameConstantBufferOutline { DirectX::XMMATRIX matModelViewProj; DirectX::XMFLOAT4 color; float scale; };
 
 	struct FFrameConstantBufferUnlitInstanced { DirectX::XMMATRIX matModelViewProj[MAX_INSTANCE_COUNT__UNLIT_SHADER]; DirectX::XMFLOAT4 color; };
 
