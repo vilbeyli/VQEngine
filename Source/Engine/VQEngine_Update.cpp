@@ -160,6 +160,8 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 		SCOPED_CPU_MARKER("UpdateThread_Loading()");
 		if (mbLoadingLevel || mbLoadingEnvironmentMap)
 		{
+			SetEffectiveFrameRateLimit(16);
+
 			// animate loading screen
 
 
@@ -293,6 +295,7 @@ bool VQEngine::IsHDRSettingOn() const
 
 void VQEngine::SetEffectiveFrameRateLimit(int FrameRateLimitEnumVal)
 {
+	SCOPED_CPU_MARKER("SetEffectiveFrameRateLimit");
 	if (FrameRateLimitEnumVal == -1)
 	{
 		// Get monitor refresh rate (primary monitor?)
