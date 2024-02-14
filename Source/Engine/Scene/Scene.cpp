@@ -1268,7 +1268,6 @@ void Scene::BatchInstanceData_SceneMeshes(
 
 			MaterialID matID = MeshBB_MatID[iBB];
 			{
-				SCOPED_CPU_MARKER("WriteInstanceData");
 				// record instance data
 				FSceneView::FMeshInstanceData& d = MaterialMeshInstanceDataLookup[matID][meshID];
 

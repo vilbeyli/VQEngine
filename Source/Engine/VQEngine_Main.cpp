@@ -18,6 +18,7 @@
 
 #include "VQEngine.h"
 #include "Libs/VQUtils/Source/utils.h"
+#include "GPUMarker.h"
 
 #include <cassert>
 
@@ -32,7 +33,8 @@ constexpr char* VQENGINE_VERSION = "v0.10.0";
 #define REPORT_SYSTEM_INFO 1
 #if REPORT_SYSTEM_INFO 
 void ReportSystemInfo(const VQSystemInfo::FSystemInfo& i, bool bDetailed = false)
-{	
+{
+	SCOPED_CPU_MARKER("ReportSystemInfo");
 	const std::string sysInfo = VQSystemInfo::PrintSystemInfo(i, bDetailed);
 	Log::Info("\n%s", sysInfo.c_str());
 }
@@ -71,6 +73,7 @@ void VQEngine::MainThread_Tick()
 
 bool VQEngine::Initialize(const FStartupParameters& Params)
 {
+	SCOPED_CPU_MARKER("VQEngine.Initialize");
 	Timer  t;  t.Reset();  t.Start();
 	Timer t2; t2.Reset(); t2.Start();
 
@@ -96,7 +99,6 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	mRenderer.Initialize(mSettings.gfx); // Device, Queues, Heaps, WorkerThreads
 	// --------------------------------------------------------
 	InitializeEngineThreads();
-	SetEffectiveFrameRateLimit(mSettings.gfx.MaxFrameRate);
 	float f4 = t.Tick();
 
 	// offload system info acquisition to a thread as it takes a few seconds on Debug build
@@ -148,6 +150,7 @@ void VQEngine::Destroy()
 
 void VQEngine::InitializeInput()
 {
+	SCOPED_CPU_MARKER("InitializeInput");
 #if ENABLE_RAW_INPUT
 	Input::InitRawInputDevices(mpWinMain->GetHWND());
 #endif
@@ -159,6 +162,7 @@ void VQEngine::InitializeInput()
 
 void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 {
+	SCOPED_CPU_MARKER("InitializeEngineSettings");
 	const FEngineSettings& p = Params.EngineSettings;
 
 	// Defaults
@@ -252,6 +256,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 
 void VQEngine::InitializeWindows(const FStartupParameters& Params)
 {
+	SCOPED_CPU_MARKER("InitializeWindows");
 	mbMainWindowHDRTransitionInProgress.store(false);
 
 	auto fnInitializeWindow = [&](const FWindowSettings& settings, HINSTANCE hInstance, std::unique_ptr<Window>& pWin, const std::string& WindowName)
@@ -288,11 +293,13 @@ void VQEngine::InitializeWindows(const FStartupParameters& Params)
 
 void VQEngine::InitializeHDRProfiles()
 {
+	SCOPED_CPU_MARKER("ParseHDRProfilesFile");
 	mDisplayHDRProfiles = VQEngine::ParseHDRProfilesFile();
 }
 
 void VQEngine::InitializeEnvironmentMaps()
 {
+	SCOPED_CPU_MARKER("InitializeEnvironmentMaps");
 	mbEnvironmentMapPreFilter.store(false);
 	std::vector<FEnvironmentMapDescriptor> descs = VQEngine::ParseEnvironmentMapsFile();
 	for (const FEnvironmentMapDescriptor& desc : descs)
@@ -304,6 +311,7 @@ void VQEngine::InitializeEnvironmentMaps()
 
 void VQEngine::InitializeScenes()
 {
+	SCOPED_CPU_MARKER("InitializeScenes");
 	std::vector<std::string>& mSceneNames = mResourceNames.mSceneNames;
 
 	// Read Scene Index Mappings from file and initialize @mSceneNames
@@ -343,6 +351,7 @@ void VQEngine::InitializeScenes()
 
 void VQEngine::InitializeEngineThreads()
 {
+	SCOPED_CPU_MARKER("InitializeEngineThreads");
 	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
 	const size_t HWThreads  = ThreadPool::sHardwareThreadCount;
 	const size_t HWCores    = HWThreads / 2;
@@ -376,6 +385,7 @@ void VQEngine::InitializeEngineThreads()
 
 void VQEngine::ExitThreads()
 {
+	SCOPED_CPU_MARKER("ExitThreads");
 	mWorkers_ModelLoading.Destroy();
 	mWorkers_TextureLoading.Destroy();
 	mWorkers_MeshLoading.Destroy();

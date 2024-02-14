@@ -35,6 +35,7 @@
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 void VQEngine::SimulationThread_Main()
 {
+	//SCOPED_CPU_MARKER("SimulationThread_Main");
 	Log::Info("SimulationThread Created.");
 
 	SimulationThread_Initialize();
@@ -66,6 +67,7 @@ void VQEngine::SimulationThread_Main()
 #if !VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 void VQEngine::SimulationThread_Initialize()
 {
+	SCOPED_CPU_MARKER("SimulationThread_Initialize");
 	mNumSimulationTicks = 0;
 
 	RenderThread_Inititalize();

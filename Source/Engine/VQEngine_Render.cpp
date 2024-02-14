@@ -159,6 +159,7 @@ static bool CheckInitialSwapchainResizeRequired(std::unordered_map<HWND, bool>& 
 }
 void VQEngine::RenderThread_Inititalize()
 {
+	SCOPED_CPU_MARKER("RenderThread_Inititalize");
 	mRenderPasses = // manual render pass registration for now (early in dev)
 	{
 		&mRenderPass_AO,
