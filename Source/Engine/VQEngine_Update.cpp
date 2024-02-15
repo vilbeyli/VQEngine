@@ -225,8 +225,8 @@ void VQEngine::UpdateThread_PostUpdate()
 	if (!io.WantCaptureMouse)
 	{
 		mpScene->PickObject(mRenderPass_ObjectID, 
-			io.MousePos.x, 
-			io.MousePos.y
+			static_cast<int>(io.MousePos.x), 
+			static_cast<int>(io.MousePos.y)
 		);
 	}
 

@@ -297,9 +297,10 @@ int4 ObjectIDPass::ReadBackPixel(const int2& screenCoords) const
 	const int bytesPerChannel = 4; // 32bit/channel
 	const int numChannels = 4; // RGBA
 	const int bytesPerPixel = bytesPerChannel * numChannels;
+	const size_t numPixels = mOutputResolutionX * mOutputResolutionY;
 
 	unsigned int* pData = nullptr;
-	D3D12_RANGE readRange = { 0, mOutputResolutionX * mOutputResolutionY * bytesPerPixel }; // Only request the read for the necessary range
+	D3D12_RANGE readRange = { 0, numPixels * bytesPerPixel }; // Only request the read for the necessary range
 	HRESULT hr = pRsc->Map(0, &readRange, reinterpret_cast<void**>(&pData));
 	if (SUCCEEDED(hr))
 	{

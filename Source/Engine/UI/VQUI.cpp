@@ -106,7 +106,7 @@ static const char* szReflectionsLabels[]
 	, ""
 };
 
-static bool ImGui_LeftAlignedCombo(const char* szLabel, int* pLabelIndex, const char** pszLabels, size_t numLabels)
+static bool ImGui_LeftAlignedCombo(const char* szLabel, int* pLabelIndex, const char** pszLabels, int numLabels)
 {
 	float fullWidth = ImGui::GetContentRegionAvail().x; // Get available width
 	float halfWidth = fullWidth * 0.5f; // Calculate half width
@@ -118,7 +118,7 @@ static bool ImGui_LeftAlignedCombo(const char* szLabel, int* pLabelIndex, const 
 	ImGui::SetNextItemWidth(comboWidth);
 	return ImGui::Combo("##hidden_label", pLabelIndex, pszLabels, numLabels);
 }
-static bool ImGui_RightAlignedCombo(const char* szLabel, int* pLabelIndex, const char** pszLabels, size_t numLabels)
+static bool ImGui_RightAlignedCombo(const char* szLabel, int* pLabelIndex, const char** pszLabels, int numLabels)
 {
 	return ImGui::Combo(szLabel, pLabelIndex, pszLabels, numLabels);
 }
@@ -196,20 +196,6 @@ static void InitializeEngineUIState(FUIState& s)
 	
 	s.mpMagnifierState = std::make_unique<FMagnifierUIState>();
 	s.mpMagnifierState->pMagnifierParams = std::make_unique<FMagnifierParameters>();
-}
-FUIState::~FUIState()
-{
-	if (mpMagnifierState != nullptr)
-	{
-		if (mpMagnifierState->pMagnifierParams)
-		{
-			//delete mpMagnifierState->pMagnifierParams;
-			mpMagnifierState->pMagnifierParams = nullptr;
-		}
-
-		//delete mpMagnifierState;
-		mpMagnifierState = nullptr;
-	}
 }
 
 void FUIState::GetMouseScreenPosition(int& X, int& Y) const
@@ -1312,10 +1298,10 @@ void VQEngine::DrawMaterialEditor()
 	// draw selector
 	ImGui::TableSetColumnIndex(1);
 	ImGui::SetNextItemWidth(-1); // Make the controls take the full width of the column
-	ImGui::ListBox("##", &mUIState.SelectedMaterialIndex, szMaterialNames.data(), szMaterialNames.size(), 18);
+	ImGui::ListBox("##", &mUIState.SelectedMaterialIndex, szMaterialNames.data(), (int)szMaterialNames.size(), 18);
 	if (ImGui::Button("Unselect##", ImVec2(-1, 0)))
 	{
-		mUIState.SelectedMaterialIndex = szMaterialNames.size() - 1;
+		mUIState.SelectedMaterialIndex = (int)(szMaterialNames.size() - 1);
 	}
 
 
@@ -1481,7 +1467,7 @@ void VQEngine::DrawLightEditor()
 	if (mUIState.SelectedLightIndex >= LightNames.size())
 	{
 		Log::Warning("SelectedLightIndex > LightNames.size() : capping SelectedLightIndex ");
-		mUIState.SelectedLightIndex = LightNames.size() - 1;
+		mUIState.SelectedLightIndex = (int)(LightNames.size() - 1);
 	}
 	if (mUIState.SelectedLightIndex < 0)
 	{
@@ -1515,10 +1501,10 @@ void VQEngine::DrawLightEditor()
 	// draw selector
 	ImGui::TableSetColumnIndex(1);
 	ImGui::SetNextItemWidth(-1); // Make the controls take the full width of the column
-	ImGui::ListBox("##", &mUIState.SelectedLightIndex, szLightNames.data(), szLightNames.size(), 18);
+	ImGui::ListBox("##", &mUIState.SelectedLightIndex, szLightNames.data(), (int)szLightNames.size(), 18);
 	if (ImGui::Button("Unselect##", ImVec2(-1, 0)))
 	{
-		mUIState.SelectedLightIndex = szLightNames.size() - 1;
+		mUIState.SelectedLightIndex = (int)(szLightNames.size() - 1);
 	}
 
 

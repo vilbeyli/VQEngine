@@ -358,7 +358,7 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, ID3D12Command
 		memcpy(pPerObj->matNormal           , meshRenderCmd.matNormal.data()           , sizeof(XMMATRIX) * NumInstances);
 		memcpy(pPerObj->matWorld            , meshRenderCmd.matWorld.data()            , sizeof(XMMATRIX) * NumInstances);
 		//memcpy(pPerObj->ObjID               , meshRenderCmd.objectID.data()            , sizeof(int) * NumInstances); // not 16B aligned
-		for (int i = 0; i < NumInstances; ++i)
+		for (uint i = 0; i < NumInstances; ++i)
 		{
 			pPerObj->ObjID[i].x = meshRenderCmd.objectID[i];
 		}

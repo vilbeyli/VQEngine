@@ -35,24 +35,22 @@ struct FMagnifierUIState
 
 struct FUIState
 {
-	bool bWindowVisible_KeyMappings;
-	bool bWindowVisible_Profiler;
-	bool bWindowVisible_SceneControls;
-	bool bWindowVisible_GraphicsSettingsPanel;
-	bool bHideAllWindows; // masks all the windows above
+	bool bWindowVisible_KeyMappings = false;
+	bool bWindowVisible_Profiler = false;
+	bool bWindowVisible_SceneControls = false;
+	bool bWindowVisible_GraphicsSettingsPanel = false;
+	bool bHideAllWindows = false; // masks all the windows above
 
-	bool bWindowVisible_MaterialEditor;
+	bool bWindowVisible_MaterialEditor = false;
 	int  SelectedMaterialIndex = -1;
 
-	bool bWindowVisible_LightEditor;
+	bool bWindowVisible_LightEditor = false;
 	int SelectedLightIndex = -1;
 	bool bDrawLightVolume = false;
 
-	bool bUIOnSeparateWindow;
-	bool bProfiler_ShowEngineStats;
+	bool bUIOnSeparateWindow = false;
+	bool bProfiler_ShowEngineStats = true;
 	std::unique_ptr<FMagnifierUIState> mpMagnifierState = nullptr;
 	
 	void GetMouseScreenPosition(int& X, int& Y) const;
-
-	~FUIState();
 };
