@@ -26,7 +26,7 @@
 #include <vector>
 #include <array>
 
-struct IRenderPassResourceCollection {};
+struct IRenderPassResourceCollection {}; // TODO: rename to IRenderPassResources
 struct IRenderPassDrawParameters {};
 struct ID3D12RootSignature;
 class VQRenderer;

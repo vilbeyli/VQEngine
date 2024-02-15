@@ -561,6 +561,10 @@ FSetHDRMetaDataParams VQEngine::GatherHDRMetaDataParameters(HWND hwnd)
 
 	params.MaxOutputNits = pProfile ? pProfile->MaxBrightness : desc.MaxLuminance;
 	params.MinOutputNits = pProfile ? pProfile->MinBrightness : desc.MinLuminance;
+	params.ColorSpace = desc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 ? EColorSpace::REC_709
+		: desc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 
+			? EColorSpace::REC_2020 
+			: EColorSpace::REC_709;
 
 	const bool bHDREnvironmentMap = mResources_MainWnd.EnvironmentMap.Tex_HDREnvironment != INVALID_ID;
 	if (bHDREnvironmentMap)

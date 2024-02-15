@@ -670,6 +670,10 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 	MathUtil::Clamp(SceneRenderParams.fAmbientLightingFactor, 0.0f, MaxAmbientLighting);
 	ImGui::SliderFloat("Ambient Lighting Factor", &SceneRenderParams.fAmbientLightingFactor, 0.0f, MaxAmbientLighting, "%.3f");
 
+	ImGui::ColorEdit4("Outline Color", reinterpret_cast<float*>(&SceneRenderParams.OutlineColor), ImGuiColorEditFlags_DefaultOptions_);
+
+	//ImGui::ColorEdit4();
+
 	ImGui::End();
 }
 void VQEngine::DrawKeyMappingsWindow()
@@ -1420,7 +1424,8 @@ void VQEngine::DrawMaterialEditor()
 						textureMIPs
 					);
 				}
-				//ImGui::Text("%s\nPath: %s", textureName.c_str(), texturePath.c_str());
+				ImGui::SameLine();
+				ImGui::Text("%s", textureName.c_str());
 
 			}
 
@@ -1510,7 +1515,7 @@ void VQEngine::DrawLightEditor()
 	// draw selector
 	ImGui::TableSetColumnIndex(1);
 	ImGui::SetNextItemWidth(-1); // Make the controls take the full width of the column
-	ImGui::ListBox("##", &mUIState.SelectedLightIndex, szLightNames.data(), szLightNames.size(), szLightNames.size());
+	ImGui::ListBox("##", &mUIState.SelectedLightIndex, szLightNames.data(), szLightNames.size(), 18);
 	if (ImGui::Button("Unselect##", ImVec2(-1, 0)))
 	{
 		mUIState.SelectedLightIndex = szLightNames.size() - 1;
@@ -1528,6 +1533,10 @@ void VQEngine::DrawLightEditor()
 		Light* l = Lights[mUIState.SelectedLightIndex];
 
 		ImGui::Checkbox("Enabled", &l->bEnabled);
+		ImGui::SameLine();
+		ImGui::Checkbox("Show Volume", &mUIState.bDrawLightVolume);
+		//ImGui::SameLine();
+		//ImGui::Checkbox("Show Outline", &l->bEnabled);
 		ImGuiSpacing(2);
 
 		ImGui::ColorEdit3("Color", reinterpret_cast<float*>(&l->Color));

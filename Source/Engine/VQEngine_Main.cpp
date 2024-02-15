@@ -50,6 +50,7 @@ VQEngine::VQEngine()
 	, mRenderPass_DepthResolve(mRenderer)
 	, mRenderPass_Magnifier(mRenderer, true) // true: outputs to swapchain
 	, mRenderPass_ObjectID(mRenderer)
+	, mRenderPass_Outline(mRenderer)
 {}
 
 void VQEngine::MainThread_Tick()

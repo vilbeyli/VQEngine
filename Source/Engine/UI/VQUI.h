@@ -46,6 +46,7 @@ struct FUIState
 
 	bool bWindowVisible_LightEditor;
 	int SelectedLightIndex = -1;
+	bool bDrawLightVolume = false;
 
 	bool bUIOnSeparateWindow;
 	bool bProfiler_ShowEngineStats;

@@ -811,7 +811,7 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 	{
 		RenderLightBounds(pCmd, pCBufferHeap, SceneView, bMSAA);
 		RenderBoundingBoxes(pCmd, pCBufferHeap, SceneView, bMSAA);
-		RenderOutline(pCmd, pCBufferHeap, SceneView, bMSAA);
+		RenderOutline(pCmd, pCBufferHeap, SceneView, bMSAA, rtvHandles);
 	}
 	
 	// Draw Environment Map ---------------------------------------
@@ -916,32 +916,18 @@ void VQEngine::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 	}
 }
 
-void VQEngine::RenderOutline(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA)
+void VQEngine::RenderOutline(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA, const std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& rtvHandles)
 {
-	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::OUTLINE_PSO_MSAA_4 : EBuiltinPSOs::OUTLINE_PSO));
-	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
-
-	for (const FOutlineRenderCommand& cmd : SceneView.outlineRenderCommands)
-	{
-		FOutlineRenderCommand::FConstantBuffer* pCBuffer = {};
-		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
-		memcpy(pCBuffer, &cmd.cb, sizeof(cmd.cb));
-
-		const Mesh& mesh = mpScene->mMeshes.at(cmd.meshID);
-		const auto VBIBIDs = mesh.GetIABufferIDs();
-		const uint32 NumIndices = mesh.GetNumIndices();
-		const BufferID& VB_ID = VBIBIDs.first;
-		const BufferID& IB_ID = VBIBIDs.second;
-		const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
-		const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
-
-		pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
-		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		pCmd->IASetVertexBuffers(0, 1, &vb);
-		pCmd->IASetIndexBuffer(&ib);
-		pCmd->DrawIndexedInstanced(NumIndices, 1, 0, 0, 0);
-	}
+	SCOPED_GPU_MARKER(pCmd, "RenderOutlinePass");
+	OutlinePass::FDrawParameters params;
+	params.pCmd = pCmd;
+	params.pCBufferHeap = pCBufferHeap;
+	params.pSceneView = &SceneView;
+	params.pMeshes = &mpScene->mMeshes;
+	params.pMaterials = &mpScene->mMaterials;
+	params.bMSAA = bMSAA;
+	params.pRTVHandles = &rtvHandles;
+	mRenderPass_Outline.RecordCommands(&params);
 }
 
 void VQEngine::RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA)
@@ -1284,7 +1270,7 @@ void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dynam
 
 	RenderBoundingBoxes(pCmd, pCBufferHeap, SceneView, bMSAA);
 	RenderLightBounds(pCmd, pCBufferHeap, SceneView, bMSAA);
-	RenderOutline(pCmd, pCBufferHeap, SceneView, bMSAA);
+	RenderOutline(pCmd, pCBufferHeap, SceneView, bMSAA, { rtvHandle });
 
 	// resolve MSAA RT 
 	if (bMSAA)

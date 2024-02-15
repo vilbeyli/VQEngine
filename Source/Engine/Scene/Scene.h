@@ -81,6 +81,7 @@ struct FSceneRenderParameters
 	float fAmbientLightingFactor = 0.055f;
 	bool bScreenSpaceAO = true;
 	FFFX_SSSR_UIParameters FFX_SSSRParameters = {};
+	DirectX::XMFLOAT4 OutlineColor = DirectX::XMFLOAT4(1.0f, 0.647f, 0.1f, 1.0f);
 };
 //--- Pass Parameters ---
 

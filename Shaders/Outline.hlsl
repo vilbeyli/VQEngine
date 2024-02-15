@@ -34,26 +34,33 @@ struct PSInput
 
 cbuffer OutlineData : register(b0)
 {
-	float4x4 matWorldViewProj;
-	float4x4 matNormalViewProj;
+	float4x4 matWorldView;
+	float4x4 matNormalView;
+	float4x4 matProj;
 	float4 Color;
 	float Scale;
 }
 
-
 PSInput VSMain(VSInput VSIn)
 {
 	PSInput result;
-	
-	float distance = 0.1; // *Scale;
-	float3 offset = VSIn.normal * distance;
-	
-	result.position = mul(matWorldViewProj, float4(VSIn.position, 1));
-	float3 clipOffset = normalize(mul(matNormalViewProj, float4(VSIn.normal, 0)));
-	result.position = mul(matWorldViewProj, float4(VSIn.position*1.01, 1));
-	//result.position.xyz += offset;
-	
+	result.position = mul(mul(matProj, matWorldView), float4(VSIn.position, 1));
 	result.color = Color;
+	return result;
+}
+
+PSInput VSMainOutline(VSInput VSIn)
+{
+	PSInput result;
+	
+	float distance = 0.5; // *Scale;
+	
+	float3 viewPosition = mul(matWorldView, float4(VSIn.position, 1));
+	float3 viewNormal   = normalize(mul(matNormalView, float4(VSIn.normal, 0)));
+	float3 viewPositionWithOffset = viewPosition + viewNormal * distance;
+	
+	result.position = mul(matProj, float4(viewPositionWithOffset, 1));
+	result.color = pow(Color, 2.2); // nonHDR
 	return result;
 }
 

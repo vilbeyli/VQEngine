@@ -82,7 +82,7 @@ SamplerState LinearSampler   : register(s0);
 float PSMain(PSInput In) : SV_DEPTH
 {
 #if ENABLE_ALPHA_MASK
-	float alpha = texDiffuseAlpha.SampleLevel(LinearSampler, In.uv, 0).a;
+	float alpha = texDiffuseAlpha.SampleLevel(LinearSampler, In.uv	, 0).a;
 	if(alpha < 0.01f)
 		discard;
 #endif

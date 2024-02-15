@@ -104,6 +104,7 @@ set (RenderPassFiles
     "Source/Engine/RenderPass/ScreenSpaceReflections.h"
     "Source/Engine/RenderPass/MagnifierPass.h"
     "Source/Engine/RenderPass/ObjectIDPass.h"
+    "Source/Engine/RenderPass/OutlinePass.h"
     
     "Source/Engine/RenderPass/RenderPass.cpp"
     "Source/Engine/RenderPass/AmbientOcclusion.cpp"
@@ -113,6 +114,7 @@ set (RenderPassFiles
     "Source/Engine/RenderPass/ScreenSpaceReflections.cpp"
     "Source/Engine/RenderPass/MagnifierPass.cpp"
     "Source/Engine/RenderPass/ObjectIDPass.cpp"
+    "Source/Engine/RenderPass/OutlinePass.cpp"
 )
 
 set (CoreFiles 

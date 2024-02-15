@@ -168,7 +168,8 @@ void VQEngine::RenderThread_Inititalize()
 		&mRenderPass_ZPrePass,
 		&mRenderPass_DepthResolve,
 		&mRenderPass_Magnifier,
-		&mRenderPass_ObjectID
+		&mRenderPass_ObjectID,
+		&mRenderPass_Outline
 	};
 
 	const bool bExclusiveFullscreen_MainWnd = CheckInitialSwapchainResizeRequired(mInitialSwapchainResizeRequiredWindowLookup, mSettings.WndMain, mpWinMain->GetHWND());
@@ -672,9 +673,16 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			mRenderPass_Magnifier.OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY, nullptr);
 		}
 
+		// ObjectID Pass
 		{
 			mRenderPass_ObjectID.OnCreateWindowSizeDependentResources(Width, Height, nullptr);
 		}
+
+		// Outline Pass
+		{
+			mRenderPass_Outline.OnCreateWindowSizeDependentResources(Width, Height, nullptr);
+		}
+
 	} // main window resources
 
 

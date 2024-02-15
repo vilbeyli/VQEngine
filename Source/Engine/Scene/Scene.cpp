@@ -515,11 +515,11 @@ static void RecordOutlineRenderCommands(
 	std::vector<FOutlineRenderCommand>& cmds,
 	const std::vector<size_t>& objHandles,
 	const Scene* pScene,
-	const XMMATRIX& matViewProj
+	const XMMATRIX& matView,
+	const XMMATRIX& matProj,
+	const XMFLOAT4& SelectionColor
 )
 {
-	const float4 SelectionColor = float4(1.0f, 0.647f, 0.1f, 1.0f);
-
 	cmds.clear();
 	for (size_t hObj : objHandles)
 	{
@@ -541,8 +541,9 @@ static void RecordOutlineRenderCommands(
 			FOutlineRenderCommand cmd = {};
 			cmd.meshID = meshID;
 			cmd.cb.color = SelectionColor;
-			cmd.cb.matWorldViewProj = matWorld * matViewProj;
-			cmd.cb.matNormalViewProj = matNormal * matViewProj;
+			cmd.cb.matWorldView = matWorld * matView;
+			cmd.cb.matNormalView = matNormal * matView;
+			cmd.cb.matProj = matProj;
 			cmd.cb.scale = 1.0f;
 			cmds.push_back(cmd);
 		}
@@ -606,7 +607,7 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 	BatchInstanceData(SceneView, UpdateWorkerThreadPool);
 	
 	RecordRenderLightMeshCommands(SceneView);
-	RecordOutlineRenderCommands(SceneView.outlineRenderCommands, mSelectedObjects, this, MatViewProj);
+	RecordOutlineRenderCommands(SceneView.outlineRenderCommands, mSelectedObjects, this, MatView, MatProj, SceneView.sceneParameters.OutlineColor);
 
 	const auto lights = this->GetLights(); // todo: this is unnecessary copying, don't do this
 	if (UIState.SelectedLightIndex >= 0 && UIState.SelectedLightIndex < lights.size())
@@ -1711,15 +1712,15 @@ void Scene::RecordRenderLightMeshCommands(FSceneView& SceneView) const
 	SCOPED_CPU_MARKER("Scene::RecordRenderLightMeshCommands()");
 	if (SceneView.sceneParameters.bDrawLightMeshes)
 	{
-		::RecordRenderLightMeshCommands(mLightsStatic    , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
-		::RecordRenderLightMeshCommands(mLightsDynamic   , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
-		::RecordRenderLightMeshCommands(mLightsStationary, SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
+		::RecordRenderLightMeshCommands(mLightsStatic    , SceneView.lightRenderCommands, SceneView.cameraPosition);
+		::RecordRenderLightMeshCommands(mLightsDynamic   , SceneView.lightRenderCommands, SceneView.cameraPosition);
+		::RecordRenderLightMeshCommands(mLightsStationary, SceneView.lightRenderCommands, SceneView.cameraPosition);
 	}
 	if (SceneView.sceneParameters.bDrawLightBounds)
 	{
-		::RecordRenderLightBoundsCommands(mLightsStatic    , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
-		::RecordRenderLightBoundsCommands(mLightsDynamic   , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
-		::RecordRenderLightBoundsCommands(mLightsStationary, SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
+		::RecordRenderLightBoundsCommands(mLightsStatic    , SceneView.lightRenderCommands, SceneView.cameraPosition);
+		::RecordRenderLightBoundsCommands(mLightsDynamic   , SceneView.lightRenderCommands, SceneView.cameraPosition);
+		::RecordRenderLightBoundsCommands(mLightsStationary, SceneView.lightRenderCommands, SceneView.cameraPosition);
 	}
 }
 
