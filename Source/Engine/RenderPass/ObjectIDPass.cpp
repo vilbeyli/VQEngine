@@ -46,6 +46,7 @@ void ObjectIDPass::Destroy()
 
 void ObjectIDPass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned Height, const IRenderPassResourceCollection* pRscParameters)
 {
+	WaitForCopyComplete();
 	mOutputResolutionX = Width;
 	mOutputResolutionY = Height;
 
@@ -81,7 +82,10 @@ void ObjectIDPass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned
 		desc.ResourceState = D3D12_RESOURCE_STATE_COMMON;
 		TEXPassOutput = mRenderer.CreateTexture(desc);
 		mRenderer.InitializeRTV(RTVPassOutput, 0u, TEXPassOutput);
-		//mRenderer.InitializeSRV(SRVPassOutput, 0u, TEXPassOutput);
+
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint;
+		UINT64 byteAlignedSize = 0;
+		mRenderer.GetDevicePtr()->GetCopyableFootprints(&desc.d3d12Desc, 0, 1, 0, &footprint, nullptr, nullptr, &byteAlignedSize);
 
 		desc.TexName = "ObjectID_CPU_READBACK";
 		desc.bCPUReadback = true;
@@ -89,9 +93,9 @@ void ObjectIDPass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned
 		desc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 		desc.d3d12Desc.Format = DXGI_FORMAT_UNKNOWN;
 		desc.d3d12Desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-		desc.d3d12Desc.Width = mOutputResolutionX * mOutputResolutionY * 16; // 4B/p = 16B/rgba
 		desc.d3d12Desc.Height = 1;
 		desc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+		desc.d3d12Desc.Width = byteAlignedSize;
 		TEXPassOutputCPUReadback = mRenderer.CreateTexture(desc);
 	}
 }
@@ -128,7 +132,6 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	auto pRscRT = mRenderer.GetTextureResource(TEXPassOutput);
 	auto pRscCPU = mRenderer.GetTextureResource(TEXPassOutputCPUReadback);
 	
-	//mRenderer
 	const DSV& dsv = mRenderer.GetDSV(DSVPassOutput);
 	const RTV& rtv = mRenderer.GetRTV(RTVPassOutput);
 
