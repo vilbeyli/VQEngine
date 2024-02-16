@@ -370,6 +370,8 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 				case OCCLUSION_ROUGHNESS_METALNESS:
 					OcclRoughMtlMap_ComponentMapping; // leave as is
 					mat.TexOcclusionRoughnessMetalnessMap = result.texLoadResult.get();
+					mat.metalness = 1.0f;
+					mat.roughness = 1.0f;
 					break;
 				case METALNESS_ROUGHNESS:
 					// turns out: even the file is named in reverse order, the common thing to do is to store
@@ -393,6 +395,8 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 						, D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0
 					);
 					mat.TexOcclusionRoughnessMetalnessMap = result.texLoadResult.get();
+					mat.metalness = 1.0f;
+					mat.roughness = 1.0f;
 					break;
 				default:
 				case UNKNOWN:
