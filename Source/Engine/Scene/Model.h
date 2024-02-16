@@ -74,6 +74,7 @@ public:
 		inline const std::vector<std::pair<MeshID, MaterialID>>& GetMeshMaterialIDPairs(EMeshType eMeshType) const { return mMeshMaterialIDPairsPerMeshType[eMeshType]; }
 		inline       std::vector<std::pair<MeshID, MaterialID>>& GetMeshMaterialIDPairs(EMeshType eMeshType)       { return mMeshMaterialIDPairsPerMeshType[eMeshType]; } // TODO: remove this if possible
 		inline       std::unordered_set<MaterialID>& GetMaterials() { return mMaterials; };
+		inline const std::unordered_set<MaterialID>& GetMaterials() const { return mMaterials; };
 
 		Data() {};
 		Data(MeshID meshID, MaterialID matID, EMeshType eType);

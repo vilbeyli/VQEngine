@@ -1263,7 +1263,22 @@ void VQEngine::DrawMaterialEditor()
 	const uint32_t MATERIAL_WINDOW_POS_Y = H - MATERIAL_WINDOW_PADDING_Y * 2 - MATERIAL_WINDOW_SIZE_Y;
 	
 	const std::vector<FMaterialRepresentation>& matReps = mpScene->GetMaterialRepresentations();
-	const std::vector<MaterialID> matIDs = mpScene->GetMaterialIDs();
+	const std::vector<MaterialID> matIDsAll = mpScene->GetMaterialIDs();
+	std::vector<MaterialID> matIDs;
+	for(MaterialID matID : matIDsAll)
+	for (size_t hObj : mpScene->mSelectedObjects)
+	{
+		const Model& m = mpScene->GetModel(mpScene->GetGameObject(hObj)->mModelID);
+		auto materialSet = m.mData.GetMaterials();
+		if (materialSet.find(matID) != materialSet.end())
+		{
+			matIDs.push_back(matID);
+		}
+	}
+	if (mpScene->mSelectedObjects.empty())
+	{
+		matIDs = matIDsAll;
+	}
 	
 	std::vector<const char*> szMaterialNames(matIDs.size() + 1, nullptr);
 	std::vector<MaterialID> MaterialIDs(matIDs.size() + 1, INVALID_ID);
