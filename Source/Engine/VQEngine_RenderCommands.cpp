@@ -263,7 +263,13 @@ void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 	}
 }
 
-void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, ID3D12CommandList* pCmdCopy, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
+void VQEngine::RenderDepthPrePass(
+	ID3D12GraphicsCommandList* pCmd, 
+	ID3D12CommandList* pCmdCopy, 
+	DynamicBufferHeap* pCBufferHeap, 
+	const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& cbAddresses,
+	const FSceneView& SceneView
+)
 {
 	using namespace DirectX;
 	using namespace VQ_SHADER_DATA;
@@ -309,7 +315,6 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, ID3D12Command
 	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::DEPTH_PREPASS_PSO_MSAA_4 : EBuiltinPSOs::DEPTH_PREPASS_PSO));
 	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ZPrePass));
 
-	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddresses(SceneView.meshRenderCommands.size());
 	int iCB = 0;
 
 	// draw meshes
@@ -330,55 +335,15 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, ID3D12Command
 		const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
 		const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
 
-
-		// set constant buffer data
-		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		PerObjectData* pPerObj = {};
-		const size_t sz = sizeof(PerObjectData);
-		pCBufferHeap->AllocConstantBuffer(sz, (void**)(&pPerObj), &cbAddr);
-		cbAddresses[iCB++] = cbAddr;
-
 #if RENDER_INSTANCED_SCENE_MESHES
 		const uint32 NumInstances = (uint32)meshRenderCmd.matNormal.size();
-		
-		const size_t memcpySrcSize = meshRenderCmd.matWorldViewProj.size() * sizeof(XMMATRIX);
-		const size_t memcpyDstSize = _countof(pPerObj->matWorldViewProj) * sizeof(XMMATRIX);
-		if (memcpyDstSize < memcpySrcSize)
-		{
-			Log::Error("Batch data (scene) too big (%d: %s) for destination cbuffer (%d: %s): "
-				, meshRenderCmd.matWorldViewProj.size()
-				, StrUtil::FormatByte(memcpySrcSize)
-				, _countof(pPerObj->matWorldViewProj)
-				, StrUtil::FormatByte(memcpyDstSize)
-			);
-		}
-
-		memcpy(pPerObj->matWorldViewProj    , meshRenderCmd.matWorldViewProj.data()    , sizeof(XMMATRIX) * NumInstances);
-		memcpy(pPerObj->matWorldViewProjPrev, meshRenderCmd.matWorldViewProjPrev.data(), sizeof(XMMATRIX) * NumInstances);
-		memcpy(pPerObj->matNormal           , meshRenderCmd.matNormal.data()           , sizeof(XMMATRIX) * NumInstances);
-		memcpy(pPerObj->matWorld            , meshRenderCmd.matWorld.data()            , sizeof(XMMATRIX) * NumInstances);
-		//memcpy(pPerObj->ObjID               , meshRenderCmd.objectID.data()            , sizeof(int) * NumInstances); // not 16B aligned
-		for (uint i = 0; i < NumInstances; ++i)
-		{
-			pPerObj->ObjID[i].x = meshRenderCmd.objectID[i];
-		}
 #else
 		const uint32 NumInstances = 1;
-		pPerObj->matWorldViewProj = meshRenderCmd.matWorldTransformation * SceneView.viewProj;
-		pPerObj->matWorldViewProjPrev = meshRenderCmd.matWorldTransformation;
-		pPerObj->matWorld = meshRenderCmd.matWorldTransformation;
-		pPerObj->matNormal = meshRenderCmd.matNormalTransformation;
-		pPerObj->objID = meshRenderCmd.objectID;
 #endif
 
-		pPerObj->materialData = std::move(mat.GetCBufferData());
-		pPerObj->meshID = meshRenderCmd.meshID;
-		pPerObj->materialID = meshRenderCmd.matID;
+		pCmd->SetGraphicsRootConstantBufferView(1, cbAddresses[iCB++]);
 
-		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
-
-		// set textures
-		if (mat.SRVMaterialMaps != INVALID_ID)
+		if (mat.SRVMaterialMaps != INVALID_ID) // set textures
 		{
 			pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
 			//pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
@@ -389,79 +354,20 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, ID3D12Command
 		pCmd->IASetIndexBuffer(&ib);
 		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 	}
-
-	// draw to non-MSAA objectID render target using the same constant buffer values
-	// also handles gfx-copy signaling
-	RenderObjectIDPass(pCmd, pCmdCopy, std::move(cbAddresses), SceneView);
-
-	// resolve if MSAA
-	if (bMSAA)
-	{
-		DXGI_FORMAT fmtDepth = DXGI_FORMAT_D32_FLOAT;
-
-		// transition for resolve first
-		const CD3DX12_RESOURCE_BARRIER pBarriers[] =
-		{
-			  CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA , D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
-			, CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA   , D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
-			, CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals     , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
-			, CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)			
-		};
-		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
-
-		DepthMSAAResolvePass::FDrawParameters params;
-		params.pCmd = pCmd;
-		params.pCBufferHeap = pCBufferHeap;
-		params.SRV_MSAADepth         = rsc.SRV_SceneDepthMSAA;
-		params.SRV_MSAANormals       = rsc.SRV_SceneNormalsMSAA;
-		params.SRV_MSAARoughness     = rsc.SRV_SceneColorMSAA;
-		params.UAV_ResolvedDepth     = rsc.UAV_SceneDepth;
-		params.UAV_ResolvedNormals   = rsc.UAV_SceneNormals;
-		params.UAV_ResolvedRoughness = INVALID_ID;
-
-		mRenderPass_DepthResolve.RecordCommands(&params);
-	}
-
-	// transition for shader read
-	{
-		std::vector<CD3DX12_RESOURCE_BARRIER> Barriers;
-		if (bMSAA)
-		{
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
-		}
-		else
-		{
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_COPY_SOURCE));
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST));
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
-		}
-
-		pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
-
-		Barriers.clear();
-
-		// FFX-CACAO expects TexDepthResolve (UAV) to contain depth buffer data, but we've written to TexDepth (DSV) when !bMSAA.
-		// Here we just copy TexDepth into TexDepthResolve to keep MSAA-toggle functionality on the fly with Key M.
-		if (!bMSAA)
-		{
-			pCmd->CopyResource(pRscDepthResolve, pRscDepth);
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepth, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
-			pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
-		}
-	}
 }
 
-void VQEngine::RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, ID3D12CommandList* pCmdCopy, std::vector< D3D12_GPU_VIRTUAL_ADDRESS>&& CBAddresses, const FSceneView& SceneView)
+void VQEngine::RenderObjectIDPass(
+	ID3D12GraphicsCommandList* pCmd, 
+	ID3D12CommandList* pCmdCopy, 
+	const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, 
+	const FSceneView& SceneView
+)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderObjectIDPass");
 	ObjectIDPass::FDrawParameters params;
 	params.pCmd = pCmd;
 	params.pCmdCopy = pCmdCopy;
-	params.CBAddresses = CBAddresses;
+	params.pCBAddresses = &CBAddresses;
 	params.pSceneView = &SceneView;
 	params.pMeshes = &mpScene->mMeshes;
 	params.pMaterials = &mpScene->mMaterials;
@@ -469,12 +375,86 @@ void VQEngine::RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, ID3D12Command
 
 #if OBJECTID_PASS__USE_ASYNC_COPY
 	FWindowRenderContext& ctx = mRenderer.GetWindowRenderContext(mpWinMain->GetHWND());
-	constexpr size_t iCmdZPrePassThread = 0; // SHOULD MATCH VQEngine_Renderer.cpp
-	pCmd->Reset(ctx.GetCommandAllocators(CommandQueue::EType::GFX)[iCmdZPrePassThread], nullptr);
-	
 	ID3D12DescriptorHeap* ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
+	constexpr size_t iCmdZPrePassThread = 0; // SHOULD MATCH VQEngine_Renderer.cpp
+
+	pCmd->Reset(ctx.GetCommandAllocators(CommandQueue::EType::GFX)[iCmdZPrePassThread], nullptr);
 	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 #endif
+}
+
+void VQEngine::TransitionDepthPrePassForRead(ID3D12GraphicsCommandList* pCmd, bool bMSAA)
+{
+	const auto& rsc = mResources_MainWnd;
+	auto pRscNormals     = mRenderer.GetTextureResource(rsc.Tex_SceneNormals);
+	auto pRscNormalsMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneNormalsMSAA);
+	auto pRscDepthResolve= mRenderer.GetTextureResource(rsc.Tex_SceneDepthResolve);
+	auto pRscDepthMSAA   = mRenderer.GetTextureResource(rsc.Tex_SceneDepthMSAA);
+	auto pRscDepth       = mRenderer.GetTextureResource(rsc.Tex_SceneDepth);
+
+	std::vector<CD3DX12_RESOURCE_BARRIER> Barriers;
+	if (bMSAA)
+	{
+		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
+		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
+		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+	}
+	else
+	{
+		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_COPY_SOURCE));
+		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST));
+		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+	}
+
+	pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
+}
+
+void VQEngine::ResolveMSAA_DepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap)
+{
+	SCOPED_GPU_MARKER(pCmd, "MSAAResolve<Depth=%d, Normals=%d, Roughness=%d>"); // TODO: string formatting
+	
+	const auto& rsc = mResources_MainWnd;
+	auto pRscNormals     = mRenderer.GetTextureResource(rsc.Tex_SceneNormals);
+	auto pRscNormalsMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneNormalsMSAA);
+	auto pRscDepthResolve= mRenderer.GetTextureResource(rsc.Tex_SceneDepthResolve);
+	auto pRscDepthMSAA   = mRenderer.GetTextureResource(rsc.Tex_SceneDepthMSAA);
+	auto pRscDepth       = mRenderer.GetTextureResource(rsc.Tex_SceneDepth);
+
+	const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+	{
+		  CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA , D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+		, CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA   , D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+		, CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals     , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+		, CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+	};
+	pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+
+	DepthMSAAResolvePass::FDrawParameters params;
+	params.pCmd = pCmd;
+	params.pCBufferHeap = pCBufferHeap;
+	params.SRV_MSAADepth = rsc.SRV_SceneDepthMSAA;
+	params.SRV_MSAANormals = rsc.SRV_SceneNormalsMSAA;
+	params.SRV_MSAARoughness = rsc.SRV_SceneColorMSAA;
+	params.UAV_ResolvedDepth = rsc.UAV_SceneDepth;
+	params.UAV_ResolvedNormals = rsc.UAV_SceneNormals;
+	params.UAV_ResolvedRoughness = INVALID_ID;
+
+	mRenderPass_DepthResolve.RecordCommands(&params);
+}
+
+void VQEngine::CopyDepthForCompute(ID3D12GraphicsCommandList* pCmd)
+{
+	const auto& rsc = mResources_MainWnd;
+	auto pRscDepthResolve= mRenderer.GetTextureResource(rsc.Tex_SceneDepthResolve);
+	auto pRscDepth       = mRenderer.GetTextureResource(rsc.Tex_SceneDepth);
+
+	pCmd->CopyResource(pRscDepthResolve, pRscDepth);
+	
+	std::vector<CD3DX12_RESOURCE_BARRIER> Barriers;
+	Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+	Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepth, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
+	pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
 }
 
 void VQEngine::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView)
@@ -1989,29 +1969,8 @@ void VQEngine::CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, Dynamic
 
 HRESULT VQEngine::PresentFrame(FWindowRenderContext& ctx)
 {
-	HRESULT hr = {};
-	CommandQueue& PresentQueue = ctx.PresentQueue;
-	SwapChain& swapchain = ctx.SwapChain;
-	ID3D12Resource* pSwapChainRT = swapchain.GetCurrentBackBufferRenderTarget();
-	
-	// close gfx cmd lists
-	std::vector<ID3D12CommandList*>& vCmdLists = ctx.GetGFXCommandListPtrs();
-	const UINT NumCommandLists = ctx.GetNumCurrentlyRecordingThreads(CommandQueue::EType::GFX);
-	for (UINT i = 0; i < NumCommandLists; ++i)
-	{
-		static_cast<ID3D12GraphicsCommandList*>(vCmdLists[i])->Close();
-	}
-
-	{
-		SCOPED_CPU_MARKER("ExecuteCommandLists()");
-		PresentQueue.pQueue->ExecuteCommandLists(NumCommandLists, (ID3D12CommandList**)vCmdLists.data());
-	}
-	
-
-	{
-		SCOPED_CPU_MARKER("SwapchainPresent");
-		hr = swapchain.Present();
-	}
+	SCOPED_CPU_MARKER("SwapchainPresent");
+	HRESULT hr = ctx.SwapChain.Present();
 	return hr;
 }
 

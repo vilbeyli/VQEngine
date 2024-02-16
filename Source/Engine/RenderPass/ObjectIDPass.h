@@ -39,7 +39,7 @@ public:
 	{
 		ID3D12GraphicsCommandList* pCmd = nullptr;
 		ID3D12CommandList* pCmdCopy = nullptr;
-		std::vector< D3D12_GPU_VIRTUAL_ADDRESS> CBAddresses;
+		const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>* pCBAddresses = nullptr;
 		const FSceneView* pSceneView = nullptr;
 		const std::unordered_map<MeshID, Mesh>* pMeshes = nullptr;
 		const std::unordered_map<MaterialID, Material>* pMaterials = nullptr;

@@ -127,6 +127,7 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	assert(pParams->pSceneView);
 	assert(pParams->pMeshes);
 	assert(pParams->pMaterials);
+	assert(pParams->pCBAddresses);
 	ID3D12GraphicsCommandList* pCmd = pParams->pCmd;
 	ID3D12GraphicsCommandList* pCmdCpy = static_cast<ID3D12GraphicsCommandList*>(pParams->pCmdCopy);
 	auto pRscRT = mRenderer.GetTextureResource(TEXPassOutput);
@@ -186,7 +187,7 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		pCmd->IASetVertexBuffers(0, 1, &vb);
 		pCmd->IASetIndexBuffer(&ib);
-		pCmd->SetGraphicsRootConstantBufferView(1, pParams->CBAddresses[iCB++]);
+		pCmd->SetGraphicsRootConstantBufferView(1, (*pParams->pCBAddresses)[iCB++]);
 		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 	}
 

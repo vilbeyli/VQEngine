@@ -899,6 +899,16 @@ static uint32_t GetNumShadowViewCmdRecordingThreads(const FSceneShadowView& Shad
 	return 0;
 #endif
 }
+static bool ShouldEnableAsyncCompute(const FSceneView& SceneView, const FSceneShadowView& ShadowView)
+{
+	if(ShadowView.NumPointShadowViews > 0) 
+		return true;
+	if (ShadowView.NumPointShadowViews > 3)
+		return true;
+	
+	return false;
+}
+
 void VQEngine::RenderThread_PreRender()
 {
 	SCOPED_CPU_MARKER("RenderThread_PreRender()");
@@ -915,6 +925,8 @@ void VQEngine::RenderThread_PreRender()
 	const FSceneView&       SceneView       = mpScene->GetSceneView(FRAME_DATA_INDEX);
 	const FSceneShadowView& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
 
+	const bool bUseAsyncCompute = ShouldEnableAsyncCompute(SceneView, SceneShadowView);
+
 #if RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING
 	const uint32_t NumCmdRecordingThreads_GFX
 		= 1 // worker thrd: DepthPrePass
@@ -929,20 +941,38 @@ void VQEngine::RenderThread_PreRender()
 	const uint32_t NumCmdRecordingThreads = NumCmdRecordingThreads_GFX;
 	const uint32_t ConstantBufferBytesPerThread = 36 * MEGABYTE;
 #endif
+	const uint NumCopyCmdLists = 1;
+	const uint NumComputeCmdLists = 1;
+
 	{
 		SCOPED_CPU_MARKER("AllocCmdLists");
 		ctx.AllocateCommandLists(CommandQueue::EType::GFX, NumCmdRecordingThreads_GFX);
 #if OBJECTID_PASS__USE_ASYNC_COPY
-		ctx.AllocateCommandLists(CommandQueue::EType::COPY, 1);
+		ctx.AllocateCommandLists(CommandQueue::EType::COPY, NumCopyCmdLists);
 #endif
+
+		if (bUseAsyncCompute)
+		{
+			ctx.AllocateCommandLists(CommandQueue::EType::COMPUTE, NumComputeCmdLists);
+		}
 	}
 	{
 		SCOPED_CPU_MARKER("ResetCmdLists");
 		ctx.ResetCommandLists(CommandQueue::EType::GFX, NumCmdRecordingThreads_GFX);
+		
+		if (mAppState == EAppState::SIMULATING) 
+		{
+			// copy queue only used in flight (TODO: remove this when texture uploads are done thru copy q)
 #if OBJECTID_PASS__USE_ASYNC_COPY
-		if(mAppState == EAppState::SIMULATING)
-			ctx.ResetCommandLists(CommandQueue::EType::COPY, 1);
+			ctx.ResetCommandLists(CommandQueue::EType::COPY, NumCopyCmdLists);
 #endif
+
+			if (bUseAsyncCompute)
+			{
+				ctx.ResetCommandLists(CommandQueue::EType::COMPUTE, NumComputeCmdLists);
+			}
+		}
+
 	}
 	{
 		SCOPED_CPU_MARKER("AllocCBMem");
@@ -965,6 +995,18 @@ void VQEngine::RenderThread_PreRender()
 		for (uint32_t iGFX = 0; iGFX < NumCmdRecordingThreads_GFX; ++iGFX)
 		{
 			static_cast<ID3D12GraphicsCommandList*>(vpGFXCmds[iGFX])->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+		}
+
+
+		if (bUseAsyncCompute)
+		{
+			auto& vpCMPCmds = ctx.GetComputeCommandListPtrs();
+			for (uint iCMP = 0; iCMP < NumComputeCmdLists; ++iCMP)
+			{
+				// TODO: do we need this?
+				static_cast<ID3D12GraphicsCommandList*>(vpCMPCmds[iCMP])->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+			}
+			
 		}
 	}
 }
@@ -1207,6 +1249,25 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 		, D3D12_RESOURCE_STATE_PRESENT)
 	); // Transition SwapChain for Present
 
+	std::vector<ID3D12CommandList*>& vCmdLists = ctx.GetGFXCommandListPtrs();
+	const UINT NumCommandLists = ctx.GetNumCurrentlyRecordingThreads(CommandQueue::EType::GFX);
+	for (UINT i = 0; i < NumCommandLists; ++i)
+	{
+		static_cast<ID3D12GraphicsCommandList*>(vCmdLists[i])->Close();
+	}
+	{
+		SCOPED_CPU_MARKER("ExecuteCommandLists()");
+		ctx.PresentQueue.pQueue->ExecuteCommandLists(NumCommandLists, (ID3D12CommandList**)vCmdLists.data());
+	}
+
+
+	const int FRAME_DATA_INDEX = 0;
+	const FSceneView& SceneView = mpScene->GetSceneView(FRAME_DATA_INDEX);
+	const FSceneShadowView& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
+	if (ShouldEnableAsyncCompute(SceneView, SceneShadowView))
+	{
+		static_cast<ID3D12GraphicsCommandList*>(ctx.GetComputeCommandListPtrs()[0])->Close();
+	}
 
 	hr = PresentFrame(ctx);
 
@@ -1219,6 +1280,67 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 // RENDER FRAME
 //
 //====================================================================================================
+static void CopyPerObjectConstantBufferData(
+	std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& cbAddresses,
+	DynamicBufferHeap* pCBufferHeap,
+	const FSceneView& SceneView,
+	const std::unique_ptr<Scene>& pScene
+)
+{
+	SCOPED_CPU_MARKER("CopyPerObjectConstantBufferData");
+	using namespace DirectX;
+	using namespace VQ_SHADER_DATA;
+
+	int iCB = 0;
+	for (const MeshRenderCommand_t& meshRenderCmd : SceneView.meshRenderCommands)
+	{
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+		PerObjectData* pPerObj = {};
+		const size_t sz = sizeof(PerObjectData);
+		
+		pCBufferHeap->AllocConstantBuffer(sz, (void**)(&pPerObj), &cbAddr);
+		cbAddresses[iCB++] = cbAddr;
+
+#if RENDER_INSTANCED_SCENE_MESHES
+		const uint32 NumInstances = (uint32)meshRenderCmd.matNormal.size();
+		
+		const size_t memcpySrcSize = meshRenderCmd.matWorldViewProj.size() * sizeof(XMMATRIX);
+		const size_t memcpyDstSize = _countof(pPerObj->matWorldViewProj) * sizeof(XMMATRIX);
+		if (memcpyDstSize < memcpySrcSize)
+		{
+			Log::Error("Batch data (scene) too big (%d: %s) for destination cbuffer (%d: %s): "
+				, meshRenderCmd.matWorldViewProj.size()
+				, StrUtil::FormatByte(memcpySrcSize)
+				, _countof(pPerObj->matWorldViewProj)
+				, StrUtil::FormatByte(memcpyDstSize)
+			);
+		}
+
+		memcpy(pPerObj->matWorldViewProj    , meshRenderCmd.matWorldViewProj.data()    , sizeof(XMMATRIX) * NumInstances);
+		memcpy(pPerObj->matWorldViewProjPrev, meshRenderCmd.matWorldViewProjPrev.data(), sizeof(XMMATRIX) * NumInstances);
+		memcpy(pPerObj->matNormal           , meshRenderCmd.matNormal.data()           , sizeof(XMMATRIX) * NumInstances);
+		memcpy(pPerObj->matWorld            , meshRenderCmd.matWorld.data()            , sizeof(XMMATRIX) * NumInstances);
+		//memcpy(pPerObj->ObjID               , meshRenderCmd.objectID.data()            , sizeof(int) * NumInstances); // not 16B aligned
+		for (uint i = 0; i < NumInstances; ++i)
+		{
+			pPerObj->ObjID[i].x = meshRenderCmd.objectID[i];
+		}
+#else
+		const uint32 NumInstances = 1;
+		pPerObj->matWorldViewProj = meshRenderCmd.matWorldTransformation * SceneView.viewProj;
+		pPerObj->matWorldViewProjPrev = meshRenderCmd.matWorldTransformation;
+		pPerObj->matWorld = meshRenderCmd.matWorldTransformation;
+		pPerObj->matNormal = meshRenderCmd.matNormalTransformation;
+		pPerObj->objID = meshRenderCmd.objectID;
+#endif
+
+		const Material& mat = pScene->GetMaterial(meshRenderCmd.matID);
+		pPerObj->materialData = std::move(mat.GetCBufferData());
+		pPerObj->meshID = meshRenderCmd.meshID;
+		pPerObj->materialID = meshRenderCmd.matID;
+	}
+}
+
 HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 {
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
@@ -1249,6 +1371,11 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	mRenderStats = {};
 
 	const auto& rsc = mResources_MainWnd;
+	auto pRscNormals     = mRenderer.GetTextureResource(rsc.Tex_SceneNormals);
+	auto pRscNormalsMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneNormalsMSAA);
+	auto pRscDepthResolve= mRenderer.GetTextureResource(rsc.Tex_SceneDepthResolve);
+	auto pRscDepthMSAA   = mRenderer.GetTextureResource(rsc.Tex_SceneDepthMSAA);
+	auto pRscDepth       = mRenderer.GetTextureResource(rsc.Tex_SceneDepth);
 
 	// TODO: undo const cast and assign in a proper spot -------------------------------------------------
 	FSceneView& RefSceneView = const_cast<FSceneView&>(SceneView);
@@ -1291,6 +1418,9 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 	ID3D12Resource* pRsc = nullptr;
 	ID3D12CommandList* pCmdCpy = (ID3D12CommandList*)ctx.GetCommandListPtr(CommandQueue::EType::COPY, 0);
+	
+	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddresses(SceneView.meshRenderCommands.size());
+
 	if constexpr (!RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING)
 	{
 		constexpr size_t THREAD_INDEX = 0;
@@ -1302,7 +1432,25 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		RenderDirectionalShadowMaps(pCmd, &CBHeap, SceneShadowView);
 		RenderPointShadowMaps(pCmd, &CBHeap, SceneShadowView, 0, SceneShadowView.NumPointShadowViews);
 
-		RenderDepthPrePass(pCmd, pCmdCpy, &CBHeap, SceneView);
+		CopyPerObjectConstantBufferData(cbAddresses, &CBHeap, SceneView, mpScene);
+
+		RenderDepthPrePass(pCmd, pCmdCpy, &CBHeap, cbAddresses, SceneView);
+
+		RenderObjectIDPass(pCmd, pCmdCpy, cbAddresses, SceneView);
+
+		if (bMSAA)
+		{
+			ResolveMSAA_DepthPrePass(pCmd, &CBHeap);
+		}
+
+		TransitionDepthPrePassForRead(pCmd, bMSAA);
+
+		if (!bMSAA)
+		{
+			// FFX-CACAO expects TexDepthResolve (UAV) to contain depth buffer data,
+			// but we've written to TexDepth (DSV) when !bMSAA.
+			CopyDepthForCompute(pCmd);
+		}
 
 		if (bDownsampleDepth)
 		{
@@ -1349,7 +1497,8 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		ID3D12GraphicsCommandList* pCmd_ThisThread = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdRenderThread);
 		DynamicBufferHeap& CBHeap_This = ctx.GetConstantBufferHeap(iCmdRenderThread);
-		
+
+
 		{
 			SCOPED_CPU_MARKER("DispatchWorkers");
 
@@ -1357,10 +1506,30 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 			{
 				ID3D12GraphicsCommandList* pCmd_ZPrePass = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdZPrePassThread);
 				DynamicBufferHeap& CBHeap_WorkerZPrePass = ctx.GetConstantBufferHeap(iCmdZPrePassThread);
-				WorkerThreads.AddTask([=, &CBHeap_WorkerZPrePass, &SceneView]()
+				WorkerThreads.AddTask([=, &CBHeap_WorkerZPrePass, &SceneView, &cbAddresses]()
 				{
 					RENDER_WORKER_CPU_MARKER;
-					RenderDepthPrePass(pCmd_ZPrePass, pCmdCpy, &CBHeap_WorkerZPrePass, SceneView);
+
+					CopyPerObjectConstantBufferData(cbAddresses, &CBHeap_WorkerZPrePass, SceneView, mpScene);
+
+					RenderDepthPrePass(pCmd_ZPrePass, pCmdCpy, &CBHeap_WorkerZPrePass, cbAddresses, SceneView);
+
+					RenderObjectIDPass(pCmd_ZPrePass, pCmdCpy, cbAddresses, SceneView);
+
+					if (bMSAA)
+					{
+						ResolveMSAA_DepthPrePass(pCmd_ZPrePass, &CBHeap_WorkerZPrePass);
+					}
+
+					TransitionDepthPrePassForRead(pCmd_ZPrePass, bMSAA);
+
+					if (!bMSAA)
+					{
+						// FFX-CACAO expects TexDepthResolve (UAV) to contain depth buffer data,
+						// but we've written to TexDepth (DSV) when !bMSAA.
+						CopyDepthForCompute(pCmd_ZPrePass);
+					}
+
 					if (bDownsampleDepth)
 					{
 						DownsampleDepth(pCmd_ZPrePass, &CBHeap_WorkerZPrePass, rsc.Tex_SceneDepth, rsc.SRV_SceneDepth);
@@ -1436,6 +1605,27 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		{
 			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS", 0xFFFF0000);
 			while (WorkerThreads.GetNumActiveTasks() != 0);
+		}
+	}
+
+
+	// close gfx cmd lists
+	{
+		std::vector<ID3D12CommandList*>& vCmdLists = ctx.GetGFXCommandListPtrs();
+		const UINT NumCommandLists = ctx.GetNumCurrentlyRecordingThreads(CommandQueue::EType::GFX);
+		for (UINT i = 0; i < NumCommandLists; ++i)
+		{
+			static_cast<ID3D12GraphicsCommandList*>(vCmdLists[i])->Close();
+		}
+
+		{
+			SCOPED_CPU_MARKER("ExecuteCommandLists()");
+			ctx.PresentQueue.pQueue->ExecuteCommandLists(NumCommandLists, (ID3D12CommandList**)vCmdLists.data());
+		}
+
+		if (ShouldEnableAsyncCompute(SceneView, SceneShadowView))
+		{
+			static_cast<ID3D12GraphicsCommandList*>(ctx.GetComputeCommandListPtrs()[0])->Close();
 		}
 	}
 
