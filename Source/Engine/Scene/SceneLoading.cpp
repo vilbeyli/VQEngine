@@ -236,6 +236,7 @@ void Scene::BuildGameObject(const FGameObjectRepresentation& ObjRep, size_t iObj
 
 		// model data
 		model.mData = Model::Data(meshID, matID, Model::Data::OPAQUE_MESH);
+		model.mModelName = ObjRep.ModelName;
 
 		model.mbLoaded = true;
 		pObj->mModelID = mID;

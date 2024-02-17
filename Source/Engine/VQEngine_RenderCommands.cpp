@@ -384,6 +384,7 @@ void VQEngine::RenderObjectIDPass(
 	Fence& CopyFence = mCopyObjIDDoneFence[BACK_BUFFER_INDEX];
 
 	pCmd->Close();
+	if(ShouldEnableAsyncCompute())
 	{
 		SCOPED_CPU_MARKER_C("WAIT_DEPTH_PREPASS_SUBMIT", 0xFFFF0000);
 		while (!mAsyncComputeWorkSubmitted.load());
