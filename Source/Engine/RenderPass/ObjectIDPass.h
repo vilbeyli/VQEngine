@@ -60,7 +60,9 @@ public:
 	       int4 ReadBackPixel(const int2& screenCoords) const;
 	inline int4 ReadBackPixel(int screenCoordsX, int screenCoordsY) const { return ReadBackPixel(int2(screenCoordsX, screenCoordsY)); }
 	inline int4 ReadBackPixel(float2 uv) const { return ReadBackPixel((int)uv.x * mOutputResolutionX, (int)uv.y * mOutputResolutionY); }
-	void WaitForCopyComplete() const;
+
+	ID3D12Resource* GetGPUTextureResource() const { return mRenderer.GetTextureResource(TEXPassOutput); }
+	ID3D12Resource* GetCPUTextureResource() const { return mRenderer.GetTextureResource(TEXPassOutputCPUReadback); }
 
 private:
 	PSO_ID PSOOpaque = INVALID_ID;
@@ -75,6 +77,4 @@ private:
 
 	TextureID TEXPassOutputDepth = INVALID_ID;
 	DSV_ID DSVPassOutput = INVALID_ID;
-
-	Fence CopyFence;
 };

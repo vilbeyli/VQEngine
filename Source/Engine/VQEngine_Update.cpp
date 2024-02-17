@@ -224,8 +224,17 @@ void VQEngine::UpdateThread_PostUpdate()
 	mpScene->PostUpdate(mWorkerThreads, mUIState, FRAME_DATA_INDEX);
 
 	ImGuiIO& io = ImGui::GetIO();
-	if (!io.WantCaptureMouse)
+	HWND hwndMain = mpWinMain->GetHWND();
+	const bool bMouseLeftTriggered = mInputStates.at(hwndMain).IsMouseTriggered(Input::EMouseButtons::MOUSE_BUTTON_LEFT);
+	if (!io.WantCaptureMouse && bMouseLeftTriggered)
 	{
+		{
+			SCOPED_CPU_MARKER_C("WAIT_COPY_Q", 0xFFFF0000);
+			const int BACK_BUFFER_INDEX = mRenderer.GetWindowRenderContext(hwndMain).GetCurrentSwapchainBufferIndex();
+			Fence& CopyFence = mCopyObjIDDoneFence[BACK_BUFFER_INDEX];
+			CopyFence.WaitOnCPU(CopyFence.GetValue());
+		}
+
 		mpScene->PickObject(mRenderPass_ObjectID, 
 			static_cast<int>(io.MousePos.x), 
 			static_cast<int>(io.MousePos.y)
@@ -527,13 +536,12 @@ void VQEngine::LoadLoadingScreenData()
 		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(i) + ".png");
 
 		mWorkers_TextureLoading.AddTask([this, &data, LoadingScreenTextureFilePath]()
-			{
-				const TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
-				const SRV_ID srvID = mRenderer.AllocateAndInitializeSRV(texID);
-				std::lock_guard<std::mutex> lk(data.Mtx);
-				data.SRVs.push_back(srvID);
-			});
-
+		{
+			const TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
+			const SRV_ID srvID = mRenderer.AllocateAndInitializeSRV(texID);
+			std::lock_guard<std::mutex> lk(data.Mtx);
+			data.SRVs.push_back(srvID);
+		});
 	}
 
 	// load the selected loading screen image

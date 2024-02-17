@@ -721,46 +721,38 @@ void Scene::HandleInput(FSceneView& SceneView)
 
 void Scene::PickObject(const ObjectIDPass& ObjectIDRenderPass, int MouseClickPositionX, int MouseClickPositionY)
 {
-	const bool bMouseLeftTriggered = mInput.IsMouseTriggered(Input::EMouseButtons::MOUSE_BUTTON_LEFT);
-	if (bMouseLeftTriggered)
+	//float uvX = io.MousePos.x / mpWinMain->GetWidth();
+	//float uvY = io.MousePos.y / mpWinMain->GetHeight();
+	int4 px = ObjectIDRenderPass.ReadBackPixel(MouseClickPositionX, MouseClickPositionY);
+
+	// objectID starts from 0, shader writes with an offset of 1.
+	// we remove the offset here so that we can clear RT to 0 and 
+	// not select object when clicked on area with no rendered pixels (no obj id).
+	size_t hObj = px.x - 1;
+	Log::Info("Picked(%d, %d): Obj[%d] Mesh[%d] Material[%d]", MouseClickPositionX, MouseClickPositionY, hObj, px.y, px.z);
+
+	auto it = std::find(this->mSelectedObjects.begin(), this->mSelectedObjects.end(), hObj);
+	const bool bFound = it != this->mSelectedObjects.end();
+	const bool bIsShiftDown = mInput.IsKeyDown("Shift");
+	if (bIsShiftDown)
 	{
+		if (bFound)
 		{
-			SCOPED_CPU_MARKER_C("WAIT_COPY_Q", 0xFFFF0000);
-			ObjectIDRenderPass.WaitForCopyComplete(); // CopyQ --> CPU signaling / sync
-		}
-		//float uvX = io.MousePos.x / mpWinMain->GetWidth();
-		//float uvY = io.MousePos.y / mpWinMain->GetHeight();
-		int4 px = ObjectIDRenderPass.ReadBackPixel(MouseClickPositionX, MouseClickPositionY);
-
-		// objectID starts from 0, shader writes with an offset of 1.
-		// we remove the offset here so that we can clear RT to 0 and 
-		// not select object when clicked on area with no rendered pixels (no obj id).
-		size_t hObj = px.x - 1;
-		Log::Info("Picked(%d, %d): Obj[%d] Mesh[%d] Material[%d]", MouseClickPositionX, MouseClickPositionY, hObj, px.y, px.z);
-
-		auto it = std::find(this->mSelectedObjects.begin(), this->mSelectedObjects.end(), hObj);
-		const bool bFound = it != this->mSelectedObjects.end();
-		const bool bIsShiftDown = mInput.IsKeyDown("Shift");
-		if (bIsShiftDown)
-		{
-			if (bFound)
-			{
-				this->mSelectedObjects.erase(it);
-			}
-			else
-			{
-				if (hObj != INVALID_ID)
-					this->mSelectedObjects.push_back(hObj);
-			}
+			this->mSelectedObjects.erase(it);
 		}
 		else
 		{
-			if (!bFound)
-			{
-				this->mSelectedObjects.clear();
-				if(hObj != INVALID_ID)
-					this->mSelectedObjects.push_back(hObj);
-			}
+			if (hObj != INVALID_ID)
+				this->mSelectedObjects.push_back(hObj);
+		}
+	}
+	else
+	{
+		if (!bFound)
+		{
+			this->mSelectedObjects.clear();
+			if(hObj != INVALID_ID)
+				this->mSelectedObjects.push_back(hObj);
 		}
 	}
 }
