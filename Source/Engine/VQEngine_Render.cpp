@@ -284,31 +284,31 @@ void VQEngine::InitializeBuiltinMeshes()
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::TRIANGLE;
 		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Triangle<VertexType>(1.0f);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Triangle";
-		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.Vertices, data.Indices, mResourceNames.mBuiltinMeshNames[eMesh]);
+		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.LODVertices[0], data.LODIndices[0], mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::CUBE;
 		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Cube<VertexType>();
 		mResourceNames.mBuiltinMeshNames[EBuiltInMeshes::CUBE] = "Cube";
-		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.Vertices, data.Indices, mResourceNames.mBuiltinMeshNames[eMesh]);
+		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.LODVertices[0], data.LODIndices[0], mResourceNames.mBuiltinMeshNames[eMesh]);
 	} 
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::CYLINDER;
-		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Cylinder<VertexType>(3.0f, 1.0f, 1.0f, 45, 6, 1);
+		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Cylinder<VertexType>(3.0f, 1.0f, 1.0f, 45, 6, 4);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Cylinder";
-		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.Vertices, data.Indices, mResourceNames.mBuiltinMeshNames[eMesh]);
+		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.LODVertices[0], data.LODIndices[0], mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::SPHERE;
-		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Sphere<VertexType>(1.0f, 30, 30, 1);
+		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Sphere<VertexType>(1.0f, 30, 30, 4);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Sphere";
-		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.Vertices, data.Indices, mResourceNames.mBuiltinMeshNames[eMesh]);
+		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.LODVertices[0], data.LODIndices[0], mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::CONE;
-		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Cone<VertexType>(1, 1, 42);
+		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Cone<VertexType>(1, 1, 42, 4);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Cone";
-		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.Vertices, data.Indices, mResourceNames.mBuiltinMeshNames[eMesh]);
+		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.LODVertices[0], data.LODIndices[0], mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	// ...
 

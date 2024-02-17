@@ -30,8 +30,10 @@ namespace GeometryGenerator
 	struct GeometryData
 	{
 		static_assert(std::is_same<TIndex, unsigned>() || std::is_same<TIndex, unsigned short>()); // ensure UINT32 or UINT16 indices
-		std::vector<TVertex>  Vertices;
-		std::vector<TIndex>   Indices;
+		std::vector<std::vector<TVertex>>  LODVertices;
+		std::vector<std::vector<TIndex> >  LODIndices;
+		GeometryData(size_t NumLODs) : LODVertices(NumLODs), LODIndices(NumLODs) {}
+		GeometryData() = delete;
 	};
 
 	template<class TVertex, class TIndex = unsigned> 
@@ -101,12 +103,12 @@ namespace GeometryGenerator
 
 		constexpr size_t NUM_VERTS = 3;
 
-		GeometryData<TVertex, TIndex> data;
-		std::vector<TVertex>& v = data.Vertices;
+		GeometryData<TVertex, TIndex> data(1);
+		std::vector<TVertex>& v = data.LODVertices[0];
 		v.resize(NUM_VERTS);
 
 		// indices
-		data.Indices = { 0u, 1u, 2u };
+		data.LODIndices[0] = { 0u, 1u, 2u };
 		
 		// position
 		SetFVec<3>(v[0].position, { -size, -size, 0.0f });
@@ -187,12 +189,12 @@ namespace GeometryGenerator
 
 		constexpr int NUM_VERTS   = 24;
 
-		GeometryData<TVertex, TIndex> data;
-		std::vector<TVertex>& v = data.Vertices;
+		GeometryData<TVertex, TIndex> data(1);
+		std::vector<TVertex>& v = data.LODVertices[0];
 		v.resize(NUM_VERTS);
 
 		// indices
-		data.Indices = {
+		data.LODIndices[0] = {
 			0, 1, 2, 0, 2, 3,		// Top
 			4, 5, 6, 4, 6, 7,		// back
 			8, 9, 10, 8, 10, 11,	// Right
@@ -299,13 +301,13 @@ namespace GeometryGenerator
 
 		if constexpr (bHasColor)
 		{
-			for (int i = 0; i < (int)data.Indices.size(); i += 3)
+			for (int i = 0; i < (int)data.LODIndices.size(); i += 3)
 			{
 				TIndex Indices[3] = 
 				{
-					  data.Indices[i + 0]
-					, data.Indices[i + 1]
-					, data.Indices[i + 2]
+					  data.LODIndices[i + 0]
+					, data.LODIndices[i + 1]
+					, data.LODIndices[i + 2]
 				};
 
 				SetFVec<3>(v[Indices[0]].color, { 1.0f, 0.0f, 0.0f });
@@ -347,7 +349,7 @@ namespace GeometryGenerator
 		constexpr bool bHasColor    = std::is_same<TVertex, FVertexWithColor>() || std::is_same<TVertex, FVertexWithColorAndAlpha>();
 		constexpr bool bHasAlpha    = std::is_same<TVertex, FVertexWithColorAndAlpha>();
 
-		std::vector<GeometryData<TVertex, TIndex>> data(numLODLevels);
+		GeometryData<TVertex, TIndex> data(numLODLevels);
 
 		// parameters for each LOD level
 		std::vector<unsigned> LODStackCounts(numLODLevels);
@@ -379,8 +381,8 @@ namespace GeometryGenerator
 			float radiusStep = (topRadius - bottomRadius) / stackCount;
 			unsigned ringCount = stackCount + 1;
 
-			std::vector<TVertex>& Vertices = data[LOD].Vertices;
-			std::vector<TIndex>&  Indices  = data[LOD].Indices;
+			std::vector<TVertex>& Vertices = data.LODVertices[LOD];
+			std::vector<TIndex>&  Indices  = data.LODIndices[LOD];
 
 			// CYLINDER BODY
 			//-----------------------------------------------------------
@@ -558,7 +560,7 @@ namespace GeometryGenerator
 		}
 		//------------------------------------------------
 
-		return data[0];
+		return data;
 	}
 
 	//
@@ -572,7 +574,6 @@ namespace GeometryGenerator
 		, int numLODLevels /*= 1*/
 	)
 	{
-		assert(numLODLevels == 1); // currently only 1 LOD level is supported: function signature will need updating
 		using namespace DirectX;
 
 		constexpr bool bHasTangents = std::is_same<TVertex, FVertexWithNormalAndTangent>();
@@ -580,7 +581,7 @@ namespace GeometryGenerator
 		constexpr bool bHasColor    = std::is_same<TVertex, FVertexWithColor>()  || std::is_same<TVertex, FVertexWithColorAndAlpha>();
 		constexpr bool bHasAlpha    = std::is_same<TVertex, FVertexWithColorAndAlpha>();
 
-		std::vector<GeometryData<TVertex, TIndex>> data(numLODLevels);
+		GeometryData<TVertex, TIndex> data(numLODLevels);
 
 		// parameters for each LOD level
 		std::vector<unsigned> LODRingCounts (numLODLevels);
@@ -603,8 +604,8 @@ namespace GeometryGenerator
 		// Generate VB/IB for each LOD level
 		for (int LOD = 0; LOD < numLODLevels; ++LOD)
 		{
-			std::vector<TVertex>& Vertices = data[LOD].Vertices;
-			std::vector<TIndex>&  Indices  = data[LOD].Indices;
+			std::vector<TVertex>& Vertices = data.LODVertices[LOD];
+			std::vector<TIndex>&  Indices  = data.LODIndices[LOD];
 
 			// Compute vertices for each stack ring starting at the bottom and moving up.
 			float dPhi = PI / (LODRingCounts[LOD] - 1);
@@ -672,7 +673,7 @@ namespace GeometryGenerator
 		}
 		//------------------------------------------------
 
-		return data[0];
+		return data;
 	}
 
 	//
@@ -689,7 +690,7 @@ namespace GeometryGenerator
 		constexpr bool bHasColor    = std::is_same<TVertex, FVertexWithColor>()  || std::is_same<TVertex, FVertexWithColorAndAlpha>();
 		constexpr bool bHasAlpha    = std::is_same<TVertex, FVertexWithColorAndAlpha>();
 
-		std::vector<GeometryData<TVertex, TIndex>> data(numLODLevels);
+		GeometryData<TVertex, TIndex> data(numLODLevels);
 
 		// parameters for each LOD level
 		std::vector<unsigned> LODSliceCounts(numLODLevels);
@@ -706,8 +707,8 @@ namespace GeometryGenerator
 		// Generate VB/IB for each LOD level
 		for (int LOD = 0; LOD < numLODLevels; ++LOD)
 		{
-			std::vector<TVertex>& Vertices = data[LOD].Vertices;
-			std::vector<TIndex>&  Indices  = data[LOD].Indices;
+			std::vector<TVertex>& Vertices = data.LODVertices[LOD];
+			std::vector<TIndex>&  Indices  = data.LODIndices[LOD];
 
 			int IndexOfConeBaseCenterVertex = -1;
 			const unsigned& sliceCount = LODSliceCounts[LOD];
@@ -851,7 +852,7 @@ namespace GeometryGenerator
 		}
 		//------------------------------------------------
 
-		return data[0];
+		return data;
 	}
 
 }; // namespace GeometryGenerator
