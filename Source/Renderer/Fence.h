@@ -35,6 +35,7 @@ public:
 
     void WaitOnCPU(UINT64 olderFence) const;
     void WaitOnGPU(ID3D12CommandQueue* pCommandQueue);
+    void WaitOnGPU(ID3D12CommandQueue* pCommandQueue, UINT64 olderFence);
 
 private:
     HANDLE       mHEvent = 0;

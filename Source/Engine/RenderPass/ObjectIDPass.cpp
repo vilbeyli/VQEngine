@@ -20,6 +20,7 @@
 #include "../Scene/Scene.h"
 #include "../../Shaders/LightingConstantBufferData.h"
 #include "../VQUtils/Source/utils.h"
+#include "../GPUMarker.h"
 
 #include <cassert>
 
@@ -136,6 +137,11 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	const DSV& dsv = mRenderer.GetDSV(DSVPassOutput);
 	const RTV& rtv = mRenderer.GetRTV(RTVPassOutput);
 
+	const float RenderResolutionX = static_cast<float>(pParams->pSceneView->SceneRTWidth);
+	const float RenderResolutionY = static_cast<float>(pParams->pSceneView->SceneRTHeight);
+	D3D12_VIEWPORT viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
+	D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
+
 	D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
 	const float clearColor[] = { 0, 0, 0, 0 };
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle();
@@ -148,6 +154,8 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 
 	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 	pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, nullptr);
+	pCmd->RSSetViewports(1, &viewport);
+	pCmd->RSSetScissorRects(1, &scissorsRect);
 
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
@@ -208,14 +216,21 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	CommandQueue& CPYCmdQ = mRenderer.GetCommandQueue(CommandQueue::EType::COPY);
 
 	// EXECUTE and SIGNAL
-	pCmd->Close();
-	GFXCmdQ.pQueue->ExecuteCommandLists(1, (ID3D12CommandList*const*)&pCmd);
-	CopyFence.Signal(GFXCmdQ.pQueue);
+	{
+		SCOPED_CPU_MARKER("ExecuteList");
+		pCmd->Close();
+		GFXCmdQ.pQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&pCmd);
+	}
+	{
+		SCOPED_CPU_MARKER("Fence");
+		CopyFence.Signal(GFXCmdQ.pQueue);
 
-	CopyFence.WaitOnGPU(CPYCmdQ.pQueue); // wait for render target done
+		CopyFence.WaitOnGPU(CPYCmdQ.pQueue); // wait for render target done
+	}
 
 	// record copy command
 	{
+		SCOPED_CPU_MARKER("Copy");
 		//pCmdCpy->CopyResource(pRscCPU, pRscRT);
 		D3D12_TEXTURE_COPY_LOCATION srcLoc = {};
 		srcLoc.pResource = pRscRT;
@@ -229,11 +244,15 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 
 		pCmdCpy->CopyTextureRegion(&dstLoc, 0, 0, 0, &srcLoc, nullptr);
 	}
-
-	pCmdCpy->Close();
-	CPYCmdQ.pQueue->ExecuteCommandLists(1, (ID3D12CommandList* const *)&pCmdCpy);
-	
-	CopyFence.Signal(CPYCmdQ.pQueue);
+	{
+		SCOPED_CPU_MARKER("ExecuteListCpy");
+		pCmdCpy->Close();
+		CPYCmdQ.pQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&pCmdCpy);
+	}
+	{
+		SCOPED_CPU_MARKER("Fence Signal");
+		CopyFence.Signal(CPYCmdQ.pQueue);
+	}
 
 #else
 

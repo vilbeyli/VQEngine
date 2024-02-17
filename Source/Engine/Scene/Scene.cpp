@@ -567,7 +567,7 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 		? mViewProjectionMatrixHistory.at(&cam)
 		: XMMatrixIdentity();
 	mViewProjectionMatrixHistory[&cam] = MatViewProj;
-	const FFrustumPlaneset ViewFrustumPlanes = FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj);
+	const FFrustumPlaneset ViewFrustumPlanes = FFrustumPlaneset::ExtractFromMatrix(MatViewProj);
 	
 	// extract scene view
 	SceneView.proj = MatProj;

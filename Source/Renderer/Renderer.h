@@ -27,6 +27,7 @@
 #include "Texture.h"
 #include "Shader.h"
 #include "WindowRenderContext.h"
+#include "Fence.h"
 
 #include "../Engine/Core/Types.h"
 #include "../Engine/Core/Platform.h"

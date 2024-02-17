@@ -1914,7 +1914,7 @@ static inline void computeShaderDraw(FFX_CACAO_D3D12Context* context, ComputeSha
 	commandList->Dispatch(width, height, depth);
 }
 
-FFX_CACAO_Status FFX_CACAO_D3D12Draw(FFX_CACAO_D3D12Context* context, ID3D12GraphicsCommandList* commandList, const FFX_CACAO_Matrix4x4* proj, const FFX_CACAO_Matrix4x4* normalsToView)
+FFX_CACAO_Status FFX_CACAO_D3D12Draw(FFX_CACAO_D3D12Context* context, ID3D12GraphicsCommandList* commandList, const FFX_CACAO_Matrix4x4* proj, const FFX_CACAO_Matrix4x4* normalsToView, bool bAsyncCompute)
 {
 	if (context == NULL || commandList == NULL || proj == NULL)
 	{
@@ -2221,7 +2221,10 @@ FFX_CACAO_Status FFX_CACAO_D3D12Draw(FFX_CACAO_D3D12Context* context, ID3D12Grap
 		D3D12_RESOURCE_BARRIER resourceBarriers[10] = {};
 		resourceBarriers[numBarriers++] = CD3DX12_RESOURCE_BARRIER::Transition(context->textures[TEXTURE_DEINTERLEAVED_DEPTHS], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		resourceBarriers[numBarriers++] = CD3DX12_RESOURCE_BARRIER::Transition(context->textures[TEXTURE_DEINTERLEAVED_NORMALS], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		resourceBarriers[numBarriers++] = CD3DX12_RESOURCE_BARRIER::Transition(context->outputResource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_GENERIC_READ);
+		if (!bAsyncCompute)
+		{
+			resourceBarriers[numBarriers++] = CD3DX12_RESOURCE_BARRIER::Transition(context->outputResource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_GENERIC_READ);
+		}
 		resourceBarriers[numBarriers++] = CD3DX12_RESOURCE_BARRIER::Transition(context->textures[TEXTURE_SSAO_BUFFER_PING], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		if (context->settings.qualityLevel == FFX_CACAO_QUALITY_HIGHEST || blurPassCount)
 		{

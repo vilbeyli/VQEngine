@@ -189,6 +189,8 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 				SetEffectiveFrameRateLimit(mSettings.gfx.MaxFrameRate);
 				Log::Info("Loading completed in %.2fs, starting scene simulation", dt_loading);
 				mTimer.Start();
+				UpdateThread_UpdateScene_MainWnd(dt);
+				UpdateThread_UpdateScene_DebugWnd(dt);
 			}
 		}
 	}	break;

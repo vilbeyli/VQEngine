@@ -206,7 +206,7 @@ extern "C"
 		\param normalsToView An optional pointer to a matrix for transforming normals to in the normal buffer to viewspace.
 		\return The corresponding error code.
 	*/
-	FFX_CACAO_Status FFX_CACAO_D3D12Draw(FFX_CACAO_D3D12Context* context, ID3D12GraphicsCommandList* commandList, const FFX_CACAO_Matrix4x4* proj, const FFX_CACAO_Matrix4x4* normalsToView);
+	FFX_CACAO_Status FFX_CACAO_D3D12Draw(FFX_CACAO_D3D12Context* context, ID3D12GraphicsCommandList* commandList, const FFX_CACAO_Matrix4x4* proj, const FFX_CACAO_Matrix4x4* normalsToView, bool bAsyncCompute);
 
 #if FFX_CACAO_ENABLE_PROFILING
 	/**
