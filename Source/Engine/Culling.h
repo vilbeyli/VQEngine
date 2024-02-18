@@ -145,12 +145,14 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	
 	using IndexList_t = std::vector<size_t>;
 
-	// Hot Data : used during culling --------------------------------------------------------------------------------------
-	/*in */ std::vector<FFrustumPlaneset> vFrustumPlanes;
-	/*in */ std::vector<FBoundingBox    > vBoundingBoxList;
+	// Hot Data (per view): used during culling --------------------------------------------------------------------------------------
+	/*in */ std::vector<FFrustumPlaneset  > vFrustumPlanes;
+	/*in */ std::vector<DirectX::XMMATRIX > vMatViewProj;
+	/*in */ std::vector<FBoundingBox      > vBoundingBoxList;
 
 	// store the index of the surviving bounding box in a list, per view frustum
-	/*out*/ std::vector<IndexList_t> vCulledBoundingBoxIndexListPerView; 
+	/*out*/ std::vector<IndexList_t       > vCulledBoundingBoxIndexListPerView; 
+	/*out*/ std::vector<std::vector<float>> vProjectedAreas;
 	// Hot Data ------------------------------------------------------------------------------------------------------------
 
 	//std::vector<int> vLightMovementTypeID; // index to access light type vectors: [0]:static, [1]:stationary, [2]:dynamic
@@ -158,6 +160,7 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	size_t NumValidInputElements = 0;
 
 	void AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet
+		, const DirectX::XMMATRIX& MatViewProj
 		, const std::vector<FBoundingBox>& vBoundingBoxList
 		, const std::vector<size_t>& vGameObjectHandles
 		, const std::vector<MaterialID>& vMaterials

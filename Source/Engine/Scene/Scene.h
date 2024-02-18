@@ -73,6 +73,8 @@ struct FSceneRenderParameters
 		int     samplesPerQuad = 1;
 	};
 
+	bool bForceLOD0_ShadowView = false;
+	bool bForceLOD0_SceneView = false;
 	bool bDrawLightBounds = false;
 	bool bDrawMeshBoundingBoxes = false;
 	bool bDrawGameObjectBoundingBoxes = false;
@@ -142,7 +144,11 @@ struct FSceneView
 	//	+----MESH225
 	//	       +----InstData0
 	//	       +----InstData1
-	struct FInstanceData { DirectX::XMMATRIX mWorld, mWorldViewProj, mWorldViewProjPrev, mNormal; int objID; }; // transformation matrixes used in the shader
+	struct FInstanceData { 
+		DirectX::XMMATRIX mWorld, mWorldViewProj, mWorldViewProjPrev, mNormal; 
+		int mObjID; 
+		float mProjectedArea;
+	}; // transformation matrixes used in the shader
 	struct FMeshInstanceData { size_t NumValidData = 0; std::vector<FInstanceData> InstanceData; };
 	std::unordered_map < MaterialID, std::unordered_map<MeshID, FMeshInstanceData>> MaterialMeshInstanceDataLookup;
 	//--------------------------------------------------------------------------------------------------------------------------------------------
@@ -161,18 +167,27 @@ struct FSceneShadowView
 		DirectX::XMMATRIX matViewProj;
 #if RENDER_INSTANCED_SHADOW_MESHES
 		//--------------------------------------------------------------------------------------------------------------------------------------------
-		//	+----SHADOW_MESH0
-		//	       +----ShadowInstData0
-		//	       +----ShadowInstData1
-		//	+----SHADOW_MESH1
-		//	       +----ShadowInstData0
-		//	       +----ShadowInstData1
-		//	       +----ShadowInstData2
-		struct FShadowInstanceData { DirectX::XMMATRIX matWorld, matWorldViewProj; };
-		struct FShadowMeshInstanceData { size_t NumValidData = 0; std::vector<FShadowInstanceData> InstanceData; };
-		std::unordered_map<MeshID, FShadowMeshInstanceData> ShadowMeshInstanceDataLookup;
+		//  +----SHADOW_MESH0
+		//     +----LOD0
+		//         +----ShadowInstData0
+		//         +----ShadowInstData1
+		//     +----LOD1
+		//         +----ShadowInstData0
+		//         +----ShadowInstData1
+		// 
+		//  +----SHADOW_MESH1
+		//     +----LOD0
+		//         +----ShadowInstData0
+		//         +----ShadowInstData1
+		//         +----ShadowInstData2
+		struct FShadowInstanceData { 
+			DirectX::XMMATRIX matWorld, matWorldViewProj;
+			float mProjectedArea;
+		};
+		struct FShadowInstanceDataArray { size_t NumValidData = 0; std::vector<FShadowInstanceData> InstanceData; };
+		std::unordered_map<MeshID, std::vector<FShadowInstanceDataArray>> ShadowMeshLODInstanceDataLookup;
 		//--------------------------------------------------------------------------------------------------------------------------------------------
-		std::vector<FInstancedShadowMeshRenderCommand> meshRenderCommands;
+		std::vector<FInstancedShadowMeshRenderCommand> meshRenderCommands; // per LOD mesh
 #else
 		std::vector<FShadowMeshRenderCommand> meshRenderCommands;
 #endif
@@ -366,6 +381,7 @@ private: // Derived Scenes shouldn't access these functions
 		  std::vector<MeshRenderCommand_t>* pMeshRenderCommands
 		, std::unordered_map < MaterialID, std::unordered_map<MeshID, FSceneView::FMeshInstanceData>>& MaterialMeshInstanceDataLookup
 		, const std::vector<size_t>& CulledBoundingBoxIndexList_Msh
+		, const std::vector<float>& CulledBoundingBoxProjectedAreas_Msh
 		, const DirectX::XMMATRIX& matViewProj
 		, const DirectX::XMMATRIX& matViewProjHistory
 	);
@@ -373,7 +389,9 @@ private: // Derived Scenes shouldn't access these functions
 		  size_t iFrustum
 		, FSceneShadowView::FShadowView* pShadowView
 		, const std::vector<size_t>* pCulledBoundingBoxIndexList_Msh
+		, const std::vector<float>& CulledBoundingBoxProjectedAreas_Msh
 		, DirectX::XMMATRIX matViewProj
+		, bool bForceLOD0
 	) const;
 
 

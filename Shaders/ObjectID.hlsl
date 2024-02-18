@@ -82,8 +82,9 @@ int4 PSMain(PSInput In) : SV_TARGET
 #endif
 #if INSTANCED_DRAW
 	int objID = cbPerObject.ObjID[In.instanceID].x;
+	int meshBBProjectedArea = cbPerObject.ObjID[In.instanceID].w;
 #else
 	int objID = cbPerObject.ObjID;
 #endif
-	return int4(objID, cbPerObject.meshID, cbPerObject.materialID, -111);
+	return int4(objID, cbPerObject.meshID, cbPerObject.materialID, meshBBProjectedArea);
 }

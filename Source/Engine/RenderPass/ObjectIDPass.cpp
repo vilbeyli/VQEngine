@@ -164,25 +164,16 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	for (const MeshRenderCommand_t& meshRenderCmd : pParams->pSceneView->meshRenderCommands)
 	{
 		using namespace VQ_SHADER_DATA;
-
-		if (pParams->pMeshes->find(meshRenderCmd.meshID) == pParams->pMeshes->end())
-		{
-			Log::Warning("MeshID=%d couldn't be found", meshRenderCmd.meshID);
-			continue; // skip drawing this mesh
-		}
 		
-		const Material& mat = GetMaterial(meshRenderCmd.matID, pParams->pMaterials);
-		const Mesh& mesh = pParams->pMeshes->at(meshRenderCmd.meshID);
-		const auto VBIBIDs = mesh.GetIABufferIDs();
-		const uint32 NumIndices = mesh.GetNumIndices();
-		const BufferID& VB_ID = VBIBIDs.first;
-		const BufferID& IB_ID = VBIBIDs.second;
+		const uint32 NumIndices = meshRenderCmd.numIndices;
+		const BufferID& VB_ID = meshRenderCmd.vertexIndexBuffer.first;
+		const BufferID& IB_ID = meshRenderCmd.vertexIndexBuffer.second;
 		const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
 		const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
-
 		const uint32 NumInstances = (uint32)meshRenderCmd.matNormal.size();
 
 		// set textures
+		const Material& mat = GetMaterial(meshRenderCmd.matID, pParams->pMaterials);
 		if (mat.SRVMaterialMaps != INVALID_ID)
 		{
 			pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));

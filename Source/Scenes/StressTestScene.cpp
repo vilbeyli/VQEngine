@@ -48,8 +48,6 @@ void StressTestScene::UpdateScene(float dt, FSceneView& SceneView)
 		for (int i=0; i< mAnimatiedObjectHandles.size(); ++i)
 		{
 			const size_t hObj = mAnimatiedObjectHandles[i];
-
-			const GameObject* pObj = GetGameObject(hObj);
 			Transform* pTf = GetGameObjectTransform(hObj);
 
 			XMVECTOR vAxis;
@@ -80,7 +78,7 @@ constexpr float ORBIT_SPEED_MAX = 0.8f;
 constexpr float ORBIT_SPEED_DEFAULT = 0.25f;
 void StressTestScene::InitializeScene()
 {
-	bEnableGeneratedObjectAnimation = true;
+	bEnableGeneratedObjectAnimation = false;
 	bEnableOrbit = true;
 	bEnableRotation = true;
 

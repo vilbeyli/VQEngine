@@ -296,19 +296,19 @@ void VQEngine::InitializeBuiltinMeshes()
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::CYLINDER;
 		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Cylinder<VertexType>(3.0f, 1.0f, 1.0f, 45, 6, 4);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Cylinder";
-		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.LODVertices[0], data.LODIndices[0], mResourceNames.mBuiltinMeshNames[eMesh]);
+		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::SPHERE;
-		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Sphere<VertexType>(1.0f, 30, 30, 4);
+		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Sphere<VertexType>(1.0f, 30, 30, 5);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Sphere";
-		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.LODVertices[0], data.LODIndices[0], mResourceNames.mBuiltinMeshNames[eMesh]);
+		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::CONE;
 		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Cone<VertexType>(1, 1, 42, 4);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Cone";
-		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.LODVertices[0], data.LODIndices[0], mResourceNames.mBuiltinMeshNames[eMesh]);
+		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	// ...
 
@@ -1089,7 +1089,7 @@ void VQEngine::RenderThread_RenderMainWindow()
 	if (hr == DXGI_ERROR_DEVICE_REMOVED){ RenderThread_HandleDeviceRemoved();  }
 
 	{
-		SCOPED_CPU_MARKER("SwapchainMoveToNextFrame");
+		SCOPED_CPU_MARKER_C("GPU_BOUND", 0xFF005500);
 		ctx.SwapChain.MoveToNextFrame();
 	}
 }
@@ -1361,6 +1361,9 @@ static void CopyPerObjectConstantBufferData(
 		for (uint i = 0; i < NumInstances; ++i)
 		{
 			pPerObj->ObjID[i].x = meshRenderCmd.objectID[i];
+			pPerObj->ObjID[i].y = -222;
+			pPerObj->ObjID[i].z = -333;
+			pPerObj->ObjID[i].w = (int)(meshRenderCmd.projectedArea[i] * 10000); // float value --> int render target
 		}
 #else
 		const uint32 NumInstances = 1;
@@ -1368,12 +1371,12 @@ static void CopyPerObjectConstantBufferData(
 		pPerObj->matWorldViewProjPrev = meshRenderCmd.matWorldTransformation;
 		pPerObj->matWorld = meshRenderCmd.matWorldTransformation;
 		pPerObj->matNormal = meshRenderCmd.matNormalTransformation;
-		pPerObj->objID = meshRenderCmd.objectID;
+		pPerObj->mObjID = meshRenderCmd.objectID;
 #endif
 
 		const Material& mat = pScene->GetMaterial(meshRenderCmd.matID);
 		pPerObj->materialData = std::move(mat.GetCBufferData());
-		pPerObj->meshID = meshRenderCmd.meshID;
+		//pPerObj->meshID = meshRenderCmd.meshID;
 		pPerObj->materialID = meshRenderCmd.matID;
 	}
 }
@@ -1459,7 +1462,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	mRenderStats = {};
 
 	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddresses(SceneView.meshRenderCommands.size());
-	UINT SSAODoneFenceValue = mAsyncComputeSSAODoneFence[BACK_BUFFER_INDEX].GetValue();
+	UINT64 SSAODoneFenceValue = mAsyncComputeSSAODoneFence[BACK_BUFFER_INDEX].GetValue();
 
 
 	if constexpr (!RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING)
@@ -1776,7 +1779,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 			if (iCmdDirectional != iCmdRenderThread)
 				vLightCommandLists.push_back(vCmdLists[iCmdDirectional]);
 
-			ctx.PresentQueue.pQueue->ExecuteCommandLists(vLightCommandLists.size(), (ID3D12CommandList**)&vLightCommandLists[0]);
+			ctx.PresentQueue.pQueue->ExecuteCommandLists((UINT)vLightCommandLists.size(), (ID3D12CommandList**)&vLightCommandLists[0]);
 			
 			mAsyncComputeSSAODoneFence[BACK_BUFFER_INDEX].WaitOnGPU(ctx.PresentQueue.pQueue, SSAODoneFenceValue+1);
 			ctx.PresentQueue.pQueue->ExecuteCommandLists(1, &pGfxCmd);

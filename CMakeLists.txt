@@ -180,7 +180,6 @@ set (SourceVQE
     "Source/Engine/Settings.h"
     "Source/Engine/Math.h"
     "Source/Engine/Culling.h"
-    "Source/Engine/Geometry.h"
     "Source/Engine/AssetLoader.h"
     "Source/Engine/GPUMarker.h"
 
@@ -192,7 +191,6 @@ set (SourceVQE
     "Source/Engine/VQEngine_Input.cpp"
     "Source/Engine/VQEngine_Simulation.cpp"
     "Source/Engine/EnvironmentMap.cpp"
-    "Source/Engine/Geometry.cpp"
     "Source/Engine/Math.cpp"
     "Source/Engine/Culling.cpp"
     "Source/Engine/AssetLoader.cpp"

@@ -124,6 +124,29 @@ bool IsFrustumIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes0, const 
 	return true;
 }
 
+float CalculateProjectedBoundingBoxArea(const FBoundingBox& BBox, const XMMATRIX& ViewProjectionMatrix) 
+{
+	auto corners = BBox.GetCornerPointsF4();
+	float minX = FLT_MAX, minY = FLT_MAX;
+	float maxX = -FLT_MAX, maxY = -FLT_MAX;
+
+	for (const auto& corner : corners) {
+		XMVECTOR cornerVec = XMLoadFloat4(&corner);
+		XMVECTOR projected = XMVector3TransformCoord(cornerVec, ViewProjectionMatrix);
+
+		XMFLOAT3 projectedF3;
+		XMStoreFloat3(&projectedF3, projected);
+
+		minX = std::fminf(minX, projectedF3.x);
+		minY = std::fminf(minY, projectedF3.y);
+		maxX = std::fmaxf(maxX, projectedF3.x);
+		maxY = std::fmaxf(maxY, projectedF3.y);
+	}
+
+	float width = maxX - minX;
+	float height = maxY - minY;
+	return width * height; // NDC[-1, 1] --> area [0, 4]
+}
 
 
 //------------------------------------------------------------------------------------------------------------------------------
@@ -137,6 +160,7 @@ void FFrustumCullWorkerContext::AllocInputMemoryIfNecessary(size_t sz)
 	{
 		SCOPED_CPU_MARKER("AllocMem");
 		vFrustumPlanes.resize(sz);
+		vMatViewProj.resize(sz);
 	}
 }
 void FFrustumCullWorkerContext::ClearMemory()
@@ -144,13 +168,16 @@ void FFrustumCullWorkerContext::ClearMemory()
 
 	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::ClearMemory()");
 	vFrustumPlanes.clear();
+	vMatViewProj.clear();
 	vBoundingBoxList.clear();
 	vCulledBoundingBoxIndexListPerView.clear();
+	vProjectedAreas.clear();
 	NumValidInputElements = 0;
 }
 
 void FFrustumCullWorkerContext::AddWorkerItem(
 	const FFrustumPlaneset& FrustumPlaneSet
+	, const DirectX::XMMATRIX& MatViewProj
 	, const std::vector<FBoundingBox>& vBoundingBoxListIn
 	, const std::vector<size_t>& vGameObjectHandles
 	, const std::vector<MaterialID>& vMaterials
@@ -159,6 +186,7 @@ void FFrustumCullWorkerContext::AddWorkerItem(
 {
 	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::AddWorkerItem()");
 	vFrustumPlanes[i] = FrustumPlaneSet;
+	vMatViewProj[i] = MatViewProj;
 	vBoundingBoxList = vBoundingBoxListIn;
 }
 
@@ -175,6 +203,7 @@ void FFrustumCullWorkerContext::ProcessWorkItems_SingleThreaded()
 
 	// allocate context memory
 	vCulledBoundingBoxIndexListPerView.resize(szFP);
+	vProjectedAreas.resize(szFP);
 
 	// process all items on this thread
 	this->Process(0, szFP - 1);
@@ -229,6 +258,7 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 
 	// allocate context memory
 	vCulledBoundingBoxIndexListPerView.resize(NumValidInputElements); // prepare worker output memory, each worker will then populate the vector
+	vProjectedAreas.resize(NumValidInputElements);
 
 	// distribute ranges of work into worker threads
 	const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, NumThreadsIncludingThisThread);
@@ -289,14 +319,22 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 			SCOPED_CPU_MARKER("Clear");
 			vCulledBoundingBoxIndexListPerView[iWork].clear();
 		}
-
-		SCOPED_CPU_MARKER("CullFrustum");
-		// process bounding box list per frustum
-		for (size_t bb = 0; bb < vBoundingBoxList.size(); ++bb)
 		{
-			if (IsBoundingBoxIntersectingFrustum(vFrustumPlanes[iWork], vBoundingBoxList[bb]))
+			SCOPED_CPU_MARKER("CullFrustum");
+			for (size_t bb = 0; bb < vBoundingBoxList.size(); ++bb)
 			{
-				vCulledBoundingBoxIndexListPerView[iWork].push_back(bb); // grows as we go (no pre-alloc)
+				if (IsBoundingBoxIntersectingFrustum(vFrustumPlanes[iWork], vBoundingBoxList[bb]))
+				{
+					vCulledBoundingBoxIndexListPerView[iWork].push_back(bb); // grows as we go (no pre-alloc)
+				}
+			}
+		}
+		{
+			SCOPED_CPU_MARKER("CalcProjectedArea");
+			for (size_t bb : vCulledBoundingBoxIndexListPerView[iWork])
+			{
+				const float fArea = CalculateProjectedBoundingBoxArea(vBoundingBoxList[bb], vMatViewProj[iWork]);
+				vProjectedAreas[iWork].push_back(fArea);
 			}
 		}
 	}
@@ -494,10 +532,8 @@ void SceneBoundingBoxHierarchy::Build(const Scene* pScene, const std::vector<siz
 
 			const size_t ThreadBBBatchCapacity = mNumValidMeshBoundingBoxes / (NumWorkerThreadsToUse+1);
 
-			size_t iBegin = 0;
-			size_t iEnd = 0;
-			size_t CurrBatchSize = 0;
-			size_t iBB = 0;
+			size_t iBegin = 0;       size_t iEnd = 0;
+			size_t CurrBatchSize = 0; size_t iBB = 0;
 			for (size_t i=0; i<NumObjs; ++i)
 			{
 				CurrBatchSize += mGameObjectNumMeshes[i];
@@ -510,7 +546,6 @@ void SceneBoundingBoxHierarchy::Build(const Scene* pScene, const std::vector<siz
 					iBB += CurrBatchSize;
 					CurrBatchSize = 0;
 				}
-
 			}
 
 			vRanges.push_back({ iBegin, iEnd, iBB });

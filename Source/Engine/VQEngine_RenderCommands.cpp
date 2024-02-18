@@ -33,26 +33,6 @@
 //
 // DRAW COMMANDS
 //
-void VQEngine::DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh, uint32 NumInstances /*= 1*/)
-{
-	using namespace DirectX;
-	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
-
-	// Draw Object -----------------------------------------------
-	const auto VBIBIDs = mesh.GetIABufferIDs();
-	const uint32 NumIndices = mesh.GetNumIndices();
-	const BufferID& VB_ID = VBIBIDs.first;
-	const BufferID& IB_ID = VBIBIDs.second;
-	const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
-	const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
-
-	pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	pCmd->IASetVertexBuffers(0, 1, &vb);
-	pCmd->IASetIndexBuffer(&ib);
-
-	pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
-}
-
 void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView::FShadowView& shadowView)
 {
 	using namespace DirectX;
@@ -66,17 +46,18 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 
 	for (const FInstancedShadowMeshRenderCommand& renderCmd : shadowView.meshRenderCommands)
 	{
-		// SCOPED_CPU_MARKER("Process_ShadowMeshRenderCommand"); // too granular
-		//if (renderCmd.matWorldViewProj.empty())
-		//	continue;
+		const uint32 NumInstances = (uint32)renderCmd.matWorldViewProj.size();
+		assert(NumInstances == renderCmd.matWorldViewProj.size());
+		assert(NumInstances == renderCmd.matWorldViewProjTransformations.size());
 
 		// set constant buffer data
 		FCBufferLightVS* pCBuffer = {};
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
 		if (renderCmd.matWorldViewProj.empty())
+		{
 			Log::Error("EMPTY COMMAND LIST WHYT??");
-		
+		}
 		const size_t memcpySrcSize = renderCmd.matWorldViewProj.size() * sizeof(XMMATRIX);
 		const size_t memcpyDstSize = _countof(pCBuffer->matWorld) * sizeof(XMMATRIX);
 		if (memcpyDstSize < memcpySrcSize)
@@ -88,12 +69,19 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 				, StrUtil::FormatByte(memcpyDstSize)
 			);
 		}
-		memcpy(pCBuffer->matWorld        , renderCmd.matWorldViewProj.data()        , renderCmd.matWorldViewProj.size() * sizeof(XMMATRIX));
-		memcpy(pCBuffer->matWorldViewProj, renderCmd.matWorldViewProjTransformations.data(), renderCmd.matWorldViewProjTransformations.size() * sizeof(XMMATRIX));
+		memcpy(pCBuffer->matWorld        , renderCmd.matWorldViewProj.data()               , NumInstances * sizeof(XMMATRIX));
+		memcpy(pCBuffer->matWorldViewProj, renderCmd.matWorldViewProjTransformations.data(), NumInstances * sizeof(XMMATRIX));
+		
+		auto vb = mRenderer.GetVertexBufferView(renderCmd.vertexIndexBuffer.first);
+		auto ib = mRenderer.GetIndexBufferView(renderCmd.vertexIndexBuffer.second);
+		
 		pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
 		
-		const Mesh& mesh = mpScene->mMeshes.at(renderCmd.meshID);
-		DrawMesh(pCmd, mesh, (uint32)renderCmd.matWorldViewProj.size());
+		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pCmd->IASetVertexBuffers(0, 1, &vb);
+		pCmd->IASetIndexBuffer(&ib);
+
+		pCmd->DrawIndexedInstanced(renderCmd.numIndices, NumInstances, 0, 0, 0);
 	}
 
 #else 
@@ -319,20 +307,13 @@ void VQEngine::RenderDepthPrePass(
 	// draw meshes
 	for (const MeshRenderCommand_t& meshRenderCmd : SceneView.meshRenderCommands)
 	{
-		if (mpScene->mMeshes.find(meshRenderCmd.meshID) == mpScene->mMeshes.end())
-		{
-			Log::Warning("MeshID=%d couldn't be found", meshRenderCmd.meshID);
-			continue; // skip drawing this mesh
-		}
-
 		const Material& mat = mpScene->GetMaterial(meshRenderCmd.matID);
-		const Mesh& mesh = mpScene->mMeshes.at(meshRenderCmd.meshID);
-		const auto VBIBIDs = mesh.GetIABufferIDs();
-		const uint32 NumIndices = mesh.GetNumIndices();
+		const auto VBIBIDs = meshRenderCmd.vertexIndexBuffer;
 		const BufferID& VB_ID = VBIBIDs.first;
 		const BufferID& IB_ID = VBIBIDs.second;
 		const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
 		const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
+		const uint32 NumIndices = meshRenderCmd.numIndices;
 
 #if RENDER_INSTANCED_SCENE_MESHES
 		const uint32 NumInstances = (uint32)meshRenderCmd.matNormal.size();
@@ -781,17 +762,10 @@ void VQEngine::RenderSceneColor(
 		int iCB = 0;
 		for (const MeshRenderCommand_t& meshRenderCmd : SceneView.meshRenderCommands)
 		{
-			if (mpScene->mMeshes.find(meshRenderCmd.meshID) == mpScene->mMeshes.end())
-			{
-				Log::Warning("MeshID=%d couldn't be found", meshRenderCmd.meshID);
-				continue; // skip drawing this mesh
-			}
-
-			const Mesh& mesh = mpScene->mMeshes.at(meshRenderCmd.meshID);
 			const Material& mat = mpScene->GetMaterial(meshRenderCmd.matID);
 
-			const auto VBIBIDs = mesh.GetIABufferIDs();
-			const uint32 NumIndices = mesh.GetNumIndices();
+			const auto VBIBIDs = meshRenderCmd.vertexIndexBuffer;
+			const uint32 NumIndices = meshRenderCmd.numIndices;
 			const BufferID& VB_ID = VBIBIDs.first;
 			const BufferID& IB_ID = VBIBIDs.second;
 			const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
@@ -805,12 +779,10 @@ void VQEngine::RenderSceneColor(
 
 			pCmd->SetGraphicsRootConstantBufferView(PerObjRSBindSlot, perObjCBAddr[iCB++]);
 
-			// set textures
-			if (mat.SRVMaterialMaps != INVALID_ID)
+			if (mat.SRVMaterialMaps != INVALID_ID) // set textures
 			{
 				pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
 				//pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
-
 			}
 
 			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -899,7 +871,18 @@ void VQEngine::RenderSceneColor(
 		pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_HDREnvironment).GetGPUDescHandle());
 		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
 
-		DrawMesh(pCmd, mBuiltinMeshes[EBuiltInMeshes::CUBE]);
+		const UINT NumIndices = mBuiltinMeshes[EBuiltInMeshes::CUBE].GetNumIndices();
+		auto VBIB = mBuiltinMeshes[EBuiltInMeshes::CUBE].GetIABufferIDs();
+		auto vb = mRenderer.GetVertexBufferView(VBIB.first);
+		auto ib = mRenderer.GetIndexBufferView(VBIB.second);
+
+		pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
+
+		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pCmd->IASetVertexBuffers(0, 1, &vb);
+		pCmd->IASetIndexBuffer(&ib);
+
+		pCmd->DrawIndexedInstanced(NumIndices, 1, 0, 0, 0);
 	}
 }
 
@@ -913,9 +896,9 @@ void VQEngine::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
 
 		// set IA
-		const Mesh& mesh = mpScene->mMeshes.at(SceneView.boundingBoxRenderCommands.begin()->meshID);
-		const auto VBIBIDs = mesh.GetIABufferIDs();
-		const uint32 NumIndices = mesh.GetNumIndices();
+		const FInstancedBoundingBoxRenderCommand& params = *SceneView.boundingBoxRenderCommands.begin();
+		const auto VBIBIDs = params.vertexIndexBuffer;
+		const uint32 NumIndices = params.numIndices;
 		const BufferID& VB_ID = VBIBIDs.first;
 		const BufferID& IB_ID = VBIBIDs.second;
 		const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);

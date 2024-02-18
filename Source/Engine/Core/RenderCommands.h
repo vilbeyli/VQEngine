@@ -69,7 +69,8 @@ using FBoundingBoxRenderCommand = FWireframeRenderCommand;
 // ------------------------------------------------------------------------------------
 struct FInstancedMeshRenderCommandBase
 {
-	MeshID meshID = INVALID_ID;
+	int numIndices = 0;
+	std::pair<BufferID, BufferID> vertexIndexBuffer;
 	std::vector<DirectX::XMMATRIX> matWorldViewProj;
 };
 struct FInstancedMotionVectorMeshCommand
@@ -81,6 +82,7 @@ struct FInstancedMeshRenderCommand : public FInstancedMeshRenderCommandBase, pub
 	std::vector<DirectX::XMMATRIX> matNormal;
 	std::vector<DirectX::XMMATRIX> matWorld;
 	std::vector<int> objectID;
+	std::vector<float> projectedArea;
 	MaterialID matID = INVALID_ID;
 };
 struct FInstancedWireframeRenderCommand : public FInstancedMeshRenderCommandBase
