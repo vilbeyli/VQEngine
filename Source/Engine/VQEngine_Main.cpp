@@ -356,7 +356,7 @@ void VQEngine::InitializeEngineThreads()
 	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
 	const size_t HWThreads  = ThreadPool::sHardwareThreadCount;
 	const size_t HWCores    = HWThreads / 2;
-	const size_t NumRuntimeWorkers = HWCores - 2; // reserve 2 cores for Update + Render threads
+	const size_t NumRuntimeWorkers = HWCores - 1; // reserve 1 core for Update + Render threads
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mpSemUpdate.reset(new Semaphore(NUM_SWAPCHAIN_BACKBUFFERS, NUM_SWAPCHAIN_BACKBUFFERS));

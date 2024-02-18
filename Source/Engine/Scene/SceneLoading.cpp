@@ -113,7 +113,7 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 		SCOPED_CPU_MARKER("ClearSceneViews");
 		for (FSceneView& view : mFrameSceneViews)
 		{
-			view.MaterialMeshInstanceDataLookup.clear();
+			view.MaterialMeshLODInstanceDataLookup.clear();
 		}
 	}
 	{
