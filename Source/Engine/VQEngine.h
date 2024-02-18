@@ -445,8 +445,9 @@ private:
 	EventQueue_t                    mEventQueue_WinToVQE_Update;
 	std::vector<Fence>              mAsyncComputeSSAOReadyFence;
 	std::vector<Fence>              mAsyncComputeSSAODoneFence;
-	std::atomic<bool>               mAsyncComputeWorkSubmitted = false;
 	std::vector<Fence>              mCopyObjIDDoneFence; // GPU->CPU
+	std::atomic<bool>               mAsyncComputeWorkSubmitted = false;
+	std::atomic<bool>               mSubmitWorkerFinished = true;
 
 	// renderer
 	VQRenderer                      mRenderer;

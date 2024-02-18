@@ -997,6 +997,7 @@ void VQEngine::RenderThread_PreRender()
 			ctx.AllocateCommandLists(CommandQueue::EType::COMPUTE, NumComputeCmdLists);
 		}
 	}
+
 	{
 		SCOPED_CPU_MARKER("ResetCmdLists");
 		ctx.ResetCommandLists(CommandQueue::EType::GFX, NumCmdRecordingThreads_GFX);
@@ -1007,19 +1008,16 @@ void VQEngine::RenderThread_PreRender()
 #if OBJECTID_PASS__USE_ASYNC_COPY
 			ctx.ResetCommandLists(CommandQueue::EType::COPY, NumCopyCmdLists);
 #endif
-
 			if (bUseAsyncCompute)
 			{
 				ctx.ResetCommandLists(CommandQueue::EType::COMPUTE, NumComputeCmdLists);
 			}
 		}
-
 	}
 	{
 		SCOPED_CPU_MARKER("AllocCBMem");
 		ctx.AllocateConstantBufferMemory(NumCmdRecordingThreads, ConstantBufferBytesPerThread);
 	}
-
 	{
 		SCOPED_CPU_MARKER("CB.BeginFrame");
 		for (size_t iThread = 0; iThread < NumCmdRecordingThreads; ++iThread)
@@ -1038,7 +1036,6 @@ void VQEngine::RenderThread_PreRender()
 			static_cast<ID3D12GraphicsCommandList*>(vpGFXCmds[iGFX])->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 		}
 
-
 		if (bUseAsyncCompute)
 		{
 			auto& vpCMPCmds = ctx.GetComputeCommandListPtrs();
@@ -1047,7 +1044,6 @@ void VQEngine::RenderThread_PreRender()
 				// TODO: do we need this?
 				static_cast<ID3D12GraphicsCommandList*>(vpCMPCmds[iCMP])->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 			}
-			
 		}
 	}
 }
@@ -1084,14 +1080,6 @@ void VQEngine::RenderThread_RenderMainWindow()
 	hr = mbLoadingLevel || mbLoadingEnvironmentMap
 		? RenderThread_RenderMainWindow_LoadingScreen(ctx)
 		: RenderThread_RenderMainWindow_Scene(ctx);
-
-	if (hr == DXGI_STATUS_OCCLUDED)     { RenderThread_HandleStatusOccluded(); }
-	if (hr == DXGI_ERROR_DEVICE_REMOVED){ RenderThread_HandleDeviceRemoved();  }
-
-	{
-		SCOPED_CPU_MARKER_C("GPU_BOUND", 0xFF005500);
-		ctx.SwapChain.MoveToNextFrame();
-	}
 }
 
 
@@ -1307,7 +1295,12 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	}
 
 	hr = PresentFrame(ctx);
-
+	if (hr == DXGI_STATUS_OCCLUDED) { RenderThread_HandleStatusOccluded(); }
+	if (hr == DXGI_ERROR_DEVICE_REMOVED) { RenderThread_HandleDeviceRemoved(); }
+	{
+		SCOPED_CPU_MARKER_C("GPU_BOUND", 0xFF005500);
+		ctx.SwapChain.MoveToNextFrame();
+	}
 	return hr;
 }
 
@@ -1380,6 +1373,7 @@ static void CopyPerObjectConstantBufferData(
 		pPerObj->materialID = meshRenderCmd.matID;
 	}
 }
+
 
 HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 {
@@ -1550,6 +1544,11 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		CopyPerObjectConstantBufferData(cbAddresses, &CBHeap_This, SceneView, mpScene); // TODO: threadify this, join+fork
 		{
+			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS", 0xFFFF0000);
+			while (!mSubmitWorkerFinished.load());
+			mSubmitWorkerFinished.store(false);
+		}
+		{
 			SCOPED_CPU_MARKER("DispatchWorkers");
 
 			// ZPrePass
@@ -1654,10 +1653,10 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 				ID3D12GraphicsCommandList* pCmd_Spots = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdSpots);
 				DynamicBufferHeap& CBHeap_Spots = ctx.GetConstantBufferHeap(iCmdSpots);
 				WorkerThreads.AddTask([=, &CBHeap_Spots, &SceneShadowView]()
-					{
-						RENDER_WORKER_CPU_MARKER;
-						RenderSpotShadowMaps(pCmd_Spots, &CBHeap_Spots, SceneShadowView);
-					});
+				{
+					RENDER_WORKER_CPU_MARKER;
+					RenderSpotShadowMaps(pCmd_Spots, &CBHeap_Spots, SceneShadowView);
+				});
 			}
 			if (SceneShadowView.NumPointShadowViews > 0)
 			{
@@ -1679,10 +1678,10 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 				ID3D12GraphicsCommandList* pCmd_Directional = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdDirectional);
 				DynamicBufferHeap& CBHeap_Directional = ctx.GetConstantBufferHeap(iCmdDirectional);
 				WorkerThreads.AddTask([=, &CBHeap_Directional, &SceneShadowView]()
-					{
-						RENDER_WORKER_CPU_MARKER;
-						RenderDirectionalShadowMaps(pCmd_Directional, &CBHeap_Directional, SceneShadowView);
-					});
+				{
+					RENDER_WORKER_CPU_MARKER;
+					RenderDirectionalShadowMaps(pCmd_Directional, &CBHeap_Directional, SceneShadowView);
+				});
 			}
 		}
 
@@ -1743,9 +1742,24 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		// TODO: async compute support for single-threaded CPU cmd recording
 		static_cast<ID3D12GraphicsCommandList*>(vCmdLists[0])->Close();
 		ctx.PresentQueue.pQueue->ExecuteCommandLists(1, vCmdLists.data());
+
+		hr = PresentFrame(ctx);
+		if (hr == DXGI_STATUS_OCCLUDED) { RenderThread_HandleStatusOccluded(); }
+		if (hr == DXGI_ERROR_DEVICE_REMOVED) { RenderThread_HandleDeviceRemoved(); }
+		{
+			SCOPED_CPU_MARKER_C("GPU_BOUND", 0xFF005500);
+			ctx.SwapChain.MoveToNextFrame();
+		}
 	}
+
 	else
 	{
+		#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+		ThreadPool& WorkerThreads = mWorkers_Render;
+		#else
+		ThreadPool& WorkerThreads = mWorkers_Simulation;
+		#endif
+
 		//  TODO remove this copy paste
 		constexpr size_t iCmdZPrePassThread = 0;
 		constexpr size_t iCmdObjIDPassThread = iCmdZPrePassThread + 1;
@@ -1760,38 +1774,51 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		{
 			if (bAsyncCompute && (i == iCmdZPrePassThread || i == iCmdObjIDPassThread))
 				continue; // already closed & executed
-
 			static_cast<ID3D12GraphicsCommandList*>(vCmdLists[i])->Close();
 		}
 
-		// execute command lists
-		if (bAsyncCompute)
-		{
-			SCOPED_CPU_MARKER("ExecuteCommandLists_Async");
-			
-			ID3D12CommandList* pGfxCmd = vCmdLists[iCmdRenderThread];
-			
-			std::vector<ID3D12CommandList*> vLightCommandLists;
-			for (int i = iCmdPointLightsThread; i - iCmdPointLightsThread < SceneShadowView.NumPointShadowViews; ++i)
-				vLightCommandLists.push_back(vCmdLists[i]);
-			if (iCmdSpots != iCmdRenderThread)
-				vLightCommandLists.push_back(vCmdLists[iCmdSpots]);
-			if (iCmdDirectional != iCmdRenderThread)
-				vLightCommandLists.push_back(vCmdLists[iCmdDirectional]);
+		// execute command lists on a thread
+		WorkerThreads.AddTask([=, &SceneView, &cbAddresses, &ctx, &vCmdLists, &SceneShadowView]()
+		{	
+			RENDER_WORKER_CPU_MARKER;
+			{
+				if (bAsyncCompute)
+				{
+					SCOPED_CPU_MARKER("ExecuteCommandLists_Async");
 
-			ctx.PresentQueue.pQueue->ExecuteCommandLists((UINT)vLightCommandLists.size(), (ID3D12CommandList**)&vLightCommandLists[0]);
-			
-			mAsyncComputeSSAODoneFence[BACK_BUFFER_INDEX].WaitOnGPU(ctx.PresentQueue.pQueue, SSAODoneFenceValue+1);
-			ctx.PresentQueue.pQueue->ExecuteCommandLists(1, &pGfxCmd);
-		}
-		else
-		{
-			SCOPED_CPU_MARKER("ExecuteCommandLists");
-			ctx.PresentQueue.pQueue->ExecuteCommandLists(NumCommandLists, (ID3D12CommandList**)&vCmdLists[0]);
-		}
+					ID3D12CommandList* pGfxCmd = vCmdLists[iCmdRenderThread];
+
+					std::vector<ID3D12CommandList*> vLightCommandLists;
+					for (int i = iCmdPointLightsThread; i - iCmdPointLightsThread < SceneShadowView.NumPointShadowViews; ++i)
+						vLightCommandLists.push_back(vCmdLists[i]);
+					if (iCmdSpots != iCmdRenderThread)
+						vLightCommandLists.push_back(vCmdLists[iCmdSpots]);
+					if (iCmdDirectional != iCmdRenderThread)
+						vLightCommandLists.push_back(vCmdLists[iCmdDirectional]);
+
+					ctx.PresentQueue.pQueue->ExecuteCommandLists((UINT)vLightCommandLists.size(), (ID3D12CommandList**)&vLightCommandLists[0]);
+
+					mAsyncComputeSSAODoneFence[BACK_BUFFER_INDEX].WaitOnGPU(ctx.PresentQueue.pQueue, SSAODoneFenceValue + 1);
+					ctx.PresentQueue.pQueue->ExecuteCommandLists(1, &pGfxCmd);
+				}
+				else
+				{
+					SCOPED_CPU_MARKER("ExecuteCommandLists");
+					ctx.PresentQueue.pQueue->ExecuteCommandLists(NumCommandLists, (ID3D12CommandList**)&vCmdLists[0]);
+				}
+
+				HRESULT hr = PresentFrame(ctx);
+				if (hr == DXGI_STATUS_OCCLUDED) { RenderThread_HandleStatusOccluded(); }
+				if (hr == DXGI_ERROR_DEVICE_REMOVED) { RenderThread_HandleDeviceRemoved(); }
+				{
+					SCOPED_CPU_MARKER_C("GPU_BOUND", 0xFF005500);
+					ctx.SwapChain.MoveToNextFrame();
+				}
+
+				mSubmitWorkerFinished.store(true);
+			}
+		});
 	}
-
-	hr = PresentFrame(ctx);
 
 	return hr;
 }
