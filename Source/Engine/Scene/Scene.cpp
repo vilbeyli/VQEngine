@@ -1083,6 +1083,22 @@ void Scene::CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerTh
 }
 
 
+static int GetLODFromProjectedScreenArea(float fArea, int NumMaxLODs)
+{
+	// LOD0 >= 0.100 >= LOD1 >= 0.010 >= LOD2 >= 0.001
+	//
+	// coarse algorithm: just pick 1/10th for each available lod
+	int CurrLOD = 0;
+	float Threshold = 0.1f;
+	while (CurrLOD < NumMaxLODs - 1 && fArea <= Threshold)
+	{
+		Threshold *= 0.1f;
+		++CurrLOD;
+	}
+	assert(CurrLOD < NumMaxLODs && CurrLOD >= 0);
+	return CurrLOD;
+}
+
 
 static const XMMATRIX IdentityMat = XMMatrixIdentity();
 static const XMVECTOR IdentityQuaternion = XMQuaternionIdentity();
@@ -1237,6 +1253,7 @@ void Scene::BatchInstanceData_SceneMeshes(
 	, const std::vector<float>& CulledBoundingBoxProjectedAreas_Msh
 	, const DirectX::XMMATRIX& matViewProj
 	, const DirectX::XMMATRIX& matViewProjHistory
+	, bool bForceLOD0
 )
 {
 	SCOPED_CPU_MARKER("BatchInstanceData_SceneMeshes");
@@ -1253,8 +1270,8 @@ void Scene::BatchInstanceData_SceneMeshes(
 
 	{
 		SCOPED_CPU_MARKER("CollectInstanceData");
-		const std::vector<MeshID>& MeshBB_MeshID        = mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping;
-		const std::vector<MaterialID>& MeshBB_MatID     = mBoundingBoxHierarchy.mMeshBoundingBoxMaterialIDMapping;
+		const std::vector<MeshID>& MeshBB_MeshID               = mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping;
+		const std::vector<MaterialID>& MeshBB_MatID            = mBoundingBoxHierarchy.mMeshBoundingBoxMaterialIDMapping;
 		const std::vector<const Transform*>& MeshBB_Transforms = mBoundingBoxHierarchy.mMeshTransforms;
 
 		int iiBB = 0;
@@ -1272,26 +1289,26 @@ void Scene::BatchInstanceData_SceneMeshes(
 			const XMMATRIX matWVP = matWorld * matViewProj;
 
 			MaterialID matID = MeshBB_MatID[iBB];
+			
+			// record instance data
+			FSceneView::FMeshInstanceData& d = MaterialMeshInstanceDataLookup[matID][meshID];
+
+			// if we're seeing this material/mesh combo the first time, 
+			// allocate some memory for instance data, enough for 1 batch
+			if (d.InstanceData.empty() || d.InstanceData.size() == d.NumValidData)
 			{
-				// record instance data
-				FSceneView::FMeshInstanceData& d = MaterialMeshInstanceDataLookup[matID][meshID];
-
-				// if we're seeing this material/mesh combo the first time, 
-				// allocate some memory for instance data, enough for 1 batch
-				if (d.InstanceData.empty() || d.InstanceData.size() == d.NumValidData)
-				{
-					SCOPED_CPU_MARKER("MemAlloc");
-					d.InstanceData.resize(d.InstanceData.empty() ? MAX_INSTANCE_COUNT__SCENE_MESHES : d.InstanceData.size() * 2);
-				}
-
-				d.InstanceData[d.NumValidData++] = { 
-					matWorld, matWVP,
-					matWorldHistory * matViewProjHistory, 
-					matNormal,
-					(int)objID,
-					CulledBoundingBoxProjectedAreas_Msh[iiBB++]
-				};
+				SCOPED_CPU_MARKER("MemAlloc");
+				d.InstanceData.resize(d.InstanceData.empty() ? MAX_INSTANCE_COUNT__SCENE_MESHES : d.InstanceData.size() * 2);
 			}
+
+			d.InstanceData[d.NumValidData++] = { 
+				matWorld, matWVP,
+				matWorldHistory * matViewProjHistory, 
+				matNormal,
+				(int)objID,
+				CulledBoundingBoxProjectedAreas_Msh[iiBB++]
+			};
+			
 		}
 	}
 
@@ -1345,16 +1362,19 @@ void Scene::BatchInstanceData_SceneMeshes(
 			{
 				const MeshID meshID = itMesh->first;
 				const FSceneView::FMeshInstanceData& MeshInstanceData = itMesh->second;
-
+				
 				int NumInstancesToProces = (int)MeshInstanceData.NumValidData;
 				int iInst = 0;
 				while (NumInstancesToProces > 0)
 				{
 					const int ThisBatchSize = std::min(MAX_INSTANCE_COUNT__SCENE_MESHES, NumInstancesToProces);
-
 					const Mesh& mesh = mMeshes.at(meshID);
-					uint lod = 0;
-					assert(lod >= 0 && lod < mesh.GetNumLODs());
+					const int NumLODs = mesh.GetNumLODs();
+
+					const float fArea = 0.0f; // CulledBoundingBoxProjectedAreas_Msh[iBBIndex];
+
+					uint lod = bForceLOD0 ? 0 : GetLODFromProjectedScreenArea(fArea, NumLODs);
+					assert(lod >= 0 && lod < NumLODs);
 
 					FInstancedMeshRenderCommand& cmd = (*pMeshRenderCommands)[NumInstancedRenderCommands];
 					//cmd.meshID = meshID; // TODO:
@@ -1419,22 +1439,6 @@ void Scene::BatchInstanceData_SceneMeshes(
 		MeshRenderCommands.push_back(meshRenderCmd);
 	}
 #endif
-}
-
-static int GetLODFromProjectedScreenArea(float fArea, int NumMaxLODs)
-{
-	// LOD0 >= 0.100 >= LOD1 >= 0.010 >= LOD2 >= 0.001
-	//
-	// coarse algorithm: just pick 1/10th for each available lod
-	int CurrLOD = 0;
-	float Threshold = 0.1f;
-	while (CurrLOD < NumMaxLODs-1 && fArea <= Threshold)
-	{
-		Threshold *= 0.1f;
-		++CurrLOD;
-	}
-	assert(CurrLOD < NumMaxLODs && CurrLOD >= 0);
-	return CurrLOD;
 }
 
 void Scene::BatchInstanceData_ShadowMeshes(
@@ -1607,6 +1611,7 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 				, mFrustumCullWorkerContext.vProjectedAreas[0]
 				, SceneView.viewProj
 				, SceneView.viewProjPrev
+				, SceneView.sceneParameters.bForceLOD0_SceneView
 			);
 		});
 	}
@@ -1618,6 +1623,7 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 			, mFrustumCullWorkerContext.vProjectedAreas[0]
 			, SceneView.viewProj
 			, SceneView.viewProjPrev
+			, SceneView.sceneParameters.bForceLOD0_SceneView
 		);
 	}
 	// Main View --------------------------------------------------------------------------------

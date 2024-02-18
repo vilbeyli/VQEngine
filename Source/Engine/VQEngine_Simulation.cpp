@@ -17,7 +17,6 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "VQEngine.h"
-#include "Geometry.h"
 #include "GPUMarker.h"
 
 #include <d3d12.h>

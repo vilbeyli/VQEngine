@@ -384,6 +384,7 @@ private: // Derived Scenes shouldn't access these functions
 		, const std::vector<float>& CulledBoundingBoxProjectedAreas_Msh
 		, const DirectX::XMMATRIX& matViewProj
 		, const DirectX::XMMATRIX& matViewProjHistory
+		, bool bForceLOD0
 	);
 	void BatchInstanceData_ShadowMeshes(
 		  size_t iFrustum
