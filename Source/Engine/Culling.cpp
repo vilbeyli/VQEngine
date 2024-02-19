@@ -127,25 +127,22 @@ bool IsFrustumIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes0, const 
 float CalculateProjectedBoundingBoxArea(const FBoundingBox& BBox, const XMMATRIX& ViewProjectionMatrix) 
 {
 	auto corners = BBox.GetCornerPointsF4();
-	float minX = FLT_MAX, minY = FLT_MAX;
-	float maxX = -FLT_MAX, maxY = -FLT_MAX;
+	
+	const XMFLOAT3 f3Min(+FLT_MAX, +FLT_MAX, +FLT_MAX);
+	const XMFLOAT3 f3Max(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+	XMVECTOR vMin = XMLoadFloat3(&f3Min);
+	XMVECTOR vMax = XMLoadFloat3(&f3Max);
 
 	for (const auto& corner : corners) {
 		XMVECTOR cornerVec = XMLoadFloat4(&corner);
 		XMVECTOR projected = XMVector3TransformCoord(cornerVec, ViewProjectionMatrix);
 
-		XMFLOAT3 projectedF3;
-		XMStoreFloat3(&projectedF3, projected);
-
-		minX = std::fminf(minX, projectedF3.x);
-		minY = std::fminf(minY, projectedF3.y);
-		maxX = std::fmaxf(maxX, projectedF3.x);
-		maxY = std::fmaxf(maxY, projectedF3.y);
+		vMin = XMVectorMin(projected, vMin);
+		vMax = XMVectorMax(projected, vMax);
 	}
 
-	float width = maxX - minX;
-	float height = maxY - minY;
-	return width * height; // NDC[-1, 1] --> area [0, 4]
+	XMVECTOR vLen = vMax - vMin;
+	return vLen.m128_f32[0] * vLen.m128_f32[1]; // NDC[-1, 1] --> area [0, 4]
 }
 
 
