@@ -258,7 +258,7 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 	vProjectedAreas.resize(NumValidInputElements);
 
 	// distribute ranges of work into worker threads
-	const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, NumThreadsIncludingThisThread);
+	const std::vector<std::pair<size_t, size_t>> vRanges = GetWorkRanges(NumThreadsIncludingThisThread);
 	
 	// dispatch worker threads
 	// DispatchWorkers(WorkerThreadPool, NumWorkItems, Process); // TODO: make this a single funciton
@@ -285,21 +285,26 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 	}
 
 	// process the remaining work on this thread
-	{
-		SCOPED_CPU_MARKER("Process_ThisThread");
-		const size_t& iBegin = vRanges.back().first;
-		const size_t& iEnd   = vRanges.back().second; // inclusive
-		this->Process(iBegin, iEnd);
-	}
+	//{
+	//	SCOPED_CPU_MARKER("Process_ThisThread");
+	//	const size_t& iBegin = vRanges.back().first;
+	//	const size_t& iEnd   = vRanges.back().second; // inclusive
+	//	this->Process(iBegin, iEnd);
+	//}
 
 	// Sync point -------------------------------------------------
-	{
-		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS", 0xFFFF0000);
-		while (WorkerThreadPool.GetNumActiveTasks() != 0); // busy-wait is bad...
-	}
+	//{
+	//	SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS", 0xFFFF0000);
+	//	while (WorkerThreadPool.GetNumActiveTasks() != 0); // busy-wait is bad...
+	//}
 	// Sync point -------------------------------------------------
 
 	return;
+}
+
+const std::vector<std::pair<size_t, size_t>> FFrustumCullWorkerContext::GetWorkRanges(size_t NumThreadsIncludingThisThread) const
+{
+	return PartitionWorkItemsIntoRanges(NumValidInputElements, NumThreadsIncludingThisThread);
 }
 
 void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
@@ -645,8 +650,8 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBox(const Scene* pScene, size_t
 			FBoundingBox AABB = CalculateAxisAlignedBoundingBox(matWorld, mMeshes.at(mesh).GetLocalSpaceBoundingBox());
 
 			mMeshBoundingBoxes[iMesh] = std::move(AABB);
-			mMeshBoundingBoxMeshIDMapping[iMesh] = mesh;
-			mMeshBoundingBoxMaterialIDMapping[iMesh] = mat;
+			mMeshIDs[iMesh] = mesh;
+			mMeshMaterials[iMesh] = mat;
 			mMeshGameObjectHandles[iMesh] = ObjectHandle;
 			mMeshTransforms[iMesh] = pTF;
 			++iMesh;
@@ -702,8 +707,8 @@ void SceneBoundingBoxHierarchy::Clear()
 	mGameObjectHandles.clear();
 	
 	mMeshBoundingBoxes.clear();
-	mMeshBoundingBoxMeshIDMapping.clear();
-	mMeshBoundingBoxMaterialIDMapping.clear();
+	mMeshIDs.clear();
+	mMeshMaterials.clear();
 	mMeshTransforms.clear();
 	mMeshGameObjectHandles.clear();
 }
@@ -736,8 +741,8 @@ void SceneBoundingBoxHierarchy::ResizeGameMeshBoxContainer(size_t size)
 {
 	SCOPED_CPU_MARKER("BuildMeshBoundingBoxes_Rsz");
 	mMeshBoundingBoxes.resize(size);
-	mMeshBoundingBoxMeshIDMapping.resize(size);
-	mMeshBoundingBoxMaterialIDMapping.resize(size);
+	mMeshIDs.resize(size);
+	mMeshMaterials.resize(size);
 	mMeshTransforms.resize(size);
 	mMeshGameObjectHandles.resize(size);
 }

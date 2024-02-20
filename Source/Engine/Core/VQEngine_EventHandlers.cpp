@@ -425,6 +425,8 @@ void VQEngine::RenderThread_HandleWindowCloseEvent(const IEvent* pEvent)
 
 	Log::Info("RenderThread: Handle Window Close event <%x>", hwnd);
 
+	// TODO: wait for GPU to finish all queues
+
 	RenderThread_UnloadWindowSizeDependentResources(hwnd);
 	pWindowCloseEvent->Signal_WindowDependentResourcesDestroyed.NotifyAll();
 

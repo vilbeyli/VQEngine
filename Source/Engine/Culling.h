@@ -172,8 +172,10 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	void ProcessWorkItems_SingleThreaded();
 	void ProcessWorkItems_MultiThreaded(const size_t NumThreadsIncludingThisThread, ThreadPool& WorkerThreadPool);
 
+	const std::vector<std::pair<size_t, size_t>> GetWorkRanges(size_t NumThreadsIncludingThisThread) const;
+
 	void AllocInputMemoryIfNecessary(size_t sz);
-private:
+//private:
 	void Process(size_t iRangeBegin, size_t iRangeEnd) override;
 
 };

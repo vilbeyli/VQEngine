@@ -601,10 +601,10 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 	GatherShadowViewData(ShadowView, mLightsDynamic, mActiveLightIndices_Dynamic);
 
 	GatherFrustumCullParameters(SceneView, ShadowView, UpdateWorkerThreadPool);
+	
+	CullFrustums(SceneView, UpdateWorkerThreadPool, mSceneMeshDrawParamKeysPerWorker);
 
-	CullFrustums(SceneView, UpdateWorkerThreadPool);
-
-	BatchInstanceData(SceneView, UpdateWorkerThreadPool);
+	BatchInstanceData(SceneView, UpdateWorkerThreadPool, mSceneMeshDrawParamKeysPerWorker);
 	
 	RecordRenderLightMeshCommands(SceneView);
 	RecordOutlineRenderCommands(SceneView.outlineRenderCommands, mSelectedObjects, this, MatView, MatProj, SceneView.sceneParameters.OutlineColor);
@@ -911,6 +911,7 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 	const size_t NumThreads = 1 + NumWorkerThreads;
 
 #if UPDATE_THREAD__ENABLE_WORKERS
+	
 	{
 		SCOPED_CPU_MARKER("InitFrustumCullWorkerContexts");
 #if 0 // debug-single threaded
@@ -944,7 +945,7 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 									, FrustumViewProjMatrix[i]
 									, BVH.mMeshBoundingBoxes
 									, BVH.mGameObjectHandles
-									, BVH.mMeshBoundingBoxMaterialIDMapping
+									, BVH.mMeshMaterials
 									, i
 								);
 						}
@@ -959,7 +960,7 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 					, FrustumViewProjMatrix[i]
 					, BVH.mMeshBoundingBoxes
 					, BVH.mGameObjectHandles
-					, BVH.mMeshBoundingBoxMaterialIDMapping
+					, BVH.mMeshMaterials
 					, i
 				);
 			}
@@ -974,6 +975,21 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 		while (UpdateWorkerThreadPool.GetNumActiveTasks() != 0);
 	}
 	// --------------------------------------------------- SYNC ---------------------------------------------------
+
+	{
+		SCOPED_CPU_MARKER("DispatchClearKeyWorkers");
+		for (std::unordered_set<int64>& keys : mSceneMeshDrawParamKeysPerWorker)
+		{
+			UpdateWorkerThreadPool.AddTask([&keys]()
+			{
+				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+				{
+					SCOPED_CPU_MARKER("ClearKeys");
+					keys.clear();
+				}
+			});
+		}
+	}
 #else
 	{
 		SCOPED_CPU_MARKER("InitWorkerContext_MainView");
@@ -1015,7 +1031,12 @@ static void MarkInstanceDataStale(FSceneView::MaterialMeshLODInstanceDataLookup_
 	}
 }
 
-void Scene::CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool)
+static void ResetKeys()
+{
+
+}
+
+void Scene::CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool, std::vector<std::unordered_set<int64>>& mSceneMeshDrawParamKeysPerWorker)
 {
 	SCOPED_CPU_MARKER("CullFrustums");
 	const size_t  NumThreadsAvailable = UpdateWorkerThreadPool.GetThreadPoolSize();
@@ -1042,41 +1063,37 @@ void Scene::CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerTh
 	const size_t  NumThreads = NumWorkerThreadsToUse + 1;
 	const bool bThreadTheWork = NumWorkerThreadsToUse > 0;
 
+#if UPDATE_THREAD__ENABLE_WORKERS
+	UpdateWorkerThreadPool.AddTask([&]()
+	{
+		SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+		MarkInstanceDataStale(((FSceneView&)SceneView).MaterialMeshLODInstanceDataLookup);
+		for (auto& it : ((FSceneView&)SceneView).drawParamLookup)
+		{
+			FSceneView::FMeshInstanceDataArray& LODArrays = it.second;
+			LODArrays.NumValidData = 0;
+		}
+	});
+
+#endif
+
 	if (UPDATE_THREAD__ENABLE_WORKERS && bThreadTheWork)
 	{
-		UpdateWorkerThreadPool.AddTask([&]()
-		{
-			SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
-			MarkInstanceDataStale(((FSceneView&)SceneView).MaterialMeshLODInstanceDataLookup);
-		});
+		std::vector<std::pair<size_t, size_t>> vRanges = mFrustumCullWorkerContext.GetWorkRanges(NumThreads);
 
 		mFrustumCullWorkerContext.ProcessWorkItems_MultiThreaded(NumThreads, UpdateWorkerThreadPool);
 
-		// ---------------------------------------------------SYNC ---------------------------------------------------
+		// process the remaining work on this thread
 		{
-			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
-			while (UpdateWorkerThreadPool.GetNumActiveTasks() != 0);
+			SCOPED_CPU_MARKER("Process_ThisThread");
+			const size_t& iBegin = vRanges.back().first;
+			const size_t& iEnd = vRanges.back().second; // inclusive
+			mFrustumCullWorkerContext.Process(iBegin, iEnd);
 		}
-		// --------------------------------------------------- SYNC ---------------------------------------------------
 	}
 	else
 	{
-#if UPDATE_THREAD__ENABLE_WORKERS
-		UpdateWorkerThreadPool.AddTask([&]()
-		{
-			SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
-			MarkInstanceDataStale(((FSceneView&)SceneView).MaterialMeshLODInstanceDataLookup);
-		});
-#endif
 		mFrustumCullWorkerContext.ProcessWorkItems_SingleThreaded();
-
-#if UPDATE_THREAD__ENABLE_WORKERS
-		{
-			// wait for the MarkInstanceDataStale() worker to finish
-			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
-			while (UpdateWorkerThreadPool.GetNumActiveTasks() != 0);
-		}
-#endif
 	}
 }
 
@@ -1243,178 +1260,324 @@ void Scene::BatchInstanceData_BoundingBox(FSceneView& SceneView
 	}
 }
 
+// Bits[0  -  3] : LOD
+// Bits[4  - 33] : MeshID
+// Bits[34 - 63] : MaterialID
+static int64 GetKey(MaterialID matID, MeshID meshID, int lod)
+{
+	constexpr int mask = 0x3FFFFFFF; // __11 1111 1111 1111
+	int64 hash = std::max(0, std::min(1 << 4, lod));
+	hash |= ((int64)(meshID & mask)) << 4;
+	hash |= ((int64)( matID & mask)) << 34;
+	return hash;
+}
+static MaterialID GetMatIDFromKey (int64 key) { return MaterialID(key >> 34); }
+static MeshID     GetMeshIDFromKey(int64 key) { return MeshID((key >> 4) & 0x3FFFFFFF); }
+static int        GetLODFromKey   (int64 key) { return int(key & 0xF); }
 
-void Scene::BatchInstanceData_SceneMeshes(
-	  std::vector<MeshRenderCommand_t>* pMeshRenderCommands
+static int CountBatches(FSceneView::MaterialMeshLODInstanceDataLookup_t& MaterialMeshLODInstanceDataLookup)
+{
+	SCOPED_CPU_MARKER("CountBatches");
+	int NumInstancedRenderCommands = 0;
+	for (auto itMat = MaterialMeshLODInstanceDataLookup.begin(); itMat != MaterialMeshLODInstanceDataLookup.end(); ++itMat)
+	{
+		const MaterialID matID = itMat->first;
+		const std::unordered_map<MeshID, std::vector<FSceneView::FMeshInstanceDataArray>>& meshLODInstanceDataLookup = itMat->second;
+		for (auto itMesh = meshLODInstanceDataLookup.begin(); itMesh != meshLODInstanceDataLookup.end(); ++itMesh)
+		{
+			for (int lod = 0; lod < itMesh->second.size(); ++lod)
+			{
+				const MeshID meshID = itMesh->first;
+				const FSceneView::FMeshInstanceDataArray& instData = itMesh->second[lod];
+
+				int NumInstancesToProces = (int)instData.NumValidData;
+				int iInst = 0;
+				while (NumInstancesToProces > 0)
+				{
+					const int ThisBatchSize = std::min(MAX_INSTANCE_COUNT__SCENE_MESHES, NumInstancesToProces);
+					int iBatch = 0;
+					while (iBatch < MAX_INSTANCE_COUNT__SCENE_MESHES && iInst < instData.NumValidData)
+					{
+						++iBatch;
+						++iInst;
+					}
+					NumInstancesToProces -= iBatch;
+					++NumInstancedRenderCommands;
+				}
+			}
+		}
+	}
+	return NumInstancedRenderCommands;
+}
+
+
+static void ResizeDrawParamInstanceArrays(FInstancedMeshRenderCommand& cmd, size_t sz)
+{
+	cmd.matWorld.resize(sz);
+	cmd.matWorldViewProj.resize(sz);
+	cmd.matWorldViewProjPrev.resize(sz);
+	cmd.matNormal.resize(sz);
+	cmd.objectID.resize(sz);
+	cmd.projectedArea.resize(sz);
+}
+static void WriteInstanceDrawParam(const FSceneView::FMeshInstanceDataArray& MeshInstanceData, int iInst, FInstancedMeshRenderCommand& cmd, int iBatch)
+{
+	cmd.matWorld[iBatch] = MeshInstanceData.InstanceData[iInst].mWorld;
+	cmd.matWorldViewProj[iBatch] = MeshInstanceData.InstanceData[iInst].mWorldViewProj;
+	cmd.matWorldViewProjPrev[iBatch] = MeshInstanceData.InstanceData[iInst].mWorldViewProjPrev;
+	cmd.matNormal[iBatch] = MeshInstanceData.InstanceData[iInst].mNormal;
+	cmd.objectID[iBatch] = MeshInstanceData.InstanceData[iInst].mObjID + 1;
+	cmd.projectedArea[iBatch] = MeshInstanceData.InstanceData[iInst].mProjectedArea;
+}
+
+
+static void ChunkDataUp(FSceneView::MaterialMeshLODInstanceDataLookup_t& MaterialMeshLODInstanceDataLookup
+	, const std::unordered_map<MeshID, Mesh>& mMeshes
+	, std::vector<MeshRenderCommand_t>* pMeshRenderCommands
+)
+{
+	SCOPED_CPU_MARKER("ChunkDataUp");
+	int NumInstancedRenderCommands = 0;
+	for (auto itMat = MaterialMeshLODInstanceDataLookup.begin(); itMat != MaterialMeshLODInstanceDataLookup.end(); ++itMat) // for-each material
+	{
+		const MaterialID matID = itMat->first;
+		const std::unordered_map<MeshID, std::vector<FSceneView::FMeshInstanceDataArray>>& meshLODInstanceDataLookup = itMat->second;
+		for (auto itMesh = meshLODInstanceDataLookup.begin(); itMesh != meshLODInstanceDataLookup.end(); ++itMesh) // for-each mesh
+		{
+			const MeshID meshID = itMesh->first;
+			const Mesh& mesh = mMeshes.at(meshID);
+			const int NumLODs = mesh.GetNumLODs();
+			for (uint lod = 0; lod < itMesh->second.size(); ++lod)
+			{
+				const FSceneView::FMeshInstanceDataArray& MeshInstanceData = itMesh->second[lod];
+
+				int NumInstancesToProces = (int)MeshInstanceData.NumValidData;
+				int iInst = 0;
+				while (NumInstancesToProces > 0)
+				{
+					const int ThisBatchSize = std::min(MAX_INSTANCE_COUNT__SCENE_MESHES, NumInstancesToProces);
+
+					FInstancedMeshRenderCommand& cmd = (*pMeshRenderCommands)[NumInstancedRenderCommands];
+					
+					//cmd.meshID = meshID;
+					cmd.vertexIndexBuffer = mesh.GetIABufferIDs(lod);
+					cmd.numIndices = mesh.GetNumIndices(lod);
+					cmd.matID = matID;
+
+					int iBatch = 0;
+					ResizeDrawParamInstanceArrays(cmd, ThisBatchSize);
+					while (iBatch < MAX_INSTANCE_COUNT__SCENE_MESHES && iInst < MeshInstanceData.NumValidData)
+					{
+						WriteInstanceDrawParam(MeshInstanceData, iInst++, cmd, iBatch++);
+					}
+
+					NumInstancesToProces -= iBatch;
+					++NumInstancedRenderCommands;
+				}
+			}
+		}
+	}
+}
+
+static void WriteInstanceDrawParams(FSceneView& SceneView , const MeshLookup_t& mMeshes)
+{
+	SCOPED_CPU_MARKER("WriteInstanceDrawParams");
+	int NumInstancedRenderCommands = 0;
+	for (auto it = SceneView.drawParamLookup.begin(); it != SceneView.drawParamLookup.end(); ++it)
+	{
+		const int64 key = it->first;
+		const int lod = GetLODFromKey(key);
+		const MaterialID matID = GetMatIDFromKey(key);
+		const MeshID meshID = GetMeshIDFromKey(key);
+		const Mesh& mesh = mMeshes.at(meshID);
+
+		FSceneView::FMeshInstanceDataArray& MeshInstanceData = it->second;
+
+		int NumInstancesToProces = (int)MeshInstanceData.NumValidData;
+		int iInst = 0;
+		while (NumInstancesToProces > 0)
+		{
+			FInstancedMeshRenderCommand& cmd = SceneView.meshRenderCommands[NumInstancedRenderCommands];
+			//cmd.meshID = meshID;
+			cmd.vertexIndexBuffer = mesh.GetIABufferIDs(lod);
+			cmd.numIndices = mesh.GetNumIndices(lod);
+			cmd.matID = matID;
+
+			const int ThisBatchSize = std::min(MAX_INSTANCE_COUNT__SCENE_MESHES, NumInstancesToProces);
+			ResizeDrawParamInstanceArrays(cmd, ThisBatchSize);
+
+			int iBatch = 0;
+			{
+				while (iBatch < MAX_INSTANCE_COUNT__SCENE_MESHES && iInst < MeshInstanceData.NumValidData)
+				{
+					WriteInstanceDrawParam(MeshInstanceData, iInst++, cmd, iBatch++);
+				}
+			}
+
+			NumInstancesToProces -= iBatch;
+			++NumInstancedRenderCommands;
+		}
+	}
+}
+static void WriteInstanceDrawParams_Threaded(FSceneView& SceneView, const MeshLookup_t& mMeshes, const std::unordered_set<int64> Keys)
+{
+}
+
+static void CountInstanceData(
+	  const SceneBoundingBoxHierarchy& BBH
+	, FSceneView& SceneView
+	, const std::vector<size_t>& CulledBoundingBoxIndexList_Msh
+	, const std::vector<float>& CulledBoundingBoxProjectedAreas_Msh
+	, const MeshLookup_t& mMeshes
+)
+{
+	SCOPED_CPU_MARKER("CountInstanceData");
+	const bool bForceLOD0 = SceneView.sceneParameters.bForceLOD0_SceneView;
+	std::unordered_map<int64, FSceneView::FMeshInstanceDataArray>& drawParamLookup = SceneView.drawParamLookup;
+
+	const std::vector<MeshID>& MeshBB_MeshID               = BBH.GetMeshesIDs();
+	const std::vector<MaterialID>& MeshBB_MatID            = BBH.GetMeshMaterialIDs();
+	const std::vector<const Transform*>& MeshBB_Transforms = BBH.GetMeshTransforms();
+	const std::vector<size_t>& MeshBB_GameObjHandles       = BBH.GetMeshGameObjectHandles();
+	for (int i = 0; i < CulledBoundingBoxIndexList_Msh.size(); ++i)
+	{
+		size_t iBB          = CulledBoundingBoxIndexList_Msh[i];
+		const float fArea   = CulledBoundingBoxProjectedAreas_Msh[i];
+
+		MaterialID matID    = MeshBB_MatID[iBB];
+		MeshID meshID       = MeshBB_MeshID[iBB];
+		size_t objID        = MeshBB_GameObjHandles[iBB];
+		const Transform& tf = *MeshBB_Transforms[iBB];
+
+		const Mesh& mesh = mMeshes.at(meshID);
+		const int NumLODs = mesh.GetNumLODs();
+		const int lod = bForceLOD0 ? 0 : GetLODFromProjectedScreenArea(fArea, NumLODs);
+
+		FSceneView::FMeshInstanceDataArray& d = drawParamLookup[GetKey(matID, meshID, lod)];
+		d.NumValidData++;
+	}
+}
+static void CountNResizeBatchedParams(FSceneView& SceneView)
+{
+	SCOPED_CPU_MARKER("CountNResizeBatchedParams");
+	std::unordered_map<int64, FSceneView::FMeshInstanceDataArray>& drawParamLookup = SceneView.drawParamLookup;
+	std::vector<MeshRenderCommand_t>& MeshRenderCommands = SceneView.meshRenderCommands;
+
+	int NumInstancedRenderCommands = 0;
+	for (auto it = drawParamLookup.begin(); it != drawParamLookup.end(); ++it)
+	{
+		FSceneView::FMeshInstanceDataArray& MeshInstanceData = it->second;
+		int NumInstancesToProces = (int)MeshInstanceData.NumValidData;
+		int iInst = 0;
+		while (NumInstancesToProces > 0)
+		{
+			const int ThisBatchSize = std::min(MAX_INSTANCE_COUNT__SCENE_MESHES, NumInstancesToProces);
+			int iBatch = 0;
+			while (iBatch < MAX_INSTANCE_COUNT__SCENE_MESHES && iInst < MeshInstanceData.NumValidData)
+			{
+				++iBatch;
+				++iInst;
+			}
+			NumInstancesToProces -= iBatch;
+			++NumInstancedRenderCommands;
+		}
+	}
+	MeshRenderCommands.resize(NumInstancedRenderCommands);
+}
+static void AllocInstanceData(FSceneView& SceneView)
+{
+	SCOPED_CPU_MARKER("AllocInstData");
+	for (auto it = SceneView.drawParamLookup.begin(); it != SceneView.drawParamLookup.end(); ++it)
+	{
+		FSceneView::FMeshInstanceDataArray& a = it->second;
+		a.InstanceData.resize(a.NumValidData);
+		a.NumValidData = 0; // we'll use this for indexing after this.
+	}
+}
+
+void CollectInstanceData(FSceneView& SceneView
+	, const std::vector<size_t>& CulledBoundingBoxIndexList_Msh
+	, const std::vector<float>& CulledBoundingBoxProjectedAreas_Msh
+	, const SceneBoundingBoxHierarchy& BBH
+	, const MeshLookup_t& mMeshes
+	, const std::unordered_set<int64>* pKeys = nullptr
+)
+{
+	SCOPED_CPU_MARKER("CollectInstanceData");
+	const std::vector<MeshID>&           MeshBB_MeshID         = BBH.GetMeshesIDs();
+	const std::vector<MaterialID>&       MeshBB_MatID          = BBH.GetMeshMaterialIDs();
+	const std::vector<const Transform*>& MeshBB_Transforms     = BBH.GetMeshTransforms();
+	const std::vector<size_t>&           MeshBB_GameObjHandles = BBH.GetMeshGameObjectHandles();
+	const bool bForceLOD0 = SceneView.sceneParameters.bForceLOD0_SceneView;
+	for (int i = 0; i < CulledBoundingBoxIndexList_Msh.size(); ++i)
+	{
+		const size_t iBB  = CulledBoundingBoxIndexList_Msh[i];
+		const float fArea = CulledBoundingBoxProjectedAreas_Msh[i];
+
+		MaterialID matID    = MeshBB_MatID[iBB];
+		MeshID meshID       = MeshBB_MeshID[iBB];
+		size_t objID        = MeshBB_GameObjHandles[iBB];
+		const Transform& tf = *MeshBB_Transforms[iBB];
+
+		const Mesh& mesh = mMeshes.at(meshID);
+		const int NumLODs = mesh.GetNumLODs();
+
+		const int lod = bForceLOD0 ? 0 : GetLODFromProjectedScreenArea(fArea, NumLODs);
+
+		const int64 key = GetKey(matID, meshID, lod);
+		if (pKeys && pKeys->find(key) == pKeys->end())
+			continue;
+
+		FSceneView::FMeshInstanceDataArray& d = SceneView.drawParamLookup[key];
+
+		const XMMATRIX matWorld = tf.matWorldTransformation();
+		const XMMATRIX matWorldHistory = tf.matWorldTransformationPrev();
+		const XMMATRIX matNormal = tf.NormalMatrix(matWorld);
+		const XMMATRIX matWVP = matWorld * SceneView.viewProj;
+		d.InstanceData[d.NumValidData++] = {
+			matWorld, matWVP,
+			matWorldHistory * SceneView.viewProjPrev,
+			matNormal,
+			(int)objID,
+			fArea
+		};
+	}
+}
+
+void Scene::BatchInstanceData_SceneMeshes( FSceneView& SceneView
 	, FSceneView::MaterialMeshLODInstanceDataLookup_t& MaterialMeshLODInstanceDataLookup
 	, const std::vector<size_t>& CulledBoundingBoxIndexList_Msh
 	, const std::vector<float>& CulledBoundingBoxProjectedAreas_Msh
-	, const DirectX::XMMATRIX& matViewProj
-	, const DirectX::XMMATRIX& matViewProjHistory
-	, bool bForceLOD0
+	, ThreadPool& UpdateWorkerThreadPool
 )
 {
 	SCOPED_CPU_MARKER("BatchInstanceData_SceneMeshes");
 
 #if RENDER_INSTANCED_SCENE_MESHES
 
-#if !UPDATE_THREAD__ENABLE_WORKERS
+	#if !UPDATE_THREAD__ENABLE_WORKERS
 	// mark the data stale here only if the update threads are not enabled.
 	// otherwise, in order to pipeline the work better, this function is 
 	// offloaded to workers somewhere before this threading phase 
 	// (instance batching) begins.
 	MarkInstanceDataStale(MaterialMeshLODInstanceDataLookup);
-#endif
+	#endif
+	
+	CountInstanceData(mBoundingBoxHierarchy, SceneView, CulledBoundingBoxIndexList_Msh, CulledBoundingBoxProjectedAreas_Msh, mMeshes);
 
-	{
-		SCOPED_CPU_MARKER("CollectInstanceData");
-		const std::vector<MeshID>& MeshBB_MeshID               = mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping;
-		const std::vector<MaterialID>& MeshBB_MatID            = mBoundingBoxHierarchy.mMeshBoundingBoxMaterialIDMapping;
-		const std::vector<const Transform*>& MeshBB_Transforms = mBoundingBoxHierarchy.mMeshTransforms;
+	CountNResizeBatchedParams(SceneView);
 
-		int iiBB = 0;
-		for (size_t iBB : CulledBoundingBoxIndexList_Msh)
-		{
-			assert(iBB < MeshBB_MeshID.size());
-			MeshID meshID = MeshBB_MeshID[iBB];
-			size_t objID = mBoundingBoxHierarchy.mMeshGameObjectHandles[iBB];
-			
-			const Mesh& mesh = mMeshes.at(meshID);
-			const int NumLODs = mesh.GetNumLODs();
+	AllocInstanceData(SceneView);
 
-			// read game object data
-			const Transform& tf = *MeshBB_Transforms[iBB];
-			const XMMATRIX matWorld = tf.matWorldTransformation();
-			const XMMATRIX matWorldHistory = tf.matWorldTransformationPrev();
-			const XMMATRIX matNormal = tf.NormalMatrix(matWorld);
-			const XMMATRIX matWVP = matWorld * matViewProj;
+	CollectInstanceData(SceneView, 
+		CulledBoundingBoxIndexList_Msh, 
+		CulledBoundingBoxProjectedAreas_Msh,
+		mBoundingBoxHierarchy,
+		mMeshes
+	);
 
-			MaterialID matID = MeshBB_MatID[iBB];
-			
-			// record instance data
-			const float fArea = CulledBoundingBoxProjectedAreas_Msh[iiBB++];
-			const int lod = bForceLOD0 ? 0 : GetLODFromProjectedScreenArea(fArea, NumLODs);
-			std::vector<FSceneView::FMeshInstanceDataArray>& da = MaterialMeshLODInstanceDataLookup[matID][meshID];
-			da.resize(NumLODs);
-			FSceneView::FMeshInstanceDataArray& d = da[lod];
-
-			// if we're seeing this material/mesh combo the first time, 
-			// allocate some memory for instance data, enough for 1 batch
-			if (d.InstanceData.empty() || d.InstanceData.size() == d.NumValidData)
-			{
-				SCOPED_CPU_MARKER("MemAlloc");
-				d.InstanceData.resize(d.InstanceData.empty() ? MAX_INSTANCE_COUNT__SCENE_MESHES : d.InstanceData.size() * 2);
-			}
-
-			d.InstanceData[d.NumValidData++] = { 
-				matWorld, matWVP,
-				matWorldHistory * matViewProjHistory, 
-				matNormal,
-				(int)objID,
-				fArea
-			};
-			
-		}
-	}
-
-	int NumInstancedRenderCommands = 0;
-	{
-		SCOPED_CPU_MARKER("CountBatches");
-		for (auto itMat = MaterialMeshLODInstanceDataLookup.begin(); itMat != MaterialMeshLODInstanceDataLookup.end(); ++itMat)
-		{
-			const MaterialID matID = itMat->first;
-			const std::unordered_map<MeshID, std::vector<FSceneView::FMeshInstanceDataArray>>& meshLODInstanceDataLookup = itMat->second;
-			for (auto itMesh = meshLODInstanceDataLookup.begin(); itMesh != meshLODInstanceDataLookup.end(); ++itMesh)
-			{
-				for (int lod = 0; lod < itMesh->second.size(); ++lod)
-				{
-					const MeshID meshID = itMesh->first;
-					const FSceneView::FMeshInstanceDataArray& instData = itMesh->second[lod];
-
-					int NumInstancesToProces = (int)instData.NumValidData;
-					int iInst = 0;
-					while (NumInstancesToProces > 0)
-					{
-						const int ThisBatchSize = std::min(MAX_INSTANCE_COUNT__SCENE_MESHES, NumInstancesToProces);
-						int iBatch = 0;
-						while (iBatch < MAX_INSTANCE_COUNT__SCENE_MESHES && iInst < instData.NumValidData)
-						{
-							++iBatch;
-							++iInst;
-						}
-						NumInstancesToProces -= iBatch;
-						++NumInstancedRenderCommands;
-					}
-				}
-			}
-		}
-	}
-	{
-		SCOPED_CPU_MARKER("ResizeCommands");
-		pMeshRenderCommands->resize(NumInstancedRenderCommands);
-	}
-
-	// chunk-up instance and record commands
-	{
-		NumInstancedRenderCommands = 0;
-		SCOPED_CPU_MARKER("ChunkDataUp");
-
-		// for-each material
-		for (auto itMat = MaterialMeshLODInstanceDataLookup.begin(); itMat != MaterialMeshLODInstanceDataLookup.end(); ++itMat)
-		{
-			const MaterialID matID = itMat->first;
-			const std::unordered_map<MeshID, std::vector<FSceneView::FMeshInstanceDataArray>>& meshLODInstanceDataLookup = itMat->second;
-
-			// for-each mesh
-			for (auto itMesh = meshLODInstanceDataLookup.begin(); itMesh != meshLODInstanceDataLookup.end(); ++itMesh)
-			{
-				const MeshID meshID = itMesh->first;
-				const Mesh& mesh = mMeshes.at(meshID);
-				const int NumLODs = mesh.GetNumLODs();
-				for (uint lod = 0; lod < itMesh->second.size(); ++lod)
-				{
-					const FSceneView::FMeshInstanceDataArray& MeshInstanceData = itMesh->second[lod];
-
-					int NumInstancesToProces = (int)MeshInstanceData.NumValidData;
-					int iInst = 0;
-					while (NumInstancesToProces > 0)
-					{
-						const int ThisBatchSize = std::min(MAX_INSTANCE_COUNT__SCENE_MESHES, NumInstancesToProces);
-
-						FInstancedMeshRenderCommand& cmd = (*pMeshRenderCommands)[NumInstancedRenderCommands];
-						//cmd.meshID = meshID;
-						cmd.vertexIndexBuffer = mesh.GetIABufferIDs(lod);
-						cmd.numIndices = mesh.GetNumIndices(lod);
-						cmd.matID = matID;
-
-						int iBatch = 0;
-						cmd.matWorld.resize(ThisBatchSize);
-						cmd.matWorldViewProj.resize(ThisBatchSize);
-						cmd.matWorldViewProjPrev.resize(ThisBatchSize);
-						cmd.matNormal.resize(ThisBatchSize);
-						cmd.objectID.resize(ThisBatchSize);
-						cmd.projectedArea.resize(ThisBatchSize);
-						while (iBatch < MAX_INSTANCE_COUNT__SCENE_MESHES && iInst < MeshInstanceData.NumValidData)
-						{
-							cmd.matWorld[iBatch] = MeshInstanceData.InstanceData[iInst].mWorld;
-							cmd.matWorldViewProj[iBatch] = MeshInstanceData.InstanceData[iInst].mWorldViewProj;
-							cmd.matWorldViewProjPrev[iBatch] = MeshInstanceData.InstanceData[iInst].mWorldViewProjPrev;
-							cmd.matNormal[iBatch] = MeshInstanceData.InstanceData[iInst].mNormal;
-							cmd.objectID[iBatch] = MeshInstanceData.InstanceData[iInst].mObjID + 1;
-							cmd.projectedArea[iBatch] = MeshInstanceData.InstanceData[iInst].mProjectedArea;
-							++iBatch;
-							++iInst;
-						}
-
-						NumInstancesToProces -= iBatch;
-						++NumInstancedRenderCommands;
-					}
-				}
-			}
-		}
-	}
-
-
+	WriteInstanceDrawParams(SceneView, mMeshes);
+	
 #else
 	MeshRenderCommands.clear();
 	for (const size_t& iBB : CulledBoundingBoxIndexList_Msh)
@@ -1477,9 +1640,9 @@ void Scene::BatchInstanceData_ShadowMeshes(
 		{
 			const size_t& BBIndex = (*pCulledBoundingBoxIndexList_Msh)[iBBIndex];
 			const float fArea = CulledBoundingBoxProjectedAreas_Msh[iBBIndex];
-			assert(BBIndex < mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping.size());
+			assert(BBIndex < mBoundingBoxHierarchy.mMeshIDs.size());
 
-			MeshID meshID = mBoundingBoxHierarchy.mMeshBoundingBoxMeshIDMapping[BBIndex];
+			MeshID meshID = mBoundingBoxHierarchy.mMeshIDs[BBIndex];
 			const Mesh& mesh = mMeshes.at(meshID);
 			const int numLODs = mesh.GetNumLODs();
 			
@@ -1582,64 +1745,66 @@ void Scene::BatchInstanceData_ShadowMeshes(
 }
 
 
-struct FFrustumRenderCommandRecorderContext
+static void DispatchMainViewInstanceDataWorkers(
+	  const SceneBoundingBoxHierarchy& BBH
+	, FSceneView& SceneView
+	, const std::vector<size_t>& CulledBoundingBoxIndexList_Msh
+	, const std::vector<float>&  CulledBoundingBoxProjectedAreas_Msh
+	, const MeshLookup_t& mMeshes
+	, ThreadPool& UpdateWorkerThreadPool
+	, std::atomic<int>& MainViewThreadDone
+	, std::vector<std::unordered_set<int64>>& KeysPerThread
+)
 {
-	size_t iFrustum;
-	const std::vector<size_t>* pObjIndices = nullptr;
-	const std::vector<float>* pCulledBoundingBoxProjectedAreas = nullptr;
-	FSceneShadowView::FShadowView* pShadowView = nullptr;
-};
-
-void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool)
-{
-	SCOPED_CPU_MARKER("BatchInstanceData");
-	FFrustumCullWorkerContext& ctx = mFrustumCullWorkerContext;
+	SCOPED_CPU_MARKER("DispatchWorker_MainView");
 	const size_t NumWorkerThreads = UpdateWorkerThreadPool.GetThreadPoolSize();
-
-	// count the work and decide whether we'll use the worker threads or not
-	constexpr size_t NUM_MIN_SHADOW_MESHES_FOR_THREADING = 64;
-	constexpr size_t NUM_MIN_SCENE_MESHES_FOR_THREADING = 128;
-
-#if UPDATE_THREAD__ENABLE_WORKERS
-	const size_t NumSceneViewMeshes = mFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[0].size();
-	const bool bUseWorkerThreadForMainView = NUM_MIN_SCENE_MESHES_FOR_THREADING <= NumSceneViewMeshes;
-
-	// Main View --------------------------------------------------------------------------------
-	if (bUseWorkerThreadForMainView)
+	const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(SceneView.drawParamLookup.size(), NumWorkerThreads);
 	{
-		SCOPED_CPU_MARKER("DispatchWorker_MainView");
-		UpdateWorkerThreadPool.AddTask([&]()
+		SCOPED_CPU_MARKER("resz");
+		KeysPerThread.resize(vRanges.size());
+	}
+	for (int iR = 0; iR < vRanges.size(); ++iR)
+	{
+		const std::pair<size_t, size_t>& Range = vRanges[iR];
+		UpdateWorkerThreadPool.AddTask([=, &SceneView, &CulledBoundingBoxIndexList_Msh, &CulledBoundingBoxProjectedAreas_Msh, &MainViewThreadDone, &KeysPerThread, &BBH, &mMeshes]()
 		{
 			SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
-			BatchInstanceData_SceneMeshes(&SceneView.meshRenderCommands
-				, SceneView.MaterialMeshLODInstanceDataLookup
-				, mFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[0]
-				, mFrustumCullWorkerContext.vProjectedAreas[0]
-				, SceneView.viewProj
-				, SceneView.viewProjPrev
-				, SceneView.sceneParameters.bForceLOD0_SceneView
+
+			std::unordered_set<int64>& Keys = KeysPerThread[iR];
+			{
+				SCOPED_CPU_MARKER("KeyFilter");
+				int i = 0;
+				for (auto it = SceneView.drawParamLookup.begin(); it != SceneView.drawParamLookup.end() && i <= Range.second; ++it)
+				{
+					if (i >= Range.first && i <= Range.second)
+					{
+						Keys.insert(it->first);
+					}
+					++i;
+				}
+			}
+
+			CollectInstanceData(SceneView,
+				CulledBoundingBoxIndexList_Msh,
+				CulledBoundingBoxProjectedAreas_Msh,
+				BBH,
+				mMeshes,
+				&Keys
 			);
+
+			MainViewThreadDone++;
 		});
 	}
-	else
-	{
-		BatchInstanceData_SceneMeshes(&SceneView.meshRenderCommands
-			, SceneView.MaterialMeshLODInstanceDataLookup
-			, mFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[0]
-			, mFrustumCullWorkerContext.vProjectedAreas[0]
-			, SceneView.viewProj
-			, SceneView.viewProjPrev
-			, SceneView.sceneParameters.bForceLOD0_SceneView
-		);
-	}
-	// Main View --------------------------------------------------------------------------------
+	
+}
 
-	// Shadow Views --------------------------------------------------------------------------------
-	const size_t NumShadowMeshFrustums = ctx.NumValidInputElements - 1; // exclude main view
+size_t Scene::DispatchWorkers_ShadowViews(size_t NumShadowMeshFrustums, std::vector< FFrustumRenderCommandRecorderContext>& WorkerContexts, FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool)
+{
+	constexpr size_t NUM_MIN_SHADOW_MESHES_FOR_THREADING = 64;
+
 	size_t NumShadowFrustumsWithNumMeshesLargerThanMinNumMeshesPerThread = 0;
 	size_t NumShadowMeshes = 0;
 	size_t NumShadowMeshes_Threaded = 0;
-	std::vector< FFrustumRenderCommandRecorderContext> WorkerContexts;
 	{
 		SCOPED_CPU_MARKER("PrepareShadowViewWorkerContexts");
 		WorkerContexts.resize(NumShadowMeshFrustums);
@@ -1665,7 +1830,7 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 	{
 		SCOPED_CPU_MARKER("DispatchWorkers_ShadowViews");
 		const bool bForceLOD0 = SceneView.sceneParameters.bForceLOD0_ShadowView;
-		for (size_t iFrustum = 1+NumShadowFrustumsThisThread; iFrustum <= NumShadowMeshFrustums; ++iFrustum)
+		for (size_t iFrustum = 1; iFrustum <= NumShadowMeshFrustums; ++iFrustum)
 		{
 			UpdateWorkerThreadPool.AddTask([=]()
 			{
@@ -1675,34 +1840,115 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 			});
 		}
 	}
-	// Shadow Views --------------------------------------------------------------------------------
-	
+	return NumShadowFrustumsThisThread;
+}
+
+void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool, std::vector<std::unordered_set<int64>>& mSceneMeshDrawParamKeysPerWorker)
+{
+	SCOPED_CPU_MARKER("BatchInstanceData");
+	FFrustumCullWorkerContext& ctx = mFrustumCullWorkerContext;
+	const size_t NumWorkerThreads = UpdateWorkerThreadPool.GetThreadPoolSize();
+
+	// count the work and decide whether we'll use the worker threads or not
+	constexpr size_t NUM_MIN_SCENE_MESHES_FOR_THREADING = 128;
+
+#if UPDATE_THREAD__ENABLE_WORKERS
+	auto& CulledBoundingBoxIndexList_Msh = mFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[0];
+	auto& CulledBoundingBoxProjectedAreas_Msh = mFrustumCullWorkerContext.vProjectedAreas[0];
+	const size_t NumSceneViewMeshes = CulledBoundingBoxIndexList_Msh.size();
+	const bool bUseWorkerThreadForMainView = NUM_MIN_SCENE_MESHES_FOR_THREADING <= NumSceneViewMeshes;
+
+	// Main View --------------------------------------------------------------------------------
+#if 1
+
+	CountInstanceData(mBoundingBoxHierarchy, SceneView, CulledBoundingBoxIndexList_Msh, CulledBoundingBoxProjectedAreas_Msh, mMeshes);
+	CountNResizeBatchedParams(SceneView);
+	AllocInstanceData(SceneView);
+
+	// ---------------------------------------------------SYNC ---------------------------------------------------
+	{
+		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
+		while (UpdateWorkerThreadPool.GetNumActiveTasks() != 0);
+	}
+	// --------------------------------------------------- SYNC ---------------------------------------------------
+
+	std::atomic<int> MainViewThreadDone = 0;
+	DispatchMainViewInstanceDataWorkers(
+		mBoundingBoxHierarchy, 
+		SceneView, 
+		CulledBoundingBoxIndexList_Msh, 
+		CulledBoundingBoxProjectedAreas_Msh, 
+		mMeshes, 
+		UpdateWorkerThreadPool, 
+		MainViewThreadDone, 
+		mSceneMeshDrawParamKeysPerWorker
+	);
+
+#else
+	if (bUseWorkerThreadForMainView)
+	{
+		SCOPED_CPU_MARKER("DispatchWorker_MainView");
+		UpdateWorkerThreadPool.AddTask([&]()
+		{
+			SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+			BatchInstanceData_SceneMeshes(SceneView
+				, SceneView.MaterialMeshLODInstanceDataLookup
+				, mFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[0]
+				, mFrustumCullWorkerContext.vProjectedAreas[0]
+				, UpdateWorkerThreadPool
+			);
+		});
+	}
+	else
+	{
+		BatchInstanceData_SceneMeshes(SceneView
+			, SceneView.MaterialMeshLODInstanceDataLookup
+			, mFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[0]
+			, mFrustumCullWorkerContext.vProjectedAreas[0]
+			, UpdateWorkerThreadPool
+		);
+	}
+#endif
+
+	std::vector< FFrustumRenderCommandRecorderContext> WorkerContexts;
+	const size_t NumShadowMeshFrustums = ctx.NumValidInputElements - 1; // exclude main view
+	/*const size_t NumShadowFrustumsThisThread = */ DispatchWorkers_ShadowViews(NumShadowMeshFrustums, WorkerContexts, SceneView, UpdateWorkerThreadPool);
+
 	BatchInstanceData_BoundingBox(SceneView, UpdateWorkerThreadPool, SceneView.viewProj);
 
-	{
-		SCOPED_CPU_MARKER("ThisThread_ShadowViews");
-		for (size_t iFrustum = 1; iFrustum <= NumShadowFrustumsThisThread; ++iFrustum)
-		{
-			FFrustumRenderCommandRecorderContext& ctx = WorkerContexts[iFrustum-1];
-			BatchInstanceData_ShadowMeshes(ctx.iFrustum, 
-				ctx.pShadowView, 
-				ctx.pObjIndices, 
-				*ctx.pCulledBoundingBoxProjectedAreas, 
-				ctx.pShadowView->matViewProj,
-				SceneView.sceneParameters.bForceLOD0_ShadowView
-			);
-		}
-	}
+	//{
+	//	SCOPED_CPU_MARKER("ThisThread_ShadowViews");
+	//	for (size_t iFrustum = 1; iFrustum <= NumShadowFrustumsThisThread; ++iFrustum)
+	//	{
+	//		FFrustumRenderCommandRecorderContext& ctx = WorkerContexts[iFrustum-1];
+	//		BatchInstanceData_ShadowMeshes(ctx.iFrustum, 
+	//			ctx.pShadowView, 
+	//			ctx.pObjIndices, 
+	//			*ctx.pCulledBoundingBoxProjectedAreas, 
+	//			ctx.pShadowView->matViewProj,
+	//			SceneView.sceneParameters.bForceLOD0_ShadowView
+	//		);
+	//	}
+	//}
 
 	{
 		SCOPED_CPU_MARKER_C("ClearLocalContext", 0xFF880000);
 		WorkerContexts.clear();
 	}
-	if(bUseWorkerThreadsForShadowViews || bUseWorkerThreadForMainView)
+
 	{
-		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
-		while (UpdateWorkerThreadPool.GetNumActiveTasks() != 0);
+		SCOPED_CPU_MARKER_C("BUSY_WAIT_MAIN_VIEW_WORKERS", 0xFFFF0000);
+		while (MainViewThreadDone.load() != NumWorkerThreads);
 	}
+	
+	WriteInstanceDrawParams(SceneView, mMeshes);
+	
+
+	//if(/*bUseWorkerThreadsForShadowViews || bUseWorkerThreadForMainView*/ true )
+	//{
+	//	SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
+	//	while (UpdateWorkerThreadPool.GetNumActiveTasks() != 0);
+	//}
 #else
 	BatchInstanceData_SceneMeshes(&SceneView.meshRenderCommands
 		, SceneView.MaterialMeshLODInstanceDataLookup
