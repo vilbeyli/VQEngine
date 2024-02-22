@@ -368,12 +368,7 @@ private: // Derived Scenes shouldn't access these functions
 		, ThreadPool& UpdateWorkerThreadPool
 		, const DirectX::XMMATRIX matViewProj
 	) const;
-	void BatchInstanceData_SceneMeshes(FSceneView& SceneView
-		, FSceneView::MaterialMeshLODInstanceDataLookup_t& MaterialMeshInstanceDataLookup
-		, const std::vector<size_t>& CulledBoundingBoxIndexList_Msh
-		, const std::vector<float>& CulledBoundingBoxProjectedAreas_Msh
-		, ThreadPool& UpdateWorkerThreadPool
-	);
+
 	
 	struct FFrustumRenderCommandRecorderContext
 	{
@@ -394,8 +389,8 @@ private: // Derived Scenes shouldn't access these functions
 
 
 	void GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShadowView& SceneShadowView, ThreadPool& UpdateWorkerThreadPool);
-	void CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool, std::vector<std::unordered_set<int64>>& mSceneMeshDrawParamKeysPerWorker);
-	void BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool, std::vector<std::unordered_set<int64>>& mSceneMeshDrawParamKeysPerWorker);
+	void CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool, std::vector<std::unordered_map<int64, std::pair<int, int>>>& mSceneMeshDrawParamKeysPerWorker);
+	void BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool, std::vector<std::unordered_map<int64, std::pair<int, int>>>& mSceneMeshDrawParamKeysPerWorker);
 
 	void BuildGameObject(const FGameObjectRepresentation& rep, size_t iObj);
 	
@@ -497,7 +492,7 @@ protected:
 	SceneBoundingBoxHierarchy mBoundingBoxHierarchy;
 	mutable FFrustumCullWorkerContext mFrustumCullWorkerContext;
 	std::unordered_map<size_t, FSceneShadowView::FShadowView*> mFrustumIndex_pShadowViewLookup;
-	std::vector<std::unordered_set<int64>> mSceneMeshDrawParamKeysPerWorker;
+	std::vector<std::unordered_map<int64, std::pair<int, int>>> mSceneMeshDrawParamKeysPerWorker;
 
 	std::vector<size_t> mActiveLightIndices_Static;
 	std::vector<size_t> mActiveLightIndices_Stationary;

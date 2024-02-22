@@ -1509,13 +1509,21 @@ void VQRenderer::TextureUploadThread_Main()
 // -----------------------------------------------------------------------------------------------------------------
 const VBV& VQRenderer::GetVertexBufferView(BufferID Id) const
 {
-	//assert(Id < mVBVs.size() && Id != INVALID_ID);
+	if (mVBVs.find(Id) == mVBVs.end())
+	{
+		static D3D12_VERTEX_BUFFER_VIEW kDefaultVBV = {};
+		return kDefaultVBV;
+	}
 	return mVBVs.at(Id);
 }
 
 const IBV& VQRenderer::GetIndexBufferView(BufferID Id) const
 {
-	//assert(Id < mIBVs.size() && Id != INVALID_ID);
+	if (mIBVs.find(Id) == mIBVs.end())
+	{
+		static D3D12_INDEX_BUFFER_VIEW kDefaultIBV = {};
+		return kDefaultIBV;
+	}
 	return mIBVs.at(Id);
 }
 const CBV_SRV_UAV& VQRenderer::GetShaderResourceView(SRV_ID Id) const

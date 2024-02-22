@@ -934,7 +934,7 @@ public:
 	// Interface
 	//
 	std::pair<BufferID, BufferID> GetIABufferIDs(int lod = 0) const;
-	inline uint GetNumIndices(int lod = 0) const { return mNumIndicesPerLODLevel[lod]; }
+	inline uint GetNumIndices(int lod = 0) const { assert(mNumIndicesPerLODLevel.size()>lod); return mNumIndicesPerLODLevel[lod]; }
 	inline uint GetNumLODs() const { return static_cast<uint>(mLODBufferPairs.size()); }
 	const FBoundingBox GetLocalSpaceBoundingBox() const { return mLocalSpaceBoundingBox; }
 	
