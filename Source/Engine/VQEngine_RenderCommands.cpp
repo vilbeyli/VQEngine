@@ -876,8 +876,6 @@ void VQEngine::RenderSceneColor(
 		auto vb = mRenderer.GetVertexBufferView(VBIB.first);
 		auto ib = mRenderer.GetIndexBufferView(VBIB.second);
 
-		pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
-
 		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		pCmd->IASetVertexBuffers(0, 1, &vb);
 		pCmd->IASetIndexBuffer(&ib);
