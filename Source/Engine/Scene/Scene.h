@@ -146,7 +146,7 @@ struct FSceneView
 	//        +----InstData0
 	//
 	MaterialMeshLODInstanceDataLookup_t MaterialMeshLODInstanceDataLookup;
-	std::unordered_map<int64, FSceneView::FMeshInstanceDataArray> drawParamLookup;
+	std::unordered_map<uint64, FSceneView::FMeshInstanceDataArray> drawParamLookup;
 	//--------------------------------------------------------------------------------------------------------------------------------------------
 #endif
 
@@ -387,8 +387,8 @@ private: // Derived Scenes shouldn't access these functions
 
 
 	void GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShadowView& SceneShadowView, ThreadPool& UpdateWorkerThreadPool);
-	void CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool, std::vector<std::unordered_map<int64, std::pair<int, int>>>& mSceneMeshDrawParamKeysPerWorker);
-	void BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool, std::vector<std::unordered_map<int64, std::pair<int, int>>>& mSceneMeshDrawParamKeysPerWorker);
+	void CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
+	void BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool, std::vector<std::pair<int, int>>& vOutputWriteParams);
 
 	void BuildGameObject(const FGameObjectRepresentation& rep, size_t iObj);
 	
@@ -490,7 +490,7 @@ protected:
 	SceneBoundingBoxHierarchy mBoundingBoxHierarchy;
 	mutable FFrustumCullWorkerContext mFrustumCullWorkerContext;
 	std::unordered_map<size_t, FSceneShadowView::FShadowView*> mFrustumIndex_pShadowViewLookup;
-	std::vector<std::unordered_map<int64, std::pair<int, int>>> mSceneMeshDrawParamKeysPerWorker;
+	std::vector<std::pair<int, int>> mMainViewCollcetInstancedDrawDataWriteParams;
 
 	std::vector<size_t> mActiveLightIndices_Static;
 	std::vector<size_t> mActiveLightIndices_Stationary;

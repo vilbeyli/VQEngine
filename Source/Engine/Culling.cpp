@@ -471,7 +471,7 @@ void SceneBoundingBoxHierarchy::Build(const Scene* pScene, const std::vector<siz
 		const size_t NumWorkItemsPerAvailableWorkerThread = DIV_AND_ROUND_UP(NumWorkItems, WorkerThreadPool.GetThreadPoolSize());
 		const size_t NumWorkersToUse = CalculateNumThreadsToUse(NumWorkItems, NumWorkerThreadsAvailable, NumDesiredMinimumWorkItemsPerThread);
 
-		const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, NumWorkersToUse+1);
+		const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, NumWorkersToUse);
 		
 		// dispatch worker threads
 		{
