@@ -173,7 +173,10 @@ void FWindowRenderContext::AllocateCommandLists(CommandQueue::EType eQueueType, 
 			ID3D12CommandList* pCmd = nullptr;
 			pD3DDevice->CreateCommandList(0, CMD_LIST_TYPE, vCmdAllocators[iNewCmdListAlloc], nullptr, IID_PPV_ARGS(&vCmdListPtrs[iNewCmdListAlloc]));
 			pCmd = vCmdListPtrs[iNewCmdListAlloc];
-			SetName(pCmd, "pCmd[%d]", (int)iNewCmdListAlloc);
+			if (pCmd)
+			{
+				SetName(pCmd, "pCmd[%d]", (int)iNewCmdListAlloc);
+			}
 
 			// close if gfx command list
 			//if (eQueueType == CommandQueue::EType::GFX)

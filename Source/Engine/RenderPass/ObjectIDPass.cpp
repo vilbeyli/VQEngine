@@ -110,7 +110,7 @@ static const Material& GetMaterial(MaterialID ID, const std::unordered_map<Mater
 {
 	if (pMats->find(ID) == pMats->end())
 	{
-		Log::Error("Material not created. Did you call Scene::CreateMaterial()? (matID=%d)", ID);
+		Log::Error("GetMaterial() failed: Material not created. Did you call Scene::CreateMaterial()? (matID=%d)", ID);
 		assert(false);
 	}
 	return pMats->at(ID);
@@ -130,7 +130,7 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	ID3D12GraphicsCommandList* pCmdCpy = static_cast<ID3D12GraphicsCommandList*>(pParams->pCmdCopy);
 	auto pRscRT = mRenderer.GetTextureResource(TEXPassOutput);
 	auto pRscCPU = mRenderer.GetTextureResource(TEXPassOutputCPUReadback);
-	
+
 	const DSV& dsv = mRenderer.GetDSV(DSVPassOutput);
 	const RTV& rtv = mRenderer.GetRTV(RTVPassOutput);
 
@@ -144,10 +144,11 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle();
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle();
 
-#if OBJECTID_PASS__USE_ASYNC_COPY
-	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscRT,
-		D3D12_RESOURCE_STATE_COMMON,  D3D12_RESOURCE_STATE_RENDER_TARGET));
-#endif
+	if (pParams->bEnableAsyncCopy)
+	{
+		pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscRT,
+			D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET));
+	}
 
 	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 	pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, nullptr);
@@ -191,11 +192,7 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	// transition output to copy source
 	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscRT,
 		D3D12_RESOURCE_STATE_RENDER_TARGET, 
-#if OBJECTID_PASS__USE_ASYNC_COPY
-		D3D12_RESOURCE_STATE_COMMON
-#else
-		D3D12_RESOURCE_STATE_COPY_SOURCE
-#endif
+		(pParams->bEnableAsyncCopy ? D3D12_RESOURCE_STATE_COMMON : D3D12_RESOURCE_STATE_COPY_SOURCE)
 	));
 }
 

@@ -448,6 +448,7 @@ private:
 	std::vector<Fence>              mCopyObjIDDoneFence; // GPU->CPU
 	std::atomic<bool>               mAsyncComputeWorkSubmitted = false;
 	std::atomic<bool>               mSubmitWorkerFinished = true;
+	bool                            mWaitForSubmitWorker = false;
 
 	// renderer
 	VQRenderer                      mRenderer;

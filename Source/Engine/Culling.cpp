@@ -167,8 +167,7 @@ void FFrustumCullWorkerContext::ClearMemory()
 	vFrustumPlanes.clear();
 	vMatViewProj.clear();
 	vBoundingBoxList.clear();
-	vCulledBoundingBoxIndexListPerView.clear();
-	vProjectedAreas.clear();
+	vCulledBoundingBoxIndexAndAreaPerView.clear();
 	NumValidInputElements = 0;
 }
 
@@ -199,8 +198,7 @@ void FFrustumCullWorkerContext::ProcessWorkItems_SingleThreaded()
 	}
 
 	// allocate context memory
-	vCulledBoundingBoxIndexListPerView.resize(szFP);
-	vProjectedAreas.resize(szFP);
+	vCulledBoundingBoxIndexAndAreaPerView.resize(szFP);
 
 	// process all items on this thread
 	this->Process(0, szFP - 1);
@@ -254,8 +252,7 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 #endif
 
 	// allocate context memory
-	vCulledBoundingBoxIndexListPerView.resize(NumValidInputElements); // prepare worker output memory, each worker will then populate the vector
-	vProjectedAreas.resize(NumValidInputElements);
+	vCulledBoundingBoxIndexAndAreaPerView.resize(NumValidInputElements); // prepare worker output memory, each worker will then populate the vector
 
 	// distribute ranges of work into worker threads
 	const std::vector<std::pair<size_t, size_t>> vRanges = GetWorkRanges(NumThreadsIncludingThisThread);
@@ -319,7 +316,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 	{
 		{
 			SCOPED_CPU_MARKER("Clear");
-			vCulledBoundingBoxIndexListPerView[iWork].clear();
+			vCulledBoundingBoxIndexAndAreaPerView[iWork].clear();
 		}
 		{
 			SCOPED_CPU_MARKER("CullFrustum");
@@ -327,16 +324,16 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 			{
 				if (IsBoundingBoxIntersectingFrustum(vFrustumPlanes[iWork], vBoundingBoxList[bb]))
 				{
-					vCulledBoundingBoxIndexListPerView[iWork].push_back(bb); // grows as we go (no pre-alloc)
+					vCulledBoundingBoxIndexAndAreaPerView[iWork].push_back({ bb, 0.0f }); // grows as we go (no pre-alloc)
 				}
 			}
 		}
 		{
 			SCOPED_CPU_MARKER("CalcProjectedArea");
-			for (size_t bb : vCulledBoundingBoxIndexListPerView[iWork])
+			for (std::pair<size_t,float>& bb : vCulledBoundingBoxIndexAndAreaPerView[iWork])
 			{
-				const float fArea = CalculateProjectedBoundingBoxArea(vBoundingBoxList[bb], vMatViewProj[iWork]);
-				vProjectedAreas[iWork].push_back(fArea);
+				const float fArea = CalculateProjectedBoundingBoxArea(vBoundingBoxList[bb.first], vMatViewProj[iWork]);
+				bb.second = fArea;
 			}
 		}
 	}

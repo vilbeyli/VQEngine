@@ -354,78 +354,71 @@ void VQEngine::RenderObjectIDPass(
 		params.pSceneView = &SceneView;
 		params.pMeshes = &mpScene->mMeshes;
 		params.pMaterials = &mpScene->mMaterials;
+		params.bEnableAsyncCopy = mSettings.gfx.bEnableAsyncCopy;
 		mRenderPass_ObjectID.RecordCommands(&params);
 	}
 
-#if OBJECTID_PASS__USE_ASYNC_COPY
-	CommandQueue& GFXCmdQ = mRenderer.GetCommandQueue(CommandQueue::EType::GFX);
-	CommandQueue& CPYCmdQ = mRenderer.GetCommandQueue(CommandQueue::EType::COPY);
-	CommandQueue& CMPCmdQ = mRenderer.GetCommandQueue(CommandQueue::EType::COMPUTE);
-	ID3D12GraphicsCommandList* pCmdCpy = static_cast<ID3D12GraphicsCommandList*>(pCmdCopy);
-	Fence& CopyFence = mCopyObjIDDoneFence[BACK_BUFFER_INDEX];
-
-	pCmd->Close();
-	if(ShouldEnableAsyncCompute())
-	{
-		SCOPED_CPU_MARKER_C("WAIT_DEPTH_PREPASS_SUBMIT", 0xFFFF0000);
-		while (!mAsyncComputeWorkSubmitted.load());
-		mAsyncComputeWorkSubmitted.store(false);
-	}
-
-	// EXECUTE and SIGNAL
-	{
-		SCOPED_CPU_MARKER("ExecuteList");
-		GFXCmdQ.pQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&pCmd);
-	}
-	{
-		SCOPED_CPU_MARKER("Fence");
-		CopyFence.Signal(GFXCmdQ.pQueue);
-		CopyFence.WaitOnGPU(CPYCmdQ.pQueue); // wait for render target done
-	}
-
-	// record copy command
-	{
-		SCOPED_CPU_MARKER("Copy");
-		D3D12_TEXTURE_COPY_LOCATION srcLoc = {};
-		srcLoc.pResource = mRenderPass_ObjectID.GetGPUTextureResource();
-		srcLoc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-		srcLoc.SubresourceIndex = 0; // Assuming copying from the first mip level
-
-		D3D12_TEXTURE_COPY_LOCATION dstLoc = {};
-		dstLoc.pResource = mRenderPass_ObjectID.GetCPUTextureResource();
-		dstLoc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-		
-		mRenderer.GetDevicePtr()->GetCopyableFootprints(&srcLoc.pResource->GetDesc(), 0, 1, 0, &dstLoc.PlacedFootprint, nullptr, nullptr, nullptr);
-
-		pCmdCpy->CopyTextureRegion(&dstLoc, 0, 0, 0, &srcLoc, nullptr);
-	}
-	{
-		SCOPED_CPU_MARKER("ExecuteListCpy");
-		pCmdCpy->Close();
-		CPYCmdQ.pQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&pCmdCpy);
-	}
-	{
-		SCOPED_CPU_MARKER("Fence Signal");
-		CopyFence.Signal(CPYCmdQ.pQueue);
-	}
-
-#else
-
+	SCOPED_CPU_MARKER("Copy");
 	D3D12_TEXTURE_COPY_LOCATION srcLoc = {};
 	srcLoc.pResource = mRenderPass_ObjectID.GetGPUTextureResource();
 	srcLoc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
 	srcLoc.SubresourceIndex = 0; // Assuming copying from the first mip level
 
 	D3D12_TEXTURE_COPY_LOCATION dstLoc = {};
-	dstLoc.pResource = pRscCPU;
+	dstLoc.pResource = mRenderPass_ObjectID.GetCPUTextureResource();
 	dstLoc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-	mRenderer.GetDevicePtr()->GetCopyableFootprints(&pRscRT->GetDesc(), 0, 1, 0, &dstLoc.PlacedFootprint, nullptr, nullptr, nullptr);
+	mRenderer.GetDevicePtr()->GetCopyableFootprints(&srcLoc.pResource->GetDesc(), 0, 1, 0, &dstLoc.PlacedFootprint, nullptr, nullptr, nullptr);
 
-	pCmd->CopyTextureRegion(&dstLoc, 0, 0, 0, &srcLoc, nullptr);
+	if (mSettings.gfx.bEnableAsyncCopy)
+	{
+		CommandQueue& GFXCmdQ = mRenderer.GetCommandQueue(CommandQueue::EType::GFX);
+		CommandQueue& CPYCmdQ = mRenderer.GetCommandQueue(CommandQueue::EType::COPY);
+		CommandQueue& CMPCmdQ = mRenderer.GetCommandQueue(CommandQueue::EType::COMPUTE);
+		ID3D12GraphicsCommandList* pCmdCpy = static_cast<ID3D12GraphicsCommandList*>(pCmdCopy);
+		Fence& CopyFence = mCopyObjIDDoneFence[BACK_BUFFER_INDEX];
 
-	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscRT,
-		D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
-#endif
+		pCmd->Close();
+		if (ShouldEnableAsyncCompute())
+		{
+			SCOPED_CPU_MARKER_C("WAIT_DEPTH_PREPASS_SUBMIT", 0xFFFF0000);
+			while (!mAsyncComputeWorkSubmitted.load());
+			mAsyncComputeWorkSubmitted.store(false);
+		}
+
+		{
+			SCOPED_CPU_MARKER("ExecuteList");
+			GFXCmdQ.pQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&pCmd);
+		}
+		{
+			SCOPED_CPU_MARKER("Fence");
+			CopyFence.Signal(GFXCmdQ.pQueue);
+			CopyFence.WaitOnGPU(CPYCmdQ.pQueue); // wait for render target done
+		}
+
+		D3D12_TEXTURE_COPY_LOCATION dstLoc = {};
+		dstLoc.pResource = mRenderPass_ObjectID.GetCPUTextureResource();
+		dstLoc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+		mRenderer.GetDevicePtr()->GetCopyableFootprints(&srcLoc.pResource->GetDesc(), 0, 1, 0, &dstLoc.PlacedFootprint, nullptr, nullptr, nullptr);
+
+		pCmdCpy->CopyTextureRegion(&dstLoc, 0, 0, 0, &srcLoc, nullptr);
+		
+		{
+			SCOPED_CPU_MARKER("ExecuteListCpy");
+			pCmdCpy->Close();
+			CPYCmdQ.pQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&pCmdCpy);
+		}
+		{
+			SCOPED_CPU_MARKER("Fence Signal");
+			CopyFence.Signal(CPYCmdQ.pQueue);
+		}
+	}
+	else // execute copy on graphics
+	{
+		pCmd->CopyTextureRegion(&dstLoc, 0, 0, 0, &srcLoc, nullptr);
+
+		pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(srcLoc.pResource,
+			D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
+	}
 
 }
 
@@ -1738,6 +1731,9 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBu
 	ID3D12Resource* pRscUI            = mRenderer.GetTextureResource(mResources_MainWnd.Tex_UI_SDR);
 
 	ID3D12Resource*          pSwapChainRT = swapchain.GetCurrentBackBufferRenderTarget();
+	
+	//Log::Info("RenderUI: Backbuffer[%d]: 0x%08x | pCmd = %p", swapchain.GetCurrentBackBufferIndex(), pSwapChainRT, pCmd);
+	
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = bHDR 
 		? mRenderer.GetRTV(mResources_MainWnd.RTV_UI_SDR).GetCPUDescHandle()
 		: swapchain.GetCurrentBackBufferRTVHandle();
@@ -2025,7 +2021,7 @@ void VQEngine::CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, Dynamic
 
 HRESULT VQEngine::PresentFrame(FWindowRenderContext& ctx)
 {
-	SCOPED_CPU_MARKER("SwapchainPresent");
+	SCOPED_CPU_MARKER("Present");
 	HRESULT hr = ctx.SwapChain.Present();
 	return hr;
 }

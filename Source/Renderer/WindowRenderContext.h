@@ -85,13 +85,11 @@ public:
 	CommandQueue& PresentQueue;
 
 private:
-	// command list allocators per back buffer, per recording thread
+	// per back buffer, per recording thread
 	std::vector<std::vector<ID3D12CommandAllocator*>> mCommandAllocators[CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES] ;
 
-	// command lists per recording thread
+	// per recording thread
 	std::vector<ID3D12CommandList*> mpCmds[CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES];
-	
-	// constant buffers per recording thread
 	std::vector<DynamicBufferHeap> mDynamicHeap_ConstantBuffer;
 
 	UINT mNumCurrentlyRecordingThreads[CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES];

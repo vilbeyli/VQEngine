@@ -25,8 +25,6 @@
 
 #include <unordered_map>
 
-#define OBJECTID_PASS__USE_ASYNC_COPY 1
-
 struct FSceneView;
 class DynamicBufferHeap;
 struct ID3D12GraphicsCommandList;
@@ -40,6 +38,7 @@ public:
 		ID3D12GraphicsCommandList* pCmd = nullptr;
 		ID3D12CommandList* pCmdCopy = nullptr;
 		const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>* pCBAddresses = nullptr;
+		bool bEnableAsyncCopy = false;
 		const FSceneView* pSceneView = nullptr;
 		const std::unordered_map<MeshID, Mesh>* pMeshes = nullptr;
 		const std::unordered_map<MaterialID, Material>* pMaterials = nullptr;

@@ -1135,6 +1135,9 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 			break;
 		}
 
+		ImGui::Checkbox("Async Compute", &mSettings.gfx.bEnableAsyncCompute);
+		ImGui::Checkbox("Async Copy", &mSettings.gfx.bEnableAsyncCopy);
+
 		ImGui::EndTabItem();
 	}
 

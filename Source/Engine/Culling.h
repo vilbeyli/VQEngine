@@ -151,8 +151,7 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	/*in */ std::vector<FBoundingBox      > vBoundingBoxList;
 
 	// store the index of the surviving bounding box in a list, per view frustum
-	/*out*/ std::vector<IndexList_t       > vCulledBoundingBoxIndexListPerView; 
-	/*out*/ std::vector<std::vector<float>> vProjectedAreas;
+	/*out*/ std::vector<std::vector<std::pair<size_t, float>>> vCulledBoundingBoxIndexAndAreaPerView;
 	// Hot Data ------------------------------------------------------------------------------------------------------------
 
 	//std::vector<int> vLightMovementTypeID; // index to access light type vectors: [0]:static, [1]:stationary, [2]:dynamic

@@ -22,6 +22,7 @@
 #include "Common.h"
 #include "Renderer.h"
 
+#include "../Engine/GPUMarker.h"
 #include "../Engine/Core/Platform.h" // CHECK_HR
 #include "../Engine/Core/Window.h"
 #include "../../Libs/VQUtils/Source/Log.h"
@@ -42,7 +43,7 @@
 #include <vector>
 
 #define NUM_MAX_BACK_BUFFERS  3
-#define LOG_SWAPCHAIN_VERBOSE 0
+#define LOG_SWAPCHAIN_VERBOSE 1
 
 #if LOG_SWAPCHAIN_VERBOSE
     #define LOG_SWAPCHAIN_SYNCHRONIZATION_EVENTS  0
@@ -521,6 +522,7 @@ void SwapChain::MoveToNextFrame()
     HRESULT hr = {};
     if (fenceComplVal < mFenceValues[mICurrentBackBuffer])
     {
+        SCOPED_CPU_MARKER_C("GPU_BOUND", 0xFF005500);
 #if LOG_SWAPCHAIN_SYNCHRONIZATION_EVENTS
         Log::Warning("SwapChain : next frame not ready. FenceComplVal=%d < FenceVal[curr]=%d", fenceComplVal, mFenceValues[mICurrentBackBuffer]);
 #endif

@@ -28,6 +28,8 @@
 
 #include "VQEngine_RenderCommon.h"
 
+#define EXECUTE_CMD_LISTS_ON_WORKER 1
+
 // https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/dxgi-error
 static const std::unordered_map<HRESULT, std::string> DEVICE_REMOVED_MESSAGE_LOOKUP =
 {
@@ -930,6 +932,12 @@ static uint32_t GetNumShadowViewCmdRecordingThreads(const FSceneShadowView& Shad
 
 bool VQEngine::ShouldEnableAsyncCompute()
 {
+	if (!mSettings.gfx.bEnableAsyncCompute)
+		return false;
+
+	if (mbLoadingLevel || mbLoadingEnvironmentMap)
+		return false;
+
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	const int NUM_BACK_BUFFERS = ctx.GetNumSwapchainBuffers();
 	const int BACK_BUFFER_INDEX = ctx.GetCurrentSwapchainBufferIndex();
@@ -961,7 +969,17 @@ void VQEngine::RenderThread_PreRender()
 #else
 	const int FRAME_DATA_INDEX = 0;
 #endif
-	
+
+	const bool bAsyncSubmit = mWaitForSubmitWorker;
+
+	if(mWaitForSubmitWorker) // not really used, need to offload submit to a non-worker thread (sync issues on main)
+	{
+		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS", 0xFFFF0000);
+		while (!mSubmitWorkerFinished.load());
+		mSubmitWorkerFinished.store(false);
+		mWaitForSubmitWorker = false;
+	}
+
 	const FSceneView&       SceneView       = mpScene->GetSceneView(FRAME_DATA_INDEX);
 	const FSceneShadowView& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
 
@@ -985,12 +1003,22 @@ void VQEngine::RenderThread_PreRender()
 	const uint NumCopyCmdLists = 1;
 	const uint NumComputeCmdLists = 1;
 
+#if 0
+	Log::Info("");
+	Log::Info("PreRender(): Swapchain[%d] %s | GFX: %d",
+		ctx.GetCurrentSwapchainBufferIndex()
+		, (bAsyncSubmit ? "(Async Submit)" : "")
+		, NumCmdRecordingThreads_GFX
+	);
+#endif
+
 	{
 		SCOPED_CPU_MARKER("AllocCmdLists");
 		ctx.AllocateCommandLists(CommandQueue::EType::GFX, NumCmdRecordingThreads_GFX);
-#if OBJECTID_PASS__USE_ASYNC_COPY
-		ctx.AllocateCommandLists(CommandQueue::EType::COPY, NumCopyCmdLists);
-#endif
+		if (mSettings.gfx.bEnableAsyncCopy)
+		{
+			ctx.AllocateCommandLists(CommandQueue::EType::COPY, NumCopyCmdLists);
+		}
 
 		if (bUseAsyncCompute)
 		{
@@ -1001,13 +1029,12 @@ void VQEngine::RenderThread_PreRender()
 	{
 		SCOPED_CPU_MARKER("ResetCmdLists");
 		ctx.ResetCommandLists(CommandQueue::EType::GFX, NumCmdRecordingThreads_GFX);
-		
 		if (mAppState == EAppState::SIMULATING) 
 		{
-			// copy queue only used in flight (TODO: remove this when texture uploads are done thru copy q)
-#if OBJECTID_PASS__USE_ASYNC_COPY
-			ctx.ResetCommandLists(CommandQueue::EType::COPY, NumCopyCmdLists);
-#endif
+			if (mSettings.gfx.bEnableAsyncCopy)
+			{ 
+				ctx.ResetCommandLists(CommandQueue::EType::COPY, NumCopyCmdLists);
+			}
 			if (bUseAsyncCompute)
 			{
 				ctx.ResetCommandLists(CommandQueue::EType::COMPUTE, NumComputeCmdLists);
@@ -1297,10 +1324,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderConte
 	hr = PresentFrame(ctx);
 	if (hr == DXGI_STATUS_OCCLUDED) { RenderThread_HandleStatusOccluded(); }
 	if (hr == DXGI_ERROR_DEVICE_REMOVED) { RenderThread_HandleDeviceRemoved(); }
-	{
-		SCOPED_CPU_MARKER_C("GPU_BOUND", 0xFF005500);
-		ctx.SwapChain.MoveToNextFrame();
-	}
+	ctx.SwapChain.MoveToNextFrame();
 	return hr;
 }
 
@@ -1550,11 +1574,6 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		CopyPerObjectConstantBufferData(cbAddresses, &CBHeap_This, SceneView, mpScene); // TODO: threadify this, join+fork
 
 		{
-			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS", 0xFFFF0000);
-			while (!mSubmitWorkerFinished.load());
-			mSubmitWorkerFinished.store(false);
-		}
-		{
 			SCOPED_CPU_MARKER("DispatchWorkers");
 
 			// ZPrePass
@@ -1576,7 +1595,6 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 					if (bAsyncCompute)
 					{
-
 						ID3D12Resource* pRscAmbientOcclusion = mRenderer.GetTextureResource(rsc.Tex_AmbientOcclusion);
 						pCmd_ZPrePass->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscAmbientOcclusion, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
 
@@ -1742,7 +1760,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	// TODO: command list execution and frame submission could be done in another thread
 
 	// close gfx cmd lists
-	std::vector<ID3D12CommandList*>& vCmdLists = ctx.GetGFXCommandListPtrs();
+	std::vector<ID3D12CommandList*> vCmdLists = ctx.GetGFXCommandListPtrs();
 	if constexpr (!RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING)
 	{
 		// TODO: async compute support for single-threaded CPU cmd recording
@@ -1765,6 +1783,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		#else
 		ThreadPool& WorkerThreads = mWorkers_Simulation;
 		#endif
+		const bool bAsyncCopy = mSettings.gfx.bEnableAsyncCopy;
 
 		//  TODO remove this copy paste
 		constexpr size_t iCmdZPrePassThread = 0;
@@ -1778,29 +1797,43 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		const UINT NumCommandLists = ctx.GetNumCurrentlyRecordingThreads(CommandQueue::EType::GFX);
 		for (UINT i = 0; i < NumCommandLists; ++i)
 		{
-			if (bAsyncCompute && (i == iCmdZPrePassThread || i == iCmdObjIDPassThread))
+			if (mSettings.gfx.bEnableAsyncCopy && (i == iCmdObjIDPassThread))
+				continue;
+			if (bAsyncCompute && (i == iCmdZPrePassThread)) 
 				continue; // already closed & executed
+
 			static_cast<ID3D12GraphicsCommandList*>(vCmdLists[i])->Close();
 		}
 
 		// execute command lists on a thread
-		WorkerThreads.AddTask([=, &SceneView, &cbAddresses, &ctx, &vCmdLists, &SceneShadowView]()
+#if EXECUTE_CMD_LISTS_ON_WORKER
+		mWaitForSubmitWorker = true;
+		WorkerThreads.AddTask([=, &SceneView, &cbAddresses, &ctx, &SceneShadowView]()
 		{	
 			RENDER_WORKER_CPU_MARKER;
 			{
+#endif
 				if (bAsyncCompute)
 				{
 					SCOPED_CPU_MARKER("ExecuteCommandLists_Async");
 
 					ID3D12CommandList* pGfxCmd = vCmdLists[iCmdRenderThread];
-
+					ID3D12CommandList* pGfxCmdObjIDPass = vCmdLists[iCmdObjIDPassThread];
+					
 					std::vector<ID3D12CommandList*> vLightCommandLists;
-					for (int i = iCmdPointLightsThread; i - iCmdPointLightsThread < SceneShadowView.NumPointShadowViews; ++i)
-						vLightCommandLists.push_back(vCmdLists[i]);
-					if (iCmdSpots != iCmdRenderThread)
-						vLightCommandLists.push_back(vCmdLists[iCmdSpots]);
-					if (iCmdDirectional != iCmdRenderThread)
-						vLightCommandLists.push_back(vCmdLists[iCmdDirectional]);
+					{
+						SCOPED_CPU_MARKER("Malloc");
+						if (!bAsyncCopy)
+						{
+							vLightCommandLists.push_back(pGfxCmdObjIDPass); // append objID to the shadow pass cmd lists if async copy isnt enabled for batching
+						}
+						for (int i = iCmdPointLightsThread; i - iCmdPointLightsThread < SceneShadowView.NumPointShadowViews; ++i)
+							vLightCommandLists.push_back(vCmdLists[i]);
+						if (iCmdSpots != iCmdRenderThread)
+							vLightCommandLists.push_back(vCmdLists[iCmdSpots]);
+						if (iCmdDirectional != iCmdRenderThread)
+							vLightCommandLists.push_back(vCmdLists[iCmdDirectional]);
+					}
 
 					ctx.PresentQueue.pQueue->ExecuteCommandLists((UINT)vLightCommandLists.size(), (ID3D12CommandList**)&vLightCommandLists[0]);
 
@@ -1810,20 +1843,43 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 				else
 				{
 					SCOPED_CPU_MARKER("ExecuteCommandLists");
-					ctx.PresentQueue.pQueue->ExecuteCommandLists(NumCommandLists, (ID3D12CommandList**)&vCmdLists[0]);
+					std::vector<ID3D12CommandList*> vCmdLists = ctx.GetGFXCommandListPtrs();
+					if (mSettings.gfx.bEnableAsyncCopy)
+					{
+						vCmdLists.erase(vCmdLists.begin() + iCmdObjIDPassThread); // already kicked off objID pass
+					}
+
+					#if 0 // debug log
+					for (int i = 0; i < vCmdLists.size(); ++i)
+					{
+						std::string s = "";
+						if (i == iCmdZPrePassThread) s += "ZPrePass";
+						if (i == iCmdObjIDPassThread) s += "ObjIDPass";
+						if (i == iCmdPointLightsThread && SceneShadowView.NumPointShadowViews > 0) s += "PointLights";
+						if (i == iCmdSpots && SceneShadowView.NumSpotShadowViews > 0) s += "SpotLights";
+						if (i == iCmdDirectional && iCmdDirectional != iCmdRenderThread) s += "DirLight";
+						if (i == iCmdRenderThread) s += "RenderThread";
+						Log::Info("  GFX : pCmd[%d]: %x | %s", i, vCmdLists[i], s.c_str());
+					}
+					#endif
+
+					const int NumCmds = iCmdRenderThread + (mSettings.gfx.bEnableAsyncCopy ? 0 : 1);
+					ctx.PresentQueue.pQueue->ExecuteCommandLists(NumCmds, (ID3D12CommandList**)&vCmdLists[0]);
 				}
 
 				HRESULT hr = PresentFrame(ctx);
+				#if !EXECUTE_CMD_LISTS_ON_WORKER
 				if (hr == DXGI_STATUS_OCCLUDED) { RenderThread_HandleStatusOccluded(); }
 				if (hr == DXGI_ERROR_DEVICE_REMOVED) { RenderThread_HandleDeviceRemoved(); }
-				{
-					SCOPED_CPU_MARKER_C("GPU_BOUND", 0xFF005500);
-					ctx.SwapChain.MoveToNextFrame();
-				}
+				#endif
 
+				ctx.SwapChain.MoveToNextFrame();
+
+#if EXECUTE_CMD_LISTS_ON_WORKER
 				mSubmitWorkerFinished.store(true);
 			}
 		});
+#endif
 	}
 
 	return hr;

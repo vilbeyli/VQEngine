@@ -373,16 +373,14 @@ private: // Derived Scenes shouldn't access these functions
 	struct FFrustumRenderCommandRecorderContext
 	{
 		size_t iFrustum;
-		const std::vector<size_t>* pObjIndices = nullptr;
-		const std::vector<float>* pCulledBoundingBoxProjectedAreas = nullptr;
+		const std::vector<std::pair<size_t, float>>* pObjIndicesAndBBAreas = nullptr;
 		FSceneShadowView::FShadowView* pShadowView = nullptr;
 	};
 	size_t DispatchWorkers_ShadowViews(size_t NumShadowMeshFrustums, std::vector< FFrustumRenderCommandRecorderContext>& WorkerContexts, FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
 	void BatchInstanceData_ShadowMeshes(
 		  size_t iFrustum
 		, FSceneShadowView::FShadowView* pShadowView
-		, const std::vector<size_t>* pCulledBoundingBoxIndexList_Msh
-		, const std::vector<float>& CulledBoundingBoxProjectedAreas_Msh
+		, const std::vector<std::pair<size_t, float>>& vCulledBoundingBoxIndexAndArea
 		, DirectX::XMMATRIX matViewProj
 		, bool bForceLOD0
 	) const;
