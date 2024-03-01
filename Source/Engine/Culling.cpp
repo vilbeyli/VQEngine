@@ -272,11 +272,14 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 			const size_t& iEnd = Range.second; // inclusive
 			assert(iBegin <= iEnd); // ensure work context bounds
 
-			WorkerThreadPool.AddTask([=]() 
+			for (size_t iWork = iBegin; iWork <= iEnd; ++iWork)
 			{
-				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
-				this->Process(iBegin, iEnd); 
-			});
+				WorkerThreadPool.AddTask([=]()
+				{
+					SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+					this->Process(iWork, iWork);
+				});
+			}
 			++currRange;
 		}
 	}
@@ -469,7 +472,8 @@ void SceneBoundingBoxHierarchy::Build(const Scene* pScene, const std::vector<siz
 	{
 		const size_t NumWorkItems = vGameObjectHandles.size();
 		const size_t NumWorkItemsPerAvailableWorkerThread = DIV_AND_ROUND_UP(NumWorkItems, WorkerThreadPool.GetThreadPoolSize());
-		const size_t NumWorkersToUse = CalculateNumThreadsToUse(NumWorkItems, NumWorkerThreadsAvailable, NumDesiredMinimumWorkItemsPerThread);
+		const size_t NumWorkersToUse = CalculateNumThreadsToUse(NumWorkItems, NumWorkerThreadsAvailable, NumDesiredMinimumWorkItemsPerThread)
+			+ (WorkerThreadPool.GetNumActiveTasks() == 0 ? 1 : 0);
 
 		const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, NumWorkersToUse);
 		
@@ -510,7 +514,7 @@ void SceneBoundingBoxHierarchy::Build(const Scene* pScene, const std::vector<siz
 		
 		// Sync point -------------------------------------------------
 		{
-			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS", 0xFFFF0000);
+			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS_GObjBB", 0xFFFF0000);
 			while (WorkerThreadPool.GetNumActiveTasks() != 0); // busy-wait is bad...
 		}
 		{
@@ -572,7 +576,7 @@ void SceneBoundingBoxHierarchy::Build(const Scene* pScene, const std::vector<siz
 	
 	// Sync point -------------------------------------------------
 	{
-		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS", 0xFFFF0000);
+		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS_MeshBB", 0xFFFF0000);
 		while (WorkerThreadPool.GetNumActiveTasks() != 0); // busy-wait is bad...
 	}
 

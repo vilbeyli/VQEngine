@@ -1793,7 +1793,7 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 
 	// ---------------------------------------------------SYNC ---------------------------------------------------
 	{
-		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000); // wait for frustum cull workers to finish
+		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER_CULL", 0xFFFF0000); // wait for frustum cull workers to finish
 		while (UpdateWorkerThreadPool.GetNumActiveTasks() != 0);
 	}
 	// --------------------------------------------------- SYNC ---------------------------------------------------
