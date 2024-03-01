@@ -1999,9 +1999,9 @@ void Scene::RecordRenderLightMeshCommands(FSceneView& SceneView) const
 	}
 	if (SceneView.sceneParameters.bDrawLightBounds)
 	{
-		::RecordRenderLightBoundsCommands(mLightsStatic    , SceneView.lightRenderCommands, SceneView.cameraPosition);
-		::RecordRenderLightBoundsCommands(mLightsDynamic   , SceneView.lightRenderCommands, SceneView.cameraPosition);
-		::RecordRenderLightBoundsCommands(mLightsStationary, SceneView.lightRenderCommands, SceneView.cameraPosition);
+		::RecordRenderLightBoundsCommands(mLightsStatic    , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
+		::RecordRenderLightBoundsCommands(mLightsDynamic   , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
+		::RecordRenderLightBoundsCommands(mLightsStationary, SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
 	}
 }
 

@@ -799,7 +799,6 @@ void VQEngine::RenderSceneColor(
 
 		for (const FLightRenderCommand& lightRenderCmd : SceneView.lightRenderCommands)
 		{
-			// set constant buffer data
 			FFrameConstantBufferUnlit* pCBuffer = {};
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
@@ -807,11 +806,10 @@ void VQEngine::RenderSceneColor(
 			pCBuffer->matModelViewProj = lightRenderCmd.matWorldTransformation * SceneView.viewProj;
 			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
 
-			// set IA
 			const Mesh& mesh = mpScene->mMeshes.at(lightRenderCmd.meshID);
-
-			const auto VBIBIDs = mesh.GetIABufferIDs();
-			const uint32 NumIndices = mesh.GetNumIndices();
+			const int LastLOD = mesh.GetNumLODs() - 1;
+			const auto VBIBIDs = mesh.GetIABufferIDs(LastLOD);
+			const uint32 NumIndices = mesh.GetNumIndices(LastLOD);
 			const uint32 NumInstances = 1;
 			const BufferID& VB_ID = VBIBIDs.first;
 			const BufferID& IB_ID = VBIBIDs.second;
@@ -821,8 +819,6 @@ void VQEngine::RenderSceneColor(
 			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			pCmd->IASetVertexBuffers(0, 1, &vb);
 			pCmd->IASetIndexBuffer(&ib);
-
-			// draw
 			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 		}
 	}
@@ -1260,9 +1256,8 @@ void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dynam
 	ID3D12Resource* pRscColor = mRenderer.GetTextureResource(rsc.Tex_SceneColor);
 	ID3D12Resource* pRscColorBB = mRenderer.GetTextureResource(rsc.Tex_SceneColorBoundingVolumes);
 
-
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = bMSAA ? mRenderer.GetRTV(rsc.RTV_SceneColorMSAA).GetCPUDescHandle(): mRenderer.GetRTV(rsc.RTV_SceneColor).GetCPUDescHandle();
-	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = bMSAA ? mRenderer.GetDSV(rsc.DSV_SceneDepthMSAA).GetCPUDescHandle(): mRenderer.GetDSV(rsc.DSV_SceneDepth).GetCPUDescHandle();
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = mRenderer.GetRTV(bMSAA ? rsc.RTV_SceneColorMSAA : rsc.RTV_SceneColor).GetCPUDescHandle();
+	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = mRenderer.GetDSV(bMSAA ? rsc.DSV_SceneDepthMSAA : rsc.DSV_SceneDepth).GetCPUDescHandle();
 
 	const float RenderResolutionX = static_cast<float>(SceneView.SceneRTWidth);
 	const float RenderResolutionY = static_cast<float>(SceneView.SceneRTHeight);
