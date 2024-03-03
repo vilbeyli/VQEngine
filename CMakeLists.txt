@@ -79,6 +79,7 @@ set (Shaders
     "Shaders/Magnifier.hlsl"
     "Shaders/ObjectID.hlsl"
     "Shaders/Outline.hlsl"
+    "Shaders/VertexDebug.hlsl"
 )
 
 set (ShadersScreenSpaceReflections

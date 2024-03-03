@@ -604,8 +604,9 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 		ImGui::TableNextRow();
 		ImGui::TableSetColumnIndex(0);
 		ImGui::Checkbox("F3: Profiler", &mUIState.bWindowVisible_Profiler);
-		//ImGui::TableSetColumnIndex(1);
-		//ImGui::Checkbox("F4: Debug", &mUIState.bWindowVisible_DebugPanel);
+		ImGui::TableSetColumnIndex(1);
+		ImGui::Checkbox("F4: Debug", &mUIState.bWindowVisible_GraphicsSettingsPanel);
+		
 
 		ImGui::TableNextRow();
 		ImGui::TableSetColumnIndex(0);
@@ -846,83 +847,6 @@ void VQEngine::DrawProfilerWindow(const FSceneStats& FrameStats, float dt)
 	ImGui::End();
 }
 
-#if 0
-void VQEngine::DrawDebugPanelWindow(FSceneRenderParameters& SceneParams, FPostProcessParameters& PPParams)
-{
-	const uint32 W = mpWinMain->GetWidth();
-	const uint32 H = mpWinMain->GetHeight();
-
-	const uint32_t DBG_WINDOW_POS_X = std::min(W - PROFILER_WINDOW_SIZE_X - DBG_WINDOW_SIZE_X - DBG_WINDOW_PADDING_X*2, GFX_WINDOW_SIZE_X + GFX_WINDOW_PADDING_X + DBG_WINDOW_PADDING_X);
-	const uint32_t DBG_WINDOW_POS_Y = H - DBG_WINDOW_SIZE_Y - DBG_WINDOW_PADDING_Y;
-	ImGui::SetNextWindowPos(ImVec2((float)DBG_WINDOW_POS_X, (float)DBG_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
-	ImGui::SetNextWindowSize(ImVec2(DBG_WINDOW_SIZE_X, DBG_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
-
-	InitializeStaticCStringData_EDrawMode();
-
-	ImGui::Begin("DEBUG PANEL", &mUIState.bWindowVisible_DebugPanel);
-
-	ImGui::Text("Debug Draw");
-	ImGui::Separator();
-	int iDrawMode = (int)PPParams.DrawModeEnum;
-	ImGui_RightAlignedCombo("Draw Mode", &iDrawMode, szDrawModes, _countof(szDrawModes));
-	PPParams.DrawModeEnum = (EDrawMode)iDrawMode;
-	if (PPParams.DrawModeEnum == EDrawMode::NORMALS)
-	{
-		bool bUnpackNormals = PPParams.VizParams.iUnpackNormals;
-		ImGui::Checkbox("Unpack Normals", &bUnpackNormals);
-		PPParams.VizParams.iUnpackNormals = bUnpackNormals;
-	}
-	if (PPParams.DrawModeEnum == EDrawMode::MOTION_VECTORS)
-	{
-		ImGui::SliderFloat("MoVec Intensity", &PPParams.VizParams.fInputStrength, 0.0f, 200.0f);
-	}
-
-	ImGui::Checkbox("Show GameObject Bounding Boxes (Shift+N)", &SceneParams.bDrawGameObjectBoundingBoxes);
-	ImGui::Checkbox("Show Mesh Bounding Boxes (N)", &SceneParams.bDrawMeshBoundingBoxes);
-	ImGui::Checkbox("Show Light Bounding Volumes (L)", &SceneParams.bDrawLightBounds);
-	ImGui::Checkbox("Draw Lights", &SceneParams.bDrawLightMeshes);
-
-
-	//
-	// MAGNIFIER
-	//
-	ImGuiSpacing3();
-	ImGuiIO& io = ImGui::GetIO();
-
-	ImGui::Text("Magnifier");
-	ImGui::Separator();
-	{
-		ImGui::Checkbox("Show Magnifier (Middle Mouse)", &mUIState.mpMagnifierState->bUseMagnifier);
-
-		BeginDisabledUIState(mUIState.mpMagnifierState->bUseMagnifier);
-		{
-			FMagnifierParameters& params = *mUIState.mpMagnifierState->pMagnifierParams;
-
-			// Use a local bool state here to track locked state through the UI widget,
-			// and then call ToggleMagnifierLockedState() to update the persistent state (m_UIstate).
-			// The keyboard input for toggling lock directly operates on the persistent state.
-			const bool bIsMagnifierCurrentlyLocked = mUIState.mpMagnifierState->bLockMagnifierPosition;
-			bool bMagnifierToggle = bIsMagnifierCurrentlyLocked;
-			ImGui::Checkbox("Lock Position (Shift + Middle Mouse)", &bMagnifierToggle);
-
-			if (bMagnifierToggle != bIsMagnifierCurrentlyLocked)
-				mUIState.mpMagnifierState->ToggleMagnifierLock();
-
-			ImGui::SliderFloat("Screen Size", &params.fMagnifierScreenRadius, MAGNIFIER_RADIUS_MIN, MAGNIFIER_RADIUS_MAX);
-			ImGui::SliderFloat("Magnification", &params.fMagnificationAmount, MAGNIFICATION_AMOUNT_MIN, MAGNIFICATION_AMOUNT_MAX);
-			if (bMagnifierToggle)
-			{
-				ImGui::SliderInt("OffsetX", &params.iMagnifierOffset[0], -(int)W, W);
-				ImGui::SliderInt("OffsetY", &params.iMagnifierOffset[1], -(int)H, H);
-			}
-		}
-		EndDisabledUIState(mUIState.mpMagnifierState->bUseMagnifier);
-	}
-
-	ImGui::End();
-}
-#endif
-
 void VQEngine::DrawPostProcessSettings(FPostProcessParameters& PPParams)
 {
 	// constants
@@ -1036,6 +960,68 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 	
 	ImGui::BeginTabBar("s*", ImGuiTabBarFlags_None);
 	
+	
+	if (ImGui::BeginTabItem("Debug"))
+	{
+		InitializeStaticCStringData_EDrawMode();
+		int iDrawMode = (int)PPParams.DrawModeEnum;
+		ImGui_RightAlignedCombo("Draw Mode", &iDrawMode, szDrawModes, _countof(szDrawModes));
+		PPParams.DrawModeEnum = (EDrawMode)iDrawMode;
+		if (PPParams.DrawModeEnum == EDrawMode::NORMALS)
+		{
+			bool bUnpackNormals = PPParams.VizParams.iUnpackNormals;
+			ImGui::Checkbox("Unpack Normals", &bUnpackNormals);
+			PPParams.VizParams.iUnpackNormals = bUnpackNormals;
+		}
+		if (PPParams.DrawModeEnum == EDrawMode::MOTION_VECTORS)
+		{
+			ImGui::SliderFloat("MoVec Intensity", &PPParams.VizParams.fInputStrength, 0.0f, 200.0f);
+		}
+
+		ImGui::Checkbox("Show GameObject Bounding Boxes (Shift+N)", &SceneRenderParams.bDrawGameObjectBoundingBoxes);
+		ImGui::Checkbox("Show Mesh Bounding Boxes (N)", &SceneRenderParams.bDrawMeshBoundingBoxes);
+		ImGui::Checkbox("Show Light Bounding Volumes (L)", &SceneRenderParams.bDrawLightBounds);
+		ImGui::Checkbox("Draw Lights", &SceneRenderParams.bDrawLightMeshes);
+		ImGui::Checkbox("Draw Vertex Axes", &SceneRenderParams.bDrawVertexLocalAxes);
+
+		//
+		// MAGNIFIER
+		//
+		ImGuiSpacing3();
+		ImGuiIO& io = ImGui::GetIO();
+
+		ImGui::Text("Magnifier");
+		ImGui::Separator();
+		{
+			ImGui::Checkbox("Show Magnifier (Middle Mouse)", &mUIState.mpMagnifierState->bUseMagnifier);
+
+			BeginDisabledUIState(mUIState.mpMagnifierState->bUseMagnifier);
+			{
+				FMagnifierParameters& params = *mUIState.mpMagnifierState->pMagnifierParams;
+
+				// Use a local bool state here to track locked state through the UI widget,
+				// and then call ToggleMagnifierLockedState() to update the persistent state (m_UIstate).
+				// The keyboard input for toggling lock directly operates on the persistent state.
+				const bool bIsMagnifierCurrentlyLocked = mUIState.mpMagnifierState->bLockMagnifierPosition;
+				bool bMagnifierToggle = bIsMagnifierCurrentlyLocked;
+				ImGui::Checkbox("Lock Position (Shift + Middle Mouse)", &bMagnifierToggle);
+
+				if (bMagnifierToggle != bIsMagnifierCurrentlyLocked)
+					mUIState.mpMagnifierState->ToggleMagnifierLock();
+
+				ImGui::SliderFloat("Screen Size", &params.fMagnifierScreenRadius, MAGNIFIER_RADIUS_MIN, MAGNIFIER_RADIUS_MAX);
+				ImGui::SliderFloat("Magnification", &params.fMagnificationAmount, MAGNIFICATION_AMOUNT_MIN, MAGNIFICATION_AMOUNT_MAX);
+				if (bMagnifierToggle)
+				{
+					ImGui::SliderInt("OffsetX", &params.iMagnifierOffset[0], -(int)W, W);
+					ImGui::SliderInt("OffsetY", &params.iMagnifierOffset[1], -(int)H, H);
+				}
+			}
+			EndDisabledUIState(mUIState.mpMagnifierState->bUseMagnifier);
+		}
+		ImGui::EndTabItem();
+	}
+
 	if (ImGui::BeginTabItem("Display"))
 	{
 		BeginDisabledUIState(!gfx.bVsync);
@@ -1077,8 +1063,6 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 
 		ImGui::EndTabItem();
 	}
-
-	
 
 	if (ImGui::BeginTabItem("Rendering"))
 	{
@@ -1148,66 +1132,6 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 		ImGui::EndTabItem();
 	}
 
-	if (ImGui::BeginTabItem("Debug"))
-	{
-		InitializeStaticCStringData_EDrawMode();
-		int iDrawMode = (int)PPParams.DrawModeEnum;
-		ImGui_RightAlignedCombo("Draw Mode", &iDrawMode, szDrawModes, _countof(szDrawModes));
-		PPParams.DrawModeEnum = (EDrawMode)iDrawMode;
-		if (PPParams.DrawModeEnum == EDrawMode::NORMALS)
-		{
-			bool bUnpackNormals = PPParams.VizParams.iUnpackNormals;
-			ImGui::Checkbox("Unpack Normals", &bUnpackNormals);
-			PPParams.VizParams.iUnpackNormals = bUnpackNormals;
-		}
-		if (PPParams.DrawModeEnum == EDrawMode::MOTION_VECTORS)
-		{
-			ImGui::SliderFloat("MoVec Intensity", &PPParams.VizParams.fInputStrength, 0.0f, 200.0f);
-		}
-
-		ImGui::Checkbox("Show GameObject Bounding Boxes (Shift+N)", &SceneRenderParams.bDrawGameObjectBoundingBoxes);
-		ImGui::Checkbox("Show Mesh Bounding Boxes (N)", &SceneRenderParams.bDrawMeshBoundingBoxes);
-		ImGui::Checkbox("Show Light Bounding Volumes (L)", &SceneRenderParams.bDrawLightBounds);
-		ImGui::Checkbox("Draw Lights", &SceneRenderParams.bDrawLightMeshes);
-
-
-		//
-		// MAGNIFIER
-		//
-		ImGuiSpacing3();
-		ImGuiIO& io = ImGui::GetIO();
-
-		ImGui::Text("Magnifier");
-		ImGui::Separator();
-		{
-			ImGui::Checkbox("Show Magnifier (Middle Mouse)", &mUIState.mpMagnifierState->bUseMagnifier);
-
-			BeginDisabledUIState(mUIState.mpMagnifierState->bUseMagnifier);
-			{
-				FMagnifierParameters& params = *mUIState.mpMagnifierState->pMagnifierParams;
-
-				// Use a local bool state here to track locked state through the UI widget,
-				// and then call ToggleMagnifierLockedState() to update the persistent state (m_UIstate).
-				// The keyboard input for toggling lock directly operates on the persistent state.
-				const bool bIsMagnifierCurrentlyLocked = mUIState.mpMagnifierState->bLockMagnifierPosition;
-				bool bMagnifierToggle = bIsMagnifierCurrentlyLocked;
-				ImGui::Checkbox("Lock Position (Shift + Middle Mouse)", &bMagnifierToggle);
-
-				if (bMagnifierToggle != bIsMagnifierCurrentlyLocked)
-					mUIState.mpMagnifierState->ToggleMagnifierLock();
-
-				ImGui::SliderFloat("Screen Size", &params.fMagnifierScreenRadius, MAGNIFIER_RADIUS_MIN, MAGNIFIER_RADIUS_MAX);
-				ImGui::SliderFloat("Magnification", &params.fMagnificationAmount, MAGNIFICATION_AMOUNT_MIN, MAGNIFICATION_AMOUNT_MAX);
-				if (bMagnifierToggle)
-				{
-					ImGui::SliderInt("OffsetX", &params.iMagnifierOffset[0], -(int)W, W);
-					ImGui::SliderInt("OffsetY", &params.iMagnifierOffset[1], -(int)H, H);
-				}
-			}
-			EndDisabledUIState(mUIState.mpMagnifierState->bUseMagnifier);
-		}
-		ImGui::EndTabItem();
-	}
 
 	ImGui::EndTabBar();
 	ImGui::End();

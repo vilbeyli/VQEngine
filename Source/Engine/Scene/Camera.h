@@ -144,6 +144,7 @@ public:
 	DirectX::XMMATRIX GetViewInverseMatrix() const;
 	DirectX::XMMATRIX GetProjectionMatrix() const;
 	DirectX::XMMATRIX GetRotationMatrix() const;
+	inline DirectX::XMMATRIX GetViewProjectionMatrix() const { return GetViewMatrix() * GetProjectionMatrix(); };
 	inline const FProjectionMatrixParameters& GetProjectionParameters() const { return mProjParams; }
 	inline       FProjectionMatrixParameters& GetProjectionParameters() { return mProjParams; }
 	inline       FFrustumPlaneset GetViewFrustumPlanesInWorldSpace() const { return FFrustumPlaneset::ExtractFromMatrix(GetViewMatrix() * GetProjectionMatrix()); }

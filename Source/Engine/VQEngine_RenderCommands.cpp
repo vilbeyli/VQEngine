@@ -827,6 +827,7 @@ void VQEngine::RenderSceneColor(
 	{
 		RenderLightBounds(pCmd, pCBufferHeap, SceneView, bMSAA);
 		RenderBoundingBoxes(pCmd, pCBufferHeap, SceneView, bMSAA);
+		RenderDebugVertexAxes(pCmd, pCBufferHeap, SceneView, bMSAA);
 		RenderOutline(pCmd, pCBufferHeap, SceneView, bMSAA, rtvHandles);
 	}
 	
@@ -1018,6 +1019,37 @@ void VQEngine::RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 			pCmd->IASetIndexBuffer(&ib);
 			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 		}
+	}
+}
+
+void VQEngine::RenderDebugVertexAxes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA)
+{
+	if (!SceneView.sceneParameters.bDrawVertexLocalAxes || SceneView.debugVertexAxesRenderCommands.empty())
+	{
+		return;
+	}
+
+	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ZPrePass));
+	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::DEBUGVERTEX_LOCALSPACEVECTORS_PSO_MSAA_4 : EBuiltinPSOs::DEBUGVERTEX_LOCALSPACEVECTORS_PSO));
+	for (const MeshRenderCommand_t& cmd : SceneView.debugVertexAxesRenderCommands)
+	{
+		FObjectConstantBufferDebugVertexVectors* pCBuffer = {};
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
+		pCBuffer->matWorld    = cmd.matWorld [0];
+		pCBuffer->matNormal   = cmd.matNormal[0];
+		pCBuffer->matViewProj = SceneView.viewProj;
+		
+		const uint32 NumInstances = 1;
+		const uint32 NumIndices = cmd.numIndices;
+		const VBV& vb = mRenderer.GetVertexBufferView(cmd.vertexIndexBuffer.first);
+		const IBV& ib = mRenderer.GetIndexBufferView(cmd.vertexIndexBuffer.second);
+
+		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
+		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
+		pCmd->IASetVertexBuffers(0, 1, &vb);
+		pCmd->IASetIndexBuffer(&ib);
+		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 	}
 }
 
@@ -1294,6 +1326,7 @@ void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dynam
 
 	RenderBoundingBoxes(pCmd, pCBufferHeap, SceneView, bMSAA);
 	RenderLightBounds(pCmd, pCBufferHeap, SceneView, bMSAA);
+	RenderDebugVertexAxes(pCmd, pCBufferHeap, SceneView, bMSAA);
 	RenderOutline(pCmd, pCBufferHeap, SceneView, bMSAA, { rtvHandle });
 
 	// resolve MSAA RT 

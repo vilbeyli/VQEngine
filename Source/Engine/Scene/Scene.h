@@ -79,6 +79,7 @@ struct FSceneRenderParameters
 	bool bDrawMeshBoundingBoxes = false;
 	bool bDrawGameObjectBoundingBoxes = false;
 	bool bDrawLightMeshes = true;
+	bool bDrawVertexLocalAxes = false;
 	float fYawSliderValue = 0.0f;
 	float fAmbientLightingFactor = 0.055f;
 	bool bScreenSpaceAO = true;
@@ -118,6 +119,7 @@ struct FSceneView
 	std::vector<FLightRenderCommand> lightRenderCommands;
 	std::vector<FLightRenderCommand> lightBoundsRenderCommands;
 	std::vector<FOutlineRenderCommand> outlineRenderCommands;
+	std::vector<MeshRenderCommand_t> debugVertexAxesRenderCommands;
 
 #if RENDER_INSTANCED_SCENE_MESHES
 	//--------------------------------------------------------------------------------------------------------------------------------------------

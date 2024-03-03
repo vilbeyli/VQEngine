@@ -119,6 +119,11 @@ std::string GetIncludeFileName(const std::string& line)
 	if (foundPos != std::string::npos)
 	{
 		std::string quotedFileName = line.substr(foundPos + strlen("#include "), line.size() - foundPos);// +str_search.size() - 1);
+		if (auto it = quotedFileName.find("//") != std::string::npos)
+		{
+			quotedFileName = quotedFileName.substr(0, quotedFileName.find("//")); // skip the comments in file name
+			quotedFileName = StrUtil::trim(quotedFileName);
+		}
 		return quotedFileName.substr(1, quotedFileName.size() - 2);
 	}
 	return std::string();

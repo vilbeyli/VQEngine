@@ -551,26 +551,20 @@ static void RecordOutlineRenderCommands(
 	}
 }
 
-void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UIState, int FRAME_DATA_INDEX)
+static void ExtractSceneView(FSceneView& SceneView, std::unordered_map<const Camera*, DirectX::XMMATRIX>& mViewProjectionMatrixHistory, const Camera& cam)
 {
-	SCOPED_CPU_MARKER("Scene::PostUpdate()");
-	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
-	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
-	FSceneShadowView& ShadowView = mFrameShadowViews[FRAME_DATA_INDEX];
-
-	const Camera& cam = mCameras[mIndex_SelectedCamera];
-	const XMFLOAT3 camPos = cam.GetPositionF(); 
+	SCOPED_CPU_MARKER("ExtractSceneView");
 
 	const XMMATRIX MatView = cam.GetViewMatrix();
 	const XMMATRIX MatProj = cam.GetProjectionMatrix();
+	const XMFLOAT3 camPos = cam.GetPositionF();
 	const XMMATRIX MatViewProj = MatView * MatProj;
-	const XMMATRIX MatViewProjPrev = mViewProjectionMatrixHistory.find(&cam) != mViewProjectionMatrixHistory.end() 
+
+	const XMMATRIX MatViewProjPrev = mViewProjectionMatrixHistory.find(&cam) != mViewProjectionMatrixHistory.end()
 		? mViewProjectionMatrixHistory.at(&cam)
 		: XMMatrixIdentity();
 	mViewProjectionMatrixHistory[&cam] = MatViewProj;
-	const FFrustumPlaneset ViewFrustumPlanes = FFrustumPlaneset::ExtractFromMatrix(MatViewProj);
-	
-	// extract scene view
+
 	SceneView.proj = MatProj;
 	SceneView.projInverse = XMMatrixInverse(NULL, SceneView.proj);
 	SceneView.view = MatView;
@@ -582,6 +576,19 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 	SceneView.MainViewCameraPitch = cam.GetPitch();
 	SceneView.HDRIYawOffset = SceneView.sceneParameters.fYawSliderValue * XM_PI * 2.0f;
 
+}
+
+void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UIState, int FRAME_DATA_INDEX)
+{
+	SCOPED_CPU_MARKER("Scene::PostUpdate()");
+	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
+	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
+	FSceneShadowView& ShadowView = mFrameShadowViews[FRAME_DATA_INDEX];
+
+	const Camera& cam = mCameras[mIndex_SelectedCamera];
+	
+	ExtractSceneView(SceneView, mViewProjectionMatrixHistory, cam);
+
 	// reset shadow view
 	ShadowView.NumPointShadowViews = 0;
 	ShadowView.NumSpotShadowViews = 0;
@@ -589,6 +596,7 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 	// distance-cull and get active shadowing lights from various light containers
 	{
 		SCOPED_CPU_MARKER("CullLights");
+		const FFrustumPlaneset ViewFrustumPlanes = FFrustumPlaneset::ExtractFromMatrix(cam.GetViewProjectionMatrix());
 		mActiveLightIndices_Static     = GetActiveAndCulledLightIndices(mLightsStatic, ViewFrustumPlanes);
 		mActiveLightIndices_Stationary = GetActiveAndCulledLightIndices(mLightsStationary, ViewFrustumPlanes);
 		mActiveLightIndices_Dynamic    = GetActiveAndCulledLightIndices(mLightsDynamic, ViewFrustumPlanes);
@@ -608,7 +616,7 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 	BatchInstanceData(SceneView, UpdateWorkerThreadPool, mMainViewCollcetInstancedDrawDataWriteParams);
 	
 	RecordRenderLightMeshCommands(SceneView);
-	RecordOutlineRenderCommands(SceneView.outlineRenderCommands, mSelectedObjects, this, MatView, MatProj, SceneView.sceneParameters.OutlineColor);
+	RecordOutlineRenderCommands(SceneView.outlineRenderCommands, mSelectedObjects, this, SceneView.view, SceneView.proj, SceneView.sceneParameters.OutlineColor);
 
 	const auto lights = this->GetLights(); // todo: this is unnecessary copying, don't do this
 	if (UIState.SelectedLightIndex >= 0 && UIState.SelectedLightIndex < lights.size())
@@ -620,6 +628,49 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 		}
 	}
 
+	if (!mSelectedObjects.empty() && SceneView.sceneParameters.bDrawVertexLocalAxes)
+	{
+		// count num meshes
+		int NumMeshes = 0;
+		for (size_t hObj : mSelectedObjects)
+		{
+			const GameObject* pObj = this->GetGameObject(hObj);
+			if (!pObj)
+				continue;
+			
+			const Model& m = mModels.at(pObj->mModelID);
+			NumMeshes += m.mData.GetNumMeshesOfAllTypes();
+		}
+		
+		SceneView.debugVertexAxesRenderCommands.resize(NumMeshes);
+		int i = 0; // no instancing, draw meshes one by one for now
+		for (size_t hObj : mSelectedObjects)
+		{
+			const GameObject* pObj = this->GetGameObject(hObj);
+			if (!pObj)
+				continue;
+			const Transform* pTf = this->GetGameObjectTransform(hObj);
+			assert(pTf);
+
+			const Model& m = mModels.at(pObj->mModelID);
+			for (const auto& pair : m.mData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH))
+			{
+				MeshID meshID = pair.first;
+				const Mesh& mesh = mMeshes.at(meshID);
+
+				MeshRenderCommand_t& cmd = SceneView.debugVertexAxesRenderCommands[i];
+				cmd.matWorld.resize(1);
+				cmd.matNormal.resize(1);
+
+				const int lod = 0; // GetLODFromProjectedScreenArea(2.0f, mesh.GetNumLODs());
+				cmd.numIndices = mesh.GetNumIndices(lod);
+				cmd.vertexIndexBuffer = mesh.GetIABufferIDs(lod);
+				cmd.matWorld[0] = pTf->matWorldTransformation();
+				cmd.matNormal[0] = pTf->NormalMatrix(cmd.matWorld.back());
+				++i;
+			}
+		}
+	}
 }
 
 
@@ -1330,10 +1381,10 @@ static void SortCulledIndices(
 
 #if 0
 	Log::Info("PostSort-------");
-	for (int i = 0; i < vMainViewCulledBoundingBoxIndexAndArea.size(); ++i)
+	for (int hObj = 0; hObj < vMainViewCulledBoundingBoxIndexAndArea.size(); ++hObj)
 	{
-		const size_t iBBL = vMainViewCulledBoundingBoxIndexAndArea[i].first;
-		const float fAreaL = vMainViewCulledBoundingBoxIndexAndArea[i].second;
+		const size_t iBBL = vMainViewCulledBoundingBoxIndexAndArea[hObj].first;
+		const float fAreaL = vMainViewCulledBoundingBoxIndexAndArea[hObj].second;
 		const MaterialID    matIDL = MeshBB_MatID[iBBL];
 		const MeshID       meshIDL = MeshBB_MeshID[iBBL];
 		const Mesh& meshL = mMeshes.at(meshIDL);
@@ -1342,7 +1393,7 @@ static void SortCulledIndices(
 		const uint64 keyL = GetKey(matIDL, meshIDL, lodL);
 		const std::string keyLBinary = std::bitset<64>(keyL).to_string(); // Convert to binary string
 
-		Log::Info("%-5d --> %-13llu -->%s", i, keyL, keyLBinary.c_str());
+		Log::Info("%-5d --> %-13llu -->%s", hObj, keyL, keyLBinary.c_str());
 	}
 #endif
 }
@@ -1493,9 +1544,9 @@ static void CollectMainViewInstanceData(FSceneView& SceneView
 #if 0
 		auto fnAllZero = [](const XMMATRIX& m)
 		{
-			for (int i = 0; i < 4; ++i)
+			for (int hObj = 0; hObj < 4; ++hObj)
 			for (int j = 0; j < 4; ++j)
-				if (m.r[i].m128_f32[j] != 0.0f)
+				if (m.r[hObj].m128_f32[j] != 0.0f)
 					return false;
 			return true;
 		};	
