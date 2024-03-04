@@ -983,6 +983,10 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 		ImGui::Checkbox("Show Light Bounding Volumes (L)", &SceneRenderParams.bDrawLightBounds);
 		ImGui::Checkbox("Draw Lights", &SceneRenderParams.bDrawLightMeshes);
 		ImGui::Checkbox("Draw Vertex Axes", &SceneRenderParams.bDrawVertexLocalAxes);
+		if (SceneRenderParams.bDrawVertexLocalAxes)
+		{
+			ImGui::SliderFloat("Axis Size", &SceneRenderParams.fVertexLocalAxixSize, 1.0f, 10.0f);
+		}
 
 		//
 		// MAGNIFIER

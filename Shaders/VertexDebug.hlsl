@@ -43,6 +43,7 @@ struct CB
 	matrix matWorld;
 	matrix matNormal;
 	matrix matViewProj;
+	float LocalAxisSize;
 };
 
 cbuffer CBPerObject : register(b2)
@@ -72,14 +73,13 @@ void GSMain(point GSInput input[1], inout LineStream<PSInput> outStream)
 	static const float3 colR = float3(0.6f, 0, 0);
 	static const float3 colG = float3(0, 0.6f, 0);
 	static const float3 colB = float3(0, 0, 0.6f);
-	const float fDist = 3.0f;
 	
 	const float3 LineVertPositionWS = mul(cb.matWorld, float4(input[0].vPosition.xyz, 1)).xyz;
 	const float4 LineVertPositionCS = mul(cb.matViewProj, float4(LineVertPositionWS, 1));
 	
-	const float3 OffsetWS0 = normalize(mul(cb.matNormal, float4(tbn0, 0)))* fDist;
-	const float3 OffsetWS1 = normalize(mul(cb.matNormal, float4(tbn1, 0)))* fDist;
-	const float3 OffsetWS2 = normalize(mul(cb.matNormal, float4(tbn2, 0)))* fDist;
+	const float3 OffsetWS0 = normalize(mul(cb.matNormal, float4(tbn0, 0)).xyz) * cb.LocalAxisSize;
+	const float3 OffsetWS1 = normalize(mul(cb.matNormal, float4(tbn1, 0)).xyz) * cb.LocalAxisSize;
+	const float3 OffsetWS2 = normalize(mul(cb.matNormal, float4(tbn2, 0)).xyz) * cb.LocalAxisSize;
 	
 	PSInput o;
 	o.vPosition = LineVertPositionCS;

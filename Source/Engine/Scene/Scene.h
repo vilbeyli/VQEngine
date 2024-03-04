@@ -80,6 +80,7 @@ struct FSceneRenderParameters
 	bool bDrawGameObjectBoundingBoxes = false;
 	bool bDrawLightMeshes = true;
 	bool bDrawVertexLocalAxes = false;
+	float fVertexLocalAxixSize = 1.0f;
 	float fYawSliderValue = 0.0f;
 	float fAmbientLightingFactor = 0.055f;
 	bool bScreenSpaceAO = true;

@@ -1039,6 +1039,7 @@ void VQEngine::RenderDebugVertexAxes(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 		pCBuffer->matWorld    = cmd.matWorld [0];
 		pCBuffer->matNormal   = cmd.matNormal[0];
 		pCBuffer->matViewProj = SceneView.viewProj;
+		pCBuffer->LocalAxisSize = SceneView.sceneParameters.fVertexLocalAxixSize;
 		
 		const uint32 NumInstances = 1;
 		const uint32 NumIndices = cmd.numIndices;

@@ -656,6 +656,7 @@ private:
 		DirectX::XMMATRIX matWorld;
 		DirectX::XMMATRIX matNormal;
 		DirectX::XMMATRIX matViewProj;
+		float LocalAxisSize;
 	};
 
 // ------------------------------------------------------------------------------------------------------

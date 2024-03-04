@@ -1247,7 +1247,8 @@ ID3D12PipelineState* VQRenderer::LoadPSO(const FPSODesc& psoLoadDesc)
 
 				// reflect shader
 				ID3D12ShaderReflection*& pReflection = ShaderReflections[ShaderCompileResult.ShaderStageEnum];
-				D3DReflect(ShaderByteCode.pShaderBytecode, ShaderByteCode.BytecodeLength, IID_PPV_ARGS(&pReflection));
+				HRESULT hr = D3DReflect(ShaderByteCode.pShaderBytecode, ShaderByteCode.BytecodeLength, IID_PPV_ARGS(&pReflection));
+				assert(pReflection);
 			}
 			
 			// assign input layout
