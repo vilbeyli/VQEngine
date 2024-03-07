@@ -501,6 +501,7 @@ void SceneBoundingBoxHierarchy::Build(const Scene* pScene, const std::vector<siz
 		}
 
 		// this thread
+		if(!vRanges.empty())
 		{
 			this->BuildGameObjectBoundingBoxes_Range(pScene, vGameObjectHandles, vRanges[0].first, vRanges[0].second);
 		}

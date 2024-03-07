@@ -244,7 +244,7 @@ Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompil
 	const EShaderStage ShaderStageEnum = GetShaderStageEnumFromShaderModel(ShaderStageCompileDesc.ShaderModel);
 	Log::Info("Compiling Shader Source: %s [%s @ %s()]"
 		, StrUtil::UnicodeToASCII<256>(strPath).c_str()
-		, SHADER_STAGE_STRING_LOOKUP.at(ShaderStageEnum).c_str()
+		, ShaderStageCompileDesc.ShaderModel.c_str()
 		, ShaderStageCompileDesc.EntryPoint.c_str()
 	);
 
