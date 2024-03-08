@@ -35,6 +35,7 @@
 	#define int4     DirectX::XMINT4
 #endif
 
+#include "LightingConstantBufferData.h"
 
 #ifdef VQ_CPU
 	namespace VQ_SHADER_DATA {
@@ -47,9 +48,10 @@ struct TerrainParams
 	matrix matNormal;
 	matrix viewProj;
 	matrix worldViewProj;
-	float fHeightScale;
 	float fDistanceToCamera;
-	float2 pad;
+	float3 pad;
+
+	MaterialData material;
 }; 
 struct TerrainTessellationParams
 {

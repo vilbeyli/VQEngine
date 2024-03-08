@@ -130,7 +130,7 @@ MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 	Material& mat = mMaterials.at(id);
 	if (mat.SRVMaterialMaps == INVALID_ID)
 	{
-		mat.SRVMaterialMaps = mRenderer.AllocateSRV(NUM_MATERIAL_TEXTURE_MAP_BINDINGS);
+		mat.SRVMaterialMaps = mRenderer.AllocateSRV(NUM_MATERIAL_TEXTURE_MAP_BINDINGS-1);
 		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 0, INVALID_ID);
 		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 1, INVALID_ID);
 		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 2, INVALID_ID);
@@ -139,6 +139,8 @@ MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 5, INVALID_ID);
 		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 6, INVALID_ID);
 		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 7, INVALID_ID);
+		mat.SRVHeightMap = mRenderer.AllocateSRV(1);
+		mRenderer.InitializeSRV(mat.SRVHeightMap, 0, INVALID_ID);
 	}
 	return id;
 }
@@ -677,10 +679,14 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 	for(size_t i=0; i< NumVisibleTerrains; ++i)
 	{
 		const Terrain& t = mTerrains[i];
+		const Material& mat = GetMaterial(t.MaterialId);
 		SceneView.terrainDrawParams[i].Terrain = GetCBuffer_TerrainParams(t, cam);
+		SceneView.terrainDrawParams[i].Terrain.material = mat.GetCBufferData();
+
 		SceneView.terrainDrawParams[i].Tessellation; // TODO
 		
-		SceneView.terrainDrawParams[i].HeightmapSRV = t.SRVHeightMap;
+		SceneView.terrainDrawParams[i].HeightmapSRV = mat.SRVHeightMap;
+		SceneView.terrainDrawParams[i].MaterialSRV = mat.SRVMaterialMaps;
 
 		const Mesh& m = mMeshes.at(t.MeshId);
 		const int lod = 0;
@@ -1839,7 +1845,7 @@ size_t Scene::DispatchWorkers_ShadowViews(size_t NumShadowMeshFrustums, std::vec
 	}
 	if (NumShadowFrustumsThisThread == 0)
 	{
-		Log::Warning("NumShadowFrustumsThisThread=0");
+		// Log::Warning("NumShadowFrustumsThisThread=0");
 	}
 	return NumShadowFrustumsThisThread;
 }

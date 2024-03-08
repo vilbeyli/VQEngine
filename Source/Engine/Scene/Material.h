@@ -27,13 +27,12 @@ enum EMaterialTextureMapBindings
 	ALBEDO = 0,
 	NORMALS,
 	EMISSIVE,
-	// HEIGHT,
-	// SPECULAR,
 	ALPHA_MASK,
 	METALLIC,
 	ROUGHNESS,
 	OCCLUSION_ROUGHNESS_METALNESS,
 	AMBIENT_OCCLUSION,
+	HEIGHT,
 
 	NUM_MATERIAL_TEXTURE_MAP_BINDINGS
 };
@@ -56,20 +55,22 @@ struct Material // 56 Bytes
 	// Cook-Torrence BRDF
 	float metalness                     = 0.0f;        // 4 Bytes
 	float roughness                     = 0.8f;        // 4 Bytes
-	float pad0, pad2;                                  // 8 Bytes
+	float displacement                  = 0.0f;        // 4 Bytes
+	float pad0;                                        // 4 Bytes
 	//------------------------------------------------------------
 
 	TextureID TexDiffuseMap   = INVALID_ID;
 	TextureID TexNormalMap    = INVALID_ID;
 	TextureID TexEmissiveMap  = INVALID_ID;
-	TextureID TexHeightMap    = INVALID_ID;
 	TextureID TexAlphaMaskMap = INVALID_ID;
 	TextureID TexMetallicMap  = INVALID_ID;
 	TextureID TexRoughnessMap = INVALID_ID;
 	TextureID TexOcclusionRoughnessMetalnessMap = INVALID_ID;
 	TextureID TexAmbientOcclusionMap = INVALID_ID;
+	TextureID TexHeightMap    = INVALID_ID;
 
 	SRV_ID SRVMaterialMaps = INVALID_ID;
+	SRV_ID SRVHeightMap = INVALID_ID;
 	//------------------------------------------------------------
 
 	VQ_SHADER_DATA::MaterialData GetCBufferData() const;

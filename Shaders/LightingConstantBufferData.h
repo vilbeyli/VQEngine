@@ -15,6 +15,9 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
+#ifndef LIGHTING_CONSTANT_BUFFER_DATA_H
+#define LIGHTING_CONSTANT_BUFFER_DATA_H
+
 #ifndef VQ_GPU
 #define VQ_CPU 1
 #endif
@@ -47,6 +50,7 @@ namespace VQ_SHADER_DATA {
 
 #define NUM_SHADOWING_LIGHTS__POINT 5
 #define NUM_SHADOWING_LIGHTS__SPOT  5
+#define NUM_SHADOWING_LIGHTS__DIRECTIONAL 1
 
 #define LIGHT_INDEX_SPOT       0
 #define LIGHT_INDEX_POINT      1
@@ -138,15 +142,17 @@ struct MaterialData
     float3 diffuse;
     float alpha;
 
-	float3 emissiveColor;
-	float emissiveIntensity;
+    float3 emissiveColor;
+    float emissiveIntensity;
 
     float3 specular;
     float roughness;
 
-	float4 uvScaleOffset;
+    float4 uvScaleOffset;
     float metalness;
-	int textureConfig;
+
+	float displacement;
+    int textureConfig;
 };
 
 
@@ -219,3 +225,5 @@ struct PerObjectData
 #ifdef VQ_CPU
 } // namespace VQ_SHADER_DATA
 #endif
+
+#endif // LIGHTING_CONSTANT_BUFFER_DATA_H

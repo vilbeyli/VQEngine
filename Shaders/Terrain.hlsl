@@ -83,8 +83,30 @@ cbuffer CBTerrain      : register(b2) { TerrainParams trrn; }
 cbuffer CBTessellation : register(b3) { TerrainTessellationParams tess; }
 
 SamplerState LinearSampler : register(s0);
-Texture2D     texHeightmap : register(t0);
-Texture2D    texDiffusemap : register(t1);
+SamplerState PointSampler : register(s1);
+SamplerState AnisoSampler : register(s2);
+SamplerState ClampedLinearSampler : register(s3);
+
+Texture2D texDiffuse        : register(t0);
+Texture2D texNormals        : register(t1);
+Texture2D texEmissive       : register(t2);
+Texture2D texAlphaMask      : register(t3);
+Texture2D texMetalness      : register(t4);
+Texture2D texRoughness      : register(t5);
+Texture2D texOcclRoughMetal : register(t6);
+Texture2D texLocalAO        : register(t7);
+
+Texture2D texHeightmap      : register(t8); // VS or PS
+
+Texture2D texScreenSpaceAO  : register(t9);
+
+TextureCube texEnvMapDiff : register(t10);
+TextureCube texEnvMapSpec : register(t11);
+Texture2D texBRDFIntegral : register(t12);
+
+Texture2D        texDirectionalLightShadowMap : register(t13);
+Texture2DArray   texSpotLightShadowMaps       : register(t16);
+TextureCubeArray texPointLightShadowMaps      : register(t22);
 
 // ----------------------------------------------------------------------------------------------------------------
 
@@ -98,15 +120,17 @@ struct PSInput
 };
 PSInput VSMain_Heightmap(VSInput v)
 {
-	const float heightMapSample = texHeightmap.SampleLevel(LinearSampler, v.uv0, 0).x;
-	const float heightOffset = trrn.fHeightScale * heightMapSample;
+	float2 uv = v.uv0 * trrn.material.uvScaleOffset.xy + trrn.material.uvScaleOffset.zw;
+	
+	const float heightMapSample = texHeightmap.SampleLevel(LinearSampler, uv, 0).x;
+	const float heightOffset = trrn.material.displacement * heightMapSample;
 	const float3 positionWithHeightOffset = v.vLocalPosition + float3(0, heightOffset, 0);
 	
 	PSInput o;
-	o.ClipPos = mul(trrn.worldViewProj, float4(positionWithHeightOffset, 1.0f));
-	o.Normal = mul(trrn.matNormal, float4(v.vNormal, 0.0f)).xyz;
-	o.Tangent;
+	o.ClipPos  = mul(trrn.worldViewProj, float4(positionWithHeightOffset, 1.0f));
 	o.WorldPos = mul(trrn.world, float4(positionWithHeightOffset, 1.0f));
+	o.Normal   = mul(trrn.matNormal, float4(/*v.vNormal*/float3(0,1,0), 0.0f)).xyz;
+	o.Tangent  = mul(trrn.matNormal, float4(/*v.vTangent*/float3(1,0,0), 0.0f)).xyz;;
 	o.uv0 = v.uv0;
 	return o;
 }
@@ -114,40 +138,142 @@ PSInput VSMain_Heightmap(VSInput v)
 float4 PSMain_Heightmap(PSInput In) : SV_TARGET0
 {
 	const float3 VertNormalCS = normalize(In.Normal);
+	const float2 uv = In.uv0 * trrn.material.uvScaleOffset.xy + trrn.material.uvScaleOffset.zw;
 	
-	//return float4(In.uv0, 0, 1);
+	const int TEX_CFG = trrn.material.textureConfig;
 	
+	float4 AlbedoAlpha = texDiffuse.Sample(AnisoSampler, uv);
+	float3 Normal = texNormals.Sample(AnisoSampler, uv).rgb;
+	float3 Emissive = texEmissive.Sample(LinearSampler, uv).rgb;
+	float  Metalness = texMetalness.Sample(AnisoSampler, uv).r;
+	float  Roughness = texRoughness.Sample(AnisoSampler, uv).r;
+	float3 OcclRghMtl = texOcclRoughMetal.Sample(AnisoSampler, uv).rgb;
+	float LocalAO = texLocalAO.Sample(AnisoSampler, uv).r;
+	
+	// no support for alpha masking
+	// if (HasDiffuseMap(TEX_CFG) && AlbedoAlpha.a < 0.01f)
+	// 	discard;
+	
+	// ensure linear space
+	AlbedoAlpha.xyz = SRGBToLinear(AlbedoAlpha.xyz);
+	Emissive = SRGBToLinear(Emissive);
+	
+	// read textures/cbuffer & assign sufrace material data
+	float ao = cbPerFrame.fAmbientLightingFactor;
 	BRDF_Surface Surface = (BRDF_Surface) 0;
-	Surface.diffuseColor = texDiffusemap.Sample(LinearSampler, In.uv0);
-	
-	Surface.specularColor = float3(1, 1, 1);
-	//Surface.emissiveColor = HasEmissiveMap(TEX_CFG) ? Emissive * cbPerObject.materialData.emissiveColor : cbPerObject.materialData.emissiveColor;
-	Surface.emissiveColor = Surface.diffuseColor;
-	//Surface.emissiveIntensity = cbPerObject.materialData.emissiveIntensity;
-	Surface.roughness = 1.0f;
-	Surface.metalness = 0.0f;
+	Surface.diffuseColor = HasDiffuseMap(TEX_CFG) ? AlbedoAlpha.rgb * trrn.material.diffuse : trrn.material.diffuse;
+	Surface.emissiveColor = HasEmissiveMap(TEX_CFG) ? Emissive * trrn.material.emissiveColor : trrn.material.emissiveColor;
+	Surface.emissiveIntensity = trrn.material.emissiveIntensity;
+	Surface.roughness = trrn.material.roughness;
+	Surface.metalness = trrn.material.metalness;
 	
 	const float3 N = normalize(In.Normal);
 	const float3 T = normalize(In.Tangent);
-	//float3 Normal = texNormals.Sample(AnisoSampler, uv).rgb;
-	//Surface.N = length(Normal) < 0.01 ? N : UnpackNormal(Normal, N, T);
-	Surface.N = N;
+	Surface.N = length(Normal) < 0.01 ? N : UnpackNormal(Normal, N, T);
+	
+	//ao = HasAmbientOcclusionMap(TEX_CFG) ? ao * LocalAO : ao;
+	//if (HasRoughnessMap(TEX_CFG))
+		Surface.roughness *= Roughness;
+	//if (HasMetallicMap(TEX_CFG))
+		Surface.metalness *= Metalness;
+	if (HasOcclusionRoughnessMetalnessMap(TEX_CFG))
+	{
+		//ao *= OcclRghMtl.r; // TODO: handle no occlusion map case
+		Surface.roughness *= OcclRghMtl.g;
+		Surface.metalness *= OcclRghMtl.b;
+	}
 	
 	const float AmbientLight = 0.011f;
-	float3 I_total = float3(AmbientLight, AmbientLight, AmbientLight);
+	const float3 I_Ambient = AmbientLight * Surface.diffuseColor;
+	const float3 I_Emission = Surface.emissiveColor * Surface.emissiveIntensity;
+	float3 I_total = I_Ambient + I_Emission;
 	
 	// lighting & surface parameters (World Space)
 	const float3 P = In.WorldPos;
 	const float3 V = normalize(cbPerView.CameraPosition - P);
 	const float2 screenSpaceUV = In.ClipPos.xy / cbPerView.ScreenDimensions;
-	for (int s = 0; s < cbPerFrame.Lights.numSpotLights; ++s)
+	
+	SceneLighting Lights = cbPerFrame.Lights;
+	
+	// Environment map
+	if (cbPerView.EnvironmentMapDiffuseOnlyIllumination) // TODO: preprocessor
 	{
-		I_total += CalculateSpotLightIllumination(cbPerFrame.Lights.spot_lights[s], Surface, P, V);
+		I_total += CalculateEnvironmentMapIllumination_DiffuseOnly(Surface, V, texEnvMapDiff, ClampedLinearSampler, cbPerFrame.fHDRIOffsetInRadians);
+	}
+	else
+	{
+		I_total += CalculateEnvironmentMapIllumination(Surface, V, cbPerView.MaxEnvMapLODLevels, texEnvMapDiff, texEnvMapSpec, texBRDFIntegral, ClampedLinearSampler, cbPerFrame.fHDRIOffsetInRadians);
 	}
 	
-	return float4(Surface.diffuseColor, 1);
-	return float4(I_total, 1.0f);
 	
+	// Non-shadowing lights
+	for (int p = 0; p < Lights.numPointLights; ++p)
+	{
+		I_total += CalculatePointLightIllumination(Lights.point_lights[p], Surface, P, V);
+	}
+	for (int s = 0; s < Lights.numSpotLights; ++s)
+	{
+		I_total += CalculateSpotLightIllumination(Lights.spot_lights[s], Surface, P, V);
+	}
+	
+	
+	// Shadow casters - POINT
+	for (int pc = 0; pc < Lights.numPointCasters; ++pc)
+	{
+		const float2 PointLightShadowMapDimensions = cbPerFrame.f2PointLightShadowMapDimensions;
+		PointLight l = Lights.point_casters[pc];
+		const float D = length(l.position - P);
+
+		if (D < l.range)
+		{
+			const float3 L = normalize(l.position - P);
+			const float3 Lw = (l.position - P);
+			ShadowTestPCFData pcfData = FillPCFData_PointLight(l, Surface.N, L, P, cbPerView.CameraPosition);
+			I_total += CalculatePointLightIllumination(Lights.point_casters[pc], Surface, P, V)
+					* OmnidirectionalShadowTestPCF(pcfData, texPointLightShadowMaps, PointSampler, PointLightShadowMapDimensions, pc, Lw, l.range);
+		}
+	}
+	
+	// Shadow casters - SPOT
+	for (int sc = 0; sc < Lights.numSpotCasters; ++sc)
+	{
+		SpotLight l = Lights.spot_casters[sc];
+		const float3 L = normalize(l.position - P);
+		const float2 SpotLightShadowMapDimensions = cbPerFrame.f2SpotLightShadowMapDimensions;
+		
+		ShadowTestPCFData pcfData = (ShadowTestPCFData) 0;
+		pcfData.depthBias = l.depthBias;
+		pcfData.NdotL = saturate(dot(Surface.N, L));
+		pcfData.lightSpacePos = mul(Lights.shadowViews[sc], float4(P, 1));
+		pcfData.viewDistanceOfPixel = length(P - cbPerView.CameraPosition);
+		
+		I_total += CalculateSpotLightIllumination(Lights.spot_casters[sc], Surface, P, V)
+			  * ShadowTestPCF(pcfData, texSpotLightShadowMaps, PointSampler, SpotLightShadowMapDimensions, sc);
+	}
+	
+	
+	// Directional light
+	{
+		DirectionalLight l = Lights.directional;
+		if (l.enabled)
+		{
+			ShadowTestPCFData pcfData = (ShadowTestPCFData) 0;
+			float ShadowingFactor = 1.0f; // no shadows
+			if (l.shadowing)
+			{
+				const float3 L = normalize(-l.lightDirection);
+				pcfData.lightSpacePos = mul(Lights.shadowViewDirectional, float4(P, 1));
+				pcfData.NdotL = saturate(dot(Surface.N, L));
+				pcfData.depthBias = l.depthBias;
+				ShadowingFactor = ShadowTestPCF_Directional(pcfData, texDirectionalLightShadowMap, PointSampler, cbPerFrame.f2DirectionalLightShadowMapDimensions, Lights.shadowViewDirectional);
+			}
+			
+			I_total += CalculateDirectionalLightIllumination(l, Surface, V) * ShadowingFactor;
+		}
+	}
+	
+	return float4(I_total, 1.0f);
+	return float4(texHeightmap.SampleLevel(LinearSampler, uv, 0).rgb, 1);
 	//return float4(VertNormalCS, 1);
 	//return float4(0, 0.5, 0, 1);
 }

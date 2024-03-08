@@ -71,22 +71,13 @@ struct PSOutput
 // RESOURCE BINDING
 //
 //---------------------------------------------------------------------------------------------------
-cbuffer CBPerFrame : register(b0)
-{
-	PerFrameData cbPerFrame;
-}
-cbuffer CBPerView : register(b1)
-{
-	PerViewData cbPerView;
-}
-cbuffer CBPerObject : register(b2)
-{
-	PerObjectData cbPerObject;
-}
+cbuffer CBPerFrame  : register(b0) { PerFrameData cbPerFrame; }
+cbuffer CBPerView   : register(b1) { PerViewData cbPerView; }
+cbuffer CBPerObject : register(b2) { PerObjectData cbPerObject; }
 
-SamplerState LinearSampler : register(s0);
-SamplerState PointSampler  : register(s1);
-SamplerState AnisoSampler  : register(s2);
+SamplerState LinearSampler        : register(s0);
+SamplerState PointSampler         : register(s1);
+SamplerState AnisoSampler         : register(s2);
 SamplerState ClampedLinearSampler : register(s3);
 
 Texture2D texDiffuse        : register(t0);
@@ -98,7 +89,9 @@ Texture2D texRoughness      : register(t5);
 Texture2D texOcclRoughMetal : register(t6);
 Texture2D texLocalAO        : register(t7);
 
-Texture2D texScreenSpaceAO  : register(t8);
+Texture2D texHeightmap      : register(t8); // VS or PS
+
+Texture2D texScreenSpaceAO  : register(t9);
 
 TextureCube texEnvMapDiff   : register(t10);
 TextureCube texEnvMapSpec   : register(t11);
@@ -175,7 +168,6 @@ PSOutput PSMain(PSInput In)
 	float ao = cbPerFrame.fAmbientLightingFactor;
 	BRDF_Surface Surface      = (BRDF_Surface)0;
 	Surface.diffuseColor      = HasDiffuseMap(TEX_CFG)  ? AlbedoAlpha.rgb * cbPerObject.materialData.diffuse : cbPerObject.materialData.diffuse;
-	Surface.specularColor     = float3(1,1,1);
 	Surface.emissiveColor     = HasEmissiveMap(TEX_CFG) ? Emissive * cbPerObject.materialData.emissiveColor : cbPerObject.materialData.emissiveColor;
 	Surface.emissiveIntensity = cbPerObject.materialData.emissiveIntensity;
 	Surface.roughness         = cbPerObject.materialData.roughness;
@@ -215,7 +207,7 @@ PSOutput PSMain(PSInput In)
 	// -------------------------------------------------------------------------------------------------------
 	
 	// Environment map
-	if(cbPerView.EnvironmentMapDiffuseOnlyIllumination)
+	if (cbPerView.EnvironmentMapDiffuseOnlyIllumination) // TODO: preprocessor
 	{
 		I_total += CalculateEnvironmentMapIllumination_DiffuseOnly(Surface, V, texEnvMapDiff, ClampedLinearSampler, cbPerFrame.fHDRIOffsetInRadians);
 	}

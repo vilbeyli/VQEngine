@@ -13,9 +13,9 @@
     
     <!-- CAMERAS -->
     <Camera>
-        <Position> -0.935758 5.132592 -30.181700 </Position>
-        <Pitch> 11.949983 </Pitch>
-        <Yaw> -0.7 </Yaw>
+        <Position> 318.534241 215.477036 2.104746 </Position>
+        <Pitch> 44.550381 </Pitch>
+        <Yaw>-90.550552 </Yaw>
         
         <Projection>Perspective</Projection>
         <FoV>70.0</FoV>

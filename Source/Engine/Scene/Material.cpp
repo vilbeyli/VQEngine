@@ -31,7 +31,8 @@ VQ_SHADER_DATA::MaterialData Material::GetCBufferData() const
 
 	d.specular = this->specular;
 	d.roughness = this->roughness;
-	
+	d.displacement = this->displacement;
+
 	d.metalness = this->metalness;
 	d.uvScaleOffset = float4(this->tiling.x, this->tiling.y, this->uv_bias.x, this->uv_bias.y);
 

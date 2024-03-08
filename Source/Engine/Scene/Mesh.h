@@ -737,6 +737,11 @@ namespace GeometryGenerator
 		assert(NumVertsY > 1);
 		assert(NumLODLevels >= 1);
 
+		constexpr bool bHasTangents = std::is_same<TVertex, FVertexWithNormalAndTangent>();
+		constexpr bool bHasNormals = std::is_same<TVertex, FVertexWithNormal>() || std::is_same<TVertex, FVertexWithNormalAndTangent>();
+		constexpr bool bHasColor = std::is_same<TVertex, FVertexWithColor>() || std::is_same<TVertex, FVertexWithColorAndAlpha>();
+		constexpr bool bHasAlpha = std::is_same<TVertex, FVertexWithColorAndAlpha>();
+
 		const unsigned MIN_HSLICE_COUNT = 2;
 		const unsigned MIN_VSLICE_COUNT = 2;
 
@@ -775,6 +780,8 @@ namespace GeometryGenerator
 					const float v = float(iX) / (m-1);
 					const float u = float(iY) / (n-1);
 					SetFVec<2>(vert.uv, { u, 1.0f-v });
+
+
 				}
 			}
 			

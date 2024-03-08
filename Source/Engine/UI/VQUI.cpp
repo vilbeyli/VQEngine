@@ -1290,10 +1290,13 @@ void VQEngine::DrawMaterialEditor()
 			ImGui::DragFloat("##roughness", &mat.roughness, 0.01f, 0.04f, 1.0f, "%.2f");
 
 			StartDrawingMaterialEditorRow("Tiling");
-			ImGui::DragFloat2("##tiling", reinterpret_cast<float*>(&mat.tiling), 0.05f, 0.0f, 10.0f, "%.2f");
+			ImGui::DragFloat2("##tiling", reinterpret_cast<float*>(&mat.tiling), 0.01f, 0.0f, 10.0f, "%.2f");
 			
 			StartDrawingMaterialEditorRow("UV Bias");
-			ImGui::DragFloat2("##uv_bias", reinterpret_cast<float*>(&mat.uv_bias), 0.05f, -10.0f, 10.0f, "%.2f");
+			ImGui::DragFloat2("##uv_bias", reinterpret_cast<float*>(&mat.uv_bias), 0.01f, -10.0f, 10.0f, "%.2f");
+
+			StartDrawingMaterialEditorRow("Displacement");
+			ImGui::DragFloat("##displecement", reinterpret_cast<float*>(&mat.displacement), 0.05f, -50.0f, 50.0f, "%.2f");
 
 			// Texture
 			//EMaterialTextureMapBindings::ALBEDO
@@ -1309,7 +1312,7 @@ void VQEngine::DrawMaterialEditor()
 				"Diffuse Map", 
 				"Normal Map", 
 				"Emissive Map", 
-				//"Height Map", 
+				"Height Map", 
 				"Alpha Mask Map",
 				"Metallic Map", 
 				"Roughness Map", 
@@ -1319,7 +1322,7 @@ void VQEngine::DrawMaterialEditor()
 			};
 			const int textureIDs[] = 
 			{
-				mat.TexDiffuseMap, mat.TexNormalMap, mat.TexEmissiveMap, /*mat.TexHeightMap,*/
+				mat.TexDiffuseMap, mat.TexNormalMap, mat.TexEmissiveMap, mat.TexHeightMap,
 				mat.TexAlphaMaskMap, mat.TexMetallicMap, mat.TexRoughnessMap,
 				mat.TexOcclusionRoughnessMetalnessMap, mat.TexAmbientOcclusionMap,
 				INVALID_ID

@@ -32,9 +32,9 @@ VQ_SHADER_DATA::TerrainParams GetCBuffer_TerrainParams(const Terrain& TerrainIn,
 
 	VQ_SHADER_DATA::TerrainParams p;
 	p.fDistanceToCamera = XMVectorSqrt(XMVector3Dot(VPosCam, VPosCam)).m128_f32[0];
-	p.fHeightScale = TerrainIn.HeightmapScale;
 	p.viewProj = CameraIn.GetViewProjectionMatrix();
 	p.world = tf.matWorldTransformation();
 	p.worldViewProj = p.world * p.viewProj;
+	p.matNormal = tf.NormalMatrix(p.world);
 	return p;
 }

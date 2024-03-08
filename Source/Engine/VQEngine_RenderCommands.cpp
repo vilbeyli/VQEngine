@@ -645,6 +645,9 @@ void VQEngine::RenderSceneColor(
 	const DSV& dsvColor = mRenderer.GetDSV(bMSAA ? mResources_MainWnd.DSV_SceneDepthMSAA : mResources_MainWnd.DSV_SceneDepth);
 	auto pRscDepth = mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneDepth);
 
+	const CBV_SRV_UAV& NullCubemapSRV = mRenderer.GetSRV(mResources_MainWnd.SRV_NullCubemap);
+	const CBV_SRV_UAV& NullTex2DSRV = mRenderer.GetSRV(mResources_MainWnd.SRV_NullTexture2D);
+
 	SCOPED_GPU_MARKER(pCmd, "RenderSceneColor");
 
 	// Clear Depth & Render targets
@@ -654,9 +657,12 @@ void VQEngine::RenderSceneColor(
 	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvHandles(1, rtvColor.GetCPUDescHandle());
 	if (bUseVisualizationRenderTarget) rtvHandles.push_back(rtvColorViz.GetCPUDescHandle());
 	if (bRenderMotionVectors)          rtvHandles.push_back(rtvMoVec.GetCPUDescHandle());
-
-	for (D3D12_CPU_DESCRIPTOR_HANDLE& rtv : rtvHandles)
-		pCmd->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
+	
+	{
+		SCOPED_GPU_MARKER(pCmd, "Clear");
+		for (D3D12_CPU_DESCRIPTOR_HANDLE& rtv : rtvHandles)
+			pCmd->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
+	}
 	
 	pCmd->OMSetRenderTargets((UINT)rtvHandles.size(), rtvHandles.data(), FALSE, &dsvHandle);
 
@@ -680,74 +686,77 @@ void VQEngine::RenderSceneColor(
 
 	// set PerFrame constants
 	D3D12_GPU_VIRTUAL_ADDRESS cbAddr_PerFrame = {};
+	D3D12_GPU_VIRTUAL_ADDRESS cbAddr_PerView = {};
 	constexpr UINT PerFrameRSBindSlot = 3;
+	constexpr UINT PerViewRSBindSlot = 2;
+	
 	{
-		SCOPED_GPU_MARKER(pCmd, "CBPerFrame");
-		const CBV_SRV_UAV& NullCubemapSRV = mRenderer.GetSRV(mResources_MainWnd.SRV_NullCubemap);
-		const CBV_SRV_UAV& NullTex2DSRV   = mRenderer.GetSRV(mResources_MainWnd.SRV_NullTexture2D);
-
-		PerFrameData* pPerFrame = {};
-		pCBufferHeap->AllocConstantBuffer(sizeof(PerFrameData), (void**)(&pPerFrame), &cbAddr_PerFrame);
-
-		assert(pPerFrame);
-		pPerFrame->Lights = SceneView.GPULightingData;
-		pPerFrame->fAmbientLightingFactor = SceneView.sceneParameters.fAmbientLightingFactor;
-		pPerFrame->f2PointLightShadowMapDimensions = { 1024.0f, 1024.f }; // TODO
-		pPerFrame->f2SpotLightShadowMapDimensions  = { 1024.0f, 1024.f }; // TODO
-		pPerFrame->f2DirectionalLightShadowMapDimensions  = { 2048.0f, 2048.0f }; // TODO
-		pPerFrame->fHDRIOffsetInRadians = SceneView.HDRIYawOffset;
-		
-		if (bUseHDRRenderPath)
+		SCOPED_GPU_MARKER(pCmd, "CB");
 		{
-			// adjust ambient factor as the tonemapper changes the output curve for HDR displays 
-			// and makes the ambient lighting too strong.
-			pPerFrame->fAmbientLightingFactor *= 0.005f;
+			SCOPED_GPU_MARKER(pCmd, "CBPerFrame");
+
+			PerFrameData* pPerFrame = {};
+			pCBufferHeap->AllocConstantBuffer(sizeof(PerFrameData), (void**)(&pPerFrame), &cbAddr_PerFrame);
+
+			assert(pPerFrame);
+			pPerFrame->Lights = SceneView.GPULightingData;
+			pPerFrame->fAmbientLightingFactor = SceneView.sceneParameters.fAmbientLightingFactor;
+			pPerFrame->f2PointLightShadowMapDimensions = { 1024.0f, 1024.f }; // TODO
+			pPerFrame->f2SpotLightShadowMapDimensions  = { 1024.0f, 1024.f }; // TODO
+			pPerFrame->f2DirectionalLightShadowMapDimensions  = { 2048.0f, 2048.0f }; // TODO
+			pPerFrame->fHDRIOffsetInRadians = SceneView.HDRIYawOffset;
+		
+			if (bUseHDRRenderPath)
+			{
+				// adjust ambient factor as the tonemapper changes the output curve for HDR displays 
+				// and makes the ambient lighting too strong.
+				pPerFrame->fAmbientLightingFactor *= 0.005f;
+			}
+
+			//pCmd->SetGraphicsRootDescriptorTable(PerFrameRSBindSlot, );
+			pCmd->SetGraphicsRootConstantBufferView(PerFrameRSBindSlot, cbAddr_PerFrame);
+			pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Spot).GetGPUDescHandle(0));
+			pCmd->SetGraphicsRootDescriptorTable(5, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Point).GetGPUDescHandle(0));
+			pCmd->SetGraphicsRootDescriptorTable(6, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Directional).GetGPUDescHandle(0));
+			pCmd->SetGraphicsRootDescriptorTable(7, bDrawEnvironmentMap
+				? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_IrradianceDiffBlurred).GetGPUDescHandle(0)
+				: NullCubemapSRV.GetGPUDescHandle()
+			);
+			pCmd->SetGraphicsRootDescriptorTable(8, bDrawEnvironmentMap
+				? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_IrradianceSpec).GetGPUDescHandle(0)
+				: NullCubemapSRV.GetGPUDescHandle()
+			);
+			pCmd->SetGraphicsRootDescriptorTable(9, bDrawEnvironmentMap
+				? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_BRDFIntegrationLUT).GetGPUDescHandle()
+				: NullTex2DSRV.GetGPUDescHandle()
+			);
+			pCmd->SetGraphicsRootDescriptorTable(10, mRenderer.GetSRV(mResources_MainWnd.SRV_FFXCACAO_Out).GetGPUDescHandle());
+			// pCmd->SetGraphicsRootDescriptorTable(11, mRenderer.GetSRV().GetGPUDescHandle()); // TODO: bind heightmap
 		}
 
-		//pCmd->SetGraphicsRootDescriptorTable(PerFrameRSBindSlot, );
-		pCmd->SetGraphicsRootConstantBufferView(PerFrameRSBindSlot, cbAddr_PerFrame);
-		pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Spot).GetGPUDescHandle(0));
-		pCmd->SetGraphicsRootDescriptorTable(5, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Point).GetGPUDescHandle(0));
-		pCmd->SetGraphicsRootDescriptorTable(6, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Directional).GetGPUDescHandle(0));
-		pCmd->SetGraphicsRootDescriptorTable(7, bDrawEnvironmentMap
-			? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_IrradianceDiffBlurred).GetGPUDescHandle(0)
-			: NullCubemapSRV.GetGPUDescHandle()
-		);
-		pCmd->SetGraphicsRootDescriptorTable(8, bDrawEnvironmentMap
-			? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_IrradianceSpec).GetGPUDescHandle(0)
-			: NullCubemapSRV.GetGPUDescHandle()
-		);
-		pCmd->SetGraphicsRootDescriptorTable(9, bDrawEnvironmentMap
-			? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_BRDFIntegrationLUT).GetGPUDescHandle()
-			: NullTex2DSRV.GetGPUDescHandle()
-		);
-		pCmd->SetGraphicsRootDescriptorTable(10, mRenderer.GetSRV(mResources_MainWnd.SRV_FFXCACAO_Out).GetGPUDescHandle());
-	}
+		// set PerView constants
+		{
+			SCOPED_GPU_MARKER(pCmd, "CBPerView");
+			PerViewData* pPerView = {};
+			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pPerView)), (void**)(&pPerView), &cbAddr_PerView);
 
-	// set PerView constants
-	D3D12_GPU_VIRTUAL_ADDRESS cbAddr_PerView = {};
-	constexpr UINT PerViewRSBindSlot = 2;
-	{
-		SCOPED_GPU_MARKER(pCmd, "CBPerView");
-		PerViewData* pPerView = {};
-		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pPerView)), (void**)(&pPerView), &cbAddr_PerView);
+			assert(pPerView);
+			XMStoreFloat3(&pPerView->CameraPosition, SceneView.cameraPosition);
+			pPerView->ScreenDimensions.x = RenderResolutionX;
+			pPerView->ScreenDimensions.y = RenderResolutionY;
+			pPerView->MaxEnvMapLODLevels = static_cast<float>(mResources_MainWnd.EnvironmentMap.GetNumSpecularIrradianceCubemapLODLevels(mRenderer));
+			pPerView->EnvironmentMapDiffuseOnlyIllumination = IsFFX_SSSREnabled(mSettings);
 
-		assert(pPerView);
-		XMStoreFloat3(&pPerView->CameraPosition, SceneView.cameraPosition);
-		pPerView->ScreenDimensions.x = RenderResolutionX;
-		pPerView->ScreenDimensions.y = RenderResolutionY;
-		pPerView->MaxEnvMapLODLevels = static_cast<float>(mResources_MainWnd.EnvironmentMap.GetNumSpecularIrradianceCubemapLODLevels(mRenderer));
-		pPerView->EnvironmentMapDiffuseOnlyIllumination = IsFFX_SSSREnabled(mSettings);
+			// TODO: PreView data
 
-		// TODO: PreView data
-
-		//pCmd->SetGraphicsRootDescriptorTable(PerViewRSBindSlot, D3D12_GPU_DESCRIPTOR_HANDLE{ cbAddr_PerView });
-		pCmd->SetGraphicsRootConstantBufferView(PerViewRSBindSlot, cbAddr_PerView);
+			//pCmd->SetGraphicsRootDescriptorTable(PerViewRSBindSlot, D3D12_GPU_DESCRIPTOR_HANDLE{ cbAddr_PerView });
+			pCmd->SetGraphicsRootConstantBufferView(PerViewRSBindSlot, cbAddr_PerView);
+		}
 	}
 
 
 	// Draw Objects -----------------------------------------------
-	//if(!SceneView.meshRenderCommands.empty())
+	if(!SceneView.meshRenderCommands.empty())
 	{
 		constexpr UINT PerObjRSBindSlot = 1;
 		SCOPED_GPU_MARKER(pCmd, "Geometry");
@@ -790,8 +799,27 @@ void VQEngine::RenderSceneColor(
 		SCOPED_GPU_MARKER(pCmd, "Terrain");
 		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::TERRAIN_MSAA4 : EBuiltinPSOs::TERRAIN));
 		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__Terrain));
-		pCmd->SetGraphicsRootConstantBufferView(2, cbAddr_PerFrame);
-		pCmd->SetGraphicsRootConstantBufferView(3, cbAddr_PerView);
+		
+		pCmd->SetGraphicsRootDescriptorTable(2, mRenderer.GetSRV(mResources_MainWnd.SRV_FFXCACAO_Out).GetGPUDescHandle());
+		pCmd->SetGraphicsRootDescriptorTable(3, bDrawEnvironmentMap
+			? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_IrradianceDiffBlurred).GetGPUDescHandle(0)
+			: NullCubemapSRV.GetGPUDescHandle()
+		);
+		pCmd->SetGraphicsRootDescriptorTable(4, bDrawEnvironmentMap
+			? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_IrradianceSpec).GetGPUDescHandle(0)
+			: NullCubemapSRV.GetGPUDescHandle()
+		);
+		pCmd->SetGraphicsRootDescriptorTable(5, bDrawEnvironmentMap
+			? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_BRDFIntegrationLUT).GetGPUDescHandle()
+			: NullTex2DSRV.GetGPUDescHandle()
+		);
+
+		pCmd->SetGraphicsRootDescriptorTable(6, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Directional).GetGPUDescHandle(0));
+		pCmd->SetGraphicsRootDescriptorTable(7, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Spot).GetGPUDescHandle(0));
+		pCmd->SetGraphicsRootDescriptorTable(8, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Point).GetGPUDescHandle(0));
+
+		pCmd->SetGraphicsRootConstantBufferView(9, cbAddr_PerFrame);
+		pCmd->SetGraphicsRootConstantBufferView(10, cbAddr_PerView);
 		for (const FTerrainDrawParams& param : SceneView.terrainDrawParams)
 		{
 			// cb0
@@ -799,18 +827,21 @@ void VQEngine::RenderSceneColor(
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Trn;
 			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Terrain)), (void**)(&pCBuffer_Terrain), &cbAddr_Trn);
 			memcpy(pCBuffer_Terrain, &param.Terrain, sizeof(param.Terrain));
-			pCmd->SetGraphicsRootConstantBufferView(4, cbAddr_Trn);
+			pCmd->SetGraphicsRootConstantBufferView(11, cbAddr_Trn);
 
 			// cb1
 			VQ_SHADER_DATA::TerrainTessellationParams* pCBuffer_Tessellation = nullptr;
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Tsl;
 			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Tessellation)), (void**)(&pCBuffer_Tessellation), &cbAddr_Tsl);
 			memcpy(pCBuffer_Tessellation, &param.Tessellation, sizeof(param.Tessellation));
-			pCmd->SetGraphicsRootConstantBufferView(5, cbAddr_Tsl);
+			pCmd->SetGraphicsRootConstantBufferView(12, cbAddr_Tsl);
 
-			// textures
-			pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(param.HeightmapSRV).GetGPUDescHandle(0));
-			pCmd->SetGraphicsRootDescriptorTable(1, mRenderer.GetSRV(param.HeightmapSRV).GetGPUDescHandle(0));
+			// per-terrain textures
+			pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(param.MaterialSRV).GetGPUDescHandle(0));
+			pCmd->SetGraphicsRootDescriptorTable(1, param.HeightmapSRV == INVALID_ID 
+				? NullTex2DSRV.GetGPUDescHandle()
+				: mRenderer.GetSRV(param.HeightmapSRV).GetGPUDescHandle(0)
+			);
 
 			// IA
 			const VBV& vb = mRenderer.GetVertexBufferView(param.vertexIndexBuffer.first);

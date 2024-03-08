@@ -71,7 +71,7 @@ struct FTerrainDrawParams
 
 	// textures
 	SRV_ID HeightmapSRV;
-	SRV_ID Diffuse0SRV;
+	SRV_ID MaterialSRV;
 
 	// geometry
 	std::pair<BufferID, BufferID> vertexIndexBuffer;

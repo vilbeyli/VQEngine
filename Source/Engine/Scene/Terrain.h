@@ -24,27 +24,12 @@
 struct Terrain
 {
 	MeshID MeshId = INVALID_ID;
-	TextureID HeightMap = INVALID_ID;
-	TextureID NormalMap = INVALID_ID;
-	TextureID RoughnessMap = INVALID_ID;
-	TextureID DiffuseMap0 = INVALID_ID;
-	TextureID DiffuseMap1 = INVALID_ID;
-	TextureID DiffuseMap2 = INVALID_ID;
-	TextureID DiffuseMap3 = INVALID_ID;
-
-	SRV_ID SRVHeightMap = INVALID_ID;
-	SRV_ID SRVNormalMap = INVALID_ID;
-	SRV_ID SRVRoughnessMap = INVALID_ID;
-	SRV_ID SRVDiffuseMap0 = INVALID_ID;
-	SRV_ID SRVDiffuseMap1 = INVALID_ID;
-	SRV_ID SRVDiffuseMap2 = INVALID_ID;
-	SRV_ID SRVDiffuseMap3 = INVALID_ID;
-
+	MaterialID MaterialId = INVALID_ID;
 	Transform RootTransform; // XZ plane
-	float HeightmapScale = 0.0f;
 
 	// TODO: Tessellation params
 	float QuadInner[2];
+	float QuadOuter[4];
 
 	// TODO: bounding box
 };
