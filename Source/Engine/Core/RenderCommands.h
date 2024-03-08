@@ -63,6 +63,20 @@ struct FOutlineRenderCommand
 using FLightRenderCommand = FWireframeRenderCommand;
 using FBoundingBoxRenderCommand = FWireframeRenderCommand;
 
+struct FTerrainDrawParams
+{
+	// cbuffer
+	VQ_SHADER_DATA::TerrainParams Terrain;
+	VQ_SHADER_DATA::TerrainTessellationParams Tessellation;
+
+	// textures
+	SRV_ID HeightmapSRV;
+	SRV_ID Diffuse0SRV;
+
+	// geometry
+	std::pair<BufferID, BufferID> vertexIndexBuffer;
+	int numIndices = 0;
+};
 
 // ------------------------------------------------------------------------------------
 // INSTANCED DRAW COMMANDS

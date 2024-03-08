@@ -312,6 +312,34 @@ void VQEngine::InitializeBuiltinMeshes()
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Cone";
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
+	{
+		const EBuiltInMeshes eMesh = EBuiltInMeshes::GRID_SIMPLE_QUAD;
+		const float GridLength = 1.0f;
+		GeometryGenerator::GeometryData<FVertexWithNormalAndTangent> data = GeometryGenerator::Grid<FVertexWithNormalAndTangent>(GridLength, GridLength, 2, 2, 1);
+		mResourceNames.mBuiltinMeshNames[eMesh] = "SimpleGrid";
+		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
+	}
+	{
+		const EBuiltInMeshes eMesh = EBuiltInMeshes::GRID_DETAILED_QUAD0;
+		const float GridLength = 1.0f;
+		GeometryGenerator::GeometryData<FVertexWithNormalAndTangent> data = GeometryGenerator::Grid<FVertexWithNormalAndTangent>(GridLength, GridLength, 3, 3, 1);
+		mResourceNames.mBuiltinMeshNames[eMesh] = "DetaildGrid0";
+		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
+	}
+	{
+		const EBuiltInMeshes eMesh = EBuiltInMeshes::GRID_DETAILED_QUAD1;
+		const float GridLength = 1.0f;
+		GeometryGenerator::GeometryData<FVertexWithNormalAndTangent> data = GeometryGenerator::Grid<FVertexWithNormalAndTangent>(GridLength, GridLength, 12, 12, 4);
+		mResourceNames.mBuiltinMeshNames[eMesh] = "DetaildGrid1";
+		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
+	}
+	{
+		const EBuiltInMeshes eMesh = EBuiltInMeshes::GRID_DETAILED_QUAD2;
+		const float GridLength = 1.0f;
+		GeometryGenerator::GeometryData<FVertexWithNormalAndTangent> data = GeometryGenerator::Grid<FVertexWithNormalAndTangent>(GridLength, GridLength, 1200, 1200, 6);
+		mResourceNames.mBuiltinMeshNames[eMesh] = "DetaildGrid2";
+		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
+	}
 	// ...
 
 	mRenderer.UploadVertexAndIndexBufferHeaps();

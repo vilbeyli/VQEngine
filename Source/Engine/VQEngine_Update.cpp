@@ -463,6 +463,7 @@ void VQEngine::Load_SceneData_Dispatch()
 		else if (SceneType == "Sponza")           pScene = std::make_unique<SponzaScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 		else if (SceneType == "StressTest")       pScene = std::make_unique<StressTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 		else if (SceneType == "EnvironmentMapUnitTest") pScene = std::make_unique<EnvironmentMapUnitTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
+		else if (SceneType == "Terrain")          pScene = std::make_unique<TerrainScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 	};
 
 	const bool bUpscalingEnabled = mpScene ? mpScene->GetPostProcessParameters(0).IsFSREnabled() : false;

@@ -671,6 +671,22 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 			}
 		}
 	}
+
+	const size_t NumVisibleTerrains = mTerrains.size(); // TODO: cull terrains
+	SceneView.terrainDrawParams.resize(NumVisibleTerrains);
+	for(size_t i=0; i< NumVisibleTerrains; ++i)
+	{
+		const Terrain& t = mTerrains[i];
+		SceneView.terrainDrawParams[i].Terrain = GetCBuffer_TerrainParams(t, cam);
+		SceneView.terrainDrawParams[i].Tessellation; // TODO
+		
+		SceneView.terrainDrawParams[i].HeightmapSRV = t.SRVHeightMap;
+
+		const Mesh& m = mMeshes.at(t.MeshId);
+		const int lod = 0;
+		SceneView.terrainDrawParams[i].vertexIndexBuffer = m.GetIABufferIDs(lod);
+		SceneView.terrainDrawParams[i].numIndices = m.GetNumIndices(lod);
+	}
 }
 
 

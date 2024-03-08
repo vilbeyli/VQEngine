@@ -679,15 +679,15 @@ void VQEngine::RenderSceneColor(
 	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ForwardLighting));
 
 	// set PerFrame constants
+	D3D12_GPU_VIRTUAL_ADDRESS cbAddr_PerFrame = {};
+	constexpr UINT PerFrameRSBindSlot = 3;
 	{
 		SCOPED_GPU_MARKER(pCmd, "CBPerFrame");
 		const CBV_SRV_UAV& NullCubemapSRV = mRenderer.GetSRV(mResources_MainWnd.SRV_NullCubemap);
 		const CBV_SRV_UAV& NullTex2DSRV   = mRenderer.GetSRV(mResources_MainWnd.SRV_NullTexture2D);
 
-		constexpr UINT PerFrameRSBindSlot = 3;
 		PerFrameData* pPerFrame = {};
-		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		pCBufferHeap->AllocConstantBuffer(sizeof(PerFrameData), (void**)(&pPerFrame), &cbAddr);
+		pCBufferHeap->AllocConstantBuffer(sizeof(PerFrameData), (void**)(&pPerFrame), &cbAddr_PerFrame);
 
 		assert(pPerFrame);
 		pPerFrame->Lights = SceneView.GPULightingData;
@@ -705,7 +705,7 @@ void VQEngine::RenderSceneColor(
 		}
 
 		//pCmd->SetGraphicsRootDescriptorTable(PerFrameRSBindSlot, );
-		pCmd->SetGraphicsRootConstantBufferView(PerFrameRSBindSlot, cbAddr);
+		pCmd->SetGraphicsRootConstantBufferView(PerFrameRSBindSlot, cbAddr_PerFrame);
 		pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Spot).GetGPUDescHandle(0));
 		pCmd->SetGraphicsRootDescriptorTable(5, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Point).GetGPUDescHandle(0));
 		pCmd->SetGraphicsRootDescriptorTable(6, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Directional).GetGPUDescHandle(0));
@@ -725,12 +725,12 @@ void VQEngine::RenderSceneColor(
 	}
 
 	// set PerView constants
+	D3D12_GPU_VIRTUAL_ADDRESS cbAddr_PerView = {};
+	constexpr UINT PerViewRSBindSlot = 2;
 	{
 		SCOPED_GPU_MARKER(pCmd, "CBPerView");
-		constexpr UINT PerViewRSBindSlot = 2;
 		PerViewData* pPerView = {};
-		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pPerView)), (void**)(&pPerView), &cbAddr);
+		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pPerView)), (void**)(&pPerView), &cbAddr_PerView);
 
 		assert(pPerView);
 		XMStoreFloat3(&pPerView->CameraPosition, SceneView.cameraPosition);
@@ -741,8 +741,8 @@ void VQEngine::RenderSceneColor(
 
 		// TODO: PreView data
 
-		//pCmd->SetGraphicsRootDescriptorTable(PerViewRSBindSlot, D3D12_GPU_DESCRIPTOR_HANDLE{ cbAddr });
-		pCmd->SetGraphicsRootConstantBufferView(PerViewRSBindSlot, cbAddr);
+		//pCmd->SetGraphicsRootDescriptorTable(PerViewRSBindSlot, D3D12_GPU_DESCRIPTOR_HANDLE{ cbAddr_PerView });
+		pCmd->SetGraphicsRootConstantBufferView(PerViewRSBindSlot, cbAddr_PerView);
 	}
 
 
@@ -759,10 +759,8 @@ void VQEngine::RenderSceneColor(
 
 			const auto VBIBIDs = meshRenderCmd.vertexIndexBuffer;
 			const uint32 NumIndices = meshRenderCmd.numIndices;
-			const BufferID& VB_ID = VBIBIDs.first;
-			const BufferID& IB_ID = VBIBIDs.second;
-			const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
-			const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
+			const VBV& vb = mRenderer.GetVertexBufferView(VBIBIDs.first);
+			const IBV& ib = mRenderer.GetIndexBufferView(VBIBIDs.second);
 
 #if RENDER_INSTANCED_SCENE_MESHES
 			const uint32 NumInstances = (uint32)meshRenderCmd.matNormal.size();;
@@ -783,6 +781,47 @@ void VQEngine::RenderSceneColor(
 			pCmd->IASetIndexBuffer(&ib);
 
 			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
+		}
+	}
+
+	// Draw Terrain ---
+	if(!SceneView.terrainDrawParams.empty())
+	{
+		SCOPED_GPU_MARKER(pCmd, "Terrain");
+		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::TERRAIN_MSAA4 : EBuiltinPSOs::TERRAIN));
+		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__Terrain));
+		pCmd->SetGraphicsRootConstantBufferView(2, cbAddr_PerFrame);
+		pCmd->SetGraphicsRootConstantBufferView(3, cbAddr_PerView);
+		for (const FTerrainDrawParams& param : SceneView.terrainDrawParams)
+		{
+			// cb0
+			VQ_SHADER_DATA::TerrainParams* pCBuffer_Terrain = nullptr;
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Trn;
+			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Terrain)), (void**)(&pCBuffer_Terrain), &cbAddr_Trn);
+			memcpy(pCBuffer_Terrain, &param.Terrain, sizeof(param.Terrain));
+			pCmd->SetGraphicsRootConstantBufferView(4, cbAddr_Trn);
+
+			// cb1
+			VQ_SHADER_DATA::TerrainTessellationParams* pCBuffer_Tessellation = nullptr;
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Tsl;
+			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Tessellation)), (void**)(&pCBuffer_Tessellation), &cbAddr_Tsl);
+			memcpy(pCBuffer_Tessellation, &param.Tessellation, sizeof(param.Tessellation));
+			pCmd->SetGraphicsRootConstantBufferView(5, cbAddr_Tsl);
+
+			// textures
+			pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(param.HeightmapSRV).GetGPUDescHandle(0));
+			pCmd->SetGraphicsRootDescriptorTable(1, mRenderer.GetSRV(param.HeightmapSRV).GetGPUDescHandle(0));
+
+			// IA
+			const VBV& vb = mRenderer.GetVertexBufferView(param.vertexIndexBuffer.first);
+			const IBV& ib = mRenderer.GetIndexBufferView(param.vertexIndexBuffer.second);
+			pCmd->IASetVertexBuffers(0, 1, &vb);
+			pCmd->IASetIndexBuffer(&ib);
+			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+			// draw
+			const int NumInstances = 1;
+			pCmd->DrawIndexedInstanced(param.numIndices, NumInstances, 0, 0, 0);
 		}
 	}
 
@@ -822,6 +861,7 @@ void VQEngine::RenderSceneColor(
 			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 		}
 	}
+
 
 	if (!bRenderScreenSpaceReflections)
 	{

@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Scene>
+    <!-- Environment maps are defined in Data/EnvironmentMaps.ini -->
+    <!--
+         // custom env map usage: specify path & MaxCLL
+         <path>Textures/HDRI/env_map.hdr</path>
+         <MaxCLL>1200</MaxCLL>
+
+         // preset usage: defined in EnvironmentMaps.ini
+         <Preset>Stadium01</Preset>
+    -->
+    <!-- <EnvironmentMap> <Preset>GymEntrance</Preset> </EnvironmentMap> -->
+    
+    <!-- CAMERAS -->
+    <Camera>
+        <Position> -0.935758 5.132592 -30.181700 </Position>
+        <Pitch> 11.949983 </Pitch>
+        <Yaw> -0.7 </Yaw>
+        
+        <Projection>Perspective</Projection>
+        <FoV>70.0</FoV>
+        <!--
+        <Near>0.01</Near>
+        <Far>10000</Far>
+        -->
+        <Near>0.1</Near>
+        <Far>1000</Far>
+        <FirstPerson>
+            <TranslationSpeed>1000</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+    <Camera>
+        <Position> 6.0 3.0 -5 </Position>
+        <Pitch> 65 </Pitch>
+        <Yaw> 6 </Yaw>
+
+        <Projection>Perspective</Projection>
+        <FoV>90.0</FoV>
+        <Near>0.01</Near>
+        <Far>5000</Far>
+
+        <FirstPerson>
+            <TranslationSpeed>1000</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+    
+    <!-- GROUND PLANE -->
+    
+    <!-- LIGHTS -->
+    <Light> <!-- Directional Light -->
+        <Enabled>true</Enabled>
+        <Mobility> Stationary </Mobility>
+        <Color>1 1 1</Color>
+        <Range> 100 </Range>
+        <Brightness> 0.90 </Brightness>
+        <Shadows>
+            <DepthBias> 0.00045 </DepthBias>
+            <NearPlane> 0.1 </NearPlane>
+            <FarPlane>  15000  </FarPlane>
+        </Shadows>
+        <Transform>
+            <Rotation> 0 0 40 </Rotation>
+        </Transform>
+        <Directional>
+            <ViewPortX> 256 </ViewPortX>
+            <ViewPortY> 256 </ViewPortY>
+            <Distance> 120 </Distance>
+        </Directional>
+    </Light>
+
+    <Light> <!-- Point Light -->
+        <Enabled>false</Enabled>
+        <Transform>
+            <Position>-12.5 3 0</Position>
+            <Rotation> 0 0 0 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <Mobility> Dynamic </Mobility>
+        <Color>0.4 0.4 0.15</Color>
+        <Range> 200 </Range>
+        <Brightness> 35 </Brightness>z
+        <Shadows>
+            <DepthBias> 0.05 </DepthBias>
+            <NearPlane> 0.001 </NearPlane>
+            <FarPlane>  200  </FarPlane>
+        </Shadows>
+        <Point>
+            <Attenuation> 1 1 1 </Attenuation>
+        </Point>
+    </Light>
+
+    <Light> <!-- Spot Light -->
+        <Enabled>true</Enabled>
+        <Mobility> Static </Mobility>
+        <Color>0.9 0.9 0.9</Color>
+        <Range> 35 </Range>
+        <Brightness> 1500 </Brightness>
+        <Transform>
+            <Position>22 26 4</Position>
+            <Rotation> 90 0 -15 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <Spot>
+            <OuterConeAngleDegrees>22</OuterConeAngleDegrees>
+            <InnerConeAngleDegrees>20</InnerConeAngleDegrees>
+        </Spot>
+    </Light>
+    
+</Scene>

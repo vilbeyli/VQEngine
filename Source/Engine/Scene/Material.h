@@ -45,10 +45,10 @@ struct Material // 56 Bytes
 	float             alpha             = 1.0f;        // 4  Bytes
 	//------------------------------------------------------------
 	DirectX::XMFLOAT3 specular          = { 1, 1, 1 }; // 12 Bytes
-	float             emissiveIntensity = 0.0f;        // 4 Bytes
+	float             emissiveIntensity = 0.0f;        // 4  Bytes
 	//------------------------------------------------------------
 	DirectX::XMFLOAT3 emissiveColor     = { 1, 1, 1 }; // 12 Bytes
-	float pad1;                                        // 4 Byter
+	float pad1;                                        // 4  Bytes
 	//------------------------------------------------------------
 	DirectX::XMFLOAT2 tiling            = { 1, 1 };    // 8 Bytes
 	DirectX::XMFLOAT2 uv_bias           = { 0, 0 };    // 8 Bytes

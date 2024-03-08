@@ -398,4 +398,3 @@ void StressTestScene::UnloadScene()
 void StressTestScene::RenderSceneUI() const
 {
 }
-

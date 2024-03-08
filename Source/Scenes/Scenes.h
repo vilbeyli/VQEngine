@@ -73,3 +73,11 @@ class StressTestScene : public Scene
 	std::vector<float> mRotationSpeeds;
 	std::vector<float> mOrbitSpeeds;
 };
+
+class TerrainScene : public Scene
+{
+	DECLARE_SCENE_INTERFACE()
+
+	DECLARE_CTOR(TerrainScene)
+	bool bAnimateEnvironmentMapRotation = false;
+};

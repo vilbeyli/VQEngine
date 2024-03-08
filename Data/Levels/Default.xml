@@ -63,6 +63,8 @@
     </GameObject>
     
     <!-- OBJECTS -->
+
+<!--
     <GameObject>
         <Transform>
             <Position>-25 0 4</Position>
@@ -131,7 +133,19 @@
             <MaterialName>Black_VeryRough</MaterialName>
         </Model>
     </GameObject>
-    
+-->
+    <GameObject>
+        <Transform>
+            <Position> 87.946915 -38.125233 -127.481918</Position>
+            <Quaternion>0 0 0 1</Quaternion>
+            <Scale>1 1 1</Scale>
+        </Transform>
+        <Model>
+            <Path>Data/Models/SH60SeaHawk/Seahawk.obj</Path>
+            <Name>Seahawk Heli</Name>
+        </Model>
+    </GameObject>
+
     <!-- Models -->
 <!-- 
     <GameObject>

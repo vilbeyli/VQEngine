@@ -37,6 +37,10 @@ enum EBuiltInMeshes
 	SPHERE,
 	CYLINDER,
 	CONE,
+	GRID_SIMPLE_QUAD,
+	GRID_DETAILED_QUAD0,
+	GRID_DETAILED_QUAD1,
+	GRID_DETAILED_QUAD2,
 	
 	NUM_BUILTIN_MESHES
 };
@@ -68,7 +72,7 @@ namespace GeometryGenerator
 	constexpr GeometryData<TVertex, TIndex> Sphere(float radius = 1.0f, unsigned ringCount = 12, unsigned sliceCount = 12, int numLODLevels = 1);
 
 	template<class TVertex, class TIndex = unsigned>
-	constexpr GeometryData<TVertex, TIndex> Grid(float width, float depth, unsigned tilingX, unsigned tilingY, int numLODLevels = 1);
+	constexpr GeometryData<TVertex, TIndex> Grid(float Width, float Depth, unsigned NumVertsX, unsigned NumVertsY, int NumLODLevels);
 
 	template<class TVertex, class TIndex = unsigned>
 	constexpr GeometryData<TVertex, TIndex> Cylinder(float height = 3.0f, float topRadius = 1.0f, float bottomRadius = 1.0f, unsigned sliceCount = 18, unsigned stackCount = 6, int numLODLevels = 1);
@@ -697,6 +701,117 @@ namespace GeometryGenerator
 			}
 		}
 		//------------------------------------------------
+
+		return data;
+	}
+
+
+
+	// m : NumVertsX
+	// n : NumVertsY
+	//		Grid of m x n vertices 
+	//		-----------------------------------------------------------
+	//		+	: Vertex
+	//		d	: Depth
+	//		w	: Width
+	//		dx	: horizontal cell spacing = width / (m-1)
+	//		dz	: z-axis	 cell spacing = depth / (n-1)
+	// 
+	//		  V(0,0)		  V(m-1,0)	^ Z
+	//		^	+-------+-------+ ^		|
+	//		|	|		|		| |		|
+	//		|	|		|		| dz	|
+	//		|	|		|		| |		|
+	//		d	+-------+-------+ v		+--------> X
+	//		|	|		|		|		
+	//		|	|		|		|
+	//		|	|		|		|
+	//		v	+-------+-------+		
+	//			<--dx--->		  V(m-1, n-1)
+	//			<------ w ------>
+	template<class TVertex, class TIndex>
+	constexpr GeometryData<TVertex, TIndex> Grid(float Width, float Depth, unsigned NumVertsX, unsigned NumVertsY, int NumLODLevels)
+	{
+		using namespace DirectX;
+		assert(NumVertsX > 1);
+		assert(NumVertsY > 1);
+		assert(NumLODLevels >= 1);
+
+		const unsigned MIN_HSLICE_COUNT = 2;
+		const unsigned MIN_VSLICE_COUNT = 2;
+
+		const float HalfWidth = Width * 0.5f;
+		const float HalfDepth = Depth * 0.5f;
+
+		GeometryData<TVertex, TIndex> data(NumLODLevels);
+		for (int LOD = 0; LOD < NumLODLevels; ++LOD)
+		{
+			std::vector<TVertex>& Vertices = data.LODVertices[LOD];
+			std::vector<TIndex>& Indices = data.LODIndices[LOD];
+
+			const float t = static_cast<float>(LOD) / (NumLODLevels == 1 ? 1 : NumLODLevels - 1);
+			const unsigned m = MathUtil::lerp(MIN_HSLICE_COUNT, NumVertsX, std::powf(1.0f - t, 2.0f));
+			const unsigned n = MathUtil::lerp(MIN_VSLICE_COUNT, NumVertsY, std::powf(1.0f - t, 2.0f));
+
+			const unsigned NumVerts = m * n;
+			const unsigned NumQuads = (m - 1) * (n - 1);
+			const unsigned NumTris = NumQuads * 2;
+			const unsigned NumIndices = NumTris * 3;
+
+			const float QuadWidth = Width / (m - 1);
+			const float QuadHeight = Depth / (n - 1);
+
+			Vertices.resize(NumVerts);
+			for (unsigned iX = 0; iX < m; ++iX)
+			{
+				const float z = -HalfDepth + QuadHeight * iX;
+				for (unsigned iY = 0; iY < n; ++iY)
+				{
+					TVertex& vert = Vertices[iX * n + iY];
+
+					const float x = -HalfWidth + QuadWidth * iY;
+					SetFVec<3>(vert.position, { x , 0.0f, z });
+
+					const float v = float(iX) / (m-1);
+					const float u = float(iY) / (n-1);
+					SetFVec<2>(vert.uv, { u, 1.0f-v });
+				}
+			}
+			
+			//	generate Indices
+			Indices.resize(NumIndices);
+			//
+			//	  A	+------+ B
+			//		|	 / |
+			//		|	/  |
+			//		|  /   |
+			//		| /	   |
+			//		|/	   |
+			//	  C	+------+ D
+			//
+			//	A	: V(i  , j  )
+			//	B	: V(i  , j+1)
+			//	C	: V(i+1, j  )
+			//	D	: V(i+1, j+1)
+			//
+			//	ABC	: (i*n +j    , i*n + j+1, (i+1)*n + j  )
+			//	CBD : ((i+1)*n +j, i*n + j+1, (i+1)*n + j+1)
+			// i = row | j = col
+			int ii = 0;
+			for (unsigned row = 0; row < m - 1; ++row)
+			{
+				for (unsigned col = 0; col < n - 1; ++col)
+				{
+					Indices[ii + 0] = row * n + col + 1;
+					Indices[ii + 1] = row * n + col;
+					Indices[ii + 2] = (row + 1) * n + col;
+					Indices[ii + 3] = (row + 1) * n + col;
+					Indices[ii + 4] = (row + 1) * n + col + 1;
+					Indices[ii + 5] = row * n + col + 1;
+					ii += 6;
+				}
+			}
+		}
 
 		return data;
 	}

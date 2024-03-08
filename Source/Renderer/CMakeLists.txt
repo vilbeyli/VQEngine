@@ -27,6 +27,8 @@ set (Headers
 
 set (Source
     "Renderer.cpp"
+    "Renderer_RootSignatures.cpp"
+    "Renderer_PSOs.cpp"
     "Renderer_Resources.cpp"
     "WindowRenderContext.cpp"
     "Device.cpp"

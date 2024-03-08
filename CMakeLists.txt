@@ -25,11 +25,13 @@ set (Scenes
     "Data/Levels/Sponza.xml"
     "Data/Levels/EnvironmentMapUnitTest.xml"
     "Data/Levels/StressTest.xml"
+    "Data/Levels/Terrain.xml"
     "Source/Scenes/Scenes.h"
     "Source/Scenes/DefaultScene.cpp"
     "Source/Scenes/SponzaScene.cpp"
     "Source/Scenes/EnvironmentMapUnitTestScene.cpp"
     "Source/Scenes/StressTestScene.cpp"
+    "Source/Scenes/TerrainScene.cpp"
 )
 
 set (Config
@@ -80,6 +82,8 @@ set (Shaders
     "Shaders/ObjectID.hlsl"
     "Shaders/Outline.hlsl"
     "Shaders/VertexDebug.hlsl"
+    "Shaders/TerrainConstantBufferData.h"
+    "Shaders/Terrain.hlsl"
 )
 
 set (ShadersScreenSpaceReflections
@@ -152,6 +156,7 @@ set (SceneFiles
     "Source/Engine/Scene/Model.h"
     "Source/Engine/Scene/GameObject.h"
     "Source/Engine/Scene/Serialization.h"
+    "Source/Engine/Scene/Terrain.h"
 
     "Source/Engine/Scene/Scene.cpp"
     "Source/Engine/Scene/SceneLoading.cpp"
@@ -162,7 +167,8 @@ set (SceneFiles
     "Source/Engine/Scene/Model.cpp"
     "Source/Engine/Scene/GameObject.cpp"
     "Source/Engine/Scene/Transform.cpp"
-    "Source/Engine/Scene/Quaternion.cpp"    
+    "Source/Engine/Scene/Quaternion.cpp"
+    "Source/Engine/Scene/Terrain.cpp"
 )
 
 set (PostProcessFiles

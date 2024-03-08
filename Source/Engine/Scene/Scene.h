@@ -29,6 +29,7 @@
 #include "Light.h"
 #include "Transform.h"
 #include "GameObject.h"
+#include "Terrain.h"
 #include "Serialization.h"
 #include "../Core/Memory.h"
 #include "../Core/RenderCommands.h"
@@ -121,6 +122,7 @@ struct FSceneView
 	std::vector<FLightRenderCommand> lightBoundsRenderCommands;
 	std::vector<FOutlineRenderCommand> outlineRenderCommands;
 	std::vector<MeshRenderCommand_t> debugVertexAxesRenderCommands;
+	std::vector<FTerrainDrawParams> terrainDrawParams;
 
 #if RENDER_INSTANCED_SCENE_MESHES
 	//--------------------------------------------------------------------------------------------------------------------------------------------
@@ -416,7 +418,7 @@ public:
 	      FSceneView&       GetSceneView (int FRAME_DATA_INDEX);
 	const FSceneView&       GetSceneView (int FRAME_DATA_INDEX) const;
 	const FSceneShadowView& GetShadowView(int FRAME_DATA_INDEX) const;
-	      FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX)       ;
+	      FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX);
 	const FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX) const ;
 
 	inline const Camera& GetActiveCamera() const { return mCameras[mIndex_SelectedCamera]; }
@@ -475,6 +477,7 @@ protected:
 	std::vector<size_t>                      mGameObjectHandles;
 	std::vector<size_t>                      mTransformHandles;
 	std::vector<Camera>                      mCameras;
+	std::vector<Terrain>                     mTerrains;
 	
 	// See Light::EMobility enum for details
 	std::vector<Light> mLightsStatic;
