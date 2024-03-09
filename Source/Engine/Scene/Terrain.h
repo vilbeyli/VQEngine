@@ -31,10 +31,15 @@ struct Terrain
 	float QuadInner[2];
 	float QuadOuter[4];
 
+	float TriOuter[3];
+	float TriInner;
+
 	// TODO: bounding box
 };
 
+
+
 class Camera;
 VQ_SHADER_DATA::TerrainParams GetCBuffer_TerrainParams(const Terrain& TerrainIn, const Camera& CameraIn);
-
+VQ_SHADER_DATA::TerrainTessellationParams GetCBuffer_TerrainTessellationParams(const Terrain& TerrainIn);
 

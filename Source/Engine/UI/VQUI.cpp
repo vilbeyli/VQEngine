@@ -987,6 +987,8 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 		{
 			ImGui::SliderFloat("Axis Size", &SceneRenderParams.fVertexLocalAxixSize, 1.0f, 10.0f);
 		}
+		ImGui::Checkbox("Wireframe Terrain", &SceneRenderParams.bDrawWireframeTerrain);
+		ImGui::Checkbox("Tesellated Terrain", &SceneRenderParams.bDrawTessellatedTerrain);
 
 		//
 		// MAGNIFIER

@@ -38,3 +38,13 @@ VQ_SHADER_DATA::TerrainParams GetCBuffer_TerrainParams(const Terrain& TerrainIn,
 	p.matNormal = tf.NormalMatrix(p.world);
 	return p;
 }
+
+VQ_SHADER_DATA::TerrainTessellationParams GetCBuffer_TerrainTessellationParams(const Terrain& TerrainIn)
+{
+	VQ_SHADER_DATA::TerrainTessellationParams p;
+	p.TriEdgeTessFactor.x = 4.0f;
+	p.TriEdgeTessFactor.y = 4.0f;
+	p.TriEdgeTessFactor.z = 4.0f;
+	p.TriInnerTessFactor = 4.0f;
+	return p;
+}

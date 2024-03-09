@@ -47,16 +47,27 @@ struct VSInput
 
 struct HSInput // control point
 {
-	float4 vPosition : SV_POSITION;
-	float3 vNormal   : NORMAL;
-	float3 vTangent  : TANGENT;
+	float4 Position : POSITION;
+	float3 Normal : NORMAL;
+	float3 Tangent : TANGENT;
+	float2 uv0 : TEXCOORD0;
 };
 
 struct HSOutput // control point
 {
-	float4 vPosition : POSITION0;
+	float4 vPosition : POSITION;
 	float3 vNormal   : NORMAL;
-	float3 vTangent  : TANGENT;
+	float3 vTangent : TANGENT;
+	float2 uv0 : TEXCOORD0;
+};
+
+struct PSInput
+{
+	float4 ClipPos : SV_Position;
+	float3 WorldPos : COLOR;
+	float3 Normal : NORMAL;
+	float3 Tangent : TANGENT;
+	float2 uv0 : TEXCOORD0;
 };
 
 // HS patch constants
@@ -110,14 +121,6 @@ TextureCubeArray texPointLightShadowMaps      : register(t22);
 
 // ----------------------------------------------------------------------------------------------------------------
 
-struct PSInput
-{
-	float4 ClipPos : SV_Position;
-	float3 WorldPos : COLOR;
-	float3 Normal : NORMAL;
-	float3 Tangent : TANGENT;
-	float2 uv0 : TEXCOORD0;
-};
 PSInput VSMain_Heightmap(VSInput v)
 {
 	float2 uv = v.uv0 * trrn.material.uvScaleOffset.xy + trrn.material.uvScaleOffset.zw;
@@ -183,7 +186,7 @@ float4 PSMain_Heightmap(PSInput In) : SV_TARGET0
 		Surface.metalness *= OcclRghMtl.b;
 	}
 	
-	const float AmbientLight = 0.011f;
+	const float AmbientLight = cbPerFrame.fAmbientLightingFactor;
 	const float3 I_Ambient = AmbientLight * Surface.diffuseColor;
 	const float3 I_Emission = Surface.emissiveColor * Surface.emissiveIntensity;
 	float3 I_total = I_Ambient + I_Emission;
@@ -278,26 +281,47 @@ float4 PSMain_Heightmap(PSInput In) : SV_TARGET0
 	//return float4(0, 0.5, 0, 1);
 }
 
+// ----------------------------------------------------------------------------------------------------------------
 
-#if 0
+
 HSInput VSMain(VSInput v)
 {
 	HSInput o;
-	o.vPosition = float4(v.vLocalPosition, 1.0f);
-	o.vNormal = v.vNormal;
-	o.vTangent = v.vTangent;
+	o.Position = float4(v.vLocalPosition, 1.0f);
+	o.Normal = v.vNormal;
+	o.Tangent = v.vTangent;
+	o.uv0 = v.uv0;
 	return o;
 }
 
 
-#define NUM_CONTROL_POINTS 3
-HSOutputTriPatchConstants CalcHSPatchConstants(InputPatch<HSInput, NUM_CONTROL_POINTS> ip, uint PatchID : SV_PrimitiveID)
+#define TESSELLATION_MODE__TRIANGLE
+//#define TESSELLATION_MODE__QUAD
+
+#ifdef TESSELLATION_MODE__TRIANGLE
+	#define NUM_CONTROL_POINTS 3
+	#define HSOutputPatchConstants HSOutputTriPatchConstants
+#elif defined(TESSELLATION_MODE__QUAD)
+	#define NUM_CONTROL_POINTS 4
+	#define HSOutputPatchConstants HSOutputQuadPatchConstants
+#endif
+
+HSOutputPatchConstants CalcHSPatchConstants(InputPatch<HSInput, NUM_CONTROL_POINTS> ip, uint PatchID : SV_PrimitiveID)
 {
-	HSOutputTriPatchConstants c;
-	c.EdgeTessFactor[0] = 4; // 
-	c.EdgeTessFactor[1] = 4; // 
-	c.EdgeTessFactor[2] = 4;
-	c.InsideTessFactor  = 4;
+	HSOutputPatchConstants c;
+#ifdef TESSELLATION_MODE__TRIANGLE
+	c.EdgeTessFactor[0] = tess.TriEdgeTessFactor.x;
+	c.EdgeTessFactor[1] = tess.TriEdgeTessFactor.y;
+	c.EdgeTessFactor[2] = tess.TriEdgeTessFactor.z;
+	c.InsideTessFactor = tess.TriInnerTessFactor;
+#elif defined(TESSELLATION_MODE__QUAD)
+	c.EdgeTessFactor[0] = 4; // TODO: read cbuffer
+	c.EdgeTessFactor[1] = 4; // TODO: read cbuffer
+	c.EdgeTessFactor[2] = 4; // TODO: read cbuffer
+	c.EdgeTessFactor[3] = 4; // TODO: read cbuffer
+	c.InsideTessFactor[0] = 4; // TODO: read cbuffer
+	c.InsideTessFactor[1] = 4; // TODO: read cbuffer
+#endif
 	return c;
 }
 
@@ -310,10 +334,10 @@ HSOutputTriPatchConstants CalcHSPatchConstants(InputPatch<HSInput, NUM_CONTROL_P
 //         patch constants      --> DS
 //         tessellation factors --> DS + TS
 //
-[domain("tri")]                   // tri, quad, or isoline.
+[domain("tri")] // tri, quad, or isoline.
 [partitioning("fractional_even")] // integer, fractional_even, fractional_odd, or pow2.
-[outputtopology("triangle_cw")]   // point, line, triangle_cw, or triangle_ccw
-[outputcontrolspoints(NUM_CONTROL_POINTS)]
+[outputtopology("triangle_cw")] // point, line, triangle_cw, or triangle_ccw
+[outputcontrolpoints(NUM_CONTROL_POINTS)]
 [patchconstantfunc("CalcHSPatchConstants")]
 HSOutput HSMain(
 	InputPatch<HSInput, NUM_CONTROL_POINTS> ip,
@@ -322,25 +346,40 @@ HSOutput HSMain(
 )
 {
 	HSOutput o;
-	o.vPosition = ip[i].vPosition;
-	o.vNormal = ip[i].vNormal;
-	o.vTangent = ip[i].vTangent;
+	o.vPosition = ip[i].Position;
+	o.vNormal = ip[i].Normal;
+	o.vTangent = ip[i].Tangent;
+	o.uv0 = ip[i].uv0;
 	return o;
 }
-
 
 //
 // https://learn.microsoft.com/en-us/windows/win32/direct3d11/direct3d-11-advanced-stages-domain-shader-design
 // https://learn.microsoft.com/en-us/windows/win32/direct3d11/direct3d-11-advanced-stages-domain-shader-create
 //
-void DSMain()
+[domain("tri")]
+PSInput DSMain(HSOutputTriPatchConstants In,
+	float3 bary : SV_DomainLocation,
+	float EdgeTessFactor[3] : SV_TessFactor,
+	float InsideTessFactor : SV_InsideTessFactor,
+	const OutputPatch<HSOutput, NUM_CONTROL_POINTS> patch
+)
 {
+	float2 uv = patch[0].uv0 * bary.x + patch[1].uv0 * bary.y + patch[2].uv0 * bary.z;
+	uv = uv * trrn.material.uvScaleOffset.xy + trrn.material.uvScaleOffset.zw;
 	
+	float3 vPosition = patch[0].vPosition * bary.x + patch[1].vPosition * bary.y + patch[2].vPosition * bary.z;
+	
+	const float heightMapSample = texHeightmap.SampleLevel(LinearSampler, uv, 0).x;
+	const float heightOffset = trrn.material.displacement * heightMapSample;
+	const float3 positionWithHeightOffset = vPosition.xyz + float3(0, heightOffset, 0);
+	
+	PSInput o;
+	o.ClipPos = mul(trrn.worldViewProj, float4(positionWithHeightOffset, 1.0f));
+	o.WorldPos = mul(trrn.world, float4(positionWithHeightOffset, 1.0f));
+	o.Normal = mul(trrn.matNormal, float4( /*In.vNormal*/float3(0, 1, 0), 0.0f)).xyz;
+	o.Tangent = mul(trrn.matNormal, float4( /*In.vTangent*/float3(1, 0, 0), 0.0f)).xyz;
+	o.uv0 = uv;
+	
+	return o;
 }
-
-
-float4 PSMain(PSInput In) : SV_TARGET0
-{
-	return float4(0.0f, 0.5f, 0.5f, 1.0f);
-}
-#endif

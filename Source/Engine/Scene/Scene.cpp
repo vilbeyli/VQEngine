@@ -210,6 +210,16 @@ std::vector<MaterialID> Scene::GetMaterialIDs() const
 	return ids;
 }
 
+const Material& Scene::GetMaterial(MaterialID ID) const
+{
+	if (mMaterials.find(ID) == mMaterials.end())
+	{
+		Log::Error("Material not created. Did you call Scene::CreateMaterial()? (matID=%d)", ID);
+		return mMaterials.at(mDefaultMaterialID);
+	}
+	return mMaterials.at(ID);
+}
+
 Material& Scene::GetMaterial(MaterialID ID)
 {
 	if (mMaterials.find(ID) == mMaterials.end())
@@ -580,6 +590,114 @@ static void ExtractSceneView(FSceneView& SceneView, std::unordered_map<const Cam
 
 }
 
+static void CollectDebugVertexDrawParams(FSceneView& SceneView,
+	const std::vector<size_t>& mSelectedObjects,
+	const Scene* pScene,
+	const ModelLookup_t& mModels,
+	const std::unordered_map<MeshID, Mesh>& mMeshes,
+	const std::vector<Terrain>& mTerrains,
+	const Camera& cam
+)
+{
+	SCOPED_CPU_MARKER("CollectDebugVertexDrawParams");
+	if (!SceneView.sceneParameters.bDrawVertexLocalAxes)
+	{
+		return;
+	}
+
+	// count num meshes
+	int NumMeshes = 0;
+	for (size_t hObj : mSelectedObjects)
+	{
+		const GameObject* pObj = pScene->GetGameObject(hObj);
+		if (!pObj)
+			continue;
+
+		const Model& m = mModels.at(pObj->mModelID);
+		NumMeshes += m.mData.GetNumMeshesOfAllTypes();
+	}
+	SceneView.debugVertexAxesRenderCommands.resize(NumMeshes + mTerrains.size());
+	
+	int i = 0; // no instancing, draw meshes one by one for now
+	for (size_t hObj : mSelectedObjects)
+	{
+		const GameObject* pObj = pScene->GetGameObject(hObj);
+		if (!pObj)
+			continue;
+		const Transform* pTf = pScene->GetGameObjectTransform(hObj);
+		assert(pTf);
+
+		const Model& m = mModels.at(pObj->mModelID);
+		for (const auto& pair : m.mData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH))
+		{
+			MeshID meshID = pair.first;
+			const Mesh& mesh = mMeshes.at(meshID);
+
+			MeshRenderCommand_t& cmd = SceneView.debugVertexAxesRenderCommands[i];
+			cmd.matWorld.resize(1);
+			cmd.matNormal.resize(1);
+
+			const int lod = 0; // GetLODFromProjectedScreenArea(2.0f, mesh.GetNumLODs());
+			cmd.numIndices = mesh.GetNumIndices(lod);
+			cmd.vertexIndexBuffer = mesh.GetIABufferIDs(lod);
+			cmd.matWorld[0] = pTf->matWorldTransformation();
+			cmd.matNormal[0] = pTf->NormalMatrix(cmd.matWorld.back());
+			++i;
+		}
+	}
+	
+	for(const Terrain& t : mTerrains)
+	{
+		const int lod = 0;
+
+		MeshRenderCommand_t& cmd = SceneView.debugVertexAxesRenderCommands[i++];
+		cmd.matID = t.MaterialId;
+		
+		cmd.matNormal.resize(1);
+		cmd.matWorld.resize(1);
+		cmd.matWorldViewProj.resize(1);
+		cmd.matWorldViewProjPrev.resize(1);
+		
+		cmd.matWorld[0] = t.RootTransform.matWorldTransformation();
+		cmd.matNormal[0] = t.RootTransform.NormalMatrix(cmd.matWorld[0]);
+		cmd.matWorldViewProj[0] = cmd.matWorld[0] * cam.GetViewProjectionMatrix();
+		//cmd.matWorldViewProjPrev[0] = 
+
+		const Mesh& mesh = mMeshes.at(t.MeshId);
+		cmd.numIndices = mesh.GetNumIndices(lod);
+		cmd.vertexIndexBuffer = mesh.GetIABufferIDs(lod);
+	}
+}
+
+static void CollectTerrainDrawParams(FSceneView& SceneView, 
+	const std::vector<Terrain>& mTerrains, 
+	const Scene* pScene,
+	const Camera& cam,
+	const std::unordered_map<MeshID, Mesh>& mMeshes
+)
+{
+	SCOPED_CPU_MARKER("CollectTerrainDrawParams");
+	const size_t NumVisibleTerrains = mTerrains.size(); // TODO: cull terrains
+	SceneView.terrainDrawParams.resize(NumVisibleTerrains);
+	for (size_t i = 0; i < NumVisibleTerrains; ++i)
+	{
+		const Terrain& t = mTerrains[i];
+		const Material& mat = pScene->GetMaterial(t.MaterialId);
+		
+		SceneView.terrainDrawParams[i].Terrain = GetCBuffer_TerrainParams(t, cam);
+		SceneView.terrainDrawParams[i].Terrain.material = mat.GetCBufferData();
+		SceneView.terrainDrawParams[i].Tessellation = GetCBuffer_TerrainTessellationParams(t);
+
+		SceneView.terrainDrawParams[i].HeightmapSRV = mat.SRVHeightMap;
+		SceneView.terrainDrawParams[i].MaterialSRV = mat.SRVMaterialMaps;
+
+		const Mesh& m = mMeshes.at(t.MeshId);
+		const int lod = 0;
+		SceneView.terrainDrawParams[i].vertexIndexBuffer = m.GetIABufferIDs(lod);
+		SceneView.terrainDrawParams[i].numIndices = m.GetNumIndices(lod);
+	}
+}
+
 void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UIState, int FRAME_DATA_INDEX)
 {
 	SCOPED_CPU_MARKER("Scene::PostUpdate()");
@@ -620,79 +738,22 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 	RecordRenderLightMeshCommands(SceneView);
 	RecordOutlineRenderCommands(SceneView.outlineRenderCommands, mSelectedObjects, this, SceneView.view, SceneView.proj, SceneView.sceneParameters.OutlineColor);
 
-	const auto lights = this->GetLights(); // todo: this is unnecessary copying, don't do this
-	if (UIState.SelectedLightIndex >= 0 && UIState.SelectedLightIndex < lights.size())
+	if (UIState.bDrawLightVolume)
 	{
-		const Light& l = *lights[UIState.SelectedLightIndex];
-		if (l.bEnabled && UIState.bDrawLightVolume)
+		const auto lights = this->GetLights(); // todo: this is unnecessary copying, don't do this
+		if (UIState.SelectedLightIndex >= 0 && UIState.SelectedLightIndex < lights.size())
 		{
-			RecordRenderLightBoundsCommand(l, SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
-		}
-	}
-
-	if (!mSelectedObjects.empty() && SceneView.sceneParameters.bDrawVertexLocalAxes)
-	{
-		// count num meshes
-		int NumMeshes = 0;
-		for (size_t hObj : mSelectedObjects)
-		{
-			const GameObject* pObj = this->GetGameObject(hObj);
-			if (!pObj)
-				continue;
-			
-			const Model& m = mModels.at(pObj->mModelID);
-			NumMeshes += m.mData.GetNumMeshesOfAllTypes();
-		}
-		
-		SceneView.debugVertexAxesRenderCommands.resize(NumMeshes);
-		int i = 0; // no instancing, draw meshes one by one for now
-		for (size_t hObj : mSelectedObjects)
-		{
-			const GameObject* pObj = this->GetGameObject(hObj);
-			if (!pObj)
-				continue;
-			const Transform* pTf = this->GetGameObjectTransform(hObj);
-			assert(pTf);
-
-			const Model& m = mModels.at(pObj->mModelID);
-			for (const auto& pair : m.mData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH))
+			const Light& l = *lights[UIState.SelectedLightIndex];
+			if (l.bEnabled)
 			{
-				MeshID meshID = pair.first;
-				const Mesh& mesh = mMeshes.at(meshID);
-
-				MeshRenderCommand_t& cmd = SceneView.debugVertexAxesRenderCommands[i];
-				cmd.matWorld.resize(1);
-				cmd.matNormal.resize(1);
-
-				const int lod = 0; // GetLODFromProjectedScreenArea(2.0f, mesh.GetNumLODs());
-				cmd.numIndices = mesh.GetNumIndices(lod);
-				cmd.vertexIndexBuffer = mesh.GetIABufferIDs(lod);
-				cmd.matWorld[0] = pTf->matWorldTransformation();
-				cmd.matNormal[0] = pTf->NormalMatrix(cmd.matWorld.back());
-				++i;
+				RecordRenderLightBoundsCommand(l, SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
 			}
 		}
 	}
 
-	const size_t NumVisibleTerrains = mTerrains.size(); // TODO: cull terrains
-	SceneView.terrainDrawParams.resize(NumVisibleTerrains);
-	for(size_t i=0; i< NumVisibleTerrains; ++i)
-	{
-		const Terrain& t = mTerrains[i];
-		const Material& mat = GetMaterial(t.MaterialId);
-		SceneView.terrainDrawParams[i].Terrain = GetCBuffer_TerrainParams(t, cam);
-		SceneView.terrainDrawParams[i].Terrain.material = mat.GetCBufferData();
+	CollectDebugVertexDrawParams(SceneView, mSelectedObjects, this, mModels, mMeshes, mTerrains, cam);
 
-		SceneView.terrainDrawParams[i].Tessellation; // TODO
-		
-		SceneView.terrainDrawParams[i].HeightmapSRV = mat.SRVHeightMap;
-		SceneView.terrainDrawParams[i].MaterialSRV = mat.SRVMaterialMaps;
-
-		const Mesh& m = mMeshes.at(t.MeshId);
-		const int lod = 0;
-		SceneView.terrainDrawParams[i].vertexIndexBuffer = m.GetIABufferIDs(lod);
-		SceneView.terrainDrawParams[i].numIndices = m.GetNumIndices(lod);
-	}
+	CollectTerrainDrawParams(SceneView, mTerrains, this, cam, mMeshes);
 }
 
 

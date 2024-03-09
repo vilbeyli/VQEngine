@@ -24,7 +24,7 @@
         <Far>10000</Far>
         -->
         <Near>0.1</Near>
-        <Far>1000</Far>
+        <Far>5000</Far>
         <FirstPerson>
             <TranslationSpeed>1000</TranslationSpeed>
             <AngularSpeed>0.05</AngularSpeed>

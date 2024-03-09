@@ -81,6 +81,8 @@ struct FSceneRenderParameters
 	bool bDrawGameObjectBoundingBoxes = false;
 	bool bDrawLightMeshes = true;
 	bool bDrawVertexLocalAxes = false;
+	bool bDrawWireframeTerrain = false;
+	bool bDrawTessellatedTerrain = false;
 	float fVertexLocalAxixSize = 1.0f;
 	float fYawSliderValue = 0.0f;
 	float fAmbientLightingFactor = 0.055f;
@@ -289,7 +291,6 @@ private:
 	std::vector<const Transform*>  mMeshTransforms;
 	std::vector<size_t>            mMeshGameObjectHandles;
 	//------------------------------------------------------
-
 
 	// scene data container references
 	const MeshLookup_t& mMeshes;

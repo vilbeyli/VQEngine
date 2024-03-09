@@ -42,9 +42,9 @@ void TerrainScene::LoadScene(FSceneRepresentation& scene)
 	// terrains
 	{
 		Terrain t;
-		t.MeshId = EBuiltInMeshes::GRID_DETAILED_QUAD2;
+		t.MeshId = EBuiltInMeshes::GRID_DETAILED_QUAD1;
 
-		const float fTerrainScale = 500.f;
+		const float fTerrainScale = 1000.f;
 		t.RootTransform.SetPosition(0, 0, 0);
 		t.RootTransform.SetScale(fTerrainScale, 1, fTerrainScale);
 		mTerrains.push_back(t);

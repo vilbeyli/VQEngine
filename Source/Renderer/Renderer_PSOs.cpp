@@ -704,9 +704,40 @@ void VQRenderer::LoadBuiltinPSOs()
 
 		PSOLoadDescs.push_back({ EBuiltinPSOs::TERRAIN, psoLoadDesc });
 
+		psoLoadDesc.PSOName = "PSO_Terrain_Wireframe";
+		psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE::D3D12_FILL_MODE_WIREFRAME;
+		PSOLoadDescs.push_back({ EBuiltinPSOs::TERRAIN_WIREFRAME, psoLoadDesc });
+
 		psoLoadDesc.PSOName = "PSO_Terrain_MSAA4";
 		psoDesc.SampleDesc.Count = 4;
+		psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE::D3D12_FILL_MODE_SOLID;
 		PSOLoadDescs.push_back({ EBuiltinPSOs::TERRAIN_MSAA4, psoLoadDesc });
+		
+		psoLoadDesc.PSOName = "PSO_Terrain_MSAA4_Wireframe";
+		psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE::D3D12_FILL_MODE_WIREFRAME;
+		PSOLoadDescs.push_back({ EBuiltinPSOs::TERRAIN_MSAA4_WIREFRAME, psoLoadDesc });
+
+		psoLoadDesc.PSOName = "PSO_Terrain_Tessellated";
+		psoLoadDesc.ShaderStageCompileDescs[0].EntryPoint = "VSMain";
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "HSMain", "hs_5_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "DSMain", "ds_5_1" });
+		psoDesc.SampleDesc.Count = 1;
+		psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE::D3D12_FILL_MODE_SOLID;
+		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
+		PSOLoadDescs.push_back({ EBuiltinPSOs::TERRAIN_TESSELLATED, psoLoadDesc });
+
+		psoLoadDesc.PSOName = "PSO_Terrain_Tessellated_Wireframe";
+		psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE::D3D12_FILL_MODE_WIREFRAME;
+		PSOLoadDescs.push_back({ EBuiltinPSOs::TERRAIN_TESSELLATED, psoLoadDesc });
+
+		psoLoadDesc.PSOName = "PSO_Terrain_Tessellated_MSAA4";
+		psoDesc.SampleDesc.Count = 4;
+		psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE::D3D12_FILL_MODE_SOLID;
+		PSOLoadDescs.push_back({ EBuiltinPSOs::TERRAIN_TESSELLATED_MSAA4, psoLoadDesc });
+		
+		psoLoadDesc.PSOName = "PSO_Terrain_Tessellated_MSAA4_Wireframe";
+		psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE::D3D12_FILL_MODE_WIREFRAME;
+		PSOLoadDescs.push_back({ EBuiltinPSOs::TERRAIN_TESSELLATED_MSAA4_WIREFRAME, psoLoadDesc });
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------1

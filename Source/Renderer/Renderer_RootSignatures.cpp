@@ -624,13 +624,14 @@ void VQRenderer::LoadBuiltinRootSignatures()
 		rootParameters[iRtParam++].InitAsConstantBufferView(3, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL); // TODO: consider limiting shader visibility
 
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
-		D3D12_STATIC_SAMPLER_DESC PBRsamplersTerrain[5] =
+		D3D12_STATIC_SAMPLER_DESC PBRsamplersTerrain[6] =
 		{
 			GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_WRAP , D3D12_SHADER_VISIBILITY_PIXEL, 0),
 			GetDefaultSamplerDesc(EDefaultSampler::POINT_WRAP, D3D12_SHADER_VISIBILITY_PIXEL, 1),
 			GetDefaultSamplerDesc(EDefaultSampler::ANISOTROPIC_WRAP, D3D12_SHADER_VISIBILITY_PIXEL, 2),
 			GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_CLAMP, D3D12_SHADER_VISIBILITY_PIXEL, 3),
 			GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_WRAP , D3D12_SHADER_VISIBILITY_VERTEX, 0),
+			GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_WRAP , D3D12_SHADER_VISIBILITY_DOMAIN, 0),
 		};
 		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, _countof(PBRsamplersTerrain), &PBRsamplersTerrain[0], D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
