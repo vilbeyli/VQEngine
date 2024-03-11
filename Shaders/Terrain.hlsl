@@ -120,14 +120,18 @@ Texture2DArray   texSpotLightShadowMaps       : register(t16);
 TextureCubeArray texPointLightShadowMaps      : register(t22);
 
 // ----------------------------------------------------------------------------------------------------------------
+float SampleHeightMap_VS(float2 uv) { return texHeightmap.SampleLevel(LinearSampler, uv, 0).x; }
+float SampleHeightMap   (float2 uv) { return texHeightmap.Sample(LinearSampler, uv, 0).x; }
+float3 CalcHeightOffset(float2 uv)
+{
+	return float3(0, SampleHeightMap_VS(uv) * trrn.material.displacement, 0);
+}
+// ----------------------------------------------------------------------------------------------------------------
 
 PSInput VSMain_Heightmap(VSInput v)
 {
 	float2 uv = v.uv0 * trrn.material.uvScaleOffset.xy + trrn.material.uvScaleOffset.zw;
-	
-	const float heightMapSample = texHeightmap.SampleLevel(LinearSampler, uv, 0).x;
-	const float heightOffset = trrn.material.displacement * heightMapSample;
-	const float3 positionWithHeightOffset = v.vLocalPosition + float3(0, heightOffset, 0);
+	const float3 positionWithHeightOffset = v.vLocalPosition + CalcHeightOffset(uv);
 	
 	PSInput o;
 	o.ClipPos  = mul(trrn.worldViewProj, float4(positionWithHeightOffset, 1.0f));
@@ -175,9 +179,9 @@ float4 PSMain_Heightmap(PSInput In) : SV_TARGET0
 	Surface.N = length(Normal) < 0.01 ? N : UnpackNormal(Normal, N, T);
 	
 	//ao = HasAmbientOcclusionMap(TEX_CFG) ? ao * LocalAO : ao;
-	//if (HasRoughnessMap(TEX_CFG))
+	if (HasRoughnessMap(TEX_CFG))
 		Surface.roughness *= Roughness;
-	//if (HasMetallicMap(TEX_CFG))
+	if (HasMetallicMap(TEX_CFG))
 		Surface.metalness *= Metalness;
 	if (HasOcclusionRoughnessMetalnessMap(TEX_CFG))
 	{
@@ -186,8 +190,7 @@ float4 PSMain_Heightmap(PSInput In) : SV_TARGET0
 		Surface.metalness *= OcclRghMtl.b;
 	}
 	
-	const float AmbientLight = cbPerFrame.fAmbientLightingFactor;
-	const float3 I_Ambient = AmbientLight * Surface.diffuseColor;
+	const float3 I_Ambient = cbPerFrame.fAmbientLightingFactor * Surface.diffuseColor;
 	const float3 I_Emission = Surface.emissiveColor * Surface.emissiveIntensity;
 	float3 I_total = I_Ambient + I_Emission;
 	
@@ -294,14 +297,16 @@ HSInput VSMain(VSInput v)
 	return o;
 }
 
+//#define DOMAIN__TRIANGLE 1
+//#define DOMAIN__QUAD 1
+#define ENABLE_TESSELLATION_SHADERS defined(DOMAIN__TRIANGLE) || defined(DOMAIN__QUAD)
 
-#define TESSELLATION_MODE__TRIANGLE
-//#define TESSELLATION_MODE__QUAD
+#if ENABLE_TESSELLATION_SHADERS
 
-#ifdef TESSELLATION_MODE__TRIANGLE
+#ifdef DOMAIN__TRIANGLE
 	#define NUM_CONTROL_POINTS 3
 	#define HSOutputPatchConstants HSOutputTriPatchConstants
-#elif defined(TESSELLATION_MODE__QUAD)
+#elif defined(DOMAIN__QUAD)
 	#define NUM_CONTROL_POINTS 4
 	#define HSOutputPatchConstants HSOutputQuadPatchConstants
 #endif
@@ -309,18 +314,18 @@ HSInput VSMain(VSInput v)
 HSOutputPatchConstants CalcHSPatchConstants(InputPatch<HSInput, NUM_CONTROL_POINTS> ip, uint PatchID : SV_PrimitiveID)
 {
 	HSOutputPatchConstants c;
-#ifdef TESSELLATION_MODE__TRIANGLE
+#ifdef DOMAIN__TRIANGLE
 	c.EdgeTessFactor[0] = tess.TriEdgeTessFactor.x;
 	c.EdgeTessFactor[1] = tess.TriEdgeTessFactor.y;
 	c.EdgeTessFactor[2] = tess.TriEdgeTessFactor.z;
 	c.InsideTessFactor = tess.TriInnerTessFactor;
-#elif defined(TESSELLATION_MODE__QUAD)
-	c.EdgeTessFactor[0] = 4; // TODO: read cbuffer
-	c.EdgeTessFactor[1] = 4; // TODO: read cbuffer
-	c.EdgeTessFactor[2] = 4; // TODO: read cbuffer
-	c.EdgeTessFactor[3] = 4; // TODO: read cbuffer
-	c.InsideTessFactor[0] = 4; // TODO: read cbuffer
-	c.InsideTessFactor[1] = 4; // TODO: read cbuffer
+#elif defined(DOMAIN__QUAD)
+	c.EdgeTessFactor[0] = tess.QuadEdgeTessFactor.x;
+	c.EdgeTessFactor[1] = tess.QuadEdgeTessFactor.y;
+	c.EdgeTessFactor[2] = tess.QuadEdgeTessFactor.z;
+	c.EdgeTessFactor[3] = tess.QuadEdgeTessFactor.w;
+	c.InsideTessFactor[0] = tess.QuadInsideFactor.x;
+	c.InsideTessFactor[1] = tess.QuadInsideFactor.y;
 #endif
 	return c;
 }
@@ -333,10 +338,39 @@ HSOutputPatchConstants CalcHSPatchConstants(InputPatch<HSInput, NUM_CONTROL_POIN
 // output: 1-32 control points  --> DS
 //         patch constants      --> DS
 //         tessellation factors --> DS + TS
-//
-[domain("tri")] // tri, quad, or isoline.
-[partitioning("fractional_even")] // integer, fractional_even, fractional_odd, or pow2.
-[outputtopology("triangle_cw")] // point, line, triangle_cw, or triangle_ccw
+
+// https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-attributes-domain
+// Domain: tri, quad, or isoline
+#if DOMAIN__QUAD
+[domain("quad")] 
+#elif DOMAIN__TRIANGLE
+[domain("tri")] 
+#endif
+
+// https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-attributes-partitioning
+// Partitioning: integer, fractional_even, fractional_odd, pow2
+#if PARTITIONING__INT
+[partitioning("integer")]
+#elif PARTITIONING__EVEN
+[partitioning("fractional_even")]
+#elif PARTITIONING__ODD
+[partitioning("fractional_odd")]
+#elif PARTITIONING__POW2
+[partitioning("pow2")]
+#endif
+
+// https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-attributes-outputtopology
+// Output topology: point, line, triangle_cw, triangle_ccw
+#if OUTTOPO__POINT
+[outputtopology("point")] 
+#elif OUTTOPO__LINE
+[outputtopology("line")] 
+#elif OUTTOPO__TRI_CW
+[outputtopology("triangle_cw")] 
+#elif OUTTOPO__TRI_CCW
+[outputtopology("triangle_ccw")] 
+#endif
+
 [outputcontrolpoints(NUM_CONTROL_POINTS)]
 [patchconstantfunc("CalcHSPatchConstants")]
 HSOutput HSMain(
@@ -353,33 +387,61 @@ HSOutput HSMain(
 	return o;
 }
 
+
 //
 // https://learn.microsoft.com/en-us/windows/win32/direct3d11/direct3d-11-advanced-stages-domain-shader-design
 // https://learn.microsoft.com/en-us/windows/win32/direct3d11/direct3d-11-advanced-stages-domain-shader-create
 //
+#define INTERPOLATE3_PATCH_ATTRIBUTE(attr, bary)\
+	patch[0].attr * bary.x +\
+	patch[1].attr * bary.y +\
+	patch[2].attr * bary.z
+
+#define INTERPOLATE2_PATCH_ATTRIBUTE(attr, bary)\
+	patch[0].attr * bary.x +\
+	patch[1].attr * bary.y
+
+
+#if DOMAIN__TRIANGLE
+#define INTERPOLATE_PATCH_ATTRIBUTE(attr, bary) INTERPOLATE3_PATCH_ATTRIBUTE(attr, bary)
+#elif DOMAIN__QUAD
+#define INTERPOLATE_PATCH_ATTRIBUTE(attr, bary) INTERPOLATE2_PATCH_ATTRIBUTE(attr, bary)
+#endif
+
+// https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/sv-domainlocation
+#if DOMAIN__QUAD
+[domain("quad")]
+#else
 [domain("tri")]
-PSInput DSMain(HSOutputTriPatchConstants In,
-	float3 bary : SV_DomainLocation,
-	float EdgeTessFactor[3] : SV_TessFactor,
-	float InsideTessFactor : SV_InsideTessFactor,
-	const OutputPatch<HSOutput, NUM_CONTROL_POINTS> patch
+#endif
+PSInput DSMain(
+	HSOutputPatchConstants In,
+	const OutputPatch<HSOutput, NUM_CONTROL_POINTS> patch,
+#if DOMAIN__QUAD
+	float2 bary               : SV_DomainLocation,
+	float EdgeTessFactor[4]   : SV_TessFactor,
+	float InsideTessFactor[2] : SV_InsideTessFactor
+#elif DOMAIN__TRIANGLE
+	float3 bary               : SV_DomainLocation,
+	float EdgeTessFactor[3]   : SV_TessFactor,
+	float InsideTessFactor    : SV_InsideTessFactor
+#endif
 )
 {
-	float2 uv = patch[0].uv0 * bary.x + patch[1].uv0 * bary.y + patch[2].uv0 * bary.z;
+	float2 uv = INTERPOLATE_PATCH_ATTRIBUTE(uv0, bary);
 	uv = uv * trrn.material.uvScaleOffset.xy + trrn.material.uvScaleOffset.zw;
 	
-	float3 vPosition = patch[0].vPosition * bary.x + patch[1].vPosition * bary.y + patch[2].vPosition * bary.z;
-	
-	const float heightMapSample = texHeightmap.SampleLevel(LinearSampler, uv, 0).x;
-	const float heightOffset = trrn.material.displacement * heightMapSample;
-	const float3 positionWithHeightOffset = vPosition.xyz + float3(0, heightOffset, 0);
+	float3 vPosition = INTERPOLATE_PATCH_ATTRIBUTE(vPosition, bary);
+	vPosition.xyz += CalcHeightOffset(uv);
 	
 	PSInput o;
-	o.ClipPos = mul(trrn.worldViewProj, float4(positionWithHeightOffset, 1.0f));
-	o.WorldPos = mul(trrn.world, float4(positionWithHeightOffset, 1.0f));
+	o.ClipPos = mul(trrn.worldViewProj, float4(vPosition, 1.0f));
+	o.WorldPos = mul(trrn.world, float4(vPosition, 1.0f));
 	o.Normal = mul(trrn.matNormal, float4( /*In.vNormal*/float3(0, 1, 0), 0.0f)).xyz;
 	o.Tangent = mul(trrn.matNormal, float4( /*In.vTangent*/float3(1, 0, 0), 0.0f)).xyz;
 	o.uv0 = uv;
 	
 	return o;
 }
+
+#endif // ENABLE_TESSELLATION_SHADERS

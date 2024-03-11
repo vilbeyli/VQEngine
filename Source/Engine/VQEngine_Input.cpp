@@ -86,8 +86,7 @@ void VQEngine::HandleUIInput()
 			if (input.IsKeyTriggered("F2")) Toggle(mUIState.bWindowVisible_Profiler);
 			if (input.IsKeyTriggered("F3")) Toggle(mUIState.bWindowVisible_GraphicsSettingsPanel);
 			//if (input.IsKeyTriggered("F4")) Toggle(mUIState.bWindowVisible_DebugPanel);
-			if (input.IsKeyTriggered("F5")) Toggle(mUIState.bWindowVisible_MaterialEditor);
-			if (input.IsKeyTriggered("F6")) Toggle(mUIState.bWindowVisible_LightEditor);
+			if (input.IsKeyTriggered("F5")) Toggle(mUIState.bWindowVisible_Editor);
 
 			if (input.IsKeyTriggered("B"))
 			{

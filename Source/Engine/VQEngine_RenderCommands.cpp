@@ -797,18 +797,7 @@ void VQEngine::RenderSceneColor(
 	if(!SceneView.terrainDrawParams.empty())
 	{
 		SCOPED_GPU_MARKER(pCmd, "Terrain");
-		const bool bWireframe = SceneView.sceneParameters.bDrawWireframeTerrain;
-		const bool bTessellate = SceneView.sceneParameters.bDrawTessellatedTerrain;
-		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA 
-			? (bWireframe 
-				? (bTessellate ? EBuiltinPSOs::TERRAIN_TESSELLATED_MSAA4_WIREFRAME : EBuiltinPSOs::TERRAIN_MSAA4_WIREFRAME)
-				: (bTessellate ? EBuiltinPSOs::TERRAIN_TESSELLATED_MSAA4 : EBuiltinPSOs::TERRAIN_MSAA4)
-			)
-			: (bWireframe 
-				? (bTessellate ? EBuiltinPSOs::TERRAIN_TESSELLATED_WIREFRAME : EBuiltinPSOs::TERRAIN_WIREFRAME)
-				: (bTessellate ? EBuiltinPSOs::TERRAIN_TESSELLATED : EBuiltinPSOs::TERRAIN))
-			)
-		);
+
 		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__Terrain));
 		
 		pCmd->SetGraphicsRootDescriptorTable(2, mRenderer.GetSRV(mResources_MainWnd.SRV_FFXCACAO_Out).GetGPUDescHandle());
@@ -832,7 +821,19 @@ void VQEngine::RenderSceneColor(
 		pCmd->SetGraphicsRootConstantBufferView(9, cbAddr_PerFrame);
 		pCmd->SetGraphicsRootConstantBufferView(10, cbAddr_PerView);
 		for (const FTerrainDrawParams& param : SceneView.terrainDrawParams)
-		{
+		{		
+			const bool bWireframe  = param.bWireframe;
+			const bool bTessellate = param.bTessellate;
+			pCmd->SetPipelineState(mRenderer.GetPSO(
+				mRenderer.mTerrainPSOs.GetPSOId(
+					(bTessellate ? 1 : 0), 
+					(bWireframe ? 1 : 0), 
+					(bMSAA ? 1 : 0),
+					param.iDomain,
+					param.iPartition,
+					param.iOutTopology))
+			);
+
 			// cb0
 			VQ_SHADER_DATA::TerrainParams* pCBuffer_Terrain = nullptr;
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Trn;
@@ -859,7 +860,10 @@ void VQEngine::RenderSceneColor(
 			const IBV& ib = mRenderer.GetIndexBufferView(param.vertexIndexBuffer.second);
 			pCmd->IASetVertexBuffers(0, 1, &vb);
 			pCmd->IASetIndexBuffer(&ib);
-			pCmd->IASetPrimitiveTopology(bTessellate ? D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			pCmd->IASetPrimitiveTopology(bTessellate 
+				? (param.iDomain == 0 ? D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST : D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST)
+				: D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST
+			);
 
 			// draw
 			const int NumInstances = 1;

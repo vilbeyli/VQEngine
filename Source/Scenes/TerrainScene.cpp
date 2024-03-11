@@ -37,12 +37,21 @@ void TerrainScene::LoadScene(FSceneRepresentation& scene)
 	mr.RoughnessMapFilePath = "Data/Textures/PBR/PavingStone05_4K/PavingStone05_4K_Roughness.png";
 	mr.AOMapFilePath        = "Data/Textures/PBR/PavingStone05_4K/PavingStone05_4K_AO.png";
 	mr.HeightMapFilePath    = "Data/Textures/PBR/PavingStone05_4K/PavingStone05_4K_Height.png";
+	mr.TilingX              = 10.f;
+	mr.TilingY              = 10.f;
 	scene.Materials.push_back(mr);
 		
 	// terrains
 	{
 		Terrain t;
 		t.MeshId = EBuiltInMeshes::GRID_DETAILED_QUAD1;
+		t.Name = "Terrain0";
+
+		FTessellationParameters& tess = t.Tessellation;
+		tess.TriInner = 4.0f;
+		tess.TriOuter[0] = tess.TriOuter[1] = tess.TriOuter[2] = 4.0f;
+		tess.QuadInner[0] = tess.QuadInner[1] = 4.0f;
+		tess.QuadOuter[0] = tess.QuadOuter[1] = tess.QuadOuter[2] = tess.QuadOuter[3] = 4.0f;
 
 		const float fTerrainScale = 1000.f;
 		t.RootTransform.SetPosition(0, 0, 0);

@@ -41,11 +41,23 @@ struct FUIState
 	bool bWindowVisible_GraphicsSettingsPanel = false;
 	bool bHideAllWindows = false; // masks all the windows above
 
-	bool bWindowVisible_MaterialEditor = false;
-	int  SelectedMaterialIndex = -1;
+	bool bWindowVisible_Editor = false;
+	enum EEditorMode
+	{
+		MATERIALS = 0,
+		LIGHTS,
+		TERRAIN,
+		OBJECTS,
 
-	bool bWindowVisible_LightEditor = false;
-	int SelectedLightIndex = -1;
+		NUM_EDITOR_MODES
+	};
+	EEditorMode EditorMode = EEditorMode::MATERIALS;
+	int SelectedEditeeIndex[NUM_EDITOR_MODES];
+
+	bool bTerrainScaleSliderFloat3 = false;
+	bool bTessellationSliderFloatVec = false;
+	bool bLockTessellationSliders = false;
+	
 	bool bDrawLightVolume = false;
 
 	bool bUIOnSeparateWindow = false;

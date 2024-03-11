@@ -55,8 +55,9 @@ struct TerrainParams
 }; 
 struct TerrainTessellationParams
 {
-	//int4 QuadEdgeTessFactor;
-	//int2 QuadInsideFactor;
+	float4 QuadEdgeTessFactor;
+	float2 QuadInsideFactor;
+	float2 pad;
 	float3 TriEdgeTessFactor;
 	float TriInnerTessFactor;
 };

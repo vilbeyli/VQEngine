@@ -119,15 +119,6 @@ enum EBuiltinPSOs // TODO: remove the hardcoded PSOs when a generic Shader solut
 	DOWNSAMPLE_DEPTH_CS_PSO,
 	DEBUGVERTEX_LOCALSPACEVECTORS_PSO,
 	DEBUGVERTEX_LOCALSPACEVECTORS_PSO_MSAA_4,
-	TERRAIN,
-	TERRAIN_WIREFRAME,
-	TERRAIN_MSAA4,
-	TERRAIN_MSAA4_WIREFRAME,
-	TERRAIN_TESSELLATED,
-	TERRAIN_TESSELLATED_WIREFRAME,
-	TERRAIN_TESSELLATED_MSAA4,
-	TERRAIN_TESSELLATED_MSAA4_WIREFRAME,
-
 	NUM_BUILTIN_PSOs
 };
 
@@ -267,7 +258,27 @@ public:
 	inline ID3D12Device*         GetDevicePtr() { return mDevice.GetDevicePtr(); }
 	inline FDeviceCapabilities   GetDeviceCapabilities() const { return mDevice.GetDeviceCapabilities(); }
 	inline CommandQueue&         GetCommandQueue(CommandQueue::EType eType) { return mCmdQueues[(int)eType]; }
-
+	
+	struct FTerrainPSOs
+	{
+		static constexpr int NUM_TESSELLATION_OPTIONS = 2; // off/on
+		static constexpr int NUM_RASTER_OPTIONS = 2; // wireframe/fill
+		static constexpr int NUM_RENDER_OPTIONS = 2; // nomsaa/msaa4
+		static constexpr int NUM_DOMAIN_OPTIONS = 2; // tri/quad
+		static constexpr int NUM_PARTIT_OPTIONS = 4; // integer, fractional_even, fractional_odd, or pow2
+		static constexpr int NUM_OUTTOP_OPTIONS = 4; // point, line, triangle_cw, or triangle_ccw
+		static constexpr size_t NUM_OPTIONS = NUM_TESSELLATION_OPTIONS * NUM_RASTER_OPTIONS * NUM_RENDER_OPTIONS * NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * NUM_OUTTOP_OPTIONS;
+		inline size_t GetPSOIndex(int iTess, int iRaster, int iRender, int iDomain, int iPartition, int iOutTopology) const {
+			return iTess
+				+ NUM_TESSELLATION_OPTIONS * iRaster
+				+ NUM_TESSELLATION_OPTIONS * NUM_RASTER_OPTIONS * iRender
+				+ NUM_TESSELLATION_OPTIONS * NUM_RASTER_OPTIONS * NUM_RENDER_OPTIONS * iDomain
+				+ NUM_TESSELLATION_OPTIONS * NUM_RASTER_OPTIONS * NUM_RENDER_OPTIONS * NUM_DOMAIN_OPTIONS * iOutTopology;
+		}
+		inline PSO_ID GetPSOId(int iTess, int iRaster, int iRender, int iDomain, int iPartition, int iOutTopology) const { return arr[GetPSOIndex(iTess, iRaster, iRender, iDomain, iPartition, iOutTopology)]; }
+		FTerrainPSOs() { for (int i = 0; i < NUM_OPTIONS; ++i) arr[i] = INVALID_ID; }
+		std::array<PSO_ID, NUM_OPTIONS> arr;
+	} mTerrainPSOs;
 private:
 	using PSOArray_t = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
 	
@@ -314,9 +325,12 @@ private:
 	mutable std::mutex                             mMtxIBVs;
 
 
-	// root signatures & PSOs
+	// root signatures
 	std::unordered_map<RS_ID , ID3D12RootSignature*> mRootSignatureLookup;
+
+	// PSOs
 	std::unordered_map<PSO_ID, ID3D12PipelineState*> mPSOs;
+	
 
 	// data
 	std::unordered_map<HWND, FWindowRenderContext> mRenderContextLookup;

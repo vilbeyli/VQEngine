@@ -42,9 +42,16 @@ VQ_SHADER_DATA::TerrainParams GetCBuffer_TerrainParams(const Terrain& TerrainIn,
 VQ_SHADER_DATA::TerrainTessellationParams GetCBuffer_TerrainTessellationParams(const Terrain& TerrainIn)
 {
 	VQ_SHADER_DATA::TerrainTessellationParams p;
-	p.TriEdgeTessFactor.x = 4.0f;
-	p.TriEdgeTessFactor.y = 4.0f;
-	p.TriEdgeTessFactor.z = 4.0f;
-	p.TriInnerTessFactor = 4.0f;
+	const FTessellationParameters& tess = TerrainIn.Tessellation;
+	p.TriEdgeTessFactor.x = tess.TriOuter[0];
+	p.TriEdgeTessFactor.y = tess.TriOuter[1];
+	p.TriEdgeTessFactor.z = tess.TriOuter[2];
+	p.TriInnerTessFactor  = tess.TriInner;
+	p.QuadEdgeTessFactor.x = tess.QuadOuter[0];
+	p.QuadEdgeTessFactor.y = tess.QuadOuter[1];
+	p.QuadEdgeTessFactor.z = tess.QuadOuter[2];
+	p.QuadEdgeTessFactor.w = tess.QuadOuter[3];
+	p.QuadInsideFactor.x = tess.QuadInner[0];
+	p.QuadInsideFactor.y = tess.QuadInner[1];
 	return p;
 }

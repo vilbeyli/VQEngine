@@ -20,20 +20,34 @@
 #include "../Core/Types.h"
 #include "Transform.h"
 #include "Shaders/TerrainConstantBufferData.h"
+#include "../../Renderer/Tessellation.h"
+#include <string>
+
+
+struct FTessellationParameters
+{
+	bool bEnableTessellation = false;
+	ETessellationDomain Domain = ETessellationDomain::TRIANGLE_PATCH;
+
+	float TriOuter[3];
+	float TriInner;
+	float QuadInner[2];
+	float QuadOuter[4];
+
+	ETessellationOutputTopology OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW;
+	ETessellationPartitioning Partitioning = ETessellationPartitioning::FRACTIONAL_ODD;
+};
 
 struct Terrain
 {
+	std::string Name;
+
 	MeshID MeshId = INVALID_ID;
 	MaterialID MaterialId = INVALID_ID;
 	Transform RootTransform; // XZ plane
 
-	// TODO: Tessellation params
-	float QuadInner[2];
-	float QuadOuter[4];
-
-	float TriOuter[3];
-	float TriInner;
-
+	FTessellationParameters Tessellation;
+	bool bWireframe = false;
 	// TODO: bounding box
 };
 

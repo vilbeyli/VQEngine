@@ -186,9 +186,11 @@ static void InitializeEngineUIState(FUIState& s)
 	s.bWindowVisible_SceneControls = true;
 	s.bWindowVisible_GraphicsSettingsPanel = false;
 	s.bWindowVisible_Profiler = false;
-	s.bWindowVisible_MaterialEditor = false;
-	s.bWindowVisible_LightEditor = false;
+	s.bWindowVisible_Editor = false;
 	s.bProfiler_ShowEngineStats = true;
+
+	for (int i = 0; i < FUIState::EEditorMode::NUM_EDITOR_MODES; ++i)
+		s.SelectedEditeeIndex[i] = 0;
 
 	// couldn't bother using smart pointers due to inlined default destructors.
 	// There's never a smooth way to work with them -- either too verbose or breaks compilation.
@@ -319,8 +321,7 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 		if (mUIState.bWindowVisible_SceneControls)         DrawSceneControlsWindow(mpScene->GetActiveCameraIndex(), mpScene->GetActiveEnvironmentMapPresetIndex(), SceneParams);
 		if (mUIState.bWindowVisible_Profiler)              DrawProfilerWindow(mpScene->GetSceneRenderStats(FRAME_DATA_INDEX), dt);
 		if (mUIState.bWindowVisible_GraphicsSettingsPanel) DrawGraphicsSettingsWindow(SceneParams, PPParams);
-		if (mUIState.bWindowVisible_MaterialEditor)        DrawMaterialEditor();
-		if (mUIState.bWindowVisible_LightEditor)           DrawLightEditor();
+		if (mUIState.bWindowVisible_Editor)                DrawEditorWindow();
 	}
 
 	// If we fired an event that would trigger loading,
@@ -361,15 +362,10 @@ const uint32_t DBG_WINDOW_PADDING_Y      = 10;
 const uint32_t DBG_WINDOW_SIZE_X         = 330;
 const uint32_t DBG_WINDOW_SIZE_Y         = 380;
 //---------------------------------------------
-const uint32_t MATERIAL_WINDOW_PADDING_X = 10;
-const uint32_t MATERIAL_WINDOW_PADDING_Y = 10;
-const uint32_t MATERIAL_WINDOW_SIZE_X    = 550;
-const uint32_t MATERIAL_WINDOW_SIZE_Y    = 400;
-//---------------------------------------------
-const uint32_t LIGHTS_WINDOW_PADDING_X   = 10;
-const uint32_t LIGHTS_WINDOW_PADDING_Y   = 10;
-const uint32_t LIGHTS_WINDOW_SIZE_X      = 550;
-const uint32_t LIGHTS_WINDOW_SIZE_Y      = 400;
+const uint32_t EDITOR_WINDOW_PADDING_X   = 10;
+const uint32_t EDITOR_WINDOW_PADDING_Y   = 10;
+const uint32_t EDITOR_WINDOW_SIZE_X      = 550;
+const uint32_t EDITOR_WINDOW_SIZE_Y      = 400;
 //---------------------------------------------
 
 // Dropdown data ----------------------------------------------------------------------------------------------
@@ -610,9 +606,7 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 
 		ImGui::TableNextRow();
 		ImGui::TableSetColumnIndex(0);
-		ImGui::Checkbox("F5: Materials", &mUIState.bWindowVisible_MaterialEditor);
-		ImGui::TableSetColumnIndex(1);
-		ImGui::Checkbox("F6: Lights", &mUIState.bWindowVisible_LightEditor);
+		ImGui::Checkbox("F5: Editor", &mUIState.bWindowVisible_Editor);
  
 		ImGui::EndTable();
 	}
@@ -987,8 +981,6 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 		{
 			ImGui::SliderFloat("Axis Size", &SceneRenderParams.fVertexLocalAxixSize, 1.0f, 10.0f);
 		}
-		ImGui::Checkbox("Wireframe Terrain", &SceneRenderParams.bDrawWireframeTerrain);
-		ImGui::Checkbox("Tesellated Terrain", &SceneRenderParams.bDrawTessellatedTerrain);
 
 		//
 		// MAGNIFIER
@@ -1191,13 +1183,66 @@ static void StartDrawingMaterialEditorRow(const char* szLabel)
 	ImGui::SetNextItemWidth(-1);
 }
 
-void VQEngine::DrawMaterialEditor()
+
+void VQEngine::DrawEditorWindow()
 {
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
-	const uint32_t MATERIAL_WINDOW_POS_X = MATERIAL_WINDOW_PADDING_X + GFX_WINDOW_SIZE_X + GFX_WINDOW_PADDING_X;
-	const uint32_t MATERIAL_WINDOW_POS_Y = H - MATERIAL_WINDOW_PADDING_Y * 2 - MATERIAL_WINDOW_SIZE_Y;
+	const uint32_t EDITOR_WINDOW_POS_X = EDITOR_WINDOW_PADDING_X + GFX_WINDOW_SIZE_X + GFX_WINDOW_PADDING_X;
+	const uint32_t EDITOR_WINDOW_POS_Y = H - EDITOR_WINDOW_PADDING_Y * 2 - EDITOR_WINDOW_SIZE_Y;
 	
+	ImGui::SetNextWindowPos(ImVec2((float)EDITOR_WINDOW_POS_X, (float)EDITOR_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(EDITOR_WINDOW_SIZE_X, EDITOR_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
+
+	ImGui::Begin("EDITOR", &mUIState.bWindowVisible_Editor);
+	
+	bool bEditMaterial = mUIState.EditorMode == FUIState::EEditorMode::MATERIALS;
+	bool bEditLight    = mUIState.EditorMode == FUIState::EEditorMode::LIGHTS;
+	bool bEditTerrain  = mUIState.EditorMode == FUIState::EEditorMode::TERRAIN;
+	bool bEditObject   = mUIState.EditorMode == FUIState::EEditorMode::OBJECTS;
+	if (ImGui::RadioButton("Material", bEditMaterial))
+	{
+		mUIState.EditorMode = FUIState::EEditorMode::MATERIALS;
+	}
+	ImGui::SameLine();
+	if (ImGui::RadioButton("Light", bEditLight))
+	{
+		mUIState.EditorMode = FUIState::EEditorMode::LIGHTS;
+	}
+	ImGui::SameLine();
+	if (ImGui::RadioButton("Terrain", bEditTerrain))
+	{
+		mUIState.EditorMode = FUIState::EEditorMode::TERRAIN;
+	}
+	ImGui::SameLine();
+	if (ImGui::RadioButton("Object", bEditObject))
+	{
+		mUIState.EditorMode = FUIState::EEditorMode::OBJECTS;
+	}
+
+
+	ImGui::Spacing();
+
+	if (!ImGui::BeginTable("EditorTableLayout", 2, ImGuiTableFlags_Resizable, ImVec2(-1, -1)))
+	{
+		ImGui::End();
+		return;
+	}
+
+	if (bEditMaterial) DrawMaterialEditor();
+	if (bEditLight   ) DrawLightEditor();
+	if (bEditTerrain ) DrawTerrainEditor();
+	if (bEditObject  ) DrawObjectEditor();
+
+	ImGui::EndTable();
+
+	ImGui::End();
+}
+
+
+void VQEngine::DrawMaterialEditor()
+{
+	// gather material data
 	const std::vector<FMaterialRepresentation>& matReps = mpScene->GetMaterialRepresentations();
 	const std::vector<MaterialID> matIDsAll = mpScene->GetMaterialIDs();
 	std::vector<MaterialID> matIDs;
@@ -1229,18 +1274,10 @@ void VQEngine::DrawMaterialEditor()
 		szMaterialNames[iMatName] = "";
 	}
 
-	ImGui::SetNextWindowPos(ImVec2((float)MATERIAL_WINDOW_POS_X, (float)MATERIAL_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
-	ImGui::SetNextWindowSize(ImVec2(MATERIAL_WINDOW_SIZE_X, MATERIAL_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
+	int& i = mUIState.SelectedEditeeIndex[FUIState::EEditorMode::MATERIALS];
 
-	ImGui::Begin("MATERIAL EDITOR", &mUIState.bWindowVisible_MaterialEditor);
-	
-	if (!ImGui::BeginTable("MaterialEditorTableLayout", 2, ImGuiTableFlags_Resizable, ImVec2(-1, -1)))
-	{
-		ImGui::End();
-		return;
-	}
-
-	ImGui::TableSetupColumn(mpScene->GetMaterialName(mUIState.SelectedMaterialIndex).c_str(), ImGuiTableColumnFlags_WidthStretch, 0.7f); // 70% width
+	// gui layout
+	ImGui::TableSetupColumn(mpScene->GetMaterialName(i).c_str(), ImGuiTableColumnFlags_WidthStretch, 0.7f); // 70% width
 	ImGui::TableSetupColumn("Materials", ImGuiTableColumnFlags_WidthStretch, 0.3f); // 30% width
 	ImGui::TableHeadersRow();
 	ImGui::TableNextRow();
@@ -1249,134 +1286,124 @@ void VQEngine::DrawMaterialEditor()
 	// draw selector
 	ImGui::TableSetColumnIndex(1);
 	ImGui::SetNextItemWidth(-1); // Make the controls take the full width of the column
-	ImGui::ListBox("##", &mUIState.SelectedMaterialIndex, szMaterialNames.data(), (int)szMaterialNames.size(), 18);
+	ImGui::ListBox("##", &i, szMaterialNames.data(), (int)szMaterialNames.size(), 18);
 	if (ImGui::Button("Unselect##", ImVec2(-1, 0)))
 	{
-		mUIState.SelectedMaterialIndex = (int)(szMaterialNames.size() - 1);
+		i = (int)(szMaterialNames.size() - 1);
 	}
 
 
 	// draw editor
 	ImGui::TableSetColumnIndex(0);
 
-	ImGui::Text("ID : %d", mUIState.SelectedMaterialIndex);
+	ImGui::Text("ID : %d", i);
 	ImGuiSpacing(2);
-	if (mUIState.SelectedMaterialIndex != szMaterialNames.size() - 1 && mUIState.SelectedMaterialIndex != INVALID_ID)
+	if (i == szMaterialNames.size() - 1 || i == INVALID_ID)
 	{
-		Material& mat = mpScene->GetMaterial(MaterialIDs[mUIState.SelectedMaterialIndex]);
-
-		if (ImGui::BeginTable("MaterialEditorTable", 2, ImGuiTableFlags_Resizable,ImVec2(0, -1))) {
-			ImGui::TableSetupColumn("Property", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-			ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-			//ImGui::TableHeadersRow();
-
-			// Diffuse Color & Alpha
-			DirectX::XMFLOAT4 ColorAlpha(mat.diffuse.x, mat.diffuse.y, mat.diffuse.z, mat.alpha);
-			StartDrawingMaterialEditorRow("Diffuse, Alpha");
-			if (ImGui::ColorEdit4("##diffuse", reinterpret_cast<float*>(&ColorAlpha), ImGuiColorEditFlags_DefaultOptions_ | ImGuiColorEditFlags_NoLabel))
-			{
-				mat.diffuse = DirectX::XMFLOAT3(ColorAlpha.x, ColorAlpha.y, ColorAlpha.z);
-				mat.alpha = ColorAlpha.w;
-			}
-
-			StartDrawingMaterialEditorRow("Emmissive Color");
-			ImGui::ColorEdit3("##emissiveColor", reinterpret_cast<float*>(&mat.emissiveColor), ImGuiColorEditFlags_DefaultOptions_ | ImGuiColorEditFlags_NoLabel);
-
-			StartDrawingMaterialEditorRow("Emmissive Intensity");
-			ImGui::DragFloat("##emissiveIntensity", &mat.emissiveIntensity, 0.01f, 0.0f, 1000.0f, "%.2f");
-
-			StartDrawingMaterialEditorRow("Metalness");
-			ImGui::DragFloat("##metalness", &mat.metalness, 0.01f, 0.00f, 1.0f, "%.2f");
-			
-			StartDrawingMaterialEditorRow("Roughness");
-			ImGui::DragFloat("##roughness", &mat.roughness, 0.01f, 0.04f, 1.0f, "%.2f");
-
-			StartDrawingMaterialEditorRow("Tiling");
-			ImGui::DragFloat2("##tiling", reinterpret_cast<float*>(&mat.tiling), 0.01f, 0.0f, 10.0f, "%.2f");
-			
-			StartDrawingMaterialEditorRow("UV Bias");
-			ImGui::DragFloat2("##uv_bias", reinterpret_cast<float*>(&mat.uv_bias), 0.01f, -10.0f, 10.0f, "%.2f");
-
-			StartDrawingMaterialEditorRow("Displacement");
-			ImGui::DragFloat("##displecement", reinterpret_cast<float*>(&mat.displacement), 0.05f, -50.0f, 50.0f, "%.2f");
-
-			// Texture
-			//EMaterialTextureMapBindings::ALBEDO
-			//EMaterialTextureMapBindings::NORMALS
-			//EMaterialTextureMapBindings::EMISSIVE
-			//EMaterialTextureMapBindings::ALPHA_MASK
-			//EMaterialTextureMapBindings::METALLIC
-			//EMaterialTextureMapBindings::ROUGHNESS
-			//EMaterialTextureMapBindings::OCCLUSION_ROUGHNESS_METALNESS
-			//EMaterialTextureMapBindings::AMBIENT_OCCLUSION
-			static const char* textureLabels[] = 
-			{
-				"Diffuse Map", 
-				"Normal Map", 
-				"Emissive Map", 
-				"Height Map", 
-				"Alpha Mask Map",
-				"Metallic Map", 
-				"Roughness Map", 
-				"Occlusion Roughness Metalness Map", 
-				"Ambient Occlusion Map"
-				, ""
-			};
-			const int textureIDs[] = 
-			{
-				mat.TexDiffuseMap, mat.TexNormalMap, mat.TexEmissiveMap, mat.TexHeightMap,
-				mat.TexAlphaMaskMap, mat.TexMetallicMap, mat.TexRoughnessMap,
-				mat.TexOcclusionRoughnessMetalnessMap, mat.TexAmbientOcclusionMap,
-				INVALID_ID
-			};
-			for (int i = 0; i < _countof(textureLabels); ++i) 
-			{
-				if (textureIDs[i] == INVALID_ID)
-					continue;
-
-				const std::string_view& textureFormat = mRenderer.DXGIFormatAsString(mRenderer.GetTextureFormat(textureIDs[i]));
-				const std::string& texturePath = mpScene->GetTexturePath(textureIDs[i]);
-				const std::string textureName = mpScene->GetTextureName(textureIDs[i]);
-				int textureSizeX, textureSizeY;
-				mRenderer.GetTextureDimensions(textureIDs[i], textureSizeX, textureSizeY);
-				int textureMIPs = mRenderer.GetTextureMips(textureIDs[i]);
-
-				const CBV_SRV_UAV& srv = mRenderer.GetShaderResourceView(mat.SRVMaterialMaps);
-				ImTextureID ImTexID = (ImTextureID)srv.GetGPUDescHandle(i).ptr;
-
-				const int texturePreviewSize = 64;
-
-				ImGui::TableNextRow();
-				ImGui::TableSetColumnIndex(0);
-				ImGui::Text("%s", textureLabels[i]);
-
-				ImGui::TableSetColumnIndex(1);
-				ImGui::Image(ImTexID, ImVec2(texturePreviewSize, texturePreviewSize));
-				if (ImGui::IsItemHovered())
-				{
-					DrawTextureViewer(
-						textureName.c_str(), 
-						texturePath.c_str(), 
-						ImTexID, 
-						textureFormat.data(), 
-						textureSizeX, 
-						textureSizeY, 
-						textureMIPs
-					);
-				}
-				ImGui::SameLine();
-				ImGui::Text("%s", textureName.c_str());
-
-			}
-
-			ImGui::EndTable();
-		}
+		return;
 	}
-	
+
+	Material& mat = mpScene->GetMaterial(MaterialIDs[i]);
+	if (!ImGui::BeginTable("MaterialEditorTable", 2, ImGuiTableFlags_Resizable, ImVec2(0, -1)))
+	{
+		return;
+	}
+
+	ImGui::TableSetupColumn("Property", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+	ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+	//ImGui::TableHeadersRow();
+
+	// Diffuse Color & Alpha
+	DirectX::XMFLOAT4 ColorAlpha(mat.diffuse.x, mat.diffuse.y, mat.diffuse.z, mat.alpha);
+	StartDrawingMaterialEditorRow("Diffuse, Alpha");
+	if (ImGui::ColorEdit4("##diffuse", reinterpret_cast<float*>(&ColorAlpha), ImGuiColorEditFlags_DefaultOptions_ | ImGuiColorEditFlags_NoLabel))
+	{
+		mat.diffuse = DirectX::XMFLOAT3(ColorAlpha.x, ColorAlpha.y, ColorAlpha.z);
+		mat.alpha = ColorAlpha.w;
+	}
+
+	StartDrawingMaterialEditorRow("Emmissive Color");
+	ImGui::ColorEdit3("##emissiveColor", reinterpret_cast<float*>(&mat.emissiveColor), ImGuiColorEditFlags_DefaultOptions_ | ImGuiColorEditFlags_NoLabel);
+
+	StartDrawingMaterialEditorRow("Emmissive Intensity");
+	ImGui::DragFloat("##emissiveIntensity", &mat.emissiveIntensity, 0.01f, 0.0f, 1000.0f, "%.2f");
+
+	StartDrawingMaterialEditorRow("Metalness");
+	ImGui::DragFloat("##metalness", &mat.metalness, 0.01f, 0.00f, 1.0f, "%.2f");
+			
+	StartDrawingMaterialEditorRow("Roughness");
+	ImGui::DragFloat("##roughness", &mat.roughness, 0.01f, 0.04f, 1.0f, "%.2f");
+
+	StartDrawingMaterialEditorRow("Tiling");
+	ImGui::DragFloat2("##tiling", reinterpret_cast<float*>(&mat.tiling), 0.01f, 0.0f, 10.0f, "%.2f");
+			
+	StartDrawingMaterialEditorRow("UV Bias");
+	ImGui::DragFloat2("##uv_bias", reinterpret_cast<float*>(&mat.uv_bias), 0.01f, -10.0f, 10.0f, "%.2f");
+
+	StartDrawingMaterialEditorRow("Displacement");
+	ImGui::DragFloat("##displecement", reinterpret_cast<float*>(&mat.displacement), 0.05f, -50.0f, 50.0f, "%.2f");
+
+	// Texture
+	static const char* textureLabels[] = 
+	{
+		"Diffuse Map",  //EMaterialTextureMapBindings::ALBEDO
+		"Normal Map",  //EMaterialTextureMapBindings::NORMALS
+		"Emissive Map",  //EMaterialTextureMapBindings::EMISSIVE
+		"Height Map",  
+		"Alpha Mask Map", //EMaterialTextureMapBindings::ALPHA_MASK
+		"Metallic Map",  //EMaterialTextureMapBindings::METALLIC
+		"Roughness Map",  //EMaterialTextureMapBindings::ROUGHNESS
+		"Occlusion Roughness Metalness Map",  //EMaterialTextureMapBindings::OCCLUSION_ROUGHNESS_METALNESS
+		"Ambient Occlusion Map"//EMaterialTextureMapBindings::AMBIENT_OCCLUSION
+		, ""
+	};
+	const int textureIDs[] = 
+	{
+		mat.TexDiffuseMap, mat.TexNormalMap, mat.TexEmissiveMap, mat.TexHeightMap,
+		mat.TexAlphaMaskMap, mat.TexMetallicMap, mat.TexRoughnessMap,
+		mat.TexOcclusionRoughnessMetalnessMap, mat.TexAmbientOcclusionMap,
+		INVALID_ID
+	};
+	for (int i = 0; i < _countof(textureLabels); ++i) 
+	{
+		if (textureIDs[i] == INVALID_ID)
+			continue;
+
+		const std::string_view& textureFormat = mRenderer.DXGIFormatAsString(mRenderer.GetTextureFormat(textureIDs[i]));
+		const std::string& texturePath = mpScene->GetTexturePath(textureIDs[i]);
+		const std::string textureName = mpScene->GetTextureName(textureIDs[i]);
+		int textureSizeX, textureSizeY;
+		mRenderer.GetTextureDimensions(textureIDs[i], textureSizeX, textureSizeY);
+		int textureMIPs = mRenderer.GetTextureMips(textureIDs[i]);
+
+		const CBV_SRV_UAV& srv = mRenderer.GetShaderResourceView(mat.SRVMaterialMaps);
+		ImTextureID ImTexID = (ImTextureID)srv.GetGPUDescHandle(i).ptr;
+
+		const int texturePreviewSize = 64;
+
+		ImGui::TableNextRow();
+		ImGui::TableSetColumnIndex(0);
+		ImGui::Text("%s", textureLabels[i]);
+
+		ImGui::TableSetColumnIndex(1);
+		ImGui::Image(ImTexID, ImVec2(texturePreviewSize, texturePreviewSize));
+		if (ImGui::IsItemHovered())
+		{
+			DrawTextureViewer(
+				textureName.c_str(), 
+				texturePath.c_str(), 
+				ImTexID, 
+				textureFormat.data(), 
+				textureSizeX, 
+				textureSizeY, 
+				textureMIPs
+			);
+		}
+		ImGui::SameLine();
+		ImGui::Text("%s", textureName.c_str());
+	}
 
 	ImGui::EndTable();
-
-	ImGui::End();
 }
 
 const char* LightTypeToString(Light::EType type) {
@@ -1389,16 +1416,8 @@ const char* LightTypeToString(Light::EType type) {
 }
 void VQEngine::DrawLightEditor()
 {
-	const uint32 W = mpWinMain->GetWidth();
-	const uint32 H = mpWinMain->GetHeight();
-	const uint32_t LIGHTS_WINDOW_POS_X = LIGHTS_WINDOW_PADDING_X 
-		+ GFX_WINDOW_SIZE_X + GFX_WINDOW_PADDING_X 
-		+ MATERIAL_WINDOW_SIZE_X + MATERIAL_WINDOW_PADDING_X;
-	const uint32_t LIGHTS_WINDOW_POS_Y = H - LIGHTS_WINDOW_PADDING_Y * 2 - LIGHTS_WINDOW_SIZE_Y;
-	
-	const std::vector<Light*> Lights = mpScene->GetLights();
-
 	// build light names
+	const std::vector<Light*> Lights = mpScene->GetLights();
 	int iSpt = 0; int iPnt = 0; // this naming scheme isnt great: changing light type renames them...
 	std::vector<std::string> LightNames;
 	for (Light* l : Lights)
@@ -1418,35 +1437,26 @@ void VQEngine::DrawLightEditor()
 	LightNames.push_back("");
 	
 	// validate selected light index
-	if (mUIState.SelectedLightIndex >= LightNames.size())
+	int& i = mUIState.SelectedEditeeIndex[FUIState::EEditorMode::LIGHTS];
+	if (i >= LightNames.size())
 	{
 		Log::Warning("SelectedLightIndex > LightNames.size() : capping SelectedLightIndex ");
-		mUIState.SelectedLightIndex = (int)(LightNames.size() - 1);
+		i = (int)(LightNames.size() - 1);
 	}
-	if (mUIState.SelectedLightIndex < 0)
+	if (i < 0)
 	{
 		// Log::Warning("SelectedLightIndex negative : Setting to 0");
-		// mUIState.SelectedLightIndex = 0;
+		// i = 0;
 	}
 
 	// get pointers to light name data 
-	const std::string& SelectedLightName = mUIState.SelectedLightIndex >= 0 ?  LightNames[mUIState.SelectedLightIndex] : LightNames.back();
+	const std::string& SelectedLightName = i >= 0 ?  LightNames[i] : LightNames.back();
 	std::vector<const char*> szLightNames(LightNames.size());
 	for (int i = 0; i < LightNames.size(); ++i)
 		szLightNames[i] = LightNames[i].c_str();
 	
-	// draw
-	ImGui::SetNextWindowPos(ImVec2((float)LIGHTS_WINDOW_POS_X, (float)LIGHTS_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
-	ImGui::SetNextWindowSize(ImVec2(LIGHTS_WINDOW_SIZE_X, LIGHTS_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
 
-	ImGui::Begin("LIGHT EDITOR", &mUIState.bWindowVisible_LightEditor);
-
-	if (!ImGui::BeginTable("LightEditorTableLayout", 2, ImGuiTableFlags_Resizable, ImVec2(-1, -1)))
-	{
-		ImGui::End();
-		return;
-	}
-
+	// gui layout
 	ImGui::TableSetupColumn(SelectedLightName.c_str(), ImGuiTableColumnFlags_WidthStretch, 0.7f); // 70% width
 	ImGui::TableSetupColumn("Lights", ImGuiTableColumnFlags_WidthStretch, 0.3f); // 30% width
 	ImGui::TableHeadersRow();
@@ -1455,83 +1465,281 @@ void VQEngine::DrawLightEditor()
 	// draw selector
 	ImGui::TableSetColumnIndex(1);
 	ImGui::SetNextItemWidth(-1); // Make the controls take the full width of the column
-	ImGui::ListBox("##", &mUIState.SelectedLightIndex, szLightNames.data(), (int)szLightNames.size(), 18);
+	ImGui::ListBox("##", &i, szLightNames.data(), (int)szLightNames.size(), 18);
 	if (ImGui::Button("Unselect##", ImVec2(-1, 0)))
 	{
-		mUIState.SelectedLightIndex = (int)(szLightNames.size() - 1);
+		i = (int)(szLightNames.size() - 1);
 	}
 
 
 	// draw editor
-	const bool bValidLight = mUIState.SelectedLightIndex != szLightNames.size() - 1 && mUIState.SelectedLightIndex != INVALID_ID;
-	
-
 	ImGui::TableSetColumnIndex(0);
 
-	if (bValidLight)
+	const bool bValidLight = i != szLightNames.size() - 1 && i != INVALID_ID;
+	if (!bValidLight)
 	{
-		Light* l = Lights[mUIState.SelectedLightIndex];
+		return;
+	}
 
-		ImGui::Checkbox("Enabled", &l->bEnabled);
-		ImGui::SameLine();
-		ImGui::Checkbox("Show Volume", &mUIState.bDrawLightVolume);
-		//ImGui::SameLine();
-		//ImGui::Checkbox("Show Outline", &l->bEnabled);
-		ImGuiSpacing(2);
+	Light* l = Lights[i];
 
-		ImGui::ColorEdit3("Color", reinterpret_cast<float*>(&l->Color));
-		ImGui::DragFloat("Brightness", &l->Brightness, 0.1f, 0.0f, 10000.0f, "%.1f");
-		if (l->Type != Light::EType::DIRECTIONAL) {
-			ImGui::DragFloat("Range", &l->Range, 0.5f, 0.0f, 10000.0f, "%.1f");
-		}
+	ImGui::Checkbox("Enabled", &l->bEnabled);
+	ImGui::SameLine();
+	ImGui::Checkbox("Show Volume", &mUIState.bDrawLightVolume);
+	//ImGui::SameLine();
+	//ImGui::Checkbox("Show Outline", &l->bEnabled);
+	ImGuiSpacing(2);
 
-		ImGuiSpacing(2);
+	ImGui::ColorEdit3("Color", reinterpret_cast<float*>(&l->Color));
+	ImGui::DragFloat("Brightness", &l->Brightness, 0.1f, 0.0f, 10000.0f, "%.1f");
+	if (l->Type != Light::EType::DIRECTIONAL) {
+		ImGui::DragFloat("Range", &l->Range, 0.5f, 0.0f, 10000.0f, "%.1f");
+	}
 
-		// Light type specific properties
-		if (ImGui::BeginCombo("Type", LightTypeToString(l->Type))) {
-			if (ImGui::Selectable("Directional", l->Type == Light::EType::DIRECTIONAL)) { l->Type = Light::EType::DIRECTIONAL; }
-			if (ImGui::Selectable("Spot"       , l->Type == Light::EType::SPOT       )) { l->Type = Light::EType::SPOT; }
-			if (ImGui::Selectable("Point"      , l->Type == Light::EType::POINT      )) { l->Type = Light::EType::POINT; }
-			ImGui::EndCombo();
-		}
-		switch (l->Type) {
-		case Light::EType::DIRECTIONAL:
-			ImGui::DragInt("Viewport X", &l->ViewportX, 1, 0, 2048);
-			ImGui::DragInt("Viewport Y", &l->ViewportY, 1, 0, 2048);
-			ImGui::DragFloat("Distance From Origin", &l->DistanceFromOrigin, 0.5f, 0.0f, 10000.0f, "%.1f");
-			break;
-		case Light::EType::SPOT:
-			ImGui::DragFloat("Outer Cone Angle", &l->SpotOuterConeAngleDegrees, 0.1f, 0.0f, 180.0f, "%.1f deg");
-			ImGui::DragFloat("Inner Cone Angle", &l->SpotInnerConeAngleDegrees, 0.1f, 0.0f, 180.0f, "%.1f deg");
-			break;
-		case Light::EType::POINT:
-			// Point lights have no additional specific properties in this example
-			break;
-		}
+	ImGuiSpacing(2);
 
-		ImGuiSpacing(2);
+	// Light type specific properties
+	if (ImGui::BeginCombo("Type", LightTypeToString(l->Type))) {
+		if (ImGui::Selectable("Directional", l->Type == Light::EType::DIRECTIONAL)) { l->Type = Light::EType::DIRECTIONAL; }
+		if (ImGui::Selectable("Spot"       , l->Type == Light::EType::SPOT       )) { l->Type = Light::EType::SPOT; }
+		if (ImGui::Selectable("Point"      , l->Type == Light::EType::POINT      )) { l->Type = Light::EType::POINT; }
+		ImGui::EndCombo();
+	}
+	switch (l->Type) {
+	case Light::EType::DIRECTIONAL:
+		ImGui::DragInt("Viewport X", &l->ViewportX, 1, 0, 2048);
+		ImGui::DragInt("Viewport Y", &l->ViewportY, 1, 0, 2048);
+		ImGui::DragFloat("Distance From Origin", &l->DistanceFromOrigin, 0.5f, 0.0f, 10000.0f, "%.1f");
+		break;
+	case Light::EType::SPOT:
+		ImGui::DragFloat("Outer Cone Angle", &l->SpotOuterConeAngleDegrees, 0.1f, 0.0f, 180.0f, "%.1f deg");
+		ImGui::DragFloat("Inner Cone Angle", &l->SpotInnerConeAngleDegrees, 0.1f, 0.0f, 180.0f, "%.1f deg");
+		break;
+	case Light::EType::POINT:
+		// Point lights have no additional specific properties in this example
+		break;
+	}
 
-		ImGui::Text("Transform");
-		if (l->Type != Light::EType::DIRECTIONAL) {
-			ImGui::DragFloat3("Position", reinterpret_cast<float*>(&l->Position), 0.1f);
-		}
-		if (l->Type != Light::EType::POINT) {
-			auto eulerRotation = Quaternion::ToEulerDeg(l->RotationQuaternion);
-			if (ImGui::DragFloat3("Rotation", reinterpret_cast<float*>(&eulerRotation), 0.1f)) {
-				// l->RotationQuaternion = Quaternion::FromEulerDeg(eulerRotation); // TODO:
-			}
-		}
+	ImGuiSpacing(2);
 
-		ImGuiSpacing(2);
-
-		ImGui::Checkbox("Cast Shadows", &l->bCastingShadows);
-		if (l->bCastingShadows) {
-			ImGui::DragFloat("Depth Bias", &l->ShadowData.DepthBias, 0.005f, 0.0f, 1.0f, "%.3f");
-			ImGui::DragFloat("Near Plane", &l->ShadowData.NearPlane, 0.1f, 0.1f, 100.0f, "%.1f");
-			ImGui::DragFloat("Far Plane", &l->ShadowData.FarPlane, 1.0f, 1.0f, 10000.0f, "%.1f");
+	ImGui::Text("Transform");
+	if (l->Type != Light::EType::DIRECTIONAL) {
+		ImGui::DragFloat3("Position", reinterpret_cast<float*>(&l->Position), 0.1f);
+	}
+	if (l->Type != Light::EType::POINT) {
+		auto eulerRotation = Quaternion::ToEulerDeg(l->RotationQuaternion);
+		if (ImGui::DragFloat3("Rotation", reinterpret_cast<float*>(&eulerRotation), 0.1f)) {
+			// l->RotationQuaternion = Quaternion::FromEulerDeg(eulerRotation); // TODO:
 		}
 	}
 
-	ImGui::EndTable();
-	ImGui::End();
+	ImGuiSpacing(2);
+
+	ImGui::Checkbox("Cast Shadows", &l->bCastingShadows);
+	if (l->bCastingShadows) {
+		ImGui::DragFloat("Depth Bias", &l->ShadowData.DepthBias, 0.005f, 0.0f, 1.0f, "%.3f");
+		ImGui::DragFloat("Near Plane", &l->ShadowData.NearPlane, 0.1f, 0.1f, 100.0f, "%.1f");
+		ImGui::DragFloat("Far Plane", &l->ShadowData.FarPlane, 1.0f, 1.0f, 10000.0f, "%.1f");
+	}
+}
+
+void VQEngine::DrawObjectEditor()
+{
+
+}
+
+void VQEngine::DrawTerrainEditor()
+{
+	// get terrain data
+	const int NumTerrains = mpScene->mTerrains.size();
+	std::vector<std::string> TerrainNames(NumTerrains + 1);
+	for (int i = 0; i < NumTerrains; ++i)
+	{
+		TerrainNames[i] = mpScene->mTerrains[i].Name;
+	}
+
+	// validate selected terrain index
+	int& i = mUIState.SelectedEditeeIndex[FUIState::EEditorMode::TERRAIN];
+	if (i >= TerrainNames.size())
+	{
+		Log::Warning("SelectedTerrainIndex > TerrainNames.size() : capping SelectedTerrainIndex ");
+		i = (int)(TerrainNames.size() - 1);
+	}
+
+	// get pointers to terrain name data 
+	const std::string& SelectedTerrainName = i >= 0 ? TerrainNames[i] : TerrainNames.back();
+	std::vector<const char*> szTerrainNames(TerrainNames.size());
+	for (int i = 0; i < TerrainNames.size(); ++i)
+		szTerrainNames[i] = TerrainNames[i].c_str();
+
+
+	// gui table layout
+	ImGui::TableSetupColumn(SelectedTerrainName.c_str(), ImGuiTableColumnFlags_WidthStretch, 0.7f); // 70% width
+	ImGui::TableSetupColumn("Terrains", ImGuiTableColumnFlags_WidthStretch, 0.3f); // 30% width
+	ImGui::TableHeadersRow();
+	ImGui::TableNextRow();
+
+	// draw selector
+	ImGui::TableSetColumnIndex(1);
+	ImGui::SetNextItemWidth(-1); // Make the controls take the full width of the column
+	ImGui::ListBox("##", &i, szTerrainNames.data(), (int)szTerrainNames.size(), 18);
+	if (ImGui::Button("Unselect##", ImVec2(-1, 0)))
+	{
+		i = (int)(szTerrainNames.size() - 1);
+	}
+
+	// draw editor
+	ImGui::TableSetColumnIndex(0);
+	const bool bValidTerrain = i != szTerrainNames.size() - 1 && i != INVALID_ID;
+	if (!bValidTerrain)
+	{
+		return;
+	}
+
+	Terrain& t = mpScene->mTerrains[i];
+
+	//ImGui::LabelText();
+
+	ImGui::Text("Transform");
+
+	ImGui::DragFloat3("Position", reinterpret_cast<float*>(&t.RootTransform._position), 0.1f, 0.0f, 0.0f, "%.1f");
+	
+	if (mUIState.bTerrainScaleSliderFloat3)
+	{
+		ImGui::DragFloat3("Scale3", reinterpret_cast<float*>(&t.RootTransform._scale), 0.1f, 0.0f, 0.0f, "%.1f");
+	}
+	else
+	{
+		float fScale = t.RootTransform._scale.x;
+		if (ImGui::SliderFloat("Scale", reinterpret_cast<float*>(&fScale), 0.0f, 10000.0f, "%.1f"))
+		{
+			t.RootTransform.SetScale(fScale, 1, fScale);
+		}
+	}
+	ImGui::SameLine();
+	ImGui::Checkbox("f3##", &mUIState.bTerrainScaleSliderFloat3);
+	
+	Material& mat = mpScene->GetMaterial(t.MaterialId);
+	ImGui::SliderFloat("Bump", &mat.displacement, 0.0f, 100.0f, "%.1f");
+	ImGui::SliderFloat("Emissive", &mat.emissiveIntensity, 0.0f, 5.0f, "%.1f");
+
+	ImGuiSpacing(3);
+
+	ImGui::Text("Tessellation");
+	ImGui::Checkbox("Tessellate", &t.Tessellation.bEnableTessellation);
+	ImGui::SameLine();
+	ImGui::Checkbox("Wireframe", &t.bWireframe);
+	if (t.Tessellation.bEnableTessellation)
+	{
+		const char* pszTessellationModeNames[] = {
+			"Triangle",
+			"Quad",
+			// "Line"
+			""
+		};
+		if( ImGui::BeginCombo("Domain", pszTessellationModeNames[t.Tessellation.Domain]))
+		{
+			if (ImGui::Selectable(pszTessellationModeNames[0], t.Tessellation.Domain == ETessellationDomain::TRIANGLE_PATCH)) { t.Tessellation.Domain = ETessellationDomain::TRIANGLE_PATCH; }
+			if (ImGui::Selectable(pszTessellationModeNames[1], t.Tessellation.Domain == ETessellationDomain::QUAD_PATCH)) { t.Tessellation.Domain = ETessellationDomain::QUAD_PATCH; }
+			ImGui::EndCombo();
+		}
+
+		constexpr float MAX_TESSELLATION = 50.0f;
+		switch (t.Tessellation.Domain)
+		{
+		case::ETessellationDomain::TRIANGLE_PATCH:
+		{
+			if (mUIState.bTessellationSliderFloatVec)
+			{
+				ImGui::SliderFloat3("Outer", t.Tessellation.TriOuter, 0.0f, MAX_TESSELLATION, "%.1f");
+			}
+			else
+			{
+				float fOuterMin = std::fminf(t.Tessellation.TriOuter[0], std::fminf(t.Tessellation.TriOuter[1], t.Tessellation.TriOuter[2]));
+				if (ImGui::SliderFloat("Outer##", &fOuterMin, 0.0f, MAX_TESSELLATION, "%.1f"))
+				{
+					t.Tessellation.TriOuter[0] = t.Tessellation.TriOuter[1] = t.Tessellation.TriOuter[2] = fOuterMin;
+				}
+			}
+			ImGui::SameLine();
+			ImGui::Checkbox("[]", &mUIState.bTessellationSliderFloatVec);
+			ImGui::SliderFloat("Inner", &t.Tessellation.TriInner, 0.0f, MAX_TESSELLATION, "%.1f");
+		}	break;
+		case::ETessellationDomain::QUAD_PATCH:
+		{
+			if (mUIState.bTessellationSliderFloatVec)
+			{
+				ImGui::SliderFloat4("Outer", t.Tessellation.QuadOuter, 0.0f, MAX_TESSELLATION, "%.1f");
+				ImGui::SameLine();
+				ImGui::Checkbox("[]", &mUIState.bTessellationSliderFloatVec);
+				ImGui::SliderFloat2("Inner", &t.Tessellation.QuadInner[0], 0.0f, MAX_TESSELLATION, "%.1f");
+			}
+			else
+			{
+				float fOuterMin = std::fminf(t.Tessellation.QuadOuter[0], std::fminf(t.Tessellation.QuadOuter[1], std::fminf(t.Tessellation.QuadOuter[2], t.Tessellation.QuadOuter[3])));
+				if (ImGui::SliderFloat("Outer", &fOuterMin, 0.0f, MAX_TESSELLATION, "%.1f"))
+				{
+					t.Tessellation.QuadOuter[0] = t.Tessellation.QuadOuter[1] = t.Tessellation.QuadOuter[2] = t.Tessellation.QuadOuter[3] = fOuterMin;
+				}
+				ImGui::SameLine();
+				ImGui::Checkbox("[]", &mUIState.bTessellationSliderFloatVec);
+
+				float fInnerMin = std::fminf(t.Tessellation.QuadInner[0], t.Tessellation.QuadInner[1]);
+				if (ImGui::SliderFloat("Inner", &fInnerMin, 0.0f, MAX_TESSELLATION, "%.1f"))
+				{
+					t.Tessellation.QuadInner[0] = t.Tessellation.QuadInner[1] = fInnerMin;
+				}
+			}
+		}	break;
+		case::ETessellationDomain::ISOLINE_PATCH:
+		{
+
+		} break;
+		}
+		ImGui::SameLine();
+		ImGui::Checkbox("Lock", &mUIState.bLockTessellationSliders);
+		
+		const char* pszPartitioningNames[] =  
+		{
+			"Integer",
+			"Fractional Even",
+			"Fractional Odd",
+			"Pow2",
+			""
+		};
+		if (ImGui::BeginCombo("Partitioning", pszPartitioningNames[t.Tessellation.Partitioning]))
+		{
+			if (ImGui::Selectable(pszPartitioningNames[0], t.Tessellation.Partitioning == ETessellationPartitioning::INTEGER))        { t.Tessellation.Partitioning = ETessellationPartitioning::INTEGER; }
+			if (ImGui::Selectable(pszPartitioningNames[1], t.Tessellation.Partitioning == ETessellationPartitioning::FRACTIONAL_EVEN)){ t.Tessellation.Partitioning = ETessellationPartitioning::FRACTIONAL_EVEN; }
+			if (ImGui::Selectable(pszPartitioningNames[2], t.Tessellation.Partitioning == ETessellationPartitioning::FRACTIONAL_ODD)) { t.Tessellation.Partitioning = ETessellationPartitioning::FRACTIONAL_ODD; }
+			if (ImGui::Selectable(pszPartitioningNames[3], t.Tessellation.Partitioning == ETessellationPartitioning::POWER_OF_TWO))   { t.Tessellation.Partitioning = ETessellationPartitioning::POWER_OF_TWO; }
+			ImGui::EndCombo();
+		}
+
+
+		switch (t.Tessellation.Domain)
+		{
+		case::ETessellationDomain::TRIANGLE_PATCH:
+			break;
+		}
+
+		const char* pszOutputTopologyNames[] = {
+			"Point",
+			"Line",
+			"Triangle CW",
+			"Triangle CCW",
+			""
+		};
+
+		if (ImGui::BeginCombo("Output Topology", pszOutputTopologyNames[t.Tessellation.OutputTopology]))
+		{
+			if (ImGui::Selectable(pszOutputTopologyNames[0], t.Tessellation.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT       )) { t.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT ; }
+			if (ImGui::Selectable(pszOutputTopologyNames[1], t.Tessellation.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE        )) { if(t.Tessellation.Domain == ETessellationDomain::ISOLINE_PATCH) t.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE; }
+			if (ImGui::Selectable(pszOutputTopologyNames[2], t.Tessellation.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW )) { t.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW; }
+			if (ImGui::Selectable(pszOutputTopologyNames[3], t.Tessellation.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW)) { t.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW; }
+			ImGui::EndCombo();
+		}
+
+
+	}
 }

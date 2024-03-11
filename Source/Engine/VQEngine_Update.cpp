@@ -471,7 +471,9 @@ void VQEngine::Load_SceneData_Dispatch()
 	{
 		this->WaitUntilRenderingFinishes();
 		mpScene->Unload(); // is this really necessary when we fnCreateSceneInstance() ?
-		mUIState.SelectedMaterialIndex = INVALID_ID;
+		
+		for(int i=0; i<FUIState::EEditorMode::NUM_EDITOR_MODES; ++i)
+			mUIState.SelectedEditeeIndex[i] = INVALID_ID;
 	}
 
 	// load scene representation from disk

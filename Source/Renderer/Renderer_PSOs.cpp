@@ -17,8 +17,10 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "Renderer.h"
+#include "Tessellation.h"
 #include "../../Shaders/LightingConstantBufferData.h"
 #include "../../Libs/VQUtils/Source/utils.h"
+
 using namespace Microsoft::WRL;
 using namespace VQSystemInfo;
 
@@ -670,6 +672,7 @@ void VQRenderer::LoadBuiltinPSOs()
 	}
 
 	// Terrain PSOs
+	int NumTerrainPSOsCompiled = 0;
 	{
 		const std::wstring ShaderFilePath = GetFullPathOfShader(L"Terrain.hlsl");
 
@@ -684,12 +687,12 @@ void VQRenderer::LoadBuiltinPSOs()
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "DSMain", "ds_6_0" });
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_0" });
 #endif
-		
+
 		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__Terrain);
 
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
 		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
 		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 		psoDesc.DepthStencilState.DepthEnable = TRUE;
 		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
@@ -702,42 +705,67 @@ void VQRenderer::LoadBuiltinPSOs()
 		for (uint rt = 0; rt < psoDesc.NumRenderTargets; ++rt) psoDesc.RTVFormats[rt] = DXGI_FORMAT_R16G16B16A16_FLOAT;
 		psoDesc.SampleDesc.Count = 1;
 
-		PSOLoadDescs.push_back({ EBuiltinPSOs::TERRAIN, psoLoadDesc });
-
-		psoLoadDesc.PSOName = "PSO_Terrain_Wireframe";
-		psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE::D3D12_FILL_MODE_WIREFRAME;
-		PSOLoadDescs.push_back({ EBuiltinPSOs::TERRAIN_WIREFRAME, psoLoadDesc });
-
-		psoLoadDesc.PSOName = "PSO_Terrain_MSAA4";
-		psoDesc.SampleDesc.Count = 4;
-		psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE::D3D12_FILL_MODE_SOLID;
-		PSOLoadDescs.push_back({ EBuiltinPSOs::TERRAIN_MSAA4, psoLoadDesc });
 		
-		psoLoadDesc.PSOName = "PSO_Terrain_MSAA4_Wireframe";
-		psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE::D3D12_FILL_MODE_WIREFRAME;
-		PSOLoadDescs.push_back({ EBuiltinPSOs::TERRAIN_MSAA4_WIREFRAME, psoLoadDesc });
-
-		psoLoadDesc.PSOName = "PSO_Terrain_Tessellated";
-		psoLoadDesc.ShaderStageCompileDescs[0].EntryPoint = "VSMain";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "HSMain", "hs_5_1" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "DSMain", "ds_5_1" });
-		psoDesc.SampleDesc.Count = 1;
-		psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE::D3D12_FILL_MODE_SOLID;
-		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
-		PSOLoadDescs.push_back({ EBuiltinPSOs::TERRAIN_TESSELLATED, psoLoadDesc });
-
-		psoLoadDesc.PSOName = "PSO_Terrain_Tessellated_Wireframe";
-		psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE::D3D12_FILL_MODE_WIREFRAME;
-		PSOLoadDescs.push_back({ EBuiltinPSOs::TERRAIN_TESSELLATED, psoLoadDesc });
-
-		psoLoadDesc.PSOName = "PSO_Terrain_Tessellated_MSAA4";
-		psoDesc.SampleDesc.Count = 4;
-		psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE::D3D12_FILL_MODE_SOLID;
-		PSOLoadDescs.push_back({ EBuiltinPSOs::TERRAIN_TESSELLATED_MSAA4, psoLoadDesc });
+		const char* szPartitionNames[FTerrainPSOs::NUM_PARTIT_OPTIONS] = { "integer", "fractional_even", "fractional_odd", "pow2" };
+		const char* szOutTopologyNames[FTerrainPSOs::NUM_OUTTOP_OPTIONS] = { "point", "line", "triangle_cw", "triangle_ccw" };
 		
-		psoLoadDesc.PSOName = "PSO_Terrain_Tessellated_MSAA4_Wireframe";
-		psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE::D3D12_FILL_MODE_WIREFRAME;
-		PSOLoadDescs.push_back({ EBuiltinPSOs::TERRAIN_TESSELLATED_MSAA4_WIREFRAME, psoLoadDesc });
+		for(int iTess = 0; iTess < FTerrainPSOs::NUM_TESSELLATION_OPTIONS; ++iTess)
+		for(int iRaster = 0; iRaster < FTerrainPSOs::NUM_RASTER_OPTIONS; ++iRaster )
+		for(int iRender = 0; iRender < FTerrainPSOs::NUM_RENDER_OPTIONS; ++iRender )
+		for(int iDomain = 0; iDomain < FTerrainPSOs::NUM_DOMAIN_OPTIONS; ++iDomain )
+		for(int iPartition = 0; iPartition < FTerrainPSOs::NUM_PARTIT_OPTIONS; ++iPartition )
+		for(int iOutTopology = 0; iOutTopology < FTerrainPSOs::NUM_OUTTOP_OPTIONS; ++iOutTopology )
+		{
+			if (iTess == 0 && (iDomain == 1 || iPartition == 1 || iOutTopology == 1))
+				continue; // skip unsued permutations
+
+			std::string PSOName = "PSO_Terrain";
+			if (iTess == 1) PSOName += "_Tessellated";
+			if (iRaster == 1) PSOName += "_Wireframe";
+			if (iRender == 1) PSOName += "_MSAA4";
+			if (iDomain == 1) PSOName += "_Quad";
+			PSOName += std::string("_") + szPartitionNames[iPartition];
+			PSOName += std::string("_") + szOutTopologyNames[iOutTopology];
+
+			psoDesc.RasterizerState.FillMode = iRaster == 0 ? D3D12_FILL_MODE::D3D12_FILL_MODE_SOLID : D3D12_FILL_MODE::D3D12_FILL_MODE_WIREFRAME;
+			psoDesc.SampleDesc.Count = iRender == 1 ? 4 : 1;
+
+			if (iTess == 1)
+			{
+				if (iOutTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE && iDomain != ETessellationDomain::ISOLINE_PATCH)
+					continue; // line output topologies are only available to isoline domains
+
+				psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
+				
+				psoLoadDesc.ShaderStageCompileDescs.resize(4); // VS-HS-DS-PS
+				psoLoadDesc.ShaderStageCompileDescs[0] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" };
+				psoLoadDesc.ShaderStageCompileDescs[1] = FShaderStageCompileDesc{ ShaderFilePath, "HSMain", "hs_5_1" };
+				psoLoadDesc.ShaderStageCompileDescs[2] = FShaderStageCompileDesc{ ShaderFilePath, "DSMain", "ds_5_1" };
+				psoLoadDesc.ShaderStageCompileDescs[3] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain_Heightmap", "ps_5_1" };
+
+				const char* szPartitioningNames[FTerrainPSOs::NUM_PARTIT_OPTIONS] = { "PARTITIONING__INT", "PARTITIONING__EVEN", "PARTITIONING__ODD", "PARTITIONING__POW2" };
+				const char* szOutTopologyNames[FTerrainPSOs::NUM_OUTTOP_OPTIONS] = { "OUTTOPO__POINT", "OUTTOPO__LINE", "OUTTOPO__TRI_CW","OUTTOPO__TRI_CCW" };
+				const char* szDomain = iDomain == 1 ? "DOMAIN__QUAD" : "DOMAIN__TRIANGLE";
+				
+				// Hull macros
+				psoLoadDesc.ShaderStageCompileDescs[1].Macros = { {szDomain, "1" }};
+				psoLoadDesc.ShaderStageCompileDescs[1].Macros.push_back({szPartitioningNames[iPartition], "1"});
+				psoLoadDesc.ShaderStageCompileDescs[1].Macros.push_back({szOutTopologyNames[iOutTopology], "1" });
+				
+				// Domain macros
+				psoLoadDesc.ShaderStageCompileDescs[2].Macros = { {szDomain, "1" }};
+			}
+			else
+			{
+				psoLoadDesc.ShaderStageCompileDescs.resize(2); // VS-PS
+				psoLoadDesc.ShaderStageCompileDescs[0] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain_Heightmap", "vs_5_1" };
+				psoLoadDesc.ShaderStageCompileDescs[1] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain_Heightmap", "ps_5_1" };
+			}
+
+			const size_t iPSO = mTerrainPSOs.GetPSOIndex(iTess, iRaster, iRender, iDomain, iPartition, iOutTopology);
+			mTerrainPSOs.arr[iPSO] = CreatePSO_OnThisThread(psoLoadDesc);
+			++NumTerrainPSOsCompiled;
+		}
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------1

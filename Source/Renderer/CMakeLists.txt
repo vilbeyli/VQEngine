@@ -23,6 +23,7 @@ set (Headers
     "Texture.h"
     "HDR.h"
     "Shader.h"
+    "Tessellation.h"
 )
 
 set (Source

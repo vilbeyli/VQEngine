@@ -35,6 +35,8 @@ struct FMaterialRepresentation
 	float Metalness = MATERIAL_UNINITIALIZED_VALUE;
 	float Roughness = MATERIAL_UNINITIALIZED_VALUE;
 	float Displacement = MATERIAL_UNINITIALIZED_VALUE;
+	float TilingX = 1.0f;
+	float TilingY = 1.0f;
 	std::string DiffuseMapFilePath;
 	std::string NormalMapFilePath;
 	std::string EmissiveMapFilePath;

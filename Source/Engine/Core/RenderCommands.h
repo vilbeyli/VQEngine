@@ -76,6 +76,13 @@ struct FTerrainDrawParams
 	// geometry
 	std::pair<BufferID, BufferID> vertexIndexBuffer;
 	int numIndices = 0;
+
+	// other
+	bool bTessellate;
+	bool bWireframe;
+	int iDomain;
+	int iPartition;
+	int iOutTopology;
 };
 
 // ------------------------------------------------------------------------------------

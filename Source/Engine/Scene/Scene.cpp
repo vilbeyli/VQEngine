@@ -695,6 +695,12 @@ static void CollectTerrainDrawParams(FSceneView& SceneView,
 		const int lod = 0;
 		SceneView.terrainDrawParams[i].vertexIndexBuffer = m.GetIABufferIDs(lod);
 		SceneView.terrainDrawParams[i].numIndices = m.GetNumIndices(lod);
+
+		SceneView.terrainDrawParams[i].bTessellate = t.Tessellation.bEnableTessellation;
+		SceneView.terrainDrawParams[i].bWireframe = t.bWireframe;
+		SceneView.terrainDrawParams[i].iDomain = t.Tessellation.Domain;
+		SceneView.terrainDrawParams[i].iPartition   = t.Tessellation.Partitioning;
+		SceneView.terrainDrawParams[i].iOutTopology = t.Tessellation.OutputTopology;
 	}
 }
 
@@ -741,9 +747,10 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 	if (UIState.bDrawLightVolume)
 	{
 		const auto lights = this->GetLights(); // todo: this is unnecessary copying, don't do this
-		if (UIState.SelectedLightIndex >= 0 && UIState.SelectedLightIndex < lights.size())
+		const int i = UIState.SelectedEditeeIndex[FUIState::EEditorMode::LIGHTS];
+		if (i >= 0 && i < lights.size())
 		{
-			const Light& l = *lights[UIState.SelectedLightIndex];
+			const Light& l = *lights[i];
 			if (l.bEnabled)
 			{
 				RecordRenderLightBoundsCommand(l, SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
