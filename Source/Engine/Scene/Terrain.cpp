@@ -36,6 +36,7 @@ VQ_SHADER_DATA::TerrainParams GetCBuffer_TerrainParams(const Terrain& TerrainIn,
 	p.world = tf.matWorldTransformation();
 	p.worldViewProj = p.world * p.viewProj;
 	p.matNormal = tf.NormalMatrix(p.world);
+	p.bCullPatches = TerrainIn.bFrustumCullPatches;
 	return p;
 }
 

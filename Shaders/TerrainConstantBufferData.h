@@ -49,7 +49,8 @@ struct TerrainParams
 	matrix viewProj;
 	matrix worldViewProj;
 	float fDistanceToCamera;
-	float3 pad;
+	float2 pad;
+	bool bCullPatches;
 
 	MaterialData material;
 }; 

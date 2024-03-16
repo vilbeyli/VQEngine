@@ -48,6 +48,7 @@ struct VSInput
 struct HSInput // control point
 {
 	float4 Position : POSITION;
+	float4 ClipPosition : POSITION2;
 	float3 Normal : NORMAL;
 	float3 Tangent : TANGENT;
 	float2 uv0 : TEXCOORD0;
@@ -56,6 +57,7 @@ struct HSInput // control point
 struct HSOutput // control point
 {
 	float4 vPosition : POSITION;
+	float4 ClipPosition : POSITION2;
 	float3 vNormal   : NORMAL;
 	float3 vTangent : TANGENT;
 	float2 uv0 : TEXCOORD0;
@@ -286,11 +288,32 @@ float4 PSMain_Heightmap(PSInput In) : SV_TARGET0
 
 // ----------------------------------------------------------------------------------------------------------------
 
+bool IsOutOfBounds(float3 p, float3 lo, float3 hi)
+{
+	return p.x < lo.x || p.x > hi.x || p.y < lo.y || p.y > hi.y || p.z < lo.z || p.z > hi.z;
+}
+
+bool IsPointOutOfFrustum(float4 PositionCS)
+{
+	float3 culling = PositionCS.xyz;
+	float3 w = PositionCS.w;
+	return IsOutOfBounds(culling, float3(-w), float3(w));
+}
+
+bool ShouldClipPatch(float4 p0PositionCS, float4 p1PositionCS, float4 p2PositionCS)
+{
+	bool bAllOutside = IsPointOutOfFrustum(p0PositionCS)
+		&& IsPointOutOfFrustum(p1PositionCS)
+		&& IsPointOutOfFrustum(p2PositionCS);
+	return bAllOutside;
+}
+
 
 HSInput VSMain(VSInput v)
 {
 	HSInput o;
 	o.Position = float4(v.vLocalPosition, 1.0f);
+	o.ClipPosition = mul(trrn.worldViewProj, float4(v.vLocalPosition, 1.0f));
 	o.Normal = v.vNormal;
 	o.Tangent = v.vTangent;
 	o.uv0 = v.uv0;
@@ -311,19 +334,22 @@ HSInput VSMain(VSInput v)
 	#define HSOutputPatchConstants HSOutputQuadPatchConstants
 #endif
 
-HSOutputPatchConstants CalcHSPatchConstants(InputPatch<HSInput, NUM_CONTROL_POINTS> ip, uint PatchID : SV_PrimitiveID)
+HSOutputPatchConstants CalcHSPatchConstants(InputPatch<HSInput, NUM_CONTROL_POINTS> patch, uint PatchID : SV_PrimitiveID)
 {
+	float ClipMask = ShouldClipPatch(patch[0].ClipPosition, patch[1].ClipPosition, patch[2].ClipPosition) ? 0.0f : 1.0f;
+	if(!trrn.bCullPatches) ClipMask = 1.0f;
+	
 	HSOutputPatchConstants c;
 #ifdef DOMAIN__TRIANGLE
-	c.EdgeTessFactor[0] = tess.TriEdgeTessFactor.x;
-	c.EdgeTessFactor[1] = tess.TriEdgeTessFactor.y;
-	c.EdgeTessFactor[2] = tess.TriEdgeTessFactor.z;
+	c.EdgeTessFactor[0] = tess.TriEdgeTessFactor.x * ClipMask;
+	c.EdgeTessFactor[1] = tess.TriEdgeTessFactor.y * ClipMask;
+	c.EdgeTessFactor[2] = tess.TriEdgeTessFactor.z * ClipMask;
 	c.InsideTessFactor = tess.TriInnerTessFactor;
 #elif defined(DOMAIN__QUAD)
-	c.EdgeTessFactor[0] = tess.QuadEdgeTessFactor.x;
-	c.EdgeTessFactor[1] = tess.QuadEdgeTessFactor.y;
-	c.EdgeTessFactor[2] = tess.QuadEdgeTessFactor.z;
-	c.EdgeTessFactor[3] = tess.QuadEdgeTessFactor.w;
+	c.EdgeTessFactor[0] = tess.QuadEdgeTessFactor.x * ClipMask;
+	c.EdgeTessFactor[1] = tess.QuadEdgeTessFactor.y * ClipMask;
+	c.EdgeTessFactor[2] = tess.QuadEdgeTessFactor.z * ClipMask;
+	c.EdgeTessFactor[3] = tess.QuadEdgeTessFactor.w * ClipMask;
 	c.InsideTessFactor[0] = tess.QuadInsideFactor.x;
 	c.InsideTessFactor[1] = tess.QuadInsideFactor.y;
 #endif

@@ -48,6 +48,7 @@ struct Terrain
 
 	FTessellationParameters Tessellation;
 	bool bWireframe = false;
+	bool bFrustumCullPatches = false;
 	// TODO: bounding box
 };
 

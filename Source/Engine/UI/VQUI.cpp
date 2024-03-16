@@ -1740,6 +1740,6 @@ void VQEngine::DrawTerrainEditor()
 			ImGui::EndCombo();
 		}
 
-
+		ImGui::Checkbox("Frustum Cull", &t.bFrustumCullPatches);
 	}
-}
+} 
