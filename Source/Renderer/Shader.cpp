@@ -19,6 +19,7 @@
 #include "Shader.h"
 #include "Renderer.h"
 
+#include "../Engine/GPUMarker.h"
 #include "../../Libs/VQUtils/Source/utils.h"
 #include <fstream>
 
@@ -131,6 +132,7 @@ std::string GetIncludeFileName(const std::string& line)
 
 bool AreIncludesDirty(const std::string& srcPath, const std::string& cachePath)
 {
+	SCOPED_CPU_MARKER("AreIncludesDirty");
 	const std::string ShaderSourceDir = DirectoryUtil::GetFolderPath(srcPath);
 	const std::string ShaderCacheDir = DirectoryUtil::GetFolderPath(cachePath);
 
@@ -234,6 +236,7 @@ std::vector<D3D12_INPUT_ELEMENT_DESC> ReflectInputLayoutFromVS(ID3D12ShaderRefle
 
 Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompileDesc, std::string& OutErrorString)
 {
+	SCOPED_CPU_MARKER("CompileFromSource");
 	const WCHAR* strPath = ShaderStageCompileDesc.FilePath.data();
 	std::vector<std::string> SMTokens = StrUtil::split(ShaderStageCompileDesc.ShaderModel, '_');
 	assert(SMTokens.size() == 3);
@@ -267,6 +270,7 @@ Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompil
 	// SM5 - Use FXC compiler - generates DXBC shader code
 	if (bIsShaderModel5)
 	{
+		SCOPED_CPU_MARKER("SM5");
 		ID3DBlob* pBlob_ErrMsg = nullptr;
 
 		int i = 0;
@@ -296,6 +300,7 @@ Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompil
 	// SM6 - Use DXC compiler - generates DXIL shader code
 	else
 	{
+		SCOPED_CPU_MARKER("SM6");
 		// collection of wstrings to feed into dxc compiler
 		const std::wstring strEntryPoint  = StrUtil::ASCIIToUnicode(ShaderStageCompileDesc.EntryPoint);
 		const std::wstring strShaderModel = StrUtil::ASCIIToUnicode(StrUtil::GetLowercased(ShaderStageCompileDesc.ShaderModel));
@@ -428,9 +433,9 @@ Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompil
 	return blob;
 }
 
-
 Shader::FBlob CompileFromCachedBinary(const std::string& ShaderBinaryFilePath)
 {
+	SCOPED_CPU_MARKER("CompileFromCachedBinary");
 	std::ifstream cache(ShaderBinaryFilePath, std::ios::in | std::ios::binary | std::ios::ate);
 	const size_t shaderBinarySize = cache.tellg();
 	void* pBuffer = calloc(1, shaderBinarySize);

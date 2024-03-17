@@ -46,7 +46,6 @@ struct FUIState
 	{
 		MATERIALS = 0,
 		LIGHTS,
-		TERRAIN,
 		OBJECTS,
 
 		NUM_EDITOR_MODES

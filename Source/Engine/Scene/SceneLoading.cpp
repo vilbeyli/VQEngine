@@ -61,6 +61,7 @@ MaterialID Scene::LoadMaterial(const FMaterialRepresentation& matRep, TaskID tas
 	fnAssignF3(mat.diffuse, matRep.DiffuseColor);
 	fnAssignF(mat.tiling.x, matRep.TilingX);
 	fnAssignF(mat.tiling.y, matRep.TilingY);
+	mat.Tessellation = matRep.Tessellation;
 
 	// async data (textures)
 	bool bHasTexture = false;

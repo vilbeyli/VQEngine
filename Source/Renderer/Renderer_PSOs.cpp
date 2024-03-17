@@ -18,6 +18,7 @@
 
 #include "Renderer.h"
 #include "Tessellation.h"
+#include "../Engine/GPUMarker.h"
 #include "../../Shaders/LightingConstantBufferData.h"
 #include "../../Libs/VQUtils/Source/utils.h"
 
@@ -26,6 +27,7 @@ using namespace VQSystemInfo;
 
 void VQRenderer::LoadBuiltinPSOs()
 {
+	SCOPED_CPU_MARKER("LoadBuiltinPSOs");
 	// temp: singl thread pso load from vector
 	// todo: enqueue load descs into the MT queue
 	std::vector< std::pair<PSO_ID, FPSODesc >> PSOLoadDescs;
@@ -275,85 +277,6 @@ void VQRenderer::LoadBuiltinPSOs()
 		psoDesc.SampleDesc.Count = 4;
 		PSOLoadDescs.push_back({ EBuiltinPSOs::DEPTH_PREPASS_PSO_MSAA_4, psoLoadDesc });
 
-	}
-
-	// FORWARD LIGHTING PSO
-	{
-		const std::wstring ShaderFilePath = GetFullPathOfShader(L"ForwardLighting.hlsl");
-
-		FPSODesc psoLoadDesc = {};
-		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
-		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ForwardLighting);
-		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCED_DRAW", std::to_string(RENDER_INSTANCED_SCENE_MESHES) });
-		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__SCENE_MESHES) });
-
-		// PSO description
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
-		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
-		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-		psoDesc.DepthStencilState.DepthEnable = TRUE;
-		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_EQUAL;
-		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-		psoDesc.DepthStencilState.StencilEnable = FALSE;
-		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-		psoDesc.SampleMask = UINT_MAX;
-		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		psoDesc.NumRenderTargets = 1;
-		psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
-		psoDesc.SampleDesc.Count = 1;
-
-		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_PSO, psoLoadDesc });
-
-		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS_MV";
-		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "OUTPUT_MOTION_VECTORS", "1" });
-		psoLoadDesc.ShaderStageCompileDescs[1].Macros.push_back({ "OUTPUT_MOTION_VECTORS", "1" });
-		psoDesc.NumRenderTargets = 2;
-		psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;
-		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_AND_MV_PSO, psoLoadDesc });
-		psoLoadDesc.ShaderStageCompileDescs[0].Macros.pop_back();
-		psoLoadDesc.ShaderStageCompileDescs[1].Macros.pop_back();
-
-		// MSAA PSOs
-		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS_MSAA4";
-		psoDesc.SampleDesc.Count = 4;
-		psoDesc.NumRenderTargets = 1;
-		psoDesc.RTVFormats[1] = DXGI_FORMAT_UNKNOWN;
-		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_PSO_MSAA_4, psoLoadDesc });
-
-		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS_MV_MSAA4";
-		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "OUTPUT_MOTION_VECTORS", "1" });
-		psoLoadDesc.ShaderStageCompileDescs[1].Macros.push_back({ "OUTPUT_MOTION_VECTORS", "1" });
-		psoDesc.NumRenderTargets = 2;
-		psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16_FLOAT;
-		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_AND_MV_PSO_MSAA_4, psoLoadDesc });
-		psoLoadDesc.ShaderStageCompileDescs[0].Macros.pop_back();
-		psoLoadDesc.ShaderStageCompileDescs[1].Macros.pop_back();
-
-		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS_Viz";
-		psoLoadDesc.ShaderStageCompileDescs[1].Macros.push_back({ "OUTPUT_ALBEDO", "1" });
-		psoDesc.RTVFormats[1] = DXGI_FORMAT_R16G16B16A16_FLOAT; // rgba16f vs rgba8unorm 
-		psoDesc.SampleDesc.Count = 1;
-		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_PSO, psoLoadDesc });
-
-		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS_MSAA4_Viz";
-		psoDesc.SampleDesc.Count = 4;
-		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_PSO_MSAA_4, psoLoadDesc });
-
-		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS_Viz_MV";
-		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "OUTPUT_MOTION_VECTORS", "1" });
-		psoLoadDesc.ShaderStageCompileDescs[1].Macros.push_back({ "OUTPUT_MOTION_VECTORS", "1" });
-		psoDesc.NumRenderTargets = 3;
-		psoDesc.RTVFormats[2] = DXGI_FORMAT_R16G16_FLOAT;
-		psoDesc.SampleDesc.Count = 1;
-		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_AND_MV_PSO, psoLoadDesc });
-
-		psoLoadDesc.PSOName = "PSO_FwdLightingVSPS_MSAA4_Viz_MV";
-		psoDesc.SampleDesc.Count = 4;
-		PSOLoadDescs.push_back({ EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_AND_MV_PSO_MSAA_4, psoLoadDesc });
-		// ^ lol this is not maintainable, gotta refactor all this into render passes and proper shader perms
 	}
 
 	// WIREFRAME/UNLIT PSOs
@@ -671,102 +594,9 @@ void VQRenderer::LoadBuiltinPSOs()
 		PSOLoadDescs.push_back({ EBuiltinPSOs::DEBUGVERTEX_LOCALSPACEVECTORS_PSO_MSAA_4, psoLoadDesc });
 	}
 
-	// Terrain PSOs
-	int NumTerrainPSOsCompiled = 0;
-	{
-		const std::wstring ShaderFilePath = GetFullPathOfShader(L"Terrain.hlsl");
+	
 
-		FPSODesc psoLoadDesc = {};
-		psoLoadDesc.PSOName = "PSO_Terrain";
-#if 1
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain_Heightmap", "vs_5_1" }); // TODO: fix 6_0 error
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain_Heightmap", "ps_5_1" }); // TODO: fix 6_0 error
-#else
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_0" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "HSMain", "hs_6_0" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "DSMain", "ds_6_0" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_0" });
-#endif
-
-		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__Terrain);
-
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
-		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
-		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-		psoDesc.DepthStencilState.DepthEnable = TRUE;
-		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-		psoDesc.DepthStencilState.StencilEnable = FALSE;
-		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-		psoDesc.SampleMask = UINT_MAX;
-		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		psoDesc.NumRenderTargets = 1;
-		for (uint rt = 0; rt < psoDesc.NumRenderTargets; ++rt) psoDesc.RTVFormats[rt] = DXGI_FORMAT_R16G16B16A16_FLOAT;
-		psoDesc.SampleDesc.Count = 1;
-
-		
-		const char* szPartitionNames[FTerrainPSOs::NUM_PARTIT_OPTIONS] = { "integer", "fractional_even", "fractional_odd", "pow2" };
-		const char* szOutTopologyNames[FTerrainPSOs::NUM_OUTTOP_OPTIONS] = { "point", "line", "triangle_cw", "triangle_ccw" };
-		
-		for(int iTess = 0; iTess < FTerrainPSOs::NUM_TESSELLATION_OPTIONS; ++iTess)
-		for(int iRaster = 0; iRaster < FTerrainPSOs::NUM_RASTER_OPTIONS; ++iRaster )
-		for(int iRender = 0; iRender < FTerrainPSOs::NUM_RENDER_OPTIONS; ++iRender )
-		for(int iDomain = 0; iDomain < FTerrainPSOs::NUM_DOMAIN_OPTIONS; ++iDomain )
-		for(int iPartition = 0; iPartition < FTerrainPSOs::NUM_PARTIT_OPTIONS; ++iPartition )
-		for(int iOutTopology = 0; iOutTopology < FTerrainPSOs::NUM_OUTTOP_OPTIONS; ++iOutTopology )
-		{
-			if (iTess == 0 && (iDomain == 1 || iPartition == 1 || iOutTopology == 1))
-				continue; // skip unsued permutations
-
-			std::string PSOName = "PSO_Terrain";
-			if (iTess == 1) PSOName += "_Tessellated";
-			if (iRaster == 1) PSOName += "_Wireframe";
-			if (iRender == 1) PSOName += "_MSAA4";
-			if (iDomain == 1) PSOName += "_Quad";
-			PSOName += std::string("_") + szPartitionNames[iPartition];
-			PSOName += std::string("_") + szOutTopologyNames[iOutTopology];
-
-			psoDesc.RasterizerState.FillMode = iRaster == 0 ? D3D12_FILL_MODE::D3D12_FILL_MODE_SOLID : D3D12_FILL_MODE::D3D12_FILL_MODE_WIREFRAME;
-			psoDesc.SampleDesc.Count = iRender == 1 ? 4 : 1;
-
-			if (iTess == 1)
-			{
-				if (iOutTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE && iDomain != ETessellationDomain::ISOLINE_PATCH)
-					continue; // line output topologies are only available to isoline domains
-
-				psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
-				
-				psoLoadDesc.ShaderStageCompileDescs.resize(4); // VS-HS-DS-PS
-				psoLoadDesc.ShaderStageCompileDescs[0] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" };
-				psoLoadDesc.ShaderStageCompileDescs[1] = FShaderStageCompileDesc{ ShaderFilePath, "HSMain", "hs_5_1" };
-				psoLoadDesc.ShaderStageCompileDescs[2] = FShaderStageCompileDesc{ ShaderFilePath, "DSMain", "ds_5_1" };
-				psoLoadDesc.ShaderStageCompileDescs[3] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain_Heightmap", "ps_5_1" };
-
-				const char* szPartitioningNames[FTerrainPSOs::NUM_PARTIT_OPTIONS] = { "PARTITIONING__INT", "PARTITIONING__EVEN", "PARTITIONING__ODD", "PARTITIONING__POW2" };
-				const char* szOutTopologyNames[FTerrainPSOs::NUM_OUTTOP_OPTIONS] = { "OUTTOPO__POINT", "OUTTOPO__LINE", "OUTTOPO__TRI_CW","OUTTOPO__TRI_CCW" };
-				const char* szDomain = iDomain == 1 ? "DOMAIN__QUAD" : "DOMAIN__TRIANGLE";
-				
-				// Hull macros
-				psoLoadDesc.ShaderStageCompileDescs[1].Macros = { {szDomain, "1" }};
-				psoLoadDesc.ShaderStageCompileDescs[1].Macros.push_back({szPartitioningNames[iPartition], "1"});
-				psoLoadDesc.ShaderStageCompileDescs[1].Macros.push_back({szOutTopologyNames[iOutTopology], "1" });
-				
-				// Domain macros
-				psoLoadDesc.ShaderStageCompileDescs[2].Macros = { {szDomain, "1" }};
-			}
-			else
-			{
-				psoLoadDesc.ShaderStageCompileDescs.resize(2); // VS-PS
-				psoLoadDesc.ShaderStageCompileDescs[0] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain_Heightmap", "vs_5_1" };
-				psoLoadDesc.ShaderStageCompileDescs[1] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain_Heightmap", "ps_5_1" };
-			}
-
-			const size_t iPSO = mTerrainPSOs.GetPSOIndex(iTess, iRaster, iRender, iDomain, iPartition, iOutTopology);
-			mTerrainPSOs.arr[iPSO] = CreatePSO_OnThisThread(psoLoadDesc);
-			++NumTerrainPSOsCompiled;
-		}
-	}
+	mLightingPSOs.Compile(*this, mRootSignatureLookup);
 
 	// ---------------------------------------------------------------------------------------------------------------1
 
@@ -778,4 +608,152 @@ void VQRenderer::LoadBuiltinPSOs()
 	}
 
 	int a = 5;
+}
+
+
+void VQRenderer::FLightingPSOs::Compile(VQRenderer& Renderer, const std::unordered_map<RS_ID, ID3D12RootSignature*>& mRootSignatureLookup)
+{
+	const std::wstring ShaderFilePath = GetFullPathOfShader(L"ForwardLighting.hlsl");
+
+	FPSODesc psoLoadDesc = {};
+	psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ForwardLighting);
+	
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
+	psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+	psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+	psoDesc.DepthStencilState.DepthEnable = TRUE;
+	psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_EQUAL;
+	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+	psoDesc.DepthStencilState.StencilEnable = FALSE;
+	psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+	psoDesc.SampleMask = UINT_MAX;
+	psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
+
+
+	const UINT SampleDescCounts[NUM_MSAA_OPTS] = { 1, 4 };
+	const D3D12_CULL_MODE CullModes[NUM_FACECULL_OPTS] = { D3D12_CULL_MODE_NONE , D3D12_CULL_MODE_FRONT, D3D12_CULL_MODE_BACK };
+	const D3D12_FILL_MODE FillModes[NUM_RASTER_OPTS] = { D3D12_FILL_MODE_SOLID, D3D12_FILL_MODE_WIREFRAME };
+	const char* szPartitionNames[FLightingPSOs::NUM_PARTIT_OPTIONS] = { "integer", "fractional_even", "fractional_odd", "pow2" };
+	const char* szOutTopologyNames[FLightingPSOs::NUM_OUTTOP_OPTIONS] = { "point", "line", "triangle_cw", "triangle_ccw" };
+
+	for(size_t iMSAA = 0    ; iMSAA     < NUM_MSAA_OPTS     ; ++iMSAA) 
+	for(size_t iRaster = 0  ; iRaster   < NUM_RASTER_OPTS   ; ++iRaster) 
+	for(size_t iFaceCull = 0; iFaceCull < NUM_FACECULL_OPTS ; ++iFaceCull)
+	for(size_t iOutMoVec = 0; iOutMoVec < NUM_MOVEC_OPTS    ; ++iOutMoVec) 
+	for(size_t iOutRough = 0; iOutRough < NUM_ROUGH_OPTS    ; ++iOutRough) 
+	for(size_t iTess = 0    ; iTess     < NUM_TESS_ENABLED  ; ++iTess) 
+	for(size_t iDomain = 0  ; iDomain   < NUM_DOMAIN_OPTIONS; ++iDomain) 
+	for(size_t iPart = 0    ; iPart     < NUM_PARTIT_OPTIONS; ++iPart) 
+	for(size_t iOutTopo = 0 ; iOutTopo  < NUM_OUTTOP_OPTIONS; ++iOutTopo) 
+	for(size_t iAlpha = 0   ; iAlpha    < NUM_ALPHA_OPTIONS ; ++iAlpha)
+	{
+		if (iTess == 0 && (iDomain > 0 || iPart > 0 || iOutTopo > 0))
+			continue; // skip tess permutations when tess is off
+
+		if (iTess == 1 && iOutTopo == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE && iDomain != ETessellationDomain::ISOLINE_PATCH)
+			continue; // line output topologies are only available to isoline domains
+		
+		const size_t key = Hash(iMSAA, iRaster, iFaceCull, iOutMoVec, iOutRough, iTess, iDomain, iPart, iOutTopo, iAlpha);
+		
+		std::string PSOName = "PSO_FwdLighting";
+		if (iTess == 1) PSOName += "_Tessellated";
+		if (iRaster == 1) PSOName += "_Wireframe";
+		if (iMSAA == 1) PSOName += "_MSAA4";
+		if (iTess == 1)
+		{
+			if (iDomain == 1) PSOName += "_Quad";
+			PSOName += std::string("_") + szPartitionNames[iPart];
+			PSOName += std::string("_") + szOutTopologyNames[iOutTopo];
+		}
+		psoLoadDesc.PSOName = PSOName;
+
+		// MSAA
+		psoDesc.SampleDesc.Count = SampleDescCounts[iMSAA];
+
+		// RS
+		psoDesc.RasterizerState.FillMode = FillModes[iRaster];
+		psoDesc.RasterizerState.CullMode = CullModes[iFaceCull];
+		
+		// RTs
+		psoDesc.NumRenderTargets = static_cast<UINT>(1 + iOutMoVec + iOutRough);
+		psoDesc.RTVFormats[1] = psoDesc.RTVFormats[2] = DXGI_FORMAT_UNKNOWN;
+		{
+			int iRT = 1;
+			if(iOutRough) psoDesc.RTVFormats[iRT++] = DXGI_FORMAT_R16G16B16A16_FLOAT;
+			if(iOutMoVec) psoDesc.RTVFormats[iRT++] = DXGI_FORMAT_R16G16_FLOAT;
+		}
+
+		// topology
+		psoDesc.PrimitiveTopologyType = iTess == 1 ? D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH : D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+
+		// shaders
+		psoLoadDesc.ShaderStageCompileDescs.resize(iTess == 1 ? 4 : 2); // VS-HS-DS-PS : VS-PS
+		if (iTess == 1)
+		{
+			psoLoadDesc.ShaderStageCompileDescs[0] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain_Tess", "vs_5_1" };
+			psoLoadDesc.ShaderStageCompileDescs[1] = FShaderStageCompileDesc{ ShaderFilePath, "HSMain"     , "hs_5_1" };
+			psoLoadDesc.ShaderStageCompileDescs[2] = FShaderStageCompileDesc{ ShaderFilePath, "DSMain"     , "ds_5_1" };
+			psoLoadDesc.ShaderStageCompileDescs[3] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain"     , "ps_5_1" };
+		}
+		else
+		{
+			psoLoadDesc.ShaderStageCompileDescs[0] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" };
+			psoLoadDesc.ShaderStageCompileDescs[1] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" };
+		}
+
+		// macros
+		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCED_DRAW", std::to_string(RENDER_INSTANCED_SCENE_MESHES) });
+		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__SCENE_MESHES) });
+		if (iTess == 1)
+		{
+			const char* szPartitioningMacros[FLightingPSOs::NUM_PARTIT_OPTIONS] = { "PARTITIONING__INT", "PARTITIONING__EVEN", "PARTITIONING__ODD", "PARTITIONING__POW2" };
+			const char* szOutTopologyMacros [FLightingPSOs::NUM_OUTTOP_OPTIONS] = { "OUTTOPO__POINT", "OUTTOPO__LINE", "OUTTOPO__TRI_CW","OUTTOPO__TRI_CCW" };
+			const char* szDomainMacros = iDomain == 1 ? "DOMAIN__QUAD" : "DOMAIN__TRIANGLE";	
+			psoLoadDesc.ShaderStageCompileDescs[1/*HS*/].Macros = {
+				  { szDomainMacros, "1" }
+				, { szPartitioningMacros[iPart], "1" }
+				, { szOutTopologyMacros[iOutTopo], "1" }
+			};
+			psoLoadDesc.ShaderStageCompileDescs[2/*DS*/].Macros = { {szDomainMacros, "1"} };
+		}
+		if (iOutMoVec)
+		{
+			psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "OUTPUT_MOTION_VECTORS", "1" });
+			psoLoadDesc.ShaderStageCompileDescs[iTess == 1 ? 3 : 1].Macros.push_back({ "OUTPUT_MOTION_VECTORS", "1" });
+			if (iTess == 1) psoLoadDesc.ShaderStageCompileDescs[2].Macros.push_back({ "OUTPUT_MOTION_VECTORS", "1" });
+		}
+		if (iOutRough)
+		{
+			psoLoadDesc.ShaderStageCompileDescs[iTess == 1 ? 3 : 1].Macros.push_back({ "OUTPUT_ALBEDO", "1" });
+		}
+
+		mapLoadDesc[key] = psoLoadDesc;
+		mapPSO[key] = Renderer.CreatePSO_OnThisThread(psoLoadDesc);
+	}
+
+
+}
+
+size_t VQRenderer::FLightingPSOs::Hash(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iOutMoVec, size_t iOutRough, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iAlpha)
+{
+	return iMSAA
+		+ NUM_MSAA_OPTS * iRaster
+		+ NUM_MSAA_OPTS * NUM_RASTER_OPTS * iFaceCull
+		+ NUM_MSAA_OPTS * NUM_RASTER_OPTS * NUM_FACECULL_OPTS * iOutMoVec
+		+ NUM_MSAA_OPTS * NUM_RASTER_OPTS * NUM_FACECULL_OPTS * NUM_MOVEC_OPTS * iOutRough
+		+ NUM_MSAA_OPTS * NUM_RASTER_OPTS * NUM_FACECULL_OPTS * NUM_MOVEC_OPTS * NUM_ROUGH_OPTS * iTess
+		+ NUM_MSAA_OPTS * NUM_RASTER_OPTS * NUM_FACECULL_OPTS * NUM_MOVEC_OPTS * NUM_ROUGH_OPTS * NUM_TESS_ENABLED * iDomain
+		+ NUM_MSAA_OPTS * NUM_RASTER_OPTS * NUM_FACECULL_OPTS * NUM_MOVEC_OPTS * NUM_ROUGH_OPTS * NUM_TESS_ENABLED * NUM_DOMAIN_OPTIONS * iPart
+		+ NUM_MSAA_OPTS * NUM_RASTER_OPTS * NUM_FACECULL_OPTS * NUM_MOVEC_OPTS * NUM_ROUGH_OPTS * NUM_TESS_ENABLED * NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * iOutTopo
+		+ NUM_MSAA_OPTS * NUM_RASTER_OPTS * NUM_FACECULL_OPTS * NUM_MOVEC_OPTS * NUM_ROUGH_OPTS * NUM_TESS_ENABLED * NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * NUM_OUTTOP_OPTIONS * iAlpha;
+}
+
+PSO_ID VQRenderer::FLightingPSOs::Get(size_t hash) const
+{
+	auto it = mapPSO.find(hash);
+	if (it == mapPSO.end())
+	{
+		return INVALID_ID;
+	}
+	return it->second;
 }

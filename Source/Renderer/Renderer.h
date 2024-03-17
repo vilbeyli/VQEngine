@@ -87,14 +87,6 @@ enum EBuiltinPSOs // TODO: remove the hardcoded PSOs when a generic Shader solut
 	OBJECT_PSO_MSAA_4,
 	DEPTH_PREPASS_PSO,
 	DEPTH_PREPASS_PSO_MSAA_4,
-	FORWARD_LIGHTING_PSO,
-	FORWARD_LIGHTING_AND_MV_PSO,
-	FORWARD_LIGHTING_AND_VIZ_PSO,
-	FORWARD_LIGHTING_AND_VIZ_AND_MV_PSO,
-	FORWARD_LIGHTING_PSO_MSAA_4,
-	FORWARD_LIGHTING_AND_MV_PSO_MSAA_4,
-	FORWARD_LIGHTING_AND_VIZ_PSO_MSAA_4,
-	FORWARD_LIGHTING_AND_VIZ_AND_MV_PSO_MSAA_4,
 	WIREFRAME_PSO,
 	WIREFRAME_PSO_MSAA_4,
 	WIREFRAME_INSTANCED_PSO,
@@ -143,7 +135,6 @@ enum EBuiltinRootSignatures
 	LEGACY__FFX_FSR1,
 	LEGACY__UI_HDR_Composite,
 	LEGACY__DownsampleDepthCS,
-	LEGACY__Terrain,
 
 	NUM_BUILTIN_ROOT_SIGNATURES
 };
@@ -259,26 +250,44 @@ public:
 	inline FDeviceCapabilities   GetDeviceCapabilities() const { return mDevice.GetDeviceCapabilities(); }
 	inline CommandQueue&         GetCommandQueue(CommandQueue::EType eType) { return mCmdQueues[(int)eType]; }
 	
-	struct FTerrainPSOs
+	struct FLightingPSOs
 	{
-		static constexpr int NUM_TESSELLATION_OPTIONS = 2; // off/on
-		static constexpr int NUM_RASTER_OPTIONS = 2; // wireframe/fill
-		static constexpr int NUM_RENDER_OPTIONS = 2; // nomsaa/msaa4
-		static constexpr int NUM_DOMAIN_OPTIONS = 2; // tri/quad
-		static constexpr int NUM_PARTIT_OPTIONS = 4; // integer, fractional_even, fractional_odd, or pow2
-		static constexpr int NUM_OUTTOP_OPTIONS = 4; // point, line, triangle_cw, or triangle_ccw
-		static constexpr size_t NUM_OPTIONS = NUM_TESSELLATION_OPTIONS * NUM_RASTER_OPTIONS * NUM_RENDER_OPTIONS * NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * NUM_OUTTOP_OPTIONS;
-		inline size_t GetPSOIndex(int iTess, int iRaster, int iRender, int iDomain, int iPartition, int iOutTopology) const {
-			return iTess
-				+ NUM_TESSELLATION_OPTIONS * iRaster
-				+ NUM_TESSELLATION_OPTIONS * NUM_RASTER_OPTIONS * iRender
-				+ NUM_TESSELLATION_OPTIONS * NUM_RASTER_OPTIONS * NUM_RENDER_OPTIONS * iDomain
-				+ NUM_TESSELLATION_OPTIONS * NUM_RASTER_OPTIONS * NUM_RENDER_OPTIONS * NUM_DOMAIN_OPTIONS * iOutTopology;
+		// rendering
+		static constexpr size_t NUM_MSAA_OPTS = 2; // off/msaa4  TODO: other msaa
+		static constexpr size_t NUM_RASTER_OPTS = 2; // solid/wireframe
+		static constexpr size_t NUM_FACECULL_OPTS = 3; // none/front/back
+		static constexpr size_t NUM_RENDERING_OPTS = NUM_FACECULL_OPTS * NUM_RASTER_OPTS * NUM_MSAA_OPTS;
+
+		// pass output
+		static constexpr size_t NUM_MOVEC_OPTS = 2; // on/off
+		static constexpr size_t NUM_ROUGH_OPTS = 2; // on/off
+		static constexpr size_t NUM_OUTPUT_OPTS = NUM_ROUGH_OPTS * NUM_MOVEC_OPTS;
+
+		// tessellation
+		static constexpr size_t NUM_TESS_ENABLED = 2; // on/off
+		static constexpr size_t NUM_DOMAIN_OPTIONS = 2; // tri/quad
+		static constexpr size_t NUM_PARTIT_OPTIONS = 4; // integer, fractional_even, fractional_odd, or pow2
+		static constexpr size_t NUM_OUTTOP_OPTIONS = 4; // point, line, triangle_cw, or triangle_ccw
+		static constexpr size_t NUM_TESS_OPTS = NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * NUM_OUTTOP_OPTIONS;
+
+		// material
+		static constexpr size_t NUM_ALPHA_OPTIONS = 2; // opaque/alpha masked
+		static constexpr size_t NUM_MAT_OPTIONS = NUM_ALPHA_OPTIONS;
+
+		static size_t Hash(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iOutMoVec, size_t iOutRough, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iAlpha);
+		       PSO_ID Get(size_t hash) const;
+		inline PSO_ID Get(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iOutMoVec, size_t iOutRough, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iAlpha) const 
+		{ 
+			return Get(Hash(iMSAA, iRaster, iFaceCull, iOutMoVec, iOutRough, iTess, iDomain, iPart, iOutTopo, iAlpha)); 
 		}
-		inline PSO_ID GetPSOId(int iTess, int iRaster, int iRender, int iDomain, int iPartition, int iOutTopology) const { return arr[GetPSOIndex(iTess, iRaster, iRender, iDomain, iPartition, iOutTopology)]; }
-		FTerrainPSOs() { for (int i = 0; i < NUM_OPTIONS; ++i) arr[i] = INVALID_ID; }
-		std::array<PSO_ID, NUM_OPTIONS> arr;
-	} mTerrainPSOs;
+
+		void Compile(VQRenderer& Renderer, const std::unordered_map<RS_ID, ID3D12RootSignature*>& mRootSignatureLookup);
+		std::unordered_map<size_t, PSO_ID> mapPSO;
+		std::unordered_map<size_t, FPSODesc> mapLoadDesc;
+
+		static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_MAT_OPTIONS * NUM_RENDERING_OPTS * NUM_OUTPUT_OPTS * NUM_TESS_OPTS;
+	} mLightingPSOs;
+
 private:
 	using PSOArray_t = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
 	

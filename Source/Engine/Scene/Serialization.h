@@ -37,6 +37,9 @@ struct FMaterialRepresentation
 	float Displacement = MATERIAL_UNINITIALIZED_VALUE;
 	float TilingX = 1.0f;
 	float TilingY = 1.0f;
+
+	FTessellationParameters Tessellation;
+
 	std::string DiffuseMapFilePath;
 	std::string NormalMapFilePath;
 	std::string EmissiveMapFilePath;

@@ -199,7 +199,7 @@ struct PerObjectData
 	matrix matWorldViewProj    [INSTANCE_COUNT];
 	matrix matWorld            [INSTANCE_COUNT];
 	matrix matWorldViewProjPrev[INSTANCE_COUNT];
-	matrix matNormal           [INSTANCE_COUNT];
+	matrix matNormal           [INSTANCE_COUNT]; // could be 4x3
 #else
 	matrix matWorldViewProj;
 	matrix matWorld;
@@ -219,6 +219,15 @@ struct PerObjectData
 #else
 	int ObjID;
 #endif
+};
+
+struct TessellationParams
+{
+	float4 QuadEdgeTessFactor;
+	float2 QuadInsideFactor;
+	float2 pad;
+	float3 TriEdgeTessFactor;
+	float TriInnerTessFactor;
 };
 
 

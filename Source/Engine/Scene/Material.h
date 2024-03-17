@@ -21,6 +21,7 @@
 
 #include "../Core/Types.h"
 #include "Shaders/LightingConstantBufferData.h"
+#include "../../Renderer/Tessellation.h"
 
 enum EMaterialTextureMapBindings
 {
@@ -58,7 +59,14 @@ struct Material // 56 Bytes
 	float displacement                  = 0.0f;        // 4 Bytes
 	float pad0;                                        // 4 Bytes
 	//------------------------------------------------------------
+	// Tessellation
+	FTessellationParameters Tessellation;
+	bool bWireframe = false;
+	bool bFrustumCullPatches = false;
+	//------------------------------------------------------------
 
+
+	// Texture Maps ----------------------------------------------
 	TextureID TexDiffuseMap   = INVALID_ID;
 	TextureID TexNormalMap    = INVALID_ID;
 	TextureID TexEmissiveMap  = INVALID_ID;
@@ -73,6 +81,7 @@ struct Material // 56 Bytes
 	SRV_ID SRVHeightMap = INVALID_ID;
 	//------------------------------------------------------------
 
+	VQ_SHADER_DATA::TessellationParams GetTessellationCBufferData() const;
 	VQ_SHADER_DATA::MaterialData GetCBufferData() const;
 	int                          GetTextureConfig() const;
 	inline bool IsTransparent() const { return alpha != 1.0f; }

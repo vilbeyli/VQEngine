@@ -315,28 +315,28 @@ void VQEngine::InitializeBuiltinMeshes()
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::GRID_SIMPLE_QUAD;
 		const float GridLength = 1.0f;
-		GeometryGenerator::GeometryData<FVertexWithNormalAndTangent> data = GeometryGenerator::Grid<FVertexWithNormalAndTangent>(GridLength, GridLength, 2, 2, 1);
+		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 2, 2, 1);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "SimpleGrid";
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::GRID_DETAILED_QUAD0;
 		const float GridLength = 1.0f;
-		GeometryGenerator::GeometryData<FVertexWithNormalAndTangent> data = GeometryGenerator::Grid<FVertexWithNormalAndTangent>(GridLength, GridLength, 3, 3, 1);
+		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 3, 3, 1);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "DetaildGrid0";
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::GRID_DETAILED_QUAD1;
 		const float GridLength = 1.0f;
-		GeometryGenerator::GeometryData<FVertexWithNormalAndTangent> data = GeometryGenerator::Grid<FVertexWithNormalAndTangent>(GridLength, GridLength, 12, 12, 4);
+		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 12, 12, 4);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "DetaildGrid1";
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::GRID_DETAILED_QUAD2;
 		const float GridLength = 1.0f;
-		GeometryGenerator::GeometryData<FVertexWithNormalAndTangent> data = GeometryGenerator::Grid<FVertexWithNormalAndTangent>(GridLength, GridLength, 1200, 1200, 6);
+		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 1200, 1200, 6);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "DetaildGrid2";
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
@@ -1855,7 +1855,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 						{
 							vLightCommandLists.push_back(pGfxCmdObjIDPass); // append objID to the shadow pass cmd lists if async copy isnt enabled for batching
 						}
-						for (int i = iCmdPointLightsThread; i - iCmdPointLightsThread < SceneShadowView.NumPointShadowViews; ++i)
+						for (size_t i = iCmdPointLightsThread; i - iCmdPointLightsThread < SceneShadowView.NumPointShadowViews; ++i)
 							vLightCommandLists.push_back(vCmdLists[i]);
 						if (iCmdSpots != iCmdRenderThread)
 							vLightCommandLists.push_back(vCmdLists[iCmdSpots]);
@@ -1891,8 +1891,8 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 					}
 					#endif
 
-					const int NumCmds = iCmdRenderThread + (mSettings.gfx.bEnableAsyncCopy ? 0 : 1);
-					ctx.PresentQueue.pQueue->ExecuteCommandLists(NumCmds, (ID3D12CommandList**)&vCmdLists[0]);
+					const size_t NumCmds = iCmdRenderThread + (mSettings.gfx.bEnableAsyncCopy ? 0 : 1);
+					ctx.PresentQueue.pQueue->ExecuteCommandLists((UINT)NumCmds, (ID3D12CommandList**)&vCmdLists[0]);
 				}
 
 				HRESULT hr = PresentFrame(ctx);

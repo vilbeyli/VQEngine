@@ -1198,7 +1198,6 @@ void VQEngine::DrawEditorWindow()
 	
 	bool bEditMaterial = mUIState.EditorMode == FUIState::EEditorMode::MATERIALS;
 	bool bEditLight    = mUIState.EditorMode == FUIState::EEditorMode::LIGHTS;
-	bool bEditTerrain  = mUIState.EditorMode == FUIState::EEditorMode::TERRAIN;
 	bool bEditObject   = mUIState.EditorMode == FUIState::EEditorMode::OBJECTS;
 	if (ImGui::RadioButton("Material", bEditMaterial))
 	{
@@ -1208,11 +1207,6 @@ void VQEngine::DrawEditorWindow()
 	if (ImGui::RadioButton("Light", bEditLight))
 	{
 		mUIState.EditorMode = FUIState::EEditorMode::LIGHTS;
-	}
-	ImGui::SameLine();
-	if (ImGui::RadioButton("Terrain", bEditTerrain))
-	{
-		mUIState.EditorMode = FUIState::EEditorMode::TERRAIN;
 	}
 	ImGui::SameLine();
 	if (ImGui::RadioButton("Object", bEditObject))
@@ -1231,7 +1225,6 @@ void VQEngine::DrawEditorWindow()
 
 	if (bEditMaterial) DrawMaterialEditor();
 	if (bEditLight   ) DrawLightEditor();
-	if (bEditTerrain ) DrawTerrainEditor();
 	if (bEditObject  ) DrawObjectEditor();
 
 	ImGui::EndTable();
@@ -1249,7 +1242,10 @@ void VQEngine::DrawMaterialEditor()
 	for(MaterialID matID : matIDsAll)
 	for (size_t hObj : mpScene->mSelectedObjects)
 	{
-		const Model& m = mpScene->GetModel(mpScene->GetGameObject(hObj)->mModelID);
+		GameObject* pObj = mpScene->GetGameObject(hObj);
+		if (!pObj)
+			continue;
+		const Model& m = mpScene->GetModel(pObj->mModelID);
 		auto materialSet = m.mData.GetMaterials();
 		if (materialSet.find(matID) != materialSet.end())
 		{
@@ -1343,6 +1339,128 @@ void VQEngine::DrawMaterialEditor()
 	StartDrawingMaterialEditorRow("Displacement");
 	ImGui::DragFloat("##displecement", reinterpret_cast<float*>(&mat.displacement), 0.05f, -50.0f, 50.0f, "%.2f");
 
+	ImGuiSpacing(3);
+
+	StartDrawingMaterialEditorRow("Tessellation");
+	ImGui::Checkbox("Tessellate", &mat.Tessellation.bEnableTessellation);
+	ImGui::SameLine();
+	ImGui::Checkbox("Wireframe", &mat.bWireframe);
+	if (mat.Tessellation.bEnableTessellation)
+	{
+		const char* pszTessellationModeNames[] = {
+			"Triangle",
+			"Quad",
+			// "Line"
+			""
+		};
+		if (ImGui::BeginCombo("Domain", pszTessellationModeNames[mat.Tessellation.Domain]))
+		{
+			if (ImGui::Selectable(pszTessellationModeNames[0], mat.Tessellation.Domain == ETessellationDomain::TRIANGLE_PATCH)) { mat.Tessellation.Domain = ETessellationDomain::TRIANGLE_PATCH; }
+			if (ImGui::Selectable(pszTessellationModeNames[1], mat.Tessellation.Domain == ETessellationDomain::QUAD_PATCH)) { mat.Tessellation.Domain = ETessellationDomain::QUAD_PATCH; }
+			ImGui::EndCombo();
+		}
+
+		constexpr float MAX_TESSELLATION = 50.0f;
+		switch (mat.Tessellation.Domain)
+		{
+		case::ETessellationDomain::TRIANGLE_PATCH:
+		{
+			if (mUIState.bTessellationSliderFloatVec)
+			{
+				ImGui::SliderFloat3("Outer", mat.Tessellation.TriOuter, 0.0f, MAX_TESSELLATION, "%.1f");
+			}
+			else
+			{
+				float fOuterMin = std::fminf(mat.Tessellation.TriOuter[0], std::fminf(mat.Tessellation.TriOuter[1], mat.Tessellation.TriOuter[2]));
+				if (ImGui::SliderFloat("Outer##", &fOuterMin, 0.0f, MAX_TESSELLATION, "%.1f"))
+				{
+					mat.Tessellation.TriOuter[0] = mat.Tessellation.TriOuter[1] = mat.Tessellation.TriOuter[2] = fOuterMin;
+				}
+			}
+			ImGui::SameLine();
+			ImGui::Checkbox("[]", &mUIState.bTessellationSliderFloatVec);
+			ImGui::SliderFloat("Inner", &mat.Tessellation.TriInner, 0.0f, MAX_TESSELLATION, "%.1f");
+		}	break;
+		case::ETessellationDomain::QUAD_PATCH:
+		{
+			if (mUIState.bTessellationSliderFloatVec)
+			{
+				ImGui::SliderFloat4("Outer", mat.Tessellation.QuadOuter, 0.0f, MAX_TESSELLATION, "%.1f");
+				ImGui::SameLine();
+				ImGui::Checkbox("[]", &mUIState.bTessellationSliderFloatVec);
+				ImGui::SliderFloat2("Inner", &mat.Tessellation.QuadInner[0], 0.0f, MAX_TESSELLATION, "%.1f");
+			}
+			else
+			{
+				float fOuterMin = std::fminf(mat.Tessellation.QuadOuter[0], std::fminf(mat.Tessellation.QuadOuter[1], std::fminf(mat.Tessellation.QuadOuter[2], mat.Tessellation.QuadOuter[3])));
+				if (ImGui::SliderFloat("Outer", &fOuterMin, 0.0f, MAX_TESSELLATION, "%.1f"))
+				{
+					mat.Tessellation.QuadOuter[0] = mat.Tessellation.QuadOuter[1] = mat.Tessellation.QuadOuter[2] = mat.Tessellation.QuadOuter[3] = fOuterMin;
+				}
+				ImGui::SameLine();
+				ImGui::Checkbox("[]", &mUIState.bTessellationSliderFloatVec);
+
+				float fInnerMin = std::fminf(mat.Tessellation.QuadInner[0], mat.Tessellation.QuadInner[1]);
+				if (ImGui::SliderFloat("Inner", &fInnerMin, 0.0f, MAX_TESSELLATION, "%.1f"))
+				{
+					mat.Tessellation.QuadInner[0] = mat.Tessellation.QuadInner[1] = fInnerMin;
+				}
+			}
+		}	break;
+		case::ETessellationDomain::ISOLINE_PATCH:
+		{
+
+		} break;
+		}
+		ImGui::SameLine();
+		ImGui::Checkbox("Lock", &mUIState.bLockTessellationSliders);
+
+		const char* pszPartitioningNames[] =
+		{
+			"Integer",
+			"Fractional Even",
+			"Fractional Odd",
+			"Pow2",
+			""
+		};
+		if (ImGui::BeginCombo("Partitioning", pszPartitioningNames[mat.Tessellation.Partitioning]))
+		{
+			if (ImGui::Selectable(pszPartitioningNames[0], mat.Tessellation.Partitioning == ETessellationPartitioning::INTEGER)) { mat.Tessellation.Partitioning = ETessellationPartitioning::INTEGER; }
+			if (ImGui::Selectable(pszPartitioningNames[1], mat.Tessellation.Partitioning == ETessellationPartitioning::FRACTIONAL_EVEN)) { mat.Tessellation.Partitioning = ETessellationPartitioning::FRACTIONAL_EVEN; }
+			if (ImGui::Selectable(pszPartitioningNames[2], mat.Tessellation.Partitioning == ETessellationPartitioning::FRACTIONAL_ODD)) { mat.Tessellation.Partitioning = ETessellationPartitioning::FRACTIONAL_ODD; }
+			if (ImGui::Selectable(pszPartitioningNames[3], mat.Tessellation.Partitioning == ETessellationPartitioning::POWER_OF_TWO)) { mat.Tessellation.Partitioning = ETessellationPartitioning::POWER_OF_TWO; }
+			ImGui::EndCombo();
+		}
+
+
+		switch (mat.Tessellation.Domain)
+		{
+		case::ETessellationDomain::TRIANGLE_PATCH:
+			break;
+		}
+
+		const char* pszOutputTopologyNames[] = {
+			"Point",
+			"Line",
+			"Triangle CW",
+			"Triangle CCW",
+			""
+		};
+
+		if (ImGui::BeginCombo("Output Topology", pszOutputTopologyNames[mat.Tessellation.OutputTopology]))
+		{
+			if (ImGui::Selectable(pszOutputTopologyNames[0], mat.Tessellation.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT)) { mat.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT; }
+			if (ImGui::Selectable(pszOutputTopologyNames[1], mat.Tessellation.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE)) { if (mat.Tessellation.Domain == ETessellationDomain::ISOLINE_PATCH) mat.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE; }
+			if (ImGui::Selectable(pszOutputTopologyNames[2], mat.Tessellation.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW)) { mat.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW; }
+			if (ImGui::Selectable(pszOutputTopologyNames[3], mat.Tessellation.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW)) { mat.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW; }
+			ImGui::EndCombo();
+		}
+
+		// ImGui::Checkbox("Frustum Cull", &t.bFrustumCullPatches);
+	}
+
+	ImGuiSpacing(6);
+
 	// Texture
 	static const char* textureLabels[] = 
 	{
@@ -1399,8 +1517,8 @@ void VQEngine::DrawMaterialEditor()
 				textureMIPs
 			);
 		}
-		ImGui::SameLine();
-		ImGui::Text("%s", textureName.c_str());
+		//ImGui::SameLine();
+		//ImGui::Text("%s", textureName.c_str());
 	}
 
 	ImGui::EndTable();
@@ -1547,199 +1665,3 @@ void VQEngine::DrawObjectEditor()
 {
 
 }
-
-void VQEngine::DrawTerrainEditor()
-{
-	// get terrain data
-	const int NumTerrains = mpScene->mTerrains.size();
-	std::vector<std::string> TerrainNames(NumTerrains + 1);
-	for (int i = 0; i < NumTerrains; ++i)
-	{
-		TerrainNames[i] = mpScene->mTerrains[i].Name;
-	}
-
-	// validate selected terrain index
-	int& i = mUIState.SelectedEditeeIndex[FUIState::EEditorMode::TERRAIN];
-	if (i >= TerrainNames.size())
-	{
-		Log::Warning("SelectedTerrainIndex > TerrainNames.size() : capping SelectedTerrainIndex ");
-		i = (int)(TerrainNames.size() - 1);
-	}
-
-	// get pointers to terrain name data 
-	const std::string& SelectedTerrainName = i >= 0 ? TerrainNames[i] : TerrainNames.back();
-	std::vector<const char*> szTerrainNames(TerrainNames.size());
-	for (int i = 0; i < TerrainNames.size(); ++i)
-		szTerrainNames[i] = TerrainNames[i].c_str();
-
-
-	// gui table layout
-	ImGui::TableSetupColumn(SelectedTerrainName.c_str(), ImGuiTableColumnFlags_WidthStretch, 0.7f); // 70% width
-	ImGui::TableSetupColumn("Terrains", ImGuiTableColumnFlags_WidthStretch, 0.3f); // 30% width
-	ImGui::TableHeadersRow();
-	ImGui::TableNextRow();
-
-	// draw selector
-	ImGui::TableSetColumnIndex(1);
-	ImGui::SetNextItemWidth(-1); // Make the controls take the full width of the column
-	ImGui::ListBox("##", &i, szTerrainNames.data(), (int)szTerrainNames.size(), 18);
-	if (ImGui::Button("Unselect##", ImVec2(-1, 0)))
-	{
-		i = (int)(szTerrainNames.size() - 1);
-	}
-
-	// draw editor
-	ImGui::TableSetColumnIndex(0);
-	const bool bValidTerrain = i != szTerrainNames.size() - 1 && i != INVALID_ID;
-	if (!bValidTerrain)
-	{
-		return;
-	}
-
-	Terrain& t = mpScene->mTerrains[i];
-
-	//ImGui::LabelText();
-
-	ImGui::Text("Transform");
-
-	ImGui::DragFloat3("Position", reinterpret_cast<float*>(&t.RootTransform._position), 0.1f, 0.0f, 0.0f, "%.1f");
-	
-	if (mUIState.bTerrainScaleSliderFloat3)
-	{
-		ImGui::DragFloat3("Scale3", reinterpret_cast<float*>(&t.RootTransform._scale), 0.1f, 0.0f, 0.0f, "%.1f");
-	}
-	else
-	{
-		float fScale = t.RootTransform._scale.x;
-		if (ImGui::SliderFloat("Scale", reinterpret_cast<float*>(&fScale), 0.0f, 10000.0f, "%.1f"))
-		{
-			t.RootTransform.SetScale(fScale, 1, fScale);
-		}
-	}
-	ImGui::SameLine();
-	ImGui::Checkbox("f3##", &mUIState.bTerrainScaleSliderFloat3);
-	
-	Material& mat = mpScene->GetMaterial(t.MaterialId);
-	ImGui::SliderFloat("Bump", &mat.displacement, 0.0f, 100.0f, "%.1f");
-	ImGui::SliderFloat("Emissive", &mat.emissiveIntensity, 0.0f, 5.0f, "%.1f");
-
-	ImGuiSpacing(3);
-
-	ImGui::Text("Tessellation");
-	ImGui::Checkbox("Tessellate", &t.Tessellation.bEnableTessellation);
-	ImGui::SameLine();
-	ImGui::Checkbox("Wireframe", &t.bWireframe);
-	if (t.Tessellation.bEnableTessellation)
-	{
-		const char* pszTessellationModeNames[] = {
-			"Triangle",
-			"Quad",
-			// "Line"
-			""
-		};
-		if( ImGui::BeginCombo("Domain", pszTessellationModeNames[t.Tessellation.Domain]))
-		{
-			if (ImGui::Selectable(pszTessellationModeNames[0], t.Tessellation.Domain == ETessellationDomain::TRIANGLE_PATCH)) { t.Tessellation.Domain = ETessellationDomain::TRIANGLE_PATCH; }
-			if (ImGui::Selectable(pszTessellationModeNames[1], t.Tessellation.Domain == ETessellationDomain::QUAD_PATCH)) { t.Tessellation.Domain = ETessellationDomain::QUAD_PATCH; }
-			ImGui::EndCombo();
-		}
-
-		constexpr float MAX_TESSELLATION = 50.0f;
-		switch (t.Tessellation.Domain)
-		{
-		case::ETessellationDomain::TRIANGLE_PATCH:
-		{
-			if (mUIState.bTessellationSliderFloatVec)
-			{
-				ImGui::SliderFloat3("Outer", t.Tessellation.TriOuter, 0.0f, MAX_TESSELLATION, "%.1f");
-			}
-			else
-			{
-				float fOuterMin = std::fminf(t.Tessellation.TriOuter[0], std::fminf(t.Tessellation.TriOuter[1], t.Tessellation.TriOuter[2]));
-				if (ImGui::SliderFloat("Outer##", &fOuterMin, 0.0f, MAX_TESSELLATION, "%.1f"))
-				{
-					t.Tessellation.TriOuter[0] = t.Tessellation.TriOuter[1] = t.Tessellation.TriOuter[2] = fOuterMin;
-				}
-			}
-			ImGui::SameLine();
-			ImGui::Checkbox("[]", &mUIState.bTessellationSliderFloatVec);
-			ImGui::SliderFloat("Inner", &t.Tessellation.TriInner, 0.0f, MAX_TESSELLATION, "%.1f");
-		}	break;
-		case::ETessellationDomain::QUAD_PATCH:
-		{
-			if (mUIState.bTessellationSliderFloatVec)
-			{
-				ImGui::SliderFloat4("Outer", t.Tessellation.QuadOuter, 0.0f, MAX_TESSELLATION, "%.1f");
-				ImGui::SameLine();
-				ImGui::Checkbox("[]", &mUIState.bTessellationSliderFloatVec);
-				ImGui::SliderFloat2("Inner", &t.Tessellation.QuadInner[0], 0.0f, MAX_TESSELLATION, "%.1f");
-			}
-			else
-			{
-				float fOuterMin = std::fminf(t.Tessellation.QuadOuter[0], std::fminf(t.Tessellation.QuadOuter[1], std::fminf(t.Tessellation.QuadOuter[2], t.Tessellation.QuadOuter[3])));
-				if (ImGui::SliderFloat("Outer", &fOuterMin, 0.0f, MAX_TESSELLATION, "%.1f"))
-				{
-					t.Tessellation.QuadOuter[0] = t.Tessellation.QuadOuter[1] = t.Tessellation.QuadOuter[2] = t.Tessellation.QuadOuter[3] = fOuterMin;
-				}
-				ImGui::SameLine();
-				ImGui::Checkbox("[]", &mUIState.bTessellationSliderFloatVec);
-
-				float fInnerMin = std::fminf(t.Tessellation.QuadInner[0], t.Tessellation.QuadInner[1]);
-				if (ImGui::SliderFloat("Inner", &fInnerMin, 0.0f, MAX_TESSELLATION, "%.1f"))
-				{
-					t.Tessellation.QuadInner[0] = t.Tessellation.QuadInner[1] = fInnerMin;
-				}
-			}
-		}	break;
-		case::ETessellationDomain::ISOLINE_PATCH:
-		{
-
-		} break;
-		}
-		ImGui::SameLine();
-		ImGui::Checkbox("Lock", &mUIState.bLockTessellationSliders);
-		
-		const char* pszPartitioningNames[] =  
-		{
-			"Integer",
-			"Fractional Even",
-			"Fractional Odd",
-			"Pow2",
-			""
-		};
-		if (ImGui::BeginCombo("Partitioning", pszPartitioningNames[t.Tessellation.Partitioning]))
-		{
-			if (ImGui::Selectable(pszPartitioningNames[0], t.Tessellation.Partitioning == ETessellationPartitioning::INTEGER))        { t.Tessellation.Partitioning = ETessellationPartitioning::INTEGER; }
-			if (ImGui::Selectable(pszPartitioningNames[1], t.Tessellation.Partitioning == ETessellationPartitioning::FRACTIONAL_EVEN)){ t.Tessellation.Partitioning = ETessellationPartitioning::FRACTIONAL_EVEN; }
-			if (ImGui::Selectable(pszPartitioningNames[2], t.Tessellation.Partitioning == ETessellationPartitioning::FRACTIONAL_ODD)) { t.Tessellation.Partitioning = ETessellationPartitioning::FRACTIONAL_ODD; }
-			if (ImGui::Selectable(pszPartitioningNames[3], t.Tessellation.Partitioning == ETessellationPartitioning::POWER_OF_TWO))   { t.Tessellation.Partitioning = ETessellationPartitioning::POWER_OF_TWO; }
-			ImGui::EndCombo();
-		}
-
-
-		switch (t.Tessellation.Domain)
-		{
-		case::ETessellationDomain::TRIANGLE_PATCH:
-			break;
-		}
-
-		const char* pszOutputTopologyNames[] = {
-			"Point",
-			"Line",
-			"Triangle CW",
-			"Triangle CCW",
-			""
-		};
-
-		if (ImGui::BeginCombo("Output Topology", pszOutputTopologyNames[t.Tessellation.OutputTopology]))
-		{
-			if (ImGui::Selectable(pszOutputTopologyNames[0], t.Tessellation.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT       )) { t.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT ; }
-			if (ImGui::Selectable(pszOutputTopologyNames[1], t.Tessellation.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE        )) { if(t.Tessellation.Domain == ETessellationDomain::ISOLINE_PATCH) t.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE; }
-			if (ImGui::Selectable(pszOutputTopologyNames[2], t.Tessellation.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW )) { t.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW; }
-			if (ImGui::Selectable(pszOutputTopologyNames[3], t.Tessellation.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW)) { t.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW; }
-			ImGui::EndCombo();
-		}
-
-		ImGui::Checkbox("Frustum Cull", &t.bFrustumCullPatches);
-	}
-} 

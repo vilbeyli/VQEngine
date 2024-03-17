@@ -1155,7 +1155,7 @@ PSO_ID VQRenderer::CreatePSO_OnThisThread(const FPSODesc& psoLoadDesc)
 
 ID3D12PipelineState* VQRenderer::LoadPSO(const FPSODesc& psoLoadDesc)
 {
-	
+	SCOPED_CPU_MARKER("LoadPSO");
 	TaskID               PSOTaskID = LAST_USED_TASK_ID.fetch_add(1);
 	ID3D12PipelineState* pPSO = nullptr;
 
@@ -1308,6 +1308,7 @@ ID3D12PipelineState* VQRenderer::LoadPSO(const FPSODesc& psoLoadDesc)
 
 FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& ShaderStageCompileDesc)
 {
+	SCOPED_CPU_MARKER("LoadShader");
 	using namespace ShaderUtils;
 	constexpr const char* SHADER_BINARY_EXTENSION = ".bin";
 

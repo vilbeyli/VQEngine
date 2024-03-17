@@ -605,14 +605,12 @@ private:
 	void                            DrawProfilerWindow(const FSceneStats& FrameStats, float dt);
 	void                            DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderParameters& SceneRenderParams);
 	void                            DrawPostProcessSettings(FPostProcessParameters& PPParams);
-	void                            DrawDebugPanelWindow(FSceneRenderParameters& SceneParams, FPostProcessParameters& PPParams);
 	void                            DrawKeyMappingsWindow();
 	void                            DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams, FPostProcessParameters& PPParams);
 	void                            DrawEditorWindow();
 	void                            DrawMaterialEditor();
 	void                            DrawLightEditor();
 	void                            DrawObjectEditor();
-	void                            DrawTerrainEditor();
 
 	//
 	// RENDER HELPERS

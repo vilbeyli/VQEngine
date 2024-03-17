@@ -595,7 +595,6 @@ static void CollectDebugVertexDrawParams(FSceneView& SceneView,
 	const Scene* pScene,
 	const ModelLookup_t& mModels,
 	const std::unordered_map<MeshID, Mesh>& mMeshes,
-	const std::vector<Terrain>& mTerrains,
 	const Camera& cam
 )
 {
@@ -606,7 +605,7 @@ static void CollectDebugVertexDrawParams(FSceneView& SceneView,
 	}
 
 	// count num meshes
-	int NumMeshes = 0;
+	size_t NumMeshes = 0;
 	for (size_t hObj : mSelectedObjects)
 	{
 		const GameObject* pObj = pScene->GetGameObject(hObj);
@@ -616,7 +615,7 @@ static void CollectDebugVertexDrawParams(FSceneView& SceneView,
 		const Model& m = mModels.at(pObj->mModelID);
 		NumMeshes += m.mData.GetNumMeshesOfAllTypes();
 	}
-	SceneView.debugVertexAxesRenderCommands.resize(NumMeshes + mTerrains.size());
+	SceneView.debugVertexAxesRenderCommands.resize(NumMeshes);
 	
 	int i = 0; // no instancing, draw meshes one by one for now
 	for (size_t hObj : mSelectedObjects)
@@ -646,62 +645,6 @@ static void CollectDebugVertexDrawParams(FSceneView& SceneView,
 		}
 	}
 	
-	for(const Terrain& t : mTerrains)
-	{
-		const int lod = 0;
-
-		MeshRenderCommand_t& cmd = SceneView.debugVertexAxesRenderCommands[i++];
-		cmd.matID = t.MaterialId;
-		
-		cmd.matNormal.resize(1);
-		cmd.matWorld.resize(1);
-		cmd.matWorldViewProj.resize(1);
-		cmd.matWorldViewProjPrev.resize(1);
-		
-		cmd.matWorld[0] = t.RootTransform.matWorldTransformation();
-		cmd.matNormal[0] = t.RootTransform.NormalMatrix(cmd.matWorld[0]);
-		cmd.matWorldViewProj[0] = cmd.matWorld[0] * cam.GetViewProjectionMatrix();
-		//cmd.matWorldViewProjPrev[0] = 
-
-		const Mesh& mesh = mMeshes.at(t.MeshId);
-		cmd.numIndices = mesh.GetNumIndices(lod);
-		cmd.vertexIndexBuffer = mesh.GetIABufferIDs(lod);
-	}
-}
-
-static void CollectTerrainDrawParams(FSceneView& SceneView, 
-	const std::vector<Terrain>& mTerrains, 
-	const Scene* pScene,
-	const Camera& cam,
-	const std::unordered_map<MeshID, Mesh>& mMeshes
-)
-{
-	SCOPED_CPU_MARKER("CollectTerrainDrawParams");
-	const size_t NumVisibleTerrains = mTerrains.size(); // TODO: cull terrains
-	SceneView.terrainDrawParams.resize(NumVisibleTerrains);
-	for (size_t i = 0; i < NumVisibleTerrains; ++i)
-	{
-		const Terrain& t = mTerrains[i];
-		const Material& mat = pScene->GetMaterial(t.MaterialId);
-		
-		SceneView.terrainDrawParams[i].Terrain = GetCBuffer_TerrainParams(t, cam);
-		SceneView.terrainDrawParams[i].Terrain.material = mat.GetCBufferData();
-		SceneView.terrainDrawParams[i].Tessellation = GetCBuffer_TerrainTessellationParams(t);
-
-		SceneView.terrainDrawParams[i].HeightmapSRV = mat.SRVHeightMap;
-		SceneView.terrainDrawParams[i].MaterialSRV = mat.SRVMaterialMaps;
-
-		const Mesh& m = mMeshes.at(t.MeshId);
-		const int lod = 0;
-		SceneView.terrainDrawParams[i].vertexIndexBuffer = m.GetIABufferIDs(lod);
-		SceneView.terrainDrawParams[i].numIndices = m.GetNumIndices(lod);
-
-		SceneView.terrainDrawParams[i].bTessellate = t.Tessellation.bEnableTessellation;
-		SceneView.terrainDrawParams[i].bWireframe = t.bWireframe;
-		SceneView.terrainDrawParams[i].iDomain = t.Tessellation.Domain;
-		SceneView.terrainDrawParams[i].iPartition   = t.Tessellation.Partitioning;
-		SceneView.terrainDrawParams[i].iOutTopology = t.Tessellation.OutputTopology;
-	}
 }
 
 void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UIState, int FRAME_DATA_INDEX)
@@ -758,9 +701,7 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 		}
 	}
 
-	CollectDebugVertexDrawParams(SceneView, mSelectedObjects, this, mModels, mMeshes, mTerrains, cam);
-
-	CollectTerrainDrawParams(SceneView, mTerrains, this, cam, mMeshes);
+	CollectDebugVertexDrawParams(SceneView, mSelectedObjects, this, mModels, mMeshes, cam);
 }
 
 
@@ -1575,8 +1516,8 @@ static void AllocInstanceData(FSceneView& SceneView)
 static void CollectMainViewInstanceData(FSceneView& SceneView
 	, const std::vector<std::pair<size_t, float>>& vMainViewCulledBoundingBoxIndexAndArea
 	, const std::vector<std::pair<int, int>>& vOutputWriteParams
-	, int iBegin
-	, int iEnd
+	, size_t iBegin
+	, size_t iEnd
 	, const SceneBoundingBoxHierarchy& BBH
 	, const MeshLookup_t& mMeshes
 )
@@ -1589,7 +1530,7 @@ static void CollectMainViewInstanceData(FSceneView& SceneView
 	const bool bForceLOD0 = SceneView.sceneParameters.bForceLOD0_SceneView;
 	
 	int iOffset = 0;
-	for (int i = iBegin; i <= iEnd; ++i)
+	for (size_t i = iBegin; i <= iEnd; ++i)
 	{
 		const size_t iBB  = vMainViewCulledBoundingBoxIndexAndArea[i].first;
 		const float fArea = vMainViewCulledBoundingBoxIndexAndArea[i].second;

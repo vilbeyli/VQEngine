@@ -674,14 +674,11 @@ void VQEngine::RenderSceneColor(
 	pCmd->RSSetViewports(1, &viewport);
 	pCmd->RSSetScissorRects(1, &scissorsRect);
 
-	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA 
-		? (bUseVisualizationRenderTarget 
-			? (bRenderMotionVectors ? EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_AND_MV_PSO_MSAA_4 : EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_PSO_MSAA_4)
-			: (bRenderMotionVectors ? EBuiltinPSOs::FORWARD_LIGHTING_AND_MV_PSO_MSAA_4 : EBuiltinPSOs::FORWARD_LIGHTING_PSO_MSAA_4) )
-		: (bUseVisualizationRenderTarget 
-			? (bRenderMotionVectors ? EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_AND_MV_PSO : EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_PSO)
-			: (bRenderMotionVectors ? EBuiltinPSOs::FORWARD_LIGHTING_AND_MV_PSO : EBuiltinPSOs::FORWARD_LIGHTING_PSO))
-	));
+	const size_t iMSAA = bMSAA ? 1 : 0;
+	const size_t iFaceCull = 2; // 2:back
+	const size_t iOutMoVec = bRenderMotionVectors ? 1 : 0;
+	const size_t iOutRough = bUseVisualizationRenderTarget ? 1 : 0;
+	
 	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ForwardLighting));
 
 	// set PerFrame constants
@@ -776,6 +773,25 @@ void VQEngine::RenderSceneColor(
 #else
 			const uint32 NumInstances = 1;
 #endif
+			const size_t iAlpha  = 0; // TODO:
+			const size_t iRaster = mat.bWireframe ? 1 : 0;
+			const size_t iTess = mat.Tessellation.bEnableTessellation ? 1 : 0;
+			const size_t iDomain  = iTess == 0 ? 0 : mat.Tessellation.Domain;
+			const size_t iPart    = iTess == 0 ? 0 : mat.Tessellation.Partitioning;
+			const size_t iOutTopo = iTess == 0 ? 0 : mat.Tessellation.OutputTopology;
+			ID3D12PipelineState* pPipelineState = mRenderer.GetPSO(mRenderer.mLightingPSOs.Get(
+				iMSAA,
+				iRaster,
+				iFaceCull,
+				iOutMoVec,
+				iOutRough,
+				iTess,
+				iDomain,
+				iPart,
+				iOutTopo,
+				iAlpha)
+			);
+			pCmd->SetPipelineState(pPipelineState);
 
 			pCmd->SetGraphicsRootConstantBufferView(PerObjRSBindSlot, perObjCBAddr[iCB++]);
 
@@ -784,90 +800,26 @@ void VQEngine::RenderSceneColor(
 				pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
 				//pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
 			}
+			pCmd->SetGraphicsRootDescriptorTable(11, mat.SRVHeightMap == INVALID_ID
+				? NullTex2DSRV.GetGPUDescHandle()
+				: mRenderer.GetSRV(mat.SRVHeightMap).GetGPUDescHandle(0)
+			);
 
-			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			if (mat.Tessellation.bEnableTessellation)
+			{
+				VQ_SHADER_DATA::TessellationParams* pCBuffer_Tessellation = nullptr;
+				D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Tsl;
+				pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Tessellation)), (void**)(&pCBuffer_Tessellation), &cbAddr_Tsl);
+				auto data = mat.GetTessellationCBufferData();
+				memcpy(pCBuffer_Tessellation, &data, sizeof(data));
+				pCmd->SetGraphicsRootConstantBufferView(12, cbAddr_Tsl);
+			}
+			
+			pCmd->IASetPrimitiveTopology(mat.Tessellation.bEnableTessellation ? D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			pCmd->IASetVertexBuffers(0, 1, &vb);
 			pCmd->IASetIndexBuffer(&ib);
 
 			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
-		}
-	}
-
-	// Draw Terrain ---
-	if(!SceneView.terrainDrawParams.empty())
-	{
-		SCOPED_GPU_MARKER(pCmd, "Terrain");
-
-		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__Terrain));
-		
-		pCmd->SetGraphicsRootDescriptorTable(2, mRenderer.GetSRV(mResources_MainWnd.SRV_FFXCACAO_Out).GetGPUDescHandle());
-		pCmd->SetGraphicsRootDescriptorTable(3, bDrawEnvironmentMap
-			? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_IrradianceDiffBlurred).GetGPUDescHandle(0)
-			: NullCubemapSRV.GetGPUDescHandle()
-		);
-		pCmd->SetGraphicsRootDescriptorTable(4, bDrawEnvironmentMap
-			? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_IrradianceSpec).GetGPUDescHandle(0)
-			: NullCubemapSRV.GetGPUDescHandle()
-		);
-		pCmd->SetGraphicsRootDescriptorTable(5, bDrawEnvironmentMap
-			? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_BRDFIntegrationLUT).GetGPUDescHandle()
-			: NullTex2DSRV.GetGPUDescHandle()
-		);
-
-		pCmd->SetGraphicsRootDescriptorTable(6, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Directional).GetGPUDescHandle(0));
-		pCmd->SetGraphicsRootDescriptorTable(7, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Spot).GetGPUDescHandle(0));
-		pCmd->SetGraphicsRootDescriptorTable(8, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Point).GetGPUDescHandle(0));
-
-		pCmd->SetGraphicsRootConstantBufferView(9, cbAddr_PerFrame);
-		pCmd->SetGraphicsRootConstantBufferView(10, cbAddr_PerView);
-		for (const FTerrainDrawParams& param : SceneView.terrainDrawParams)
-		{		
-			const bool bWireframe  = param.bWireframe;
-			const bool bTessellate = param.bTessellate;
-			pCmd->SetPipelineState(mRenderer.GetPSO(
-				mRenderer.mTerrainPSOs.GetPSOId(
-					(bTessellate ? 1 : 0), 
-					(bWireframe ? 1 : 0), 
-					(bMSAA ? 1 : 0),
-					param.iDomain,
-					param.iPartition,
-					param.iOutTopology))
-			);
-
-			// cb0
-			VQ_SHADER_DATA::TerrainParams* pCBuffer_Terrain = nullptr;
-			D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Trn;
-			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Terrain)), (void**)(&pCBuffer_Terrain), &cbAddr_Trn);
-			memcpy(pCBuffer_Terrain, &param.Terrain, sizeof(param.Terrain));
-			pCmd->SetGraphicsRootConstantBufferView(11, cbAddr_Trn);
-
-			// cb1
-			VQ_SHADER_DATA::TerrainTessellationParams* pCBuffer_Tessellation = nullptr;
-			D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Tsl;
-			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Tessellation)), (void**)(&pCBuffer_Tessellation), &cbAddr_Tsl);
-			memcpy(pCBuffer_Tessellation, &param.Tessellation, sizeof(param.Tessellation));
-			pCmd->SetGraphicsRootConstantBufferView(12, cbAddr_Tsl);
-
-			// per-terrain textures
-			pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(param.MaterialSRV).GetGPUDescHandle(0));
-			pCmd->SetGraphicsRootDescriptorTable(1, param.HeightmapSRV == INVALID_ID 
-				? NullTex2DSRV.GetGPUDescHandle()
-				: mRenderer.GetSRV(param.HeightmapSRV).GetGPUDescHandle(0)
-			);
-
-			// IA
-			const VBV& vb = mRenderer.GetVertexBufferView(param.vertexIndexBuffer.first);
-			const IBV& ib = mRenderer.GetIndexBufferView(param.vertexIndexBuffer.second);
-			pCmd->IASetVertexBuffers(0, 1, &vb);
-			pCmd->IASetIndexBuffer(&ib);
-			pCmd->IASetPrimitiveTopology(bTessellate 
-				? (param.iDomain == 0 ? D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST : D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST)
-				: D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST
-			);
-
-			// draw
-			const int NumInstances = 1;
-			pCmd->DrawIndexedInstanced(param.numIndices, NumInstances, 0, 0, 0);
 		}
 	}
 

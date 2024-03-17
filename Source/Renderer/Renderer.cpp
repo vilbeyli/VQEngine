@@ -456,7 +456,7 @@ void VQRenderer::UploadVertexAndIndexBufferHeaps()
 ID3D12PipelineState* VQRenderer::GetPSO(PSO_ID psoID) const
 {
 	assert(psoID >= EBuiltinPSOs::NUM_BUILTIN_PSOs);
-
+	if (psoID == INVALID_ID) return nullptr;
 	return mPSOs.at(psoID);
 }
 

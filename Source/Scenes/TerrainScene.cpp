@@ -17,10 +17,7 @@ void TerrainScene::UpdateScene(float dt, FSceneView& SceneView)
 static const char* pszTerrainMaterialName = "TerrainMaterial0";
 void TerrainScene::InitializeScene()
 {
-	for (Terrain& t : mTerrains)
-	{
-		t.MaterialId = CreateMaterial(pszTerrainMaterialName);
-	}
+
 }
 
 void TerrainScene::LoadScene(FSceneRepresentation& scene)
@@ -39,34 +36,23 @@ void TerrainScene::LoadScene(FSceneRepresentation& scene)
 	mr.HeightMapFilePath    = "Data/Textures/PBR/PavingStone05_4K/PavingStone05_4K_Height.png";
 	mr.TilingX              = 10.f;
 	mr.TilingY              = 10.f;
+
+	FTessellationParameters& tess = mr.Tessellation;
+	tess.bEnableTessellation = true;
+	tess.TriInner = 4.0f;
+	tess.TriOuter[0] = tess.TriOuter[1] = tess.TriOuter[2] = 4.0f;
+	tess.QuadInner[0] = tess.QuadInner[1] = 4.0f;
+	tess.QuadOuter[0] = tess.QuadOuter[1] = tess.QuadOuter[2] = tess.QuadOuter[3] = 4.0f;
 	scene.Materials.push_back(mr);
-		
-	// terrains
-	{
-		Terrain t;
-		t.MeshId = EBuiltInMeshes::GRID_DETAILED_QUAD1;
-		t.Name = "Terrain0";
-
-		FTessellationParameters& tess = t.Tessellation;
-		tess.TriInner = 4.0f;
-		tess.TriOuter[0] = tess.TriOuter[1] = tess.TriOuter[2] = 4.0f;
-		tess.QuadInner[0] = tess.QuadInner[1] = 4.0f;
-		tess.QuadOuter[0] = tess.QuadOuter[1] = tess.QuadOuter[2] = tess.QuadOuter[3] = 4.0f;
-
-		const float fTerrainScale = 1000.f;
-		t.RootTransform.SetPosition(0, 0, 0);
-		t.RootTransform.SetScale(fTerrainScale, 1, fTerrainScale);
-		mTerrains.push_back(t);
-	}
 	
-	if constexpr (false)
-	{
-		Terrain t;
-		t.MeshId = EBuiltInMeshes::GRID_DETAILED_QUAD2;
-		t.RootTransform.SetPosition(-10, 100, 0);
-		t.RootTransform.SetScale(100, 1, 100);
-		mTerrains.push_back(t);
-	}
+	const float fTerrainScale = 1000.f;
+	FGameObjectRepresentation obj;
+	obj.tf.SetPosition(0, 0, 0);
+	obj.tf.SetScale(fTerrainScale, 1, fTerrainScale);
+	obj.BuiltinMeshName = "DetaildGrid1";
+	obj.ModelName = "TerrainModel0";
+	obj.MaterialName = pszTerrainMaterialName;
+	scene.Objects.emplace_back(obj);
 }
 
 void TerrainScene::UnloadScene()

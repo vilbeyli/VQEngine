@@ -42,3 +42,17 @@ enum ETessellationPartitioning
 	FRACTIONAL_ODD,
 	POWER_OF_TWO,
 };
+
+struct FTessellationParameters
+{
+	bool bEnableTessellation = false;
+	ETessellationDomain Domain = ETessellationDomain::TRIANGLE_PATCH;
+	ETessellationOutputTopology OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW;
+	ETessellationPartitioning Partitioning = ETessellationPartitioning::FRACTIONAL_ODD;
+
+	float TriOuter[3];
+	float TriInner;
+	float QuadInner[2];
+	float QuadOuter[4];
+	// TODO: line
+};
