@@ -251,6 +251,7 @@ void VQEngine::InitializeImGUI(HWND hwnd)
 
 void VQEngine::InitializeUI(HWND hwnd)
 {
+	SCOPED_CPU_MARKER("InitializeUI");
 	ImGuiIO& io = ImGui::GetIO();
 	// Get UI texture 
 	//

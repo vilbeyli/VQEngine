@@ -66,6 +66,7 @@ void VQEngine::UpdateThread_Main()
 
 void VQEngine::UpdateThread_Inititalize()
 {
+	SCOPED_CPU_MARKER("UpdateThread_Inititalize");
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mNumUpdateLoopsExecuted.store(0);
 #endif
@@ -78,9 +79,6 @@ void VQEngine::UpdateThread_Inititalize()
 #endif
 
 	InitializeUI(mpWinMain->GetHWND());
-
-	// immediately load loading screen texture
-	LoadLoadingScreenData();
 
 	mTimer.Reset();
 	mTimer.Start();
@@ -520,6 +518,7 @@ void FLoadingScreenData::RotateLoadingScreenImageIndex()
 }
 void VQEngine::LoadLoadingScreenData()
 {
+	SCOPED_CPU_MARKER("LoadLoadingScreenData");
 	FLoadingScreenData& data = mLoadingScreenData;
 
 	data.SwapChainClearColor = { 0.0f, 0.2f, 0.4f, 1.0f };

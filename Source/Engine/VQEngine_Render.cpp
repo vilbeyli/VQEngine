@@ -159,9 +159,25 @@ static bool CheckInitialSwapchainResizeRequired(std::unordered_map<HWND, bool>& 
 	}
 	return bExclusiveFullscreen;
 }
+
+std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs()
+{
+	SCOPED_CPU_MARKER("LoadPSODescs_Builtin");
+
+	mLightingPSOs.GatherPSOLoadDescs(mRootSignatureLookup);
+	std::vector<FPSODesc> descs(mLightingPSOs.mapLoadDesc.size());
+	int i = 0;
+	for (auto it = mLightingPSOs.mapLoadDesc.begin(); it != mLightingPSOs.mapLoadDesc.end(); ++it)
+	{
+		descs[i++] = it->second;
+		mLightingPSOs.mapPSO[it->first] = EBuiltinPSOs::NUM_BUILTIN_PSOs + i; // assign PSO_IDs beforehand
+	}
+	return descs;
+}
+
 void VQEngine::RenderThread_Inititalize()
 {
-	SCOPED_CPU_MARKER("RenderThread_Inititalize");
+	SCOPED_CPU_MARKER("RenderThread_Inititalize()");
 	mRenderPasses = // manual render pass registration for now (early in dev)
 	{
 		&mRenderPass_AO,
@@ -217,45 +233,67 @@ void VQEngine::RenderThread_Inititalize()
 		}
 	}
 
-	InitializeBuiltinMeshes();
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mbRenderThreadInitialized.store(true);
 #endif
-
+	 
 	// load builtin resources, compile shaders, load PSOs
-	mRenderer.Load(); // TODO: THREADED LOADING
-	RenderThread_LoadResources();
+	
+	mRenderer.Load();
 
 	// initialize render passes
-	std::vector<FPSOCreationTaskParameters> RenderPassPSOLoadDescs;
 	for (IRenderPass* pPass : mRenderPasses)
+		pPass->Initialize();
+
+	// collect its PSO load descriptors so we can dispatch PSO compilation workers
+	std::vector<FPSOCreationTaskParameters> RenderPassPSOTaskParams;
 	{
-		pPass->Initialize(); // initialize the render pass
-
-		// collect its PSO load descriptors so we can dispatch PSO compilation workers
-		const auto vPassPSODescs = pPass->CollectPSOCreationParameters();
-		RenderPassPSOLoadDescs.insert(RenderPassPSOLoadDescs.end()
-			, std::make_move_iterator(vPassPSODescs.begin())
-			, std::make_move_iterator(vPassPSODescs.end())
-		);
+		SCOPED_CPU_MARKER("LoadPSODescs_RenderPass");
+		for (IRenderPass* pPass : mRenderPasses)
+		{
+			const std::vector<FPSOCreationTaskParameters> vPSOTaskParams = pPass->CollectPSOCreationParameters();
+			RenderPassPSOTaskParams.insert(RenderPassPSOTaskParams.end()
+				, std::make_move_iterator(vPSOTaskParams.begin())
+				, std::make_move_iterator(vPSOTaskParams.end())
+			);
+		}
 	}
+#define MT_PSO 1
+#if MT_PSO
 
+	mRenderer.StartPSOCompilation_MT(RenderPassPSOTaskParams);
+	RenderThread_LoadResources();
+
+#else
+
+	RenderThread_LoadResources();
+	mRenderer.LoadBuiltinPSOs();
 	// compile PSOs (single-threaded)
-	for (auto& pr : RenderPassPSOLoadDescs)
 	{
-		*pr.pID = mRenderer.CreatePSO_OnThisThread(pr.Desc);
+		SCOPED_CPU_MARKER("CompilePassPSOs()");
+		for (auto& pr : RenderPassPSOTaskParams)
+		{
+			*pr.pID = mRenderer.CreatePSO_OnThisThread(pr.Desc);
+		}
 	}
 
+#endif
 
 	// load window resources
 	const bool bFullscreen = mpWinMain->IsFullscreen();
 	const int W = bFullscreen ? mpWinMain->GetFullscreenWidth() : mpWinMain->GetWidth();
 	const int H = bFullscreen ? mpWinMain->GetFullscreenHeight() : mpWinMain->GetHeight();
-
-	// Post process parameters are not initialized at this stage to determine the resolution scale
-	const float fResolutionScale = 1.0f;
+	const float fResolutionScale = 1.0f; // Post process parameters are not initialized at this stage to determine the resolution scale
 	RenderThread_LoadWindowSizeDependentResources(mpWinMain->GetHWND(), W, H, fResolutionScale);
+
+	LoadLoadingScreenData();
+	InitializeBuiltinMeshes();
+
+#if MT_PSO
+	mRenderer.WaitPSOCompilation();
+	mRenderer.AssignPSOs();
+#endif
 
 	mTimerRender.Reset();
 	mTimerRender.Start();
@@ -281,6 +319,7 @@ void VQEngine::RenderThread_Exit()
 
 void VQEngine::InitializeBuiltinMeshes()
 {
+	SCOPED_CPU_MARKER("InitializeBuiltinMeshes()");
 	using VertexType = FVertexWithNormalAndTangent;
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::TRIANGLE;
@@ -353,6 +392,7 @@ void VQEngine::InitializeBuiltinMeshes()
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height, float fResolutionScale)
 {
+	SCOPED_CPU_MARKER("RenderThread_LoadWindowSizeDependentResources()");
 	assert(Width >= 1 && Height >= 1);
 
 	const uint RenderResolutionX = static_cast<uint>(Width * fResolutionScale);
@@ -749,8 +789,8 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 }
 
 void VQEngine::RenderThread_LoadResources()
-
 {
+	SCOPED_CPU_MARKER("RenderThread_LoadResources()");
 	FRenderingResources_MainWindow& rsc = mResources_MainWnd;
 
 	// null cubemap SRV
@@ -902,6 +942,7 @@ void VQEngine::RenderThread_LoadResources()
 
 void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 {
+	SCOPED_CPU_MARKER("RenderThread_UnloadWindowSizeDependentResources()");
 	if (hwnd == mpWinMain->GetHWND())
 	{
 		FRenderingResources_MainWindow& r = mResources_MainWnd;

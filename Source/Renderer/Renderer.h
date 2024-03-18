@@ -202,9 +202,8 @@ public:
 
 	// Pipeline State Object creation functions
 	PSO_ID                       CreatePSO_OnThisThread(const FPSODesc& psoLoadDesc);
-	void                         EnqueueTask_CreatePSO(FPSOCreationTaskParameters&& params);
-	void                         StartPSOCreationTasks();
-	void                         WaitForPSOCreationTaskQueueCompletion();
+	void                          EnqueueTask_ShaderLoad(TaskID PSOLoadTaskID, const FShaderStageCompileDesc&);
+	std::vector<std::shared_future<FShaderStageCompileResult>> StartShaderLoadTasks(TaskID PSOLoadTaskID);
 	//void AbortTasks(); // ?
 
 
@@ -281,12 +280,14 @@ public:
 			return Get(Hash(iMSAA, iRaster, iFaceCull, iOutMoVec, iOutRough, iTess, iDomain, iPart, iOutTopo, iAlpha)); 
 		}
 
-		void Compile(VQRenderer& Renderer, const std::unordered_map<RS_ID, ID3D12RootSignature*>& mRootSignatureLookup);
+		void GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12RootSignature*>& mRootSignatureLookup);
+		void Compile(VQRenderer& Renderer);
 		std::unordered_map<size_t, PSO_ID> mapPSO;
 		std::unordered_map<size_t, FPSODesc> mapLoadDesc;
 
 		static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_MAT_OPTIONS * NUM_RENDERING_OPTS * NUM_OUTPUT_OPTS * NUM_TESS_OPTS;
 	} mLightingPSOs;
+	void ReservePSOMap(size_t NumPSOs);
 
 private:
 	using PSOArray_t = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
@@ -360,27 +361,37 @@ private:
 	
 	
 	// Multithreaded PSO Loading
-	ThreadPool mWorkers_PSOLoad; // Loading a PSO will use one worker from shaderLoad pool for each shader stage to be compiled
-	struct FPSOCreationTaskExecutionContext{ std::queue<FPSOCreationTaskParameters> TaskQueue; };
-	std::unordered_map <TaskID, FPSOCreationTaskExecutionContext> mLookup_PSOCreationContext;
+	ThreadPool mWorkers_PSOLoad;
+	struct FPSOCompileResult { ID3D12PipelineState* pPSO; PSO_ID id; };
+
+	std::vector<std::shared_future<VQRenderer::FPSOCompileResult>> mPSOCompileResults;
+	std::vector<std::shared_future<FShaderStageCompileResult>> mShaderCompileResults;
 
 	// Multithreaded Shader Loading
 	ThreadPool mWorkers_ShaderLoad;
 	struct FShaderLoadTaskContext { std::queue<FShaderStageCompileDesc> TaskQueue; };
 	std::unordered_map < TaskID, FShaderLoadTaskContext> mLookup_ShaderLoadContext;
-	
-	void EnqueueTask_ShaderLoad(TaskID PSOLoadTaskID, const FShaderStageCompileDesc&);
-	std::vector<std::shared_future<FShaderStageCompileResult>> StartShaderLoadTasks(TaskID PSOLoadTaskID);
 
 private:
 	void InitializeD3D12MA();
 	void InitializeHeaps();
 	
-
 	void LoadBuiltinRootSignatures();
-	void LoadBuiltinPSOs();
 	void LoadDefaultResources();
+
+public:
+	void LoadBuiltinPSOs();
+
+	void StartPSOCompilation_MT(const std::vector<FPSOCreationTaskParameters>& RenderPassPSODescs);
+	void WaitPSOCompilation();
+	void AssignPSOs();
+	std::vector<FPSODesc> LoadBuiltinPSODescs_Legacy();
+	std::vector<FPSODesc> LoadBuiltinPSODescs();
 	
+	static std::string GetCachedShaderBinaryPath(const FShaderStageCompileDesc& ShaderStageCompileDesc);
+private:
+	ID3D12PipelineState* CompileGraphicsPSO(const FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults);
+	ID3D12PipelineState* CompileComputePSO (const FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults);
 
 	ID3D12PipelineState* LoadPSO(const FPSODesc& psoLoadDesc);
 	FShaderStageCompileResult LoadShader(const FShaderStageCompileDesc& shaderStageDesc);

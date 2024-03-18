@@ -164,14 +164,16 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 
 	const size_t HWThreads = ThreadPool::sHardwareThreadCount;
 	const size_t HWCores   = HWThreads >> 1;
-	mWorkers_ShaderLoad.Initialize(HWThreads, "ShaderLoadWorkers");
-	mWorkers_PSOLoad.Initialize(HWThreads, "PSOLoadWorkers");
+	mWorkers_ShaderLoad.Initialize(HWCores, "ShaderLoadWorkers");
+	mWorkers_PSOLoad.Initialize(HWCores, "PSOLoadWorkers");
 
 	Log::Info("[Renderer] Initialized.");
 }
 
+#include "../Engine/GPUMarker.h"
 void VQRenderer::Load()
 {
+	SCOPED_CPU_MARKER("Renderer::Load()");
 	Timer timer; timer.Start();
 	Log::Info("[Renderer] Loading...");
 	
@@ -179,15 +181,11 @@ void VQRenderer::Load()
 	float tRS = timer.Tick();
 	Log::Info("[Renderer]    RootSignatures=%.2fs", tRS);
 
-	LoadBuiltinPSOs();
-	float tPSOs = timer.Tick();
-	Log::Info("[Renderer]    PSOs=%.2fs", tPSOs);
-
 	LoadDefaultResources();
 	float tDefaultRscs = timer.Tick();
 	Log::Info("[Renderer]    DefaultRscs=%.2fs", tDefaultRscs);
 
-	float total = tRS + tPSOs + tDefaultRscs;
+	float total = tRS + tDefaultRscs;
 	Log::Info("[Renderer] Loaded in %.2fs.", total);
 	mbDefaultResourcesLoaded.store(true);
 }
