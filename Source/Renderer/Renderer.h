@@ -356,9 +356,13 @@ private:
 	std::thread                    mTextureUploadThread;
 	std::mutex                     mMtxTextureUploadQueue;
 	std::queue<FTextureUploadDesc> mTextureUploadQueue;
-
-	std::atomic<bool>              mbDefaultResourcesLoaded;
 	
+public:
+	std::atomic<bool>              mbDefaultResourcesLoaded;
+	std::atomic<bool>              mbDefaultMeshesLoaded;
+	std::atomic<bool>              mbRendererInitialized;
+
+	private:
 	
 	// Multithreaded PSO Loading
 	ThreadPool mWorkers_PSOLoad;

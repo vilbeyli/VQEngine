@@ -450,6 +450,9 @@ private:
 	std::atomic<bool>               mSubmitWorkerFinished = true;
 	bool                            mWaitForSubmitWorker = false;
 
+	// load events
+	std::future<bool>              mbLoadingScreenLoaded;
+
 	// renderer
 	VQRenderer                      mRenderer;
 

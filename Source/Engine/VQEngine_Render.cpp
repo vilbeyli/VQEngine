@@ -175,9 +175,21 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs()
 	return descs;
 }
 
+static void LoadRenderPassPSODescs(const std::vector<IRenderPass*>& mRenderPasses, std::vector<FPSOCreationTaskParameters>& RenderPassPSOTaskParams)
+{
+	SCOPED_CPU_MARKER("LoadRenderPassPSODescs");
+	for (IRenderPass* pPass : mRenderPasses)
+	{
+		const std::vector<FPSOCreationTaskParameters> vPSOTaskParams = pPass->CollectPSOCreationParameters();
+		RenderPassPSOTaskParams.insert(RenderPassPSOTaskParams.end()
+			, std::make_move_iterator(vPSOTaskParams.begin())
+			, std::make_move_iterator(vPSOTaskParams.end())
+		);
+	}
+}
 void VQEngine::RenderThread_Inititalize()
 {
-	SCOPED_CPU_MARKER("RenderThread_Inititalize()");
+	SCOPED_CPU_MARKER_C("RenderThread_Inititalize()", 0xFF007700);
 	mRenderPasses = // manual render pass registration for now (early in dev)
 	{
 		&mRenderPass_AO,
@@ -196,10 +208,16 @@ void VQEngine::RenderThread_Inititalize()
 	mNumRenderLoopsExecuted.store(0);
 #endif
 
+#define THREADED_CTX_INIT 1
+#if THREADED_CTX_INIT
+	std::atomic<bool> bSwapChainReady = false;
+	mWorkers_Simulation.AddTask([=, &bSwapChainReady]() {
+#endif
 	// Initialize swapchains for each rendering window
 	// all windows use the same number of swapchains as the main window
 	const int NUM_SWAPCHAIN_BUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
 	{
+		SCOPED_CPU_MARKER("mpWinMainInitContext");
 		const bool bIsContainingWindowOnHDRScreen = VQSystemInfo::FMonitorInfo::CheckHDRSupport(mpWinMain->GetHWND());
 		const bool bCreateHDRSwapchain = mSettings.WndMain.bEnableHDR && bIsContainingWindowOnHDRScreen;
 		if (mSettings.WndMain.bEnableHDR && !bIsContainingWindowOnHDRScreen)
@@ -212,14 +230,60 @@ void VQEngine::RenderThread_Inititalize()
 	}
 	if(mpWinDebug)
 	{
+		SCOPED_CPU_MARKER("mpWinDebugInitContext");
 		const bool bIsContainingWindowOnHDRScreen = VQSystemInfo::FMonitorInfo::CheckHDRSupport(mpWinDebug->GetHWND());
 		constexpr bool bCreateHDRSwapchain = false; // only main window in HDR for now
 		mRenderer.InitializeRenderContext(mpWinDebug.get(), NUM_SWAPCHAIN_BUFFERS, false, bCreateHDRSwapchain);
 		mEventQueue_VQEToWin_Main.AddItem(std::make_shared<HandleWindowTransitionsEvent>(mpWinDebug->GetHWND()));
 	}
 
+#if THREADED_CTX_INIT
+		bSwapChainReady.store(true);
+	});
+#endif
+
+
+
+
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	mbRenderThreadInitialized.store(true);
+#endif
+	 
+	// load builtin resources, compile shaders, load PSOs
+	
+	mRenderer.Load();
+	RenderThread_LoadResources();
+	
+	mWorkers_Simulation.AddTask([=]() { LoadLoadingScreenData(); });
+	mWorkers_Simulation.AddTask([=]() { InitializeBuiltinMeshes(); });
+
+	// initialize render passes
+	{
+		SCOPED_CPU_MARKER("InitRenderPasses");
+		for (IRenderPass* pPass : mRenderPasses) 
+			pPass->Initialize();
+	}
+
+	// collect its PSO load descriptors so we can dispatch PSO compilation workers
+	std::vector<FPSOCreationTaskParameters> RenderPassPSOTaskParams;
+	LoadRenderPassPSODescs(mRenderPasses, RenderPassPSOTaskParams);
+	mRenderer.StartPSOCompilation_MT(RenderPassPSOTaskParams);
+
+	// load window resources
+	const bool bFullscreen = mpWinMain->IsFullscreen();
+	const int W = bFullscreen ? mpWinMain->GetFullscreenWidth() : mpWinMain->GetWidth();
+	const int H = bFullscreen ? mpWinMain->GetFullscreenHeight() : mpWinMain->GetHeight();
+	const float fResolutionScale = 1.0f; // Post process parameters are not initialized at this stage to determine the resolution scale
+
+#if THREADED_CTX_INIT
+	{
+		SCOPED_CPU_MARKER_C("WaitSwapchainReady", 0xFF770000);
+		while(!bSwapChainReady.load());
+	}
+
 	// initialize queue fences
 	{
+		SCOPED_CPU_MARKER("InitQueueFences");
 		ID3D12Device* pDevice = mRenderer.GetDevicePtr();
 		const int NumBackBuffers = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
 		mAsyncComputeSSAOReadyFence.resize(NumBackBuffers);
@@ -232,68 +296,11 @@ void VQEngine::RenderThread_Inititalize()
 			mCopyObjIDDoneFence[i].Create(pDevice, "CopyObjIDDoneFence");
 		}
 	}
-
-
-#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
-	mbRenderThreadInitialized.store(true);
 #endif
-	 
-	// load builtin resources, compile shaders, load PSOs
-	
-	mRenderer.Load();
-
-	// initialize render passes
-	for (IRenderPass* pPass : mRenderPasses)
-		pPass->Initialize();
-
-	// collect its PSO load descriptors so we can dispatch PSO compilation workers
-	std::vector<FPSOCreationTaskParameters> RenderPassPSOTaskParams;
-	{
-		SCOPED_CPU_MARKER("LoadPSODescs_RenderPass");
-		for (IRenderPass* pPass : mRenderPasses)
-		{
-			const std::vector<FPSOCreationTaskParameters> vPSOTaskParams = pPass->CollectPSOCreationParameters();
-			RenderPassPSOTaskParams.insert(RenderPassPSOTaskParams.end()
-				, std::make_move_iterator(vPSOTaskParams.begin())
-				, std::make_move_iterator(vPSOTaskParams.end())
-			);
-		}
-	}
-#define MT_PSO 1
-#if MT_PSO
-
-	mRenderer.StartPSOCompilation_MT(RenderPassPSOTaskParams);
-	RenderThread_LoadResources();
-
-#else
-
-	RenderThread_LoadResources();
-	mRenderer.LoadBuiltinPSOs();
-	// compile PSOs (single-threaded)
-	{
-		SCOPED_CPU_MARKER("CompilePassPSOs()");
-		for (auto& pr : RenderPassPSOTaskParams)
-		{
-			*pr.pID = mRenderer.CreatePSO_OnThisThread(pr.Desc);
-		}
-	}
-
-#endif
-
-	// load window resources
-	const bool bFullscreen = mpWinMain->IsFullscreen();
-	const int W = bFullscreen ? mpWinMain->GetFullscreenWidth() : mpWinMain->GetWidth();
-	const int H = bFullscreen ? mpWinMain->GetFullscreenHeight() : mpWinMain->GetHeight();
-	const float fResolutionScale = 1.0f; // Post process parameters are not initialized at this stage to determine the resolution scale
 	RenderThread_LoadWindowSizeDependentResources(mpWinMain->GetHWND(), W, H, fResolutionScale);
 
-	LoadLoadingScreenData();
-	InitializeBuiltinMeshes();
-
-#if MT_PSO
 	mRenderer.WaitPSOCompilation();
 	mRenderer.AssignPSOs();
-#endif
 
 	mTimerRender.Reset();
 	mTimerRender.Start();
@@ -330,7 +337,7 @@ void VQEngine::InitializeBuiltinMeshes()
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::CUBE;
 		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Cube<VertexType>();
-		mResourceNames.mBuiltinMeshNames[EBuiltInMeshes::CUBE] = "Cube";
+		mResourceNames.mBuiltinMeshNames[eMesh] = "Cube";
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.LODVertices[0], data.LODIndices[0], mResourceNames.mBuiltinMeshNames[eMesh]);
 	} 
 	{
@@ -382,6 +389,7 @@ void VQEngine::InitializeBuiltinMeshes()
 	// ...
 
 	mRenderer.UploadVertexAndIndexBufferHeaps();
+	mRenderer.mbDefaultMeshesLoaded.store(true);
 }
 
 
@@ -938,6 +946,8 @@ void VQEngine::RenderThread_LoadResources()
 		mRenderer.InitializeSRV(rsc.SRV_ShadowMaps_Point, 0, rsc.Tex_ShadowMaps_Point, true, true);
 		mRenderer.InitializeSRV(rsc.SRV_ShadowMaps_Directional, 0, rsc.Tex_ShadowMaps_Directional);
 	}
+	
+	mRenderer.mbDefaultResourcesLoaded.store(true);
 }
 
 void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)

@@ -55,4 +55,10 @@ struct FTessellationParameters
 	float QuadInner[2];
 	float QuadOuter[4];
 	// TODO: line
+
+	FTessellationParameters()
+	{
+		TriOuter[0] = TriOuter[1] = TriOuter[2] = TriInner = 1.0f;
+		QuadOuter[0] = QuadOuter[1] = QuadOuter[2] = QuadOuter[3] = QuadInner[0] = QuadInner[1] = 1.0f;
+	}
 };

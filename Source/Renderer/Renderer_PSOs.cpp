@@ -659,6 +659,7 @@ static std::vector<FShaderStageCompileDesc> GatherUniqueShaderCompileDescs(const
 
 void VQRenderer::StartPSOCompilation_MT(const std::vector<FPSOCreationTaskParameters>& PSOCompileParams_RenderPass)
 {
+	SCOPED_CPU_MARKER("StartPSOCompilation_MT");
 	std::vector<FPSODesc> PSODescs_BuiltinLegacy = LoadBuiltinPSODescs_Legacy();
 	std::vector<FPSODesc> PSODescs_Builtin = LoadBuiltinPSODescs();
 	

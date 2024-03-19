@@ -187,7 +187,6 @@ void VQRenderer::Load()
 
 	float total = tRS + tDefaultRscs;
 	Log::Info("[Renderer] Loaded in %.2fs.", total);
-	mbDefaultResourcesLoaded.store(true);
 }
 
 void VQRenderer::Unload()
@@ -445,6 +444,7 @@ void VQRenderer::LoadDefaultResources()
 }
 void VQRenderer::UploadVertexAndIndexBufferHeaps()
 {
+	SCOPED_CPU_MARKER("UploadVertexAndIndexBufferHeaps");
 	std::lock_guard<std::mutex> lk(mMtxTextureUploadQueue);
 	mStaticHeap_VertexBuffer.UploadData(mHeapUpload.GetCommandList());
 	mStaticHeap_IndexBuffer.UploadData(mHeapUpload.GetCommandList());

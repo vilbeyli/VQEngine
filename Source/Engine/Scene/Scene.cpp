@@ -1336,7 +1336,7 @@ static uint64 GetKey(MaterialID matID, MeshID meshID, int lod)
 {
 	assert(matID != -1);
 	assert(meshID != -1);
-	assert(lod >= 0 && lod < 4);
+	assert(lod >= 0 && lod < 16);
 	constexpr int mask = 0x3FFFFFFF; // __11 1111 1111 1111
 	uint64 hash = std::max(0, std::min(1 << 4, lod));
 	hash |= ((uint64)(meshID & mask)) << 4;

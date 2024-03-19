@@ -401,7 +401,7 @@ PSInput DSMain(
 	float3 vPosition = INTERPOLATE_PATCH_ATTRIBUTE(vPosition, bary);
 	// vPosition.xyz += CalcHeightOffset(uv);
 	
-#if 1
+#if 0
 	// generate normals and tangents
 	float3 tangent   = patch[1].vPosition- patch[0].vPosition;
 	float3 bitangent = patch[2].vPosition - patch[0].vPosition;

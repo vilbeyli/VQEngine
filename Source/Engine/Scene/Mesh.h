@@ -781,7 +781,15 @@ namespace GeometryGenerator
 					const float u = float(iY) / (n-1);
 					SetFVec<2>(vert.uv, { u, 1.0f-v });
 
+					if constexpr (bHasNormals)
+					{
+						SetFVec<3>(vert.normal, { 0.0f , 1.0f, 0.0f });
+					}
 
+					if constexpr (bHasTangents)
+					{
+						SetFVec<3>(vert.tangent, { 1.0f , 0.0f, 0.0f });
+					}
 				}
 			}
 			

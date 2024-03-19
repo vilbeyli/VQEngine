@@ -66,7 +66,7 @@ void VQEngine::UpdateThread_Main()
 
 void VQEngine::UpdateThread_Inititalize()
 {
-	SCOPED_CPU_MARKER("UpdateThread_Inititalize");
+	SCOPED_CPU_MARKER_C("UpdateThread_Inititalize()", 0xFF000077);
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mNumUpdateLoopsExecuted.store(0);
 #endif
@@ -86,9 +86,9 @@ void VQEngine::UpdateThread_Inititalize()
 
 void VQEngine::UpdateThread_Tick(const float dt)
 {
-	float dt_RenderWaitTime = 0.0f;
-
 	SCOPED_CPU_MARKER_C("UpdateThread_Tick()", 0xFF000077);
+	
+	float dt_RenderWaitTime = 0.0f;
 
 	dt_RenderWaitTime = UpdateThread_WaitForRenderThread();
 
@@ -496,15 +496,15 @@ void VQEngine::Load_SceneData_Dispatch()
 	}
 	//----------------------------------------------------------------------
 	
-
-	// start loading textures, models, materials with worker threads
-	mpScene->StartLoading(this->mBuiltinMeshes, SceneRep, mWorkers_Simulation);
-
 	// start loading environment map textures
 	if (!SceneRep.EnvironmentMapPreset.empty())
 	{
 		mWorkers_TextureLoading.AddTask([=]() { LoadEnvironmentMap(SceneRep.EnvironmentMapPreset, mSettings.gfx.EnvironmentMapResolution); });
 	}
+
+	// start loading textures, models, materials with worker threads
+	mpScene->StartLoading(this->mBuiltinMeshes, SceneRep, mWorkers_Simulation);
+
 }
 
 SRV_ID FLoadingScreenData::GetSelectedLoadingScreenSRV_ID() const
@@ -555,7 +555,7 @@ void VQEngine::LoadLoadingScreenData()
 		data.SRVs.push_back(srvID);
 		data.SelectedLoadingScreenSRVIndex = static_cast<int>(data.SRVs.size() - 1);
 	}
-
+	
 }
 
 
