@@ -686,10 +686,12 @@ void VQRenderer::StartPSOCompilation_MT(const std::vector<FPSOCreationTaskParame
 	assert(EBuiltinPSOs::NUM_BUILTIN_PSOs == PSODescs_BuiltinLegacy.size());
 	ReservePSOMap(PSODescs.size() - EBuiltinPSOs::NUM_BUILTIN_PSOs);
 	
-	int i = 0;
-	for (auto& params : PSOCompileParams_RenderPass) 
 	{
-		*params.pID = NumBuiltinPSOs + i++;
+		int i = 0;
+		for (auto& params : PSOCompileParams_RenderPass)
+		{
+			*params.pID = NumBuiltinPSOs + i++;
+		}
 	}
 
 	// shader compile context
@@ -734,7 +736,7 @@ void VQRenderer::StartPSOCompilation_MT(const std::vector<FPSOCreationTaskParame
 				ID3D12Device* pDevice = mDevice.GetDevicePtr();
 				FPSOCompileResult result;
 				result.pPSO = nullptr;
-				result.id = INVALID_ID;
+				result.id = psoID;
 				ID3D12PipelineState*& pPSO = result.pPSO;
 
 				// check if PSO is cached
@@ -787,7 +789,6 @@ void VQRenderer::StartPSOCompilation_MT(const std::vector<FPSOCreationTaskParame
 					pPSO = bComputePSO
 						? CompileComputePSO(PSODesc, ShaderCompileResultsForThisPSO)
 						: CompileGraphicsPSO(PSODesc, ShaderCompileResultsForThisPSO);
-					result.id = psoID;
 				}
 				else // load cached PSO
 				{

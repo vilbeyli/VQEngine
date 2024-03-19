@@ -1253,7 +1253,7 @@ void VQEngine::DrawMaterialEditor()
 			matIDs.push_back(matID);
 		}
 	}
-	if (mpScene->mSelectedObjects.empty())
+	if (matIDs.empty())
 	{
 		matIDs = matIDsAll;
 	}

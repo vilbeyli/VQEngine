@@ -779,7 +779,7 @@ void VQEngine::RenderSceneColor(
 			const size_t iDomain  = iTess == 0 ? 0 : mat.Tessellation.Domain;
 			const size_t iPart    = iTess == 0 ? 0 : mat.Tessellation.Partitioning;
 			const size_t iOutTopo = iTess == 0 ? 0 : mat.Tessellation.OutputTopology;
-			ID3D12PipelineState* pPipelineState = mRenderer.GetPSO(mRenderer.mLightingPSOs.Get(
+			PSO_ID psoID = mRenderer.mLightingPSOs.Get(
 				iMSAA,
 				iRaster,
 				iFaceCull,
@@ -789,8 +789,8 @@ void VQEngine::RenderSceneColor(
 				iDomain,
 				iPart,
 				iOutTopo,
-				iAlpha)
-			);
+				iAlpha);
+			ID3D12PipelineState* pPipelineState = mRenderer.GetPSO(psoID);
 			pCmd->SetPipelineState(pPipelineState);
 
 			pCmd->SetGraphicsRootConstantBufferView(PerObjRSBindSlot, perObjCBAddr[iCB++]);

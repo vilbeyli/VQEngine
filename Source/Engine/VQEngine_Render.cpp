@@ -169,8 +169,8 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs()
 	int i = 0;
 	for (auto it = mLightingPSOs.mapLoadDesc.begin(); it != mLightingPSOs.mapLoadDesc.end(); ++it)
 	{
-		descs[i++] = it->second;
-		mLightingPSOs.mapPSO[it->first] = EBuiltinPSOs::NUM_BUILTIN_PSOs + i; // assign PSO_IDs beforehand
+		descs[i] = it->second;
+		mLightingPSOs.mapPSO[it->first] = EBuiltinPSOs::NUM_BUILTIN_PSOs + i++; // assign PSO_IDs beforehand
 	}
 	return descs;
 }
