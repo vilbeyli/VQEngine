@@ -486,13 +486,16 @@ void VQRenderer::LoadBuiltinRootSignatures()
 
 	// DepthPrePass Root Signature : [14]
 	{
-		CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
+		CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
 		// material textures
 		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
+		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 8, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/); // heightmap
 		
-		CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+		CD3DX12_ROOT_PARAMETER1 rootParameters[4];
 		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[1].InitAsConstantBufferView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL); // VS-PS
+		rootParameters[2].InitAsConstantBufferView(3, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL); // VS-PS
+		rootParameters[3].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_ALL); // Heightmap binding VS-HS-DS-PS
 
 
 		D3D12_STATIC_SAMPLER_DESC samplers[4] = 

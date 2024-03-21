@@ -82,6 +82,7 @@ set (Shaders
     "Shaders/ObjectID.hlsl"
     "Shaders/Outline.hlsl"
     "Shaders/VertexDebug.hlsl"
+    "Shaders/Tessellation.hlsl"
 )
 
 set (ShadersScreenSpaceReflections

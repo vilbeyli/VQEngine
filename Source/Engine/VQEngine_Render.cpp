@@ -160,18 +160,26 @@ static bool CheckInitialSwapchainResizeRequired(std::unordered_map<HWND, bool>& 
 	return bExclusiveFullscreen;
 }
 
+static void PreAssignPSOIDs(PSOCollection& psoCollection, int& i, std::vector<FPSODesc>& descs)
+{
+	for (auto it = psoCollection.mapLoadDesc.begin(); it != psoCollection.mapLoadDesc.end(); ++it)
+	{
+		descs[i] = it->second;
+		psoCollection.mapPSO[it->first] = EBuiltinPSOs::NUM_BUILTIN_PSOs + i++; // assign PSO_IDs beforehand
+	}
+}
 std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs()
 {
 	SCOPED_CPU_MARKER("LoadPSODescs_Builtin");
 
 	mLightingPSOs.GatherPSOLoadDescs(mRootSignatureLookup);
-	std::vector<FPSODesc> descs(mLightingPSOs.mapLoadDesc.size());
+	mZPrePassPSOs.GatherPSOLoadDescs(mRootSignatureLookup);
+	
+	std::vector<FPSODesc> descs(mLightingPSOs.mapLoadDesc.size() + mZPrePassPSOs.mapLoadDesc.size());
 	int i = 0;
-	for (auto it = mLightingPSOs.mapLoadDesc.begin(); it != mLightingPSOs.mapLoadDesc.end(); ++it)
-	{
-		descs[i] = it->second;
-		mLightingPSOs.mapPSO[it->first] = EBuiltinPSOs::NUM_BUILTIN_PSOs + i++; // assign PSO_IDs beforehand
-	}
+	PreAssignPSOIDs(mLightingPSOs, i, descs);
+	PreAssignPSOIDs(mZPrePassPSOs, i, descs);
+
 	return descs;
 }
 
@@ -1575,7 +1583,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		RenderDirectionalShadowMaps(pCmd, &CBHeap, SceneShadowView);
 		RenderPointShadowMaps(pCmd, &CBHeap, SceneShadowView, 0, SceneShadowView.NumPointShadowViews);
 
-		RenderDepthPrePass(pCmd, cbAddresses, SceneView);
+		RenderDepthPrePass(pCmd, &CBHeap, cbAddresses, SceneView);
 
 		RenderObjectIDPass(pCmd, pCmdCpy, cbAddresses, SceneView, BACK_BUFFER_INDEX);
 
@@ -1665,7 +1673,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 				{
 					RENDER_WORKER_CPU_MARKER;
 
-					RenderDepthPrePass(pCmd_ZPrePass, cbAddresses, SceneView);
+					RenderDepthPrePass(pCmd_ZPrePass, &CBHeap_WorkerZPrePass, cbAddresses, SceneView);
 
 					if (bMSAA)
 					{

@@ -253,6 +253,7 @@ void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 
 void VQEngine::RenderDepthPrePass(
 	ID3D12GraphicsCommandList* pCmd, 
+	DynamicBufferHeap* pCBufferHeap,
 	const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& cbAddresses,
 	const FSceneView& SceneView
 )
@@ -299,12 +300,13 @@ void VQEngine::RenderDepthPrePass(
 	pCmd->RSSetViewports(1, &viewport);
 	pCmd->RSSetScissorRects(1, &scissorsRect);
 
-	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::DEPTH_PREPASS_PSO_MSAA_4 : EBuiltinPSOs::DEPTH_PREPASS_PSO));
 	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ZPrePass));
 
 	int iCB = 0;
 
 	// draw meshes
+	const size_t iMSAA = bMSAA ? 1 : 0;
+	const size_t iFaceCull = 2; // 2:back
 	for (const MeshRenderCommand_t& meshRenderCmd : SceneView.meshRenderCommands)
 	{
 		const Material& mat = mpScene->GetMaterial(meshRenderCmd.matID);
@@ -321,17 +323,30 @@ void VQEngine::RenderDepthPrePass(
 		const uint32 NumInstances = 1;
 #endif
 
+		const size_t iAlpha   = 0; // TODO:
+		const size_t iRaster  = mat.bWireframe ? 1 : 0;
+		const size_t iTess    = mat.Tessellation.bEnableTessellation ? 1 : 0;
+		const size_t iDomain  = iTess == 0 ? 0 : mat.Tessellation.Domain;
+		const size_t iPart    = iTess == 0 ? 0 : mat.Tessellation.Partitioning;
+		const size_t iOutTopo = iTess == 0 ? 0 : mat.Tessellation.OutputTopology;
+		const PSO_ID psoID = mRenderer.mZPrePassPSOs.Get(
+			iMSAA,
+			iRaster,
+			iFaceCull,
+			iTess,
+			iDomain,
+			iPart,
+			iOutTopo,
+			iAlpha);
+		pCmd->SetPipelineState(mRenderer.GetPSO(psoID));
 		if (mat.Tessellation.bEnableTessellation)
 		{
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Tsl;
 			VQ_SHADER_DATA::TessellationParams* pCBuffer_Tessellation = nullptr;
 			auto data = mat.GetTessellationCBufferData();
-
-#if 0 // TODO
 			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Tessellation)), (void**)(&pCBuffer_Tessellation), &cbAddr_Tsl);
 			memcpy(pCBuffer_Tessellation, &data, sizeof(data));
-			pCmd->SetGraphicsRootConstantBufferView(12, cbAddr_Tsl);
-#endif
+			pCmd->SetGraphicsRootConstantBufferView(2, cbAddr_Tsl);
 		}
 
 		pCmd->SetGraphicsRootConstantBufferView(1, cbAddresses[iCB++]);
@@ -342,7 +357,7 @@ void VQEngine::RenderDepthPrePass(
 			//pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
 		}
 
-		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pCmd->IASetPrimitiveTopology(mat.Tessellation.bEnableTessellation ? D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		pCmd->IASetVertexBuffers(0, 1, &vb);
 		pCmd->IASetIndexBuffer(&ib);
 		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);

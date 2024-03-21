@@ -18,11 +18,13 @@
 
 #include "Lighting.hlsl"
 
+
 //---------------------------------------------------------------------------------------------------
 //
 // DATA
 //
 //---------------------------------------------------------------------------------------------------
+#if 0
 struct VSInput
 {
 	float3 position : POSITION;
@@ -31,6 +33,7 @@ struct VSInput
 	float2 uv       : TEXCOORD0;
 	uint instanceID : SV_InstanceID;
 };
+#endif
 
 struct PSInput
 {
@@ -60,49 +63,75 @@ SamplerState PointSampler  : register(s1);
 SamplerState AnisoSampler  : register(s2);
 SamplerState ClampedLinearSampler : register(s3);
 
-Texture2D texDiffuse        : register(t0);
-Texture2D texNormals        : register(t1);
-Texture2D texEmissive       : register(t2);
-Texture2D texAlphaMask      : register(t3);
-Texture2D texMetalness      : register(t4);
-Texture2D texRoughness      : register(t5);
+Texture2D texDiffuse : register(t0);
+Texture2D texNormals : register(t1);
+Texture2D texEmissive : register(t2);
+Texture2D texAlphaMask : register(t3);
+Texture2D texMetalness : register(t4);
+Texture2D texRoughness : register(t5);
 Texture2D texOcclRoughMetal : register(t6);
-Texture2D texLocalAO        : register(t7);
+Texture2D texLocalAO : register(t7);
+
+Texture2D texHeightmap : register(t8); // VS or PS
 
 //---------------------------------------------------------------------------------------------------
 //
 // KERNELS
 //
 //---------------------------------------------------------------------------------------------------
-PSInput VSMain(VSInput vertex)
+PSInput TransformVertex(
+#if INSTANCED_DRAW
+	int InstanceID,
+#endif
+	float3 Position,
+	float3 Normal,
+	float3 Tangent,
+	float2 uv
+)
 {
 	PSInput result;
-	
+	float4 vPosition = float4(Position, 1.0f);
+
 #if INSTANCED_DRAW
-	result.position    = mul(cbPerObject.matWorldViewProj[vertex.instanceID], float4(vertex.position, 1.0f));
-	result.vertNormal  = mul(cbPerObject.matNormal       [vertex.instanceID], float4(vertex.normal  , 0.0f));
-	result.vertTangent = mul(cbPerObject.matNormal       [vertex.instanceID], float4(vertex.tangent , 0.0f));
+	result.position    = mul(cbPerObject.matWorldViewProj[InstanceID], vPosition);
+	result.vertNormal  = mul(cbPerObject.matNormal[InstanceID], Normal);
+	result.vertTangent = mul(cbPerObject.matNormal[InstanceID], Tangent);
 #else
-	result.position    = mul(cbPerObject.matWorldViewProj, float4(vertex.position, 1.0f));
-	result.vertNormal  = mul(cbPerObject.matNormal       , float4(vertex.normal  , 0.0f));
-	result.vertTangent = mul(cbPerObject.matNormal       , float4(vertex.tangent , 0.0f));
-#endif
-	result.uv          = vertex.uv;
+	result.position    = mul(cbPerObject.matWorldViewProj, vPosition);
+	result.vertNormal  = mul(cbPerObject.matNormal, Normal );
+	result.vertTangent = mul(cbPerObject.matNormal, Tangent);
+#endif // INSTANCED_DRAW
 	
+	result.uv = uv;
 	return result;
 }
+#include "Tessellation.hlsl"
 
+
+PSInput VSMain(VSInput vertex)
+{
+	return TransformVertex(
+#if INSTANCED_DRAW
+		vertex.instanceID,
+#endif
+		vertex.position,
+		vertex.normal  ,
+		vertex.tangent ,
+		vertex.uv
+	);
+}
 
 float4 PSMain(PSInput In) : SV_TARGET
 {
-	const float2 uv = In.uv;
+	const float2 uv = In.uv * cbPerObject.materialData.uvScaleOffset.xy + cbPerObject.materialData.uvScaleOffset.zw;
 	
+	// alpha mask
 	const int TEX_CFG = cbPerObject.materialData.textureConfig;	
-	
 	float4 AlbedoAlpha = texDiffuse.Sample(AnisoSampler, uv);
 	if (HasDiffuseMap(TEX_CFG) && AlbedoAlpha.a < 0.01f)
 		discard;
 	
+	// render surface normals
 	float3 Normal = texNormals.Sample(AnisoSampler, uv).rgb;
 	const float3 N = normalize(In.vertNormal);
 	const float3 T = normalize(In.vertTangent);

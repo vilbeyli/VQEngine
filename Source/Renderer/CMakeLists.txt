@@ -11,6 +11,7 @@ set (LibHeadersD3D12X
 
 set (Headers
     "Renderer.h"
+    "Renderer_PSOs.h"
     "WindowRenderContext.h"
     "Device.h"
     "SwapChain.h"
