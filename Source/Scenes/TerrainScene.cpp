@@ -26,7 +26,7 @@ void TerrainScene::LoadScene(FSceneRepresentation& scene)
 	mr.Name                 = pszTerrainMaterialName;
 	mr.Alpha                = 1.0f;
 	mr.DiffuseColor         = { 1, 1, 1 };
-	mr.EmissiveColor        = { 0, 1, 1 };
+	mr.EmissiveColor        = { 0, 0.235, 1 };
 	mr.EmissiveIntensity    = 0.0f;
 	mr.Displacement         = 100.0f;
 	mr.DiffuseMapFilePath   = "Data/Textures/PBR/PavingStone05_4K/PavingStone05_4K_BaseColor.png";

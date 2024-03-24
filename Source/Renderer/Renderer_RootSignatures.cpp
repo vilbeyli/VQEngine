@@ -137,12 +137,13 @@ void VQRenderer::LoadBuiltinRootSignatures()
 	ComPtr<ID3DBlob> signature;
 	ComPtr<ID3DBlob> error;
 
-	D3D12_STATIC_SAMPLER_DESC PBRsamplers[4] =
+	D3D12_STATIC_SAMPLER_DESC PBRsamplers[5] =
 	{
 		GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_WRAP , D3D12_SHADER_VISIBILITY_PIXEL, 0),
 		GetDefaultSamplerDesc(EDefaultSampler::POINT_WRAP, D3D12_SHADER_VISIBILITY_PIXEL, 1),
 		GetDefaultSamplerDesc(EDefaultSampler::ANISOTROPIC_WRAP, D3D12_SHADER_VISIBILITY_PIXEL, 2),
 		GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_CLAMP, D3D12_SHADER_VISIBILITY_PIXEL, 3),
+		GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_WRAP , D3D12_SHADER_VISIBILITY_ALL, 4)
 	};
 
 
@@ -497,17 +498,8 @@ void VQRenderer::LoadBuiltinRootSignatures()
 		rootParameters[2].InitAsConstantBufferView(3, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL); // VS-PS
 		rootParameters[3].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_ALL); // Heightmap binding VS-HS-DS-PS
 
-
-		D3D12_STATIC_SAMPLER_DESC samplers[4] = 
-		{
-			GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_WRAP  , D3D12_SHADER_VISIBILITY_PIXEL, 0),
-			GetDefaultSamplerDesc(EDefaultSampler::POINT_WRAP      , D3D12_SHADER_VISIBILITY_PIXEL, 1),
-			GetDefaultSamplerDesc(EDefaultSampler::ANISOTROPIC_WRAP, D3D12_SHADER_VISIBILITY_PIXEL, 2),
-			GetDefaultSamplerDesc(EDefaultSampler::TRILINEAR_CLAMP , D3D12_SHADER_VISIBILITY_PIXEL, 3),
-		};
-
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
-		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, _countof(samplers), &samplers[0], D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, _countof(PBRsamplers), &PBRsamplers[0], D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 		ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &signature, &error));
 

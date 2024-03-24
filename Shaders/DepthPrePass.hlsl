@@ -62,6 +62,7 @@ SamplerState LinearSampler : register(s0);
 SamplerState PointSampler  : register(s1);
 SamplerState AnisoSampler  : register(s2);
 SamplerState ClampedLinearSampler : register(s3);
+SamplerState LinearSamplerTess : register(s4);
 
 Texture2D texDiffuse : register(t0);
 Texture2D texNormals : register(t1);
@@ -72,13 +73,20 @@ Texture2D texRoughness : register(t5);
 Texture2D texOcclRoughMetal : register(t6);
 Texture2D texLocalAO : register(t7);
 
-Texture2D texHeightmap : register(t8); // VS or PS
+Texture2D texHeightmap : register(t8);
 
 //---------------------------------------------------------------------------------------------------
 //
 // KERNELS
 //
 //---------------------------------------------------------------------------------------------------
+float3 CalcHeightOffset(float2 uv)
+{
+	float fHeightSample = texHeightmap.SampleLevel(LinearSamplerTess, uv, 0);
+	float fHeightOffset = fHeightSample * cbPerObject.materialData.displacement;
+	return float3(0, fHeightOffset, 0);
+}
+
 PSInput TransformVertex(
 #if INSTANCED_DRAW
 	int InstanceID,
@@ -91,6 +99,7 @@ PSInput TransformVertex(
 {
 	PSInput result;
 	float4 vPosition = float4(Position, 1.0f);
+	vPosition.xyz += CalcHeightOffset(uv * cbPerObject.materialData.uvScaleOffset.xy + cbPerObject.materialData.uvScaleOffset.zw);
 
 #if INSTANCED_DRAW
 	result.position    = mul(cbPerObject.matWorldViewProj[InstanceID], vPosition);

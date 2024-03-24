@@ -291,9 +291,6 @@ PSInput DSMain(
 	
 	float3 vPosition = INTERPOLATE_PATCH_ATTRIBUTE(vPosition, bary);
 	
-	// TODO: enable height map effect
-	//vPosition.xyz += CalcHeightOffset(uv * cbPerObject.materialData.uvScaleOffset.xy + cbPerObject.materialData.uvScaleOffset.zw);
-	
 #if 0
 	// generate normals and tangents
 	float3 tangent   = patch[1].vPosition- patch[0].vPosition;

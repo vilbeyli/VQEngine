@@ -234,7 +234,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	if (Params.bOverrideGFXSettings_Reflections)                s.gfx.Reflections          = p.gfx.Reflections;
 
 	if (Params.bOverrideENGSetting_MainWindowWidth)             s.WndMain.Width            = p.WndMain.Width;
-	if (Params.bOverrideENGSetting_MainWindowHeight)            s.WndMain.Height           = p.WndMain.Height;
+	if (Params.bOverrideENGSetting_MainWindowHeight)            s.	WndMain.Height         = p.WndMain.Height;
 	if (Params.bOverrideENGSetting_bDisplayMode)                s.WndMain.DisplayMode      = p.WndMain.DisplayMode;
 	if (Params.bOverrideENGSetting_PreferredDisplay)            s.WndMain.PreferredDisplay = p.WndMain.PreferredDisplay;
 	if (Params.bOverrideGFXSetting_bHDR)                        s.WndMain.bEnableHDR       = p.WndMain.bEnableHDR;

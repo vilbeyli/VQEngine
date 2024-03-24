@@ -1656,9 +1656,9 @@ void VQEngine::DrawLightEditor()
 
 	ImGui::Checkbox("Cast Shadows", &l->bCastingShadows);
 	if (l->bCastingShadows) {
-		ImGui::DragFloat("Depth Bias", &l->ShadowData.DepthBias, 0.005f, 0.0f, 1.0f, "%.3f");
+		ImGui::DragFloat("Depth Bias", &l->ShadowData.DepthBias, 0.001f, 0.0f, 1.0f, "%.3f");
 		ImGui::DragFloat("Near Plane", &l->ShadowData.NearPlane, 0.1f, 0.1f, 100.0f, "%.1f");
-		ImGui::DragFloat("Far Plane", &l->ShadowData.FarPlane, 1.0f, 1.0f, 10000.0f, "%.1f");
+		ImGui::DragFloat("Far Plane", &l->ShadowData.FarPlane  , 1.0f, 1.0f, 10000.0f, "%.1f");
 	}
 }
 
