@@ -208,7 +208,7 @@ struct PerObjectData
 #endif
 
 	MaterialData materialData;
-	float2 pad2;
+	float pad2;
 
 	int meshID;
 	int materialID;
