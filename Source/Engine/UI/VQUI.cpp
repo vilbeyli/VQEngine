@@ -621,10 +621,7 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 	{
 		this->StartLoadingScene(mIndex_SelectedScene);
 	}
-	ImGui_RightAlignedCombo("Camera (C)", &iSelectedCamera, szCameraNames, _countof(szCameraNames));
-	MathUtil::Clamp(iSelectedCamera, 0, (int)mpScene->GetNumSceneCameras()-1);
-
-
+	
 	if (ImGui_RightAlignedCombo("HDRI Map (Page Up/Down)", &iEnvMap, szEnvMapNames, (int)std::min(_countof(szEnvMapNames), mResourceNames.mEnvironmentMapPresetNames.size()+1)))
 	{
 		if (iSelectedEnvMap != iEnvMap)
@@ -654,10 +651,23 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 
 	ImGui::ColorEdit4("Outline Color", reinterpret_cast<float*>(&SceneRenderParams.OutlineColor), ImGuiColorEditFlags_DefaultOptions_);
 
-	ImGui::Checkbox("ForceLOD0 (Shadow)", &SceneRenderParams.bForceLOD0_ShadowView);
-	ImGui::Checkbox("ForceLOD0 (Scene )", &SceneRenderParams.bForceLOD0_SceneView);
-
 	//ImGui::ColorEdit4();
+
+	ImGuiSpacing3();
+
+	ImGui::Text("Camera");
+	ImGui::Separator();
+	ImGui_RightAlignedCombo("Camera (C)", &iSelectedCamera, szCameraNames, _countof(szCameraNames));
+	MathUtil::Clamp(iSelectedCamera, 0, (int)mpScene->GetNumSceneCameras() - 1);
+
+	static const char* pszCamerControllerModes[] = { "Orbit", "First Person" };
+	Camera& cam = mpScene->GetActiveCamera();
+	ECameraControllerType eController = cam.GetControllerType();
+	int iController = static_cast<int>(eController);
+	if (ImGui_RightAlignedCombo("Camera Controller", &iController, pszCamerControllerModes, _countof(pszCamerControllerModes)))
+	{
+		cam.SetControllerType(static_cast<ECameraControllerType>(iController));
+	}
 
 	ImGui::End();
 }
@@ -982,6 +992,9 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 		{
 			ImGui::SliderFloat("Axis Size", &SceneRenderParams.fVertexLocalAxixSize, 1.0f, 10.0f);
 		}
+
+		ImGui::Checkbox("ForceLOD0 (Shadow)", &SceneRenderParams.bForceLOD0_ShadowView);
+		ImGui::Checkbox("ForceLOD0 (Scene )", &SceneRenderParams.bForceLOD0_SceneView);
 
 		//
 		// MAGNIFIER

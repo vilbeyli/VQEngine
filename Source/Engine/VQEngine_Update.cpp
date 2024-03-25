@@ -237,6 +237,23 @@ void VQEngine::UpdateThread_PostUpdate()
 			static_cast<int>(io.MousePos.x), 
 			static_cast<int>(io.MousePos.y)
 		);
+
+		if (!mpScene->mSelectedObjects.empty())
+		{
+			Camera& cam = mpScene->GetActiveCamera();
+
+			XMVECTOR vAvgPositions = XMLoadFloat3(&mpScene->GetGameObjectTransform(mpScene->mSelectedObjects[0])->_position);
+			for (int i = 1; i < mpScene->mSelectedObjects.size(); ++i)
+			{
+				const Transform* pTF = mpScene->GetGameObjectTransform(mpScene->mSelectedObjects[i]);
+				vAvgPositions += XMLoadFloat3(&pTF->_position);
+			}
+			vAvgPositions /= mpScene->mSelectedObjects.size();
+
+			XMFLOAT3 f3AvgPosition;
+			XMStoreFloat3(&f3AvgPosition, vAvgPositions);
+			cam.SetTargetPosition(f3AvgPosition);
+		}
 	}
 
 	// input post update

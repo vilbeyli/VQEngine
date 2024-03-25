@@ -117,12 +117,9 @@ void Camera::Update(float dt, const Input& input)
 	const bool bMouseScrollInput = input.IsMouseScrollUp() || input.IsMouseScrollDown();
 
 	const ImGuiIO& io = ImGui::GetIO();
-
-	if (bMouseLeftDown)  mControllerIndex = static_cast<size_t>(ECameraControllerType::ORBIT);
-	if (bMouseRightDown) mControllerIndex = static_cast<size_t>(ECameraControllerType::FIRST_PERSON);
 	
 	const bool bMouseInputUsedByUI = io.WantCaptureMouse;
-	const bool bUseInput = (bMouseLeftDown || bMouseRightDown || (bMouseScrollInput && mControllerIndex == ECameraControllerType::ORBIT)) && !bMouseInputUsedByUI;
+	const bool bUseInput = (bMouseRightDown || (bMouseScrollInput && mControllerIndex == ECameraControllerType::ORBIT)) && !bMouseInputUsedByUI;
 	mpControllers[mControllerIndex]->UpdateCamera(input, dt, bUseInput);
 }
 
@@ -159,6 +156,14 @@ XMMATRIX Camera::GetViewInverseMatrix() const
 }
 XMMATRIX Camera::GetProjectionMatrix() const { return  XMLoadFloat4x4(&mMatProj); }
 XMMATRIX Camera::GetRotationMatrix() const   { return XMMatrixRotationRollPitchYaw(mPitch, mYaw, 0.0f); }
+
+void Camera::SetTargetPosition(const DirectX::XMFLOAT3& f3Position)
+{
+	if (mpControllers.size() > ECameraControllerType::ORBIT)
+	{
+		static_cast<OrbitController*>(mpControllers[ECameraControllerType::ORBIT].get())->SetLookAtPosition(f3Position);
+	}
+}
 
 void Camera::Rotate(float yaw, float pitch)
 {
@@ -235,12 +240,13 @@ void Camera::LookAt(const XMVECTOR& target)
 
 OrbitController::OrbitController(Camera* pCam)
 	: CameraController(pCam)
+	, mF3LookAt(0, 0, 0)
 {
 }
 
 void OrbitController::UpdateCamera(const Input& input, float dt, bool bUseInput)
 {
-	const bool bMouseLeftDown = input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_LEFT);
+	const bool bMouseRightDown = input.IsMouseDown(Input::EMouseButtons::MOUSE_BUTTON_RIGHT);
 	const XMVECTOR vZERO = XMVectorZero();
 	const XMFLOAT3 f3ZERO = XMFLOAT3(0, 0, 0);
 	const XMVECTOR vROTATION_AXIS_AZIMUTH = XMLoadFloat3(&UpVector);
@@ -271,10 +277,8 @@ void OrbitController::UpdateCamera(const Input& input, float dt, bool bUseInput)
 		vLOOK_DIRECTION          = XMVector3TransformCoord(vLOOK_DIRECTION, mROT_CAM);
 		vROTATION_AXIS_POLAR     = XMVector3TransformCoord(vROTATION_AXIS_POLAR, mROT_CAM_Y_ONLY);
 		
-		XMVECTOR vLOOK_AT_POSITION = vZERO; // look at the origin
-		//vLOOK_AT_POSITION = vPOSITION + vLOOK_DIRECTION * fLOOK_AT_DISTANCE; // look ahead
-
-		if (bMouseLeftDown)
+		XMVECTOR vLOOK_AT_POSITION = XMLoadFloat3(&mF3LookAt);
+		if (bMouseRightDown)
 		{
 			// do orbit rotation around the look target point
 			constexpr float fROTATION_SPEED = 1.0f; // todo: drive by some config?

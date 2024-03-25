@@ -316,16 +316,8 @@ FSceneStats Scene::GetSceneRenderStats(int FRAME_DATA_INDEX) const
 	return stats;
 }
 
-GameObject* Scene::GetGameObject(size_t hObject) const
-{
-	return mGameObjectPool.Get(hObject);
-}
-
-Transform* Scene::GetGameObjectTransform(size_t hObject) const
-{
-	return mGameObjectTransformPool.Get(hObject);
-}
-
+GameObject* Scene::GetGameObject(size_t hObject) const { return mGameObjectPool.Get(hObject); }
+Transform* Scene::GetGameObjectTransform(size_t hObject) const { return mGameObjectTransformPool.Get(hObject); }
 
 //-------------------------------------------------------------------------------
 //
