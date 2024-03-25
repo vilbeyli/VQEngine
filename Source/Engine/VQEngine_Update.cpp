@@ -248,7 +248,7 @@ void VQEngine::UpdateThread_PostUpdate()
 				const Transform* pTF = mpScene->GetGameObjectTransform(mpScene->mSelectedObjects[i]);
 				vAvgPositions += XMLoadFloat3(&pTF->_position);
 			}
-			vAvgPositions /= mpScene->mSelectedObjects.size();
+			vAvgPositions /= static_cast<float>(mpScene->mSelectedObjects.size());
 
 			XMFLOAT3 f3AvgPosition;
 			XMStoreFloat3(&f3AvgPosition, vAvgPositions);

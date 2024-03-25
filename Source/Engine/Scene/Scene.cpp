@@ -30,6 +30,7 @@
 
 #include <fstream>
 #include <bitset>
+#include <execution>
 
 //-------------------------------------------------------------------------------
 // LOGGING
@@ -938,25 +939,36 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 	const SceneBoundingBoxHierarchy& BVH = mBoundingBoxHierarchy;
 	const size_t NumWorkerThreadsAvailable = UpdateWorkerThreadPool.GetThreadPoolSize();
 
-	std::vector< FFrustumPlaneset> FrustumPlanesets(1 + SceneShadowView.NumSpotShadowViews + SceneShadowView.NumPointShadowViews * 6);
+	const std::vector<const Light*> dirLights = GetLightsOfType(Light::EType::DIRECTIONAL);
+	const bool bCullDirectionalLightView = !dirLights.empty() && dirLights[0]->bEnabled;
+
+	std::vector< FFrustumPlaneset> FrustumPlanesets(1 + SceneShadowView.NumSpotShadowViews + SceneShadowView.NumPointShadowViews * 6 + (bCullDirectionalLightView ? 1 : 0));
 	std::vector<XMMATRIX> FrustumViewProjMatrix(FrustumPlanesets.size());
 	size_t iFrustum = 0;
 	{
 		SCOPED_CPU_MARKER("CollectFrustumPlanesets");
 		FrustumViewProjMatrix[iFrustum] = SceneView.viewProj;
 		FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj);
+		
+		// directional
+		if (bCullDirectionalLightView)
+		{
+			mFrustumIndex_pShadowViewLookup[iFrustum] = &SceneShadowView.ShadowView_Directional;
+			FrustumViewProjMatrix[iFrustum] = SceneShadowView.ShadowView_Directional.matViewProj;
+			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowView_Directional.matViewProj);
+		}
 
-
+		// point
 		for (size_t iPoint = 0; iPoint < SceneShadowView.NumPointShadowViews; ++iPoint)
-			for (size_t face = 0; face < 6; ++face)
-			{
-				const size_t iPointFace = iPoint * 6 + face;
-				mFrustumIndex_pShadowViewLookup[iFrustum] = &SceneShadowView.ShadowViews_Point[iPointFace];
-				FrustumViewProjMatrix[iFrustum] = SceneShadowView.ShadowViews_Point[iPointFace].matViewProj;
-				FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowViews_Point[iPointFace].matViewProj);
+		for (size_t face = 0; face < 6; ++face)
+		{
+			const size_t iPointFace = iPoint * 6 + face;
+			mFrustumIndex_pShadowViewLookup[iFrustum] = &SceneShadowView.ShadowViews_Point[iPointFace];
+			FrustumViewProjMatrix[iFrustum] = SceneShadowView.ShadowViews_Point[iPointFace].matViewProj;
+			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowViews_Point[iPointFace].matViewProj);
+		}
 
-			}
-
+		// spot
 		for (size_t iSpot = 0; iSpot < SceneShadowView.NumSpotShadowViews; ++iSpot)
 		{
 			mFrustumIndex_pShadowViewLookup[iFrustum] = &SceneShadowView.ShadowViews_Spot[iSpot];
@@ -1376,7 +1388,7 @@ static void SortCulledIndices(
 	const std::vector<const Transform*>& MeshBB_Transforms = BBH.GetMeshTransforms();
 	const std::vector<size_t>& MeshBB_GameObjHandles       = BBH.GetMeshGameObjectHandles();
 	
-	std::sort(vMainViewCulledBoundingBoxIndexAndArea.begin(), vMainViewCulledBoundingBoxIndexAndArea.end(),
+	std::sort(std::execution::par_unseq, vMainViewCulledBoundingBoxIndexAndArea.begin(), vMainViewCulledBoundingBoxIndexAndArea.end(),
 	[&](const std::pair<size_t, float>& l, const std::pair<size_t, float>& r)
 	{		
 		const size_t iBBR  = r.first;
@@ -1954,7 +1966,7 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 
 	BatchInstanceData_BoundingBox(SceneView, UpdateWorkerThreadPool, SceneView.viewProj);
 
-	if constexpr (false)
+	if constexpr (true)
 	{
 		SCOPED_CPU_MARKER("ThisThread_ShadowViews");
 		for (size_t iFrustum = 1; iFrustum <= NumShadowFrustumsThisThread; ++iFrustum)

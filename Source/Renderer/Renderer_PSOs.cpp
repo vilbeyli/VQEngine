@@ -35,7 +35,7 @@ void VQRenderer::ReservePSOMap(size_t NumPSOs)
 	for (int i = 0; i < EBuiltinPSOs::NUM_BUILTIN_PSOs; ++i)
 		mPSOs[i] = nullptr;
 	for (size_t i = 0; i < NumPSOs; ++i)
-		mPSOs[EBuiltinPSOs::NUM_BUILTIN_PSOs + i] = nullptr;
+		mPSOs[EBuiltinPSOs::NUM_BUILTIN_PSOs + (int)i] = nullptr;
 }
 
 static std::vector<FShaderStageCompileDesc> GatherUniqueShaderCompileDescs(const std::vector<FPSODesc>& PSODescs, std::map<PSO_ID, std::vector<size_t>>& PSOShaderMap)

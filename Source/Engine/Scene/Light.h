@@ -71,7 +71,8 @@ struct Light
 	};
 	struct FShadowData
 	{
-		FShadowData(float bias, float near, float far) : DepthBias(bias), NearPlane(near), FarPlane(far) { }
+		FShadowData() = delete;
+		FShadowData(float bias, float fNear, float fFar) : DepthBias(bias), NearPlane(fNear), FarPlane(fFar) { }
 		float DepthBias;
 		float NearPlane;
 		float FarPlane;

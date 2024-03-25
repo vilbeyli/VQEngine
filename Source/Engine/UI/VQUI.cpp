@@ -1296,7 +1296,7 @@ void VQEngine::DrawMaterialEditor()
 			{
 				Log::Warning("DrawMaterialEditor(): Selected material not found, clamping index");
 				// shouldn't happen, but in case it does, clamp the index to prevent crash
-				i = MaterialIDs.size() - 1; 
+				i = (int)MaterialIDs.size() - 1; 
 			}
 		}
 	}
@@ -1643,7 +1643,14 @@ void VQEngine::DrawLightEditor()
 
 	Light* l = Lights[i];
 
-	ImGui::Checkbox("Enabled", &l->bEnabled);
+	if (ImGui::Checkbox("Enabled", &l->bEnabled))
+	{
+		if (!l->bEnabled && l->Type == Light::EType::DIRECTIONAL)
+		{
+			l->Brightness = 0.0f;
+		}
+
+	}
 	ImGui::SameLine();
 	ImGui::Checkbox("Show Volume", &mUIState.bDrawLightVolume);
 	//ImGui::SameLine();
@@ -1697,9 +1704,13 @@ void VQEngine::DrawLightEditor()
 
 	ImGui::Checkbox("Cast Shadows", &l->bCastingShadows);
 	if (l->bCastingShadows) {
-		ImGui::DragFloat("Depth Bias", &l->ShadowData.DepthBias, 0.001f, 0.0f, 1.0f, "%.3f");
+		ImGui::DragFloat("Depth Bias", &l->ShadowData.DepthBias, 0.0001f, 0.0f, 1.0f, "%.4f");
 		ImGui::DragFloat("Near Plane", &l->ShadowData.NearPlane, 0.1f, 0.1f, 100.0f, "%.1f");
 		ImGui::DragFloat("Far Plane", &l->ShadowData.FarPlane  , 1.0f, 1.0f, 10000.0f, "%.1f");
+		if (l->ShadowData.FarPlane == 0.0f)
+			l->ShadowData.FarPlane = 1.0f;
+		if (l->ShadowData.NearPlane - l->ShadowData.FarPlane >= 0.0f)
+			l->ShadowData.FarPlane = l->ShadowData.NearPlane + 0.001f;
 	}
 }
 

@@ -155,6 +155,9 @@ struct PSOCollection
 	std::unordered_map<size_t, FPSODesc> mapLoadDesc;
 };
 
+// ------------------------------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------------------------------
+
 struct FLightingPSOs : PSOCollection
 {
 	// rendering
@@ -181,6 +184,8 @@ struct FLightingPSOs : PSOCollection
 
 	static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_MAT_OPTIONS * NUM_RENDERING_OPTS * NUM_OUTPUT_OPTS * NUM_TESS_OPTS;
 };
+
+// ------------------------------------------------------------------------------------------------------------------------
 
 struct FDepthPrePassPSOs : public PSOCollection
 {
