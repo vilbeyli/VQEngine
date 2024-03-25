@@ -66,6 +66,30 @@ Quaternion Quaternion::FromAxisAngle(const DirectX::XMFLOAT3& axis, const float 
 	return FromAxisAngle(Axis, angle);
 }
 
+Quaternion Quaternion::FromEulerDeg(const DirectX::XMFLOAT3& XYZRotations) { return FromEulerRad({ XYZRotations.x * DEG2RAD, XYZRotations.y * DEG2RAD, XYZRotations.z * DEG2RAD }); }
+Quaternion Quaternion::FromEulerRad(const DirectX::XMFLOAT3& XYZRotations)
+{
+	const float& pitch = XYZRotations.x;
+	const float& yaw = XYZRotations.y;
+	const float& roll = XYZRotations.z;
+	
+	// https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Euler_angles_(in_3-2-1_sequence)_to_quaternion_conversion
+	float cr = cos(roll * 0.5f);
+	float sr = sin(roll * 0.5f);
+	float cp = cos(pitch * 0.5f);
+	float sp = sin(pitch * 0.5f);
+	float cy = cos(yaw * 0.5f);
+	float sy = sin(yaw * 0.5f);
+
+	Quaternion q; 
+	q.S = cr * cp * cy + sr * sp * sy;
+	q.V.z = sr * cp * cy - cr * sp * sy;
+	q.V.x = cr * sp * cy + sr * cp * sy;
+	q.V.y = cr * cp * sy - sr * sp * cy;
+
+	return q;
+}
+
 Quaternion Quaternion::Lerp(const Quaternion& from, const Quaternion& to, float t)
 {
 	return  from * (1.0f - t) + to * t;

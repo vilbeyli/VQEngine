@@ -1272,6 +1272,26 @@ void VQEngine::DrawMaterialEditor()
 	}
 
 	int& i = mUIState.SelectedEditeeIndex[FUIState::EEditorMode::MATERIALS];
+	const bool bMaterialsAreFiltered = matIDsAll.size() != MaterialIDs.size();
+	if (bMaterialsAreFiltered)
+	{
+		if (i >= MaterialIDs.size() || MaterialIDs[i] != matIDsAll[i])
+		{
+			for (int iMat = 0; iMat < MaterialIDs.size(); ++iMat)
+				if (MaterialIDs[iMat] == matIDsAll[i])
+				{
+					i = iMat;
+					break;
+				}
+
+			if (i > MaterialIDs.size())
+			{
+				Log::Warning("DrawMaterialEditor(): Selected material not found, clamping index");
+				// shouldn't happen, but in case it does, clamp the index to prevent crash
+				i = MaterialIDs.size() - 1; 
+			}
+		}
+	}
 
 	// gui layout
 	ImGui::TableSetupColumn(mpScene->GetMaterialName(i).c_str(), ImGuiTableColumnFlags_WidthStretch, 0.7f); // 70% width
@@ -1559,7 +1579,7 @@ void VQEngine::DrawLightEditor()
 	int& i = mUIState.SelectedEditeeIndex[FUIState::EEditorMode::LIGHTS];
 	if (i >= LightNames.size())
 	{
-		Log::Warning("SelectedLightIndex > LightNames.size() : capping SelectedLightIndex ");
+		Log::Warning("SelectedLightIndex > ObjNames.size() : capping SelectedLightIndex ");
 		i = (int)(LightNames.size() - 1);
 	}
 	if (i < 0)
@@ -1664,5 +1684,73 @@ void VQEngine::DrawLightEditor()
 
 void VQEngine::DrawObjectEditor()
 {
+	// build obj names
+	const std::vector<size_t>& GameObjectHs = mpScene->mGameObjectHandles;
+	std::vector<std::string> ObjNames;
+	for (size_t hObj : GameObjectHs)
+	{
+		const GameObject* pObj = mpScene->GetGameObject(hObj);
+		const Model& m = mpScene->GetModel(pObj->mModelID);
+		ObjNames.push_back(m.mModelName);
+	}
+	ObjNames.push_back("");
 
+	// validate selected index
+	int& i = mUIState.SelectedEditeeIndex[FUIState::EEditorMode::OBJECTS];
+	if (i >= ObjNames.size())
+	{
+		Log::Warning("SelectedObjectIndex > ObjNames.size() : capping SelectedObjectIndex ");
+		i = (int)(ObjNames.size() - 1);
+	}
+	if (i < 0)
+	{
+		// Log::Warning("SelectedLightIndex negative : Setting to 0");
+		// i = 0;
+	}
+
+	// get pointers to light name data 
+	const std::string& SelectedObjName = i >= 0 ? ObjNames[i] : ObjNames.back();
+	std::vector<const char*> szObjNames(ObjNames.size());
+	for (int i = 0; i < ObjNames.size(); ++i)
+		szObjNames[i] = ObjNames[i].c_str();
+
+
+	// gui layout
+	ImGui::TableSetupColumn(SelectedObjName.c_str(), ImGuiTableColumnFlags_WidthStretch, 0.7f); // 70% width
+	ImGui::TableSetupColumn("Objects", ImGuiTableColumnFlags_WidthStretch, 0.3f); // 30% width
+	ImGui::TableHeadersRow();
+	ImGui::TableNextRow();
+
+	// draw selector
+	ImGui::TableSetColumnIndex(1);
+	ImGui::SetNextItemWidth(-1); // Make the controls take the full width of the column
+	ImGui::ListBox("##", &i, szObjNames.data(), (int)szObjNames.size(), 18);
+	if (ImGui::Button("Unselect##", ImVec2(-1, 0)))
+	{
+		i = (int)(szObjNames.size() - 1);
+	}
+
+
+	// draw editor
+	ImGui::TableSetColumnIndex(0);
+
+	const bool bValidLight = i != szObjNames.size() - 1 && i != INVALID_ID;
+	if (!bValidLight)
+	{
+		return;
+	}
+
+	const size_t hObj = mpScene->mGameObjectHandles[i];
+	Transform* pTF = mpScene->GetGameObjectTransform(hObj);
+
+	ImGuiSpacing(2);
+
+	ImGui::Text("Transform");
+	ImGui::DragFloat3("Position", reinterpret_cast<float*>(&pTF->_position), 0.1f);
+	float3 eulerRotation = Quaternion::ToEulerDeg(pTF->_rotation);
+	if (ImGui::InputFloat3("Rotation", reinterpret_cast<float*>(&eulerRotation))) {
+		pTF->_rotation = Quaternion::FromEulerDeg(eulerRotation);
+	}
+	ImGui::DragFloat3("Scale", reinterpret_cast<float*>(&pTF->_scale), 0.1f);
+	
 }
