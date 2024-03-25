@@ -574,7 +574,7 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
 		psoDesc.DepthStencilState.DepthEnable = TRUE;
-		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
 		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
 		psoDesc.DepthStencilState.StencilEnable = FALSE;
 		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
@@ -892,6 +892,10 @@ void FLightingPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12Roo
 		// MSAA
 		psoDesc.SampleDesc.Count = SampleDescCounts[iMSAA];
 
+		// DS
+		psoDesc.DepthStencilState.DepthFunc = iRaster == 1 ? D3D12_COMPARISON_FUNC_LESS_EQUAL : D3D12_COMPARISON_FUNC_EQUAL;
+		psoDesc.DepthStencilState.DepthWriteMask = iRaster == 1 ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
+
 		// RS
 		psoDesc.RasterizerState.FillMode = FillModes[iRaster];
 		psoDesc.RasterizerState.CullMode = CullModes[iFaceCull];
@@ -967,8 +971,8 @@ void FDepthPrePassPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D1
 	psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 	psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 	psoDesc.DepthStencilState.DepthEnable = TRUE;
-	psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
 	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
 	psoDesc.DepthStencilState.StencilEnable = FALSE;
 	psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 	psoDesc.SampleMask = UINT_MAX;
