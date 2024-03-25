@@ -365,8 +365,8 @@ const uint32_t DBG_WINDOW_SIZE_Y         = 380;
 //---------------------------------------------
 const uint32_t EDITOR_WINDOW_PADDING_X   = 10;
 const uint32_t EDITOR_WINDOW_PADDING_Y   = 10;
-const uint32_t EDITOR_WINDOW_SIZE_X      = 550;
-const uint32_t EDITOR_WINDOW_SIZE_Y      = 400;
+const uint32_t EDITOR_WINDOW_SIZE_X      = 500;
+const uint32_t EDITOR_WINDOW_SIZE_Y      = 600;
 //---------------------------------------------
 
 // Dropdown data ----------------------------------------------------------------------------------------------
@@ -596,18 +596,13 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 		ImGui::TableSetColumnIndex(0);
 		ImGui::Checkbox("F1: Editor", &mUIState.bWindowVisible_SceneControls);
 		ImGui::TableSetColumnIndex(1);
-		ImGui::Checkbox("F2: Settings", &mUIState.bWindowVisible_GraphicsSettingsPanel);
+		ImGui::Checkbox("F2: Profiler", &mUIState.bWindowVisible_Profiler);
 
 		ImGui::TableNextRow();
 		ImGui::TableSetColumnIndex(0);
-		ImGui::Checkbox("F3: Profiler", &mUIState.bWindowVisible_Profiler);
+		ImGui::Checkbox("F3: Settings", &mUIState.bWindowVisible_GraphicsSettingsPanel);
 		ImGui::TableSetColumnIndex(1);
-		ImGui::Checkbox("F4: Debug", &mUIState.bWindowVisible_GraphicsSettingsPanel);
-		
-
-		ImGui::TableNextRow();
-		ImGui::TableSetColumnIndex(0);
-		ImGui::Checkbox("F5: Editor", &mUIState.bWindowVisible_Editor);
+		ImGui::Checkbox("F4: Editor", &mUIState.bWindowVisible_Editor);
  
 		ImGui::EndTable();
 	}
@@ -955,7 +950,7 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 	int iSSAOLabel = SceneRenderParams.bScreenSpaceAO ? 1 : 0;
 	int iReflections = gfx.Reflections;
 
-	const uint32_t GFX_WINDOW_POS_X = GFX_WINDOW_PADDING_X;
+	const uint32_t GFX_WINDOW_POS_X = W - GFX_WINDOW_SIZE_X - PROFILER_WINDOW_SIZE_X - PROFILER_WINDOW_PADDIG_X - GFX_WINDOW_PADDING_X;
 	const uint32_t GFX_WINDOW_POS_Y = H - GFX_WINDOW_PADDING_Y*2 - GFX_WINDOW_SIZE_Y;
 	ImGui::SetNextWindowPos(ImVec2((float)GFX_WINDOW_POS_X, (float)GFX_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(GFX_WINDOW_SIZE_X, GFX_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
@@ -992,9 +987,6 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 		{
 			ImGui::SliderFloat("Axis Size", &SceneRenderParams.fVertexLocalAxixSize, 1.0f, 10.0f);
 		}
-
-		ImGui::Checkbox("ForceLOD0 (Shadow)", &SceneRenderParams.bForceLOD0_ShadowView);
-		ImGui::Checkbox("ForceLOD0 (Scene )", &SceneRenderParams.bForceLOD0_SceneView);
 
 		//
 		// MAGNIFIER
@@ -1134,6 +1126,9 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 		ImGui::Checkbox("Async Compute", &mSettings.gfx.bEnableAsyncCompute);
 		ImGui::Checkbox("Async Copy", &mSettings.gfx.bEnableAsyncCopy);
 
+		ImGui::Checkbox("ForceLOD0 (Shadow)", &SceneRenderParams.bForceLOD0_ShadowView);
+		ImGui::Checkbox("ForceLOD0 (Scene )", &SceneRenderParams.bForceLOD0_SceneView);
+
 		ImGui::EndTabItem();
 	}
 
@@ -1202,7 +1197,7 @@ void VQEngine::DrawEditorWindow()
 {
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
-	const uint32_t EDITOR_WINDOW_POS_X = EDITOR_WINDOW_PADDING_X + GFX_WINDOW_SIZE_X + GFX_WINDOW_PADDING_X;
+	const uint32_t EDITOR_WINDOW_POS_X = EDITOR_WINDOW_PADDING_X;
 	const uint32_t EDITOR_WINDOW_POS_Y = H - EDITOR_WINDOW_PADDING_Y * 2 - EDITOR_WINDOW_SIZE_Y;
 	
 	ImGui::SetNextWindowPos(ImVec2((float)EDITOR_WINDOW_POS_X, (float)EDITOR_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
@@ -1341,7 +1336,6 @@ void VQEngine::DrawMaterialEditor()
 
 	ImGui::TableSetupColumn("Property", ImGuiTableColumnFlags_WidthFixed, 150.0f);
 	ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-	//ImGui::TableHeadersRow();
 
 	// Diffuse Color & Alpha
 	DirectX::XMFLOAT4 ColorAlpha(mat.diffuse.x, mat.diffuse.y, mat.diffuse.z, mat.alpha);
@@ -1409,11 +1403,24 @@ void VQEngine::DrawMaterialEditor()
 				if (ImGui::SliderFloat("Outer##", &fOuterMin, 0.0f, MAX_TESSELLATION, "%.1f"))
 				{
 					mat.Tessellation.TriOuter[0] = mat.Tessellation.TriOuter[1] = mat.Tessellation.TriOuter[2] = fOuterMin;
+					if (mUIState.bLockTessellationSliders)
+					{
+						mat.Tessellation.TriInner = fOuterMin;
+					}
 				}
 			}
 			ImGui::SameLine();
+
 			ImGui::Checkbox("[]", &mUIState.bTessellationSliderFloatVec);
-			ImGui::SliderFloat("Inner", &mat.Tessellation.TriInner, 0.0f, MAX_TESSELLATION, "%.1f");
+			if (ImGui::SliderFloat("Inner", &mat.Tessellation.TriInner, 0.0f, MAX_TESSELLATION, "%.1f"))
+			{
+				if (mUIState.bLockTessellationSliders)
+				{
+					mat.Tessellation.TriOuter[0] = mat.Tessellation.TriInner;
+					mat.Tessellation.TriOuter[1] = mat.Tessellation.TriInner;
+					mat.Tessellation.TriOuter[2] = mat.Tessellation.TriInner;
+				}
+			}
 		}	break;
 		case::ETessellationDomain::QUAD_PATCH:
 		{
@@ -1447,7 +1454,10 @@ void VQEngine::DrawMaterialEditor()
 		} break;
 		}
 		ImGui::SameLine();
-		ImGui::Checkbox("Lock", &mUIState.bLockTessellationSliders);
+		if (ImGui::Checkbox("Lock", &mUIState.bLockTessellationSliders))
+		{
+
+		}
 
 		const char* pszPartitioningNames[] =
 		{
@@ -1551,8 +1561,6 @@ void VQEngine::DrawMaterialEditor()
 				textureMIPs
 			);
 		}
-		//ImGui::SameLine();
-		//ImGui::Text("%s", textureName.c_str());
 	}
 
 	ImGui::EndTable();
