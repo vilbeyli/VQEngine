@@ -1339,21 +1339,8 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 	using namespace ShaderUtils;
 	
 	const std::string ShaderSourcePath = StrUtil::UnicodeToASCII<256>(ShaderStageCompileDesc.FilePath.c_str());
-#if 1
 	const std::string CachedShaderBinaryPath = GetCachedShaderBinaryPath(ShaderStageCompileDesc);
-#else
 
-	// calculate shader hash
-	const size_t ShaderHash = GeneratePreprocessorDefinitionsHash(ShaderStageCompileDesc.Macros);
-
-	// determine cached shader file name
-	const std::string cacheFileName = ShaderStageCompileDesc.Macros.empty()
-		? DirectoryUtil::GetFileNameWithoutExtension(ShaderSourcePath) + "_" + ShaderStageCompileDesc.EntryPoint + SHADER_BINARY_EXTENSION
-		: DirectoryUtil::GetFileNameWithoutExtension(ShaderSourcePath) + "_" + ShaderStageCompileDesc.EntryPoint + "_" + std::to_string(ShaderHash) + SHADER_BINARY_EXTENSION;
-
-	// determine cached shader file path
-	const std::string CachedShaderBinaryPath = VQRenderer::ShaderCacheDirectory + "\\" + cacheFileName;
-#endif
 	// decide whether to use shader cache or compile from source
 	const bool bUseCachedShaders = DirectoryUtil::FileExists(CachedShaderBinaryPath)
 		&& !ShaderUtils::IsCacheDirty(ShaderSourcePath, CachedShaderBinaryPath);

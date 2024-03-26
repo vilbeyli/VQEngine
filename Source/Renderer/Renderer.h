@@ -80,7 +80,8 @@ public:
 	void                         Load();
 	void                         Unload();
 	void                         Destroy();
-	inline void                  WaitForLoadCompletion() const { while (!mbDefaultResourcesLoaded); };
+
+	void                         WaitForLoadCompletion() const;
 
 	void                         OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h);
 
@@ -122,10 +123,16 @@ public:
 
 	// Pipeline State Object creation functions
 	PSO_ID                       CreatePSO_OnThisThread(const FPSODesc& psoLoadDesc);
-	void                          EnqueueTask_ShaderLoad(TaskID PSOLoadTaskID, const FShaderStageCompileDesc&);
+	void                         EnqueueTask_ShaderLoad(TaskID PSOLoadTaskID, const FShaderStageCompileDesc&);
 	std::vector<std::shared_future<FShaderStageCompileResult>> StartShaderLoadTasks(TaskID PSOLoadTaskID);
 	//void AbortTasks(); // ?
 
+	void                         StartPSOCompilation_MT(const std::vector<FPSOCreationTaskParameters>& RenderPassPSODescs);
+	void                         WaitPSOCompilation();
+	void                         AssignPSOs();
+	std::vector<FPSODesc>        LoadBuiltinPSODescs_Legacy();
+	std::vector<FPSODesc>        LoadBuiltinPSODescs();
+	void                         ReservePSOMap(size_t NumPSOs);
 
 	// Getters: PSO, RootSignature, Heap
 	inline ID3D12PipelineState*  GetPSO(EBuiltinPSOs pso) const { return mPSOs.at(static_cast<PSO_ID>(pso)); }
@@ -169,15 +176,15 @@ public:
 	inline FDeviceCapabilities   GetDeviceCapabilities() const { return mDevice.GetDeviceCapabilities(); }
 	inline CommandQueue&         GetCommandQueue(CommandQueue::EType eType) { return mCmdQueues[(int)eType]; }
 	
-	FLightingPSOs mLightingPSOs;
+	FLightingPSOs     mLightingPSOs;
 	FDepthPrePassPSOs mZPrePassPSOs;
-	void ReservePSOMap(size_t NumPSOs);
+	std::atomic<bool> mbDefaultResourcesLoaded; 
 
 private:
 	using PSOArray_t = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
 	
 	// GPU
-	Device       mDevice; 
+	Device mDevice; 
 	std::array<CommandQueue, CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES> mCmdQueues;
 
 	// memory
@@ -218,14 +225,12 @@ private:
 	mutable std::mutex                             mMtxVBVs;
 	mutable std::mutex                             mMtxIBVs;
 
-
 	// root signatures
 	std::unordered_map<RS_ID , ID3D12RootSignature*> mRootSignatureLookup;
 
 	// PSOs
 	std::unordered_map<PSO_ID, ID3D12PipelineState*> mPSOs;
 	
-
 	// data
 	std::unordered_map<HWND, FWindowRenderContext> mRenderContextLookup;
 
@@ -241,13 +246,8 @@ private:
 	std::mutex                     mMtxTextureUploadQueue;
 	std::queue<FTextureUploadDesc> mTextureUploadQueue;
 	
-public:
-	std::atomic<bool>              mbDefaultResourcesLoaded;
-	std::atomic<bool>              mbDefaultMeshesLoaded;
 	std::atomic<bool>              mbRendererInitialized;
 
-	private:
-	
 	// Multithreaded PSO Loading
 	ThreadPool mWorkers_PSOLoad;
 	struct FPSOCompileResult { ID3D12PipelineState* pPSO; PSO_ID id; };
@@ -261,23 +261,11 @@ public:
 	std::unordered_map < TaskID, FShaderLoadTaskContext> mLookup_ShaderLoadContext;
 
 private:
-	void InitializeD3D12MA();
 	void InitializeHeaps();
 	
 	void LoadBuiltinRootSignatures();
 	void LoadDefaultResources();
 
-public:
-	void LoadBuiltinPSOs();
-
-	void StartPSOCompilation_MT(const std::vector<FPSOCreationTaskParameters>& RenderPassPSODescs);
-	void WaitPSOCompilation();
-	void AssignPSOs();
-	std::vector<FPSODesc> LoadBuiltinPSODescs_Legacy();
-	std::vector<FPSODesc> LoadBuiltinPSODescs();
-	
-	static std::string GetCachedShaderBinaryPath(const FShaderStageCompileDesc& ShaderStageCompileDesc);
-private:
 	ID3D12PipelineState* CompileGraphicsPSO(const FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults);
 	ID3D12PipelineState* CompileComputePSO (const FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults);
 
@@ -307,12 +295,14 @@ public:
 	static const std::string_view&               DXGIFormatAsString(DXGI_FORMAT format);
 	static EProceduralTextures                   GetProceduralTextureEnumFromName(const std::string& ProceduralTextureName);
 
-	static std::string ShaderSourceFileDirectory;
 	static std::wstring GetFullPathOfShader(LPCWSTR shaderFileName);
 	static std::wstring GetFullPathOfShader(const std::string& shaderFileName);
+	static std::string  GetCachedShaderBinaryPath(const FShaderStageCompileDesc& ShaderStageCompileDesc);
+	static void         InitializeShaderAndPSOCacheDirectory();
+
+	static std::string ShaderSourceFileDirectory;
 	static std::string PSOCacheDirectory;
 	static std::string ShaderCacheDirectory;
-	static void InitializeShaderAndPSOCacheDirectory();
 };
 
 

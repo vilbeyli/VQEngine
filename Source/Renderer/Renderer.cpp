@@ -127,6 +127,39 @@ static void CustomFree(void* pMemory, void* pUserData)
 		_aligned_free(pMemory);
 	}
 }
+static void InitializeD3D12MA(D3D12MA::Allocator*& mpAllocator, Device& mDevice)
+{
+	// Initialize D3D12MA
+	const D3D12MA::ALLOCATOR_FLAGS FlagAlloc = D3D12MA::ALLOCATOR_FLAG_NONE;
+
+	D3D12MA::ALLOCATOR_DESC desc = {};
+	desc.Flags = FlagAlloc;
+	desc.pDevice = mDevice.GetDevicePtr();
+	desc.pAdapter = mDevice.GetAdapterPtr();
+
+	D3D12MA::ALLOCATION_CALLBACKS allocationCallbacks = {};
+	if (D3D12MA_ENABLE_CPU_ALLOCATION_CALLBACKS)
+	{
+		allocationCallbacks.pAllocate = &CustomAllocate;
+		allocationCallbacks.pFree = &CustomFree;
+		allocationCallbacks.pUserData = CUSTOM_ALLOCATION_USER_DATA;
+		desc.pAllocationCallbacks = &allocationCallbacks;
+	}
+
+	CHECK_HR(D3D12MA::CreateAllocator(&desc, &mpAllocator));
+
+	switch (mpAllocator->GetD3D12Options().ResourceHeapTier)
+	{
+	case D3D12_RESOURCE_HEAP_TIER_1:
+		wprintf(L"ResourceHeapTier = D3D12_RESOURCE_HEAP_TIER_1\n");
+		break;
+	case D3D12_RESOURCE_HEAP_TIER_2:
+		wprintf(L"ResourceHeapTier = D3D12_RESOURCE_HEAP_TIER_2\n");
+		break;
+	default:
+		assert(0);
+	}
+}
 // ---------------------------------------------------------------------------------------
 
 //
@@ -154,12 +187,11 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 	}
 
 	// Initialize memory
-	InitializeD3D12MA();
+	InitializeD3D12MA(mpAllocator, mDevice);
 	InitializeHeaps();
 
 	// initialize thread
 	mbExitUploadThread.store(false);
-	mbDefaultResourcesLoaded.store(false);
 	mTextureUploadThread = std::thread(&VQRenderer::TextureUploadThread_Main, this);
 
 	const size_t HWThreads = ThreadPool::sHardwareThreadCount;
@@ -310,50 +342,19 @@ FWindowRenderContext& VQRenderer::GetWindowRenderContext(HWND hwnd)
 	return mRenderContextLookup.at(hwnd);
 }
 
+void VQRenderer::WaitForLoadCompletion() const
+{
+	SCOPED_CPU_MARKER_C("WaitRendererDefaultResourceLoaded", 0xFFAA0000);
+	while (!mbDefaultResourcesLoaded); 
+}
+
 // ================================================================================================================================================
 // ================================================================================================================================================
 // ================================================================================================================================================
-
-
-
 
 //
 // PRIVATE
 //
-void VQRenderer::InitializeD3D12MA()
-{
-	// Initialize D3D12MA
-	const D3D12MA::ALLOCATOR_FLAGS FlagAlloc = D3D12MA::ALLOCATOR_FLAG_NONE;
-
-	D3D12MA::ALLOCATOR_DESC desc = {};
-	desc.Flags = FlagAlloc;
-	desc.pDevice = mDevice.GetDevicePtr();
-	desc.pAdapter = mDevice.GetAdapterPtr();
-
-	D3D12MA::ALLOCATION_CALLBACKS allocationCallbacks = {};
-	if (D3D12MA_ENABLE_CPU_ALLOCATION_CALLBACKS)
-	{
-		allocationCallbacks.pAllocate = &CustomAllocate;
-		allocationCallbacks.pFree = &CustomFree;
-		allocationCallbacks.pUserData = CUSTOM_ALLOCATION_USER_DATA;
-		desc.pAllocationCallbacks = &allocationCallbacks;
-	}
-
-	CHECK_HR(D3D12MA::CreateAllocator(&desc, &mpAllocator));
-
-	switch (mpAllocator->GetD3D12Options().ResourceHeapTier)
-	{
-	case D3D12_RESOURCE_HEAP_TIER_1:
-		wprintf(L"ResourceHeapTier = D3D12_RESOURCE_HEAP_TIER_1\n");
-		break;
-	case D3D12_RESOURCE_HEAP_TIER_2:
-		wprintf(L"ResourceHeapTier = D3D12_RESOURCE_HEAP_TIER_2\n");
-		break;
-	default:
-		assert(0);
-	}
-}
-
 void VQRenderer::InitializeHeaps()
 {
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
@@ -474,7 +475,7 @@ ID3D12DescriptorHeap* VQRenderer::GetDescHeap(EResourceHeapType HeapType)
 
 TextureID VQRenderer::GetProceduralTexture(EProceduralTextures tex) const
 {
-	while (!mbDefaultResourcesLoaded);
+	WaitForLoadCompletion();
 	if (mLookup_ProceduralTextureIDs.find(tex) == mLookup_ProceduralTextureIDs.end())
 	{
 		Log::Error("Couldn't find procedural texture %d", tex);

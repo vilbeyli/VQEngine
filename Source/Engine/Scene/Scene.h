@@ -551,7 +551,4 @@ private:
 
 	const std::string mInvalidMaterialName;
 	const std::string mInvalidTexturePath;
-	
-	//CPUProfiler* mpCPUProfiler;
-	//FBoundingBox mSceneBoundingBox;
 };

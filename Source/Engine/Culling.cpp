@@ -258,7 +258,6 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 	const std::vector<std::pair<size_t, size_t>> vRanges = GetWorkRanges(NumThreadsIncludingThisThread);
 	
 	// dispatch worker threads
-	// DispatchWorkers(WorkerThreadPool, NumWorkItems, Process); // TODO: make this a single funciton
 	{
 		SCOPED_CPU_MARKER("Process_DispatchWorkers");
 		size_t currRange = 0;
@@ -285,19 +284,12 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 	}
 
 	// process the remaining work on this thread
-	//{
-	//	SCOPED_CPU_MARKER("Process_ThisThread");
-	//	const size_t& iBegin = vRanges.back().first;
-	//	const size_t& iEnd   = vRanges.back().second; // inclusive
-	//	this->Process(iBegin, iEnd);
-	//}
-
-	// Sync point -------------------------------------------------
-	//{
-	//	SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS", 0xFFFF0000);
-	//	while (WorkerThreadPool.GetNumActiveTasks() != 0); // busy-wait is bad...
-	//}
-	// Sync point -------------------------------------------------
+	{
+		SCOPED_CPU_MARKER("Process_ThisThread");
+		const size_t& iBegin = vRanges.back().first;
+		const size_t& iEnd = vRanges.back().second; // inclusive
+		this->Process(iBegin, iEnd);
+	}
 
 	return;
 }

@@ -1152,17 +1152,7 @@ void Scene::CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerTh
 
 	if (UPDATE_THREAD__ENABLE_WORKERS && bThreadTheWork)
 	{
-		std::vector<std::pair<size_t, size_t>> vRanges = mFrustumCullWorkerContext.GetWorkRanges(NumThreads);
-
 		mFrustumCullWorkerContext.ProcessWorkItems_MultiThreaded(NumThreads, UpdateWorkerThreadPool);
-
-		// process the remaining work on this thread
-		{
-			SCOPED_CPU_MARKER("Process_ThisThread");
-			const size_t& iBegin = vRanges.back().first;
-			const size_t& iEnd = vRanges.back().second; // inclusive
-			mFrustumCullWorkerContext.Process(iBegin, iEnd);
-		}
 	}
 	else
 	{

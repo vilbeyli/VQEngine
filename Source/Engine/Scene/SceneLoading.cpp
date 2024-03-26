@@ -87,10 +87,9 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 
 	const TaskID taskID = AssetLoader::GenerateModelLoadTaskID();
 	LoadBuiltinMaterials(taskID, sceneRep.Objects);
-	{
-		SCOPED_CPU_MARKER_C("WaitForRendererLoadCompletion", 0xFFAA0000);
-		mRenderer.WaitForLoadCompletion();
-	}
+	
+	mRenderer.WaitForLoadCompletion();
+	
 	Log::Info("[Scene] Loading Scene: %s", sceneRep.SceneName.c_str());
 
 
@@ -130,15 +129,10 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	}
 	mFrustumCullWorkerContext.ClearMemory();
 
+	mEngine.WaitForBuiltinMeshGeneration();
 
-	//mRenderer.mbDefaultMeshesLoaded
-	{
-		SCOPED_CPU_MARKER_C("WaitForMeshInitialized", 0xFFAA0000);
-		while (!mRenderer.mbDefaultMeshesLoaded.load());
-	}
 	LoadBuiltinMeshes(builtinMeshes);
 	LoadGameObjects(std::move(sceneRep.Objects), UpdateWorkerThreadPool);
-
 }
 
 

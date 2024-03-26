@@ -386,6 +386,8 @@ public:
 	void ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, SRV_ID& outSRV_ID);
 	void UnloadEnvironmentMap();
 
+	void WaitForBuiltinMeshGeneration() const;
+
 	// Getters
 	MeshID GetBuiltInMeshID(const std::string& MeshName) const;
 
@@ -479,6 +481,7 @@ private:
 	std::atomic<bool>               mbEnvironmentMapPreFilter;
 	std::atomic<bool>               mbMainWindowHDRTransitionInProgress; // see DispatchHDRSwapchainTransitionEvents()
 	std::atomic<bool>               mbExitApp;
+	std::atomic<bool>               mbDefaultMeshesLoaded;
 
 	// system & settings
 	FEngineSettings                 mSettings;
@@ -580,7 +583,6 @@ private:
 	void                            TransitionDepthPrePassForRead(ID3D12GraphicsCommandList* pCmd, bool bMSAA, bool bAsyncCompute);
 	void                            TransitionDepthPrePassMSAAResolve(ID3D12GraphicsCommandList* pCmd, bool bMSAA);
 	void                            ResolveMSAA_DepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap);
-	void                            TransitionDepthPrePassForWrite(ID3D12GraphicsCommandList* pCmd, bool bMSAA);
 	void                            CopyDepthForCompute(ID3D12GraphicsCommandList* pCmd);
 	void                            RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView);
 	void                            RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FPostProcessParameters& PPParams, const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses);
@@ -618,7 +620,6 @@ private:
 	//
 	// RENDER HELPERS
 	//
-	//void                            DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh, uint32 NumInstances = 1);
 	void                            DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView::FShadowView& shadowView);
 
 	std::unique_ptr<Window>&        GetWindow(HWND hwnd);

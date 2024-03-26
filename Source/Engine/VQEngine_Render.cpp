@@ -397,7 +397,13 @@ void VQEngine::InitializeBuiltinMeshes()
 	// ...
 
 	mRenderer.UploadVertexAndIndexBufferHeaps();
-	mRenderer.mbDefaultMeshesLoaded.store(true);
+	mbDefaultMeshesLoaded.store(true);
+}
+
+void VQEngine::WaitForBuiltinMeshGeneration() const
+{
+	SCOPED_CPU_MARKER_C("WaitForBuiltinMeshGeneration", 0xFFAA0000);
+	while (!mbDefaultMeshesLoaded.load());
 }
 
 
@@ -804,25 +810,14 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 	// TODO: generic implementation of other window procedures for load
 }
 
-void VQEngine::RenderThread_LoadResources()
+static void AllocateDescriptors(FRenderingResources_MainWindow& rsc, VQRenderer& mRenderer)
 {
-	SCOPED_CPU_MARKER("RenderThread_LoadResources()");
-	FRenderingResources_MainWindow& rsc = mResources_MainWnd;
-
+	SCOPED_CPU_MARKER("AllocateDescriptors");
+	
 	// null cubemap SRV
 	{
-		mResources_MainWnd.SRV_NullCubemap = mRenderer.AllocateSRV();
-		mResources_MainWnd.SRV_NullTexture2D = mRenderer.AllocateSRV();
-
-		D3D12_SHADER_RESOURCE_VIEW_DESC nullSRVDesc = {};
-		nullSRVDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-		nullSRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		nullSRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-		nullSRVDesc.TextureCube.MipLevels = 1;
-		mRenderer.InitializeSRV(mResources_MainWnd.SRV_NullCubemap, 0, nullSRVDesc);
-		
-		nullSRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-		mRenderer.InitializeSRV(mResources_MainWnd.SRV_NullTexture2D, 0, nullSRVDesc);
+		rsc.SRV_NullCubemap = mRenderer.AllocateSRV();
+		rsc.SRV_NullTexture2D = mRenderer.AllocateSRV();
 	}
 
 	// depth pre pass
@@ -838,6 +833,16 @@ void VQEngine::RenderThread_LoadResources()
 		rsc.SRV_SceneNormalsMSAA = mRenderer.AllocateSRV();
 		rsc.SRV_SceneDepthMSAA = mRenderer.AllocateSRV();
 		rsc.SRV_SceneDepth = mRenderer.AllocateSRV();
+	}
+
+	// shadow map passes
+	{
+		rsc.DSV_ShadowMaps_Spot = mRenderer.AllocateDSV(NUM_SHADOWING_LIGHTS__SPOT);
+		rsc.SRV_ShadowMaps_Spot = mRenderer.AllocateSRV();
+		rsc.DSV_ShadowMaps_Point = mRenderer.AllocateDSV(NUM_SHADOWING_LIGHTS__POINT * 6);
+		rsc.SRV_ShadowMaps_Point = mRenderer.AllocateSRV();
+		rsc.DSV_ShadowMaps_Directional = mRenderer.AllocateDSV();
+		rsc.SRV_ShadowMaps_Directional = mRenderer.AllocateSRV();
 	}
 
 	// scene color pass
@@ -861,12 +866,6 @@ void VQEngine::RenderThread_LoadResources()
 	{
 		rsc.UAV_DownsampledSceneDepth = mRenderer.AllocateUAV(13);
 		rsc.UAV_DownsampledSceneDepthAtomicCounter = mRenderer.AllocateUAV(1);
-
-		TextureCreateDesc desc("DownsampledSceneDepthAtomicCounter");
-		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(4, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-		desc.ResourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-		rsc.Tex_DownsampledSceneDepthAtomicCounter = mRenderer.CreateTexture(desc);
-		mRenderer.InitializeUAVForBuffer(rsc.UAV_DownsampledSceneDepthAtomicCounter, 0u, rsc.Tex_DownsampledSceneDepthAtomicCounter, DXGI_FORMAT_R32_UINT);
 	}
 
 	// ambient occlusion pass
@@ -877,27 +876,53 @@ void VQEngine::RenderThread_LoadResources()
 
 	// post process pass
 	{
-		rsc.UAV_PostProcess_TonemapperOut    = mRenderer.AllocateUAV();
+		rsc.UAV_PostProcess_TonemapperOut = mRenderer.AllocateUAV();
 		rsc.UAV_PostProcess_VisualizationOut = mRenderer.AllocateUAV();
-		rsc.UAV_PostProcess_BlurIntermediate = mRenderer.AllocateUAV(); 
-		rsc.UAV_PostProcess_BlurOutput       = mRenderer.AllocateUAV();
-		rsc.UAV_PostProcess_FFXCASOut        = mRenderer.AllocateUAV();
-		rsc.UAV_PostProcess_FSR_EASUOut      = mRenderer.AllocateUAV();
-		rsc.UAV_PostProcess_FSR_RCASOut      = mRenderer.AllocateUAV();
+		rsc.UAV_PostProcess_BlurIntermediate = mRenderer.AllocateUAV();
+		rsc.UAV_PostProcess_BlurOutput = mRenderer.AllocateUAV();
+		rsc.UAV_PostProcess_FFXCASOut = mRenderer.AllocateUAV();
+		rsc.UAV_PostProcess_FSR_EASUOut = mRenderer.AllocateUAV();
+		rsc.UAV_PostProcess_FSR_RCASOut = mRenderer.AllocateUAV();
 
-		rsc.SRV_PostProcess_TonemapperOut    = mRenderer.AllocateSRV();
+		rsc.SRV_PostProcess_TonemapperOut = mRenderer.AllocateSRV();
 		rsc.SRV_PostProcess_VisualizationOut = mRenderer.AllocateSRV();
-		rsc.SRV_PostProcess_BlurIntermediate = mRenderer.AllocateSRV(); 
-		rsc.SRV_PostProcess_BlurOutput       = mRenderer.AllocateSRV();
-		rsc.SRV_PostProcess_FFXCASOut        = mRenderer.AllocateSRV();
-		rsc.SRV_PostProcess_FSR_EASUOut      = mRenderer.AllocateSRV();
-		rsc.SRV_PostProcess_FSR_RCASOut      = mRenderer.AllocateSRV();
+		rsc.SRV_PostProcess_BlurIntermediate = mRenderer.AllocateSRV();
+		rsc.SRV_PostProcess_BlurOutput = mRenderer.AllocateSRV();
+		rsc.SRV_PostProcess_FFXCASOut = mRenderer.AllocateSRV();
+		rsc.SRV_PostProcess_FSR_EASUOut = mRenderer.AllocateSRV();
+		rsc.SRV_PostProcess_FSR_RCASOut = mRenderer.AllocateSRV();
 	}
 
 	// UI HDR pass
 	{
 		rsc.RTV_UI_SDR = mRenderer.AllocateRTV();
 		rsc.SRV_UI_SDR = mRenderer.AllocateSRV();
+	}
+}
+
+static void CreateResourceViews(FRenderingResources_MainWindow& rsc, VQRenderer& mRenderer)
+{
+	SCOPED_CPU_MARKER("CreateResourceViews");
+	// null cubemap SRV
+	{
+		D3D12_SHADER_RESOURCE_VIEW_DESC nullSRVDesc = {};
+		nullSRVDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		nullSRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		nullSRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+		nullSRVDesc.TextureCube.MipLevels = 1;
+		mRenderer.InitializeSRV(rsc.SRV_NullCubemap, 0, nullSRVDesc);
+
+		nullSRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+		mRenderer.InitializeSRV(rsc.SRV_NullTexture2D, 0, nullSRVDesc);
+	}
+
+	// reflection passes
+	{
+		TextureCreateDesc desc("DownsampledSceneDepthAtomicCounter");
+		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(4, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+		desc.ResourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		rsc.Tex_DownsampledSceneDepthAtomicCounter = mRenderer.CreateTexture(desc);
+		mRenderer.InitializeUAVForBuffer(rsc.UAV_DownsampledSceneDepthAtomicCounter, 0u, rsc.Tex_DownsampledSceneDepthAtomicCounter, DXGI_FORMAT_R32_UINT);
 	}
 
 	// shadow map passes
@@ -922,38 +947,39 @@ void VQEngine::RenderThread_LoadResources()
 		rsc.Tex_ShadowMaps_Spot = mRenderer.CreateTexture(desc);
 
 		desc.d3d12Desc.DepthOrArraySize = NUM_SHADOWING_LIGHTS__POINT * 6;
-		desc.d3d12Desc.Width  = SHADOW_MAP_DIMENSION_POINT;
+		desc.d3d12Desc.Width = SHADOW_MAP_DIMENSION_POINT;
 		desc.d3d12Desc.Height = SHADOW_MAP_DIMENSION_POINT;
 		desc.TexName = "ShadowMaps_Point";
 		desc.bCubemap = true;
 		rsc.Tex_ShadowMaps_Point = mRenderer.CreateTexture(desc);
 
 
-		desc.d3d12Desc.Width  = SHADOW_MAP_DIMENSION_DIRECTIONAL;
+		desc.d3d12Desc.Width = SHADOW_MAP_DIMENSION_DIRECTIONAL;
 		desc.d3d12Desc.Height = SHADOW_MAP_DIMENSION_DIRECTIONAL;
 		desc.d3d12Desc.DepthOrArraySize = 1;
 		desc.bCubemap = false;
 		desc.TexName = "ShadowMap_Directional";
 		rsc.Tex_ShadowMaps_Directional = mRenderer.CreateTexture(desc);
-		
-		// initialize DSVs
-		rsc.DSV_ShadowMaps_Spot        = mRenderer.AllocateDSV(NUM_SHADOWING_LIGHTS__SPOT);
-		rsc.DSV_ShadowMaps_Point       = mRenderer.AllocateDSV(NUM_SHADOWING_LIGHTS__POINT * 6);
-		rsc.DSV_ShadowMaps_Directional = mRenderer.AllocateDSV();
 
-		for (int i = 0; i < NUM_SHADOWING_LIGHTS__SPOT; ++i)      mRenderer.InitializeDSV(rsc.DSV_ShadowMaps_Spot , i, rsc.Tex_ShadowMaps_Spot , i);
+		// initialize DSVs
+		for (int i = 0; i < NUM_SHADOWING_LIGHTS__SPOT; ++i)      mRenderer.InitializeDSV(rsc.DSV_ShadowMaps_Spot, i, rsc.Tex_ShadowMaps_Spot, i);
 		for (int i = 0; i < NUM_SHADOWING_LIGHTS__POINT * 6; ++i) mRenderer.InitializeDSV(rsc.DSV_ShadowMaps_Point, i, rsc.Tex_ShadowMaps_Point, i);
 		mRenderer.InitializeDSV(rsc.DSV_ShadowMaps_Directional, 0, rsc.Tex_ShadowMaps_Directional);
 
-
 		// initialize SRVs
-		rsc.SRV_ShadowMaps_Spot        = mRenderer.AllocateSRV();
-		rsc.SRV_ShadowMaps_Point       = mRenderer.AllocateSRV();
-		rsc.SRV_ShadowMaps_Directional = mRenderer.AllocateSRV();
-		mRenderer.InitializeSRV(rsc.SRV_ShadowMaps_Spot , 0, rsc.Tex_ShadowMaps_Spot, true);
+		mRenderer.InitializeSRV(rsc.SRV_ShadowMaps_Spot, 0, rsc.Tex_ShadowMaps_Spot, true);
 		mRenderer.InitializeSRV(rsc.SRV_ShadowMaps_Point, 0, rsc.Tex_ShadowMaps_Point, true, true);
 		mRenderer.InitializeSRV(rsc.SRV_ShadowMaps_Directional, 0, rsc.Tex_ShadowMaps_Directional);
 	}
+}
+
+void VQEngine::RenderThread_LoadResources()
+{
+	SCOPED_CPU_MARKER("RenderThread_LoadResources()");
+	
+	FRenderingResources_MainWindow& rsc = mResources_MainWnd;
+	AllocateDescriptors(rsc, mRenderer);
+	CreateResourceViews(rsc, mRenderer);
 	
 	mRenderer.mbDefaultResourcesLoaded.store(true);
 }
@@ -1843,8 +1869,6 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 			while (WorkerThreads.GetNumActiveTasks() != 0);
 		}
 	}
-
-	// TODO: command list execution and frame submission could be done in another thread
 
 	// close gfx cmd lists
 	std::vector<ID3D12CommandList*> vCmdLists = ctx.GetGFXCommandListPtrs();

@@ -57,14 +57,13 @@
             <Scale>100 0.01 100</Scale>
         </Transform>
         <Model>
+            <Name>Ground Plane</Name>
             <Mesh>Cube</Mesh>
             <MaterialName>Black_herringbone_tiles_01</MaterialName>
         </Model>
     </GameObject>
     
     <!-- OBJECTS -->
-
-<!--
     <GameObject>
         <Transform>
             <Position>-25 0 4</Position>
@@ -72,6 +71,7 @@
             <Scale>4 4 4</Scale>
         </Transform>
         <Model>
+            <Name>Metal Cube</Name>
             <Mesh>Cube</Mesh>
             <MaterialName>Painted_metal_02</MaterialName>
         </Model>
@@ -83,6 +83,7 @@
             <Scale>10 0.1 10</Scale>
         </Transform>
         <Model>
+            <Name>Cylinder</Name>
             <Mesh>Cylinder</Mesh>
             <MaterialName>DarkGray_VeryRough</MaterialName>
         </Model>
@@ -106,6 +107,7 @@
             <Scale>10 0.1 10</Scale>
         </Transform>
         <Model>
+            <Name>Platform1</Name>
             <Mesh>Cylinder</Mesh>
             <MaterialName>DarkGray_VeryRough</MaterialName>
         </Model>
@@ -118,6 +120,7 @@
             <Scale>12 12 12</Scale>
         </Transform>
         <Model>
+            <Name>Marble Sphere</Name>
             <Mesh>Sphere</Mesh>
             <MaterialName>Marble_08</MaterialName>
         </Model>
@@ -129,23 +132,12 @@
             <Scale>13 0.15 13</Scale>
         </Transform>
         <Model>
+            <Name>Platform0</Name>
             <Mesh>Cylinder</Mesh>
             <MaterialName>Black_VeryRough</MaterialName>
         </Model>
     </GameObject>
--->
-    <GameObject>
-        <Transform>
-            <Position> 87.946915 -38.125233 -127.481918</Position>
-            <Quaternion>0 0 0 1</Quaternion>
-            <Scale>1 1 1</Scale>
-        </Transform>
-        <Model>
-            <Path>Data/Models/SH60SeaHawk/Seahawk.obj</Path>
-            <Name>Seahawk Heli</Name>
-        </Model>
-    </GameObject>
-
+    
     <!-- Models -->
 <!-- 
     <GameObject>

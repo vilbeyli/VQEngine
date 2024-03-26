@@ -690,7 +690,7 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 		if(pViewPortX)  { XMLParseIntVal  (pViewPortX     , l.ViewportX); }
 		if(pViewPortY)  { XMLParseIntVal  (pViewPortY     , l.ViewportY); }
 		if(pDistance)   { XMLParseFloatVal(pDistance      , l.DistanceFromOrigin); }
-		if(pMobility)   
+		if(pMobility)
 		{
 			std::string mobilityEnumStr;
 			XMLParseStringVal(pMobility, mobilityEnumStr);
