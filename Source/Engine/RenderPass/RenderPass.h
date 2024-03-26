@@ -17,8 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 #pragma once
 
-#include "../../Renderer/Renderer.h"
-
+#include "../../Renderer/Renderer_PSOs.h"
 #include "../Core/Types.h"
 #include <DirectXMath.h>
 #include <dxgiformat.h>

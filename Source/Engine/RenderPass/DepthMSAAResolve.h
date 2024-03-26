@@ -19,6 +19,7 @@
 
 #include "RenderPass.h"
 
+class DynamicBufferHeap;
 class DepthMSAAResolvePass : public RenderPassBase
 {
 public:

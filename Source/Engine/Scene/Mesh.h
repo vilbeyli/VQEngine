@@ -17,7 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 #pragma once
 
-#include "../../Renderer/Renderer.h"
+#include "../Core/Types.h"
 #include "../Culling.h"
 
 #include <string>
@@ -28,6 +28,9 @@
 
 #define NOMINMAX
 #undef max
+
+struct FBufferDesc;
+class VQRenderer;
 
 enum EBuiltInMeshes
 {
@@ -1009,6 +1012,8 @@ namespace GeometryGenerator
 		return data;
 	}
 
+	BufferID CreateBuffer(VQRenderer* pRenderer, const FBufferDesc& desc);
+
 }; // namespace GeometryGenerator
 
 
@@ -1102,7 +1107,7 @@ Mesh::Mesh(
 	bufferDesc.Stride       = sizeof(vertices[0]);
 	bufferDesc.pData        = static_cast<const void*>(vertices.data());
 	bufferDesc.Name         = VBName;
-	BufferID vertexBufferID = pRenderer->CreateBuffer(bufferDesc);
+	BufferID vertexBufferID = GeometryGenerator::CreateBuffer(pRenderer, bufferDesc);
 
 	bufferDesc.Type        = INDEX_BUFFER;
 	//bufferDesc.Usage       = GPU_READ_WRITE;
@@ -1110,7 +1115,7 @@ Mesh::Mesh(
 	bufferDesc.Stride      = sizeof(unsigned);
 	bufferDesc.pData       = static_cast<const void*>(indices.data());
 	bufferDesc.Name        = IBName;
-	BufferID indexBufferID = pRenderer->CreateBuffer(bufferDesc);
+	BufferID indexBufferID = GeometryGenerator::CreateBuffer(pRenderer, bufferDesc);
 
 	mLODBufferPairs.push_back({ vertexBufferID, indexBufferID }); // LOD[0]
 	mNumIndicesPerLODLevel.push_back(bufferDesc.NumElements);
@@ -1136,7 +1141,7 @@ Mesh::Mesh(VQRenderer* pRenderer, const GeometryGenerator::GeometryData<TVertex,
 		bufferDesc.pData = static_cast<const void*>(vertices.data());
 		bufferDesc.Stride = sizeof(vertices[0]);
 		bufferDesc.Name = VBName;
-		BufferID vertexBufferID = pRenderer->CreateBuffer(bufferDesc);
+		BufferID vertexBufferID = GeometryGenerator::CreateBuffer(pRenderer, bufferDesc);
 
 		bufferDesc.Type = INDEX_BUFFER;
 		//bufferDesc.Usage = GPU_READ_WRITE;
@@ -1144,7 +1149,7 @@ Mesh::Mesh(VQRenderer* pRenderer, const GeometryGenerator::GeometryData<TVertex,
 		bufferDesc.pData = static_cast<const void*>(indices.data());
 		bufferDesc.Stride = sizeof(unsigned);
 		bufferDesc.Name = IBName;
-		BufferID indexBufferID = pRenderer->CreateBuffer(bufferDesc);
+		BufferID indexBufferID = GeometryGenerator::CreateBuffer(pRenderer, bufferDesc);
 
 		mLODBufferPairs.push_back({ vertexBufferID, indexBufferID });
 		mNumIndicesPerLODLevel.push_back(bufferDesc.NumElements);

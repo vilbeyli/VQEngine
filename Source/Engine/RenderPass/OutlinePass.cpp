@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "OutlinePass.h"
+#include "../../Renderer/Renderer.h"
 #include "../Scene/Scene.h"
 #include "../../Shaders/LightingConstantBufferData.h"
 #include "../VQUtils/Source/utils.h"

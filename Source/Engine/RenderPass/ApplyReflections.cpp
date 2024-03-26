@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "ApplyReflections.h"
+#include "../../Renderer/Renderer.h"
 
 ApplyReflectionsPass::ApplyReflectionsPass(VQRenderer& Renderer)
 	: RenderPassBase(Renderer)

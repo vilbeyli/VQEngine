@@ -1204,13 +1204,6 @@ ID3D12PipelineState* VQRenderer::CompileGraphicsPSO(const FPSODesc& Desc, std::v
 	if (hr == S_OK)
 		SetName(pPSO, Desc.PSOName.c_str());
 
-	// release reflections
-	//for (auto it = ShaderReflections.begin(); it != ShaderReflections.end(); ++it)
-	//{
-	//	it->second->Release();
-	//}
-	//ShaderReflections.clear();
-
 	return pPSO;
 }
 ID3D12PipelineState* VQRenderer::CompileComputePSO(const FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults)

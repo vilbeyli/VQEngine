@@ -25,6 +25,8 @@
 
 #include <unordered_map>
 
+#include "../../Renderer/Renderer.h" // TODO:
+
 struct FSceneView;
 class DynamicBufferHeap;
 struct ID3D12GraphicsCommandList;

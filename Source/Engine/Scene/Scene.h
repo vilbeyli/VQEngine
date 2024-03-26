@@ -30,6 +30,7 @@
 #include "Transform.h"
 #include "GameObject.h"
 #include "Serialization.h"
+
 #include "../Core/Memory.h"
 #include "../Core/RenderCommands.h"
 #include "../AssetLoader.h"
@@ -49,6 +50,7 @@ struct Material;
 struct FResourceNames;
 struct FFrustumPlaneset;
 struct FUIState;
+class Window;
 
 // typedefs
 using MeshLookup_t     = std::unordered_map<MeshID, Mesh>;
@@ -74,7 +76,7 @@ struct FSceneRenderParameters
 	};
 
 	bool bForceLOD0_ShadowView = false;
-	bool bForceLOD0_SceneView = true;
+	bool bForceLOD0_SceneView = false;
 	bool bDrawLightBounds = false;
 	bool bDrawMeshBoundingBoxes = false;
 	bool bDrawGameObjectBoundingBoxes = false;

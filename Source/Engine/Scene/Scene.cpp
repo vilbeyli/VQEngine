@@ -1104,11 +1104,6 @@ static void MarkInstanceDataStale(FSceneView::MaterialMeshLODInstanceDataLookup_
 	}
 }
 
-static void ResetKeys()
-{
-
-}
-
 void Scene::CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool)
 {
 	SCOPED_CPU_MARKER("CullFrustums");
