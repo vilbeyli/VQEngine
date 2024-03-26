@@ -21,6 +21,7 @@
 #include <DirectXMath.h>
 
 #include "../Math.h"
+#include "../Culling.h"
 
 #include <array>
 #include <memory>
@@ -103,6 +104,8 @@ class OrbitController : public CameraController
 public:
 	OrbitController(Camera* pCam);
 	void UpdateCamera(const Input& input, float dt, bool bUseInput) override;
+	inline void SetLookAtPosition(const DirectX::XMFLOAT3& f3Position) { mF3LookAt = f3Position; }
+	inline void SetLookAtPosition(float x, float y, float z) { mF3LookAt = DirectX::XMFLOAT3(x,y,z); }
 protected:
 	CameraController* Clone_impl(Camera* pNewCam) override;
 private:
@@ -120,11 +123,11 @@ enum ECameraControllerType
 // ---------------------------------------------------------
 // CAMERA
 // ---------------------------------------------------------
-#include "../Culling.h"
 class Camera
 {
 	friend class OrbitController;
 	friend class FirstPersonController;
+
 public:
 	Camera();
 	Camera Clone();
@@ -144,10 +147,15 @@ public:
 	DirectX::XMMATRIX GetViewInverseMatrix() const;
 	DirectX::XMMATRIX GetProjectionMatrix() const;
 	DirectX::XMMATRIX GetRotationMatrix() const;
+	inline DirectX::XMMATRIX GetViewProjectionMatrix() const { return GetViewMatrix() * GetProjectionMatrix(); };
 	inline const FProjectionMatrixParameters& GetProjectionParameters() const { return mProjParams; }
 	inline       FProjectionMatrixParameters& GetProjectionParameters() { return mProjParams; }
 	inline       FFrustumPlaneset GetViewFrustumPlanesInWorldSpace() const { return FFrustumPlaneset::ExtractFromMatrix(GetViewMatrix() * GetProjectionMatrix()); }
 	
+	ECameraControllerType GetControllerType() const { return static_cast<ECameraControllerType>(mControllerIndex); };
+	void SetControllerType(ECameraControllerType c) { mControllerIndex = c; }
+	void SetTargetPosition(const DirectX::XMFLOAT3& f3Position);
+
 	inline void SetPosition(float x, float y, float z) { mPosition = DirectX::XMFLOAT3(x, y, z); }
 	inline void SetPosition(const DirectX::XMFLOAT3& p){ mPosition = p; }
 	       void Rotate(float yaw, float pitch);

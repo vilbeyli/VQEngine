@@ -53,7 +53,7 @@ public:
 	{
 		ID3D12GraphicsCommandList* pCmd = nullptr;
 		DynamicBufferHeap* pCBufferHeap = nullptr;
-		const FMagnifierParameters* pCBufferParams = nullptr;
+		std::shared_ptr<const FMagnifierParameters> pCBufferParams;
 		D3D12_CPU_DESCRIPTOR_HANDLE RTV = {};
 		SRV SRVColorInput = {};
 		IBV IndexBufferView = {};

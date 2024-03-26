@@ -13,7 +13,7 @@ static void Toggle(bool& b) { b = !b; }
 
 void DefaultScene::UpdateScene(float dt, FSceneView& SceneView)
 {
-	assert(pObject);
+	assert(hObject != INVALID_ID);
 	assert(mIndex_SelectedCamera < mCameras.size());
 	ImGuiIO& io = ImGui::GetIO();
 	const bool& bMouseInputUsedByUI = io.WantCaptureMouse;
@@ -31,7 +31,7 @@ void DefaultScene::UpdateScene(float dt, FSceneView& SceneView)
 
 	if (mInput.IsKeyTriggered("Space")) Toggle(this->bObjectAnimation);
 
-	Transform* pTF = mpTransforms[pObject->mTransformID];
+	Transform* pTF = this->GetGameObjectTransform(hObject);
 
 	// update scene data
 	if (this->bObjectAnimation)
@@ -41,8 +41,8 @@ void DefaultScene::UpdateScene(float dt, FSceneView& SceneView)
 
 void DefaultScene::InitializeScene()
 {
-	assert(!mpObjects.empty());
-	this->pObject = mpObjects[1];
+	assert(!mGameObjectHandles.empty());
+	hObject = 1;
 	this->bObjectAnimation = true;
 }
 

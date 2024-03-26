@@ -19,6 +19,22 @@
 #include "Material.h"
 #include "Scene.h"
 
+VQ_SHADER_DATA::TessellationParams Material::GetTessellationCBufferData() const
+{
+	VQ_SHADER_DATA::TessellationParams p;
+	p.TriEdgeTessFactor.x = Tessellation.TriOuter[0];
+	p.TriEdgeTessFactor.y = Tessellation.TriOuter[1];
+	p.TriEdgeTessFactor.z = Tessellation.TriOuter[2];
+	p.TriInnerTessFactor = Tessellation.TriInner;
+	p.QuadEdgeTessFactor.x = Tessellation.QuadOuter[0];
+	p.QuadEdgeTessFactor.y = Tessellation.QuadOuter[1];
+	p.QuadEdgeTessFactor.z = Tessellation.QuadOuter[2];
+	p.QuadEdgeTessFactor.w = Tessellation.QuadOuter[3];
+	p.QuadInsideFactor.x = Tessellation.QuadInner[0];
+	p.QuadInsideFactor.y = Tessellation.QuadInner[1];
+	return p;
+}
+
 VQ_SHADER_DATA::MaterialData Material::GetCBufferData() const
 {
 	VQ_SHADER_DATA::MaterialData d = {};
@@ -31,9 +47,10 @@ VQ_SHADER_DATA::MaterialData Material::GetCBufferData() const
 
 	d.specular = this->specular;
 	d.roughness = this->roughness;
-	
+	d.displacement = this->displacement;
+
 	d.metalness = this->metalness;
-	d.uvScale = this->tiling;
+	d.uvScaleOffset = float4(this->tiling.x, this->tiling.y, this->uv_bias.x, this->uv_bias.y);
 
 	d.textureConfig = this->GetTextureConfig();
 	

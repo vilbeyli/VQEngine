@@ -32,9 +32,6 @@
 #define SCOPED_CPU_MARKER_F(pStr, ...)            ScopedMarker    CPUMarker(PIX_COLOR_DEFAULT, pStr, __VA_ARGS__)
 #define SCOPED_CPU_MARKER_CF(PIXColor, pStr, ...) ScopedMarker    CPUMarker(PIXColor, pStr, __VA_ARGS__)
 
-struct ID3D12GraphicsCommandList;
-struct ID3D12CommandQueue;
-
 
 class ScopedMarker
 {
@@ -45,24 +42,6 @@ public:
 	~ScopedMarker();
 };
 
-class ScopedGPUMarker// : public ScopedMarker
-{
-public:
-	ScopedGPUMarker(ID3D12GraphicsCommandList* pCmdList, const char* pLabel, unsigned PIXColor = PIX_COLOR_DEFAULT);
-	ScopedGPUMarker(ID3D12CommandQueue*       pCmdQueue, const char* pLabel, unsigned PIXColor = PIX_COLOR_DEFAULT);
-	~ScopedGPUMarker();
-
-	ScopedGPUMarker(const ScopedGPUMarker&)       = delete;
-	ScopedGPUMarker(ScopedGPUMarker&&)            = delete;
-	ScopedGPUMarker& operator=(ScopedGPUMarker&&) = delete;
-private:
-	union 
-	{
-		ID3D12GraphicsCommandList* mpCmdList;
-		ID3D12CommandQueue* mpCmdQueue;
-	};
-};
-
 
 template<class ...Args>
 inline ScopedMarker::ScopedMarker(unsigned PIXColor, const char* pFormat, Args && ...args)
@@ -71,3 +50,25 @@ inline ScopedMarker::ScopedMarker(unsigned PIXColor, const char* pFormat, Args &
 	sprintf_s(buf, pFormat, args...);
 	PIXBeginEvent(PIXColor, buf);
 }
+
+
+struct ID3D12GraphicsCommandList;
+struct ID3D12CommandQueue;
+
+class ScopedGPUMarker// : public ScopedMarker
+{
+public:
+	ScopedGPUMarker(ID3D12GraphicsCommandList* pCmdList, const char* pLabel, unsigned PIXColor = PIX_COLOR_DEFAULT);
+	ScopedGPUMarker(ID3D12CommandQueue* pCmdQueue, const char* pLabel, unsigned PIXColor = PIX_COLOR_DEFAULT);
+	~ScopedGPUMarker();
+
+	ScopedGPUMarker(const ScopedGPUMarker&) = delete;
+	ScopedGPUMarker(ScopedGPUMarker&&) = delete;
+	ScopedGPUMarker& operator=(ScopedGPUMarker&&) = delete;
+private:
+	union
+	{
+		ID3D12GraphicsCommandList* mpCmdList;
+		ID3D12CommandQueue* mpCmdQueue;
+	};
+};

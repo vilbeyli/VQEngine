@@ -34,6 +34,12 @@ struct FMaterialRepresentation
 	float EmissiveIntensity = MATERIAL_UNINITIALIZED_VALUE;
 	float Metalness = MATERIAL_UNINITIALIZED_VALUE;
 	float Roughness = MATERIAL_UNINITIALIZED_VALUE;
+	float Displacement = MATERIAL_UNINITIALIZED_VALUE;
+	float TilingX = 1.0f;
+	float TilingY = 1.0f;
+
+	FTessellationParameters Tessellation;
+
 	std::string DiffuseMapFilePath;
 	std::string NormalMapFilePath;
 	std::string EmissiveMapFilePath;
@@ -41,6 +47,7 @@ struct FMaterialRepresentation
 	std::string MetallicMapFilePath;
 	std::string RoughnessMapFilePath;
 	std::string AOMapFilePath;
+	std::string HeightMapFilePath;
 
 	FMaterialRepresentation();
 };

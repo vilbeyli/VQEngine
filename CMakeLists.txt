@@ -25,11 +25,13 @@ set (Scenes
     "Data/Levels/Sponza.xml"
     "Data/Levels/EnvironmentMapUnitTest.xml"
     "Data/Levels/StressTest.xml"
+    "Data/Levels/Terrain.xml"
     "Source/Scenes/Scenes.h"
     "Source/Scenes/DefaultScene.cpp"
     "Source/Scenes/SponzaScene.cpp"
     "Source/Scenes/EnvironmentMapUnitTestScene.cpp"
     "Source/Scenes/StressTestScene.cpp"
+    "Source/Scenes/TerrainScene.cpp"
 )
 
 set (Config
@@ -77,6 +79,10 @@ set (Shaders
     "Shaders/Visualization.hlsl"
     "Shaders/ApplyReflections.hlsl"
     "Shaders/Magnifier.hlsl"
+    "Shaders/ObjectID.hlsl"
+    "Shaders/Outline.hlsl"
+    "Shaders/VertexDebug.hlsl"
+    "Shaders/Tessellation.hlsl"
 )
 
 set (ShadersScreenSpaceReflections
@@ -101,6 +107,8 @@ set (RenderPassFiles
     "Source/Engine/RenderPass/DepthMSAAResolve.h"
     "Source/Engine/RenderPass/ScreenSpaceReflections.h"
     "Source/Engine/RenderPass/MagnifierPass.h"
+    "Source/Engine/RenderPass/ObjectIDPass.h"
+    "Source/Engine/RenderPass/OutlinePass.h"
     
     "Source/Engine/RenderPass/RenderPass.cpp"
     "Source/Engine/RenderPass/AmbientOcclusion.cpp"
@@ -109,6 +117,8 @@ set (RenderPassFiles
     "Source/Engine/RenderPass/DepthMSAAResolve.cpp"
     "Source/Engine/RenderPass/ScreenSpaceReflections.cpp"
     "Source/Engine/RenderPass/MagnifierPass.cpp"
+    "Source/Engine/RenderPass/ObjectIDPass.cpp"
+    "Source/Engine/RenderPass/OutlinePass.cpp"
 )
 
 set (CoreFiles 
@@ -155,7 +165,7 @@ set (SceneFiles
     "Source/Engine/Scene/Model.cpp"
     "Source/Engine/Scene/GameObject.cpp"
     "Source/Engine/Scene/Transform.cpp"
-    "Source/Engine/Scene/Quaternion.cpp"    
+    "Source/Engine/Scene/Quaternion.cpp"
 )
 
 set (PostProcessFiles
@@ -174,7 +184,6 @@ set (SourceVQE
     "Source/Engine/Settings.h"
     "Source/Engine/Math.h"
     "Source/Engine/Culling.h"
-    "Source/Engine/Geometry.h"
     "Source/Engine/AssetLoader.h"
     "Source/Engine/GPUMarker.h"
 
@@ -186,7 +195,6 @@ set (SourceVQE
     "Source/Engine/VQEngine_Input.cpp"
     "Source/Engine/VQEngine_Simulation.cpp"
     "Source/Engine/EnvironmentMap.cpp"
-    "Source/Engine/Geometry.cpp"
     "Source/Engine/Math.cpp"
     "Source/Engine/Culling.cpp"
     "Source/Engine/AssetLoader.cpp"

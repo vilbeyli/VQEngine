@@ -318,9 +318,11 @@ static AssetLoader::ETextureType GetTextureType(aiTextureType aiType)
 	return AssetLoader::ETextureType::NUM_TEXTURE_TYPES;
 }
 
-void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, VQRenderer* pRenderer)
+void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std::mutex& mtxTexturePaths, std::unordered_map<TextureID, std::string>& TexturePaths, VQRenderer* pRenderer)
 {
 	SCOPED_CPU_MARKER("FMaterialTextureAssignments::DoAssignments()");
+
+	
 	for (FMaterialTextureAssignment& assignment : mAssignments)
 	{
 		Material& mat = pScene->GetMaterial(assignment.matID);
@@ -346,17 +348,20 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, VQRe
 			assert(result.texLoadResult.valid());
 
 			result.texLoadResult.wait();
+
+			const TextureID loadedTextureID = result.texLoadResult.get();
+
 			switch (result.type)
 			{
-			case DIFFUSE           : mat.TexDiffuseMap   = result.texLoadResult.get(); break;
-			case NORMALS           : mat.TexNormalMap    = result.texLoadResult.get(); break;
-			case ALPHA_MASK        : mat.TexAlphaMaskMap = result.texLoadResult.get(); break;
-			case EMISSIVE          : mat.TexEmissiveMap  = result.texLoadResult.get(); break;
-			case METALNESS         : mat.TexMetallicMap  = result.texLoadResult.get(); break;
-			case ROUGHNESS         : mat.TexRoughnessMap = result.texLoadResult.get(); break;
+			case DIFFUSE           : mat.TexDiffuseMap          = loadedTextureID; break;
+			case NORMALS           : mat.TexNormalMap           = loadedTextureID; break;
+			case ALPHA_MASK        : mat.TexAlphaMaskMap        = loadedTextureID; break;
+			case EMISSIVE          : mat.TexEmissiveMap         = loadedTextureID; break;
+			case METALNESS         : mat.TexMetallicMap         = loadedTextureID; mat.metalness = 1.0f; break;
+			case ROUGHNESS         : mat.TexRoughnessMap        = loadedTextureID; mat.roughness = 1.0f; break;
+			case HEIGHT            : mat.TexHeightMap           = loadedTextureID; break;
+			case AMBIENT_OCCLUSION : mat.TexAmbientOcclusionMap = loadedTextureID; break;
 			case SPECULAR          : assert(false); /*mat.TexSpecularMap  = result.texLoadResult.get();*/ break;
-			case HEIGHT            : mat.TexHeightMap    = result.texLoadResult.get(); break;
-			case AMBIENT_OCCLUSION : mat.TexAmbientOcclusionMap = result.texLoadResult.get(); break;
 			case CUSTOM_MAP        :
 			{
 				const ECustomMapType customMapType = DetermineCustomMapType(result.TexturePath);
@@ -365,6 +370,8 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, VQRe
 				case OCCLUSION_ROUGHNESS_METALNESS:
 					OcclRoughMtlMap_ComponentMapping; // leave as is
 					mat.TexOcclusionRoughnessMetalnessMap = result.texLoadResult.get();
+					mat.metalness = 1.0f;
+					mat.roughness = 1.0f;
 					break;
 				case METALNESS_ROUGHNESS:
 					// turns out: even the file is named in reverse order, the common thing to do is to store
@@ -388,6 +395,8 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, VQRe
 						, D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0
 					);
 					mat.TexOcclusionRoughnessMetalnessMap = result.texLoadResult.get();
+					mat.metalness = 1.0f;
+					mat.roughness = 1.0f;
 					break;
 				default:
 				case UNKNOWN:
@@ -400,6 +409,13 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, VQRe
 				Log::Warning("TODO");
 				break;
 			}
+			
+			// store the loaded texture path if we have a successful texture creation
+			if (loadedTextureID != INVALID_ID)
+			{
+				std::lock_guard<std::mutex> lk(mtxTexturePaths);
+				TexturePaths[loadedTextureID] = result.TexturePath;
+			}
 		}
 
 		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ALBEDO, mat.TexDiffuseMap);
@@ -410,6 +426,7 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, VQRe
 		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ROUGHNESS, mat.TexRoughnessMap);
 		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::OCCLUSION_ROUGHNESS_METALNESS, mat.TexOcclusionRoughnessMetalnessMap, OcclRoughMtlMap_ComponentMapping);
 		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::AMBIENT_OCCLUSION, mat.TexAmbientOcclusionMap);
+		pRenderer->InitializeSRV(mat.SRVHeightMap, 0, mat.TexHeightMap);
 	}
 }
 
@@ -706,7 +723,7 @@ static Model::Data ProcessAssimpNode(
 		auto vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, NumThreadsToUse);
 
 		// synchronization
-		std::atomic<int> WorkerCounter((int)NumWorkerThreadsToUse);
+		std::atomic<int> WorkerCounter(static_cast<int>(min(vRanges.size()-1, NumWorkerThreadsToUse)));
 		Signal WorkerSignal;
 		{
 			SCOPED_CPU_MARKER("DispatchMeshWorkers");
@@ -886,7 +903,7 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 	}
 
 	// assign TextureIDs to the materials;
-	MaterialTextureAssignments.DoAssignments(pScene, pRenderer);
+	MaterialTextureAssignments.DoAssignments(pScene, pScene->mMtxTexturePaths,  pScene->mTexturePaths, pRenderer);
 
 	t.Stop();
 	Log::Info("   [%.2fs] Loaded Model '%s': %d meshes, %d materials"

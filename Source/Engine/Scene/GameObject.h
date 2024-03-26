@@ -24,7 +24,6 @@
 class GameObject
 {
 public:
-	TransformID  mTransformID = INVALID_ID;
 	ModelID      mModelID     = INVALID_ID;
 	FBoundingBox mLocalSpaceBoundingBox;
 };

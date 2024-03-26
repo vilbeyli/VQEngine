@@ -47,7 +47,18 @@ struct FShadowMeshRenderCommand : public FMeshRenderCommandBase
 };
 struct FWireframeRenderCommand : public FMeshRenderCommandBase
 {
-	DirectX::XMFLOAT3 color;
+	DirectX::XMFLOAT4 color;
+};
+struct FOutlineRenderCommand
+{
+	MeshID meshID = INVALID_ID;
+	struct FConstantBuffer { 
+		DirectX::XMMATRIX matWorldView; 
+		DirectX::XMMATRIX matNormalView; 
+		DirectX::XMMATRIX matProj; 
+		DirectX::XMFLOAT4 color; 
+		float scale; 
+	} cb;
 };
 using FLightRenderCommand = FWireframeRenderCommand;
 using FBoundingBoxRenderCommand = FWireframeRenderCommand;
@@ -58,7 +69,8 @@ using FBoundingBoxRenderCommand = FWireframeRenderCommand;
 // ------------------------------------------------------------------------------------
 struct FInstancedMeshRenderCommandBase
 {
-	MeshID meshID = INVALID_ID;
+	int numIndices = 0;
+	std::pair<BufferID, BufferID> vertexIndexBuffer;
 	std::vector<DirectX::XMMATRIX> matWorldViewProj;
 };
 struct FInstancedMotionVectorMeshCommand
@@ -69,12 +81,14 @@ struct FInstancedMeshRenderCommand : public FInstancedMeshRenderCommandBase, pub
 {
 	std::vector<DirectX::XMMATRIX> matNormal;
 	std::vector<DirectX::XMMATRIX> matWorld;
+	std::vector<int> objectID;
+	std::vector<float> projectedArea;
 	MaterialID matID = INVALID_ID;
 };
 struct FInstancedWireframeRenderCommand : public FInstancedMeshRenderCommandBase
 {
 	// single color for all instances, ideally we could make the color an instance data
-	DirectX::XMFLOAT3 color; 
+	DirectX::XMFLOAT4 color; 
 };
 struct FInstancedShadowMeshRenderCommand : public FInstancedMeshRenderCommandBase
 {

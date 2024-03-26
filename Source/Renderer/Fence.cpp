@@ -29,44 +29,51 @@ void Fence::Create(ID3D12Device* pDevice, const char* pDebugName)
 {
     mFenceValue = 0;
     //ThrowIfFailed(
-        pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&mpFence))
+        pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&ptr))
     //)
     ;
-    //SetName(mpFence, pDebugName);
+    SetName(ptr, pDebugName);
     //mHEvent = CreateEventEx(nullptr, "FENCE_EVENT0", FALSE, EVENT_ALL_ACCESS);
     mHEvent = CreateEventEx(nullptr, FALSE, FALSE, EVENT_ALL_ACCESS);
 }
 
 void Fence::Destroy() 
 {
-    if(mpFence) mpFence->Release();
+    if(ptr) ptr->Release();
     CloseHandle(mHEvent);
 }
 
 void Fence::Signal(ID3D12CommandQueue* pCommandQueue)
 {
     ++mFenceValue;
+    
     //ThrowIfFailed(
-        pCommandQueue->Signal(mpFence, mFenceValue)
+        pCommandQueue->Signal(ptr, mFenceValue)
 
     //)
     ;
 }
 
 
-void Fence::WaitOnCPU(UINT64 FenceWaitValue)
+void Fence::WaitOnCPU(UINT64 FenceWaitValue) const
 {
-    if (mpFence->GetCompletedValue() < FenceWaitValue)
+    if (ptr->GetCompletedValue() < FenceWaitValue)
     {
-        ThrowIfFailed(mpFence->SetEventOnCompletion(FenceWaitValue, mHEvent));
+        ThrowIfFailed(ptr->SetEventOnCompletion(FenceWaitValue, mHEvent));
         WaitForSingleObject(mHEvent, INFINITE);
     }
 }
 
 void Fence::WaitOnGPU(ID3D12CommandQueue* pCommandQueue)
 {
-    //ThrowIfFailed(
-        pCommandQueue->Wait(mpFence, mFenceValue)
-    //);
-    ;
+    ThrowIfFailed(
+        pCommandQueue->Wait(ptr, mFenceValue)
+    );
+}
+
+void Fence::WaitOnGPU(ID3D12CommandQueue* pCommandQueue, UINT64 olderFence)
+{
+    ThrowIfFailed(
+        pCommandQueue->Wait(ptr, olderFence)
+    );
 }

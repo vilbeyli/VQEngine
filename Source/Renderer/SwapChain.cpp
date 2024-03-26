@@ -22,6 +22,7 @@
 #include "Common.h"
 #include "Renderer.h"
 
+#include "../Engine/GPUMarker.h"
 #include "../Engine/Core/Platform.h" // CHECK_HR
 #include "../Engine/Core/Window.h"
 #include "../../Libs/VQUtils/Source/Log.h"
@@ -42,7 +43,7 @@
 #include <vector>
 
 #define NUM_MAX_BACK_BUFFERS  3
-#define LOG_SWAPCHAIN_VERBOSE 0
+#define LOG_SWAPCHAIN_VERBOSE 1
 
 #if LOG_SWAPCHAIN_VERBOSE
     #define LOG_SWAPCHAIN_SYNCHRONIZATION_EVENTS  0
@@ -267,7 +268,7 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     this->mICurrentBackBuffer = mpSwapChain->GetCurrentBackBufferIndex();
     this->mFenceValues.resize(this->mNumBackBuffers, 0);
     D3D12_FENCE_FLAGS FenceFlags = D3D12_FENCE_FLAG_NONE;
-    mpDevice->CreateFence(this->mFenceValues[this->mICurrentBackBuffer], FenceFlags, IID_PPV_ARGS(&this->mpFence));
+    mpDevice->CreateFence(this->mFenceValues[this->mICurrentBackBuffer], FenceFlags, IID_PPV_ARGS(&this->ptr));
     ++mFenceValues[mICurrentBackBuffer];
     mHEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     if (mHEvent == nullptr)
@@ -337,7 +338,7 @@ void SwapChain::Destroy()
 
     WaitForGPU();
 
-    this->mpFence->Release();
+    this->ptr->Release();
     CloseHandle(this->mHEvent);
 
     DestroyRenderTargetViews();
@@ -510,22 +511,23 @@ void SwapChain::MoveToNextFrame()
 
     // Schedule a Signal command in the queue.
     const UINT64 currentFenceValue = mFenceValues[mICurrentBackBuffer];
-    ThrowIfFailed(mpPresentQueue->Signal(mpFence, currentFenceValue));
+    ThrowIfFailed(mpPresentQueue->Signal(ptr, currentFenceValue));
 
     // Update the frame index.
     mICurrentBackBuffer = mpSwapChain->GetCurrentBackBufferIndex();
     ++mNumTotalFrames;
 
     // If the next frame is not ready to be rendered yet, wait until it is ready.
-    UINT64 fenceComplVal = mpFence->GetCompletedValue();
+    UINT64 fenceComplVal = ptr->GetCompletedValue();
     HRESULT hr = {};
     if (fenceComplVal < mFenceValues[mICurrentBackBuffer])
     {
+        SCOPED_CPU_MARKER_C("GPU_BOUND", 0xFF005500);
 #if LOG_SWAPCHAIN_SYNCHRONIZATION_EVENTS
         Log::Warning("SwapChain : next frame not ready. FenceComplVal=%d < FenceVal[curr]=%d", fenceComplVal, mFenceValues[mICurrentBackBuffer]);
 #endif
-        ThrowIfFailed(mpFence->SetEventOnCompletion(mFenceValues[mICurrentBackBuffer], mHEvent));
-        hr = WaitForSingleObjectEx(mHEvent, 10000, FALSE);
+        ThrowIfFailed(ptr->SetEventOnCompletion(mFenceValues[mICurrentBackBuffer], mHEvent));
+        hr = WaitForSingleObjectEx(mHEvent, 1000, FALSE);
     }
     switch (hr)
     {

@@ -176,7 +176,7 @@ void AmbientOcclusionPass::RecordCommands(const IRenderPassDrawParameters* pDraw
 	}
 #endif
 
-	FFX_CACAO_Status hr = FFX_CACAO_D3D12Draw(pFFX_CACAO_Context, pParameters->pCmd, &proj, &normalsWorldToView);
+	FFX_CACAO_Status hr = FFX_CACAO_D3D12Draw(pFFX_CACAO_Context, pParameters->pCmd, &proj, &normalsWorldToView, pParameters->bAsyncCompute);
 
 	if (hr != FFX_CACAO_STATUS_OK)
 	{

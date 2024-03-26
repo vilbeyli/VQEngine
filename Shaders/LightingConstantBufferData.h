@@ -15,6 +15,9 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
+#ifndef LIGHTING_CONSTANT_BUFFER_DATA_H
+#define LIGHTING_CONSTANT_BUFFER_DATA_H
+
 #ifndef VQ_GPU
 #define VQ_CPU 1
 #endif
@@ -24,10 +27,14 @@
 #include <array>
 #include <DirectXMath.h>
 // HLSL types for CPU
+#define float4   DirectX::XMFLOAT4
 #define float3   DirectX::XMFLOAT3
 #define float2   DirectX::XMFLOAT2
 #define matrix   DirectX::XMMATRIX
 #define float3x3 DirectX::XMFLOAT3X3
+#define int2     DirectX::XMINT2
+#define int3     DirectX::XMINT3
+#define int4     DirectX::XMINT4
 namespace VQ_SHADER_DATA {
 #endif
 
@@ -43,6 +50,7 @@ namespace VQ_SHADER_DATA {
 
 #define NUM_SHADOWING_LIGHTS__POINT 5
 #define NUM_SHADOWING_LIGHTS__SPOT  5
+#define NUM_SHADOWING_LIGHTS__DIRECTIONAL 1
 
 #define LIGHT_INDEX_SPOT       0
 #define LIGHT_INDEX_POINT      1
@@ -134,15 +142,17 @@ struct MaterialData
     float3 diffuse;
     float alpha;
 
-	float3 emissiveColor;
-	float emissiveIntensity;
+    float3 emissiveColor;
+    float emissiveIntensity;
 
     float3 specular;
     float roughness;
 
-	float2 uvScale;
+    float4 uvScaleOffset;
     float metalness;
-	int textureConfig;
+
+	float displacement;
+    int textureConfig;
 };
 
 
@@ -150,7 +160,7 @@ struct MaterialData
 //----------------------------------------------------------
 // SHADER CONSTANT BUFFER INTERFACE
 //----------------------------------------------------------
-#define RENDER_INSTANCED_SCENE_MESHES    1
+#define RENDER_INSTANCED_SCENE_MESHES    1  // 0 is broken, TODO: fix
 #define MAX_INSTANCE_COUNT__SCENE_MESHES 64
 
 #ifndef INSTANCE_COUNT
@@ -189,7 +199,7 @@ struct PerObjectData
 	matrix matWorldViewProj    [INSTANCE_COUNT];
 	matrix matWorld            [INSTANCE_COUNT];
 	matrix matWorldViewProjPrev[INSTANCE_COUNT];
-	matrix matNormal           [INSTANCE_COUNT];
+	matrix matNormal           [INSTANCE_COUNT]; // could be 4x3
 #else
 	matrix matWorldViewProj;
 	matrix matWorld;
@@ -198,9 +208,31 @@ struct PerObjectData
 #endif
 
 	MaterialData materialData;
+	float pad2;
+
+	int meshID;
+	int materialID;
+	int2 pad3;
+
+#if INSTANCED_DRAW
+	int4 ObjID[INSTANCE_COUNT]; // int[] causes alignment issues as each element is aligned to 16B on the GPU. use int4.x
+#else
+	int ObjID;
+#endif
+};
+
+struct TessellationParams
+{
+	float4 QuadEdgeTessFactor;
+	float2 QuadInsideFactor;
+	float2 pad;
+	float3 TriEdgeTessFactor;
+	float TriInnerTessFactor;
 };
 
 
 #ifdef VQ_CPU
 } // namespace VQ_SHADER_DATA
 #endif
+
+#endif // LIGHTING_CONSTANT_BUFFER_DATA_H

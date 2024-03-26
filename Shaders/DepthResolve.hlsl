@@ -70,7 +70,15 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 		
 #if OUTPUT_NORMALS
 		// resolve normals
+	#if 1 // avg normals
+		float3 Normal0 = texNormalsMS.Load(dispatchThreadId.xy, 0).rgb * 2.0f - 1.0f;
+		float3 Normal1 = texNormalsMS.Load(dispatchThreadId.xy, 1).rgb * 2.0f - 1.0f;
+		float3 Normal2 = texNormalsMS.Load(dispatchThreadId.xy, 2).rgb * 2.0f - 1.0f;
+		float3 Normal3 = texNormalsMS.Load(dispatchThreadId.xy, 3).rgb * 2.0f - 1.0f;
+		Normal = (normalize((Normal0+Normal1+Normal2+Normal3)*0.25f) + 1.0f.xxx)*0.5f;
+	#else
 		Normal = texNormalsMS.Load(dispatchThreadId.xy, iSample).rgb;
+	#endif
 #endif
 
 #if OUTPUT_ROUGHNESS

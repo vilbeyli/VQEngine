@@ -26,6 +26,8 @@ public:
 	static Quaternion Identity();
 	static Quaternion FromAxisAngle(const DirectX::XMVECTOR& axis, const float angle);
 	static Quaternion FromAxisAngle(const DirectX::XMFLOAT3& axis, const float angle);
+	static Quaternion FromEulerDeg(const DirectX::XMFLOAT3& XYZRotations);
+	static Quaternion FromEulerRad(const DirectX::XMFLOAT3& XYZRotations);
 	static Quaternion Lerp(const Quaternion& from, const Quaternion& to, float t);
 	static Quaternion Slerp(const Quaternion& from, const Quaternion& to, float t);
 	static DirectX::XMFLOAT3 ToEulerRad(const Quaternion& Q);

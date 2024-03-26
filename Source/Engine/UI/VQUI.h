@@ -16,6 +16,8 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
+#include <memory>
+
 struct FMagnifierParameters;
 struct FMagnifierUIState
 {
@@ -24,7 +26,7 @@ struct FMagnifierUIState
 	bool  bLockMagnifierPositionHistory = false;
 	int   LockedMagnifiedScreenPositionX = 0;
 	int   LockedMagnifiedScreenPositionY = 0;
-	FMagnifierParameters* pMagnifierParams = nullptr;
+	std::shared_ptr<FMagnifierParameters> pMagnifierParams = nullptr;
 
 	void ToggleMagnifierLock();
 	void AdjustMagnifierSize(float increment = 0.05f);
@@ -33,18 +35,33 @@ struct FMagnifierUIState
 
 struct FUIState
 {
-	bool bWindowVisible_KeyMappings;
-	bool bWindowVisible_Profiler;
-	bool bWindowVisible_SceneControls;
-	bool bWindowVisible_DebugPanel;
-	bool bWindowVisible_GraphicsSettingsPanel;
-	bool bHideAllWindows; // masks all the windows above
+	bool bWindowVisible_KeyMappings = false;
+	bool bWindowVisible_Profiler = false;
+	bool bWindowVisible_SceneControls = false;
+	bool bWindowVisible_GraphicsSettingsPanel = false;
+	bool bHideAllWindows = false; // masks all the windows above
 
-	bool bUIOnSeparateWindow;
-	bool bProfiler_ShowEngineStats;
-	FMagnifierUIState* mpMagnifierState = nullptr;
+	bool bWindowVisible_Editor = false;
+	enum EEditorMode
+	{
+		MATERIALS = 0,
+		LIGHTS,
+		OBJECTS,
+
+		NUM_EDITOR_MODES
+	};
+	EEditorMode EditorMode = EEditorMode::MATERIALS;
+	int SelectedEditeeIndex[NUM_EDITOR_MODES];
+
+	bool bTerrainScaleSliderFloat3 = false;
+	bool bTessellationSliderFloatVec = false;
+	bool bLockTessellationSliders = false;
+	
+	bool bDrawLightVolume = false;
+
+	bool bUIOnSeparateWindow = false;
+	bool bProfiler_ShowEngineStats = true;
+	std::unique_ptr<FMagnifierUIState> mpMagnifierState = nullptr;
 	
 	void GetMouseScreenPosition(int& X, int& Y) const;
-
-	~FUIState();
 };

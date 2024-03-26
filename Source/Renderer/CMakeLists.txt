@@ -11,6 +11,7 @@ set (LibHeadersD3D12X
 
 set (Headers
     "Renderer.h"
+    "Renderer_PSOs.h"
     "WindowRenderContext.h"
     "Device.h"
     "SwapChain.h"
@@ -23,10 +24,13 @@ set (Headers
     "Texture.h"
     "HDR.h"
     "Shader.h"
+    "Tessellation.h"
 )
 
 set (Source
     "Renderer.cpp"
+    "Renderer_RootSignatures.cpp"
+    "Renderer_PSOs.cpp"
     "Renderer_Resources.cpp"
     "WindowRenderContext.cpp"
     "Device.cpp"

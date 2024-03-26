@@ -17,7 +17,6 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "VQEngine.h"
-#include "Geometry.h"
 #include "GPUMarker.h"
 
 #include <d3d12.h>
@@ -35,6 +34,7 @@
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 void VQEngine::SimulationThread_Main()
 {
+	//SCOPED_CPU_MARKER("SimulationThread_Main");
 	Log::Info("SimulationThread Created.");
 
 	SimulationThread_Initialize();
@@ -66,12 +66,30 @@ void VQEngine::SimulationThread_Main()
 #if !VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 void VQEngine::SimulationThread_Initialize()
 {
+	SCOPED_CPU_MARKER_C("SimulationThread_Initialize()", 0xFF007777);
 	mNumSimulationTicks = 0;
 
+#define PARALLEL_INIT 1
+
+#if PARALLEL_INIT
+	mWorkers_Simulation.AddTask([=]()
+	{
+		UpdateThread_Inititalize();
+		UpdateThread_Tick(0.0f);
+	});
+#endif
 	RenderThread_Inititalize();
 
-	// --- needs renderer ready
+#if !PARALLEL_INIT
 	UpdateThread_Inititalize();
+#endif
+
+#if PARALLEL_INIT
+	{
+		SCOPED_CPU_MARKER_C("BUSY_WAIT", 0xFFFF0000);
+		while (mWorkers_Simulation.GetNumActiveTasks() != 0); // busy-wait is bad...
+	}
+#endif
 
 	Log::Info("SimulationThread Initialized.");
 }

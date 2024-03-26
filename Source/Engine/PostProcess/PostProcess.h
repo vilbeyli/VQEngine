@@ -21,8 +21,36 @@
 
 #include "../../Renderer/HDR.h"
 
+#define DISABLE_FIDELITYFX_CAS 1 // disable ffx cas but keep implementaiton around, now using fsr1 rcas
+
 // fwd decl
 struct FUIState;
+
+// AMD / FidelityFX Super Resolution 1.0: 
+namespace AMD_FidelityFX_SuperResolution1
+{
+	enum EPreset
+	{
+		ULTRA_QUALITY = 0,
+		QUALITY,
+		BALANCED,
+		PERFORMANCE,
+		CUSTOM,
+
+		NUM_FSR1_PRESET_OPTIONS
+	};
+	inline float GetAMDFSR1ScreenPercentage(EPreset ePreset)
+	{
+		switch (ePreset)
+		{
+		case EPreset::ULTRA_QUALITY: return 0.77f;
+		case EPreset::QUALITY: return 0.67f;
+		case EPreset::BALANCED: return 0.58f;
+		case EPreset::PERFORMANCE: return 0.50f;
+		}
+		return 1.0f;
+	}
+}
 
 enum class EDrawMode
 {
@@ -43,6 +71,14 @@ enum class EDrawMode
 };
 struct FPostProcessParameters
 {
+	enum EUpscalingAlgorithm
+	{
+		NONE = 0,
+		FIDELITYFX_SUPER_RESOLUTION1,
+
+		NUM_UPSCALING_ALGORITHMS
+	};
+
 	struct FTonemapper
 	{
 		EColorSpace   ContentColorSpace = EColorSpace::REC_709;
@@ -50,51 +86,6 @@ struct FPostProcessParameters
 		float         DisplayReferenceBrightnessLevel = 200.0f;
 		int           ToggleGammaCorrection = 1;
 		float         UIHDRBrightness = 1.0f;
-	};
-	struct FFFXCAS
-	{
-		float CASSharpen = 0.8f;
-		FFFXCAS() = default;
-		FFFXCAS(const FFFXCAS& other) : CASSharpen(other.CASSharpen) { memcpy(CASConstantBlock, other.CASConstantBlock, sizeof(CASConstantBlock)); }
-		void UpdateCASConstantBlock(uint InputWidth, uint InputHeight, uint OutputWidth, uint OutputHeight);
-		
-		unsigned CASConstantBlock[8];
-	};
-	struct FFSR_EASU
-	{
-		enum EPresets
-		{
-			ULTRA_QUALITY = 0,
-			QUALITY,
-			BALANCED,
-			PERFORMANCE,
-			CUSTOM,
-
-			NUM_FSR_PRESET_OPTIONS
-		};
-
-		float GetScreenPercentage() const;
-		FFSR_EASU();
-		FFSR_EASU(const FFSR_EASU& other);
-		void UpdateEASUConstantBlock(uint InputWidth          , uint InputHeight,
-			                         uint InputContainerWidth , uint InputContainerHeight,
-			                         uint OutputWidth         , uint OutputHeight);
-		
-		EPresets SelectedFSRPreset;
-		float    fCustomScaling;
-
-		unsigned EASUConstantBlock[16];
-	};
-	struct FFSR_RCAS
-	{
-		FFSR_RCAS();
-		FFSR_RCAS(const FFSR_RCAS& other);
-		float GetLinearSharpness() const;
-		void  SetLinearSharpness(float Sharpness);
-		void UpdateRCASConstantBlock();
-
-		unsigned RCASConstantBlock[4];
-		float RCASSharpnessStops = 0.2f;
 	};
 	struct FBlurParams // Gaussian Blur Pass
 	{ 
@@ -107,28 +98,73 @@ struct FPostProcessParameters
 		int iUnpackNormals = 0;
 		float fInputStrength = 100.0f;
 	};
+#if !DISABLE_FIDELITYFX_CAS
+	struct FFFXCAS
+	{
+		float CASSharpen = 0.8f;
+		FFFXCAS() = default;
+		FFFXCAS(const FFFXCAS& other) : CASSharpen(other.CASSharpen) { memcpy(CASConstantBlock, other.CASConstantBlock, sizeof(CASConstantBlock)); }
+		void UpdateCASConstantBlock(uint InputWidth, uint InputHeight, uint OutputWidth, uint OutputHeight);
+
+		unsigned CASConstantBlock[8];
+	};
+#endif
+	struct FFSR1_EASU
+	{
+		void UpdateEASUConstantBlock(uint InputWidth, uint InputHeight,
+			uint InputContainerWidth, uint InputContainerHeight,
+			uint OutputWidth, uint OutputHeight);
+
+		unsigned EASUConstantBlock[16];
+	};
+	struct FFSR1_RCAS
+	{
+		float GetLinearSharpness() const;
+		void  SetLinearSharpness(float Sharpness);
+		void UpdateRCASConstantBlock();
+
+		unsigned RCASConstantBlock[4];
+		float RCASSharpnessStops = 0.2f;
+	};
+	
+	using AMD_FSR1_Preset = AMD_FidelityFX_SuperResolution1::EPreset;
 
 	//-------------------------------------------------------------------------------------------
 	//-------------------------------------------------------------------------------------------
 	//-------------------------------------------------------------------------------------------
-
-	inline bool IsFFXCASEnabled() const { return !this->bEnableFSR && this->bEnableCAS; }
-	inline bool IsFSREnabled() const { return this->bEnableFSR; }
+#if !DISABLE_FIDELITYFX_CAS
+	inline bool IsFFXCASEnabled() const { return !this->IsFSREnabled() && this->bEnableCAS; }
+#else
+	inline bool IsFFXCASEnabled() const { return false; }
+#endif
+	inline bool IsFSREnabled() const { return UpscalingAlgorithm == EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION1; }
 
 	int SceneRTWidth = 0;
 	int SceneRTHeight = 0;
 	int DisplayResolutionWidth = 0;
 	int DisplayResolutionHeight = 0;
 
-	FTonemapper TonemapperParams = {};
-	FBlurParams BlurParams       = {};
-	FFFXCAS     FFXCASParams     = {};
-	FFSR_RCAS   FFSR_RCASParams  = {};
-	FFSR_EASU   FFSR_EASUParams  = {};
-	EDrawMode   eDrawMode = EDrawMode::LIT_AND_POSTPROCESSED;
+	FTonemapper          TonemapperParams = {};
+	FBlurParams          BlurParams       = {};
+
+	EUpscalingAlgorithm  UpscalingAlgorithm = EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION1;
+	AMD_FSR1_Preset      UpscalingQualityPresetEnum = AMD_FSR1_Preset::ULTRA_QUALITY;
+	FFSR1_EASU           FSR_EASUParams = {};
+	FFSR1_RCAS           FSR_RCASParams = {};
+#if !DISABLE_FIDELITYFX_CAS
+	FFFXCAS              FFXCASParams = {};
+#endif
+	float                ResolutionScale = 1.0f;
+	float                Sharpness = 0.8f;
+
+	EDrawMode            DrawModeEnum = EDrawMode::LIT_AND_POSTPROCESSED;
 	FVizualizationParams VizParams = {};
 
+#if !DISABLE_FIDELITYFX_CAS
 	bool bEnableCAS = false;
-	bool bEnableFSR = false;
+#endif
 	bool bEnableGaussianBlur = false;
+
+
+	EUpscalingAlgorithm UpscalingAlgorithmLastValue;
 };

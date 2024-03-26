@@ -66,6 +66,7 @@ void VQEngine::UpdateThread_Main()
 
 void VQEngine::UpdateThread_Inititalize()
 {
+	SCOPED_CPU_MARKER_C("UpdateThread_Inititalize()", 0xFF000077);
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mNumUpdateLoopsExecuted.store(0);
 #endif
@@ -79,18 +80,15 @@ void VQEngine::UpdateThread_Inititalize()
 
 	InitializeUI(mpWinMain->GetHWND());
 
-	// immediately load loading screen texture
-	LoadLoadingScreenData();
-
 	mTimer.Reset();
 	mTimer.Start();
 }
 
 void VQEngine::UpdateThread_Tick(const float dt)
 {
-	float dt_RenderWaitTime = 0.0f;
-
 	SCOPED_CPU_MARKER_C("UpdateThread_Tick()", 0xFF000077);
+	
+	float dt_RenderWaitTime = 0.0f;
 
 	dt_RenderWaitTime = UpdateThread_WaitForRenderThread();
 
@@ -156,8 +154,12 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 		break;
 	}
 	case EAppState::LOADING:
+	{
+		SCOPED_CPU_MARKER("UpdateThread_Loading()");
 		if (mbLoadingLevel || mbLoadingEnvironmentMap)
 		{
+			SetEffectiveFrameRateLimit(16);
+
 			// animate loading screen
 
 
@@ -185,9 +187,11 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 				SetEffectiveFrameRateLimit(mSettings.gfx.MaxFrameRate);
 				Log::Info("Loading completed in %.2fs, starting scene simulation", dt_loading);
 				mTimer.Start();
+				UpdateThread_UpdateScene_MainWnd(dt);
+				UpdateThread_UpdateScene_DebugWnd(dt);
 			}
 		}
-		break;
+	}	break;
 	case EAppState::SIMULATING:
 		// TODO: threaded?
 		UpdateThread_UpdateScene_MainWnd(dt);
@@ -196,6 +200,7 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 	}
 }
 
+#include "imgui.h"
 void VQEngine::UpdateThread_PostUpdate()
 {
 	SCOPED_CPU_MARKER("UpdateThread_PostUpdate()");
@@ -213,8 +218,43 @@ void VQEngine::UpdateThread_PostUpdate()
 	{
 		return;
 	}
+	
+	mpScene->PostUpdate(mWorkerThreads, mUIState, FRAME_DATA_INDEX);
 
-	mpScene->PostUpdate(mWorkerThreads, FRAME_DATA_INDEX);
+	ImGuiIO& io = ImGui::GetIO();
+	HWND hwndMain = mpWinMain->GetHWND();
+	const bool bMouseLeftTriggered = mInputStates.at(hwndMain).IsMouseTriggered(Input::EMouseButtons::MOUSE_BUTTON_LEFT);
+	if (!io.WantCaptureMouse && bMouseLeftTriggered)
+	{
+		{
+			SCOPED_CPU_MARKER_C("WAIT_COPY_Q", 0xFFFF0000);
+			const int BACK_BUFFER_INDEX = mRenderer.GetWindowRenderContext(hwndMain).GetCurrentSwapchainBufferIndex();
+			Fence& CopyFence = mCopyObjIDDoneFence[BACK_BUFFER_INDEX];
+			CopyFence.WaitOnCPU(CopyFence.GetValue());
+		}
+
+		mpScene->PickObject(mRenderPass_ObjectID, 
+			static_cast<int>(io.MousePos.x), 
+			static_cast<int>(io.MousePos.y)
+		);
+
+		if (!mpScene->mSelectedObjects.empty())
+		{
+			Camera& cam = mpScene->GetActiveCamera();
+
+			XMVECTOR vAvgPositions = XMLoadFloat3(&mpScene->GetGameObjectTransform(mpScene->mSelectedObjects[0])->_position);
+			for (int i = 1; i < mpScene->mSelectedObjects.size(); ++i)
+			{
+				const Transform* pTF = mpScene->GetGameObjectTransform(mpScene->mSelectedObjects[i]);
+				vAvgPositions += XMLoadFloat3(&pTF->_position);
+			}
+			vAvgPositions /= static_cast<float>(mpScene->mSelectedObjects.size());
+
+			XMFLOAT3 f3AvgPosition;
+			XMStoreFloat3(&f3AvgPosition, vAvgPositions);
+			cam.SetTargetPosition(f3AvgPosition);
+		}
+	}
 
 	// input post update
 	for (auto it = mInputStates.begin(); it != mInputStates.end(); ++it)
@@ -281,6 +321,7 @@ bool VQEngine::IsHDRSettingOn() const
 
 void VQEngine::SetEffectiveFrameRateLimit(int FrameRateLimitEnumVal)
 {
+	SCOPED_CPU_MARKER("SetEffectiveFrameRateLimit");
 	if (FrameRateLimitEnumVal == -1)
 	{
 		// Get monitor refresh rate (primary monitor?)
@@ -405,7 +446,7 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 			HandleMainWindowInput(input, hwnd);
 	}
 	HandleUIInput();
-	UpdateMagnifierParameters(mUIState.mpMagnifierState, mUIState, mpWinMain->GetWidth(), mpWinMain->GetHeight());
+	UpdateMagnifierParameters(mUIState.mpMagnifierState.get(), mUIState, mpWinMain->GetWidth(), mpWinMain->GetHeight());
 }
 
 void VQEngine::UpdateThread_UpdateScene_DebugWnd(const float dt)
@@ -437,6 +478,7 @@ void VQEngine::Load_SceneData_Dispatch()
 		else if (SceneType == "Sponza")           pScene = std::make_unique<SponzaScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 		else if (SceneType == "StressTest")       pScene = std::make_unique<StressTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 		else if (SceneType == "EnvironmentMapUnitTest") pScene = std::make_unique<EnvironmentMapUnitTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
+		else if (SceneType == "Terrain")          pScene = std::make_unique<TerrainScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
 	};
 
 	const bool bUpscalingEnabled = mpScene ? mpScene->GetPostProcessParameters(0).IsFSREnabled() : false;
@@ -444,6 +486,9 @@ void VQEngine::Load_SceneData_Dispatch()
 	{
 		this->WaitUntilRenderingFinishes();
 		mpScene->Unload(); // is this really necessary when we fnCreateSceneInstance() ?
+		
+		for(int i=0; i<FUIState::EEditorMode::NUM_EDITOR_MODES; ++i)
+			mUIState.SelectedEditeeIndex[i] = INVALID_ID;
 	}
 
 	// load scene representation from disk
@@ -468,15 +513,15 @@ void VQEngine::Load_SceneData_Dispatch()
 	}
 	//----------------------------------------------------------------------
 	
-
-	// start loading textures, models, materials with worker threads
-	mpScene->StartLoading(this->mBuiltinMeshes, SceneRep, mWorkers_Simulation);
-
 	// start loading environment map textures
 	if (!SceneRep.EnvironmentMapPreset.empty())
 	{
 		mWorkers_TextureLoading.AddTask([=]() { LoadEnvironmentMap(SceneRep.EnvironmentMapPreset, mSettings.gfx.EnvironmentMapResolution); });
 	}
+
+	// start loading textures, models, materials with worker threads
+	mpScene->StartLoading(this->mBuiltinMeshes, SceneRep, mWorkers_Simulation);
+
 }
 
 SRV_ID FLoadingScreenData::GetSelectedLoadingScreenSRV_ID() const
@@ -490,6 +535,7 @@ void FLoadingScreenData::RotateLoadingScreenImageIndex()
 }
 void VQEngine::LoadLoadingScreenData()
 {
+	SCOPED_CPU_MARKER("LoadLoadingScreenData");
 	FLoadingScreenData& data = mLoadingScreenData;
 
 	data.SwapChainClearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
@@ -509,13 +555,12 @@ void VQEngine::LoadLoadingScreenData()
 		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(i) + ".png");
 
 		mWorkers_TextureLoading.AddTask([this, &data, LoadingScreenTextureFilePath]()
-			{
-				const TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
-				const SRV_ID srvID = mRenderer.AllocateAndInitializeSRV(texID);
-				std::lock_guard<std::mutex> lk(data.Mtx);
-				data.SRVs.push_back(srvID);
-			});
-
+		{
+			const TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
+			const SRV_ID srvID = mRenderer.AllocateAndInitializeSRV(texID);
+			std::lock_guard<std::mutex> lk(data.Mtx);
+			data.SRVs.push_back(srvID);
+		});
 	}
 
 	// load the selected loading screen image
@@ -527,7 +572,7 @@ void VQEngine::LoadLoadingScreenData()
 		data.SRVs.push_back(srvID);
 		data.SelectedLoadingScreenSRVIndex = static_cast<int>(data.SRVs.size() - 1);
 	}
-
+	
 }
 
 
@@ -545,6 +590,10 @@ FSetHDRMetaDataParams VQEngine::GatherHDRMetaDataParameters(HWND hwnd)
 
 	params.MaxOutputNits = pProfile ? pProfile->MaxBrightness : desc.MaxLuminance;
 	params.MinOutputNits = pProfile ? pProfile->MinBrightness : desc.MinLuminance;
+	params.ColorSpace = desc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 ? EColorSpace::REC_709
+		: desc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 
+			? EColorSpace::REC_2020 
+			: EColorSpace::REC_709;
 
 	const bool bHDREnvironmentMap = mResources_MainWnd.EnvironmentMap.Tex_HDREnvironment != INVALID_ID;
 	if (bHDREnvironmentMap)

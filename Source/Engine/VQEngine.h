@@ -39,6 +39,8 @@
 #include "RenderPass/ScreenSpaceReflections.h"
 #include "RenderPass/ApplyReflections.h"
 #include "RenderPass/MagnifierPass.h"
+#include "RenderPass/ObjectIDPass.h"
+#include "RenderPass/OutlinePass.h"
 
 #include "Libs/VQUtils/Source/Multithreading.h"
 #include "Libs/VQUtils/Source/Timer.h"
@@ -384,6 +386,8 @@ public:
 	void ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, SRV_ID& outSRV_ID);
 	void UnloadEnvironmentMap();
 
+	void WaitForBuiltinMeshGeneration() const;
+
 	// Getters
 	MeshID GetBuiltInMeshID(const std::string& MeshName) const;
 
@@ -441,6 +445,15 @@ private:
 	EventQueue_t                    mEventQueue_VQEToWin_Main;
 	EventQueue_t                    mEventQueue_WinToVQE_Renderer;
 	EventQueue_t                    mEventQueue_WinToVQE_Update;
+	std::vector<Fence>              mAsyncComputeSSAOReadyFence;
+	std::vector<Fence>              mAsyncComputeSSAODoneFence;
+	std::vector<Fence>              mCopyObjIDDoneFence; // GPU->CPU
+	std::atomic<bool>               mAsyncComputeWorkSubmitted = false;
+	std::atomic<bool>               mSubmitWorkerFinished = true;
+	bool                            mWaitForSubmitWorker = false;
+
+	// load events
+	std::future<bool>              mbLoadingScreenLoaded;
 
 	// renderer
 	VQRenderer                      mRenderer;
@@ -468,6 +481,7 @@ private:
 	std::atomic<bool>               mbEnvironmentMapPreFilter;
 	std::atomic<bool>               mbMainWindowHDRTransitionInProgress; // see DispatchHDRSwapchainTransitionEvents()
 	std::atomic<bool>               mbExitApp;
+	std::atomic<bool>               mbDefaultMeshesLoaded;
 
 	// system & settings
 	FEngineSettings                 mSettings;
@@ -500,6 +514,9 @@ private:
 	DepthMSAAResolvePass            mRenderPass_DepthResolve;
 	ApplyReflectionsPass            mRenderPass_ApplyReflections;
 	MagnifierPass                   mRenderPass_Magnifier;
+	ObjectIDPass                    mRenderPass_ObjectID;
+	OutlinePass                     mRenderPass_Outline;
+
 
 	// timer / profiler
 	Timer                           mTimer;
@@ -561,11 +578,18 @@ private:
 	void                            RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView& ShadowView);
 	void                            RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView& ShadowView);
 	void                            RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView& ShadowView, size_t iBegin, size_t NumPointLights);
-	void                            RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
+	void                            RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, const FSceneView& SceneView);
+	void                            RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, ID3D12CommandList* pCmdCopy,  const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, const FSceneView& SceneView, const int BACK_BUFFER_INDEX);
+	void                            TransitionDepthPrePassForRead(ID3D12GraphicsCommandList* pCmd, bool bMSAA, bool bAsyncCompute);
+	void                            TransitionDepthPrePassMSAAResolve(ID3D12GraphicsCommandList* pCmd, bool bMSAA);
+	void                            ResolveMSAA_DepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap);
+	void                            CopyDepthForCompute(ID3D12GraphicsCommandList* pCmd);
 	void                            RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView);
-	void                            RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FPostProcessParameters& PPParams);
+	void                            RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FPostProcessParameters& PPParams, const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses);
 	void                            RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA);
+	void                            RenderOutline(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA, const std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& rtvHandles);
 	void                            RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA);
+	void                            RenderDebugVertexAxes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA);
 	void                            ResolveMSAA(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams);
 	void                            DownsampleDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTextureID, SRV_ID SRVDepth);
 	void                            RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
@@ -576,6 +600,8 @@ private:
 	void                            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, ID3D12Resource* pRscIn);
 	void                            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
 	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
+	
+	bool                            ShouldEnableAsyncCompute();
 
 	//
 	// UI
@@ -584,14 +610,16 @@ private:
 	void                            DrawProfilerWindow(const FSceneStats& FrameStats, float dt);
 	void                            DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderParameters& SceneRenderParams);
 	void                            DrawPostProcessSettings(FPostProcessParameters& PPParams);
-	void                            DrawDebugPanelWindow(FSceneRenderParameters& SceneParams, FPostProcessParameters& PPParams);
 	void                            DrawKeyMappingsWindow();
 	void                            DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams, FPostProcessParameters& PPParams);
+	void                            DrawEditorWindow();
+	void                            DrawMaterialEditor();
+	void                            DrawLightEditor();
+	void                            DrawObjectEditor();
 
 	//
 	// RENDER HELPERS
 	//
-	void                            DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh, uint32 NumInstances = 1);
 	void                            DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView::FShadowView& shadowView);
 
 	std::unique_ptr<Window>&        GetWindow(HWND hwnd);
@@ -627,9 +655,15 @@ private:
 	// temp data
 	struct FFrameConstantBuffer { DirectX::XMMATRIX matModelViewProj; };
 	struct FFrameConstantBuffer2 { DirectX::XMMATRIX matModelViewProj; int iTextureConfig; int iTextureOutput; };
-	struct FFrameConstantBufferUnlit { DirectX::XMMATRIX matModelViewProj; DirectX::XMFLOAT3 color; };
-
-	struct FFrameConstantBufferUnlitInstanced { DirectX::XMMATRIX matModelViewProj[MAX_INSTANCE_COUNT__UNLIT_SHADER]; DirectX::XMFLOAT3 color; };
+	struct FFrameConstantBufferUnlit { DirectX::XMMATRIX matModelViewProj; DirectX::XMFLOAT4 color; };
+	struct FFrameConstantBufferUnlitInstanced { DirectX::XMMATRIX matModelViewProj[MAX_INSTANCE_COUNT__UNLIT_SHADER]; DirectX::XMFLOAT4 color; };
+	struct FObjectConstantBufferDebugVertexVectors 
+	{ 
+		DirectX::XMMATRIX matWorld;
+		DirectX::XMMATRIX matNormal;
+		DirectX::XMMATRIX matViewProj;
+		float LocalAxisSize;
+	};
 
 // ------------------------------------------------------------------------------------------------------
 //

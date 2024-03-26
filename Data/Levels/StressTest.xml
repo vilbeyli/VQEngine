@@ -144,8 +144,7 @@
         </Model>
     </GameObject>
 
-
-     <!-- Directional Light -->
+    <!-- Directional Light -->
     <Light>
         <Enabled>true</Enabled>
         <Mobility> Stationary </Mobility>

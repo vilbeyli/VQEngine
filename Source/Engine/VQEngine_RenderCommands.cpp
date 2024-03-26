@@ -17,8 +17,8 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "VQEngine.h"
-#include "Geometry.h"
 #include "GPUMarker.h"
+#include "../VQUtils/Source/utils.h"
 
 #include <d3d12.h>
 #include <dxgi.h>
@@ -33,26 +33,6 @@
 //
 // DRAW COMMANDS
 //
-void VQEngine::DrawMesh(ID3D12GraphicsCommandList* pCmd, const Mesh& mesh, uint32 NumInstances /*= 1*/)
-{
-	using namespace DirectX;
-	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
-
-	// Draw Object -----------------------------------------------
-	const auto VBIBIDs = mesh.GetIABufferIDs();
-	const uint32 NumIndices = mesh.GetNumIndices();
-	const BufferID& VB_ID = VBIBIDs.first;
-	const BufferID& IB_ID = VBIBIDs.second;
-	const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
-	const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
-
-	pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	pCmd->IASetVertexBuffers(0, 1, &vb);
-	pCmd->IASetIndexBuffer(&ib);
-
-	pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
-}
-
 void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView::FShadowView& shadowView)
 {
 	using namespace DirectX;
@@ -66,17 +46,18 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 
 	for (const FInstancedShadowMeshRenderCommand& renderCmd : shadowView.meshRenderCommands)
 	{
-		// SCOPED_CPU_MARKER("Process_ShadowMeshRenderCommand"); // too granular
-		//if (renderCmd.matWorldViewProj.empty())
-		//	continue;
+		const uint32 NumInstances = (uint32)renderCmd.matWorldViewProj.size();
+		assert(NumInstances == renderCmd.matWorldViewProj.size());
+		assert(NumInstances == renderCmd.matWorldViewProjTransformations.size());
 
 		// set constant buffer data
 		FCBufferLightVS* pCBuffer = {};
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
 		if (renderCmd.matWorldViewProj.empty())
+		{
 			Log::Error("EMPTY COMMAND LIST WHYT??");
-		
+		}
 		const size_t memcpySrcSize = renderCmd.matWorldViewProj.size() * sizeof(XMMATRIX);
 		const size_t memcpyDstSize = _countof(pCBuffer->matWorld) * sizeof(XMMATRIX);
 		if (memcpyDstSize < memcpySrcSize)
@@ -88,12 +69,19 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 				, StrUtil::FormatByte(memcpyDstSize)
 			);
 		}
-		memcpy(pCBuffer->matWorld        , renderCmd.matWorldViewProj.data()        , renderCmd.matWorldViewProj.size() * sizeof(XMMATRIX));
-		memcpy(pCBuffer->matWorldViewProj, renderCmd.matWorldViewProjTransformations.data(), renderCmd.matWorldViewProjTransformations.size() * sizeof(XMMATRIX));
+		memcpy(pCBuffer->matWorld        , renderCmd.matWorldViewProj.data()               , NumInstances * sizeof(XMMATRIX));
+		memcpy(pCBuffer->matWorldViewProj, renderCmd.matWorldViewProjTransformations.data(), NumInstances * sizeof(XMMATRIX));
+		
+		auto vb = mRenderer.GetVertexBufferView(renderCmd.vertexIndexBuffer.first);
+		auto ib = mRenderer.GetIndexBufferView(renderCmd.vertexIndexBuffer.second);
+		
 		pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
 		
-		const Mesh& mesh = mpScene->mMeshes.at(renderCmd.meshID);
-		DrawMesh(pCmd, mesh, (uint32)renderCmd.matWorldViewProj.size());
+		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pCmd->IASetVertexBuffers(0, 1, &vb);
+		pCmd->IASetIndexBuffer(&ib);
+
+		pCmd->DrawIndexedInstanced(renderCmd.numIndices, NumInstances, 0, 0, 0);
 	}
 
 #else 
@@ -263,11 +251,17 @@ void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 	}
 }
 
-void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
+void VQEngine::RenderDepthPrePass(
+	ID3D12GraphicsCommandList* pCmd, 
+	DynamicBufferHeap* pCBufferHeap,
+	const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& cbAddresses,
+	const FSceneView& SceneView
+)
 {
 	using namespace DirectX;
 	using namespace VQ_SHADER_DATA;
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
+	const bool bAsyncCompute = ShouldEnableAsyncCompute();
 	const auto& rsc = mResources_MainWnd;
 	auto pRscNormals     = mRenderer.GetTextureResource(rsc.Tex_SceneNormals);
 	auto pRscNormalsMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneNormalsMSAA);
@@ -306,141 +300,247 @@ void VQEngine::RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBuffer
 	pCmd->RSSetViewports(1, &viewport);
 	pCmd->RSSetScissorRects(1, &scissorsRect);
 
-	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::DEPTH_PREPASS_PSO_MSAA_4 : EBuiltinPSOs::DEPTH_PREPASS_PSO));
 	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ZPrePass));
 
+	int iCB = 0;
+
 	// draw meshes
+	const size_t iMSAA = bMSAA ? 1 : 0;
+	const size_t iFaceCull = 2; // 2:back
 	for (const MeshRenderCommand_t& meshRenderCmd : SceneView.meshRenderCommands)
 	{
-		if (mpScene->mMeshes.find(meshRenderCmd.meshID) == mpScene->mMeshes.end())
-		{
-			Log::Warning("MeshID=%d couldn't be found", meshRenderCmd.meshID);
-			continue; // skip drawing this mesh
-		}
-
 		const Material& mat = mpScene->GetMaterial(meshRenderCmd.matID);
-		const Mesh& mesh = mpScene->mMeshes.at(meshRenderCmd.meshID);
-		const auto VBIBIDs = mesh.GetIABufferIDs();
-		const uint32 NumIndices = mesh.GetNumIndices();
+		const auto VBIBIDs = meshRenderCmd.vertexIndexBuffer;
 		const BufferID& VB_ID = VBIBIDs.first;
 		const BufferID& IB_ID = VBIBIDs.second;
 		const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
 		const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
+		const uint32 NumIndices = meshRenderCmd.numIndices;
 
-
-		// set constant buffer data
-		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		PerObjectData* pPerObj = {};
-		const size_t sz = sizeof(PerObjectData);
-		pCBufferHeap->AllocConstantBuffer(sz, (void**)(&pPerObj), &cbAddr);
-		
 #if RENDER_INSTANCED_SCENE_MESHES
 		const uint32 NumInstances = (uint32)meshRenderCmd.matNormal.size();
-		
-		const size_t memcpySrcSize = meshRenderCmd.matWorldViewProj.size() * sizeof(XMMATRIX);
-		const size_t memcpyDstSize = _countof(pPerObj->matWorldViewProj) * sizeof(XMMATRIX);
-		if (memcpyDstSize < memcpySrcSize)
+#else
+		const uint32 NumInstances = 1;
+#endif
+
+		const size_t iAlpha   = 0; // TODO:
+		const size_t iRaster  = mat.bWireframe ? 1 : 0;
+		const size_t iTess    = mat.Tessellation.bEnableTessellation ? 1 : 0;
+		const size_t iDomain  = iTess == 0 ? 0 : mat.Tessellation.Domain;
+		const size_t iPart    = iTess == 0 ? 0 : mat.Tessellation.Partitioning;
+		const size_t iOutTopo = iTess == 0 ? 0 : mat.Tessellation.OutputTopology;
+		const PSO_ID psoID = mRenderer.mZPrePassPSOs.Get(
+			iMSAA,
+			iRaster,
+			iFaceCull,
+			iTess,
+			iDomain,
+			iPart,
+			iOutTopo,
+			iAlpha);
+		pCmd->SetPipelineState(mRenderer.GetPSO(psoID));
+		if (mat.Tessellation.bEnableTessellation)
 		{
-			Log::Error("Batch data (scene) too big (%d: %s) for destination cbuffer (%d: %s): "
-				, meshRenderCmd.matWorldViewProj.size()
-				, StrUtil::FormatByte(memcpySrcSize)
-				, _countof(pPerObj->matWorldViewProj)
-				, StrUtil::FormatByte(memcpyDstSize)
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Tsl;
+			VQ_SHADER_DATA::TessellationParams* pCBuffer_Tessellation = nullptr;
+			auto data = mat.GetTessellationCBufferData();
+			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Tessellation)), (void**)(&pCBuffer_Tessellation), &cbAddr_Tsl);
+			memcpy(pCBuffer_Tessellation, &data, sizeof(data));
+			pCmd->SetGraphicsRootConstantBufferView(2, cbAddr_Tsl);
+		}
+
+		pCmd->SetGraphicsRootConstantBufferView(1, cbAddresses[iCB++]);
+
+		if (mat.SRVMaterialMaps != INVALID_ID) // set textures
+		{
+			const CBV_SRV_UAV& NullTex2DSRV = mRenderer.GetSRV(mResources_MainWnd.SRV_NullTexture2D);
+			pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
+			pCmd->SetGraphicsRootDescriptorTable(3, mat.SRVHeightMap == INVALID_ID
+				? NullTex2DSRV.GetGPUDescHandle()
+				: mRenderer.GetSRV(mat.SRVHeightMap).GetGPUDescHandle(0)
 			);
 		}
 
-		memcpy(pPerObj->matWorldViewProj    , meshRenderCmd.matWorldViewProj.data()    , sizeof(XMMATRIX) * NumInstances);
-		memcpy(pPerObj->matWorldViewProjPrev, meshRenderCmd.matWorldViewProjPrev.data(), sizeof(XMMATRIX) * NumInstances);
-		memcpy(pPerObj->matNormal           , meshRenderCmd.matNormal.data()           , sizeof(XMMATRIX) * NumInstances);
-		memcpy(pPerObj->matWorld            , meshRenderCmd.matWorld.data()            , sizeof(XMMATRIX) * NumInstances);
-#else
-		const uint32 NumInstances = 1;
-		pPerObj->matWorldViewProj = meshRenderCmd.matWorldTransformation * SceneView.viewProj;
-		pPerObj->matWorldViewProjPrev = meshRenderCmd.matWorldTransformation;
-		pPerObj->matWorld = meshRenderCmd.matWorldTransformation;
-		pPerObj->matNormal = meshRenderCmd.matNormalTransformation;
-#endif
-
-		pPerObj->materialData = std::move(mat.GetCBufferData());
-
-		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
-
-		// set textures
-		if (mat.SRVMaterialMaps != INVALID_ID)
-		{
-			pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
-			//pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
-		}
-
-		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pCmd->IASetPrimitiveTopology(mat.Tessellation.bEnableTessellation ? D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		pCmd->IASetVertexBuffers(0, 1, &vb);
 		pCmd->IASetIndexBuffer(&ib);
 		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 	}
 
-	// resolve if MSAA
-	if (bMSAA)
+}
+
+void VQEngine::RenderObjectIDPass(
+	ID3D12GraphicsCommandList* pCmd, 
+	ID3D12CommandList* pCmdCopy, 
+	const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, 
+	const FSceneView& SceneView,
+	const int BACK_BUFFER_INDEX
+)
+{
 	{
-		DXGI_FORMAT fmtDepth = DXGI_FORMAT_D32_FLOAT;
-
-		// transition for resolve first
-		const CD3DX12_RESOURCE_BARRIER pBarriers[] =
-		{
-			  CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA , D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
-			, CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA   , D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
-			, CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals     , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
-			, CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)			
-		};
-		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
-
-		DepthMSAAResolvePass::FDrawParameters params;
+		SCOPED_GPU_MARKER(pCmd, "RenderObjectIDPass");
+		ObjectIDPass::FDrawParameters params;
 		params.pCmd = pCmd;
-		params.pCBufferHeap = pCBufferHeap;
-		params.SRV_MSAADepth         = rsc.SRV_SceneDepthMSAA;
-		params.SRV_MSAANormals       = rsc.SRV_SceneNormalsMSAA;
-		params.SRV_MSAARoughness     = rsc.SRV_SceneColorMSAA;
-		params.UAV_ResolvedDepth     = rsc.UAV_SceneDepth;
-		params.UAV_ResolvedNormals   = rsc.UAV_SceneNormals;
-		params.UAV_ResolvedRoughness = INVALID_ID;
-
-		mRenderPass_DepthResolve.RecordCommands(&params);
+		params.pCmdCopy = pCmdCopy;
+		params.pCBAddresses = &CBAddresses;
+		params.pSceneView = &SceneView;
+		params.pMeshes = &mpScene->mMeshes;
+		params.pMaterials = &mpScene->mMaterials;
+		params.bEnableAsyncCopy = mSettings.gfx.bEnableAsyncCopy;
+		mRenderPass_ObjectID.RecordCommands(&params);
 	}
 
-	// transition for shader read
+	SCOPED_CPU_MARKER("Copy");
+	D3D12_TEXTURE_COPY_LOCATION srcLoc = {};
+	srcLoc.pResource = mRenderPass_ObjectID.GetGPUTextureResource();
+	srcLoc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+	srcLoc.SubresourceIndex = 0; // Assuming copying from the first mip level
+
+	D3D12_TEXTURE_COPY_LOCATION dstLoc = {};
+	dstLoc.pResource = mRenderPass_ObjectID.GetCPUTextureResource();
+	dstLoc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+	mRenderer.GetDevicePtr()->GetCopyableFootprints(&srcLoc.pResource->GetDesc(), 0, 1, 0, &dstLoc.PlacedFootprint, nullptr, nullptr, nullptr);
+
+	if (mSettings.gfx.bEnableAsyncCopy)
 	{
-		std::vector<CD3DX12_RESOURCE_BARRIER> Barriers;
-		if (bMSAA)
+		CommandQueue& GFXCmdQ = mRenderer.GetCommandQueue(CommandQueue::EType::GFX);
+		CommandQueue& CPYCmdQ = mRenderer.GetCommandQueue(CommandQueue::EType::COPY);
+		CommandQueue& CMPCmdQ = mRenderer.GetCommandQueue(CommandQueue::EType::COMPUTE);
+		ID3D12GraphicsCommandList* pCmdCpy = static_cast<ID3D12GraphicsCommandList*>(pCmdCopy);
+		Fence& CopyFence = mCopyObjIDDoneFence[BACK_BUFFER_INDEX];
+
+		pCmd->Close();
+		if (ShouldEnableAsyncCompute())
+		{
+			SCOPED_CPU_MARKER_C("WAIT_DEPTH_PREPASS_SUBMIT", 0xFFFF0000);
+			while (!mAsyncComputeWorkSubmitted.load());
+			mAsyncComputeWorkSubmitted.store(false);
+		}
+
+		{
+			SCOPED_CPU_MARKER("ExecuteList");
+			GFXCmdQ.pQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&pCmd);
+		}
+		{
+			SCOPED_CPU_MARKER("Fence");
+			CopyFence.Signal(GFXCmdQ.pQueue);
+			CopyFence.WaitOnGPU(CPYCmdQ.pQueue); // wait for render target done
+		}
+
+		D3D12_TEXTURE_COPY_LOCATION dstLoc = {};
+		dstLoc.pResource = mRenderPass_ObjectID.GetCPUTextureResource();
+		dstLoc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+		mRenderer.GetDevicePtr()->GetCopyableFootprints(&srcLoc.pResource->GetDesc(), 0, 1, 0, &dstLoc.PlacedFootprint, nullptr, nullptr, nullptr);
+
+		pCmdCpy->CopyTextureRegion(&dstLoc, 0, 0, 0, &srcLoc, nullptr);
+		
+		{
+			SCOPED_CPU_MARKER("ExecuteListCpy");
+			pCmdCpy->Close();
+			CPYCmdQ.pQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&pCmdCpy);
+		}
+		{
+			SCOPED_CPU_MARKER("Fence Signal");
+			CopyFence.Signal(CPYCmdQ.pQueue);
+		}
+	}
+	else // execute copy on graphics
+	{
+		pCmd->CopyTextureRegion(&dstLoc, 0, 0, 0, &srcLoc, nullptr);
+
+		pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(srcLoc.pResource,
+			D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
+	}
+
+}
+
+void VQEngine::TransitionDepthPrePassForRead(ID3D12GraphicsCommandList* pCmd, bool bMSAA, bool bAsyncCompute)
+{
+	SCOPED_GPU_MARKER(pCmd, "TransitionDepthPrePassForRead");
+
+	const auto& rsc = mResources_MainWnd;
+	auto pRscNormals     = mRenderer.GetTextureResource(rsc.Tex_SceneNormals);
+	auto pRscNormalsMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneNormalsMSAA);
+	auto pRscDepthResolve= mRenderer.GetTextureResource(rsc.Tex_SceneDepthResolve);
+	auto pRscDepthMSAA   = mRenderer.GetTextureResource(rsc.Tex_SceneDepthMSAA);
+	auto pRscDepth       = mRenderer.GetTextureResource(rsc.Tex_SceneDepth);
+
+	std::vector<CD3DX12_RESOURCE_BARRIER> Barriers;
+	if (bMSAA)
+	{
+		if (!bAsyncCompute)
 		{
 			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
 			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
 		}
-		else
-		{
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_COPY_SOURCE));
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST));
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
-		}
-
-		pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
-
-		Barriers.clear();
-
-		// FFX-CACAO expects TexDepthResolve (UAV) to contain depth buffer data, but we've written to TexDepth (DSV) when !bMSAA.
-		// Here we just copy TexDepth into TexDepthResolve to keep MSAA-toggle functionality on the fly with Key M.
-		if (!bMSAA)
-		{
-			pCmd->CopyResource(pRscDepthResolve, pRscDepth);
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepth, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
-			pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
-		}
+		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
 	}
+	else
+	{
+		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_COPY_SOURCE));
+		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST));
+		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+	}
+
+	pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
+}
+
+void VQEngine::TransitionDepthPrePassMSAAResolve(ID3D12GraphicsCommandList* pCmd, bool bMSAA)
+{
+	const auto& rsc      = mResources_MainWnd;
+	auto pRscNormals     = mRenderer.GetTextureResource(rsc.Tex_SceneNormals);
+	auto pRscNormalsMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneNormalsMSAA);
+	auto pRscDepthResolve= mRenderer.GetTextureResource(rsc.Tex_SceneDepthResolve);
+	auto pRscDepthMSAA   = mRenderer.GetTextureResource(rsc.Tex_SceneDepthMSAA);
+	auto pRscDepth       = mRenderer.GetTextureResource(rsc.Tex_SceneDepth);
+
+	const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+	{
+		  CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA , D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+		, CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA   , D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+		, CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals     , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+		, CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+	};
+	pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+}
+
+void VQEngine::ResolveMSAA_DepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap)
+{
+	SCOPED_GPU_MARKER(pCmd, "MSAAResolve<Depth=%d, Normals=%d, Roughness=%d>"); // TODO: string formatting
+	
+	const auto& rsc = mResources_MainWnd;
+
+	DepthMSAAResolvePass::FDrawParameters params;
+	params.pCmd = pCmd;
+	params.pCBufferHeap = pCBufferHeap;
+	params.SRV_MSAADepth = rsc.SRV_SceneDepthMSAA;
+	params.SRV_MSAANormals = rsc.SRV_SceneNormalsMSAA;
+	params.SRV_MSAARoughness = rsc.SRV_SceneColorMSAA;
+	params.UAV_ResolvedDepth = rsc.UAV_SceneDepth;
+	params.UAV_ResolvedNormals = rsc.UAV_SceneNormals;
+	params.UAV_ResolvedRoughness = INVALID_ID;
+
+	mRenderPass_DepthResolve.RecordCommands(&params);
+}
+
+void VQEngine::CopyDepthForCompute(ID3D12GraphicsCommandList* pCmd)
+{
+	const auto& rsc = mResources_MainWnd;
+	auto pRscDepthResolve= mRenderer.GetTextureResource(rsc.Tex_SceneDepthResolve);
+	auto pRscDepth       = mRenderer.GetTextureResource(rsc.Tex_SceneDepth);
+
+	pCmd->CopyResource(pRscDepthResolve, pRscDepth);
+	
+	std::vector<CD3DX12_RESOURCE_BARRIER> Barriers;
+	Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+	Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepth, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
+	pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
 }
 
 void VQEngine::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView)
 {
+	bool bAsyncCompute = ShouldEnableAsyncCompute();
 	const auto& rsc = mResources_MainWnd;
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 
@@ -462,9 +562,13 @@ void VQEngine::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSc
 		DirectX::XMStoreFloat4x4(&drawParams.matNormalToView, SceneView.view);
 		DirectX::XMStoreFloat4x4(&drawParams.matProj, SceneView.proj);
 		drawParams.pCmd = pCmd;
+		drawParams.bAsyncCompute = bAsyncCompute;
 
-		// TODO: move into RecordCommands?
-		pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscAmbientOcclusion, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+		if (!bAsyncCompute)
+		{
+			// TODO: move into RecordCommands?
+			pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscAmbientOcclusion, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+		}
 		mRenderPass_AO.RecordCommands(&drawParams);
 
 		// set back the descriptor heap for the VQEngine
@@ -492,11 +596,11 @@ static bool ShouldUseMotionVectorsTarget(const FEngineSettings& settings)
 {
 	return IsFFX_SSSREnabled(settings);
 }
-static bool ShouldUseVisualizationTarget(EDrawMode eDrawMode)
+static bool ShouldUseVisualizationTarget(EDrawMode DrawModeEnum)
 {
-	return eDrawMode == EDrawMode::ALBEDO
-		|| eDrawMode == EDrawMode::ROUGHNESS
-		|| eDrawMode == EDrawMode::METALLIC;
+	return DrawModeEnum == EDrawMode::ALBEDO
+		|| DrawModeEnum == EDrawMode::ROUGHNESS
+		|| DrawModeEnum == EDrawMode::METALLIC;
 }
 void VQEngine::TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams)
 {
@@ -527,7 +631,7 @@ void VQEngine::TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWin
 	vBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Point, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
 	vBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Directional, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
 
-	if (ShouldUseVisualizationTarget(PPParams.eDrawMode))
+	if (ShouldUseVisualizationTarget(PPParams.DrawModeEnum))
 	{
 		vBarriers.push_back(bMSAA
 			? CD3DX12_RESOURCE_BARRIER::Transition(pRscVizMSAA, D3D12_RESOURCE_STATE_RESOLVE_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET)
@@ -545,14 +649,20 @@ void VQEngine::TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWin
 	pCmd->ResourceBarrier((UINT)vBarriers.size(), vBarriers.data());
 }
 
-void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FPostProcessParameters& PPParams)
+void VQEngine::RenderSceneColor(
+	ID3D12GraphicsCommandList* pCmd, 
+	DynamicBufferHeap* pCBufferHeap, 
+	const FSceneView& SceneView, 
+	const FPostProcessParameters& PPParams,
+	const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& perObjCBAddr
+)
 {
 	using namespace VQ_SHADER_DATA;
 
 	const bool bUseHDRRenderPath = this->ShouldRenderHDR(mpWinMain->GetHWND());
 	const bool bHasEnvironmentMapHDRTexture = mResources_MainWnd.EnvironmentMap.SRV_HDREnvironment != INVALID_ID;
 	const bool bDrawEnvironmentMap = bHasEnvironmentMapHDRTexture && true;
-	const bool bUseVisualizationRenderTarget = ShouldUseVisualizationTarget(PPParams.eDrawMode);
+	const bool bUseVisualizationRenderTarget = ShouldUseVisualizationTarget(PPParams.DrawModeEnum);
 	const bool bRenderMotionVectors = ShouldUseMotionVectorsTarget(mSettings);
 	const bool bRenderScreenSpaceReflections = IsFFX_SSSREnabled(mSettings);
 
@@ -567,6 +677,9 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 	const DSV& dsvColor = mRenderer.GetDSV(bMSAA ? mResources_MainWnd.DSV_SceneDepthMSAA : mResources_MainWnd.DSV_SceneDepth);
 	auto pRscDepth = mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneDepth);
 
+	const CBV_SRV_UAV& NullCubemapSRV = mRenderer.GetSRV(mResources_MainWnd.SRV_NullCubemap);
+	const CBV_SRV_UAV& NullTex2DSRV = mRenderer.GetSRV(mResources_MainWnd.SRV_NullTexture2D);
+
 	SCOPED_GPU_MARKER(pCmd, "RenderSceneColor");
 
 	// Clear Depth & Render targets
@@ -576,9 +689,12 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvHandles(1, rtvColor.GetCPUDescHandle());
 	if (bUseVisualizationRenderTarget) rtvHandles.push_back(rtvColorViz.GetCPUDescHandle());
 	if (bRenderMotionVectors)          rtvHandles.push_back(rtvMoVec.GetCPUDescHandle());
-
-	for (D3D12_CPU_DESCRIPTOR_HANDLE& rtv : rtvHandles)
-		pCmd->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
+	
+	{
+		SCOPED_GPU_MARKER(pCmd, "Clear");
+		for (D3D12_CPU_DESCRIPTOR_HANDLE& rtv : rtvHandles)
+			pCmd->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
+	}
 	
 	pCmd->OMSetRenderTargets((UINT)rtvHandles.size(), rtvHandles.data(), FALSE, &dsvHandle);
 
@@ -590,25 +706,23 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 	pCmd->RSSetViewports(1, &viewport);
 	pCmd->RSSetScissorRects(1, &scissorsRect);
 
-	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA 
-		? (bUseVisualizationRenderTarget 
-			? (bRenderMotionVectors ? EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_AND_MV_PSO_MSAA_4 : EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_PSO_MSAA_4)
-			: (bRenderMotionVectors ? EBuiltinPSOs::FORWARD_LIGHTING_AND_MV_PSO_MSAA_4 : EBuiltinPSOs::FORWARD_LIGHTING_PSO_MSAA_4) )
-		: (bUseVisualizationRenderTarget 
-			? (bRenderMotionVectors ? EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_AND_MV_PSO : EBuiltinPSOs::FORWARD_LIGHTING_AND_VIZ_PSO)
-			: (bRenderMotionVectors ? EBuiltinPSOs::FORWARD_LIGHTING_AND_MV_PSO : EBuiltinPSOs::FORWARD_LIGHTING_PSO))
-	));
+	const size_t iMSAA = bMSAA ? 1 : 0;
+	const size_t iFaceCull = 2; // 2:back
+	const size_t iOutMoVec = bRenderMotionVectors ? 1 : 0;
+	const size_t iOutRough = bUseVisualizationRenderTarget ? 1 : 0;
+	
 	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ForwardLighting));
 
 	// set PerFrame constants
+	D3D12_GPU_VIRTUAL_ADDRESS cbAddr_PerFrame = {};
+	D3D12_GPU_VIRTUAL_ADDRESS cbAddr_PerView = {};
+	constexpr UINT PerFrameRSBindSlot = 3;
+	constexpr UINT PerViewRSBindSlot = 2;
 	{
-		const CBV_SRV_UAV& NullCubemapSRV = mRenderer.GetSRV(mResources_MainWnd.SRV_NullCubemap);
-		const CBV_SRV_UAV& NullTex2DSRV   = mRenderer.GetSRV(mResources_MainWnd.SRV_NullTexture2D);
+		SCOPED_GPU_MARKER(pCmd, "CBPerFrame");
 
-		constexpr UINT PerFrameRSBindSlot = 3;
 		PerFrameData* pPerFrame = {};
-		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		pCBufferHeap->AllocConstantBuffer(sizeof(PerFrameData), (void**)(&pPerFrame), &cbAddr);
+		pCBufferHeap->AllocConstantBuffer(sizeof(PerFrameData), (void**)(&pPerFrame), &cbAddr_PerFrame);
 
 		assert(pPerFrame);
 		pPerFrame->Lights = SceneView.GPULightingData;
@@ -626,7 +740,7 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 		}
 
 		//pCmd->SetGraphicsRootDescriptorTable(PerFrameRSBindSlot, );
-		pCmd->SetGraphicsRootConstantBufferView(PerFrameRSBindSlot, cbAddr);
+		pCmd->SetGraphicsRootConstantBufferView(PerFrameRSBindSlot, cbAddr_PerFrame);
 		pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Spot).GetGPUDescHandle(0));
 		pCmd->SetGraphicsRootDescriptorTable(5, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Point).GetGPUDescHandle(0));
 		pCmd->SetGraphicsRootDescriptorTable(6, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Directional).GetGPUDescHandle(0));
@@ -647,10 +761,9 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 
 	// set PerView constants
 	{
-		constexpr UINT PerViewRSBindSlot = 2;
+		SCOPED_GPU_MARKER(pCmd, "CBPerView");
 		PerViewData* pPerView = {};
-		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pPerView)), (void**)(&pPerView), &cbAddr);
+		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pPerView)), (void**)(&pPerView), &cbAddr_PerView);
 
 		assert(pPerView);
 		XMStoreFloat3(&pPerView->CameraPosition, SceneView.cameraPosition);
@@ -661,70 +774,87 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 
 		// TODO: PreView data
 
-		//pCmd->SetGraphicsRootDescriptorTable(PerViewRSBindSlot, D3D12_GPU_DESCRIPTOR_HANDLE{ cbAddr });
-		pCmd->SetGraphicsRootConstantBufferView(PerViewRSBindSlot, cbAddr);
+		//pCmd->SetGraphicsRootDescriptorTable(PerViewRSBindSlot, D3D12_GPU_DESCRIPTOR_HANDLE{ cbAddr_PerView });
+		pCmd->SetGraphicsRootConstantBufferView(PerViewRSBindSlot, cbAddr_PerView);
 	}
+	
 
 
 	// Draw Objects -----------------------------------------------
-	//if(!SceneView.meshRenderCommands.empty())
+	if(!SceneView.meshRenderCommands.empty())
 	{
 		constexpr UINT PerObjRSBindSlot = 1;
 		SCOPED_GPU_MARKER(pCmd, "Geometry");
 
+		int iCB = 0;
+		PSO_ID psoID_Prev = -1;
 		for (const MeshRenderCommand_t& meshRenderCmd : SceneView.meshRenderCommands)
 		{
-			if (mpScene->mMeshes.find(meshRenderCmd.meshID) == mpScene->mMeshes.end())
-			{
-				Log::Warning("MeshID=%d couldn't be found", meshRenderCmd.meshID);
-				continue; // skip drawing this mesh
-			}
-
-			const Mesh& mesh = mpScene->mMeshes.at(meshRenderCmd.meshID);
 			const Material& mat = mpScene->GetMaterial(meshRenderCmd.matID);
 
-			const auto VBIBIDs = mesh.GetIABufferIDs();
-			const uint32 NumIndices = mesh.GetNumIndices();
-			const BufferID& VB_ID = VBIBIDs.first;
-			const BufferID& IB_ID = VBIBIDs.second;
-			const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
-			const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
-
-			// set constant buffer data
-			PerObjectData* pPerObj = {};
-			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pPerObj)), (void**)(&pPerObj), &cbAddr);
+			const auto VBIBIDs = meshRenderCmd.vertexIndexBuffer;
+			const uint32 NumIndices = meshRenderCmd.numIndices;
+			const VBV& vb = mRenderer.GetVertexBufferView(VBIBIDs.first);
+			const IBV& ib = mRenderer.GetIndexBufferView(VBIBIDs.second);
 
 #if RENDER_INSTANCED_SCENE_MESHES
-			const uint32 NumInstances = (uint32)meshRenderCmd.matNormal.size();
-			memcpy(pPerObj->matWorldViewProj    , meshRenderCmd.matWorldViewProj.data()    , sizeof(DirectX::XMMATRIX) * NumInstances);
-			memcpy(pPerObj->matWorldViewProjPrev, meshRenderCmd.matWorldViewProjPrev.data(), sizeof(DirectX::XMMATRIX) * NumInstances);
-			memcpy(pPerObj->matNormal           , meshRenderCmd.matNormal.data()           , sizeof(DirectX::XMMATRIX) * NumInstances);
-			memcpy(pPerObj->matWorld            , meshRenderCmd.matWorld.data()            , sizeof(DirectX::XMMATRIX) * NumInstances);
+			const uint32 NumInstances = (uint32)meshRenderCmd.matNormal.size();;
 #else
 			const uint32 NumInstances = 1;
-			pPerObj->matWorldViewProj = meshRenderCmd.matWorldTransformation * SceneView.viewProj;
-			pPerObj->matWorldViewProjPrev = meshRenderCmd.matWorldTransformationPrev * SceneView.viewProjPrev;
-			pPerObj->matWorld         = meshRenderCmd.matWorldTransformation;
-			pPerObj->matNormal        = meshRenderCmd.matNormalTransformation;
 #endif
-			pPerObj->materialData = std::move(mat.GetCBufferData());
+			const size_t iAlpha  = 0; // TODO:
+			const size_t iRaster = mat.bWireframe ? 1 : 0;
+			const size_t iTess = mat.Tessellation.bEnableTessellation ? 1 : 0;
+			const size_t iDomain  = iTess == 0 ? 0 : mat.Tessellation.Domain;
+			const size_t iPart    = iTess == 0 ? 0 : mat.Tessellation.Partitioning;
+			const size_t iOutTopo = iTess == 0 ? 0 : mat.Tessellation.OutputTopology;
+			PSO_ID psoID = mRenderer.mLightingPSOs.Get(
+				iMSAA,
+				iRaster,
+				iFaceCull,
+				iOutMoVec,
+				iOutRough,
+				iTess,
+				iDomain,
+				iPart,
+				iOutTopo,
+				iAlpha);
+			ID3D12PipelineState* pPipelineState = mRenderer.GetPSO(psoID);
+			
+			//if(psoID_Prev != psoID) // TODO: profile PSO
+			{
+				pCmd->SetPipelineState(pPipelineState);
+			}
 
-			pCmd->SetGraphicsRootConstantBufferView(PerObjRSBindSlot, cbAddr);
+			pCmd->SetGraphicsRootConstantBufferView(PerObjRSBindSlot, perObjCBAddr[iCB++]);
 
-			// set textures
-			if (mat.SRVMaterialMaps != INVALID_ID)
+			if (mat.SRVMaterialMaps != INVALID_ID) // set textures
 			{
 				pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
 				//pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
-
 			}
+			pCmd->SetGraphicsRootDescriptorTable(11, mat.SRVHeightMap == INVALID_ID
+				? NullTex2DSRV.GetGPUDescHandle()
+				: mRenderer.GetSRV(mat.SRVHeightMap).GetGPUDescHandle(0)
+			);
 
-			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			if (mat.Tessellation.bEnableTessellation)
+			{
+				VQ_SHADER_DATA::TessellationParams* pCBuffer_Tessellation = nullptr;
+				D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Tsl;
+				pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Tessellation)), (void**)(&pCBuffer_Tessellation), &cbAddr_Tsl);
+				auto data = mat.GetTessellationCBufferData();
+				memcpy(pCBuffer_Tessellation, &data, sizeof(data));
+				pCmd->SetGraphicsRootConstantBufferView(12, cbAddr_Tsl);
+			}
+			
+			pCmd->IASetPrimitiveTopology(mat.Tessellation.bEnableTessellation ? D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			pCmd->IASetVertexBuffers(0, 1, &vb);
 			pCmd->IASetIndexBuffer(&ib);
 
 			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
+
+			psoID_Prev = psoID;
 		}
 	}
 
@@ -741,7 +871,6 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 
 		for (const FLightRenderCommand& lightRenderCmd : SceneView.lightRenderCommands)
 		{
-			// set constant buffer data
 			FFrameConstantBufferUnlit* pCBuffer = {};
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
@@ -749,11 +878,10 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 			pCBuffer->matModelViewProj = lightRenderCmd.matWorldTransformation * SceneView.viewProj;
 			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
 
-			// set IA
 			const Mesh& mesh = mpScene->mMeshes.at(lightRenderCmd.meshID);
-
-			const auto VBIBIDs = mesh.GetIABufferIDs();
-			const uint32 NumIndices = mesh.GetNumIndices();
+			const int LastLOD = mesh.GetNumLODs() - 1;
+			const auto VBIBIDs = mesh.GetIABufferIDs(LastLOD);
+			const uint32 NumIndices = mesh.GetNumIndices(LastLOD);
 			const uint32 NumInstances = 1;
 			const BufferID& VB_ID = VBIBIDs.first;
 			const BufferID& IB_ID = VBIBIDs.second;
@@ -763,16 +891,17 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			pCmd->IASetVertexBuffers(0, 1, &vb);
 			pCmd->IASetIndexBuffer(&ib);
-
-			// draw
 			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 		}
 	}
+
 
 	if (!bRenderScreenSpaceReflections)
 	{
 		RenderLightBounds(pCmd, pCBufferHeap, SceneView, bMSAA);
 		RenderBoundingBoxes(pCmd, pCBufferHeap, SceneView, bMSAA);
+		RenderDebugVertexAxes(pCmd, pCBufferHeap, SceneView, bMSAA);
+		RenderOutline(pCmd, pCBufferHeap, SceneView, bMSAA, rtvHandles);
 	}
 	
 	// Draw Environment Map ---------------------------------------
@@ -805,7 +934,16 @@ void VQEngine::RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHe
 		pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_HDREnvironment).GetGPUDescHandle());
 		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
 
-		DrawMesh(pCmd, mBuiltinMeshes[EBuiltInMeshes::CUBE]);
+		const UINT NumIndices = mBuiltinMeshes[EBuiltInMeshes::CUBE].GetNumIndices();
+		auto VBIB = mBuiltinMeshes[EBuiltInMeshes::CUBE].GetIABufferIDs();
+		auto vb = mRenderer.GetVertexBufferView(VBIB.first);
+		auto ib = mRenderer.GetIndexBufferView(VBIB.second);
+
+		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pCmd->IASetVertexBuffers(0, 1, &vb);
+		pCmd->IASetIndexBuffer(&ib);
+
+		pCmd->DrawIndexedInstanced(NumIndices, 1, 0, 0, 0);
 	}
 }
 
@@ -819,9 +957,9 @@ void VQEngine::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
 
 		// set IA
-		const Mesh& mesh = mpScene->mMeshes.at(SceneView.boundingBoxRenderCommands.begin()->meshID);
-		const auto VBIBIDs = mesh.GetIABufferIDs();
-		const uint32 NumIndices = mesh.GetNumIndices();
+		const FInstancedBoundingBoxRenderCommand& params = *SceneView.boundingBoxRenderCommands.begin();
+		const auto VBIBIDs = params.vertexIndexBuffer;
+		const uint32 NumIndices = params.numIndices;
 		const BufferID& VB_ID = VBIBIDs.first;
 		const BufferID& IB_ID = VBIBIDs.second;
 		const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
@@ -877,45 +1015,115 @@ void VQEngine::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 	}
 }
 
+void VQEngine::RenderOutline(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA, const std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& rtvHandles)
+{
+	SCOPED_GPU_MARKER(pCmd, "RenderOutlinePass");
+	OutlinePass::FDrawParameters params;
+	params.pCmd = pCmd;
+	params.pCBufferHeap = pCBufferHeap;
+	params.pSceneView = &SceneView;
+	params.pMeshes = &mpScene->mMeshes;
+	params.pMaterials = &mpScene->mMaterials;
+	params.bMSAA = bMSAA;
+	params.pRTVHandles = &rtvHandles;
+	mRenderPass_Outline.RecordCommands(&params);
+}
+
 void VQEngine::RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA)
 {
 	if (!SceneView.lightBoundsRenderCommands.empty())
 	{
 		SCOPED_GPU_MARKER(pCmd, "LightBounds");
-		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA
-			? EBuiltinPSOs::WIREFRAME_PSO_MSAA_4
-			: EBuiltinPSOs::WIREFRAME_PSO)
-		);
+		const uint32 NumInstances = 1;
 
+		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::UNLIT_PSO_MSAA_4: EBuiltinPSOs::UNLIT_PSO));
 		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
+
+		std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddresses(SceneView.lightBoundsRenderCommands.size());
+		int iCbAddress = 0;
 		for (const FLightRenderCommand& lightBoundRenderCmd : SceneView.lightBoundsRenderCommands)
 		{
 			// set constant buffer data
 			FFrameConstantBufferUnlit* pCBuffer = {};
-			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+			D3D12_GPU_VIRTUAL_ADDRESS& cbAddr = cbAddresses[iCbAddress++];
 			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
 			pCBuffer->color = lightBoundRenderCmd.color;
+			pCBuffer->color.w *= 0.01f;
 			pCBuffer->matModelViewProj = lightBoundRenderCmd.matWorldTransformation * SceneView.viewProj;
-			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
 
 			// set IA
 			const Mesh& mesh = mpScene->mMeshes.at(lightBoundRenderCmd.meshID);
 
 			const auto VBIBIDs = mesh.GetIABufferIDs();
 			const uint32 NumIndices = mesh.GetNumIndices();
-			const uint32 NumInstances = 1;
 			const BufferID& VB_ID = VBIBIDs.first;
 			const BufferID& IB_ID = VBIBIDs.second;
 			const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
 			const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
 
+			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
 			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			pCmd->IASetVertexBuffers(0, 1, &vb);
 			pCmd->IASetIndexBuffer(&ib);
-
-			// draw
 			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 		}
+
+		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::WIREFRAME_PSO_MSAA_4 : EBuiltinPSOs::WIREFRAME_PSO));
+		for (const FLightRenderCommand& lightBoundRenderCmd : SceneView.lightBoundsRenderCommands)
+		{
+			FFrameConstantBufferUnlit* pCBuffer = {};
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
+			pCBuffer->color = lightBoundRenderCmd.color;
+			pCBuffer->matModelViewProj = lightBoundRenderCmd.matWorldTransformation * SceneView.viewProj;
+
+			const Mesh& mesh = mpScene->mMeshes.at(lightBoundRenderCmd.meshID);
+
+			const auto VBIBIDs = mesh.GetIABufferIDs();
+			const uint32 NumIndices = mesh.GetNumIndices();
+			const BufferID& VB_ID = VBIBIDs.first;
+			const BufferID& IB_ID = VBIBIDs.second;
+			const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
+			const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
+
+			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
+			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			pCmd->IASetVertexBuffers(0, 1, &vb);
+			pCmd->IASetIndexBuffer(&ib);
+			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
+		}
+	}
+}
+
+void VQEngine::RenderDebugVertexAxes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA)
+{
+	if (!SceneView.sceneParameters.bDrawVertexLocalAxes || SceneView.debugVertexAxesRenderCommands.empty())
+	{
+		return;
+	}
+
+	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ZPrePass));
+	pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? EBuiltinPSOs::DEBUGVERTEX_LOCALSPACEVECTORS_PSO_MSAA_4 : EBuiltinPSOs::DEBUGVERTEX_LOCALSPACEVECTORS_PSO));
+	for (const MeshRenderCommand_t& cmd : SceneView.debugVertexAxesRenderCommands)
+	{
+		FObjectConstantBufferDebugVertexVectors* pCBuffer = {};
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
+		pCBuffer->matWorld    = cmd.matWorld [0];
+		pCBuffer->matNormal   = cmd.matNormal[0];
+		pCBuffer->matViewProj = SceneView.viewProj;
+		pCBuffer->LocalAxisSize = SceneView.sceneParameters.fVertexLocalAxixSize;
+		
+		const uint32 NumInstances = 1;
+		const uint32 NumIndices = cmd.numIndices;
+		const VBV& vb = mRenderer.GetVertexBufferView(cmd.vertexIndexBuffer.first);
+		const IBV& ib = mRenderer.GetIndexBufferView(cmd.vertexIndexBuffer.second);
+
+		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
+		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
+		pCmd->IASetVertexBuffers(0, 1, &vb);
+		pCmd->IASetIndexBuffer(&ib);
+		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 	}
 }
 
@@ -937,7 +1145,7 @@ void VQEngine::ResolveMSAA(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* p
 	auto pRscMoVecMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneMotionVectorsMSAA);
 	auto pRscDepthMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneDepthMSAA);
 
-	const bool bUseVizualization = ShouldUseVisualizationTarget(PPParams.eDrawMode);
+	const bool bUseVizualization = ShouldUseVisualizationTarget(PPParams.DrawModeEnum);
 	const bool bRenderMotionVectors = ShouldUseMotionVectorsTarget(mSettings);
 	const bool bResolveRoughness = IsFFX_SSSREnabled(mSettings) && false;
 
@@ -1134,11 +1342,17 @@ void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 	}
 }
 
+static bool ShouldSkipBoundsPass(const FSceneView& SceneView)
+{
+	return SceneView.boundingBoxRenderCommands.empty()
+		&& SceneView.lightBoundsRenderCommands.empty()
+		&& SceneView.outlineRenderCommands.empty()
+		&& SceneView.debugVertexAxesRenderCommands.empty();
+}
 void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderSceneBoundingVolumes");
-	const bool bNoBoundingVolumeToRender = SceneView.boundingBoxRenderCommands.empty() 
-		&& SceneView.lightBoundsRenderCommands.empty();
+	const bool bNoBoundingVolumeToRender = ShouldSkipBoundsPass(SceneView);
 
 	if (bNoBoundingVolumeToRender)
 		return;
@@ -1149,9 +1363,8 @@ void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dynam
 	ID3D12Resource* pRscColor = mRenderer.GetTextureResource(rsc.Tex_SceneColor);
 	ID3D12Resource* pRscColorBB = mRenderer.GetTextureResource(rsc.Tex_SceneColorBoundingVolumes);
 
-
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = bMSAA ? mRenderer.GetRTV(rsc.RTV_SceneColorMSAA).GetCPUDescHandle(): mRenderer.GetRTV(rsc.RTV_SceneColor).GetCPUDescHandle();
-	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = bMSAA ? mRenderer.GetDSV(rsc.DSV_SceneDepthMSAA).GetCPUDescHandle(): mRenderer.GetDSV(rsc.DSV_SceneDepth).GetCPUDescHandle();
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = mRenderer.GetRTV(bMSAA ? rsc.RTV_SceneColorMSAA : rsc.RTV_SceneColor).GetCPUDescHandle();
+	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = mRenderer.GetDSV(bMSAA ? rsc.DSV_SceneDepthMSAA : rsc.DSV_SceneDepth).GetCPUDescHandle();
 
 	const float RenderResolutionX = static_cast<float>(SceneView.SceneRTWidth);
 	const float RenderResolutionY = static_cast<float>(SceneView.SceneRTHeight);
@@ -1188,6 +1401,8 @@ void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dynam
 
 	RenderBoundingBoxes(pCmd, pCBufferHeap, SceneView, bMSAA);
 	RenderLightBounds(pCmd, pCBufferHeap, SceneView, bMSAA);
+	RenderDebugVertexAxes(pCmd, pCBufferHeap, SceneView, bMSAA);
+	RenderOutline(pCmd, pCBufferHeap, SceneView, bMSAA, { rtvHandle });
 
 	// resolve MSAA RT 
 	if (bMSAA)
@@ -1216,8 +1431,7 @@ void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dynam
 
 void VQEngine::CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
 {
-	const bool bNoBoundingVolumeToRender = SceneView.boundingBoxRenderCommands.empty()
-		&& SceneView.lightBoundsRenderCommands.empty();
+	const bool bNoBoundingVolumeToRender = ShouldSkipBoundsPass(SceneView);
 
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 
@@ -1252,10 +1466,10 @@ void VQEngine::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, cons
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 	const auto& rsc = mResources_MainWnd;
 
-	const bool bCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.FFXCASParams.CASSharpen > 0.0f;
+	const bool bCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f;
 	const bool bFSREnabled = PPParams.IsFSREnabled();
-	const bool bVizualizationEnabled = PPParams.eDrawMode != EDrawMode::LIT_AND_POSTPROCESSED;
-	const bool bVizualizationSceneTargetUsed = ShouldUseVisualizationTarget(PPParams.eDrawMode);
+	const bool bVizualizationEnabled = PPParams.DrawModeEnum != EDrawMode::LIT_AND_POSTPROCESSED;
+	const bool bVizualizationSceneTargetUsed = ShouldUseVisualizationTarget(PPParams.DrawModeEnum);
 	const bool bMotionVectorsEnabled = ShouldUseMotionVectorsTarget(mSettings);
 
 	auto pRscPostProcessInput = mRenderer.GetTextureResource(rsc.Tex_SceneColor);
@@ -1342,7 +1556,7 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 
 	// cmds
 	ID3D12Resource* pRscOutput = nullptr;
-	if (PPParams.eDrawMode != EDrawMode::LIT_AND_POSTPROCESSED)
+	if (PPParams.DrawModeEnum != EDrawMode::LIT_AND_POSTPROCESSED)
 	{
 		SCOPED_GPU_MARKER(pCmd, "RenderPostProcess_DebugViz");
 
@@ -1352,10 +1566,10 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 		pCBufferHeap->AllocConstantBuffer(sizeof(cbuffer_t), (void**)&pConstBuffer, &cbAddr);
 		memcpy(pConstBuffer, &PPParams.VizParams, sizeof(PPParams.VizParams));
-		pConstBuffer->iDrawMode = static_cast<int>(PPParams.eDrawMode); // iDrawMode is not connected to the UI
+		pConstBuffer->iDrawMode = static_cast<int>(PPParams.DrawModeEnum); // iDrawMode is not connected to the UI
 
 		SRV SRVIn = srv_ColorIn;
-		switch (PPParams.eDrawMode)
+		switch (PPParams.DrawModeEnum)
 		{
 		case EDrawMode::DEPTH         : SRVIn = mRenderer.GetSRV(rsc.SRV_SceneDepth); break;
 		case EDrawMode::NORMALS       : SRVIn = mRenderer.GetSRV(rsc.SRV_SceneNormals); break;
@@ -1458,7 +1672,8 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 			pRscOutput = pRscTonemapperOut;
 		}
 
-		if(PPParams.IsFFXCASEnabled() && PPParams.FFXCASParams.CASSharpen > 0.0f)
+#if !DISABLE_FIDELITYFX_CAS
+		if(PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f)
 		{
 			ID3D12Resource* pRscFFXCASOut = mRenderer.GetTextureResource(rsc.Tex_PostProcess_FFXCASOut);
 			const CD3DX12_RESOURCE_BARRIER pBarriers[] =
@@ -1492,6 +1707,7 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 			pCmd->Dispatch(CASDispatchX, CASDispatchY, DispatchZ);
 			pRscOutput = pRscFFXCASOut;
 		}
+#endif
 
 		if (PPParams.IsFSREnabled()) // FSR & CAS are mutually exclusive
 		{
@@ -1516,7 +1732,7 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 				D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 				const size_t cbSize = sizeof(unsigned) * 16;
 				pCBufferHeap->AllocConstantBuffer(cbSize, (void**)&pConstBuffer, &cbAddr);
-				memcpy(pConstBuffer, PPParams.FFSR_EASUParams.EASUConstantBlock, cbSize);
+				memcpy(pConstBuffer, PPParams.FSR_EASUParams.EASUConstantBlock, cbSize);
 
 				ID3D12PipelineState* pPSO = mRenderer.GetPSO(EBuiltinPSOs::FFX_FSR1_EASU_CS_PSO);
 				assert(pPSO);
@@ -1552,10 +1768,10 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 
 				ID3D12PipelineState* pPSO = mRenderer.GetPSO(EBuiltinPSOs::FFX_FSR1_RCAS_CS_PSO);
 
-				FPostProcessParameters::FFSR_RCAS* pConstBuffer = {};
+				FPostProcessParameters::FFSR1_RCAS* pConstBuffer = {};
 				D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-				pCBufferHeap->AllocConstantBuffer(sizeof(FPostProcessParameters::FFSR_RCAS), (void**)&pConstBuffer, &cbAddr);
-				*pConstBuffer = PPParams.FFSR_RCASParams;
+				pCBufferHeap->AllocConstantBuffer(sizeof(FPostProcessParameters::FFSR1_RCAS), (void**)&pConstBuffer, &cbAddr);
+				*pConstBuffer = PPParams.FSR_RCASParams;
 
 				pCmd->SetPipelineState(pPSO);
 				pCmd->SetComputeRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FFX_FSR1));
@@ -1600,9 +1816,9 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBu
 	D3D12_RECT                 scissorsRect { 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
 	SwapChain&                    swapchain = ctx.SwapChain;
 
-	const bool bVizualizationEnabled = PPParams.eDrawMode != EDrawMode::LIT_AND_POSTPROCESSED;
+	const bool bVizualizationEnabled = PPParams.DrawModeEnum != EDrawMode::LIT_AND_POSTPROCESSED;
 	const bool bHDR = this->ShouldRenderHDR(mpWinMain->GetHWND());
-	const bool bFFXCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.FFXCASParams.CASSharpen > 0.0f;
+	const bool bFFXCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f;
 	const bool bFSREnabled = PPParams.IsFSREnabled();
 	const SRV& srv_ColorIn = bVizualizationEnabled ?
 		mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_VisualizationOut) : (
@@ -1618,6 +1834,9 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBu
 	ID3D12Resource* pRscUI            = mRenderer.GetTextureResource(mResources_MainWnd.Tex_UI_SDR);
 
 	ID3D12Resource*          pSwapChainRT = swapchain.GetCurrentBackBufferRenderTarget();
+	
+	//Log::Info("RenderUI: Backbuffer[%d]: 0x%08x | pCmd = %p", swapchain.GetCurrentBackBufferIndex(), pSwapChainRT, pCmd);
+	
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = bHDR 
 		? mRenderer.GetRTV(mResources_MainWnd.RTV_UI_SDR).GetCPUDescHandle()
 		: swapchain.GetCurrentBackBufferRTVHandle();
@@ -1803,7 +2022,8 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBu
 						(LONG)pcmd->ClipRect.w
 					};
 					pCmd->RSSetScissorRects(1, &r);
-					pCmd->SetGraphicsRootDescriptorTable(0, ((const CBV_SRV_UAV*)(pcmd->TextureId))->GetGPUDescHandle());
+					D3D12_GPU_DESCRIPTOR_HANDLE h = { (UINT64)(pcmd->TextureId) };
+					pCmd->SetGraphicsRootDescriptorTable(0, h);
 
 					pCmd->DrawIndexedInstanced(pcmd->ElemCount, 1, idx_offset, vtx_offset, 0);
 				}
@@ -1834,7 +2054,7 @@ void VQEngine::CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, Dynamic
 	const BufferID& IB_ID = VBIBIDs.second;
 	const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
 	const bool bHDR = this->ShouldRenderHDR(mpWinMain->GetHWND());
-	const bool bFFXCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.FFXCASParams.CASSharpen > 0.0f;
+	const bool bFFXCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f;
 	const bool bFSREnabled = PPParams.IsFSREnabled();
 
 	SwapChain& swapchain = ctx.SwapChain;
@@ -1904,25 +2124,8 @@ void VQEngine::CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, Dynamic
 
 HRESULT VQEngine::PresentFrame(FWindowRenderContext& ctx)
 {
-	HRESULT hr = {};
-	CommandQueue& PresentQueue = ctx.PresentQueue;
-	SwapChain& swapchain = ctx.SwapChain;
-	ID3D12Resource* pSwapChainRT = swapchain.GetCurrentBackBufferRenderTarget();
-
-	std::vector<ID3D12GraphicsCommandList*>& vCmdLists = ctx.GetGFXCommandListPtrs();
-	const UINT NumCommandLists = ctx.GetNumCurrentlyRecordingThreads(CommandQueue::EType::GFX);
-	for (UINT i = 0; i < NumCommandLists; ++i)
-	{
-		vCmdLists[i]->Close();
-	}
-	{
-		SCOPED_CPU_MARKER("ExecuteCommandLists()");
-		PresentQueue.pQueue->ExecuteCommandLists(NumCommandLists, (ID3D12CommandList**)vCmdLists.data());
-	}
-	{
-		SCOPED_CPU_MARKER("SwapchainPresent");
-		hr = swapchain.Present();
-	}
+	SCOPED_CPU_MARKER("Present");
+	HRESULT hr = ctx.SwapChain.Present();
 	return hr;
 }
 

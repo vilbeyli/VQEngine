@@ -72,7 +72,7 @@ void MagnifierPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamet
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 		FMagnifierParameters* CB = nullptr;
 		pParams->pCBufferHeap->AllocConstantBuffer(sizeof(FMagnifierParameters), (void**)&CB, &cbAddr);
-		memcpy(CB, pParams->pCBufferParams, sizeof(FMagnifierParameters));
+		memcpy(CB, pParams->pCBufferParams.get(), sizeof(FMagnifierParameters));
 		
 		pCmd->SetPipelineState(mRenderer.GetPSO(PSOMagnifierPS));
 		pCmd->OMSetRenderTargets(1, &pParams->RTV, FALSE, NULL);

@@ -151,7 +151,7 @@ void UploadHeap::Create(ID3D12Device* pDevice, SIZE_T uSize, ID3D12CommandQueue*
     mpDataCur = mpDataBegin;
     mpDataEnd = mpDataBegin + mpUploadHeap->GetDesc().Width;
 
-    hr = pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&mpFence));
+    hr = pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&ptr));
     mHEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     mFenceValue = 1;
 }
@@ -160,7 +160,7 @@ void UploadHeap::Destroy()
 {
     mpUploadHeap->Release();
 
-    if (mpFence) mpFence->Release();
+    if (ptr) ptr->Release();
 
     mpCommandList->Release();
     mpCommandAllocator->Release();
@@ -191,10 +191,10 @@ void UploadHeap::UploadToGPUAndWait(ID3D12CommandQueue* pCmdQueue /* =nullptr */
 
     mpCommandList->Close();
     pCmdQueue->ExecuteCommandLists(1, CommandListCast(&mpCommandList));
-    pCmdQueue->Signal(mpFence, mFenceValue);
-    if (mpFence->GetCompletedValue() < mFenceValue)
+    pCmdQueue->Signal(ptr, mFenceValue);
+    if (ptr->GetCompletedValue() < mFenceValue)
     {
-        mpFence->SetEventOnCompletion(mFenceValue, mHEvent);
+        ptr->SetEventOnCompletion(mFenceValue, mHEvent);
         WaitForSingleObject(mHEvent, INFINITE);
     }
 

@@ -44,6 +44,7 @@ using MeshRenderCommand_t = FMeshRenderCommand;
 
 // fwd decl
 class Input;
+class ObjectIDPass;
 struct Material;
 struct FResourceNames;
 struct FFrustumPlaneset;
@@ -72,14 +73,19 @@ struct FSceneRenderParameters
 		int     samplesPerQuad = 1;
 	};
 
+	bool bForceLOD0_ShadowView = false;
+	bool bForceLOD0_SceneView = true;
 	bool bDrawLightBounds = false;
 	bool bDrawMeshBoundingBoxes = false;
 	bool bDrawGameObjectBoundingBoxes = false;
 	bool bDrawLightMeshes = true;
+	bool bDrawVertexLocalAxes = false;
+	float fVertexLocalAxixSize = 1.0f;
 	float fYawSliderValue = 0.0f;
 	float fAmbientLightingFactor = 0.055f;
 	bool bScreenSpaceAO = true;
 	FFFX_SSSR_UIParameters FFX_SSSRParameters = {};
+	DirectX::XMFLOAT4 OutlineColor = DirectX::XMFLOAT4(1.0f, 0.647f, 0.1f, 1.0f);
 };
 //--- Pass Parameters ---
 
@@ -113,6 +119,8 @@ struct FSceneView
 	std::vector<MeshRenderCommand_t>  meshRenderCommands;
 	std::vector<FLightRenderCommand> lightRenderCommands;
 	std::vector<FLightRenderCommand> lightBoundsRenderCommands;
+	std::vector<FOutlineRenderCommand> outlineRenderCommands;
+	std::vector<MeshRenderCommand_t> debugVertexAxesRenderCommands;
 
 #if RENDER_INSTANCED_SCENE_MESHES
 	//--------------------------------------------------------------------------------------------------------------------------------------------
@@ -120,28 +128,28 @@ struct FSceneView
 	// In order to avoid clear, we also keep track of the number 
 	// of valid instance data.
 	//--------------------------------------------------------------------------------------------------------------------------------------------
-	// MAT0
-	//	+----MESH0
-	//	       +----InstData0
-	//	       +----InstData1
-	//	+----MESH1
-	//	       +----InstData0
-	//	       +----InstData1
-	//	       +----InstData2
-	//	+----MESH2
-	//	       +----InstData0
+	struct FInstanceData { DirectX::XMMATRIX mWorld, mWorldViewProj, mWorldViewProjPrev, mNormal; int mObjID; float mProjectedArea; }; // transformation matrixes used in the shader
+	struct FMeshInstanceDataArray { size_t NumValidData = 0; std::vector<FInstanceData> InstanceData; };
+	using MaterialMeshLODInstanceDataLookup_t = std::unordered_map<MaterialID, std::unordered_map<MeshID, std::vector<FMeshInstanceDataArray>>>;
+	// MAT0                       MAT1       
+	// +----MESH0                 +----MESH37             
+	//     +----LOD0                  +----LOD0                
+	//        +----InstData0             +----InstData0                        
+	//        +----InstData1             +----InstData1                        
+	//     +----LOD1                     +----InstData2                
+	//        +----InstData0      +----MESH225                        
+	//        +----InstData1          +----LOD0                        
+	// +----MESH1                        +----InstData0             
+	//     +----LOD0                     +----InstData1                
+	//        +----InstData0          +----LOD1                        
+	//        +----InstData1             +----InstData0                        
+	//        +----InstData2             +----InstData1                        
+	// +----MESH2                              
+	//     +----LOD0
+	//        +----InstData0
 	//
-	// MAT1
-	//	+----MESH37
-	//	       +----InstData0
-	//	       +----InstData1
-	//	       +----InstData2
-	//	+----MESH225
-	//	       +----InstData0
-	//	       +----InstData1
-	struct FInstanceData { DirectX::XMMATRIX mWorld, mWorldViewProj, mWorldViewProjPrev, mNormal; }; // transformation matrixes used in the shader
-	struct FMeshInstanceData { size_t NumValidData = 0; std::vector<FInstanceData> InstanceData; };
-	std::unordered_map < MaterialID, std::unordered_map<MeshID, FMeshInstanceData>> MaterialMeshInstanceDataLookup;
+	MaterialMeshLODInstanceDataLookup_t MaterialMeshLODInstanceDataLookup;
+	std::unordered_map<uint64, FSceneView::FMeshInstanceDataArray> drawParamLookup;
 	//--------------------------------------------------------------------------------------------------------------------------------------------
 #endif
 
@@ -158,18 +166,18 @@ struct FSceneShadowView
 		DirectX::XMMATRIX matViewProj;
 #if RENDER_INSTANCED_SHADOW_MESHES
 		//--------------------------------------------------------------------------------------------------------------------------------------------
-		//	+----SHADOW_MESH0
-		//	       +----ShadowInstData0
-		//	       +----ShadowInstData1
-		//	+----SHADOW_MESH1
-		//	       +----ShadowInstData0
-		//	       +----ShadowInstData1
-		//	       +----ShadowInstData2
+		//  +----SHADOW_MESH0             +----SHADOW_MESH1             
+		//     +----LOD0                     +----LOD0        
+		//         +----ShadowInstData0          +----ShadowInstData0                       
+		//         +----ShadowInstData1          +----ShadowInstData1                       
+		//     +----LOD1                         +----ShadowInstData2        
+		//         +----ShadowInstData0                        
+		//         +----ShadowInstData1                        
 		struct FShadowInstanceData { DirectX::XMMATRIX matWorld, matWorldViewProj; };
-		struct FShadowMeshInstanceData { size_t NumValidData = 0; std::vector<FShadowInstanceData> InstanceData; };
-		std::unordered_map<MeshID, FShadowMeshInstanceData> ShadowMeshInstanceDataLookup;
+		struct FShadowInstanceDataArray { size_t NumValidData = 0; std::vector<FShadowInstanceData> InstanceData; };
+		std::unordered_map<MeshID, std::vector<FShadowInstanceDataArray>> ShadowMeshLODInstanceDataLookup;
 		//--------------------------------------------------------------------------------------------------------------------------------------------
-		std::vector<FInstancedShadowMeshRenderCommand> meshRenderCommands;
+		std::vector<FInstancedShadowMeshRenderCommand> meshRenderCommands; // per LOD mesh
 #else
 		std::vector<FShadowMeshRenderCommand> meshRenderCommands;
 #endif
@@ -226,30 +234,37 @@ public:
 		const MeshLookup_t& Meshes
 		, const ModelLookup_t& Models
 		, const MaterialLookup_t& Materials
-		, const std::vector<Transform*>& pTransforms
+		, const std::vector<size_t>& TransformHandles
 	)
 		: mMeshes(Meshes)
 		, mModels(Models)
 		, mMaterials(Materials)
-		, mpTransforms(pTransforms)
+		, mTransformHandles(TransformHandles)
 	{}
 	SceneBoundingBoxHierarchy() = delete;
 
-	void Build(const std::vector<GameObject*>& pObjects, ThreadPool& UpdateWorkerThreadPool);
+	void Build(const Scene* pScene, const std::vector<size_t>& GameObjectHandles, ThreadPool& UpdateWorkerThreadPool);
 	void Clear();
 	void ResizeGameObjectBoundingBoxContainer(size_t sz);
 
+	const std::vector<MeshID>&           GetMeshesIDs() const { return mMeshIDs; }
+	const std::vector<MaterialID>&       GetMeshMaterialIDs() const { return mMeshMaterials; }
+	const std::vector<const Transform*>& GetMeshTransforms() const { return mMeshTransforms; }
+	const std::vector<size_t>&           GetMeshGameObjectHandles() const { return mMeshGameObjectHandles; }
+
 private:
-	void CountGameObjectMeshes(const std::vector<GameObject*>& pObjects);
 	void ResizeGameMeshBoxContainer(size_t size);
 
-	void BuildGameObjectBoundingBoxes(const std::vector<GameObject*>& pObjects);
-	void BuildGameObjectBoundingBoxes_Range(const std::vector<GameObject*>& pObjects, size_t iBegin, size_t iEnd);
-	void BuildMeshBoundingBoxes(const std::vector<GameObject*>& pObjects);
-	void BuildMeshBoundingBoxes_Range(const std::vector<GameObject*>& pObjects, size_t iBegin, size_t iEnd, size_t iMeshBB);
-
-	void BuildMeshBoundingBox(const GameObject* pObj, size_t iBB_Begin, size_t iBB_End);
-	void BuildGameObjectBoundingBox(const GameObject* pObj, size_t iBB);
+	void BuildGameObjectBoundingSpheres(const std::vector<size_t>& GameObjectHandles);
+	void BuildGameObjectBoundingSpheres_Range(const std::vector<size_t>& GameObjectHandles, size_t iBegin, size_t iEnd);
+	
+	void BuildGameObjectBoundingBox(const Scene* pScene, size_t ObjectHandle, size_t iBB);
+	void BuildGameObjectBoundingBoxes(const Scene* pScene, const std::vector<size_t>& GameObjectHandles);
+	void BuildGameObjectBoundingBoxes_Range(const Scene* pScene, const std::vector<size_t>& GameObjectHandles, size_t iBegin, size_t iEnd);
+	
+	void BuildMeshBoundingBox(const Scene* pScene, size_t ObjectHandle, size_t iBB_Begin, size_t iBB_End);
+	void BuildMeshBoundingBoxes(const Scene* pScene, const std::vector<size_t>& GameObjectHandles);
+	void BuildMeshBoundingBoxes_Range(const Scene* pScene, const std::vector<size_t>& GameObjectHandles, size_t iBegin, size_t iEnd, size_t iMeshBB);
 
 private:
 	friend class Scene;
@@ -258,7 +273,7 @@ private:
 	// list of game object bounding boxes for coarse culling
 	//------------------------------------------------------
 	std::vector<FBoundingBox>      mGameObjectBoundingBoxes;
-	std::vector<const GameObject*> mGameObjectBoundingBoxGameObjectPointerMapping;
+	std::vector<size_t>            mGameObjectHandles;
 	std::vector<size_t>            mGameObjectNumMeshes;
 	//------------------------------------------------------
 
@@ -267,17 +282,17 @@ private:
 	// these are same size containers, mapping bounding boxes to gameobjects and meshIDs
 	size_t mNumValidMeshBoundingBoxes = 0;
 	std::vector<FBoundingBox>      mMeshBoundingBoxes;
-	std::vector<MeshID>            mMeshBoundingBoxMeshIDMapping;
-	std::vector<MaterialID>        mMeshBoundingBoxMaterialIDMapping;
-	std::vector<Transform>         mMeshTransforms;
-	std::vector<const GameObject*> mMeshBoundingBoxGameObjectPointerMapping;
+	std::vector<MeshID>            mMeshIDs;
+	std::vector<MaterialID>        mMeshMaterials;
+	std::vector<const Transform*>  mMeshTransforms;
+	std::vector<size_t>            mMeshGameObjectHandles;
 	//------------------------------------------------------
 
 	// scene data container references
 	const MeshLookup_t& mMeshes;
 	const ModelLookup_t& mModels;
 	const MaterialLookup_t& mMaterials;
-	const std::vector<Transform*>& mpTransforms;
+	const std::vector<size_t>& mTransformHandles;
 };
 
 //------------------------------------------------------
@@ -299,6 +314,7 @@ class Scene
 {
 	// Engine has easy access to the scene as scene is essentially a part of the engine.
 	friend class VQEngine; 
+	friend class AssetLoader;
 
 //----------------------------------------------------------------------------------------------------------------
 // SCENE INTERFACE
@@ -333,12 +349,15 @@ protected:
 private: // Derived Scenes shouldn't access these functions
 	void PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX);
 	void Update(float dt, int FRAME_DATA_INDEX = 0);
-	void PostUpdate(ThreadPool& UpdateWorkerThreadPool, int FRAME_DATA_INDEX = 0);
+	void PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UIState, int FRAME_DATA_INDEX = 0);
+	
 	void StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene, ThreadPool& UpdateWorkerThreadPool);
 	void OnLoadComplete();
 	void Unload(); // serial-only for now. maybe MT later.
+	
 	void RenderUI(FUIState& UIState, uint32_t W, uint32_t H);
 	void HandleInput(FSceneView& SceneView);
+	void PickObject(const ObjectIDPass& ObjectIDRenderPass, int MouseClickPositionX, int MouseClickPositionY);
 
 	void GatherSceneLightData(FSceneView& SceneView) const;
 	void GatherShadowViewData(FSceneShadowView& SceneShadowView
@@ -346,31 +365,34 @@ private: // Derived Scenes shouldn't access these functions
 		, const std::vector<size_t>& vActiveLightIndices
 	);
 
-	void PrepareLightMeshRenderParams(FSceneView& SceneView) const;
+	void RecordRenderLightMeshCommands(FSceneView& SceneView) const;
 	void BatchInstanceData_BoundingBox(FSceneView& SceneView
 		, ThreadPool& UpdateWorkerThreadPool
 		, const DirectX::XMMATRIX matViewProj
 	) const;
-	void BatchInstanceData_SceneMeshes(
-		  std::vector<MeshRenderCommand_t>* pMeshRenderCommands
-		, std::unordered_map < MaterialID, std::unordered_map<MeshID, FSceneView::FMeshInstanceData>>& MaterialMeshInstanceDataLookup
-		, const std::vector<size_t>& CulledBoundingBoxIndexList_Msh
-		, const DirectX::XMMATRIX& matViewProj
-		, const DirectX::XMMATRIX& matViewProjHistory
-	);
+
+	
+	struct FFrustumRenderCommandRecorderContext
+	{
+		size_t iFrustum;
+		const std::vector<std::pair<size_t, float>>* pObjIndicesAndBBAreas = nullptr;
+		FSceneShadowView::FShadowView* pShadowView = nullptr;
+	};
+	size_t DispatchWorkers_ShadowViews(size_t NumShadowMeshFrustums, std::vector< FFrustumRenderCommandRecorderContext>& WorkerContexts, FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
 	void BatchInstanceData_ShadowMeshes(
 		  size_t iFrustum
 		, FSceneShadowView::FShadowView* pShadowView
-		, const std::vector<size_t>* pCulledBoundingBoxIndexList_Msh
+		, const std::vector<std::pair<size_t, float>>& vCulledBoundingBoxIndexAndArea
 		, DirectX::XMMATRIX matViewProj
+		, bool bForceLOD0
 	) const;
 
 
 	void GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShadowView& SceneShadowView, ThreadPool& UpdateWorkerThreadPool);
 	void CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
-	void BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
+	void BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool, std::vector<std::pair<int, int>>& vOutputWriteParams);
 
-	void BuildGameObject(const FGameObjectRepresentation& rep, size_t iObj, size_t iTF);
+	void BuildGameObject(const FGameObjectRepresentation& rep, size_t iObj);
 	
 	void LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRepresentation>& GameObjsToBeLoaded);
 	void LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes);
@@ -393,7 +415,7 @@ public:
 	      FSceneView&       GetSceneView (int FRAME_DATA_INDEX);
 	const FSceneView&       GetSceneView (int FRAME_DATA_INDEX) const;
 	const FSceneShadowView& GetShadowView(int FRAME_DATA_INDEX) const;
-	      FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX)       ;
+	      FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX);
 	const FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX) const ;
 
 	inline const Camera& GetActiveCamera() const { return mCameras[mIndex_SelectedCamera]; }
@@ -412,9 +434,25 @@ public:
 	MaterialID  CreateMaterial(const std::string& UniqueMaterialName);
 	MaterialID  LoadMaterial(const FMaterialRepresentation& matRep, TaskID taskID);
 
-	Material&   GetMaterial(MaterialID ID);
+	const std::vector<FMaterialRepresentation>& GetMaterialRepresentations() const { return mSceneRepresentation.Materials; }
+	const std::string& GetMaterialName(MaterialID ID) const;
+	std::vector<MaterialID> GetMaterialIDs() const;
+	const Material& GetMaterial(MaterialID ID) const;
+	Material& GetMaterial(MaterialID ID);
+
+	const std::string& GetTexturePath(TextureID) const;
+	std::string GetTextureName(TextureID) const;
+
+	std::vector<const Light*> GetLightsOfType(Light::EType eType) const;
+	std::vector<const Light*> GetLights() const;
+	std::vector<Light*> GetLights();
+	
 	Model&      GetModel(ModelID);
+	const Model& GetModel(ModelID) const;
 	FSceneStats GetSceneRenderStats(int FRAME_DATA_INDEX) const;
+	
+	GameObject* GetGameObject(size_t hObject) const;
+	Transform* GetGameObjectTransform(size_t hObject) const;
 
 //----------------------------------------------------------------------------------------------------------------
 // SCENE DATA
@@ -433,21 +471,20 @@ protected:
 	std::unordered_map<MeshID, Mesh>         mMeshes;
 	std::unordered_map<ModelID, Model>       mModels;
 	std::unordered_map<MaterialID, Material> mMaterials;
-	std::vector<GameObject*> mpObjects;
-	std::vector<Transform*>  mpTransforms;
-	std::vector<Camera>      mCameras;
+	std::vector<size_t>                      mGameObjectHandles;
+	std::vector<size_t>                      mTransformHandles;
+	std::vector<Camera>                      mCameras;
 	
-	Light                    mDirectionalLight;
-
-	std::vector<Light>       mLightsStatic;      //     static lights (See Light::EMobility enum for details)
-	std::vector<Light>       mLightsStationary;  // stationary lights (See Light::EMobility enum for details)
-	std::vector<Light>       mLightsDynamic;     //     moving lights (See Light::EMobility enum for details)
-	//Skybox                   mSkybox;
+	// See Light::EMobility enum for details
+	std::vector<Light> mLightsStatic;
+	std::vector<Light> mLightsStationary;
+	std::vector<Light> mLightsDynamic;
+	//Skybox             mSkybox;
 
 	//
 	// AUX DATA
 	//
-	std::unordered_map<const Camera*   , DirectX::XMMATRIX> mViewProjectionMatrixHistory; // history for motion vectors
+	std::unordered_map<const Camera*, DirectX::XMMATRIX> mViewProjectionMatrixHistory; // history for motion vectors
 
 	//
 	// CULLING DATA
@@ -455,6 +492,7 @@ protected:
 	SceneBoundingBoxHierarchy mBoundingBoxHierarchy;
 	mutable FFrustumCullWorkerContext mFrustumCullWorkerContext;
 	std::unordered_map<size_t, FSceneShadowView::FShadowView*> mFrustumIndex_pShadowViewLookup;
+	std::vector<std::pair<int, int>> mMainViewCollcetInstancedDrawDataWriteParams;
 
 	std::vector<size_t> mActiveLightIndices_Static;
 	std::vector<size_t> mActiveLightIndices_Stationary;
@@ -471,6 +509,7 @@ protected:
 	// SCENE STATE
 	//
 	int                      mIndex_SelectedCamera;
+	std::vector<size_t>      mSelectedObjects;
 
 public:
 	int                      mIndex_ActiveEnvironmentMapPreset;
@@ -493,10 +532,10 @@ protected:
 //----------------------------------------------------------------------------------------------------------------
 private:
 	MemoryPool<GameObject> mGameObjectPool;
-	MemoryPool<Transform>  mTransformPool;
+	MemoryPool<Transform>  mGameObjectTransformPool;
 
 	std::mutex mMtx_GameObjects;
-	std::mutex mMtx_Transforms;
+	std::mutex mMtx_GameObjectTransforms;
 	std::mutex mMtx_Meshes;
 	std::mutex mMtx_Models;
 	std::mutex mMtx_Materials;
@@ -505,8 +544,11 @@ private:
 	AssetLoader::FMaterialTextureAssignments mMaterialAssignments;
 	
 	// cache
-	std::unordered_map<std::string, MaterialID> mLoadedMaterials;
-	
-	//CPUProfiler*    mpCPUProfiler;
-	//FBoundingBox     mSceneBoundingBox;
+	std::unordered_set<MaterialID> mLoadedMaterials;
+	std::unordered_map<MaterialID, std::string> mMaterialNames;
+	std::unordered_map<TextureID, std::string> mTexturePaths;
+	std::mutex mMtxTexturePaths;
+
+	const std::string mInvalidMaterialName;
+	const std::string mInvalidTexturePath;
 };

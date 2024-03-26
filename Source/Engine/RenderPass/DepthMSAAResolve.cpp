@@ -88,7 +88,6 @@ void DepthMSAAResolvePass::RecordCommands(const IRenderPassDrawParameters* pDraw
 	*pConstBuffer = CBuffer;
 
 	// record commands
-	SCOPED_GPU_MARKER(pCmd, "MSAAResolve<Depth=%d, Normals=%d, Roughness=%d>"); // TODO: string formatting
 	pCmd->SetPipelineState(mRenderer.GetPSO(mPSO[iDepth][iNorml][iRoghn]));
 	pCmd->SetComputeRootSignature(mpRS);
 	if (true/*always*/)     pCmd->SetComputeRootDescriptorTable(0, mRenderer.GetSRV(pParams->SRV_MSAADepth).GetGPUDescHandle());

@@ -75,7 +75,6 @@ void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, cons
     const bool bRenderTargetTexture    = (desc.d3d12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0;
     const bool bUnorderedAccessTexture = (desc.d3d12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) != 0;
     const bool bDepthStencilTexture    = (desc.d3d12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0;
-    
 
     // determine resource state & optimal clear value
     D3D12_RESOURCE_STATES ResourceState = (!desc.pDataArray.empty() && desc.pDataArray[0])
@@ -85,7 +84,12 @@ void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, cons
     if (bDepthStencilTexture)
     {
         D3D12_CLEAR_VALUE ClearValue = {};
-        ClearValue.Format = (desc.d3d12Desc.Format == DXGI_FORMAT_R32_TYPELESS) ? DXGI_FORMAT_D32_FLOAT : desc.d3d12Desc.Format;
+        ClearValue.Format = desc.d3d12Desc.Format;
+        if(desc.d3d12Desc.Format == DXGI_FORMAT_R32_TYPELESS) 
+            ClearValue.Format = DXGI_FORMAT_D32_FLOAT;
+        if (desc.d3d12Desc.Format == DXGI_FORMAT_R24_UNORM_X8_TYPELESS || desc.d3d12Desc.Format == DXGI_FORMAT_R24G8_TYPELESS)
+            ClearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
         ClearValue.DepthStencil.Depth = 1.0f;
         ClearValue.DepthStencil.Stencil = 0;
         pClearValue = &ClearValue;
@@ -104,7 +108,7 @@ void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, cons
 
     // Create resource
     D3D12MA::ALLOCATION_DESC textureAllocDesc = {};
-    textureAllocDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
+    textureAllocDesc.HeapType = desc.bCPUReadback ? D3D12_HEAP_TYPE_READBACK : D3D12_HEAP_TYPE_DEFAULT;
     hr = pAllocator->CreateResource(
         &textureAllocDesc,
         &desc.d3d12Desc,
@@ -310,7 +314,10 @@ void Texture::InitializeDSV(uint32 index, DSV* pRV, int ArraySlice /*= 1*/)
     D3D12_RESOURCE_DESC texDesc = mpResource->GetDesc();
 
     D3D12_DEPTH_STENCIL_VIEW_DESC DSViewDesc = {};
-    DSViewDesc.Format = DXGI_FORMAT_D32_FLOAT;
+    if(texDesc.Format == DXGI_FORMAT_R32_TYPELESS)
+        DSViewDesc.Format = DXGI_FORMAT_D32_FLOAT;
+    if (texDesc.Format == DXGI_FORMAT_R24G8_TYPELESS)
+        DSViewDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
     if (texDesc.SampleDesc.Count == 1)
     {
         if (texDesc.DepthOrArraySize == 1)

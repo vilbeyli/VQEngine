@@ -41,12 +41,88 @@ void StressTestScene::UpdateScene(float dt, FSceneView& SceneView)
 		if (SceneView.sceneParameters.fYawSliderValue > 1.0f)
 			SceneView.sceneParameters.fYawSliderValue = 0.0f;
 	}
+
+	// animation
+	if (bEnableGeneratedObjectAnimation)
+	{
+		for (int i=0; i< mAnimatiedObjectHandles.size(); ++i)
+		{
+			const size_t hObj = mAnimatiedObjectHandles[i];
+			Transform* pTf = GetGameObjectTransform(hObj);
+
+			XMVECTOR vAxis;
+			
+			if (bEnableOrbit)
+			{
+				vAxis = XMLoadFloat3(&mOrbitAxes[i]);
+				XMVECTOR vPoint = XMLoadFloat3(&mOrbitRotationPoint);
+				vPoint.m128_f32[3] = 1.0f;
+				pTf->RotateAroundPointAndAxis(vAxis, mOrbitSpeeds[i] * dt, vPoint);
+			}
+			
+			if (bEnableRotation)
+			{
+				vAxis = XMLoadFloat3(&mRotationAxes[i]);
+				pTf->RotateAroundAxisDegrees(vAxis, mRotationSpeeds[i] * dt);
+			}
+		}
+	}
 }
 
 
+constexpr float ROTATION_SPEED_MIN = 0.0f;
+constexpr float ROTATION_SPEED_MAX = 400.0f;
+constexpr float ROTATION_SPEED_DEFAULT = 0.0f;
+constexpr float ORBIT_SPEED_MIN = 0.1f;
+constexpr float ORBIT_SPEED_MAX = 0.8f;
+constexpr float ORBIT_SPEED_DEFAULT = 0.25f;
 void StressTestScene::InitializeScene()
 {
+	bEnableGeneratedObjectAnimation = false;
+	bEnableOrbit = true;
+	bEnableRotation = true;
 
+	bRandomizeRotationSpeeds = true;
+	bRandomizeOrbitSpeeds = true;
+	bRandomizeRotationAxes = true;
+
+	mAnimatiedObjectHandles.clear();
+	mRotationAxes.clear();
+	mRotationSpeeds.clear();
+	mOrbitAxes.clear();
+	mOrbitSpeeds.clear();
+	for (size_t hObj : this->mGameObjectHandles)
+	{
+		const GameObject* pObj = GetGameObject(hObj);
+		const ModelID iModel = pObj->mModelID;
+		const Model& model = mModels.at(iModel);
+		
+		const bool bGeneratedObject = model.mModelName.empty();
+		if (bGeneratedObject)
+		{
+			mAnimatiedObjectHandles.push_back(hObj);
+
+			XMFLOAT3 f3RotationAxis = UpVector;
+			if (bRandomizeRotationAxes)
+			{
+				const float fAzimuth = MathUtil::RandF(0.0f, 360.0f ) * DEG2RAD;
+				const float fZenith  = MathUtil::RandF(-90.0f, 90.0f) * DEG2RAD;
+				f3RotationAxis.x = cosf(fAzimuth);
+				f3RotationAxis.y = sinf(fZenith);
+				f3RotationAxis.z = sinf(fAzimuth);
+				
+				XMVECTOR vAxis = XMLoadFloat3(&f3RotationAxis);
+				vAxis = XMVector3Normalize(vAxis);
+				XMStoreFloat3(&f3RotationAxis, vAxis);
+			}
+
+			mRotationAxes.push_back(f3RotationAxis);
+			mOrbitAxes.push_back(f3RotationAxis);
+			mOrbitSpeeds.push_back(bRandomizeOrbitSpeeds ? MathUtil::RandF(ORBIT_SPEED_MIN   , ORBIT_SPEED_MAX   ) : ORBIT_SPEED_DEFAULT   );
+			mRotationSpeeds.push_back(bRandomizeRotationSpeeds ? MathUtil::RandF(ROTATION_SPEED_MIN, ROTATION_SPEED_MAX) : ROTATION_SPEED_DEFAULT);
+		}
+	}
+	mOrbitRotationPoint = XMFLOAT3(0, 0, 0); // origin
 }
 
 void StressTestScene::LoadScene(FSceneRepresentation& scene)
@@ -306,6 +382,7 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 		obj.tf.SetPosition(pos);
 		obj.tf.SetScale(scale);
 		obj.BuiltinMeshName = "Cylinder";
+		obj.ModelName = "PlatformCylinder";
 		if constexpr (ENABLE_MATERIALS)
 		{
 			obj.MaterialName = "Checkerboard_Grayscale";
@@ -321,4 +398,3 @@ void StressTestScene::UnloadScene()
 void StressTestScene::RenderSceneUI() const
 {
 }
-

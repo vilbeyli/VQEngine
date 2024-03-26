@@ -17,6 +17,8 @@
 //	Contact: volkanilbeyli@gmail.com
 #pragma once
 
+#include <vector>
+
 //
 // Resources on memory management
 //
@@ -46,6 +48,7 @@ inline constexpr size_t AlignTo(size_t size, size_t alignment = 64)
 //
 // MEMORY POOL
 //
+static const size_t INVALID_HANDLE = static_cast<size_t>(-1);
 template<class TObject>
 class MemoryPool
 {
@@ -53,13 +56,18 @@ public:
 	MemoryPool(size_t NumBlocks, size_t Alignment);
 	~MemoryPool();
 	
-	TObject* Allocate(size_t NumBlocks = 1);
-	void     Free(void* pBlock);
+	size_t Allocate();
+	void   Free(size_t Handle);
+	
+	std::vector<size_t> Allocate(size_t NumBlocks);
+	void Free(const std::vector<size_t>&  Handle);
 
+	TObject* Get(size_t Handle) const;
 
 #if MEMORY_POOL__ENABLE_DEBUG_LOG
 	void PrintDebugInfo() const;
 #endif
+
 private:
 	struct Block { Block* pNext; };
 
@@ -71,6 +79,10 @@ private:
 	size_t mNumMaxBlocks = 0;
 	size_t mNumUsedBlocks = 0;
 	size_t mAllocSize = 0;
+	size_t mAlignedObjSize = 0;
+
+	// handles
+	std::vector<bool> mActiveHandles;
 };
 
 
@@ -84,8 +96,8 @@ inline MemoryPool<TObject>::MemoryPool(size_t NumBlocks, size_t Alignment)
 	: mNumMaxBlocks(NumBlocks)
 {
 	// calc alloc size
-	const size_t AlignedObjSize = AlignTo(sizeof(TObject), Alignment);
-	const size_t AllocSize = AlignedObjSize * NumBlocks;
+	this->mAlignedObjSize = AlignTo(sizeof(TObject), Alignment);
+	const size_t AllocSize = this->mAlignedObjSize * NumBlocks;
 
 	// alloc mem
 	this->mpNextFreeBlock = reinterpret_cast<Block*>(malloc(AllocSize));
@@ -98,7 +110,7 @@ inline MemoryPool<TObject>::MemoryPool(size_t NumBlocks, size_t Alignment)
 
 	// setup list structure
 	Block* pWalk = this->mpNextFreeBlock;
-	Block* pNextBlock = (Block*)(((unsigned char*)this->mpNextFreeBlock) + AlignedObjSize);
+	Block* pNextBlock = (Block*)(((unsigned char*)this->mpNextFreeBlock) + mAlignedObjSize);
 	for (size_t i = 0; i < NumBlocks; ++i)
 	{
 		if (i == NumBlocks - 1)
@@ -108,7 +120,7 @@ inline MemoryPool<TObject>::MemoryPool(size_t NumBlocks, size_t Alignment)
 		}
 		pWalk->pNext = pNextBlock;
 		pWalk = pNextBlock;
-		pNextBlock = (Block*)((unsigned char*)(pNextBlock) + AlignedObjSize);
+		pNextBlock = (Block*)((unsigned char*)(pNextBlock) +mAlignedObjSize);
 	}
 	
 
@@ -116,7 +128,7 @@ inline MemoryPool<TObject>::MemoryPool(size_t NumBlocks, size_t Alignment)
 	Log::Info("MemoryPool: Created pool w/ ObjectSize=%s, Alignment=%s, AlignedObjectSize=%s, NumBlocks=%d, AllocSize=%s, mpAlloc=0x%x"
 		, StrUtil::FormatByte(sizeof(TObject)).c_str()
 		, StrUtil::FormatByte(Alignment).c_str()
-		, StrUtil::FormatByte(AlignedObjSize).c_str()
+		, StrUtil::FormatByte(mAlignedObjSize).c_str()
 		, NumBlocks
 		, StrUtil::FormatByte(AllocSize).c_str()
 		, mpAlloc
@@ -143,7 +155,7 @@ inline MemoryPool<TObject>::~MemoryPool()
 }
 
 template<class TObject>
-inline TObject* MemoryPool<TObject>::Allocate(size_t NumBlocks)
+inline size_t MemoryPool<TObject>::Allocate()
 {
 	if (!mpNextFreeBlock)
 	{
@@ -179,26 +191,72 @@ inline TObject* MemoryPool<TObject>::Allocate(size_t NumBlocks)
 			mpNextFreeBlock = NewPool.mpNextFreeBlock;
 		}
 #endif
+
+		return INVALID_HANDLE;
 	}
+	size_t Handle = (reinterpret_cast<unsigned char*>(mpNextFreeBlock) - reinterpret_cast<unsigned char*>(mpAlloc)) / mAlignedObjSize;
+
+	// mark handle active
+	if (Handle >= mActiveHandles.size()) {
+		mActiveHandles.resize(Handle + 1, false);
+	}
+	mActiveHandles[Handle] = true;
+
+	// update free list
+	Block* pAllocatedBlock = mpNextFreeBlock;
+	mpNextFreeBlock = mpNextFreeBlock->pNext;
 
 	++this->mNumUsedBlocks;
-
-	// only alloc 1 for now
-	TObject* pNewObj = (TObject*)mpNextFreeBlock;
-	mpNextFreeBlock = mpNextFreeBlock->pNext;
-	return pNewObj;
+	return Handle;
 }
 
 template<class TObject>
-inline void MemoryPool<TObject>::Free(void* pBlock)
+inline std::vector<size_t> MemoryPool<TObject>::Allocate(size_t NumBlocks)
 {
-	assert(pBlock);
-	Block* pMem = (Block*)pBlock;
-	pMem->pNext = this->mpNextFreeBlock;
-	this->mpNextFreeBlock = pMem;
-	--this->mNumUsedBlocks;
+	std::vector<size_t> Handles(NumBlocks, INVALID_HANDLE);
+	for (size_t i = 0; i < NumBlocks; ++i)
+		Handles[i] = Allocate();
+	return Handles;
 }
 
+template<class TObject>
+inline void MemoryPool<TObject>::Free(size_t Handle)
+{
+	if (Handle > mActiveHandles.size() || !mActiveHandles[Handle])
+	{
+		return;
+	}
+	
+	// update free list
+	Block* pBlockToFree = reinterpret_cast<Block*>(Get(Handle));
+	assert(pBlockToFree);
+	pBlockToFree->pNext = mpNextFreeBlock;
+	mpNextFreeBlock = pBlockToFree;
+
+	// update handle & state
+	mActiveHandles[Handle] = false;
+	--mNumUsedBlocks;
+}
+
+template<class TObject>
+inline void MemoryPool<TObject>::Free(const std::vector<size_t>& Handles)
+{
+	for(size_t Handle : Handles)
+		Free(Handle);
+}
+
+template<class TObject> 
+inline TObject* MemoryPool<TObject>::Get(size_t Handle) const
+{
+	if (Handle > mActiveHandles.size() || !mActiveHandles[Handle])
+	{
+		return nullptr;
+	}
+
+	return reinterpret_cast<TObject*>(
+		reinterpret_cast<char*>(mpAlloc) + Handle * mAlignedObjSize
+	);
+}
 
 #if MEMORY_POOL__ENABLE_DEBUG_LOG
 template<class TObject>
@@ -207,7 +265,7 @@ inline void MemoryPool<TObject>::PrintDebugInfo() const
 	Log::Info("-----------------");
 	Log::Info("Memory Pool");
 	Log::Info("Allocation Size : %s", StrUtil::FormatByte(this->mAllocSize).c_str());
-	Log::Info("Total # Blocks  : %d", this->mNumBlocks);
+	Log::Info("Total # Blocks  : %d", this->mNumMaxBlocks);
 	Log::Info("Used  # Blocks  : %d", this->mNumUsedBlocks);
 	Log::Info("Next Available  : 0x%x %s", this->mpNextFreeBlock, (this->mpNextFreeBlock == this->mpAlloc ? "(HEAD)" : ""));
 	Log::Info("-----------------");

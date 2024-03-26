@@ -18,6 +18,7 @@
 
 #include "VQEngine.h"
 #include "Libs/VQUtils/Source/utils.h"
+#include "GPUMarker.h"
 
 #include <cassert>
 
@@ -32,7 +33,8 @@ constexpr char* VQENGINE_VERSION = "v0.10.0";
 #define REPORT_SYSTEM_INFO 1
 #if REPORT_SYSTEM_INFO 
 void ReportSystemInfo(const VQSystemInfo::FSystemInfo& i, bool bDetailed = false)
-{	
+{
+	SCOPED_CPU_MARKER("ReportSystemInfo");
 	const std::string sysInfo = VQSystemInfo::PrintSystemInfo(i, bDetailed);
 	Log::Info("\n%s", sysInfo.c_str());
 }
@@ -47,6 +49,9 @@ VQEngine::VQEngine()
 	, mRenderPass_ApplyReflections(mRenderer)
 	, mRenderPass_DepthResolve(mRenderer)
 	, mRenderPass_Magnifier(mRenderer, true) // true: outputs to swapchain
+	, mRenderPass_ObjectID(mRenderer)
+	, mRenderPass_Outline(mRenderer)
+	, mbDefaultMeshesLoaded(false)
 {}
 
 void VQEngine::MainThread_Tick()
@@ -70,6 +75,7 @@ void VQEngine::MainThread_Tick()
 
 bool VQEngine::Initialize(const FStartupParameters& Params)
 {
+	SCOPED_CPU_MARKER("VQEngine.Initialize");
 	Timer  t;  t.Reset();  t.Start();
 	Timer t2; t2.Reset(); t2.Start();
 
@@ -95,7 +101,6 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	mRenderer.Initialize(mSettings.gfx); // Device, Queues, Heaps, WorkerThreads
 	// --------------------------------------------------------
 	InitializeEngineThreads();
-	SetEffectiveFrameRateLimit(mSettings.gfx.MaxFrameRate);
 	float f4 = t.Tick();
 
 	// offload system info acquisition to a thread as it takes a few seconds on Debug build
@@ -147,6 +152,7 @@ void VQEngine::Destroy()
 
 void VQEngine::InitializeInput()
 {
+	SCOPED_CPU_MARKER("InitializeInput");
 #if ENABLE_RAW_INPUT
 	Input::InitRawInputDevices(mpWinMain->GetHWND());
 #endif
@@ -158,6 +164,7 @@ void VQEngine::InitializeInput()
 
 void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 {
+	SCOPED_CPU_MARKER("InitializeEngineSettings");
 	const FEngineSettings& p = Params.EngineSettings;
 
 	// Defaults
@@ -228,7 +235,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	if (Params.bOverrideGFXSettings_Reflections)                s.gfx.Reflections          = p.gfx.Reflections;
 
 	if (Params.bOverrideENGSetting_MainWindowWidth)             s.WndMain.Width            = p.WndMain.Width;
-	if (Params.bOverrideENGSetting_MainWindowHeight)            s.WndMain.Height           = p.WndMain.Height;
+	if (Params.bOverrideENGSetting_MainWindowHeight)            s.	WndMain.Height         = p.WndMain.Height;
 	if (Params.bOverrideENGSetting_bDisplayMode)                s.WndMain.DisplayMode      = p.WndMain.DisplayMode;
 	if (Params.bOverrideENGSetting_PreferredDisplay)            s.WndMain.PreferredDisplay = p.WndMain.PreferredDisplay;
 	if (Params.bOverrideGFXSetting_bHDR)                        s.WndMain.bEnableHDR       = p.WndMain.bEnableHDR;
@@ -251,6 +258,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 
 void VQEngine::InitializeWindows(const FStartupParameters& Params)
 {
+	SCOPED_CPU_MARKER("InitializeWindows");
 	mbMainWindowHDRTransitionInProgress.store(false);
 
 	auto fnInitializeWindow = [&](const FWindowSettings& settings, HINSTANCE hInstance, std::unique_ptr<Window>& pWin, const std::string& WindowName)
@@ -287,11 +295,13 @@ void VQEngine::InitializeWindows(const FStartupParameters& Params)
 
 void VQEngine::InitializeHDRProfiles()
 {
+	SCOPED_CPU_MARKER("ParseHDRProfilesFile");
 	mDisplayHDRProfiles = VQEngine::ParseHDRProfilesFile();
 }
 
 void VQEngine::InitializeEnvironmentMaps()
 {
+	SCOPED_CPU_MARKER("InitializeEnvironmentMaps");
 	mbEnvironmentMapPreFilter.store(false);
 	std::vector<FEnvironmentMapDescriptor> descs = VQEngine::ParseEnvironmentMapsFile();
 	for (const FEnvironmentMapDescriptor& desc : descs)
@@ -303,6 +313,7 @@ void VQEngine::InitializeEnvironmentMaps()
 
 void VQEngine::InitializeScenes()
 {
+	SCOPED_CPU_MARKER("InitializeScenes");
 	std::vector<std::string>& mSceneNames = mResourceNames.mSceneNames;
 
 	// Read Scene Index Mappings from file and initialize @mSceneNames
@@ -342,10 +353,11 @@ void VQEngine::InitializeScenes()
 
 void VQEngine::InitializeEngineThreads()
 {
+	SCOPED_CPU_MARKER("InitializeEngineThreads");
 	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
 	const size_t HWThreads  = ThreadPool::sHardwareThreadCount;
 	const size_t HWCores    = HWThreads / 2;
-	const size_t NumRuntimeWorkers = HWCores - 2; // reserve 2 cores for Update + Render threads
+	const size_t NumRuntimeWorkers = HWCores - 1; // reserve 1 core for Update + Render threads
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mpSemUpdate.reset(new Semaphore(NUM_SWAPCHAIN_BACKBUFFERS, NUM_SWAPCHAIN_BACKBUFFERS));
@@ -363,15 +375,19 @@ void VQEngine::InitializeEngineThreads()
 	mRenderThread = std::thread(&VQEngine::RenderThread_Main, this);
 	mUpdateThread = std::thread(&VQEngine::UpdateThread_Main, this);
 	mWorkers_Update.Initialize(NumRuntimeWorkers, "UpdateWorkers");
+	SetThreadDescription(mWorkers_Update.native_handle(), StrUtil::ASCIIToUnicode("Update Thread").c_str());
 	mWorkers_Render.Initialize(NumRuntimeWorkers, "RenderWorkers");
+	SetThreadDescription(mWorkers_Render.native_handle(), StrUtil::ASCIIToUnicode("Render Thread").c_str());
 #else
 	mSimulationThread = std::thread(&VQEngine::SimulationThread_Main, this);
+	SetThreadDescription(mSimulationThread.native_handle(), StrUtil::ASCIIToUnicode("Simulation Thread").c_str());
 	mWorkers_Simulation.Initialize(NumRuntimeWorkers, "SimulationWorkers");
 #endif
 }
 
 void VQEngine::ExitThreads()
 {
+	SCOPED_CPU_MARKER("ExitThreads");
 	mWorkers_ModelLoading.Destroy();
 	mWorkers_TextureLoading.Destroy();
 	mWorkers_MeshLoading.Destroy();
