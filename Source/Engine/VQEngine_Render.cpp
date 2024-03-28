@@ -998,16 +998,20 @@ void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 		mRenderer.DestroyTexture(r.Tex_SceneDepthMSAA);
 		mRenderer.DestroyTexture(r.Tex_SceneColorMSAA);
 		mRenderer.DestroyTexture(r.Tex_SceneNormalsMSAA);
-
+		mRenderer.DestroyTexture(r.Tex_SceneVisualizationMSAA);
+		mRenderer.DestroyTexture(r.Tex_SceneMotionVectorsMSAA);
+		
 		mRenderer.DestroyTexture(r.Tex_SceneDepth);
 		mRenderer.DestroyTexture(r.Tex_SceneDepthResolve);
 		mRenderer.DestroyTexture(r.Tex_SceneColor);
 		mRenderer.DestroyTexture(r.Tex_SceneColorBoundingVolumes);
 		mRenderer.DestroyTexture(r.Tex_SceneNormals);
 		mRenderer.DestroyTexture(r.Tex_SceneVisualization);
-		mRenderer.DestroyTexture(r.Tex_SceneVisualizationMSAA);
-
 		mRenderer.DestroyTexture(r.Tex_AmbientOcclusion);
+		mRenderer.DestroyTexture(r.Tex_SceneMotionVectors);
+
+		mRenderer.DestroyTexture(r.Tex_DownsampledSceneDepth);
+
 		// TODO: destroy SSR resources?
 
 		mRenderer.DestroyTexture(r.Tex_PostProcess_BlurOutput);
@@ -1017,6 +1021,7 @@ void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 		mRenderer.DestroyTexture(r.Tex_PostProcess_FFXCASOut);
 		mRenderer.DestroyTexture(r.Tex_PostProcess_FSR_EASUOut);
 		mRenderer.DestroyTexture(r.Tex_PostProcess_FSR_RCASOut);
+		mRenderer.DestroyTexture(r.Tex_UI_SDR);
 
 		for(auto* pRenderPass : mRenderPasses)
 			pRenderPass->OnDestroyWindowSizeDependentResources();
