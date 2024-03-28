@@ -627,7 +627,7 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 			SCOPED_CPU_MARKER("CleanupImages");
 			for (Image& i : images) i.Destroy();
 		}
-
+		mLoadedTexturePaths[pFilePath] = ID;
 #if LOG_RESOURCE_CREATE
 		Log::Info("VQRenderer::CreateTextureFromFile(): [%.2fs] %s", t.StopGetDeltaTimeAndReset(), pFilePath);
 #endif
@@ -718,7 +718,8 @@ void VQRenderer::DestroyTexture(TextureID& texID)
 {
 	// Remove texID
 	std::lock_guard<std::mutex> lk(mMtxTextures);
-	mTextures.at(texID).Destroy();
+	Texture& tex = mTextures.at(texID);
+	tex.Destroy();
 	mTextures.erase(texID);
 
 	// Remove texture path from cache
