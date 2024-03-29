@@ -286,11 +286,16 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 		const std::vector<FGameObjectRepresentation>* pObjects = &GameObjects;
 
 		std::vector<std::pair<size_t, size_t>> ranges = PartitionWorkItemsIntoRanges(NumGameObjects, NumThreads);
+		const int NumTasks = ranges.size();
+		const int NumThreadTasks = NumTasks - 1;
+		Signal ThreadsDoneSignal;
+		std::atomic<bool> bThreadsDone = false;
 		{
 			SCOPED_CPU_MARKER("DispatchThreads");
+			std::atomic<int> NumThreadsDone = 0;
 			for (size_t iRange = 1; iRange < ranges.size(); ++iRange)
 			{
-				WorkerThreadPool.AddTask([=]()
+				WorkerThreadPool.AddTask([=, &NumThreadsDone, &ThreadsDoneSignal, &bThreadsDone]()
 				{
 					SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
 					{
@@ -301,6 +306,13 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 
 						for (size_t i = ranges[iRange].first; i <= ranges[iRange].second; ++i)
 							BuildGameObject((*pObjects)[i], iObj_Thread++);
+
+						const int NumThreadsDoneBefore = NumThreadsDone.fetch_add(1);
+						if (NumThreadsDoneBefore + 1 == NumThreadTasks)
+						{
+							bThreadsDone.store(true);
+							ThreadsDoneSignal.NotifyOne();
+						}
 					}
 				});
 			}
@@ -312,9 +324,10 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 				BuildGameObject(GameObjects[i], iObj++);
 			}
 		}
+		if(!bThreadsDone.load())
 		{
 			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
-			while (WorkerThreadPool.GetNumActiveTasks() != 0);
+			ThreadsDoneSignal.Wait();
 		}
 	}
 

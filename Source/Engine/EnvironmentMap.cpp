@@ -225,9 +225,6 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 	}
 
 	FEnvironmentMapDescriptor desc = this->GetEnvironmentMapDescCopy(EnvMapName); // copy because we'll update the FilePath down below
-	std::vector<std::string>::iterator it = std::find(mResourceNames.mEnvironmentMapPresetNames.begin(), mResourceNames.mEnvironmentMapPresetNames.end(), EnvMapName);
-	const size_t ActiveEnvMapIndex = it - mResourceNames.mEnvironmentMapPresetNames.begin();
-	
 	if (desc.FilePath.empty()) // check whether the env map was found or not
 	{
 		Log::Error("Environment Map file path empty");
@@ -240,6 +237,9 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 		Log::Warning("Have you run Scripts/DownloadAssets.bat?");
 		return;
 	}
+	
+	std::vector<std::string>::iterator it = std::find(mResourceNames.mEnvironmentMapPresetNames.begin(), mResourceNames.mEnvironmentMapPresetNames.end(), EnvMapName);
+	const size_t ActiveEnvMapIndex = it - mResourceNames.mEnvironmentMapPresetNames.begin();
 
 	// Pick an environment map resolution based on the monitor swapchain is on
 	// so we can avoid loading 8k textures for a 1080p laptop for example.
@@ -262,7 +262,6 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 
 
 	// Load environment map resources ------------------------------------------------------------
-
 
 	// HDR map
 	env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(desc.FilePath.c_str(), true);

@@ -72,10 +72,14 @@ void VQEngine::SimulationThread_Initialize()
 #define PARALLEL_INIT 1
 
 #if PARALLEL_INIT
-	mWorkers_Simulation.AddTask([=]()
+	Signal UpdateThreadInitializeFinished;
+	std::atomic<int> ThreadDone = 0;
+	mWorkers_Simulation.AddTask([=, &UpdateThreadInitializeFinished, &ThreadDone]()
 	{
 		UpdateThread_Inititalize();
 		UpdateThread_Tick(0.0f);
+		ThreadDone++;
+		UpdateThreadInitializeFinished.NotifyOne();
 	});
 #endif
 	RenderThread_Inititalize();
@@ -86,8 +90,9 @@ void VQEngine::SimulationThread_Initialize()
 
 #if PARALLEL_INIT
 	{
-		SCOPED_CPU_MARKER_C("BUSY_WAIT", 0xFFFF0000);
-		while (mWorkers_Simulation.GetNumActiveTasks() != 0); // busy-wait is bad...
+		SCOPED_CPU_MARKER_C("WAIT_UpdateWorkers", 0xFFFF0000);
+		if(ThreadDone.load() == 0)
+			UpdateThreadInitializeFinished.Wait();
 	}
 #endif
 
