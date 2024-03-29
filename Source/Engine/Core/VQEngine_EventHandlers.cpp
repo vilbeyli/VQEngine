@@ -435,7 +435,7 @@ void VQEngine::RenderThread_HandleWindowCloseEvent(const IEvent* pEvent)
 #endif
 	}
 	
-	// TODO: wait for GPU to finish all queues
+	mRenderer.GetWindowSwapChain(hwnd).WaitForGPU();
 	RenderThread_UnloadWindowSizeDependentResources(hwnd);
 }
 
