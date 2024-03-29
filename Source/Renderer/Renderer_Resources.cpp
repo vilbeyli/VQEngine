@@ -514,14 +514,18 @@ BufferID VQRenderer::CreateBuffer(const FBufferDesc& desc)
 TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerateMips /*= false*/)
 {
 	SCOPED_CPU_MARKER("VQRenderer::CreateTextureFromFile()");
+
 	// check if we've already loaded the texture
-	auto it = mLoadedTexturePaths.find(pFilePath);
-	if (it != mLoadedTexturePaths.end())
 	{
+		std::lock_guard<std::mutex> lk(mMtxLoadedTexturePaths);
+		auto it = mLoadedTexturePaths.find(pFilePath);
+		if (it != mLoadedTexturePaths.end())
+		{
 #if LOG_CACHED_RESOURCES_ON_LOAD
-		Log::Info("Texture already loaded: %s", pFilePath);
+			Log::Info("Texture already loaded: %s", pFilePath);
 #endif
-		return it->second;
+			return it->second;
+		}
 	}
 	// check path
 	if (strlen(pFilePath) == 0)
@@ -619,6 +623,7 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 		Texture& refTex = mTextures.at(ID);
 
 		// SYNC POINT - texture residency
+		if(!refTex.mbResident.load())
 		{
 			SCOPED_CPU_MARKER_C("WAIT_RESIDENT", 0xFFFF0000);
 			refTex.mSignalResident.Wait();
@@ -627,7 +632,11 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 			SCOPED_CPU_MARKER("CleanupImages");
 			for (Image& i : images) i.Destroy();
 		}
-		mLoadedTexturePaths[pFilePath] = ID;
+
+		{
+			std::lock_guard<std::mutex> lk(mMtxLoadedTexturePaths);
+			mLoadedTexturePaths[pFilePath] = ID;
+		}
 #if LOG_RESOURCE_CREATE
 		Log::Info("VQRenderer::CreateTextureFromFile(): [%.2fs] %s", t.StopGetDeltaTimeAndReset(), pFilePath);
 #endif
@@ -1472,6 +1481,7 @@ void VQRenderer::ProcessTextureUploadQueue()
 		return;
 
 	std::vector<Signal*> vTexResidentSignals;
+	std::vector<std::atomic<bool>*> vTexResidentBools;
 
 	while (!mTextureUploadQueue.empty())
 	{
@@ -1485,6 +1495,7 @@ void VQRenderer::ProcessTextureUploadQueue()
 			assert(mTextures.find(desc.id) != mTextures.end());
 			Texture& tex = mTextures.at(desc.id);
 			vTexResidentSignals.push_back(&tex.mSignalResident);
+			vTexResidentBools.push_back(&tex.mbResident);
 		}
 	}
 
@@ -1495,8 +1506,13 @@ void VQRenderer::ProcessTextureUploadQueue()
 
 	{
 		SCOPED_CPU_MARKER("NotifyResidentSignals");
-		for (Signal* pSignal : vTexResidentSignals)
-			pSignal->NotifyOne();
+		{
+			for (int i=0; i< vTexResidentSignals.size(); ++i)
+			{
+				vTexResidentBools[i]->store(true);
+				vTexResidentSignals[i]->NotifyOne();
+			}
+		}
 	}
 }
 

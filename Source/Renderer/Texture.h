@@ -106,6 +106,7 @@ private:
 	D3D12MA::Allocation* mpAlloc = nullptr;
 	ID3D12Resource*      mpResource = nullptr;
 	Signal               mSignalResident;
+	std::atomic<bool>    mbResident = false;
 
 	// some texture desc fields
 	bool mbTypelessTexture = false;

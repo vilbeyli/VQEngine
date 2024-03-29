@@ -224,6 +224,7 @@ private:
 	mutable std::mutex                             mMtxDSVs;
 	mutable std::mutex                             mMtxVBVs;
 	mutable std::mutex                             mMtxIBVs;
+	mutable std::mutex                             mMtxLoadedTexturePaths;
 
 	// root signatures
 	std::unordered_map<RS_ID , ID3D12RootSignature*> mRootSignatureLookup;
