@@ -604,11 +604,8 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 			tDesc.pDataArray.resize(MipLevels);
 			for (int mip = 1; mip < MipLevels; ++mip)
 			{
-				// mip0 : 1/1
-				// mip1 : 1/4   2^2
-				// mip2 : 1/16  2^4
-				// mip3 : 1/64  2^6
-				images[mip] = Image::CreateEmptyImage(imgSizeInBytes / static_cast<UINT>(std::pow(2, mip*2)));
+				const size_t NewMipImageSize = placedSubresource[mip].Footprint.Height * placedSubresource[mip].Footprint.RowPitch;
+				images[mip] = Image::CreateEmptyImage(NewMipImageSize);
 
 				VQ_DXGI_UTILS::MipImage(images[mip-1].pData, images[mip].pData, placedSubresource[mip-1].Footprint.Width, num_rows[mip-1], bytePP);
 				tDesc.pDataArray[mip] = images[mip].pData;
