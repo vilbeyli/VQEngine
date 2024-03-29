@@ -655,7 +655,7 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 	ImGui_RightAlignedCombo("Camera (C)", &iSelectedCamera, szCameraNames, _countof(szCameraNames));
 	MathUtil::Clamp(iSelectedCamera, 0, (int)mpScene->GetNumSceneCameras() - 1);
 
-	static const char* pszCamerControllerModes[] = { "Orbit", "First Person" };
+	static const char* pszCamerControllerModes[] = { "First Person", "Orbit"};
 	Camera& cam = mpScene->GetActiveCamera();
 	ECameraControllerType eController = cam.GetControllerType();
 	int iController = static_cast<int>(eController);

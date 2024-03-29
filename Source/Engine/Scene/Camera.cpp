@@ -73,11 +73,11 @@ void Camera::InitializeCamera(const FCameraParameters& data)
 
 void Camera::InitializeController(const FCameraParameters& data)
 {
-	mControllerIndex = 0;
+	mControllerIndex = data.ControllerType;
 	
 	// initialize in ECameraControllerType order ----
-	mpControllers.emplace_back(new OrbitController(this));
 	mpControllers.emplace_back(new FirstPersonController(this, data.TranslationSpeed, data.AngularSpeed, data.Drag));
+	mpControllers.emplace_back(new OrbitController(this));
 	// initialize in ECameraControllerType order ----
 }
 
