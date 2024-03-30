@@ -84,7 +84,9 @@ float2 FFX_SSSR_GetMipResolution(float2 screen_dimensions, int mip_level) {
 
 // Requires origin and direction of the ray to be in screen space [0, 1] x [0, 1]
 float3 FFX_SSSR_HierarchicalRaymarch(float3 origin, float3 direction, bool is_mirror, float2 screen_size, int most_detailed_mip, uint min_traversal_occupancy, uint max_traversal_intersections, out bool valid_hit) {
-    const float3 inv_direction = direction != 0 ? 1.0 / direction : FFX_SSSR_FLOAT_MAX;
+    //const float3 inv_direction = direction != 0 ? 1.0 / direction : FFX_SSSR_FLOAT_MAX;
+    const float3 inv_direction = select(direction != 0, 1. / direction, FFX_SSSR_FLOAT_MAX);
+    
 
     // Start on mip with highest detail.
     int current_mip = most_detailed_mip;
@@ -96,10 +98,10 @@ float3 FFX_SSSR_HierarchicalRaymarch(float3 origin, float3 direction, bool is_mi
     // Offset to the bounding boxes uv space to intersect the ray with the center of the next pixel.
     // This means we ever so slightly over shoot into the next region. 
     float2 uv_offset = 0.005 * exp2(most_detailed_mip) / screen_size;
-    uv_offset = direction.xy < 0 ? -uv_offset : uv_offset;
+    uv_offset = select(direction.xy < 0, -uv_offset, uv_offset);
 
     // Offset applied depending on current mip resolution to move the boundary to the left/right upper/lower border depending on ray direction.
-    float2 floor_offset = direction.xy < 0 ? 0 : 1;
+    float2 floor_offset = select(direction.xy < 0, 0, 1);
     
     // Initially advance ray to avoid immediate self intersections.
     float current_t;

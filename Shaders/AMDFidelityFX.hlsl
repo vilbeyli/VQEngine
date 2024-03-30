@@ -156,19 +156,19 @@ void CAS_CSMain(uint3 LocalThreadId : SV_GroupThreadID, uint3 WorkGroupId : SV_G
     AF3 c; // color
     
 	CasFilter(c.r, c.g, c.b, gxy, CASConst0, CASConst1, sharpenOnly);
-	CASOutputTexture[ASU2(gxy)] = AF4(c, 1);
+	CASOutputTexture[ASU2(gxy)] = c;
 	gxy.x += 8u;
     
 	CasFilter(c.r, c.g, c.b, gxy, CASConst0, CASConst1, sharpenOnly);
-	CASOutputTexture[ASU2(gxy)] = AF4(c, 1);
+	CASOutputTexture[ASU2(gxy)] = c;
 	gxy.y += 8u;
     
 	CasFilter(c.r, c.g, c.b, gxy, CASConst0, CASConst1, sharpenOnly);
-	CASOutputTexture[ASU2(gxy)] = AF4(c, 1);
+	CASOutputTexture[ASU2(gxy)] = c;
 	gxy.x -= 8u;
     
 	CasFilter(c.r, c.g, c.b, gxy, CASConst0, CASConst1, sharpenOnly);
-	CASOutputTexture[ASU2(gxy)] = AF4(c, 1);
+	CASOutputTexture[ASU2(gxy)] = c;
 
 #endif // FFXCAS_FP16
 }
@@ -254,36 +254,36 @@ void FSR_EASU_CSMain(uint3 LocalThreadId : SV_GroupThreadID, uint3 WorkGroupId :
 	AH3 c;
 
 	FsrEasuH(c, gxy, FSRConst0, FSRConst1, FSRConst2, FSRConst3);
-	FSROutputTexture[ASU2(gxy)] = AH4(c, 1);
+	FSROutputTexture[ASU2(gxy)] = c;
 
 	gxy.x += 8u;
 	FsrEasuH(c, gxy, FSRConst0, FSRConst1, FSRConst2, FSRConst3);
-	FSROutputTexture[ASU2(gxy)] = AH4(c, 1);
+	FSROutputTexture[ASU2(gxy)] = c;
 
 	gxy.y += 8u;
 	FsrEasuH(c, gxy, FSRConst0, FSRConst1, FSRConst2, FSRConst3);
-	FSROutputTexture[ASU2(gxy)] = AH4(c, 1);
+	FSROutputTexture[ASU2(gxy)] = c;
 
 	gxy.x -= 8u;
 	FsrEasuH(c, gxy, FSRConst0, FSRConst1, FSRConst2, FSRConst3);
-	FSROutputTexture[ASU2(gxy)] = AH4(c, 1);
+	FSROutputTexture[ASU2(gxy)] = c;
 #else
 	AF3 c;
 
 	FsrEasuF(c, gxy, FSRConst0, FSRConst1, FSRConst2, FSRConst3);
-	FSROutputTexture[ASU2(gxy)] = AF4(c, 1);
+	FSROutputTexture[ASU2(gxy)] = c;
 
 	gxy.x += 8u;
 	FsrEasuF(c, gxy, FSRConst0, FSRConst1, FSRConst2, FSRConst3);
-	FSROutputTexture[ASU2(gxy)] = AF4(c, 1);
+	FSROutputTexture[ASU2(gxy)] = c;
 
 	gxy.y += 8u;
 	FsrEasuF(c, gxy, FSRConst0, FSRConst1, FSRConst2, FSRConst3);
-	FSROutputTexture[ASU2(gxy)] = AF4(c, 1);
+	FSROutputTexture[ASU2(gxy)] = c;
 
 	gxy.x -= 8u;
 	FsrEasuF(c, gxy, FSRConst0, FSRConst1, FSRConst2, FSRConst3);
-	FSROutputTexture[ASU2(gxy)] = AF4(c, 1);
+	FSROutputTexture[ASU2(gxy)] = c;
 #endif
 }
 
@@ -342,36 +342,36 @@ void FSR_RCAS_CSMain(uint3 LocalThreadId : SV_GroupThreadID, uint3 WorkGroupId :
 	AH3 c;
 
 	FsrRcasH(c.r, c.g, c.b, gxy, Const0);
-	RCASOutputTexture[ASU2(gxy)] = AH4(c, 1);
+	RCASOutputTexture[ASU2(gxy)] = c;
 
 	gxy.x += 8u;
 	FsrRcasH(c.r, c.g, c.b, gxy, Const0);
-	RCASOutputTexture[ASU2(gxy)] = AH4(c, 1);
+	RCASOutputTexture[ASU2(gxy)] = c;
 
 	gxy.y += 8u;
 	FsrRcasH(c.r, c.g, c.b, gxy, Const0);
-	RCASOutputTexture[ASU2(gxy)] = AH4(c, 1);
+	RCASOutputTexture[ASU2(gxy)] = c;
 
 	gxy.x -= 8u;
 	FsrRcasH(c.r, c.g, c.b, gxy, Const0);
-	RCASOutputTexture[ASU2(gxy)] = AH4(c, 1);
+	RCASOutputTexture[ASU2(gxy)] = c;
 #else
 	AF3 c;
 
 	FsrRcasF(c.r, c.g, c.b, gxy, RCASConst0);
-	RCASOutputTexture[ASU2(gxy)] = AF4(c, 1);
+	RCASOutputTexture[ASU2(gxy)] = c;
 
 	gxy.x += 8u;
 	FsrRcasF(c.r, c.g, c.b, gxy, RCASConst0);
-	RCASOutputTexture[ASU2(gxy)] = AF4(c, 1);
+	RCASOutputTexture[ASU2(gxy)] = c;
 
 	gxy.y += 8u;
 	FsrRcasF(c.r, c.g, c.b, gxy, RCASConst0);
-	RCASOutputTexture[ASU2(gxy)] = AF4(c, 1);
+	RCASOutputTexture[ASU2(gxy)] = c;
 
 	gxy.x -= 8u;
 	FsrRcasF(c.r, c.g, c.b, gxy, RCASConst0);
-	RCASOutputTexture[ASU2(gxy)] = AF4(c, 1);
+	RCASOutputTexture[ASU2(gxy)] = c;
 #endif
 }
 #endif // FSR_RCAS_CS || FSR_RCAS_PS
