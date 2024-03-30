@@ -26,21 +26,27 @@ bool IsOutOfBounds(float3 p, float3 lo, float3 hi)
 {
 	return p.x < lo.x || p.x > hi.x || p.y < lo.y || p.y > hi.y || p.z < lo.z || p.z > hi.z;
 }
-bool IsPointOutOfFrustum(float4 PositionCS)
+bool IsPointOutOfFrustum(float4 PositionCS, float Tolerance)
 {
 	float3 culling = PositionCS.xyz;
 	float3 w = PositionCS.w;
-	return IsOutOfBounds(culling, float3(-w), float3(w));
+	return IsOutOfBounds(culling, float3(-w - Tolerance), float3(w + Tolerance));
 }
 bool ShouldClipPatch(float4 p0PositionCS, float4 p1PositionCS, float4 p2PositionCS)
 {
-	bool bAllOutside = IsPointOutOfFrustum(p0PositionCS)
-		&& IsPointOutOfFrustum(p1PositionCS)
-		&& IsPointOutOfFrustum(p2PositionCS);
+	const float Tolerance = 20.0f; // TODO: bounding box for triangle
+	bool bAllOutside = IsPointOutOfFrustum(p0PositionCS, Tolerance)
+		&& IsPointOutOfFrustum(p1PositionCS, Tolerance)
+		&& IsPointOutOfFrustum(p2PositionCS, Tolerance);
 	
 	return bAllOutside;
 }
 
+
+// TODO:
+// Triplanar mapping: https://gamedevelopment.tutsplus.com/use-tri-planar-texture-mapping-for-better-terrain--gamedev-13821a
+// LODs : https://thedemonthrone.ca/projects/rendering-terrain/rendering-terrain-part-9-dynamic-level-of-detail/
+// Normal reconstruction: http://www.thetenthplanet.de/archives/1180
 
 //---------------------------------------------------------------------------------------------------
 //
@@ -61,27 +67,29 @@ struct VSInput
 // control points
 struct HSInput 
 {
-	float4 Position : POSITION;
-	float4 ClipPosition : POSITION2;
-	float3 Normal : NORMAL;
-	float3 Tangent : TANGENT;
-	float2 uv0 : TEXCOORD0;
+	float4 LocalPosition : POSITION;
+	float4 ClipPosition  : COLOR0;
+	float3 WorldPosition : COLOR1;
+	float3 Normal        : NORMAL;
+	float3 Tangent       : TANGENT;
+	float2 uv0           : TEXCOORD0;
 #if INSTANCED_DRAW
-	uint instanceID : INSTANCEID;
+	uint instanceID      : TEXCOORD1;
 #endif
 };
 struct HSOutput
 {
-	float4 vPosition : POSITION;
-	float4 ClipPosition : POSITION2;
-	float3 vNormal : NORMAL;
-	float3 vTangent : TANGENT;
-	float2 uv0 : TEXCOORD0;
+	float4 vPosition    : POSITION;
+	float4 ClipPosition : COLOR0;
+	float3 vNormal      : NORMAL;
+	float3 vTangent     : TANGENT;
+	float2 uv0          : TEXCOORD0;
 #if INSTANCED_DRAW
-	uint instanceID : INSTANCEID;
+	uint instanceID : TEXCOORD1;
 #endif
 };
 
+#if ENABLE_TESSELLATION_SHADERS
 // HS patch constants
 struct HSOutputTriPatchConstants
 {
@@ -93,7 +101,7 @@ struct HSOutputQuadPatchConstants
 	float EdgeTessFactor[4] : SV_TessFactor;
 	float InsideTessFactor[2] : SV_InsideTessFactor;
 };
-
+#endif
 
 
 
@@ -127,17 +135,43 @@ Texture2D texHeightmap      : register(t8); // VS or PS
 HSInput VSMain_Tess(VSInput vertex)
 {
 	HSInput o;
-	o.Position = float4(vertex.position, 1.0f);
+	o.LocalPosition = float4(vertex.position, 1.0f);
 #if INSTANCED_DRAW
-	o.ClipPosition = mul(cbPerObject.matWorldViewProj[vertex.instanceID], o.Position);
+	o.WorldPosition = mul(cbPerObject.matWorld[vertex.instanceID], o.LocalPosition).xyz;
+	o.ClipPosition = mul(cbPerObject.matWorldViewProj[vertex.instanceID], o.LocalPosition);
 	o.instanceID = vertex.instanceID;
 #else
-	o.ClipPosition = mul(cbPerObject.matWorldViewProj, o.Position);
+	o.WorldPosition = mul(cbPerObject.matWorld, o.LocalPosition).xyz;
+	o.ClipPosition = mul(cbPerObject.matWorldViewProj, o.LocalPosition);
 #endif
 	o.Normal = vertex.normal;
 	o.Tangent = vertex.tangent;
 	o.uv0 = vertex.uv;
 	return o;
+}
+
+struct AABB
+{
+	float3 Center;
+	float3 Extents;
+};
+
+// http://www.richardssoftware.net/2013/09/dynamic-terrain-rendering-with-slimdx.html
+bool IsAABBBehindPlane(AABB aabb, float4 Plane)
+{
+	// N : get the absolute value of the plane normal, so all {x,y,z} are positive
+	//     which aligns well with the extents vector which is all positive due to
+	//     storing the distances of maxs and mins.
+	float3 N = abs(Plane.xyz);
+	
+	// r: how far away is the furthest point along the plane normal
+	float r = dot(N, aabb.Extents); 
+	// Intuition: 
+	
+	// signed distance of the center point of AABB to the plane
+	float sd = dot(Plane, float4(aabb.Center, 1.0f));
+	
+	return (sd + r) < 0.0f;
 }
 
 #if ENABLE_TESSELLATION_SHADERS
@@ -156,11 +190,49 @@ HSInput VSMain_Tess(VSInput vertex)
 	#define HSOutputPatchConstants HSOutputQuadPatchConstants
 #endif // DOMAIN__
 
-HSOutputPatchConstants CalcHSPatchConstants(InputPatch<HSInput, NUM_CONTROL_POINTS> patch, uint PatchID : SV_PrimitiveID)
+AABB BuildAABB(InputPatch<HSInput, NUM_CONTROL_POINTS> patch)
 {
-	float ClipMask = 1.0f; // TODO: enable clipping
+	float3 Mins = +1000000.0f.xxx; // TODO: FLT_MAX
+	float3 Maxs = -1000000.0f.xxx; // TODO: FLT_MIN
+	[unroll]
+	for (int iCP = 0; iCP < NUM_CONTROL_POINTS; ++iCP)
+	{
+		Mins = min(Mins, patch[iCP].WorldPosition);
+		Maxs = max(Maxs, patch[iCP].WorldPosition);
+	}
+
+	AABB aabb;
+	aabb.Center  = 0.5f * (Mins + Maxs);
+	aabb.Extents = 0.5f * (Maxs - Mins);
+	return aabb;
+}
+
+bool ShouldFrustumCullPatch(float4 FrustumPlanes[6], InputPatch<HSInput, NUM_CONTROL_POINTS> patch)
+{
+	AABB aabb = BuildAABB(patch);
+	
+	//[unroll]
+	for (int iPlane = 0; iPlane < 6; ++iPlane)
+	{
+		if (IsAABBBehindPlane(aabb, FrustumPlanes[iPlane]))
+		{
+			return true;
+		}
+	}
+	
+	return false;
+}
+
+HSOutputPatchConstants CalcHSPatchConstants(
+	InputPatch<HSInput, NUM_CONTROL_POINTS> patch, 
+	uint PatchID : SV_PrimitiveID
+)
+{
+	//float ClipMask = 1.0f;
+	float ClipMask = ShouldFrustumCullPatch(cbPerView.WorldFrustumPlanes, patch) ? 0.0f : 1.0f;
 	//float ClipMask = ShouldClipPatch(patch[0].ClipPosition, patch[1].ClipPosition, patch[2].ClipPosition) ? 0.0f : 1.0f;
-	//if(!trrn.bCullPatches) ClipMask = 1.0f;
+	if(!tess.bFrustumCull) 
+		ClipMask = 1.0f;
 	
 	HSOutputPatchConstants c;
 #ifdef DOMAIN__TRIANGLE
@@ -224,12 +296,12 @@ HSOutputPatchConstants CalcHSPatchConstants(InputPatch<HSInput, NUM_CONTROL_POIN
 [patchconstantfunc("CalcHSPatchConstants")]
 HSOutput HSMain(
 	InputPatch<HSInput, NUM_CONTROL_POINTS> ip,
-	uint i : SV_OutputControlPointID,
+	uint i       : SV_OutputControlPointID,
 	uint PatchID : SV_PrimitiveID
 )
 {
 	HSOutput o;
-	o.vPosition = ip[i].Position;
+	o.vPosition = ip[i].LocalPosition;
 	o.vNormal = ip[i].Normal;
 	o.vTangent = ip[i].Tangent;
 	o.uv0 = ip[i].uv0;
@@ -276,25 +348,23 @@ PSInput DSMain(
 	HSOutputPatchConstants In,
 	const OutputPatch<HSOutput, NUM_CONTROL_POINTS> patch,
 #if DOMAIN__QUAD
-	float2 bary               : SV_DomainLocation,
-	float EdgeTessFactor[4]   : SV_TessFactor,
-	float InsideTessFactor[2] : SV_InsideTessFactor
+	float2 bary               : SV_DomainLocation
 #elif DOMAIN__TRIANGLE
-	float3 bary               : SV_DomainLocation,
-	float EdgeTessFactor[3]   : SV_TessFactor,
-	float InsideTessFactor    : SV_InsideTessFactor
+	float3 bary               : SV_DomainLocation
 #endif // DOMAIN__
 )
 {
 	float2 uv = INTERPOLATE_PATCH_ATTRIBUTE(uv0, bary);
-	//uv = uv * cbPerObject.materialData.uvScaleOffset.xy + cbPerObject.materialData.uvScaleOffset.zw;
+	float2 uvScale = cbPerObject.materialData.uvScaleOffset.xy;
+	float2 uvOffst = cbPerObject.materialData.uvScaleOffset.zw;
+	float2 uvTiled = uv * uvScale + uvOffst;
 	
-	float3 vPosition = INTERPOLATE_PATCH_ATTRIBUTE(vPosition, bary);
+	float3 vPosition = INTERPOLATE_PATCH_ATTRIBUTE(vPosition.xyz, bary);
 	
-#if 0
+#if 1
 	// generate normals and tangents
-	float3 tangent   = patch[1].vPosition- patch[0].vPosition;
-	float3 bitangent = patch[2].vPosition - patch[0].vPosition;
+	float3 tangent   = patch[1].vPosition.xyz - patch[0].vPosition.xyz;
+	float3 bitangent = patch[2].vPosition.xyz - patch[0].vPosition.xyz;
 	float3 vNormal = normalize(cross(tangent, bitangent));
 	float3 vTangent = float3(1,0,0);//normalize(tangent - dot(tangent, vNormal) * vNormal);
 #else

@@ -251,8 +251,8 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 		psoLoadDesc.PSOName = "PSO_FullscreenTriangle";
 
 		// Shader description
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_0" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_0" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_0" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_0" });
 
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
 		psoDesc.InputLayout = { };
@@ -282,7 +282,7 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_Visualization";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_5_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_1" });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1);
 
 		descs[EBuiltinPSOs::VIZUALIZATION_CS_PSO] = psoLoadDesc;
@@ -297,8 +297,8 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 		psoLoadDesc.PSOName = "PSO_UI";
 
 		// Shader description
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_0" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_0" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_0" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_0" });
 
 		// PSO description
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
@@ -335,8 +335,8 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 		psoLoadDesc.PSOName = "PSO_UI_HDR";
 
 		// Shader description
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_0" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_0" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_0" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_0" });
 
 		// PSO description
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
@@ -373,8 +373,8 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 		psoLoadDesc.PSOName = "PSO_Skydome";
 
 		// Shader description
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_0" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_0" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_0" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_0" });
 
 		// PSO description
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
@@ -410,8 +410,8 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 		psoLoadDesc.PSOName = "PSO_Object";
 
 		// Shader description
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_1" });
 
 		// PSO description
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
@@ -445,7 +445,7 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_TonemapperCS";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_5_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_1" });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1);
 
 		descs[EBuiltinPSOs::TONEMAPPER_PSO] = psoLoadDesc;
@@ -458,8 +458,8 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_FDepthPrePassVSPS";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_1" });
 		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ZPrePass);
 		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCED_DRAW", std::to_string(RENDER_INSTANCED_SCENE_MESHES) });
 		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__SCENE_MESHES) });
@@ -496,8 +496,8 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_UnlitVSPS";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_1" });
 		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__WireframeUnlit);
 
 		// PSO description
@@ -565,8 +565,8 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_OutlineVSPS";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_1" });
 		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__WireframeUnlit);
 
 		// PSO description
@@ -600,7 +600,7 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_DepthOnlyVS";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_1" });
 		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCED_DRAW", "1" });
 		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__SHADOW_MESHES) });
 		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ShadowPassDepthOnlyVS);
@@ -623,14 +623,14 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 		descs[EBuiltinPSOs::DEPTH_PASS_PSO] = psoLoadDesc;
 		{
 			psoLoadDesc.PSOName = "PSO_LinearDepthVSPS";
-			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
+			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_1" });
 			psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ShadowPassLinearDepthVSPS);
 			descs[EBuiltinPSOs::DEPTH_PASS_LINEAR_PSO] = psoLoadDesc;
 			psoLoadDesc.ShaderStageCompileDescs.pop_back();
 		}
 		{
 			psoLoadDesc.PSOName = "PSO_MaskedDepthVSPS";
-			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
+			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_1" });
 			for (FShaderStageCompileDesc& shdDesc : psoLoadDesc.ShaderStageCompileDescs)
 			{
 				shdDesc.Macros.push_back({ "ALPHA_MASK", "1" });
@@ -648,9 +648,9 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_CubemapConvolutionVSGSPS_Diffuse";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "GSMain", "gs_5_1" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain_DiffuseIrradiance", "ps_5_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "GSMain", "gs_6_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain_DiffuseIrradiance", "ps_6_1" });
 		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ConvolutionCubemap);
 
 		// PSO description
@@ -675,8 +675,8 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 
 		psoLoadDesc.PSOName = "PSO_CubemapConvolutionVSPS_Diffuse";
 		psoLoadDesc.ShaderStageCompileDescs.clear();
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain_PerFace", "vs_5_1" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain_DiffuseIrradiance", "ps_5_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain_PerFace", "vs_6_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain_DiffuseIrradiance", "ps_6_1" });
 		for (uint rt = 1; rt < psoDesc.NumRenderTargets; ++rt) psoDesc.RTVFormats[rt] = DXGI_FORMAT_UNKNOWN;
 		psoDesc.NumRenderTargets = 1;
 		// determine diffuse irradiance integration iteration count based on GPU dedicated memory size
@@ -692,8 +692,8 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 
 		psoLoadDesc.PSOName = "PSO_CubemapConvolutionVSPS_Specular";
 		psoLoadDesc.ShaderStageCompileDescs.clear();
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain_PerFace", "vs_5_1" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain_SpecularIrradiance", "ps_5_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain_PerFace", "vs_6_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain_SpecularIrradiance", "ps_6_1" });
 		descs[EBuiltinPSOs::CUBEMAP_CONVOLUTION_SPECULAR_PSO] = psoLoadDesc;
 	}
 
@@ -703,14 +703,14 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 		{
 			FPSODesc psoLoadDesc = {};
 			psoLoadDesc.PSOName = "PSO_GaussianBlurNaiveXCS";
-			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain_X", "cs_5_1" });
+			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain_X", "cs_6_1" });
 			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1);
 			descs[EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_X_PSO] = psoLoadDesc;
 		}
 		{
 			FPSODesc psoLoadDesc = {};
 			psoLoadDesc.PSOName = "PSO_GaussianBlurNaiveYCS";
-			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain_Y", "cs_5_1" });
+			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain_Y", "cs_6_1" });
 			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1);
 			descs[EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_Y_PSO] = psoLoadDesc;
 		}
@@ -722,7 +722,7 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 		{
 			FPSODesc psoLoadDesc = {};
 			psoLoadDesc.PSOName = "PSO_BRDFIntegrationCS";
-			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain_BRDFIntegration", "cs_5_1" });
+			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain_BRDFIntegration", "cs_6_1" });
 			psoLoadDesc.D3D12ComputeDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__BRDFIntegrationCS);
 			descs[EBuiltinPSOs::BRDF_INTEGRATION_CS_PSO] = psoLoadDesc;
 		}
@@ -778,9 +778,9 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "PSO_VertexDebugLocalSpaceVectors";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "GSMain", "gs_5_1" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "GSMain", "gs_6_1" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_1" });
 		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ZPrePass);
 
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
@@ -916,15 +916,15 @@ void FLightingPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12Roo
 		psoLoadDesc.ShaderStageCompileDescs.resize(iTess == 1 ? 4 : 2); // VS-HS-DS-PS : VS-PS
 		if (iTess == 1)
 		{
-			psoLoadDesc.ShaderStageCompileDescs[0] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain_Tess", "vs_5_1" };
-			psoLoadDesc.ShaderStageCompileDescs[1] = FShaderStageCompileDesc{ ShaderFilePath, "HSMain"     , "hs_5_1" };
-			psoLoadDesc.ShaderStageCompileDescs[2] = FShaderStageCompileDesc{ ShaderFilePath, "DSMain"     , "ds_5_1" };
-			psoLoadDesc.ShaderStageCompileDescs[3] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain"     , "ps_5_1" };
+			psoLoadDesc.ShaderStageCompileDescs[0] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain_Tess", "vs_6_0" };
+			psoLoadDesc.ShaderStageCompileDescs[1] = FShaderStageCompileDesc{ ShaderFilePath, "HSMain"     , "hs_6_0" };
+			psoLoadDesc.ShaderStageCompileDescs[2] = FShaderStageCompileDesc{ ShaderFilePath, "DSMain"     , "ds_6_0" };
+			psoLoadDesc.ShaderStageCompileDescs[3] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain"     , "ps_6_0" };
 		}
 		else
 		{
-			psoLoadDesc.ShaderStageCompileDescs[0] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" };
-			psoLoadDesc.ShaderStageCompileDescs[1] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" };
+			psoLoadDesc.ShaderStageCompileDescs[0] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_0" };
+			psoLoadDesc.ShaderStageCompileDescs[1] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_0" };
 		}
 
 		// macros
@@ -1027,15 +1027,15 @@ void FDepthPrePassPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D1
 		psoLoadDesc.ShaderStageCompileDescs.resize(iTess == 1 ? 4 : 2); // VS-HS-DS-PS : VS-PS
 		if (iTess == 1)
 		{
-			psoLoadDesc.ShaderStageCompileDescs[0] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain_Tess", "vs_5_1" };
-			psoLoadDesc.ShaderStageCompileDescs[1] = FShaderStageCompileDesc{ ShaderFilePath, "HSMain"     , "hs_5_1" };
-			psoLoadDesc.ShaderStageCompileDescs[2] = FShaderStageCompileDesc{ ShaderFilePath, "DSMain"     , "ds_5_1" };
-			psoLoadDesc.ShaderStageCompileDescs[3] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain"     , "ps_5_1" };
+			psoLoadDesc.ShaderStageCompileDescs[0] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain_Tess", "vs_6_0" };
+			psoLoadDesc.ShaderStageCompileDescs[1] = FShaderStageCompileDesc{ ShaderFilePath, "HSMain"     , "hs_6_0" };
+			psoLoadDesc.ShaderStageCompileDescs[2] = FShaderStageCompileDesc{ ShaderFilePath, "DSMain"     , "ds_6_0" };
+			psoLoadDesc.ShaderStageCompileDescs[3] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain"     , "ps_6_0" };
 		}
 		else
 		{
-			psoLoadDesc.ShaderStageCompileDescs[0] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_1" };
-			psoLoadDesc.ShaderStageCompileDescs[1] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_1" };
+			psoLoadDesc.ShaderStageCompileDescs[0] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_0" };
+			psoLoadDesc.ShaderStageCompileDescs[1] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_0" };
 		}
 
 		// macros

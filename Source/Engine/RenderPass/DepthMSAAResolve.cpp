@@ -124,7 +124,7 @@ std::vector<FPSOCreationTaskParameters> DepthMSAAResolvePass::CollectPSOCreation
 		FShaderStageCompileDesc shaderDesc = {};
 		shaderDesc.EntryPoint = "CSMain";
 		shaderDesc.FilePath = VQRenderer::GetFullPathOfShader("DepthResolve.hlsl");
-		shaderDesc.ShaderModel = "cs_5_0";
+		shaderDesc.ShaderModel = "cs_6_0";
 		shaderDesc.Macros =
 		{
 			  {"OUTPUT_DEPTH"    , (iDpth ? "1" : "0")}

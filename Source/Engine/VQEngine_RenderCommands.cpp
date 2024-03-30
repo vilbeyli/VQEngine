@@ -254,8 +254,10 @@ void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 void VQEngine::RenderDepthPrePass(
 	ID3D12GraphicsCommandList* pCmd, 
 	DynamicBufferHeap* pCBufferHeap,
+	const FSceneView& SceneView,
 	const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& cbAddresses,
-	const FSceneView& SceneView
+	D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr,
+	D3D12_GPU_VIRTUAL_ADDRESS perFrameCBAddr
 )
 {
 	using namespace DirectX;
@@ -350,6 +352,7 @@ void VQEngine::RenderDepthPrePass(
 		}
 
 		pCmd->SetGraphicsRootConstantBufferView(1, cbAddresses[iCB++]);
+		pCmd->SetGraphicsRootConstantBufferView(4, perViewCBAddr);
 
 		if (mat.SRVMaterialMaps != INVALID_ID) // set textures
 		{
@@ -650,11 +653,13 @@ void VQEngine::TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWin
 }
 
 void VQEngine::RenderSceneColor(
-	ID3D12GraphicsCommandList* pCmd, 
-	DynamicBufferHeap* pCBufferHeap, 
+	ID3D12GraphicsCommandList* pCmd,
+	DynamicBufferHeap* pCBufferHeap,
 	const FSceneView& SceneView, 
 	const FPostProcessParameters& PPParams,
-	const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& perObjCBAddr
+	const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& perObjCBAddr,
+	D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr,
+	D3D12_GPU_VIRTUAL_ADDRESS perFrameCBAddr
 )
 {
 	using namespace VQ_SHADER_DATA;
@@ -714,33 +719,12 @@ void VQEngine::RenderSceneColor(
 	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ForwardLighting));
 
 	// set PerFrame constants
-	D3D12_GPU_VIRTUAL_ADDRESS cbAddr_PerFrame = {};
-	D3D12_GPU_VIRTUAL_ADDRESS cbAddr_PerView = {};
 	constexpr UINT PerFrameRSBindSlot = 3;
 	constexpr UINT PerViewRSBindSlot = 2;
 	{
 		SCOPED_GPU_MARKER(pCmd, "CBPerFrame");
 
-		PerFrameData* pPerFrame = {};
-		pCBufferHeap->AllocConstantBuffer(sizeof(PerFrameData), (void**)(&pPerFrame), &cbAddr_PerFrame);
-
-		assert(pPerFrame);
-		pPerFrame->Lights = SceneView.GPULightingData;
-		pPerFrame->fAmbientLightingFactor = SceneView.sceneParameters.fAmbientLightingFactor;
-		pPerFrame->f2PointLightShadowMapDimensions = { 1024.0f, 1024.f }; // TODO
-		pPerFrame->f2SpotLightShadowMapDimensions  = { 1024.0f, 1024.f }; // TODO
-		pPerFrame->f2DirectionalLightShadowMapDimensions  = { 2048.0f, 2048.0f }; // TODO
-		pPerFrame->fHDRIOffsetInRadians = SceneView.HDRIYawOffset;
-		
-		if (bUseHDRRenderPath)
-		{
-			// adjust ambient factor as the tonemapper changes the output curve for HDR displays 
-			// and makes the ambient lighting too strong.
-			pPerFrame->fAmbientLightingFactor *= 0.005f;
-		}
-
-		//pCmd->SetGraphicsRootDescriptorTable(PerFrameRSBindSlot, );
-		pCmd->SetGraphicsRootConstantBufferView(PerFrameRSBindSlot, cbAddr_PerFrame);
+		pCmd->SetGraphicsRootConstantBufferView(PerFrameRSBindSlot, perFrameCBAddr);
 		pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Spot).GetGPUDescHandle(0));
 		pCmd->SetGraphicsRootDescriptorTable(5, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Point).GetGPUDescHandle(0));
 		pCmd->SetGraphicsRootDescriptorTable(6, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Directional).GetGPUDescHandle(0));
@@ -762,20 +746,7 @@ void VQEngine::RenderSceneColor(
 	// set PerView constants
 	{
 		SCOPED_GPU_MARKER(pCmd, "CBPerView");
-		PerViewData* pPerView = {};
-		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pPerView)), (void**)(&pPerView), &cbAddr_PerView);
-
-		assert(pPerView);
-		XMStoreFloat3(&pPerView->CameraPosition, SceneView.cameraPosition);
-		pPerView->ScreenDimensions.x = RenderResolutionX;
-		pPerView->ScreenDimensions.y = RenderResolutionY;
-		pPerView->MaxEnvMapLODLevels = static_cast<float>(mResources_MainWnd.EnvironmentMap.GetNumSpecularIrradianceCubemapLODLevels(mRenderer));
-		pPerView->EnvironmentMapDiffuseOnlyIllumination = IsFFX_SSSREnabled(mSettings);
-
-		// TODO: PreView data
-
-		//pCmd->SetGraphicsRootDescriptorTable(PerViewRSBindSlot, D3D12_GPU_DESCRIPTOR_HANDLE{ cbAddr_PerView });
-		pCmd->SetGraphicsRootConstantBufferView(PerViewRSBindSlot, cbAddr_PerView);
+		pCmd->SetGraphicsRootConstantBufferView(PerViewRSBindSlot, perViewCBAddr);
 	}
 	
 
@@ -821,7 +792,7 @@ void VQEngine::RenderSceneColor(
 				iAlpha);
 			ID3D12PipelineState* pPipelineState = mRenderer.GetPSO(psoID);
 			
-			//if(psoID_Prev != psoID) // TODO: profile PSO
+			if(psoID_Prev != psoID) // TODO: profile PSO
 			{
 				pCmd->SetPipelineState(pPipelineState);
 			}

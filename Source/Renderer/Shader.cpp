@@ -234,15 +234,28 @@ std::vector<D3D12_INPUT_ELEMENT_DESC> ReflectInputLayoutFromVS(ID3D12ShaderRefle
 }
 
 
+// https://github.com/microsoft/DirectXShaderCompiler/wiki/Shader-Model
+bool IsShaderSM5(const std::string& ShaderModelStr)
+{
+	// TODO: validate input
+	const std::vector<std::string> SMTokens = StrUtil::split(ShaderModelStr, '_');
+	assert(SMTokens.size() == 3);
+	return SMTokens[1][0] == '5';
+}
+bool IsShaderSM6(const std::string& ShaderModelStr)
+{
+	// TODO: validate input
+	const std::vector<std::string> SMTokens = StrUtil::split(ShaderModelStr, '_');
+	assert(SMTokens.size() == 3);
+	return SMTokens[1][0] == '6';
+}
+
 Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompileDesc, std::string& OutErrorString)
 {
 	SCOPED_CPU_MARKER("CompileFromSource");
 	const WCHAR* strPath = ShaderStageCompileDesc.FilePath.data();
-	std::vector<std::string> SMTokens = StrUtil::split(ShaderStageCompileDesc.ShaderModel, '_');
-	assert(SMTokens.size() == 3);
 
-	// https://github.com/microsoft/DirectXShaderCompiler/wiki/Shader-Model
-	const bool bIsShaderModel5 = SMTokens[1][0] == '5';
+	const bool bIsShaderModel5 = IsShaderSM5(ShaderStageCompileDesc.ShaderModel);
 
 	const EShaderStage ShaderStageEnum = GetShaderStageEnumFromShaderModel(ShaderStageCompileDesc.ShaderModel);
 	Log::Info("Compiling Shader Source: %s [%s @ %s()]"
@@ -358,6 +371,7 @@ Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompil
 				if (prFlag.first == D3DCOMPILE_DEBUG)
 				{
 					ppArgs.push_back(L"-Qembed_debug");
+					ppArgs.push_back(L"-Zi");
 				}
 			}
 		}
@@ -373,7 +387,6 @@ Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompil
 		{
 			ppArgs.push_back(flag.c_str());
 		}
-
 
 		// build args: defines
 		for (const std::wstring& unicodeDefineArg : unicodeDefineArgs)
@@ -427,36 +440,118 @@ Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompil
 		}
 		
 		CComPtr<IDxcBlobUtf16> pShaderName = nullptr;
-		pResults->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&blob.pBlobDxc), &pShaderName);
+		hr = pResults->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&blob.pBlobDxc), &pShaderName);
+		if (FAILED(hr))
+		{
+			return {};
+		}
 	}
 
 	return blob;
 }
 
-Shader::FBlob CompileFromCachedBinary(const std::string& ShaderBinaryFilePath)
+static bool ValidateDXCBlob(IDxcBlob* pShaderBlob)
+{
+	Microsoft::WRL::ComPtr<IDxcValidator> pValidator;
+	HRESULT hr = DxcCreateInstance(CLSID_DxcValidator, IID_PPV_ARGS(&pValidator));
+	if (SUCCEEDED(hr)) {
+		Microsoft::WRL::ComPtr<IDxcOperationResult> pValidationResult;
+		hr = pValidator->Validate(pShaderBlob, DxcValidatorFlags_Default, &pValidationResult);
+		if (SUCCEEDED(hr)) {
+			HRESULT validationStatus;
+			pValidationResult->GetStatus(&validationStatus);
+			if (FAILED(validationStatus)) {
+				// Validation failed, inspect the error message
+				Microsoft::WRL::ComPtr<IDxcBlobEncoding> pErrorMessages;
+				if (SUCCEEDED(pValidationResult->GetErrorBuffer(&pErrorMessages))) {
+					// Output the error messages
+					std::string errorMessage(static_cast<char*>(pErrorMessages->GetBufferPointer()), pErrorMessages->GetBufferSize());
+					Log::Error("Shader validation failed: %s", errorMessage.c_str());
+				}
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+bool CompileFromCachedBinary(const std::string& ShaderBinaryFilePath, Shader::FBlob& Blob, bool bSM6, std::string& errMsg)
 {
 	SCOPED_CPU_MARKER("CompileFromCachedBinary");
-	std::ifstream cache(ShaderBinaryFilePath, std::ios::in | std::ios::binary | std::ios::ate);
-	const size_t shaderBinarySize = cache.tellg();
-	void* pBuffer = calloc(1, shaderBinarySize);
-	cache.seekg(0);
-	cache.read(reinterpret_cast<char*>(pBuffer), shaderBinarySize);
-	cache.close();
-
 	Log::Info("Loading Shader Binary: %s ", DirectoryUtil::GetFileNameFromPath(ShaderBinaryFilePath).c_str());
 
-	Shader::FBlob ShaderBlob;
-	if (FAILED(D3DCreateBlob(shaderBinarySize, &ShaderBlob.pD3DBlob)))
+	if (bSM6)
 	{
-		assert(false);
+		Microsoft::WRL::ComPtr<IDxcLibrary> pDxcLibrary;
+		HRESULT hr = DxcCreateInstance(CLSID_DxcLibrary, IID_PPV_ARGS(&pDxcLibrary));
+		if (FAILED(hr)) {
+			errMsg = "Failed to initialize DXC Library.";
+			return false;
+		}
+
+		Microsoft::WRL::ComPtr<IDxcBlobEncoding> pShaderBlob;
+		const std::wstring ShaderBinaryFilePathW = StrUtil::ASCIIToUnicode(ShaderBinaryFilePath);
+
+		UINT32 CodePage;
+		hr = pDxcLibrary->CreateBlobFromFile(ShaderBinaryFilePathW.c_str(), &CodePage, &pShaderBlob);
+		if (FAILED(hr)) {
+			errMsg = "Failed to create DXC blob from shader binary.";
+			return false;
+		}
+
+		if (!ValidateDXCBlob(pShaderBlob.Get()))
+		{
+			errMsg = "Failed to validate shader blob for " + ShaderBinaryFilePath;
+		}
+		
+		hr = pDxcLibrary->CreateBlobFromBlob(pShaderBlob.Get(), 0, (UINT32)pShaderBlob->GetBufferSize(), &Blob.pBlobDxc);
+		if (FAILED(hr)) {
+			errMsg += "\nFailed to create BLOB.";
+			return false;
+		}
+
+		if (!ValidateDXCBlob(Blob.pBlobDxc))
+		{
+			errMsg = "Failed to validate shader blob for " + ShaderBinaryFilePath;
+		}
+
+		return true;
+	}
+	else // SM5
+	{
+		std::ifstream cache(ShaderBinaryFilePath, std::ios::in | std::ios::binary | std::ios::ate);
+		if (!cache.is_open())
+		{
+			errMsg = "Failed to open shader binary file.";
+			return false;
+		}
+
+		const size_t shaderBinarySize = cache.tellg();
+		void* pBuffer = calloc(1, shaderBinarySize);
+		if (!pBuffer)
+		{
+			errMsg = "Failed to allocate buffer for shader binary.";
+			return false;
+		}
+
+		cache.seekg(0);
+		cache.read(reinterpret_cast<char*>(pBuffer), shaderBinarySize);
+		cache.close();
+
+		assert(pBuffer);
+		assert(shaderBinarySize > 0);
+		if (FAILED(D3DCreateBlob(shaderBinarySize, &Blob.pD3DBlob)))
+		{
+			errMsg = "Failed to create SM5 blob.";
+			free(pBuffer);
+			return false;
+		}
+
+		memcpy(Blob.pD3DBlob->GetBufferPointer(), pBuffer, shaderBinarySize);
+		free(pBuffer);
 	}
 	
-	assert(pBuffer);
-	assert(shaderBinarySize > 0);
-	memcpy(ShaderBlob.pD3DBlob->GetBufferPointer(), pBuffer, shaderBinarySize);
-	free(pBuffer);
-
-	return ShaderBlob;
+	return true;
 }
 
 void CacheShaderBinary(const std::string& ShaderBinaryFilePath, size_t ShaderBinarySize, const void* pShaderBinary)

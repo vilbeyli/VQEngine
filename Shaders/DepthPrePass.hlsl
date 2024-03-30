@@ -53,10 +53,8 @@ struct PSInput
 // RESOURCE BINDING
 //
 //---------------------------------------------------------------------------------------------------
-cbuffer CBPerObject : register(b2)
-{
-	PerObjectData cbPerObject;
-}
+cbuffer CBPerView   : register(b1) { PerViewData cbPerView; }
+cbuffer CBPerObject : register(b2) { PerObjectData cbPerObject; }
 
 SamplerState LinearSampler : register(s0);
 SamplerState PointSampler  : register(s1);
@@ -82,7 +80,7 @@ Texture2D texHeightmap : register(t8);
 //---------------------------------------------------------------------------------------------------
 float3 CalcHeightOffset(float2 uv)
 {
-	float fHeightSample = texHeightmap.SampleLevel(LinearSamplerTess, uv, 0);
+	float fHeightSample = texHeightmap.SampleLevel(LinearSamplerTess, uv, 0).r;
 	float fHeightOffset = fHeightSample * cbPerObject.materialData.displacement;
 	return float3(0, fHeightOffset, 0);
 }
@@ -103,8 +101,8 @@ PSInput TransformVertex(
 
 #if INSTANCED_DRAW
 	result.position    = mul(cbPerObject.matWorldViewProj[InstanceID], vPosition);
-	result.vertNormal  = mul(cbPerObject.matNormal[InstanceID], Normal);
-	result.vertTangent = mul(cbPerObject.matNormal[InstanceID], Tangent);
+	result.vertNormal  = mul((float4x3)cbPerObject.matNormal[InstanceID], Normal );
+	result.vertTangent = mul((float4x3)cbPerObject.matNormal[InstanceID], Tangent);
 #else
 	result.position    = mul(cbPerObject.matWorldViewProj, vPosition);
 	result.vertNormal  = mul(cbPerObject.matNormal, Normal );

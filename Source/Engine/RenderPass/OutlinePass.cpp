@@ -172,8 +172,8 @@ std::vector<FPSOCreationTaskParameters> OutlinePass::CollectPSOCreationParameter
 	std::vector<FPSOCreationTaskParameters> params;
 	
 	const std::wstring ShaderFilePath = VQRenderer::GetFullPathOfShader(L"Outline.hlsl");
-	FShaderStageCompileDesc VSDesc{ ShaderFilePath, "VSMain", "vs_5_1" };
-	FShaderStageCompileDesc PSDesc{ ShaderFilePath, "PSMain", "ps_5_1" };
+	FShaderStageCompileDesc VSDesc{ ShaderFilePath, "VSMain", "vs_6_1" };
+	FShaderStageCompileDesc PSDesc{ ShaderFilePath, "PSMain", "ps_6_1" };
 
 	FPSODesc psoLoadDesc = {};
 	psoLoadDesc.ShaderStageCompileDescs.push_back(VSDesc);

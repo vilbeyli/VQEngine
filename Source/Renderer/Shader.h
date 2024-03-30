@@ -125,13 +125,16 @@ public:
 
 namespace ShaderUtils
 {
+	bool IsShaderSM5(const std::string& ShaderModelStr);
+	bool IsShaderSM6(const std::string& ShaderModelStr);
+
 	// Compiles shader from source file with the given file path, entry point, shader model & macro definitions
 	//
 	Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompileDesc, std::string& OutErrorString);
 	
 	// Reads in cached shader binary from given @ShaderBinaryFilePath 
 	//
-	Shader::FBlob CompileFromCachedBinary(const std::string& ShaderBinaryFilePath);
+	bool CompileFromCachedBinary(const std::string& ShaderBinaryFilePath, Shader::FBlob& Blob, bool bSM6, std::string& errMsg);
 	
 	// Writes out compiled ID3DBlob into @ShaderBinaryFilePath
 	//
@@ -165,4 +168,6 @@ struct FShaderStageCompileResult
 {
 	Shader::FBlob ShaderBlob;
 	EShaderStage ShaderStageEnum;
+	std::wstring FilePath;
+	bool bSM6;
 };

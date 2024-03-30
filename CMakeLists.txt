@@ -83,6 +83,7 @@ set (Shaders
     "Shaders/Outline.hlsl"
     "Shaders/VertexDebug.hlsl"
     "Shaders/Tessellation.hlsl"
+    "Shaders/VQPlatform.h"
 )
 
 set (ShadersScreenSpaceReflections

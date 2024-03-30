@@ -1170,9 +1170,41 @@ ID3D12PipelineState* VQRenderer::CompileGraphicsPSO(const FPSODesc& Desc, std::v
 		}
 
 		// reflect shader
-		ID3D12ShaderReflection*& pReflection = ShaderReflections[ShaderCompileResult.ShaderStageEnum];
-		HRESULT hr = D3DReflect(ShaderByteCode.pShaderBytecode, ShaderByteCode.BytecodeLength, IID_PPV_ARGS(&pReflection));
-		assert(pReflection);
+		ID3D12ShaderReflection*& pShaderReflection = ShaderReflections[ShaderCompileResult.ShaderStageEnum];
+		if (ShaderCompileResult.bSM6)
+		{
+			assert(ShaderCompileResult.ShaderBlob.pBlobDxc);
+			HRESULT hr;
+
+			Microsoft::WRL::ComPtr<IDxcContainerReflection> pReflection;
+			hr = DxcCreateInstance(CLSID_DxcContainerReflection, IID_PPV_ARGS(&pReflection));
+			if (FAILED(hr)) {
+				Log::Error("Failed ");
+			}
+
+			hr = pReflection->Load(ShaderCompileResult.ShaderBlob.pBlobDxc);
+			if (FAILED(hr)) {
+				Log::Error("Failed ");
+			}
+
+			UINT32 index;
+			hr = pReflection->FindFirstPartKind(DXC_PART_REFLECTION_DATA, &index);
+			if (FAILED(hr)) {
+				Log::Error("Failed ");
+			}
+
+			hr = pReflection->GetPartReflection(index, IID_PPV_ARGS(&pShaderReflection));
+			if (FAILED(hr)) {
+				Log::Error("Failed ");
+			}
+
+			assert(pShaderReflection);
+		}
+		else
+		{
+			HRESULT hr = D3DReflect(ShaderByteCode.pShaderBytecode, ShaderByteCode.BytecodeLength, IID_PPV_ARGS(&pShaderReflection));
+			assert(pShaderReflection);
+		}
 	}
 
 	// assign input layout
@@ -1347,17 +1379,20 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 
 	// load the shader d3dblob
 	FShaderStageCompileResult Result = {};
+	Result.FilePath = ShaderStageCompileDesc.FilePath;
+	Result.bSM6 = IsShaderSM6(ShaderStageCompileDesc.ShaderModel);
 	Shader::FBlob& ShaderBlob = Result.ShaderBlob;
 	Result.ShaderStageEnum = ShaderUtils::GetShaderStageEnumFromShaderModel(ShaderStageCompileDesc.ShaderModel);
-
+	
+	std::string errMsg;
+	bool bCompileSuccessful = false;
+	
 	if (bUseCachedShaders)
 	{
-		ShaderBlob = CompileFromCachedBinary(CachedShaderBinaryPath);
+		bCompileSuccessful = CompileFromCachedBinary(CachedShaderBinaryPath, ShaderBlob, Result.bSM6, errMsg);
 	}
 	else
-	{
-		std::string errMsg;
-		
+	{	
 		// check if file exists
 		const std::string ShaderFilePath = StrUtil::UnicodeToASCII<512>(ShaderStageCompileDesc.FilePath.c_str());
 		if (!DirectoryUtil::FileExists(ShaderFilePath))
@@ -1371,17 +1406,18 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 		}
 
 		ShaderBlob = CompileFromSource(ShaderStageCompileDesc, errMsg);
-		const bool bCompileSuccessful = !ShaderBlob.IsNull();
+		bCompileSuccessful = !ShaderBlob.IsNull();
 		if (bCompileSuccessful)
 		{
 			CacheShaderBinary(CachedShaderBinaryPath, ShaderBlob.GetByteCodeSize(), ShaderBlob.GetByteCode());
 		}
-		else
-		{
-			Log::Error(errMsg);
-			MessageBox(NULL, errMsg.c_str(), "Shader Compiler Error", MB_OK);
-			return Result; // no crash until runtime
-		}
+	}
+
+	if (!bCompileSuccessful)
+	{
+		Log::Error(errMsg);
+		MessageBox(NULL, errMsg.c_str(), "Shader Compiler Error", MB_OK);
+		return Result; // no crash until runtime
 	}
 
 	return Result;

@@ -18,26 +18,11 @@
 #ifndef LIGHTING_CONSTANT_BUFFER_DATA_H
 #define LIGHTING_CONSTANT_BUFFER_DATA_H
 
-#ifndef VQ_GPU
-#define VQ_CPU 1
-#endif
+#include "VQPlatform.h"
 
 #ifdef VQ_CPU
-#pragma once
-#include <array>
-#include <DirectXMath.h>
-// HLSL types for CPU
-#define float4   DirectX::XMFLOAT4
-#define float3   DirectX::XMFLOAT3
-#define float2   DirectX::XMFLOAT2
-#define matrix   DirectX::XMMATRIX
-#define float3x3 DirectX::XMFLOAT3X3
-#define int2     DirectX::XMINT2
-#define int3     DirectX::XMINT3
-#define int4     DirectX::XMINT4
 namespace VQ_SHADER_DATA {
 #endif
-
 
 //----------------------------------------------------------
 // LIGHTS
@@ -187,6 +172,8 @@ struct PerViewData
 	matrix matViewToWorld; // i.e. matViewInverse
 	matrix matProjInverse;
 
+	float4 WorldFrustumPlanes[6];
+
 	float3 CameraPosition;
 	float  MaxEnvMapLODLevels;
 	float2 ScreenDimensions;
@@ -228,6 +215,9 @@ struct TessellationParams
 	float2 pad;
 	float3 TriEdgeTessFactor;
 	float TriInnerTessFactor;
+
+	int bFrustumCull;
+	int bFaceCull;
 };
 
 

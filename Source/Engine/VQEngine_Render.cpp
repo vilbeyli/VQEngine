@@ -20,13 +20,12 @@
 #include "GPUMarker.h"
 #include "../VQUtils/Source/utils.h"
 
-#include <d3d12.h>
-#include <dxgi.h>
-
 #include "RenderPass/AmbientOcclusion.h"
 #include "RenderPass/DepthPrePass.h"
 
 #include "VQEngine_RenderCommon.h"
+
+#include "Shaders/LightingConstantBufferData.h"
 
 #define EXECUTE_CMD_LISTS_ON_WORKER 1
 
@@ -1594,12 +1593,54 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	assert(PPParams.DisplayResolutionHeight != 0);
 	assert(PPParams.DisplayResolutionWidth != 0);
 	// TODO: undo const cast and assign in a proper spot -------------------------------------------------
-	
+
+	const float RenderResolutionX = static_cast<float>(SceneView.SceneRTWidth);
+	const float RenderResolutionY = static_cast<float>(SceneView.SceneRTHeight);
 	mRenderStats = {};
 
 	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddresses(SceneView.meshRenderCommands.size());
 	UINT64 SSAODoneFenceValue = mAsyncComputeSSAODoneFence[BACK_BUFFER_INDEX].GetValue();
+	D3D12_GPU_VIRTUAL_ADDRESS cbPerFrame = {};
+	{
+		SCOPED_CPU_MARKER("CopyPerFrameConstantBufferData");
+		DynamicBufferHeap& CBHeap = ctx.GetConstantBufferHeap(0);
+		using namespace VQ_SHADER_DATA;
+		PerFrameData* pPerFrame = {};
+		CBHeap.AllocConstantBuffer(sizeof(PerFrameData), (void**)(&pPerFrame), &cbPerFrame);
 
+		assert(pPerFrame);
+		pPerFrame->Lights = SceneView.GPULightingData;
+		pPerFrame->fAmbientLightingFactor = SceneView.sceneParameters.fAmbientLightingFactor;
+		pPerFrame->f2PointLightShadowMapDimensions       = { 1024.0f, 1024.f  }; // TODO
+		pPerFrame->f2SpotLightShadowMapDimensions        = { 1024.0f, 1024.f  }; // TODO
+		pPerFrame->f2DirectionalLightShadowMapDimensions = { 2048.0f, 2048.0f }; // TODO
+		pPerFrame->fHDRIOffsetInRadians = SceneView.HDRIYawOffset;
+
+		if (bUseHDRRenderPath)
+		{
+			// adjust ambient factor as the tonemapper changes the output curve for HDR displays 
+			// and makes the ambient lighting too strong.
+			pPerFrame->fAmbientLightingFactor *= 0.005f;
+		}
+	}
+
+	D3D12_GPU_VIRTUAL_ADDRESS cbPerView = {};
+	{
+		SCOPED_CPU_MARKER("CopyPerViewConstantBufferData");
+		DynamicBufferHeap& CBHeap = ctx.GetConstantBufferHeap(0);
+		using namespace VQ_SHADER_DATA;
+		PerViewData* pPerView = {};
+		CBHeap.AllocConstantBuffer(sizeof(decltype(*pPerView)), (void**)(&pPerView), &cbPerView);
+
+		assert(pPerView);
+		XMStoreFloat3(&pPerView->CameraPosition, SceneView.cameraPosition);
+		pPerView->ScreenDimensions.x = RenderResolutionX;
+		pPerView->ScreenDimensions.y = RenderResolutionY;
+		pPerView->MaxEnvMapLODLevels = static_cast<float>(mResources_MainWnd.EnvironmentMap.GetNumSpecularIrradianceCubemapLODLevels(mRenderer));
+		pPerView->EnvironmentMapDiffuseOnlyIllumination = mSettings.gfx.Reflections == EReflections::SCREEN_SPACE_REFLECTIONS__FFX;
+		const FFrustumPlaneset planes = FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj);
+		memcpy(pPerView->WorldFrustumPlanes, planes.abcd, sizeof(planes.abcd));
+	}
 
 	if constexpr (!RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING)
 	{
@@ -1614,7 +1655,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		RenderDirectionalShadowMaps(pCmd, &CBHeap, SceneShadowView);
 		RenderPointShadowMaps(pCmd, &CBHeap, SceneShadowView, 0, SceneShadowView.NumPointShadowViews);
 
-		RenderDepthPrePass(pCmd, &CBHeap, cbAddresses, SceneView);
+		RenderDepthPrePass(pCmd, &CBHeap, SceneView, cbAddresses, cbPerView, cbPerFrame);
 
 		RenderObjectIDPass(pCmd, pCmdCpy, cbAddresses, SceneView, BACK_BUFFER_INDEX);
 
@@ -1641,7 +1682,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		TransitionForSceneRendering(pCmd, ctx, PPParams);
 
-		RenderSceneColor(pCmd, &CBHeap, SceneView, PPParams, cbAddresses);
+		RenderSceneColor(pCmd, &CBHeap, SceneView, PPParams, cbAddresses, cbPerView, cbPerFrame);
 
 		ResolveMSAA(pCmd, &CBHeap, PPParams);
 
@@ -1704,7 +1745,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 				{
 					RENDER_WORKER_CPU_MARKER;
 
-					RenderDepthPrePass(pCmd_ZPrePass, &CBHeap_WorkerZPrePass, cbAddresses, SceneView);
+					RenderDepthPrePass(pCmd_ZPrePass, &CBHeap_WorkerZPrePass, SceneView, cbAddresses, cbPerView, cbPerFrame);
 
 					if (bMSAA)
 					{
@@ -1843,7 +1884,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		TransitionForSceneRendering(pCmd_ThisThread, ctx, PPParams);
 
-		RenderSceneColor(pCmd_ThisThread, &CBHeap_This, SceneView, PPParams, cbAddresses);
+		RenderSceneColor(pCmd_ThisThread, &CBHeap_This, SceneView, PPParams, cbAddresses, cbPerView, cbPerFrame);
 
 		ResolveMSAA(pCmd_ThisThread, &CBHeap_This, PPParams);
 

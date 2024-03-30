@@ -44,9 +44,9 @@ struct VSInput
 struct PSInput
 {
 	float4 position    : SV_POSITION;
-	float3 worldPos    : POSITION1;
-	min16float3 vertNormal  : COLOR0;
-	min16float3 vertTangent : COLOR1;
+	float3 worldPos    : COLOR2;
+	float3 vertNormal  : COLOR0;
+	float3 vertTangent : COLOR1;
 	float2 uv          : TEXCOORD0;
 #if PS_OUTPUT_MOTION_VECTORS
 	float4 svPositionCurr : TEXCOORD1;
@@ -118,7 +118,7 @@ TextureCubeArray texPointLightShadowMaps      : register(t22);
 
 float3 CalcHeightOffset(float2 uv)
 {
-	float fHeightSample = texHeightmap.SampleLevel(LinearSamplerTess, uv, 0);
+	float fHeightSample = texHeightmap.SampleLevel(LinearSamplerTess, uv, 0).r;
 	float fHeightOffset = fHeightSample * cbPerObject.materialData.displacement;
 	return float3(0, fHeightOffset, 0);
 }
@@ -138,10 +138,10 @@ PSInput TransformVertex(
 	vPosition.xyz += CalcHeightOffset(uv * cbPerObject.materialData.uvScaleOffset.xy + cbPerObject.materialData.uvScaleOffset.zw);
 
 #if INSTANCED_DRAW
-	result.position = mul(cbPerObject.matWorldViewProj[InstanceID], vPosition);
-	result.vertNormal = mul(cbPerObject.matNormal[InstanceID], Normal);
-	result.vertTangent = mul(cbPerObject.matNormal[InstanceID], Tangent);
-	result.worldPos = mul(cbPerObject.matWorld[InstanceID], vPosition);
+	result.position    = mul(cbPerObject.matWorldViewProj[InstanceID], vPosition);
+	result.vertNormal  = mul((float4x3)cbPerObject.matNormal[InstanceID], Normal  );
+	result.vertTangent = mul((float4x3)cbPerObject.matNormal[InstanceID], Tangent );
+	result.worldPos    = mul(cbPerObject.matWorld[InstanceID], vPosition).xyz;
 
 #if PS_OUTPUT_MOTION_VECTORS
 	result.svPositionPrev = mul(cbPerObject.matWorldViewProjPrev[InstanceID], vPosition);
@@ -198,8 +198,8 @@ PSOutput PSMain(PSInput In)
 	float4 AlbedoAlpha = texDiffuse  .Sample(AnisoSampler, uv);
 	float3 Normal      = texNormals.Sample(AnisoSampler, uv).rgb;
 	float3 Emissive    = texEmissive .Sample(LinearSampler, uv).rgb;
-	float3 Metalness   = texMetalness.Sample(AnisoSampler, uv).rgb;
-	float3 Roughness   = texRoughness.Sample(AnisoSampler, uv).rgb;
+	float  Metalness   = texMetalness.Sample(AnisoSampler, uv).r;
+	float  Roughness   = texRoughness.Sample(AnisoSampler, uv).r;
 	float3 OcclRghMtl  = texOcclRoughMetal.Sample(AnisoSampler, uv).rgb;
 	float LocalAO      = texLocalAO.Sample(AnisoSampler, uv).r;
 	
@@ -223,10 +223,10 @@ PSOutput PSMain(PSInput In)
 	const float3 T = normalize(In.vertTangent);
 	Surface.N = length(Normal) < 0.01 ? N : UnpackNormal(Normal, N, T);
 	
-	if (HasAmbientOcclusionMap           (TEX_CFG)) ao *= LocalAO;
-	if (HasRoughnessMap                  (TEX_CFG)) Surface.roughness *= Roughness;
-	if (HasMetallicMap                   (TEX_CFG)) Surface.metalness *= Metalness;
-	if (HasOcclusionRoughnessMetalnessMap(TEX_CFG))
+	if (HasAmbientOcclusionMap           (TEX_CFG)>0) ao *= LocalAO;
+	if (HasRoughnessMap                  (TEX_CFG)>0) Surface.roughness *= Roughness;
+	if (HasMetallicMap                   (TEX_CFG)>0) Surface.metalness *= Metalness;
+	if (HasOcclusionRoughnessMetalnessMap(TEX_CFG)>0)
 	{
 		//ao *= OcclRghMtl.r; // TODO: handle no occlusion map case
 		Surface.roughness *= OcclRghMtl.g;
@@ -235,7 +235,7 @@ PSOutput PSMain(PSInput In)
 
 	// apply SSAO
 	const float2 ScreenSpaceUV = (float2(In.position.xy) + 0.5f.xx) / float2(cbPerView.ScreenDimensions);
-	ao *= texScreenSpaceAO.Sample(PointSampler, ScreenSpaceUV);
+	ao *= texScreenSpaceAO.Sample(PointSampler, ScreenSpaceUV).r;
 	
 	// lighting & surface parameters (World Space)
 	const float3 P = In.worldPos;

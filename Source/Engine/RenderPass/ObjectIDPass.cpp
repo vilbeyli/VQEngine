@@ -204,8 +204,8 @@ std::vector<FPSOCreationTaskParameters> ObjectIDPass::CollectPSOCreationParamete
 	psoLoadDesc.PSOName = "PSO_ObjectIDPass";
 
 	// Shader description
-	psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_5_0" });
-	psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_5_0" });
+	psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_0" });
+	psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_0" });
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
 	psoDesc.InputLayout = { };
@@ -227,8 +227,8 @@ std::vector<FPSOCreationTaskParameters> ObjectIDPass::CollectPSOCreationParamete
 	std::vector<FPSOCreationTaskParameters> params;
 	params.push_back({ &PSOOpaque, psoLoadDesc });
 
-	psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({});
-	psoLoadDesc.ShaderStageCompileDescs[1].Macros.push_back({});
+	//psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({});
+	//psoLoadDesc.ShaderStageCompileDescs[1].Macros.push_back({});
 	psoLoadDesc.PSOName = "PSO_ObjectIDPass_AlphaMasked";
 	
 	params.push_back({ &PSOAlphaMasked, psoLoadDesc });
