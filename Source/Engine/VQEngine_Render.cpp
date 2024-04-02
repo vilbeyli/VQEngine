@@ -393,6 +393,31 @@ void VQEngine::InitializeBuiltinMeshes()
 		mResourceNames.mBuiltinMeshNames[eMesh] = "DetaildGrid2";
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
+	{
+		constexpr int NUM_TESSELLATION_GEOMETRY = 5;
+		const EBuiltInMeshes eMesh[NUM_TESSELLATION_GEOMETRY] =
+		{ 
+			EBuiltInMeshes::TESSELLATION_CONTROL_POINTS__QUAD1,
+			EBuiltInMeshes::TESSELLATION_CONTROL_POINTS__QUAD4,
+			EBuiltInMeshes::TESSELLATION_CONTROL_POINTS__QUAD9,
+			EBuiltInMeshes::TESSELLATION_CONTROL_POINTS__QUAD16,
+			EBuiltInMeshes::TESSELLATION_CONTROL_POINTS__QUAD25
+		};
+		const char* szMeshNames[NUM_TESSELLATION_GEOMETRY] =
+		{
+			"TessellationGrid_Quad1",
+			"TessellationGrid_Quad4",
+			"TessellationGrid_Quad9",
+			"TessellationGrid_Quad16",
+			"TessellationGrid_Quad25"
+		};
+		for (int i = 0; i < NUM_TESSELLATION_GEOMETRY; ++i)
+		{
+			GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::TessellationPatch_Quad<VertexType>(i+1);
+			mResourceNames.mBuiltinMeshNames[eMesh[i]] = szMeshNames[i];
+			mBuiltinMeshes[eMesh[i]] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh[i]]);
+		}
+	}
 	// ...
 
 	mRenderer.UploadVertexAndIndexBufferHeaps();
@@ -1638,7 +1663,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		pPerView->ScreenDimensions.y = RenderResolutionY;
 		pPerView->MaxEnvMapLODLevels = static_cast<float>(mResources_MainWnd.EnvironmentMap.GetNumSpecularIrradianceCubemapLODLevels(mRenderer));
 		pPerView->EnvironmentMapDiffuseOnlyIllumination = mSettings.gfx.Reflections == EReflections::SCREEN_SPACE_REFLECTIONS__FFX;
-		const FFrustumPlaneset planes = FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj);
+		const FFrustumPlaneset planes = FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj, true);
 		memcpy(pPerView->WorldFrustumPlanes, planes.abcd, sizeof(planes.abcd));
 	}
 

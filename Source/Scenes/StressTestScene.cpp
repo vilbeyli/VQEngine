@@ -78,7 +78,7 @@ constexpr float ORBIT_SPEED_MAX = 0.8f;
 constexpr float ORBIT_SPEED_DEFAULT = 0.25f;
 void StressTestScene::InitializeScene()
 {
-	bEnableGeneratedObjectAnimation = false;
+	bEnableGeneratedObjectAnimation = true;
 	bEnableOrbit = true;
 	bEnableRotation = true;
 
@@ -182,6 +182,26 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 	//
 	// MATERIALS
 	//
+	{
+		FMaterialRepresentation matR;
+		matR.Tessellation.bEnableTessellation = true;
+		matR.Tessellation.Domain = ETessellationDomain::QUAD_PATCH;
+		matR.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW;
+		matR.Tessellation.Partitioning = ETessellationPartitioning::INTEGER;
+		constexpr float TERRAIN_TESS_FACTOR = FTessellationParameters::MAX_TESSELLATION_FACTOR;
+		matR.Tessellation.SetAllTessellationFactors(TERRAIN_TESS_FACTOR);
+
+		matR.EmissiveIntensity = 0.0f;
+		matR.NormalMapFilePath    = "Data/Textures/PBR/Pebbles02_4K/Pebbles02_4K_Normal.png";
+		matR.DiffuseMapFilePath   = "Data/Textures/PBR/Pebbles02_4K/Pebbles02_4K_BaseColor.png";
+		matR.RoughnessMapFilePath = "Data/Textures/PBR/Pebbles02_4K/Pebbles02_4K_Roughness.png";
+		matR.HeightMapFilePath    = "Data/Textures/PBR/Pebbles02_4K/Pebbles02_4K_Height.png";
+		matR.AOMapFilePath        = "Data/Textures/PBR/Pebbles02_4K/Pebbles02_4K_AO.png";
+		matR.EmissiveMapFilePath  = "Data/Textures/PBR/Pebbles02_4K/Pebbles02_4K_Normal.png";
+		matR.Displacement = 75.0f;
+		matR.Name = "GroundPlatformMaterial";
+		scene.Materials.push_back(matR);
+	}
 	if constexpr (ENABLE_MATERIALS)
 	{
 		const size_t NumMaterials = 2
@@ -257,7 +277,25 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 	//
 	// OBJECTS
 	//
-	
+	size_t iObj = scene.Objects.size();
+	scene.Objects.resize(scene.Objects.size() + 1);
+
+	// ground platform
+	{
+		FGameObjectRepresentation& obj = scene.Objects[iObj++];
+		XMFLOAT3 pos = { 0, -200, 0 };
+		XMFLOAT3 axis = UpVector;
+		XMFLOAT3 scale = { 2000, 1, 2000 };
+		obj.tf.SetPosition(pos);
+		obj.tf.SetScale(scale);
+		obj.BuiltinMeshName = "TessellationGrid_Quad25";
+		obj.ModelName = "GroundPlatform";
+		if constexpr (ENABLE_MATERIALS)
+		{
+			obj.MaterialName = "GroundPlatformMaterial";
+		}
+	}
+
 	// TODO: pre-alloc
 
 	// object chunk
@@ -271,12 +309,16 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 	constexpr int DIMENSION_Z = 48;
 #endif
 
+	constexpr size_t NUM_TESSELLATION_SPHERES_ROW = 2;
+	constexpr size_t NUM_TESSELLATION_SPHERES_COL = 2;
+	constexpr size_t NUM_TESSELLATION_SPHERES = NUM_TESSELLATION_SPHERES_COL * NUM_TESSELLATION_SPHERES_ROW;
+
+
 	const size_t NumObjectsToAllocate
 		= DIMENSION_X * DIMENSION_Y * DIMENSION_Z // randomized objects 
 		+ NUM_ROUGHNESS_INSTANCES * NUM_METALLIC_INSTANCES // gradient spheres
-		+ 1 // platform cylinder
-	;
-	size_t iObj = scene.Objects.size();
+		+ NUM_TESSELLATION_SPHERES;
+	
 	scene.Objects.resize(scene.Objects.size() + NumObjectsToAllocate);
 
 	int NumObjects = 0;
@@ -354,6 +396,47 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 				}
 			}
 		}
+
+		for (int r = 0; r < NUM_TESSELLATION_SPHERES_ROW; ++r)
+		{
+			for (int m = 0; m < NUM_TESSELLATION_SPHERES_COL; ++m)
+			{
+				XMFLOAT3 scale = { 7, 7, 7 };
+				constexpr float posX_Begin = +50.0f;
+				const float posX_Incr = r * (2 * scale.x + 2.0f);
+
+				constexpr float posY_Begin = 200.0f;
+				const float posY_Incr = m * (2 * scale.x + 2.0f);
+
+				float x = posX_Begin + posX_Incr;
+				float y = posY_Begin + posY_Incr;
+
+				XMFLOAT3 pos = XMFLOAT3(x, y, -50);
+
+				FGameObjectRepresentation& obj = scene.Objects[iObj++];
+				obj.tf.SetPosition(pos);
+				obj.tf.SetScale(scale);
+				obj.BuiltinMeshName = "Sphere";
+				//if constexpr (ENABLE_MATERIALS)
+				{
+					FMaterialRepresentation matR;
+					matR.Tessellation.bEnableTessellation = true;
+					matR.Tessellation.Domain = ETessellationDomain::TRIANGLE_PATCH;
+					matR.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW;
+					matR.Tessellation.Partitioning = ETessellationPartitioning::INTEGER;
+					constexpr float TESSELLATION_FACTOR = 10.0f;
+					matR.Tessellation.TriInner = TESSELLATION_FACTOR;
+					matR.Tessellation.TriOuter[0] = matR.Tessellation.TriOuter[1] = matR.Tessellation.TriOuter[2] = TESSELLATION_FACTOR;
+					
+					const size_t i = r * NUM_TESSELLATION_SPHERES_COL + m;
+					matR.EmissiveIntensity = i;
+					matR.Name = "TessellatedDisplacementMaterial[" + std::to_string(i) + "]";
+					scene.Materials.push_back(matR);
+
+					obj.MaterialName = matR.Name;
+				}
+			}
+		}
 	}
 
 	// big cube
@@ -373,21 +456,6 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 		//scene.Objects.[iObj++]= (obj);
 	}
 
-	// platform cylinder
-	{
-		FGameObjectRepresentation& obj = scene.Objects[iObj++];
-		XMFLOAT3 pos = { 0, -40, 0 };
-		XMFLOAT3 axis = UpVector;
-		XMFLOAT3 scale = { 100, 1, 100 };
-		obj.tf.SetPosition(pos);
-		obj.tf.SetScale(scale);
-		obj.BuiltinMeshName = "Cylinder";
-		obj.ModelName = "PlatformCylinder";
-		if constexpr (ENABLE_MATERIALS)
-		{
-			obj.MaterialName = "Checkerboard_Grayscale";
-		}
-	}
 }
 
 void StressTestScene::UnloadScene()

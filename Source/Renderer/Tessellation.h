@@ -50,11 +50,23 @@ struct FTessellationParameters
 	ETessellationOutputTopology OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW;
 	ETessellationPartitioning Partitioning = ETessellationPartitioning::FRACTIONAL_ODD;
 
+	inline void SetAllTessellationFactors(float TessellationFactor)
+	{
+		switch (Domain)
+		{
+		case TRIANGLE_PATCH: TriInner = TriOuter[0] = TriOuter[1] = TriOuter[2] = TessellationFactor; break;
+		case QUAD_PATCH: QuadInner[0] = QuadInner[1] = QuadOuter[0] = QuadOuter[1] = QuadOuter[2] = QuadOuter[3] = TessellationFactor; break;
+		case ISOLINE_PATCH: // TODO: line
+			break;
+		}
+	}
+
 	float TriOuter[3];
 	float TriInner;
 	float QuadInner[2];
 	float QuadOuter[4];
 	// TODO: line
+	static constexpr float MAX_TESSELLATION_FACTOR = 64.0f;
 
 	FTessellationParameters()
 	{

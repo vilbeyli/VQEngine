@@ -1365,15 +1365,17 @@ void VQEngine::DrawMaterialEditor()
 	ImGui::DragFloat2("##uv_bias", reinterpret_cast<float*>(&mat.uv_bias), 0.01f, -10.0f, 10.0f, "%.2f");
 
 	StartDrawingMaterialEditorRow("Displacement");
-	ImGui::DragFloat("##displecement", reinterpret_cast<float*>(&mat.displacement), 0.05f, -50.0f, 50.0f, "%.2f");
+	ImGui::InputFloat("##displecement", reinterpret_cast<float*>(&mat.displacement), 0.05f, 5.0f, "%.2f");
 
 	ImGuiSpacing(3);
 
+	// Tessellation
+	FTessellationParameters& tess = mat.Tessellation;
 	StartDrawingMaterialEditorRow("Tessellation");
-	ImGui::Checkbox("Tessellate", &mat.Tessellation.bEnableTessellation);
+	ImGui::Checkbox("Enable##", &tess.bEnableTessellation);
 	ImGui::SameLine();
 	ImGui::Checkbox("Wireframe", &mat.bWireframe);
-	if (mat.Tessellation.bEnableTessellation)
+	if (tess.bEnableTessellation)
 	{
 		const char* pszTessellationModeNames[] = {
 			"Triangle",
@@ -1381,44 +1383,42 @@ void VQEngine::DrawMaterialEditor()
 			// "Line"
 			""
 		};
-		if (ImGui::BeginCombo("Domain", pszTessellationModeNames[mat.Tessellation.Domain]))
+		if (ImGui::BeginCombo("Domain", pszTessellationModeNames[tess.Domain]))
 		{
-			if (ImGui::Selectable(pszTessellationModeNames[0], mat.Tessellation.Domain == ETessellationDomain::TRIANGLE_PATCH)) { mat.Tessellation.Domain = ETessellationDomain::TRIANGLE_PATCH; }
-			if (ImGui::Selectable(pszTessellationModeNames[1], mat.Tessellation.Domain == ETessellationDomain::QUAD_PATCH)) { mat.Tessellation.Domain = ETessellationDomain::QUAD_PATCH; }
+			if (ImGui::Selectable(pszTessellationModeNames[0], tess.Domain == ETessellationDomain::TRIANGLE_PATCH)) { tess.Domain = ETessellationDomain::TRIANGLE_PATCH; }
+			if (ImGui::Selectable(pszTessellationModeNames[1], tess.Domain == ETessellationDomain::QUAD_PATCH)) { tess.Domain = ETessellationDomain::QUAD_PATCH; }
 			ImGui::EndCombo();
 		}
 
-		constexpr float MAX_TESSELLATION = 50.0f;
-		switch (mat.Tessellation.Domain)
+		constexpr float MAX_TESSELLATION = FTessellationParameters::MAX_TESSELLATION_FACTOR;
+		switch (tess.Domain)
 		{
 		case::ETessellationDomain::TRIANGLE_PATCH:
 		{
 			if (mUIState.bTessellationSliderFloatVec)
 			{
-				ImGui::SliderFloat3("Outer", mat.Tessellation.TriOuter, 0.0f, MAX_TESSELLATION, "%.1f");
+				ImGui::SliderFloat3("Outer", tess.TriOuter, 0.0f, MAX_TESSELLATION, "%.1f");
 			}
 			else
 			{
-				float fOuterMin = std::fminf(mat.Tessellation.TriOuter[0], std::fminf(mat.Tessellation.TriOuter[1], mat.Tessellation.TriOuter[2]));
+				float fOuterMin = std::fminf(tess.TriOuter[0], std::fminf(tess.TriOuter[1], tess.TriOuter[2]));
 				if (ImGui::SliderFloat("Outer##", &fOuterMin, 0.0f, MAX_TESSELLATION, "%.1f"))
 				{
-					mat.Tessellation.TriOuter[0] = mat.Tessellation.TriOuter[1] = mat.Tessellation.TriOuter[2] = fOuterMin;
+					tess.TriOuter[0] = tess.TriOuter[1] = tess.TriOuter[2] = fOuterMin;
 					if (mUIState.bLockTessellationSliders)
 					{
-						mat.Tessellation.TriInner = fOuterMin;
+						tess.TriInner = fOuterMin;
 					}
 				}
 			}
 			ImGui::SameLine();
 
 			ImGui::Checkbox("[]", &mUIState.bTessellationSliderFloatVec);
-			if (ImGui::SliderFloat("Inner", &mat.Tessellation.TriInner, 0.0f, MAX_TESSELLATION, "%.1f"))
+			if (ImGui::SliderFloat("Inner", &tess.TriInner, 0.0f, MAX_TESSELLATION, "%.1f"))
 			{
 				if (mUIState.bLockTessellationSliders)
 				{
-					mat.Tessellation.TriOuter[0] = mat.Tessellation.TriInner;
-					mat.Tessellation.TriOuter[1] = mat.Tessellation.TriInner;
-					mat.Tessellation.TriOuter[2] = mat.Tessellation.TriInner;
+					tess.SetAllTessellationFactors(tess.TriInner);
 				}
 			}
 		}	break;
@@ -1426,25 +1426,33 @@ void VQEngine::DrawMaterialEditor()
 		{
 			if (mUIState.bTessellationSliderFloatVec)
 			{
-				ImGui::SliderFloat4("Outer", mat.Tessellation.QuadOuter, 0.0f, MAX_TESSELLATION, "%.1f");
+				ImGui::SliderFloat4("Outer", tess.QuadOuter, 0.0f, MAX_TESSELLATION, "%.1f");
 				ImGui::SameLine();
 				ImGui::Checkbox("[]", &mUIState.bTessellationSliderFloatVec);
-				ImGui::SliderFloat2("Inner", &mat.Tessellation.QuadInner[0], 0.0f, MAX_TESSELLATION, "%.1f");
+				ImGui::SliderFloat2("Inner", &tess.QuadInner[0], 0.0f, MAX_TESSELLATION, "%.1f");
 			}
 			else
 			{
-				float fOuterMin = std::fminf(mat.Tessellation.QuadOuter[0], std::fminf(mat.Tessellation.QuadOuter[1], std::fminf(mat.Tessellation.QuadOuter[2], mat.Tessellation.QuadOuter[3])));
+				float fOuterMin = std::fminf(tess.QuadOuter[0], std::fminf(tess.QuadOuter[1], std::fminf(tess.QuadOuter[2], tess.QuadOuter[3])));
 				if (ImGui::SliderFloat("Outer", &fOuterMin, 0.0f, MAX_TESSELLATION, "%.1f"))
 				{
-					mat.Tessellation.QuadOuter[0] = mat.Tessellation.QuadOuter[1] = mat.Tessellation.QuadOuter[2] = mat.Tessellation.QuadOuter[3] = fOuterMin;
+					tess.QuadOuter[0] = tess.QuadOuter[1] = tess.QuadOuter[2] = tess.QuadOuter[3] = fOuterMin;
+					if (mUIState.bLockTessellationSliders)
+					{
+						tess.SetAllTessellationFactors(fOuterMin);
+					}
 				}
 				ImGui::SameLine();
 				ImGui::Checkbox("[]", &mUIState.bTessellationSliderFloatVec);
 
-				float fInnerMin = std::fminf(mat.Tessellation.QuadInner[0], mat.Tessellation.QuadInner[1]);
+				float fInnerMin = std::fminf(tess.QuadInner[0], tess.QuadInner[1]);
 				if (ImGui::SliderFloat("Inner", &fInnerMin, 0.0f, MAX_TESSELLATION, "%.1f"))
 				{
-					mat.Tessellation.QuadInner[0] = mat.Tessellation.QuadInner[1] = fInnerMin;
+					tess.QuadInner[0] = tess.QuadInner[1] = fInnerMin;
+					if (mUIState.bLockTessellationSliders)
+					{
+						tess.SetAllTessellationFactors(fInnerMin);
+					}
 				}
 			}
 		}	break;
@@ -1456,7 +1464,7 @@ void VQEngine::DrawMaterialEditor()
 		ImGui::SameLine();
 		if (ImGui::Checkbox("Lock", &mUIState.bLockTessellationSliders))
 		{
-
+			// TODO
 		}
 
 		const char* pszPartitioningNames[] =
@@ -1467,17 +1475,17 @@ void VQEngine::DrawMaterialEditor()
 			"Pow2",
 			""
 		};
-		if (ImGui::BeginCombo("Partitioning", pszPartitioningNames[mat.Tessellation.Partitioning]))
+		if (ImGui::BeginCombo("Partitioning", pszPartitioningNames[tess.Partitioning]))
 		{
-			if (ImGui::Selectable(pszPartitioningNames[0], mat.Tessellation.Partitioning == ETessellationPartitioning::INTEGER)) { mat.Tessellation.Partitioning = ETessellationPartitioning::INTEGER; }
-			if (ImGui::Selectable(pszPartitioningNames[1], mat.Tessellation.Partitioning == ETessellationPartitioning::FRACTIONAL_EVEN)) { mat.Tessellation.Partitioning = ETessellationPartitioning::FRACTIONAL_EVEN; }
-			if (ImGui::Selectable(pszPartitioningNames[2], mat.Tessellation.Partitioning == ETessellationPartitioning::FRACTIONAL_ODD)) { mat.Tessellation.Partitioning = ETessellationPartitioning::FRACTIONAL_ODD; }
-			if (ImGui::Selectable(pszPartitioningNames[3], mat.Tessellation.Partitioning == ETessellationPartitioning::POWER_OF_TWO)) { mat.Tessellation.Partitioning = ETessellationPartitioning::POWER_OF_TWO; }
+			if (ImGui::Selectable(pszPartitioningNames[0], tess.Partitioning == ETessellationPartitioning::INTEGER)) { tess.Partitioning = ETessellationPartitioning::INTEGER; }
+			if (ImGui::Selectable(pszPartitioningNames[1], tess.Partitioning == ETessellationPartitioning::FRACTIONAL_EVEN)) { tess.Partitioning = ETessellationPartitioning::FRACTIONAL_EVEN; }
+			if (ImGui::Selectable(pszPartitioningNames[2], tess.Partitioning == ETessellationPartitioning::FRACTIONAL_ODD)) { tess.Partitioning = ETessellationPartitioning::FRACTIONAL_ODD; }
+			if (ImGui::Selectable(pszPartitioningNames[3], tess.Partitioning == ETessellationPartitioning::POWER_OF_TWO)) { tess.Partitioning = ETessellationPartitioning::POWER_OF_TWO; }
 			ImGui::EndCombo();
 		}
 
 
-		switch (mat.Tessellation.Domain)
+		switch (tess.Domain)
 		{
 		case::ETessellationDomain::TRIANGLE_PATCH:
 			break;
@@ -1491,16 +1499,16 @@ void VQEngine::DrawMaterialEditor()
 			""
 		};
 
-		if (ImGui::BeginCombo("Output Topology", pszOutputTopologyNames[mat.Tessellation.OutputTopology]))
+		if (ImGui::BeginCombo("Output Topology", pszOutputTopologyNames[tess.OutputTopology]))
 		{
-			if (ImGui::Selectable(pszOutputTopologyNames[0], mat.Tessellation.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT)) { mat.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT; }
-			if (ImGui::Selectable(pszOutputTopologyNames[1], mat.Tessellation.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE)) { if (mat.Tessellation.Domain == ETessellationDomain::ISOLINE_PATCH) mat.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE; }
-			if (ImGui::Selectable(pszOutputTopologyNames[2], mat.Tessellation.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW)) { mat.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW; }
-			if (ImGui::Selectable(pszOutputTopologyNames[3], mat.Tessellation.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW)) { mat.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW; }
+			if (ImGui::Selectable(pszOutputTopologyNames[0], tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT)) { tess.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT; }
+			if (ImGui::Selectable(pszOutputTopologyNames[1], tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE)) { if (tess.Domain == ETessellationDomain::ISOLINE_PATCH) tess.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE; }
+			if (ImGui::Selectable(pszOutputTopologyNames[2], tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW)) { tess.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW; }
+			if (ImGui::Selectable(pszOutputTopologyNames[3], tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW)) { tess.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW; }
 			ImGui::EndCombo();
 		}
 
-		// ImGui::Checkbox("Frustum Cull", &t.bFrustumCullPatches);
+		ImGui::Checkbox("Frustum Cull", &mat.bFrustumCullPatches);
 	}
 
 	ImGuiSpacing(6);
@@ -1778,11 +1786,11 @@ void VQEngine::DrawObjectEditor()
 	ImGuiSpacing(2);
 
 	ImGui::Text("Transform");
-	ImGui::DragFloat3("Position", reinterpret_cast<float*>(&pTF->_position), 0.1f);
+	ImGui::InputFloat3("Position", reinterpret_cast<float*>(&pTF->_position));
 	float3 eulerRotation = Quaternion::ToEulerDeg(pTF->_rotation);
 	if (ImGui::InputFloat3("Rotation", reinterpret_cast<float*>(&eulerRotation))) {
 		pTF->_rotation = Quaternion::FromEulerDeg(eulerRotation);
 	}
-	ImGui::DragFloat3("Scale", reinterpret_cast<float*>(&pTF->_scale), 0.1f);
+	ImGui::InputFloat3("Scale", reinterpret_cast<float*>(&pTF->_scale));
 	
 }

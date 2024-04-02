@@ -1,5 +1,5 @@
 //	VQE
-//	Copyright(C) 2020  - Volkan Ilbeyli
+//	Copyright(C) 2024  - Volkan Ilbeyli
 //
 //	This program is free software : you can redistribute it and / or modify
 //	it under the terms of the GNU General Public License as published by
@@ -32,16 +32,35 @@ bool IsPointOutOfFrustum(float4 PositionCS, float Tolerance)
 	float3 w = PositionCS.w;
 	return IsOutOfBounds(culling, float3(-w - Tolerance), float3(w + Tolerance));
 }
-bool ShouldClipPatch(float4 p0PositionCS, float4 p1PositionCS, float4 p2PositionCS)
-{
-	const float Tolerance = 20.0f; // TODO: bounding box for triangle
-	bool bAllOutside = IsPointOutOfFrustum(p0PositionCS, Tolerance)
-		&& IsPointOutOfFrustum(p1PositionCS, Tolerance)
-		&& IsPointOutOfFrustum(p2PositionCS, Tolerance);
-	
-	return bAllOutside;
-}
 
+struct AABB
+{
+	float3 Center;
+	float3 Extents;
+};
+
+bool IsAABBBehindPlane(AABB aabb, float4 Plane, const bool bNormalize)
+{
+	if(bNormalize)
+	{
+		float L = length(Plane.xyz);
+		Plane /= L;
+	}
+	
+	// N : get the absolute value of the plane normal, so all {x,y,z} are positive
+	//     which aligns well with the extents vector which is all positive due to
+	//     storing the distances of maxs and mins.
+	float3 N = abs(Plane.xyz);
+	
+	// r : how far away is the furthest point along the plane normal
+	float r = dot(N, aabb.Extents);
+	// Intuition: see https://fgiesen.wordpress.com/2010/10/17/view-frustum-culling/
+	
+	// signed distance of the center point of AABB to the plane
+	float sd = dot(float4(aabb.Center, 1.0f), Plane);
+	
+	return (sd + r) < 0.0f;
+}
 
 // TODO:
 // Triplanar mapping: https://gamedevelopment.tutsplus.com/use-tri-planar-texture-mapping-for-better-terrain--gamedev-13821a
@@ -64,8 +83,8 @@ struct VSInput
 #endif
 };
 
-// control points
-struct HSInput 
+// control points (HS+DS)
+struct TessellationControlPoint
 {
 	float4 LocalPosition : POSITION;
 	float4 ClipPosition  : COLOR0;
@@ -75,17 +94,6 @@ struct HSInput
 	float2 uv0           : TEXCOORD0;
 #if INSTANCED_DRAW
 	uint instanceID      : TEXCOORD1;
-#endif
-};
-struct HSOutput
-{
-	float4 vPosition    : POSITION;
-	float4 ClipPosition : COLOR0;
-	float3 vNormal      : NORMAL;
-	float3 vTangent     : TANGENT;
-	float2 uv0          : TEXCOORD0;
-#if INSTANCED_DRAW
-	uint instanceID : TEXCOORD1;
 #endif
 };
 
@@ -101,6 +109,54 @@ struct HSOutputQuadPatchConstants
 	float EdgeTessFactor[4] : SV_TessFactor;
 	float InsideTessFactor[2] : SV_InsideTessFactor;
 };
+
+#ifdef DOMAIN__TRIANGLE
+	#define NUM_CONTROL_POINTS 3
+	#define HSOutputPatchConstants HSOutputTriPatchConstants
+#elif defined(DOMAIN__QUAD)
+	#define NUM_CONTROL_POINTS 4
+	#define HSOutputPatchConstants HSOutputQuadPatchConstants
+#endif // DOMAIN__
+
+AABB BuildAABB(InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch)
+{
+	float3 Mins = +1000000.0f.xxx; // TODO: FLT_MAX
+	float3 Maxs = -1000000.0f.xxx; // TODO: FLT_MIN
+	[unroll]
+	for (int iCP = 0; iCP < NUM_CONTROL_POINTS; ++iCP)
+	{
+		Mins = min(Mins, patch[iCP].WorldPosition);
+		Maxs = max(Maxs, patch[iCP].WorldPosition);
+	}
+
+	AABB aabb;
+	aabb.Center  = 0.5f * (Mins + Maxs);
+	aabb.Extents = 0.5f * (Maxs - Mins);
+	return aabb;
+}
+
+bool ShouldFrustumCullPatch(float4 FrustumPlanes[6], InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch)
+{
+	AABB aabb = BuildAABB(patch);
+	
+	[unroll]
+	for (int iPlane = 0; iPlane < 6; ++iPlane)
+	{
+		if (IsAABBBehindPlane(aabb, FrustumPlanes[iPlane], false))
+		{
+			return true;
+		}
+	}
+	
+	return false;
+}
+
+bool ShouldCullFace(InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch)
+{
+	// TODO
+	return false;
+}
+
 #endif
 
 
@@ -132,16 +188,18 @@ Texture2D texHeightmap      : register(t8); // VS or PS
 // KERNELS
 //
 //---------------------------------------------------------------------------------------------------
-HSInput VSMain_Tess(VSInput vertex)
+TessellationControlPoint VSMain_Tess(VSInput vertex)
 {
-	HSInput o;
+	TessellationControlPoint o;
 	o.LocalPosition = float4(vertex.position, 1.0f);
+	float fHeightOffset = texHeightmap.SampleLevel(LinearSamplerTess, vertex.uv, 0).r * cbPerObject.materialData.displacement;
+	float4 DisplacedLocalPosition = float4(o.LocalPosition.xyz + float3(0, fHeightOffset, 0), 1.0f);
 #if INSTANCED_DRAW
-	o.WorldPosition = mul(cbPerObject.matWorld[vertex.instanceID], o.LocalPosition).xyz;
+	o.WorldPosition = mul(cbPerObject.matWorld[vertex.instanceID], DisplacedLocalPosition).xyz;
 	o.ClipPosition = mul(cbPerObject.matWorldViewProj[vertex.instanceID], o.LocalPosition);
 	o.instanceID = vertex.instanceID;
 #else
-	o.WorldPosition = mul(cbPerObject.matWorld, o.LocalPosition).xyz;
+	o.WorldPosition = mul(cbPerObject.matWorld, DisplacedLocalPosition).xyz;
 	o.ClipPosition = mul(cbPerObject.matWorldViewProj, o.LocalPosition);
 #endif
 	o.Normal = vertex.normal;
@@ -150,115 +208,58 @@ HSInput VSMain_Tess(VSInput vertex)
 	return o;
 }
 
-struct AABB
-{
-	float3 Center;
-	float3 Extents;
-};
-
-// http://www.richardssoftware.net/2013/09/dynamic-terrain-rendering-with-slimdx.html
-bool IsAABBBehindPlane(AABB aabb, float4 Plane)
-{
-	// N : get the absolute value of the plane normal, so all {x,y,z} are positive
-	//     which aligns well with the extents vector which is all positive due to
-	//     storing the distances of maxs and mins.
-	float3 N = abs(Plane.xyz);
-	
-	// r: how far away is the furthest point along the plane normal
-	float r = dot(N, aabb.Extents); 
-	// Intuition: 
-	
-	// signed distance of the center point of AABB to the plane
-	float sd = dot(Plane, float4(aabb.Center, 1.0f));
-	
-	return (sd + r) < 0.0f;
-}
-
 #if ENABLE_TESSELLATION_SHADERS
 // Sources:
 // Cem Yuksel / Interactive Graphics 18 - Tessellation Shaders: https://www.youtube.com/watch?v=OqRMNrvu6TE
 // https://thedemonthrone.ca/projects/rendering-terrain/rendering-terrain-part-8-adding-tessellation/
+// https://bruop.github.io/frustum_culling/
+// http://www.richardssoftware.net/2013/09/dynamic-terrain-rendering-with-slimdx.html
+// https://fgiesen.wordpress.com/2010/10/17/view-frustum-culling/
+// https://thedemonthrone.ca/projects/rendering-terrain/rendering-terrain-part-10-view-frustum-culling/
 // ----------------------------------------------------------------------------------------------------------------
 // https://learn.microsoft.com/en-us/windows/win32/direct3d11/direct3d-11-advanced-stages-tessellation
 // https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-semantics#system-value-semantics
 
-#ifdef DOMAIN__TRIANGLE
-	#define NUM_CONTROL_POINTS 3
-	#define HSOutputPatchConstants HSOutputTriPatchConstants
-#elif defined(DOMAIN__QUAD)
-	#define NUM_CONTROL_POINTS 4
-	#define HSOutputPatchConstants HSOutputQuadPatchConstants
-#endif // DOMAIN__
-
-AABB BuildAABB(InputPatch<HSInput, NUM_CONTROL_POINTS> patch)
-{
-	float3 Mins = +1000000.0f.xxx; // TODO: FLT_MAX
-	float3 Maxs = -1000000.0f.xxx; // TODO: FLT_MIN
-	[unroll]
-	for (int iCP = 0; iCP < NUM_CONTROL_POINTS; ++iCP)
-	{
-		Mins = min(Mins, patch[iCP].WorldPosition);
-		Maxs = max(Maxs, patch[iCP].WorldPosition);
-	}
-
-	AABB aabb;
-	aabb.Center  = 0.5f * (Mins + Maxs);
-	aabb.Extents = 0.5f * (Maxs - Mins);
-	return aabb;
-}
-
-bool ShouldFrustumCullPatch(float4 FrustumPlanes[6], InputPatch<HSInput, NUM_CONTROL_POINTS> patch)
-{
-	AABB aabb = BuildAABB(patch);
-	
-	//[unroll]
-	for (int iPlane = 0; iPlane < 6; ++iPlane)
-	{
-		if (IsAABBBehindPlane(aabb, FrustumPlanes[iPlane]))
-		{
-			return true;
-		}
-	}
-	
-	return false;
-}
-
 HSOutputPatchConstants CalcHSPatchConstants(
-	InputPatch<HSInput, NUM_CONTROL_POINTS> patch, 
+	InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch, 
 	uint PatchID : SV_PrimitiveID
 )
 {
-	//float ClipMask = 1.0f;
-	float ClipMask = ShouldFrustumCullPatch(cbPerView.WorldFrustumPlanes, patch) ? 0.0f : 1.0f;
-	//float ClipMask = ShouldClipPatch(patch[0].ClipPosition, patch[1].ClipPosition, patch[2].ClipPosition) ? 0.0f : 1.0f;
-	if(!tess.bFrustumCull) 
-		ClipMask = 1.0f;
+	float CullMask = select(tess.bFrustumCull && ShouldFrustumCullPatch(cbPerView.WorldFrustumPlanes, patch), 0.0f, 1.0f);
+	CullMask += select(tess.bFaceCull && ShouldCullFace(patch), 0.0f, 1.0f);
+	CullMask = saturate(CullMask); //[0,N] -> [0,1]
 	
 	HSOutputPatchConstants c;
+
 #ifdef DOMAIN__TRIANGLE
-	c.EdgeTessFactor[0] = tess.TriEdgeTessFactor.x * ClipMask;
-	c.EdgeTessFactor[1] = tess.TriEdgeTessFactor.y * ClipMask;
-	c.EdgeTessFactor[2] = tess.TriEdgeTessFactor.z * ClipMask;
+	c.EdgeTessFactor[0] = tess.TriEdgeTessFactor.x * CullMask;
+	c.EdgeTessFactor[1] = tess.TriEdgeTessFactor.y * CullMask;
+	c.EdgeTessFactor[2] = tess.TriEdgeTessFactor.z * CullMask;
 	c.InsideTessFactor = tess.TriInnerTessFactor;
 #elif defined(DOMAIN__QUAD)
-	c.EdgeTessFactor[0] = tess.QuadEdgeTessFactor.x * ClipMask;
-	c.EdgeTessFactor[1] = tess.QuadEdgeTessFactor.y * ClipMask;
-	c.EdgeTessFactor[2] = tess.QuadEdgeTessFactor.z * ClipMask;
-	c.EdgeTessFactor[3] = tess.QuadEdgeTessFactor.w * ClipMask;
+	c.EdgeTessFactor[0] = tess.QuadEdgeTessFactor.x * CullMask;
+	c.EdgeTessFactor[1] = tess.QuadEdgeTessFactor.y * CullMask;
+	c.EdgeTessFactor[2] = tess.QuadEdgeTessFactor.z * CullMask;
+	c.EdgeTessFactor[3] = tess.QuadEdgeTessFactor.w * CullMask;
 	c.InsideTessFactor[0] = tess.QuadInsideFactor.x;
 	c.InsideTessFactor[1] = tess.QuadInsideFactor.y;
+#elif defined(DOMAIN__LINE)
+	// TODO:
 #endif
+
 	return c;
 }
 
+// Hull Shader
+//
 // https://learn.microsoft.com/en-us/windows/win32/direct3d11/direct3d-11-advanced-stages-hull-shader-design
 // https://learn.microsoft.com/en-us/windows/win32/direct3d11/direct3d-11-advanced-stages-hull-shader-create
 //
 // control point phase + patch-constant phase
 // input : 1-32 control points 
 // output: 1-32 control points  --> DS
-//         patch constants      --> DS
-//         tessellation factors --> DS + TS
+//         patch constants      --> Tessellator + DS
+//         tessellation factors --> Tessellator
 
 // https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-attributes-domain
 // Domain: tri, quad, or isoline
@@ -266,6 +267,8 @@ HSOutputPatchConstants CalcHSPatchConstants(
 [domain("quad")] 
 #elif DOMAIN__TRIANGLE
 [domain("tri")] 
+#elif DOMAIN__LINE
+[domain("isoline")]
 #endif
 
 // https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-attributes-partitioning
@@ -294,16 +297,17 @@ HSOutputPatchConstants CalcHSPatchConstants(
 
 [outputcontrolpoints(NUM_CONTROL_POINTS)]
 [patchconstantfunc("CalcHSPatchConstants")]
-HSOutput HSMain(
-	InputPatch<HSInput, NUM_CONTROL_POINTS> ip,
+TessellationControlPoint HSMain(
+	InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> ip,
 	uint i       : SV_OutputControlPointID,
 	uint PatchID : SV_PrimitiveID
 )
 {
-	HSOutput o;
-	o.vPosition = ip[i].LocalPosition;
-	o.vNormal = ip[i].Normal;
-	o.vTangent = ip[i].Tangent;
+	TessellationControlPoint o;
+	o.LocalPosition = ip[i].LocalPosition;
+	o.WorldPosition = ip[i].WorldPosition;
+	o.Normal = ip[i].Normal;
+	o.Tangent = ip[i].Tangent;
 	o.uv0 = ip[i].uv0;
 	o.instanceID = ip[i].instanceID;
 	return o;
@@ -329,28 +333,32 @@ HSOutput HSMain(
 	patch[2].attr * bary.z
 
 #define INTERPOLATE2_PATCH_ATTRIBUTE(attr, bary)\
-	patch[0].attr * bary.x +\
-	patch[1].attr * bary.y
+	lerp(\
+		lerp(patch[1].attr, patch[2].attr, bary.x),\
+		lerp(patch[0].attr, patch[3].attr, bary.x),\
+		bary.y)
 
 #if DOMAIN__TRIANGLE
 #define INTERPOLATE_PATCH_ATTRIBUTE(attr, bary) INTERPOLATE3_PATCH_ATTRIBUTE(attr, bary)
-#elif DOMAIN__QUAD
+#elif DOMAIN__QUAD || DOMAIN__LINE
 #define INTERPOLATE_PATCH_ATTRIBUTE(attr, bary) INTERPOLATE2_PATCH_ATTRIBUTE(attr, bary)
 #endif
 
 // https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/sv-domainlocation
 #if DOMAIN__QUAD
 [domain("quad")]
-#else
+#elif DOMAIN__TRIANGLE
 [domain("tri")]
+#elif DOMAIN__LINE
+[domain("isoline")]
 #endif
 PSInput DSMain(
 	HSOutputPatchConstants In,
-	const OutputPatch<HSOutput, NUM_CONTROL_POINTS> patch,
-#if DOMAIN__QUAD
-	float2 bary               : SV_DomainLocation
+	const OutputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch,
+#if DOMAIN__QUAD || DOMAIN__LINE
+	float2 bary : SV_DomainLocation
 #elif DOMAIN__TRIANGLE
-	float3 bary               : SV_DomainLocation
+	float3 bary : SV_DomainLocation
 #endif // DOMAIN__
 )
 {
@@ -359,19 +367,17 @@ PSInput DSMain(
 	float2 uvOffst = cbPerObject.materialData.uvScaleOffset.zw;
 	float2 uvTiled = uv * uvScale + uvOffst;
 	
-	float3 vPosition = INTERPOLATE_PATCH_ATTRIBUTE(vPosition.xyz, bary);
+	float3 vPosition = INTERPOLATE_PATCH_ATTRIBUTE(LocalPosition.xyz, bary);
 	
-#if 1
-	// generate normals and tangents
-	float3 tangent   = patch[1].vPosition.xyz - patch[0].vPosition.xyz;
-	float3 bitangent = patch[2].vPosition.xyz - patch[0].vPosition.xyz;
+#if DOMAIN__TRIANGLE && 1 // generate normals & tangents
+	float3 tangent   = patch[1].LocalPosition.xyz - patch[0].LocalPosition.xyz;
+	float3 bitangent = patch[2].LocalPosition.xyz - patch[0].LocalPosition.xyz;
 	float3 vNormal = normalize(cross(tangent, bitangent));
 	float3 vTangent = float3(1,0,0);//normalize(tangent - dot(tangent, vNormal) * vNormal);
-#else
-	float3 vNormal = INTERPOLATE_PATCH_ATTRIBUTE(vNormal, bary);
-	float3 vTangent = INTERPOLATE_PATCH_ATTRIBUTE(vTangent, bary);
+#else // read normals & tangents from VB
+	float3 vNormal = INTERPOLATE_PATCH_ATTRIBUTE(Normal, bary);
+	float3 vTangent = INTERPOLATE_PATCH_ATTRIBUTE(Tangent, bary);
 #endif
-
 
 	return TransformVertex(
 	#if INSTANCED_DRAW

@@ -52,7 +52,7 @@ struct FFrustumPlaneset
 	// - @projectionTransformation is viewProj      matrix -> world space plane equations
 	// - @projectionTransformation is worldViewProj matrix -> model space plane equations
 	// 
-	inline static FFrustumPlaneset ExtractFromMatrix(const DirectX::XMMATRIX& projectionTransformation)
+	inline static FFrustumPlaneset ExtractFromMatrix(const DirectX::XMMATRIX& projectionTransformation, const bool bNormalize = false)
 	{
 		const DirectX::XMMATRIX& m = projectionTransformation;
 
@@ -93,6 +93,18 @@ struct FFrustumPlaneset
 			m.r[2].m128_f32[2],
 			m.r[3].m128_f32[2]
 		);
+
+		if (bNormalize)
+		{
+			for (int i = 0; i < 6; ++i)
+			{
+				DirectX::XMVECTOR vPlane = DirectX::XMLoadFloat4(&viewPlanes.abcd[i]);
+				DirectX::XMVECTOR vLen = DirectX::XMVectorSqrt(DirectX::XMVector3Dot(vPlane, vPlane));
+				vPlane = DirectX::XMVectorMultiply(vPlane, DirectX::XMVectorReciprocal(vLen));
+				DirectX::XMStoreFloat4(&viewPlanes.abcd[i], vPlane);
+			}
+		}
+
 		return viewPlanes;
 	}
 };

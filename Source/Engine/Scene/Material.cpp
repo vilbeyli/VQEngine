@@ -32,6 +32,8 @@ VQ_SHADER_DATA::TessellationParams Material::GetTessellationCBufferData() const
 	p.QuadEdgeTessFactor.w = Tessellation.QuadOuter[3];
 	p.QuadInsideFactor.x = Tessellation.QuadInner[0];
 	p.QuadInsideFactor.y = Tessellation.QuadInner[1];
+	p.bFrustumCull = this->bFrustumCullPatches;
+	p.bFaceCull = false;
 	return p;
 }
 

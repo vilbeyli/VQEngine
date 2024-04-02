@@ -44,6 +44,12 @@ enum EBuiltInMeshes
 	GRID_DETAILED_QUAD0,
 	GRID_DETAILED_QUAD1,
 	GRID_DETAILED_QUAD2,
+
+	TESSELLATION_CONTROL_POINTS__QUAD1,
+	TESSELLATION_CONTROL_POINTS__QUAD4,
+	TESSELLATION_CONTROL_POINTS__QUAD9,
+	TESSELLATION_CONTROL_POINTS__QUAD16,
+	TESSELLATION_CONTROL_POINTS__QUAD25,
 	
 	NUM_BUILTIN_MESHES
 };
@@ -84,7 +90,11 @@ namespace GeometryGenerator
 	constexpr GeometryData<TVertex, TIndex> Cone(float height, float radius, unsigned sliceCount, int numLODLevels = 1);
 
 
-
+	// PatchDimension=1 -> 1 Patch   -> 2x2=4  vertices, 4  indices
+	// PatchDimension=2 -> 4 Patches -> 3x3=9  vertices, 16 indices
+	// PatchDimension=3 -> 9 Patches -> 4x4=16 vertices, 36 indices
+	template<class TVertex, class TIndex = unsigned>
+	constexpr GeometryData<TVertex, TIndex> TessellationPatch_Quad(unsigned PatchDimension);
 
 	// --------------------------------------------------------------------------------------------------------------------------------------------
 	// TEMPLATE DEFINITIONS
@@ -1010,6 +1020,38 @@ namespace GeometryGenerator
 		//------------------------------------------------
 
 		return data;
+	}
+
+	template<class TVertex, class TIndex>
+	constexpr GeometryData<TVertex, TIndex> TessellationPatch_Quad(unsigned PatchDimension)
+	{
+		GeometryData<TVertex, TIndex> g = Grid<TVertex, TIndex>(1.0f, 1.0f, PatchDimension+1, PatchDimension+1, 1);
+		g.LODIndices[0].clear();
+		const unsigned NumPatches = PatchDimension * PatchDimension;
+		const unsigned NumVerts   = (PatchDimension+1) * (PatchDimension+1);
+		constexpr unsigned INDICES_PER_PATCH = 4;
+		g.LODIndices[0].resize(NumPatches * INDICES_PER_PATCH);
+		assert(NumVerts == g.LODVertices[0].size());
+		for (int iPatch = 0; iPatch < NumPatches; ++iPatch) 
+		{
+			// going bottom left to top right
+			// e.g. 3x3 patches, 4x4 verts 36 indices
+			// 12 13 14 15
+			// 8  9  10 11
+			// 4  5  6  7
+			// 0  1  2  3
+			const unsigned PatchRow = iPatch / PatchDimension;
+			const unsigned PatchCol = iPatch % PatchDimension;
+			TIndex iPatchBottomLeft = PatchRow * (PatchDimension+1) + PatchCol;
+			TIndex iPatchTopLeft = iPatchBottomLeft + PatchDimension+1;
+
+			// CCW: BL BR TR TL
+			g.LODIndices[0][iPatch * INDICES_PER_PATCH + 0] = iPatchBottomLeft;
+			g.LODIndices[0][iPatch * INDICES_PER_PATCH + 1] = iPatchTopLeft;
+			g.LODIndices[0][iPatch * INDICES_PER_PATCH + 2] = iPatchTopLeft + 1;
+			g.LODIndices[0][iPatch * INDICES_PER_PATCH + 3] = iPatchBottomLeft + 1;
+		}
+		return g;
 	}
 
 	BufferID CreateBuffer(VQRenderer* pRenderer, const FBufferDesc& desc);

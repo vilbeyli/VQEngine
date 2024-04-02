@@ -364,7 +364,14 @@ void VQEngine::RenderDepthPrePass(
 			);
 		}
 
-		pCmd->IASetPrimitiveTopology(mat.Tessellation.bEnableTessellation ? D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		D3D_PRIMITIVE_TOPOLOGY topo = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+		if (mat.Tessellation.bEnableTessellation)
+		{
+			topo = mat.Tessellation.Domain == ETessellationDomain::QUAD_PATCH
+				? D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST
+				: D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
+		}
+		pCmd->IASetPrimitiveTopology(topo);
 		pCmd->IASetVertexBuffers(0, 1, &vb);
 		pCmd->IASetIndexBuffer(&ib);
 		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
@@ -819,7 +826,14 @@ void VQEngine::RenderSceneColor(
 				pCmd->SetGraphicsRootConstantBufferView(12, cbAddr_Tsl);
 			}
 			
-			pCmd->IASetPrimitiveTopology(mat.Tessellation.bEnableTessellation ? D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			D3D_PRIMITIVE_TOPOLOGY topo = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+			if (mat.Tessellation.bEnableTessellation)
+			{
+				topo = mat.Tessellation.Domain == ETessellationDomain::QUAD_PATCH 
+					? D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST 
+					: D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
+			}
+			pCmd->IASetPrimitiveTopology(topo);
 			pCmd->IASetVertexBuffers(0, 1, &vb);
 			pCmd->IASetIndexBuffer(&ib);
 
