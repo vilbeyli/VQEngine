@@ -218,6 +218,32 @@ struct TessellationParams
 
 	int bFrustumCull;
 	int bFaceCull;
+	int bAdaptiveTessellation;
+	int padi;
+
+	float fHSFrustumCullEpsilon;
+	float fHSFaceCullEpsilon;
+	float fHSAdaptiveTessellationMaxDist;
+	float fHSAdaptiveTessellationMinDist;
+
+
+#ifdef VQ_CPU
+	TessellationParams() : 
+		  QuadEdgeTessFactor(1,1,1,1)
+		, QuadInsideFactor(1, 1)
+		, TriEdgeTessFactor(1,1,1)
+		, TriInnerTessFactor(1)
+		, pad(99999.0f, 99999.0f)
+		, bFrustumCull(0)
+		, bFaceCull(0)
+		, bAdaptiveTessellation(0)
+		, padi(0x0BADF00D)
+		, fHSFrustumCullEpsilon(0)
+		, fHSFaceCullEpsilon(0)
+		, fHSAdaptiveTessellationMaxDist(500.0f)
+		, fHSAdaptiveTessellationMinDist(10.0f)
+	{}
+#endif
 };
 
 

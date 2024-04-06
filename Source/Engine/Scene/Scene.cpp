@@ -1826,12 +1826,12 @@ size_t Scene::DispatchWorkers_ShadowViews(size_t NumShadowMeshFrustums, std::vec
 	const size_t NumWorkersForFrustumsBelowThreadingThreshold = DIV_AND_ROUND_UP(NumShadowMeshesRemaining, NUM_MIN_SHADOW_MESHES_FOR_THREADING);
 	const size_t NumShadowFrustumBatchWorkers = NumShadowFrustumsWithNumMeshesLargerThanMinNumMeshesPerThread;
 	const bool bUseWorkerThreadsForShadowViews = NumShadowFrustumBatchWorkers >= 1;
-	const size_t NumShadowFrustumsThisThread = bUseWorkerThreadsForShadowViews ? std::max((size_t)1, NumShadowMeshFrustums - NumShadowFrustumBatchWorkers) : NumShadowMeshFrustums;
+	const size_t NumShadowFrustumsThisThread = 0; // bUseWorkerThreadsForShadowViews ? std::max((size_t)0, NumShadowMeshFrustums - NumShadowFrustumBatchWorkers) : NumShadowMeshFrustums;
 	if(bUseWorkerThreadsForShadowViews)
 	{
 		SCOPED_CPU_MARKER("DispatchWorkers_ShadowViews");
 		const bool bForceLOD0 = SceneView.sceneParameters.bForceLOD0_ShadowView;
-		for (size_t iFrustum = 1+ NumShadowFrustumsThisThread; iFrustum <= NumShadowMeshFrustums; ++iFrustum)
+		for (size_t iFrustum = 1 + NumShadowFrustumsThisThread; iFrustum <= NumShadowMeshFrustums; ++iFrustum)
 		{
 			UpdateWorkerThreadPool.AddTask([=]()
 			{

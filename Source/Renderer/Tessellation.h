@@ -18,6 +18,8 @@
 
 #pragma once
 
+#include "../Shaders/LightingConstantBufferData.h"
+
 enum ETessellationDomain
 {
 	TRIANGLE_PATCH = 0,
@@ -50,27 +52,18 @@ struct FTessellationParameters
 	ETessellationOutputTopology OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW;
 	ETessellationPartitioning Partitioning = ETessellationPartitioning::FRACTIONAL_ODD;
 
+	VQ_SHADER_DATA::TessellationParams GPUParams;
+
+	static constexpr float MAX_TESSELLATION_FACTOR = 64.0f;
+
 	inline void SetAllTessellationFactors(float TessellationFactor)
 	{
 		switch (Domain)
 		{
-		case TRIANGLE_PATCH: TriInner = TriOuter[0] = TriOuter[1] = TriOuter[2] = TessellationFactor; break;
-		case QUAD_PATCH: QuadInner[0] = QuadInner[1] = QuadOuter[0] = QuadOuter[1] = QuadOuter[2] = QuadOuter[3] = TessellationFactor; break;
+		case TRIANGLE_PATCH: GPUParams.TriInnerTessFactor = GPUParams.TriEdgeTessFactor.x = GPUParams.TriEdgeTessFactor.y = GPUParams.TriEdgeTessFactor.z = TessellationFactor; break;
+		case QUAD_PATCH: GPUParams.QuadEdgeTessFactor.x = GPUParams.QuadEdgeTessFactor.y = GPUParams.QuadEdgeTessFactor.x = GPUParams.QuadEdgeTessFactor.y = GPUParams.QuadEdgeTessFactor.z = GPUParams.QuadEdgeTessFactor.w = TessellationFactor; break;
 		case ISOLINE_PATCH: // TODO: line
 			break;
 		}
-	}
-
-	float TriOuter[3];
-	float TriInner;
-	float QuadInner[2];
-	float QuadOuter[4];
-	// TODO: line
-	static constexpr float MAX_TESSELLATION_FACTOR = 64.0f;
-
-	FTessellationParameters()
-	{
-		TriOuter[0] = TriOuter[1] = TriOuter[2] = TriInner = 1.0f;
-		QuadOuter[0] = QuadOuter[1] = QuadOuter[2] = QuadOuter[3] = QuadInner[0] = QuadInner[1] = 1.0f;
 	}
 };

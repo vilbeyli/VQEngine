@@ -24,7 +24,7 @@
 
 bool IsOutOfBounds(float3 p, float3 lo, float3 hi)
 {
-	return p.x < lo.x || p.x > hi.x || p.y < lo.y || p.y > hi.y || p.z < lo.z || p.z > hi.z;
+	return p.x < lo.x || p.x > hi.x || p.y < lo.y || p.y > hi.y || p.z <= 0 || p.z > hi.z;
 }
 bool IsPointOutOfFrustum(float4 PositionCS, float Tolerance)
 {
@@ -39,7 +39,7 @@ struct AABB
 	float3 Extents;
 };
 
-bool IsAABBBehindPlane(AABB aabb, float4 Plane, const bool bNormalize)
+bool IsAABBBehindPlane(AABB aabb, float4 Plane, const bool bNormalize, float fTolerance)
 {
 	if(bNormalize)
 	{
@@ -59,7 +59,7 @@ bool IsAABBBehindPlane(AABB aabb, float4 Plane, const bool bNormalize)
 	// signed distance of the center point of AABB to the plane
 	float sd = dot(float4(aabb.Center, 1.0f), Plane);
 	
-	return (sd + r) < 0.0f;
+	return (sd + r) < (0.0f + fTolerance);
 }
 
 // TODO:
@@ -135,14 +135,14 @@ AABB BuildAABB(InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch)
 	return aabb;
 }
 
-bool ShouldFrustumCullPatch(float4 FrustumPlanes[6], InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch)
+bool ShouldFrustumCullPatch(float4 FrustumPlanes[6], InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch, float fTolerance)
 {
 	AABB aabb = BuildAABB(patch);
 	
-	[unroll]
+	//[unroll]
 	for (int iPlane = 0; iPlane < 6; ++iPlane)
 	{
-		if (IsAABBBehindPlane(aabb, FrustumPlanes[iPlane], false))
+		if (IsAABBBehindPlane(aabb, FrustumPlanes[iPlane], false, fTolerance))
 		{
 			return true;
 		}
@@ -151,10 +151,13 @@ bool ShouldFrustumCullPatch(float4 FrustumPlanes[6], InputPatch<TessellationCont
 	return false;
 }
 
-bool ShouldCullFace(InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch)
+bool ShouldCullBackFace(InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch, float fTolerance)
 {
-	// TODO
-	return false;
+	float3 NDC0 = patch[0].ClipPosition.xyz / patch[0].ClipPosition.w;
+	float3 NDC1 = patch[1].ClipPosition.xyz / patch[1].ClipPosition.w;
+	float3 NDC2 = patch[2].ClipPosition.xyz / patch[2].ClipPosition.w;
+	float3 NormalNDC = cross(NDC1 - NDC0, NDC2 - NDC0);
+	return NormalNDC.z > fTolerance;
 }
 
 #endif
@@ -208,6 +211,13 @@ TessellationControlPoint VSMain_Tess(VSInput vertex)
 	return o;
 }
 
+float CalcTessFactor(float3 Point, float3 Eye, float fMinDist, float fMaxDist)
+{
+	float Distance = distance(Point, Eye);
+	float s = saturate((Distance - fMinDist) / (fMaxDist - fMinDist));
+	return pow(2, (lerp(6, 0, s))); // 2^6 = 64 max tess factor
+}
+
 #if ENABLE_TESSELLATION_SHADERS
 // Sources:
 // Cem Yuksel / Interactive Graphics 18 - Tessellation Shaders: https://www.youtube.com/watch?v=OqRMNrvu6TE
@@ -224,30 +234,98 @@ HSOutputPatchConstants CalcHSPatchConstants(
 	InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch, 
 	uint PatchID : SV_PrimitiveID
 )
-{
-	float CullMask = select(tess.bFrustumCull && ShouldFrustumCullPatch(cbPerView.WorldFrustumPlanes, patch), 0.0f, 1.0f);
-	CullMask += select(tess.bFaceCull && ShouldCullFace(patch), 0.0f, 1.0f);
-	CullMask = saturate(CullMask); //[0,N] -> [0,1]
-	
+{	
 	HSOutputPatchConstants c;
 
+	// CULLING -------------------------------------------------------------------------------------
+	bool bCull = tess.bFrustumCull && ShouldFrustumCullPatch(cbPerView.WorldFrustumPlanes, patch, tess.fHSFrustumCullEpsilon);
+	if(!bCull)
+		bCull = tess.bFaceCull && ShouldCullBackFace(patch, tess.fHSFaceCullEpsilon);
+	if(bCull)
+	{
+	#ifdef DOMAIN__TRIANGLE
+		c.EdgeTessFactor[0] = 0;
+		c.EdgeTessFactor[1] = 0;
+		c.EdgeTessFactor[2] = 0;
+		c.InsideTessFactor  = 0;
+	#elif defined(DOMAIN__QUAD)
+		c.EdgeTessFactor[0]   = 0;
+		c.EdgeTessFactor[1]   = 0;
+		c.EdgeTessFactor[2]   = 0;
+		c.EdgeTessFactor[3]   = 0;
+		c.InsideTessFactor[0] = 0;
+		c.InsideTessFactor[1] = 0;
+	#elif defined(DOMAIN__LINE)
+		// TODO:
+	#endif
+
+		return c;
+	}
+	// ---------------------------------------------------------------------------------------------
+
+	float3 Eye = cbPerView.CameraPosition;
+
+	float3 PatchCenter = float3(0,0,0);
+	for (int i = 0; i < NUM_CONTROL_POINTS; ++i)
+	{
+		PatchCenter += patch[i].WorldPosition;
+	}
+	PatchCenter /= NUM_CONTROL_POINTS;
+	
+	float fDTessMin = tess.fHSAdaptiveTessellationMinDist;
+	float fDTessMax = tess.fHSAdaptiveTessellationMaxDist;
+	
 #ifdef DOMAIN__TRIANGLE
-	c.EdgeTessFactor[0] = tess.TriEdgeTessFactor.x * CullMask;
-	c.EdgeTessFactor[1] = tess.TriEdgeTessFactor.y * CullMask;
-	c.EdgeTessFactor[2] = tess.TriEdgeTessFactor.z * CullMask;
-	c.InsideTessFactor = tess.TriInnerTessFactor;
+	
+	if(tess.bAdaptiveTessellation)
+	{
+		float3 e0 = 0.5f * (patch[1].WorldPosition + patch[0].WorldPosition);
+		float3 e1 = 0.5f * (patch[2].WorldPosition + patch[0].WorldPosition);
+		float3 e2 = 0.5f * (patch[2].WorldPosition + patch[1].WorldPosition);
+	
+		c.EdgeTessFactor[0] = CalcTessFactor(e0, Eye, fDTessMin, fDTessMax);
+		c.EdgeTessFactor[1] = CalcTessFactor(e1, Eye, fDTessMin, fDTessMax);
+		c.EdgeTessFactor[2] = CalcTessFactor(e2, Eye, fDTessMin, fDTessMax);
+		c.InsideTessFactor  = CalcTessFactor(PatchCenter, Eye, fDTessMin, fDTessMax);
+		return c;
+	}
+	
+	c.EdgeTessFactor[0] = tess.TriEdgeTessFactor.x;
+	c.EdgeTessFactor[1] = tess.TriEdgeTessFactor.y;
+	c.EdgeTessFactor[2] = tess.TriEdgeTessFactor.z;
+	c.InsideTessFactor  = tess.TriInnerTessFactor;
+	
 #elif defined(DOMAIN__QUAD)
-	c.EdgeTessFactor[0] = tess.QuadEdgeTessFactor.x * CullMask;
-	c.EdgeTessFactor[1] = tess.QuadEdgeTessFactor.y * CullMask;
-	c.EdgeTessFactor[2] = tess.QuadEdgeTessFactor.z * CullMask;
-	c.EdgeTessFactor[3] = tess.QuadEdgeTessFactor.w * CullMask;
+	
+	if(tess.bAdaptiveTessellation)
+	{
+		float3 e0 = 0.5f * (patch[1].WorldPosition + patch[0].WorldPosition);
+		float3 e1 = 0.5f * (patch[2].WorldPosition + patch[1].WorldPosition);
+		float3 e2 = 0.5f * (patch[3].WorldPosition + patch[2].WorldPosition);
+		float3 e3 = 0.5f * (patch[0].WorldPosition + patch[3].WorldPosition);
+		float3 fCenter = CalcTessFactor(PatchCenter, Eye, fDTessMin, fDTessMax);
+
+		c.EdgeTessFactor[0]   = CalcTessFactor(e0, Eye, fDTessMin, fDTessMax);
+		c.EdgeTessFactor[1]   = CalcTessFactor(e1, Eye, fDTessMin, fDTessMax);
+		c.EdgeTessFactor[2]   = CalcTessFactor(e2, Eye, fDTessMin, fDTessMax);
+		c.EdgeTessFactor[3]   = CalcTessFactor(e3, Eye, fDTessMin, fDTessMax);
+		c.InsideTessFactor[0] = fCenter;
+		c.InsideTessFactor[1] = fCenter;
+		return c;
+	}
+	
+	c.EdgeTessFactor[0]   = tess.QuadEdgeTessFactor.x;
+	c.EdgeTessFactor[1]   = tess.QuadEdgeTessFactor.y;
+	c.EdgeTessFactor[2]   = tess.QuadEdgeTessFactor.z;
+	c.EdgeTessFactor[3]   = tess.QuadEdgeTessFactor.w;
 	c.InsideTessFactor[0] = tess.QuadInsideFactor.x;
 	c.InsideTessFactor[1] = tess.QuadInsideFactor.y;
+	
 #elif defined(DOMAIN__LINE)
 	// TODO:
 #endif
 
-	return c;
+		return c;
 }
 
 // Hull Shader

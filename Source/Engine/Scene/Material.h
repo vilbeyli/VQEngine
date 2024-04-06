@@ -62,7 +62,6 @@ struct Material // 56 Bytes
 	// Tessellation
 	FTessellationParameters Tessellation;
 	bool bWireframe = false;
-	bool bFrustumCullPatches = false;
 	//------------------------------------------------------------
 
 
@@ -81,7 +80,7 @@ struct Material // 56 Bytes
 	SRV_ID SRVHeightMap = INVALID_ID;
 	//------------------------------------------------------------
 
-	VQ_SHADER_DATA::TessellationParams GetTessellationCBufferData() const;
+	inline VQ_SHADER_DATA::TessellationParams GetTessellationCBufferData() const { return this->Tessellation.GPUParams; }
 	VQ_SHADER_DATA::MaterialData GetCBufferData() const;
 	int                          GetTextureConfig() const;
 	inline bool IsTransparent() const { return alpha != 1.0f; }

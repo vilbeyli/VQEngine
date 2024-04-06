@@ -425,8 +425,7 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 					matR.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW;
 					matR.Tessellation.Partitioning = ETessellationPartitioning::INTEGER;
 					constexpr float TESSELLATION_FACTOR = 10.0f;
-					matR.Tessellation.TriInner = TESSELLATION_FACTOR;
-					matR.Tessellation.TriOuter[0] = matR.Tessellation.TriOuter[1] = matR.Tessellation.TriOuter[2] = TESSELLATION_FACTOR;
+					matR.Tessellation.SetAllTessellationFactors(TESSELLATION_FACTOR);
 					
 					const size_t i = r * NUM_TESSELLATION_SPHERES_COL + m;
 					matR.EmissiveIntensity = i;
