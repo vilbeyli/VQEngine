@@ -25,8 +25,6 @@
 
 #include <unordered_map>
 
-#include "../../Renderer/Renderer.h" // TODO:
-
 struct FSceneView;
 class DynamicBufferHeap;
 struct ID3D12GraphicsCommandList;
@@ -62,8 +60,8 @@ public:
 	inline int4 ReadBackPixel(int screenCoordsX, int screenCoordsY) const { return ReadBackPixel(int2(screenCoordsX, screenCoordsY)); }
 	inline int4 ReadBackPixel(float2 uv) const { return ReadBackPixel((int)uv.x * mOutputResolutionX, (int)uv.y * mOutputResolutionY); }
 
-	ID3D12Resource* GetGPUTextureResource() const { return mRenderer.GetTextureResource(TEXPassOutput); }
-	ID3D12Resource* GetCPUTextureResource() const { return mRenderer.GetTextureResource(TEXPassOutputCPUReadback); }
+	ID3D12Resource* GetGPUTextureResource() const;
+	ID3D12Resource* GetCPUTextureResource() const;
 
 private:
 	PSO_ID PSOOpaque = INVALID_ID;

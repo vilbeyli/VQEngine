@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "ObjectIDPass.h"
+#include "../../Renderer/Renderer.h"
 #include "../Scene/Scene.h"
 #include "../../Shaders/LightingConstantBufferData.h"
 #include "../VQUtils/Source/utils.h"
@@ -25,6 +26,7 @@
 #include <cassert>
 
 using namespace DirectX;
+
 
 ObjectIDPass::ObjectIDPass(VQRenderer& Renderer)
 	: RenderPassBase(Renderer)
@@ -262,3 +264,6 @@ int4 ObjectIDPass::ReadBackPixel(const int2& screenCoords) const
 
 	return int4(-1, -1, -1, -1);
 }
+
+ID3D12Resource* ObjectIDPass::GetGPUTextureResource() const { return mRenderer.GetTextureResource(TEXPassOutput); }
+ID3D12Resource* ObjectIDPass::GetCPUTextureResource() const { return mRenderer.GetTextureResource(TEXPassOutputCPUReadback); }

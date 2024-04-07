@@ -39,11 +39,9 @@
 
 #include "ResourceHeaps.h"
 #include "ResourceViews.h"
+#include "Common.h"
 
 #include "Libs/D3DX12/d3dx12.h"
-#include "../../Libs/VQUtils/Source/Log.h"
-
-#include <cassert>
 
 //--------------------------------------------------------------------------------------
 //
@@ -52,8 +50,18 @@
 //--------------------------------------------------------------------------------------
 
 #include "../../Libs/VQUtils/Source/utils.h"
-void StaticResourceViewHeap::Create(ID3D12Device* pDevice, const std::string& ResourceName, D3D12_DESCRIPTOR_HEAP_TYPE heapType, uint32 descriptorCount, bool forceCPUVisible)
+void StaticResourceViewHeap::Create(ID3D12Device* pDevice, const std::string& ResourceName, EResourceHeapType heapTypeIn, uint32 descriptorCount, bool forceCPUVisible)
 {
+    D3D12_DESCRIPTOR_HEAP_TYPE heapType;
+    switch (heapTypeIn)
+    {
+    case RTV_HEAP: heapType = D3D12_DESCRIPTOR_HEAP_TYPE_RTV; break;
+    case DSV_HEAP: heapType = D3D12_DESCRIPTOR_HEAP_TYPE_DSV; break;
+    case CBV_SRV_UAV_HEAP: heapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; break;
+    case SAMPLER_HEAP: heapType = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER; break;
+    case NUM_HEAP_TYPES: heapType = D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; break;
+    }
+    
     this->mDescriptorCount = descriptorCount;
     this->mIndex = 0;
         
@@ -113,7 +121,7 @@ bool StaticResourceViewHeap::AllocDescriptor(uint32 size, ResourceView* pRV)
 // UploadHeap
 //
 //--------------------------------------------------------------------------------------
-void UploadHeap::Create(ID3D12Device* pDevice, SIZE_T uSize, ID3D12CommandQueue* pQueue)
+void UploadHeap::Create(ID3D12Device* pDevice, size_t uSize, ID3D12CommandQueue* pQueue)
 {
     mpDevice = pDevice;
     mpQueue = pQueue;
@@ -167,7 +175,7 @@ void UploadHeap::Destroy()
 }
 
 
-UINT8* UploadHeap::Suballocate(SIZE_T uSize, UINT64 uAlign)
+UINT8* UploadHeap::Suballocate(size_t uSize, UINT64 uAlign)
 {
     mpDataCur = reinterpret_cast<UINT8*>(AlignOffset(reinterpret_cast<SIZE_T>(mpDataCur), SIZE_T(uAlign)));
 

@@ -47,14 +47,16 @@
 //-----------------------------------------------------------------------------------------------------------
 
 #include "ResourceHeaps.h"
-#include "Common.h"
+#include <d3d12.h>
 
 #include <mutex>
 
 struct ID3D12Device;
 struct ID3D12Resource;
-struct D3D12_CONSTANT_BUFFER_VIEW_DESC;
 struct ID3D12GraphicsCommandList;
+struct D3D12_CONSTANT_BUFFER_VIEW_DESC;
+struct D3D12_VERTEX_BUFFER_VIEW;
+struct D3D12_INDEX_BUFFER_VIEW;
 
 //
 // BUFFER DESCRIPTOR

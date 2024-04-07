@@ -366,13 +366,13 @@ void VQRenderer::InitializeHeaps()
 	constexpr uint32 NumDescsSRV = 8192;
 	constexpr uint32 NumDescsUAV = 100;
 	constexpr bool   bCPUVisible = false;
-	mHeapCBV_SRV_UAV.Create(pDevice, "HeapCBV_SRV_UAV", D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, NumDescsCBV + NumDescsSRV + NumDescsUAV, bCPUVisible);
+	mHeapCBV_SRV_UAV.Create(pDevice, "HeapCBV_SRV_UAV", EResourceHeapType::CBV_SRV_UAV_HEAP, NumDescsCBV + NumDescsSRV + NumDescsUAV, bCPUVisible);
 
 	constexpr uint32 NumDescsDSV = 100;
-	mHeapDSV.Create(pDevice, "HeapDSV", D3D12_DESCRIPTOR_HEAP_TYPE_DSV, NumDescsDSV);
+	mHeapDSV.Create(pDevice, "HeapDSV", EResourceHeapType::DSV_HEAP, NumDescsDSV);
 
 	constexpr uint32 NumDescsRTV = 1000;
-	mHeapRTV.Create(pDevice, "HeapRTV", D3D12_DESCRIPTOR_HEAP_TYPE_RTV, NumDescsRTV);
+	mHeapRTV.Create(pDevice, "HeapRTV", EResourceHeapType::RTV_HEAP, NumDescsRTV);
 
 	constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 256 * MEGABYTE;
 	constexpr bool USE_GPU_MEMORY = true;

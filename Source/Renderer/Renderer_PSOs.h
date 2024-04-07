@@ -18,12 +18,8 @@
 
 #pragma once
 
-#include "Shader.h"
-
-#include <d3d12.h>
+#include "ShaderCompileUtils.h"
 #include <unordered_map>
-#include <string>
-#include <vector>
 
 namespace D3D12MA { class Allocator; }
 class Window;
@@ -122,7 +118,8 @@ static constexpr size_t NUM_TESS_ENABLED = 2; // on/off
 static constexpr size_t NUM_DOMAIN_OPTIONS = 2; // tri/quad
 static constexpr size_t NUM_PARTIT_OPTIONS = 4; // integer, fractional_even, fractional_odd, or pow2
 static constexpr size_t NUM_OUTTOP_OPTIONS = 4; // point, line, triangle_cw, or triangle_ccw
-static constexpr size_t NUM_TESS_OPTS = NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * NUM_OUTTOP_OPTIONS;
+static constexpr size_t NUM_TESS_CULL_OPTIONS = 2; // Cull[on/off], dynamic branch for face/frustum params
+static constexpr size_t NUM_TESS_OPTS = NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * NUM_OUTTOP_OPTIONS * NUM_TESS_CULL_OPTIONS;
 
 // off/msaa4  TODO: other msaa
 static constexpr size_t NUM_MSAA_OPTS = 2; 
@@ -156,10 +153,10 @@ struct FLightingPSOs : PSOCollection
 	static constexpr size_t NUM_ALPHA_OPTIONS = 2; // opaque/alpha masked
 	static constexpr size_t NUM_MAT_OPTIONS = NUM_ALPHA_OPTIONS;
 
-	static size_t Hash(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iOutMoVec, size_t iOutRough, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iAlpha);
-	inline PSO_ID Get(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iOutMoVec, size_t iOutRough, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iAlpha) const
+	static size_t Hash(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iOutMoVec, size_t iOutRough, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha);
+	inline PSO_ID Get(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iOutMoVec, size_t iOutRough, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha) const
 	{
-		return PSOCollection::Get(Hash(iMSAA, iRaster, iFaceCull, iOutMoVec, iOutRough, iTess, iDomain, iPart, iOutTopo, iAlpha));
+		return PSOCollection::Get(Hash(iMSAA, iRaster, iFaceCull, iOutMoVec, iOutRough, iTess, iDomain, iPart, iOutTopo, iTessCullMode, iAlpha));
 	}
 
 	void GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12RootSignature*>& mRootSignatureLookup) override;
@@ -180,10 +177,10 @@ struct FDepthPrePassPSOs : public PSOCollection
 	static constexpr size_t NUM_ALPHA_OPTIONS = 2; // opaque/alpha masked
 	static constexpr size_t NUM_MAT_OPTIONS = NUM_ALPHA_OPTIONS;
 
-	static size_t Hash(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iAlpha);
-	inline PSO_ID Get(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iAlpha) const
+	static size_t Hash(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha);
+	inline PSO_ID Get(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha) const
 	{
-		return PSOCollection::Get(Hash(iMSAA, iRaster, iFaceCull, iTess, iDomain, iPart, iOutTopo, iAlpha));
+		return PSOCollection::Get(Hash(iMSAA, iRaster, iFaceCull, iTess, iDomain, iPart, iOutTopo, iTessCullMode, iAlpha));
 	}
 
 	void GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12RootSignature*>& mRootSignatureLookup) override;

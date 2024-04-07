@@ -166,28 +166,38 @@ PSInput TransformVertex(
 	return result;
 }
 
-#include "Tessellation.hlsl"
-
-
 
 //---------------------------------------------------------------------------------------------------
 //
-// KERNELS
+// TESSELLATION
+//
+//---------------------------------------------------------------------------------------------------
+#include "Tessellation.hlsl"
+
+//---------------------------------------------------------------------------------------------------
+//
+// VERTEX SHADER
 //
 //---------------------------------------------------------------------------------------------------
 PSInput VSMain(VSInput vertex)
 {
 	return TransformVertex(
-	#if INSTANCED_DRAW
+#if INSTANCED_DRAW
 		vertex.instanceID,
-	#endif
-		vertex.position, 
-		vertex.normal, 
-		vertex.tangent, 
+#endif
+		vertex.position,
+		vertex.normal,
+		vertex.tangent,
 		vertex.uv
 	);
 }
 
+
+//---------------------------------------------------------------------------------------------------
+//
+// PIXEL SHADER
+//
+//---------------------------------------------------------------------------------------------------
 PSOutput PSMain(PSInput In)
 {
 	PSOutput o = (PSOutput)0;
@@ -219,8 +229,21 @@ PSOutput PSMain(PSInput In)
 	Surface.roughness         = cbPerObject.materialData.roughness;
 	Surface.metalness         = cbPerObject.materialData.metalness;
 	
+	#if ENABLE_TESSELLATION_SHADERS
+	float fHeightSample = texHeightmap.SampleLevel(LinearSampler, uv, 0).r;
+	float fHeightOffset = fHeightSample * cbPerObject.materialData.displacement;
+	
+	float fHeightSampleT = texHeightmap.SampleLevel(LinearSampler, uv + float2(0,0), 0).r;
+	float fHeightSampleB = texHeightmap.SampleLevel(LinearSampler, uv + float2(0,0), 0).r;
+	float fHeightSampleL = texHeightmap.SampleLevel(LinearSampler, uv + float2(0,0), 0).r;
+	float fHeightSampleR = texHeightmap.SampleLevel(LinearSampler, uv + float2(0,0), 0).r;
+	
 	const float3 N = normalize(In.vertNormal);
 	const float3 T = normalize(In.vertTangent);
+	#else
+	const float3 N = normalize(In.vertNormal);
+	const float3 T = normalize(In.vertTangent);
+	#endif
 	Surface.N = length(Normal) < 0.01 ? N : UnpackNormal(Normal, N, T);
 	
 	if (HasAmbientOcclusionMap           (TEX_CFG)>0) ao *= LocalAO;

@@ -19,6 +19,7 @@
 
 #include "RenderPass.h"
 #include "../../Renderer/ResourceViews.h" // TODO: use IDs instead of SRV & IBV in draw params
+#include <memory>
 
 static constexpr float MAGNIFIER_BORDER_COLOR__LOCKED[3] = { 0.002f, 0.52f, 0.0f }; // G
 static constexpr float MAGNIFIER_BORDER_COLOR__FREE[3] = { 0.72f, 0.002f, 0.0f };   // R

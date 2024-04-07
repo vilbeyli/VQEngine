@@ -19,13 +19,12 @@
 #pragma once
 
 #include "Device.h"
-#include "SwapChain.h"
 #include "CommandQueue.h"
 #include "ResourceHeaps.h"
 #include "ResourceViews.h"
 #include "Buffer.h"
 #include "Texture.h"
-#include "Shader.h"
+#include "ShaderCompileUtils.h"
 #include "WindowRenderContext.h"
 #include "Fence.h"
 #include "Renderer_PSOs.h"

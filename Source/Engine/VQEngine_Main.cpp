@@ -20,6 +20,7 @@
 #include "Libs/VQUtils/Source/utils.h"
 #include "GPUMarker.h"
 
+#include "../../Libs/DirectXCompiler/inc/dxcapi.h"
 #include <cassert>
 
 #ifdef _DEBUG

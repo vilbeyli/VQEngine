@@ -28,9 +28,11 @@
 #include "../../Libs/VQUtils/Source/Timer.h"
 #include "../../Libs/VQUtils/Source/Image.h"
 #include "../../Libs/D3D12MA/src/Common.h"
+#include "../../Libs/DirectXCompiler/inc/dxcapi.h"
 
 #include <cassert>
 #include <atomic>
+#include <d3dcompiler.h>
 
 using namespace Microsoft::WRL;
 using namespace VQSystemInfo;
@@ -1182,7 +1184,7 @@ ID3D12PipelineState* VQRenderer::CompileGraphicsPSO(const FPSODesc& Desc, std::v
 				Log::Error("Failed ");
 			}
 
-			hr = pReflection->Load(ShaderCompileResult.ShaderBlob.pBlobDxc);
+			hr = pReflection->Load(ShaderCompileResult.ShaderBlob.pBlobDxc.Get());
 			if (FAILED(hr)) {
 				Log::Error("Failed ");
 			}

@@ -24,6 +24,7 @@ set (Headers
     "Texture.h"
     "HDR.h"
     "Shader.h"
+    "ShaderCompileUtils.h"
     "Tessellation.h"
 )
 
@@ -42,6 +43,7 @@ set (Source
     "Buffer.cpp"
     "Texture.cpp"
     "Shader.cpp"
+    "ShaderCompileUtils.cpp"
 )
 
 

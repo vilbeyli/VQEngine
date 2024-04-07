@@ -19,6 +19,7 @@
 #pragma once
 
 #include "../Shaders/LightingConstantBufferData.h"
+#include "Shader.h"
 
 enum ETessellationDomain
 {
@@ -47,21 +48,27 @@ enum ETessellationPartitioning
 
 struct FTessellationParameters
 {
+	static constexpr float MAX_TESSELLATION_FACTOR = 64.0f;
+
 	bool bEnableTessellation = false;
 	ETessellationDomain Domain = ETessellationDomain::TRIANGLE_PATCH;
 	ETessellationOutputTopology OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW;
 	ETessellationPartitioning Partitioning = ETessellationPartitioning::FRACTIONAL_ODD;
 
 	VQ_SHADER_DATA::TessellationParams GPUParams;
+	bool bEnableVertexTBNVisualization = false;
 
-	static constexpr float MAX_TESSELLATION_FACTOR = 64.0f;
+	static const char* GetShaderMacro_Domain_Tri() { return ""; }
+	static const char* GetShaderMacro_Domain_Quad() { return ""; }
+	static const char* GetShaderMacro_Domain_Line() { return ""; }
+	static const char* GetShaderMacro_() { return ""; }
 
 	inline void SetAllTessellationFactors(float TessellationFactor)
 	{
 		switch (Domain)
 		{
 		case TRIANGLE_PATCH: GPUParams.TriInnerTessFactor = GPUParams.TriEdgeTessFactor.x = GPUParams.TriEdgeTessFactor.y = GPUParams.TriEdgeTessFactor.z = TessellationFactor; break;
-		case QUAD_PATCH: GPUParams.QuadEdgeTessFactor.x = GPUParams.QuadEdgeTessFactor.y = GPUParams.QuadEdgeTessFactor.x = GPUParams.QuadEdgeTessFactor.y = GPUParams.QuadEdgeTessFactor.z = GPUParams.QuadEdgeTessFactor.w = TessellationFactor; break;
+		case QUAD_PATCH: GPUParams.QuadInsideFactor.x = GPUParams.QuadInsideFactor.y = GPUParams.QuadEdgeTessFactor.x = GPUParams.QuadEdgeTessFactor.y = GPUParams.QuadEdgeTessFactor.z = GPUParams.QuadEdgeTessFactor.w = TessellationFactor; break;
 		case ISOLINE_PATCH: // TODO: line
 			break;
 		}

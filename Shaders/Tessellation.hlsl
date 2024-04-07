@@ -17,11 +17,40 @@
 //	Contact: volkanilbeyli@gmail.com
 
 
+// TESSELLATION
+// ==================================================================================================================================
+//
+// Sources:
+// - Academy
+//   - Real-Time Rendering Techniques w/ HW Tessellation: https://techmatt.github.io/pdfs/realtimeRendering.pdf
+//   - Cem Yuksel / Interactive Graphics 18 - Tessellation Shaders: https://www.youtube.com/watch?v=OqRMNrvu6TE
+// - Projects/Blogs
+//   - https://thedemonthrone.ca/projects/rendering-terrain/rendering-terrain-part-8-adding-tessellation/
+//   - https://thedemonthrone.ca/projects/rendering-terrain/rendering-terrain-part-10-view-frustum-culling/
+//   - https://bruop.github.io/frustum_culling/
+//   - http://www.richardssoftware.net/2013/09/dynamic-terrain-rendering-with-slimdx.html
+//   - https://fgiesen.wordpress.com/2010/10/17/view-frustum-culling/
+// ----------------------------------------------------------------------------------------------------------------
+// https://learn.microsoft.com/en-us/windows/win32/direct3d11/direct3d-11-advanced-stages-tessellation
+// https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-semantics#system-value-semantics
+//
+// TODO:
+// Triplanar mapping: https://gamedevelopment.tutsplus.com/use-tri-planar-texture-mapping-for-better-terrain--gamedev-13821a
+// LODs : https://thedemonthrone.ca/projects/rendering-terrain/rendering-terrain-part-9-dynamic-level-of-detail/
+// Normal reconstruction: http://www.thetenthplanet.de/archives/1180
+// ==================================================================================================================================
+
+
 //#define DOMAIN__TRIANGLE 1
 //#define DOMAIN__QUAD 1
 #define ENABLE_TESSELLATION_SHADERS defined(DOMAIN__TRIANGLE) || defined(DOMAIN__QUAD)
 
 
+//---------------------------------------------------------------------------------------------------
+//
+// UTILS
+//
+//---------------------------------------------------------------------------------------------------
 bool IsOutOfBounds(float3 p, float3 lo, float3 hi)
 {
 	return p.x < lo.x || p.x > hi.x || p.y < lo.y || p.y > hi.y || p.z <= 0 || p.z > hi.z;
@@ -62,10 +91,36 @@ bool IsAABBBehindPlane(AABB aabb, float4 Plane, const bool bNormalize, float fTo
 	return (sd + r) < (0.0f + fTolerance);
 }
 
-// TODO:
-// Triplanar mapping: https://gamedevelopment.tutsplus.com/use-tri-planar-texture-mapping-for-better-terrain--gamedev-13821a
-// LODs : https://thedemonthrone.ca/projects/rendering-terrain/rendering-terrain-part-9-dynamic-level-of-detail/
-// Normal reconstruction: http://www.thetenthplanet.de/archives/1180
+bool ShouldFrustumCullTriangle(float4 FrustumPlanes[6], float3 V0WorldPos, float3 V1WorldPos, float3 V2WorldPos, float fTolerance)
+{
+	float3 Mins = +1000000.0f.xxx; // TODO: FLT_MAX
+	float3 Maxs = -1000000.0f.xxx; // TODO: FLT_MIN
+	AABB aabb;
+	Mins = min(V0WorldPos, min(V1WorldPos, V2WorldPos));
+	Maxs = max(V0WorldPos, max(V1WorldPos, V2WorldPos));
+	aabb.Center = 0.5f * (Mins + Maxs);
+	aabb.Extents = 0.5f * (Maxs - Mins);
+	
+	[unroll]
+	for (int iPlane = 0; iPlane < 6; ++iPlane)
+	{
+		if (IsAABBBehindPlane(aabb, FrustumPlanes[iPlane], false, fTolerance))
+		{
+			return true;
+		}
+	}
+	
+	return false;
+}
+
+bool ShouldCullBackFace(float4 ClipPos0, float4 ClipPos1, float4 ClipPos2, float fTolerance)
+{
+	float3 NDC0 = ClipPos0.xyz / ClipPos0.w;
+	float3 NDC1 = ClipPos1.xyz / ClipPos1.w;
+	float3 NDC2 = ClipPos2.xyz / ClipPos2.w;
+	float3 NormalNDC = cross(NDC1 - NDC0, NDC2 - NDC0);
+	return NormalNDC.z > fTolerance;
+}
 
 //---------------------------------------------------------------------------------------------------
 //
@@ -97,6 +152,21 @@ struct TessellationControlPoint
 #endif
 };
 
+#if ENABLE_GEOMETRY_SHADER
+struct GSInput
+{
+	float4 position    : POSITION;
+	float3 worldPos    : COLOR2;
+	float3 vertNormal  : COLOR0;
+	float3 vertTangent : COLOR1;
+	float2 uv          : TEXCOORD0;
+#if PS_OUTPUT_MOTION_VECTORS
+	float4 svPositionCurr : TEXCOORD1;
+	float4 svPositionPrev : TEXCOORD2;
+#endif
+};
+#endif // ENABLE_GEOMETRY_SHADER
+
 #if ENABLE_TESSELLATION_SHADERS
 // HS patch constants
 struct HSOutputTriPatchConstants
@@ -117,6 +187,13 @@ struct HSOutputQuadPatchConstants
 	#define NUM_CONTROL_POINTS 4
 	#define HSOutputPatchConstants HSOutputQuadPatchConstants
 #endif // DOMAIN__
+
+
+#if ENABLE_GEOMETRY_SHADER
+#define DSOutput GSInput
+#else
+#define DSOutput PSInput
+#endif
 
 AABB BuildAABB(InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch)
 {
@@ -153,11 +230,7 @@ bool ShouldFrustumCullPatch(float4 FrustumPlanes[6], InputPatch<TessellationCont
 
 bool ShouldCullBackFace(InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch, float fTolerance)
 {
-	float3 NDC0 = patch[0].ClipPosition.xyz / patch[0].ClipPosition.w;
-	float3 NDC1 = patch[1].ClipPosition.xyz / patch[1].ClipPosition.w;
-	float3 NDC2 = patch[2].ClipPosition.xyz / patch[2].ClipPosition.w;
-	float3 NormalNDC = cross(NDC1 - NDC0, NDC2 - NDC0);
-	return NormalNDC.z > fTolerance;
+	return ShouldCullBackFace(patch[0].ClipPosition, patch[2].ClipPosition, patch[2].ClipPosition, fTolerance);
 }
 
 #endif
@@ -188,7 +261,7 @@ Texture2D texHeightmap      : register(t8); // VS or PS
 
 //---------------------------------------------------------------------------------------------------
 //
-// KERNELS
+// VERTEX SHADER
 //
 //---------------------------------------------------------------------------------------------------
 TessellationControlPoint VSMain_Tess(VSInput vertex)
@@ -211,6 +284,11 @@ TessellationControlPoint VSMain_Tess(VSInput vertex)
 	return o;
 }
 
+//---------------------------------------------------------------------------------------------------
+//
+// HULL SHADER
+//
+//---------------------------------------------------------------------------------------------------
 float CalcTessFactor(float3 Point, float3 Eye, float fMinDist, float fMaxDist)
 {
 	float Distance = distance(Point, Eye);
@@ -219,17 +297,6 @@ float CalcTessFactor(float3 Point, float3 Eye, float fMinDist, float fMaxDist)
 }
 
 #if ENABLE_TESSELLATION_SHADERS
-// Sources:
-// Cem Yuksel / Interactive Graphics 18 - Tessellation Shaders: https://www.youtube.com/watch?v=OqRMNrvu6TE
-// https://thedemonthrone.ca/projects/rendering-terrain/rendering-terrain-part-8-adding-tessellation/
-// https://bruop.github.io/frustum_culling/
-// http://www.richardssoftware.net/2013/09/dynamic-terrain-rendering-with-slimdx.html
-// https://fgiesen.wordpress.com/2010/10/17/view-frustum-culling/
-// https://thedemonthrone.ca/projects/rendering-terrain/rendering-terrain-part-10-view-frustum-culling/
-// ----------------------------------------------------------------------------------------------------------------
-// https://learn.microsoft.com/en-us/windows/win32/direct3d11/direct3d-11-advanced-stages-tessellation
-// https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-semantics#system-value-semantics
-
 HSOutputPatchConstants CalcHSPatchConstants(
 	InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch, 
 	uint PatchID : SV_PrimitiveID
@@ -237,7 +304,9 @@ HSOutputPatchConstants CalcHSPatchConstants(
 {	
 	HSOutputPatchConstants c;
 
+	#if ENABLE_GEOMETRY_SHADER
 	// CULLING -------------------------------------------------------------------------------------
+	// Culling in the patch geometry pre-tessellation isn't very accurate -- do it only when there's no GS.
 	bool bCull = tess.bFrustumCull && ShouldFrustumCullPatch(cbPerView.WorldFrustumPlanes, patch, tess.fHSFrustumCullEpsilon);
 	if(!bCull)
 		bCull = tess.bFaceCull && ShouldCullBackFace(patch, tess.fHSFaceCullEpsilon);
@@ -261,6 +330,7 @@ HSOutputPatchConstants CalcHSPatchConstants(
 
 		return c;
 	}
+	#endif
 	// ---------------------------------------------------------------------------------------------
 
 	float3 Eye = cbPerView.CameraPosition;
@@ -338,9 +408,9 @@ HSOutputPatchConstants CalcHSPatchConstants(
 // output: 1-32 control points  --> DS
 //         patch constants      --> Tessellator + DS
 //         tessellation factors --> Tessellator
-
+//
 // https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-attributes-domain
-// Domain: tri, quad, or isoline
+// Domain: tri, quad, or isoline   
 #if DOMAIN__QUAD
 [domain("quad")] 
 #elif DOMAIN__TRIANGLE
@@ -392,6 +462,11 @@ TessellationControlPoint HSMain(
 }
 
 
+//---------------------------------------------------------------------------------------------------
+//
+// DOMAIN SHADER
+//
+//---------------------------------------------------------------------------------------------------
 //
 // https://learn.microsoft.com/en-us/windows/win32/direct3d11/direct3d-11-advanced-stages-domain-shader-design
 // https://learn.microsoft.com/en-us/windows/win32/direct3d11/direct3d-11-advanced-stages-domain-shader-create
@@ -430,7 +505,8 @@ TessellationControlPoint HSMain(
 #elif DOMAIN__LINE
 [domain("isoline")]
 #endif
-PSInput DSMain(
+
+DSOutput DSMain(
 	HSOutputPatchConstants In,
 	const OutputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch,
 #if DOMAIN__QUAD || DOMAIN__LINE
@@ -457,7 +533,9 @@ PSInput DSMain(
 	float3 vTangent = INTERPOLATE_PATCH_ATTRIBUTE(Tangent, bary);
 #endif
 
-	return TransformVertex(
+
+	// transform vertex
+	PSInput TransformedVertex = TransformVertex(
 	#if INSTANCED_DRAW
 		patch[0].instanceID,
 	#endif
@@ -466,6 +544,86 @@ PSInput DSMain(
 		vTangent,
 		uv
 	);
+
+#if ENABLE_GEOMETRY_SHADER
+	GSInput TransformedVertexGS;
+	TransformedVertexGS.position    = TransformedVertex.position   ;
+	TransformedVertexGS.worldPos    = TransformedVertex.worldPos   ;
+	TransformedVertexGS.vertNormal  = TransformedVertex.vertNormal ;
+	TransformedVertexGS.vertTangent = TransformedVertex.vertTangent;
+	TransformedVertexGS.uv          = TransformedVertex.uv         ;
+	#if PS_OUTPUT_MOTION_VECTORS
+	TransformedVertexGS.svPositionCurr = TransformedVertex.svPositionCurr;
+	TransformedVertexGS.svPositionPrev = TransformedVertex.svPositionPrev;
+	#endif
+	return TransformedVertexGS;
+#else
+	return TransformedVertex;
+#endif
 }
 
 #endif // ENABLE_TESSELLATION_SHADERS
+
+
+//---------------------------------------------------------------------------------------------------
+//
+// GEOMETRY SHADER
+//
+//---------------------------------------------------------------------------------------------------
+#if OUTTOPO__POINT
+#define NUM_VERTS_PER_INPUT_PRIM     1
+#elif OUTTOPO__LINE
+#define NUM_VERTS_PER_INPUT_PRIM     2
+#elif OUTTOPO__TRI_CW || OUTTOPO__TRI_CCW
+#define NUM_VERTS_PER_INPUT_PRIM     3
+#endif
+
+
+#if ENABLE_GEOMETRY_SHADER
+
+[maxvertexcount(NUM_VERTS_PER_INPUT_PRIM)]
+void GSMain(
+#if OUTTOPO__POINT
+	point GSInput Input[NUM_VERTS_PER_INPUT_PRIM]
+#elif OUTTOPO__LINE
+	line GSInput Input[NUM_VERTS_PER_INPUT_PRIM]
+#elif OUTTOPO__TRI_CW
+	triangle GSInput Input[NUM_VERTS_PER_INPUT_PRIM]
+#elif OUTTOPO__TRI_CCW
+	triangle GSInput Input[NUM_VERTS_PER_INPUT_PRIM]
+#endif
+
+	, inout TriangleStream<PSInput> outTriStream
+)
+{	
+	#if OUTTOPO__TRI_CW || OUTTOPO__TRI_CCW
+	// cull triangle
+	if(tess.bFrustumCull && ShouldFrustumCullTriangle(cbPerView.WorldFrustumPlanes, Input[0].worldPos, Input[1].worldPos, Input[2].worldPos, tess.fHSFrustumCullEpsilon))
+		return;
+	if (tess.bFaceCull && ShouldCullBackFace(Input[0].position, Input[1].position, Input[2].position, tess.fHSFaceCullEpsilon)) // need a GSFaceCullEpsilon?
+		return;
+	#endif // TODO: prevent non-tri output topologies to utilize GS (because it'll only be a perf penalty)
+
+	// fetch primitive data
+	PSInput OutputVertex[NUM_VERTS_PER_INPUT_PRIM];
+	[unroll] for (int iVert = 0; iVert < NUM_VERTS_PER_INPUT_PRIM; ++iVert)
+	{
+		OutputVertex[iVert].position = Input[iVert].position;
+		OutputVertex[iVert].worldPos = Input[iVert].worldPos;
+		OutputVertex[iVert].vertNormal = Input[iVert].vertNormal;
+		OutputVertex[iVert].vertTangent = Input[iVert].vertTangent;
+		OutputVertex[iVert].uv = Input[iVert].uv;
+	#if PS_OUTPUT_MOTION_VECTORS
+		OutputVertex[iVert].svPositionCurr = Input[iVert].svPositionCurr;
+		OutputVertex[iVert].svPositionPrev = Input[iVert].svPositionPrev;
+	#endif
+	}
+	
+	// append to output
+	[unroll] for (int iVert = 0; iVert < NUM_VERTS_PER_INPUT_PRIM; ++iVert)
+	{
+		outTriStream.Append(OutputVertex[iVert]);
+	}
+}
+
+#endif // ENABLE_GEOMETRY_SHADER

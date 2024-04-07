@@ -16,23 +16,19 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
+#include "VQEngine.h"
+#include "GPUMarker.h"
+
+#include "Libs/DirectXCompiler/inc/dxcapi.h"
+#include "Libs/VQUtils/Source/utils.h"
+
 #include <Windows.h>
 #include <ShellScalingAPI.h>
 #pragma comment(lib, "shcore.lib")
 
 #include <ctime>
 #include <cstdlib>
-#include <vector>
-#include <string>
 
-#include "Libs/VQUtils/Source/Log.h"
-#include "Libs/VQUtils/Source/utils.h"
-#include "Core/Window.h"
-#include "Core/Platform.h"
-
-#include "VQEngine.h"
-
-#include "GPUMarker.h"
 
 void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmdl)
 {

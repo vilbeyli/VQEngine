@@ -38,6 +38,7 @@ struct VSInput
 struct PSInput
 {
     float4 position    : SV_POSITION;
+	float3 worldPos    : COLOR2;
 	float3 vertNormal  : COLOR0;
 	float3 vertTangent : COLOR1;
 	float2 uv          : TEXCOORD0;
@@ -101,10 +102,12 @@ PSInput TransformVertex(
 
 #if INSTANCED_DRAW
 	result.position    = mul(cbPerObject.matWorldViewProj[InstanceID], vPosition);
+	result.worldPos    = mul(cbPerObject.matWorld[InstanceID], vPosition);
 	result.vertNormal  = mul((float4x3)cbPerObject.matNormal[InstanceID], Normal );
 	result.vertTangent = mul((float4x3)cbPerObject.matNormal[InstanceID], Tangent);
 #else
 	result.position    = mul(cbPerObject.matWorldViewProj, vPosition);
+	result.worldPos    = mul(cbPerObject.matWorld, vPosition);
 	result.vertNormal  = mul(cbPerObject.matNormal, Normal );
 	result.vertTangent = mul(cbPerObject.matNormal, Tangent);
 #endif // INSTANCED_DRAW

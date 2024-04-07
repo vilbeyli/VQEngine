@@ -324,13 +324,15 @@ void VQEngine::RenderDepthPrePass(
 #else
 		const uint32 NumInstances = 1;
 #endif
-
+		
+		const bool bSWCullTessellation = mat.Tessellation.GPUParams.bFaceCull > 0 || mat.Tessellation.GPUParams.bFrustumCull > 0;
 		const size_t iAlpha   = 0; // TODO:
 		const size_t iRaster  = mat.bWireframe ? 1 : 0;
 		const size_t iTess    = mat.Tessellation.bEnableTessellation ? 1 : 0;
 		const size_t iDomain  = iTess == 0 ? 0 : mat.Tessellation.Domain;
 		const size_t iPart    = iTess == 0 ? 0 : mat.Tessellation.Partitioning;
 		const size_t iOutTopo = iTess == 0 ? 0 : mat.Tessellation.OutputTopology;
+		const size_t iTessCull = iTess == 1 && (bSWCullTessellation ? 1 : 0);
 		const PSO_ID psoID = mRenderer.mZPrePassPSOs.Get(
 			iMSAA,
 			iRaster,
@@ -339,6 +341,7 @@ void VQEngine::RenderDepthPrePass(
 			iDomain,
 			iPart,
 			iOutTopo,
+			iTessCull,
 			iAlpha);
 		pCmd->SetPipelineState(mRenderer.GetPSO(psoID));
 		if (mat.Tessellation.bEnableTessellation)
@@ -780,12 +783,14 @@ void VQEngine::RenderSceneColor(
 #else
 			const uint32 NumInstances = 1;
 #endif
-			const size_t iAlpha  = 0; // TODO:
-			const size_t iRaster = mat.bWireframe ? 1 : 0;
-			const size_t iTess = mat.Tessellation.bEnableTessellation ? 1 : 0;
-			const size_t iDomain  = iTess == 0 ? 0 : mat.Tessellation.Domain;
-			const size_t iPart    = iTess == 0 ? 0 : mat.Tessellation.Partitioning;
-			const size_t iOutTopo = iTess == 0 ? 0 : mat.Tessellation.OutputTopology;
+			const bool bSWCullTessellation = mat.Tessellation.GPUParams.bFaceCull > 0 || mat.Tessellation.GPUParams.bFrustumCull > 0;
+			const size_t iAlpha    = 0; // TODO:
+			const size_t iRaster   = mat.bWireframe ? 1 : 0;
+			const size_t iTess     = mat.Tessellation.bEnableTessellation ? 1 : 0;
+			const size_t iDomain   = iTess == 0 ? 0 : mat.Tessellation.Domain;
+			const size_t iPart     = iTess == 0 ? 0 : mat.Tessellation.Partitioning;
+			const size_t iOutTopo  = iTess == 0 ? 0 : mat.Tessellation.OutputTopology;
+			const size_t iTessCull = iTess == 1 && (bSWCullTessellation ? 1 : 0);
 			PSO_ID psoID = mRenderer.mLightingPSOs.Get(
 				iMSAA,
 				iRaster,
@@ -796,6 +801,7 @@ void VQEngine::RenderSceneColor(
 				iDomain,
 				iPart,
 				iOutTopo,
+				iTessCull,
 				iAlpha);
 			ID3D12PipelineState* pPipelineState = mRenderer.GetPSO(psoID);
 			

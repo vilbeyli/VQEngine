@@ -19,8 +19,6 @@
 
 #include "../../Renderer/Renderer_PSOs.h"
 #include "../Core/Types.h"
-#include <DirectXMath.h>
-#include <dxgiformat.h>
 
 #include <vector>
 #include <array>

@@ -39,9 +39,8 @@
 // THE SOFTWARE.
 #pragma once
 
-#include "Common.h"
-
 #include <d3d12.h>
+#include "../Engine/Core/Types.h"
 
 class ResourceView
 {

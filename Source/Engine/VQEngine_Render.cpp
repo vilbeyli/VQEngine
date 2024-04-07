@@ -20,9 +20,6 @@
 #include "GPUMarker.h"
 #include "../VQUtils/Source/utils.h"
 
-#include "RenderPass/AmbientOcclusion.h"
-#include "RenderPass/DepthPrePass.h"
-
 #include "VQEngine_RenderCommon.h"
 
 #include "Shaders/LightingConstantBufferData.h"
