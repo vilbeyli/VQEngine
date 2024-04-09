@@ -55,8 +55,8 @@ PSInput VSMainOutline(VSInput VSIn)
 	
 	float distance = 0.5; // *Scale;
 	
-	float3 viewPosition = mul(matWorldView, float4(VSIn.position, 1));
-	float3 viewNormal   = normalize(mul(matNormalView, float4(VSIn.normal, 0)));
+	float3 viewPosition = mul(matWorldView, float4(VSIn.position, 1)).xyz;
+	float3 viewNormal   = normalize(mul(matNormalView, float4(VSIn.normal, 0)).xyx);
 	float3 viewPositionWithOffset = viewPosition + viewNormal * distance;
 	
 	result.position = mul(matProj, float4(viewPositionWithOffset, 1));

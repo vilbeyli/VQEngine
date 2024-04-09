@@ -84,7 +84,7 @@ enum class EDrawMode
     }
     else if (iDrawMode == NORMALS)
     {
-        OutRGB = ((texInA - 0.5f.xxx) * 2.0f) * iUnpackNormals + (1 - iUnpackNormals) * texInA.rgb;
+        OutRGB = ((texInA.rgb - 0.5f.xxx) * 2.0f) * iUnpackNormals + (1 - iUnpackNormals) * texInA.rgb;
     }
     else if (iDrawMode == ROUGHNESS)
     {

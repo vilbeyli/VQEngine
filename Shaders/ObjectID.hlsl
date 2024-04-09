@@ -85,6 +85,7 @@ int4 PSMain(PSInput In) : SV_TARGET
 	int meshBBProjectedArea = cbPerObject.ObjID[In.instanceID].w;
 #else
 	int objID = cbPerObject.ObjID;
+	int meshBBProjectedArea = cbPerObject.ObjID.w;
 #endif
 	return int4(objID, cbPerObject.meshID, cbPerObject.materialID, meshBBProjectedArea);
 }
