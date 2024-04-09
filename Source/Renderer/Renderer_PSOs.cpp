@@ -452,44 +452,6 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 		descs[EBuiltinPSOs::TONEMAPPER_PSO] = psoLoadDesc;
 	}
 
-	// DEPTH PREPASS PSOs
-#if 0
-	{
-		const std::wstring ShaderFilePath = GetFullPathOfShader(L"DepthPrePass.hlsl");
-
-		FPSODesc psoLoadDesc = {};
-		psoLoadDesc.PSOName = "PSO_FDepthPrePassVSPS";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_1" });
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_1" });
-		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ZPrePass);
-		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCED_DRAW", std::to_string(RENDER_INSTANCED_SCENE_MESHES) });
-		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__SCENE_MESHES) });
-
-		// PSO description
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
-		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
-		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-		psoDesc.DepthStencilState.DepthEnable = TRUE;
-		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-		psoDesc.DepthStencilState.StencilEnable = FALSE;
-		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-		psoDesc.SampleMask = UINT_MAX;
-		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		psoDesc.NumRenderTargets = 1;
-		psoDesc.RTVFormats[0] = DXGI_FORMAT_R10G10B10A2_UNORM;
-		psoDesc.SampleDesc.Count = 1;
-
-		descs[EBuiltinPSOs::DEPTH_PREPASS_PSO] = psoLoadDesc;
-
-
-		// MSAA PSO
-		psoLoadDesc.PSOName = "PSO_FDepthPrePassVSPS_MSAA4";
-		psoDesc.SampleDesc.Count = 4;
-		descs[EBuiltinPSOs::DEPTH_PREPASS_PSO_MSAA_4] = psoLoadDesc;
-	}
-#endif
 
 	// WIREFRAME/UNLIT PSOs
 	{
@@ -604,7 +566,7 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_1" });
 		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCED_DRAW", "1" });
 		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__SHADOW_MESHES) });
-		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ShadowPassDepthOnlyVS);
+		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ShadowPass);
 
 		// PSO description
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
@@ -625,7 +587,6 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 		{
 			psoLoadDesc.PSOName = "PSO_LinearDepthVSPS";
 			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_1" });
-			psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ShadowPassLinearDepthVSPS);
 			descs[EBuiltinPSOs::DEPTH_PASS_LINEAR_PSO] = psoLoadDesc;
 			psoLoadDesc.ShaderStageCompileDescs.pop_back();
 		}
@@ -636,7 +597,6 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 			{
 				shdDesc.Macros.push_back({ "ALPHA_MASK", "1" });
 			}
-			psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ShadowPassMaskedDepthVSPS);
 			descs[EBuiltinPSOs::DEPTH_PASS_ALPHAMASKED_PSO] = psoLoadDesc;
 			psoLoadDesc.ShaderStageCompileDescs.pop_back();
 		}
@@ -831,10 +791,84 @@ PSO_ID PSOCollection::Get(size_t hash) const
 }
 
 
-// TESSELLATION COMMON NAMES
-static const char* szPartitionNames[NUM_PARTIT_OPTIONS] = { "integer", "fractional_even", "fractional_odd", "pow2" };
-static const char* szOutTopologyNames[NUM_OUTTOP_OPTIONS] = { "point", "line", "triangle_cw", "triangle_ccw" };
+// TESSELLATION CONSTANT DATA FOR COMPILATION
+static const char* szPartitionNames[NUM_PARTIT_OPTIONS]   = { "integer", "fractional_even", "fractional_odd", "pw2" };
+static const char* szOutTopologyNames[NUM_OUTTOP_OPTIONS] = { "point", "line", "triangle_cw", "triangle_ccw" }; 
 
+static const char* szOutTopologyMacros[NUM_OUTTOP_OPTIONS]  = { "OUTTOPO__POINT"   , "OUTTOPO__LINE"     , "OUTTOPO__TRI_CW"  , "OUTTOPO__TRI_CCW" };
+static const char* szPartitioningMacros[NUM_PARTIT_OPTIONS] = { "PARTITIONING__INT", "PARTITIONING__EVEN", "PARTITIONING__ODD", "PARTITIONING__POW2" };
+static const char* szDomainMacros[NUM_DOMAIN_OPTIONS]       = { "DOMAIN__TRIANGLE" , "DOMAIN__QUAD"      , "DOMAIN__LINE" };
+
+static FShaderMacro TessellationOutputTopologyEnabledMacros[NUM_PARTIT_OPTIONS] = {
+	{ szOutTopologyMacros[0], "1" },
+	{ szOutTopologyMacros[1], "1" },
+	{ szOutTopologyMacros[2], "1" },
+	{ szOutTopologyMacros[3], "1" },
+};
+static FShaderMacro TessellationPartitioningEnabledMacros[NUM_PARTIT_OPTIONS] = {
+	{ szPartitioningMacros[0], "1" },
+	{ szPartitioningMacros[1], "1" },
+	{ szPartitioningMacros[2], "1" },
+	{ szPartitioningMacros[3], "1" },
+};
+static FShaderMacro TessellationDomainEnabledMacros[NUM_DOMAIN_OPTIONS] = {
+	{ szDomainMacros[0], "1" },
+	{ szDomainMacros[1], "1" },
+	{ szDomainMacros[2], "1" },
+};
+static FShaderMacro TessellationGSEnabledMacro = { "ENABLE_GEOMETRY_SHADER", "1" };
+static void AppendTessellationVSMacros(std::vector<FShaderMacro>& Macros, size_t iDomain)
+{
+	Macros.push_back(TessellationDomainEnabledMacros[iDomain]);
+}
+static void AppendTessellationHSMacros(std::vector<FShaderMacro>& Macros, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCull)
+{
+	Macros.push_back(TessellationPartitioningEnabledMacros[iPart]);
+	Macros.push_back(TessellationDomainEnabledMacros[iDomain]);
+	Macros.push_back(TessellationOutputTopologyEnabledMacros[iOutTopo]);
+	if (iTessCull > 0)
+	{
+		Macros.push_back(TessellationGSEnabledMacro);
+	}
+}
+static void AppendTessellationDSMacros(std::vector<FShaderMacro>& Macros, size_t iDomain, size_t iOutTopo, size_t iTessCull)
+{
+	Macros.push_back(TessellationDomainEnabledMacros[iDomain]);
+	Macros.push_back(TessellationOutputTopologyEnabledMacros[iOutTopo]);
+	if (iTessCull > 0)
+	{
+		Macros.push_back(TessellationGSEnabledMacro);
+	}
+}
+static void AppendTessellationGSMacros(std::vector<FShaderMacro>& Macros, size_t iOutTopo, size_t iTessCull)
+{
+	if (iTessCull == 0)
+		return;
+	Macros.push_back(TessellationOutputTopologyEnabledMacros[iOutTopo]);
+	Macros.push_back(TessellationGSEnabledMacro);
+}
+
+static void AppendTessellationPSONameTokens(std::string& PSOName, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCull)
+{
+	PSOName += "_Tessellated";
+	if (iDomain == 1) PSOName += "_Quad";
+	PSOName += std::string("_") + szPartitionNames[iPart];
+	PSOName += std::string("_") + szOutTopologyNames[iOutTopo];
+	if (iTessCull > 1) PSOName += "_GSCull";
+}
+static bool ShouldSkipTessellationVariant(size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCull)
+{
+	const bool bOutputTopologyIsTriangle = (iOutTopo != ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE && iOutTopo != ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT);
+	if (iTess == 0 && (iDomain > 0 || iPart > 0 || iOutTopo > 0 || iTessCull > 0))
+		return true; // skip tess permutations when tess is off
+	if (iTess == 1 && iOutTopo == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE && iDomain != ETessellationDomain::ISOLINE_PATCH)
+		return true; // line output topologies are only available to isoline domains
+	if (iTess == 1 && iDomain == ETessellationDomain::ISOLINE_PATCH && bOutputTopologyIsTriangle)
+		return true; // // IsoLine domain must specify output primitive point or line
+	if (iTess == 1 && iTessCull > 0 && !bOutputTopologyIsTriangle)
+		return true; // prevent non-tri output topologies to utilize GS (because it'll only be a perf penalty)
+	return false;
+}
 
 void FLightingPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12RootSignature*>& mRootSignatureLookup)
 {
@@ -855,7 +889,6 @@ void FLightingPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12Roo
 	psoDesc.SampleMask = UINT_MAX;
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
 
-
 	const UINT SampleDescCounts[NUM_MSAA_OPTS] = { 1, 4 };
 	const D3D12_CULL_MODE CullModes[NUM_FACECULL_OPTS] = { D3D12_CULL_MODE_NONE , D3D12_CULL_MODE_FRONT, D3D12_CULL_MODE_BACK };
 	const D3D12_FILL_MODE FillModes[NUM_RASTER_OPTS] = { D3D12_FILL_MODE_SOLID, D3D12_FILL_MODE_WIREFRAME };
@@ -872,24 +905,20 @@ void FLightingPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12Roo
 	for(size_t iTessCull = 0; iTessCull < NUM_TESS_CULL_OPTIONS; ++iTessCull)
 	for(size_t iAlpha = 0   ; iAlpha    < NUM_ALPHA_OPTIONS ; ++iAlpha)
 	{
-		if (iTess == 0 && (iDomain > 0 || iPart > 0 || iOutTopo > 0 || iTessCull > 0))
-			continue; // skip tess permutations when tess is off
-		if (iTess == 1 && iOutTopo == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE && iDomain != ETessellationDomain::ISOLINE_PATCH)
-			continue; // line output topologies are only available to isoline domains
+		if (ShouldSkipTessellationVariant(iTess, iDomain, iPart, iOutTopo, iTessCull))
+			continue;
 		
 		const size_t key = Hash(iMSAA, iRaster, iFaceCull, iOutMoVec, iOutRough, iTess, iDomain, iPart, iOutTopo, iTessCull, iAlpha);
 		
 		std::string PSOName = "PSO_FwdLighting";
-		if (iTess == 1) PSOName += "_Tessellated";
+		if (iAlpha == 1) PSOName += "_AlphaMasked";
 		if (iRaster == 1) PSOName += "_Wireframe";
 		if (iMSAA == 1) PSOName += "_MSAA4";
 		if (iTess == 1)
 		{
-			if (iDomain == 1) PSOName += "_Quad";
-			PSOName += std::string("_") + szPartitionNames[iPart];
-			PSOName += std::string("_") + szOutTopologyNames[iOutTopo];
-			if (iTessCull > 1) PSOName += "_GSCull";
+			AppendTessellationPSONameTokens(PSOName, iDomain, iPart, iOutTopo, iTessCull);
 		}
+
 		psoLoadDesc.PSOName = PSOName;
 
 		// MSAA
@@ -940,30 +969,16 @@ void FLightingPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12Roo
 		const size_t iPixelShader = iShader - 1;
 
 		// macros
-		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCED_DRAW", std::to_string(RENDER_INSTANCED_SCENE_MESHES) });
-		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__SCENE_MESHES) });
+		const FShaderMacro InstancedDrawMacro = { "INSTANCED_DRAW", std::to_string(RENDER_INSTANCED_SCENE_MESHES) };
+		const FShaderMacro InstanceCountMacro = { "INSTANCE_COUNT",std::to_string(MAX_INSTANCE_COUNT__SCENE_MESHES) };
 		if (iTess == 1)
 		{
-			const char* szPartitioningMacros[NUM_PARTIT_OPTIONS] = { "PARTITIONING__INT", "PARTITIONING__EVEN", "PARTITIONING__ODD", "PARTITIONING__POW2" };
-			const char* szOutTopologyMacros [NUM_OUTTOP_OPTIONS] = { "OUTTOPO__POINT", "OUTTOPO__LINE", "OUTTOPO__TRI_CW","OUTTOPO__TRI_CCW" };
-			const char* szDomainMacros = iDomain == 1 ? "DOMAIN__QUAD" : "DOMAIN__TRIANGLE";	
-			psoLoadDesc.ShaderStageCompileDescs[1/*HS*/].Macros = {
-				  { szDomainMacros, "1" }
-				, { szPartitioningMacros[iPart], "1" }
-				, { szOutTopologyMacros[iOutTopo], "1" }
-			};
-			psoLoadDesc.ShaderStageCompileDescs[2/*DS*/].Macros = { 
-				{ szDomainMacros, "1" },
-				{ szOutTopologyMacros[iOutTopo], "1" } 
-			};
-
+			AppendTessellationVSMacros(psoLoadDesc.ShaderStageCompileDescs[0/*VS*/].Macros, iDomain);
+			AppendTessellationHSMacros(psoLoadDesc.ShaderStageCompileDescs[1/*HS*/].Macros, iDomain, iPart, iOutTopo, iTessCull);
+			AppendTessellationDSMacros(psoLoadDesc.ShaderStageCompileDescs[2/*DS*/].Macros, iDomain, iOutTopo, iTessCull);
 			if (iTessCull > 0)
 			{
-				psoLoadDesc.ShaderStageCompileDescs[2/*DS*/].Macros.push_back({"ENABLE_GEOMETRY_SHADER", "1"});
-				psoLoadDesc.ShaderStageCompileDescs[3/*GS*/].Macros = { 
-					{"ENABLE_GEOMETRY_SHADER", "1"},
-					{ szOutTopologyMacros[iOutTopo], "1" }
-				};
+				AppendTessellationGSMacros(psoLoadDesc.ShaderStageCompileDescs[3/*GS*/].Macros, iOutTopo, iTessCull);
 			}
 		}
 		if (iOutMoVec)
@@ -983,6 +998,15 @@ void FLightingPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12Roo
 		if (iOutRough)
 		{
 			psoLoadDesc.ShaderStageCompileDescs[iPixelShader].Macros.push_back({ "OUTPUT_ALBEDO", "1" });
+		}
+		for (FShaderStageCompileDesc& shdDesc : psoLoadDesc.ShaderStageCompileDescs) // all stages
+		{
+			shdDesc.Macros.push_back(InstancedDrawMacro);
+			shdDesc.Macros.push_back(InstanceCountMacro);
+			if (iAlpha == 1)
+			{
+				shdDesc.Macros.push_back({ "ENABLE_ALPHA_MASK", "1" });
+			}
 		}
 
 		mapLoadDesc[key] = psoLoadDesc;
@@ -1022,23 +1046,18 @@ void FDepthPrePassPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D1
 	for(size_t iTessCull = 0; iTessCull < NUM_TESS_CULL_OPTIONS; ++iTessCull)
 	for(size_t iAlpha = 0   ; iAlpha    < NUM_ALPHA_OPTIONS ; ++iAlpha)
 	{
-		if (iTess == 0 && (iDomain > 0 || iPart > 0 || iOutTopo > 0))
-			continue; // skip tess permutations when tess is off
-		if (iTess == 1 && iOutTopo == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE && iDomain != ETessellationDomain::ISOLINE_PATCH)
-			continue; // line output topologies are only available to isoline domains
-		
+		if (ShouldSkipTessellationVariant(iTess, iDomain, iPart, iOutTopo, iTessCull))
+			continue;
+
 		const size_t key = Hash(iMSAA, iRaster, iFaceCull, iTess, iDomain, iPart, iOutTopo, iTessCull, iAlpha);
 		
 		std::string PSOName = "PSO_ZPrePass";
-		if (iTess == 1) PSOName += "_Tessellated";
+		if (iAlpha == 1) PSOName += "_AlphaMasked";
 		if (iRaster == 1) PSOName += "_Wireframe";
 		if (iMSAA == 1) PSOName += "_MSAA4";
 		if (iTess == 1)
 		{
-			if (iDomain == 1) PSOName += "_Quad";
-			PSOName += std::string("_") + szPartitionNames[iPart];
-			PSOName += std::string("_") + szOutTopologyNames[iOutTopo];
-			if (iTessCull > 1) PSOName += "_GSCull";
+			AppendTessellationPSONameTokens(PSOName, iDomain, iPart, iOutTopo, iTessCull);
 		}
 		psoLoadDesc.PSOName = PSOName;
 
@@ -1081,29 +1100,25 @@ void FDepthPrePassPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D1
 		const size_t iPixelShader = iShader - 1;
 
 		// macros
-		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCED_DRAW", std::to_string(RENDER_INSTANCED_SCENE_MESHES) });
-		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__SCENE_MESHES) });
+		const FShaderMacro InstancedDrawMacro = { "INSTANCED_DRAW", std::to_string(RENDER_INSTANCED_SCENE_MESHES) };
+		const FShaderMacro InstanceCountMacro = { "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__SCENE_MESHES) };
 		if (iTess == 1)
 		{
-			const char* szPartitioningMacros[NUM_PARTIT_OPTIONS] = { "PARTITIONING__INT", "PARTITIONING__EVEN", "PARTITIONING__ODD", "PARTITIONING__POW2" };
-			const char* szOutTopologyMacros [NUM_OUTTOP_OPTIONS] = { "OUTTOPO__POINT", "OUTTOPO__LINE", "OUTTOPO__TRI_CW","OUTTOPO__TRI_CCW" };
-			const char* szDomainMacros = iDomain == 1 ? "DOMAIN__QUAD" : "DOMAIN__TRIANGLE";	
-			psoLoadDesc.ShaderStageCompileDescs[1/*HS*/].Macros = {
-				  { szDomainMacros, "1" }
-				, { szPartitioningMacros[iPart], "1" }
-				, { szOutTopologyMacros[iOutTopo], "1" }
-			};
-			psoLoadDesc.ShaderStageCompileDescs[2/*DS*/].Macros = {
-				{ szDomainMacros, "1" },
-				{ szOutTopologyMacros[iOutTopo], "1" }
-			};
+			AppendTessellationVSMacros(psoLoadDesc.ShaderStageCompileDescs[0/*VS*/].Macros, iDomain);
+			AppendTessellationHSMacros(psoLoadDesc.ShaderStageCompileDescs[1/*HS*/].Macros, iDomain, iPart, iOutTopo, iTessCull);
+			AppendTessellationDSMacros(psoLoadDesc.ShaderStageCompileDescs[2/*DS*/].Macros, iDomain, iOutTopo, iTessCull);
 			if (iTessCull > 0)
 			{
-				psoLoadDesc.ShaderStageCompileDescs[2/*DS*/].Macros.push_back({ "ENABLE_GEOMETRY_SHADER", "1" });
-				psoLoadDesc.ShaderStageCompileDescs[3/*GS*/].Macros = {
-					{"ENABLE_GEOMETRY_SHADER", "1"},
-					{ szOutTopologyMacros[iOutTopo], "1" }
-				};
+				AppendTessellationGSMacros(psoLoadDesc.ShaderStageCompileDescs[3/*GS*/].Macros, iOutTopo, iTessCull);
+			}
+		}
+		for (FShaderStageCompileDesc& shdDesc : psoLoadDesc.ShaderStageCompileDescs) // all stages
+		{
+			shdDesc.Macros.push_back(InstancedDrawMacro);
+			shdDesc.Macros.push_back(InstanceCountMacro);
+			if (iAlpha == 1)
+			{
+				shdDesc.Macros.push_back({ "ENABLE_ALPHA_MASK", "1" });
 			}
 		}
 
@@ -1112,6 +1127,114 @@ void FDepthPrePassPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D1
 	}
 }
 
+void FShadowPassPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12RootSignature*>& mRootSignatureLookup)
+{
+	SCOPED_CPU_MARKER("GatherPSOLoadDescs_ZPrePass");
+	const std::wstring ShaderFilePath = VQRenderer::GetFullPathOfShader(L"ShadowDepthPass.hlsl");
+
+	FPSODesc psoLoadDesc = {};
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
+	psoDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ShadowPass);
+	psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+	psoDesc.DepthStencilState.DepthEnable = TRUE;
+	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+	psoDesc.DepthStencilState.StencilEnable = FALSE;
+	psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+	psoDesc.SampleMask = UINT_MAX;
+	psoDesc.NumRenderTargets = 0; // no color targets, PS will discard alpha
+	psoDesc.SampleDesc.Count = 1; // No MSAA
+
+	const UINT SampleDescCounts[NUM_MSAA_OPTS] = { 1, 4 };
+	const D3D12_CULL_MODE CullModes[NUM_FACECULL_OPTS] = { D3D12_CULL_MODE_NONE , D3D12_CULL_MODE_FRONT, D3D12_CULL_MODE_BACK };
+	const D3D12_FILL_MODE FillModes[NUM_RASTER_OPTS] = { D3D12_FILL_MODE_SOLID, D3D12_FILL_MODE_WIREFRAME };
+
+	for(size_t iDepthMode =0; iDepthMode < NUM_DEPTH_RENDER_OPTS; ++iDepthMode)
+	for(size_t iRaster = 0  ; iRaster   < NUM_RASTER_OPTS   ; ++iRaster) 
+	for(size_t iFaceCull = 0; iFaceCull < NUM_FACECULL_OPTS ; ++iFaceCull)
+	for(size_t iTess = 0    ; iTess     < NUM_TESS_ENABLED  ; ++iTess) 
+	for(size_t iDomain = 0  ; iDomain   < NUM_DOMAIN_OPTIONS; ++iDomain) 
+	for(size_t iPart = 0    ; iPart     < NUM_PARTIT_OPTIONS; ++iPart) 
+	for(size_t iOutTopo = 0 ; iOutTopo  < NUM_OUTTOP_OPTIONS; ++iOutTopo) 
+	for(size_t iTessCull = 0; iTessCull < NUM_TESS_CULL_OPTIONS; ++iTessCull)
+	for(size_t iAlpha = 0   ; iAlpha    < NUM_ALPHA_OPTIONS ; ++iAlpha)
+	{
+		if (ShouldSkipTessellationVariant(iTess, iDomain, iPart, iOutTopo, iTessCull))
+			continue;
+
+		const size_t key = Hash(iDepthMode, iRaster, iFaceCull, iTess, iDomain, iPart, iOutTopo, iTessCull, iAlpha);
+		
+		std::string PSOName = "PSO_ShadowPass";
+		if (iDepthMode == 1) PSOName += "_LinearDepth";
+		if (iAlpha == 1) PSOName += "_AlphaMasked";
+		if (iRaster == 1) PSOName += "_Wireframe";
+		if (iTess == 1)
+		{
+			AppendTessellationPSONameTokens(PSOName, iDomain, iPart, iOutTopo, iTessCull);
+		}
+		psoLoadDesc.PSOName = PSOName;
+
+		// RS
+		psoDesc.RasterizerState.FillMode = FillModes[iRaster];
+		psoDesc.RasterizerState.CullMode = CullModes[iFaceCull];
+		
+		// topology
+		psoDesc.PrimitiveTopologyType = iTess == 1 
+			? D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH 
+			: D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+
+		// shaders
+		size_t NumPixelShader = iDepthMode > 0 ? 1 : 0;
+		size_t NumShaders = 1 + NumPixelShader; // VS-PS(optional)
+		if (iTess == 1)
+		{	                 // VS-HS-DS-PS | VS-HS-DS-GS-PS
+			NumShaders += iTessCull == 0 ? 2 : 3;
+		}
+		psoLoadDesc.ShaderStageCompileDescs.resize(NumShaders);
+		size_t iShader = 0;
+		if (iTess == 1)
+		{
+			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain_Tess", "vs_6_0" };
+			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "HSMain"     , "hs_6_0" };
+			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "DSMain"     , "ds_6_0" };
+			if (iTessCull > 0)
+				psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "GSMain" , "gs_6_0" };
+			if (iDepthMode > 0)
+				psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain"     , "ps_6_0" };
+		}
+		else
+		{
+			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_0" };
+			if(iDepthMode > 0)
+				psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_0" };
+		}
+		const size_t iPixelShader = iShader - 1;
+
+		// macros
+		const FShaderMacro InstancedDrawMacro = { "INSTANCED_DRAW", "1" };
+		const FShaderMacro InstanceCountMacro = { "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__SHADOW_MESHES) };
+		if (iTess == 1)
+		{
+			AppendTessellationVSMacros(psoLoadDesc.ShaderStageCompileDescs[0/*VS*/].Macros, iDomain);
+			AppendTessellationHSMacros(psoLoadDesc.ShaderStageCompileDescs[1/*HS*/].Macros, iDomain, iPart, iOutTopo, iTessCull);
+			AppendTessellationDSMacros(psoLoadDesc.ShaderStageCompileDescs[2/*DS*/].Macros, iDomain, iOutTopo, iTessCull);
+			if(iTessCull > 0)
+				AppendTessellationGSMacros(psoLoadDesc.ShaderStageCompileDescs[3/*GS*/].Macros, iOutTopo, iTessCull);
+		}
+		for (FShaderStageCompileDesc& shdDesc : psoLoadDesc.ShaderStageCompileDescs)
+		{
+			shdDesc.Macros.push_back(InstancedDrawMacro);
+			shdDesc.Macros.push_back(InstanceCountMacro);
+			if (iAlpha == 1)
+			{
+				shdDesc.Macros.push_back({ "ENABLE_ALPHA_MASK", "1" });
+			}
+		}
+		
+		mapLoadDesc[key] = psoLoadDesc;
+		mapPSO[key] = INVALID_ID; 
+	}
+}
 
 
 size_t FLightingPSOs::Hash(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iOutMoVec, size_t iOutRough, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha)
@@ -1140,4 +1263,17 @@ size_t FDepthPrePassPSOs::Hash(size_t iMSAA, size_t iRaster, size_t iFaceCull, s
 		+ NUM_MSAA_OPTS * NUM_RASTER_OPTS * NUM_FACECULL_OPTS * NUM_TESS_ENABLED * NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * iOutTopo
 		+ NUM_MSAA_OPTS * NUM_RASTER_OPTS * NUM_FACECULL_OPTS * NUM_TESS_ENABLED * NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * NUM_OUTTOP_OPTIONS * iTessCullMode
 		+ NUM_MSAA_OPTS * NUM_RASTER_OPTS * NUM_FACECULL_OPTS * NUM_TESS_ENABLED * NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * NUM_OUTTOP_OPTIONS * NUM_TESS_CULL_OPTIONS * iAlpha;
+}
+
+size_t FShadowPassPSOs::Hash(size_t iDepthMode, size_t iRaster, size_t iFaceCull, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha)
+{
+	return iDepthMode
+		+ NUM_DEPTH_RENDER_OPTS * iRaster
+		+ NUM_DEPTH_RENDER_OPTS * NUM_RASTER_OPTS * iFaceCull
+		+ NUM_DEPTH_RENDER_OPTS * NUM_RASTER_OPTS * NUM_FACECULL_OPTS * iTess
+		+ NUM_DEPTH_RENDER_OPTS * NUM_RASTER_OPTS * NUM_FACECULL_OPTS * NUM_TESS_ENABLED * iDomain
+		+ NUM_DEPTH_RENDER_OPTS * NUM_RASTER_OPTS * NUM_FACECULL_OPTS * NUM_TESS_ENABLED * NUM_DOMAIN_OPTIONS * iPart
+		+ NUM_DEPTH_RENDER_OPTS * NUM_RASTER_OPTS * NUM_FACECULL_OPTS * NUM_TESS_ENABLED * NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * iOutTopo
+		+ NUM_DEPTH_RENDER_OPTS * NUM_RASTER_OPTS * NUM_FACECULL_OPTS * NUM_TESS_ENABLED * NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * NUM_OUTTOP_OPTIONS * iTessCullMode
+		+ NUM_DEPTH_RENDER_OPTS * NUM_RASTER_OPTS * NUM_FACECULL_OPTS * NUM_TESS_ENABLED * NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * NUM_OUTTOP_OPTIONS * NUM_TESS_CULL_OPTIONS * iAlpha;
 }

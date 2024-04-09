@@ -50,6 +50,8 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 		assert(NumInstances == renderCmd.matWorldViewProj.size());
 		assert(NumInstances == renderCmd.matWorldViewProjTransformations.size());
 
+		const Material& mat = mpScene->GetMaterial(renderCmd.matID);
+
 		// set constant buffer data
 		FCBufferLightVS* pCBuffer = {};
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
@@ -72,12 +74,28 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 		memcpy(pCBuffer->matWorld        , renderCmd.matWorldViewProj.data()               , NumInstances * sizeof(XMMATRIX));
 		memcpy(pCBuffer->matWorldViewProj, renderCmd.matWorldViewProjTransformations.data(), NumInstances * sizeof(XMMATRIX));
 		
+		if (mat.Tessellation.bEnableTessellation)
+		{
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Tsl;
+			VQ_SHADER_DATA::TessellationParams* pCBuffer_Tessellation = nullptr;
+			auto data = mat.GetTessellationCBufferData();
+			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Tessellation)), (void**)(&pCBuffer_Tessellation), &cbAddr_Tsl);
+			memcpy(pCBuffer_Tessellation, &data, sizeof(data));
+			pCmd->SetGraphicsRootConstantBufferView(3, cbAddr_Tsl);
+		}
+
 		auto vb = mRenderer.GetVertexBufferView(renderCmd.vertexIndexBuffer.first);
 		auto ib = mRenderer.GetIndexBufferView(renderCmd.vertexIndexBuffer.second);
 		
 		pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
-		
-		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		D3D_PRIMITIVE_TOPOLOGY topo = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+		if (mat.Tessellation.bEnableTessellation)
+		{
+			topo = mat.Tessellation.Domain == ETessellationDomain::QUAD_PATCH
+				? D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST
+				: D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
+		}
+		pCmd->IASetPrimitiveTopology(topo);
 		pCmd->IASetVertexBuffers(0, 1, &vb);
 		pCmd->IASetIndexBuffer(&ib);
 
@@ -122,7 +140,7 @@ void VQEngine::RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, Dyna
 		SCOPED_GPU_MARKER(pCmd, marker.c_str());
 
 		pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_PSO));
-		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ShadowPassDepthOnlyVS));
+		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ShadowPass));
 
 		const float RenderResolutionX = 2048.0f; // TODO
 		const float RenderResolutionY = 2048.0f; // TODO
@@ -166,7 +184,7 @@ void VQEngine::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuff
 	// SPOT LIGHTS
 	//
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_PSO));
-	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ShadowPassDepthOnlyVS));
+	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ShadowPass));
 	
 	for (uint i = 0; i < SceneShadowView.NumSpotShadowViews; ++i)
 	{
@@ -213,7 +231,7 @@ void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 #endif
 
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_LINEAR_PSO));
-	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ShadowPassLinearDepthVSPS));
+	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ShadowPass));
 	for (size_t i = iBegin; i < iBegin + NumPointLights; ++i)
 	{
 		const std::string marker = "Point[" + std::to_string(i) + "]";

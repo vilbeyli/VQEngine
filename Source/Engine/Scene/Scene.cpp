@@ -1699,7 +1699,9 @@ void Scene::BatchInstanceData_ShadowMeshes(
 			assert(BBIndex < mBoundingBoxHierarchy.mMeshIDs.size());
 
 			MeshID meshID = mBoundingBoxHierarchy.mMeshIDs[BBIndex];
+			MaterialID matID = mBoundingBoxHierarchy.mMeshMaterials[BBIndex];
 			const Mesh& mesh = mMeshes.at(meshID);
+			const Material& mat = mMaterials.at(matID);
 			const int numLODs = mesh.GetNumLODs();
 
 			const Transform& TF = *mBoundingBoxHierarchy.mMeshTransforms[BBIndex];
@@ -1719,7 +1721,7 @@ void Scene::BatchInstanceData_ShadowMeshes(
 				d.InstanceData.resize(d.InstanceData.empty() ? MAX_INSTANCE_COUNT__SHADOW_MESHES : d.InstanceData.size() * 2);
 			}
 
-			d.InstanceData[d.NumValidData++] = { matWorld, matWorld * matViewProj };
+			d.InstanceData[d.NumValidData++] = { matWorld, matWorld * matViewProj, mat.displacement };
 		}
 	}
 

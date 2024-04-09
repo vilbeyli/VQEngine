@@ -98,9 +98,7 @@ enum EBuiltinRootSignatures
 	LEGACY__Object,
 	LEGACY__ForwardLighting,
 	LEGACY__WireframeUnlit,
-	LEGACY__ShadowPassDepthOnlyVS,
-	LEGACY__ShadowPassLinearDepthVSPS,
-	LEGACY__ShadowPassMaskedDepthVSPS,
+	LEGACY__ShadowPass,
 	LEGACY__ConvolutionCubemap,
 	LEGACY__BRDFIntegrationCS,
 	LEGACY__FFX_SPD_CS,
@@ -115,7 +113,7 @@ enum EBuiltinRootSignatures
 
 // tessellation
 static constexpr size_t NUM_TESS_ENABLED = 2; // on/off
-static constexpr size_t NUM_DOMAIN_OPTIONS = 2; // tri/quad
+static constexpr size_t NUM_DOMAIN_OPTIONS = 3; // tri/quad/line
 static constexpr size_t NUM_PARTIT_OPTIONS = 4; // integer, fractional_even, fractional_odd, or pow2
 static constexpr size_t NUM_OUTTOP_OPTIONS = 4; // point, line, triangle_cw, or triangle_ccw
 static constexpr size_t NUM_TESS_CULL_OPTIONS = 2; // Cull[on/off], dynamic branch for face/frustum params
@@ -153,8 +151,9 @@ struct FLightingPSOs : PSOCollection
 	static constexpr size_t NUM_ALPHA_OPTIONS = 2; // opaque/alpha masked
 	static constexpr size_t NUM_MAT_OPTIONS = NUM_ALPHA_OPTIONS;
 
+	//static size_t Hash(size_t iMSAA, size_t iRaster, size_t iFaceCull, const FTessellationParameters& Tessellation, size_t iAlpha);
 	static size_t Hash(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iOutMoVec, size_t iOutRough, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha);
-	inline PSO_ID Get(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iOutMoVec, size_t iOutRough, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha) const
+	inline PSO_ID  Get(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iOutMoVec, size_t iOutRough, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha) const
 	{
 		return PSOCollection::Get(Hash(iMSAA, iRaster, iFaceCull, iOutMoVec, iOutRough, iTess, iDomain, iPart, iOutTopo, iTessCullMode, iAlpha));
 	}
@@ -178,7 +177,7 @@ struct FDepthPrePassPSOs : public PSOCollection
 	static constexpr size_t NUM_MAT_OPTIONS = NUM_ALPHA_OPTIONS;
 
 	static size_t Hash(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha);
-	inline PSO_ID Get(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha) const
+	inline PSO_ID  Get(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha) const
 	{
 		return PSOCollection::Get(Hash(iMSAA, iRaster, iFaceCull, iTess, iDomain, iPart, iOutTopo, iTessCullMode, iAlpha));
 	}
@@ -187,3 +186,33 @@ struct FDepthPrePassPSOs : public PSOCollection
 
 	static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_MAT_OPTIONS * NUM_RENDERING_OPTS * NUM_TESS_OPTS;
 };
+
+// ------------------------------------------------------------------------------------------------------------------------
+
+struct FShadowPassPSOs : public PSOCollection
+{
+	// rendering
+	static constexpr size_t NUM_DEPTH_RENDER_OPTS = 2; // NDC/WorldSpace(linear)
+	static constexpr size_t NUM_RASTER_OPTS = 2; // solid/wireframe
+	static constexpr size_t NUM_FACECULL_OPTS = 3; // none/front/back
+	static constexpr size_t NUM_RENDERING_OPTS = NUM_FACECULL_OPTS * NUM_RASTER_OPTS;
+
+	// material
+	static constexpr size_t NUM_ALPHA_OPTIONS = 2; // opaque/alpha masked
+	static constexpr size_t NUM_MAT_OPTIONS = NUM_ALPHA_OPTIONS;
+
+
+	static size_t Hash(size_t iDepthMode, size_t iRaster, size_t iFaceCull, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha);
+	inline PSO_ID  Get(size_t iDepthMode, size_t iRaster, size_t iFaceCull, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha) const
+	{
+		return PSOCollection::Get(Hash(iDepthMode, iRaster, iFaceCull, iTess, iDomain, iPart, iOutTopo, iTessCullMode, iAlpha));
+	}
+	//PSO_ID  Get(const FTessellationParameters& Tessellation, bool bMSAA4, size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iAlpha) const;
+
+	void GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12RootSignature*>& mRootSignatureLookup) override;
+
+	static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_MAT_OPTIONS * NUM_RENDERING_OPTS * NUM_TESS_OPTS;
+};
+
+// ------------------------------------------------------------------------------------------------------------------------
+

@@ -43,7 +43,8 @@
 
 //#define DOMAIN__TRIANGLE 1
 //#define DOMAIN__QUAD 1
-#define ENABLE_TESSELLATION_SHADERS defined(DOMAIN__TRIANGLE) || defined(DOMAIN__QUAD)
+//#define DOMAIN__LINE 1
+#define ENABLE_TESSELLATION_SHADERS defined(DOMAIN__TRIANGLE) || defined(DOMAIN__QUAD) || defined(DOMAIN__LINE)
 
 
 //---------------------------------------------------------------------------------------------------
@@ -66,6 +67,11 @@ struct AABB
 {
 	float3 Center;
 	float3 Extents;
+};
+
+struct Frustum
+{
+	float4 Planes[6];
 };
 
 bool IsAABBBehindPlane(AABB aabb, float4 Plane, const bool bNormalize, float fTolerance)
@@ -127,57 +133,85 @@ bool ShouldCullBackFace(float4 ClipPos0, float4 ClipPos1, float4 ClipPos2, float
 // DATA
 //
 //---------------------------------------------------------------------------------------------------
-struct VSInput
+#if DOMAIN__TRIANGLE || DOMAIN__LINE
+#define CONTROL_POINT_TANGENT_DATA 1
+#endif
+#if DOMAIN__TRIANGLE 
+#define CONTROL_POINT_NORMAL_DATA  1
+#endif
+
+struct VSInput_Tess
 {
-	float3 position : POSITION;
-	float3 normal   : NORMAL;
-	float3 tangent  : TANGENT;
-	float2 uv       : TEXCOORD0;
+	float3 position           : POSITION;
+#if CONTROL_POINT_NORMAL_DATA // for tri
+	float3 normal             : NORMAL;
+#endif
+#if CONTROL_POINT_TANGENT_DATA // for tri + lines
+	float3 tangent            : TANGENT;
+#endif
+	float2 uv                 : TEXCOORD0;
 #if INSTANCED_DRAW
-	uint instanceID : SV_InstanceID;
+	uint instanceID           : SV_InstanceID;
 #endif
 };
 
-// control points (HS+DS)
-struct TessellationControlPoint
+struct HSInput
 {
-	float4 LocalPosition : POSITION;
-	float4 ClipPosition  : COLOR0;
-	float3 WorldPosition : COLOR1;
-	float3 Normal        : NORMAL;
-	float3 Tangent       : TANGENT;
-	float2 uv0           : TEXCOORD0;
+	float3 LocalSpacePosition : POSITION0;
+	float3 WorldSpacePosition : POSITION1;
+	float2 uv                 : TEXCOORD0;
+#if CONTROL_POINT_NORMAL_DATA
+	float3 LocalSpaceNormal   : NORMAL;
+#endif
+#if CONTROL_POINT_TANGENT_DATA
+	float3 LocalSpaceTangent  : TANGENT;
+#endif
+	
 #if INSTANCED_DRAW
-	uint instanceID      : TEXCOORD1;
+	uint instanceID           : TEXCOORD1;
 #endif
 };
 
-#if ENABLE_GEOMETRY_SHADER
-struct GSInput
+struct DSInput
 {
-	float4 position    : POSITION;
-	float3 worldPos    : COLOR2;
-	float3 vertNormal  : COLOR0;
-	float3 vertTangent : COLOR1;
-	float2 uv          : TEXCOORD0;
-#if PS_OUTPUT_MOTION_VECTORS
-	float4 svPositionCurr : TEXCOORD1;
-	float4 svPositionPrev : TEXCOORD2;
+	float3 LocalSpacePosition : POSITION0;
+	float2 uv                 : TEXCOORD0;
+
+#if HS_OUTPUT_WORLD_SPACE_POSITIONS // WIP: HS coarse culling
+	float3 WorldSpacePosition : POSITION1;
+#endif	
+#if CONTROL_POINT_NORMAL_DATA
+	float3 LocalSpaceNormal   : NORMAL;
+#endif
+#if CONTROL_POINT_TANGENT_DATA
+	float3 LocalSpaceTangent  : TANGENT;
 #endif
 };
-#endif // ENABLE_GEOMETRY_SHADER
 
 #if ENABLE_TESSELLATION_SHADERS
 // HS patch constants
 struct HSOutputTriPatchConstants
 {
 	float EdgeTessFactor[3] : SV_TessFactor;
-	float InsideTessFactor : SV_InsideTessFactor;
+	float InsideTessFactor  : SV_InsideTessFactor;
+#if INSTANCED_DRAW
+	uint instanceID         : TEXCOORD1;
+#endif
 };
 struct HSOutputQuadPatchConstants
 {
-	float EdgeTessFactor[4] : SV_TessFactor;
+	float EdgeTessFactor[4]   : SV_TessFactor;
 	float InsideTessFactor[2] : SV_InsideTessFactor;
+#if INSTANCED_DRAW
+	uint instanceID         : TEXCOORD1;
+#endif
+};
+struct HSOutputLinePatchConstants
+{
+	float EdgeTessFactor[2] : SV_TessFactor;
+#if INSTANCED_DRAW
+	uint instanceID         : TEXCOORD1;
+#endif
 };
 
 #ifdef DOMAIN__TRIANGLE
@@ -186,24 +220,24 @@ struct HSOutputQuadPatchConstants
 #elif defined(DOMAIN__QUAD)
 	#define NUM_CONTROL_POINTS 4
 	#define HSOutputPatchConstants HSOutputQuadPatchConstants
+#elif defined(DOMAIN__LINE)
+	// control points should be provided by the user.
+	#ifndef NUM_CONTROL_POINTS
+	#define NUM_CONTROL_POINTS 2 
+	#endif
+	#define HSOutputPatchConstants HSOutputLinePatchConstants
 #endif // DOMAIN__
 
-
-#if ENABLE_GEOMETRY_SHADER
-#define DSOutput GSInput
-#else
-#define DSOutput PSInput
-#endif
-
-AABB BuildAABB(InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch)
+#if 0 // WIP: HS coarse culling
+AABB BuildAABB(InputPatch<HSInput, NUM_CONTROL_POINTS> patch)
 {
 	float3 Mins = +1000000.0f.xxx; // TODO: FLT_MAX
 	float3 Maxs = -1000000.0f.xxx; // TODO: FLT_MIN
 	[unroll]
 	for (int iCP = 0; iCP < NUM_CONTROL_POINTS; ++iCP)
 	{
-		Mins = min(Mins, patch[iCP].WorldPosition);
-		Maxs = max(Maxs, patch[iCP].WorldPosition);
+		Mins = min(Mins, patch[iCP].WorldSpacePosition);
+		Maxs = max(Maxs, patch[iCP].WorldSpacePosition);
 	}
 
 	AABB aabb;
@@ -212,7 +246,7 @@ AABB BuildAABB(InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch)
 	return aabb;
 }
 
-bool ShouldFrustumCullPatch(float4 FrustumPlanes[6], InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch, float fTolerance)
+bool ShouldFrustumCullPatch(float4 FrustumPlanes[6], InputPatch<HSInput, NUM_CONTROL_POINTS> patch, float fTolerance)
 {
 	AABB aabb = BuildAABB(patch);
 	
@@ -230,10 +264,16 @@ bool ShouldFrustumCullPatch(float4 FrustumPlanes[6], InputPatch<TessellationCont
 
 bool ShouldCullBackFace(InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch, float fTolerance)
 {
+	#if DOMAIN__TRIANGLE || DOMAIN__QUAD
 	return ShouldCullBackFace(patch[0].ClipPosition, patch[2].ClipPosition, patch[2].ClipPosition, fTolerance);
+	#else 
+	// TODO: line
+	return false;
+	#endif
 }
+#endif// WIP: HS coarse culling
 
-#endif
+#endif // ENABLE_TESSELLATION_SHADERS
 
 
 
@@ -242,45 +282,47 @@ bool ShouldCullBackFace(InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS>
 // RESOURCE BINDING
 //
 //---------------------------------------------------------------------------------------------------
-cbuffer CBTessellation : register(b3) { TessellationParams tess; }
-#if 0
-cbuffer CBPerFrame     : register(b0) { PerFrameData cbPerFrame; }
-cbuffer CBPerView      : register(b1) { PerViewData cbPerView; }
-cbuffer CBPerObject    : register(b2) { PerObjectData cbPerObject; }
-
-SamplerState LinearSampler        : register(s0);
-SamplerState PointSampler         : register(s1);
-SamplerState AnisoSampler         : register(s2);
-SamplerState ClampedLinearSampler : register(s3);
-
-Texture2D texDiffuse        : register(t0);
-Texture2D texNormals        : register(t1);
-
-Texture2D texHeightmap      : register(t8); // VS or PS
-#endif
+cbuffer CBTessellation : register(b3) { TessellationParams tess; } // TODO: move to stubs, get w/ function
 
 //---------------------------------------------------------------------------------------------------
 //
 // VERTEX SHADER
 //
 //---------------------------------------------------------------------------------------------------
-TessellationControlPoint VSMain_Tess(VSInput vertex)
+// includer of Tessellation.hlsl needs to define the following functions:
+//   float3 CalcHeightOffset(float2 uv) { ... } // sample from heightmap, mul w/ max displacement factor
+//   matrix GetWorldMatrix(uint InstanceID [optional]) { ... }
+//   matrix GetWorldViewProjectionMatrix(uint InstanceID [optional]) { ... }
+//   float2 GetUVScale()
+//   float2 GetUVBias()
+HSInput VSMain_Tess(VSInput_Tess vertex /*control point*/)
 {
-	TessellationControlPoint o;
-	o.LocalPosition = float4(vertex.position, 1.0f);
-	float fHeightOffset = texHeightmap.SampleLevel(LinearSamplerTess, vertex.uv, 0).r * cbPerObject.materialData.displacement;
-	float4 DisplacedLocalPosition = float4(o.LocalPosition.xyz + float3(0, fHeightOffset, 0), 1.0f);
+	float4 LocalSpacePosition = float4(vertex.position, 1.0f);
+	float3 vHeightOffset = CalcHeightOffset(vertex.uv);
+	float4 DisplacedLocalPosition = float4(LocalSpacePosition.xyz + vHeightOffset, 1.0f);
+
 #if INSTANCED_DRAW
-	o.WorldPosition = mul(cbPerObject.matWorld[vertex.instanceID], DisplacedLocalPosition).xyz;
-	o.ClipPosition = mul(cbPerObject.matWorldViewProj[vertex.instanceID], o.LocalPosition);
-	o.instanceID = vertex.instanceID;
+	matrix matW   = GetWorldMatrix(vertex.instanceID);
+	matrix matWVP = GetWorldViewProjectionMatrix(vertex.instanceID);
 #else
-	o.WorldPosition = mul(cbPerObject.matWorld, DisplacedLocalPosition).xyz;
-	o.ClipPosition = mul(cbPerObject.matWorldViewProj, o.LocalPosition);
+	matrix matW   = GetWorldMatrix();
+	matrix matWVP = GetWorldViewProjectionMatrix();
 #endif
-	o.Normal = vertex.normal;
-	o.Tangent = vertex.tangent;
-	o.uv0 = vertex.uv;
+	
+	HSInput o;
+	o.LocalSpacePosition = LocalSpacePosition.xyz;
+	//o.ClipPosition = mul(matWVP, o.LocalPosition);
+	o.WorldSpacePosition = mul(matW, LocalSpacePosition).xyz;
+	o.uv = vertex.uv;
+#if CONTROL_POINT_NORMAL_DATA
+	o.LocalSpaceNormal = vertex.normal;
+#endif
+#if CONTROL_POINT_TANGENT_DATA
+	o.LocalSpaceTangent = vertex.tangent;
+#endif
+#if INSTANCED_DRAW
+	o.instanceID = vertex.instanceID;
+#endif
 	return o;
 }
 
@@ -298,47 +340,52 @@ float CalcTessFactor(float3 Point, float3 Eye, float fMinDist, float fMaxDist)
 
 #if ENABLE_TESSELLATION_SHADERS
 HSOutputPatchConstants CalcHSPatchConstants(
-	InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch, 
+	InputPatch<HSInput, NUM_CONTROL_POINTS> patch, 
 	uint PatchID : SV_PrimitiveID
 )
 {	
 	HSOutputPatchConstants c;
 
-	#if ENABLE_GEOMETRY_SHADER
 	// CULLING -------------------------------------------------------------------------------------
-	// Culling in the patch geometry pre-tessellation isn't very accurate -- do it only when there's no GS.
+	// WIP: coarse culling on HS requries more work, disabled for now
+	// WorldSpace AABB culling is incorrectly culling some patches when the camera is close
+	// Also missing is the edge case of all 3 vertices of the triangle are outside frustum but its 
+	// edges intersect the frustum (i.e. plane of triangle is visible within the plane)
+	#if 0
 	bool bCull = tess.bFrustumCull && ShouldFrustumCullPatch(cbPerView.WorldFrustumPlanes, patch, tess.fHSFrustumCullEpsilon);
 	if(!bCull)
 		bCull = tess.bFaceCull && ShouldCullBackFace(patch, tess.fHSFaceCullEpsilon);
 	if(bCull)
 	{
-	#ifdef DOMAIN__TRIANGLE
+		#ifdef DOMAIN__TRIANGLE
 		c.EdgeTessFactor[0] = 0;
 		c.EdgeTessFactor[1] = 0;
 		c.EdgeTessFactor[2] = 0;
 		c.InsideTessFactor  = 0;
-	#elif defined(DOMAIN__QUAD)
+		#elif defined(DOMAIN__QUAD)
 		c.EdgeTessFactor[0]   = 0;
 		c.EdgeTessFactor[1]   = 0;
 		c.EdgeTessFactor[2]   = 0;
 		c.EdgeTessFactor[3]   = 0;
 		c.InsideTessFactor[0] = 0;
 		c.InsideTessFactor[1] = 0;
-	#elif defined(DOMAIN__LINE)
-		// TODO:
-	#endif
+		#elif defined(DOMAIN__LINE)
+		c.EdgeTessFactor[0]   = 0;
+		c.EdgeTessFactor[1]   = 0;
+		#endif // DOMAIN__
 
 		return c;
 	}
 	#endif
 	// ---------------------------------------------------------------------------------------------
 
+	// Calculate Tessellation Factor
 	float3 Eye = cbPerView.CameraPosition;
 
 	float3 PatchCenter = float3(0,0,0);
 	for (int i = 0; i < NUM_CONTROL_POINTS; ++i)
 	{
-		PatchCenter += patch[i].WorldPosition;
+		PatchCenter += patch[i].WorldSpacePosition;
 	}
 	PatchCenter /= NUM_CONTROL_POINTS;
 	
@@ -349,9 +396,9 @@ HSOutputPatchConstants CalcHSPatchConstants(
 	
 	if(tess.bAdaptiveTessellation)
 	{
-		float3 e0 = 0.5f * (patch[1].WorldPosition + patch[0].WorldPosition);
-		float3 e1 = 0.5f * (patch[2].WorldPosition + patch[0].WorldPosition);
-		float3 e2 = 0.5f * (patch[2].WorldPosition + patch[1].WorldPosition);
+		float3 e0 = 0.5f * (patch[1].WorldSpacePosition + patch[0].WorldSpacePosition);
+		float3 e1 = 0.5f * (patch[2].WorldSpacePosition + patch[0].WorldSpacePosition);
+		float3 e2 = 0.5f * (patch[2].WorldSpacePosition + patch[1].WorldSpacePosition);
 	
 		c.EdgeTessFactor[0] = CalcTessFactor(e0, Eye, fDTessMin, fDTessMax);
 		c.EdgeTessFactor[1] = CalcTessFactor(e1, Eye, fDTessMin, fDTessMax);
@@ -369,10 +416,10 @@ HSOutputPatchConstants CalcHSPatchConstants(
 	
 	if(tess.bAdaptiveTessellation)
 	{
-		float3 e0 = 0.5f * (patch[1].WorldPosition + patch[0].WorldPosition);
-		float3 e1 = 0.5f * (patch[2].WorldPosition + patch[1].WorldPosition);
-		float3 e2 = 0.5f * (patch[3].WorldPosition + patch[2].WorldPosition);
-		float3 e3 = 0.5f * (patch[0].WorldPosition + patch[3].WorldPosition);
+		float3 e0 = 0.5f * (patch[1].WorldSpacePosition + patch[0].WorldSpacePosition);
+		float3 e1 = 0.5f * (patch[2].WorldSpacePosition + patch[1].WorldSpacePosition);
+		float3 e2 = 0.5f * (patch[3].WorldSpacePosition + patch[2].WorldSpacePosition);
+		float3 e3 = 0.5f * (patch[0].WorldSpacePosition + patch[3].WorldSpacePosition);
 		float3 fCenter = CalcTessFactor(PatchCenter, Eye, fDTessMin, fDTessMax);
 
 		c.EdgeTessFactor[0]   = CalcTessFactor(e0, Eye, fDTessMin, fDTessMax);
@@ -392,10 +439,15 @@ HSOutputPatchConstants CalcHSPatchConstants(
 	c.InsideTessFactor[1] = tess.QuadInsideFactor.y;
 	
 #elif defined(DOMAIN__LINE)
-	// TODO:
+	c.EdgeTessFactor[0]   = 1.0f;
+	c.EdgeTessFactor[1]   = 1.0f;
 #endif
 
-		return c;
+	
+#if INSTANCED_DRAW
+	c.instanceID = patch[0].instanceID;
+#endif
+	return c;
 }
 
 // Hull Shader
@@ -445,19 +497,21 @@ HSOutputPatchConstants CalcHSPatchConstants(
 
 [outputcontrolpoints(NUM_CONTROL_POINTS)]
 [patchconstantfunc("CalcHSPatchConstants")]
-TessellationControlPoint HSMain(
-	InputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> ip,
+DSInput HSMain(
+	InputPatch<HSInput, NUM_CONTROL_POINTS> patch,
 	uint i       : SV_OutputControlPointID,
 	uint PatchID : SV_PrimitiveID
 )
 {
-	TessellationControlPoint o;
-	o.LocalPosition = ip[i].LocalPosition;
-	o.WorldPosition = ip[i].WorldPosition;
-	o.Normal = ip[i].Normal;
-	o.Tangent = ip[i].Tangent;
-	o.uv0 = ip[i].uv0;
-	o.instanceID = ip[i].instanceID;
+	DSInput o;
+	o.LocalSpacePosition = patch[i].LocalSpacePosition;
+#if CONTROL_POINT_NORMAL_DATA
+	o.LocalSpaceNormal = patch[i].LocalSpaceNormal;
+#endif
+#if CONTROL_POINT_TANGENT_DATA
+	o.LocalSpaceTangent = patch[i].LocalSpaceTangent;
+#endif
+	o.uv = patch[i].uv;
 	return o;
 }
 
@@ -480,21 +534,25 @@ TessellationControlPoint HSMain(
 	attr * bary.x +\
 	attr * bary.y
 
-#define INTERPOLATE3_PATCH_ATTRIBUTE(attr, bary)\
+
+#define INTERPOLATE_TRI_PATCH_ATTRIBUTE(attr, bary)\
 	patch[0].attr * bary.x +\
 	patch[1].attr * bary.y +\
 	patch[2].attr * bary.z
-
-#define INTERPOLATE2_PATCH_ATTRIBUTE(attr, bary)\
+#define INTERPOLATE_QUAD_PATCH_ATTRIBUTE(attr, bary)\
 	lerp(\
 		lerp(patch[1].attr, patch[2].attr, bary.x),\
 		lerp(patch[0].attr, patch[3].attr, bary.x),\
 		bary.y)
+#define INTERPOLATE_LINE_PATCH_ATTRIBUTE(attr, bary)\
+	lerp(patch[0].attr, patch[1].attr, bary.x)
 
 #if DOMAIN__TRIANGLE
-#define INTERPOLATE_PATCH_ATTRIBUTE(attr, bary) INTERPOLATE3_PATCH_ATTRIBUTE(attr, bary)
-#elif DOMAIN__QUAD || DOMAIN__LINE
-#define INTERPOLATE_PATCH_ATTRIBUTE(attr, bary) INTERPOLATE2_PATCH_ATTRIBUTE(attr, bary)
+#define INTERPOLATE_PATCH_ATTRIBUTE(attr, bary) INTERPOLATE_TRI_PATCH_ATTRIBUTE(attr, bary)
+#elif DOMAIN__QUAD
+#define INTERPOLATE_PATCH_ATTRIBUTE(attr, bary) INTERPOLATE_QUAD_PATCH_ATTRIBUTE(attr, bary)
+#elif DOMAIN__LINE
+#define INTERPOLATE_PATCH_ATTRIBUTE(attr, bary) INTERPOLATE_LINE_PATCH_ATTRIBUTE(attr, bary)
 #endif
 
 // https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/sv-domainlocation
@@ -506,9 +564,9 @@ TessellationControlPoint HSMain(
 [domain("isoline")]
 #endif
 
-DSOutput DSMain(
+PSInput DSMain(
 	HSOutputPatchConstants In,
-	const OutputPatch<TessellationControlPoint, NUM_CONTROL_POINTS> patch,
+	const OutputPatch<DSInput, NUM_CONTROL_POINTS> patch,
 #if DOMAIN__QUAD || DOMAIN__LINE
 	float2 bary : SV_DomainLocation
 #elif DOMAIN__TRIANGLE
@@ -516,28 +574,33 @@ DSOutput DSMain(
 #endif // DOMAIN__
 )
 {
-	float2 uv = INTERPOLATE_PATCH_ATTRIBUTE(uv0, bary);
-	float2 uvScale = cbPerObject.materialData.uvScaleOffset.xy;
-	float2 uvOffst = cbPerObject.materialData.uvScaleOffset.zw;
+	float2 uv = INTERPOLATE_PATCH_ATTRIBUTE(uv, bary);
+	float2 uvScale = GetUVScale();
+	float2 uvOffst = GetUVOffset();
 	float2 uvTiled = uv * uvScale + uvOffst;
 	
-	float3 vPosition = INTERPOLATE_PATCH_ATTRIBUTE(LocalPosition.xyz, bary);
+	float3 vPosition = INTERPOLATE_PATCH_ATTRIBUTE(LocalSpacePosition.xyz, bary);
 	
-#if DOMAIN__TRIANGLE && 1 // generate normals & tangents
-	float3 tangent   = patch[1].LocalPosition.xyz - patch[0].LocalPosition.xyz;
-	float3 bitangent = patch[2].LocalPosition.xyz - patch[0].LocalPosition.xyz;
+#if DOMAIN__TRIANGLE
+	float3 vNormal = normalize(INTERPOLATE_PATCH_ATTRIBUTE(LocalSpaceNormal.xyz, bary));
+	float3 vTangent = normalize(INTERPOLATE_PATCH_ATTRIBUTE(LocalSpaceTangent.xyz, bary));
+#elif DOMAIN__QUAD
+	float3 tangent   = patch[1].LocalSpacePosition.xyz - patch[0].LocalSpacePosition.xyz;
+	float3 bitangent = patch[2].LocalSpacePosition.xyz - patch[0].LocalSpacePosition.xyz;
+	float3 vNormal   = normalize(cross(tangent, bitangent));
+	float3 vTangent  = normalize(tangent); //float3(1,0,0);//normalize(tangent - dot(tangent, vNormal) * vNormal);
+#elif DOMAIN__LINE
+	// TODO
+	float3 tangent   = 0.0f.xxx;
+	float3 bitangent = 0.0f.xxx;
 	float3 vNormal = normalize(cross(tangent, bitangent));
-	float3 vTangent = float3(1,0,0);//normalize(tangent - dot(tangent, vNormal) * vNormal);
-#else // read normals & tangents from VB
-	float3 vNormal = INTERPOLATE_PATCH_ATTRIBUTE(Normal, bary);
-	float3 vTangent = INTERPOLATE_PATCH_ATTRIBUTE(Tangent, bary);
+	float3 vTangent = normalize(tangent); //float3(1,0,0);//normalize(tangent - dot(tangent, vNormal) * vNormal);
 #endif
-
 
 	// transform vertex
 	PSInput TransformedVertex = TransformVertex(
 	#if INSTANCED_DRAW
-		patch[0].instanceID,
+		In.instanceID,
 	#endif
 		vPosition,
 		vNormal,
@@ -545,25 +608,10 @@ DSOutput DSMain(
 		uv
 	);
 
-#if ENABLE_GEOMETRY_SHADER
-	GSInput TransformedVertexGS;
-	TransformedVertexGS.position    = TransformedVertex.position   ;
-	TransformedVertexGS.worldPos    = TransformedVertex.worldPos   ;
-	TransformedVertexGS.vertNormal  = TransformedVertex.vertNormal ;
-	TransformedVertexGS.vertTangent = TransformedVertex.vertTangent;
-	TransformedVertexGS.uv          = TransformedVertex.uv         ;
-	#if PS_OUTPUT_MOTION_VECTORS
-	TransformedVertexGS.svPositionCurr = TransformedVertex.svPositionCurr;
-	TransformedVertexGS.svPositionPrev = TransformedVertex.svPositionPrev;
-	#endif
-	return TransformedVertexGS;
-#else
 	return TransformedVertex;
-#endif
 }
 
 #endif // ENABLE_TESSELLATION_SHADERS
-
 
 //---------------------------------------------------------------------------------------------------
 //
@@ -583,40 +631,38 @@ DSOutput DSMain(
 
 [maxvertexcount(NUM_VERTS_PER_INPUT_PRIM)]
 void GSMain(
+// input
 #if OUTTOPO__POINT
-	point GSInput Input[NUM_VERTS_PER_INPUT_PRIM]
+	point PSInput Input[NUM_VERTS_PER_INPUT_PRIM]
 #elif OUTTOPO__LINE
-	line GSInput Input[NUM_VERTS_PER_INPUT_PRIM]
-#elif OUTTOPO__TRI_CW
-	triangle GSInput Input[NUM_VERTS_PER_INPUT_PRIM]
-#elif OUTTOPO__TRI_CCW
-	triangle GSInput Input[NUM_VERTS_PER_INPUT_PRIM]
+	line PSInput Input[NUM_VERTS_PER_INPUT_PRIM]
+#elif OUTTOPO__TRI_CW || OUTTOPO__TRI_CCW
+	triangle PSInput Input[NUM_VERTS_PER_INPUT_PRIM]
 #endif
 
+// output
+#if OUTTOPO__TRI_CW || OUTTOPO__TRI_CCW
 	, inout TriangleStream<PSInput> outTriStream
+#elif OUTTOPO__LINE
+	, inout LineStream<PSInput> outTriStream
+#elif OUTTOPO__POINT
+	, inout PointStream<PSInput> outTriStream
+#endif
 )
 {	
 	#if OUTTOPO__TRI_CW || OUTTOPO__TRI_CCW
 	// cull triangle
-	if(tess.bFrustumCull && ShouldFrustumCullTriangle(cbPerView.WorldFrustumPlanes, Input[0].worldPos, Input[1].worldPos, Input[2].worldPos, tess.fHSFrustumCullEpsilon))
+	if(tess.bFrustumCull && ShouldFrustumCullTriangle(cbPerView.WorldFrustumPlanes, Input[0].WorldSpacePosition, Input[1].WorldSpacePosition, Input[2].WorldSpacePosition, tess.fHSFrustumCullEpsilon))
 		return;
 	if (tess.bFaceCull && ShouldCullBackFace(Input[0].position, Input[1].position, Input[2].position, tess.fHSFaceCullEpsilon)) // need a GSFaceCullEpsilon?
 		return;
-	#endif // TODO: prevent non-tri output topologies to utilize GS (because it'll only be a perf penalty)
+	#endif
 
 	// fetch primitive data
 	PSInput OutputVertex[NUM_VERTS_PER_INPUT_PRIM];
 	[unroll] for (int iVert = 0; iVert < NUM_VERTS_PER_INPUT_PRIM; ++iVert)
 	{
-		OutputVertex[iVert].position = Input[iVert].position;
-		OutputVertex[iVert].worldPos = Input[iVert].worldPos;
-		OutputVertex[iVert].vertNormal = Input[iVert].vertNormal;
-		OutputVertex[iVert].vertTangent = Input[iVert].vertTangent;
-		OutputVertex[iVert].uv = Input[iVert].uv;
-	#if PS_OUTPUT_MOTION_VECTORS
-		OutputVertex[iVert].svPositionCurr = Input[iVert].svPositionCurr;
-		OutputVertex[iVert].svPositionPrev = Input[iVert].svPositionPrev;
-	#endif
+		OutputVertex[iVert] = Input[iVert];
 	}
 	
 	// append to output

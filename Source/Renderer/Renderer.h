@@ -177,6 +177,7 @@ public:
 	
 	FLightingPSOs     mLightingPSOs;
 	FDepthPrePassPSOs mZPrePassPSOs;
+	FShadowPassPSOs   mShadowPassPSOs;
 	std::atomic<bool> mbDefaultResourcesLoaded; 
 
 private:

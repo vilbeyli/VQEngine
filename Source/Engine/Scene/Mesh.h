@@ -1025,7 +1025,8 @@ namespace GeometryGenerator
 	template<class TVertex, class TIndex>
 	constexpr GeometryData<TVertex, TIndex> TessellationPatch_Quad(unsigned PatchDimension)
 	{
-		GeometryData<TVertex, TIndex> g = Grid<TVertex, TIndex>(1.0f, 1.0f, PatchDimension+1, PatchDimension+1, 1);
+		constexpr int NUM_LODS = 1;
+		GeometryData<TVertex, TIndex> g = Grid<TVertex, TIndex>(1.0f, 1.0f, PatchDimension+1, PatchDimension+1, NUM_LODS);
 		g.LODIndices[0].clear();
 		const unsigned NumPatches = PatchDimension * PatchDimension;
 		const unsigned NumVerts   = (PatchDimension+1) * (PatchDimension+1);

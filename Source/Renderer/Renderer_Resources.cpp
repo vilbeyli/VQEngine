@@ -1242,8 +1242,13 @@ ID3D12PipelineState* VQRenderer::CompileGraphicsPSO(const FPSODesc& Desc, std::v
 
 	// Compile PSO
 	HRESULT hr = pDevice->CreateGraphicsPipelineState(&d3d12GraphicsPSODesc, IID_PPV_ARGS(&pPSO));
-	if (hr == S_OK)
-		SetName(pPSO, Desc.PSOName.c_str());
+	if (hr != S_OK)
+	{
+		// TODO: PSO error display
+		return nullptr;
+	}
+	assert(hr == S_OK);
+	SetName(pPSO, Desc.PSOName.c_str());
 
 	return pPSO;
 }
@@ -1372,7 +1377,7 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 	SCOPED_CPU_MARKER("LoadShader");
 	using namespace ShaderUtils;
 	
-	const std::string ShaderSourcePath = StrUtil::UnicodeToASCII<256>(ShaderStageCompileDesc.FilePath.c_str());
+	const std::string ShaderSourcePath = StrUtil::UnicodeToASCII<512>(ShaderStageCompileDesc.FilePath.c_str());
 	const std::string CachedShaderBinaryPath = GetCachedShaderBinaryPath(ShaderStageCompileDesc);
 
 	// decide whether to use shader cache or compile from source
@@ -1396,10 +1401,9 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 	else
 	{	
 		// check if file exists
-		const std::string ShaderFilePath = StrUtil::UnicodeToASCII<512>(ShaderStageCompileDesc.FilePath.c_str());
-		if (!DirectoryUtil::FileExists(ShaderFilePath))
+		if (!DirectoryUtil::FileExists(ShaderSourcePath))
 		{
-			std::stringstream ss; ss << "Shader file doesn't exist:\n\t" << ShaderFilePath;
+			std::stringstream ss; ss << "Shader file doesn't exist:\n\t" << ShaderSourcePath;
 			const std::string errMsg = ss.str();
 
 			Log::Error("%s", errMsg.c_str());
@@ -1417,8 +1421,11 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 
 	if (!bCompileSuccessful)
 	{
-		Log::Error(errMsg);
-		MessageBox(NULL, errMsg.c_str(), "Shader Compiler Error", MB_OK);
+		const std::string ShaderCompilerErrorMessageHeader = ShaderSourcePath + " | " + ShaderStageCompileDesc.EntryPoint;
+		const std::string ShaderCompileErrorMessage = ShaderCompilerErrorMessageHeader
+			+ "\n--------------------------------------------------------\n" + errMsg;
+		Log::Error(ShaderCompileErrorMessage);
+		MessageBox(NULL, errMsg.c_str(), ("Compile Error @ " + ShaderCompilerErrorMessageHeader).c_str(), MB_OK);
 		return Result; // no crash until runtime
 	}
 

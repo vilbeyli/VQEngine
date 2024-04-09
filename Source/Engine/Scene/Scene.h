@@ -175,7 +175,7 @@ struct FSceneShadowView
 		//     +----LOD1                         +----ShadowInstData2        
 		//         +----ShadowInstData0                        
 		//         +----ShadowInstData1                        
-		struct FShadowInstanceData { DirectX::XMMATRIX matWorld, matWorldViewProj; };
+		struct FShadowInstanceData { DirectX::XMMATRIX matWorld, matWorldViewProj; float fDisplacement; };
 		struct FShadowInstanceDataArray { size_t NumValidData = 0; std::vector<FShadowInstanceData> InstanceData; };
 		std::unordered_map<MeshID, std::vector<FShadowInstanceDataArray>> ShadowMeshLODInstanceDataLookup;
 		//--------------------------------------------------------------------------------------------------------------------------------------------

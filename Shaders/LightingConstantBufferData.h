@@ -152,11 +152,12 @@ struct MaterialData
 #define INSTANCE_COUNT  MAX_INSTANCE_COUNT__SCENE_MESHES
 #endif
 
-// adapter for C++ code
-#if RENDER_INSTANCED_SCENE_MESHES
-#define INSTANCED_DRAW 1
+#ifdef VQ_CPU
+	// adapter for C++ code
+	#if RENDER_INSTANCED_SCENE_MESHES
+	#define INSTANCED_DRAW 1
+	#endif
 #endif
-
 struct PerFrameData
 {
 	SceneLighting Lights;
@@ -204,7 +205,7 @@ struct PerObjectData
 #if INSTANCED_DRAW
 	int4 ObjID[INSTANCE_COUNT]; // int[] causes alignment issues as each element is aligned to 16B on the GPU. use int4.x
 #else
-	int ObjID;
+	int4 ObjID;
 #endif
 };
 

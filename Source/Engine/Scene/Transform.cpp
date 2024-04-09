@@ -116,9 +116,9 @@ DirectX::XMMATRIX Transform::NormalMatrix(const XMMATRIX& world)
 {
 	XMMATRIX nrm = world;
 	nrm.r[3].m128_f32[0] = nrm.r[3].m128_f32[1] = nrm.r[3].m128_f32[2] = 0;
-	nrm.r[3].m128_f32[3] = 1;
+	nrm.r[3].m128_f32[3] = 1; // undo translation
 	XMVECTOR Det = XMMatrixDeterminant(nrm);
-	nrm = XMMatrixInverse(&Det, nrm);
-	nrm = XMMatrixTranspose(nrm);
+	nrm = XMMatrixInverse(&Det, nrm); // undo rotation+scale
+	nrm = XMMatrixTranspose(nrm); // redo rotation
 	return nrm;
 }

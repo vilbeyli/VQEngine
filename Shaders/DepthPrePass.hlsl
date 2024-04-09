@@ -24,26 +24,26 @@
 // DATA
 //
 //---------------------------------------------------------------------------------------------------
-#if 0
 struct VSInput
 {
 	float3 position : POSITION;
 	float3 normal   : NORMAL;
 	float3 tangent  : TANGENT;
 	float2 uv       : TEXCOORD0;
+#if INSTANCED_DRAW
 	uint instanceID : SV_InstanceID;
-};
 #endif
+};
 
 struct PSInput
 {
-    float4 position    : SV_POSITION;
-	float3 worldPos    : COLOR2;
-	float3 vertNormal  : COLOR0;
-	float3 vertTangent : COLOR1;
-	float2 uv          : TEXCOORD0;
+	float4 position           : SV_POSITION;
+	float3 WorldSpacePosition : COLOR2;
+	float3 WorldSpaceNormal   : COLOR0;
+	float3 WorldSpaceTangent  : COLOR1;
+	float2 uv                 : TEXCOORD0;
 #if INSTANCED_DRAW
-	uint instanceID    : SV_InstanceID;
+	uint instanceID           : SV_InstanceID;
 #endif
 };
 
@@ -79,6 +79,20 @@ Texture2D texHeightmap : register(t8);
 // KERNELS
 //
 //---------------------------------------------------------------------------------------------------
+
+// CB fetchers
+#if INSTANCED_DRAW
+matrix GetWorldMatrix(uint instID) { return cbPerObject.matWorld[instID]; }
+matrix GetWorldNormalMatrix(uint instID) { return cbPerObject.matNormal[instID]; }
+matrix GetWorldViewProjectionMatrix(uint instID) { return cbPerObject.matWorldViewProj[instID]; }
+#else
+matrix GetWorldMatrix() { return cbPerObject.matWorld; }
+matrix GetWorldNormalMatrix() { return cbPerObject.matNormal; }
+matrix GetWorldViewProjectionMatrix() { return cbPerObject.matWorldViewProj; }
+#endif
+float2 GetUVScale() { return cbPerObject.materialData.uvScaleOffset.xy; }
+float2 GetUVOffset() { return cbPerObject.materialData.uvScaleOffset.zw; }
+
 float3 CalcHeightOffset(float2 uv)
 {
 	float fHeightSample = texHeightmap.SampleLevel(LinearSamplerTess, uv, 0).r;
@@ -96,23 +110,28 @@ PSInput TransformVertex(
 	float2 uv
 )
 {
-	PSInput result;
 	float4 vPosition = float4(Position, 1.0f);
 	vPosition.xyz += CalcHeightOffset(uv * cbPerObject.materialData.uvScaleOffset.xy + cbPerObject.materialData.uvScaleOffset.zw);
 
 #if INSTANCED_DRAW
-	result.position    = mul(cbPerObject.matWorldViewProj[InstanceID], vPosition);
-	result.worldPos    = mul(cbPerObject.matWorld[InstanceID], vPosition);
-	result.vertNormal  = mul((float4x3)cbPerObject.matNormal[InstanceID], Normal );
-	result.vertTangent = mul((float4x3)cbPerObject.matNormal[InstanceID], Tangent);
+	matrix matW = GetWorldMatrix(InstanceID);
+	matrix matWVP = GetWorldViewProjectionMatrix(InstanceID);
+	matrix matWN = GetWorldNormalMatrix(InstanceID);
 #else
-	result.position    = mul(cbPerObject.matWorldViewProj, vPosition);
-	result.worldPos    = mul(cbPerObject.matWorld, vPosition);
-	result.vertNormal  = mul(cbPerObject.matNormal, Normal );
-	result.vertTangent = mul(cbPerObject.matNormal, Tangent);
+	matrix matW = GetWorldMatrix();
+	matrix matWVP = GetWorldViewProjectionMatrix();
+	matrix matWN = GetWorldNormalMatrix();
 #endif // INSTANCED_DRAW
 	
+	PSInput result;
+	result.position = mul(matWVP, vPosition);
+	result.WorldSpacePosition = mul(matW, vPosition).xyz;
+	result.WorldSpaceNormal = mul((float4x3) matWN, Normal).xyz;
+	result.WorldSpaceTangent = mul((float4x3) matWN, Tangent).xyz;
 	result.uv = uv;
+#if INSTANCED_DRAW
+	result.instanceID = InstanceID;
+#endif
 	return result;
 }
 #include "Tessellation.hlsl"
@@ -143,8 +162,8 @@ float4 PSMain(PSInput In) : SV_TARGET
 	
 	// render surface normals
 	float3 Normal = texNormals.Sample(AnisoSampler, uv).rgb;
-	const float3 N = normalize(In.vertNormal);
-	const float3 T = normalize(In.vertTangent);
+	const float3 N = normalize(In.WorldSpaceNormal);
+	const float3 T = normalize(In.WorldSpaceTangent);
 	float3 SurfaceN = length(Normal) < 0.01 ? N : UnpackNormal(Normal, N, T);
 	SurfaceN = (SurfaceN + 1.0f.xxx) * 0.5; // FidelityFX-CACAO needs packed normals
 	return float4(SurfaceN, 1);

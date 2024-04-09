@@ -170,11 +170,18 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs()
 
 	mLightingPSOs.GatherPSOLoadDescs(mRootSignatureLookup);
 	mZPrePassPSOs.GatherPSOLoadDescs(mRootSignatureLookup);
-	
-	std::vector<FPSODesc> descs(mLightingPSOs.mapLoadDesc.size() + mZPrePassPSOs.mapLoadDesc.size());
+	mShadowPassPSOs.GatherPSOLoadDescs(mRootSignatureLookup);
+
+	std::vector<FPSODesc> descs(
+		mLightingPSOs.mapLoadDesc.size() 
+		+ mZPrePassPSOs.mapLoadDesc.size() 
+		+ mShadowPassPSOs.mapLoadDesc.size()
+	);
+
 	int i = 0;
 	PreAssignPSOIDs(mLightingPSOs, i, descs);
 	PreAssignPSOIDs(mZPrePassPSOs, i, descs);
+	PreAssignPSOIDs(mShadowPassPSOs, i, descs);
 
 	return descs;
 }
@@ -391,6 +398,7 @@ void VQEngine::InitializeBuiltinMeshes()
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
+		using PatchVertexType = FVertexDefault;
 		constexpr int NUM_TESSELLATION_GEOMETRY = 5;
 		const EBuiltInMeshes eMesh[NUM_TESSELLATION_GEOMETRY] =
 		{ 
@@ -410,7 +418,7 @@ void VQEngine::InitializeBuiltinMeshes()
 		};
 		for (int i = 0; i < NUM_TESSELLATION_GEOMETRY; ++i)
 		{
-			GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::TessellationPatch_Quad<VertexType>(i+1);
+			GeometryGenerator::GeometryData<PatchVertexType> data = GeometryGenerator::TessellationPatch_Quad<PatchVertexType>(i+1);
 			mResourceNames.mBuiltinMeshNames[eMesh[i]] = szMeshNames[i];
 			mBuiltinMeshes[eMesh[i]] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh[i]]);
 		}
