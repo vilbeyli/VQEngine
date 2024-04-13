@@ -18,6 +18,10 @@
 
 #pragma once
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 using int64 = long long;
 using int32 = int;
 using int16 = short;

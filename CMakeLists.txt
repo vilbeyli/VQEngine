@@ -278,7 +278,7 @@ add_subdirectory(Source/Renderer)
 #    -DASSIMP_BUILD_TESTS=OFF 
 #    -DASSIMP_INSTALL=OFF
 #)
-add_definitions(-DNOMINMAX)
+#add_definitions(-DNOMINMAX)
 add_subdirectory(Libs/assimp)
 add_subdirectory(Libs/imgui)
 
