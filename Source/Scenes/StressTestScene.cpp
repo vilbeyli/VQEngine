@@ -1,5 +1,3 @@
-#define NOMINMAX
-
 #include "Scenes.h"
 
 #include "../Engine/Core/Input.h"
@@ -78,7 +76,7 @@ constexpr float ORBIT_SPEED_MAX = 0.8f;
 constexpr float ORBIT_SPEED_DEFAULT = 0.25f;
 void StressTestScene::InitializeScene()
 {
-	bEnableGeneratedObjectAnimation = true;
+	bEnableGeneratedObjectAnimation = false;
 	bEnableOrbit = true;
 	bEnableRotation = true;
 
@@ -191,15 +189,15 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 		constexpr float TERRAIN_TESS_FACTOR = FTessellationParameters::MAX_TESSELLATION_FACTOR;
 		matR.Tessellation.SetAllTessellationFactors(TERRAIN_TESS_FACTOR);
 
-		matR.EmissiveIntensity = 0.0f;
+		matR.EmissiveIntensity    = 0.0f;
 		matR.NormalMapFilePath    = "Data/Textures/PBR/Pebbles02_4K/Pebbles02_4K_Normal.png";
 		matR.DiffuseMapFilePath   = "Data/Textures/PBR/Pebbles02_4K/Pebbles02_4K_BaseColor.png";
 		matR.RoughnessMapFilePath = "Data/Textures/PBR/Pebbles02_4K/Pebbles02_4K_Roughness.png";
 		matR.HeightMapFilePath    = "Data/Textures/PBR/Pebbles02_4K/Pebbles02_4K_Height.png";
 		matR.AOMapFilePath        = "Data/Textures/PBR/Pebbles02_4K/Pebbles02_4K_AO.png";
 		matR.EmissiveMapFilePath  = "Data/Textures/PBR/Pebbles02_4K/Pebbles02_4K_Normal.png";
-		matR.Displacement = 75.0f;
-		matR.Name = "GroundPlatformMaterial";
+		matR.Displacement         = 75.0f;
+		matR.Name                 = "GroundPlatformMaterial";
 		scene.Materials.push_back(matR);
 	}
 	if constexpr (ENABLE_MATERIALS)
@@ -428,7 +426,7 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 					matR.Tessellation.SetAllTessellationFactors(TESSELLATION_FACTOR);
 					
 					const size_t i = r * NUM_TESSELLATION_SPHERES_COL + m;
-					matR.EmissiveIntensity = i;
+					matR.EmissiveIntensity = static_cast<float>(i);
 					matR.Name = "TessellatedDisplacementMaterial[" + std::to_string(i) + "]";
 					scene.Materials.push_back(matR);
 

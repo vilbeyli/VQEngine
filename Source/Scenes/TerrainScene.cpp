@@ -1,5 +1,3 @@
-#define NOMINMAX
-
 #include "Scenes.h"
 
 #include "../Engine/Core/Input.h"

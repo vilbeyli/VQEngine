@@ -723,7 +723,7 @@ static Model::Data ProcessAssimpNode(
 		auto vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, NumThreadsToUse);
 
 		// synchronization
-		std::atomic<int> WorkerCounter(static_cast<int>(min(vRanges.size()-1, NumWorkerThreadsToUse)));
+		std::atomic<int> WorkerCounter(static_cast<int>(std::min(vRanges.size()-1, NumWorkerThreadsToUse)));
 		Signal WorkerSignal;
 		{
 			SCOPED_CPU_MARKER("DispatchMeshWorkers");

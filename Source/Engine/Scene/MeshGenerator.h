@@ -1001,7 +1001,7 @@ namespace GeometryGenerator
 		constexpr unsigned INDICES_PER_PATCH = 4;
 		g.LODIndices[0].resize(NumPatches * INDICES_PER_PATCH);
 		assert(NumVerts == g.LODVertices[0].size());
-		for (int iPatch = 0; iPatch < NumPatches; ++iPatch) 
+		for (unsigned int iPatch = 0; iPatch < NumPatches; ++iPatch) 
 		{
 			// going bottom left to top right
 			// e.g. 3x3 patches, 4x4 verts 36 indices

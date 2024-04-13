@@ -186,6 +186,7 @@ set (SourceVQE
     "Source/Engine/Settings.h"
     "Source/Engine/Math.h"
     "Source/Engine/Culling.h"
+    "Source/Engine/CullingData.h"
     "Source/Engine/AssetLoader.h"
     "Source/Engine/GPUMarker.h"
 
@@ -277,6 +278,7 @@ add_subdirectory(Source/Renderer)
 #    -DASSIMP_BUILD_TESTS=OFF 
 #    -DASSIMP_INSTALL=OFF
 #)
+add_definitions(-DNOMINMAX)
 add_subdirectory(Libs/assimp)
 add_subdirectory(Libs/imgui)
 

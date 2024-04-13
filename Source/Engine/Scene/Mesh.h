@@ -18,7 +18,7 @@
 #pragma once
 
 #include "../Core/Types.h"
-#include "../Culling.h"
+#include "../CullingData.h"
 
 #include <string>
 #include <vector>
@@ -27,9 +27,6 @@
 #include <DirectXMath.h>
 
 #include "MeshGenerator.h"
-
-#define NOMINMAX
-#undef max
 
 struct FBufferDesc;
 class VQRenderer;

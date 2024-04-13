@@ -15,9 +15,6 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
-
-#define NOMINMAX
-
 #include "Scene.h"
 #include "../Core/Window.h"
 #include "../VQEngine.h"
@@ -113,19 +110,12 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	}
 	mBoundingBoxHierarchy.Clear();
 	{
-		SCOPED_CPU_MARKER("ClearSceneViews");
-		for (FSceneView& view : mFrameSceneViews)
-		{
-			view.MaterialMeshLODInstanceDataLookup.clear();
-		}
-	}
-	{
 		SCOPED_CPU_MARKER("ClearShadowViews");
-		for (FSceneShadowView& view : mFrameShadowViews)
+		for (FSceneShadowViews& view : mFrameShadowViews)
 		{
-			for (FSceneShadowView::FShadowView& sv : view.ShadowViews_Spot) sv.ShadowMeshLODInstanceDataLookup.clear();
-			for (FSceneShadowView::FShadowView& sv : view.ShadowViews_Point) sv.ShadowMeshLODInstanceDataLookup.clear();
-			view.ShadowView_Directional.ShadowMeshLODInstanceDataLookup.clear();
+			for (FSceneShadowViews::FShadowView& sv : view.ShadowViews_Spot ) sv.drawParamLookup.clear();
+			for (FSceneShadowViews::FShadowView& sv : view.ShadowViews_Point) sv.drawParamLookup.clear();
+			view.ShadowView_Directional.drawParamLookup.clear();
 		}
 	}
 	mFrustumCullWorkerContext.ClearMemory();
@@ -287,7 +277,7 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 		const std::vector<FGameObjectRepresentation>* pObjects = &GameObjects;
 
 		std::vector<std::pair<size_t, size_t>> ranges = PartitionWorkItemsIntoRanges(NumGameObjects, NumThreads);
-		const int NumTasks = ranges.size();
+		const int NumTasks = static_cast<int>(ranges.size());
 		const int NumThreadTasks = NumTasks - 1;
 		Signal ThreadsDoneSignal;
 		std::atomic<bool> bThreadsDone = false;

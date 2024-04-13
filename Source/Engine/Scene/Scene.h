@@ -36,11 +36,21 @@
 #include "../AssetLoader.h"
 #include "../PostProcess/PostProcess.h"
 
+#include <algorithm>
+
 #if RENDER_INSTANCED_SCENE_MESHES
 using MeshRenderCommand_t = FInstancedMeshRenderCommand;
 #else
 using MeshRenderCommand_t = FMeshRenderCommand;
 #endif
+
+#if RENDER_INSTANCED_BOUNDING_BOXES
+using BoundingBoxRenderCommand_t = FInstancedBoundingBoxRenderCommand;
+#else
+using BoundingBoxRenderCommand_t = FBoundingBoxRenderCommand;
+#endif
+
+
 
 
 // fwd decl
@@ -91,7 +101,27 @@ struct FSceneRenderParameters
 };
 //--- Pass Parameters ---
 
+namespace InstanceBatching
+{
+	inline int GetLODFromProjectedScreenArea(float fArea, int NumMaxLODs)
+	{
+		// LOD0 >= 0.100 >= LOD1 >= 0.010 >= LOD2 >= 0.001
+		//
+		// coarse algorithm: just pick 1/10th for each available lod
+		int CurrLOD = 0;
+		float Threshold = 0.1f;
+		while (CurrLOD < NumMaxLODs - 1 && fArea <= Threshold)
+		{
+			Threshold *= 0.1f;
+			++CurrLOD;
+		}
+		assert(CurrLOD < NumMaxLODs && CurrLOD >= 0);
+		return CurrLOD;
+	}
 
+}
+
+struct FInstanceDataWriteParam { int iDraw, iInst; };
 struct FSceneView
 {
 	DirectX::XMMATRIX     view;
@@ -123,6 +153,7 @@ struct FSceneView
 	std::vector<FLightRenderCommand> lightBoundsRenderCommands;
 	std::vector<FOutlineRenderCommand> outlineRenderCommands;
 	std::vector<MeshRenderCommand_t> debugVertexAxesRenderCommands;
+	std::vector<BoundingBoxRenderCommand_t> boundingBoxRenderCommands;
 
 #if RENDER_INSTANCED_SCENE_MESHES
 	//--------------------------------------------------------------------------------------------------------------------------------------------
@@ -131,37 +162,51 @@ struct FSceneView
 	// of valid instance data.
 	//--------------------------------------------------------------------------------------------------------------------------------------------
 	struct FInstanceData { DirectX::XMMATRIX mWorld, mWorldViewProj, mWorldViewProjPrev, mNormal; int mObjID; float mProjectedArea; }; // transformation matrixes used in the shader
-	struct FMeshInstanceDataArray { size_t NumValidData = 0; std::vector<FInstanceData> InstanceData; };
-	using MaterialMeshLODInstanceDataLookup_t = std::unordered_map<MaterialID, std::unordered_map<MeshID, std::vector<FMeshInstanceDataArray>>>;
-	// MAT0                       MAT1       
-	// +----MESH0                 +----MESH37             
-	//     +----LOD0                  +----LOD0                
-	//        +----InstData0             +----InstData0                        
-	//        +----InstData1             +----InstData1                        
-	//     +----LOD1                     +----InstData2                
-	//        +----InstData0      +----MESH225                        
-	//        +----InstData1          +----LOD0                        
-	// +----MESH1                        +----InstData0             
-	//     +----LOD0                     +----InstData1                
-	//        +----InstData0          +----LOD1                        
-	//        +----InstData1             +----InstData0                        
-	//        +----InstData2             +----InstData1                        
-	// +----MESH2                              
-	//     +----LOD0
-	//        +----InstData0
+	struct FMeshInstanceDataArray { size_t NumValidData = 0; std::vector<FInstanceData> Data; };
+	// MAT0
+	// +---- PSO0                       MAT1       
+	//     +----MESH0                 +----MESH37             
+	//         +----LOD0                  +----LOD0                
+	//             +----InstData0             +----InstData0                        
+	//             +----InstData1             +----InstData1                        
+	//          +----LOD1                     +----InstData2                
+	//             +----InstData0      +----MESH225                        
+	//             +----InstData1          +----LOD0                        
+	// +---- PSO1
+	//     +----MESH1                        +----InstData0             
+	//         +----LOD0                     +----InstData1                
+	//            +----InstData0          +----LOD1                        
+	//            +----InstData1             +----InstData0                        
+	//            +----InstData2             +----InstData1                        
+	//     +----MESH2                              
+	//         +----LOD0
+	//            +----InstData0
 	//
-	MaterialMeshLODInstanceDataLookup_t MaterialMeshLODInstanceDataLookup;
+
+	// Bits[0  -  3] : LOD
+	// Bits[4  - 33] : MeshID
+	// Bits[34 - 34] : IsAlphaMasked (or opaque)
+	// Bits[35 - 35] : IsTessellated
+	static inline uint64 GetKey(MaterialID matID, MeshID meshID, int lod)
+	{
+		assert(matID != -1);
+		assert(meshID != -1);
+		assert(lod >= 0 && lod < 16);
+		constexpr int mask = 0x3FFFFFFF; // __11 1111 1111 1111 ...
+		uint64 hash = std::max(0, std::min(1 << 4, lod));
+		hash |= ((uint64)(meshID & mask)) << 4;
+		hash |= ((uint64)(matID & mask)) << 34;
+		return hash;
+	}
+	static inline MaterialID GetMatIDFromKey(uint64 key) { return MaterialID(key >> 34); }
+	static inline MeshID     GetMeshIDFromKey(uint64 key) { return MeshID((key >> 4) & 0x3FFFFFFF); }
+	static inline int        GetLODFromKey(uint64 key) { return int(key & 0xF); }
 	std::unordered_map<uint64, FSceneView::FMeshInstanceDataArray> drawParamLookup;
+	std::vector<FInstanceDataWriteParam> mRenderCmdInstanceDataWriteIndex; // drawParamLookup --> meshRenderCommands
 	//--------------------------------------------------------------------------------------------------------------------------------------------
 #endif
-
-#if RENDER_INSTANCED_BOUNDING_BOXES
-	std::vector<FInstancedBoundingBoxRenderCommand> boundingBoxRenderCommands;
-#else
-	std::vector<FBoundingBoxRenderCommand> boundingBoxRenderCommands;
-#endif
 };
-struct FSceneShadowView
+struct FSceneShadowViews
 {
 	struct FShadowView
 	{
@@ -175,10 +220,29 @@ struct FSceneShadowView
 		//     +----LOD1                         +----ShadowInstData2        
 		//         +----ShadowInstData0                        
 		//         +----ShadowInstData1                        
-		struct FShadowInstanceData { DirectX::XMMATRIX matWorld, matWorldViewProj; float fDisplacement; };
-		struct FShadowInstanceDataArray { size_t NumValidData = 0; std::vector<FShadowInstanceData> InstanceData; };
-		std::unordered_map<MeshID, std::vector<FShadowInstanceDataArray>> ShadowMeshLODInstanceDataLookup;
-		//--------------------------------------------------------------------------------------------------------------------------------------------
+		struct FInstanceData { DirectX::XMMATRIX matWorld, matWorldViewProj; float fDisplacement; };
+		struct FInstanceDataArray { size_t NumValidData = 0; std::vector<FInstanceData> Data; };
+		
+		// Bits[0  -  3] : LOD
+		// Bits[4  - 33] : MeshID
+		// Bits[34 - 63] : MaterialID
+		static inline uint64 GetKey(MaterialID matID, MeshID meshID, int lod)
+		{
+			assert(matID != -1);
+			assert(meshID != -1);
+			assert(lod >= 0 && lod < 16);
+			constexpr int mask = 0x3FFFFFFF; // __11 1111 1111 1111 ...
+			uint64 hash = std::max(0, std::min(1 << 4, lod));
+			hash |= ((uint64)(meshID & mask)) << 4;
+			//hash |= ((uint64)(matID & mask)) << 34;
+			return hash;
+		}
+		static inline MaterialID GetMatIDFromKey(uint64 key) { return MaterialID(key >> 34); }
+		static inline MeshID     GetMeshIDFromKey(uint64 key) { return MeshID((key >> 4) & 0x3FFFFFFF); }
+		static inline int        GetLODFromKey(uint64 key) { return int(key & 0xF); }
+		std::unordered_map<uint64, FInstanceDataArray> drawParamLookup;
+		std::vector<FInstanceDataWriteParam> mRenderCmdInstanceDataWriteIndex; // drawParamLookup --> meshRenderCommands
+		////--------------------------------------------------------------------------------------------------------------------------------------------
 		std::vector<FInstancedShadowMeshRenderCommand> meshRenderCommands; // per LOD mesh
 #else
 		std::vector<FShadowMeshRenderCommand> meshRenderCommands;
@@ -227,7 +291,6 @@ struct FSceneStats
 	uint NumCameras;
 };
 
-
 // For the time being, this is simply a flat list of bounding boxes -- there is not much of a hierarchy to speak of.
 class SceneBoundingBoxHierarchy
 {
@@ -249,21 +312,22 @@ public:
 	void Clear();
 	void ResizeGameObjectBoundingBoxContainer(size_t sz);
 
-	const std::vector<MeshID>&           GetMeshesIDs() const { return mMeshIDs; }
-	const std::vector<MaterialID>&       GetMeshMaterialIDs() const { return mMeshMaterials; }
+	const std::vector<int>& GetNumMeshesLODs() const { return mNumMeshLODs; }
+	const std::vector<MeshID>& GetMeshesIDs() const { return mMeshIDs; }
+	const std::vector<MaterialID>& GetMeshMaterialIDs() const { return mMeshMaterials; }
 	const std::vector<const Transform*>& GetMeshTransforms() const { return mMeshTransforms; }
-	const std::vector<size_t>&           GetMeshGameObjectHandles() const { return mMeshGameObjectHandles; }
+	const std::vector<size_t>& GetMeshGameObjectHandles() const { return mMeshGameObjectHandles; }
 
 private:
 	void ResizeGameMeshBoxContainer(size_t size);
 
 	void BuildGameObjectBoundingSpheres(const std::vector<size_t>& GameObjectHandles);
 	void BuildGameObjectBoundingSpheres_Range(const std::vector<size_t>& GameObjectHandles, size_t iBegin, size_t iEnd);
-	
+
 	void BuildGameObjectBoundingBox(const Scene* pScene, size_t ObjectHandle, size_t iBB);
 	void BuildGameObjectBoundingBoxes(const Scene* pScene, const std::vector<size_t>& GameObjectHandles);
 	void BuildGameObjectBoundingBoxes_Range(const Scene* pScene, const std::vector<size_t>& GameObjectHandles, size_t iBegin, size_t iEnd);
-	
+
 	void BuildMeshBoundingBox(const Scene* pScene, size_t ObjectHandle, size_t iBB_Begin, size_t iBB_End);
 	void BuildMeshBoundingBoxes(const Scene* pScene, const std::vector<size_t>& GameObjectHandles);
 	void BuildMeshBoundingBoxes_Range(const Scene* pScene, const std::vector<size_t>& GameObjectHandles, size_t iBegin, size_t iEnd, size_t iMeshBB);
@@ -285,6 +349,7 @@ private:
 	size_t mNumValidMeshBoundingBoxes = 0;
 	std::vector<FBoundingBox>      mMeshBoundingBoxes;
 	std::vector<MeshID>            mMeshIDs;
+	std::vector<int>               mNumMeshLODs;
 	std::vector<MaterialID>        mMeshMaterials;
 	std::vector<const Transform*>  mMeshTransforms;
 	std::vector<size_t>            mMeshGameObjectHandles;
@@ -298,6 +363,14 @@ private:
 };
 
 //------------------------------------------------------
+
+
+struct FFrustumRenderCommandRecorderContext
+{
+	size_t iFrustum;
+	const std::vector<FFrustumCullWorkerContext::FCullResult>* pCullResults = nullptr;
+	FSceneShadowViews::FShadowView* pShadowView = nullptr;
+};
 
 constexpr size_t NUM_GAMEOBJECT_POOL_SIZE = 1024 * 64;
 constexpr size_t GAMEOBJECT_BYTE_ALIGNMENT = 64; // assumed typical cache-line size
@@ -362,7 +435,7 @@ private: // Derived Scenes shouldn't access these functions
 	void PickObject(const ObjectIDPass& ObjectIDRenderPass, int MouseClickPositionX, int MouseClickPositionY);
 
 	void GatherSceneLightData(FSceneView& SceneView) const;
-	void GatherShadowViewData(FSceneShadowView& SceneShadowView
+	void GatherShadowViewData(FSceneShadowViews& SceneShadowView
 		, const std::vector<Light>& vLights
 		, const std::vector<size_t>& vActiveLightIndices
 	);
@@ -373,26 +446,9 @@ private: // Derived Scenes shouldn't access these functions
 		, const DirectX::XMMATRIX matViewProj
 	) const;
 
-	
-	struct FFrustumRenderCommandRecorderContext
-	{
-		size_t iFrustum;
-		const std::vector<std::pair<size_t, float>>* pObjIndicesAndBBAreas = nullptr;
-		FSceneShadowView::FShadowView* pShadowView = nullptr;
-	};
-	size_t DispatchWorkers_ShadowViews(size_t NumShadowMeshFrustums, std::vector< FFrustumRenderCommandRecorderContext>& WorkerContexts, FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
-	void BatchInstanceData_ShadowMeshes(
-		  size_t iFrustum
-		, FSceneShadowView::FShadowView* pShadowView
-		, const std::vector<std::pair<size_t, float>>& vCulledBoundingBoxIndexAndArea
-		, DirectX::XMMATRIX matViewProj
-		, bool bForceLOD0
-	) const;
-
-
-	void GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShadowView& SceneShadowView, ThreadPool& UpdateWorkerThreadPool);
+	void GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShadowViews& SceneShadowView, ThreadPool& UpdateWorkerThreadPool);
 	void CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
-	void BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool, std::vector<std::pair<int, int>>& vOutputWriteParams);
+	void BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
 
 	void BuildGameObject(const FGameObjectRepresentation& rep, size_t iObj);
 	
@@ -416,7 +472,7 @@ public:
 
 	      FSceneView&       GetSceneView (int FRAME_DATA_INDEX);
 	const FSceneView&       GetSceneView (int FRAME_DATA_INDEX) const;
-	const FSceneShadowView& GetShadowView(int FRAME_DATA_INDEX) const;
+	const FSceneShadowViews& GetShadowView(int FRAME_DATA_INDEX) const;
 	      FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX);
 	const FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX) const ;
 
@@ -465,7 +521,7 @@ protected:
 	// VIEWS
 	//
 	std::vector<FSceneView>       mFrameSceneViews ; // per-frame data (usually 3 if Render & Update threads are separate)
-	std::vector<FSceneShadowView> mFrameShadowViews; // per-frame data (usually 3 if Render & Update threads are separate)
+	std::vector<FSceneShadowViews> mFrameShadowViews; // per-frame data (usually 3 if Render & Update threads are separate)
 
 	//
 	// SCENE ELEMENT CONTAINERS
@@ -493,8 +549,7 @@ protected:
 	//
 	SceneBoundingBoxHierarchy mBoundingBoxHierarchy;
 	mutable FFrustumCullWorkerContext mFrustumCullWorkerContext;
-	std::unordered_map<size_t, FSceneShadowView::FShadowView*> mFrustumIndex_pShadowViewLookup;
-	std::vector<std::pair<int, int>> mMainViewCollcetInstancedDrawDataWriteParams;
+	std::unordered_map<size_t, FSceneShadowViews::FShadowView*> mFrustumIndex_pShadowViewLookup;
 
 	std::vector<size_t> mActiveLightIndices_Static;
 	std::vector<size_t> mActiveLightIndices_Stationary;

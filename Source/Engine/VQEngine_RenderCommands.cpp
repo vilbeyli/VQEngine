@@ -33,7 +33,7 @@
 //
 // DRAW COMMANDS
 //
-void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView::FShadowView& shadowView)
+void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews::FShadowView& shadowView)
 {
 	using namespace DirectX;
 
@@ -44,13 +44,14 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 		XMMATRIX matWorld        [MAX_INSTANCE_COUNT__SHADOW_MESHES];
 	};
 
+	//Log::Info("DrawShadowMeshList(%d)", shadowView.meshRenderCommands.size());
 	for (const FInstancedShadowMeshRenderCommand& renderCmd : shadowView.meshRenderCommands)
 	{
 		const uint32 NumInstances = (uint32)renderCmd.matWorldViewProj.size();
 		assert(NumInstances == renderCmd.matWorldViewProj.size());
-		assert(NumInstances == renderCmd.matWorldViewProjTransformations.size());
+		assert(NumInstances == renderCmd.matWorld.size());
 
-		const Material& mat = mpScene->GetMaterial(renderCmd.matID);
+		//const Material& mat = mpScene->GetMaterial(renderCmd.matID);
 
 		// set constant buffer data
 		FCBufferLightVS* pCBuffer = {};
@@ -71,30 +72,30 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 				, StrUtil::FormatByte(memcpyDstSize)
 			);
 		}
-		memcpy(pCBuffer->matWorld        , renderCmd.matWorldViewProj.data()               , NumInstances * sizeof(XMMATRIX));
-		memcpy(pCBuffer->matWorldViewProj, renderCmd.matWorldViewProjTransformations.data(), NumInstances * sizeof(XMMATRIX));
+		memcpy(pCBuffer->matWorld        , renderCmd.matWorld.data()        , NumInstances * sizeof(XMMATRIX));
+		memcpy(pCBuffer->matWorldViewProj, renderCmd.matWorldViewProj.data(), NumInstances * sizeof(XMMATRIX));
 		
-		if (mat.Tessellation.bEnableTessellation)
-		{
-			D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Tsl;
-			VQ_SHADER_DATA::TessellationParams* pCBuffer_Tessellation = nullptr;
-			auto data = mat.GetTessellationCBufferData();
-			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Tessellation)), (void**)(&pCBuffer_Tessellation), &cbAddr_Tsl);
-			memcpy(pCBuffer_Tessellation, &data, sizeof(data));
-			pCmd->SetGraphicsRootConstantBufferView(3, cbAddr_Tsl);
-		}
+		//if (mat.Tessellation.bEnableTessellation && false)
+		//{
+		//	D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Tsl;
+		//	VQ_SHADER_DATA::TessellationParams* pCBuffer_Tessellation = nullptr;
+		//	auto data = mat.GetTessellationCBufferData();
+		//	pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Tessellation)), (void**)(&pCBuffer_Tessellation), &cbAddr_Tsl);
+		//	memcpy(pCBuffer_Tessellation, &data, sizeof(data));
+		//	pCmd->SetGraphicsRootConstantBufferView(3, cbAddr_Tsl);
+		//}
 
 		auto vb = mRenderer.GetVertexBufferView(renderCmd.vertexIndexBuffer.first);
 		auto ib = mRenderer.GetIndexBufferView(renderCmd.vertexIndexBuffer.second);
 		
 		pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
 		D3D_PRIMITIVE_TOPOLOGY topo = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		if (mat.Tessellation.bEnableTessellation)
-		{
-			topo = mat.Tessellation.Domain == ETessellationDomain::QUAD_PATCH
-				? D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST
-				: D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
-		}
+		//if (mat.Tessellation.bEnableTessellation)
+		//{
+		//	topo = mat.Tessellation.Domain == ETessellationDomain::QUAD_PATCH
+		//		? D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST
+		//		: D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
+		//}
 		pCmd->IASetPrimitiveTopology(topo);
 		pCmd->IASetVertexBuffers(0, 1, &vb);
 		pCmd->IASetIndexBuffer(&ib);
@@ -130,11 +131,10 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 //
 // RENDER PASSES
 //
-void VQEngine::RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView& SceneShadowView)
+void VQEngine::RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& SceneShadowView)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderDirectionalShadowMaps");
-
-	if (!SceneShadowView.ShadowView_Directional.meshRenderCommands.empty())
+	if (!SceneShadowView.ShadowView_Directional.drawParamLookup.empty())
 	{
 		const std::string marker = "Directional";
 		SCOPED_GPU_MARKER(pCmd, marker.c_str());
@@ -163,7 +163,7 @@ void VQEngine::RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, Dyna
 		DrawShadowViewMeshList(pCmd, pCBufferHeap, SceneShadowView.ShadowView_Directional);
 	}
 }
-void VQEngine::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView& SceneShadowView)
+void VQEngine::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& SceneShadowView)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderSpotShadowMaps");
 	const bool bRenderAtLeastOneSpotShadowMap = SceneShadowView.NumSpotShadowViews > 0;
@@ -183,14 +183,13 @@ void VQEngine::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuff
 	//
 	// SPOT LIGHTS
 	//
-	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_PSO));
+	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_PSO)); // TODO
 	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ShadowPass));
 	
 	for (uint i = 0; i < SceneShadowView.NumSpotShadowViews; ++i)
 	{
-		const FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowViews_Spot[i];
-
-		if (ShadowView.meshRenderCommands.empty())
+		const FSceneShadowViews::FShadowView& ShadowView = SceneShadowView.ShadowViews_Spot[i];
+		if (ShadowView.drawParamLookup.empty())
 			continue;
 
 		const std::string marker = "Spot[" + std::to_string(i) + "]";
@@ -207,7 +206,7 @@ void VQEngine::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuff
 		DrawShadowViewMeshList(pCmd, pCBufferHeap, ShadowView);
 	}
 }
-void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowView& SceneShadowView, size_t iBegin, size_t NumPointLights)
+void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& SceneShadowView, size_t iBegin, size_t NumPointLights)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderPointShadowMaps");
 	if (SceneShadowView.NumPointShadowViews <= 0)
@@ -248,9 +247,9 @@ void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 		for (size_t face = 0; face < 6; ++face)
 		{
 			const size_t iShadowView = i * 6 + face;
-			const FSceneShadowView::FShadowView& ShadowView = SceneShadowView.ShadowViews_Point[iShadowView];
+			const FSceneShadowViews::FShadowView& ShadowView = SceneShadowView.ShadowViews_Point[iShadowView];
 
-			if (ShadowView.meshRenderCommands.empty())
+			if (ShadowView.drawParamLookup.empty())
 				continue;
 
 			const std::string marker_face = "[Cubemap Face=" + std::to_string(face) + "]";

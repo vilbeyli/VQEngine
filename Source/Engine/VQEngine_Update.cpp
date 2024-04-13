@@ -15,9 +15,6 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
-
-#define NOMINMAX
-
 #include "VQEngine.h"
 #include "Math.h"
 #include "Scene/Scene.h"

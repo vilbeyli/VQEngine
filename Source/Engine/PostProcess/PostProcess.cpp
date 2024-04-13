@@ -16,8 +16,6 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-#define NOMINMAX
-
 #define FFX_DEBUG_LOG 1
 
 #define A_CPU 1

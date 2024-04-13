@@ -526,7 +526,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 			desc.ResourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 			r.Tex_DownsampledSceneDepth = mRenderer.CreateTexture(desc);
 			for(int mip=0; mip<13; ++mip) // 13 comes from downsampledepth.hlsl resource count, TODO: fix magic number
-				mRenderer.InitializeUAV(r.UAV_DownsampledSceneDepth, mip, r.Tex_DownsampledSceneDepth, 0, min(mip, NumMIPs - 1));
+				mRenderer.InitializeUAV(r.UAV_DownsampledSceneDepth, mip, r.Tex_DownsampledSceneDepth, 0, std::min(mip, NumMIPs - 1));
 		}
 
 		{ // Main render target view w/ MSAA
@@ -1066,7 +1066,7 @@ void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 //
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-static uint32_t GetNumShadowViewCmdRecordingThreads(const FSceneShadowView& ShadowView)
+static uint32_t GetNumShadowViewCmdRecordingThreads(const FSceneShadowViews& ShadowView)
 {
 #if RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING
 	return (ShadowView.ShadowView_Directional.meshRenderCommands.size() > 0 ? 1 : 0) // 1 thread for directional light (assumes long list of mesh render cmds)
@@ -1094,7 +1094,7 @@ bool VQEngine::ShouldEnableAsyncCompute()
 #endif
 
 	const FSceneView& SceneView = mpScene->GetSceneView(FRAME_DATA_INDEX);
-	const FSceneShadowView& ShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
+	const FSceneShadowViews& ShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
 
 	if(ShadowView.NumPointShadowViews > 0) 
 		return true;
@@ -1128,7 +1128,7 @@ void VQEngine::RenderThread_PreRender()
 	}
 
 	const FSceneView&       SceneView       = mpScene->GetSceneView(FRAME_DATA_INDEX);
-	const FSceneShadowView& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
+	const FSceneShadowViews& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
 
 	const bool bUseAsyncCompute = ShouldEnableAsyncCompute();
 
@@ -1141,7 +1141,7 @@ void VQEngine::RenderThread_PreRender()
 	const uint32_t NumCmdRecordingThreads_CMP = 0;
 	const uint32_t NumCmdRecordingThreads_CPY = 0;
 	const uint32_t NumCmdRecordingThreads = NumCmdRecordingThreads_GFX + NumCmdRecordingThreads_CPY + NumCmdRecordingThreads_CMP;
-	const uint32_t ConstantBufferBytesPerThread = (128) * MEGABYTE;
+	const uint32_t ConstantBufferBytesPerThread = (128+256) * MEGABYTE;
 #else
 	const uint32_t NumCmdRecordingThreads_GFX = 1;
 	const uint32_t NumCmdRecordingThreads = NumCmdRecordingThreads_GFX;
@@ -1567,7 +1567,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	const bool bAsyncCompute       = ShouldEnableAsyncCompute();
 
 	const FSceneView& SceneView             = mpScene->GetSceneView(FRAME_DATA_INDEX);
-	const FSceneShadowView& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
+	const FSceneShadowViews& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
 	const FPostProcessParameters& PPParams  = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 
 	const auto& rsc      = mResources_MainWnd;

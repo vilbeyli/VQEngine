@@ -16,8 +16,6 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-#define NOMINMAX
-
 #include "VQEngine.h"
 
 #include "Libs/VQUtils/Source/utils.h"

@@ -212,7 +212,7 @@ void Camera::LookAt(const XMVECTOR& target)
 	//
 	XMVECTOR dotX = XMVector3Dot(VTargetDirection, VTargetDirectionXZ);
 	bool bPositivePitch = std::signbit(VTargetDirection.m128_f32[1]);
-	float pitchRadians = std::acos(min(dotX.m128_f32[0], 1.0f));
+	float pitchRadians = std::acos(std::min(dotX.m128_f32[0], 1.0f));
 	assert(!std::isnan(pitchRadians));
 	if (!bPositivePitch)
 		pitchRadians *= -1.0f;
