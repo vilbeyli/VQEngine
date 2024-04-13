@@ -94,8 +94,8 @@ public:
 
 	// Resource management
 	BufferID                     CreateBuffer(const FBufferDesc& desc);
-	TextureID                    CreateTextureFromFile(const char* pFilePath, bool bGenerateMips = false);
-	TextureID                    CreateTexture(const TextureCreateDesc& desc);
+	TextureID                    CreateTextureFromFile(const char* pFilePath, bool bCheckAlpha, bool bGenerateMips/* = false*/);
+	TextureID                    CreateTexture(const TextureCreateDesc& desc, bool bCheckAlpha = false);
 	void                         UploadVertexAndIndexBufferHeaps();
 
 	// Allocates a ResourceView from the respective heap and returns a unique identifier.
@@ -152,6 +152,7 @@ public:
 	const ID3D12Resource*        GetTextureResource(TextureID Id) const;
 	      ID3D12Resource*        GetTextureResource(TextureID Id);
 	DXGI_FORMAT                  GetTextureFormat(TextureID Id) const;
+	bool                         GetTextureAlphaChannelUsed(TextureID Id) const;
 
 	inline void                  GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, dummy); }
 	inline void                  GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, NumSlices, dummy); }

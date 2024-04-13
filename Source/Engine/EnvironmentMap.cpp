@@ -262,7 +262,7 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 	// Load environment map resources ------------------------------------------------------------
 
 	// HDR map
-	env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(desc.FilePath.c_str(), true);
+	env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(desc.FilePath.c_str(), false, true);
 	env.SRV_HDREnvironment = mRenderer.AllocateAndInitializeSRV(env.Tex_HDREnvironment);
 	env.MaxContentLightLevel = static_cast<int>(desc.MaxContentLightLevel);
 

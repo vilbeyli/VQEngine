@@ -620,7 +620,7 @@ private:
 	//
 	// RENDER HELPERS
 	//
-	void                            DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews::FShadowView& shadowView);
+	void                            DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews::FShadowView& shadowView, size_t iDepthMode);
 
 	std::unique_ptr<Window>&        GetWindow(HWND hwnd);
 	const std::unique_ptr<Window>&  GetWindow(HWND hwnd) const;

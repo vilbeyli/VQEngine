@@ -56,6 +56,7 @@ public:
 		enum EMeshType
 		{
 			OPAQUE_MESH = 0,
+			ALPHA_MASKED_MESH = 0,
 			TRANSPARENT_MESH,
 			TRANSLUCENT_MESH,
 

@@ -29,6 +29,7 @@
 #include "WindowRenderContext.h"
 
 #include "../Engine/Core/Window.h"
+#include "../Engine/GPUMarker.h"
 #include "../../Shaders/LightingConstantBufferData.h"
 
 #include "../../Libs/VQUtils/Source/Log.h"
@@ -202,7 +203,6 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 	Log::Info("[Renderer] Initialized.");
 }
 
-#include "../Engine/GPUMarker.h"
 void VQRenderer::Load()
 {
 	SCOPED_CPU_MARKER("Renderer::Load()");
@@ -416,7 +416,7 @@ void VQRenderer::LoadDefaultResources()
 	{
 		std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX);
 		desc.pDataArray.push_back( texture.data() );
-		TextureID texID = this->CreateTexture(desc);
+		TextureID texID = this->CreateTexture(desc, false);
 		mLookup_ProceduralTextureIDs[EProceduralTextures::CHECKERBOARD] = texID;
 		mLookup_ProceduralTextureSRVs[EProceduralTextures::CHECKERBOARD] = this->AllocateAndInitializeSRV(texID);
 		desc.pDataArray.pop_back();
@@ -425,7 +425,7 @@ void VQRenderer::LoadDefaultResources()
 		desc.TexName = "Checkerboard_Gray";
 		std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX, true);
 		desc.pDataArray.push_back( texture.data() );
-		TextureID texID = this->CreateTexture(desc);
+		TextureID texID = this->CreateTexture(desc, false);
 		mLookup_ProceduralTextureIDs[EProceduralTextures::CHECKERBOARD_GRAYSCALE] = texID;
 		mLookup_ProceduralTextureSRVs[EProceduralTextures::CHECKERBOARD_GRAYSCALE] = this->AllocateAndInitializeSRV(texID);
 		desc.pDataArray.pop_back();
@@ -438,7 +438,7 @@ void VQRenderer::LoadDefaultResources()
 		desc.d3d12Desc.Format = DXGI_FORMAT_R16G16_FLOAT;
 		desc.d3d12Desc.Flags = D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
-		TextureID texID = this->CreateTexture(desc);
+		TextureID texID = this->CreateTexture(desc, false);
 		mLookup_ProceduralTextureIDs[EProceduralTextures::IBL_BRDF_INTEGRATION_LUT] = texID;
 		mLookup_ProceduralTextureSRVs[EProceduralTextures::IBL_BRDF_INTEGRATION_LUT] = this->AllocateAndInitializeSRV(texID);
 	}

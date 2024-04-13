@@ -90,7 +90,7 @@ public:
 	Texture(const Texture& other);
 	Texture& operator=(const Texture& other);
 
-	void Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, const TextureCreateDesc& desc);
+	void Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, const TextureCreateDesc& desc, bool bCheckAlpha);
 	void Destroy();
 
 	void InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayView = false, bool bInitAsCubeView = false, UINT ShaderComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc = nullptr);
@@ -99,6 +99,7 @@ public:
 	inline const ID3D12Resource* GetResource() const { return mpResource; }
 	inline       ID3D12Resource* GetResource()       { return mpResource; }
 	inline       DXGI_FORMAT     GetFormat()   const { return mFormat; }
+	inline       bool            GetUsesAlphaChannel() const { return mbUsesAlphaChannel; }
 
 private:
 	friend class VQRenderer;
@@ -116,6 +117,7 @@ private:
 	int  mWidth = 0;
 	int  mHeight = 0;
 	int  mNumArraySlices = 1;
+	bool mbUsesAlphaChannel = false;
 
 	DXGI_FORMAT mFormat = DXGI_FORMAT_UNKNOWN;
 };

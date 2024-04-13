@@ -18,6 +18,7 @@
 
 #include "Material.h"
 #include "Scene.h"
+#include "../../Renderer/Renderer.h"
 
 VQ_SHADER_DATA::MaterialData Material::GetCBufferData() const
 {
@@ -55,3 +56,6 @@ int Material::GetTextureConfig() const
 	textureConfig |= TexOcclusionRoughnessMetalnessMap == -1 ? 0 : (1 << 8);
 	return textureConfig;
 }
+
+bool Material::IsTransparent(const VQRenderer& mRenderer) const { return alpha != 1.0f || (TexDiffuseMap != INVALID_ID && mRenderer.GetTextureAlphaChannelUsed(TexDiffuseMap)); }
+bool Material::IsAlphaMasked(const VQRenderer& mRenderer) const { return TexAlphaMaskMap != INVALID_ID || (TexDiffuseMap != INVALID_ID && mRenderer.GetTextureAlphaChannelUsed(TexDiffuseMap)); }

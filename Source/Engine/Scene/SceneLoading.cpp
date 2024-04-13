@@ -230,10 +230,19 @@ void Scene::BuildGameObject(const FGameObjectRepresentation& ObjRep, size_t iObj
 			matID = this->CreateMaterial(ObjRep.MaterialName);
 		}
 		Material& mat = this->GetMaterial(matID);
-		const bool bTransparentMesh = mat.IsTransparent();
+		//const bool bTransparentMesh = mat.IsTransparent();
 
 		// model data
-		model.mData = Model::Data(meshID, matID, Model::Data::OPAQUE_MESH);
+		Model::Data::EMeshType eMeshType = Model::Data::EMeshType::OPAQUE_MESH;
+		if (mat.IsAlphaMasked(mRenderer) || mat.IsTransparent(mRenderer))
+		{
+			//if (mat.IsTransparent(mRenderer))
+			//	eMeshType = Model::Data::EMeshType::TRANSPARENT_MESH;
+			if (mat.IsAlphaMasked(mRenderer))
+				eMeshType = Model::Data::EMeshType::ALPHA_MASKED_MESH;
+		}
+
+		model.mData = Model::Data(meshID, matID, eMeshType);
 		model.mModelName = ObjRep.ModelName;
 
 		model.mbLoaded = true;

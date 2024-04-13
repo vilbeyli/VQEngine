@@ -23,6 +23,9 @@
 #include "Shaders/LightingConstantBufferData.h"
 #include "../../Renderer/Tessellation.h"
 
+
+class VQRenderer;
+
 enum EMaterialTextureMapBindings
 {
 	ALBEDO = 0,
@@ -83,5 +86,6 @@ struct Material // 56 Bytes
 	inline VQ_SHADER_DATA::TessellationParams GetTessellationCBufferData() const { return this->Tessellation.GPUParams; }
 	VQ_SHADER_DATA::MaterialData GetCBufferData() const;
 	int                          GetTextureConfig() const;
-	inline bool IsTransparent() const { return alpha != 1.0f; }
+	bool IsTransparent(const VQRenderer& mRenderer) const;
+	bool IsAlphaMasked(const VQRenderer& mRenderer) const;
 };

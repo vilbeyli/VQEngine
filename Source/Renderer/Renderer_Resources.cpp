@@ -513,7 +513,7 @@ BufferID VQRenderer::CreateBuffer(const FBufferDesc& desc)
 	return Id;
 }
 
-TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerateMips /*= false*/)
+TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bCheckAlpha, bool bGenerateMips /*= false*/)
 {
 	SCOPED_CPU_MARKER("VQRenderer::CreateTextureFromFile()");
 
@@ -588,7 +588,8 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 		tDesc.pDataArray.push_back( images[0].pData );
 		tDesc.bGenerateMips = bGenerateMips;
 
-		tex.Create(mDevice.GetDevicePtr(), mpAllocator, tDesc);
+		tex.Create(mDevice.GetDevicePtr(), mpAllocator, tDesc, bCheckAlpha);
+
 		ID = AddTexture_ThreadSafe(std::move(tex));
 
 		const bool bGenerateMips_ = MipLevels > 1 && images[0].pData;
@@ -644,7 +645,7 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 	return ID;
 }
 
-TextureID VQRenderer::CreateTexture(const TextureCreateDesc& desc)
+TextureID VQRenderer::CreateTexture(const TextureCreateDesc& desc, bool bCheckAlpha)
 {
 	SCOPED_CPU_MARKER("VQRenderer::CreateTexture()");
 	if (desc.d3d12Desc.MipLevels == 0) assert( desc.bGenerateMips);
@@ -653,7 +654,7 @@ TextureID VQRenderer::CreateTexture(const TextureCreateDesc& desc)
 	Texture tex;
 	Timer t; t.Start();
 
-	tex.Create(mDevice.GetDevicePtr(), mpAllocator, desc);
+	tex.Create(mDevice.GetDevicePtr(), mpAllocator, desc, bCheckAlpha);
 
 	TextureID ID = AddTexture_ThreadSafe(std::move(tex));
 	const bool bValidData = !desc.pDataArray.empty() && desc.pDataArray[0];
@@ -1630,6 +1631,12 @@ DXGI_FORMAT VQRenderer::GetTextureFormat(TextureID Id) const
 {
 	CHECK_TEXTURE(mTextures, Id);
 	return mTextures.at(Id).GetFormat();
+}
+
+bool VQRenderer::GetTextureAlphaChannelUsed(TextureID Id) const
+{
+	CHECK_TEXTURE(mTextures, Id);
+	return mTextures.at(Id).GetUsesAlphaChannel();
 }
 
 void VQRenderer::GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices, int& NumMips) const

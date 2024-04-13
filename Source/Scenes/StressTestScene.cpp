@@ -6,6 +6,21 @@
 
 using namespace DirectX;
 
+// randomized object grid
+#if _DEBUG
+constexpr int DIMENSION_X = 16;
+constexpr int DIMENSION_Y = 2;
+constexpr int DIMENSION_Z = 12;
+#else
+constexpr int DIMENSION_X = 64;
+constexpr int DIMENSION_Y = 4;
+constexpr int DIMENSION_Z = 48;
+#endif
+
+constexpr size_t NUM_TESSELLATION_SPHERES_ROW = 2;
+constexpr size_t NUM_TESSELLATION_SPHERES_COL = 2;
+constexpr size_t NUM_TESSELLATION_SPHERES = NUM_TESSELLATION_SPHERES_COL * NUM_TESSELLATION_SPHERES_ROW;
+
 
 
 constexpr bool ENABLE_MATERIALS = true;
@@ -297,21 +312,6 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 	// TODO: pre-alloc
 
 	// object chunk
-#if _DEBUG
-	constexpr int DIMENSION_X = 16;
-	constexpr int DIMENSION_Y = 2;
-	constexpr int DIMENSION_Z = 12;
-#else
-	constexpr int DIMENSION_X = 64;
-	constexpr int DIMENSION_Y = 4;
-	constexpr int DIMENSION_Z = 48;
-#endif
-
-	constexpr size_t NUM_TESSELLATION_SPHERES_ROW = 2;
-	constexpr size_t NUM_TESSELLATION_SPHERES_COL = 2;
-	constexpr size_t NUM_TESSELLATION_SPHERES = NUM_TESSELLATION_SPHERES_COL * NUM_TESSELLATION_SPHERES_ROW;
-
-
 	const size_t NumObjectsToAllocate
 		= DIMENSION_X * DIMENSION_Y * DIMENSION_Z // randomized objects 
 		+ NUM_ROUGHNESS_INSTANCES * NUM_METALLIC_INSTANCES // gradient spheres

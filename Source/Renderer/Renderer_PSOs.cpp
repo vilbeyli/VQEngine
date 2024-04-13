@@ -557,52 +557,6 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 		}
 	}
 
-	// SHADOWMAP PSOs
-	{
-		const std::wstring ShaderFilePath = GetFullPathOfShader(L"ShadowDepthPass.hlsl");
-
-		FPSODesc psoLoadDesc = {};
-		psoLoadDesc.PSOName = "PSO_DepthOnlyVS";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_1" });
-		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCED_DRAW", "1" });
-		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__SHADOW_MESHES) });
-		psoLoadDesc.D3D12GraphicsDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__ShadowPass);
-
-		// PSO description
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
-		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
-		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-		psoDesc.DepthStencilState.DepthEnable = TRUE;
-		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-		psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-		psoDesc.DepthStencilState.StencilEnable = FALSE;
-		psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-		psoDesc.SampleMask = UINT_MAX;
-		psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		psoDesc.NumRenderTargets = 0;
-		psoDesc.SampleDesc.Count = 1;
-
-		descs[EBuiltinPSOs::DEPTH_PASS_PSO] = psoLoadDesc;
-		{
-			psoLoadDesc.PSOName = "PSO_LinearDepthVSPS";
-			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_1" });
-			descs[EBuiltinPSOs::DEPTH_PASS_LINEAR_PSO] = psoLoadDesc;
-			psoLoadDesc.ShaderStageCompileDescs.pop_back();
-		}
-		{
-			psoLoadDesc.PSOName = "PSO_MaskedDepthVSPS";
-			psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_1" });
-			for (FShaderStageCompileDesc& shdDesc : psoLoadDesc.ShaderStageCompileDescs)
-			{
-				shdDesc.Macros.push_back({ "ALPHA_MASK", "1" });
-			}
-			descs[EBuiltinPSOs::DEPTH_PASS_ALPHAMASKED_PSO] = psoLoadDesc;
-			psoLoadDesc.ShaderStageCompileDescs.pop_back();
-		}
-	}
-
-
 	// CUBEMAP CONVOLUTION PSOs
 	{
 		const std::wstring ShaderFilePath = GetFullPathOfShader(L"CubemapConvolution.hlsl");

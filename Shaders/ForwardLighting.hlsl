@@ -234,8 +234,10 @@ PSOutput PSMain(PSInput In)
 	float3 OcclRghMtl  = texOcclRoughMetal.Sample(AnisoSampler, uv).rgb;
 	float LocalAO      = texLocalAO.Sample(AnisoSampler, uv).r;
 	
+	#if ENABLE_ALPHA_MASK
 	if (HasDiffuseMap(TEX_CFG) && AlbedoAlpha.a < 0.01f)
 		discard;
+	#endif
 	
 	// ensure linear space
 	AlbedoAlpha.xyz = SRGBToLinear(AlbedoAlpha.xyz);

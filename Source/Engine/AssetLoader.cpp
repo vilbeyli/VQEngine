@@ -244,12 +244,11 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 					SCOPED_CPU_MARKER_C("TextureLoadWorker", mWorkers_TextureLoad.mMarkerColor);
 					constexpr bool GENERATE_MIPS = true;
 					const bool IS_PROCEDURAL = ProcTex != EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
-					if (IS_PROCEDURAL)
-					{
-						return mRenderer.GetProceduralTexture(ProcTex);
-					}
-
-					return mRenderer.CreateTextureFromFile(TexLoadParams.TexturePath.c_str(), GENERATE_MIPS);
+					const bool bCheckAlphaMask = (TexLoadParams.TexType == ETextureType::DIFFUSE) || TexLoadParams.TexType == ETextureType::ALPHA_MASK;
+					const TextureID texID = IS_PROCEDURAL
+						? mRenderer.GetProceduralTexture(ProcTex)
+						: mRenderer.CreateTextureFromFile(TexLoadParams.TexturePath.c_str(), bCheckAlphaMask, GENERATE_MIPS);
+					return texID;
 				}));
 
 				// update results lookup for the shared textures (among different materials)
@@ -774,13 +773,7 @@ static Model::Data ProcessAssimpNode(
 				MaterialID matID = NodeMaterialIDs[i];
 				Material& mat = pScene->GetMaterial(matID);
 
-	#if 0 // TODO: make sure this case works
-				modelData.AddMesh(id, matID, mat.IsTransparent() ? Model::Data::EMeshType::TRANSPARENT_MESH : Model::Data::EMeshType::OPAQUE_MESH);
-	#else
 				modelData.AddMesh(id, matID, Model::Data::EMeshType::OPAQUE_MESH);
-				if (mat.IsTransparent())
-					modelData.AddMesh(id, matID, Model::Data::EMeshType::TRANSPARENT_MESH);
-	#endif
 			} // for: NumMeshes
 		}
 	}
@@ -798,14 +791,7 @@ static Model::Data ProcessAssimpNode(
 
 			MeshID id = pScene->AddMesh(std::move(mesh));
 			Material& mat = pScene->GetMaterial(matID);
-
-#if 0 // TODO: make sure this case works
-			modelData.AddMesh(id, matID, mat.IsTransparent() ? Model::Data::EMeshType::TRANSPARENT_MESH : Model::Data::EMeshType::OPAQUE_MESH);
-#else
 			modelData.AddMesh(id, matID, Model::Data::EMeshType::OPAQUE_MESH);
-			if (mat.IsTransparent())
-				modelData.AddMesh(id, matID, Model::Data::EMeshType::TRANSPARENT_MESH);
-#endif
 		} // for: NumMeshes
 	}
 
@@ -816,10 +802,8 @@ static Model::Data ProcessAssimpNode(
 		{	// then do the same for each of its children
 			Model::Data childModelData = ProcessAssimpNode(ModelName, pNode->mChildren[i], pAiScene, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
 			const std::vector<std::pair<MeshID, MaterialID>>& ChildMeshes = childModelData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH);
-			const std::vector<std::pair<MeshID, MaterialID>>& ChildMeshesTransparent = childModelData.GetMeshMaterialIDPairs(Model::Data::EMeshType::TRANSPARENT_MESH);
 
 			std::copy(ChildMeshes.begin(), ChildMeshes.end(), std::back_inserter(modelData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH)));
-			std::copy(ChildMeshesTransparent.begin(), ChildMeshesTransparent.end(), std::back_inserter(modelData.GetMeshMaterialIDPairs(Model::Data::EMeshType::TRANSPARENT_MESH)));
 			std::unordered_set<MaterialID>& childMats = childModelData.GetMaterials();
 			modelData.GetMaterials().insert(childMats.begin(), childMats.end());
 		} // for: NumChildren
@@ -912,6 +896,9 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 		, model.mData.GetNumMeshesOfAllTypes()
 		, model.mData.GetMaterials().size()
 	);
+
+	// TODO: post process
+
 	return mID;
 }
 

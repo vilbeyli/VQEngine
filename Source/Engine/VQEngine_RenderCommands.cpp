@@ -33,7 +33,7 @@
 //
 // DRAW COMMANDS
 //
-void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews::FShadowView& shadowView)
+void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews::FShadowView& shadowView, size_t iDepthMode)
 {
 	using namespace DirectX;
 
@@ -44,6 +44,8 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 		XMMATRIX matWorld        [MAX_INSTANCE_COUNT__SHADOW_MESHES];
 	};
 
+	const size_t iFaceCull = 2; // 2:back
+
 	//Log::Info("DrawShadowMeshList(%d)", shadowView.meshRenderCommands.size());
 	for (const FInstancedShadowMeshRenderCommand& renderCmd : shadowView.meshRenderCommands)
 	{
@@ -51,7 +53,18 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 		assert(NumInstances == renderCmd.matWorldViewProj.size());
 		assert(NumInstances == renderCmd.matWorld.size());
 
-		//const Material& mat = mpScene->GetMaterial(renderCmd.matID);
+		const Material& mat = mpScene->GetMaterial(renderCmd.matID);
+
+		const bool bSWCullTessellation = mat.Tessellation.GPUParams.bFaceCull > 0 || mat.Tessellation.GPUParams.bFrustumCull > 0;
+		const size_t iAlpha   = mat.IsAlphaMasked(mRenderer) ? 1 : 0;
+		const size_t iRaster  = mat.bWireframe ? 1 : 0;
+		const size_t iTess    = mat.Tessellation.bEnableTessellation ? 1 : 0;
+		const size_t iDomain  = iTess == 0 ? 0 : mat.Tessellation.Domain;
+		const size_t iPart    = iTess == 0 ? 0 : mat.Tessellation.Partitioning;
+		const size_t iOutTopo = iTess == 0 ? 0 : mat.Tessellation.OutputTopology;
+		const size_t iTessCull = iTess == 1 && (bSWCullTessellation ? 1 : 0);
+		const PSO_ID psoID = mRenderer.mShadowPassPSOs.Get(iDepthMode, iRaster, iFaceCull, iTess, iDomain, iPart, iOutTopo, iTessCull, iAlpha);
+		pCmd->SetPipelineState(mRenderer.GetPSO(psoID));
 
 		// set constant buffer data
 		FCBufferLightVS* pCBuffer = {};
@@ -74,28 +87,37 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 		}
 		memcpy(pCBuffer->matWorld        , renderCmd.matWorld.data()        , NumInstances * sizeof(XMMATRIX));
 		memcpy(pCBuffer->matWorldViewProj, renderCmd.matWorldViewProj.data(), NumInstances * sizeof(XMMATRIX));
-		
-		//if (mat.Tessellation.bEnableTessellation && false)
-		//{
-		//	D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Tsl;
-		//	VQ_SHADER_DATA::TessellationParams* pCBuffer_Tessellation = nullptr;
-		//	auto data = mat.GetTessellationCBufferData();
-		//	pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Tessellation)), (void**)(&pCBuffer_Tessellation), &cbAddr_Tsl);
-		//	memcpy(pCBuffer_Tessellation, &data, sizeof(data));
-		//	pCmd->SetGraphicsRootConstantBufferView(3, cbAddr_Tsl);
-		//}
+		pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
+
+		if (mat.Tessellation.bEnableTessellation)
+		{
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Tsl;
+			VQ_SHADER_DATA::TessellationParams* pCBuffer_Tessellation = nullptr;
+			auto data = mat.GetTessellationCBufferData();
+			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Tessellation)), (void**)(&pCBuffer_Tessellation), &cbAddr_Tsl);
+			memcpy(pCBuffer_Tessellation, &data, sizeof(data));
+			pCmd->SetGraphicsRootConstantBufferView(3, cbAddr_Tsl);
+		}
+		if (mat.SRVMaterialMaps != INVALID_ID) // set textures
+		{
+			const CBV_SRV_UAV& NullTex2DSRV = mRenderer.GetSRV(mResources_MainWnd.SRV_NullTexture2D);
+			pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
+			pCmd->SetGraphicsRootDescriptorTable(5, mat.SRVHeightMap == INVALID_ID
+				? NullTex2DSRV.GetGPUDescHandle()
+				: mRenderer.GetSRV(mat.SRVHeightMap).GetGPUDescHandle(0)
+			);
+		}
 
 		auto vb = mRenderer.GetVertexBufferView(renderCmd.vertexIndexBuffer.first);
 		auto ib = mRenderer.GetIndexBufferView(renderCmd.vertexIndexBuffer.second);
 		
-		pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
 		D3D_PRIMITIVE_TOPOLOGY topo = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		//if (mat.Tessellation.bEnableTessellation)
-		//{
-		//	topo = mat.Tessellation.Domain == ETessellationDomain::QUAD_PATCH
-		//		? D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST
-		//		: D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
-		//}
+		if (mat.Tessellation.bEnableTessellation)
+		{
+			topo = mat.Tessellation.Domain == ETessellationDomain::QUAD_PATCH
+				? D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST
+				: D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
+		}
 		pCmd->IASetPrimitiveTopology(topo);
 		pCmd->IASetVertexBuffers(0, 1, &vb);
 		pCmd->IASetIndexBuffer(&ib);
@@ -131,15 +153,39 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 //
 // RENDER PASSES
 //
+static D3D12_GPU_VIRTUAL_ADDRESS SetPerViewCB(
+	DynamicBufferHeap& CBHeap,
+	const DirectX::XMFLOAT3& CamPosition,
+	float RenderResolutionX,
+	float RenderResolutionY,
+	const DirectX::XMMATRIX& ViewProj
+)
+{
+	SCOPED_CPU_MARKER("CopyPerViewConstantBufferData");
+	D3D12_GPU_VIRTUAL_ADDRESS cbPerView = {};
+
+	using namespace VQ_SHADER_DATA;
+	PerViewData* pPerView = {};
+	CBHeap.AllocConstantBuffer(sizeof(decltype(*pPerView)), (void**)(&pPerView), &cbPerView);
+
+	assert(pPerView);
+	pPerView->CameraPosition = CamPosition;
+	pPerView->ScreenDimensions.x = RenderResolutionX;
+	pPerView->ScreenDimensions.y = RenderResolutionY;
+	const FFrustumPlaneset planes = FFrustumPlaneset::ExtractFromMatrix(ViewProj, true);
+	memcpy(pPerView->WorldFrustumPlanes, planes.abcd, sizeof(planes.abcd));
+	
+	return cbPerView;
+}
 void VQEngine::RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& SceneShadowView)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderDirectionalShadowMaps");
-	if (!SceneShadowView.ShadowView_Directional.drawParamLookup.empty())
+	const FSceneShadowViews::FShadowView& View = SceneShadowView.ShadowView_Directional;
+	if (!View.drawParamLookup.empty())
 	{
 		const std::string marker = "Directional";
 		SCOPED_GPU_MARKER(pCmd, marker.c_str());
 
-		pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_PSO));
 		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ShadowPass));
 
 		const float RenderResolutionX = 2048.0f; // TODO
@@ -160,7 +206,11 @@ void VQEngine::RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, Dyna
 			pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, NULL);
 		}
 
-		DrawShadowViewMeshList(pCmd, pCBufferHeap, SceneShadowView.ShadowView_Directional);
+		DirectX::XMFLOAT3 f3(0, 0, 0); // TODO
+		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = SetPerViewCB(*pCBufferHeap, f3, RenderResolutionX, RenderResolutionY, View.matViewProj);
+		pCmd->SetGraphicsRootConstantBufferView(2, cbPerView); // preView
+
+		DrawShadowViewMeshList(pCmd, pCBufferHeap, View, 0);
 	}
 }
 void VQEngine::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& SceneShadowView)
@@ -183,7 +233,6 @@ void VQEngine::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuff
 	//
 	// SPOT LIGHTS
 	//
-	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_PSO)); // TODO
 	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ShadowPass));
 	
 	for (uint i = 0; i < SceneShadowView.NumSpotShadowViews; ++i)
@@ -202,8 +251,11 @@ void VQEngine::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuff
 
 		D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
 		pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, NULL);
-
-		DrawShadowViewMeshList(pCmd, pCBufferHeap, ShadowView);
+		
+		DirectX::XMFLOAT3 f3(0, 0, 0); // TODO
+		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = SetPerViewCB(*pCBufferHeap, f3, RenderResolutionX, RenderResolutionY, ShadowView.matViewProj);
+		pCmd->SetGraphicsRootConstantBufferView(2, cbPerView); // preView
+		DrawShadowViewMeshList(pCmd, pCBufferHeap, ShadowView, 0);
 	}
 }
 void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& SceneShadowView, size_t iBegin, size_t NumPointLights)
@@ -229,7 +281,6 @@ void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 	pCmd->RSSetScissorRects(1, &scissorsRect);
 #endif
 
-	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DEPTH_PASS_LINEAR_PSO));
 	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ShadowPass));
 	for (size_t i = iBegin; i < iBegin + NumPointLights; ++i)
 	{
@@ -262,8 +313,11 @@ void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 			pCmd->OMSetRenderTargets(0, NULL, FALSE, &dsvHandle);
 			pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, NULL);
 
+			D3D12_GPU_VIRTUAL_ADDRESS cbPerView = SetPerViewCB(*pCBufferHeap, SceneShadowView.PointLightLinearDepthParams[i].vWorldPos, RenderResolutionX, RenderResolutionY, ShadowView.matViewProj);
+			pCmd->SetGraphicsRootConstantBufferView(2, cbPerView); // preView
+
 			// draw render list
-			DrawShadowViewMeshList(pCmd, pCBufferHeap, ShadowView);
+			DrawShadowViewMeshList(pCmd, pCBufferHeap, ShadowView, 1);
 		}
 	}
 }
@@ -343,7 +397,7 @@ void VQEngine::RenderDepthPrePass(
 #endif
 		
 		const bool bSWCullTessellation = mat.Tessellation.GPUParams.bFaceCull > 0 || mat.Tessellation.GPUParams.bFrustumCull > 0;
-		const size_t iAlpha   = 0; // TODO:
+		const size_t iAlpha   = mat.IsAlphaMasked(mRenderer) ? 1 : 0;
 		const size_t iRaster  = mat.bWireframe ? 1 : 0;
 		const size_t iTess    = mat.Tessellation.bEnableTessellation ? 1 : 0;
 		const size_t iDomain  = iTess == 0 ? 0 : mat.Tessellation.Domain;
@@ -801,7 +855,7 @@ void VQEngine::RenderSceneColor(
 			const uint32 NumInstances = 1;
 #endif
 			const bool bSWCullTessellation = mat.Tessellation.GPUParams.bFaceCull > 0 || mat.Tessellation.GPUParams.bFrustumCull > 0;
-			const size_t iAlpha    = 0; // TODO:
+			const size_t iAlpha    = mat.IsAlphaMasked(mRenderer) ? 1 : 0;
 			const size_t iRaster   = mat.bWireframe ? 1 : 0;
 			const size_t iTess     = mat.Tessellation.bEnableTessellation ? 1 : 0;
 			const size_t iDomain   = iTess == 0 ? 0 : mat.Tessellation.Domain;

@@ -543,6 +543,9 @@ void VQEngine::LoadLoadingScreenData()
 	const std::string LoadingScreenTextureFileDirectory = "Data/Textures/LoadingScreen/";
 	const size_t SelectedLoadingScreenIndex = MathUtil::RandU(0u, NUM_LOADING_SCREEN_BACKGROUNDS);
 
+	constexpr bool CHECK_ALPHA_MASK = false;
+	constexpr bool GENERATE_MIPS = false;
+
 	// dispatch background workers for other 
 	for (size_t i = 0; i < NUM_LOADING_SCREEN_BACKGROUNDS; ++i)
 	{
@@ -551,9 +554,9 @@ void VQEngine::LoadLoadingScreenData()
 
 		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(i) + ".png");
 
-		mWorkers_TextureLoading.AddTask([this, &data, LoadingScreenTextureFilePath]()
+		mWorkers_TextureLoading.AddTask([this, &data, LoadingScreenTextureFilePath, CHECK_ALPHA_MASK, GENERATE_MIPS]()
 		{
-			const TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
+			const TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str(), CHECK_ALPHA_MASK, GENERATE_MIPS);
 			const SRV_ID srvID = mRenderer.AllocateAndInitializeSRV(texID);
 			std::lock_guard<std::mutex> lk(data.Mtx);
 			data.SRVs.push_back(srvID);
@@ -563,7 +566,7 @@ void VQEngine::LoadLoadingScreenData()
 	// load the selected loading screen image
 	{
 		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(SelectedLoadingScreenIndex) + ".png");
-		TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str());
+		TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str(), CHECK_ALPHA_MASK, GENERATE_MIPS);
 		SRV_ID    srvID = mRenderer.AllocateAndInitializeSRV(texID);
 		std::lock_guard<std::mutex> lk(data.Mtx);
 		data.SRVs.push_back(srvID);
