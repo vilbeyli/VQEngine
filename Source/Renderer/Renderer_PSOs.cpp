@@ -29,6 +29,7 @@
 
 using namespace Microsoft::WRL;
 using namespace VQSystemInfo;
+using namespace Tessellation;
 
 void VQRenderer::ReservePSOMap(size_t NumPSOs)
 {
@@ -744,86 +745,6 @@ PSO_ID PSOCollection::Get(size_t hash) const
 	return it->second;
 }
 
-
-// TESSELLATION CONSTANT DATA FOR COMPILATION
-static const char* szPartitionNames[NUM_PARTIT_OPTIONS]   = { "integer", "fractional_even", "fractional_odd", "pw2" };
-static const char* szOutTopologyNames[NUM_OUTTOP_OPTIONS] = { "point", "line", "triangle_cw", "triangle_ccw" }; 
-
-static const char* szOutTopologyMacros[NUM_OUTTOP_OPTIONS]  = { "OUTTOPO__POINT"   , "OUTTOPO__LINE"     , "OUTTOPO__TRI_CW"  , "OUTTOPO__TRI_CCW" };
-static const char* szPartitioningMacros[NUM_PARTIT_OPTIONS] = { "PARTITIONING__INT", "PARTITIONING__EVEN", "PARTITIONING__ODD", "PARTITIONING__POW2" };
-static const char* szDomainMacros[NUM_DOMAIN_OPTIONS]       = { "DOMAIN__TRIANGLE" , "DOMAIN__QUAD"      , "DOMAIN__LINE" };
-
-static FShaderMacro TessellationOutputTopologyEnabledMacros[NUM_PARTIT_OPTIONS] = {
-	{ szOutTopologyMacros[0], "1" },
-	{ szOutTopologyMacros[1], "1" },
-	{ szOutTopologyMacros[2], "1" },
-	{ szOutTopologyMacros[3], "1" },
-};
-static FShaderMacro TessellationPartitioningEnabledMacros[NUM_PARTIT_OPTIONS] = {
-	{ szPartitioningMacros[0], "1" },
-	{ szPartitioningMacros[1], "1" },
-	{ szPartitioningMacros[2], "1" },
-	{ szPartitioningMacros[3], "1" },
-};
-static FShaderMacro TessellationDomainEnabledMacros[NUM_DOMAIN_OPTIONS] = {
-	{ szDomainMacros[0], "1" },
-	{ szDomainMacros[1], "1" },
-	{ szDomainMacros[2], "1" },
-};
-static FShaderMacro TessellationGSEnabledMacro = { "ENABLE_GEOMETRY_SHADER", "1" };
-static void AppendTessellationVSMacros(std::vector<FShaderMacro>& Macros, size_t iDomain)
-{
-	Macros.push_back(TessellationDomainEnabledMacros[iDomain]);
-}
-static void AppendTessellationHSMacros(std::vector<FShaderMacro>& Macros, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCull)
-{
-	Macros.push_back(TessellationPartitioningEnabledMacros[iPart]);
-	Macros.push_back(TessellationDomainEnabledMacros[iDomain]);
-	Macros.push_back(TessellationOutputTopologyEnabledMacros[iOutTopo]);
-	if (iTessCull > 0)
-	{
-		Macros.push_back(TessellationGSEnabledMacro);
-	}
-}
-static void AppendTessellationDSMacros(std::vector<FShaderMacro>& Macros, size_t iDomain, size_t iOutTopo, size_t iTessCull)
-{
-	Macros.push_back(TessellationDomainEnabledMacros[iDomain]);
-	Macros.push_back(TessellationOutputTopologyEnabledMacros[iOutTopo]);
-	if (iTessCull > 0)
-	{
-		Macros.push_back(TessellationGSEnabledMacro);
-	}
-}
-static void AppendTessellationGSMacros(std::vector<FShaderMacro>& Macros, size_t iOutTopo, size_t iTessCull)
-{
-	if (iTessCull == 0)
-		return;
-	Macros.push_back(TessellationOutputTopologyEnabledMacros[iOutTopo]);
-	Macros.push_back(TessellationGSEnabledMacro);
-}
-
-static void AppendTessellationPSONameTokens(std::string& PSOName, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCull)
-{
-	PSOName += "_Tessellated";
-	if (iDomain == 1) PSOName += "_Quad";
-	PSOName += std::string("_") + szPartitionNames[iPart];
-	PSOName += std::string("_") + szOutTopologyNames[iOutTopo];
-	if (iTessCull > 1) PSOName += "_GSCull";
-}
-static bool ShouldSkipTessellationVariant(size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCull)
-{
-	const bool bOutputTopologyIsTriangle = (iOutTopo != ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE && iOutTopo != ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT);
-	if (iTess == 0 && (iDomain > 0 || iPart > 0 || iOutTopo > 0 || iTessCull > 0))
-		return true; // skip tess permutations when tess is off
-	if (iTess == 1 && iOutTopo == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE && iDomain != ETessellationDomain::ISOLINE_PATCH)
-		return true; // line output topologies are only available to isoline domains
-	if (iTess == 1 && iDomain == ETessellationDomain::ISOLINE_PATCH && bOutputTopologyIsTriangle)
-		return true; // // IsoLine domain must specify output primitive point or line
-	if (iTess == 1 && iTessCull > 0 && !bOutputTopologyIsTriangle)
-		return true; // prevent non-tri output topologies to utilize GS (because it'll only be a perf penalty)
-	return false;
-}
-
 void FLightingPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12RootSignature*>& mRootSignatureLookup)
 {
 	SCOPED_CPU_MARKER("GatherPSOLoadDescs_ForwardLighting");
@@ -1189,7 +1110,6 @@ void FShadowPassPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12R
 		mapPSO[key] = INVALID_ID; 
 	}
 }
-
 
 size_t FLightingPSOs::Hash(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iOutMoVec, size_t iOutRough, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha)
 {

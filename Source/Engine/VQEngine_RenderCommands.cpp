@@ -456,7 +456,9 @@ void VQEngine::RenderDepthPrePass(
 void VQEngine::RenderObjectIDPass(
 	ID3D12GraphicsCommandList* pCmd, 
 	ID3D12CommandList* pCmdCopy, 
+	DynamicBufferHeap* pCBufferHeap,
 	const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, 
+	D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr,
 	const FSceneView& SceneView,
 	const int BACK_BUFFER_INDEX
 )
@@ -468,6 +470,8 @@ void VQEngine::RenderObjectIDPass(
 		params.pCmdCopy = pCmdCopy;
 		params.pCBAddresses = &CBAddresses;
 		params.pSceneView = &SceneView;
+		params.pCBufferHeap = pCBufferHeap;
+		params.cbPerView = perViewCBAddr;
 		params.pMeshes = &mpScene->mMeshes;
 		params.pMaterials = &mpScene->mMaterials;
 		params.bEnableAsyncCopy = mSettings.gfx.bEnableAsyncCopy;

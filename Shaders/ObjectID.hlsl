@@ -16,8 +16,8 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-#define INSTANCED_DRAW 1
-#define INSTANCE_COUNT 64
+//#define INSTANCED_DRAW 1
+//#define INSTANCE_COUNT 64
 
 #define VQ_GPU 1
 #include "LightingConstantBufferData.h"
@@ -34,45 +34,100 @@ struct VSInput
 struct PSInput
 {
 	float4 position : SV_POSITION;
-	float2 uv       : TEXCOORD0;
+	float2 uv : TEXCOORD0;
+	float3 WorldSpacePosition : COLOR2;
 #if INSTANCED_DRAW
 	uint instanceID : INSTANCEID;
 #endif
 };
 
-cbuffer CBPerObject : register(b2)
+cbuffer CBPerView   : register(b1) { PerViewData cbPerView; }
+cbuffer CBPerObject : register(b2) { PerObjectData cbPerObject; }
+
+SamplerState LinearSampler : register(s0);
+SamplerState PointSampler : register(s1);
+SamplerState AnisoSampler : register(s2);
+SamplerState ClampedLinearSampler : register(s3);
+SamplerState LinearSamplerTess : register(s4);
+
+Texture2D texDiffuse : register(t0);
+Texture2D texHeightmap : register(t8);
+
+
+// CB fetchers
+#if INSTANCED_DRAW
+matrix GetWorldMatrix(uint instID) { return cbPerObject.matWorld[instID]; }
+matrix GetWorldNormalMatrix(uint instID) { return cbPerObject.matNormal[instID]; }
+matrix GetWorldViewProjectionMatrix(uint instID) { return cbPerObject.matWorldViewProj[instID]; }
+#else
+matrix GetWorldMatrix() { return cbPerObject.matWorld; }
+matrix GetWorldNormalMatrix() { return cbPerObject.matNormal; }
+matrix GetWorldViewProjectionMatrix() { return cbPerObject.matWorldViewProj; }
+#endif
+float2 GetUVScale() { return cbPerObject.materialData.uvScaleOffset.xy; }
+float2 GetUVOffset() { return cbPerObject.materialData.uvScaleOffset.zw; }
+
+float3 CalcHeightOffset(float2 uv)
 {
-	PerObjectData cbPerObject;
+	float fHeightSample = texHeightmap.SampleLevel(LinearSamplerTess, uv, 0).r;
+	float fHeightOffset = fHeightSample * cbPerObject.materialData.displacement;
+	return float3(0, fHeightOffset, 0);
 }
 
 
-SamplerState LinearSampler : register(s0);
+PSInput TransformVertex(
+#if INSTANCED_DRAW
+	int InstanceID,
+#endif
+	float3 Position,
+	float3 Normal,
+	float3 Tangent,
+	float2 uv
+)
+{
+	float4 vPosition = float4(Position, 1.0f);
+	vPosition.xyz += CalcHeightOffset(uv * cbPerObject.materialData.uvScaleOffset.xy + cbPerObject.materialData.uvScaleOffset.zw);
 
-Texture2D texDiffuse : register(t0);
+#if INSTANCED_DRAW
+	matrix matW = GetWorldMatrix(InstanceID);
+	matrix matWVP = GetWorldViewProjectionMatrix(InstanceID);
+	matrix matWN = GetWorldNormalMatrix(InstanceID);
+#else
+	matrix matW = GetWorldMatrix();
+	matrix matWVP = GetWorldViewProjectionMatrix();
+	matrix matWN = GetWorldNormalMatrix();
+#endif // INSTANCED_DRAW
+	
+	PSInput result;
+	result.position = mul(matWVP, vPosition);
+	result.WorldSpacePosition = mul(matW, vPosition).xyz;
+	result.uv = uv;
+#if INSTANCED_DRAW
+	result.instanceID = InstanceID;
+#endif
+	return result;
+}
+#include "Tessellation.hlsl"
 
 
 PSInput VSMain(VSInput VSIn)
 {
-	PSInput result;
-	
+	return TransformVertex(
 #if INSTANCED_DRAW
-	result.position = mul(cbPerObject.matWorldViewProj[VSIn.instanceID], float4(VSIn.position, 1));
-#else
-	result.position = mul(cbPerObject.matWorldViewProj, float4(VSIn.position, 1));
+		VSIn.instanceID,
 #endif
-	
-	result.uv = VSIn.uv;
-#if INSTANCED_DRAW
-	result.instanceID = VSIn.instanceID;
-#endif
-    return result;
+		VSIn.position,
+		0.0f.xxx,
+		0.0f.xxx,
+		VSIn.uv
+	);
 }
 
 int4 PSMain(PSInput In) : SV_TARGET
 {
 	const float2 uv = In.uv * cbPerObject.materialData.uvScaleOffset.xy + cbPerObject.materialData.uvScaleOffset.zw;
 
-#if ALPHA_MASK
+#if ENABLE_ALPHA_MASK
 	float4 AlbedoAlpha = texDiffuse.Sample(AnisoSampler, uv);
 	if (AlbedoAlpha.a < 0.01f)
 		discard;

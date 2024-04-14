@@ -20,6 +20,7 @@
 
 #include "ShaderCompileUtils.h"
 #include <unordered_map>
+#include "Tessellation.h"
 
 namespace D3D12MA { class Allocator; }
 class Window;
@@ -108,14 +109,6 @@ enum EBuiltinRootSignatures
 };
 
 
-// tessellation
-static constexpr size_t NUM_TESS_ENABLED = 2; // on/off
-static constexpr size_t NUM_DOMAIN_OPTIONS = 3; // tri/quad/line
-static constexpr size_t NUM_PARTIT_OPTIONS = 4; // integer, fractional_even, fractional_odd, or pow2
-static constexpr size_t NUM_OUTTOP_OPTIONS = 4; // point, line, triangle_cw, or triangle_ccw
-static constexpr size_t NUM_TESS_CULL_OPTIONS = 2; // Cull[on/off], dynamic branch for face/frustum params
-static constexpr size_t NUM_TESS_OPTS = NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * NUM_OUTTOP_OPTIONS * NUM_TESS_CULL_OPTIONS;
-
 // off/msaa4  TODO: other msaa
 static constexpr size_t NUM_MSAA_OPTS = 2; 
 
@@ -157,7 +150,7 @@ struct FLightingPSOs : PSOCollection
 
 	void GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12RootSignature*>& mRootSignatureLookup) override;
 
-	static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_MAT_OPTIONS * NUM_RENDERING_OPTS * NUM_OUTPUT_OPTS * NUM_TESS_OPTS;
+	static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_MAT_OPTIONS * NUM_RENDERING_OPTS * NUM_OUTPUT_OPTS * Tessellation::NUM_TESS_OPTS;
 };
 
 // ------------------------------------------------------------------------------------------------------------------------
@@ -181,7 +174,7 @@ struct FDepthPrePassPSOs : public PSOCollection
 
 	void GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12RootSignature*>& mRootSignatureLookup) override;
 
-	static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_MAT_OPTIONS * NUM_RENDERING_OPTS * NUM_TESS_OPTS;
+	static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_MAT_OPTIONS * NUM_RENDERING_OPTS * Tessellation::NUM_TESS_OPTS;
 };
 
 // ------------------------------------------------------------------------------------------------------------------------
@@ -208,7 +201,7 @@ struct FShadowPassPSOs : public PSOCollection
 
 	void GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12RootSignature*>& mRootSignatureLookup) override;
 
-	static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_MAT_OPTIONS * NUM_RENDERING_OPTS * NUM_TESS_OPTS;
+	static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_MAT_OPTIONS * NUM_RENDERING_OPTS * Tessellation::NUM_TESS_OPTS;
 };
 
 // ------------------------------------------------------------------------------------------------------------------------

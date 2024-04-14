@@ -38,6 +38,8 @@ public:
 		ID3D12GraphicsCommandList* pCmd = nullptr;
 		ID3D12CommandList* pCmdCopy = nullptr;
 		const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>* pCBAddresses = nullptr;
+		DynamicBufferHeap* pCBufferHeap = nullptr;
+		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = 0;
 		bool bEnableAsyncCopy = false;
 		const FSceneView* pSceneView = nullptr;
 		const std::unordered_map<MeshID, Mesh>* pMeshes = nullptr;
@@ -64,8 +66,8 @@ public:
 	ID3D12Resource* GetCPUTextureResource() const;
 
 private:
-	PSO_ID PSOOpaque = INVALID_ID;
-	PSO_ID PSOAlphaMasked = INVALID_ID;
+	std::unordered_map<size_t, PSO_ID>   mapPSO;
+	std::unordered_map<size_t, FPSODesc> mapLoadDesc;
 
 	int mOutputResolutionX = 0;
 	int mOutputResolutionY = 0;

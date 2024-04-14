@@ -184,7 +184,7 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 			, "Data/Textures/PBR/BlackTiles01_MR_4K/BlackTiles01_4K_Roughness.png"
 			, "Data/Textures/PBR/BlackTiles07_MR_4K/BlackTiles07_4K_BaseColor.png"
 			, "Data/Textures/PBR/PaintedMetal02_MR_4K/PaintedMetal02_4K_Metallic.png"
-			, "Data/Textures/PBR/BlackTiles01_MR_4K/BlackTiles01_4K_Metallic.png"
+			, "Data/Textures/PBR/BlackTiles01_MR_4K/BlackTiles01_4K_BaseColor.png"
 		};
 		return maps[MathUtil::RandI(0, NUM_RND_MAPS)];
 	};

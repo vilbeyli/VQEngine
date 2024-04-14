@@ -1687,7 +1687,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		RenderDepthPrePass(pCmd, &CBHeap, SceneView, cbAddresses, cbPerView, cbPerFrame);
 
-		RenderObjectIDPass(pCmd, pCmdCpy, cbAddresses, SceneView, BACK_BUFFER_INDEX);
+		RenderObjectIDPass(pCmd, pCmdCpy, &CBHeap, cbAddresses, cbPerView, SceneView, BACK_BUFFER_INDEX);
 
 		if (bMSAA)
 		{
@@ -1854,10 +1854,12 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 			// objectID Pass
 			{
 				ID3D12GraphicsCommandList* pCmd_ObjIDPass = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdObjIDPassThread);
-				WorkerThreads.AddTask([=, &SceneView, &cbAddresses]()
+
+				DynamicBufferHeap& CBHeap_WorkerObjIDPass = ctx.GetConstantBufferHeap(iCmdObjIDPassThread);
+				WorkerThreads.AddTask([=, &SceneView, &cbAddresses, &CBHeap_WorkerObjIDPass]()
 				{
 					RENDER_WORKER_CPU_MARKER;
-					RenderObjectIDPass(pCmd_ObjIDPass, pCmdCpy, cbAddresses, SceneView, BACK_BUFFER_INDEX);
+					RenderObjectIDPass(pCmd_ObjIDPass, pCmdCpy, &CBHeap_WorkerObjIDPass, cbAddresses, cbPerView, SceneView, BACK_BUFFER_INDEX);
 				});
 			}
 
