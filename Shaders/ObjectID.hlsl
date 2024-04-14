@@ -16,14 +16,11 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
+#define INSTANCED_DRAW 1
+#define INSTANCE_COUNT 64
+
 #define VQ_GPU 1
 #include "LightingConstantBufferData.h"
-
-#if INSTANCED_DRAW
-	#ifndef INSTANCE_COUNT
-	#define INSTANCE_COUNT 64
-	#endif
-#endif
 
 struct VSInput
 {

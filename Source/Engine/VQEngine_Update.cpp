@@ -239,7 +239,9 @@ void VQEngine::UpdateThread_PostUpdate()
 		{
 			Camera& cam = mpScene->GetActiveCamera();
 
-			XMVECTOR vAvgPositions = XMLoadFloat3(&mpScene->GetGameObjectTransform(mpScene->mSelectedObjects[0])->_position);
+			const Transform* pTF = mpScene->GetGameObjectTransform(mpScene->mSelectedObjects[0]);
+			assert(pTF);
+			XMVECTOR vAvgPositions = XMLoadFloat3(&pTF->_position);
 			for (int i = 1; i < mpScene->mSelectedObjects.size(); ++i)
 			{
 				const Transform* pTF = mpScene->GetGameObjectTransform(mpScene->mSelectedObjects[i]);

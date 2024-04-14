@@ -1326,16 +1326,6 @@ static void ResizeDrawInstanceArrays(FInstancedShadowMeshRenderCommand& cmd, siz
 	cmd.matWorldViewProj.resize(sz);
 }
 
-static void WriteInstanceDrawParam(const FSceneView::FMeshInstanceDataArray& MeshInstanceData, int iInst, FInstancedMeshRenderCommand& cmd, int iBatch)
-{
-	cmd.matWorld[iBatch] = MeshInstanceData.Data[iInst].mWorld;
-	cmd.matWorldViewProj[iBatch] = MeshInstanceData.Data[iInst].mWorldViewProj;
-	cmd.matWorldViewProjPrev[iBatch] = MeshInstanceData.Data[iInst].mWorldViewProjPrev;
-	cmd.matNormal[iBatch] = MeshInstanceData.Data[iInst].mNormal;
-	cmd.objectID[iBatch] = MeshInstanceData.Data[iInst].mObjID + 1;
-	cmd.projectedArea[iBatch] = MeshInstanceData.Data[iInst].mProjectedArea;
-}
-
 
 
 template<class TMeshInstanceDataArray>

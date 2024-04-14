@@ -250,6 +250,7 @@ inline TObject* MemoryPool<TObject>::Get(size_t Handle) const
 {
 	if (Handle > mActiveHandles.size() || !mActiveHandles[Handle])
 	{
+		Log::Warning("Invalid handle requested from MemoryPool.");
 		return nullptr;
 	}
 
