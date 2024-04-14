@@ -59,7 +59,7 @@
         <Model>
             <Name>Ground Plane</Name>
             <Mesh>Cube</Mesh>
-            <MaterialName>Black_herringbone_tiles_01</MaterialName>
+            <MaterialName>BlackHerringboneTiles01</MaterialName>
         </Model>
     </GameObject>
     
@@ -73,7 +73,7 @@
         <Model>
             <Name>Metal Cube</Name>
             <Mesh>Cube</Mesh>
-            <MaterialName>Painted_metal_02</MaterialName>
+            <MaterialName>PaintedMetal02</MaterialName>
         </Model>
     </GameObject>
     <GameObject>
@@ -85,7 +85,7 @@
         <Model>
             <Name>Cylinder</Name>
             <Mesh>Cylinder</Mesh>
-            <MaterialName>DarkGray_VeryRough</MaterialName>
+            <MaterialName>DarkOceanTiles05</MaterialName>
         </Model>
     </GameObject>
 
@@ -109,7 +109,7 @@
         <Model>
             <Name>Platform1</Name>
             <Mesh>Cylinder</Mesh>
-            <MaterialName>DarkGray_VeryRough</MaterialName>
+            <MaterialName>Fabric05</MaterialName>
         </Model>
     </GameObject>
 

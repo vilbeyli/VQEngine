@@ -463,6 +463,7 @@ static FMaterialRepresentation XMLParseMaterial(tinyxml2::XMLElement* pMat)
 	XMLElement* pMtlMap  = pMat->FirstChildElement("MetallicMap");
 	XMLElement* pRghMap  = pMat->FirstChildElement("RoughnessMap");
 	XMLElement* pAOMap   = pMat->FirstChildElement("AOMap");
+	XMLElement* pHghtMap = pMat->FirstChildElement("HeightMap");
 
 	if (pName) XMLParseStringVal(pName, mat.Name);
 	//------------------------------------------------------------------
@@ -480,6 +481,7 @@ static FMaterialRepresentation XMLParseMaterial(tinyxml2::XMLElement* pMat)
 	if (pMtlMap ) XMLParseStringVal(pMtlMap , mat.MetallicMapFilePath );
 	if (pRghMap ) XMLParseStringVal(pRghMap , mat.RoughnessMapFilePath);
 	if (pAOMap  ) XMLParseStringVal(pAOMap  , mat.AOMapFilePath);
+	if (pHghtMap) XMLParseStringVal(pHghtMap, mat.HeightMapFilePath);
 
 	return mat;
 }

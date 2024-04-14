@@ -164,29 +164,27 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 		const size_t NUM_RND_MAPS = 5;
 		static std::array<const char*, NUM_RND_MAPS> maps =
 		{
-			  "Data/Textures/PBR/Black_herringbone_tiles_01/Black_herringbone_tiles_01_2K_Normal.png"
-			, "Data/Textures/PBR/Marble_08/Marble_08_2K_Normal.png"
-			, "Data/Textures/PBR/Metal_tiles_03/Metal_tiles_03_2K_Normal.png"
-			, "Data/Textures/PBR/Painted_metal_02/Painted_metal_02_2K_Normal.png"
-			, "Data/Textures/PBR/Small_tiles_01/Small_tiles_01_2K_Normal.png"
+			  "Data/Textures/PBR/BlackHerringboneTiles01_MR_4K/BlackHerringboneTiles01_4K_Normal.png"
+			, "Data/Textures/PBR/Marble08_MR_4K/Marble08_4K_Normal.png"
+			, "Data/Textures/PBR/BlackTiles07_MR_4K/BlackTiles07_4K_Normal.png"
+			, "Data/Textures/PBR/PaintedMetal02_MR_4K/PaintedMetal02_4K_Normal.png"
+			, "Data/Textures/PBR/BlackTiles01_MR_4K/BlackTiles01_4K_Normal.png"
 		};
 		return maps[MathUtil::RandI(0, NUM_RND_MAPS)];
 	};
 	auto fnGetRandomRoughnessMetallicMapFile = []() -> std::string
 	{
-		const size_t NUM_RND_MAPS = 10;
+		const size_t NUM_RND_MAPS = 8;
 		static std::array<const char*, NUM_RND_MAPS> maps =
 		{
-			  "Data/Textures/PBR/Black_herringbone_tiles_01/Black_herringbone_tiles_01_2K_Roughness.png"
-			, "Data/Textures/PBR/Marble_08/Marble_08_2K_Roughness.png"
-			, "Data/Textures/PBR/Metal_tiles_03/Metal_tiles_03_2K_Roughness.png"
-			, "Data/Textures/PBR/Painted_metal_02/Painted_metal_02_2K_Roughness.png"
-			, "Data/Textures/PBR/Small_tiles_01/Small_tiles_01_2K_Roughness.png"
-			, "Data/Textures/PBR/Black_herringbone_tiles_01/Black_herringbone_tiles_01_2K_Metallic.png"
-			, "Data/Textures/PBR/Marble_08/Marble_08_2K_Metallic.png"
-			, "Data/Textures/PBR/Metal_tiles_03/Metal_tiles_03_2K_Metallic.png"
-			, "Data/Textures/PBR/Painted_metal_02/Painted_metal_02_2K_Metallic.png"
-			, "Data/Textures/PBR/Small_tiles_01/Small_tiles_01_2K_Metallic.png"
+			  "Data/Textures/PBR/BlackHerringboneTiles01_MR_4K/BlackHerringboneTiles01_4K_Roughness.png"
+			, "Data/Textures/PBR/Marble08_MR_4K/Marble08_4K_Roughness.png"
+			, "Data/Textures/PBR/BlackTiles07_MR_4K/BlackTiles07_4K_Roughness.png"
+			, "Data/Textures/PBR/PaintedMetal02_MR_4K/PaintedMetal02_4K_Roughness.png"
+			, "Data/Textures/PBR/BlackTiles01_MR_4K/BlackTiles01_4K_Roughness.png"
+			, "Data/Textures/PBR/BlackTiles07_MR_4K/BlackTiles07_4K_BaseColor.png"
+			, "Data/Textures/PBR/PaintedMetal02_MR_4K/PaintedMetal02_4K_Metallic.png"
+			, "Data/Textures/PBR/BlackTiles01_MR_4K/BlackTiles01_4K_Metallic.png"
 		};
 		return maps[MathUtil::RandI(0, NUM_RND_MAPS)];
 	};
@@ -205,12 +203,12 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 		matR.Tessellation.SetAllTessellationFactors(TERRAIN_TESS_FACTOR);
 
 		matR.EmissiveIntensity    = 0.0f;
-		matR.NormalMapFilePath    = "Data/Textures/PBR/Pebbles02_4K/Pebbles02_4K_Normal.png";
-		matR.DiffuseMapFilePath   = "Data/Textures/PBR/Pebbles02_4K/Pebbles02_4K_BaseColor.png";
-		matR.RoughnessMapFilePath = "Data/Textures/PBR/Pebbles02_4K/Pebbles02_4K_Roughness.png";
-		matR.HeightMapFilePath    = "Data/Textures/PBR/Pebbles02_4K/Pebbles02_4K_Height.png";
-		matR.AOMapFilePath        = "Data/Textures/PBR/Pebbles02_4K/Pebbles02_4K_AO.png";
-		matR.EmissiveMapFilePath  = "Data/Textures/PBR/Pebbles02_4K/Pebbles02_4K_Normal.png";
+		matR.NormalMapFilePath    = "Data/Textures/PBR/Pebbles02_MR_4K/Pebbles02_4K_Normal.png";
+		matR.DiffuseMapFilePath   = "Data/Textures/PBR/Pebbles02_MR_4K/Pebbles02_4K_BaseColor.png";
+		matR.RoughnessMapFilePath = "Data/Textures/PBR/Pebbles02_MR_4K/Pebbles02_4K_Roughness.png";
+		matR.HeightMapFilePath    = "Data/Textures/PBR/Pebbles02_MR_4K/Pebbles02_4K_Height.png";
+		matR.AOMapFilePath        = "Data/Textures/PBR/Pebbles02_MR_4K/Pebbles02_4K_AO.png";
+		matR.EmissiveMapFilePath  = "Data/Textures/PBR/Pebbles02_MR_4K/Pebbles02_4K_Normal.png";
 		matR.Displacement         = 75.0f;
 		matR.Name                 = "GroundPlatformMaterial";
 		scene.Materials.push_back(matR);

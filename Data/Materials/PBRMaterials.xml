@@ -4,41 +4,47 @@
 
     <!-- Tile_BlackHerringbone -->
     <Material>
-        <Name>Black_herringbone_tiles_01</Name>
-          <DiffuseMap>Data/Textures/PBR/Black_herringbone_tiles_01/Black_herringbone_tiles_01_2K_Base_Color.png</DiffuseMap>
-           <NormalMap>Data/Textures/PBR/Black_herringbone_tiles_01/Black_herringbone_tiles_01_2K_Normal.png</NormalMap>
-        <RoughnessMap>Data/Textures/PBR/Black_herringbone_tiles_01/Black_herringbone_tiles_01_2K_Roughness.png</RoughnessMap>
-               <AOMap>Data/Textures/PBR/Black_herringbone_tiles_01/Black_herringbone_tiles_01_2K_AO.png</AOMap>
+        <Name>BlackHerringboneTiles01</Name>
+          <DiffuseMap>Data/Textures/PBR/BlackHerringboneTiles01_MR_4K/BlackHerringboneTiles01_4K_BaseColor.png</DiffuseMap>
+           <NormalMap>Data/Textures/PBR/BlackHerringboneTiles01_MR_4K/BlackHerringboneTiles01_4K_Normal.png</NormalMap>
+           <HeightMap>Data/Textures/PBR/BlackHerringboneTiles01_MR_4K/BlackHerringboneTiles01_4K_Height.png</HeightMap>
+        <RoughnessMap>Data/Textures/PBR/BlackHerringboneTiles01_MR_4K/BlackHerringboneTiles01_4K_Roughness.png</RoughnessMap>
+               <AOMap>Data/Textures/PBR/BlackHerringboneTiles01_MR_4K/BlackHerringboneTiles01_4K_AO.png</AOMap>
     </Material>
     
     <Material>
         <Name>Marble_08</Name>
-       <DiffuseMap>Data/Textures/PBR/Marble_08/Marble_08_2K_Base_Color.png</DiffuseMap>
-        <NormalMap>Data/Textures/PBR/Marble_08/Marble_08_2K_Normal.png</NormalMap>
-     <RoughnessMap>Data/Textures/PBR/Marble_08/Marble_08_2K_Roughness.png</RoughnessMap>
+       <DiffuseMap>Data/Textures/PBR/Marble08_MR_4K/Marble08_4K_BaseColor.png</DiffuseMap>
+        <NormalMap>Data/Textures/PBR/Marble08_MR_4K/Marble08_4K_Normal.png</NormalMap>
+     <RoughnessMap>Data/Textures/PBR/Marble08_MR_4K/Marble08_4K_Roughness.png</RoughnessMap>
+        <HeightMap>Data/Textures/PBR/Marble08_MR_4K/Marble08_4K_Height.png</HeightMap>
     </Material>
 
     <Material>
-        <Name>Metal_tiles_03</Name>
-       <DiffuseMap>Data/Textures/PBR/Metal_tiles_03/Metal_tiles_03_2K_Base_Color.png</DiffuseMap>
-        <NormalMap>Data/Textures/PBR/Metal_tiles_03/Metal_tiles_03_2K_Normal.png</NormalMap>
-     <RoughnessMap>Data/Textures/PBR/Metal_tiles_03/Metal_tiles_03_2K_Roughness.png</RoughnessMap>
-      <MetallicMap>Data/Textures/PBR/Metal_tiles_03/Metal_tiles_03_2K_Metallic.png</MetallicMap>
+        <Name>Fabric05</Name>
+         <DiffuseMap>Data/Textures/PBR/Fabric05_MR_4K/Fabric05_4K_BaseColor.png</DiffuseMap>
+          <NormalMap>Data/Textures/PBR/Fabric05_MR_4K/Fabric05_4K_Normal.png</NormalMap>
+       <RoughnessMap>Data/Textures/PBR/Fabric05_MR_4K/Fabric05_4K_Roughness.png</RoughnessMap>
+          <HeightMap>Data/Textures/PBR/Fabric05_MR_4K/Fabric05_4K_Height.png</HeightMap>
     </Material>
 
     <Material>
-        <Name>Painted_metal_02</Name>
-       <DiffuseMap>Data/Textures/PBR/Painted_metal_02/Painted_metal_02_2K_Base_Color.png</DiffuseMap>
-        <NormalMap>Data/Textures/PBR/Painted_metal_02/Painted_metal_02_2K_Normal.png</NormalMap>
-     <RoughnessMap>Data/Textures/PBR/Painted_metal_02/Painted_metal_02_2K_Roughness.png</RoughnessMap>
-      <MetallicMap>Data/Textures/PBR/Painted_metal_02/Painted_metal_02_2K_Metallic.png</MetallicMap>
+        <Name>PaintedMetal02</Name>
+        <DiffuseMap>Data/Textures/PBR/PaintedMetal02_MR_4K/PaintedMetal02_4K_BaseColor.png</DiffuseMap>
+         <NormalMap>Data/Textures/PBR/PaintedMetal02_MR_4K/PaintedMetal02_4K_Normal.png</NormalMap>
+      <RoughnessMap>Data/Textures/PBR/PaintedMetal02_MR_4K/PaintedMetal02_4K_Roughness.png</RoughnessMap>
+         <HeightMap>Data/Textures/PBR/PaintedMetal02_MR_4K/PaintedMetal02_4K_Height.png</HeightMap>
+             <AOMap>Data/Textures/PBR/PaintedMetal02_MR_4K/PaintedMetal02_4K_AO.png</AOMap>
+       <MetallicMap>Data/Textures/PBR/PaintedMetal02_MR_4K/PaintedMetal02_4K_Metallic.png</MetallicMap>
     </Material>
 
     <Material>
-        <Name>Small_tiles_01</Name>
-       <DiffuseMap>Data/Textures/PBR/Small_tiles_01/Small_tiles_01_2K_Base_Color.png</DiffuseMap>
-        <NormalMap>Data/Textures/PBR/Small_tiles_01/Small_tiles_01_2K_Normal.png</NormalMap>
-     <RoughnessMap>Data/Textures/PBR/Small_tiles_01/Small_tiles_01_2K_Roughness.png</RoughnessMap>
+        <Name>DarkOceanTiles05</Name>
+       <DiffuseMap>Data/Textures/PBR/DarkOceanTiles05_MR_4K/DarkOceanTiles05_4K_BaseColor.png</DiffuseMap>
+        <NormalMap>Data/Textures/PBR/DarkOceanTiles05_MR_4K/DarkOceanTiles05_4K_Normal.png</NormalMap>
+     <RoughnessMap>Data/Textures/PBR/DarkOceanTiles05_MR_4K/DarkOceanTiles05_4K_Roughness.png</RoughnessMap>
+        <HeightMap>Data/Textures/PBR/DarkOceanTiles05_MR_4K/DarkOceanTiles05_4K_Height.png</HeightMap>
+            <AOMap>Data/Textures/PBR/DarkOceanTiles05_MR_4K/DarkOceanTiles05_4K_AO.png</AOMap>
     </Material>
     
 </MetallicMaterials>

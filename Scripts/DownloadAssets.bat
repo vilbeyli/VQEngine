@@ -8,6 +8,9 @@ set WGET_PATH="%~dp0../Tools/wget.exe"
 pushd "%~dp0"
 cd "../Data/Textures/HDRI"
 set HDRI_TEXTURES_DESTINATION_PATH=%cd%\
+if not exist "../PBR" (
+  mkdir "../PBR"
+)
 cd "../PBR"
 set PBR_TEXTURES_DESTINATION_PATH=%cd%\
 popd
@@ -96,10 +99,10 @@ if !ALL_ASSETS_ALREADY_DOWNLOADED! equ 1 (
 :: Download the PBR textures that doesn't already exist using wget and store them in the PBR_DOWNLOADED_FILES 'list'
 set ALL_ASSETS_ALREADY_DOWNLOADED=1
 for %%f in (%PBR_FILE_LIST%) do ( 
-  if not exist %PBR_TEXTURES_DESTINATION_PATH%%%f (
-    %WGET_PATH% %PBR_WEB_PATH%%%f -O %PBR_TEXTURES_DESTINATION_PATH%%%f
+  if not exist !PBR_TEXTURES_DESTINATION_PATH!%%f (
+    %WGET_PATH% %PBR_WEB_PATH%%%f -O !PBR_TEXTURES_DESTINATION_PATH!%%f
     set ALL_ASSETS_ALREADY_DOWNLOADED=0
-    set PBR_DOWNLOADED_FILES=!PBR_DOWNLOADED_FILES!;%PBR_TEXTURES_DESTINATION_PATH%%%f
+    set PBR_DOWNLOADED_FILES=!PBR_DOWNLOADED_FILES!;!PBR_TEXTURES_DESTINATION_PATH!%%f
   )
 )
 if !ALL_ASSETS_ALREADY_DOWNLOADED! equ 1 (
@@ -112,7 +115,7 @@ if !ALL_ASSETS_ALREADY_DOWNLOADED! equ 1 (
 
 :: unpack zip and remove zip
 for %%f in (%PBR_FILE_LIST%) do ( 
-  set FILE_PATH=%PBR_TEXTURES_DESTINATION_PATH%%%f
+  set FILE_PATH=!PBR_TEXTURES_DESTINATION_PATH!%%f
   if exist !FILE_PATH! (
       echo  - !FILE_PATH!
       if %%~xf equ .zip (
@@ -123,7 +126,7 @@ for %%f in (%PBR_FILE_LIST%) do (
           echo Deleting: !FILE_PATH!
           if exist "!FILE_PATH!" (
               del "!FILE_PATH!"
-              echo Deleted: %%~nf
+              echo Deleted: !FILE_PATH!
           ) else (
               echo File not found: !FILE_PATH!
           )
