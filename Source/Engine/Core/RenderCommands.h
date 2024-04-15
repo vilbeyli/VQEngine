@@ -52,12 +52,17 @@ struct FWireframeRenderCommand : public FMeshRenderCommandBase
 struct FOutlineRenderCommand
 {
 	MeshID meshID = INVALID_ID;
+	MaterialID matID = INVALID_ID;
 	struct FConstantBuffer { 
-		DirectX::XMMATRIX matWorldView; 
-		DirectX::XMMATRIX matNormalView; 
-		DirectX::XMMATRIX matProj; 
-		DirectX::XMFLOAT4 color; 
-		float scale; 
+		DirectX::XMMATRIX matWorld;
+		DirectX::XMMATRIX matWorldView;
+		DirectX::XMMATRIX matNormalView;
+		DirectX::XMMATRIX matProj;
+		DirectX::XMMATRIX matViewInverse;
+		DirectX::XMFLOAT4 color;
+		DirectX::XMFLOAT4 uvScaleBias;
+		float scale;
+		float heightDisplacement;
 	} cb;
 };
 using FLightRenderCommand = FWireframeRenderCommand;

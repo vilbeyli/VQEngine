@@ -59,16 +59,12 @@ enum EBuiltinPSOs // TODO: remove the hardcoded PSOs when a generic Shader solut
 	HDR_FP16_SWAPCHAIN_PSO,
 	SKYDOME_PSO,
 	SKYDOME_PSO_MSAA_4,
-	OBJECT_PSO,
-	OBJECT_PSO_MSAA_4,
 	WIREFRAME_PSO,
 	WIREFRAME_PSO_MSAA_4,
 	WIREFRAME_INSTANCED_PSO,
 	WIREFRAME_INSTANCED_MSAA4_PSO,
 	UNLIT_PSO,
 	UNLIT_PSO_MSAA_4,
-	OUTLINE_PSO,
-	OUTLINE_PSO_MSAA_4,
 	CUBEMAP_CONVOLUTION_DIFFUSE_PSO,
 	CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO,
 	CUBEMAP_CONVOLUTION_SPECULAR_PSO,
@@ -90,7 +86,6 @@ enum EBuiltinRootSignatures
 	CS__SRV1_UAV1_ROOTCBV1,
 	CS__SRV2_UAV1_ROOTCBV1,
 	//--------------------------
-	LEGACY__HelloWorldTriangle,
 	LEGACY__FullScreenTriangle,
 	LEGACY__HelloWorldCube,
 	LEGACY__Object,
@@ -101,6 +96,7 @@ enum EBuiltinRootSignatures
 	LEGACY__BRDFIntegrationCS,
 	LEGACY__FFX_SPD_CS,
 	LEGACY__ZPrePass,
+	LEGACY__OutlinePass,
 	LEGACY__FFX_FSR1,
 	LEGACY__UI_HDR_Composite,
 	LEGACY__DownsampleDepthCS,
@@ -110,7 +106,8 @@ enum EBuiltinRootSignatures
 
 
 // off/msaa4  TODO: other msaa
-static constexpr size_t NUM_MSAA_OPTS = 2; 
+static constexpr size_t NUM_MSAA_OPTIONS = 2; 
+static constexpr UINT MSAA_SAMPLE_COUNTS[NUM_MSAA_OPTIONS] = { 1, 4 };
 
 struct PSOCollection
 {
@@ -130,7 +127,7 @@ struct FLightingPSOs : PSOCollection
 	// rendering
 	static constexpr size_t NUM_RASTER_OPTS = 2; // solid/wireframe
 	static constexpr size_t NUM_FACECULL_OPTS = 3; // none/front/back
-	static constexpr size_t NUM_RENDERING_OPTS = NUM_FACECULL_OPTS * NUM_RASTER_OPTS * NUM_MSAA_OPTS;
+	static constexpr size_t NUM_RENDERING_OPTIONS = NUM_FACECULL_OPTS * NUM_RASTER_OPTS * NUM_MSAA_OPTIONS;
 
 	// pass output
 	static constexpr size_t NUM_MOVEC_OPTS = 2; // on/off
@@ -150,7 +147,7 @@ struct FLightingPSOs : PSOCollection
 
 	void GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12RootSignature*>& mRootSignatureLookup) override;
 
-	static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_MAT_OPTIONS * NUM_RENDERING_OPTS * NUM_OUTPUT_OPTS * Tessellation::NUM_TESS_OPTS;
+	static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_MAT_OPTIONS * NUM_RENDERING_OPTIONS * NUM_OUTPUT_OPTS * Tessellation::NUM_TESS_OPTIONS;
 };
 
 // ------------------------------------------------------------------------------------------------------------------------
@@ -160,7 +157,7 @@ struct FDepthPrePassPSOs : public PSOCollection
 	// rendering
 	static constexpr size_t NUM_RASTER_OPTS = 2; // solid/wireframe
 	static constexpr size_t NUM_FACECULL_OPTS = 3; // none/front/back
-	static constexpr size_t NUM_RENDERING_OPTS = NUM_FACECULL_OPTS * NUM_RASTER_OPTS * NUM_MSAA_OPTS;
+	static constexpr size_t NUM_RENDERING_OPTIONS = NUM_FACECULL_OPTS * NUM_RASTER_OPTS * NUM_MSAA_OPTIONS;
 
 	// material
 	static constexpr size_t NUM_ALPHA_OPTIONS = 2; // opaque/alpha masked
@@ -174,7 +171,7 @@ struct FDepthPrePassPSOs : public PSOCollection
 
 	void GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12RootSignature*>& mRootSignatureLookup) override;
 
-	static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_MAT_OPTIONS * NUM_RENDERING_OPTS * Tessellation::NUM_TESS_OPTS;
+	static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_MAT_OPTIONS * NUM_RENDERING_OPTIONS * Tessellation::NUM_TESS_OPTIONS;
 };
 
 // ------------------------------------------------------------------------------------------------------------------------
@@ -185,7 +182,7 @@ struct FShadowPassPSOs : public PSOCollection
 	static constexpr size_t NUM_DEPTH_RENDER_OPTS = 2; // NDC/WorldSpace(linear)
 	static constexpr size_t NUM_RASTER_OPTS = 2; // solid/wireframe
 	static constexpr size_t NUM_FACECULL_OPTS = 3; // none/front/back
-	static constexpr size_t NUM_RENDERING_OPTS = NUM_FACECULL_OPTS * NUM_RASTER_OPTS;
+	static constexpr size_t NUM_RENDERING_OPTIONS = NUM_FACECULL_OPTS * NUM_RASTER_OPTS;
 
 	// material
 	static constexpr size_t NUM_ALPHA_OPTIONS = 2; // opaque/alpha masked
@@ -201,8 +198,7 @@ struct FShadowPassPSOs : public PSOCollection
 
 	void GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12RootSignature*>& mRootSignatureLookup) override;
 
-	static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_MAT_OPTIONS * NUM_RENDERING_OPTS * Tessellation::NUM_TESS_OPTS;
+	static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_MAT_OPTIONS * NUM_RENDERING_OPTIONS * Tessellation::NUM_TESS_OPTIONS;
 };
 
 // ------------------------------------------------------------------------------------------------------------------------
-

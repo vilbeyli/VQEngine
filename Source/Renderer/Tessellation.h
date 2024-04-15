@@ -80,7 +80,7 @@ namespace Tessellation
 	constexpr size_t NUM_PARTIT_OPTIONS = 4; // integer, fractional_even, fractional_odd, or pow2
 	constexpr size_t NUM_OUTTOP_OPTIONS = 4; // point, line, triangle_cw, or triangle_ccw
 	constexpr size_t NUM_TESS_CULL_OPTIONS = 2; // Cull[on/off], dynamic branch for face/frustum params
-	constexpr size_t NUM_TESS_OPTS = NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * NUM_OUTTOP_OPTIONS * NUM_TESS_CULL_OPTIONS;
+	constexpr size_t NUM_TESS_OPTIONS = NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * NUM_OUTTOP_OPTIONS * NUM_TESS_CULL_OPTIONS;
 
 
 	// TESSELLATION CONSTANT DATA FOR COMPILATION
@@ -162,4 +162,20 @@ namespace Tessellation
 		return false;
 	}
 
+	inline void GetTessellationPSOConfig(const FTessellationParameters& tess,
+		size_t& iTess,
+		size_t& iDomain,
+		size_t& iPart,
+		size_t& iOutTopo,
+		size_t& iTessCull
+	)
+	{
+		const bool bSWCullTessellation = tess.GPUParams.bFaceCull > 0 || tess.GPUParams.bFrustumCull > 0;
+		iTess     = tess.bEnableTessellation ? 1 : 0;
+		iDomain   = iTess == 0 ? 0 : tess.Domain;
+		iPart     = iTess == 0 ? 0 : tess.Partitioning;
+		iOutTopo  = iTess == 0 ? 0 : tess.OutputTopology;
+		iTessCull = iTess == 1 && (bSWCullTessellation ? 1 : 0);
+		return;
+	}
 };

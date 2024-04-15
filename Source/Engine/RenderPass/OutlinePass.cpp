@@ -18,14 +18,17 @@
 
 #include "OutlinePass.h"
 #include "../../Renderer/Renderer.h"
-#include "../Scene/Scene.h"
+#include "../../Renderer/Tessellation.h"
 #include "../../Shaders/LightingConstantBufferData.h"
+#include "../Scene/Scene.h"
 #include "../VQUtils/Source/utils.h"
 #include "../GPUMarker.h"
 
 #include <cassert>
 
 using namespace DirectX;
+using namespace VQ_SHADER_DATA;
+using namespace Tessellation;
 
 OutlinePass::OutlinePass(VQRenderer& Renderer)
 	: RenderPassBase(Renderer)
@@ -90,6 +93,15 @@ void OutlinePass::OnDestroyWindowSizeDependentResources()
 	mRenderer.DestroyTexture(TEXPassOutputDepthMSAA4);
 }
 
+static const Material& GetMaterial(MaterialID ID, const std::unordered_map<MaterialID, Material>* pMats)
+{
+	if (pMats->find(ID) == pMats->end())
+	{
+		Log::Error("GetMaterial() failed: Material not created. Did you call Scene::CreateMaterial()? (matID=%d)", ID);
+		assert(false);
+	}
+	return pMats->at(ID);
+}
 void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameters)
 {
 	const FDrawParameters* pParams = static_cast<const FDrawParameters*>(pDrawParameters);
@@ -101,6 +113,7 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 	assert(pParams->pCBufferHeap);
 	assert(pParams->pRTVHandles);
 	ID3D12GraphicsCommandList* pCmd = pParams->pCmd;
+	DynamicBufferHeap* pHeap = pParams->pCBufferHeap;
 	const bool& bMSAA = pParams->bMSAA;
 	const FSceneView& SceneView = *pParams->pSceneView;
 	
@@ -111,46 +124,84 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle();
 
 	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddrs(SceneView.outlineRenderCommands.size());
-	int iCB = 0;
+	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddrsTess(SceneView.outlineRenderCommands.size());
+
+	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__OutlinePass));
+	pCmd->OMSetRenderTargets(0, nullptr, FALSE, &dsvHandle);
+	pCmd->OMSetStencilRef(1);
+	pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, nullptr);
+
+	const char* pszPassName[NUM_PASS_OPTIONS] = { "RenderStencil", "RenderOutline" };
+	for (size_t iPass = 0; iPass < NUM_PASS_OPTIONS; ++iPass)
 	{
-		SCOPED_GPU_MARKER(pCmd, "RenderStencil");
-		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? PSOOutlineStencilMSAA4Write : PSOOutlineStencilWrite));
-		pCmd->OMSetRenderTargets(0, nullptr, FALSE, &dsvHandle);
-		pCmd->OMSetStencilRef(1);
-
-		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
-		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-		pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, nullptr);
-		
-		for (const FOutlineRenderCommand& cmd : SceneView.outlineRenderCommands)
+		SCOPED_GPU_MARKER(pCmd, pszPassName[iPass]);
+		if (iPass == 1)
 		{
-			FOutlineRenderCommand::FConstantBuffer* pCBuffer = {};
-			D3D12_GPU_VIRTUAL_ADDRESS& cbAddr = cbAddrs[iCB];
-			pParams->pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
-			memcpy(pCBuffer, &cmd.cb, sizeof(cmd.cb));
-
-			const Mesh& mesh = pParams->pMeshes->at(cmd.meshID);
-			const auto VBIBIDs = mesh.GetIABufferIDs();
-			const uint32 NumIndices = mesh.GetNumIndices();
-			const BufferID& VB_ID = VBIBIDs.first;
-			const BufferID& IB_ID = VBIBIDs.second;
-			const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
-			const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
-
-			pCmd->SetGraphicsRootConstantBufferView(0, cbAddrs[iCB++]);
-			pCmd->IASetVertexBuffers(0, 1, &vb);
-			pCmd->IASetIndexBuffer(&ib);
-			pCmd->DrawIndexedInstanced(NumIndices, 1, 0, 0, 0);
+			pCmd->OMSetRenderTargets((UINT)pParams->pRTVHandles->size(), pParams->pRTVHandles->data(), FALSE, &dsvHandle);
 		}
-	}
-	{
-		SCOPED_GPU_MARKER(pCmd, "RenderOutline");
-		pCmd->SetPipelineState(mRenderer.GetPSO(bMSAA ? PSOOutlineStencilMSAA4Mask : PSOOutlineStencilMask));	
-		pCmd->OMSetRenderTargets((UINT)pParams->pRTVHandles->size(), pParams->pRTVHandles->data(), FALSE, &dsvHandle);
-		iCB = 0;
+
+		int iCB = 0;
 		for (const FOutlineRenderCommand& cmd : SceneView.outlineRenderCommands)
 		{
+			// set PSO
+			const Material& mat = GetMaterial(cmd.matID, pParams->pMaterials);
+			const size_t iMSAA  = bMSAA ? 1 : 0;
+			const size_t iAlpha = mat.IsAlphaMasked(mRenderer) ? 1 : 0;
+			size_t iTess = 0; size_t iDomain = 0; size_t iPart = 0; size_t iOutTopo = 0; size_t iTessCull = 0;
+			Tessellation::GetTessellationPSOConfig(mat.Tessellation, iTess, iDomain, iPart, iOutTopo, iTessCull);
+			const size_t key = Hash(iPass,
+				iMSAA,
+				iTess,
+				iDomain,
+				iPart,
+				iOutTopo,
+				iTessCull,
+				iAlpha
+			);
+			const PSO_ID psoID = mapPSO.at(key);
+			ID3D12PipelineState* pPSO = mRenderer.GetPSO(psoID);
+			assert(pPSO);
+			pCmd->SetPipelineState(pPSO);
+
+			// set cbuffers
+			D3D12_GPU_VIRTUAL_ADDRESS& cbAddr = cbAddrs[iCB];
+			if (iPass == 0) // allocate only on the first go
+			{
+				FOutlineRenderCommand::FConstantBuffer* pCBuffer = {};
+				pHeap->AllocConstantBuffer(sizeof(FOutlineRenderCommand::FConstantBuffer), (void**)(&pCBuffer), &cbAddr);
+				memcpy(pCBuffer, &cmd.cb, sizeof(cmd.cb));
+			}
+			pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
+
+			if (mat.Tessellation.bEnableTessellation)
+			{
+				D3D12_GPU_VIRTUAL_ADDRESS& cbAddr_Tsl = cbAddrsTess[iCB];
+				if (iPass == 0) // allocate only on the first go
+				{
+					VQ_SHADER_DATA::TessellationParams* pCBuffer_Tessellation = nullptr;
+					auto data = mat.GetTessellationCBufferData();
+					pHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Tessellation)), (void**)(&pCBuffer_Tessellation), &cbAddr_Tsl);
+					memcpy(pCBuffer_Tessellation, &data, sizeof(data));
+				}
+				pCmd->SetGraphicsRootConstantBufferView(2, cbAddr_Tsl);
+			}
+
+			assert(iCB < cbAddrs.size());
+			pCmd->SetGraphicsRootConstantBufferView(4, pParams->cbPerView);
+			++iCB;
+
+			// set textures
+			if (mat.SRVMaterialMaps != INVALID_ID)
+			{
+				//const CBV_SRV_UAV& NullTex2DSRV = mRenderer.GetSRV(mResources_MainWnd.SRV_NullTexture2D);
+				pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
+				if (mat.SRVHeightMap != INVALID_ID)
+				{
+					pCmd->SetGraphicsRootDescriptorTable(3, mRenderer.GetSRV(mat.SRVHeightMap).GetGPUDescHandle(0));
+				}
+			}
+
+			// set input geometry
 			const Mesh& mesh = pParams->pMeshes->at(cmd.meshID);
 			const auto VBIBIDs = mesh.GetIABufferIDs();
 			const uint32 NumIndices = mesh.GetNumIndices();
@@ -158,36 +209,48 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 			const BufferID& IB_ID = VBIBIDs.second;
 			const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
 			const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
-
-			pCmd->SetGraphicsRootConstantBufferView(0, cbAddrs[iCB++]);
+			D3D_PRIMITIVE_TOPOLOGY topo = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+			if (mat.Tessellation.bEnableTessellation)
+			{
+				topo = mat.Tessellation.Domain == ETessellationDomain::QUAD_PATCH
+					? D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST
+					: D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
+			}
+			pCmd->IASetPrimitiveTopology(topo);
 			pCmd->IASetVertexBuffers(0, 1, &vb);
 			pCmd->IASetIndexBuffer(&ib);
+
+			// draw
 			pCmd->DrawIndexedInstanced(NumIndices, 1, 0, 0, 0);
 		}
 	}
 }
 
+size_t OutlinePass::Hash(size_t iPass, size_t iMSAA, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha)
+{
+	return iPass
+		+ NUM_PASS_OPTIONS * iMSAA
+		+ NUM_PASS_OPTIONS * NUM_MSAA_OPTIONS * iTess
+		+ NUM_PASS_OPTIONS * NUM_MSAA_OPTIONS * NUM_TESS_ENABLED * iDomain
+		+ NUM_PASS_OPTIONS * NUM_MSAA_OPTIONS * NUM_TESS_ENABLED * NUM_DOMAIN_OPTIONS * iPart
+		+ NUM_PASS_OPTIONS * NUM_MSAA_OPTIONS * NUM_TESS_ENABLED * NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * iOutTopo
+		+ NUM_PASS_OPTIONS * NUM_MSAA_OPTIONS * NUM_TESS_ENABLED * NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * NUM_OUTTOP_OPTIONS * iTessCullMode
+		+ NUM_PASS_OPTIONS * NUM_MSAA_OPTIONS * NUM_TESS_ENABLED * NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * NUM_OUTTOP_OPTIONS * NUM_TESS_CULL_OPTIONS * iAlpha;
+}
+
 std::vector<FPSOCreationTaskParameters> OutlinePass::CollectPSOCreationParameters()
 {
-	std::vector<FPSOCreationTaskParameters> params;
-	
 	const std::wstring ShaderFilePath = VQRenderer::GetFullPathOfShader(L"Outline.hlsl");
-	FShaderStageCompileDesc VSDesc{ ShaderFilePath, "VSMain", "vs_6_1" };
-	FShaderStageCompileDesc PSDesc{ ShaderFilePath, "PSMain", "ps_6_1" };
 
 	FPSODesc psoLoadDesc = {};
-	psoLoadDesc.ShaderStageCompileDescs.push_back(VSDesc);
-	psoLoadDesc.ShaderStageCompileDescs.push_back(PSDesc);
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
 	psoDesc.InputLayout = { };
-	psoDesc.pRootSignature = mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit);
+	psoDesc.pRootSignature = mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__OutlinePass);
 	psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 	psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 	psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 	psoDesc.SampleMask = UINT_MAX;
-	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	psoDesc.NumRenderTargets = 0;
 	psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	psoDesc.DepthStencilState.DepthEnable = TRUE;
 	psoDesc.DepthStencilState.StencilEnable = TRUE;
@@ -195,44 +258,143 @@ std::vector<FPSOCreationTaskParameters> OutlinePass::CollectPSOCreationParameter
 	psoDesc.DepthStencilState.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP::D3D12_STENCIL_OP_KEEP;
 	psoDesc.DepthStencilState.FrontFace.StencilFailOp = D3D12_STENCIL_OP::D3D12_STENCIL_OP_KEEP;
 	psoDesc.DepthStencilState.BackFace.StencilFailOp = D3D12_STENCIL_OP::D3D12_STENCIL_OP_KEEP;
-	
-	psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC::D3D12_COMPARISON_FUNC_LESS;
-	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK::D3D12_DEPTH_WRITE_MASK_ALL;
-	psoDesc.DepthStencilState.StencilReadMask = 0x00;
-	psoDesc.DepthStencilState.StencilWriteMask = 0xFF;
-	psoDesc.DepthStencilState.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC::D3D12_COMPARISON_FUNC_ALWAYS;
-	psoDesc.DepthStencilState.BackFace.StencilFunc = D3D12_COMPARISON_FUNC::D3D12_COMPARISON_FUNC_ALWAYS;
-	psoDesc.DepthStencilState.FrontFace.StencilPassOp = D3D12_STENCIL_OP::D3D12_STENCIL_OP_REPLACE;
-	psoDesc.DepthStencilState.BackFace.StencilPassOp = D3D12_STENCIL_OP::D3D12_STENCIL_OP_REPLACE;
-	{
-		psoLoadDesc.PSOName = "PSO_OutlineStencil";
-		psoDesc.SampleDesc.Count = 1;
-		params.push_back({ &PSOOutlineStencilWrite, psoLoadDesc });
 
-		psoLoadDesc.PSOName = "PSO_OutlineStencil_MSAA4";
-		psoDesc.SampleDesc.Count = 4;
-		params.push_back({ &PSOOutlineStencilMSAA4Write, psoLoadDesc });
+	const char* pszPSONameBases[NUM_PASS_OPTIONS] = { "PSO_OutlineStencil", "PSO_OutlineMask" };
+
+	
+	for(size_t iPass = 0    ; iPass     < NUM_PASS_OPTIONS  ; ++iPass)
+	for(size_t iMSAA = 0    ; iMSAA     < NUM_MSAA_OPTIONS  ; ++iMSAA) 
+	for(size_t iTess = 0    ; iTess     < NUM_TESS_ENABLED  ; ++iTess) 
+	for(size_t iDomain = 0  ; iDomain   < NUM_DOMAIN_OPTIONS; ++iDomain) 
+	for(size_t iPart = 0    ; iPart     < NUM_PARTIT_OPTIONS; ++iPart) 
+	for(size_t iOutTopo = 0 ; iOutTopo  < NUM_OUTTOP_OPTIONS; ++iOutTopo) 
+	for(size_t iTessCull = 0; iTessCull < NUM_TESS_CULL_OPTIONS; ++iTessCull)
+	for(size_t iAlpha = 0   ; iAlpha    < NUM_ALPHA_OPTIONS ; ++iAlpha)
+	{
+		if (ShouldSkipTessellationVariant(iTess, iDomain, iPart, iOutTopo, iTessCull))
+			continue;
+
+		const size_t key = Hash(iPass, iMSAA, iTess, iDomain, iPart, iOutTopo, iTessCull, iAlpha);
+		this->mapPSO[key] = INVALID_ID;
 	}
 
-	psoLoadDesc.ShaderStageCompileDescs[0].EntryPoint = "VSMainOutline";
-	psoDesc.NumRenderTargets = 1;
-	psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
-	psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC::D3D12_COMPARISON_FUNC_ALWAYS;
-	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK::D3D12_DEPTH_WRITE_MASK_ZERO;
-	psoDesc.DepthStencilState.StencilWriteMask = 0x00;
-	psoDesc.DepthStencilState.StencilReadMask = 0xFF;
-	psoDesc.DepthStencilState.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC::D3D12_COMPARISON_FUNC_NOT_EQUAL;
-	psoDesc.DepthStencilState.BackFace.StencilFunc = D3D12_COMPARISON_FUNC::D3D12_COMPARISON_FUNC_NOT_EQUAL;
-	psoDesc.DepthStencilState.FrontFace.StencilPassOp = D3D12_STENCIL_OP::D3D12_STENCIL_OP_KEEP;
-	psoDesc.DepthStencilState.BackFace.StencilPassOp = D3D12_STENCIL_OP::D3D12_STENCIL_OP_KEEP;
+	std::vector<FPSOCreationTaskParameters> params;
+	for(size_t iPass = 0    ; iPass     < NUM_PASS_OPTIONS  ; ++iPass)
+	for(size_t iMSAA = 0    ; iMSAA     < NUM_MSAA_OPTIONS  ; ++iMSAA) 
+	for(size_t iTess = 0    ; iTess     < NUM_TESS_ENABLED  ; ++iTess) 
+	for(size_t iDomain = 0  ; iDomain   < NUM_DOMAIN_OPTIONS; ++iDomain) 
+	for(size_t iPart = 0    ; iPart     < NUM_PARTIT_OPTIONS; ++iPart) 
+	for(size_t iOutTopo = 0 ; iOutTopo  < NUM_OUTTOP_OPTIONS; ++iOutTopo) 
+	for(size_t iTessCull = 0; iTessCull < NUM_TESS_CULL_OPTIONS; ++iTessCull)
+	for(size_t iAlpha = 0   ; iAlpha    < NUM_ALPHA_OPTIONS ; ++iAlpha)
 	{
-		psoLoadDesc.PSOName = "PSO_OutlineMask";
-		psoDesc.SampleDesc.Count = 1;
-		params.push_back({ &PSOOutlineStencilMask, psoLoadDesc });
+		if (ShouldSkipTessellationVariant(iTess, iDomain, iPart, iOutTopo, iTessCull))
+			continue;
 
-		psoLoadDesc.PSOName = "PSO_OutlineMask_MSAA4";
-		psoDesc.SampleDesc.Count = 4;
-		params.push_back({ &PSOOutlineStencilMSAA4Mask, psoLoadDesc });
+		const size_t key = Hash(iPass, iMSAA, iTess, iDomain, iPart, iOutTopo, iTessCull, iAlpha);
+
+		// PSO name
+		std::string PSOName = pszPSONameBases[iPass];
+		if (iAlpha == 1) PSOName += "_AlphaMasked";
+		if (iMSAA == 1) PSOName += "_MSAA4";
+		if (iTess == 1)
+		{
+			AppendTessellationPSONameTokens(PSOName, iDomain, iPart, iOutTopo, iTessCull);
+		}
+		psoLoadDesc.PSOName = PSOName;
+
+		// MSAA
+		psoDesc.SampleDesc.Count = MSAA_SAMPLE_COUNTS[iMSAA];
+
+		// DepthStencilState[iPass]
+		switch (iPass)
+		{
+		case 0:
+			psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC::D3D12_COMPARISON_FUNC_LESS;
+			psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK::D3D12_DEPTH_WRITE_MASK_ALL;
+			psoDesc.DepthStencilState.StencilReadMask = 0x00;
+			psoDesc.DepthStencilState.StencilWriteMask = 0xFF;
+			psoDesc.DepthStencilState.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC::D3D12_COMPARISON_FUNC_ALWAYS;
+			psoDesc.DepthStencilState.BackFace.StencilFunc = D3D12_COMPARISON_FUNC::D3D12_COMPARISON_FUNC_ALWAYS;
+			psoDesc.DepthStencilState.FrontFace.StencilPassOp = D3D12_STENCIL_OP::D3D12_STENCIL_OP_REPLACE;
+			psoDesc.DepthStencilState.BackFace.StencilPassOp = D3D12_STENCIL_OP::D3D12_STENCIL_OP_REPLACE;
+			break;
+		case 1:
+			psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC::D3D12_COMPARISON_FUNC_ALWAYS;
+			psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK::D3D12_DEPTH_WRITE_MASK_ZERO;
+			psoDesc.DepthStencilState.StencilWriteMask = 0x00;
+			psoDesc.DepthStencilState.StencilReadMask = 0xFF;
+			psoDesc.DepthStencilState.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC::D3D12_COMPARISON_FUNC_NOT_EQUAL;
+			psoDesc.DepthStencilState.BackFace.StencilFunc = D3D12_COMPARISON_FUNC::D3D12_COMPARISON_FUNC_NOT_EQUAL;
+			psoDesc.DepthStencilState.FrontFace.StencilPassOp = D3D12_STENCIL_OP::D3D12_STENCIL_OP_KEEP;
+			psoDesc.DepthStencilState.BackFace.StencilPassOp = D3D12_STENCIL_OP::D3D12_STENCIL_OP_KEEP;
+			break;
+		}
+
+		// topology
+		psoDesc.PrimitiveTopologyType = iTess == 1 ? D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH : D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+
+		// render targets
+		psoDesc.NumRenderTargets = iPass == 0 ? 0 : 1;
+		if (psoDesc.NumRenderTargets > 0)
+		{
+			psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
+		}
+
+		// shaders 
+		assert(iPass <= 1);
+		size_t NumShaders = 1 + iPass; // VS-PS
+		if (iTess == 1)
+		{	                 // VS-HS-DS-PS | VS-HS-DS-GS-PS
+			NumShaders += iTessCull == 0 ? 2 : 3;
+		}
+		psoLoadDesc.ShaderStageCompileDescs.resize(NumShaders);
+		size_t iShader = 0;
+		if (iTess == 1)
+		{
+			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain_Tess", "vs_6_1" };
+			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "HSMain"     , "hs_6_1" };
+			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "DSMain"     , "ds_6_1" };
+			if (iTessCull > 0)
+				psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "GSMain" , "gs_6_1" };
+		}
+		else
+		{
+			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain"     , "vs_6_1"};
+		}
+		if (iPass == 1)
+		{
+			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain"     , "ps_6_1" };
+		}
+		const size_t iPixelShader = iShader - 1;
+
+		// macros: per-stage
+		if (iTess == 1)
+		{
+			AppendTessellationVSMacros(psoLoadDesc.ShaderStageCompileDescs[0/*VS*/].Macros, iDomain);
+			AppendTessellationHSMacros(psoLoadDesc.ShaderStageCompileDescs[1/*HS*/].Macros, iDomain, iPart, iOutTopo, iTessCull);
+			AppendTessellationDSMacros(psoLoadDesc.ShaderStageCompileDescs[2/*DS*/].Macros, iDomain, iOutTopo, iTessCull);
+			if (iTessCull > 0)
+			{
+				AppendTessellationGSMacros(psoLoadDesc.ShaderStageCompileDescs[3/*GS*/].Macros, iOutTopo, iTessCull);
+			}
+		}
+		
+		// macros: all stages
+		const FShaderMacro InstancedDrawMacro = { "INSTANCED_DRAW", std::to_string(RENDER_INSTANCED_SCENE_MESHES) };
+		const FShaderMacro InstanceCountMacro = { "INSTANCE_COUNT",std::to_string(MAX_INSTANCE_COUNT__SCENE_MESHES) };
+		const FShaderMacro OutlineMacro = { "OUTLINE_PASS", "1" };
+		const FShaderMacro AlphaMaskMacro = { "ENABLE_ALPHA_MASK", "1" };
+		for (FShaderStageCompileDesc& shdDesc : psoLoadDesc.ShaderStageCompileDescs) 
+		{
+			shdDesc.Macros.push_back(InstancedDrawMacro);
+			shdDesc.Macros.push_back(InstanceCountMacro);
+			if (iAlpha == 1) { shdDesc.Macros.push_back(AlphaMaskMacro); }
+			if (iPass  == 1) { shdDesc.Macros.push_back(OutlineMacro); }
+		}
+	
+		this->mapLoadDesc[key] = psoLoadDesc;
+		params.push_back({ &this->mapPSO.at(key), psoLoadDesc });
 	}
 	return params;
 }

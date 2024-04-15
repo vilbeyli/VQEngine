@@ -198,12 +198,8 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 		const uint32 NumInstances = (uint32)meshRenderCmd.matNormal.size();
 
 		// select PSO
-		const bool bSWCullTessellation = mat.Tessellation.GPUParams.bFaceCull > 0 || mat.Tessellation.GPUParams.bFrustumCull > 0;
-		const size_t iTess     = mat.Tessellation.bEnableTessellation ? 1 : 0;
-		const size_t iDomain   = iTess == 0 ? 0 : mat.Tessellation.Domain;
-		const size_t iPart     = iTess == 0 ? 0 : mat.Tessellation.Partitioning;
-		const size_t iOutTopo  = iTess == 0 ? 0 : mat.Tessellation.OutputTopology;
-		const size_t iTessCull = iTess == 1 && (bSWCullTessellation ? 1 : 0);
+		size_t iTess = 0; size_t iDomain = 0; size_t iPart = 0; size_t iOutTopo = 0; size_t iTessCull = 0;
+		Tessellation::GetTessellationPSOConfig(mat.Tessellation, iTess, iDomain, iPart, iOutTopo, iTessCull);
 		const size_t iAlpha    = mat.IsAlphaMasked(mRenderer) ? 1 : 0;
 		const PSO_ID psoID = mapPSO.at(GetPSO_Key(
 			iTess,

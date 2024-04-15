@@ -537,18 +537,27 @@ static void RecordOutlineRenderCommands(
 		const Transform& tf = *pScene->GetGameObjectTransform(hObj);
 		const XMMATRIX matWorld = tf.matWorldTransformation();
 		const XMMATRIX matNormal = tf.NormalMatrix(matWorld);
+		XMVECTOR det = XMMatrixDeterminant(matView);
+		const XMMATRIX matViewInverse = XMMatrixInverse(&det, matView);;
 		const Model& model = pScene->GetModel(pObj->mModelID);
 		for (const auto& pair : model.mData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH))
 		{
 			MeshID meshID = pair.first;
-
+			MaterialID matID = pair.second;
+			const Material& mat = pScene->GetMaterial(matID);
+			
 			FOutlineRenderCommand cmd = {};
 			cmd.meshID = meshID;
-			cmd.cb.color = SelectionColor;
+			cmd.matID = matID;
+			cmd.cb.matWorld = matWorld;
 			cmd.cb.matWorldView = matWorld * matView;
 			cmd.cb.matNormalView = matNormal * matView;
 			cmd.cb.matProj = matProj;
+			cmd.cb.matViewInverse = matViewInverse;
+			cmd.cb.color = SelectionColor;
+			cmd.cb.uvScaleBias = float4(mat.tiling.x, mat.tiling.y, mat.uv_bias.x, mat.uv_bias.y);
 			cmd.cb.scale = 1.0f;
+			cmd.cb.heightDisplacement = mat.displacement;
 			cmds.push_back(cmd);
 		}
 	}

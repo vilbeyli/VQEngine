@@ -1146,6 +1146,15 @@ PSO_ID VQRenderer::CreatePSO_OnThisThread(const FPSODesc& psoLoadDesc)
 	return id;
 }
 
+static std::string GetErrString(HRESULT hr)
+{
+	switch (hr)
+	{
+	case E_OUTOFMEMORY: return "Out of memory";
+	case E_INVALIDARG: return "Invalid arguments";
+	}
+	return "Unspecified error, contact dev";
+}
 
 ID3D12PipelineState* VQRenderer::CompileGraphicsPSO(const FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults)
 {
@@ -1245,8 +1254,9 @@ ID3D12PipelineState* VQRenderer::CompileGraphicsPSO(const FPSODesc& Desc, std::v
 	HRESULT hr = pDevice->CreateGraphicsPipelineState(&d3d12GraphicsPSODesc, IID_PPV_ARGS(&pPSO));
 	if (hr != S_OK)
 	{
-		// TODO: PSO error display
-		return nullptr;
+		std::string errMsg = "PSO compile failed (HR=" + std::to_string(hr) + "): " + GetErrString(hr);
+		Log::Error("%s", errMsg.c_str());
+		MessageBox(NULL, errMsg.c_str(), "PSO Compile Error", MB_OK);
 	}
 	assert(hr == S_OK);
 	SetName(pPSO, Desc.PSOName.c_str());
@@ -1281,7 +1291,9 @@ ID3D12PipelineState* VQRenderer::CompileComputePSO(const FPSODesc& Desc, std::ve
 	}
 	else
 	{
-		int a = 6;
+		std::string errMsg = "PSO compile failed (HR=" + std::to_string(hr) + "): " + GetErrString(hr);
+		Log::Error("%s", errMsg.c_str());
+		MessageBox(NULL, errMsg.c_str(), "PSO Compile Error", MB_OK);
 	}
 	return pPSO;
 }

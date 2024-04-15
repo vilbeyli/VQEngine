@@ -37,6 +37,7 @@ public:
 	{
 		ID3D12GraphicsCommandList* pCmd = nullptr;
 		DynamicBufferHeap* pCBufferHeap = nullptr;
+		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = 0;
 
 		const FSceneView* pSceneView = nullptr;
 		const std::unordered_map<MeshID, Mesh>* pMeshes = nullptr;
@@ -58,11 +59,6 @@ public:
 	virtual std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() override;
 
 private:
-	PSO_ID PSOOutlineStencilWrite = INVALID_ID;
-	PSO_ID PSOOutlineStencilMSAA4Write = INVALID_ID;
-	PSO_ID PSOOutlineStencilMask = INVALID_ID;
-	PSO_ID PSOOutlineStencilMSAA4Mask = INVALID_ID;
-
 	int mOutputResolutionX = 0;
 	int mOutputResolutionY = 0;
 
@@ -70,4 +66,15 @@ private:
 	TextureID TEXPassOutputDepthMSAA4 = INVALID_ID;
 	DSV_ID DSV = INVALID_ID;
 	DSV_ID DSVMSAA = INVALID_ID;
+
+	// PSOs
+	static constexpr size_t NUM_RENDERING_OPTIONS = NUM_MSAA_OPTIONS;
+	static constexpr size_t NUM_ALPHA_OPTIONS = 2; // opaque/alpha masked
+	static constexpr size_t NUM_MAT_OPTIONS = NUM_ALPHA_OPTIONS;
+	static constexpr size_t NUM_PASS_OPTIONS = 2; // 0:stencil/1:mask
+	static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_PASS_OPTIONS * NUM_MAT_OPTIONS * NUM_RENDERING_OPTIONS * Tessellation::NUM_TESS_OPTIONS;
+	static size_t Hash(size_t iPass, size_t iMSAA, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha);
+
+	std::unordered_map<size_t, PSO_ID>   mapPSO;
+	std::unordered_map<size_t, FPSODesc> mapLoadDesc;;
 };

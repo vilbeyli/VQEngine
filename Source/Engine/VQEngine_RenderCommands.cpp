@@ -396,14 +396,10 @@ void VQEngine::RenderDepthPrePass(
 		const uint32 NumInstances = 1;
 #endif
 		
-		const bool bSWCullTessellation = mat.Tessellation.GPUParams.bFaceCull > 0 || mat.Tessellation.GPUParams.bFrustumCull > 0;
+		size_t iTess = 0; size_t iDomain = 0; size_t iPart = 0; size_t iOutTopo = 0; size_t iTessCull = 0;
+		Tessellation::GetTessellationPSOConfig(mat.Tessellation, iTess, iDomain, iPart, iOutTopo, iTessCull);
 		const size_t iAlpha   = mat.IsAlphaMasked(mRenderer) ? 1 : 0;
 		const size_t iRaster  = mat.bWireframe ? 1 : 0;
-		const size_t iTess    = mat.Tessellation.bEnableTessellation ? 1 : 0;
-		const size_t iDomain  = iTess == 0 ? 0 : mat.Tessellation.Domain;
-		const size_t iPart    = iTess == 0 ? 0 : mat.Tessellation.Partitioning;
-		const size_t iOutTopo = iTess == 0 ? 0 : mat.Tessellation.OutputTopology;
-		const size_t iTessCull = iTess == 1 && (bSWCullTessellation ? 1 : 0);
 		const PSO_ID psoID = mRenderer.mZPrePassPSOs.Get(
 			iMSAA,
 			iRaster,
@@ -858,14 +854,10 @@ void VQEngine::RenderSceneColor(
 #else
 			const uint32 NumInstances = 1;
 #endif
-			const bool bSWCullTessellation = mat.Tessellation.GPUParams.bFaceCull > 0 || mat.Tessellation.GPUParams.bFrustumCull > 0;
 			const size_t iAlpha    = mat.IsAlphaMasked(mRenderer) ? 1 : 0;
 			const size_t iRaster   = mat.bWireframe ? 1 : 0;
-			const size_t iTess     = mat.Tessellation.bEnableTessellation ? 1 : 0;
-			const size_t iDomain   = iTess == 0 ? 0 : mat.Tessellation.Domain;
-			const size_t iPart     = iTess == 0 ? 0 : mat.Tessellation.Partitioning;
-			const size_t iOutTopo  = iTess == 0 ? 0 : mat.Tessellation.OutputTopology;
-			const size_t iTessCull = iTess == 1 && (bSWCullTessellation ? 1 : 0);
+			size_t iTess = 0; size_t iDomain = 0; size_t iPart = 0; size_t iOutTopo = 0; size_t iTessCull = 0;
+			Tessellation::GetTessellationPSOConfig(mat.Tessellation, iTess, iDomain, iPart, iOutTopo, iTessCull);
 			PSO_ID psoID = mRenderer.mLightingPSOs.Get(
 				iMSAA,
 				iRaster,
@@ -967,7 +959,7 @@ void VQEngine::RenderSceneColor(
 		RenderLightBounds(pCmd, pCBufferHeap, SceneView, bMSAA);
 		RenderBoundingBoxes(pCmd, pCBufferHeap, SceneView, bMSAA);
 		RenderDebugVertexAxes(pCmd, pCBufferHeap, SceneView, bMSAA);
-		RenderOutline(pCmd, pCBufferHeap, SceneView, bMSAA, rtvHandles);
+		RenderOutline(pCmd, pCBufferHeap, perViewCBAddr, SceneView, bMSAA, rtvHandles);
 	}
 	
 	// Draw Environment Map ---------------------------------------
@@ -1081,12 +1073,13 @@ void VQEngine::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 	}
 }
 
-void VQEngine::RenderOutline(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA, const std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& rtvHandles)
+void VQEngine::RenderOutline(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, bool bMSAA, const std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& rtvHandles)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderOutlinePass");
 	OutlinePass::FDrawParameters params;
 	params.pCmd = pCmd;
 	params.pCBufferHeap = pCBufferHeap;
+	params.cbPerView = perViewCBAddr;
 	params.pSceneView = &SceneView;
 	params.pMeshes = &mpScene->mMeshes;
 	params.pMaterials = &mpScene->mMaterials;
@@ -1415,7 +1408,7 @@ static bool ShouldSkipBoundsPass(const FSceneView& SceneView)
 		&& SceneView.outlineRenderCommands.empty()
 		&& SceneView.debugVertexAxesRenderCommands.empty();
 }
-void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA)
+void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, bool bMSAA)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderSceneBoundingVolumes");
 	const bool bNoBoundingVolumeToRender = ShouldSkipBoundsPass(SceneView);
@@ -1439,7 +1432,6 @@ void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dynam
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	
 	if(bMSAA)
 	{
 		// transition MSAA RT
@@ -1459,8 +1451,6 @@ void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dynam
 	}
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 	
-
-
 	// Set Viewport & Scissors
 	pCmd->RSSetViewports(1, &viewport);
 	pCmd->RSSetScissorRects(1, &scissorsRect);
@@ -1468,7 +1458,7 @@ void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dynam
 	RenderBoundingBoxes(pCmd, pCBufferHeap, SceneView, bMSAA);
 	RenderLightBounds(pCmd, pCBufferHeap, SceneView, bMSAA);
 	RenderDebugVertexAxes(pCmd, pCBufferHeap, SceneView, bMSAA);
-	RenderOutline(pCmd, pCBufferHeap, SceneView, bMSAA, { rtvHandle });
+	RenderOutline(pCmd, pCBufferHeap, perViewCBAddr, SceneView, bMSAA, { rtvHandle });
 
 	// resolve MSAA RT 
 	if (bMSAA)

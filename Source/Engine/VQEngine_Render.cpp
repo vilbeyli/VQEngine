@@ -1723,7 +1723,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 			RenderReflections(pCmd, &CBHeap, SceneView);
 			
 			// render scene-debugging stuff that shouldn't be in reflections: bounding volumes, etc
-			RenderSceneBoundingVolumes(pCmd, &CBHeap, SceneView, bMSAA);
+			RenderSceneBoundingVolumes(pCmd, &CBHeap, cbPerView, SceneView, bMSAA);
 
 			CompositeReflections(pCmd, &CBHeap, SceneView);
 		}
@@ -1927,7 +1927,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 			RenderReflections(pCmd_ThisThread, &CBHeap_This, SceneView);
 			
 			// render scene-debugging stuff that shouldn't be in reflections: bounding volumes, etc
-			RenderSceneBoundingVolumes(pCmd_ThisThread, &CBHeap_This, SceneView, bMSAA);
+			RenderSceneBoundingVolumes(pCmd_ThisThread, &CBHeap_This, cbPerView, SceneView, bMSAA);
 
 			CompositeReflections(pCmd_ThisThread, &CBHeap_This, SceneView);
 		}
