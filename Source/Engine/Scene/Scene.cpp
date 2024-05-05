@@ -459,7 +459,7 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 	, mFrameSceneViews(1)
 	, mFrameShadowViews(1)
 #endif
-	, mFrustumCullWorkerContext(mBoundingBoxHierarchy, mMeshes)
+	, mFrustumCullWorkerContext(mBoundingBoxHierarchy, mMeshes, mMaterials)
 	, mIndex_SelectedCamera(0)
 	, mIndex_ActiveEnvironmentMapPreset(-1)
 	, mGameObjectPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
@@ -1042,8 +1042,8 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 				[&MeshBB_MeshID, &MeshBB_MatID, &MeshBB_NumMeshLODs, bForceLOD0_ShadowView]
 				(const FFrustumCullWorkerContext::FCullResult& l, const FFrustumCullWorkerContext::FCullResult& r)
 			{
-				const uint64 keyL = FSceneShadowViews::FShadowView::GetKey(MeshBB_MatID[l.iBB], MeshBB_MeshID[l.iBB], l.SelectedLOD);
-				const uint64 keyR = FSceneShadowViews::FShadowView::GetKey(MeshBB_MatID[r.iBB], MeshBB_MeshID[r.iBB], r.SelectedLOD);
+				const uint64 keyL = FSceneShadowViews::FShadowView::GetKey(MeshBB_MatID[l.iBB], MeshBB_MeshID[l.iBB], l.SelectedLOD, l.bTessellated);
+				const uint64 keyR = FSceneShadowViews::FShadowView::GetKey(MeshBB_MatID[r.iBB], MeshBB_MeshID[r.iBB], r.SelectedLOD, r.bTessellated);
 				return keyL > keyR;
 			};
 			size_t currRange = 0;
@@ -1090,8 +1090,8 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 				[&MeshBB_MeshID, &MeshBB_MatID, bForceLOD0]
 				(const FFrustumCullWorkerContext::FCullResult& l, const FFrustumCullWorkerContext::FCullResult& r)
 			{
-				const uint64 keyL = FSceneView::GetKey(MeshBB_MatID[l.iBB], MeshBB_MeshID[l.iBB], l.SelectedLOD);
-				const uint64 keyR = FSceneView::GetKey(MeshBB_MatID[r.iBB], MeshBB_MeshID[r.iBB], r.SelectedLOD);
+				const uint64 keyL = FSceneView::GetKey(MeshBB_MatID[l.iBB], MeshBB_MeshID[l.iBB], l.SelectedLOD, l.bTessellated);
+				const uint64 keyR = FSceneView::GetKey(MeshBB_MatID[r.iBB], MeshBB_MeshID[r.iBB], r.SelectedLOD, r.bTessellated);
 				return keyL > keyR;
 			};
 
@@ -1342,7 +1342,7 @@ static void CountInstanceData(
 	  const SceneBoundingBoxHierarchy& BBH
 	, std::unordered_map<uint64, TMeshInstanceDataArray>& drawParamLookup
 	, const std::vector<FFrustumCullWorkerContext::FCullResult>& vViewCullResults
-	, std::function<uint64(MaterialID, MeshID, int)> FnGetKey
+	, std::function<uint64(MaterialID, MeshID, int, bool)> FnGetKey
 )
 {
 	SCOPED_CPU_MARKER("CountInstanceData");
@@ -1352,10 +1352,9 @@ static void CountInstanceData(
 	for (int i = 0; i < vViewCullResults.size(); ++i)
 	{
 		const size_t iBB = vViewCullResults[i].iBB;
-		const int lod = vViewCullResults[i].SelectedLOD;
 		const MaterialID matID = MeshBB_MatID[iBB];
 		const MeshID meshID = MeshBB_MeshID[iBB];
-		TMeshInstanceDataArray& d = drawParamLookup[FnGetKey(matID, meshID, lod)];
+		TMeshInstanceDataArray& d = drawParamLookup[FnGetKey(matID, meshID, vViewCullResults[i].SelectedLOD, vViewCullResults[i].bTessellated)];
 		d.NumValidData++;
 	}
 }
@@ -1541,7 +1540,7 @@ static void CountNResizeRenderCmdInstanceArrays(
 	, const std::vector<FFrustumCullWorkerContext::FCullResult>& vCullResults
 	, std::vector<TMeshRenderCmd>& meshRenderCommands
 	, int MAX_INSTANCE_COUNT
-	, std::function<uint64(MaterialID, MeshID, int)> FnGetKey
+	, std::function<uint64(MaterialID, MeshID, int, bool)> FnGetKey
 )
 {
 	SCOPED_CPU_MARKER("CountNResizeRenderCmdInstanceArrays");
@@ -1559,10 +1558,7 @@ static void CountNResizeRenderCmdInstanceArrays(
 		const MaterialID matID = MeshBB_MatID[iBB];
 		const MeshID meshID = MeshBB_MeshID[iBB];
 
-		const float fArea = vCullResults[i].fBBArea;
-		const int lod = vCullResults[i].SelectedLOD;
-
-		const uint64 key = FnGetKey(matID, meshID, lod);
+		const uint64 key = FnGetKey(matID, meshID, vCullResults[i].SelectedLOD, vCullResults[i].bTessellated);
 		if (keyPrev != key)
 		{
 			if (iDraw != -1)
@@ -1591,7 +1587,7 @@ static void CalculateInstanceDataWriteIndices(
 	  const SceneBoundingBoxHierarchy& BBH
 	, const std::vector<FFrustumCullWorkerContext::FCullResult>& vViewCullResults
 	, std::vector<FInstanceDataWriteParam>& vOutputWriteParams // {iDraw, iInst}
-	, std::function<uint64(MaterialID, MeshID, int)> FnGetKey
+	, std::function<uint64(MaterialID, MeshID, int, bool)> FnGetKey
 	, int MAX_INSTANCE_COUNT
 )
 {
@@ -1613,7 +1609,7 @@ static void CalculateInstanceDataWriteIndices(
 			const MaterialID matID = MeshBB_MatID[iBB];
 			const MeshID meshID = MeshBB_MeshID[iBB];
 
-			const uint64 key = FnGetKey(matID, meshID, lod);
+			const uint64 key = FnGetKey(matID, meshID, lod, vViewCullResults[i].bTessellated);
 			if (keyPrev != key)
 			{
 				keyPrev = key;
@@ -1641,7 +1637,7 @@ static void ReserveWorkerMemory(
 	, const std::vector<FFrustumCullWorkerContext::FCullResult>& vViewCullResults
 	, std::vector<TMeshRenderCmd>& meshRenderCommands
 	, std::unordered_map<uint64, TMeshInstanceDataArray>& drawParamLookup
-	, std::function<uint64(MaterialID, MeshID, int)> FnGetKey
+	, std::function<uint64(MaterialID, MeshID, int, bool)> FnGetKey
 	, std::vector<FInstanceDataWriteParam>& outWriteParams
 	, int MAX_INSTANCE_COUNT
 )

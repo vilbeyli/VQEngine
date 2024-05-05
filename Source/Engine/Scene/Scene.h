@@ -187,15 +187,15 @@ struct FSceneView
 	// Bits[4  - 33] : MeshID
 	// Bits[34 - 34] : IsAlphaMasked (or opaque)
 	// Bits[35 - 35] : IsTessellated
-	static inline uint64 GetKey(MaterialID matID, MeshID meshID, int lod)
+	static inline uint64 GetKey(MaterialID matID, MeshID meshID, int lod, /*UNUSED*/bool bTessellated)
 	{
 		assert(matID != -1);
 		assert(meshID != -1);
 		assert(lod >= 0 && lod < 16);
-		constexpr int mask = 0x3FFFFFFF; // __11 1111 1111 1111 ...
+		constexpr int mask = 0x3FFFFFFF; // __11 1111 1111 1111 ... | use the first 30 bits of IDs
 		uint64 hash = std::max(0, std::min(1 << 4, lod));
 		hash |= ((uint64)(meshID & mask)) << 4;
-		hash |= ((uint64)(matID & mask)) << 34;
+		hash |= ((uint64)(matID  & mask)) << 34;
 		return hash;
 	}
 	static inline MaterialID GetMatIDFromKey(uint64 key) { return MaterialID(key >> 34); }
@@ -226,15 +226,17 @@ struct FSceneShadowViews
 		// Bits[0  -  3] : LOD
 		// Bits[4  - 33] : MeshID
 		// Bits[34 - 63] : MaterialID
-		static inline uint64 GetKey(MaterialID matID, MeshID meshID, int lod)
+		static inline uint64 GetKey(MaterialID matID, MeshID meshID, int lod, bool bTessellated)
 		{
-			assert(matID != -1);
-			assert(meshID != -1);
-			assert(lod >= 0 && lod < 16);
-			constexpr int mask = 0x3FFFFFFF; // __11 1111 1111 1111 ...
+			assert(matID != -1); assert(meshID != -1); assert(lod >= 0 && lod < 16);
+
+			constexpr int mask = 0x3FFFFFFF; // __11 1111 1111 1111 ...| use the first 30 bits of IDs
 			uint64 hash = std::max(0, std::min(1 << 4, lod));
 			hash |= ((uint64)(meshID & mask)) << 4;
-			//hash |= ((uint64)(matID & mask)) << 34;
+			if (bTessellated)
+			{
+				hash |= ((uint64)(matID & mask)) << 34;
+			}
 			return hash;
 		}
 		static inline MaterialID GetMatIDFromKey(uint64 key) { return MaterialID(key >> 34); }
@@ -345,7 +347,7 @@ private:
 
 	// list of mesh bounding boxes for fine culling
 	//------------------------------------------------------
-	// these are same size containers, mapping bounding boxes to gameobjects and meshIDs
+	// these are same size containers, mapping bounding boxes to gameobjects, meshIDs, etc.
 	size_t mNumValidMeshBoundingBoxes = 0;
 	std::vector<FBoundingBox>      mMeshBoundingBoxes;
 	std::vector<MeshID>            mMeshIDs;

@@ -694,7 +694,7 @@ void FLightingPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12Roo
 	const D3D12_CULL_MODE CullModes[NUM_FACECULL_OPTS] = { D3D12_CULL_MODE_NONE , D3D12_CULL_MODE_FRONT, D3D12_CULL_MODE_BACK };
 	const D3D12_FILL_MODE FillModes[NUM_RASTER_OPTS] = { D3D12_FILL_MODE_SOLID, D3D12_FILL_MODE_WIREFRAME };
 
-	for(size_t iMSAA = 0    ; iMSAA     < NUM_MSAA_OPTIONS     ; ++iMSAA) 
+	for(size_t iMSAA = 0    ; iMSAA     < NUM_MSAA_OPTIONS  ; ++iMSAA) 
 	for(size_t iRaster = 0  ; iRaster   < NUM_RASTER_OPTS   ; ++iRaster) 
 	for(size_t iFaceCull = 0; iFaceCull < NUM_FACECULL_OPTS ; ++iFaceCull)
 	for(size_t iOutMoVec = 0; iOutMoVec < NUM_MOVEC_OPTS    ; ++iOutMoVec) 

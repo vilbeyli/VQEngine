@@ -35,6 +35,7 @@
 // https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-semantics#system-value-semantics
 //
 // TODO:
+// vertex packing: https://www.youtube.com/watch?v=5zlfJW2VGLM
 // Triplanar mapping: https://gamedevelopment.tutsplus.com/use-tri-planar-texture-mapping-for-better-terrain--gamedev-13821a
 // LODs : https://thedemonthrone.ca/projects/rendering-terrain/rendering-terrain-part-9-dynamic-level-of-detail/
 // Normal reconstruction: http://www.thetenthplanet.de/archives/1180

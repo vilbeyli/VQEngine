@@ -19,6 +19,8 @@
 
 #include "Core/Types.h"
 #include "Scene/Mesh.h"
+#include "Scene/Material.h"
+
 #include <unordered_map>
 #include <functional>
 
@@ -28,6 +30,7 @@ class Scene;
 struct Transform;
 class SceneBoundingBoxHierarchy;
 using MeshLookup_t = std::unordered_map<MeshID, Mesh>;
+using MaterialLookup_t = std::unordered_map<MaterialID, Material>;
 
 //------------------------------------------------------------------------------------------------------------------------------
 //
@@ -62,14 +65,14 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 
 	// Common data for each view
 	/*in */ std::vector<FBoundingBox     > vBoundingBoxList;
-
+	 
 	// store the index of the surviving bounding box in a list, per view frustum
-	struct FCullResult { size_t iBB; float fBBArea; int SelectedLOD; std::pair<BufferID, BufferID> VBIB; unsigned NumIndices; };
+	struct FCullResult { size_t iBB; float fBBArea; int SelectedLOD; std::pair<BufferID, BufferID> VBIB; unsigned NumIndices; char bTessellated; };
 	/*out*/ std::vector<std::vector<FCullResult>> vCullResultsPerView;
 	
 	using SortingFunction_t = std::function<bool(const FFrustumCullWorkerContext::FCullResult&, const FFrustumCullWorkerContext::FCullResult&)>;
 	/*in */ std::vector<SortingFunction_t> vSortFunctions;
-	/*in */ std::vector<bool> vForceLOD0;
+	/*in */ std::vector<char> vForceLOD0;
 	// Hot Data ------------------------------------------------------------------------------------------------------------
 
 	//std::vector<int> vLightMovementTypeID; // index to access light type vectors: [0]:static, [1]:stationary, [2]:dynamic
@@ -77,10 +80,17 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	size_t NumValidInputElements = 0;
 	const SceneBoundingBoxHierarchy& BBH;
 	const MeshLookup_t& mMeshes;
+	const MaterialLookup_t& mMaterials;
 
 	// ====================================================================================
 	FFrustumCullWorkerContext() = delete;
-	FFrustumCullWorkerContext(const SceneBoundingBoxHierarchy& BBH, const MeshLookup_t& mMeshes) : BBH(BBH), mMeshes(mMeshes) {}
+	FFrustumCullWorkerContext(
+		const SceneBoundingBoxHierarchy& BBH, 
+		const MeshLookup_t& mMeshes, 
+		const MaterialLookup_t& mMaterials
+	) : BBH(BBH), mMeshes(mMeshes), mMaterials(mMaterials) 
+	{}
+	
 	void AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet
 		, const DirectX::XMMATRIX& MatViewProj
 		, const std::vector<FBoundingBox>& vBoundingBoxList

@@ -118,7 +118,6 @@ static bool IsBoundingBoxIntersectingFrustum2(const FFrustumPlaneset FrustumPlan
 {
 	constexpr float EPSILON = 0.000002f;
 	const XMVECTOR V_EPSILON = XMVectorSet(EPSILON, EPSILON, EPSILON, EPSILON);
-	bool bOutide = false;
 	for (int p = 0; p < 6; ++p)	// for each plane
 	{
 		XMVECTOR vPlane = XMLoadFloat4(&FrustumPlanes.abcd[p]);
@@ -334,6 +333,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 	assert(iRangeBegin <= iRangeEnd); // ensure work context bounds
 	
 	const MeshLookup_t MeshLookupCopy = mMeshes;
+	const MaterialLookup_t MaterialLookupCopy = mMaterials;
 	const std::vector<MeshID> MeshBB_MeshID	= BBH.GetMeshesIDs();		   // copy
 	const std::vector<MaterialID> MeshBB_MatID = BBH.GetMeshMaterialIDs(); // copy
 	
@@ -351,6 +351,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 				if (IsBoundingBoxIntersectingFrustum2(vFrustumPlanes[iWork], vBoundingBoxList[bb]))
 				{
 					const Mesh& mesh = MeshLookupCopy.at(MeshBB_MeshID[bb]);
+					const Material mat = MaterialLookupCopy.at(MeshBB_MatID[bb]);
 
 					FCullResult r;
 					r.iBB = bb;
@@ -358,6 +359,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 					r.SelectedLOD = vForceLOD0[iWork] ? 0 : InstanceBatching::GetLODFromProjectedScreenArea(r.fBBArea, mesh.GetNumLODs());
 					r.NumIndices = mesh.GetNumIndices(r.SelectedLOD);
 					r.VBIB = mesh.GetIABufferIDs(r.SelectedLOD);
+					r.bTessellated = mat.Tessellation.bEnableTessellation;
 					vCullResultsPerView[iWork].push_back(r); // grows as we go (no pre-alloc)
 				}
 			}
