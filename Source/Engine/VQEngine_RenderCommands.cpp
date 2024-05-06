@@ -40,8 +40,10 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 #if RENDER_INSTANCED_SHADOW_MESHES
 	struct FCBufferLightVS
 	{
-		XMMATRIX matWorldViewProj[MAX_INSTANCE_COUNT__SHADOW_MESHES];
-		XMMATRIX matWorld        [MAX_INSTANCE_COUNT__SHADOW_MESHES];
+		matrix matWorldViewProj[MAX_INSTANCE_COUNT__SHADOW_MESHES];
+		matrix matWorld        [MAX_INSTANCE_COUNT__SHADOW_MESHES];
+		float4 texScaleBias;
+		float displacement;
 	};
 
 	const size_t iFaceCull = 2; // 2:back
@@ -87,6 +89,8 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 		}
 		memcpy(pCBuffer->matWorld        , renderCmd.matWorld.data()        , NumInstances * sizeof(XMMATRIX));
 		memcpy(pCBuffer->matWorldViewProj, renderCmd.matWorldViewProj.data(), NumInstances * sizeof(XMMATRIX));
+		pCBuffer->displacement = mat.displacement;
+		pCBuffer->texScaleBias = float4(mat.tiling.x, mat.tiling.y, mat.uv_bias.x, mat.uv_bias.y);
 		pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
 
 		if (mat.Tessellation.bEnableTessellation)

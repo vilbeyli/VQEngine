@@ -41,7 +41,7 @@
 
 #include "../Engine/Core/Types.h"
 #include <string>
-//#include <Windows.h>
+#include <vector>
 typedef void* HANDLE;
 
 class ResourceView;
@@ -67,20 +67,22 @@ enum EResourceHeapType
 class StaticResourceViewHeap
 {
 public:
-    void Create(ID3D12Device* pDevice, const std::string& ResourceName, EResourceHeapType heapType, uint32 descriptorCount, bool forceCPUVisible = false);
+    void Create(ID3D12Device* pDevice, const std::string& ResourceName, EResourceHeapType EHeapType, uint32 Capacity, bool CPUVisible = false);
     void Destroy();
-    bool AllocDescriptor(uint32 size, ResourceView* pRV);
-    
+
+    bool AllocateDescriptor(uint32 Count, ResourceView* pRV);
+    void FreeDescriptor(ResourceView* pRV);
 
     inline ID3D12DescriptorHeap* GetHeap() const { return mpHeap; }
 
 private:
-    uint32 mIndex;
-    uint32 mDescriptorCount;
+    uint32 mCapacity;
     uint32 mDescriptorElementSize;
+    std::vector<bool> mIsDescriptorFree;
 
     ID3D12DescriptorHeap* mpHeap;
     bool mbGPUVisible;
+    EResourceHeapType mHeapType;
 };
 
 // Creates one Upload heap and suballocates memory from the heap

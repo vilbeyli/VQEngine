@@ -1695,7 +1695,7 @@ static void DispatchMainViewInstanceDataWorkers(
 }
 
 
-static size_t DispatchWorkers_ShadowViews(
+static void DispatchWorkers_ShadowViews(
 	size_t NumShadowMeshFrustums
 	, std::vector<FFrustumRenderCommandRecorderContext>& WorkerContexts
 	, const bool bForceLOD0
@@ -1707,7 +1707,8 @@ static size_t DispatchWorkers_ShadowViews(
 	, const MaterialLookup_t& mMaterials
 )
 {
-	constexpr size_t NUM_MIN_SHADOW_MESHES_FOR_THREADING = 64;
+	SCOPED_CPU_MARKER("DispatchWorkers_ShadowViews");
+	constexpr size_t NUM_MIN_SHADOW_MESHES_FOR_THREADING = 1; // TODO: tweak this when thread work count is divided equally instead of per frustum
 
 	size_t NumShadowFrustumsWithNumMeshesLargerThanMinNumMeshesPerThread = 0;
 	size_t NumShadowMeshes = 0;
@@ -1731,13 +1732,15 @@ static size_t DispatchWorkers_ShadowViews(
 	const size_t NumWorkersForFrustumsBelowThreadingThreshold = DIV_AND_ROUND_UP(NumShadowMeshesRemaining, NUM_MIN_SHADOW_MESHES_FOR_THREADING);
 	const size_t NumShadowFrustumBatchWorkers = NumShadowFrustumsWithNumMeshesLargerThanMinNumMeshesPerThread;
 	const bool bUseWorkerThreadsForShadowViews = NumShadowFrustumBatchWorkers >= 1;
-	const size_t NumShadowFrustumsThisThread = 0; // bUseWorkerThreadsForShadowViews ? std::max((size_t)0, NumShadowMeshFrustums - NumShadowFrustumBatchWorkers) : NumShadowMeshFrustums;
+	const size_t NumShadowFrustumsThisThread = bUseWorkerThreadsForShadowViews 
+		? std::max((size_t)0, NumShadowMeshFrustums - NumShadowFrustumBatchWorkers) 
+		: NumShadowMeshFrustums;
 	if (bUseWorkerThreadsForShadowViews)
 	{
-		SCOPED_CPU_MARKER("DispatchWorkers_ShadowViews");
 		for (size_t iFrustum = 1 + NumShadowFrustumsThisThread; iFrustum <= NumShadowMeshFrustums; ++iFrustum)
 		{
-			UpdateWorkerThreadPool.AddTask([=, &BBH, &mMeshes, &mMaterials]()
+			SCOPED_CPU_MARKER("Dispatch");
+			UpdateWorkerThreadPool.AddTask([=, &BBH, &mMeshes, &mMaterials]() // dispatch workers
 			{
 				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
 				FFrustumRenderCommandRecorderContext ctx = WorkerContexts[iFrustum - 1];
@@ -1764,11 +1767,36 @@ static size_t DispatchWorkers_ShadowViews(
 			});
 		}
 	}
-	if (NumShadowFrustumsThisThread == 0)
-	{
-		// Log::Warning("NumShadowFrustumsThisThread=0");
-	}
-	return NumShadowFrustumsThisThread;
+
+	//{
+	//	SCOPED_CPU_MARKER("ThisThread");
+
+	//	// handle frustums in this thread
+	//	for (size_t iFrustum = 1; iFrustum <= std::min(1+ NumShadowFrustumsThisThread, NumShadowMeshFrustums); ++iFrustum)
+	//	{
+	//		FFrustumRenderCommandRecorderContext ctx = WorkerContexts[iFrustum - 1];
+	//		assert(!ctx.pCullResults->empty());
+	//		ReserveWorkerMemory(BBH,
+	//			*ctx.pCullResults,
+	//			ctx.pShadowView->meshRenderCommands,
+	//			ctx.pShadowView->drawParamLookup,
+	//			FSceneShadowViews::FShadowView::GetKey,
+	//			ctx.pShadowView->mRenderCmdInstanceDataWriteIndex,
+	//			MAX_INSTANCE_COUNT__SHADOW_MESHES
+	//		);
+	//		CollectViewInstanceData(BBH,
+	//			*ctx.pCullResults,
+	//			0,
+	//			ctx.pCullResults->size() - 1,
+	//			ctx.pShadowView->matViewProj,
+	//			ctx.pShadowView->matViewProj,
+	//			ctx.pShadowView->mRenderCmdInstanceDataWriteIndex,
+	//			ctx.pShadowView->meshRenderCommands
+	//		);
+	//	}
+	//}
+
+	return;
 }
 
 void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool)
@@ -1798,7 +1826,7 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 	const size_t NumShadowMeshFrustums = ctx.NumValidInputElements - 1; // exclude main view
 
 	// shadow views
-	const size_t NumShadowFrustumsThisThread = DispatchWorkers_ShadowViews(
+	DispatchWorkers_ShadowViews(
 		NumShadowMeshFrustums, 
 		WorkerContexts, 
 		bForceLOD0_ShadowView, 

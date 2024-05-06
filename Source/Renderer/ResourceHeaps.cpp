@@ -42,6 +42,7 @@
 #include "Common.h"
 
 #include "Libs/D3DX12/d3dx12.h"
+#include "../../Libs/VQUtils/Source/utils.h"
 
 //--------------------------------------------------------------------------------------
 //
@@ -49,67 +50,113 @@
 //
 //--------------------------------------------------------------------------------------
 
-#include "../../Libs/VQUtils/Source/utils.h"
-void StaticResourceViewHeap::Create(ID3D12Device* pDevice, const std::string& ResourceName, EResourceHeapType heapTypeIn, uint32 descriptorCount, bool forceCPUVisible)
+void StaticResourceViewHeap::Create(ID3D12Device* pDevice, const std::string& ResourceName, EResourceHeapType HeapTypeIn, uint32 DescriptorCount, bool CPUVisible /*= false*/)
 {
-    D3D12_DESCRIPTOR_HEAP_TYPE heapType;
-    switch (heapTypeIn)
+    D3D12_DESCRIPTOR_HEAP_TYPE HeapType = D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES;
+    switch (HeapTypeIn)
     {
-    case RTV_HEAP: heapType = D3D12_DESCRIPTOR_HEAP_TYPE_RTV; break;
-    case DSV_HEAP: heapType = D3D12_DESCRIPTOR_HEAP_TYPE_DSV; break;
-    case CBV_SRV_UAV_HEAP: heapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; break;
-    case SAMPLER_HEAP: heapType = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER; break;
-    case NUM_HEAP_TYPES: heapType = D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; break;
+    case RTV_HEAP         : HeapType = D3D12_DESCRIPTOR_HEAP_TYPE_RTV; break;
+    case DSV_HEAP         : HeapType = D3D12_DESCRIPTOR_HEAP_TYPE_DSV; break;
+    case CBV_SRV_UAV_HEAP : HeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; break;
+    case SAMPLER_HEAP     : HeapType = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER; break;
     }
-    
-    this->mDescriptorCount = descriptorCount;
-    this->mIndex = 0;
-        
-    this->mDescriptorElementSize = pDevice->GetDescriptorHandleIncrementSize(heapType);
 
-    D3D12_DESCRIPTOR_HEAP_DESC descHeap;
-    descHeap.NumDescriptors = descriptorCount;
-    descHeap.Type = heapType;
-    descHeap.Flags = ((heapType == D3D12_DESCRIPTOR_HEAP_TYPE_RTV) || (heapType == D3D12_DESCRIPTOR_HEAP_TYPE_DSV)) 
+    this->mCapacity = DescriptorCount;
+    this->mIsDescriptorFree.resize(DescriptorCount, true);
+    this->mDescriptorElementSize = pDevice->GetDescriptorHandleIncrementSize(HeapType);
+    this->mHeapType = HeapTypeIn;
+
+    D3D12_DESCRIPTOR_HEAP_DESC DescHeap;
+    DescHeap.NumDescriptors = DescriptorCount;
+    DescHeap.Type = HeapType;
+    DescHeap.Flags = ((HeapType == D3D12_DESCRIPTOR_HEAP_TYPE_RTV) || (HeapType == D3D12_DESCRIPTOR_HEAP_TYPE_DSV)) 
         ? D3D12_DESCRIPTOR_HEAP_FLAG_NONE 
         : D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    this->mbGPUVisible = DescHeap.Flags == D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     
-    if (forceCPUVisible)
+    if (CPUVisible)
     {
-        descHeap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+        DescHeap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     }
-    descHeap.NodeMask = 0;
+    DescHeap.NodeMask = 0;
 
-    pDevice->CreateDescriptorHeap(&descHeap, IID_PPV_ARGS(&mpHeap));
-    this->mbGPUVisible = descHeap.Flags == D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    HRESULT hr = pDevice->CreateDescriptorHeap(&DescHeap, IID_PPV_ARGS(&mpHeap));
+    if (FAILED(hr))
+    {
+        Log::Error("CreateDescriptorHeap() failed");
+        return;
+    }
     this->mpHeap->SetName(StrUtil::ASCIIToUnicode(ResourceName).c_str());
 }
 
 void StaticResourceViewHeap::Destroy()
 {
-    mpHeap->Release();
+    if (mpHeap)
+    {
+        mpHeap->Release();
+        mpHeap = nullptr;
+    }
+    mIsDescriptorFree.clear();
 }
 
-bool StaticResourceViewHeap::AllocDescriptor(uint32 size, ResourceView* pRV)
+bool StaticResourceViewHeap::AllocateDescriptor(uint32 Count, ResourceView* pRV)
 {
-    if ((mIndex + size) > mDescriptorCount)
+    uint32 iStart = 0;
+    bool bFound = false;
+
+    while (iStart <= mCapacity - Count)
     {
-        assert(!"StaticResourceViewHeapDX12 heap ran of memory, increase its size");
+        bFound = true;
+        for (uint32 i = 0; i < Count; ++i)
+        {
+            if (!mIsDescriptorFree[iStart + i])
+            {
+                iStart += i + 1;
+                bFound = false;
+                break;
+            }
+        }
+
+        if (bFound)
+        {
+            break;
+        }
+    }
+    
+    if (!bFound)
+    {
+        Log::Error("CreateDescriptorHeap() failed: couldn't find contiguous descriptor block");
         return false;
     }
 
-    D3D12_CPU_DESCRIPTOR_HANDLE CPUView = mpHeap->GetCPUDescriptorHandleForHeapStart();
-    CPUView.ptr += mIndex * mDescriptorElementSize;
+    // mark allocated
+    for (uint32 i = 0; i < Count; ++i)
+    {
+        mIsDescriptorFree[iStart + i] = false;
+    }
 
-    
-    D3D12_GPU_DESCRIPTOR_HANDLE GPUView = mbGPUVisible ? mpHeap->GetGPUDescriptorHandleForHeapStart() : D3D12_GPU_DESCRIPTOR_HANDLE{};
-    GPUView.ptr += mbGPUVisible ? mIndex * mDescriptorElementSize : GPUView.ptr;
+    D3D12_CPU_DESCRIPTOR_HANDLE CPUHandle = mpHeap->GetCPUDescriptorHandleForHeapStart();
+    CPUHandle.ptr += static_cast<size_t>(iStart) * mDescriptorElementSize;
 
-    mIndex += size;
+    D3D12_GPU_DESCRIPTOR_HANDLE GPUHandle = mbGPUVisible ? mpHeap->GetGPUDescriptorHandleForHeapStart() : D3D12_GPU_DESCRIPTOR_HANDLE{};
+    GPUHandle.ptr += mbGPUVisible ? static_cast<size_t>(iStart) * mDescriptorElementSize : 0;
 
-    pRV->SetResourceView(size, mDescriptorElementSize, CPUView, GPUView);
+    pRV->SetResourceView(Count, mDescriptorElementSize, CPUHandle, GPUHandle);
 
     return true;
+}
+
+void StaticResourceViewHeap::FreeDescriptor(ResourceView* pRV)
+{
+    assert(pRV);
+    if (!pRV) 
+        return;
+
+    const size_t iRV = (pRV->GetCPUDescHandle().ptr - mpHeap->GetCPUDescriptorHandleForHeapStart().ptr) / mDescriptorElementSize;
+    for (uint32_t i = 0; i < pRV->GetSize(); ++i) 
+    {
+        mIsDescriptorFree[iRV + i] = true;
+    }
 }
 
 

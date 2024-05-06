@@ -781,7 +781,7 @@ SRV_ID VQRenderer::AllocateAndInitializeSRV(TextureID texID)
 			Log::Error("Texture ID=%d failed initializing, cannot create the SRV", texID);
 			return INVALID_ID;
 		}
-		mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
+		mHeapCBV_SRV_UAV.AllocateDescriptor(1, &SRV);
 		tex.InitializeSRV(0, &SRV);
 		Id = LAST_USED_SRV_ID++;
 		mSRVs[Id] = SRV;
@@ -798,7 +798,7 @@ DSV_ID VQRenderer::AllocateAndInitializeDSV(TextureID texID)
 	{
 		std::lock_guard<std::mutex> lk(this->mMtxDSVs);
 
-		this->mHeapDSV.AllocDescriptor(1, &dsv);
+		this->mHeapDSV.AllocateDescriptor(1, &dsv);
 		Id = LAST_USED_DSV_ID++;
 		this->mTextures.at(texID).InitializeDSV(0, &dsv);
 		this->mDSVs[Id] = dsv;
@@ -814,7 +814,7 @@ DSV_ID VQRenderer::AllocateDSV(uint NumDescriptors /*= 1*/)
 
 	std::lock_guard<std::mutex> lk(this->mMtxDSVs);
 
-	this->mHeapDSV.AllocDescriptor(NumDescriptors, &dsv);
+	this->mHeapDSV.AllocateDescriptor(NumDescriptors, &dsv);
 	Id = LAST_USED_DSV_ID++;
 	this->mDSVs[Id] = dsv;
 
@@ -827,7 +827,7 @@ RTV_ID VQRenderer::AllocateRTV(uint NumDescriptors /*= 1*/)
 
 	std::lock_guard<std::mutex> lk(this->mMtxRTVs);
 
-	this->mHeapRTV.AllocDescriptor(NumDescriptors, &rtv);
+	this->mHeapRTV.AllocateDescriptor(NumDescriptors, &rtv);
 	Id = LAST_USED_RTV_ID++;
 	this->mRTVs[Id] = rtv;
 
@@ -840,7 +840,7 @@ SRV_ID VQRenderer::AllocateSRV(uint NumDescriptors)
 
 	std::lock_guard<std::mutex> lk(this->mMtxSRVs_CBVs_UAVs);
 
-	this->mHeapCBV_SRV_UAV.AllocDescriptor(NumDescriptors, &srv);
+	this->mHeapCBV_SRV_UAV.AllocateDescriptor(NumDescriptors, &srv);
 	Id = LAST_USED_SRV_ID++;
 	this->mSRVs[Id] = srv;
 
@@ -853,7 +853,7 @@ UAV_ID VQRenderer::AllocateUAV(uint NumDescriptors)
 
 	std::lock_guard<std::mutex> lk(this->mMtxSRVs_CBVs_UAVs);
 
-	this->mHeapCBV_SRV_UAV.AllocDescriptor(NumDescriptors, &uav);
+	this->mHeapCBV_SRV_UAV.AllocateDescriptor(NumDescriptors, &uav);
 	Id = LAST_USED_UAV_ID++;
 	this->mUAVs[Id] = uav;
 
@@ -1076,20 +1076,17 @@ void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, ui
 	);
 }
 
-void VQRenderer::DestroySRV(SRV_ID& srvID)
+void VQRenderer::DestroySRV(SRV_ID srvID)
 {
 	std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
-	//mSRVs.at(srvID).Destroy(); // TODO
+	mHeapCBV_SRV_UAV.FreeDescriptor(&mSRVs.at(srvID));
 	mSRVs.erase(srvID);
-	//Log::Info("Erase SRV_ID=%d", srvID); // todo: verbose logging preprocessor ifdef
-	srvID = INVALID_ID;
 }
-void VQRenderer::DestroyDSV(DSV_ID& dsvID)
+void VQRenderer::DestroyDSV(DSV_ID dsvID)
 {
 	std::lock_guard<std::mutex> lk(mMtxDSVs);
-	//mDSVs.at(dsvID).Destroy(); // TODO
+	mHeapDSV.FreeDescriptor(&mDSVs.at(dsvID));
 	mDSVs.erase(dsvID);
-	dsvID = INVALID_ID;
 }
 
 

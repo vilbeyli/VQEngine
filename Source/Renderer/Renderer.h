@@ -117,8 +117,8 @@ public:
 	void                         InitializeSRVForBuffer(SRV_ID uavID, uint heapIndex, TextureID texID, DXGI_FORMAT bufferViewFormatOverride);
 
 	void                         DestroyTexture(TextureID& texID);
-	void                         DestroySRV(SRV_ID& srvID);
-	void                         DestroyDSV(DSV_ID& dsvID);
+	void                         DestroySRV(SRV_ID srvID);
+	void                         DestroyDSV(DSV_ID dsvID);
 
 	// Pipeline State Object creation functions
 	PSO_ID                       CreatePSO_OnThisThread(const FPSODesc& psoLoadDesc);

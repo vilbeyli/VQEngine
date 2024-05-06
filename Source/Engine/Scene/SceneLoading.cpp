@@ -491,9 +491,32 @@ void Scene::Unload()
 	mGameObjectHandles.clear();
 
 	mCameras.clear();
+	
+	for (const std::pair<MaterialID, Material>& matPair : mMaterials)
+	{
+		const Material& mat = matPair.second;
+		mRenderer.DestroySRV(mat.SRVHeightMap);
+		mRenderer.DestroySRV(mat.SRVMaterialMaps);
+	}
 	mMaterials.clear();
 	mMaterialNames.clear();
 	mLoadedMaterials.clear();
+
+	for (const auto& pair : mMeshes)
+	{
+		const Mesh& mesh = pair.second;
+		for (int lod = 0; lod < mesh.GetNumLODs(); ++lod)
+		{
+			std::pair<BufferID, BufferID> VBIB = mesh.GetIABufferIDs(lod);
+			const VBV& VertexBufferView = mRenderer.GetVertexBufferView(VBIB.first);
+			const IBV& IndexBufferView = mRenderer.GetIndexBufferView(VBIB.second);
+			// TODO: release VB & IB	
+		}
+	}
+	mMeshes.clear();
+	mModels.clear();
+	mModelLoadResults.clear();
+	mTexturePaths.clear();
 
 	mLightsStatic.clear();
 	mLightsDynamic.clear();
