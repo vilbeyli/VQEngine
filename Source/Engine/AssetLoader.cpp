@@ -149,7 +149,7 @@ static AssetLoader::ECustomMapType DetermineCustomMapType(const std::string& Fil
 	if (vTokens.size() < 3) // we expect at least 3 tokens: MAT_NAME, TEXTYPE, EXTENSION
 		return t; // not a proper texture type string token, such as procedural texture names
 
-	const std::string texTypeToken = vTokens[vTokens.size()-2];
+	const std::string& texTypeToken = vTokens[vTokens.size()-2];
 
 	if (texTypeToken.empty())
 		return t;

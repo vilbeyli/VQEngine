@@ -50,6 +50,7 @@
 #include <d3d12.h>
 
 #include <mutex>
+#include <cassert>
 
 struct ID3D12Device;
 struct ID3D12Resource;
@@ -89,41 +90,119 @@ enum EVertexBufferType
     COLOR_AND_ALPHA,
     NORMAL,
     NORMAL_AND_TANGENT,
+    NORMAL_AND_TANGENT_PACKED1,
+    NORMAL_AND_TANGENT_PACKED2,
 
     NUM_VERTEX_BUFFER_TYPES
 };
 struct FVertexDefault
 {
-    float position[3];
-    float uv[2];
+    fp32 position[3];
+    fp32 uv[2];
 };
 struct FVertexWithColor
 {
-    float position[3];
-    float color[3];
-    float uv[2];
+    fp32 position[3];
+    fp32 color[3];
+    fp32 uv[2];
 };
 struct FVertexWithColorAndAlpha
 {
-    float position[3];
-    float color[4];
-    float uv[2];
+    fp32 position[3];
+    fp32 color[4];
+    fp32 uv[2];
 };
 struct FVertexWithNormal
 {
-    float position[3];
-    float normal[3];
-    float uv[2];
+    fp32 position[3];
+    fp32 normal[3];
+    fp32 uv[2];
 };
-struct FVertexWithNormalAndTangent
+struct FVertexWithNormalAndTangent // 44B
 {
-    float position[3];
-    float normal[3];
-    float tangent[3];
-    float uv[2];
+    fp32 position[3]; // 12B
+    fp32 normal  [3];
+    fp32 tangent [3];
+    fp32 uv      [2];
+};
+struct FVertexWithNormalAndTangentPacked1 // 28B
+{
+    fp32   position[3]; // rgb32  12B
+    uint16 normal  [3]; // rgb16   6B
+    uint16 tangent [3]; // rgb16   6B
+    uint16 uv      [2]; // rg16    4B
+};
+struct FVertexWithNormalAndTangentPacked2 // 24B
+{
+    fp32     position[3]; // rgb32    12B
+    uint32   normal     ; // rgb10a2   4B
+    uint32   tangent    ; // rgb10a2   4B
+    uint16   uv      [2]; // rg16      4B
 };
 
+static void AssertUnitLength(float v[3]) { assert(sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) == 1.0f); }
+static uint PackRGB10A2(float v[3])
+{
+    AssertUnitLength(v);
+    const uint i0 = static_cast<uint>(v[0] * 1023.0f);
+    const uint i1 = static_cast<uint>(v[1] * 1023.0f);
+    const uint i2 = static_cast<uint>(v[2] * 1023.0f);
+    return (i0 << 22) | (i1 << 12) | (i2 << 2) | 3 /*11 for a*/;
+}
+static const uint16 PackFP16(float f)
+{
+    assert(f >= 0.0f && f <= 1.0f);
+    return static_cast<uint16>(f * USHRT_MAX);
+}
+static const void PackRGB16F(float v[3], uint16 vpacked[3])
+{
+    assert(v[0] >= -1.0f && v[0] <= 1.0f);
+    assert(v[1] >= -1.0f && v[1] <= 1.0f);
+    assert(v[2] >= -1.0f && v[2] <= 1.0f);
+    AssertUnitLength(v);
 
+    // [-1,1] --> [0, 1]
+    v[0] = (v[0] + 1.0f) * 0.5f;
+    v[1] = (v[1] + 1.0f) * 0.5f;
+    v[2] = (v[2] + 1.0f) * 0.5f;
+
+    vpacked[0] = PackFP16(v[0]);
+    vpacked[1] = PackFP16(v[1]);
+    vpacked[2] = PackFP16(v[2]);
+}
+static void PackUV16(float uv[2], uint16 uvpacked[2])
+{
+    uvpacked[0] = PackFP16(uv[0]);
+    uvpacked[1] = PackFP16(uv[1]);
+}
+
+template<class TVertex> static constexpr bool VertexHasNormals() 
+{
+    return std::is_same<TVertex, FVertexWithNormal>()
+        || std::is_same<TVertex, FVertexWithNormalAndTangent>()
+        || std::is_same<TVertex, FVertexWithNormalAndTangentPacked1>()
+        || std::is_same<TVertex, FVertexWithNormalAndTangentPacked2>();
+}
+template<class TVertex> static constexpr bool VertexHasTangents() 
+{
+    return std::is_same<TVertex, FVertexWithNormalAndTangent>()
+        || std::is_same<TVertex, FVertexWithNormalAndTangentPacked1>()
+        || std::is_same<TVertex, FVertexWithNormalAndTangentPacked2>();
+}
+template<class TVertex> static constexpr bool VertexHasColor() 
+{
+    return std::is_same<TVertex, FVertexWithColor>()
+        || std::is_same<TVertex, FVertexWithColorAndAlpha>();
+}
+template<class TVertex> static constexpr bool VertexHasAlpha() 
+{
+    return std::is_same<TVertex, FVertexWithColorAndAlpha>();
+}
+template<class TVertex> static constexpr bool VertexHasPackedUVs()
+{
+    return std::is_same<TVertex, FVertexWithNormalAndTangentPacked2>()
+        || std::is_same<TVertex, FVertexWithNormalAndTangentPacked1>();
+}
 //
 // STATIC BUFFER HEAP
 //

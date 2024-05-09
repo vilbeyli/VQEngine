@@ -505,7 +505,7 @@ void Scene::Unload()
 	for (const auto& pair : mMeshes)
 	{
 		const Mesh& mesh = pair.second;
-		for (int lod = 0; lod < mesh.GetNumLODs(); ++lod)
+		for (int lod = 0; lod < (int)mesh.GetNumLODs(); ++lod)
 		{
 			std::pair<BufferID, BufferID> VBIB = mesh.GetIABufferIDs(lod);
 			const VBV& VertexBufferView = mRenderer.GetVertexBufferView(VBIB.first);

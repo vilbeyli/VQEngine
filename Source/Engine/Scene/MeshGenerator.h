@@ -74,7 +74,13 @@ namespace GeometryGenerator
 		for (size_t i = 0; i < LEN; ++i)
 			p[i] = values.begin()[i];
 	}
-
+	template<size_t LEN>
+	void SetFVec(float* p, float* ps)
+	{
+		static_assert(LEN > 0 && LEN <= 4); // assume [vec1-vec4]
+		for (size_t i = 0; i < LEN; ++i)
+			p[i] = ps[i];
+	}
 
 
 	//  Bitangent
@@ -97,10 +103,11 @@ namespace GeometryGenerator
 	template<class TVertex, class TIndex>
 	constexpr GeometryData<TVertex, TIndex> Triangle(float size)
 	{
-		constexpr bool bHasTangents = std::is_same<TVertex, FVertexWithNormalAndTangent>();
-		constexpr bool bHasNormals = std::is_same<TVertex, FVertexWithNormal>() || std::is_same<TVertex, FVertexWithNormalAndTangent>();
-		constexpr bool bHasColor = std::is_same<TVertex, FVertexWithColor>() || std::is_same<TVertex, FVertexWithColorAndAlpha>();
-		constexpr bool bHasAlpha = std::is_same<TVertex, FVertexWithColorAndAlpha>();
+		constexpr bool bHasTangents = VertexHasTangents<TVertex>();
+		constexpr bool bHasNormals = VertexHasNormals<TVertex>();
+		constexpr bool bHasColor = VertexHasColor<TVertex>();
+		constexpr bool bHasAlpha = VertexHasAlpha<TVertex>();
+		constexpr bool bHasPackedUV0 = VertexHasPackedUVs<TVertex>();
 
 		constexpr size_t NUM_VERTS = 3;
 
@@ -133,9 +140,9 @@ namespace GeometryGenerator
 		// color
 		if constexpr (bHasColor)
 		{
-			SetFVec<3>(v[0].color, { 1.0f, 0.0f, 0.0f });
-			SetFVec<3>(v[1].color, { 0.0f, 1.0f, 0.0f });
-			SetFVec<3>(v[2].color, { 0.0f, 0.0f, 1.0f });
+			v[0].color = { 1.0f, 0.0f, 0.0f };
+			v[1].color = { 0.0f, 1.0f, 0.0f };
+			v[2].color = { 0.0f, 0.0f, 1.0f };
 			if constexpr (bHasAlpha)
 			{
 				v[0].color[3] = 1.0f;
@@ -183,10 +190,10 @@ namespace GeometryGenerator
 	template<class TVertex, class TIndex>
 	constexpr GeometryData<TVertex, TIndex> Cube()
 	{
-		constexpr bool bHasTangents = std::is_same<TVertex, FVertexWithNormalAndTangent>();
-		constexpr bool bHasNormals = std::is_same<TVertex, FVertexWithNormal>() || std::is_same<TVertex, FVertexWithNormalAndTangent>();
-		constexpr bool bHasColor = std::is_same<TVertex, FVertexWithColor>() || std::is_same<TVertex, FVertexWithColorAndAlpha>();
-		constexpr bool bHasAlpha = std::is_same<TVertex, FVertexWithColorAndAlpha>();
+		constexpr bool bHasTangents = VertexHasTangents<TVertex>();
+		constexpr bool bHasNormals  = VertexHasNormals<TVertex>();
+		constexpr bool bHasColor    = VertexHasColor<TVertex>();
+		constexpr bool bHasAlpha    = VertexHasAlpha<TVertex>();
 
 		constexpr int NUM_VERTS = 24;
 
@@ -344,10 +351,11 @@ namespace GeometryGenerator
 	{
 		using namespace DirectX;
 
-		constexpr bool bHasTangents = std::is_same<TVertex, FVertexWithNormalAndTangent>();
-		constexpr bool bHasNormals = std::is_same<TVertex, FVertexWithNormal>() || std::is_same<TVertex, FVertexWithNormalAndTangent>();
-		constexpr bool bHasColor = std::is_same<TVertex, FVertexWithColor>() || std::is_same<TVertex, FVertexWithColorAndAlpha>();
-		constexpr bool bHasAlpha = std::is_same<TVertex, FVertexWithColorAndAlpha>();
+		constexpr bool bHasTangents = VertexHasTangents<TVertex>();
+		constexpr bool bHasNormals = VertexHasNormals<TVertex>();
+		constexpr bool bHasColor = VertexHasColor<TVertex>();
+		constexpr bool bHasAlpha = VertexHasAlpha<TVertex>();
+		constexpr bool bHasPackedUV0 = VertexHasPackedUVs<TVertex>();
 
 		GeometryData<TVertex, TIndex> data(numLODLevels);
 
@@ -407,7 +415,8 @@ namespace GeometryGenerator
 					{
 						float u = (float)j / sliceCount;
 						float v = 1.0f - (float)i / stackCount;
-						SetFVec<2>(vertex.uv, { u, v });
+						if constexpr (bHasPackedUV0) { PackUV16({ u , v }, vertex.uv); }
+						else                         { SetFVec<2>(vertex.uv, { u, v }); }
 					}
 
 
@@ -491,7 +500,8 @@ namespace GeometryGenerator
 
 					TVertex vertex;
 					SetFVec<3>(vertex.position, { x, y, z });
-					SetFVec<2>(vertex.uv, { u, v });
+					if constexpr (bHasPackedUV0) { PackUV16({ u , v }, vertex.uv); }
+					else                         { SetFVec<2>(vertex.uv, { u, v }); }
 					if constexpr (bHasNormals)  SetFVec<3>(vertex.normal, { 0.0f, 1.0f, 0.0f });
 					if constexpr (bHasTangents) SetFVec<3>(vertex.tangent, { 1.0f, 0.0f, 0.0f });
 					Vertices.push_back(vertex);
@@ -500,7 +510,8 @@ namespace GeometryGenerator
 				// Cap center vertex.
 				TVertex capCenter;
 				SetFVec<3>(capCenter.position, { 0.0f, y, 0.0f });
-				SetFVec<3>(capCenter.uv, { 0.5f, 0.5f });
+				if constexpr (bHasPackedUV0) { PackUV16({ 0.5f, 0.5f }, capCenter.uv); }
+				else                         { SetFVec<2>(capCenter.uv, { 0.5f, 0.5f }); }
 				if constexpr (bHasNormals)  SetFVec<3>(capCenter.normal, { 0.0f, 1.0f, 0.0f });
 				if constexpr (bHasTangents) SetFVec<3>(capCenter.tangent, { 1.0f, 0.0f, 0.0f });
 				Vertices.push_back(capCenter);
@@ -522,6 +533,9 @@ namespace GeometryGenerator
 				float y = -0.5f * height;
 				float dTheta = 2.0f * XM_PI / sliceCount;
 
+				float normal[3] = { 0.0f, -1.0f, 0.0f };
+				float tangent[3] = { -1.0f, 0.0f, 0.0f };
+
 				// Duplicate cap ring vertices because the texture coordinates and normals differ.
 				for (unsigned i = 0; i <= sliceCount; ++i)
 				{
@@ -534,9 +548,22 @@ namespace GeometryGenerator
 
 					TVertex vertex;
 					SetFVec<3>(vertex.position, { x, y, z });
-					SetFVec<2>(vertex.uv, { u, v });
-					if constexpr (bHasNormals)  SetFVec<3>(vertex.normal, { 0.0f, -1.0f, 0.0f });
-					if constexpr (bHasTangents) SetFVec<3>(vertex.tangent, { -1.0f, 0.0f, 0.0f });
+					
+					if constexpr (bHasPackedUV0) { PackUV16({ u , v }, vertex.uv); }
+					else                         { SetFVec<2>(vertex.uv, { u, v }); }
+					if constexpr (bHasNormals)
+					{
+						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangent>()) { memcpy(vertex.normal, normal, sizeof(normal)); }
+						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangentPacked1>()) { vertex.tangent; /*TODO*/ }
+						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangentPacked2>()) { vertex.normal = PackRGB10A2(normal); }
+					}
+					if constexpr (bHasTangents)
+					{
+						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangent>()) { SetFVec<3>(vertex.tangent, tangent); }
+						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangentPacked1>()) { vertex.tangent; /*TODO*/ }
+						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangentPacked2>()) { vertex.tangent = PackRGB10A2(tangent); }
+					}
+
 					Vertices.push_back(vertex);
 				}
 
@@ -544,8 +571,8 @@ namespace GeometryGenerator
 				TVertex capCenter;
 				SetFVec<3>(capCenter.position, { 0.0f, y, 0.0f });
 				SetFVec<3>(capCenter.uv, { 0.5f, 0.5f });
-				if constexpr (bHasNormals)  SetFVec<3>(capCenter.normal, { 0.0f, -1.0f, 0.0f });
-				if constexpr (bHasTangents) SetFVec<3>(capCenter.tangent, { -1.0f, 0.0f, 0.0f });
+				if constexpr (bHasNormals)  SetFVec<3>(capCenter.normal, normal);
+				if constexpr (bHasTangents) SetFVec<3>(capCenter.tangent, tangent);
 				Vertices.push_back(capCenter);
 
 				// Index of center vertex.
@@ -576,10 +603,11 @@ namespace GeometryGenerator
 	{
 		using namespace DirectX;
 
-		constexpr bool bHasTangents = std::is_same<TVertex, FVertexWithNormalAndTangent>();
-		constexpr bool bHasNormals = std::is_same<TVertex, FVertexWithNormal>() || std::is_same<TVertex, FVertexWithNormalAndTangent>();
-		constexpr bool bHasColor = std::is_same<TVertex, FVertexWithColor>() || std::is_same<TVertex, FVertexWithColorAndAlpha>();
-		constexpr bool bHasAlpha = std::is_same<TVertex, FVertexWithColorAndAlpha>();
+		constexpr bool bHasTangents = VertexHasTangents<TVertex>();
+		constexpr bool bHasNormals  = VertexHasNormals<TVertex>();
+		constexpr bool bHasColor    = VertexHasColor<TVertex>();
+		constexpr bool bHasAlpha    = VertexHasAlpha<TVertex>();
+		constexpr bool bHasPackedUV0 = VertexHasPackedUVs<TVertex>();
 
 		GeometryData<TVertex, TIndex> data(numLODLevels);
 
@@ -636,17 +664,19 @@ namespace GeometryGenerator
 					{
 						float u = (float)j / LODSliceCounts[LOD];
 						float v = (y + radius) / (2 * radius);
-						SetFVec<2>(vertex.uv, { u, v });
+						if constexpr (bHasPackedUV0) { PackUV16({ u , v }, vertex.uv);  }
+						else                         { SetFVec<2>(vertex.uv, { u, v }); }
 					}
 
 					// TangentU us unit length.
 					if constexpr (bHasTangents)
 					{
-						SetFVec<3>(vertex.tangent, { -z, 0.0f, x });
+						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangent>())       { SetFVec<3>(vertex.tangent, { -z, 0.0f, x }); }
+						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangentPacked1>()){ vertex.tangent; /*TODO*/ }
+						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangentPacked2>()){ vertex.tangent = PackRGB10A2({ -z, 0.0f, x }); }
 					}
 					if constexpr (bHasNormals)
 					{
-
 						//float dr = bottomRadius - topRadius;
 						//vec3 bitangent(dr*x, -, dr*z);
 						//XMVECTOR T = XMLoadFloat3(&vertex.tangent);
@@ -657,7 +687,9 @@ namespace GeometryGenerator
 						XMVECTOR ROT = XMQuaternionRotationRollPitchYaw(0.0f, -PI - theta, PI_DIV2 - phi);
 						N = XMVector3Rotate(N, ROT);
 
-						SetFVec<3>(vertex.normal, { N.m128_f32[0], N.m128_f32[1], N.m128_f32[2] });
+						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangent>())        { SetFVec<3>(vertex.normal, { N.m128_f32[0], N.m128_f32[1], N.m128_f32[2] }); }
+						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangentPacked1>()) { vertex.tangent; /*TODO*/ }
+						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangentPacked2>()) { vertex.normal = PackRGB10A2({ N.m128_f32[0], N.m128_f32[1], N.m128_f32[2] }); }
 					}
 
 					Vertices.push_back(vertex);
@@ -718,10 +750,11 @@ namespace GeometryGenerator
 		assert(NumVertsY > 1);
 		assert(NumLODLevels >= 1);
 
-		constexpr bool bHasTangents = std::is_same<TVertex, FVertexWithNormalAndTangent>();
-		constexpr bool bHasNormals = std::is_same<TVertex, FVertexWithNormal>() || std::is_same<TVertex, FVertexWithNormalAndTangent>();
-		constexpr bool bHasColor = std::is_same<TVertex, FVertexWithColor>() || std::is_same<TVertex, FVertexWithColorAndAlpha>();
-		constexpr bool bHasAlpha = std::is_same<TVertex, FVertexWithColorAndAlpha>();
+		constexpr bool bHasTangents = VertexHasTangents<TVertex>();
+		constexpr bool bHasNormals = VertexHasNormals<TVertex>();
+		constexpr bool bHasColor = VertexHasColor<TVertex>();
+		constexpr bool bHasAlpha = VertexHasAlpha<TVertex>();
+		constexpr bool bHasPackedUV0 = VertexHasPackedUVs<TVertex>();
 
 		const unsigned MIN_HSLICE_COUNT = 2;
 		const unsigned MIN_VSLICE_COUNT = 2;
@@ -760,7 +793,8 @@ namespace GeometryGenerator
 
 					const float v = float(iX) / (m-1);
 					const float u = float(iY) / (n-1);
-					SetFVec<2>(vert.uv, { u, 1.0f-v });
+					if constexpr (bHasPackedUV0) { PackUV16({ u , 1.0f - v }, vert.uv);  }
+					else                         { SetFVec<2>(vert.uv, { u, 1.0f - v }); }
 
 					if constexpr (bHasNormals)
 					{
@@ -820,10 +854,11 @@ namespace GeometryGenerator
 	{
 		using namespace DirectX;
 
-		constexpr bool bHasTangents = std::is_same<TVertex, FVertexWithNormalAndTangent>();
-		constexpr bool bHasNormals = std::is_same<TVertex, FVertexWithNormal>() || std::is_same<TVertex, FVertexWithNormalAndTangent>();
-		constexpr bool bHasColor = std::is_same<TVertex, FVertexWithColor>() || std::is_same<TVertex, FVertexWithColorAndAlpha>();
-		constexpr bool bHasAlpha = std::is_same<TVertex, FVertexWithColorAndAlpha>();
+		constexpr bool bHasTangents = VertexHasTangents<TVertex>();
+		constexpr bool bHasNormals = VertexHasNormals<TVertex>();
+		constexpr bool bHasColor = VertexHasColor<TVertex>();
+		constexpr bool bHasAlpha = VertexHasAlpha<TVertex>();
+		constexpr bool bHasPackedUV0 = VertexHasPackedUVs<TVertex>();
 
 		GeometryData<TVertex, TIndex> data(numLODLevels);
 
