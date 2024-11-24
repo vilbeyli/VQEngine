@@ -1630,7 +1630,7 @@ void VQEngine::DrawLightEditor()
 	for (Light* l : Lights)
 	{
 		std::string LightName;
-		switch (l->GetType())
+		switch (l->Type)
 		{
 			case Light::EType::POINT       : LightName += "Point #" + std::to_string(iPnt++); break;
 			case Light::EType::SPOT        : LightName += "Spot #" + std::to_string(iSpt++); break;
@@ -1692,9 +1692,9 @@ void VQEngine::DrawLightEditor()
 
 	if (ImGui::Checkbox("Enabled", &l->bEnabled))
 	{
-		if (!l->bEnabled && l->Type == Light::EType::DIRECTIONAL)
+		if (l->Type == Light::EType::DIRECTIONAL)
 		{
-			l->Brightness = 0.0f;
+			l->Brightness = l->bEnabled ? 5.0f : 0.0f;
 		}
 
 	}

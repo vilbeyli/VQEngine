@@ -104,7 +104,6 @@ struct Light
 	Transform GetTransform() const;
 
 	EMobility GetMobility() const { return Mobility; }
-	EType     GetType() const { return Type;  }
 
 	//
 	// DATA

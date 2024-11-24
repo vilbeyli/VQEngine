@@ -1070,7 +1070,7 @@ static uint32_t GetNumShadowViewCmdRecordingThreads(const FSceneShadowViews& Sha
 {
 #if RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING
 	return (ShadowView.ShadowView_Directional.meshRenderCommands.size() > 0 ? 1 : 0) // 1 thread for directional light (assumes long list of mesh render cmds)
-		+ ShadowView.NumPointShadowViews  // each point light view (6x frustums per point light
+		+ ShadowView.NumPointShadowViews  // each point light view (6x frustums per point light)
 		+ (ShadowView.NumSpotShadowViews > 0 ? 1 : 0); // process spot light render lists in own thread
 #else
 	return 0;

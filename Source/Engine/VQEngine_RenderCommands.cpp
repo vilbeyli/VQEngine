@@ -185,7 +185,7 @@ void VQEngine::RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, Dyna
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderDirectionalShadowMaps");
 	const FSceneShadowViews::FShadowView& View = SceneShadowView.ShadowView_Directional;
-	if (!View.drawParamLookup.empty())
+	if (!View.drawParamLookup.empty() && !View.meshRenderCommands.empty())
 	{
 		const std::string marker = "Directional";
 		SCOPED_GPU_MARKER(pCmd, marker.c_str());

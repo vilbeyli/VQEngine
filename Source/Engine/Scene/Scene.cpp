@@ -874,7 +874,7 @@ void Scene::GatherSceneLightData(FSceneView& SceneView) const
 	{
 		for (const Light& l : vLights)
 		{
-			if (!l.bEnabled) continue;
+			if (!l.bEnabled && l.Type != Light::EType::DIRECTIONAL) continue;
 			if (l.Mobility != eLightMobility) continue;
 
 			switch (l.Type)
@@ -965,7 +965,7 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 	const size_t NumWorkerThreadsAvailable = UpdateWorkerThreadPool.GetThreadPoolSize();
 
 	const std::vector<const Light*> dirLights = GetLightsOfType(Light::EType::DIRECTIONAL);
-	const bool bCullDirectionalLightView = !dirLights.empty() && dirLights[0]->bEnabled;
+	const bool bCullDirectionalLightView = !dirLights.empty() && dirLights[0]->bEnabled && dirLights[0]->bCastingShadows;
 
 	std::vector< FFrustumPlaneset> FrustumPlanesets(1 + SceneShadowView.NumSpotShadowViews + SceneShadowView.NumPointShadowViews * 6 + (bCullDirectionalLightView ? 1 : 0));
 	std::vector<XMMATRIX> FrustumViewProjMatrix(FrustumPlanesets.size());
@@ -981,6 +981,12 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 			mFrustumIndex_pShadowViewLookup[iFrustum] = &SceneShadowView.ShadowView_Directional;
 			FrustumViewProjMatrix[iFrustum] = SceneShadowView.ShadowView_Directional.matViewProj;
 			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowView_Directional.matViewProj);
+		}
+		else
+		{
+			SceneShadowView.ShadowView_Directional.drawParamLookup.clear();
+			SceneShadowView.ShadowView_Directional.mRenderCmdInstanceDataWriteIndex.clear();
+			SceneShadowView.ShadowView_Directional.meshRenderCommands.clear();
 		}
 
 		// point
