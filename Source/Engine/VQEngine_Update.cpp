@@ -241,17 +241,24 @@ void VQEngine::UpdateThread_PostUpdate()
 
 			const Transform* pTF = mpScene->GetGameObjectTransform(mpScene->mSelectedObjects[0]);
 			assert(pTF);
-			XMVECTOR vAvgPositions = XMLoadFloat3(&pTF->_position);
-			for (int i = 1; i < mpScene->mSelectedObjects.size(); ++i)
-			{
-				const Transform* pTF = mpScene->GetGameObjectTransform(mpScene->mSelectedObjects[i]);
-				vAvgPositions += XMLoadFloat3(&pTF->_position);
-			}
-			vAvgPositions /= static_cast<float>(mpScene->mSelectedObjects.size());
 
-			XMFLOAT3 f3AvgPosition;
-			XMStoreFloat3(&f3AvgPosition, vAvgPositions);
-			cam.SetTargetPosition(f3AvgPosition);
+			if (pTF)
+			{
+				XMVECTOR vAvgPositions = XMLoadFloat3(&pTF->_position);
+				for (int i = 1; i < mpScene->mSelectedObjects.size(); ++i)
+				{
+					const Transform* pTF = mpScene->GetGameObjectTransform(mpScene->mSelectedObjects[i]);
+					if (!pTF)
+						continue;
+
+					vAvgPositions += XMLoadFloat3(&pTF->_position);
+				}
+				vAvgPositions /= static_cast<float>(mpScene->mSelectedObjects.size());
+
+				XMFLOAT3 f3AvgPosition;
+				XMStoreFloat3(&f3AvgPosition, vAvgPositions);
+				cam.SetTargetPosition(f3AvgPosition);
+			}
 		}
 	}
 
