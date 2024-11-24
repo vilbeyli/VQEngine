@@ -680,7 +680,13 @@ void SceneBoundingBoxHierarchy::BuildGameObjectBoundingBox(const Scene* pScene, 
 	mGameObjectBoundingBoxes[iBB] = CalculateAxisAlignedBoundingBox(matWorld, pObj->mLocalSpaceBoundingBox);
 	mGameObjectHandles[iBB] = ObjectHandle;
 	
-	const Model& model = mModels.at(pObj->mModelID);
+	auto it = mModels.find(pObj->mModelID);
+	if (it == mModels.end())
+	{
+		return;
+	}
+
+	const Model& model = it->second;
 	mGameObjectNumMeshes[iBB] = model.mData.GetNumMeshesOfAllTypes();
 }
 
@@ -769,7 +775,13 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBoxes_Range(const Scene* pScene
 		const GameObject* pObj = pScene->GetGameObject(GameObjectHandles[i]);
 		assert(pObj);
 
-		const Model& model = mModels.at(pObj->mModelID);
+		auto it = mModels.find(pObj->mModelID);
+		if (it == mModels.end())
+		{
+			continue;
+		}
+
+		const Model& model = it->second;
 		const size_t NumMeshes = model.mData.GetNumMeshesOfAllTypes();
 		BuildMeshBoundingBox(pScene, GameObjectHandles[i], iMeshBB + iMeshBBOffset, 0);
 		iMeshBBOffset += NumMeshes;

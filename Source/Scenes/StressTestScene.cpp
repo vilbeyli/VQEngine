@@ -108,7 +108,13 @@ void StressTestScene::InitializeScene()
 	{
 		const GameObject* pObj = GetGameObject(hObj);
 		const ModelID iModel = pObj->mModelID;
-		const Model& model = mModels.at(iModel);
+		auto it = mModels.find(iModel);
+		if (it == mModels.end())
+		{
+			continue;
+		}
+
+		const Model& model = it->second;
 		
 		const bool bGeneratedObject = model.mModelName.empty();
 		if (bGeneratedObject)
