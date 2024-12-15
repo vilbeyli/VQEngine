@@ -1161,7 +1161,7 @@ ID3D12PipelineState* VQRenderer::CompileGraphicsPSO(const FPSODesc& Desc, std::v
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC d3d12GraphicsPSODesc = Desc.D3D12GraphicsDesc;
 
-	std::unordered_map<EShaderStage, ID3D12ShaderReflection*> ShaderReflections;
+	std::unordered_map<EShaderStage, Microsoft::WRL::ComPtr<ID3D12ShaderReflection>> ShaderReflections;
 
 	// Assign shader blobs to PSODesc
 	for (const std::shared_future<FShaderStageCompileResult>& TaskResult : ShaderCompileResults)
@@ -1179,7 +1179,7 @@ ID3D12PipelineState* VQRenderer::CompileGraphicsPSO(const FPSODesc& Desc, std::v
 		}
 
 		// reflect shader
-		ID3D12ShaderReflection*& pShaderReflection = ShaderReflections[ShaderCompileResult.ShaderStageEnum];
+		Microsoft::WRL::ComPtr<ID3D12ShaderReflection>& pShaderReflection = ShaderReflections[ShaderCompileResult.ShaderStageEnum];
 		if (ShaderCompileResult.bSM6)
 		{
 			assert(ShaderCompileResult.ShaderBlob.pBlobDxc);
@@ -1221,7 +1221,7 @@ ID3D12PipelineState* VQRenderer::CompileGraphicsPSO(const FPSODesc& Desc, std::v
 	const bool bHasVS = ShaderReflections.find(EShaderStage::VS) != ShaderReflections.end();
 	if (bHasVS)
 	{
-		inputLayout = ShaderUtils::ReflectInputLayoutFromVS(ShaderReflections.at(EShaderStage::VS));
+		inputLayout = ShaderUtils::ReflectInputLayoutFromVS(ShaderReflections.at(EShaderStage::VS).Get());
 		d3d12GraphicsPSODesc.InputLayout = { inputLayout.data(), static_cast<UINT>(inputLayout.size()) };
 	}
 
@@ -1258,6 +1258,7 @@ ID3D12PipelineState* VQRenderer::CompileGraphicsPSO(const FPSODesc& Desc, std::v
 	assert(hr == S_OK);
 	SetName(pPSO, Desc.PSOName.c_str());
 
+
 	return pPSO;
 }
 ID3D12PipelineState* VQRenderer::CompileComputePSO(const FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults)
@@ -1265,8 +1266,6 @@ ID3D12PipelineState* VQRenderer::CompileComputePSO(const FPSODesc& Desc, std::ve
 	SCOPED_CPU_MARKER("CompileComputePSO");
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 	D3D12_COMPUTE_PIPELINE_STATE_DESC  d3d12ComputePSODesc = Desc.D3D12ComputeDesc;
-	
-	std::unordered_map<EShaderStage, ID3D12ShaderReflection*> ShaderReflections;
 
 	// Assign CS shader blob to PSODesc
 	for (std::shared_future<FShaderStageCompileResult>& TaskResult : ShaderCompileResults)
@@ -1315,7 +1314,6 @@ ID3D12PipelineState* VQRenderer::LoadPSO(const FPSODesc& psoLoadDesc)
 		) != psoLoadDesc.ShaderStageCompileDescs.end();
 
 	std::vector<std::shared_future<FShaderStageCompileResult>> ShaderCompileResults;
-	std::unordered_map<EShaderStage, ID3D12ShaderReflection*> ShaderReflections;
 
 	// compile PSO if no cache or cache dirty, otherwise load cached binary
 	if (!bCachedPSOExists || bCacheDirty) 
