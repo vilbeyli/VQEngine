@@ -134,6 +134,13 @@ static size_t GetPSO_Key(
 		+ NUM_TESS_ENABLED * NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * NUM_OUTTOP_OPTIONS * iTessCullMode
 		+ NUM_TESS_ENABLED * NUM_DOMAIN_OPTIONS * NUM_PARTIT_OPTIONS * NUM_OUTTOP_OPTIONS * NUM_TESS_CULL_OPTIONS * iAlpha;
 }
+static size_t GetPSO_Key(const Material& mat, const VQRenderer& mRenderer)
+{
+	size_t iTess = 0; size_t iDomain = 0; size_t iPart = 0; size_t iOutTopo = 0; size_t iTessCull = 0;
+	Tessellation::GetTessellationPSOConfig(mat.Tessellation, iTess, iDomain, iPart, iOutTopo, iTessCull);
+	const size_t iAlpha = mat.IsAlphaMasked(mRenderer) ? 1 : 0;
+	return GetPSO_Key(iTess, iDomain, iPart, iOutTopo, iTessCull, iAlpha);
+}
 
 
 void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParameters)
@@ -198,17 +205,7 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 		const uint32 NumInstances = (uint32)meshRenderCmd.matNormal.size();
 
 		// select PSO
-		size_t iTess = 0; size_t iDomain = 0; size_t iPart = 0; size_t iOutTopo = 0; size_t iTessCull = 0;
-		Tessellation::GetTessellationPSOConfig(mat.Tessellation, iTess, iDomain, iPart, iOutTopo, iTessCull);
-		const size_t iAlpha    = mat.IsAlphaMasked(mRenderer) ? 1 : 0;
-		const PSO_ID psoID = mapPSO.at(GetPSO_Key(
-			iTess,
-			iDomain,
-			iPart,
-			iOutTopo,
-			iTessCull,
-			iAlpha
-		));
+		const PSO_ID psoID = mapPSO.at(GetPSO_Key(mat, mRenderer));
 		pCmd->SetPipelineState(mRenderer.GetPSO(psoID));
 
 		// set cbuffers

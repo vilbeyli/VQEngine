@@ -1365,27 +1365,39 @@ static void DrawTessellationEditorGUI(FUIState& mUIState, FTessellationParameter
 		// topo
 		const char* pszOutputTopologyNames[] = {
 			"Point",
-			"Line",
+			"Line (not implemented)",
 			"Triangle CW",
 			"Triangle CCW",
 			""
 		};
+		const bool bLineDomain = tess.Domain == ETessellationDomain::ISOLINE_PATCH;
 		if (ImGui::BeginCombo("Output Topology", pszOutputTopologyNames[tess.OutputTopology]))
 		{
 			if (ImGui::Selectable(pszOutputTopologyNames[0], tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT)) { tess.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT; }
-			if (ImGui::Selectable(pszOutputTopologyNames[1], tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE)) { if (tess.Domain == ETessellationDomain::ISOLINE_PATCH) tess.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE; }
+			BeginDisabledUIState(bLineDomain);
+			if (ImGui::Selectable(pszOutputTopologyNames[1], tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE)) { tess.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE; }
+			EndDisabledUIState(bLineDomain);
 			if (ImGui::Selectable(pszOutputTopologyNames[2], tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW)) { tess.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW; }
 			if (ImGui::Selectable(pszOutputTopologyNames[3], tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW)) { tess.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW; }
 			ImGui::EndCombo();
 		}
 
+		const bool bShouldDisableCullingOptionsForTessellation = tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT || tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE;
+		if (bShouldDisableCullingOptionsForTessellation)
+		{
+			tess.GPUParams.bFaceCull = false;
+			tess.GPUParams.bFrustumCull = false;
+		}
+
 		// cull toggles
 		bool bFrustumCull = tess.GPUParams.bFrustumCull;
+		BeginDisabledUIState(!bShouldDisableCullingOptionsForTessellation);
 		if (ImGui::Checkbox("Frustum Cull", &bFrustumCull)) { tess.GPUParams.bFrustumCull = bFrustumCull; }
 		ImGui::SameLine();
 		bool bBackFaceCull = tess.GPUParams.bFaceCull;
 		if (ImGui::Checkbox("BackFace Cull", &bBackFaceCull)) { tess.GPUParams.bFaceCull = bBackFaceCull; }
-		
+		EndDisabledUIState(!bShouldDisableCullingOptionsForTessellation);
+
 		// cull thresholdes
 		float fCullFrustumAndBackfaceThresholds[2] = { tess.GPUParams.fHSFrustumCullEpsilon, tess.GPUParams.fHSFaceCullEpsilon };
 		if (bBackFaceCull && bFrustumCull)
