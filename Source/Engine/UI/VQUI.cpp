@@ -1637,16 +1637,17 @@ void VQEngine::DrawLightEditor()
 {
 	// build light names
 	const std::vector<Light*> Lights = mpScene->GetLights();
-	int iSpt = 0; int iPnt = 0; // this naming scheme isnt great: changing light type renames them...
+	int NumSpotLights = 0; int NumPointLights = 0; // this naming scheme isnt great: changing light type renames them...
+	int NumShadowingSpotLights = 0; int NumShadowingPointLights = 0; int NumDirectionalLights = 0;
 	std::vector<std::string> LightNames;
 	for (Light* l : Lights)
 	{
 		std::string LightName;
 		switch (l->Type)
 		{
-			case Light::EType::POINT       : LightName += "Point #" + std::to_string(iPnt++); break;
-			case Light::EType::SPOT        : LightName += "Spot #" + std::to_string(iSpt++); break;
-			case Light::EType::DIRECTIONAL : LightName += "Directional"; break;
+			case Light::EType::POINT       : LightName += "Point #" + std::to_string(NumPointLights++); NumShadowingPointLights += l->bCastingShadows ? 1 : 0; break;
+			case Light::EType::SPOT        : LightName += "Spot #" + std::to_string(NumSpotLights++); NumShadowingSpotLights += l->bCastingShadows ? 1 : 0; break;
+			case Light::EType::DIRECTIONAL : LightName += "Directional"; NumDirectionalLights += 1; break;
 			default: 
 				Log::Error("DrawLightEditor(): undefined light type");
 				break;
@@ -1690,7 +1691,7 @@ void VQEngine::DrawLightEditor()
 		i = (int)(szLightNames.size() - 1);
 	}
 
-
+	
 	// draw editor
 	ImGui::TableSetColumnIndex(0);
 
@@ -1704,16 +1705,16 @@ void VQEngine::DrawLightEditor()
 
 	if (ImGui::Checkbox("Enabled", &l->bEnabled))
 	{
+		// directional light is disabled (in shader) by setting brightness to 0.
+		// it doesn't have a boolean to track its enabled state, hence reset its value 
+		// to a fixed value here to toggle enable/disable.
 		if (l->Type == Light::EType::DIRECTIONAL)
 		{
 			l->Brightness = l->bEnabled ? 5.0f : 0.0f;
 		}
-
 	}
 	ImGui::SameLine();
 	ImGui::Checkbox("Show Volume", &mUIState.bDrawLightVolume);
-	//ImGui::SameLine();
-	//ImGui::Checkbox("Show Outline", &l->bEnabled);
 	ImGuiSpacing(2);
 
 	ImGui::ColorEdit3("Color", reinterpret_cast<float*>(&l->Color));
@@ -1725,10 +1726,19 @@ void VQEngine::DrawLightEditor()
 	ImGuiSpacing(2);
 
 	// Light type specific properties
+	const bool bEnableSpotLightDropdown = l->bCastingShadows && NumShadowingSpotLights < NUM_SHADOWING_LIGHTS__SPOT && l->Type != Light::EType::SPOT;
+	const bool bEnablePointLightDropdown = l->bCastingShadows && NumShadowingPointLights < NUM_SHADOWING_LIGHTS__POINT && l->Type != Light::EType::POINT;
+	const bool bEnableDirectionalLightDropdown = l->bCastingShadows && NumDirectionalLights < NUM_SHADOWING_LIGHTS__DIRECTIONAL && l->Type != Light::EType::DIRECTIONAL; // only 1 supported
 	if (ImGui::BeginCombo("Type", LightTypeToString(l->Type))) {
+		BeginDisabledUIState(bEnableDirectionalLightDropdown);
 		if (ImGui::Selectable("Directional", l->Type == Light::EType::DIRECTIONAL)) { l->Type = Light::EType::DIRECTIONAL; }
-		if (ImGui::Selectable("Spot"       , l->Type == Light::EType::SPOT       )) { l->Type = Light::EType::SPOT; }
-		if (ImGui::Selectable("Point"      , l->Type == Light::EType::POINT      )) { l->Type = Light::EType::POINT; }
+		EndDisabledUIState(bEnableDirectionalLightDropdown);
+		BeginDisabledUIState(bEnableSpotLightDropdown);
+		if (ImGui::Selectable("Spot", l->Type == Light::EType::SPOT)) { l->Type = Light::EType::SPOT; }
+		EndDisabledUIState(bEnableSpotLightDropdown);
+		BeginDisabledUIState(bEnablePointLightDropdown);
+		if (ImGui::Selectable("Point", l->Type == Light::EType::POINT)) { l->Type = Light::EType::POINT; }
+		EndDisabledUIState(bEnablePointLightDropdown);
 		ImGui::EndCombo();
 	}
 	switch (l->Type) {
