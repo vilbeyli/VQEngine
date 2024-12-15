@@ -177,8 +177,8 @@
             <Rotation> 30 0 40 </Rotation>
         </Transform>
         <Directional>
-            <ViewPortX> 220 </ViewPortX>
-            <ViewPortY> 220 </ViewPortY>
+            <ViewPortX> 1024 </ViewPortX>
+            <ViewPortY> 1024 </ViewPortY>
             <Distance> 1000 </Distance>
         </Directional>
     </Light>
