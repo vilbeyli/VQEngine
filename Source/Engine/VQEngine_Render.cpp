@@ -163,6 +163,7 @@ static void PreAssignPSOIDs(PSOCollection& psoCollection, int& i, std::vector<FP
 		descs[i] = it->second;
 		psoCollection.mapPSO[it->first] = EBuiltinPSOs::NUM_BUILTIN_PSOs + i++; // assign PSO_IDs beforehand
 	}
+	psoCollection.mapLoadDesc.clear();
 }
 std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs()
 {

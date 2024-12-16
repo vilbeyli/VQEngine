@@ -76,5 +76,4 @@ private:
 	static size_t Hash(size_t iPass, size_t iMSAA, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha);
 
 	std::unordered_map<size_t, PSO_ID>   mapPSO;
-	std::unordered_map<size_t, FPSODesc> mapLoadDesc;;
 };

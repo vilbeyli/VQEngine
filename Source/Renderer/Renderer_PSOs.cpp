@@ -236,6 +236,14 @@ void VQRenderer::AssignPSOs()
 		const FPSOCompileResult& r = mPSOCompileResults[i].get();
 		mPSOs[r.id] = r.pPSO;
 	}
+
+	{
+		SCOPED_CPU_MARKER("CleanUp");
+		mPSOCompileResults.clear();
+		mShaderCompileResults.clear();
+		mPSOCompileResults.shrink_to_fit();
+		mShaderCompileResults.shrink_to_fit();
+	}
 }
 
 std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()

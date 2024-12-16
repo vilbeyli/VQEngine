@@ -366,7 +366,6 @@ std::vector<FPSOCreationTaskParameters> ObjectIDPass::CollectPSOCreationParamete
 			}
 		}
 
-		mapLoadDesc[key] = psoLoadDesc;
 		FPSOCreationTaskParameters& param = params[iPSO++];
 		param.pID = &mapPSO[key];
 		param.Desc = psoLoadDesc;

@@ -393,7 +393,6 @@ std::vector<FPSOCreationTaskParameters> OutlinePass::CollectPSOCreationParameter
 			if (iPass  == 1) { shdDesc.Macros.push_back(OutlineMacro); }
 		}
 	
-		this->mapLoadDesc[key] = psoLoadDesc;
 		params.push_back({ &this->mapPSO.at(key), psoLoadDesc });
 	}
 	return params;

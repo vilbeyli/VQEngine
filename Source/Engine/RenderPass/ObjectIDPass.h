@@ -66,8 +66,7 @@ public:
 	ID3D12Resource* GetCPUTextureResource() const;
 
 private:
-	std::unordered_map<size_t, PSO_ID>   mapPSO;
-	std::unordered_map<size_t, FPSODesc> mapLoadDesc;
+	std::unordered_map<size_t, PSO_ID> mapPSO;
 
 	int mOutputResolutionX = 0;
 	int mOutputResolutionY = 0;
