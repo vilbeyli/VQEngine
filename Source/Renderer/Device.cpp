@@ -180,7 +180,7 @@ static void CheckDeviceFeatureSupport(ID3D12Device4* pDevice, FDeviceCapabilitie
 bool Device::Create(const FDeviceCreateDesc& desc)
 {
     HRESULT hr = {};
-
+    
     // Debug & Validation Layer
     if (desc.bEnableDebugLayer)
     {
@@ -225,6 +225,25 @@ bool Device::Create(const FDeviceCreateDesc& desc)
         Log::Error("Device::Create(): D3D12CreateDevice4() failed.");
     }
     const bool bDeviceCreated = true;
+
+    // Info Queue Filtering (suppress some useless warnings)
+    if (desc.bEnableDebugLayer)
+    {
+        ID3D12InfoQueue* pInfoQueue = nullptr;
+        if (SUCCEEDED(mpDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
+        {
+            D3D12_MESSAGE_ID ignoredWarnings[] = {
+                D3D12_MESSAGE_ID_COMMAND_LIST_DRAW_VERTEX_BUFFER_NOT_SET
+            };
+
+            D3D12_INFO_QUEUE_FILTER filter = {};
+            filter.DenyList.NumIDs = _countof(ignoredWarnings);
+            filter.DenyList.pIDList = ignoredWarnings;
+
+            pInfoQueue->AddStorageFilterEntries(&filter);
+            pInfoQueue->Release();
+        }
+    }
 
     CheckDeviceFeatureSupport(this->mpDevice4, this->mDeviceCapabilities);
     return bDeviceCreated;
