@@ -1470,9 +1470,9 @@ void VQEngine::DrawMaterialEditor()
 
 	int& i = mUIState.SelectedEditeeIndex[FUIState::EEditorMode::MATERIALS];
 	const bool bMaterialsAreFiltered = matIDsAll.size() >= MaterialIDs.size();
-	if (bMaterialsAreFiltered)
+	if (bMaterialsAreFiltered && i != INVALID_ID)
 	{
-		if (i != INVALID_ID && i >= MaterialIDs.size() || MaterialIDs[i] != matIDsAll[i])
+		if (i >= MaterialIDs.size() || MaterialIDs[i] != matIDsAll[i])
 		{
 			for (int iMat = 0; iMat < MaterialIDs.size(); ++iMat)
 				if (MaterialIDs[iMat] == matIDsAll[i])
