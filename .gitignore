@@ -343,9 +343,13 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
+Tools/.wget-hsts
+
 # EXCEPTIONS
 !Data/Models/*/*.obj
-!Tools/7z.exe
+!Tools/7za.exe
+!Tools/7za.dll
+!Tools/7zxa.dll
 !Tools/wget.exe
 !Libs/WinPixEventRuntime/bin
 !Libs/WinPixEventRuntime/bin/x64/

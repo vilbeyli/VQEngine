@@ -3,7 +3,7 @@
 setlocal enabledelayedexpansion
 
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
-set SEVEN_ZIP_PATH="%~dp0../Tools/7z.exe"
+set SEVEN_ZIP_PATH="%~dp0../Tools/7za.exe"
 set WGET_PATH="%~dp0../Tools/wget.exe"
 pushd "%~dp0"
 cd "../Data/Textures/HDRI"
@@ -119,16 +119,20 @@ for %%f in (%PBR_FILE_LIST%) do (
   if exist !FILE_PATH! (
       echo  - !FILE_PATH!
       if %%~xf equ .zip (
-          ..\Tools\7z.exe x "!FILE_PATH!" -o"!FILE_PATH!\..\%%~nf" -y
-          echo Unpacked: %%f
-          echo  - !FILE_PATH!
-          :: Optionally, delete the ZIP file after extraction
-          echo Deleting: !FILE_PATH!
-          if exist "!FILE_PATH!" (
-              del "!FILE_PATH!"
-              echo Deleted: !FILE_PATH!
+          !SEVEN_ZIP_PATH! x "!FILE_PATH!" -o"!FILE_PATH!\..\%%~nf" -y
+          if !errorlevel! equ 0 (
+              echo Unpacked: %%f
+              echo  - !FILE_PATH!
+              :: Optionally, delete the ZIP file after extraction
+              echo Deleting: !FILE_PATH!
+              if exist "!FILE_PATH!" (
+                  del "!FILE_PATH!"
+                  echo Deleted: !FILE_PATH!
+              ) else (
+                  echo File not found: !FILE_PATH!
+              )
           ) else (
-              echo File not found: !FILE_PATH!
+            echo Error extracting: !FILE_PATH!
           )
       )
     )
