@@ -593,7 +593,7 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 
 		ImGui::TableNextRow();
 		ImGui::TableSetColumnIndex(0);
-		ImGui::Checkbox("F1: Editor", &mUIState.bWindowVisible_SceneControls);
+		ImGui::Checkbox("F1: Scene Controls", &mUIState.bWindowVisible_SceneControls);
 		ImGui::TableSetColumnIndex(1);
 		ImGui::Checkbox("F2: Profiler", &mUIState.bWindowVisible_Profiler);
 
