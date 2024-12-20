@@ -135,8 +135,6 @@ std::string GetIncludeFileName(const std::string& line)
 bool AreIncludesDirty(const std::string& srcPath, const std::string& cachePath)
 {
 	SCOPED_CPU_MARKER("AreIncludesDirty");
-	const std::string ShaderSourceDir = DirectoryUtil::GetFolderPath(srcPath);
-	const std::string ShaderCacheDir = DirectoryUtil::GetFolderPath(cachePath);
 
 	std::stack<std::string> includeStack;
 	includeStack.push(srcPath);
@@ -150,6 +148,7 @@ bool AreIncludesDirty(const std::string& srcPath, const std::string& cachePath)
 			Log::Error("[ShaderCompile] %s : Cannot open include file '%s'", srcPath.c_str(),  topIncludeFilePath.c_str());
 			return false;
 		}
+		const std::string currIncludeDir = DirectoryUtil::GetFolderPath(topIncludeFilePath);
 
 		std::string line;
 		while (getline(src, line))
@@ -158,14 +157,13 @@ bool AreIncludesDirty(const std::string& srcPath, const std::string& cachePath)
 				continue;
 
 			const std::string includeFileName = GetIncludeFileName(line);
-			if (includeFileName.empty()) continue;
+			if (includeFileName.empty()) 
+				continue;
 
-			const std::string currIncludeDir = DirectoryUtil::GetFolderPath(topIncludeFilePath);
 			const std::string includeSourcePath = currIncludeDir + includeFileName;
-			const std::string includeCachePath = currIncludeDir + includeFileName;
-
 			if (DirectoryUtil::IsFileNewer(includeSourcePath, cachePath))
 				return true;
+
 			includeStack.push(includeSourcePath);
 		}
 		src.close();

@@ -127,7 +127,7 @@ public:
 	std::vector<std::shared_future<FShaderStageCompileResult>> StartShaderLoadTasks(TaskID PSOLoadTaskID);
 	//void AbortTasks(); // ?
 
-	void                         StartPSOCompilation_MT(const std::vector<FPSOCreationTaskParameters>& RenderPassPSODescs);
+	void                         StartPSOCompilation_MT(std::vector<FPSOCreationTaskParameters>&& RenderPassPSODescs);
 	void                         WaitPSOCompilation();
 	void                         AssignPSOs();
 	std::vector<FPSODesc>        LoadBuiltinPSODescs_Legacy();

@@ -160,7 +160,7 @@ static void PreAssignPSOIDs(PSOCollection& psoCollection, int& i, std::vector<FP
 {
 	for (auto it = psoCollection.mapLoadDesc.begin(); it != psoCollection.mapLoadDesc.end(); ++it)
 	{
-		descs[i] = it->second;
+		descs[i] = std::move(it->second);
 		psoCollection.mapPSO[it->first] = EBuiltinPSOs::NUM_BUILTIN_PSOs + i++; // assign PSO_IDs beforehand
 	}
 	psoCollection.mapLoadDesc.clear();
@@ -179,11 +179,13 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs()
 		+ mShadowPassPSOs.mapLoadDesc.size()
 	);
 
-	int i = 0;
-	PreAssignPSOIDs(mLightingPSOs, i, descs);
-	PreAssignPSOIDs(mZPrePassPSOs, i, descs);
-	PreAssignPSOIDs(mShadowPassPSOs, i, descs);
-
+	{
+		SCOPED_CPU_MARKER("PreAssignPSOIds");
+		int i = 0;
+		PreAssignPSOIDs(mLightingPSOs, i, descs);
+		PreAssignPSOIDs(mZPrePassPSOs, i, descs);
+		PreAssignPSOIDs(mShadowPassPSOs, i, descs);
+	}
 	return descs;
 }
 
@@ -277,7 +279,7 @@ void VQEngine::RenderThread_Inititalize()
 	// collect its PSO load descriptors so we can dispatch PSO compilation workers
 	std::vector<FPSOCreationTaskParameters> RenderPassPSOTaskParams;
 	LoadRenderPassPSODescs(mRenderPasses, RenderPassPSOTaskParams);
-	mRenderer.StartPSOCompilation_MT(RenderPassPSOTaskParams);
+	mRenderer.StartPSOCompilation_MT(std::move(RenderPassPSOTaskParams));
 
 	// load window resources
 	const bool bFullscreen = mpWinMain->IsFullscreen();

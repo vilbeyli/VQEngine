@@ -40,68 +40,60 @@ void VQRenderer::ReservePSOMap(size_t NumPSOs)
 		mPSOs[EBuiltinPSOs::NUM_BUILTIN_PSOs + (int)i] = nullptr;
 }
 
-static std::vector<FShaderStageCompileDesc> GatherUniqueShaderCompileDescs(const std::vector<FPSODesc>& PSODescs, std::map<PSO_ID, std::vector<size_t>>& PSOShaderMap)
+static std::vector<const FShaderStageCompileDesc*> GatherUniqueShaderCompileDescs(const std::vector<FPSODesc>& PSODescs, std::map<PSO_ID, std::vector<size_t>>& PSOShaderMap)
 {
 	SCOPED_CPU_MARKER("GatherUniqueShaderCompileDescs");
-	std::unordered_set<std::string> ShaderCachedBinaryFileNames;
-	std::unordered_set<std::string> DuplicateShaderCompileRequests;
-	std::vector<FShaderStageCompileDesc> UniqueCompileDescs;
+	std::vector<const FShaderStageCompileDesc*> UniqueCompileDescs;
 	std::unordered_map<size_t, size_t> UniqueCompilePathHashToIndex;
 	std::hash<std::string> hasher;
+
 	for (int i = 0; i < PSODescs.size(); ++i)
 	{
-		const FPSODesc& desc = PSODescs[i];
-		for (const FShaderStageCompileDesc& comp : desc.ShaderStageCompileDescs)
+		const FPSODesc& psoDesc = PSODescs[i];
+		for (const FShaderStageCompileDesc& shaderDesc : psoDesc.ShaderStageCompileDescs)
 		{
-			const std::string CachedShaderBinaryPath = VQRenderer::GetCachedShaderBinaryPath(comp);
+			const std::string CachedShaderBinaryPath = VQRenderer::GetCachedShaderBinaryPath(shaderDesc);
 			const size_t hash = hasher(CachedShaderBinaryPath);
-			if (!ShaderCachedBinaryFileNames.insert(CachedShaderBinaryPath).second)
+
+			auto it = UniqueCompilePathHashToIndex.find(hash);
+			if (it != UniqueCompilePathHashToIndex.end())
 			{
-				DuplicateShaderCompileRequests.insert(CachedShaderBinaryPath);
-				const size_t iShader = UniqueCompilePathHashToIndex.at(hash);
+				const size_t& iShader = it->second;
 				PSOShaderMap[i].push_back(iShader);
 				continue;
 			}
-			UniqueCompileDescs.push_back(comp);
-			UniqueCompilePathHashToIndex[hash] = UniqueCompileDescs.size()-1;
-			PSOShaderMap[i].push_back(UniqueCompileDescs.size() - 1);
+
+			UniqueCompileDescs.push_back(&shaderDesc);
+			const size_t iShader = UniqueCompileDescs.size() - 1;
+			UniqueCompilePathHashToIndex[hash] = iShader;
+			PSOShaderMap[i].push_back(iShader);
 		}
 	}
-
 	return UniqueCompileDescs;
 }
 
-void VQRenderer::StartPSOCompilation_MT(const std::vector<FPSOCreationTaskParameters>& PSOCompileParams_RenderPass)
+void VQRenderer::StartPSOCompilation_MT(std::vector<FPSOCreationTaskParameters>&& PSOCompileParams_RenderPass)
 {
 	SCOPED_CPU_MARKER("StartPSOCompilation_MT");
 	std::vector<FPSODesc> PSODescs_BuiltinLegacy = LoadBuiltinPSODescs_Legacy();
+	assert(EBuiltinPSOs::NUM_BUILTIN_PSOs == PSODescs_BuiltinLegacy.size());
+
 	std::vector<FPSODesc> PSODescs_Builtin = LoadBuiltinPSODescs();
 	
 	const size_t NumBuiltinPSOs = PSODescs_BuiltinLegacy.size() + PSODescs_Builtin.size();
 
-	std::vector<FPSODesc> PSODescs;
-#if 1
-	for (const auto& desc : PSODescs_BuiltinLegacy) { PSODescs.push_back(desc); }
-	for (const auto& desc : PSODescs_Builtin) { PSODescs.push_back(desc); }
-	for (const auto& params : PSOCompileParams_RenderPass) { PSODescs.push_back(params.Desc);  }
-#else
-	PSODescs.insert(PSODescs.end(),
-		std::make_move_iterator(PSODescs_BuiltinLegacy.begin()),
-		std::make_move_iterator(PSODescs_BuiltinLegacy.end())
-	);
-	PSODescs.insert(PSODescs.end(),
-		std::make_move_iterator(PSODescs_Builtin.begin()),
-		std::make_move_iterator(PSODescs_Builtin.end())
-	);
-	PSODescs.insert(PSODescs.end(),
-		std::make_move_iterator(PSODescs_RenderPass.begin()),
-		std::make_move_iterator(PSODescs_RenderPass.end())
-	);
-#endif
-	assert(EBuiltinPSOs::NUM_BUILTIN_PSOs == PSODescs_BuiltinLegacy.size());
+	std::vector<FPSODesc> PSODescs(NumBuiltinPSOs + PSOCompileParams_RenderPass.size());
+	{
+		SCOPED_CPU_MARKER("GatherDescs");
+		size_t i = 0;
+		for (auto&& desc : PSODescs_BuiltinLegacy) { PSODescs[i++] = std::move(desc); }
+		for (auto&& desc : PSODescs_Builtin) { PSODescs[i++] = std::move(desc); }
+		for (auto&& params : PSOCompileParams_RenderPass) { PSODescs[i++] = std::move(params.Desc); }
+	}
 	ReservePSOMap(PSODescs.size() - EBuiltinPSOs::NUM_BUILTIN_PSOs);
 	
 	{
+		SCOPED_CPU_MARKER("AssignRenderPassPSOIDs");
 		int i = 0;
 		for (auto& params : PSOCompileParams_RenderPass)
 		{
@@ -111,7 +103,7 @@ void VQRenderer::StartPSOCompilation_MT(const std::vector<FPSOCreationTaskParame
 
 	// shader compile context
 	std::map<PSO_ID, std::vector<size_t>> PSOShaderMap; // pso -> shader_index[]
-	std::vector<FShaderStageCompileDesc> UniqueShaderCompileDescs = GatherUniqueShaderCompileDescs(PSODescs, PSOShaderMap);
+	std::vector<const FShaderStageCompileDesc*> UniqueShaderCompileDescs = GatherUniqueShaderCompileDescs(PSODescs, PSOShaderMap);
 	mShaderCompileResults.clear();
 	mShaderCompileResults.resize(UniqueShaderCompileDescs.size());
 
@@ -120,7 +112,7 @@ void VQRenderer::StartPSOCompilation_MT(const std::vector<FPSOCreationTaskParame
 		SCOPED_CPU_MARKER("DispatchShaderWorkers");
 		for (size_t i = 0; i < UniqueShaderCompileDescs.size(); ++i)
 		{
-			const FShaderStageCompileDesc& ShaderStageCompileDesc = UniqueShaderCompileDescs[i];
+			const FShaderStageCompileDesc& ShaderStageCompileDesc = *UniqueShaderCompileDescs[i];
 			if (ShaderStageCompileDesc.FilePath.empty())
 			{
 				continue;
@@ -170,7 +162,7 @@ void VQRenderer::StartPSOCompilation_MT(const std::vector<FPSOCreationTaskParame
 						{
 							assert(mShaderCompileResults[i].valid());
 							{
-								SCOPED_CPU_MARKER("WAIT_future");
+								SCOPED_CPU_MARKER_C("WAIT_future", 0xFF0000AA);
 								mShaderCompileResults[i].wait();
 							}
 						}
