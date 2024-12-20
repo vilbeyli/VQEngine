@@ -169,6 +169,7 @@ static void InitializeD3D12MA(D3D12MA::Allocator*& mpAllocator, Device& mDevice)
 void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 {
 	Device* pVQDevice = &mDevice;
+	mbMainSwapchainInitialized.store(false);
 
 	InitializeShaderAndPSOCacheDirectory();
 
@@ -320,6 +321,7 @@ void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuf
 
 	// save the render context
 	this->mRenderContextLookup.emplace(pWin->GetHWND(), std::move(ctx));
+	this->mbMainSwapchainInitialized.store(true);
 }
 
 bool VQRenderer::CheckContext(HWND hwnd) const
@@ -340,6 +342,12 @@ FWindowRenderContext& VQRenderer::GetWindowRenderContext(HWND hwnd)
 		//return FWindowRenderContext{};
 	}
 	return mRenderContextLookup.at(hwnd);
+}
+
+void VQRenderer::WaitMainSwapchainReady() const
+{
+	SCOPED_CPU_MARKER_C("WaitSwapchainReady", 0xFF770000);
+	while (!mbMainSwapchainInitialized.load());
 }
 
 void VQRenderer::WaitForLoadCompletion() const

@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "VQEngine.h"
+#include "GPUMarker.h"
 
 #include "Libs/VQUtils/Source/utils.h"
 
@@ -211,6 +212,7 @@ bool CreateEnvironmentMapTextureFromHiResAndSaveToDisk(const std::string& Target
 }
 void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMapMip0Resolution)
 {
+	SCOPED_CPU_MARKER("LoadEnvironmentMap");
 	assert(EnvMapName.size() != 0);
 	constexpr int DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION = 64;
 	FEnvironmentMapRenderingResources& env = mResources_MainWnd.EnvironmentMap;
@@ -239,8 +241,12 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 	std::vector<std::string>::iterator it = std::find(mResourceNames.mEnvironmentMapPresetNames.begin(), mResourceNames.mEnvironmentMapPresetNames.end(), EnvMapName);
 	const size_t ActiveEnvMapIndex = it - mResourceNames.mEnvironmentMapPresetNames.begin();
 
+	
+	
+
 	// Pick an environment map resolution based on the monitor swapchain is on
 	// so we can avoid loading 8k textures for a 1080p laptop for example.
+	mRenderer.WaitMainSwapchainReady(); // wait for swapchain initialization, we need it initialized at this point
 	const unsigned MonitorResolutionY = mRenderer.GetWindowSwapChain(mpWinMain->GetHWND()).GetContainingMonitorDesc().DesktopCoordinates.bottom;
 	DetermineResolution_HDRI(desc, MonitorResolutionY);
 	const std::string EnvMapResolution = StrUtil::split(DirectoryUtil::GetFileNameWithoutExtension(desc.FilePath), '_').back(); // file_name_4k.png -> "4k"
@@ -385,7 +391,6 @@ void VQEngine::UnloadEnvironmentMap()
 // RENDER THREAD
 //
 //-------------------------------------------------------------------------------------------------------------------------------------------------
-#include "GPUMarker.h"
 void VQEngine::PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, FEnvironmentMapRenderingResources& env)
 {
 	Log::Info("Environment Map: PreFilterEnvironmentMap");

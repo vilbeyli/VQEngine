@@ -52,7 +52,7 @@ void FWindowRenderContext::InitializeContext(const Window* pWin, Device* pVQDevi
 	swapChainDesc.bVSync         = bVSync;
 	swapChainDesc.bHDR           = bHDRSwapchain;
 	swapChainDesc.bitDepth       = bHDRSwapchain ? _16 : _8; // currently no support for HDR10 / R10G10B10A2 signals
-	swapChainDesc.bFullscreen    = false; // TODO: exclusive fullscreen to be deprecated. App shouldn't make dxgi mode changes.
+	swapChainDesc.bFullscreen    = false; // Exclusive fullscreen is deprecated. App shouldn't make dxgi mode changes.
 	this->SwapChain.Create(swapChainDesc);
 	if (bHDRSwapchain)
 	{

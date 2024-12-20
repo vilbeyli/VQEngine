@@ -91,6 +91,7 @@ public:
 	unsigned short               GetSwapChainBackBufferCount(HWND hwnd) const;
 	SwapChain&                   GetWindowSwapChain(HWND hwnd);
 	FWindowRenderContext&        GetWindowRenderContext(HWND hwnd);
+	void                         WaitMainSwapchainReady() const;
 
 	// Resource management
 	BufferID                     CreateBuffer(const FBufferDesc& desc);
@@ -249,6 +250,7 @@ private:
 	std::queue<FTextureUploadDesc> mTextureUploadQueue;
 	
 	std::atomic<bool>              mbRendererInitialized;
+	std::atomic<bool>              mbMainSwapchainInitialized;
 
 	// Multithreaded PSO Loading
 	ThreadPool mWorkers_PSOLoad;

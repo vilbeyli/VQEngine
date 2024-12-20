@@ -72,7 +72,7 @@ public:
 	inline void SetHDRMetaData(const FSetHDRMetaDataParams& p) { SetHDRMetaData(p.ColorSpace, p.MaxOutputNits, p.MinOutputNits, p.MaxContentLightLevel, p.MaxFrameAverageLightLevel); }
 	void ClearHDRMetaData();
 	void EnsureSwapChainColorSpace(SwapChainBitDepth swapChainBitDepth, bool bHDR10Signal); 
-
+	bool IsInitialized() const { return this->mpSwapChain != nullptr; }
 
 	/* Getters */ 
 	inline unsigned short                GetNumBackBuffers()                const { return mNumBackBuffers; }
@@ -104,7 +104,7 @@ private:
 	bool                         mbVSync = false;
 
 	HANDLE                       mHEvent = 0;
-	ID3D12Fence*                 ptr = nullptr;
+	ID3D12Fence*                 mpFence = nullptr;
 	std::vector<UINT64>          mFenceValues;
 
 	std::vector<ID3D12Resource*> mRenderTargets;
