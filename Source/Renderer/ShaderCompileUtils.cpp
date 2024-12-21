@@ -117,19 +117,23 @@ std::string GetCompileError(ID3DBlob*& errorMessage, const std::string& shdPath)
 
 std::string GetIncludeFileName(const std::string& line)
 {
-	const std::string str_search = "#include \"";
-	const size_t foundPos = line.find(str_search);
-	if (foundPos != std::string::npos)
-	{
-		std::string quotedFileName = line.substr(foundPos + strlen("#include "), line.size() - foundPos);// +str_search.size() - 1);
-		if (auto it = quotedFileName.find("//") != std::string::npos)
-		{
-			quotedFileName = quotedFileName.substr(0, quotedFileName.find("//")); // skip the comments in file name
-			quotedFileName = StrUtil::trim(quotedFileName);
-		}
-		return quotedFileName.substr(1, quotedFileName.size() - 2);
-	}
-	return std::string();
+	const std::string strIncludeDirective = "#include \"";
+	const size_t iIncludeStart = line.find(strIncludeDirective);
+	if (iIncludeStart == std::string::npos)
+		return "";
+
+	const size_t iFileNameStart = iIncludeStart + strIncludeDirective.size();
+	const size_t iClosingQuote = line.find('\"', iFileNameStart);
+	if (iClosingQuote == std::string::npos)
+		return ""; // closing quote not found -> ill-formed include, skip
+
+	std::string fileName = line.substr(iFileNameStart, iClosingQuote - iFileNameStart);
+
+	// trim file name
+	while (!fileName.empty() && std::isspace(fileName.back()))
+		fileName.pop_back();
+
+	return fileName;
 }
 
 bool AreIncludesDirty(const std::string& srcPath, const std::string& cachePath)
