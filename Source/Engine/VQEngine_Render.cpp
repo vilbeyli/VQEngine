@@ -350,12 +350,14 @@ void VQEngine::InitializeBuiltinMeshes()
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.LODVertices[0], data.LODIndices[0], mResourceNames.mBuiltinMeshNames[eMesh]);
 	} 
 	{
+		SCOPED_CPU_MARKER("Cylinder");
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::CYLINDER;
 		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Cylinder<VertexType>(3.0f, 1.0f, 1.0f, 45, 6, 4);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Cylinder";
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
+		SCOPED_CPU_MARKER("Sphere");
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::SPHERE;
 		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Sphere<VertexType>(1.0f, 30, 30, 5);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Sphere";
@@ -368,6 +370,7 @@ void VQEngine::InitializeBuiltinMeshes()
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
+		SCOPED_CPU_MARKER("SimpleGrid");
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::GRID_SIMPLE_QUAD;
 		const float GridLength = 1.0f;
 		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 2, 2, 1);
@@ -375,6 +378,7 @@ void VQEngine::InitializeBuiltinMeshes()
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
+		SCOPED_CPU_MARKER("DetailGrid0");
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::GRID_DETAILED_QUAD0;
 		const float GridLength = 1.0f;
 		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 3, 3, 1);
@@ -382,6 +386,7 @@ void VQEngine::InitializeBuiltinMeshes()
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
+		SCOPED_CPU_MARKER("DetailGrid1");
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::GRID_DETAILED_QUAD1;
 		const float GridLength = 1.0f;
 		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 12, 12, 4);
@@ -389,6 +394,7 @@ void VQEngine::InitializeBuiltinMeshes()
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
+		SCOPED_CPU_MARKER("DetailGrid2");
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::GRID_DETAILED_QUAD2;
 		const float GridLength = 1.0f;
 		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 1200, 1200, 6);
@@ -396,6 +402,7 @@ void VQEngine::InitializeBuiltinMeshes()
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
+		SCOPED_CPU_MARKER("TessellationGrids");
 		using PatchVertexType = FVertexDefault;
 		constexpr int NUM_TESSELLATION_GEOMETRY = 5;
 		const EBuiltInMeshes eMesh[NUM_TESSELLATION_GEOMETRY] =
@@ -424,13 +431,13 @@ void VQEngine::InitializeBuiltinMeshes()
 	// ...
 
 	mRenderer.UploadVertexAndIndexBufferHeaps();
-	mbDefaultMeshesLoaded.store(true);
+	mBuiltinMeshGenCompleted.NotifyAll();
 }
 
-void VQEngine::WaitForBuiltinMeshGeneration() const
+void VQEngine::WaitForBuiltinMeshGeneration()
 {
 	SCOPED_CPU_MARKER_C("WaitForBuiltinMeshGeneration", 0xFFAA0000);
-	while (!mbDefaultMeshesLoaded.load());
+	mBuiltinMeshGenCompleted.Wait();
 }
 
 

@@ -52,7 +52,6 @@ VQEngine::VQEngine()
 	, mRenderPass_Magnifier(mRenderer, true) // true: outputs to swapchain
 	, mRenderPass_ObjectID(mRenderer)
 	, mRenderPass_Outline(mRenderer)
-	, mbDefaultMeshesLoaded(false)
 {}
 
 void VQEngine::MainThread_Tick()

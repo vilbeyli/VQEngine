@@ -467,6 +467,7 @@ void VQEngine::UpdateThread_UpdateScene_DebugWnd(const float dt)
 
 void VQEngine::Load_SceneData_Dispatch()
 {
+	SCOPED_CPU_MARKER("DispatchLoadSceneData");
 	if (mQueue_SceneLoad.empty())
 		return;
 

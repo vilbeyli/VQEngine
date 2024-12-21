@@ -81,7 +81,7 @@ MaterialID Scene::LoadMaterial(const FMaterialRepresentation& matRep, TaskID tas
 
 void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& sceneRep, ThreadPool& UpdateWorkerThreadPool)
 {
-	SCOPED_CPU_MARKER("Scene::StartLoading()");
+	SCOPED_CPU_MARKER("SceneStartLoading");
 
 	const TaskID taskID = AssetLoader::GenerateModelLoadTaskID();
 	LoadBuiltinMaterials(taskID, sceneRep.Objects);

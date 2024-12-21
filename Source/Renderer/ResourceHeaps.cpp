@@ -42,6 +42,7 @@
 #include "Common.h"
 
 #include "Libs/D3DX12/d3dx12.h"
+#include "../Engine/GPUMarker.h"
 #include "../../Libs/VQUtils/Source/utils.h"
 
 //--------------------------------------------------------------------------------------
@@ -170,6 +171,7 @@ void StaticResourceViewHeap::FreeDescriptor(ResourceView* pRV)
 //--------------------------------------------------------------------------------------
 void UploadHeap::Create(ID3D12Device* pDevice, size_t uSize, ID3D12CommandQueue* pQueue)
 {
+    SCOPED_CPU_MARKER("UploadHeapCreate");
     mpDevice = pDevice;
     mpQueue = pQueue;
 
@@ -239,6 +241,7 @@ UINT8* UploadHeap::Suballocate(size_t uSize, UINT64 uAlign)
 
 void UploadHeap::UploadToGPUAndWait(ID3D12CommandQueue* pCmdQueue /* =nullptr */)
 {
+    SCOPED_CPU_MARKER("UploadToGPUAndWait");
     if (!pCmdQueue)
     {
         pCmdQueue = this->mpQueue;
@@ -249,6 +252,7 @@ void UploadHeap::UploadToGPUAndWait(ID3D12CommandQueue* pCmdQueue /* =nullptr */
     pCmdQueue->Signal(ptr, mFenceValue);
     if (ptr->GetCompletedValue() < mFenceValue)
     {
+        SCOPED_CPU_MARKER_C("Wait", 0xFF0000AA);
         ptr->SetEventOnCompletion(mFenceValue, mHEvent);
         WaitForSingleObject(mHEvent, INFINITE);
     }

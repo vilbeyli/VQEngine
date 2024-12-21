@@ -386,7 +386,7 @@ public:
 	void ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, SRV_ID& outSRV_ID);
 	void UnloadEnvironmentMap();
 
-	void WaitForBuiltinMeshGeneration() const;
+	void WaitForBuiltinMeshGeneration();
 
 	// Getters
 	MeshID GetBuiltInMeshID(const std::string& MeshName) const;
@@ -481,7 +481,7 @@ private:
 	std::atomic<bool>               mbEnvironmentMapPreFilter;
 	std::atomic<bool>               mbMainWindowHDRTransitionInProgress; // see DispatchHDRSwapchainTransitionEvents()
 	std::atomic<bool>               mbExitApp;
-	std::atomic<bool>               mbDefaultMeshesLoaded;
+	Signal                          mBuiltinMeshGenCompleted;
 
 	// system & settings
 	FEngineSettings                 mSettings;
