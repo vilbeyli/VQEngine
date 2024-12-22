@@ -620,7 +620,7 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bCheckAl
 
 		this->StartTextureUploads();
 
-		Texture& refTex = mTextures.at(ID);
+		Texture& refTex = mTextures.at(ID); // has threading issue: occasional std::out_of_range error
 
 		// SYNC POINT - texture residency
 		if(!refTex.mbResident.load())

@@ -481,7 +481,9 @@ private:
 	std::atomic<bool>               mbEnvironmentMapPreFilter;
 	std::atomic<bool>               mbMainWindowHDRTransitionInProgress; // see DispatchHDRSwapchainTransitionEvents()
 	std::atomic<bool>               mbExitApp;
-	Signal                          mBuiltinMeshGenCompleted;
+	std::atomic<bool>               mbBuiltinMeshGenFinished;
+	Signal                          mBuiltinMeshGenSignal;
+
 
 	// system & settings
 	FEngineSettings                 mSettings;

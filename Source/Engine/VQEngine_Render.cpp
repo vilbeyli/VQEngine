@@ -431,13 +431,14 @@ void VQEngine::InitializeBuiltinMeshes()
 	// ...
 
 	mRenderer.UploadVertexAndIndexBufferHeaps();
-	mBuiltinMeshGenCompleted.NotifyAll();
+	mbBuiltinMeshGenFinished.store(true);
+	mBuiltinMeshGenSignal.NotifyAll();
 }
 
 void VQEngine::WaitForBuiltinMeshGeneration()
 {
 	SCOPED_CPU_MARKER_C("WaitForBuiltinMeshGeneration", 0xFFAA0000);
-	mBuiltinMeshGenCompleted.Wait();
+	mBuiltinMeshGenSignal.Wait([&]() { return mbBuiltinMeshGenFinished.load(); });
 }
 
 
@@ -1132,7 +1133,7 @@ void VQEngine::RenderThread_PreRender()
 		mWaitForSubmitWorker = false;
 	}
 
-	const FSceneView&       SceneView       = mpScene->GetSceneView(FRAME_DATA_INDEX);
+	const FSceneView&        SceneView       = mpScene->GetSceneView(FRAME_DATA_INDEX);
 	const FSceneShadowViews& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
 
 	const bool bUseAsyncCompute = ShouldEnableAsyncCompute();
