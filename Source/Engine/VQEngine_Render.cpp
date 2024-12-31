@@ -1700,12 +1700,11 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 			ResolveMSAA_DepthPrePass(pCmd, &CBHeap);
 		}
 
-		TransitionDepthPrePassForRead(pCmd, bMSAA, false);
+		TransitionDepthPrePassForRead(pCmd, bMSAA);
 
 		if (!bMSAA)
 		{
-			// FFX-CACAO expects TexDepthResolve (UAV) to contain depth buffer data,
-			// but we've written to TexDepth (DSV) when !bMSAA.
+			// FFX-CACAO 
 			CopyDepthForCompute(pCmd);
 		}
 
@@ -1781,15 +1780,22 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 				{
 					RENDER_WORKER_CPU_MARKER;
 
+					TransitionDepthPrePassForWrite(pCmd_ZPrePass, bMSAA);
+
 					RenderDepthPrePass(pCmd_ZPrePass, &CBHeap_WorkerZPrePass, SceneView, cbAddresses, cbPerView, cbPerFrame);
 
 					if (bMSAA)
 					{
-						TransitionDepthPrePassMSAAResolve(pCmd_ZPrePass, bMSAA);
+						TransitionDepthPrePassMSAAResolve(pCmd_ZPrePass);
 					}
 
 					if (bAsyncCompute)
 					{
+						if (!bMSAA)
+						{
+							CopyDepthForCompute(pCmd_ZPrePass); // This should be eventually removed, see function body
+						}
+
 						ID3D12Resource* pRscAmbientOcclusion = mRenderer.GetTextureResource(rsc.Tex_AmbientOcclusion);
 						pCmd_ZPrePass->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscAmbientOcclusion, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
 
@@ -1800,24 +1806,17 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 						}
 						{
 							SCOPED_CPU_MARKER("Signal");
-
 							mAsyncComputeSSAOReadyFence[BACK_BUFFER_INDEX].Signal(GFXCmdQ.pQueue);
-
 							mAsyncComputeSSAOReadyFence[BACK_BUFFER_INDEX].WaitOnGPU(CMPCmdQ.pQueue);
-
 							mAsyncComputeWorkSubmitted.store(true);
 						}
 
 						if (bMSAA)
 						{
 							ResolveMSAA_DepthPrePass(pCmd_Compute, &CBHeap_WorkerZPrePass);
-						}
-						else
-						{
-							CopyDepthForCompute(pCmd_Compute);
+							TransitionDepthPrePassForReadAsyncCompute(pCmd_Compute);
 						}
 
-						TransitionDepthPrePassForRead(pCmd_Compute, bMSAA, true);
 
 						if (bDownsampleDepth)
 						{
@@ -1840,13 +1839,11 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 							ResolveMSAA_DepthPrePass(pCmd_ZPrePass, &CBHeap_WorkerZPrePass);
 						}
 
-						TransitionDepthPrePassForRead(pCmd_ZPrePass, bMSAA, false);
+						TransitionDepthPrePassForRead(pCmd_ZPrePass, bMSAA);
 
 						if (!bMSAA)
 						{
-							// FFX-CACAO expects TexDepthResolve (UAV) to contain depth buffer data,
-							// but we've written to TexDepth (DSV) when !bMSAA.
-							CopyDepthForCompute(pCmd_ZPrePass);
+							CopyDepthForCompute(pCmd_ZPrePass); // This should be eventually removed, see function body
 						}
 
 						if (bDownsampleDepth)
@@ -1910,8 +1907,11 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		{
 			ID3D12Resource* pRscAmbientOcclusion = mRenderer.GetTextureResource(rsc.Tex_AmbientOcclusion);
 			std::vector<CD3DX12_RESOURCE_BARRIER> Barriers;
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
+			if (bMSAA)
+			{
+				Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
+				Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
+			}
 			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscAmbientOcclusion, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_GENERIC_READ));
 			pCmd_ThisThread->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
 		}

@@ -582,8 +582,10 @@ private:
 	void                            RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView, size_t iBegin, size_t NumPointLights);
 	void                            RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, D3D12_GPU_VIRTUAL_ADDRESS perFrameCBAddr);
 	void                            RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, ID3D12CommandList* pCmdCopy, DynamicBufferHeap* pCBufferHeap, const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, const int BACK_BUFFER_INDEX);
-	void                            TransitionDepthPrePassForRead(ID3D12GraphicsCommandList* pCmd, bool bMSAA, bool bAsyncCompute);
-	void                            TransitionDepthPrePassMSAAResolve(ID3D12GraphicsCommandList* pCmd, bool bMSAA);
+	void                            TransitionDepthPrePassForWrite(ID3D12GraphicsCommandList* pCmd, bool bMSAA);
+	void                            TransitionDepthPrePassForRead(ID3D12GraphicsCommandList* pCmd, bool bMSAA);
+	void                            TransitionDepthPrePassForReadAsyncCompute(ID3D12GraphicsCommandList* pCmd);
+	void                            TransitionDepthPrePassMSAAResolve(ID3D12GraphicsCommandList* pCmd);
 	void                            ResolveMSAA_DepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap);
 	void                            CopyDepthForCompute(ID3D12GraphicsCommandList* pCmd);
 	void                            RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView);

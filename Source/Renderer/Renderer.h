@@ -176,7 +176,7 @@ public:
 	inline ID3D12Device*         GetDevicePtr() { return mDevice.GetDevicePtr(); }
 	inline FDeviceCapabilities   GetDeviceCapabilities() const { return mDevice.GetDeviceCapabilities(); }
 	inline CommandQueue&         GetCommandQueue(CommandQueue::EType eType) { return mCmdQueues[(int)eType]; }
-	
+
 	FLightingPSOs     mLightingPSOs;
 	FDepthPrePassPSOs mZPrePassPSOs;
 	FShadowPassPSOs   mShadowPassPSOs;

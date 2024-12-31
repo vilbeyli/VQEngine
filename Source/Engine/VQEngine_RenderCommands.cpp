@@ -346,13 +346,6 @@ void VQEngine::RenderDepthPrePass(
 	auto pRscDepthMSAA   = mRenderer.GetTextureResource(rsc.Tex_SceneDepthMSAA);
 	auto pRscDepth       = mRenderer.GetTextureResource(rsc.Tex_SceneDepth);
 
-	if (!bMSAA)
-	{
-		std::vector<CD3DX12_RESOURCE_BARRIER> Barriers;
-		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
-		pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
-	}
-
 	const DSV& dsvColor   = mRenderer.GetDSV(bMSAA ? mResources_MainWnd.DSV_SceneDepthMSAA : mResources_MainWnd.DSV_SceneDepth);
 	const RTV& rtvNormals = mRenderer.GetRTV(bMSAA ? mResources_MainWnd.RTV_SceneNormalsMSAA : mResources_MainWnd.RTV_SceneNormals);
 
@@ -450,7 +443,6 @@ void VQEngine::RenderDepthPrePass(
 		pCmd->IASetIndexBuffer(&ib);
 		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
 	}
-
 }
 
 void VQEngine::RenderObjectIDPass(
@@ -501,10 +493,9 @@ void VQEngine::RenderObjectIDPass(
 		if (ShouldEnableAsyncCompute())
 		{
 			SCOPED_CPU_MARKER_C("WAIT_DEPTH_PREPASS_SUBMIT", 0xFFFF0000);
-			while (!mAsyncComputeWorkSubmitted.load());
+			while (!mAsyncComputeWorkSubmitted.load()); // pls don't judge
 			mAsyncComputeWorkSubmitted.store(false);
-		}
-
+		} 
 		{
 			SCOPED_CPU_MARKER("ExecuteList");
 			GFXCmdQ.pQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&pCmd);
@@ -539,10 +530,27 @@ void VQEngine::RenderObjectIDPass(
 		pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(srcLoc.pResource,
 			D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
 	}
-
 }
 
-void VQEngine::TransitionDepthPrePassForRead(ID3D12GraphicsCommandList* pCmd, bool bMSAA, bool bAsyncCompute)
+void VQEngine::TransitionDepthPrePassForWrite(ID3D12GraphicsCommandList* pCmd, bool bMSAA)
+{
+	SCOPED_GPU_MARKER(pCmd, "TransitionDepthPrePassForWrite");
+	const auto& rsc      = mResources_MainWnd;
+	auto pRscNormals     = mRenderer.GetTextureResource(rsc.Tex_SceneNormals);
+	auto pRscNormalsMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneNormalsMSAA);
+	auto pRscDepthResolve= mRenderer.GetTextureResource(rsc.Tex_SceneDepthResolve);
+	auto pRscDepthMSAA   = mRenderer.GetTextureResource(rsc.Tex_SceneDepthMSAA);
+	auto pRscDepth       = mRenderer.GetTextureResource(rsc.Tex_SceneDepth);
+
+	std::vector<CD3DX12_RESOURCE_BARRIER> Barriers;
+	if (!bMSAA)
+	{
+		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
+		pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
+	}
+}
+
+void VQEngine::TransitionDepthPrePassForRead(ID3D12GraphicsCommandList* pCmd, bool bMSAA)
 {
 	SCOPED_GPU_MARKER(pCmd, "TransitionDepthPrePassForRead");
 
@@ -556,11 +564,10 @@ void VQEngine::TransitionDepthPrePassForRead(ID3D12GraphicsCommandList* pCmd, bo
 	std::vector<CD3DX12_RESOURCE_BARRIER> Barriers;
 	if (bMSAA)
 	{
-		if (!bAsyncCompute)
-		{
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
-			Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
-		}
+		
+		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
+		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
+		
 		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
 		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
 	}
@@ -574,7 +581,24 @@ void VQEngine::TransitionDepthPrePassForRead(ID3D12GraphicsCommandList* pCmd, bo
 	pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
 }
 
-void VQEngine::TransitionDepthPrePassMSAAResolve(ID3D12GraphicsCommandList* pCmd, bool bMSAA)
+void VQEngine::TransitionDepthPrePassForReadAsyncCompute(ID3D12GraphicsCommandList* pCmd)
+{
+	SCOPED_GPU_MARKER(pCmd, "TransitionDepthPrePassForReadAsyncCompute");
+
+	const auto& rsc = mResources_MainWnd;
+	auto pRscNormals = mRenderer.GetTextureResource(rsc.Tex_SceneNormals);
+	auto pRscNormalsMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneNormalsMSAA);
+	auto pRscDepthResolve = mRenderer.GetTextureResource(rsc.Tex_SceneDepthResolve);
+	auto pRscDepthMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneDepthMSAA);
+	auto pRscDepth = mRenderer.GetTextureResource(rsc.Tex_SceneDepth);
+
+	std::vector<CD3DX12_RESOURCE_BARRIER> Barriers;
+	Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+	Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+	pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
+}
+
+void VQEngine::TransitionDepthPrePassMSAAResolve(ID3D12GraphicsCommandList* pCmd)
 {
 	const auto& rsc      = mResources_MainWnd;
 	auto pRscNormals     = mRenderer.GetTextureResource(rsc.Tex_SceneNormals);
@@ -582,12 +606,14 @@ void VQEngine::TransitionDepthPrePassMSAAResolve(ID3D12GraphicsCommandList* pCmd
 	auto pRscDepthResolve= mRenderer.GetTextureResource(rsc.Tex_SceneDepthResolve);
 	auto pRscDepthMSAA   = mRenderer.GetTextureResource(rsc.Tex_SceneDepthMSAA);
 	auto pRscDepth       = mRenderer.GetTextureResource(rsc.Tex_SceneDepth);
-
+	
 	const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 	{
+		// write->read
 		  CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA , D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
 		, CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA   , D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
-		, CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals     , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+		// read->write
+		, CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
 		, CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
 	};
 	pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
@@ -612,8 +638,23 @@ void VQEngine::ResolveMSAA_DepthPrePass(ID3D12GraphicsCommandList* pCmd, Dynamic
 	mRenderPass_DepthResolve.RecordCommands(&params);
 }
 
+// ------------------------------------------------------------------------------------------------------------
+// This CopyDepthForCompute pass is, in theory, not necessary.
+// However, since CACAO pass initializes resource views OnCreateWindowSizeDependentResources
+// and uses the Tex_SceneDepthResolve resource as input, assuming MSAA=on, we have two choices:
+//   (1) re-initialize CACAO depth input resource view on MSAA change
+//   (2) copy depth
+// 
+// Opting in for (2) for a quick fix for the MSAA=off case.
+// (1) is the correct solution -- it involves syncing w/ GPU to update the view so the correct resource is used.
+// 
+// Note that we have 3 depth resources
+// - Tex_SceneDepthMSAA    : DSV + SRV        | MSAA target
+// - Tex_SceneDepth        : DSV + SRV        | non-MSAA target
+// - Tex_SceneDepthResolve : SRV + UAV Write  | MSAA resolve target
 void VQEngine::CopyDepthForCompute(ID3D12GraphicsCommandList* pCmd)
 {
+	SCOPED_GPU_MARKER(pCmd, "CopyDepthForCompute");
 	const auto& rsc = mResources_MainWnd;
 	auto pRscDepthResolve= mRenderer.GetTextureResource(rsc.Tex_SceneDepthResolve);
 	auto pRscDepth       = mRenderer.GetTextureResource(rsc.Tex_SceneDepth);
@@ -625,6 +666,7 @@ void VQEngine::CopyDepthForCompute(ID3D12GraphicsCommandList* pCmd)
 	Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepth, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
 	pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
 }
+// ------------------------------------------------------------------------------------------------------------
 
 void VQEngine::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView)
 {
