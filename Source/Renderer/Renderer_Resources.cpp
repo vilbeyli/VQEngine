@@ -620,7 +620,7 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bCheckAl
 
 		this->StartTextureUploads();
 
-		Texture& refTex = mTextures.at(ID); // has threading issue: occasional std::out_of_range error
+		Texture& refTex = this->GetTexture_ThreadSafe(ID);
 
 		// SYNC POINT - texture residency
 		if(!refTex.mbResident.load())
@@ -761,6 +761,17 @@ TextureID VQRenderer::AddTexture_ThreadSafe(Texture&& tex)
 	return Id;
 }
 
+const Texture& VQRenderer::GetTexture_ThreadSafe(TextureID Id) const
+{
+	std::lock_guard<std::mutex> lk(mMtxTextures);
+	return mTextures.at(Id);
+}
+
+Texture& VQRenderer::GetTexture_ThreadSafe(TextureID Id)
+{
+	std::lock_guard<std::mutex> lk(mMtxTextures);
+	return mTextures.at(Id);
+}
 
 // -----------------------------------------------------------------------------------------------------------------
 //
@@ -1626,24 +1637,24 @@ const RTV& VQRenderer::GetRenderTargetView(RTV_ID Id) const
 const ID3D12Resource* VQRenderer::GetTextureResource(TextureID Id) const
 {
 	CHECK_TEXTURE(mTextures, Id);
-	return mTextures.at(Id).GetResource();
+	return GetTexture_ThreadSafe(Id).GetResource();
 }
 ID3D12Resource* VQRenderer::GetTextureResource(TextureID Id) 
 {
 	CHECK_TEXTURE(mTextures, Id);
-	return mTextures.at(Id).GetResource();
+	return GetTexture_ThreadSafe(Id).GetResource();
 }
 
 DXGI_FORMAT VQRenderer::GetTextureFormat(TextureID Id) const
 {
 	CHECK_TEXTURE(mTextures, Id);
-	return mTextures.at(Id).GetFormat();
+	return GetTexture_ThreadSafe(Id).GetFormat();
 }
 
 bool VQRenderer::GetTextureAlphaChannelUsed(TextureID Id) const
 {
 	CHECK_TEXTURE(mTextures, Id);
-	return mTextures.at(Id).GetUsesAlphaChannel();
+	return GetTexture_ThreadSafe(Id).GetUsesAlphaChannel();
 }
 
 void VQRenderer::GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices, int& NumMips) const
@@ -1651,7 +1662,7 @@ void VQRenderer::GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int&
 	if (Id != INVALID_ID)
 	{
 		CHECK_TEXTURE(mTextures, Id);
-		const Texture& tex = mTextures.at(Id);
+		const Texture& tex = GetTexture_ThreadSafe(Id);
 		SizeX = tex.mWidth;
 		SizeY = tex.mHeight;
 		NumSlices = tex.mNumArraySlices;
@@ -1671,14 +1682,14 @@ uint VQRenderer::GetTextureMips(TextureID Id) const
 {
 	if (Id == INVALID_ID) return 0;
 	CHECK_TEXTURE(mTextures, Id);
-	const Texture& tex = mTextures.at(Id);
+	const Texture& tex = GetTexture_ThreadSafe(Id);
 	return tex.mMipMapCount;
 }
 
 uint VQRenderer::GetTextureSampleCount(TextureID Id) const
 {
 	CHECK_TEXTURE(mTextures, Id);
-	const Texture& tex = mTextures.at(Id);
+	const Texture& tex = GetTexture_ThreadSafe(Id);
 	assert(false);
 	return 0; // TODO:
 }

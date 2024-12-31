@@ -283,6 +283,8 @@ private:
 	bool CheckContext(HWND hwnd) const;
 
 	TextureID AddTexture_ThreadSafe(Texture&& tex);
+	const Texture& GetTexture_ThreadSafe(TextureID Id) const;
+	Texture& GetTexture_ThreadSafe(TextureID Id);
 
 	// Texture Residency
 	void QueueTextureUpload(const FTextureUploadDesc& desc);
