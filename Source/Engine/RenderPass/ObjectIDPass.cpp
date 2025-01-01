@@ -385,7 +385,7 @@ int4 ObjectIDPass::ReadBackPixel(const int2& screenCoords) const
 	unsigned int* pData = nullptr;
 	D3D12_RANGE readRange = { 0, numPixels * bytesPerPixel }; // Only request the read for the necessary range
 	HRESULT hr = pRsc->Map(0, &readRange, reinterpret_cast<void**>(&pData));
-	if (SUCCEEDED(hr))
+	if (SUCCEEDED(hr) && screenCoords.y >= 0 && screenCoords.x >= 0)
 	{
 		const int pixelIndex = (screenCoords.y * mOutputResolutionX + screenCoords.x) * bytesPerChannel;
 		const int r = pData[pixelIndex + 0]; 

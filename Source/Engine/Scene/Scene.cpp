@@ -824,36 +824,49 @@ void Scene::HandleInput(FSceneView& SceneView)
 void Scene::PickObject(const ObjectIDPass& ObjectIDRenderPass, int MouseClickPositionX, int MouseClickPositionY)
 {
 	int4 px = ObjectIDRenderPass.ReadBackPixel(MouseClickPositionX, MouseClickPositionY);
+	Log::Info("Picked(%d, %d): Obj[%d] Mesh[%d] Material[%d] ProjArea[%d]", MouseClickPositionX, MouseClickPositionY, px.x, px.y, px.z, px.w);
+	
+	// if the mouse clicked on another monitor and main window lost focus, 
+	// we will potentially get negative coordinates when the mouse is clicked
+	// again on the main window. px will have negative values in that case.
+	// we discard this case.
+	if (px.x < 0)
+	{
+		return;
+	}
 
 	// objectID starts from 0, shader writes with an offset of 1.
 	// we remove the offset here so that we can clear RT to 0 and 
 	// not select object when clicked on area with no rendered pixels (no obj id).
-	size_t hObj = px.x - 1;
-	Log::Info("Picked(%d, %d): Obj[%d] Mesh[%d] Material[%d] ProjArea[%d]", MouseClickPositionX, MouseClickPositionY, hObj, px.y, px.z, px.w);
+	const int hObj = px.x - 1;
+
+	// handle click on background (no object)
+	if (hObj == -1)
+	{
+		this->mSelectedObjects.clear();
+		return;
+	}
+
+	assert(px.x >= 1);
 
 	auto it = std::find(this->mSelectedObjects.begin(), this->mSelectedObjects.end(), hObj);
-	const bool bFound = it != this->mSelectedObjects.end();
+	const bool bClickOnAlreadySelected = it != this->mSelectedObjects.end();
 	const bool bIsShiftDown = mInput.IsKeyDown("Shift");
-	if (bIsShiftDown)
+	
+	if (bClickOnAlreadySelected)
 	{
-		if (bFound)
+		if (bIsShiftDown) // de-select
 		{
 			this->mSelectedObjects.erase(it);
 		}
-		else
-		{
-			if (hObj != INVALID_ID)
-				this->mSelectedObjects.push_back(hObj);
-		}
 	}
-	else
+	else // clicked on new object
 	{
-		if (!bFound)
+		if(!bIsShiftDown) // multi-select w/ shift, single select otherwise
 		{
 			this->mSelectedObjects.clear();
-			if(hObj != INVALID_ID)
-				this->mSelectedObjects.push_back(hObj);
 		}
+		this->mSelectedObjects.push_back(hObj);
 	}
 }
 
