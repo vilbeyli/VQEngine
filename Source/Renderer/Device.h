@@ -41,6 +41,7 @@ struct FDeviceCapabilities
 	bool bSupportsMeshShaders = false;
 	bool bSupportsSamplerFeedback = false;
 	bool bSupportsTypedUAVLoads = false;
+	bool bSupportsEnhancedBarriers = false;
 	unsigned SupportedMaxMultiSampleQualityLevel = 0;
 
 	std::unordered_map<DXGI_FORMAT, bool> TypedUAVLoadFormatSupportMap;
