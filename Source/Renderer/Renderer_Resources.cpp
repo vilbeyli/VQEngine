@@ -667,7 +667,7 @@ TextureID VQRenderer::CreateTexture(const TextureCreateDesc& desc, bool bCheckAl
 
 		{
 			SCOPED_CPU_MARKER_C("WAIT_RESIDENT", 0xFFFF0000);
-			mTextures.at(ID).mSignalResident.Wait();
+			GetTexture_ThreadSafe(ID).mSignalResident.Wait();
 		}
 	}
 
@@ -786,7 +786,7 @@ SRV_ID VQRenderer::AllocateAndInitializeSRV(TextureID texID)
 	{
 		std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 
-		Texture& tex = mTextures.at(texID);
+		Texture& tex = GetTexture_ThreadSafe(texID);
 		if (!tex.mpResource)
 		{
 			Log::Error("Texture ID=%d failed initializing, cannot create the SRV", texID);
@@ -811,7 +811,7 @@ DSV_ID VQRenderer::AllocateAndInitializeDSV(TextureID texID)
 
 		this->mHeapDSV.AllocateDescriptor(1, &dsv);
 		Id = LAST_USED_DSV_ID++;
-		this->mTextures.at(texID).InitializeDSV(0, &dsv);
+		GetTexture_ThreadSafe(texID).InitializeDSV(0, &dsv);
 		this->mDSVs[Id] = dsv;
 	}
 	return Id;
@@ -878,7 +878,7 @@ void VQRenderer::InitializeDSV(DSV_ID dsvID, uint32 heapIndex, TextureID texID, 
 	
 	assert(mDSVs.find(dsvID) != mDSVs.end());
 
-	mTextures.at(texID).InitializeDSV(heapIndex, &mDSVs.at(dsvID), ArraySlice);
+	GetTexture_ThreadSafe(texID).InitializeDSV(heapIndex, &mDSVs.at(dsvID), ArraySlice);
 }
 void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bool bInitAsArrayView /*= false*/, bool bInitAsCubeView /*= false*/, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc /*=nullptr*/, UINT ShaderComponentMapping)
 {
@@ -886,7 +886,7 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 	if (texID != INVALID_ID)
 	{
 		CHECK_TEXTURE(mTextures, texID);
-		mTextures.at(texID).InitializeSRV(heapIndex, &mSRVs.at(srvID), bInitAsArrayView, bInitAsCubeView, ShaderComponentMapping, pSRVDesc);
+		GetTexture_ThreadSafe(texID).InitializeSRV(heapIndex, &mSRVs.at(srvID), bInitAsArrayView, bInitAsCubeView, ShaderComponentMapping, pSRVDesc);
 	}
 	else // init NULL SRV
 	{
@@ -911,14 +911,14 @@ void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID)
 	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(RTV, rtvID);
 	D3D12_RENDER_TARGET_VIEW_DESC* pRTVDesc = nullptr; // unused
-	mDevice.GetDevicePtr()->CreateRenderTargetView(mTextures.at(texID).GetResource(), pRTVDesc, mRTVs.at(rtvID).GetCPUDescHandle(heapIndex));
+	mDevice.GetDevicePtr()->CreateRenderTargetView(GetTexture_ThreadSafe(texID).GetResource(), pRTVDesc, mRTVs.at(rtvID).GetCPUDescHandle(heapIndex));
 }
 
 void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID, int arraySlice, int mipLevel)
 {
 	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(RTV, rtvID);
-	Texture& tex = mTextures.at(texID);
+	Texture& tex = GetTexture_ThreadSafe(texID);
 
 	D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
 	D3D12_RESOURCE_DESC rscDesc = tex.GetResource()->GetDesc();
@@ -962,7 +962,7 @@ void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID, in
 		}
 	}
 
-	mDevice.GetDevicePtr()->CreateRenderTargetView(mTextures.at(texID).GetResource(), &rtvDesc, mRTVs.at(rtvID).GetCPUDescHandle(heapIndex));
+	mDevice.GetDevicePtr()->CreateRenderTargetView(GetTexture_ThreadSafe(texID).GetResource(), &rtvDesc, mRTVs.at(rtvID).GetCPUDescHandle(heapIndex));
 }
 
 void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID texID, DXGI_FORMAT bufferViewFormatOverride)
@@ -970,7 +970,7 @@ void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID 
 	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(UAV, uavID);
 
-	Texture& tex = mTextures.at(texID);
+	Texture& tex = GetTexture_ThreadSafe(texID);
 	D3D12_RESOURCE_DESC rscDesc = tex.GetResource()->GetDesc();
 	
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
@@ -989,7 +989,7 @@ void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID 
 	uavDesc.Buffer.StructureByteStride = StructByteStride;
 
 	// create the UAV
-	ID3D12Resource* pRsc = mTextures.at(texID).GetResource();
+	ID3D12Resource* pRsc = GetTexture_ThreadSafe(texID).GetResource();
 	ID3D12Resource* pRscCounter = nullptr; // TODO: find a use case for this parameter and implement proper interface
 	assert(pRsc);
 	mDevice.GetDevicePtr()->CreateUnorderedAccessView(
@@ -1001,7 +1001,7 @@ void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID 
 }
 void VQRenderer::InitializeSRVForBuffer(SRV_ID srvID, uint heapIndex, TextureID texID, DXGI_FORMAT bufferViewFormatOverride)
 {
-	Texture& tex = mTextures.at(texID);
+	Texture& tex = GetTexture_ThreadSafe(texID);
 	ID3D12Resource* pRsc = tex.GetResource();
 	D3D12_RESOURCE_DESC rscDesc = pRsc->GetDesc();
 	assert(rscDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER);
@@ -1023,7 +1023,7 @@ void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, ui
 	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(UAV, uavID);
 
-	Texture& tex = mTextures.at(texID);
+	Texture& tex = GetTexture_ThreadSafe(texID);
 	D3D12_RESOURCE_DESC rscDesc = tex.GetResource()->GetDesc();
 	
 	const bool& bCubemap = tex.mbCubemap;
@@ -1076,7 +1076,7 @@ void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, ui
 	}
 
 	// create the UAV
-	ID3D12Resource* pRsc = mTextures.at(texID).GetResource();
+	ID3D12Resource* pRsc = GetTexture_ThreadSafe(texID).GetResource();
 	ID3D12Resource* pRscCounter = nullptr; // TODO: find a use case for this parameter and implement proper interface
 	assert(pRsc);
 	mDevice.GetDevicePtr()->CreateUnorderedAccessView(
@@ -1554,7 +1554,7 @@ void VQRenderer::ProcessTextureUploadQueue()
 		{
 			std::unique_lock<std::mutex> lk(mMtxTextures);
 			assert(mTextures.find(desc.id) != mTextures.end());
-			Texture& tex = mTextures.at(desc.id);
+			Texture& tex = mTextures.at(desc.id); // already locked the mutex, direct access is granted to mTextures
 			vTexResidentSignals.push_back(&tex.mSignalResident);
 			vTexResidentBools.push_back(&tex.mbResident);
 		}
