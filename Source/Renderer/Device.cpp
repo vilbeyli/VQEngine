@@ -171,7 +171,7 @@ static void CheckDeviceFeatureSupport(ID3D12Device4* pDevice, FDeviceCapabilitie
     }
     {
         D3D12_FEATURE_DATA_D3D12_OPTIONS12 ftOpt12 = {};
-        hr = pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &ftOpt12, sizeof(ftOpt12));
+        hr = pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS12, &ftOpt12, sizeof(ftOpt12));
         if (!SUCCEEDED(hr))
         {
             Log::Warning("Device::CheckFeatureSupport(): Enhanced barriers failed.");
