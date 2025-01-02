@@ -43,7 +43,7 @@ inline float3 UnpackNormals(Texture2D normalMap, SamplerState normalSampler, flo
 
 inline float3 UnpackNormal(float3 SampledNormal, float3 worldNormal, float3 worldTangent)
 {
-	SampledNormal = SampledNormal * 2.0f - 1.0f;
+	SampledNormal = normalize(SampledNormal * 2.0f - 1.0f);
 	const float3 T = normalize(worldTangent - dot(worldNormal, worldTangent) * worldNormal);
 	const float3 N = normalize(worldNormal);
 	const float3 B = normalize(cross(T, N));
