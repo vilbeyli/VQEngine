@@ -1369,67 +1369,70 @@ static DirectX::XMMATRIX GetHDRIRotationMatrix(float fHDIROffsetInRadians)
 void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
 {
 	const FSceneRenderParameters::FFFX_SSSR_UIParameters& UIParams = SceneView.sceneParameters.FFX_SSSRParameters;
-	
-	const bool bHasEnvironmentMap = mResources_MainWnd.EnvironmentMap.SRV_IrradianceSpec != INVALID_ID;
+
+	const FEnvironmentMapRenderingResources& EnvMapRsc = mResources_MainWnd.EnvironmentMap;
+	const bool bHasEnvironmentMap = EnvMapRsc.SRV_IrradianceSpec != INVALID_ID;
+	ID3D12Resource* pRscEnvIrradianceSpecular = bHasEnvironmentMap ? pRscEnvIrradianceSpecular = mRenderer.GetTextureResource(EnvMapRsc.Tex_IrradianceSpec)  : nullptr;
+	ID3D12Resource* pRscBRDFIntegrationLUT    = bHasEnvironmentMap ? pRscBRDFIntegrationLUT = mRenderer.GetTextureResource(mRenderer.GetProceduralTexture(EProceduralTextures::IBL_BRDF_INTEGRATION_LUT)) : nullptr;
 	int EnvMapSpecIrrCubemapDimX = 0;
 	int EnvMapSpecIrrCubemapDimY = 0;
 	if (bHasEnvironmentMap)
 	{
-		mRenderer.GetTextureDimensions(mResources_MainWnd.EnvironmentMap.Tex_IrradianceSpec, EnvMapSpecIrrCubemapDimX, EnvMapSpecIrrCubemapDimY);
+		mRenderer.GetTextureDimensions(EnvMapRsc.Tex_IrradianceSpec, EnvMapSpecIrrCubemapDimX, EnvMapSpecIrrCubemapDimY);
 	}
 	
 	switch (mSettings.gfx.Reflections)
 	{
 	case EReflections::SCREEN_SPACE_REFLECTIONS__FFX:
 	{
+		SCOPED_GPU_MARKER(pCmd, "RenderReflections FidelityFX-SSSR");
 		ScreenSpaceReflectionsPass::FDrawParameters params = {};
 		// ---- cmd recording ----
 		params.pCmd = pCmd;
 		params.pCBufferHeap = pCBufferHeap;
 		// ---- cbuffer ----
-		params.ffxCBuffer.invViewProjection          = DirectX::XMMatrixInverse(nullptr, SceneView.view * SceneView.proj);
-		params.ffxCBuffer.projection                 = SceneView.proj;
-		params.ffxCBuffer.invProjection              = SceneView.projInverse;
-		params.ffxCBuffer.view                       = SceneView.view;
-		params.ffxCBuffer.invView                    = SceneView.viewInverse;
-		params.ffxCBuffer.bufferDimensions[0]        = SceneView.SceneRTWidth;
-		params.ffxCBuffer.bufferDimensions[1]        = SceneView.SceneRTHeight;
-		params.ffxCBuffer.envMapRotation             = GetHDRIRotationMatrix(SceneView.HDRIYawOffset);
-		params.ffxCBuffer.inverseBufferDimensions[0] = 1.0f / params.ffxCBuffer.bufferDimensions[0];
-		params.ffxCBuffer.inverseBufferDimensions[1] = 1.0f / params.ffxCBuffer.bufferDimensions[1];
-		params.ffxCBuffer.frameIndex                 = static_cast<uint32>(mNumSimulationTicks);
-		params.ffxCBuffer.temporalStabilityFactor    = UIParams.temporalStability;
-		params.ffxCBuffer.depthBufferThickness       = UIParams.depthBufferThickness;
-		params.ffxCBuffer.roughnessThreshold         = UIParams.roughnessThreshold;
-		params.ffxCBuffer.varianceThreshold          = UIParams.temporalVarianceThreshold;
-		params.ffxCBuffer.maxTraversalIntersections  = UIParams.maxTraversalIterations;
-		params.ffxCBuffer.minTraversalOccupancy      = UIParams.minTraversalOccupancy;
-		params.ffxCBuffer.mostDetailedMip            = UIParams.mostDetailedDepthHierarchyMipLevel;
-		params.ffxCBuffer.samplesPerQuad             = UIParams.samplesPerQuad;
+		params.ffxCBuffer.invViewProjection                    = DirectX::XMMatrixInverse(nullptr, SceneView.view * SceneView.proj);
+		params.ffxCBuffer.projection                           = SceneView.proj;
+		params.ffxCBuffer.invProjection                        = SceneView.projInverse;
+		params.ffxCBuffer.view                                 = SceneView.view;
+		params.ffxCBuffer.invView                              = SceneView.viewInverse;
+		params.ffxCBuffer.bufferDimensions[0]                  = SceneView.SceneRTWidth;
+		params.ffxCBuffer.bufferDimensions[1]                  = SceneView.SceneRTHeight;
+		params.ffxCBuffer.envMapRotation                       = GetHDRIRotationMatrix(SceneView.HDRIYawOffset);
+		params.ffxCBuffer.inverseBufferDimensions[0]           = 1.0f / params.ffxCBuffer.bufferDimensions[0];
+		params.ffxCBuffer.inverseBufferDimensions[1]           = 1.0f / params.ffxCBuffer.bufferDimensions[1];
+		params.ffxCBuffer.frameIndex                           = static_cast<uint32>(mNumSimulationTicks);
+		params.ffxCBuffer.temporalStabilityFactor              = UIParams.temporalStability;
+		params.ffxCBuffer.depthBufferThickness                 = UIParams.depthBufferThickness;
+		params.ffxCBuffer.roughnessThreshold                   = UIParams.roughnessThreshold;
+		params.ffxCBuffer.varianceThreshold                    = UIParams.temporalVarianceThreshold;
+		params.ffxCBuffer.maxTraversalIntersections            = UIParams.maxTraversalIterations;
+		params.ffxCBuffer.minTraversalOccupancy                = UIParams.minTraversalOccupancy;
+		params.ffxCBuffer.mostDetailedMip                      = UIParams.mostDetailedDepthHierarchyMipLevel;
+		params.ffxCBuffer.samplesPerQuad                       = UIParams.samplesPerQuad;
 		params.ffxCBuffer.temporalVarianceGuidedTracingEnabled = UIParams.bEnableTemporalVarianceGuidedTracing;
-		params.ffxCBuffer.envMapSpecularIrradianceCubemapMipLevelCount = mResources_MainWnd.EnvironmentMap.GetNumSpecularIrradianceCubemapLODLevels(mRenderer);
-		params.TexDepthHierarchy = mResources_MainWnd.Tex_DownsampledSceneDepth;
-		params.TexNormals = mResources_MainWnd.Tex_SceneNormals;
-		params.SRVEnvironmentSpecularIrradianceCubemap = bHasEnvironmentMap ? mResources_MainWnd.EnvironmentMap.SRV_IrradianceSpec : mResources_MainWnd.SRV_NullCubemap;
-		params.SRVBRDFIntegrationLUT = bHasEnvironmentMap ? mResources_MainWnd.EnvironmentMap.SRV_BRDFIntegrationLUT : mResources_MainWnd.SRV_NullTexture2D;
+		params.ffxCBuffer.envMapSpecularIrradianceCubemapMipLevelCount = EnvMapRsc.GetNumSpecularIrradianceCubemapLODLevels(mRenderer);
+		params.TexDepthHierarchy                               = mResources_MainWnd.Tex_DownsampledSceneDepth;
+		params.TexNormals                                      = mResources_MainWnd.Tex_SceneNormals;
+		params.SRVEnvironmentSpecularIrradianceCubemap         = bHasEnvironmentMap ? EnvMapRsc.SRV_IrradianceSpec : mResources_MainWnd.SRV_NullCubemap;
+		params.SRVBRDFIntegrationLUT                           = bHasEnvironmentMap ? EnvMapRsc.SRV_BRDFIntegrationLUT : mResources_MainWnd.SRV_NullTexture2D;
 
 		if (bHasEnvironmentMap)
 		{
 			D3D12_RESOURCE_BARRIER barriers[] = {
-				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(mResources_MainWnd.EnvironmentMap.Tex_IrradianceSpec), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(mResources_MainWnd.EnvironmentMap.SRV_BRDFIntegrationLUT), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+				CD3DX12_RESOURCE_BARRIER::Transition(pRscEnvIrradianceSpecular, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+				CD3DX12_RESOURCE_BARRIER::Transition(pRscBRDFIntegrationLUT   , D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 			};
 			pCmd->ResourceBarrier(_countof(barriers), barriers);
 		}
 
-		SCOPED_GPU_MARKER(pCmd, "RenderReflections FidelityFX-SSSR");
 		mRenderPass_SSR.RecordCommands(&params);
 
 		if (bHasEnvironmentMap)
 		{
 			D3D12_RESOURCE_BARRIER barriers[] = {
-	CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(mResources_MainWnd.EnvironmentMap.Tex_IrradianceSpec),	D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
-	CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(mResources_MainWnd.EnvironmentMap.SRV_BRDFIntegrationLUT),	D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+				CD3DX12_RESOURCE_BARRIER::Transition(pRscEnvIrradianceSpecular, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+				CD3DX12_RESOURCE_BARRIER::Transition(pRscBRDFIntegrationLUT   , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
 			};
 			pCmd->ResourceBarrier(_countof(barriers), barriers);
 		}
