@@ -24,7 +24,7 @@ VQEngine is a multi-threaded DirectX12 renderer for prototyping of rendering tec
 
 ![](Screenshots/FrameCapture.png)
 <p align="center">
-<sub><i>Radeon Graphics Profiler capture from the stress test scene showcasing async compute and copy</i></sub>
+<sub><i>Radeon Graphics Profiler capture from the stress test scene showcasing async compute</i></sub>
 </p>
 
 # Features
