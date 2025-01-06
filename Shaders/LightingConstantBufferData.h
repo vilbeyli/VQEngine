@@ -136,7 +136,8 @@ struct MaterialData
     float4 uvScaleOffset;
     float metalness;
 
-	float displacement;
+	float normalMapMipBias;
+    float displacement;
     int textureConfig;
 };
 
@@ -196,11 +197,10 @@ struct PerObjectData
 #endif
 
 	MaterialData materialData;
-	float pad2;
 
 	int meshID;
 	int materialID;
-	int2 pad3;
+	int2 pad2;
 
 #if INSTANCED_DRAW
 	int4 ObjID[INSTANCE_COUNT]; // int[] causes alignment issues as each element is aligned to 16B on the GPU. use int4.x

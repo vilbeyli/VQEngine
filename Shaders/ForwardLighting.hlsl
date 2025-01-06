@@ -227,7 +227,7 @@ PSOutput PSMain(PSInput In)
 	const int TEX_CFG = cbPerObject.materialData.textureConfig;
 	
 	float4 AlbedoAlpha = texDiffuse  .Sample(AnisoSampler, uv);
-	float3 Normal      = texNormals.Sample(AnisoSampler, uv).rgb;
+	float3 Normal      = texNormals.SampleBias(AnisoSampler, uv, cbPerObject.materialData.normalMapMipBias).rgb;
 	float3 Emissive    = texEmissive .Sample(LinearSampler, uv).rgb;
 	float  Metalness   = texMetalness.Sample(AnisoSampler, uv).r;
 	float  Roughness   = texRoughness.Sample(AnisoSampler, uv).r;

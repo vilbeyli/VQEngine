@@ -1547,6 +1547,9 @@ void VQEngine::DrawMaterialEditor()
 	StartDrawingMaterialEditorRow("Roughness");
 	ImGui::DragFloat("##roughness", &mat.roughness, 0.01f, 0.04f, 1.0f, "%.2f");
 
+	StartDrawingMaterialEditorRow("Mip Bias (Normals)");
+	ImGui::DragFloat("##mip_bias", &mat.normalMapMipBias, 0.01f, -5.0f, 5.0f, "%.2f");
+
 	StartDrawingMaterialEditorRow("Tiling");
 	ImGui::DragFloat2("##tiling", reinterpret_cast<float*>(&mat.tiling), 0.01f, 0.0f, 10.0f, "%.2f");
 			
@@ -1554,7 +1557,7 @@ void VQEngine::DrawMaterialEditor()
 	ImGui::DragFloat2("##uv_bias", reinterpret_cast<float*>(&mat.uv_bias), 0.01f, -10.0f, 10.0f, "%.2f");
 
 	StartDrawingMaterialEditorRow("Displacement");
-	ImGui::InputFloat("##displecement", reinterpret_cast<float*>(&mat.displacement), 0.05f, 5.0f, "%.2f");
+	ImGui::InputFloat("##displecement", &mat.displacement, 0.05f, 5.0f, "%.2f");
 
 	ImGuiSpacing(3);
 

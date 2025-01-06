@@ -60,7 +60,7 @@ struct Material // 56 Bytes
 	float metalness                     = 0.0f;        // 4 Bytes
 	float roughness                     = 0.8f;        // 4 Bytes
 	float displacement                  = 0.0f;        // 4 Bytes
-	float pad0;                                        // 4 Bytes
+	float normalMapMipBias              = 0.0f;        // 4 Bytes
 	//------------------------------------------------------------
 	// Tessellation
 	FTessellationParameters Tessellation;
