@@ -1473,6 +1473,7 @@ void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dynam
 
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = mRenderer.GetRTV(bMSAA ? rsc.RTV_SceneColorMSAA : rsc.RTV_SceneColor).GetCPUDescHandle();
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = mRenderer.GetDSV(bMSAA ? rsc.DSV_SceneDepthMSAA : rsc.DSV_SceneDepth).GetCPUDescHandle();
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvBVHandle = mRenderer.GetRTV(rsc.RTV_SceneColorBoundingVolumes).GetCPUDescHandle();
 
 	const float RenderResolutionX = static_cast<float>(SceneView.SceneRTWidth);
 	const float RenderResolutionY = static_cast<float>(SceneView.SceneRTHeight);
@@ -1481,29 +1482,26 @@ void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dynam
 
 	// -----------------------------------------------------------------------------------------------------------
 
-	if(bMSAA)
-	{
-		// transition MSAA RT
-		std::vector< CD3DX12_RESOURCE_BARRIER> barriers;
-		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColorMSAA, D3D12_RESOURCE_STATE_RESOLVE_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
-		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColorBV  , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RESOLVE_DEST));
-		pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
-
-		pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
-		pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
-	}
-	else
 	{
 		std::vector< CD3DX12_RESOURCE_BARRIER> barriers;
-		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
-		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColorBV, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
-
+		if (bMSAA)
+		{
+			barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColorMSAA, D3D12_RESOURCE_STATE_RESOLVE_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
+			barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColorBV, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RESOLVE_DEST));
+		}
+		else
+		{
+			barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColor, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
+			barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColorBV, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
+		}
 		pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
-
-		auto rtvBVHandle = mRenderer.GetRTV(rsc.RTV_SceneColorBoundingVolumes).GetCPUDescHandle();
-		pCmd->OMSetRenderTargets(1, &rtvBVHandle, FALSE, &dsvHandle);
-		pCmd->ClearRenderTargetView(rtvBVHandle, clearColor, 0, nullptr);
 	}
+
+	// if MSAA is enabled, we're re-using the color MSAA buffer to render the bounding volumes.
+	// otherwise, we'll utilize a separatre color buffer for bounding volumes, which we'll later
+	// composite with reflections. Assumes we're calling this function when SSR is enabled.
+	pCmd->ClearRenderTargetView(bMSAA ? rtvHandle : rtvBVHandle, clearColor, 0, nullptr);
+	pCmd->OMSetRenderTargets(1, bMSAA ? &rtvHandle: &rtvBVHandle, FALSE, &dsvHandle);
 	pCmd->RSSetViewports(1, &viewport);
 	pCmd->RSSetScissorRects(1, &scissorsRect);
 
@@ -1511,29 +1509,25 @@ void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dynam
 	RenderLightBounds(pCmd, pCBufferHeap, SceneView, bMSAA, true); // RenderSceneBoundingVolumes() called only when reflections are enabled, so just pass true for the last param
 	RenderDebugVertexAxes(pCmd, pCBufferHeap, SceneView, bMSAA);
 	RenderOutline(pCmd, pCBufferHeap, perViewCBAddr, SceneView, bMSAA, { rtvHandle });
-
-	// resolve MSAA RT 
-	if (bMSAA)
-	{
-		{
-			std::vector< CD3DX12_RESOURCE_BARRIER> barriers;
-			barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColorMSAA, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE));
-			pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
-		}
-
-		pCmd->ResolveSubresource(pRscColorBV, 0, pRscColorMSAA, 0, mRenderer.GetTextureFormat(rsc.Tex_SceneColor));
-		
-		{
-			std::vector< CD3DX12_RESOURCE_BARRIER> barriers;
-			barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColorBV, D3D12_RESOURCE_STATE_RESOLVE_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
-			pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
-		}
-	}
-	else
+	if (bMSAA) // resolve if MSAA
 	{
 		std::vector< CD3DX12_RESOURCE_BARRIER> barriers;
-		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColor, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
-		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColorBV, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColorMSAA, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE));
+		pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
+		pCmd->ResolveSubresource(pRscColorBV, 0, pRscColorMSAA, 0, mRenderer.GetTextureFormat(rsc.Tex_SceneColor));
+	}
+
+	{
+		std::vector< CD3DX12_RESOURCE_BARRIER> barriers;
+		if (bMSAA)
+		{
+			barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColorBV, D3D12_RESOURCE_STATE_RESOLVE_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+		}
+		else
+		{
+			barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColor, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+			barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscColorBV, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+		}
 		pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
 	}
 }
