@@ -27,7 +27,7 @@ set HDRI_FILE_LIST=%HDRI_FILE_LIST%;sunny_vondelpark_!HDRI_RESOLUTION!.hdr
 set HDRI_DOWNLOADED_FILES=
 
 :: PBR Files
-set PBR_RESOLUTION=4K
+set PBR_RESOLUTION=2K
 set PBR_WEB_PATH=https://cgbookcase-volume.b-cdn.net/t/
 set PBR_FILE_LIST=Pebbles02_MR_!PBR_RESOLUTION!.zip
 set PBR_FILE_LIST==%PBR_FILE_LIST%;Fabric05_MR_!PBR_RESOLUTION!.zip
