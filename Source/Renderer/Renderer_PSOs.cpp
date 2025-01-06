@@ -458,9 +458,27 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 			psoDesc.SampleDesc.Count = 4;
 			descs[EBuiltinPSOs::UNLIT_PSO_MSAA_4] = psoLoadDesc;
 		}
+		{
+			psoLoadDesc.PSOName = "PSO_Unlit_Blended";
+			psoDesc.SampleDesc.Count = 1;
+			psoDesc.BlendState.RenderTarget[0].BlendEnable = true;
+			psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND::D3D12_BLEND_SRC_ALPHA;
+			psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND::D3D12_BLEND_INV_SRC_ALPHA;
+			psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+			psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+			psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+			psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+			descs[EBuiltinPSOs::UNLIT_BLEND_PSO] = psoLoadDesc;
+		}
+		{
+			psoLoadDesc.PSOName = "PSO_Unlit_Blended_MSAA";
+			psoDesc.SampleDesc.Count = 4;
+			descs[EBuiltinPSOs::UNLIT_BLEND_PSO_MSAA_4] = psoLoadDesc;
+		}
 
 		// wireframe
 		psoLoadDesc.PSOName = "PSO_WireframeVSPS";
+		psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 		psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
 		psoDesc.SampleDesc.Count = 1;

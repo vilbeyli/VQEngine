@@ -117,6 +117,10 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 	const bool& bMSAA = pParams->bMSAA;
 	const FSceneView& SceneView = *pParams->pSceneView;
 	
+	// early out & avoid changing state if we have no meshes to render
+	if (SceneView.outlineRenderCommands.empty())
+		return;
+
 	const ::DSV& dsv = mRenderer.GetDSV(bMSAA ? DSVMSAA : DSV);
 
 	D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL;

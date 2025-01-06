@@ -953,6 +953,7 @@ static void CreateResourceViews(FRenderingResources_MainWindow& rsc, VQRenderer&
 
 	// reflection passes
 	{
+		SCOPED_CPU_MARKER("Reflection");
 		TextureCreateDesc desc("DownsampledSceneDepthAtomicCounter");
 		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(4, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 		desc.ResourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -962,6 +963,7 @@ static void CreateResourceViews(FRenderingResources_MainWindow& rsc, VQRenderer&
 
 	// shadow map passes
 	{
+		SCOPED_CPU_MARKER("ShadowMaps");
 		TextureCreateDesc desc("ShadowMaps_Spot");
 		// initialize texture memory
 		constexpr UINT SHADOW_MAP_DIMENSION_SPOT = 1024;
@@ -1704,8 +1706,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		if (!bMSAA)
 		{
-			// FFX-CACAO 
-			CopyDepthForCompute(pCmd);
+			CopyDepthForCompute(pCmd); // for FFX-CACAO 
 		}
 
 		if (bDownsampleDepth)
@@ -1718,6 +1719,16 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		TransitionForSceneRendering(pCmd, ctx, PPParams);
 
 		RenderSceneColor(pCmd, &CBHeap, SceneView, PPParams, cbAddresses, cbPerView, cbPerFrame);
+
+		if (!bReflectionsEnabled)
+		{
+			RenderLightBounds(pCmd, &CBHeap, SceneView, bMSAA, bReflectionsEnabled);
+			RenderBoundingBoxes(pCmd, &CBHeap, SceneView, bMSAA);
+			RenderDebugVertexAxes(pCmd, &CBHeap, SceneView, bMSAA);
+			
+			D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = mRenderer.GetRTV(bMSAA ? rsc.RTV_SceneColorMSAA : rsc.RTV_SceneColor).GetCPUDescHandle();
+			RenderOutline(pCmd, &CBHeap, cbPerView, SceneView, bMSAA, { rtvHandle });
+		}
 
 		ResolveMSAA(pCmd, &CBHeap, PPParams);
 
@@ -1763,7 +1774,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		{
 			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000); // sync for SceneView
-			while (WorkerThreads.GetNumActiveTasks() != 0);
+			while (WorkerThreads.GetNumActiveTasks() != 0); // busy-wait is not good
 		}
 		CopyPerObjectConstantBufferData(cbAddresses, &CBHeap_This, SceneView, mpScene); // TODO: threadify this, join+fork
 
@@ -1816,7 +1827,6 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 							ResolveMSAA_DepthPrePass(pCmd_Compute, &CBHeap_WorkerZPrePass);
 							TransitionDepthPrePassForReadAsyncCompute(pCmd_Compute);
 						}
-
 
 						if (bDownsampleDepth)
 						{
@@ -1905,9 +1915,11 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		if (bAsyncCompute)
 		{
+			// async compute queue cannot issue these barrier transitions. 
+			// we're waiting the async compute fence before we execute this cmd list so there's no sync issues.
 			ID3D12Resource* pRscAmbientOcclusion = mRenderer.GetTextureResource(rsc.Tex_AmbientOcclusion);
 			std::vector<CD3DX12_RESOURCE_BARRIER> Barriers;
-			if (bMSAA)
+			if (bMSAA) 
 			{
 				Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
 				Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
@@ -1923,6 +1935,16 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		TransitionForSceneRendering(pCmd_ThisThread, ctx, PPParams);
 
 		RenderSceneColor(pCmd_ThisThread, &CBHeap_This, SceneView, PPParams, cbAddresses, cbPerView, cbPerFrame);
+
+		if (!bReflectionsEnabled)
+		{
+			RenderLightBounds(pCmd_ThisThread, &CBHeap_This, SceneView, bMSAA, bReflectionsEnabled);
+			RenderBoundingBoxes(pCmd_ThisThread, &CBHeap_This, SceneView, bMSAA);
+			RenderDebugVertexAxes(pCmd_ThisThread, &CBHeap_This, SceneView, bMSAA);
+
+			D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = mRenderer.GetRTV(bMSAA ? rsc.RTV_SceneColorMSAA : rsc.RTV_SceneColor).GetCPUDescHandle();
+			RenderOutline(pCmd_ThisThread, &CBHeap_This, cbPerView, SceneView, bMSAA, { rtvHandle });
+		}
 
 		ResolveMSAA(pCmd_ThisThread, &CBHeap_This, PPParams);
 

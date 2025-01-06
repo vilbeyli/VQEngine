@@ -241,9 +241,6 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 	std::vector<std::string>::iterator it = std::find(mResourceNames.mEnvironmentMapPresetNames.begin(), mResourceNames.mEnvironmentMapPresetNames.end(), EnvMapName);
 	const size_t ActiveEnvMapIndex = it - mResourceNames.mEnvironmentMapPresetNames.begin();
 
-	
-	
-
 	// Pick an environment map resolution based on the monitor swapchain is on
 	// so we can avoid loading 8k textures for a 1080p laptop for example.
 	mRenderer.WaitMainSwapchainReady(); // wait for swapchain initialization, we need it initialized at this point
