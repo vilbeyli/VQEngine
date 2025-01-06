@@ -2,11 +2,12 @@
 
 # VQEngine
 
-VQEngine is a DirectX12 renderer for prototyping of rendering techniques and experimenting with cutting edge technology.
+VQEngine is a multi-threaded DirectX12 renderer for prototyping of rendering techniques and experimenting with cutting edge technology.
 
-Join the [VQE Discord Channel](https://discord.gg/U7pd8TV) for graphics, math and engine chatter!
 
-[![Discord Banner 2](https://discordapp.com/api/guilds/720409073756930079/widget.png?style=banner2)](https://discord.gg/U7pd8TV)
+| master | dev |
+| :---: | :---: | 
+| [![Build status](https://ci.appveyor.com/api/projects/status/eep4xej7ay8mvhpb/branch/master?svg=true)](https://ci.appveyor.com/project/vilbeyli/vqe/branch/master) |[![Build status](https://ci.appveyor.com/api/projects/status/eep4xej7ay8mvhpb/branch/dev?svg=true)](https://ci.appveyor.com/project/vilbeyli/vqe/branch/dev) |
 
 
 # Screenshots
@@ -14,6 +15,16 @@ Join the [VQE Discord Channel](https://discord.gg/U7pd8TV) for graphics, math an
 ![](Screenshots/HelloEnvMap1.png)
 <p align="center">
 <sub><i>Data-driven (XML) Scenes & glTF Model Loading, HDRI Environment Maps, UE4's PBR model w/ IBL, ImGui UI & debug drawing, AMD FidelityFX CACAO, CAS, FSR1, SSSR, DNSR, SPD </i></sub>
+</p>
+
+![](Screenshots/Renderer.png)
+<p align="center">
+<sub><i>How a frame is rendered by VQEngine</i></sub>
+</p>
+
+![](Screenshots/FrameCapture.png)
+<p align="center">
+<sub><i>Radeon Graphics Profiler capture from the stress test scene showcasing async compute and copy</i></sub>
 </p>
 
 # Features
@@ -27,14 +38,11 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
      - NDF : Trowbridge-Reitz GGX 
      - G   : Smith
      - F   : Fresnel_Schlick / Fresnel_Gaussian
-   - Image-based Lighting (IBL) w/ prefiltered environment cubemaps
+   - Image-based Lighting (IBL) w/ prefiltered environment cubemaps from [HDRI Haven](https://hdrihaven.com/)
      - Load-time diffuse & specular irradiance cubemap convolution
 - Lighting & Shadow maps
-  - Point Lights
-  - Spot Lights
-  - Directional Light
-  - PCF Shadow Maps for Point/Spot/Directional lights
-- HDR Environment Maps from [HDRI Haven](https://hdrihaven.com/)
+  - Point / Spot / Directional Lights
+  - PCF Shadows
 - Reflections
   - [FidelityFX - Stochastic Screen Space Reflections (SSSR)](https://github.com/GPUOpen-Effects/FidelityFX-SSSR)
   - [FidelityFX - Denoiser (DNSR)](https://github.com/GPUOpen-Effects/FidelityFX-Denoiser)
@@ -47,6 +55,8 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
   - Tonemapping & Gamma correction
   - [FidelityFX - Contrast Adaptive Sharpening (CAS)](https://github.com/GPUOpen-Effects/FidelityFX-CAS/)
   - [FidelityFX - Super Resolution 1.0](https://github.com/GPUOpen-Effects/FidelityFX-FSR)
+- Async Compute & Copy
+
 
 ## Display
 
@@ -65,8 +75,9 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
 - Multi-threading 
   - Worker threads
     - Parallel command list recording
-    - Culling
+    - Frustum Culling
     - Asset loading
+    - PSO & Shader compilation
   - Main + Simulation threads to decouple OS events from the update loop
 - [glTF](https://en.wikipedia.org/wiki/GlTF) [2.0](https://github.com/KhronosGroup/glTF/tree/master/specification/2.0) model loading using [assimp](https://github.com/assimp/assimp)
 - Shader system
@@ -76,14 +87,27 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
 - Automated build & testing scripts
 
 
+![](Screenshots/MT-Loading.jpeg)
+
+<p align="center">
+<sub><i>Multi-threaded loading: Textures, Shaders & PSOs. Not shown: Models</i></sub>
+</p>
+
+<br/>
+
+![](Screenshots/MT-Simulation.png)
+<p align="center">
+<sub><i>Multi-threaded simulation: Frustum culling & parallel command list recording</i></sub>
+</p>
+
 
 # Build
 
 Make sure to have pre-requisites installed 
 
-- [CMake 3.4](https://cmake.org/download/)
-- [Visual Studio 2019](https://visualstudio.microsoft.com/downloads/)
-- [Windows 10 SDK 10.0.18362.0](https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk)
+- [CMake 3.24](https://cmake.org/download/)
+- [Visual Studio 2022](https://visualstudio.microsoft.com/downloads/)
+- Windows 10 SDK 10.0.20348 OR Windows 11 SDK 10.26100.0
 
 To download the PBR & HDRI textures, run
 
@@ -101,12 +125,12 @@ Then, run one of the build scripts in `Build/` folder,
 
 Make sure to have installed
 
- - [Visual C++ 2019 Redistributiable (x64)](https://support.microsoft.com/en-us/help/2977003/the-latest-supported-visual-c-downloads)
+ - MSVC v143 - VS 2022 C++ x64/x86 build tools
  - A DX12-capable GPU
 
 Double click `VQE.exe`. 
 
-Or, if you're using a terminal, 
+Or, if you're using a terminal
 - `VQE.exe -LogConsole` for logging displayed on a console
 - `VQE.exe -LogFile="FileName.txt"` to write out to a file.
 
@@ -115,6 +139,12 @@ Or, if you're using a terminal,
 | Key | |
 | :--: | :-- |
 | **WASD+EQ** | Camera movement |
+| **Left Click** | Pick object |
+| **Right Click** | Hold to look around |
+| **F1** | Toggle Scene Controls |
+| **F2** | Toggle Profiler |
+| **F3** | Toggle Settings |
+| **F4** | Toggle  Editor |
 | **Page Up/Down** | Change Environment Map |
 | **1-4** |	Change scenes <br>**1** - *Default Scene* <br>**2** - *Sponza* <br>**3** - *Geometry Test Scene* <br>**4** - *Stress Test Scene* |
 | **Shift+R** | Reload level |
@@ -127,7 +157,6 @@ Or, if you're using a terminal,
 | **N** | Toggle object bounding boxes |
 | **Shift+N** | Toggle mesh bounding boxes |
 | **Alt+Enter** | Toggle Fullscreen |
-| **Esc** | Release mouse |
 
 
 ## Settings
