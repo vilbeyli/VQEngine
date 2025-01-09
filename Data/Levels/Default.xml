@@ -306,8 +306,8 @@
             <InnerConeAngleDegrees>28</InnerConeAngleDegrees>
         </Spot>
     </Light>
-    
-    <Light> <!-- Area Light (WIP) -->
+    <!-- Area Light (WIP) 
+    <Light> 
         <Enabled>false</Enabled>
         <Mobility> Stationary </Mobility>
         <Color>0.08 1.0 0.15</Color>
@@ -319,8 +319,8 @@
             <Scale> 5 5 0.1 </Scale>
         </Transform>
         <Area>
-            <!-- TODO -->
+            
         </Area>
     </Light>
-    
+    -->
 </Scene>
