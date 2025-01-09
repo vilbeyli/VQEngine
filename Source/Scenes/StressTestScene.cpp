@@ -209,12 +209,12 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 		matR.Tessellation.SetAllTessellationFactors(TERRAIN_TESS_FACTOR);
 
 		matR.EmissiveIntensity    = 0.0f;
-		matR.NormalMapFilePath    = "Data/Textures/PBR/Pebbles02_MR_4K/Pebbles02_4K_Normal.png";
-		matR.DiffuseMapFilePath   = "Data/Textures/PBR/Pebbles02_MR_4K/Pebbles02_4K_BaseColor.png";
-		matR.RoughnessMapFilePath = "Data/Textures/PBR/Pebbles02_MR_4K/Pebbles02_4K_Roughness.png";
-		matR.HeightMapFilePath    = "Data/Textures/PBR/Pebbles02_MR_4K/Pebbles02_4K_Height.png";
-		matR.AOMapFilePath        = "Data/Textures/PBR/Pebbles02_MR_4K/Pebbles02_4K_AO.png";
-		matR.EmissiveMapFilePath  = "Data/Textures/PBR/Pebbles02_MR_4K/Pebbles02_4K_Normal.png";
+		matR.NormalMapFilePath    = "Data/Textures/PBR/Pebbles02_MR_2K/Pebbles02_2K_Normal.png";
+		matR.DiffuseMapFilePath   = "Data/Textures/PBR/Pebbles02_MR_2K/Pebbles02_2K_BaseColor.png";
+		matR.RoughnessMapFilePath = "Data/Textures/PBR/Pebbles02_MR_2K/Pebbles02_2K_Roughness.png";
+		matR.HeightMapFilePath    = "Data/Textures/PBR/Pebbles02_MR_2K/Pebbles02_2K_Height.png";
+		matR.AOMapFilePath        = "Data/Textures/PBR/Pebbles02_MR_2K/Pebbles02_2K_AO.png";
+		matR.EmissiveMapFilePath  = "Data/Textures/PBR/Pebbles02_MR_2K/Pebbles02_2K_Normal.png";
 		matR.Displacement         = 75.0f;
 		matR.Name                 = "GroundPlatformMaterial";
 		scene.Materials.push_back(matR);
