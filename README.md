@@ -17,10 +17,21 @@ VQEngine is a multi-threaded DirectX12 renderer for prototyping of rendering tec
 <sub><i>Data-driven (XML) Scenes & glTF Model Loading, HDRI Environment Maps, UE4's PBR model w/ IBL, ImGui UI & debug drawing, AMD FidelityFX CACAO, CAS, FSR1, SSSR, DNSR, SPD </i></sub>
 </p>
 
+<br/>
+
+![](Screenshots/VQE_NoGq8VTxGu.gif)
+<p align="center">
+<sub><i>Tessellation pipeline drawing a single large quad domain mesh w/ heightmap</i></sub>
+</p>
+
+<br/>
+
 ![](Screenshots/Renderer.png)
 <p align="center">
 <sub><i>How a frame is rendered by VQEngine</i></sub>
 </p>
+
+<br/>
 
 ![](Screenshots/FrameCapture.png)
 <p align="center">
@@ -56,6 +67,8 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
   - [FidelityFX - Contrast Adaptive Sharpening (CAS)](https://github.com/GPUOpen-Effects/FidelityFX-CAS/)
   - [FidelityFX - Super Resolution 1.0](https://github.com/GPUOpen-Effects/FidelityFX-FSR)
 - Async Compute & Copy
+- Tessellation Pipeline
+  - Triangle & Quad domains
 
 
 ## Display
@@ -84,6 +97,7 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
   - Shader cache
   - Multi-threaded shader compilation
   - Shader Model 5.0 (DXBC) & 6.0 (DXIL)
+- Editor for Materials, Lights & Transforms
 - Automated build & testing scripts
 
 
@@ -209,7 +223,7 @@ VQE supports the following command line parameters:
 
 | File |  |
 | :-- | :-- |
-| `GenerateSolutions.bat` | **What it does** <br/>- Initializes the submodule repos<br/> - Runs `CMake` to generate visual studio solution files in `Build/SolutionFiles` directory <br/> - Launches Visual Studio <br/> <br/> **Flags** <br/> - `noVS` : Updates/Generates `VQE.sln` without launching a Visual Studio instance <br/><br/> ***Example** : `GenerateSolutions.bat -noVS` <br/> while VS is open to update solution files after modifying CmakeLists.txt without closing/relaunching VS*
+| `ProjectFiles.bat` | **What it does** <br/>- Initializes the submodule repos<br/> - Runs `CMake` to generate visual studio solution files in `Build/SolutionFiles` directory <br/> - Launches Visual Studio <br/> <br/> **Flags** <br/> - `noVS` : Updates/Generates `VQE.sln` without launching a Visual Studio instance <br/><br/> ***Example** : `GenerateSolutions.bat -noVS` <br/> while VS is open to update solution files after modifying CmakeLists.txt without closing/relaunching VS*
 | `PackageEngine.bat` | **What it does** <br/>  - Runs `GenerateSolutions.bat` if the visual studio solution doesn't exist <br/> - Builds the engine in Release configuration <br/> - Moves build output into `Build/_artifacts` folder <br/> <br/> **Flags** <br/> `-Clean` : Runs Clean on `VQE.sln` projects before building <br/> `-DebugOnly` : Builds the Debug binaries only <br/> `-Debug` : Builds Debug binaries in addition to Release <br/> `-RelWithDebInfo` : Builds the Release binaries with Debug info in addition to Release    <br/><br/> ***Note**: Release build is always on by default, unless `-DebugOnly` is specified* <br/><br/> ***Example**: `PackageEngine.bat -Clean -Debug -RelWithDebInfo ` <br/>will build all configurations after running Clean and copy the binaries into `Build/_artifacts` folder*
 | `TestVQE.bat` | **What it does** <br/> - Runs `VQE.exe` with testing parameters, making the engine exit after rendering specified number of frames (1000 default). <br/><br/> **Flags** <br/> `-Debug`: Tests the Debug build in addition to the Release build <br/> 
 
