@@ -1,20 +1,29 @@
 ![](Data/Icons/VQEngine-icon.png)
 
-# VQEngine
-
-VQEngine is a multi-threaded DirectX12 renderer for prototyping of rendering techniques and experimenting with cutting edge technology.
-
 
 | master | dev |
 | :---: | :---: | 
 | [![Build status](https://ci.appveyor.com/api/projects/status/eep4xej7ay8mvhpb/branch/master?svg=true)](https://ci.appveyor.com/project/vilbeyli/vqe/branch/master) |[![Build status](https://ci.appveyor.com/api/projects/status/eep4xej7ay8mvhpb/branch/dev?svg=true)](https://ci.appveyor.com/project/vilbeyli/vqe/branch/dev) |
 
 
+# VQEngine
+
+VQEngine is a multi-threaded DirectX12 renderer for prototyping of rendering techniques and experimenting with cutting edge technology.
+
+See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source & pre-built executables.
+
 # Screenshots
 
 ![](Screenshots/HelloEnvMap1.png)
 <p align="center">
 <sub><i>Data-driven (XML) Scenes & glTF Model Loading, HDRI Environment Maps, UE4's PBR model w/ IBL, ImGui UI & debug drawing, AMD FidelityFX CACAO, CAS, FSR1, SSSR, DNSR, SPD </i></sub>
+</p>
+
+<br/>
+
+![](Screenshots/VQE_kXRV9BkYzQ.gif)
+<p align="center">
+<sub><i>Debug draw modes</i></sub>
 </p>
 
 <br/>
@@ -39,8 +48,6 @@ VQEngine is a multi-threaded DirectX12 renderer for prototyping of rendering tec
 </p>
 
 # Features
-
-See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source & pre-built executables.
 
 ## Graphics
 
