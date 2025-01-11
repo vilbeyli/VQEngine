@@ -1524,7 +1524,7 @@ static void CollectViewInstanceData(
 	const std::vector<MaterialID>&       MeshBB_MatID          = BBH.GetMeshMaterialIDs();
 	const std::vector<const Transform*>& MeshBB_Transforms     = BBH.GetMeshTransforms();
 	const std::vector<size_t>&           MeshBB_GameObjHandles = BBH.GetMeshGameObjectHandles();
-
+	
 	for (size_t i = iBegin; i <= iEnd; ++i)
 	{
 		const size_t iBB  = vViewCullResults[i].iBB;
@@ -1762,9 +1762,10 @@ static void DispatchWorkers_ShadowViews(
 			UpdateWorkerThreadPool.AddTask([=, &BBH, &mMeshes, &mMaterials]() // dispatch workers
 			{
 				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
-				FFrustumRenderCommandRecorderContext ctx = WorkerContexts[iFrustum - 1];
-				assert(!ctx.pCullResults->empty());
-				
+				FFrustumRenderCommandRecorderContext ctx = WorkerContexts[iFrustum - 1]; // operate on a copy
+				if (ctx.pCullResults->empty())
+					return;
+
 				ReserveWorkerMemory(BBH,
 					*ctx.pCullResults,
 					ctx.pShadowView->meshRenderCommands,

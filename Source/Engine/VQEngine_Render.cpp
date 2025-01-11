@@ -2052,7 +2052,10 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 							vLightCommandLists.push_back(vCmdLists[iCmdDirectional]);
 					}
 
-					ctx.PresentQueue.pQueue->ExecuteCommandLists((UINT)vLightCommandLists.size(), (ID3D12CommandList**)&vLightCommandLists[0]);
+					if (!vLightCommandLists.empty())
+					{
+						ctx.PresentQueue.pQueue->ExecuteCommandLists((UINT)vLightCommandLists.size(), (ID3D12CommandList**)&vLightCommandLists[0]);
+					}
 
 					mAsyncComputeSSAODoneFence[BACK_BUFFER_INDEX].WaitOnGPU(ctx.PresentQueue.pQueue, SSAODoneFenceValue + 1);
 					ctx.PresentQueue.pQueue->ExecuteCommandLists(1, &pGfxCmd);
