@@ -703,8 +703,8 @@ void VQEngine::DrawKeyMappingsWindow()
 		ImGui::PushStyleColor(ImGuiCol_Text, ColHeader);
 		ImGui::Text("------------------ CAMERA ----------------------");
 		ImGui::PopStyleColor(1);
-		ImGui::Text(" Right Click : Free Camera");
-		ImGui::Text("  Left Click : Orbit Camera");
+		ImGui::Text(" Right Click : Operate Camera");
+		ImGui::Text("  Left Click : Pick object");
 		ImGui::Text("      Scroll : Adjust distance (Orbit Camera)");
 		ImGui::Text("      WASDEQ : Move Camera (Free Camera)");
 		ImGui::Text("       Space : Toggle animation (if available)");
