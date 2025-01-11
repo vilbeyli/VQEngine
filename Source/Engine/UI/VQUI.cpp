@@ -1435,8 +1435,10 @@ void VQEngine::DrawMaterialEditor()
 {
 	// gather material data
 	const std::vector<FMaterialRepresentation>& matReps = mpScene->GetMaterialRepresentations();
-	const std::vector<MaterialID> matIDsAll = mpScene->GetMaterialIDs();
-	std::vector<MaterialID> matIDs;
+	std::vector<MaterialID> matIDsAll = mpScene->GetMaterialIDs();
+	
+	// filter materials by selected objects
+	std::vector<MaterialID> filteredMatIDs;
 	for(MaterialID matID : matIDsAll)
 	for (size_t hObj : mpScene->mSelectedObjects)
 	{
@@ -1444,22 +1446,24 @@ void VQEngine::DrawMaterialEditor()
 		if (!pObj)
 			continue;
 		const Model& m = mpScene->GetModel(pObj->mModelID);
-		auto materialSet = m.mData.GetMaterials();
+		const std::unordered_set<MaterialID>& materialSet = m.mData.GetMaterials();
 		if (materialSet.find(matID) != materialSet.end())
 		{
-			matIDs.push_back(matID);
+			filteredMatIDs.push_back(matID);
 		}
 	}
-	if (matIDs.empty())
+
+	// if no objects are selected, list all the materials
+	if (filteredMatIDs.empty())
 	{
-		matIDs = matIDsAll;
+		filteredMatIDs = std::move(matIDsAll);
 	}
 	
-	std::vector<const char*> szMaterialNames(matIDs.size() + 1, nullptr);
-	std::vector<MaterialID> MaterialIDs(matIDs.size() + 1, INVALID_ID);
+	std::vector<const char*> szMaterialNames(filteredMatIDs.size() + 1, nullptr);
+	std::vector<MaterialID> MaterialIDs(filteredMatIDs.size() + 1, INVALID_ID);
 	{
 		int iMatName = 0;
-		for (MaterialID matID : matIDs)
+		for (MaterialID matID : filteredMatIDs)
 		{
 			const std::string& matName = mpScene->GetMaterialName(matID);
 			szMaterialNames[iMatName] = matName.c_str();
@@ -1469,29 +1473,13 @@ void VQEngine::DrawMaterialEditor()
 	}
 
 	int& i = mUIState.SelectedEditeeIndex[FUIState::EEditorMode::MATERIALS];
-	const bool bMaterialsAreFiltered = matIDsAll.size() >= MaterialIDs.size();
-	if (bMaterialsAreFiltered && i != INVALID_ID)
+	if (i == INVALID_ID) // if nothing is selected, default-select the first material
 	{
-		if (i >= MaterialIDs.size() || MaterialIDs[i] != matIDsAll[i])
-		{
-			for (int iMat = 0; iMat < MaterialIDs.size(); ++iMat)
-				if (MaterialIDs[iMat] == matIDsAll[i])
-				{
-					i = iMat;
-					break;
-				}
-
-			if (i > MaterialIDs.size())
-			{
-				Log::Warning("DrawMaterialEditor(): Selected material not found, clamping index");
-				// shouldn't happen, but in case it does, clamp the index to prevent crash
-				i = (int)MaterialIDs.size() - 1; 
-			}
-		}
+		i = 0;
 	}
 
 	// gui layout
-	ImGui::TableSetupColumn(mpScene->GetMaterialName(i).c_str(), ImGuiTableColumnFlags_WidthStretch, 0.7f); // 70% width
+	ImGui::TableSetupColumn(mpScene->GetMaterialName(MaterialIDs[i]).c_str(), ImGuiTableColumnFlags_WidthStretch, 0.7f); // 70% width
 	ImGui::TableSetupColumn("Materials", ImGuiTableColumnFlags_WidthStretch, 0.3f); // 30% width
 	ImGui::TableHeadersRow();
 	ImGui::TableNextRow();
@@ -1510,7 +1498,7 @@ void VQEngine::DrawMaterialEditor()
 	// draw editor
 	ImGui::TableSetColumnIndex(0);
 
-	ImGui::Text("ID : %d", i);
+	ImGui::Text("ID : %d", MaterialIDs[i]);
 	ImGuiSpacing(2);
 	if (i == szMaterialNames.size() - 1 || i == INVALID_ID)
 	{
@@ -1729,9 +1717,9 @@ void VQEngine::DrawLightEditor()
 	ImGuiSpacing(2);
 
 	// Light type specific properties
-	const bool bEnableSpotLightDropdown = l->bCastingShadows && NumShadowingSpotLights < NUM_SHADOWING_LIGHTS__SPOT && l->Type != Light::EType::SPOT;
-	const bool bEnablePointLightDropdown = l->bCastingShadows && NumShadowingPointLights < NUM_SHADOWING_LIGHTS__POINT && l->Type != Light::EType::POINT;
-	const bool bEnableDirectionalLightDropdown = l->bCastingShadows && NumDirectionalLights < NUM_SHADOWING_LIGHTS__DIRECTIONAL && l->Type != Light::EType::DIRECTIONAL; // only 1 supported
+	const bool bEnableSpotLightDropdown        = !l->bCastingShadows || (NumShadowingSpotLights  < NUM_SHADOWING_LIGHTS__SPOT        && l->Type != Light::EType::SPOT);
+	const bool bEnablePointLightDropdown       = !l->bCastingShadows || (NumShadowingPointLights < NUM_SHADOWING_LIGHTS__POINT       && l->Type != Light::EType::POINT);
+	const bool bEnableDirectionalLightDropdown = !l->bCastingShadows || (NumDirectionalLights    < NUM_SHADOWING_LIGHTS__DIRECTIONAL && l->Type != Light::EType::DIRECTIONAL); // only 1 supported
 	if (ImGui::BeginCombo("Type", LightTypeToString(l->Type))) {
 		BeginDisabledUIState(bEnableDirectionalLightDropdown);
 		if (ImGui::Selectable("Directional", l->Type == Light::EType::DIRECTIONAL)) { l->Type = Light::EType::DIRECTIONAL; }
@@ -1766,10 +1754,12 @@ void VQEngine::DrawLightEditor()
 		ImGui::DragFloat3("Position", reinterpret_cast<float*>(&l->Position), 0.1f);
 	}
 	if (l->Type != Light::EType::POINT) {
-		auto eulerRotation = Quaternion::ToEulerDeg(l->RotationQuaternion);
+		DirectX::XMFLOAT3 eulerRotation = Quaternion::ToEulerDeg(l->RotationQuaternion);
+		#if 0 // TODO: fix Euler->Quaternion code
 		if (ImGui::DragFloat3("Rotation", reinterpret_cast<float*>(&eulerRotation), 0.1f)) {
-			// l->RotationQuaternion = Quaternion::FromEulerDeg(eulerRotation); // TODO:
+			l->RotationQuaternion = Quaternion::FromEulerDeg(eulerRotation); 
 		}
+		#endif
 	}
 
 	ImGuiSpacing(2);
