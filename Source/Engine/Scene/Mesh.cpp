@@ -17,6 +17,8 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "Mesh.h"
+
+#include "../../Renderer/Renderer.h"
 #include <cassert>
 
 #define VERBOSE_LOGGING 0
@@ -52,3 +54,7 @@ std::pair<BufferID, BufferID> Mesh::GetIABufferIDs(int lod /*= 0*/) const
 	return mLODBufferPairs.back().GetIABufferPair();
 }
 
+BufferID GeometryGenerator::CreateBuffer(VQRenderer* pRenderer, const FBufferDesc& desc)
+{
+	return pRenderer->CreateBuffer(desc);
+}

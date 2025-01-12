@@ -20,6 +20,7 @@
 
 #include "Common.h"
 #include "../../Libs/VQUtils/Source/Image.h"
+#include "../../Libs/VQUtils/Source/Multithreading.h"
 
 #include <DirectXMath.h>
 
@@ -44,15 +45,15 @@ struct TextureCreateDesc
 		, ResourceState(state)
 		, bCubemap(bTexIsCubemap)
 		, bGenerateMips(bGenerateTexMips)
-		, pData(nullptr)
 	{}
 
 	std::string           TexName;
-	const void*           pData = nullptr;
+	std::vector<const void*> pDataArray; // mips, arrays
 	D3D12_RESOURCE_DESC   d3d12Desc = {};
 	D3D12_RESOURCE_STATES ResourceState = D3D12_RESOURCE_STATE_COMMON;
 	bool                  bCubemap = false;
 	bool                  bGenerateMips = false;
+	bool                  bCPUReadback = false;
 };
 
 
@@ -89,7 +90,7 @@ public:
 	Texture(const Texture& other);
 	Texture& operator=(const Texture& other);
 
-	void Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, const TextureCreateDesc& desc);
+	void Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, const TextureCreateDesc& desc, bool bCheckAlpha);
 	void Destroy();
 
 	void InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayView = false, bool bInitAsCubeView = false, UINT ShaderComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc = nullptr);
@@ -98,14 +99,16 @@ public:
 	inline const ID3D12Resource* GetResource() const { return mpResource; }
 	inline       ID3D12Resource* GetResource()       { return mpResource; }
 	inline       DXGI_FORMAT     GetFormat()   const { return mFormat; }
+	inline       bool            GetUsesAlphaChannel() const { return mbUsesAlphaChannel; }
 
 private:
 	friend class VQRenderer;
 
 	D3D12MA::Allocation* mpAlloc = nullptr;
 	ID3D12Resource*      mpResource = nullptr;
+	Signal               mSignalResident;
 	std::atomic<bool>    mbResident = false;
-	
+
 	// some texture desc fields
 	bool mbTypelessTexture = false;
 	uint mStructuredBufferStride = 0;
@@ -114,6 +117,7 @@ private:
 	int  mWidth = 0;
 	int  mHeight = 0;
 	int  mNumArraySlices = 1;
+	bool mbUsesAlphaChannel = false;
 
 	DXGI_FORMAT mFormat = DXGI_FORMAT_UNKNOWN;
 };
@@ -121,12 +125,16 @@ private:
 
 struct FTextureUploadDesc
 {
-	FTextureUploadDesc(Image&& img_, TextureID texID, const TextureCreateDesc& tDesc) : img(img_), id(texID), desc(tDesc), pData(nullptr) {}
-	FTextureUploadDesc(const void* pData_, TextureID texID, const TextureCreateDesc& tDesc) : img({  }), id(texID), desc(tDesc), pData(pData_) {}
+	FTextureUploadDesc(std::vector<Image>&& imgs_, TextureID texID, const TextureCreateDesc& tDesc) : imgs(imgs_), id(texID), desc(tDesc), pDataArr(tDesc.pDataArray) {}
+	FTextureUploadDesc(Image&& img_, TextureID texID, const TextureCreateDesc& tDesc) : imgs(1, img_), id(texID), desc(tDesc), pDataArr(1, img_.pData) {}
+
+	FTextureUploadDesc(const void* pData_, TextureID texID, const TextureCreateDesc& tDesc) : imgs({  }), id(texID), desc(tDesc), pDataArr(1, pData_) {}
+	FTextureUploadDesc(std::vector<const void*> pDataArr, TextureID texID, const TextureCreateDesc& tDesc) : imgs({  }), id(texID), desc(tDesc), pDataArr(pDataArr) {}
+
 	FTextureUploadDesc() = delete;
 
-	Image img;
-	const void* pData;
+	std::vector<Image> imgs;
+	std::vector<const void*> pDataArr;
 	TextureID id;
 	TextureCreateDesc desc;
 };

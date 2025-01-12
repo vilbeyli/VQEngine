@@ -17,7 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "DepthMSAAResolve.h"
-
+#include "../../Renderer/Renderer.h"
 #include "../GPUMarker.h"
 
 DepthMSAAResolvePass::DepthMSAAResolvePass(VQRenderer& Renderer)
@@ -88,7 +88,6 @@ void DepthMSAAResolvePass::RecordCommands(const IRenderPassDrawParameters* pDraw
 	*pConstBuffer = CBuffer;
 
 	// record commands
-	SCOPED_GPU_MARKER(pCmd, "MSAAResolve<Depth=%d, Normals=%d, Roughness=%d>"); // TODO: string formatting
 	pCmd->SetPipelineState(mRenderer.GetPSO(mPSO[iDepth][iNorml][iRoghn]));
 	pCmd->SetComputeRootSignature(mpRS);
 	if (true/*always*/)     pCmd->SetComputeRootDescriptorTable(0, mRenderer.GetSRV(pParams->SRV_MSAADepth).GetGPUDescHandle());
@@ -125,7 +124,7 @@ std::vector<FPSOCreationTaskParameters> DepthMSAAResolvePass::CollectPSOCreation
 		FShaderStageCompileDesc shaderDesc = {};
 		shaderDesc.EntryPoint = "CSMain";
 		shaderDesc.FilePath = VQRenderer::GetFullPathOfShader("DepthResolve.hlsl");
-		shaderDesc.ShaderModel = "cs_5_0";
+		shaderDesc.ShaderModel = "cs_6_0";
 		shaderDesc.Macros =
 		{
 			  {"OUTPUT_DEPTH"    , (iDpth ? "1" : "0")}

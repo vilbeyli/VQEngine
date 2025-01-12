@@ -80,6 +80,7 @@ public:
 	inline void Reset() { ResetScale(); ResetRotation(); ResetPosition(); }
 	
 	DirectX::XMMATRIX matWorldTransformation() const;
+	DirectX::XMMATRIX matWorldTransformationPrev() const;
 	DirectX::XMMATRIX WorldTransformationMatrix_NoScale() const;
 	DirectX::XMMATRIX RotationMatrix() const;
 
@@ -91,5 +92,7 @@ public:
 	DirectX::XMFLOAT3       _position;
 	Quaternion              _rotation;
 	DirectX::XMFLOAT3       _scale;
+
+	DirectX::XMFLOAT3       _positionPrev;
 };
 

@@ -142,14 +142,14 @@ void ScreenSpaceReflectionsPass::OnCreateWindowSizeDependentResources(unsigned W
 			, TextureCreateDesc("Reflection Denoiser - Normal Buffer History"              , descs[EDescs::NORMAL_HISTORY]   , rscStateSRV)
 			, TextureCreateDesc("Reflection Denoiser - Extracted Roughness History Texture", descs[EDescs::ROUGHNESS_TEXTURE], rscStateSRV)
 			, TextureCreateDesc("Reflection Denoiser - Radiance 0"                         , descs[EDescs::RADIANCE]         , rscStateSRV)
-			, TextureCreateDesc("Reflection Denoiser - Radiance 1"                         , descs[EDescs::RADIANCE]         , rscStateSRV)
-			, TextureCreateDesc("Reflection Denoiser - Variance 0"                         , descs[EDescs::VARIANCE]         , rscStateSRV)
-			, TextureCreateDesc("Reflection Denoiser - Variance 1"                         , descs[EDescs::VARIANCE]         , rscStateSRV)
-			, TextureCreateDesc("Reflection Denoiser - SampleCount 0"                      , descs[EDescs::SAMPLE_COUNT]     , rscStateSRV)
-			, TextureCreateDesc("Reflection Denoiser - SampleCount 1"                      , descs[EDescs::SAMPLE_COUNT]     , rscStateSRV)
-			, TextureCreateDesc("Reflection Denoiser - Average Radiance 0"                 , descs[EDescs::AVERAGE_RADIANCE] , rscStateSRV)
-			, TextureCreateDesc("Reflection Denoiser - Average Radiance 1"                 , descs[EDescs::AVERAGE_RADIANCE] , rscStateSRV)
-			, TextureCreateDesc("Reflection Denoiser - Reprojected Radiance"               , descs[EDescs::RADIANCE]         , rscStateSRV)
+			, TextureCreateDesc("Reflection Denoiser - Radiance 1"                         , descs[EDescs::RADIANCE]         , rscStateUAV)
+			, TextureCreateDesc("Reflection Denoiser - Variance 0"                         , descs[EDescs::VARIANCE]         , rscStateUAV)
+			, TextureCreateDesc("Reflection Denoiser - Variance 1"                         , descs[EDescs::VARIANCE]         , rscStateUAV)
+			, TextureCreateDesc("Reflection Denoiser - SampleCount 0"                      , descs[EDescs::SAMPLE_COUNT]     , rscStateUAV)
+			, TextureCreateDesc("Reflection Denoiser - SampleCount 1"                      , descs[EDescs::SAMPLE_COUNT]     , rscStateUAV)
+			, TextureCreateDesc("Reflection Denoiser - Average Radiance 0"                 , descs[EDescs::AVERAGE_RADIANCE] , rscStateUAV)
+			, TextureCreateDesc("Reflection Denoiser - Average Radiance 1"                 , descs[EDescs::AVERAGE_RADIANCE] , rscStateUAV)
+			, TextureCreateDesc("Reflection Denoiser - Reprojected Radiance"               , descs[EDescs::RADIANCE]         , rscStateUAV)
 		};
 
 		int i = 0;
@@ -291,11 +291,11 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 	{
 		D3D12_RESOURCE_BARRIER barriers[] = {
 				CD3DX12_RESOURCE_BARRIER::UAV       (mRenderer.GetTextureResource(TexRayCounter)),
-				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexRayList)                     , D3D12_RESOURCE_STATE_UNORDERED_ACCESS         , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexDenoiserTileList)            , D3D12_RESOURCE_STATE_UNORDERED_ACCESS         , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexIntersectionPassIndirectArgs), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT        , D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
-				CD3DX12_RESOURCE_BARRIER::Transition(pRscRoughnessExtract                                         , D3D12_RESOURCE_STATE_UNORDERED_ACCESS         , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
-				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexReflectionDenoiserBlueNoise) , D3D12_RESOURCE_STATE_UNORDERED_ACCESS         , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexRayList)                     , D3D12_RESOURCE_STATE_UNORDERED_ACCESS , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexDenoiserTileList)            , D3D12_RESOURCE_STATE_UNORDERED_ACCESS , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexIntersectionPassIndirectArgs), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS         ),
+				CD3DX12_RESOURCE_BARRIER::Transition(pRscRoughnessExtract                                         , D3D12_RESOURCE_STATE_UNORDERED_ACCESS , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+				CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexReflectionDenoiserBlueNoise) , D3D12_RESOURCE_STATE_UNORDERED_ACCESS , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		};
 		pCmd->ResourceBarrier(_countof(barriers), barriers);
 	}
@@ -563,7 +563,7 @@ void ScreenSpaceReflectionsPass::ClearHistoryBuffers(ID3D12GraphicsCommandList* 
 		const UAV& uav = mRenderer.GetUAV(UAVTemporalResolveOutputs[i]);
 		std::vector<ID3D12Resource*> pRsc = 
 		{
-			mRenderer.GetTextureResource(TexRadiance[i])
+			  mRenderer.GetTextureResource(TexRadiance[i])
 			, mRenderer.GetTextureResource(TexVariance[i])
 			, mRenderer.GetTextureResource(TexSampleCount[i])
 		};
@@ -582,6 +582,18 @@ void ScreenSpaceReflectionsPass::ClearHistoryBuffers(ID3D12GraphicsCommandList* 
 			pCmd->ClearUnorderedAccessViewUint(uav.GetGPUDescHandle(), uav.GetCPUDescHandle(), mRenderer.GetTextureResource(TexReprojectedRadiance), clear, 0, nullptr);
 		}
 	}
+
+	D3D12_RESOURCE_BARRIER barriers[] = {
+		CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexReprojectedRadiance) , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexAvgRadiance[0]), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexAvgRadiance[1]), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexVariance[0])   , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexVariance[1])   , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexRadiance[1])   , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexSampleCount[0]), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(TexSampleCount[1]), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+	};
+	pCmd->ResourceBarrier(_countof(barriers), barriers);
 }
 
 
@@ -981,21 +993,24 @@ void ScreenSpaceReflectionsPass::CreateResources()
 	//==============================Blue Noise buffers============================================
 	{
 		TextureCreateDesc desc("FFX_SSSR - Sobol Buffer");
-		desc.pData = (void*)&g_blueNoiseSamplerState.sobolBuffer;
+		desc.pDataArray.push_back( (void*)&g_blueNoiseSamplerState.sobolBuffer );
 		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(ELEMENT_BYTE_SIZE * _countof(g_blueNoiseSamplerState.sobolBuffer), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 		TexBlueNoiseSobolBuffer = mRenderer.CreateTexture(desc);
+		desc.pDataArray.pop_back();
 	}
 	{
 		TextureCreateDesc desc("FFX_SSSR - Ranking Tile Buffer");
-		desc.pData = (void*)&g_blueNoiseSamplerState.rankingTileBuffer;
+		desc.pDataArray.push_back( (void*)&g_blueNoiseSamplerState.rankingTileBuffer );
 		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(ELEMENT_BYTE_SIZE * _countof(g_blueNoiseSamplerState.rankingTileBuffer), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 		TexBlueNoiseRankingTileBuffer = mRenderer.CreateTexture(desc);
+		desc.pDataArray.pop_back();
 	}
 	{
 		TextureCreateDesc desc("FFX_SSSR - Scrambling Tile Buffer");
-		desc.pData = (void*)&g_blueNoiseSamplerState.scramblingTileBuffer;
+		desc.pDataArray.push_back( (void*)&g_blueNoiseSamplerState.scramblingTileBuffer );
 		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(ELEMENT_BYTE_SIZE * _countof(g_blueNoiseSamplerState.scramblingTileBuffer), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 		TexBlueNoiseScramblingTileBuffer = mRenderer.CreateTexture(desc);
+		desc.pDataArray.pop_back();
 	}
 	{			
 		TextureCreateDesc desc("Reflection Denoiser - Blue Noise Texture");

@@ -25,6 +25,8 @@
 #include "../../Libs/VQUtils/Source/utils.h"
 #include "../../Libs/VQUtils/Source/Image.h"
 
+#include "../Engine/GPUMarker.h"
+
 #include <unordered_map>
 #include <set>
 #include <cassert>
@@ -39,7 +41,6 @@ pTex->GetDevice(__uuidof(*pDevice), reinterpret_cast<void**>(&pDevice))\
 Texture::Texture(const Texture& other)
     : mpAlloc                (other.mpAlloc)
     , mpResource             (other.mpResource)
-    , mbResident             (other.mbResident.load())
     , mbTypelessTexture      (other.mbTypelessTexture)
     , mStructuredBufferStride(other.mStructuredBufferStride)
     , mMipMapCount           (other.mMipMapCount)
@@ -48,13 +49,13 @@ Texture::Texture(const Texture& other)
     , mWidth                 (other.mWidth         )
     , mHeight                (other.mHeight        )
     , mNumArraySlices        (other.mNumArraySlices)
+    , mbUsesAlphaChannel     (other.mbUsesAlphaChannel)
 {}
 
 Texture& Texture::operator=(const Texture& other)
 {
     mpAlloc                 = other.mpAlloc;
     mpResource              = other.mpResource;
-    mbResident              = other.mbResident.load();
     mbTypelessTexture       = other.mbTypelessTexture;
     mStructuredBufferStride = other.mStructuredBufferStride;
     mMipMapCount            = other.mMipMapCount;
@@ -63,30 +64,273 @@ Texture& Texture::operator=(const Texture& other)
     mWidth                  = other.mWidth;
     mHeight                 = other.mHeight;
     mNumArraySlices         = other.mNumArraySlices;
-    
+    mbUsesAlphaChannel      = other.mbUsesAlphaChannel;
     return *this;
+}
+
+
+static int GetBytePerPixel(DXGI_FORMAT Format)
+{
+    switch (Format)
+    {
+    case DXGI_FORMAT_R32G32B32A32_TYPELESS:
+    case DXGI_FORMAT_R32G32B32A32_FLOAT:
+    case DXGI_FORMAT_R32G32B32A32_UINT:
+    case DXGI_FORMAT_R32G32B32A32_SINT:
+        return 4 * 4;
+
+    case DXGI_FORMAT_R32G32B32_TYPELESS:
+    case DXGI_FORMAT_R32G32B32_FLOAT:
+    case DXGI_FORMAT_R32G32B32_UINT:
+    case DXGI_FORMAT_R32G32B32_SINT:
+        return 3 * 4;
+
+    case DXGI_FORMAT_R16G16B16A16_TYPELESS:
+    case DXGI_FORMAT_R16G16B16A16_FLOAT:
+    case DXGI_FORMAT_R16G16B16A16_UNORM:
+    case DXGI_FORMAT_R16G16B16A16_UINT:
+    case DXGI_FORMAT_R16G16B16A16_SNORM:
+    case DXGI_FORMAT_R16G16B16A16_SINT:
+        return 4 * 2;
+
+    case DXGI_FORMAT_R32G32_TYPELESS:
+    case DXGI_FORMAT_R32G32_FLOAT:
+    case DXGI_FORMAT_R32G32_UINT:
+    case DXGI_FORMAT_R32G32_SINT:
+        return 2 * 4;
+
+    case DXGI_FORMAT_R32G8X24_TYPELESS:
+    case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+    case DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS:
+    case DXGI_FORMAT_X32_TYPELESS_G8X24_UINT:
+        return 2 * 4;
+
+    case DXGI_FORMAT_R10G10B10A2_TYPELESS:
+    case DXGI_FORMAT_R10G10B10A2_UNORM:
+    case DXGI_FORMAT_R10G10B10A2_UINT:
+        return 4;
+
+    case DXGI_FORMAT_R11G11B10_FLOAT:
+        return 4;
+
+    case DXGI_FORMAT_R8G8B8A8_TYPELESS:
+    case DXGI_FORMAT_R8G8B8A8_UNORM:
+    case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+    case DXGI_FORMAT_R8G8B8A8_UINT:
+    case DXGI_FORMAT_R8G8B8A8_SNORM:
+    case DXGI_FORMAT_R8G8B8A8_SINT:
+        return 4;
+
+    case DXGI_FORMAT_R16G16_TYPELESS:
+    case DXGI_FORMAT_R16G16_FLOAT:
+    case DXGI_FORMAT_R16G16_UNORM:
+    case DXGI_FORMAT_R16G16_UINT:
+    case DXGI_FORMAT_R16G16_SNORM:
+    case DXGI_FORMAT_R16G16_SINT:
+        return 4;
+
+    case DXGI_FORMAT_R32_TYPELESS:
+    case DXGI_FORMAT_D32_FLOAT:
+    case DXGI_FORMAT_R32_FLOAT:
+    case DXGI_FORMAT_R32_UINT:
+    case DXGI_FORMAT_R32_SINT:
+        return 4;
+
+    case DXGI_FORMAT_R24G8_TYPELESS:
+    case DXGI_FORMAT_D24_UNORM_S8_UINT:
+    case DXGI_FORMAT_R24_UNORM_X8_TYPELESS:
+    case DXGI_FORMAT_X24_TYPELESS_G8_UINT:
+        return 4;
+
+    case DXGI_FORMAT_R8G8_TYPELESS:
+    case DXGI_FORMAT_R8G8_UNORM:
+    case DXGI_FORMAT_R8G8_UINT:
+    case DXGI_FORMAT_R8G8_SNORM:
+    case DXGI_FORMAT_R8G8_SINT:
+        return 2;
+
+    case DXGI_FORMAT_R16_TYPELESS:
+    case DXGI_FORMAT_R16_FLOAT:
+    case DXGI_FORMAT_D16_UNORM:
+    case DXGI_FORMAT_R16_UNORM:
+    case DXGI_FORMAT_R16_UINT:
+    case DXGI_FORMAT_R16_SNORM:
+    case DXGI_FORMAT_R16_SINT:
+        return 2;
+
+    case DXGI_FORMAT_R8_TYPELESS:
+    case DXGI_FORMAT_R8_UNORM:
+    case DXGI_FORMAT_R8_UINT:
+    case DXGI_FORMAT_R8_SNORM:
+    case DXGI_FORMAT_R8_SINT:
+    case DXGI_FORMAT_A8_UNORM:
+        return 1;
+
+    case DXGI_FORMAT_UNKNOWN:
+    case DXGI_FORMAT_R1_UNORM:
+    case DXGI_FORMAT_R9G9B9E5_SHAREDEXP:
+    case DXGI_FORMAT_R8G8_B8G8_UNORM:
+
+    case DXGI_FORMAT_G8R8_G8B8_UNORM:
+
+    case DXGI_FORMAT_BC1_TYPELESS:
+
+    case DXGI_FORMAT_BC1_UNORM:
+
+    case DXGI_FORMAT_BC1_UNORM_SRGB:
+
+    case DXGI_FORMAT_BC2_TYPELESS:
+
+    case DXGI_FORMAT_BC2_UNORM:
+
+    case DXGI_FORMAT_BC2_UNORM_SRGB:
+
+    case DXGI_FORMAT_BC3_TYPELESS:
+
+    case DXGI_FORMAT_BC3_UNORM:
+
+    case DXGI_FORMAT_BC3_UNORM_SRGB:
+
+    case DXGI_FORMAT_BC4_TYPELESS:
+
+    case DXGI_FORMAT_BC4_UNORM:
+
+    case DXGI_FORMAT_BC4_SNORM:
+
+    case DXGI_FORMAT_BC5_TYPELESS:
+
+    case DXGI_FORMAT_BC5_UNORM:
+
+    case DXGI_FORMAT_BC5_SNORM:
+
+    case DXGI_FORMAT_B5G6R5_UNORM:
+
+    case DXGI_FORMAT_B5G5R5A1_UNORM:
+
+    case DXGI_FORMAT_B8G8R8A8_UNORM:
+
+    case DXGI_FORMAT_B8G8R8X8_UNORM:
+
+    case DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM:
+
+    case DXGI_FORMAT_B8G8R8A8_TYPELESS:
+
+    case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+
+    case DXGI_FORMAT_B8G8R8X8_TYPELESS:
+
+    case DXGI_FORMAT_B8G8R8X8_UNORM_SRGB:
+
+    case DXGI_FORMAT_BC6H_TYPELESS:
+
+    case DXGI_FORMAT_BC6H_UF16:
+
+    case DXGI_FORMAT_BC6H_SF16:
+
+    case DXGI_FORMAT_BC7_TYPELESS:
+
+    case DXGI_FORMAT_BC7_UNORM:
+
+    case DXGI_FORMAT_BC7_UNORM_SRGB:
+
+    case DXGI_FORMAT_AYUV:
+
+    case DXGI_FORMAT_Y410:
+
+    case DXGI_FORMAT_Y416:
+
+    case DXGI_FORMAT_NV12:
+
+    case DXGI_FORMAT_P010:
+
+    case DXGI_FORMAT_P016:
+
+    case DXGI_FORMAT_420_OPAQUE:
+
+    case DXGI_FORMAT_YUY2:
+
+    case DXGI_FORMAT_Y210:
+
+    case DXGI_FORMAT_Y216:
+
+    case DXGI_FORMAT_NV11:
+
+    case DXGI_FORMAT_AI44:
+
+    case DXGI_FORMAT_IA44:
+
+    case DXGI_FORMAT_P8:
+
+    case DXGI_FORMAT_A8P8:
+
+    case DXGI_FORMAT_B4G4R4A4_UNORM:
+
+    case DXGI_FORMAT_P208:
+
+    case DXGI_FORMAT_V208:
+
+    case DXGI_FORMAT_V408:
+
+    case DXGI_FORMAT_SAMPLER_FEEDBACK_MIN_MIP_OPAQUE:
+
+    case DXGI_FORMAT_SAMPLER_FEEDBACK_MIP_REGION_USED_OPAQUE:
+
+    case DXGI_FORMAT_FORCE_UINT:
+    default:
+        assert(false);
+        break;
+    }
+    return -1;
+}
+
+static bool HasAlphaValues(const void* pData, int W, int H, DXGI_FORMAT Format)
+{
+    SCOPED_CPU_MARKER("HasAlphaValues");
+    const int BytesPerPixel = GetBytePerPixel(Format);
+    bool bAllZero = true;
+    bool bAllWhite = true;
+    assert(BytesPerPixel >= 4);
+    for(int row=0; row<H; ++row)
+    for(int col=0; col<W; ++col)
+    {
+        const char* pImg = static_cast<const char*>(pData);
+        const int iPixel = row * W + col;
+        const int AlphaByteOffset = 3 * BytesPerPixel / 4;
+        const uint8 a = pImg[iPixel * BytesPerPixel + AlphaByteOffset];
+        bAllZero = bAllZero && a == 0;
+        bAllWhite = bAllWhite && a == 255;
+        if (!bAllWhite && !bAllZero)
+            return true;
+    }
+    return false; // all 1 or all 0
 }
 
 //
 // TEXTURE
 //
-void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, const TextureCreateDesc& desc)
+void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, const TextureCreateDesc& desc, bool bCheckAlpha)
 {
     HRESULT hr = {};
 
     const bool bRenderTargetTexture    = (desc.d3d12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0;
     const bool bUnorderedAccessTexture = (desc.d3d12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) != 0;
     const bool bDepthStencilTexture    = (desc.d3d12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0;
-    
+    const bool bHasData = !desc.pDataArray.empty() && desc.pDataArray[0];
+
     // determine resource state & optimal clear value
-    D3D12_RESOURCE_STATES ResourceState = desc.pData 
+    D3D12_RESOURCE_STATES ResourceState = bHasData
         ? D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_COPY_DEST
         : desc.ResourceState;
     D3D12_CLEAR_VALUE* pClearValue = nullptr;
     if (bDepthStencilTexture)
     {
         D3D12_CLEAR_VALUE ClearValue = {};
-        ClearValue.Format = (desc.d3d12Desc.Format == DXGI_FORMAT_R32_TYPELESS) ? DXGI_FORMAT_D32_FLOAT : desc.d3d12Desc.Format;
+        ClearValue.Format = desc.d3d12Desc.Format;
+        if(desc.d3d12Desc.Format == DXGI_FORMAT_R32_TYPELESS) 
+            ClearValue.Format = DXGI_FORMAT_D32_FLOAT;
+        if (desc.d3d12Desc.Format == DXGI_FORMAT_R24_UNORM_X8_TYPELESS || desc.d3d12Desc.Format == DXGI_FORMAT_R24G8_TYPELESS)
+            ClearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
         ClearValue.DepthStencil.Depth = 1.0f;
         ClearValue.DepthStencil.Stencil = 0;
         pClearValue = &ClearValue;
@@ -102,10 +346,9 @@ void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, cons
         // no-op
     }
 
-
     // Create resource
     D3D12MA::ALLOCATION_DESC textureAllocDesc = {};
-    textureAllocDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
+    textureAllocDesc.HeapType = desc.bCPUReadback ? D3D12_HEAP_TYPE_READBACK : D3D12_HEAP_TYPE_DEFAULT;
     hr = pAllocator->CreateResource(
         &textureAllocDesc,
         &desc.d3d12Desc,
@@ -127,6 +370,10 @@ void Texture::Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, cons
     this->mNumArraySlices = desc.d3d12Desc.DepthOrArraySize;
     this->mMipMapCount = desc.d3d12Desc.MipLevels;
     this->mFormat = desc.d3d12Desc.Format;
+    if (bCheckAlpha && bHasData)
+    {
+        this->mbUsesAlphaChannel = HasAlphaValues(desc.pDataArray[0], this->mWidth, this->mHeight, this->mFormat);
+    }
 }
 
 
@@ -311,7 +558,10 @@ void Texture::InitializeDSV(uint32 index, DSV* pRV, int ArraySlice /*= 1*/)
     D3D12_RESOURCE_DESC texDesc = mpResource->GetDesc();
 
     D3D12_DEPTH_STENCIL_VIEW_DESC DSViewDesc = {};
-    DSViewDesc.Format = DXGI_FORMAT_D32_FLOAT;
+    if(texDesc.Format == DXGI_FORMAT_R32_TYPELESS)
+        DSViewDesc.Format = DXGI_FORMAT_D32_FLOAT;
+    if (texDesc.Format == DXGI_FORMAT_R24G8_TYPELESS)
+        DSViewDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
     if (texDesc.SampleDesc.Count == 1)
     {
         if (texDesc.DepthOrArraySize == 1)
@@ -347,13 +597,13 @@ void Texture::InitializeDSV(uint32 index, DSV* pRV, int ArraySlice /*= 1*/)
 // from Microsoft's D3D12HelloTexture
 std::vector<uint8> Texture::GenerateTexture_Checkerboard(uint Dimension, bool bUseMidtones /*= false*/)
 {
-    constexpr UINT TexturePixelSizeInBytes = 4; // byte/px
+    const UINT TexturePixelSizeInBytes = 4; // byte/px
     const UINT& TextureWidth = Dimension;
     const UINT& TextureHeight = Dimension;
 
     const UINT rowPitch = TextureWidth * TexturePixelSizeInBytes;
-    const UINT cellPitch = rowPitch >> 3;        // The width of a cell in the checkboard texture.
-    const UINT cellHeight = TextureWidth >> 3;    // The height of a cell in the checkerboard texture.
+    const UINT cellPitch = rowPitch / 8;      // The width of a cell in the texture.
+    const UINT cellHeight = TextureWidth / 8; // The height of a cell in the texture.
     const UINT textureSize = rowPitch * TextureHeight;
 
     std::vector<UINT8> data(textureSize);

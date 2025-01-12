@@ -156,11 +156,6 @@ static void CheckDeviceFeatureSupport(ID3D12Device4* pDevice, FDeviceCapabilitie
             }
         }
     }
-#if 0
-    // https://www.appveyor.com/docs/windows-images-software/#visual-studio-2019
-    // AppVeyor (CI) currently doesn't support WinSDK Windows 10 SDK 10.0.19041, which means
-    // it cannot compile and package the code below. As we're not currently using this info,
-    // leave out this code snippet for the v0.8.0 release.
     {
         D3D12_FEATURE_DATA_D3D12_OPTIONS7 ftOpt7 = {};
         hr = pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &ftOpt7, sizeof(ftOpt7));
@@ -174,13 +169,24 @@ static void CheckDeviceFeatureSupport(ID3D12Device4* pDevice, FDeviceCapabilitie
             dc.bSupportsSamplerFeedback = ftOpt7.SamplerFeedbackTier != D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED;
         }
     }
-#endif
+    {
+        D3D12_FEATURE_DATA_D3D12_OPTIONS12 ftOpt12 = {};
+        hr = pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS12, &ftOpt12, sizeof(ftOpt12));
+        if (!SUCCEEDED(hr))
+        {
+            Log::Warning("Device::CheckFeatureSupport(): Enhanced barriers failed.");
+        }
+        else
+        {
+            dc.bSupportsEnhancedBarriers = ftOpt12.EnhancedBarriersSupported;
+        }
+    }
 }
 
 bool Device::Create(const FDeviceCreateDesc& desc)
 {
     HRESULT hr = {};
-
+    
     // Debug & Validation Layer
     if (desc.bEnableDebugLayer)
     {
@@ -225,6 +231,25 @@ bool Device::Create(const FDeviceCreateDesc& desc)
         Log::Error("Device::Create(): D3D12CreateDevice4() failed.");
     }
     const bool bDeviceCreated = true;
+
+    // Info Queue Filtering (suppress some useless warnings)
+    if (desc.bEnableDebugLayer)
+    {
+        ID3D12InfoQueue* pInfoQueue = nullptr;
+        if (SUCCEEDED(mpDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
+        {
+            D3D12_MESSAGE_ID ignoredWarnings[] = {
+                D3D12_MESSAGE_ID_COMMAND_LIST_DRAW_VERTEX_BUFFER_NOT_SET
+            };
+
+            D3D12_INFO_QUEUE_FILTER filter = {};
+            filter.DenyList.NumIDs = _countof(ignoredWarnings);
+            filter.DenyList.pIDList = ignoredWarnings;
+
+            pInfoQueue->AddStorageFilterEntries(&filter);
+            pInfoQueue->Release();
+        }
+    }
 
     CheckDeviceFeatureSupport(this->mpDevice4, this->mDeviceCapabilities);
     return bDeviceCreated;

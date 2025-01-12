@@ -44,10 +44,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 //
-#include <string>
+#define NOMINMAX
 #include <Windows.h>
+#include <string>
 #include <memory>
-
 
 struct IWindow;
 class SwapChain;

@@ -16,9 +16,8 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-#define NOMINMAX
-
 #include "VQEngine.h"
+#include "GPUMarker.h"
 
 #include "Libs/VQUtils/Source/utils.h"
 
@@ -213,6 +212,7 @@ bool CreateEnvironmentMapTextureFromHiResAndSaveToDisk(const std::string& Target
 }
 void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMapMip0Resolution)
 {
+	SCOPED_CPU_MARKER("LoadEnvironmentMap");
 	assert(EnvMapName.size() != 0);
 	constexpr int DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION = 64;
 	FEnvironmentMapRenderingResources& env = mResources_MainWnd.EnvironmentMap;
@@ -225,9 +225,6 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 	}
 
 	FEnvironmentMapDescriptor desc = this->GetEnvironmentMapDescCopy(EnvMapName); // copy because we'll update the FilePath down below
-	std::vector<std::string>::iterator it = std::find(mResourceNames.mEnvironmentMapPresetNames.begin(), mResourceNames.mEnvironmentMapPresetNames.end(), EnvMapName);
-	const size_t ActiveEnvMapIndex = it - mResourceNames.mEnvironmentMapPresetNames.begin();
-	
 	if (desc.FilePath.empty()) // check whether the env map was found or not
 	{
 		Log::Error("Environment Map file path empty");
@@ -240,9 +237,13 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 		Log::Warning("Have you run Scripts/DownloadAssets.bat?");
 		return;
 	}
+	
+	std::vector<std::string>::iterator it = std::find(mResourceNames.mEnvironmentMapPresetNames.begin(), mResourceNames.mEnvironmentMapPresetNames.end(), EnvMapName);
+	const size_t ActiveEnvMapIndex = it - mResourceNames.mEnvironmentMapPresetNames.begin();
 
 	// Pick an environment map resolution based on the monitor swapchain is on
 	// so we can avoid loading 8k textures for a 1080p laptop for example.
+	mRenderer.WaitMainSwapchainReady(); // wait for swapchain initialization, we need it initialized at this point
 	const unsigned MonitorResolutionY = mRenderer.GetWindowSwapChain(mpWinMain->GetHWND()).GetContainingMonitorDesc().DesktopCoordinates.bottom;
 	DetermineResolution_HDRI(desc, MonitorResolutionY);
 	const std::string EnvMapResolution = StrUtil::split(DirectoryUtil::GetFileNameWithoutExtension(desc.FilePath), '_').back(); // file_name_4k.png -> "4k"
@@ -263,9 +264,8 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 
 	// Load environment map resources ------------------------------------------------------------
 
-
 	// HDR map
-	env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(desc.FilePath.c_str(), true);
+	env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(desc.FilePath.c_str(), false, true);
 	env.SRV_HDREnvironment = mRenderer.AllocateAndInitializeSRV(env.Tex_HDREnvironment);
 	env.MaxContentLightLevel = static_cast<int>(desc.MaxContentLightLevel);
 
@@ -277,7 +277,6 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 	// Create Irradiance Map Textures 
 	TextureCreateDesc tdesc("EnvMap_IrradianceDiff");
 	tdesc.bCubemap = true;
-	tdesc.pData = nullptr;
 	tdesc.d3d12Desc.Height = DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION; // TODO: drive with gfx settings?
 	tdesc.d3d12Desc.Width  = DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION; // TODO: drive with gfx settings?
 	tdesc.d3d12Desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
@@ -384,14 +383,11 @@ void VQEngine::UnloadEnvironmentMap()
 	}
 }
 
-
-
 //-------------------------------------------------------------------------------------------------------------------------------------------------
 //
 // RENDER THREAD
 //
 //-------------------------------------------------------------------------------------------------------------------------------------------------
-#include "GPUMarker.h"
 void VQEngine::PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, FEnvironmentMapRenderingResources& env)
 {
 	Log::Info("Environment Map: PreFilterEnvironmentMap");

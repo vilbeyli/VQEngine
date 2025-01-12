@@ -76,7 +76,7 @@ min16float4 FFX_DNSR_Reflections_UnpackFloat16_4(uint2 a) { return min16float4(F
 // Rounds value to the nearest multiple of 8
 uint2 FFX_DNSR_Reflections_RoundUp8(uint2 value) {
     uint2 round_down = value & ~0b111;
-    return (round_down == value) ? value : value + 8;
+    return select(round_down == value, value, value + 8);
 }
 
 // From "Temporal Reprojection Anti-Aliasing"

@@ -1,5 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
+cd /d %~dp0
 
 set LAUNCH_VS=1
 set SOLUTION_FILE=VQE.sln

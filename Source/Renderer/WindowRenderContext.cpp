@@ -20,6 +20,18 @@
 #include "WindowRenderContext.h"
 #include "../Engine/Core/Window.h"
 
+static D3D12_COMMAND_LIST_TYPE GetDX12CmdListType(CommandQueue::EType type)
+{
+	switch (type)
+	{
+	case CommandQueue::GFX     : return D3D12_COMMAND_LIST_TYPE_DIRECT;
+	case CommandQueue::COMPUTE : return D3D12_COMMAND_LIST_TYPE_COMPUTE;
+	case CommandQueue::COPY    : return D3D12_COMMAND_LIST_TYPE_COPY;
+	}
+	assert(false);
+	return D3D12_COMMAND_LIST_TYPE_VIDEO_ENCODE; // shouldnt happen
+}
+
 void FWindowRenderContext::InitializeContext(const Window* pWin, Device* pVQDevice, int NumSwapchainBuffers, bool bVSync, bool bHDRSwapchain)
 {
 	HWND hwnd = pWin->GetHWND();
@@ -29,7 +41,7 @@ void FWindowRenderContext::InitializeContext(const Window* pWin, Device* pVQDevi
 
 	// create the present queue
 	char c[127] = {}; sprintf_s(c, "PresentQueue<0x%p>", hwnd);
-	this->PresentQueue.Create(pVQDevice, CommandQueue::EType::GFX, c); // Create the GFX queue for presenting the SwapChain
+	this->PresentQueue = PresentQueue;
 	
 	// create teh swapchain
 	FSwapChainCreateDesc swapChainDesc = {};
@@ -40,7 +52,7 @@ void FWindowRenderContext::InitializeContext(const Window* pWin, Device* pVQDevi
 	swapChainDesc.bVSync         = bVSync;
 	swapChainDesc.bHDR           = bHDRSwapchain;
 	swapChainDesc.bitDepth       = bHDRSwapchain ? _16 : _8; // currently no support for HDR10 / R10G10B10A2 signals
-	swapChainDesc.bFullscreen    = false; // TODO: exclusive fullscreen to be deprecated. App shouldn't make dxgi mode changes.
+	swapChainDesc.bFullscreen    = false; // Exclusive fullscreen is deprecated. App shouldn't make dxgi mode changes.
 	this->SwapChain.Create(swapChainDesc);
 	if (bHDRSwapchain)
 	{
@@ -52,22 +64,22 @@ void FWindowRenderContext::InitializeContext(const Window* pWin, Device* pVQDevi
 	}
 
 	// allocate per-backbuffer containers
-	mCommandAllocatorsGFX.resize(NumSwapchainBuffers);
-	mCommandAllocatorsCompute.resize(NumSwapchainBuffers);
-	mCommandAllocatorsCopy.resize(NumSwapchainBuffers);
+	for (int i = 0; i < CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES; ++i)
+	{
+		mCommandAllocators[i].resize(NumSwapchainBuffers);
+	}
 	for (int b = 0; b < NumSwapchainBuffers; ++b)
 	{
-		// make at least one command allocator and command ready for each kind of queue, per back buffer
-		this->mCommandAllocatorsGFX[b].resize(1);
-		this->mCommandAllocatorsCompute[b].resize(1);
-		this->mCommandAllocatorsCopy[b].resize(1);
+		for (int i = 0; i < CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES; ++i)
+		{
+			mCommandAllocators[i][b].resize(1); // make at least one command allocator and command ready for each kind of queue, per back buffer
+			D3D12_COMMAND_LIST_TYPE t = GetDX12CmdListType((CommandQueue::EType)i);
+			pDevice->CreateCommandAllocator(t, IID_PPV_ARGS(&this->mCommandAllocators[i][b][0]));
+		}
 
-		pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT , IID_PPV_ARGS(&this->mCommandAllocatorsGFX[b][0]));
-		pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&this->mCommandAllocatorsCompute[b][0]));
-		pDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY   , IID_PPV_ARGS(&this->mCommandAllocatorsCopy[b][0]));
-		SetName(this->mCommandAllocatorsGFX[b][0]    , "RenderContext<0x%p>::CmdAllocGFX[%d][0]    ", hwnd, b);
-		SetName(this->mCommandAllocatorsCompute[b][0], "RenderContext<0x%p>::CmdAllocCompute[%d][0]", hwnd, b);
-		SetName(this->mCommandAllocatorsCopy[b][0]   , "RenderContext<0x%p>::CmdAllocCopy[%d][0]   ", hwnd, b);
+		SetName(this->mCommandAllocators[CommandQueue::EType::GFX][b][0], "RenderContext<0x%p>::CmdAllocGFX[%d][0]", hwnd, b);
+		SetName(this->mCommandAllocators[CommandQueue::EType::COPY][b][0], "RenderContext<0x%p>::CmdAllocCopy[%d][0]", hwnd, b);
+		SetName(this->mCommandAllocators[CommandQueue::EType::COMPUTE][b][0], "RenderContext<0x%p>::CmdAllocCompute[%d][0]", hwnd, b);
 	}
 
 
@@ -76,43 +88,44 @@ void FWindowRenderContext::InitializeContext(const Window* pWin, Device* pVQDevi
 	// TODO: device4 create command list1 doesn't require command allocator, figure out if a further refactor is needed.
 	// https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nn-d3d12-id3d12device4
 	auto pDevice4 = pVQDevice->GetDevice4Ptr();
-	pDevice4->CreateCommandList1(0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_FLAG_NONE, this->mCommandAllocatorsGFX[b][0]);
+	pDevice4->CreateCommandList1(0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_FLAG_NONE, this->mCommandAllocators[CommandQueue::EType::GFX][b][b][0]);
 #else	
-	this->mpCmdGFX.resize(1);
-	this->mpCmdCompute.resize(1);
-	this->mpCmdCopy.resize(1);
-	pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT , this->mCommandAllocatorsGFX[0][0], nullptr, IID_PPV_ARGS(&this->mpCmdGFX[0]));
-	//pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, this->mCommandAllocatorsGFX[0][0], nullptr, IID_PPV_ARGS(&this->mpCmdCompute[0]));
-	//pDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY   , this->mCommandAllocatorsGFX[0][0], nullptr, IID_PPV_ARGS(&this->mpCmdCopy[0]));
-	this->mpCmdGFX[0]->Close();
-	//this->mpCmdCompute[0]->Close();
-	//this->mpCmdCopy[0]->Close();
+	for (int q = 0; q < CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES; ++q)
+	{
+		mpCmds[q].resize(1);
+		D3D12_COMMAND_LIST_TYPE t = GetDX12CmdListType((CommandQueue::EType)q);
+		pDevice->CreateCommandList(0, t, this->mCommandAllocators[q][0][0], nullptr, IID_PPV_ARGS(&this->mpCmds[q][0]));
+		static_cast<ID3D12GraphicsCommandList*>(this->mpCmds[q][0])->Close();
+	}
 #endif
 
 	// create 1 constant buffer
 	this->mDynamicHeap_ConstantBuffer.resize(1);
-	this->mDynamicHeap_ConstantBuffer[0].Create(pDevice, NumSwapchainBuffers, 32 * MEGABYTE);
+	this->mDynamicHeap_ConstantBuffer[0].Create(pDevice, NumSwapchainBuffers, 64 * MEGABYTE);
 }
 
 void FWindowRenderContext::CleanupContext()
 {
 	this->SwapChain.Destroy(); // syncs GPU before releasing resources
-	this->PresentQueue.Destroy();
 	this->pDevice = nullptr;
 
 	// clean up command lists & memory
-	assert(mCommandAllocatorsGFX.size() == mCommandAllocatorsCompute.size());
-	assert(mCommandAllocatorsCompute.size() == mCommandAllocatorsCopy.size());
-	assert(mCommandAllocatorsCopy.size() == mCommandAllocatorsGFX.size());
-	for (size_t BackBuffer = 0; BackBuffer < mCommandAllocatorsGFX.size(); ++BackBuffer)
+	assert(mCommandAllocators[CommandQueue::EType::GFX].size() == mCommandAllocators[CommandQueue::EType::COMPUTE].size());
+	assert(mCommandAllocators[CommandQueue::EType::COMPUTE].size() == mCommandAllocators[CommandQueue::EType::COPY].size());
+	assert(mCommandAllocators[CommandQueue::EType::COPY].size() == mCommandAllocators[CommandQueue::EType::GFX].size());
+	for (size_t BackBuffer = 0; BackBuffer < mCommandAllocators[CommandQueue::EType::GFX].size(); ++BackBuffer)
 	{
-		for (ID3D12CommandAllocator* pCmdAlloc : mCommandAllocatorsGFX[BackBuffer]    ) if (pCmdAlloc) pCmdAlloc->Release();
-		for (ID3D12CommandAllocator* pCmdAlloc : mCommandAllocatorsCompute[BackBuffer]) if (pCmdAlloc) pCmdAlloc->Release();
-		for (ID3D12CommandAllocator* pCmdAlloc : mCommandAllocatorsCopy[BackBuffer]   ) if (pCmdAlloc) pCmdAlloc->Release();
+		for (int q = 0; q < CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES; ++q)
+		for (ID3D12CommandAllocator* pCmdAlloc : mCommandAllocators[q][BackBuffer]) 
+			if (pCmdAlloc) 
+				pCmdAlloc->Release();
 	}
-	for (ID3D12GraphicsCommandList* pCmd : mpCmdGFX    ) if (pCmd) pCmd->Release();
-	for (ID3D12CommandList*         pCmd : mpCmdCompute) if (pCmd) pCmd->Release();
-	for (ID3D12CommandList*         pCmd : mpCmdCopy   ) if (pCmd) pCmd->Release();
+	
+	for (int i = 0; i < CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES; ++i)
+	for (ID3D12CommandList* pCmd : mpCmds[i]) 
+		if (pCmd) 
+			pCmd->Release();
+
 	for (DynamicBufferHeap& Heap : mDynamicHeap_ConstantBuffer) // per cmd recording thread?
 	{
 		Heap.Destroy();
@@ -123,15 +136,7 @@ void FWindowRenderContext::AllocateCommandLists(CommandQueue::EType eQueueType, 
 {
 	ID3D12Device* pD3DDevice = pDevice->GetDevicePtr();
 
-	D3D12_COMMAND_LIST_TYPE CMD_LIST_TYPE;
-	switch (eQueueType)
-	{
-	case CommandQueue::EType::GFX    : CMD_LIST_TYPE = D3D12_COMMAND_LIST_TYPE_DIRECT ; break;
-	case CommandQueue::EType::COMPUTE: CMD_LIST_TYPE = D3D12_COMMAND_LIST_TYPE_COMPUTE; break;
-	case CommandQueue::EType::COPY   : CMD_LIST_TYPE = D3D12_COMMAND_LIST_TYPE_COPY   ; break;
-	default: assert(false); break;
-	}
-	
+	D3D12_COMMAND_LIST_TYPE CMD_LIST_TYPE = GetDX12CmdListType(eQueueType);
 	std::vector<ID3D12CommandAllocator*>& vCmdAllocators = GetCommandAllocators(eQueueType);
 	std::vector<ID3D12CommandList*>&      vCmdListPtrs   = GetCommandListPtrs(eQueueType);
 
@@ -168,10 +173,13 @@ void FWindowRenderContext::AllocateCommandLists(CommandQueue::EType eQueueType, 
 			ID3D12CommandList* pCmd = nullptr;
 			pD3DDevice->CreateCommandList(0, CMD_LIST_TYPE, vCmdAllocators[iNewCmdListAlloc], nullptr, IID_PPV_ARGS(&vCmdListPtrs[iNewCmdListAlloc]));
 			pCmd = vCmdListPtrs[iNewCmdListAlloc];
-			SetName(pCmd, "pCmd[%d]", (int)iNewCmdListAlloc);
+			if (pCmd)
+			{
+				SetName(pCmd, "pCmd[%d]", (int)iNewCmdListAlloc);
+			}
 
 			// close if gfx command list
-			if (eQueueType == CommandQueue::EType::GFX)
+			//if (eQueueType == CommandQueue::EType::GFX)
 			{
 				ID3D12GraphicsCommandList* pGfxCmdList = (ID3D12GraphicsCommandList*)pCmd;
 				pGfxCmdList->Close();
@@ -200,8 +208,6 @@ void FWindowRenderContext::AllocateConstantBufferMemory(uint32_t NumHeaps, uint3
 
 void FWindowRenderContext::ResetCommandLists(CommandQueue::EType eQueueType, size_t NumRecordingThreads)
 {
-	assert(eQueueType == CommandQueue::EType::GFX); // Reset() is ID3D12GraphicsCommandList function
-
 	std::vector<ID3D12CommandAllocator*>& vCmdAllocators = GetCommandAllocators(eQueueType);
 	assert(NumRecordingThreads <= vCmdAllocators.size());
 
@@ -216,34 +222,7 @@ void FWindowRenderContext::ResetCommandLists(CommandQueue::EType eQueueType, siz
 		// However, when ExecuteCommandList() is called on a particular command 
 		// list, that command list can then be reset at any time and must be before 
 		// re-recording.
-		assert(mpCmdGFX[iThread]);
-		mpCmdGFX[iThread]->Reset(pAlloc, nullptr);
+		assert(mpCmds[eQueueType][iThread]);
+		static_cast<ID3D12GraphicsCommandList*>(mpCmds[eQueueType][iThread])->Reset(pAlloc, nullptr);
 	}
 }
-
-ID3D12CommandList* FWindowRenderContext::GetCommandListPtr(CommandQueue::EType eQueueType, size_t THREAD_INDEX)
-{
-	int BACK_BUFFER_INDEX = SwapChain.GetCurrentBackBufferIndex();
-	switch (eQueueType)
-	{
-	case CommandQueue::EType::GFX    : assert(THREAD_INDEX < mpCmdGFX.size())    ; return mpCmdGFX[THREAD_INDEX];
-	case CommandQueue::EType::COMPUTE: assert(THREAD_INDEX < mpCmdCompute.size()); return mpCmdCompute[THREAD_INDEX];
-	case CommandQueue::EType::COPY   : assert(THREAD_INDEX < mpCmdCopy.size())   ; return mpCmdCopy[THREAD_INDEX];
-	default: assert(false);
-	}
-	return nullptr;
-}
-
-std::vector<ID3D12CommandAllocator*>& FWindowRenderContext::GetCommandAllocators(CommandQueue::EType eQueueType)
-{
-	int BACK_BUFFER_INDEX = SwapChain.GetCurrentBackBufferIndex();
-	switch (eQueueType)
-	{
-	case CommandQueue::EType::GFX    : return mCommandAllocatorsGFX[BACK_BUFFER_INDEX];
-	case CommandQueue::EType::COMPUTE: return mCommandAllocatorsCompute[BACK_BUFFER_INDEX];
-	case CommandQueue::EType::COPY   : return mCommandAllocatorsCopy[BACK_BUFFER_INDEX];
-	}
-	assert(false); // shouldn't happen
-	return mCommandAllocatorsGFX[BACK_BUFFER_INDEX];
-}
-

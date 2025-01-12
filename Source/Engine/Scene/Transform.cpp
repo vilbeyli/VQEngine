@@ -25,12 +25,14 @@ Transform::Transform(const XMFLOAT3& position, const Quaternion& rotation, const
 	: _position(position)
 	, _rotation(rotation)
 	, _scale(scale)
+	, _positionPrev(position)
 {}
 
 Transform::~Transform() {}
 
 Transform & Transform::operator=(const Transform & t)
 {
+	this->_positionPrev = t._positionPrev;
 	this->_position = t._position;
 	this->_rotation = t._rotation;
 	this->_scale    = t._scale;
@@ -39,6 +41,7 @@ Transform & Transform::operator=(const Transform & t)
 
 void Transform::Translate(const XMFLOAT3& translation)
 {
+	_positionPrev = _position;
 	XMVECTOR POSITION = XMLoadFloat3(&_position);
 	XMVECTOR TRANSLATION = XMLoadFloat3(&translation);
 	POSITION += TRANSLATION;
@@ -47,6 +50,7 @@ void Transform::Translate(const XMFLOAT3& translation)
 
 void Transform::Translate(float x, float y, float z)
 {
+	_positionPrev = _position;
 	XMVECTOR POSITION = XMLoadFloat3(&_position);
 	XMVECTOR TRANSLATION = XMLoadFloat3(&XMFLOAT3(x, y, z));
 	POSITION += TRANSLATION;
@@ -74,7 +78,18 @@ XMMATRIX Transform::matWorldTransformation() const
 	XMVECTOR scale = XMLoadFloat3(&_scale);
 	XMVECTOR translation = XMLoadFloat3(&_position);
 
-	Quaternion Q = _rotation;
+	const Quaternion& Q = _rotation;
+	XMVECTOR rotation = XMVectorSet(Q.V.x, Q.V.y, Q.V.z, Q.S);
+	XMVECTOR rotOrigin = XMVectorZero();
+	return XMMatrixAffineTransformation(scale, rotOrigin, rotation, translation);
+}
+
+DirectX::XMMATRIX Transform::matWorldTransformationPrev() const
+{
+	XMVECTOR scale = XMLoadFloat3(&_scale);
+	XMVECTOR translation = XMLoadFloat3(&_positionPrev);
+
+	const Quaternion& Q = _rotation;
 	XMVECTOR rotation = XMVectorSet(Q.V.x, Q.V.y, Q.V.z, Q.S);
 	XMVECTOR rotOrigin = XMVectorZero();
 	return XMMatrixAffineTransformation(scale, rotOrigin, rotation, translation);
@@ -84,7 +99,7 @@ DirectX::XMMATRIX Transform::WorldTransformationMatrix_NoScale() const
 {
 	XMVECTOR scale = XMVectorSet(1.0f, 1.0f, 1.0f, 0.0f);
 	XMVECTOR translation = XMLoadFloat3(&_position);
-	Quaternion Q = _rotation;
+	const Quaternion& Q = _rotation;
 	XMVECTOR rotation = XMVectorSet(Q.V.x, Q.V.y, Q.V.z, Q.S);
 	XMVECTOR rotOrigin = XMVectorZero();
 	return XMMatrixAffineTransformation(scale, rotOrigin, rotation, translation);
@@ -101,9 +116,9 @@ DirectX::XMMATRIX Transform::NormalMatrix(const XMMATRIX& world)
 {
 	XMMATRIX nrm = world;
 	nrm.r[3].m128_f32[0] = nrm.r[3].m128_f32[1] = nrm.r[3].m128_f32[2] = 0;
-	nrm.r[3].m128_f32[3] = 1;
+	nrm.r[3].m128_f32[3] = 1; // undo translation
 	XMVECTOR Det = XMMatrixDeterminant(nrm);
-	nrm = XMMatrixInverse(&Det, nrm);
-	nrm = XMMatrixTranspose(nrm);
+	nrm = XMMatrixInverse(&Det, nrm); // undo rotation+scale
+	nrm = XMMatrixTranspose(nrm); // redo rotation
 	return nrm;
 }

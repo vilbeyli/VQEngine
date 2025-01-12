@@ -17,8 +17,8 @@
 //	Contact: volkanilbeyli@gmail.com
 #pragma once
 
-#include "../../Renderer/Renderer.h"
-#include "../Culling.h"
+#include "../Core/Types.h"
+#include "../CullingData.h"
 
 #include <string>
 #include <vector>
@@ -26,8 +26,10 @@
 
 #include <DirectXMath.h>
 
-#define NOMINMAX
-#undef max
+#include "MeshGenerator.h"
+
+struct FBufferDesc;
+class VQRenderer;
 
 enum EBuiltInMeshes
 {
@@ -37,12 +39,19 @@ enum EBuiltInMeshes
 	SPHERE,
 	CYLINDER,
 	CONE,
+	GRID_SIMPLE_QUAD,
+	GRID_DETAILED_QUAD0,
+	GRID_DETAILED_QUAD1,
+	GRID_DETAILED_QUAD2,
+
+	TESSELLATION_CONTROL_POINTS__QUAD1,
+	TESSELLATION_CONTROL_POINTS__QUAD4,
+	TESSELLATION_CONTROL_POINTS__QUAD9,
+	TESSELLATION_CONTROL_POINTS__QUAD16,
+	TESSELLATION_CONTROL_POINTS__QUAD25,
 	
 	NUM_BUILTIN_MESHES
 };
-
-
- 
 
 struct VertexIndexBufferIDPair
 {
@@ -86,7 +95,7 @@ public:
 	);
 
 	template<class TVertex, class TIndex>
-	Mesh(VQRenderer* pRenderer, const MeshLODData<TVertex, TIndex>& meshLODData);
+	Mesh(VQRenderer* pRenderer, const GeometryGenerator::GeometryData<TVertex, TIndex>& meshLODData, const std::string& name);
 
 	Mesh() = default;
 
@@ -94,7 +103,8 @@ public:
 	// Interface
 	//
 	std::pair<BufferID, BufferID> GetIABufferIDs(int lod = 0) const;
-	inline uint GetNumIndices(int lod = 0) const { return mNumIndicesPerLODLevel[lod]; }
+	inline uint GetNumIndices(int lod = 0) const { assert(mNumIndicesPerLODLevel.size()>lod); return mNumIndicesPerLODLevel[lod]; }
+	inline uint GetNumLODs() const { return static_cast<uint>(mLODBufferPairs.size()); }
 	const FBoundingBox GetLocalSpaceBoundingBox() const { return mLocalSpaceBoundingBox; }
 	
 private:
@@ -131,14 +141,15 @@ Mesh::Mesh(
 	bufferDesc.Stride       = sizeof(vertices[0]);
 	bufferDesc.pData        = static_cast<const void*>(vertices.data());
 	bufferDesc.Name         = VBName;
-	BufferID vertexBufferID = pRenderer->CreateBuffer(bufferDesc);
+	BufferID vertexBufferID = GeometryGenerator::CreateBuffer(pRenderer, bufferDesc);
 
 	bufferDesc.Type        = INDEX_BUFFER;
 	//bufferDesc.Usage       = GPU_READ_WRITE;
 	bufferDesc.NumElements = static_cast<unsigned>(indices.size());
 	bufferDesc.Stride      = sizeof(unsigned);
 	bufferDesc.pData       = static_cast<const void*>(indices.data());
-	BufferID indexBufferID = pRenderer->CreateBuffer(bufferDesc);
+	bufferDesc.Name        = IBName;
+	BufferID indexBufferID = GeometryGenerator::CreateBuffer(pRenderer, bufferDesc);
 
 	mLODBufferPairs.push_back({ vertexBufferID, indexBufferID }); // LOD[0]
 	mNumIndicesPerLODLevel.push_back(bufferDesc.NumElements);
@@ -147,33 +158,39 @@ Mesh::Mesh(
 }
 
 template<class TVertex, class TIndex>
-Mesh::Mesh(VQRenderer* pRenderer, const MeshLODData<TVertex, TIndex>& meshLODData)
+Mesh::Mesh(VQRenderer* pRenderer, const GeometryGenerator::GeometryData<TVertex, TIndex>& meshLODData, const std::string& name)
 {
 	for (size_t LOD = 0; LOD < meshLODData.LODVertices.size(); ++LOD)
 	{
 		FBufferDesc bufferDesc = {};
 
-		const std::string VBName = meshLODData.meshName + "_LOD[" + std::to_string(LOD) + "]_VB";
-		const std::string IBName = meshLODData.meshName + "_LOD[" + std::to_string(LOD) + "]_IB";
+		const std::string VBName = name + "_LOD[" + std::to_string(LOD) + "]_VB";
+		const std::string IBName = name + "_LOD[" + std::to_string(LOD) + "]_IB";
+		const std::vector<TVertex>& vertices = meshLODData.LODVertices[LOD];
+		const std::vector<TIndex>& indices = meshLODData.LODIndices[LOD];
 
-		bufferDesc.mType = VERTEX_BUFFER;
-		//bufferDesc.mUsage = GPU_READ_WRITE;
-		bufferDesc.mElementCount = static_cast<unsigned>(meshLODData.LODVertices[LOD].size());
-		bufferDesc.mStride = sizeof(meshLODData.LODVertices[LOD][0]);
-		BufferID vertexBufferID = pRenderer->CreateBuffer(bufferDesc, meshLODData.LODVertices[LOD].data(), VBName.c_str());
+		bufferDesc.Type = VERTEX_BUFFER;
+		//bufferDesc.Usage = GPU_READ_WRITE;
+		bufferDesc.NumElements = static_cast<unsigned>(vertices.size());
+		bufferDesc.pData = static_cast<const void*>(vertices.data());
+		bufferDesc.Stride = sizeof(vertices[0]);
+		bufferDesc.Name = VBName;
+		BufferID vertexBufferID = GeometryGenerator::CreateBuffer(pRenderer, bufferDesc);
 
-		bufferDesc.mType = INDEX_BUFFER;
-		//bufferDesc.mUsage = GPU_READ_WRITE;
-		bufferDesc.NumElements = static_cast<unsigned>(meshLODData.LODIndices[LOD].size());
-		bufferDesc.mStride = sizeof(unsigned);
-		BufferID indexBufferID = pRenderer->CreateBuffer(bufferDesc, meshLODData.LODIndices[LOD].data(), IBName.c_str());
+		bufferDesc.Type = INDEX_BUFFER;
+		//bufferDesc.Usage = GPU_READ_WRITE;
+		bufferDesc.NumElements = static_cast<unsigned>(indices.size());
+		bufferDesc.pData = static_cast<const void*>(indices.data());
+		bufferDesc.Stride = sizeof(unsigned);
+		bufferDesc.Name = IBName;
+		BufferID indexBufferID = GeometryGenerator::CreateBuffer(pRenderer, bufferDesc);
 
 		mLODBufferPairs.push_back({ vertexBufferID, indexBufferID });
 		mNumIndicesPerLODLevel.push_back(bufferDesc.NumElements);
 
 		if (LOD == 0)
 		{
-			mLocalSpaceBoundingBox = CalculateBoundingBox(meshLODData.LODVertices[LOD]);
+			mLocalSpaceBoundingBox = CalculateBoundingBox(vertices);
 		}
 	}
 }

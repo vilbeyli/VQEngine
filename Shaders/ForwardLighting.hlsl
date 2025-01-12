@@ -21,6 +21,8 @@
 
 #include "Lighting.hlsl"
 
+
+
 //---------------------------------------------------------------------------------------------------
 //
 // DATA
@@ -32,21 +34,18 @@ struct VSInput
 	float3 normal   : NORMAL;
 	float3 tangent  : TANGENT;
 	float2 uv       : TEXCOORD0;
-#ifdef INSTANCED
+#if INSTANCED_DRAW
 	uint instanceID : SV_InstanceID;
 #endif
 };
 
 struct PSInput
 {
-    float4 position    : SV_POSITION;
-	float3 worldPos    : POSITION1;
-	float3 vertNormal  : COLOR0;
-	float3 vertTangent : COLOR1;
-	float2 uv          : TEXCOORD0;
-#ifdef INSTANCED
-	uint instanceID    : SV_InstanceID;
-#endif
+	float4 position           : SV_POSITION;
+	float3 WorldSpacePosition : COLOR2;
+	float3 WorldSpaceNormal   : COLOR0;
+	float3 WorldSpaceTangent  : COLOR1;
+	float2 uv                 : TEXCOORD0;
 #if PS_OUTPUT_MOTION_VECTORS
 	float4 svPositionCurr : TEXCOORD1;
 	float4 svPositionPrev : TEXCOORD2;
@@ -68,38 +67,22 @@ struct PSOutput
 #endif
 };
 
-#ifdef INSTANCED
-	#ifndef INSTANCE_COUNT
-	#define INSTANCE_COUNT 50 // 50 instances assumed per default, this should be provided by the app
-	#endif
-#endif
 
 //---------------------------------------------------------------------------------------------------
 //
 // RESOURCE BINDING
 //
 //---------------------------------------------------------------------------------------------------
-cbuffer CBPerFrame : register(b0)
-{
-	PerFrameData cbPerFrame;
-}
-cbuffer CBPerView : register(b1)
-{
-	PerViewData cbPerView;
-}
-cbuffer CBPerObject : register(b2)
-{
-#ifdef INSTANCED
-	PerObjectData cbPerObject[INSTANCE_COUNT];
-#else
-	PerObjectData cbPerObject;
-#endif
-}
+cbuffer CBPerFrame     : register(b0) { PerFrameData cbPerFrame; }
+cbuffer CBPerView      : register(b1) { PerViewData cbPerView; }
+cbuffer CBPerObject    : register(b2) { PerObjectData cbPerObject; }
+//cbuffer CBTessellation : register(b3) { TessellationParams tess; }
 
-SamplerState LinearSampler : register(s0);
-SamplerState PointSampler  : register(s1);
-SamplerState AnisoSampler  : register(s2);
+SamplerState LinearSampler        : register(s0);
+SamplerState PointSampler         : register(s1);
+SamplerState AnisoSampler         : register(s2);
 SamplerState ClampedLinearSampler : register(s3);
+SamplerState LinearSamplerTess    : register(s4);
 
 Texture2D texDiffuse        : register(t0);
 Texture2D texNormals        : register(t1);
@@ -110,7 +93,9 @@ Texture2D texRoughness      : register(t5);
 Texture2D texOcclRoughMetal : register(t6);
 Texture2D texLocalAO        : register(t7);
 
-Texture2D texScreenSpaceAO  : register(t8);
+Texture2D texHeightmap      : register(t8); // VS or PS
+
+Texture2D texScreenSpaceAO  : register(t9);
 
 TextureCube texEnvMapDiff   : register(t10);
 TextureCube texEnvMapSpec   : register(t11);
@@ -122,60 +107,137 @@ TextureCubeArray texPointLightShadowMaps      : register(t22);
 
 
 
+
 //---------------------------------------------------------------------------------------------------
 //
-// KERNELS
+// FUNCS
 //
 //---------------------------------------------------------------------------------------------------
-PSInput VSMain(VSInput vertex)
+
+// CB fetchers
+#if INSTANCED_DRAW
+matrix GetWorldMatrix(uint instID) { return cbPerObject.matWorld[instID]; }
+matrix GetWorldNormalMatrix(uint instID) { return cbPerObject.matNormal[instID]; }
+matrix GetWorldViewProjectionMatrix(uint instID) { return cbPerObject.matWorldViewProj[instID]; }
+#if PS_OUTPUT_MOTION_VECTORS
+matrix GetPrevWorldViewProjectionMatrix(uint instID) { return cbPerObject.matWorldViewProjPrev[instID]; }
+#endif
+#else
+matrix GetWorldMatrix() { return cbPerObject.matWorld; }
+matrix GetWorldNormalMatrix() { return cbPerObject.matNormal; }
+matrix GetWorldViewProjectionMatrix() { return cbPerObject.matWorldViewProj; }
+#if PS_OUTPUT_MOTION_VECTORS
+matrix GetPrevWorldViewProjectionMatrix() { return cbPerObject.matWorldViewProjPrev; }
+#endif
+#endif
+float2 GetUVScale() { return cbPerObject.materialData.uvScaleOffset.xy; }
+float2 GetUVOffset() { return cbPerObject.materialData.uvScaleOffset.zw; }
+
+float3 CalcHeightOffset(float2 uv)
 {
-	PSInput result;
-	float4 vPosition = float4(vertex.position, 1.0f);
+	float fHeightSample = texHeightmap.SampleLevel(LinearSamplerTess, uv, 0).r;
+	float fHeightOffset = fHeightSample * cbPerObject.materialData.displacement;
+	return float3(0, fHeightOffset, 0);
+}
 
-#ifdef INSTANCED
-	result.position    = mul(cbPerObject[vertex.instanceID].matWorldViewProj, vPosition);
-	result.vertNormal  = mul(cbPerObject[vertex.instanceID].matNormal, vertex.normal );
-	result.vertTangent = mul(cbPerObject[vertex.instanceID].matNormal, vertex.tangent);
-	result.worldPos    = mul(cbPerObject[vertex.instanceID].matWorld, vPosition);
-
+PSInput TransformVertex(
+#if INSTANCED_DRAW
+	int InstanceID,
+#endif
+	float3 Position,
+	float3 Normal,
+	float3 Tangent,
+	float2 uv
+)
+{
+	float4 vPosition = float4(Position, 1.0f);
+	vPosition.xyz += CalcHeightOffset(uv * cbPerObject.materialData.uvScaleOffset.xy + cbPerObject.materialData.uvScaleOffset.zw);
+	
+#if INSTANCED_DRAW
+	matrix matW   = GetWorldMatrix(InstanceID);
+	matrix matWVP = GetWorldViewProjectionMatrix(InstanceID);
+	matrix matWN = GetWorldNormalMatrix(InstanceID);
+	
 	#if PS_OUTPUT_MOTION_VECTORS
-	result.svPositionCurr = result.position;
-	result.svPositionPrev = mul(cbPerObject[vertex.instanceID].matWorldViewProjPrev, vPosition);
+	matrix matPrevWVP = GetPrevWorldViewProjectionMatrix(InstanceID);
 	#endif
 #else
-	result.position    = mul(cbPerObject.matWorldViewProj, vPosition);
-	result.vertNormal  = mul(cbPerObject.matNormal, vertex.normal );
-	result.vertTangent = mul(cbPerObject.matNormal, vertex.tangent);
-	result.worldPos    = mul(cbPerObject.matWorld, vPosition);
-
+	matrix matW   = GetWorldMatrix();
+	matrix matWVP = GetWorldViewProjectionMatrix();
+	matrix matWN = GetWorldNormalMatrix();
 	#if PS_OUTPUT_MOTION_VECTORS
-	result.svPositionCurr = result.position;
-	result.svPositionPrev = mul(cbPerObject.matWorldViewProjPrev, vPosition);
+	matrix matPrevWVP = GetPrevWorldViewProjectionMatrix();
 	#endif
+#endif // INSTANCED_DRAW
+	
+	PSInput result;
+	result.position = mul(matWVP, vPosition);
+	result.WorldSpacePosition = mul(matW, vPosition).xyz;
+	result.WorldSpaceNormal = mul((float4x3)matWN, Normal).xyz;
+	result.WorldSpaceTangent = mul((float4x3)matWN, Tangent).xyz;
+	#if PS_OUTPUT_MOTION_VECTORS
+	result.svPositionPrev = mul(matPrevWVP, vPosition);
+	#endif
+	result.uv = uv;
+
+#if PS_OUTPUT_MOTION_VECTORS
+	result.svPositionCurr = result.position;
 #endif
-	result.uv = vertex.uv;
 	
 	return result;
 }
 
 
+//---------------------------------------------------------------------------------------------------
+//
+// TESSELLATION
+//
+//---------------------------------------------------------------------------------------------------
+#include "Tessellation.hlsl"
+
+//---------------------------------------------------------------------------------------------------
+//
+// VERTEX SHADER
+//
+//---------------------------------------------------------------------------------------------------
+PSInput VSMain(VSInput vertex)
+{
+	return TransformVertex(
+#if INSTANCED_DRAW
+		vertex.instanceID,
+#endif
+		vertex.position,
+		vertex.normal,
+		vertex.tangent,
+		vertex.uv
+	);
+}
+
+
+//---------------------------------------------------------------------------------------------------
+//
+// PIXEL SHADER
+//
+//---------------------------------------------------------------------------------------------------
 PSOutput PSMain(PSInput In)
 {
 	PSOutput o = (PSOutput)0;
 
-	const float2 uv = In.uv;
+	const float2 uv = In.uv * cbPerObject.materialData.uvScaleOffset.xy + cbPerObject.materialData.uvScaleOffset.zw;
 	const int TEX_CFG = cbPerObject.materialData.textureConfig;
 	
 	float4 AlbedoAlpha = texDiffuse  .Sample(AnisoSampler, uv);
-	float3 Normal      = texNormals  .Sample(AnisoSampler, uv).rgb;
+	float3 Normal      = texNormals.SampleBias(AnisoSampler, uv, cbPerObject.materialData.normalMapMipBias).rgb;
 	float3 Emissive    = texEmissive .Sample(LinearSampler, uv).rgb;
-	float3 Metalness   = texMetalness.Sample(AnisoSampler, uv).rgb;
-	float3 Roughness   = texRoughness.Sample(AnisoSampler, uv).rgb;
+	float  Metalness   = texMetalness.Sample(AnisoSampler, uv).r;
+	float  Roughness   = texRoughness.Sample(AnisoSampler, uv).r;
 	float3 OcclRghMtl  = texOcclRoughMetal.Sample(AnisoSampler, uv).rgb;
 	float LocalAO      = texLocalAO.Sample(AnisoSampler, uv).r;
 	
+	#if ENABLE_ALPHA_MASK
 	if (HasDiffuseMap(TEX_CFG) && AlbedoAlpha.a < 0.01f)
 		discard;
+	#endif
 	
 	// ensure linear space
 	AlbedoAlpha.xyz = SRGBToLinear(AlbedoAlpha.xyz);
@@ -183,37 +245,46 @@ PSOutput PSMain(PSInput In)
 	
 	// read textures/cbuffer & assign sufrace material data
 	float ao = cbPerFrame.fAmbientLightingFactor;
-	BRDF_Surface Surface = (BRDF_Surface)0;
-	Surface.diffuseColor      = HasDiffuseMap(TEX_CFG)   ? AlbedoAlpha.rgb : cbPerObject.materialData.diffuse;
-	Surface.specularColor     = float3(1,1,1);
-	Surface.emissiveColor     = HasEmissiveMap(TEX_CFG)  ? Emissive        : cbPerObject.materialData.emissiveColor;
+	BRDF_Surface Surface      = (BRDF_Surface)0;
+	Surface.diffuseColor      = HasDiffuseMap(TEX_CFG)  ? AlbedoAlpha.rgb * cbPerObject.materialData.diffuse : cbPerObject.materialData.diffuse;
+	Surface.emissiveColor     = HasEmissiveMap(TEX_CFG) ? Emissive * cbPerObject.materialData.emissiveColor : cbPerObject.materialData.emissiveColor;
 	Surface.emissiveIntensity = cbPerObject.materialData.emissiveIntensity;
+	Surface.roughness         = cbPerObject.materialData.roughness;
+	Surface.metalness         = cbPerObject.materialData.metalness;
 	
-	const float3  N = normalize(In.vertNormal);
-	const float3  T = normalize(In.vertTangent);
+	#if ENABLE_TESSELLATION_SHADERS
+	float fHeightSample = texHeightmap.SampleLevel(LinearSampler, uv, 0).r;
+	float fHeightOffset = fHeightSample * cbPerObject.materialData.displacement;
+	
+	float fHeightSampleT = texHeightmap.SampleLevel(LinearSampler, uv + float2(0,0), 0).r;
+	float fHeightSampleB = texHeightmap.SampleLevel(LinearSampler, uv + float2(0,0), 0).r;
+	float fHeightSampleL = texHeightmap.SampleLevel(LinearSampler, uv + float2(0,0), 0).r;
+	float fHeightSampleR = texHeightmap.SampleLevel(LinearSampler, uv + float2(0,0), 0).r;
+	
+	const float3 N = normalize(In.WorldSpaceNormal);
+	const float3 T = normalize(In.WorldSpaceTangent);
+	#else
+	const float3 N = normalize(In.WorldSpaceNormal);
+	const float3 T = normalize(In.WorldSpaceTangent);
+	#endif
 	Surface.N = length(Normal) < 0.01 ? N : UnpackNormal(Normal, N, T);
 	
-	const bool bReadsRoughnessMapData = HasRoughnessMap(TEX_CFG) || HasOcclusionRoughnessMetalnessMap(TEX_CFG);
-	const bool bReadsMetalnessMapData =  HasMetallicMap(TEX_CFG) || HasOcclusionRoughnessMetalnessMap(TEX_CFG);
-	
-	if (!bReadsRoughnessMapData) Surface.roughness = cbPerObject.materialData.roughness;
-	if (!bReadsMetalnessMapData) Surface.metalness = cbPerObject.materialData.metalness;
-	if (HasAmbientOcclusionMap           (TEX_CFG)) ao *= LocalAO;
-	if (HasRoughnessMap                  (TEX_CFG)) Surface.roughness = Roughness;
-	if (HasMetallicMap                   (TEX_CFG)) Surface.metalness = Metalness;
-	if (HasOcclusionRoughnessMetalnessMap(TEX_CFG))
+	if (HasAmbientOcclusionMap           (TEX_CFG)>0) ao *= LocalAO;
+	if (HasRoughnessMap                  (TEX_CFG)>0) Surface.roughness *= Roughness;
+	if (HasMetallicMap                   (TEX_CFG)>0) Surface.metalness *= Metalness;
+	if (HasOcclusionRoughnessMetalnessMap(TEX_CFG)>0)
 	{
 		//ao *= OcclRghMtl.r; // TODO: handle no occlusion map case
-		Surface.roughness = OcclRghMtl.g;
-		Surface.metalness = OcclRghMtl.b;
+		Surface.roughness *= OcclRghMtl.g;
+		Surface.metalness *= OcclRghMtl.b;
 	}
 
 	// apply SSAO
 	const float2 ScreenSpaceUV = (float2(In.position.xy) + 0.5f.xx) / float2(cbPerView.ScreenDimensions);
-	ao *= texScreenSpaceAO.Sample(PointSampler, ScreenSpaceUV);
+	ao *= texScreenSpaceAO.Sample(PointSampler, ScreenSpaceUV).r;
 	
 	// lighting & surface parameters (World Space)
-	const float3 P = In.worldPos;
+	const float3 P = In.WorldSpacePosition;
 	const float3 V = normalize(cbPerView.CameraPosition - P);
 	const float2 screenSpaceUV = In.position.xy / cbPerView.ScreenDimensions;
 	
@@ -221,14 +292,14 @@ PSOutput PSMain(PSInput In)
 	// illumination accumulators
 	float3 I_total = 
 	/* ambient  */   Surface.diffuseColor  * ao
-	/* Emissive */ + Surface.emissiveColor * Surface.emissiveIntensity * 100.0f
+	/* Emissive */ + Surface.emissiveColor * Surface.emissiveIntensity
 	;
 
 	
 	// -------------------------------------------------------------------------------------------------------
 	
 	// Environment map
-	if(cbPerView.EnvironmentMapDiffuseOnlyIllumination)
+	if (cbPerView.EnvironmentMapDiffuseOnlyIllumination) // TODO: preprocessor
 	{
 		I_total += CalculateEnvironmentMapIllumination_DiffuseOnly(Surface, V, texEnvMapDiff, ClampedLinearSampler, cbPerFrame.fHDRIOffsetInRadians);
 	}
@@ -254,7 +325,7 @@ PSOutput PSMain(PSInput In)
 	{
 		const float2 PointLightShadowMapDimensions = cbPerFrame.f2PointLightShadowMapDimensions;
 		PointLight l = cbPerFrame.Lights.point_casters[pc];
-		const float  D = length   (l.position - P);
+		const float D = length(l.position - P);
 
 		if(D < l.range)
 		{

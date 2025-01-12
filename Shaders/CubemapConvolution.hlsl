@@ -153,7 +153,7 @@ float4 PSMain_DiffuseIrradiance(GSOut In) : SV_TARGET
 			
 			float mipLevel = 3; // source texture is 8K, diffuse irradiance could benefit from lower res so we use mip=3
 			
-			irradiance += texEquirectEnvironmentMap.SampleLevel(Sampler, DirectionToEquirectUV(sampleVec), mipLevel) * cosTheta * sinTheta;
+			irradiance += texEquirectEnvironmentMap.SampleLevel(Sampler, DirectionToEquirectUV(sampleVec), mipLevel).rgb * cosTheta * sinTheta;
 			numSamples += 1.0f;
 		}
 	}
@@ -213,7 +213,7 @@ float4 PSMain_SpecularIrradiance(GSOut In) : SV_TARGET
 				? 0.0 
 				: max(0.5 * log2(fOmegaS / fOmegaP) + fMipBias, 0.0f);
 			
-			prefilteredColor += texEquirectEnvironmentMap.SampleLevel(Sampler, DirectionToEquirectUV(L), fMipLevel) * NdotL;
+			prefilteredColor += texEquirectEnvironmentMap.SampleLevel(Sampler, DirectionToEquirectUV(L), fMipLevel).rgb * NdotL;
 			#endif
 			totalWeight += NdotL;
 		}

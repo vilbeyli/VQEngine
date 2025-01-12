@@ -22,6 +22,7 @@
 #include "Common.h"
 #include "Renderer.h"
 
+#include "../Engine/GPUMarker.h"
 #include "../Engine/Core/Platform.h" // CHECK_HR
 #include "../Engine/Core/Window.h"
 #include "../../Libs/VQUtils/Source/Log.h"
@@ -42,7 +43,7 @@
 #include <vector>
 
 #define NUM_MAX_BACK_BUFFERS  3
-#define LOG_SWAPCHAIN_VERBOSE 0
+#define LOG_SWAPCHAIN_VERBOSE 1
 
 #if LOG_SWAPCHAIN_VERBOSE
     #define LOG_SWAPCHAIN_SYNCHRONIZATION_EVENTS  0
@@ -267,9 +268,9 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     this->mICurrentBackBuffer = mpSwapChain->GetCurrentBackBufferIndex();
     this->mFenceValues.resize(this->mNumBackBuffers, 0);
     D3D12_FENCE_FLAGS FenceFlags = D3D12_FENCE_FLAG_NONE;
-    mpDevice->CreateFence(this->mFenceValues[this->mICurrentBackBuffer], FenceFlags, IID_PPV_ARGS(&this->mpFence));
+    this->mpDevice->CreateFence(this->mFenceValues[this->mICurrentBackBuffer], FenceFlags, IID_PPV_ARGS(&this->mpFence));
     ++mFenceValues[mICurrentBackBuffer];
-    mHEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    this->mHEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     if (mHEvent == nullptr)
     {
         ThrowIfFailed(HRESULT_FROM_WIN32(GetLastError()));
@@ -521,11 +522,12 @@ void SwapChain::MoveToNextFrame()
     HRESULT hr = {};
     if (fenceComplVal < mFenceValues[mICurrentBackBuffer])
     {
+        SCOPED_CPU_MARKER_C("GPU_BOUND", 0xFF005500);
 #if LOG_SWAPCHAIN_SYNCHRONIZATION_EVENTS
         Log::Warning("SwapChain : next frame not ready. FenceComplVal=%d < FenceVal[curr]=%d", fenceComplVal, mFenceValues[mICurrentBackBuffer]);
 #endif
         ThrowIfFailed(mpFence->SetEventOnCompletion(mFenceValues[mICurrentBackBuffer], mHEvent));
-        hr = WaitForSingleObjectEx(mHEvent, 10000, FALSE);
+        hr = WaitForSingleObjectEx(mHEvent, 1000, FALSE);
     }
     switch (hr)
     {

@@ -53,7 +53,6 @@ struct BRDF_Surface
 	float  roughness;
 	float3 diffuseColor;
 	float  metalness;
-	float3 specularColor;
 	float  emissiveIntensity;
 	float3 emissiveColor;
 };
@@ -184,12 +183,12 @@ float3 BRDF(in BRDF_Surface s, float3 Wi, float3 V)
 	const float  D = NormalDistributionGGX(NdotH, roughness);
 	const float denom = max(4.0f * NdotV * NdotL, 0.0001f);
 	const float3 specular = D * F * G / denom;
-	const float3 Is = specular * s.specularColor;
+	const float3 Is = specular;
 
 	// Diffuse BRDF
 	const float3 kS = F;
-	const float3 kD = (float3(1, 1, 1) - kS) * (1.0f - metalness) * albedo;
-	const float3 Id = F_LambertDiffuse(kD);
+	const float3 kD = (float3(1, 1, 1) - kS) * (1.0f - metalness);
+	const float3 Id = F_LambertDiffuse(kD * albedo);
 
 	return (Id + Is);
 }

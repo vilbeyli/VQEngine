@@ -15,12 +15,10 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
-
-#define NOMINMAX
-
 #include "Scene.h"
 #include "../Core/Window.h"
 #include "../VQEngine.h"
+#include "../GPUMarker.h"
 
 #include "Libs/VQUtils/Source/utils.h"
 
@@ -58,6 +56,10 @@ MaterialID Scene::LoadMaterial(const FMaterialRepresentation& matRep, TaskID tas
 	fnAssignF(mat.emissiveIntensity, matRep.EmissiveIntensity);
 	fnAssignF3(mat.emissiveColor, matRep.EmissiveColor);
 	fnAssignF3(mat.diffuse, matRep.DiffuseColor);
+	fnAssignF(mat.tiling.x, matRep.TilingX);
+	fnAssignF(mat.tiling.y, matRep.TilingY);
+	mat.Tessellation = matRep.Tessellation;
+	fnAssignF(mat.displacement, matRep.Displacement);
 
 	// async data (textures)
 	bool bHasTexture = false;
@@ -68,6 +70,7 @@ MaterialID Scene::LoadMaterial(const FMaterialRepresentation& matRep, TaskID tas
 	bHasTexture |= fnEnqueueTexLoad(id, matRep.MetallicMapFilePath, AssetLoader::ETextureType::METALNESS);
 	bHasTexture |= fnEnqueueTexLoad(id, matRep.RoughnessMapFilePath, AssetLoader::ETextureType::ROUGHNESS);
 	bHasTexture |= fnEnqueueTexLoad(id, matRep.AOMapFilePath, AssetLoader::ETextureType::AMBIENT_OCCLUSION);
+	bHasTexture |= fnEnqueueTexLoad(id, matRep.HeightMapFilePath, AssetLoader::ETextureType::HEIGHT);
 
 	AssetLoader::FMaterialTextureAssignment MatTexAssignment = {};
 	MatTexAssignment.matID = id;
@@ -76,34 +79,59 @@ MaterialID Scene::LoadMaterial(const FMaterialRepresentation& matRep, TaskID tas
 	return id;
 }
 
-void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& sceneRep)
+void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& sceneRep, ThreadPool& UpdateWorkerThreadPool)
 {
-	mRenderer.WaitForLoadCompletion();
+	SCOPED_CPU_MARKER("SceneStartLoading");
 
-	Log::Info("[Scene] Loading Scene: %s", sceneRep.SceneName.c_str());
 	const TaskID taskID = AssetLoader::GenerateModelLoadTaskID();
+	LoadBuiltinMaterials(taskID, sceneRep.Objects);
+	
+	mRenderer.WaitForLoadCompletion();
+	
+	Log::Info("[Scene] Loading Scene: %s", sceneRep.SceneName.c_str());
 
 
 	mSceneRepresentation = sceneRep;
 
-	LoadBuiltinMeshes(builtinMeshes);
+	{
+		SCOPED_CPU_MARKER("LoadScene()");
+		this->LoadScene(sceneRep); // scene-specific load 
+	}
 
-	this->LoadScene(sceneRep); // scene-specific load 
-
-	LoadBuiltinMaterials(taskID, sceneRep.Objects);
 	LoadSceneMaterials(sceneRep.Materials, taskID);
 
-	LoadGameObjects(std::move(sceneRep.Objects));
 	LoadLights(sceneRep.Lights);
 	LoadCameras(sceneRep.Cameras);
 	LoadPostProcessSettings();
 
-	mTransformWorldMatrixHistory.clear();
-	mViewProjectionMatrixHistory.clear();
+	{
+		SCOPED_CPU_MARKER("ClearHistoryData");
+		mViewProjectionMatrixHistory.clear();
+	}
+	mBoundingBoxHierarchy.Clear();
+	{
+		SCOPED_CPU_MARKER("ClearShadowViews");
+		for (FSceneShadowViews& view : mFrameShadowViews)
+		{
+			for (FSceneShadowViews::FShadowView& sv : view.ShadowViews_Spot ) sv.drawParamLookup.clear();
+			for (FSceneShadowViews::FShadowView& sv : view.ShadowViews_Point) sv.drawParamLookup.clear();
+			view.ShadowView_Directional.drawParamLookup.clear();
+		}
+	}
+	mFrustumCullWorkerContext.ClearMemory();
+
+	mEngine.WaitForBuiltinMeshGeneration();
+
+	LoadBuiltinMeshes(builtinMeshes);
+	LoadGameObjects(std::move(sceneRep.Objects), UpdateWorkerThreadPool);
 }
+
+
 
 void Scene::LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRepresentation>& GameObjsToBeLoaded)
 {
+	SCOPED_CPU_MARKER("Scene::LoadBuiltinMaterials()");
+
 	const char* STR_MATERIALS_FOLDER = "Data/Materials/";
 	auto vMatFiles = DirectoryUtil::ListFilesInDirectory(STR_MATERIALS_FOLDER, "xml");
 
@@ -150,6 +178,8 @@ void Scene::LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRep
 
 void Scene::LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes)
 {
+	SCOPED_CPU_MARKER("Scene::LoadBuiltinMeshes()");
+
 	// register builtin meshes to scene mesh lookup
 	// @mMeshes[0-NUM_BUILTIN_MESHES] are assigned here directly while the rest
 	// of the meshes used in the scene must use this->AddMesh(Mesh&&) interface;
@@ -165,67 +195,140 @@ void Scene::LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes)
 	}
 }
 
-void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects)
+// multi threaded code
+void Scene::BuildGameObject(const FGameObjectRepresentation& ObjRep, size_t iObj)
 {
-	constexpr bool B_LOAD_GAMEOBJECTS_SERIAL = true;
+	SCOPED_CPU_MARKER("BuildGameObject");
 
-	if constexpr (B_LOAD_GAMEOBJECTS_SERIAL)
+	// GameObject
+	GameObject* pObj = mGameObjectPool.Get(iObj);
+	pObj->mModelID = INVALID_ID;
+
+	// Transform
+	Transform* pTransform = mGameObjectTransformPool.Get(iObj);
+	*pTransform = ObjRep.tf;
+
+	// Model
+	const bool bModelIsBuiltinMesh = !ObjRep.BuiltinMeshName.empty();
+	const bool bModelIsLoadedFromFile = !ObjRep.ModelFilePath.empty();
+	assert(bModelIsBuiltinMesh != bModelIsLoadedFromFile);
+
+	if (bModelIsBuiltinMesh)
+	{
+		ModelID mID = this->CreateModel();
+
+		std::unique_lock<std::mutex> lk(mMtx_Models);
+		Model& model = mModels.at(mID);
+
+		// create/get mesh
+		MeshID meshID = mEngine.GetBuiltInMeshID(ObjRep.BuiltinMeshName);
+
+		// material
+		MaterialID matID = this->mDefaultMaterialID;
+		if (!ObjRep.MaterialName.empty())
+		{
+			matID = this->CreateMaterial(ObjRep.MaterialName);
+		}
+		Material& mat = this->GetMaterial(matID);
+		//const bool bTransparentMesh = mat.IsTransparent();
+
+		// model data
+		Model::Data::EMeshType eMeshType = Model::Data::EMeshType::OPAQUE_MESH;
+		if (mat.IsAlphaMasked(mRenderer) || mat.IsTransparent(mRenderer))
+		{
+			//if (mat.IsTransparent(mRenderer))
+			//	eMeshType = Model::Data::EMeshType::TRANSPARENT_MESH;
+			if (mat.IsAlphaMasked(mRenderer))
+				eMeshType = Model::Data::EMeshType::ALPHA_MASKED_MESH;
+		}
+
+		model.mData = Model::Data(meshID, matID, eMeshType);
+		model.mModelName = ObjRep.ModelName;
+
+		model.mbLoaded = true;
+		pObj->mModelID = mID;
+	}
+	else
+	{
+		mAssetLoader.QueueModelLoad(pObj, ObjRep.ModelFilePath, ObjRep.ModelName);
+	}
+}
+
+void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects, ThreadPool& WorkerThreadPool)
+{
+	const size_t NumGameObjects = GameObjects.size();
+
+	SCOPED_CPU_MARKER_F("Scene::LoadGameObjects(N=%d)", NumGameObjects);
+	constexpr bool B_LOAD_GAMEOBJECTS_SERIAL = false;
+	constexpr size_t NUM_GAMEOBJECTS_THRESHOLD_FOR_THREADED_LOAD = 1024;
+
+	{
+		SCOPED_CPU_MARKER("MemAlloc");
+		mGameObjectHandles.resize(NumGameObjects, INVALID_HANDLE);
+		mTransformHandles.resize(NumGameObjects, INVALID_HANDLE);
+		
+		mGameObjectHandles = mGameObjectPool.Allocate(NumGameObjects);
+		mTransformHandles = mGameObjectTransformPool.Allocate(NumGameObjects); 
+	}
+
+	size_t iObj = 0;
+	if (B_LOAD_GAMEOBJECTS_SERIAL || NumGameObjects < NUM_GAMEOBJECTS_THRESHOLD_FOR_THREADED_LOAD)
 	{
 		for (FGameObjectRepresentation& ObjRep : GameObjects)
 		{
-			// GameObject
-			GameObject* pObj = mGameObjectPool.Allocate(1);
-			pObj->mModelID = INVALID_ID;
-			pObj->mTransformID = INVALID_ID;
-
-			// Transform
-			Transform* pTransform = mTransformPool.Allocate(1);
-			*pTransform = std::move(ObjRep.tf);
-			mpTransforms.push_back(pTransform);
-
-			TransformID tID = static_cast<TransformID>(mpTransforms.size() - 1);
-			pObj->mTransformID = tID;
-
-			// Model
-			const bool bModelIsBuiltinMesh = !ObjRep.BuiltinMeshName.empty();
-			const bool bModelIsLoadedFromFile = !ObjRep.ModelFilePath.empty();
-			assert(bModelIsBuiltinMesh != bModelIsLoadedFromFile);
-
-			if (bModelIsBuiltinMesh)
-			{
-				ModelID mID = this->CreateModel();
-				Model& model = mModels.at(mID);
-
-				// create/get mesh
-				MeshID meshID = mEngine.GetBuiltInMeshID(ObjRep.BuiltinMeshName);
-				model.mData.mOpaueMeshIDs.push_back(meshID);
-
-				// material
-				MaterialID matID = this->mDefaultMaterialID;
-				if (!ObjRep.MaterialName.empty())
-				{
-					matID = this->CreateMaterial(ObjRep.MaterialName);
-				}
-				Material& mat = this->GetMaterial(matID);
-				const bool bTransparentMesh = mat.IsTransparent();
-				model.mData.mOpaqueMaterials[meshID] = matID; // todo: handle transparency
-
-				model.mbLoaded = true;
-				pObj->mModelID = mID;
-			}
-			else
-			{
-				mAssetLoader.QueueModelLoad(pObj, ObjRep.ModelFilePath, ObjRep.ModelName);
-			}
-
-
-			mpObjects.push_back(pObj);
+			BuildGameObject(ObjRep, iObj++);
 		}
 	}
 	else // THREADED LOAD
 	{
-		// dispatch workers
-		assert(false); // TODO: profile first
+		const size_t NumAvailableWorkers = WorkerThreadPool.GetThreadPoolSize();
+		const size_t NumThreads = NumAvailableWorkers + 1;
+		const std::vector<FGameObjectRepresentation>* pObjects = &GameObjects;
+
+		std::vector<std::pair<size_t, size_t>> ranges = PartitionWorkItemsIntoRanges(NumGameObjects, NumThreads);
+		const int NumTasks = static_cast<int>(ranges.size());
+		const int NumThreadTasks = NumTasks - 1;
+		Signal ThreadsDoneSignal;
+		std::atomic<bool> bThreadsDone = false;
+		{
+			SCOPED_CPU_MARKER("DispatchThreads");
+			std::atomic<int> NumThreadsDone = 0;
+			for (size_t iRange = 1; iRange < ranges.size(); ++iRange)
+			{
+				WorkerThreadPool.AddTask([=, &NumThreadsDone, &ThreadsDoneSignal, &bThreadsDone]()
+				{
+					SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+					{
+						SCOPED_CPU_MARKER_F("Range: [%d, %d]", ranges[iRange].first, ranges[iRange].second);
+						const size_t NumItems_PrevRange = (ranges[iRange - 1].second - ranges[iRange - 1].first + 1);
+						const size_t Offset = (ranges[iRange - 1].second - ranges[0].first + 1);
+						size_t iObj_Thread = iObj + Offset;
+
+						for (size_t i = ranges[iRange].first; i <= ranges[iRange].second; ++i)
+							BuildGameObject((*pObjects)[i], iObj_Thread++);
+
+						const int NumThreadsDoneBefore = NumThreadsDone.fetch_add(1);
+						if (NumThreadsDoneBefore + 1 == NumThreadTasks)
+						{
+							bThreadsDone.store(true);
+							ThreadsDoneSignal.NotifyOne();
+						}
+					}
+				});
+			}
+		}
+		{
+			SCOPED_CPU_MARKER_F("Range[%d,%d] ", ranges[0].first, ranges[0].second);
+			for (size_t i = ranges.front().first; i <= ranges.front().second; ++i)
+			{
+				BuildGameObject(GameObjects[i], iObj++);
+			}
+		}
+		if(!bThreadsDone.load())
+		{
+			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
+			ThreadsDoneSignal.Wait();
+		}
 	}
 
 	// kickoff workers for loading models
@@ -236,6 +339,7 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 
 void Scene::LoadSceneMaterials(const std::vector<FMaterialRepresentation>& Materials, TaskID taskID)
 {
+	SCOPED_CPU_MARKER("Scene::LoadSceneMaterials()");
 	// Create scene materials before deserializing gameobjects
 	uint NumMaterials = 0;
 	for (const FMaterialRepresentation& matRep : Materials)
@@ -257,6 +361,7 @@ void Scene::LoadSceneMaterials(const std::vector<FMaterialRepresentation>& Mater
 
 void Scene::LoadLights(const std::vector<Light>& SceneLights)
 {
+	SCOPED_CPU_MARKER("Scene::LoadLights()");
 	for (const Light& l : SceneLights)
 	{
 		std::vector<Light>& LightContainer = [&]() -> std::vector<Light>&{
@@ -278,6 +383,7 @@ void Scene::LoadLights(const std::vector<Light>& SceneLights)
 
 void Scene::LoadCameras(std::vector<FCameraParameters>& CameraParams)
 {
+	SCOPED_CPU_MARKER("Scene::LoadCameras()");
 	for (FCameraParameters& param : CameraParams)
 	{
 		param.ProjectionParams.ViewportWidth = static_cast<float>(mpWindow->GetWidth());
@@ -303,6 +409,7 @@ void Scene::LoadCameras(std::vector<FCameraParameters>& CameraParams)
 
 void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 {
+	SCOPED_CPU_MARKER("Scene::LoadPostProcessSettings()");
 	// TODO: remove hardcode
 
 	const uint fWidth  = this->mpWindow->GetWidth();
@@ -314,25 +421,27 @@ void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 		FPostProcessParameters& PPParams = this->GetPostProcessParameters(static_cast<int>(i));
 
 		// Update FidelityFX constant blocks
+#if !DISABLE_FIDELITYFX_CAS
 		PPParams.bEnableCAS = true; // TODO: read from scene PP settings
 		if (PPParams.IsFFXCASEnabled())
 		{
 			PPParams.FFXCASParams.UpdateCASConstantBlock(fWidth, fHeight, fWidth, fHeight);
 		}
+#endif
 
 		if (PPParams.IsFSREnabled())
 		{
-			const float fResolutionScale = PPParams.FFSR_EASUParams.GetScreenPercentage();
-			const uint InputWidth = static_cast<uint>(fResolutionScale * fWidth);
-			const uint InputHeight = static_cast<uint>(fResolutionScale * fHeight);
-			PPParams.FFSR_EASUParams.UpdateEASUConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, fWidth, fHeight);
-			PPParams.FFSR_RCASParams.UpdateRCASConstantBlock();
+			const uint InputWidth = static_cast<uint> (PPParams.ResolutionScale * fWidth);
+			const uint InputHeight = static_cast<uint>(PPParams.ResolutionScale * fHeight);
+			PPParams.FSR_EASUParams.UpdateEASUConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, fWidth, fHeight);
+			PPParams.FSR_RCASParams.UpdateRCASConstantBlock();
 		}
 	}
 }
 
 void Scene::OnLoadComplete()
 {
+	SCOPED_CPU_MARKER("Scene::OnLoadComplete()");
 	Log::Info("[Scene] OnLoadComplete()");
 
 	// Assign model data to game objects
@@ -348,7 +457,7 @@ void Scene::OnLoadComplete()
 	}
 
 	// assign material data
-	mMaterialAssignments.DoAssignments(this, &mRenderer);
+	mMaterialAssignments.DoAssignments(this, this->mMtxTexturePaths, this->mTexturePaths, &mRenderer);
 
 	// calculate local-space game object AABBs
 	CalculateGameObjectLocalSpaceBoundingBoxes();
@@ -360,6 +469,8 @@ void Scene::OnLoadComplete()
 
 void Scene::Unload()
 {
+	SCOPED_CPU_MARKER("Scene::Unload()");
+
 	this->UnloadScene();
 
 	mSceneRepresentation = {};
@@ -371,28 +482,51 @@ void Scene::Unload()
 	mFrameShadowViews.resize(sz);
 
 	//mMeshes.clear(); // TODO
-
-	for (Transform* pTf : mpTransforms) mTransformPool.Free(pTf);
-	mpTransforms.clear();
-
-	for (GameObject* pObj : mpObjects) mGameObjectPool.Free(pObj);
-	mpObjects.clear();
+	
+	for (size_t hTransform : mTransformHandles)
+		mGameObjectTransformPool.Free(hTransform);
+	for (size_t hObject : mGameObjectHandles)
+		mGameObjectPool.Free(hObject);
+	mTransformHandles.clear();
+	mGameObjectHandles.clear();
 
 	mCameras.clear();
+	
+	for (const std::pair<MaterialID, Material>& matPair : mMaterials)
+	{
+		const Material& mat = matPair.second;
+		mRenderer.DestroySRV(mat.SRVHeightMap);
+		mRenderer.DestroySRV(mat.SRVMaterialMaps);
+	}
+	mMaterials.clear();
+	mMaterialNames.clear();
+	mLoadedMaterials.clear();
 
-	mDirectionalLight = {};
+	for (const auto& pair : mMeshes)
+	{
+		const Mesh& mesh = pair.second;
+		for (int lod = 0; lod < (int)mesh.GetNumLODs(); ++lod)
+		{
+			std::pair<BufferID, BufferID> VBIB = mesh.GetIABufferIDs(lod);
+			const VBV& VertexBufferView = mRenderer.GetVertexBufferView(VBIB.first);
+			const IBV& IndexBufferView = mRenderer.GetIndexBufferView(VBIB.second);
+			// TODO: release VB & IB	
+		}
+	}
+	mMeshes.clear();
+	mModels.clear();
+	mModelLoadResults.clear();
+	mTexturePaths.clear();
+
 	mLightsStatic.clear();
 	mLightsDynamic.clear();
+	mLightsStationary.clear();
 
 	mBoundingBoxHierarchy.Clear();
 
 	mIndex_SelectedCamera = 0;
 	mIndex_ActiveEnvironmentMapPreset = -1;
 	mEngine.UnloadEnvironmentMap();
-
-	mLightsDynamic.clear();
-	mLightsStatic.clear();
-	mLightsStationary.clear();
 }
 
 
@@ -400,9 +534,19 @@ void Scene::CalculateGameObjectLocalSpaceBoundingBoxes()
 {
 	constexpr float max_f = std::numeric_limits<float>::max();
 	constexpr float min_f = -(max_f - 1.0f);
-
-	for (GameObject* pGameObj : mpObjects)
+	
+	size_t i = 0;
+	for (size_t hObj : mGameObjectHandles)
 	{
+		GameObject* pGameObj = mGameObjectPool.Get(hObj);
+		if (!pGameObj)
+		{
+			Log::Warning("nullptr gameobj[%d]", i);
+			++i;
+			continue;
+		}
+		++i;
+		assert(pGameObj);
 		FBoundingBox& AABB = pGameObj->mLocalSpaceBoundingBox;
 
 		// reset AABB
@@ -430,13 +574,15 @@ void Scene::CalculateGameObjectLocalSpaceBoundingBoxes()
 			vMaxs = XMVectorMax(vMaxs, vMinMesh);
 			vMaxs = XMVectorMax(vMaxs, vMaxMesh);
 		};
-		for (MeshID mesh : model.mData.mOpaueMeshIDs)
+		for (std::pair<MeshID, MaterialID> meshMaterialIDPair : model.mData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH))
 		{
+			MeshID mesh = meshMaterialIDPair.first;
 			const FBoundingBox& AABB_Mesh = mMeshes.at(mesh).GetLocalSpaceBoundingBox();
 			fnProcessMeshAABB(AABB_Mesh);
 		}
-		for (MeshID mesh : model.mData.mTransparentMeshIDs)
+		for (std::pair<MeshID, MaterialID> meshMaterialIDPair : model.mData.GetMeshMaterialIDPairs(Model::Data::EMeshType::TRANSPARENT_MESH))
 		{
+			MeshID mesh = meshMaterialIDPair.first;
 			const FBoundingBox& AABB_Mesh = mMeshes.at(mesh).GetLocalSpaceBoundingBox();
 			fnProcessMeshAABB(AABB_Mesh);
 		}

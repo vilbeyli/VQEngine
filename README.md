@@ -1,13 +1,16 @@
 ![](Data/Icons/VQEngine-icon.png)
 
+
+| master | dev |
+| :---: | :---: | 
+| [![Build status](https://ci.appveyor.com/api/projects/status/eep4xej7ay8mvhpb/branch/master?svg=true)](https://ci.appveyor.com/project/vilbeyli/vqe/branch/master) |[![Build status](https://ci.appveyor.com/api/projects/status/eep4xej7ay8mvhpb/branch/dev?svg=true)](https://ci.appveyor.com/project/vilbeyli/vqe/branch/dev) |
+
+
 # VQEngine
 
-VQEngine is a DirectX12 renderer for prototyping of rendering techniques and experimenting with cutting edge technology.
+VQEngine is a multi-threaded DirectX12 renderer for prototyping of rendering techniques and experimenting with cutting edge technology.
 
-Join the [VQE Discord Channel](https://discord.gg/U7pd8TV) for graphics, math and engine chatter!
-
-[![Discord Banner 2](https://discordapp.com/api/guilds/720409073756930079/widget.png?style=banner2)](https://discord.gg/U7pd8TV)
-
+See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source & pre-built executables.
 
 # Screenshots
 
@@ -16,9 +19,49 @@ Join the [VQE Discord Channel](https://discord.gg/U7pd8TV) for graphics, math an
 <sub><i>Data-driven (XML) Scenes & glTF Model Loading, HDRI Environment Maps, UE4's PBR model w/ IBL, ImGui UI & debug drawing, AMD FidelityFX CACAO, CAS, FSR1, SSSR, DNSR, SPD </i></sub>
 </p>
 
-# Features
+<br/>
 
-See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source & pre-built executables.
+![](Screenshots/VQE_kXRV9BkYzQ.gif)
+<p align="center">
+<sub><i>Debug draw modes</i></sub>
+</p>
+
+<br/>
+
+![](Screenshots/VQE_q4sWXO143X.gif)
+<p align="center">
+<sub><i>Object selection, light bounds, magnifier</i></sub>
+</p>
+
+<br/>
+
+![](Screenshots/VQE_NoGq8VTxGu.gif)
+<p align="center">
+<sub><i>Tessellation pipeline drawing a single large quad domain mesh w/ heightmap</i></sub>
+</p>
+
+<br/>
+
+![](Screenshots/Renderer.png)
+<p align="center">
+<sub><i>How a frame is rendered by VQEngine</i></sub>
+</p>
+
+<br/>
+
+![](Screenshots/FrameCapture.png)
+<p align="center">
+<sub><i>Radeon Graphics Profiler capture from the stress test scene showcasing async compute</i></sub>
+</p>
+
+<br/>
+
+![](Screenshots/qrenderdoc_Lthvze2obv.gif)
+<p align="center">
+<sub><i>Instanced rendering w/ LODs</i></sub>
+</p>
+
+# Features
 
 ## Graphics
 
@@ -27,14 +70,11 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
      - NDF : Trowbridge-Reitz GGX 
      - G   : Smith
      - F   : Fresnel_Schlick / Fresnel_Gaussian
-   - Image-based Lighting (IBL) w/ prefiltered environment cubemaps
+   - Image-based Lighting (IBL) w/ prefiltered environment cubemaps from [HDRI Haven](https://hdrihaven.com/)
      - Load-time diffuse & specular irradiance cubemap convolution
 - Lighting & Shadow maps
-  - Point Lights
-  - Spot Lights
-  - Directional Light
-  - PCF Shadow Maps for Point/Spot/Directional lights
-- HDR Environment Maps from [HDRI Haven](https://hdrihaven.com/)
+  - Point / Spot / Directional Lights
+  - PCF Shadows
 - Reflections
   - [FidelityFX - Stochastic Screen Space Reflections (SSSR)](https://github.com/GPUOpen-Effects/FidelityFX-SSSR)
   - [FidelityFX - Denoiser (DNSR)](https://github.com/GPUOpen-Effects/FidelityFX-Denoiser)
@@ -47,6 +87,10 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
   - Tonemapping & Gamma correction
   - [FidelityFX - Contrast Adaptive Sharpening (CAS)](https://github.com/GPUOpen-Effects/FidelityFX-CAS/)
   - [FidelityFX - Super Resolution 1.0](https://github.com/GPUOpen-Effects/FidelityFX-FSR)
+- Async Compute & Copy queue support
+- Tessellation Pipeline
+  - Triangle & Quad domains
+
 
 ## Display
 
@@ -65,25 +109,40 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
 - Multi-threading 
   - Worker threads
     - Parallel command list recording
-    - Culling
+    - Frustum Culling
     - Asset loading
+    - PSO & Shader compilation
   - Main + Simulation threads to decouple OS events from the update loop
 - [glTF](https://en.wikipedia.org/wiki/GlTF) [2.0](https://github.com/KhronosGroup/glTF/tree/master/specification/2.0) model loading using [assimp](https://github.com/assimp/assimp)
 - Shader system
   - Shader cache
   - Multi-threaded shader compilation
   - Shader Model 5.0 (DXBC) & 6.0 (DXIL)
+- Editor for Materials, Lights & Transforms
 - Automated build & testing scripts
 
+
+![](Screenshots/MT-Loading.jpeg)
+
+<p align="center">
+<sub><i>Multi-threaded loading: Textures, Shaders & PSOs. Not shown: Models</i></sub>
+</p>
+
+<br/>
+
+![](Screenshots/MT-Simulation.png)
+<p align="center">
+<sub><i>Multi-threaded simulation: Frustum culling & parallel command list recording</i></sub>
+</p>
 
 
 # Build
 
 Make sure to have pre-requisites installed 
 
-- [CMake 3.4](https://cmake.org/download/)
-- [Visual Studio 2019](https://visualstudio.microsoft.com/downloads/)
-- [Windows 10 SDK 10.0.18362.0](https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk)
+- [CMake 3.24](https://cmake.org/download/)
+- [Visual Studio 2022](https://visualstudio.microsoft.com/downloads/)
+- Windows 10 SDK 10.0.20348 OR Windows 11 SDK 10.26100.0
 
 To download the PBR & HDRI textures, run
 
@@ -101,12 +160,12 @@ Then, run one of the build scripts in `Build/` folder,
 
 Make sure to have installed
 
- - [Visual C++ 2019 Redistributiable (x64)](https://support.microsoft.com/en-us/help/2977003/the-latest-supported-visual-c-downloads)
+ - MSVC v143 - VS 2022 C++ x64/x86 build tools
  - A DX12-capable GPU
 
 Double click `VQE.exe`. 
 
-Or, if you're using a terminal, 
+Or, if you're using a terminal
 - `VQE.exe -LogConsole` for logging displayed on a console
 - `VQE.exe -LogFile="FileName.txt"` to write out to a file.
 
@@ -115,6 +174,12 @@ Or, if you're using a terminal,
 | Key | |
 | :--: | :-- |
 | **WASD+EQ** | Camera movement |
+| **Left Click** | Pick object |
+| **Right Click** | Hold to look around |
+| **F1** | Toggle Scene Controls |
+| **F2** | Toggle Profiler |
+| **F3** | Toggle Settings |
+| **F4** | Toggle  Editor |
 | **Page Up/Down** | Change Environment Map |
 | **1-4** |	Change scenes <br>**1** - *Default Scene* <br>**2** - *Sponza* <br>**3** - *Geometry Test Scene* <br>**4** - *Stress Test Scene* |
 | **Shift+R** | Reload level |
@@ -127,7 +192,6 @@ Or, if you're using a terminal,
 | **N** | Toggle object bounding boxes |
 | **Shift+N** | Toggle mesh bounding boxes |
 | **Alt+Enter** | Toggle Fullscreen |
-| **Esc** | Release mouse |
 
 
 ## Settings
@@ -180,7 +244,7 @@ VQE supports the following command line parameters:
 
 | File |  |
 | :-- | :-- |
-| `GenerateSolutions.bat` | **What it does** <br/>- Initializes the submodule repos<br/> - Runs `CMake` to generate visual studio solution files in `Build/SolutionFiles` directory <br/> - Launches Visual Studio <br/> <br/> **Flags** <br/> - `noVS` : Updates/Generates `VQE.sln` without launching a Visual Studio instance <br/><br/> ***Example** : `GenerateSolutions.bat -noVS` <br/> while VS is open to update solution files after modifying CmakeLists.txt without closing/relaunching VS*
+| `ProjectFiles.bat` | **What it does** <br/>- Initializes the submodule repos<br/> - Runs `CMake` to generate visual studio solution files in `Build/SolutionFiles` directory <br/> - Launches Visual Studio <br/> <br/> **Flags** <br/> - `noVS` : Updates/Generates `VQE.sln` without launching a Visual Studio instance <br/><br/> ***Example** : `GenerateSolutions.bat -noVS` <br/> while VS is open to update solution files after modifying CmakeLists.txt without closing/relaunching VS*
 | `PackageEngine.bat` | **What it does** <br/>  - Runs `GenerateSolutions.bat` if the visual studio solution doesn't exist <br/> - Builds the engine in Release configuration <br/> - Moves build output into `Build/_artifacts` folder <br/> <br/> **Flags** <br/> `-Clean` : Runs Clean on `VQE.sln` projects before building <br/> `-DebugOnly` : Builds the Debug binaries only <br/> `-Debug` : Builds Debug binaries in addition to Release <br/> `-RelWithDebInfo` : Builds the Release binaries with Debug info in addition to Release    <br/><br/> ***Note**: Release build is always on by default, unless `-DebugOnly` is specified* <br/><br/> ***Example**: `PackageEngine.bat -Clean -Debug -RelWithDebInfo ` <br/>will build all configurations after running Clean and copy the binaries into `Build/_artifacts` folder*
 | `TestVQE.bat` | **What it does** <br/> - Runs `VQE.exe` with testing parameters, making the engine exit after rendering specified number of frames (1000 default). <br/><br/> **Flags** <br/> `-Debug`: Tests the Debug build in addition to the Release build <br/> 
 

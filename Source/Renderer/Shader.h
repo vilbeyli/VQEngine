@@ -19,26 +19,10 @@
 #pragma once
 
 #include "../Engine/Core/Types.h"
-
-#include <atlbase.h>
-#include <d3dcompiler.h>
-#include <d3d12.h>
-
-#include "../../Libs/DirectXCompiler/inc/dxcapi.h"
-
 #include <string>
-#include <array>
-#include <tuple>
-#include <vector>
-#include <stack>
-#include <unordered_map>
-#include <filesystem>
+#include <wrl/client.h>
 
 struct ID3D12Device;
-
-using FileTimeStamp = std::filesystem::file_time_type;
-
-//using namespace;
 
 //
 // HELPER STRUCTS/ENUMS
@@ -77,6 +61,9 @@ struct FShaderMacro
 
 struct FShaderStageCompileDesc;
 
+struct ID3D12ShaderReflection;
+struct IDxcBlob;
+struct ID3D10Blob;
 
 //
 // SHADER
@@ -88,12 +75,12 @@ class Shader
 public:
 	struct FBlob
 	{
-		inline bool IsNull() const { return !pD3DBlob && !pBlobDxc; }
+		bool IsNull() const;
 		const void* GetByteCode() const;
 		size_t GetByteCodeSize() const;
 
-		CComPtr<ID3DBlob> pD3DBlob = nullptr;
-		CComPtr<IDxcBlob> pBlobDxc = nullptr;
+		Microsoft::WRL::ComPtr<ID3D10Blob> pD3DBlob = nullptr;
+		Microsoft::WRL::ComPtr<IDxcBlob> pBlobDxc = nullptr;
 	};
 	union ShaderBlobs
 	{
@@ -121,48 +108,4 @@ public:
 		};
 		ID3D12ShaderReflection* Reflections[EShaderStage::NUM_SHADER_STAGES] = { nullptr };
 	};
-};
-
-namespace ShaderUtils
-{
-	// Compiles shader from source file with the given file path, entry point, shader model & macro definitions
-	//
-	Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompileDesc, std::string& OutErrorString);
-	
-	// Reads in cached shader binary from given @ShaderBinaryFilePath 
-	//
-	Shader::FBlob CompileFromCachedBinary(const std::string& ShaderBinaryFilePath);
-	
-	// Writes out compiled ID3DBlob into @ShaderBinaryFilePath
-	//
-	void CacheShaderBinary(const std::string& ShaderBinaryFilePath, size_t ShaderBinarySize, const void* pShaderBinary);
-
-	// Concatenates given FShaderMacros and generates a hash from the resulting string
-	//
-	size_t GeneratePreprocessorDefinitionsHash(const std::vector<FShaderMacro>& Macros);
-
-	std::string  GetCompileError(ID3DBlob*& errorMessage, const std::string& shdPath);
-	std::string  GetIncludeFileName(const std::string& line);
-	bool         AreIncludesDirty(const std::string& srcPath, const std::string& cachePath);
-	bool         IsCacheDirty(const std::string& sourcePath, const std::string& cachePath);
-
-	std::vector<D3D12_INPUT_ELEMENT_DESC> ReflectInputLayoutFromVS(ID3D12ShaderReflection* pReflection);
-
-	EShaderStage GetShaderStageEnumFromShaderModel(const std::string& ShaderModel);
-}
-
-
-struct FShaderStageCompileDesc
-{
-	std::wstring FilePath;
-	std::string EntryPoint;
-	std::string ShaderModel;
-	std::vector<FShaderMacro> Macros;
-	bool bUseNative16bit = false;
-	std::vector<std::wstring> DXCompilerFlags;
-};
-struct FShaderStageCompileResult
-{
-	Shader::FBlob ShaderBlob;
-	EShaderStage ShaderStageEnum;
 };

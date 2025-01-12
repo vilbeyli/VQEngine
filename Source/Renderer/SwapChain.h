@@ -72,7 +72,7 @@ public:
 	inline void SetHDRMetaData(const FSetHDRMetaDataParams& p) { SetHDRMetaData(p.ColorSpace, p.MaxOutputNits, p.MinOutputNits, p.MaxContentLightLevel, p.MaxFrameAverageLightLevel); }
 	void ClearHDRMetaData();
 	void EnsureSwapChainColorSpace(SwapChainBitDepth swapChainBitDepth, bool bHDR10Signal); 
-
+	bool IsInitialized() const { return this->mpSwapChain != nullptr; }
 
 	/* Getters */ 
 	inline unsigned short                GetNumBackBuffers()                const { return mNumBackBuffers; }

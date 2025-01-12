@@ -16,24 +16,23 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
+#include "VQEngine.h"
+#include "GPUMarker.h"
+
+#include "Libs/DirectXCompiler/inc/dxcapi.h"
+#include "Libs/VQUtils/Source/utils.h"
+
 #include <Windows.h>
 #include <ShellScalingAPI.h>
 #pragma comment(lib, "shcore.lib")
 
 #include <ctime>
 #include <cstdlib>
-#include <vector>
-#include <string>
 
-#include "Libs/VQUtils/Source/Log.h"
-#include "Libs/VQUtils/Source/utils.h"
-#include "Core/Window.h"
-#include "Core/Platform.h"
-
-#include "VQEngine.h"
 
 void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmdl)
 {
+	SCOPED_CPU_MARKER("ParseCommandLineParameters");
 	const std::string StrCmdLineParams = pScmdl;
 	const std::vector<std::string> params = StrUtil::split(StrCmdLineParams, ' ');
 	for (const std::string& param : params)
@@ -171,7 +170,9 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR pScmdl, int iCmdShow)
 {
+	SCOPED_CPU_MARKER("WinMain");
 	SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+	SetThreadDescription(GetCurrentThread(), L"Main Thread");
 
 	FStartupParameters StartupParameters = {};
 	StartupParameters.hExeInstance = hInst;
@@ -180,8 +181,11 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR pScmdl, int iCmdSh
 	srand(static_cast<unsigned>(time(NULL)));
 	
 	ParseCommandLineParameters(StartupParameters, pScmdl);
-
-	Log::Initialize(StartupParameters.LogInitParams);
+	
+	{
+		SCOPED_CPU_MARKER("Log::Initialize");
+		Log::Initialize(StartupParameters.LogInitParams);
+	}
 
 	{
 		VQEngine Engine = {};

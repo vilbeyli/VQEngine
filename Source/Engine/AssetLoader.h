@@ -72,7 +72,7 @@ public:
 	};
 	struct FTextureLoadResult
 	{
-		ETextureType   type; // material textures: diffuse/normal/alpha_mask/...
+		ETextureType type; // material textures: diffuse/normal/alpha_mask/...
 		std::string TexturePath;
 		std::shared_future<TextureID> texLoadResult;
 	};
@@ -100,7 +100,12 @@ public:
 	struct FMaterialTextureAssignments
 	{
 		FMaterialTextureAssignments(const ThreadPool& workers) : mWorkersThreads(workers) {}
-		void DoAssignments(Scene* pScene, VQRenderer* pRenderer);
+		void DoAssignments(
+			Scene* pScene, 
+			std::mutex& mtxTexturePaths,
+			std::unordered_map<TextureID, std::string>& TexturePaths, 
+			VQRenderer* pRenderer
+		);
 		void WaitForTextureLoads();
 
 		const ThreadPool&                       mWorkersThreads; // to check if pool IsExiting()
@@ -111,7 +116,12 @@ public:
 	//
 	// CLASS INTERFACE
 	// 
-	AssetLoader(ThreadPool& WorkerThreads_Model, ThreadPool& WorkerThreads_Texture, VQRenderer& renderer);
+	AssetLoader(
+		  ThreadPool& WorkerThreads_Model
+		, ThreadPool& WorkerThreads_Texture
+		, ThreadPool& WorkerThreads_Mesh
+		, VQRenderer& renderer
+	);
 
 	inline const ThreadPool& GetThreadPool_TextureLoad() const { return mWorkers_TextureLoad; }
 
@@ -128,9 +138,11 @@ private:
 	//
 	// DATA
 	//
-private:
+public:
 	ThreadPool& mWorkers_ModelLoad;
 	ThreadPool& mWorkers_TextureLoad;
+	ThreadPool& mWorkers_MeshLoad;
+private:
 	VQRenderer& mRenderer;
 
 	template<class T> struct FLoadTaskContext

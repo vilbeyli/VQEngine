@@ -132,7 +132,7 @@ DirectX::XMMATRIX Light::GetWorldTransformationMatrix() const
 
 DirectX::XMMATRIX Light::GetViewProjectionMatrix(Texture::CubemapUtility::ECubeMapLookDirections PointLightFace) const
 {
-	XMFLOAT2 ViewportSize = XMFLOAT2(this->ViewportX, this->ViewportY);
+	XMFLOAT2 ViewportSize = XMFLOAT2((float)this->ViewportX, (float)this->ViewportY);
 
 	XMMATRIX matView = XMMatrixIdentity();
 	XMMATRIX matProj = CalculateProjectionMatrix(this->Type, this->ShadowData.NearPlane, this->ShadowData.FarPlane, ViewportSize);

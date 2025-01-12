@@ -17,102 +17,20 @@
 //	Contact: volkanilbeyli@gmail.com
 #pragma once
 
-#include <DirectXMath.h>
-#include <array>
-#include <vector>
 #include "Core/Types.h"
+#include "Scene/Mesh.h"
+#include "Scene/Material.h"
+
+#include <unordered_map>
+#include <functional>
 
 class GameObject;
 class ThreadPool;
-
-//------------------------------------------------------------------------------------------------------------------------------
-//
-// DATA STRUCTURES
-//
-//------------------------------------------------------------------------------------------------------------------------------
-struct FFrustumPlaneset
-{	// plane equations: aX + bY + cZ + d = 0
-	DirectX::XMFLOAT4 abcd[6]; // planes[6]: r, l, t, b, n, f
-	enum EPlaneset
-	{
-		PL_RIGHT = 0,
-		PL_LEFT,
-		PL_TOP,
-		PL_BOTTOM,
-		PL_FAR,
-		PL_NEAR
-	};
-
-	// src: http://gamedevs.org/uploads/fast-extraction-viewing-frustum-planes-from-world-view-projection-matrix.pdfe
-	// gets the frustum planes based on @projectionTransformation. if:
-	//
-	// - @projectionTransformation is proj          matrix ->  view space plane equations
-	// - @projectionTransformation is viewProj      matrix -> world space plane equations
-	// - @projectionTransformation is worldViewProj matrix -> model space plane equations
-	// 
-	inline static FFrustumPlaneset ExtractFromMatrix(const DirectX::XMMATRIX& projectionTransformation)
-	{
-		const DirectX::XMMATRIX& m = projectionTransformation;
-
-		FFrustumPlaneset viewPlanes;
-		viewPlanes.abcd[FFrustumPlaneset::PL_RIGHT] = DirectX::XMFLOAT4(
-			m.r[0].m128_f32[3] - m.r[0].m128_f32[0],
-			m.r[1].m128_f32[3] - m.r[1].m128_f32[0],
-			m.r[2].m128_f32[3] - m.r[2].m128_f32[0],
-			m.r[3].m128_f32[3] - m.r[3].m128_f32[0]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_LEFT] = DirectX::XMFLOAT4(
-			m.r[0].m128_f32[3] + m.r[0].m128_f32[0],
-			m.r[1].m128_f32[3] + m.r[1].m128_f32[0],
-			m.r[2].m128_f32[3] + m.r[2].m128_f32[0],
-			m.r[3].m128_f32[3] + m.r[3].m128_f32[0]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_TOP] = DirectX::XMFLOAT4(
-			m.r[0].m128_f32[3] - m.r[0].m128_f32[1],
-			m.r[1].m128_f32[3] - m.r[1].m128_f32[1],
-			m.r[2].m128_f32[3] - m.r[2].m128_f32[1],
-			m.r[3].m128_f32[3] - m.r[3].m128_f32[1]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_BOTTOM] = DirectX::XMFLOAT4(
-			m.r[0].m128_f32[3] + m.r[0].m128_f32[1],
-			m.r[1].m128_f32[3] + m.r[1].m128_f32[1],
-			m.r[2].m128_f32[3] + m.r[2].m128_f32[1],
-			m.r[3].m128_f32[3] + m.r[3].m128_f32[1]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_FAR] = DirectX::XMFLOAT4(
-			m.r[0].m128_f32[3] - m.r[0].m128_f32[2],
-			m.r[1].m128_f32[3] - m.r[1].m128_f32[2],
-			m.r[2].m128_f32[3] - m.r[2].m128_f32[2],
-			m.r[3].m128_f32[3] - m.r[3].m128_f32[2]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_NEAR] = DirectX::XMFLOAT4(
-			m.r[0].m128_f32[2],
-			m.r[1].m128_f32[2],
-			m.r[2].m128_f32[2],
-			m.r[3].m128_f32[2]
-		);
-		return viewPlanes;
-	}
-};
-
-struct FSphere
-{
-	FSphere(const DirectX::XMFLOAT3& CenterIn, float RadiusIn) : CenterPosition(CenterIn), Radius(RadiusIn) {}
-	DirectX::XMFLOAT3 CenterPosition;
-	float Radius;
-};
-struct FBoundingBox
-{
-	DirectX::XMFLOAT3 ExtentMin;
-	DirectX::XMFLOAT3 ExtentMax;
-	FBoundingBox():ExtentMin(0,0,0),ExtentMax(0,0,0){}
-	FBoundingBox(const FSphere& s); // makes a bounding box encapsulating the sphere
-
-	std::array<DirectX::XMVECTOR, 8> GetCornerPointsV4() const;
-	std::array<DirectX::XMVECTOR, 8> GetCornerPointsV3() const;
-	std::array<DirectX::XMFLOAT4, 8> GetCornerPointsF4() const;
-	std::array<DirectX::XMFLOAT3, 8> GetCornerPointsF3() const;
-};
+class Scene;
+struct Transform;
+class SceneBoundingBoxHierarchy;
+using MeshLookup_t = std::unordered_map<MeshID, Mesh>;
+using MaterialLookup_t = std::unordered_map<MaterialID, Material>;
 
 //------------------------------------------------------------------------------------------------------------------------------
 //
@@ -120,7 +38,7 @@ struct FBoundingBox
 //
 //------------------------------------------------------------------------------------------------------------------------------
 bool IsSphereIntersectingFurstum(const FFrustumPlaneset& FrustumPlanes, const FSphere& Sphere);
-bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes, const FBoundingBox& BBox);
+bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset FrustumPlanes, const FBoundingBox& BBox);
 bool IsFrustumIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes0, const FFrustumPlaneset& FrustumPlanes1);
 
 
@@ -136,32 +54,62 @@ struct FThreadWorkerContext
 {
 	virtual void Process(size_t iRangeBegin, size_t iRangeEnd) = 0;
 };
+
 struct FFrustumCullWorkerContext : public FThreadWorkerContext
 {
-	// Struct of Arrays for fast thread access
 	
 	using IndexList_t = std::vector<size_t>;
+	// Hot Data (per view): used during culling --------------------------------------------------------------------------------------
+	/*in */ std::vector<FFrustumPlaneset > vFrustumPlanes;
+	/*in */ std::vector<DirectX::XMMATRIX> vMatViewProj;
 
-	// Hot Data : used during culling --------------------------------------------------------------------------------------
-	/*in */ std::vector<FFrustumPlaneset         > vFrustumPlanes;
-	/*in */ std::vector<std::vector<FBoundingBox>> vBoundingBoxLists;
-
+	// Common data for each view
+	/*in */ std::vector<FBoundingBox     > vBoundingBoxList;
+	 
 	// store the index of the surviving bounding box in a list, per view frustum
-	/*out*/ std::vector<IndexList_t> vCulledBoundingBoxIndexListPerView; 
-	// Hot Data ------------------------------------------------------------------------------------------------------------
+	struct FCullResult { size_t iBB; float fBBArea; int SelectedLOD; std::pair<BufferID, BufferID> VBIB; unsigned NumIndices; char bTessellated; };
+	/*out*/ std::vector<std::vector<FCullResult>> vCullResultsPerView;
 	
-	// Cold Data : used after culling
-	/*in */ std::vector<std::vector<const GameObject*>> vGameObjectPointerLists; // Associates BoundingBoxes with pGameObjects
+	using SortingFunction_t = std::function<bool(const FFrustumCullWorkerContext::FCullResult&, const FFrustumCullWorkerContext::FCullResult&)>;
+	/*in */ std::vector<SortingFunction_t> vSortFunctions;
+	/*in */ std::vector<char> vForceLOD0;
+	// Hot Data ------------------------------------------------------------------------------------------------------------
 
 	//std::vector<int> vLightMovementTypeID; // index to access light type vectors: [0]:static, [1]:stationary, [2]:dynamic
 
+	size_t NumValidInputElements = 0;
+	const SceneBoundingBoxHierarchy& BBH;
+	const MeshLookup_t& mMeshes;
+	const MaterialLookup_t& mMaterials;
 
-	size_t AddWorkerItem(     FFrustumPlaneset&& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects);
-	size_t AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet, const std::vector<FBoundingBox>& vBoundingBoxList, const std::vector<const GameObject*>& pGameObjects);
+	// ====================================================================================
+	FFrustumCullWorkerContext() = delete;
+	FFrustumCullWorkerContext(
+		const SceneBoundingBoxHierarchy& BBH, 
+		const MeshLookup_t& mMeshes, 
+		const MaterialLookup_t& mMaterials
+	) : BBH(BBH), mMeshes(mMeshes), mMaterials(mMaterials) 
+	{}
+	
+	void AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet
+		, const DirectX::XMMATRIX& MatViewProj
+		, const std::vector<FBoundingBox>& vBoundingBoxList
+		, const std::vector<size_t>& vGameObjectHandles
+		, const std::vector<MaterialID>& vMaterials
+		, const  size_t i
+		, SortingFunction_t SortFunction
+		, bool bForceLOD0
+	);
+	inline void InvalidateContextData() { NumValidInputElements = 0; }
+	void ClearMemory();
 
 	void ProcessWorkItems_SingleThreaded();
 	void ProcessWorkItems_MultiThreaded(const size_t NumThreadsIncludingThisThread, ThreadPool& WorkerThreadPool);
 
-private:
+	const std::vector<std::pair<size_t, size_t>> GetWorkRanges(size_t NumThreadsIncludingThisThread) const;
+
+	void AllocInputMemoryIfNecessary(size_t sz);
+//private:
 	void Process(size_t iRangeBegin, size_t iRangeEnd) override;
+
 };

@@ -142,7 +142,7 @@ void CSMain(
             OutRGB = InRGBA.rgb;
             break;
         default:
-            OutRGB = float4(1, 1, 0, 1);
+            OutRGB = float4(1, 1, 0, 1).rgb;
             break;
 
     }

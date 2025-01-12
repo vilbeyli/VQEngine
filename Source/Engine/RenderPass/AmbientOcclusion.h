@@ -54,6 +54,7 @@ public:
 		ID3D12GraphicsCommandList* pCmd = nullptr;
 		DirectX::XMFLOAT4X4 matProj;
 		DirectX::XMFLOAT4X4 matNormalToView;
+		bool bAsyncCompute = false;
 	};
 
 	//------------------------------------------------------

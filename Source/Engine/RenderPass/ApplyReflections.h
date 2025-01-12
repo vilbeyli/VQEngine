@@ -19,6 +19,8 @@
 
 #include "RenderPass.h"
 
+class DynamicBufferHeap;
+struct ID3D12GraphicsCommandList;
 class ApplyReflectionsPass : public RenderPassBase
 {
 public:

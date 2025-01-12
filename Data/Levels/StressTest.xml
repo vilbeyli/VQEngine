@@ -37,7 +37,7 @@
         <Projection>Perspective</Projection>
         <FoV>60.0</FoV>
         <Near>0.1</Near>
-        <Far>1000</Far>
+        <Far>20000</Far>
 
         <FirstPerson>
             <TranslationSpeed>1000</TranslationSpeed>
@@ -62,6 +62,23 @@
         </FirstPerson>
     </Camera>
 
+    <Camera>
+        <Position> 60.764015 204.101440 -19.462582 </Position>
+        <Pitch>  -5.999988 </Pitch>
+        <Yaw> 180.500031 </Yaw>
+        <Projection>Perspective</Projection>
+        <FoV>60.0</FoV>
+        <Near>0.01</Near>
+        <Far>10000</Far>
+
+        <FirstPerson>
+            <TranslationSpeed>1000</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+
+    
     <!-- Sponza -->
     <GameObject>
         <Transform>
@@ -144,8 +161,7 @@
         </Model>
     </GameObject>
 
-
-     <!-- Directional Light -->
+    <!-- Directional Light -->
     <Light>
         <Enabled>true</Enabled>
         <Mobility> Stationary </Mobility>
@@ -161,8 +177,8 @@
             <Rotation> 30 0 40 </Rotation>
         </Transform>
         <Directional>
-            <ViewPortX> 220 </ViewPortX>
-            <ViewPortY> 220 </ViewPortY>
+            <ViewPortX> 1024 </ViewPortX>
+            <ViewPortY> 1024 </ViewPortY>
             <Distance> 1000 </Distance>
         </Directional>
     </Light>

@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "ApplyReflections.h"
+#include "../../Renderer/Renderer.h"
 
 ApplyReflectionsPass::ApplyReflectionsPass(VQRenderer& Renderer)
 	: RenderPassBase(Renderer)
@@ -75,7 +76,7 @@ std::vector<FPSOCreationTaskParameters> ApplyReflectionsPass::CollectPSOCreation
 
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "[PSO] ApplyReflections";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_5_0" });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_0" });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1);
 		PSODescs.push_back({ &PSOApplyReflectionsPass[0], psoLoadDesc});
 

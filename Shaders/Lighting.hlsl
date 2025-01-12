@@ -84,9 +84,17 @@ struct ShadowTestPCFData
 	float depthBias;
 	float NdotL;
 	float viewDistanceOfPixel;
-	//...
-	//-------------------------
 };
+
+ShadowTestPCFData FillPCFData_PointLight(in PointLight l, float3 N, float3 L, float3 P, float3 PCam)
+{
+	ShadowTestPCFData d = (ShadowTestPCFData) 0;
+	d.depthBias = l.depthBias;
+	d.NdotL = saturate(dot(N, L));
+	d.viewDistanceOfPixel = length(P - PCam);
+	return d;
+}
+
 float OmnidirectionalShadowTest(
 	in ShadowTestPCFData pcfTestLightData
 	, TextureCubeArray shadowCubeMapArr
@@ -374,7 +382,7 @@ float3 CalculateEnvironmentMapIllumination(
 	const float3   R                             = mul(reflect(-V, s.N), m);
 	const float3   N                             = mul(s.N, m);
 	const int      MIP_LEVEL                     = s.roughness * MAX_REFLECTION_LOD;
-	const float3   IEnv_SpecularPreFilteredColor = texEnvMapSpec.SampleLevel(smpEnvMap, R, MIP_LEVEL);
+	const float3   IEnv_SpecularPreFilteredColor = texEnvMapSpec.SampleLevel(smpEnvMap, R, MIP_LEVEL).xyz;
 	const float2   F0ScaleBias                   = texBRDFIntegrationLUT.SampleLevel(smpEnvMap, float2(NdotV, s.roughness), 0).rg;
 	const float3   IEnv_DiffuseIrradiance        = texEnvMapDiff.Sample(smpEnvMap, N).rgb;
 	return EnvironmentBRDF(NdotV, s.roughness, s.metalness, s.diffuseColor, IEnv_DiffuseIrradiance, IEnv_SpecularPreFilteredColor, F0ScaleBias);

@@ -30,8 +30,8 @@ class DefaultScene : public Scene
 	DECLARE_CTOR(DefaultScene)
 
 private:
-	GameObject* pObject = nullptr;
-	bool        bObjectAnimation = false;
+	size_t hObject = -1;
+	bool bObjectAnimation = false;
 };
 
 class SponzaScene : public Scene
@@ -57,5 +57,27 @@ class StressTestScene : public Scene
 	DECLARE_SCENE_INTERFACE()
 
 	DECLARE_CTOR(StressTestScene)
+	bool bAnimateEnvironmentMapRotation = false;
+
+	// object animation
+	bool bEnableGeneratedObjectAnimation = false;
+	bool bEnableOrbit;
+	bool bEnableRotation;
+	bool bRandomizeRotationSpeeds;
+	bool bRandomizeOrbitSpeeds;
+	bool bRandomizeRotationAxes;
+	std::vector<size_t> mAnimatiedObjectHandles;
+	DirectX::XMFLOAT3 mOrbitRotationPoint;
+	std::vector<DirectX::XMFLOAT3> mRotationAxes;
+	std::vector<DirectX::XMFLOAT3> mOrbitAxes;
+	std::vector<float> mRotationSpeeds;
+	std::vector<float> mOrbitSpeeds;
+};
+
+class TerrainScene : public Scene
+{
+	DECLARE_SCENE_INTERFACE()
+
+	DECLARE_CTOR(TerrainScene)
 	bool bAnimateEnvironmentMapRotation = false;
 };

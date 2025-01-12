@@ -15,9 +15,6 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
-
-#define NOMINMAX
-
 #include "VQEngine.h"
 #include "Math.h"
 #include "Scene/Scene.h"
@@ -85,7 +82,7 @@ void VQEngine::HandleUIInput()
 			if (input.IsKeyTriggered("F1")) Toggle(mUIState.bWindowVisible_SceneControls);
 			if (input.IsKeyTriggered("F2")) Toggle(mUIState.bWindowVisible_Profiler);
 			if (input.IsKeyTriggered("F3")) Toggle(mUIState.bWindowVisible_GraphicsSettingsPanel);
-			if (input.IsKeyTriggered("F4")) Toggle(mUIState.bWindowVisible_DebugPanel);
+			if (input.IsKeyTriggered("F4")) Toggle(mUIState.bWindowVisible_Editor);
 
 			if (input.IsKeyTriggered("B"))
 			{
@@ -95,8 +92,23 @@ void VQEngine::HandleUIInput()
 				const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
 #endif
 				FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
+#if !DISABLE_FIDELITYFX_CAS
 				PPParams.bEnableCAS = !PPParams.bEnableCAS;
 				Log::Info("Toggle FFX-CAS: %d", PPParams.bEnableCAS);
+#endif
+			}
+
+			/* MAGNIFIER CONTROLS */
+			const bool bMidMouseTriggered = input.IsMouseTriggered(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE);
+			if (bMidMouseTriggered)
+			{
+				if (bIsShiftDown)
+				{
+					if (mUIState.mpMagnifierState->bUseMagnifier)
+						mUIState.mpMagnifierState->ToggleMagnifierLock();
+				}
+				else
+					mUIState.mpMagnifierState->bUseMagnifier ^= 1;
 			}
 		}
 	}
@@ -122,7 +134,6 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 	// Mouse Capture & Visibility
 	if (bMouseLeftTriggered || bMouseRightTriggered)
 	{
-
 		const bool bCapture = true;
 		const bool bVisible = !bCapture; // visible=false if capture=true
 		const bool bReleaseWhereCaptured = false; // doesn't matter for this event
@@ -165,17 +176,24 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 		PPParams.TonemapperParams.ToggleGammaCorrection = PPParams.TonemapperParams.ToggleGammaCorrection == 1 ? 0 : 1;
 		Log::Info("Tonemapper: ApplyGamma=%d (SDR-only)", PPParams.TonemapperParams.ToggleGammaCorrection);
 	}
-	if (input.IsKeyTriggered("J")) // FSR
+	if (input.IsKeyTriggered("J")) // Upscaling toggle
 	{
 		WaitUntilRenderingFinishes();
 		FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
-		PPParams.bEnableFSR = !PPParams.bEnableFSR;
+		if (PPParams.UpscalingAlgorithm != FPostProcessParameters::EUpscalingAlgorithm::NONE)
+		{
+			PPParams.UpscalingAlgorithmLastValue = PPParams.UpscalingAlgorithm;
+		}
+		
+		PPParams.UpscalingAlgorithm = PPParams.IsFSREnabled() 
+			? FPostProcessParameters::EUpscalingAlgorithm::NONE 
+			: PPParams.UpscalingAlgorithmLastValue;
 
 		const uint32 W = mpWinMain->GetWidth();
 		const uint32 H = mpWinMain->GetHeight();
 		mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<WindowResizeEvent>(W, H, hwnd));
 		mEventQueue_WinToVQE_Update.AddItem(std::make_unique<WindowResizeEvent>(W, H, hwnd));
-		Log::Info("Toggle FSR: %d", PPParams.bEnableFSR);
+		Log::Info("Toggle FSR: %d", PPParams.IsFSREnabled());
 	}
 
 	// Scene switching

@@ -15,22 +15,14 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
-#ifndef VQ_GPU
-#define VQ_CPU 1
-#endif
+#ifndef LIGHTING_CONSTANT_BUFFER_DATA_H
+#define LIGHTING_CONSTANT_BUFFER_DATA_H
+
+#include "VQPlatform.h"
 
 #ifdef VQ_CPU
-#pragma once
-#include <array>
-#include <DirectXMath.h>
-// HLSL types for CPU
-#define float3   DirectX::XMFLOAT3
-#define float2   DirectX::XMFLOAT2
-#define matrix   DirectX::XMMATRIX
-#define float3x3 DirectX::XMFLOAT3X3
 namespace VQ_SHADER_DATA {
 #endif
-
 
 //----------------------------------------------------------
 // LIGHTS
@@ -43,6 +35,7 @@ namespace VQ_SHADER_DATA {
 
 #define NUM_SHADOWING_LIGHTS__POINT 5
 #define NUM_SHADOWING_LIGHTS__SPOT  5
+#define NUM_SHADOWING_LIGHTS__DIRECTIONAL 1
 
 #define LIGHT_INDEX_SPOT       0
 #define LIGHT_INDEX_POINT      1
@@ -134,15 +127,18 @@ struct MaterialData
     float3 diffuse;
     float alpha;
 
-	float3 emissiveColor;
-	float emissiveIntensity;
+    float3 emissiveColor;
+    float emissiveIntensity;
 
     float3 specular;
     float roughness;
 
-	float2 uvScale;
+    float4 uvScaleOffset;
     float metalness;
-	int textureConfig;
+
+	float normalMapMipBias;
+    float displacement;
+    int textureConfig;
 };
 
 
@@ -150,6 +146,19 @@ struct MaterialData
 //----------------------------------------------------------
 // SHADER CONSTANT BUFFER INTERFACE
 //----------------------------------------------------------
+#define RENDER_INSTANCED_SCENE_MESHES    1  // 0 is broken, TODO: fix
+#define MAX_INSTANCE_COUNT__SCENE_MESHES 64
+
+#ifndef INSTANCE_COUNT
+#define INSTANCE_COUNT  MAX_INSTANCE_COUNT__SCENE_MESHES
+#endif
+
+#ifdef VQ_CPU
+	// adapter for C++ code
+	#if RENDER_INSTANCED_SCENE_MESHES
+	#define INSTANCED_DRAW 1
+	#endif
+#endif
 struct PerFrameData
 {
 	SceneLighting Lights;
@@ -165,6 +174,8 @@ struct PerViewData
 	matrix matViewToWorld; // i.e. matViewInverse
 	matrix matProjInverse;
 
+	float4 WorldFrustumPlanes[6];
+
 	float3 CameraPosition;
 	float  MaxEnvMapLODLevels;
 	float2 ScreenDimensions;
@@ -173,17 +184,72 @@ struct PerViewData
 };
 struct PerObjectData
 {
+#if INSTANCED_DRAW
+	matrix matWorldViewProj    [INSTANCE_COUNT];
+	matrix matWorld            [INSTANCE_COUNT];
+	matrix matWorldViewProjPrev[INSTANCE_COUNT];
+	matrix matNormal           [INSTANCE_COUNT]; // could be 4x3
+#else
 	matrix matWorldViewProj;
 	matrix matWorld;
 	matrix matWorldViewProjPrev;
-	//float3x3 matNormal;
 	matrix matNormal;
-
+#endif
 
 	MaterialData materialData;
+
+	int meshID;
+	int materialID;
+	int2 pad2;
+
+#if INSTANCED_DRAW
+	int4 ObjID[INSTANCE_COUNT]; // int[] causes alignment issues as each element is aligned to 16B on the GPU. use int4.x
+#else
+	int4 ObjID;
+#endif
+};
+
+struct TessellationParams
+{
+	float4 QuadEdgeTessFactor;
+	float2 QuadInsideFactor;
+	float2 pad;
+	float3 TriEdgeTessFactor;
+	float TriInnerTessFactor;
+
+	int bFrustumCull;
+	int bFaceCull;
+	int bAdaptiveTessellation;
+	int padi;
+
+	float fHSFrustumCullEpsilon;
+	float fHSFaceCullEpsilon;
+	float fHSAdaptiveTessellationMaxDist;
+	float fHSAdaptiveTessellationMinDist;
+
+
+#ifdef VQ_CPU
+	TessellationParams() : 
+		  QuadEdgeTessFactor(1,1,1,1)
+		, QuadInsideFactor(1, 1)
+		, TriEdgeTessFactor(1,1,1)
+		, TriInnerTessFactor(1)
+		, pad(99999.0f, 99999.0f)
+		, bFrustumCull(0)
+		, bFaceCull(0)
+		, bAdaptiveTessellation(0)
+		, padi(0x0BADF00D)
+		, fHSFrustumCullEpsilon(0)
+		, fHSFaceCullEpsilon(0)
+		, fHSAdaptiveTessellationMaxDist(500.0f)
+		, fHSAdaptiveTessellationMinDist(10.0f)
+	{}
+#endif
 };
 
 
 #ifdef VQ_CPU
 } // namespace VQ_SHADER_DATA
 #endif
+
+#endif // LIGHTING_CONSTANT_BUFFER_DATA_H

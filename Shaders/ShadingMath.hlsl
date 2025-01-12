@@ -43,13 +43,24 @@ inline float3 UnpackNormals(Texture2D normalMap, SamplerState normalSampler, flo
 
 inline float3 UnpackNormal(float3 SampledNormal, float3 worldNormal, float3 worldTangent)
 {
-	SampledNormal = SampledNormal * 2.0f - 1.0f;
+	SampledNormal = normalize(SampledNormal * 2.0f - 1.0f);
 	const float3 T = normalize(worldTangent - dot(worldNormal, worldTangent) * worldNormal);
 	const float3 N = normalize(worldNormal);
 	const float3 B = normalize(cross(T, N));
 	const float3x3 TBN = float3x3(T, B, N);
 	return mul(SampledNormal, TBN);
 }
+
+inline half3 UnpackNormal_FP16(half3 SampledNormal, half3 worldNormal, half3 worldTangent)
+{
+	SampledNormal = SampledNormal * 2.0f - 1.0f;
+	const half3 T = normalize(worldTangent - dot(worldNormal, worldTangent) * worldNormal);
+	const half3 N = normalize(worldNormal);
+	const half3 B = normalize(cross(T, N));
+	const half3x3 TBN = half3x3(T, B, N);
+	return mul(SampledNormal, TBN);
+}
+
 
 float3 SRGBToLinear(float3 c) { return pow(c, 2.2f); }
 

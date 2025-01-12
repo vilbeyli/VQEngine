@@ -92,38 +92,38 @@ void AmbientOcclusionPass::OnCreateWindowSizeDependentResources(unsigned Width, 
 	assert(pParams->pRscOutput);
 	assert(pParams->pRscDepthBuffer);
 
-	FFX_CACAO_D3D12ScreenSizeInfo iScreenSize = {};
-	iScreenSize.height = Height;
-	iScreenSize.width = Width;
+	FFX_CACAO_D3D12ScreenSizeInfo ScreenSizeInfo = {};
+	ScreenSizeInfo.height = Height;
+	ScreenSizeInfo.width = Width;
 
 	// Normal Maps
-	iScreenSize.normalBufferResource = pParams->pRscNormalBuffer;
-	iScreenSize.normalBufferSrvDesc.Format = pParams->FmtNormalBuffer;
-	iScreenSize.normalBufferSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	iScreenSize.normalBufferSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	iScreenSize.normalBufferSrvDesc.Texture2D.MostDetailedMip = 0;
-	iScreenSize.normalBufferSrvDesc.Texture2D.MipLevels = 1;
-	iScreenSize.normalBufferSrvDesc.Texture2D.PlaneSlice = 0;
-	iScreenSize.normalBufferSrvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+	ScreenSizeInfo.normalBufferResource = pParams->pRscNormalBuffer;
+	ScreenSizeInfo.normalBufferSrvDesc.Format = pParams->FmtNormalBuffer;
+	ScreenSizeInfo.normalBufferSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	ScreenSizeInfo.normalBufferSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	ScreenSizeInfo.normalBufferSrvDesc.Texture2D.MostDetailedMip = 0;
+	ScreenSizeInfo.normalBufferSrvDesc.Texture2D.MipLevels = 1;
+	ScreenSizeInfo.normalBufferSrvDesc.Texture2D.PlaneSlice = 0;
+	ScreenSizeInfo.normalBufferSrvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
 
 	// Output UAV
-	iScreenSize.outputResource = pParams->pRscOutput;
-	iScreenSize.outputUavDesc.Format = pParams->FmtOutput;
-	iScreenSize.outputUavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-	iScreenSize.outputUavDesc.Texture2D.MipSlice = 0;
-	iScreenSize.outputUavDesc.Texture2D.PlaneSlice = 0;
+	ScreenSizeInfo.outputResource = pParams->pRscOutput;
+	ScreenSizeInfo.outputUavDesc.Format = pParams->FmtOutput;
+	ScreenSizeInfo.outputUavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+	ScreenSizeInfo.outputUavDesc.Texture2D.MipSlice = 0;
+	ScreenSizeInfo.outputUavDesc.Texture2D.PlaneSlice = 0;
 
 	// Depth
-	iScreenSize.depthBufferResource = pParams->pRscDepthBuffer;
-	iScreenSize.depthBufferSrvDesc.Format = pParams->FmtDepthBuffer;
-	iScreenSize.depthBufferSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	iScreenSize.depthBufferSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	iScreenSize.depthBufferSrvDesc.Texture2D.MipLevels = 1;
-	iScreenSize.depthBufferSrvDesc.Texture2D.MostDetailedMip = 0;
-	iScreenSize.depthBufferSrvDesc.Texture2D.PlaneSlice = 0;
-	iScreenSize.depthBufferSrvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+	ScreenSizeInfo.depthBufferResource = pParams->pRscDepthBuffer;
+	ScreenSizeInfo.depthBufferSrvDesc.Format = pParams->FmtDepthBuffer;
+	ScreenSizeInfo.depthBufferSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	ScreenSizeInfo.depthBufferSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	ScreenSizeInfo.depthBufferSrvDesc.Texture2D.MipLevels = 1;
+	ScreenSizeInfo.depthBufferSrvDesc.Texture2D.MostDetailedMip = 0;
+	ScreenSizeInfo.depthBufferSrvDesc.Texture2D.PlaneSlice = 0;
+	ScreenSizeInfo.depthBufferSrvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
 
-	FFX_CACAO_Status hr = FFX_CACAO_D3D12InitScreenSizeDependentResources(pFFX_CACAO_Context, &iScreenSize);
+	FFX_CACAO_Status hr = FFX_CACAO_D3D12InitScreenSizeDependentResources(pFFX_CACAO_Context, &ScreenSizeInfo);
 
 	if (hr != FFX_CACAO_STATUS_OK)
 	{
@@ -176,7 +176,7 @@ void AmbientOcclusionPass::RecordCommands(const IRenderPassDrawParameters* pDraw
 	}
 #endif
 
-	FFX_CACAO_Status hr = FFX_CACAO_D3D12Draw(pFFX_CACAO_Context, pParameters->pCmd, &proj, &normalsWorldToView);
+	FFX_CACAO_Status hr = FFX_CACAO_D3D12Draw(pFFX_CACAO_Context, pParameters->pCmd, &proj, &normalsWorldToView, pParameters->bAsyncCompute);
 
 	if (hr != FFX_CACAO_STATUS_OK)
 	{

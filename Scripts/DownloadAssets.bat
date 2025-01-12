@@ -3,13 +3,16 @@
 setlocal enabledelayedexpansion
 
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
-set SEVEN_ZIP_PATH="%~dp0../Tools/7z.exe"
+set SEVEN_ZIP_PATH="%~dp0../Tools/7za.exe"
 set WGET_PATH="%~dp0../Tools/wget.exe"
 pushd "%~dp0"
 cd "../Data/Textures/HDRI"
-set HDRI_TEXTURES_DESTINATION_PATH="%cd%/"
+set HDRI_TEXTURES_DESTINATION_PATH=%cd%\
+if not exist "../PBR" (
+  mkdir "../PBR"
+)
 cd "../PBR"
-set PBR_TEXTURES_DESTINATION_PATH="%cd%/"
+set PBR_TEXTURES_DESTINATION_PATH=%cd%\
 popd
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
 set MAIN_SCREEN_RESOLUTION_Y=0
@@ -22,27 +25,20 @@ set HDRI_FILE_LIST=%HDRI_FILE_LIST%;gym_entrance_!HDRI_RESOLUTION!.hdr
 set HDRI_FILE_LIST=%HDRI_FILE_LIST%;stadium_01_!HDRI_RESOLUTION!.hdr
 set HDRI_FILE_LIST=%HDRI_FILE_LIST%;sunny_vondelpark_!HDRI_RESOLUTION!.hdr
 set HDRI_DOWNLOADED_FILES=
+
 :: PBR Files
 set PBR_RESOLUTION=2K
-set PBR_WEB_PATH=https://cdn.cgbookcase.cloud/file/cgbookcase/textures/downloads/
-set PBR_FILE_LIST=Metal_tiles_03/Metal_tiles_03_!PBR_RESOLUTION!_Base_Color.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Metal_tiles_03/Metal_tiles_03_!PBR_RESOLUTION!_Roughness.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Metal_tiles_03/Metal_tiles_03_!PBR_RESOLUTION!_Metallic.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Metal_tiles_03/Metal_tiles_03_!PBR_RESOLUTION!_Normal.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Painted_metal_02/Painted_metal_02_!PBR_RESOLUTION!_Base_Color.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Painted_metal_02/Painted_metal_02_!PBR_RESOLUTION!_Metallic.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Painted_metal_02/Painted_metal_02_!PBR_RESOLUTION!_Normal.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Painted_metal_02/Painted_metal_02_!PBR_RESOLUTION!_Roughness.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Marble_08/Marble_08_!PBR_RESOLUTION!_Roughness.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Marble_08/Marble_08_!PBR_RESOLUTION!_Normal.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Marble_08/Marble_08_!PBR_RESOLUTION!_Base_Color.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Small_tiles_01/Small_tiles_01_!PBR_RESOLUTION!_Roughness.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Small_tiles_01/Small_tiles_01_!PBR_RESOLUTION!_Normal.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Small_tiles_01/Small_tiles_01_!PBR_RESOLUTION!_Base_Color.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Black_herringbone_tiles_01/Black_herringbone_tiles_01_!PBR_RESOLUTION!_Roughness.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Black_herringbone_tiles_01/Black_herringbone_tiles_01_!PBR_RESOLUTION!_Normal.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Black_herringbone_tiles_01/Black_herringbone_tiles_01_!PBR_RESOLUTION!_Base_Color.png
-set PBR_FILE_LIST=%PBR_FILE_LIST%;Black_herringbone_tiles_01/Black_herringbone_tiles_01_!PBR_RESOLUTION!_AO.png
+set PBR_WEB_PATH=https://cgbookcase-volume.b-cdn.net/t/
+set PBR_FILE_LIST=Pebbles02_MR_!PBR_RESOLUTION!.zip
+set PBR_FILE_LIST==%PBR_FILE_LIST%;Fabric05_MR_!PBR_RESOLUTION!.zip
+set PBR_FILE_LIST==%PBR_FILE_LIST%;PaintedMetal02_MR_!PBR_RESOLUTION!.zip
+set PBR_FILE_LIST==%PBR_FILE_LIST%;BlackTiles01_MR_!PBR_RESOLUTION!.zip
+set PBR_FILE_LIST==%PBR_FILE_LIST%;BlackTiles07_MR_!PBR_RESOLUTION!.zip
+set PBR_FILE_LIST==%PBR_FILE_LIST%;BlackHerringboneTiles01_MR_!PBR_RESOLUTION!.zip
+set PBR_FILE_LIST==%PBR_FILE_LIST%;Marble08_MR_!PBR_RESOLUTION!.zip
+set PBR_FILE_LIST==%PBR_FILE_LIST%;DarkOceanTiles05_MR_!PBR_RESOLUTION!.zip
+set PBR_FILE_LIST==%PBR_FILE_LIST%;BasicCarpet01_MR_!PBR_RESOLUTION!.zip
+
 set PBR_DOWNLOADED_FILES=
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
 :: parameter scan
@@ -103,10 +99,10 @@ if !ALL_ASSETS_ALREADY_DOWNLOADED! equ 1 (
 :: Download the PBR textures that doesn't already exist using wget and store them in the PBR_DOWNLOADED_FILES 'list'
 set ALL_ASSETS_ALREADY_DOWNLOADED=1
 for %%f in (%PBR_FILE_LIST%) do ( 
-  if not exist %PBR_TEXTURES_DESTINATION_PATH%%%f (
-    %WGET_PATH% %PBR_WEB_PATH%%%f -O %PBR_TEXTURES_DESTINATION_PATH%%%f
+  if not exist !PBR_TEXTURES_DESTINATION_PATH!%%f (
+    %WGET_PATH% %PBR_WEB_PATH%%%f -O !PBR_TEXTURES_DESTINATION_PATH!%%f
     set ALL_ASSETS_ALREADY_DOWNLOADED=0
-    set PBR_DOWNLOADED_FILES=!PBR_DOWNLOADED_FILES!;%PBR_TEXTURES_DESTINATION_PATH%%%f
+    set PBR_DOWNLOADED_FILES=!PBR_DOWNLOADED_FILES!;!PBR_TEXTURES_DESTINATION_PATH!%%f
   )
 )
 if !ALL_ASSETS_ALREADY_DOWNLOADED! equ 1 (
@@ -114,9 +110,32 @@ if !ALL_ASSETS_ALREADY_DOWNLOADED! equ 1 (
 ) else (
   echo.
   echo Downloaded PBR textures to: !PBR_TEXTURES_DESTINATION_PATH!
-  for %%f in (%PBR_DOWNLOADED_FILES%) do (
-    echo  - %%f
-  )
+)
+
+
+:: unpack zip and remove zip
+for %%f in (%PBR_FILE_LIST%) do ( 
+  set FILE_PATH=!PBR_TEXTURES_DESTINATION_PATH!%%f
+  if exist !FILE_PATH! (
+      echo  - !FILE_PATH!
+      if %%~xf equ .zip (
+          !SEVEN_ZIP_PATH! x "!FILE_PATH!" -o"!FILE_PATH!\..\%%~nf" -y
+          if !errorlevel! equ 0 (
+              echo Unpacked: %%f
+              echo  - !FILE_PATH!
+              :: Optionally, delete the ZIP file after extraction
+              echo Deleting: !FILE_PATH!
+              if exist "!FILE_PATH!" (
+                  del "!FILE_PATH!"
+                  echo Deleted: !FILE_PATH!
+              ) else (
+                  echo File not found: !FILE_PATH!
+              )
+          ) else (
+            echo Error extracting: !FILE_PATH!
+          )
+      )
+    )
 )
 
 git submodule update --init ../Data/Models

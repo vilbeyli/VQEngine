@@ -20,6 +20,7 @@
 #include "Device.h"
 #include "Texture.h"
 
+#include "../Engine/GPUMarker.h"
 #include "../Engine/Core/Window.h"
 
 #include "../../Libs/VQUtils/Source/Log.h"
@@ -27,9 +28,11 @@
 #include "../../Libs/VQUtils/Source/Timer.h"
 #include "../../Libs/VQUtils/Source/Image.h"
 #include "../../Libs/D3D12MA/src/Common.h"
+#include "../../Libs/DirectXCompiler/inc/dxcapi.h"
 
 #include <cassert>
 #include <atomic>
+#include <d3dcompiler.h>
 
 using namespace Microsoft::WRL;
 using namespace VQSystemInfo;
@@ -70,7 +73,7 @@ static RTV_ID    LAST_USED_RTV_ID            = 1;
 static BufferID  LAST_USED_VBV_ID            = 1;
 static BufferID  LAST_USED_IBV_ID            = 1;
 static BufferID  LAST_USED_CBV_ID            = 1;
-static PSO_ID    LAST_USED_PSO_ID_OFFSET     = 1; // TODO: atomic id
+static std::atomic<PSO_ID> LAST_USED_PSO_ID_OFFSET = 1;
 static std::atomic<TaskID> LAST_USED_TASK_ID = 1;
 
 namespace VQ_DXGI_UTILS
@@ -294,21 +297,25 @@ namespace VQ_DXGI_UTILS
 		return 0;
 	}
 
-	void MipImage(void* pData, uint width, uint height, uint bytesPerPixel)
+	void MipImage(const void* pDataSrc, void* pDataDst, uint width, uint height, uint bytesPerPixel)
 	{
-		//compute mip so next call gets the lower mip    
+		assert(pDataDst);
+		assert(pDataSrc);
+
+		SCOPED_CPU_MARKER("MipImage");
+
+#define GetByte(color, component) (((color) >> (8 * (component))) & 0xff)
+#define GetColor(ptr, x,y) (ptr[(x)+(y)*width])
+#define SetColor(ptr, x,y, col) ptr[(x)+(y)*width/2]=col;
+
 		int offsetsX[] = { 0,1,0,1 };
 		int offsetsY[] = { 0,0,1,1 };
-
-
 		assert(bytesPerPixel == 4 || bytesPerPixel == 16);
 		
 		if (bytesPerPixel == 4)
 		{
-			uint32_t* pImg = (uint32_t*)pData;
-#define GetByte(color, component) (((color) >> (8 * (component))) & 0xff)
-#define GetColor(ptr, x,y) (ptr[(x)+(y)*width])
-#define SetColor(ptr, x,y, col) ptr[(x)+(y)*width/2]=col;
+			const uint32_t* pImgSrc = (const uint32_t*)pDataSrc;
+			uint32_t* pImgDst = (uint32_t*)pDataDst;
 
 			for (uint32_t y = 0; y < height; y += 2)
 			{
@@ -318,12 +325,13 @@ namespace VQ_DXGI_UTILS
 					for (uint32_t c = 0; c < 4; c++)
 					{
 						uint32_t cc = 0;
-						for (uint32_t i = 0; i < 4; i++)
-							cc += GetByte(GetColor(pImg, x + offsetsX[i], y + offsetsY[i]), 3 - c);
-
-						ccc = (ccc << 8) | (cc / 4);
+						cc += GetByte(GetColor(pImgSrc, x + offsetsX[0], y + offsetsY[0]), 3 - c);
+						cc += GetByte(GetColor(pImgSrc, x + offsetsX[1], y + offsetsY[1]), 3 - c);
+						cc += GetByte(GetColor(pImgSrc, x + offsetsX[2], y + offsetsY[2]), 3 - c);
+						cc += GetByte(GetColor(pImgSrc, x + offsetsX[3], y + offsetsY[3]), 3 - c);
+						ccc = (ccc << 8) | (cc / 4); // ABGR
 					}
-					SetColor(pImg, x / 2, y / 2, ccc);
+					SetColor(pImgDst, x / 2, y / 2, ccc);
 				}
 			}
 		}
@@ -331,7 +339,8 @@ namespace VQ_DXGI_UTILS
 		if (bytesPerPixel == 16)
 		{
 			using std::min;
-			float* pImg = (float*)pData;
+			const float* pImgSrc = (const float*)pDataSrc;
+			      float* pImgDst = (      float*)pDataDst;
 			// each iteration handles 4 pixels from current level, writes out to a single pixel
 			for (uint32_t y = 0; y < height; y += 2) // [0, 2, 4, ...]
 			for (uint32_t x = 0; x < width ; x += 2) // [0, 2, 4, ...]
@@ -340,7 +349,7 @@ namespace VQ_DXGI_UTILS
 				for (uint smp = 0; smp < 4; ++smp)
 				{
 					for (int ch = 0; ch < 3; ++ch) // color channel ~ rgba, care for RGB only
-						rgb[smp][ch] = pImg[(x + offsetsX[smp]) * 4 + (y + offsetsY[smp]) * 4 * width + ch];
+						rgb[smp][ch] = pImgSrc[(x + offsetsX[smp]) * 4 + (y + offsetsY[smp]) * 4 * width + ch];
 				}
 
 				// filter: use min filter rather than interpolation
@@ -353,9 +362,8 @@ namespace VQ_DXGI_UTILS
 				uint outY = y >> 1;
 
 				for (int ch = 0; ch < 4; ++ch)
-					pImg[(outX * 4) + 4 * outY * (width >> 1) + ch] = rgbFiltered[ch];
+					pImgDst[(outX * 4) + 4 * outY * (width >> 1) + ch] = rgbFiltered[ch];
 			}
-			
 		}
 
 #if 0
@@ -389,7 +397,7 @@ namespace VQ_DXGI_UTILS
 #endif
 	}
 
-	void CopyPixels(void* pData, void* pDest, uint32_t stride, uint32_t bytesWidth, uint32_t height)
+	void CopyPixels(const void* pData, void* pDest, uint32_t stride, uint32_t bytesWidth, uint32_t height)
 	{
 		for (uint32_t y = 0; y < height; y++)
 		{
@@ -505,16 +513,21 @@ BufferID VQRenderer::CreateBuffer(const FBufferDesc& desc)
 	return Id;
 }
 
-TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerateMips /*= false*/)
+TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bCheckAlpha, bool bGenerateMips /*= false*/)
 {
+	SCOPED_CPU_MARKER("VQRenderer::CreateTextureFromFile()");
+
 	// check if we've already loaded the texture
-	auto it = mLoadedTexturePaths.find(pFilePath);
-	if (it != mLoadedTexturePaths.end())
 	{
+		std::lock_guard<std::mutex> lk(mMtxLoadedTexturePaths);
+		auto it = mLoadedTexturePaths.find(pFilePath);
+		if (it != mLoadedTexturePaths.end())
+		{
 #if LOG_CACHED_RESOURCES_ON_LOAD
-		Log::Info("Texture already loaded: %s", pFilePath);
+			Log::Info("Texture already loaded: %s", pFilePath);
 #endif
-		return it->second;
+			return it->second;
+		}
 	}
 	// check path
 	if (strlen(pFilePath) == 0)
@@ -545,20 +558,23 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 		const std::vector<std::string> FilePathTokens = StrUtil::split(FilePath, { '/', '\\' });
 		assert(FilePathTokens.size() >= 1);
 
-		img = Image::LoadFromFile(FilePath.c_str());
+		{
+			SCOPED_CPU_MARKER("Image::LoadFromFile()");
+			img = Image::LoadFromFile(FilePath.c_str());
+		}
 		return img.pData && img.BytesPerPixel > 0;
 	};
 
-	Image image;
-	const bool bSuccess = fnLoadImageFromDisk(pFilePath, image);
-	const int MipLevels = bGenerateMips ? image.CalculateMipLevelCount() : 1;
+	std::vector<Image> images(1);
+	const bool bSuccess = fnLoadImageFromDisk(pFilePath, images[0]);
+	const int MipLevels = bGenerateMips ? images[0].CalculateMipLevelCount() : 1;
 	if (bSuccess)
 	{
 		// Fill D3D12 Descriptor
 		tDesc.d3d12Desc = {};
-		tDesc.d3d12Desc.Width = image.Width;
-		tDesc.d3d12Desc.Height = image.Height;
-		tDesc.d3d12Desc.Format = image.IsHDR() ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
+		tDesc.d3d12Desc.Width  = images[0].Width;
+		tDesc.d3d12Desc.Height = images[0].Height;
+		tDesc.d3d12Desc.Format = images[0].IsHDR() ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
 		tDesc.d3d12Desc.DepthOrArraySize = 1;
 		tDesc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 		tDesc.d3d12Desc.Alignment = 0;
@@ -569,23 +585,58 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 		tDesc.d3d12Desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 		tDesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
 		
-		tDesc.pData = image.pData;
+		tDesc.pDataArray.push_back( images[0].pData );
 		tDesc.bGenerateMips = bGenerateMips;
 
-		tex.Create(mDevice.GetDevicePtr(), mpAllocator, tDesc);
+		tex.Create(mDevice.GetDevicePtr(), mpAllocator, tDesc, bCheckAlpha);
+
 		ID = AddTexture_ThreadSafe(std::move(tex));
-		this->QueueTextureUpload(FTextureUploadDesc(std::move(image), ID, tDesc));
+
+		const bool bGenerateMips_ = MipLevels > 1 && images[0].pData;
+		
+		if(bGenerateMips_ && bGenerateMips)
+		{
+			UINT64 UplHeapSize;
+			uint32_t num_rows[D3D12_REQ_MIP_LEVELS] = { 0 };
+			UINT64 row_size_in_bytes[D3D12_REQ_MIP_LEVELS] = { 0 };
+			D3D12_PLACED_SUBRESOURCE_FOOTPRINT placedSubresource[D3D12_REQ_MIP_LEVELS];
+			mDevice.GetDevicePtr()->GetCopyableFootprints(&tDesc.d3d12Desc, 0, MipLevels, 0, placedSubresource, num_rows, row_size_in_bytes, &UplHeapSize);
+			const UINT bytePP = static_cast<UINT>(VQ_DXGI_UTILS::GetPixelByteSize(tDesc.d3d12Desc.Format));
+			const UINT imgSizeInBytes = bytePP * placedSubresource[0].Footprint.Width * placedSubresource[0].Footprint.Height;
+			images.resize(MipLevels);
+			tDesc.pDataArray.resize(MipLevels);
+			for (int mip = 1; mip < MipLevels; ++mip)
+			{
+				const size_t NewMipImageSize = placedSubresource[mip].Footprint.Height * placedSubresource[mip].Footprint.RowPitch;
+				images[mip] = Image::CreateEmptyImage(NewMipImageSize);
+
+				VQ_DXGI_UTILS::MipImage(images[mip-1].pData, images[mip].pData, placedSubresource[mip-1].Footprint.Width, num_rows[mip-1], bytePP);
+				tDesc.pDataArray[mip] = images[mip].pData;
+			}
+
+		}
+
+		this->QueueTextureUpload(FTextureUploadDesc(std::move(images), ID, tDesc));
 
 		this->StartTextureUploads();
-		std::atomic<bool>& mbResident = mTextures.at(ID).mbResident; // Is this safe?
+
+		Texture& refTex = this->GetTexture_ThreadSafe(ID);
 
 		// SYNC POINT - texture residency
-		//------------------------------------------------------------------------------
-		// NOTE: this isn't the best but good enough for small scenes for now.
-		// >60% of the CPU time is spent here during a scene load on the threads
-		while (!mbResident.load()); // BUSY WAIT here until the texture is made resident;
-		//------------------------------------------------------------------------------
+		if(!refTex.mbResident.load())
+		{
+			SCOPED_CPU_MARKER_C("WAIT_RESIDENT", 0xFFFF0000);
+			refTex.mSignalResident.Wait();
+		}
+		{
+			SCOPED_CPU_MARKER("CleanupImages");
+			for (Image& i : images) i.Destroy();
+		}
 
+		{
+			std::lock_guard<std::mutex> lk(mMtxLoadedTexturePaths);
+			mLoadedTexturePaths[pFilePath] = ID;
+		}
 #if LOG_RESOURCE_CREATE
 		Log::Info("VQRenderer::CreateTextureFromFile(): [%.2fs] %s", t.StopGetDeltaTimeAndReset(), pFilePath);
 #endif
@@ -594,27 +645,33 @@ TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bGenerat
 	return ID;
 }
 
-TextureID VQRenderer::CreateTexture(const TextureCreateDesc& desc)
+TextureID VQRenderer::CreateTexture(const TextureCreateDesc& desc, bool bCheckAlpha)
 {
+	SCOPED_CPU_MARKER("VQRenderer::CreateTexture()");
 	if (desc.d3d12Desc.MipLevels == 0) assert( desc.bGenerateMips);
 	if (desc.d3d12Desc.MipLevels == 1) assert(!desc.bGenerateMips);
 	//if (desc.d3d12Desc.MipLevels >  1) assert( desc.bGenerateMips);
 	Texture tex;
 	Timer t; t.Start();
 
-	tex.Create(mDevice.GetDevicePtr(), mpAllocator, desc);
+	tex.Create(mDevice.GetDevicePtr(), mpAllocator, desc, bCheckAlpha);
 
 	TextureID ID = AddTexture_ThreadSafe(std::move(tex));
-	if (desc.pData)
+	const bool bValidData = !desc.pDataArray.empty() && desc.pDataArray[0];
+	if (bValidData)
 	{
-		this->QueueTextureUpload(FTextureUploadDesc(desc.pData, ID, desc));
+
+		this->QueueTextureUpload(FTextureUploadDesc(desc.pDataArray, ID, desc));
 
 		this->StartTextureUploads();
-		std::atomic<bool>& mbResident = mTextures.at(ID).mbResident;
-		while (!mbResident.load());  // busy wait here until the texture is made resident; (very not ideal)
+
+		{
+			SCOPED_CPU_MARKER_C("WAIT_RESIDENT", 0xFFFF0000);
+			GetTexture_ThreadSafe(ID).mSignalResident.Wait();
+		}
 	}
 
-	if (desc.pData)
+	if (bValidData)
 	{
 #if LOG_RESOURCE_CREATE
 		Log::Info("VQRenderer::CreateTexture() w/ pData: [%.2fs] %s", t.StopGetDeltaTimeAndReset(), desc.TexName.c_str());
@@ -670,7 +727,8 @@ void VQRenderer::DestroyTexture(TextureID& texID)
 {
 	// Remove texID
 	std::lock_guard<std::mutex> lk(mMtxTextures);
-	mTextures.at(texID).Destroy();
+	Texture& tex = mTextures.at(texID);
+	tex.Destroy();
 	mTextures.erase(texID);
 
 	// Remove texture path from cache
@@ -703,6 +761,17 @@ TextureID VQRenderer::AddTexture_ThreadSafe(Texture&& tex)
 	return Id;
 }
 
+const Texture& VQRenderer::GetTexture_ThreadSafe(TextureID Id) const
+{
+	std::lock_guard<std::mutex> lk(mMtxTextures);
+	return mTextures.at(Id);
+}
+
+Texture& VQRenderer::GetTexture_ThreadSafe(TextureID Id)
+{
+	std::lock_guard<std::mutex> lk(mMtxTextures);
+	return mTextures.at(Id);
+}
 
 // -----------------------------------------------------------------------------------------------------------------
 //
@@ -717,13 +786,13 @@ SRV_ID VQRenderer::AllocateAndInitializeSRV(TextureID texID)
 	{
 		std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 
-		Texture& tex = mTextures.at(texID);
+		Texture& tex = GetTexture_ThreadSafe(texID);
 		if (!tex.mpResource)
 		{
 			Log::Error("Texture ID=%d failed initializing, cannot create the SRV", texID);
 			return INVALID_ID;
 		}
-		mHeapCBV_SRV_UAV.AllocDescriptor(1, &SRV);
+		mHeapCBV_SRV_UAV.AllocateDescriptor(1, &SRV);
 		tex.InitializeSRV(0, &SRV);
 		Id = LAST_USED_SRV_ID++;
 		mSRVs[Id] = SRV;
@@ -740,9 +809,9 @@ DSV_ID VQRenderer::AllocateAndInitializeDSV(TextureID texID)
 	{
 		std::lock_guard<std::mutex> lk(this->mMtxDSVs);
 
-		this->mHeapDSV.AllocDescriptor(1, &dsv);
+		this->mHeapDSV.AllocateDescriptor(1, &dsv);
 		Id = LAST_USED_DSV_ID++;
-		this->mTextures.at(texID).InitializeDSV(0, &dsv);
+		GetTexture_ThreadSafe(texID).InitializeDSV(0, &dsv);
 		this->mDSVs[Id] = dsv;
 	}
 	return Id;
@@ -756,7 +825,7 @@ DSV_ID VQRenderer::AllocateDSV(uint NumDescriptors /*= 1*/)
 
 	std::lock_guard<std::mutex> lk(this->mMtxDSVs);
 
-	this->mHeapDSV.AllocDescriptor(NumDescriptors, &dsv);
+	this->mHeapDSV.AllocateDescriptor(NumDescriptors, &dsv);
 	Id = LAST_USED_DSV_ID++;
 	this->mDSVs[Id] = dsv;
 
@@ -769,7 +838,7 @@ RTV_ID VQRenderer::AllocateRTV(uint NumDescriptors /*= 1*/)
 
 	std::lock_guard<std::mutex> lk(this->mMtxRTVs);
 
-	this->mHeapRTV.AllocDescriptor(NumDescriptors, &rtv);
+	this->mHeapRTV.AllocateDescriptor(NumDescriptors, &rtv);
 	Id = LAST_USED_RTV_ID++;
 	this->mRTVs[Id] = rtv;
 
@@ -782,7 +851,7 @@ SRV_ID VQRenderer::AllocateSRV(uint NumDescriptors)
 
 	std::lock_guard<std::mutex> lk(this->mMtxSRVs_CBVs_UAVs);
 
-	this->mHeapCBV_SRV_UAV.AllocDescriptor(NumDescriptors, &srv);
+	this->mHeapCBV_SRV_UAV.AllocateDescriptor(NumDescriptors, &srv);
 	Id = LAST_USED_SRV_ID++;
 	this->mSRVs[Id] = srv;
 
@@ -795,7 +864,7 @@ UAV_ID VQRenderer::AllocateUAV(uint NumDescriptors)
 
 	std::lock_guard<std::mutex> lk(this->mMtxSRVs_CBVs_UAVs);
 
-	this->mHeapCBV_SRV_UAV.AllocDescriptor(NumDescriptors, &uav);
+	this->mHeapCBV_SRV_UAV.AllocateDescriptor(NumDescriptors, &uav);
 	Id = LAST_USED_UAV_ID++;
 	this->mUAVs[Id] = uav;
 
@@ -809,7 +878,7 @@ void VQRenderer::InitializeDSV(DSV_ID dsvID, uint32 heapIndex, TextureID texID, 
 	
 	assert(mDSVs.find(dsvID) != mDSVs.end());
 
-	mTextures.at(texID).InitializeDSV(heapIndex, &mDSVs.at(dsvID), ArraySlice);
+	GetTexture_ThreadSafe(texID).InitializeDSV(heapIndex, &mDSVs.at(dsvID), ArraySlice);
 }
 void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bool bInitAsArrayView /*= false*/, bool bInitAsCubeView /*= false*/, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc /*=nullptr*/, UINT ShaderComponentMapping)
 {
@@ -817,7 +886,7 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 	if (texID != INVALID_ID)
 	{
 		CHECK_TEXTURE(mTextures, texID);
-		mTextures.at(texID).InitializeSRV(heapIndex, &mSRVs.at(srvID), bInitAsArrayView, bInitAsCubeView, ShaderComponentMapping, pSRVDesc);
+		GetTexture_ThreadSafe(texID).InitializeSRV(heapIndex, &mSRVs.at(srvID), bInitAsArrayView, bInitAsCubeView, ShaderComponentMapping, pSRVDesc);
 	}
 	else // init NULL SRV
 	{
@@ -842,14 +911,14 @@ void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID)
 	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(RTV, rtvID);
 	D3D12_RENDER_TARGET_VIEW_DESC* pRTVDesc = nullptr; // unused
-	mDevice.GetDevicePtr()->CreateRenderTargetView(mTextures.at(texID).GetResource(), pRTVDesc, mRTVs.at(rtvID).GetCPUDescHandle(heapIndex));
+	mDevice.GetDevicePtr()->CreateRenderTargetView(GetTexture_ThreadSafe(texID).GetResource(), pRTVDesc, mRTVs.at(rtvID).GetCPUDescHandle(heapIndex));
 }
 
 void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID, int arraySlice, int mipLevel)
 {
 	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(RTV, rtvID);
-	Texture& tex = mTextures.at(texID);
+	Texture& tex = GetTexture_ThreadSafe(texID);
 
 	D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
 	D3D12_RESOURCE_DESC rscDesc = tex.GetResource()->GetDesc();
@@ -893,7 +962,7 @@ void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID, in
 		}
 	}
 
-	mDevice.GetDevicePtr()->CreateRenderTargetView(mTextures.at(texID).GetResource(), &rtvDesc, mRTVs.at(rtvID).GetCPUDescHandle(heapIndex));
+	mDevice.GetDevicePtr()->CreateRenderTargetView(GetTexture_ThreadSafe(texID).GetResource(), &rtvDesc, mRTVs.at(rtvID).GetCPUDescHandle(heapIndex));
 }
 
 void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID texID, DXGI_FORMAT bufferViewFormatOverride)
@@ -901,7 +970,7 @@ void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID 
 	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(UAV, uavID);
 
-	Texture& tex = mTextures.at(texID);
+	Texture& tex = GetTexture_ThreadSafe(texID);
 	D3D12_RESOURCE_DESC rscDesc = tex.GetResource()->GetDesc();
 	
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
@@ -920,7 +989,7 @@ void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID 
 	uavDesc.Buffer.StructureByteStride = StructByteStride;
 
 	// create the UAV
-	ID3D12Resource* pRsc = mTextures.at(texID).GetResource();
+	ID3D12Resource* pRsc = GetTexture_ThreadSafe(texID).GetResource();
 	ID3D12Resource* pRscCounter = nullptr; // TODO: find a use case for this parameter and implement proper interface
 	assert(pRsc);
 	mDevice.GetDevicePtr()->CreateUnorderedAccessView(
@@ -932,7 +1001,7 @@ void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID 
 }
 void VQRenderer::InitializeSRVForBuffer(SRV_ID srvID, uint heapIndex, TextureID texID, DXGI_FORMAT bufferViewFormatOverride)
 {
-	Texture& tex = mTextures.at(texID);
+	Texture& tex = GetTexture_ThreadSafe(texID);
 	ID3D12Resource* pRsc = tex.GetResource();
 	D3D12_RESOURCE_DESC rscDesc = pRsc->GetDesc();
 	assert(rscDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER);
@@ -954,7 +1023,7 @@ void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, ui
 	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(UAV, uavID);
 
-	Texture& tex = mTextures.at(texID);
+	Texture& tex = GetTexture_ThreadSafe(texID);
 	D3D12_RESOURCE_DESC rscDesc = tex.GetResource()->GetDesc();
 	
 	const bool& bCubemap = tex.mbCubemap;
@@ -1007,7 +1076,7 @@ void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, ui
 	}
 
 	// create the UAV
-	ID3D12Resource* pRsc = mTextures.at(texID).GetResource();
+	ID3D12Resource* pRsc = GetTexture_ThreadSafe(texID).GetResource();
 	ID3D12Resource* pRscCounter = nullptr; // TODO: find a use case for this parameter and implement proper interface
 	assert(pRsc);
 	mDevice.GetDevicePtr()->CreateUnorderedAccessView(
@@ -1018,20 +1087,17 @@ void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, ui
 	);
 }
 
-void VQRenderer::DestroySRV(SRV_ID& srvID)
+void VQRenderer::DestroySRV(SRV_ID srvID)
 {
 	std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
-	//mSRVs.at(srvID).Destroy(); // TODO
+	mHeapCBV_SRV_UAV.FreeDescriptor(&mSRVs.at(srvID));
 	mSRVs.erase(srvID);
-	//Log::Info("Erase SRV_ID=%d", srvID); // todo: verbose logging preprocessor ifdef
-	srvID = INVALID_ID;
 }
-void VQRenderer::DestroyDSV(DSV_ID& dsvID)
+void VQRenderer::DestroyDSV(DSV_ID dsvID)
 {
 	std::lock_guard<std::mutex> lk(mMtxDSVs);
-	//mDSVs.at(dsvID).Destroy(); // TODO
+	mHeapDSV.FreeDescriptor(&mDSVs.at(dsvID));
 	mDSVs.erase(dsvID);
-	dsvID = INVALID_ID;
 }
 
 
@@ -1073,27 +1139,10 @@ std::vector<std::shared_future<FShaderStageCompileResult>> VQRenderer::StartShad
 
 	return taskResults;
 }
-void VQRenderer::EnqueueTask_CreatePSO(FPSOCreationTaskParameters&& params)
-{
-	const TaskID PSOTaskID = LAST_USED_TASK_ID.fetch_add(1);
-	FPSOCreationTaskExecutionContext& ctx = mLookup_PSOCreationContext[PSOTaskID];
-	assert(false); // TODO: continue
-	//ctx.TaskQueue.push(params.Desc);
-	//*params.pID = INVALID_ID;
-}
-void VQRenderer::StartPSOCreationTasks()
-{
-	assert(false); // TODO: continue
-}
-
-void VQRenderer::WaitForPSOCreationTaskQueueCompletion()
-{
-	assert(false); // TODO: continue
-}
 
 static PSO_ID GetNextAvailablePSOIdAndIncrement()
 {
-	return EBuiltinPSOs::NUM_BUILTIN_PSOs + LAST_USED_PSO_ID_OFFSET++;
+	return EBuiltinPSOs::NUM_BUILTIN_PSOs + LAST_USED_PSO_ID_OFFSET.fetch_add(1);
 }
 PSO_ID VQRenderer::CreatePSO_OnThisThread(const FPSODesc& psoLoadDesc)
 {
@@ -1105,9 +1154,160 @@ PSO_ID VQRenderer::CreatePSO_OnThisThread(const FPSODesc& psoLoadDesc)
 	return id;
 }
 
+static std::string GetErrString(HRESULT hr)
+{
+	switch (hr)
+	{
+	case E_OUTOFMEMORY: return "Out of memory";
+	case E_INVALIDARG: return "Invalid arguments";
+	}
+	return "Unspecified error, contact dev";
+}
+
+ID3D12PipelineState* VQRenderer::CompileGraphicsPSO(const FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults)
+{
+	SCOPED_CPU_MARKER("CompileGraphicsPSO");
+	ID3D12Device* pDevice = mDevice.GetDevicePtr();
+	ID3D12PipelineState* pPSO = nullptr;
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC d3d12GraphicsPSODesc = Desc.D3D12GraphicsDesc;
+
+	std::unordered_map<EShaderStage, Microsoft::WRL::ComPtr<ID3D12ShaderReflection>> ShaderReflections;
+
+	// Assign shader blobs to PSODesc
+	for (const std::shared_future<FShaderStageCompileResult>& TaskResult : ShaderCompileResults)
+	{
+		const FShaderStageCompileResult& ShaderCompileResult = TaskResult.get();
+
+		CD3DX12_SHADER_BYTECODE ShaderByteCode(ShaderCompileResult.ShaderBlob.GetByteCode(), ShaderCompileResult.ShaderBlob.GetByteCodeSize());
+		switch (ShaderCompileResult.ShaderStageEnum)
+		{
+		case EShaderStage::VS: d3d12GraphicsPSODesc.VS = ShaderByteCode; break;
+		case EShaderStage::HS: d3d12GraphicsPSODesc.HS = ShaderByteCode; break;
+		case EShaderStage::DS: d3d12GraphicsPSODesc.DS = ShaderByteCode; break;
+		case EShaderStage::GS: d3d12GraphicsPSODesc.GS = ShaderByteCode; break;
+		case EShaderStage::PS: d3d12GraphicsPSODesc.PS = ShaderByteCode; break;
+		}
+
+		// reflect shader
+		Microsoft::WRL::ComPtr<ID3D12ShaderReflection>& pShaderReflection = ShaderReflections[ShaderCompileResult.ShaderStageEnum];
+		if (ShaderCompileResult.bSM6)
+		{
+			assert(ShaderCompileResult.ShaderBlob.pBlobDxc);
+			HRESULT hr;
+
+			Microsoft::WRL::ComPtr<IDxcContainerReflection> pReflection;
+			hr = DxcCreateInstance(CLSID_DxcContainerReflection, IID_PPV_ARGS(&pReflection));
+			if (FAILED(hr)) {
+				Log::Error("Failed ");
+			}
+
+			hr = pReflection->Load(ShaderCompileResult.ShaderBlob.pBlobDxc.Get());
+			if (FAILED(hr)) {
+				Log::Error("Failed ");
+			}
+
+			UINT32 index;
+			hr = pReflection->FindFirstPartKind(DXC_PART_REFLECTION_DATA, &index);
+			if (FAILED(hr)) {
+				Log::Error("Failed ");
+			}
+
+			hr = pReflection->GetPartReflection(index, IID_PPV_ARGS(&pShaderReflection));
+			if (FAILED(hr)) {
+				Log::Error("Failed ");
+			}
+
+			assert(pShaderReflection);
+		}
+		else
+		{
+			HRESULT hr = D3DReflect(ShaderByteCode.pShaderBytecode, ShaderByteCode.BytecodeLength, IID_PPV_ARGS(&pShaderReflection));
+			assert(pShaderReflection);
+		}
+	}
+
+	// assign input layout
+	std::vector<D3D12_INPUT_ELEMENT_DESC> inputLayout;
+	const bool bHasVS = ShaderReflections.find(EShaderStage::VS) != ShaderReflections.end();
+	if (bHasVS)
+	{
+		inputLayout = ShaderUtils::ReflectInputLayoutFromVS(ShaderReflections.at(EShaderStage::VS).Get());
+		d3d12GraphicsPSODesc.InputLayout = { inputLayout.data(), static_cast<UINT>(inputLayout.size()) };
+	}
+
+	// TODO: assign root signature
+#if 0
+	{
+		for (auto& it : ShaderReflections)
+		{
+			EShaderStage eShaderStage = it.first;
+			ID3D12ShaderReflection*& pRefl = it.second;
+
+			D3D12_SHADER_DESC shaderDesc = {};
+			pRefl->GetDesc(&shaderDesc);
+
+			std::vector< D3D12_SHADER_INPUT_BIND_DESC> boundRscDescs(shaderDesc.BoundResources);
+			for (UINT i = 0; i < shaderDesc.BoundResources; ++i)
+			{
+				pRefl->GetResourceBindingDesc(i, &boundRscDescs[i]);
+			}
+
+			int a = 5;
+		}
+	}
+#endif
+
+	// Compile PSO
+	HRESULT hr = pDevice->CreateGraphicsPipelineState(&d3d12GraphicsPSODesc, IID_PPV_ARGS(&pPSO));
+	if (hr != S_OK)
+	{
+		std::string errMsg = "PSO compile failed (HR=" + std::to_string(hr) + "): " + GetErrString(hr);
+		Log::Error("%s", errMsg.c_str());
+		MessageBox(NULL, errMsg.c_str(), "PSO Compile Error", MB_OK);
+	}
+	assert(hr == S_OK);
+	SetName(pPSO, Desc.PSOName.c_str());
+
+
+	return pPSO;
+}
+ID3D12PipelineState* VQRenderer::CompileComputePSO(const FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults)
+{
+	SCOPED_CPU_MARKER("CompileComputePSO");
+	ID3D12Device* pDevice = mDevice.GetDevicePtr();
+	D3D12_COMPUTE_PIPELINE_STATE_DESC  d3d12ComputePSODesc = Desc.D3D12ComputeDesc;
+
+	// Assign CS shader blob to PSODesc
+	for (std::shared_future<FShaderStageCompileResult>& TaskResult : ShaderCompileResults)
+	{
+		FShaderStageCompileResult ShaderCompileResult = TaskResult.get();
+
+		CD3DX12_SHADER_BYTECODE ShaderByteCode(ShaderCompileResult.ShaderBlob.GetByteCode(), ShaderCompileResult.ShaderBlob.GetByteCodeSize());
+		d3d12ComputePSODesc.CS = ShaderByteCode;
+	}
+
+	// TODO: assign root signature
+
+	// Compile PSO
+	ID3D12PipelineState* pPSO = nullptr;
+	HRESULT hr = pDevice->CreateComputePipelineState(&d3d12ComputePSODesc, IID_PPV_ARGS(&pPSO));
+	if (hr == S_OK)
+	{
+		SetName(pPSO, Desc.PSOName.c_str());
+	}
+	else
+	{
+		std::string errMsg = "PSO compile failed (HR=" + std::to_string(hr) + "): " + GetErrString(hr);
+		Log::Error("%s", errMsg.c_str());
+		MessageBox(NULL, errMsg.c_str(), "PSO Compile Error", MB_OK);
+	}
+	return pPSO;
+}
+
 ID3D12PipelineState* VQRenderer::LoadPSO(const FPSODesc& psoLoadDesc)
 {
-	
+	SCOPED_CPU_MARKER("LoadPSO");
 	TaskID               PSOTaskID = LAST_USED_TASK_ID.fetch_add(1);
 	ID3D12PipelineState* pPSO = nullptr;
 
@@ -1124,8 +1324,7 @@ ID3D12PipelineState* VQRenderer::LoadPSO(const FPSODesc& psoLoadDesc)
 			, [](const FShaderStageCompileDesc& desc) { return ShaderUtils::GetShaderStageEnumFromShaderModel(desc.ShaderModel) == EShaderStage::CS; }
 		) != psoLoadDesc.ShaderStageCompileDescs.end();
 
-	std::vector<std::shared_future<FShaderStageCompileResult>> shaderCompileResults;
-	std::unordered_map<EShaderStage, ID3D12ShaderReflection*> ShaderReflections;
+	std::vector<std::shared_future<FShaderStageCompileResult>> ShaderCompileResults;
 
 	// compile PSO if no cache or cache dirty, otherwise load cached binary
 	if (!bCachedPSOExists || bCacheDirty) 
@@ -1139,17 +1338,17 @@ ID3D12PipelineState* VQRenderer::LoadPSO(const FPSODesc& psoLoadDesc)
 		}
 
 		// kickoff shader compiler workers
-		shaderCompileResults = std::move( StartShaderLoadTasks(PSOTaskID) );
+		ShaderCompileResults = std::move( StartShaderLoadTasks(PSOTaskID) );
 
 		// SYNC POINT - wait for shaders to load / compile
-		for (std::shared_future<FShaderStageCompileResult>& result : shaderCompileResults)
+		for (std::shared_future<FShaderStageCompileResult>& result : ShaderCompileResults)
 		{
 			assert(result.valid());
 			result.wait();
 		}
 
 		// Check for compile errors
-		for (std::shared_future<FShaderStageCompileResult>& TaskResult : shaderCompileResults)
+		for (std::shared_future<FShaderStageCompileResult>& TaskResult : ShaderCompileResults)
 		{
 			FShaderStageCompileResult ShaderCompileResult = TaskResult.get();
 			if (ShaderCompileResult.ShaderBlob.IsNull())
@@ -1160,109 +1359,24 @@ ID3D12PipelineState* VQRenderer::LoadPSO(const FPSODesc& psoLoadDesc)
 		}
 
 		// Compile the PSO using the shaders
-		if (bComputePSO) // COMPUTE PSO ------------------------------------------------------------
-		{
-			D3D12_COMPUTE_PIPELINE_STATE_DESC  d3d12ComputePSODesc = psoLoadDesc.D3D12ComputeDesc;
-
-			// Assign CS shader blob to PSODesc
-			for (std::shared_future<FShaderStageCompileResult>& TaskResult : shaderCompileResults)
-			{
-				FShaderStageCompileResult ShaderCompileResult = TaskResult.get();
-
-				CD3DX12_SHADER_BYTECODE ShaderByteCode(ShaderCompileResult.ShaderBlob.GetByteCode(), ShaderCompileResult.ShaderBlob.GetByteCodeSize());
-				d3d12ComputePSODesc.CS = ShaderByteCode;
-			}
-
-			// TODO: assign root signature
-
-			// Compile PSO
-			hr = pDevice->CreateComputePipelineState(&d3d12ComputePSODesc, IID_PPV_ARGS(&pPSO));
-		}
-		else // GRAPHICS PSO ------------------------------------------------------------------------
-		{
-			D3D12_GRAPHICS_PIPELINE_STATE_DESC d3d12GraphicsPSODesc = psoLoadDesc.D3D12GraphicsDesc;
-
-			// Assign shader blobs to PSODesc
-			for (std::shared_future<FShaderStageCompileResult>& TaskResult : shaderCompileResults)
-			{
-				FShaderStageCompileResult ShaderCompileResult = TaskResult.get();
-
-				CD3DX12_SHADER_BYTECODE ShaderByteCode(ShaderCompileResult.ShaderBlob.GetByteCode(), ShaderCompileResult.ShaderBlob.GetByteCodeSize());
-				switch (ShaderCompileResult.ShaderStageEnum)
-				{
-				case EShaderStage::VS: d3d12GraphicsPSODesc.VS = ShaderByteCode; break;
-				case EShaderStage::GS: d3d12GraphicsPSODesc.GS = ShaderByteCode; break;
-				case EShaderStage::DS: d3d12GraphicsPSODesc.DS = ShaderByteCode; break;
-				case EShaderStage::HS: d3d12GraphicsPSODesc.HS = ShaderByteCode; break;
-				case EShaderStage::PS: d3d12GraphicsPSODesc.PS = ShaderByteCode; break;
-				}
-
-				// reflect shader
-				ID3D12ShaderReflection*& pReflection = ShaderReflections[ShaderCompileResult.ShaderStageEnum];
-				D3DReflect(ShaderByteCode.pShaderBytecode, ShaderByteCode.BytecodeLength, IID_PPV_ARGS(&pReflection));
-			}
-			
-			// assign input layout
-			std::vector<D3D12_INPUT_ELEMENT_DESC> inputLayout;
-			const bool bHasVS = ShaderReflections.find(EShaderStage::VS) != ShaderReflections.end();
-			if (bHasVS)
-			{
-				inputLayout = ShaderUtils::ReflectInputLayoutFromVS(ShaderReflections.at(EShaderStage::VS));
-				d3d12GraphicsPSODesc.InputLayout = { inputLayout.data(), static_cast<UINT>(inputLayout.size()) };
-			}
-
-			// TODO: assign root signature
-#if 0
-			{
-				for (auto& it : ShaderReflections)
-				{
-					EShaderStage eShaderStage = it.first;
-					ID3D12ShaderReflection*& pRefl = it.second;
-
-					D3D12_SHADER_DESC shaderDesc = {};
-					pRefl->GetDesc(&shaderDesc);
-					
-					std::vector< D3D12_SHADER_INPUT_BIND_DESC> boundRscDescs(shaderDesc.BoundResources);
-					for (UINT i = 0; i < shaderDesc.BoundResources; ++i)
-					{
-						pRefl->GetResourceBindingDesc(i, &boundRscDescs[i]);
-					}
-
-					int a = 5;
-				}
-			}
-#endif
-
-			// Compile PSO
-			hr = pDevice->CreateGraphicsPipelineState(&d3d12GraphicsPSODesc, IID_PPV_ARGS(&pPSO));
-		}
+		pPSO = bComputePSO 
+			? CompileComputePSO(psoLoadDesc, ShaderCompileResults) 
+			: CompileGraphicsPSO(psoLoadDesc, ShaderCompileResults);
 	}
 	else // load cached PSO
 	{
 		assert(false); // TODO
 	}
 
-	// Check PSO compile result
-	assert(hr == S_OK);
-	if(hr == S_OK)
-		SetName(pPSO, psoLoadDesc.PSOName.c_str());
-
-	// release reflections
-	for(auto it = ShaderReflections.begin(); it != ShaderReflections.end(); ++it)
-	{
-		it->second->Release();
-	}
-	ShaderReflections.clear();
 
 	return pPSO;
 }
 
-FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& ShaderStageCompileDesc)
+constexpr const char* SHADER_BINARY_EXTENSION = ".bin";
+std::string VQRenderer::GetCachedShaderBinaryPath(const FShaderStageCompileDesc& ShaderStageCompileDesc)
 {
 	using namespace ShaderUtils;
-	constexpr const char* SHADER_BINARY_EXTENSION = ".bin";
-
-	const std::string ShaderSourcePath = StrUtil::UnicodeToASCII<256>( ShaderStageCompileDesc.FilePath.c_str() ); 
+	const std::string ShaderSourcePath = StrUtil::UnicodeToASCII<256>(ShaderStageCompileDesc.FilePath.c_str());
 
 	// calculate shader hash
 	const size_t ShaderHash = GeneratePreprocessorDefinitionsHash(ShaderStageCompileDesc.Macros);
@@ -1274,6 +1388,16 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 
 	// determine cached shader file path
 	const std::string CachedShaderBinaryPath = VQRenderer::ShaderCacheDirectory + "\\" + cacheFileName;
+	return CachedShaderBinaryPath;
+}
+
+FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& ShaderStageCompileDesc)
+{
+	SCOPED_CPU_MARKER("LoadShader");
+	using namespace ShaderUtils;
+	
+	const std::string ShaderSourcePath = StrUtil::UnicodeToASCII<512>(ShaderStageCompileDesc.FilePath.c_str());
+	const std::string CachedShaderBinaryPath = GetCachedShaderBinaryPath(ShaderStageCompileDesc);
 
 	// decide whether to use shader cache or compile from source
 	const bool bUseCachedShaders = DirectoryUtil::FileExists(CachedShaderBinaryPath)
@@ -1281,22 +1405,24 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 
 	// load the shader d3dblob
 	FShaderStageCompileResult Result = {};
+	Result.FilePath = ShaderStageCompileDesc.FilePath;
+	Result.bSM6 = IsShaderSM6(ShaderStageCompileDesc.ShaderModel);
 	Shader::FBlob& ShaderBlob = Result.ShaderBlob;
 	Result.ShaderStageEnum = ShaderUtils::GetShaderStageEnumFromShaderModel(ShaderStageCompileDesc.ShaderModel);
-
+	
+	std::string errMsg;
+	bool bCompileSuccessful = false;
+	
 	if (bUseCachedShaders)
 	{
-		ShaderBlob = CompileFromCachedBinary(CachedShaderBinaryPath);
+		bCompileSuccessful = CompileFromCachedBinary(CachedShaderBinaryPath, ShaderBlob, Result.bSM6, errMsg);
 	}
 	else
-	{
-		std::string errMsg;
-		
+	{	
 		// check if file exists
-		const std::string ShaderFilePath = StrUtil::UnicodeToASCII<512>(ShaderStageCompileDesc.FilePath.c_str());
-		if (!DirectoryUtil::FileExists(ShaderFilePath))
+		if (!DirectoryUtil::FileExists(ShaderSourcePath))
 		{
-			std::stringstream ss; ss << "Shader file doesn't exist:\n\t" << ShaderFilePath;
+			std::stringstream ss; ss << "Shader file doesn't exist:\n\t" << ShaderSourcePath;
 			const std::string errMsg = ss.str();
 
 			Log::Error("%s", errMsg.c_str());
@@ -1305,17 +1431,21 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 		}
 
 		ShaderBlob = CompileFromSource(ShaderStageCompileDesc, errMsg);
-		const bool bCompileSuccessful = !ShaderBlob.IsNull();
+		bCompileSuccessful = !ShaderBlob.IsNull();
 		if (bCompileSuccessful)
 		{
 			CacheShaderBinary(CachedShaderBinaryPath, ShaderBlob.GetByteCodeSize(), ShaderBlob.GetByteCode());
 		}
-		else
-		{
-			Log::Error(errMsg);
-			MessageBox(NULL, errMsg.c_str(), "Shader Compiler Error", MB_OK);
-			return Result; // no crash until runtime
-		}
+	}
+
+	if (!bCompileSuccessful)
+	{
+		const std::string ShaderCompilerErrorMessageHeader = ShaderSourcePath + " | " + ShaderStageCompileDesc.EntryPoint;
+		const std::string ShaderCompileErrorMessage = ShaderCompilerErrorMessageHeader
+			+ "\n--------------------------------------------------------\n" + errMsg;
+		Log::Error(ShaderCompileErrorMessage);
+		MessageBox(NULL, errMsg.c_str(), ("Compile Error @ " + ShaderCompilerErrorMessageHeader).c_str(), MB_OK);
+		return Result; // no crash until runtime
 	}
 
 	return Result;
@@ -1330,17 +1460,19 @@ void VQRenderer::QueueTextureUpload(const FTextureUploadDesc& desc)
 }
 
 
+
 void VQRenderer::ProcessTextureUpload(const FTextureUploadDesc& desc)
 {
+	SCOPED_CPU_MARKER("ProcessTextureUpload()");
 	ID3D12GraphicsCommandList* pCmd = mHeapUpload.GetCommandList();
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 	const D3D12_RESOURCE_DESC& d3dDesc = desc.desc.d3d12Desc;
 	//--------------------------------------------------------------
 	ID3D12Resource* pResc = GetTextureResource(desc.id);
-	const void* pData = desc.img.pData ? desc.img.pData : desc.pData;
+	const void* pData = !desc.imgs.empty() ? desc.imgs[0].pData : desc.pDataArr[0];
 	assert(pData);
 
-	const uint MIP_COUNT = desc.desc.bGenerateMips ? desc.img.CalculateMipLevelCount() : 1;
+	const uint MIP_COUNT = desc.desc.d3d12Desc.MipLevels;
 
 	UINT64 UplHeapSize;
 	uint32_t num_rows[D3D12_REQ_MIP_LEVELS] = { 0 };
@@ -1352,6 +1484,7 @@ void VQRenderer::ProcessTextureUpload(const FTextureUploadDesc& desc)
 	UINT8* pUploadBufferMem = mHeapUpload.Suballocate(SIZE_T(UplHeapSize), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 	if (pUploadBufferMem == NULL)
 	{
+		SCOPED_CPU_MARKER("UploadToGPUAndWait()");
 		mHeapUpload.UploadToGPUAndWait(); // We ran out of mem in the upload heap, upload contents and try allocating again
 		pUploadBufferMem = mHeapUpload.Suballocate(SIZE_T(UplHeapSize), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 		assert(pUploadBufferMem);
@@ -1370,30 +1503,17 @@ void VQRenderer::ProcessTextureUpload(const FTextureUploadDesc& desc)
 		const int szArray = 1; // array size (not impl for now)
 		const UINT bytePP = static_cast<UINT>(VQ_DXGI_UTILS::GetPixelByteSize(d3dDesc.Format));
 		const UINT imgSizeInBytes = bytePP * placedSubresource[0].Footprint.Width * placedSubresource[0].Footprint.Height;
-
-		//---------------------------------------------------------------------------------------------
-		// Note: the img copy is used here to enable writing MIP levels on top of the available memory.
-		//       This will slow things down, ideally we should be able to use the img in the @desc,
-		//       but const correctness has to be revisited.
-		Image imgCopy = Image::CreateEmptyImage(imgSizeInBytes);
-		memcpy(imgCopy.pData, pData, imgSizeInBytes);
-		//---------------------------------------------------------------------------------------------
-
+		
 		for (int a = 0; a < szArray; ++a)
 		{
 			for (uint mip = 0; mip < MIP_COUNT; ++mip)
 			{
-				VQ_DXGI_UTILS::CopyPixels(imgCopy.pData
+				VQ_DXGI_UTILS::CopyPixels((mip == 0 ? pData : desc.imgs[mip].pData)
 					, pUploadBufferMem + placedSubresource[mip].Offset
 					, placedSubresource[mip].Footprint.RowPitch
 					, placedSubresource[mip].Footprint.Width * bytePP
 					, num_rows[mip]
 				);
-
-				if (MIP_COUNT > 1)
-				{
-					VQ_DXGI_UTILS::MipImage(imgCopy.pData, placedSubresource[mip].Footprint.Width, num_rows[mip], bytePP);
-				}
 
 				D3D12_PLACED_SUBRESOURCE_FOOTPRINT slice = placedSubresource[mip];
 				slice.Offset += (pUploadBufferMem - mHeapUpload.BasePtr());
@@ -1403,7 +1523,6 @@ void VQRenderer::ProcessTextureUpload(const FTextureUploadDesc& desc)
 				pCmd->CopyTextureRegion(&Dst, 0, 0, 0, &Src, NULL);
 			}
 		}
-		imgCopy.Destroy();
 	}
 
 
@@ -1422,8 +1541,8 @@ void VQRenderer::ProcessTextureUploadQueue()
 	if (mTextureUploadQueue.empty())
 		return;
 
+	std::vector<Signal*> vTexResidentSignals;
 	std::vector<std::atomic<bool>*> vTexResidentBools;
-	std::vector<Image> vImages;
 
 	while (!mTextureUploadQueue.empty())
 	{
@@ -1432,32 +1551,37 @@ void VQRenderer::ProcessTextureUploadQueue()
 
 		ProcessTextureUpload(desc);
 
-		assert(mTextures.find(desc.id) != mTextures.end());
 		{
 			std::unique_lock<std::mutex> lk(mMtxTextures);
-			Texture& tex = mTextures.at(desc.id);
+			assert(mTextures.find(desc.id) != mTextures.end());
+			Texture& tex = mTextures.at(desc.id); // already locked the mutex, direct access is granted to mTextures
+			vTexResidentSignals.push_back(&tex.mSignalResident);
 			vTexResidentBools.push_back(&tex.mbResident);
-		}
-
-		if (desc.img.pData)
-		{
-			vImages.push_back(std::move(desc.img));
 		}
 	}
 
-	mHeapUpload.UploadToGPUAndWait();
+	{
+		SCOPED_CPU_MARKER("UploadToGPUAndWait()");
+		mHeapUpload.UploadToGPUAndWait();
+	}
 
-	for (std::atomic<bool>* pbResident : vTexResidentBools)
-		pbResident->store(true);
-
-	for (Image& img : vImages)
-		img.Destroy(); // free the image memory
+	{
+		SCOPED_CPU_MARKER("NotifyResidentSignals");
+		{
+			for (int i=0; i< vTexResidentSignals.size(); ++i)
+			{
+				vTexResidentBools[i]->store(true);
+				vTexResidentSignals[i]->NotifyOne();
+			}
+		}
+	}
 }
 
 void VQRenderer::TextureUploadThread_Main()
 {
 	while (!mbExitUploadThread)
 	{
+		SCOPED_CPU_MARKER_C("TextureUploadThread_Main()", 0xFF33AAFF);
 		mSignal_UploadThreadWorkReady.Wait([&]() { return mbExitUploadThread.load() || !mTextureUploadQueue.empty(); });
 
 		if (mbExitUploadThread)
@@ -1474,13 +1598,21 @@ void VQRenderer::TextureUploadThread_Main()
 // -----------------------------------------------------------------------------------------------------------------
 const VBV& VQRenderer::GetVertexBufferView(BufferID Id) const
 {
-	//assert(Id < mVBVs.size() && Id != INVALID_ID);
+	if (mVBVs.find(Id) == mVBVs.end())
+	{
+		static D3D12_VERTEX_BUFFER_VIEW kDefaultVBV = {};
+		return kDefaultVBV;
+	}
 	return mVBVs.at(Id);
 }
 
 const IBV& VQRenderer::GetIndexBufferView(BufferID Id) const
 {
-	//assert(Id < mIBVs.size() && Id != INVALID_ID);
+	if (mIBVs.find(Id) == mIBVs.end())
+	{
+		static D3D12_INDEX_BUFFER_VIEW kDefaultIBV = {};
+		return kDefaultIBV;
+	}
 	return mIBVs.at(Id);
 }
 const CBV_SRV_UAV& VQRenderer::GetShaderResourceView(SRV_ID Id) const
@@ -1505,18 +1637,24 @@ const RTV& VQRenderer::GetRenderTargetView(RTV_ID Id) const
 const ID3D12Resource* VQRenderer::GetTextureResource(TextureID Id) const
 {
 	CHECK_TEXTURE(mTextures, Id);
-	return mTextures.at(Id).GetResource();
+	return GetTexture_ThreadSafe(Id).GetResource();
 }
 ID3D12Resource* VQRenderer::GetTextureResource(TextureID Id) 
 {
 	CHECK_TEXTURE(mTextures, Id);
-	return mTextures.at(Id).GetResource();
+	return GetTexture_ThreadSafe(Id).GetResource();
 }
 
 DXGI_FORMAT VQRenderer::GetTextureFormat(TextureID Id) const
 {
 	CHECK_TEXTURE(mTextures, Id);
-	return mTextures.at(Id).GetFormat();
+	return GetTexture_ThreadSafe(Id).GetFormat();
+}
+
+bool VQRenderer::GetTextureAlphaChannelUsed(TextureID Id) const
+{
+	CHECK_TEXTURE(mTextures, Id);
+	return GetTexture_ThreadSafe(Id).GetUsesAlphaChannel();
 }
 
 void VQRenderer::GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices, int& NumMips) const
@@ -1524,7 +1662,7 @@ void VQRenderer::GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int&
 	if (Id != INVALID_ID)
 	{
 		CHECK_TEXTURE(mTextures, Id);
-		const Texture& tex = mTextures.at(Id);
+		const Texture& tex = GetTexture_ThreadSafe(Id);
 		SizeX = tex.mWidth;
 		SizeY = tex.mHeight;
 		NumSlices = tex.mNumArraySlices;
@@ -1544,14 +1682,14 @@ uint VQRenderer::GetTextureMips(TextureID Id) const
 {
 	if (Id == INVALID_ID) return 0;
 	CHECK_TEXTURE(mTextures, Id);
-	const Texture& tex = mTextures.at(Id);
+	const Texture& tex = GetTexture_ThreadSafe(Id);
 	return tex.mMipMapCount;
 }
 
 uint VQRenderer::GetTextureSampleCount(TextureID Id) const
 {
 	CHECK_TEXTURE(mTextures, Id);
-	const Texture& tex = mTextures.at(Id);
+	const Texture& tex = GetTexture_ThreadSafe(Id);
 	assert(false);
 	return 0; // TODO:
 }

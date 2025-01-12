@@ -39,12 +39,20 @@
 // THE SOFTWARE.
 #pragma once
 
-#include "Common.h"
-
-#include <d3d12.h>
+#include "../Engine/Core/Types.h"
 #include <string>
+#include <vector>
+typedef void* HANDLE;
 
 class ResourceView;
+struct ID3D12Device;
+struct ID3D12DescriptorHeap;
+struct ID3D12CommandQueue;
+struct ID3D12GraphicsCommandList;
+struct ID3D12Resource;
+struct ID3D12Fence;
+struct ID3D12CommandAllocator;
+
 
 enum EResourceHeapType
 {
@@ -59,32 +67,34 @@ enum EResourceHeapType
 class StaticResourceViewHeap
 {
 public:
-    void Create(ID3D12Device* pDevice, const std::string& ResourceName, D3D12_DESCRIPTOR_HEAP_TYPE heapType, uint32 descriptorCount, bool forceCPUVisible = false);
+    void Create(ID3D12Device* pDevice, const std::string& ResourceName, EResourceHeapType EHeapType, uint32 Capacity, bool CPUVisible = false);
     void Destroy();
-    bool AllocDescriptor(uint32 size, ResourceView* pRV);
-    
+
+    bool AllocateDescriptor(uint32 Count, ResourceView* pRV);
+    void FreeDescriptor(ResourceView* pRV);
 
     inline ID3D12DescriptorHeap* GetHeap() const { return mpHeap; }
 
 private:
-    uint32 mIndex;
-    uint32 mDescriptorCount;
+    uint32 mCapacity;
     uint32 mDescriptorElementSize;
+    std::vector<bool> mIsDescriptorFree;
 
-    ID3D12DescriptorHeap *mpHeap;
+    ID3D12DescriptorHeap* mpHeap;
     bool mbGPUVisible;
+    EResourceHeapType mHeapType;
 };
 
 // Creates one Upload heap and suballocates memory from the heap
 class UploadHeap
 {
 public:
-    void Create(ID3D12Device* pDevice, SIZE_T uSize, ID3D12CommandQueue* pQueue);
+    void Create(ID3D12Device* pDevice, size_t uSize, ID3D12CommandQueue* pQueue);
     void Destroy();
 
-    UINT8* Suballocate(SIZE_T uSize, UINT64 uAlign);
+    uint8* Suballocate(size_t uSize, uint64 uAlign);
 
-    inline UINT8*                     BasePtr()         const { return mpDataBegin; }
+    inline uint8*                     BasePtr()         const { return mpDataBegin; }
     inline ID3D12Resource*            GetResource()     const { return mpUploadHeap; }
     inline ID3D12GraphicsCommandList* GetCommandList()  const { return mpCommandList; }
 
@@ -98,11 +108,11 @@ private:
     ID3D12GraphicsCommandList* mpCommandList      = nullptr;
     ID3D12CommandAllocator*    mpCommandAllocator = nullptr;
 
-    UINT8*                     mpDataCur   = nullptr;
-    UINT8*                     mpDataEnd   = nullptr; 
-    UINT8*                     mpDataBegin = nullptr;
+    uint8*                     mpDataCur   = nullptr;
+    uint8*                     mpDataEnd   = nullptr;
+    uint8*                     mpDataBegin = nullptr;
 
-    ID3D12Fence*               mpFence = nullptr;
-    UINT64                     mFenceValue = 0;
+    ID3D12Fence*               ptr = nullptr;
+    uint64                     mFenceValue = 0;
     HANDLE                     mHEvent;
 };

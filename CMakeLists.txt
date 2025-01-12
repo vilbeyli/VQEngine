@@ -25,11 +25,13 @@ set (Scenes
     "Data/Levels/Sponza.xml"
     "Data/Levels/EnvironmentMapUnitTest.xml"
     "Data/Levels/StressTest.xml"
+    "Data/Levels/Terrain.xml"
     "Source/Scenes/Scenes.h"
     "Source/Scenes/DefaultScene.cpp"
     "Source/Scenes/SponzaScene.cpp"
     "Source/Scenes/EnvironmentMapUnitTestScene.cpp"
     "Source/Scenes/StressTestScene.cpp"
+    "Source/Scenes/TerrainScene.cpp"
 )
 
 set (Config
@@ -76,6 +78,12 @@ set (Shaders
     "Shaders/HDR.hlsl"
     "Shaders/Visualization.hlsl"
     "Shaders/ApplyReflections.hlsl"
+    "Shaders/Magnifier.hlsl"
+    "Shaders/ObjectID.hlsl"
+    "Shaders/Outline.hlsl"
+    "Shaders/VertexDebug.hlsl"
+    "Shaders/Tessellation.hlsl"
+    "Shaders/VQPlatform.h"
 )
 
 set (ShadersScreenSpaceReflections
@@ -99,6 +107,9 @@ set (RenderPassFiles
     "Source/Engine/RenderPass/DepthPrePass.h"
     "Source/Engine/RenderPass/DepthMSAAResolve.h"
     "Source/Engine/RenderPass/ScreenSpaceReflections.h"
+    "Source/Engine/RenderPass/MagnifierPass.h"
+    "Source/Engine/RenderPass/ObjectIDPass.h"
+    "Source/Engine/RenderPass/OutlinePass.h"
     
     "Source/Engine/RenderPass/RenderPass.cpp"
     "Source/Engine/RenderPass/AmbientOcclusion.cpp"
@@ -106,6 +117,9 @@ set (RenderPassFiles
     "Source/Engine/RenderPass/DepthPrePass.cpp"
     "Source/Engine/RenderPass/DepthMSAAResolve.cpp"
     "Source/Engine/RenderPass/ScreenSpaceReflections.cpp"
+    "Source/Engine/RenderPass/MagnifierPass.cpp"
+    "Source/Engine/RenderPass/ObjectIDPass.cpp"
+    "Source/Engine/RenderPass/OutlinePass.cpp"
 )
 
 set (CoreFiles 
@@ -116,6 +130,7 @@ set (CoreFiles
     "Source/Engine/Core/Types.h"
     "Source/Engine/Core/RenderCommands.h"
     "Source/Engine/Core/Memory.h"
+    "Source/Engine/Core/imgui_impl_win32.h"
 
     "Source/Engine/Core/Platform.cpp"
     "Source/Engine/Core/Window.cpp"
@@ -125,6 +140,7 @@ set (CoreFiles
     "Source/Engine/Core/VQEngine_EventHandlers.cpp"
     "Source/Engine/Core/FileParser.cpp"
     "Source/Engine/Core/Memory.cpp"
+    "Source/Engine/Core/imgui_impl_win32.cpp"
 )
 
 set (SceneFiles   
@@ -136,6 +152,7 @@ set (SceneFiles
     "Source/Engine/Scene/Light.h"
     "Source/Engine/Scene/Camera.h"
     "Source/Engine/Scene/Mesh.h"
+    "Source/Engine/Scene/MeshGenerator.h"
     "Source/Engine/Scene/Material.h"
     "Source/Engine/Scene/Model.h"
     "Source/Engine/Scene/GameObject.h"
@@ -150,12 +167,17 @@ set (SceneFiles
     "Source/Engine/Scene/Model.cpp"
     "Source/Engine/Scene/GameObject.cpp"
     "Source/Engine/Scene/Transform.cpp"
-    "Source/Engine/Scene/Quaternion.cpp"    
+    "Source/Engine/Scene/Quaternion.cpp"
 )
 
 set (PostProcessFiles
     "Source/Engine/PostProcess/PostProcess.h"
     "Source/Engine/PostProcess/PostProcess.cpp"
+)
+
+set (UIFiles
+    "Source/Engine/UI/VQUI.cpp"
+    "Source/Engine/UI/VQUI.h"
 )
 
 set (SourceVQE 
@@ -164,10 +186,9 @@ set (SourceVQE
     "Source/Engine/Settings.h"
     "Source/Engine/Math.h"
     "Source/Engine/Culling.h"
-    "Source/Engine/Geometry.h"
+    "Source/Engine/CullingData.h"
     "Source/Engine/AssetLoader.h"
     "Source/Engine/GPUMarker.h"
-    "Source/Engine/VQUI.h"
 
     "Source/Engine/Main.cpp"
     "Source/Engine/VQEngine_Main.cpp"
@@ -176,9 +197,7 @@ set (SourceVQE
     "Source/Engine/VQEngine_Update.cpp"
     "Source/Engine/VQEngine_Input.cpp"
     "Source/Engine/VQEngine_Simulation.cpp"
-    "Source/Engine/VQUI.cpp"
     "Source/Engine/EnvironmentMap.cpp"
-    "Source/Engine/Geometry.cpp"
     "Source/Engine/Math.cpp"
     "Source/Engine/Culling.cpp"
     "Source/Engine/AssetLoader.cpp"
@@ -259,6 +278,7 @@ add_subdirectory(Source/Renderer)
 #    -DASSIMP_BUILD_TESTS=OFF 
 #    -DASSIMP_INSTALL=OFF
 #)
+#add_definitions(-DNOMINMAX)
 add_subdirectory(Libs/assimp)
 add_subdirectory(Libs/imgui)
 
@@ -278,6 +298,7 @@ source_group("Materials" FILES ${Materials})
 source_group("Source\\RenderPass" FILES ${RenderPassFiles})
 source_group("Source\\Core" FILES ${CoreFiles})
 source_group("Source\\Scene" FILES ${SceneFiles})
+source_group("Source\\UI" FILES ${UIFiles})
 source_group("Source\\PostProcess" FILES ${PostProcessFiles})
 source_group("Source" FILES ${SourceVQE})
 source_group("Libs\\AMD-FidelityFX\\CACAO"   FILES ${LibFFX_CACAO})
@@ -297,6 +318,8 @@ set_source_files_properties(${FFX_DNSR_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Tex
 set_source_files_properties(${CoreFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${RenderPassFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${SceneFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${UIFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${PostProcessFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${LibFFX_CACAO} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${LibFFX_SSSR} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(Data/Resources/VQE.rc PROPERTIES VS_TOOL_OVERRIDE "Resource compiler")
@@ -327,6 +350,7 @@ add_executable( ${PROJECT_NAME}
     ${LibFFX_SSSR} 
     ${RenderPassFiles} 
     ${CoreFiles} 
+    ${UIFiles} 
     ${PostProcessFiles} 
     ${SceneFiles}
 )
