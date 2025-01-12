@@ -28,6 +28,13 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
 
 <br/>
 
+![](Screenshots/VQE_q4sWXO143X.gif)
+<p align="center">
+<sub><i>Object selection, light bounds, magnifier</i></sub>
+</p>
+
+<br/>
+
 ![](Screenshots/VQE_NoGq8VTxGu.gif)
 <p align="center">
 <sub><i>Tessellation pipeline drawing a single large quad domain mesh w/ heightmap</i></sub>
@@ -46,6 +53,7 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
 <p align="center">
 <sub><i>Radeon Graphics Profiler capture from the stress test scene showcasing async compute</i></sub>
 </p>
+
 
 # Features
 
