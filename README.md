@@ -54,6 +54,12 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
 <sub><i>Radeon Graphics Profiler capture from the stress test scene showcasing async compute</i></sub>
 </p>
 
+<br/>
+
+![](Screenshots/qrenderdoc_Lthvze2obv.gif)
+<p align="center">
+<sub><i>Instanced rendering w/ LODs</i></sub>
+</p>
 
 # Features
 
@@ -81,7 +87,7 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
   - Tonemapping & Gamma correction
   - [FidelityFX - Contrast Adaptive Sharpening (CAS)](https://github.com/GPUOpen-Effects/FidelityFX-CAS/)
   - [FidelityFX - Super Resolution 1.0](https://github.com/GPUOpen-Effects/FidelityFX-FSR)
-- Async Compute & Copy
+- Async Compute & Copy queue support
 - Tessellation Pipeline
   - Triangle & Quad domains
 
