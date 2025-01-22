@@ -18,10 +18,8 @@
 
 #pragma once
 
-#include <DirectXMath.h>
-
+#include "../CullingData.h"
 #include "../Math.h"
-#include "../Culling.h"
 
 #include <array>
 #include <memory>
