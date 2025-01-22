@@ -26,6 +26,7 @@ set (Headers
     "Shader.h"
     "ShaderCompileUtils.h"
     "Tessellation.h"
+    "CubemapUtility.h"
 )
 
 set (Source
@@ -44,6 +45,7 @@ set (Source
     "Texture.cpp"
     "Shader.cpp"
     "ShaderCompileUtils.cpp"
+    "CubemapUtility.cpp"
 )
 
 

@@ -20,6 +20,8 @@
 #include "ResourceHeaps.h"
 #include "ResourceViews.h"
 #include "Libs/D3DX12/d3dx12.h"
+#include "../Engine/Math.h"
+#include "CubemapUtility.h"
 
 #include "../../Libs/D3D12MA/src/D3D12MemAlloc.h"
 #include "../../Libs/VQUtils/Source/utils.h"
@@ -633,35 +635,4 @@ std::vector<uint8> Texture::GenerateTexture_Checkerboard(uint Dimension, bool bU
     }
 
     return data;
-}
-
-#include "../Engine/Math.h"
-DirectX::XMMATRIX Texture::CubemapUtility::CalculateViewMatrix(Texture::CubemapUtility::ECubeMapLookDirections cubeFace, const DirectX::XMFLOAT3& position)
-{
-    using namespace DirectX;
-    const XMVECTOR pos = XMLoadFloat3(&position);
-
-    static XMVECTOR VEC3_UP      = XMLoadFloat3(&UpVector);
-    static XMVECTOR VEC3_DOWN    = XMLoadFloat3(&DownVector);
-    static XMVECTOR VEC3_LEFT    = XMLoadFloat3(&LeftVector);
-    static XMVECTOR VEC3_RIGHT   = XMLoadFloat3(&RightVector);
-    static XMVECTOR VEC3_FORWARD = XMLoadFloat3(&ForwardVector);
-    static XMVECTOR VEC3_BACK    = XMLoadFloat3(&BackVector);
-
-    // cube face order: https://msdn.microsoft.com/en-us/library/windows/desktop/ff476906(v=vs.85).aspx
-    //------------------------------------------------------------------------------------------------------
-    // 0: RIGHT		1: LEFT
-    // 2: UP		3: DOWN
-    // 4: FRONT		5: BACK
-    //------------------------------------------------------------------------------------------------------
-    switch (cubeFace)
-    {
-    case Texture::CubemapUtility::CUBEMAP_LOOK_RIGHT:	return XMMatrixLookAtLH(pos, pos + VEC3_RIGHT  , VEC3_UP);
-    case Texture::CubemapUtility::CUBEMAP_LOOK_LEFT:	return XMMatrixLookAtLH(pos, pos + VEC3_LEFT   , VEC3_UP);
-    case Texture::CubemapUtility::CUBEMAP_LOOK_UP:		return XMMatrixLookAtLH(pos, pos + VEC3_UP     , VEC3_BACK);
-    case Texture::CubemapUtility::CUBEMAP_LOOK_DOWN:	return XMMatrixLookAtLH(pos, pos + VEC3_DOWN   , VEC3_FORWARD);
-    case Texture::CubemapUtility::CUBEMAP_LOOK_FRONT:	return XMMatrixLookAtLH(pos, pos + VEC3_FORWARD, VEC3_UP);
-    case Texture::CubemapUtility::CUBEMAP_LOOK_BACK:	return XMMatrixLookAtLH(pos, pos + VEC3_BACK   , VEC3_UP);
-    default: return XMMatrixIdentity();
-    }
 }

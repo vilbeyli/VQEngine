@@ -21,13 +21,12 @@
 #include "Shaders/LightingConstantBufferData.h"
 #include "Transform.h"
 #include "../Settings.h"
-#include "../../Renderer/Texture.h"
-#include <DirectXMath.h>
+#include "../../Renderer/CubemapUtility.h"
 
 
 // Only used for point lights when querying LightSpaceMatrix, ViewMatrix and ViewFrustumPlanes.
 //
-#define DEFAULT_POINT_LIGHT_LOOK_DIRECTION Texture::CubemapUtility::ECubeMapLookDirections::CUBEMAP_LOOK_FRONT
+#define DEFAULT_POINT_LIGHT_LOOK_DIRECTION CubemapUtility::ECubeMapLookDirections::CUBEMAP_LOOK_FRONT
 
 
 // Design considerations here:
@@ -83,7 +82,7 @@ struct Light
 	// 
 	static DirectX::XMMATRIX CalculateDirectionalLightViewMatrix(const Light& mDirLight);
 	static DirectX::XMMATRIX CalculateSpotLightViewMatrix(const Transform& mTransform);
-	static DirectX::XMMATRIX CalculatePointLightViewMatrix(Texture::CubemapUtility::ECubeMapLookDirections lookDir, const DirectX::XMFLOAT3& position);
+	static DirectX::XMMATRIX CalculatePointLightViewMatrix(CubemapUtility::ECubeMapLookDirections lookDir, const DirectX::XMFLOAT3& position);
 	static DirectX::XMMATRIX CalculateProjectionMatrix(Light::EType eType, float near, float far, const DirectX::XMFLOAT2 viewPortSize = DirectX::XMFLOAT2(0, 0));
 
 	// Creates a default Light type with some fields pre-initialized
@@ -100,7 +99,7 @@ struct Light
 	void GetGPUData(VQ_SHADER_DATA::SpotLight*        pLight) const;
 
 	DirectX::XMMATRIX GetWorldTransformationMatrix() const;
-	DirectX::XMMATRIX GetViewProjectionMatrix(Texture::CubemapUtility::ECubeMapLookDirections lookDir = Texture::CubemapUtility::ECubeMapLookDirections::CUBEMAP_LOOK_FRONT) const;
+	DirectX::XMMATRIX GetViewProjectionMatrix(CubemapUtility::ECubeMapLookDirections lookDir = CubemapUtility::ECubeMapLookDirections::CUBEMAP_LOOK_FRONT) const;
 	Transform GetTransform() const;
 
 	EMobility GetMobility() const { return Mobility; }

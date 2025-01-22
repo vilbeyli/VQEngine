@@ -950,7 +950,7 @@ void Scene::GatherShadowViewData(FSceneShadowViews& SceneShadowView, const std::
 		{
 			for (int face = 0; face < 6; ++face)
 			{
-				XMMATRIX matViewProj = l.GetViewProjectionMatrix(static_cast<Texture::CubemapUtility::ECubeMapLookDirections>(face));
+				XMMATRIX matViewProj = l.GetViewProjectionMatrix(static_cast<CubemapUtility::ECubeMapLookDirections>(face));
 				FSceneShadowViews::FShadowView& ShadowView = SceneShadowView.ShadowViews_Point[SceneShadowView.NumPointShadowViews * 6 + face];
 				ShadowView.matViewProj = matViewProj;
 			}

@@ -470,7 +470,7 @@ void VQEngine::PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, FEnviron
 				pCB1->ViewDimX = static_cast<float>(w);
 				pCB1->ViewDimY = static_cast<float>(h);
 				pCB1->Roughness = 0.0f;
-				pCB0->viewProj[0] = Texture::CubemapUtility::CalculateViewMatrix(face) * proj;
+				pCB0->viewProj[0] = CubemapUtility::CalculateViewMatrix(face) * proj;
 
 				pCmd->SetGraphicsRootConstantBufferView(1, cbAddr1);
 				pCmd->SetGraphicsRootConstantBufferView(0, cbAddr0);
@@ -495,7 +495,7 @@ void VQEngine::PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, FEnviron
 			pCB1->Roughness = 0.0f;
 			for (int face = 0; face < NUM_CUBE_FACES; ++face)
 			{
-				pCB0->viewProj[face] = Texture::CubemapUtility::CalculateViewMatrix(face) * proj;
+				pCB0->viewProj[face] = CubemapUtility::CalculateViewMatrix(face) * proj;
 			}
 
 			pCmd->SetPipelineState(mRenderer.GetPSO(CUBEMAP_CONVOLUTION_DIFFUSE_PSO));
@@ -633,7 +633,7 @@ void VQEngine::PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, FEnviron
 				cbHeap.AllocConstantBuffer(sizeof(cb0_t), (void**)(&pCB0), &cbAddr0);
 				cbHeap.AllocConstantBuffer(sizeof(cb1_t), (void**)(&pCB1), &cbAddr1);
 				
-				pCB0->viewProj[0] = Texture::CubemapUtility::CalculateViewMatrix(face) * proj;
+				pCB0->viewProj[0] = CubemapUtility::CalculateViewMatrix(face) * proj;
 				pCB1->Roughness = static_cast<float>(mip) / (MIP_LEVELS-1); // min(0.04, ) ?
 				pCB1->ViewDimX = static_cast<float>(inpTexW);
 				pCB1->ViewDimY = static_cast<float>(inpTexH);
