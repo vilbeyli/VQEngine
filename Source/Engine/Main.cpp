@@ -39,7 +39,7 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 	{
 		const std::vector<std::string> paramNameValue = StrUtil::split(param, '=');
 		const std::string& paramName = paramNameValue.front();
-		std::string  paramValue = paramNameValue.size() > 1 ? paramNameValue[1] : "";
+		std::string paramValue = paramNameValue.size() > 1 ? paramNameValue[1] : "";
 
 		//
 		// Log Settings
@@ -51,7 +51,7 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 		if (paramName == "-LogFile")
 		{
 			refStartupParams.LogInitParams.bLogFile = true;
-			refStartupParams.LogInitParams.LogFilePath = std::move(paramValue);
+			strncpy_s(refStartupParams.LogInitParams.LogFilePath, paramValue.c_str(), sizeof(refStartupParams.LogInitParams.LogFilePath));
 		}
 
 		//
@@ -163,7 +163,7 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 		if (paramName == "-Scene")
 		{
 			refStartupParams.bOverrideENGSetting_StartupScene = true;
-			refStartupParams.EngineSettings.StartupScene = paramValue;
+			strncpy_s(refStartupParams.EngineSettings.StartupScene, paramValue.c_str(), sizeof(refStartupParams.EngineSettings.StartupScene));
 		}
 	}
 }

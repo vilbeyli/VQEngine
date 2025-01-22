@@ -129,6 +129,7 @@ set (CoreFiles
     "Source/Engine/Core/Events.h"
     "Source/Engine/Core/Types.h"
     "Source/Engine/Core/RenderCommands.h"
+    "Source/Engine/Core/FileParser.h"
     "Source/Engine/Core/Memory.h"
     "Source/Engine/Core/imgui_impl_win32.h"
 
@@ -190,6 +191,7 @@ set (SourceVQE
     "Source/Engine/CullingData.h"
     "Source/Engine/AssetLoader.h"
     "Source/Engine/GPUMarker.h"
+    "Source/Engine/EnvironmentMap.h"
 
     "Source/Engine/Main.cpp"
     "Source/Engine/VQEngine_Main.cpp"

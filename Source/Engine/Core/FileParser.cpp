@@ -16,13 +16,17 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-#include "../VQEngine.h"
+#include "FileParser.h"
+#include "Platform.h"
 
 #include "Libs/VQUtils/Source/utils.h"
 #include "Libs/VQUtils/Libs/tinyxml2/tinyxml2.h"
 
+#include "VQUtils/Source/Log.h"
+
 #include <fstream>
 #include <cassert>
+#include <unordered_map>
 
 using namespace DirectX;
 
@@ -63,10 +67,9 @@ static std::unordered_map<std::string, EDisplayMode> S_LOOKUP_STR_TO_DISPLAYMODE
 
 
 
-FStartupParameters VQEngine::ParseEngineSettingsFile()
+void FileParser::ParseEngineSettingsFile(FStartupParameters& params)
 {
 	constexpr const char* ENGINE_SETTINGS_FILE_NAME = "Data/EngineSettings.ini";
-	FStartupParameters params = {};
 
 	std::ifstream file(ENGINE_SETTINGS_FILE_NAME);
 	if (file.is_open())
@@ -200,9 +203,8 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 			if (SettingName == "Scene")
 			{
 				params.bOverrideENGSetting_StartupScene = true;
-				params.EngineSettings.StartupScene = SettingValue;
+				strncpy_s(params.EngineSettings.StartupScene, SettingValue.c_str(), sizeof(params.EngineSettings.StartupScene));
 			}
-			
 		}
 	}
 	else
@@ -212,11 +214,9 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 	}
 
 	file.close();
-
-	return params;
 }
 
-std::vector<std::pair<std::string, int>> VQEngine::ParseSceneIndexMappingFile()
+std::vector<std::pair<std::string, int>> FileParser::ParseSceneIndexMappingFile()
 {
 	constexpr const char* SCENE_MAPPING_FILE_NAME = "Data/Scenes.ini";
 
@@ -260,7 +260,7 @@ std::vector<std::pair<std::string, int>> VQEngine::ParseSceneIndexMappingFile()
 	return SceneIndexMappings;
 }
 
-std::vector<FEnvironmentMapDescriptor> VQEngine::ParseEnvironmentMapsFile()
+std::vector<FEnvironmentMapDescriptor> FileParser::ParseEnvironmentMapsFile()
 {
 	constexpr const char* SETTINGS_FILE_NAME = "Data/EnvironmentMaps.ini";
 
@@ -322,7 +322,7 @@ std::vector<FEnvironmentMapDescriptor> VQEngine::ParseEnvironmentMapsFile()
 	return EnvironmentMapDescriptors;
 }
 
-std::vector<FDisplayHDRProfile> VQEngine::ParseHDRProfilesFile()
+std::vector<FDisplayHDRProfile> FileParser::ParseHDRProfilesFile()
 {
 	constexpr const char* SETTINGS_FILE_NAME = "Data/HDRDisplayProfiles.ini";
 
@@ -499,7 +499,7 @@ unsigned GetNumSiblings(XMLElement* pEle)
 	return numSiblings;
 }
 
-FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
+FSceneRepresentation FileParser::ParseSceneFile(const std::string& SceneFile)
 {
 	using namespace tinyxml2;
 	//-----------------------------------------------------------------
@@ -798,7 +798,7 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 }
 
 
-std::vector<FMaterialRepresentation> VQEngine::ParseMaterialFile(const std::string& MaterialFilePath)
+std::vector<FMaterialRepresentation> FileParser::ParseMaterialFile(const std::string& MaterialFilePath)
 {
 	std::vector<FMaterialRepresentation> matReps;
 

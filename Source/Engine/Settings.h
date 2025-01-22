@@ -18,8 +18,6 @@
 
 #pragma once
 
-#include <string>
-
 enum EDisplayMode
 {
 	WINDOWED = 0,
@@ -77,5 +75,5 @@ struct FEngineSettings
 	bool bAutomatedTestRun     = false;
 	int NumAutomatedTestFrames = -1;
 	
-	std::string StartupScene;
+	char StartupScene[512];
 };

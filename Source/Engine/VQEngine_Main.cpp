@@ -20,6 +20,8 @@
 #include "Libs/VQUtils/Source/utils.h"
 #include "GPUMarker.h"
 
+#include "Core/FileParser.h"
+
 #include "../../Libs/DirectXCompiler/inc/dxcapi.h"
 #include <cassert>
 
@@ -192,10 +194,12 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	s.bAutomatedTestRun = false;
 	s.NumAutomatedTestFrames = 100; // default num frames to run if -Test is specified in cmd line params
 
-	s.StartupScene = "Default";
+	strncpy_s(s.StartupScene, "Default", sizeof(s.StartupScene));
 
 	// Override #0 : from file
-	FStartupParameters paramFile = VQEngine::ParseEngineSettingsFile();
+	FStartupParameters paramFile;
+	FileParser::ParseEngineSettingsFile(paramFile);
+
 	const FEngineSettings& pf = paramFile.EngineSettings;
 	if (paramFile.bOverrideGFXSetting_bVSync)                      s.gfx.bVsync              = pf.gfx.bVsync;
 	if (paramFile.bOverrideGFXSetting_bAA)                         s.gfx.bAntiAliasing       = pf.gfx.bAntiAliasing;
@@ -224,7 +228,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 		s.NumAutomatedTestFrames = pf.NumAutomatedTestFrames; 
 	}
 
-	if (paramFile.bOverrideENGSetting_StartupScene)              s.StartupScene = pf.StartupScene;
+	if (paramFile.bOverrideENGSetting_StartupScene)              strncpy_s(s.StartupScene, pf.StartupScene, sizeof(s.StartupScene));
 
 
 	// Override #1 : if there's command line params
@@ -254,7 +258,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 		s.NumAutomatedTestFrames = p.NumAutomatedTestFrames;
 	}
 
-	if (Params.bOverrideENGSetting_StartupScene)             s.StartupScene           = p.StartupScene;
+	if (Params.bOverrideENGSetting_StartupScene)               strncpy_s(s.StartupScene, p.StartupScene, sizeof(s.StartupScene));
 }
 
 void VQEngine::InitializeWindows(const FStartupParameters& Params)
@@ -297,14 +301,14 @@ void VQEngine::InitializeWindows(const FStartupParameters& Params)
 void VQEngine::InitializeHDRProfiles()
 {
 	SCOPED_CPU_MARKER("ParseHDRProfilesFile");
-	mDisplayHDRProfiles = VQEngine::ParseHDRProfilesFile();
+	mDisplayHDRProfiles = FileParser::ParseHDRProfilesFile();
 }
 
 void VQEngine::InitializeEnvironmentMaps()
 {
 	SCOPED_CPU_MARKER("InitializeEnvironmentMaps");
 	mbEnvironmentMapPreFilter.store(false);
-	std::vector<FEnvironmentMapDescriptor> descs = VQEngine::ParseEnvironmentMapsFile();
+	std::vector<FEnvironmentMapDescriptor> descs = FileParser::ParseEnvironmentMapsFile();
 	for (const FEnvironmentMapDescriptor& desc : descs)
 	{
 		mLookup_EnvironmentMapDescriptors[desc.Name] = desc;
@@ -319,7 +323,7 @@ void VQEngine::InitializeScenes()
 
 	// Read Scene Index Mappings from file and initialize @mSceneNames
 	{
-		std::vector<std::pair<std::string, int>> SceneIndexMappings = VQEngine::ParseSceneIndexMappingFile();
+		std::vector<std::pair<std::string, int>> SceneIndexMappings = FileParser::ParseSceneIndexMappingFile();
 		for (auto& nameIndex : SceneIndexMappings)
 			mSceneNames.push_back(std::move(nameIndex.first));
 	}
@@ -344,7 +348,7 @@ void VQEngine::InitializeScenes()
 		if (!bSceneNameMatch)
 		{
 			it2 = mSceneNames.begin();
-			Log::Error("Couldn't find scene '%s' among scene file names, loading level '%s' by default.", mSettings.StartupScene.c_str(), it2->c_str());
+			Log::Error("Couldn't find scene '%s' among scene file names, loading level '%s' by default.", mSettings.StartupScene, it2->c_str());
 		}
 	}
 	mIndex_SelectedScene = static_cast<int>(it2 - mSceneNames.begin());

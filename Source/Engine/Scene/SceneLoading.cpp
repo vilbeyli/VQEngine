@@ -19,6 +19,7 @@
 #include "../Core/Window.h"
 #include "../VQEngine.h"
 #include "../GPUMarker.h"
+#include "../Core/FileParser.h"
 
 #include "Libs/VQUtils/Source/utils.h"
 
@@ -141,7 +142,7 @@ void Scene::LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRep
 		std::vector<FMaterialRepresentation> vBuiltinMaterialReps;
 		for (const std::string& filePath : vMatFiles) // for each material file
 		{
-			std::vector<FMaterialRepresentation> vMaterialReps = VQEngine::ParseMaterialFile(filePath); // get all materials in an xml file
+			std::vector<FMaterialRepresentation> vMaterialReps = FileParser::ParseMaterialFile(filePath); // get all materials in an xml file
 			vBuiltinMaterialReps.insert(vBuiltinMaterialReps.end(), vMaterialReps.begin(), vMaterialReps.end());
 		}
 

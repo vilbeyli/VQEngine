@@ -21,6 +21,8 @@
 #include "Camera.h"
 #include "Light.h"
 #include "Transform.h"
+#include "../../Renderer/Tessellation.h"
+
 #include <string>
 #include <vector>
 

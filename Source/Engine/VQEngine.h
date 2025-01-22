@@ -29,6 +29,7 @@
 #include "Scene/Camera.h"
 #include "Scene/Transform.h"
 
+#include "EnvironmentMap.h"
 #include "Settings.h"
 #include "AssetLoader.h"
 #include "UI/VQUI.h"
@@ -68,7 +69,6 @@ struct ImGuiContext;
 // DATA STRUCTS
 //
 
-
 struct FLoadingScreenData
 {
 	std::array<float, 4> SwapChainClearColor;
@@ -81,56 +81,6 @@ struct FLoadingScreenData
 	void RotateLoadingScreenImageIndex();
 
 	// TODO: animation resources
-};
-
-
-struct FEnvironmentMapDescriptor
-{
-	std::string Name;
-	std::string FilePath;
-	float MaxContentLightLevel = 0.0f;
-};
-struct FEnvironmentMapRenderingResources
-{
-	TextureID Tex_HDREnvironment = INVALID_ID; // equirect input
-	TextureID Tex_IrradianceDiff = INVALID_ID; // Kd
-	TextureID Tex_IrradianceSpec = INVALID_ID; // Ks
-	
-	// temporary resources
-	TextureID Tex_BlurTemp = INVALID_ID;
-	TextureID Tex_IrradianceDiffBlurred = INVALID_ID; // Kd
-
-	RTV_ID RTV_IrradianceDiff = INVALID_ID;
-	RTV_ID RTV_IrradianceSpec = INVALID_ID;
-
-	SRV_ID SRV_HDREnvironment = INVALID_ID;
-	SRV_ID SRV_IrradianceDiff = INVALID_ID;
-	SRV_ID SRV_IrradianceSpec = INVALID_ID;
-	SRV_ID SRV_IrradianceDiffFaces[6] = { INVALID_ID };
-	SRV_ID SRV_IrradianceDiffBlurred = INVALID_ID;
-
-	UAV_ID UAV_BlurTemp = INVALID_ID;
-	UAV_ID UAV_IrradianceDiffBlurred = INVALID_ID;
-
-	SRV_ID SRV_BlurTemp = INVALID_ID;
-
-	SRV_ID SRV_BRDFIntegrationLUT = INVALID_ID;
-
-	//
-	// HDR10 Static Metadata Parameters -------------------------------
-	// https://docs.microsoft.com/en-us/windows/win32/api/dxgi1_5/ns-dxgi1_5-dxgi_hdr_metadata_hdr10
-	//
-	// The maximum content light level (MaxCLL). This is the nit value 
-	// corresponding to the brightest pixel used anywhere in the content.
-	int MaxContentLightLevel = 0;
-
-	// The maximum frame average light level (MaxFALL). 
-	// This is the nit value corresponding to the average luminance of 
-	// the frame which has the brightest average luminance anywhere in 
-	// the content.
-	int MaxFrameAverageLightLevel = 0;
-
-	int GetNumSpecularIrradianceCubemapLODLevels(const VQRenderer& Renderer) const;
 };
 
 struct FRenderingResources{};
@@ -261,45 +211,6 @@ struct FRenderStats
 //
 // VQENGINE
 //
-
-struct LogInitializeParams
-{
-	bool bLogConsole = false;
-	bool bLogFile = false;
-	std::string LogFilePath = "./";
-};
-struct FStartupParameters
-{
-	HINSTANCE                 hExeInstance;
-	int                       iCmdShow;
-	LogInitializeParams       LogInitParams;
-
-	FEngineSettings EngineSettings;
-
-	uint8 bOverrideGFXSetting_RenderScale                 : 1;
-	uint8 bOverrideGFXSetting_bVSync                      : 1;
-	uint8 bOverrideGFXSetting_bUseTripleBuffering         : 1;
-	uint8 bOverrideGFXSetting_bAA                         : 1;
-	uint8 bOverrideGFXSetting_bMaxFrameRate               : 1;
-	uint8 bOverrideGFXSetting_bHDR                        : 1;
-	uint8 bOverrideGFXSetting_EnvironmentMapResolution    : 1;
-	uint8 bOverrideGFXSettings_Reflections                : 1;
-
-	uint8 bOverrideENGSetting_MainWindowHeight            : 1;
-	uint8 bOverrideENGSetting_MainWindowWidth             : 1;
-	uint8 bOverrideENGSetting_bDisplayMode                : 1;
-	uint8 bOverrideENGSetting_PreferredDisplay            : 1;
-
-	uint8 bOverrideENGSetting_bDebugWindowEnable          : 1;
-	uint8 bOverrideENGSetting_DebugWindowHeight           : 1;
-	uint8 bOverrideENGSetting_DebugWindowWidth            : 1;
-	uint8 bOverrideENGSetting_DebugWindowDisplayMode      : 1;
-	uint8 bOverrideENGSetting_DebugWindowPreferredDisplay : 1;
-
-	uint8 bOverrideENGSetting_bAutomatedTest              : 1;
-	uint8 bOverrideENGSetting_bTestFrames                 : 1;
-	uint8 bOverrideENGSetting_StartupScene                : 1;
-};
 class VQEngine : public IWindowOwner
 {
 public:
@@ -713,17 +624,6 @@ private:
 // VQENGINE STATIC
 // 
 // ------------------------------------------------------------------------------------------------------
-private:
-	// Reads EngineSettings.ini from next to the executable and returns a 
-	// FStartupParameters struct as it readily has override booleans for engine settings
-	static FStartupParameters                       ParseEngineSettingsFile();
-	static std::vector<std::pair<std::string, int>> ParseSceneIndexMappingFile();
-	static std::vector<FEnvironmentMapDescriptor>   ParseEnvironmentMapsFile();
-	static std::vector<FDisplayHDRProfile>          ParseHDRProfilesFile();
-	static FSceneRepresentation                     ParseSceneFile(const std::string& SceneFile);
-public:
-	static std::vector<FMaterialRepresentation>     ParseMaterialFile(const std::string& MaterialFilePath);
-
 public:
 	// Supported HDR Formats { DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_FORMAT_R16G16B16A16_FLOAT  }
 	// Supported SDR Formats { DXGI_FORMAT_R8G8B8A8_UNORM   , DXGI_FORMAT_R8G8B8A8_UNORM_SRGB }

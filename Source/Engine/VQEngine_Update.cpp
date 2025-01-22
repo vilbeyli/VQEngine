@@ -19,6 +19,7 @@
 #include "Math.h"
 #include "Scene/Scene.h"
 #include "../Scenes/Scenes.h" // scene instances
+#include "Core/FileParser.h"
 
 #include "GPUMarker.h"
 
@@ -500,7 +501,7 @@ void VQEngine::Load_SceneData_Dispatch()
 
 	// load scene representation from disk
 	const std::string SceneFilePath = "Data/Levels/" + SceneFileName + ".xml";
-	FSceneRepresentation SceneRep = VQEngine::ParseSceneFile(SceneFilePath);
+	FSceneRepresentation SceneRep = FileParser::ParseSceneFile(SceneFilePath);
 	fnCreateSceneInstance(SceneRep.SceneName, mpScene);
 
 	//----------------------------------------------------------------------
