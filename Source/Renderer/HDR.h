@@ -75,8 +75,6 @@
 
 //------------------------------------------------------------------------------------------------------------------
 
-#include <string>
-
 enum EColorSpace
 {
 	REC_709 = 0,  // Also: sRGB
@@ -96,7 +94,7 @@ enum EDisplayCurve
 	, NUM_DISPLAY_CURVES
 };
 
-inline std::string GetColorSpaceString(EColorSpace cs)
+inline constexpr const char* GetColorSpaceString(EColorSpace cs)
 {
 	switch (cs)
 	{
@@ -106,7 +104,7 @@ inline std::string GetColorSpaceString(EColorSpace cs)
 	}
 	return "";
 }
-inline std::string GetDisplayCurveString(EDisplayCurve dc)
+inline constexpr const char* GetDisplayCurveString(EDisplayCurve dc)
 {
 	switch (dc)
 	{
@@ -119,7 +117,7 @@ inline std::string GetDisplayCurveString(EDisplayCurve dc)
 
 struct FDisplayHDRProfile
 {
-	std::string DisplayName;
+	char DisplayName[256];
 	union 
 	{
 		float MinBrightness;

@@ -355,7 +355,7 @@ std::vector<FDisplayHDRProfile> FileParser::ParseHDRProfilesFile()
 					profile = {};
 					bRecentlyReadEmptyLine = false;
 				}
-				profile.DisplayName = SettingName;
+				strncpy_s(profile.DisplayName, SettingName.c_str(), sizeof(profile.DisplayName));
 				continue;
 			}
 

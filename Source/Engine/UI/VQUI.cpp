@@ -15,7 +15,6 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
-#include <utility>
 #include "../VQEngine.h"
 #include "../GPUMarker.h"
 
