@@ -54,7 +54,4 @@ std::pair<BufferID, BufferID> Mesh::GetIABufferIDs(int lod /*= 0*/) const
 	return mLODBufferPairs.back().GetIABufferPair();
 }
 
-BufferID GeometryGenerator::CreateBuffer(VQRenderer* pRenderer, const FBufferDesc& desc)
-{
-	return pRenderer->CreateBuffer(desc);
-}
+BufferID Mesh::CreateBuffer(VQRenderer* pRenderer, const FBufferDesc& desc) { return pRenderer->CreateBuffer(desc); }

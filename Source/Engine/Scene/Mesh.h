@@ -19,14 +19,10 @@
 
 #include "../Core/Types.h"
 #include "../CullingData.h"
+#include "MeshGeometryData.h"
+#include "Source/Renderer/Buffer.h"
 
-#include <string>
-#include <vector>
 #include <limits>
-
-#include <DirectXMath.h>
-
-#include "MeshGenerator.h"
 
 struct FBufferDesc;
 class VQRenderer;
@@ -95,7 +91,7 @@ public:
 	);
 
 	template<class TVertex, class TIndex>
-	Mesh(VQRenderer* pRenderer, const GeometryGenerator::GeometryData<TVertex, TIndex>& meshLODData, const std::string& name);
+	Mesh(VQRenderer* pRenderer, const GeometryData<TVertex, TIndex>& meshLODData, const std::string& name);
 
 	Mesh() = default;
 
@@ -116,6 +112,8 @@ private:
 
 	template<class TVertex>
 	static FBoundingBox CalculateBoundingBox(const std::vector<TVertex>& verts);
+
+	static BufferID CreateBuffer(VQRenderer* pRenderer, const FBufferDesc& desc);
 };
 
 //
@@ -141,7 +139,7 @@ Mesh::Mesh(
 	bufferDesc.Stride       = sizeof(vertices[0]);
 	bufferDesc.pData        = static_cast<const void*>(vertices.data());
 	bufferDesc.Name         = VBName;
-	BufferID vertexBufferID = GeometryGenerator::CreateBuffer(pRenderer, bufferDesc);
+	BufferID vertexBufferID = CreateBuffer(pRenderer, bufferDesc);
 
 	bufferDesc.Type        = INDEX_BUFFER;
 	//bufferDesc.Usage       = GPU_READ_WRITE;
@@ -149,7 +147,7 @@ Mesh::Mesh(
 	bufferDesc.Stride      = sizeof(unsigned);
 	bufferDesc.pData       = static_cast<const void*>(indices.data());
 	bufferDesc.Name        = IBName;
-	BufferID indexBufferID = GeometryGenerator::CreateBuffer(pRenderer, bufferDesc);
+	BufferID indexBufferID = CreateBuffer(pRenderer, bufferDesc);
 
 	mLODBufferPairs.push_back({ vertexBufferID, indexBufferID }); // LOD[0]
 	mNumIndicesPerLODLevel.push_back(bufferDesc.NumElements);
@@ -158,7 +156,7 @@ Mesh::Mesh(
 }
 
 template<class TVertex, class TIndex>
-Mesh::Mesh(VQRenderer* pRenderer, const GeometryGenerator::GeometryData<TVertex, TIndex>& meshLODData, const std::string& name)
+Mesh::Mesh(VQRenderer* pRenderer, const GeometryData<TVertex, TIndex>& meshLODData, const std::string& name)
 {
 	for (size_t LOD = 0; LOD < meshLODData.LODVertices.size(); ++LOD)
 	{
@@ -175,7 +173,7 @@ Mesh::Mesh(VQRenderer* pRenderer, const GeometryGenerator::GeometryData<TVertex,
 		bufferDesc.pData = static_cast<const void*>(vertices.data());
 		bufferDesc.Stride = sizeof(vertices[0]);
 		bufferDesc.Name = VBName;
-		BufferID vertexBufferID = GeometryGenerator::CreateBuffer(pRenderer, bufferDesc);
+		BufferID vertexBufferID = CreateBuffer(pRenderer, bufferDesc);
 
 		bufferDesc.Type = INDEX_BUFFER;
 		//bufferDesc.Usage = GPU_READ_WRITE;
@@ -183,7 +181,7 @@ Mesh::Mesh(VQRenderer* pRenderer, const GeometryGenerator::GeometryData<TVertex,
 		bufferDesc.pData = static_cast<const void*>(indices.data());
 		bufferDesc.Stride = sizeof(unsigned);
 		bufferDesc.Name = IBName;
-		BufferID indexBufferID = GeometryGenerator::CreateBuffer(pRenderer, bufferDesc);
+		BufferID indexBufferID = CreateBuffer(pRenderer, bufferDesc);
 
 		mLODBufferPairs.push_back({ vertexBufferID, indexBufferID });
 		mNumIndicesPerLODLevel.push_back(bufferDesc.NumElements);

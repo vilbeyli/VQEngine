@@ -24,6 +24,8 @@
 
 #include "Shaders/LightingConstantBufferData.h"
 
+#include "Scene/MeshGenerator.h"
+
 #define EXECUTE_CMD_LISTS_ON_WORKER 1
 
 // https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/dxgi-error
@@ -339,33 +341,33 @@ void VQEngine::InitializeBuiltinMeshes()
 	using VertexType = FVertexWithNormalAndTangent;
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::TRIANGLE;
-		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Triangle<VertexType>(1.0f);
+		GeometryData<VertexType> data = GeometryGenerator::Triangle<VertexType>(1.0f);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Triangle";
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.LODVertices[0], data.LODIndices[0], mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::CUBE;
-		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Cube<VertexType>();
+		GeometryData<VertexType> data = GeometryGenerator::Cube<VertexType>();
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Cube";
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.LODVertices[0], data.LODIndices[0], mResourceNames.mBuiltinMeshNames[eMesh]);
 	} 
 	{
 		SCOPED_CPU_MARKER("Cylinder");
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::CYLINDER;
-		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Cylinder<VertexType>(3.0f, 1.0f, 1.0f, 45, 6, 4);
+		GeometryData<VertexType> data = GeometryGenerator::Cylinder<VertexType>(3.0f, 1.0f, 1.0f, 45, 6, 4);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Cylinder";
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
 		SCOPED_CPU_MARKER("Sphere");
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::SPHERE;
-		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Sphere<VertexType>(1.0f, 30, 30, 5);
+		GeometryData<VertexType> data = GeometryGenerator::Sphere<VertexType>(1.0f, 30, 30, 5);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Sphere";
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::CONE;
-		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Cone<VertexType>(1, 1, 42, 4);
+		GeometryData<VertexType> data = GeometryGenerator::Cone<VertexType>(1, 1, 42, 4);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Cone";
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
@@ -373,7 +375,7 @@ void VQEngine::InitializeBuiltinMeshes()
 		SCOPED_CPU_MARKER("SimpleGrid");
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::GRID_SIMPLE_QUAD;
 		const float GridLength = 1.0f;
-		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 2, 2, 1);
+		GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 2, 2, 1);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "SimpleGrid";
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
@@ -381,7 +383,7 @@ void VQEngine::InitializeBuiltinMeshes()
 		SCOPED_CPU_MARKER("DetailGrid0");
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::GRID_DETAILED_QUAD0;
 		const float GridLength = 1.0f;
-		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 3, 3, 1);
+		GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 3, 3, 1);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "DetaildGrid0";
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
@@ -389,7 +391,7 @@ void VQEngine::InitializeBuiltinMeshes()
 		SCOPED_CPU_MARKER("DetailGrid1");
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::GRID_DETAILED_QUAD1;
 		const float GridLength = 1.0f;
-		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 12, 12, 4);
+		GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 12, 12, 4);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "DetaildGrid1";
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
@@ -397,7 +399,7 @@ void VQEngine::InitializeBuiltinMeshes()
 		SCOPED_CPU_MARKER("DetailGrid2");
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::GRID_DETAILED_QUAD2;
 		const float GridLength = 1.0f;
-		GeometryGenerator::GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 1200, 1200, 6);
+		GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 1200, 1200, 6);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "DetaildGrid2";
 		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
@@ -423,7 +425,7 @@ void VQEngine::InitializeBuiltinMeshes()
 		};
 		for (int i = 0; i < NUM_TESSELLATION_GEOMETRY; ++i)
 		{
-			GeometryGenerator::GeometryData<PatchVertexType> data = GeometryGenerator::TessellationPatch_Quad<PatchVertexType>(i+1);
+			GeometryData<PatchVertexType> data = GeometryGenerator::TessellationPatch_Quad<PatchVertexType>(i+1);
 			mResourceNames.mBuiltinMeshNames[eMesh[i]] = szMeshNames[i];
 			mBuiltinMeshes[eMesh[i]] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh[i]]);
 		}

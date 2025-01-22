@@ -153,6 +153,7 @@ set (SceneFiles
     "Source/Engine/Scene/Camera.h"
     "Source/Engine/Scene/Mesh.h"
     "Source/Engine/Scene/MeshGenerator.h"
+    "Source/Engine/Scene/MeshGeometryData.h"
     "Source/Engine/Scene/Material.h"
     "Source/Engine/Scene/Model.h"
     "Source/Engine/Scene/GameObject.h"

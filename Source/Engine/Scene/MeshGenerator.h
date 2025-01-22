@@ -21,22 +21,13 @@
 #include "../Libs/VQUtils/Source/utils.h"
 #include "../Source/Renderer/Buffer.h"
 #include "../Math.h"
+#include "MeshGeometryData.h"
 
 class VQRenderer;
 struct FBufferDesc;
 
 namespace GeometryGenerator
 {
-	template<class TVertex, class TIndex = unsigned>
-	struct GeometryData
-	{
-		static_assert(std::is_same<TIndex, unsigned>() || std::is_same<TIndex, unsigned short>()); // ensure UINT32 or UINT16 indices
-		std::vector<std::vector<TVertex>>  LODVertices;
-		std::vector<std::vector<TIndex> >  LODIndices;
-		GeometryData(size_t NumLODs) : LODVertices(NumLODs), LODIndices(NumLODs) {}
-		GeometryData() = delete;
-	};
-
 	template<class TVertex, class TIndex = unsigned>
 	constexpr GeometryData<TVertex, TIndex> Triangle(float size);
 
@@ -1061,8 +1052,6 @@ namespace GeometryGenerator
 		}
 		return g;
 	}
-
-	BufferID CreateBuffer(VQRenderer* pRenderer, const FBufferDesc& desc);
 
 }; // namespace GeometryGenerator
 
