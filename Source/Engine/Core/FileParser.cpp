@@ -65,7 +65,7 @@ static std::unordered_map<std::string, EDisplayMode> S_LOOKUP_STR_TO_DISPLAYMODE
 
 FStartupParameters VQEngine::ParseEngineSettingsFile()
 {
-	constexpr char* ENGINE_SETTINGS_FILE_NAME = "Data/EngineSettings.ini";
+	constexpr const char* ENGINE_SETTINGS_FILE_NAME = "Data/EngineSettings.ini";
 	FStartupParameters params = {};
 
 	std::ifstream file(ENGINE_SETTINGS_FILE_NAME);
@@ -218,7 +218,7 @@ FStartupParameters VQEngine::ParseEngineSettingsFile()
 
 std::vector<std::pair<std::string, int>> VQEngine::ParseSceneIndexMappingFile()
 {
-	constexpr char* SCENE_MAPPING_FILE_NAME = "Data/Scenes.ini";
+	constexpr const char* SCENE_MAPPING_FILE_NAME = "Data/Scenes.ini";
 
 	std::vector<std::pair<std::string, int>> SceneIndexMappings;
 
@@ -262,7 +262,7 @@ std::vector<std::pair<std::string, int>> VQEngine::ParseSceneIndexMappingFile()
 
 std::vector<FEnvironmentMapDescriptor> VQEngine::ParseEnvironmentMapsFile()
 {
-	constexpr char* SETTINGS_FILE_NAME = "Data/EnvironmentMaps.ini";
+	constexpr const char* SETTINGS_FILE_NAME = "Data/EnvironmentMaps.ini";
 
 	std::vector<FEnvironmentMapDescriptor> EnvironmentMapDescriptors;
 
@@ -324,7 +324,7 @@ std::vector<FEnvironmentMapDescriptor> VQEngine::ParseEnvironmentMapsFile()
 
 std::vector<FDisplayHDRProfile> VQEngine::ParseHDRProfilesFile()
 {
-	constexpr char* SETTINGS_FILE_NAME = "Data/HDRDisplayProfiles.ini";
+	constexpr const char* SETTINGS_FILE_NAME = "Data/HDRDisplayProfiles.ini";
 
 	std::vector<FDisplayHDRProfile> HDRProfiles;
 
@@ -390,7 +390,7 @@ std::vector<FDisplayHDRProfile> VQEngine::ParseHDRProfilesFile()
 using namespace tinyxml2;
 
 
-constexpr char* XML_TAG__MATERIAL = "Material";
+constexpr const char* XML_TAG__MATERIAL = "Material";
 
 template<class TVec> 
 static TVec XMLParseFVec(const std::string& xyzw)
@@ -503,14 +503,14 @@ FSceneRepresentation VQEngine::ParseSceneFile(const std::string& SceneFile)
 {
 	using namespace tinyxml2;
 	//-----------------------------------------------------------------
-	constexpr char* XML_TAG__SCENE                  = "Scene";
-	constexpr char* XML_TAG__ENVIRONMENT_MAP        = "EnvironmentMap";
-	constexpr char* XML_TAG__ENVIRONMENT_MAP_PRESET = "Preset";
-	constexpr char* XML_TAG__CAMERA                 = "Camera";
-	constexpr char* XML_TAG__GAMEOBJECT             = "GameObject";
-	constexpr char* XML_TAG__LIGHT                  = "Light";
+	constexpr const char* XML_TAG__SCENE                  = "Scene";
+	constexpr const char* XML_TAG__ENVIRONMENT_MAP        = "EnvironmentMap";
+	constexpr const char* XML_TAG__ENVIRONMENT_MAP_PRESET = "Preset";
+	constexpr const char* XML_TAG__CAMERA                 = "Camera";
+	constexpr const char* XML_TAG__GAMEOBJECT             = "GameObject";
+	constexpr const char* XML_TAG__LIGHT                  = "Light";
 	//-----------------------------------------------------------------
-	constexpr char* SCENE_FILES_DIRECTORY           = "Data/Levels/";
+	constexpr const char* SCENE_FILES_DIRECTORY           = "Data/Levels/";
 	//-----------------------------------------------------------------
 
 	// functions for parsing engine stuff -----------------------------

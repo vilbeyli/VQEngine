@@ -177,8 +177,8 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 
 	if (pParams->bEnableAsyncCopy)
 	{
-		pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscRT,
-			D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET));
+		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(pRscRT, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		pCmd->ResourceBarrier(1, &barrier);
 	}
 
 	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
@@ -250,10 +250,12 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 
 
 	// transition output to copy source
-	pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscRT,
-		D3D12_RESOURCE_STATE_RENDER_TARGET, 
-		(pParams->bEnableAsyncCopy ? D3D12_RESOURCE_STATE_COMMON : D3D12_RESOURCE_STATE_COPY_SOURCE)
+	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(pRscRT, 
+		D3D12_RESOURCE_STATE_RENDER_TARGET, (pParams->bEnableAsyncCopy 
+			? D3D12_RESOURCE_STATE_COMMON
+			: D3D12_RESOURCE_STATE_COPY_SOURCE
 	));
+	pCmd->ResourceBarrier(1, &barrier);
 }
 
 using namespace Tessellation;

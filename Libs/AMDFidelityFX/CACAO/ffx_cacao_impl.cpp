@@ -1100,10 +1100,12 @@ static FFX_CACAO_Status constantBufferRingInit(ConstantBufferRing* constantBuffe
 	char *data = NULL;
 	ID3D12Resource *buffer = NULL;
 
+	CD3DX12_HEAP_PROPERTIES heap = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+	CD3DX12_RESOURCE_DESC rscDesc = CD3DX12_RESOURCE_DESC::Buffer(totalSize);
 	HRESULT hr = device->CreateCommittedResource(
-		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+		&heap,
 		D3D12_HEAP_FLAG_NONE,
-		&CD3DX12_RESOURCE_DESC::Buffer(totalSize),
+		&rscDesc,
 		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
 		IID_PPV_ARGS(&buffer));
@@ -1174,8 +1176,9 @@ static FFX_CACAO_Status textureInit(Texture* texture, ID3D12Device* device, cons
 	FFX_CACAO_ASSERT(name);
 	FFX_CACAO_ASSERT(desc);
 
+	CD3DX12_HEAP_PROPERTIES heapProp = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 	HRESULT hr = device->CreateCommittedResource(
-		&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+		&heapProp,
 		D3D12_HEAP_FLAG_NONE,
 		desc,
 		initialState,
@@ -1360,6 +1363,9 @@ size_t FFX_CACAO_D3D12GetContextSize()
 
 FFX_CACAO_Status FFX_CACAO_D3D12InitContext(FFX_CACAO_D3D12Context* context, ID3D12Device* device)
 {
+	D3D12_STATIC_SAMPLER_DESC samplers[5] = { };
+	CD3DX12_RESOURCE_DESC rscDesc = CD3DX12_RESOURCE_DESC::Tex1D(DXGI_FORMAT_R32_UINT, 1, 1, 1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+
 	if (context == NULL)
 	{
 		return FFX_CACAO_STATUS_INVALID_POINTER;
@@ -1407,7 +1413,6 @@ error_create_ ## entryPoint:
 	}
 #endif
 
-	D3D12_STATIC_SAMPLER_DESC samplers[5] = { };
 
 	samplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
 	samplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -1479,7 +1484,7 @@ error_create_ ## entryPoint:
 	samplers[4].RegisterSpace = 0;
 	samplers[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-	errorStatus = textureInit(&context->loadCounter, device, "CACAO::m_loadCounter", &CD3DX12_RESOURCE_DESC::Tex1D(DXGI_FORMAT_R32_UINT, 1, 1, 1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, NULL);
+	errorStatus = textureInit(&context->loadCounter, device, "CACAO::m_loadCounter", &rscDesc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, NULL);
 	if (errorStatus)
 	{
 		goto error_create_load_counter_texture;
@@ -2049,7 +2054,10 @@ FFX_CACAO_Status FFX_CACAO_D3D12Draw(FFX_CACAO_D3D12Context* context, ID3D12Grap
 		}
 
 		// results written by base pass are now a reaad only resource, used in next stage
-		commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(context->textures[TEXTURE_SSAO_BUFFER_PONG], D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+		{
+			CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(context->textures[TEXTURE_SSAO_BUFFER_PONG], D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			commandList->ResourceBarrier(1, &barrier);
+		}
 
 		// generate importance map
 		{
@@ -2160,11 +2168,13 @@ FFX_CACAO_Status FFX_CACAO_D3D12Draw(FFX_CACAO_D3D12Context* context, ID3D12Grap
 
 		GET_TIMESTAMP(EDGE_SENSITIVE_BLUR);
 
-		commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(context->textures[TEXTURE_SSAO_BUFFER_PONG], D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(context->textures[TEXTURE_SSAO_BUFFER_PONG], D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		commandList->ResourceBarrier(1, &barrier);
 	}
 	else
 	{
-		commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(context->textures[TEXTURE_SSAO_BUFFER_PING], D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(context->textures[TEXTURE_SSAO_BUFFER_PING], D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		commandList->ResourceBarrier(1, &barrier);
 	}
 
 

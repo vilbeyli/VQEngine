@@ -479,7 +479,8 @@ void VQEngine::RenderObjectIDPass(
 	D3D12_TEXTURE_COPY_LOCATION dstLoc = {};
 	dstLoc.pResource = mRenderPass_ObjectID.GetCPUTextureResource();
 	dstLoc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-	mRenderer.GetDevicePtr()->GetCopyableFootprints(&srcLoc.pResource->GetDesc(), 0, 1, 0, &dstLoc.PlacedFootprint, nullptr, nullptr, nullptr);
+	D3D12_RESOURCE_DESC srcDesc = srcLoc.pResource->GetDesc();
+	mRenderer.GetDevicePtr()->GetCopyableFootprints(&srcDesc, 0, 1, 0, &dstLoc.PlacedFootprint, nullptr, nullptr, nullptr);
 
 	if (mSettings.gfx.bEnableAsyncCopy)
 	{
@@ -509,7 +510,7 @@ void VQEngine::RenderObjectIDPass(
 		D3D12_TEXTURE_COPY_LOCATION dstLoc = {};
 		dstLoc.pResource = mRenderPass_ObjectID.GetCPUTextureResource();
 		dstLoc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-		mRenderer.GetDevicePtr()->GetCopyableFootprints(&srcLoc.pResource->GetDesc(), 0, 1, 0, &dstLoc.PlacedFootprint, nullptr, nullptr, nullptr);
+		mRenderer.GetDevicePtr()->GetCopyableFootprints(&srcDesc, 0, 1, 0, &dstLoc.PlacedFootprint, nullptr, nullptr, nullptr);
 
 		pCmdCpy->CopyTextureRegion(&dstLoc, 0, 0, 0, &srcLoc, nullptr);
 		
@@ -527,8 +528,8 @@ void VQEngine::RenderObjectIDPass(
 	{
 		pCmd->CopyTextureRegion(&dstLoc, 0, 0, 0, &srcLoc, nullptr);
 
-		pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(srcLoc.pResource,
-			D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
+		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(srcLoc.pResource, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		pCmd->ResourceBarrier(1, &barrier);
 	}
 }
 
@@ -695,8 +696,8 @@ void VQEngine::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSc
 
 		if (!bAsyncCompute)
 		{
-			// TODO: move into RecordCommands?
-			pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscAmbientOcclusion, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+			CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(pRscAmbientOcclusion, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			pCmd->ResourceBarrier(1, &barrier);
 		}
 		mRenderPass_AO.RecordCommands(&drawParams);
 
@@ -708,10 +709,13 @@ void VQEngine::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSc
 	// clear UAV only once
 	if(bSSAOToggledOff)
 	{
-		pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscAmbientOcclusion, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+		CD3DX12_RESOURCE_BARRIER barrierRW = CD3DX12_RESOURCE_BARRIER::Transition(pRscAmbientOcclusion, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		CD3DX12_RESOURCE_BARRIER barrierWR = CD3DX12_RESOURCE_BARRIER::Transition(pRscAmbientOcclusion, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_GENERIC_READ);
 		const FLOAT clearValue[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+
+		pCmd->ResourceBarrier(1, &barrierRW);
 		pCmd->ClearUnorderedAccessViewFloat(uav.GetGPUDescHandle(), uav.GetCPUDescHandle(), pRscAmbientOcclusion, clearValue, 0, NULL);
-		pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pRscAmbientOcclusion, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_GENERIC_READ));
+		pCmd->ResourceBarrier(1, &barrierWR);
 	}
 
 	sbScreenSpaceAO_Previous = SceneView.sceneParameters.bScreenSpaceAO;
@@ -2145,10 +2149,8 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBu
 	{
 		SCOPED_GPU_MARKER(pCmd, "SwapchainTransitionToPresent");
 		// Transition SwapChain for Present
-		pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
-			, D3D12_RESOURCE_STATE_RENDER_TARGET
-			, D3D12_RESOURCE_STATE_PRESENT)
-		);
+		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+		pCmd->ResourceBarrier(1, &barrier);
 	}
 }
 
@@ -2222,10 +2224,8 @@ void VQEngine::CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, Dynamic
 	{
 		//SCOPED_GPU_MARKER(pCmd, "SwapchainTransitionToPresent");
 		// Transition SwapChain for Present
-		pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT
-			, D3D12_RESOURCE_STATE_RENDER_TARGET
-			, D3D12_RESOURCE_STATE_PRESENT)
-		);
+		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+		pCmd->ResourceBarrier(1, &barrier);
 	}
 }
 

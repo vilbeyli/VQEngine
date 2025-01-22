@@ -18,6 +18,10 @@
 #pragma once
 
 #include "../Core/Types.h"
+#include "../Libs/VQUtils/Source/utils.h"
+#include "../Source/Renderer/Buffer.h"
+#include "../Math.h"
+
 class VQRenderer;
 struct FBufferDesc;
 
@@ -75,7 +79,7 @@ namespace GeometryGenerator
 			p[i] = values.begin()[i];
 	}
 	template<size_t LEN>
-	void SetFVec(float* p, float* ps)
+	void SetFVec(float* p, const float* ps)
 	{
 		static_assert(LEN > 0 && LEN <= 4); // assume [vec1-vec4]
 		for (size_t i = 0; i < LEN; ++i)
@@ -673,7 +677,7 @@ namespace GeometryGenerator
 					{
 						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangent>())       { SetFVec<3>(vertex.tangent, { -z, 0.0f, x }); }
 						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangentPacked1>()){ vertex.tangent; /*TODO*/ }
-						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangentPacked2>()){ vertex.tangent = PackRGB10A2({ -z, 0.0f, x }); }
+						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangentPacked2>()){ vertex.tangent = PackRGB10A2(-z, 0.0f, x ); }
 					}
 					if constexpr (bHasNormals)
 					{
@@ -689,7 +693,7 @@ namespace GeometryGenerator
 
 						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangent>())        { SetFVec<3>(vertex.normal, { N.m128_f32[0], N.m128_f32[1], N.m128_f32[2] }); }
 						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangentPacked1>()) { vertex.tangent; /*TODO*/ }
-						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangentPacked2>()) { vertex.normal = PackRGB10A2({ N.m128_f32[0], N.m128_f32[1], N.m128_f32[2] }); }
+						if constexpr (std::is_same<TVertex, FVertexWithNormalAndTangentPacked2>()) { vertex.normal = PackRGB10A2(N.m128_f32[0], N.m128_f32[1], N.m128_f32[2]); }
 					}
 
 					Vertices.push_back(vertex);

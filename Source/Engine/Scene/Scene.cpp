@@ -1419,7 +1419,7 @@ template<class TMeshInstanceDataArray>
 static void AllocInstanceData(std::unordered_map<uint64, TMeshInstanceDataArray>& drawParamLookup)
 {
 	SCOPED_CPU_MARKER("AllocInstData");
-	std::vector< std::unordered_map<uint64, TMeshInstanceDataArray>::iterator> deleteList;
+	std::vector<typename std::unordered_map<uint64, TMeshInstanceDataArray>::iterator> deleteList;
 	for (auto it = drawParamLookup.begin(); it != drawParamLookup.end(); ++it)
 	{
 		TMeshInstanceDataArray& a = it->second;
@@ -1665,7 +1665,7 @@ static void ReserveWorkerMemory(
 	CountInstanceData(BBH, drawParamLookup, vViewCullResults, FnGetKey);
 	CountNResizeRenderCmds(drawParamLookup, meshRenderCommands, MAX_INSTANCE_COUNT);
 	CountNResizeRenderCmdInstanceArrays(BBH, vViewCullResults, meshRenderCommands, MAX_INSTANCE_COUNT, FnGetKey);
-	AllocInstanceData(drawParamLookup);
+	AllocInstanceData<TMeshInstanceDataArray>(drawParamLookup);
 	CalculateInstanceDataWriteIndices(BBH, vViewCullResults, outWriteParams, FnGetKey, MAX_INSTANCE_COUNT);
 }
 

@@ -140,15 +140,17 @@ struct FVertexWithNormalAndTangentPacked2 // 24B
     uint16   uv      [2]; // rg16      4B
 };
 
-static void AssertUnitLength(float v[3]) { assert(sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) == 1.0f); }
-static uint PackRGB10A2(float v[3])
+static void AssertUnitLength(float x, float y, float z) { assert(sqrt(x*x + y*y + z*z) == 1.0f); }
+static void AssertUnitLength(float v[3]) { AssertUnitLength(v[0], v[1], v[2]); }
+static uint PackRGB10A2(float x, float y, float z)
 {
-    AssertUnitLength(v);
-    const uint i0 = static_cast<uint>(v[0] * 1023.0f);
-    const uint i1 = static_cast<uint>(v[1] * 1023.0f);
-    const uint i2 = static_cast<uint>(v[2] * 1023.0f);
+    AssertUnitLength(x,y,z);
+    const uint i0 = static_cast<uint>(x * 1023.0f);
+    const uint i1 = static_cast<uint>(y * 1023.0f);
+    const uint i2 = static_cast<uint>(z * 1023.0f);
     return (i0 << 22) | (i1 << 12) | (i2 << 2) | 3 /*11 for a*/;
 }
+static uint PackRGB10A2(float v[3]) { return(PackRGB10A2(v[0], v[1], v[2])); }
 static const uint16 PackFP16(float f)
 {
     assert(f >= 0.0f && f <= 1.0f);

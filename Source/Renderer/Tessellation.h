@@ -84,12 +84,12 @@ namespace Tessellation
 
 
 	// TESSELLATION CONSTANT DATA FOR COMPILATION
-	constexpr char* szPartitionNames[NUM_PARTIT_OPTIONS] = { "integer", "fractional_even", "fractional_odd", "pw2" };
-	constexpr char* szOutTopologyNames[NUM_OUTTOP_OPTIONS] = { "point", "line", "triangle_cw", "triangle_ccw" };
+	constexpr const char* szPartitionNames[NUM_PARTIT_OPTIONS] = { "integer", "fractional_even", "fractional_odd", "pw2" };
+	constexpr const char* szOutTopologyNames[NUM_OUTTOP_OPTIONS] = { "point", "line", "triangle_cw", "triangle_ccw" };
 
-	constexpr char* szOutTopologyMacros[NUM_OUTTOP_OPTIONS] = { "OUTTOPO__POINT"   , "OUTTOPO__LINE"     , "OUTTOPO__TRI_CW"  , "OUTTOPO__TRI_CCW" };
-	constexpr char* szPartitioningMacros[NUM_PARTIT_OPTIONS] = { "PARTITIONING__INT", "PARTITIONING__EVEN", "PARTITIONING__ODD", "PARTITIONING__POW2" };
-	constexpr char* szDomainMacros[NUM_DOMAIN_OPTIONS] = { "DOMAIN__TRIANGLE" , "DOMAIN__QUAD"      , "DOMAIN__LINE" };
+	constexpr const char* szOutTopologyMacros[NUM_OUTTOP_OPTIONS] = { "OUTTOPO__POINT"   , "OUTTOPO__LINE"     , "OUTTOPO__TRI_CW"  , "OUTTOPO__TRI_CCW" };
+	constexpr const char* szPartitioningMacros[NUM_PARTIT_OPTIONS] = { "PARTITIONING__INT", "PARTITIONING__EVEN", "PARTITIONING__ODD", "PARTITIONING__POW2" };
+	constexpr const char* szDomainMacros[NUM_DOMAIN_OPTIONS] = { "DOMAIN__TRIANGLE" , "DOMAIN__QUAD"      , "DOMAIN__LINE" };
 
 	const FShaderMacro TessellationOutputTopologyEnabledMacros[NUM_PARTIT_OPTIONS] = {
 		{ szOutTopologyMacros[0], "1" },

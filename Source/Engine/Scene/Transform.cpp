@@ -50,9 +50,10 @@ void Transform::Translate(const XMFLOAT3& translation)
 
 void Transform::Translate(float x, float y, float z)
 {
+	XMFLOAT3 t = XMFLOAT3(x, y, z);
 	_positionPrev = _position;
 	XMVECTOR POSITION = XMLoadFloat3(&_position);
-	XMVECTOR TRANSLATION = XMLoadFloat3(&XMFLOAT3(x, y, z));
+	XMVECTOR TRANSLATION = XMLoadFloat3(&t);
 	POSITION += TRANSLATION;
 	XMStoreFloat3(&_position, POSITION);
 }
