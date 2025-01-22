@@ -17,9 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #pragma once
-
-#define NOMINMAX
-#include <Windows.h>
+#include "Platform.h"
 #include <dxgi1_6.h>
 
 #include "Libs/VQUtils/Source/Multithreading.h"

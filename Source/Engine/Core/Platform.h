@@ -18,23 +18,20 @@
 
 #pragma once
 
-#include <Windows.h>
-
-#include "../../../Libs/VQUtils/Source/Log.h"
-
 #include "Types.h"
 #include "../Settings.h"
 
-struct IDXGIAdapter1;
-struct IDXGIOutput;
-
-// -------------------------------------------------------------------------------
-
+struct LogInitializeParams
+{
+	bool bLogConsole = false;
+	bool bLogFile = false;
+	std::string LogFilePath = "./";
+};
 struct FStartupParameters
 {
 	HINSTANCE                 hExeInstance;
 	int                       iCmdShow;
-	Log::LogInitializeParams  LogInitParams;
+	LogInitializeParams       LogInitParams;
 
 	FEngineSettings EngineSettings;
 	uint8 bOverrideGFXSetting_RenderScale                 : 1;
@@ -62,7 +59,7 @@ struct FStartupParameters
 	uint8 bOverrideENGSetting_StartupScene                : 1;
 };
 
-LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+LRESULT __stdcall WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 // -------------------------------------------------------------------------------
 

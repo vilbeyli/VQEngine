@@ -184,7 +184,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR pScmdl, int iCmdSh
 	
 	{
 		SCOPED_CPU_MARKER("Log::Initialize");
-		Log::Initialize(StartupParameters.LogInitParams);
+		Log::Initialize(StartupParameters.LogInitParams.bLogConsole, StartupParameters.LogInitParams.bLogFile, StartupParameters.LogInitParams.LogFilePath);
 	}
 
 	{

@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include <Windows.h>
+#include "../Engine/Core/Platform.h"
 
 struct ID3D12CommandQueue;
 struct ID3D12Fence;

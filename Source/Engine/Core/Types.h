@@ -72,5 +72,18 @@ using TransformID = ID_TYPE;
 
 using TaskID = ID_TYPE;
 
+// windows mini types from https://x.com/SebAaltonen/status/1530152876655386624/photo/1
+typedef void* HANDLE;
+typedef unsigned long long UINT64;
+typedef unsigned int UINT;
+typedef unsigned long long WPARAM;
+typedef long long LPARAM;
+typedef long long LRESULT;
+
+#define FORWARD_DECLARE_HANDLE(name) struct name##__; typedef struct name##__ *name
+FORWARD_DECLARE_HANDLE(HINSTANCE);
+FORWARD_DECLARE_HANDLE(HWND);
+FORWARD_DECLARE_HANDLE(HDC);
+FORWARD_DECLARE_HANDLE(HGLRC);
 
 #define DIV_AND_ROUND_UP(x,d) ((x+d-1)/d)

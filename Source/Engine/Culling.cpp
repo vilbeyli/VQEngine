@@ -24,7 +24,6 @@
 #include <algorithm>
 #include <execution>
 
-#include <Windows.h>
 #include "GPUMarker.h"
 
 using namespace DirectX;
