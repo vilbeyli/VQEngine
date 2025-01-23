@@ -19,6 +19,7 @@
 #include "Buffer.h"
 #include "Common.h"
 
+#include <d3d12.h>
 #include "Libs/D3DX12/d3dx12.h"
 
 #include <cassert>

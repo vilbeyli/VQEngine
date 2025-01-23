@@ -47,7 +47,6 @@
 //-----------------------------------------------------------------------------------------------------------
 
 #include "ResourceHeaps.h"
-#include <d3d12.h>
 
 #include <mutex>
 #include <cassert>
@@ -58,6 +57,8 @@ struct ID3D12GraphicsCommandList;
 struct D3D12_CONSTANT_BUFFER_VIEW_DESC;
 struct D3D12_VERTEX_BUFFER_VIEW;
 struct D3D12_INDEX_BUFFER_VIEW;
+typedef unsigned long long D3D12_GPU_VIRTUAL_ADDRESS;
+
 
 //
 // BUFFER DESCRIPTOR
