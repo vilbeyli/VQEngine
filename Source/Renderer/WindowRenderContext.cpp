@@ -19,6 +19,8 @@
 
 #include "WindowRenderContext.h"
 #include "../Engine/Core/Window.h"
+#include "Device.h"
+#include "Common.h"
 
 static D3D12_COMMAND_LIST_TYPE GetDX12CmdListType(CommandQueue::EType type)
 {

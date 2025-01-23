@@ -18,36 +18,17 @@
 
 #pragma once
 
-#include "Device.h"
 #include "SwapChain.h"
 #include "CommandQueue.h"
 #include "ResourceHeaps.h"
-#include "ResourceViews.h"
 #include "Buffer.h"
-#include "Texture.h"
-#include "Shader.h"
 
-#include "../Engine/Core/Types.h"
-#include "../Engine/Core/Platform.h"
-#include "../Engine/Settings.h"
-
-#define VQUTILS_SYSTEMINFO_INCLUDE_D3D12 1
-#include "../../Libs/VQUtils/Source/SystemInfo.h" // FGPUInfo
-#include "../../Libs/VQUtils/Source/Image.h"
-#include "../../Libs/VQUtils/Source/Multithreading.h"
-
-#include <vector>
-#include <unordered_map>
-#include <array>
-#include <queue>
-#include <set>
 
 namespace D3D12MA { class Allocator; }
 class Window;
 struct ID3D12RootSignature;
 struct ID3D12PipelineState;
-
-
+class Device;
 
 class FWindowRenderContext
 {
