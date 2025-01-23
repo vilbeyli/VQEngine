@@ -46,7 +46,6 @@
 //
 #define NOMINMAX
 #include <Windows.h>
-#include <string>
 #include <memory>
 
 struct IWindow;
@@ -62,18 +61,16 @@ class SwapChain;
 struct WindowClass final
 {
 public:
-	WindowClass(const std::string& name,
-		HINSTANCE hInst,
-		::WNDPROC procedure = ::DefWindowProc);
+	WindowClass(const char* name, HINSTANCE hInst, ::WNDPROC procedure = ::DefWindowProc);
 	~WindowClass();
 
-	const std::string& GetName() const;
+	inline const char* GetName() const { return name_; }
 
 	WindowClass(const WindowClass&) = delete;
 	WindowClass& operator= (const WindowClass&) = delete;
 
 private:
-	std::string name_;
+	char name_[128];
 };
 
 class IWindowOwner
@@ -147,7 +144,7 @@ struct FWindowDesc;
 class Window : public IWindow
 {
 public:
-	Window(const std::string& title, FWindowDesc& initParams);
+	Window(const char* title, FWindowDesc& initParams);
 
 	HWND GetHWND() const;
 

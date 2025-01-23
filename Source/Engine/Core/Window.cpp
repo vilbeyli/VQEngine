@@ -52,6 +52,7 @@
 #include "Data/Resources/resource.h"
 
 #include <dxgi1_6.h>
+#include <cstring>
 
 #define VERBOSE_LOGGING 0
 
@@ -135,7 +136,7 @@ IWindow::~IWindow()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-Window::Window(const std::string& title, FWindowDesc& initParams)
+Window::Window(const char* title, FWindowDesc& initParams)
     : IWindow(initParams.pWndOwner)
     , width_(initParams.width)
     , height_(initParams.height)
@@ -163,8 +164,8 @@ Window::Window(const std::string& title, FWindowDesc& initParams)
     // https://docs.microsoft.com/en-us/windows/win32/learnwin32/creating-a-window
     // Create the main window.
     hwnd_ = CreateWindowEx(NULL,
-        windowClass_->GetName().c_str(),
-        title.c_str(),
+        windowClass_->GetName(),
+        title,
         FlagWindowStyle,
         bPreferredDisplayFound ? preferredScreenRect.left : CW_USEDEFAULT, // positions
         bPreferredDisplayFound ? preferredScreenRect.top  : CW_USEDEFAULT, // positions
@@ -351,9 +352,10 @@ void Window::SetMouseCapture(bool bCapture)
 }
 
 /////////////////////////////////////////////////////////////////////////
-WindowClass::WindowClass(const std::string& name, HINSTANCE hInst, ::WNDPROC procedure)
-    : name_(name)
+WindowClass::WindowClass(const char* name, HINSTANCE hInst, ::WNDPROC procedure)
 {
+    strncpy_s(name_, name, sizeof(name_));
+
     ::WNDCLASSEX wc = {};
 
     // Register the window class for the main window.
@@ -372,20 +374,14 @@ WindowClass::WindowClass(const std::string& name, HINSTANCE hInst, ::WNDPROC pro
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = NULL;
     wc.lpszMenuName = NULL;
-    wc.lpszClassName = name_.c_str();
+    wc.lpszClassName = name_;
     wc.cbSize = sizeof(WNDCLASSEX);
 
     ::RegisterClassEx(&wc);
 }
 
 /////////////////////////////////////////////////////////////////////////
-const std::string& WindowClass::GetName() const
-{
-    return name_;
-}
-
-/////////////////////////////////////////////////////////////////////////
 WindowClass::~WindowClass()
 {
-    ::UnregisterClassA(name_.c_str(), (HINSTANCE)::GetModuleHandle(NULL));
+    ::UnregisterClassA(name_, (HINSTANCE)::GetModuleHandle(NULL));
 }
