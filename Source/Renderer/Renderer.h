@@ -26,7 +26,6 @@
 #include "Texture.h"
 #include "ShaderCompileUtils.h"
 #include "WindowRenderContext.h"
-#include "Fence.h"
 #include "Renderer_PSOs.h"
 
 #include "../Engine/Core/Types.h"
@@ -35,14 +34,11 @@
 
 #define VQUTILS_SYSTEMINFO_INCLUDE_D3D12 1
 #include "../../Libs/VQUtils/Source/SystemInfo.h" // FGPUInfo
-#include "../../Libs/VQUtils/Source/Image.h"
 #include "../../Libs/VQUtils/Source/Multithreading.h"
 
 #include <vector>
 #include <unordered_map>
 #include <array>
-#include <queue>
-#include <set>
 
 namespace D3D12MA { class Allocator; }
 class Window;

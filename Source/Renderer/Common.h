@@ -21,6 +21,7 @@
 #include "../Engine/Core/Types.h"
 #include "../../Libs/VQUtils/Source/Log.h"
 #include <cassert>
+#include <cwchar>
 
 #define KILOBYTE 1024ull
 #define MEGABYTE (1024ull*KILOBYTE)
@@ -35,9 +36,12 @@ void SetName(ID3D12Object* pObj, const char* format, Args&&... args)
 {
 	char bufName[240];
 	sprintf_s(bufName, format, args...);
-	std::string Name = bufName;
-	std::wstring wName(Name.begin(), Name.end());
-	pObj->SetName(wName.c_str());
+
+	wchar_t wBufName[240];
+	size_t convertedChars = 0;
+	mbstowcs_s(&convertedChars, wBufName, bufName, sizeof(wBufName) / sizeof(wchar_t));
+
+	pObj->SetName(wBufName);
 }
 
 inline void ThrowIfFailed(HRESULT hr)

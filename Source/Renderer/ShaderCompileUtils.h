@@ -22,6 +22,7 @@
 #include <vector>
 #include <string>
 #include <d3d12.h>
+
 namespace ShaderUtils
 {
 	bool IsShaderSM5(const char* ShaderModelStr);
