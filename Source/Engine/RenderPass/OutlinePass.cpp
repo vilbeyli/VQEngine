@@ -385,8 +385,8 @@ std::vector<FPSOCreationTaskParameters> OutlinePass::CollectPSOCreationParameter
 		}
 		
 		// macros: all stages
-		const FShaderMacro InstancedDrawMacro = { "INSTANCED_DRAW", std::to_string(RENDER_INSTANCED_SCENE_MESHES) };
-		const FShaderMacro InstanceCountMacro = { "INSTANCE_COUNT",std::to_string(MAX_INSTANCE_COUNT__SCENE_MESHES) };
+		const FShaderMacro InstancedDrawMacro = FShaderMacro::CreateShaderMacro("INSTANCED_DRAW", "%d", RENDER_INSTANCED_SCENE_MESHES);
+		const FShaderMacro InstanceCountMacro = FShaderMacro::CreateShaderMacro("INSTANCE_COUNT", "%d", MAX_INSTANCE_COUNT__SCENE_MESHES);
 		const FShaderMacro OutlineMacro = { "OUTLINE_PASS", "1" };
 		const FShaderMacro AlphaMaskMacro = { "ENABLE_ALPHA_MASK", "1" };
 		for (FShaderStageCompileDesc& shdDesc : psoLoadDesc.ShaderStageCompileDescs) 

@@ -23,6 +23,7 @@
 #include "Source/Renderer/Buffer.h"
 
 #include <limits>
+#include <cstdio>
 
 struct FBufferDesc;
 class VQRenderer;
@@ -162,8 +163,8 @@ Mesh::Mesh(VQRenderer* pRenderer, const GeometryData<TVertex, TIndex>& meshLODDa
 	{
 		FBufferDesc bufferDesc = {};
 
-		const std::string VBName = name + "_LOD[" + std::to_string(LOD) + "]_VB";
-		const std::string IBName = name + "_LOD[" + std::to_string(LOD) + "]_IB";
+		char VBName[128]; _snprintf_s(VBName, sizeof(VBName), "%s_LOD[%zu]_VB", name.c_str(), LOD);
+		char IBName[128]; _snprintf_s(IBName, sizeof(IBName), "%s_LOD[%zu]_IB", name.c_str(), LOD);
 		const std::vector<TVertex>& vertices = meshLODData.LODVertices[LOD];
 		const std::vector<TIndex>& indices = meshLODData.LODIndices[LOD];
 

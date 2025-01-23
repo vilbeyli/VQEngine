@@ -239,14 +239,14 @@ std::vector<D3D12_INPUT_ELEMENT_DESC> ReflectInputLayoutFromVS(ID3D12ShaderRefle
 
 
 // https://github.com/microsoft/DirectXShaderCompiler/wiki/Shader-Model
-bool IsShaderSM5(const std::string& ShaderModelStr)
+bool IsShaderSM5(const char* ShaderModelStr)
 {
 	// TODO: validate input
 	const std::vector<std::string> SMTokens = StrUtil::split(ShaderModelStr, '_');
 	assert(SMTokens.size() == 3);
 	return SMTokens[1][0] == '5';
 }
-bool IsShaderSM6(const std::string& ShaderModelStr)
+bool IsShaderSM6(const char* ShaderModelStr)
 {
 	// TODO: validate input
 	const std::vector<std::string> SMTokens = StrUtil::split(ShaderModelStr, '_');
@@ -259,7 +259,7 @@ Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompil
 	SCOPED_CPU_MARKER("CompileFromSource");
 	const WCHAR* strPath = ShaderStageCompileDesc.FilePath.data();
 
-	const bool bIsShaderModel5 = IsShaderSM5(ShaderStageCompileDesc.ShaderModel);
+	const bool bIsShaderModel5 = IsShaderSM5(ShaderStageCompileDesc.ShaderModel.c_str());
 
 	const EShaderStage ShaderStageEnum = GetShaderStageEnumFromShaderModel(ShaderStageCompileDesc.ShaderModel);
 	Log::Info("Compiling Shader Source: %s [%s @ %s()]"
@@ -294,7 +294,7 @@ Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompil
 		std::vector<D3D_SHADER_MACRO> d3dMacros(ShaderStageCompileDesc.Macros.size() + 1);
 		std::for_each(RANGE(ShaderStageCompileDesc.Macros), [&](const FShaderMacro& macro)
 		{
-			d3dMacros[i++] = D3D_SHADER_MACRO({ macro.Name.c_str(), macro.Value.c_str() });
+			d3dMacros[i++] = D3D_SHADER_MACRO({ macro.Name, macro.Value });
 		});
 		d3dMacros[i] = { NULL, NULL };
 
@@ -571,8 +571,12 @@ size_t GeneratePreprocessorDefinitionsHash(const std::vector<FShaderMacro>& macr
 {
 	if (macros.empty()) return 0;
 	std::string concatenatedMacros;
+
 	for (const FShaderMacro& macro : macros)
-		concatenatedMacros += macro.Name + macro.Value;
+	{
+		concatenatedMacros += macro.Name;
+		concatenatedMacros += macro.Value;
+	}
 	return std::hash<std::string>()(concatenatedMacros);
 }
 

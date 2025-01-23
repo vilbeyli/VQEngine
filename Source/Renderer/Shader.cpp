@@ -20,8 +20,8 @@
 
 #include "../../Libs/DirectXCompiler/inc/dxcapi.h"
 #include "../../Libs/VQUtils/Source/utils.h"
-#include <fstream>
 #include <cassert>
+#include <cstring>
 #include <d3dcompiler.h>
 
 bool Shader::FBlob::IsNull() const { return !pD3DBlob && !pBlobDxc; }
@@ -44,4 +44,19 @@ size_t Shader::FBlob::GetByteCodeSize() const
 	if (this->pBlobDxc)
 		return this->pBlobDxc->GetBufferSize();
 	return 0;
+}
+
+FShaderMacro FShaderMacro::CreateShaderMacro(const char* name, const char* format, ...)
+{
+	FShaderMacro macro{};
+
+	strncpy_s(macro.Name, name, sizeof(macro.Name) - 1);
+	macro.Name[sizeof(macro.Name) - 1] = '\0';
+
+	va_list args;
+	va_start(args, format);
+	vsnprintf(macro.Value, sizeof(macro.Value), format, args);
+	va_end(args);
+
+	return macro;
 }

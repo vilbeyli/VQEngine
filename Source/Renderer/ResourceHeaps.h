@@ -40,8 +40,9 @@
 #pragma once
 
 #include "../Engine/Core/Types.h"
-#include <string>
+
 #include <vector>
+
 typedef void* HANDLE;
 
 class ResourceView;
@@ -67,7 +68,7 @@ enum EResourceHeapType
 class StaticResourceViewHeap
 {
 public:
-    void Create(ID3D12Device* pDevice, const std::string& ResourceName, EResourceHeapType EHeapType, uint32 Capacity, bool CPUVisible = false);
+    void Create(ID3D12Device* pDevice, const char* ResourceName, EResourceHeapType EHeapType, uint32 Capacity, bool CPUVisible = false);
     void Destroy();
 
     bool AllocateDescriptor(uint32 Count, ResourceView* pRV);

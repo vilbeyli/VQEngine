@@ -21,6 +21,7 @@
 #include "../Shaders/LightingConstantBufferData.h"
 #include "Shader.h"
 
+#include <string>
 #include <vector>
 
 enum ETessellationDomain
@@ -92,23 +93,23 @@ namespace Tessellation
 	constexpr const char* szDomainMacros[NUM_DOMAIN_OPTIONS] = { "DOMAIN__TRIANGLE" , "DOMAIN__QUAD"      , "DOMAIN__LINE" };
 
 	const FShaderMacro TessellationOutputTopologyEnabledMacros[NUM_PARTIT_OPTIONS] = {
-		{ szOutTopologyMacros[0], "1" },
-		{ szOutTopologyMacros[1], "1" },
-		{ szOutTopologyMacros[2], "1" },
-		{ szOutTopologyMacros[3], "1" },
+		FShaderMacro::CreateShaderMacro( szOutTopologyMacros[0], "1" ),
+		FShaderMacro::CreateShaderMacro( szOutTopologyMacros[1], "1" ),
+		FShaderMacro::CreateShaderMacro( szOutTopologyMacros[2], "1" ),
+		FShaderMacro::CreateShaderMacro( szOutTopologyMacros[3], "1" ),
 	};
 	const FShaderMacro TessellationPartitioningEnabledMacros[NUM_PARTIT_OPTIONS] = {
-		{ szPartitioningMacros[0], "1" },
-		{ szPartitioningMacros[1], "1" },
-		{ szPartitioningMacros[2], "1" },
-		{ szPartitioningMacros[3], "1" },
+		FShaderMacro::CreateShaderMacro( szPartitioningMacros[0], "1" ),
+		FShaderMacro::CreateShaderMacro( szPartitioningMacros[1], "1" ),
+		FShaderMacro::CreateShaderMacro( szPartitioningMacros[2], "1" ),
+		FShaderMacro::CreateShaderMacro( szPartitioningMacros[3], "1" ),
 	};
 	const FShaderMacro TessellationDomainEnabledMacros[NUM_DOMAIN_OPTIONS] = {
-		{ szDomainMacros[0], "1" },
-		{ szDomainMacros[1], "1" },
-		{ szDomainMacros[2], "1" },
+		FShaderMacro::CreateShaderMacro( szDomainMacros[0], "1" ),
+		FShaderMacro::CreateShaderMacro( szDomainMacros[1], "1" ),
+		FShaderMacro::CreateShaderMacro( szDomainMacros[2], "1" ),
 	};
-	const FShaderMacro TessellationGSEnabledMacro = { "ENABLE_GEOMETRY_SHADER", "1" };
+	constexpr const FShaderMacro TessellationGSEnabledMacro = { "ENABLE_GEOMETRY_SHADER", "1" };
 	inline void AppendTessellationVSMacros(std::vector<FShaderMacro>& Macros, size_t iDomain)
 	{
 		Macros.push_back(TessellationDomainEnabledMacros[iDomain]);

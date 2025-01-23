@@ -23,7 +23,6 @@
 #endif
 
 #ifdef VQ_CPU
-#include <array>
 #include <DirectXMath.h>
 // HLSL types for CPU
 #define float4   DirectX::XMFLOAT4

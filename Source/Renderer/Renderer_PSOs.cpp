@@ -244,7 +244,10 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 	std::vector<FPSODesc> descs;
 	descs.resize(EBuiltinPSOs::NUM_BUILTIN_PSOs);
 
-	
+
+	const FShaderMacro UnlitShaderInstanceCountMacro = FShaderMacro::CreateShaderMacro("INSTANCE_COUNT", "%zu", MAX_INSTANCE_COUNT__UNLIT_SHADER);
+	const FShaderMacro InstancedDrawEnabledMacro = FShaderMacro::CreateShaderMacro("INSTANCED_DRAW", "1");
+
 	// FULLSCREEN TRIANGLE PSO
 	{
 		const std::wstring ShaderFilePath = GetFullPathOfShader(L"FullscreenTriangle.hlsl");
@@ -485,8 +488,8 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 		descs[EBuiltinPSOs::WIREFRAME_PSO] = psoLoadDesc;
 
 		psoLoadDesc.PSOName = "PSO_Wireframe_VSPS_Instanced";
-		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCED_DRAW", "1" });
-		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__UNLIT_SHADER) });
+		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back(InstancedDrawEnabledMacro);
+		psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back(UnlitShaderInstanceCountMacro);
 		descs[EBuiltinPSOs::WIREFRAME_INSTANCED_PSO] = psoLoadDesc;
 		psoLoadDesc.ShaderStageCompileDescs[0].Macros.pop_back();
 		psoLoadDesc.ShaderStageCompileDescs[0].Macros.pop_back();
@@ -497,8 +500,8 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 			descs[EBuiltinPSOs::WIREFRAME_PSO_MSAA_4] = psoLoadDesc;
 
 			psoLoadDesc.PSOName = "PSO_WireframeVSPS_Instanced_MSAA4";
-			psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCED_DRAW", "1" });
-			psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back({ "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__UNLIT_SHADER) });
+			psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back(InstancedDrawEnabledMacro);
+			psoLoadDesc.ShaderStageCompileDescs[0].Macros.push_back(UnlitShaderInstanceCountMacro);
 			descs[EBuiltinPSOs::WIREFRAME_INSTANCED_MSAA4_PSO] = psoLoadDesc;
 		}
 	}
@@ -547,7 +550,7 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 		const bool bHighEndGPU = iGPU[0].DedicatedGPUMemory > 4.0 * GIGABYTE;
 		for (FShaderStageCompileDesc& shdDesc : psoLoadDesc.ShaderStageCompileDescs)
 		{
-			shdDesc.Macros.push_back({ "INTEGRATION_STEP_DIFFUSE_IRRADIANCE", (bLowEndGPU ? "0.050f" : (bHighEndGPU ? "0.010f" : "0.025f")) });
+			shdDesc.Macros.push_back(FShaderMacro::CreateShaderMacro("INTEGRATION_STEP_DIFFUSE_IRRADIANCE", (bLowEndGPU ? "0.050f" : (bHighEndGPU ? "0.010f" : "0.025f"))) );
 		}
 		descs[EBuiltinPSOs::CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO] = psoLoadDesc;
 
@@ -788,8 +791,8 @@ void FLightingPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12Roo
 		const size_t iPixelShader = iShader - 1;
 
 		// macros
-		const FShaderMacro InstancedDrawMacro = { "INSTANCED_DRAW", std::to_string(RENDER_INSTANCED_SCENE_MESHES) };
-		const FShaderMacro InstanceCountMacro = { "INSTANCE_COUNT",std::to_string(MAX_INSTANCE_COUNT__SCENE_MESHES) };
+		const FShaderMacro InstancedDrawMacro = FShaderMacro::CreateShaderMacro("INSTANCED_DRAW", "%d", RENDER_INSTANCED_SCENE_MESHES );
+		const FShaderMacro InstanceCountMacro = FShaderMacro::CreateShaderMacro("INSTANCE_COUNT", "%d", MAX_INSTANCE_COUNT__SCENE_MESHES );
 		if (iTess == 1)
 		{
 			AppendTessellationVSMacros(psoLoadDesc.ShaderStageCompileDescs[0/*VS*/].Macros, iDomain);
@@ -918,8 +921,8 @@ void FDepthPrePassPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D1
 		const size_t iPixelShader = iShader - 1;
 
 		// macros
-		const FShaderMacro InstancedDrawMacro = { "INSTANCED_DRAW", std::to_string(RENDER_INSTANCED_SCENE_MESHES) };
-		const FShaderMacro InstanceCountMacro = { "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__SCENE_MESHES) };
+		const FShaderMacro InstancedDrawMacro = FShaderMacro::CreateShaderMacro("INSTANCED_DRAW", "%d", RENDER_INSTANCED_SCENE_MESHES );
+		const FShaderMacro InstanceCountMacro = FShaderMacro::CreateShaderMacro("INSTANCE_COUNT", "%d", MAX_INSTANCE_COUNT__SCENE_MESHES );
 		if (iTess == 1)
 		{
 			AppendTessellationVSMacros(psoLoadDesc.ShaderStageCompileDescs[0/*VS*/].Macros, iDomain);
@@ -1029,8 +1032,9 @@ void FShadowPassPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12R
 		const size_t iPixelShader = iShader - 1;
 
 		// macros
+		
 		const FShaderMacro InstancedDrawMacro = { "INSTANCED_DRAW", "1" };
-		const FShaderMacro InstanceCountMacro = { "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__SHADOW_MESHES) };
+		const FShaderMacro InstanceCountMacro = FShaderMacro::CreateShaderMacro("INSTANCE_COUNT", "%d", MAX_INSTANCE_COUNT__SHADOW_MESHES);
 		if (iTess == 1)
 		{
 			AppendTessellationVSMacros(psoLoadDesc.ShaderStageCompileDescs[0/*VS*/].Macros, iDomain);

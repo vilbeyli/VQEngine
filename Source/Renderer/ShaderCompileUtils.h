@@ -20,12 +20,12 @@
 
 #include "Shader.h"
 #include <vector>
-
+#include <string>
 #include <d3d12.h>
 namespace ShaderUtils
 {
-	bool IsShaderSM5(const std::string& ShaderModelStr);
-	bool IsShaderSM6(const std::string& ShaderModelStr);
+	bool IsShaderSM5(const char* ShaderModelStr);
+	bool IsShaderSM6(const char* ShaderModelStr);
 
 	// Compiles shader from source file with the given file path, entry point, shader model & macro definitions
 	//

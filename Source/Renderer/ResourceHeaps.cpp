@@ -51,7 +51,7 @@
 //
 //--------------------------------------------------------------------------------------
 
-void StaticResourceViewHeap::Create(ID3D12Device* pDevice, const std::string& ResourceName, EResourceHeapType HeapTypeIn, uint32 DescriptorCount, bool CPUVisible /*= false*/)
+void StaticResourceViewHeap::Create(ID3D12Device* pDevice, const char* ResourceName, EResourceHeapType HeapTypeIn, uint32 DescriptorCount, bool CPUVisible /*= false*/)
 {
     D3D12_DESCRIPTOR_HEAP_TYPE HeapType = D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES;
     switch (HeapTypeIn)

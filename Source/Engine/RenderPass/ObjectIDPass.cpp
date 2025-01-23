@@ -349,7 +349,7 @@ std::vector<FPSOCreationTaskParameters> ObjectIDPass::CollectPSOCreationParamete
 
 		// macros
 		const FShaderMacro InstancedDrawMacro = { "INSTANCED_DRAW", "1" };
-		const FShaderMacro InstanceCountMacro = { "INSTANCE_COUNT", std::to_string(MAX_INSTANCE_COUNT__SCENE_MESHES) };
+		const FShaderMacro InstanceCountMacro = FShaderMacro::CreateShaderMacro("INSTANCE_COUNT", "%d", MAX_INSTANCE_COUNT__SCENE_MESHES);
 		if (iTess == 1)
 		{
 			AppendTessellationVSMacros(psoLoadDesc.ShaderStageCompileDescs[0/*VS*/].Macros, iDomain);

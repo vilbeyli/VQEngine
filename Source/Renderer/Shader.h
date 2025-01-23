@@ -19,7 +19,6 @@
 #pragma once
 
 #include "../Engine/Core/Types.h"
-#include <string>
 #include <wrl/client.h>
 
 struct ID3D12Device;
@@ -55,8 +54,9 @@ enum EShaderStage : unsigned // use this enum for array indexing
 
 struct FShaderMacro
 {
-	std::string Name;
-	std::string Value;
+	char Name[256];
+	char Value[128];
+	static FShaderMacro CreateShaderMacro(const char* name, const char* format, ...);
 };
 
 struct FShaderStageCompileDesc;

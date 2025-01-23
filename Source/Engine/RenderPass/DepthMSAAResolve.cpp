@@ -127,9 +127,9 @@ std::vector<FPSOCreationTaskParameters> DepthMSAAResolvePass::CollectPSOCreation
 		shaderDesc.ShaderModel = "cs_6_0";
 		shaderDesc.Macros =
 		{
-			  {"OUTPUT_DEPTH"    , (iDpth ? "1" : "0")}
-			, {"OUTPUT_NORMALS"  , (iNrml ? "1" : "0")}
-			, {"OUTPUT_ROUGHNESS", (iRghn ? "1" : "0")}
+			  FShaderMacro::CreateShaderMacro("OUTPUT_DEPTH"    , "%s", (iDpth ? "1" : "0"))
+			, FShaderMacro::CreateShaderMacro("OUTPUT_NORMALS"  , "%s", (iNrml ? "1" : "0"))
+			, FShaderMacro::CreateShaderMacro("OUTPUT_ROUGHNESS", "%s", (iRghn ? "1" : "0"))
 		};
 
 		FPSODesc& psoDesc = param.Desc;
