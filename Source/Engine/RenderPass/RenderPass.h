@@ -18,7 +18,6 @@
 #pragma once
 
 #include "../../Renderer/Renderer_PSOs.h"
-#include "../Core/Types.h"
 
 #include <vector>
 #include <array>

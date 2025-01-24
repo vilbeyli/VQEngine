@@ -1,3 +1,4 @@
+
 //	VQE
 //	Copyright(C) 2020  - Volkan Ilbeyli
 //
@@ -20,6 +21,9 @@
 
 #include "HDR.h"
 
+#define VC_EXTRALEAN
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <d3d12.h>
 #include <dxgi1_6.h>
 

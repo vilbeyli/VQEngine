@@ -198,8 +198,8 @@ template<class TVertex>
 inline FBoundingBox Mesh::CalculateBoundingBox(const std::vector<TVertex>& verts)
 {
 	using namespace DirectX;
-	const float max_f = std::numeric_limits<float>::max();
-	const float min_f = -(max_f - 1.0f);
+	constexpr float max_f = std::numeric_limits<float>::max();
+	constexpr float min_f = -(max_f - 1.0f);
 
 	FBoundingBox bb;
 	XMFLOAT3& mins = bb.ExtentMin;

@@ -23,8 +23,15 @@
 	// Enable PIX markers for RGP, must be included before pix3.h
 	#define VQE_ENABLE_RGP_PIX 0
 #endif
-#include "WinPixEventRuntime/Include/WinPixEventRuntime/pix3.h"
 
+#define VC_EXTRALEAN
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+#include "WinPixEventRuntime/Include/WinPixEventRuntime/pix3.h"
+#ifdef max
+#error "max macro is defined"
+#endif
 #define SCOPED_GPU_MARKER(pCmd, pStr)             ScopedGPUMarker GPUMarker(pCmd,pStr)
 
 #define SCOPED_CPU_MARKER(pStr)                   ScopedMarker    CPUMarker(pStr)

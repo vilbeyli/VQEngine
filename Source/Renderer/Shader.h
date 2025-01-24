@@ -18,14 +18,6 @@
 
 #pragma once
 
-#include "../Engine/Core/Types.h"
-#include <wrl/client.h>
-
-struct ID3D12Device;
-
-//
-// HELPER STRUCTS/ENUMS
-//
 enum EShaderStageFlags : unsigned
 {
 	SHADER_STAGE_NONE         = 0x00000000,
@@ -57,55 +49,4 @@ struct FShaderMacro
 	char Name[256];
 	char Value[128];
 	static FShaderMacro CreateShaderMacro(const char* name, const char* format, ...);
-};
-
-struct FShaderStageCompileDesc;
-
-struct ID3D12ShaderReflection;
-struct IDxcBlob;
-struct ID3D10Blob;
-
-//
-// SHADER
-//
-class Shader
-{
-	friend class Renderer;
-
-public:
-	struct FBlob
-	{
-		bool IsNull() const;
-		const void* GetByteCode() const;
-		size_t GetByteCodeSize() const;
-
-		Microsoft::WRL::ComPtr<ID3D10Blob> pD3DBlob = nullptr;
-		Microsoft::WRL::ComPtr<IDxcBlob> pBlobDxc = nullptr;
-	};
-	union ShaderBlobs
-	{
-		struct
-		{
-			FBlob* vs;
-			FBlob* gs;
-			FBlob* ds;
-			FBlob* hs;
-			FBlob* ps;
-			FBlob* cs;
-		};
-		FBlob* ShaderBlobs[EShaderStage::NUM_SHADER_STAGES];
-	};
-	union ShaderReflections
-	{
-		struct
-		{
-			ID3D12ShaderReflection* vsRefl;
-			ID3D12ShaderReflection* gsRefl;
-			ID3D12ShaderReflection* dsRefl;
-			ID3D12ShaderReflection* hsRefl;
-			ID3D12ShaderReflection* psRefl;
-			ID3D12ShaderReflection* csRefl;
-		};
-		ID3D12ShaderReflection* Reflections[EShaderStage::NUM_SHADER_STAGES] = { nullptr };
-	};
 };

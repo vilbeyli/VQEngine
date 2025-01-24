@@ -21,6 +21,8 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+#define VC_EXTRALEAN
+#define WIN32_LEAN_AND_MEAN
 
 using int64 = long long;
 using int32 = int;

@@ -18,7 +18,6 @@
 
 #include "AssetLoader.h"
 
-#include <Windows.h> // for pix markers ?
 #include "GPUMarker.h"
 
 #include "Scene/Mesh.h"

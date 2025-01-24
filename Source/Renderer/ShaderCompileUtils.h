@@ -18,23 +18,69 @@
 
 #pragma once
 
+#define VC_EXTRALEAN
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include "Shader.h"
 #include <vector>
 #include <string>
 #include <d3d12.h>
+#include <wrl/client.h>
+
+struct FShaderStageCompileDesc;
+
+struct ID3D12ShaderReflection;
+struct IDxcBlob;
+struct ID3D10Blob;
 
 namespace ShaderUtils
 {
+	struct FBlob
+	{
+		bool IsNull() const;
+		const void* GetByteCode() const;
+		size_t GetByteCodeSize() const;
+
+		Microsoft::WRL::ComPtr<ID3D10Blob> pD3DBlob = nullptr;
+		Microsoft::WRL::ComPtr<IDxcBlob> pBlobDxc = nullptr;
+	};
+	union ShaderBlobs
+	{
+		struct
+		{
+			FBlob* vs;
+			FBlob* gs;
+			FBlob* ds;
+			FBlob* hs;
+			FBlob* ps;
+			FBlob* cs;
+		};
+		FBlob* ShaderBlobs[EShaderStage::NUM_SHADER_STAGES];
+	};
+	union ShaderReflections
+	{
+		struct
+		{
+			ID3D12ShaderReflection* vsRefl;
+			ID3D12ShaderReflection* gsRefl;
+			ID3D12ShaderReflection* dsRefl;
+			ID3D12ShaderReflection* hsRefl;
+			ID3D12ShaderReflection* psRefl;
+			ID3D12ShaderReflection* csRefl;
+		};
+		ID3D12ShaderReflection* Reflections[EShaderStage::NUM_SHADER_STAGES] = { nullptr };
+	};
+
 	bool IsShaderSM5(const char* ShaderModelStr);
 	bool IsShaderSM6(const char* ShaderModelStr);
 
 	// Compiles shader from source file with the given file path, entry point, shader model & macro definitions
 	//
-	Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompileDesc, std::string& OutErrorString);
+	FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompileDesc, std::string& OutErrorString);
 	
 	// Reads in cached shader binary from given @ShaderBinaryFilePath 
 	//
-	bool CompileFromCachedBinary(const std::string& ShaderBinaryFilePath, Shader::FBlob& Blob, bool bSM6, std::string& errMsg);
+	bool CompileFromCachedBinary(const std::string& ShaderBinaryFilePath, FBlob& Blob, bool bSM6, std::string& errMsg);
 	
 	// Writes out compiled ID3DBlob into @ShaderBinaryFilePath
 	//
@@ -66,7 +112,7 @@ struct FShaderStageCompileDesc
 };
 struct FShaderStageCompileResult
 {
-	Shader::FBlob ShaderBlob;
+	ShaderUtils::FBlob ShaderBlob;
 	EShaderStage ShaderStageEnum;
 	std::wstring FilePath;
 	bool bSM6;

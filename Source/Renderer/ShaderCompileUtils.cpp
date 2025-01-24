@@ -94,6 +94,29 @@ static const std::unordered_map<UINT, LPCWSTR> D3DCompilerFlagCompatiblityLookup
 //-------------------------------------------------------------------------------------------------------------
 namespace ShaderUtils
 {
+
+bool FBlob::IsNull() const { return !pD3DBlob && !pBlobDxc; }
+
+const void* FBlob::GetByteCode() const
+{
+	if (this->pD3DBlob)
+		return this->pD3DBlob->GetBufferPointer();
+	if (this->pBlobDxc)
+		return this->pBlobDxc->GetBufferPointer();
+
+	assert(!IsNull());
+	return nullptr; // should never hit this
+}
+
+size_t FBlob::GetByteCodeSize() const
+{
+	if (this->pD3DBlob)
+		return this->pD3DBlob->GetBufferSize();
+	if (this->pBlobDxc)
+		return this->pBlobDxc->GetBufferSize();
+	return 0;
+}
+
 std::string GetCompileError(ID3DBlob*& errorMessage, const std::string& shdPath)
 {
 	if (errorMessage)
@@ -254,7 +277,7 @@ bool IsShaderSM6(const char* ShaderModelStr)
 	return SMTokens[1][0] == '6';
 }
 
-Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompileDesc, std::string& OutErrorString)
+FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompileDesc, std::string& OutErrorString)
 {
 	SCOPED_CPU_MARKER("CompileFromSource");
 	const WCHAR* strPath = ShaderStageCompileDesc.FilePath.data();
@@ -282,7 +305,7 @@ Shader::FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompil
 	// DXC Wiki 'Using dxc.exe & dxcompiler.dll'
 	// https://github.com/microsoft/DirectXShaderCompiler/wiki/Using-dxc.exe-and-dxcompiler.dll
 	//-------------------------------------------------------------------------
-	Shader::FBlob blob;
+	FBlob blob;
 
 	// SM5 - Use FXC compiler - generates DXBC shader code
 	if (bIsShaderModel5)
@@ -479,7 +502,7 @@ static bool ValidateDXCBlob(IDxcBlob* pShaderBlob)
 	return true;
 }
 
-bool CompileFromCachedBinary(const std::string& ShaderBinaryFilePath, Shader::FBlob& Blob, bool bSM6, std::string& errMsg)
+bool CompileFromCachedBinary(const std::string& ShaderBinaryFilePath, FBlob& Blob, bool bSM6, std::string& errMsg)
 {
 	SCOPED_CPU_MARKER("CompileFromCachedBinary");
 	Log::Info("Loading Shader Binary: %s ", DirectoryUtil::GetFileNameFromPath(ShaderBinaryFilePath).c_str());

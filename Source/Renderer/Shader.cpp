@@ -18,33 +18,10 @@
 
 #include "Shader.h"
 
-#include "../../Libs/DirectXCompiler/inc/dxcapi.h"
-#include "../../Libs/VQUtils/Source/utils.h"
+#include <cstdio>
 #include <cassert>
 #include <cstring>
-#include <d3dcompiler.h>
-
-bool Shader::FBlob::IsNull() const { return !pD3DBlob && !pBlobDxc; }
-
-const void* Shader::FBlob::GetByteCode() const
-{
-	if (this->pD3DBlob)
-		return this->pD3DBlob->GetBufferPointer();
-	if (this->pBlobDxc)
-		return this->pBlobDxc->GetBufferPointer();
-	
-	assert(!IsNull());
-	return nullptr; // should never hit this
-}
-
-size_t Shader::FBlob::GetByteCodeSize() const
-{
-	if (this->pD3DBlob)
-		return this->pD3DBlob->GetBufferSize();
-	if (this->pBlobDxc)
-		return this->pBlobDxc->GetBufferSize();
-	return 0;
-}
+#include <cstdarg>
 
 FShaderMacro FShaderMacro::CreateShaderMacro(const char* name, const char* format, ...)
 {

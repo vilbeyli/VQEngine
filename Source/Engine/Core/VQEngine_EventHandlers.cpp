@@ -19,6 +19,7 @@
 #include "../VQEngine.h"
 #include "../GPUMarker.h"
 #include "Windows.h"
+#include "imgui.h"
 
 #define VERBOSE_LOGGING 0
 
@@ -131,7 +132,6 @@ void VQEngine::SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse, bool bRel
 // UPDATE THREAD
 //
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
-#include "imgui.h"
 static void UpdateImGui_KeyUp(KeyCode key, bool bIsMouseKey)
 {
 	ImGuiIO& io = ImGui::GetIO();

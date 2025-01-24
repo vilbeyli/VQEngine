@@ -15,6 +15,9 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
+
+#define VC_EXTRALEAN
+#define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include "Renderer.h"
 #include "Device.h"
@@ -1407,7 +1410,7 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 	FShaderStageCompileResult Result = {};
 	Result.FilePath = ShaderStageCompileDesc.FilePath;
 	Result.bSM6 = IsShaderSM6(ShaderStageCompileDesc.ShaderModel.c_str());
-	Shader::FBlob& ShaderBlob = Result.ShaderBlob;
+	FBlob& ShaderBlob = Result.ShaderBlob;
 	Result.ShaderStageEnum = ShaderUtils::GetShaderStageEnumFromShaderModel(ShaderStageCompileDesc.ShaderModel);
 	
 	std::string errMsg;
