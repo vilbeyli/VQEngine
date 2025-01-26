@@ -57,13 +57,17 @@ void StaticBufferHeap::Create(ID3D12Device* pDevice, EBufferType type, uint32 to
     mbUseVidMem = bUseVidMem;
     mType = type;
 
+    CD3DX12_HEAP_PROPERTIES defaultHeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+    CD3DX12_HEAP_PROPERTIES uploadHeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+    CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(totalMemSize);
+
     HRESULT hr = {};
     if (bUseVidMem)
     {
         hr = mpDevice->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+            &defaultHeapProperties,
             D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(totalMemSize),
+            &resourceDesc,
             GetResourceTransitionState(mType),
             nullptr,
             IID_PPV_ARGS(&mpVidMemBuffer));
@@ -77,9 +81,9 @@ void StaticBufferHeap::Create(ID3D12Device* pDevice, EBufferType type, uint32 to
     }
 
     hr = mpDevice->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+        &uploadHeapProperties,
         D3D12_HEAP_FLAG_NONE,
-        &CD3DX12_RESOURCE_DESC::Buffer(totalMemSize),
+        &resourceDesc,
         D3D12_RESOURCE_STATE_GENERIC_READ,
         nullptr,
         IID_PPV_ARGS(&mpSysMemBuffer));
@@ -196,18 +200,12 @@ void StaticBufferHeap::UploadData(ID3D12GraphicsCommandList* pCmd)
     if (mbUseVidMem)
     {
         D3D12_RESOURCE_STATES state = GetResourceTransitionState(mType);
+        CD3DX12_RESOURCE_BARRIER barrierToCopyDest = CD3DX12_RESOURCE_BARRIER::Transition(mpVidMemBuffer, state, D3D12_RESOURCE_STATE_COPY_DEST);
+        CD3DX12_RESOURCE_BARRIER barrierToState = CD3DX12_RESOURCE_BARRIER::Transition(mpVidMemBuffer, D3D12_RESOURCE_STATE_COPY_DEST, state);
 
-        pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mpVidMemBuffer
-            , state
-            , D3D12_RESOURCE_STATE_COPY_DEST)
-        );
-
+        pCmd->ResourceBarrier(1, &barrierToCopyDest);
         pCmd->CopyBufferRegion(mpVidMemBuffer, mMemInit, mpSysMemBuffer, mMemInit, mMemOffset - mMemInit);
-
-        pCmd->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mpVidMemBuffer
-            , D3D12_RESOURCE_STATE_COPY_DEST
-            , state)
-        );
+        pCmd->ResourceBarrier(1, &barrierToState);
 
         mMemInit = mMemOffset;
     }
@@ -224,10 +222,13 @@ void DynamicBufferHeap::Create(ID3D12Device* pDevice, uint32_t numberOfBackBuffe
 
     m_mem.Create(numberOfBackBuffers, memTotalSize);
 
+    CD3DX12_HEAP_PROPERTIES uploadHeapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+    CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(memTotalSize);
+
     ThrowIfFailed(pDevice->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+        &uploadHeapProperties,
         D3D12_HEAP_FLAG_NONE,
-        &CD3DX12_RESOURCE_DESC::Buffer(memTotalSize),
+        &resourceDesc,
         D3D12_RESOURCE_STATE_GENERIC_READ,
         nullptr,
         IID_PPV_ARGS(&m_pBuffer)));

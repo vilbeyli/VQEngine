@@ -3,7 +3,7 @@ cmake_minimum_required (VERSION 3.4)
 project (VQRenderer)
 
 add_compile_options(/MP)
-add_compile_options(/std:c++17)
+add_compile_options(/std:c++20)
 
 set (LibHeadersD3D12X
     "Libs/D3DX12/d3dx12.h"
