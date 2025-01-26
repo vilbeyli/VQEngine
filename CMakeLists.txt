@@ -150,6 +150,8 @@ set (SceneFiles
     "Source/Engine/Scene/Transform.h"
     "Source/Engine/Scene/Quaternion.h"
     "Source/Engine/Scene/Scene.h"
+    "Source/Engine/Scene/SceneBoundingBoxHierarchy.h"
+    "Source/Engine/Scene/SceneViews.h"
     "Source/Engine/Scene/Light.h"
     "Source/Engine/Scene/Camera.h"
     "Source/Engine/Scene/Mesh.h"

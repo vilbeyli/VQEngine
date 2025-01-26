@@ -20,16 +20,19 @@
 #include "GPUMarker.h"
 #include "../VQUtils/Source/utils.h"
 
-#include <d3d12.h>
-#include <dxgi.h>
-#include <DirectXMath.h>
-
 #include "RenderPass/AmbientOcclusion.h"
 #include "RenderPass/DepthPrePass.h"
 
 #include "VQEngine_RenderCommon.h"
 
+#include "Scene/SceneViews.h"
+
 #include "imgui.h"
+
+#include <d3d12.h>
+#include <dxgi.h>
+#include <DirectXMath.h>
+
 //
 // DRAW COMMANDS
 //
