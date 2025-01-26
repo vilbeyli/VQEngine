@@ -4,8 +4,8 @@
 [submodule "Source/Renderer/Libs/D3DX12"]
 	path = Source/Renderer/Libs/D3DX12
 	url = https://github.com/vilbeyli/D3DX12.git
-[submodule "Libs/D3D12MA"]
-	path = Libs/D3D12MA
+[submodule "Source/RendererLibs/D3D12MA"]
+	path = Source/Renderer/Libs/D3D12MA
 	url = https://github.com/vilbeyli/D3D12MemoryAllocator.git
 [submodule "Libs/assimp"]
 	path = Libs/assimp

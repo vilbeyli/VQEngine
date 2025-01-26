@@ -52,6 +52,8 @@ set (Materials
 #
 # SOURCE
 #
+
+add_definitions(-DFFX_CACAO_ENABLE_D3D12) # TODO: move render passes to renderer project
 set (RenderPassFiles
     "Source/Engine/RenderPass/RenderPass.h"
     "Source/Engine/RenderPass/AmbientOcclusion.h"
@@ -176,7 +178,6 @@ add_link_options(/SUBSYSTEM:WINDOWS)
 
 # add submodules
 add_subdirectory(Libs/VQUtils)
-add_subdirectory(Libs/D3D12MA)
 add_subdirectory(Source/Renderer)
 
 #add_definitions(
@@ -215,8 +216,6 @@ set_source_files_properties(Data/Icons/VQE32.ico  PROPERTIES VS_TOOL_OVERRIDE "I
 
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/VQUtils/Bin/)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/WinPixEventRuntime/bin/x64)
-
-add_definitions(-DFFX_CACAO_ENABLE_D3D12)
 
 # Create a library with the project name that is build with the Headers and Source files
 add_executable( ${PROJECT_NAME} 
@@ -257,7 +256,6 @@ set_target_properties(zlibstatic PROPERTIES FOLDER Libs/assimp)
 
 #set_target_properties(VQRenderer PROPERTIES FOLDER Libs)
 #set_target_properties(VQUtils PROPERTIES FOLDER Libs)
-set_target_properties(D3D12MA PROPERTIES FOLDER Libs)
 set_target_properties(ImGUI PROPERTIES FOLDER Libs)
 
 # Make sure the compiler can find include files for the libraries

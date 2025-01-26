@@ -27,6 +27,12 @@ set (LibFFX_SSSR
     "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_64spp.cpp"
     "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_8spp.cpp"
 )
+set (LibD3D12MA
+    "Libs/D3D12MA/src/D3D12MemAlloc.h"
+    "Libs/D3D12MA/src/D3D12MemAlloc.cpp"
+    "Libs/D3D12MA/src/Common.h"
+    "Libs/D3D12MA/src/Common.cpp"
+)
 
 # Core system
 set(CoreHeaders
@@ -163,7 +169,6 @@ set (ShadersScreenSpaceReflections
     "../../Shaders/ScreenSpaceReflections/Common.hlsl"
 )
 
-
 source_group("Core" FILES ${CoreHeaders} ${CoreSources})
 source_group("Resources" FILES ${ResourceHeaders} ${ResourceSources})
 source_group("Pipeline" FILES ${PipelineHeaders} ${PipelineSources})
@@ -182,6 +187,7 @@ source_group("Shaders\\AMD-FidelityFX\\DNSR" FILES ${FFX_DNSR_Shaders})
 source_group("Libs\\AMD-FidelityFX\\CACAO" FILES ${LibFFX_CACAO})
 source_group("Libs\\AMD-FidelityFX\\SSSR" FILES ${LibFFX_SSSR})
 source_group("Libs\\D3D12X" FILES ${LibHeadersD3D12X})
+source_group("Libs\\D3D12MA" FILES ${LibD3D12MA})
 
 set_source_files_properties(${LibHeadersD3D12X} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
@@ -205,28 +211,30 @@ endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 # add_link_options(/SUBSYSTEM:WINDOWS)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/DirectXCompiler/lib/x64)
 
-add_library(${PROJECT_NAME} STATIC 
+add_library(${PROJECT_NAME} STATIC
     ${LibHeadersD3D12X} 
     ${LibFFX_CACAO} 
     ${LibFFX_SSSR} 
+    ${LibD3D12MA}
+
     ${CoreHeaders} ${CoreSources}
     ${PipelineHeaders} ${PipelineSources}
     ${RenderingHeaders} ${RenderingSources}
     ${ResourceHeaders} ${ResourceSources}
     ${Renderer}
+    
     ${Shaders} 
-        ${ShadersScreenSpaceReflections} 
-        ${FFX_FSR_Shaders} 
-        ${FFX_CAS_Shaders} 
-        ${FFX_CACAO_Shaders} 
-        ${FFX_SSSR_Shaders} 
-        ${FFX_DNSR_Shaders} 
-        ${FFX_SPD_Shaders} 
+    ${ShadersScreenSpaceReflections} 
+    ${FFX_FSR_Shaders} 
+    ${FFX_CAS_Shaders} 
+    ${FFX_CACAO_Shaders} 
+    ${FFX_SSSR_Shaders} 
+    ${FFX_DNSR_Shaders} 
+    ${FFX_SPD_Shaders} 
 )
 
 add_definitions(-DFFX_CACAO_ENABLE_D3D12)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE D3D12MA)
 target_include_directories(${PROJECT_NAME} PUBLIC "../") # Engine / Renderer / Scenes
 target_include_directories(${PROJECT_NAME} PUBLIC "../../") # VQE root
 target_include_directories(${PROJECT_NAME} PUBLIC "./") # Renderer root

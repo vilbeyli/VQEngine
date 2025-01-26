@@ -70,7 +70,7 @@ exit /b !errorlevel!
 set SUBMODULE_FILE=CMakeLists.txt
 
 set SUBMODULE_DIR0=..\Libs\VQUtils\
-set SUBMODULE_DIR1=..\Libs\D3D12MA\
+set SUBMODULE_DIR1=..\Source\Renderer\Libs\D3D12MA\
 set SUBMODULE_DIR2=..\Source\Renderer\Libs\D3DX12\
 set SUBMODULE_DIR3=..\Libs\imgui\
 set SUBMODULE_FILE_PATH0=!SUBMODULE_DIR0!!SUBMODULE_FILE!
@@ -106,7 +106,7 @@ if !NEED_TO_INIT_SUBMODULES! neq 0 (
     :: attempt to initialize submodule
     cd ..
     echo.
-    git submodule update --init Libs/D3D12MA
+    git submodule update --init Source/Renderer/Libs/D3D12MA
     git submodule update --init Libs/VQUtils
     git submodule update --init Libs/assimp
     git submodule update --init Libs/imgui
@@ -166,18 +166,8 @@ if !errorlevel! EQU 0 (
     rmdir /S /Q  %~dp0SolutionFiles
     cmake ..\.. -G "Visual Studio 16 2019" -A x64 !CMAKE_ASSIMP_PARAMETERS!
     if !errorlevel! NEQ 0 (    
-        echo [VQBuild] cmake VS2019 failed, retrying with VS2017...
-        rmdir /S /Q  %~dp0SolutionFiles
-        cmake ..\.. -G "Visual Studio 15 2017" -A x64 !CMAKE_ASSIMP_PARAMETERS!
-        if !errorlevel! NEQ 0 (
-            echo [VQBuild] removing %~dp0SolutionFiles ...
-            rmdir /S /Q  %~dp0SolutionFiles
-            cmake ..\..
-            if !errorlevel! NEQ 0 (
-                echo [VQBuild] GenerateSolutions.bat: Error with CMake. No solution file generated after retrying. 
-                exit /b -1
-            )
-        )
+        echo [VQBuild] GenerateSolutions.bat: Error with CMake. No solution file generated after retrying. 
+        exit /b -1
     )
     echo. 
 )
