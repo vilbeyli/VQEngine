@@ -44,13 +44,13 @@ set(ResourceSources
 
 # Pipeline configuration
 set(PipelineHeaders
-    "Pipeline/Renderer_PSOs.h"
+    "Pipeline/PipelineStateObjects.h"
     "Pipeline/Shader.h"
     "Pipeline/ShaderCompileUtils.h"
     "Pipeline/Tessellation.h"
 )
 set(PipelineSources
-    "Pipeline/Renderer_PSOs.cpp"
+    "Pipeline/PipelineStateObjects.cpp"
     "Pipeline/Renderer_RootSignatures.cpp"
     "Pipeline/Shader.cpp"
     "Pipeline/ShaderCompileUtils.cpp"

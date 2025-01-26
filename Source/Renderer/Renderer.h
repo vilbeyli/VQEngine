@@ -25,7 +25,7 @@
 #include "Resources/Buffer.h"
 #include "Resources/Texture.h"
 #include "Pipeline/ShaderCompileUtils.h"
-#include "Pipeline/Renderer_PSOs.h"
+#include "Pipeline/PipelineStateObjects.h"
 #include "Rendering/WindowRenderContext.h"
 
 #include "Engine/Core/Types.h"
