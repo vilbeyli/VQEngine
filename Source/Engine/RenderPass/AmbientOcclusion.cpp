@@ -17,12 +17,12 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "AmbientOcclusion.h"
-#include "AMDFidelityFX/CACAO/ffx_cacao_impl.h"
+#include "Renderer/Libs/AMDFidelityFX/CACAO/ffx_cacao_impl.h"
 
 #include "Libs/VQUtils/Source/Log.h"
 
-#include "../../Renderer/Libs/D3DX12/d3dx12.h"
-#include "../../Renderer/Renderer.h"
+#include "Renderer/Libs/D3DX12/d3dx12.h"
+#include "Renderer/Renderer.h"
 
 #include <cassert>
 

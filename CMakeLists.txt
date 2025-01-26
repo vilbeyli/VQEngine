@@ -243,25 +243,6 @@ set (LibsIncl
     "Libs/"
 )
 
-set (LibFFX_CACAO
-    "Libs/AMDFidelityFX/CACAO/ffx_cacao_defines.h"
-    "Libs/AMDFidelityFX/CACAO/ffx_cacao.cpp"
-    "Libs/AMDFidelityFX/CACAO/ffx_cacao.h"
-    "Libs/AMDFidelityFX/CACAO/ffx_cacao_impl.cpp"
-    "Libs/AMDFidelityFX/CACAO/ffx_cacao_impl.h"
-)
-
-set (LibFFX_SSSR
-    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_128spp.cpp"
-    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_16spp.cpp"
-    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_1spp.cpp"
-    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_256spp.cpp"
-    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_2spp.cpp"
-    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_32spp.cpp"
-    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_4spp.cpp"
-    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_64spp.cpp"
-    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_8spp.cpp"
-)
 
 # ouput exe to bin directory
 foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
@@ -306,8 +287,6 @@ source_group("Source\\Scene" FILES ${SceneFiles})
 source_group("Source\\UI" FILES ${UIFiles})
 source_group("Source\\PostProcess" FILES ${PostProcessFiles})
 source_group("Source" FILES ${SourceVQE})
-source_group("Libs\\AMD-FidelityFX\\CACAO"   FILES ${LibFFX_CACAO})
-source_group("Libs\\AMD-FidelityFX\\SSSR"   FILES ${LibFFX_SSSR})
 
 set_source_files_properties(${Config} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Materials} PROPERTIES VS_TOOL_OVERRIDE "Text")
@@ -332,7 +311,6 @@ set_source_files_properties(Data/Icons/VQE32.ico  PROPERTIES VS_TOOL_OVERRIDE "I
 
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/VQUtils/Bin/)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/WinPixEventRuntime/bin/x64)
-link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/DirectXCompiler/lib/x64)
 
 add_definitions(-DFFX_CACAO_ENABLE_D3D12)
 
@@ -351,8 +329,6 @@ add_executable( ${PROJECT_NAME}
         ${FFX_SSSR_Shaders} 
         ${FFX_DNSR_Shaders} 
         ${FFX_SPD_Shaders} 
-    ${LibFFX_CACAO} 
-    ${LibFFX_SSSR} 
     ${RenderPassFiles} 
     ${CoreFiles} 
     ${UIFiles} 
@@ -394,10 +370,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${
 
 target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer assimp WinPixEventRuntime ImGUI)
 
-
-add_custom_command(TARGET ${PROJECT_NAME} PRE_BUILD
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Libs/AMDFidelityFX/CACAO/build_shaders_dxil.bat)
-
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "${CMAKE_CURRENT_SOURCE_DIR}/Libs/WinPixEventRuntime/bin/x64/WinPixEventRuntime.dll"
@@ -405,11 +377,11 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 )
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "${CMAKE_CURRENT_SOURCE_DIR}/Libs/DirectXCompiler/bin/x64/dxcompiler.dll"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Source/Renderer/Libs/DirectXCompiler/bin/x64/dxcompiler.dll"
     $<TARGET_FILE_DIR:${PROJECT_NAME}>
 )
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "${CMAKE_CURRENT_SOURCE_DIR}/Libs/DirectXCompiler/bin/x64/dxil.dll"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Source/Renderer/Libs/DirectXCompiler/bin/x64/dxil.dll"
     $<TARGET_FILE_DIR:${PROJECT_NAME}>
 )

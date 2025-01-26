@@ -9,6 +9,24 @@ add_compile_options(/std:c++20)
 set (LibHeadersD3D12X
     "Libs/D3DX12/d3dx12.h"
 )
+set (LibFFX_CACAO
+    "Libs/AMDFidelityFX/CACAO/ffx_cacao_defines.h"
+    "Libs/AMDFidelityFX/CACAO/ffx_cacao.cpp"
+    "Libs/AMDFidelityFX/CACAO/ffx_cacao.h"
+    "Libs/AMDFidelityFX/CACAO/ffx_cacao_impl.cpp"
+    "Libs/AMDFidelityFX/CACAO/ffx_cacao_impl.h"
+)
+set (LibFFX_SSSR
+    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_128spp.cpp"
+    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_16spp.cpp"
+    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_1spp.cpp"
+    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_256spp.cpp"
+    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_2spp.cpp"
+    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_32spp.cpp"
+    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_4spp.cpp"
+    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_64spp.cpp"
+    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_8spp.cpp"
+)
 
 # Core system
 set(CoreHeaders
@@ -75,14 +93,16 @@ set(Renderer
 set(Shaders
 
 )
-
-source_group("Libs\\D3D12X" FILES ${LibHeadersD3D12X})
 source_group("Core" FILES ${CoreHeaders} ${CoreSources})
 source_group("Resources" FILES ${ResourceHeaders} ${ResourceSources})
 source_group("Pipeline" FILES ${PipelineHeaders} ${PipelineSources})
 source_group("Rendering" FILES ${RenderingHeaders} ${RenderingSources})
 source_group("Renderer" FILES ${Renderer})
 #source_group("Shaders" FILES ${Shaders} )
+
+source_group("Libs\\AMD-FidelityFX\\CACAO" FILES ${LibFFX_CACAO})
+source_group("Libs\\AMD-FidelityFX\\SSSR" FILES ${LibFFX_SSSR})
+source_group("Libs\\D3D12X" FILES ${LibHeadersD3D12X})
 
 set_source_files_properties(${LibHeadersD3D12X} PROPERTIES VS_TOOL_OVERRIDE "Text")
 #set_source_files_properties(${Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
@@ -97,9 +117,12 @@ foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
 endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 
 # add_link_options(/SUBSYSTEM:WINDOWS)
+link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/DirectXCompiler/lib/x64)
 
 add_library(${PROJECT_NAME} STATIC 
     ${LibHeadersD3D12X} 
+    ${LibFFX_CACAO} 
+    ${LibFFX_SSSR} 
     ${CoreHeaders} ${CoreSources}
     ${PipelineHeaders} ${PipelineSources}
     ${RenderingHeaders} ${RenderingSources}
@@ -113,3 +136,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE D3D12MA)
 target_include_directories(${PROJECT_NAME} PUBLIC "../") # Engine / Renderer / Scenes
 target_include_directories(${PROJECT_NAME} PUBLIC "../../") # VQE root
 target_include_directories(${PROJECT_NAME} PUBLIC "./") # Renderer root
+
+add_custom_command(TARGET ${PROJECT_NAME} PRE_BUILD
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Libs/AMDFidelityFX/CACAO/build_shaders_dxil.bat)

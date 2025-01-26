@@ -18,8 +18,8 @@
 
 #include "ScreenSpaceReflections.h"
 
-#include "../../Renderer/Libs/D3DX12/d3dx12.h"
-#include "../../Renderer/Renderer.h"
+#include "Renderer/Libs/D3DX12/d3dx12.h"
+#include "Renderer/Renderer.h"
 #include "../GPUMarker.h"
 
 /**********************************************************************
@@ -45,7 +45,7 @@ THE SOFTWARE.
 ********************************************************************/
 namespace _1spp
 {
-#include "../Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_1spp.cpp"
+#include "Renderer/Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_1spp.cpp"
 }
 struct FBlueNoiseSamplerStateCPU
 {

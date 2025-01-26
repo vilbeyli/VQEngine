@@ -14,7 +14,7 @@
 # Precompiled Headers
 *.gch
 *.pch
-Libs/AMDFidelityFX/CACAO/PrecompiledShadersDXIL/*
+Source/Renderer/Libs/AMDFidelityFX/CACAO/PrecompiledShadersDXIL/*
 
 # Compiled Dynamic libraries
 *.so
@@ -354,9 +354,9 @@ Tools/.wget-hsts
 !Libs/WinPixEventRuntime/bin
 !Libs/WinPixEventRuntime/bin/x64/
 !Libs/WinPixEventRuntime/bin/x64/*
-!Libs/DirectXCompiler/lib
-!Libs/DirectXCompiler/lib/x64/
-!Libs/DirectXCompiler/lib/x64/*
-!Libs/DirectXCompiler/bin
-!Libs/DirectXCompiler/bin/x64/
-!Libs/DirectXCompiler/bin/x64/*
+!Source/Renderer/Libs/DirectXCompiler/lib
+!Source/Renderer/Libs/DirectXCompiler/lib/x64/
+!Source/Renderer/Libs/DirectXCompiler/lib/x64/*
+!Source/Renderer/Libs/DirectXCompiler/bin
+!Source/Renderer/Libs/DirectXCompiler/bin/x64/
+!Source/Renderer/Libs/DirectXCompiler/bin/x64/*
