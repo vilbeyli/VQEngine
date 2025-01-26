@@ -40,7 +40,7 @@
 #pragma once
 
 #include <d3d12.h>
-#include "../Engine/Core/Types.h"
+#include "Engine/Core/Types.h"
 
 class ResourceView
 {

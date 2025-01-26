@@ -21,8 +21,8 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <d3d12.h>
-#include "../Engine/Core/Types.h"
-#include "../../Libs/VQUtils/Source/Log.h"
+#include "Engine/Core/Types.h"
+#include "Libs/VQUtils/Source/Log.h"
 #include <cassert>
 #include <cwchar>
 

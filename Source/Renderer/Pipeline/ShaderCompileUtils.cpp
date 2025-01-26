@@ -19,9 +19,9 @@
 #include "Shader.h"
 #include "Renderer.h"
 
-#include "../Engine/GPUMarker.h"
-#include "../../Libs/DirectXCompiler/inc/dxcapi.h"
-#include "../../Libs/VQUtils/Source/utils.h"
+#include "Engine/GPUMarker.h"
+#include "Libs/DirectXCompiler/inc/dxcapi.h"
+#include "Libs/VQUtils/Source/utils.h"
 #include <fstream>
 #include <stack>
 

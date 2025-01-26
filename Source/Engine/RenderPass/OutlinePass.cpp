@@ -18,7 +18,7 @@
 
 #include "OutlinePass.h"
 #include "../../Renderer/Renderer.h"
-#include "../../Renderer/Tessellation.h"
+#include "Renderer/Pipeline/Tessellation.h"
 #include "../../Shaders/LightingConstantBufferData.h"
 #include "../Scene/Scene.h"
 #include "../VQUtils/Source/utils.h"

@@ -21,7 +21,7 @@
 
 #include "../Core/Types.h"
 #include "Shaders/LightingConstantBufferData.h"
-#include "../../Renderer/Tessellation.h"
+#include "Renderer/Pipeline/Tessellation.h"
 
 
 class VQRenderer;

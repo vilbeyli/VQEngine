@@ -37,13 +37,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#include "ResourceHeaps.h"
-#include "ResourceViews.h"
-#include "Common.h"
+#include "Resources/ResourceHeaps.h"
+#include "Resources/ResourceViews.h"
+#include "Core/Common.h"
 
 #include "Libs/D3DX12/d3dx12.h"
-#include "../Engine/GPUMarker.h"
-#include "../../Libs/VQUtils/Source/utils.h"
+#include "Engine/GPUMarker.h"
+#include "Libs/VQUtils/Source/utils.h"
 
 //--------------------------------------------------------------------------------------
 //
@@ -183,11 +183,13 @@ void UploadHeap::Create(ID3D12Device* pDevice, size_t uSize, ID3D12CommandQueue*
     mpCommandList->SetName(L"UploadHeap::mpCommandList");
 
     // Create buffer to suballocate
+    CD3DX12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+    CD3DX12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(uSize);
     HRESULT hr = {};
     hr = pDevice->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+        &heapProperties,
         D3D12_HEAP_FLAG_NONE,
-        &CD3DX12_RESOURCE_DESC::Buffer(uSize),
+        &bufferDesc,
         D3D12_RESOURCE_STATE_GENERIC_READ,
         nullptr,
         IID_PPV_ARGS(&mpUploadHeap)

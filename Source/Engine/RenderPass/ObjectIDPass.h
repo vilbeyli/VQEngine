@@ -21,7 +21,7 @@
 
 #include "../Scene/Mesh.h"
 #include "../Scene/Material.h"
-#include "../../Renderer/Fence.h"
+#include "Renderer/Core/Fence.h"
 
 #include <unordered_map>
 

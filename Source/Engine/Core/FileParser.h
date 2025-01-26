@@ -17,7 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "../Scene/Serialization.h"
-#include "../../Renderer/HDR.h"
+#include "Renderer/Rendering/HDR.h"
 #include "../EnvironmentMap.h"
 
 struct FStartupParameters;

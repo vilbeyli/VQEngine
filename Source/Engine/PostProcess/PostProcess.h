@@ -19,7 +19,7 @@
 
 #include "../Core/Types.h"
 
-#include "../../Renderer/HDR.h"
+#include "Renderer/Rendering/HDR.h"
 
 #define DISABLE_FIDELITYFX_CAS 1 // disable ffx cas but keep implementaiton around, now using fsr1 rcas
 

@@ -16,12 +16,12 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-#include "Renderer.h"
+#include "Renderer/Renderer.h"
 #include "Tessellation.h"
-#include "../Engine/GPUMarker.h"
-#include "../../Shaders/LightingConstantBufferData.h"
-#include "../../Libs/VQUtils/Source/utils.h"
-#include "../../Libs/DirectXCompiler/inc/dxcapi.h"
+#include "Engine/GPUMarker.h"
+#include "Shaders/LightingConstantBufferData.h"
+#include "Libs/VQUtils/Source/utils.h"
+#include "Libs/DirectXCompiler/inc/dxcapi.h"
 
 #include <unordered_set>
 #include <set>

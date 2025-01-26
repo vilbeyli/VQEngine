@@ -20,7 +20,7 @@
 #include "../Core/Types.h"
 #include "../CullingData.h"
 #include "MeshGeometryData.h"
-#include "Source/Renderer/Buffer.h"
+#include "Renderer/Resources/Buffer.h"
 
 #include <limits>
 #include <cstdio>

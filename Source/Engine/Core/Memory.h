@@ -18,8 +18,8 @@
 #pragma once
 
 #include <vector>
-#include "../../Libs/VQUtils/Source/Log.h"
-#include "../../Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Source/Log.h"
+#include "Libs/VQUtils/Source/utils.h"
 
 //
 // Resources on memory management

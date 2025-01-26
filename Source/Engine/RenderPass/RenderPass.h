@@ -17,7 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 #pragma once
 
-#include "../../Renderer/Renderer_PSOs.h"
+#include "Renderer/Pipeline/Renderer_PSOs.h"
 
 #include <vector>
 #include <array>

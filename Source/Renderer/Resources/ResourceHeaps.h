@@ -39,7 +39,7 @@
 // THE SOFTWARE.
 #pragma once
 
-#include "../Engine/Core/Types.h"
+#include "Engine/Core/Types.h"
 
 #include <vector>
 

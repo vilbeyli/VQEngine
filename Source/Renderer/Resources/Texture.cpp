@@ -20,14 +20,14 @@
 #include "ResourceHeaps.h"
 #include "ResourceViews.h"
 #include "Libs/D3DX12/d3dx12.h"
-#include "../Engine/Math.h"
+#include "Engine/Math.h"
 #include "CubemapUtility.h"
 
-#include "../../Libs/D3D12MA/src/D3D12MemAlloc.h"
-#include "../../Libs/VQUtils/Source/utils.h"
-#include "../../Libs/VQUtils/Source/Image.h"
+#include "Libs/D3D12MA/src/D3D12MemAlloc.h"
+#include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Source/Image.h"
 
-#include "../Engine/GPUMarker.h"
+#include "Engine/GPUMarker.h"
 
 #include <unordered_map>
 #include <set>

@@ -18,10 +18,10 @@
 
 #pragma once
 
-#include "SwapChain.h"
-#include "CommandQueue.h"
-#include "ResourceHeaps.h"
-#include "Buffer.h"
+#include "Core/SwapChain.h"
+#include "Core/CommandQueue.h"
+#include "Resources/ResourceHeaps.h"
+#include "Resources/Buffer.h"
 
 
 namespace D3D12MA { class Allocator; }

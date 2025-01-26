@@ -22,7 +22,7 @@
 
 #include "Core/FileParser.h"
 
-#include "../../Libs/DirectXCompiler/inc/dxcapi.h"
+#include "Libs/DirectXCompiler/inc/dxcapi.h"
 #include <cassert>
 
 #ifdef _DEBUG

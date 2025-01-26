@@ -17,10 +17,10 @@
 //	Contact: volkanilbeyli@gmail.com
 
 
-#include "WindowRenderContext.h"
-#include "../Engine/Core/Window.h"
-#include "Device.h"
-#include "Common.h"
+#include "Rendering/WindowRenderContext.h"
+#include "Engine/Core/Window.h"
+#include "Core/Device.h"
+#include "Core/Common.h"
 
 static D3D12_COMMAND_LIST_TYPE GetDX12CmdListType(CommandQueue::EType type)
 {

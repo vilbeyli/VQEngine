@@ -17,7 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "Buffer.h"
-#include "Common.h"
+#include "Core/Common.h"
 
 #include <d3d12.h>
 #include "Libs/D3DX12/d3dx12.h"

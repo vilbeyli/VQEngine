@@ -22,7 +22,7 @@
 
 #include "Libs/VQUtils/Source/Multithreading.h"
 
-#include "../../Renderer/HDR.h"
+#include "Renderer/Rendering/HDR.h"
 
 //
 // EVENT BASE CLASS

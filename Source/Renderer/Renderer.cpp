@@ -23,20 +23,20 @@
 // - https://simonstechblog.blogspot.com/2019/06/d3d12-descriptor-heap-management.html
 
 #include "Renderer.h"
-#include "Device.h"
-#include "Texture.h"
-#include "Shader.h"
-#include "WindowRenderContext.h"
+#include "Core/Device.h"
+#include "Resources/Texture.h"
+#include "Pipeline/Shader.h"
+#include "Rendering/WindowRenderContext.h"
 
-#include "../Engine/Core/Window.h"
-#include "../Engine/GPUMarker.h"
+#include "Engine/Core/Window.h"
+#include "Engine/GPUMarker.h"
 #include "../../Shaders/LightingConstantBufferData.h"
 
-#include "../../Libs/VQUtils/Source/Log.h"
-#include "../../Libs/VQUtils/Source/utils.h"
-#include "../../Libs/VQUtils/Source/Timer.h"
-#include "../../Libs/D3D12MA/src/Common.h"
-#include "../../Libs/D3D12MA/src/D3D12MemAlloc.h"
+#include "Libs/VQUtils/Source/Log.h"
+#include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Source/Timer.h"
+#include "Libs/D3D12MA/src/Common.h"
+#include "Libs/D3D12MA/src/D3D12MemAlloc.h"
 
 #include <cassert>
 #include <atomic>

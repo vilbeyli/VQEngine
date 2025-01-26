@@ -21,7 +21,7 @@
 #include "ShaderCompileUtils.h"
 #include <unordered_map>
 #include "Tessellation.h"
-#include "../Engine/Core/Types.h"
+#include "Engine/Core/Types.h"
 
 namespace D3D12MA { class Allocator; }
 class Window;

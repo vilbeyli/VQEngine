@@ -21,7 +21,7 @@
 #include "Shaders/LightingConstantBufferData.h"
 #include "Transform.h"
 #include "../Settings.h"
-#include "../../Renderer/CubemapUtility.h"
+#include "Renderer/Resources/CubemapUtility.h"
 
 
 // Only used for point lights when querying LightSpaceMatrix, ViewMatrix and ViewFrustumPlanes.

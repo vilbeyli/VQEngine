@@ -19,7 +19,7 @@
 
 #include "../Core/Types.h"
 #include "../Libs/VQUtils/Source/utils.h"
-#include "../Source/Renderer/Buffer.h"
+#include "Renderer/Resources/Buffer.h"
 #include "../Math.h"
 #include "MeshGeometryData.h"
 

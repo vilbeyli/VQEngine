@@ -18,23 +18,23 @@
 
 #pragma once
 
-#include "Device.h"
-#include "CommandQueue.h"
-#include "ResourceHeaps.h"
-#include "ResourceViews.h"
-#include "Buffer.h"
-#include "Texture.h"
-#include "ShaderCompileUtils.h"
-#include "WindowRenderContext.h"
-#include "Renderer_PSOs.h"
+#include "Core/Device.h"
+#include "Core/CommandQueue.h"
+#include "Resources/ResourceHeaps.h"
+#include "Resources/ResourceViews.h"
+#include "Resources/Buffer.h"
+#include "Resources/Texture.h"
+#include "Pipeline/ShaderCompileUtils.h"
+#include "Pipeline/Renderer_PSOs.h"
+#include "Rendering/WindowRenderContext.h"
 
-#include "../Engine/Core/Types.h"
-#include "../Engine/Core/Platform.h"
-#include "../Engine/Settings.h"
+#include "Engine/Core/Types.h"
+#include "Engine/Core/Platform.h"
+#include "Engine/Settings.h"
 
 #define VQUTILS_SYSTEMINFO_INCLUDE_D3D12 1
-#include "../../Libs/VQUtils/Source/SystemInfo.h" // FGPUInfo
-#include "../../Libs/VQUtils/Source/Multithreading.h"
+#include "Libs/VQUtils/Source/SystemInfo.h" // FGPUInfo
+#include "Libs/VQUtils/Source/Multithreading.h"
 
 #include <vector>
 #include <unordered_map>

@@ -19,7 +19,7 @@
 
 #pragma once
 
-#include "HDR.h"
+#include "Rendering/HDR.h"
 
 #define VC_EXTRALEAN
 #define WIN32_LEAN_AND_MEAN

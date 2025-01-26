@@ -28,7 +28,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
-#include "WinPixEventRuntime/Include/WinPixEventRuntime/pix3.h"
+#include "Libs/WinPixEventRuntime/Include/WinPixEventRuntime/pix3.h"
 #ifdef max
 #error "max macro is defined"
 #endif

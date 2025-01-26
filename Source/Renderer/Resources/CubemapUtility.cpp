@@ -17,7 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "CubemapUtility.h"
-#include "../Engine/Math.h"
+#include "Engine/Math.h"
 
 DirectX::XMMATRIX CubemapUtility::CalculateViewMatrix(CubemapUtility::ECubeMapLookDirections cubeFace, const DirectX::XMFLOAT3& position)
 {

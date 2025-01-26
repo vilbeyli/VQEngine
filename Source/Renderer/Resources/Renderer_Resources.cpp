@@ -19,19 +19,19 @@
 #define VC_EXTRALEAN
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
-#include "Renderer.h"
-#include "Device.h"
+#include "Renderer/Renderer.h"
+#include "Core/Device.h"
 #include "Texture.h"
 
-#include "../Engine/GPUMarker.h"
-#include "../Engine/Core/Window.h"
+#include "Engine/GPUMarker.h"
+#include "Engine/Core/Window.h"
 
-#include "../../Libs/VQUtils/Source/Log.h"
-#include "../../Libs/VQUtils/Source/utils.h"
-#include "../../Libs/VQUtils/Source/Timer.h"
-#include "../../Libs/VQUtils/Source/Image.h"
-#include "../../Libs/D3D12MA/src/Common.h"
-#include "../../Libs/DirectXCompiler/inc/dxcapi.h"
+#include "Libs/VQUtils/Source/Log.h"
+#include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Source/Timer.h"
+#include "Libs/VQUtils/Source/Image.h"
+#include "Libs/D3D12MA/src/Common.h"
+#include "Libs/DirectXCompiler/inc/dxcapi.h"
 
 #include <cassert>
 #include <atomic>

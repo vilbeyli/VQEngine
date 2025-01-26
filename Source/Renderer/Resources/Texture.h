@@ -18,9 +18,9 @@
 
 #pragma once
 
-#include "Common.h"
-#include "../../Libs/VQUtils/Source/Image.h"
-#include "../../Libs/VQUtils/Source/Multithreading.h"
+#include "Core/Common.h"
+#include "Libs/VQUtils/Source/Image.h"
+#include "Libs/VQUtils/Source/Multithreading.h"
 
 #include <atomic>
 #include <vector>
