@@ -50,54 +50,6 @@ set (Materials
 )
 
 #
-# SHADERS
-#
-set (Shaders
-    "Shaders/hello-triangle.hlsl"
-    "Shaders/hello-cube.hlsl"
-    "Shaders/FullscreenTriangle.hlsl"
-    "Shaders/Tonemapper.hlsl"
-    "Shaders/Skydome.hlsl"
-    "Shaders/Object.hlsl"
-    "Shaders/ForwardLighting.hlsl"
-    "Shaders/BRDF.hlsl"
-    "Shaders/Common.hlsl"
-    "Shaders/ShadingMath.hlsl"
-    "Shaders/Lighting.hlsl"
-    "Shaders/LightingConstantBufferData.h"
-    "Shaders/Unlit.hlsl"
-    "Shaders/ShadowDepthPass.hlsl"
-    "Shaders/DepthPrePass.hlsl"
-    "Shaders/DepthResolve.hlsl"
-    "Shaders/CubemapConvolution.hlsl"
-    "Shaders/GaussianBlur.hlsl"
-    "Shaders/AMDFidelityFX.hlsl"
-    "Shaders/DownsampleDepth.hlsl"
-    "Shaders/UI.hlsl"
-    "Shaders/UIHDRComposite.hlsl"
-    "Shaders/HDR.hlsl"
-    "Shaders/Visualization.hlsl"
-    "Shaders/ApplyReflections.hlsl"
-    "Shaders/Magnifier.hlsl"
-    "Shaders/ObjectID.hlsl"
-    "Shaders/Outline.hlsl"
-    "Shaders/VertexDebug.hlsl"
-    "Shaders/Tessellation.hlsl"
-    "Shaders/VQPlatform.h"
-)
-
-set (ShadersScreenSpaceReflections
-    "Shaders/ScreenSpaceReflections/ClassifyReflectionTiles.hlsl"
-    "Shaders/ScreenSpaceReflections/Intersect.hlsl"
-    "Shaders/ScreenSpaceReflections/Prefilter.hlsl"
-    "Shaders/ScreenSpaceReflections/PrepareBlueNoiseTexture.hlsl"
-    "Shaders/ScreenSpaceReflections/PrepareIndirectArgs.hlsl"
-    "Shaders/ScreenSpaceReflections/Reproject.hlsl"
-    "Shaders/ScreenSpaceReflections/ResolveTemporal.hlsl"
-    "Shaders/ScreenSpaceReflections/Common.hlsl"
-)
-
-#
 # SOURCE
 #
 set (RenderPassFiles
@@ -209,36 +161,6 @@ set (SourceVQE
     "Source/Engine/GPUMarker.cpp"
 )
 
-set (FFX_CAS_Shaders
-    "Shaders/AMDFidelityFX/CAS/ffx_a.h"
-    "Shaders/AMDFidelityFX/CAS/ffx_cas.h"
-)
-set (FFX_FSR_Shaders
-    "Shaders/AMDFidelityFX/FSR1.0/ffx_a.h"
-    "Shaders/AMDFidelityFX/FSR1.0/ffx_fsr1.h"
-)
-set (FFX_SPD_Shaders
-    "Shaders/AMDFidelityFX/SPD/ffx_a.h"
-    "Shaders/AMDFidelityFX/SPD/ffx_spd.h"
-)
-set (FFX_CACAO_Shaders
-    "Shaders/AMDFidelityFX/CACAO/ffx_cacao.hlsl"
-)
-set (FFX_SSSR_Shaders
-    "Shaders/AMDFidelityFX/SSSR/ffx_sssr.h"
-)
-set (FFX_DNSR_Shaders
-    "Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_common.h"
-    "Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_config.h"
-    "Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_prefilter.h"
-    "Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_reproject.h"
-    "Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_resolve_temporal.h"
-    "Shaders/AMDFidelityFX/DNSR/ffx_denoiser_shadows_filter.h"
-    "Shaders/AMDFidelityFX/DNSR/ffx_denoiser_shadows_prepare.h"
-    "Shaders/AMDFidelityFX/DNSR/ffx_denoiser_shadows_tileclassification.h"
-    "Shaders/AMDFidelityFX/DNSR/ffx_denoiser_shadows_util.h"
-)
-
 set (LibsIncl
     "Libs/"
 )
@@ -271,14 +193,6 @@ add_subdirectory(Libs/imgui)
 source_group("Config"   FILES ${Config})
 source_group("Resource" FILES ${Resource})
 source_group("Icons"    FILES ${Icons})
-source_group("Shaders"  FILES ${Shaders})
-source_group("Shaders\\ScreenSpaceReflections"  FILES ${ShadersScreenSpaceReflections})
-source_group("Shaders\\AMD-FidelityFX\\CAS"   FILES ${FFX_CAS_Shaders})
-source_group("Shaders\\AMD-FidelityFX\\FSR1"  FILES ${FFX_FSR_Shaders})
-source_group("Shaders\\AMD-FidelityFX\\SPD"   FILES ${FFX_SPD_Shaders})
-source_group("Shaders\\AMD-FidelityFX\\CACAO" FILES ${FFX_CACAO_Shaders})
-source_group("Shaders\\AMD-FidelityFX\\SSSR" FILES ${FFX_SSSR_Shaders})
-source_group("Shaders\\AMD-FidelityFX\\DNSR" FILES ${FFX_DNSR_Shaders})
 source_group("Scenes"   FILES ${Scenes})
 source_group("Materials" FILES ${Materials})
 source_group("Source\\RenderPass" FILES ${RenderPassFiles})
@@ -291,21 +205,11 @@ source_group("Source" FILES ${SourceVQE})
 set_source_files_properties(${Config} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Materials} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Scenes} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${ShadersScreenSpaceReflections} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${FFX_CAS_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${FFX_FSR_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${FFX_SPD_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${FFX_CACAO_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${FFX_SSSR_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${FFX_DNSR_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${CoreFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${RenderPassFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${SceneFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${UIFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${PostProcessFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${LibFFX_CACAO} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${LibFFX_SSSR} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(Data/Resources/VQE.rc PROPERTIES VS_TOOL_OVERRIDE "Resource compiler")
 set_source_files_properties(Data/Icons/VQE32.ico  PROPERTIES VS_TOOL_OVERRIDE "Image")
 
@@ -321,14 +225,6 @@ add_executable( ${PROJECT_NAME}
     ${Scenes} 
     ${Resource} 
     ${Materials} 
-    ${Shaders} 
-        ${ShadersScreenSpaceReflections} 
-        ${FFX_FSR_Shaders} 
-        ${FFX_CAS_Shaders} 
-        ${FFX_CACAO_Shaders} 
-        ${FFX_SSSR_Shaders} 
-        ${FFX_DNSR_Shaders} 
-        ${FFX_SPD_Shaders} 
     ${RenderPassFiles} 
     ${CoreFiles} 
     ${UIFiles} 

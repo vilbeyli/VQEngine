@@ -89,23 +89,109 @@ set(Renderer
     "Renderer.cpp"
 )
 
-# Shaders (TODO)
-set(Shaders
-
+# Shaders
+set (Shaders
+    "../../Shaders/hello-triangle.hlsl"
+    "../../Shaders/hello-cube.hlsl"
+    "../../Shaders/FullscreenTriangle.hlsl"
+    "../../Shaders/Tonemapper.hlsl"
+    "../../Shaders/Skydome.hlsl"
+    "../../Shaders/Object.hlsl"
+    "../../Shaders/ForwardLighting.hlsl"
+    "../../Shaders/BRDF.hlsl"
+    "../../Shaders/Common.hlsl"
+    "../../Shaders/ShadingMath.hlsl"
+    "../../Shaders/Lighting.hlsl"
+    "../../Shaders/LightingConstantBufferData.h"
+    "../../Shaders/Unlit.hlsl"
+    "../../Shaders/ShadowDepthPass.hlsl"
+    "../../Shaders/DepthPrePass.hlsl"
+    "../../Shaders/DepthResolve.hlsl"
+    "../../Shaders/CubemapConvolution.hlsl"
+    "../../Shaders/GaussianBlur.hlsl"
+    "../../Shaders/AMDFidelityFX.hlsl"
+    "../../Shaders/DownsampleDepth.hlsl"
+    "../../Shaders/UI.hlsl"
+    "../../Shaders/UIHDRComposite.hlsl"
+    "../../Shaders/HDR.hlsl"
+    "../../Shaders/Visualization.hlsl"
+    "../../Shaders/ApplyReflections.hlsl"
+    "../../Shaders/Magnifier.hlsl"
+    "../../Shaders/ObjectID.hlsl"
+    "../../Shaders/Outline.hlsl"
+    "../../Shaders/VertexDebug.hlsl"
+    "../../Shaders/Tessellation.hlsl"
+    "../../Shaders/VQPlatform.h"
 )
+set (FFX_CAS_Shaders
+    "../../Shaders/AMDFidelityFX/CAS/ffx_a.h"
+    "../../Shaders/AMDFidelityFX/CAS/ffx_cas.h"
+)
+set (FFX_FSR_Shaders
+    "../../Shaders/AMDFidelityFX/FSR1.0/ffx_a.h"
+    "../../Shaders/AMDFidelityFX/FSR1.0/ffx_fsr1.h"
+)
+set (FFX_SPD_Shaders
+    "../../Shaders/AMDFidelityFX/SPD/ffx_a.h"
+    "../../Shaders/AMDFidelityFX/SPD/ffx_spd.h"
+)
+set (FFX_CACAO_Shaders
+    "../../Shaders/AMDFidelityFX/CACAO/ffx_cacao.hlsl"
+)
+set (FFX_SSSR_Shaders
+    "../../Shaders/AMDFidelityFX/SSSR/ffx_sssr.h"
+)
+set (FFX_DNSR_Shaders
+    "../../Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_common.h"
+    "../../Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_config.h"
+    "../../Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_prefilter.h"
+    "../../Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_reproject.h"
+    "../../Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_resolve_temporal.h"
+    "../../Shaders/AMDFidelityFX/DNSR/ffx_denoiser_shadows_filter.h"
+    "../../Shaders/AMDFidelityFX/DNSR/ffx_denoiser_shadows_prepare.h"
+    "../../Shaders/AMDFidelityFX/DNSR/ffx_denoiser_shadows_tileclassification.h"
+    "../../Shaders/AMDFidelityFX/DNSR/ffx_denoiser_shadows_util.h"
+)
+set (ShadersScreenSpaceReflections
+    "../../Shaders/ScreenSpaceReflections/ClassifyReflectionTiles.hlsl"
+    "../../Shaders/ScreenSpaceReflections/Intersect.hlsl"
+    "../../Shaders/ScreenSpaceReflections/Prefilter.hlsl"
+    "../../Shaders/ScreenSpaceReflections/PrepareBlueNoiseTexture.hlsl"
+    "../../Shaders/ScreenSpaceReflections/PrepareIndirectArgs.hlsl"
+    "../../Shaders/ScreenSpaceReflections/Reproject.hlsl"
+    "../../Shaders/ScreenSpaceReflections/ResolveTemporal.hlsl"
+    "../../Shaders/ScreenSpaceReflections/Common.hlsl"
+)
+
+
 source_group("Core" FILES ${CoreHeaders} ${CoreSources})
 source_group("Resources" FILES ${ResourceHeaders} ${ResourceSources})
 source_group("Pipeline" FILES ${PipelineHeaders} ${PipelineSources})
 source_group("Rendering" FILES ${RenderingHeaders} ${RenderingSources})
 source_group("Renderer" FILES ${Renderer})
-#source_group("Shaders" FILES ${Shaders} )
+
+source_group("Shaders"  FILES ${Shaders})
+source_group("Shaders\\ScreenSpaceReflections"  FILES ${ShadersScreenSpaceReflections})
+source_group("Shaders\\AMD-FidelityFX\\CAS"   FILES ${FFX_CAS_Shaders})
+source_group("Shaders\\AMD-FidelityFX\\FSR1"  FILES ${FFX_FSR_Shaders})
+source_group("Shaders\\AMD-FidelityFX\\SPD"   FILES ${FFX_SPD_Shaders})
+source_group("Shaders\\AMD-FidelityFX\\CACAO" FILES ${FFX_CACAO_Shaders})
+source_group("Shaders\\AMD-FidelityFX\\SSSR" FILES ${FFX_SSSR_Shaders})
+source_group("Shaders\\AMD-FidelityFX\\DNSR" FILES ${FFX_DNSR_Shaders})
 
 source_group("Libs\\AMD-FidelityFX\\CACAO" FILES ${LibFFX_CACAO})
 source_group("Libs\\AMD-FidelityFX\\SSSR" FILES ${LibFFX_SSSR})
 source_group("Libs\\D3D12X" FILES ${LibHeadersD3D12X})
 
 set_source_files_properties(${LibHeadersD3D12X} PROPERTIES VS_TOOL_OVERRIDE "Text")
-#set_source_files_properties(${Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${ShadersScreenSpaceReflections} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${FFX_CAS_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${FFX_FSR_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${FFX_SPD_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${FFX_CACAO_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${FFX_SSSR_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${FFX_DNSR_Shaders} PROPERTIES VS_TOOL_OVERRIDE "Text")
 
 # set ouput directory
 SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/Bin)
@@ -128,6 +214,14 @@ add_library(${PROJECT_NAME} STATIC
     ${RenderingHeaders} ${RenderingSources}
     ${ResourceHeaders} ${ResourceSources}
     ${Renderer}
+    ${Shaders} 
+        ${ShadersScreenSpaceReflections} 
+        ${FFX_FSR_Shaders} 
+        ${FFX_CAS_Shaders} 
+        ${FFX_CACAO_Shaders} 
+        ${FFX_SSSR_Shaders} 
+        ${FFX_DNSR_Shaders} 
+        ${FFX_SPD_Shaders} 
 )
 
 add_definitions(-DFFX_CACAO_ENABLE_D3D12)
