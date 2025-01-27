@@ -36,7 +36,7 @@
 //
 // DRAW COMMANDS
 //
-void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews::FShadowView& shadowView, size_t iDepthMode)
+void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FShadowView& shadowView, size_t iDepthMode)
 {
 	using namespace DirectX;
 
@@ -187,7 +187,7 @@ static D3D12_GPU_VIRTUAL_ADDRESS SetPerViewCB(
 void VQEngine::RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& SceneShadowView)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderDirectionalShadowMaps");
-	const FSceneShadowViews::FShadowView& View = SceneShadowView.ShadowView_Directional;
+	const FShadowView& View = SceneShadowView.ShadowView_Directional;
 	if (!View.drawParamLookup.empty() && !View.meshRenderCommands.empty())
 	{
 		const std::string marker = "Directional";
@@ -244,7 +244,7 @@ void VQEngine::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuff
 	
 	for (uint i = 0; i < SceneShadowView.NumSpotShadowViews; ++i)
 	{
-		const FSceneShadowViews::FShadowView& ShadowView = SceneShadowView.ShadowViews_Spot[i];
+		const FShadowView& ShadowView = SceneShadowView.ShadowViews_Spot[i];
 		if (ShadowView.drawParamLookup.empty())
 			continue;
 
@@ -305,7 +305,7 @@ void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 		for (size_t face = 0; face < 6; ++face)
 		{
 			const size_t iShadowView = i * 6 + face;
-			const FSceneShadowViews::FShadowView& ShadowView = SceneShadowView.ShadowViews_Point[iShadowView];
+			const FShadowView& ShadowView = SceneShadowView.ShadowViews_Point[iShadowView];
 
 			if (ShadowView.drawParamLookup.empty())
 				continue;

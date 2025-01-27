@@ -244,7 +244,7 @@ protected:
 	//
 	SceneBoundingBoxHierarchy mBoundingBoxHierarchy;
 	mutable FFrustumCullWorkerContext mFrustumCullWorkerContext;
-	std::unordered_map<size_t, FSceneShadowViews::FShadowView*> mFrustumIndex_pShadowViewLookup;
+	std::unordered_map<size_t, FShadowView*> mFrustumIndex_pShadowViewLookup;
 
 	std::vector<size_t> mActiveLightIndices_Static;
 	std::vector<size_t> mActiveLightIndices_Stationary;

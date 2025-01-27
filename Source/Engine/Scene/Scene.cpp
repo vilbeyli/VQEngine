@@ -646,7 +646,7 @@ static void CollectDebugVertexDrawParams(FSceneView& SceneView,
 	}	
 }
 
-static void ResetInstanceCounts(size_t NumFrustums, FSceneView& SceneView, std::unordered_map<size_t, FSceneShadowViews::FShadowView*>& mFrustumIndex_pShadowViewLookup)
+static void ResetInstanceCounts(size_t NumFrustums, FSceneView& SceneView, std::unordered_map<size_t, FShadowView*>& mFrustumIndex_pShadowViewLookup)
 {
 	SCOPED_CPU_MARKER_C("ResetInstanceCounts", 0xFF0000FF);
 	for (auto& it : ((FSceneView&)SceneView).drawParamLookup)
@@ -657,10 +657,10 @@ static void ResetInstanceCounts(size_t NumFrustums, FSceneView& SceneView, std::
 
 	for (int iFrustum = 1; iFrustum < NumFrustums; ++iFrustum)
 	{
-		FSceneShadowViews::FShadowView* pShadowView = mFrustumIndex_pShadowViewLookup.at(iFrustum);
-		for (auto& it : ((FSceneShadowViews::FShadowView&)*pShadowView).drawParamLookup)
+		FShadowView* pShadowView = mFrustumIndex_pShadowViewLookup.at(iFrustum);
+		for (auto& it : ((FShadowView&)*pShadowView).drawParamLookup)
 		{
-			FSceneShadowViews::FShadowView::FInstanceDataArray& LODArrays = it.second;
+			FShadowView::FInstanceDataArray& LODArrays = it.second;
 			LODArrays.NumValidData = 0;
 		}
 	}
@@ -937,13 +937,13 @@ void Scene::GatherShadowViewData(FSceneShadowViews& SceneShadowView, const std::
 		{
 		case Light::EType::DIRECTIONAL:
 		{
-			FSceneShadowViews::FShadowView& ShadowView = SceneShadowView.ShadowView_Directional;
+			FShadowView& ShadowView = SceneShadowView.ShadowView_Directional;
 			ShadowView.matViewProj = l.GetViewProjectionMatrix();
 		}	break;
 		case Light::EType::SPOT:
 		{
 			XMMATRIX matViewProj = l.GetViewProjectionMatrix();
-			FSceneShadowViews::FShadowView& ShadowView = SceneShadowView.ShadowViews_Spot[SceneShadowView.NumSpotShadowViews++];
+			FShadowView& ShadowView = SceneShadowView.ShadowViews_Spot[SceneShadowView.NumSpotShadowViews++];
 			ShadowView.matViewProj = matViewProj;
 		} break;
 		case Light::EType::POINT:
@@ -951,7 +951,7 @@ void Scene::GatherShadowViewData(FSceneShadowViews& SceneShadowView, const std::
 			for (int face = 0; face < 6; ++face)
 			{
 				XMMATRIX matViewProj = l.GetViewProjectionMatrix(static_cast<CubemapUtility::ECubeMapLookDirections>(face));
-				FSceneShadowViews::FShadowView& ShadowView = SceneShadowView.ShadowViews_Point[SceneShadowView.NumPointShadowViews * 6 + face];
+				FShadowView& ShadowView = SceneShadowView.ShadowViews_Point[SceneShadowView.NumPointShadowViews * 6 + face];
 				ShadowView.matViewProj = matViewProj;
 			}
 			SceneShadowView.PointLightLinearDepthParams[SceneShadowView.NumPointShadowViews].fFarPlane = l.Range;
@@ -1061,8 +1061,8 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 				[&MeshBB_MeshID, &MeshBB_MatID, &MeshBB_NumMeshLODs, bForceLOD0_ShadowView]
 				(const FFrustumCullWorkerContext::FCullResult& l, const FFrustumCullWorkerContext::FCullResult& r)
 			{
-				const uint64 keyL = FSceneShadowViews::FShadowView::GetKey(MeshBB_MatID[l.iBB], MeshBB_MeshID[l.iBB], l.SelectedLOD, l.bTessellated);
-				const uint64 keyR = FSceneShadowViews::FShadowView::GetKey(MeshBB_MatID[r.iBB], MeshBB_MeshID[r.iBB], r.SelectedLOD, r.bTessellated);
+				const uint64 keyL = FShadowView::GetKey(MeshBB_MatID[l.iBB], MeshBB_MeshID[l.iBB], l.SelectedLOD, l.bTessellated);
+				const uint64 keyR = FShadowView::GetKey(MeshBB_MatID[r.iBB], MeshBB_MeshID[r.iBB], r.SelectedLOD, r.bTessellated);
 				return keyL > keyR;
 			};
 			size_t currRange = 0;
@@ -1720,7 +1720,7 @@ static void DispatchWorkers_ShadowViews(
 	, const bool bForceLOD0
 	, ThreadPool& UpdateWorkerThreadPool
 	, FFrustumCullWorkerContext& mFrustumCullWorkerContext
-	, std::unordered_map<size_t, FSceneShadowViews::FShadowView*>& mFrustumIndex_pShadowViewLookup
+	, std::unordered_map<size_t, FShadowView*>& mFrustumIndex_pShadowViewLookup
 	, const SceneBoundingBoxHierarchy& BBH
 	, const MeshLookup_t& mMeshes
 	, const MaterialLookup_t& mMaterials
@@ -1737,7 +1737,7 @@ static void DispatchWorkers_ShadowViews(
 		WorkerContexts.resize(NumShadowMeshFrustums);
 		for (size_t iFrustum = 1; iFrustum <= NumShadowMeshFrustums; ++iFrustum) // iFrustum==0 is for mainView, start from 1
 		{
-			FSceneShadowViews::FShadowView* pShadowView = mFrustumIndex_pShadowViewLookup.at(iFrustum);
+			FShadowView* pShadowView = mFrustumIndex_pShadowViewLookup.at(iFrustum);
 			const std::vector<FFrustumCullWorkerContext::FCullResult>& ViewCullResults = mFrustumCullWorkerContext.vCullResultsPerView[iFrustum];
 			WorkerContexts[iFrustum - 1] = { iFrustum, &ViewCullResults, pShadowView };
 
@@ -1770,7 +1770,7 @@ static void DispatchWorkers_ShadowViews(
 					*ctx.pCullResults,
 					ctx.pShadowView->meshRenderCommands,
 					ctx.pShadowView->drawParamLookup,
-					FSceneShadowViews::FShadowView::GetKey,
+					FShadowView::GetKey,
 					ctx.pShadowView->mRenderCmdInstanceDataWriteIndex,
 					MAX_INSTANCE_COUNT__SHADOW_MESHES
 				);
@@ -1800,7 +1800,7 @@ static void DispatchWorkers_ShadowViews(
 	//			*ctx.pCullResults,
 	//			ctx.pShadowView->meshRenderCommands,
 	//			ctx.pShadowView->drawParamLookup,
-	//			FSceneShadowViews::FShadowView::GetKey,
+	//			FShadowView::GetKey,
 	//			ctx.pShadowView->mRenderCmdInstanceDataWriteIndex,
 	//			MAX_INSTANCE_COUNT__SHADOW_MESHES
 	//		);

@@ -163,50 +163,52 @@ struct FSceneView
 	//--------------------------------------------------------------------------------------------------------------------------------------------
 #endif
 };
+
+struct FShadowView
+{
+	DirectX::XMMATRIX matViewProj;
+#if RENDER_INSTANCED_SHADOW_MESHES
+	//--------------------------------------------------------------------------------------------------------------------------------------------
+	//  +----SHADOW_MESH0             +----SHADOW_MESH1             
+	//     +----LOD0                     +----LOD0        
+	//         +----ShadowInstData0          +----ShadowInstData0                       
+	//         +----ShadowInstData1          +----ShadowInstData1                       
+	//     +----LOD1                         +----ShadowInstData2        
+	//         +----ShadowInstData0                        
+	//         +----ShadowInstData1                        
+	struct FInstanceData { DirectX::XMMATRIX matWorld, matWorldViewProj; float fDisplacement; };
+	struct FInstanceDataArray { size_t NumValidData = 0; std::vector<FInstanceData> Data; };
+		
+	// Bits[0  -  3] : LOD
+	// Bits[4  - 33] : MeshID
+	// Bits[34 - 63] : MaterialID
+	static inline uint64 GetKey(MaterialID matID, MeshID meshID, int lod, bool bTessellated)
+	{
+		assert(matID != -1); assert(meshID != -1); assert(lod >= 0 && lod < 16);
+
+		constexpr int mask = 0x3FFFFFFF; // __11 1111 1111 1111 ...| use the first 30 bits of IDs
+		uint64 hash = std::max(0, std::min(1 << 4, lod));
+		hash |= ((uint64)(meshID & mask)) << 4;
+		if (bTessellated)
+		{
+			hash |= ((uint64)(matID & mask)) << 34;
+		}
+		return hash;
+	}
+	static inline MaterialID GetMatIDFromKey(uint64 key) { return MaterialID(key >> 34); }
+	static inline MeshID     GetMeshIDFromKey(uint64 key) { return MeshID((key >> 4) & 0x3FFFFFFF); }
+	static inline int        GetLODFromKey(uint64 key) { return int(key & 0xF); }
+	std::unordered_map<uint64, FInstanceDataArray> drawParamLookup;
+	std::vector<FInstanceDataWriteParam> mRenderCmdInstanceDataWriteIndex; // drawParamLookup --> meshRenderCommands
+	////--------------------------------------------------------------------------------------------------------------------------------------------
+	std::vector<FInstancedShadowMeshRenderCommand> meshRenderCommands; // per LOD mesh
+#else
+	std::vector<FShadowMeshRenderCommand> meshRenderCommands;
+#endif
+};
+
 struct FSceneShadowViews
 {
-	struct FShadowView
-	{
-		DirectX::XMMATRIX matViewProj;
-#if RENDER_INSTANCED_SHADOW_MESHES
-		//--------------------------------------------------------------------------------------------------------------------------------------------
-		//  +----SHADOW_MESH0             +----SHADOW_MESH1             
-		//     +----LOD0                     +----LOD0        
-		//         +----ShadowInstData0          +----ShadowInstData0                       
-		//         +----ShadowInstData1          +----ShadowInstData1                       
-		//     +----LOD1                         +----ShadowInstData2        
-		//         +----ShadowInstData0                        
-		//         +----ShadowInstData1                        
-		struct FInstanceData { DirectX::XMMATRIX matWorld, matWorldViewProj; float fDisplacement; };
-		struct FInstanceDataArray { size_t NumValidData = 0; std::vector<FInstanceData> Data; };
-		
-		// Bits[0  -  3] : LOD
-		// Bits[4  - 33] : MeshID
-		// Bits[34 - 63] : MaterialID
-		static inline uint64 GetKey(MaterialID matID, MeshID meshID, int lod, bool bTessellated)
-		{
-			assert(matID != -1); assert(meshID != -1); assert(lod >= 0 && lod < 16);
-
-			constexpr int mask = 0x3FFFFFFF; // __11 1111 1111 1111 ...| use the first 30 bits of IDs
-			uint64 hash = std::max(0, std::min(1 << 4, lod));
-			hash |= ((uint64)(meshID & mask)) << 4;
-			if (bTessellated)
-			{
-				hash |= ((uint64)(matID & mask)) << 34;
-			}
-			return hash;
-		}
-		static inline MaterialID GetMatIDFromKey(uint64 key) { return MaterialID(key >> 34); }
-		static inline MeshID     GetMeshIDFromKey(uint64 key) { return MeshID((key >> 4) & 0x3FFFFFFF); }
-		static inline int        GetLODFromKey(uint64 key) { return int(key & 0xF); }
-		std::unordered_map<uint64, FInstanceDataArray> drawParamLookup;
-		std::vector<FInstanceDataWriteParam> mRenderCmdInstanceDataWriteIndex; // drawParamLookup --> meshRenderCommands
-		////--------------------------------------------------------------------------------------------------------------------------------------------
-		std::vector<FInstancedShadowMeshRenderCommand> meshRenderCommands; // per LOD mesh
-#else
-		std::vector<FShadowMeshRenderCommand> meshRenderCommands;
-#endif
-	};
 	struct FPointLightLinearDepthParams
 	{
 		float fFarPlane;
@@ -254,5 +256,5 @@ struct FFrustumRenderCommandRecorderContext
 {
 	size_t iFrustum;
 	const std::vector<FFrustumCullWorkerContext::FCullResult>* pCullResults = nullptr;
-	FSceneShadowViews::FShadowView* pShadowView = nullptr;
+	FShadowView* pShadowView = nullptr;
 };
