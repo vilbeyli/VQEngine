@@ -18,7 +18,7 @@
 
 
 #include "Renderer.h"
-#include "../../Shaders/LightingConstantBufferData.h"
+#include "Shaders/LightingConstantBufferData.h"
 
 using namespace Microsoft::WRL;
 using namespace VQSystemInfo;

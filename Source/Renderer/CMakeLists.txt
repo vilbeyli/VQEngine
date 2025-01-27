@@ -75,7 +75,7 @@ set(PipelineHeaders
 )
 set(PipelineSources
     "Pipeline/PipelineStateObjects.cpp"
-    "Pipeline/Renderer_RootSignatures.cpp"
+    "Pipeline/RootSignatures.cpp"
     "Pipeline/Shader.cpp"
     "Pipeline/ShaderCompileUtils.cpp"
 )
