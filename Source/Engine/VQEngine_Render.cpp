@@ -1255,7 +1255,7 @@ void VQEngine::RenderThread_RenderMainWindow()
 	if (mbEnvironmentMapPreFilter.load())
 	{
 		ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, 0);
-		PreFilterEnvironmentMap(pCmd, mResources_MainWnd.EnvironmentMap);
+		mRenderer.PreFilterEnvironmentMap(pCmd, mResources_MainWnd.EnvironmentMap, mBuiltinMeshes[EBuiltInMeshes::CUBE], mpWinMain->GetHWND());
 		mbEnvironmentMapPreFilter.store(false);
 	}
 

@@ -332,8 +332,7 @@ public:
 	void StartLoadingScene(int IndexScene);
 	
 	void StartLoadingEnvironmentMap(int IndexEnvMap);
-	void PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, FEnvironmentMapRenderingResources& env);
-	void ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, SRV_ID& outSRV_ID);
+	
 	void UnloadEnvironmentMap();
 
 	void WaitForBuiltinMeshGeneration();
