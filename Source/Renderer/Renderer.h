@@ -20,6 +20,7 @@
 
 #include "Core/Device.h"
 #include "Core/CommandQueue.h"
+#include "Core/Fence.h"
 #include "Resources/ResourceHeaps.h"
 #include "Resources/ResourceViews.h"
 #include "Resources/Buffer.h"
@@ -40,17 +41,23 @@
 #include <unordered_map>
 #include <array>
 
+
 namespace D3D12MA { class Allocator; }
 class Window;
+class Device;
+struct FSceneView;
+struct FSceneShadowViews;
+struct FShadowView;
+struct FPostProcessParameters;
 struct ID3D12RootSignature;
 struct ID3D12PipelineState;
+struct TextureCreateDesc;
 
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//========================================================================================================================================================================================================---
 //
 // TYPE DEFINITIONS
 //
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
+//========================================================================================================================================================================================================---
 constexpr size_t MAX_INSTANCE_COUNT__UNLIT_SHADER = 512;
 constexpr size_t MAX_INSTANCE_COUNT__SHADOW_MESHES = 128;
 
@@ -63,11 +70,12 @@ enum EProceduralTextures
 	, NUM_PROCEDURAL_TEXTURES
 };
 
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+//========================================================================================================================================================================================================---
 //
 // RENDERER
 //
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//========================================================================================================================================================================================================---
 class VQRenderer
 {
 public:
@@ -76,11 +84,24 @@ public:
 	void                         Unload();
 	void                         Destroy();
 
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	// EVENTS
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	void                         WaitForLoadCompletion() const;
-
 	void                         OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h);
 
-	// Swapchain-interface
+
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	// Device & Queues
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	inline ID3D12Device*         GetDevicePtr() const { return mDevice.GetDevicePtr(); }
+	inline CommandQueue&         GetCommandQueue(CommandQueue::EType eType) { return mCmdQueues[(int)eType]; }
+	inline FDeviceCapabilities   GetDeviceCapabilities() const { return mDevice.GetDeviceCapabilities(); }
+
+
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	// Swapchain
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	void                         InitializeRenderContext(const Window* pWnd, int NumSwapchainBuffers, bool bVSync, bool bHDRSwapchain);
 	inline short                 GetSwapChainBackBufferCount(std::unique_ptr<Window>& pWnd) const { return GetSwapChainBackBufferCount(pWnd.get()); };
 	unsigned short               GetSwapChainBackBufferCount(Window* pWnd) const;
@@ -89,14 +110,38 @@ public:
 	FWindowRenderContext&        GetWindowRenderContext(HWND hwnd);
 	void                         WaitMainSwapchainReady() const;
 
-	// Resource management
+
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	// Buffers
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	BufferID                     CreateBuffer(const FBufferDesc& desc);
-	TextureID                    CreateTextureFromFile(const char* pFilePath, bool bCheckAlpha, bool bGenerateMips/* = false*/);
-	TextureID                    CreateTexture(const TextureCreateDesc& desc, bool bCheckAlpha = false);
 	void                         UploadVertexAndIndexBufferHeaps();
 
-	// Allocates a ResourceView from the respective heap and returns a unique identifier.
-	SRV_ID                       AllocateSRV(uint NumDescriptors = 1);
+
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	// Textures
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	TextureID                    CreateTextureFromFile(const char* pFilePath, bool bCheckAlpha, bool bGenerateMips/* = false*/);
+	TextureID                    CreateTexture(const TextureCreateDesc& desc, bool bCheckAlpha = false);
+	
+	const ID3D12Resource*        GetTextureResource(TextureID Id) const;
+	      ID3D12Resource*        GetTextureResource(TextureID Id);
+	DXGI_FORMAT                  GetTextureFormat(TextureID Id) const;
+	bool                         GetTextureAlphaChannelUsed(TextureID Id) const;
+	inline void                  GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, dummy); }
+	inline void                  GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, NumSlices, dummy); }
+	void                         GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices, int& NumMips) const;
+	uint                         GetTextureMips(TextureID Id) const;
+	uint                         GetTextureSampleCount(TextureID) const;
+	
+	TextureID                    GetProceduralTexture(EProceduralTextures tex) const;
+	inline const SRV&            GetProceduralTextureSRV(EProceduralTextures tex) const { return GetSRV(GetProceduralTextureSRV_ID(tex)); }
+	inline const SRV_ID          GetProceduralTextureSRV_ID(EProceduralTextures tex) const { return mLookup_ProceduralTextureSRVs.at(tex); }
+	
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	// Resource views
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	SRV_ID                       AllocateSRV(uint NumDescriptors = 1); // Allocates a ResourceView descriptor from the respective heap and returns a unique identifier.
 	DSV_ID                       AllocateDSV(uint NumDescriptors = 1);
 	RTV_ID                       AllocateRTV(uint NumDescriptors = 1);
 	UAV_ID                       AllocateUAV(uint NumDescriptors = 1);
@@ -117,27 +162,6 @@ public:
 	void                         DestroySRV(SRV_ID srvID);
 	void                         DestroyDSV(DSV_ID dsvID);
 
-	// Pipeline State Object creation functions
-	PSO_ID                       CreatePSO_OnThisThread(const FPSODesc& psoLoadDesc);
-	void                         EnqueueTask_ShaderLoad(TaskID PSOLoadTaskID, const FShaderStageCompileDesc&);
-	std::vector<std::shared_future<FShaderStageCompileResult>> StartShaderLoadTasks(TaskID PSOLoadTaskID);
-	//void AbortTasks(); // ?
-
-	void                         StartPSOCompilation_MT(std::vector<FPSOCreationTaskParameters>&& RenderPassPSODescs);
-	void                         WaitPSOCompilation();
-	void                         AssignPSOs();
-	std::vector<FPSODesc>        LoadBuiltinPSODescs_Legacy();
-	std::vector<FPSODesc>        LoadBuiltinPSODescs();
-	void                         ReservePSOMap(size_t NumPSOs);
-
-	// Getters: PSO, RootSignature, Heap
-	inline ID3D12PipelineState*  GetPSO(EBuiltinPSOs pso) const { return mPSOs.at(static_cast<PSO_ID>(pso)); }
-	       ID3D12PipelineState*  GetPSO(PSO_ID psoID) const;
-		   ID3D12RootSignature*  GetBuiltinRootSignature(EBuiltinRootSignatures eRootSignature) const;
-
-	ID3D12DescriptorHeap*        GetDescHeap(EResourceHeapType HeapType);
-
-	// Getters: Resource Views
 	const VBV&                   GetVertexBufferView(BufferID Id) const;
 	const IBV&                   GetIndexBufferView(BufferID Id) const;
 	const CBV_SRV_UAV&           GetShaderResourceView(SRV_ID Id) const;
@@ -145,18 +169,6 @@ public:
 	const CBV_SRV_UAV&           GetConstantBufferView(CBV_ID Id) const;
 	const RTV&                   GetRenderTargetView(RTV_ID Id) const;
 	const DSV&                   GetDepthStencilView(RTV_ID Id) const;
-
-	const ID3D12Resource*        GetTextureResource(TextureID Id) const;
-	      ID3D12Resource*        GetTextureResource(TextureID Id);
-	DXGI_FORMAT                  GetTextureFormat(TextureID Id) const;
-	bool                         GetTextureAlphaChannelUsed(TextureID Id) const;
-
-	inline void                  GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, dummy); }
-	inline void                  GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, NumSlices, dummy); }
-	void                         GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices, int& NumMips) const;
-	uint                         GetTextureMips(TextureID Id) const;
-	uint                         GetTextureSampleCount(TextureID) const;
-
 	inline const VBV&            GetVBV(BufferID Id) const { return GetVertexBufferView(Id);    }
 	inline const IBV&            GetIBV(BufferID Id) const { return GetIndexBufferView(Id);     }
 	inline const CBV_SRV_UAV&    GetSRV(SRV_ID   Id) const { return GetShaderResourceView(Id);  }
@@ -164,15 +176,37 @@ public:
 	inline const CBV_SRV_UAV&    GetCBV(CBV_ID   Id) const { return GetConstantBufferView(Id);  }
 	inline const RTV&            GetRTV(RTV_ID   Id) const { return GetRenderTargetView(Id);    }
 	inline const DSV&            GetDSV(DSV_ID   Id) const { return GetDepthStencilView(Id);    }
-	
-	inline const SRV&            GetProceduralTextureSRV(EProceduralTextures tex) const { return GetSRV(GetProceduralTextureSRV_ID(tex)); }
-	inline const SRV_ID          GetProceduralTextureSRV_ID(EProceduralTextures tex) const { return mLookup_ProceduralTextureSRVs.at(tex); }
-	TextureID                    GetProceduralTexture(EProceduralTextures tex) const;
-	
-	inline ID3D12Device*         GetDevicePtr() { return mDevice.GetDevicePtr(); }
-	inline FDeviceCapabilities   GetDeviceCapabilities() const { return mDevice.GetDeviceCapabilities(); }
-	inline CommandQueue&         GetCommandQueue(CommandQueue::EType eType) { return mCmdQueues[(int)eType]; }
 
+
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	// PSO & Shader management
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	PSO_ID                       CreatePSO_OnThisThread(const FPSODesc& psoLoadDesc);
+	void                         EnqueueTask_ShaderLoad(TaskID PSOLoadTaskID, const FShaderStageCompileDesc&);
+	std::vector<std::shared_future<FShaderStageCompileResult>> StartShaderLoadTasks(TaskID PSOLoadTaskID);
+	void                         StartPSOCompilation_MT(std::vector<FPSOCreationTaskParameters>&& RenderPassPSODescs);
+	void                         WaitPSOCompilation();
+	void                         AssignPSOs();
+	std::vector<FPSODesc>        LoadBuiltinPSODescs_Legacy();
+	std::vector<FPSODesc>        LoadBuiltinPSODescs();
+	void                         ReservePSOMap(size_t NumPSOs);
+
+	inline ID3D12PipelineState*  GetPSO(EBuiltinPSOs pso) const { return mPSOs.at(static_cast<PSO_ID>(pso)); }
+	       ID3D12PipelineState*  GetPSO(PSO_ID psoID) const;
+	       ID3D12RootSignature*  GetBuiltinRootSignature(EBuiltinRootSignatures eRootSignature) const;
+
+	ID3D12DescriptorHeap*        GetDescHeap(EResourceHeapType HeapType);
+
+
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	// Render (Public)
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	// PUBLIC MEMBERS
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	FLightingPSOs     mLightingPSOs;
 	FDepthPrePassPSOs mZPrePassPSOs;
 	FShadowPassPSOs   mShadowPassPSOs;
@@ -180,63 +214,73 @@ public:
 
 private:
 	using PSOArray_t = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
+	friend class ScreenSpaceReflectionsPass; // device access
 	
 	// GPU
-	Device mDevice; 
+	Device mDevice;
 	std::array<CommandQueue, CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES> mCmdQueues;
 
 	// memory
-	D3D12MA::Allocator*            mpAllocator;
-	// CPU-visible heaps ----------------------------------------
-	StaticResourceViewHeap         mHeapRTV; 
-	StaticResourceViewHeap         mHeapDSV; 
-	StaticResourceViewHeap         mHeapUAV; // CPU-visible heap (TODO: fix SSAO UAV clear error msg)
-	UploadHeap                     mHeapUpload;
-	// CPU-visible heaps ----------------------------------------
-	// GPU-visible heaps ----------------------------------------
-	StaticResourceViewHeap         mHeapCBV_SRV_UAV;
-	StaticResourceViewHeap         mHeapSampler;
-	StaticBufferHeap               mStaticHeap_VertexBuffer;
-	StaticBufferHeap               mStaticHeap_IndexBuffer;
-	// GPU-visible heaps ----------------------------------------
-	// constant buffers are handled in FRenderContext objects
-
-	// resources & views
-	std::unordered_map<std::string, TextureID>     mLoadedTexturePaths;
-	std::unordered_map<TextureID, Texture>         mTextures;
-	std::unordered_map<SamplerID, SAMPLER>         mSamplers;
-	std::unordered_map<BufferID, VBV>              mVBVs;
-	std::unordered_map<BufferID, IBV>              mIBVs;
-	std::unordered_map<CBV_ID  , CBV_SRV_UAV>      mCBVs;
-	std::unordered_map<SRV_ID  , CBV_SRV_UAV>      mSRVs;
-	std::unordered_map<UAV_ID  , CBV_SRV_UAV>      mUAVs;
-	std::unordered_map<RTV_ID  , RTV>              mRTVs;
-	std::unordered_map<DSV_ID  , DSV>              mDSVs;
-	mutable std::mutex                             mMtxStaticVBHeap;
-	mutable std::mutex                             mMtxStaticIBHeap;
-	mutable std::mutex                             mMtxDynamicCBHeap;
-	mutable std::mutex                             mMtxTextures;
-	mutable std::mutex                             mMtxSamplers;
-	mutable std::mutex                             mMtxSRVs_CBVs_UAVs;
-	mutable std::mutex                             mMtxRTVs;
-	mutable std::mutex                             mMtxDSVs;
-	mutable std::mutex                             mMtxVBVs;
-	mutable std::mutex                             mMtxIBVs;
-	mutable std::mutex                             mMtxLoadedTexturePaths;
-
-	// root signatures
-	std::unordered_map<RS_ID , ID3D12RootSignature*> mRootSignatureLookup;
-
-	// PSOs
-	std::unordered_map<PSO_ID, ID3D12PipelineState*> mPSOs;
+	D3D12MA::Allocator*    mpAllocator;
 	
-	// data
+	StaticResourceViewHeap mHeapRTV;   // CPU-visible heap
+	StaticResourceViewHeap mHeapDSV;   // CPU-visible heap
+	StaticResourceViewHeap mHeapUAV;   // CPU-visible heap
+	UploadHeap             mHeapUpload;
+	StaticResourceViewHeap mHeapCBV_SRV_UAV;         // GPU-visible heap
+	StaticResourceViewHeap mHeapSampler;             // GPU-visible heap
+	StaticBufferHeap       mStaticHeap_VertexBuffer; // GPU-visible heap
+	StaticBufferHeap       mStaticHeap_IndexBuffer;  // GPU-visible heap
+	
+	// resources & views
+	std::unordered_map<TextureID, Texture>    mTextures;
+	std::unordered_map<SamplerID, SAMPLER>    mSamplers;
+	std::unordered_map<BufferID, VBV>         mVBVs;
+	std::unordered_map<BufferID, IBV>         mIBVs;
+	std::unordered_map<CBV_ID  , CBV_SRV_UAV> mCBVs;
+	std::unordered_map<SRV_ID  , CBV_SRV_UAV> mSRVs;
+	std::unordered_map<UAV_ID  , CBV_SRV_UAV> mUAVs;
+	std::unordered_map<RTV_ID  , RTV>         mRTVs;
+	std::unordered_map<DSV_ID  , DSV>         mDSVs;
+	mutable std::mutex                        mMtxStaticVBHeap;
+	mutable std::mutex                        mMtxStaticIBHeap;
+	mutable std::mutex                        mMtxDynamicCBHeap;
+	mutable std::mutex                        mMtxTextures;
+	mutable std::mutex                        mMtxSamplers;
+	mutable std::mutex                        mMtxSRVs_CBVs_UAVs;
+	mutable std::mutex                        mMtxRTVs;
+	mutable std::mutex                        mMtxDSVs;
+	mutable std::mutex                        mMtxVBVs;
+	mutable std::mutex                        mMtxIBVs;
+	mutable std::mutex                        mMtxLoadedTexturePaths;
+
+	// PSOs & Root Signatures
+	std::unordered_map<RS_ID , ID3D12RootSignature*> mRootSignatureLookup;
+	std::unordered_map<PSO_ID, ID3D12PipelineState*> mPSOs;
+	ThreadPool mWorkers_PSOLoad;
+	ThreadPool mWorkers_ShaderLoad;
+	struct FPSOCompileResult { ID3D12PipelineState* pPSO; PSO_ID id; };
+	struct FShaderLoadTaskContext { std::queue<FShaderStageCompileDesc> TaskQueue; };
+	std::vector<std::shared_future<VQRenderer::FPSOCompileResult>> mPSOCompileResults;
+	std::vector<std::shared_future<FShaderStageCompileResult>>     mShaderCompileResults;
+	std::unordered_map < TaskID, FShaderLoadTaskContext>           mLookup_ShaderLoadContext;
+
+	// rendering
 	std::unordered_map<HWND, FWindowRenderContext> mRenderContextLookup;
+
+	// sync
+	std::vector<Fence>              mAsyncComputeSSAOReadyFence;
+	std::vector<Fence>              mAsyncComputeSSAODoneFence;
+	std::vector<Fence>              mCopyObjIDDoneFence; // GPU->CPU
+	std::atomic<bool>               mAsyncComputeWorkSubmitted = false;
+	std::atomic<bool>               mSubmitWorkerFinished = true;
+	bool                            mWaitForSubmitWorker = false;
 
 	// bookkeeping
 	std::unordered_map<TextureID, std::string>         mLookup_TextureDiskLocations;
 	std::unordered_map<EProceduralTextures, SRV_ID>    mLookup_ProceduralTextureSRVs;
 	std::unordered_map<EProceduralTextures, TextureID> mLookup_ProceduralTextureIDs;
+	std::unordered_map<std::string, TextureID>         mLoadedTexturePaths;
 
 	// texture uploading
 	std::atomic<bool>              mbExitUploadThread;
@@ -245,24 +289,11 @@ private:
 	std::mutex                     mMtxTextureUploadQueue;
 	std::queue<FTextureUploadDesc> mTextureUploadQueue;
 	
-	std::atomic<bool>              mbRendererInitialized;
-	std::atomic<bool>              mbMainSwapchainInitialized;
-
-	// Multithreaded PSO Loading
-	ThreadPool mWorkers_PSOLoad;
-	struct FPSOCompileResult { ID3D12PipelineState* pPSO; PSO_ID id; };
-
-	std::vector<std::shared_future<VQRenderer::FPSOCompileResult>> mPSOCompileResults;
-	std::vector<std::shared_future<FShaderStageCompileResult>> mShaderCompileResults;
-
-	// Multithreaded Shader Loading
-	ThreadPool mWorkers_ShaderLoad;
-	struct FShaderLoadTaskContext { std::queue<FShaderStageCompileDesc> TaskQueue; };
-	std::unordered_map < TaskID, FShaderLoadTaskContext> mLookup_ShaderLoadContext;
+	// state
+	std::atomic<bool> mbRendererInitialized;
+	std::atomic<bool> mbMainSwapchainInitialized;
 
 private:
-	void InitializeHeaps();
-	
 	void LoadBuiltinRootSignatures();
 	void LoadDefaultResources();
 
@@ -282,12 +313,20 @@ private:
 	const Texture& GetTexture_ThreadSafe(TextureID Id) const;
 	Texture& GetTexture_ThreadSafe(TextureID Id);
 
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Texture Residency
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	void QueueTextureUpload(const FTextureUploadDesc& desc);
 	void ProcessTextureUpload(const FTextureUploadDesc& desc);
 	void ProcessTextureUploadQueue();
 	void TextureUploadThread_Main();
 	inline void StartTextureUploads() { mSignal_UploadThreadWorkReady.NotifyOne(); };
+
+
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	// Render (Private)
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	
 
 //
 // STATIC PUBLIC DATA/INTERFACE
@@ -300,7 +339,6 @@ public:
 	static std::wstring GetFullPathOfShader(LPCWSTR shaderFileName);
 	static std::wstring GetFullPathOfShader(const std::string& shaderFileName);
 	static std::string  GetCachedShaderBinaryPath(const FShaderStageCompileDesc& ShaderStageCompileDesc);
-	static void         InitializeShaderAndPSOCacheDirectory();
 
 	static std::string ShaderSourceFileDirectory;
 	static std::string PSOCacheDirectory;
@@ -312,9 +350,9 @@ namespace VQ_DXGI_UTILS
 {
 	size_t BitsPerPixel(DXGI_FORMAT fmt);
 
-	//--------------------------------------------------------------------------------------
+	//=====================================================================================-
 	// return the byte size of a pixel (or block if block compressed)
-	//--------------------------------------------------------------------------------------
+	//=====================================================================================-
 	size_t GetPixelByteSize(DXGI_FORMAT fmt);
 
 	void MipImage(void* pData, uint width, uint height, uint bytesPerPixel);

@@ -130,7 +130,7 @@ static void CustomFree(void* pMemory, void* pUserData)
 }
 static void InitializeD3D12MA(D3D12MA::Allocator*& mpAllocator, Device& mDevice)
 {
-	// Initialize D3D12MA
+	SCOPED_CPU_MARKER("Renderer.InitD3D12MA");
 	const D3D12MA::ALLOCATOR_FLAGS FlagAlloc = D3D12MA::ALLOCATOR_FLAG_NONE;
 
 	D3D12MA::ALLOCATOR_DESC desc = {};
@@ -171,7 +171,9 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 	Device* pVQDevice = &mDevice;
 	mbMainSwapchainInitialized.store(false);
 
-	InitializeShaderAndPSOCacheDirectory();
+	// create PSO & Shader cache folders
+	DirectoryUtil::CreateFolderIfItDoesntExist(VQRenderer::ShaderCacheDirectory);
+	DirectoryUtil::CreateFolderIfItDoesntExist(VQRenderer::PSOCacheDirectory);
 
 	// Create the device
 	FDeviceCreateDesc deviceDesc = {};
@@ -190,7 +192,30 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 
 	// Initialize memory
 	InitializeD3D12MA(mpAllocator, mDevice);
-	InitializeHeaps();
+	{
+		SCOPED_CPU_MARKER("Renderer.InitializeHeaps");
+		ID3D12Device* pDevice = mDevice.GetDevicePtr();
+
+		const uint32 UPLOAD_HEAP_SIZE = (512 + 256 + 128) * MEGABYTE; // TODO: from RendererSettings.ini
+		mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE, this->mCmdQueues[CommandQueue::EType::GFX].pQueue);
+
+		constexpr uint32 NumDescsCBV = 100;
+		constexpr uint32 NumDescsSRV = 8192;
+		constexpr uint32 NumDescsUAV = 100;
+		constexpr bool   bCPUVisible = false;
+		mHeapCBV_SRV_UAV.Create(pDevice, "HeapCBV_SRV_UAV", EResourceHeapType::CBV_SRV_UAV_HEAP, NumDescsCBV + NumDescsSRV + NumDescsUAV, bCPUVisible);
+
+		constexpr uint32 NumDescsDSV = 100;
+		mHeapDSV.Create(pDevice, "HeapDSV", EResourceHeapType::DSV_HEAP, NumDescsDSV);
+
+		constexpr uint32 NumDescsRTV = 1000;
+		mHeapRTV.Create(pDevice, "HeapRTV", EResourceHeapType::RTV_HEAP, NumDescsRTV);
+
+		constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 256 * MEGABYTE;
+		constexpr bool USE_GPU_MEMORY = true;
+		mStaticHeap_VertexBuffer.Create(pDevice, EBufferType::VERTEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticVertexBufferPool");
+		mStaticHeap_IndexBuffer.Create(pDevice, EBufferType::INDEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticIndexBufferPool");
+	}
 
 	// initialize thread
 	mbExitUploadThread.store(false);
@@ -363,37 +388,6 @@ void VQRenderer::WaitForLoadCompletion() const
 //
 // PRIVATE
 //
-void VQRenderer::InitializeHeaps()
-{
-	SCOPED_CPU_MARKER("Renderer::InitializeHeaps");
-	ID3D12Device* pDevice = mDevice.GetDevicePtr();
-
-	const uint32 UPLOAD_HEAP_SIZE = (512+256+128) * MEGABYTE; // TODO: from RendererSettings.ini
-	mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE, this->mCmdQueues[CommandQueue::EType::GFX].pQueue);
-
-	constexpr uint32 NumDescsCBV = 100;
-	constexpr uint32 NumDescsSRV = 8192;
-	constexpr uint32 NumDescsUAV = 100;
-	constexpr bool   bCPUVisible = false;
-	mHeapCBV_SRV_UAV.Create(pDevice, "HeapCBV_SRV_UAV", EResourceHeapType::CBV_SRV_UAV_HEAP, NumDescsCBV + NumDescsSRV + NumDescsUAV, bCPUVisible);
-
-	constexpr uint32 NumDescsDSV = 100;
-	mHeapDSV.Create(pDevice, "HeapDSV", EResourceHeapType::DSV_HEAP, NumDescsDSV);
-
-	constexpr uint32 NumDescsRTV = 1000;
-	mHeapRTV.Create(pDevice, "HeapRTV", EResourceHeapType::RTV_HEAP, NumDescsRTV);
-
-	constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 256 * MEGABYTE;
-	constexpr bool USE_GPU_MEMORY = true;
-	mStaticHeap_VertexBuffer.Create(pDevice, EBufferType::VERTEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticVertexBufferPool");
-	mStaticHeap_IndexBuffer .Create(pDevice, EBufferType::INDEX_BUFFER , STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticIndexBufferPool");
-}
-
-void VQRenderer::InitializeShaderAndPSOCacheDirectory()
-{
-	DirectoryUtil::CreateFolderIfItDoesntExist(VQRenderer::ShaderCacheDirectory);
-	DirectoryUtil::CreateFolderIfItDoesntExist(VQRenderer::PSOCacheDirectory);
-}
 
 void VQRenderer::LoadDefaultResources()
 {

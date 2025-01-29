@@ -19,6 +19,7 @@
 
 #include "Renderer.h"
 #include "Shaders/LightingConstantBufferData.h"
+#include "Engine/GPUMarker.h"
 
 using namespace Microsoft::WRL;
 using namespace VQSystemInfo;
@@ -127,7 +128,6 @@ static void ReportErrorAndReleaseBlob(ComPtr<ID3DBlob>& pBlob)
 }
 
 
-#include "Engine/GPUMarker.h"
 void VQRenderer::LoadBuiltinRootSignatures()
 {
 	SCOPED_CPU_MARKER("RootSignatures");

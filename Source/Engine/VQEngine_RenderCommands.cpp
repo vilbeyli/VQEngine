@@ -415,7 +415,7 @@ void VQEngine::RenderDepthPrePass(
 		{
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Tsl;
 			VQ_SHADER_DATA::TessellationParams* pCBuffer_Tessellation = nullptr;
-			auto data = mat.GetTessellationCBufferData();
+			VQ_SHADER_DATA::TessellationParams data = mat.GetTessellationCBufferData();
 			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Tessellation)), (void**)(&pCBuffer_Tessellation), &cbAddr_Tsl);
 			memcpy(pCBuffer_Tessellation, &data, sizeof(data));
 			pCmd->SetGraphicsRootConstantBufferView(2, cbAddr_Tsl);
