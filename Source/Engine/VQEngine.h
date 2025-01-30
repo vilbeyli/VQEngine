@@ -29,6 +29,7 @@
 #include "Scene/Camera.h"
 #include "Scene/Transform.h"
 
+#include "Renderer/Rendering/EnvironmentMapRendering.h"
 #include "EnvironmentMap.h"
 #include "Settings.h"
 #include "AssetLoader.h"

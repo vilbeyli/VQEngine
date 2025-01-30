@@ -30,13 +30,6 @@ using namespace DirectX;
 
 static const FEnvironmentMapDescriptor DEFAULT_ENV_MAP_DESC = { "ENV_MAP_NOT_FOUND", "", 0.0f };
 
-
-int FEnvironmentMapRenderingResources::GetNumSpecularIrradianceCubemapLODLevels(const VQRenderer& Renderer) const
-{
-	return Renderer.GetTextureMips(Tex_IrradianceSpec);
-}
-
-
 //-------------------------------------------------------------------------------------------------------------------------------------------------
 //
 // UPDATE THREAD
@@ -261,124 +254,20 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 		CreateEnvironmentMapTextureFromHiResAndSaveToDisk(desc.FilePath);
 	}
 
-
-	// Load environment map resources ------------------------------------------------------------
-
-	// HDR map
-	env.Tex_HDREnvironment = mRenderer.CreateTextureFromFile(desc.FilePath.c_str(), false, true);
-	env.SRV_HDREnvironment = mRenderer.AllocateAndInitializeSRV(env.Tex_HDREnvironment);
-	env.MaxContentLightLevel = static_cast<int>(desc.MaxContentLightLevel);
-
-	// HDR Map Downsampled 
-	int HDREnvironmentSizeX = 0;
-	int HDREnvironmentSizeY = 0;
-	mRenderer.GetTextureDimensions(env.Tex_HDREnvironment, HDREnvironmentSizeX, HDREnvironmentSizeY);
-
-	// Create Irradiance Map Textures 
-	TextureCreateDesc tdesc("EnvMap_IrradianceDiff");
-	tdesc.bCubemap = true;
-	tdesc.d3d12Desc.Height = DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION; // TODO: drive with gfx settings?
-	tdesc.d3d12Desc.Width  = DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION; // TODO: drive with gfx settings?
-	tdesc.d3d12Desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-	tdesc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-	tdesc.d3d12Desc.DepthOrArraySize = 6;
-	tdesc.d3d12Desc.MipLevels = 1;
-	tdesc.d3d12Desc.SampleDesc = { 1, 0 };
-	tdesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-	tdesc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
-	env.Tex_IrradianceDiff = mRenderer.CreateTexture(tdesc);
-
-	tdesc.TexName = "EnvMap_IrradianceDiffBlurred";
-	tdesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	tdesc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-	env.Tex_IrradianceDiffBlurred = mRenderer.CreateTexture(tdesc);
-
-	tdesc.TexName = "EnvMap_BlurImmediateTemp";
-	tdesc.bCubemap = false;
-	tdesc.d3d12Desc.DepthOrArraySize = 1;
-	env.Tex_BlurTemp = mRenderer.CreateTexture(tdesc);
-
-	tdesc.TexName = "EnvMap_IrradianceSpec";
-	tdesc.d3d12Desc.DepthOrArraySize = 6;
-	tdesc.bGenerateMips = true;
-	tdesc.bCubemap = true;
-	tdesc.d3d12Desc.Height = SpecularMapMip0Resolution;
-	tdesc.d3d12Desc.Width  = SpecularMapMip0Resolution;
-	tdesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-	tdesc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
-	tdesc.d3d12Desc.MipLevels = Image::CalculateMipLevelCount(tdesc.d3d12Desc.Width, tdesc.d3d12Desc.Height) - 1; // 2x2 for the last mip level
-	env.Tex_IrradianceSpec = mRenderer.CreateTexture(tdesc);
-
-	const int& NUM_MIPS = tdesc.d3d12Desc.MipLevels;
-
-	// Create Irradiance Map SRVs 
-	env.SRV_IrradianceDiff = mRenderer.AllocateSRV();
-	env.SRV_IrradianceSpec = mRenderer.AllocateSRV();
-	env.SRV_BlurTemp = mRenderer.AllocateSRV();
-	mRenderer.InitializeSRV(env.SRV_IrradianceDiff, 0, env.Tex_IrradianceDiff, false, true);
-	mRenderer.InitializeSRV(env.SRV_IrradianceSpec, 0, env.Tex_IrradianceSpec, false, true);
-	mRenderer.InitializeSRV(env.SRV_BlurTemp, 0, env.Tex_BlurTemp);
-	for (int face = 0; face < 6; ++face)
-	{
-		env.SRV_IrradianceDiffFaces[face] = mRenderer.AllocateSRV();
-		mRenderer.InitializeSRV(env.SRV_IrradianceDiffFaces[face], face, env.Tex_IrradianceDiff, false, false);
-	}
-	env.SRV_IrradianceDiffBlurred = mRenderer.AllocateSRV();
-	mRenderer.InitializeSRV(env.SRV_IrradianceDiffBlurred, 0, env.Tex_IrradianceDiffBlurred, false, true);
-
-
-	// Create Irradiance Map RTVs & UAVs
-	env.RTV_IrradianceDiff = mRenderer.AllocateRTV(6);
-	env.RTV_IrradianceSpec = mRenderer.AllocateRTV(6 * NUM_MIPS);
-	env.UAV_IrradianceDiffBlurred = mRenderer.AllocateUAV(6);
-	env.UAV_BlurTemp = mRenderer.AllocateUAV();
-	for (int face = 0; face < 6; ++face)
-	{
-		constexpr int MIP_LEVEL = 0;
-		mRenderer.InitializeRTV(env.RTV_IrradianceDiff, face, env.Tex_IrradianceDiff, face, MIP_LEVEL);
-		mRenderer.InitializeUAV(env.UAV_IrradianceDiffBlurred, face, env.Tex_IrradianceDiffBlurred, face, MIP_LEVEL);
-	}
-	mRenderer.InitializeUAV(env.UAV_BlurTemp, 0, env.Tex_BlurTemp, 0, 0);
-
-	for (int  mip = 0; mip<NUM_MIPS; ++mip ) 
-	for (int face = 0; face < 6    ; ++face)  
-		mRenderer.InitializeRTV(env.RTV_IrradianceSpec, mip*6+face, env.Tex_IrradianceSpec, face, mip);
-
+	env.CreateRenderingResources(mRenderer, desc, DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION, SpecularMapMip0Resolution);
 
 	// Queue irradiance cube face rendering
 	mbEnvironmentMapPreFilter.store(true);
 
-	//assert(mpScene->mIndex_ActiveEnvironmentMapPreset == static_cast<int>(ActiveEnvMapIndex)); // Only false durin initialization
+	//assert(mpScene->mIndex_ActiveEnvironmentMapPreset == static_cast<int>(ActiveEnvMapIndex)); // Only false during initialization
 	mpScene->mIndex_ActiveEnvironmentMapPreset = static_cast<int>(ActiveEnvMapIndex);
 
 	// Update HDRMetaData when the environment map is loaded
 	HWND hwnd = mpWinMain->GetHWND();
-
 	mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetStaticHDRMetaDataEvent>(hwnd, this->GatherHDRMetaDataParameters(hwnd)));
 }
 
 void VQEngine::UnloadEnvironmentMap()
 {
-	FEnvironmentMapRenderingResources& env = mResources_MainWnd.EnvironmentMap;
-	if (env.Tex_HDREnvironment != INVALID_ID)
-	{
-		// GPU-sync assumed
-		mRenderer.GetWindowSwapChain(mpWinMain->GetHWND()).WaitForGPU();
-		
-		mRenderer.DestroySRV(env.SRV_HDREnvironment);
-		mRenderer.DestroySRV(env.SRV_IrradianceDiff);
-		for (int face = 0; face < 6; ++face) mRenderer.DestroySRV(env.SRV_IrradianceDiffFaces[face]);
-		mRenderer.DestroySRV(env.SRV_IrradianceSpec);
-		mRenderer.DestroySRV(env.SRV_BlurTemp);
-		mRenderer.DestroySRV(env.SRV_IrradianceDiffBlurred);
-		// mRenderer.DestroyUAV(); // TODO:?
-		mRenderer.DestroyTexture(env.Tex_HDREnvironment);
-		mRenderer.DestroyTexture(env.Tex_IrradianceDiff);
-		mRenderer.DestroyTexture(env.Tex_IrradianceSpec);
-		mRenderer.DestroyTexture(env.Tex_IrradianceDiffBlurred);
-
-		env.SRV_HDREnvironment = env.Tex_HDREnvironment = INVALID_ID;
-		env.SRV_IrradianceDiff = env.SRV_IrradianceSpec = INVALID_ID;
-		env.MaxContentLightLevel = 0;
-	}
+	mResources_MainWnd.EnvironmentMap.DestroyRenderingResources(mRenderer, mpWinMain->GetHWND());
 }
