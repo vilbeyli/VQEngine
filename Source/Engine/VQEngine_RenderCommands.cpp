@@ -58,7 +58,7 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 		assert(NumInstances == renderCmd.matWorldViewProj.size());
 		assert(NumInstances == renderCmd.matWorld.size());
 
-		const Material& mat = mpScene->GetMaterial(renderCmd.matID);
+		const Material& mat = *renderCmd.pMaterial;
 
 		const bool bSWCullTessellation = mat.Tessellation.GPUParams.bFaceCull > 0 || mat.Tessellation.GPUParams.bFrustumCull > 0;
 		const size_t iAlpha   = mat.IsAlphaMasked(mRenderer) ? 1 : 0;
@@ -382,7 +382,7 @@ void VQEngine::RenderDepthPrePass(
 	const size_t iFaceCull = 2; // 2:back
 	for (const MeshRenderCommand_t& meshRenderCmd : SceneView.meshRenderParams)
 	{
-		const Material& mat = mpScene->GetMaterial(meshRenderCmd.matID);
+		const Material& mat = *meshRenderCmd.pMaterial;
 		const auto VBIBIDs = meshRenderCmd.vertexIndexBuffer;
 		const BufferID& VB_ID = VBIBIDs.first;
 		const BufferID& IB_ID = VBIBIDs.second;
@@ -467,8 +467,6 @@ void VQEngine::RenderObjectIDPass(
 		params.pSceneView = &SceneView;
 		params.pCBufferHeap = pCBufferHeap;
 		params.cbPerView = perViewCBAddr;
-		params.pMeshes = &mpScene->mMeshes;
-		params.pMaterials = &mpScene->mMaterials;
 		params.bEnableAsyncCopy = mSettings.gfx.bEnableAsyncCopy;
 		mRenderPass_ObjectID.RecordCommands(&params);
 	}
@@ -894,7 +892,7 @@ void VQEngine::RenderSceneColor(
 		PSO_ID psoID_Prev = -1;
 		for (const MeshRenderCommand_t& meshRenderCmd : SceneView.meshRenderParams)
 		{
-			const Material& mat = mpScene->GetMaterial(meshRenderCmd.matID);
+			const Material& mat = *meshRenderCmd.pMaterial;
 
 			const auto VBIBIDs = meshRenderCmd.vertexIndexBuffer;
 			const uint32 NumIndices = meshRenderCmd.numIndices;
@@ -1125,7 +1123,6 @@ void VQEngine::RenderOutline(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap*
 	params.cbPerView = perViewCBAddr;
 	params.pSceneView = &SceneView;
 	params.pMeshes = &mpScene->mMeshes;
-	params.pMaterials = &mpScene->mMaterials;
 	params.bMSAA = bMSAA;
 	params.pRTVHandles = &rtvHandles;
 	mRenderPass_Outline.RecordCommands(&params);

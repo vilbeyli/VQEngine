@@ -53,6 +53,7 @@ struct FOutlineRenderCommand
 {
 	MeshID meshID = INVALID_ID;
 	MaterialID matID = INVALID_ID;
+	const Material* pMaterial = nullptr;
 	struct FConstantBuffer { 
 		DirectX::XMMATRIX matWorld;
 		DirectX::XMMATRIX matWorldView;
@@ -77,6 +78,7 @@ struct FInstancedMeshRenderCommandBase
 	int numIndices = 0;
 	std::pair<BufferID, BufferID> vertexIndexBuffer;
 	MaterialID matID = INVALID_ID;
+	const Material* pMaterial = nullptr;
 	std::vector<DirectX::XMMATRIX> matWorldViewProj;
 };
 struct FInstancedMotionVectorMeshCommand

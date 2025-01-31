@@ -109,7 +109,6 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 	assert(pParams->pCmd);
 	assert(pParams->pSceneView);
 	assert(pParams->pMeshes);
-	assert(pParams->pMaterials);
 	assert(pParams->pCBufferHeap);
 	assert(pParams->pRTVHandles);
 	ID3D12GraphicsCommandList* pCmd = pParams->pCmd;
@@ -148,7 +147,7 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 		for (const FOutlineRenderCommand& cmd : SceneView.outlineRenderParams)
 		{
 			// set PSO
-			const Material& mat = GetMaterial(cmd.matID, pParams->pMaterials);
+			const Material& mat = *cmd.pMaterial;
 			const size_t iMSAA  = bMSAA ? 1 : 0;
 			const size_t iAlpha = mat.IsAlphaMasked(mRenderer) ? 1 : 0;
 			size_t iTess = 0; size_t iDomain = 0; size_t iPart = 0; size_t iOutTopo = 0; size_t iTessCull = 0;

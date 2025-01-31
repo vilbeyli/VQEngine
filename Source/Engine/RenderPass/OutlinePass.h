@@ -41,7 +41,6 @@ public:
 
 		const FSceneView* pSceneView = nullptr;
 		const std::unordered_map<MeshID, Mesh>* pMeshes = nullptr;
-		const std::unordered_map<MaterialID, Material>* pMaterials = nullptr;
 		const std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>* pRTVHandles = nullptr;
 		bool bMSAA = false;
 	};

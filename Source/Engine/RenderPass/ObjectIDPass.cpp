@@ -150,8 +150,6 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	assert(pParams->pCmd);
 	assert(pParams->pCmdCopy);
 	assert(pParams->pSceneView);
-	assert(pParams->pMeshes);
-	assert(pParams->pMaterials);
 	assert(pParams->pCBAddresses);
 	assert(pParams->pCBufferHeap);
 	const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& cbAddresses = *pParams->pCBAddresses;
@@ -195,7 +193,7 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	for (const MeshRenderCommand_t& meshRenderCmd : pParams->pSceneView->meshRenderParams)
 	{
 		using namespace VQ_SHADER_DATA;
-		const Material& mat = GetMaterial(meshRenderCmd.matID, pParams->pMaterials);
+		const Material& mat = *meshRenderCmd.pMaterial;
 		
 		const uint32 NumIndices = meshRenderCmd.numIndices;
 		const BufferID& VB_ID = meshRenderCmd.vertexIndexBuffer.first;

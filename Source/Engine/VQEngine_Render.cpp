@@ -1546,7 +1546,7 @@ static void CopyPerObjectConstantBufferData(
 		pPerObj->mObjID = meshRenderCmd.objectID;
 #endif
 
-		const Material& mat = pScene->GetMaterial(meshRenderCmd.matID);
+		const Material& mat = *meshRenderCmd.pMaterial;
 		pPerObj->materialData = std::move(mat.GetCBufferData());
 		//pPerObj->meshID = meshRenderCmd.meshID;
 		pPerObj->materialID = meshRenderCmd.matID;

@@ -42,8 +42,6 @@ public:
 		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = 0;
 		bool bEnableAsyncCopy = false;
 		const FSceneView* pSceneView = nullptr;
-		const std::unordered_map<MeshID, Mesh>* pMeshes = nullptr;
-		const std::unordered_map<MaterialID, Material>* pMaterials = nullptr;
 	};
 
 	ObjectIDPass(VQRenderer& Renderer);
