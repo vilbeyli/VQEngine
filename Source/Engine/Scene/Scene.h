@@ -192,6 +192,8 @@ public:
 	std::vector<MaterialID> GetMaterialIDs() const;
 	const Material& GetMaterial(MaterialID ID) const;
 	Material& GetMaterial(MaterialID ID);
+	
+	const Mesh& GetMesh(MeshID ID) const;
 
 	const std::string& GetTexturePath(TextureID) const;
 	std::string GetTextureName(TextureID) const;
@@ -254,7 +256,7 @@ protected:
 	//
 	// MATERIAL DATA
 	//
-	MaterialID                mDefaultMaterialID = INVALID_ID;
+	MaterialID mDefaultMaterialID = INVALID_ID;
 
 
 	//

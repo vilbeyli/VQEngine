@@ -27,7 +27,7 @@
 // ------------------------------------------------------------------------------------
 struct FMeshRenderCommandBase
 {
-	MeshID meshID = INVALID_ID;
+	const Mesh* pMesh = nullptr;
 	DirectX::XMMATRIX matWorldTransformation;
 	DirectX::XMMATRIX matWorldTransformationPrev;
 };
@@ -51,7 +51,7 @@ struct FWireframeRenderCommand : public FMeshRenderCommandBase
 };
 struct FOutlineRenderCommand
 {
-	MeshID meshID = INVALID_ID;
+	const Mesh* pMesh = nullptr;
 	MaterialID matID = INVALID_ID;
 	const Material* pMaterial = nullptr;
 	struct FConstantBuffer { 

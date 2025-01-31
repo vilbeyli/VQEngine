@@ -228,6 +228,16 @@ Material& Scene::GetMaterial(MaterialID ID)
 	return mMaterials.at(ID);
 }
 
+const Mesh& Scene::GetMesh(MeshID ID) const
+{
+	if (mMeshes.find(ID) == mMeshes.end())
+	{
+		Log::Error("Mesh not found. Did you call Scene::AddMesh()? (meshID=%d)", ID);
+		assert(false);
+	}
+	return mMeshes.at(ID);
+}
+
 Model& Scene::GetModel(ModelID id)
 {
 	if (mModels.find(id) == mModels.end())
@@ -384,7 +394,8 @@ static void ToggleBool(bool& b) { b = !b; }
 
 static void RecordRenderLightBoundsCommand(const Light& l,
 	std::vector<FLightRenderCommand>& cmds,
-	const XMVECTOR& CameraPosition
+	const XMVECTOR& CameraPosition,
+	const Scene* pScene
 )
 {
 	const XMVECTOR lightPosition = XMLoadFloat3(&l.Position);
@@ -426,7 +437,7 @@ static void RecordRenderLightBoundsCommand(const Light& l,
 		scaleConeToRange.r[2].m128_f32[2] = coneBaseRadius;
 
 		//wvp = alignConeToSpotLightTransformation * tf.WorldTransformationMatrix() * viewProj;
-		cmd.meshID = EBuiltInMeshes::CONE;
+		cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::CONE);
 		cmd.matWorldTransformation = scaleConeToRange * alignConeToSpotLightTransformation * tf.matWorldTransformation();
 		cmds.push_back(cmd);
 	}	break;
@@ -436,7 +447,7 @@ static void RecordRenderLightBoundsCommand(const Light& l,
 		Transform tf = l.GetTransform();
 		tf._scale = XMFLOAT3(l.Range, l.Range, l.Range);
 		
-		cmd.meshID = EBuiltInMeshes::SPHERE;
+		cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::SPHERE);
 		cmd.matWorldTransformation = tf.matWorldTransformation();
 		cmds.push_back(cmd);
 	}  break;
@@ -547,7 +558,7 @@ static void RecordOutlineRenderCommands(
 			const Material& mat = pScene->GetMaterial(matID);
 			
 			FOutlineRenderCommand cmd = {};
-			cmd.meshID = meshID;
+			cmd.pMesh = &pScene->GetMesh(meshID);
 			cmd.matID = matID;
 			cmd.pMaterial = &pScene->GetMaterial(matID);
 			cmd.cb.matWorld = matWorld;
@@ -716,7 +727,7 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 			const Light& l = *lights[i];
 			if (l.bEnabled)
 			{
-				RecordRenderLightBoundsCommand(l, SceneView.lightBoundsRenderParams, SceneView.cameraPosition);
+				RecordRenderLightBoundsCommand(l, SceneView.lightBoundsRenderParams, SceneView.cameraPosition, this);
 			}
 		}
 	}
@@ -1932,7 +1943,8 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 static void RecordRenderLightBoundsCommands(
 	const std::vector<Light>& vLights, 
 	std::vector<FLightRenderCommand>& cmds,
-	const XMVECTOR& CameraPosition
+	const XMVECTOR& CameraPosition,
+	const Scene* pScene
 )
 {
 	for (const Light& l : vLights)
@@ -1940,7 +1952,7 @@ static void RecordRenderLightBoundsCommands(
 		if (!l.bEnabled)
 			continue;
 
-		RecordRenderLightBoundsCommand(l, cmds, CameraPosition);
+		RecordRenderLightBoundsCommand(l, cmds, CameraPosition, pScene);
 	}
 }
 
@@ -1948,6 +1960,7 @@ static void RecordRenderLightMeshCommands(
 	const std::vector<Light>& vLights,
 	std::vector<FLightRenderCommand>& cmds,
 	const XMVECTOR& CameraPosition,
+	const Scene* pScene,
 	bool bAttenuateLight = true
 )
 {
@@ -1979,13 +1992,13 @@ static void RecordRenderLightMeshCommands(
 			break;
 		case Light::EType::SPOT:
 		{
-			cmd.meshID = EBuiltInMeshes::SPHERE;
+			cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::SPHERE);
 			cmds.push_back(cmd);
 		}	break;
 
 		case Light::EType::POINT:
 		{
-			cmd.meshID = EBuiltInMeshes::SPHERE;
+			cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::SPHERE);
 			cmds.push_back(cmd);
 		}  break;
 		}
@@ -1998,15 +2011,15 @@ void Scene::RecordRenderLightMeshCommands(FSceneView& SceneView) const
 	SCOPED_CPU_MARKER("Scene::RecordRenderLightMeshCommands()");
 	if (SceneView.sceneParameters.bDrawLightMeshes)
 	{
-		::RecordRenderLightMeshCommands(mLightsStatic    , SceneView.lightRenderParams, SceneView.cameraPosition);
-		::RecordRenderLightMeshCommands(mLightsDynamic   , SceneView.lightRenderParams, SceneView.cameraPosition);
-		::RecordRenderLightMeshCommands(mLightsStationary, SceneView.lightRenderParams, SceneView.cameraPosition);
+		::RecordRenderLightMeshCommands(mLightsStatic    , SceneView.lightRenderParams, SceneView.cameraPosition, this);
+		::RecordRenderLightMeshCommands(mLightsDynamic   , SceneView.lightRenderParams, SceneView.cameraPosition, this);
+		::RecordRenderLightMeshCommands(mLightsStationary, SceneView.lightRenderParams, SceneView.cameraPosition, this);
 	}
 	if (SceneView.sceneParameters.bDrawLightBounds)
 	{
-		::RecordRenderLightBoundsCommands(mLightsStatic    , SceneView.lightBoundsRenderParams, SceneView.cameraPosition);
-		::RecordRenderLightBoundsCommands(mLightsDynamic   , SceneView.lightBoundsRenderParams, SceneView.cameraPosition);
-		::RecordRenderLightBoundsCommands(mLightsStationary, SceneView.lightBoundsRenderParams, SceneView.cameraPosition);
+		::RecordRenderLightBoundsCommands(mLightsStatic    , SceneView.lightBoundsRenderParams, SceneView.cameraPosition, this);
+		::RecordRenderLightBoundsCommands(mLightsDynamic   , SceneView.lightBoundsRenderParams, SceneView.cameraPosition, this);
+		::RecordRenderLightBoundsCommands(mLightsStationary, SceneView.lightBoundsRenderParams, SceneView.cameraPosition, this);
 	}
 }
 

@@ -40,7 +40,6 @@ public:
 		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = 0;
 
 		const FSceneView* pSceneView = nullptr;
-		const std::unordered_map<MeshID, Mesh>* pMeshes = nullptr;
 		const std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>* pRTVHandles = nullptr;
 		bool bMSAA = false;
 	};

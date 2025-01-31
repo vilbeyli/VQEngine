@@ -108,7 +108,6 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 	assert(pParams);
 	assert(pParams->pCmd);
 	assert(pParams->pSceneView);
-	assert(pParams->pMeshes);
 	assert(pParams->pCBufferHeap);
 	assert(pParams->pRTVHandles);
 	ID3D12GraphicsCommandList* pCmd = pParams->pCmd;
@@ -205,7 +204,7 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 			}
 
 			// set input geometry
-			const Mesh& mesh = pParams->pMeshes->at(cmd.meshID);
+			const Mesh& mesh = *cmd.pMesh;
 			const auto VBIBIDs = mesh.GetIABufferIDs();
 			const uint32 NumIndices = mesh.GetNumIndices();
 			const BufferID& VB_ID = VBIBIDs.first;

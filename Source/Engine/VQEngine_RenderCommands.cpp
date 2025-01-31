@@ -986,7 +986,7 @@ void VQEngine::RenderSceneColor(
 			pCBuffer->matModelViewProj = lightRenderCmd.matWorldTransformation * SceneView.viewProj;
 			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
 
-			const Mesh& mesh = mpScene->mMeshes.at(lightRenderCmd.meshID);
+			const Mesh& mesh = *lightRenderCmd.pMesh;
 			const int LastLOD = mesh.GetNumLODs() - 1;
 			const auto VBIBIDs = mesh.GetIABufferIDs(LastLOD);
 			const uint32 NumIndices = mesh.GetNumIndices(LastLOD);
@@ -1122,7 +1122,6 @@ void VQEngine::RenderOutline(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap*
 	params.pCBufferHeap = pCBufferHeap;
 	params.cbPerView = perViewCBAddr;
 	params.pSceneView = &SceneView;
-	params.pMeshes = &mpScene->mMeshes;
 	params.bMSAA = bMSAA;
 	params.pRTVHandles = &rtvHandles;
 	mRenderPass_Outline.RecordCommands(&params);
@@ -1161,7 +1160,7 @@ void VQEngine::RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 			pCBuffer->matModelViewProj = lightBoundRenderCmd.matWorldTransformation * SceneView.viewProj;
 
 			// set IA
-			const Mesh& mesh = mpScene->mMeshes.at(lightBoundRenderCmd.meshID);
+			const Mesh& mesh = *lightBoundRenderCmd.pMesh;
 
 			const auto VBIBIDs = mesh.GetIABufferIDs();
 			const uint32 NumIndices = mesh.GetNumIndices();
@@ -1186,7 +1185,7 @@ void VQEngine::RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 			pCBuffer->color = lightBoundRenderCmd.color;
 			pCBuffer->matModelViewProj = lightBoundRenderCmd.matWorldTransformation * SceneView.viewProj;
 
-			const Mesh& mesh = mpScene->mMeshes.at(lightBoundRenderCmd.meshID);
+			const Mesh& mesh = *lightBoundRenderCmd.pMesh;
 
 			const auto VBIBIDs = mesh.GetIABufferIDs();
 			const uint32 NumIndices = mesh.GetNumIndices();
