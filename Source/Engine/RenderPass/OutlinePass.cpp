@@ -118,7 +118,7 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 	const FSceneView& SceneView = *pParams->pSceneView;
 	
 	// early out & avoid changing state if we have no meshes to render
-	if (SceneView.outlineRenderCommands.empty())
+	if (SceneView.outlineRenderParams.empty())
 		return;
 
 	const ::DSV& dsv = mRenderer.GetDSV(bMSAA ? DSVMSAA : DSV);
@@ -127,8 +127,8 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 	const float clearColor[] = { 0, 0, 0, 0 };
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle();
 
-	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddrs(SceneView.outlineRenderCommands.size());
-	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddrsTess(SceneView.outlineRenderCommands.size());
+	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddrs(SceneView.outlineRenderParams.size());
+	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddrsTess(SceneView.outlineRenderParams.size());
 
 	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__OutlinePass));
 	pCmd->OMSetRenderTargets(0, nullptr, FALSE, &dsvHandle);
@@ -145,7 +145,7 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 		}
 
 		int iCB = 0;
-		for (const FOutlineRenderCommand& cmd : SceneView.outlineRenderCommands)
+		for (const FOutlineRenderCommand& cmd : SceneView.outlineRenderParams)
 		{
 			// set PSO
 			const Material& mat = GetMaterial(cmd.matID, pParams->pMaterials);

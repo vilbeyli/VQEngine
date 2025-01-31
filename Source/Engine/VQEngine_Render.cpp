@@ -1079,7 +1079,7 @@ void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 static uint32_t GetNumShadowViewCmdRecordingThreads(const FSceneShadowViews& ShadowView)
 {
 #if RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING
-	return (ShadowView.ShadowView_Directional.meshRenderCommands.size() > 0 ? 1 : 0) // 1 thread for directional light (assumes long list of mesh render cmds)
+	return (ShadowView.ShadowView_Directional.meshRenderParams.size() > 0 ? 1 : 0) // 1 thread for directional light (assumes long list of mesh render cmds)
 		+ ShadowView.NumPointShadowViews  // each point light view (6x frustums per point light)
 		+ (ShadowView.NumSpotShadowViews > 0 ? 1 : 0); // process spot light render lists in own thread
 #else
@@ -1501,7 +1501,7 @@ static void CopyPerObjectConstantBufferData(
 	using namespace VQ_SHADER_DATA;
 
 	int iCB = 0;
-	for (const MeshRenderCommand_t& meshRenderCmd : SceneView.meshRenderCommands)
+	for (const MeshRenderCommand_t& meshRenderCmd : SceneView.meshRenderParams)
 	{
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 		PerObjectData* pPerObj = {};
@@ -1636,7 +1636,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	const float RenderResolutionY = static_cast<float>(SceneView.SceneRTHeight);
 	mRenderStats = {};
 
-	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddresses(SceneView.meshRenderCommands.size());
+	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddresses(SceneView.meshRenderParams.size());
 	UINT64 SSAODoneFenceValue = mAsyncComputeSSAODoneFence[BACK_BUFFER_INDEX].GetValue();
 	D3D12_GPU_VIRTUAL_ADDRESS cbPerFrame = {};
 	{
@@ -1767,7 +1767,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		constexpr size_t iCmdPointLightsThread = iCmdObjIDPassThread + 1;
 		const     size_t iCmdSpots        = iCmdPointLightsThread + SceneShadowView.NumPointShadowViews;
 		const     size_t iCmdDirectional  = iCmdSpots + (SceneShadowView.NumSpotShadowViews > 0 ? 1 : 0);
-		const     size_t iCmdRenderThread = iCmdDirectional + (SceneShadowView.ShadowView_Directional.meshRenderCommands.empty() ? 0 : 1);
+		const     size_t iCmdRenderThread = iCmdDirectional + (SceneShadowView.ShadowView_Directional.meshRenderParams.empty() ? 0 : 1);
 
 		ID3D12GraphicsCommandList* pCmd_ThisThread = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdRenderThread);
 		DynamicBufferHeap& CBHeap_This = ctx.GetConstantBufferHeap(iCmdRenderThread);
@@ -1902,7 +1902,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 				}
 			}
 
-			if (!SceneShadowView.ShadowView_Directional.meshRenderCommands.empty())
+			if (!SceneShadowView.ShadowView_Directional.meshRenderParams.empty())
 			{
 				ID3D12GraphicsCommandList* pCmd_Directional = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdDirectional);
 				DynamicBufferHeap& CBHeap_Directional = ctx.GetConstantBufferHeap(iCmdDirectional);
@@ -2009,7 +2009,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		constexpr size_t iCmdPointLightsThread = iCmdObjIDPassThread + 1;
 		const     size_t iCmdSpots = iCmdPointLightsThread + SceneShadowView.NumPointShadowViews;
 		const     size_t iCmdDirectional = iCmdSpots + (SceneShadowView.NumSpotShadowViews > 0 ? 1 : 0);
-		const     size_t iCmdRenderThread = iCmdDirectional + (SceneShadowView.ShadowView_Directional.meshRenderCommands.empty() ? 0 : 1);
+		const     size_t iCmdRenderThread = iCmdDirectional + (SceneShadowView.ShadowView_Directional.meshRenderParams.empty() ? 0 : 1);
 
 		// close command lists
 		const UINT NumCommandLists = ctx.GetNumCurrentlyRecordingThreads(CommandQueue::EType::GFX);

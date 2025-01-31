@@ -290,17 +290,17 @@ FSceneStats Scene::GetSceneRenderStats(int FRAME_DATA_INDEX) const
 	fnCountLights(mLightsStatic);
 
 
-	stats.NumMeshRenderCommands        = static_cast<uint>(view.meshRenderCommands.size() + view.lightRenderCommands.size() + view.lightBoundsRenderCommands.size() /*+ view.boundingBoxRenderCommands.size()*/);
-	stats.NumBoundingBoxRenderCommands = static_cast<uint>(view.boundingBoxRenderCommands.size());
+	stats.NumMeshRenderCommands        = static_cast<uint>(view.meshRenderParams.size() + view.lightRenderParams.size() + view.lightBoundsRenderParams.size() /*+ view.boundingBoxRenderParams.size()*/);
+	stats.NumBoundingBoxRenderCommands = static_cast<uint>(view.boundingBoxRenderParams.size());
 	auto fnCountShadowMeshRenderCommands = [](const FSceneShadowViews& shadowView) -> uint
 	{
 		uint NumShadowRenderCmds = 0;
 		for (uint i = 0; i < shadowView.NumPointShadowViews; ++i)
 		for (uint face = 0; face < 6u; ++face)
-			NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowViews_Point[i * 6 + face].meshRenderCommands.size());
+			NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowViews_Point[i * 6 + face].meshRenderParams.size());
 		for (uint i = 0; i < shadowView.NumSpotShadowViews; ++i)
-			NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowViews_Spot[i].meshRenderCommands.size());
-		NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowView_Directional.meshRenderCommands.size());
+			NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowViews_Spot[i].meshRenderParams.size());
+		NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowView_Directional.meshRenderParams.size());
 		return NumShadowRenderCmds;
 	};
 	stats.NumShadowMeshRenderCommands = fnCountShadowMeshRenderCommands(shadowView);
@@ -615,7 +615,7 @@ static void CollectDebugVertexDrawParams(FSceneView& SceneView,
 		const Model& m = mModels.at(pObj->mModelID);
 		NumMeshes += m.mData.GetNumMeshesOfAllTypes();
 	}
-	SceneView.debugVertexAxesRenderCommands.resize(NumMeshes);
+	SceneView.debugVertexAxesRenderParams.resize(NumMeshes);
 	
 	int i = 0; // no instancing, draw meshes one by one for now
 	for (size_t hObj : mSelectedObjects)
@@ -632,7 +632,7 @@ static void CollectDebugVertexDrawParams(FSceneView& SceneView,
 			MeshID meshID = pair.first;
 			const Mesh& mesh = mMeshes.at(meshID);
 
-			MeshRenderCommand_t& cmd = SceneView.debugVertexAxesRenderCommands[i];
+			MeshRenderCommand_t& cmd = SceneView.debugVertexAxesRenderParams[i];
 			cmd.matWorld.resize(1);
 			cmd.matNormal.resize(1);
 
@@ -704,7 +704,7 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 	BatchInstanceData(SceneView, UpdateWorkerThreadPool);
 	
 	RecordRenderLightMeshCommands(SceneView);
-	RecordOutlineRenderCommands(SceneView.outlineRenderCommands, mSelectedObjects, this, SceneView.view, SceneView.proj, SceneView.sceneParameters.OutlineColor);
+	RecordOutlineRenderCommands(SceneView.outlineRenderParams, mSelectedObjects, this, SceneView.view, SceneView.proj, SceneView.sceneParameters.OutlineColor);
 
 	if (UIState.bDrawLightVolume)
 	{
@@ -715,7 +715,7 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 			const Light& l = *lights[i];
 			if (l.bEnabled)
 			{
-				RecordRenderLightBoundsCommand(l, SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
+				RecordRenderLightBoundsCommand(l, SceneView.lightBoundsRenderParams, SceneView.cameraPosition);
 			}
 		}
 	}
@@ -876,8 +876,8 @@ void Scene::PickObject(const ObjectIDPass& ObjectIDRenderPass, int MouseClickPos
 void Scene::GatherSceneLightData(FSceneView& SceneView) const
 {
 	SCOPED_CPU_MARKER("Scene::GatherSceneLightData()");
-	SceneView.lightBoundsRenderCommands.clear();
-	SceneView.lightRenderCommands.clear();
+	SceneView.lightBoundsRenderParams.clear();
+	SceneView.lightRenderParams.clear();
 
 	VQ_SHADER_DATA::SceneLighting& data = SceneView.GPULightingData;
 
@@ -999,7 +999,7 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 		{
 			SceneShadowView.ShadowView_Directional.drawParamLookup.clear();
 			SceneShadowView.ShadowView_Directional.mRenderCmdInstanceDataWriteIndex.clear();
-			SceneShadowView.ShadowView_Directional.meshRenderCommands.clear();
+			SceneShadowView.ShadowView_Directional.meshRenderParams.clear();
 		}
 
 		// point
@@ -1293,7 +1293,7 @@ void Scene::BatchInstanceData_BoundingBox(FSceneView& SceneView
 
 	{
 		SCOPED_CPU_MARKER("AllocMem");
-		SceneView.boundingBoxRenderCommands.resize(NumGameObjectBBRenderCmds + NumMeshBBRenderCmds);
+		SceneView.boundingBoxRenderParams.resize(NumGameObjectBBRenderCmds + NumMeshBBRenderCmds);
 	}
 	// --------------------------------------------------------------
 	// Game Object Bounding Boxes
@@ -1302,7 +1302,7 @@ void Scene::BatchInstanceData_BoundingBox(FSceneView& SceneView
 	if (SceneView.sceneParameters.bDrawGameObjectBoundingBoxes)
 	{
 #if RENDER_INSTANCED_BOUNDING_BOXES 
-		fnBatch(SceneView.boundingBoxRenderCommands
+		fnBatch(SceneView.boundingBoxRenderParams
 			, mBoundingBoxHierarchy.mGameObjectBoundingBoxes
 			, iBoundingBox
 			, BBColor_GameObj
@@ -1310,7 +1310,7 @@ void Scene::BatchInstanceData_BoundingBox(FSceneView& SceneView
 			, "GameObj"
 		);
 #else
-	BatchBoundingBoxRenderCommandData(SceneView.boundingBoxRenderCommands, SceneView, mBoundingBoxHierarchy.mGameObjectBoundingBoxes, BBColor_GameObj, 0);
+	BatchBoundingBoxRenderCommandData(SceneView.boundingBoxRenderParams, SceneView, mBoundingBoxHierarchy.mGameObjectBoundingBoxes, BBColor_GameObj, 0);
 #endif
 	}
 
@@ -1323,7 +1323,7 @@ void Scene::BatchInstanceData_BoundingBox(FSceneView& SceneView
 		iBoundingBox = NumGameObjectBBRenderCmds;
 
 #if RENDER_INSTANCED_BOUNDING_BOXES 
-		fnBatch(SceneView.boundingBoxRenderCommands
+		fnBatch(SceneView.boundingBoxRenderParams
 			, mBoundingBoxHierarchy.mMeshBoundingBoxes
 			, iBoundingBox
 			, BBColor_Mesh
@@ -1331,7 +1331,7 @@ void Scene::BatchInstanceData_BoundingBox(FSceneView& SceneView
 			, "Meshes"
 		);
 #else
-		BatchBoundingBoxRenderCommandData(SceneView.boundingBoxRenderCommands, SceneView, mBoundingBoxHierarchy.mGameObjectBoundingBoxes, BBColor_GameObj, 0);
+		BatchBoundingBoxRenderCommandData(SceneView.boundingBoxRenderParams, SceneView, mBoundingBoxHierarchy.mGameObjectBoundingBoxes, BBColor_GameObj, 0);
 #endif
 	}
 }
@@ -1516,7 +1516,7 @@ static void CollectViewInstanceData(
 	, const XMMATRIX& viewProj
 	, const XMMATRIX& viewProjPrev
 	, const std::vector<FInstanceDataWriteParam>& vOutputWriteParams // {iDraw, iInst}
-	, std::vector<TMeshRenderCmd>& meshRenderCommands
+	, std::vector<TMeshRenderCmd>& meshRenderParams
 )
 {
 	SCOPED_CPU_MARKER("CollectViewInstanceData");
@@ -1537,9 +1537,9 @@ static void CollectViewInstanceData(
 		const int iDraw = vOutputWriteParams[i].iDraw;
 		const int iInst = vOutputWriteParams[i].iInst;
 
-		assert(meshRenderCommands.size() > iDraw);
-		TMeshRenderCmd& cmd = meshRenderCommands[iDraw];
-		//Log::Info("meshRenderCommands[%d] NumInst=%d , iFirst=%d", iCmdParam, NumInstances, range.first);
+		assert(meshRenderParams.size() > iDraw);
+		TMeshRenderCmd& cmd = meshRenderParams[iDraw];
+		//Log::Info("meshRenderParams[%d] NumInst=%d , iFirst=%d", iCmdParam, NumInstances, range.first);
 		SetParamData(cmd
 			, iInst
 			, tf
@@ -1557,7 +1557,7 @@ template<class TMeshRenderCmd>
 static void CountNResizeRenderCmdInstanceArrays(
 	const SceneBoundingBoxHierarchy& BBH
 	, const std::vector<FFrustumCullWorkerContext::FCullResult>& vCullResults
-	, std::vector<TMeshRenderCmd>& meshRenderCommands
+	, std::vector<TMeshRenderCmd>& meshRenderParams
 	, int MAX_INSTANCE_COUNT
 	, std::function<uint64(MaterialID, MeshID, int, bool)> FnGetKey
 )
@@ -1582,7 +1582,7 @@ static void CountNResizeRenderCmdInstanceArrays(
 		{
 			if (iDraw != -1)
 			{
-				ResizeDrawInstanceArrays(meshRenderCommands[iDraw], iInst, iDraw);
+				ResizeDrawInstanceArrays(meshRenderParams[iDraw], iInst, iDraw);
 			}
 			keyPrev = key;
 			++iDraw;
@@ -1590,7 +1590,7 @@ static void CountNResizeRenderCmdInstanceArrays(
 		}
 		if (iInst == MAX_INSTANCE_COUNT)
 		{
-			ResizeDrawInstanceArrays(meshRenderCommands[iDraw], iInst, iDraw);
+			ResizeDrawInstanceArrays(meshRenderParams[iDraw], iInst, iDraw);
 			++iDraw;
 			iInst = 0;
 		}
@@ -1598,7 +1598,7 @@ static void CountNResizeRenderCmdInstanceArrays(
 	}
 	if (iDraw != -1 && iInst != -1)
 	{
-		ResizeDrawInstanceArrays(meshRenderCommands[iDraw], iInst, iDraw);
+		ResizeDrawInstanceArrays(meshRenderParams[iDraw], iInst, iDraw);
 	}
 }
 
@@ -1654,7 +1654,7 @@ template<class TMeshInstanceDataArray, class TMeshRenderCmd>
 static void ReserveWorkerMemory(
 	  const SceneBoundingBoxHierarchy& BBH
 	, const std::vector<FFrustumCullWorkerContext::FCullResult>& vViewCullResults
-	, std::vector<TMeshRenderCmd>& meshRenderCommands
+	, std::vector<TMeshRenderCmd>& meshRenderParams
 	, std::unordered_map<uint64, TMeshInstanceDataArray>& drawParamLookup
 	, std::function<uint64(MaterialID, MeshID, int, bool)> FnGetKey
 	, std::vector<FInstanceDataWriteParam>& outWriteParams
@@ -1663,8 +1663,8 @@ static void ReserveWorkerMemory(
 {
 	SCOPED_CPU_MARKER("ReserveWorkerMemory");
 	CountInstanceData(BBH, drawParamLookup, vViewCullResults, FnGetKey);
-	CountNResizeRenderCmds(drawParamLookup, meshRenderCommands, MAX_INSTANCE_COUNT);
-	CountNResizeRenderCmdInstanceArrays(BBH, vViewCullResults, meshRenderCommands, MAX_INSTANCE_COUNT, FnGetKey);
+	CountNResizeRenderCmds(drawParamLookup, meshRenderParams, MAX_INSTANCE_COUNT);
+	CountNResizeRenderCmdInstanceArrays(BBH, vViewCullResults, meshRenderParams, MAX_INSTANCE_COUNT, FnGetKey);
 	AllocInstanceData<TMeshInstanceDataArray>(drawParamLookup);
 	CalculateInstanceDataWriteIndices(BBH, vViewCullResults, outWriteParams, FnGetKey, MAX_INSTANCE_COUNT);
 }
@@ -1687,7 +1687,7 @@ static void DispatchMainViewInstanceDataWorkers(
 
 	ReserveWorkerMemory(BBH,
 		vMainViewCullResults,
-		SceneView.meshRenderCommands,
+		SceneView.meshRenderParams,
 		SceneView.drawParamLookup,
 		FSceneView::GetKey,
 		SceneView.mRenderCmdInstanceDataWriteIndex,
@@ -1706,7 +1706,7 @@ static void DispatchMainViewInstanceDataWorkers(
 				SceneView.viewProj,
 				SceneView.viewProjPrev,
 				vOutputWriteParams,
-				SceneView.meshRenderCommands
+				SceneView.meshRenderParams
 			);
 			MainViewThreadDone++;
 		});
@@ -1768,7 +1768,7 @@ static void DispatchWorkers_ShadowViews(
 
 				ReserveWorkerMemory(BBH,
 					*ctx.pCullResults,
-					ctx.pShadowView->meshRenderCommands,
+					ctx.pShadowView->meshRenderParams,
 					ctx.pShadowView->drawParamLookup,
 					FShadowView::GetKey,
 					ctx.pShadowView->mRenderCmdInstanceDataWriteIndex,
@@ -1782,7 +1782,7 @@ static void DispatchWorkers_ShadowViews(
 					ctx.pShadowView->matViewProj,
 					ctx.pShadowView->matViewProj,
 					ctx.pShadowView->mRenderCmdInstanceDataWriteIndex,
-					ctx.pShadowView->meshRenderCommands
+					ctx.pShadowView->meshRenderParams
 				);
 			});
 		}
@@ -1798,7 +1798,7 @@ static void DispatchWorkers_ShadowViews(
 	//		assert(!ctx.pCullResults->empty());
 	//		ReserveWorkerMemory(BBH,
 	//			*ctx.pCullResults,
-	//			ctx.pShadowView->meshRenderCommands,
+	//			ctx.pShadowView->meshRenderParams,
 	//			ctx.pShadowView->drawParamLookup,
 	//			FShadowView::GetKey,
 	//			ctx.pShadowView->mRenderCmdInstanceDataWriteIndex,
@@ -1811,7 +1811,7 @@ static void DispatchWorkers_ShadowViews(
 	//			ctx.pShadowView->matViewProj,
 	//			ctx.pShadowView->matViewProj,
 	//			ctx.pShadowView->mRenderCmdInstanceDataWriteIndex,
-	//			ctx.pShadowView->meshRenderCommands
+	//			ctx.pShadowView->meshRenderParams
 	//		);
 	//	}
 	//}
@@ -1884,7 +1884,7 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 				, SceneView.viewProj
 				, SceneView.viewProjPrev
 				, SceneView.mRenderCmdInstanceDataWriteIndex
-				, SceneView.meshRenderCommands
+				, SceneView.meshRenderParams
 			);
 		}
 	}
@@ -1905,7 +1905,7 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 	}
 
 #else
-	BatchInstanceData_SceneMeshes(&SceneView.meshRenderCommands
+	BatchInstanceData_SceneMeshes(&SceneView.meshRenderParams
 		, SceneView.MaterialMeshLODInstanceDataLookup
 		, mFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[0]
 		, SceneView.viewProj
@@ -1991,15 +1991,15 @@ void Scene::RecordRenderLightMeshCommands(FSceneView& SceneView) const
 	SCOPED_CPU_MARKER("Scene::RecordRenderLightMeshCommands()");
 	if (SceneView.sceneParameters.bDrawLightMeshes)
 	{
-		::RecordRenderLightMeshCommands(mLightsStatic    , SceneView.lightRenderCommands, SceneView.cameraPosition);
-		::RecordRenderLightMeshCommands(mLightsDynamic   , SceneView.lightRenderCommands, SceneView.cameraPosition);
-		::RecordRenderLightMeshCommands(mLightsStationary, SceneView.lightRenderCommands, SceneView.cameraPosition);
+		::RecordRenderLightMeshCommands(mLightsStatic    , SceneView.lightRenderParams, SceneView.cameraPosition);
+		::RecordRenderLightMeshCommands(mLightsDynamic   , SceneView.lightRenderParams, SceneView.cameraPosition);
+		::RecordRenderLightMeshCommands(mLightsStationary, SceneView.lightRenderParams, SceneView.cameraPosition);
 	}
 	if (SceneView.sceneParameters.bDrawLightBounds)
 	{
-		::RecordRenderLightBoundsCommands(mLightsStatic    , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
-		::RecordRenderLightBoundsCommands(mLightsDynamic   , SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
-		::RecordRenderLightBoundsCommands(mLightsStationary, SceneView.lightBoundsRenderCommands, SceneView.cameraPosition);
+		::RecordRenderLightBoundsCommands(mLightsStatic    , SceneView.lightBoundsRenderParams, SceneView.cameraPosition);
+		::RecordRenderLightBoundsCommands(mLightsDynamic   , SceneView.lightBoundsRenderParams, SceneView.cameraPosition);
+		::RecordRenderLightBoundsCommands(mLightsStationary, SceneView.lightBoundsRenderParams, SceneView.cameraPosition);
 	}
 }
 

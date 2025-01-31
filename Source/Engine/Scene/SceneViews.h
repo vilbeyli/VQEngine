@@ -105,12 +105,12 @@ struct FSceneView
 	FSceneRenderParameters sceneParameters;
 	FPostProcessParameters postProcessParameters;
 
-	std::vector<MeshRenderCommand_t>  meshRenderCommands;
-	std::vector<FLightRenderCommand> lightRenderCommands;
-	std::vector<FLightRenderCommand> lightBoundsRenderCommands;
-	std::vector<FOutlineRenderCommand> outlineRenderCommands;
-	std::vector<MeshRenderCommand_t> debugVertexAxesRenderCommands;
-	std::vector<BoundingBoxRenderCommand_t> boundingBoxRenderCommands;
+	std::vector<MeshRenderCommand_t>  meshRenderParams;
+	std::vector<FLightRenderCommand> lightRenderParams;
+	std::vector<FLightRenderCommand> lightBoundsRenderParams;
+	std::vector<FOutlineRenderCommand> outlineRenderParams;
+	std::vector<MeshRenderCommand_t> debugVertexAxesRenderParams;
+	std::vector<BoundingBoxRenderCommand_t> boundingBoxRenderParams;
 
 #if RENDER_INSTANCED_SCENE_MESHES
 	//--------------------------------------------------------------------------------------------------------------------------------------------
@@ -159,7 +159,7 @@ struct FSceneView
 	static inline MeshID     GetMeshIDFromKey(uint64 key) { return MeshID((key >> 4) & 0x3FFFFFFF); }
 	static inline int        GetLODFromKey(uint64 key) { return int(key & 0xF); }
 	std::unordered_map<uint64, FSceneView::FMeshInstanceDataArray> drawParamLookup;
-	std::vector<FInstanceDataWriteParam> mRenderCmdInstanceDataWriteIndex; // drawParamLookup --> meshRenderCommands
+	std::vector<FInstanceDataWriteParam> mRenderCmdInstanceDataWriteIndex; // drawParamLookup --> meshRenderParams
 	//--------------------------------------------------------------------------------------------------------------------------------------------
 #endif
 };
@@ -199,11 +199,11 @@ struct FShadowView
 	static inline MeshID     GetMeshIDFromKey(uint64 key) { return MeshID((key >> 4) & 0x3FFFFFFF); }
 	static inline int        GetLODFromKey(uint64 key) { return int(key & 0xF); }
 	std::unordered_map<uint64, FInstanceDataArray> drawParamLookup;
-	std::vector<FInstanceDataWriteParam> mRenderCmdInstanceDataWriteIndex; // drawParamLookup --> meshRenderCommands
+	std::vector<FInstanceDataWriteParam> mRenderCmdInstanceDataWriteIndex; // drawParamLookup --> meshRenderParams
 	////--------------------------------------------------------------------------------------------------------------------------------------------
-	std::vector<FInstancedShadowMeshRenderCommand> meshRenderCommands; // per LOD mesh
+	std::vector<FInstancedShadowMeshRenderCommand> meshRenderParams; // per LOD mesh
 #else
-	std::vector<FShadowMeshRenderCommand> meshRenderCommands;
+	std::vector<FShadowMeshRenderCommand> meshRenderParams;
 #endif
 };
 
