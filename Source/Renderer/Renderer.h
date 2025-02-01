@@ -28,6 +28,7 @@
 #include "Pipeline/ShaderCompileUtils.h"
 #include "Pipeline/PipelineStateObjects.h"
 #include "Rendering/WindowRenderContext.h"
+#include "Rendering/RenderResources.h"
 
 #include "Engine/Core/Types.h"
 #include "Engine/Core/Platform.h"
@@ -91,7 +92,8 @@ public:
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	void                         WaitForLoadCompletion() const;
 	void                         OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h);
-
+	void                         LoadWindowSizeDependentResources(HWND hwnd, unsigned w, unsigned h, float fResolutionScale, bool bHDR);
+	void                         UnloadWindowSizeDependentResources(HWND hwnd);
 
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Device & Queues
@@ -203,8 +205,11 @@ public:
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Render (Public)
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-	void PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, FEnvironmentMapRenderingResources& env, const Mesh& CubeMesh, HWND hwnd);
-
+	void PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, const Mesh& CubeMesh, HWND hwnd);
+	
+	      FRenderingResources_MainWindow& GetRenderingResources_MainWindow() { return mResources_MainWnd; }
+	const FRenderingResources_MainWindow& GetRenderingResources_MainWindow() const { return mResources_MainWnd; }
+	const FRenderingResources_DebugWindow& GetRenderingResources_DebugWindow() const { return mResources_DebugWnd; }
 
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// PUBLIC MEMBERS
@@ -269,6 +274,8 @@ private:
 
 	// rendering
 	std::unordered_map<HWND, FWindowRenderContext> mRenderContextLookup;
+	FRenderingResources_MainWindow  mResources_MainWnd;
+	FRenderingResources_DebugWindow mResources_DebugWnd;
 
 	// sync
 	std::vector<Fence>              mAsyncComputeSSAOReadyFence;
@@ -345,6 +352,11 @@ public:
 	static std::string ShaderSourceFileDirectory;
 	static std::string PSOCacheDirectory;
 	static std::string ShaderCacheDirectory;
+
+	// Supported HDR Formats { DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_FORMAT_R16G16B16A16_FLOAT  }
+	// Supported SDR Formats { DXGI_FORMAT_R8G8B8A8_UNORM   , DXGI_FORMAT_R8G8B8A8_UNORM_SRGB }
+	static const DXGI_FORMAT PREFERRED_HDR_FORMAT = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	static const DXGI_FORMAT PREFERRED_SDR_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 };
 
 

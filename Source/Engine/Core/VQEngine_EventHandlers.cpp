@@ -353,7 +353,6 @@ void VQEngine::RenderThread_HandleEvents()
 	{
 		RenderThread_HandleWindowResizeEvent(it->second);
 	}
-
 }
 
 void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent)
@@ -406,7 +405,7 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	pWnd->OnResize(WIDTH, HEIGHT);
 	mRenderer.OnWindowSizeChanged(hwnd, WIDTH, HEIGHT); // updates render context
 
-	const auto& PPParams = this->mpScene->GetPostProcessParameters(0);
+	const FPostProcessParameters& PPParams = this->mpScene->GetPostProcessParameters(0);
 	const bool bFSREnabled = PPParams.IsFSREnabled() && !bUseHDRRenderPath; // TODO: remove this when FSR-HDR is implemented
 	const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
 

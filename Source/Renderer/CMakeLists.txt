@@ -83,11 +83,13 @@ set(PipelineSources
 # Rendering logic
 set(RenderingHeaders
     "Rendering/WindowRenderContext.h"
+    "Rendering/RenderResources.h"
     "Rendering/EnvironmentMapRendering.h"
     "Rendering/HDR.h"
 )
 set(RenderingSources
     "Rendering/WindowRenderContext.cpp"
+    "Rendering/RenderResources.cpp"
     "Rendering/EnvironmentMapRendering.cpp"
 )
 

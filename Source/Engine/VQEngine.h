@@ -84,104 +84,6 @@ struct FLoadingScreenData
 	// TODO: animation resources
 };
 
-struct FRenderingResources{};
-struct FRenderingResources_MainWindow : public FRenderingResources
-{
-	TextureID Tex_ShadowMaps_Spot                    = INVALID_ID;
-	TextureID Tex_ShadowMaps_Point                   = INVALID_ID;
-	TextureID Tex_ShadowMaps_Directional             = INVALID_ID;
-
-	TextureID Tex_SceneColorMSAA                     = INVALID_ID;
-	TextureID Tex_SceneColor                         = INVALID_ID;
-	TextureID Tex_SceneColorBoundingVolumes          = INVALID_ID;
-	TextureID Tex_SceneDepthMSAA                     = INVALID_ID;
-	TextureID Tex_SceneDepth                         = INVALID_ID;
-	TextureID Tex_SceneDepthResolve                  = INVALID_ID;
-	TextureID Tex_SceneNormalsMSAA                   = INVALID_ID;
-	TextureID Tex_SceneNormals                       = INVALID_ID;
-	TextureID Tex_AmbientOcclusion                   = INVALID_ID;
-	TextureID Tex_SceneVisualization                 = INVALID_ID;
-	TextureID Tex_SceneVisualizationMSAA             = INVALID_ID;
-	TextureID Tex_SceneMotionVectors                 = INVALID_ID;
-	TextureID Tex_SceneMotionVectorsMSAA             = INVALID_ID;
-
-	TextureID Tex_DownsampledSceneDepth              = INVALID_ID;
-	TextureID Tex_DownsampledSceneDepthAtomicCounter = INVALID_ID;
-
-	TextureID Tex_PostProcess_BlurIntermediate       = INVALID_ID;
-	TextureID Tex_PostProcess_BlurOutput             = INVALID_ID;
-	TextureID Tex_PostProcess_TonemapperOut          = INVALID_ID;
-	TextureID Tex_PostProcess_VisualizationOut       = INVALID_ID;
-	TextureID Tex_PostProcess_FFXCASOut              = INVALID_ID;
-	TextureID Tex_PostProcess_FSR_EASUOut            = INVALID_ID;
-	TextureID Tex_PostProcess_FSR_RCASOut            = INVALID_ID;
-	TextureID Tex_UI_SDR                             = INVALID_ID;
-
-	RTV_ID    RTV_SceneColorMSAA                     = INVALID_ID;
-	RTV_ID    RTV_SceneColor                         = INVALID_ID;
-	RTV_ID    RTV_SceneColorBoundingVolumes          = INVALID_ID;
-	RTV_ID    RTV_SceneNormalsMSAA                   = INVALID_ID;
-	RTV_ID    RTV_SceneNormals                       = INVALID_ID;
-	RTV_ID    RTV_UI_SDR                             = INVALID_ID;
-	RTV_ID    RTV_SceneVisualization                 = INVALID_ID;
-	RTV_ID    RTV_SceneVisualizationMSAA             = INVALID_ID;
-	RTV_ID    RTV_SceneMotionVectors                 = INVALID_ID;
-	RTV_ID    RTV_SceneMotionVectorsMSAA             = INVALID_ID;
-
-	SRV_ID    SRV_PostProcess_BlurIntermediate       = INVALID_ID;
-	SRV_ID    SRV_PostProcess_BlurOutput             = INVALID_ID;
-	SRV_ID    SRV_PostProcess_TonemapperOut          = INVALID_ID;
-	SRV_ID    SRV_PostProcess_VisualizationOut       = INVALID_ID;
-	SRV_ID    SRV_PostProcess_FFXCASOut              = INVALID_ID;
-	SRV_ID    SRV_PostProcess_FSR_EASUOut            = INVALID_ID;
-	SRV_ID    SRV_PostProcess_FSR_RCASOut            = INVALID_ID;
-	SRV_ID    SRV_ShadowMaps_Spot                    = INVALID_ID;
-	SRV_ID    SRV_ShadowMaps_Point                   = INVALID_ID;
-	SRV_ID    SRV_ShadowMaps_Directional             = INVALID_ID;
-	SRV_ID    SRV_SceneColor                         = INVALID_ID;
-	SRV_ID    SRV_SceneColorBoundingVolumes          = INVALID_ID;
-	SRV_ID    SRV_SceneColorMSAA                     = INVALID_ID;
-	SRV_ID    SRV_SceneNormals                       = INVALID_ID;
-	SRV_ID    SRV_SceneNormalsMSAA                   = INVALID_ID;
-	SRV_ID    SRV_SceneDepth                         = INVALID_ID;
-	SRV_ID    SRV_SceneDepthMSAA                     = INVALID_ID;
-	SRV_ID    SRV_FFXCACAO_Out                       = INVALID_ID;
-	SRV_ID    SRV_UI_SDR                             = INVALID_ID;
-	SRV_ID    SRV_SceneVisualization                 = INVALID_ID;
-	SRV_ID    SRV_SceneVisualizationMSAA             = INVALID_ID;
-	SRV_ID    SRV_SceneMotionVectors                 = INVALID_ID;
-
-	UAV_ID    UAV_FFXCACAO_Out                       = INVALID_ID;
-	UAV_ID    UAV_PostProcess_BlurIntermediate       = INVALID_ID;
-	UAV_ID    UAV_PostProcess_BlurOutput             = INVALID_ID;
-	UAV_ID    UAV_PostProcess_TonemapperOut          = INVALID_ID;
-	UAV_ID    UAV_PostProcess_VisualizationOut       = INVALID_ID;
-	UAV_ID    UAV_PostProcess_FFXCASOut              = INVALID_ID;
-	UAV_ID    UAV_PostProcess_FSR_EASUOut            = INVALID_ID;
-	UAV_ID    UAV_PostProcess_FSR_RCASOut            = INVALID_ID;
-	UAV_ID    UAV_SceneDepth                         = INVALID_ID;
-	UAV_ID    UAV_SceneColor                         = INVALID_ID;
-	UAV_ID    UAV_SceneNormals                       = INVALID_ID;
-
-	UAV_ID    UAV_DownsampledSceneDepth              = INVALID_ID;
-	UAV_ID    UAV_DownsampledSceneDepthAtomicCounter = INVALID_ID;
-
-	DSV_ID    DSV_SceneDepth                         = INVALID_ID;
-	DSV_ID    DSV_SceneDepthMSAA                     = INVALID_ID;
-	DSV_ID    DSV_ShadowMaps_Spot                    = INVALID_ID;
-	DSV_ID    DSV_ShadowMaps_Point                   = INVALID_ID;
-	DSV_ID    DSV_ShadowMaps_Directional             = INVALID_ID;
-
-	FEnvironmentMapRenderingResources EnvironmentMap;
-
-	SRV_ID SRV_NullCubemap   = INVALID_ID;
-	SRV_ID SRV_NullTexture2D = INVALID_ID;
-};
-struct FRenderingResources_DebugWindow : public FRenderingResources
-{
-	// TODO
-};
-
 
 enum EAppState
 {
@@ -261,7 +163,6 @@ public:
 #endif
 
 	void RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height, float ResolutionScale);
-	void RenderThread_LoadResources();
 	void RenderThread_UnloadWindowSizeDependentResources(HWND hwnd);
 
 	// PRE_RENDER()
@@ -450,14 +351,6 @@ private:
 	FUIState                        mUIState;
 	FRenderStats                    mRenderStats;
 
-	// rendering resources per window
-#if 0
-	RenderingResourcesLookup_t      mRenderingResources;
-#else
-	FRenderingResources_MainWindow  mResources_MainWnd;
-	FRenderingResources_DebugWindow mResources_DebugWnd;
-#endif
-
 	// RenderPasses (WIP design)
 	std::vector<IRenderPass*>       mRenderPasses;
 	DepthPrePass                    mRenderPass_ZPrePass;
@@ -618,17 +511,6 @@ private:
 		DirectX::XMMATRIX matViewProj;
 		float LocalAxisSize;
 	};
-
-// ------------------------------------------------------------------------------------------------------
-//
-// VQENGINE STATIC
-// 
-// ------------------------------------------------------------------------------------------------------
-public:
-	// Supported HDR Formats { DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_FORMAT_R16G16B16A16_FLOAT  }
-	// Supported SDR Formats { DXGI_FORMAT_R8G8B8A8_UNORM   , DXGI_FORMAT_R8G8B8A8_UNORM_SRGB }
-	static const DXGI_FORMAT PREFERRED_HDR_FORMAT = DXGI_FORMAT_R16G16B16A16_FLOAT;
-	static const DXGI_FORMAT PREFERRED_SDR_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 };
 
 

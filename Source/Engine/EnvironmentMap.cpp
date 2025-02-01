@@ -208,7 +208,8 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 	SCOPED_CPU_MARKER("LoadEnvironmentMap");
 	assert(EnvMapName.size() != 0);
 	constexpr int DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION = 64;
-	FEnvironmentMapRenderingResources& env = mResources_MainWnd.EnvironmentMap;
+	FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
+	FEnvironmentMapRenderingResources& env = rsc.EnvironmentMap;
 
 	// if already loaded, unload it
 	if (env.Tex_HDREnvironment != INVALID_ID)
@@ -269,5 +270,6 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 
 void VQEngine::UnloadEnvironmentMap()
 {
-	mResources_MainWnd.EnvironmentMap.DestroyRenderingResources(mRenderer, mpWinMain->GetHWND());
+	FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
+	rsc.EnvironmentMap.DestroyRenderingResources(mRenderer, mpWinMain->GetHWND());
 }

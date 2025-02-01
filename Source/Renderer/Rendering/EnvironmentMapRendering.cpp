@@ -127,10 +127,12 @@ void FEnvironmentMapRenderingResources::DestroyRenderingResources(VQRenderer& Re
 //
 // Rendering
 //
-void VQRenderer::PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, FEnvironmentMapRenderingResources& env, const Mesh& CubeMesh, HWND hwnd)
+void VQRenderer::PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, const Mesh& CubeMesh, HWND hwnd)
 {
 	Log::Info("Environment Map: PreFilterEnvironmentMap");
 	using namespace DirectX;
+
+	FEnvironmentMapRenderingResources& env = mResources_MainWnd.EnvironmentMap;
 
 	FWindowRenderContext& ctx = this->GetWindowRenderContext(hwnd);
 	DynamicBufferHeap& cbHeap = ctx.GetConstantBufferHeap(0);

@@ -606,10 +606,12 @@ FSetHDRMetaDataParams VQEngine::GatherHDRMetaDataParameters(HWND hwnd)
 			? EColorSpace::REC_2020 
 			: EColorSpace::REC_709;
 
-	const bool bHDREnvironmentMap = mResources_MainWnd.EnvironmentMap.Tex_HDREnvironment != INVALID_ID;
+
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
+	const bool bHDREnvironmentMap = rsc.EnvironmentMap.Tex_HDREnvironment != INVALID_ID;
 	if (bHDREnvironmentMap)
 	{
-		params.MaxContentLightLevel = static_cast<float>(mResources_MainWnd.EnvironmentMap.MaxContentLightLevel);
+		params.MaxContentLightLevel = static_cast<float>(rsc.EnvironmentMap.MaxContentLightLevel);
 	}
 
 	params.MaxFrameAverageLightLevel = 80.0f; // TODO: dynamic calculation using histograms?

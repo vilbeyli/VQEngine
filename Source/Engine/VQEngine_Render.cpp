@@ -266,7 +266,6 @@ void VQEngine::RenderThread_Inititalize()
 	// load builtin resources, compile shaders, load PSOs
 	
 	mRenderer.Load();
-	RenderThread_LoadResources();
 	
 	mWorkers_Simulation.AddTask([=]() { LoadLoadingScreenData(); });
 	mWorkers_Simulation.AddTask([=]() { InitializeBuiltinMeshes(); });
@@ -459,326 +458,17 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 
 	if (hwnd == mpWinMain->GetHWND())
 	{
-		const bool bHDR = this->IsHDRSettingOn();
 		const bool bRenderingHDR = this->ShouldRenderHDR(hwnd);
 
-		constexpr DXGI_FORMAT MainColorRTFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
-		const     DXGI_FORMAT TonemapperOutputFormat = bRenderingHDR ? VQEngine::PREFERRED_HDR_FORMAT : DXGI_FORMAT_R8G8B8A8_UNORM;
-
-		FRenderingResources_MainWindow& r = mResources_MainWnd;
+		mRenderer.LoadWindowSizeDependentResources(hwnd, Width, Height, fResolutionScale, bRenderingHDR);
 
 
-		{	// Scene depth stencil view /w MSAA
-			TextureCreateDesc desc("SceneDepthMSAA");
-			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				DXGI_FORMAT_R32_TYPELESS
-				, RenderResolutionX
-				, RenderResolutionY
-				, 1 // Array Size
-				, 1 // MIP levels
-				, MSAA_SAMPLE_COUNT // MSAA SampleCount
-				, 0 // MSAA SampleQuality
-				, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
-			);
-			desc.ResourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-			r.Tex_SceneDepthMSAA = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeDSV(r.DSV_SceneDepthMSAA, 0u, r.Tex_SceneDepthMSAA);
-			mRenderer.InitializeSRV(r.SRV_SceneDepthMSAA, 0u, r.Tex_SceneDepthMSAA);
-		}
-		{	// Scene depth stencil resolve target
-			TextureCreateDesc desc("SceneDepthResolve");
-			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				DXGI_FORMAT_R32_FLOAT
-				, RenderResolutionX
-				, RenderResolutionY
-				, 1 // Array Size
-				, 1 // MIP levels
-				, 1 // MSAA SampleCount
-				, 0 // MSAA SampleQuality
-				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-			);
-			desc.ResourceState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-			r.Tex_SceneDepthResolve = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeUAV(r.UAV_SceneDepth, 0u, r.Tex_SceneDepthResolve, 0u, 0u);
-			mRenderer.InitializeSRV(r.SRV_SceneDepth, 0u, r.Tex_SceneDepthResolve, 0u, 0u);
-		}
-		{	// Scene depth stencil target (for MSAA off)
-			TextureCreateDesc desc("SceneDepth");
-			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				DXGI_FORMAT_R32_TYPELESS
-				, RenderResolutionX
-				, RenderResolutionY
-				, 1 // Array Size
-				, 1 // MIP levels
-				, 1 // MSAA SampleCount
-				, 0 // MSAA SampleQuality
-				, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
-			);
-			desc.ResourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-			r.Tex_SceneDepth = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeDSV(r.DSV_SceneDepth, 0u, r.Tex_SceneDepth);
-		}
-		{
-			TextureCreateDesc desc("DownsampledSceneDepth");
-			const int NumMIPs = Image::CalculateMipLevelCount(RenderResolutionX, RenderResolutionY);
-			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				DXGI_FORMAT_R32_FLOAT
-				, RenderResolutionX
-				, RenderResolutionY
-				, 1 // Array Size
-				, NumMIPs
-				, 1 // MSAA SampleCount
-				, 0 // MSAA SampleQuality
-				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-			);
-			desc.ResourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-			r.Tex_DownsampledSceneDepth = mRenderer.CreateTexture(desc);
-			for(int mip=0; mip<13; ++mip) // 13 comes from downsampledepth.hlsl resource count, TODO: fix magic number
-				mRenderer.InitializeUAV(r.UAV_DownsampledSceneDepth, mip, r.Tex_DownsampledSceneDepth, 0, std::min(mip, NumMIPs - 1));
-		}
-
-		{ // Main render target view w/ MSAA
-			TextureCreateDesc desc("SceneColorMSAA");
-			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				MainColorRTFormat
-				, RenderResolutionX
-				, RenderResolutionY
-				, 1 // Array Size
-				, 1 // MIP levels
-				, MSAA_SAMPLE_COUNT // MSAA SampleCount
-				, 0 // MSAA SampleQuality
-				, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
-			);
-
-			desc.ResourceState = D3D12_RESOURCE_STATE_RESOLVE_SOURCE;
-			r.Tex_SceneColorMSAA = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeRTV(r.RTV_SceneColorMSAA, 0u, r.Tex_SceneColorMSAA);
-			mRenderer.InitializeSRV(r.SRV_SceneColorMSAA, 0u, r.Tex_SceneColorMSAA);
-
-			// scene visualization
-			desc.TexName = "SceneVizMSAA";
-			r.Tex_SceneVisualizationMSAA = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeRTV(r.RTV_SceneVisualizationMSAA, 0u, r.Tex_SceneVisualizationMSAA);
-			mRenderer.InitializeSRV(r.SRV_SceneVisualizationMSAA, 0u, r.Tex_SceneVisualizationMSAA);
-
-			// motion vectors
-			desc.TexName = "SceneMotionVectorsMSAA";
-			desc.d3d12Desc.Format = DXGI_FORMAT_R16G16_FLOAT;
-			r.Tex_SceneMotionVectorsMSAA = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeRTV(r.RTV_SceneMotionVectorsMSAA, 0u, r.Tex_SceneMotionVectorsMSAA);
-		}
-		{ // MSAA resolve target
-			TextureCreateDesc desc("SceneColor");
-			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				MainColorRTFormat
-				, RenderResolutionX
-				, RenderResolutionY
-				, 1 // Array Size
-				, 1 // MIP levels
-				, 1 // MSAA SampleCount
-				, 0 // MSAA SampleQuality
-				, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-			);
-
-			desc.ResourceState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-			r.Tex_SceneColor = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeRTV(r.RTV_SceneColor, 0u, r.Tex_SceneColor);
-			mRenderer.InitializeSRV(r.SRV_SceneColor, 0u, r.Tex_SceneColor);
-			mRenderer.InitializeUAV(r.UAV_SceneColor, 0u, r.Tex_SceneColor);
-			
-			// scene bounding volumes
-			desc.TexName = "SceneBVs";
-			desc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-			r.Tex_SceneColorBoundingVolumes = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeRTV(r.RTV_SceneColorBoundingVolumes, 0u, r.Tex_SceneColorBoundingVolumes);
-			mRenderer.InitializeSRV(r.SRV_SceneColorBoundingVolumes, 0u, r.Tex_SceneColorBoundingVolumes);
-
-			// scene visualization
-			desc.TexName = "SceneViz";
-			desc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-			r.Tex_SceneVisualization = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeRTV(r.RTV_SceneVisualization, 0u, r.Tex_SceneVisualization);
-			mRenderer.InitializeSRV(r.SRV_SceneVisualization, 0u, r.Tex_SceneVisualization);
-
-			// motion vectors
-			desc.TexName = "SceneMotionVectors";
-			desc.d3d12Desc.Format = DXGI_FORMAT_R16G16_FLOAT;
-			r.Tex_SceneMotionVectors = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeRTV(r.RTV_SceneMotionVectors, 0u, r.Tex_SceneMotionVectors);
-			mRenderer.InitializeSRV(r.SRV_SceneMotionVectors, 0u, r.Tex_SceneMotionVectors);
-		}
-		{ // Scene Normals
-			TextureCreateDesc desc("SceneNormals");
-			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				DXGI_FORMAT_R10G10B10A2_UNORM
-				, RenderResolutionX
-				, RenderResolutionY
-				, 1 // Array Size
-				, 1 // MIP levels
-				, 1 // MSAA SampleCount
-				, 0 // MSAA SampleQuality
-				, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-			);
-			desc.ResourceState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-			r.Tex_SceneNormals = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeRTV(r.RTV_SceneNormals, 0u, r.Tex_SceneNormals);
-			mRenderer.InitializeSRV(r.SRV_SceneNormals, 0u, r.Tex_SceneNormals);
-			mRenderer.InitializeUAV(r.UAV_SceneNormals, 0u, r.Tex_SceneNormals);
-		}
+		// TODO: move this into renderer after moving Render Passes
+		FRenderingResources_MainWindow& r = mRenderer.GetRenderingResources_MainWindow();
 		
-		{ // Scene Normals /w MSAA
-			TextureCreateDesc desc("SceneNormalsMSAA");
-			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				DXGI_FORMAT_R10G10B10A2_UNORM
-				, RenderResolutionX
-				, RenderResolutionY
-				, 1 // Array Size
-				, 1 // MIP levels
-				, MSAA_SAMPLE_COUNT // MSAA SampleCount
-				, 0 // MSAA SampleQuality
-				, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
-			);
-			desc.ResourceState = D3D12_RESOURCE_STATE_RENDER_TARGET;
-			r.Tex_SceneNormalsMSAA = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeRTV(r.RTV_SceneNormalsMSAA, 0u, r.Tex_SceneNormalsMSAA);
-			mRenderer.InitializeSRV(r.SRV_SceneNormalsMSAA, 0u, r.Tex_SceneNormalsMSAA);
+		{ // Depth-resolve CS pass
+			mRenderPass_DepthResolve.OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY);
 		}
-
-		mRenderPass_DepthResolve.OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY);
-
-
-		{ // BlurIntermediate UAV & SRV
-			TextureCreateDesc desc("BlurIntermediate");
-			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				MainColorRTFormat
-				, RenderResolutionX
-				, RenderResolutionY
-				, 1 // Array Size
-				, 1 // MIP levels
-				, 1 // MSAA SampleCount
-				, 0 // MSAA SampleQuality
-				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-			);
-			desc.ResourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-			r.Tex_PostProcess_BlurIntermediate = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeUAV(r.UAV_PostProcess_BlurIntermediate, 0u, r.Tex_PostProcess_BlurIntermediate);
-			mRenderer.InitializeSRV(r.SRV_PostProcess_BlurIntermediate, 0u, r.Tex_PostProcess_BlurIntermediate);
-
-			desc.TexName = "BlurOutput";
-			desc.ResourceState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-			r.Tex_PostProcess_BlurOutput = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeUAV(r.UAV_PostProcess_BlurOutput, 0u, r.Tex_PostProcess_BlurOutput);
-			mRenderer.InitializeSRV(r.SRV_PostProcess_BlurOutput, 0u, r.Tex_PostProcess_BlurOutput);
-		}
-
-		{ // Tonemapper Resources
-			TextureCreateDesc desc("TonemapperOut");
-			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				TonemapperOutputFormat
-				, RenderResolutionX
-				, RenderResolutionY
-				, 1 // Array Size
-				, 1 // MIP levels
-				, 1 // MSAA SampleCount
-				, 0 // MSAA SampleQuality
-				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-			);
-
-			r.Tex_PostProcess_TonemapperOut = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeUAV(r.UAV_PostProcess_TonemapperOut, 0u, r.Tex_PostProcess_TonemapperOut);
-			mRenderer.InitializeSRV(r.SRV_PostProcess_TonemapperOut, 0u, r.Tex_PostProcess_TonemapperOut);
-		}
-
-		{ // Visualization Resources
-			TextureCreateDesc desc("VizOut");
-			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				TonemapperOutputFormat
-				, RenderResolutionX
-				, RenderResolutionY
-				, 1 // Array Size
-				, 1 // MIP levels
-				, 1 // MSAA SampleCount
-				, 0 // MSAA SampleQuality
-				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-			);
-			desc.ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-			r.Tex_PostProcess_VisualizationOut = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeUAV(r.UAV_PostProcess_VisualizationOut, 0u, r.Tex_PostProcess_VisualizationOut);
-			mRenderer.InitializeSRV(r.SRV_PostProcess_VisualizationOut, 0u, r.Tex_PostProcess_VisualizationOut);
-		}
-
-
-		{ // FFX-CAS Resources
-			TextureCreateDesc desc("FFXCAS_Out");
-			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				TonemapperOutputFormat
-				, RenderResolutionX
-				, RenderResolutionY
-				, 1 // Array Size
-				, 1 // MIP levels
-				, 1 // MSAA SampleCount
-				, 0 // MSAA SampleQuality
-				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-			);
-			desc.ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-			r.Tex_PostProcess_FFXCASOut = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeUAV(r.UAV_PostProcess_FFXCASOut, 0u, r.Tex_PostProcess_FFXCASOut);
-			mRenderer.InitializeSRV(r.SRV_PostProcess_FFXCASOut, 0u, r.Tex_PostProcess_FFXCASOut);
-		}
-
-		{ // FSR1-EASU Resources
-			TextureCreateDesc desc("FSR_EASU_Out");
-			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				TonemapperOutputFormat
-				, Width
-				, Height
-				, 1 // Array Size
-				, 1 // MIP levels
-				, 1 // MSAA SampleCount
-				, 0 // MSAA SampleQuality
-				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-			);
-			desc.ResourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-			r.Tex_PostProcess_FSR_EASUOut = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeUAV(r.UAV_PostProcess_FSR_EASUOut, 0u, r.Tex_PostProcess_FSR_EASUOut);
-			mRenderer.InitializeSRV(r.SRV_PostProcess_FSR_EASUOut, 0u, r.Tex_PostProcess_FSR_EASUOut);
-		}
-		{ // FSR1-RCAS Resources
-			TextureCreateDesc desc("FSR_RCAS_Out");
-			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				TonemapperOutputFormat
-				, Width
-				, Height
-				, 1 // Array Size
-				, 1 // MIP levels
-				, 1 // MSAA SampleCount
-				, 0 // MSAA SampleQuality
-				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-			);
-			desc.ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-			r.Tex_PostProcess_FSR_RCASOut = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeUAV(r.UAV_PostProcess_FSR_RCASOut, 0u, r.Tex_PostProcess_FSR_RCASOut);
-			mRenderer.InitializeSRV(r.SRV_PostProcess_FSR_RCASOut, 0u, r.Tex_PostProcess_FSR_RCASOut);
-		}
-
-		{ // UI Resources
-			TextureCreateDesc desc("UI_SDR");
-			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				DXGI_FORMAT_R8G8B8A8_UNORM
-				, Width
-				, Height
-				, 1 // Array Size
-				, 1 // MIP levels
-				, 1 // MSAA SampleCount
-				, 0 // MSAA SampleQuality
-				, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
-			);
-			desc.ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-			r.Tex_UI_SDR = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeRTV(r.RTV_UI_SDR, 0u, r.Tex_UI_SDR);
-			mRenderer.InitializeSRV(r.SRV_UI_SDR, 0u, r.Tex_UI_SDR);
-		}
-
 
 		{ // FFX-CACAO Resources
 			TextureCreateDesc desc("FFXCACAO_Out");
@@ -847,221 +537,13 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 	// TODO: generic implementation of other window procedures for load
 }
 
-static void AllocateDescriptors(FRenderingResources_MainWindow& rsc, VQRenderer& mRenderer)
-{
-	SCOPED_CPU_MARKER("AllocateDescriptors");
-	
-	// null cubemap SRV
-	{
-		rsc.SRV_NullCubemap = mRenderer.AllocateSRV();
-		rsc.SRV_NullTexture2D = mRenderer.AllocateSRV();
-	}
-
-	// depth pre pass
-	{
-		rsc.DSV_SceneDepthMSAA = mRenderer.AllocateDSV();
-		rsc.DSV_SceneDepth = mRenderer.AllocateDSV();
-		rsc.UAV_SceneDepth = mRenderer.AllocateUAV();
-		rsc.UAV_SceneColor = mRenderer.AllocateUAV();
-		rsc.UAV_SceneNormals = mRenderer.AllocateUAV();
-		rsc.RTV_SceneNormals = mRenderer.AllocateRTV();
-		rsc.RTV_SceneNormalsMSAA = mRenderer.AllocateRTV();
-		rsc.SRV_SceneNormals = mRenderer.AllocateSRV();
-		rsc.SRV_SceneNormalsMSAA = mRenderer.AllocateSRV();
-		rsc.SRV_SceneDepthMSAA = mRenderer.AllocateSRV();
-		rsc.SRV_SceneDepth = mRenderer.AllocateSRV();
-	}
-
-	// shadow map passes
-	{
-		rsc.DSV_ShadowMaps_Spot = mRenderer.AllocateDSV(NUM_SHADOWING_LIGHTS__SPOT);
-		rsc.SRV_ShadowMaps_Spot = mRenderer.AllocateSRV();
-		rsc.DSV_ShadowMaps_Point = mRenderer.AllocateDSV(NUM_SHADOWING_LIGHTS__POINT * 6);
-		rsc.SRV_ShadowMaps_Point = mRenderer.AllocateSRV();
-		rsc.DSV_ShadowMaps_Directional = mRenderer.AllocateDSV();
-		rsc.SRV_ShadowMaps_Directional = mRenderer.AllocateSRV();
-	}
-
-	// scene color pass
-	{
-		rsc.RTV_SceneColorMSAA = mRenderer.AllocateRTV();
-		rsc.RTV_SceneColor = mRenderer.AllocateRTV();
-		rsc.RTV_SceneColorBoundingVolumes = mRenderer.AllocateRTV();
-		rsc.RTV_SceneVisualization = mRenderer.AllocateRTV();
-		rsc.RTV_SceneVisualizationMSAA = mRenderer.AllocateRTV();
-		rsc.RTV_SceneMotionVectors = mRenderer.AllocateRTV();
-		rsc.RTV_SceneMotionVectorsMSAA = mRenderer.AllocateRTV();
-		rsc.SRV_SceneColor = mRenderer.AllocateSRV();
-		rsc.SRV_SceneColorMSAA = mRenderer.AllocateSRV();
-		rsc.SRV_SceneColorBoundingVolumes = mRenderer.AllocateSRV();
-		rsc.SRV_SceneVisualization = mRenderer.AllocateSRV();
-		rsc.SRV_SceneMotionVectors = mRenderer.AllocateSRV();
-		rsc.SRV_SceneVisualizationMSAA = mRenderer.AllocateSRV();
-	}
-
-	// reflection passes
-	{
-		rsc.UAV_DownsampledSceneDepth = mRenderer.AllocateUAV(13);
-		rsc.UAV_DownsampledSceneDepthAtomicCounter = mRenderer.AllocateUAV(1);
-	}
-
-	// ambient occlusion pass
-	{
-		rsc.UAV_FFXCACAO_Out = mRenderer.AllocateUAV();
-		rsc.SRV_FFXCACAO_Out = mRenderer.AllocateSRV();
-	}
-
-	// post process pass
-	{
-		rsc.UAV_PostProcess_TonemapperOut = mRenderer.AllocateUAV();
-		rsc.UAV_PostProcess_VisualizationOut = mRenderer.AllocateUAV();
-		rsc.UAV_PostProcess_BlurIntermediate = mRenderer.AllocateUAV();
-		rsc.UAV_PostProcess_BlurOutput = mRenderer.AllocateUAV();
-		rsc.UAV_PostProcess_FFXCASOut = mRenderer.AllocateUAV();
-		rsc.UAV_PostProcess_FSR_EASUOut = mRenderer.AllocateUAV();
-		rsc.UAV_PostProcess_FSR_RCASOut = mRenderer.AllocateUAV();
-
-		rsc.SRV_PostProcess_TonemapperOut = mRenderer.AllocateSRV();
-		rsc.SRV_PostProcess_VisualizationOut = mRenderer.AllocateSRV();
-		rsc.SRV_PostProcess_BlurIntermediate = mRenderer.AllocateSRV();
-		rsc.SRV_PostProcess_BlurOutput = mRenderer.AllocateSRV();
-		rsc.SRV_PostProcess_FFXCASOut = mRenderer.AllocateSRV();
-		rsc.SRV_PostProcess_FSR_EASUOut = mRenderer.AllocateSRV();
-		rsc.SRV_PostProcess_FSR_RCASOut = mRenderer.AllocateSRV();
-	}
-
-	// UI HDR pass
-	{
-		rsc.RTV_UI_SDR = mRenderer.AllocateRTV();
-		rsc.SRV_UI_SDR = mRenderer.AllocateSRV();
-	}
-}
-
-static void CreateResourceViews(FRenderingResources_MainWindow& rsc, VQRenderer& mRenderer)
-{
-	SCOPED_CPU_MARKER("CreateResourceViews");
-	// null cubemap SRV
-	{
-		D3D12_SHADER_RESOURCE_VIEW_DESC nullSRVDesc = {};
-		nullSRVDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-		nullSRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		nullSRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-		nullSRVDesc.TextureCube.MipLevels = 1;
-		mRenderer.InitializeSRV(rsc.SRV_NullCubemap, 0, nullSRVDesc);
-
-		nullSRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-		mRenderer.InitializeSRV(rsc.SRV_NullTexture2D, 0, nullSRVDesc);
-	}
-
-	// reflection passes
-	{
-		SCOPED_CPU_MARKER("Reflection");
-		TextureCreateDesc desc("DownsampledSceneDepthAtomicCounter");
-		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(4, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-		desc.ResourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-		rsc.Tex_DownsampledSceneDepthAtomicCounter = mRenderer.CreateTexture(desc);
-		mRenderer.InitializeUAVForBuffer(rsc.UAV_DownsampledSceneDepthAtomicCounter, 0u, rsc.Tex_DownsampledSceneDepthAtomicCounter, DXGI_FORMAT_R32_UINT);
-	}
-
-	// shadow map passes
-	{
-		SCOPED_CPU_MARKER("ShadowMaps");
-		TextureCreateDesc desc("ShadowMaps_Spot");
-		// initialize texture memory
-		constexpr UINT SHADOW_MAP_DIMENSION_SPOT = 1024;
-		constexpr UINT SHADOW_MAP_DIMENSION_POINT = 1024;
-		constexpr UINT SHADOW_MAP_DIMENSION_DIRECTIONAL = 2048;
-
-		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-			DXGI_FORMAT_R32_TYPELESS
-			, SHADOW_MAP_DIMENSION_SPOT
-			, SHADOW_MAP_DIMENSION_SPOT
-			, NUM_SHADOWING_LIGHTS__SPOT // Array Size
-			, 1 // MIP levels
-			, 1 // MSAA SampleCount
-			, 0 // MSAA SampleQuality
-			, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
-		);
-		desc.ResourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-		rsc.Tex_ShadowMaps_Spot = mRenderer.CreateTexture(desc);
-
-		desc.d3d12Desc.DepthOrArraySize = NUM_SHADOWING_LIGHTS__POINT * 6;
-		desc.d3d12Desc.Width = SHADOW_MAP_DIMENSION_POINT;
-		desc.d3d12Desc.Height = SHADOW_MAP_DIMENSION_POINT;
-		desc.TexName = "ShadowMaps_Point";
-		desc.bCubemap = true;
-		rsc.Tex_ShadowMaps_Point = mRenderer.CreateTexture(desc);
-
-
-		desc.d3d12Desc.Width = SHADOW_MAP_DIMENSION_DIRECTIONAL;
-		desc.d3d12Desc.Height = SHADOW_MAP_DIMENSION_DIRECTIONAL;
-		desc.d3d12Desc.DepthOrArraySize = 1;
-		desc.bCubemap = false;
-		desc.TexName = "ShadowMap_Directional";
-		rsc.Tex_ShadowMaps_Directional = mRenderer.CreateTexture(desc);
-
-		// initialize DSVs
-		for (int i = 0; i < NUM_SHADOWING_LIGHTS__SPOT; ++i)      mRenderer.InitializeDSV(rsc.DSV_ShadowMaps_Spot, i, rsc.Tex_ShadowMaps_Spot, i);
-		for (int i = 0; i < NUM_SHADOWING_LIGHTS__POINT * 6; ++i) mRenderer.InitializeDSV(rsc.DSV_ShadowMaps_Point, i, rsc.Tex_ShadowMaps_Point, i);
-		mRenderer.InitializeDSV(rsc.DSV_ShadowMaps_Directional, 0, rsc.Tex_ShadowMaps_Directional);
-
-		// initialize SRVs
-		mRenderer.InitializeSRV(rsc.SRV_ShadowMaps_Spot, 0, rsc.Tex_ShadowMaps_Spot, true);
-		mRenderer.InitializeSRV(rsc.SRV_ShadowMaps_Point, 0, rsc.Tex_ShadowMaps_Point, true, true);
-		mRenderer.InitializeSRV(rsc.SRV_ShadowMaps_Directional, 0, rsc.Tex_ShadowMaps_Directional);
-	}
-}
-
-void VQEngine::RenderThread_LoadResources()
-{
-	SCOPED_CPU_MARKER("RenderThread_LoadResources()");
-	
-	FRenderingResources_MainWindow& rsc = mResources_MainWnd;
-	AllocateDescriptors(rsc, mRenderer);
-	CreateResourceViews(rsc, mRenderer);
-	
-	mRenderer.mbDefaultResourcesLoaded.store(true);
-}
-
 void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 {
 	SCOPED_CPU_MARKER("RenderThread_UnloadWindowSizeDependentResources()");
 	if (hwnd == mpWinMain->GetHWND())
 	{
-		FRenderingResources_MainWindow& r = mResources_MainWnd;
-
-		// sync GPU
-		auto& ctx = mRenderer.GetWindowRenderContext(hwnd);
-		ctx.SwapChain.WaitForGPU();
-
-		mRenderer.DestroyTexture(r.Tex_SceneDepthMSAA);
-		mRenderer.DestroyTexture(r.Tex_SceneColorMSAA);
-		mRenderer.DestroyTexture(r.Tex_SceneNormalsMSAA);
-		mRenderer.DestroyTexture(r.Tex_SceneVisualizationMSAA);
-		mRenderer.DestroyTexture(r.Tex_SceneMotionVectorsMSAA);
+		mRenderer.UnloadWindowSizeDependentResources(hwnd);
 		
-		mRenderer.DestroyTexture(r.Tex_SceneDepth);
-		mRenderer.DestroyTexture(r.Tex_SceneDepthResolve);
-		mRenderer.DestroyTexture(r.Tex_SceneColor);
-		mRenderer.DestroyTexture(r.Tex_SceneColorBoundingVolumes);
-		mRenderer.DestroyTexture(r.Tex_SceneNormals);
-		mRenderer.DestroyTexture(r.Tex_SceneVisualization);
-		mRenderer.DestroyTexture(r.Tex_AmbientOcclusion);
-		mRenderer.DestroyTexture(r.Tex_SceneMotionVectors);
-
-		mRenderer.DestroyTexture(r.Tex_DownsampledSceneDepth);
-
-		// TODO: destroy SSR resources?
-
-		mRenderer.DestroyTexture(r.Tex_PostProcess_BlurOutput);
-		mRenderer.DestroyTexture(r.Tex_PostProcess_BlurIntermediate);
-		mRenderer.DestroyTexture(r.Tex_PostProcess_TonemapperOut);
-		mRenderer.DestroyTexture(r.Tex_PostProcess_VisualizationOut);
-		mRenderer.DestroyTexture(r.Tex_PostProcess_FFXCASOut);
-		mRenderer.DestroyTexture(r.Tex_PostProcess_FSR_EASUOut);
-		mRenderer.DestroyTexture(r.Tex_PostProcess_FSR_RCASOut);
-		mRenderer.DestroyTexture(r.Tex_UI_SDR);
-
 		for(auto* pRenderPass : mRenderPasses)
 			pRenderPass->OnDestroyWindowSizeDependentResources();
 	}
@@ -1255,7 +737,7 @@ void VQEngine::RenderThread_RenderMainWindow()
 	if (mbEnvironmentMapPreFilter.load())
 	{
 		ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, 0);
-		mRenderer.PreFilterEnvironmentMap(pCmd, mResources_MainWnd.EnvironmentMap, mBuiltinMeshes[EBuiltInMeshes::CUBE], mpWinMain->GetHWND());
+		mRenderer.PreFilterEnvironmentMap(pCmd, mBuiltinMeshes[EBuiltInMeshes::CUBE], mpWinMain->GetHWND());
 		mbEnvironmentMapPreFilter.store(false);
 	}
 
@@ -1578,7 +1060,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 	const FSceneShadowViews& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
 	const FPostProcessParameters& PPParams  = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 
-	const auto& rsc      = mResources_MainWnd;
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
 	auto pRscNormals     = mRenderer.GetTextureResource(rsc.Tex_SceneNormals);
 	auto pRscNormalsMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneNormalsMSAA);
 	auto pRscDepthResolve= mRenderer.GetTextureResource(rsc.Tex_SceneDepthResolve);
@@ -1674,7 +1156,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 		XMStoreFloat3(&pPerView->CameraPosition, SceneView.cameraPosition);
 		pPerView->ScreenDimensions.x = RenderResolutionX;
 		pPerView->ScreenDimensions.y = RenderResolutionY;
-		pPerView->MaxEnvMapLODLevels = static_cast<float>(mResources_MainWnd.EnvironmentMap.GetNumSpecularIrradianceCubemapLODLevels(mRenderer));
+		pPerView->MaxEnvMapLODLevels = static_cast<float>(rsc.EnvironmentMap.GetNumSpecularIrradianceCubemapLODLevels(mRenderer));
 		pPerView->EnvironmentMapDiffuseOnlyIllumination = mSettings.gfx.Reflections == EReflections::SCREEN_SPACE_REFLECTIONS__FFX;
 		const FFrustumPlaneset planes = FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj, true);
 		memcpy(pPerView->WorldFrustumPlanes, planes.abcd, sizeof(planes.abcd));

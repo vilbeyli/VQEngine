@@ -51,6 +51,8 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 
 	const size_t iFaceCull = 2; // 2:back
 
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
+
 	//Log::Info("DrawShadowMeshList(%d)", shadowView.meshRenderParams.size());
 	for (const FInstancedShadowMeshRenderCommand& renderCmd : shadowView.meshRenderParams)
 	{
@@ -107,7 +109,7 @@ void VQEngine::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBu
 		}
 		if (mat.SRVMaterialMaps != INVALID_ID) // set textures
 		{
-			const CBV_SRV_UAV& NullTex2DSRV = mRenderer.GetSRV(mResources_MainWnd.SRV_NullTexture2D);
+			const CBV_SRV_UAV& NullTex2DSRV = mRenderer.GetSRV(rsc.SRV_NullTexture2D);
 			pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
 			pCmd->SetGraphicsRootDescriptorTable(5, mat.SRVHeightMap == INVALID_ID
 				? NullTex2DSRV.GetGPUDescHandle()
@@ -187,6 +189,7 @@ static D3D12_GPU_VIRTUAL_ADDRESS SetPerViewCB(
 void VQEngine::RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& SceneShadowView)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderDirectionalShadowMaps");
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
 	const FShadowView& View = SceneShadowView.ShadowView_Directional;
 	if (!View.drawParamLookup.empty() && !View.meshRenderParams.empty())
 	{
@@ -203,7 +206,7 @@ void VQEngine::RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, Dyna
 		pCmd->RSSetScissorRects(1, &scissorsRect);
 
 		// Bind Depth / clear
-		const DSV& dsv = mRenderer.GetDSV(mResources_MainWnd.DSV_ShadowMaps_Directional);
+		const DSV& dsv = mRenderer.GetDSV(rsc.DSV_ShadowMaps_Directional);
 		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle();
 		pCmd->OMSetRenderTargets(0, NULL, FALSE, &dsvHandle);
 
@@ -224,6 +227,7 @@ void VQEngine::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuff
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderSpotShadowMaps");
 	const bool bRenderAtLeastOneSpotShadowMap = SceneShadowView.NumSpotShadowViews > 0;
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
 
 	// Set Viewport & Scissors
 	const float RenderResolutionX = 1024.0f; // TODO
@@ -252,7 +256,7 @@ void VQEngine::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuff
 		SCOPED_GPU_MARKER(pCmd, marker.c_str());
 
 		// Bind Depth / clear
-		const DSV& dsv = mRenderer.GetDSV(mResources_MainWnd.DSV_ShadowMaps_Spot);
+		const DSV& dsv = mRenderer.GetDSV(rsc.DSV_ShadowMaps_Spot);
 		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle(i);
 		pCmd->OMSetRenderTargets(0, NULL, FALSE, &dsvHandle);
 
@@ -277,7 +281,9 @@ void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 		XMFLOAT3 vLightPos;
 		float fFarPlane;
 	};
-	
+
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
+
 #if RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING
 	// Set Viewport & Scissors
 	const float RenderResolutionX = 1024.0f; // TODO
@@ -314,7 +320,7 @@ void VQEngine::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 			SCOPED_GPU_MARKER(pCmd, marker_face.c_str());
 
 			// Bind Depth / clear
-			const DSV& dsv = mRenderer.GetDSV(mResources_MainWnd.DSV_ShadowMaps_Point);
+			const DSV& dsv = mRenderer.GetDSV(rsc.DSV_ShadowMaps_Point);
 			D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle((uint32_t)iShadowView);
 			D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
 			pCmd->OMSetRenderTargets(0, NULL, FALSE, &dsvHandle);
@@ -342,15 +348,16 @@ void VQEngine::RenderDepthPrePass(
 	using namespace VQ_SHADER_DATA;
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 	const bool bAsyncCompute = ShouldEnableAsyncCompute();
-	const auto& rsc = mResources_MainWnd;
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
+
 	auto pRscNormals     = mRenderer.GetTextureResource(rsc.Tex_SceneNormals);
 	auto pRscNormalsMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneNormalsMSAA);
 	auto pRscDepthResolve= mRenderer.GetTextureResource(rsc.Tex_SceneDepthResolve);
 	auto pRscDepthMSAA   = mRenderer.GetTextureResource(rsc.Tex_SceneDepthMSAA);
 	auto pRscDepth       = mRenderer.GetTextureResource(rsc.Tex_SceneDepth);
 
-	const DSV& dsvColor   = mRenderer.GetDSV(bMSAA ? mResources_MainWnd.DSV_SceneDepthMSAA : mResources_MainWnd.DSV_SceneDepth);
-	const RTV& rtvNormals = mRenderer.GetRTV(bMSAA ? mResources_MainWnd.RTV_SceneNormalsMSAA : mResources_MainWnd.RTV_SceneNormals);
+	const DSV& dsvColor   = mRenderer.GetDSV(bMSAA ? rsc.DSV_SceneDepthMSAA : rsc.DSV_SceneDepth);
+	const RTV& rtvNormals = mRenderer.GetRTV(bMSAA ? rsc.RTV_SceneNormalsMSAA : rsc.RTV_SceneNormals);
 
 	D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
 	const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
@@ -426,7 +433,7 @@ void VQEngine::RenderDepthPrePass(
 
 		if (mat.SRVMaterialMaps != INVALID_ID) // set textures
 		{
-			const CBV_SRV_UAV& NullTex2DSRV = mRenderer.GetSRV(mResources_MainWnd.SRV_NullTexture2D);
+			const CBV_SRV_UAV& NullTex2DSRV = mRenderer.GetSRV(rsc.SRV_NullTexture2D);
 			pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
 			pCmd->SetGraphicsRootDescriptorTable(3, mat.SRVHeightMap == INVALID_ID
 				? NullTex2DSRV.GetGPUDescHandle()
@@ -537,7 +544,8 @@ void VQEngine::RenderObjectIDPass(
 void VQEngine::TransitionDepthPrePassForWrite(ID3D12GraphicsCommandList* pCmd, bool bMSAA)
 {
 	SCOPED_GPU_MARKER(pCmd, "TransitionDepthPrePassForWrite");
-	const auto& rsc      = mResources_MainWnd;
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
+
 	auto pRscNormals     = mRenderer.GetTextureResource(rsc.Tex_SceneNormals);
 	auto pRscNormalsMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneNormalsMSAA);
 	auto pRscDepthResolve= mRenderer.GetTextureResource(rsc.Tex_SceneDepthResolve);
@@ -555,8 +563,8 @@ void VQEngine::TransitionDepthPrePassForWrite(ID3D12GraphicsCommandList* pCmd, b
 void VQEngine::TransitionDepthPrePassForRead(ID3D12GraphicsCommandList* pCmd, bool bMSAA)
 {
 	SCOPED_GPU_MARKER(pCmd, "TransitionDepthPrePassForRead");
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
 
-	const auto& rsc = mResources_MainWnd;
 	auto pRscNormals     = mRenderer.GetTextureResource(rsc.Tex_SceneNormals);
 	auto pRscNormalsMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneNormalsMSAA);
 	auto pRscDepthResolve= mRenderer.GetTextureResource(rsc.Tex_SceneDepthResolve);
@@ -585,8 +593,8 @@ void VQEngine::TransitionDepthPrePassForRead(ID3D12GraphicsCommandList* pCmd, bo
 void VQEngine::TransitionDepthPrePassForReadAsyncCompute(ID3D12GraphicsCommandList* pCmd)
 {
 	SCOPED_GPU_MARKER(pCmd, "TransitionDepthPrePassForReadAsyncCompute");
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
 
-	const auto& rsc = mResources_MainWnd;
 	auto pRscNormals = mRenderer.GetTextureResource(rsc.Tex_SceneNormals);
 	auto pRscNormalsMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneNormalsMSAA);
 	auto pRscDepthResolve = mRenderer.GetTextureResource(rsc.Tex_SceneDepthResolve);
@@ -601,7 +609,8 @@ void VQEngine::TransitionDepthPrePassForReadAsyncCompute(ID3D12GraphicsCommandLi
 
 void VQEngine::TransitionDepthPrePassMSAAResolve(ID3D12GraphicsCommandList* pCmd)
 {
-	const auto& rsc      = mResources_MainWnd;
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
+
 	auto pRscNormals     = mRenderer.GetTextureResource(rsc.Tex_SceneNormals);
 	auto pRscNormalsMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneNormalsMSAA);
 	auto pRscDepthResolve= mRenderer.GetTextureResource(rsc.Tex_SceneDepthResolve);
@@ -623,8 +632,8 @@ void VQEngine::TransitionDepthPrePassMSAAResolve(ID3D12GraphicsCommandList* pCmd
 void VQEngine::ResolveMSAA_DepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap)
 {
 	SCOPED_GPU_MARKER(pCmd, "MSAAResolve<Depth=%d, Normals=%d, Roughness=%d>"); // TODO: string formatting
-	
-	const auto& rsc = mResources_MainWnd;
+
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
 
 	DepthMSAAResolvePass::FDrawParameters params;
 	params.pCmd = pCmd;
@@ -656,7 +665,8 @@ void VQEngine::ResolveMSAA_DepthPrePass(ID3D12GraphicsCommandList* pCmd, Dynamic
 void VQEngine::CopyDepthForCompute(ID3D12GraphicsCommandList* pCmd)
 {
 	SCOPED_GPU_MARKER(pCmd, "CopyDepthForCompute");
-	const auto& rsc = mResources_MainWnd;
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
+
 	auto pRscDepthResolve= mRenderer.GetTextureResource(rsc.Tex_SceneDepthResolve);
 	auto pRscDepth       = mRenderer.GetTextureResource(rsc.Tex_SceneDepth);
 
@@ -672,7 +682,8 @@ void VQEngine::CopyDepthForCompute(ID3D12GraphicsCommandList* pCmd)
 void VQEngine::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView)
 {
 	bool bAsyncCompute = ShouldEnableAsyncCompute();
-	const auto& rsc = mResources_MainWnd;
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
+
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 
 	ID3D12Resource* pRscAmbientOcclusion = mRenderer.GetTextureResource(rsc.Tex_AmbientOcclusion);
@@ -740,7 +751,8 @@ void VQEngine::TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWin
 {
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 
-	const auto& rsc = mResources_MainWnd;
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
+
 	auto pRscColor           = mRenderer.GetTextureResource(rsc.Tex_SceneColor);
 	auto pRscColorMSAA       = mRenderer.GetTextureResource(rsc.Tex_SceneColorMSAA);
 	auto pRscViz             = mRenderer.GetTextureResource(rsc.Tex_SceneVisualization);
@@ -794,9 +806,10 @@ void VQEngine::RenderSceneColor(
 )
 {
 	using namespace VQ_SHADER_DATA;
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
 
 	const bool bUseHDRRenderPath = this->ShouldRenderHDR(mpWinMain->GetHWND());
-	const bool bHasEnvironmentMapHDRTexture = mResources_MainWnd.EnvironmentMap.SRV_HDREnvironment != INVALID_ID;
+	const bool bHasEnvironmentMapHDRTexture = rsc.EnvironmentMap.SRV_HDREnvironment != INVALID_ID;
 	const bool bDrawEnvironmentMap = bHasEnvironmentMapHDRTexture && true;
 	const bool bUseVisualizationRenderTarget = ShouldUseVisualizationTarget(PPParams.DrawModeEnum);
 	const bool bRenderMotionVectors = ShouldUseMotionVectorsTarget(mSettings);
@@ -806,15 +819,15 @@ void VQEngine::RenderSceneColor(
 
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 
-	const RTV& rtvColor = mRenderer.GetRTV(bMSAA ? mResources_MainWnd.RTV_SceneColorMSAA : mResources_MainWnd.RTV_SceneColor);
-	const RTV& rtvColorViz = mRenderer.GetRTV(bMSAA ? mResources_MainWnd.RTV_SceneVisualizationMSAA : mResources_MainWnd.RTV_SceneVisualization);
-	const RTV& rtvMoVec = mRenderer.GetRTV(bMSAA ? mResources_MainWnd.RTV_SceneMotionVectorsMSAA : mResources_MainWnd.RTV_SceneMotionVectors);
+	const RTV& rtvColor = mRenderer.GetRTV(bMSAA ? rsc.RTV_SceneColorMSAA : rsc.RTV_SceneColor);
+	const RTV& rtvColorViz = mRenderer.GetRTV(bMSAA ? rsc.RTV_SceneVisualizationMSAA : rsc.RTV_SceneVisualization);
+	const RTV& rtvMoVec = mRenderer.GetRTV(bMSAA ? rsc.RTV_SceneMotionVectorsMSAA : rsc.RTV_SceneMotionVectors);
 
-	const DSV& dsvColor = mRenderer.GetDSV(bMSAA ? mResources_MainWnd.DSV_SceneDepthMSAA : mResources_MainWnd.DSV_SceneDepth);
-	auto pRscDepth = mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneDepth);
+	const DSV& dsvColor = mRenderer.GetDSV(bMSAA ? rsc.DSV_SceneDepthMSAA : rsc.DSV_SceneDepth);
+	auto pRscDepth = mRenderer.GetTextureResource(rsc.Tex_SceneDepth);
 
-	const CBV_SRV_UAV& NullCubemapSRV = mRenderer.GetSRV(mResources_MainWnd.SRV_NullCubemap);
-	const CBV_SRV_UAV& NullTex2DSRV = mRenderer.GetSRV(mResources_MainWnd.SRV_NullTexture2D);
+	const CBV_SRV_UAV& NullCubemapSRV = mRenderer.GetSRV(rsc.SRV_NullCubemap);
+	const CBV_SRV_UAV& NullTex2DSRV = mRenderer.GetSRV(rsc.SRV_NullTexture2D);
 
 	SCOPED_GPU_MARKER(pCmd, "RenderSceneColor");
 
@@ -856,22 +869,22 @@ void VQEngine::RenderSceneColor(
 		SCOPED_GPU_MARKER(pCmd, "CBPerFrame");
 
 		pCmd->SetGraphicsRootConstantBufferView(PerFrameRSBindSlot, perFrameCBAddr);
-		pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Spot).GetGPUDescHandle(0));
-		pCmd->SetGraphicsRootDescriptorTable(5, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Point).GetGPUDescHandle(0));
-		pCmd->SetGraphicsRootDescriptorTable(6, mRenderer.GetSRV(mResources_MainWnd.SRV_ShadowMaps_Directional).GetGPUDescHandle(0));
+		pCmd->SetGraphicsRootDescriptorTable(4, mRenderer.GetSRV(rsc.SRV_ShadowMaps_Spot).GetGPUDescHandle(0));
+		pCmd->SetGraphicsRootDescriptorTable(5, mRenderer.GetSRV(rsc.SRV_ShadowMaps_Point).GetGPUDescHandle(0));
+		pCmd->SetGraphicsRootDescriptorTable(6, mRenderer.GetSRV(rsc.SRV_ShadowMaps_Directional).GetGPUDescHandle(0));
 		pCmd->SetGraphicsRootDescriptorTable(7, bDrawEnvironmentMap
-			? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_IrradianceDiffBlurred).GetGPUDescHandle(0)
+			? mRenderer.GetSRV(rsc.EnvironmentMap.SRV_IrradianceDiffBlurred).GetGPUDescHandle(0)
 			: NullCubemapSRV.GetGPUDescHandle()
 		);
 		pCmd->SetGraphicsRootDescriptorTable(8, bDrawEnvironmentMap
-			? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_IrradianceSpec).GetGPUDescHandle(0)
+			? mRenderer.GetSRV(rsc.EnvironmentMap.SRV_IrradianceSpec).GetGPUDescHandle(0)
 			: NullCubemapSRV.GetGPUDescHandle()
 		);
 		pCmd->SetGraphicsRootDescriptorTable(9, bDrawEnvironmentMap
-			? mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_BRDFIntegrationLUT).GetGPUDescHandle()
+			? mRenderer.GetSRV(rsc.EnvironmentMap.SRV_BRDFIntegrationLUT).GetGPUDescHandle()
 			: NullTex2DSRV.GetGPUDescHandle()
 		);
-		pCmd->SetGraphicsRootDescriptorTable(10, mRenderer.GetSRV(mResources_MainWnd.SRV_FFXCACAO_Out).GetGPUDescHandle());
+		pCmd->SetGraphicsRootDescriptorTable(10, mRenderer.GetSRV(rsc.SRV_FFXCACAO_Out).GetGPUDescHandle());
 	}
 
 	// set PerView constants
@@ -1030,7 +1043,7 @@ void VQEngine::RenderSceneColor(
 		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__HelloWorldCube));
 
 		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-		pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mResources_MainWnd.EnvironmentMap.SRV_HDREnvironment).GetGPUDescHandle());
+		pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(rsc.EnvironmentMap.SRV_HDREnvironment).GetGPUDescHandle());
 		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
 
 		const UINT NumIndices = mBuiltinMeshes[EBuiltInMeshes::CUBE].GetNumIndices();
@@ -1242,7 +1255,7 @@ void VQEngine::ResolveMSAA(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* p
 	if (!bMSAA)
 		return;
 
-	const FRenderingResources_MainWindow& rsc = mResources_MainWnd; // shorthand
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow(); // shorthand
 
 	SCOPED_GPU_MARKER(pCmd, "ResolveMSAA");
 	auto pRscColor     = mRenderer.GetTextureResource(rsc.Tex_SceneColor);
@@ -1332,6 +1345,8 @@ void VQEngine::DownsampleDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHea
 	int W, H;
 	mRenderer.GetTextureDimensions(DepthTextureID, W, H);
 
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
+
 	struct FParams { uint params[4]; } CBuffer;
 	CBuffer.params[0] = W;
 	CBuffer.params[1] = H;
@@ -1353,8 +1368,8 @@ void VQEngine::DownsampleDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHea
 	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::DOWNSAMPLE_DEPTH_CS_PSO));
 	pCmd->SetComputeRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__DownsampleDepthCS));
 	pCmd->SetComputeRootDescriptorTable(0, mRenderer.GetSRV(SRVDepth).GetGPUDescHandle());
-	pCmd->SetComputeRootDescriptorTable(1, mRenderer.GetUAV(mResources_MainWnd.UAV_DownsampledSceneDepth).GetGPUDescHandle());
-	pCmd->SetComputeRootDescriptorTable(2, mRenderer.GetUAV(mResources_MainWnd.UAV_DownsampledSceneDepthAtomicCounter).GetGPUDescHandle());
+	pCmd->SetComputeRootDescriptorTable(1, mRenderer.GetUAV(rsc.UAV_DownsampledSceneDepth).GetGPUDescHandle());
+	pCmd->SetComputeRootDescriptorTable(2, mRenderer.GetUAV(rsc.UAV_DownsampledSceneDepthAtomicCounter).GetGPUDescHandle());
 	pCmd->SetComputeRootConstantBufferView(3, cbAddr);
 	pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
 }
@@ -1373,8 +1388,9 @@ static DirectX::XMMATRIX GetHDRIRotationMatrix(float fHDIROffsetInRadians)
 void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView)
 {
 	const FSceneRenderParameters::FFFX_SSSR_UIParameters& UIParams = SceneView.sceneParameters.FFX_SSSRParameters;
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
 
-	const FEnvironmentMapRenderingResources& EnvMapRsc = mResources_MainWnd.EnvironmentMap;
+	const FEnvironmentMapRenderingResources& EnvMapRsc = rsc.EnvironmentMap;
 	const bool bHasEnvironmentMap = EnvMapRsc.SRV_IrradianceSpec != INVALID_ID;
 	ID3D12Resource* pRscEnvIrradianceSpecular = bHasEnvironmentMap ? pRscEnvIrradianceSpecular = mRenderer.GetTextureResource(EnvMapRsc.Tex_IrradianceSpec)  : nullptr;
 	ID3D12Resource* pRscBRDFIntegrationLUT    = bHasEnvironmentMap ? pRscBRDFIntegrationLUT = mRenderer.GetTextureResource(mRenderer.GetProceduralTexture(EProceduralTextures::IBL_BRDF_INTEGRATION_LUT)) : nullptr;
@@ -1416,10 +1432,10 @@ void VQEngine::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferH
 		params.ffxCBuffer.samplesPerQuad                       = UIParams.samplesPerQuad;
 		params.ffxCBuffer.temporalVarianceGuidedTracingEnabled = UIParams.bEnableTemporalVarianceGuidedTracing;
 		params.ffxCBuffer.envMapSpecularIrradianceCubemapMipLevelCount = EnvMapRsc.GetNumSpecularIrradianceCubemapLODLevels(mRenderer);
-		params.TexDepthHierarchy                               = mResources_MainWnd.Tex_DownsampledSceneDepth;
-		params.TexNormals                                      = mResources_MainWnd.Tex_SceneNormals;
-		params.SRVEnvironmentSpecularIrradianceCubemap         = bHasEnvironmentMap ? EnvMapRsc.SRV_IrradianceSpec : mResources_MainWnd.SRV_NullCubemap;
-		params.SRVBRDFIntegrationLUT                           = bHasEnvironmentMap ? EnvMapRsc.SRV_BRDFIntegrationLUT : mResources_MainWnd.SRV_NullTexture2D;
+		params.TexDepthHierarchy                               = rsc.Tex_DownsampledSceneDepth;
+		params.TexNormals                                      = rsc.Tex_SceneNormals;
+		params.SRVEnvironmentSpecularIrradianceCubemap         = bHasEnvironmentMap ? EnvMapRsc.SRV_IrradianceSpec : rsc.SRV_NullCubemap;
+		params.SRVBRDFIntegrationLUT                           = bHasEnvironmentMap ? EnvMapRsc.SRV_BRDFIntegrationLUT : rsc.SRV_NullTexture2D;
 
 		if (bHasEnvironmentMap)
 		{
@@ -1468,7 +1484,7 @@ void VQEngine::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dynam
 	if (bNoBoundingVolumeToRender)
 		return;
 
-	const auto& rsc = mResources_MainWnd;
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
 	const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
 	ID3D12Resource* pRscColorMSAA = mRenderer.GetTextureResource(rsc.Tex_SceneColorMSAA);
 	ID3D12Resource* pRscColor = mRenderer.GetTextureResource(rsc.Tex_SceneColor);
@@ -1541,20 +1557,22 @@ void VQEngine::CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBuff
 
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
 
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
+
 	SCOPED_GPU_MARKER(pCmd, "CompositeReflections");
 	
 	ApplyReflectionsPass::FDrawParameters params;
 	params.pCmd = pCmd;
 	params.pCBufferHeap = pCBufferHeap;
 	params.SRVReflectionRadiance = mRenderPass_SSR.GetPassOutputSRV();
-	params.SRVBoundingVolumes = bNoBoundingVolumeToRender ? INVALID_ID : mResources_MainWnd.SRV_SceneColorBoundingVolumes;
-	params.UAVSceneRadiance = mResources_MainWnd.UAV_SceneColor;
+	params.SRVBoundingVolumes = bNoBoundingVolumeToRender ? INVALID_ID : rsc.SRV_SceneColorBoundingVolumes;
+	params.UAVSceneRadiance = rsc.UAV_SceneColor;
 	params.iSceneRTWidth  = SceneView.SceneRTWidth;
 	params.iSceneRTHeight = SceneView.SceneRTHeight;
 
 	{			
 		D3D12_RESOURCE_BARRIER barriers[] = {
-			CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneColor), 
+			CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(rsc.Tex_SceneColor),
 				D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS
 			),
 		};
@@ -1563,7 +1581,7 @@ void VQEngine::CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBuff
 	mRenderPass_ApplyReflections.RecordCommands(&params);
 	{
 		D3D12_RESOURCE_BARRIER barriers[] = {
-			CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(mResources_MainWnd.Tex_SceneColor), 
+			CD3DX12_RESOURCE_BARRIER::Transition(mRenderer.GetTextureResource(rsc.Tex_SceneColor),
 				D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
 			),
 		};
@@ -1574,7 +1592,7 @@ void VQEngine::CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBuff
 void VQEngine::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams)
 {
 	const bool& bMSAA = mSettings.gfx.bAntiAliasing;
-	const auto& rsc = mResources_MainWnd;
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
 
 	const bool bCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f;
 	const bool bFSREnabled = PPParams.IsFSREnabled();
@@ -1636,7 +1654,7 @@ ID3D12Resource* VQEngine::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, Dyn
 	ID3D12DescriptorHeap*       ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 
 	const bool bHDR = this->ShouldRenderHDR(mpWinMain->GetHWND());
-	const auto& rsc = mResources_MainWnd;
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
 
 	// pass io
 	const SRV& srv_ColorIn          = mRenderer.GetSRV(rsc.SRV_SceneColor);
@@ -1925,30 +1943,31 @@ void VQEngine::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBu
 	ID3D12DescriptorHeap*         ppHeaps[] = { mRenderer.GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 	D3D12_RECT                 scissorsRect { 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
 	SwapChain&                    swapchain = ctx.SwapChain;
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
 
 	const bool bVizualizationEnabled = PPParams.DrawModeEnum != EDrawMode::LIT_AND_POSTPROCESSED;
 	const bool bHDR = this->ShouldRenderHDR(mpWinMain->GetHWND());
 	const bool bFFXCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f;
 	const bool bFSREnabled = PPParams.IsFSREnabled();
 	const SRV& srv_ColorIn = bVizualizationEnabled ?
-		mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_VisualizationOut) : (
+		mRenderer.GetSRV(rsc.SRV_PostProcess_VisualizationOut) : (
 		bFFXCASEnabled 
-		? mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_FFXCASOut)
+		? mRenderer.GetSRV(rsc.SRV_PostProcess_FFXCASOut)
 		: (bFSREnabled 
-			? mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_FSR_RCASOut) 
-			: mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_TonemapperOut)));
+			? mRenderer.GetSRV(rsc.SRV_PostProcess_FSR_RCASOut) 
+			: mRenderer.GetSRV(rsc.SRV_PostProcess_TonemapperOut)));
 
-	ID3D12Resource* pRscFSR1Out       = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_FSR_RCASOut);
-	ID3D12Resource* pRscTonemapperOut = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_TonemapperOut);
-	ID3D12Resource* pRscFFXCASOut     = mRenderer.GetTextureResource(mResources_MainWnd.Tex_PostProcess_FFXCASOut);
-	ID3D12Resource* pRscUI            = mRenderer.GetTextureResource(mResources_MainWnd.Tex_UI_SDR);
+	ID3D12Resource* pRscFSR1Out       = mRenderer.GetTextureResource(rsc.Tex_PostProcess_FSR_RCASOut);
+	ID3D12Resource* pRscTonemapperOut = mRenderer.GetTextureResource(rsc.Tex_PostProcess_TonemapperOut);
+	ID3D12Resource* pRscFFXCASOut     = mRenderer.GetTextureResource(rsc.Tex_PostProcess_FFXCASOut);
+	ID3D12Resource* pRscUI            = mRenderer.GetTextureResource(rsc.Tex_UI_SDR);
 
 	ID3D12Resource*          pSwapChainRT = swapchain.GetCurrentBackBufferRenderTarget();
 	
 	//Log::Info("RenderUI: Backbuffer[%d]: 0x%08x | pCmd = %p", swapchain.GetCurrentBackBufferIndex(), pSwapChainRT, pCmd);
 	
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = bHDR 
-		? mRenderer.GetRTV(mResources_MainWnd.RTV_UI_SDR).GetCPUDescHandle()
+		? mRenderer.GetRTV(rsc.RTV_UI_SDR).GetCPUDescHandle()
 		: swapchain.GetCurrentBackBufferRTVHandle();
 
 	// barriers
@@ -2158,6 +2177,7 @@ void VQEngine::CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, Dynamic
 	SCOPED_GPU_MARKER(pCmd, "CompositUIToHDRSwapchain");
 
 	// handles
+	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
 	const auto VBIBIDs = mBuiltinMeshes[EBuiltInMeshes::TRIANGLE].GetIABufferIDs();
 	const BufferID& IB_ID = VBIBIDs.second;
 	const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
@@ -2168,13 +2188,13 @@ void VQEngine::CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, Dynamic
 	SwapChain& swapchain = ctx.SwapChain;
 	ID3D12Resource* pSwapChainRT = swapchain.GetCurrentBackBufferRenderTarget();
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = swapchain.GetCurrentBackBufferRTVHandle();
-	ID3D12Resource* pRscUI = mRenderer.GetTextureResource(mResources_MainWnd.Tex_UI_SDR);
-	const SRV& srv_UI_SDR = mRenderer.GetSRV(mResources_MainWnd.SRV_UI_SDR);
+	ID3D12Resource* pRscUI = mRenderer.GetTextureResource(rsc.Tex_UI_SDR);
+	const SRV& srv_UI_SDR = mRenderer.GetSRV(rsc.SRV_UI_SDR);
 	const SRV& srv_SceneColor = bFFXCASEnabled
-		? mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_FFXCASOut)
+		? mRenderer.GetSRV(rsc.SRV_PostProcess_FFXCASOut)
 		: (bFSREnabled
-			? mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_FSR_RCASOut)
-			: mRenderer.GetSRV(mResources_MainWnd.SRV_PostProcess_TonemapperOut));
+			? mRenderer.GetSRV(rsc.SRV_PostProcess_FSR_RCASOut)
+			: mRenderer.GetSRV(rsc.SRV_PostProcess_TonemapperOut));
 
 	const int W = mpWinMain->GetWidth();
 	const int H = mpWinMain->GetHeight();
