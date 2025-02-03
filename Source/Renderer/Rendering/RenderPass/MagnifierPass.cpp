@@ -17,7 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "MagnifierPass.h"
-#include "../../Renderer/Renderer.h"
+#include "Renderer/Renderer.h"
 
 MagnifierPass::MagnifierPass(VQRenderer& Renderer, bool bOutputsToSwapchainIn)
 	: RenderPassBase(Renderer)

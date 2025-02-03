@@ -18,6 +18,6 @@
 
 #include "Platform.h"
 #include "Window.h"
-#include "../../Renderer/Renderer.h" // GetDX12Adapters
+#include "Renderer/Renderer.h" // GetDX12Adapters
 
 #include <dxgi1_6.h>

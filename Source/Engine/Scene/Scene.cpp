@@ -17,12 +17,12 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "Scene.h"
-#include "../GPUMarker.h"
+#include "Engine/GPUMarker.h"
 
-#include "../Core/Window.h"
-#include "../VQEngine.h"
-#include "../Culling.h"
-#include "../RenderPass/ObjectIDPass.h"
+#include "Engine/Core/Window.h"
+#include "Engine/VQEngine.h"
+#include "Engine/Culling.h"
+#include "Renderer/Rendering/RenderPass/ObjectIDPass.h"
 
 #include "Libs/VQUtils/Source/utils.h"
 
@@ -833,11 +833,10 @@ void Scene::HandleInput(FSceneView& SceneView)
 	}
 }
 
-void Scene::PickObject(const ObjectIDPass& ObjectIDRenderPass, int MouseClickPositionX, int MouseClickPositionY)
+void Scene::PickObject(int4 px)
 {
-	int4 px = ObjectIDRenderPass.ReadBackPixel(MouseClickPositionX, MouseClickPositionY);
-	Log::Info("Picked(%d, %d): Obj[%d] Mesh[%d] Material[%d] ProjArea[%d]", MouseClickPositionX, MouseClickPositionY, px.x, px.y, px.z, px.w);
-	
+	// Log::Info("Picked(%d, %d): Obj[%d] Mesh[%d] Material[%d] ProjArea[%d]", MouseClickPositionX, MouseClickPositionY, px.x, px.y, px.z, px.w);
+
 	// if the mouse clicked on another monitor and main window lost focus, 
 	// we will potentially get negative coordinates when the mouse is clicked
 	// again on the main window. px will have negative values in that case.

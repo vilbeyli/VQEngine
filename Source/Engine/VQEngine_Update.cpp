@@ -17,11 +17,15 @@
 //	Contact: volkanilbeyli@gmail.com
 #include "VQEngine.h"
 #include "Math.h"
+#include "GPUMarker.h"
 #include "Scene/Scene.h"
 #include "../Scenes/Scenes.h" // scene instances
 #include "Core/FileParser.h"
+#include "imgui.h"
 
-#include "GPUMarker.h"
+#include "Renderer/Rendering/RenderPass/MagnifierPass.h"
+#include "Renderer/Rendering/RenderPass/ScreenSpaceReflections.h"
+#include "Renderer/Rendering/RenderPass/ObjectIDPass.h"
 
 #include "Libs/VQUtils/Source/utils.h"
 
@@ -198,7 +202,6 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 	}
 }
 
-#include "imgui.h"
 void VQEngine::UpdateThread_PostUpdate()
 {
 	SCOPED_CPU_MARKER("UpdateThread_PostUpdate()");
@@ -224,17 +227,14 @@ void VQEngine::UpdateThread_PostUpdate()
 	const bool bMouseLeftTriggered = mInputStates.at(hwndMain).IsMouseTriggered(Input::EMouseButtons::MOUSE_BUTTON_LEFT);
 	if (!io.WantCaptureMouse && bMouseLeftTriggered)
 	{
-		{
-			SCOPED_CPU_MARKER_C("WAIT_COPY_Q", 0xFFFF0000);
-			const int BACK_BUFFER_INDEX = mRenderer.GetWindowRenderContext(hwndMain).GetCurrentSwapchainBufferIndex();
-			Fence& CopyFence = mCopyObjIDDoneFence[BACK_BUFFER_INDEX];
-			CopyFence.WaitOnCPU(CopyFence.GetValue());
-		}
+		const std::shared_ptr<ObjectIDPass> pObjIDPass = std::static_pointer_cast<ObjectIDPass>(mRenderer.GetRenderPass(ERenderPass::ObjectID));
 
-		mpScene->PickObject(mRenderPass_ObjectID, 
-			static_cast<int>(io.MousePos.x), 
-			static_cast<int>(io.MousePos.y)
-		);
+		const int MouseClickPositionX = static_cast<int>(io.MousePos.x);
+		const int MouseClickPositionY = static_cast<int>(io.MousePos.y);
+		int4 px = pObjIDPass->ReadBackPixel(MouseClickPositionX, MouseClickPositionY, hwndMain);
+		Log::Info("Picked(%d, %d): Obj[%d] Mesh[%d] Material[%d] ProjArea[%d]", MouseClickPositionX, MouseClickPositionY, px.x, px.y, px.z, px.w);
+
+		mpScene->PickObject(px);
 
 		if (!mpScene->mSelectedObjects.empty())
 		{
@@ -670,7 +670,8 @@ void VQEngine::StartLoadingScene(int IndexScene)
 	mQueue_SceneLoad.push(mResourceNames.mSceneNames[IndexScene]);
 
 	// signal clearing history buffers to the render passes
-	mRenderPass_SSR.ClearHistoryBuffers();
+	std::shared_ptr<ScreenSpaceReflectionsPass> pReclectionsPass = std::static_pointer_cast<ScreenSpaceReflectionsPass>(mRenderer.GetRenderPass(ERenderPass::ObjectID));
+	pReclectionsPass->SetClearHistoryBuffers();
 
 	mAppState = INITIALIZING;
 	mbLoadingLevel.store(true); // thread-safe

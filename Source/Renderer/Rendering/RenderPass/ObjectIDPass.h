@@ -1,5 +1,5 @@
 //	VQE
-//	Copyright(C) 2020  - Volkan Ilbeyli
+//	Copyright(C) 2024  - Volkan Ilbeyli
 //
 //	This program is free software : you can redistribute it and / or modify
 //	it under the terms of the GNU General Public License as published by
@@ -19,26 +19,30 @@
 
 #include "RenderPass.h"
 
+#include <unordered_map>
+
+struct FSceneView;
 class DynamicBufferHeap;
 struct ID3D12GraphicsCommandList;
-class ApplyReflectionsPass : public RenderPassBase
+
+class ObjectIDPass : public RenderPassBase
 {
 public:
 	struct FResourceCollection : public IRenderPassResourceCollection {};
-	struct FDrawParameters : public IRenderPassDrawParameters
+	struct FDrawParameters : public IRenderPassDrawParameters 
 	{
 		ID3D12GraphicsCommandList* pCmd = nullptr;
+		ID3D12CommandList* pCmdCopy = nullptr;
+		const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>* pCBAddresses = nullptr;
 		DynamicBufferHeap* pCBufferHeap = nullptr;
-		SRV_ID SRVReflectionRadiance = INVALID_ID;
-		SRV_ID SRVBoundingVolumes = INVALID_ID;
-		UAV_ID UAVSceneRadiance      = INVALID_ID;
-		int iSceneRTWidth = 0;
-		int iSceneRTHeight = 0;
+		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = 0;
+		bool bEnableAsyncCopy = false;
+		const FSceneView* pSceneView = nullptr;
 	};
 
-	ApplyReflectionsPass(VQRenderer& Renderer);
-	ApplyReflectionsPass() = delete;
-	virtual ~ApplyReflectionsPass() override {}
+	ObjectIDPass(VQRenderer& Renderer);
+	ObjectIDPass() = delete;
+	virtual ~ObjectIDPass() override {}
 
 	virtual bool Initialize() override;
 	virtual void Destroy() override;
@@ -47,7 +51,24 @@ public:
 	virtual void RecordCommands(const IRenderPassDrawParameters* pDrawParameters = nullptr) override;
 
 	virtual std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() override;
-private:
-	std::array<PSO_ID,2> PSOApplyReflectionsPass;
-};
 
+	       int4 ReadBackPixel(const int2& screenCoords, HWND hwnd) const;
+	inline int4 ReadBackPixel(int screenCoordsX, int screenCoordsY, HWND hwnd) const { return ReadBackPixel(int2(screenCoordsX, screenCoordsY), hwnd); }
+	inline int4 ReadBackPixel(float2 uv, HWND hwnd) const { return ReadBackPixel((int)(uv.x * mOutputResolutionX), (int)(uv.y * mOutputResolutionY), hwnd); }
+
+	ID3D12Resource* GetGPUTextureResource() const;
+	ID3D12Resource* GetCPUTextureResource() const;
+
+private:
+	std::unordered_map<size_t, PSO_ID> mapPSO;
+
+	int mOutputResolutionX = 0;
+	int mOutputResolutionY = 0;
+
+	TextureID TEXPassOutput = INVALID_ID;
+	RTV_ID RTVPassOutput = INVALID_ID;
+	TextureID TEXPassOutputCPUReadback = INVALID_ID;
+
+	TextureID TEXPassOutputDepth = INVALID_ID;
+	DSV_ID DSVPassOutput = INVALID_ID;
+};

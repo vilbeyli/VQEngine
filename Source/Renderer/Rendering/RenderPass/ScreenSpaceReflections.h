@@ -19,6 +19,7 @@
 
 #include "RenderPass.h"
 
+#include <array>
 #include <unordered_map>
 #include <DirectXMath.h>
 
@@ -89,7 +90,8 @@ public:
 	virtual std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() override;
 
 	SRV_ID GetPassOutputSRV(int iOutput = 0) const;
-	inline void ClearHistoryBuffers() { this->bClearHistoryBuffers = true; }
+	inline void SetClearHistoryBuffers() { this->bClearHistoryBuffers = true; }
+
 private:
 	void LoadRootSignatures();
 	void CreateResources();

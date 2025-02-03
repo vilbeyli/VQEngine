@@ -91,6 +91,31 @@ set(RenderingSources
     "Rendering/WindowRenderContext.cpp"
     "Rendering/RenderResources.cpp"
     "Rendering/EnvironmentMapRendering.cpp"
+    "Rendering/SceneRendering.cpp"
+)
+
+# Render Passes
+set(RenderPassHeaders
+    "Rendering/RenderPass/RenderPass.h"
+    "Rendering/RenderPass/AmbientOcclusion.h"
+    "Rendering/RenderPass/ApplyReflections.h"
+    "Rendering/RenderPass/DepthPrePass.h"
+    "Rendering/RenderPass/DepthMSAAResolve.h"
+    "Rendering/RenderPass/ScreenSpaceReflections.h"
+    "Rendering/RenderPass/MagnifierPass.h"
+    "Rendering/RenderPass/ObjectIDPass.h"
+    "Rendering/RenderPass/OutlinePass.h"
+)
+set(RenderPassSources
+    "Rendering/RenderPass/RenderPass.cpp"
+    "Rendering/RenderPass/AmbientOcclusion.cpp"
+    "Rendering/RenderPass/ApplyReflections.cpp"
+    "Rendering/RenderPass/DepthPrePass.cpp"
+    "Rendering/RenderPass/DepthMSAAResolve.cpp"
+    "Rendering/RenderPass/ScreenSpaceReflections.cpp"
+    "Rendering/RenderPass/MagnifierPass.cpp"
+    "Rendering/RenderPass/ObjectIDPass.cpp"
+    "Rendering/RenderPass/OutlinePass.cpp"
 )
 
 # Renderer
@@ -177,6 +202,7 @@ source_group("Core" FILES ${CoreHeaders} ${CoreSources})
 source_group("Resources" FILES ${ResourceHeaders} ${ResourceSources})
 source_group("Pipeline" FILES ${PipelineHeaders} ${PipelineSources})
 source_group("Rendering" FILES ${RenderingHeaders} ${RenderingSources})
+source_group("Rendering\\RenderPass" FILES ${RenderPassHeaders} ${RenderPassSources})
 source_group("Renderer" FILES ${Renderer})
 
 source_group("Shaders"  FILES ${Shaders})
@@ -222,9 +248,10 @@ add_library(${PROJECT_NAME} STATIC
     ${LibD3D12MA}
 
     ${CoreHeaders} ${CoreSources}
+    ${ResourceHeaders} ${ResourceSources}
     ${PipelineHeaders} ${PipelineSources}
     ${RenderingHeaders} ${RenderingSources}
-    ${ResourceHeaders} ${ResourceSources}
+    ${RenderPassHeaders} ${RenderPassSources}
     ${Renderer}
     
     ${Shaders} 

@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "../Shaders/LightingConstantBufferData.h"
+#include "Shaders/LightingConstantBufferData.h"
 #include "Shader.h"
 
 #include <string>

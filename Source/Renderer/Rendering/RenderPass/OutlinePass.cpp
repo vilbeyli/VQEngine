@@ -17,12 +17,12 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "OutlinePass.h"
-#include "../../Renderer/Renderer.h"
+#include "Renderer/Renderer.h"
 #include "Renderer/Pipeline/Tessellation.h"
-#include "../../Shaders/LightingConstantBufferData.h"
-#include "../Scene/Scene.h"
-#include "../VQUtils/Source/utils.h"
-#include "../GPUMarker.h"
+#include "Shaders/LightingConstantBufferData.h"
+#include "Libs/VQUtils/Source/utils.h"
+#include "Engine/GPUMarker.h"
+#include "Engine/Scene/SceneViews.h"
 
 #include <cassert>
 

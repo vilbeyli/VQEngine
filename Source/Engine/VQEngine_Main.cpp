@@ -46,14 +46,6 @@ void ReportSystemInfo(const VQSystemInfo::FSystemInfo& i, bool bDetailed = false
 // TODO: heed to W4 warnings, initialize the variables
 VQEngine::VQEngine()
 	: mAssetLoader(mWorkers_ModelLoading, mWorkers_TextureLoading, mWorkers_MeshLoading, mRenderer)
-	, mRenderPass_ZPrePass(mRenderer)
-	, mRenderPass_AO(mRenderer, AmbientOcclusionPass::EMethod::FFX_CACAO)
-	, mRenderPass_SSR(mRenderer)
-	, mRenderPass_ApplyReflections(mRenderer)
-	, mRenderPass_DepthResolve(mRenderer)
-	, mRenderPass_Magnifier(mRenderer, true) // true: outputs to swapchain
-	, mRenderPass_ObjectID(mRenderer)
-	, mRenderPass_Outline(mRenderer)
 	, mbBuiltinMeshGenFinished(false)
 {}
 
@@ -96,13 +88,15 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	float f3 = t.Tick();
 	InitializeInput();
 	InitializeImGUI(mpWinMain->GetHWND());
-	InitializeScenes();
-	float f2 = t.Tick();
+
 	// --------------------------------------------------------
 	// Note: Device should be initialized from WinMain thread, 
 	// otherwise device may be lost if launched from RenderDoc
 	mRenderer.Initialize(mSettings.gfx); // Device, Queues, Heaps, WorkerThreads
 	// --------------------------------------------------------
+
+	InitializeScenes();
+	float f2 = t.Tick();
 	InitializeEngineThreads();
 	float f4 = t.Tick();
 

@@ -19,6 +19,11 @@
 #include "RenderResources.h"
 #include "Renderer.h"
 
+#include "Rendering/RenderPass/AmbientOcclusion.h"
+#include "Rendering/RenderPass/ScreenSpaceReflections.h"
+
+#include "Engine/GPUMarker.h"
+
 void VQRenderer::LoadWindowSizeDependentResources(HWND hwnd, unsigned Width, unsigned Height, float fResolutionScale, bool bRenderingHDR)
 {
 	const uint RenderResolutionX = static_cast<uint>(Width * fResolutionScale);
@@ -336,6 +341,62 @@ void VQRenderer::LoadWindowSizeDependentResources(HWND hwnd, unsigned Width, uns
 		this->InitializeRTV(r.RTV_UI_SDR, 0u, r.Tex_UI_SDR);
 		this->InitializeSRV(r.SRV_UI_SDR, 0u, r.Tex_UI_SDR);
 	}
+
+
+	{ // Depth-resolve CS pass
+		mRenderPasses[ERenderPass::DepthMSAAResolve]->OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY);
+	}
+
+	{ // FFX-CACAO Resources
+		TextureCreateDesc desc("FFXCACAO_Out");
+		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
+			DXGI_FORMAT_R8_UNORM
+			, RenderResolutionX
+			, RenderResolutionY
+			, 1 // Array Size
+			, 1 // MIP levels
+			, 1 // MSAA SampleCount
+			, 0 // MSAA SampleQuality
+			, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+		);
+		desc.ResourceState = D3D12_RESOURCE_STATE_GENERIC_READ;
+		r.Tex_AmbientOcclusion = this->CreateTexture(desc);
+		this->InitializeUAV(r.UAV_FFXCACAO_Out, 0u, r.Tex_AmbientOcclusion);
+		this->InitializeSRV(r.SRV_FFXCACAO_Out, 0u, r.Tex_AmbientOcclusion);
+
+
+		AmbientOcclusionPass::FResourceParameters params;
+		params.pRscNormalBuffer = this->GetTextureResource(r.Tex_SceneNormals);
+		params.pRscDepthBuffer = this->GetTextureResource(r.Tex_SceneDepthResolve);
+		params.pRscOutput = this->GetTextureResource(r.Tex_AmbientOcclusion);
+		params.FmtNormalBuffer = this->GetTextureFormat(r.Tex_SceneNormals);
+		params.FmtDepthBuffer = DXGI_FORMAT_R32_FLOAT; //this->GetTextureFormat(r.Tex_SceneDepth); /*R32_TYPELESS*/
+		params.FmtOutput = desc.d3d12Desc.Format;
+		mRenderPasses[ERenderPass::AmbientOcclusion]->OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY, &params);
+	}
+
+	{ // FFX-SSSR Resources
+		ScreenSpaceReflectionsPass::FResourceParameters params;
+		params.NormalBufferFormat = this->GetTextureFormat(r.Tex_SceneNormals);
+		params.TexNormals = r.Tex_SceneNormals;
+		params.TexHierarchicalDepthBuffer = r.Tex_DownsampledSceneDepth;
+		params.TexSceneColor = r.Tex_SceneColor;
+		params.TexSceneColorRoughness = r.Tex_SceneColor;
+		params.TexMotionVectors = r.Tex_SceneMotionVectors;
+		mRenderPasses[ERenderPass::ScreenSpaceReflections]->OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY, &params);
+	}
+
+	mRenderPasses[ERenderPass::Magnifier]->OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY, nullptr);
+	mRenderPasses[ERenderPass::Outline]->OnCreateWindowSizeDependentResources(Width, Height, nullptr);
+
+	{
+		SCOPED_CPU_MARKER_C("WAIT_COPY_Q", 0xFFFF0000);
+		const int BACK_BUFFER_INDEX = this->GetWindowRenderContext(hwnd).GetCurrentSwapchainBufferIndex();
+		Fence& CopyFence = mCopyObjIDDoneFence[BACK_BUFFER_INDEX];
+		CopyFence.WaitOnCPU(CopyFence.GetValue());
+	}
+	mRenderPasses[ERenderPass::ObjectID]->OnCreateWindowSizeDependentResources(Width, Height, nullptr);
+	
 }
 
 void VQRenderer::UnloadWindowSizeDependentResources(HWND hwnd)
@@ -374,4 +435,7 @@ void VQRenderer::UnloadWindowSizeDependentResources(HWND hwnd)
 	this->DestroyTexture(r.Tex_PostProcess_FSR_RCASOut);
 
 	this->DestroyTexture(r.Tex_UI_SDR);
+
+	for (std::shared_ptr<IRenderPass>& pRenderPass : mRenderPasses)
+		pRenderPass->OnDestroyWindowSizeDependentResources();
 }

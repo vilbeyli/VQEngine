@@ -35,15 +35,6 @@
 #include "AssetLoader.h"
 #include "UI/VQUI.h"
 
-#include "RenderPass/AmbientOcclusion.h"
-#include "RenderPass/DepthPrePass.h"
-#include "RenderPass/DepthMSAAResolve.h"
-#include "RenderPass/ScreenSpaceReflections.h"
-#include "RenderPass/ApplyReflections.h"
-#include "RenderPass/MagnifierPass.h"
-#include "RenderPass/ObjectIDPass.h"
-#include "RenderPass/OutlinePass.h"
-
 #include "Libs/VQUtils/Source/Multithreading.h"
 #include "Libs/VQUtils/Source/Timer.h"
 
@@ -296,9 +287,9 @@ private:
 	EventQueue_t                    mEventQueue_VQEToWin_Main;
 	EventQueue_t                    mEventQueue_WinToVQE_Renderer;
 	EventQueue_t                    mEventQueue_WinToVQE_Update;
+
 	std::vector<Fence>              mAsyncComputeSSAOReadyFence;
 	std::vector<Fence>              mAsyncComputeSSAODoneFence;
-	std::vector<Fence>              mCopyObjIDDoneFence; // GPU->CPU
 	std::atomic<bool>               mAsyncComputeWorkSubmitted = false;
 	std::atomic<bool>               mSubmitWorkerFinished = true;
 	bool                            mWaitForSubmitWorker = false;
@@ -350,18 +341,6 @@ private:
 	ImGuiContext*                   mpImGuiContext;
 	FUIState                        mUIState;
 	FRenderStats                    mRenderStats;
-
-	// RenderPasses (WIP design)
-	std::vector<IRenderPass*>       mRenderPasses;
-	DepthPrePass                    mRenderPass_ZPrePass;
-	AmbientOcclusionPass            mRenderPass_AO;
-	ScreenSpaceReflectionsPass      mRenderPass_SSR;
-	DepthMSAAResolvePass            mRenderPass_DepthResolve;
-	ApplyReflectionsPass            mRenderPass_ApplyReflections;
-	MagnifierPass                   mRenderPass_Magnifier;
-	ObjectIDPass                    mRenderPass_ObjectID;
-	OutlinePass                     mRenderPass_Outline;
-
 
 	// timer / profiler
 	Timer                           mTimer;
@@ -424,7 +403,6 @@ private:
 	void                            RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView);
 	void                            RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView, size_t iBegin, size_t NumPointLights);
 	void                            RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, D3D12_GPU_VIRTUAL_ADDRESS perFrameCBAddr);
-	void                            RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, ID3D12CommandList* pCmdCopy, DynamicBufferHeap* pCBufferHeap, const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, const int BACK_BUFFER_INDEX);
 	void                            TransitionDepthPrePassForWrite(ID3D12GraphicsCommandList* pCmd, bool bMSAA);
 	void                            TransitionDepthPrePassForRead(ID3D12GraphicsCommandList* pCmd, bool bMSAA);
 	void                            TransitionDepthPrePassForReadAsyncCompute(ID3D12GraphicsCommandList* pCmd);

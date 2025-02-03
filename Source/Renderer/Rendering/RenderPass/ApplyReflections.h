@@ -1,5 +1,5 @@
 //	VQE
-//	Copyright(C) 2024  - Volkan Ilbeyli
+//	Copyright(C) 2020  - Volkan Ilbeyli
 //
 //	This program is free software : you can redistribute it and / or modify
 //	it under the terms of the GNU General Public License as published by
@@ -19,34 +19,28 @@
 
 #include "RenderPass.h"
 
-#include "../Scene/Mesh.h"
-#include "../Scene/Material.h"
+#include <array>
 
-#include <unordered_map>
-
-
-struct FSceneView;
 class DynamicBufferHeap;
 struct ID3D12GraphicsCommandList;
-
-class OutlinePass : public RenderPassBase
+class ApplyReflectionsPass : public RenderPassBase
 {
 public:
 	struct FResourceCollection : public IRenderPassResourceCollection {};
-	struct FDrawParameters : public IRenderPassDrawParameters 
+	struct FDrawParameters : public IRenderPassDrawParameters
 	{
 		ID3D12GraphicsCommandList* pCmd = nullptr;
 		DynamicBufferHeap* pCBufferHeap = nullptr;
-		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = 0;
-
-		const FSceneView* pSceneView = nullptr;
-		const std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>* pRTVHandles = nullptr;
-		bool bMSAA = false;
+		SRV_ID SRVReflectionRadiance = INVALID_ID;
+		SRV_ID SRVBoundingVolumes = INVALID_ID;
+		UAV_ID UAVSceneRadiance      = INVALID_ID;
+		int iSceneRTWidth = 0;
+		int iSceneRTHeight = 0;
 	};
 
-	OutlinePass(VQRenderer& Renderer);
-	OutlinePass() = delete;
-	virtual ~OutlinePass() override {}
+	ApplyReflectionsPass(VQRenderer& Renderer);
+	ApplyReflectionsPass() = delete;
+	virtual ~ApplyReflectionsPass() override {}
 
 	virtual bool Initialize() override;
 	virtual void Destroy() override;
@@ -55,23 +49,7 @@ public:
 	virtual void RecordCommands(const IRenderPassDrawParameters* pDrawParameters = nullptr) override;
 
 	virtual std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() override;
-
 private:
-	int mOutputResolutionX = 0;
-	int mOutputResolutionY = 0;
-
-	TextureID TEXPassOutputDepth = INVALID_ID;
-	TextureID TEXPassOutputDepthMSAA4 = INVALID_ID;
-	DSV_ID DSV = INVALID_ID;
-	DSV_ID DSVMSAA = INVALID_ID;
-
-	// PSOs
-	static constexpr size_t NUM_RENDERING_OPTIONS = NUM_MSAA_OPTIONS;
-	static constexpr size_t NUM_ALPHA_OPTIONS = 2; // opaque/alpha masked
-	static constexpr size_t NUM_MAT_OPTIONS = NUM_ALPHA_OPTIONS;
-	static constexpr size_t NUM_PASS_OPTIONS = 2; // 0:stencil/1:mask
-	static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_PASS_OPTIONS * NUM_MAT_OPTIONS * NUM_RENDERING_OPTIONS * Tessellation::NUM_TESS_OPTIONS;
-	static size_t Hash(size_t iPass, size_t iMSAA, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha);
-
-	std::unordered_map<size_t, PSO_ID>   mapPSO;
+	std::array<PSO_ID,2> PSOApplyReflectionsPass;
 };
+

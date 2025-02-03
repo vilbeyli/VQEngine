@@ -21,14 +21,19 @@
 #include "Core/Device.h"
 #include "Core/CommandQueue.h"
 #include "Core/Fence.h"
+
 #include "Resources/ResourceHeaps.h"
 #include "Resources/ResourceViews.h"
 #include "Resources/Buffer.h"
 #include "Resources/Texture.h"
+
 #include "Pipeline/ShaderCompileUtils.h"
 #include "Pipeline/PipelineStateObjects.h"
+
 #include "Rendering/WindowRenderContext.h"
 #include "Rendering/RenderResources.h"
+
+#include "Rendering/RenderPass/RenderPass.h"
 
 #include "Engine/Core/Types.h"
 #include "Engine/Core/Platform.h"
@@ -42,6 +47,7 @@
 #include <unordered_map>
 #include <array>
 
+#define THREADED_CTX_INIT 1
 
 namespace D3D12MA { class Allocator; }
 class Window;
@@ -188,7 +194,7 @@ public:
 	PSO_ID                       CreatePSO_OnThisThread(const FPSODesc& psoLoadDesc);
 	void                         EnqueueTask_ShaderLoad(TaskID PSOLoadTaskID, const FShaderStageCompileDesc&);
 	std::vector<std::shared_future<FShaderStageCompileResult>> StartShaderLoadTasks(TaskID PSOLoadTaskID);
-	void                         StartPSOCompilation_MT(std::vector<FPSOCreationTaskParameters>&& RenderPassPSODescs);
+	void                         StartPSOCompilation_MT();
 	void                         WaitPSOCompilation();
 	void                         AssignPSOs();
 	std::vector<FPSODesc>        LoadBuiltinPSODescs_Legacy();
@@ -207,9 +213,34 @@ public:
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	void PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, const Mesh& CubeMesh, HWND hwnd);
 	
+	std::shared_ptr<IRenderPass> GetRenderPass(ERenderPass ePass) { return mRenderPasses[ePass]; }
+	
+	// temp
+	void RenderObjectIDPass(
+		ID3D12GraphicsCommandList* pCmd, 
+		ID3D12CommandList* pCmdCopy, 
+		DynamicBufferHeap* pCBufferHeap, 
+		const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, 
+		D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, 
+		const FSceneView& SceneView,
+		const FSceneShadowViews& ShadowView,
+		const int BACK_BUFFER_INDEX,
+		const FGraphicsSettings& GFXSettings,
+		std::atomic<bool>& mAsyncComputeWorkSubmitted // temp
+	);
+	bool ShouldEnableAsyncCompute(const FGraphicsSettings& GFXSettings, const FSceneView& SceneView, const FSceneShadowViews& ShadowView) const;
+	
 	      FRenderingResources_MainWindow& GetRenderingResources_MainWindow() { return mResources_MainWnd; }
 	const FRenderingResources_MainWindow& GetRenderingResources_MainWindow() const { return mResources_MainWnd; }
 	const FRenderingResources_DebugWindow& GetRenderingResources_DebugWindow() const { return mResources_DebugWnd; }
+
+
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	// Sync
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	void InitializeFences(HWND hwnd);
+	void DestroyFences(HWND hwnd);
+	void WaitCopyFenceOnCPU(HWND hwnd);
 
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// PUBLIC MEMBERS
@@ -276,14 +307,15 @@ private:
 	std::unordered_map<HWND, FWindowRenderContext> mRenderContextLookup;
 	FRenderingResources_MainWindow  mResources_MainWnd;
 	FRenderingResources_DebugWindow mResources_DebugWnd;
+	std::vector<std::shared_ptr<IRenderPass>> mRenderPasses; // WIP design
 
 	// sync
-	std::vector<Fence>              mAsyncComputeSSAOReadyFence;
-	std::vector<Fence>              mAsyncComputeSSAODoneFence;
+	//std::vector<Fence>              mAsyncComputeSSAOReadyFence;
+	//std::vector<Fence>              mAsyncComputeSSAODoneFence;
 	std::vector<Fence>              mCopyObjIDDoneFence; // GPU->CPU
-	std::atomic<bool>               mAsyncComputeWorkSubmitted = false;
-	std::atomic<bool>               mSubmitWorkerFinished = true;
-	bool                            mWaitForSubmitWorker = false;
+	//std::atomic<bool>               mAsyncComputeWorkSubmitted = false;
+	//std::atomic<bool>               mSubmitWorkerFinished = true;
+	//bool                            mWaitForSubmitWorker = false;
 
 	// bookkeeping
 	std::unordered_map<TextureID, std::string>         mLookup_TextureDiskLocations;

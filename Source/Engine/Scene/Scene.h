@@ -39,7 +39,6 @@ using MaterialLookup_t = std::unordered_map<MaterialID, Material>;
 
 // fwd decl
 class Input;
-class ObjectIDPass;
 struct Material;
 struct FResourceNames;
 struct FFrustumPlaneset;
@@ -127,7 +126,7 @@ private: // Derived Scenes shouldn't access these functions
 	
 	void RenderUI(FUIState& UIState, uint32_t W, uint32_t H);
 	void HandleInput(FSceneView& SceneView);
-	void PickObject(const ObjectIDPass& ObjectIDRenderPass, int MouseClickPositionX, int MouseClickPositionY);
+	void PickObject(int4 ObjectIDPixelValue);
 
 	void GatherSceneLightData(FSceneView& SceneView) const;
 	void GatherShadowViewData(FSceneShadowViews& SceneShadowView

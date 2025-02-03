@@ -72,9 +72,26 @@ static std::vector<const FShaderStageCompileDesc*> GatherUniqueShaderCompileDesc
 	return UniqueCompileDescs;
 }
 
-void VQRenderer::StartPSOCompilation_MT(std::vector<FPSOCreationTaskParameters>&& PSOCompileParams_RenderPass)
+
+static void LoadRenderPassPSODescs(std::vector<std::shared_ptr<IRenderPass>>& mRenderPasses, std::vector<FPSOCreationTaskParameters>& RenderPassPSOTaskParams)
+{
+	SCOPED_CPU_MARKER("LoadRenderPassPSODescs");
+	for (std::shared_ptr<IRenderPass>& pPass : mRenderPasses)
+	{
+		const std::vector<FPSOCreationTaskParameters> vPSOTaskParams = pPass->CollectPSOCreationParameters();
+		RenderPassPSOTaskParams.insert(RenderPassPSOTaskParams.end()
+			, std::make_move_iterator(vPSOTaskParams.begin())
+			, std::make_move_iterator(vPSOTaskParams.end())
+		);
+	}
+}
+void VQRenderer::StartPSOCompilation_MT()
 {
 	SCOPED_CPU_MARKER("StartPSOCompilation_MT");
+
+	std::vector<FPSOCreationTaskParameters> RenderPassPSOTaskParams;
+	LoadRenderPassPSODescs(mRenderPasses, RenderPassPSOTaskParams);
+
 	std::vector<FPSODesc> PSODescs_BuiltinLegacy = LoadBuiltinPSODescs_Legacy();
 	assert(EBuiltinPSOs::NUM_BUILTIN_PSOs == PSODescs_BuiltinLegacy.size());
 
@@ -82,20 +99,20 @@ void VQRenderer::StartPSOCompilation_MT(std::vector<FPSOCreationTaskParameters>&
 	
 	const size_t NumBuiltinPSOs = PSODescs_BuiltinLegacy.size() + PSODescs_Builtin.size();
 
-	std::vector<FPSODesc> PSODescs(NumBuiltinPSOs + PSOCompileParams_RenderPass.size());
+	std::vector<FPSODesc> PSODescs(NumBuiltinPSOs + RenderPassPSOTaskParams.size());
 	{
 		SCOPED_CPU_MARKER("GatherDescs");
 		size_t i = 0;
 		for (auto&& desc : PSODescs_BuiltinLegacy) { PSODescs[i++] = std::move(desc); }
 		for (auto&& desc : PSODescs_Builtin) { PSODescs[i++] = std::move(desc); }
-		for (auto&& params : PSOCompileParams_RenderPass) { PSODescs[i++] = std::move(params.Desc); }
+		for (auto&& params : RenderPassPSOTaskParams) { PSODescs[i++] = std::move(params.Desc); }
 	}
 	ReservePSOMap(PSODescs.size() - EBuiltinPSOs::NUM_BUILTIN_PSOs);
 	
 	{
 		SCOPED_CPU_MARKER("AssignRenderPassPSOIDs");
 		int i = 0;
-		for (auto& params : PSOCompileParams_RenderPass)
+		for (auto& params : RenderPassPSOTaskParams)
 		{
 			*params.pID = (PSO_ID)(NumBuiltinPSOs + i++);
 		}

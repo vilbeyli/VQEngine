@@ -17,11 +17,11 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "ObjectIDPass.h"
-#include "../../Renderer/Renderer.h"
-#include "../Scene/Scene.h"
-#include "../../Shaders/LightingConstantBufferData.h"
-#include "../VQUtils/Source/utils.h"
-#include "../GPUMarker.h"
+#include "Renderer/Renderer.h"
+#include "Engine/Scene/Scene.h"
+#include "Shaders/LightingConstantBufferData.h"
+#include "Libs/VQUtils/Source/utils.h"
+#include "Engine/GPUMarker.h"
 
 #include <cassert>
 
@@ -374,8 +374,10 @@ std::vector<FPSOCreationTaskParameters> ObjectIDPass::CollectPSOCreationParamete
 	return params;
 }
 
-int4 ObjectIDPass::ReadBackPixel(const int2& screenCoords) const
+int4 ObjectIDPass::ReadBackPixel(const int2& screenCoords, HWND hwnd) const
 {
+	mRenderer.WaitCopyFenceOnCPU(hwnd);
+
 	auto pRsc = mRenderer.GetTextureResource(TEXPassOutputCPUReadback);
 	const int bytesPerChannel = 4; // 32bit/channel
 	const int numChannels = 4; // RGBA

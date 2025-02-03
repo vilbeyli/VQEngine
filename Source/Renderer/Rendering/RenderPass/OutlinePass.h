@@ -18,35 +18,30 @@
 #pragma once
 
 #include "RenderPass.h"
-
-#include "../Scene/Mesh.h"
-#include "../Scene/Material.h"
-#include "Renderer/Core/Fence.h"
-
 #include <unordered_map>
 
 struct FSceneView;
 class DynamicBufferHeap;
 struct ID3D12GraphicsCommandList;
 
-class ObjectIDPass : public RenderPassBase
+class OutlinePass : public RenderPassBase
 {
 public:
 	struct FResourceCollection : public IRenderPassResourceCollection {};
 	struct FDrawParameters : public IRenderPassDrawParameters 
 	{
 		ID3D12GraphicsCommandList* pCmd = nullptr;
-		ID3D12CommandList* pCmdCopy = nullptr;
-		const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>* pCBAddresses = nullptr;
 		DynamicBufferHeap* pCBufferHeap = nullptr;
 		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = 0;
-		bool bEnableAsyncCopy = false;
+
 		const FSceneView* pSceneView = nullptr;
+		const std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>* pRTVHandles = nullptr;
+		bool bMSAA = false;
 	};
 
-	ObjectIDPass(VQRenderer& Renderer);
-	ObjectIDPass() = delete;
-	virtual ~ObjectIDPass() override {}
+	OutlinePass(VQRenderer& Renderer);
+	OutlinePass() = delete;
+	virtual ~OutlinePass() override {}
 
 	virtual bool Initialize() override;
 	virtual void Destroy() override;
@@ -56,23 +51,22 @@ public:
 
 	virtual std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() override;
 
-	       int4 ReadBackPixel(const int2& screenCoords) const;
-	inline int4 ReadBackPixel(int screenCoordsX, int screenCoordsY) const { return ReadBackPixel(int2(screenCoordsX, screenCoordsY)); }
-	inline int4 ReadBackPixel(float2 uv) const { return ReadBackPixel((int)uv.x * mOutputResolutionX, (int)uv.y * mOutputResolutionY); }
-
-	ID3D12Resource* GetGPUTextureResource() const;
-	ID3D12Resource* GetCPUTextureResource() const;
-
 private:
-	std::unordered_map<size_t, PSO_ID> mapPSO;
-
 	int mOutputResolutionX = 0;
 	int mOutputResolutionY = 0;
 
-	TextureID TEXPassOutput = INVALID_ID;
-	RTV_ID RTVPassOutput = INVALID_ID;
-	TextureID TEXPassOutputCPUReadback = INVALID_ID;
-
 	TextureID TEXPassOutputDepth = INVALID_ID;
-	DSV_ID DSVPassOutput = INVALID_ID;
+	TextureID TEXPassOutputDepthMSAA4 = INVALID_ID;
+	DSV_ID DSV = INVALID_ID;
+	DSV_ID DSVMSAA = INVALID_ID;
+
+	// PSOs
+	static constexpr size_t NUM_RENDERING_OPTIONS = NUM_MSAA_OPTIONS;
+	static constexpr size_t NUM_ALPHA_OPTIONS = 2; // opaque/alpha masked
+	static constexpr size_t NUM_MAT_OPTIONS = NUM_ALPHA_OPTIONS;
+	static constexpr size_t NUM_PASS_OPTIONS = 2; // 0:stencil/1:mask
+	static constexpr size_t NUM_OPTIONS_PERMUTATIONS = NUM_PASS_OPTIONS * NUM_MAT_OPTIONS * NUM_RENDERING_OPTIONS * Tessellation::NUM_TESS_OPTIONS;
+	static size_t Hash(size_t iPass, size_t iMSAA, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha);
+
+	std::unordered_map<size_t, PSO_ID>   mapPSO;
 };

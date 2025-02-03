@@ -191,32 +191,9 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs()
 	return descs;
 }
 
-static void LoadRenderPassPSODescs(const std::vector<IRenderPass*>& mRenderPasses, std::vector<FPSOCreationTaskParameters>& RenderPassPSOTaskParams)
-{
-	SCOPED_CPU_MARKER("LoadRenderPassPSODescs");
-	for (IRenderPass* pPass : mRenderPasses)
-	{
-		const std::vector<FPSOCreationTaskParameters> vPSOTaskParams = pPass->CollectPSOCreationParameters();
-		RenderPassPSOTaskParams.insert(RenderPassPSOTaskParams.end()
-			, std::make_move_iterator(vPSOTaskParams.begin())
-			, std::make_move_iterator(vPSOTaskParams.end())
-		);
-	}
-}
 void VQEngine::RenderThread_Inititalize()
 {
 	SCOPED_CPU_MARKER_C("RenderThread_Inititalize()", 0xFF007700);
-	mRenderPasses = // manual render pass registration for now (early in dev)
-	{
-		&mRenderPass_AO,
-		&mRenderPass_SSR,
-		&mRenderPass_ApplyReflections,
-		&mRenderPass_ZPrePass,
-		&mRenderPass_DepthResolve,
-		&mRenderPass_Magnifier,
-		&mRenderPass_ObjectID,
-		&mRenderPass_Outline
-	};
 
 	const bool bExclusiveFullscreen_MainWnd = CheckInitialSwapchainResizeRequired(mInitialSwapchainResizeRequiredWindowLookup, mSettings.WndMain, mpWinMain->GetHWND());
 
@@ -224,7 +201,6 @@ void VQEngine::RenderThread_Inititalize()
 	mNumRenderLoopsExecuted.store(0);
 #endif
 
-#define THREADED_CTX_INIT 1
 #if THREADED_CTX_INIT
 	mWorkers_Simulation.AddTask([=]() {
 #endif
@@ -269,18 +245,7 @@ void VQEngine::RenderThread_Inititalize()
 	
 	mWorkers_Simulation.AddTask([=]() { LoadLoadingScreenData(); });
 	mWorkers_Simulation.AddTask([=]() { InitializeBuiltinMeshes(); });
-
-	// initialize render passes
-	{
-		SCOPED_CPU_MARKER("InitRenderPasses");
-		for (IRenderPass* pPass : mRenderPasses) 
-			pPass->Initialize();
-	}
-
-	// collect its PSO load descriptors so we can dispatch PSO compilation workers
-	std::vector<FPSOCreationTaskParameters> RenderPassPSOTaskParams;
-	LoadRenderPassPSODescs(mRenderPasses, RenderPassPSOTaskParams);
-	mRenderer.StartPSOCompilation_MT(std::move(RenderPassPSOTaskParams));
+	mRenderer.StartPSOCompilation_MT();
 
 	// load window resources
 	const bool bFullscreen = mpWinMain->IsFullscreen();
@@ -298,15 +263,15 @@ void VQEngine::RenderThread_Inititalize()
 		const int NumBackBuffers = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
 		mAsyncComputeSSAOReadyFence.resize(NumBackBuffers);
 		mAsyncComputeSSAODoneFence.resize(NumBackBuffers);
-		mCopyObjIDDoneFence.resize(NumBackBuffers);
 		for (int i = 0; i < NumBackBuffers; ++i)
 		{
 			mAsyncComputeSSAOReadyFence[i].Create(pDevice, "AsyncComputeSSAOReadyFence");
 			mAsyncComputeSSAODoneFence[i].Create(pDevice, "AsyncComputeSSAODoneFence");
-			mCopyObjIDDoneFence[i].Create(pDevice, "CopyObjIDDoneFence");
 		}
+		mRenderer.InitializeFences(mpWinMain->GetHWND());
 	}
 #endif
+
 	RenderThread_LoadWindowSizeDependentResources(mpWinMain->GetHWND(), W, H, fResolutionScale);
 
 	mRenderer.WaitPSOCompilation();
@@ -321,16 +286,13 @@ void VQEngine::RenderThread_Exit()
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mpSemUpdate->Signal();
 #endif
-	for (IRenderPass* pPass : mRenderPasses)
-	{
-		pPass->Destroy();
-	}
+
 	const int NumBackBuffers = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
+	mRenderer.DestroyFences(mpWinMain->GetHWND());
 	for (int i = 0; i < NumBackBuffers; ++i)
 	{
 		mAsyncComputeSSAOReadyFence[i].Destroy();
 		mAsyncComputeSSAODoneFence[i].Destroy();
-		mCopyObjIDDoneFence[i].Destroy();
 	}
 }
 
@@ -458,82 +420,8 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 
 	if (hwnd == mpWinMain->GetHWND())
 	{
-		const bool bRenderingHDR = this->ShouldRenderHDR(hwnd);
-
-		mRenderer.LoadWindowSizeDependentResources(hwnd, Width, Height, fResolutionScale, bRenderingHDR);
-
-
-		// TODO: move this into renderer after moving Render Passes
-		FRenderingResources_MainWindow& r = mRenderer.GetRenderingResources_MainWindow();
-		
-		{ // Depth-resolve CS pass
-			mRenderPass_DepthResolve.OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY);
-		}
-
-		{ // FFX-CACAO Resources
-			TextureCreateDesc desc("FFXCACAO_Out");
-			desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
-				DXGI_FORMAT_R8_UNORM
-				, RenderResolutionX
-				, RenderResolutionY
-				, 1 // Array Size
-				, 1 // MIP levels
-				, 1 // MSAA SampleCount
-				, 0 // MSAA SampleQuality
-				, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-			);
-			desc.ResourceState = D3D12_RESOURCE_STATE_GENERIC_READ;
-			r.Tex_AmbientOcclusion = mRenderer.CreateTexture(desc);
-			mRenderer.InitializeUAV(r.UAV_FFXCACAO_Out, 0u, r.Tex_AmbientOcclusion);
-			mRenderer.InitializeSRV(r.SRV_FFXCACAO_Out, 0u, r.Tex_AmbientOcclusion);
-
-
-			AmbientOcclusionPass::FResourceParameters params;
-			params.pRscNormalBuffer = mRenderer.GetTextureResource(r.Tex_SceneNormals);
-			params.pRscDepthBuffer  = mRenderer.GetTextureResource(r.Tex_SceneDepthResolve);
-			params.pRscOutput       = mRenderer.GetTextureResource(r.Tex_AmbientOcclusion);
-			params.FmtNormalBuffer  = mRenderer.GetTextureFormat(r.Tex_SceneNormals);
-			params.FmtDepthBuffer   = DXGI_FORMAT_R32_FLOAT; //mRenderer.GetTextureFormat(r.Tex_SceneDepth); /*R32_TYPELESS*/
-			params.FmtOutput        = desc.d3d12Desc.Format;
-			mRenderPass_AO.OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY, &params);
-		}
-
-		{ // FFX-SSSR Resources
-			ScreenSpaceReflectionsPass::FResourceParameters params;
-			params.NormalBufferFormat = mRenderer.GetTextureFormat(r.Tex_SceneNormals);
-			params.TexNormals = r.Tex_SceneNormals;
-			params.TexHierarchicalDepthBuffer = r.Tex_DownsampledSceneDepth;
-			params.TexSceneColor = r.Tex_SceneColor;
-			params.TexSceneColorRoughness = r.Tex_SceneColor;
-			params.TexMotionVectors = r.Tex_SceneMotionVectors;
-			mRenderPass_SSR.OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY, &params);
-		}
-
-		// Magnifier pass
-		{
-			mRenderPass_Magnifier.OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY, nullptr);
-		}
-
-		// ObjectID Pass
-		{
-			{
-				SCOPED_CPU_MARKER_C("WAIT_COPY_Q", 0xFFFF0000);
-				const int BACK_BUFFER_INDEX = mRenderer.GetWindowRenderContext(mpWinMain->GetHWND()).GetCurrentSwapchainBufferIndex();
-				Fence& CopyFence = mCopyObjIDDoneFence[BACK_BUFFER_INDEX];
-				CopyFence.WaitOnCPU(CopyFence.GetValue());
-			}
-			mRenderPass_ObjectID.OnCreateWindowSizeDependentResources(Width, Height, nullptr);
-		}
-
-		// Outline Pass
-		{
-			mRenderPass_Outline.OnCreateWindowSizeDependentResources(Width, Height, nullptr);
-		}
-
-	} // main window resources
-
-
-
+		mRenderer.LoadWindowSizeDependentResources(hwnd, Width, Height, fResolutionScale, this->ShouldRenderHDR(hwnd));
+	}
 	// TODO: generic implementation of other window procedures for load
 }
 
@@ -543,11 +431,7 @@ void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 	if (hwnd == mpWinMain->GetHWND())
 	{
 		mRenderer.UnloadWindowSizeDependentResources(hwnd);
-		
-		for(auto* pRenderPass : mRenderPasses)
-			pRenderPass->OnDestroyWindowSizeDependentResources();
 	}
-
 	// TODO: generic implementation of other window procedures for unload
 }
 
@@ -571,12 +455,6 @@ static uint32_t GetNumShadowViewCmdRecordingThreads(const FSceneShadowViews& Sha
 
 bool VQEngine::ShouldEnableAsyncCompute()
 {
-	if (!mSettings.gfx.bEnableAsyncCompute)
-		return false;
-
-	if (mbLoadingLevel || mbLoadingEnvironmentMap)
-		return false;
-
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	const int NUM_BACK_BUFFERS = ctx.GetNumSwapchainBuffers();
 	const int BACK_BUFFER_INDEX = ctx.GetCurrentSwapchainBufferIndex();
@@ -588,12 +466,7 @@ bool VQEngine::ShouldEnableAsyncCompute()
 	const FSceneView& SceneView = mpScene->GetSceneView(FRAME_DATA_INDEX);
 	const FSceneShadowViews& ShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
 
-	if(ShadowView.NumPointShadowViews > 0) 
-		return true;
-	if (ShadowView.NumPointShadowViews > 3)
-		return true;
-	
-	return false;
+	return mRenderer.ShouldEnableAsyncCompute(mSettings.gfx, SceneView, ShadowView/*, mbLoadingLevel, mbLoadingEnvironmentMap*/);
 }
 
 void VQEngine::RenderThread_PreRender()
@@ -1177,7 +1050,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 
 		RenderDepthPrePass(pCmd, &CBHeap, SceneView, cbAddresses, cbPerView, cbPerFrame);
 
-		RenderObjectIDPass(pCmd, pCmdCpy, &CBHeap, cbAddresses, cbPerView, SceneView, BACK_BUFFER_INDEX);
+		mRenderer.RenderObjectIDPass(pCmd, pCmdCpy, &CBHeap, cbAddresses, cbPerView, SceneView, SceneShadowView, BACK_BUFFER_INDEX, mSettings.gfx, mAsyncComputeWorkSubmitted);
 
 		if (bMSAA)
 		{
@@ -1355,7 +1228,7 @@ HRESULT VQEngine::RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx)
 				WorkerThreads.AddTask([=, &SceneView, &cbAddresses, &CBHeap_WorkerObjIDPass]()
 				{
 					RENDER_WORKER_CPU_MARKER;
-					RenderObjectIDPass(pCmd_ObjIDPass, pCmdCpy, &CBHeap_WorkerObjIDPass, cbAddresses, cbPerView, SceneView, BACK_BUFFER_INDEX);
+					mRenderer.RenderObjectIDPass(pCmd_ObjIDPass, pCmdCpy, &CBHeap_WorkerObjIDPass, cbAddresses, cbPerView, SceneView, SceneShadowView, BACK_BUFFER_INDEX, mSettings.gfx, mAsyncComputeWorkSubmitted);
 				});
 			}
 

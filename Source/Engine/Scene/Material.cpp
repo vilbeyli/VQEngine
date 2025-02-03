@@ -18,7 +18,7 @@
 
 #include "Material.h"
 #include "Scene.h"
-#include "../../Renderer/Renderer.h"
+#include "Renderer/Renderer.h"
 
 VQ_SHADER_DATA::MaterialData Material::GetCBufferData() const
 {

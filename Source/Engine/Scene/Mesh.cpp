@@ -18,7 +18,7 @@
 
 #include "Mesh.h"
 
-#include "../../Renderer/Renderer.h"
+#include "Renderer/Renderer.h"
 #include <cassert>
 
 #define VERBOSE_LOGGING 0

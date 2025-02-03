@@ -19,14 +19,6 @@
 #include "VQEngine.h"
 #include "GPUMarker.h"
 
-#include <d3d12.h>
-#include <dxgi.h>
-
-#include "RenderPass/AmbientOcclusion.h"
-#include "RenderPass/DepthPrePass.h"
-
-#include "VQEngine_RenderCommon.h"
-
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 //
 // MAIN

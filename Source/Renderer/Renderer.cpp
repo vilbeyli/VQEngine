@@ -25,8 +25,18 @@
 #include "Renderer.h"
 #include "Core/Device.h"
 #include "Resources/Texture.h"
+#include "Resources/CubemapUtility.h"
 #include "Pipeline/Shader.h"
 #include "Rendering/WindowRenderContext.h"
+
+#include "Rendering/RenderPass/AmbientOcclusion.h"
+#include "Rendering/RenderPass/DepthPrePass.h"
+#include "Rendering/RenderPass/DepthMSAAResolve.h"
+#include "Rendering/RenderPass/ScreenSpaceReflections.h"
+#include "Rendering/RenderPass/ApplyReflections.h"
+#include "Rendering/RenderPass/MagnifierPass.h"
+#include "Rendering/RenderPass/ObjectIDPass.h"
+#include "Rendering/RenderPass/OutlinePass.h"
 
 #include "Engine/Core/Window.h"
 #include "Engine/Core/Platform.h"
@@ -34,7 +44,6 @@
 #include "Engine/EnvironmentMap.h"
 #include "Engine/Math.h"
 #include "Engine/Scene/Mesh.h"
-#include "Resources/CubemapUtility.h"
 #include "Shaders/LightingConstantBufferData.h"
 
 #include "Libs/VQUtils/Source/Log.h"
@@ -44,7 +53,7 @@
 
 #include <cassert>
 #include <atomic>
-
+#include <memory>
 
 using namespace Microsoft::WRL;
 using namespace VQSystemInfo;
@@ -235,6 +244,20 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 	mWorkers_ShaderLoad.Initialize(HWCores, "ShaderLoadWorkers");
 	mWorkers_PSOLoad.Initialize(HWCores, "PSOLoadWorkers");
 
+	// allocate render passes
+	{
+		SCOPED_CPU_MARKER("AllocRenderPasses");
+		mRenderPasses.resize(NUM_RENDER_PASSES, nullptr);
+		mRenderPasses[ERenderPass::AmbientOcclusion      ] = std::make_shared<AmbientOcclusionPass>(*this, AmbientOcclusionPass::EMethod::FFX_CACAO);
+		mRenderPasses[ERenderPass::ZPrePass              ] = std::make_shared<DepthPrePass>(*this);
+		mRenderPasses[ERenderPass::DepthMSAAResolve      ] = std::make_shared<DepthMSAAResolvePass>(*this);
+		mRenderPasses[ERenderPass::ApplyReflections      ] = std::make_shared<ApplyReflectionsPass>(*this);
+		mRenderPasses[ERenderPass::Magnifier             ] = std::make_shared<MagnifierPass>(*this, true); // true: outputs to swapchain
+		mRenderPasses[ERenderPass::ObjectID              ] = std::make_shared<ObjectIDPass>(*this);
+		mRenderPasses[ERenderPass::ScreenSpaceReflections] = std::make_shared<ScreenSpaceReflectionsPass>(*this);
+		mRenderPasses[ERenderPass::Outline               ] = std::make_shared<OutlinePass>(*this);
+	}
+
 	Log::Info("[Renderer] Initialized.");
 }
 
@@ -405,25 +428,37 @@ static void CreateResourceViews(FRenderingResources_MainWindow& rsc, VQRenderer&
 
 void VQRenderer::Load()
 {
-	SCOPED_CPU_MARKER("Renderer::Load()");
+	SCOPED_CPU_MARKER("Renderer.Load()");
 	Timer timer; timer.Start();
 	Log::Info("[Renderer] Loading...");
 	
 	LoadBuiltinRootSignatures();
-	float tRS = timer.Tick();
+	const float tRS = timer.Tick();
 	Log::Info("[Renderer]    RootSignatures=%.2fs", tRS);
 
 	LoadDefaultResources();
-	float tDefaultRscs = timer.Tick();
+	const float tDefaultRscs = timer.Tick();
 	Log::Info("[Renderer]    DefaultRscs=%.2fs", tDefaultRscs);
 
-	float tRenderRscs = timer.Tick();
 	AllocateDescriptors(mResources_MainWnd, *this);
 	CreateResourceViews(mResources_MainWnd, *this);
 	mbDefaultResourcesLoaded.store(true);
+	const float tRenderRscs = timer.Tick();
 	Log::Info("[Renderer]    RenderRscs=%.2fs", tDefaultRscs);
 
-	float total = tRS + tDefaultRscs + tRenderRscs;
+	{
+		SCOPED_CPU_MARKER("InitRenderPasses");
+		for (std::shared_ptr<IRenderPass>& pPass : mRenderPasses)
+			pPass->Initialize();
+	}
+	const float tRenderPasses = timer.Tick();
+	Log::Info("[Renderer]    RenderPasses=%.2fs", tRenderPasses);
+
+	{
+
+	}
+
+	const float total = tRS + tDefaultRscs + tRenderRscs + tRenderPasses;
 	Log::Info("[Renderer] Loaded in %.2fs.", total);
 }
 
@@ -436,6 +471,12 @@ void VQRenderer::Unload()
 void VQRenderer::Destroy()
 {
 	Log::Info("VQRenderer::Exit()");
+
+	for (std::shared_ptr<IRenderPass>& pPass : mRenderPasses)
+	{
+		pPass->Destroy();
+	}
+
 	mWorkers_PSOLoad.Destroy();
 	mWorkers_ShaderLoad.Destroy();
 
@@ -528,8 +569,40 @@ void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuf
 
 	// save the render context
 	this->mRenderContextLookup.emplace(pWin->GetHWND(), std::move(ctx));
-	this->mbMainSwapchainInitialized.store(true);
+	this->mbMainSwapchainInitialized.store(true); // TODO: this should execute only for main window
 }
+
+void VQRenderer::InitializeFences(HWND hwnd)
+{
+	ID3D12Device* pDevice = this->GetDevicePtr();
+	const int NumBackBuffers = this->GetSwapChainBackBufferCount(hwnd);
+
+	mCopyObjIDDoneFence.resize(NumBackBuffers);
+	for (int i = 0; i < NumBackBuffers; ++i)
+	{
+		mCopyObjIDDoneFence[i].Create(pDevice, "CopyObjIDDoneFence");
+	}
+}
+
+void VQRenderer::DestroyFences(HWND hwnd)
+{
+	const int NumBackBuffers = this->GetSwapChainBackBufferCount(hwnd);
+	for (int i = 0; i < NumBackBuffers; ++i)
+	{
+		mCopyObjIDDoneFence[i].Destroy();
+	}
+
+}
+
+void VQRenderer::WaitCopyFenceOnCPU(HWND hwnd)
+
+{
+	SCOPED_CPU_MARKER_C("WAIT_COPY_Q", 0xFFFF0000);
+	const int BACK_BUFFER_INDEX = this->GetWindowRenderContext(hwnd).GetCurrentSwapchainBufferIndex();
+	Fence& CopyFence = this->mCopyObjIDDoneFence[BACK_BUFFER_INDEX];
+	CopyFence.WaitOnCPU(CopyFence.GetValue());
+}
+
 
 bool VQRenderer::CheckContext(HWND hwnd) const
 {

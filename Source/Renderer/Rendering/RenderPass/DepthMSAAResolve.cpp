@@ -17,8 +17,8 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "DepthMSAAResolve.h"
-#include "../../Renderer/Renderer.h"
-#include "../GPUMarker.h"
+#include "Renderer/Renderer.h"
+#include "Engine/GPUMarker.h"
 
 DepthMSAAResolvePass::DepthMSAAResolvePass(VQRenderer& Renderer)
 	: RenderPassBase(Renderer)

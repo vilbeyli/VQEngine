@@ -20,12 +20,25 @@
 #include "Renderer/Pipeline/PipelineStateObjects.h"
 
 #include <vector>
-#include <array>
 
 struct IRenderPassResourceCollection {}; // TODO: rename to IRenderPassResources
 struct IRenderPassDrawParameters {};
 struct ID3D12RootSignature;
 class VQRenderer;
+
+enum ERenderPass
+{
+	AmbientOcclusion,
+	ZPrePass,
+	DepthMSAAResolve,
+	ScreenSpaceReflections,
+	ApplyReflections,
+	Magnifier,
+	ObjectID,
+	Outline,
+
+	NUM_RENDER_PASSES
+};
 
 // Interface for Render Passes
 class IRenderPass
