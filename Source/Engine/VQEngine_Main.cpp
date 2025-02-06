@@ -17,11 +17,13 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "VQEngine.h"
-#include "Libs/VQUtils/Source/utils.h"
 #include "GPUMarker.h"
 
 #include "Core/FileParser.h"
 
+#include "Renderer/Renderer.h"
+
+#include "Libs/VQUtils/Source/utils.h"
 #include "Libs/DirectXCompiler/inc/dxcapi.h"
 #include <cassert>
 
@@ -45,8 +47,9 @@ void ReportSystemInfo(const VQSystemInfo::FSystemInfo& i, bool bDetailed = false
 
 // TODO: heed to W4 warnings, initialize the variables
 VQEngine::VQEngine()
-	: mAssetLoader(mWorkers_ModelLoading, mWorkers_TextureLoading, mWorkers_MeshLoading, mRenderer)
+	: mAssetLoader(mWorkers_ModelLoading, mWorkers_TextureLoading, mWorkers_MeshLoading, *mpRenderer)
 	, mbBuiltinMeshGenFinished(false)
+	, mpRenderer(std::make_unique<VQRenderer>())
 {}
 
 void VQEngine::MainThread_Tick()
@@ -92,7 +95,7 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 	// --------------------------------------------------------
 	// Note: Device should be initialized from WinMain thread, 
 	// otherwise device may be lost if launched from RenderDoc
-	mRenderer.Initialize(mSettings.gfx); // Device, Queues, Heaps, WorkerThreads
+	mpRenderer->Initialize(mSettings.gfx); // Device, Queues, Heaps, WorkerThreads
 	// --------------------------------------------------------
 
 	InitializeScenes();
@@ -141,8 +144,8 @@ void VQEngine::Destroy()
 {
 	ExitThreads();
 
-	mRenderer.Unload();
-	mRenderer.Destroy();
+	mpRenderer->Unload();
+	mpRenderer->Destroy();
 }
 
 

@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "../VQEngine.h"
+#include "Renderer/Renderer.h"
 #include "Input.h"
 #include "imgui.h"
 

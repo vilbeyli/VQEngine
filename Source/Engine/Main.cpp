@@ -21,6 +21,7 @@
 
 #include "Libs/DirectXCompiler/inc/dxcapi.h"
 #include "Libs/VQUtils/Source/utils.h"
+#include "Renderer/Renderer.h"
 
 #include <Windows.h>
 #include <ShellScalingAPI.h>
@@ -30,7 +31,7 @@
 #include <cstdlib>
 
 
-void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmdl)
+static void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmdl)
 {
 	SCOPED_CPU_MARKER("ParseCommandLineParameters");
 	const std::string StrCmdLineParams = pScmdl;

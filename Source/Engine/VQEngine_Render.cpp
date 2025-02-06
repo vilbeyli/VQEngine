@@ -18,14 +18,15 @@
 
 #include "VQEngine.h"
 #include "GPUMarker.h"
-#include "../VQUtils/Source/utils.h"
-
 #include "VQEngine_RenderCommon.h"
 
 #include "Shaders/LightingConstantBufferData.h"
 
 #include "Scene/MeshGenerator.h"
 
+#include "Libs/VQUtils/Source/utils.h"
+
+#include "Renderer/Renderer.h"
 
 // https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/dxgi-error
 static const std::unordered_map<HRESULT, std::string> DEVICE_REMOVED_MESSAGE_LOOKUP =
@@ -166,39 +167,6 @@ static bool CheckInitialSwapchainResizeRequired(std::unordered_map<HWND, bool>& 
 	return bExclusiveFullscreen;
 }
 
-static void PreAssignPSOIDs(PSOCollection& psoCollection, int& i, std::vector<FPSODesc>& descs)
-{
-	for (auto it = psoCollection.mapLoadDesc.begin(); it != psoCollection.mapLoadDesc.end(); ++it)
-	{
-		descs[i] = std::move(it->second);
-		psoCollection.mapPSO[it->first] = EBuiltinPSOs::NUM_BUILTIN_PSOs + i++; // assign PSO_IDs beforehand
-	}
-	psoCollection.mapLoadDesc.clear();
-}
-std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs()
-{
-	SCOPED_CPU_MARKER("LoadPSODescs_Builtin");
-
-	mLightingPSOs.GatherPSOLoadDescs(mRootSignatureLookup);
-	mZPrePassPSOs.GatherPSOLoadDescs(mRootSignatureLookup);
-	mShadowPassPSOs.GatherPSOLoadDescs(mRootSignatureLookup);
-
-	std::vector<FPSODesc> descs(
-		mLightingPSOs.mapLoadDesc.size() 
-		+ mZPrePassPSOs.mapLoadDesc.size() 
-		+ mShadowPassPSOs.mapLoadDesc.size()
-	);
-
-	{
-		SCOPED_CPU_MARKER("PreAssignPSOIds");
-		int i = 0;
-		PreAssignPSOIDs(mLightingPSOs, i, descs);
-		PreAssignPSOIDs(mZPrePassPSOs, i, descs);
-		PreAssignPSOIDs(mShadowPassPSOs, i, descs);
-	}
-	return descs;
-}
-
 void VQEngine::RenderThread_Inititalize()
 {
 	SCOPED_CPU_MARKER_C("RenderThread_Inititalize()", 0xFF007700);
@@ -225,7 +193,7 @@ void VQEngine::RenderThread_Inititalize()
 				Log::Warning("RenderThread_Initialize(): HDR Swapchain requested, but the containing monitor does not support HDR. Falling back to SDR Swapchain, and will enable HDR swapchain when the window is moved to a HDR-capable display");
 			}
 
-			mRenderer.InitializeRenderContext(mpWinMain.get(), NUM_SWAPCHAIN_BUFFERS, mSettings.gfx.bVsync, bCreateHDRSwapchain);
+			mpRenderer->InitializeRenderContext(mpWinMain.get(), NUM_SWAPCHAIN_BUFFERS, mSettings.gfx.bVsync, bCreateHDRSwapchain);
 			mEventQueue_VQEToWin_Main.AddItem(std::make_shared<HandleWindowTransitionsEvent>(hwndMain));
 		}
 		if(mpWinDebug)
@@ -233,7 +201,7 @@ void VQEngine::RenderThread_Inititalize()
 			SCOPED_CPU_MARKER("mpWinDebugInitContext");
 			const bool bIsContainingWindowOnHDRScreen = VQSystemInfo::FMonitorInfo::CheckHDRSupport(mpWinDebug->GetHWND());
 			constexpr bool bCreateHDRSwapchain = false; // only main window in HDR for now
-			mRenderer.InitializeRenderContext(mpWinDebug.get(), NUM_SWAPCHAIN_BUFFERS, false, bCreateHDRSwapchain);
+			mpRenderer->InitializeRenderContext(mpWinDebug.get(), NUM_SWAPCHAIN_BUFFERS, false, bCreateHDRSwapchain);
 			mEventQueue_VQEToWin_Main.AddItem(std::make_shared<HandleWindowTransitionsEvent>(mpWinDebug->GetHWND()));
 		}
 
@@ -250,11 +218,11 @@ void VQEngine::RenderThread_Inititalize()
 	 
 	// load builtin resources, compile shaders, load PSOs
 	
-	mRenderer.Load();
+	mpRenderer->Load();
 	
 	mWorkers_Simulation.AddTask([=]() { LoadLoadingScreenData(); });
 	mWorkers_Simulation.AddTask([=]() { InitializeBuiltinMeshes(); });
-	mRenderer.StartPSOCompilation_MT();
+	mpRenderer->StartPSOCompilation_MT();
 
 	// load window resources
 	const bool bFullscreen = mpWinMain->IsFullscreen();
@@ -263,13 +231,13 @@ void VQEngine::RenderThread_Inititalize()
 	const float fResolutionScale = 1.0f; // Post process parameters are not initialized at this stage to determine the resolution scale
 
 #if THREADED_CTX_INIT
-	mRenderer.WaitMainSwapchainReady();
+	mpRenderer->WaitMainSwapchainReady();
 #endif
 
-	mRenderer.InitializeFences(mpWinMain->GetHWND());
+	mpRenderer->InitializeFences(mpWinMain->GetHWND());
 	RenderThread_LoadWindowSizeDependentResources(hwndMain, W, H, fResolutionScale);
-	mRenderer.WaitPSOCompilation();
-	mRenderer.AssignPSOs();
+	mpRenderer->WaitPSOCompilation();
+	mpRenderer->AssignPSOs();
 
 	mTimerRender.Reset();
 	mTimerRender.Start();
@@ -281,8 +249,8 @@ void VQEngine::RenderThread_Exit()
 	mpSemUpdate->Signal();
 #endif
 
-	const int NumBackBuffers = mRenderer.GetSwapChainBackBufferCount(mpWinMain);
-	mRenderer.DestroyFences(mpWinMain->GetHWND());
+	const int NumBackBuffers = mpRenderer->GetSwapChainBackBufferCount(mpWinMain);
+	mpRenderer->DestroyFences(mpWinMain->GetHWND());
 }
 
 void VQEngine::InitializeBuiltinMeshes()
@@ -293,33 +261,33 @@ void VQEngine::InitializeBuiltinMeshes()
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::TRIANGLE;
 		GeometryData<VertexType> data = GeometryGenerator::Triangle<VertexType>(1.0f);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Triangle";
-		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.LODVertices[0], data.LODIndices[0], mResourceNames.mBuiltinMeshNames[eMesh]);
+		mBuiltinMeshes[eMesh] = Mesh(mpRenderer.get(), data.LODVertices[0], data.LODIndices[0], mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::CUBE;
 		GeometryData<VertexType> data = GeometryGenerator::Cube<VertexType>();
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Cube";
-		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data.LODVertices[0], data.LODIndices[0], mResourceNames.mBuiltinMeshNames[eMesh]);
+		mBuiltinMeshes[eMesh] = Mesh(mpRenderer.get(), data.LODVertices[0], data.LODIndices[0], mResourceNames.mBuiltinMeshNames[eMesh]);
 	} 
 	{
 		SCOPED_CPU_MARKER("Cylinder");
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::CYLINDER;
 		GeometryData<VertexType> data = GeometryGenerator::Cylinder<VertexType>(3.0f, 1.0f, 1.0f, 45, 6, 4);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Cylinder";
-		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
+		mBuiltinMeshes[eMesh] = Mesh(mpRenderer.get(), data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
 		SCOPED_CPU_MARKER("Sphere");
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::SPHERE;
 		GeometryData<VertexType> data = GeometryGenerator::Sphere<VertexType>(1.0f, 30, 30, 5);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Sphere";
-		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
+		mBuiltinMeshes[eMesh] = Mesh(mpRenderer.get(), data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::CONE;
 		GeometryData<VertexType> data = GeometryGenerator::Cone<VertexType>(1, 1, 42, 4);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "Cone";
-		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
+		mBuiltinMeshes[eMesh] = Mesh(mpRenderer.get(), data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
 		SCOPED_CPU_MARKER("SimpleGrid");
@@ -327,7 +295,7 @@ void VQEngine::InitializeBuiltinMeshes()
 		const float GridLength = 1.0f;
 		GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 2, 2, 1);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "SimpleGrid";
-		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
+		mBuiltinMeshes[eMesh] = Mesh(mpRenderer.get(), data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
 		SCOPED_CPU_MARKER("DetailGrid0");
@@ -335,7 +303,7 @@ void VQEngine::InitializeBuiltinMeshes()
 		const float GridLength = 1.0f;
 		GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 3, 3, 1);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "DetaildGrid0";
-		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
+		mBuiltinMeshes[eMesh] = Mesh(mpRenderer.get(), data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
 		SCOPED_CPU_MARKER("DetailGrid1");
@@ -343,7 +311,7 @@ void VQEngine::InitializeBuiltinMeshes()
 		const float GridLength = 1.0f;
 		GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 12, 12, 4);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "DetaildGrid1";
-		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
+		mBuiltinMeshes[eMesh] = Mesh(mpRenderer.get(), data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
 		SCOPED_CPU_MARKER("DetailGrid2");
@@ -351,7 +319,7 @@ void VQEngine::InitializeBuiltinMeshes()
 		const float GridLength = 1.0f;
 		GeometryData<VertexType> data = GeometryGenerator::Grid<VertexType>(GridLength, GridLength, 1200, 1200, 6);
 		mResourceNames.mBuiltinMeshNames[eMesh] = "DetaildGrid2";
-		mBuiltinMeshes[eMesh] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh]);
+		mBuiltinMeshes[eMesh] = Mesh(mpRenderer.get(), data, mResourceNames.mBuiltinMeshNames[eMesh]);
 	}
 	{
 		SCOPED_CPU_MARKER("TessellationGrids");
@@ -377,12 +345,12 @@ void VQEngine::InitializeBuiltinMeshes()
 		{
 			GeometryData<PatchVertexType> data = GeometryGenerator::TessellationPatch_Quad<PatchVertexType>(i+1);
 			mResourceNames.mBuiltinMeshNames[eMesh[i]] = szMeshNames[i];
-			mBuiltinMeshes[eMesh[i]] = Mesh(&mRenderer, data, mResourceNames.mBuiltinMeshNames[eMesh[i]]);
+			mBuiltinMeshes[eMesh[i]] = Mesh(mpRenderer.get(), data, mResourceNames.mBuiltinMeshNames[eMesh[i]]);
 		}
 	}
 	// ...
 
-	mRenderer.UploadVertexAndIndexBufferHeaps();
+	mpRenderer->UploadVertexAndIndexBufferHeaps();
 	mbBuiltinMeshGenFinished.store(true);
 	mBuiltinMeshGenSignal.NotifyAll();
 }
@@ -405,7 +373,7 @@ void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Widt
 
 	if (hwnd == mpWinMain->GetHWND())
 	{
-		mRenderer.LoadWindowSizeDependentResources(hwnd, Width, Height, fResolutionScale, this->ShouldRenderHDR(hwnd));
+		mpRenderer->LoadWindowSizeDependentResources(hwnd, Width, Height, fResolutionScale, this->ShouldRenderHDR(hwnd));
 	}
 	// TODO: generic implementation of other window procedures for load
 }
@@ -415,7 +383,7 @@ void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 	SCOPED_CPU_MARKER("RenderThread_UnloadWindowSizeDependentResources()");
 	if (hwnd == mpWinMain->GetHWND())
 	{
-		mRenderer.UnloadWindowSizeDependentResources(hwnd);
+		mpRenderer->UnloadWindowSizeDependentResources(hwnd);
 	}
 	// TODO: generic implementation of other window procedures for unload
 }
@@ -443,21 +411,21 @@ void VQEngine::RenderThread_RenderMainWindow()
 	const HWND hwndMain = mpWinMain->GetHWND();
 	const bool bHDR = this->ShouldRenderHDR(hwndMain);
 
-	HRESULT hr = mRenderer.PreRenderScene(WorkerThreads, mpWinMain.get(), SceneView, SceneShadowView, PPParams, mSettings.gfx, mUIState);
+	HRESULT hr = mpRenderer->PreRenderScene(WorkerThreads, mpWinMain.get(), SceneView, SceneShadowView, PPParams, mSettings.gfx, mUIState);
 
 	if (mbEnvironmentMapPreFilter.load())
 	{
-		mRenderer.PreFilterEnvironmentMap(mBuiltinMeshes[EBuiltInMeshes::CUBE], mpWinMain->GetHWND());
+		mpRenderer->PreFilterEnvironmentMap(mBuiltinMeshes[EBuiltInMeshes::CUBE], mpWinMain->GetHWND());
 		mbEnvironmentMapPreFilter.store(false);
 	}
 
 	if (mbLoadingLevel || mbLoadingEnvironmentMap)
 	{
-		hr = mRenderer.RenderLoadingScreen(mpWinMain.get(), mLoadingScreenData, bHDR);
+		hr = mpRenderer->RenderLoadingScreen(mpWinMain.get(), mLoadingScreenData, bHDR);
 	}
 	else
 	{
-		hr = mRenderer.RenderScene(WorkerThreads, mpWinMain.get(), SceneView, SceneShadowView, PPParams, mSettings.gfx, mUIState, bHDR);
+		hr = mpRenderer->RenderScene(WorkerThreads, mpWinMain.get(), SceneView, SceneShadowView, PPParams, mSettings.gfx, mUIState, bHDR);
 	}
 
 	if (hr == DXGI_STATUS_OCCLUDED) { RenderThread_HandleStatusOccluded(); }
@@ -478,7 +446,7 @@ void VQEngine::RenderThread_HandleStatusOccluded()
 
 void VQEngine::RenderThread_HandleDeviceRemoved()
 {
-	HRESULT hr = this->mRenderer.GetDevicePtr()->GetDeviceRemovedReason();
+	HRESULT hr = this->mpRenderer->GetDevicePtr()->GetDeviceRemovedReason();
 
 	this->mbStopAllThreads.store(true);
 
@@ -502,7 +470,7 @@ void VQEngine::RenderThread_RenderDebugWindow()
 		return;
 
 	HRESULT hr = S_OK;
-	FWindowRenderContext& ctx   = mRenderer.GetWindowRenderContext(mpWinDebug->GetHWND());
+	FWindowRenderContext& ctx   = mpRenderer->GetWindowRenderContext(mpWinDebug->GetHWND());
 	const int NUM_BACK_BUFFERS  = ctx.SwapChain.GetNumBackBuffers();
 	const int BACK_BUFFER_INDEX = ctx.SwapChain.GetCurrentBackBufferIndex();
 	const int FRAME_DATA_INDEX  = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
@@ -554,16 +522,16 @@ void VQEngine::RenderThread_RenderDebugWindow()
 	const auto& VBIBIDs      = TriangleMesh.GetIABufferIDs();
 	const BufferID& VB_ID    = VBIBIDs.first;
 	const BufferID& IB_ID    = VBIBIDs.second;
-	const VBV& vbv = mRenderer.GetVertexBufferView(VB_ID);
-	const IBV& ibv = mRenderer.GetIndexBufferView(IB_ID);
+	const VBV& vbv = mpRenderer->GetVertexBufferView(VB_ID);
+	const IBV& ibv = mpRenderer->GetIndexBufferView(IB_ID);
 	const float RenderResolutionX = static_cast<float>(ctx.WindowDisplayResolutionX);
 	const float RenderResolutionY = static_cast<float>(ctx.WindowDisplayResolutionY);
 	D3D12_VIEWPORT viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
 	D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
 
 
-	pCmd->SetPipelineState(mRenderer.GetPSO(EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO));
-	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(0));
+	pCmd->SetPipelineState(mpRenderer->GetPSO(EBuiltinPSOs::HELLO_WORLD_TRIANGLE_PSO));
+	pCmd->SetGraphicsRootSignature(mpRenderer->GetBuiltinRootSignature(0));
 
 	pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	pCmd->IASetVertexBuffers(0, 1, &vbv);

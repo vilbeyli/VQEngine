@@ -18,8 +18,10 @@
 
 #include "VQEngine.h"
 #include "GPUMarker.h"
+#include "Renderer/Renderer.h"
 
 #include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Source/Image.h"
 
 #include <algorithm>
 
@@ -208,7 +210,7 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 	SCOPED_CPU_MARKER("LoadEnvironmentMap");
 	assert(EnvMapName.size() != 0);
 	constexpr int DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION = 64;
-	FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
+	FRenderingResources_MainWindow& rsc = mpRenderer->GetRenderingResources_MainWindow();
 	FEnvironmentMapRenderingResources& env = rsc.EnvironmentMap;
 
 	// if already loaded, unload it
@@ -237,8 +239,8 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 
 	// Pick an environment map resolution based on the monitor swapchain is on
 	// so we can avoid loading 8k textures for a 1080p laptop for example.
-	mRenderer.WaitMainSwapchainReady(); // wait for swapchain initialization, we need it initialized at this point
-	const unsigned MonitorResolutionY = mRenderer.GetWindowSwapChain(mpWinMain->GetHWND()).GetContainingMonitorDesc().DesktopCoordinates.bottom;
+	mpRenderer->WaitMainSwapchainReady(); // wait for swapchain initialization, we need it initialized at this point
+	const unsigned MonitorResolutionY = mpRenderer->GetWindowSwapChain(mpWinMain->GetHWND()).GetContainingMonitorDesc().DesktopCoordinates.bottom;
 	DetermineResolution_HDRI(desc, MonitorResolutionY);
 	const std::string EnvMapResolution = StrUtil::split(DirectoryUtil::GetFileNameWithoutExtension(desc.FilePath), '_').back(); // file_name_4k.png -> "4k"
 	Log::Info("Loading Environment Map: %s (%s | Diff:%dx%d | Spec:%dx%d)", EnvMapName.c_str(), EnvMapResolution.c_str(), DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION, DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION, SpecularMapMip0Resolution, SpecularMapMip0Resolution);
@@ -255,7 +257,7 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 		CreateEnvironmentMapTextureFromHiResAndSaveToDisk(desc.FilePath);
 	}
 
-	env.CreateRenderingResources(mRenderer, desc, DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION, SpecularMapMip0Resolution);
+	env.CreateRenderingResources(*mpRenderer, desc, DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION, SpecularMapMip0Resolution);
 
 	// Queue irradiance cube face rendering
 	mbEnvironmentMapPreFilter.store(true);
@@ -270,6 +272,6 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 
 void VQEngine::UnloadEnvironmentMap()
 {
-	FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
-	rsc.EnvironmentMap.DestroyRenderingResources(mRenderer, mpWinMain->GetHWND());
+	FRenderingResources_MainWindow& rsc = mpRenderer->GetRenderingResources_MainWindow();
+	rsc.EnvironmentMap.DestroyRenderingResources(*mpRenderer, mpWinMain->GetHWND());
 }

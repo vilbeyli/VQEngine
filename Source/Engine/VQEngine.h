@@ -39,8 +39,7 @@
 
 #include "Libs/VQUtils/Source/Multithreading.h"
 #include "Libs/VQUtils/Source/Timer.h"
-
-#include "Source/Renderer/Renderer.h"
+#include "Libs/VQUtils/Source/SystemInfo.h"
 
 #include <memory>
 
@@ -58,6 +57,7 @@
 //--------------------------------------------------------------------
 
 struct ImGuiContext;
+class VQRenderer;
 
 //
 // DATA STRUCTS
@@ -218,7 +218,6 @@ private:
 	using EventPtr_t                  = std::shared_ptr<IEvent>;
 	using EventQueue_t                = BufferedContainer<std::queue<EventPtr_t>, EventPtr_t>;
 	//-------------------------------------------------------------------------------------------------
-	using RenderingResourcesLookup_t  = std::unordered_map<HWND, std::shared_ptr<FRenderingResources>>;
 	using WindowLookup_t              = std::unordered_map<HWND, std::unique_ptr<Window>>;
 	using WindowNameLookup_t          = std::unordered_map<HWND, std::string>;
 	//-------------------------------------------------------------------------------------------------
@@ -266,7 +265,7 @@ private:
 	std::future<bool>              mbLoadingScreenLoaded;
 
 	// renderer
-	VQRenderer                      mRenderer;
+	std::unique_ptr<VQRenderer>    mpRenderer;
 
 	// assets 
 	AssetLoader                     mAssetLoader;

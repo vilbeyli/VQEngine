@@ -15,10 +15,11 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
-#include "../VQEngine.h"
+#include "Engine/VQEngine.h"
 #include "Engine/GPUMarker.h"
 
 #include "Renderer/Rendering/RenderPass/MagnifierPass.h"
+#include "Renderer/Renderer.h"
 
 #include "VQUtils/Source/utils.h"
 
@@ -262,12 +263,12 @@ void VQEngine::InitializeUI(HWND hwnd)
 	TextureCreateDesc rDescs("texUI");
 	rDescs.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height, 1, 1);
 	rDescs.pDataArray.push_back( pixels );
-	TextureID texUI = mRenderer.CreateTexture(rDescs);
-	SRV_ID srvUI = mRenderer.AllocateAndInitializeSRV(texUI);
+	TextureID texUI = mpRenderer->CreateTexture(rDescs);
+	SRV_ID srvUI = mpRenderer->AllocateAndInitializeSRV(texUI);
 
 	// Tell ImGUI what the image view is
 	//
-	io.Fonts->TexID = (ImTextureID)mRenderer.GetSRV(srvUI).GetGPUDescHandle().ptr;
+	io.Fonts->TexID = (ImTextureID)mpRenderer->GetSRV(srvUI).GetGPUDescHandle().ptr;
 
 
 	// Create sampler
@@ -300,7 +301,7 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 
 	// Data for the UI controller to update
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCountmpWinMain->GetHWND());
+	const int NUM_BACK_BUFFERS = mpRenderer->GetSwapChainBackBufferCountmpWinMain->GetHWND());
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
 #endif
 	FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
@@ -1580,14 +1581,14 @@ void VQEngine::DrawMaterialEditor()
 		if (textureIDs[i] == INVALID_ID)
 			continue;
 
-		const std::string_view& textureFormat = mRenderer.DXGIFormatAsString(mRenderer.GetTextureFormat(textureIDs[i]));
+		const std::string_view& textureFormat = mpRenderer->DXGIFormatAsString(mpRenderer->GetTextureFormat(textureIDs[i]));
 		const std::string& texturePath = mpScene->GetTexturePath(textureIDs[i]);
 		const std::string textureName = mpScene->GetTextureName(textureIDs[i]);
 		int textureSizeX, textureSizeY;
-		mRenderer.GetTextureDimensions(textureIDs[i], textureSizeX, textureSizeY);
-		int textureMIPs = mRenderer.GetTextureMips(textureIDs[i]);
+		mpRenderer->GetTextureDimensions(textureIDs[i], textureSizeX, textureSizeY);
+		int textureMIPs = mpRenderer->GetTextureMips(textureIDs[i]);
 
-		const CBV_SRV_UAV& srv = mRenderer.GetShaderResourceView(mat.SRVMaterialMaps);
+		const CBV_SRV_UAV& srv = mpRenderer->GetShaderResourceView(mat.SRVMaterialMaps);
 		ImTextureID ImTexID = (ImTextureID)srv.GetGPUDescHandle(i).ptr;
 
 		const int texturePreviewSize = 64;

@@ -16,10 +16,12 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 #include "Scene.h"
-#include "../Core/Window.h"
-#include "../VQEngine.h"
+#include "Engine/Core/Window.h"
+#include "Engine/Core/FileParser.h"
+#include "Engine/VQEngine.h"
 #include "Engine/GPUMarker.h"
-#include "../Core/FileParser.h"
+
+#include "Renderer/Renderer.h"
 
 #include "Libs/VQUtils/Source/utils.h"
 

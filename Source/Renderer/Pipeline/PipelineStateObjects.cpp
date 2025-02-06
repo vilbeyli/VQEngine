@@ -40,6 +40,15 @@ void VQRenderer::ReservePSOMap(size_t NumPSOs)
 		mPSOs[EBuiltinPSOs::NUM_BUILTIN_PSOs + (int)i] = nullptr;
 }
 
+static void PreAssignPSOIDs(PSOCollection& psoCollection, int& i, std::vector<FPSODesc>& descs)
+{
+	for (auto it = psoCollection.mapLoadDesc.begin(); it != psoCollection.mapLoadDesc.end(); ++it)
+	{
+		descs[i] = std::move(it->second);
+		psoCollection.mapPSO[it->first] = EBuiltinPSOs::NUM_BUILTIN_PSOs + i++; // assign PSO_IDs beforehand
+	}
+	psoCollection.mapLoadDesc.clear();
+}
 static std::vector<const FShaderStageCompileDesc*> GatherUniqueShaderCompileDescs(const std::vector<FPSODesc>& PSODescs, std::map<PSO_ID, std::vector<size_t>>& PSOShaderMap)
 {
 	SCOPED_CPU_MARKER("GatherUniqueShaderCompileDescs");
@@ -71,8 +80,6 @@ static std::vector<const FShaderStageCompileDesc*> GatherUniqueShaderCompileDesc
 	}
 	return UniqueCompileDescs;
 }
-
-
 static void LoadRenderPassPSODescs(std::vector<std::shared_ptr<IRenderPass>>& mRenderPasses, std::vector<FPSOCreationTaskParameters>& RenderPassPSOTaskParams)
 {
 	SCOPED_CPU_MARKER("LoadRenderPassPSODescs");
@@ -85,6 +92,31 @@ static void LoadRenderPassPSODescs(std::vector<std::shared_ptr<IRenderPass>>& mR
 		);
 	}
 }
+
+std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs()
+{
+	SCOPED_CPU_MARKER("LoadPSODescs_Builtin");
+
+	mLightingPSOs.GatherPSOLoadDescs(mRootSignatureLookup);
+	mZPrePassPSOs.GatherPSOLoadDescs(mRootSignatureLookup);
+	mShadowPassPSOs.GatherPSOLoadDescs(mRootSignatureLookup);
+
+	std::vector<FPSODesc> descs(
+		mLightingPSOs.mapLoadDesc.size()
+		+ mZPrePassPSOs.mapLoadDesc.size()
+		+ mShadowPassPSOs.mapLoadDesc.size()
+	);
+
+	{
+		SCOPED_CPU_MARKER("PreAssignPSOIds");
+		int i = 0;
+		PreAssignPSOIDs(mLightingPSOs, i, descs);
+		PreAssignPSOIDs(mZPrePassPSOs, i, descs);
+		PreAssignPSOIDs(mShadowPassPSOs, i, descs);
+	}
+	return descs;
+}
+
 void VQRenderer::StartPSOCompilation_MT()
 {
 	SCOPED_CPU_MARKER("StartPSOCompilation_MT");

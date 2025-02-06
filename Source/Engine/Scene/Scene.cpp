@@ -23,6 +23,7 @@
 #include "Engine/VQEngine.h"
 #include "Engine/Culling.h"
 #include "Renderer/Rendering/RenderPass/ObjectIDPass.h"
+#include "Renderer/Renderer.h"
 
 #include "Libs/VQUtils/Source/utils.h"
 

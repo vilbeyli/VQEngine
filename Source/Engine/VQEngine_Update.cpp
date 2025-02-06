@@ -23,6 +23,7 @@
 #include "Core/FileParser.h"
 #include "imgui.h"
 
+#include "Renderer/Renderer.h"
 #include "Renderer/Rendering/RenderPass/MagnifierPass.h"
 #include "Renderer/Rendering/RenderPass/ScreenSpaceReflections.h"
 #include "Renderer/Rendering/RenderPass/ObjectIDPass.h"
@@ -123,7 +124,7 @@ void VQEngine::UpdateThread_PreUpdate()
 {
 	SCOPED_CPU_MARKER("UpdateThread_PreUpdate()");
 
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
+	const int NUM_BACK_BUFFERS = mpRenderer->GetSwapChainBackBufferCount(mpWinMain->GetHWND());
 
 	if (mpScene)
 	{
@@ -207,7 +208,7 @@ void VQEngine::UpdateThread_PostUpdate()
 	SCOPED_CPU_MARKER("UpdateThread_PostUpdate()");
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
+	const int NUM_BACK_BUFFERS = mpRenderer->GetSwapChainBackBufferCount(mpWinMain->GetHWND());
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
 	ThreadPool& mWorkerThreads = mWorkers_Update;
 #else
@@ -227,7 +228,7 @@ void VQEngine::UpdateThread_PostUpdate()
 	const bool bMouseLeftTriggered = mInputStates.at(hwndMain).IsMouseTriggered(Input::EMouseButtons::MOUSE_BUTTON_LEFT);
 	if (!io.WantCaptureMouse && bMouseLeftTriggered)
 	{
-		const std::shared_ptr<ObjectIDPass> pObjIDPass = std::static_pointer_cast<ObjectIDPass>(mRenderer.GetRenderPass(ERenderPass::ObjectID));
+		const std::shared_ptr<ObjectIDPass> pObjIDPass = std::static_pointer_cast<ObjectIDPass>(mpRenderer->GetRenderPass(ERenderPass::ObjectID));
 
 		const int MouseClickPositionX = static_cast<int>(io.MousePos.x);
 		const int MouseClickPositionY = static_cast<int>(io.MousePos.y);
@@ -434,7 +435,7 @@ void VQEngine::UpdateThread_UpdateScene_MainWnd(const float dt)
 	HWND hwnd = pWin->GetHWND();
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(hwnd);
+	const int NUM_BACK_BUFFERS = mpRenderer->GetSwapChainBackBufferCount(hwnd);
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
 #else
 	const int FRAME_DATA_INDEX = 0;
@@ -482,11 +483,11 @@ void VQEngine::Load_SceneData_Dispatch()
 	auto fnCreateSceneInstance = [&](const std::string& SceneType, std::unique_ptr<Scene>& pScene) -> void
 	{
 		SCOPED_CPU_MARKER("fnCreateSceneInstance");
-		     if (SceneType == "Default")          pScene = std::make_unique<DefaultScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
-		else if (SceneType == "Sponza")           pScene = std::make_unique<SponzaScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
-		else if (SceneType == "StressTest")       pScene = std::make_unique<StressTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
-		else if (SceneType == "EnvironmentMapUnitTest") pScene = std::make_unique<EnvironmentMapUnitTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
-		else if (SceneType == "Terrain")          pScene = std::make_unique<TerrainScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, mRenderer);
+		     if (SceneType == "Default")          pScene = std::make_unique<DefaultScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, *mpRenderer);
+		else if (SceneType == "Sponza")           pScene = std::make_unique<SponzaScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, *mpRenderer);
+		else if (SceneType == "StressTest")       pScene = std::make_unique<StressTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, *mpRenderer);
+		else if (SceneType == "EnvironmentMapUnitTest") pScene = std::make_unique<EnvironmentMapUnitTestScene >(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, *mpRenderer);
+		else if (SceneType == "Terrain")          pScene = std::make_unique<TerrainScene>(*this, NUM_SWAPCHAIN_BACKBUFFERS, input, mpWinMain, *mpRenderer);
 	};
 
 	const bool bUpscalingEnabled = mpScene ? mpScene->GetPostProcessParameters(0).IsFSREnabled() : false;
@@ -498,7 +499,7 @@ void VQEngine::Load_SceneData_Dispatch()
 		for(int i=0; i<FUIState::EEditorMode::NUM_EDITOR_MODES; ++i)
 			mUIState.SelectedEditeeIndex[i] = INVALID_ID;
 
-		mRenderer.ResetNumFramesRendered();
+		mpRenderer->ResetNumFramesRendered();
 	}
 
 	// load scene representation from disk
@@ -560,8 +561,8 @@ void VQEngine::LoadLoadingScreenData()
 
 		mWorkers_TextureLoading.AddTask([this, &data, LoadingScreenTextureFilePath, CHECK_ALPHA_MASK, GENERATE_MIPS]()
 		{
-			const TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str(), CHECK_ALPHA_MASK, GENERATE_MIPS);
-			const SRV_ID srvID = mRenderer.AllocateAndInitializeSRV(texID);
+			const TextureID texID = mpRenderer->CreateTextureFromFile(LoadingScreenTextureFilePath.c_str(), CHECK_ALPHA_MASK, GENERATE_MIPS);
+			const SRV_ID srvID = mpRenderer->AllocateAndInitializeSRV(texID);
 			std::lock_guard<std::mutex> lk(data.Mtx);
 			data.SRVs.push_back(srvID);
 		});
@@ -570,8 +571,8 @@ void VQEngine::LoadLoadingScreenData()
 	// load the selected loading screen image
 	{
 		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(SelectedLoadingScreenIndex) + ".png");
-		TextureID texID = mRenderer.CreateTextureFromFile(LoadingScreenTextureFilePath.c_str(), CHECK_ALPHA_MASK, GENERATE_MIPS);
-		SRV_ID    srvID = mRenderer.AllocateAndInitializeSRV(texID);
+		TextureID texID = mpRenderer->CreateTextureFromFile(LoadingScreenTextureFilePath.c_str(), CHECK_ALPHA_MASK, GENERATE_MIPS);
+		SRV_ID    srvID = mpRenderer->AllocateAndInitializeSRV(texID);
 		std::lock_guard<std::mutex> lk(data.Mtx);
 		data.SRVs.push_back(srvID);
 		data.SelectedLoadingScreenSRVIndex = static_cast<int>(data.SRVs.size() - 1);
@@ -588,7 +589,7 @@ FSetHDRMetaDataParams VQEngine::GatherHDRMetaDataParameters(HWND hwnd)
 	while (!mbRenderThreadInitialized); // wait until renderer is initialized
 #endif
 
-	const SwapChain& Swapchain = mRenderer.GetWindowSwapChain(hwnd);
+	const SwapChain& Swapchain = mpRenderer->GetWindowSwapChain(hwnd);
 	const DXGI_OUTPUT_DESC1 desc = Swapchain.GetContainingMonitorDesc();
 	const FDisplayHDRProfile* pProfile = GetHDRProfileIfExists(desc.DeviceName);
 
@@ -600,7 +601,7 @@ FSetHDRMetaDataParams VQEngine::GatherHDRMetaDataParameters(HWND hwnd)
 			: EColorSpace::REC_709;
 
 
-	const FRenderingResources_MainWindow& rsc = mRenderer.GetRenderingResources_MainWindow();
+	const FRenderingResources_MainWindow& rsc = mpRenderer->GetRenderingResources_MainWindow();
 	const bool bHDREnvironmentMap = rsc.EnvironmentMap.Tex_HDREnvironment != INVALID_ID;
 	if (bHDREnvironmentMap)
 	{
@@ -663,7 +664,7 @@ void VQEngine::StartLoadingScene(int IndexScene)
 	mQueue_SceneLoad.push(mResourceNames.mSceneNames[IndexScene]);
 
 	// signal clearing history buffers to the render passes
-	std::shared_ptr<ScreenSpaceReflectionsPass> pReclectionsPass = std::static_pointer_cast<ScreenSpaceReflectionsPass>(mRenderer.GetRenderPass(ERenderPass::ObjectID));
+	std::shared_ptr<ScreenSpaceReflectionsPass> pReclectionsPass = std::static_pointer_cast<ScreenSpaceReflectionsPass>(mpRenderer->GetRenderPass(ERenderPass::ObjectID));
 	pReclectionsPass->SetClearHistoryBuffers();
 
 	mAppState = INITIALIZING;

@@ -16,8 +16,11 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-#include "../VQEngine.h"
+#include "Engine/VQEngine.h"
 #include "Engine/GPUMarker.h"
+
+#include "Renderer/Renderer.h"
+
 #include "Windows.h"
 #include "imgui.h"
 
@@ -89,7 +92,7 @@ void VQEngine::HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWin
 	if (settings.DisplayMode == EDisplayMode::BORDERLESS_FULLSCREEN)
 	{
 		HWND hwnd = pWin->GetHWND();
-		pWin->ToggleWindowedFullscreen(&mRenderer.GetWindowSwapChain(hwnd));
+		pWin->ToggleWindowedFullscreen(&mpRenderer->GetWindowSwapChain(hwnd));
 		
 		if (bHandlingMainWindowTransition)
 			SetMouseCaptureForWindow(hwnd, true, true);
@@ -267,7 +270,7 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 
 	if (p->hwnd == mpWinMain->GetHWND())
 	{
-		SwapChain& Swapchain = mRenderer.GetWindowSwapChain(p->hwnd);
+		SwapChain& Swapchain = mpRenderer->GetWindowSwapChain(p->hwnd);
 		const int NUM_BACK_BUFFERS =  Swapchain.GetNumBackBuffers();
 
 		if ((uWidth | uHeight) != 0 && mpScene)
@@ -361,7 +364,7 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	const HWND&                      hwnd = pResizeEvent->hwnd;
 	const int                       WIDTH = pResizeEvent->width;
 	const int                      HEIGHT = pResizeEvent->height;
-	SwapChain&                  Swapchain = mRenderer.GetWindowSwapChain(hwnd);
+	SwapChain&                  Swapchain = mpRenderer->GetWindowSwapChain(hwnd);
 	std::unique_ptr<Window>&         pWnd = GetWindow(hwnd);
 	const bool         bIsWindowMinimized = WIDTH == 0 && HEIGHT == 0;
 	const bool                  bIsClosed = pWnd->IsClosed();
@@ -403,7 +406,7 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	}
 	Swapchain.EnsureSwapChainColorSpace(Swapchain.GetFormat() == DXGI_FORMAT_R16G16B16A16_FLOAT ? _16 : _8, false);
 	pWnd->OnResize(WIDTH, HEIGHT);
-	mRenderer.OnWindowSizeChanged(hwnd, WIDTH, HEIGHT); // updates render context
+	mpRenderer->OnWindowSizeChanged(hwnd, WIDTH, HEIGHT); // updates render context
 
 	const FPostProcessParameters& PPParams = this->mpScene->GetPostProcessParameters(0);
 	const bool bFSREnabled = PPParams.IsFSREnabled() && !bUseHDRRenderPath; // TODO: remove this when FSR-HDR is implemented
@@ -419,7 +422,7 @@ void VQEngine::RenderThread_HandleWindowCloseEvent(const IEvent* pEvent)
 {
 	const WindowCloseEvent* pWindowCloseEvent = static_cast<const WindowCloseEvent*>(pEvent);
 	const HWND& hwnd = pWindowCloseEvent->hwnd;
-	SwapChain& Swapchain = mRenderer.GetWindowSwapChain(hwnd);
+	SwapChain& Swapchain = mpRenderer->GetWindowSwapChain(hwnd);
 	std::unique_ptr<Window>& pWnd = GetWindow(hwnd);
 
 	Log::Info("RenderThread: Handle Window Close event <%x>", hwnd);
@@ -434,7 +437,7 @@ void VQEngine::RenderThread_HandleWindowCloseEvent(const IEvent* pEvent)
 #endif
 	}
 	
-	mRenderer.GetWindowSwapChain(hwnd).WaitForGPU();
+	mpRenderer->GetWindowSwapChain(hwnd).WaitForGPU();
 	RenderThread_UnloadWindowSizeDependentResources(hwnd);
 }
 
@@ -442,7 +445,7 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 {
 	const ToggleFullscreenEvent* pToggleFSEvent = static_cast<const ToggleFullscreenEvent*>(pEvent);
 	HWND                                   hwnd = pToggleFSEvent->hwnd;
-	SwapChain&                        Swapchain = mRenderer.GetWindowSwapChain(pToggleFSEvent->hwnd);
+	SwapChain&                        Swapchain = mpRenderer->GetWindowSwapChain(pToggleFSEvent->hwnd);
 	const FWindowSettings&          WndSettings = GetWindowSettings(hwnd);
 	const bool   bExclusiveFullscreenTransition = WndSettings.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN;
 	std::unique_ptr<Window>&               pWnd = GetWindow(hwnd);
@@ -519,7 +522,7 @@ void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
 	const SetVSyncEvent*      pToggleVSyncEvent = static_cast<const SetVSyncEvent*>(pEvent);
 	HWND                                   hwnd = pToggleVSyncEvent->hwnd;
 	const bool                      bVsyncState = pToggleVSyncEvent->bToggleValue;
-	SwapChain&                        Swapchain = mRenderer.GetWindowSwapChain(pToggleVSyncEvent->hwnd);
+	SwapChain&                        Swapchain = mpRenderer->GetWindowSwapChain(pToggleVSyncEvent->hwnd);
 	const FWindowSettings&          WndSettings = GetWindowSettings(hwnd);
 	std::unique_ptr<Window>&               pWnd = GetWindow(hwnd);
 	const bool   bExclusiveFullscreenTransition = WndSettings.DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN;
@@ -529,7 +532,7 @@ void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
 
 	Swapchain.WaitForGPU(); // make sure GPU is finished
 	{
-		auto& ctx = mRenderer.GetWindowRenderContext(hwnd);
+		auto& ctx = mpRenderer->GetWindowRenderContext(hwnd);
 
 		FSwapChainCreateDesc desc;
 		desc.bVSync         = bVsyncState;
@@ -566,7 +569,7 @@ void VQEngine::RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent)
 	const std::unique_ptr<Window>&   pWnd = GetWindow(hwnd);
 	const int                       WIDTH = pWnd->GetWidth();
 	const int                      HEIGHT = pWnd->GetHeight();
-	SwapChain&                  Swapchain = mRenderer.GetWindowSwapChain(hwnd);
+	SwapChain&                  Swapchain = mpRenderer->GetWindowSwapChain(hwnd);
 	const FSetHDRMetaDataParams HDRMetaData = this->GatherHDRMetaDataParameters(hwnd);
 	const bool                bFormatChange = pSwapchainEvent->format != Swapchain.GetFormat();
 
@@ -602,7 +605,7 @@ void VQEngine::RenderThread_HandleSetHDRMetaDataEvent(const IEvent* pEvent)
 	const SetStaticHDRMetaDataEvent* pSetMetaDataEvent = static_cast<const SetStaticHDRMetaDataEvent*>(pEvent);
 	const HWND&                      hwnd = pEvent->hwnd;
 	const std::unique_ptr<Window>&   pWnd = GetWindow(hwnd);
-	SwapChain&                  Swapchain = mRenderer.GetWindowSwapChain(hwnd);
+	SwapChain&                  Swapchain = mpRenderer->GetWindowSwapChain(hwnd);
 
 	if (pWnd->GetIsOnHDRCapableDisplay())
 	{
