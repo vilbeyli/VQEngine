@@ -22,6 +22,7 @@
 #include "Libs/DirectXCompiler/inc/dxcapi.h"
 #include "Libs/VQUtils/Source/utils.h"
 #include "Renderer/Renderer.h"
+#include "Scene/SceneViews.h"
 
 #include <Windows.h>
 #include <ShellScalingAPI.h>

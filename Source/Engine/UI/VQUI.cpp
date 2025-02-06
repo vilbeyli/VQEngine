@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 #include "Engine/VQEngine.h"
 #include "Engine/GPUMarker.h"
+#include "Engine/Scene/SceneViews.h"
 
 #include "Renderer/Rendering/RenderPass/MagnifierPass.h"
 #include "Renderer/Renderer.h"

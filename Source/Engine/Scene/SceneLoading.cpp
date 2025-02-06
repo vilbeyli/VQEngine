@@ -16,6 +16,7 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 #include "Scene.h"
+#include "Engine/Scene/SceneViews.h"
 #include "Engine/Core/Window.h"
 #include "Engine/Core/FileParser.h"
 #include "Engine/VQEngine.h"

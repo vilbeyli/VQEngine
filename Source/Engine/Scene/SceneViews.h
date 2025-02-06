@@ -227,34 +227,6 @@ struct FSceneShadowViews
 	uint NumPointShadowViews;
 };
 
-struct FSceneStats
-{
-	// lights -----------------------
-	uint NumDirectionalLights;
-	uint NumStaticLights;
-	uint NumDynamicLights;
-	uint NumStationaryLights;
-	uint NumSpotLights;
-	uint NumPointLights;
-	uint NumDisabledSpotLights;
-	uint NumDisabledPointLights;
-	uint NumDisabledDirectionalLights;
-	uint NumShadowingPointLights;
-	uint NumShadowingSpotLights;
-
-	// render cmds ------------------
-	uint NumMeshRenderCommands;
-	uint NumShadowMeshRenderCommands;
-	uint NumBoundingBoxRenderCommands;
-
-	// scene ------------------------
-	uint NumMeshes;
-	uint NumModels;
-	uint NumMaterials;
-	uint NumObjects;
-	uint NumCameras;
-};
-
 struct FFrustumRenderCommandRecorderContext
 {
 	size_t iFrustum;

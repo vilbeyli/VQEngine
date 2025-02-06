@@ -1,4 +1,5 @@
 #include "Scenes.h"
+#include "Engine/Scene/SceneViews.h"
 
 void SponzaScene::InitializeScene()
 {

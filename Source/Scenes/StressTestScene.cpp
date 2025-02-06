@@ -1,8 +1,7 @@
 #include "Scenes.h"
-
-#include "../Engine/Core/Input.h"
-
-#include "../Libs/VQUtils/Source/utils.h"
+#include "Engine/Scene/SceneViews.h"
+#include "Engine/Core/Input.h"
+#include "Libs/VQUtils/Source/utils.h"
 
 using namespace DirectX;
 

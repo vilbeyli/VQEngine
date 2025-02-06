@@ -19,6 +19,7 @@
 #include "Scene.h"
 #include "Engine/GPUMarker.h"
 
+#include "Engine/Scene/SceneViews.h"
 #include "Engine/Core/Window.h"
 #include "Engine/VQEngine.h"
 #include "Engine/Culling.h"

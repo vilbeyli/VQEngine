@@ -1,6 +1,7 @@
 #include "Scenes.h"
+#include "Engine/Scene/SceneViews.h"
 
-#include "../Engine/Core/Input.h"
+#include "Engine/Core/Input.h"
 
 using namespace DirectX;
 

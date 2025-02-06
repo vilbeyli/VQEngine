@@ -58,6 +58,7 @@
 
 struct ImGuiContext;
 class VQRenderer;
+struct FSceneRenderParameters;
 
 //
 // DATA STRUCTS

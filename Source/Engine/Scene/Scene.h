@@ -17,7 +17,6 @@
 //	Contact: volkanilbeyli@gmail.com
 #pragma once
 
-#include "SceneViews.h"
 #include "Camera.h"
 #include "Light.h"
 #include "Transform.h"
@@ -44,6 +43,9 @@ struct FResourceNames;
 struct FFrustumPlaneset;
 struct FUIState;
 class Window;
+struct FSceneView;
+struct FSceneShadowViews;
+struct FShadowView;
 
 
 namespace InstanceBatching
@@ -65,6 +67,34 @@ namespace InstanceBatching
 	}
 
 }
+
+struct FSceneStats
+{
+	// lights -----------------------
+	uint NumDirectionalLights;
+	uint NumStaticLights;
+	uint NumDynamicLights;
+	uint NumStationaryLights;
+	uint NumSpotLights;
+	uint NumPointLights;
+	uint NumDisabledSpotLights;
+	uint NumDisabledPointLights;
+	uint NumDisabledDirectionalLights;
+	uint NumShadowingPointLights;
+	uint NumShadowingSpotLights;
+
+	// render cmds ------------------
+	uint NumMeshRenderCommands;
+	uint NumShadowMeshRenderCommands;
+	uint NumBoundingBoxRenderCommands;
+
+	// scene ------------------------
+	uint NumMeshes;
+	uint NumModels;
+	uint NumMaterials;
+	uint NumObjects;
+	uint NumCameras;
+};
 
 constexpr size_t NUM_GAMEOBJECT_POOL_SIZE = 1024 * 64;
 constexpr size_t GAMEOBJECT_BYTE_ALIGNMENT = 64; // assumed typical cache-line size

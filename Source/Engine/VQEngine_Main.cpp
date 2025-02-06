@@ -18,6 +18,7 @@
 
 #include "VQEngine.h"
 #include "GPUMarker.h"
+#include "Scene/SceneViews.h"
 
 #include "Core/FileParser.h"
 
