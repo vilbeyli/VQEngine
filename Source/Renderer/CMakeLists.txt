@@ -92,6 +92,8 @@ set(RenderingSources
     "Rendering/RenderResources.cpp"
     "Rendering/EnvironmentMapRendering.cpp"
     "Rendering/SceneRendering.cpp"
+    "Rendering/LoadingScreenRendering.cpp"
+    "Rendering/Batching.cpp"
 )
 
 # Render Passes

@@ -128,7 +128,7 @@ class Camera
 
 public:
 	Camera();
-	Camera Clone();
+	Camera Clone() const;
 
 	void InitializeCamera(const FCameraParameters& data);
 	void InitializeController(const FCameraParameters& data);

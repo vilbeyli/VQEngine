@@ -41,7 +41,7 @@ Camera::Camera()
 	XMStoreFloat4x4(&mMatView, XMMatrixIdentity());
 }
 
-Camera Camera::Clone()
+Camera Camera::Clone() const
 {
 	Camera c = {};
 	c.mPosition = this->mPosition;

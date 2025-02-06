@@ -26,6 +26,9 @@
 
 void VQRenderer::LoadWindowSizeDependentResources(HWND hwnd, unsigned Width, unsigned Height, float fResolutionScale, bool bRenderingHDR)
 {
+	assert(Width >= 1 && Height >= 1);
+	SCOPED_CPU_MARKER("LoadWindowSizeDependentResources");
+
 	const uint RenderResolutionX = static_cast<uint>(Width * fResolutionScale);
 	const uint RenderResolutionY = static_cast<uint>(Height * fResolutionScale);
 

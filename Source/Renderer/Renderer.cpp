@@ -258,6 +258,8 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		mRenderPasses[ERenderPass::Outline               ] = std::make_shared<OutlinePass>(*this);
 	}
 
+	mNumFramesRendered = 0;
+
 	Log::Info("[Renderer] Initialized.");
 }
 
@@ -574,12 +576,17 @@ void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuf
 
 void VQRenderer::InitializeFences(HWND hwnd)
 {
+	SCOPED_CPU_MARKER("InitQueueFences");
 	ID3D12Device* pDevice = this->GetDevicePtr();
 	const int NumBackBuffers = this->GetSwapChainBackBufferCount(hwnd);
 
+	mAsyncComputeSSAOReadyFence.resize(NumBackBuffers);
+	mAsyncComputeSSAODoneFence.resize(NumBackBuffers);
 	mCopyObjIDDoneFence.resize(NumBackBuffers);
 	for (int i = 0; i < NumBackBuffers; ++i)
 	{
+		mAsyncComputeSSAOReadyFence[i].Create(pDevice, "AsyncComputeSSAOReadyFence");
+		mAsyncComputeSSAODoneFence[i].Create(pDevice, "AsyncComputeSSAODoneFence");
 		mCopyObjIDDoneFence[i].Create(pDevice, "CopyObjIDDoneFence");
 	}
 }
@@ -590,6 +597,8 @@ void VQRenderer::DestroyFences(HWND hwnd)
 	for (int i = 0; i < NumBackBuffers; ++i)
 	{
 		mCopyObjIDDoneFence[i].Destroy();
+		mAsyncComputeSSAOReadyFence[i].Destroy();
+		mAsyncComputeSSAODoneFence[i].Destroy();
 	}
 
 }

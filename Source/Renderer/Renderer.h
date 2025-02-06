@@ -48,6 +48,8 @@
 #include <array>
 
 #define THREADED_CTX_INIT 1
+#define RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING 1
+#define EXECUTE_CMD_LISTS_ON_WORKER 1
 
 namespace D3D12MA { class Allocator; }
 class Window;
@@ -61,6 +63,8 @@ struct ID3D12PipelineState;
 struct TextureCreateDesc;
 struct FEnvironmentMapRenderingResources;
 struct Mesh;
+struct FUIState;
+struct FLoadingScreenData;
 
 //========================================================================================================================================================================================================---
 //
@@ -78,7 +82,11 @@ enum EProceduralTextures
 
 	, NUM_PROCEDURAL_TEXTURES
 };
-
+struct FRenderStats
+{
+	uint NumDraws;
+	uint NumDispatches;
+};
 
 //========================================================================================================================================================================================================---
 //
@@ -211,29 +219,35 @@ public:
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Render (Public)
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-	void PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, const Mesh& CubeMesh, HWND hwnd);
-	
-	std::shared_ptr<IRenderPass> GetRenderPass(ERenderPass ePass) { return mRenderPasses[ePass]; }
-	
-	// temp
-	void RenderObjectIDPass(
-		ID3D12GraphicsCommandList* pCmd, 
-		ID3D12CommandList* pCmdCopy, 
-		DynamicBufferHeap* pCBufferHeap, 
-		const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, 
-		D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, 
+	void PreFilterEnvironmentMap(const Mesh& CubeMesh, HWND hwnd);
+
+	HRESULT PreRenderScene(ThreadPool& WorkerThreads,
+		const Window* pWindow,
 		const FSceneView& SceneView,
 		const FSceneShadowViews& ShadowView,
-		const int BACK_BUFFER_INDEX,
+		const FPostProcessParameters& PPParams,
 		const FGraphicsSettings& GFXSettings,
-		std::atomic<bool>& mAsyncComputeWorkSubmitted // temp
+		const FUIState& UIState
 	);
-	bool ShouldEnableAsyncCompute(const FGraphicsSettings& GFXSettings, const FSceneView& SceneView, const FSceneShadowViews& ShadowView) const;
+
+	HRESULT RenderScene(ThreadPool& WorkerThreads,
+		const Window* pWindow,
+		const FSceneView& SceneView,
+		const FSceneShadowViews& ShadowView,
+		const FPostProcessParameters& PPParams,
+		const FGraphicsSettings& GFXSettings,
+		const FUIState& UIState,
+		bool bHDRDisplay
+	);
 	
+	HRESULT RenderLoadingScreen(const Window* pWindow, const FLoadingScreenData& LoadingScreenData, bool bUseHDRRenderPath); // TODO: should be generalized and removed later
+	
+	std::shared_ptr<IRenderPass> GetRenderPass(ERenderPass ePass) { return mRenderPasses[ePass]; }
 	      FRenderingResources_MainWindow& GetRenderingResources_MainWindow() { return mResources_MainWnd; }
 	const FRenderingResources_MainWindow& GetRenderingResources_MainWindow() const { return mResources_MainWnd; }
 	const FRenderingResources_DebugWindow& GetRenderingResources_DebugWindow() const { return mResources_DebugWnd; }
 
+	void ResetNumFramesRendered() { mNumFramesRendered = 0; }
 
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Sync
@@ -308,14 +322,15 @@ private:
 	FRenderingResources_MainWindow  mResources_MainWnd;
 	FRenderingResources_DebugWindow mResources_DebugWnd;
 	std::vector<std::shared_ptr<IRenderPass>> mRenderPasses; // WIP design
+	uint64                          mNumFramesRendered;
 
 	// sync
-	//std::vector<Fence>              mAsyncComputeSSAOReadyFence;
-	//std::vector<Fence>              mAsyncComputeSSAODoneFence;
+	std::vector<Fence>              mAsyncComputeSSAOReadyFence;
+	std::vector<Fence>              mAsyncComputeSSAODoneFence;
 	std::vector<Fence>              mCopyObjIDDoneFence; // GPU->CPU
-	//std::atomic<bool>               mAsyncComputeWorkSubmitted = false;
-	//std::atomic<bool>               mSubmitWorkerFinished = true;
-	//bool                            mWaitForSubmitWorker = false;
+	std::atomic<bool>               mAsyncComputeWorkSubmitted = false;
+	std::atomic<bool>               mSubmitWorkerFinished = true;
+	bool                            mWaitForSubmitWorker = false;
 
 	// bookkeeping
 	std::unordered_map<TextureID, std::string>         mLookup_TextureDiskLocations;
@@ -333,6 +348,8 @@ private:
 	// state
 	std::atomic<bool> mbRendererInitialized;
 	std::atomic<bool> mbMainSwapchainInitialized;
+
+	FRenderStats mRenderStats;
 
 private:
 	void LoadBuiltinRootSignatures();
@@ -368,6 +385,38 @@ private:
 	// Render (Private)
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	void ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, SRV_ID& outSRV_ID);
+	bool ShouldEnableAsyncCompute(const FGraphicsSettings& GFXSettings, const FSceneView& SceneView, const FSceneShadowViews& ShadowView) const;
+	void            RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, ID3D12CommandList* pCmdCopy, DynamicBufferHeap* pCBufferHeap, const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, const FSceneShadowViews& ShadowView, const int BACK_BUFFER_INDEX, const FGraphicsSettings& GFXSettings);
+	void            TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings);
+	void            RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView);
+	void            RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView);
+	void            RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView, size_t iBegin, size_t NumPointLights);
+	void            RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, D3D12_GPU_VIRTUAL_ADDRESS perFrameCBAddr, const FGraphicsSettings& GFXSettings, bool bAsyncCompute);
+	void            TransitionDepthPrePassForWrite(ID3D12GraphicsCommandList* pCmd, bool bMSAA);
+	void            TransitionDepthPrePassForRead(ID3D12GraphicsCommandList* pCmd, bool bMSAA);
+	void            TransitionDepthPrePassForReadAsyncCompute(ID3D12GraphicsCommandList* pCmd);
+	void            TransitionDepthPrePassMSAAResolve(ID3D12GraphicsCommandList* pCmd);
+	void            ResolveMSAA_DepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap);
+	void            CopyDepthForCompute(ID3D12GraphicsCommandList* pCmd);
+	void            RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings, bool bAsyncCompute);
+	void            RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FPostProcessParameters& PPParams, const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, D3D12_GPU_VIRTUAL_ADDRESS perFrameCBAddr, const FGraphicsSettings& GFXSettings, bool bHDR);
+	void            RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA);
+	void            RenderOutline(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, bool bMSAA, const std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& rtvHandles);
+	void            RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA, bool bReflectionsEnabled);
+	void            RenderDebugVertexAxes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA);
+	void            ResolveMSAA(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings);
+	void            DownsampleDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTextureID, SRV_ID SRVDepth);
+	void            RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings);
+	void            RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, bool bMSAA);
+	void            CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings);
+	void            TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings);
+	ID3D12Resource* RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams, bool bHDR);
+	void            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, ID3D12Resource* pRscIn, const FUIState& UIState, bool bHDR);
+	void            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, const Window* pWindow);
+	HRESULT         PresentFrame(FWindowRenderContext& ctx);
+	void DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FShadowView& shadowView, size_t iDepthMode);
+
+	void BatchDrawCalls();
 
 //
 // STATIC PUBLIC DATA/INTERFACE

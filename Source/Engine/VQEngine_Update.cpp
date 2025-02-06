@@ -220,7 +220,7 @@ void VQEngine::UpdateThread_PostUpdate()
 		return;
 	}
 	
-	mpScene->PostUpdate(mWorkerThreads, mUIState, FRAME_DATA_INDEX);
+	mpScene->PostUpdate(mWorkerThreads, mUIState, mAppState == EAppState::SIMULATING, FRAME_DATA_INDEX);
 
 	ImGuiIO& io = ImGui::GetIO();
 	HWND hwndMain = mpWinMain->GetHWND();
@@ -497,6 +497,8 @@ void VQEngine::Load_SceneData_Dispatch()
 		
 		for(int i=0; i<FUIState::EEditorMode::NUM_EDITOR_MODES; ++i)
 			mUIState.SelectedEditeeIndex[i] = INVALID_ID;
+
+		mRenderer.ResetNumFramesRendered();
 	}
 
 	// load scene representation from disk
@@ -532,15 +534,6 @@ void VQEngine::Load_SceneData_Dispatch()
 
 }
 
-SRV_ID FLoadingScreenData::GetSelectedLoadingScreenSRV_ID() const
-{
-	assert(SelectedLoadingScreenSRVIndex < SRVs.size());
-	return SRVs[SelectedLoadingScreenSRVIndex];
-}
-void FLoadingScreenData::RotateLoadingScreenImageIndex()
-{
-	SelectedLoadingScreenSRVIndex = (int)MathUtil::RandU(0, (int)SRVs.size());
-}
 void VQEngine::LoadLoadingScreenData()
 {
 	SCOPED_CPU_MARKER("LoadLoadingScreenData");

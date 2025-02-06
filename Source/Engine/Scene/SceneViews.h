@@ -92,6 +92,8 @@ struct FSceneView
 	float                 MainViewCameraYaw = 0.0f;
 	float                 MainViewCameraPitch = 0.0f;
 	float                 HDRIYawOffset = 0.0f;
+	DirectX::XMMATRIX     EnvironmentMapViewProj;
+	const Mesh*           pEnvironmentMapMesh = nullptr;
 	int                   SceneRTWidth = 0;
 	int                   SceneRTHeight = 0;
 	//bool                  bIsPBRLightingUsed;
@@ -99,6 +101,7 @@ struct FSceneView
 	//bool                  bIsIBLEnabled;
 	//Settings::SceneRender sceneRenderSettings;
 	//EnvironmentMap	environmentMap;
+	bool                  bAppIsInSimulationState = false;
 
 	VQ_SHADER_DATA::SceneLighting GPULightingData;
 
@@ -111,7 +114,7 @@ struct FSceneView
 	std::vector<FOutlineRenderCommand> outlineRenderParams;
 	std::vector<MeshRenderCommand_t> debugVertexAxesRenderParams;
 	std::vector<BoundingBoxRenderCommand_t> boundingBoxRenderParams;
-
+	
 #if RENDER_INSTANCED_SCENE_MESHES
 	//--------------------------------------------------------------------------------------------------------------------------------------------
 	// collect instance data based on Material, and then Mesh.

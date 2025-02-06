@@ -33,6 +33,8 @@
 #include "EnvironmentMap.h"
 #include "Settings.h"
 #include "AssetLoader.h"
+#include "LoadingScreen.h"
+
 #include "UI/VQUI.h"
 
 #include "Libs/VQUtils/Source/Multithreading.h"
@@ -60,22 +62,6 @@ struct ImGuiContext;
 //
 // DATA STRUCTS
 //
-
-struct FLoadingScreenData
-{
-	std::array<float, 4> SwapChainClearColor;
-
-	int SelectedLoadingScreenSRVIndex = INVALID_ID;
-	std::mutex Mtx;
-	std::vector<SRV_ID> SRVs;
-
-	SRV_ID GetSelectedLoadingScreenSRV_ID() const;
-	void RotateLoadingScreenImageIndex();
-
-	// TODO: animation resources
-};
-
-
 enum EAppState
 {
 	INITIALIZING = 0,
@@ -93,13 +79,6 @@ struct FResourceNames
 	std::vector<std::string>    mEnvironmentMapPresetNames;
 	std::vector<std::string>    mSceneNames;
 };
-
-struct FRenderStats
-{
-	uint NumDraws;
-	uint NumDispatches;
-};
-
 
 
 //
@@ -156,15 +135,10 @@ public:
 	void RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height, float ResolutionScale);
 	void RenderThread_UnloadWindowSizeDependentResources(HWND hwnd);
 
-	// PRE_RENDER()
-	// - TBA
-	void RenderThread_PreRender();
-
 	// RENDER()
 	// - Records command lists in parallel per FSceneView
 	// - Submits commands to the GPU
 	// - Presents SwapChain
-	void RenderThread_RenderFrame();
 	void RenderThread_RenderMainWindow();
 	void RenderThread_RenderDebugWindow();
 
@@ -288,12 +262,6 @@ private:
 	EventQueue_t                    mEventQueue_WinToVQE_Renderer;
 	EventQueue_t                    mEventQueue_WinToVQE_Update;
 
-	std::vector<Fence>              mAsyncComputeSSAOReadyFence;
-	std::vector<Fence>              mAsyncComputeSSAODoneFence;
-	std::atomic<bool>               mAsyncComputeWorkSubmitted = false;
-	std::atomic<bool>               mSubmitWorkerFinished = true;
-	bool                            mWaitForSubmitWorker = false;
-
 	// load events
 	std::future<bool>              mbLoadingScreenLoaded;
 
@@ -340,7 +308,6 @@ private:
 	// ui
 	ImGuiContext*                   mpImGuiContext;
 	FUIState                        mUIState;
-	FRenderStats                    mRenderStats;
 
 	// timer / profiler
 	Timer                           mTimer;
@@ -376,9 +343,6 @@ private:
 	void                            Load_SceneData_Dispatch();
 	void                            LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMapMip0Resolution);
 
-	HRESULT                         RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderContext& ctx);
-	HRESULT                         RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx);
-
 	//
 	// EVENTS
 	//
@@ -396,39 +360,6 @@ private:
 	void                            UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent);
 
 	//
-	// FRAME RENDERING PIPELINE
-	//
-	void                            TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
-	void                            RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView);
-	void                            RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView);
-	void                            RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView, size_t iBegin, size_t NumPointLights);
-	void                            RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, D3D12_GPU_VIRTUAL_ADDRESS perFrameCBAddr);
-	void                            TransitionDepthPrePassForWrite(ID3D12GraphicsCommandList* pCmd, bool bMSAA);
-	void                            TransitionDepthPrePassForRead(ID3D12GraphicsCommandList* pCmd, bool bMSAA);
-	void                            TransitionDepthPrePassForReadAsyncCompute(ID3D12GraphicsCommandList* pCmd);
-	void                            TransitionDepthPrePassMSAAResolve(ID3D12GraphicsCommandList* pCmd);
-	void                            ResolveMSAA_DepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap);
-	void                            CopyDepthForCompute(ID3D12GraphicsCommandList* pCmd);
-	void                            RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView);
-	void                            RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FPostProcessParameters& PPParams, const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, D3D12_GPU_VIRTUAL_ADDRESS perFrameCBAddr);
-	void                            RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA);
-	void                            RenderOutline(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, bool bMSAA, const std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& rtvHandles);
-	void                            RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA, bool bReflectionsEnabled);
-	void                            RenderDebugVertexAxes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA);
-	void                            ResolveMSAA(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams);
-	void                            DownsampleDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTextureID, SRV_ID SRVDepth);
-	void                            RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
-	void                            RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, bool bMSAA);
-	void                            CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
-	void                            TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams);
-	ID3D12Resource*                 RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams);
-	void                            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, ID3D12Resource* pRscIn);
-	void                            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
-	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
-	
-	bool                            ShouldEnableAsyncCompute();
-
-	//
 	// UI
 	//
 	void                            UpdateUIState(HWND hwnd, float dt);
@@ -442,10 +373,6 @@ private:
 	void                            DrawLightEditor();
 	void                            DrawObjectEditor();
 
-	//
-	// RENDER HELPERS
-	//
-	void                            DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FShadowView& shadowView, size_t iDepthMode);
 
 	std::unique_ptr<Window>&        GetWindow(HWND hwnd);
 	const std::unique_ptr<Window>&  GetWindow(HWND hwnd) const;
@@ -476,19 +403,6 @@ private:
 
 	// Busy waits until render thread catches up with update thread
 	void                            WaitUntilRenderingFinishes();
-
-	// temp data
-	struct FFrameConstantBuffer { DirectX::XMMATRIX matModelViewProj; };
-	struct FFrameConstantBuffer2 { DirectX::XMMATRIX matModelViewProj; int iTextureConfig; int iTextureOutput; };
-	struct FFrameConstantBufferUnlit { DirectX::XMMATRIX matModelViewProj; DirectX::XMFLOAT4 color; };
-	struct FFrameConstantBufferUnlitInstanced { DirectX::XMMATRIX matModelViewProj[MAX_INSTANCE_COUNT__UNLIT_SHADER]; DirectX::XMFLOAT4 color; };
-	struct FObjectConstantBufferDebugVertexVectors 
-	{ 
-		DirectX::XMMATRIX matWorld;
-		DirectX::XMMATRIX matNormal;
-		DirectX::XMMATRIX matViewProj;
-		float LocalAxisSize;
-	};
 };
 
 

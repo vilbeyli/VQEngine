@@ -600,6 +600,19 @@ static void ExtractSceneView(FSceneView& SceneView, std::unordered_map<const Cam
 	SceneView.MainViewCameraPitch = cam.GetPitch();
 	SceneView.HDRIYawOffset = SceneView.sceneParameters.fYawSliderValue * XM_PI * 2.0f;
 
+	{
+		Camera skyCam = cam.Clone();
+		FCameraParameters p = {};
+		p.bInitializeCameraController = false;
+		p.ProjectionParams = skyCam.GetProjectionParameters();
+		p.ProjectionParams.bPerspectiveProjection = true;
+		p.ProjectionParams.FieldOfView = p.ProjectionParams.FieldOfView * RAD2DEG;
+		p.x = p.y = p.z = 0;
+		p.Yaw = (SceneView.MainViewCameraYaw + SceneView.HDRIYawOffset) * RAD2DEG;
+		p.Pitch = SceneView.MainViewCameraPitch * RAD2DEG;
+		skyCam.InitializeCamera(p);
+		SceneView.EnvironmentMapViewProj = skyCam.GetViewMatrix()* skyCam.GetProjectionMatrix();
+	}
 }
 
 static void CollectDebugVertexDrawParams(FSceneView& SceneView,
@@ -678,7 +691,7 @@ static void ResetInstanceCounts(size_t NumFrustums, FSceneView& SceneView, std::
 	}
 }
 
-void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UIState, int FRAME_DATA_INDEX)
+void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UIState, bool AppInSimulationState, int FRAME_DATA_INDEX)
 {
 	SCOPED_CPU_MARKER("Scene::PostUpdate()");
 	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
@@ -688,6 +701,8 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 	const Camera& cam = mCameras[mIndex_SelectedCamera];
 	
 	ExtractSceneView(SceneView, mViewProjectionMatrixHistory, cam);
+	SceneView.pEnvironmentMapMesh = &mMeshes.at((MeshID)EBuiltInMeshes::CUBE);
+	SceneView.bAppIsInSimulationState = AppInSimulationState;
 
 	// reset shadow view
 	ShadowView.NumPointShadowViews = 0;
