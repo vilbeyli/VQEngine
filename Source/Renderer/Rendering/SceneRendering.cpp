@@ -71,7 +71,7 @@ static void CopyPerObjectConstantBufferData(
 	using namespace VQ_SHADER_DATA;
 
 	int iCB = 0;
-	for (const MeshRenderCommand_t& meshRenderCmd : SceneView.meshRenderParams)
+	for (const MeshRenderData_t& meshRenderCmd : SceneView.meshRenderParams)
 	{
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 		PerObjectData* pPerObj = {};
@@ -884,7 +884,7 @@ void VQRenderer::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, Dynamic
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 
 	//Log::Info("DrawShadowMeshList(%d)", shadowView.meshRenderParams.size());
-	for (const FInstancedShadowMeshRenderCommand& renderCmd : shadowView.meshRenderParams)
+	for (const FInstancedShadowMeshRenderData& renderCmd : shadowView.meshRenderParams)
 	{
 		const uint32 NumInstances = (uint32)renderCmd.matWorldViewProj.size();
 		assert(NumInstances == renderCmd.matWorldViewProj.size());
@@ -971,7 +971,7 @@ void VQRenderer::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, Dynamic
 		XMMATRIX matWorld;
 	};
 
-	for (const FShadowMeshRenderCommand& renderCmd : shadowView.meshRenderParams)
+	for (const FShadowMeshRenderData& renderCmd : shadowView.meshRenderParams)
 	{
 		SCOPED_CPU_MARKER("Process_ShadowMeshRenderCommand");
 		// set constant buffer data
@@ -1218,7 +1218,7 @@ void VQRenderer::RenderDepthPrePass(
 	// draw meshes
 	const size_t iMSAA = bMSAA ? 1 : 0;
 	const size_t iFaceCull = 2; // 2:back
-	for (const MeshRenderCommand_t& meshRenderCmd : SceneView.meshRenderParams)
+	for (const MeshRenderData_t& meshRenderCmd : SceneView.meshRenderParams)
 	{
 		const Material& mat = *meshRenderCmd.pMaterial;
 		const auto VBIBIDs = meshRenderCmd.vertexIndexBuffer;
@@ -1642,7 +1642,7 @@ void VQRenderer::RenderSceneColor(
 
 		int iCB = 0;
 		PSO_ID psoID_Prev = -1;
-		for (const MeshRenderCommand_t& meshRenderCmd : SceneView.meshRenderParams)
+		for (const MeshRenderData_t& meshRenderCmd : SceneView.meshRenderParams)
 		{
 			const Material& mat = *meshRenderCmd.pMaterial;
 
@@ -1715,7 +1715,7 @@ void VQRenderer::RenderSceneColor(
 		
 		pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
 
-		for (const FLightRenderCommand& lightRenderCmd : SceneView.lightRenderParams)
+		for (const FLightRenderData& lightRenderCmd : SceneView.lightRenderParams)
 		{
 			FFrameConstantBufferUnlit* pCBuffer = {};
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
@@ -1785,7 +1785,7 @@ void VQRenderer::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 		pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
 
 		// set IA
-		const FInstancedBoundingBoxRenderCommand& params = *SceneView.boundingBoxRenderParams.begin();
+		const FInstancedBoundingBoxRenderData& params = *SceneView.boundingBoxRenderParams.begin();
 		const auto VBIBIDs = params.vertexIndexBuffer;
 		const uint32 NumIndices = params.numIndices;
 		const BufferID& VB_ID = VBIBIDs.first;
@@ -1803,7 +1803,7 @@ void VQRenderer::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 			: EBuiltinPSOs::WIREFRAME_INSTANCED_PSO)
 		);
 
-		for (const FInstancedBoundingBoxRenderCommand& BBRenderCmd : SceneView.boundingBoxRenderParams)
+		for (const FInstancedBoundingBoxRenderData& BBRenderCmd : SceneView.boundingBoxRenderParams)
 		{
 			const int NumInstances = (int)BBRenderCmd.matWorldViewProj.size();
 			if (NumInstances == 0)
@@ -1828,7 +1828,7 @@ void VQRenderer::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 		);
 
 		const uint32 NumInstances = 1;
-		for (const FBoundingBoxRenderCommand& BBRenderCmd : SceneView.boundingBoxRenderParams)
+		for (const FBoundingBoxRenderData& BBRenderCmd : SceneView.boundingBoxRenderParams)
 		{
 			// set constant buffer data
 			FFrameConstantBufferUnlit* pCBuffer = {};
@@ -1879,7 +1879,7 @@ void VQRenderer::RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 
 		std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddresses(SceneView.lightBoundsRenderParams.size());
 		int iCbAddress = 0;
-		for (const FLightRenderCommand& lightBoundRenderCmd : SceneView.lightBoundsRenderParams)
+		for (const FLightRenderData& lightBoundRenderCmd : SceneView.lightBoundsRenderParams)
 		{
 			// set constant buffer data
 			FFrameConstantBufferUnlit* pCBuffer = {};
@@ -1907,7 +1907,7 @@ void VQRenderer::RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 		}
 
 		pCmd->SetPipelineState(this->GetPSO(bMSAA ? EBuiltinPSOs::WIREFRAME_PSO_MSAA_4 : EBuiltinPSOs::WIREFRAME_PSO));
-		for (const FLightRenderCommand& lightBoundRenderCmd : SceneView.lightBoundsRenderParams)
+		for (const FLightRenderData& lightBoundRenderCmd : SceneView.lightBoundsRenderParams)
 		{
 			FFrameConstantBufferUnlit* pCBuffer = {};
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
@@ -1950,7 +1950,7 @@ void VQRenderer::RenderDebugVertexAxes(ID3D12GraphicsCommandList* pCmd, DynamicB
 
 	pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ZPrePass));
 	pCmd->SetPipelineState(this->GetPSO(bMSAA ? EBuiltinPSOs::DEBUGVERTEX_LOCALSPACEVECTORS_PSO_MSAA_4 : EBuiltinPSOs::DEBUGVERTEX_LOCALSPACEVECTORS_PSO));
-	for (const MeshRenderCommand_t& cmd : SceneView.debugVertexAxesRenderParams)
+	for (const MeshRenderData_t& cmd : SceneView.debugVertexAxesRenderParams)
 	{
 		FObjectConstantBufferDebugVertexVectors* pCBuffer = {};
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};

@@ -395,7 +395,7 @@ static void ToggleBool(bool& b) { b = !b; }
 
 
 static void RecordRenderLightBoundsCommand(const Light& l,
-	std::vector<FLightRenderCommand>& cmds,
+	std::vector<FLightRenderData>& cmds,
 	const XMVECTOR& CameraPosition,
 	const Scene* pScene
 )
@@ -408,7 +408,7 @@ static void RecordRenderLightBoundsCommand(const Light& l,
 	const float attenuation = 1.0f / distanceSq;
 	const float attenuatedBrightness = l.Brightness * attenuation;
 
-	FLightRenderCommand cmd;
+	FLightRenderData cmd;
 	cmd.color = XMFLOAT4(
 		l.Color.x //* attenuatedBrightness
 		, l.Color.y //* attenuatedBrightness
@@ -529,7 +529,7 @@ void Scene::Update(float dt, int FRAME_DATA_INDEX)
 }
 
 static void RecordOutlineRenderCommands(
-	std::vector<FOutlineRenderCommand>& cmds,
+	std::vector<FOutlineRenderData>& cmds,
 	const std::vector<size_t>& objHandles,
 	const Scene* pScene,
 	const XMMATRIX& matView,
@@ -559,7 +559,7 @@ static void RecordOutlineRenderCommands(
 			MaterialID matID = pair.second;
 			const Material& mat = pScene->GetMaterial(matID);
 			
-			FOutlineRenderCommand cmd = {};
+			FOutlineRenderData cmd = {};
 			cmd.pMesh = &pScene->GetMesh(meshID);
 			cmd.matID = matID;
 			cmd.pMaterial = &pScene->GetMaterial(matID);
@@ -659,7 +659,7 @@ static void CollectDebugVertexDrawParams(FSceneView& SceneView,
 			MeshID meshID = pair.first;
 			const Mesh& mesh = mMeshes.at(meshID);
 
-			MeshRenderCommand_t& cmd = SceneView.debugVertexAxesRenderParams[i];
+			MeshRenderData_t& cmd = SceneView.debugVertexAxesRenderParams[i];
 			cmd.matWorld.resize(1);
 			cmd.matNormal.resize(1);
 
@@ -1232,7 +1232,7 @@ void Scene::CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerTh
 
 
 static void BatchBoundingBoxRenderCommandData(
-	std::vector<FInstancedBoundingBoxRenderCommand>& cmds
+	std::vector<FInstancedBoundingBoxRenderData>& cmds
 	, const std::vector<FBoundingBox>& BBs
 	, const XMMATRIX viewProj
 	, const XMFLOAT4 Color
@@ -1246,7 +1246,7 @@ static void BatchBoundingBoxRenderCommandData(
 	int iBB = 0;
 	while (NumBBsToProcess > 0)
 	{
-		FInstancedBoundingBoxRenderCommand& cmd = cmds[iBegin + i];
+		FInstancedBoundingBoxRenderData& cmd = cmds[iBegin + i];
 		cmd.matWorldViewProj.resize(std::min(MAX_INSTANCE_COUNT__UNLIT_SHADER, (size_t)NumBBsToProcess));
 		cmd.vertexIndexBuffer = VBIB;
 		cmd.numIndices = 36; // TODO: remove magic number
@@ -1278,7 +1278,7 @@ void Scene::BatchInstanceData_BoundingBox(FSceneView& SceneView
 	
 	const auto VBIB = this->mMeshes.at(EBuiltInMeshes::CUBE).GetIABufferIDs();
 	auto fnBatch = [&UpdateWorkerThreadPool, &VBIB](
-		std::vector<FInstancedBoundingBoxRenderCommand>& cmds
+		std::vector<FInstancedBoundingBoxRenderData>& cmds
 		, const std::vector<FBoundingBox>& BBs
 		, size_t iBoundingBox
 		, const XMFLOAT4 BBColor
@@ -1365,7 +1365,7 @@ void Scene::BatchInstanceData_BoundingBox(FSceneView& SceneView
 }
 
 using namespace InstanceBatching;
-static void ResizeDrawInstanceArrays(FInstancedMeshRenderCommand& cmd, size_t sz, size_t iCmd)
+static void ResizeDrawInstanceArrays(FInstancedMeshRenderData& cmd, size_t sz, size_t iCmd)
 {
 	//Log::Info("ResizeDrawParamInstanceArrays(cmds[%d], %d);", sz, iCmd);
 	cmd.matWorld.resize(sz);
@@ -1375,7 +1375,7 @@ static void ResizeDrawInstanceArrays(FInstancedMeshRenderCommand& cmd, size_t sz
 	cmd.objectID.resize(sz);
 	cmd.projectedArea.resize(sz);
 }
-static void ResizeDrawInstanceArrays(FInstancedShadowMeshRenderCommand& cmd, size_t sz, size_t iCmd)
+static void ResizeDrawInstanceArrays(FInstancedShadowMeshRenderData& cmd, size_t sz, size_t iCmd)
 {
 	//Log::Info("ResizeDrawParamInstanceArrays(cmds[%d], %d);", sz, iCmd);
 	cmd.matWorld.resize(sz);
@@ -1467,7 +1467,7 @@ static void AllocInstanceData(std::unordered_map<uint64, TMeshInstanceDataArray>
 	}
 }
 
-static void SetParamData(MeshRenderCommand_t& cmd,
+static void SetParamData(MeshRenderData_t& cmd,
 	int iInst,
 	const Transform& tf,
 	const XMMATRIX& viewProj,
@@ -1512,7 +1512,7 @@ static void SetParamData(MeshRenderCommand_t& cmd,
 	}
 #endif
 }
-static void SetParamData(FInstancedShadowMeshRenderCommand& cmd,
+static void SetParamData(FInstancedShadowMeshRenderData& cmd,
 	int iInst,
 	const Transform& tf,
 	const XMMATRIX& viewProj,
@@ -1958,7 +1958,7 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 
 static void RecordRenderLightBoundsCommands(
 	const std::vector<Light>& vLights, 
-	std::vector<FLightRenderCommand>& cmds,
+	std::vector<FLightRenderData>& cmds,
 	const XMVECTOR& CameraPosition,
 	const Scene* pScene
 )
@@ -1974,7 +1974,7 @@ static void RecordRenderLightBoundsCommands(
 
 static void RecordRenderLightMeshCommands(
 	const std::vector<Light>& vLights,
-	std::vector<FLightRenderCommand>& cmds,
+	std::vector<FLightRenderData>& cmds,
 	const XMVECTOR& CameraPosition,
 	const Scene* pScene,
 	bool bAttenuateLight = true
@@ -1992,7 +1992,7 @@ static void RecordRenderLightMeshCommands(
 		const float distanceSq = dot.m128_f32[0];
 		const float attenuation = 1.0f / distanceSq;
 		const float attenuatedBrightness = l.Brightness * attenuation;
-		FLightRenderCommand cmd;
+		FLightRenderData cmd;
 		cmd.color = XMFLOAT4(
 			  l.Color.x * bAttenuateLight ? attenuatedBrightness : 1.0f
 			, l.Color.y * bAttenuateLight ? attenuatedBrightness : 1.0f

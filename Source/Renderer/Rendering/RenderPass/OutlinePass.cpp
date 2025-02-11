@@ -143,7 +143,7 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 		}
 
 		int iCB = 0;
-		for (const FOutlineRenderCommand& cmd : SceneView.outlineRenderParams)
+		for (const FOutlineRenderData& cmd : SceneView.outlineRenderParams)
 		{
 			// set PSO
 			const Material& mat = *cmd.pMaterial;
@@ -169,8 +169,8 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 			D3D12_GPU_VIRTUAL_ADDRESS& cbAddr = cbAddrs[iCB];
 			if (iPass == 0) // allocate only on the first go
 			{
-				FOutlineRenderCommand::FConstantBuffer* pCBuffer = {};
-				pHeap->AllocConstantBuffer(sizeof(FOutlineRenderCommand::FConstantBuffer), (void**)(&pCBuffer), &cbAddr);
+				FOutlineRenderData::FConstantBuffer* pCBuffer = {};
+				pHeap->AllocConstantBuffer(sizeof(FOutlineRenderData::FConstantBuffer), (void**)(&pCBuffer), &cbAddr);
 				memcpy(pCBuffer, &cmd.cb, sizeof(cmd.cb));
 			}
 			pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);

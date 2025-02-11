@@ -191,7 +191,7 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 
 	// draw meshes
 	int iCB = 0;
-	for (const MeshRenderCommand_t& meshRenderCmd : pParams->pSceneView->meshRenderParams)
+	for (const MeshRenderData_t& meshRenderCmd : pParams->pSceneView->meshRenderParams)
 	{
 		using namespace VQ_SHADER_DATA;
 		const Material& mat = *meshRenderCmd.pMaterial;

@@ -25,13 +25,13 @@
 // ------------------------------------------------------------------------------------
 // SINGLE DRAW COMMANDS
 // ------------------------------------------------------------------------------------
-struct FMeshRenderCommandBase
+struct FMeshRenderDataBase
 {
 	const Mesh* pMesh = nullptr;
 	DirectX::XMMATRIX matWorldTransformation;
 	DirectX::XMMATRIX matWorldTransformationPrev;
 };
-struct FMeshRenderCommand : public FMeshRenderCommandBase
+struct FMeshRenderData : public FMeshRenderDataBase
 {
 	MaterialID matID = INVALID_ID;
 	DirectX::XMMATRIX matNormalTransformation; //ID ?
@@ -40,16 +40,16 @@ struct FMeshRenderCommand : public FMeshRenderCommandBase
 	std::string ModelName;
 	std::string MaterialName;
 };
-struct FShadowMeshRenderCommand : public FMeshRenderCommandBase
+struct FShadowMeshRenderData : public FMeshRenderDataBase
 {
 	DirectX::XMMATRIX matWorldViewProj;
 	MaterialID matID = INVALID_ID;
 };
-struct FWireframeRenderCommand : public FMeshRenderCommandBase
+struct FWireframeRenderData : public FMeshRenderDataBase
 {
 	DirectX::XMFLOAT4 color;
 };
-struct FOutlineRenderCommand
+struct FOutlineRenderData
 {
 	const Mesh* pMesh = nullptr;
 	MaterialID matID = INVALID_ID;
@@ -66,14 +66,14 @@ struct FOutlineRenderCommand
 		float heightDisplacement;
 	} cb;
 };
-using FLightRenderCommand = FWireframeRenderCommand;
-using FBoundingBoxRenderCommand = FWireframeRenderCommand;
+using FLightRenderData = FWireframeRenderData;
+using FBoundingBoxRenderData = FWireframeRenderData;
 
 
 // ------------------------------------------------------------------------------------
 // INSTANCED DRAW COMMANDS
 // ------------------------------------------------------------------------------------
-struct FInstancedMeshRenderCommandBase
+struct FInstancedMeshRenderDataBase
 {
 	int numIndices = 0;
 	std::pair<BufferID, BufferID> vertexIndexBuffer;
@@ -81,25 +81,25 @@ struct FInstancedMeshRenderCommandBase
 	const Material* pMaterial = nullptr;
 	std::vector<DirectX::XMMATRIX> matWorldViewProj;
 };
-struct FInstancedMotionVectorMeshCommand
+struct FInstancedMotionVectorMeshData
 {
 	std::vector<DirectX::XMMATRIX> matWorldViewProjPrev;
 };
-struct FInstancedMeshRenderCommand : public FInstancedMeshRenderCommandBase, public FInstancedMotionVectorMeshCommand
+struct FInstancedMeshRenderData : public FInstancedMeshRenderDataBase, public FInstancedMotionVectorMeshData
 {
 	std::vector<DirectX::XMMATRIX> matNormal;
 	std::vector<DirectX::XMMATRIX> matWorld;
 	std::vector<int> objectID;
 	std::vector<float> projectedArea;
 };
-struct FInstancedWireframeRenderCommand : public FInstancedMeshRenderCommandBase
+struct FInstancedWireframeRenderData : public FInstancedMeshRenderDataBase
 {
 	// single color for all instances, ideally we could make the color an instance data
 	DirectX::XMFLOAT4 color; 
 };
-struct FInstancedShadowMeshRenderCommand : public FInstancedMeshRenderCommandBase
+struct FInstancedShadowMeshRenderData : public FInstancedMeshRenderDataBase
 {
 	std::vector<DirectX::XMMATRIX> matWorld;
 };
 
-using FInstancedBoundingBoxRenderCommand = FInstancedWireframeRenderCommand;
+using FInstancedBoundingBoxRenderData = FInstancedWireframeRenderData;

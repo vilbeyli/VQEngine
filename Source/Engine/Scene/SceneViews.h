@@ -34,15 +34,15 @@ using MeshLookup_t = std::unordered_map<MeshID, Mesh>;
 using ModelLookup_t = std::unordered_map<ModelID, Model>;
 using MaterialLookup_t = std::unordered_map<MaterialID, Material>;
 #if RENDER_INSTANCED_SCENE_MESHES
-using MeshRenderCommand_t = FInstancedMeshRenderCommand;
+using MeshRenderData_t = FInstancedMeshRenderData;
 #else
-using MeshRenderCommand_t = FMeshRenderCommand;
+using MeshRenderData_t = FMeshRenderData;
 #endif
 
 #if RENDER_INSTANCED_BOUNDING_BOXES
-using BoundingBoxRenderCommand_t = FInstancedBoundingBoxRenderCommand;
+using BoundingBoxRenderData_t = FInstancedBoundingBoxRenderData;
 #else
-using BoundingBoxRenderCommand_t = FBoundingBoxRenderCommand;
+using BoundingBoxRenderData_t = FBoundingBoxRenderData;
 #endif
 struct Transform;
 class Scene;
@@ -108,12 +108,12 @@ struct FSceneView
 	FSceneRenderParameters sceneParameters;
 	FPostProcessParameters postProcessParameters;
 
-	std::vector<MeshRenderCommand_t>  meshRenderParams;
-	std::vector<FLightRenderCommand> lightRenderParams;
-	std::vector<FLightRenderCommand> lightBoundsRenderParams;
-	std::vector<FOutlineRenderCommand> outlineRenderParams;
-	std::vector<MeshRenderCommand_t> debugVertexAxesRenderParams;
-	std::vector<BoundingBoxRenderCommand_t> boundingBoxRenderParams;
+	std::vector<MeshRenderData_t>  meshRenderParams;
+	std::vector<FLightRenderData> lightRenderParams;
+	std::vector<FLightRenderData> lightBoundsRenderParams;
+	std::vector<FOutlineRenderData> outlineRenderParams;
+	std::vector<MeshRenderData_t> debugVertexAxesRenderParams;
+	std::vector<BoundingBoxRenderData_t> boundingBoxRenderParams;
 	
 #if RENDER_INSTANCED_SCENE_MESHES
 	//--------------------------------------------------------------------------------------------------------------------------------------------
@@ -204,9 +204,9 @@ struct FShadowView
 	std::unordered_map<uint64, FInstanceDataArray> drawParamLookup;
 	std::vector<FInstanceDataWriteParam> mRenderCmdInstanceDataWriteIndex; // drawParamLookup --> meshRenderParams
 	////--------------------------------------------------------------------------------------------------------------------------------------------
-	std::vector<FInstancedShadowMeshRenderCommand> meshRenderParams; // per LOD mesh
+	std::vector<FInstancedShadowMeshRenderData> meshRenderParams; // per LOD mesh
 #else
-	std::vector<FShadowMeshRenderCommand> meshRenderParams;
+	std::vector<FShadowMeshRenderData> meshRenderParams;
 #endif
 };
 
