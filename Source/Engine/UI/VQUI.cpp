@@ -306,7 +306,7 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
 #endif
 	FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
-	FSceneRenderParameters& SceneParams = mpScene->GetSceneView(FRAME_DATA_INDEX).sceneParameters;
+	FSceneRenderOptions& SceneParams = mpScene->GetSceneView(FRAME_DATA_INDEX).sceneRenderOptions;
 	ImGuiStyle& style = ImGui::GetStyle();
 
 	// ----------------------------------
@@ -562,7 +562,7 @@ static void DrawFrameTimeChart()
 // VQEngine UI Drawing
 //
 
-void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderParameters& SceneRenderParams)
+void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderOptions& SceneRenderParams)
 {
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
@@ -934,7 +934,7 @@ void VQEngine::DrawPostProcessSettings(FPostProcessParameters& PPParams)
 
 }
 
-void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams, FPostProcessParameters& PPParams)
+void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams, FPostProcessParameters& PPParams)
 {
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
@@ -1091,7 +1091,7 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 		{
 		case EReflections::SCREEN_SPACE_REFLECTIONS__FFX:
 		{
-			FSceneRenderParameters::FFFX_SSSR_UIParameters& FFXParams = SceneRenderParams.FFX_SSSRParameters;
+			FSceneRenderOptions::FFFX_SSSR_UIOptions& FFXParams = SceneRenderParams.FFX_SSSRParameters;
 
 			ImGui::PushStyleColor(ImGuiCol_Header, UI_COLLAPSING_HEADER_COLOR_VALUE);
 			if (ImGui::CollapsingHeader("SSSR Settings"))

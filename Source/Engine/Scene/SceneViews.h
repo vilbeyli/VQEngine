@@ -48,9 +48,9 @@ struct Transform;
 class Scene;
 
 
-struct FSceneRenderParameters
+struct FSceneRenderOptions
 {
-	struct FFFX_SSSR_UIParameters
+	struct FFFX_SSSR_UIOptions
 	{
 		bool    bEnableTemporalVarianceGuidedTracing = true;
 		int     maxTraversalIterations = 128;
@@ -74,7 +74,7 @@ struct FSceneRenderParameters
 	float fYawSliderValue = 0.0f;
 	float fAmbientLightingFactor = 0.055f;
 	bool bScreenSpaceAO = true;
-	FFFX_SSSR_UIParameters FFX_SSSRParameters = {};
+	FFFX_SSSR_UIOptions FFX_SSSRParameters = {};
 	DirectX::XMFLOAT4 OutlineColor = DirectX::XMFLOAT4(1.0f, 0.647f, 0.1f, 1.0f);
 };
 
@@ -105,7 +105,7 @@ struct FSceneView
 
 	VQ_SHADER_DATA::SceneLighting GPULightingData;
 
-	FSceneRenderParameters sceneParameters;
+	FSceneRenderOptions sceneRenderOptions;
 	FPostProcessParameters postProcessParameters;
 
 	std::vector<MeshRenderData_t>  meshRenderParams;

@@ -69,6 +69,8 @@ enum class EDrawMode
 
 	NUM_DRAW_MODES,
 };
+
+// TODO: separate post process options from parameters (shader data)
 struct FPostProcessParameters
 {
 	enum EUpscalingAlgorithm

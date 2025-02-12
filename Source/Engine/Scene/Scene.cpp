@@ -500,7 +500,7 @@ void Scene::PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX)
 	FSceneView& SceneViewPrev = mFrameSceneViews[FRAME_DATA_PREV_INDEX];
 	// bring over the parameters from the last frame
 	SceneViewCurr.postProcessParameters = SceneViewPrev.postProcessParameters;
-	SceneViewCurr.sceneParameters = SceneViewPrev.sceneParameters;
+	SceneViewCurr.sceneRenderOptions = SceneViewPrev.sceneRenderOptions;
 #endif
 
 
@@ -600,7 +600,7 @@ static void ExtractSceneView(FSceneView& SceneView, std::unordered_map<const Cam
 	SceneView.cameraPosition = XMLoadFloat3(&camPos);
 	SceneView.MainViewCameraYaw = cam.GetYaw();
 	SceneView.MainViewCameraPitch = cam.GetPitch();
-	SceneView.HDRIYawOffset = SceneView.sceneParameters.fYawSliderValue * XM_PI * 2.0f;
+	SceneView.HDRIYawOffset = SceneView.sceneRenderOptions.fYawSliderValue * XM_PI * 2.0f;
 
 	{
 		Camera skyCam = cam.Clone();
@@ -626,7 +626,7 @@ static void CollectDebugVertexDrawParams(FSceneView& SceneView,
 )
 {
 	SCOPED_CPU_MARKER("CollectDebugVertexDrawParams");
-	if (!SceneView.sceneParameters.bDrawVertexLocalAxes)
+	if (!SceneView.sceneRenderOptions.bDrawVertexLocalAxes)
 	{
 		return;
 	}
@@ -733,7 +733,7 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 	BatchInstanceData(SceneView, UpdateWorkerThreadPool);
 	
 	RecordRenderLightMeshCommands(SceneView);
-	RecordOutlineRenderCommands(SceneView.outlineRenderParams, mSelectedObjects, this, SceneView.view, SceneView.proj, SceneView.sceneParameters.OutlineColor);
+	RecordOutlineRenderCommands(SceneView.outlineRenderParams, mSelectedObjects, this, SceneView.view, SceneView.proj, SceneView.sceneRenderOptions.OutlineColor);
 
 	if (UIState.bDrawLightVolume)
 	{
@@ -823,12 +823,12 @@ void Scene::HandleInput(FSceneView& SceneView)
 	}
 	if (mInput.IsKeyTriggered("L"))
 	{
-		ToggleBool(SceneView.sceneParameters.bDrawLightBounds);
+		ToggleBool(SceneView.sceneRenderOptions.bDrawLightBounds);
 	}
 	if (mInput.IsKeyTriggered("N"))
 	{
-		if(bIsShiftDown) ToggleBool(SceneView.sceneParameters.bDrawGameObjectBoundingBoxes);
-		else             ToggleBool(SceneView.sceneParameters.bDrawMeshBoundingBoxes);
+		if(bIsShiftDown) ToggleBool(SceneView.sceneRenderOptions.bDrawGameObjectBoundingBoxes);
+		else             ToggleBool(SceneView.sceneRenderOptions.bDrawMeshBoundingBoxes);
 	}
 
 	
@@ -1084,7 +1084,7 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 			const std::vector<int>& MeshBB_NumMeshLODs = BVH.GetNumMeshesLODs();
 
 			mFrustumCullWorkerContext.vBoundingBoxList = BVH.mMeshBoundingBoxes;
-			const bool bForceLOD0_ShadowView = SceneView.sceneParameters.bForceLOD0_ShadowView;
+			const bool bForceLOD0_ShadowView = SceneView.sceneRenderOptions.bForceLOD0_ShadowView;
 			std::function<bool(const FFrustumCullWorkerContext::FCullResult&, const FFrustumCullWorkerContext::FCullResult&)> fnShadowViewSort = 
 				[&MeshBB_MeshID, &MeshBB_MatID, &MeshBB_NumMeshLODs, bForceLOD0_ShadowView]
 				(const FFrustumCullWorkerContext::FCullResult& l, const FFrustumCullWorkerContext::FCullResult& r)
@@ -1132,7 +1132,7 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 			// main view
 			SCOPED_CPU_MARKER(fnMark("InitWorkerContexts", vRanges[0].first, vRanges[0].second).c_str());
 
-			const bool bForceLOD0 = SceneView.sceneParameters.bForceLOD0_SceneView;
+			const bool bForceLOD0 = SceneView.sceneRenderOptions.bForceLOD0_SceneView;
 			std::function<bool(const FFrustumCullWorkerContext::FCullResult&, const FFrustumCullWorkerContext::FCullResult&)> fnMainViewSort = 
 				[&MeshBB_MeshID, &MeshBB_MatID, bForceLOD0]
 				(const FFrustumCullWorkerContext::FCullResult& l, const FFrustumCullWorkerContext::FCullResult& r)
@@ -1269,8 +1269,8 @@ void Scene::BatchInstanceData_BoundingBox(FSceneView& SceneView
 	, const DirectX::XMMATRIX matViewProj) const
 {
 	SCOPED_CPU_MARKER("BoundingBox");
-	const bool bDrawGameObjectBBs = SceneView.sceneParameters.bDrawGameObjectBoundingBoxes;
-	const bool bDrawMeshBBs = SceneView.sceneParameters.bDrawMeshBoundingBoxes;
+	const bool bDrawGameObjectBBs = SceneView.sceneRenderOptions.bDrawGameObjectBoundingBoxes;
+	const bool bDrawMeshBBs = SceneView.sceneRenderOptions.bDrawMeshBoundingBoxes;
 
 	const float Transparency = 0.75f;
 	const XMFLOAT4 BBColor_GameObj = XMFLOAT4(0.0f, 0.2f, 0.8f, Transparency);
@@ -1327,7 +1327,7 @@ void Scene::BatchInstanceData_BoundingBox(FSceneView& SceneView
 	// Game Object Bounding Boxes
 	// --------------------------------------------------------------
 	size_t iBoundingBox = 0;
-	if (SceneView.sceneParameters.bDrawGameObjectBoundingBoxes)
+	if (SceneView.sceneRenderOptions.bDrawGameObjectBoundingBoxes)
 	{
 #if RENDER_INSTANCED_BOUNDING_BOXES 
 		fnBatch(SceneView.boundingBoxRenderParams
@@ -1346,7 +1346,7 @@ void Scene::BatchInstanceData_BoundingBox(FSceneView& SceneView
 	// --------------------------------------------------------------
 	// Mesh Bounding Boxes
 	// --------------------------------------------------------------
-	if (SceneView.sceneParameters.bDrawMeshBoundingBoxes)
+	if (SceneView.sceneRenderOptions.bDrawMeshBoundingBoxes)
 	{
 		iBoundingBox = NumGameObjectBBRenderCmds;
 
@@ -1873,8 +1873,8 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 
 	const size_t NumSceneViewMeshes = vMainViewCullResults.size();
 	const bool bUseWorkerThreadForMainView = NUM_MIN_SCENE_MESHES_FOR_THREADING <= NumSceneViewMeshes;
-	const bool bForceLOD0_SceneView = SceneView.sceneParameters.bForceLOD0_SceneView;
-	const bool bForceLOD0_ShadowView = SceneView.sceneParameters.bForceLOD0_ShadowView;
+	const bool bForceLOD0_SceneView = SceneView.sceneRenderOptions.bForceLOD0_SceneView;
+	const bool bForceLOD0_ShadowView = SceneView.sceneRenderOptions.bForceLOD0_ShadowView;
 
 	std::vector< FFrustumRenderCommandRecorderContext> WorkerContexts;
 	const size_t NumShadowMeshFrustums = ctx.NumValidInputElements - 1; // exclude main view
@@ -2025,13 +2025,13 @@ static void RecordRenderLightMeshCommands(
 void Scene::RecordRenderLightMeshCommands(FSceneView& SceneView) const
 {
 	SCOPED_CPU_MARKER("Scene::RecordRenderLightMeshCommands()");
-	if (SceneView.sceneParameters.bDrawLightMeshes)
+	if (SceneView.sceneRenderOptions.bDrawLightMeshes)
 	{
 		::RecordRenderLightMeshCommands(mLightsStatic    , SceneView.lightRenderParams, SceneView.cameraPosition, this);
 		::RecordRenderLightMeshCommands(mLightsDynamic   , SceneView.lightRenderParams, SceneView.cameraPosition, this);
 		::RecordRenderLightMeshCommands(mLightsStationary, SceneView.lightRenderParams, SceneView.cameraPosition, this);
 	}
-	if (SceneView.sceneParameters.bDrawLightBounds)
+	if (SceneView.sceneRenderOptions.bDrawLightBounds)
 	{
 		::RecordRenderLightBoundsCommands(mLightsStatic    , SceneView.lightBoundsRenderParams, SceneView.cameraPosition, this);
 		::RecordRenderLightBoundsCommands(mLightsDynamic   , SceneView.lightBoundsRenderParams, SceneView.cameraPosition, this);

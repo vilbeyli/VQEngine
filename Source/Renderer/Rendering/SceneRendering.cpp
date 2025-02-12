@@ -336,7 +336,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 
 		assert(pPerFrame);
 		pPerFrame->Lights = SceneView.GPULightingData;
-		pPerFrame->fAmbientLightingFactor = SceneView.sceneParameters.fAmbientLightingFactor;
+		pPerFrame->fAmbientLightingFactor = SceneView.sceneRenderOptions.fAmbientLightingFactor;
 		pPerFrame->f2PointLightShadowMapDimensions       = { 1024.0f, 1024.f  }; // TODO
 		pPerFrame->f2SpotLightShadowMapDimensions        = { 1024.0f, 1024.f  }; // TODO
 		pPerFrame->f2DirectionalLightShadowMapDimensions = { 2048.0f, 2048.0f }; // TODO
@@ -1432,9 +1432,9 @@ void VQRenderer::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const F
 	SCOPED_GPU_MARKER(pCmd, pStrPass[pAOPass->GetMethod()]);
 	
 	static bool sbScreenSpaceAO_Previous = false;
-	const bool bSSAOToggledOff = sbScreenSpaceAO_Previous && !SceneView.sceneParameters.bScreenSpaceAO;
+	const bool bSSAOToggledOff = sbScreenSpaceAO_Previous && !SceneView.sceneRenderOptions.bScreenSpaceAO;
 
-	if (SceneView.sceneParameters.bScreenSpaceAO)
+	if (SceneView.sceneRenderOptions.bScreenSpaceAO)
 	{
 		AmbientOcclusionPass::FDrawParameters drawParams = {};
 		DirectX::XMStoreFloat4x4(&drawParams.matNormalToView, SceneView.view);
@@ -1466,7 +1466,7 @@ void VQRenderer::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const F
 		pCmd->ResourceBarrier(1, &barrierWR);
 	}
 
-	sbScreenSpaceAO_Previous = SceneView.sceneParameters.bScreenSpaceAO;
+	sbScreenSpaceAO_Previous = SceneView.sceneRenderOptions.bScreenSpaceAO;
 }
 
 static bool IsFFX_SSSREnabled(const FGraphicsSettings& GFXSettings)
@@ -1943,7 +1943,7 @@ void VQRenderer::RenderDebugVertexAxes(ID3D12GraphicsCommandList* pCmd, DynamicB
 		float LocalAxisSize;
 	};
 
-	if (!SceneView.sceneParameters.bDrawVertexLocalAxes || SceneView.debugVertexAxesRenderParams.empty())
+	if (!SceneView.sceneRenderOptions.bDrawVertexLocalAxes || SceneView.debugVertexAxesRenderParams.empty())
 	{
 		return;
 	}
@@ -1958,7 +1958,7 @@ void VQRenderer::RenderDebugVertexAxes(ID3D12GraphicsCommandList* pCmd, DynamicB
 		pCBuffer->matWorld    = cmd.matWorld [0];
 		pCBuffer->matNormal   = cmd.matNormal[0];
 		pCBuffer->matViewProj = SceneView.viewProj;
-		pCBuffer->LocalAxisSize = SceneView.sceneParameters.fVertexLocalAxixSize;
+		pCBuffer->LocalAxisSize = SceneView.sceneRenderOptions.fVertexLocalAxixSize;
 		
 		const uint32 NumInstances = 1;
 		const uint32 NumIndices = cmd.numIndices;
@@ -2111,7 +2111,7 @@ static DirectX::XMMATRIX GetHDRIRotationMatrix(float fHDIROffsetInRadians)
 }
 void VQRenderer::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings)
 {
-	const FSceneRenderParameters::FFFX_SSSR_UIParameters& UIParams = SceneView.sceneParameters.FFX_SSSRParameters;
+	const FSceneRenderOptions::FFFX_SSSR_UIOptions& UIParams = SceneView.sceneRenderOptions.FFX_SSSRParameters;
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 
 	const FEnvironmentMapRenderingResources& EnvMapRsc = rsc.EnvironmentMap;
