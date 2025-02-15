@@ -32,7 +32,7 @@
 
 #include "Rendering/WindowRenderContext.h"
 #include "Rendering/RenderResources.h"
-
+#include "Rendering/DrawData.h"
 #include "Rendering/RenderPass/RenderPass.h"
 
 #include "Engine/Core/Types.h"
@@ -246,6 +246,7 @@ public:
 	      FRenderingResources_MainWindow& GetRenderingResources_MainWindow() { return mResources_MainWnd; }
 	const FRenderingResources_MainWindow& GetRenderingResources_MainWindow() const { return mResources_MainWnd; }
 	const FRenderingResources_DebugWindow& GetRenderingResources_DebugWindow() const { return mResources_DebugWnd; }
+	FSceneDrawData& GetSceneDrawData(int FRAME_INDEX);
 
 	void ResetNumFramesRendered() { mNumFramesRendered = 0; }
 
@@ -318,11 +319,12 @@ private:
 	std::unordered_map < TaskID, FShaderLoadTaskContext>           mLookup_ShaderLoadContext;
 
 	// rendering
+	std::vector<std::shared_ptr<IRenderPass>>      mRenderPasses; // WIP design
 	std::unordered_map<HWND, FWindowRenderContext> mRenderContextLookup;
 	FRenderingResources_MainWindow  mResources_MainWnd;
 	FRenderingResources_DebugWindow mResources_DebugWnd;
-	std::vector<std::shared_ptr<IRenderPass>> mRenderPasses; // WIP design
 	uint64                          mNumFramesRendered;
+	std::vector<FSceneDrawData>     mFrameSceneDrawData; // per-frame if pipelined update+render threads
 
 	// sync
 	std::vector<Fence>              mAsyncComputeSSAOReadyFence;

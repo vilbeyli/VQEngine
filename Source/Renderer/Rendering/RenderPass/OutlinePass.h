@@ -21,6 +21,7 @@
 #include <unordered_map>
 
 struct FSceneView;
+struct FSceneDrawData;
 class DynamicBufferHeap;
 struct ID3D12GraphicsCommandList;
 
@@ -35,6 +36,7 @@ public:
 		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = 0;
 
 		const FSceneView* pSceneView = nullptr;
+		const FSceneDrawData* pSceneDrawData = nullptr;
 		const std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>* pRTVHandles = nullptr;
 		bool bMSAA = false;
 	};

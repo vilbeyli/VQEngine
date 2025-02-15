@@ -59,11 +59,16 @@ bool VQRenderer::ShouldEnableAsyncCompute(const FGraphicsSettings& GFXSettings, 
 
 	return false;
 }
+FSceneDrawData& VQRenderer::GetSceneDrawData(int FRAME_INDEX)
+{
+	// [0] since we don't have parallel update+render, use FRAME_INDEX otherwise
+	return mFrameSceneDrawData[0];
+}
 
 static void CopyPerObjectConstantBufferData(
 	std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& cbAddresses,
 	DynamicBufferHeap* pCBufferHeap,
-	const FSceneView& SceneView
+	const FSceneDrawData& SceneDrawData
 )
 {
 	SCOPED_CPU_MARKER("CopyPerObjectConstantBufferData");
@@ -71,7 +76,7 @@ static void CopyPerObjectConstantBufferData(
 	using namespace VQ_SHADER_DATA;
 
 	int iCB = 0;
-	for (const MeshRenderData_t& meshRenderCmd : SceneView.meshRenderParams)
+	for (const MeshRenderData_t& meshRenderCmd : SceneDrawData.meshRenderParams)
 	{
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 		PerObjectData* pPerObj = {};
@@ -281,6 +286,8 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 	CommandQueue& CPYCmdQ = this->GetCommandQueue(CommandQueue::EType::COPY);
 	CommandQueue& CMPCmdQ = this->GetCommandQueue(CommandQueue::EType::COMPUTE);
 
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
+
 	// ---------------------------------------------------------------------------------------------------
 	// TODO: undo const cast and assign in a proper spot -------------------------------------------------
 	FSceneView& RefSceneView = const_cast<FSceneView&>(SceneView);
@@ -324,7 +331,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 	const float RenderResolutionY = static_cast<float>(SceneView.SceneRTHeight);
 	mRenderStats = {};
 
-	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddresses(SceneView.meshRenderParams.size());
+	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddresses(SceneDrawData.meshRenderParams.size());
 	UINT64 SSAODoneFenceValue = mAsyncComputeSSAODoneFence[BACK_BUFFER_INDEX].GetValue();
 	D3D12_GPU_VIRTUAL_ADDRESS cbPerFrame = {};
 	{
@@ -375,7 +382,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 		ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, THREAD_INDEX);
 		DynamicBufferHeap& CBHeap = ctx.GetConstantBufferHeap(THREAD_INDEX);
 
-		CopyPerObjectConstantBufferData(cbAddresses, &CBHeap, SceneView);
+		CopyPerObjectConstantBufferData(cbAddresses, &CBHeap, SceneDrawData);
 
 		RenderSpotShadowMaps(pCmd, &CBHeap, ShadowView);
 		RenderDirectionalShadowMaps(pCmd, &CBHeap, ShadowView);
@@ -458,7 +465,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000); // sync for SceneView
 			while (WorkerThreads.GetNumActiveTasks() != 0); // busy-wait is not good
 		}
-		CopyPerObjectConstantBufferData(cbAddresses, &CBHeap_This, SceneView); // TODO: threadify this, join+fork
+		CopyPerObjectConstantBufferData(cbAddresses, &CBHeap_This, SceneDrawData); // TODO: threadify this, join+fork
 
 		{
 			SCOPED_CPU_MARKER("DispatchWorkers");
@@ -796,6 +803,7 @@ void VQRenderer::RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, ID3D12Comma
 		params.pCmdCopy = pCmdCopy;
 		params.pCBAddresses = &CBAddresses;
 		params.pSceneView = &SceneView;
+		params.pSceneDrawData = &mFrameSceneDrawData[0];
 		params.pCBufferHeap = pCBufferHeap;
 		params.cbPerView = perViewCBAddr;
 		params.bEnableAsyncCopy = GFXSettings.bEnableAsyncCopy;
@@ -1180,6 +1188,7 @@ void VQRenderer::RenderDepthPrePass(
 	using namespace VQ_SHADER_DATA;
 	const bool& bMSAA = GFXSettings.bAntiAliasing;
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
 
 	auto pRscNormals     = this->GetTextureResource(rsc.Tex_SceneNormals);
 	auto pRscNormalsMSAA = this->GetTextureResource(rsc.Tex_SceneNormalsMSAA);
@@ -1218,7 +1227,7 @@ void VQRenderer::RenderDepthPrePass(
 	// draw meshes
 	const size_t iMSAA = bMSAA ? 1 : 0;
 	const size_t iFaceCull = 2; // 2:back
-	for (const MeshRenderData_t& meshRenderCmd : SceneView.meshRenderParams)
+	for (const MeshRenderData_t& meshRenderCmd : SceneDrawData.meshRenderParams)
 	{
 		const Material& mat = *meshRenderCmd.pMaterial;
 		const auto VBIBIDs = meshRenderCmd.vertexIndexBuffer;
@@ -1570,6 +1579,8 @@ void VQRenderer::RenderSceneColor(
 	const CBV_SRV_UAV& NullCubemapSRV = this->GetSRV(rsc.SRV_NullCubemap);
 	const CBV_SRV_UAV& NullTex2DSRV = this->GetSRV(rsc.SRV_NullTexture2D);
 
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
+
 	SCOPED_GPU_MARKER(pCmd, "RenderSceneColor");
 
 	// Clear Depth & Render targets
@@ -1635,14 +1646,14 @@ void VQRenderer::RenderSceneColor(
 	}
 
 	// Draw Objects -----------------------------------------------
-	if(!SceneView.meshRenderParams.empty())
+	if(!SceneDrawData.meshRenderParams.empty())
 	{
 		constexpr UINT PerObjRSBindSlot = 1;
 		SCOPED_GPU_MARKER(pCmd, "Geometry");
 
 		int iCB = 0;
 		PSO_ID psoID_Prev = -1;
-		for (const MeshRenderData_t& meshRenderCmd : SceneView.meshRenderParams)
+		for (const MeshRenderData_t& meshRenderCmd : SceneDrawData.meshRenderParams)
 		{
 			const Material& mat = *meshRenderCmd.pMaterial;
 
@@ -1708,14 +1719,14 @@ void VQRenderer::RenderSceneColor(
 	}
 
 	// Draw Light Meshes ------------------------------------------
-	if(!SceneView.lightRenderParams.empty())
+	if(!SceneDrawData.lightRenderParams.empty())
 	{
 		SCOPED_GPU_MARKER(pCmd, "Lights");
 		pCmd->SetPipelineState(this->GetPSO(bMSAA ? EBuiltinPSOs::UNLIT_PSO_MSAA_4 : EBuiltinPSOs::UNLIT_PSO));
 		
 		pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
 
-		for (const FLightRenderData& lightRenderCmd : SceneView.lightRenderParams)
+		for (const FLightRenderData& lightRenderCmd : SceneDrawData.lightRenderParams)
 		{
 			FFrameConstantBufferUnlit* pCBuffer = {};
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
@@ -1776,8 +1787,9 @@ void VQRenderer::RenderSceneColor(
 void VQRenderer::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA)
 {
 	struct FFrameConstantBufferUnlitInstanced { DirectX::XMMATRIX matModelViewProj[MAX_INSTANCE_COUNT__UNLIT_SHADER]; DirectX::XMFLOAT4 color; };
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
 
-	if (!SceneView.boundingBoxRenderParams.empty())
+	if (!SceneDrawData.boundingBoxRenderParams.empty())
 	{
 		SCOPED_GPU_MARKER(pCmd, "BoundingBoxes");
 
@@ -1785,7 +1797,7 @@ void VQRenderer::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 		pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
 
 		// set IA
-		const FInstancedBoundingBoxRenderData& params = *SceneView.boundingBoxRenderParams.begin();
+		const FInstancedBoundingBoxRenderData& params = *SceneDrawData.boundingBoxRenderParams.begin();
 		const auto VBIBIDs = params.vertexIndexBuffer;
 		const uint32 NumIndices = params.numIndices;
 		const BufferID& VB_ID = VBIBIDs.first;
@@ -1803,7 +1815,7 @@ void VQRenderer::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 			: EBuiltinPSOs::WIREFRAME_INSTANCED_PSO)
 		);
 
-		for (const FInstancedBoundingBoxRenderData& BBRenderCmd : SceneView.boundingBoxRenderParams)
+		for (const FInstancedBoundingBoxRenderData& BBRenderCmd : SceneDrawData.boundingBoxRenderParams)
 		{
 			const int NumInstances = (int)BBRenderCmd.matWorldViewProj.size();
 			if (NumInstances == 0)
@@ -1846,6 +1858,8 @@ void VQRenderer::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 void VQRenderer::RenderOutline(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, bool bMSAA, const std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& rtvHandles)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderOutlinePass");
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
+
 	OutlinePass::FDrawParameters params;
 	params.pCmd = pCmd;
 	params.pCBufferHeap = pCBufferHeap;
@@ -1853,13 +1867,15 @@ void VQRenderer::RenderOutline(ID3D12GraphicsCommandList* pCmd, DynamicBufferHea
 	params.pSceneView = &SceneView;
 	params.bMSAA = bMSAA;
 	params.pRTVHandles = &rtvHandles;
+	params.pSceneDrawData = &SceneDrawData;
 	this->GetRenderPass(ERenderPass::Outline)->RecordCommands(&params);
 }
 
 void VQRenderer::RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA, bool bReflectionsEnabled)
 {
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
 
-	if (!SceneView.lightBoundsRenderParams.empty())
+	if (!SceneDrawData.lightBoundsRenderParams.empty())
 	{
 		SCOPED_GPU_MARKER(pCmd, "LightBounds");
 		const uint32 NumInstances = 1;
@@ -1877,9 +1893,9 @@ void VQRenderer::RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 		}
 		pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
 
-		std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddresses(SceneView.lightBoundsRenderParams.size());
+		std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddresses(SceneDrawData.lightBoundsRenderParams.size());
 		int iCbAddress = 0;
-		for (const FLightRenderData& lightBoundRenderCmd : SceneView.lightBoundsRenderParams)
+		for (const FLightRenderData& lightBoundRenderCmd : SceneDrawData.lightBoundsRenderParams)
 		{
 			// set constant buffer data
 			FFrameConstantBufferUnlit* pCBuffer = {};
@@ -1907,7 +1923,7 @@ void VQRenderer::RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 		}
 
 		pCmd->SetPipelineState(this->GetPSO(bMSAA ? EBuiltinPSOs::WIREFRAME_PSO_MSAA_4 : EBuiltinPSOs::WIREFRAME_PSO));
-		for (const FLightRenderData& lightBoundRenderCmd : SceneView.lightBoundsRenderParams)
+		for (const FLightRenderData& lightBoundRenderCmd : SceneDrawData.lightBoundsRenderParams)
 		{
 			FFrameConstantBufferUnlit* pCBuffer = {};
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
@@ -1943,14 +1959,16 @@ void VQRenderer::RenderDebugVertexAxes(ID3D12GraphicsCommandList* pCmd, DynamicB
 		float LocalAxisSize;
 	};
 
-	if (!SceneView.sceneRenderOptions.bDrawVertexLocalAxes || SceneView.debugVertexAxesRenderParams.empty())
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
+
+	if (!SceneView.sceneRenderOptions.bDrawVertexLocalAxes || SceneDrawData.debugVertexAxesRenderParams.empty())
 	{
 		return;
 	}
 
 	pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ZPrePass));
 	pCmd->SetPipelineState(this->GetPSO(bMSAA ? EBuiltinPSOs::DEBUGVERTEX_LOCALSPACEVECTORS_PSO_MSAA_4 : EBuiltinPSOs::DEBUGVERTEX_LOCALSPACEVECTORS_PSO));
-	for (const MeshRenderData_t& cmd : SceneView.debugVertexAxesRenderParams)
+	for (const MeshRenderData_t& cmd : SceneDrawData.debugVertexAxesRenderParams)
 	{
 		FObjectConstantBufferDebugVertexVectors* pCBuffer = {};
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
@@ -2193,17 +2211,18 @@ void VQRenderer::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 	}
 }
 
-static bool ShouldSkipBoundsPass(const FSceneView& SceneView)
+static bool ShouldSkipBoundsPass(const FSceneDrawData& SceneDrawData)
 {
-	return SceneView.boundingBoxRenderParams.empty()
-		&& SceneView.lightBoundsRenderParams.empty()
-		&& SceneView.outlineRenderParams.empty()
-		&& SceneView.debugVertexAxesRenderParams.empty();
+	return SceneDrawData.boundingBoxRenderParams.empty()
+		&& SceneDrawData.lightBoundsRenderParams.empty()
+		&& SceneDrawData.outlineRenderParams.empty()
+		&& SceneDrawData.debugVertexAxesRenderParams.empty();
 }
 void VQRenderer::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, bool bMSAA)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderSceneBoundingVolumes");
-	const bool bNoBoundingVolumeToRender = ShouldSkipBoundsPass(SceneView);
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
+	const bool bNoBoundingVolumeToRender = ShouldSkipBoundsPass(SceneDrawData);
 
 	if (bNoBoundingVolumeToRender)
 		return;
@@ -2277,7 +2296,8 @@ void VQRenderer::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dyn
 
 void VQRenderer::CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings)
 {
-	const bool bNoBoundingVolumeToRender = ShouldSkipBoundsPass(SceneView);
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
+	const bool bNoBoundingVolumeToRender = ShouldSkipBoundsPass(SceneDrawData);
 
 	const bool& bMSAA = GFXSettings.bAntiAliasing;
 

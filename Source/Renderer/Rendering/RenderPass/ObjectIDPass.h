@@ -22,6 +22,7 @@
 #include <unordered_map>
 
 struct FSceneView;
+struct FSceneDrawData;
 class DynamicBufferHeap;
 struct ID3D12GraphicsCommandList;
 
@@ -38,6 +39,7 @@ public:
 		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = 0;
 		bool bEnableAsyncCopy = false;
 		const FSceneView* pSceneView = nullptr;
+		const FSceneDrawData* pSceneDrawData = nullptr;
 	};
 
 	ObjectIDPass(VQRenderer& Renderer);

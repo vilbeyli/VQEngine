@@ -19,10 +19,12 @@
 #include "OutlinePass.h"
 #include "Renderer/Renderer.h"
 #include "Renderer/Pipeline/Tessellation.h"
+#include "Renderer/Rendering/DrawData.h"
 #include "Shaders/LightingConstantBufferData.h"
-#include "Libs/VQUtils/Source/utils.h"
 #include "Engine/GPUMarker.h"
-#include "Engine/Scene/SceneViews.h"
+#include "Libs/VQUtils/Source/utils.h"
+#include "Engine/Scene/Mesh.h"
+#include "Engine/Scene/Material.h"
 
 #include <cassert>
 
@@ -107,16 +109,16 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 	const FDrawParameters* pParams = static_cast<const FDrawParameters*>(pDrawParameters);
 	assert(pParams);
 	assert(pParams->pCmd);
-	assert(pParams->pSceneView);
+	assert(pParams->pSceneDrawData);
 	assert(pParams->pCBufferHeap);
 	assert(pParams->pRTVHandles);
 	ID3D12GraphicsCommandList* pCmd = pParams->pCmd;
 	DynamicBufferHeap* pHeap = pParams->pCBufferHeap;
 	const bool& bMSAA = pParams->bMSAA;
-	const FSceneView& SceneView = *pParams->pSceneView;
+	const FSceneDrawData& SceneDrawData = *pParams->pSceneDrawData;
 	
 	// early out & avoid changing state if we have no meshes to render
-	if (SceneView.outlineRenderParams.empty())
+	if (SceneDrawData.outlineRenderParams.empty())
 		return;
 
 	const ::DSV& dsv = mRenderer.GetDSV(bMSAA ? DSVMSAA : DSV);
@@ -125,8 +127,8 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 	const float clearColor[] = { 0, 0, 0, 0 };
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle();
 
-	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddrs(SceneView.outlineRenderParams.size());
-	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddrsTess(SceneView.outlineRenderParams.size());
+	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddrs(SceneDrawData.outlineRenderParams.size());
+	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddrsTess(SceneDrawData.outlineRenderParams.size());
 
 	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__OutlinePass));
 	pCmd->OMSetRenderTargets(0, nullptr, FALSE, &dsvHandle);
@@ -143,7 +145,7 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 		}
 
 		int iCB = 0;
-		for (const FOutlineRenderData& cmd : SceneView.outlineRenderParams)
+		for (const FOutlineRenderData& cmd : SceneDrawData.outlineRenderParams)
 		{
 			// set PSO
 			const Material& mat = *cmd.pMaterial;

@@ -260,6 +260,14 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 
 	mNumFramesRendered = 0;
 
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	mFrameSceneDrawData.resize(NumFrameBuffers);
+	mFrameShadowDrawData.resize(NumFrameBuffers);
+#else
+	mFrameSceneDrawData.resize(1);
+	//mFrameShadowDrawData.resize(1); // TODO
+#endif
+
 	Log::Info("[Renderer] Initialized.");
 }
 

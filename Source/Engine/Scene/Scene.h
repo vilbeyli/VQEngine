@@ -164,7 +164,7 @@ private: // Derived Scenes shouldn't access these functions
 		, const std::vector<size_t>& vActiveLightIndices
 	);
 
-	void RecordRenderLightMeshCommands(FSceneView& SceneView) const;
+	void RecordRenderLightMeshCommands(const FSceneView& SceneView) const;
 	void BatchInstanceData_BoundingBox(FSceneView& SceneView
 		, ThreadPool& UpdateWorkerThreadPool
 		, const DirectX::XMMATRIX matViewProj
