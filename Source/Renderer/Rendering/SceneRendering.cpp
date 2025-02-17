@@ -244,7 +244,7 @@ HRESULT VQRenderer::PreRenderScene(ThreadPool& WorkerThreads, const Window* pWin
 		}
 	}
 
-	BatchDrawCalls();
+	BatchDrawCalls(WorkerThreads, SceneView);
 
 	return S_OK;
 }
@@ -472,6 +472,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 
 			// ZPrePass
 			{
+				SCOPED_CPU_MARKER("Dispatch.ZPrePass");
 				ID3D12GraphicsCommandList* pCmd_ZPrePass = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdZPrePassThread);
 				ID3D12GraphicsCommandList* pCmd_Compute = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::COMPUTE, 0);
 
@@ -556,50 +557,56 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 
 			// objectID Pass
 			{
+				SCOPED_CPU_MARKER("Dispatch.ObjectID");
 				ID3D12GraphicsCommandList* pCmd_ObjIDPass = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdObjIDPassThread);
 
 				DynamicBufferHeap& CBHeap_WorkerObjIDPass = ctx.GetConstantBufferHeap(iCmdObjIDPassThread);
-				WorkerThreads.AddTask([=, &SceneView, &cbAddresses, &CBHeap_WorkerObjIDPass]()
+				WorkerThreads.AddTask([=, &SceneView, &ShadowView, &cbAddresses, &CBHeap_WorkerObjIDPass, &GFXSettings]()
 				{
 					RENDER_WORKER_CPU_MARKER;
 					RenderObjectIDPass(pCmd_ObjIDPass, pCmdCpy, &CBHeap_WorkerObjIDPass, cbAddresses, cbPerView, SceneView, ShadowView, BACK_BUFFER_INDEX, GFXSettings);
 				});
 			}
 
-			if (ShadowView.NumSpotShadowViews > 0)
+			// shadow passes
 			{
-				ID3D12GraphicsCommandList* pCmd_Spots = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdSpots);
-				DynamicBufferHeap& CBHeap_Spots = ctx.GetConstantBufferHeap(iCmdSpots);
-				WorkerThreads.AddTask([=, &CBHeap_Spots, &ShadowView]()
+				SCOPED_CPU_MARKER("Dispatch.ShadowPasses");
+
+				if (ShadowView.NumSpotShadowViews > 0)
 				{
-					RENDER_WORKER_CPU_MARKER;
-					RenderSpotShadowMaps(pCmd_Spots, &CBHeap_Spots, ShadowView);
-				});
-			}
-			if (ShadowView.NumPointShadowViews > 0)
-			{
-				for (uint iPoint = 0; iPoint < ShadowView.NumPointShadowViews; ++iPoint)
-				{
-					const size_t iPointWorker = iCmdPointLightsThread + iPoint;
-					ID3D12GraphicsCommandList* pCmd_Point = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iPointWorker);
-					DynamicBufferHeap& CBHeap_Point = ctx.GetConstantBufferHeap(iPointWorker);
-					WorkerThreads.AddTask([=, &CBHeap_Point, &ShadowView]()
+					ID3D12GraphicsCommandList* pCmd_Spots = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdSpots);
+					DynamicBufferHeap& CBHeap_Spots = ctx.GetConstantBufferHeap(iCmdSpots);
+					WorkerThreads.AddTask([=, &CBHeap_Spots, &ShadowView]()
 					{
 						RENDER_WORKER_CPU_MARKER;
-						RenderPointShadowMaps(pCmd_Point, &CBHeap_Point, ShadowView, iPoint, 1);
+						RenderSpotShadowMaps(pCmd_Spots, &CBHeap_Spots, ShadowView);
 					});
 				}
-			}
-
-			if (!ShadowView.ShadowView_Directional.meshRenderParams.empty())
-			{
-				ID3D12GraphicsCommandList* pCmd_Directional = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdDirectional);
-				DynamicBufferHeap& CBHeap_Directional = ctx.GetConstantBufferHeap(iCmdDirectional);
-				WorkerThreads.AddTask([=, &CBHeap_Directional, &ShadowView]()
+				if (ShadowView.NumPointShadowViews > 0)
 				{
-					RENDER_WORKER_CPU_MARKER;
-					RenderDirectionalShadowMaps(pCmd_Directional, &CBHeap_Directional, ShadowView);
-				});
+					for (uint iPoint = 0; iPoint < ShadowView.NumPointShadowViews; ++iPoint)
+					{
+						const size_t iPointWorker = iCmdPointLightsThread + iPoint;
+						ID3D12GraphicsCommandList* pCmd_Point = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iPointWorker);
+						DynamicBufferHeap& CBHeap_Point = ctx.GetConstantBufferHeap(iPointWorker);
+						WorkerThreads.AddTask([=, &CBHeap_Point, &ShadowView]()
+						{
+							RENDER_WORKER_CPU_MARKER;
+							RenderPointShadowMaps(pCmd_Point, &CBHeap_Point, ShadowView, iPoint, 1);
+						});
+					}
+				}
+
+				if (!ShadowView.ShadowView_Directional.meshRenderParams.empty())
+				{
+					ID3D12GraphicsCommandList* pCmd_Directional = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdDirectional);
+					DynamicBufferHeap& CBHeap_Directional = ctx.GetConstantBufferHeap(iCmdDirectional);
+					WorkerThreads.AddTask([=, &CBHeap_Directional, &ShadowView]()
+					{
+						RENDER_WORKER_CPU_MARKER;
+						RenderDirectionalShadowMaps(pCmd_Directional, &CBHeap_Directional, ShadowView);
+					});
+				}
 			}
 		}
 

@@ -20,9 +20,11 @@
 #include "Core/Types.h"
 #include "Scene/Mesh.h"
 #include "Scene/Material.h"
+#include "Scene/Transform.h"
 
 #include <unordered_map>
 #include <functional>
+#include <future>
 
 class GameObject;
 class ThreadPool;
@@ -56,8 +58,7 @@ struct FThreadWorkerContext
 };
 
 struct FFrustumCullWorkerContext : public FThreadWorkerContext
-{
-	
+{	
 	using IndexList_t = std::vector<size_t>;
 	// Hot Data (per view): used during culling --------------------------------------------------------------------------------------
 	/*in */ std::vector<FFrustumPlaneset > vFrustumPlanes;
@@ -67,9 +68,21 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	/*in */ std::vector<FBoundingBox     > vBoundingBoxList;
 	 
 	// store the index of the surviving bounding box in a list, per view frustum
-	struct FCullResult { size_t iBB; float fBBArea; int SelectedLOD; std::pair<BufferID, BufferID> VBIB; unsigned NumIndices; char bTessellated; };
+	struct FCullResult 
+	{ 
+		size_t iBB; 
+		float fBBArea; 
+		int SelectedLOD; 
+		std::pair<BufferID, BufferID> VBIB; 
+		unsigned NumIndices; 
+		char bTessellated; 
+	};
 	/*out*/ std::vector<std::vector<FCullResult>> vCullResultsPerView;
-	
+
+
+	std::vector<std::promise<void>> vPromises; // signal ready
+	std::vector<std::future <void>> vFutures;  // wait signal
+
 	using SortingFunction_t = std::function<bool(const FFrustumCullWorkerContext::FCullResult&, const FFrustumCullWorkerContext::FCullResult&)>;
 	/*in */ std::vector<SortingFunction_t> vSortFunctions;
 	/*in */ std::vector<char> vForceLOD0;

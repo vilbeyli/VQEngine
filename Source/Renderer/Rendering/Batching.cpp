@@ -18,6 +18,8 @@
 
 #include "Renderer.h"
 
-void VQRenderer::BatchDrawCalls()
+
+
+void VQRenderer::BatchDrawCalls(ThreadPool& WorkerThreads, const FSceneView& SceneView)
 {
 }

@@ -174,6 +174,7 @@ std::string Scene::GetTextureName(TextureID ID) const
 
 std::vector<const Light*> Scene::GetLightsOfType(Light::EType eType) const
 {
+	SCOPED_CPU_MARKER("Scene.GetLightsOfType");
 	std::vector<const Light*> lights;
 	for (const Light& l : mLightsStatic    ) if(l.Type == eType) lights.push_back(&l);
 	for (const Light& l : mLightsStationary) if(l.Type == eType) lights.push_back(&l);
@@ -1558,6 +1559,7 @@ static void CollectViewInstanceData(const Scene* pScene
 		const MeshID meshID    = MeshBB_MeshID[iBB];
 		const size_t objID     = MeshBB_GameObjHandles[iBB];
 		const Transform& tf    = *MeshBB_Transforms[iBB];
+		const Material* pMat   = &pScene->GetMaterial(matID);
 
 		const int iDraw = vOutputWriteParams[i].iDraw;
 		const int iInst = vOutputWriteParams[i].iInst;
@@ -1572,7 +1574,7 @@ static void CollectViewInstanceData(const Scene* pScene
 			, viewProjPrev
 			, vViewCullResults[i]
 			, matID
-			, &pScene->GetMaterial(matID)
+			, pMat
 			, objID
 		);
 	}
@@ -1768,6 +1770,7 @@ static void DispatchWorkers_ShadowViews(const Scene* pScene
 			const std::vector<FFrustumCullWorkerContext::FCullResult>& ViewCullResults = mFrustumCullWorkerContext.vCullResultsPerView[iFrustum];
 			WorkerContexts[iFrustum - 1] = { iFrustum, &ViewCullResults, pShadowView };
 
+			mFrustumCullWorkerContext.vFutures[iFrustum].get(); // sync
 			const size_t NumMeshes = ViewCullResults.size();
 			NumShadowMeshes += NumMeshes;
 			NumShadowFrustumsWithNumMeshesLargerThanMinNumMeshesPerThread += NumMeshes >= NUM_MIN_SHADOW_MESHES_FOR_THREADING ? 1 : 0;
@@ -1860,8 +1863,8 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 #if UPDATE_THREAD__ENABLE_WORKERS
 	// ---------------------------------------------------SYNC ---------------------------------------------------
 	{
-		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER_CULL", 0xFFFF0000); // wait for frustum cull workers to finish
-		while (UpdateWorkerThreadPool.GetNumActiveTasks() != 0);
+		SCOPED_CPU_MARKER_C("WAIT_WORKER_CULL", 0xFFAA0000); // wait for frustum cull workers to finish
+		mFrustumCullWorkerContext.vFutures[0].get();
 	}
 	// --------------------------------------------------- SYNC ---------------------------------------------------
 	std::vector<FFrustumCullWorkerContext::FCullResult>& vMainViewCullResults = mFrustumCullWorkerContext.vCullResultsPerView[0];
@@ -1874,22 +1877,10 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 	std::vector< FFrustumRenderCommandRecorderContext> WorkerContexts;
 	const size_t NumShadowMeshFrustums = ctx.NumValidInputElements - 1; // exclude main view
 
-	// shadow views
-	DispatchWorkers_ShadowViews(this,
-		NumShadowMeshFrustums, 
-		WorkerContexts, 
-		bForceLOD0_ShadowView, 
-		UpdateWorkerThreadPool, 
-		mFrustumCullWorkerContext, 
-		mFrustumIndex_pShadowViewLookup, 
-		BBH, 
-		mMeshes
-	);
-
 	// main view
 	std::atomic<int> MainViewThreadDone = 0;
 	DispatchMainViewInstanceDataWorkers(this,
-		mBoundingBoxHierarchy,
+		BBH,
 		SceneView,
 		DrawData,
 		vMainViewCullResults,
@@ -1898,7 +1889,6 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 		MainViewThreadDone,
 		DrawData.mRenderCmdInstanceDataWriteIndex
 	);
-
 	// collect isntance data on this thread
 	{
 		const size_t NumThreads = NumWorkerThreads + 1;
@@ -1918,6 +1908,19 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 			);
 		}
 	}
+
+	// shadow views
+	DispatchWorkers_ShadowViews(this,
+		NumShadowMeshFrustums, 
+		WorkerContexts, 
+		bForceLOD0_ShadowView, 
+		UpdateWorkerThreadPool, 
+		mFrustumCullWorkerContext, 
+		mFrustumIndex_pShadowViewLookup, 
+		BBH, 
+		mMeshes
+	);
+
 
 	// -------------------------------------------------------------------------------------------------------------------
 
