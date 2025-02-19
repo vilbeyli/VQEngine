@@ -20,11 +20,10 @@
 #include "Mesh.h"
 #include "Material.h"
 #include "Model.h"
+#include "Transform.h"
 #include "../PostProcess/PostProcess.h"
 
 #include "Renderer/Rendering/DrawData.h" // TODO: remove after shadow mesh drawing is migrated to renderer
-
-#include "../Culling.h" // FFrustumCullWorkerContext
 
 
 // typedefs
@@ -158,9 +157,25 @@ struct FSceneShadowViews
 	uint NumPointShadowViews;
 };
 
+
+struct FVisibleMeshData
+{
+	Transform Transform;// store a copy
+	Material Material;  // store a copy
+	MeshID hMesh;
+	MaterialID hMaterial;
+	size_t hGameObject;
+	float fBBArea;
+	int SelectedLOD;
+	std::pair<BufferID, BufferID> VBIB;
+	unsigned NumIndices;
+	char bTessellated;
+};
+
+
 struct FFrustumRenderCommandRecorderContext
 {
 	size_t iFrustum;
-	const std::vector<FFrustumCullWorkerContext::FCullResult>* pCullResults = nullptr;
+	const std::vector<FVisibleMeshData>* pCullResults = nullptr;
 	FShadowView* pShadowView = nullptr;
 };

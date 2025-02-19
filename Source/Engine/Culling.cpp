@@ -203,13 +203,14 @@ void FFrustumCullWorkerContext::AllocInputMemoryIfNecessary(size_t sz)
 }
 void FFrustumCullWorkerContext::ClearMemory()
 {
-	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::ClearMemory()");
+	SCOPED_CPU_MARKER("ClearMemory()");
 	vFrustumPlanes.clear();
 	vMatViewProj.clear();
 	vSortFunctions.clear();
 	vForceLOD0.clear();
 	vBoundingBoxList.clear();
-	vCullResultsPerView.clear();
+	vVisibleBBIndicesPerView.clear();
+	vVisibleMeshListPerView.clear();
 	vPromises.clear();
 	vFutures.clear();
 	NumValidInputElements = 0;
@@ -226,12 +227,12 @@ void FFrustumCullWorkerContext::AddWorkerItem(
 	, bool bForceLOD0
 )
 {
-	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::AddWorkerItem()");
+	SCOPED_CPU_MARKER("AddWorkerItem()");
 	vFrustumPlanes[i] = FrustumPlaneSet;
 	vMatViewProj[i] = MatViewProj;
 	vSortFunctions[i] = SortFunction;
 	vForceLOD0[i] = bForceLOD0;
-	vBoundingBoxList = vBoundingBoxListIn;
+	vBoundingBoxList = vBoundingBoxListIn; // copy
 }
 
 void FFrustumCullWorkerContext::ProcessWorkItems_SingleThreaded()
@@ -246,7 +247,8 @@ void FFrustumCullWorkerContext::ProcessWorkItems_SingleThreaded()
 	}
 
 	// allocate context memory
-	vCullResultsPerView.resize(szFP);
+	vVisibleMeshListPerView.resize(szFP);
+	vVisibleBBIndicesPerView.resize(szFP);
 
 	// process all items on this thread
 	this->Process(0, szFP - 1);
@@ -300,7 +302,8 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 #endif
 
 	// allocate context memory
-	vCullResultsPerView.resize(NumValidInputElements); // prepare worker output memory, each worker will then populate the vector
+	vVisibleMeshListPerView.resize(NumValidInputElements); // prepare worker output memory, each worker will then populate the vector
+	vVisibleBBIndicesPerView.resize(NumValidInputElements); // prepare worker output memory, each worker will then populate the vector
 
 	// distribute ranges of work into worker threads
 	const std::vector<std::pair<size_t, size_t>> vRanges = GetWorkRanges(NumThreadsIncludingThisThread);
@@ -341,70 +344,87 @@ const std::vector<std::pair<size_t, size_t>> FFrustumCullWorkerContext::GetWorkR
 
 void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 {
-	SCOPED_CPU_MARKER("ProcessFrustums");
+	SCOPED_CPU_MARKER_C("ProcessFrustums", 0xFF0000AA);
 	const size_t szFP = vFrustumPlanes.size();
 	assert(iRangeBegin <= szFP); // ensure work context bounds
 	assert(iRangeEnd < szFP); // ensure work context bounds
 	assert(iRangeBegin <= iRangeEnd); // ensure work context bounds
 
 #define DEBUG_LOG_SORT 0
-	const MeshLookup_t MeshLookupCopy = mMeshes;
-	const MaterialLookup_t MaterialLookupCopy = mMaterials;
-	const std::vector<MeshID> MeshBB_MeshID	= BBH.GetMeshesIDs();		   // copy
-	const std::vector<MaterialID> MeshBB_MatID = BBH.GetMeshMaterialIDs(); // copy
+	const MeshLookup_t& MeshLookupCopy = mMeshes;
+	const MaterialLookup_t& MaterialLookupCopy = mMaterials;
+	const std::vector<MeshID>& MeshBB_MeshID	= BBH.GetMeshesIDs();		   // copy
+	const std::vector<MaterialID>& MeshBB_MatID = BBH.GetMeshMaterialIDs(); // copy
+	const std::vector<size_t>& MeshBB_GameObjHandles = BBH.GetMeshGameObjectHandles();
+	const std::vector<const Transform*>& MeshBB_Transforms = BBH.GetMeshTransforms();
 	
 	// process each frustum
 	for (size_t iWork = iRangeBegin; iWork <= iRangeEnd; ++iWork)
 	{
-		std::vector<FCullResult>& vViewCullResults = vCullResultsPerView[iWork];
+		std::vector<FVisibleMeshData>& vVisibleMeshList = vVisibleMeshListPerView[iWork];
 		{
 			SCOPED_CPU_MARKER("Clear");
-			vCullResultsPerView[iWork].clear();
+			vVisibleMeshListPerView[iWork].clear();
+			vVisibleBBIndicesPerView[iWork].clear();
 		}
 		{
-			SCOPED_CPU_MARKER("CullFrustum");
+			SCOPED_CPU_MARKER_C("CullFrustum", 0xFFAAAA00);
 			for (size_t bb = 0; bb < vBoundingBoxList.size(); ++bb)
 			{
 				if (IsBoundingBoxIntersectingFrustum2(vFrustumPlanes[iWork], vBoundingBoxList[bb]))
 				{
-					const Mesh& mesh = MeshLookupCopy.at(MeshBB_MeshID[bb]);
-					const Material mat = MaterialLookupCopy.at(MeshBB_MatID[bb]);
-
-					// TODO: material is copied above, FCullResult could be emplaced_back
-
-					FCullResult r;
-					r.iBB = bb;
-					r.fBBArea = CalculateProjectedBoundingBoxArea(vBoundingBoxList[bb], vMatViewProj[iWork]);
-					r.SelectedLOD = vForceLOD0[iWork] ? 0 : InstanceBatching::GetLODFromProjectedScreenArea(r.fBBArea, mesh.GetNumLODs());
-					r.NumIndices = mesh.GetNumIndices(r.SelectedLOD);
-					r.VBIB = mesh.GetIABufferIDs(r.SelectedLOD);
-					r.bTessellated = mat.Tessellation.bEnableTessellation;
-					vViewCullResults.push_back(r); // grows as we go (no pre-alloc)
+					vVisibleBBIndicesPerView[iWork].push_back(bb); // grows as we go (no pre-alloc)
 				}
 			}
 		}
 		{
+			SCOPED_CPU_MARKER("AllocRenderData");
+			vVisibleMeshList.reserve(vVisibleBBIndicesPerView[iWork].size());
+		}
+		{
 			SCOPED_CPU_MARKER("GatherRenderData");
+			for (size_t bb : vVisibleBBIndicesPerView[iWork])
+			{
+				const Mesh& mesh = MeshLookupCopy.at(MeshBB_MeshID[bb]);
+				const Material& mat = MaterialLookupCopy.at(MeshBB_MatID[bb]);
 
+				const float fBBArea = CalculateProjectedBoundingBoxArea(vBoundingBoxList[bb], vMatViewProj[iWork]);
+				const int iLOD = vForceLOD0[iWork] ? 0 : InstanceBatching::GetLODFromProjectedScreenArea(fBBArea, mesh.GetNumLODs());
+
+				vVisibleMeshList.emplace_back(
+					FVisibleMeshData{
+						.Transform = *MeshBB_Transforms[bb], // copy the transform
+						.Material = mat, // copy the material
+						.hMesh = MeshBB_MeshID[bb],
+						.hMaterial = MeshBB_MatID[bb],
+						.hGameObject = MeshBB_GameObjHandles[bb],
+						.fBBArea = fBBArea,
+						.SelectedLOD = iLOD,
+						.VBIB = mesh.GetIABufferIDs(iLOD),
+						.NumIndices = mesh.GetNumIndices(iLOD),
+						.bTessellated = mat.Tessellation.bEnableTessellation
+					}
+				);
+			}
 		}
 		{
 			SCOPED_CPU_MARKER("Sort");
 			std::sort(std::execution::par_unseq, 
-				vViewCullResults.begin(),
-				vViewCullResults.end(),
+				vVisibleMeshList.begin(),
+				vVisibleMeshList.end(),
 				vSortFunctions[iWork]
 			);
 #if DEBUG_LOG_SORT
 			Log::Info("PostSort-------");
-			for (int hObj = 0; hObj < vViewCullResults.size(); ++hObj)
+			for (int hObj = 0; hObj < vVisibleMeshList.size(); ++hObj)
 			{
-				const size_t iBBL = vViewCullResults[hObj].iBB;
-				const float fAreaL = vViewCullResults[hObj].fBBArea;
+				const size_t iBBL = vVisibleMeshList[hObj].iBB;
+				const float fAreaL = vVisibleMeshList[hObj].fBBArea;
 				const MaterialID    matIDL = MeshBB_MatID[iBBL];
 				const MeshID       meshIDL = MeshBB_MeshID[iBBL];
 				const Mesh& meshL = mMeshes.at(meshIDL);
 				const int NumLODsL = meshL.GetNumLODs();
-				const int lodL = vViewCullResults[hObj].SelectedLOD;
+				const int lodL = vVisibleMeshList[hObj].SelectedLOD;
 				const uint64 keyL = GetKey(matIDL, meshIDL, lodL);
 				const std::string keyLBinary = std::bitset<64>(keyL).to_string(); // Convert to binary string
 

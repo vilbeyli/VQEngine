@@ -20,7 +20,7 @@
 #include "Core/Types.h"
 #include "Scene/Mesh.h"
 #include "Scene/Material.h"
-#include "Scene/Transform.h"
+#include "Scene/SceneViews.h"
 
 #include <unordered_map>
 #include <functional>
@@ -68,22 +68,14 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	/*in */ std::vector<FBoundingBox     > vBoundingBoxList;
 	 
 	// store the index of the surviving bounding box in a list, per view frustum
-	struct FCullResult 
-	{ 
-		size_t iBB; 
-		float fBBArea; 
-		int SelectedLOD; 
-		std::pair<BufferID, BufferID> VBIB; 
-		unsigned NumIndices; 
-		char bTessellated; 
-	};
-	/*out*/ std::vector<std::vector<FCullResult>> vCullResultsPerView;
+	/*out*/ std::vector<std::vector<size_t>> vVisibleBBIndicesPerView;
+	/*out*/ std::vector<std::vector<FVisibleMeshData>> vVisibleMeshListPerView;
 
 
 	std::vector<std::promise<void>> vPromises; // signal ready
 	std::vector<std::future <void>> vFutures;  // wait signal
 
-	using SortingFunction_t = std::function<bool(const FFrustumCullWorkerContext::FCullResult&, const FFrustumCullWorkerContext::FCullResult&)>;
+	using SortingFunction_t = std::function<bool(const FVisibleMeshData&, const FVisibleMeshData&)>;
 	/*in */ std::vector<SortingFunction_t> vSortFunctions;
 	/*in */ std::vector<char> vForceLOD0;
 	// Hot Data ------------------------------------------------------------------------------------------------------------

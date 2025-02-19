@@ -1063,18 +1063,14 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 #else
 		const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NumFrustums, NumThreads);
 		{
-			const std::vector<MeshID>& MeshBB_MeshID = BVH.GetMeshesIDs();
-			const std::vector<MaterialID>& MeshBB_MatID = BVH.GetMeshMaterialIDs();
-			const std::vector<int>& MeshBB_NumMeshLODs = BVH.GetNumMeshesLODs();
-
 			mFrustumCullWorkerContext.vBoundingBoxList = BVH.mMeshBoundingBoxes;
+
 			const bool bForceLOD0_ShadowView = SceneView.sceneRenderOptions.bForceLOD0_ShadowView;
-			std::function<bool(const FFrustumCullWorkerContext::FCullResult&, const FFrustumCullWorkerContext::FCullResult&)> fnShadowViewSort = 
-				[&MeshBB_MeshID, &MeshBB_MatID, &MeshBB_NumMeshLODs, bForceLOD0_ShadowView]
-				(const FFrustumCullWorkerContext::FCullResult& l, const FFrustumCullWorkerContext::FCullResult& r)
+			std::function<bool(const FVisibleMeshData&, const FVisibleMeshData&)> fnShadowViewSort = 
+				[](const FVisibleMeshData& l, const FVisibleMeshData& r)
 			{
-				const uint64 keyL = FShadowView::GetKey(MeshBB_MatID[l.iBB], MeshBB_MeshID[l.iBB], l.SelectedLOD, l.bTessellated);
-				const uint64 keyR = FShadowView::GetKey(MeshBB_MatID[r.iBB], MeshBB_MeshID[r.iBB], r.SelectedLOD, r.bTessellated);
+				const uint64 keyL = FShadowView::GetKey(l.hMaterial, l.hMesh, l.SelectedLOD, l.bTessellated);
+				const uint64 keyR = FShadowView::GetKey(r.hMaterial, r.hMesh, r.SelectedLOD, r.bTessellated);
 				return keyL > keyR;
 			};
 			size_t currRange = 0;
@@ -1117,12 +1113,11 @@ void Scene::GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShado
 			SCOPED_CPU_MARKER(fnMark("InitWorkerContexts", vRanges[0].first, vRanges[0].second).c_str());
 
 			const bool bForceLOD0 = SceneView.sceneRenderOptions.bForceLOD0_SceneView;
-			std::function<bool(const FFrustumCullWorkerContext::FCullResult&, const FFrustumCullWorkerContext::FCullResult&)> fnMainViewSort = 
-				[&MeshBB_MeshID, &MeshBB_MatID, bForceLOD0]
-				(const FFrustumCullWorkerContext::FCullResult& l, const FFrustumCullWorkerContext::FCullResult& r)
+			std::function<bool(const FVisibleMeshData&, const FVisibleMeshData&)> fnMainViewSort = 
+				[](const FVisibleMeshData& l, const FVisibleMeshData& r)
 			{
-				const uint64 keyL = FSceneDrawData::GetKey(MeshBB_MatID[l.iBB], MeshBB_MeshID[l.iBB], l.SelectedLOD, l.bTessellated);
-				const uint64 keyR = FSceneDrawData::GetKey(MeshBB_MatID[r.iBB], MeshBB_MeshID[r.iBB], r.SelectedLOD, r.bTessellated);
+				const uint64 keyL = FSceneDrawData::GetKey(l.hMaterial, l.hMesh, l.SelectedLOD, l.bTessellated);
+				const uint64 keyR = FSceneDrawData::GetKey(r.hMaterial, r.hMesh, r.SelectedLOD, r.bTessellated);
 				return keyL > keyR;
 			};
 
@@ -1380,22 +1375,15 @@ static void ResizeDrawInstanceArrays(FInstancedShadowMeshRenderData& cmd, size_t
 
 template<class TMeshInstanceDataArray>
 static void CountInstanceData(
-	  const SceneBoundingBoxHierarchy& BBH
-	, std::unordered_map<uint64, TMeshInstanceDataArray>& drawParamLookup
-	, const std::vector<FFrustumCullWorkerContext::FCullResult>& vViewCullResults
+	  std::unordered_map<uint64, TMeshInstanceDataArray>& drawParamLookup
+	, const std::vector<FVisibleMeshData>& vVisibleMeshData
 	, std::function<uint64(MaterialID, MeshID, int, bool)> FnGetKey
 )
 {
 	SCOPED_CPU_MARKER("CountInstanceData");
-
-	const std::vector<MeshID>& MeshBB_MeshID    = BBH.GetMeshesIDs();
-	const std::vector<MaterialID>& MeshBB_MatID = BBH.GetMeshMaterialIDs();
-	for (int i = 0; i < vViewCullResults.size(); ++i)
+	for (int i = 0; i < vVisibleMeshData.size(); ++i)
 	{
-		const size_t iBB = vViewCullResults[i].iBB;
-		const MaterialID matID = MeshBB_MatID[iBB];
-		const MeshID meshID = MeshBB_MeshID[iBB];
-		TMeshInstanceDataArray& d = drawParamLookup[FnGetKey(matID, meshID, vViewCullResults[i].SelectedLOD, vViewCullResults[i].bTessellated)];
+		TMeshInstanceDataArray& d = drawParamLookup[FnGetKey(vVisibleMeshData[i].hMaterial, vVisibleMeshData[i].hMesh, vVisibleMeshData[i].SelectedLOD, vVisibleMeshData[i].bTessellated)];
 		d.NumValidData++;
 	}
 }
@@ -1463,18 +1451,15 @@ static void AllocInstanceData(std::unordered_map<uint64, TMeshInstanceDataArray>
 
 static void SetParamData(MeshRenderData_t& cmd,
 	int iInst,
-	const Transform& tf,
 	const XMMATRIX& viewProj,
 	const XMMATRIX& viewProjPrev,
-	const FFrustumCullWorkerContext::FCullResult& cullResult,
-	const MaterialID matID,
-	const Material* pMaterial,
-	size_t objID
+	const FVisibleMeshData& cullResult,
+	const Material* pMaterial
 )
 {
-	const XMMATRIX matWorld = tf.matWorldTransformation();
-	const XMMATRIX matWorldHistory = tf.matWorldTransformationPrev();
-	const XMMATRIX matNormal = tf.NormalMatrix(matWorld);
+	const XMMATRIX matWorld = cullResult.Transform.matWorldTransformation();
+	const XMMATRIX matWorldHistory = cullResult.Transform.matWorldTransformationPrev();
+	const XMMATRIX matNormal = cullResult.Transform.NormalMatrix(matWorld);
 	const XMMATRIX matWVP = matWorld * viewProj;
 
 	assert(iInst >= 0 && cmd.matWorld.size() > iInst);
@@ -1484,11 +1469,11 @@ static void SetParamData(MeshRenderData_t& cmd,
 	cmd.matWorldViewProj[iInst] = matWVP;
 	cmd.matWorldViewProjPrev[iInst] = matWorldHistory * viewProjPrev;
 	cmd.matNormal[iInst] = matNormal;
-	cmd.objectID[iInst] = (int)objID + 1; // 0 means empty. offset by 1 now, and undo it when reading back
+	cmd.objectID[iInst] = (int)cullResult.hGameObject + 1; // 0 means empty. offset by 1 now, and undo it when reading back
 	cmd.projectedArea[iInst] = cullResult.fBBArea;
 	cmd.vertexIndexBuffer = cullResult.VBIB;
 	cmd.numIndices = cullResult.NumIndices;
-	cmd.matID = matID;
+	cmd.matID = cullResult.hMaterial;
 	cmd.pMaterial = pMaterial;
 
 #if 0
@@ -1508,16 +1493,13 @@ static void SetParamData(MeshRenderData_t& cmd,
 }
 static void SetParamData(FInstancedShadowMeshRenderData& cmd,
 	int iInst,
-	const Transform& tf,
 	const XMMATRIX& viewProj,
 	const XMMATRIX& viewProjPrev,
-	const FFrustumCullWorkerContext::FCullResult& cullResult,
-	const MaterialID matID,
-	const Material* pMaterial,
-	size_t objID
+	const FVisibleMeshData& cullResult,
+	const Material* pMaterial
 )
 {
-	const XMMATRIX matWorld = tf.matWorldTransformation();
+	const XMMATRIX matWorld = cullResult.Transform.matWorldTransformation();
 	const XMMATRIX matWVP = matWorld * viewProj;
 
 	assert(iInst >= 0 && cmd.matWorldViewProj.size() > iInst);
@@ -1529,14 +1511,14 @@ static void SetParamData(FInstancedShadowMeshRenderData& cmd,
 	cmd.matWorldViewProj[iInst] = matWVP;
 	cmd.vertexIndexBuffer = cullResult.VBIB;
 	cmd.numIndices = cullResult.NumIndices;
-	cmd.matID = matID;
+	cmd.matID = cullResult.hMaterial;
 	cmd.pMaterial = pMaterial;
 }
 
 template<class TMeshRenderCmd>
 static void CollectViewInstanceData(const Scene* pScene
 	, const SceneBoundingBoxHierarchy& BBH
-	, const std::vector<FFrustumCullWorkerContext::FCullResult>& vViewCullResults
+	, const std::vector<FVisibleMeshData>& vVisibleMeshData
 	, size_t iBegin
 	, size_t iEnd
 	, const XMMATRIX& viewProj
@@ -1546,19 +1528,12 @@ static void CollectViewInstanceData(const Scene* pScene
 )
 {
 	SCOPED_CPU_MARKER("CollectViewInstanceData");
-	const std::vector<MeshID>&           MeshBB_MeshID         = BBH.GetMeshesIDs();
-	const std::vector<MaterialID>&       MeshBB_MatID          = BBH.GetMeshMaterialIDs();
-	const std::vector<const Transform*>& MeshBB_Transforms     = BBH.GetMeshTransforms();
 	const std::vector<size_t>&           MeshBB_GameObjHandles = BBH.GetMeshGameObjectHandles();
 	
 	for (size_t i = iBegin; i <= iEnd; ++i)
 	{
-		const size_t iBB  = vViewCullResults[i].iBB;
-
-		const MaterialID matID = MeshBB_MatID[iBB];
-		const MeshID meshID    = MeshBB_MeshID[iBB];
-		const size_t objID     = MeshBB_GameObjHandles[iBB];
-		const Transform& tf    = *MeshBB_Transforms[iBB];
+		const MaterialID matID = vVisibleMeshData[i].hMaterial;
+		const MeshID meshID    = vVisibleMeshData[i].hMesh;
 		const Material* pMat   = &pScene->GetMaterial(matID);
 
 		const int iDraw = vOutputWriteParams[i].iDraw;
@@ -1569,13 +1544,10 @@ static void CollectViewInstanceData(const Scene* pScene
 		//Log::Info("meshRenderParams[%d] NumInst=%d , iFirst=%d", iCmdParam, NumInstances, range.first);
 		SetParamData(cmd
 			, iInst
-			, tf
 			, viewProj
 			, viewProjPrev
-			, vViewCullResults[i]
-			, matID
+			, vVisibleMeshData[i]
 			, pMat
-			, objID
 		);
 	}
 }
@@ -1584,7 +1556,7 @@ static void CollectViewInstanceData(const Scene* pScene
 template<class TMeshRenderCmd>
 static void CountNResizeRenderCmdInstanceArrays(
 	const SceneBoundingBoxHierarchy& BBH
-	, const std::vector<FFrustumCullWorkerContext::FCullResult>& vCullResults
+	, const std::vector<FVisibleMeshData>& vCullResults
 	, std::vector<TMeshRenderCmd>& meshRenderParams
 	, int MAX_INSTANCE_COUNT
 	, std::function<uint64(MaterialID, MeshID, int, bool)> FnGetKey
@@ -1601,11 +1573,7 @@ static void CountNResizeRenderCmdInstanceArrays(
 	uint64 keyPrev = -1;
 	for (int i = 0; i < vCullResults.size(); ++i)
 	{
-		const size_t iBB = vCullResults[i].iBB;
-		const MaterialID matID = MeshBB_MatID[iBB];
-		const MeshID meshID = MeshBB_MeshID[iBB];
-
-		const uint64 key = FnGetKey(matID, meshID, vCullResults[i].SelectedLOD, vCullResults[i].bTessellated);
+		const uint64 key = FnGetKey(vCullResults[i].hMaterial, vCullResults[i].hMesh, vCullResults[i].SelectedLOD, vCullResults[i].bTessellated);
 		if (keyPrev != key)
 		{
 			if (iDraw != -1)
@@ -1632,14 +1600,12 @@ static void CountNResizeRenderCmdInstanceArrays(
 
 static void CalculateInstanceDataWriteIndices(
 	  const SceneBoundingBoxHierarchy& BBH
-	, const std::vector<FFrustumCullWorkerContext::FCullResult>& vViewCullResults
+	, const std::vector<FVisibleMeshData>& vViewCullResults
 	, std::vector<FInstanceDataWriteParam>& vOutputWriteParams // {iDraw, iInst}
 	, std::function<uint64(MaterialID, MeshID, int, bool)> FnGetKey
 	, int MAX_INSTANCE_COUNT
 )
 {
-	const std::vector<MeshID>&           MeshBB_MeshID         = BBH.GetMeshesIDs();
-	const std::vector<MaterialID>&       MeshBB_MatID          = BBH.GetMeshMaterialIDs();
 	{
 		SCOPED_CPU_MARKER("AllocInstanceParams");
 		vOutputWriteParams.resize(vViewCullResults.size());
@@ -1652,11 +1618,7 @@ static void CalculateInstanceDataWriteIndices(
 		for (size_t i = 0; i < vViewCullResults.size(); ++i)
 		{
 			const int lod = vViewCullResults[i].SelectedLOD;
-			const size_t iBB = vViewCullResults[i].iBB;
-			const MaterialID matID = MeshBB_MatID[iBB];
-			const MeshID meshID = MeshBB_MeshID[iBB];
-
-			const uint64 key = FnGetKey(matID, meshID, lod, vViewCullResults[i].bTessellated);
+			const uint64 key = FnGetKey(vViewCullResults[i].hMaterial, vViewCullResults[i].hMesh, lod, vViewCullResults[i].bTessellated);
 			if (keyPrev != key)
 			{
 				keyPrev = key;
@@ -1681,7 +1643,7 @@ static void CalculateInstanceDataWriteIndices(
 template<class TMeshInstanceDataArray, class TMeshRenderCmd>
 static void ReserveWorkerMemory(
 	  const SceneBoundingBoxHierarchy& BBH
-	, const std::vector<FFrustumCullWorkerContext::FCullResult>& vViewCullResults
+	, const std::vector<FVisibleMeshData>& vViewCullResults
 	, std::vector<TMeshRenderCmd>& meshRenderParams
 	, std::unordered_map<uint64, TMeshInstanceDataArray>& drawParamLookup
 	, std::function<uint64(MaterialID, MeshID, int, bool)> FnGetKey
@@ -1690,7 +1652,7 @@ static void ReserveWorkerMemory(
 )
 {
 	SCOPED_CPU_MARKER("ReserveWorkerMemory");
-	CountInstanceData(BBH, drawParamLookup, vViewCullResults, FnGetKey);
+	CountInstanceData(drawParamLookup, vViewCullResults, FnGetKey);
 	CountNResizeRenderCmds(drawParamLookup, meshRenderParams, MAX_INSTANCE_COUNT);
 	CountNResizeRenderCmdInstanceArrays(BBH, vViewCullResults, meshRenderParams, MAX_INSTANCE_COUNT, FnGetKey);
 	AllocInstanceData<TMeshInstanceDataArray>(drawParamLookup);
@@ -1702,7 +1664,7 @@ static void DispatchMainViewInstanceDataWorkers(const Scene* pScene
 	, const SceneBoundingBoxHierarchy& BBH
 	, const FSceneView& SceneView
 	, FSceneDrawData& SceneDrawData
-	, const std::vector<FFrustumCullWorkerContext::FCullResult>& vMainViewCullResults
+	, const std::vector<FVisibleMeshData>& vMainViewCullResults
 	, const MeshLookup_t& mMeshes
 	, ThreadPool& UpdateWorkerThreadPool
 	, std::atomic<int>& MainViewThreadDone
@@ -1767,7 +1729,7 @@ static void DispatchWorkers_ShadowViews(const Scene* pScene
 		for (size_t iFrustum = 1; iFrustum <= NumShadowMeshFrustums; ++iFrustum) // iFrustum==0 is for mainView, start from 1
 		{
 			FShadowView* pShadowView = mFrustumIndex_pShadowViewLookup.at(iFrustum);
-			const std::vector<FFrustumCullWorkerContext::FCullResult>& ViewCullResults = mFrustumCullWorkerContext.vCullResultsPerView[iFrustum];
+			const std::vector<FVisibleMeshData>& ViewCullResults = mFrustumCullWorkerContext.vVisibleMeshListPerView[iFrustum];
 			WorkerContexts[iFrustum - 1] = { iFrustum, &ViewCullResults, pShadowView };
 
 			mFrustumCullWorkerContext.vFutures[iFrustum].get(); // sync
@@ -1867,7 +1829,7 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 		mFrustumCullWorkerContext.vFutures[0].get();
 	}
 	// --------------------------------------------------- SYNC ---------------------------------------------------
-	std::vector<FFrustumCullWorkerContext::FCullResult>& vMainViewCullResults = mFrustumCullWorkerContext.vCullResultsPerView[0];
+	std::vector<FVisibleMeshData>& vMainViewCullResults = mFrustumCullWorkerContext.vVisibleMeshListPerView[0];
 
 	const size_t NumSceneViewMeshes = vMainViewCullResults.size();
 	const bool bUseWorkerThreadForMainView = NUM_MIN_SCENE_MESHES_FOR_THREADING <= NumSceneViewMeshes;
