@@ -69,7 +69,7 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	 
 	// store the index of the surviving bounding box in a list, per view frustum
 	/*out*/ std::vector<std::vector<size_t>> vVisibleBBIndicesPerView;
-	/*out*/ std::vector<std::vector<FVisibleMeshData>> vVisibleMeshListPerView;
+	/*out*/ std::vector<std::vector<FVisibleMeshData>>* pVisibleMeshListPerView;
 
 
 	std::vector<std::promise<void>> vPromises; // signal ready
@@ -93,7 +93,11 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 		const SceneBoundingBoxHierarchy& BBH, 
 		const MeshLookup_t& mMeshes, 
 		const MaterialLookup_t& mMaterials
-	) : BBH(BBH), mMeshes(mMeshes), mMaterials(mMaterials) 
+	) 
+		: BBH(BBH)
+		, mMeshes(mMeshes)
+		, mMaterials(mMaterials)
+		, pVisibleMeshListPerView(nullptr)
 	{}
 	
 	void AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet

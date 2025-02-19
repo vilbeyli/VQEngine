@@ -170,7 +170,7 @@ private: // Derived Scenes shouldn't access these functions
 		, const DirectX::XMMATRIX matViewProj
 	) const;
 
-	void GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShadowViews& SceneShadowView, ThreadPool& UpdateWorkerThreadPool);
+	void GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews& SceneShadowView, ThreadPool& UpdateWorkerThreadPool);
 	void CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
 	void BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
 

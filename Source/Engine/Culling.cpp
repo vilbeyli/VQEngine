@@ -210,7 +210,8 @@ void FFrustumCullWorkerContext::ClearMemory()
 	vForceLOD0.clear();
 	vBoundingBoxList.clear();
 	vVisibleBBIndicesPerView.clear();
-	vVisibleMeshListPerView.clear();
+	if(pVisibleMeshListPerView)
+		pVisibleMeshListPerView->clear();
 	vPromises.clear();
 	vFutures.clear();
 	NumValidInputElements = 0;
@@ -247,7 +248,7 @@ void FFrustumCullWorkerContext::ProcessWorkItems_SingleThreaded()
 	}
 
 	// allocate context memory
-	vVisibleMeshListPerView.resize(szFP);
+	pVisibleMeshListPerView->resize(szFP);
 	vVisibleBBIndicesPerView.resize(szFP);
 
 	// process all items on this thread
@@ -302,7 +303,7 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 #endif
 
 	// allocate context memory
-	vVisibleMeshListPerView.resize(NumValidInputElements); // prepare worker output memory, each worker will then populate the vector
+	pVisibleMeshListPerView->resize(NumValidInputElements); // prepare worker output memory, each worker will then populate the vector
 	vVisibleBBIndicesPerView.resize(NumValidInputElements); // prepare worker output memory, each worker will then populate the vector
 
 	// distribute ranges of work into worker threads
@@ -353,18 +354,18 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 #define DEBUG_LOG_SORT 0
 	const MeshLookup_t& MeshLookupCopy = mMeshes;
 	const MaterialLookup_t& MaterialLookupCopy = mMaterials;
-	const std::vector<MeshID>& MeshBB_MeshID	= BBH.GetMeshesIDs();		   // copy
-	const std::vector<MaterialID>& MeshBB_MatID = BBH.GetMeshMaterialIDs(); // copy
+	const std::vector<MeshID>& MeshBB_MeshID	= BBH.GetMeshesIDs();
+	const std::vector<MaterialID>& MeshBB_MatID = BBH.GetMeshMaterialIDs();
 	const std::vector<size_t>& MeshBB_GameObjHandles = BBH.GetMeshGameObjectHandles();
 	const std::vector<const Transform*>& MeshBB_Transforms = BBH.GetMeshTransforms();
 	
 	// process each frustum
 	for (size_t iWork = iRangeBegin; iWork <= iRangeEnd; ++iWork)
 	{
-		std::vector<FVisibleMeshData>& vVisibleMeshList = vVisibleMeshListPerView[iWork];
+		std::vector<FVisibleMeshData>& vVisibleMeshList = (*pVisibleMeshListPerView)[iWork];
 		{
 			SCOPED_CPU_MARKER("Clear");
-			vVisibleMeshListPerView[iWork].clear();
+			(*pVisibleMeshListPerView)[iWork].clear();
 			vVisibleBBIndicesPerView[iWork].clear();
 		}
 		{

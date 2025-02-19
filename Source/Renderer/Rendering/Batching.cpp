@@ -18,8 +18,10 @@
 
 #include "Renderer.h"
 
-
+#include "Engine/GPUMarker.h"
 
 void VQRenderer::BatchDrawCalls(ThreadPool& WorkerThreads, const FSceneView& SceneView)
 {
+	SCOPED_CPU_MARKER("BatchInstanceData");
+
 }

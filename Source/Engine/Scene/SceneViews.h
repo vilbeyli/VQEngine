@@ -65,6 +65,20 @@ struct FSceneRenderOptions
 	DirectX::XMFLOAT4 OutlineColor = DirectX::XMFLOAT4(1.0f, 0.647f, 0.1f, 1.0f);
 };
 
+struct FVisibleMeshData
+{
+	Transform Transform;// store a copy
+	Material Material;  // store a copy
+	MeshID hMesh;
+	MaterialID hMaterial;
+	size_t hGameObject;
+	float fBBArea;
+	int SelectedLOD;
+	std::pair<BufferID, BufferID> VBIB;
+	unsigned NumIndices;
+	char bTessellated;
+};
+
 struct FSceneView
 {
 	DirectX::XMMATRIX     view;
@@ -88,6 +102,7 @@ struct FSceneView
 	//Settings::SceneRender sceneRenderSettings;
 	//EnvironmentMap	environmentMap;
 	bool                  bAppIsInSimulationState = false;
+	std::vector<std::vector<FVisibleMeshData>> vVisibleMeshListPerView;
 
 	VQ_SHADER_DATA::SceneLighting GPULightingData;
 
@@ -156,22 +171,6 @@ struct FSceneShadowViews
 	uint NumSpotShadowViews;
 	uint NumPointShadowViews;
 };
-
-
-struct FVisibleMeshData
-{
-	Transform Transform;// store a copy
-	Material Material;  // store a copy
-	MeshID hMesh;
-	MaterialID hMaterial;
-	size_t hGameObject;
-	float fBBArea;
-	int SelectedLOD;
-	std::pair<BufferID, BufferID> VBIB;
-	unsigned NumIndices;
-	char bTessellated;
-};
-
 
 struct FFrustumRenderCommandRecorderContext
 {
