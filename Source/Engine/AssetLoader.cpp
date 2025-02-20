@@ -722,7 +722,7 @@ static Model::Data ProcessAssimpNode(
 
 		// synchronization
 		std::atomic<int> WorkerCounter(static_cast<int>(std::min(vRanges.size()-1, NumWorkerThreadsToUse)));
-		Signal WorkerSignal;
+		EventSignal WorkerSignal;
 		{
 			SCOPED_CPU_MARKER("DispatchMeshWorkers");
 			for (size_t iRange = 1; iRange < vRanges.size(); ++iRange)

@@ -113,7 +113,7 @@ struct WindowCloseEvent : public IEvent
 {
 	WindowCloseEvent(HWND hwnd_) : IEvent(EEventType::WINDOW_CLOSE_EVENT, hwnd_){}
 
-	mutable Signal Signal_WindowDependentResourcesDestroyed;
+	mutable EventSignal Signal_WindowDependentResourcesDestroyed;
 };
 
 struct ToggleFullscreenEvent : public IEvent

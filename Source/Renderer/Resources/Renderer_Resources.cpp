@@ -1544,7 +1544,7 @@ void VQRenderer::ProcessTextureUploadQueue()
 	if (mTextureUploadQueue.empty())
 		return;
 
-	std::vector<Signal*> vTexResidentSignals;
+	std::vector<EventSignal*> vTexResidentSignals;
 	std::vector<std::atomic<bool>*> vTexResidentBools;
 
 	while (!mTextureUploadQueue.empty())

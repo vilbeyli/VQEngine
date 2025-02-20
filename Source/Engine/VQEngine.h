@@ -292,7 +292,7 @@ private:
 	std::atomic<bool>               mbMainWindowHDRTransitionInProgress; // see DispatchHDRSwapchainTransitionEvents()
 	std::atomic<bool>               mbExitApp;
 	std::atomic<bool>               mbBuiltinMeshGenFinished;
-	Signal                          mBuiltinMeshGenSignal;
+	EventSignal                          mBuiltinMeshGenSignal;
 
 
 	// system & settings

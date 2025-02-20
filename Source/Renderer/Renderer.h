@@ -342,7 +342,7 @@ private:
 
 	// texture uploading
 	std::atomic<bool>              mbExitUploadThread;
-	Signal                         mSignal_UploadThreadWorkReady;
+	EventSignal                    mSignal_UploadThreadWorkReady;
 	std::thread                    mTextureUploadThread;
 	std::mutex                     mMtxTextureUploadQueue;
 	std::queue<FTextureUploadDesc> mTextureUploadQueue;

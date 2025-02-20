@@ -21,8 +21,8 @@
 #include "Material.h"
 #include "Model.h"
 #include "Transform.h"
-#include "../PostProcess/PostProcess.h"
-
+#include "Engine/PostProcess/PostProcess.h"
+#include "Libs/VQUtils/Source/Multithreading.h"
 #include "Renderer/Rendering/DrawData.h" // TODO: remove after shadow mesh drawing is migrated to renderer
 
 
@@ -77,6 +77,12 @@ struct FVisibleMeshData
 	std::pair<BufferID, BufferID> VBIB;
 	unsigned NumIndices;
 	char bTessellated;
+};
+
+struct FFrustumRenderList
+{
+	TaskSignal<void> DataReadySignal;
+	std::vector<FVisibleMeshData> Data;
 };
 
 struct FSceneView

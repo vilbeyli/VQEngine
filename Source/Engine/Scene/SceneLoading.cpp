@@ -292,7 +292,7 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 		std::vector<std::pair<size_t, size_t>> ranges = PartitionWorkItemsIntoRanges(NumGameObjects, NumThreads);
 		const int NumTasks = static_cast<int>(ranges.size());
 		const int NumThreadTasks = NumTasks - 1;
-		Signal ThreadsDoneSignal;
+		EventSignal ThreadsDoneSignal;
 		std::atomic<bool> bThreadsDone = false;
 		{
 			SCOPED_CPU_MARKER("DispatchThreads");
