@@ -83,6 +83,11 @@ struct FFrustumRenderList
 {
 	TaskSignal<void> DataReadySignal;
 	std::vector<FVisibleMeshData> Data;
+	inline void Reset()
+	{
+		Data.clear();
+		DataReadySignal.Reset();
+	}
 };
 
 struct FSceneView
@@ -108,7 +113,7 @@ struct FSceneView
 	//Settings::SceneRender sceneRenderSettings;
 	//EnvironmentMap	environmentMap;
 	bool                  bAppIsInSimulationState = false;
-	std::vector<std::vector<FVisibleMeshData>> vVisibleMeshListPerView;
+	std::vector<FFrustumRenderList> vVisibleMeshListPerView;
 
 	VQ_SHADER_DATA::SceneLighting GPULightingData;
 

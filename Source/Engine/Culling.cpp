@@ -185,20 +185,8 @@ void FFrustumCullWorkerContext::AllocInputMemoryIfNecessary(size_t sz)
 		vMatViewProj.resize(sz);
 		vSortFunctions.resize(sz);
 		vForceLOD0.resize(sz);
-		{
-			SCOPED_CPU_MARKER("PromiseFuture");
-			vPromises.resize(sz);
-			vFutures.resize(sz);
-		}
-	}
-
-	{
-		SCOPED_CPU_MARKER("InitPromiseFuture");
-		for (int i = 0; i < vPromises.size(); ++i)
-		{
-			vPromises[i] = std::promise<void>();
-			vFutures[i] = vPromises[i].get_future();
-		}
+		assert(pFrustumRenderLists);
+		pFrustumRenderLists->resize(sz);
 	}
 }
 void FFrustumCullWorkerContext::ClearMemory()
@@ -210,10 +198,12 @@ void FFrustumCullWorkerContext::ClearMemory()
 	vForceLOD0.clear();
 	vBoundingBoxList.clear();
 	vVisibleBBIndicesPerView.clear();
-	if(pVisibleMeshListPerView)
-		pVisibleMeshListPerView->clear();
-	vPromises.clear();
-	vFutures.clear();
+
+	// initial startup won't have this assigned but consecutive 
+	// scene loads will have.
+	if(pFrustumRenderLists)
+		pFrustumRenderLists->clear();
+	
 	NumValidInputElements = 0;
 }
 
@@ -248,7 +238,7 @@ void FFrustumCullWorkerContext::ProcessWorkItems_SingleThreaded()
 	}
 
 	// allocate context memory
-	pVisibleMeshListPerView->resize(szFP);
+	pFrustumRenderLists->resize(szFP);
 	vVisibleBBIndicesPerView.resize(szFP);
 
 	// process all items on this thread
@@ -303,7 +293,7 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 #endif
 
 	// allocate context memory
-	pVisibleMeshListPerView->resize(NumValidInputElements); // prepare worker output memory, each worker will then populate the vector
+	pFrustumRenderLists->resize(NumValidInputElements); // prepare worker output memory, each worker will then populate the vector
 	vVisibleBBIndicesPerView.resize(NumValidInputElements); // prepare worker output memory, each worker will then populate the vector
 
 	// distribute ranges of work into worker threads
@@ -362,10 +352,10 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 	// process each frustum
 	for (size_t iWork = iRangeBegin; iWork <= iRangeEnd; ++iWork)
 	{
-		std::vector<FVisibleMeshData>& vVisibleMeshList = (*pVisibleMeshListPerView)[iWork];
+		std::vector<FVisibleMeshData>& vVisibleMeshList = (*pFrustumRenderLists)[iWork].Data;
 		{
 			SCOPED_CPU_MARKER("Clear");
-			(*pVisibleMeshListPerView)[iWork].clear();
+			(*pFrustumRenderLists)[iWork].Reset();
 			vVisibleBBIndicesPerView[iWork].clear();
 		}
 		{
@@ -435,7 +425,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 		}
 		{
 			SCOPED_CPU_MARKER("Signal");
-			vPromises[iWork].set_value();
+			(*pFrustumRenderLists)[iWork].DataReadySignal.Notify();
 		}
 	}
 }

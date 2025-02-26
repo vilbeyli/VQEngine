@@ -1033,7 +1033,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 		}
 	}
 
-	mFrustumCullWorkerContext.pVisibleMeshListPerView = &SceneView.vVisibleMeshListPerView;
+	mFrustumCullWorkerContext.pFrustumRenderLists = &SceneView.vVisibleMeshListPerView;
 	mFrustumCullWorkerContext.InvalidateContextData();
 	mFrustumCullWorkerContext.AllocInputMemoryIfNecessary(FrustumPlanesets.size());
 	mFrustumCullWorkerContext.NumValidInputElements = FrustumPlanesets.size();
@@ -1709,11 +1709,12 @@ static void DispatchWorkers_ShadowViews(
 		for (size_t iFrustum = 1; iFrustum <= NumShadowMeshFrustums; ++iFrustum) // iFrustum==0 is for mainView, start from 1
 		{
 			FShadowView* pShadowView = mFrustumIndex_pShadowViewLookup.at(iFrustum);
-			const std::vector<FVisibleMeshData>* ViewCullResults = &(*mFrustumCullWorkerContext.pVisibleMeshListPerView)[iFrustum];
-			WorkerContexts[iFrustum - 1] = { iFrustum, ViewCullResults, pShadowView };
+			FFrustumRenderList* ViewCullResults = &(*mFrustumCullWorkerContext.pFrustumRenderLists)[iFrustum];
+			//const std::vector<FVisibleMeshData>* ViewCullResults = &(*mFrustumCullWorkerContext.pVisibleMeshListPerView)[iFrustum];
+			WorkerContexts[iFrustum - 1] = { iFrustum, &ViewCullResults->Data, pShadowView };
 
-			mFrustumCullWorkerContext.vFutures[iFrustum].get(); // sync
-			const size_t NumMeshes = ViewCullResults->size();
+			ViewCullResults->DataReadySignal.Wait();
+			const size_t NumMeshes = ViewCullResults->Data.size();
 			NumShadowMeshes += NumMeshes;
 			NumShadowFrustumsWithNumMeshesLargerThanMinNumMeshesPerThread += NumMeshes >= NUM_MIN_SHADOW_MESHES_FOR_THREADING ? 1 : 0;
 			NumShadowMeshes_Threaded += NumMeshes >= NUM_MIN_SHADOW_MESHES_FOR_THREADING ? NumMeshes : 0;
@@ -1800,14 +1801,16 @@ void Scene::BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThr
 	constexpr size_t NUM_MIN_SCENE_MESHES_FOR_THREADING = 128;
 	const size_t NumWorkerThreads = UpdateWorkerThreadPool.GetThreadPoolSize();
 
+	FFrustumRenderList& MainViewFrustumRenderList = (*mFrustumCullWorkerContext.pFrustumRenderLists)[0];
+	const std::vector<FVisibleMeshData>& vMainViewCullResults = MainViewFrustumRenderList.Data;
+
 #if UPDATE_THREAD__ENABLE_WORKERS
 	// ---------------------------------------------------SYNC ---------------------------------------------------
 	{
 		SCOPED_CPU_MARKER_C("WAIT_WORKER_CULL", 0xFFAA0000); // wait for frustum cull workers to finish
-		mFrustumCullWorkerContext.vFutures[0].get();
+		MainViewFrustumRenderList.DataReadySignal.Wait();
 	}
 	// --------------------------------------------------- SYNC ---------------------------------------------------
-	std::vector<FVisibleMeshData>& vMainViewCullResults = (*mFrustumCullWorkerContext.pVisibleMeshListPerView)[0];
 
 	const size_t NumSceneViewMeshes = vMainViewCullResults.size();
 	const bool bUseWorkerThreadForMainView = NUM_MIN_SCENE_MESHES_FOR_THREADING <= NumSceneViewMeshes;
