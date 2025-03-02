@@ -442,7 +442,8 @@ static void BatchBoundingBoxRenderCommandData(
 	, const XMMATRIX viewProj
 	, const XMFLOAT4 Color
 	, size_t iBegin
-	, const std::pair<BufferID, BufferID>& VBIB
+	, BufferID VB
+	, BufferID IB
 )
 {
 	SCOPED_CPU_MARKER("BatchBoundingBoxRenderCommandData");
@@ -453,7 +454,7 @@ static void BatchBoundingBoxRenderCommandData(
 	{
 		FInstancedBoundingBoxRenderData& cmd = cmds[iBegin + i];
 		cmd.matWorldViewProj.resize(std::min(MAX_INSTANCE_COUNT__UNLIT_SHADER, (size_t)NumBBsToProcess));
-		cmd.vertexIndexBuffer = VBIB;
+		cmd.vertexIndexBuffer = { VB, IB };
 		cmd.numIndices = 36; // TODO: remove magic number
 		cmd.color = Color;
 
@@ -481,12 +482,8 @@ static void BatchInstanceData_BoundingBox(FSceneDrawData& SceneDrawData
 	const float Transparency = 0.75f;
 	const XMFLOAT4 BBColor_GameObj = XMFLOAT4(0.0f, 0.2f, 0.8f, Transparency);
 	const XMFLOAT4 BBColor_Mesh = XMFLOAT4(0.0f, 0.8f, 0.2f, Transparency);
-	
-#if 1 // WIP
-	return;
-#else
-	const auto VBIB = this->mMeshes.at(EBuiltInMeshes::CUBE).GetIABufferIDs();
-	auto fnBatch = [&UpdateWorkerThreadPool, &VBIB](
+
+	auto fnBatch = [&UpdateWorkerThreadPool, &SceneView](
 		std::vector<FInstancedBoundingBoxRenderData>& cmds
 		, const std::vector<FBoundingBox>& BBs
 		, size_t iBoundingBox
@@ -505,13 +502,14 @@ static void BatchInstanceData_BoundingBox(FSceneDrawData& SceneDrawData
 				, matViewProj
 				, BBColor
 				, iBoundingBox
-				, VBIB
+				, SceneView.cubeVB
+				, SceneView.cubeIB
 			);
 		}
 		else
 		{
 			SCOPED_CPU_MARKER("Dispatch");
-			UpdateWorkerThreadPool.AddTask([=, &BBs, &cmds]()
+			UpdateWorkerThreadPool.AddTask([=, &BBs, &cmds, &SceneView]()
 			{
 				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
 				BatchBoundingBoxRenderCommandData(cmds
@@ -519,18 +517,17 @@ static void BatchInstanceData_BoundingBox(FSceneDrawData& SceneDrawData
 					, matViewProj
 					, BBColor
 					, iBoundingBox
-					, VBIB
+					, SceneView.cubeVB
+					, SceneView.cubeIB
 				);
 			});
 		}
 	};
 
-	const size_t NumGameObjectBBRenderCmds = (bDrawGameObjectBBs ? DIV_AND_ROUND_UP(mBoundingBoxHierarchy.mGameObjectBoundingBoxes.size(), MAX_INSTANCE_COUNT__UNLIT_SHADER) : 0);
-	const size_t NumMeshBBRenderCmds       = (bDrawMeshBBs       ? DIV_AND_ROUND_UP(mBoundingBoxHierarchy.mMeshBoundingBoxes.size(), MAX_INSTANCE_COUNT__UNLIT_SHADER) : 0);
 
 	{
 		SCOPED_CPU_MARKER("AllocMem");
-		SceneDrawData.boundingBoxRenderParams.resize(NumGameObjectBBRenderCmds + NumMeshBBRenderCmds);
+		SceneDrawData.boundingBoxRenderParams.resize(SceneView.NumGameObjectBBRenderCmds + SceneView.NumMeshBBRenderCmds);
 	}
 	// --------------------------------------------------------------
 	// Game Object Bounding Boxes
@@ -540,7 +537,7 @@ static void BatchInstanceData_BoundingBox(FSceneDrawData& SceneDrawData
 	{
 #if RENDER_INSTANCED_BOUNDING_BOXES 
 		fnBatch(SceneDrawData.boundingBoxRenderParams
-			, mBoundingBoxHierarchy.mGameObjectBoundingBoxes
+			, *SceneView.pGameObjectBoundingBoxList
 			, iBoundingBox
 			, BBColor_GameObj
 			, matViewProj
@@ -557,11 +554,11 @@ static void BatchInstanceData_BoundingBox(FSceneDrawData& SceneDrawData
 	// --------------------------------------------------------------
 	if (SceneView.sceneRenderOptions.bDrawMeshBoundingBoxes)
 	{
-		iBoundingBox = NumGameObjectBBRenderCmds;
+		iBoundingBox = SceneView.NumGameObjectBBRenderCmds;
 
 #if RENDER_INSTANCED_BOUNDING_BOXES 
 		fnBatch(SceneDrawData.boundingBoxRenderParams
-			, mBoundingBoxHierarchy.mMeshBoundingBoxes
+			, *SceneView.pMeshBoundingBoxList
 			, iBoundingBox
 			, BBColor_Mesh
 			, matViewProj
@@ -571,7 +568,6 @@ static void BatchInstanceData_BoundingBox(FSceneDrawData& SceneDrawData
 		BatchBoundingBoxRenderCommandData(SceneView.boundingBoxRenderParams, SceneView, mBoundingBoxHierarchy.mGameObjectBoundingBoxes, BBColor_GameObj, 0);
 #endif
 	}
-#endif
 }
 
 
@@ -588,7 +584,6 @@ void VQRenderer::BatchDrawCalls(ThreadPool& RenderWorkerThreadPool, FSceneView& 
 	FFrustumRenderList& MainViewFrustumRenderList = SceneView.FrustumRenderLists[0];
 	const std::vector<FVisibleMeshData>& MainViewRenderList = MainViewFrustumRenderList.Data;
 
-#if UPDATE_THREAD__ENABLE_WORKERS
 	// ---------------------------------------------------SYNC ---------------------------------------------------
 	{
 		SCOPED_CPU_MARKER_C("WAIT_WORKER_CULL", 0xFFAA0000); // wait for frustum cull workers to finish
@@ -658,21 +653,4 @@ void VQRenderer::BatchDrawCalls(ThreadPool& RenderWorkerThreadPool, FSceneView& 
 		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
 		while (RenderWorkerThreadPool.GetNumActiveTasks() != 0);
 	}
-
-#else
-	BatchInstanceData_SceneMeshes(&SceneView.meshRenderParams
-		, SceneView.MaterialMeshLODInstanceDataLookup
-		, mFrustumCullWorkerContext.vCulledBoundingBoxIndexListPerView[0]
-		, SceneView.viewProj
-		, SceneView.viewProjPrev
-	);
-	for (size_t iFrustum = 1; iFrustum <= NumShadowMeshFrustums; ++iFrustum)
-	{
-		const FFrustumRenderCommandRecorderContext& ctx = WorkerContexts[iFrustum - 1];
-		BatchInstanceData_ShadowMeshes(ctx.iFrustum, ctx.pShadowView, ctx.pObjIndices, ctx.pShadowView->matViewProj);
-	}
-	BatchInstanceData_BoundingBox(SceneView, RenderWorkerThreadPool, SceneView.viewProj);
-	RecordRenderLightMeshCommands(SceneView);
-
-#endif
 }

@@ -578,7 +578,7 @@ static void RecordOutlineRenderCommands(
 	}
 }
 
-static void ExtractSceneView(FSceneView& SceneView, std::unordered_map<const Camera*, DirectX::XMMATRIX>& mViewProjectionMatrixHistory, const Camera& cam)
+static void ExtractSceneView(FSceneView& SceneView, std::unordered_map<const Camera*, DirectX::XMMATRIX>& mViewProjectionMatrixHistory, const Camera& cam, std::pair<BufferID, BufferID> cubeVBIB)
 {
 	SCOPED_CPU_MARKER("ExtractSceneView");
 
@@ -602,6 +602,9 @@ static void ExtractSceneView(FSceneView& SceneView, std::unordered_map<const Cam
 	SceneView.MainViewCameraYaw = cam.GetYaw();
 	SceneView.MainViewCameraPitch = cam.GetPitch();
 	SceneView.HDRIYawOffset = SceneView.sceneRenderOptions.fYawSliderValue * XM_PI * 2.0f;
+
+	SceneView.cubeVB = cubeVBIB.first;
+	SceneView.cubeIB = cubeVBIB.second;
 
 	{
 		Camera skyCam = cam.Clone();
@@ -676,18 +679,21 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 {
 	SCOPED_CPU_MARKER("Scene::PostUpdate()");
 	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
+
+	const Camera& cam = mCameras[mIndex_SelectedCamera];
+
 	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
 	FSceneShadowViews& ShadowView = mFrameShadowViews[FRAME_DATA_INDEX];
 
-	const Camera& cam = mCameras[mIndex_SelectedCamera];
-	
-	ExtractSceneView(SceneView, mViewProjectionMatrixHistory, cam);
-	SceneView.pEnvironmentMapMesh = &mMeshes.at((MeshID)EBuiltInMeshes::CUBE);
-	SceneView.bAppIsInSimulationState = AppInSimulationState;
+	mBoundingBoxHierarchy.Build(this, mGameObjectHandles, UpdateWorkerThreadPool);
 
-	// reset shadow view
-	ShadowView.NumPointShadowViews = 0;
-	ShadowView.NumSpotShadowViews = 0;
+	ExtractSceneView(SceneView, mViewProjectionMatrixHistory, cam, this->mMeshes.at(EBuiltInMeshes::CUBE).GetIABufferIDs());
+	SceneView.pEnvironmentMapMesh        = &mMeshes.at((MeshID)EBuiltInMeshes::CUBE);
+	SceneView.bAppIsInSimulationState    = AppInSimulationState;
+	SceneView.NumGameObjectBBRenderCmds  = (SceneView.sceneRenderOptions.bDrawGameObjectBoundingBoxes ? DIV_AND_ROUND_UP(mBoundingBoxHierarchy.mGameObjectBoundingBoxes.size(), MAX_INSTANCE_COUNT__UNLIT_SHADER) : 0);
+	SceneView.NumMeshBBRenderCmds        = (SceneView.sceneRenderOptions.bDrawMeshBoundingBoxes       ? DIV_AND_ROUND_UP(mBoundingBoxHierarchy.mMeshBoundingBoxes.size()      , MAX_INSTANCE_COUNT__UNLIT_SHADER) : 0);
+	SceneView.pGameObjectBoundingBoxList = &mBoundingBoxHierarchy.mGameObjectBoundingBoxes;
+	SceneView.pMeshBoundingBoxList       = &mBoundingBoxHierarchy.mMeshBoundingBoxes;
 
 	// distance-cull and get active shadowing lights from various light containers
 	{
@@ -698,9 +704,10 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 		mActiveLightIndices_Dynamic    = GetActiveAndCulledLightIndices(mLightsDynamic, ViewFrustumPlanes);
 	}
 
-	mBoundingBoxHierarchy.Build(this, mGameObjectHandles, UpdateWorkerThreadPool);
-
 	GatherSceneLightData(SceneView);
+
+	ShadowView.NumPointShadowViews = 0;
+	ShadowView.NumSpotShadowViews = 0;
 	GatherShadowViewData(ShadowView, mLightsStatic, mActiveLightIndices_Static);
 	GatherShadowViewData(ShadowView, mLightsStationary, mActiveLightIndices_Stationary);
 	GatherShadowViewData(ShadowView, mLightsDynamic, mActiveLightIndices_Dynamic);
@@ -717,7 +724,7 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 	
 	RecordRenderLightMeshCommands(SceneView);
 	RecordOutlineRenderCommands(DrawData.outlineRenderParams, mSelectedObjects, this, SceneView.view, SceneView.proj, SceneView.sceneRenderOptions.OutlineColor);
-
+	 
 	if (UIState.bDrawLightVolume)
 	{
 		const auto lights = this->GetLights(); // todo: this is unnecessary copying, don't do this

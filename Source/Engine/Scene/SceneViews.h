@@ -91,6 +91,7 @@ struct FFrustumRenderList
 	TaskSignal<void> DataReadySignal;
 	std::vector<FVisibleMeshData> Data;
 	FViewRef ViewRef; // references SceneView or ShadowView
+
 	inline void Reset()
 	{
 		Data.clear();
@@ -115,12 +116,15 @@ struct FSceneView
 	const Mesh*           pEnvironmentMapMesh = nullptr;
 	int                   SceneRTWidth = 0;
 	int                   SceneRTHeight = 0;
-	//bool                  bIsPBRLightingUsed;
-	//bool                  bIsDeferredRendering;
-	//bool                  bIsIBLEnabled;
-	//Settings::SceneRender sceneRenderSettings;
-	//EnvironmentMap	environmentMap;
 	bool                  bAppIsInSimulationState = false;
+
+	size_t NumGameObjectBBRenderCmds = 0;
+	size_t NumMeshBBRenderCmds = 0;
+	BufferID cubeVB = INVALID_ID;
+	BufferID cubeIB = INVALID_ID;
+	const std::vector<FBoundingBox>* pGameObjectBoundingBoxList = nullptr;
+	const std::vector<FBoundingBox>* pMeshBoundingBoxList = nullptr;
+
 	std::vector<FFrustumRenderList> FrustumRenderLists;
 
 	VQ_SHADER_DATA::SceneLighting GPULightingData;
