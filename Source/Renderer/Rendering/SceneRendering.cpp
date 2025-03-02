@@ -244,7 +244,7 @@ HRESULT VQRenderer::PreRenderScene(ThreadPool& WorkerThreads, const Window* pWin
 		}
 	}
 
-	BatchDrawCalls(WorkerThreads, SceneView);
+	// BatchDrawCalls(WorkerThreads, SceneView); // TODO:
 
 	return S_OK;
 }

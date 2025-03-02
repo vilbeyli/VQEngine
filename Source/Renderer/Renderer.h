@@ -418,7 +418,8 @@ private:
 	HRESULT         PresentFrame(FWindowRenderContext& ctx);
 	void DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FShadowView& shadowView, size_t iDepthMode);
 
-	void BatchDrawCalls(ThreadPool& WorkerThreads, const FSceneView& SceneView);
+	public: // TODO: undo
+	void BatchDrawCalls(ThreadPool& WorkerThreads, FSceneView& SceneView);
 
 //
 // STATIC PUBLIC DATA/INTERFACE

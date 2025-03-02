@@ -79,10 +79,18 @@ struct FVisibleMeshData
 	char bTessellated;
 };
 
+struct FViewRef
+{
+	enum EViewType { Scene, Shadow };
+	void* pViewData;
+	EViewType eViewType;
+};
+
 struct FFrustumRenderList
 {
 	TaskSignal<void> DataReadySignal;
 	std::vector<FVisibleMeshData> Data;
+	FViewRef ViewRef; // references SceneView or ShadowView
 	inline void Reset()
 	{
 		Data.clear();
@@ -113,7 +121,7 @@ struct FSceneView
 	//Settings::SceneRender sceneRenderSettings;
 	//EnvironmentMap	environmentMap;
 	bool                  bAppIsInSimulationState = false;
-	std::vector<FFrustumRenderList> vVisibleMeshListPerView;
+	std::vector<FFrustumRenderList> FrustumRenderLists;
 
 	VQ_SHADER_DATA::SceneLighting GPULightingData;
 

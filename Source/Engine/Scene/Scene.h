@@ -172,7 +172,6 @@ private: // Derived Scenes shouldn't access these functions
 
 	void GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews& SceneShadowView, ThreadPool& UpdateWorkerThreadPool);
 	void CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
-	void BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
 
 	void BuildGameObject(const FGameObjectRepresentation& rep, size_t iObj);
 	
@@ -275,7 +274,6 @@ protected:
 	//
 	SceneBoundingBoxHierarchy mBoundingBoxHierarchy;
 	mutable FFrustumCullWorkerContext mFrustumCullWorkerContext;
-	std::unordered_map<size_t, FShadowView*> mFrustumIndex_pShadowViewLookup;
 
 	std::vector<size_t> mActiveLightIndices_Static;
 	std::vector<size_t> mActiveLightIndices_Stationary;
