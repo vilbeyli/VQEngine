@@ -18,7 +18,6 @@
 
 #include "VQEngine.h"
 #include "GPUMarker.h"
-#include "VQEngine_RenderCommon.h"
 
 #include "Shaders/LightingConstantBufferData.h"
 
