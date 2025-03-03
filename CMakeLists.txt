@@ -119,7 +119,6 @@ set (UIFiles
 
 set (SourceVQE 
     "Source/Engine/VQEngine.h"
-    "Source/Engine/VQEngine_RenderCommon.h"
     "Source/Engine/Settings.h"
     "Source/Engine/Math.h"
     "Source/Engine/Culling.h"

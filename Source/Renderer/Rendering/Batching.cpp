@@ -339,7 +339,7 @@ static void DispatchMainViewInstanceDataWorkers(
 	{
 		RenderWorkerThreadPool.AddTask([=, &SceneView, &SceneDrawData, &vMainViewCullResults, &MainViewThreadDone]()
 		{
-			SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+			RENDER_WORKER_CPU_MARKER;
 			CollectViewInstanceData(
 				vMainViewCullResults,
 				vRanges[iR].first,
@@ -360,7 +360,7 @@ static void DispatchWorkers_ShadowViews(
 	, std::vector<FFrustumRenderCommandRecorderContext>& WorkerContexts
 	, const bool bForceLOD0
 	, ThreadPool& RenderWorkerThreadPool
-	, std::vector<FFrustumRenderList>& mFrustumRenderLists
+	, const std::vector<FFrustumRenderList>& mFrustumRenderLists
 )
 {
 	SCOPED_CPU_MARKER("DispatchWorkers_ShadowViews");
@@ -378,7 +378,7 @@ static void DispatchWorkers_ShadowViews(
 			size_t shadowIndex = iFrustum - 1; // Offset by 1 since index 0 is main view
 
 			assert(pShadowView);
-			FFrustumRenderList* FrustumRenderList = &mFrustumRenderLists[iFrustum];
+			const FFrustumRenderList* FrustumRenderList = &mFrustumRenderLists[iFrustum];
 			//const std::vector<FVisibleMeshData>* ViewCullResults = &(*mFrustumCullWorkerContext.pVisibleMeshListPerView)[iFrustum];
 			WorkerContexts[iFrustum - 1] = { iFrustum, &FrustumRenderList->Data, pShadowView };
 
@@ -404,7 +404,7 @@ static void DispatchWorkers_ShadowViews(
 			SCOPED_CPU_MARKER("Dispatch");
 			RenderWorkerThreadPool.AddTask([=]() // dispatch workers
 			{
-				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+				RENDER_WORKER_CPU_MARKER;
 				FFrustumRenderCommandRecorderContext ctx = WorkerContexts[iFrustum - 1]; // operate on a copy
 				if (ctx.pCullResults->empty())
 					return;
@@ -511,7 +511,7 @@ static void BatchInstanceData_BoundingBox(FSceneDrawData& SceneDrawData
 			SCOPED_CPU_MARKER("Dispatch");
 			UpdateWorkerThreadPool.AddTask([=, &BBs, &cmds, &SceneView]()
 			{
-				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+				RENDER_WORKER_CPU_MARKER;
 				BatchBoundingBoxRenderCommandData(cmds
 					, BBs
 					, matViewProj
@@ -572,16 +572,17 @@ static void BatchInstanceData_BoundingBox(FSceneDrawData& SceneDrawData
 
 
 
-void VQRenderer::BatchDrawCalls(ThreadPool& RenderWorkerThreadPool, FSceneView& SceneView)
+void VQRenderer::BatchDrawCalls(ThreadPool& RenderWorkerThreadPool, const FSceneView& SceneView)
 {
 	SCOPED_CPU_MARKER("BatchInstanceData");
+
 	FSceneDrawData& DrawData = this->GetSceneDrawData(0);
 
 	constexpr size_t NUM_MIN_SCENE_MESHES_FOR_THREADING = 128;
 	const size_t NumWorkerThreads = RenderWorkerThreadPool.GetThreadPoolSize();
 
 	assert(SceneView.FrustumRenderLists.size() >= 1);
-	FFrustumRenderList& MainViewFrustumRenderList = SceneView.FrustumRenderLists[0];
+	const FFrustumRenderList& MainViewFrustumRenderList = SceneView.FrustumRenderLists[0];
 	const std::vector<FVisibleMeshData>& MainViewRenderList = MainViewFrustumRenderList.Data;
 
 	// ---------------------------------------------------SYNC ---------------------------------------------------
@@ -653,4 +654,5 @@ void VQRenderer::BatchDrawCalls(ThreadPool& RenderWorkerThreadPool, FSceneView& 
 		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
 		while (RenderWorkerThreadPool.GetNumActiveTasks() != 0);
 	}
+
 }

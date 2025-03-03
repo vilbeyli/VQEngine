@@ -88,7 +88,7 @@ struct FViewRef
 
 struct FFrustumRenderList
 {
-	TaskSignal<void> DataReadySignal;
+	mutable TaskSignal<void> DataReadySignal;
 	std::vector<FVisibleMeshData> Data;
 	FViewRef ViewRef; // references SceneView or ShadowView
 
@@ -133,6 +133,10 @@ struct FSceneView
 	FPostProcessParameters postProcessParameters;
 };
 
+struct FSceneDebugView
+{
+
+};
 
 
 struct FShadowView

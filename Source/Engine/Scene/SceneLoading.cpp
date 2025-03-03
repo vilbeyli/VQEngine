@@ -527,6 +527,7 @@ void Scene::Unload()
 	mLightsStationary.clear();
 
 	mBoundingBoxHierarchy.Clear();
+	mFrustumCullWorkerContext.ClearMemory();
 
 	mIndex_SelectedCamera = 0;
 	mIndex_ActiveEnvironmentMapPreset = -1;

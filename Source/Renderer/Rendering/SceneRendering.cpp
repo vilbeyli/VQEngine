@@ -37,10 +37,6 @@
 #include "Libs/imgui/imgui.h"
 
 
-#define MARKER_COLOR  0xFF00FF00 
-#define RENDER_WORKER_CPU_MARKER   SCOPED_CPU_MARKER_C("RenderWorker", MARKER_COLOR)
-
-
 struct FFrameConstantBufferUnlit { DirectX::XMMATRIX matModelViewProj; DirectX::XMFLOAT4 color; };
 
 bool VQRenderer::ShouldEnableAsyncCompute(const FGraphicsSettings& GFXSettings, const FSceneView& SceneView, const FSceneShadowViews& ShadowView) const
@@ -138,7 +134,15 @@ static uint32_t GetNumShadowViewCmdRecordingThreads(const FSceneShadowViews& Sha
 #endif
 }
 
-HRESULT VQRenderer::PreRenderScene(ThreadPool& WorkerThreads, const Window* pWindow, const FSceneView& SceneView, const FSceneShadowViews& SceneShadowView, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings, const FUIState& UIState)
+HRESULT VQRenderer::PreRenderScene(
+	  ThreadPool& WorkerThreads
+	, const Window* pWindow
+	, const FSceneView& SceneView
+	, const FSceneShadowViews& SceneShadowView
+	, const FPostProcessParameters& PPParams
+	, const FGraphicsSettings& GFXSettings
+	, const FUIState& UIState
+)
 {
 	SCOPED_CPU_MARKER("RenderThread_PreRender()");
 	FWindowRenderContext& ctx = this->GetWindowRenderContext(pWindow->GetHWND());
@@ -151,6 +155,11 @@ HRESULT VQRenderer::PreRenderScene(ThreadPool& WorkerThreads, const Window* pWin
 		while (!mSubmitWorkerFinished.load());
 		mSubmitWorkerFinished.store(false);
 		mWaitForSubmitWorker = false;
+	}
+
+	if (!SceneView.FrustumRenderLists.empty())
+	{
+		BatchDrawCalls(WorkerThreads, SceneView);
 	}
 
 	const bool bUseAsyncCompute = ShouldEnableAsyncCompute(GFXSettings, SceneView, SceneShadowView);
@@ -243,8 +252,6 @@ HRESULT VQRenderer::PreRenderScene(ThreadPool& WorkerThreads, const Window* pWin
 			}
 		}
 	}
-
-	// BatchDrawCalls(WorkerThreads, SceneView); // TODO:
 
 	return S_OK;
 }

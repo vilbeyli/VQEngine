@@ -395,67 +395,6 @@ static std::string DumpCameraInfo(int index, const Camera& cam)
 static void ToggleBool(bool& b) { b = !b; }
 
 
-static void RecordRenderLightBoundsCommand(const Light& l,
-	std::vector<FLightRenderData>& cmds,
-	const XMVECTOR& CameraPosition,
-	const Scene* pScene
-)
-{
-	const XMVECTOR lightPosition = XMLoadFloat3(&l.Position);
-	const XMVECTOR lightToCamera = CameraPosition - lightPosition;
-	const XMVECTOR dot = XMVector3Dot(lightToCamera, lightToCamera);
-
-	const float distanceSq = dot.m128_f32[0];
-	const float attenuation = 1.0f / distanceSq;
-	const float attenuatedBrightness = l.Brightness * attenuation;
-
-	FLightRenderData cmd;
-	cmd.color = XMFLOAT4(
-		l.Color.x //* attenuatedBrightness
-		, l.Color.y //* attenuatedBrightness
-		, l.Color.z //* attenuatedBrightness
-		, 0.45f
-	);
-
-	switch (l.Type)
-	{
-	case Light::EType::DIRECTIONAL:
-		break; // don't draw directional light mesh
-
-	case Light::EType::SPOT:
-	{
-		Transform tf = l.GetTransform();
-		tf.SetScale(1, 1, 1); // reset scale as it holds the scale value for light's render mesh
-		tf.RotateAroundLocalXAxisDegrees(-90.0f); // align with spot light's local space
-
-		XMMATRIX alignConeToSpotLightTransformation = XMMatrixIdentity();
-		alignConeToSpotLightTransformation.r[3].m128_f32[0] = 0.0f;
-		alignConeToSpotLightTransformation.r[3].m128_f32[1] = -l.Range;
-		alignConeToSpotLightTransformation.r[3].m128_f32[2] = 0.0f;
-
-		const float coneBaseRadius = std::tanf(l.SpotOuterConeAngleDegrees * DEG2RAD) * l.Range;
-		XMMATRIX scaleConeToRange = XMMatrixIdentity();
-		scaleConeToRange.r[0].m128_f32[0] = coneBaseRadius;
-		scaleConeToRange.r[1].m128_f32[1] = l.Range;
-		scaleConeToRange.r[2].m128_f32[2] = coneBaseRadius;
-
-		//wvp = alignConeToSpotLightTransformation * tf.WorldTransformationMatrix() * viewProj;
-		cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::CONE);
-		cmd.matWorldTransformation = scaleConeToRange * alignConeToSpotLightTransformation * tf.matWorldTransformation();
-		cmds.push_back(cmd);
-	}	break;
-
-	case Light::EType::POINT:
-	{
-		Transform tf = l.GetTransform();
-		tf._scale = XMFLOAT3(l.Range, l.Range, l.Range);
-		
-		cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::SPHERE);
-		cmd.matWorldTransformation = tf.matWorldTransformation();
-		cmds.push_back(cmd);
-	}  break;
-	} // swicth
-}
 
 //-------------------------------------------------------------------------------
 //
@@ -673,7 +612,70 @@ static void CollectDebugVertexDrawParams(
 		}
 	}	
 }
- 
+
+static void RecordRenderLightBoundsCommand(const Light& l,
+	std::vector<FLightRenderData>& cmds,
+	const XMVECTOR& CameraPosition,
+	const Scene* pScene
+)
+{
+	const XMVECTOR lightPosition = XMLoadFloat3(&l.Position);
+	const XMVECTOR lightToCamera = CameraPosition - lightPosition;
+	const XMVECTOR dot = XMVector3Dot(lightToCamera, lightToCamera);
+
+	const float distanceSq = dot.m128_f32[0];
+	const float attenuation = 1.0f / distanceSq;
+	const float attenuatedBrightness = l.Brightness * attenuation;
+
+	const float alpha = 0.45f;
+
+	FLightRenderData cmd;
+	cmd.color = XMFLOAT4(
+		l.Color.x //* attenuatedBrightness
+		, l.Color.y //* attenuatedBrightness
+		, l.Color.z //* attenuatedBrightness
+		, alpha
+	);
+
+	switch (l.Type)
+	{
+	case Light::EType::DIRECTIONAL:
+		break; // don't draw directional light mesh
+
+	case Light::EType::SPOT:
+	{
+		Transform tf = l.GetTransform();
+		tf.SetScale(1, 1, 1); // reset scale as it holds the scale value for light's render mesh
+		tf.RotateAroundLocalXAxisDegrees(-90.0f); // align with spot light's local space
+
+		XMMATRIX alignConeToSpotLightTransformation = XMMatrixIdentity();
+		alignConeToSpotLightTransformation.r[3].m128_f32[0] = 0.0f;
+		alignConeToSpotLightTransformation.r[3].m128_f32[1] = -l.Range;
+		alignConeToSpotLightTransformation.r[3].m128_f32[2] = 0.0f;
+
+		const float coneBaseRadius = std::tanf(l.SpotOuterConeAngleDegrees * DEG2RAD) * l.Range;
+		XMMATRIX scaleConeToRange = XMMatrixIdentity();
+		scaleConeToRange.r[0].m128_f32[0] = coneBaseRadius;
+		scaleConeToRange.r[1].m128_f32[1] = l.Range;
+		scaleConeToRange.r[2].m128_f32[2] = coneBaseRadius;
+
+		//wvp = alignConeToSpotLightTransformation * tf.WorldTransformationMatrix() * viewProj;
+		cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::CONE);
+		cmd.matWorldTransformation = scaleConeToRange * alignConeToSpotLightTransformation * tf.matWorldTransformation();
+		cmds.push_back(cmd);
+	}	break;
+
+	case Light::EType::POINT:
+	{
+		Transform tf = l.GetTransform();
+		tf._scale = XMFLOAT3(l.Range, l.Range, l.Range);
+
+		cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::SPHERE);
+		cmd.matWorldTransformation = tf.matWorldTransformation();
+		cmds.push_back(cmd);
+	}  break;
+	} // swicth
+}
 
 void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UIState, bool AppInSimulationState, int FRAME_DATA_INDEX)
 {
@@ -720,7 +722,7 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 
 	FSceneDrawData& DrawData = mRenderer.GetSceneDrawData(FRAME_DATA_INDEX);
 
-	mRenderer.BatchDrawCalls(UpdateWorkerThreadPool, SceneView);
+	//mRenderer.BatchDrawCalls(UpdateWorkerThreadPool, SceneView);
 	
 	RecordRenderLightMeshCommands(SceneView);
 	RecordOutlineRenderCommands(DrawData.outlineRenderParams, mSelectedObjects, this, SceneView.view, SceneView.proj, SceneView.sceneRenderOptions.OutlineColor);
@@ -1234,144 +1236,6 @@ void Scene::CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerTh
 //-------------------------------------------------------------------------------
 
 
-static void BatchBoundingBoxRenderCommandData(
-	std::vector<FInstancedBoundingBoxRenderData>& cmds
-	, const std::vector<FBoundingBox>& BBs
-	, const XMMATRIX viewProj
-	, const XMFLOAT4 Color
-	, size_t iBegin
-	, const std::pair<BufferID, BufferID>& VBIB
-)
-{
-	SCOPED_CPU_MARKER("BatchBoundingBoxRenderCommandData");
-	int NumBBsToProcess = (int)BBs.size();
-	size_t i = 0;
-	int iBB = 0;
-	while (NumBBsToProcess > 0)
-	{
-		FInstancedBoundingBoxRenderData& cmd = cmds[iBegin + i];
-		cmd.matWorldViewProj.resize(std::min(MAX_INSTANCE_COUNT__UNLIT_SHADER, (size_t)NumBBsToProcess));
-		cmd.vertexIndexBuffer = VBIB;
-		cmd.numIndices = 36; // TODO: remove magic number
-		cmd.color = Color;
-
-		int iBatch = 0;
-		while (iBatch < MAX_INSTANCE_COUNT__UNLIT_SHADER && iBB < BBs.size())
-		{
-			cmd.matWorldViewProj[iBatch] = BBs[iBB].GetWorldTransformMatrix() * viewProj;
-			++iBatch;
-			++iBB;
-		}
-
-		NumBBsToProcess -= iBatch;
-		++i;
-	}
-}
-void Scene::BatchInstanceData_BoundingBox(FSceneView& SceneView
-	, ThreadPool& UpdateWorkerThreadPool
-	, const DirectX::XMMATRIX matViewProj) const
-{
-	SCOPED_CPU_MARKER("BoundingBox");
-	const bool bDrawGameObjectBBs = SceneView.sceneRenderOptions.bDrawGameObjectBoundingBoxes;
-	const bool bDrawMeshBBs = SceneView.sceneRenderOptions.bDrawMeshBoundingBoxes;
-
-	FSceneDrawData& SceneDrawData = mRenderer.GetSceneDrawData(0);
-
-	const float Transparency = 0.75f;
-	const XMFLOAT4 BBColor_GameObj = XMFLOAT4(0.0f, 0.2f, 0.8f, Transparency);
-	const XMFLOAT4 BBColor_Mesh = XMFLOAT4(0.0f, 0.8f, 0.2f, Transparency);
-	
-	const auto VBIB = this->mMeshes.at(EBuiltInMeshes::CUBE).GetIABufferIDs();
-	auto fnBatch = [&UpdateWorkerThreadPool, &VBIB](
-		std::vector<FInstancedBoundingBoxRenderData>& cmds
-		, const std::vector<FBoundingBox>& BBs
-		, size_t iBoundingBox
-		, const XMFLOAT4 BBColor
-		, const XMMATRIX matViewProj
-		, const char* strMarker = ""
-	)
-	{
-		SCOPED_CPU_MARKER(strMarker);
-
-		constexpr size_t MIN_NUM_BOUNDING_BOX_FOR_THREADING = 128;
-		if (BBs.size() < MIN_NUM_BOUNDING_BOX_FOR_THREADING || !UPDATE_THREAD__ENABLE_WORKERS)
-		{
-			BatchBoundingBoxRenderCommandData(cmds
-				, BBs
-				, matViewProj
-				, BBColor
-				, iBoundingBox
-				, VBIB
-			);
-		}
-		else
-		{
-			SCOPED_CPU_MARKER("Dispatch");
-			UpdateWorkerThreadPool.AddTask([=, &BBs, &cmds]()
-			{
-				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
-				BatchBoundingBoxRenderCommandData(cmds
-					, BBs
-					, matViewProj
-					, BBColor
-					, iBoundingBox
-					, VBIB
-				);
-			});
-		}
-	};
-
-	const size_t NumGameObjectBBRenderCmds = (bDrawGameObjectBBs ? DIV_AND_ROUND_UP(mBoundingBoxHierarchy.mGameObjectBoundingBoxes.size(), MAX_INSTANCE_COUNT__UNLIT_SHADER) : 0);
-	const size_t NumMeshBBRenderCmds       = (bDrawMeshBBs       ? DIV_AND_ROUND_UP(mBoundingBoxHierarchy.mMeshBoundingBoxes.size(), MAX_INSTANCE_COUNT__UNLIT_SHADER) : 0);
-
-	{
-		SCOPED_CPU_MARKER("AllocMem");
-		SceneDrawData.boundingBoxRenderParams.resize(NumGameObjectBBRenderCmds + NumMeshBBRenderCmds);
-	}
-	// --------------------------------------------------------------
-	// Game Object Bounding Boxes
-	// --------------------------------------------------------------
-	size_t iBoundingBox = 0;
-	if (SceneView.sceneRenderOptions.bDrawGameObjectBoundingBoxes)
-	{
-#if RENDER_INSTANCED_BOUNDING_BOXES 
-		fnBatch(SceneDrawData.boundingBoxRenderParams
-			, mBoundingBoxHierarchy.mGameObjectBoundingBoxes
-			, iBoundingBox
-			, BBColor_GameObj
-			, matViewProj
-			, "GameObj"
-		);
-#else
-	BatchBoundingBoxRenderCommandData(SceneView.boundingBoxRenderParams, SceneView, mBoundingBoxHierarchy.mGameObjectBoundingBoxes, BBColor_GameObj, 0);
-#endif
-	}
-
-
-	// --------------------------------------------------------------
-	// Mesh Bounding Boxes
-	// --------------------------------------------------------------
-	if (SceneView.sceneRenderOptions.bDrawMeshBoundingBoxes)
-	{
-		iBoundingBox = NumGameObjectBBRenderCmds;
-
-#if RENDER_INSTANCED_BOUNDING_BOXES 
-		fnBatch(SceneDrawData.boundingBoxRenderParams
-			, mBoundingBoxHierarchy.mMeshBoundingBoxes
-			, iBoundingBox
-			, BBColor_Mesh
-			, matViewProj
-			, "Meshes"
-		);
-#else
-		BatchBoundingBoxRenderCommandData(SceneView.boundingBoxRenderParams, SceneView, mBoundingBoxHierarchy.mGameObjectBoundingBoxes, BBColor_GameObj, 0);
-#endif
-	}
-}
-
-using namespace InstanceBatching;
-
-
 
 static void RecordRenderLightBoundsCommands(
 	const std::vector<Light>& vLights, 
@@ -1421,8 +1285,7 @@ static void RecordRenderLightMeshCommands(
 		switch (l.Type)
 		{
 		case Light::EType::DIRECTIONAL:
-			continue; // don't draw directional light mesh
-			break;
+			break; // don't draw directional light mesh
 		case Light::EType::SPOT:
 		{
 			cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::SPHERE);

@@ -50,6 +50,8 @@
 #define THREADED_CTX_INIT 1
 #define RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING 1
 #define EXECUTE_CMD_LISTS_ON_WORKER 1
+#define MARKER_COLOR  0xFF00FF00 
+#define RENDER_WORKER_CPU_MARKER   SCOPED_CPU_MARKER_C("RenderWorker", MARKER_COLOR)
 
 namespace D3D12MA { class Allocator; }
 class Window;
@@ -418,8 +420,7 @@ private:
 	HRESULT         PresentFrame(FWindowRenderContext& ctx);
 	void DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FShadowView& shadowView, size_t iDepthMode);
 
-	public: // TODO: undo
-	void BatchDrawCalls(ThreadPool& WorkerThreads, FSceneView& SceneView);
+	void BatchDrawCalls(ThreadPool& WorkerThreads, const FSceneView& SceneView);
 
 //
 // STATIC PUBLIC DATA/INTERFACE
