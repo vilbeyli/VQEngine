@@ -90,6 +90,7 @@ struct FViewRef
 struct FFrustumRenderList
 {
 	mutable TaskSignal<void> DataReadySignal;
+	mutable TaskSignal<size_t> DataCountReadySignal;
 	std::vector<FVisibleMeshData> Data;
 	FViewRef ViewRef; // references SceneView or ShadowView
 
@@ -97,6 +98,7 @@ struct FFrustumRenderList
 	{
 		Data.clear();
 		DataReadySignal.Reset();
+		DataCountReadySignal.Reset();
 	}
 };
 
@@ -201,6 +203,6 @@ struct FSceneShadowViews
 struct FFrustumRenderCommandRecorderContext
 {
 	size_t iFrustum;
-	const std::vector<FVisibleMeshData>* pCullResults = nullptr;
+	const FFrustumRenderList* pFrustumRenderList = nullptr;
 	FShadowView* pShadowView = nullptr;
 };

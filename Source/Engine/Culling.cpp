@@ -368,6 +368,10 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 			}
 		}
 		{
+			SCOPED_CPU_MARKER("SignalCount");
+			(*pFrustumRenderLists)[iWork].DataCountReadySignal.Notify(vVisibleBBIndicesPerView[iWork].size());
+		}
+		{
 			SCOPED_CPU_MARKER("AllocRenderData");
 			vVisibleMeshList.reserve(vVisibleBBIndicesPerView[iWork].size());
 		}
@@ -425,7 +429,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 #endif
 		}
 		{
-			SCOPED_CPU_MARKER("Signal");
+			SCOPED_CPU_MARKER("SignalDataReady");
 			(*pFrustumRenderLists)[iWork].DataReadySignal.Notify();
 		}
 	}

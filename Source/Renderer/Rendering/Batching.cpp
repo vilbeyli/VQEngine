@@ -266,11 +266,10 @@ static void DispatchWorkers_ShadowViews(
 			assert(pShadowView);
 			const FFrustumRenderList* FrustumRenderList = &mFrustumRenderLists[iFrustum];
 			//const std::vector<FVisibleMeshData>* ViewvisibleMeshDatas = &(*mFrustumCullWorkerContext.pVisibleMeshListPerView)[iFrustum];
-			WorkerContexts[iFrustum - 1] = { iFrustum, &FrustumRenderList->Data, pShadowView };
+			WorkerContexts[iFrustum - 1] = { iFrustum, FrustumRenderList, pShadowView };
 
-			FrustumRenderList->DataReadySignal.Wait(); // sync
+			const size_t NumMeshes = FrustumRenderList->DataCountReadySignal.Wait(); // sync
 
-			const size_t NumMeshes = FrustumRenderList->Data.size();
 			NumShadowMeshes += NumMeshes;
 			NumShadowFrustumsWithNumMeshesLargerThanMinNumMeshesPerThread += NumMeshes >= NUM_MIN_SHADOW_MESHES_FOR_THREADING ? 1 : 0;
 			NumShadowMeshes_Threaded += NumMeshes >= NUM_MIN_SHADOW_MESHES_FOR_THREADING ? NumMeshes : 0;
@@ -295,11 +294,13 @@ static void DispatchWorkers_ShadowViews(
 				RENDER_WORKER_CPU_MARKER;
 				const size_t iContext = iFrustum - NUM_NON_SHADOW_FRUSTUMS;
 				FFrustumRenderCommandRecorderContext ctx = WorkerContexts[iFrustum - NUM_NON_SHADOW_FRUSTUMS]; // copy so we dont have to worry about freed memory since contexts are within the scope of this function
-				assert(ctx.pCullResults);
-				if (ctx.pCullResults->empty())
+				assert(ctx.pFrustumRenderList);
+				
+				ctx.pFrustumRenderList->DataReadySignal.Wait(); // sync
+				if (ctx.pFrustumRenderList->Data.empty())
 					return;
 
-				BatchShadowViewDrawCalls(ctx.pShadowView, *ctx.pCullResults, &FShadowView::GetKey);
+				BatchShadowViewDrawCalls(ctx.pShadowView, ctx.pFrustumRenderList->Data, &FShadowView::GetKey);
 			});
 		}
 	}
@@ -473,7 +474,11 @@ void VQRenderer::BatchDrawCalls(ThreadPool& RenderWorkerThreadPool, const FScene
 		+ (SceneShadowView.ShadowView_Directional.meshRenderParams.size() > 0 ? 1 : 0
 	);
 	
-	BatchMainViewDrawCalls(DrawData, MainViewRenderList, SceneView.viewProj, SceneView.viewProjPrev, &FSceneDrawData::GetKey);
+	RenderWorkerThreadPool.AddTask([&]() 
+	{
+		RENDER_WORKER_CPU_MARKER;
+		BatchMainViewDrawCalls(DrawData, MainViewRenderList, SceneView.viewProj, SceneView.viewProjPrev, &FSceneDrawData::GetKey);
+	});
 
 	DispatchWorkers_ShadowViews(
 		NumShadowMeshFrustums,
