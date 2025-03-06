@@ -33,24 +33,24 @@ static void SetParamData(MeshRenderData_t& cmd,
 	const FVisibleMeshData& visibleMeshData
 )
 {
-	const XMMATRIX matWorld = visibleMeshData.Transform.matWorldTransformation();
-	const XMMATRIX matWorldHistory = visibleMeshData.Transform.matWorldTransformationPrev();
-	const XMMATRIX matNormal = visibleMeshData.Transform.NormalMatrix(matWorld);
-	const XMMATRIX matWVP = matWorld * viewProj;
+	XMMATRIX matWorld = visibleMeshData.Transform.matWorldTransformation();
+	XMMATRIX matWorldHistory = visibleMeshData.Transform.matWorldTransformationPrev();
+	XMMATRIX matNormal = visibleMeshData.Transform.NormalMatrix(matWorld);
+	XMMATRIX matWVP = matWorld * viewProj;
 
 	assert(iInst >= 0 && cmd.matWorld.size() > iInst);
 	assert(cmd.matWorld.size() <= MAX_INSTANCE_COUNT__SCENE_MESHES);
 
-	cmd.matWorld[iInst] = matWorld;
-	cmd.matWorldViewProj[iInst] = matWVP;
-	cmd.matWorldViewProjPrev[iInst] = matWorldHistory * viewProjPrev;
-	cmd.matNormal[iInst] = matNormal;
+	cmd.matWorldViewProjPrev[iInst] = std::move(matWorldHistory * viewProjPrev);
+	cmd.matWorldViewProj[iInst] = std::move(matWVP);
+	cmd.matNormal[iInst] = std::move(matNormal);
+	cmd.matWorld[iInst] = std::move(matWorld);
 	cmd.objectID[iInst] = (int)visibleMeshData.hGameObject + 1; // 0 means empty. offset by 1 now, and undo it when reading back
 	cmd.projectedArea[iInst] = visibleMeshData.fBBArea;
 	cmd.vertexIndexBuffer = visibleMeshData.VBIB;
 	cmd.numIndices = visibleMeshData.NumIndices;
 	cmd.matID = visibleMeshData.hMaterial;
-	cmd.material = visibleMeshData.Material; // TODO: use std::move
+	cmd.material = std::move(visibleMeshData.Material);
 
 #if 0
 	auto fnAllZero = [](const XMMATRIX& m)
@@ -74,20 +74,17 @@ static void SetParamData(FInstancedShadowMeshRenderData& cmd,
 	const FVisibleMeshData& visibleMeshData
 )
 {
-	const XMMATRIX matWorld = visibleMeshData.Transform.matWorldTransformation();
-	const XMMATRIX matWVP = matWorld * viewProj;
-
 	assert(iInst >= 0 && cmd.matWorldViewProj.size() > iInst);
 	assert(iInst >= 0 && cmd.matWorld.size() > iInst);
 	assert(cmd.matWorldViewProj.size() <= MAX_INSTANCE_COUNT__SHADOW_MESHES);
 	assert(cmd.matWorld.size() <= MAX_INSTANCE_COUNT__SHADOW_MESHES);
 
-	cmd.matWorld[iInst] = matWorld;
-	cmd.matWorldViewProj[iInst] = matWVP;
-	cmd.vertexIndexBuffer = visibleMeshData.VBIB;
-	cmd.numIndices = visibleMeshData.NumIndices;
+	cmd.matWorld[iInst] = visibleMeshData.Transform.matWorldTransformation();
+	cmd.material = std::move(visibleMeshData.Material);
 	cmd.matID = visibleMeshData.hMaterial;
-	cmd.material = visibleMeshData.Material; // TODO: std::move()
+	cmd.numIndices = visibleMeshData.NumIndices;
+	cmd.vertexIndexBuffer = visibleMeshData.VBIB;
+	cmd.matWorldViewProj[iInst] = cmd.matWorld[iInst] * viewProj;
 }
 
 static void ResizeDrawInstanceArrays(FInstancedMeshRenderData& cmd, size_t sz, size_t iCmd)

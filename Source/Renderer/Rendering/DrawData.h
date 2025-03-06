@@ -82,8 +82,8 @@ struct FOutlineRenderData
 struct FInstancedMeshRenderDataBase
 {
 	int numIndices = 0;
-	std::pair<BufferID, BufferID> vertexIndexBuffer;
 	MaterialID matID = INVALID_ID;
+	std::pair<BufferID, BufferID> vertexIndexBuffer;
 	Material material;
 	std::vector<DirectX::XMMATRIX> matWorldViewProj;
 };
@@ -91,10 +91,10 @@ struct FInstancedMotionVectorMeshData
 {
 	std::vector<DirectX::XMMATRIX> matWorldViewProjPrev;
 };
-struct FInstancedMeshRenderData : public FInstancedMeshRenderDataBase, public FInstancedMotionVectorMeshData
+struct FInstancedMeshRenderData : public FInstancedMotionVectorMeshData, public FInstancedMeshRenderDataBase
 {
-	std::vector<DirectX::XMMATRIX> matNormal;
 	std::vector<DirectX::XMMATRIX> matWorld;
+	std::vector<DirectX::XMMATRIX> matNormal;
 	std::vector<int> objectID;
 	std::vector<float> projectedArea;
 };

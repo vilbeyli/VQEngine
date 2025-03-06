@@ -41,7 +41,7 @@ enum EMaterialTextureMapBindings
 	NUM_MATERIAL_TEXTURE_MAP_BINDINGS
 };
 
-struct Material // 56 Bytes
+struct Material
 {
 	//------------------------------------------------------------
 	DirectX::XMFLOAT3 diffuse           = {1, 1, 1};   // 12 Bytes
@@ -62,9 +62,7 @@ struct Material // 56 Bytes
 	float displacement                  = 0.0f;        // 4 Bytes
 	float normalMapMipBias              = 0.0f;        // 4 Bytes
 	//------------------------------------------------------------
-	// Tessellation
 	FTessellationParameters Tessellation;
-	bool bWireframe = false;
 	//------------------------------------------------------------
 
 
@@ -81,6 +79,7 @@ struct Material // 56 Bytes
 
 	SRV_ID SRVMaterialMaps = INVALID_ID;
 	SRV_ID SRVHeightMap = INVALID_ID;
+	bool bWireframe = false;
 	//------------------------------------------------------------
 
 	inline VQ_SHADER_DATA::TessellationParams GetTessellationCBufferData() const { return this->Tessellation.GPUParams; }

@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-enum ETessellationDomain
+enum class ETessellationDomain : short
 {
 	TRIANGLE_PATCH = 0,
 	QUAD_PATCH,
@@ -32,7 +32,7 @@ enum ETessellationDomain
 
 	NUM_TESSELLATION_DOMAINS
 };
-enum ETessellationOutputTopology
+enum class ETessellationOutputTopology : short
 {
 	TESSELLATION_OUTPUT_POINT = 0,
 	TESSELLATION_OUTPUT_LINE,
@@ -41,7 +41,7 @@ enum ETessellationOutputTopology
 
 	NUM_TESSELLATION_OUTPUT_TOPOLOGY
 };
-enum ETessellationPartitioning
+enum class ETessellationPartitioning : short
 {
 	INTEGER = 0,
 	FRACTIONAL_EVEN,
@@ -54,20 +54,20 @@ struct FTessellationParameters
 	static constexpr float MAX_TESSELLATION_FACTOR = 64.0f;
 
 	bool bEnableTessellation = false;
+	bool bEnableVertexTBNVisualization = false;
 	ETessellationDomain Domain = ETessellationDomain::TRIANGLE_PATCH;
 	ETessellationOutputTopology OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW;
 	ETessellationPartitioning Partitioning = ETessellationPartitioning::FRACTIONAL_ODD;
 
 	VQ_SHADER_DATA::TessellationParams GPUParams;
-	bool bEnableVertexTBNVisualization = false;
 
 	inline void SetAllTessellationFactors(float TessellationFactor)
 	{
 		switch (Domain)
 		{
-		case TRIANGLE_PATCH: GPUParams.TriInnerTessFactor = GPUParams.TriEdgeTessFactor.x = GPUParams.TriEdgeTessFactor.y = GPUParams.TriEdgeTessFactor.z = TessellationFactor; break;
-		case QUAD_PATCH: GPUParams.QuadInsideFactor.x = GPUParams.QuadInsideFactor.y = GPUParams.QuadEdgeTessFactor.x = GPUParams.QuadEdgeTessFactor.y = GPUParams.QuadEdgeTessFactor.z = GPUParams.QuadEdgeTessFactor.w = TessellationFactor; break;
-		case ISOLINE_PATCH: // TODO: line
+		case ETessellationDomain::TRIANGLE_PATCH: GPUParams.TriInnerTessFactor = GPUParams.TriEdgeTessFactor.x = GPUParams.TriEdgeTessFactor.y = GPUParams.TriEdgeTessFactor.z = TessellationFactor; break;
+		case ETessellationDomain::QUAD_PATCH: GPUParams.QuadInsideFactor.x = GPUParams.QuadInsideFactor.y = GPUParams.QuadEdgeTessFactor.x = GPUParams.QuadEdgeTessFactor.y = GPUParams.QuadEdgeTessFactor.z = GPUParams.QuadEdgeTessFactor.w = TessellationFactor; break;
+		case ETessellationDomain::ISOLINE_PATCH: // TODO: line
 			break;
 		}
 	}
@@ -151,12 +151,13 @@ namespace Tessellation
 	}
 	inline bool ShouldSkipTessellationVariant(size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCull)
 	{
-		const bool bOutputTopologyIsTriangle = (iOutTopo != ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE && iOutTopo != ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT);
+		const bool bOutputTopologyIsTriangle = ((ETessellationOutputTopology)iOutTopo != ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE && (ETessellationOutputTopology)iOutTopo != ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT);
+
 		if (iTess == 0 && (iDomain > 0 || iPart > 0 || iOutTopo > 0 || iTessCull > 0))
 			return true; // skip tess permutations when tess is off
-		if (iTess == 1 && iOutTopo == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE && iDomain != ETessellationDomain::ISOLINE_PATCH)
+		if (iTess == 1 && (ETessellationOutputTopology)iOutTopo == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE && (ETessellationDomain)iDomain != ETessellationDomain::ISOLINE_PATCH)
 			return true; // line output topologies are only available to isoline domains
-		if (iTess == 1 && iDomain == ETessellationDomain::ISOLINE_PATCH && bOutputTopologyIsTriangle)
+		if (iTess == 1 && (ETessellationDomain)iDomain == ETessellationDomain::ISOLINE_PATCH && bOutputTopologyIsTriangle)
 			return true; // // IsoLine domain must specify output primitive point or line
 		if (iTess == 1 && iTessCull > 0 && !bOutputTopologyIsTriangle)
 			return true; // prevent non-tri output topologies to utilize GS (because it'll only be a perf penalty)
@@ -173,9 +174,9 @@ namespace Tessellation
 	{
 		const bool bSWCullTessellation = tess.GPUParams.bFaceCull > 0 || tess.GPUParams.bFrustumCull > 0;
 		iTess     = tess.bEnableTessellation ? 1 : 0;
-		iDomain   = iTess == 0 ? 0 : tess.Domain;
-		iPart     = iTess == 0 ? 0 : tess.Partitioning;
-		iOutTopo  = iTess == 0 ? 0 : tess.OutputTopology;
+		iDomain   = iTess == 0 ? 0 : (size_t)tess.Domain;
+		iPart     = iTess == 0 ? 0 : (size_t)tess.Partitioning;
+		iOutTopo  = iTess == 0 ? 0 : (size_t)tess.OutputTopology;
 		iTessCull = iTess == 1 && (bSWCullTessellation ? 1 : 0);
 		return;
 	}

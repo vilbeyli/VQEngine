@@ -381,18 +381,20 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 				const float fBBArea = CalculateProjectedBoundingBoxArea(vBoundingBoxList[bb], vMatViewProj[iWork]);
 				const int iLOD = vForceLOD0[iWork] ? 0 : InstanceBatching::GetLODFromProjectedScreenArea(fBBArea, mesh.GetNumLODs());
 
+				assert(iLOD < 256);
 				vVisibleMeshList.emplace_back(
 					FVisibleMeshData{
 						.Transform = *MeshBB_Transforms[bb], // copy the transform
-						.Material = mat, // copy the material
-						.hMesh = MeshBB_MeshID[bb],
-						.hMaterial = MeshBB_MatID[bb],
-						.hGameObject = MeshBB_GameObjHandles[bb],
 						.fBBArea = fBBArea,
-						.SelectedLOD = iLOD,
-						.VBIB = mesh.GetIABufferIDs(iLOD),
+						.hGameObject = MeshBB_GameObjHandles[bb],
+						.Material = mat, // copy the material
+						.padding = 0xDEADC0DE,
+						.hMaterial = MeshBB_MatID[bb],
+						.hMesh = MeshBB_MeshID[bb],
+						.SelectedLOD = static_cast<unsigned char>(iLOD),
+						.bTessellated = mat.Tessellation.bEnableTessellation,
 						.NumIndices = mesh.GetNumIndices(iLOD),
-						.bTessellated = mat.Tessellation.bEnableTessellation
+						.VBIB = mesh.GetIABufferIDs(iLOD),
 					}
 				);
 			}

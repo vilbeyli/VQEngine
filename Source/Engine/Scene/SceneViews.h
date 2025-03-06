@@ -68,15 +68,16 @@ struct FSceneRenderOptions
 struct FVisibleMeshData
 {
 	Transform Transform;// store a copy
-	Material Material;  // store a copy
-	MeshID hMesh;
-	MaterialID hMaterial;
-	size_t hGameObject;
 	float fBBArea;
-	int SelectedLOD;
-	std::pair<BufferID, BufferID> VBIB;
-	unsigned NumIndices;
+	size_t hGameObject;
+	Material Material;  // store a copy
+	size_t padding;
+	MaterialID hMaterial;
+	MeshID hMesh;
+	unsigned char SelectedLOD;
 	char bTessellated;
+	unsigned NumIndices;
+	std::pair<BufferID, BufferID> VBIB;
 };
 
 struct FViewRef

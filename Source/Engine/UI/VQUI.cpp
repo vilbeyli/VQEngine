@@ -1255,7 +1255,7 @@ static void DrawTessellationEditorGUI(FUIState& mUIState, FTessellationParameter
 			// "Line"
 			""
 		};
-		if (ImGui::BeginCombo("Domain", pszTessellationModeNames[tess.Domain]))
+		if (ImGui::BeginCombo("Domain", pszTessellationModeNames[(size_t)tess.Domain]))
 		{
 			if (ImGui::Selectable(pszTessellationModeNames[0], tess.Domain == ETessellationDomain::TRIANGLE_PATCH)) { tess.Domain = ETessellationDomain::TRIANGLE_PATCH; }
 			if (ImGui::Selectable(pszTessellationModeNames[1], tess.Domain == ETessellationDomain::QUAD_PATCH)) { tess.Domain = ETessellationDomain::QUAD_PATCH; }
@@ -1347,7 +1347,7 @@ static void DrawTessellationEditorGUI(FUIState& mUIState, FTessellationParameter
 			"Pow2",
 			""
 		};
-		if (ImGui::BeginCombo("Partitioning", pszPartitioningNames[tess.Partitioning]))
+		if (ImGui::BeginCombo("Partitioning", pszPartitioningNames[(size_t)tess.Partitioning]))
 		{
 			if (ImGui::Selectable(pszPartitioningNames[0], tess.Partitioning == ETessellationPartitioning::INTEGER)) { tess.Partitioning = ETessellationPartitioning::INTEGER; }
 			if (ImGui::Selectable(pszPartitioningNames[1], tess.Partitioning == ETessellationPartitioning::FRACTIONAL_EVEN)) { tess.Partitioning = ETessellationPartitioning::FRACTIONAL_EVEN; }
@@ -1372,7 +1372,7 @@ static void DrawTessellationEditorGUI(FUIState& mUIState, FTessellationParameter
 			""
 		};
 		const bool bLineDomain = tess.Domain == ETessellationDomain::ISOLINE_PATCH;
-		if (ImGui::BeginCombo("Output Topology", pszOutputTopologyNames[tess.OutputTopology]))
+		if (ImGui::BeginCombo("Output Topology", pszOutputTopologyNames[(size_t)tess.OutputTopology]))
 		{
 			if (ImGui::Selectable(pszOutputTopologyNames[0], tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT)) { tess.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT; }
 			BeginDisabledUIState(bLineDomain);

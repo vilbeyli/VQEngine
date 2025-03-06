@@ -918,9 +918,9 @@ void VQRenderer::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, Dynamic
 		const size_t iAlpha   = mat.IsAlphaMasked(*this) ? 1 : 0;
 		const size_t iRaster  = mat.bWireframe ? 1 : 0;
 		const size_t iTess    = mat.Tessellation.bEnableTessellation ? 1 : 0;
-		const size_t iDomain  = iTess == 0 ? 0 : mat.Tessellation.Domain;
-		const size_t iPart    = iTess == 0 ? 0 : mat.Tessellation.Partitioning;
-		const size_t iOutTopo = iTess == 0 ? 0 : mat.Tessellation.OutputTopology;
+		const size_t iDomain  = iTess == 0 ? 0 : (size_t)mat.Tessellation.Domain;
+		const size_t iPart    = iTess == 0 ? 0 : (size_t)mat.Tessellation.Partitioning;
+		const size_t iOutTopo = iTess == 0 ? 0 : (size_t)mat.Tessellation.OutputTopology;
 		const size_t iTessCull = iTess == 1 && (bSWCullTessellation ? 1 : 0);
 		const PSO_ID psoID = this->mShadowPassPSOs.Get(iDepthMode, iRaster, iFaceCull, iTess, iDomain, iPart, iOutTopo, iTessCull, iAlpha);
 		pCmd->SetPipelineState(this->GetPSO(psoID));
