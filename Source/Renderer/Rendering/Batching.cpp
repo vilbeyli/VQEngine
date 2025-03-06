@@ -26,93 +26,16 @@ using namespace DirectX;
 
 #define UPDATE_THREAD__ENABLE_WORKERS 1  // TODO: rename to render thread
 
-
-template<class TMeshInstanceDataArray>
-static void CountInstanceData(
-	  std::unordered_map<uint64, TMeshInstanceDataArray>& drawParamLookup
-	, const std::vector<FVisibleMeshData>& vVisibleMeshData
-	, std::function<uint64(MaterialID, MeshID, int, bool)> FnGetKey
-)
-{
-	SCOPED_CPU_MARKER("CountInstanceData");
-	for (int i = 0; i < vVisibleMeshData.size(); ++i)
-	{
-		TMeshInstanceDataArray& d = drawParamLookup[FnGetKey(vVisibleMeshData[i].hMaterial, vVisibleMeshData[i].hMesh, vVisibleMeshData[i].SelectedLOD, vVisibleMeshData[i].bTessellated)];
-		d.NumValidData++;
-	}
-}
-
-template<class TMeshInstanceDataArray, class TMeshRenderCommand>
-static void CountNResizeRenderCmds(
-	std::unordered_map<uint64, TMeshInstanceDataArray>& drawParamLookup,
-	std::vector<TMeshRenderCommand>& MeshRenderCommands,
-	int MAX_INSTANCE_COUNT
-)
-{
-	SCOPED_CPU_MARKER("CountNResizeDrawParams");
-	int NumInstancedRenderCommands = 0;
-	{
-		SCOPED_CPU_MARKER("Count");
-		for (auto it = drawParamLookup.begin(); it != drawParamLookup.end(); ++it)
-		{
-			TMeshInstanceDataArray& MeshInstanceData = it->second;
-			int NumInstancesToProces = (int)MeshInstanceData.NumValidData;
-			int iInst = 0;
-			while (NumInstancesToProces > 0)
-			{
-				const int ThisBatchSize = std::min(MAX_INSTANCE_COUNT, NumInstancesToProces);
-				int iBatch = 0;
-				while (iBatch < MAX_INSTANCE_COUNT && iInst < MeshInstanceData.NumValidData)
-				{
-					++iBatch;
-					++iInst;
-				}
-				NumInstancesToProces -= iBatch;
-				++NumInstancedRenderCommands;
-			}
-		}
-	}
-	{
-		SCOPED_CPU_MARKER("Resize");
-		MeshRenderCommands.resize(NumInstancedRenderCommands);
-	}
-}
-
-
-template<class TMeshInstanceDataArray>
-static void AllocInstanceData(std::unordered_map<uint64, TMeshInstanceDataArray>& drawParamLookup)
-{
-	SCOPED_CPU_MARKER("AllocInstData");
-	std::vector<typename std::unordered_map<uint64, TMeshInstanceDataArray>::iterator> deleteList;
-	for (auto it = drawParamLookup.begin(); it != drawParamLookup.end(); ++it)
-	{
-		TMeshInstanceDataArray& a = it->second;
-		if (a.NumValidData == 0)
-		{
-			deleteList.push_back(it);
-			continue;
-		}
-		a.Data.resize(a.NumValidData);
-		//Log::Info("AllocInstanceData: %llu -> resize(%d)", it->first, a.NumValidData);
-		a.NumValidData = 0; // we'll use NumValidData for indexing after this call.
-	}
-
-	for (auto it : deleteList)
-	{
-		drawParamLookup.erase(it);
-	}
-}
-
 static void SetParamData(MeshRenderData_t& cmd,
 	int iInst,
 	const XMMATRIX& viewProj,
 	const XMMATRIX& viewProjPrev,
-	const FVisibleMeshData& cullResult
+	const FVisibleMeshData& visibleMeshData
 )
 {
-	const XMMATRIX matWorld = cullResult.Transform.matWorldTransformation();
-	const XMMATRIX matWorldHistory = cullResult.Transform.matWorldTransformationPrev();
-	const XMMATRIX matNormal = cullResult.Transform.NormalMatrix(matWorld);
+	const XMMATRIX matWorld = visibleMeshData.Transform.matWorldTransformation();
+	const XMMATRIX matWorldHistory = visibleMeshData.Transform.matWorldTransformationPrev();
+	const XMMATRIX matNormal = visibleMeshData.Transform.NormalMatrix(matWorld);
 	const XMMATRIX matWVP = matWorld * viewProj;
 
 	assert(iInst >= 0 && cmd.matWorld.size() > iInst);
@@ -122,12 +45,12 @@ static void SetParamData(MeshRenderData_t& cmd,
 	cmd.matWorldViewProj[iInst] = matWVP;
 	cmd.matWorldViewProjPrev[iInst] = matWorldHistory * viewProjPrev;
 	cmd.matNormal[iInst] = matNormal;
-	cmd.objectID[iInst] = (int)cullResult.hGameObject + 1; // 0 means empty. offset by 1 now, and undo it when reading back
-	cmd.projectedArea[iInst] = cullResult.fBBArea;
-	cmd.vertexIndexBuffer = cullResult.VBIB;
-	cmd.numIndices = cullResult.NumIndices;
-	cmd.matID = cullResult.hMaterial;
-	cmd.pMaterial = &cullResult.Material; // TODO: use std::move
+	cmd.objectID[iInst] = (int)visibleMeshData.hGameObject + 1; // 0 means empty. offset by 1 now, and undo it when reading back
+	cmd.projectedArea[iInst] = visibleMeshData.fBBArea;
+	cmd.vertexIndexBuffer = visibleMeshData.VBIB;
+	cmd.numIndices = visibleMeshData.NumIndices;
+	cmd.matID = visibleMeshData.hMaterial;
+	cmd.material = visibleMeshData.Material; // TODO: use std::move
 
 #if 0
 	auto fnAllZero = [](const XMMATRIX& m)
@@ -147,11 +70,11 @@ static void SetParamData(MeshRenderData_t& cmd,
 static void SetParamData(FInstancedShadowMeshRenderData& cmd,
 	int iInst,
 	const XMMATRIX& viewProj,
-	const XMMATRIX& viewProjPrev,
-	const FVisibleMeshData& cullResult
+	const XMMATRIX& viewProjPrev, // unused, keeping here to match signature of SetParamData() for non-shadow meshes
+	const FVisibleMeshData& visibleMeshData
 )
 {
-	const XMMATRIX matWorld = cullResult.Transform.matWorldTransformation();
+	const XMMATRIX matWorld = visibleMeshData.Transform.matWorldTransformation();
 	const XMMATRIX matWVP = matWorld * viewProj;
 
 	assert(iInst >= 0 && cmd.matWorldViewProj.size() > iInst);
@@ -161,39 +84,10 @@ static void SetParamData(FInstancedShadowMeshRenderData& cmd,
 
 	cmd.matWorld[iInst] = matWorld;
 	cmd.matWorldViewProj[iInst] = matWVP;
-	cmd.vertexIndexBuffer = cullResult.VBIB;
-	cmd.numIndices = cullResult.NumIndices;
-	cmd.matID = cullResult.hMaterial;
-	cmd.pMaterial = &cullResult.Material; // TODO: std::move()
-}
-
-template<class TMeshRenderCmd>
-static void CollectViewInstanceData(
-	  const std::vector<FVisibleMeshData>& vVisibleMeshData
-	, size_t iBegin
-	, size_t iEnd
-	, const XMMATRIX& viewProj
-	, const XMMATRIX& viewProjPrev
-	, const std::vector<FInstanceDataWriteParam>& vOutputWriteParams // {iDraw, iInst}
-	, std::vector<TMeshRenderCmd>& meshRenderParams
-)
-{
-	SCOPED_CPU_MARKER("CollectViewInstanceData");
-	for (size_t i = iBegin; i <= iEnd; ++i)
-	{
-		const int iDraw = vOutputWriteParams[i].iDraw;
-		const int iInst = vOutputWriteParams[i].iInst;
-
-		assert(meshRenderParams.size() > iDraw);
-		TMeshRenderCmd& cmd = meshRenderParams[iDraw];
-		//Log::Info("meshRenderParams[%d] NumInst=%d , iFirst=%d", iCmdParam, NumInstances, range.first);
-		SetParamData(cmd
-			, iInst
-			, viewProj
-			, viewProjPrev
-			, vVisibleMeshData[i]
-		);
-	}
+	cmd.vertexIndexBuffer = visibleMeshData.VBIB;
+	cmd.numIndices = visibleMeshData.NumIndices;
+	cmd.matID = visibleMeshData.hMaterial;
+	cmd.material = visibleMeshData.Material; // TODO: std::move()
 }
 
 static void ResizeDrawInstanceArrays(FInstancedMeshRenderData& cmd, size_t sz, size_t iCmd)
@@ -213,158 +107,153 @@ static void ResizeDrawInstanceArrays(FInstancedShadowMeshRenderData& cmd, size_t
 	cmd.matWorldViewProj.resize(sz);
 }
 
-template<class TMeshRenderCmd>
-static void CountNResizeRenderCmdInstanceArrays(
-	  const std::vector<FVisibleMeshData>& vCullResults
-	, std::vector<TMeshRenderCmd>& meshRenderParams
-	, int MAX_INSTANCE_COUNT
-	, std::function<uint64(MaterialID, MeshID, int, bool)> FnGetKey
+template<typename RenderDataT, typename ContainerT, size_t MAX_INSTANCES>
+static void BatchViewDrawCalls(
+	ContainerT& renderParamsContainer,
+	const std::vector<FVisibleMeshData>& ViewVisibleMeshes,
+	const XMMATRIX& viewProj,
+	const XMMATRIX& viewProjPrev, // used for main view
+	std::function<uint64(MaterialID, MeshID, int, bool)> getKeyFn
 )
 {
-	SCOPED_CPU_MARKER("CountNResizeRenderCmdInstanceArrays");
-	int iDraw = -1;
-	int iInst = -1;
-	uint64 keyPrev = -1;
-	for (int i = 0; i < vCullResults.size(); ++i)
-	{
-		const uint64 key = FnGetKey(vCullResults[i].hMaterial, vCullResults[i].hMesh, vCullResults[i].SelectedLOD, vCullResults[i].bTessellated);
-		if (keyPrev != key)
-		{
-			if (iDraw != -1)
-			{
-				ResizeDrawInstanceArrays(meshRenderParams[iDraw], iInst, iDraw);
-			}
-			keyPrev = key;
-			++iDraw;
-			iInst = 0;
-		}
-		if (iInst == MAX_INSTANCE_COUNT)
-		{
-			ResizeDrawInstanceArrays(meshRenderParams[iDraw], iInst, iDraw);
-			++iDraw;
-			iInst = 0;
-		}
-		++iInst; // TODO: check correctness for after iInst = 0 executions
-	}
-	if (iDraw != -1 && iInst != -1)
-	{
-		ResizeDrawInstanceArrays(meshRenderParams[iDraw], iInst, iDraw);
-	}
-}
+	SCOPED_CPU_MARKER("BatchViewDrawCalls");
 
-static void CalculateInstanceDataWriteIndices(
-	  const std::vector<FVisibleMeshData>& vViewCullResults
-	, std::vector<FInstanceDataWriteParam>& vOutputWriteParams // {iDraw, iInst}
-	, std::function<uint64(MaterialID, MeshID, int, bool)> FnGetKey
-	, int MAX_INSTANCE_COUNT
-)
-{
+	if (ViewVisibleMeshes.empty()) 
 	{
-		SCOPED_CPU_MARKER("AllocInstanceParams");
-		vOutputWriteParams.resize(vViewCullResults.size());
+		return;
+	}
+
+	size_t numDrawCommands = 0;
+	{
+		SCOPED_CPU_MARKER("CountInstancedDraws");
+		uint64 currentKey = getKeyFn(ViewVisibleMeshes[0].hMaterial, ViewVisibleMeshes[0].hMesh, ViewVisibleMeshes[0].SelectedLOD, ViewVisibleMeshes[0].bTessellated);
+		size_t count = 1;
+		for (size_t i = 1; i < ViewVisibleMeshes.size(); ++i) 
+		{
+			const uint64 key = getKeyFn(ViewVisibleMeshes[i].hMaterial, ViewVisibleMeshes[i].hMesh, ViewVisibleMeshes[i].SelectedLOD, ViewVisibleMeshes[i].bTessellated);
+			if (key != currentKey || count == MAX_INSTANCES)
+			{
+				numDrawCommands += 1;
+				currentKey = key;
+				count = 1;
+			}
+			else 
+			{
+				++count;
+			}
+		}
+		if (count > 0) 
+		{
+			numDrawCommands += 1;
+		}
 	}
 	{
-		SCOPED_CPU_MARKER("WriteOutputIndices");
-		int iDraw = -1;
-		int iInst = -1;
-		uint64 keyPrev = -1;
-		for (size_t i = 0; i < vViewCullResults.size(); ++i)
+		SCOPED_CPU_MARKER("ResizeDrawData");
+		renderParamsContainer.resize(numDrawCommands);
+	}
+	{
+		SCOPED_CPU_MARKER("ResizeInstanceData");
+		uint64 currentKey = getKeyFn(ViewVisibleMeshes[0].hMaterial, ViewVisibleMeshes[0].hMesh, ViewVisibleMeshes[0].SelectedLOD, ViewVisibleMeshes[0].bTessellated);
+		size_t numInstances = 1;
+		size_t iDraw = 0;
+		for (size_t iMesh = 1; iMesh < ViewVisibleMeshes.size(); ++iMesh) 
 		{
-			const int lod = vViewCullResults[i].SelectedLOD;
-			const uint64 key = FnGetKey(vViewCullResults[i].hMaterial, vViewCullResults[i].hMesh, lod, vViewCullResults[i].bTessellated);
-			if (keyPrev != key)
+			const FVisibleMeshData& meshData = ViewVisibleMeshes[iMesh];
+			const uint64 key = getKeyFn(meshData.hMaterial, meshData.hMesh, meshData.SelectedLOD, meshData.bTessellated);
+			if (key != currentKey || numInstances == MAX_INSTANCES)
 			{
-				keyPrev = key;
+				assert(iDraw < renderParamsContainer.size());
+				ResizeDrawInstanceArrays(renderParamsContainer[iDraw], numInstances, iDraw);
 				++iDraw;
-				iInst = 0;
+				numInstances = 1;
+				currentKey = key;
 			}
-			if (iInst == MAX_INSTANCE_COUNT)
+			else 
+			{
+				++numInstances;
+			}
+		}
+		if (numInstances > 0) 
+		{
+			assert(iDraw < renderParamsContainer.size());
+			ResizeDrawInstanceArrays(renderParamsContainer[iDraw], numInstances, iDraw);
+		}
+	}
+	{
+		SCOPED_CPU_MARKER("SetDrawData");
+		int iInstance = 0;
+		int iDraw = 0;
+		size_t iMesh = 0;
+		uint64 currentKey = getKeyFn(ViewVisibleMeshes[iMesh].hMaterial, ViewVisibleMeshes[iMesh].hMesh, ViewVisibleMeshes[iMesh].SelectedLOD, ViewVisibleMeshes[iMesh].bTessellated);
+
+		assert(iDraw < renderParamsContainer.size());
+		SetParamData(renderParamsContainer[iDraw], iInstance, viewProj, viewProjPrev, ViewVisibleMeshes[iMesh]);
+		++iInstance;
+
+		for (iMesh = 1; iMesh < ViewVisibleMeshes.size(); ++iMesh) 
+		{
+			const FVisibleMeshData& meshData = ViewVisibleMeshes[iMesh];
+			const uint64 key = getKeyFn(meshData.hMaterial, meshData.hMesh, meshData.SelectedLOD, meshData.bTessellated);
+
+			if (iInstance >= MAX_INSTANCES || key != currentKey) 
 			{
 				++iDraw;
-				iInst = 0;
+				iInstance = 0;
+				currentKey = key;
 			}
 
-			// i,iBB --> key --> { iDraw, iInst }
-			// Log::Info("[%-4d] %-6d --> %-13llu --> { %d , %d }", i, iBB, key, iDraw, iInst);
-
-			vOutputWriteParams[i] = FInstanceDataWriteParam{ iDraw, iInst };
-			++iInst;
+			assert(iDraw < renderParamsContainer.size());
+			SetParamData(renderParamsContainer[iDraw], iInstance, viewProj, viewProjPrev, meshData);
+			++iInstance;
 		}
 	}
 }
 
-template<class TMeshInstanceDataArray, class TMeshRenderCmd>
-static void ReserveWorkerMemory(
-	  const std::vector<FVisibleMeshData>& visibleMeshDataList
-	, std::vector<TMeshRenderCmd>& meshRenderParams
-	, std::unordered_map<uint64, TMeshInstanceDataArray>& drawParamLookup
-	, std::function<uint64(MaterialID, MeshID, int, bool)> FnGetKey
-	, std::vector<FInstanceDataWriteParam>& outWriteParams
-	, int MAX_INSTANCE_COUNT
+
+static void BatchMainViewDrawCalls(
+	FSceneDrawData& SceneDrawData,
+	const std::vector<FVisibleMeshData>& ViewVisibleMeshes,
+	const XMMATRIX& viewProj,
+	const XMMATRIX& viewProjPrev,
+	std::function<uint64(MaterialID, MeshID, int, bool)> getKeyFn
 )
 {
-	SCOPED_CPU_MARKER("ReserveWorkerMemory");
-	CountInstanceData(drawParamLookup, visibleMeshDataList, FnGetKey);
-	CountNResizeRenderCmds(drawParamLookup, meshRenderParams, MAX_INSTANCE_COUNT);
-	CountNResizeRenderCmdInstanceArrays(visibleMeshDataList, meshRenderParams, MAX_INSTANCE_COUNT, FnGetKey);
-	AllocInstanceData<TMeshInstanceDataArray>(drawParamLookup);
-	CalculateInstanceDataWriteIndices(visibleMeshDataList, outWriteParams, FnGetKey, MAX_INSTANCE_COUNT);
-}
-
-
-static void DispatchMainViewInstanceDataWorkers(
-	  const FSceneView& SceneView
-	, FSceneDrawData& SceneDrawData
-	, const std::vector<FVisibleMeshData>& vMainViewCullResults
-	, ThreadPool& RenderWorkerThreadPool
-	, std::atomic<int>& MainViewThreadDone
-	, std::vector<FInstanceDataWriteParam>& vOutputWriteParams // {iDraw, iInst}
-)
-{
-	SCOPED_CPU_MARKER("DispatchWorker_MainView");
-	const size_t NumWorkerThreads = RenderWorkerThreadPool.GetThreadPoolSize();
-	const size_t NumThreads = NumWorkerThreads + 1;
-	const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(vMainViewCullResults.size(), NumThreads);
-
-	ReserveWorkerMemory(
-		vMainViewCullResults,
+	SCOPED_CPU_MARKER("BatchMainViewDrawCalls");
+	BatchViewDrawCalls<FInstancedMeshRenderData, std::vector<FInstancedMeshRenderData>&, MAX_INSTANCE_COUNT__SCENE_MESHES>(
 		SceneDrawData.meshRenderParams,
-		SceneDrawData.drawParamLookup,
-		FSceneDrawData::GetKey,
-		SceneDrawData.mRenderCmdInstanceDataWriteIndex,
-		MAX_INSTANCE_COUNT__SCENE_MESHES
+		ViewVisibleMeshes,
+		viewProj,
+		viewProjPrev,
+		getKeyFn
 	);
-
-	for (int iR = 0; !vRanges.empty() && iR < vRanges.size(); ++iR) // offload all tasks to workers
-	{
-		RenderWorkerThreadPool.AddTask([=, &SceneView, &SceneDrawData, &vMainViewCullResults, &MainViewThreadDone]()
-		{
-			RENDER_WORKER_CPU_MARKER;
-			CollectViewInstanceData(
-				vMainViewCullResults,
-				vRanges[iR].first,
-				vRanges[iR].second,
-				SceneView.viewProj,
-				SceneView.viewProjPrev,
-				vOutputWriteParams,
-				SceneDrawData.meshRenderParams
-			);
-			MainViewThreadDone++;
-		});
-	}
 }
 
+static void BatchShadowViewDrawCalls(
+	FShadowView* pShadowView,
+	const std::vector<FVisibleMeshData>& ViewVisibleMeshes,
+	std::function<uint64(MaterialID, MeshID, int, bool)> getKeyFn
+)
+{
+	SCOPED_CPU_MARKER("BatchShadowViewDrawCalls");
+	BatchViewDrawCalls<FInstancedShadowMeshRenderData, std::vector<FInstancedShadowMeshRenderData>&, MAX_INSTANCE_COUNT__SHADOW_MESHES>(
+		pShadowView->meshRenderParams,
+		ViewVisibleMeshes,
+		pShadowView->matViewProj,
+		pShadowView->matViewProj, // No viewProjPrev for shadow
+		getKeyFn
+	);
+}
 
 static void DispatchWorkers_ShadowViews(
 	  size_t NumShadowMeshFrustums
-	, std::vector<FFrustumRenderCommandRecorderContext>& WorkerContexts
-	, const bool bForceLOD0
 	, ThreadPool& RenderWorkerThreadPool
 	, const std::vector<FFrustumRenderList>& mFrustumRenderLists
 )
 {
 	SCOPED_CPU_MARKER("DispatchWorkers_ShadowViews");
 	constexpr size_t NUM_MIN_SHADOW_MESHES_FOR_THREADING = 1; // TODO: tweak this when thread work count is divided equally instead of per frustum
+
+	std::vector< FFrustumRenderCommandRecorderContext> WorkerContexts;
 
 	size_t NumShadowFrustumsWithNumMeshesLargerThanMinNumMeshesPerThread = 0;
 	size_t NumShadowMeshes = 0;
@@ -379,10 +268,11 @@ static void DispatchWorkers_ShadowViews(
 
 			assert(pShadowView);
 			const FFrustumRenderList* FrustumRenderList = &mFrustumRenderLists[iFrustum];
-			//const std::vector<FVisibleMeshData>* ViewCullResults = &(*mFrustumCullWorkerContext.pVisibleMeshListPerView)[iFrustum];
+			//const std::vector<FVisibleMeshData>* ViewvisibleMeshDatas = &(*mFrustumCullWorkerContext.pVisibleMeshListPerView)[iFrustum];
 			WorkerContexts[iFrustum - 1] = { iFrustum, &FrustumRenderList->Data, pShadowView };
 
-			FrustumRenderList->DataReadySignal.Wait();
+			FrustumRenderList->DataReadySignal.Wait(); // sync
+
 			const size_t NumMeshes = FrustumRenderList->Data.size();
 			NumShadowMeshes += NumMeshes;
 			NumShadowFrustumsWithNumMeshesLargerThanMinNumMeshesPerThread += NumMeshes >= NUM_MIN_SHADOW_MESHES_FOR_THREADING ? 1 : 0;
@@ -399,34 +289,20 @@ static void DispatchWorkers_ShadowViews(
 
 	if (bUseWorkerThreadsForShadowViews)
 	{
-		for (size_t iFrustum = 1 + NumShadowFrustumsThisThread; iFrustum <= NumShadowMeshFrustums; ++iFrustum)
+		constexpr size_t NUM_NON_SHADOW_FRUSTUMS = 1;
+		for (size_t iFrustum = NUM_NON_SHADOW_FRUSTUMS + NumShadowFrustumsThisThread; iFrustum <= NumShadowMeshFrustums; ++iFrustum)
 		{
 			SCOPED_CPU_MARKER("Dispatch");
 			RenderWorkerThreadPool.AddTask([=]() // dispatch workers
 			{
 				RENDER_WORKER_CPU_MARKER;
-				FFrustumRenderCommandRecorderContext ctx = WorkerContexts[iFrustum - 1]; // operate on a copy
+				const size_t iContext = iFrustum - NUM_NON_SHADOW_FRUSTUMS;
+				FFrustumRenderCommandRecorderContext ctx = WorkerContexts[iFrustum - NUM_NON_SHADOW_FRUSTUMS]; // copy so we dont have to worry about freed memory since contexts are within the scope of this function
+				assert(ctx.pCullResults);
 				if (ctx.pCullResults->empty())
 					return;
 
-				ReserveWorkerMemory(
-					*ctx.pCullResults,
-					ctx.pShadowView->meshRenderParams,
-					ctx.pShadowView->drawParamLookup,
-					FShadowView::GetKey,
-					ctx.pShadowView->mRenderCmdInstanceDataWriteIndex,
-					MAX_INSTANCE_COUNT__SHADOW_MESHES
-				);
-				
-				CollectViewInstanceData(
-					*ctx.pCullResults,
-					0,
-					ctx.pCullResults->size()-1,
-					ctx.pShadowView->matViewProj,
-					ctx.pShadowView->matViewProj,
-					ctx.pShadowView->mRenderCmdInstanceDataWriteIndex,
-					ctx.pShadowView->meshRenderParams
-				);
+				BatchShadowViewDrawCalls(ctx.pShadowView, *ctx.pCullResults, &FShadowView::GetKey);
 			});
 		}
 	}
@@ -572,7 +448,7 @@ static void BatchInstanceData_BoundingBox(FSceneDrawData& SceneDrawData
 
 
 
-void VQRenderer::BatchDrawCalls(ThreadPool& RenderWorkerThreadPool, const FSceneView& SceneView)
+void VQRenderer::BatchDrawCalls(ThreadPool& RenderWorkerThreadPool, const FSceneView& SceneView, const FSceneShadowViews& SceneShadowView)
 {
 	SCOPED_CPU_MARKER("BatchInstanceData");
 
@@ -587,54 +463,23 @@ void VQRenderer::BatchDrawCalls(ThreadPool& RenderWorkerThreadPool, const FScene
 
 	// ---------------------------------------------------SYNC ---------------------------------------------------
 	{
-		SCOPED_CPU_MARKER_C("WAIT_WORKER_CULL", 0xFFAA0000); // wait for frustum cull workers to finish
+		SCOPED_CPU_MARKER_C("WAIT_WORKER_CULL", 0xFFAA0000); // wait for main view frustum cull worker to finish
 		MainViewFrustumRenderList.DataReadySignal.Wait();
 	}
 	// --------------------------------------------------- SYNC ---------------------------------------------------
 
 	const size_t NumSceneViewMeshes = MainViewRenderList.size();
 	const bool bUseWorkerThreadForMainView = NUM_MIN_SCENE_MESHES_FOR_THREADING <= NumSceneViewMeshes;
-	const bool bForceLOD0_SceneView = SceneView.sceneRenderOptions.bForceLOD0_SceneView;
-	const bool bForceLOD0_ShadowView = SceneView.sceneRenderOptions.bForceLOD0_ShadowView;
 
-	std::vector< FFrustumRenderCommandRecorderContext> WorkerContexts;
-	const size_t NumShadowMeshFrustums = SceneView.FrustumRenderLists.size() - 1; // exclude main view
-
-	// main view
-	std::atomic<int> MainViewThreadDone = 0;
-	DispatchMainViewInstanceDataWorkers(
-		SceneView,
-		DrawData,
-		MainViewRenderList,
-		RenderWorkerThreadPool,
-		MainViewThreadDone,
-		DrawData.mRenderCmdInstanceDataWriteIndex
+	const size_t NumShadowMeshFrustums = SceneShadowView.NumSpotShadowViews 
+		+ SceneShadowView.NumPointShadowViews * 6
+		+ (SceneShadowView.ShadowView_Directional.meshRenderParams.size() > 0 ? 1 : 0
 	);
+	
+	BatchMainViewDrawCalls(DrawData, MainViewRenderList, SceneView.viewProj, SceneView.viewProjPrev, &FSceneDrawData::GetKey);
 
-	// collect isntance data on this thread
-	{
-		const size_t NumThreads = NumWorkerThreads + 1;
-		auto vRanges = PartitionWorkItemsIntoRanges(MainViewRenderList.size(), NumThreads);
-		if (!vRanges.empty())
-		{
-			const std::pair<size_t, size_t> vRange_ThisThread = vRanges.back();
-			CollectViewInstanceData(
-				MainViewRenderList
-				, vRange_ThisThread.first
-				, vRange_ThisThread.second
-				, SceneView.viewProj
-				, SceneView.viewProjPrev
-				, DrawData.mRenderCmdInstanceDataWriteIndex
-				, DrawData.meshRenderParams
-			);
-		}
-	}
-
-	// shadow views
 	DispatchWorkers_ShadowViews(
 		NumShadowMeshFrustums,
-		WorkerContexts,
-		bForceLOD0_ShadowView,
 		RenderWorkerThreadPool,
 		SceneView.FrustumRenderLists
 	);
@@ -643,11 +488,6 @@ void VQRenderer::BatchDrawCalls(ThreadPool& RenderWorkerThreadPool, const FScene
 	// -------------------------------------------------------------------------------------------------------------------
 
 	BatchInstanceData_BoundingBox(this->GetSceneDrawData(0), SceneView, RenderWorkerThreadPool, SceneView.viewProj);
-
-	{
-		SCOPED_CPU_MARKER_C("ClearLocalContext", 0xFF880000);
-		WorkerContexts.clear();
-	}
 
 	RenderWorkerThreadPool.RunRemainingTasksOnThisThread();
 	{

@@ -178,9 +178,12 @@ float CalculateProjectedBoundingBoxArea(const FBoundingBox& BBox, const XMMATRIX
 //------------------------------------------------------------------------------------------------------------------------------
 void FFrustumCullWorkerContext::AllocInputMemoryIfNecessary(size_t sz)
 {
+	NumValidInputElements = sz;
 	if (vFrustumPlanes.size() < sz)
 	{
 		SCOPED_CPU_MARKER("AllocMem");
+		pFrustumRenderLists->resize(sz);
+		vVisibleBBIndicesPerView.resize(sz);
 		vFrustumPlanes.resize(sz);
 		vMatViewProj.resize(sz);
 		vSortFunctions.resize(sz);
@@ -292,10 +295,6 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 	}
 #endif
 
-	// allocate context memory
-	pFrustumRenderLists->resize(NumValidInputElements); // prepare worker output memory, each worker will then populate the vector
-	vVisibleBBIndicesPerView.resize(NumValidInputElements); // prepare worker output memory, each worker will then populate the vector
-
 	// distribute ranges of work into worker threads
 	const std::vector<std::pair<size_t, size_t>> vRanges = GetWorkRanges(NumThreadsIncludingThisThread);
 	
@@ -359,7 +358,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 			vVisibleBBIndicesPerView[iWork].clear();
 		}
 		{
-			SCOPED_CPU_MARKER_C("CullFrustum", 0xFFAAAA00);
+			SCOPED_CPU_MARKER_C("CullFrustum", 0xFF2222AA);
 			for (size_t bb = 0; bb < vBoundingBoxList.size(); ++bb)
 			{
 				if (IsBoundingBoxIntersectingFrustum2(vFrustumPlanes[iWork], vBoundingBoxList[bb]))
@@ -400,7 +399,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 		}
 		{
 			SCOPED_CPU_MARKER("Sort");
-			std::sort(std::execution::par_unseq, 
+			std::sort(std::execution::seq, 
 				vVisibleMeshList.begin(),
 				vVisibleMeshList.end(),
 				vSortFunctions[iWork]

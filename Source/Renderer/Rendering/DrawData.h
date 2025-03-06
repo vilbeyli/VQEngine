@@ -21,6 +21,7 @@
 #include "Engine/Core/Types.h"
 
 #include "Shaders/LightingConstantBufferData.h"
+#include "Engine/Scene/Material.h"
 
 #include <DirectXMath.h>
 #include <string>
@@ -83,7 +84,7 @@ struct FInstancedMeshRenderDataBase
 	int numIndices = 0;
 	std::pair<BufferID, BufferID> vertexIndexBuffer;
 	MaterialID matID = INVALID_ID;
-	const Material* pMaterial = nullptr;
+	Material material;
 	std::vector<DirectX::XMMATRIX> matWorldViewProj;
 };
 struct FInstancedMotionVectorMeshData
@@ -180,8 +181,6 @@ struct FSceneDrawData
 	static inline MaterialID GetMatIDFromKey(uint64 key) { return MaterialID(key >> 34); }
 	static inline MeshID     GetMeshIDFromKey(uint64 key) { return MeshID((key >> 4) & 0x3FFFFFFF); }
 	static inline int        GetLODFromKey(uint64 key) { return int(key & 0xF); }
-	std::unordered_map<uint64, FMeshInstanceDataArray> drawParamLookup;
-	std::vector<FInstanceDataWriteParam> mRenderCmdInstanceDataWriteIndex; // drawParamLookup --> meshRenderParams
 	//--------------------------------------------------------------------------------------------------------------------------------------------
 #endif
 };

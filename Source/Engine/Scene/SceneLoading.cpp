@@ -117,9 +117,9 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 		SCOPED_CPU_MARKER("ClearShadowViews");
 		for (FSceneShadowViews& view : mFrameShadowViews)
 		{
-			for (FShadowView& sv : view.ShadowViews_Spot ) sv.drawParamLookup.clear();
-			for (FShadowView& sv : view.ShadowViews_Point) sv.drawParamLookup.clear();
-			view.ShadowView_Directional.drawParamLookup.clear();
+			for (FShadowView& sv : view.ShadowViews_Spot ) sv.meshRenderParams.clear();
+			for (FShadowView& sv : view.ShadowViews_Point) sv.meshRenderParams.clear();
+			view.ShadowView_Directional.meshRenderParams.clear();
 		}
 	}
 	mFrustumCullWorkerContext.ClearMemory();

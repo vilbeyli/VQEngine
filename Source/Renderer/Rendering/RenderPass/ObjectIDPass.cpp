@@ -195,7 +195,7 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	for (const MeshRenderData_t& meshRenderCmd : pParams->pSceneDrawData->meshRenderParams)
 	{
 		using namespace VQ_SHADER_DATA;
-		const Material& mat = *meshRenderCmd.pMaterial;
+		const Material& mat = meshRenderCmd.material;
 		
 		const uint32 NumIndices = meshRenderCmd.numIndices;
 		const BufferID& VB_ID = meshRenderCmd.vertexIndexBuffer.first;

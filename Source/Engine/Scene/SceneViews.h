@@ -173,8 +173,6 @@ struct FShadowView
 	static inline MaterialID GetMatIDFromKey(uint64 key) { return MaterialID(key >> 34); }
 	static inline MeshID     GetMeshIDFromKey(uint64 key) { return MeshID((key >> 4) & 0x3FFFFFFF); }
 	static inline int        GetLODFromKey(uint64 key) { return int(key & 0xF); }
-	std::unordered_map<uint64, FInstanceDataArray> drawParamLookup;
-	std::vector<FInstanceDataWriteParam> mRenderCmdInstanceDataWriteIndex; // drawParamLookup --> meshRenderParams
 	////--------------------------------------------------------------------------------------------------------------------------------------------
 	std::vector<FInstancedShadowMeshRenderData> meshRenderParams; // per LOD mesh
 #else

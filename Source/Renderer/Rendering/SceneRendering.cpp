@@ -117,7 +117,7 @@ static void CopyPerObjectConstantBufferData(
 		pPerObj->mObjID = meshRenderCmd.objectID;
 #endif
 
-		const Material& mat = *meshRenderCmd.pMaterial;
+		const Material& mat = meshRenderCmd.material;
 		pPerObj->materialData = std::move(mat.GetCBufferData());
 		//pPerObj->meshID = meshRenderCmd.meshID;
 		pPerObj->materialID = meshRenderCmd.matID;
@@ -159,7 +159,7 @@ HRESULT VQRenderer::PreRenderScene(
 
 	if (!SceneView.FrustumRenderLists.empty())
 	{
-		BatchDrawCalls(WorkerThreads, SceneView);
+		BatchDrawCalls(WorkerThreads, SceneView, SceneShadowView);
 	}
 
 	const bool bUseAsyncCompute = ShouldEnableAsyncCompute(GFXSettings, SceneView, SceneShadowView);
@@ -912,7 +912,7 @@ void VQRenderer::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, Dynamic
 		assert(NumInstances == renderCmd.matWorldViewProj.size());
 		assert(NumInstances == renderCmd.matWorld.size());
 
-		const Material& mat = *renderCmd.pMaterial;
+		const Material& mat = renderCmd.material;
 
 		const bool bSWCullTessellation = mat.Tessellation.GPUParams.bFaceCull > 0 || mat.Tessellation.GPUParams.bFrustumCull > 0;
 		const size_t iAlpha   = mat.IsAlphaMasked(*this) ? 1 : 0;
@@ -1043,7 +1043,7 @@ void VQRenderer::RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, Dy
 	SCOPED_GPU_MARKER(pCmd, "RenderDirectionalShadowMaps");
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 	const FShadowView& View = ShadowView.ShadowView_Directional;
-	if (!View.drawParamLookup.empty() && !View.meshRenderParams.empty())
+	if (!View.meshRenderParams.empty())
 	{
 		const std::string marker = "Directional";
 		SCOPED_GPU_MARKER(pCmd, marker.c_str());
@@ -1101,7 +1101,7 @@ void VQRenderer::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBu
 	for (uint i = 0; i < SceneShadowViews.NumSpotShadowViews; ++i)
 	{
 		const FShadowView& ShadowView = SceneShadowViews.ShadowViews_Spot[i];
-		if (ShadowView.drawParamLookup.empty())
+		if (ShadowView.meshRenderParams.empty())
 			continue;
 
 		const std::string marker = "Spot[" + std::to_string(i) + "]";
@@ -1165,7 +1165,7 @@ void VQRenderer::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicB
 			const size_t iShadowView = i * 6 + face;
 			const FShadowView& ShadowView = SceneShadowViews.ShadowViews_Point[iShadowView];
 
-			if (ShadowView.drawParamLookup.empty())
+			if (ShadowView.meshRenderParams.empty())
 				continue;
 
 			const std::string marker_face = "[Cubemap Face=" + std::to_string(face) + "]";
@@ -1243,7 +1243,7 @@ void VQRenderer::RenderDepthPrePass(
 	const size_t iFaceCull = 2; // 2:back
 	for (const MeshRenderData_t& meshRenderCmd : SceneDrawData.meshRenderParams)
 	{
-		const Material& mat = *meshRenderCmd.pMaterial;
+		const Material& mat = meshRenderCmd.material;
 		const auto VBIBIDs = meshRenderCmd.vertexIndexBuffer;
 		const BufferID& VB_ID = VBIBIDs.first;
 		const BufferID& IB_ID = VBIBIDs.second;
@@ -1669,7 +1669,7 @@ void VQRenderer::RenderSceneColor(
 		PSO_ID psoID_Prev = -1;
 		for (const MeshRenderData_t& meshRenderCmd : SceneDrawData.meshRenderParams)
 		{
-			const Material& mat = *meshRenderCmd.pMaterial;
+			const Material& mat = meshRenderCmd.material;
 
 			const auto VBIBIDs = meshRenderCmd.vertexIndexBuffer;
 			const uint32 NumIndices = meshRenderCmd.numIndices;

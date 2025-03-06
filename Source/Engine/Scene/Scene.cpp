@@ -1013,7 +1013,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 	mFrustumCullWorkerContext.pFrustumRenderLists = &SceneView.FrustumRenderLists;
 	mFrustumCullWorkerContext.InvalidateContextData();
 	mFrustumCullWorkerContext.AllocInputMemoryIfNecessary(NumFrustums);
-	mFrustumCullWorkerContext.NumValidInputElements = NumFrustums;
+	assert(SceneView.FrustumRenderLists.size() >= NumFrustums);
 
 	size_t iFrustum = 0;
 	{
@@ -1033,8 +1033,8 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 		}
 		else
 		{
-			SceneShadowView.ShadowView_Directional.drawParamLookup.clear();
-			SceneShadowView.ShadowView_Directional.mRenderCmdInstanceDataWriteIndex.clear();
+			//SceneShadowView.ShadowView_Directional.drawParamLookup.clear();
+			//SceneShadowView.ShadowView_Directional.mRenderCmdInstanceDataWriteIndex.clear();
 			SceneShadowView.ShadowView_Directional.meshRenderParams.clear();
 		}
 
