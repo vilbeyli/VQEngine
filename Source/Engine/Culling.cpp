@@ -588,6 +588,8 @@ void SceneBoundingBoxHierarchy::Build(const Scene* pScene, const std::vector<siz
 
 #if BOUNDING_BOX_HIERARCHY__MULTI_THREADED_BUILD
 
+	std::vector<TaskSignal<void>> Signals;
+
 	// dispatch gameobject bounding box workers
 	{
 		const size_t NumWorkItems = vGameObjectHandles.size();
@@ -596,26 +598,24 @@ void SceneBoundingBoxHierarchy::Build(const Scene* pScene, const std::vector<siz
 			+ (WorkerThreadPool.GetNumActiveTasks() == 0 ? 1 : 0);
 
 		const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, NumWorkersToUse);
+		Signals.resize(vRanges.size());
 		
 		// dispatch worker threads
 		{
 			SCOPED_CPU_MARKER("DispatchWorkers");
-			size_t currRange = 0;
-			for (const std::pair<size_t, size_t>& Range : vRanges)
+			for(size_t iRange=1; iRange<vRanges.size(); ++iRange)
+			//for (const std::pair<size_t, size_t>& Range : vRanges)
 			{
-				if (currRange == 0)
-				{
-					++currRange; // skip the first range, and do it on this thread after dispatches
-					continue;
-				}
+				const std::pair<size_t, size_t>& Range = vRanges[iRange];
 				const size_t& iBegin = Range.first;
 				const size_t& iEnd = Range.second; // inclusive
 				assert(iBegin <= iEnd); // ensure work context bounds
 
-				WorkerThreadPool.AddTask([=, &vGameObjectHandles]()
+				WorkerThreadPool.AddTask([=, &vGameObjectHandles, &Signals]()
 				{
 					SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
 					this->BuildGameObjectBoundingBoxes_Range(pScene, vGameObjectHandles, iBegin, iEnd);
+					Signals[iRange].Notify();
 				});
 			}
 		}
@@ -624,76 +624,75 @@ void SceneBoundingBoxHierarchy::Build(const Scene* pScene, const std::vector<siz
 		if(!vRanges.empty())
 		{
 			this->BuildGameObjectBoundingBoxes_Range(pScene, vGameObjectHandles, vRanges[0].first, vRanges[0].second);
+			Signals[0].Notify();
 		}
 	}
 
 
 	// dispatch mesh bounding box workers
-	{
-		using namespace std;
-		//CountGameObjectMeshes(pObjects);
+	
+	using namespace std;
+	//CountGameObjectMeshes(pObjects);
 		
-		// Sync point -------------------------------------------------
-		{
-			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS_GObjBB", 0xFFFF0000);
-			while (WorkerThreadPool.GetNumActiveTasks() != 0); // busy-wait is bad...
-		}
-		{
-			SCOPED_CPU_MARKER("CountGameObjectMeshes");
-			mNumValidMeshBoundingBoxes = 0;
-			for (size_t NumMeshes : mGameObjectNumMeshes)
-				mNumValidMeshBoundingBoxes += NumMeshes;
-		}
-
-		ResizeGameMeshBoxContainer(mNumValidMeshBoundingBoxes);
-#if 1
-		std::vector<std::tuple<size_t, size_t, size_t>> vRanges;
-		{
-			SCOPED_CPU_MARKER("PrepareRanges");
-			const size_t  NumObjs = vGameObjectHandles.size();
-			const size_t& NumWorkItems = mNumValidMeshBoundingBoxes;
-			const size_t  NumWorkerThreadsToUse = CalculateNumThreadsToUse(NumWorkItems, NumWorkerThreadsAvailable, NumDesiredMinimumWorkItemsPerThread);
-
-			const size_t ThreadBBBatchCapacity = mNumValidMeshBoundingBoxes / (NumWorkerThreadsToUse+1);
-
-			size_t iBegin = 0;       size_t iEnd = 0;
-			size_t CurrBatchSize = 0; size_t iBB = 0;
-			for (size_t i=0; i<NumObjs; ++i)
-			{
-				CurrBatchSize += mGameObjectNumMeshes[i];
-				++iEnd;
-
-				if (CurrBatchSize > ThreadBBBatchCapacity)
-				{
-					vRanges.push_back({ iBegin, iEnd, iBB });
-					iBegin = iEnd;
-					iBB += CurrBatchSize;
-					CurrBatchSize = 0;
-				}
-			}
-
-			vRanges.push_back({ iBegin, iEnd, iBB });
-		}
-		{
-			SCOPED_CPU_MARKER("DispatchWorkers");
-			for (size_t i = 1; i < vRanges.size(); ++i)
-			{
-				WorkerThreadPool.AddTask([=]()
-				{
-					SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
-					this->BuildMeshBoundingBoxes_Range(pScene, vGameObjectHandles, get<0>(vRanges[i]), get<1>(vRanges[i]), get<2>(vRanges[i]));
-				});
-			}
-
-		}
-		{
-			SCOPED_CPU_MARKER("Process_ThisThread");
-			this->BuildMeshBoundingBoxes_Range(pScene, vGameObjectHandles, get<0>(vRanges.front()), get<1>(vRanges.front()), get<2>(vRanges.front()));
-		}
-#else
-		this->BuildMeshBoundingBoxes(pObjects);
-#endif
+	// Sync point -------------------------------------------------
+	{
+		for (TaskSignal<void>& Signal : Signals)
+			Signal.Wait();
 	}
+	{
+		SCOPED_CPU_MARKER("CountGameObjectMeshes");
+		mNumValidMeshBoundingBoxes = 0;
+		for (size_t NumMeshes : mGameObjectNumMeshes)
+			mNumValidMeshBoundingBoxes += NumMeshes;
+	}
+
+	ResizeGameMeshBoxContainer(mNumValidMeshBoundingBoxes);
+#if 1
+	std::vector<std::tuple<size_t, size_t, size_t>> vRanges;
+	{
+		SCOPED_CPU_MARKER("PrepareRanges");
+		const size_t  NumObjs = vGameObjectHandles.size();
+		const size_t& NumWorkItems = mNumValidMeshBoundingBoxes;
+		const size_t  NumWorkerThreadsToUse = CalculateNumThreadsToUse(NumWorkItems, NumWorkerThreadsAvailable, NumDesiredMinimumWorkItemsPerThread);
+
+		const size_t ThreadBBBatchCapacity = mNumValidMeshBoundingBoxes / (NumWorkerThreadsToUse+1);
+
+		size_t iBegin = 0;       size_t iEnd = 0;
+		size_t CurrBatchSize = 0; size_t iBB = 0;
+		for (size_t i=0; i<NumObjs; ++i)
+		{
+			CurrBatchSize += mGameObjectNumMeshes[i];
+			++iEnd;
+
+			if (CurrBatchSize > ThreadBBBatchCapacity)
+			{
+				vRanges.push_back({ iBegin, iEnd, iBB });
+				iBegin = iEnd;
+				iBB += CurrBatchSize;
+				CurrBatchSize = 0;
+			}
+		}
+
+		vRanges.push_back({ iBegin, iEnd, iBB });
+	}
+	{
+		SCOPED_CPU_MARKER("DispatchWorkers");
+		for (size_t i = 1; i < vRanges.size(); ++i)
+		{
+			WorkerThreadPool.AddTask([=, &vGameObjectHandles]()
+			{
+				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+				this->BuildMeshBoundingBoxes_Range(pScene, vGameObjectHandles, get<0>(vRanges[i]), get<1>(vRanges[i]), get<2>(vRanges[i]));
+			});
+		}
+	}
+	{
+		SCOPED_CPU_MARKER("Process_ThisThread");
+		this->BuildMeshBoundingBoxes_Range(pScene, vGameObjectHandles, get<0>(vRanges.front()), get<1>(vRanges.front()), get<2>(vRanges.front()));
+	}
+#else
+	this->BuildMeshBoundingBoxes(pObjects);
+#endif
 	
 	// Sync point -------------------------------------------------
 	{
@@ -776,10 +775,9 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBox(const Scene* pScene, size_t
 			MeshID meshID = meshMaterialIDPair.first;
 			const Mesh& mesh = mMeshes.at(meshID);
 			MaterialID mat = meshMaterialIDPair.second;
-			FBoundingBox AABB = CalculateAxisAlignedBoundingBox(matWorld, mesh.GetLocalSpaceBoundingBox());
 			const int numMaxLODs = mesh.GetNumLODs();
 
-			mMeshBoundingBoxes[iMesh] = std::move(AABB);
+			mMeshBoundingBoxes[iMesh] = CalculateAxisAlignedBoundingBox(matWorld, mesh.GetLocalSpaceBoundingBox());
 			mMeshIDs[iMesh] = meshID;
 			mNumMeshLODs[iMesh] = numMaxLODs;
 			mMeshMaterials[iMesh] = mat;
