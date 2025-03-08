@@ -37,7 +37,7 @@ VQ_SHADER_DATA::MaterialData Material::GetCBufferData() const
 	d.metalness = this->metalness;
 	d.uvScaleOffset = float4(this->tiling.x, this->tiling.y, this->uv_bias.x, this->uv_bias.y);
 
-	d.textureConfig = this->GetTextureConfig();
+	d.textureConfig = static_cast<float>(this->GetTextureConfig());
 	d.normalMapMipBias = this->normalMapMipBias;
 	
 	return d;

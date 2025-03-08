@@ -101,6 +101,7 @@ static void CopyPerObjectConstantBufferData(
 		memcpy(pPerObj->matNormal           , meshRenderCmd.matNormal.data()           , sizeof(XMMATRIX) * NumInstances);
 		memcpy(pPerObj->matWorld            , meshRenderCmd.matWorld.data()            , sizeof(XMMATRIX) * NumInstances);
 		//memcpy(pPerObj->ObjID               , meshRenderCmd.objectID.data()            , sizeof(int) * NumInstances); // not 16B aligned
+
 		for (uint i = 0; i < NumInstances; ++i)
 		{
 			pPerObj->ObjID[i].x = meshRenderCmd.objectID[i];
@@ -144,7 +145,7 @@ HRESULT VQRenderer::PreRenderScene(
 	, const FUIState& UIState
 )
 {
-	SCOPED_CPU_MARKER("RenderThread_PreRender()");
+	SCOPED_CPU_MARKER("Renderer.PreRender");
 	FWindowRenderContext& ctx = this->GetWindowRenderContext(pWindow->GetHWND());
 
 	const bool bAsyncSubmit = mWaitForSubmitWorker;

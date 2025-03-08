@@ -122,7 +122,11 @@ inline int HasHeightMap(int textureConfig)                      { return ((textu
 inline int HasEmissiveMap(int textureConfig)                    { return ((textureConfig & (1 << 7)) > 0 ? 1 : 0); }
 inline int HasOcclusionRoughnessMetalnessMap(int textureConfig) { return ((textureConfig & (1 << 8)) > 0 ? 1 : 0); }
 
-struct MaterialData
+struct 
+#if VQ_CPU
+	alignas(16)
+#endif
+MaterialData
 {
     float3 diffuse;
     float alpha;
@@ -138,7 +142,7 @@ struct MaterialData
 
 	float normalMapMipBias;
     float displacement;
-    int textureConfig;
+    float textureConfig;
 };
 
 
