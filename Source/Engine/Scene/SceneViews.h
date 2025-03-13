@@ -65,6 +65,15 @@ struct FSceneRenderOptions
 	DirectX::XMFLOAT4 OutlineColor = DirectX::XMFLOAT4(1.0f, 0.647f, 0.1f, 1.0f);
 };
 
+struct FVisibleMeshSortData
+{
+	int32 iBB;
+	float fBBArea;
+	int32 matID;
+	int32 meshID;
+	uint8 bTess;
+	uint8 iLOD;
+};
 struct alignas(64) FVisibleMeshData
 {
 	uint64 SceneSortKey;

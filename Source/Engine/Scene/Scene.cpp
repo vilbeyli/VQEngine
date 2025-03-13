@@ -1084,10 +1084,10 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 			mFrustumCullWorkerContext.vBoundingBoxList = BVH.mMeshBoundingBoxes;
 
 			const bool bForceLOD0_ShadowView = SceneView.sceneRenderOptions.bForceLOD0_ShadowView;
-			std::function<bool(const FVisibleMeshData&, const FVisibleMeshData&)> fnShadowViewSort = 
-				[](const FVisibleMeshData& l, const FVisibleMeshData& r)
+			std::function<bool(const FVisibleMeshSortData&, const FVisibleMeshSortData&)> fnShadowViewSort =
+				[](const FVisibleMeshSortData& l, const FVisibleMeshSortData& r)
 			{
-				return l.ShadowSortKey > r.ShadowSortKey;
+				return FShadowView::GetKey(l.matID, l.meshID, l.iLOD, l.bTess) > FShadowView::GetKey(r.matID, r.meshID, r.iLOD, r.bTess);
 			};
 			size_t currRange = 0;
 			{
@@ -1129,10 +1129,10 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 			SCOPED_CPU_MARKER(fnMark("InitWorkerContexts", vRanges[0].first, vRanges[0].second).c_str());
 
 			const bool bForceLOD0 = SceneView.sceneRenderOptions.bForceLOD0_SceneView;
-			std::function<bool(const FVisibleMeshData&, const FVisibleMeshData&)> fnMainViewSort = 
-				[](const FVisibleMeshData& l, const FVisibleMeshData& r)
+			std::function<bool(const FVisibleMeshSortData&, const FVisibleMeshSortData&)> fnMainViewSort =
+				[](const FVisibleMeshSortData& l, const FVisibleMeshSortData& r)
 			{
-				return l.SceneSortKey > r.SceneSortKey;
+				return FSceneDrawData::GetKey(l.matID, l.meshID, l.iLOD, l.bTess) > FSceneDrawData::GetKey(r.matID, r.meshID, r.iLOD, r.bTess);
 			};
 
 			for (size_t i = vRanges[0].first; i <= vRanges[0].second; ++i)

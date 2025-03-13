@@ -72,7 +72,7 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	/*out*/ std::vector<FFrustumRenderList>* pFrustumRenderLists; // for each view
 
 
-	using SortingFunction_t = std::function<bool(const FVisibleMeshData&, const FVisibleMeshData&)>;
+	using SortingFunction_t = std::function<bool(const FVisibleMeshSortData&, const FVisibleMeshSortData&)>;
 	/*in */ std::vector<SortingFunction_t> vSortFunctions;
 	/*in */ std::vector<char> vForceLOD0;
 	// Hot Data ------------------------------------------------------------------------------------------------------------
