@@ -137,10 +137,21 @@ static size_t GetPSO_Key(
 }
 static size_t GetPSO_Key(const Material& mat, const VQRenderer& mRenderer)
 {
-	size_t iTess = 0; size_t iDomain = 0; size_t iPart = 0; size_t iOutTopo = 0; size_t iTessCull = 0;
+	uint8 iTess = 0; uint8 iDomain = 0; uint8 iPart = 0; uint8 iOutTopo = 0; uint8 iTessCull = 0;
 	Tessellation::GetTessellationPSOConfig(mat.Tessellation, iTess, iDomain, iPart, iOutTopo, iTessCull);
 	const size_t iAlpha = mat.IsAlphaMasked(mRenderer) ? 1 : 0;
 	return GetPSO_Key(iTess, iDomain, iPart, iOutTopo, iTessCull, iAlpha);
+}
+
+PSO_ID ObjectIDPass::GetPSO_ID(
+	size_t iTess,
+	size_t iDomain,
+	size_t iPart,
+	size_t iOutTopo,
+	size_t iTessCullMode,
+	size_t iAlpha) const
+{
+	return mapPSO.at(GetPSO_Key(iTess, iDomain, iPart, iOutTopo, iTessCullMode, iAlpha));
 }
 
 
@@ -152,9 +163,8 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	assert(pParams->pCmdCopy);
 	assert(pParams->pSceneView);
 	assert(pParams->pSceneDrawData);
-	assert(pParams->pCBAddresses);
+	//assert(pParams->pCBAddresses);
 	assert(pParams->pCBufferHeap);
-	const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& cbAddresses = *pParams->pCBAddresses;
 
 	DynamicBufferHeap* pHeap = pParams->pCBufferHeap;
 	ID3D12GraphicsCommandList* pCmd = pParams->pCmd;
@@ -192,60 +202,45 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 
 	// draw meshes
 	int iCB = 0;
-	for (const MeshRenderData_t& meshRenderCmd : pParams->pSceneDrawData->meshRenderParams)
+	for (const FInstancedDrawParameters& meshRenderCmd : pParams->pSceneDrawData->mainViewDrawParams)
 	{
-		using namespace VQ_SHADER_DATA;
-		const Material& mat = meshRenderCmd.material;
-		
-		const uint32 NumIndices = meshRenderCmd.numIndices;
-		const BufferID& VB_ID = meshRenderCmd.vertexIndexBuffer.first;
-		const BufferID& IB_ID = meshRenderCmd.vertexIndexBuffer.second;
-		const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
-		const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
-		const uint32 NumInstances = (uint32)meshRenderCmd.matNormal.size();
+		const VBV& vb = mRenderer.GetVertexBufferView(meshRenderCmd.VB);
+		const IBV& ib = mRenderer.GetIndexBufferView(meshRenderCmd.IB);
 
+		const size_t iAlpha = meshRenderCmd.PackedMaterialConfig & 0x1;
+		
 		// select PSO
-		const PSO_ID psoID = mapPSO.at(GetPSO_Key(mat, mRenderer));
+		size_t iTess = 0; size_t iDomain = 0; size_t iPart = 0; size_t iOutTopo = 0; size_t iTessCull = 0;
+		meshRenderCmd.UnpackPessellationConfig(iTess, iDomain, iPart, iOutTopo, iTessCull);
+		const PSO_ID psoID = this->GetPSO_ID(iTess, iDomain, iPart, iOutTopo, iTessCull, iAlpha);
 		pCmd->SetPipelineState(mRenderer.GetPSO(psoID));
 
 		// set cbuffers
-		if (mat.Tessellation.bEnableTessellation)
+		pCmd->SetGraphicsRootConstantBufferView(1, meshRenderCmd.cbAddr);
+		if (meshRenderCmd.cbAddr_Tessellation)
 		{
-			D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Tsl;
-			VQ_SHADER_DATA::TessellationParams* pCBuffer_Tessellation = nullptr;
-			auto data = mat.GetTessellationCBufferData();
-			pHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Tessellation)), (void**)(&pCBuffer_Tessellation), &cbAddr_Tsl);
-			memcpy(pCBuffer_Tessellation, &data, sizeof(data));
-			pCmd->SetGraphicsRootConstantBufferView(2, cbAddr_Tsl);
+			pCmd->SetGraphicsRootConstantBufferView(2, meshRenderCmd.cbAddr_Tessellation);
 		}
-		assert(iCB < cbAddresses.size());
-		pCmd->SetGraphicsRootConstantBufferView(1, cbAddresses[iCB++]);
 		pCmd->SetGraphicsRootConstantBufferView(4, pParams->cbPerView);
 
 		// set textures
-		if (mat.SRVMaterialMaps != INVALID_ID)
+		if (meshRenderCmd.SRVMaterialMaps != INVALID_ID)
 		{
 			//const CBV_SRV_UAV& NullTex2DSRV = mRenderer.GetSRV(mResources_MainWnd.SRV_NullTexture2D);
-			pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
-			if (mat.SRVHeightMap != INVALID_ID)
+			pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(meshRenderCmd.SRVMaterialMaps).GetGPUDescHandle(0));
+			if (meshRenderCmd.SRVHeightMap != INVALID_ID)
 			{
-				pCmd->SetGraphicsRootDescriptorTable(3, mRenderer.GetSRV(mat.SRVHeightMap).GetGPUDescHandle(0));
+				pCmd->SetGraphicsRootDescriptorTable(3, mRenderer.GetSRV(meshRenderCmd.SRVHeightMap).GetGPUDescHandle(0));
 			}
 		}
 
 		// set IA-VB-IB
-		D3D_PRIMITIVE_TOPOLOGY topo = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		if (mat.Tessellation.bEnableTessellation)
-		{
-			topo = mat.Tessellation.Domain == ETessellationDomain::QUAD_PATCH
-				? D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST
-				: D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
-		}
-		pCmd->IASetPrimitiveTopology(topo);
+		pCmd->IASetPrimitiveTopology(meshRenderCmd.IATopology);
 		pCmd->IASetVertexBuffers(0, 1, &vb);
 		pCmd->IASetIndexBuffer(&ib);
 		
-		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
+		// draw
+		pCmd->DrawIndexedInstanced(meshRenderCmd.numIndices, meshRenderCmd.numInstances, 0, 0, 0);
 	}
 
 

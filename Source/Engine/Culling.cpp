@@ -379,26 +379,32 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 			SCOPED_CPU_MARKER("GatherRenderData");
 			for (size_t bb : vVisibleBBIndicesPerView[iWork])
 			{
-				const Mesh& mesh = MeshLookupCopy.at(MeshBB_MeshID[bb]);
+				const MeshID meshID = MeshBB_MeshID[bb];
+				const MaterialID matID = MeshBB_MatID[bb];
+				const Mesh& mesh = MeshLookupCopy.at(meshID);
 				const Material& mat = MaterialLookupCopy.at(MeshBB_MatID[bb]);
 
 				const float fBBArea = CalculateProjectedBoundingBoxArea(vBoundingBoxList[bb], vMatViewProj[iWork]);
 				const int iLOD = vForceLOD0[iWork] ? 0 : InstanceBatching::GetLODFromProjectedScreenArea(fBBArea, mesh.GetNumLODs());
+				const bool bTessellationEnabled = mat.Tessellation.IsTessellationEnabled();
 
 				assert(iLOD < 256);
 				vVisibleMeshList.emplace_back(
 					FVisibleMeshData{
+						.SceneSortKey = FSceneDrawData::GetKey(matID, meshID, iLOD, bTessellationEnabled),
+						.ShadowSortKey = FShadowView::GetKey(matID, meshID, iLOD, bTessellationEnabled),
+						//.padding = 0xDEADC0DE,
+						.hMaterial = matID,
+						.hMesh = meshID,
+						.SelectedLOD = static_cast<unsigned char>(iLOD),
+						.bTessellated = bTessellationEnabled,
+						.NumIndices = mesh.GetNumIndices(iLOD),
+						.VBIB = mesh.GetIABufferIDs(iLOD),
+						.pad = "",
 						.Transform = *MeshBB_Transforms[bb], // copy the transform
 						.fBBArea = fBBArea,
 						.hGameObject = MeshBB_GameObjHandles[bb],
 						.Material = mat, // copy the material
-						.padding = 0xDEADC0DE,
-						.hMaterial = MeshBB_MatID[bb],
-						.hMesh = MeshBB_MeshID[bb],
-						.SelectedLOD = static_cast<unsigned char>(iLOD),
-						.bTessellated = mat.Tessellation.bEnableTessellation,
-						.NumIndices = mesh.GetNumIndices(iLOD),
-						.VBIB = mesh.GetIABufferIDs(iLOD),
 					}
 				);
 			}

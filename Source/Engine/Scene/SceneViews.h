@@ -65,19 +65,21 @@ struct FSceneRenderOptions
 	DirectX::XMFLOAT4 OutlineColor = DirectX::XMFLOAT4(1.0f, 0.647f, 0.1f, 1.0f);
 };
 
-struct FVisibleMeshData
+struct alignas(64) FVisibleMeshData
 {
+	uint64 SceneSortKey;
+	uint64 ShadowSortKey;
+	MaterialID hMaterial;
+	MeshID hMesh;
+	short SelectedLOD;
+	bool bTessellated;
+	unsigned NumIndices;
+	std::pair<BufferID, BufferID> VBIB;
+	char pad[24];
 	Transform Transform;// store a copy
 	float fBBArea;
 	size_t hGameObject;
 	Material Material;  // store a copy
-	size_t padding;
-	MaterialID hMaterial;
-	MeshID hMesh;
-	unsigned char SelectedLOD;
-	char bTessellated;
-	unsigned NumIndices;
-	std::pair<BufferID, BufferID> VBIB;
 };
 
 struct FViewRef
@@ -198,6 +200,7 @@ struct FSceneShadowViews
 
 	uint NumSpotShadowViews;
 	uint NumPointShadowViews;
+	uint NumDirectionalViews;
 };
 
 struct FFrustumRenderCommandRecorderContext

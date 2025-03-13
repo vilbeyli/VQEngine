@@ -23,7 +23,8 @@
 #include "Shaders/LightingConstantBufferData.h"
 #include "Engine/Scene/Material.h"
 
-#include <DirectXMath.h>
+#include <d3d12.h>
+
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -108,6 +109,74 @@ struct FInstancedShadowMeshRenderData : public FInstancedMeshRenderDataBase
 	std::vector<DirectX::XMMATRIX> matWorld;
 };
 
+struct FInstancedDrawParameters
+{
+	// constant buffers
+	D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {}; // cbAddr contains material data, transformations, object/mesh/material IDs
+	D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Tessellation = {}; // contains tessellation param cbuffer
+	
+	// material-texture params
+	SRV_ID SRVMaterialMaps = INVALID_ID;
+	SRV_ID SRVHeightMap = INVALID_ID;
+
+	// IA params
+	D3D_PRIMITIVE_TOPOLOGY IATopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	BufferID VB = INVALID_ID; // renderer later derefs these IDs
+	BufferID IB = INVALID_ID; // renderer later derefs these IDs
+
+	// draw params
+	uint numInstances = 0;
+	uint numIndices = 0;
+
+	// material-specific PSO ID collection
+	// PSO_ID PSO_ZPrePass = INVALID_ID;
+	// PSO_ID PSO_Lighting = INVALID_ID;
+	// PSO_ID PSO_ObjectIDPass = INVALID_ID;
+
+	// PSO-material configs
+	//   Tessellation Config
+	//     bit  0  : iTess
+	//     bits 1-2: iDomain
+	//     bits 3-4: iPartition
+	//     bits 5-6: iOutputTopology
+	//     bit  7  : iTessellationSWCull
+	uint8 PackedTessellationConfig = 0;
+	inline void PackTessellationConfig(bool bEnable, ETessellationDomain d, ETessellationPartitioning p, ETessellationOutputTopology t, bool bFaceCullOrFrustumCull)
+	{
+		PackedTessellationConfig = (bEnable ? 1 : 0) |
+			((uint8)d) << 1 |
+			((uint8)p) << 3 |
+			((uint8)t) << 5 |
+			((bFaceCullOrFrustumCull ? 1 : 0) << 7);
+	}
+	inline void UnpackPessellationConfig(size_t& iTess, size_t& iDomain, size_t& iPartition, size_t& iOutputTopology, size_t& iTessellationSWCull) const
+	{
+		iTess = PackedTessellationConfig & 0x1;
+		iDomain = (PackedTessellationConfig >> 1) & 0x3;
+		iPartition = (PackedTessellationConfig >> 3) & 0x3;
+		iOutputTopology = (PackedTessellationConfig >> 5) & 0x3;
+		iTessellationSWCull = (PackedTessellationConfig >> 7) & 0x1;
+	}
+		
+	//   Material Config
+	//     bit  0  : iAlpha
+	//     bit  1  : iRaster
+	//     bits 2-3: iFaceCull
+	//     bit  4-7: <unused>
+	uint8 PackedMaterialConfig;
+	inline void PackMaterialConfig(bool bAlphaMasked, bool bWireFrame, uint8 iFaceCull)
+	{
+		PackedMaterialConfig = (bAlphaMasked ? 1 : 0) |
+			(bWireFrame ? 1 : 0) << 1 |
+			(iFaceCull & 0x3) << 2;
+	}
+	inline void UnpackMaterialConfig(size_t& iAlpha, size_t& iRaster, size_t& iFaceCull) const
+	{
+		iAlpha = PackedMaterialConfig & 0x1;
+		iRaster = (PackedMaterialConfig >> 1) & 0x1;
+		iFaceCull = (PackedMaterialConfig >> 2) & 0x3;
+	}
+};
 
 using FLightRenderData = FWireframeRenderData;
 using FBoundingBoxRenderData = FWireframeRenderData;
@@ -128,7 +197,7 @@ using BoundingBoxRenderData_t = FBoundingBoxRenderData;
 struct FInstanceDataWriteParam { int iDraw, iInst; };
 struct FSceneDrawData
 {
-	std::vector<MeshRenderData_t> meshRenderParams;
+	std::vector<FInstancedDrawParameters> mainViewDrawParams;
 	std::vector<FLightRenderData> lightRenderParams;
 	std::vector<FLightRenderData> lightBoundsRenderParams;
 	std::vector<FOutlineRenderData> outlineRenderParams;

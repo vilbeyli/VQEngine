@@ -58,6 +58,8 @@ public:
 	inline int4 ReadBackPixel(int screenCoordsX, int screenCoordsY, HWND hwnd) const { return ReadBackPixel(int2(screenCoordsX, screenCoordsY), hwnd); }
 	inline int4 ReadBackPixel(float2 uv, HWND hwnd) const { return ReadBackPixel((int)(uv.x * mOutputResolutionX), (int)(uv.y * mOutputResolutionY), hwnd); }
 
+	PSO_ID GetPSO_ID(size_t iTess,size_t iDomain,size_t iPart,size_t iOutTopo,size_t iTessCullMode,size_t iAlpha) const;
+
 	ID3D12Resource* GetGPUTextureResource() const;
 	ID3D12Resource* GetCPUTextureResource() const;
 

@@ -710,6 +710,7 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 
 	ShadowView.NumPointShadowViews = 0;
 	ShadowView.NumSpotShadowViews = 0;
+	ShadowView.NumDirectionalViews = 0;
 	GatherShadowViewData(ShadowView, mLightsStatic, mActiveLightIndices_Static);
 	GatherShadowViewData(ShadowView, mLightsStationary, mActiveLightIndices_Stationary);
 	GatherShadowViewData(ShadowView, mLightsDynamic, mActiveLightIndices_Dynamic);
@@ -721,8 +722,6 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 	// ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 	FSceneDrawData& DrawData = mRenderer.GetSceneDrawData(FRAME_DATA_INDEX);
-
-	//mRenderer.BatchDrawCalls(UpdateWorkerThreadPool, SceneView);
 	
 	RecordRenderLightMeshCommands(SceneView);
 	RecordOutlineRenderCommands(DrawData.outlineRenderParams, mSelectedObjects, this, SceneView.view, SceneView.proj, SceneView.sceneRenderOptions.OutlineColor);
@@ -960,6 +959,7 @@ void Scene::GatherShadowViewData(FSceneShadowViews& SceneShadowView, const std::
 		{
 			FShadowView& ShadowView = SceneShadowView.ShadowView_Directional;
 			ShadowView.matViewProj = l.GetViewProjectionMatrix();
+			++SceneShadowView.NumDirectionalViews;
 		}	break;
 		case Light::EType::SPOT:
 		{
@@ -1087,9 +1087,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 			std::function<bool(const FVisibleMeshData&, const FVisibleMeshData&)> fnShadowViewSort = 
 				[](const FVisibleMeshData& l, const FVisibleMeshData& r)
 			{
-				const uint64 keyL = FShadowView::GetKey(l.hMaterial, l.hMesh, l.SelectedLOD, l.bTessellated);
-				const uint64 keyR = FShadowView::GetKey(r.hMaterial, r.hMesh, r.SelectedLOD, r.bTessellated);
-				return keyL > keyR;
+				return l.ShadowSortKey > r.ShadowSortKey;
 			};
 			size_t currRange = 0;
 			{
@@ -1134,9 +1132,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 			std::function<bool(const FVisibleMeshData&, const FVisibleMeshData&)> fnMainViewSort = 
 				[](const FVisibleMeshData& l, const FVisibleMeshData& r)
 			{
-				const uint64 keyL = FSceneDrawData::GetKey(l.hMaterial, l.hMesh, l.SelectedLOD, l.bTessellated);
-				const uint64 keyR = FSceneDrawData::GetKey(r.hMaterial, r.hMesh, r.SelectedLOD, r.bTessellated);
-				return keyL > keyR;
+				return l.SceneSortKey > r.SceneSortKey;
 			};
 
 			for (size_t i = vRanges[0].first; i <= vRanges[0].second; ++i)
