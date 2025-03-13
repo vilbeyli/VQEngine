@@ -1244,10 +1244,12 @@ void VQEngine::DrawEditorWindow()
 static void DrawTessellationEditorGUI(FUIState& mUIState, FTessellationParameters& tess, bool& bWireframe)
 {
 	StartDrawingMaterialEditorRow("Tessellation");
-	ImGui::Checkbox("Enable##", &tess.bEnableTessellation);
+	bool bEnableTessellation = tess.IsTessellationEnabled();
+	if (ImGui::Checkbox("Enable##", &bEnableTessellation))
+		tess.SetTessellationEnabled(bEnableTessellation);
 	ImGui::SameLine();
 	ImGui::Checkbox("Wireframe", &bWireframe);
-	if (tess.bEnableTessellation)
+	if (bEnableTessellation)
 	{
 		const char* pszTessellationModeNames[] = {
 			"Triangle",
@@ -1255,15 +1257,18 @@ static void DrawTessellationEditorGUI(FUIState& mUIState, FTessellationParameter
 			// "Line"
 			""
 		};
-		if (ImGui::BeginCombo("Domain", pszTessellationModeNames[(size_t)tess.Domain]))
+
+		ETessellationDomain Domain = tess.GetDomain();
+		if (ImGui::BeginCombo("Domain", pszTessellationModeNames[(size_t)Domain]))
 		{
-			if (ImGui::Selectable(pszTessellationModeNames[0], tess.Domain == ETessellationDomain::TRIANGLE_PATCH)) { tess.Domain = ETessellationDomain::TRIANGLE_PATCH; }
-			if (ImGui::Selectable(pszTessellationModeNames[1], tess.Domain == ETessellationDomain::QUAD_PATCH)) { tess.Domain = ETessellationDomain::QUAD_PATCH; }
+			if (ImGui::Selectable(pszTessellationModeNames[0], Domain == ETessellationDomain::TRIANGLE_PATCH)) { tess.SetDomain( ETessellationDomain::TRIANGLE_PATCH ); }
+			if (ImGui::Selectable(pszTessellationModeNames[1], Domain == ETessellationDomain::QUAD_PATCH)) { tess.SetDomain( ETessellationDomain::QUAD_PATCH ); }
 			ImGui::EndCombo();
 		}
 
+		Domain = tess.GetDomain();
 		constexpr float MAX_TESSELLATION = FTessellationParameters::MAX_TESSELLATION_FACTOR;
-		switch (tess.Domain)
+		switch (Domain)
 		{
 		case::ETessellationDomain::TRIANGLE_PATCH:
 		{
@@ -1347,20 +1352,15 @@ static void DrawTessellationEditorGUI(FUIState& mUIState, FTessellationParameter
 			"Pow2",
 			""
 		};
-		if (ImGui::BeginCombo("Partitioning", pszPartitioningNames[(size_t)tess.Partitioning]))
+
+		ETessellationPartitioning partitioning = tess.GetPartitioning();
+		if (ImGui::BeginCombo("Partitioning", pszPartitioningNames[(size_t)partitioning]))
 		{
-			if (ImGui::Selectable(pszPartitioningNames[0], tess.Partitioning == ETessellationPartitioning::INTEGER)) { tess.Partitioning = ETessellationPartitioning::INTEGER; }
-			if (ImGui::Selectable(pszPartitioningNames[1], tess.Partitioning == ETessellationPartitioning::FRACTIONAL_EVEN)) { tess.Partitioning = ETessellationPartitioning::FRACTIONAL_EVEN; }
-			if (ImGui::Selectable(pszPartitioningNames[2], tess.Partitioning == ETessellationPartitioning::FRACTIONAL_ODD)) { tess.Partitioning = ETessellationPartitioning::FRACTIONAL_ODD; }
-			if (ImGui::Selectable(pszPartitioningNames[3], tess.Partitioning == ETessellationPartitioning::POWER_OF_TWO)) { tess.Partitioning = ETessellationPartitioning::POWER_OF_TWO; }
+			if (ImGui::Selectable(pszPartitioningNames[0], partitioning == ETessellationPartitioning::INTEGER))        { tess.SetPartitioning(ETessellationPartitioning::INTEGER); }
+			if (ImGui::Selectable(pszPartitioningNames[1], partitioning == ETessellationPartitioning::FRACTIONAL_EVEN)){ tess.SetPartitioning(ETessellationPartitioning::FRACTIONAL_EVEN); }
+			if (ImGui::Selectable(pszPartitioningNames[2], partitioning == ETessellationPartitioning::FRACTIONAL_ODD)) { tess.SetPartitioning(ETessellationPartitioning::FRACTIONAL_ODD); }
+			if (ImGui::Selectable(pszPartitioningNames[3], partitioning == ETessellationPartitioning::POWER_OF_TWO))   { tess.SetPartitioning(ETessellationPartitioning::POWER_OF_TWO); }
 			ImGui::EndCombo();
-		}
-
-
-		switch (tess.Domain)
-		{
-		case::ETessellationDomain::TRIANGLE_PATCH:
-			break;
 		}
 
 		// topo
@@ -1371,32 +1371,34 @@ static void DrawTessellationEditorGUI(FUIState& mUIState, FTessellationParameter
 			"Triangle CCW",
 			""
 		};
-		const bool bLineDomain = tess.Domain == ETessellationDomain::ISOLINE_PATCH;
-		if (ImGui::BeginCombo("Output Topology", pszOutputTopologyNames[(size_t)tess.OutputTopology]))
+		const bool bLineDomain = tess.GetDomain() == ETessellationDomain::ISOLINE_PATCH;
+		ETessellationOutputTopology topology = tess.GetOutputTopology();
+		if (ImGui::BeginCombo("Output Topology", pszOutputTopologyNames[(size_t)topology]))
 		{
-			if (ImGui::Selectable(pszOutputTopologyNames[0], tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT)) { tess.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT; }
+			if (ImGui::Selectable(pszOutputTopologyNames[0], topology == ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT)) { tess.SetOutputTopology(ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT); }
 			BeginDisabledUIState(bLineDomain);
-			if (ImGui::Selectable(pszOutputTopologyNames[1], tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE)) { tess.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE; }
+			if (ImGui::Selectable(pszOutputTopologyNames[1], topology == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE)) { tess.SetOutputTopology(ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE); }
 			EndDisabledUIState(bLineDomain);
-			if (ImGui::Selectable(pszOutputTopologyNames[2], tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW)) { tess.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW; }
-			if (ImGui::Selectable(pszOutputTopologyNames[3], tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW)) { tess.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW; }
+			if (ImGui::Selectable(pszOutputTopologyNames[2], topology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW)) { tess.SetOutputTopology(ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW); }
+			if (ImGui::Selectable(pszOutputTopologyNames[3], topology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW)) { tess.SetOutputTopology(ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW); }
 			ImGui::EndCombo();
 		}
-
-		const bool bShouldDisableCullingOptionsForTessellation = tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT || tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE;
+		
+		topology = tess.GetOutputTopology();
+		const bool bShouldDisableCullingOptionsForTessellation = topology == ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT || topology == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE;
 		if (bShouldDisableCullingOptionsForTessellation)
 		{
-			tess.GPUParams.bFaceCull = false;
-			tess.GPUParams.bFrustumCull = false;
+			tess.GPUParams.SetFaceCulling(false);
+			tess.GPUParams.SetFrustumCulling(false);
 		}
 
 		// cull toggles
-		bool bFrustumCull = tess.GPUParams.bFrustumCull;
+		bool bFrustumCull = tess.GPUParams.IsFaceCullingOn();
 		BeginDisabledUIState(!bShouldDisableCullingOptionsForTessellation);
-		if (ImGui::Checkbox("Frustum Cull", &bFrustumCull)) { tess.GPUParams.bFrustumCull = bFrustumCull; }
+		if (ImGui::Checkbox("Frustum Cull", &bFrustumCull)) { tess.GPUParams.SetFrustumCulling(bFrustumCull); }
 		ImGui::SameLine();
-		bool bBackFaceCull = tess.GPUParams.bFaceCull;
-		if (ImGui::Checkbox("BackFace Cull", &bBackFaceCull)) { tess.GPUParams.bFaceCull = bBackFaceCull; }
+		bool bBackFaceCull = tess.GPUParams.IsFaceCullingOn();
+		if (ImGui::Checkbox("BackFace Cull", &bBackFaceCull)) { tess.GPUParams.SetFaceCulling(bBackFaceCull); }
 		EndDisabledUIState(!bShouldDisableCullingOptionsForTessellation);
 
 		// cull thresholdes
@@ -1418,8 +1420,8 @@ static void DrawTessellationEditorGUI(FUIState& mUIState, FTessellationParameter
 			ImGui::InputFloat("Threshold", &tess.GPUParams.fHSFrustumCullEpsilon);
 		}
 
-		bool bAdaptiveTess = tess.GPUParams.bAdaptiveTessellation;
-		if (ImGui::Checkbox("Adaptive", &bAdaptiveTess)) { tess.GPUParams.bAdaptiveTessellation = bAdaptiveTess; }
+		bool bAdaptiveTess = tess.GPUParams.IsAdaptiveTessellationOn();
+		if (ImGui::Checkbox("Adaptive", &bAdaptiveTess)) { tess.GPUParams.SetAdaptiveTessellation(bAdaptiveTess); }
 		if (bAdaptiveTess)
 		{
 			float fMinMaxDistanceThresholds[2] = { tess.GPUParams.fHSAdaptiveTessellationMinDist, tess.GPUParams.fHSAdaptiveTessellationMaxDist };

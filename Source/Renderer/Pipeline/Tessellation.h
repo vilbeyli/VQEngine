@@ -18,13 +18,14 @@
 
 #pragma once
 
+#include "Engine/Core/Types.h"
 #include "Shaders/LightingConstantBufferData.h"
 #include "Shader.h"
 
 #include <string>
 #include <vector>
 
-enum class ETessellationDomain : short
+enum class ETessellationDomain : uint8
 {
 	TRIANGLE_PATCH = 0,
 	QUAD_PATCH,
@@ -32,7 +33,7 @@ enum class ETessellationDomain : short
 
 	NUM_TESSELLATION_DOMAINS
 };
-enum class ETessellationOutputTopology : short
+enum class ETessellationOutputTopology : uint8
 {
 	TESSELLATION_OUTPUT_POINT = 0,
 	TESSELLATION_OUTPUT_LINE,
@@ -41,7 +42,7 @@ enum class ETessellationOutputTopology : short
 
 	NUM_TESSELLATION_OUTPUT_TOPOLOGY
 };
-enum class ETessellationPartitioning : short
+enum class ETessellationPartitioning : uint8
 {
 	INTEGER = 0,
 	FRACTIONAL_EVEN,
@@ -53,20 +54,37 @@ struct FTessellationParameters
 {
 	static constexpr float MAX_TESSELLATION_FACTOR = 64.0f;
 
-	bool bEnableTessellation = false;
-	bool bEnableVertexTBNVisualization = false;
-	ETessellationDomain Domain = ETessellationDomain::TRIANGLE_PATCH;
-	ETessellationOutputTopology OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW;
-	ETessellationPartitioning Partitioning = ETessellationPartitioning::FRACTIONAL_ODD;
-
 	VQ_SHADER_DATA::TessellationParams GPUParams;
+
+	// bit 0  : bEnableTessellation
+	// bit 1  : bEnableVertexTBNVisualization
+	// bit 2-3: ETessellationDomain
+	// bit 4-5: ETessellationOutputTopology
+	// bit 6-7: ETessellationPartitioning;
+	uint8 PackedTessellationConfig = 
+		(((uint8)ETessellationDomain::TRIANGLE_PATCH                         ) << 2) | 
+		(((uint8)ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW) << 4) |
+		(((uint8)ETessellationPartitioning::FRACTIONAL_ODD                   ) << 6) ;
+
+	inline bool IsTessellationEnabled() const { return PackedTessellationConfig & 0x1; }
+	inline bool IsVertexTBNVisualization() const { return PackedTessellationConfig & 0x2; }
+	inline ETessellationDomain GetDomain() const { return static_cast<ETessellationDomain>((PackedTessellationConfig >> 2) & 0x3); }
+	inline ETessellationOutputTopology GetOutputTopology() const { return static_cast<ETessellationOutputTopology>((PackedTessellationConfig >> 4) & 0x3); }
+	inline ETessellationPartitioning GetPartitioning() const { return static_cast<ETessellationPartitioning>((PackedTessellationConfig >> 6) & 0x3); }
+
+	inline void SetTessellationEnabled(bool b) { PackedTessellationConfig |= (b ? 1 : 0); }
+	inline void SetVertexTBNVisualization(bool b) { PackedTessellationConfig |= (b ? 2 : 0); }
+	inline void SetDomain(ETessellationDomain d) { PackedTessellationConfig |= ((uint8)d) << 2; }
+	inline void SetOutputTopology(ETessellationOutputTopology t) { PackedTessellationConfig |= ((uint8)t) << 4; }
+	inline void SetPartitioning(ETessellationPartitioning p) { PackedTessellationConfig |= ((uint8)p) << 6; }
 
 	inline void SetAllTessellationFactors(float TessellationFactor)
 	{
+		const ETessellationDomain Domain = GetDomain();
 		switch (Domain)
 		{
 		case ETessellationDomain::TRIANGLE_PATCH: GPUParams.TriInnerTessFactor = GPUParams.TriEdgeTessFactor.x = GPUParams.TriEdgeTessFactor.y = GPUParams.TriEdgeTessFactor.z = TessellationFactor; break;
-		case ETessellationDomain::QUAD_PATCH: GPUParams.QuadInsideFactor.x = GPUParams.QuadInsideFactor.y = GPUParams.QuadEdgeTessFactor.x = GPUParams.QuadEdgeTessFactor.y = GPUParams.QuadEdgeTessFactor.z = GPUParams.QuadEdgeTessFactor.w = TessellationFactor; break;
+		case ETessellationDomain::QUAD_PATCH    : GPUParams.QuadInsideFactor.x = GPUParams.QuadInsideFactor.y  = GPUParams.QuadEdgeTessFactor.x = GPUParams.QuadEdgeTessFactor.y = GPUParams.QuadEdgeTessFactor.z = GPUParams.QuadEdgeTessFactor.w = TessellationFactor; break;
 		case ETessellationDomain::ISOLINE_PATCH: // TODO: line
 			break;
 		}
@@ -165,18 +183,22 @@ namespace Tessellation
 	}
 
 	inline void GetTessellationPSOConfig(const FTessellationParameters& tess,
-		size_t& iTess,
-		size_t& iDomain,
-		size_t& iPart,
-		size_t& iOutTopo,
-		size_t& iTessCull
+		uint8& iTess,
+		uint8& iDomain,
+		uint8& iPart,
+		uint8& iOutTopo,
+		uint8& iTessCull
 	)
 	{
-		const bool bSWCullTessellation = tess.GPUParams.bFaceCull > 0 || tess.GPUParams.bFrustumCull > 0;
-		iTess     = tess.bEnableTessellation ? 1 : 0;
-		iDomain   = iTess == 0 ? 0 : (size_t)tess.Domain;
-		iPart     = iTess == 0 ? 0 : (size_t)tess.Partitioning;
-		iOutTopo  = iTess == 0 ? 0 : (size_t)tess.OutputTopology;
+		const bool bFrustumCull  = tess.GPUParams.bFrustumCull_FaceCull_AdaptiveTessellation & 0x1;
+		const bool bFaceCull     = tess.GPUParams.bFrustumCull_FaceCull_AdaptiveTessellation & 0x2;
+		const bool bAdaptiveTess = tess.GPUParams.bFrustumCull_FaceCull_AdaptiveTessellation & 0x4;
+		const bool bSWCullTessellation = bFaceCull || bFrustumCull;
+
+		iTess     = tess.IsTessellationEnabled() ? 1 : 0;
+		iDomain   = iTess == 0 ? 0 : (uint8)tess.GetDomain();
+		iPart     = iTess == 0 ? 0 : (uint8)tess.GetPartitioning();
+		iOutTopo  = iTess == 0 ? 0 : (uint8)tess.GetOutputTopology();
 		iTessCull = iTess == 1 && (bSWCullTessellation ? 1 : 0);
 		return;
 	}

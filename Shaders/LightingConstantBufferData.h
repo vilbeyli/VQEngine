@@ -189,7 +189,13 @@ struct PerViewData
 	int    EnvironmentMapDiffuseOnlyIllumination;
 	float pad1;
 };
-struct PerObjectData
+
+
+struct
+#ifdef VQ_CPU
+	alignas(64)
+#endif
+PerObjectData
 {
 #if INSTANCED_DRAW
 	matrix matWorldViewProj    [INSTANCE_COUNT];
@@ -203,37 +209,55 @@ struct PerObjectData
 	matrix matNormal;
 #endif
 
-	MaterialData materialData;
-
-	int meshID;
-	int materialID;
-	int2 pad2;
-
 #if INSTANCED_DRAW
 	int4 ObjID[INSTANCE_COUNT]; // int[] causes alignment issues as each element is aligned to 16B on the GPU. use int4.x
 #else
 	int4 ObjID;
 #endif
+
+	MaterialData materialData;
+
+	int meshID;
+	int materialID;
 };
 
 struct TessellationParams
 {
+#if 0 // TODO: further reduce CBuffer & CPU memory footprint
+	float4 EdgeTessFactor;   // Quad[4], Tri[3], Line[?]
+	float2 InsideTessFactor; // Quad[2], Tri[1], Line[?]
+#else
 	float4 QuadEdgeTessFactor;
-	float2 QuadInsideFactor;
-	float2 pad;
 	float3 TriEdgeTessFactor;
 	float TriInnerTessFactor;
-
-	int bFrustumCull;
-	int bFaceCull;
-	int bAdaptiveTessellation;
-	int padi;
+	float2 QuadInsideFactor;
+#endif
 
 	float fHSFrustumCullEpsilon;
 	float fHSFaceCullEpsilon;
 	float fHSAdaptiveTessellationMaxDist;
 	float fHSAdaptiveTessellationMinDist;
 
+	
+	// bit  0    : FrustumCull in GS
+	// bit  1    : FaceCull in GS
+	// bit  2    : AdaptiveTessellation in HS/Tess
+	// bits 3-31 : <unused>
+	int bFrustumCull_FaceCull_AdaptiveTessellation;
+
+#if __cplusplus
+#define CONST const
+#else
+#define CONST 
+#endif
+
+	inline bool IsFrustumCullingOn() CONST       { return bFrustumCull_FaceCull_AdaptiveTessellation & 0x1; }
+	inline bool IsFaceCullingOn() CONST          { return bFrustumCull_FaceCull_AdaptiveTessellation & 0x2; }
+	inline bool IsAdaptiveTessellationOn() CONST { return bFrustumCull_FaceCull_AdaptiveTessellation & 0x4; }
+
+	inline void SetFrustumCulling(bool b)       { if (b) bFrustumCull_FaceCull_AdaptiveTessellation |= 0x1; else bFrustumCull_FaceCull_AdaptiveTessellation &= ~0x1; }
+	inline void SetFaceCulling(bool b)          { if (b) bFrustumCull_FaceCull_AdaptiveTessellation |= 0x2; else bFrustumCull_FaceCull_AdaptiveTessellation &= ~0x2; }
+	inline void SetAdaptiveTessellation(bool b) { if (b) bFrustumCull_FaceCull_AdaptiveTessellation |= 0x4; else bFrustumCull_FaceCull_AdaptiveTessellation &= ~0x4; }
 
 #ifdef VQ_CPU
 	TessellationParams() : 
@@ -241,17 +265,14 @@ struct TessellationParams
 		, QuadInsideFactor(1, 1)
 		, TriEdgeTessFactor(1,1,1)
 		, TriInnerTessFactor(1)
-		, pad(99999.0f, 99999.0f)
-		, bFrustumCull(0)
-		, bFaceCull(0)
-		, bAdaptiveTessellation(0)
-		, padi(0x0BADF00D)
+		, bFrustumCull_FaceCull_AdaptiveTessellation(0)
 		, fHSFrustumCullEpsilon(0)
 		, fHSFaceCullEpsilon(0)
 		, fHSAdaptiveTessellationMaxDist(500.0f)
 		, fHSAdaptiveTessellationMinDist(10.0f)
 	{}
 #endif
+
 };
 
 

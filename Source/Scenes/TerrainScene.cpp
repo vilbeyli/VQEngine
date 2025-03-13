@@ -37,7 +37,7 @@ void TerrainScene::LoadScene(FSceneRepresentation& scene)
 	mr.TilingY              = 1.0f;
 
 	FTessellationParameters& tess = mr.Tessellation;
-	tess.bEnableTessellation = true;
+	tess.SetTessellationEnabled(true);
 	tess.SetAllTessellationFactors(4.0f);
 	scene.Materials.push_back(mr);
 	

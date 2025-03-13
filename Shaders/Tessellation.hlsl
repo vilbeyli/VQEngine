@@ -353,9 +353,9 @@ HSOutputPatchConstants CalcHSPatchConstants(
 	// Also missing is the edge case of all 3 vertices of the triangle are outside frustum but its 
 	// edges intersect the frustum (i.e. plane of triangle is visible within the plane)
 	#if 0
-	bool bCull = tess.bFrustumCull && ShouldFrustumCullPatch(cbPerView.WorldFrustumPlanes, patch, tess.fHSFrustumCullEpsilon);
+	bool bCull = tess.IsFrustumCullingOn() && ShouldFrustumCullPatch(cbPerView.WorldFrustumPlanes, patch, tess.fHSFrustumCullEpsilon);
 	if(!bCull)
-		bCull = tess.bFaceCull && ShouldCullBackFace(patch, tess.fHSFaceCullEpsilon);
+		bCull = tess.IsFaceCullingOn() && ShouldCullBackFace(patch, tess.fHSFaceCullEpsilon);
 	if(bCull)
 	{
 		#ifdef DOMAIN__TRIANGLE
@@ -395,7 +395,7 @@ HSOutputPatchConstants CalcHSPatchConstants(
 	
 #ifdef DOMAIN__TRIANGLE
 	
-	if(tess.bAdaptiveTessellation)
+	if(tess.IsAdaptiveTessellationOn())
 	{
 		float3 e0 = 0.5f * (patch[1].WorldSpacePosition + patch[0].WorldSpacePosition);
 		float3 e1 = 0.5f * (patch[2].WorldSpacePosition + patch[0].WorldSpacePosition);
@@ -415,7 +415,7 @@ HSOutputPatchConstants CalcHSPatchConstants(
 	
 #elif defined(DOMAIN__QUAD)
 	
-	if(tess.bAdaptiveTessellation)
+	if(tess.IsAdaptiveTessellationOn())
 	{
 		float3 e0 = 0.5f * (patch[1].WorldSpacePosition + patch[0].WorldSpacePosition);
 		float3 e1 = 0.5f * (patch[2].WorldSpacePosition + patch[1].WorldSpacePosition);
@@ -653,9 +653,9 @@ void GSMain(
 {	
 	#if OUTTOPO__TRI_CW || OUTTOPO__TRI_CCW
 	// cull triangle
-	if(tess.bFrustumCull && ShouldFrustumCullTriangle(cbPerView.WorldFrustumPlanes, Input[0].WorldSpacePosition, Input[1].WorldSpacePosition, Input[2].WorldSpacePosition, tess.fHSFrustumCullEpsilon))
+	if(tess.IsFrustumCullingOn() && ShouldFrustumCullTriangle(cbPerView.WorldFrustumPlanes, Input[0].WorldSpacePosition, Input[1].WorldSpacePosition, Input[2].WorldSpacePosition, tess.fHSFrustumCullEpsilon))
 		return;
-	if (tess.bFaceCull && ShouldCullBackFace(Input[0].position, Input[1].position, Input[2].position, tess.fHSFaceCullEpsilon)) // need a GSFaceCullEpsilon?
+	if (tess.IsFaceCullingOn() && ShouldCullBackFace(Input[0].position, Input[1].position, Input[2].position, tess.fHSFaceCullEpsilon)) // need a GSFaceCullEpsilon?
 		return;
 	#endif
 
