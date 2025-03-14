@@ -74,6 +74,38 @@ struct FVisibleMeshSortData
 	uint8 bTess;
 	uint8 iLOD;
 };
+struct FVisibleMeshDataSoA
+{
+	std::vector<uint64> SceneSortKey;
+	std::vector<uint64> ShadowSortKey;
+	std::vector<MaterialID> hMaterial;
+	std::vector<MeshID> hMesh;
+	std::vector<short> SelectedLOD;
+	std::vector<bool> bTessellated;
+	std::vector<unsigned> NumIndices;
+	std::vector<std::pair<BufferID, BufferID>> VBIB;
+	std::vector<Transform> Transform;
+	std::vector<float> fBBArea;
+	std::vector<size_t> hGameObject;
+	std::vector<Material> Material;
+	void Reserve(size_t sz)
+	{
+		SceneSortKey.resize(sz);
+		ShadowSortKey.resize(sz);
+		hMaterial.resize(sz);
+		hMesh.resize(sz);
+		SelectedLOD.resize(sz);
+		bTessellated.resize(sz);
+		NumIndices.resize(sz);
+		VBIB.resize(sz);
+		Transform.resize(sz);
+		fBBArea.resize(sz);
+		hGameObject.resize(sz);
+		Material.resize(sz);
+	}
+	size_t Size() const { return SceneSortKey.size(); }
+};
+
 struct alignas(64) FVisibleMeshData
 {
 	uint64 SceneSortKey;
@@ -103,6 +135,7 @@ struct FFrustumRenderList
 	mutable TaskSignal<void> DataReadySignal;
 	mutable TaskSignal<size_t> DataCountReadySignal;
 	std::vector<FVisibleMeshData> Data;
+	FVisibleMeshDataSoA Data2;
 	FViewRef ViewRef; // references SceneView or ShadowView
 
 	inline void Reset()

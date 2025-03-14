@@ -352,6 +352,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 	std::vector<FVisibleMeshSortData> sortData;
 	for (size_t iWork = iRangeBegin; iWork <= iRangeEnd; ++iWork)
 	{
+		FVisibleMeshDataSoA& vVisibleMeshListSoA = (*pFrustumRenderLists)[iWork].Data2;
 		std::vector<FVisibleMeshData>& vVisibleMeshList = (*pFrustumRenderLists)[iWork].Data;
 		{
 			SCOPED_CPU_MARKER("Clear");
@@ -377,6 +378,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 			SCOPED_CPU_MARKER("AllocRenderData");
 			vVisibleMeshList.reserve(NumVisibleItems);
 			sortData.resize(NumVisibleItems);
+			vVisibleMeshListSoA.Reserve(NumVisibleItems);
 		}
 		{
 			SCOPED_CPU_MARKER("SetSortData");
@@ -427,11 +429,29 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 		}
 		{
 			SCOPED_CPU_MARKER("GatherRenderData");
+			size_t i = 0;
 			for(const FVisibleMeshSortData& d : sortData)
 			{
 				const Mesh& mesh = MeshLookupCopy.at(d.meshID);
 				const Material& mat = MaterialLookupCopy.at(d.matID);
 
+#if 1
+				{
+					vVisibleMeshListSoA.SceneSortKey[i] = FSceneDrawData::GetKey(d.matID, d.meshID, d.iLOD, d.bTess),
+					vVisibleMeshListSoA.ShadowSortKey[i] = FShadowView::GetKey(d.matID, d.meshID, d.iLOD, d.bTess),
+					vVisibleMeshListSoA.hMaterial[i] = d.matID,
+					vVisibleMeshListSoA.hMesh[i] = d.meshID,
+					vVisibleMeshListSoA.SelectedLOD[i] = d.iLOD,
+					vVisibleMeshListSoA.bTessellated[i] = (bool)d.bTess,
+					vVisibleMeshListSoA.NumIndices[i] = mesh.GetNumIndices(d.iLOD),
+					vVisibleMeshListSoA.VBIB[i] = mesh.GetIABufferIDs(d.iLOD),
+					vVisibleMeshListSoA.Transform[i] = *MeshBB_Transforms[d.iBB], // copy the transform
+					vVisibleMeshListSoA.fBBArea[i] = d.fBBArea,
+					vVisibleMeshListSoA.hGameObject[i] = MeshBB_GameObjHandles[d.iBB],
+					vVisibleMeshListSoA.Material[i] = mat, // copy the material
+					++i;
+				}
+//#else
 				vVisibleMeshList.emplace_back(
 					FVisibleMeshData{
 						.SceneSortKey = FSceneDrawData::GetKey(d.matID, d.meshID, d.iLOD, d.bTess),
@@ -450,6 +470,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 						.Material = mat, // copy the material
 					}
 				);
+#endif
 			}
 		}
 
