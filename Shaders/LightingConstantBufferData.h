@@ -21,6 +21,8 @@
 #include "VQPlatform.h"
 
 #ifdef VQ_CPU
+#include "Renderer/Pipeline/Tessellation.h"
+
 namespace VQ_SHADER_DATA {
 #endif
 
@@ -135,12 +137,12 @@ MaterialData
     float emissiveIntensity;
 
     float3 specular;
-    float roughness;
+    float normalMapMipBias;
 
     float4 uvScaleOffset;
-    float metalness;
 
-	float normalMapMipBias;
+    float roughness;
+    float metalness;
     float displacement;
     float textureConfig;
 };
@@ -271,6 +273,16 @@ struct TessellationParams
 		, fHSAdaptiveTessellationMaxDist(500.0f)
 		, fHSAdaptiveTessellationMinDist(10.0f)
 	{}
+	inline void SetAllTessellationFactors(ETessellationDomain Domain, float TessellationFactor)
+	{
+		switch (Domain)
+		{
+		case ETessellationDomain::TRIANGLE_PATCH: TriInnerTessFactor = TriEdgeTessFactor.x = TriEdgeTessFactor.y = TriEdgeTessFactor.z = TessellationFactor; break;
+		case ETessellationDomain::QUAD_PATCH    : QuadInsideFactor.x = QuadInsideFactor.y = QuadEdgeTessFactor.x = QuadEdgeTessFactor.y = QuadEdgeTessFactor.z = QuadEdgeTessFactor.w = TessellationFactor; break;
+		case ETessellationDomain::ISOLINE_PATCH : // TODO: line
+			break;
+		}
+	}
 #endif
 
 };

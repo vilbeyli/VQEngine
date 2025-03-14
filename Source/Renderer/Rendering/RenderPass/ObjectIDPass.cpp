@@ -138,7 +138,7 @@ static size_t GetPSO_Key(
 static size_t GetPSO_Key(const Material& mat, const VQRenderer& mRenderer)
 {
 	uint8 iTess = 0; uint8 iDomain = 0; uint8 iPart = 0; uint8 iOutTopo = 0; uint8 iTessCull = 0;
-	Tessellation::GetTessellationPSOConfig(mat.Tessellation, iTess, iDomain, iPart, iOutTopo, iTessCull);
+	mat.GetTessellationPSOConfig(iTess, iDomain, iPart, iOutTopo, iTessCull);
 	const size_t iAlpha = mat.IsAlphaMasked(mRenderer) ? 1 : 0;
 	return GetPSO_Key(iTess, iDomain, iPart, iOutTopo, iTessCull, iAlpha);
 }

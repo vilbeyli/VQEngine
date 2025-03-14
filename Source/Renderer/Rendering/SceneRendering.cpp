@@ -915,14 +915,14 @@ void VQRenderer::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, Dynamic
 
 		const Material& mat = renderCmd.material;
 
-		const bool bTessellationEnabled = mat.Tessellation.IsTessellationEnabled();
-		const bool bSWCullTessellation = mat.Tessellation.GPUParams.IsFaceCullingOn() || mat.Tessellation.GPUParams.IsFrustumCullingOn();
+		const bool bTessellationEnabled = mat.IsTessellationEnabled();
+		const bool bSWCullTessellation = mat.TessellationData.IsFaceCullingOn() || mat.TessellationData.IsFrustumCullingOn();
 		const size_t iAlpha   = mat.IsAlphaMasked(*this) ? 1 : 0;
 		const size_t iRaster  = mat.bWireframe ? 1 : 0;
 		const size_t iTess    = bTessellationEnabled ? 1 : 0;
-		const size_t iDomain  = iTess == 0 ? 0 : (size_t)mat.Tessellation.GetDomain();
-		const size_t iPart    = iTess == 0 ? 0 : (size_t)mat.Tessellation.GetPartitioning();
-		const size_t iOutTopo = iTess == 0 ? 0 : (size_t)mat.Tessellation.GetOutputTopology();
+		const size_t iDomain  = iTess == 0 ? 0 : (size_t)mat.GetTessellationDomain();
+		const size_t iPart    = iTess == 0 ? 0 : (size_t)mat.GetTessellationPartitioning();
+		const size_t iOutTopo = iTess == 0 ? 0 : (size_t)mat.GetTessellationOutputTopology();
 		const size_t iTessCull = iTess == 1 && (bSWCullTessellation ? 1 : 0);
 		const PSO_ID psoID = this->mShadowPassPSOs.Get(iDepthMode, iRaster, iFaceCull, iTess, iDomain, iPart, iOutTopo, iTessCull, iAlpha);
 		pCmd->SetPipelineState(this->GetPSO(psoID));
@@ -977,7 +977,7 @@ void VQRenderer::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, Dynamic
 		D3D_PRIMITIVE_TOPOLOGY topo = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 		if (bTessellationEnabled)
 		{
-			topo = mat.Tessellation.GetDomain() == ETessellationDomain::QUAD_PATCH
+			topo = mat.GetTessellationDomain() == ETessellationDomain::QUAD_PATCH
 				? D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST
 				: D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
 		}

@@ -493,7 +493,7 @@ static void BatchMainViewDrawCalls(
 						uint8 iPart = 0;
 						uint8 iOutTopo = 0;
 						uint8 iTessCull = 0;
-						Tessellation::GetTessellationPSOConfig(mat, iTess, iDomain, iPart, iOutTopo, iTessCull);
+						mat.GetTessellationPSOConfig(iTess, iDomain, iPart, iOutTopo, iTessCull);
 						assert(iTess == 1);
 
 						draw.PackTessellationConfig(iTess, (ETessellationDomain)iDomain, (ETessellationPartitioning)iPart, (ETessellationOutputTopology)iOutTopo, iTessCull);
@@ -516,7 +516,7 @@ static void BatchMainViewDrawCalls(
 					draw.SRVMaterialMaps = mat.SRVMaterialMaps;
 					draw.SRVHeightMap = mat.SRVHeightMap;
 
-					pPerObj[iDraw]->materialData = mat.GetCBufferData();
+					mat.GetCBufferData(pPerObj[iDraw]->materialData);
 					
 					draw.cbAddr = cbAddr[iDraw];
 
@@ -543,7 +543,7 @@ static void BatchMainViewDrawCalls(
 				uint8 iPart = 0;
 				uint8 iOutTopo = 0;
 				uint8 iTessCull = 0;
-				Tessellation::GetTessellationPSOConfig(mat, iTess, iDomain, iPart, iOutTopo, iTessCull);
+				mat.GetTessellationPSOConfig(iTess, iDomain, iPart, iOutTopo, iTessCull);
 				assert(iTess == 1);
 
 				draw.PackTessellationConfig(iTess, (ETessellationDomain)iDomain, (ETessellationPartitioning)iPart, (ETessellationOutputTopology)iOutTopo, iTessCull);
@@ -566,7 +566,7 @@ static void BatchMainViewDrawCalls(
 			draw.SRVMaterialMaps = mat.SRVMaterialMaps;
 			draw.SRVHeightMap = mat.SRVHeightMap;
 
-			pPerObj[iDraw]->materialData = mat.GetCBufferData();
+			 mat.GetCBufferData(pPerObj[iDraw]->materialData);
 
 			draw.cbAddr = cbAddr[iDraw];
 		}

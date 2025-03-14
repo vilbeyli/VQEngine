@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 #pragma once
 
+#include "Shaders/VQPlatform.h"
 #include "RenderPass.h"
 
 #include <unordered_map>

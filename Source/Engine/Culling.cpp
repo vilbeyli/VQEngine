@@ -383,7 +383,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 		{
 			SCOPED_CPU_MARKER("SetSortData");
 			int ii = 0;
-			for (int bb : vVisibleBBIndicesPerView[iWork])
+			for (size_t bb : vVisibleBBIndicesPerView[iWork])
 			{
 				const float fBBArea = CalculateProjectedBoundingBoxArea(vBoundingBoxList[bb], vMatViewProj[iWork]);
 				const MeshID meshID = MeshBB_MeshID[bb];
@@ -395,7 +395,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 				sortData[ii].fBBArea = fBBArea;
 				sortData[ii].matID = matID;
 				sortData[ii].meshID = meshID;
-				sortData[ii].bTess = mat.Tessellation.IsTessellationEnabled() ? 1 : 0;
+				sortData[ii].bTess = mat.IsTessellationEnabled() ? 1 : 0;
 				sortData[ii].iLOD = vForceLOD0[iWork] ? 0 : InstanceBatching::GetLODFromProjectedScreenArea(fBBArea, mesh.GetNumLODs());
 
 				assert(sortData[ii].iLOD < 256);
@@ -442,7 +442,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 					vVisibleMeshListSoA.hMaterial[i] = d.matID,
 					vVisibleMeshListSoA.hMesh[i] = d.meshID,
 					vVisibleMeshListSoA.SelectedLOD[i] = d.iLOD,
-					vVisibleMeshListSoA.bTessellated[i] = (bool)d.bTess,
+					vVisibleMeshListSoA.bTessellated[i] = (bool)d.bTess, 
 					vVisibleMeshListSoA.NumIndices[i] = mesh.GetNumIndices(d.iLOD),
 					vVisibleMeshListSoA.VBIB[i] = mesh.GetIABufferIDs(d.iLOD),
 					vVisibleMeshListSoA.Transform[i] = *MeshBB_Transforms[d.iBB], // copy the transform

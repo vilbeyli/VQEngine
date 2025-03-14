@@ -40,7 +40,11 @@ struct FMaterialRepresentation
 	float TilingX = 1.0f;
 	float TilingY = 1.0f;
 
-	FTessellationParameters Tessellation;
+	VQ_SHADER_DATA::TessellationParams Tessellation;
+	ETessellationDomain TessellationDomain = ETessellationDomain::QUAD_PATCH;
+	ETessellationOutputTopology TessellationOutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW;
+	ETessellationPartitioning TessellationPartitioning = ETessellationPartitioning::FRACTIONAL_EVEN;
+	bool TessellationEnabled = false;
 
 	std::string DiffuseMapFilePath;
 	std::string NormalMapFilePath;

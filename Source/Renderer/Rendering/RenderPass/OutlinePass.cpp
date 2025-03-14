@@ -152,7 +152,7 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 			const size_t iMSAA  = bMSAA ? 1 : 0;
 			const size_t iAlpha = mat.IsAlphaMasked(mRenderer) ? 1 : 0;
 			uint8 iTess = 0; uint8 iDomain = 0; uint8 iPart = 0; uint8 iOutTopo = 0; uint8 iTessCull = 0;
-			Tessellation::GetTessellationPSOConfig(mat.Tessellation, iTess, iDomain, iPart, iOutTopo, iTessCull);
+			mat.GetTessellationPSOConfig(iTess, iDomain, iPart, iOutTopo, iTessCull);
 			const size_t key = Hash(iPass,
 				iMSAA,
 				iTess,
@@ -177,7 +177,7 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 			}
 			pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
 
-			const bool bTessellationEnabled = mat.Tessellation.IsTessellationEnabled();
+			const bool bTessellationEnabled = mat.IsTessellationEnabled();
 			if (bTessellationEnabled)
 			{
 				D3D12_GPU_VIRTUAL_ADDRESS& cbAddr_Tsl = cbAddrsTess[iCB];
@@ -217,7 +217,7 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 			D3D_PRIMITIVE_TOPOLOGY topo = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 			if (bTessellationEnabled)
 			{
-				topo = mat.Tessellation.GetDomain() == ETessellationDomain::QUAD_PATCH
+				topo = mat.GetTessellationDomain() == ETessellationDomain::QUAD_PATCH
 					? D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST
 					: D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
 			}
