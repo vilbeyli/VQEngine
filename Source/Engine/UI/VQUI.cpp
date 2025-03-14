@@ -1274,28 +1274,28 @@ static void DrawTessellationEditorGUI(FUIState& mUIState, Material& mat)
 		{
 			if (mUIState.bTessellationSliderFloatVec)
 			{
-				ImGui::SliderFloat3("Outer", &mat.TessellationData.TriEdgeTessFactor.x, 0.0f, MAX_TESSELLATION, "%.1f");
+				ImGui::SliderFloat3("Outer", &mat.TessellationData.EdgeTessFactor.x, 0.0f, MAX_TESSELLATION, "%.1f");
 			}
 			else
 			{
-				float fOuterMin = std::fminf(mat.TessellationData.TriEdgeTessFactor.x, std::fminf(mat.TessellationData.TriEdgeTessFactor.y, mat.TessellationData.TriEdgeTessFactor.z));
+				float fOuterMin = std::fminf(mat.TessellationData.EdgeTessFactor.x, std::fminf(mat.TessellationData.EdgeTessFactor.y, mat.TessellationData.EdgeTessFactor.z));
 				if (ImGui::SliderFloat("Outer##", &fOuterMin, 0.0f, MAX_TESSELLATION, "%.1f"))
 				{
-					mat.TessellationData.TriEdgeTessFactor.x = mat.TessellationData.TriEdgeTessFactor.y = mat.TessellationData.TriEdgeTessFactor.z = fOuterMin;
+					mat.TessellationData.EdgeTessFactor.x = mat.TessellationData.EdgeTessFactor.y = mat.TessellationData.EdgeTessFactor.z = fOuterMin;
 					if (mUIState.bLockTessellationSliders)
 					{
-						mat.TessellationData.TriInnerTessFactor = fOuterMin;
+						mat.TessellationData.InsideTessFactor.x = fOuterMin;
 					}
 				}
 			}
 			ImGui::SameLine();
 
 			ImGui::Checkbox("[]", &mUIState.bTessellationSliderFloatVec);
-			if (ImGui::SliderFloat("Inner", &mat.TessellationData.TriInnerTessFactor, 0.0f, MAX_TESSELLATION, "%.1f"))
+			if (ImGui::SliderFloat("Inner", &mat.TessellationData.InsideTessFactor.x, 0.0f, MAX_TESSELLATION, "%.1f"))
 			{
 				if (mUIState.bLockTessellationSliders)
 				{
-					mat.TessellationData.SetAllTessellationFactors(Domain, mat.TessellationData.TriInnerTessFactor);
+					mat.TessellationData.SetAllTessellationFactors(mat.TessellationData.InsideTessFactor.x);
 				}
 			}
 		}	break;
@@ -1303,32 +1303,32 @@ static void DrawTessellationEditorGUI(FUIState& mUIState, Material& mat)
 		{
 			if (mUIState.bTessellationSliderFloatVec)
 			{
-				ImGui::SliderFloat4("Outer", &mat.TessellationData.QuadEdgeTessFactor.x, 0.0f, MAX_TESSELLATION, "%.1f");
+				ImGui::SliderFloat4("Outer", &mat.TessellationData.EdgeTessFactor.x, 0.0f, MAX_TESSELLATION, "%.1f");
 				ImGui::SameLine();
 				ImGui::Checkbox("[]", &mUIState.bTessellationSliderFloatVec);
-				ImGui::SliderFloat2("Inner", &mat.TessellationData.QuadInsideFactor.x, 0.0f, MAX_TESSELLATION, "%.1f");
+				ImGui::SliderFloat2("Inner", &mat.TessellationData.InsideTessFactor.x, 0.0f, MAX_TESSELLATION, "%.1f");
 			}
 			else
 			{
-				float fOuterMin = std::fminf(mat.TessellationData.QuadEdgeTessFactor.x, std::fminf(mat.TessellationData.QuadEdgeTessFactor.y, std::fminf(mat.TessellationData.QuadEdgeTessFactor.z, mat.TessellationData.QuadEdgeTessFactor.w)));
+				float fOuterMin = std::fminf(mat.TessellationData.EdgeTessFactor.x, std::fminf(mat.TessellationData.EdgeTessFactor.y, std::fminf(mat.TessellationData.EdgeTessFactor.z, mat.TessellationData.EdgeTessFactor.w)));
 				if (ImGui::SliderFloat("Outer", &fOuterMin, 0.0f, MAX_TESSELLATION, "%.1f"))
 				{
-					mat.TessellationData.QuadEdgeTessFactor.x = mat.TessellationData.QuadEdgeTessFactor.y = mat.TessellationData.QuadEdgeTessFactor.z = mat.TessellationData.QuadEdgeTessFactor.w = fOuterMin;
+					mat.TessellationData.EdgeTessFactor.x = mat.TessellationData.EdgeTessFactor.y = mat.TessellationData.EdgeTessFactor.z = mat.TessellationData.EdgeTessFactor.w = fOuterMin;
 					if (mUIState.bLockTessellationSliders)
 					{
-						mat.TessellationData.SetAllTessellationFactors(Domain, fOuterMin);
+						mat.TessellationData.SetAllTessellationFactors(fOuterMin);
 					}
 				}
 				ImGui::SameLine();
 				ImGui::Checkbox("[]", &mUIState.bTessellationSliderFloatVec);
 
-				float fInnerMin = std::fminf(mat.TessellationData.QuadInsideFactor.x, mat.TessellationData.QuadInsideFactor.y);
+				float fInnerMin = std::fminf(mat.TessellationData.InsideTessFactor.x, mat.TessellationData.InsideTessFactor.y);
 				if (ImGui::SliderFloat("Inner", &fInnerMin, 0.0f, MAX_TESSELLATION, "%.1f"))
 				{
-					mat.TessellationData.QuadInsideFactor.x = mat.TessellationData.QuadInsideFactor.y = fInnerMin;
+					mat.TessellationData.InsideTessFactor.x = mat.TessellationData.InsideTessFactor.y = fInnerMin;
 					if (mUIState.bLockTessellationSliders)
 					{
-						mat.TessellationData.SetAllTessellationFactors(Domain, fInnerMin);
+						mat.TessellationData.SetAllTessellationFactors(fInnerMin);
 					}
 				}
 			}

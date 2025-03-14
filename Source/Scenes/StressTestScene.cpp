@@ -205,7 +205,7 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 		matR.TessellationOutputTopology = (ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW);
 		matR.TessellationPartitioning = (ETessellationPartitioning::INTEGER);
 		constexpr float TERRAIN_TESS_FACTOR = Tessellation::MAX_TESSELLATION_FACTOR;
-		matR.Tessellation.SetAllTessellationFactors(ETessellationDomain::QUAD_PATCH, TERRAIN_TESS_FACTOR);
+		matR.Tessellation.SetAllTessellationFactors(TERRAIN_TESS_FACTOR);
 
 		matR.EmissiveIntensity    = 0.0f;
 		matR.NormalMapFilePath    = "Data/Textures/PBR/Pebbles02_MR_2K/Pebbles02_2K_Normal.png";
@@ -426,7 +426,7 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 					matR.TessellationOutputTopology = (ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW);
 					matR.TessellationPartitioning = (ETessellationPartitioning::INTEGER);
 					constexpr float TESSELLATION_FACTOR = 10.0f;
-					matR.Tessellation.SetAllTessellationFactors(ETessellationDomain::TRIANGLE_PATCH, TESSELLATION_FACTOR);
+					matR.Tessellation.SetAllTessellationFactors(TESSELLATION_FACTOR);
 					
 					const size_t i = r * NUM_TESSELLATION_SPHERES_COL + m;
 					matR.EmissiveIntensity = static_cast<float>(i);

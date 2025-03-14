@@ -21,8 +21,6 @@
 #include "VQPlatform.h"
 
 #ifdef VQ_CPU
-#include "Renderer/Pipeline/Tessellation.h"
-
 namespace VQ_SHADER_DATA {
 #endif
 
@@ -225,15 +223,8 @@ PerObjectData
 
 struct TessellationParams
 {
-#if 0 // TODO: further reduce CBuffer & CPU memory footprint
 	float4 EdgeTessFactor;   // Quad[4], Tri[3], Line[?]
 	float2 InsideTessFactor; // Quad[2], Tri[1], Line[?]
-#else
-	float4 QuadEdgeTessFactor;
-	float3 TriEdgeTessFactor;
-	float TriInnerTessFactor;
-	float2 QuadInsideFactor;
-#endif
 
 	float fHSFrustumCullEpsilon;
 	float fHSFaceCullEpsilon;
@@ -263,25 +254,18 @@ struct TessellationParams
 
 #ifdef VQ_CPU
 	TessellationParams() : 
-		  QuadEdgeTessFactor(1,1,1,1)
-		, QuadInsideFactor(1, 1)
-		, TriEdgeTessFactor(1,1,1)
-		, TriInnerTessFactor(1)
+		  EdgeTessFactor(1,1,1,1)
+		, InsideTessFactor(1, 1)
 		, bFrustumCull_FaceCull_AdaptiveTessellation(0)
 		, fHSFrustumCullEpsilon(0)
 		, fHSFaceCullEpsilon(0)
 		, fHSAdaptiveTessellationMaxDist(500.0f)
 		, fHSAdaptiveTessellationMinDist(10.0f)
 	{}
-	inline void SetAllTessellationFactors(ETessellationDomain Domain, float TessellationFactor)
+	inline void SetAllTessellationFactors(float TessellationFactor)
 	{
-		switch (Domain)
-		{
-		case ETessellationDomain::TRIANGLE_PATCH: TriInnerTessFactor = TriEdgeTessFactor.x = TriEdgeTessFactor.y = TriEdgeTessFactor.z = TessellationFactor; break;
-		case ETessellationDomain::QUAD_PATCH    : QuadInsideFactor.x = QuadInsideFactor.y = QuadEdgeTessFactor.x = QuadEdgeTessFactor.y = QuadEdgeTessFactor.z = QuadEdgeTessFactor.w = TessellationFactor; break;
-		case ETessellationDomain::ISOLINE_PATCH : // TODO: line
-			break;
-		}
+		EdgeTessFactor = float4(TessellationFactor, TessellationFactor, TessellationFactor, TessellationFactor);
+		InsideTessFactor = float2(TessellationFactor, TessellationFactor);
 	}
 #endif
 

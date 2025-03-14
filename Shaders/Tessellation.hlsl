@@ -408,10 +408,10 @@ HSOutputPatchConstants CalcHSPatchConstants(
 		return c;
 	}
 	
-	c.EdgeTessFactor[0] = tess.TriEdgeTessFactor.x;
-	c.EdgeTessFactor[1] = tess.TriEdgeTessFactor.y;
-	c.EdgeTessFactor[2] = tess.TriEdgeTessFactor.z;
-	c.InsideTessFactor  = tess.TriInnerTessFactor;
+	c.EdgeTessFactor[0] = tess.EdgeTessFactor.x;
+	c.EdgeTessFactor[1] = tess.EdgeTessFactor.y;
+	c.EdgeTessFactor[2] = tess.EdgeTessFactor.z;
+	c.InsideTessFactor  = tess.InsideTessFactor;
 	
 #elif defined(DOMAIN__QUAD)
 	
@@ -432,12 +432,12 @@ HSOutputPatchConstants CalcHSPatchConstants(
 		return c;
 	}
 	
-	c.EdgeTessFactor[0]   = tess.QuadEdgeTessFactor.x;
-	c.EdgeTessFactor[1]   = tess.QuadEdgeTessFactor.y;
-	c.EdgeTessFactor[2]   = tess.QuadEdgeTessFactor.z;
-	c.EdgeTessFactor[3]   = tess.QuadEdgeTessFactor.w;
-	c.InsideTessFactor[0] = tess.QuadInsideFactor.x;
-	c.InsideTessFactor[1] = tess.QuadInsideFactor.y;
+	c.EdgeTessFactor[0]   = tess.EdgeTessFactor.x;
+	c.EdgeTessFactor[1]   = tess.EdgeTessFactor.y;
+	c.EdgeTessFactor[2]   = tess.EdgeTessFactor.z;
+	c.EdgeTessFactor[3]   = tess.EdgeTessFactor.w;
+	c.InsideTessFactor[0] = tess.InsideTessFactor.x;
+	c.InsideTessFactor[1] = tess.InsideTessFactor.y;
 	
 #elif defined(DOMAIN__LINE)
 	c.EdgeTessFactor[0]   = 1.0f;

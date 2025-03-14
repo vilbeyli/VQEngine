@@ -37,7 +37,7 @@ void TerrainScene::LoadScene(FSceneRepresentation& scene)
 	mr.TilingY              = 1.0f;
 
 	mr.TessellationEnabled = (true);
-	mr.Tessellation.SetAllTessellationFactors(ETessellationDomain::QUAD_PATCH, 4.0f);
+	mr.Tessellation.SetAllTessellationFactors(4.0f);
 	scene.Materials.push_back(mr);
 	
 	const float fTerrainScale = 1000.f;
