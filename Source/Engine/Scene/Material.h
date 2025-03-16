@@ -121,7 +121,7 @@ struct alignas(16) Material
 	{ 
 		// MaterialData and Material has almost identical elements, except for the float 
 		// at the end of MaterialData for encoding the texture configuration.
-		const size_t BytesToCopy = sizeof(VQ_SHADER_DATA::MaterialData) - sizeof(float);
+		const size_t BytesToCopy = sizeof(VQ_SHADER_DATA::MaterialData);// -sizeof(float);
 		memcpy(&data, this, BytesToCopy);
 		data.textureConfig = static_cast<float>(GetTextureConfig());
 	}

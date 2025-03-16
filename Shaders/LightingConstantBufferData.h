@@ -221,7 +221,11 @@ PerObjectData
 	int materialID;
 };
 
-struct TessellationParams
+struct 
+#ifdef VQ_CPU
+	alignas(16)
+#endif
+TessellationParams
 {
 	float4 EdgeTessFactor;   // Quad[4], Tri[3], Line[?]
 	float2 InsideTessFactor; // Quad[2], Tri[1], Line[?]

@@ -111,8 +111,6 @@ XMMATRIX Transform::RotationMatrix() const
 	return _rotation.Matrix();
 }
 
-// builds normal matrix from world matrix, ignoring translation
-// and using inverse-transpose of rotation/scale matrix
 DirectX::XMMATRIX Transform::NormalMatrix(const XMMATRIX& world)
 {
 	XMMATRIX nrm = world;

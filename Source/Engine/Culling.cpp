@@ -439,15 +439,18 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 				{
 					vVisibleMeshListSoA.SceneSortKey[i] = FSceneDrawData::GetKey(d.matID, d.meshID, d.iLOD, d.bTess),
 					vVisibleMeshListSoA.ShadowSortKey[i] = FShadowView::GetKey(d.matID, d.meshID, d.iLOD, d.bTess),
-					vVisibleMeshListSoA.hMaterial[i] = d.matID,
-					vVisibleMeshListSoA.hMesh[i] = d.meshID,
-					vVisibleMeshListSoA.SelectedLOD[i] = d.iLOD,
-					vVisibleMeshListSoA.bTessellated[i] = (bool)d.bTess, 
-					vVisibleMeshListSoA.NumIndices[i] = mesh.GetNumIndices(d.iLOD),
-					vVisibleMeshListSoA.VBIB[i] = mesh.GetIABufferIDs(d.iLOD),
+					vVisibleMeshListSoA.PerDrawData[i] = FPerDrawData{
+						.hMaterial = d.matID,
+						.hMesh = d.meshID,
+						.VBIB = mesh.GetIABufferIDs(d.iLOD),
+						.NumIndices = mesh.GetNumIndices(d.iLOD),
+						.SelectedLOD = d.iLOD,
+					},
 					vVisibleMeshListSoA.Transform[i] = *MeshBB_Transforms[d.iBB], // copy the transform
-					vVisibleMeshListSoA.fBBArea[i] = d.fBBArea,
-					vVisibleMeshListSoA.hGameObject[i] = MeshBB_GameObjHandles[d.iBB],
+					vVisibleMeshListSoA.PerInstanceData[i] = FPerInstanceData{
+						.hGameObject = MeshBB_GameObjHandles[d.iBB],
+						.fBBArea = d.fBBArea,
+					},
 					vVisibleMeshListSoA.Material[i] = mat, // copy the material
 					++i;
 				}

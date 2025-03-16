@@ -74,33 +74,34 @@ struct FVisibleMeshSortData
 	uint8 bTess;
 	uint8 iLOD;
 };
+struct alignas(16) FPerInstanceData // that fits in a cache line.
+{
+	size_t hGameObject;
+	float fBBArea;
+};
+struct alignas(16) FPerDrawData // that fits in a cache line.
+{
+	MaterialID hMaterial;
+	MeshID hMesh;
+	std::pair<BufferID, BufferID> VBIB;
+	unsigned NumIndices;
+	short SelectedLOD;
+};
 struct FVisibleMeshDataSoA
 {
 	std::vector<uint64> SceneSortKey;
 	std::vector<uint64> ShadowSortKey;
-	std::vector<MaterialID> hMaterial;
-	std::vector<MeshID> hMesh;
-	std::vector<short> SelectedLOD;
-	std::vector<bool> bTessellated;
-	std::vector<unsigned> NumIndices;
-	std::vector<std::pair<BufferID, BufferID>> VBIB;
+	std::vector<FPerDrawData> PerDrawData;
 	std::vector<Transform> Transform;
-	std::vector<float> fBBArea;
-	std::vector<size_t> hGameObject;
+	std::vector<FPerInstanceData> PerInstanceData;
 	std::vector<Material> Material;
 	void Reserve(size_t sz)
 	{
 		SceneSortKey.resize(sz);
 		ShadowSortKey.resize(sz);
-		hMaterial.resize(sz);
-		hMesh.resize(sz);
-		SelectedLOD.resize(sz);
-		bTessellated.resize(sz);
-		NumIndices.resize(sz);
-		VBIB.resize(sz);
+		PerDrawData.resize(sz);
+		PerInstanceData.resize(sz);
 		Transform.resize(sz);
-		fBBArea.resize(sz);
-		hGameObject.resize(sz);
 		Material.resize(sz);
 	}
 	size_t Size() const { return SceneSortKey.size(); }

@@ -141,6 +141,44 @@ static size_t CountInstancedDrawCommands(
 	return numDrawCommands;
 }
 
+struct FDrawCallInputDataRange
+{
+	size_t iStart;
+	size_t Stride; // NumElements
+};
+template <typename std::vector<size_t> FVisibleMeshDataSoA::* SortKeyArray>
+static std::vector<FDrawCallInputDataRange> CalcInstancedDrawCommandDataRangesSoA(
+	const FVisibleMeshDataSoA& ViewVisibleMeshes,
+	const size_t MAX_INSTANCES
+)
+{
+	SCOPED_CPU_MARKER("CalcInstancedDrawDataRangesSoA");
+	const size_t NumElements = (ViewVisibleMeshes.*SortKeyArray).size();
+	if (NumElements == 0)
+		return std::vector<FDrawCallInputDataRange>();
+
+	std::vector<FDrawCallInputDataRange> drawCalls;
+	drawCalls.reserve(NumElements);
+	uint64 currentKey = (ViewVisibleMeshes.*SortKeyArray)[0];
+	size_t count = 1;
+	size_t iStart = 0;
+	for (size_t i = 1; i < NumElements; ++i)
+	{
+		const uint64 key = (ViewVisibleMeshes.*SortKeyArray)[i];
+		if (key != currentKey || (count-1) == MAX_INSTANCES-1)
+		{
+			drawCalls.push_back({ .iStart = iStart, .Stride = count });
+			currentKey = key;
+			count = 0;
+			iStart = i;
+		}
+		++count;
+	}
+	drawCalls.push_back({ .iStart = iStart, .Stride = count });
+
+	return drawCalls;
+}
+
 template <typename std::vector<size_t> FVisibleMeshDataSoA::*SortKeyArray>
 static size_t CountInstancedDrawCommandsSoA(
 	const FVisibleMeshDataSoA& ViewVisibleMeshes,
@@ -260,19 +298,21 @@ static void BatchViewDrawCalls(
 static void BatchMainViewDrawCalls(
 	FSceneDrawData& SceneDrawData,
 	const FVisibleMeshDataSoA& ViewVisibleMeshes,
-	const XMMATRIX& viewProj,
-	const XMMATRIX& viewProjPrev,
+	const XMMATRIX viewProj,     // take in copy for less cache thrashing
+	const XMMATRIX viewProjPrev, // take in copy for less cache thrashing
 	DynamicBufferHeap& CBHeap,
 	VQRenderer* pRenderer,
 	const FGraphicsSettings& GFXSettings,
 	const FPostProcessParameters& PPParams
 )
 {
-	SCOPED_CPU_MARKER("BatchMainViewDrawCalls");
+	SCOPED_CPU_MARKER_C("BatchMainViewDrawCalls", 0xFF00AA00);
 	
 	using namespace VQ_SHADER_DATA;
 
-	const size_t NumInstancedDrawCalls = CountInstancedDrawCommandsSoA<&FVisibleMeshDataSoA::SceneSortKey>(ViewVisibleMeshes, MAX_INSTANCE_COUNT__SCENE_MESHES);
+	const std::vector<FDrawCallInputDataRange> drawCallRanges = CalcInstancedDrawCommandDataRangesSoA<&FVisibleMeshDataSoA::SceneSortKey>(ViewVisibleMeshes, MAX_INSTANCE_COUNT__SCENE_MESHES);
+	//const size_t NumInstancedDrawCalls2 = CountInstancedDrawCommandsSoA<&FVisibleMeshDataSoA::SceneSortKey>(ViewVisibleMeshes, MAX_INSTANCE_COUNT__SCENE_MESHES);
+	const size_t NumInstancedDrawCalls = drawCallRanges.size();
 	if (NumInstancedDrawCalls == 0)
 		return;
 
@@ -297,437 +337,151 @@ static void BatchMainViewDrawCalls(
 		const size_t iOutMoVec = bRenderMotionVectors ? 1 : 0;
 		const size_t iOutRough = bUseVisualizationRenderTarget ? 1 : 0;
 		const size_t iMSAA = GFXSettings.bAntiAliasing ? 1 : 0;
-		
-		{
-			SCOPED_CPU_MARKER("matWorld");
-			size_t iMesh = 0;
-			int iInstance = 0;
-			int iDraw = 0;
-			uint64 currentKey = ViewVisibleMeshes.SceneSortKey[iMesh];
-			for (iMesh = 0; iMesh < ViewVisibleMeshes.Size(); ++iMesh)
-			{
-				const uint64 key = ViewVisibleMeshes.SceneSortKey[iMesh];
-				if (iInstance >= MAX_INSTANCE_COUNT__SCENE_MESHES || key != currentKey)
-				{
-					assert(iMesh >= 1);
-					++iDraw;
-					iInstance = 0;
-					currentKey = key;
-				}
-				const Transform& tf = ViewVisibleMeshes.Transform[iMesh];
-				pPerObj[iDraw]->matWorld[iInstance++] = tf.matWorldTransformation();
-			}
-		}
-		{
-			SCOPED_CPU_MARKER("matNormal");
-			size_t iMesh = 0;
-			int iInstance = 0;
-			int iDraw = 0;
-			uint64 currentKey = ViewVisibleMeshes.SceneSortKey[iMesh];
-			for (iMesh = 0; iMesh < ViewVisibleMeshes.Size(); ++iMesh)
-			{
-				const uint64 key = ViewVisibleMeshes.SceneSortKey[iMesh];
-				if (iInstance >= MAX_INSTANCE_COUNT__SCENE_MESHES || key != currentKey)
-				{
-					assert(iMesh >= 1);
-					++iDraw;
-					iInstance = 0;
-					currentKey = key;
-				}
-				const Transform& tf = ViewVisibleMeshes.Transform[iMesh];
-				pPerObj[iDraw]->matNormal[iInstance++] = tf.NormalMatrix(tf.matWorldTransformation());
-			}
-		}
 		{
 			SCOPED_CPU_MARKER("matWorldViewProj");
-			size_t iMesh = 0;
-			int iInstance = 0;
-			int iDraw = 0;
-			uint64 currentKey = ViewVisibleMeshes.SceneSortKey[iMesh];
-			for (iMesh = 0; iMesh < ViewVisibleMeshes.Size(); ++iMesh)
+			size_t iDraw = 0;
+			for (const FDrawCallInputDataRange& r : drawCallRanges)
 			{
-				const uint64 key = ViewVisibleMeshes.SceneSortKey[iMesh];
-				if (iInstance >= MAX_INSTANCE_COUNT__SCENE_MESHES || key != currentKey)
+				assert(r.Stride <= MAX_INSTANCE_COUNT__SCENE_MESHES);
+				size_t iInstance = 0;
+				for (size_t i = r.iStart; i < r.iStart + r.Stride; ++i)
 				{
-					assert(iMesh >= 1);
-					++iDraw;
-					iInstance = 0;
-					currentKey = key;
+					const Transform& tf = ViewVisibleMeshes.Transform[i];
+					pPerObj[iDraw]->matWorldViewProj[iInstance++] = tf.matWorldTransformation() * viewProj;
 				}
-				const Transform& tf = ViewVisibleMeshes.Transform[iMesh];
-				pPerObj[iDraw]->matWorldViewProj[iInstance++] = tf.matWorldTransformation() * viewProj;
+				++iDraw;
+			}
+		}
+		{
+			SCOPED_CPU_MARKER("matWorld");
+			size_t iDraw = 0;
+			for (const FDrawCallInputDataRange& r : drawCallRanges)
+			{
+				size_t iInstance = 0;
+				for (size_t i = r.iStart; i < r.iStart + r.Stride; ++i)
+				{
+					const Transform& tf = ViewVisibleMeshes.Transform[i];
+					pPerObj[iDraw]->matWorld[iInstance++] = tf.matWorldTransformation();
+				}
+				++iDraw;
 			}
 		}
 		{
 			SCOPED_CPU_MARKER("matWorldViewProjPrev");
-			size_t iMesh = 0;
-			int iInstance = 0;
-			int iDraw = 0;
-			uint64 currentKey = ViewVisibleMeshes.SceneSortKey[iMesh];
-			for (iMesh = 0; iMesh < ViewVisibleMeshes.Size(); ++iMesh)
+			size_t iDraw = 0;
+			for (const FDrawCallInputDataRange& r : drawCallRanges)
 			{
-				const uint64 key = ViewVisibleMeshes.SceneSortKey[iMesh];
-				if (iInstance >= MAX_INSTANCE_COUNT__SCENE_MESHES || key != currentKey)
+				size_t iInstance = 0;
+				for (size_t i = r.iStart; i < r.iStart + r.Stride; ++i)
 				{
-					assert(iMesh >= 1);
-					++iDraw;
-					iInstance = 0;
-					currentKey = key;
+					const Transform& tf = ViewVisibleMeshes.Transform[i];
+					pPerObj[iDraw]->matWorldViewProjPrev[iInstance++] = tf.matWorldTransformationPrev() * viewProjPrev;
 				}
-				const Transform& tf = ViewVisibleMeshes.Transform[iMesh];
-				pPerObj[iDraw]->matWorldViewProjPrev[iInstance++] = tf.matWorldTransformationPrev() * viewProjPrev;
+				++iDraw;
 			}
 		}
 		{
-			SCOPED_CPU_MARKER("objID.xyz");
-			size_t iMesh = 0;
-			int iInstance = 0;
-			int iDraw = 0;
-			uint64 currentKey = ViewVisibleMeshes.SceneSortKey[iMesh];
-			for (iMesh = 0; iMesh < ViewVisibleMeshes.Size(); ++iMesh)
+			SCOPED_CPU_MARKER("matNormal");
+			size_t iDraw = 0;
+			for (const FDrawCallInputDataRange& r : drawCallRanges)
 			{
-				const uint64 key = ViewVisibleMeshes.SceneSortKey[iMesh];
-				if (iInstance >= MAX_INSTANCE_COUNT__SCENE_MESHES || key != currentKey)
+				size_t iInstance = 0;
+				for (size_t i = r.iStart; i < r.iStart + r.Stride; ++i)
 				{
-					assert(iMesh >= 1);
-					++iDraw;
-					iInstance = 0;
-					currentKey = key;
+					const Transform& tf = ViewVisibleMeshes.Transform[i];
+					pPerObj[iDraw]->matNormal[iInstance++] = tf.RotationMatrix();
 				}
-				pPerObj[iDraw]->ObjID[iInstance].x = (int)ViewVisibleMeshes.hGameObject[iMesh];
-				pPerObj[iDraw]->ObjID[iInstance].y = -222; //debug val
-				pPerObj[iDraw]->ObjID[iInstance].z = -333; //debug val
-				++iInstance;
+				++iDraw;
 			}
 		}
 		{
-			SCOPED_CPU_MARKER("objID.w");
-			size_t iMesh = 0;
-			int iInstance = 0;
-			int iDraw = 0;
-			uint64 currentKey = ViewVisibleMeshes.SceneSortKey[iMesh];
-			for (iMesh = 0; iMesh < ViewVisibleMeshes.Size(); ++iMesh)
+			SCOPED_CPU_MARKER("objID");
+			size_t iDraw = 0;
+			for (const FDrawCallInputDataRange& r : drawCallRanges)
 			{
-				const uint64 key = ViewVisibleMeshes.SceneSortKey[iMesh];
-				if (iInstance >= MAX_INSTANCE_COUNT__SCENE_MESHES || key != currentKey)
+				size_t iInstance = 0;
+				for (size_t iMesh = r.iStart; iMesh < r.iStart + r.Stride; ++iMesh)
 				{
-					assert(iMesh >= 1);
-					++iDraw;
-					iInstance = 0;
-					currentKey = key;
+					pPerObj[iDraw]->ObjID[iInstance].x = (int)ViewVisibleMeshes.PerInstanceData[iMesh].hGameObject;
+					pPerObj[iDraw]->ObjID[iInstance].y = -222; //debug val
+					pPerObj[iDraw]->ObjID[iInstance].z = -333; //debug val
+					pPerObj[iDraw]->ObjID[iInstance].w = (int)(ViewVisibleMeshes.PerInstanceData[iMesh].fBBArea * 10000); // float value --> int render target
+					++iInstance;
 				}
-				pPerObj[iDraw]->ObjID[iInstance++].w = (int)(ViewVisibleMeshes.fBBArea[iMesh] * 10000); // float value --> int render target
+				++iDraw;
 			}
 		}
 		{
-			SCOPED_CPU_MARKER("matID");
-			size_t iMesh = 0;
-			int iInstance = 0;
-			int iDraw = 0;
-			uint64 currentKey = ViewVisibleMeshes.SceneSortKey[iMesh];
-			for (iMesh = 0; iMesh < ViewVisibleMeshes.Size(); ++iMesh)
+			SCOPED_CPU_MARKER("PerDraw");
+			size_t iDraw = 0;
+			for (const FDrawCallInputDataRange& r : drawCallRanges)
 			{
-				const uint64 key = ViewVisibleMeshes.SceneSortKey[iMesh];
-				if (iInstance >= MAX_INSTANCE_COUNT__SCENE_MESHES || key != currentKey)
-				{
-					assert(iMesh >= 1);
-
-					pPerObj[iDraw]->materialID = ViewVisibleMeshes.hMaterial[iMesh-1];
-
-					++iDraw;
-					iInstance = 0;
-					currentKey = key;
-				}
-				++iInstance;
-			}
-			pPerObj[iDraw]->materialID = ViewVisibleMeshes.hMaterial[iMesh - 1];
-		}
-		{
-			SCOPED_CPU_MARKER("meshID");
-			size_t iMesh = 0;
-			int iInstance = 0;
-			int iDraw = 0;
-			uint64 currentKey = ViewVisibleMeshes.SceneSortKey[iMesh];
-			for (iMesh = 0; iMesh < ViewVisibleMeshes.Size(); ++iMesh)
-			{
-				const uint64 key = ViewVisibleMeshes.SceneSortKey[iMesh];
-				if (iInstance >= MAX_INSTANCE_COUNT__SCENE_MESHES || key != currentKey)
-				{
-					assert(iMesh >= 1);
-
-					pPerObj[iDraw]->meshID = ViewVisibleMeshes.hMesh[iMesh - 1];
-
-					++iDraw;
-					iInstance = 0;
-					currentKey = key;
-				}
-				++iInstance;
-			}
-			pPerObj[iDraw]->meshID = ViewVisibleMeshes.hMesh[iMesh - 1];
-		}
-		{
-			SCOPED_CPU_MARKER("mat");
-			size_t iMesh = 0;
-			int iInstance = 0;
-			int iDraw = 0;
-			uint64 currentKey = ViewVisibleMeshes.SceneSortKey[iMesh];
-			for (iMesh = 0; iMesh < ViewVisibleMeshes.Size(); ++iMesh)
-			{
-				const uint64 key = ViewVisibleMeshes.SceneSortKey[iMesh];
-				if (iInstance >= MAX_INSTANCE_COUNT__SCENE_MESHES || key != currentKey)
-				{
-					assert(iMesh >= 1);
-					FInstancedDrawParameters& draw = SceneDrawData.mainViewDrawParams[iDraw];
-
-					draw.IATopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-
-					const Material& mat = ViewVisibleMeshes.Material[iMesh-1];
-					if (mat.IsTessellationEnabled())
-					{
-						draw.IATopology = mat.GetTessellationDomain() == ETessellationDomain::QUAD_PATCH
-							? D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST
-							: D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
-
-						uint8 iTess = 0;
-						uint8 iDomain = 0;
-						uint8 iPart = 0;
-						uint8 iOutTopo = 0;
-						uint8 iTessCull = 0;
-						mat.GetTessellationPSOConfig(iTess, iDomain, iPart, iOutTopo, iTessCull);
-						assert(iTess == 1);
-
-						draw.PackTessellationConfig(iTess, (ETessellationDomain)iDomain, (ETessellationPartitioning)iPart, (ETessellationOutputTopology)iOutTopo, iTessCull);
-
-						TessellationParams* pTessParams = nullptr;
-						CBHeap.AllocConstantBuffer(sizeof(TessellationParams), (void**)(&pTessParams), &draw.cbAddr_Tessellation);
-						*pTessParams = mat.GetTessellationCBufferData();
-					}
-					else
-					{
-						draw.cbAddr_Tessellation = 0;
-						draw.PackedTessellationConfig = 0;
-					}
-
-					const uint8 iAlpha = mat.IsAlphaMasked(*pRenderer) ? 1 : 0;
-					const uint8 iRaster = mat.bWireframe ? 1 : 0;
-					const uint8 iFaceCull = 2; // 2:back
-					draw.PackMaterialConfig(mat.IsAlphaMasked(*pRenderer), mat.bWireframe, iFaceCull);
-
-					draw.SRVMaterialMaps = mat.SRVMaterialMaps;
-					draw.SRVHeightMap = mat.SRVHeightMap;
-
-					mat.GetCBufferData(pPerObj[iDraw]->materialData);
-					
-					draw.cbAddr = cbAddr[iDraw];
-
-					++iDraw;
-					iInstance = 0;
-					currentKey = key;
-				}
-				++iInstance;
-			}
-
-			FInstancedDrawParameters& draw = SceneDrawData.mainViewDrawParams[iDraw];
-
-			draw.IATopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-
-			const Material& mat = ViewVisibleMeshes.Material[iMesh - 1];
-			if (mat.IsTessellationEnabled())
-			{
-				draw.IATopology = mat.GetTessellationDomain() == ETessellationDomain::QUAD_PATCH
-					? D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST
-					: D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
-
-				uint8 iTess = 0;
-				uint8 iDomain = 0;
-				uint8 iPart = 0;
-				uint8 iOutTopo = 0;
-				uint8 iTessCull = 0;
-				mat.GetTessellationPSOConfig(iTess, iDomain, iPart, iOutTopo, iTessCull);
-				assert(iTess == 1);
-
-				draw.PackTessellationConfig(iTess, (ETessellationDomain)iDomain, (ETessellationPartitioning)iPart, (ETessellationOutputTopology)iOutTopo, iTessCull);
-
-				TessellationParams* pTessParams = nullptr;
-				CBHeap.AllocConstantBuffer(sizeof(TessellationParams), (void**)(&pTessParams), &draw.cbAddr_Tessellation);
-				*pTessParams = mat.GetTessellationCBufferData();
-			}
-			else
-			{
-				draw.cbAddr_Tessellation = 0;
-				draw.PackedTessellationConfig = 0;
-			}
-
-			const uint8 iAlpha = mat.IsAlphaMasked(*pRenderer) ? 1 : 0;
-			const uint8 iRaster = mat.bWireframe ? 1 : 0;
-			const uint8 iFaceCull = 2; // 2:back
-			draw.PackMaterialConfig(mat.IsAlphaMasked(*pRenderer), mat.bWireframe, iFaceCull);
-
-			draw.SRVMaterialMaps = mat.SRVMaterialMaps;
-			draw.SRVHeightMap = mat.SRVHeightMap;
-
-			 mat.GetCBufferData(pPerObj[iDraw]->materialData);
-
-			draw.cbAddr = cbAddr[iDraw];
-		}
-		{
-			SCOPED_CPU_MARKER("VBIB");
-			size_t iMesh = 0;
-			int iInstance = 0;
-			int iDraw = 0;
-			uint64 currentKey = ViewVisibleMeshes.SceneSortKey[iMesh];
-			for (iMesh = 0; iMesh < ViewVisibleMeshes.Size(); ++iMesh)
-			{
-				const uint64 key = ViewVisibleMeshes.SceneSortKey[iMesh];
-				if (iInstance >= MAX_INSTANCE_COUNT__SCENE_MESHES || key != currentKey)
-				{
-					assert(iMesh >= 1);
-					FInstancedDrawParameters& draw = SceneDrawData.mainViewDrawParams[iDraw];
-
-					draw.VB = ViewVisibleMeshes.VBIB[iMesh - 1].first;
-					draw.IB = ViewVisibleMeshes.VBIB[iMesh - 1].second;
-					draw.numInstances = iInstance;
-
-					++iDraw;
-					iInstance = 0;
-					currentKey = key;
-				}
-				++iInstance;
-			}
-			FInstancedDrawParameters& draw = SceneDrawData.mainViewDrawParams[iDraw];
-			draw.VB = ViewVisibleMeshes.VBIB[iMesh - 1].first;
-			draw.IB = ViewVisibleMeshes.VBIB[iMesh - 1].second;
-			draw.numInstances = iInstance;
-		}
-		{
-			SCOPED_CPU_MARKER("NumIndices");
-			size_t iMesh = 0;
-			int iInstance = 0;
-			int iDraw = 0;
-			uint64 currentKey = ViewVisibleMeshes.SceneSortKey[iMesh];
-			for (iMesh = 0; iMesh < ViewVisibleMeshes.Size(); ++iMesh)
-			{
-				const uint64 key = ViewVisibleMeshes.SceneSortKey[iMesh];
-				if (iInstance >= MAX_INSTANCE_COUNT__SCENE_MESHES || key != currentKey)
-				{
-					assert(iMesh >= 1);
-					FInstancedDrawParameters& draw = SceneDrawData.mainViewDrawParams[iDraw];
-
-					draw.numIndices = ViewVisibleMeshes.NumIndices[iMesh - 1];
-
-					++iDraw;
-					iInstance = 0;
-					currentKey = key;
-				}
-				++iInstance;
-			}
-			FInstancedDrawParameters& draw = SceneDrawData.mainViewDrawParams[iDraw];
-			draw.numIndices = ViewVisibleMeshes.NumIndices[iMesh - 1];
-		}
-
-#if 0
-		// perObject CB
-		PerObjectData* pPerObj = {};
-		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-
-		// loop
-		int iDraw = 0;
-		size_t iMesh = 0;
-		int iInstance = 0;
-
-		uint64 currentKey = ViewVisibleMeshes.SceneSortKey[iMesh];
-		CBHeap.AllocConstantBuffer(sizeof(PerObjectData), (void**)(&pPerObj), &cbAddr);
-
-		for (iMesh = 0; iMesh < ViewVisibleMeshes.Size(); ++iMesh)
-		{
-			const uint64 key = ViewVisibleMeshes.SceneSortKey[iMesh];
-			if (iInstance >= MAX_INSTANCE_COUNT__SCENE_MESHES || key != currentKey)
-			{
-				assert(iMesh >= 1);
+				const size_t iMesh = r.iStart;
+				const FPerDrawData& drawData = ViewVisibleMeshes.PerDrawData[iMesh];
 				FInstancedDrawParameters& draw = SceneDrawData.mainViewDrawParams[iDraw];
-				//fnSetPerDrawParams(draw, pPerObj, meshData, iDraw);
-				{
-					pPerObj->materialID = ViewVisibleMeshes.hMaterial[iMesh];
-					pPerObj->meshID = ViewVisibleMeshes.hMesh[iMesh];
-					draw.cbAddr = cbAddr;
-					
-					draw.IATopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-					draw.VB = ViewVisibleMeshes.VBIB[iMesh].first;
-					draw.IB = ViewVisibleMeshes.VBIB[iMesh].second;
 
-					draw.numInstances = iInstance;
-					draw.numIndices = RENDER_INSTANCED_SCENE_MESHES ? ViewVisibleMeshes.NumIndices[iMesh] : 1;
-
-					const Material& mat = ViewVisibleMeshes.Material[iMesh];
-					if (ViewVisibleMeshes.bTessellated[iMesh])
-					{
-						TessellationParams* pTessParams = nullptr;
-						CBHeap.AllocConstantBuffer(sizeof(TessellationParams), (void**)(&pTessParams), &draw.cbAddr_Tessellation);
-						*pTessParams = mat.GetTessellationCBufferData();
-
-						draw.IATopology = mat.Tessellation.GetTessellationDomain() == ETessellationDomain::QUAD_PATCH
-							? D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST
-							: D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
-
-						uint8 iTess = 0;
-						uint8 iDomain = 0;
-						uint8 iPart = 0;
-						uint8 iOutTopo = 0;
-						uint8 iTessCull = 0;
-						Tessellation::GetTessellationPSOConfig(mat.Tessellation, iTess, iDomain, iPart, iOutTopo, iTessCull);
-						assert(iTess == 1);
-
-						draw.PackTessellationConfig(iTess, (ETessellationDomain)iDomain, (ETessellationPartitioning)iPart, (ETessellationOutputTopology)iOutTopo, iTessCull);
-					}
-					else
-					{
-						draw.cbAddr_Tessellation = 0;
-						draw.PackedTessellationConfig = 0;
-					}
-					draw.SRVMaterialMaps = mat.SRVMaterialMaps;
-					draw.SRVHeightMap = mat.SRVHeightMap;
-
-					const uint8 iAlpha = mat.IsAlphaMasked(*pRenderer) ? 1 : 0;
-					const uint8 iRaster = mat.bWireframe ? 1 : 0;
-					const uint8 iFaceCull = 2; // 2:back
-					draw.PackMaterialConfig(mat.IsAlphaMasked(*pRenderer), mat.bWireframe, iFaceCull);
-					//Log::Info("Draw[%d]\tT:%d VB:%d IB:%d N:%d i:%d", iDraw, ViewVisibleMeshes.bTessellated, draw.VB, draw.IB, iInstance, draw.numIndices);
-					
-					pPerObj->materialData = mat.GetCBufferData();
-				}
+				pPerObj[iDraw]->materialID = drawData.hMaterial;
+				pPerObj[iDraw]->meshID = drawData.hMesh;
+				draw.VB = drawData.VBIB.first;
+				draw.IB = drawData.VBIB.second;
+				draw.numIndices = drawData.NumIndices;
+				draw.numInstances = r.Stride;
 
 				++iDraw;
-				iInstance = 0;
-				currentKey = key;
-				CBHeap.AllocConstantBuffer(sizeof(PerObjectData), (void**)(&pPerObj), &cbAddr);
 			}
-
-			const Transform& tf = ViewVisibleMeshes.Transform[iMesh];
-			XMMATRIX matWorld = tf.matWorldTransformation();
-
-			pPerObj->matWorldViewProjPrev[iInstance] = tf.matWorldTransformationPrev() * viewProjPrev;
-			pPerObj->matWorldViewProj[iInstance] = matWorld * viewProj;
-			pPerObj->matNormal[iInstance] = tf.NormalMatrix(matWorld);
-			pPerObj->matWorld[iInstance] = matWorld;
-
-			pPerObj->ObjID[iInstance].x = (int)ViewVisibleMeshes.hGameObject[iMesh] + 1; // 0 means empty. offset by 1 now, and undo it when reading back
-			pPerObj->ObjID[iInstance].y = -222;
-			pPerObj->ObjID[iInstance].z = -333;
-			pPerObj->ObjID[iInstance].w = (int)(ViewVisibleMeshes.fBBArea[iMesh] * 10000); // float value --> int render target
-
-			++iInstance;
 		}
+		{
+			SCOPED_CPU_MARKER("Material");
+			size_t iDraw = 0;
+			for (const FDrawCallInputDataRange& r : drawCallRanges)
+			{
+				const size_t iMesh = r.iStart;
+				FInstancedDrawParameters& draw = SceneDrawData.mainViewDrawParams[iDraw];
 
-		// assert(SceneDrawData.mainViewDrawParams.size() >= 1);
-		// assert(iDraw == SceneDrawData.mainViewDrawParams.size() - 1);
-		// if (iDraw == SceneDrawData.mainViewDrawParams.size() - 1) 
-		// {
-		// 	FInstancedDrawParameters& draw = SceneDrawData.mainViewDrawParams[iDraw];
-		// 	const FVisibleMeshData& meshData = ViewVisibleMeshes.back();
-		// 	fnSetPerDrawParams(draw, pPerObj, meshData, iDraw);
-		// }
-#endif
+				draw.IATopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
+				const Material& mat = ViewVisibleMeshes.Material[iMesh];
+				mat.GetCBufferData(pPerObj[iDraw]->materialData);
+				draw.SRVMaterialMaps = mat.SRVMaterialMaps;
+				draw.SRVHeightMap = mat.SRVHeightMap;
+
+				const bool bWireframe = mat.bWireframe;
+				draw.cbAddr = cbAddr[iDraw];
+
+				if (mat.IsTessellationEnabled())
+				{
+					draw.IATopology = mat.GetTessellationDomain() == ETessellationDomain::QUAD_PATCH
+						? D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST
+						: D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
+
+					uint8 iTess = 0;
+					uint8 iDomain = 0;
+					uint8 iPart = 0;
+					uint8 iOutTopo = 0;
+					uint8 iTessCull = 0;
+					mat.GetTessellationPSOConfig(iTess, iDomain, iPart, iOutTopo, iTessCull);
+					assert(iTess == 1);
+
+					draw.PackTessellationConfig(iTess, (ETessellationDomain)iDomain, (ETessellationPartitioning)iPart, (ETessellationOutputTopology)iOutTopo, iTessCull);
+
+					TessellationParams* pTessParams = nullptr;
+					CBHeap.AllocConstantBuffer(sizeof(TessellationParams), (void**)(&pTessParams), &draw.cbAddr_Tessellation);
+					*pTessParams = mat.GetTessellationCBufferData();
+				}
+				else
+				{
+					draw.cbAddr_Tessellation = 0;
+					draw.PackedTessellationConfig = 0;
+				}
+
+				const uint8 iAlpha = mat.IsAlphaMasked(*pRenderer) ? 1 : 0;
+				const uint8 iRaster = mat.bWireframe ? 1 : 0;
+				const uint8 iFaceCull = 2; // 2:back
+				draw.PackMaterialConfig(iAlpha, bWireframe, iFaceCull);
+				
+				++iDraw;
+			}
+		}
 	}
 
 }

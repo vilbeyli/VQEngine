@@ -26,7 +26,7 @@
 #include <utility>
 
 
-struct Transform
+struct alignas(16) Transform
 {
 public:
 	//----------------------------------------------------------------------------------------------------------------
@@ -84,6 +84,8 @@ public:
 	DirectX::XMMATRIX WorldTransformationMatrix_NoScale() const;
 	DirectX::XMMATRIX RotationMatrix() const;
 
+	// builds normal matrix from world matrix, ignoring translation
+	// and using inverse-transpose of rotation/scale matrix
 	static DirectX::XMMATRIX NormalMatrix(const DirectX::XMMATRIX& world);
 
 	//----------------------------------------------------------------------------------------------------------------
