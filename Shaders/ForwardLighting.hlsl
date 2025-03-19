@@ -74,8 +74,8 @@ struct PSOutput
 //
 //---------------------------------------------------------------------------------------------------
 cbuffer CBPerFrame     : register(b0) { PerFrameData cbPerFrame; }
-cbuffer CBPerView      : register(b1) { PerViewData cbPerView; }
-cbuffer CBPerObject    : register(b2) { PerObjectData cbPerObject; }
+cbuffer CBPerView      : register(b1) { PerViewLightingData cbPerView; }
+cbuffer CBPerObject    : register(b2) { PerObjectLightingData cbPerObject; }
 //cbuffer CBTessellation : register(b3) { TessellationParams tess; }
 
 SamplerState LinearSampler        : register(s0);
@@ -260,13 +260,10 @@ PSOutput PSMain(PSInput In)
 	float fHeightSampleB = texHeightmap.SampleLevel(LinearSampler, uv + float2(0,0), 0).r;
 	float fHeightSampleL = texHeightmap.SampleLevel(LinearSampler, uv + float2(0,0), 0).r;
 	float fHeightSampleR = texHeightmap.SampleLevel(LinearSampler, uv + float2(0,0), 0).r;
+	#endif
 	
 	const float3 N = normalize(In.WorldSpaceNormal);
 	const float3 T = normalize(In.WorldSpaceTangent);
-	#else
-	const float3 N = normalize(In.WorldSpaceNormal);
-	const float3 T = normalize(In.WorldSpaceTangent);
-	#endif
 	Surface.N = length(Normal) < 0.01 ? N : UnpackNormal(Normal, N, T);
 	
 	if (HasAmbientOcclusionMap           (TEX_CFG)>0) ao *= LocalAO;

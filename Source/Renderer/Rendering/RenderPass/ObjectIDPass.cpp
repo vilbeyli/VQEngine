@@ -211,7 +211,7 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 		
 		// select PSO
 		size_t iTess = 0; size_t iDomain = 0; size_t iPart = 0; size_t iOutTopo = 0; size_t iTessCull = 0;
-		meshRenderCmd.UnpackPessellationConfig(iTess, iDomain, iPart, iOutTopo, iTessCull);
+		meshRenderCmd.UnpackTessellationConfig(iTess, iDomain, iPart, iOutTopo, iTessCull);
 		const PSO_ID psoID = this->GetPSO_ID(iTess, iDomain, iPart, iOutTopo, iTessCull, iAlpha);
 		pCmd->SetPipelineState(mRenderer.GetPSO(psoID));
 

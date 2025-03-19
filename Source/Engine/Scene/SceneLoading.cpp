@@ -119,12 +119,13 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	mBoundingBoxHierarchy.Clear();
 	{
 		SCOPED_CPU_MARKER("ClearShadowViews");
-		for (FSceneShadowViews& view : mFrameShadowViews)
-		{
-			for (FShadowView& sv : view.ShadowViews_Spot ) sv.meshRenderParams.clear();
-			for (FShadowView& sv : view.ShadowViews_Point) sv.meshRenderParams.clear();
-			view.ShadowView_Directional.meshRenderParams.clear();
-		}
+		assert(false); // TODO: reset renderer draw data arrays
+		//for (FSceneShadowViews& view : mFrameShadowViews)
+		//{
+		//	for (FShadowView& sv : view.ShadowViews_Spot ) sv.meshRenderParams.clear();
+		//	for (FShadowView& sv : view.ShadowViews_Point) sv.meshRenderParams.clear();
+		//	view.ShadowView_Directional.meshRenderParams.clear();
+		//}
 	}
 	mFrustumCullWorkerContext.ClearMemory();
 

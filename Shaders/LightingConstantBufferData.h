@@ -65,7 +65,7 @@ struct SpotLight
 	float  depthBias;
 	//---------------
 	float innerConeAngle;
-	float dummy;
+	float range;
 	float dummy1;
 	float dummy2;
 	//---------------
@@ -85,11 +85,9 @@ struct DirectionalLight
 
 struct SceneLighting
 {
-	// non-shadow caster counts
-	int numPointLights;  
+	int numPointLights; // non-shadow caster counts
 	int numSpotLights;
-	// shadow caster counts
-	int numPointCasters;  
+	int numPointCasters; // shadow caster counts
 	int numSpotCasters;
 	//----------------------------------------------
 	DirectionalLight directional;
@@ -108,10 +106,7 @@ struct SceneLighting
 //----------------------------------------------------------
 // MATERIAL
 //----------------------------------------------------------
-
-
 // Has*Map() encoding should match Material::GetTextureConfig()
-//
 inline int HasDiffuseMap(int textureConfig)                     { return ((textureConfig & (1 << 0)) > 0 ? 1 : 0); }
 inline int HasNormalMap(int textureConfig)	                    { return ((textureConfig & (1 << 1)) > 0 ? 1 : 0); }
 inline int HasAmbientOcclusionMap(int textureConfig)            { return ((textureConfig & (1 << 2)) > 0 ? 1 : 0); }
@@ -152,13 +147,10 @@ MaterialData
 //----------------------------------------------------------
 #define RENDER_INSTANCED_SCENE_MESHES    1  // 0 is broken, TODO: fix
 #define MAX_INSTANCE_COUNT__SCENE_MESHES 64
+#define MAX_INSTANCE_COUNT__SHADOW_MESHES 128
 
 #define RENDER_INSTANCED_BOUNDING_BOXES 1
 #define RENDER_INSTANCED_SHADOW_MESHES  1
-
-#ifndef INSTANCE_COUNT
-#define INSTANCE_COUNT  MAX_INSTANCE_COUNT__SCENE_MESHES
-#endif
 
 #ifdef VQ_CPU
 	// adapter for C++ code
@@ -175,7 +167,7 @@ struct PerFrameData
 	float fAmbientLightingFactor;
 	float fHDRIOffsetInRadians;
 };
-struct PerViewData
+struct PerViewLightingData
 {
 	matrix matView;
 	matrix matViewToWorld; // i.e. matViewInverse
@@ -190,35 +182,49 @@ struct PerViewData
 	float pad1;
 };
 
-
 struct
 #ifdef VQ_CPU
 	alignas(64)
 #endif
-PerObjectData
+PerObjectLightingData
 {
 #if INSTANCED_DRAW
-	matrix matWorldViewProj    [INSTANCE_COUNT];
-	matrix matWorld            [INSTANCE_COUNT];
-	matrix matWorldViewProjPrev[INSTANCE_COUNT];
-	matrix matNormal           [INSTANCE_COUNT]; // could be 4x3
+	matrix matWorldViewProj    [MAX_INSTANCE_COUNT__SCENE_MESHES];
+	matrix matWorld            [MAX_INSTANCE_COUNT__SCENE_MESHES];
+	matrix matWorldViewProjPrev[MAX_INSTANCE_COUNT__SCENE_MESHES];
+	matrix matNormal           [MAX_INSTANCE_COUNT__SCENE_MESHES]; // could be 4x3
+	int4   ObjID               [MAX_INSTANCE_COUNT__SCENE_MESHES]; // int[] causes alignment issues as each element is aligned to 16B on the GPU. use int4.x
 #else
 	matrix matWorldViewProj;
 	matrix matWorld;
 	matrix matWorldViewProjPrev;
 	matrix matNormal;
-#endif
-
-#if INSTANCED_DRAW
-	int4 ObjID[INSTANCE_COUNT]; // int[] causes alignment issues as each element is aligned to 16B on the GPU. use int4.x
-#else
-	int4 ObjID;
+	int4   ObjID;
 #endif
 
 	MaterialData materialData;
 
 	int meshID;
 	int materialID;
+};
+
+struct 
+#ifdef VQ_CPU
+	alignas(64)
+#endif
+PerObjectShadowData
+{
+	matrix matWorldViewProj[MAX_INSTANCE_COUNT__SHADOW_MESHES];
+	matrix matWorld        [MAX_INSTANCE_COUNT__SHADOW_MESHES];
+	float4 texScaleBias;
+	float displacement;
+};
+
+struct PerShadowViewData
+{
+	float3 CameraPosition;
+	float fFarPlane;
+	float4 WorldFrustumPlanes[6]; // used by Tessellation
 };
 
 struct 

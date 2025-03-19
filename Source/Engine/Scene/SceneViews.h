@@ -95,7 +95,8 @@ struct FVisibleMeshDataSoA
 	std::vector<Transform> Transform;
 	std::vector<FPerInstanceData> PerInstanceData;
 	std::vector<Material> Material;
-	void Reserve(size_t sz)
+
+	inline void Reserve(size_t sz)
 	{
 		SceneSortKey.resize(sz);
 		ShadowSortKey.resize(sz);
@@ -104,24 +105,16 @@ struct FVisibleMeshDataSoA
 		Transform.resize(sz);
 		Material.resize(sz);
 	}
+	inline void Clear()
+	{
+		SceneSortKey.clear();
+		ShadowSortKey.clear();
+		PerDrawData.clear();
+		PerInstanceData.clear();
+		Transform.clear();
+		Material.clear();
+	}
 	size_t Size() const { return SceneSortKey.size(); }
-};
-
-struct alignas(64) FVisibleMeshData
-{
-	uint64 SceneSortKey;
-	uint64 ShadowSortKey;
-	MaterialID hMaterial;
-	MeshID hMesh;
-	short SelectedLOD;
-	bool bTessellated;
-	unsigned NumIndices;
-	std::pair<BufferID, BufferID> VBIB;
-	char pad[24];
-	Transform Transform;// store a copy
-	float fBBArea;
-	size_t hGameObject;
-	Material Material;  // store a copy
 };
 
 struct FViewRef
@@ -135,13 +128,16 @@ struct FFrustumRenderList
 {
 	mutable TaskSignal<void> DataReadySignal;
 	mutable TaskSignal<size_t> DataCountReadySignal;
-	std::vector<FVisibleMeshData> Data;
-	FVisibleMeshDataSoA Data2;
+	FVisibleMeshDataSoA Data;
 	FViewRef ViewRef; // references SceneView or ShadowView
 
-	inline void Reset()
+	enum class EFrustumType { MainView, SpotShadow, PointShadow, DirectionalShadow };
+	EFrustumType Type;
+	uint TypeIndex; // e.g., spot light index, point light index * 6 + face, etc.
+
+	inline void ResetSignalsAndData()
 	{
-		Data.clear();
+		Data.Clear();
 		DataReadySignal.Reset();
 		DataCountReadySignal.Reset();
 	}
@@ -149,9 +145,9 @@ struct FFrustumRenderList
 
 struct FSceneView
 {
-	DirectX::XMMATRIX     view;
 	DirectX::XMMATRIX     viewProj;
 	DirectX::XMMATRIX     viewProjPrev;
+	DirectX::XMMATRIX     view;
 	DirectX::XMMATRIX     viewInverse;
 	DirectX::XMMATRIX     proj;
 	DirectX::XMMATRIX     projInverse;
@@ -173,6 +169,8 @@ struct FSceneView
 	const std::vector<FBoundingBox>* pGameObjectBoundingBoxList = nullptr;
 	const std::vector<FBoundingBox>* pMeshBoundingBoxList = nullptr;
 
+	// Sent to renderer for instance data batching.
+	// Renderer uses FSceneDrawData in DrawData.h to fill in batched draw parameters.
 	std::vector<FFrustumRenderList> FrustumRenderLists;
 
 	VQ_SHADER_DATA::SceneLighting GPULightingData;
@@ -190,22 +188,11 @@ struct FSceneDebugView
 struct FShadowView
 {
 	DirectX::XMMATRIX matViewProj;
-#if RENDER_INSTANCED_SHADOW_MESHES
-	//--------------------------------------------------------------------------------------------------------------------------------------------
-	//  +----SHADOW_MESH0             +----SHADOW_MESH1             
-	//     +----LOD0                     +----LOD0        
-	//         +----ShadowInstData0          +----ShadowInstData0                       
-	//         +----ShadowInstData1          +----ShadowInstData1                       
-	//     +----LOD1                         +----ShadowInstData2        
-	//         +----ShadowInstData0                        
-	//         +----ShadowInstData1                        
-	struct FInstanceData { DirectX::XMMATRIX matWorld, matWorldViewProj; float fDisplacement; };
-	struct FInstanceDataArray { size_t NumValidData = 0; std::vector<FInstanceData> Data; };
-		
+
 	// Bits[0  -  3] : LOD
 	// Bits[4  - 33] : MeshID
 	// Bits[34 - 63] : MaterialID
-	static inline uint64 GetKey(MaterialID matID, MeshID meshID, int lod, bool bTessellated)
+	static inline uint64     GetKey(MaterialID matID, MeshID meshID, int lod, bool bTessellated)
 	{
 		assert(matID != -1); assert(meshID != -1); assert(lod >= 0 && lod < 16);
 
@@ -221,11 +208,6 @@ struct FShadowView
 	static inline MaterialID GetMatIDFromKey(uint64 key) { return MaterialID(key >> 34); }
 	static inline MeshID     GetMeshIDFromKey(uint64 key) { return MeshID((key >> 4) & 0x3FFFFFFF); }
 	static inline int        GetLODFromKey(uint64 key) { return int(key & 0xF); }
-	////--------------------------------------------------------------------------------------------------------------------------------------------
-	std::vector<FInstancedShadowMeshRenderData> meshRenderParams; // per LOD mesh
-#else
-	std::vector<FShadowMeshRenderData> meshRenderParams;
-#endif
 };
 
 struct FSceneShadowViews
@@ -248,7 +230,6 @@ struct FSceneShadowViews
 
 struct FFrustumRenderCommandRecorderContext
 {
-	size_t iFrustum;
 	const FFrustumRenderList* pFrustumRenderList = nullptr;
 	FShadowView* pShadowView = nullptr;
 };

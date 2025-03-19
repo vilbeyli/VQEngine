@@ -41,8 +41,8 @@ struct PSInput
 #endif
 };
 
-cbuffer CBPerView   : register(b1) { PerViewData cbPerView; }
-cbuffer CBPerObject : register(b2) { PerObjectData cbPerObject; }
+cbuffer CBPerView   : register(b1) { PerViewLightingData cbPerView; }
+cbuffer CBPerObject : register(b2) { PerObjectLightingData cbPerObject; }
 
 SamplerState LinearSampler : register(s0);
 SamplerState PointSampler : register(s1);

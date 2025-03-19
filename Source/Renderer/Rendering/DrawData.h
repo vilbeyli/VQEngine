@@ -128,11 +128,6 @@ struct FInstancedDrawParameters
 	uint numInstances = 0;
 	uint numIndices = 0;
 
-	// material-specific PSO ID collection
-	// PSO_ID PSO_ZPrePass = INVALID_ID;
-	// PSO_ID PSO_Lighting = INVALID_ID;
-	// PSO_ID PSO_ObjectIDPass = INVALID_ID;
-
 	// PSO-material configs
 	//   Tessellation Config
 	//     bit  0  : iTess
@@ -149,7 +144,7 @@ struct FInstancedDrawParameters
 			((uint8)t) << 5 |
 			((bFaceCullOrFrustumCull ? 1 : 0) << 7);
 	}
-	inline void UnpackPessellationConfig(size_t& iTess, size_t& iDomain, size_t& iPartition, size_t& iOutputTopology, size_t& iTessellationSWCull) const
+	inline void UnpackTessellationConfig(size_t& iTess, size_t& iDomain, size_t& iPartition, size_t& iOutputTopology, size_t& iTessellationSWCull) const
 	{
 		iTess = PackedTessellationConfig & 0x1;
 		iDomain = (PackedTessellationConfig >> 1) & 0x3;
@@ -194,24 +189,25 @@ using BoundingBoxRenderData_t = FInstancedBoundingBoxRenderData;
 using BoundingBoxRenderData_t = FBoundingBoxRenderData;
 #endif
 
-struct FInstanceDataWriteParam { int iDraw, iInst; };
 struct FSceneDrawData
 {
 	std::vector<FInstancedDrawParameters> mainViewDrawParams;
+	std::vector<std::vector<FInstancedDrawParameters>> pointShadowDrawParams;
+	std::vector<std::vector<FInstancedDrawParameters>> spotShadowDrawParams;
+	std::vector<FInstancedDrawParameters> directionalShadowDrawParams;
+
 	std::vector<FLightRenderData> lightRenderParams;
 	std::vector<FLightRenderData> lightBoundsRenderParams;
 	std::vector<FOutlineRenderData> outlineRenderParams;
 	std::vector<MeshRenderData_t> debugVertexAxesRenderParams;
 	std::vector<BoundingBoxRenderData_t> boundingBoxRenderParams;
 
-#if RENDER_INSTANCED_SCENE_MESHES
+
 	//--------------------------------------------------------------------------------------------------------------------------------------------
 	// collect instance data based on Material, and then Mesh.
 	// In order to avoid clear, we also keep track of the number 
 	// of valid instance data.
 	//--------------------------------------------------------------------------------------------------------------------------------------------
-	struct FInstanceData { DirectX::XMMATRIX mWorld, mWorldViewProj, mWorldViewProjPrev, mNormal; int mObjID; float mProjectedArea; }; // transformation matrixes used in the shader
-	struct FMeshInstanceDataArray { size_t NumValidData = 0; std::vector<FInstanceData> Data; };
 	// MAT0
 	// +---- PSO0                       MAT1       
 	//     +----MESH0                 +----MESH37             
@@ -251,6 +247,5 @@ struct FSceneDrawData
 	static inline MeshID     GetMeshIDFromKey(uint64 key) { return MeshID((key >> 4) & 0x3FFFFFFF); }
 	static inline int        GetLODFromKey(uint64 key) { return int(key & 0xF); }
 	//--------------------------------------------------------------------------------------------------------------------------------------------
-#endif
 };
 

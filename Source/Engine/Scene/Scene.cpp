@@ -305,18 +305,18 @@ FSceneStats Scene::GetSceneRenderStats(int FRAME_DATA_INDEX) const
 
 	stats.NumMeshRenderCommands        = 0; // TODO: static_cast<uint>(view.meshRenderParams.size() + view.lightRenderParams.size() + view.lightBoundsRenderParams.size() /*+ view.boundingBoxRenderParams.size()*/);
 	stats.NumBoundingBoxRenderCommands = 0; // TODO: static_cast<uint>(view.boundingBoxRenderParams.size());
-	auto fnCountShadowMeshRenderCommands = [](const FSceneShadowViews& shadowView) -> uint
-	{
-		uint NumShadowRenderCmds = 0;
-		for (uint i = 0; i < shadowView.NumPointShadowViews; ++i)
-		for (uint face = 0; face < 6u; ++face)
-			NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowViews_Point[i * 6 + face].meshRenderParams.size());
-		for (uint i = 0; i < shadowView.NumSpotShadowViews; ++i)
-			NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowViews_Spot[i].meshRenderParams.size());
-		NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowView_Directional.meshRenderParams.size());
-		return NumShadowRenderCmds;
-	};
-	stats.NumShadowMeshRenderCommands = fnCountShadowMeshRenderCommands(shadowView);
+	//auto fnCountShadowMeshRenderCommands = [](const FSceneShadowViews& shadowView) -> uint // TODO:
+	//{
+	//	uint NumShadowRenderCmds = 0;
+	//	for (uint i = 0; i < shadowView.NumPointShadowViews; ++i)
+	//	for (uint face = 0; face < 6u; ++face)
+	//		NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowViews_Point[i * 6 + face].meshRenderParams.size());
+	//	for (uint i = 0; i < shadowView.NumSpotShadowViews; ++i)
+	//		NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowViews_Spot[i].meshRenderParams.size());
+	//	NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowView_Directional.meshRenderParams.size());
+	//	return NumShadowRenderCmds;
+	//};
+	stats.NumShadowMeshRenderCommands = 0;// fnCountShadowMeshRenderCommands(shadowView);
 	
 	stats.NumMeshes    = static_cast<uint>(this->mMeshes.size());
 	stats.NumModels    = static_cast<uint>(this->mModels.size());
@@ -1027,15 +1027,15 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 		// directional
 		if (bCullDirectionalLightView)
 		{
-			(*mFrustumCullWorkerContext.pFrustumRenderLists)[iFrustum].ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowView_Directional, .eViewType = FViewRef::Shadow };
+			std::vector<FFrustumRenderList>& FrustumRenderLists = (*mFrustumCullWorkerContext.pFrustumRenderLists);
+
+			FFrustumRenderList& FrustumRenderList = FrustumRenderLists[iFrustum];
+			FrustumRenderList.ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowView_Directional, .eViewType = FViewRef::Shadow };
+			FrustumRenderList.Type = FFrustumRenderList::EFrustumType::DirectionalShadow;
+			FrustumRenderList.TypeIndex = 0;
+
 			FrustumViewProjMatrix[iFrustum] = SceneShadowView.ShadowView_Directional.matViewProj;
 			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowView_Directional.matViewProj);
-		}
-		else
-		{
-			//SceneShadowView.ShadowView_Directional.drawParamLookup.clear();
-			//SceneShadowView.ShadowView_Directional.mRenderCmdInstanceDataWriteIndex.clear();
-			SceneShadowView.ShadowView_Directional.meshRenderParams.clear();
 		}
 
 		// point
@@ -1043,7 +1043,13 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 		for (size_t face = 0; face < 6; ++face)
 		{
 			const size_t iPointFace = iPoint * 6 + face;
-			(*mFrustumCullWorkerContext.pFrustumRenderLists)[iFrustum].ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowViews_Point[iPointFace], .eViewType = FViewRef::Shadow };
+			std::vector<FFrustumRenderList>& FrustumRenderLists = (*mFrustumCullWorkerContext.pFrustumRenderLists);
+			
+			FFrustumRenderList& FrustumRenderList = FrustumRenderLists[iFrustum];
+			FrustumRenderList.ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowViews_Point[iPointFace], .eViewType = FViewRef::Shadow };
+			FrustumRenderList.Type = FFrustumRenderList::EFrustumType::PointShadow;
+			FrustumRenderList.TypeIndex = iPointFace;
+
 			FrustumViewProjMatrix[iFrustum] = SceneShadowView.ShadowViews_Point[iPointFace].matViewProj;
 			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowViews_Point[iPointFace].matViewProj);
 		}
@@ -1051,7 +1057,13 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 		// spot
 		for (size_t iSpot = 0; iSpot < SceneShadowView.NumSpotShadowViews; ++iSpot)
 		{
-			(*mFrustumCullWorkerContext.pFrustumRenderLists)[iFrustum].ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowViews_Spot[iSpot], .eViewType = FViewRef::Shadow };
+			std::vector<FFrustumRenderList>& FrustumRenderLists = (*mFrustumCullWorkerContext.pFrustumRenderLists);
+			
+			FFrustumRenderList& FrustumRenderList = FrustumRenderLists[iFrustum];
+			FrustumRenderList.ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowViews_Spot[iSpot], .eViewType = FViewRef::Shadow };
+			FrustumRenderList.Type = FFrustumRenderList::EFrustumType::SpotShadow;
+			FrustumRenderList.TypeIndex = iSpot;
+
 			FrustumViewProjMatrix[iFrustum] = SceneShadowView.ShadowViews_Spot[iSpot].matViewProj;
 			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowViews_Spot[iSpot].matViewProj);
 		}
