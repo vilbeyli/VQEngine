@@ -113,10 +113,13 @@ bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset FrustumPlanes, cons
 	
 	return true;
 }
-static bool IsBoundingBoxIntersectingFrustum2(const FFrustumPlaneset FrustumPlanes, const FBoundingBox& BBox)
+static bool IsBoundingBoxIntersectingFrustum2(const FFrustumPlaneset& FrustumPlanes, const FBoundingBox& BBox)
 {
 	constexpr float EPSILON = 0.000002f;
 	const XMVECTOR V_EPSILON = XMVectorSet(EPSILON, EPSILON, EPSILON, EPSILON);
+	const XMVECTOR vExtent = BBox.GetExtent();
+	XMVECTOR vCenter = BBox.GetCenter();
+	vCenter.m128_f32[3] = 1.0f;
 	for (int p = 0; p < 6; ++p)	// for each plane
 	{
 		XMVECTOR vPlane = XMLoadFloat4(&FrustumPlanes.abcd[p]);
@@ -127,14 +130,11 @@ static bool IsBoundingBoxIntersectingFrustum2(const FFrustumPlaneset FrustumPlan
 		XMVECTOR vN = XMVectorAbs(vPlane);
 
 		// r : how far away is the furthest point along the plane normal
-		XMVECTOR R = XMVector3Dot(vN, BBox.GetExtent());
+		XMVECTOR R = XMVector3Dot(vN, vExtent);
 		// Intuition: see https://fgiesen.wordpress.com/2010/10/17/view-frustum-culling/
-		
-		XMVECTOR Center = BBox.GetCenter();
-		Center.m128_f32[3] = 1.0f;
 
 		// signed distance of the center point of AABB to the plane
-		XMVECTOR Dist = XMVector4Dot(Center, vPlane);
+		XMVECTOR Dist = XMVector4Dot(vCenter, vPlane);
 
 		if (XMVectorLess((Dist + R), V_EPSILON).m128_f32[0])
 			return false;
