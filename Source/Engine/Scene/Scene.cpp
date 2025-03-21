@@ -1021,6 +1021,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 		FrustumViewProjMatrix[iFrustum] = SceneView.viewProj;
 		FrustumPlanesets[iFrustum] = FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj);
 		(*mFrustumCullWorkerContext.pFrustumRenderLists)[iFrustum].ViewRef = FViewRef{ .pViewData = &SceneView, .eViewType = FViewRef::Scene };
+		(*mFrustumCullWorkerContext.pFrustumRenderLists)[iFrustum].ResetSignalsAndData();
 
 		++iFrustum; // main view frustum done -- move to shadow views
 
@@ -1033,6 +1034,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 			FrustumRenderList.ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowView_Directional, .eViewType = FViewRef::Shadow };
 			FrustumRenderList.Type = FFrustumRenderList::EFrustumType::DirectionalShadow;
 			FrustumRenderList.TypeIndex = 0;
+			FrustumRenderList.ResetSignalsAndData();
 
 			FrustumViewProjMatrix[iFrustum] = SceneShadowView.ShadowView_Directional.matViewProj;
 			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowView_Directional.matViewProj);
@@ -1049,6 +1051,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 			FrustumRenderList.ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowViews_Point[iPointFace], .eViewType = FViewRef::Shadow };
 			FrustumRenderList.Type = FFrustumRenderList::EFrustumType::PointShadow;
 			FrustumRenderList.TypeIndex = iPointFace;
+			FrustumRenderList.ResetSignalsAndData();
 
 			FrustumViewProjMatrix[iFrustum] = SceneShadowView.ShadowViews_Point[iPointFace].matViewProj;
 			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowViews_Point[iPointFace].matViewProj);
@@ -1063,6 +1066,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 			FrustumRenderList.ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowViews_Spot[iSpot], .eViewType = FViewRef::Shadow };
 			FrustumRenderList.Type = FFrustumRenderList::EFrustumType::SpotShadow;
 			FrustumRenderList.TypeIndex = iSpot;
+			FrustumRenderList.ResetSignalsAndData();
 
 			FrustumViewProjMatrix[iFrustum] = SceneShadowView.ShadowViews_Spot[iSpot].matViewProj;
 			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowViews_Spot[iSpot].matViewProj);

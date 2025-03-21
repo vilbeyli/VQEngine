@@ -69,6 +69,7 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	 
 	// store the index of the surviving bounding box in a list, per view frustum
 	/*out*/ std::vector<std::vector<size_t>> vVisibleBBIndicesPerView;
+	/*out*/ std::vector<std::vector<FVisibleMeshSortData>> vSortData;
 	/*out*/ std::vector<FFrustumRenderList>* pFrustumRenderLists; // for each view
 
 

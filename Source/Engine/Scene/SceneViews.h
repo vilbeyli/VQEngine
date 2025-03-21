@@ -95,15 +95,19 @@ struct FVisibleMeshDataSoA
 	std::vector<Transform> Transform;
 	std::vector<FPerInstanceData> PerInstanceData;
 	std::vector<Material> Material;
-
+	size_t NumValidElements;
 	inline void Reserve(size_t sz)
 	{
-		SceneSortKey.resize(sz);
-		ShadowSortKey.resize(sz);
-		PerDrawData.resize(sz);
-		PerInstanceData.resize(sz);
-		Transform.resize(sz);
-		Material.resize(sz);
+		if (NumValidElements < sz)
+		{
+			SceneSortKey.resize(sz);
+			ShadowSortKey.resize(sz);
+			PerDrawData.resize(sz);
+			Transform.resize(sz);
+			PerInstanceData.resize(sz);
+			Material.resize(sz);
+		}
+		NumValidElements = sz;
 	}
 	inline void Clear()
 	{
@@ -114,7 +118,7 @@ struct FVisibleMeshDataSoA
 		Transform.clear();
 		Material.clear();
 	}
-	size_t Size() const { return SceneSortKey.size(); }
+	size_t Size() const { return NumValidElements; }
 };
 
 struct FViewRef

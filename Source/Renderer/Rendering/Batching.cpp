@@ -41,7 +41,8 @@ static std::vector<FDrawCallInputDataRange> CalcInstancedDrawCommandDataRangesSo
 )
 {
 	SCOPED_CPU_MARKER("CalcInstancedDrawDataRangesSoA");
-	const size_t NumElements = (ViewVisibleMeshes.*SortKeyArray).size();
+	//const size_t NumElements = (ViewVisibleMeshes.*SortKeyArray).size();
+	const size_t NumElements = ViewVisibleMeshes.NumValidElements;
 	if (NumElements == 0)
 		return std::vector<FDrawCallInputDataRange>();
 
@@ -476,6 +477,7 @@ static void DispatchWorkers_ShadowViews(FWindowRenderContext& ctx,
 			WorkerContexts[iFrustum - 1] = { /*iFrustum,*/ pFrustumRenderList, pShadowView };
 
 			// -------------------------------------------------- SYNC ---------------------------------------------------
+			//Log::Info("WaitDataCountReady[%d]", iFrustum);
 			const size_t NumMeshes = pFrustumRenderList->DataCountReadySignal.Wait();
 			// -------------------------------------------------- SYNC ---------------------------------------------------
 
@@ -529,10 +531,10 @@ static void DispatchWorkers_ShadowViews(FWindowRenderContext& ctx,
 				// -------------------------------------------------- SYNC ---------------------------------------------------
 				pFrustumRenderList->DataReadySignal.Wait(); 
 				// -------------------------------------------------- SYNC ---------------------------------------------------
-				const std::vector<FDrawCallInputDataRange> drawCallRanges = CalcInstancedDrawCommandDataRangesSoA<&FVisibleMeshDataSoA::ShadowSortKey>(
-					wctx.pFrustumRenderList->Data, MAX_INSTANCE_COUNT__SHADOW_MESHES);
-				const size_t NumInstancedDrawCalls = drawCallRanges.size();
-				Log::Info("Frustum[%d] : %d", pFrustumRenderList->TypeIndex, NumInstancedDrawCalls);
+				//const std::vector<FDrawCallInputDataRange> drawCallRanges = CalcInstancedDrawCommandDataRangesSoA<&FVisibleMeshDataSoA::ShadowSortKey>(
+				//	wctx.pFrustumRenderList->Data, MAX_INSTANCE_COUNT__SHADOW_MESHES);
+				//const size_t NumInstancedDrawCalls = drawCallRanges.size();
+				//Log::Info("Frustum[%d] : %d", pFrustumRenderList->TypeIndex, NumInstancedDrawCalls);
 
 				BatchShadowViewDrawCalls(
 					*pDrawParams,
