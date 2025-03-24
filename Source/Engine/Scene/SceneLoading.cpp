@@ -501,13 +501,13 @@ void Scene::Unload()
 
 	mCameras.clear();
 	
-	for (const std::pair<MaterialID, Material>& matPair : mMaterials)
+	for (const Material* pMaterial : mMaterialPool.GetAllAliveObjects())
 	{
-		const Material& mat = matPair.second;
-		mRenderer.DestroySRV(mat.SRVHeightMap);
-		mRenderer.DestroySRV(mat.SRVMaterialMaps);
+		mRenderer.DestroySRV(pMaterial->SRVHeightMap);
+		mRenderer.DestroySRV(pMaterial->SRVMaterialMaps);
 	}
-	mMaterials.clear();
+	assert(false); // TODO: reset material pool?
+	//mMaterialPool.clear();
 	mMaterialNames.clear();
 	mLoadedMaterials.clear();
 

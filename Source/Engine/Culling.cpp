@@ -340,7 +340,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd, Th
 
 #define DEBUG_LOG_SORT 0
 	const MeshLookup_t& MeshLookupCopy = mMeshes;
-	const MaterialLookup_t& MaterialLookupCopy = mMaterials;
+	const MemoryPool<Material>& MaterialPool = mMaterials;
 	const std::vector<MeshID>& MeshBB_MeshID	= BBH.GetMeshesIDs();
 	const std::vector<MaterialID>& MeshBB_MatID = BBH.GetMeshMaterialIDs();
 	const std::vector<size_t>& MeshBB_GameObjHandles = BBH.GetMeshGameObjectHandles();
@@ -456,7 +456,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd, Th
 				const float fBBArea = CalculateProjectedBoundingBoxArea(vBoundingBoxList[bb], vMatViewProj[iWork]);
 				const MeshID meshID = MeshBB_MeshID[bb];
 				const MaterialID matID = MeshBB_MatID[bb];
-				const Material& mat = MaterialLookupCopy.at(MeshBB_MatID[bb]);
+				const Material& mat = MaterialPool.at(MeshBB_MatID[bb]);
 				const Mesh& mesh = MeshLookupCopy.at(meshID);
 
 				sortData[ii].iBB = bb;
@@ -516,7 +516,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd, Th
 		for (size_t i = 0; i < NumVisibleItems; ++i)
 		{
 			const FVisibleMeshSortData& d = sortData[i];
-			const Material& mat = MaterialLookupCopy.at(d.matID);
+			const Material& mat = MaterialPool.at(d.matID);
 			vVisibleMeshListSoA.Material[i] = mat; // copy the material
 		}
 		for (size_t i = 0; i < NumVisibleItems; ++i)
@@ -574,7 +574,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd, Th
 				const float fBBArea = CalculateProjectedBoundingBoxArea(vBoundingBoxList[bb], matVP);
 				const MeshID meshID = MeshBB_MeshID[bb];
 				const MaterialID matID = MeshBB_MatID[bb];
-				const Material& mat = MaterialLookupCopy.at(MeshBB_MatID[bb]);
+				const Material& mat = MaterialPool.at(MeshBB_MatID[bb]);
 				const Mesh& mesh = MeshLookupCopy.at(meshID);
 
 				sortData[ii].iBB = bb;
@@ -642,7 +642,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd, Th
 			for (size_t i = 0; i < NumVisibleItems; ++i)
 			{
 				const FVisibleMeshSortData& d = sortData[i];
-				const Material& mat = MaterialLookupCopy.at(d.matID);
+				const Material& mat = MaterialPool.at(d.matID);
 				vVisibleMeshListSoA.Material[i] = mat; // copy the material
 			}
 			for (size_t i = 0; i < NumVisibleItems; ++i)
@@ -658,7 +658,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd, Th
 			{
 				const FVisibleMeshSortData& d = sortData[i];
 				const Mesh& mesh = MeshLookupCopy.at(d.meshID);
-				const Material& mat = MaterialLookupCopy.at(d.matID);
+				const Material& mat = MaterialPool.at(d.matID);
 
 				vVisibleMeshListSoA.SceneSortKey[i] = FSceneDrawData::GetKey(d.matID, d.meshID, d.iLOD, d.bTess);
 				vVisibleMeshListSoA.ShadowSortKey[i] = FShadowView::GetKey(d.matID, d.meshID, d.iLOD, d.bTess);
@@ -692,7 +692,7 @@ void FFrustumCullWorkerContext::SortMeshData(size_t iWork)
 {
 	SCOPED_CPU_MARKER("SortMeshData");
 	const MeshLookup_t& MeshLookupCopy = mMeshes;
-	const MaterialLookup_t& MaterialLookupCopy = mMaterials;
+	const MemoryPool<Material>& MaterialPool = mMaterials;
 	const std::vector<MeshID>& MeshBB_MeshID = BBH.GetMeshesIDs();
 	const std::vector<MaterialID>& MeshBB_MatID = BBH.GetMeshMaterialIDs();
 	const std::vector<size_t>& MeshBB_GameObjHandles = BBH.GetMeshGameObjectHandles();
@@ -709,7 +709,7 @@ void FFrustumCullWorkerContext::SortMeshData(size_t iWork)
 			const float fBBArea = CalculateProjectedBoundingBoxArea(vBoundingBoxList[bb], matVP);
 			const MeshID meshID = MeshBB_MeshID[bb];
 			const MaterialID matID = MeshBB_MatID[bb];
-			const Material& mat = MaterialLookupCopy.at(MeshBB_MatID[bb]);
+			const Material& mat = *MaterialPool.Get(matID);
 			const Mesh& mesh = MeshLookupCopy.at(meshID);
 
 			sortData[ii].iBB = bb;
@@ -738,7 +738,7 @@ void FFrustumCullWorkerContext::GatherVisibleMeshData(size_t iWork)
 	SCOPED_CPU_MARKER("GatherRenderData");
 
 	const MeshLookup_t& MeshLookupCopy = mMeshes;
-	const MaterialLookup_t& MaterialLookupCopy = mMaterials;
+	const MemoryPool<Material>& MaterialPool = mMaterials;
 	const std::vector<MeshID>& MeshBB_MeshID = BBH.GetMeshesIDs();
 	const std::vector<MaterialID>& MeshBB_MatID = BBH.GetMeshMaterialIDs();
 	const std::vector<size_t>& MeshBB_GameObjHandles = BBH.GetMeshGameObjectHandles();
@@ -781,7 +781,7 @@ void FFrustumCullWorkerContext::GatherVisibleMeshData(size_t iWork)
 		for (size_t i = 0; i < NumVisibleItems; ++i)
 		{
 			const FVisibleMeshSortData& d = sortData[i];
-			const Material& mat = MaterialLookupCopy.at(d.matID);
+			const Material& mat = *MaterialPool.Get(d.matID);
 			vVisibleMeshListSoA.Material[i] = mat; // copy the material
 		}
 	}
