@@ -54,7 +54,7 @@ bool IsFrustumIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes0, const 
 // - each thread given a range of the vectors to process
 struct FThreadWorkerContext
 {
-	virtual void Process(size_t iRangeBegin, size_t iRangeEnd) = 0;
+	virtual void Process(size_t iRangeBegin, size_t iRangeEnd, ThreadPool* pWorkerThreadPool) = 0;
 };
 
 struct FFrustumCullWorkerContext : public FThreadWorkerContext
@@ -117,6 +117,8 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 
 	void AllocInputMemoryIfNecessary(size_t sz);
 //private:
-	void Process(size_t iRangeBegin, size_t iRangeEnd) override;
+	void Process(size_t iRangeBegin, size_t iRangeEnd, ThreadPool* pWorkerThreadPool) override;
+	void SortMeshData(size_t iFrustum);
+	void GatherVisibleMeshData(size_t iFrustum);
 
 };

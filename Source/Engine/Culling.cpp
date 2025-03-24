@@ -246,7 +246,7 @@ void FFrustumCullWorkerContext::ProcessWorkItems_SingleThreaded()
 	vVisibleBBIndicesPerView.resize(szFP);
 
 	// process all items on this thread
-	this->Process(0, szFP - 1);
+	this->Process(0, szFP - 1, nullptr);
 }
 
 static void DispatchWorkers(ThreadPool& WorkerThreadPool, size_t NumWorkItems, void (*pfnProcess)(size_t iBegin, size_t iEnd))
@@ -308,10 +308,10 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 			const size_t& iBegin = Range.first;
 			const size_t& iEnd = Range.second; // inclusive
 			assert(iBegin <= iEnd); // ensure work context bounds
-			WorkerThreadPool.AddTask([=]()
+			WorkerThreadPool.AddTask([=, &WorkerThreadPool]()
 			{
 				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
-				this->Process(iBegin, iEnd);
+				this->Process(iBegin, iEnd, &WorkerThreadPool);
 			});
 			++currRange;
 		}
@@ -329,7 +329,7 @@ const std::vector<std::pair<size_t, size_t>> FFrustumCullWorkerContext::GetWorkR
 }
 
 
-void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
+void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd, ThreadPool* pWorkerThreadPool)
 {
 	const std::string marker = "ProcessFrustums[" + std::to_string(iRangeBegin) + "-" + std::to_string(iRangeEnd) + "]";
 	SCOPED_CPU_MARKER_C(marker.c_str(), 0xFF0000AA);
@@ -383,97 +383,28 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 			(*pFrustumRenderLists)[iWork].DataCountReadySignal.Notify(NumVisibleItems);
 		}
 	}
-	for (size_t iWork = iRangeBegin; iWork <= iRangeEnd; ++iWork)
+
+	if(pWorkerThreadPool)
 	{
-		const size_t NumVisibleItems = vVisibleBBIndicesPerView[iWork].size();
-		FVisibleMeshDataSoA& vVisibleMeshListSoA = (*pFrustumRenderLists)[iWork].Data;
-		std::vector<FVisibleMeshSortData>& sortData = vSortData[iWork];
+		for (size_t iWork = iRangeBegin; iWork <= iRangeEnd; ++iWork)
 		{
-			SCOPED_CPU_MARKER("SetSortData");
-			int ii = 0;
-			XMMATRIX matVP = vMatViewProj[iWork];
-			for (size_t bb : vVisibleBBIndicesPerView[iWork])
+			pWorkerThreadPool->AddTask([iWork, this]() 
 			{
-				const float fBBArea = CalculateProjectedBoundingBoxArea(vBoundingBoxList[bb], matVP);
-				const MeshID meshID = MeshBB_MeshID[bb];
-				const MaterialID matID = MeshBB_MatID[bb];
-				const Material& mat = MaterialLookupCopy.at(MeshBB_MatID[bb]);
-				const Mesh& mesh = MeshLookupCopy.at(meshID);
-
-				sortData[ii].iBB = bb;
-				sortData[ii].fBBArea = fBBArea;
-				sortData[ii].matID = matID;
-				sortData[ii].meshID = meshID;
-				sortData[ii].bTess = mat.IsTessellationEnabled() ? 1 : 0;
-				sortData[ii].iLOD = vForceLOD0[iWork] ? 0 : InstanceBatching::GetLODFromProjectedScreenArea(fBBArea, mesh.GetNumLODs());
-
-				assert(sortData[ii].iLOD < 256);
-				++ii;
-			}
-		}
-		{
-			SCOPED_CPU_MARKER("Sort");
-			std::sort(std::execution::seq,
-				sortData.begin(),
-				sortData.begin() + NumVisibleItems,
-				vSortFunctions[iWork]
-			);
-		}
-		{
-			SCOPED_CPU_MARKER("GatherRenderData");
-			{
-				SCOPED_CPU_MARKER("SortKey");
-				for (size_t i = 0; i < NumVisibleItems; ++i)
-				{
-					const FVisibleMeshSortData& d = sortData[i];
-					vVisibleMeshListSoA.SceneSortKey[i] = FSceneDrawData::GetKey(d.matID, d.meshID, d.iLOD, d.bTess);
-					vVisibleMeshListSoA.ShadowSortKey[i] = FShadowView::GetKey(d.matID, d.meshID, d.iLOD, d.bTess);
-				}
-			}
-			for (size_t i = 0; i < NumVisibleItems; ++i)
-			{
-				const FVisibleMeshSortData& d = sortData[i];
-				const Mesh& mesh = MeshLookupCopy.at(d.meshID);
-				vVisibleMeshListSoA.PerDrawData[i] = FPerDrawData{
-					.hMaterial = d.matID,
-					.hMesh = d.meshID,
-					.VBIB = mesh.GetIABufferIDs(d.iLOD),
-					.NumIndices = mesh.GetNumIndices(d.iLOD),
-					.SelectedLOD = d.iLOD,
-				};
-			}
-			{
-				SCOPED_CPU_MARKER("Transform");
-				for (size_t i = 0; i < NumVisibleItems; ++i)
-				{
-					const FVisibleMeshSortData& d = sortData[i];
-					vVisibleMeshListSoA.Transform[i] = *MeshBB_Transforms[d.iBB]; // copy the transform
-				}
-			}
-			{
-				SCOPED_CPU_MARKER("MatCpy");
-				for (size_t i = 0; i < NumVisibleItems; ++i)
-				{
-					const FVisibleMeshSortData& d = sortData[i];
-					const Material& mat = MaterialLookupCopy.at(d.matID);
-					vVisibleMeshListSoA.Material[i] = mat; // copy the material
-				}
-			}
-			for (size_t i = 0; i < NumVisibleItems; ++i)
-			{
-				const FVisibleMeshSortData& d = sortData[i];
-				vVisibleMeshListSoA.PerInstanceData[i] = FPerInstanceData{
-					.hGameObject = MeshBB_GameObjHandles[d.iBB],
-					.fBBArea = d.fBBArea,
-				};
-			}
-			{
-				SCOPED_CPU_MARKER_C("SignalDataReady", 0xFF00FF00);
-				//Log::Info("Signal FrustumRenderList[%d] : %d", iWork, NumVisibleItems);
-				(*pFrustumRenderLists)[iWork].DataReadySignal.Notify();
-			}
+				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+				SortMeshData(iWork);
+				GatherVisibleMeshData(iWork);
+			});
 		}
 	}
+	else
+	{
+		for (size_t iWork = iRangeBegin; iWork <= iRangeEnd; ++iWork)
+		{
+			SortMeshData(iWork);
+			GatherVisibleMeshData(iWork);
+		}
+	}
+
 #elif 1
 	for (size_t iWork = iRangeBegin; iWork <= iRangeEnd; ++iWork)
 	{
@@ -755,6 +686,118 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 		}
 	}
 #endif
+}
+
+void FFrustumCullWorkerContext::SortMeshData(size_t iWork)
+{
+	SCOPED_CPU_MARKER("SortMeshData");
+	const MeshLookup_t& MeshLookupCopy = mMeshes;
+	const MaterialLookup_t& MaterialLookupCopy = mMaterials;
+	const std::vector<MeshID>& MeshBB_MeshID = BBH.GetMeshesIDs();
+	const std::vector<MaterialID>& MeshBB_MatID = BBH.GetMeshMaterialIDs();
+	const std::vector<size_t>& MeshBB_GameObjHandles = BBH.GetMeshGameObjectHandles();
+	const std::vector<const Transform*>& MeshBB_Transforms = BBH.GetMeshTransforms();
+
+	const size_t NumVisibleItems = vVisibleBBIndicesPerView[iWork].size();
+	std::vector<FVisibleMeshSortData>& sortData = vSortData[iWork];
+	{
+		SCOPED_CPU_MARKER("Set");
+		int ii = 0;
+		XMMATRIX matVP = vMatViewProj[iWork];
+		for (size_t bb : vVisibleBBIndicesPerView[iWork])
+		{
+			const float fBBArea = CalculateProjectedBoundingBoxArea(vBoundingBoxList[bb], matVP);
+			const MeshID meshID = MeshBB_MeshID[bb];
+			const MaterialID matID = MeshBB_MatID[bb];
+			const Material& mat = MaterialLookupCopy.at(MeshBB_MatID[bb]);
+			const Mesh& mesh = MeshLookupCopy.at(meshID);
+
+			sortData[ii].iBB = bb;
+			sortData[ii].fBBArea = fBBArea;
+			sortData[ii].matID = matID;
+			sortData[ii].meshID = meshID;
+			sortData[ii].bTess = mat.IsTessellationEnabled() ? 1 : 0;
+			sortData[ii].iLOD = vForceLOD0[iWork] ? 0 : InstanceBatching::GetLODFromProjectedScreenArea(fBBArea, mesh.GetNumLODs());
+
+			assert(sortData[ii].iLOD < 256);
+			++ii;
+		}
+	}
+	{
+		SCOPED_CPU_MARKER("Sort");
+		std::sort(std::execution::seq,
+			sortData.begin(),
+			sortData.begin() + NumVisibleItems,
+			vSortFunctions[iWork]
+		);
+	}
+}
+
+void FFrustumCullWorkerContext::GatherVisibleMeshData(size_t iWork)
+{
+	SCOPED_CPU_MARKER("GatherRenderData");
+
+	const MeshLookup_t& MeshLookupCopy = mMeshes;
+	const MaterialLookup_t& MaterialLookupCopy = mMaterials;
+	const std::vector<MeshID>& MeshBB_MeshID = BBH.GetMeshesIDs();
+	const std::vector<MaterialID>& MeshBB_MatID = BBH.GetMeshMaterialIDs();
+	const std::vector<size_t>& MeshBB_GameObjHandles = BBH.GetMeshGameObjectHandles();
+	const std::vector<const Transform*>& MeshBB_Transforms = BBH.GetMeshTransforms();
+
+	const std::vector<FVisibleMeshSortData>& sortData = vSortData[iWork];
+	const size_t NumVisibleItems = vVisibleBBIndicesPerView[iWork].size();
+	FVisibleMeshDataSoA& vVisibleMeshListSoA = (*pFrustumRenderLists)[iWork].Data;
+	{
+		SCOPED_CPU_MARKER("SortKey");
+		for (size_t i = 0; i < NumVisibleItems; ++i)
+		{
+			const FVisibleMeshSortData& d = sortData[i];
+			vVisibleMeshListSoA.SceneSortKey[i] = FSceneDrawData::GetKey(d.matID, d.meshID, d.iLOD, d.bTess);
+			vVisibleMeshListSoA.ShadowSortKey[i] = FShadowView::GetKey(d.matID, d.meshID, d.iLOD, d.bTess);
+		}
+	}
+	for (size_t i = 0; i < NumVisibleItems; ++i)
+	{
+		const FVisibleMeshSortData& d = sortData[i];
+		const Mesh& mesh = MeshLookupCopy.at(d.meshID);
+		vVisibleMeshListSoA.PerDrawData[i] = FPerDrawData{
+			.hMaterial = d.matID,
+			.hMesh = d.meshID,
+			.VBIB = mesh.GetIABufferIDs(d.iLOD),
+			.NumIndices = mesh.GetNumIndices(d.iLOD),
+			.SelectedLOD = d.iLOD,
+		};
+	}
+	{
+		SCOPED_CPU_MARKER("Transform");
+		for (size_t i = 0; i < NumVisibleItems; ++i)
+		{
+			const FVisibleMeshSortData& d = sortData[i];
+			vVisibleMeshListSoA.Transform[i] = *MeshBB_Transforms[d.iBB]; // copy the transform
+		}
+	}
+	{
+		SCOPED_CPU_MARKER("MatCpy");
+		for (size_t i = 0; i < NumVisibleItems; ++i)
+		{
+			const FVisibleMeshSortData& d = sortData[i];
+			const Material& mat = MaterialLookupCopy.at(d.matID);
+			vVisibleMeshListSoA.Material[i] = mat; // copy the material
+		}
+	}
+	for (size_t i = 0; i < NumVisibleItems; ++i)
+	{
+		const FVisibleMeshSortData& d = sortData[i];
+		vVisibleMeshListSoA.PerInstanceData[i] = FPerInstanceData{
+			.hGameObject = MeshBB_GameObjHandles[d.iBB],
+			.fBBArea = d.fBBArea,
+		};
+	}
+	{
+		SCOPED_CPU_MARKER_C("SignalDataReady", 0xFF00FF00);
+		//Log::Info("Signal FrustumRenderList[%d] : %d", iWork, NumVisibleItems);
+		(*pFrustumRenderLists)[iWork].DataReadySignal.Notify();
+	}
 }
 
 
