@@ -111,6 +111,7 @@ struct FVisibleMeshDataSoA
 	}
 	inline void Clear()
 	{
+		NumValidElements = 0;
 		SceneSortKey.clear();
 		ShadowSortKey.clear();
 		PerDrawData.clear();
@@ -118,6 +119,7 @@ struct FVisibleMeshDataSoA
 		Transform.clear();
 		Material.clear();
 	}
+	inline void ResetValidElements() { NumValidElements = 0; }
 	size_t Size() const { return NumValidElements; }
 };
 
@@ -141,7 +143,7 @@ struct FFrustumRenderList
 
 	inline void ResetSignalsAndData()
 	{
-		Data.Clear();
+		Data.ResetValidElements();
 		DataReadySignal.Reset();
 		DataCountReadySignal.Reset();
 	}
