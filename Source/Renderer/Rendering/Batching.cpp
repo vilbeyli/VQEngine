@@ -126,7 +126,7 @@ static void BatchShadowViewDrawCalls(
 	std::vector<PerObjectShadowData*> pPerObj(NumInstancedDrawCalls);
 	for (size_t i = 0; i < NumInstancedDrawCalls; ++i)
 	{
-		CBHeap.AllocConstantBuffer(sizeof(PerObjectShadowData), (void**)(&pPerObj[i]), &cbAddr[i]);
+		CBHeap.AllocConstantBuffer_MT(sizeof(PerObjectShadowData), (void**)(&pPerObj[i]), &cbAddr[i]);
 	}
 	{
 		SCOPED_CPU_MARKER("ResizeDrawParams");
@@ -216,7 +216,7 @@ static void BatchShadowViewDrawCalls(
 					draw.PackTessellationConfig(iTess, (ETessellationDomain)iDomain, (ETessellationPartitioning)iPart, (ETessellationOutputTopology)iOutTopo, iTessCull);
 
 					TessellationParams* pTessParams = nullptr;
-					CBHeap.AllocConstantBuffer(sizeof(TessellationParams), (void**)(&pTessParams), &draw.cbAddr_Tessellation);
+					CBHeap.AllocConstantBuffer_MT(sizeof(TessellationParams), (void**)(&pTessParams), &draw.cbAddr_Tessellation);
 					*pTessParams = mat.GetTessellationCBufferData();
 				}
 				else
@@ -497,17 +497,23 @@ static void DispatchWorkers_ShadowViews(FWindowRenderContext& ctx,
 	if (bUseWorkerThreadsForShadowViews)
 	{
 		constexpr size_t NUM_NON_SHADOW_FRUSTUMS = 1; // TODO: dont assume a single main/scene view
+		const size_t iFrustumBegin = NUM_NON_SHADOW_FRUSTUMS + NumShadowFrustumsThisThread;
+		const size_t iFrustumEnd = iFrustumBegin + NumShadowMeshFrustums;
+		
 		for (size_t iFrustum = NUM_NON_SHADOW_FRUSTUMS + NumShadowFrustumsThisThread; iFrustum <= NumShadowMeshFrustums; ++iFrustum)
 		{
 			SCOPED_CPU_MARKER("Dispatch");
 			const FFrustumRenderList* pFrustumRenderList = &mFrustumRenderLists[iFrustum];
 			assert(pFrustumRenderList);
 			if (pFrustumRenderList->Data.Size() == 0)
+			{
+				//Log::Info("Empty pFrustumRenderList %d", iFrustum);
 				continue;
+			}
 
 			const size_t iContext = iFrustum - NUM_NON_SHADOW_FRUSTUMS;
 			FFrustumRenderCommandRecorderContext wctx = WorkerContexts[iContext]; // copy so we dont have to worry about freed memory since contexts are within the scope of this function
-			RenderWorkerThreadPool.AddTask([&, wctx]() // dispatch workers
+			RenderWorkerThreadPool.AddTask([&, wctx, iFrustum]() // dispatch workers
 			{
 				RENDER_WORKER_CPU_MARKER;
 				assert(wctx.pFrustumRenderList);
@@ -528,13 +534,14 @@ static void DispatchWorkers_ShadowViews(FWindowRenderContext& ctx,
 				case FFrustumRenderList::EFrustumType::PointShadow      : pDrawParams = &DrawData.pointShadowDrawParams[pFrustumRenderList->TypeIndex]; break;
 				}
 				assert(pDrawParams);
+
 				// -------------------------------------------------- SYNC ---------------------------------------------------
 				pFrustumRenderList->DataReadySignal.Wait(); 
 				// -------------------------------------------------- SYNC ---------------------------------------------------
 				//const std::vector<FDrawCallInputDataRange> drawCallRanges = CalcInstancedDrawCommandDataRangesSoA<&FVisibleMeshDataSoA::ShadowSortKey>(
 				//	wctx.pFrustumRenderList->Data, MAX_INSTANCE_COUNT__SHADOW_MESHES);
 				//const size_t NumInstancedDrawCalls = drawCallRanges.size();
-				//Log::Info("Frustum[%d] : %d", pFrustumRenderList->TypeIndex, NumInstancedDrawCalls);
+				//Log::Info("Frustum[%d] : %d", iFrustum, NumInstancedDrawCalls);
 
 				BatchShadowViewDrawCalls(
 					*pDrawParams,

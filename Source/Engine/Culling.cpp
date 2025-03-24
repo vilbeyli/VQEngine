@@ -353,7 +353,6 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 	{
 		{
 			SCOPED_CPU_MARKER("Clear");
-			(*pFrustumRenderLists)[iWork].ResetSignalsAndData();
 			vVisibleBBIndicesPerView[iWork].clear();
 		}
 	}
@@ -371,6 +370,14 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 			}
 		}
 		const size_t NumVisibleItems = vVisibleBBIndicesPerView[iWork].size();
+		FVisibleMeshDataSoA& vVisibleMeshListSoA = (*pFrustumRenderLists)[iWork].Data;
+		std::vector<FVisibleMeshSortData>& sortData = vSortData[iWork];
+		{
+			SCOPED_CPU_MARKER("AllocRenderData");
+			if (NumVisibleItems > sortData.size())
+				sortData.resize(NumVisibleItems);
+			vVisibleMeshListSoA.Reserve(NumVisibleItems);
+		}
 		{
 			SCOPED_CPU_MARKER("SignalCount");
 			(*pFrustumRenderLists)[iWork].DataCountReadySignal.Notify(NumVisibleItems);
@@ -381,12 +388,6 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 		const size_t NumVisibleItems = vVisibleBBIndicesPerView[iWork].size();
 		FVisibleMeshDataSoA& vVisibleMeshListSoA = (*pFrustumRenderLists)[iWork].Data;
 		std::vector<FVisibleMeshSortData>& sortData = vSortData[iWork];
-		{
-			SCOPED_CPU_MARKER("AllocRenderData");
-			if (NumVisibleItems > sortData.size())
-				sortData.resize(NumVisibleItems);
-			vVisibleMeshListSoA.Reserve(NumVisibleItems);
-		}
 		{
 			SCOPED_CPU_MARKER("SetSortData");
 			int ii = 0;
@@ -467,7 +468,8 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
 				};
 			}
 			{
-				SCOPED_CPU_MARKER("SignalDataReady");
+				SCOPED_CPU_MARKER_C("SignalDataReady", 0xFF00FF00);
+				//Log::Info("Signal FrustumRenderList[%d] : %d", iWork, NumVisibleItems);
 				(*pFrustumRenderLists)[iWork].DataReadySignal.Notify();
 			}
 		}
