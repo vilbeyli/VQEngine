@@ -61,6 +61,9 @@ public:
 	void Free(const std::vector<size_t>&  Handle);
 
 	TObject* Get(size_t Handle) const;
+	inline size_t GetAliveObjectCount() const { return mNumUsedBlocks; };
+	std::vector<const TObject*> GetAllAliveObjects() const;
+	std::vector<size_t> GetAllAliveObjectHandles() const;
 
 #if MEMORY_POOL__ENABLE_DEBUG_LOG
 	void PrintDebugInfo() const;
@@ -255,6 +258,31 @@ inline TObject* MemoryPool<TObject>::Get(size_t Handle) const
 	return reinterpret_cast<TObject*>(
 		reinterpret_cast<char*>(mpAlloc) + Handle * mAlignedObjSize
 	);
+}
+
+template<class TObject>
+inline std::vector<const TObject*> MemoryPool<TObject>::GetAllAliveObjects() const
+{
+	std::vector<const TObject*> Objects(this->mNumUsedBlocks, nullptr);
+	for (size_t i = 0; i < mActiveHandles.size(); ++i)
+	{
+		if (mActiveHandles[i])
+			Objects[i] = Get(i);
+	}
+	return Objects;
+}
+
+template<class TObject>
+inline std::vector<size_t> MemoryPool<TObject>::GetAllAliveObjectHandles() const
+{
+	std::vector<size_t> Handles(this->mNumUsedBlocks, -1);
+	size_t iHandle = 0;
+	for (size_t i = 0; i < mActiveHandles.size(); ++i)
+	{
+		if (mActiveHandles[i])
+			Handles[iHandle++] = i;
+	}
+	return Handles;
 }
 
 #if MEMORY_POOL__ENABLE_DEBUG_LOG

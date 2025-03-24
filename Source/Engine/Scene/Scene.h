@@ -96,6 +96,7 @@ struct FSceneStats
 	uint NumCameras;
 };
 
+constexpr size_t NUM_MATERIAL_POOL_SIZE = 1024 * 64;
 constexpr size_t NUM_GAMEOBJECT_POOL_SIZE = 1024 * 64;
 constexpr size_t GAMEOBJECT_BYTE_ALIGNMENT = 64; // assumed typical cache-line size
 
@@ -253,7 +254,7 @@ protected:
 	//
 	std::unordered_map<MeshID, Mesh>         mMeshes;
 	std::unordered_map<ModelID, Model>       mModels;
-	std::unordered_map<MaterialID, Material> mMaterials;
+	//std::unordered_map<MaterialID, Material> mMaterials;
 	std::vector<size_t>                      mGameObjectHandles;
 	std::vector<size_t>                      mTransformHandles;
 	std::vector<Camera>                      mCameras;
@@ -314,6 +315,7 @@ protected:
 private:
 	MemoryPool<GameObject> mGameObjectPool;
 	MemoryPool<Transform>  mGameObjectTransformPool;
+	MemoryPool<Material>   mMaterialPool;
 
 	std::mutex mMtx_GameObjects;
 	std::mutex mMtx_GameObjectTransforms;

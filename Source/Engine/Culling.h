@@ -18,6 +18,7 @@
 #pragma once
 
 #include "Core/Types.h"
+#include "Core/Memory.h"
 #include "Scene/Mesh.h"
 #include "Scene/Material.h"
 #include "Scene/SceneViews.h"
@@ -83,14 +84,14 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	size_t NumValidInputElements = 0;
 	const SceneBoundingBoxHierarchy& BBH;
 	const MeshLookup_t& mMeshes;
-	const MaterialLookup_t& mMaterials;
+	const MemoryPool<Material>& mMaterials;
 
 	// ====================================================================================
 	FFrustumCullWorkerContext() = delete;
 	FFrustumCullWorkerContext(
 		const SceneBoundingBoxHierarchy& BBH, 
 		const MeshLookup_t& mMeshes, 
-		const MaterialLookup_t& mMaterials
+		const MemoryPool<Material>& mMaterials
 	) 
 		: BBH(BBH)
 		, mMeshes(mMeshes)

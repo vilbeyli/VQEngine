@@ -107,13 +107,11 @@ MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 		return iMat;
 	}
 
-	static MaterialID LAST_USED_MATERIAL_ID = 1;
 	MaterialID id = INVALID_ID;
 	// critical section
 	{
 		std::unique_lock<std::mutex> lk(mMtx_Materials);
-		id = LAST_USED_MATERIAL_ID++;
-		mMaterials[id] = Material();
+		id = (MaterialID)mMaterialPool.Allocate();
 		mLoadedMaterials.emplace(id);
 		mMaterialNames[id] = UniqueMaterialName;
 		if (UniqueMaterialName == "")
@@ -127,7 +125,8 @@ MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 	Log::Info("Scene::CreateMaterial() ID=%d - %s", id, UniqueMaterialName.c_str());
 #endif
 
-	Material& mat = mMaterials.at(id);
+	Material& mat = *mMaterialPool.Get(id);
+	mat = Material();
 	if (mat.SRVMaterialMaps == INVALID_ID)
 	{
 		mat.SRVMaterialMaps = mRenderer.AllocateSRV(NUM_MATERIAL_TEXTURE_MAP_BINDINGS-1);
@@ -202,33 +201,34 @@ std::vector<Light*> Scene::GetLights()
 
 std::vector<MaterialID> Scene::GetMaterialIDs() const
 {
-	std::vector<MaterialID> ids(mMaterials.size());
+	std::vector<size_t> vHandles = mMaterialPool.GetAllAliveObjectHandles();
+	std::vector<MaterialID> vIDs(vHandles.size());
 	size_t i = 0;
-	for (const auto& kvp : mMaterials)
-	{
-		ids[i++] = kvp.first;
-	}
-	return ids;
+	for (size_t h : vHandles)
+		vIDs[i++] = static_cast<MaterialID>(h);
+	return vIDs;
 }
 
 const Material& Scene::GetMaterial(MaterialID ID) const
 {
-	if (mMaterials.find(ID) == mMaterials.end())
+	const Material* pMaterial = mMaterialPool.Get(ID);
+	if (pMaterial == nullptr)
 	{
 		Log::Error("Material not created. Did you call Scene::CreateMaterial()? (matID=%d)", ID);
-		return mMaterials.at(mDefaultMaterialID);
+		return *mMaterialPool.Get(0); // TODO: mDefaultMaterialID
 	}
-	return mMaterials.at(ID);
+	return *pMaterial;
 }
 
 Material& Scene::GetMaterial(MaterialID ID)
 {
-	if (mMaterials.find(ID) == mMaterials.end())
+	Material* pMaterial = mMaterialPool.Get(ID);
+	if (pMaterial == nullptr)
 	{
 		Log::Error("Material not created. Did you call Scene::CreateMaterial()? (matID=%d)", ID);
-		return mMaterials.at(mDefaultMaterialID);
+		return *mMaterialPool.Get(0); // TODO: mDefaultMaterialID
 	}
-	return mMaterials.at(ID);
+	return *pMaterial;
 }
 
 const Mesh& Scene::GetMesh(MeshID ID) const
@@ -320,7 +320,7 @@ FSceneStats Scene::GetSceneRenderStats(int FRAME_DATA_INDEX) const
 	
 	stats.NumMeshes    = static_cast<uint>(this->mMeshes.size());
 	stats.NumModels    = static_cast<uint>(this->mModels.size());
-	stats.NumMaterials = static_cast<uint>(this->mMaterials.size());
+	stats.NumMaterials = static_cast<uint>(this->mMaterialPool.GetAliveObjectCount());
 	stats.NumObjects   = static_cast<uint>(this->mGameObjectHandles.size());
 	stats.NumCameras   = static_cast<uint>(this->mCameras.size());
 
@@ -412,16 +412,17 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 	, mFrameSceneViews(1)
 	, mFrameShadowViews(1)
 #endif
-	, mFrustumCullWorkerContext(mBoundingBoxHierarchy, mMeshes, mMaterials)
+	, mFrustumCullWorkerContext(mBoundingBoxHierarchy, mMeshes, mMaterialPool)
 	, mIndex_SelectedCamera(0)
 	, mIndex_ActiveEnvironmentMapPreset(-1)
 	, mGameObjectPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
 	, mGameObjectTransformPool(NUM_GAMEOBJECT_POOL_SIZE, GAMEOBJECT_BYTE_ALIGNMENT)
+	, mMaterialPool(NUM_MATERIAL_POOL_SIZE, alignof(Material))
 	, mResourceNames(engine.GetResourceNames())
 	, mAssetLoader(engine.GetAssetLoader())
 	, mRenderer(renderer)
 	, mMaterialAssignments(engine.GetAssetLoader().GetThreadPool_TextureLoad())
-	, mBoundingBoxHierarchy(mMeshes, mModels, mMaterials, mTransformHandles)
+	, mBoundingBoxHierarchy(mMeshes, mModels, mMaterialPool, mTransformHandles)
 	, mInvalidMaterialName("INVALID MATERIAL")
 	, mInvalidTexturePath("INVALID PATH")
 {}
@@ -1015,26 +1016,24 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 	mFrustumCullWorkerContext.AllocInputMemoryIfNecessary(NumFrustums);
 	assert(SceneView.FrustumRenderLists.size() >= NumFrustums);
 
+	std::vector<FFrustumRenderList>& FrustumRenderLists = (*mFrustumCullWorkerContext.pFrustumRenderLists);
 	size_t iFrustum = 0;
 	{
 		SCOPED_CPU_MARKER("CollectFrustumPlanesets");
 		FrustumViewProjMatrix[iFrustum] = SceneView.viewProj;
 		FrustumPlanesets[iFrustum] = FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj);
-		(*mFrustumCullWorkerContext.pFrustumRenderLists)[iFrustum].ViewRef = FViewRef{ .pViewData = &SceneView, .eViewType = FViewRef::Scene };
-		(*mFrustumCullWorkerContext.pFrustumRenderLists)[iFrustum].ResetSignalsAndData();
+		FrustumRenderLists[iFrustum].ViewRef = FViewRef{ .pViewData = &SceneView, .eViewType = FViewRef::Scene };
+		FrustumRenderLists[iFrustum].ResetSignalsAndData();
 
 		++iFrustum; // main view frustum done -- move to shadow views
 
 		// directional
 		if (bCullDirectionalLightView)
 		{
-			std::vector<FFrustumRenderList>& FrustumRenderLists = (*mFrustumCullWorkerContext.pFrustumRenderLists);
-
-			FFrustumRenderList& FrustumRenderList = FrustumRenderLists[iFrustum];
-			FrustumRenderList.ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowView_Directional, .eViewType = FViewRef::Shadow };
-			FrustumRenderList.Type = FFrustumRenderList::EFrustumType::DirectionalShadow;
-			FrustumRenderList.TypeIndex = 0;
-			FrustumRenderList.ResetSignalsAndData();
+			FrustumRenderLists[iFrustum].ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowView_Directional, .eViewType = FViewRef::Shadow };
+			FrustumRenderLists[iFrustum].Type = FFrustumRenderList::EFrustumType::DirectionalShadow;
+			FrustumRenderLists[iFrustum].TypeIndex = 0;
+			FrustumRenderLists[iFrustum].ResetSignalsAndData();
 
 			FrustumViewProjMatrix[iFrustum] = SceneShadowView.ShadowView_Directional.matViewProj;
 			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowView_Directional.matViewProj);
@@ -1045,13 +1044,11 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 		for (size_t face = 0; face < 6; ++face)
 		{
 			const size_t iPointFace = iPoint * 6 + face;
-			std::vector<FFrustumRenderList>& FrustumRenderLists = (*mFrustumCullWorkerContext.pFrustumRenderLists);
-			
-			FFrustumRenderList& FrustumRenderList = FrustumRenderLists[iFrustum];
-			FrustumRenderList.ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowViews_Point[iPointFace], .eViewType = FViewRef::Shadow };
-			FrustumRenderList.Type = FFrustumRenderList::EFrustumType::PointShadow;
-			FrustumRenderList.TypeIndex = iPointFace;
-			FrustumRenderList.ResetSignalsAndData();
+
+			FrustumRenderLists[iFrustum].ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowViews_Point[iPointFace], .eViewType = FViewRef::Shadow };
+			FrustumRenderLists[iFrustum].Type = FFrustumRenderList::EFrustumType::PointShadow;
+			FrustumRenderLists[iFrustum].TypeIndex = iPointFace;
+			FrustumRenderLists[iFrustum].ResetSignalsAndData();
 
 			FrustumViewProjMatrix[iFrustum] = SceneShadowView.ShadowViews_Point[iPointFace].matViewProj;
 			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowViews_Point[iPointFace].matViewProj);
@@ -1060,13 +1057,10 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 		// spot
 		for (size_t iSpot = 0; iSpot < SceneShadowView.NumSpotShadowViews; ++iSpot)
 		{
-			std::vector<FFrustumRenderList>& FrustumRenderLists = (*mFrustumCullWorkerContext.pFrustumRenderLists);
-			
-			FFrustumRenderList& FrustumRenderList = FrustumRenderLists[iFrustum];
-			FrustumRenderList.ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowViews_Spot[iSpot], .eViewType = FViewRef::Shadow };
-			FrustumRenderList.Type = FFrustumRenderList::EFrustumType::SpotShadow;
-			FrustumRenderList.TypeIndex = iSpot;
-			FrustumRenderList.ResetSignalsAndData();
+			FrustumRenderLists[iFrustum].ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowViews_Spot[iSpot], .eViewType = FViewRef::Shadow };
+			FrustumRenderLists[iFrustum].Type = FFrustumRenderList::EFrustumType::SpotShadow;
+			FrustumRenderLists[iFrustum].TypeIndex = iSpot;
+			FrustumRenderLists[iFrustum].ResetSignalsAndData();
 
 			FrustumViewProjMatrix[iFrustum] = SceneShadowView.ShadowViews_Spot[iSpot].matViewProj;
 			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowViews_Spot[iSpot].matViewProj);

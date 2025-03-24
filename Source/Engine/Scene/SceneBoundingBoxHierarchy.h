@@ -22,6 +22,7 @@
 #include "Material.h"
 #include "Transform.h"
 #include "GameObject.h"
+#include "../Core/Memory.h"
 
 // For the time being, this is simply a flat list of bounding boxes -- there is not much of a hierarchy to speak of.
 class SceneBoundingBoxHierarchy
@@ -30,7 +31,7 @@ public:
 	SceneBoundingBoxHierarchy(
 		  const std::unordered_map<MeshID, Mesh>& Meshes
 		, const std::unordered_map<ModelID, Model>& Models
-		, const std::unordered_map<MaterialID, Material>& Materials
+		, const MemoryPool<Material>& Materials
 		, const std::vector<size_t>& TransformHandles
 	)
 		: mMeshes(Meshes)
@@ -90,6 +91,6 @@ private:
 	// scene data container references
 	const std::unordered_map<MeshID, Mesh>& mMeshes;
 	const std::unordered_map<ModelID, Model>& mModels;
-	const std::unordered_map<MaterialID, Material>& mMaterials;
+	const MemoryPool<Material>& mMaterials;
 	const std::vector<size_t>& mTransformHandles;
 };
