@@ -181,7 +181,7 @@ static void BatchShadowViewDrawCalls(
 			}
 		}
 		{
-			SCOPED_CPU_MARKER("Material");
+			SCOPED_CPU_MARKER("MaterialID");
 			size_t iDraw = 0;
 			for (const FDrawCallInputDataRange& r : drawCallRanges)
 			{
@@ -190,7 +190,8 @@ static void BatchShadowViewDrawCalls(
 
 				draw.IATopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
-				const Material& mat = ViewVisibleMeshes.Material[iMesh];
+				assert(ViewVisibleMeshes.pMaterialPool);
+				const Material& mat = *ViewVisibleMeshes.pMaterialPool->Get(ViewVisibleMeshes.MaterialID[iMesh]);
 				pPerObj[iDraw]->texScaleBias = float4(mat.tiling.x, mat.tiling.y, mat.uv_bias.x, mat.uv_bias.y);
 				pPerObj[iDraw]->displacement = mat.displacement;
 				draw.SRVMaterialMaps = mat.SRVMaterialMaps;
@@ -358,7 +359,7 @@ static void BatchMainViewDrawCalls(
 			}
 		}
 		{
-			SCOPED_CPU_MARKER("Material");
+			SCOPED_CPU_MARKER("MaterialID");
 			size_t iDraw = 0;
 			for (const FDrawCallInputDataRange& r : drawCallRanges)
 			{
@@ -366,8 +367,9 @@ static void BatchMainViewDrawCalls(
 				FInstancedDrawParameters& draw = drawParams[iDraw];
 
 				draw.IATopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-
-				const Material& mat = ViewVisibleMeshes.Material[iMesh];
+				
+				assert(ViewVisibleMeshes.pMaterialPool);
+				const Material& mat = *ViewVisibleMeshes.pMaterialPool->Get(ViewVisibleMeshes.MaterialID[iMesh]);
 				mat.GetCBufferData(pPerObj[iDraw]->materialData);
 				draw.SRVMaterialMaps = mat.SRVMaterialMaps;
 				draw.SRVHeightMap = mat.SRVHeightMap;

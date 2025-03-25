@@ -798,12 +798,11 @@ void FFrustumCullWorkerContext::GatherVisibleMeshData(size_t iWork)
 		}
 	}
 	{
-		SCOPED_CPU_MARKER("MatCpy");
+		SCOPED_CPU_MARKER("MatID");
 		for (size_t i = 0; i < NumVisibleItems; ++i)
 		{
 			const FVisibleMeshSortData& d = sortData[i];
-			const Material& mat = *MaterialPool.Get(d.matID);
-			vVisibleMeshListSoA.Material[i] = mat; // copy the material
+			vVisibleMeshListSoA.MaterialID[i] = d.matID;
 		}
 	}
 	for (size_t i = 0; i < NumVisibleItems; ++i)

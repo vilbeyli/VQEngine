@@ -24,7 +24,7 @@
 #include "Engine/PostProcess/PostProcess.h"
 #include "Libs/VQUtils/Source/Multithreading.h"
 #include "Renderer/Rendering/DrawData.h" // TODO: remove after shadow mesh drawing is migrated to renderer
-
+#include "Engine/Core/Memory.h"
 
 // typedefs
 using MeshLookup_t = std::unordered_map<MeshID, Mesh>;
@@ -89,12 +89,14 @@ struct alignas(16) FPerDrawData // that fits in a cache line.
 };
 struct FVisibleMeshDataSoA
 {
+	const MemoryPool<Material>* pMaterialPool = nullptr;
+
 	std::vector<uint64> SceneSortKey;
 	std::vector<uint64> ShadowSortKey;
 	std::vector<FPerDrawData> PerDrawData;
 	std::vector<Transform> Transform;
 	std::vector<FPerInstanceData> PerInstanceData;
-	std::vector<Material> Material;
+	std::vector<MaterialID> MaterialID;
 	size_t NumValidElements;
 	inline void Reserve(size_t sz)
 	{
@@ -105,7 +107,7 @@ struct FVisibleMeshDataSoA
 			PerDrawData.resize(sz);
 			Transform.resize(sz);
 			PerInstanceData.resize(sz);
-			Material.resize(sz);
+			MaterialID.resize(sz);
 		}
 		NumValidElements = sz;
 	}
@@ -117,7 +119,7 @@ struct FVisibleMeshDataSoA
 		PerDrawData.clear();
 		PerInstanceData.clear();
 		Transform.clear();
-		Material.clear();
+		MaterialID.clear();
 	}
 	inline void ResetValidElements() { NumValidElements = 0; }
 	size_t Size() const { return NumValidElements; }
