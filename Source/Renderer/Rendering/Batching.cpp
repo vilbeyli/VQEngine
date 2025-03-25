@@ -513,7 +513,7 @@ static void DispatchWorkers_ShadowViews(FWindowRenderContext& ctx,
 
 			const size_t iContext = iFrustum - NUM_NON_SHADOW_FRUSTUMS;
 			FFrustumRenderCommandRecorderContext wctx = WorkerContexts[iContext]; // copy so we dont have to worry about freed memory since contexts are within the scope of this function
-			RenderWorkerThreadPool.AddTask([&, wctx, iFrustum]() // dispatch workers
+			RenderWorkerThreadPool.AddTask([&, wctx, iFrustum, pRenderer]() // dispatch workers
 			{
 				RENDER_WORKER_CPU_MARKER;
 				assert(wctx.pFrustumRenderList);
@@ -551,6 +551,7 @@ static void DispatchWorkers_ShadowViews(FWindowRenderContext& ctx,
 					CBHeap,
 					pRenderer
 				);
+				wctx.pFrustumRenderList->BatchDoneSignal.Notify();
 			});
 		}
 	}
@@ -737,6 +738,7 @@ void VQRenderer::BatchDrawCalls(
 			CBHeap, 
 			this
 		);
+		MainViewFrustumRenderList.BatchDoneSignal.Notify();
 	});
 
 	DispatchWorkers_ShadowViews(
@@ -750,9 +752,4 @@ void VQRenderer::BatchDrawCalls(
 	BatchInstanceData_BoundingBox(DrawData, SceneView, RenderWorkerThreadPool, SceneView.viewProj);
 
 	RenderWorkerThreadPool.RunRemainingTasksOnThisThread();
-	{
-		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
-		while (RenderWorkerThreadPool.GetNumActiveTasks() != 0); // TODO: remove busy wait
-	}
-
 }

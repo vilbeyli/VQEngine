@@ -388,11 +388,10 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd, Th
 	{
 		for (size_t iWork = iRangeBegin; iWork <= iRangeEnd; ++iWork)
 		{
-			pWorkerThreadPool->AddTask([iWork, this]() 
+			pWorkerThreadPool->AddTask([iWork, this, pWorkerThreadPool]()
 			{
 				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
-				SortMeshData(iWork);
-				GatherVisibleMeshData(iWork);
+				SortMeshData(iWork, pWorkerThreadPool); // GatherVisibleMeshData() called from within SortMeshData()
 			});
 		}
 	}
@@ -400,7 +399,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd, Th
 	{
 		for (size_t iWork = iRangeBegin; iWork <= iRangeEnd; ++iWork)
 		{
-			SortMeshData(iWork);
+			SortMeshData(iWork, nullptr);
 			GatherVisibleMeshData(iWork);
 		}
 	}
@@ -688,7 +687,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd, Th
 #endif
 }
 
-void FFrustumCullWorkerContext::SortMeshData(size_t iWork)
+void FFrustumCullWorkerContext::SortMeshData(size_t iWork, ThreadPool* pWorkerThreadPool)
 {
 	SCOPED_CPU_MARKER_C("SortMeshData", 0xFFAA00AA);
 	const MeshLookup_t& MeshLookupCopy = mMeshes;
@@ -701,7 +700,7 @@ void FFrustumCullWorkerContext::SortMeshData(size_t iWork)
 	const size_t NumVisibleItems = vVisibleBBIndicesPerView[iWork].size();
 	std::vector<FVisibleMeshSortData>& sortData = vSortData[iWork];
 	{
-		SCOPED_CPU_MARKER("Set");
+		SCOPED_CPU_MARKER_C("Set", 0xFFAA00AA);
 		int ii = 0;
 		XMMATRIX matVP = vMatViewProj[iWork];
 		for (size_t bb : vVisibleBBIndicesPerView[iWork])
@@ -723,6 +722,28 @@ void FFrustumCullWorkerContext::SortMeshData(size_t iWork)
 			++ii;
 		}
 	}
+	if (pWorkerThreadPool)
+	{
+		pWorkerThreadPool->AddTask([iWork, this, pWorkerThreadPool, &sortData, NumVisibleItems]()
+		{
+			SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+			{
+				SCOPED_CPU_MARKER_C("Sort", 0xFFAA00AA);
+				std::sort(std::execution::seq,
+					sortData.begin(),
+					sortData.begin() + NumVisibleItems,
+					vSortFunctions[iWork]
+				);
+			}
+
+			pWorkerThreadPool->AddTask([iWork, this]() 
+			{
+				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+				GatherVisibleMeshData(iWork);
+			});
+		});
+	}
+	else
 	{
 		SCOPED_CPU_MARKER("Sort");
 		std::sort(std::execution::seq,

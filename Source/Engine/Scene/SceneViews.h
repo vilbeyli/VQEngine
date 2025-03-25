@@ -132,6 +132,7 @@ struct FViewRef
 
 struct FFrustumRenderList
 {
+	mutable TaskSignal<void> BatchDoneSignal;
 	mutable TaskSignal<void> DataReadySignal;
 	mutable TaskSignal<size_t> DataCountReadySignal;
 	FVisibleMeshDataSoA Data;
@@ -146,6 +147,7 @@ struct FFrustumRenderList
 		Data.ResetValidElements();
 		DataReadySignal.Reset();
 		DataCountReadySignal.Reset();
+		BatchDoneSignal.Reset();
 	}
 };
 

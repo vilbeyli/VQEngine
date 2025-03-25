@@ -119,7 +119,7 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	void AllocInputMemoryIfNecessary(size_t sz);
 //private:
 	void Process(size_t iRangeBegin, size_t iRangeEnd, ThreadPool* pWorkerThreadPool) override;
-	void SortMeshData(size_t iFrustum);
+	void SortMeshData(size_t iFrustum, ThreadPool* pWorkerThreadPool);
 	void GatherVisibleMeshData(size_t iFrustum);
 
 };

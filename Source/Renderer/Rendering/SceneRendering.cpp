@@ -127,6 +127,24 @@ HRESULT VQRenderer::PreRenderScene(
 	);
 #endif
 
+
+	{
+		SCOPED_CPU_MARKER("AllocCBMem");
+		ctx.AllocateConstantBufferMemory(NumCmdRecordingThreads, ConstantBufferBytesPerThread);
+	}
+	{
+		SCOPED_CPU_MARKER("CB.BeginFrame");
+		for (size_t iThread = 0; iThread < NumCmdRecordingThreads; ++iThread)
+		{
+			ctx.GetConstantBufferHeap(iThread).OnBeginFrame();
+		}
+	}
+
+	if (!SceneView.FrustumRenderLists.empty())
+	{
+		BatchDrawCalls(WorkerThreads, SceneView, SceneShadowView, ctx, PPParams, GFXSettings);
+	}
+
 	{
 		SCOPED_CPU_MARKER("AllocCmdLists");
 		ctx.AllocateCommandLists(CommandQueue::EType::GFX, NumCmdRecordingThreads_GFX);
@@ -155,22 +173,6 @@ HRESULT VQRenderer::PreRenderScene(
 				ctx.ResetCommandLists(CommandQueue::EType::COMPUTE, NumComputeCmdLists);
 			}
 		}
-	}
-	{
-		SCOPED_CPU_MARKER("AllocCBMem");
-		ctx.AllocateConstantBufferMemory(NumCmdRecordingThreads, ConstantBufferBytesPerThread);
-	}
-	{
-		SCOPED_CPU_MARKER("CB.BeginFrame");
-		for (size_t iThread = 0; iThread < NumCmdRecordingThreads; ++iThread)
-		{
-			ctx.GetConstantBufferHeap(iThread).OnBeginFrame();
-		}
-	}
-
-	if (!SceneView.FrustumRenderLists.empty())
-	{
-		BatchDrawCalls(WorkerThreads, SceneView, SceneShadowView, ctx, PPParams, GFXSettings);
 	}
 
 	ID3D12DescriptorHeap* ppHeaps[] = { this->GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
@@ -201,6 +203,12 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 {
 	SCOPED_CPU_MARKER("Renderer.RenderScene");
 	
+	{
+		SCOPED_CPU_MARKER_C("WaitBatching", 0xFFFF0000);
+		for (const FFrustumRenderList& FrustumRenderList : SceneView.FrustumRenderLists)
+			FrustumRenderList.BatchDoneSignal.Wait();
+	}
+
 	HWND hwnd = pWindow->GetHWND();
 	const uint32 W = pWindow->GetWidth();
 	const uint32 H = pWindow->GetHeight();
