@@ -199,21 +199,26 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
 	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ZPrePass));
+	pCmd->SetGraphicsRootConstantBufferView(4, pParams->cbPerView);
 
 	// draw meshes
 	int iCB = 0;
+	PSO_ID psoPrev = INVALID_ID;
+	BufferID vbPrev = INVALID_ID;
+	BufferID ibPrev = INVALID_ID;
+	D3D_PRIMITIVE_TOPOLOGY topoPrev = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
 	for (const FInstancedDrawParameters& meshRenderCmd : pParams->pSceneDrawData->mainViewDrawParams)
 	{
-		const VBV& vb = mRenderer.GetVertexBufferView(meshRenderCmd.VB);
-		const IBV& ib = mRenderer.GetIndexBufferView(meshRenderCmd.IB);
-
 		const size_t iAlpha = meshRenderCmd.PackedMaterialConfig & 0x1;
 		
 		// select PSO
 		size_t iTess = 0; size_t iDomain = 0; size_t iPart = 0; size_t iOutTopo = 0; size_t iTessCull = 0;
 		meshRenderCmd.UnpackTessellationConfig(iTess, iDomain, iPart, iOutTopo, iTessCull);
 		const PSO_ID psoID = this->GetPSO_ID(iTess, iDomain, iPart, iOutTopo, iTessCull, iAlpha);
-		pCmd->SetPipelineState(mRenderer.GetPSO(psoID));
+		if (psoPrev != psoID)
+		{
+			pCmd->SetPipelineState(mRenderer.GetPSO(psoID));
+		}
 
 		// set cbuffers
 		pCmd->SetGraphicsRootConstantBufferView(1, meshRenderCmd.cbAddr);
@@ -221,7 +226,6 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 		{
 			pCmd->SetGraphicsRootConstantBufferView(2, meshRenderCmd.cbAddr_Tessellation);
 		}
-		pCmd->SetGraphicsRootConstantBufferView(4, pParams->cbPerView);
 
 		// set textures
 		if (meshRenderCmd.SRVMaterialMaps != INVALID_ID)
@@ -235,12 +239,28 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 		}
 
 		// set IA-VB-IB
-		pCmd->IASetPrimitiveTopology(meshRenderCmd.IATopology);
-		pCmd->IASetVertexBuffers(0, 1, &vb);
-		pCmd->IASetIndexBuffer(&ib);
-		
+		if (topoPrev != meshRenderCmd.IATopology)
+		{
+			pCmd->IASetPrimitiveTopology(meshRenderCmd.IATopology);
+		}
+		if (vbPrev != meshRenderCmd.VB)
+		{
+			const VBV& vb = mRenderer.GetVertexBufferView(meshRenderCmd.VB);
+			pCmd->IASetVertexBuffers(0, 1, &vb);
+		}
+		if (ibPrev != meshRenderCmd.IB)
+		{
+			const IBV& ib = mRenderer.GetIndexBufferView(meshRenderCmd.IB);
+			pCmd->IASetIndexBuffer(&ib);
+		}
+
 		// draw
 		pCmd->DrawIndexedInstanced(meshRenderCmd.numIndices, meshRenderCmd.numInstances, 0, 0, 0);
+
+		ibPrev = meshRenderCmd.IB;
+		vbPrev = meshRenderCmd.VB;
+		topoPrev = meshRenderCmd.IATopology;
+		psoPrev = psoID;
 	}
 
 

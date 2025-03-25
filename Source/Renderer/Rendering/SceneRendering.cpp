@@ -1145,10 +1145,14 @@ void VQRenderer::RenderDepthPrePass(
 	pCmd->RSSetScissorRects(1, &scissorsRect);
 
 	pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ZPrePass));
+	pCmd->SetGraphicsRootConstantBufferView(4, perViewCBAddr);
 
 	const size_t iMSAA = bMSAA ? 1 : 0;
 	const size_t iFaceCull = 2; // 2:back
 	PSO_ID psoIDPrev = INVALID_ID;
+	BufferID vbPrev = INVALID_ID;
+	BufferID ibPrev = INVALID_ID;
+	D3D_PRIMITIVE_TOPOLOGY topoPrev = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
 	for (const FInstancedDrawParameters& meshRenderCmd : SceneDrawData.mainViewDrawParams)
 	{
 		const VBV& vb = this->GetVertexBufferView(meshRenderCmd.VB);
@@ -1160,9 +1164,10 @@ void VQRenderer::RenderDepthPrePass(
 		meshRenderCmd.UnpackTessellationConfig(iTess, iDomain, iPart, iOutTopo, iTessCull);
 		const PSO_ID psoID = this->mZPrePassPSOs.Get(iMSAA, iRaster, iFaceCull, iTess, iDomain, iPart, iOutTopo, iTessCull, iAlpha);
 
-		// TODO: set prev so we don't change the PSO for all draws
-		// if(psoIDPrev != psoID)
-		pCmd->SetPipelineState(this->GetPSO(psoID));
+		if (psoIDPrev != psoID)
+		{
+			pCmd->SetPipelineState(this->GetPSO(psoID));
+		}
 
 		pCmd->SetGraphicsRootConstantBufferView(1, meshRenderCmd.cbAddr);
 		if (meshRenderCmd.cbAddr_Tessellation)
@@ -1173,12 +1178,28 @@ void VQRenderer::RenderDepthPrePass(
 			pCmd->SetGraphicsRootDescriptorTable(0, this->GetSRV(meshRenderCmd.SRVMaterialMaps).GetGPUDescHandle(0));
 			pCmd->SetGraphicsRootDescriptorTable(3, HeightMapSRV.GetGPUDescHandle(0));
 		}
-		pCmd->SetGraphicsRootConstantBufferView(4, perViewCBAddr);
 
-		pCmd->IASetPrimitiveTopology(meshRenderCmd.IATopology);
-		pCmd->IASetVertexBuffers(0, 1, &vb);
-		pCmd->IASetIndexBuffer(&ib);
+		if (topoPrev != meshRenderCmd.IATopology)
+		{
+			pCmd->IASetPrimitiveTopology(meshRenderCmd.IATopology);
+		}
+		if (vbPrev != meshRenderCmd.VB)
+		{
+			const VBV& vb = GetVertexBufferView(meshRenderCmd.VB);
+			pCmd->IASetVertexBuffers(0, 1, &vb);
+		}
+		if (ibPrev != meshRenderCmd.IB)
+		{
+			const IBV& ib = GetIndexBufferView(meshRenderCmd.IB);
+			pCmd->IASetIndexBuffer(&ib);
+		}
+
 		pCmd->DrawIndexedInstanced(meshRenderCmd.numIndices, meshRenderCmd.numInstances, 0, 0, 0);
+
+		psoIDPrev = psoID;
+		ibPrev = meshRenderCmd.IB;
+		vbPrev = meshRenderCmd.VB;
+		topoPrev = meshRenderCmd.IATopology;
 	}
 }
 
@@ -1447,6 +1468,8 @@ void VQRenderer::RenderSceneColor(
 	bool bHDR
 )
 {
+	SCOPED_GPU_MARKER(pCmd, "RenderSceneColor");
+
 	struct FFrameConstantBuffer { DirectX::XMMATRIX matModelViewProj; };
 	struct FFrameConstantBuffer2 { DirectX::XMMATRIX matModelViewProj; int iTextureConfig; int iTextureOutput; };
 
@@ -1472,8 +1495,6 @@ void VQRenderer::RenderSceneColor(
 	const CBV_SRV_UAV& NullTex2DSRV = this->GetSRV(rsc.SRV_NullTexture2D);
 
 	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
-
-	SCOPED_GPU_MARKER(pCmd, "RenderSceneColor");
 
 	// Clear Depth & Render targets
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvColor.GetCPUDescHandle();
@@ -1511,7 +1532,6 @@ void VQRenderer::RenderSceneColor(
 	constexpr UINT PerViewRSBindSlot = 2;
 	{
 		SCOPED_GPU_MARKER(pCmd, "CBPerFrame");
-
 		pCmd->SetGraphicsRootConstantBufferView(PerFrameRSBindSlot, perFrameCBAddr);
 		pCmd->SetGraphicsRootDescriptorTable(4, this->GetSRV(rsc.SRV_ShadowMaps_Spot).GetGPUDescHandle(0));
 		pCmd->SetGraphicsRootDescriptorTable(5, this->GetSRV(rsc.SRV_ShadowMaps_Point).GetGPUDescHandle(0));
@@ -1544,7 +1564,10 @@ void VQRenderer::RenderSceneColor(
 		SCOPED_GPU_MARKER(pCmd, "Geometry");
 
 		int iCB = 0;
-		PSO_ID psoID_Prev = -1;
+		PSO_ID psoID_Prev = INVALID_ID;
+		BufferID vbPrev = INVALID_ID;
+		BufferID ibPrev = INVALID_ID;
+		D3D_PRIMITIVE_TOPOLOGY topoPrev = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
 		for (const FInstancedDrawParameters& meshRenderCmd : SceneDrawData.mainViewDrawParams)
 		{
 			const uint32 NumIndices = meshRenderCmd.numIndices;
@@ -1582,13 +1605,28 @@ void VQRenderer::RenderSceneColor(
 				: this->GetSRV(meshRenderCmd.SRVHeightMap).GetGPUDescHandle(0)
 			);
 			
-			pCmd->IASetPrimitiveTopology(meshRenderCmd.IATopology);
-			pCmd->IASetVertexBuffers(0, 1, &vb);
-			pCmd->IASetIndexBuffer(&ib);
+			if (topoPrev != meshRenderCmd.IATopology)
+			{
+				topoPrev = meshRenderCmd.IATopology;
+				pCmd->IASetPrimitiveTopology(meshRenderCmd.IATopology);
+			}
+			if (vbPrev != meshRenderCmd.VB)
+			{
+				const VBV& vb = GetVertexBufferView(meshRenderCmd.VB);
+				pCmd->IASetVertexBuffers(0, 1, &vb);
+			}
+			if (ibPrev != meshRenderCmd.IB)
+			{
+				const IBV& ib = GetIndexBufferView(meshRenderCmd.IB);
+				pCmd->IASetIndexBuffer(&ib);
+			}
 
 			pCmd->DrawIndexedInstanced(NumIndices, meshRenderCmd.numInstances, 0, 0, 0);
 
 			psoID_Prev = psoID;
+			ibPrev = meshRenderCmd.IB;
+			vbPrev = meshRenderCmd.VB;
+			topoPrev = meshRenderCmd.IATopology;
 		}
 	}
 
