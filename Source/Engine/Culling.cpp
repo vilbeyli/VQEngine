@@ -690,7 +690,7 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd, Th
 
 void FFrustumCullWorkerContext::SortMeshData(size_t iWork)
 {
-	SCOPED_CPU_MARKER("SortMeshData");
+	SCOPED_CPU_MARKER_C("SortMeshData", 0xFFAA00AA);
 	const MeshLookup_t& MeshLookupCopy = mMeshes;
 	const MemoryPool<Material>& MaterialPool = mMaterials;
 	const std::vector<MeshID>& MeshBB_MeshID = BBH.GetMeshesIDs();
@@ -735,7 +735,7 @@ void FFrustumCullWorkerContext::SortMeshData(size_t iWork)
 
 void FFrustumCullWorkerContext::GatherVisibleMeshData(size_t iWork)
 {
-	SCOPED_CPU_MARKER("GatherRenderData");
+	SCOPED_CPU_MARKER_C("GatherMeshData", 0xFFFF5500);
 
 	const MeshLookup_t& MeshLookupCopy = mMeshes;
 	const MemoryPool<Material>& MaterialPool = mMaterials;
