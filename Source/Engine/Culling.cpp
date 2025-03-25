@@ -768,6 +768,7 @@ void FFrustumCullWorkerContext::GatherVisibleMeshData(size_t iWork)
 	const std::vector<FVisibleMeshSortData>& sortData = vSortData[iWork];
 	const size_t NumVisibleItems = vVisibleBBIndicesPerView[iWork].size();
 	FVisibleMeshDataSoA& vVisibleMeshListSoA = (*pFrustumRenderLists)[iWork].Data;
+	vVisibleMeshListSoA.pMaterialPool = &this->mMaterials;
 	{
 		SCOPED_CPU_MARKER("SortKey");
 		for (size_t i = 0; i < NumVisibleItems; ++i)
@@ -1060,14 +1061,16 @@ void SceneBoundingBoxHierarchy::Build(const Scene* pScene, const std::vector<siz
 
 		vRanges.push_back({ iBegin, iEnd, iBB });
 	}
+	std::vector<TaskSignal<void>> SignalsMeshBB(vRanges.size());
 	{
 		SCOPED_CPU_MARKER("DispatchWorkers");
 		for (size_t i = 1; i < vRanges.size(); ++i)
 		{
-			WorkerThreadPool.AddTask([=, &vGameObjectHandles]()
+			WorkerThreadPool.AddTask([=, &vGameObjectHandles, &SignalsMeshBB]()
 			{
 				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
 				this->BuildMeshBoundingBoxes_Range(pScene, vGameObjectHandles, get<0>(vRanges[i]), get<1>(vRanges[i]), get<2>(vRanges[i]));
+				SignalsMeshBB[i].Notify();
 			});
 		}
 	}
@@ -1081,8 +1084,11 @@ void SceneBoundingBoxHierarchy::Build(const Scene* pScene, const std::vector<siz
 	
 	// Sync point -------------------------------------------------
 	{
-		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS_MeshBB", 0xFFFF0000);
-		while (WorkerThreadPool.GetNumActiveTasks() != 0); // busy-wait is bad...
+		SCOPED_CPU_MARKER_C("WAIT_WORKERS_MeshBB", 0xFFFF0000);
+		for (size_t i = 1; i < vRanges.size(); ++i)
+		{
+			SignalsMeshBB[i].Wait();
+		}
 	}
 
 #else
