@@ -186,13 +186,12 @@ HRESULT VQRenderer::PreRenderScene(
 		{
 			static_cast<ID3D12GraphicsCommandList*>(vpGFXCmds[iGFX])->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 		}
-
-		if (bUseAsyncCompute)
+		
+		if (bUseAsyncCompute && SceneView.bAppIsInSimulationState)
 		{
 			auto& vpCMPCmds = ctx.GetComputeCommandListPtrs();
 			for (uint iCMP = 0; iCMP < NumComputeCmdLists; ++iCMP)
 			{
-				// TODO: do we need this?
 				static_cast<ID3D12GraphicsCommandList*>(vpCMPCmds[iCMP])->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 			}
 		}
