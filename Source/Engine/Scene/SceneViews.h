@@ -91,8 +91,7 @@ struct FVisibleMeshDataSoA
 {
 	const MemoryPool<Material>* pMaterialPool = nullptr;
 
-	std::vector<uint64> SceneSortKey;
-	std::vector<uint64> ShadowSortKey;
+	std::vector<uint64> SortKey;
 	std::vector<FPerDrawData> PerDrawData;
 	std::vector<Transform> Transform;
 	std::vector<FPerInstanceData> PerInstanceData;
@@ -102,8 +101,7 @@ struct FVisibleMeshDataSoA
 	{
 		if (NumValidElements < sz)
 		{
-			SceneSortKey.resize(sz);
-			ShadowSortKey.resize(sz);
+			SortKey.resize(sz);
 			PerDrawData.resize(sz);
 			Transform.resize(sz);
 			PerInstanceData.resize(sz);
@@ -114,8 +112,7 @@ struct FVisibleMeshDataSoA
 	inline void Clear()
 	{
 		NumValidElements = 0;
-		SceneSortKey.clear();
-		ShadowSortKey.clear();
+		SortKey.clear();
 		PerDrawData.clear();
 		PerInstanceData.clear();
 		Transform.clear();

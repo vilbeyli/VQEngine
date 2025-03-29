@@ -759,17 +759,28 @@ void FFrustumCullWorkerContext::GatherVisibleMeshData(size_t iWork)
 	const std::vector<size_t>& MeshBB_GameObjHandles = BBH.GetMeshGameObjectHandles();
 	const std::vector<const Transform*>& MeshBB_Transforms = BBH.GetMeshTransforms();
 
+	FFrustumRenderList& FrustumRenderList = (*pFrustumRenderLists)[iWork];
 	const std::vector<FVisibleMeshSortData>& sortData = vSortData[iWork];
 	const size_t NumVisibleItems = vVisibleBBIndicesPerView[iWork].size();
-	FVisibleMeshDataSoA& vVisibleMeshListSoA = (*pFrustumRenderLists)[iWork].Data;
+	FVisibleMeshDataSoA& vVisibleMeshListSoA = FrustumRenderList.Data;
 	vVisibleMeshListSoA.pMaterialPool = &this->mMaterials;
 	{
 		SCOPED_CPU_MARKER("SortKey");
 		for (size_t i = 0; i < NumVisibleItems; ++i)
 		{
 			const FVisibleMeshSortData& d = sortData[i];
-			vVisibleMeshListSoA.SceneSortKey[i] = FSceneDrawData::GetKey(d.matID, d.meshID, d.iLOD, d.bTess);
-			vVisibleMeshListSoA.ShadowSortKey[i] = FShadowView::GetKey(d.matID, d.meshID, d.iLOD, d.bTess);
+			switch (FrustumRenderList.ViewRef.eViewType)
+			{
+			case FViewRef::EViewType::Scene:
+				vVisibleMeshListSoA.SortKey[i] = FSceneDrawData::GetKey(d.matID, d.meshID, d.iLOD, d.bTess);
+				break;
+			case FViewRef::EViewType::Shadow:
+				vVisibleMeshListSoA.SortKey[i] = FShadowView::GetKey(d.matID, d.meshID, d.iLOD, d.bTess);
+				break;
+			default:
+				assert(false);
+				break;
+			}
 		}
 	}
 	for (size_t i = 0; i < NumVisibleItems; ++i)
@@ -811,7 +822,7 @@ void FFrustumCullWorkerContext::GatherVisibleMeshData(size_t iWork)
 	{
 		SCOPED_CPU_MARKER_C("SignalDataReady", 0xFF00FF00);
 		//Log::Info("Signal FrustumRenderList[%d] : %d", iWork, NumVisibleItems);
-		(*pFrustumRenderLists)[iWork].DataReadySignal.Notify();
+		FrustumRenderList.DataReadySignal.Notify();
 	}
 }
 

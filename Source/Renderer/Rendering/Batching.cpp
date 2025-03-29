@@ -34,7 +34,7 @@ struct FDrawCallInputDataRange
 	size_t iStart;
 	uint Stride; // NumElements
 };
-template <typename std::vector<size_t> FVisibleMeshDataSoA::* SortKeyArray>
+
 static std::vector<FDrawCallInputDataRange> CalcInstancedDrawCommandDataRangesSoA(
 	const FVisibleMeshDataSoA& ViewVisibleMeshes,
 	const size_t MAX_INSTANCES
@@ -48,12 +48,12 @@ static std::vector<FDrawCallInputDataRange> CalcInstancedDrawCommandDataRangesSo
 
 	std::vector<FDrawCallInputDataRange> drawCalls;
 	drawCalls.reserve(NumElements);
-	uint64 currentKey = (ViewVisibleMeshes.*SortKeyArray)[0];
+	uint64 currentKey = ViewVisibleMeshes.SortKey[0];
 	uint count = 1;
 	size_t iStart = 0;
 	for (size_t i = 1; i < NumElements; ++i)
 	{
-		const uint64 key = (ViewVisibleMeshes.*SortKeyArray)[i];
+		const uint64 key = ViewVisibleMeshes.SortKey[i];
 		if (key != currentKey || (count-1) == MAX_INSTANCES-1)
 		{
 			drawCalls.push_back({ .iStart = iStart, .Stride = count });
@@ -117,7 +117,7 @@ static void BatchShadowViewDrawCalls(
 {
 	SCOPED_CPU_MARKER_C("BatchShadowViewDrawCalls", 0xFF005500);
 
-	const std::vector<FDrawCallInputDataRange> drawCallRanges = CalcInstancedDrawCommandDataRangesSoA<&FVisibleMeshDataSoA::ShadowSortKey>(ViewVisibleMeshes, MAX_INSTANCE_COUNT__SHADOW_MESHES);
+	const std::vector<FDrawCallInputDataRange> drawCallRanges = CalcInstancedDrawCommandDataRangesSoA(ViewVisibleMeshes, MAX_INSTANCE_COUNT__SHADOW_MESHES);
 	const size_t NumInstancedDrawCalls = drawCallRanges.size();
 	if (NumInstancedDrawCalls == 0)
 		return;
@@ -248,7 +248,7 @@ static void BatchMainViewDrawCalls(
 {
 	SCOPED_CPU_MARKER_C("BatchMainViewDrawCalls", 0xFF00AA00);
 
-	const std::vector<FDrawCallInputDataRange> drawCallRanges = CalcInstancedDrawCommandDataRangesSoA<&FVisibleMeshDataSoA::SceneSortKey>(ViewVisibleMeshes, MAX_INSTANCE_COUNT__SCENE_MESHES);
+	const std::vector<FDrawCallInputDataRange> drawCallRanges = CalcInstancedDrawCommandDataRangesSoA(ViewVisibleMeshes, MAX_INSTANCE_COUNT__SCENE_MESHES);
 	const size_t NumInstancedDrawCalls = drawCallRanges.size();
 	if (NumInstancedDrawCalls == 0)
 		return;
