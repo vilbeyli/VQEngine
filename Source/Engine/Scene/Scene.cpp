@@ -1082,7 +1082,8 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 	const size_t NumThreads = 1 + NumWorkerThreads;
 
 #if UPDATE_THREAD__ENABLE_WORKERS
-	
+
+	std::vector<TaskSignal<void>> Signals;
 	{
 		SCOPED_CPU_MARKER("InitFrustumCullWorkerContexts");
 #if 0 // debug-single threaded
@@ -1090,6 +1091,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 			mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[iKey], BVH.mMeshBoundingBoxes, BVH.mGameObjectHandles, iKey);
 #else
 		const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NumFrustums, NumThreads);
+		Signals.resize(vRanges.size());
 		{
 			mFrustumCullWorkerContext.vBoundingBoxList = BVH.mMeshBoundingBoxes;
 
@@ -1113,7 +1115,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 					const size_t& iBegin = Range.first;
 					const size_t& iEnd = Range.second; // inclusive
 					assert(iBegin <= iEnd); // ensure work context bounds
-					UpdateWorkerThreadPool.AddTask([Range, fnShadowViewSort, &FrustumPlanesets, &BVH, this, &FrustumViewProjMatrix, bForceLOD0_ShadowView]()
+					UpdateWorkerThreadPool.AddTask([Range, fnShadowViewSort, &FrustumPlanesets, &BVH, this, &FrustumViewProjMatrix, bForceLOD0_ShadowView, &Signals, currRange]()
 					{
 						// we're doing shadow views
 						
@@ -1121,6 +1123,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 						{
 							SCOPED_CPU_MARKER(fnMark("InitWorkerContexts", Range.first, Range.second).c_str());
 							for (size_t i = Range.first; i <= Range.second; ++i)
+							{
 								mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i]
 									, FrustumViewProjMatrix[i]
 									, BVH.mMeshBoundingBoxes
@@ -1130,8 +1133,11 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 									, fnShadowViewSort
 									, bForceLOD0_ShadowView
 								);
+							}
+							Signals[currRange].Notify();
 						}
 					});
+					++currRange;
 				}
 			}
 
@@ -1164,8 +1170,9 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 	// ---------------------------------------------------SYNC ---------------------------------------------------
 	if(NumThreads>1)
 	{
-		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
-		while (UpdateWorkerThreadPool.GetNumActiveTasks() != 0);
+		SCOPED_CPU_MARKER_C("WAIT_WORKERS", 0xFFFF0000);
+		for (size_t i = 1; i < Signals.size(); ++i)
+			Signals[i].Wait();
 	}
 	// --------------------------------------------------- SYNC ---------------------------------------------------
 

@@ -90,13 +90,6 @@ HRESULT VQRenderer::PreRenderScene(
 
 	const bool bAsyncSubmit = mWaitForSubmitWorker;
 
-	if (mWaitForSubmitWorker) // not really used, need to offload submit to a non-worker thread (sync issues on main)
-	{
-		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS", 0xFFFF0000);
-		while (!mSubmitWorkerFinished.load());
-		mSubmitWorkerFinished.store(false);
-		mWaitForSubmitWorker = false;
-	}
 
 	const bool bUseAsyncCompute = ShouldEnableAsyncCompute(GFXSettings, SceneView, SceneShadowView);
 
@@ -145,6 +138,15 @@ HRESULT VQRenderer::PreRenderScene(
 		BatchDrawCalls(WorkerThreads, SceneView, SceneShadowView, ctx, PPParams, GFXSettings);
 	}
 
+	if (mWaitForSubmitWorker) // not really used, need to offload submit to a non-worker thread (sync issues on main)
+	{
+		{
+			SCOPED_CPU_MARKER_C("WAIT_SUBMIT_WORKER", 0xFFFF0000);
+			mSubmitWorkerSignal.Wait();
+		}
+		mWaitForSubmitWorker = false;
+		mSubmitWorkerSignal.Reset();
+	}
 	{
 		SCOPED_CPU_MARKER("AllocCmdLists");
 		ctx.AllocateCommandLists(CommandQueue::EType::GFX, NumCmdRecordingThreads_GFX);
@@ -739,7 +741,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 					ctx.SwapChain.MoveToNextFrame();
 
 #if EXECUTE_CMD_LISTS_ON_WORKER
-				mSubmitWorkerFinished.store(true);
+				mSubmitWorkerSignal.Notify();
 			}
 		});
 #endif
@@ -1116,11 +1118,11 @@ void VQRenderer::RenderDepthPrePass(
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
 
-	auto pRscNormals     = this->GetTextureResource(rsc.Tex_SceneNormals);
-	auto pRscNormalsMSAA = this->GetTextureResource(rsc.Tex_SceneNormalsMSAA);
-	auto pRscDepthResolve= this->GetTextureResource(rsc.Tex_SceneDepthResolve);
-	auto pRscDepthMSAA   = this->GetTextureResource(rsc.Tex_SceneDepthMSAA);
-	auto pRscDepth       = this->GetTextureResource(rsc.Tex_SceneDepth);
+	ID3D12Resource* pRscNormals     = this->GetTextureResource(rsc.Tex_SceneNormals);
+	ID3D12Resource* pRscNormalsMSAA = this->GetTextureResource(rsc.Tex_SceneNormalsMSAA);
+	ID3D12Resource* pRscDepthResolve= this->GetTextureResource(rsc.Tex_SceneDepthResolve);
+	ID3D12Resource* pRscDepthMSAA   = this->GetTextureResource(rsc.Tex_SceneDepthMSAA);
+	ID3D12Resource* pRscDepth       = this->GetTextureResource(rsc.Tex_SceneDepth);
 
 	const DSV& dsvColor   = this->GetDSV(bMSAA ? rsc.DSV_SceneDepthMSAA : rsc.DSV_SceneDepth);
 	const RTV& rtvNormals = this->GetRTV(bMSAA ? rsc.RTV_SceneNormalsMSAA : rsc.RTV_SceneNormals);
@@ -1155,13 +1157,12 @@ void VQRenderer::RenderDepthPrePass(
 	D3D_PRIMITIVE_TOPOLOGY topoPrev = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
 	for (const FInstancedDrawParameters& meshRenderCmd : SceneDrawData.mainViewDrawParams)
 	{
-		const VBV& vb = this->GetVertexBufferView(meshRenderCmd.VB);
-		const IBV& ib = this->GetIndexBufferView(meshRenderCmd.IB);
-
 		size_t iAlpha = 0; size_t iRaster = 0; size_t iFaceCull = 0;
 		meshRenderCmd.UnpackMaterialConfig(iAlpha, iRaster, iFaceCull);
+
 		size_t iTess = 0; size_t iDomain = 0; size_t iPart = 0; size_t iOutTopo = 0; size_t iTessCull = 0;
 		meshRenderCmd.UnpackTessellationConfig(iTess, iDomain, iPart, iOutTopo, iTessCull);
+
 		const PSO_ID psoID = this->mZPrePassPSOs.Get(iMSAA, iRaster, iFaceCull, iTess, iDomain, iPart, iOutTopo, iTessCull, iAlpha);
 
 		if (psoIDPrev != psoID)

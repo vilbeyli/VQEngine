@@ -332,8 +332,8 @@ private:
 	std::vector<Fence>              mAsyncComputeSSAODoneFence;
 	std::vector<Fence>              mCopyObjIDDoneFence; // GPU->CPU
 	std::atomic<bool>               mAsyncComputeWorkSubmitted = false;
-	std::atomic<bool>               mSubmitWorkerFinished = true;
 	bool                            mWaitForSubmitWorker = false;
+	TaskSignal<void>                mSubmitWorkerSignal;
 
 	// bookkeeping
 	std::unordered_map<TextureID, std::string>         mLookup_TextureDiskLocations;
