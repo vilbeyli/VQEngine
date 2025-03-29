@@ -21,6 +21,12 @@
 #include "VQPlatform.h"
 
 #ifdef VQ_CPU
+#define ALIGNAS(x) alignas(x)
+#else
+#define ALIGNAS(x) 
+#endif
+
+#ifdef VQ_CPU
 namespace VQ_SHADER_DATA {
 #endif
 
@@ -117,11 +123,7 @@ inline int HasHeightMap(int textureConfig)                      { return ((textu
 inline int HasEmissiveMap(int textureConfig)                    { return ((textureConfig & (1 << 7)) > 0 ? 1 : 0); }
 inline int HasOcclusionRoughnessMetalnessMap(int textureConfig) { return ((textureConfig & (1 << 8)) > 0 ? 1 : 0); }
 
-struct 
-#if VQ_CPU
-	alignas(16)
-#endif
-MaterialData
+struct ALIGNAS(16) MaterialData
 {
     float3 diffuse;
     float alpha;
@@ -157,11 +159,8 @@ MaterialData
 	#if RENDER_INSTANCED_SCENE_MESHES
 	#define INSTANCED_DRAW 1
 	#endif
-
-#define ALIGNAS(x) alignas(x)
-#else
-#define ALIGNAS(x) 
 #endif
+
 struct PerFrameData
 {
 	SceneLighting Lights;

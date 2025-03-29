@@ -25,7 +25,6 @@
 #include "SceneBoundingBoxHierarchy.h"
 
 #include "../Core/Memory.h"
-#include "../Core/RenderCommands.h"
 #include "../AssetLoader.h"
 #include "../PostProcess/PostProcess.h"
 
@@ -34,7 +33,6 @@
 
 using MeshLookup_t = std::unordered_map<MeshID, Mesh>;
 using ModelLookup_t = std::unordered_map<ModelID, Model>;
-using MaterialLookup_t = std::unordered_map<MaterialID, Material>;
 
 // fwd decl
 class Input;

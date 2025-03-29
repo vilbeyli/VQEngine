@@ -182,7 +182,6 @@ void FFrustumCullWorkerContext::AllocInputMemoryIfNecessary(size_t sz)
 	if (vFrustumPlanes.size() < sz)
 	{
 		SCOPED_CPU_MARKER("AllocMem");
-		pFrustumRenderLists->resize(sz);
 		vVisibleBBIndicesPerView.resize(sz);
 		vFrustumPlanes.resize(sz);
 		vMatViewProj.resize(sz);
@@ -190,7 +189,8 @@ void FFrustumCullWorkerContext::AllocInputMemoryIfNecessary(size_t sz)
 		vForceLOD0.resize(sz);
 		vSortData.resize(sz);
 		assert(pFrustumRenderLists);
-		pFrustumRenderLists->resize(sz);
+		if(pFrustumRenderLists)
+			pFrustumRenderLists->resize(sz);
 	}
 }
 void FFrustumCullWorkerContext::ClearMemory()
