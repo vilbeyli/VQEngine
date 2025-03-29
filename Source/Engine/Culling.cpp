@@ -100,7 +100,7 @@ bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset FrustumPlanes, cons
 		for (const XMFLOAT4& f4Point : vPoints)
 		{
 			XMVECTOR vPoint = XMLoadFloat4(&f4Point);
-			XMVECTOR vPlane = XMLoadFloat4(&FrustumPlanes.abcd[p]);
+			const XMVECTOR& vPlane = FrustumPlanes.abcd[p];
 			XMVECTOR cmp = XMVectorGreater(XMVector4Dot(vPoint, vPlane), V_EPSILON);
 			if (bInside = cmp.m128_u32[0]) // is point inside frustum ?
 			{
@@ -122,7 +122,7 @@ static bool IsBoundingBoxIntersectingFrustum2(const FFrustumPlaneset& FrustumPla
 	vCenter.m128_f32[3] = 1.0f;
 	for (int p = 0; p < 6; ++p)	// for each plane
 	{
-		XMVECTOR vPlane = XMLoadFloat4(&FrustumPlanes.abcd[p]);
+		const XMVECTOR& vPlane = FrustumPlanes.abcd[p];
 		
 		// N : get the absolute value of the plane normal, so all {x,y,z} are positive
 		//     which aligns well with the extents vector which is all positive due to
