@@ -55,10 +55,11 @@ public:
 	~MemoryPool();
 	
 	size_t Allocate();
-	void   Free(size_t Handle);
-	
 	std::vector<size_t> Allocate(size_t NumBlocks);
+
+	void Free(size_t Handle);
 	void Free(const std::vector<size_t>&  Handle);
+	void FreeAll();
 
 	TObject* Get(size_t Handle) const;
 	inline size_t GetAliveObjectCount() const { return mNumUsedBlocks; };
@@ -244,6 +245,14 @@ inline void MemoryPool<TObject>::Free(const std::vector<size_t>& Handles)
 {
 	for(size_t Handle : Handles)
 		Free(Handle);
+}
+
+template<class TObject>
+inline void MemoryPool<TObject>::FreeAll()
+{
+	for (size_t handle = 0; handle < this->mActiveHandles.size(); ++handle)
+		if (this->mActiveHandles[handle])
+			Free(handle);
 }
 
 template<class TObject> 

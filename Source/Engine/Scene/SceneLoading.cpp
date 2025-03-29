@@ -119,13 +119,10 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	mBoundingBoxHierarchy.Clear();
 	{
 		SCOPED_CPU_MARKER("ClearShadowViews");
-		assert(false); // TODO: reset renderer draw data arrays
-		//for (FSceneShadowViews& view : mFrameShadowViews)
-		//{
-		//	for (FShadowView& sv : view.ShadowViews_Spot ) sv.meshRenderParams.clear();
-		//	for (FShadowView& sv : view.ShadowViews_Point) sv.meshRenderParams.clear();
-		//	view.ShadowView_Directional.meshRenderParams.clear();
-		//}
+		for (FSceneView& view : mFrameSceneViews)
+		{
+			view.FrustumRenderLists.clear();
+		}
 	}
 	mFrustumCullWorkerContext.ClearMemory();
 
@@ -492,10 +489,8 @@ void Scene::Unload()
 
 	//mMeshes.clear(); // TODO
 	
-	for (size_t hTransform : mTransformHandles)
-		mGameObjectTransformPool.Free(hTransform);
-	for (size_t hObject : mGameObjectHandles)
-		mGameObjectPool.Free(hObject);
+	mGameObjectTransformPool.FreeAll();
+	mGameObjectPool.FreeAll();
 	mTransformHandles.clear();
 	mGameObjectHandles.clear();
 
@@ -506,8 +501,7 @@ void Scene::Unload()
 		mRenderer.DestroySRV(pMaterial->SRVHeightMap);
 		mRenderer.DestroySRV(pMaterial->SRVMaterialMaps);
 	}
-	assert(false); // TODO: reset material pool?
-	//mMaterialPool.clear();
+	mMaterialPool.FreeAll();
 	mMaterialNames.clear();
 	mLoadedMaterials.clear();
 

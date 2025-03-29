@@ -482,6 +482,7 @@ void VQRenderer::Destroy()
 	{
 		pPass->Destroy();
 	}
+	mRenderPasses.clear();
 
 	mWorkers_PSOLoad.Destroy();
 	mWorkers_ShaderLoad.Destroy();
