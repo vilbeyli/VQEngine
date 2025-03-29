@@ -488,21 +488,11 @@ static void DispatchWorkers_ShadowViews(FWindowRenderContext& ctx,
 			NumShadowMeshes_Threaded += NumMeshes >= NUM_MIN_SHADOW_MESHES_FOR_THREADING ? NumMeshes : 0;
 		}
 	}
-	const size_t NumShadowMeshesRemaining = NumShadowMeshes - NumShadowMeshes_Threaded;
-	const size_t NumWorkersForFrustumsBelowThreadingThreshold = DIV_AND_ROUND_UP(NumShadowMeshesRemaining, NUM_MIN_SHADOW_MESHES_FOR_THREADING);
-	const size_t NumShadowFrustumBatchWorkers = NumShadowFrustumsWithNumMeshesLargerThanMinNumMeshesPerThread;
-	const bool bUseWorkerThreadsForShadowViews = NumShadowFrustumBatchWorkers >= 1;
-	const size_t NumShadowFrustumsThisThread = bUseWorkerThreadsForShadowViews 
-		? std::max((size_t)0, NumShadowMeshFrustums - NumShadowFrustumBatchWorkers) 
-		: NumShadowMeshFrustums;
-
-	if (bUseWorkerThreadsForShadowViews)
 	{
 		constexpr size_t NUM_NON_SHADOW_FRUSTUMS = 1; // TODO: dont assume a single main/scene view
-		const size_t iFrustumBegin = NUM_NON_SHADOW_FRUSTUMS + NumShadowFrustumsThisThread;
+		const size_t iFrustumBegin = NUM_NON_SHADOW_FRUSTUMS;
 		const size_t iFrustumEnd = iFrustumBegin + NumShadowMeshFrustums;
-		
-		for (size_t iFrustum = NUM_NON_SHADOW_FRUSTUMS + NumShadowFrustumsThisThread; iFrustum <= NumShadowMeshFrustums; ++iFrustum)
+		for (size_t iFrustum = iFrustumBegin; iFrustum < iFrustumEnd; ++iFrustum)
 		{
 			SCOPED_CPU_MARKER("Dispatch");
 			const FFrustumRenderList* pFrustumRenderList = &mFrustumRenderLists[iFrustum];
@@ -510,6 +500,7 @@ static void DispatchWorkers_ShadowViews(FWindowRenderContext& ctx,
 			if (pFrustumRenderList->Data.Size() == 0)
 			{
 				//Log::Info("Empty pFrustumRenderList %d", iFrustum);
+				pFrustumRenderList->BatchDoneSignal.Notify();
 				continue;
 			}
 
