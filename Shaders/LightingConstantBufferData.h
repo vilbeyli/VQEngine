@@ -157,6 +157,10 @@ MaterialData
 	#if RENDER_INSTANCED_SCENE_MESHES
 	#define INSTANCED_DRAW 1
 	#endif
+
+#define ALIGNAS(x) alignas(x)
+#else
+#define ALIGNAS(x) 
 #endif
 struct PerFrameData
 {
@@ -182,11 +186,7 @@ struct PerViewLightingData
 	float pad1;
 };
 
-struct
-#ifdef VQ_CPU
-	alignas(64)
-#endif
-PerObjectLightingData
+struct ALIGNAS(64) PerObjectLightingData
 {
 #if INSTANCED_DRAW
 	matrix matWorldViewProj    [MAX_INSTANCE_COUNT__SCENE_MESHES];
@@ -208,11 +208,7 @@ PerObjectLightingData
 	int materialID;
 };
 
-struct 
-#ifdef VQ_CPU
-	alignas(64)
-#endif
-PerObjectShadowData
+struct ALIGNAS(64) PerObjectShadowData
 {
 	matrix matWorldViewProj[MAX_INSTANCE_COUNT__SHADOW_MESHES];
 	matrix matWorld        [MAX_INSTANCE_COUNT__SHADOW_MESHES];
@@ -227,11 +223,7 @@ struct PerShadowViewData
 	float4 WorldFrustumPlanes[6]; // used by Tessellation
 };
 
-struct 
-#ifdef VQ_CPU
-	alignas(16)
-#endif
-TessellationParams
+struct ALIGNAS(16) TessellationParams
 {
 	float4 EdgeTessFactor;   // Quad[4], Tri[3], Line[?]
 	float2 InsideTessFactor; // Quad[2], Tri[1], Line[?]
