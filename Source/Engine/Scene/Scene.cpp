@@ -1040,10 +1040,10 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 		}
 
 		// point
-		for (size_t iPoint = 0; iPoint < SceneShadowView.NumPointShadowViews; ++iPoint)
-		for (size_t face = 0; face < 6; ++face)
+		for (uint iPoint = 0; iPoint < SceneShadowView.NumPointShadowViews; ++iPoint)
+		for (uint face = 0; face < 6; ++face)
 		{
-			const size_t iPointFace = iPoint * 6 + face;
+			const uint iPointFace = iPoint * 6 + face;
 
 			FrustumRenderLists[iFrustum].ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowViews_Point[iPointFace], .eViewType = FViewRef::Shadow };
 			FrustumRenderLists[iFrustum].Type = FFrustumRenderList::EFrustumType::PointShadow;
@@ -1055,7 +1055,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 		}
 
 		// spot
-		for (size_t iSpot = 0; iSpot < SceneShadowView.NumSpotShadowViews; ++iSpot)
+		for (uint iSpot = 0; iSpot < SceneShadowView.NumSpotShadowViews; ++iSpot)
 		{
 			FrustumRenderLists[iFrustum].ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowViews_Spot[iSpot], .eViewType = FViewRef::Shadow };
 			FrustumRenderLists[iFrustum].Type = FFrustumRenderList::EFrustumType::SpotShadow;

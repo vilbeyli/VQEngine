@@ -32,7 +32,7 @@ using namespace VQ_SHADER_DATA;
 struct FDrawCallInputDataRange
 {
 	size_t iStart;
-	size_t Stride; // NumElements
+	uint Stride; // NumElements
 };
 template <typename std::vector<size_t> FVisibleMeshDataSoA::* SortKeyArray>
 static std::vector<FDrawCallInputDataRange> CalcInstancedDrawCommandDataRangesSoA(
@@ -49,7 +49,7 @@ static std::vector<FDrawCallInputDataRange> CalcInstancedDrawCommandDataRangesSo
 	std::vector<FDrawCallInputDataRange> drawCalls;
 	drawCalls.reserve(NumElements);
 	uint64 currentKey = (ViewVisibleMeshes.*SortKeyArray)[0];
-	size_t count = 1;
+	uint count = 1;
 	size_t iStart = 0;
 	for (size_t i = 1; i < NumElements; ++i)
 	{

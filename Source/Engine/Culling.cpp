@@ -711,7 +711,7 @@ void FFrustumCullWorkerContext::SortMeshData(size_t iWork, ThreadPool* pWorkerTh
 			const Material& mat = *MaterialPool.Get(matID);
 			const Mesh& mesh = MeshLookupCopy.at(meshID);
 
-			sortData[ii].iBB = bb;
+			sortData[ii].iBB = (int32)bb;
 			sortData[ii].fBBArea = fBBArea;
 			sortData[ii].matID = matID;
 			sortData[ii].meshID = meshID;
