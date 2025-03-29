@@ -99,11 +99,8 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 		, pFrustumRenderLists(nullptr)
 	{}
 	
-	void AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet
-		, const DirectX::XMMATRIX& MatViewProj
-		, const std::vector<FBoundingBox>& vBoundingBoxList
-		, const std::vector<size_t>& vGameObjectHandles
-		, const std::vector<MaterialID>& vMaterials
+	void AddWorkerItem(
+		  const std::vector<FBoundingBox>& vBoundingBoxList
 		, const  size_t i
 		, SortingFunction_t SortFunction
 		, bool bForceLOD0

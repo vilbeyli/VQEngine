@@ -464,10 +464,6 @@ void VQRenderer::Load()
 	const float tRenderPasses = timer.Tick();
 	Log::Info("[Renderer]    RenderPasses=%.2fs", tRenderPasses);
 
-	{
-
-	}
-
 	const float total = tRS + tDefaultRscs + tRenderRscs + tRenderPasses;
 	Log::Info("[Renderer] Loaded in %.2fs.", total);
 }

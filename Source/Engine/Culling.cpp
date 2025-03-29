@@ -212,19 +212,13 @@ void FFrustumCullWorkerContext::ClearMemory()
 }
 
 void FFrustumCullWorkerContext::AddWorkerItem(
-	const FFrustumPlaneset& FrustumPlaneSet
-	, const DirectX::XMMATRIX& MatViewProj
-	, const std::vector<FBoundingBox>& vBoundingBoxListIn
-	, const std::vector<size_t>& vGameObjectHandles
-	, const std::vector<MaterialID>& vMaterials
+	  const std::vector<FBoundingBox>& vBoundingBoxListIn
 	, size_t i
 	, SortingFunction_t SortFunction
 	, bool bForceLOD0
 )
 {
 	SCOPED_CPU_MARKER("AddWorkerItem()");
-	vFrustumPlanes[i] = FrustumPlaneSet;
-	vMatViewProj[i] = MatViewProj;
 	vSortFunctions[i] = SortFunction;
 	vForceLOD0[i] = bForceLOD0;
 	vBoundingBoxList = vBoundingBoxListIn; // copy

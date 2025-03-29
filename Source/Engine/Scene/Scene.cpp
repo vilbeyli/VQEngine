@@ -1008,13 +1008,14 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 		+ SceneShadowView.NumPointShadowViews * 6
 		+ (bCullDirectionalLightView ? 1 : 0);
 
-	std::vector<FFrustumPlaneset> FrustumPlanesets(NumFrustums);
-	std::vector<XMMATRIX> FrustumViewProjMatrix(NumFrustums);
 
 	mFrustumCullWorkerContext.pFrustumRenderLists = &SceneView.FrustumRenderLists;
 	mFrustumCullWorkerContext.InvalidateContextData();
 	mFrustumCullWorkerContext.AllocInputMemoryIfNecessary(NumFrustums);
 	assert(SceneView.FrustumRenderLists.size() >= NumFrustums);
+
+	std::vector<FFrustumPlaneset>& FrustumPlanesets = mFrustumCullWorkerContext.vFrustumPlanes;
+	std::vector<XMMATRIX>& FrustumViewProjMatrix = mFrustumCullWorkerContext.vMatViewProj;
 
 	std::vector<FFrustumRenderList>& FrustumRenderLists = (*mFrustumCullWorkerContext.pFrustumRenderLists);
 	size_t iFrustum = 0;
@@ -1124,11 +1125,8 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 							SCOPED_CPU_MARKER(fnMark("InitWorkerContexts", Range.first, Range.second).c_str());
 							for (size_t i = Range.first; i <= Range.second; ++i)
 							{
-								mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i]
-									, FrustumViewProjMatrix[i]
-									, BVH.mMeshBoundingBoxes
-									, BVH.mGameObjectHandles
-									, BVH.mMeshMaterials
+								mFrustumCullWorkerContext.AddWorkerItem(
+									  BVH.mMeshBoundingBoxes
 									, i
 									, fnShadowViewSort
 									, bForceLOD0_ShadowView
@@ -1153,11 +1151,8 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 
 			for (size_t i = vRanges[0].first; i <= vRanges[0].second; ++i)
 			{
-				mFrustumCullWorkerContext.AddWorkerItem(FrustumPlanesets[i]
-					, FrustumViewProjMatrix[i]
-					, BVH.mMeshBoundingBoxes
-					, BVH.mGameObjectHandles
-					, BVH.mMeshMaterials
+				mFrustumCullWorkerContext.AddWorkerItem(
+					  BVH.mMeshBoundingBoxes
 					, i
 					, (i == 0 ? fnMainViewSort : fnShadowViewSort)
 					, bForceLOD0
