@@ -122,24 +122,17 @@ struct FVisibleMeshDataSoA
 	size_t Size() const { return NumValidElements; }
 };
 
-struct FViewRef
-{
-	enum EViewType { Scene, Shadow };
-	void* pViewData;
-	EViewType eViewType;
-};
-
 struct FFrustumRenderList
 {
 	mutable TaskSignal<void> BatchDoneSignal;
 	mutable TaskSignal<void> DataReadySignal;
 	mutable TaskSignal<size_t> DataCountReadySignal;
 	FVisibleMeshDataSoA Data;
-	FViewRef ViewRef; // references SceneView or ShadowView
 
 	enum class EFrustumType { MainView, SpotShadow, PointShadow, DirectionalShadow };
-	EFrustumType Type;
-	uint TypeIndex; // e.g., spot light index, point light index * 6 + face, etc.
+	EFrustumType Type = EFrustumType::MainView;
+	uint TypeIndex = 0; // e.g., spot light index, point light index * 6 + face, etc.
+	const void* pViewData = nullptr; // references SceneView or ShadowView based on EFrustumType
 
 	inline void ResetSignalsAndData()
 	{
@@ -238,5 +231,5 @@ struct FSceneShadowViews
 struct FFrustumRenderCommandRecorderContext
 {
 	const FFrustumRenderList* pFrustumRenderList = nullptr;
-	FShadowView* pShadowView = nullptr;
+	const FShadowView* pShadowView = nullptr;
 };

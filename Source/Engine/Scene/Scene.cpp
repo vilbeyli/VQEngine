@@ -1023,7 +1023,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 		SCOPED_CPU_MARKER("CollectFrustumPlanesets");
 		FrustumViewProjMatrix[iFrustum] = SceneView.viewProj;
 		FrustumPlanesets[iFrustum] = FFrustumPlaneset::ExtractFromMatrix(SceneView.viewProj);
-		FrustumRenderLists[iFrustum].ViewRef = FViewRef{ .pViewData = &SceneView, .eViewType = FViewRef::Scene };
+		FrustumRenderLists[iFrustum].pViewData = &SceneView;
 		FrustumRenderLists[iFrustum].ResetSignalsAndData();
 
 		++iFrustum; // main view frustum done -- move to shadow views
@@ -1031,7 +1031,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 		// directional
 		if (bCullDirectionalLightView)
 		{
-			FrustumRenderLists[iFrustum].ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowView_Directional, .eViewType = FViewRef::Shadow };
+			FrustumRenderLists[iFrustum].pViewData = &SceneShadowView.ShadowView_Directional;
 			FrustumRenderLists[iFrustum].Type = FFrustumRenderList::EFrustumType::DirectionalShadow;
 			FrustumRenderLists[iFrustum].TypeIndex = 0;
 			FrustumRenderLists[iFrustum].ResetSignalsAndData();
@@ -1046,7 +1046,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 		{
 			const uint iPointFace = iPoint * 6 + face;
 
-			FrustumRenderLists[iFrustum].ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowViews_Point[iPointFace], .eViewType = FViewRef::Shadow };
+			FrustumRenderLists[iFrustum].pViewData = &SceneShadowView.ShadowViews_Point[iPointFace];
 			FrustumRenderLists[iFrustum].Type = FFrustumRenderList::EFrustumType::PointShadow;
 			FrustumRenderLists[iFrustum].TypeIndex = iPointFace;
 			FrustumRenderLists[iFrustum].ResetSignalsAndData();
@@ -1058,7 +1058,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 		// spot
 		for (uint iSpot = 0; iSpot < SceneShadowView.NumSpotShadowViews; ++iSpot)
 		{
-			FrustumRenderLists[iFrustum].ViewRef = FViewRef{ .pViewData = &SceneShadowView.ShadowViews_Spot[iSpot], .eViewType = FViewRef::Shadow };
+			FrustumRenderLists[iFrustum].pViewData = &SceneShadowView.ShadowViews_Spot[iSpot];
 			FrustumRenderLists[iFrustum].Type = FFrustumRenderList::EFrustumType::SpotShadow;
 			FrustumRenderLists[iFrustum].TypeIndex = iSpot;
 			FrustumRenderLists[iFrustum].ResetSignalsAndData();

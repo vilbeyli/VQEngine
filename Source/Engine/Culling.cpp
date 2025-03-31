@@ -769,17 +769,18 @@ void FFrustumCullWorkerContext::GatherVisibleMeshData(size_t iWork)
 		for (size_t i = 0; i < NumVisibleItems; ++i)
 		{
 			const FVisibleMeshSortData& d = sortData[i];
-			switch (FrustumRenderList.ViewRef.eViewType)
+			switch (FrustumRenderList.Type)
 			{
-			case FViewRef::EViewType::Scene:
+			case FFrustumRenderList::EFrustumType::MainView:
 				vVisibleMeshListSoA.SortKey[i] = FSceneDrawData::GetKey(d.matID, d.meshID, d.iLOD, d.bTess);
 				break;
-			case FViewRef::EViewType::Shadow:
+			case FFrustumRenderList::EFrustumType::SpotShadow:
+			case FFrustumRenderList::EFrustumType::PointShadow:
+			case FFrustumRenderList::EFrustumType::DirectionalShadow:
 				vVisibleMeshListSoA.SortKey[i] = FShadowView::GetKey(d.matID, d.meshID, d.iLOD, d.bTess);
 				break;
 			default:
-				assert(false);
-				break;
+				assert(false); // shouldn't happen
 			}
 		}
 	}

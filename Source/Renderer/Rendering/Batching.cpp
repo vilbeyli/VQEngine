@@ -432,7 +432,7 @@ static void DispatchWorkers_ShadowViews(FWindowRenderContext& ctx,
 		WorkerContexts.resize(NumShadowMeshFrustums);
 		for (size_t iFrustum = 1; iFrustum <= NumShadowMeshFrustums; ++iFrustum) // iFrustum==0 is for mainView, start from 1
 		{
-			FShadowView* pShadowView = static_cast<FShadowView*>(mFrustumRenderLists[iFrustum].ViewRef.pViewData);
+			const FShadowView* pShadowView = static_cast<const FShadowView*>(mFrustumRenderLists[iFrustum].pViewData);
 			size_t shadowIndex = iFrustum - 1; // Offset by 1 since index 0 is main view
 
 			assert(pShadowView);
