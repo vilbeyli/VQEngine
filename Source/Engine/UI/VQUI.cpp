@@ -213,6 +213,7 @@ void FUIState::GetMouseScreenPosition(int& X, int& Y) const
 
 void VQEngine::InitializeImGUI(HWND hwnd)
 {
+	SCOPED_CPU_MARKER("InitializeImGUI");
 	mpImGuiContext = ImGui::CreateContext();
 	ImGui::SetCurrentContext(mpImGuiContext);
 	ImGui_ImplWin32_Init(hwnd);

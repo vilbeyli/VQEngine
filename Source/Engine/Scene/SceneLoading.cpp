@@ -447,25 +447,27 @@ void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 
 void Scene::OnLoadComplete()
 {
-	SCOPED_CPU_MARKER("Scene::OnLoadComplete()");
+	SCOPED_CPU_MARKER("Scene.OnLoadComplete");
 	Log::Info("[Scene] OnLoadComplete()");
 
-	// Assign model data to game objects
-	for (auto it = mModelLoadResults.begin(); it != mModelLoadResults.end(); ++it)
 	{
-		GameObject* pObj = it->first;
-		AssetLoader::ModelLoadResult_t res = std::move(it->second);
+		SCOPED_CPU_MARKER("AssignModels");
+		// Assign model data to game objects
+		for (auto it = mModelLoadResults.begin(); it != mModelLoadResults.end(); ++it)
+		{
+			GameObject* pObj = it->first;
+			AssetLoader::ModelLoadResult_t res = std::move(it->second);
 
-		assert(res.valid());
-		///res.wait(); // we should already have the results ready in OnLoadComplete()
+			assert(res.valid());
+			///res.wait(); // we should already have the results ready in OnLoadComplete()
 
-		pObj->mModelID = res.get();
+			pObj->mModelID = res.get();
+		}
 	}
 
 	// assign material data
 	mMaterialAssignments.DoAssignments(this, this->mMtxTexturePaths, this->mTexturePaths, &mRenderer);
 
-	// calculate local-space game object AABBs
 	CalculateGameObjectLocalSpaceBoundingBoxes();
 
 	Log::Info("[Scene] %s loaded.", mSceneRepresentation.SceneName.c_str());
@@ -536,6 +538,7 @@ void Scene::Unload()
 
 void Scene::CalculateGameObjectLocalSpaceBoundingBoxes()
 {
+	SCOPED_CPU_MARKER("CalculateGameObjectLocalSpaceBoundingBoxes");
 	constexpr float max_f = std::numeric_limits<float>::max();
 	constexpr float min_f = -(max_f - 1.0f);
 	
