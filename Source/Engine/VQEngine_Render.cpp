@@ -484,13 +484,13 @@ void VQEngine::RenderThread_RenderDebugWindow()
 	// command lists have finished execution on the GPU; apps should use 
 	// fences to determine GPU execution progress.
 	ID3D12CommandAllocator* pCmdAlloc = ctx.mCommandAllocatorsGFX[BACK_BUFFER_INDEX];
-	ThrowIfFailed(pCmdAlloc->ResetSignalsAndData());
+	ThrowIfFailed(pCmdAlloc->Reset());
 
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
 	ID3D12PipelineState* pInitialState = nullptr;
-	ThrowIfFailed(ctx.pCmdList_GFX->ResetSignalsAndData(pCmdAlloc, pInitialState));
+	ThrowIfFailed(ctx.pCmdList_GFX->Reset(pCmdAlloc, pInitialState));
 
 	//
 	// RENDER
