@@ -208,6 +208,12 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 #else
 	const int FRAME_DATA_INDEX = 0;
 #endif
+	
+	if (!this->mPSOCompileResults.empty())
+	{
+		this->WaitPSOCompilation();
+		this->AssignPSOs();
+	}
 
 	{
 		SCOPED_CPU_MARKER_C("WaitBatching", 0xFFFF0000);

@@ -235,8 +235,6 @@ void VQEngine::RenderThread_Inititalize()
 
 	mpRenderer->InitializeFences(mpWinMain->GetHWND());
 	RenderThread_LoadWindowSizeDependentResources(hwndMain, W, H, fResolutionScale);
-	mpRenderer->WaitPSOCompilation();
-	mpRenderer->AssignPSOs();
 
 	mTimerRender.Reset();
 	mTimerRender.Start();
@@ -409,22 +407,23 @@ void VQEngine::RenderThread_RenderMainWindow()
 	const FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 	const HWND hwndMain = mpWinMain->GetHWND();
 	const bool bHDR = this->ShouldRenderHDR(hwndMain);
+	const Window* pWindow = mpWinMain.get();
 
-	HRESULT hr = mpRenderer->PreRenderScene(WorkerThreads, mpWinMain.get(), SceneView, SceneShadowView, PPParams, mSettings.gfx, mUIState);
+	HRESULT hr = mpRenderer->PreRenderScene(WorkerThreads, pWindow, SceneView, SceneShadowView, PPParams, mSettings.gfx, mUIState);
 
 	if (mbEnvironmentMapPreFilter.load())
 	{
-		mpRenderer->PreFilterEnvironmentMap(mBuiltinMeshes[EBuiltInMeshes::CUBE], mpWinMain->GetHWND());
+		mpRenderer->PreFilterEnvironmentMap(mBuiltinMeshes[EBuiltInMeshes::CUBE], hwndMain);
 		mbEnvironmentMapPreFilter.store(false);
 	}
 
 	if (mbLoadingLevel || mbLoadingEnvironmentMap)
 	{
-		hr = mpRenderer->RenderLoadingScreen(mpWinMain.get(), mLoadingScreenData, bHDR);
+		hr = mpRenderer->RenderLoadingScreen(pWindow, mLoadingScreenData, bHDR);
 	}
 	else
 	{
-		hr = mpRenderer->RenderScene(WorkerThreads, mpWinMain.get(), SceneView, SceneShadowView, PPParams, mSettings.gfx, mUIState, bHDR);
+		hr = mpRenderer->RenderScene(WorkerThreads, pWindow, SceneView, SceneShadowView, PPParams, mSettings.gfx, mUIState, bHDR);
 	}
 
 	if (hr == DXGI_STATUS_OCCLUDED) { RenderThread_HandleStatusOccluded(); }
