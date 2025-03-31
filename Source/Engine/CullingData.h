@@ -72,7 +72,7 @@ struct FFrustumPlaneset
 			m.r[0].m128_f32[3] + m.r[0].m128_f32[1],
 			m.r[1].m128_f32[3] + m.r[1].m128_f32[1],
 			m.r[2].m128_f32[3] + m.r[2].m128_f32[1],
-			m.r[3].m128_f32[3] + m.r[3].m128_f32[0]
+			m.r[3].m128_f32[3] + m.r[3].m128_f32[1]
 		);
 		viewPlanes.abcd[FFrustumPlaneset::PL_FAR] = DirectX::XMVectorSet(
 			m.r[0].m128_f32[3] - m.r[0].m128_f32[2],
