@@ -68,44 +68,6 @@ static std::vector<FDrawCallInputDataRange> CalcInstancedDrawCommandDataRangesSo
 	return drawCalls;
 }
 
-template <typename std::vector<size_t> FVisibleMeshDataSoA::*SortKeyArray>
-static size_t CountInstancedDrawCommandsSoA(
-	const FVisibleMeshDataSoA& ViewVisibleMeshes,
-	const size_t MAX_INSTANCES
-)
-{
-	SCOPED_CPU_MARKER("CountInstancedDraws");
-	const size_t NumElements = (ViewVisibleMeshes.*SortKeyArray).size();
-	if (NumElements == 0)
-		return 0;
-
-	size_t numDrawCommands = 0;
-	uint64 currentKey = (ViewVisibleMeshes.*SortKeyArray)[0];
-	size_t count = 1;
-	for (size_t i = 1; i < NumElements; ++i)
-	{
-		const uint64 key = (ViewVisibleMeshes.*SortKeyArray)[i];
-		if (key != currentKey || count == MAX_INSTANCES)
-		{
-			numDrawCommands += 1;
-			currentKey = key;
-			count = 1;
-		}
-		else
-		{
-			++count;
-		}
-	}
-	if (count > 0)
-	{
-		numDrawCommands += 1;
-	}
-
-	return numDrawCommands;
-}
-
-
-
 static void BatchShadowViewDrawCalls(
 	std::vector<FInstancedDrawParameters>& drawParams,
 	const FVisibleMeshDataSoA& ViewVisibleMeshes,

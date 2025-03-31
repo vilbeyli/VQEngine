@@ -315,7 +315,7 @@ private:
 	ThreadPool mWorkers_ShaderLoad;
 	struct FPSOCompileResult { ID3D12PipelineState* pPSO; PSO_ID id; };
 	struct FShaderLoadTaskContext { std::queue<FShaderStageCompileDesc> TaskQueue; };
-	std::vector<std::shared_future<VQRenderer::FPSOCompileResult>> mPSOCompileResults;
+	std::vector<std::shared_future<FPSOCompileResult>> mPSOCompileResults;
 	std::vector<std::shared_future<FShaderStageCompileResult>>     mShaderCompileResults;
 	std::unordered_map < TaskID, FShaderLoadTaskContext>           mLookup_ShaderLoadContext;
 
