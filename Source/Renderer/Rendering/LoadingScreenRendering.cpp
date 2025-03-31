@@ -74,10 +74,6 @@ HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScr
 
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
 
-	{
-		SCOPED_CPU_MARKER("WAIT_PSO_WORKER_DISPATCH");
-		mLatchPSOLoaderDispatched.wait();
-	}
 	if (!mPSOCompileResults.empty())
 	{
 		std::shared_future<FPSOCompileResult>& future = mPSOCompileResults[bUseHDRRenderPath ? EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO : EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO];
@@ -89,7 +85,6 @@ HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScr
 		}
 	}
 
-	this->WaitLoadingScreenReady();
 	pCmd->SetPipelineState(this->GetPSO(bUseHDRRenderPath ? EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO : EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO));
 	pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FullScreenTriangle));
 

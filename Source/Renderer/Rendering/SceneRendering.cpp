@@ -209,6 +209,12 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 	const int FRAME_DATA_INDEX = 0;
 #endif
 	
+	if (!this->mPSOCompileResults.empty())
+	{
+		this->WaitPSOCompilation();
+		this->AssignPSOs();
+	}
+
 	{
 		SCOPED_CPU_MARKER("WAIT_PSO_WORKER_DISPATCH");
 		mLatchPSOLoaderDispatched.wait();
