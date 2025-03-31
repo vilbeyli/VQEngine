@@ -164,10 +164,6 @@ private: // Derived Scenes shouldn't access these functions
 	);
 
 	void RecordRenderLightMeshCommands(const FSceneView& SceneView) const;
-	void BatchInstanceData_BoundingBox(FSceneView& SceneView
-		, ThreadPool& UpdateWorkerThreadPool
-		, const DirectX::XMMATRIX matViewProj
-	) const;
 
 	void GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews& SceneShadowView, ThreadPool& UpdateWorkerThreadPool);
 	void CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
@@ -252,7 +248,6 @@ protected:
 	//
 	std::unordered_map<MeshID, Mesh>         mMeshes;
 	std::unordered_map<ModelID, Model>       mModels;
-	//std::unordered_map<MaterialID, Material> mMaterials;
 	std::vector<size_t>                      mGameObjectHandles;
 	std::vector<size_t>                      mTransformHandles;
 	std::vector<Camera>                      mCameras;

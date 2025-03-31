@@ -401,9 +401,10 @@ static DynamicBufferHeap& GetThreadConstantBufferHeap(
 }
 
 static void DispatchWorkers_ShadowViews(FWindowRenderContext& ctx,
-	const FSceneShadowViews& SceneShadowView, 
-	ThreadPool& RenderWorkerThreadPool, 
-	const std::vector<FFrustumRenderList>& mFrustumRenderLists, 
+	const FSceneShadowViews& SceneShadowView,
+	ThreadPool& RenderWorkerThreadPool,
+	const std::vector<FFrustumRenderList>& mFrustumRenderLists,
+	const size_t NumActiveFrustumRenderLists,
 	VQRenderer* pRenderer
 )
 {
@@ -414,6 +415,7 @@ static void DispatchWorkers_ShadowViews(FWindowRenderContext& ctx,
 		+ SceneShadowView.NumPointShadowViews * 6
 		+ (SceneShadowView.NumDirectionalViews
 	);
+	assert(NumActiveFrustumRenderLists-1 == NumShadowMeshFrustums);
 
 	FSceneDrawData& DrawData = pRenderer->GetSceneDrawData(0);
 	{
@@ -701,6 +703,7 @@ void VQRenderer::BatchDrawCalls(
 		SceneShadowView,
 		RenderWorkerThreadPool,
 		SceneView.FrustumRenderLists,
+		SceneView.NumActiveFrustumRenderLists,
 		this
 	);
 

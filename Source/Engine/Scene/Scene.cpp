@@ -1067,10 +1067,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowViews_Spot[iSpot].matViewProj);
 		}
 	}
-
-	// TODO: fix invalid signal on render loop
-	//       culled lights will not reset signals and data for FrustumRenderLists
-	//       renderer will wait on invalid signal
+	SceneView.NumActiveFrustumRenderLists = iFrustum;
 
 	constexpr size_t MINIMUM_WORK_SIZE_PER_THREAD = 256;
 

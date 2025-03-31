@@ -160,7 +160,6 @@ struct FSceneView
 	const Mesh*           pEnvironmentMapMesh = nullptr;
 	int                   SceneRTWidth = 0;
 	int                   SceneRTHeight = 0;
-	bool                  bAppIsInSimulationState = false;
 
 	size_t NumGameObjectBBRenderCmds = 0;
 	size_t NumMeshBBRenderCmds = 0;
@@ -172,11 +171,15 @@ struct FSceneView
 	// Sent to renderer for instance data batching.
 	// Renderer uses FSceneDrawData in DrawData.h to fill in batched draw parameters.
 	std::vector<FFrustumRenderList> FrustumRenderLists;
+	// Culled frustums are not removed from the vector so we track the active ones here
+	size_t NumActiveFrustumRenderLists = 0; 
+
 
 	VQ_SHADER_DATA::SceneLighting GPULightingData;
 
 	FSceneRenderOptions sceneRenderOptions;
 	FPostProcessParameters postProcessParameters;
+	bool bAppIsInSimulationState = false;
 };
 
 struct FSceneDebugView

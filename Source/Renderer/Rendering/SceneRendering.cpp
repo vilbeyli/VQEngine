@@ -206,8 +206,8 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 	
 	{
 		SCOPED_CPU_MARKER_C("WaitBatching", 0xFFFF0000);
-		for (const FFrustumRenderList& FrustumRenderList : SceneView.FrustumRenderLists)
-			FrustumRenderList.BatchDoneSignal.Wait();
+		for(size_t i = 0; i < SceneView.NumActiveFrustumRenderLists; ++i)
+			SceneView.FrustumRenderLists[i].BatchDoneSignal.Wait();
 	}
 
 	HWND hwnd = pWindow->GetHWND();
