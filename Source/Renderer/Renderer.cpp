@@ -201,9 +201,9 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		deviceDesc.bEnableDebugLayer = ENABLE_DEBUG_LAYER;
 		deviceDesc.bEnableGPUValidationLayer = ENABLE_VALIDATION_LAYER;
 		const bool bDeviceCreateSucceeded = mDevice.Create(deviceDesc);
+		assert(bDeviceCreateSucceeded);
 		ID3D12Device* pDevice = pVQDevice->GetDevicePtr();
 	}
-	assert(bDeviceCreateSucceeded);
 
 	// Create Command Queues of different types
 	{

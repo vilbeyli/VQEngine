@@ -393,7 +393,7 @@ private:
 	void            RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView, const FSceneView& SceneView);
 	void            RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView, const FSceneView& SceneView);
 	void            RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView, const FSceneView& SceneView, size_t iBegin, size_t NumPointLights);
-	void            RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, D3D12_GPU_VIRTUAL_ADDRESS perFrameCBAddr, const FGraphicsSettings& GFXSettings, bool bAsyncCompute);
+	void            RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FGraphicsSettings& GFXSettings, bool bAsyncCompute);
 	void            TransitionDepthPrePassForWrite(ID3D12GraphicsCommandList* pCmd, bool bMSAA);
 	void            TransitionDepthPrePassForRead(ID3D12GraphicsCommandList* pCmd, bool bMSAA);
 	void            TransitionDepthPrePassForReadAsyncCompute(ID3D12GraphicsCommandList* pCmd);

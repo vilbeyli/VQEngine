@@ -163,10 +163,7 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	assert(pParams->pCmdCopy);
 	assert(pParams->pSceneView);
 	assert(pParams->pSceneDrawData);
-	//assert(pParams->pCBAddresses);
-	assert(pParams->pCBufferHeap);
 
-	DynamicBufferHeap* pHeap = pParams->pCBufferHeap;
 	ID3D12GraphicsCommandList* pCmd = pParams->pCmd;
 	ID3D12GraphicsCommandList* pCmdCpy = static_cast<ID3D12GraphicsCommandList*>(pParams->pCmdCopy);
 	auto pRscRT = mRenderer.GetTextureResource(TEXPassOutput);

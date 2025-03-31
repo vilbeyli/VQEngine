@@ -340,7 +340,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 		RenderDirectionalShadowMaps(pCmd, &CBHeap, ShadowView, SceneView);
 		RenderPointShadowMaps(pCmd, &CBHeap, ShadowView, SceneView, 0, ShadowView.NumPointShadowViews);
 
-		RenderDepthPrePass(pCmd, &CBHeap, SceneView, cbPerView, cbPerFrame, GFXSettings, bAsyncCompute);
+		RenderDepthPrePass(pCmd, SceneView, cbPerView, GFXSettings, bAsyncCompute);
 
 		RenderObjectIDPass(pCmd, pCmdCpy, &CBHeap, cbPerView, SceneView, ShadowView, BACK_BUFFER_INDEX, GFXSettings);
 
@@ -417,7 +417,6 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000); // sync for SceneView
 			while (WorkerThreads.GetNumActiveTasks() != 0); // busy-wait is not good
 		}
-		//CopyPerObjectConstantBufferData(&CBHeap_This, SceneDrawData); // TODO: threadify this, join+fork
 
 		{
 			SCOPED_CPU_MARKER("DispatchWorkers");
@@ -435,7 +434,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 
 					TransitionDepthPrePassForWrite(pCmd_ZPrePass, bMSAA);
 
-					RenderDepthPrePass(pCmd_ZPrePass, &CBHeap_WorkerZPrePass, SceneView, cbPerView, cbPerFrame, GFXSettings, bAsyncCompute);
+					RenderDepthPrePass(pCmd_ZPrePass, SceneView, cbPerView, GFXSettings, bAsyncCompute);
 
 					if (bMSAA)
 					{
@@ -760,10 +759,8 @@ void VQRenderer::RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, ID3D12Comma
 		ObjectIDPass::FDrawParameters params;
 		params.pCmd = pCmd;
 		params.pCmdCopy = pCmdCopy;
-		params.pCBAddresses = nullptr; // TODO:
 		params.pSceneView = &SceneView;
 		params.pSceneDrawData = &mFrameSceneDrawData[0];
-		params.pCBufferHeap = pCBufferHeap;
 		params.cbPerView = perViewCBAddr;
 		params.bEnableAsyncCopy = GFXSettings.bEnableAsyncCopy;
 		pObjectIDPass->RecordCommands(&params);
@@ -1102,11 +1099,9 @@ void VQRenderer::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicB
 }
 
 void VQRenderer::RenderDepthPrePass(
-	ID3D12GraphicsCommandList* pCmd, 
-	DynamicBufferHeap* pCBufferHeap,
+	ID3D12GraphicsCommandList* pCmd,
 	const FSceneView& SceneView,
 	D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr,
-	D3D12_GPU_VIRTUAL_ADDRESS perFrameCBAddr, 
 	const FGraphicsSettings& GFXSettings,
 	bool bAsyncCompute
 )

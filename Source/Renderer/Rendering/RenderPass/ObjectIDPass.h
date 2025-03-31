@@ -35,8 +35,6 @@ public:
 	{
 		ID3D12GraphicsCommandList* pCmd = nullptr;
 		ID3D12CommandList* pCmdCopy = nullptr;
-		const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>* pCBAddresses = nullptr;
-		DynamicBufferHeap* pCBufferHeap = nullptr;
 		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = 0;
 		bool bEnableAsyncCopy = false;
 		const FSceneView* pSceneView = nullptr;
