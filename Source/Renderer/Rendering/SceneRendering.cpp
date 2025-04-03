@@ -1565,11 +1565,6 @@ void VQRenderer::RenderSceneColor(
 		D3D_PRIMITIVE_TOPOLOGY topoPrev = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
 		for (const FInstancedDrawParameters& meshRenderCmd : SceneDrawData.mainViewDrawParams)
 		{
-			const uint32 NumIndices = meshRenderCmd.numIndices;
-			const VBV& vb = this->GetVertexBufferView(meshRenderCmd.VB);
-			const IBV& ib = this->GetIndexBufferView (meshRenderCmd.IB);
-
-
 			size_t iAlpha = 0; size_t iRaster = 0; size_t iFaceCull = 0;
 			meshRenderCmd.UnpackMaterialConfig(iAlpha, iRaster, iFaceCull);
 			size_t iTess = 0; size_t iDomain = 0; size_t iPart = 0; size_t iOutTopo = 0; size_t iTessCull = 0;
@@ -1616,7 +1611,7 @@ void VQRenderer::RenderSceneColor(
 				pCmd->IASetIndexBuffer(&ib);
 			}
 
-			pCmd->DrawIndexedInstanced(NumIndices, meshRenderCmd.numInstances, 0, 0, 0);
+			pCmd->DrawIndexedInstanced(meshRenderCmd.numIndices, meshRenderCmd.numInstances, 0, 0, 0);
 
 			psoID_Prev = psoID;
 			ibPrev = meshRenderCmd.IB;
