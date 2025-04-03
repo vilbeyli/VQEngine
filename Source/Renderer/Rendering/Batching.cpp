@@ -212,6 +212,10 @@ static void BatchMainViewDrawCalls(
 
 	const std::vector<FDrawCallInputDataRange> drawCallRanges = CalcInstancedDrawCommandDataRangesSoA(ViewVisibleMeshes, MAX_INSTANCE_COUNT__SCENE_MESHES);
 	const size_t NumInstancedDrawCalls = drawCallRanges.size();
+	{
+		SCOPED_CPU_MARKER("ResizeDrawParams");
+		drawParams.resize(NumInstancedDrawCalls);
+	}
 	if (NumInstancedDrawCalls == 0)
 		return;
 
@@ -220,10 +224,6 @@ static void BatchMainViewDrawCalls(
 	for (size_t i = 0; i < NumInstancedDrawCalls; ++i)
 	{
 		CBHeap.AllocConstantBuffer(sizeof(PerObjectLightingData), (void**)(&pPerObj[i]), &cbAddr[i]);
-	}
-	{
-		SCOPED_CPU_MARKER("ResizeDrawParams");
-		drawParams.resize(NumInstancedDrawCalls);
 	}
 	{
 		SCOPED_CPU_MARKER("SetDrawData");
