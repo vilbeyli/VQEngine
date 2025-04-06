@@ -580,6 +580,7 @@ void VQRenderer::LoadBuiltinRootSignatures()
 		SetName(pRS, "RootSignature_DownsampleDepth");
 		mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__DownsampleDepthCS] = pRS;
 	}
+
 	mLatchRootSignaturesInitialized.count_down();
 }
 

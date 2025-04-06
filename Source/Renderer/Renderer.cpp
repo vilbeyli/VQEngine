@@ -222,6 +222,7 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		deviceDesc.bEnableGPUValidationLayer = ENABLE_VALIDATION_LAYER;
 		const bool bDeviceCreateSucceeded = mDevice.Create(deviceDesc);
 		assert(bDeviceCreateSucceeded);
+
 		mLatchDeviceInitialized.count_down();
 	}
 
@@ -233,11 +234,13 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		{
 			mCmdQueues[i].Create(pVQDevice, (CommandQueue::EType)i);
 		}
+
 		mLatchCmdQueuesInitialized.count_down();
 	}
 
 	// Initialize memory
 	InitializeD3D12MA(mpAllocator, mDevice);
+
 	mLatchMemoryAllocatorInitialized.count_down();
 	{
 		SCOPED_CPU_MARKER("Heaps");
@@ -262,6 +265,7 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		constexpr bool USE_GPU_MEMORY = true;
 		mStaticHeap_VertexBuffer.Create(pDevice, EBufferType::VERTEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticVertexBufferPool");
 		mStaticHeap_IndexBuffer.Create(pDevice, EBufferType::INDEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticIndexBufferPool");
+
 		mLatchHeapsInitialized.count_down();
 	}
 

@@ -2932,6 +2932,7 @@ void VQRenderer::ClearRenderPassHistories()
 		SCOPED_CPU_MARKER_C("WaitRenderPassesInitialized", 0xFF0000AA);
 		mLatchRenderPassesInitialized.wait();
 	}
+
 	std::shared_ptr<ScreenSpaceReflectionsPass> pReclectionsPass = std::static_pointer_cast<ScreenSpaceReflectionsPass>(GetRenderPass(ERenderPass::ScreenSpaceReflections));
 	pReclectionsPass->SetClearHistoryBuffers();
 }
