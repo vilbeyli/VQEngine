@@ -240,6 +240,9 @@ void VQEngine::InitializeUI(HWND hwnd)
 	TextureCreateDesc rDescs("texUI");
 	rDescs.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height, 1, 1);
 	rDescs.pDataArray.push_back( pixels );
+
+	mpRenderer->WaitHeapsInitialized();
+	//mpRenderer->WaitMemoryAllocatorInitialized();
 	TextureID texUI = mpRenderer->CreateTexture(rDescs);
 	SRV_ID srvUI = mpRenderer->AllocateAndInitializeSRV(texUI);
 
@@ -282,6 +285,11 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 	const int NUM_BACK_BUFFERS = mpRenderer->GetSwapChainBackBufferCountmpWinMain->GetHWND());
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
 #endif
+
+	// TODO: remove this hack, properly sync
+	if (!mpScene)
+		return;
+
 	FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 	FSceneRenderOptions& SceneParams = mpScene->GetSceneView(FRAME_DATA_INDEX).sceneRenderOptions;
 	ImGuiStyle& style = ImGui::GetStyle();

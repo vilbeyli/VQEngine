@@ -75,34 +75,27 @@ void VQEngine::MainThread_Tick()
 bool VQEngine::Initialize(const FStartupParameters& Params)
 {
 	SCOPED_CPU_MARKER("VQEngine.Initialize");
-	Timer  t;  t.Reset();  t.Start();
-	Timer t2; t2.Reset(); t2.Start();
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	ThreadPool& WorkerThreads = mWorkers_Update;
 #else
 	ThreadPool& WorkerThreads = mWorkers_Simulation;
 #endif
-
 	InitializeEngineSettings(Params);
+	InitializeEngineThreads();
 	InitializeEnvironmentMaps();
 	InitializeHDRProfiles();
-	float f1 = t.Tick();
+
 	InitializeWindows(Params);
-	float f3 = t.Tick();
 	InitializeInput();
-	InitializeImGUI(mpWinMain->GetHWND());
+
+	WorkerThreads.AddTask([=]() { InitializeScenes(); });
 
 	// --------------------------------------------------------
 	// Note: Device should be initialized from WinMain thread, 
 	// otherwise device may be lost if launched from RenderDoc
 	mpRenderer->Initialize(mSettings.gfx); // Device, Queues, Heaps, WorkerThreads
 	// --------------------------------------------------------
-
-	InitializeScenes();
-	float f2 = t.Tick();
-	InitializeEngineThreads();
-	float f4 = t.Tick();
 
 	// offload system info acquisition to a thread as it takes a few seconds on Debug build
 	WorkerThreads.AddTask([&]()
@@ -128,16 +121,6 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 			}
 		});
 	});
-	float f0 = t.Tick();
-
-#if 0
-	Log::Info("[PERF] VQEngine::Initialize() : %.3fs", t2.StopGetDeltaTimeAndReset());
-	Log::Info("[PERF]    DispatchSysInfo : %.3fs", f0);
-	Log::Info("[PERF]    Settings        : %.3fs", f1);
-	Log::Info("[PERF]    Scenes          : %.3fs", f2);
-	Log::Info("[PERF]    Windows         : %.3fs", f3);
-	Log::Info("[PERF]    Threads         : %.3fs", f4);
-#endif
 	return true; 
 }
 
@@ -284,6 +267,7 @@ void VQEngine::InitializeWindows(const FStartupParameters& Params)
 
 	fnInitializeWindow(mSettings.WndMain, Params.hExeInstance, mpWinMain, "Main Window");
 	Log::Info("Created main window<0x%x>: %dx%d", mpWinMain->GetHWND(), mpWinMain->GetWidth(), mpWinMain->GetHeight());
+	mSignalMainWindowCreated.NotifyAll();
 
 	if (mSettings.bShowDebugWindow)
 	{

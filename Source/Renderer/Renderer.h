@@ -46,6 +46,7 @@
 #include <vector>
 #include <unordered_map>
 #include <array>
+#include <latch>
 
 #define THREADED_CTX_INIT 1
 #define RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING 1
@@ -247,6 +248,8 @@ public:
 	
 	HRESULT RenderLoadingScreen(const Window* pWindow, const FLoadingScreenData& LoadingScreenData, bool bUseHDRRenderPath); // TODO: should be generalized and removed later
 	
+	void ClearRenderPassHistories();
+
 	std::shared_ptr<IRenderPass> GetRenderPass(ERenderPass ePass) { return mRenderPasses[ePass]; }
 	      FRenderingResources_MainWindow& GetRenderingResources_MainWindow() { return mResources_MainWnd; }
 	const FRenderingResources_MainWindow& GetRenderingResources_MainWindow() const { return mResources_MainWnd; }
@@ -257,11 +260,19 @@ public:
 	const FRenderStats& GetRenderStats() const { return mRenderStats; }
 
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-	// Sync
+	// Frame Sync
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	void InitializeFences(HWND hwnd);
 	void DestroyFences(HWND hwnd);
 	void WaitCopyFenceOnCPU(HWND hwnd);
+
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	// Init Sync
+	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	void WaitHeapsInitialized();
+	void WaitMemoryAllocatorInitialized();
+	void WaitLoadingScreenReady() const;
+	void SignalLoadingScreenReady();
 
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// PUBLIC MEMBERS
@@ -269,7 +280,6 @@ public:
 	FLightingPSOs     mLightingPSOs;
 	FDepthPrePassPSOs mZPrePassPSOs;
 	FShadowPassPSOs   mShadowPassPSOs;
-	std::atomic<bool> mbDefaultResourcesLoaded; 
 
 private:
 	using PSOArray_t = std::array<ID3D12PipelineState*, EBuiltinPSOs::NUM_BUILTIN_PSOs>;
@@ -331,13 +341,25 @@ private:
 	FRenderingResources_DebugWindow mResources_DebugWnd;
 	std::vector<FSceneDrawData>     mFrameSceneDrawData; // per-frame if pipelined update+render threads
 
-	// sync
+	// frame sync
 	std::vector<Fence>              mAsyncComputeSSAOReadyFence;
 	std::vector<Fence>              mAsyncComputeSSAODoneFence;
 	std::vector<Fence>              mCopyObjIDDoneFence; // GPU->CPU
 	std::atomic<bool>               mAsyncComputeWorkSubmitted = false;
 	bool                            mWaitForSubmitWorker = false;
 	TaskSignal<void>                mSubmitWorkerSignal;
+
+	// init sync
+	EventSignal                     mSignalDeviceInitialized;
+	EventSignal                     mSignalCmdQueuesInitialized;
+	EventSignal                     mSignalMemoryAllocatorInitialized;
+	EventSignal                     mSignalHeapsInitialized;
+	EventSignal                     mSignalRootSignaturesInitialized;
+	std::latch                      mLatchSignalLoadingScreenReady{ 1 };
+	std::latch                      mLatchPSOLoaderDispatched{ 1 };
+	std::latch                      mLatchRenderPassesInitialized{ 1 };
+	std::latch                      mLatchSwapchainInitialized{ 1 };
+	std::latch                      mLatchDefaultResourcesLoaded{ 1 };
 
 	// bookkeeping
 	std::unordered_map<TextureID, std::string>         mLookup_TextureDiskLocations;
@@ -349,12 +371,9 @@ private:
 	std::atomic<bool>              mbExitUploadThread;
 	EventSignal                    mSignal_UploadThreadWorkReady;
 	std::thread                    mTextureUploadThread;
+	std::thread                    mFrameSubmitThread;
 	std::mutex                     mMtxTextureUploadQueue;
 	std::queue<FTextureUploadDesc> mTextureUploadQueue;
-	
-	// state
-	std::atomic<bool> mbRendererInitialized;
-	std::atomic<bool> mbMainSwapchainInitialized;
 
 	FRenderStats mRenderStats;
 

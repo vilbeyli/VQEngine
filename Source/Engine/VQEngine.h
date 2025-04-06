@@ -252,6 +252,7 @@ private:
 	std::unique_ptr<Window>         mpWinDebug;
 #endif
 	WindowNameLookup_t              mWinNameLookup;
+	EventSignal                     mSignalMainWindowCreated;
 	POINT                           mMouseCapturePosition;
 
 	// input

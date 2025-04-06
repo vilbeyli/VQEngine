@@ -209,6 +209,10 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 	const int FRAME_DATA_INDEX = 0;
 #endif
 	
+	{
+		SCOPED_CPU_MARKER("WAIT_PSO_WORKER_DISPATCH");
+		mLatchPSOLoaderDispatched.wait();
+	}
 	if (!this->mPSOCompileResults.empty())
 	{
 		this->WaitPSOCompilation();
@@ -2922,3 +2926,12 @@ HRESULT VQRenderer::PresentFrame(FWindowRenderContext& ctx)
 	return hr;
 }
 
+void VQRenderer::ClearRenderPassHistories()
+{
+	{
+		SCOPED_CPU_MARKER_C("WaitRenderPassesInitialized", 0xFF0000AA);
+		mLatchRenderPassesInitialized.wait();
+	}
+	std::shared_ptr<ScreenSpaceReflectionsPass> pReclectionsPass = std::static_pointer_cast<ScreenSpaceReflectionsPass>(GetRenderPass(ERenderPass::ScreenSpaceReflections));
+	pReclectionsPass->SetClearHistoryBuffers();
+}

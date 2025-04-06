@@ -169,8 +169,11 @@ static bool CheckInitialSwapchainResizeRequired(std::unordered_map<HWND, bool>& 
 void VQEngine::RenderThread_Inititalize()
 {
 	SCOPED_CPU_MARKER_C("RenderThread_Inititalize()", 0xFF007700);
+	{
+		SCOPED_CPU_MARKER_C("WAIT_MAIN_WINDOW_CREATE", 0xFF0000FF);
+		mSignalMainWindowCreated.Wait();
+	}
 	HWND hwndMain = mpWinMain->GetHWND();
-
 	const bool bExclusiveFullscreen_MainWnd = CheckInitialSwapchainResizeRequired(mInitialSwapchainResizeRequiredWindowLookup, mSettings.WndMain, hwndMain);
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
@@ -178,7 +181,9 @@ void VQEngine::RenderThread_Inititalize()
 #endif
 
 #if THREADED_CTX_INIT
-	mWorkers_Simulation.AddTask([=]() {
+	mWorkers_Simulation.AddTask([=]() 
+	{
+		RENDER_WORKER_CPU_MARKER;
 #endif
 		// Initialize swapchains for each rendering window
 		// all windows use the same number of swapchains as the main window
@@ -203,38 +208,34 @@ void VQEngine::RenderThread_Inititalize()
 			mpRenderer->InitializeRenderContext(mpWinDebug.get(), NUM_SWAPCHAIN_BUFFERS, false, bCreateHDRSwapchain);
 			mEventQueue_VQEToWin_Main.AddItem(std::make_shared<HandleWindowTransitionsEvent>(mpWinDebug->GetHWND()));
 		}
-
 #if THREADED_CTX_INIT
 	});
 #endif
-
-
-
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mbRenderThreadInitialized.store(true);
 #endif
 	 
 	// load builtin resources, compile shaders, load PSOs
-	
-	mpRenderer->Load();
-	
-	mWorkers_Simulation.AddTask([=]() { LoadLoadingScreenData(); });
-	mWorkers_Simulation.AddTask([=]() { InitializeBuiltinMeshes(); });
-	mpRenderer->StartPSOCompilation_MT();
+	mWorkers_Simulation.AddTask([=]() { RENDER_WORKER_CPU_MARKER; mpRenderer->Load(); });
+	mWorkers_Simulation.AddTask([=]() { RENDER_WORKER_CPU_MARKER; LoadLoadingScreenData(); });
+	mWorkers_Simulation.AddTask([=]() { RENDER_WORKER_CPU_MARKER; InitializeBuiltinMeshes(); });
 
-	// load window resources
-	const bool bFullscreen = mpWinMain->IsFullscreen();
-	const int W = bFullscreen ? mpWinMain->GetFullscreenWidth() : mpWinMain->GetWidth();
-	const int H = bFullscreen ? mpWinMain->GetFullscreenHeight() : mpWinMain->GetHeight();
-	const float fResolutionScale = 1.0f; // Post process parameters are not initialized at this stage to determine the resolution scale
 
+	mWorkers_Simulation.AddTask([=]() 
+	{ 
 #if THREADED_CTX_INIT
-	mpRenderer->WaitMainSwapchainReady();
+			mpRenderer->WaitMainSwapchainReady();
 #endif
+			mpRenderer->InitializeFences(mpWinMain->GetHWND());
+		// load window resources
+		const bool bFullscreen = mpWinMain->IsFullscreen();
+		const int W = bFullscreen ? mpWinMain->GetFullscreenWidth() : mpWinMain->GetWidth();
+		const int H = bFullscreen ? mpWinMain->GetFullscreenHeight() : mpWinMain->GetHeight();
+		const float fResolutionScale = 1.0f; // Post process parameters are not initialized at this stage to determine the resolution scale
 
-	mpRenderer->InitializeFences(mpWinMain->GetHWND());
-	RenderThread_LoadWindowSizeDependentResources(hwndMain, W, H, fResolutionScale);
+		RenderThread_LoadWindowSizeDependentResources(hwndMain, W, H, fResolutionScale); 
+	});
 
 	mTimerRender.Reset();
 	mTimerRender.Start();
@@ -253,6 +254,10 @@ void VQEngine::RenderThread_Exit()
 void VQEngine::InitializeBuiltinMeshes()
 {
 	SCOPED_CPU_MARKER("InitializeBuiltinMeshes()");
+
+	// TOOD: generate geometry on CPU first, wait heaps, then upload to GPU.
+	mpRenderer->WaitHeapsInitialized();
+
 	using VertexType = FVertexWithNormalAndTangent;
 	{
 		const EBuiltInMeshes eMesh = EBuiltInMeshes::TRIANGLE;
@@ -402,6 +407,10 @@ void VQEngine::RenderThread_RenderMainWindow()
 	const int FRAME_DATA_INDEX = 0;
 	ThreadPool& WorkerThreads = mWorkers_Simulation;
 #endif
+	// TODO: remove this hack, properly sync
+	if (!mpScene)
+		return;
+
 	const FSceneView& SceneView = mpScene->GetSceneView(FRAME_DATA_INDEX);
 	const FSceneShadowViews& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
 	const FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);

@@ -132,6 +132,10 @@ void VQRenderer::LoadBuiltinRootSignatures()
 {
 	SCOPED_CPU_MARKER("RootSignatures");
 	HRESULT hr = {};
+	{
+		SCOPED_CPU_MARKER_C("WAIT_DEVICE_CREATE", 0xFF0000FF);
+		mSignalDeviceInitialized.Wait();
+	}
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
 	ComPtr<ID3DBlob> signature;
@@ -576,6 +580,6 @@ void VQRenderer::LoadBuiltinRootSignatures()
 		SetName(pRS, "RootSignature_DownsampleDepth");
 		mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__DownsampleDepthCS] = pRS;
 	}
-	
+	mSignalRootSignaturesInitialized.NotifyAll();
 }
 

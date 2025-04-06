@@ -188,7 +188,23 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 {
 	SCOPED_CPU_MARKER("Renderer.Initialize");
 	Device* pVQDevice = &mDevice;
-	mbMainSwapchainInitialized.store(false);
+
+	// initialize thread
+	{
+		SCOPED_CPU_MARKER("Threads");
+		mbExitUploadThread.store(false);
+		mTextureUploadThread = std::thread(&VQRenderer::TextureUploadThread_Main, this);
+		SetThreadDescription(mTextureUploadThread.native_handle(), L"TextureUploadThread");
+		
+		// TODO:
+		//mFrameSubmitThread = std::thread(&VQRenderer::FrameSubmitThread_Main, this);
+		//SetThreadDescription(mFrameSubmitThread.native_handle(), L"FrameSubmitThread");
+		
+		const size_t HWThreads = ThreadPool::sHardwareThreadCount;
+		const size_t HWCores = HWThreads >> 1;
+		mWorkers_ShaderLoad.Initialize(HWCores, "ShaderLoadWorkers");
+		mWorkers_PSOLoad.Initialize(HWCores, "PSOLoadWorkers");
+	}
 
 	// create PSO & Shader cache folders
 	DirectoryUtil::CreateFolderIfItDoesntExist(VQRenderer::ShaderCacheDirectory);
@@ -202,8 +218,9 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		deviceDesc.bEnableGPUValidationLayer = ENABLE_VALIDATION_LAYER;
 		const bool bDeviceCreateSucceeded = mDevice.Create(deviceDesc);
 		assert(bDeviceCreateSucceeded);
-		ID3D12Device* pDevice = pVQDevice->GetDevicePtr();
+		mSignalDeviceInitialized.NotifyAll();
 	}
+
 
 	// Create Command Queues of different types
 	{
@@ -212,10 +229,12 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		{
 			mCmdQueues[i].Create(pVQDevice, (CommandQueue::EType)i);
 		}
+		mSignalCmdQueuesInitialized.NotifyAll();
 	}
 
 	// Initialize memory
 	InitializeD3D12MA(mpAllocator, mDevice);
+	mSignalMemoryAllocatorInitialized.NotifyAll();
 	{
 		SCOPED_CPU_MARKER("Heaps");
 		ID3D12Device* pDevice = mDevice.GetDevicePtr();
@@ -239,32 +258,7 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		constexpr bool USE_GPU_MEMORY = true;
 		mStaticHeap_VertexBuffer.Create(pDevice, EBufferType::VERTEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticVertexBufferPool");
 		mStaticHeap_IndexBuffer.Create(pDevice, EBufferType::INDEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticIndexBufferPool");
-	}
-
-	// initialize thread
-	{
-		SCOPED_CPU_MARKER("Threads");
-		mbExitUploadThread.store(false);
-		mTextureUploadThread = std::thread(&VQRenderer::TextureUploadThread_Main, this);
-
-		const size_t HWThreads = ThreadPool::sHardwareThreadCount;
-		const size_t HWCores = HWThreads >> 1;
-		mWorkers_ShaderLoad.Initialize(HWCores, "ShaderLoadWorkers");
-		mWorkers_PSOLoad.Initialize(HWCores, "PSOLoadWorkers");
-	}
-
-	// allocate render passes
-	{
-		SCOPED_CPU_MARKER("AllocRenderPasses");
-		mRenderPasses.resize(NUM_RENDER_PASSES, nullptr);
-		mRenderPasses[ERenderPass::AmbientOcclusion      ] = std::make_shared<AmbientOcclusionPass>(*this, AmbientOcclusionPass::EMethod::FFX_CACAO);
-		mRenderPasses[ERenderPass::ZPrePass              ] = std::make_shared<DepthPrePass>(*this);
-		mRenderPasses[ERenderPass::DepthMSAAResolve      ] = std::make_shared<DepthMSAAResolvePass>(*this);
-		mRenderPasses[ERenderPass::ApplyReflections      ] = std::make_shared<ApplyReflectionsPass>(*this);
-		mRenderPasses[ERenderPass::Magnifier             ] = std::make_shared<MagnifierPass>(*this, true); // true: outputs to swapchain
-		mRenderPasses[ERenderPass::ObjectID              ] = std::make_shared<ObjectIDPass>(*this);
-		mRenderPasses[ERenderPass::ScreenSpaceReflections] = std::make_shared<ScreenSpaceReflectionsPass>(*this);
-		mRenderPasses[ERenderPass::Outline               ] = std::make_shared<OutlinePass>(*this);
+		mSignalHeapsInitialized.NotifyAll();
 	}
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
@@ -448,10 +442,29 @@ void VQRenderer::Load()
 	SCOPED_CPU_MARKER("Renderer.Load()");
 	Timer timer; timer.Start();
 	Log::Info("[Renderer] Loading...");
-	
-	LoadBuiltinRootSignatures();
-	const float tRS = timer.Tick();
-	Log::Info("[Renderer]    RootSignatures=%.2fs", tRS);
+
+	mWorkers_PSOLoad.AddTask([=]() { LoadBuiltinRootSignatures(); });
+	mWorkers_PSOLoad.AddTask([=]() { StartPSOCompilation_MT(); });
+	mWorkers_PSOLoad.AddTask([=]() 
+	{
+		SCOPED_CPU_MARKER("InitRenderPasses");
+		mRenderPasses.resize(NUM_RENDER_PASSES, nullptr);
+		mRenderPasses[ERenderPass::AmbientOcclusion      ] = std::make_shared<AmbientOcclusionPass>(*this, AmbientOcclusionPass::EMethod::FFX_CACAO);
+		mRenderPasses[ERenderPass::ZPrePass              ] = std::make_shared<DepthPrePass>(*this);
+		mRenderPasses[ERenderPass::DepthMSAAResolve      ] = std::make_shared<DepthMSAAResolvePass>(*this);
+		mRenderPasses[ERenderPass::ApplyReflections      ] = std::make_shared<ApplyReflectionsPass>(*this);
+		mRenderPasses[ERenderPass::Magnifier             ] = std::make_shared<MagnifierPass>(*this, true); // true: outputs to swapchain
+		mRenderPasses[ERenderPass::ObjectID              ] = std::make_shared<ObjectIDPass>(*this);
+		mRenderPasses[ERenderPass::ScreenSpaceReflections] = std::make_shared<ScreenSpaceReflectionsPass>(*this);
+		mRenderPasses[ERenderPass::Outline               ] = std::make_shared<OutlinePass>(*this);
+		{
+			SCOPED_CPU_MARKER_C("WaitRootSignatures", 0xFF0000AA);
+			mSignalRootSignaturesInitialized.Wait();
+		}
+		for (std::shared_ptr<IRenderPass>& pPass : mRenderPasses)
+			pPass->Initialize();
+		mLatchRenderPassesInitialized.count_down();
+	});
 
 	LoadDefaultResources();
 	const float tDefaultRscs = timer.Tick();
@@ -459,19 +472,14 @@ void VQRenderer::Load()
 
 	AllocateDescriptors(mResources_MainWnd, *this);
 	CreateResourceViews(mResources_MainWnd, *this);
-	mbDefaultResourcesLoaded.store(true);
+	mLatchDefaultResourcesLoaded.count_down();
 	const float tRenderRscs = timer.Tick();
 	Log::Info("[Renderer]    RenderRscs=%.2fs", tDefaultRscs);
 
-	{
-		SCOPED_CPU_MARKER("InitRenderPasses");
-		for (std::shared_ptr<IRenderPass>& pPass : mRenderPasses)
-			pPass->Initialize();
-	}
 	const float tRenderPasses = timer.Tick();
 	Log::Info("[Renderer]    RenderPasses=%.2fs", tRenderPasses);
 
-	const float total = tRS + tDefaultRscs + tRenderRscs + tRenderPasses;
+	const float total = tDefaultRscs + tRenderRscs + tRenderPasses;
 	Log::Info("[Renderer] Loaded in %.2fs.", total);
 }
 
@@ -575,6 +583,14 @@ void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuf
 	ID3D12Device* pDevice = pVQDevice->GetDevicePtr();
 
 	FWindowRenderContext ctx = FWindowRenderContext(mCmdQueues[CommandQueue::EType::GFX]);
+	{
+		SCOPED_CPU_MARKER_C("WAIT_DEVICE_CREATE", 0xFF0000FF);
+		mSignalDeviceInitialized.Wait();
+	}
+	{
+		SCOPED_CPU_MARKER_C("WAIT_CMDQ_CREATE", 0xFF0000FF);
+		mSignalCmdQueuesInitialized.Wait();
+	}
 	ctx.InitializeContext(pWin, pVQDevice, NumSwapchainBuffers, bVSync, bHDRSwapchain);
 
 	// Save other context data
@@ -583,7 +599,7 @@ void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuf
 
 	// save the render context
 	this->mRenderContextLookup.emplace(pWin->GetHWND(), std::move(ctx));
-	this->mbMainSwapchainInitialized.store(true); // TODO: this should execute only for main window
+	mLatchSwapchainInitialized.count_down();
 }
 
 void VQRenderer::InitializeFences(HWND hwnd)
@@ -624,6 +640,37 @@ void VQRenderer::WaitCopyFenceOnCPU(HWND hwnd)
 	CopyFence.WaitOnCPU(CopyFence.GetValue());
 }
 
+void VQRenderer::WaitHeapsInitialized()
+{
+	SCOPED_CPU_MARKER_C("WaitHeapsInitialized", 0xFF770000);
+	mSignalHeapsInitialized.Wait();
+}
+void VQRenderer::WaitMemoryAllocatorInitialized()
+{
+	SCOPED_CPU_MARKER_C("WaitMemoryAllocatorInitialized", 0xFF770000);
+	mSignalMemoryAllocatorInitialized.Wait();
+}
+void VQRenderer::WaitLoadingScreenReady() const
+{
+	SCOPED_CPU_MARKER_C("WaitLoadingScreenReady", 0xFF770000);
+	mLatchSignalLoadingScreenReady.wait();
+}
+void VQRenderer::SignalLoadingScreenReady()
+{
+	mLatchSignalLoadingScreenReady.count_down();
+}
+void VQRenderer::WaitMainSwapchainReady() const
+{
+	SCOPED_CPU_MARKER_C("WaitSwapchainReady", 0xFF770000);
+	mLatchSwapchainInitialized.wait();
+}
+
+void VQRenderer::WaitForLoadCompletion() const
+{
+	SCOPED_CPU_MARKER_C("WaitRendererDefaultResourceLoaded", 0xFFAA0000);
+	mLatchDefaultResourcesLoaded.wait();
+}
+
 
 bool VQRenderer::CheckContext(HWND hwnd) const
 {
@@ -645,17 +692,6 @@ FWindowRenderContext& VQRenderer::GetWindowRenderContext(HWND hwnd)
 	return mRenderContextLookup.at(hwnd);
 }
 
-void VQRenderer::WaitMainSwapchainReady() const
-{
-	SCOPED_CPU_MARKER_C("WaitSwapchainReady", 0xFF770000);
-	while (!mbMainSwapchainInitialized.load());
-}
-
-void VQRenderer::WaitForLoadCompletion() const
-{
-	SCOPED_CPU_MARKER_C("WaitRendererDefaultResourceLoaded", 0xFFAA0000);
-	while (!mbDefaultResourcesLoaded); 
-}
 
 // ================================================================================================================================================
 // ================================================================================================================================================
@@ -667,6 +703,8 @@ void VQRenderer::WaitForLoadCompletion() const
 
 void VQRenderer::LoadDefaultResources()
 {
+	SCOPED_CPU_MARKER("LoadDefaultResources");
+
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
 	const UINT sizeX = 1024;
@@ -690,6 +728,8 @@ void VQRenderer::LoadDefaultResources()
 	TextureCreateDesc desc("Checkerboard");
 	desc.d3d12Desc = textureDesc;
 	desc.ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+	WaitMemoryAllocatorInitialized();
 
 	// programmatically generated textures
 	{

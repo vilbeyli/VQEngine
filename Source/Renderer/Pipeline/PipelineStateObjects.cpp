@@ -120,15 +120,21 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs()
 void VQRenderer::StartPSOCompilation_MT()
 {
 	SCOPED_CPU_MARKER("StartPSOCompilation_MT");
-
-	std::vector<FPSOCreationTaskParameters> RenderPassPSOTaskParams;
-	LoadRenderPassPSODescs(mRenderPasses, RenderPassPSOTaskParams);
+	{
+		SCOPED_CPU_MARKER_C("WaitRootSignatures", 0xFF0000AA);
+		mSignalRootSignaturesInitialized.Wait();
+	}
 
 	std::vector<FPSODesc> PSODescs_BuiltinLegacy = LoadBuiltinPSODescs_Legacy();
-	assert(EBuiltinPSOs::NUM_BUILTIN_PSOs == PSODescs_BuiltinLegacy.size());
-
 	std::vector<FPSODesc> PSODescs_Builtin = LoadBuiltinPSODescs();
-	
+	std::vector<FPSOCreationTaskParameters> RenderPassPSOTaskParams;
+	{
+		SCOPED_CPU_MARKER_C("WaitRenderPassInit", 0xFF0000AA);
+		mLatchRenderPassesInitialized.wait();
+	}
+	LoadRenderPassPSODescs(mRenderPasses, RenderPassPSOTaskParams);
+
+	assert(EBuiltinPSOs::NUM_BUILTIN_PSOs == PSODescs_BuiltinLegacy.size());
 	const size_t NumBuiltinPSOs = PSODescs_BuiltinLegacy.size() + PSODescs_Builtin.size();
 
 	std::vector<FPSODesc> PSODescs(NumBuiltinPSOs + RenderPassPSOTaskParams.size());
@@ -256,6 +262,7 @@ void VQRenderer::StartPSOCompilation_MT()
 
 			mPSOCompileResults.push_back(PSOCompileResult);
 		}
+		mLatchPSOLoaderDispatched.count_down();
 	}
 }
 

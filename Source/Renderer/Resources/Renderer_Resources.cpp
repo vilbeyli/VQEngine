@@ -656,7 +656,6 @@ TextureID VQRenderer::CreateTexture(const TextureCreateDesc& desc, bool bCheckAl
 	//if (desc.d3d12Desc.MipLevels >  1) assert( desc.bGenerateMips);
 	Texture tex;
 	Timer t; t.Start();
-
 	tex.Create(mDevice.GetDevicePtr(), mpAllocator, desc, bCheckAlpha);
 
 	TextureID ID = AddTexture_ThreadSafe(std::move(tex));
@@ -1582,6 +1581,12 @@ void VQRenderer::ProcessTextureUploadQueue()
 
 void VQRenderer::TextureUploadThread_Main()
 {
+	{
+		SCOPED_CPU_MARKER_C("WAIT_DEVICE_INIT", 0xFF0000FF);
+		mSignalDeviceInitialized.Wait();
+	}
+	this->WaitHeapsInitialized();
+
 	while (!mbExitUploadThread)
 	{
 		SCOPED_CPU_MARKER_C("TextureUploadThread_Main()", 0xFF33AAFF);

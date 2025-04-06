@@ -29,6 +29,11 @@ void VQRenderer::LoadWindowSizeDependentResources(HWND hwnd, unsigned Width, uns
 	assert(Width >= 1 && Height >= 1);
 	SCOPED_CPU_MARKER("LoadWindowSizeDependentResources");
 
+	{
+		SCOPED_CPU_MARKER_C("WAIT_DEFAULT_RSC_LOAD", 0xFF0000FF);
+		mLatchDefaultResourcesLoaded.wait();
+	}
+
 	const uint RenderResolutionX = static_cast<uint>(Width * fResolutionScale);
 	const uint RenderResolutionY = static_cast<uint>(Height * fResolutionScale);
 
@@ -399,7 +404,6 @@ void VQRenderer::LoadWindowSizeDependentResources(HWND hwnd, unsigned Width, uns
 		CopyFence.WaitOnCPU(CopyFence.GetValue());
 	}
 	mRenderPasses[ERenderPass::ObjectID]->OnCreateWindowSizeDependentResources(Width, Height, nullptr);
-	
 }
 
 void VQRenderer::UnloadWindowSizeDependentResources(HWND hwnd)

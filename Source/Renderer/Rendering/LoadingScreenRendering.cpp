@@ -34,22 +34,20 @@ HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScr
 {
 	HRESULT hr = S_OK;
 	
+	this->WaitMainSwapchainReady();
 	HWND hwnd = pWindow->GetHWND();
 	FWindowRenderContext& ctx = mRenderContextLookup.at(hwnd);
 
-	//
-	// RENDER
-	//
 #if RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING
 	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, 1); // RenderThreadID == 1
 #else
 	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, 0);
 #endif
+
 	// Transition SwapChain RT
 	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
 	CD3DX12_RESOURCE_BARRIER barrierPW = CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	CD3DX12_RESOURCE_BARRIER barrierWP = CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-
 	pCmd->ResourceBarrier(1, &barrierPW);
 
 	// Clear RT
@@ -76,6 +74,10 @@ HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScr
 
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
 
+	{
+		SCOPED_CPU_MARKER("WAIT_PSO_WORKER_DISPATCH");
+		mLatchPSOLoaderDispatched.wait();
+	}
 	if (!mPSOCompileResults.empty())
 	{
 		std::shared_future<FPSOCompileResult>& future = mPSOCompileResults[bUseHDRRenderPath ? EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO : EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO];
@@ -87,6 +89,7 @@ HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScr
 		}
 	}
 
+	this->WaitLoadingScreenReady();
 	pCmd->SetPipelineState(this->GetPSO(bUseHDRRenderPath ? EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO : EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO));
 	pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FullScreenTriangle));
 
