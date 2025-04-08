@@ -75,7 +75,7 @@ enum EBuiltinPSOs // TODO: remove the hardcoded PSOs when a generic Shader solut
 	GAUSSIAN_BLUR_CS_NAIVE_Y_PSO,
 	BRDF_INTEGRATION_CS_PSO,
 	FFX_CAS_CS_PSO,
-	FFX_SPD_CS_PSO,
+	//FFX_SPD_CS_PSO, // TODO
 	FFX_FSR1_EASU_CS_PSO,
 	FFX_FSR1_RCAS_CS_PSO,
 	DOWNSAMPLE_DEPTH_CS_PSO,
@@ -97,7 +97,7 @@ enum EBuiltinRootSignatures
 	LEGACY__ShadowPass,
 	LEGACY__ConvolutionCubemap,
 	LEGACY__BRDFIntegrationCS,
-	LEGACY__FFX_SPD_CS,
+	LEGACY__FFX_SPD_CS, // TODO
 	LEGACY__ZPrePass,
 	LEGACY__OutlinePass,
 	LEGACY__FFX_FSR1,
@@ -115,7 +115,6 @@ static constexpr UINT MSAA_SAMPLE_COUNTS[NUM_MSAA_OPTIONS] = { 1, 4 };
 struct PSOCollection
 {
 	virtual void GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12RootSignature*>& mRootSignatureLookup) = 0;
-	void Compile(VQRenderer& Renderer);
 	PSO_ID Get(size_t hash) const;
 
 	std::unordered_map<size_t, PSO_ID>   mapPSO;

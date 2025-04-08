@@ -205,7 +205,6 @@ public:
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// PSO & Shader management
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-	PSO_ID                       CreatePSO_OnThisThread(const FPSODesc& psoLoadDesc);
 	void                         EnqueueTask_ShaderLoad(TaskID PSOLoadTaskID, const FShaderStageCompileDesc&);
 	std::vector<std::shared_future<FShaderStageCompileResult>> StartShaderLoadTasks(TaskID PSOLoadTaskID);
 	void                         StartPSOCompilation_MT();
@@ -381,10 +380,9 @@ private:
 	void LoadBuiltinRootSignatures();
 	void LoadDefaultResources();
 
-	ID3D12PipelineState* CompileGraphicsPSO(const FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults);
-	ID3D12PipelineState* CompileComputePSO (const FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults);
+	ID3D12PipelineState* CompileGraphicsPSO(FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults);
+	ID3D12PipelineState* CompileComputePSO (FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults);
 
-	ID3D12PipelineState* LoadPSO(const FPSODesc& psoLoadDesc);
 	FShaderStageCompileResult LoadShader(const FShaderStageCompileDesc& shaderStageDesc);
 
 	BufferID CreateVertexBuffer(const FBufferDesc& desc);

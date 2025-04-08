@@ -35,7 +35,6 @@
 
 #include <cassert>
 #include <atomic>
-#include <d3dcompiler.h>
 
 using namespace Microsoft::WRL;
 using namespace VQSystemInfo;
@@ -76,8 +75,6 @@ static RTV_ID    LAST_USED_RTV_ID            = 1;
 static BufferID  LAST_USED_VBV_ID            = 1;
 static BufferID  LAST_USED_IBV_ID            = 1;
 static BufferID  LAST_USED_CBV_ID            = 1;
-static std::atomic<PSO_ID> LAST_USED_PSO_ID_OFFSET = 1;
-static std::atomic<TaskID> LAST_USED_TASK_ID = 1;
 
 namespace VQ_DXGI_UTILS
 {
@@ -885,6 +882,7 @@ void VQRenderer::InitializeDSV(DSV_ID dsvID, uint32 heapIndex, TextureID texID, 
 void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bool bInitAsArrayView /*= false*/, bool bInitAsCubeView /*= false*/, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc /*=nullptr*/, UINT ShaderComponentMapping)
 {
 	CHECK_RESOURCE_VIEW(SRV, srvID);
+	std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 	if (texID != INVALID_ID)
 	{
 		CHECK_TEXTURE(mTextures, texID);
@@ -1140,238 +1138,6 @@ std::vector<std::shared_future<FShaderStageCompileResult>> VQRenderer::StartShad
 	}
 
 	return taskResults;
-}
-
-static PSO_ID GetNextAvailablePSOIdAndIncrement()
-{
-	return EBuiltinPSOs::NUM_BUILTIN_PSOs + LAST_USED_PSO_ID_OFFSET.fetch_add(1);
-}
-PSO_ID VQRenderer::CreatePSO_OnThisThread(const FPSODesc& psoLoadDesc)
-{
-	ID3D12PipelineState* pPSO = this->LoadPSO(psoLoadDesc);
-	if (!pPSO)
-		return INVALID_ID;
-	PSO_ID id = GetNextAvailablePSOIdAndIncrement();
-	mPSOs[id] = pPSO;
-	return id;
-}
-
-static std::string GetErrString(HRESULT hr)
-{
-	switch (hr)
-	{
-	case E_OUTOFMEMORY: return "Out of memory";
-	case E_INVALIDARG: return "Invalid arguments";
-	}
-	return "Unspecified error, contact dev";
-}
-
-ID3D12PipelineState* VQRenderer::CompileGraphicsPSO(const FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults)
-{
-	SCOPED_CPU_MARKER("CompileGraphicsPSO");
-	ID3D12Device* pDevice = mDevice.GetDevicePtr();
-	ID3D12PipelineState* pPSO = nullptr;
-
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC d3d12GraphicsPSODesc = Desc.D3D12GraphicsDesc;
-
-	std::unordered_map<EShaderStage, Microsoft::WRL::ComPtr<ID3D12ShaderReflection>> ShaderReflections;
-
-	// Assign shader blobs to PSODesc
-	for (const std::shared_future<FShaderStageCompileResult>& TaskResult : ShaderCompileResults)
-	{
-		const FShaderStageCompileResult& ShaderCompileResult = TaskResult.get();
-
-		CD3DX12_SHADER_BYTECODE ShaderByteCode(ShaderCompileResult.ShaderBlob.GetByteCode(), ShaderCompileResult.ShaderBlob.GetByteCodeSize());
-		switch (ShaderCompileResult.ShaderStageEnum)
-		{
-		case EShaderStage::VS: d3d12GraphicsPSODesc.VS = ShaderByteCode; break;
-		case EShaderStage::HS: d3d12GraphicsPSODesc.HS = ShaderByteCode; break;
-		case EShaderStage::DS: d3d12GraphicsPSODesc.DS = ShaderByteCode; break;
-		case EShaderStage::GS: d3d12GraphicsPSODesc.GS = ShaderByteCode; break;
-		case EShaderStage::PS: d3d12GraphicsPSODesc.PS = ShaderByteCode; break;
-		}
-
-		// reflect shader
-		Microsoft::WRL::ComPtr<ID3D12ShaderReflection>& pShaderReflection = ShaderReflections[ShaderCompileResult.ShaderStageEnum];
-		if (ShaderCompileResult.bSM6)
-		{
-			assert(ShaderCompileResult.ShaderBlob.pBlobDxc);
-			HRESULT hr;
-
-			Microsoft::WRL::ComPtr<IDxcContainerReflection> pReflection;
-			hr = DxcCreateInstance(CLSID_DxcContainerReflection, IID_PPV_ARGS(&pReflection));
-			if (FAILED(hr)) {
-				Log::Error("Failed ");
-			}
-
-			hr = pReflection->Load(ShaderCompileResult.ShaderBlob.pBlobDxc.Get());
-			if (FAILED(hr)) {
-				Log::Error("Failed ");
-			}
-
-			UINT32 index;
-			hr = pReflection->FindFirstPartKind(DXC_PART_REFLECTION_DATA, &index);
-			if (FAILED(hr)) {
-				Log::Error("Failed ");
-			}
-
-			hr = pReflection->GetPartReflection(index, IID_PPV_ARGS(&pShaderReflection));
-			if (FAILED(hr)) {
-				Log::Error("Failed ");
-			}
-
-			assert(pShaderReflection);
-		}
-		else
-		{
-			HRESULT hr = D3DReflect(ShaderByteCode.pShaderBytecode, ShaderByteCode.BytecodeLength, IID_PPV_ARGS(&pShaderReflection));
-			assert(pShaderReflection);
-		}
-	}
-
-	// assign input layout
-	std::vector<D3D12_INPUT_ELEMENT_DESC> inputLayout;
-	const bool bHasVS = ShaderReflections.find(EShaderStage::VS) != ShaderReflections.end();
-	if (bHasVS)
-	{
-		inputLayout = ShaderUtils::ReflectInputLayoutFromVS(ShaderReflections.at(EShaderStage::VS).Get());
-		d3d12GraphicsPSODesc.InputLayout = { inputLayout.data(), static_cast<UINT>(inputLayout.size()) };
-	}
-
-	// TODO: assign root signature
-#if 0
-	{
-		for (auto& it : ShaderReflections)
-		{
-			EShaderStage eShaderStage = it.first;
-			ID3D12ShaderReflection*& pRefl = it.second;
-
-			D3D12_SHADER_DESC shaderDesc = {};
-			pRefl->GetDesc(&shaderDesc);
-
-			std::vector< D3D12_SHADER_INPUT_BIND_DESC> boundRscDescs(shaderDesc.BoundResources);
-			for (UINT i = 0; i < shaderDesc.BoundResources; ++i)
-			{
-				pRefl->GetResourceBindingDesc(i, &boundRscDescs[i]);
-			}
-
-			int a = 5;
-		}
-	}
-#endif
-
-	// Compile PSO
-	HRESULT hr = pDevice->CreateGraphicsPipelineState(&d3d12GraphicsPSODesc, IID_PPV_ARGS(&pPSO));
-	if (hr != S_OK)
-	{
-		std::string errMsg = "PSO compile failed (HR=" + std::to_string(hr) + "): " + GetErrString(hr);
-		Log::Error("%s", errMsg.c_str());
-		MessageBox(NULL, errMsg.c_str(), "PSO Compile Error", MB_OK);
-	}
-	assert(hr == S_OK);
-	SetName(pPSO, Desc.PSOName.c_str());
-
-
-	return pPSO;
-}
-ID3D12PipelineState* VQRenderer::CompileComputePSO(const FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults)
-{
-	SCOPED_CPU_MARKER("CompileComputePSO");
-	ID3D12Device* pDevice = mDevice.GetDevicePtr();
-	D3D12_COMPUTE_PIPELINE_STATE_DESC  d3d12ComputePSODesc = Desc.D3D12ComputeDesc;
-
-	// Assign CS shader blob to PSODesc
-	for (std::shared_future<FShaderStageCompileResult>& TaskResult : ShaderCompileResults)
-	{
-		FShaderStageCompileResult ShaderCompileResult = TaskResult.get();
-
-		CD3DX12_SHADER_BYTECODE ShaderByteCode(ShaderCompileResult.ShaderBlob.GetByteCode(), ShaderCompileResult.ShaderBlob.GetByteCodeSize());
-		d3d12ComputePSODesc.CS = ShaderByteCode;
-	}
-
-	// TODO: assign root signature
-
-	// Compile PSO
-	ID3D12PipelineState* pPSO = nullptr;
-	HRESULT hr = pDevice->CreateComputePipelineState(&d3d12ComputePSODesc, IID_PPV_ARGS(&pPSO));
-	if (hr == S_OK)
-	{
-		SetName(pPSO, Desc.PSOName.c_str());
-	}
-	else
-	{
-		std::string errMsg = "PSO compile failed (HR=" + std::to_string(hr) + "): " + GetErrString(hr);
-		Log::Error("%s", errMsg.c_str());
-		MessageBox(NULL, errMsg.c_str(), "PSO Compile Error", MB_OK);
-	}
-	return pPSO;
-}
-
-ID3D12PipelineState* VQRenderer::LoadPSO(const FPSODesc& psoLoadDesc)
-{
-	SCOPED_CPU_MARKER("LoadPSO");
-	TaskID               PSOTaskID = LAST_USED_TASK_ID.fetch_add(1);
-	ID3D12PipelineState* pPSO = nullptr;
-
-	HRESULT hr = {};
-	ID3D12Device* pDevice = mDevice.GetDevicePtr();
-
-	// calc PSO hash
-	//std::hash<FPSOLoadDesc> PSO_HASH = 
-
-	// check if PSO is cached
-	const bool bCachedPSOExists = false;
-	const bool bCacheDirty = false;
-	const bool bComputePSO = std::find_if(RANGE(psoLoadDesc.ShaderStageCompileDescs) // check if ShaderModel has cs_*_*
-			, [](const FShaderStageCompileDesc& desc) { return ShaderUtils::GetShaderStageEnumFromShaderModel(desc.ShaderModel) == EShaderStage::CS; }
-		) != psoLoadDesc.ShaderStageCompileDescs.end();
-
-	std::vector<std::shared_future<FShaderStageCompileResult>> ShaderCompileResults;
-
-	// compile PSO if no cache or cache dirty, otherwise load cached binary
-	if (!bCachedPSOExists || bCacheDirty) 
-	{
-		// Prepare shader loading tasks for worker threads
-		for (const FShaderStageCompileDesc& shaderStageDesc : psoLoadDesc.ShaderStageCompileDescs)
-		{
-			if (shaderStageDesc.FilePath.empty())
-				continue;
-			EnqueueTask_ShaderLoad(PSOTaskID, shaderStageDesc);
-		}
-
-		// kickoff shader compiler workers
-		ShaderCompileResults = std::move( StartShaderLoadTasks(PSOTaskID) );
-
-		// SYNC POINT - wait for shaders to load / compile
-		for (std::shared_future<FShaderStageCompileResult>& result : ShaderCompileResults)
-		{
-			assert(result.valid());
-			result.wait();
-		}
-
-		// Check for compile errors
-		for (std::shared_future<FShaderStageCompileResult>& TaskResult : ShaderCompileResults)
-		{
-			FShaderStageCompileResult ShaderCompileResult = TaskResult.get();
-			if (ShaderCompileResult.ShaderBlob.IsNull())
-			{
-				Log::Error("PSO Compile failed: PSOTaskID=%d", PSOTaskID);
-				return nullptr;
-			}
-		}
-
-		// Compile the PSO using the shaders
-		pPSO = bComputePSO 
-			? CompileComputePSO(psoLoadDesc, ShaderCompileResults) 
-			: CompileGraphicsPSO(psoLoadDesc, ShaderCompileResults);
-	}
-	else // load cached PSO
-	{
-		assert(false); // TODO
-	}
-
-
-	return pPSO;
 }
 
 constexpr const char* SHADER_BINARY_EXTENSION = ".bin";

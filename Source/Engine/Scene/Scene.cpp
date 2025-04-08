@@ -830,7 +830,7 @@ FSceneView& Scene::GetSceneView(int FRAME_DATA_INDEX)
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	return mFrameSceneViews[FRAME_DATA_INDEX];
 #else
-	return mFrameSceneViews[0];
+ 	return mFrameSceneViews[0];
 #endif
 }
 const FSceneView& Scene::GetSceneView(int FRAME_DATA_INDEX) const

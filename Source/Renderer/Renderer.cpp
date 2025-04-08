@@ -68,7 +68,11 @@ using namespace VQSystemInfo;
 
 // initialize statics
 std::string VQRenderer::ShaderSourceFileDirectory = "Shaders";
+#if _DEBUG
+std::string VQRenderer::PSOCacheDirectory = "Cache/PSOs/Debug";
+#else
 std::string VQRenderer::PSOCacheDirectory    = "Cache/PSOs";
+#endif
 #if _DEBUG
 std::string VQRenderer::ShaderCacheDirectory = "Cache/Shaders/Debug";
 #else
