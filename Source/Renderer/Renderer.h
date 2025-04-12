@@ -205,8 +205,6 @@ public:
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// PSO & Shader management
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-	void                         EnqueueTask_ShaderLoad(TaskID PSOLoadTaskID, const FShaderStageCompileDesc&);
-	std::vector<std::shared_future<FShaderStageCompileResult>> StartShaderLoadTasks(TaskID PSOLoadTaskID);
 	void                         StartPSOCompilation_MT();
 	void                         WaitPSOCompilation();
 	void                         AssignPSOs();
@@ -365,6 +363,7 @@ private:
 	std::unordered_map<EProceduralTextures, SRV_ID>    mLookup_ProceduralTextureSRVs;
 	std::unordered_map<EProceduralTextures, TextureID> mLookup_ProceduralTextureIDs;
 	std::unordered_map<std::string, TextureID>         mLoadedTexturePaths;
+	std::unordered_map<std::string, bool>              mShaderCacheDirtyMap;
 
 	// texture uploading
 	std::atomic<bool>              mbExitUploadThread;
@@ -383,7 +382,7 @@ private:
 	ID3D12PipelineState* CompileGraphicsPSO(FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults);
 	ID3D12PipelineState* CompileComputePSO (FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults);
 
-	FShaderStageCompileResult LoadShader(const FShaderStageCompileDesc& shaderStageDesc);
+	FShaderStageCompileResult LoadShader(const FShaderStageCompileDesc& shaderStageDesc, const std::unordered_map<std::string, bool>& ShaderCacheDirtyMap);
 
 	BufferID CreateVertexBuffer(const FBufferDesc& desc);
 	BufferID CreateIndexBuffer(const FBufferDesc& desc);

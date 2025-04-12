@@ -1106,40 +1106,6 @@ void VQRenderer::DestroyDSV(DSV_ID dsvID)
 // MULTI-THREADED PSO / SHADER / TEXTURE LOADING
 //
 // -----------------------------------------------------------------------------------------------------------------
-void VQRenderer::EnqueueTask_ShaderLoad(TaskID PSOTaskID, const FShaderStageCompileDesc& ShaderStageCompileDesc)
-{
-	FShaderLoadTaskContext& taskContext = mLookup_ShaderLoadContext[PSOTaskID];
-	taskContext.TaskQueue.push(ShaderStageCompileDesc);
-}
-std::vector<std::shared_future<FShaderStageCompileResult>> VQRenderer::StartShaderLoadTasks(TaskID PSOTaskID)
-{
-	if (mLookup_ShaderLoadContext.find(PSOTaskID) == mLookup_ShaderLoadContext.end())
-	{
-		Log::Error("Couldn't find PSO Load Task [ID=%d]", PSOTaskID);
-		return {};
-	}
-
-	// get the task queue associated with the PSOTaskID
-	FShaderLoadTaskContext& taskCtx = mLookup_ShaderLoadContext.at(PSOTaskID);
-	std::queue<FShaderStageCompileDesc>& TaskQueue = taskCtx.TaskQueue;
-
-	// kickoff shader load workers
-	std::vector<std::shared_future<FShaderStageCompileResult>> taskResults;
-	while (!TaskQueue.empty())
-	{
-		FShaderStageCompileDesc compileDesc = std::move(TaskQueue.front());
-		TaskQueue.pop();
-
-		std::shared_future<FShaderStageCompileResult> ShaderCompileResult = mWorkers_ShaderLoad.AddTask([=]()
-		{
-			return this->LoadShader(compileDesc);
-		});
-		taskResults.push_back(std::move(ShaderCompileResult));
-	}
-
-	return taskResults;
-}
-
 constexpr const char* SHADER_BINARY_EXTENSION = ".bin";
 std::string VQRenderer::GetCachedShaderBinaryPath(const FShaderStageCompileDesc& ShaderStageCompileDesc)
 {
@@ -1159,7 +1125,7 @@ std::string VQRenderer::GetCachedShaderBinaryPath(const FShaderStageCompileDesc&
 	return CachedShaderBinaryPath;
 }
 
-FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& ShaderStageCompileDesc)
+FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& ShaderStageCompileDesc, const std::unordered_map<std::string, bool>& ShaderCacheDirtyMap)
 {
 	SCOPED_CPU_MARKER("LoadShader");
 	using namespace ShaderUtils;
@@ -1168,8 +1134,12 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 	const std::string CachedShaderBinaryPath = GetCachedShaderBinaryPath(ShaderStageCompileDesc);
 
 	// decide whether to use shader cache or compile from source
+#if 1
+	const bool bUseCachedShaders = !ShaderCacheDirtyMap.at(CachedShaderBinaryPath);
+#else
 	const bool bUseCachedShaders = DirectoryUtil::FileExists(CachedShaderBinaryPath)
 		&& !ShaderUtils::IsCacheDirty(ShaderSourcePath, CachedShaderBinaryPath);
+#endif
 
 	// load the shader d3dblob
 	FShaderStageCompileResult Result = {};

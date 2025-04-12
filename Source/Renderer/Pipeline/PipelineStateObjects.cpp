@@ -52,6 +52,7 @@ static void PreAssignPSOIDs(PSOCollection& psoCollection, int& i, std::vector<FP
 	}
 	psoCollection.mapLoadDesc.clear();
 }
+
 static std::vector<const FShaderStageCompileDesc*> GatherUniqueShaderCompileDescs(const std::vector<FPSODesc>& PSODescs, std::map<PSO_ID, std::vector<size_t>>& PSOShaderMap)
 {
 	SCOPED_CPU_MARKER("GatherUniqueShaderCompileDescs");
@@ -61,8 +62,7 @@ static std::vector<const FShaderStageCompileDesc*> GatherUniqueShaderCompileDesc
 
 	for (int i = 0; i < PSODescs.size(); ++i)
 	{
-		const FPSODesc& psoDesc = PSODescs[i];
-		for (const FShaderStageCompileDesc& shaderDesc : psoDesc.ShaderStageCompileDescs)
+		for (const FShaderStageCompileDesc& shaderDesc : PSODescs[i].ShaderStageCompileDescs)
 		{
 			const std::string CachedShaderBinaryPath = VQRenderer::GetCachedShaderBinaryPath(shaderDesc);
 			const size_t hash = hasher(CachedShaderBinaryPath);
@@ -83,6 +83,124 @@ static std::vector<const FShaderStageCompileDesc*> GatherUniqueShaderCompileDesc
 	}
 	return UniqueCompileDescs;
 }
+
+// BUGGY MULTITHREADED, TODO: FIX
+static std::vector<const FShaderStageCompileDesc*> GatherUniqueShaderCompileDescs(
+	const std::vector<FPSODesc>& PSODescs,
+	const std::vector<std::pair<size_t, size_t>>& vRanges,
+	std::map<PSO_ID, std::vector<size_t>>& PSOShaderMap,
+	ThreadPool& PSOWorkers
+)
+{
+	SCOPED_CPU_MARKER("GatherUniqueShaderCompileDescs");
+
+	// Thread-local storage for each range
+	struct ThreadResult 
+	{
+		std::vector<const FShaderStageCompileDesc*> LocalUniqueCompileDescs;
+		std::unordered_map<size_t, size_t> LocalUniqueCompilePathHashToIndex;
+	};
+	std::vector<ThreadResult> ThreadResults(vRanges.size() - 1);
+
+	// Lambda to process a range of PSODescs
+	auto fnProcessPSODescs = [&PSODescs, &PSOShaderMap](size_t start, size_t end, ThreadResult& result)
+	{
+		std::hash<std::string> hasher;
+		for (size_t i = start; i <= end; ++i) 
+		{
+			for (const FShaderStageCompileDesc& shaderDesc : PSODescs[i].ShaderStageCompileDescs) 
+			{
+				const std::string CachedShaderBinaryPath = VQRenderer::GetCachedShaderBinaryPath(shaderDesc);
+				const size_t hash = hasher(CachedShaderBinaryPath);
+
+				auto it = result.LocalUniqueCompilePathHashToIndex.find(hash);
+				if (it != result.LocalUniqueCompilePathHashToIndex.end()) 
+				{
+					PSOShaderMap[i].push_back(it->second);
+					continue;
+				}
+
+				result.LocalUniqueCompileDescs.push_back(&shaderDesc);
+				const size_t iShader = result.LocalUniqueCompileDescs.size() - 1;
+				result.LocalUniqueCompilePathHashToIndex[hash] = iShader;
+				PSOShaderMap[i].push_back(iShader);
+			}
+		}
+	};
+
+	// Launch threaded tasks
+	std::latch Latch{ __int64(vRanges.size() - 1) };
+	for (size_t iRange = 0; iRange < vRanges.size() - 1; ++iRange) 
+	{
+		PSOWorkers.AddTask([&, iRange]() 
+		{
+			SCOPED_CPU_MARKER("ProcessPSODescs");
+			fnProcessPSODescs(vRanges[iRange].first, vRanges[iRange].second, ThreadResults[iRange]);
+			Latch.count_down();
+		});
+	}
+
+	// Main thread processes the last range
+	std::vector<const FShaderStageCompileDesc*> UniqueCompileDescs;
+	std::unordered_map<size_t, size_t> UniqueCompilePathHashToIndex;
+	{
+		SCOPED_CPU_MARKER("ProcessPSODescs");
+		ThreadResult mainThreadResult;
+		fnProcessPSODescs(vRanges.back().first, vRanges.back().second, mainThreadResult);
+		UniqueCompileDescs = std::move(mainThreadResult.LocalUniqueCompileDescs);
+		UniqueCompilePathHashToIndex = std::move(mainThreadResult.LocalUniqueCompilePathHashToIndex);
+	}
+
+	// Wait for threads to finish
+	{
+		SCOPED_CPU_MARKER_C("WAIT_Workers", 0xFFAA0000);
+		Latch.wait();
+	}
+
+	// Merge results
+	{
+		SCOPED_CPU_MARKER("Merge");
+		for (size_t iRange = 0; iRange < vRanges.size() - 1; ++iRange)
+		{
+			const auto& threadResult = ThreadResults[iRange];
+			std::unordered_map<size_t, size_t> tempHashToGlobalIndex;
+
+			// Merge descriptors and update hash-to-index mapping
+			for (size_t iLocal = 0; iLocal < threadResult.LocalUniqueCompileDescs.size(); ++iLocal)
+			{
+				const auto* shaderDesc = threadResult.LocalUniqueCompileDescs[iLocal];
+				const std::string CachedShaderBinaryPath = VQRenderer::GetCachedShaderBinaryPath(*shaderDesc);
+				const size_t hash = std::hash<std::string>{}(CachedShaderBinaryPath);
+
+				auto it = UniqueCompilePathHashToIndex.find(hash);
+				if (it != UniqueCompilePathHashToIndex.end() &&
+					VQRenderer::GetCachedShaderBinaryPath(*UniqueCompileDescs[it->second]) == CachedShaderBinaryPath)
+				{
+					tempHashToGlobalIndex[threadResult.LocalUniqueCompilePathHashToIndex.at(hash)] = it->second;
+				}
+				else
+				{
+					tempHashToGlobalIndex[threadResult.LocalUniqueCompilePathHashToIndex.at(hash)] = UniqueCompileDescs.size();
+					UniqueCompileDescs.push_back(shaderDesc);
+					UniqueCompilePathHashToIndex[hash] = UniqueCompileDescs.size() - 1;
+				}
+			}
+
+			// Update PSOShaderMap indices for this thread's range
+			// Note: Assumes PSO_ID is compatible with size_t; verify PSOShaderMap key type
+			for (size_t i = vRanges[iRange].first; i <= vRanges[iRange].second; ++i)
+			{
+				for (size_t& shaderIndex : PSOShaderMap[i])
+				{
+					shaderIndex = tempHashToGlobalIndex.at(shaderIndex);
+				}
+			}
+		}
+	}
+
+	return UniqueCompileDescs;
+}
+
 static void LoadRenderPassPSODescs(std::vector<std::shared_ptr<IRenderPass>>& mRenderPasses, std::vector<FPSOCreationTaskParameters>& RenderPassPSOTaskParams)
 {
 	SCOPED_CPU_MARKER("LoadRenderPassPSODescs");
@@ -270,12 +388,41 @@ static bool CachePSO(ID3D12PipelineState* pPSO, const std::string& PSOCacheFileP
 	return true;
 }
 
-static void ComputePSOHashes(std::vector<size_t>& Results, size_t iBegin, size_t iEnd, const std::vector<FPSODesc>& Descs)
+static std::vector<size_t> ComputePSOHashes(const std::vector<FPSODesc>& Descs, const std::vector<std::pair<size_t, size_t>>& vRanges, ThreadPool& PSOLoadWorkers)
 {
-	SCOPED_CPU_MARKER("ComputeHashes");
-	assert(iBegin <= iEnd && iBegin < Descs.size() && iEnd < Descs.size());
-	for (size_t i = iBegin; i <= iEnd; ++i)
-		Results[i] = GeneratePSOHash(Descs[i]);
+	std::vector<size_t> hashes(Descs.size());
+
+	__int64 LATCH_COUNTER = (__int64)vRanges.size() - 1;
+	std::latch latch{ LATCH_COUNTER };
+
+	auto fnComputeHashes = [](std::vector<size_t>& Results, size_t iBegin, size_t iEnd, const std::vector<FPSODesc>& Descs)
+	{
+		SCOPED_CPU_MARKER("ComputeHashes");
+		assert(iBegin <= iEnd && iBegin < Descs.size() && iEnd < Descs.size());
+		for (size_t i = iBegin; i <= iEnd; ++i)
+			Results[i] = GeneratePSOHash(Descs[i]);
+	};
+
+	{
+		SCOPED_CPU_MARKER("Dispatch");
+		for (size_t iRange = 0; iRange < vRanges.size() - 1; ++iRange)
+		{
+			PSOLoadWorkers.AddTask([&, iRange]()
+			{
+				fnComputeHashes(hashes, vRanges[iRange].first, vRanges[iRange].second, Descs);
+				latch.count_down();
+			});
+		}
+	}
+
+	fnComputeHashes(hashes, vRanges.back().first, vRanges.back().second, Descs);
+
+	{
+		SCOPED_CPU_MARKER_C("Sync", 0xFFAA0000);
+		latch.wait();
+	}
+
+	return hashes;
 }
 
 static std::vector<std::string> ComputeCachedPSOFilePaths(const std::vector<FPSODesc>& PSODescs, const std::vector<size_t>& PSOHashes)
@@ -292,61 +439,94 @@ static std::vector<std::string> ComputeCachedPSOFilePaths(const std::vector<FPSO
 	return PSOCacheFilePaths;
 }
 
-static void CheckIsCached(
-	std::vector<bool>& IsPSOCached, 
-	size_t iBegin, size_t iEnd, 
+static std::vector<bool> CheckIsCached(
 	const std::vector<FPSODesc>& Descs,
 	const std::vector<std::string>& PSOCacheFilePaths,
-	const std::unordered_map<std::string, bool>& ShaderCacheDirtyMap
+	const std::unordered_map<std::string, bool>& ShaderCacheDirtyMap,
+	const std::vector<std::pair<size_t, size_t>>& vRanges,
+	ThreadPool& PSOWorkers
 )
 {
 	SCOPED_CPU_MARKER("IsCached");
-	for (size_t i = iBegin; i <= iEnd; ++i)
+	std::vector<bool> IsPSOCached(Descs.size());
+
+	std::latch latch{ (__int64)vRanges.size()-1 };
+
+	auto fnProcessIsCached = [&IsPSOCached, &PSOCacheFilePaths, &ShaderCacheDirtyMap, &Descs](size_t iBegin, size_t iEnd)
 	{
-		const bool bCachedFileExists = std::filesystem::exists(PSOCacheFilePaths[i]);
-		if (!bCachedFileExists)
+		SCOPED_CPU_MARKER("ProcessIsCached");
+		for (size_t i = iBegin; i <= iEnd; ++i)
 		{
-			IsPSOCached[i] = false;
-			continue;
-		}
+			const bool bCachedFileExists = std::filesystem::exists(PSOCacheFilePaths[i]);
+			if (!bCachedFileExists)
+			{
+				IsPSOCached[i] = false;
+				continue;
+			}
 
-		// PSO cache may be dirty if any of its cached shader is dirty
-		bool bShaderCacheDirty = false;
-		for (const FShaderStageCompileDesc& shaderDesc : Descs[i].ShaderStageCompileDescs)
+			// PSO cache may be dirty if any of its cached shader is dirty
+			bool bShaderCacheDirty = false;
+			for (const FShaderStageCompileDesc& shaderDesc : Descs[i].ShaderStageCompileDescs)
+			{
+				const std::string ShaderSourcePath = StrUtil::UnicodeToASCII<256>(shaderDesc.FilePath.c_str());
+				const std::string CachedShaderBinaryPath = VQRenderer::GetCachedShaderBinaryPath(shaderDesc);
+				bShaderCacheDirty = ShaderCacheDirtyMap.at(CachedShaderBinaryPath);
+				if (bShaderCacheDirty)
+					break;
+			}
+
+			IsPSOCached[i] = !bShaderCacheDirty;
+		}
+	};
+	{
+		SCOPED_CPU_MARKER("Dispatch");
+		for (size_t iRange = 0; iRange < vRanges.size() - 1; ++iRange)
 		{
-			const std::string ShaderSourcePath = StrUtil::UnicodeToASCII<256>(shaderDesc.FilePath.c_str());
-			const std::string CachedShaderBinaryPath = VQRenderer::GetCachedShaderBinaryPath(shaderDesc);
-			bShaderCacheDirty = ShaderCacheDirtyMap.at(CachedShaderBinaryPath);
-			if (bShaderCacheDirty)
-				break;
+			PSOWorkers.AddTask([&, iRange]() 
+			{
+				fnProcessIsCached(vRanges[iRange].first, vRanges[iRange].second);
+				latch.count_down();
+			});
 		}
-
-		IsPSOCached[i] = !bShaderCacheDirty;
 	}
+
+	fnProcessIsCached(vRanges.back().first, vRanges.back().second);
+
+	{
+		SCOPED_CPU_MARKER_C("Sync", 0xFFAA0000);
+		latch.wait();
+	}
+
+	return IsPSOCached;
 }
 
 static std::unordered_map<std::string, bool> BuildShaderCacheDirtyMap(
 	const std::vector<const FShaderStageCompileDesc*>& UniqueShaderCompileDescs,
-	std::unordered_map<std::string, bool>& IncludeDirtyMap
+	std::unordered_map<std::string, bool>& IncludeDirtyMap,
+	ThreadPool& PSOWorkers
 )
 {
-	SCOPED_CPU_MARKER("BuildShaderCacheDirtyMap");
-	std::unordered_map<std::string, bool> Map;
-	for (const FShaderStageCompileDesc* shaderDesc : UniqueShaderCompileDescs)
+	SCOPED_CPU_MARKER("BuildShaderCacheDirtyMaps");
+	const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(UniqueShaderCompileDescs.size(), PSOWorkers.GetThreadPoolSize());
+	
+	std::vector<std::unordered_map<std::string, bool>> ShaderCacheDirtyMaps(vRanges.size() - 1);
+	std::vector<std::unordered_map<std::string, bool>> IncludeDirtyMaps(vRanges.size() - 1);
+
+	auto fnProcessShaders = [](const FShaderStageCompileDesc* shaderDesc, std::unordered_map<std::string, bool>& ShaderCacheDirtyMap, std::unordered_map<std::string, bool>& IncludeDirtyMap)
 	{
 		const std::string ShaderSourcePath = StrUtil::UnicodeToASCII<256>(shaderDesc->FilePath.c_str());
 		const std::string CachedShaderBinaryPath = VQRenderer::GetCachedShaderBinaryPath(*shaderDesc);
 
 		if (!DirectoryUtil::FileExists(CachedShaderBinaryPath))
 		{
-			Map[CachedShaderBinaryPath] = true;
-			continue;
+			ShaderCacheDirtyMap[CachedShaderBinaryPath] = true;
+			return;
 		}
 
 		if (DirectoryUtil::IsFileNewer(ShaderSourcePath, CachedShaderBinaryPath))
 		{
-			Map[CachedShaderBinaryPath] = true;
-			continue;
+			ShaderCacheDirtyMap[CachedShaderBinaryPath] = true;
+			return;
 		}
 
 		auto it = IncludeDirtyMap.find(ShaderSourcePath);
@@ -356,12 +536,52 @@ static std::unordered_map<std::string, bool> BuildShaderCacheDirtyMap(
 		}
 		if (IncludeDirtyMap.at(ShaderSourcePath))
 		{
-			Map[CachedShaderBinaryPath] = true;
-			continue;
+			ShaderCacheDirtyMap[CachedShaderBinaryPath] = true;
+			return;
 		}
-		Map[CachedShaderBinaryPath] = false;
+		ShaderCacheDirtyMap[CachedShaderBinaryPath] = false;
+	};
+
+
+	std::latch Latch{ __int64(vRanges.size() - 1) };
+	for (size_t iRange = 0; iRange < vRanges.size() - 1; ++iRange)
+	{
+		PSOWorkers.AddTask([&, iRange]()
+		{
+			SCOPED_CPU_MARKER("BuildShaderCacheDirtyMap");
+			for (size_t i = vRanges[iRange].first; i <= vRanges[iRange].second; ++i)
+			{
+				const FShaderStageCompileDesc* shaderDesc = UniqueShaderCompileDescs[i];
+				fnProcessShaders(shaderDesc, ShaderCacheDirtyMaps[iRange], IncludeDirtyMaps[iRange]);
+			}
+			Latch.count_down();
+		});
 	}
-	return Map;
+
+	std::unordered_map<std::string, bool> ShaderCacheDirtyMap; // reduce everything into this final map
+	{
+		SCOPED_CPU_MARKER("BuildShaderCacheDirtyMap");
+		for (size_t i = vRanges.back().first; i <= vRanges.back().second; ++i)
+		{
+			const FShaderStageCompileDesc* shaderDesc = UniqueShaderCompileDescs[i];
+			fnProcessShaders(shaderDesc, ShaderCacheDirtyMap, IncludeDirtyMap);
+		}
+	}
+
+	{
+		SCOPED_CPU_MARKER_C("WAIT_Workers", 0xFFAA0000);
+		Latch.wait();
+	}
+
+	{
+		SCOPED_CPU_MARKER("Merge");
+		for (size_t iRange = 0; iRange < vRanges.size() - 1; ++iRange)
+		{
+			ShaderCacheDirtyMap.insert(ShaderCacheDirtyMaps[iRange].begin(), ShaderCacheDirtyMaps[iRange].end());
+		}
+	}
+
+	return ShaderCacheDirtyMap;
 }
 
 static std::vector<uint8_t> LoadPSOBinary(const std::string& CachedPSOBinaryPath)
@@ -512,7 +732,7 @@ ID3D12PipelineState* VQRenderer::CompileGraphicsPSO(FPSODesc& Desc, std::vector<
 	HRESULT hr = pDevice->CreateGraphicsPipelineState(&d3d12GraphicsPSODesc, IID_PPV_ARGS(&pPSO));
 	if (hr != S_OK)
 	{
-		std::string errMsg = "PSO compile failed (HR=" + std::to_string(hr) + "): " + GetErrString(hr);
+		std::string errMsg = Desc.PSOName + ": PSO compile failed (HR=" + std::to_string(hr) + "): " + GetErrString(hr);
 		Log::Error("%s", errMsg.c_str());
 		MessageBox(NULL, errMsg.c_str(), "PSO Compile Error", MB_OK);
 	}
@@ -599,47 +819,29 @@ void VQRenderer::StartPSOCompilation_MT()
 	std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NUM_PSO_DESCS, mWorkers_PSOLoad.GetThreadPoolSize());
 	__int64 LATCH_COUNTER = (__int64)vRanges.size() - 1;
 
-	std::vector<size_t> PSOHash(NUM_PSO_DESCS);
-	{
-		std::latch latch{ LATCH_COUNTER };
-		{
-			SCOPED_CPU_MARKER("Dispatch");
-			for (size_t iRange = 0; iRange < vRanges.size() - 1; ++iRange)
-			{
-				mWorkers_PSOLoad.AddTask([&, iRange]()
-				{
-					ComputePSOHashes(PSOHash, vRanges[iRange].first, vRanges[iRange].second, PSODescs);
-					latch.count_down();
-				});
-			}
-		}
-		ComputePSOHashes(PSOHash, vRanges.back().first, vRanges.back().second, PSODescs);	
-		{
-			SCOPED_CPU_MARKER_C("Sync", 0xFFAA0000);
-			latch.wait();
-		}
-	}
+	const std::vector<size_t> PSOHashes = ComputePSOHashes(PSODescs, vRanges, mWorkers_PSOLoad);
 
 	{
 		SCOPED_CPU_MARKER("CheckCollision");
-		std::unordered_set<size_t> PSOHashSet(PSOHash.begin(), PSOHash.end());
-		assert(PSOHashSet.size(), PSOHash.size());
-		if (PSOHashSet.size() != PSOHash.size())
+		std::unordered_set<size_t> PSOHashSet(PSOHashes.begin(), PSOHashes.end());
+		assert(PSOHashSet.size(), PSOHashes.size());
+		if (PSOHashSet.size() != PSOHashes.size())
 		{
 			Log::Warning("PSO hash collision! duplicate PSO hashes found!");
 		}
 	}
 
-	const std::vector<std::string> PSOCacheFilePaths = ComputeCachedPSOFilePaths(PSODescs, PSOHash);
+	const std::vector<std::string> PSOCacheFilePaths = ComputeCachedPSOFilePaths(PSODescs, PSOHashes);
 
 	// shader compile context
 	std::map<PSO_ID, std::vector<size_t>> PSOShaderMap; // pso_index -> shader_index[]
 	std::vector<const FShaderStageCompileDesc*> UniqueShaderCompileDescs = GatherUniqueShaderCompileDescs(PSODescs, PSOShaderMap);
+	//std::vector<const FShaderStageCompileDesc*> UniqueShaderCompileDescs = GatherUniqueShaderCompileDescs(PSODescs, vRanges, PSOShaderMap, mWorkers_PSOLoad);
 	mShaderCompileResults.clear();
 	mShaderCompileResults.resize(UniqueShaderCompileDescs.size());
 
 	std::unordered_map<std::string, bool> IncludeDirtyMap;
-	const std::unordered_map<std::string, bool> ShaderCacheDirtyMap = BuildShaderCacheDirtyMap(UniqueShaderCompileDescs, IncludeDirtyMap);
+	mShaderCacheDirtyMap = BuildShaderCacheDirtyMap(UniqueShaderCompileDescs, IncludeDirtyMap, mWorkers_PSOLoad);
 
 	// kickoff shader workers
 	{
@@ -654,31 +856,12 @@ void VQRenderer::StartPSOCompilation_MT()
 
 			mShaderCompileResults[i] = mWorkers_ShaderLoad.AddTask([=]()
 			{
-				return this->LoadShader(ShaderStageCompileDesc);
+				return this->LoadShader(ShaderStageCompileDesc, mShaderCacheDirtyMap);
 			});
 		}
 	}
 
-	std::vector<bool> IsPSOCached(NUM_PSO_DESCS);
-	{
-		std::latch latch{ LATCH_COUNTER };
-		{
-			SCOPED_CPU_MARKER("Dispatch");
-			for (size_t iRange = 0; iRange < vRanges.size() - 1; ++iRange)
-			{
-				mWorkers_PSOLoad.AddTask([&, iRange]()
-					{
-						CheckIsCached(IsPSOCached, vRanges[iRange].first, vRanges[iRange].second, PSODescs, PSOCacheFilePaths, ShaderCacheDirtyMap);
-						latch.count_down();
-					});
-			}
-		}
-		CheckIsCached(IsPSOCached, vRanges.back().first, vRanges.back().second, PSODescs, PSOCacheFilePaths, ShaderCacheDirtyMap);
-		{
-			SCOPED_CPU_MARKER_C("Sync", 0xFFAA0000);
-			latch.wait();
-		}
-	}
+	const std::vector<bool> IsPSOCached = CheckIsCached(PSODescs, PSOCacheFilePaths, mShaderCacheDirtyMap, vRanges, mWorkers_PSOLoad);
 
 	// kickoff PSO workers
 	{
