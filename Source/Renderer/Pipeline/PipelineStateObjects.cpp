@@ -780,7 +780,7 @@ void VQRenderer::StartPSOCompilation_MT()
 	SCOPED_CPU_MARKER("StartPSOCompilation_MT");
 	{
 		SCOPED_CPU_MARKER_C("WaitRootSignatures", 0xFF0000AA);
-		mSignalRootSignaturesInitialized.Wait();
+		mLatchRootSignaturesInitialized.wait();
 	}
 
 	std::vector<FPSODesc> PSODescs_BuiltinLegacy = LoadBuiltinPSODescs_Legacy();

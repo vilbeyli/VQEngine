@@ -1319,7 +1319,7 @@ void VQRenderer::TextureUploadThread_Main()
 {
 	{
 		SCOPED_CPU_MARKER_C("WAIT_DEVICE_INIT", 0xFF0000FF);
-		mSignalDeviceInitialized.Wait();
+		mLatchDeviceInitialized.wait();
 	}
 	this->WaitHeapsInitialized();
 

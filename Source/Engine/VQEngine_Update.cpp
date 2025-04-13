@@ -553,6 +553,7 @@ void VQEngine::Load_SceneData_Dispatch()
 	}
 
 	// start loading textures, models, materials with worker threads
+	mpRenderer->WaitHeapsInitialized();
 	mpScene->StartLoading(this->mBuiltinMeshes, SceneRep, mWorkers_Simulation);
 
 }

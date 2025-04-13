@@ -347,11 +347,11 @@ private:
 	TaskSignal<void>                mSubmitWorkerSignal;
 
 	// init sync
-	EventSignal                     mSignalDeviceInitialized;
-	EventSignal                     mSignalCmdQueuesInitialized;
-	EventSignal                     mSignalMemoryAllocatorInitialized;
-	EventSignal                     mSignalHeapsInitialized;
-	EventSignal                     mSignalRootSignaturesInitialized;
+	std::latch                      mLatchDeviceInitialized{ 1 };
+	std::latch                      mLatchCmdQueuesInitialized{ 1 };
+	std::latch                      mLatchMemoryAllocatorInitialized{ 1 };
+	std::latch                      mLatchHeapsInitialized{ 1 };
+	std::latch                      mLatchRootSignaturesInitialized{ 1 };
 	std::latch                      mLatchSignalLoadingScreenReady{ 1 };
 	std::latch                      mLatchPSOLoaderDispatched{ 1 };
 	std::latch                      mLatchRenderPassesInitialized{ 1 };

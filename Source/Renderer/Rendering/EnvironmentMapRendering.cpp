@@ -137,6 +137,25 @@ void VQRenderer::PreFilterEnvironmentMap(const Mesh& CubeMesh, HWND hwnd)
 	DynamicBufferHeap& cbHeap = ctx.GetConstantBufferHeap(0);
 	FEnvironmentMapRenderingResources& env = mResources_MainWnd.EnvironmentMap;
 
+	this->WaitHeapsInitialized();
+	//this->WaitRoot
+
+	{
+		SCOPED_CPU_MARKER("WAIT_PSO_WORKER_DISPATCH");
+		mLatchPSOLoaderDispatched.wait();
+	}
+	if (!mPSOCompileResults.empty())
+	{
+		std::shared_future<FPSOCompileResult>& future = mPSOCompileResults[EBuiltinPSOs::BRDF_INTEGRATION_CS_PSO];
+		if (future.valid())
+		{
+			SCOPED_CPU_MARKER("WAIT_PSO_COMPILE");
+			future.wait();
+			const FPSOCompileResult& result = future.get();
+			mPSOs[result.id] = result.pPSO;
+		}
+	}
+
 	if (env.SRV_BRDFIntegrationLUT == INVALID_ID)
 	{
 		ComputeBRDFIntegrationLUT(pCmd, env.SRV_BRDFIntegrationLUT);
@@ -192,6 +211,17 @@ void VQRenderer::PreFilterEnvironmentMap(const Mesh& CubeMesh, HWND hwnd)
 
 		if constexpr (DRAW_CUBE_FACES_SEPARATELY)
 		{
+			if (!mPSOCompileResults.empty())
+			{
+				std::shared_future<FPSOCompileResult>& future = mPSOCompileResults[EBuiltinPSOs::CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO];
+				if (future.valid())
+				{
+					SCOPED_CPU_MARKER("WAIT_PSO_COMPILE");
+					future.wait();
+					const FPSOCompileResult& result = future.get();
+					mPSOs[result.id] = result.pPSO;
+				}
+			}
 			pCmd->SetPipelineState(this->GetPSO(CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO));
 			pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ConvolutionCubemap));
 			pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());
@@ -293,6 +323,30 @@ void VQRenderer::PreFilterEnvironmentMap(const Mesh& CubeMesh, HWND hwnd)
 		pBlurParams->iImageSizeX = InputImageWidth;
 		pBlurParams->iImageSizeY = InputImageHeight;
 
+		if (!mPSOCompileResults.empty())
+		{
+			{
+				std::shared_future<FPSOCompileResult>& future = mPSOCompileResults[EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_X_PSO];
+				if (future.valid())
+				{
+					SCOPED_CPU_MARKER("WAIT_PSO_COMPILE");
+					future.wait();
+					const FPSOCompileResult& result = future.get();
+					mPSOs[result.id] = result.pPSO;
+				}
+			}
+			{
+				std::shared_future<FPSOCompileResult>& future = mPSOCompileResults[EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_Y_PSO];
+				if (future.valid())
+				{
+					SCOPED_CPU_MARKER("WAIT_PSO_COMPILE");
+					future.wait();
+					const FPSOCompileResult& result = future.get();
+					mPSOs[result.id] = result.pPSO;
+				}
+			}
+		}
+
 		{
 			SCOPED_GPU_MARKER(pCmd, "BlurX");
 			pCmd->SetPipelineState(this->GetPSO(EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_X_PSO));
@@ -343,7 +397,17 @@ void VQRenderer::PreFilterEnvironmentMap(const Mesh& CubeMesh, HWND hwnd)
 	{
 		Log::Info("Environment Map:   SpecularIrradianceCubemap");
 		SCOPED_GPU_MARKER(pCmd, "SpecularIrradianceCubemap");
-
+		if (!mPSOCompileResults.empty())
+		{
+			std::shared_future<FPSOCompileResult>& future = mPSOCompileResults[EBuiltinPSOs::CUBEMAP_CONVOLUTION_SPECULAR_PSO];
+			if (future.valid())
+			{
+				SCOPED_CPU_MARKER("WAIT_PSO_COMPILE");
+				future.wait();
+				const FPSOCompileResult& result = future.get();
+				mPSOs[result.id] = result.pPSO;
+			}
+		}
 		pCmd->SetPipelineState(this->GetPSO(CUBEMAP_CONVOLUTION_SPECULAR_PSO));
 		pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ConvolutionCubemap));
 		pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());

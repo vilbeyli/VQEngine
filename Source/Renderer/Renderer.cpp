@@ -222,7 +222,7 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		deviceDesc.bEnableGPUValidationLayer = ENABLE_VALIDATION_LAYER;
 		const bool bDeviceCreateSucceeded = mDevice.Create(deviceDesc);
 		assert(bDeviceCreateSucceeded);
-		mSignalDeviceInitialized.NotifyAll();
+		mLatchDeviceInitialized.count_down();
 	}
 
 
@@ -233,12 +233,12 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		{
 			mCmdQueues[i].Create(pVQDevice, (CommandQueue::EType)i);
 		}
-		mSignalCmdQueuesInitialized.NotifyAll();
+		mLatchCmdQueuesInitialized.count_down();
 	}
 
 	// Initialize memory
 	InitializeD3D12MA(mpAllocator, mDevice);
-	mSignalMemoryAllocatorInitialized.NotifyAll();
+	mLatchMemoryAllocatorInitialized.count_down();
 	{
 		SCOPED_CPU_MARKER("Heaps");
 		ID3D12Device* pDevice = mDevice.GetDevicePtr();
@@ -262,7 +262,7 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		constexpr bool USE_GPU_MEMORY = true;
 		mStaticHeap_VertexBuffer.Create(pDevice, EBufferType::VERTEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticVertexBufferPool");
 		mStaticHeap_IndexBuffer.Create(pDevice, EBufferType::INDEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticIndexBufferPool");
-		mSignalHeapsInitialized.NotifyAll();
+		mLatchHeapsInitialized.count_down();
 	}
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
@@ -463,7 +463,7 @@ void VQRenderer::Load()
 		mRenderPasses[ERenderPass::Outline               ] = std::make_shared<OutlinePass>(*this);
 		{
 			SCOPED_CPU_MARKER_C("WaitRootSignatures", 0xFF0000AA);
-			mSignalRootSignaturesInitialized.Wait();
+			mLatchRootSignaturesInitialized.wait();
 		}
 		for (std::shared_ptr<IRenderPass>& pPass : mRenderPasses)
 			pPass->Initialize();
@@ -589,11 +589,11 @@ void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuf
 	FWindowRenderContext ctx = FWindowRenderContext(mCmdQueues[CommandQueue::EType::GFX]);
 	{
 		SCOPED_CPU_MARKER_C("WAIT_DEVICE_CREATE", 0xFF0000FF);
-		mSignalDeviceInitialized.Wait();
+		mLatchDeviceInitialized.wait();
 	}
 	{
 		SCOPED_CPU_MARKER_C("WAIT_CMDQ_CREATE", 0xFF0000FF);
-		mSignalCmdQueuesInitialized.Wait();
+		mLatchCmdQueuesInitialized.wait();
 	}
 	ctx.InitializeContext(pWin, pVQDevice, NumSwapchainBuffers, bVSync, bHDRSwapchain);
 
@@ -647,12 +647,12 @@ void VQRenderer::WaitCopyFenceOnCPU(HWND hwnd)
 void VQRenderer::WaitHeapsInitialized()
 {
 	SCOPED_CPU_MARKER_C("WaitHeapsInitialized", 0xFF770000);
-	mSignalHeapsInitialized.Wait();
+	mLatchHeapsInitialized.wait();
 }
 void VQRenderer::WaitMemoryAllocatorInitialized()
 {
 	SCOPED_CPU_MARKER_C("WaitMemoryAllocatorInitialized", 0xFF770000);
-	mSignalMemoryAllocatorInitialized.Wait();
+	mLatchMemoryAllocatorInitialized.wait();
 }
 void VQRenderer::WaitLoadingScreenReady() const
 {
