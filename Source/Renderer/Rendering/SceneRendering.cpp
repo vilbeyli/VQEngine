@@ -28,6 +28,8 @@
 
 #include "Shaders/LightingConstantBufferData.h"
 
+#include "Core/Common.h"
+
 #include "Engine/GPUMarker.h"
 #include "Engine/Scene/SceneViews.h"
 #include "Engine/UI/VQUI.h"

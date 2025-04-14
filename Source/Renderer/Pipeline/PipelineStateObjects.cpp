@@ -19,6 +19,7 @@
 #include "Renderer/Renderer.h"
 #include "Tessellation.h"
 #include "Engine/GPUMarker.h"
+#include "Core/Common.h"
 #include "Shaders/LightingConstantBufferData.h"
 #include "Libs/VQUtils/Source/utils.h"
 #include "Libs/DirectXCompiler/inc/dxcapi.h"
@@ -824,7 +825,7 @@ void VQRenderer::StartPSOCompilation_MT()
 	{
 		SCOPED_CPU_MARKER("CheckCollision");
 		std::unordered_set<size_t> PSOHashSet(PSOHashes.begin(), PSOHashes.end());
-		assert(PSOHashSet.size(), PSOHashes.size());
+		assert(PSOHashSet.size() == PSOHashes.size());
 		if (PSOHashSet.size() != PSOHashes.size())
 		{
 			Log::Warning("PSO hash collision! duplicate PSO hashes found!");

@@ -48,7 +48,7 @@ void ReportSystemInfo(const VQSystemInfo::FSystemInfo& i, bool bDetailed = false
 
 // TODO: heed to W4 warnings, initialize the variables
 VQEngine::VQEngine()
-	: mAssetLoader(mWorkers_ModelLoading, mWorkers_TextureLoading, mWorkers_MeshLoading, *mpRenderer)
+	: mAssetLoader(mWorkers_ModelLoading, mWorkers_MeshLoading, *mpRenderer)
 	, mbBuiltinMeshGenFinished(false)
 	, mpRenderer(std::make_unique<VQRenderer>())
 {}
@@ -355,7 +355,6 @@ void VQEngine::InitializeEngineThreads()
 	mbStopAllThreads.store(false);
 
 	mWorkers_ModelLoading.Initialize(HWCores    , "LoadWorkers_Model"  , 0xFFDDAA00);
-	mWorkers_TextureLoading.Initialize(HWThreads, "LoadWorkers_Texture", 0xFFCC0077);
 	mWorkers_MeshLoading.Initialize(HWCores     , "LoadWorkers_Mesh"   , 0xFFEE2266);
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
@@ -376,7 +375,6 @@ void VQEngine::ExitThreads()
 {
 	SCOPED_CPU_MARKER("ExitThreads");
 	mWorkers_ModelLoading.Destroy();
-	mWorkers_TextureLoading.Destroy();
 	mWorkers_MeshLoading.Destroy();
 	mbStopAllThreads.store(true);
 

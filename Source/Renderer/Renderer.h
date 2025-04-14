@@ -25,7 +25,7 @@
 #include "Resources/ResourceHeaps.h"
 #include "Resources/ResourceViews.h"
 #include "Resources/Buffer.h"
-#include "Resources/Texture.h"
+#include "Resources/TextureManager.h"
 
 #include "Pipeline/ShaderCompileUtils.h"
 #include "Pipeline/PipelineStateObjects.h"
@@ -41,12 +41,9 @@
 
 #define VQUTILS_SYSTEMINFO_INCLUDE_D3D12 1
 #include "Libs/VQUtils/Source/SystemInfo.h" // FGPUInfo
-#include "Libs/VQUtils/Source/Multithreading.h"
 
 #include <vector>
-#include <unordered_map>
 #include <array>
-#include <latch>
 
 #define THREADED_CTX_INIT 1
 #define RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING 1
@@ -62,7 +59,7 @@ struct FSceneShadowViews;
 struct FPostProcessParameters;
 struct ID3D12RootSignature;
 struct ID3D12PipelineState;
-struct TextureCreateDesc;
+struct FTextureRequest;
 struct FEnvironmentMapRenderingResources;
 struct Mesh;
 struct FUIState;
@@ -146,10 +143,11 @@ public:
 	// Textures
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	TextureID                    CreateTextureFromFile(const char* pFilePath, bool bCheckAlpha, bool bGenerateMips/* = false*/);
-	TextureID                    CreateTexture(const TextureCreateDesc& desc, bool bCheckAlpha = false);
-	
-	const ID3D12Resource*        GetTextureResource(TextureID Id) const;
-	      ID3D12Resource*        GetTextureResource(TextureID Id);
+	TextureID                    CreateTexture(const FTextureRequest& desc, bool bCheckAlpha = false);
+	inline void                  WaitForTexture(TextureID ID) const { mTextureManager.WaitForTexture(ID); }; // blocks caller until texture is loaded
+	TextureManager&              GetTextureManager() { return mTextureManager; }
+
+	ID3D12Resource*              GetTextureResource(TextureID Id) const;
 	DXGI_FORMAT                  GetTextureFormat(TextureID Id) const;
 	bool                         GetTextureAlphaChannelUsed(TextureID Id) const;
 	inline void                  GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY) const { int dummy; GetTextureDimensions(Id, SizeX, SizeY, dummy); }
@@ -158,7 +156,7 @@ public:
 	uint                         GetTextureMips(TextureID Id) const;
 	uint                         GetTextureSampleCount(TextureID) const;
 	
-	TextureID                    GetProceduralTexture(EProceduralTextures tex) const;
+	TextureID                    GetProceduralTexture(EProceduralTextures tex) const; // TODO: this returns an SRV_ID!
 	inline const SRV&            GetProceduralTextureSRV(EProceduralTextures tex) const { return GetSRV(GetProceduralTextureSRV_ID(tex)); }
 	inline const SRV_ID          GetProceduralTextureSRV_ID(EProceduralTextures tex) const { return mLookup_ProceduralTextureSRVs.at(tex); }
 	
@@ -299,7 +297,6 @@ private:
 	StaticBufferHeap       mStaticHeap_IndexBuffer;  // GPU-visible heap
 	
 	// resources & views
-	std::unordered_map<TextureID, Texture>    mTextures;
 	std::unordered_map<SamplerID, SAMPLER>    mSamplers;
 	std::unordered_map<BufferID, VBV>         mVBVs;
 	std::unordered_map<BufferID, IBV>         mIBVs;
@@ -311,14 +308,14 @@ private:
 	mutable std::mutex                        mMtxStaticVBHeap;
 	mutable std::mutex                        mMtxStaticIBHeap;
 	mutable std::mutex                        mMtxDynamicCBHeap;
-	mutable std::mutex                        mMtxTextures;
 	mutable std::mutex                        mMtxSamplers;
-	mutable std::mutex                        mMtxSRVs_CBVs_UAVs;
+	mutable std::mutex                        mMtxSRVs_CBVs_UAVs; // TODO: separate mutexes for SRV/CBV/UAV
 	mutable std::mutex                        mMtxRTVs;
 	mutable std::mutex                        mMtxDSVs;
 	mutable std::mutex                        mMtxVBVs;
 	mutable std::mutex                        mMtxIBVs;
-	mutable std::mutex                        mMtxLoadedTexturePaths;
+	mutable std::mutex                        mMtxUploadHeap;
+	TextureManager                            mTextureManager;
 
 	// PSOs & Root Signatures
 	std::unordered_map<RS_ID , ID3D12RootSignature*> mRootSignatureLookup;
@@ -345,6 +342,7 @@ private:
 	std::atomic<bool>               mAsyncComputeWorkSubmitted = false;
 	bool                            mWaitForSubmitWorker = false;
 	TaskSignal<void>                mSubmitWorkerSignal;
+	std::thread                     mFrameSubmitThread;
 
 	// init sync
 	std::latch                      mLatchDeviceInitialized{ 1 };
@@ -365,13 +363,6 @@ private:
 	std::unordered_map<std::string, TextureID>         mLoadedTexturePaths;
 	std::unordered_map<std::string, bool>              mShaderCacheDirtyMap;
 
-	// texture uploading
-	std::atomic<bool>              mbExitUploadThread;
-	EventSignal                    mSignal_UploadThreadWorkReady;
-	std::thread                    mTextureUploadThread;
-	std::thread                    mFrameSubmitThread;
-	std::mutex                     mMtxTextureUploadQueue;
-	std::queue<FTextureUploadDesc> mTextureUploadQueue;
 
 	FRenderStats mRenderStats;
 
@@ -389,20 +380,6 @@ private:
 	BufferID CreateConstantBuffer(const FBufferDesc& desc);
 
 	bool CheckContext(HWND hwnd) const;
-
-	TextureID AddTexture_ThreadSafe(Texture&& tex);
-	const Texture& GetTexture_ThreadSafe(TextureID Id) const;
-	Texture& GetTexture_ThreadSafe(TextureID Id);
-
-	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-	// Texture Residency
-	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-	void QueueTextureUpload(const FTextureUploadDesc& desc);
-	void ProcessTextureUpload(const FTextureUploadDesc& desc);
-	void ProcessTextureUploadQueue();
-	void TextureUploadThread_Main();
-	inline void StartTextureUploads() { mSignal_UploadThreadWorkReady.NotifyOne(); };
-
 
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Render (Private)
@@ -465,17 +442,3 @@ public:
 	static const DXGI_FORMAT PREFERRED_HDR_FORMAT = DXGI_FORMAT_R16G16B16A16_FLOAT;
 	static const DXGI_FORMAT PREFERRED_SDR_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 };
-
-
-namespace VQ_DXGI_UTILS
-{
-	size_t BitsPerPixel(DXGI_FORMAT fmt);
-
-	//=====================================================================================-
-	// return the byte size of a pixel (or block if block compressed)
-	//=====================================================================================-
-	size_t GetPixelByteSize(DXGI_FORMAT fmt);
-
-	void MipImage(void* pData, uint width, uint height, uint bytesPerPixel);
-	void CopyPixels(const void* pData, void* pDest, uint32_t stride, uint32_t bytesWidth, uint32_t height);
-}

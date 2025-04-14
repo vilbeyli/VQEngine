@@ -46,9 +46,8 @@ TaskID AssetLoader::GenerateModelLoadTaskID()
 	return id;
 }
 
-AssetLoader::AssetLoader(ThreadPool& WorkerThreads_Model, ThreadPool& WorkerThreads_Texture, ThreadPool& WorkerThreads_Mesh, VQRenderer& renderer)
+AssetLoader::AssetLoader(ThreadPool& WorkerThreads_Model, ThreadPool& WorkerThreads_Mesh, VQRenderer& renderer)
 	: mWorkers_ModelLoad(WorkerThreads_Model)
-	, mWorkers_TextureLoad(WorkerThreads_Texture)
 	, mWorkers_MeshLoad(WorkerThreads_Mesh)
 	, mRenderer(renderer)
 {}
@@ -94,7 +93,7 @@ AssetLoader::ModelLoadResults_t AssetLoader::StartLoadingModels(Scene* pScene)
 			mUniqueModelPaths.insert(ModelPath);
 
 			// check whether Exit signal is given to the app before dispatching workers
-			if (mWorkers_ModelLoad.IsExiting() || mWorkers_TextureLoad.IsExiting())
+			if (mWorkers_ModelLoad.IsExiting())
 			{
 				break;
 			}
@@ -197,7 +196,7 @@ static AssetLoader::ECustomMapType DetermineCustomMapType(const std::string& Fil
 
 AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskID)
 {
-	SCOPED_CPU_MARKER("AssetLoader::StartLoadingTextures()");
+	SCOPED_CPU_MARKER("AssetLoader.StartLoadingTextures()");
 	TextureLoadResults_t TextureLoadResults;
 	FLoadTaskContext<FTextureLoadParams>& ctx = mLookup_TextureLoadContext.at(taskID);
 
@@ -207,12 +206,12 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 		return TextureLoadResults;
 	}
 	
-	std::unordered_map<std::string, std::shared_future<TextureID>> Lookup_TextureLoadResult;
+	std::unordered_map<std::string, TextureID> Lookup_TextureLoadResult;
 
 	// process texture load queue
 	{
 		SCOPED_CPU_MARKER("DispatchTextureWorkers");
-		do
+		while (!ctx.LoadQueue.empty())
 		{
 			FTextureLoadParams TexLoadParams = std::move(ctx.LoadQueue.front());
 			ctx.LoadQueue.pop();
@@ -231,37 +230,60 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 					? VQRenderer::GetProceduralTextureEnumFromName(vPathTokens[1])
 					: EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
 
-				// check whether Exit signal is given to the app before dispatching workers
-				if (mWorkers_TextureLoad.IsExiting())
+				// TODO: check whether Exit signal is given to the app before dispatching workers
+				//if (mWorkers_TextureLoad.IsExiting())
+				//{
+				//	break;
+				//}
+
+				TextureID texID = INVALID_ID;
+				TaskSignal<void> CompletionSignal;
+				TextureManager& mTextureManager = mRenderer.GetTextureManager();
+				if (bProceduralTexture)
 				{
-					break;
+					texID = mRenderer.GetProceduralTexture(ProcTex);
+					CompletionSignal.Notify(); // Procedural textures are immediate
+				}
+				else
+				{
+					FTextureRequest Request;
+					Request.Name = DirectoryUtil::GetFileNameFromPath(TexLoadParams.TexturePath);
+					Request.FilePath = TexLoadParams.TexturePath;
+					Request.bGenerateMips = true;
+					Request.bCPUReadback = false;
+					Request.InitialState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+					Request.SRVFormat = DXGI_FORMAT_R8G8B8A8_UNORM; // Adjust per TexType
+
+					const bool bCheckAlphaMask = (TexLoadParams.TexType == ETextureType::DIFFUSE) || TexLoadParams.TexType == ETextureType::ALPHA_MASK;
+					texID = mTextureManager.CreateTexture(Request, bCheckAlphaMask);
+					//CompletionSignal = mTextureManager.GetTextureCompletionSignal(texID);
 				}
 
 				// dispatch worker thread
-				std::shared_future<TextureID> texLoadResult = std::move(mWorkers_TextureLoad.AddTask([this, TexLoadParams, ProcTex]()
-				{
-					SCOPED_CPU_MARKER_C("TextureLoadWorker", mWorkers_TextureLoad.mMarkerColor);
-					constexpr bool GENERATE_MIPS = true;
-					const bool IS_PROCEDURAL = ProcTex != EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
-					const bool bCheckAlphaMask = (TexLoadParams.TexType == ETextureType::DIFFUSE) || TexLoadParams.TexType == ETextureType::ALPHA_MASK;
-					const TextureID texID = IS_PROCEDURAL
-						? mRenderer.GetProceduralTexture(ProcTex)
-						: mRenderer.CreateTextureFromFile(TexLoadParams.TexturePath.c_str(), bCheckAlphaMask, GENERATE_MIPS);
-					return texID;
-				}));
+				//std::shared_future<TextureID> texLoadResult = std::move(mWorkers_TextureLoad.AddTask([this, TexLoadParams, ProcTex]()
+				//{
+				//	SCOPED_CPU_MARKER_C("TextureLoadWorker", mWorkers_TextureLoad.mMarkerColor);
+				//	constexpr bool GENERATE_MIPS = true;
+				//	const bool IS_PROCEDURAL = ProcTex != EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
+				//	const bool bCheckAlphaMask = (TexLoadParams.TexType == ETextureType::DIFFUSE) || TexLoadParams.TexType == ETextureType::ALPHA_MASK;
+				//	const TextureID texID = IS_PROCEDURAL
+				//		? mRenderer.GetProceduralTexture(ProcTex)
+				//		: mRenderer.CreateTextureFromFile(TexLoadParams.TexturePath.c_str(), bCheckAlphaMask, GENERATE_MIPS);
+				//	return texID;
+				//}));
 
 				// update results lookup for the shared textures (among different materials)
-				Lookup_TextureLoadResult[TexLoadParams.TexturePath] = texLoadResult;
+				Lookup_TextureLoadResult[TexLoadParams.TexturePath] = texID;
 
 				// record load results
-				TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, FTextureLoadResult{ TexLoadParams.TexType, TexLoadParams.TexturePath, std::move(texLoadResult) }));
+				TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, FTextureLoadResult{ TexLoadParams.TexType, TexLoadParams.TexturePath, texID }));
 			}
 			// shared textures among materials
 			else
 			{
 				TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, FTextureLoadResult{ TexLoadParams.TexType, TexLoadParams.TexturePath, Lookup_TextureLoadResult.at(TexLoadParams.TexturePath) }));
 			}
-		} while (!ctx.LoadQueue.empty());
+		}
 	}
 
 	ctx.UniquePaths.clear();
@@ -270,7 +292,6 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 
 	return std::move(TextureLoadResults);
 }
-
 
 static AssetLoader::ETextureType GetTextureType(aiTextureType aiType)
 {
@@ -340,14 +361,15 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 			const MaterialID& matID = it->first;
 			FTextureLoadResult& result = it->second;
 			
-			if (mWorkersThreads.IsExiting())
-				break;
+			// TODO: check exiting ?
+			// if (mWorkersThreads.IsExiting())
+			// 	break;
 
-			assert(result.texLoadResult.valid());
+			// assert(result.texLoadResult.valid());
 
-			result.texLoadResult.wait();
-
-			const TextureID loadedTextureID = result.texLoadResult.get();
+			const TextureID loadedTextureID = result.TexID;
+			pRenderer->GetTextureManager().WaitForTexture(loadedTextureID);
+			//result.CompletionSignal.Wait();
 
 			switch (result.type)
 			{
@@ -367,7 +389,7 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 				{
 				case OCCLUSION_ROUGHNESS_METALNESS:
 					OcclRoughMtlMap_ComponentMapping; // leave as is
-					mat.TexOcclusionRoughnessMetalnessMap = result.texLoadResult.get();
+					mat.TexOcclusionRoughnessMetalnessMap = result.TexID;
 					mat.metalness = 1.0f;
 					mat.roughness = 1.0f;
 					break;
@@ -382,7 +404,7 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 						, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1
 						, D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0
 					);
-					mat.TexOcclusionRoughnessMetalnessMap = result.texLoadResult.get();
+					mat.TexOcclusionRoughnessMetalnessMap = result.TexID;
 					break;
 #endif
 				case ROUGHNESS_METALNESS:
@@ -392,7 +414,7 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 						, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_2
 						, D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0
 					);
-					mat.TexOcclusionRoughnessMetalnessMap = result.texLoadResult.get();
+					mat.TexOcclusionRoughnessMetalnessMap = result.TexID;
 					mat.metalness = 1.0f;
 					mat.roughness = 1.0f;
 					break;
@@ -430,18 +452,18 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 
 void AssetLoader::FMaterialTextureAssignments::WaitForTextureLoads()
 {
-	SCOPED_CPU_MARKER_C("FMaterialTextureAssignments::WaitForTextureLoads()", 0xFFFF0000);
-	for (auto it = mTextureLoadResults.begin(); it != mTextureLoadResults.end(); ++it)
-	{
-		const MaterialID& matID = it->first;
-		const FTextureLoadResult& result = it->second;
-		assert(result.texLoadResult.valid());
-
-		if (mWorkersThreads.IsExiting())
-			break;
-
-		result.texLoadResult.wait();
-	}
+	// SCOPED_CPU_MARKER_C("FMaterialTextureAssignments::WaitForTextureLoads()", 0xFFFF0000);
+	// for (auto it = mTextureLoadResults.begin(); it != mTextureLoadResults.end(); ++it)
+	// {
+	// 	const MaterialID& matID = it->first;
+	// 	const FTextureLoadResult& result = it->second;
+	// 	assert(result.texLoadResult.valid());
+	// 
+	// 	if (mWorkersThreads.IsExiting())
+	// 		break;
+	// 
+	// 	result.texLoadResult.wait();
+	// }
 }
 
 
@@ -855,7 +877,7 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 	Log::Info("   [%.2fs] ReadFile=%s ", fTimeReadFile, objFilePath.c_str());
 
 	// parse scene and initialize model data
-	FMaterialTextureAssignments MaterialTextureAssignments(pAssetLoader->mWorkers_TextureLoad);
+	FMaterialTextureAssignments MaterialTextureAssignments;
 	Model::Data data = ProcessAssimpNode(ModelName, pAiScene->mRootNode, pAiScene, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
 
 	{
@@ -879,11 +901,6 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 		SCOPED_CPU_MARKER("CleanUpImporter");
 		delete importer;
 	});
-
-	// SYNC POINT : wait for textures to load
-	{
-		MaterialTextureAssignments.WaitForTextureLoads();
-	}
 
 	// assign TextureIDs to the materials;
 	MaterialTextureAssignments.DoAssignments(pScene, pScene->mMtxTexturePaths,  pScene->mTexturePaths, pRenderer);

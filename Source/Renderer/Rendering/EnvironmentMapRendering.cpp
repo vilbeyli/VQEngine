@@ -1,6 +1,8 @@
 #include "EnvironmentMapRendering.h"
 #include "Renderer/Renderer.h"
 #include "Renderer/Resources/CubemapUtility.h"
+#include "Libs/VQUtils/Source/Image.h"
+#include "Libs/VQUtils/Source/Log.h"
 
 #include "Engine/EnvironmentMap.h"
 #include "Engine/GPUMarker.h"
@@ -25,41 +27,41 @@ void FEnvironmentMapRenderingResources::CreateRenderingResources(VQRenderer& Ren
 	Renderer.GetTextureDimensions(this->Tex_HDREnvironment, HDREnvironmentSizeX, HDREnvironmentSizeY);
 
 	// Create Irradiance Map Textures 
-	TextureCreateDesc tdesc("EnvMap_IrradianceDiff");
+	FTextureRequest tdesc("EnvMap_IrradianceDiff");
 	tdesc.bCubemap = true;
-	tdesc.d3d12Desc.Height = DiffuseIrradianceCubemapResolution; // TODO: drive with gfx settings?
-	tdesc.d3d12Desc.Width = DiffuseIrradianceCubemapResolution; // TODO: drive with gfx settings?
-	tdesc.d3d12Desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-	tdesc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-	tdesc.d3d12Desc.DepthOrArraySize = 6;
-	tdesc.d3d12Desc.MipLevels = 1;
-	tdesc.d3d12Desc.SampleDesc = { 1, 0 };
-	tdesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-	tdesc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
+	tdesc.D3D12Desc.Height = DiffuseIrradianceCubemapResolution; // TODO: drive with gfx settings?
+	tdesc.D3D12Desc.Width = DiffuseIrradianceCubemapResolution; // TODO: drive with gfx settings?
+	tdesc.D3D12Desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	tdesc.D3D12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	tdesc.D3D12Desc.DepthOrArraySize = 6;
+	tdesc.D3D12Desc.MipLevels = 1;
+	tdesc.D3D12Desc.SampleDesc = { 1, 0 };
+	tdesc.D3D12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+	tdesc.InitialState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
 	this->Tex_IrradianceDiff = Renderer.CreateTexture(tdesc);
 
-	tdesc.TexName = "EnvMap_IrradianceDiffBlurred";
-	tdesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	tdesc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+	tdesc.Name = "EnvMap_IrradianceDiffBlurred";
+	tdesc.D3D12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	tdesc.InitialState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 	this->Tex_IrradianceDiffBlurred = Renderer.CreateTexture(tdesc);
 
-	tdesc.TexName = "EnvMap_BlurImmediateTemp";
+	tdesc.Name = "EnvMap_BlurImmediateTemp";
 	tdesc.bCubemap = false;
-	tdesc.d3d12Desc.DepthOrArraySize = 1;
+	tdesc.D3D12Desc.DepthOrArraySize = 1;
 	this->Tex_BlurTemp = Renderer.CreateTexture(tdesc);
 
-	tdesc.TexName = "EnvMap_IrradianceSpec";
-	tdesc.d3d12Desc.DepthOrArraySize = 6;
+	tdesc.Name = "EnvMap_IrradianceSpec";
+	tdesc.D3D12Desc.DepthOrArraySize = 6;
 	tdesc.bGenerateMips = true;
 	tdesc.bCubemap = true;
-	tdesc.d3d12Desc.Height = SpecularMapMip0Resolution;
-	tdesc.d3d12Desc.Width = SpecularMapMip0Resolution;
-	tdesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-	tdesc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
-	tdesc.d3d12Desc.MipLevels = Image::CalculateMipLevelCount(tdesc.d3d12Desc.Width, tdesc.d3d12Desc.Height) - 1; // 2x2 for the last mip level
+	tdesc.D3D12Desc.Height = SpecularMapMip0Resolution;
+	tdesc.D3D12Desc.Width = SpecularMapMip0Resolution;
+	tdesc.D3D12Desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+	tdesc.InitialState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
+	tdesc.D3D12Desc.MipLevels = Image::CalculateMipLevelCount(tdesc.D3D12Desc.Width, tdesc.D3D12Desc.Height) - 1; // 2x2 for the last mip level
 	this->Tex_IrradianceSpec = Renderer.CreateTexture(tdesc);
 
-	const int& NUM_MIPS = tdesc.d3d12Desc.MipLevels;
+	const int& NUM_MIPS = tdesc.D3D12Desc.MipLevels;
 
 	// Create Irradiance Map SRVs 
 	this->SRV_IrradianceDiff = Renderer.AllocateSRV();

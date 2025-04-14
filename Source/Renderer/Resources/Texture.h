@@ -18,98 +18,36 @@
 
 #pragma once
 
-#include "Core/Common.h"
-#include "Libs/VQUtils/Source/Image.h"
-#include "Libs/VQUtils/Source/Multithreading.h"
+#include <dxgiformat.h>
 
-#include <atomic>
+#include "Engine/Core/Types.h"
 #include <vector>
 
-namespace D3D12MA { class Allocation; class Allocator; }
+struct ID3D12Resource;
+namespace D3D12MA { class Allocation; }
 
-class UploadHeap;
-class CBV_SRV_UAV;
-class DSV;
-class RTV;
-struct D3D12_SHADER_RESOURCE_VIEW_DESC;
-struct Image;
-
-struct TextureCreateDesc
+struct FTexture
 {
-	TextureCreateDesc(const std::string& name) : TexName(name) {}
-	TextureCreateDesc(const std::string& name, const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES state, bool bTexIsCubemap = false, bool bGenerateTexMips = false)
-		: TexName(name)
-		, d3d12Desc(desc)
-		, ResourceState(state)
-		, bCubemap(bTexIsCubemap)
-		, bGenerateMips(bGenerateTexMips)
-	{}
+    ID3D12Resource* Resource = nullptr;
+    D3D12MA::Allocation* Allocation = nullptr;
+    DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
+    int Width = 0;
+    int Height = 0;
+    int ArraySlices = 1;
+    int MipCount = 1;
+    bool IsCubemap = false;
+    bool UsesAlphaChannel = false;
+    bool IsTypeless = false;
 
-	std::string           TexName;
-	std::vector<const void*> pDataArray; // mips, arrays
-	D3D12_RESOURCE_DESC   d3d12Desc = {};
-	D3D12_RESOURCE_STATES ResourceState = D3D12_RESOURCE_STATE_COMMON;
-	bool                  bCubemap = false;
-	bool                  bGenerateMips = false;
-	bool                  bCPUReadback = false;
-};
+    void Reset()
+    {
+        Resource = nullptr;
+        Allocation = nullptr;
+        Format = DXGI_FORMAT_UNKNOWN;
+        Width = Height = ArraySlices = MipCount = 0;
+        IsCubemap = UsesAlphaChannel = IsTypeless = false;
+    }
 
-
-class Texture
-{
-public:
-	static std::vector<uint8> GenerateTexture_Checkerboard(uint Dimension, bool bUseMidtones = false);
-
-	Texture()  = default;
-	~Texture() = default;
-	Texture(const Texture& other);
-	Texture& operator=(const Texture& other);
-
-	void Create(ID3D12Device* pDevice, D3D12MA::Allocator* pAllocator, const TextureCreateDesc& desc, bool bCheckAlpha);
-	void Destroy();
-
-	void InitializeSRV(uint32 index, CBV_SRV_UAV* pRV, bool bInitAsArrayView = false, bool bInitAsCubeView = false, UINT ShaderComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc = nullptr);
-	void InitializeDSV(uint32 index, DSV* pRV, int ArraySlice = 1);
-
-	inline const ID3D12Resource* GetResource() const { return mpResource; }
-	inline       ID3D12Resource* GetResource()       { return mpResource; }
-	inline       DXGI_FORMAT     GetFormat()   const { return mFormat; }
-	inline       bool            GetUsesAlphaChannel() const { return mbUsesAlphaChannel; }
-
-private:
-	friend class VQRenderer;
-
-	D3D12MA::Allocation* mpAlloc = nullptr;
-	ID3D12Resource*      mpResource = nullptr;
-	EventSignal          mSignalResident;
-	std::atomic<bool>    mbResident = false;
-
-	// some texture desc fields
-	bool mbTypelessTexture = false;
-	uint mStructuredBufferStride = 0;
-	int  mMipMapCount = 1;
-	bool mbCubemap = false;
-	int  mWidth = 0;
-	int  mHeight = 0;
-	int  mNumArraySlices = 1;
-	bool mbUsesAlphaChannel = false;
-
-	DXGI_FORMAT mFormat = DXGI_FORMAT_UNKNOWN;
-};
-
-
-struct FTextureUploadDesc
-{
-	FTextureUploadDesc(std::vector<Image>&& imgs_, TextureID texID, const TextureCreateDesc& tDesc) : imgs(imgs_), id(texID), desc(tDesc), pDataArr(tDesc.pDataArray) {}
-	FTextureUploadDesc(Image&& img_, TextureID texID, const TextureCreateDesc& tDesc) : imgs(1, img_), id(texID), desc(tDesc), pDataArr(1, img_.pData) {}
-
-	FTextureUploadDesc(const void* pData_, TextureID texID, const TextureCreateDesc& tDesc) : imgs({  }), id(texID), desc(tDesc), pDataArr(1, pData_) {}
-	FTextureUploadDesc(std::vector<const void*> pDataArr, TextureID texID, const TextureCreateDesc& tDesc) : imgs({  }), id(texID), desc(tDesc), pDataArr(pDataArr) {}
-
-	FTextureUploadDesc() = delete;
-
-	std::vector<Image> imgs;
-	std::vector<const void*> pDataArr;
-	TextureID id;
-	TextureCreateDesc desc;
+    // procedural texture generators
+    static std::vector<uint8> GenerateTexture_Checkerboard(uint Dimension, bool bUseMidtones = false);
 };

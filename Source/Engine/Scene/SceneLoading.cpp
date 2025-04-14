@@ -71,14 +71,14 @@ MaterialID Scene::LoadMaterial(const FMaterialRepresentation& matRep, TaskID tas
 
 	// async data (textures)
 	bool bHasTexture = false;
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.DiffuseMapFilePath, AssetLoader::ETextureType::DIFFUSE);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.NormalMapFilePath, AssetLoader::ETextureType::NORMALS);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.EmissiveMapFilePath, AssetLoader::ETextureType::EMISSIVE);
+	bHasTexture |= fnEnqueueTexLoad(id, matRep.DiffuseMapFilePath  , AssetLoader::ETextureType::DIFFUSE);
+	bHasTexture |= fnEnqueueTexLoad(id, matRep.NormalMapFilePath   , AssetLoader::ETextureType::NORMALS);
+	bHasTexture |= fnEnqueueTexLoad(id, matRep.EmissiveMapFilePath , AssetLoader::ETextureType::EMISSIVE);
 	bHasTexture |= fnEnqueueTexLoad(id, matRep.AlphaMaskMapFilePath, AssetLoader::ETextureType::ALPHA_MASK);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.MetallicMapFilePath, AssetLoader::ETextureType::METALNESS);
+	bHasTexture |= fnEnqueueTexLoad(id, matRep.MetallicMapFilePath , AssetLoader::ETextureType::METALNESS);
 	bHasTexture |= fnEnqueueTexLoad(id, matRep.RoughnessMapFilePath, AssetLoader::ETextureType::ROUGHNESS);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.AOMapFilePath, AssetLoader::ETextureType::AMBIENT_OCCLUSION);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.HeightMapFilePath, AssetLoader::ETextureType::HEIGHT);
+	bHasTexture |= fnEnqueueTexLoad(id, matRep.AOMapFilePath       , AssetLoader::ETextureType::AMBIENT_OCCLUSION);
+	bHasTexture |= fnEnqueueTexLoad(id, matRep.HeightMapFilePath   , AssetLoader::ETextureType::HEIGHT);
 
 	AssetLoader::FMaterialTextureAssignment MatTexAssignment = {};
 	MatTexAssignment.matID = id;

@@ -76,337 +76,6 @@ static BufferID  LAST_USED_VBV_ID            = 1;
 static BufferID  LAST_USED_IBV_ID            = 1;
 static BufferID  LAST_USED_CBV_ID            = 1;
 
-namespace VQ_DXGI_UTILS
-{
-	size_t BitsPerPixel(DXGI_FORMAT fmt)
-	{
-		switch (fmt)
-		{
-		case DXGI_FORMAT_R32G32B32A32_TYPELESS:
-		case DXGI_FORMAT_R32G32B32A32_FLOAT:
-		case DXGI_FORMAT_R32G32B32A32_UINT:
-		case DXGI_FORMAT_R32G32B32A32_SINT:
-			return 128;
-
-		case DXGI_FORMAT_R32G32B32_TYPELESS:
-		case DXGI_FORMAT_R32G32B32_FLOAT:
-		case DXGI_FORMAT_R32G32B32_UINT:
-		case DXGI_FORMAT_R32G32B32_SINT:
-			return 96;
-
-		case DXGI_FORMAT_R16G16B16A16_TYPELESS:
-		case DXGI_FORMAT_R16G16B16A16_FLOAT:
-		case DXGI_FORMAT_R16G16B16A16_UNORM:
-		case DXGI_FORMAT_R16G16B16A16_UINT:
-		case DXGI_FORMAT_R16G16B16A16_SNORM:
-		case DXGI_FORMAT_R16G16B16A16_SINT:
-		case DXGI_FORMAT_R32G32_TYPELESS:
-		case DXGI_FORMAT_R32G32_FLOAT:
-		case DXGI_FORMAT_R32G32_UINT:
-		case DXGI_FORMAT_R32G32_SINT:
-		case DXGI_FORMAT_R32G8X24_TYPELESS:
-		case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
-		case DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS:
-		case DXGI_FORMAT_X32_TYPELESS_G8X24_UINT:
-		case DXGI_FORMAT_Y416:
-		case DXGI_FORMAT_Y210:
-		case DXGI_FORMAT_Y216:
-			return 64;
-
-		case DXGI_FORMAT_R10G10B10A2_TYPELESS:
-		case DXGI_FORMAT_R10G10B10A2_UNORM:
-		case DXGI_FORMAT_R10G10B10A2_UINT:
-		case DXGI_FORMAT_R11G11B10_FLOAT:
-		case DXGI_FORMAT_R8G8B8A8_TYPELESS:
-		case DXGI_FORMAT_R8G8B8A8_UNORM:
-		case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
-		case DXGI_FORMAT_R8G8B8A8_UINT:
-		case DXGI_FORMAT_R8G8B8A8_SNORM:
-		case DXGI_FORMAT_R8G8B8A8_SINT:
-		case DXGI_FORMAT_R16G16_TYPELESS:
-		case DXGI_FORMAT_R16G16_FLOAT:
-		case DXGI_FORMAT_R16G16_UNORM:
-		case DXGI_FORMAT_R16G16_UINT:
-		case DXGI_FORMAT_R16G16_SNORM:
-		case DXGI_FORMAT_R16G16_SINT:
-		case DXGI_FORMAT_R32_TYPELESS:
-		case DXGI_FORMAT_D32_FLOAT:
-		case DXGI_FORMAT_R32_FLOAT:
-		case DXGI_FORMAT_R32_UINT:
-		case DXGI_FORMAT_R32_SINT:
-		case DXGI_FORMAT_R24G8_TYPELESS:
-		case DXGI_FORMAT_D24_UNORM_S8_UINT:
-		case DXGI_FORMAT_R24_UNORM_X8_TYPELESS:
-		case DXGI_FORMAT_X24_TYPELESS_G8_UINT:
-		case DXGI_FORMAT_R9G9B9E5_SHAREDEXP:
-		case DXGI_FORMAT_R8G8_B8G8_UNORM:
-		case DXGI_FORMAT_G8R8_G8B8_UNORM:
-		case DXGI_FORMAT_B8G8R8A8_UNORM:
-		case DXGI_FORMAT_B8G8R8X8_UNORM:
-		case DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM:
-		case DXGI_FORMAT_B8G8R8A8_TYPELESS:
-		case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
-		case DXGI_FORMAT_B8G8R8X8_TYPELESS:
-		case DXGI_FORMAT_B8G8R8X8_UNORM_SRGB:
-		case DXGI_FORMAT_AYUV:
-		case DXGI_FORMAT_Y410:
-		case DXGI_FORMAT_YUY2:
-			return 32;
-
-		case DXGI_FORMAT_P010:
-		case DXGI_FORMAT_P016:
-			return 24;
-
-		case DXGI_FORMAT_R8G8_TYPELESS:
-		case DXGI_FORMAT_R8G8_UNORM:
-		case DXGI_FORMAT_R8G8_UINT:
-		case DXGI_FORMAT_R8G8_SNORM:
-		case DXGI_FORMAT_R8G8_SINT:
-		case DXGI_FORMAT_R16_TYPELESS:
-		case DXGI_FORMAT_R16_FLOAT:
-		case DXGI_FORMAT_D16_UNORM:
-		case DXGI_FORMAT_R16_UNORM:
-		case DXGI_FORMAT_R16_UINT:
-		case DXGI_FORMAT_R16_SNORM:
-		case DXGI_FORMAT_R16_SINT:
-		case DXGI_FORMAT_B5G6R5_UNORM:
-		case DXGI_FORMAT_B5G5R5A1_UNORM:
-		case DXGI_FORMAT_A8P8:
-		case DXGI_FORMAT_B4G4R4A4_UNORM:
-			return 16;
-
-		case DXGI_FORMAT_NV12:
-		case DXGI_FORMAT_420_OPAQUE:
-		case DXGI_FORMAT_NV11:
-			return 12;
-
-		case DXGI_FORMAT_R8_TYPELESS:
-		case DXGI_FORMAT_R8_UNORM:
-		case DXGI_FORMAT_R8_UINT:
-		case DXGI_FORMAT_R8_SNORM:
-		case DXGI_FORMAT_R8_SINT:
-		case DXGI_FORMAT_A8_UNORM:
-		case DXGI_FORMAT_AI44:
-		case DXGI_FORMAT_IA44:
-		case DXGI_FORMAT_P8:
-			return 8;
-
-		case DXGI_FORMAT_BC2_TYPELESS:
-		case DXGI_FORMAT_BC2_UNORM:
-		case DXGI_FORMAT_BC2_UNORM_SRGB:
-		case DXGI_FORMAT_BC3_TYPELESS:
-		case DXGI_FORMAT_BC3_UNORM:
-		case DXGI_FORMAT_BC3_UNORM_SRGB:
-		case DXGI_FORMAT_BC5_TYPELESS:
-		case DXGI_FORMAT_BC5_UNORM:
-		case DXGI_FORMAT_BC5_SNORM:
-		case DXGI_FORMAT_BC6H_TYPELESS:
-		case DXGI_FORMAT_BC6H_UF16:
-		case DXGI_FORMAT_BC6H_SF16:
-		case DXGI_FORMAT_BC7_TYPELESS:
-		case DXGI_FORMAT_BC7_UNORM:
-		case DXGI_FORMAT_BC7_UNORM_SRGB:
-			return 8;
-
-		case DXGI_FORMAT_BC1_TYPELESS:
-		case DXGI_FORMAT_BC1_UNORM:
-		case DXGI_FORMAT_BC1_UNORM_SRGB:
-		case DXGI_FORMAT_BC4_TYPELESS:
-		case DXGI_FORMAT_BC4_UNORM:
-		case DXGI_FORMAT_BC4_SNORM:
-			return 4;
-
-		case DXGI_FORMAT_R1_UNORM:
-			return 1;
-
-		default:
-			return 0;
-		}
-	}
-
-	//--------------------------------------------------------------------------------------
-	// return the byte size of a pixel (or block if block compressed)
-	//--------------------------------------------------------------------------------------
-	size_t GetPixelByteSize(DXGI_FORMAT fmt)
-	{
-		switch (fmt)
-		{
-		case(DXGI_FORMAT_R10G10B10A2_TYPELESS):
-		case(DXGI_FORMAT_R10G10B10A2_UNORM):
-		case(DXGI_FORMAT_R10G10B10A2_UINT):
-		case(DXGI_FORMAT_R11G11B10_FLOAT):
-		case(DXGI_FORMAT_R8G8B8A8_TYPELESS):
-		case(DXGI_FORMAT_R8G8B8A8_UNORM):
-		case(DXGI_FORMAT_R8G8B8A8_UNORM_SRGB):
-		case(DXGI_FORMAT_R8G8B8A8_UINT):
-		case(DXGI_FORMAT_R8G8B8A8_SNORM):
-		case(DXGI_FORMAT_R8G8B8A8_SINT):
-		case(DXGI_FORMAT_B8G8R8A8_UNORM):
-		case(DXGI_FORMAT_B8G8R8X8_UNORM):
-		case(DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM):
-		case(DXGI_FORMAT_B8G8R8A8_TYPELESS):
-		case(DXGI_FORMAT_B8G8R8A8_UNORM_SRGB):
-		case(DXGI_FORMAT_B8G8R8X8_TYPELESS):
-		case(DXGI_FORMAT_B8G8R8X8_UNORM_SRGB):
-		case(DXGI_FORMAT_R16G16_TYPELESS):
-		case(DXGI_FORMAT_R16G16_FLOAT):
-		case(DXGI_FORMAT_R16G16_UNORM):
-		case(DXGI_FORMAT_R16G16_UINT):
-		case(DXGI_FORMAT_R16G16_SNORM):
-		case(DXGI_FORMAT_R16G16_SINT):
-		case(DXGI_FORMAT_R32_TYPELESS):
-		case(DXGI_FORMAT_D32_FLOAT):
-		case(DXGI_FORMAT_R32_FLOAT):
-		case(DXGI_FORMAT_R32_UINT):
-		case(DXGI_FORMAT_R32_SINT):
-			return 4;
-
-		case(DXGI_FORMAT_BC1_TYPELESS):
-		case(DXGI_FORMAT_BC1_UNORM):
-		case(DXGI_FORMAT_BC1_UNORM_SRGB):
-		case(DXGI_FORMAT_BC4_TYPELESS):
-		case(DXGI_FORMAT_BC4_UNORM):
-		case(DXGI_FORMAT_BC4_SNORM):
-		case(DXGI_FORMAT_R16G16B16A16_FLOAT):
-		case(DXGI_FORMAT_R16G16B16A16_TYPELESS):
-			return 8;
-
-		case(DXGI_FORMAT_BC2_TYPELESS):
-		case(DXGI_FORMAT_BC2_UNORM):
-		case(DXGI_FORMAT_BC2_UNORM_SRGB):
-		case(DXGI_FORMAT_BC3_TYPELESS):
-		case(DXGI_FORMAT_BC3_UNORM):
-		case(DXGI_FORMAT_BC3_UNORM_SRGB):
-		case(DXGI_FORMAT_BC5_TYPELESS):
-		case(DXGI_FORMAT_BC5_UNORM):
-		case(DXGI_FORMAT_BC5_SNORM):
-		case(DXGI_FORMAT_BC6H_TYPELESS):
-		case(DXGI_FORMAT_BC6H_UF16):
-		case(DXGI_FORMAT_BC6H_SF16):
-		case(DXGI_FORMAT_BC7_TYPELESS):
-		case(DXGI_FORMAT_BC7_UNORM):
-		case(DXGI_FORMAT_BC7_UNORM_SRGB):
-		case(DXGI_FORMAT_R32G32B32A32_FLOAT):
-		case(DXGI_FORMAT_R32G32B32A32_TYPELESS):
-			return 16;
-
-		default:
-			assert(0);
-			break;
-		}
-		return 0;
-	}
-
-	void MipImage(const void* pDataSrc, void* pDataDst, uint width, uint height, uint bytesPerPixel)
-	{
-		assert(pDataDst);
-		assert(pDataSrc);
-
-		SCOPED_CPU_MARKER("MipImage");
-
-#define GetByte(color, component) (((color) >> (8 * (component))) & 0xff)
-#define GetColor(ptr, x,y) (ptr[(x)+(y)*width])
-#define SetColor(ptr, x,y, col) ptr[(x)+(y)*width/2]=col;
-
-		int offsetsX[] = { 0,1,0,1 };
-		int offsetsY[] = { 0,0,1,1 };
-		assert(bytesPerPixel == 4 || bytesPerPixel == 16);
-		
-		if (bytesPerPixel == 4)
-		{
-			const uint32_t* pImgSrc = (const uint32_t*)pDataSrc;
-			uint32_t* pImgDst = (uint32_t*)pDataDst;
-
-			for (uint32_t y = 0; y < height; y += 2)
-			{
-				for (uint32_t x = 0; x < width; x += 2)
-				{
-					uint32_t ccc = 0;
-					for (uint32_t c = 0; c < 4; c++)
-					{
-						uint32_t cc = 0;
-						cc += GetByte(GetColor(pImgSrc, x + offsetsX[0], y + offsetsY[0]), 3 - c);
-						cc += GetByte(GetColor(pImgSrc, x + offsetsX[1], y + offsetsY[1]), 3 - c);
-						cc += GetByte(GetColor(pImgSrc, x + offsetsX[2], y + offsetsY[2]), 3 - c);
-						cc += GetByte(GetColor(pImgSrc, x + offsetsX[3], y + offsetsY[3]), 3 - c);
-						ccc = (ccc << 8) | (cc / 4); // ABGR
-					}
-					SetColor(pImgDst, x / 2, y / 2, ccc);
-				}
-			}
-		}
-
-		if (bytesPerPixel == 16)
-		{
-			using std::min;
-			const float* pImgSrc = (const float*)pDataSrc;
-			      float* pImgDst = (      float*)pDataDst;
-			// each iteration handles 4 pixels from current level, writes out to a single pixel
-			for (uint32_t y = 0; y < height; y += 2) // [0, 2, 4, ...]
-			for (uint32_t x = 0; x < width ; x += 2) // [0, 2, 4, ...]
-			{
-				float rgb[4][3] = {}; // 4 samples of rgb
-				for (uint smp = 0; smp < 4; ++smp)
-				{
-					for (int ch = 0; ch < 3; ++ch) // color channel ~ rgba, care for RGB only
-						rgb[smp][ch] = pImgSrc[(x + offsetsX[smp]) * 4 + (y + offsetsY[smp]) * 4 * width + ch];
-				}
-
-				// filter: use min filter rather than interpolation
-				float rgbFiltered[4];
-				for (int ch = 0; ch < 3; ++ch)
-					rgbFiltered[ch] = min(rgb[0][ch], min(rgb[1][ch], min(rgb[2][ch], rgb[3][ch])));
-				rgbFiltered[3] = 1.0f;
-
-				uint outX = x >> 1;
-				uint outY = y >> 1;
-
-				for (int ch = 0; ch < 4; ++ch)
-					pImgDst[(outX * 4) + 4 * outY * (width >> 1) + ch] = rgbFiltered[ch];
-			}
-		}
-
-#if 0
-		// For cutouts we need we need to scale the alpha channel to match the coverage of the top MIP map
-		// otherwise cutouts seem to get thinner when smaller mips are used
-		// Credits: http://the-witness.net/news/2010/09/computing-alpha-mipmaps/
-		//
-		if (m_alphaTestCoverage < 1.0)
-		{
-			float ini = 0;
-			float fin = 10;
-			float mid;
-			float alphaPercentage;
-			int iter = 0;
-			for (; iter < 50; iter++)
-			{
-				mid = (ini + fin) / 2;
-				alphaPercentage = GetAlphaCoverage(width / 2, height / 2, mid, (int)(m_cutOff * 255));
-
-				if (fabs(alphaPercentage - m_alphaTestCoverage) < .001)
-					break;
-
-				if (alphaPercentage > m_alphaTestCoverage)
-					fin = mid;
-				if (alphaPercentage < m_alphaTestCoverage)
-					ini = mid;
-			}
-			ScaleAlpha(width / 2, height / 2, mid);
-			//Trace(format("(%4i x %4i), %f, %f, %i\n", width, height, alphaPercentage, 1.0f, 0));       
-		}
-#endif
-	}
-
-	void CopyPixels(const void* pData, void* pDest, uint32_t stride, uint32_t bytesWidth, uint32_t height)
-	{
-		for (uint32_t y = 0; y < height; y++)
-		{
-			memcpy((char*)pDest + y * stride, (char*)pData + y * bytesWidth, bytesWidth);
-		}
-	}
-}
-
-
 static UINT GetDXGIFormatByteSize(DXGI_FORMAT format)
 {
 	switch (format)
@@ -515,169 +184,16 @@ BufferID VQRenderer::CreateBuffer(const FBufferDesc& desc)
 
 TextureID VQRenderer::CreateTextureFromFile(const char* pFilePath, bool bCheckAlpha, bool bGenerateMips /*= false*/)
 {
-	SCOPED_CPU_MARKER("VQRenderer::CreateTextureFromFile()");
-
-	// check if we've already loaded the texture
-	{
-		std::lock_guard<std::mutex> lk(mMtxLoadedTexturePaths);
-		auto it = mLoadedTexturePaths.find(pFilePath);
-		if (it != mLoadedTexturePaths.end())
-		{
-#if LOG_CACHED_RESOURCES_ON_LOAD
-			Log::Info("Texture already loaded: %s", pFilePath);
-#endif
-			return it->second;
-		}
-	}
-	// check path
-	if (strlen(pFilePath) == 0)
-	{
-		Log::Warning("VQRenderer::CreateTextureFromFile: Empty FilePath provided");
-		return INVALID_ID;
-	}
-
-	// --------------------------------------------------------
-
-	TextureID ID = INVALID_ID;
-
-	Timer t; t.Start();
-	Texture tex;
-
-	const std::string FileNameAndExtension = DirectoryUtil::GetFileNameFromPath(pFilePath);
-	TextureCreateDesc tDesc(FileNameAndExtension);
-
-	auto fnLoadImageFromDisk = [](const std::string& FilePath, Image& img)
-	{
-		if (FilePath.empty())
-		{
-			Log::Error("Cannot load Image from file: empty FilePath provided.");
-			return false;
-		}
-
-		// process file path
-		const std::vector<std::string> FilePathTokens = StrUtil::split(FilePath, { '/', '\\' });
-		assert(FilePathTokens.size() >= 1);
-
-		{
-			SCOPED_CPU_MARKER("Image::LoadFromFile()");
-			img = Image::LoadFromFile(FilePath.c_str());
-		}
-		return img.pData && img.BytesPerPixel > 0;
-	};
-
-	std::vector<Image> images(1);
-	const bool bSuccess = fnLoadImageFromDisk(pFilePath, images[0]);
-	const int MipLevels = bGenerateMips ? images[0].CalculateMipLevelCount() : 1;
-	if (bSuccess)
-	{
-		// Fill D3D12 Descriptor
-		tDesc.d3d12Desc = {};
-		tDesc.d3d12Desc.Width  = images[0].Width;
-		tDesc.d3d12Desc.Height = images[0].Height;
-		tDesc.d3d12Desc.Format = images[0].IsHDR() ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
-		tDesc.d3d12Desc.DepthOrArraySize = 1;
-		tDesc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-		tDesc.d3d12Desc.Alignment = 0;
-		tDesc.d3d12Desc.DepthOrArraySize = 1;
-		tDesc.d3d12Desc.MipLevels = MipLevels;
-		tDesc.d3d12Desc.SampleDesc.Count = 1;
-		tDesc.d3d12Desc.SampleDesc.Quality = 0;
-		tDesc.d3d12Desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-		tDesc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-		
-		tDesc.pDataArray.push_back( images[0].pData );
-		tDesc.bGenerateMips = bGenerateMips;
-
-		tex.Create(mDevice.GetDevicePtr(), mpAllocator, tDesc, bCheckAlpha);
-
-		ID = AddTexture_ThreadSafe(std::move(tex));
-
-		const bool bGenerateMips_ = MipLevels > 1 && images[0].pData;
-		
-		if(bGenerateMips_ && bGenerateMips)
-		{
-			UINT64 UplHeapSize;
-			uint32_t num_rows[D3D12_REQ_MIP_LEVELS] = { 0 };
-			UINT64 row_size_in_bytes[D3D12_REQ_MIP_LEVELS] = { 0 };
-			D3D12_PLACED_SUBRESOURCE_FOOTPRINT placedSubresource[D3D12_REQ_MIP_LEVELS];
-			mDevice.GetDevicePtr()->GetCopyableFootprints(&tDesc.d3d12Desc, 0, MipLevels, 0, placedSubresource, num_rows, row_size_in_bytes, &UplHeapSize);
-			const UINT bytePP = static_cast<UINT>(VQ_DXGI_UTILS::GetPixelByteSize(tDesc.d3d12Desc.Format));
-			const UINT imgSizeInBytes = bytePP * placedSubresource[0].Footprint.Width * placedSubresource[0].Footprint.Height;
-			images.resize(MipLevels);
-			tDesc.pDataArray.resize(MipLevels);
-			for (int mip = 1; mip < MipLevels; ++mip)
-			{
-				const size_t NewMipImageSize = placedSubresource[mip].Footprint.Height * placedSubresource[mip].Footprint.RowPitch;
-				images[mip] = Image::CreateEmptyImage(NewMipImageSize);
-
-				VQ_DXGI_UTILS::MipImage(images[mip-1].pData, images[mip].pData, placedSubresource[mip-1].Footprint.Width, num_rows[mip-1], bytePP);
-				tDesc.pDataArray[mip] = images[mip].pData;
-			}
-
-		}
-
-		this->QueueTextureUpload(FTextureUploadDesc(std::move(images), ID, tDesc));
-
-		this->StartTextureUploads();
-
-		Texture& refTex = this->GetTexture_ThreadSafe(ID);
-
-		// SYNC POINT - texture residency
-		if(!refTex.mbResident.load())
-		{
-			SCOPED_CPU_MARKER_C("WAIT_RESIDENT", 0xFFFF0000);
-			refTex.mSignalResident.Wait();
-		}
-		{
-			SCOPED_CPU_MARKER("CleanupImages");
-			for (Image& i : images) i.Destroy();
-		}
-
-		{
-			std::lock_guard<std::mutex> lk(mMtxLoadedTexturePaths);
-			mLoadedTexturePaths[pFilePath] = ID;
-		}
-#if LOG_RESOURCE_CREATE
-		Log::Info("VQRenderer::CreateTextureFromFile(): [%.2fs] %s", t.StopGetDeltaTimeAndReset(), pFilePath);
-#endif
-	}
-
-	return ID;
+	FTextureRequest desc;
+	desc.Name = DirectoryUtil::GetFileNameFromPath(pFilePath);
+	desc.FilePath = pFilePath;
+	desc.bGenerateMips = bGenerateMips;
+	return mTextureManager.CreateTexture(desc, bCheckAlpha);
 }
 
-TextureID VQRenderer::CreateTexture(const TextureCreateDesc& desc, bool bCheckAlpha)
+TextureID VQRenderer::CreateTexture(const FTextureRequest& desc, bool bCheckAlpha)
 {
-	SCOPED_CPU_MARKER("VQRenderer::CreateTexture()");
-	if (desc.d3d12Desc.MipLevels == 0) assert( desc.bGenerateMips);
-	if (desc.d3d12Desc.MipLevels == 1) assert(!desc.bGenerateMips);
-	//if (desc.d3d12Desc.MipLevels >  1) assert( desc.bGenerateMips);
-	Texture tex;
-	Timer t; t.Start();
-	tex.Create(mDevice.GetDevicePtr(), mpAllocator, desc, bCheckAlpha);
-
-	TextureID ID = AddTexture_ThreadSafe(std::move(tex));
-	const bool bValidData = !desc.pDataArray.empty() && desc.pDataArray[0];
-	if (bValidData)
-	{
-
-		this->QueueTextureUpload(FTextureUploadDesc(desc.pDataArray, ID, desc));
-
-		this->StartTextureUploads();
-
-		{
-			SCOPED_CPU_MARKER_C("WAIT_RESIDENT", 0xFFFF0000);
-			GetTexture_ThreadSafe(ID).mSignalResident.Wait();
-		}
-	}
-
-	if (bValidData)
-	{
-#if LOG_RESOURCE_CREATE
-		Log::Info("VQRenderer::CreateTexture() w/ pData: [%.2fs] %s", t.StopGetDeltaTimeAndReset(), desc.TexName.c_str());
-#endif
-	}
-
-	return ID;
+	return mTextureManager.CreateTexture(desc, bCheckAlpha);
 }
 
 BufferID VQRenderer::CreateVertexBuffer(const FBufferDesc& desc)
@@ -722,44 +238,10 @@ BufferID VQRenderer::CreateConstantBuffer(const FBufferDesc& desc)
 	return Id;
 }
 
-void VQRenderer::DestroyTexture(TextureID& texID)
-{
-	// Remove texID
-	std::lock_guard<std::mutex> lk(mMtxTextures);
-	Texture& tex = mTextures.at(texID);
-	tex.Destroy();
-	mTextures.erase(texID);
+void VQRenderer::DestroyTexture(TextureID& texID) { mTextureManager.DestroyTexture(texID); }
 
-	// Remove texture path from cache
-	std::string texPath = "";
-	bool bTexturePathRegistered = false;
-	for (const auto& path_id_pair : mLoadedTexturePaths)
-	{
-		if (path_id_pair.second == texID)
-		{
-			texPath = path_id_pair.first;
-			bTexturePathRegistered = true;
-			break;
-		}
-	}
-	if (bTexturePathRegistered)
-		mLoadedTexturePaths.erase(texPath);
 
-	texID = INVALID_ID; // invalidate the ID
-}
-
-TextureID VQRenderer::AddTexture_ThreadSafe(Texture&& tex)
-{
-	TextureID Id = INVALID_ID;
-
-	std::lock_guard<std::mutex> lk(mMtxTextures);
-	Id = LAST_USED_TEXTURE_ID++;
-
-	mTextures[Id] = std::move(tex);
-
-	return Id;
-}
-
+#if 0
 const Texture& VQRenderer::GetTexture_ThreadSafe(TextureID Id) const
 {
 	std::lock_guard<std::mutex> lk(mMtxTextures);
@@ -771,6 +253,7 @@ Texture& VQRenderer::GetTexture_ThreadSafe(TextureID Id)
 	std::lock_guard<std::mutex> lk(mMtxTextures);
 	return mTextures.at(Id);
 }
+#endif
 
 // -----------------------------------------------------------------------------------------------------------------
 //
@@ -779,40 +262,14 @@ Texture& VQRenderer::GetTexture_ThreadSafe(TextureID Id)
 // -----------------------------------------------------------------------------------------------------------------
 SRV_ID VQRenderer::AllocateAndInitializeSRV(TextureID texID)
 {
-	SRV_ID Id = INVALID_ID;
-	CBV_SRV_UAV SRV = {};
-	if(texID != INVALID_ID)
-	{
-		std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
-
-		Texture& tex = GetTexture_ThreadSafe(texID);
-		if (!tex.mpResource)
-		{
-			Log::Error("Texture ID=%d failed initializing, cannot create the SRV", texID);
-			return INVALID_ID;
-		}
-		mHeapCBV_SRV_UAV.AllocateDescriptor(1, &SRV);
-		tex.InitializeSRV(0, &SRV);
-		Id = LAST_USED_SRV_ID++;
-		mSRVs[Id] = SRV;
-	}
-
-	return Id;
+	SRV_ID srvID = AllocateSRV(1);
+	InitializeSRV(srvID, 0, texID);
+	return srvID;
 }
 DSV_ID VQRenderer::AllocateAndInitializeDSV(TextureID texID)
 {
-	assert(mTextures.find(texID) != mTextures.end());
-
-	DSV_ID Id = INVALID_ID;
-	DSV dsv = {};
-	{
-		std::lock_guard<std::mutex> lk(this->mMtxDSVs);
-
-		this->mHeapDSV.AllocateDescriptor(1, &dsv);
-		Id = LAST_USED_DSV_ID++;
-		GetTexture_ThreadSafe(texID).InitializeDSV(0, &dsv);
-		this->mDSVs[Id] = dsv;
-	}
+	DSV_ID Id = AllocateDSV(1);
+	InitializeDSV(Id, 0, texID);
 	return Id;
 }
 
@@ -872,21 +329,209 @@ UAV_ID VQRenderer::AllocateUAV(uint NumDescriptors)
 
 void VQRenderer::InitializeDSV(DSV_ID dsvID, uint32 heapIndex, TextureID texID, int ArraySlice /*= 0*/)
 {
-	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(DSV, dsvID);
-	
-	assert(mDSVs.find(dsvID) != mDSVs.end());
+	auto itDSV = mDSVs.find(dsvID);
+	assert(itDSV != mDSVs.end());
+	DSV& dsv = itDSV->second;
 
-	GetTexture_ThreadSafe(texID).InitializeDSV(heapIndex, &mDSVs.at(dsvID), ArraySlice);
+	const FTexture* pTexture = mTextureManager.GetTexture(texID);
+	assert(pTexture);
+
+	ID3D12Device* pDevice = mDevice.GetDevicePtr();
+	assert(pDevice);
+
+	const D3D12_RESOURCE_DESC texDesc = pTexture->Resource->GetDesc();
+
+	D3D12_DEPTH_STENCIL_VIEW_DESC DSViewDesc = {};
+	if (texDesc.Format == DXGI_FORMAT_R32_TYPELESS)
+		DSViewDesc.Format = DXGI_FORMAT_D32_FLOAT;
+	if (texDesc.Format == DXGI_FORMAT_R24G8_TYPELESS)
+		DSViewDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	if (texDesc.SampleDesc.Count == 1)
+	{
+		if (texDesc.DepthOrArraySize == 1)
+		{
+			DSViewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+			DSViewDesc.Texture2D.MipSlice = 0;
+		}
+		else
+		{
+			DSViewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+			DSViewDesc.Texture2DArray.MipSlice = 0;
+			DSViewDesc.Texture2DArray.FirstArraySlice = ArraySlice;
+			DSViewDesc.Texture2DArray.ArraySize = pTexture->IsCubemap ? (6 - ArraySlice % 6) : 1;
+		}
+	}
+	else
+	{
+		DSViewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS;
+	}
+
+	pDevice->CreateDepthStencilView(pTexture->Resource, &DSViewDesc, dsv.GetCPUDescHandle(heapIndex));
 }
+
 void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bool bInitAsArrayView /*= false*/, bool bInitAsCubeView /*= false*/, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc /*=nullptr*/, UINT ShaderComponentMapping)
 {
 	CHECK_RESOURCE_VIEW(SRV, srvID);
+	
+	const FTexture* pTexture = mTextureManager.GetTexture(texID);
+
+	ID3D12Device* pDevice = mDevice.GetDevicePtr();
+	assert(pDevice);
+
 	std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
-	if (texID != INVALID_ID)
+	if (pTexture)
 	{
-		CHECK_TEXTURE(mTextures, texID);
-		GetTexture_ThreadSafe(texID).InitializeSRV(heapIndex, &mSRVs.at(srvID), bInitAsArrayView, bInitAsCubeView, ShaderComponentMapping, pSRVDesc);
+		if (bInitAsCubeView)
+		{
+			if (!pTexture->IsCubemap)
+			{
+				Log::Warning("Cubemap view requested on a non-cubemap resource");
+			}
+			assert(pTexture->IsCubemap); // could this be an actual use case: e.g. view array[6] as cubemap?
+		}
+
+		//
+		// TODO: bool bInitAsArrayView needed so that InitializeSRV() can initialize a per-face SRV of a cubemap
+		//
+
+		ID3D12Resource* pResource = pTexture->Resource;
+		mTextureManager.WaitForTexture(texID);
+
+		const bool bCustomComponentMappingSpecified = ShaderComponentMapping != D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+		D3D12_RESOURCE_DESC resourceDesc = pResource->GetDesc();
+		const bool bBufferSRV = resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER;
+		const int NumCubes = pTexture->IsCubemap ? resourceDesc.DepthOrArraySize / 6 : 0;
+		const bool bInitializeAsCubemapView = pTexture->IsCubemap && bInitAsCubeView;
+		if (bInitializeAsCubemapView)
+		{
+			const bool bArraySizeMultipleOfSix = resourceDesc.DepthOrArraySize % 6 == 0;
+			if (!bArraySizeMultipleOfSix)
+			{
+				Log::Warning("Cubemap Texture's array size is not multiple of 6");
+			}
+			assert(bArraySizeMultipleOfSix);
+		}
+
+		SRV& srv = mSRVs.at(srvID);
+		if (pTexture->IsTypeless || bCustomComponentMappingSpecified || pTexture->IsCubemap || bBufferSRV)
+		{
+			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+			int mipLevel = 0;// TODO resourceDesc.MipLevels;
+			int arraySize = resourceDesc.DepthOrArraySize; // TODO
+			int firstArraySlice = heapIndex;
+			//assert(mipLevel > 0);
+
+			const bool bDepthSRV = resourceDesc.Format == DXGI_FORMAT_R32_TYPELESS;
+			const bool bMSAA = resourceDesc.SampleDesc.Count != 1;
+			const bool bArraySRV = /*bInitAsArrayView &&*/ resourceDesc.DepthOrArraySize > 1;
+
+			if (bDepthSRV)
+			{
+				srvDesc.Format = DXGI_FORMAT_R32_FLOAT; //special case for the depth buffer
+			}
+			else
+			{
+				D3D12_RESOURCE_DESC desc = pResource->GetDesc();
+				srvDesc.Format = desc.Format;
+			}
+
+			if (bMSAA)
+			{
+				assert(!pTexture->IsCubemap); // no need so far, implement MS cubemaps if this is hit.
+				if (bArraySRV)
+				{
+					srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY;
+					srvDesc.Texture2DMSArray.FirstArraySlice = (firstArraySlice == -1) ? 0 : firstArraySlice;
+					srvDesc.Texture2DMSArray.ArraySize = (arraySize == -1) ? resourceDesc.DepthOrArraySize : arraySize;
+					assert(mipLevel == -1);
+				}
+				else
+				{
+					srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
+				}
+			}
+			else // non-MSAA Texture SRV
+			{
+				if (bArraySRV)
+				{
+					srvDesc.ViewDimension = bInitAsCubeView ? D3D12_SRV_DIMENSION_TEXTURECUBEARRAY : D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+					if (bInitAsCubeView)
+					{
+						srvDesc.TextureCubeArray.MipLevels = resourceDesc.MipLevels;
+						srvDesc.TextureCubeArray.ResourceMinLODClamp = 0;
+						srvDesc.TextureCubeArray.MostDetailedMip = 0;
+						srvDesc.TextureCubeArray.First2DArrayFace = 0;
+						srvDesc.TextureCubeArray.NumCubes = NumCubes;
+					}
+					else
+					{
+						srvDesc.Texture2DArray.MostDetailedMip = (mipLevel == -1) ? 0 : mipLevel;
+						srvDesc.Texture2DArray.MipLevels = (mipLevel == -1) ? pTexture->MipCount : 1;
+						srvDesc.Texture2DArray.FirstArraySlice = (firstArraySlice == -1) ? 0 : firstArraySlice;
+						srvDesc.Texture2DArray.ArraySize = arraySize - srvDesc.Texture2DArray.FirstArraySlice;
+					}
+				}
+
+				else // single SRV
+				{
+					srvDesc.ViewDimension = bInitAsCubeView ? D3D12_SRV_DIMENSION_TEXTURECUBE : D3D12_SRV_DIMENSION_TEXTURE2D;
+					if (bInitAsCubeView)
+					{
+						srvDesc.TextureCube.MostDetailedMip = 0;
+						srvDesc.TextureCube.MipLevels = resourceDesc.MipLevels;
+						srvDesc.TextureCube.ResourceMinLODClamp = 0;
+					}
+					else
+					{
+						srvDesc.Texture2D.MostDetailedMip = mipLevel;
+						srvDesc.Texture2D.MipLevels = (mipLevel == -1) ? pTexture->MipCount : 1;
+					}
+				}
+			}
+
+			srvDesc.Shader4ComponentMapping = ShaderComponentMapping;
+
+			// Create array SRV
+			if (bArraySRV)
+			{
+				if (bInitializeAsCubemapView)
+				{
+					for (int cube = 0; cube < NumCubes; ++cube)
+					{
+						srvDesc.TextureCubeArray.First2DArrayFace = cube;
+						srvDesc.TextureCubeArray.NumCubes = NumCubes - cube;
+						pDevice->CreateShaderResourceView(pResource, &srvDesc, srv.GetCPUDescHandle(heapIndex + cube));
+					}
+				}
+				else
+				{
+					//for (int i = 0; i < resourceDesc.DepthOrArraySize; ++i)
+					{
+						srvDesc.Texture2DArray.FirstArraySlice = heapIndex;
+						srvDesc.Texture2DArray.ArraySize = resourceDesc.DepthOrArraySize - heapIndex;
+						pDevice->CreateShaderResourceView(pResource, &srvDesc, srv.GetCPUDescHandle(0 /*+ i*/));
+					}
+				}
+			}
+
+			// Create single SRV
+			else
+			{
+				pDevice->CreateShaderResourceView(pResource, &srvDesc, srv.GetCPUDescHandle(0));
+			}
+		}
+		else
+		{
+			if (!pSRVDesc && bBufferSRV)
+			{
+				Log::Error("AllocateSRV() for RWBuffer cannot have null SRVDescriptor, specify a SRV "
+					"format for a buffer (as it has no format from the pResource's point of view).");
+				return;
+			}
+			pDevice->CreateShaderResourceView(pResource, pSRVDesc, srv.GetCPUDescHandle(heapIndex));
+		}
 	}
 	else // init NULL SRV
 	{
@@ -899,7 +544,7 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 		nullSrvDesc.Texture2D.MipLevels = 1;
 		nullSrvDesc.Texture2D.MostDetailedMip = 0;
 		nullSrvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
-		mDevice.GetDevicePtr()->CreateShaderResourceView(nullptr, &nullSrvDesc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
+		pDevice->CreateShaderResourceView(nullptr, &nullSrvDesc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
 	}
 }
 void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc)
@@ -908,24 +553,34 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, D3D12_SHADER_RESOUR
 }
 void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID)
 {
-	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(RTV, rtvID);
+
+	const FTexture* pTexture = mTextureManager.GetTexture(texID);
+	assert(pTexture);
+
+	ID3D12Device* pDevice = mDevice.GetDevicePtr();
+	assert(pDevice);
+
 	D3D12_RENDER_TARGET_VIEW_DESC* pRTVDesc = nullptr; // unused
-	mDevice.GetDevicePtr()->CreateRenderTargetView(GetTexture_ThreadSafe(texID).GetResource(), pRTVDesc, mRTVs.at(rtvID).GetCPUDescHandle(heapIndex));
+	pDevice->CreateRenderTargetView(pTexture->Resource, pRTVDesc, mRTVs.at(rtvID).GetCPUDescHandle(heapIndex));
 }
 
 void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID, int arraySlice, int mipLevel)
 {
-	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(RTV, rtvID);
-	Texture& tex = GetTexture_ThreadSafe(texID);
+	
+	const FTexture* pTexture = mTextureManager.GetTexture(texID);
+	assert(pTexture);
+
+	ID3D12Device* pDevice = mDevice.GetDevicePtr();
+	assert(pDevice);
 
 	D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-	D3D12_RESOURCE_DESC rscDesc = tex.GetResource()->GetDesc();
+	const D3D12_RESOURCE_DESC rscDesc = pTexture->Resource->GetDesc();
 
 	rtvDesc.Format = rscDesc.Format;
 	
-	const bool& bCubemap = tex.mbCubemap;
+	const bool& bCubemap = pTexture->IsCubemap;
 	const bool  bArray   = bCubemap ? (rscDesc.DepthOrArraySize/6 > 1) : rscDesc.DepthOrArraySize > 1;
 	const bool  bMSAA    = rscDesc.SampleDesc.Count > 1;
 
@@ -962,16 +617,20 @@ void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID, in
 		}
 	}
 
-	mDevice.GetDevicePtr()->CreateRenderTargetView(GetTexture_ThreadSafe(texID).GetResource(), &rtvDesc, mRTVs.at(rtvID).GetCPUDescHandle(heapIndex));
+	mDevice.GetDevicePtr()->CreateRenderTargetView(pTexture->Resource, &rtvDesc, mRTVs.at(rtvID).GetCPUDescHandle(heapIndex));
 }
 
 void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID texID, DXGI_FORMAT bufferViewFormatOverride)
 {
-	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(UAV, uavID);
 
-	Texture& tex = GetTexture_ThreadSafe(texID);
-	D3D12_RESOURCE_DESC rscDesc = tex.GetResource()->GetDesc();
+	const FTexture* pTexture = mTextureManager.GetTexture(texID);
+	assert(pTexture);
+
+	ID3D12Device* pDevice = mDevice.GetDevicePtr();
+	assert(pDevice);
+
+	const D3D12_RESOURCE_DESC rscDesc = pTexture->Resource->GetDesc();
 	
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
 	uavDesc.ViewDimension = GetUAVDimensionFromResourceDimension(rscDesc.Dimension, false);
@@ -985,15 +644,14 @@ void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID 
 
 	// tex.Width should be representing the Bytes of the Buffer UAV.
 	constexpr UINT StructByteStride = 0; // TODO: get as a parameter?
-	uavDesc.Buffer.NumElements = tex.mWidth / GetDXGIFormatByteSize(bufferViewFormatOverride);
+	uavDesc.Buffer.NumElements = pTexture->Width / GetDXGIFormatByteSize(bufferViewFormatOverride);
 	uavDesc.Buffer.StructureByteStride = StructByteStride;
 
 	// create the UAV
-	ID3D12Resource* pRsc = GetTexture_ThreadSafe(texID).GetResource();
 	ID3D12Resource* pRscCounter = nullptr; // TODO: find a use case for this parameter and implement proper interface
-	assert(pRsc);
+	assert(pTexture->Resource);
 	mDevice.GetDevicePtr()->CreateUnorderedAccessView(
-		pRsc,
+		pTexture->Resource,
 		pRscCounter,
 		&uavDesc,
 		mUAVs.at(uavID).GetCPUDescHandle(heapIndex)
@@ -1001,13 +659,18 @@ void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID 
 }
 void VQRenderer::InitializeSRVForBuffer(SRV_ID srvID, uint heapIndex, TextureID texID, DXGI_FORMAT bufferViewFormatOverride)
 {
-	Texture& tex = GetTexture_ThreadSafe(texID);
-	ID3D12Resource* pRsc = tex.GetResource();
+	const FTexture* pTexture = mTextureManager.GetTexture(texID);
+	assert(pTexture);
+
+	ID3D12Device* pDevice = mDevice.GetDevicePtr();
+	assert(pDevice);
+
+	ID3D12Resource* pRsc = pTexture->Resource;
 	D3D12_RESOURCE_DESC rscDesc = pRsc->GetDesc();
 	assert(rscDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER);
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC desc;
-	desc.Buffer.NumElements = tex.mWidth / GetDXGIFormatByteSize(bufferViewFormatOverride);
+	desc.Buffer.NumElements = pTexture->Width / GetDXGIFormatByteSize(bufferViewFormatOverride);
 	desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAGS::D3D12_BUFFER_SRV_FLAG_NONE;
 	desc.Buffer.FirstElement = 0;
 	desc.Buffer.StructureByteStride = GetDXGIFormatByteSize(bufferViewFormatOverride);
@@ -1020,19 +683,23 @@ void VQRenderer::InitializeSRVForBuffer(SRV_ID srvID, uint heapIndex, TextureID 
 }
 void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, uint arraySlice /*=0*/, uint mipSlice /*=0*/)
 {
-	CHECK_TEXTURE(mTextures, texID);
 	CHECK_RESOURCE_VIEW(UAV, uavID);
 
-	Texture& tex = GetTexture_ThreadSafe(texID);
-	D3D12_RESOURCE_DESC rscDesc = tex.GetResource()->GetDesc();
+	const FTexture* pTexture = mTextureManager.GetTexture(texID);
+	assert(pTexture);
+
+	ID3D12Device* pDevice = mDevice.GetDevicePtr();
+	assert(pDevice);
+
+	D3D12_RESOURCE_DESC rscDesc = pTexture->Resource->GetDesc();
 	
-	const bool& bCubemap = tex.mbCubemap;
+	const bool& bCubemap = pTexture->IsCubemap;
 	const bool  bArray   = bCubemap ? (rscDesc.DepthOrArraySize / 6 > 1) : rscDesc.DepthOrArraySize > 1;
 	const bool  bMSAA    = rscDesc.SampleDesc.Count > 1; // don't care?
 
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
 	uavDesc.ViewDimension = GetUAVDimensionFromResourceDimension(rscDesc.Dimension, bArray || bCubemap);
-	uavDesc.Format = tex.mFormat; 
+	uavDesc.Format = pTexture->Format; 
 
 	// prevent device removal if this function is called on a Buffer resource with DXGI_FORMAT_UNKNOWN resource type:
 	//     DX12 will remove dvice w/ reason #232: DEVICE_REMOVAL_PROCESS_AT_FAULT
@@ -1076,11 +743,10 @@ void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, ui
 	}
 
 	// create the UAV
-	ID3D12Resource* pRsc = GetTexture_ThreadSafe(texID).GetResource();
 	ID3D12Resource* pRscCounter = nullptr; // TODO: find a use case for this parameter and implement proper interface
-	assert(pRsc);
+	assert(pTexture->Resource);
 	mDevice.GetDevicePtr()->CreateUnorderedAccessView(
-		pRsc,
+		pTexture->Resource,
 		pRscCounter,
 		&uavDesc,
 		mUAVs.at(uavID).GetCPUDescHandle(heapIndex)
@@ -1189,16 +855,7 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 	return Result;
 }
 
-
-
-void VQRenderer::QueueTextureUpload(const FTextureUploadDesc& desc)
-{
-	std::unique_lock<std::mutex> lk(mMtxTextureUploadQueue);
-	mTextureUploadQueue.push(desc);
-}
-
-
-
+#if 0
 void VQRenderer::ProcessTextureUpload(const FTextureUploadDesc& desc)
 {
 	SCOPED_CPU_MARKER("ProcessTextureUpload()");
@@ -1315,25 +972,7 @@ void VQRenderer::ProcessTextureUploadQueue()
 	}
 }
 
-void VQRenderer::TextureUploadThread_Main()
-{
-	{
-		SCOPED_CPU_MARKER_C("WAIT_DEVICE_INIT", 0xFF0000FF);
-		mLatchDeviceInitialized.wait();
-	}
-	this->WaitHeapsInitialized();
-
-	while (!mbExitUploadThread)
-	{
-		SCOPED_CPU_MARKER_C("TextureUploadThread_Main()", 0xFF33AAFF);
-		mSignal_UploadThreadWorkReady.Wait([&]() { return mbExitUploadThread.load() || !mTextureUploadQueue.empty(); });
-
-		if (mbExitUploadThread)
-			break;
-
-		this->ProcessTextureUploadQueue();
-	}
-}
+#endif
 
 // -----------------------------------------------------------------------------------------------------------------
 //
@@ -1365,75 +1004,21 @@ const CBV_SRV_UAV& VQRenderer::GetShaderResourceView(SRV_ID Id) const
 	return mSRVs.at(Id);
 }
 
-const CBV_SRV_UAV& VQRenderer::GetUnorderedAccessView(UAV_ID Id) const
-{
-	return mUAVs.at(Id);
-}
+const CBV_SRV_UAV& VQRenderer::GetUnorderedAccessView(UAV_ID Id) const { return mUAVs.at(Id); }
 
-const DSV& VQRenderer::GetDepthStencilView(RTV_ID Id) const
-{
-	return mDSVs.at(Id);
-}
-const RTV& VQRenderer::GetRenderTargetView(RTV_ID Id) const
-{
-	return mRTVs.at(Id);
-}
-const ID3D12Resource* VQRenderer::GetTextureResource(TextureID Id) const
-{
-	CHECK_TEXTURE(mTextures, Id);
-	return GetTexture_ThreadSafe(Id).GetResource();
-}
-ID3D12Resource* VQRenderer::GetTextureResource(TextureID Id) 
-{
-	CHECK_TEXTURE(mTextures, Id);
-	return GetTexture_ThreadSafe(Id).GetResource();
-}
+const DSV& VQRenderer::GetDepthStencilView(RTV_ID Id) const { return mDSVs.at(Id); }
+const RTV& VQRenderer::GetRenderTargetView(RTV_ID Id) const { return mRTVs.at(Id); }
 
-DXGI_FORMAT VQRenderer::GetTextureFormat(TextureID Id) const
-{
-	CHECK_TEXTURE(mTextures, Id);
-	return GetTexture_ThreadSafe(Id).GetFormat();
-}
-
-bool VQRenderer::GetTextureAlphaChannelUsed(TextureID Id) const
-{
-	CHECK_TEXTURE(mTextures, Id);
-	return GetTexture_ThreadSafe(Id).GetUsesAlphaChannel();
-}
-
-void VQRenderer::GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices, int& NumMips) const
-{
-	if (Id != INVALID_ID)
-	{
-		CHECK_TEXTURE(mTextures, Id);
-		const Texture& tex = GetTexture_ThreadSafe(Id);
-		SizeX = tex.mWidth;
-		SizeY = tex.mHeight;
-		NumSlices = tex.mNumArraySlices;
-		NumMips = tex.mMipMapCount;
-	}
-	else
-	{
-		Log::Warning("GetTextureDimensions() called on uninitialized texture w/ TexID=INVALID_ID");
-		SizeX     = 0;
-		SizeY     = 0;
-		NumSlices = 0;
-		NumMips   = 0;
-	}
-}
-
-uint VQRenderer::GetTextureMips(TextureID Id) const
-{
-	if (Id == INVALID_ID) return 0;
-	CHECK_TEXTURE(mTextures, Id);
-	const Texture& tex = GetTexture_ThreadSafe(Id);
-	return tex.mMipMapCount;
-}
+ID3D12Resource* VQRenderer::GetTextureResource(TextureID Id) const                                              { return mTextureManager.GetTextureResource(Id); }
+DXGI_FORMAT VQRenderer::GetTextureFormat(TextureID Id) const                                                    { return mTextureManager.GetTextureFormat(Id); }
+bool VQRenderer::GetTextureAlphaChannelUsed(TextureID Id) const                                                 { return mTextureManager.GetTextureAlphaChannelUsed(Id); }
+void VQRenderer::GetTextureDimensions(TextureID Id, int& SizeX, int& SizeY, int& NumSlices, int& NumMips) const { mTextureManager.GetTextureDimensions(Id, SizeX, SizeY, NumSlices, NumMips); }
+uint VQRenderer::GetTextureMips(TextureID Id) const                                                             { return mTextureManager.GetTextureMips(Id); }
 
 uint VQRenderer::GetTextureSampleCount(TextureID Id) const
 {
-	CHECK_TEXTURE(mTextures, Id);
-	const Texture& tex = GetTexture_ThreadSafe(Id);
+	//CHECK_TEXTURE(mTextures, Id);
+	//const Texture& tex = GetTexture_ThreadSafe(Id);
 	assert(false);
 	return 0; // TODO:
 }

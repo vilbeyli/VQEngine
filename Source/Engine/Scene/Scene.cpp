@@ -498,7 +498,6 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 	, mResourceNames(engine.GetResourceNames())
 	, mAssetLoader(engine.GetAssetLoader())
 	, mRenderer(renderer)
-	, mMaterialAssignments(engine.GetAssetLoader().GetThreadPool_TextureLoad())
 	, mBoundingBoxHierarchy(mMeshes, mModels, mMaterialPool, mTransformHandles)
 	, mInvalidMaterialName("INVALID MATERIAL")
 	, mInvalidTexturePath("INVALID PATH")

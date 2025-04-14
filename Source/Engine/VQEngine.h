@@ -234,7 +234,6 @@ private:
 	ThreadPool                      mWorkers_Simulation;
 #endif
 	ThreadPool                      mWorkers_ModelLoading;
-	ThreadPool                      mWorkers_TextureLoading;
 	ThreadPool                      mWorkers_MeshLoading;
 
 	// sync

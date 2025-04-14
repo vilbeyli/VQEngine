@@ -73,5 +73,4 @@ class CBV_SRV_UAV : public ResourceView { };
 class SAMPLER     : public ResourceView { };
 using SRV = CBV_SRV_UAV;
 using CBV = CBV_SRV_UAV;
-using UAV = CBV_SRV_UAV;    
-
+using UAV = CBV_SRV_UAV;

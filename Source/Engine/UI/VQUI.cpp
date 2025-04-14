@@ -237,9 +237,9 @@ void VQEngine::InitializeUI(HWND hwnd)
 
 	// Create the texture object
 	//
-	TextureCreateDesc rDescs("texUI");
-	rDescs.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height, 1, 1);
-	rDescs.pDataArray.push_back( pixels );
+	FTextureRequest rDescs("texUI");
+	rDescs.D3D12Desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height, 1, 1);
+	rDescs.DataArray.push_back( pixels );
 
 	mpRenderer->WaitHeapsInitialized();
 	//mpRenderer->WaitMemoryAllocatorInitialized();

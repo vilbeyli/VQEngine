@@ -52,8 +52,8 @@ void ObjectIDPass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned
 	mOutputResolutionY = Height;
 
 	{	// Scene depth stencil view
-		TextureCreateDesc desc("ObjectIDDepth");
-		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
+		FTextureRequest desc("ObjectIDDepth");
+		desc.D3D12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 			DXGI_FORMAT_R32_TYPELESS
 			, mOutputResolutionX
 			, mOutputResolutionY
@@ -63,13 +63,13 @@ void ObjectIDPass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned
 			, 0 // MSAA SampleQuality
 			, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
 		);
-		desc.ResourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+		desc.InitialState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 		TEXPassOutputDepth = mRenderer.CreateTexture(desc);
 		mRenderer.InitializeDSV(DSVPassOutput, 0u, TEXPassOutputDepth);
 	}
 	{ // Main render target view
-		TextureCreateDesc desc("ObjectID");
-		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
+		FTextureRequest desc("ObjectID");
+		desc.D3D12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 			DXGI_FORMAT::DXGI_FORMAT_R32G32B32A32_SINT
 			, mOutputResolutionX
 			, mOutputResolutionY
@@ -80,23 +80,23 @@ void ObjectIDPass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned
 			, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
 		);
 
-		desc.ResourceState = D3D12_RESOURCE_STATE_COMMON;
+		desc.InitialState = D3D12_RESOURCE_STATE_COMMON;
 		TEXPassOutput = mRenderer.CreateTexture(desc);
 		mRenderer.InitializeRTV(RTVPassOutput, 0u, TEXPassOutput);
 
 		D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint;
 		UINT64 byteAlignedSize = 0;
-		mRenderer.GetDevicePtr()->GetCopyableFootprints(&desc.d3d12Desc, 0, 1, 0, &footprint, nullptr, nullptr, &byteAlignedSize);
+		mRenderer.GetDevicePtr()->GetCopyableFootprints(&desc.D3D12Desc, 0, 1, 0, &footprint, nullptr, nullptr, &byteAlignedSize);
 
-		desc.TexName = "ObjectID_CPU_READBACK";
+		desc.Name = "ObjectID_CPU_READBACK";
 		desc.bCPUReadback = true;
-		desc.ResourceState = D3D12_RESOURCE_STATE_COPY_DEST;
-		desc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-		desc.d3d12Desc.Format = DXGI_FORMAT_UNKNOWN;
-		desc.d3d12Desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-		desc.d3d12Desc.Height = 1;
-		desc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-		desc.d3d12Desc.Width = byteAlignedSize;
+		desc.InitialState = D3D12_RESOURCE_STATE_COPY_DEST;
+		desc.D3D12Desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		desc.D3D12Desc.Format = DXGI_FORMAT_UNKNOWN;
+		desc.D3D12Desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+		desc.D3D12Desc.Height = 1;
+		desc.D3D12Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+		desc.D3D12Desc.Width = byteAlignedSize;
 		TEXPassOutputCPUReadback = mRenderer.CreateTexture(desc);
 	}
 }

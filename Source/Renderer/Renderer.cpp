@@ -24,6 +24,7 @@
 
 #include "Renderer.h"
 #include "Core/Device.h"
+#include "Core/Common.h"
 #include "Resources/Texture.h"
 #include "Resources/CubemapUtility.h"
 #include "Pipeline/Shader.h"
@@ -193,12 +194,11 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 	SCOPED_CPU_MARKER("Renderer.Initialize");
 	Device* pVQDevice = &mDevice;
 
+	mTextureManager.InitializeEarly(mLatchDeviceInitialized, mLatchHeapsInitialized);
+
 	// initialize thread
 	{
 		SCOPED_CPU_MARKER("Threads");
-		mbExitUploadThread.store(false);
-		mTextureUploadThread = std::thread(&VQRenderer::TextureUploadThread_Main, this);
-		SetThreadDescription(mTextureUploadThread.native_handle(), L"TextureUploadThread");
 		
 		// TODO:
 		//mFrameSubmitThread = std::thread(&VQRenderer::FrameSubmitThread_Main, this);
@@ -268,6 +268,17 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 
 		mLatchHeapsInitialized.count_down();
 	}
+
+	mTextureManager.InitializeLate(
+		mDevice.GetDevicePtr(),
+		mpAllocator,
+		mCmdQueues[CommandQueue::EType::COPY].pQueue,
+		mHeapCBV_SRV_UAV,
+		mHeapUpload,
+		mMtxUploadHeap
+	);
+
+	mNumFramesRendered = 0;
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mFrameSceneDrawData.resize(NumFrameBuffers);
@@ -389,9 +400,9 @@ static void CreateResourceViews(FRenderingResources_MainWindow& rsc, VQRenderer&
 	// reflection passes
 	{
 		SCOPED_CPU_MARKER("Reflection");
-		TextureCreateDesc desc("DownsampledSceneDepthAtomicCounter");
-		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(4, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-		desc.ResourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		FTextureRequest desc("DownsampledSceneDepthAtomicCounter");
+		desc.D3D12Desc = CD3DX12_RESOURCE_DESC::Buffer(4, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+		desc.InitialState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 		rsc.Tex_DownsampledSceneDepthAtomicCounter = mRenderer.CreateTexture(desc);
 		mRenderer.InitializeUAVForBuffer(rsc.UAV_DownsampledSceneDepthAtomicCounter, 0u, rsc.Tex_DownsampledSceneDepthAtomicCounter, DXGI_FORMAT_R32_UINT);
 	}
@@ -399,13 +410,13 @@ static void CreateResourceViews(FRenderingResources_MainWindow& rsc, VQRenderer&
 	// shadow map passes
 	{
 		SCOPED_CPU_MARKER("ShadowMaps");
-		TextureCreateDesc desc("ShadowMaps_Spot");
+		FTextureRequest desc("ShadowMaps_Spot");
 		// initialize texture memory
 		constexpr UINT SHADOW_MAP_DIMENSION_SPOT = 1024;
 		constexpr UINT SHADOW_MAP_DIMENSION_POINT = 1024;
 		constexpr UINT SHADOW_MAP_DIMENSION_DIRECTIONAL = 2048;
 
-		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
+		desc.D3D12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 			DXGI_FORMAT_R32_TYPELESS
 			, SHADOW_MAP_DIMENSION_SPOT
 			, SHADOW_MAP_DIMENSION_SPOT
@@ -415,22 +426,22 @@ static void CreateResourceViews(FRenderingResources_MainWindow& rsc, VQRenderer&
 			, 0 // MSAA SampleQuality
 			, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
 		);
-		desc.ResourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+		desc.InitialState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 		rsc.Tex_ShadowMaps_Spot = mRenderer.CreateTexture(desc);
 
-		desc.d3d12Desc.DepthOrArraySize = NUM_SHADOWING_LIGHTS__POINT * 6;
-		desc.d3d12Desc.Width = SHADOW_MAP_DIMENSION_POINT;
-		desc.d3d12Desc.Height = SHADOW_MAP_DIMENSION_POINT;
-		desc.TexName = "ShadowMaps_Point";
+		desc.D3D12Desc.DepthOrArraySize = NUM_SHADOWING_LIGHTS__POINT * 6;
+		desc.D3D12Desc.Width = SHADOW_MAP_DIMENSION_POINT;
+		desc.D3D12Desc.Height = SHADOW_MAP_DIMENSION_POINT;
+		desc.Name = "ShadowMaps_Point";
 		desc.bCubemap = true;
 		rsc.Tex_ShadowMaps_Point = mRenderer.CreateTexture(desc);
 
 
-		desc.d3d12Desc.Width = SHADOW_MAP_DIMENSION_DIRECTIONAL;
-		desc.d3d12Desc.Height = SHADOW_MAP_DIMENSION_DIRECTIONAL;
-		desc.d3d12Desc.DepthOrArraySize = 1;
+		desc.D3D12Desc.Width = SHADOW_MAP_DIMENSION_DIRECTIONAL;
+		desc.D3D12Desc.Height = SHADOW_MAP_DIMENSION_DIRECTIONAL;
+		desc.D3D12Desc.DepthOrArraySize = 1;
 		desc.bCubemap = false;
-		desc.TexName = "ShadowMap_Directional";
+		desc.Name = "ShadowMap_Directional";
 		rsc.Tex_ShadowMaps_Directional = mRenderer.CreateTexture(desc);
 
 		// initialize DSVs
@@ -510,9 +521,6 @@ void VQRenderer::Destroy()
 	mWorkers_PSOLoad.Destroy();
 	mWorkers_ShaderLoad.Destroy();
 
-	mbExitUploadThread.store(true);
-	mSignal_UploadThreadWorkReady.NotifyAll();
-
 	// clean up memory
 	mHeapUpload.Destroy();
 	mHeapCBV_SRV_UAV.Destroy();
@@ -522,11 +530,8 @@ void VQRenderer::Destroy()
 	mStaticHeap_IndexBuffer.Destroy();
 
 	// clean up textures
-	for (std::unordered_map<TextureID, Texture>::iterator it = mTextures.begin(); it != mTextures.end(); ++it)
-	{
-		it->second.Destroy();
-	}
-	mTextures.clear();
+	mTextureManager.Destroy();
+
 	mpAllocator->Release();
 	
 	// clean up root signatures and PSOs
@@ -555,9 +560,6 @@ void VQRenderer::Destroy()
 		mCmdQueues[i].Destroy();
 	}
 	mDevice.Destroy();
-
-	// clean up remaining threads
-	mTextureUploadThread.join();
 }
 
 void VQRenderer::OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h)
@@ -733,37 +735,37 @@ void VQRenderer::LoadDefaultResources()
 		textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 		textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 	}
-	TextureCreateDesc desc("Checkerboard");
-	desc.d3d12Desc = textureDesc;
-	desc.ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+	FTextureRequest desc("Checkerboard");
+	desc.D3D12Desc = textureDesc;
+	desc.InitialState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 
-	WaitMemoryAllocatorInitialized();
+	WaitHeapsInitialized();
 
 	// programmatically generated textures
 	{
-		std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX);
-		desc.pDataArray.push_back( texture.data() );
+		std::vector<UINT8> texture = FTexture::GenerateTexture_Checkerboard(sizeX);
+		desc.DataArray.push_back( texture.data() );
 		TextureID texID = this->CreateTexture(desc, false);
 		mLookup_ProceduralTextureIDs[EProceduralTextures::CHECKERBOARD] = texID;
 		mLookup_ProceduralTextureSRVs[EProceduralTextures::CHECKERBOARD] = this->AllocateAndInitializeSRV(texID);
-		desc.pDataArray.pop_back();
+		desc.DataArray.pop_back();
 	}
 	{
-		desc.TexName = "Checkerboard_Gray";
-		std::vector<UINT8> texture = Texture::GenerateTexture_Checkerboard(sizeX, true);
-		desc.pDataArray.push_back( texture.data() );
+		desc.Name = "Checkerboard_Gray";
+		std::vector<UINT8> texture = FTexture::GenerateTexture_Checkerboard(sizeX, true);
+		desc.DataArray.push_back( texture.data() );
 		TextureID texID = this->CreateTexture(desc, false);
 		mLookup_ProceduralTextureIDs[EProceduralTextures::CHECKERBOARD_GRAYSCALE] = texID;
 		mLookup_ProceduralTextureSRVs[EProceduralTextures::CHECKERBOARD_GRAYSCALE] = this->AllocateAndInitializeSRV(texID);
-		desc.pDataArray.pop_back();
+		desc.DataArray.pop_back();
 	}
 	{
-		desc.TexName = "IBL_BRDF_Integration";
-		desc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-		desc.d3d12Desc.Width  = 1024;
-		desc.d3d12Desc.Height = 1024;
-		desc.d3d12Desc.Format = DXGI_FORMAT_R16G16_FLOAT;
-		desc.d3d12Desc.Flags = D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+		desc.Name = "IBL_BRDF_Integration";
+		desc.InitialState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		desc.D3D12Desc.Width  = 1024;
+		desc.D3D12Desc.Height = 1024;
+		desc.D3D12Desc.Format = DXGI_FORMAT_R16G16_FLOAT;
+		desc.D3D12Desc.Flags = D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
 		TextureID texID = this->CreateTexture(desc, false);
 		mLookup_ProceduralTextureIDs[EProceduralTextures::IBL_BRDF_INTEGRATION_LUT] = texID;
@@ -773,7 +775,7 @@ void VQRenderer::LoadDefaultResources()
 void VQRenderer::UploadVertexAndIndexBufferHeaps()
 {
 	SCOPED_CPU_MARKER("UploadVertexAndIndexBufferHeaps");
-	std::lock_guard<std::mutex> lk(mMtxTextureUploadQueue);
+	std::lock_guard<std::mutex> lk(mMtxUploadHeap);
 	
 	mStaticHeap_VertexBuffer.UploadData(mHeapUpload.GetCommandList());
 	mStaticHeap_IndexBuffer.UploadData(mHeapUpload.GetCommandList());
@@ -801,7 +803,7 @@ ID3D12DescriptorHeap* VQRenderer::GetDescHeap(EResourceHeapType HeapType)
 	return pHeap;
 }
 
-
+// TODO: this returns an SRV_ID!
 TextureID VQRenderer::GetProceduralTexture(EProceduralTextures tex) const
 {
 	WaitForLoadCompletion();

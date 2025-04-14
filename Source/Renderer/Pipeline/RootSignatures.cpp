@@ -20,6 +20,7 @@
 #include "Renderer.h"
 #include "Shaders/LightingConstantBufferData.h"
 #include "Engine/GPUMarker.h"
+#include "Core/Common.h"
 
 using namespace Microsoft::WRL;
 using namespace VQSystemInfo;
