@@ -21,20 +21,25 @@
 #include "DXGIUtils.h"
 
 #include "Core/Common.h"
-#include "Libs/VQUtils/Source/Image.h"
 #include "Libs/VQUtils/Source/utils.h"
 #include "Libs/D3D12MA/src/D3D12MemAlloc.h"
 #include "Libs/D3DX12/d3dx12.h"
 
 #include "Engine/GPUMarker.h"
 
+
 using namespace Microsoft::WRL;
 
 
-static TextureID LAST_USED_TEXTURE_ID = 1;
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//
+// STATIC
+//
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+static std::atomic<TextureID> LAST_USED_TEXTURE_ID = 1;
 static TextureID GenerateUniqueID()
 {
-	return LAST_USED_TEXTURE_ID++;
+	return LAST_USED_TEXTURE_ID.fetch_add(1);
 }
 static bool HasAlphaValues(const void* pData, uint W, uint H, DXGI_FORMAT Format)
 {
@@ -59,12 +64,14 @@ static bool HasAlphaValues(const void* pData, uint W, uint H, DXGI_FORMAT Format
 }
 
 
-void TextureManager::InitializeEarly(std::latch& DeviceInitializedSignal, std::latch& HeapsInitializedSignal)
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//
+// INIT / SHUTDOWN
+//
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+void TextureManager::InitializeEarly()
 {
 	SCOPED_CPU_MARKER("TextureManager::InitializeEarly");
-
-	mpDeviceInitializedLatch = &DeviceInitializedSignal;
-	mpHeapsInitializedLatch = &HeapsInitializedSignal;
 
 	// Initialize thread pools for CPU tasks
 	const size_t HWThreads = ThreadPool::sHardwareThreadCount;
@@ -86,36 +93,18 @@ void TextureManager::InitializeLate(
 {
 	SCOPED_CPU_MARKER("TextureManager::InitializeLate");
 
+	// set refs
 	mpDevice = pDevice;
 	mpAllocator = pAllocator;
 	mpCopyQueue = pCopyQueue;
 	mpSRVHeap = &SRVHeap;
 	mpUploadHeap = &UploadHeap;
-	mpUploadQueueMutex = &UploadHeapMutex;
+	mpUploadHeapMutex = &UploadHeapMutex;
 
 	// Start upload thread
-	mUploadThread = std::thread([this]()
-	{
-		SCOPED_CPU_MARKER_C("TextureUploadThread", 0xFF33AAFF);
+	mUploadThread = std::thread(&TextureManager::TextureUploadThread_Main, this);
 
-		{
-			SCOPED_CPU_MARKER_C("WAIT_DEVICE_INIT", 0xFF0000FF);
-			mpDeviceInitializedLatch->wait();
-			mpHeapsInitializedLatch->wait();
-		}
-
-		while (!mExitUploadThread.load())
-		{
-			std::unique_lock<std::mutex> Lock(*mpUploadQueueMutex);
-			mUploadSignal.Wait([this]() { return !mUploadQueue.empty() || mExitUploadThread.load(); });
-			
-			if (mExitUploadThread.load())
-				break;
-			
-			ProcessTextureUploadQueue();
-		}
-	});
-
+	// signal ready
 	mInitialized.count_down();
 }
 
@@ -139,28 +128,41 @@ void TextureManager::Destroy()
 
 	// registry cleanup
 	{
-		SCOPED_CPU_MARKER("CleanUpTextures");
-		std::lock_guard<std::mutex> Lock(mTexturesMutex);
-		for (auto& [ID, State] : mTextures)
+		std::lock_guard<std::mutex> taskLock(mTaskMutex);
+		for (auto& [id, state] : mTaskStates)
 		{
-			if (State.CPUTasksDoneSignal.IsReady())
+			if (state.State != ETextureTaskState::Ready && state.State != ETextureTaskState::Failed)
 			{
-				State.CPUTasksDoneSignal.Wait();
-			}
-			if (State.GPUTasksDoneSignal.IsReady())
-			{
-				State.GPUTasksDoneSignal.Wait();
-			}
-			if (State.Texture.Resource)
-			{
-				State.Texture.Resource->Release();
-			}
-			if (State.Texture.Allocation)
-			{
-				State.Texture.Allocation->Release();
+				state.CompletionSignal.wait();
 			}
 		}
-		mTextures.clear();
+		mTaskStates.clear();
+	}
+
+	{
+		std::lock_guard<std::shared_mutex> metaLock(mMetadataMutex);
+		for (auto& [id, meta] : mMetadata)
+		{
+			if (meta.Texture.Resource)
+			{
+				meta.Texture.Resource->Release();
+			}
+			if (meta.Texture.Allocation)
+			{
+				meta.Texture.Allocation->Release();
+			}
+		}
+		mMetadata.clear();
+	}
+
+
+	{
+		std::lock_guard<std::mutex> dataLock(mDataMutex);
+		mTextureData.clear();
+	}
+
+	{
+		std::lock_guard<std::mutex> pathLock(mLoadedTexturePathsMutex);
 		mLoadedTexturePaths.clear();
 	}
 
@@ -170,120 +172,23 @@ void TextureManager::Destroy()
 	mpCopyQueue = nullptr;
 	mpSRVHeap = nullptr;
 	mpUploadHeap = nullptr;
-	mpDeviceInitializedLatch = nullptr;
-	mpHeapsInitializedLatch = nullptr;
 }
 
-TextureID TextureManager::QueueTextureCreation(const FTextureRequest& Request)
-{
-	SCOPED_CPU_MARKER("QueueTextureCreation");
-	
-	TextureID ID;
-	
-	{
-		std::lock_guard<std::mutex> Lock(mTexturesMutex);
-		ID = GenerateUniqueID();
-		FTextureState& State = mTextures[ID];
-		State.Request = Request;
-	}
-	
-	const bool bGenerateMips = Request.bGenerateMips;
-	const bool bLoadFromFile = !Request.FilePath.empty();
-	const bool bProcedural = !Request.DataArray.empty();
 
-	const bool bHaveCPUTasks = bGenerateMips || bLoadFromFile;
-
-	// Phase 1: CPU-bound tasks (disk read, mip generation)
-	if(bHaveCPUTasks)
-	{
-		mDiskWorkers.AddTask([this, ID, bLoadFromFile, bGenerateMips, bProcedural]()
-		{
-			if (bLoadFromFile)
-			{
-				DiskRead(ID);
-			}
-
-			if (bGenerateMips)
-			{
-				TaskSignal<void> MipSignal;
-				mMipWorkers.AddTask([this, ID, &MipSignal]() { GenerateMips(ID); MipSignal.Notify(); });
-				{
-					SCOPED_CPU_MARKER_C("WAIT_MIP_DONE", 0xFFAA0000);
-					MipSignal.Wait();
-				}
-			}
-
-			{
-				std::lock_guard<std::mutex> Lock(mTexturesMutex);
-				std::unordered_map<TextureID, FTextureState>::iterator It = mTextures.find(ID);
-				FTextureState& State = It->second;
-				State.CPUTasksDoneSignal.Notify();
-			}
-		});
-	}
-	else
-	{
-		std::lock_guard<std::mutex> Lock(mTexturesMutex);
-		mTextures.at(ID).CPUTasksDoneSignal.Notify();
-	}
-	
-	// Phase 2: GPU-bound tasks (allocation, upload, views)
-	std::future<void> GPUTasksDoneSignal = mGPUWorkers.AddTask([this, ID]()
-	{
-		SCOPED_CPU_MARKER("TextureGPUTasks");
-		FTextureState* pState = nullptr;
-		{
-			std::lock_guard<std::mutex> Lock(mTexturesMutex);
-			auto It = mTextures.find(ID);
-			if (It == mTextures.end())
-			{
-				Log::Warning("Texture ID %d not found for GPU tasks", ID);
-				return;
-			}
-			pState = &It->second;
-		}
-
-		{
-			SCOPED_CPU_MARKER_C("WAIT_DISK_IO_N_MIPMAP", 0xFF0000FF);
-			pState->CPUTasksDoneSignal.Wait(); // Wait for CPU tasks to complete
-		}
-		
-		// Wait for device initialization
-		{
-			SCOPED_CPU_MARKER_C("WAIT_DEVICE_INIT", 0xFF0000FF);
-			mpDeviceInitializedLatch->wait();
-		}
-		
-		{
-			AllocateResource(ID);
-			
-			{
-				SCOPED_CPU_MARKER_C("WAIT_HEAP_INIT", 0xFF0000FF);
-				mpHeapsInitializedLatch->wait();
-			}
-
-			bool bUploadToGPU = false;
-			{   // TODO
-				std::lock_guard<std::mutex> Lock(mTexturesMutex);
-				auto It = mTextures.find(ID);
-				bUploadToGPU = !It->second.RawData.empty() || !It->second.MipData.empty();
-			}
-			if (bUploadToGPU)
-			{
-				UploadToGPU(ID);
-			}
-		}
-	});
-	
-	return ID;
-}
-
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//
+// INTERFACE
+//
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 TextureID TextureManager::CreateTexture(const FTextureRequest& Request, bool bCheckAlpha)
 {
-	SCOPED_CPU_MARKER("CreateTextureFromFile");
+	SCOPED_CPU_MARKER("CreateTexture");
+
+	const bool bInitFromFile = !Request.FilePath.empty();
+	const bool bInitFromRAM = !Request.DataArray.empty();
 
 	// check cache for file-based textures
-	if (!Request.FilePath.empty())
+	if (bInitFromFile)
 	{
 		std::lock_guard<std::mutex> Lock(mLoadedTexturePathsMutex);
 		if (auto It = mLoadedTexturePaths.find(Request.FilePath); It != mLoadedTexturePaths.end())
@@ -295,94 +200,141 @@ TextureID TextureManager::CreateTexture(const FTextureRequest& Request, bool bCh
 		}
 	}
 
-	TextureID ID = QueueTextureCreation(Request);
-
-	if (!Request.FilePath.empty())
+	// Assign ID and initialize metadata
+	TextureID id = GenerateUniqueID();
 	{
-		std::lock_guard<std::mutex> Lock(mLoadedTexturePathsMutex);
-		mLoadedTexturePaths[Request.FilePath] = ID;
+		std::lock_guard<std::shared_mutex> lock(mMetadataMutex);
+		mMetadata[id].Request = Request;
 	}
 
-	return ID;
+	// Initialize task state
+	{
+		std::lock_guard<std::mutex> lock(mTaskMutex);
+		mTaskStates[id].State = ETextureTaskState::Pending;
+	}
+
+    // Queue initial task
+    if (bInitFromFile)
+    {
+        mDiskWorkers.AddTask([this, id, Request]()
+        {
+            DiskRead(id, Request);
+        });
+    }
+    else if (bInitFromRAM)
+    {
+        mDiskWorkers.AddTask([this, id, Request]()
+        {
+            LoadFromMemory(id, Request);
+        });
+    }
+    else
+    {
+        // GPU-only texture (e.g., render target)
+        mGPUWorkers.AddTask([this, id]()
+        {
+            AllocateResource(id);
+        });
+    }
+
+	// update cache
+	if (bInitFromFile)
+	{
+		std::lock_guard<std::mutex> Lock(mLoadedTexturePathsMutex);
+		mLoadedTexturePaths[Request.FilePath] = id;
+	}
+
+	return id;
 }
 
 void TextureManager::DestroyTexture(TextureID& ID)
 {
 	SCOPED_CPU_MARKER("DestroyTexture");
 
-	std::lock_guard<std::mutex> TextureLock(mTexturesMutex);
-	auto It = mTextures.find(ID);
-	if (It == mTextures.end())
+	// Wait for tasks to complete
 	{
-		Log::Warning("Texture ID %d not found for destruction", ID);
-		return;
+		std::lock_guard<std::mutex> lock(mTaskMutex);
+		auto taskIt = mTaskStates.find(ID);
+		if (taskIt != mTaskStates.end())
+		{
+			taskIt->second.CompletionSignal.wait();
+			mTaskStates.erase(taskIt);
+		}
+	}
+	// Get metadata
+	FTextureMetaData meta;
+	{
+		std::lock_guard<std::shared_mutex> lock(mMetadataMutex);
+		auto it = mMetadata.find(ID);
+		if (it == mMetadata.end())
+		{
+			Log::Warning("Texture ID %d not found for destruction", ID);
+			return;
+		}
+		meta = std::move(it->second);
+		mMetadata.erase(it);
 	}
 
-	FTextureState& State = It->second;
-
-#if 0
-	// Wait for ongoing tasks
-	if (State.CPUTasksDoneSignal.valid())
-		State.CPUTasksDoneSignal.wait();
-	
-	if (State.GPUTasksDoneSignal.valid())
-		State.GPUTasksDoneSignal.wait();
-#endif
 
 	// Release resources
-	if (State.Texture.Resource)
+	if (meta.Texture.Resource)
 	{
-		State.Texture.Resource->Release();
-		State.Texture.Resource = nullptr;
+		meta.Texture.Resource->Release();
+		meta.Texture.Resource = nullptr;
 	}
-	if (State.Texture.Allocation)
+	if (meta.Texture.Allocation)
 	{
-		State.Texture.Allocation->Release();
-		State.Texture.Allocation = nullptr;
+		meta.Texture.Allocation->Release();
+		meta.Texture.Allocation = nullptr;
 	}
 
 	// Free descriptors (assumes VQRenderer manages DSV/UAV heaps)
-	if (State.SRVID != INVALID_ID)
+	if (meta.SRVID != INVALID_ID)
 	{
-		// mpSRVHeap->Free(State.SRVID); // Implement if heap supports freeing
-		State.SRVID = INVALID_ID;
+		// mpSRVHeap->Free(meta.SRVID); // Implement if heap supports freeing
+		meta.SRVID = INVALID_ID;
 	}
-	if (State.DSVID != INVALID_ID)
+	if (meta.DSVID != INVALID_ID)
 	{
-		// VQRenderer::FreeDSV(State.DSVID); // Placeholder
-		State.DSVID = INVALID_ID;
+		// VQRenderer::FreeDSV(meta.DSVID); // Placeholder
+		meta.DSVID = INVALID_ID;
 	}
-	if (State.UAVID != INVALID_ID)
+	if (meta.UAVID != INVALID_ID)
 	{
-		// VQRenderer::FreeUAV(State.UAVID); // Placeholder
-		State.UAVID = INVALID_ID;
+		// VQRenderer::FreeUAV(meta.UAVID); // Placeholder
+		meta.UAVID = INVALID_ID;
 	}
 
 	// Remove from bookkeeping
-	if (!State.Request.FilePath.empty())
+	if (!meta.Request.FilePath.empty())
 	{
 		std::lock_guard<std::mutex> PathLock(mLoadedTexturePathsMutex);
-		mLoadedTexturePaths.erase(State.Request.FilePath);
+		mLoadedTexturePaths.erase(meta.Request.FilePath);
 	}
 
 	// Purge pending uploads
 	{
-		std::lock_guard<std::mutex> QueueLock(*mpUploadQueueMutex);
-		std::queue<FTextureUploadTask> TempQueue;
-		while (!mUploadQueue.empty())
+		concurrency::concurrent_queue<FTextureUploadTask> tempQueue;
+		FTextureUploadTask task;
+		while (mUploadQueue.try_pop(task))
 		{
-			FTextureUploadTask Task = std::move(mUploadQueue.front());
-			mUploadQueue.pop();
-			if (Task.ID != ID)
+			if (task.ID != ID)
 			{
-				TempQueue.push(std::move(Task));
+				tempQueue.push(std::move(task));
 			}
 		}
-		mUploadQueue = std::move(TempQueue);
+		// Push back non-matching tasks
+		while (tempQueue.try_pop(task))
+		{
+			mUploadQueue.push(std::move(task));
+		}
 	}
 
-	// Remove from textures
-	mTextures.erase(It);
+	// Clear data
+	{
+		std::lock_guard<std::mutex> lock(mDataMutex);
+		mTextureData.erase(ID);
+	}
 
 	ID = INVALID_ID;
 }
@@ -391,254 +343,339 @@ void TextureManager::WaitForTexture(TextureID ID) const
 {
 	SCOPED_CPU_MARKER_C("WaitForTexture", 0xFFAA0000);
 
-	std::lock_guard<std::mutex> Lock(mTexturesMutex);
-	auto It = mTextures.find(ID);
-	if (It == mTextures.end())
+	std::latch* signal = nullptr;
 	{
-		Log::Warning("Texture ID %d not found", ID);
-		return;
+		std::lock_guard<std::mutex> lock(mTaskMutex);
+		auto it = mTaskStates.find(ID);
+		if (it == mTaskStates.end())
+		{
+			Log::Warning("Texture ID %d not found", ID);
+			return;
+		}
+		signal = &it->second.CompletionSignal;
 	}
 
-	It->second.GPUTasksDoneSignal.Wait();
+	if (signal)
+	{
+		signal->wait();
+	}
 }
 
 void TextureManager::Update()
 {
 	SCOPED_CPU_MARKER("TextureManager::Update");
 	// Process streaming priorities (placeholder for future streaming)
-	std::lock_guard<std::mutex> Lock(mTexturesMutex);
-	for (auto& [ID, State] : mTextures) 
+
+#if 0
+	std::vector<std::pair<TextureID, float>> pendingTasks;
 	{
-		// Example: Update StreamingPriority based on scene visibility
-		// State.StreamingPriority = ComputePriority(ID);
+		std::lock_guard<std::mutex> lock(mTaskMutex);
+		if (mTaskStates.empty())
+		{
+			return;
+		}
+		for (const auto& [id, state] : mTaskStates)
+		{
+			if (state.State != ETextureTaskState::Ready && state.State != ETextureTaskState::Failed)
+			{
+				pendingTasks.emplace_back(id, state.StreamingPriority);
+			}
+		}
 	}
+
+	// Sort by priority (optional)
+	std::sort(pendingTasks.begin(), pendingTasks.end(),
+		[](const auto& a, const auto& b) { return a.second > b.second; });
+
+	for (const auto& [id, priority] : pendingTasks)
+	{
+		ScheduleNextTask(id);
+	}
+#endif
 }
 
-TaskSignal<void>& TextureManager::GetTextureCompletionSignal(TextureID ID) const
-{
-	std::lock_guard<std::mutex> Lock(mTexturesMutex);
-	auto It = mTextures.find(ID);
-	assert(It != mTextures.end());
-	if (It == mTextures.end())
-	{
-		Log::Warning("Texture ID %d not found for completion signal", ID);
-	}
-	return It->second.GPUTasksDoneSignal;
-}
 
-ID3D12Resource* TextureManager::GetTextureResource(TextureID ID) const
-{
-	std::lock_guard<std::mutex> Lock(mTexturesMutex);
-	auto It = mTextures.find(ID);
-	if (It == mTextures.end())
-	{
-		Log::Warning("Texture ID %d not found", ID);
-		return nullptr;
-	}
-	return It->second.Texture.Resource;
-}
-
-DXGI_FORMAT TextureManager::GetTextureFormat(TextureID ID) const
-{
-	std::lock_guard<std::mutex> Lock(mTexturesMutex);
-	auto It = mTextures.find(ID);
-	if (It == mTextures.end())
-	{
-		Log::Warning("Texture ID %d not found", ID);
-		return DXGI_FORMAT_UNKNOWN;
-	}
-	return It->second.Texture.Format;
-}
-
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//
+// GETTERS
+//
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void TextureManager::GetTextureDimensions(TextureID ID, int& Width, int& Height, int& Slices, int& Mips) const
 {
-	std::lock_guard<std::mutex> Lock(mTexturesMutex);
-	auto It = mTextures.find(ID);
-	if (It == mTextures.end())
-	{
-		Log::Warning("Texture ID %d not found", ID);
-		Width = Height = Slices = Mips = 0;
-		return;
-	}
-	const FTexture& Texture = It->second.Texture;
+	const FTexture& Texture = *GetTexture(ID);
 	Width = Texture.Width;
 	Height = Texture.Height;
 	Slices = Texture.ArraySlices;
 	Mips = Texture.MipCount;
 }
 
-bool TextureManager::GetTextureAlphaChannelUsed(TextureID ID) const
+const FTexture* TextureManager::GetTexture(TextureID id) const
 {
-	std::lock_guard<std::mutex> Lock(mTexturesMutex);
-	auto It = mTextures.find(ID);
-	if (It == mTextures.end())
+	std::shared_lock<std::shared_mutex> lock(mMetadataMutex);
+	auto it = mMetadata.find(id);
+	if (it == mMetadata.end())
 	{
-		Log::Warning("Texture ID %d not found", ID);
-		return false;
-	}
-	return It->second.Texture.UsesAlphaChannel;
-}
-
-uint TextureManager::GetTextureMips(TextureID ID) const
-{
-	std::lock_guard<std::mutex> Lock(mTexturesMutex);
-	auto It = mTextures.find(ID);
-	if (It == mTextures.end())
-	{
-		Log::Warning("Texture ID %d not found", ID);
-		return 0;
-	}
-	return It->second.Texture.MipCount;
-}
-
-const FTexture* TextureManager::GetTexture(TextureID ID) const
-{
-	std::lock_guard<std::mutex> Lock(mTexturesMutex);
-	auto It = mTextures.find(ID);
-	if (It == mTextures.end())
-	{
-		Log::Warning("Texture ID %d not found", ID);
+		Log::Warning("Texture ID %d not found", id);
 		return nullptr;
 	}
-	return &It->second.Texture;
+	return &it->second.Texture;
 }
 
 SRV_ID TextureManager::GetSRVID(TextureID ID) const
 {
-	std::lock_guard<std::mutex> Lock(mTexturesMutex);
-	auto It = mTextures.find(ID);
-	if (It == mTextures.end())
+	std::shared_lock<std::shared_mutex> lock(mMetadataMutex);
+	auto it = mMetadata.find(ID);
+	if (it == mMetadata.end())
 	{
-		Log::Warning("Texture ID %d not found for SRV retrieval", ID);
+		Log::Warning("Texture ID %d not found for SRV ID getter", ID);
 		return INVALID_ID;
 	}
-	return It->second.SRVID;
+	return it->second.SRVID;
 }
 
 DSV_ID TextureManager::GetDSVID(TextureID ID) const
 {
-	std::lock_guard<std::mutex> Lock(mTexturesMutex);
-	auto It = mTextures.find(ID);
-	if (It == mTextures.end())
+	std::shared_lock<std::shared_mutex> lock(mMetadataMutex);
+	auto it = mMetadata.find(ID);
+	if (it == mMetadata.end())
 	{
-		Log::Warning("Texture ID %d not found for DSV retrieval", ID);
+		Log::Warning("Texture ID %d not found for DSV ID getter", ID);
 		return INVALID_ID;
 	}
-	return It->second.DSVID;
+	return it->second.DSVID;
 }
 
 UAV_ID TextureManager::GetUAVID(TextureID ID) const
 {
-	std::lock_guard<std::mutex> Lock(mTexturesMutex);
-	auto It = mTextures.find(ID);
-	if (It == mTextures.end())
+	std::shared_lock<std::shared_mutex> lock(mMetadataMutex);
+	auto it = mMetadata.find(ID);
+	if (it == mMetadata.end())
 	{
-		Log::Warning("Texture ID %d not found for UAV retrieval", ID);
+		Log::Warning("Texture ID %d not found for UAV ID getter", ID);
 		return INVALID_ID;
 	}
-	return It->second.UAVID;
+	return it->second.UAVID;
 }
 
 
-void TextureManager::DiskRead(TextureID ID)
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//
+// INTERNAL / TASK STAGES
+//
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+void TextureManager::DiskRead(TextureID id, const FTextureRequest& request)
 {
 	SCOPED_CPU_MARKER("DiskRead");
-	std::lock_guard<std::mutex> Lock(mTexturesMutex);
-	auto It = mTextures.find(ID);
-	if (It == mTextures.end()) 
+	
+	// Update task state
 	{
-		Log::Warning("Texture ID %d not found for disk read", ID);
-		return;
+		std::lock_guard<std::mutex> lock(mTaskMutex);
+		mTaskStates[id].State = ETextureTaskState::Reading;
 	}
-	FTextureState& State = It->second;
-
-	if (State.Request.FilePath.empty()) 
+	
+	// load image
+	FTextureData data;
 	{
-		Log::Warning("No file path for texture %s", State.Request.Name.c_str());
-		return;
-	}
-
-	Image Img = Image::LoadFromFile(State.Request.FilePath.c_str());
-	if (!Img.pData) 
-	{
-		Log::Error("Failed to load texture: %s", State.Request.FilePath.c_str());
-		return;
+		SCOPED_CPU_MARKER("LoadFromFile");
+		data.DiskImage = Image::LoadFromFile(request.FilePath.c_str());
 	}
 
-	size_t DataSize = Img.Width * Img.Height * Img.BytesPerPixel;
-	State.RawData.assign(static_cast<uint8_t*>(Img.pData), static_cast<uint8_t*>(Img.pData) + DataSize);
-	Img.Destroy();
+	// check image
+	if (!data.DiskImage.IsValid())
+	{
+		Log::Error("Failed to load texture: %s", request.FilePath.c_str());
+		std::lock_guard<std::mutex> lock(mTaskMutex);
+		mTaskStates[id].State = ETextureTaskState::Failed;
+		mTaskStates[id].CompletionSignal.count_down();
+		return;
+	}
 
-	// Update request with image properties
-	State.Request.D3D12Desc.Width = Img.Width;
-	State.Request.D3D12Desc.Height = Img.Height;
-	State.Request.D3D12Desc.Format = Img.IsHDR() ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
-	State.Request.D3D12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-	State.Request.D3D12Desc.MipLevels = State.Request.bGenerateMips ? Img.CalculateMipLevelCount() : 1;
-	State.Request.D3D12Desc.DepthOrArraySize = 1;
-	State.Request.D3D12Desc.SampleDesc.Count = 1;
-	State.Request.D3D12Desc.SampleDesc.Quality = 0;
-	State.Request.D3D12Desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-	State.Request.D3D12Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+	// Set InputData to point to the image data for consistency
+	data.InputData.push_back(data.DiskImage.pData);
+
+	// Update metadata with image properties
+	{
+		SCOPED_CPU_MARKER("UpdateRequestDesc");
+		std::lock_guard<std::shared_mutex> lock(mMetadataMutex);
+		auto& meta = mMetadata[id];
+		meta.Request.D3D12Desc.Width = data.DiskImage.Width;
+		meta.Request.D3D12Desc.Height = data.DiskImage.Height;
+		meta.Request.D3D12Desc.Format = data.DiskImage.IsHDR() ? DXGI_FORMAT_R32G32B32A32_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM;
+		meta.Request.D3D12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+		meta.Request.D3D12Desc.MipLevels = request.bGenerateMips ? data.DiskImage.CalculateMipLevelCount() : 1;
+		meta.Request.D3D12Desc.DepthOrArraySize = 1;
+		meta.Request.D3D12Desc.SampleDesc.Count = 1;
+		meta.Request.D3D12Desc.SampleDesc.Quality = 0;
+		meta.Request.D3D12Desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+		meta.Request.D3D12Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+		meta.Request.InitialState = D3D12_RESOURCE_STATE_COMMON;
+	}
+
+	// Store data
+	{
+		std::lock_guard<std::mutex> lock(mDataMutex);
+		mTextureData[id] = std::move(data);
+	}
+
+	ScheduleNextTask(id);
 }
 
-void TextureManager::GenerateMips(TextureID ID)
+void TextureManager::LoadFromMemory(TextureID id, const FTextureRequest& request)
+{
+	SCOPED_CPU_MARKER("LoadFromMemory");
+
+	// Update task state
+	{
+		std::lock_guard<std::mutex> lock(mTaskMutex);
+		mTaskStates[id].State = ETextureTaskState::Reading;
+	}
+
+	// check
+	if (request.DataArray.empty())
+	{
+		Log::Error("No data provided for procedural texture ID %d", id);
+		std::lock_guard<std::mutex> lock(mTaskMutex);
+		mTaskStates[id].State = ETextureTaskState::Failed;
+		mTaskStates[id].CompletionSignal.count_down();
+		return;
+	}
+
+	// assign data
+	FTextureData data;
+	data.InputData = request.DataArray; // Store pointers directly
+
+	// Store data
+	{
+		std::lock_guard<std::mutex> lock(mDataMutex);
+		mTextureData[id] = std::move(data);
+	}
+
+	ScheduleNextTask(id);
+}
+
+void TextureManager::GenerateMips(TextureID id)
 {
 	SCOPED_CPU_MARKER("bGenerateMips");
-	std::lock_guard<std::mutex> Lock(mTexturesMutex);
-	auto It = mTextures.find(ID);
-	if (It == mTextures.end()) 
+	
+	// Update task state
 	{
-		Log::Warning("Texture ID %d not found for mip generation", ID);
-		return;
-	}
-	FTextureState& State = It->second;
-
-	if (!State.Request.bGenerateMips || State.RawData.empty()) 
-	{
-		return;
+		std::lock_guard<std::mutex> lock(mTaskMutex);
+		mTaskStates[id].State = ETextureTaskState::MipGenerating;
 	}
 
-	UINT64 UploadHeapSize;
+	FTextureMetaData meta;
+	{
+		std::shared_lock<std::shared_mutex> metaLock(mMetadataMutex);
+		meta = mMetadata[id];
+	}
+	FTextureData data;
+	{
+		std::lock_guard<std::mutex> dataLock(mDataMutex);
+		auto it = mTextureData.find(id);
+		if (it == mTextureData.end())
+		{
+			Log::Warning("Texture ID %d not found for mip generation", id);
+			std::lock_guard<std::mutex> taskLock(mTaskMutex);
+			mTaskStates[id].State = ETextureTaskState::Failed;
+			mTaskStates[id].CompletionSignal.count_down();
+			return;
+		}
+		data = std::move(it->second);
+	}
+
+	if (!meta.Request.bGenerateMips || data.InputData.empty() || !data.InputData[0])
+	{
+		{
+			std::lock_guard<std::mutex> lock(mDataMutex);
+			mTextureData[id] = std::move(data);
+		}
+		ScheduleNextTask(id);
+		return;
+	}
+
+
 	uint32_t NumRows[D3D12_REQ_MIP_LEVELS] = { 0 };
 	UINT64 RowSizes[D3D12_REQ_MIP_LEVELS] = { 0 };
 	D3D12_PLACED_SUBRESOURCE_FOOTPRINT Footprints[D3D12_REQ_MIP_LEVELS];
-	mpDevice->GetCopyableFootprints(&State.Request.D3D12Desc, 0, State.Request.D3D12Desc.MipLevels, 0, Footprints, NumRows, RowSizes, &UploadHeapSize);
+	UINT64 UploadHeapSize;
+	mpDevice->GetCopyableFootprints(&meta.Request.D3D12Desc, 0, meta.Request.D3D12Desc.MipLevels, 0, Footprints, NumRows, RowSizes, &UploadHeapSize);
 
-	State.MipData.resize(State.Request.D3D12Desc.MipLevels);
-	State.MipData[0] = State.RawData;
+	// Initialize MipImages
+	data.MipImages.resize(meta.Request.D3D12Desc.MipLevels);
 
-	for (uint32_t Mip = 1; Mip < State.Request.D3D12Desc.MipLevels; ++Mip) 
+	// Set first mip from InputData (DiskImage or procedural data)
+	if (data.DiskImage.IsValid())
 	{
-		State.MipData[Mip].resize(Footprints[Mip].Footprint.Height * Footprints[Mip].Footprint.RowPitch);
+		data.MipImages[0] = std::move(data.DiskImage); // Move DiskImage to MipImages[0]
+	}
+	else
+	{
+		// For procedural textures, create an Image from InputData
+		data.MipImages[0] = Image::CreateEmptyImage(Footprints[0].Footprint.Height * Footprints[0].Footprint.RowPitch);
+		memcpy(data.MipImages[0].pData, data.InputData[0], Footprints[0].Footprint.Height * Footprints[0].Footprint.RowPitch);
+		data.MipImages[0].Width = Footprints[0].Footprint.Width;
+		data.MipImages[0].Height = Footprints[0].Footprint.Height;
+		data.MipImages[0].BytesPerPixel = static_cast<int>(VQ_DXGI_UTILS::GetPixelByteSize(meta.Request.D3D12Desc.Format));
+	}
+
+	// Generate subsequent mips
+	for (uint32_t Mip = 1; Mip < meta.Request.D3D12Desc.MipLevels; ++Mip)
+	{
+		// Allocate Image for the new mip level
+		data.MipImages[Mip] = Image::CreateEmptyImage(Footprints[Mip].Footprint.Height * Footprints[Mip].Footprint.RowPitch);
+		data.MipImages[Mip].Width = Footprints[Mip].Footprint.Width;
+		data.MipImages[Mip].Height = Footprints[Mip].Footprint.Height;
+		data.MipImages[Mip].BytesPerPixel = static_cast<int>(VQ_DXGI_UTILS::GetPixelByteSize(meta.Request.D3D12Desc.Format));
+
+		// Generate mip data
 		VQ_DXGI_UTILS::MipImage(
-			State.MipData[Mip - 1].data(),
-			State.MipData[Mip].data(),
+			data.MipImages[Mip - 1].pData,
+			data.MipImages[Mip].pData,
 			Footprints[Mip - 1].Footprint.Width,
 			NumRows[Mip - 1],
-			(uint)VQ_DXGI_UTILS::GetPixelByteSize(State.Request.D3D12Desc.Format)
+			(uint)VQ_DXGI_UTILS::GetPixelByteSize(meta.Request.D3D12Desc.Format)
 		);
 	}
+
+	{
+		std::lock_guard<std::mutex> lock(mDataMutex);
+		mTextureData[id] = std::move(data);
+	}
+
+	ScheduleNextTask(id);
 }
 
-void TextureManager::AllocateResource(TextureID ID)
+void TextureManager::AllocateResource(TextureID id)
 {
 	SCOPED_CPU_MARKER("AllocateResource");
-	auto It = mTextures.find(ID); // should already be locked
-	if (It == mTextures.end()) 
-	{
-		Log::Warning("Texture ID %d not found for resource allocation", ID);
-		return;
-	}
-	FTextureState& State = It->second;
 
-	D3D12_RESOURCE_STATES ResourceState = State.RawData.empty() && State.MipData.empty() ? State.Request.InitialState : D3D12_RESOURCE_STATE_COPY_DEST;
+	// Update task state
+	{
+		std::lock_guard<std::mutex> lock(mTaskMutex);
+		mTaskStates[id].State = ETextureTaskState::Allocating;
+	}
+
+	FTextureMetaData meta;
+	bool bHasData = false;
+	{
+		std::shared_lock<std::shared_mutex> lock(mMetadataMutex);
+		meta = mMetadata[id];
+	}
+	{
+		std::lock_guard<std::mutex> lock(mDataMutex);
+		auto it = mTextureData.find(id);
+		bHasData = it != mTextureData.end() && (!it->second.InputData.empty() || !it->second.MipImages.empty() || it->second.DiskImage.IsValid());
+	}
+
+
+	D3D12_RESOURCE_STATES ResourceState = bHasData ? D3D12_RESOURCE_STATE_COPY_DEST : meta.Request.InitialState;
 	D3D12_CLEAR_VALUE* pClearValue = nullptr;
 	D3D12_CLEAR_VALUE ClearValueData = {};
 
-	if (State.Request.D3D12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) 
+	if (meta.Request.D3D12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) 
 	{
-		ClearValueData.Format = State.Request.D3D12Desc.Format;
+		ClearValueData.Format = meta.Request.D3D12Desc.Format;
 		if (ClearValueData.Format == DXGI_FORMAT_R32_TYPELESS)
 		{
 			ClearValueData.Format = DXGI_FORMAT_D32_FLOAT;
@@ -651,14 +688,14 @@ void TextureManager::AllocateResource(TextureID ID)
 		ClearValueData.DepthStencil.Stencil = 0;
 		pClearValue = &ClearValueData;
 	}
-	else if (State.Request.D3D12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET)
+	else if (meta.Request.D3D12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET)
 	{
-		ClearValueData.Format = State.Request.D3D12Desc.Format;
+		ClearValueData.Format = meta.Request.D3D12Desc.Format;
 		pClearValue = &ClearValueData;
 	}
 
 	D3D12MA::ALLOCATION_DESC AllocDesc = {};
-	AllocDesc.HeapType = State.Request.bCPUReadback ? D3D12_HEAP_TYPE_READBACK : D3D12_HEAP_TYPE_DEFAULT;
+	AllocDesc.HeapType = meta.Request.bCPUReadback ? D3D12_HEAP_TYPE_READBACK : D3D12_HEAP_TYPE_DEFAULT;
 
 	{
 		SCOPED_CPU_MARKER_C("WAIT_INIT", 0xFFAA0000);
@@ -667,129 +704,222 @@ void TextureManager::AllocateResource(TextureID ID)
 
 	HRESULT Hr = mpAllocator->CreateResource(
 		&AllocDesc,
-		&State.Request.D3D12Desc,
+		&meta.Request.D3D12Desc,
 		ResourceState,
 		pClearValue,
-		&State.Texture.Allocation,
-		IID_PPV_ARGS(&State.Texture.Resource)
+		&meta.Texture.Allocation,
+		IID_PPV_ARGS(&meta.Texture.Resource)
 	);
 
 	if (FAILED(Hr)) 
 	{
-		Log::Error("Failed to create texture: %s", State.Request.Name.c_str());
+		Log::Error("Failed to create texture: %s", meta.Request.Name.c_str());
+		std::lock_guard<std::mutex> lock(mTaskMutex);
+		mTaskStates[id].State = ETextureTaskState::Failed;
+		mTaskStates[id].CompletionSignal.count_down();
 		return;
 	}
 
-	SetName(State.Texture.Resource, State.Request.Name.c_str());
+	FTexture& Texture = meta.Texture;
+	SetName(Texture.Resource, meta.Request.Name.c_str());
 
-	State.Texture.Format = State.Request.D3D12Desc.Format;
-	State.Texture.Width = static_cast<int>(State.Request.D3D12Desc.Width);
-	State.Texture.Height = static_cast<int>(State.Request.D3D12Desc.Height);
-	State.Texture.ArraySlices = State.Request.D3D12Desc.DepthOrArraySize;
-	State.Texture.MipCount = State.Request.D3D12Desc.MipLevels;
-	State.Texture.IsCubemap = false; // Update if cubemap support is added
-	State.Texture.IsTypeless = State.Request.D3D12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-	if (!State.RawData.empty() && State.Request.bCPUReadback) 
+	Texture.Format = meta.Request.D3D12Desc.Format;
+	Texture.Width = static_cast<int>(meta.Request.D3D12Desc.Width);
+	Texture.Height = static_cast<int>(meta.Request.D3D12Desc.Height);
+	Texture.ArraySlices = meta.Request.D3D12Desc.DepthOrArraySize;
+	Texture.MipCount = meta.Request.D3D12Desc.MipLevels;
+	Texture.IsCubemap = meta.Request.bCubemap;
+	Texture.IsTypeless = meta.Request.D3D12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+	if (bHasData && meta.Request.bCPUReadback)
 	{
-		State.Texture.UsesAlphaChannel = HasAlphaValues(State.RawData.data(), State.Texture.Width, State.Texture.Height, State.Texture.Format);
+		std::lock_guard<std::mutex> lock(mDataMutex);
+		auto it = mTextureData.find(id);
+		if (it != mTextureData.end() && !it->second.InputData.empty())
+		{
+			meta.Texture.UsesAlphaChannel = HasAlphaValues(it->second.InputData[0], meta.Texture.Width, meta.Texture.Height, meta.Texture.Format);
+		}
 	}
+
+	{
+		std::lock_guard<std::shared_mutex> lock(mMetadataMutex);
+		mMetadata[id] = meta;
+	}
+
+	// update task state to Uploading (dummy) for render target textures 
+	// so that ScheduleNextTask can signal completion.
+	if (!bHasData)
+	{
+		std::lock_guard<std::mutex> lock(mTaskMutex);
+		mTaskStates[id].State = ETextureTaskState::Uploading;
+	}
+	ScheduleNextTask(id);
 }
 
-void TextureManager::UploadToGPU(TextureID ID)
+void TextureManager::QueueUploadToGPUTask(TextureID id)
 {
-	SCOPED_CPU_MARKER("UploadToGPU");
-	std::lock_guard<std::mutex> Lock(mTexturesMutex);
-	auto It = mTextures.find(ID);
-	if (It == mTextures.end()) 
+	SCOPED_CPU_MARKER("QueueUploadToGPUTask");
+	
+	// Get data
+	FTextureMetaData meta;
+	FTextureData* pData = nullptr;
 	{
-		Log::Warning("Texture ID %d not found for upload", ID);
-		return;
+		std::shared_lock<std::shared_mutex> metaLock(mMetadataMutex);
+		meta = mMetadata[id];
 	}
-	FTextureState& State = It->second;
+	{
+		std::lock_guard<std::mutex> lock(mDataMutex);
+		auto it = mTextureData.find(id);
+		if (it == mTextureData.end())
+		{
+			Log::Warning("Texture ID %d not found for upload", id);
+			std::lock_guard<std::mutex> taskLock(mTaskMutex);
+			mTaskStates[id].State = ETextureTaskState::Failed;
+			mTaskStates[id].CompletionSignal.count_down();
+			return;
+		}
+		pData = &it->second;
+	}
 
 	FTextureUploadTask Task;
-	Task.ID = ID;
-	if (State.MipData.empty()) 
+	Task.ID = id;
+	if (meta.Request.bGenerateMips && !pData->MipImages.empty())
 	{
-		if (!State.RawData.empty()) 
+		Task.DataArray.resize(pData->MipImages.size());
+		for (size_t i = 0; i < pData->MipImages.size(); ++i)
 		{
-			Task.DataArray.push_back(State.RawData.data());
+			Task.DataArray[i] = pData->MipImages[i].pData;
 		}
+		Task.MipCount = static_cast<uint32_t>(pData->MipImages.size());
 	}
-	else 
+	else if (!pData->InputData.empty())
 	{
-		Task.DataArray.reserve(State.MipData.size());
-		for (const auto& Mip : State.MipData) 
-		{
-			Task.DataArray.push_back(Mip.data());
-		}
+		Task.DataArray = std::move(pData->InputData);
+		Task.MipCount = 1;
 	}
 
-	if (Task.DataArray.empty()) 
+	if (Task.DataArray.empty())
 	{
-		Log::Warning("No data to upload for texture %s", State.Request.Name.c_str());
+		Log::Warning("No data to upload for texture ID %d", id);
+		std::lock_guard<std::mutex> lock(mTaskMutex);
+		mTaskStates[id].State = ETextureTaskState::Failed;
+		mTaskStates[id].CompletionSignal.count_down();
+		// Clean up FTextureData if upload fails
+		{
+			std::lock_guard<std::mutex> lock(mDataMutex);
+			mTextureData.erase(id);
+		}
 		return;
 	}
 
-	{
-		std::lock_guard<std::mutex> QueueLock(*mpUploadQueueMutex);
-		mUploadQueue.emplace(std::move(Task));
-	}
+	mUploadQueue.push(std::move(Task));
 	mUploadSignal.NotifyOne();
 }
 
-
-void TextureManager::TransitionState(TextureID ID)
+void TextureManager::ScheduleNextTask(TextureID id)
 {
-	SCOPED_CPU_MARKER("TransitionState");
-	std::lock_guard<std::mutex> Lock(mTexturesMutex);
-	auto It = mTextures.find(ID);
-	if (It == mTextures.end()) 
+	SCOPED_CPU_MARKER("ScheduleNextTask");
+
+	FTextureMetaData meta;
 	{
-		Log::Warning("Texture ID %d not found for state transition", ID);
-		return;
+		std::unique_lock<std::shared_mutex> lock(mMetadataMutex);
+		auto it = mMetadata.find(id);
+		if (it == mMetadata.end())
+		{
+			Log::Warning("Texture ID %d not found for scheduling", id);
+			return;
+		}
+		meta = it->second;
 	}
-	FTextureState& State = It->second;
 
-	if (State.RawData.empty() && State.MipData.empty()) 
+	ETextureTaskState nextState;
 	{
-		return; // No upload, already in InitialState
+		std::lock_guard<std::mutex> lock(mTaskMutex);
+		FTextureTaskState& taskState = mTaskStates[id];
+		switch (taskState.State)
+		{
+		case ETextureTaskState::Reading      : nextState = meta.Request.bGenerateMips ? ETextureTaskState::MipGenerating : ETextureTaskState::Allocating; break;
+		case ETextureTaskState::MipGenerating: nextState = ETextureTaskState::Allocating; break;
+		case ETextureTaskState::Allocating   : nextState = ETextureTaskState::Uploading; break;
+		case ETextureTaskState::Uploading    : nextState = ETextureTaskState::Ready; break;
+		default:
+			Log::Warning("Invalid task state for texture ID %d", id);
+			return;
+		}
+		taskState.State = nextState;
 	}
 
-	ID3D12GraphicsCommandList* pCommandList = mpUploadHeap->GetCommandList();
+	switch (nextState)
+	{
+	case ETextureTaskState::MipGenerating:
+		mMipWorkers.AddTask([this, id]() { GenerateMips(id); }); 
+		break;
+	case ETextureTaskState::Allocating:
+		mGPUWorkers.AddTask([this, id]() { AllocateResource(id); });
+		break;
+	case ETextureTaskState::Uploading: 
+		QueueUploadToGPUTask(id);
+		break;
+	case ETextureTaskState::Ready:
+	{
+		std::lock_guard<std::mutex> lock(mTaskMutex);
+		mTaskStates[id].CompletionSignal.count_down();
+	}
+	break;
+	}
+}
 
-	CD3DX12_RESOURCE_BARRIER Barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-		State.Texture.Resource,
-		D3D12_RESOURCE_STATE_COPY_DEST,
-		State.Request.InitialState
-	);
-	pCommandList->ResourceBarrier(1, &Barrier);
-	pCommandList->Close();
 
-	ID3D12CommandList* ppCommandLists[] = { pCommandList };
-	mpCopyQueue->ExecuteCommandLists(1, ppCommandLists);
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//
+// INTERNAL / UPLOAD THREAD
+//
+//--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+void TextureManager::TextureUploadThread_Main()
+{
+	SCOPED_CPU_MARKER_C("TextureUploadThread_Main()", 0xFF33AAFF);
+	while (!mExitUploadThread.load())
+	{
+		{
+			SCOPED_CPU_MARKER_C("WAIT_TASK", 0xFF33AAFF);
+			mUploadSignal.Wait([this]() { return !mUploadQueue.empty() || mExitUploadThread.load(); });
+		}
+
+		if (mExitUploadThread.load())
+			break;
+
+		ProcessTextureUploadQueue();
+	}
 }
 
 void TextureManager::ProcessTextureUpload(const FTextureUploadTask& Task)
 {
 	SCOPED_CPU_MARKER("ProcessTextureUpload");
-	std::lock_guard<std::mutex> Lock(mTexturesMutex);
-	auto It = mTextures.find(Task.ID);
-	if (It == mTextures.end()) 
-	{
-		Log::Warning("Texture ID %d not found for upload processing", Task.ID);
-		return;
-	}
-	FTextureState& State = It->second;
+	std::unique_lock<std::mutex> lock(*mpUploadHeapMutex);
 
-	if (!State.Texture.Resource) 
+	FTextureMetaData meta;
 	{
-		Log::Error("No resource for texture %s", State.Request.Name.c_str());
+		std::shared_lock<std::shared_mutex> lock(mMetadataMutex);
+		auto it = mMetadata.find(Task.ID);
+		if (it == mMetadata.end())
+		{
+			Log::Warning("Texture ID %d not found for upload processing", Task.ID);
+			return;
+		}
+		meta = it->second;
+	}
+
+
+	if (!meta.Texture.Resource)
+	{
+		Log::Error("No resource for texture %s", meta.Request.Name.c_str());
+		std::lock_guard<std::mutex> lock(mTaskMutex);
+		mTaskStates[Task.ID].State = ETextureTaskState::Failed;
+		mTaskStates[Task.ID].CompletionSignal.count_down();
 		return;
 	}
 
 	ID3D12GraphicsCommandList* pCmd = mpUploadHeap->GetCommandList();
-	const D3D12_RESOURCE_DESC& D3DDesc = State.Request.D3D12Desc;
+	const D3D12_RESOURCE_DESC& D3DDesc = meta.Request.D3D12Desc;
 	const void* pData = Task.DataArray[0];
 	assert(pData);
 
@@ -801,13 +931,16 @@ void TextureManager::ProcessTextureUpload(const FTextureUploadTask& Task)
 
 	mpDevice->GetCopyableFootprints(&D3DDesc, 0, MipCount, 0, PlacedSubresource, NumRows, RowSizes, &UploadHeapSize);
 
-	UINT8* pUploadBufferMem = mpUploadHeap->Suballocate(SIZE_T(UploadHeapSize), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
-	if (pUploadBufferMem == nullptr) 
+	UINT8* pUploadBufferMem = nullptr;
 	{
-		SCOPED_CPU_MARKER("UploadToGPUAndWait");
-		mpUploadHeap->UploadToGPUAndWait();
 		pUploadBufferMem = mpUploadHeap->Suballocate(SIZE_T(UploadHeapSize), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
-		assert(pUploadBufferMem);
+		if (pUploadBufferMem == nullptr)
+		{
+			SCOPED_CPU_MARKER("UploadToGPUAndWait");
+			mpUploadHeap->UploadToGPUAndWait();
+			pUploadBufferMem = mpUploadHeap->Suballocate(SIZE_T(UploadHeapSize), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+			assert(pUploadBufferMem);
+		}
 	}
 
 	const bool bBufferResource = D3DDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -816,7 +949,7 @@ void TextureManager::ProcessTextureUpload(const FTextureUploadTask& Task)
 	{
 		const UINT64 SourceRscOffset = pUploadBufferMem - mpUploadHeap->BasePtr();
 		memcpy(pUploadBufferMem, pData, D3DDesc.Width);
-		pCmd->CopyBufferRegion(State.Texture.Resource, 0, mpUploadHeap->GetResource(), SourceRscOffset, D3DDesc.Width);
+		pCmd->CopyBufferRegion(meta.Texture.Resource, 0, mpUploadHeap->GetResource(), SourceRscOffset, D3DDesc.Width);
 	}
 	else 
 	{
@@ -839,64 +972,100 @@ void TextureManager::ProcessTextureUpload(const FTextureUploadTask& Task)
 				D3D12_PLACED_SUBRESOURCE_FOOTPRINT Slice = PlacedSubresource[Mip];
 				Slice.Offset += (pUploadBufferMem - mpUploadHeap->BasePtr());
 
-				CD3DX12_TEXTURE_COPY_LOCATION Dst(State.Texture.Resource, ArrayIdx * MipCount + Mip);
+				CD3DX12_TEXTURE_COPY_LOCATION Dst(meta.Texture.Resource, ArrayIdx * MipCount + Mip);
 				CD3DX12_TEXTURE_COPY_LOCATION Src(mpUploadHeap->GetResource(), Slice);
 				pCmd->CopyTextureRegion(&Dst, 0, 0, 0, &Src, nullptr);
 			}
 		}
 	}
 
-	CD3DX12_RESOURCE_BARRIER Barrier = CD3DX12_RESOURCE_BARRIER::Transition(
-		State.Texture.Resource,
-		D3D12_RESOURCE_STATE_COPY_DEST,
-		State.Request.InitialState
-	);
-	pCmd->ResourceBarrier(1, &Barrier);
+	D3D12_RESOURCE_BARRIER barrier = {};
+	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+	barrier.Transition.pResource = meta.Texture.Resource;
+	barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+	barrier.Transition.StateAfter = meta.Request.InitialState;
+	barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+	pCmd->ResourceBarrier(1, &barrier);
+
+	// Queue Image destruction on worker threads
+	{
+		std::lock_guard<std::mutex> lock(mDataMutex);
+		auto it = mTextureData.find(Task.ID);
+		if (it != mTextureData.end())
+		{
+			FTextureData& data = it->second;
+
+			// Queue DiskImage destruction
+			if (data.DiskImage.IsValid())
+			{
+				Image diskImage = std::move(data.DiskImage);
+				mDiskWorkers.AddTask([img = std::move(diskImage)]() mutable 
+				{
+					SCOPED_CPU_MARKER("DestroyDiskImage");
+					;// TODO: img.Destroy();
+				});
+			}
+
+			// Queue MipImages destruction
+			mDiskWorkers.AddTask([it, this]() 
+			{
+				FTextureData& data = it->second;
+				for (Image& mipImage : data.MipImages)
+				{
+					SCOPED_CPU_MARKER("DestroyMipImage");
+					if (mipImage.IsValid())
+					{
+						// mipImage.Destroy();
+					}
+				}
+				data.MipImages.clear();
+				
+				{
+					std::lock_guard<std::mutex> lock(mDataMutex);
+					mTextureData.erase(it);
+				}
+			});
+		}
+	}
+
 }
 
 void TextureManager::ProcessTextureUploadQueue()
 {
-    SCOPED_CPU_MARKER("ProcessTextureUploadQueue");
-    
-    std::unique_lock<std::mutex> QueueLock(*mpUploadQueueMutex);
-    if (mUploadQueue.empty())
-    {
-        return;
-    }
-    
-    std::vector<TaskSignal<void>*> GPUTasksDoneSignals;
-    while (!mUploadQueue.empty())
-    {
-        FTextureUploadTask Task = std::move(mUploadQueue.front());
-        mUploadQueue.pop();
-        
-        {
-            std::lock_guard<std::mutex> TextureLock(mTexturesMutex);
-            auto It = mTextures.find(Task.ID);
-            if (It == mTextures.end())
-            {
-                Log::Warning("Texture ID %d not found for upload processing", Task.ID);
-                continue;
-            }
-            
-            GPUTasksDoneSignals.push_back(&It->second.GPUTasksDoneSignal);
-            QueueLock.unlock();
-            ProcessTextureUpload(Task);
-            QueueLock.lock();
-        }
-    }
-    
-    {
-        SCOPED_CPU_MARKER("UploadToGPUAndWait");
-        mpUploadHeap->UploadToGPUAndWait();
-    }
-    
-    {
-        SCOPED_CPU_MARKER("NotifyGPUTasksDoneSignals");
-        std::lock_guard<std::mutex> TextureLock(mTexturesMutex);
-        for (TaskSignal<void>* pFuture : GPUTasksDoneSignals)
-        {
-            pFuture->Notify();
-        }
-    }
+	SCOPED_CPU_MARKER("ProcessTextureUploadQueue");
+
+	std::vector<TextureID> processedIDs;
+	{
+		SCOPED_CPU_MARKER("ProcessQueue");
+		FTextureUploadTask task;
+		while (mUploadQueue.try_pop(task)) 
+		{
+			processedIDs.push_back(task.ID);
+			ProcessTextureUpload(task);
+		}
+	}
+
+	if (processedIDs.empty())
+	{
+		return;
+	}
+
+	{
+		SCOPED_CPU_MARKER("UploadToGPUAndWait");
+		std::unique_lock<std::mutex> lock(*mpUploadHeapMutex);
+		mpUploadHeap->UploadToGPUAndWait();
+	}
+	{
+		SCOPED_CPU_MARKER("NotifyCompletion");
+		std::lock_guard<std::mutex> lock(mTaskMutex);
+		for (TextureID id : processedIDs)
+		{
+			auto it = mTaskStates.find(id);
+			if (it != mTaskStates.end())
+			{
+				it->second.State = ETextureTaskState::Ready;
+				it->second.CompletionSignal.count_down();
+			}
+		}
+	}
 }

@@ -340,6 +340,7 @@ void VQRenderer::InitializeDSV(DSV_ID dsvID, uint32 heapIndex, TextureID texID, 
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 	assert(pDevice);
 
+	mTextureManager.WaitForTexture(texID);
 	const D3D12_RESOURCE_DESC texDesc = pTexture->Resource->GetDesc();
 
 	D3D12_DEPTH_STENCIL_VIEW_DESC DSViewDesc = {};
@@ -374,7 +375,12 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 {
 	CHECK_RESOURCE_VIEW(SRV, srvID);
 	
-	const FTexture* pTexture = mTextureManager.GetTexture(texID);
+	if (texID != INVALID_ID)
+	{
+		mTextureManager.WaitForTexture(texID);
+	}
+
+	const FTexture* pTexture = texID == INVALID_ID ? nullptr : mTextureManager.GetTexture(texID);
 
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 	assert(pDevice);
@@ -395,8 +401,8 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 		// TODO: bool bInitAsArrayView needed so that InitializeSRV() can initialize a per-face SRV of a cubemap
 		//
 
-		ID3D12Resource* pResource = pTexture->Resource;
 		mTextureManager.WaitForTexture(texID);
+		ID3D12Resource* pResource = pTexture->Resource;
 
 		const bool bCustomComponentMappingSpecified = ShaderComponentMapping != D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
@@ -561,6 +567,7 @@ void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID)
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 	assert(pDevice);
 
+	mTextureManager.WaitForTexture(texID);
 	D3D12_RENDER_TARGET_VIEW_DESC* pRTVDesc = nullptr; // unused
 	pDevice->CreateRenderTargetView(pTexture->Resource, pRTVDesc, mRTVs.at(rtvID).GetCPUDescHandle(heapIndex));
 }
@@ -630,6 +637,7 @@ void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID 
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 	assert(pDevice);
 
+	mTextureManager.WaitForTexture(texID);
 	const D3D12_RESOURCE_DESC rscDesc = pTexture->Resource->GetDesc();
 	
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
@@ -691,6 +699,7 @@ void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, ui
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 	assert(pDevice);
 
+	mTextureManager.WaitForTexture(texID);
 	D3D12_RESOURCE_DESC rscDesc = pTexture->Resource->GetDesc();
 	
 	const bool& bCubemap = pTexture->IsCubemap;

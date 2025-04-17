@@ -194,7 +194,7 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 	SCOPED_CPU_MARKER("Renderer.Initialize");
 	Device* pVQDevice = &mDevice;
 
-	mTextureManager.InitializeEarly(mLatchDeviceInitialized, mLatchHeapsInitialized);
+	mTextureManager.InitializeEarly();
 
 	// initialize thread
 	{
@@ -720,56 +720,71 @@ void VQRenderer::LoadDefaultResources()
 	const UINT sizeX = 1024;
 	const UINT sizeY = 1024;
 	
-	D3D12_RESOURCE_DESC textureDesc = {};
+	D3D12_RESOURCE_DESC textureDesc = 
 	{
-		textureDesc = {};
-		textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-		textureDesc.Alignment = 0;
-		textureDesc.Width = sizeX;
-		textureDesc.Height = sizeY;
-		textureDesc.DepthOrArraySize = 1;
-		textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-		textureDesc.MipLevels = 1;
-		textureDesc.SampleDesc.Count = 1;
-		textureDesc.SampleDesc.Quality = 0;
-		textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-		textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-	}
-	FTextureRequest desc("Checkerboard");
-	desc.D3D12Desc = textureDesc;
-	desc.InitialState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+		.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+		.Alignment = 0,
+		.Width = sizeX,
+		.Height = sizeY,
+		.DepthOrArraySize = 1,
+		.MipLevels = 1,
+		.Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+		.SampleDesc = { .Count=1, .Quality=0 },
+		.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+		.Flags = D3D12_RESOURCE_FLAG_NONE,
+	};
+	
+	constexpr size_t NUM_PROCEDURAL_TEXTURES = EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
+	const std::array<std::vector<UINT8>, NUM_PROCEDURAL_TEXTURES> textureData =
+	{
+		FTexture::GenerateTexture_Checkerboard(sizeX),
+		FTexture::GenerateTexture_Checkerboard(sizeX, true),
+		{} // GPU-initialized texture has no data
+	};
+	const std::array<const char*, NUM_PROCEDURAL_TEXTURES> textureNames =
+	{
+		"Checkerboard",
+		"Checkerboard_Gray",
+		"IBL_BRDF_Integration"
+	};
+	std::array<TextureID, NUM_PROCEDURAL_TEXTURES> textureIDs = { INVALID_ID, INVALID_ID, INVALID_ID };
+	std::array<D3D12_RESOURCE_DESC, NUM_PROCEDURAL_TEXTURES> texDescs{ textureDesc, textureDesc, textureDesc };
 
 	WaitHeapsInitialized();
 
-	// programmatically generated textures
 	{
-		std::vector<UINT8> texture = FTexture::GenerateTexture_Checkerboard(sizeX);
-		desc.DataArray.push_back( texture.data() );
-		TextureID texID = this->CreateTexture(desc, false);
-		mLookup_ProceduralTextureIDs[EProceduralTextures::CHECKERBOARD] = texID;
-		mLookup_ProceduralTextureSRVs[EProceduralTextures::CHECKERBOARD] = this->AllocateAndInitializeSRV(texID);
-		desc.DataArray.pop_back();
-	}
-	{
-		desc.Name = "Checkerboard_Gray";
-		std::vector<UINT8> texture = FTexture::GenerateTexture_Checkerboard(sizeX, true);
-		desc.DataArray.push_back( texture.data() );
-		TextureID texID = this->CreateTexture(desc, false);
-		mLookup_ProceduralTextureIDs[EProceduralTextures::CHECKERBOARD_GRAYSCALE] = texID;
-		mLookup_ProceduralTextureSRVs[EProceduralTextures::CHECKERBOARD_GRAYSCALE] = this->AllocateAndInitializeSRV(texID);
-		desc.DataArray.pop_back();
-	}
-	{
-		desc.Name = "IBL_BRDF_Integration";
-		desc.InitialState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-		desc.D3D12Desc.Width  = 1024;
-		desc.D3D12Desc.Height = 1024;
-		desc.D3D12Desc.Format = DXGI_FORMAT_R16G16_FLOAT;
-		desc.D3D12Desc.Flags = D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+		SCOPED_CPU_MARKER("ProceduralTextures");
 
-		TextureID texID = this->CreateTexture(desc, false);
-		mLookup_ProceduralTextureIDs[EProceduralTextures::IBL_BRDF_INTEGRATION_LUT] = texID;
-		mLookup_ProceduralTextureSRVs[EProceduralTextures::IBL_BRDF_INTEGRATION_LUT] = this->AllocateAndInitializeSRV(texID);
+		for (size_t i = 0; i < NUM_PROCEDURAL_TEXTURES; ++i)
+		{
+			FTextureRequest req(textureNames[i]);
+			req.D3D12Desc = texDescs[i];
+			req.InitialState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+			if (!textureData[i].empty())
+			{
+				req.DataArray.push_back(textureData[i].data());
+			}
+
+			switch ((EProceduralTextures)i)
+			{
+				case EProceduralTextures::IBL_BRDF_INTEGRATION_LUT:
+					req.InitialState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+					req.D3D12Desc.Width = 1024;
+					req.D3D12Desc.Height = 1024;
+					req.D3D12Desc.Format = DXGI_FORMAT_R16G16_FLOAT;
+					req.D3D12Desc.Flags = D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+				break;
+			}
+
+			textureIDs[i] = this->CreateTexture(req, false);
+		}
+
+		for (size_t i = 0; i < NUM_PROCEDURAL_TEXTURES; ++i)
+		{
+			mLookup_ProceduralTextureIDs [(EProceduralTextures)i] = textureIDs[i];
+			mLookup_ProceduralTextureSRVs[(EProceduralTextures)i] = this->AllocateAndInitializeSRV(textureIDs[i]);
+		}
 	}
 }
 void VQRenderer::UploadVertexAndIndexBufferHeaps()

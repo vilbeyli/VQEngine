@@ -11,6 +11,9 @@
 
 int FEnvironmentMapRenderingResources::GetNumSpecularIrradianceCubemapLODLevels(const VQRenderer& Renderer) const
 {
+	if (Tex_IrradianceSpec == INVALID_ID)
+		return 0;
+	Renderer.WaitForTexture(Tex_IrradianceSpec);
 	return Renderer.GetTextureMips(Tex_IrradianceSpec);
 }
 
