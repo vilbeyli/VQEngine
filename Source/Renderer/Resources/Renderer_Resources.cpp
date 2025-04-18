@@ -764,6 +764,8 @@ void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, ui
 
 void VQRenderer::DestroySRV(SRV_ID srvID)
 {
+	if (srvID == INVALID_ID)
+		return;
 	std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 	mHeapCBV_SRV_UAV.FreeDescriptor(&mSRVs.at(srvID));
 	mSRVs.erase(srvID);

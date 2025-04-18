@@ -45,6 +45,7 @@ struct FSceneView;
 struct FSceneShadowViews;
 struct FShadowView;
 struct FRenderStats;
+class ThreadPool;
 
 struct FSceneStats
 {

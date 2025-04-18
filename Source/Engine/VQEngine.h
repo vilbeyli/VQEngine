@@ -207,6 +207,7 @@ public:
 
 	// Getters
 	MeshID GetBuiltInMeshID(const std::string& MeshName) const;
+	void   FinalizeBuiltinMeshes();
 
 	inline const FResourceNames& GetResourceNames() const { return mResourceNames; }
 	inline AssetLoader& GetAssetLoader() { return mAssetLoader; }
@@ -292,7 +293,7 @@ private:
 	std::atomic<bool>               mbMainWindowHDRTransitionInProgress; // see DispatchHDRSwapchainTransitionEvents()
 	std::atomic<bool>               mbExitApp;
 	std::atomic<bool>               mbBuiltinMeshGenFinished;
-	EventSignal                          mBuiltinMeshGenSignal;
+	EventSignal                     mBuiltinMeshGenSignal;
 
 
 	// system & settings
@@ -338,7 +339,7 @@ private:
 	void                            SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse, bool bReleaseAtCapturedPosition);
 	inline void                     SetMouseCaptureForWindow(Window* pWin, bool bCaptureMouse, bool bReleaseAtCapturedPosition) { this->SetMouseCaptureForWindow(pWin->GetHWND(), bCaptureMouse, bReleaseAtCapturedPosition); };
 
-	void                            InitializeBuiltinMeshes();
+	void                            GenerateBuiltinMeshes();
 	void                            LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete
 	void                            Load_SceneData_Dispatch();
 	void                            LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMapMip0Resolution);

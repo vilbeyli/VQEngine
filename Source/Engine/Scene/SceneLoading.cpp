@@ -99,7 +99,7 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	mSceneRepresentation = sceneRep;
 
 	{
-		SCOPED_CPU_MARKER("LoadScene()");
+		SCOPED_CPU_MARKER("LoadScene");
 		this->LoadScene(sceneRep); // scene-specific load 
 	}
 
@@ -123,8 +123,7 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	}
 	mFrustumCullWorkerContext.ClearMemory();
 
-	mEngine.WaitForBuiltinMeshGeneration();
-
+	mEngine.FinalizeBuiltinMeshes();
 	LoadBuiltinMeshes(builtinMeshes);
 	LoadGameObjects(std::move(sceneRep.Objects), UpdateWorkerThreadPool);
 }
@@ -329,7 +328,7 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 		}
 		if(!bThreadsDone.load())
 		{
-			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
+			SCOPED_CPU_MARKER_C("WAIT_WORKER", 0xFFFF0000);
 			ThreadsDoneSignal.Wait();
 		}
 	}

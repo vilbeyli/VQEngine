@@ -226,21 +226,11 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 				assert(!vPathTokens.empty());
 				const bool bProceduralTexture = vPathTokens[0] == "Procedural";
 
-				EProceduralTextures ProcTex = bProceduralTexture
-					? VQRenderer::GetProceduralTextureEnumFromName(vPathTokens[1])
-					: EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
-
-				// TODO: check whether Exit signal is given to the app before dispatching workers
-				//if (mWorkers_TextureLoad.IsExiting())
-				//{
-				//	break;
-				//}
-
 				TextureID texID = INVALID_ID;
 				TextureManager& mTextureManager = mRenderer.GetTextureManager();
 				if (bProceduralTexture)
 				{
-					texID = mRenderer.GetProceduralTexture(ProcTex);
+					texID = mRenderer.GetProceduralTexture(VQRenderer::GetProceduralTextureEnumFromName(vPathTokens[1]));
 				}
 				else
 				{
@@ -256,25 +246,13 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 					texID = mTextureManager.CreateTexture(Request, bCheckAlphaMask);
 				}
 
-				// dispatch worker thread
-				//std::shared_future<TextureID> texLoadResult = std::move(mWorkers_TextureLoad.AddTask([this, TexLoadParams, ProcTex]()
-				//{
-				//	SCOPED_CPU_MARKER_C("TextureLoadWorker", mWorkers_TextureLoad.mMarkerColor);
-				//	constexpr bool GENERATE_MIPS = true;
-				//	const bool IS_PROCEDURAL = ProcTex != EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
-				//	const bool bCheckAlphaMask = (TexLoadParams.TexType == ETextureType::DIFFUSE) || TexLoadParams.TexType == ETextureType::ALPHA_MASK;
-				//	const TextureID texID = IS_PROCEDURAL
-				//		? mRenderer.GetProceduralTexture(ProcTex)
-				//		: mRenderer.CreateTextureFromFile(TexLoadParams.TexturePath.c_str(), bCheckAlphaMask, GENERATE_MIPS);
-				//	return texID;
-				//}));
-
 				// update results lookup for the shared textures (among different materials)
 				Lookup_TextureLoadResult[TexLoadParams.TexturePath] = texID;
 
 				// record load results
 				TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, FTextureLoadResult{ TexLoadParams.TexType, TexLoadParams.TexturePath, texID }));
 			}
+
 			// shared textures among materials
 			else
 			{
@@ -336,9 +314,7 @@ static AssetLoader::ETextureType GetTextureType(aiTextureType aiType)
 
 void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std::mutex& mtxTexturePaths, std::unordered_map<TextureID, std::string>& TexturePaths, VQRenderer* pRenderer)
 {
-	SCOPED_CPU_MARKER("FMaterialTextureAssignments::DoAssignments()");
-
-	
+	SCOPED_CPU_MARKER("FMaterialTextureAssignments.DoAssignments()");
 	for (FMaterialTextureAssignment& assignment : mAssignments)
 	{
 		Material& mat = pScene->GetMaterial(assignment.matID);
@@ -479,8 +455,9 @@ static Mesh ProcessAssimpMesh(
 )
 {
 	SCOPED_CPU_MARKER("ProcessAssimpMesh()");
-	std::vector<FVertexWithNormalAndTangent> Vertices;
-	std::vector<unsigned> Indices;
+	GeometryData< FVertexWithNormalAndTangent, unsigned> GeometryData(1);
+	std::vector<FVertexWithNormalAndTangent>& Vertices = GeometryData.LODVertices[0];
+	std::vector<unsigned>& Indices = GeometryData.LODIndices[0];
 
 	{
 		SCOPED_CPU_MARKER("MemAlloc");
@@ -545,7 +522,7 @@ static Mesh ProcessAssimpMesh(
 		}
 	}
 
-	return Mesh(pRenderer, Vertices, Indices, ModelName);
+	return Mesh(pRenderer, std::move(GeometryData), ModelName);
 }
 
 static std::string CreateUniqueMaterialName(const aiMaterial* material, size_t iMat, const std::string& modelDirectory)

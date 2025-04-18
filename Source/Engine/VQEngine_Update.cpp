@@ -595,6 +595,7 @@ void VQEngine::LoadLoadingScreenData()
 
 		mWorkers_Simulation.AddTask([this, &data, LoadingScreenTextureFilePath, CHECK_ALPHA_MASK, GENERATE_MIPS]()
 		{
+			SCOPED_CPU_MARKER("LoadLoadingScreenImage");
 			const TextureID texID = mpRenderer->CreateTextureFromFile(LoadingScreenTextureFilePath.c_str(), CHECK_ALPHA_MASK, GENERATE_MIPS);
 			mpRenderer->WaitForTexture(texID);
 			const SRV_ID srvID = mpRenderer->AllocateAndInitializeSRV(texID);
