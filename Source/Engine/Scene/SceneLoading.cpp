@@ -123,9 +123,10 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	}
 	mFrustumCullWorkerContext.ClearMemory();
 
+	LoadGameObjects(std::move(sceneRep.Objects), UpdateWorkerThreadPool);
+
 	mEngine.FinalizeBuiltinMeshes();
 	LoadBuiltinMeshes(builtinMeshes);
-	LoadGameObjects(std::move(sceneRep.Objects), UpdateWorkerThreadPool);
 }
 
 

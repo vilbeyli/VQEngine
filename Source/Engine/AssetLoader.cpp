@@ -522,7 +522,7 @@ static Mesh ProcessAssimpMesh(
 		}
 	}
 
-	return Mesh(pRenderer, std::move(GeometryData), ModelName);
+	return Mesh(nullptr, std::move(GeometryData), ModelName);
 }
 
 static std::string CreateUniqueMaterialName(const aiMaterial* material, size_t iMat, const std::string& modelDirectory)
@@ -835,11 +835,6 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 	FMaterialTextureAssignments MaterialTextureAssignments;
 	Model::Data data = ProcessAssimpNode(ModelName, pAiScene->mRootNode, pAiScene, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
 
-	{
-		SCOPED_CPU_MARKER("UploadVertexAndIndexBufferHeaps()");
-		pRenderer->UploadVertexAndIndexBufferHeaps(); // load VB/IBs
-	}
-
 	if (!MaterialTextureAssignments.mAssignments.empty()) // dispatch texture workers
 		MaterialTextureAssignments.mTextureLoadResults = pAssetLoader->StartLoadingTextures(taskID);
 
@@ -859,6 +854,18 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 
 	// assign TextureIDs to the materials;
 	MaterialTextureAssignments.DoAssignments(pScene, pScene->mMtxTexturePaths,  pScene->mTexturePaths, pRenderer);
+
+	// Create buffers for loaded meshes
+	pRenderer->WaitHeapsInitialized();
+	for (const auto& [meshID, matID] : model.mData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH))
+	{
+		Mesh& mesh = pScene->GetMesh(meshID);
+		mesh.CreateBuffers(pRenderer);
+	}
+	//pObject->mModelID = modelID;
+	
+
+	pRenderer->UploadVertexAndIndexBufferHeaps();
 
 	t.Stop();
 	Log::Info("   [%.2fs] Loaded Model '%s': %d meshes, %d materials"

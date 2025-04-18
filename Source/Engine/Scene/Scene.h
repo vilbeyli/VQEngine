@@ -207,6 +207,7 @@ public:
 	
 	// Meshes
 	const Mesh& GetMesh(MeshID ID) const;
+	      Mesh& GetMesh(MeshID ID);
 
 	// Textures
 	const std::string& GetTexturePath(TextureID) const;

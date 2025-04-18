@@ -314,6 +314,16 @@ const Mesh& Scene::GetMesh(MeshID ID) const
 	return mMeshes.at(ID);
 }
 
+Mesh& Scene::GetMesh(MeshID ID)
+{
+	if (mMeshes.find(ID) == mMeshes.end())
+	{
+		Log::Error("Mesh not found. Did you call Scene::AddMesh()? (meshID=%d)", ID);
+		assert(false);
+	}
+	return mMeshes.at(ID);
+}
+
 Model& Scene::GetModel(ModelID id)
 {
 	if (mModels.find(id) == mModels.end())
