@@ -241,14 +241,7 @@ void VQEngine::InitializeUI(HWND hwnd)
 	rDescs.D3D12Desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height, 1, 1);
 	rDescs.DataArray.push_back( pixels );
 
-	mpRenderer->WaitHeapsInitialized();
-	//mpRenderer->WaitMemoryAllocatorInitialized();
 	TextureID texUI = mpRenderer->CreateTexture(rDescs);
-	SRV_ID srvUI = mpRenderer->AllocateAndInitializeSRV(texUI);
-
-	// Tell ImGUI what the image view is
-	//
-	io.Fonts->TexID = (ImTextureID)mpRenderer->GetSRV(srvUI).GetGPUDescHandle().ptr;
 
 
 	// Create sampler
@@ -268,6 +261,10 @@ void VQEngine::InitializeUI(HWND hwnd)
 	SamplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
 	InitializeEngineUIState(mUIState);
+	
+	mpRenderer->WaitHeapsInitialized();
+	SRV_ID srvUI = mpRenderer->AllocateAndInitializeSRV(texUI);
+	io.Fonts->TexID = (ImTextureID)mpRenderer->GetSRV(srvUI).GetGPUDescHandle().ptr;
 }
 void VQEngine::ExitUI()
 {

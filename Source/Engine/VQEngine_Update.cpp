@@ -573,6 +573,18 @@ void VQEngine::LoadLoadingScreenData()
 	constexpr bool CHECK_ALPHA_MASK = false;
 	constexpr bool GENERATE_MIPS = false;
 
+	// load the selected loading screen image
+	{
+		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(SelectedLoadingScreenIndex) + ".png");
+		TextureID texID = mpRenderer->CreateTextureFromFile(LoadingScreenTextureFilePath.c_str(), CHECK_ALPHA_MASK, GENERATE_MIPS);
+		mpRenderer->WaitHeapsInitialized();
+		SRV_ID    srvID = mpRenderer->AllocateAndInitializeSRV(texID);
+		std::lock_guard<std::mutex> lk(data.Mtx);
+		data.SRVs.push_back(srvID);
+		data.SelectedLoadingScreenSRVIndex = static_cast<int>(data.SRVs.size() - 1);
+		mpRenderer->SignalLoadingScreenReady();
+	}
+	
 	// dispatch background workers for other 
 	for (size_t i = 0; i < NUM_LOADING_SCREEN_BACKGROUNDS; ++i)
 	{
@@ -583,7 +595,6 @@ void VQEngine::LoadLoadingScreenData()
 
 		mWorkers_Simulation.AddTask([this, &data, LoadingScreenTextureFilePath, CHECK_ALPHA_MASK, GENERATE_MIPS]()
 		{
-			mpRenderer->WaitHeapsInitialized();
 			const TextureID texID = mpRenderer->CreateTextureFromFile(LoadingScreenTextureFilePath.c_str(), CHECK_ALPHA_MASK, GENERATE_MIPS);
 			mpRenderer->WaitForTexture(texID);
 			const SRV_ID srvID = mpRenderer->AllocateAndInitializeSRV(texID);
@@ -592,19 +603,6 @@ void VQEngine::LoadLoadingScreenData()
 				data.SRVs.push_back(srvID);
 			}
 		});
-	}
-
-	// load the selected loading screen image
-	{
-		mpRenderer->WaitHeapsInitialized();
-		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(SelectedLoadingScreenIndex) + ".png");
-		TextureID texID = mpRenderer->CreateTextureFromFile(LoadingScreenTextureFilePath.c_str(), CHECK_ALPHA_MASK, GENERATE_MIPS);
-		mpRenderer->WaitForTexture(texID);
-		SRV_ID    srvID = mpRenderer->AllocateAndInitializeSRV(texID);
-		std::lock_guard<std::mutex> lk(data.Mtx);
-		data.SRVs.push_back(srvID);
-		data.SelectedLoadingScreenSRVIndex = static_cast<int>(data.SRVs.size() - 1);
-		mpRenderer->SignalLoadingScreenReady();
 	}
 }
 

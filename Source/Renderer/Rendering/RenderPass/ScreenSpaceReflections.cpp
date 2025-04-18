@@ -77,6 +77,7 @@ ScreenSpaceReflectionsPass::~ScreenSpaceReflectionsPass()
 
 bool ScreenSpaceReflectionsPass::Initialize()
 {
+	SCOPED_CPU_MARKER("ScreenSpaceReflectionsPass.Initialize");
 	CreateResources();
 	LoadRootSignatures();
 	AllocateResourceViews();

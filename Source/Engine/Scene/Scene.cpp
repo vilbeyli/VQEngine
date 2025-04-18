@@ -128,20 +128,7 @@ MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 
 	Material& mat = *mMaterialPool.Get(id);
 	mat = Material();
-	if (mat.SRVMaterialMaps == INVALID_ID)
-	{
-		mat.SRVMaterialMaps = mRenderer.AllocateSRV(NUM_MATERIAL_TEXTURE_MAP_BINDINGS-1);
-		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 0, INVALID_ID);
-		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 1, INVALID_ID);
-		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 2, INVALID_ID);
-		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 3, INVALID_ID);
-		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 4, INVALID_ID);
-		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 5, INVALID_ID);
-		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 6, INVALID_ID);
-		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 7, INVALID_ID);
-		mat.SRVHeightMap = mRenderer.AllocateSRV(1);
-		mRenderer.InitializeSRV(mat.SRVHeightMap, 0, INVALID_ID);
-	}
+
 	return id;
 }
 

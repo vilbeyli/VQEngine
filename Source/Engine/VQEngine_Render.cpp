@@ -217,17 +217,18 @@ void VQEngine::RenderThread_Inititalize()
 #endif
 	 
 	// load builtin resources, compile shaders, load PSOs
-	mWorkers_Simulation.AddTask([=]() { RENDER_WORKER_CPU_MARKER; mpRenderer->Load(); });
+	mWorkers_Simulation.AddTask([=]() { RENDER_WORKER_CPU_MARKER; mpRenderer->Load(); InitializeBuiltinMeshes(); });
 	mWorkers_Simulation.AddTask([=]() { RENDER_WORKER_CPU_MARKER; LoadLoadingScreenData(); });
-	mWorkers_Simulation.AddTask([=]() { RENDER_WORKER_CPU_MARKER; InitializeBuiltinMeshes(); });
-
-
 	mWorkers_Simulation.AddTask([=]() 
-	{ 
+	{
+		RENDER_WORKER_CPU_MARKER;
+		{
+			SCOPED_CPU_MARKER_C("InitFences", 0xFF007700);
 #if THREADED_CTX_INIT
 			mpRenderer->WaitMainSwapchainReady();
 #endif
 			mpRenderer->InitializeFences(mpWinMain->GetHWND());
+		}
 		// load window resources
 		const bool bFullscreen = mpWinMain->IsFullscreen();
 		const int W = bFullscreen ? mpWinMain->GetFullscreenWidth() : mpWinMain->GetWidth();

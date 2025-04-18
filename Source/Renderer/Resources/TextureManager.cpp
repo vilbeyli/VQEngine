@@ -31,6 +31,10 @@
 using namespace Microsoft::WRL;
 
 
+#define DISK_WORKER_MAKRER SCOPED_CPU_MARKER_C("DiskWorker", 0xFF00AAAA);
+#define MIP_WORKER_MAKRER SCOPED_CPU_MARKER_C("MipWorker", 0xFFAA0000);
+#define GPU_WORKER_MAKRER SCOPED_CPU_MARKER_C("GPUWorker", 0xFFAA00AA);
+
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 //
 // STATIC
@@ -77,8 +81,8 @@ void TextureManager::InitializeEarly()
 	const size_t HWThreads = ThreadPool::sHardwareThreadCount;
 	const size_t HWCores = HWThreads / 2;
 
-	mDiskWorkers.Initialize(std::max<size_t>(2, HWCores / 2), "TextureManagerDiskWorkers");
-	mMipWorkers.Initialize(HWCores, "TextureManagerMipWorkers");
+	mDiskWorkers.Initialize(HWCores, "TextureManagerDiskWorkers");
+	mMipWorkers.Initialize(std::max<size_t>(2, HWCores / 2), "TextureManagerMipWorkers");
 	mGPUWorkers.Initialize(1, "TextureManagerGPUWorkers");
 }
 
@@ -91,7 +95,7 @@ void TextureManager::InitializeLate(
 	std::mutex& UploadHeapMutex
 )
 {
-	SCOPED_CPU_MARKER("TextureManager::InitializeLate");
+	SCOPED_CPU_MARKER("TextureManager.InitializeLate");
 
 	// set refs
 	mpDevice = pDevice;
@@ -103,6 +107,7 @@ void TextureManager::InitializeLate(
 
 	// Start upload thread
 	mUploadThread = std::thread(&TextureManager::TextureUploadThread_Main, this);
+	SetThreadDescription(mUploadThread.native_handle(), L"TextureManagerUploadThread");
 
 	// signal ready
 	mInitialized.count_down();
@@ -213,29 +218,32 @@ TextureID TextureManager::CreateTexture(const FTextureRequest& Request, bool bCh
 		mTaskStates[id].State = ETextureTaskState::Pending;
 	}
 
-    // Queue initial task
-    if (bInitFromFile)
-    {
-        mDiskWorkers.AddTask([this, id, Request]()
-        {
-            DiskRead(id, Request);
-        });
-    }
-    else if (bInitFromRAM)
-    {
-        mDiskWorkers.AddTask([this, id, Request]()
-        {
-            LoadFromMemory(id, Request);
-        });
-    }
-    else
-    {
-        // GPU-only texture (e.g., render target)
-        mGPUWorkers.AddTask([this, id]()
-        {
-            AllocateResource(id);
-        });
-    }
+	// Queue initial task
+	if (bInitFromFile)
+	{
+		mDiskWorkers.AddTask([this, id, Request]()
+		{
+			DISK_WORKER_MAKRER;
+			DiskRead(id, Request);
+		});
+	}
+	else if (bInitFromRAM)
+	{
+		mDiskWorkers.AddTask([this, id, Request]()
+		{
+			DISK_WORKER_MAKRER;
+			LoadFromMemory(id, Request);
+		});
+	}
+	else
+	{
+		// GPU-only texture (e.g., render target)
+		mGPUWorkers.AddTask([this, id]()
+		{
+			GPU_WORKER_MAKRER;
+			AllocateResource(id);
+		});
+	}
 
 	// update cache
 	if (bInitFromFile)
@@ -594,6 +602,10 @@ void TextureManager::GenerateMips(TextureID id)
 		return;
 	}
 
+	{
+		SCOPED_CPU_MARKER_C("WAIT_INIT", 0xFFAA0000);
+		mInitialized.wait();
+	}
 
 	uint32_t NumRows[D3D12_REQ_MIP_LEVELS] = { 0 };
 	UINT64 RowSizes[D3D12_REQ_MIP_LEVELS] = { 0 };
@@ -851,10 +863,10 @@ void TextureManager::ScheduleNextTask(TextureID id)
 	switch (nextState)
 	{
 	case ETextureTaskState::MipGenerating:
-		mMipWorkers.AddTask([this, id]() { GenerateMips(id); }); 
+		mMipWorkers.AddTask([this, id]() { MIP_WORKER_MAKRER; GenerateMips(id); });
 		break;
 	case ETextureTaskState::Allocating:
-		mGPUWorkers.AddTask([this, id]() { AllocateResource(id); });
+		mGPUWorkers.AddTask([this, id]() { GPU_WORKER_MAKRER; AllocateResource(id); });
 		break;
 	case ETextureTaskState::Uploading: 
 		QueueUploadToGPUTask(id);
@@ -876,11 +888,11 @@ void TextureManager::ScheduleNextTask(TextureID id)
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 void TextureManager::TextureUploadThread_Main()
 {
-	SCOPED_CPU_MARKER_C("TextureUploadThread_Main()", 0xFF33AAFF);
+	SCOPED_CPU_MARKER_C("TextureUploadThread_Main()", 0xFFCC22CC);
 	while (!mExitUploadThread.load())
 	{
 		{
-			SCOPED_CPU_MARKER_C("WAIT_TASK", 0xFF33AAFF);
+			SCOPED_CPU_MARKER_C("WAIT_TASK", 0xFFAA0000);
 			mUploadSignal.Wait([this]() { return !mUploadQueue.empty() || mExitUploadThread.load(); });
 		}
 
@@ -936,7 +948,6 @@ void TextureManager::ProcessTextureUpload(const FTextureUploadTask& Task)
 		pUploadBufferMem = mpUploadHeap->Suballocate(SIZE_T(UploadHeapSize), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 		if (pUploadBufferMem == nullptr)
 		{
-			SCOPED_CPU_MARKER("UploadToGPUAndWait");
 			mpUploadHeap->UploadToGPUAndWait();
 			pUploadBufferMem = mpUploadHeap->Suballocate(SIZE_T(UploadHeapSize), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 			assert(pUploadBufferMem);
@@ -947,6 +958,7 @@ void TextureManager::ProcessTextureUpload(const FTextureUploadTask& Task)
 
 	if (bBufferResource) 
 	{
+		SCOPED_CPU_MARKER("CopyBuffer");
 		const UINT64 SourceRscOffset = pUploadBufferMem - mpUploadHeap->BasePtr();
 		memcpy(pUploadBufferMem, pData, D3DDesc.Width);
 		pCmd->CopyBufferRegion(meta.Texture.Resource, 0, mpUploadHeap->GetResource(), SourceRscOffset, D3DDesc.Width);
@@ -961,14 +973,16 @@ void TextureManager::ProcessTextureUpload(const FTextureUploadTask& Task)
 		{
 			for (uint Mip = 0; Mip < MipCount; ++Mip) 
 			{
-				VQ_DXGI_UTILS::CopyPixels(
-					Task.DataArray[Mip],
-					pUploadBufferMem + PlacedSubresource[Mip].Offset,
-					PlacedSubresource[Mip].Footprint.RowPitch,
-					PlacedSubresource[Mip].Footprint.Width * BytePP,
-					NumRows[Mip]
-				);
-
+				{
+					SCOPED_CPU_MARKER("CopyPixels");
+					VQ_DXGI_UTILS::CopyPixels(
+						Task.DataArray[Mip],
+						pUploadBufferMem + PlacedSubresource[Mip].Offset,
+						PlacedSubresource[Mip].Footprint.RowPitch,
+						PlacedSubresource[Mip].Footprint.Width * BytePP,
+						NumRows[Mip]
+					);
+				}
 				D3D12_PLACED_SUBRESOURCE_FOOTPRINT Slice = PlacedSubresource[Mip];
 				Slice.Offset += (pUploadBufferMem - mpUploadHeap->BasePtr());
 
@@ -1009,6 +1023,7 @@ void TextureManager::ProcessTextureUpload(const FTextureUploadTask& Task)
 			// Queue MipImages destruction
 			mDiskWorkers.AddTask([it, this]() 
 			{
+				DISK_WORKER_MAKRER;
 				FTextureData& data = it->second;
 				for (Image& mipImage : data.MipImages)
 				{

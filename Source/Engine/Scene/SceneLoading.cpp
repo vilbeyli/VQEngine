@@ -94,10 +94,7 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	const TaskID taskID = AssetLoader::GenerateModelLoadTaskID();
 	LoadBuiltinMaterials(taskID, sceneRep.Objects);
 	
-	mRenderer.WaitForLoadCompletion();
-	
 	Log::Info("[Scene] Loading Scene: %s", sceneRep.SceneName.c_str());
-
 
 	mSceneRepresentation = sceneRep;
 
@@ -136,7 +133,7 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 
 void Scene::LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRepresentation>& GameObjsToBeLoaded)
 {
-	SCOPED_CPU_MARKER("Scene::LoadBuiltinMaterials()");
+	SCOPED_CPU_MARKER("Scene.LoadBuiltinMaterials()");
 
 	const char* STR_MATERIALS_FOLDER = "Data/Materials/";
 	auto vMatFiles = DirectoryUtil::ListFilesInDirectory(STR_MATERIALS_FOLDER, "xml");
@@ -184,7 +181,7 @@ void Scene::LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRep
 
 void Scene::LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes)
 {
-	SCOPED_CPU_MARKER("Scene::LoadBuiltinMeshes()");
+	SCOPED_CPU_MARKER("Scene.LoadBuiltinMeshes()");
 
 	// register builtin meshes to scene mesh lookup
 	// @mMeshes[0-NUM_BUILTIN_MESHES] are assigned here directly while the rest

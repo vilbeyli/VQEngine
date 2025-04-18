@@ -105,7 +105,6 @@ public:
 			std::unordered_map<TextureID, std::string>& TexturePaths, 
 			VQRenderer* pRenderer
 		);
-		void WaitForTextureLoads();
 
 		std::vector<FMaterialTextureAssignment> mAssignments;
 		TextureLoadResults_t                    mTextureLoadResults;

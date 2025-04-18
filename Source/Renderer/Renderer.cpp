@@ -821,7 +821,6 @@ ID3D12DescriptorHeap* VQRenderer::GetDescHeap(EResourceHeapType HeapType)
 // TODO: this returns an SRV_ID!
 TextureID VQRenderer::GetProceduralTexture(EProceduralTextures tex) const
 {
-	WaitForLoadCompletion();
 	if (mLookup_ProceduralTextureIDs.find(tex) == mLookup_ProceduralTextureIDs.end())
 	{
 		Log::Error("Couldn't find procedural texture %d", tex);

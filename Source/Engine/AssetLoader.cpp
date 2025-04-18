@@ -237,12 +237,10 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 				//}
 
 				TextureID texID = INVALID_ID;
-				TaskSignal<void> CompletionSignal;
 				TextureManager& mTextureManager = mRenderer.GetTextureManager();
 				if (bProceduralTexture)
 				{
 					texID = mRenderer.GetProceduralTexture(ProcTex);
-					CompletionSignal.Notify(); // Procedural textures are immediate
 				}
 				else
 				{
@@ -256,7 +254,6 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 
 					const bool bCheckAlphaMask = (TexLoadParams.TexType == ETextureType::DIFFUSE) || TexLoadParams.TexType == ETextureType::ALPHA_MASK;
 					texID = mTextureManager.CreateTexture(Request, bCheckAlphaMask);
-					//CompletionSignal = mTextureManager.GetTextureCompletionSignal(texID);
 				}
 
 				// dispatch worker thread
@@ -360,16 +357,9 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 		{
 			const MaterialID& matID = it->first;
 			FTextureLoadResult& result = it->second;
-			
-			// TODO: check exiting ?
-			// if (mWorkersThreads.IsExiting())
-			// 	break;
-
-			// assert(result.texLoadResult.valid());
 
 			const TextureID loadedTextureID = result.TexID;
 			pRenderer->GetTextureManager().WaitForTexture(loadedTextureID);
-			//result.CompletionSignal.Wait();
 
 			switch (result.type)
 			{
@@ -438,6 +428,11 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 			}
 		}
 
+		if (mat.SRVMaterialMaps == INVALID_ID)
+		{
+			mat.SRVMaterialMaps = pRenderer->AllocateSRV(NUM_MATERIAL_TEXTURE_MAP_BINDINGS - 1);
+			mat.SRVHeightMap = pRenderer->AllocateSRV(1);
+		}
 		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ALBEDO, mat.TexDiffuseMap);
 		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::NORMALS, mat.TexNormalMap);
 		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::EMISSIVE, mat.TexEmissiveMap);
@@ -449,23 +444,6 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 		pRenderer->InitializeSRV(mat.SRVHeightMap, 0, mat.TexHeightMap);
 	}
 }
-
-void AssetLoader::FMaterialTextureAssignments::WaitForTextureLoads()
-{
-	// SCOPED_CPU_MARKER_C("FMaterialTextureAssignments::WaitForTextureLoads()", 0xFFFF0000);
-	// for (auto it = mTextureLoadResults.begin(); it != mTextureLoadResults.end(); ++it)
-	// {
-	// 	const MaterialID& matID = it->first;
-	// 	const FTextureLoadResult& result = it->second;
-	// 	assert(result.texLoadResult.valid());
-	// 
-	// 	if (mWorkersThreads.IsExiting())
-	// 		break;
-	// 
-	// 	result.texLoadResult.wait();
-	// }
-}
-
 
 //----------------------------------------------------------------------------------------------------------------
 // ASSIMP HELPER FUNCTIONS
