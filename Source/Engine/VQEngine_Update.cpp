@@ -185,8 +185,7 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 			{
 				if (mbLoadingLevel)
 				{
-					SCOPED_CPU_MARKER("Scene->OnLoadComplete()");
-					mpScene->OnLoadComplete();
+					mpScene->OnLoadComplete(mBuiltinMeshes);
 				}
 				// OnEnvMapLoaded = noop
 
@@ -553,8 +552,7 @@ void VQEngine::Load_SceneData_Dispatch()
 	}
 
 	// start loading textures, models, materials with worker threads
-	mpRenderer->WaitHeapsInitialized();
-	mpScene->StartLoading(this->mBuiltinMeshes, SceneRep, mWorkers_Simulation);
+	mpScene->StartLoading(SceneRep, mWorkers_Simulation);
 }
 
 void VQEngine::LoadLoadingScreenData()

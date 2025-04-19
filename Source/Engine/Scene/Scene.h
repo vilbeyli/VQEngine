@@ -129,8 +129,8 @@ private: // Derived Scenes shouldn't access these functions
 	void Update(float dt, int FRAME_DATA_INDEX = 0);
 	void PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UIState, bool bAppInSimulationState, int FRAME_DATA_INDEX = 0);
 	
-	void StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& scene, ThreadPool& UpdateWorkerThreadPool);
-	void OnLoadComplete();
+	void StartLoading(FSceneRepresentation& scene, ThreadPool& UpdateWorkerThreadPool);
+	void OnLoadComplete(const BuiltinMeshArray_t& builtinMeshes);
 	void Unload(); // serial-only for now. maybe MT later.
 	
 	void RenderUI(FUIState& UIState, uint32_t W, uint32_t H);

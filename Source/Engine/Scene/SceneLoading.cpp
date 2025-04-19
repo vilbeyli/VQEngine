@@ -87,7 +87,7 @@ MaterialID Scene::LoadMaterial(const FMaterialRepresentation& matRep, TaskID tas
 	return id;
 }
 
-void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& sceneRep, ThreadPool& UpdateWorkerThreadPool)
+void Scene::StartLoading(FSceneRepresentation& sceneRep, ThreadPool& UpdateWorkerThreadPool)
 {
 	SCOPED_CPU_MARKER("SceneStartLoading");
 
@@ -124,9 +124,6 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	mFrustumCullWorkerContext.ClearMemory();
 
 	LoadGameObjects(std::move(sceneRep.Objects), UpdateWorkerThreadPool);
-
-	mEngine.FinalizeBuiltinMeshes();
-	LoadBuiltinMeshes(builtinMeshes);
 }
 
 
@@ -441,7 +438,7 @@ void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 	}
 }
 
-void Scene::OnLoadComplete()
+void Scene::OnLoadComplete(const BuiltinMeshArray_t& builtinMeshes)
 {
 	SCOPED_CPU_MARKER("Scene.OnLoadComplete");
 	Log::Info("[Scene] OnLoadComplete()");
@@ -463,6 +460,9 @@ void Scene::OnLoadComplete()
 
 	// assign material data
 	mMaterialAssignments.DoAssignments(this, this->mMtxTexturePaths, this->mTexturePaths, &mRenderer);
+
+	mEngine.FinalizeBuiltinMeshes();
+	LoadBuiltinMeshes(builtinMeshes);
 
 	CalculateGameObjectLocalSpaceBoundingBoxes();
 
