@@ -652,17 +652,17 @@ void VQRenderer::WaitCopyFenceOnCPU(HWND hwnd)
 
 void VQRenderer::WaitHeapsInitialized()
 {
-	SCOPED_CPU_MARKER_C("WaitHeapsInitialized", 0xFF770000);
+	SCOPED_CPU_MARKER_C("WAIT_HEAPS_READY", 0xFF770000);
 	mLatchHeapsInitialized.wait();
 }
 void VQRenderer::WaitMemoryAllocatorInitialized()
 {
-	SCOPED_CPU_MARKER_C("WaitMemoryAllocatorInitialized", 0xFF770000);
+	SCOPED_CPU_MARKER_C("WAIT_MEM_ALLOCATOR_READY", 0xFF770000);
 	mLatchMemoryAllocatorInitialized.wait();
 }
 void VQRenderer::WaitLoadingScreenReady() const
 {
-	SCOPED_CPU_MARKER_C("WaitLoadingScreenReady", 0xFF770000);
+	SCOPED_CPU_MARKER_C("WAIT_LOADING_SCR_READY", 0xFF770000);
 	mLatchSignalLoadingScreenReady.wait();
 }
 void VQRenderer::SignalLoadingScreenReady()
@@ -671,7 +671,7 @@ void VQRenderer::SignalLoadingScreenReady()
 }
 void VQRenderer::WaitMainSwapchainReady() const
 {
-	SCOPED_CPU_MARKER_C("WaitSwapchainReady", 0xFF770000);
+	SCOPED_CPU_MARKER_C("WAIT_SWAPCHAIN", 0xFF770000);
 	mLatchSwapchainInitialized.wait();
 }
 

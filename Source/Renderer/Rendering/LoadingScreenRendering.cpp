@@ -87,6 +87,8 @@ HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScr
 			const FPSOCompileResult& result = future.get();
 			mPSOs[result.id] = result.pPSO;
 		}
+		else
+			return S_OK;
 	}
 
 	this->WaitLoadingScreenReady();
