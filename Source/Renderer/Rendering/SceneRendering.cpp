@@ -88,6 +88,7 @@ HRESULT VQRenderer::PreRenderScene(
 )
 {
 	SCOPED_CPU_MARKER("Renderer.PreRender");
+	WaitMainSwapchainReady();
 	FWindowRenderContext& ctx = this->GetWindowRenderContext(pWindow->GetHWND());
 
 	const bool bAsyncSubmit = mWaitForSubmitWorker;
@@ -1497,7 +1498,7 @@ void VQRenderer::RenderSceneColor(
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 
 	const bool bHDRDisplay = bHDR; // TODO: this->ShouldRenderHDR(pWindow->GetHWND());
-	const bool bHasEnvironmentMapHDRTexture = rsc.EnvironmentMap.SRV_HDREnvironment != INVALID_ID;
+	const bool bHasEnvironmentMapHDRTexture = rsc.EnvironmentMap.SRV_HDREnvironment != INVALID_ID && rsc.EnvironmentMap.SRV_BRDFIntegrationLUT != INVALID_ID;
 	const bool bDrawEnvironmentMap = bHasEnvironmentMapHDRTexture && true;
 	const bool bUseVisualizationRenderTarget = ShouldUseVisualizationTarget(PPParams);
 	const bool bRenderMotionVectors = ShouldUseMotionVectorsTarget(GFXSettings);

@@ -371,6 +371,20 @@ void VQRenderer::InitializeDSV(DSV_ID dsvID, uint32 heapIndex, TextureID texID, 
 	pDevice->CreateDepthStencilView(pTexture->Resource, &DSViewDesc, dsv.GetCPUDescHandle(heapIndex));
 }
 
+void VQRenderer::InitializeNullSRV(SRV_ID srvID, uint heapIndex, UINT ShaderComponentMapping)
+{
+	ID3D12Device* pDevice = mDevice.GetDevicePtr();
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC nullSrvDesc = {};
+	nullSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	nullSrvDesc.Shader4ComponentMapping = ShaderComponentMapping;
+	nullSrvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	nullSrvDesc.Texture2D.MipLevels = 1;
+	nullSrvDesc.Texture2D.MostDetailedMip = 0;
+	nullSrvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
+	pDevice->CreateShaderResourceView(nullptr, &nullSrvDesc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
+}
+
 void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bool bInitAsArrayView /*= false*/, bool bInitAsCubeView /*= false*/, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc /*=nullptr*/, UINT ShaderComponentMapping)
 {
 	CHECK_RESOURCE_VIEW(SRV, srvID);
@@ -404,10 +418,13 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 		mTextureManager.WaitForTexture(texID);
 		ID3D12Resource* pResource = pTexture->Resource;
 
-		const bool bCustomComponentMappingSpecified = ShaderComponentMapping != D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		if (!pResource)
+		{
+			InitializeNullSRV(srvID, heapIndex, ShaderComponentMapping);
+			return;
+		}
 
 		D3D12_RESOURCE_DESC resourceDesc = pResource->GetDesc();
-		const bool bBufferSRV = resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER;
 		const int NumCubes = pTexture->IsCubemap ? resourceDesc.DepthOrArraySize / 6 : 0;
 		const bool bInitializeAsCubemapView = pTexture->IsCubemap && bInitAsCubeView;
 		if (bInitializeAsCubemapView)
@@ -421,6 +438,8 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 		}
 
 		SRV& srv = mSRVs.at(srvID);
+		const bool bBufferSRV = resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER;
+		const bool bCustomComponentMappingSpecified = ShaderComponentMapping != D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 		if (pTexture->IsTypeless || bCustomComponentMappingSpecified || pTexture->IsCubemap || bBufferSRV)
 		{
 			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -543,14 +562,7 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 	{
 		// Describe and create null SRV. Null descriptors are needed in order 
 		// to achieve the effect of an "unbound" resource.
-		D3D12_SHADER_RESOURCE_VIEW_DESC nullSrvDesc = {};
-		nullSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-		nullSrvDesc.Shader4ComponentMapping = ShaderComponentMapping;
-		nullSrvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-		nullSrvDesc.Texture2D.MipLevels = 1;
-		nullSrvDesc.Texture2D.MostDetailedMip = 0;
-		nullSrvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
-		pDevice->CreateShaderResourceView(nullptr, &nullSrvDesc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
+		InitializeNullSRV(srvID, heapIndex, ShaderComponentMapping);
 	}
 }
 void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc)

@@ -179,6 +179,7 @@ public:
 	void                         InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, uint arraySlice = 0, uint mipSlice = 0);
 	void                         InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID texID, DXGI_FORMAT bufferViewFormatOverride);
 	void                         InitializeSRVForBuffer(SRV_ID uavID, uint heapIndex, TextureID texID, DXGI_FORMAT bufferViewFormatOverride);
+	void                         InitializeNullSRV(SRV_ID srvID, uint heapIndex, UINT ShaderComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING);
 
 	void                         DestroyTexture(TextureID& texID);
 	void                         DestroySRV(SRV_ID srvID);
