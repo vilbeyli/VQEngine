@@ -951,7 +951,7 @@ void VQRenderer::RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, Dy
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderDirectionalShadowMaps");
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
-	const FShadowView& View = ShadowView.ShadowView_Directional;
+	const XMMATRIX& MatViewProj = ShadowView.ShadowView_Directional;
 	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
 	
 	const std::vector<FInstancedDrawParameters>& drawParams = SceneDrawData.directionalShadowDrawParams;
@@ -984,7 +984,7 @@ void VQRenderer::RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, Dy
 		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = SetPerViewShadowCB(*pCBufferHeap, 
 			f3,
 			range,
-			View.matViewProj
+			MatViewProj
 		);
 		pCmd->SetGraphicsRootConstantBufferView(0, cbPerView);
 
@@ -1014,7 +1014,7 @@ void VQRenderer::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBu
 	assert(SceneDrawData.spotShadowDrawParams.size() == SceneShadowViews.NumSpotShadowViews);
 	for (uint i = 0; i < SceneShadowViews.NumSpotShadowViews; ++i)
 	{
-		const FShadowView& ShadowView = SceneShadowViews.ShadowViews_Spot[i];
+		const XMMATRIX& ShadowView = SceneShadowViews.ShadowViews_Spot[i];
 		const std::vector<FInstancedDrawParameters>& drawParams = SceneDrawData.spotShadowDrawParams[i];
 		if (drawParams.empty())
 			continue;
@@ -1034,7 +1034,7 @@ void VQRenderer::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBu
 		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = SetPerViewShadowCB(*pCBufferHeap,
 			SceneView.GPULightingData.spot_casters[i].position,
 			SceneView.GPULightingData.spot_casters[i].range, // far plane
-			SceneShadowViews.ShadowViews_Spot[i].matViewProj
+			SceneShadowViews.ShadowViews_Spot[i]
 		);
 		pCmd->SetGraphicsRootConstantBufferView(0, cbPerView);
 
@@ -1069,7 +1069,7 @@ void VQRenderer::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicB
 		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = SetPerViewShadowCB(*pCBufferHeap, 
 			SceneView.GPULightingData.point_casters[i].position,
 			SceneView.GPULightingData.point_casters[i].range, // far plane
-			SceneShadowViews.ShadowViews_Point[i].matViewProj
+			SceneShadowViews.ShadowViews_Point[i]
 		);
 		pCmd->SetGraphicsRootConstantBufferView(0, cbPerView);
 
@@ -1078,7 +1078,7 @@ void VQRenderer::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicB
 			const size_t iShadowView = i * 6 + face;
 
 			const std::vector<FInstancedDrawParameters>& drawParams = SceneDrawData.pointShadowDrawParams[iShadowView];
-			const FShadowView& ShadowView = SceneShadowViews.ShadowViews_Point[iShadowView];
+			const XMMATRIX& ShadowView = SceneShadowViews.ShadowViews_Point[iShadowView];
 
 			if (drawParams.empty())
 				continue;

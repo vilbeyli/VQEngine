@@ -434,13 +434,13 @@ static void DispatchWorkers_ShadowViews(FWindowRenderContext& ctx,
 		WorkerContexts.resize(NumShadowMeshFrustums);
 		for (size_t iFrustum = 1; iFrustum <= NumShadowMeshFrustums; ++iFrustum) // iFrustum==0 is for mainView, start from 1
 		{
-			const FShadowView* pShadowView = static_cast<const FShadowView*>(mFrustumRenderLists[iFrustum].pViewData);
+			const XMMATRIX* pMatShadowViewProj = static_cast<const XMMATRIX*>(mFrustumRenderLists[iFrustum].pViewData);
 			size_t shadowIndex = iFrustum - 1; // Offset by 1 since index 0 is main view
 
-			assert(pShadowView);
+			assert(pMatShadowViewProj);
 			const FFrustumRenderList* pFrustumRenderList = &mFrustumRenderLists[iFrustum];
 			//const std::vector<FVisibleMeshData>* ViewvisibleMeshDatas = &(*mFrustumCullWorkerContext.pVisibleMeshListPerView)[iFrustum];
-			WorkerContexts[iFrustum - 1] = { /*iFrustum,*/ pFrustumRenderList, pShadowView };
+			WorkerContexts[iFrustum - 1] = { /*iFrustum,*/ pFrustumRenderList, pMatShadowViewProj };
 
 			// -------------------------------------------------- SYNC ---------------------------------------------------
 			//Log::Info("WaitDataCountReady[%d]", iFrustum);
@@ -503,8 +503,8 @@ static void DispatchWorkers_ShadowViews(FWindowRenderContext& ctx,
 				BatchShadowViewDrawCalls(
 					*pDrawParams,
 					wctx.pFrustumRenderList->Data,
-					wctx.pShadowView->matViewProj,
-					wctx.pShadowView->matViewProj,
+					*wctx.pMatShadowViewProj,
+					*wctx.pMatShadowViewProj,
 					CBHeap,
 					pRenderer
 				);

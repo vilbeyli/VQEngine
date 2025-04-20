@@ -58,7 +58,6 @@ class Window;
 class Device;
 struct FSceneView;
 struct FSceneShadowViews;
-struct FShadowView;
 struct FPostProcessParameters;
 struct ID3D12RootSignature;
 struct ID3D12PipelineState;

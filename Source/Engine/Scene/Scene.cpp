@@ -959,23 +959,18 @@ void Scene::GatherShadowViewData(FSceneShadowViews& SceneShadowView, const std::
 		{
 		case Light::EType::DIRECTIONAL:
 		{
-			FShadowView& ShadowView = SceneShadowView.ShadowView_Directional;
-			ShadowView.matViewProj = l.GetViewProjectionMatrix();
+			SceneShadowView.ShadowView_Directional = l.GetViewProjectionMatrix();
 			++SceneShadowView.NumDirectionalViews;
 		}	break;
 		case Light::EType::SPOT:
 		{
-			XMMATRIX matViewProj = l.GetViewProjectionMatrix();
-			FShadowView& ShadowView = SceneShadowView.ShadowViews_Spot[SceneShadowView.NumSpotShadowViews++];
-			ShadowView.matViewProj = matViewProj;
+			SceneShadowView.ShadowViews_Spot[SceneShadowView.NumSpotShadowViews++] = l.GetViewProjectionMatrix();
 		} break;
 		case Light::EType::POINT:
 		{
 			for (int face = 0; face < 6; ++face)
 			{
-				XMMATRIX matViewProj = l.GetViewProjectionMatrix(static_cast<CubemapUtility::ECubeMapLookDirections>(face));
-				FShadowView& ShadowView = SceneShadowView.ShadowViews_Point[SceneShadowView.NumPointShadowViews * 6 + face];
-				ShadowView.matViewProj = matViewProj;
+				SceneShadowView.ShadowViews_Point[SceneShadowView.NumPointShadowViews * 6 + face] = l.GetViewProjectionMatrix(static_cast<CubemapUtility::ECubeMapLookDirections>(face));
 			}
 			SceneShadowView.PointLightLinearDepthParams[SceneShadowView.NumPointShadowViews].fFarPlane = l.Range;
 			SceneShadowView.PointLightLinearDepthParams[SceneShadowView.NumPointShadowViews].vWorldPos = l.Position;
@@ -1037,8 +1032,8 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 			FrustumRenderLists[iFrustum].TypeIndex = 0;
 			FrustumRenderLists[iFrustum].ResetSignalsAndData();
 
-			FrustumViewProjMatrix[iFrustum] = SceneShadowView.ShadowView_Directional.matViewProj;
-			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowView_Directional.matViewProj);
+			FrustumViewProjMatrix[iFrustum] = SceneShadowView.ShadowView_Directional;
+			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowView_Directional);
 		}
 
 		// point
@@ -1052,8 +1047,8 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 			FrustumRenderLists[iFrustum].TypeIndex = iPointFace;
 			FrustumRenderLists[iFrustum].ResetSignalsAndData();
 
-			FrustumViewProjMatrix[iFrustum] = SceneShadowView.ShadowViews_Point[iPointFace].matViewProj;
-			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowViews_Point[iPointFace].matViewProj);
+			FrustumViewProjMatrix[iFrustum] = SceneShadowView.ShadowViews_Point[iPointFace];
+			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowViews_Point[iPointFace]);
 		}
 
 		// spot
@@ -1064,8 +1059,8 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 			FrustumRenderLists[iFrustum].TypeIndex = iSpot;
 			FrustumRenderLists[iFrustum].ResetSignalsAndData();
 
-			FrustumViewProjMatrix[iFrustum] = SceneShadowView.ShadowViews_Spot[iSpot].matViewProj;
-			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowViews_Spot[iSpot].matViewProj);
+			FrustumViewProjMatrix[iFrustum] = SceneShadowView.ShadowViews_Spot[iSpot];
+			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowViews_Spot[iSpot]);
 		}
 	}
 	SceneView.NumActiveFrustumRenderLists = iFrustum;

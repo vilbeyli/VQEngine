@@ -23,7 +23,6 @@
 #include "Transform.h"
 #include "Engine/PostProcess/PostProcess.h"
 #include "Libs/VQUtils/Source/Multithreading.h"
-#include "Renderer/Rendering/DrawData.h" // TODO: remove after shadow mesh drawing is migrated to renderer
 #include "Engine/Core/Memory.h"
 
 // typedefs
@@ -132,7 +131,7 @@ struct FFrustumRenderList
 	enum class EFrustumType { MainView, SpotShadow, PointShadow, DirectionalShadow };
 	EFrustumType Type = EFrustumType::MainView;
 	uint TypeIndex = 0; // e.g., spot light index, point light index * 6 + face, etc.
-	const void* pViewData = nullptr; // references SceneView or ShadowView based on EFrustumType
+	const void* pViewData = nullptr; // references SceneView or ShadowView(=matShadowViewProj) based on EFrustumType
 
 	inline void ResetSignalsAndData()
 	{
@@ -187,12 +186,6 @@ struct FSceneDebugView
 
 };
 
-
-struct FShadowView
-{
-	DirectX::XMMATRIX matViewProj;
-};
-
 struct FSceneShadowViews
 {
 	struct FPointLightLinearDepthParams
@@ -201,10 +194,10 @@ struct FSceneShadowViews
 		float fFarPlane;
 	};
 
-	std::array<FShadowView, NUM_SHADOWING_LIGHTS__SPOT>                   ShadowViews_Spot;
-	std::array<FShadowView, NUM_SHADOWING_LIGHTS__POINT * 6>              ShadowViews_Point;
+	std::array<DirectX::XMMATRIX, NUM_SHADOWING_LIGHTS__SPOT>                   ShadowViews_Spot;
+	std::array<DirectX::XMMATRIX, NUM_SHADOWING_LIGHTS__POINT * 6>              ShadowViews_Point;
 	std::array<FPointLightLinearDepthParams, NUM_SHADOWING_LIGHTS__POINT> PointLightLinearDepthParams;
-	FShadowView ShadowView_Directional;
+	DirectX::XMMATRIX ShadowView_Directional;
 
 	uint NumSpotShadowViews;
 	uint NumPointShadowViews;
@@ -214,5 +207,5 @@ struct FSceneShadowViews
 struct FFrustumRenderCommandRecorderContext
 {
 	const FFrustumRenderList* pFrustumRenderList = nullptr;
-	const FShadowView* pShadowView = nullptr;
+	const DirectX::XMMATRIX* pMatShadowViewProj = nullptr;
 };
