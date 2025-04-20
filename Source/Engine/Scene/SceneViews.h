@@ -191,34 +191,14 @@ struct FSceneDebugView
 struct FShadowView
 {
 	DirectX::XMMATRIX matViewProj;
-
-	// Bits[0  -  3] : LOD
-	// Bits[4  - 33] : MeshID
-	// Bits[34 - 63] : MaterialID
-	static inline uint64     GetKey(MaterialID matID, MeshID meshID, int lod, bool bTessellated)
-	{
-		assert(matID != -1); assert(meshID != -1); assert(lod >= 0 && lod < 16);
-
-		constexpr int mask = 0x3FFFFFFF; // __11 1111 1111 1111 ...| use the first 30 bits of IDs
-		uint64 hash = std::max(0, std::min(1 << 4, lod));
-		hash |= ((uint64)(meshID & mask)) << 4;
-		if (bTessellated)
-		{
-			hash |= ((uint64)(matID & mask)) << 34;
-		}
-		return hash;
-	}
-	static inline MaterialID GetMatIDFromKey(uint64 key) { return MaterialID(key >> 34); }
-	static inline MeshID     GetMeshIDFromKey(uint64 key) { return MeshID((key >> 4) & 0x3FFFFFFF); }
-	static inline int        GetLODFromKey(uint64 key) { return int(key & 0xF); }
 };
 
 struct FSceneShadowViews
 {
 	struct FPointLightLinearDepthParams
 	{
-		float fFarPlane;
 		DirectX::XMFLOAT3 vWorldPos;
+		float fFarPlane;
 	};
 
 	std::array<FShadowView, NUM_SHADOWING_LIGHTS__SPOT>                   ShadowViews_Spot;

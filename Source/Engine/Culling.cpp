@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "Culling.h"
+#include "MeshSorting.h"
 #include "Math.h"
 #include "Scene/Scene.h"
 #include "Libs/VQUtils/Source/Multithreading.h"
@@ -500,12 +501,12 @@ void FFrustumCullWorkerContext::GatherVisibleMeshData(size_t iWork)
 			switch (FrustumRenderList.Type)
 			{
 			case FFrustumRenderList::EFrustumType::MainView:
-				vVisibleMeshListSoA.SortKey[i] = FSceneDrawData::GetKey(d.matID, d.meshID, d.iLOD, d.bTess);
+				vVisibleMeshListSoA.SortKey[i] = MeshSorting::GetLitMeshKey(d.matID, d.meshID, d.iLOD, d.bTess);
 				break;
 			case FFrustumRenderList::EFrustumType::SpotShadow:
 			case FFrustumRenderList::EFrustumType::PointShadow:
 			case FFrustumRenderList::EFrustumType::DirectionalShadow:
-				vVisibleMeshListSoA.SortKey[i] = FShadowView::GetKey(d.matID, d.meshID, d.iLOD, d.bTess);
+				vVisibleMeshListSoA.SortKey[i] = MeshSorting::GetShadowMeshKey(d.matID, d.meshID, d.iLOD, d.bTess);
 				break;
 			default:
 				assert(false); // shouldn't happen

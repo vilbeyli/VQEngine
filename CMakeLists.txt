@@ -121,6 +121,7 @@ set (SourceVQE
     "Source/Engine/Settings.h"
     "Source/Engine/Math.h"
     "Source/Engine/Culling.h"
+    "Source/Engine/MeshSorting.h"
     "Source/Engine/CullingData.h"
     "Source/Engine/AssetLoader.h"
     "Source/Engine/GPUMarker.h"

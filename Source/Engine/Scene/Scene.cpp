@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "Scene.h"
+#include "Engine/MeshSorting.h"
 #include "Engine/GPUMarker.h"
 
 #include "Engine/Scene/SceneViews.h"
@@ -1098,10 +1099,9 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 			mFrustumCullWorkerContext.vBoundingBoxList = BVH.mMeshBoundingBoxes;
 
 			const bool bForceLOD0_ShadowView = SceneView.sceneRenderOptions.bForceLOD0_ShadowView;
-			std::function<bool(const FVisibleMeshSortData&, const FVisibleMeshSortData&)> fnShadowViewSort =
-				[](const FVisibleMeshSortData& l, const FVisibleMeshSortData& r)
+			std::function<bool(const FVisibleMeshSortData&, const FVisibleMeshSortData&)> fnShadowViewSort = [](const FVisibleMeshSortData& l, const FVisibleMeshSortData& r)
 			{
-				return FShadowView::GetKey(l.matID, l.meshID, l.iLOD, l.bTess) > FShadowView::GetKey(r.matID, r.meshID, r.iLOD, r.bTess);
+				return MeshSorting::GetShadowMeshKey(l.matID, l.meshID, l.iLOD, l.bTess) > MeshSorting::GetShadowMeshKey(r.matID, r.meshID, r.iLOD, r.bTess);
 			};
 			size_t currRange = 0;
 			{
@@ -1144,10 +1144,9 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 			SCOPED_CPU_MARKER(fnMark("InitWorkerContexts", vRanges[0].first, vRanges[0].second).c_str());
 
 			const bool bForceLOD0 = SceneView.sceneRenderOptions.bForceLOD0_SceneView;
-			std::function<bool(const FVisibleMeshSortData&, const FVisibleMeshSortData&)> fnMainViewSort =
-				[](const FVisibleMeshSortData& l, const FVisibleMeshSortData& r)
+			std::function<bool(const FVisibleMeshSortData&, const FVisibleMeshSortData&)> fnMainViewSort = [](const FVisibleMeshSortData& l, const FVisibleMeshSortData& r)
 			{
-				return FSceneDrawData::GetKey(l.matID, l.meshID, l.iLOD, l.bTess) > FSceneDrawData::GetKey(r.matID, r.meshID, r.iLOD, r.bTess);
+				return MeshSorting::GetLitMeshKey(l.matID, l.meshID, l.iLOD, l.bTess) > MeshSorting::GetLitMeshKey(r.matID, r.meshID, r.iLOD, r.bTess);
 			};
 
 			for (size_t i = vRanges[0].first; i <= vRanges[0].second; ++i)
