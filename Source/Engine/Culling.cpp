@@ -410,6 +410,21 @@ void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd, Th
 	}
 }
 
+static int GetLODFromProjectedScreenArea(float fArea, int NumMaxLODs)
+{
+	// LOD0 >= 0.100 >= LOD1 >= 0.010 >= LOD2 >= 0.001
+	//
+	// coarse algorithm: just pick 1/10th for each available lod
+	int CurrLOD = 0;
+	float Threshold = 0.1f;
+	while (CurrLOD < NumMaxLODs - 1 && fArea <= Threshold)
+	{
+		Threshold *= 0.1f;
+		++CurrLOD;
+	}
+	assert(CurrLOD < NumMaxLODs && CurrLOD >= 0);
+	return CurrLOD;
+}
 void FFrustumCullWorkerContext::SortMeshData(size_t iWork, ThreadPool* pWorkerThreadPool)
 {
 	SCOPED_CPU_MARKER_C("SortMeshData", 0xFFAA00AA);
@@ -439,7 +454,7 @@ void FFrustumCullWorkerContext::SortMeshData(size_t iWork, ThreadPool* pWorkerTh
 			sortData[ii].matID = matID;
 			sortData[ii].meshID = meshID;
 			sortData[ii].bTess = mat.IsTessellationEnabled() ? 1 : 0;
-			sortData[ii].iLOD = vForceLOD0[iWork] ? 0 : InstanceBatching::GetLODFromProjectedScreenArea(fBBArea, mesh.GetNumLODs());
+			sortData[ii].iLOD = vForceLOD0[iWork] ? 0 : GetLODFromProjectedScreenArea(fBBArea, mesh.GetNumLODs());
 
 			assert(sortData[ii].iLOD < 256);
 			++ii;

@@ -46,28 +46,6 @@ struct FSceneShadowViews;
 struct FShadowView;
 struct FRenderStats;
 
-
-// TODO: remove namespace
-namespace InstanceBatching
-{
-	inline int GetLODFromProjectedScreenArea(float fArea, int NumMaxLODs)
-	{
-		// LOD0 >= 0.100 >= LOD1 >= 0.010 >= LOD2 >= 0.001
-		//
-		// coarse algorithm: just pick 1/10th for each available lod
-		int CurrLOD = 0;
-		float Threshold = 0.1f;
-		while (CurrLOD < NumMaxLODs - 1 && fArea <= Threshold)
-		{
-			Threshold *= 0.1f;
-			++CurrLOD;
-		}
-		assert(CurrLOD < NumMaxLODs && CurrLOD >= 0);
-		return CurrLOD;
-	}
-
-}
-
 struct FSceneStats
 {
 	// lights -----------------------

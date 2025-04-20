@@ -591,7 +591,7 @@ static void CollectDebugVertexDrawParams(
 			cmd.matWorld.resize(1);
 			cmd.matNormal.resize(1);
 
-			const int lod = 0; // GetLODFromProjectedScreenArea(2.0f, mesh.GetNumLODs());
+			const int lod = 0;
 			cmd.numIndices = mesh.GetNumIndices(lod);
 			cmd.vertexIndexBuffer = mesh.GetIABufferIDs(lod);
 			cmd.matWorld[0] = pTf->matWorldTransformation();
