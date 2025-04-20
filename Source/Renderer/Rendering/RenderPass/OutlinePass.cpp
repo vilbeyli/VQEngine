@@ -19,10 +19,12 @@
 #include "OutlinePass.h"
 #include "Renderer/Renderer.h"
 #include "Renderer/Pipeline/Tessellation.h"
+#include "Renderer/Rendering/DrawData.h"
 #include "Shaders/LightingConstantBufferData.h"
-#include "Libs/VQUtils/Source/utils.h"
 #include "Engine/GPUMarker.h"
-#include "Engine/Scene/SceneViews.h"
+#include "Libs/VQUtils/Source/utils.h"
+#include "Engine/Scene/Mesh.h"
+#include "Engine/Scene/Material.h"
 
 #include <cassert>
 
@@ -107,16 +109,16 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 	const FDrawParameters* pParams = static_cast<const FDrawParameters*>(pDrawParameters);
 	assert(pParams);
 	assert(pParams->pCmd);
-	assert(pParams->pSceneView);
+	assert(pParams->pSceneDrawData);
 	assert(pParams->pCBufferHeap);
 	assert(pParams->pRTVHandles);
 	ID3D12GraphicsCommandList* pCmd = pParams->pCmd;
 	DynamicBufferHeap* pHeap = pParams->pCBufferHeap;
 	const bool& bMSAA = pParams->bMSAA;
-	const FSceneView& SceneView = *pParams->pSceneView;
+	const FSceneDrawData& SceneDrawData = *pParams->pSceneDrawData;
 	
 	// early out & avoid changing state if we have no meshes to render
-	if (SceneView.outlineRenderParams.empty())
+	if (SceneDrawData.outlineRenderParams.empty())
 		return;
 
 	const ::DSV& dsv = mRenderer.GetDSV(bMSAA ? DSVMSAA : DSV);
@@ -125,8 +127,8 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 	const float clearColor[] = { 0, 0, 0, 0 };
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsv.GetCPUDescHandle();
 
-	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddrs(SceneView.outlineRenderParams.size());
-	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddrsTess(SceneView.outlineRenderParams.size());
+	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddrs(SceneDrawData.outlineRenderParams.size());
+	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddrsTess(SceneDrawData.outlineRenderParams.size());
 
 	pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__OutlinePass));
 	pCmd->OMSetRenderTargets(0, nullptr, FALSE, &dsvHandle);
@@ -143,14 +145,14 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 		}
 
 		int iCB = 0;
-		for (const FOutlineRenderCommand& cmd : SceneView.outlineRenderParams)
+		for (const FOutlineRenderData& cmd : SceneDrawData.outlineRenderParams)
 		{
 			// set PSO
 			const Material& mat = *cmd.pMaterial;
 			const size_t iMSAA  = bMSAA ? 1 : 0;
 			const size_t iAlpha = mat.IsAlphaMasked(mRenderer) ? 1 : 0;
-			size_t iTess = 0; size_t iDomain = 0; size_t iPart = 0; size_t iOutTopo = 0; size_t iTessCull = 0;
-			Tessellation::GetTessellationPSOConfig(mat.Tessellation, iTess, iDomain, iPart, iOutTopo, iTessCull);
+			uint8 iTess = 0; uint8 iDomain = 0; uint8 iPart = 0; uint8 iOutTopo = 0; uint8 iTessCull = 0;
+			mat.GetTessellationPSOConfig(iTess, iDomain, iPart, iOutTopo, iTessCull);
 			const size_t key = Hash(iPass,
 				iMSAA,
 				iTess,
@@ -169,13 +171,14 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 			D3D12_GPU_VIRTUAL_ADDRESS& cbAddr = cbAddrs[iCB];
 			if (iPass == 0) // allocate only on the first go
 			{
-				FOutlineRenderCommand::FConstantBuffer* pCBuffer = {};
-				pHeap->AllocConstantBuffer(sizeof(FOutlineRenderCommand::FConstantBuffer), (void**)(&pCBuffer), &cbAddr);
+				FOutlineRenderData::FConstantBuffer* pCBuffer = {};
+				pHeap->AllocConstantBuffer(sizeof(FOutlineRenderData::FConstantBuffer), (void**)(&pCBuffer), &cbAddr);
 				memcpy(pCBuffer, &cmd.cb, sizeof(cmd.cb));
 			}
 			pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
 
-			if (mat.Tessellation.bEnableTessellation)
+			const bool bTessellationEnabled = mat.IsTessellationEnabled();
+			if (bTessellationEnabled)
 			{
 				D3D12_GPU_VIRTUAL_ADDRESS& cbAddr_Tsl = cbAddrsTess[iCB];
 				if (iPass == 0) // allocate only on the first go
@@ -212,9 +215,9 @@ void OutlinePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameter
 			const VBV& vb = mRenderer.GetVertexBufferView(VB_ID);
 			const IBV& ib = mRenderer.GetIndexBufferView(IB_ID);
 			D3D_PRIMITIVE_TOPOLOGY topo = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-			if (mat.Tessellation.bEnableTessellation)
+			if (bTessellationEnabled)
 			{
-				topo = mat.Tessellation.Domain == ETessellationDomain::QUAD_PATCH
+				topo = mat.GetTessellationDomain() == ETessellationDomain::QUAD_PATCH
 					? D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST
 					: D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
 			}

@@ -312,9 +312,43 @@ public:
     void Create(ID3D12Device* pDevice, uint32_t numberOfBackBuffers, uint32_t memTotalSize);
     void Destroy();
 
+    DynamicBufferHeap() noexcept : 
+        m_memTotalSize(0),
+        m_mem(),
+        m_pData(nullptr),
+        m_pBuffer(nullptr),
+        m_mutex()
+    {}
+    DynamicBufferHeap(DynamicBufferHeap&& other) noexcept : 
+        m_memTotalSize(other.m_memTotalSize),
+        m_mem(std::move(other.m_mem)),
+        m_pData(other.m_pData),
+        m_pBuffer(other.m_pBuffer),
+        m_mutex()
+    {
+        other.m_memTotalSize = 0;
+        other.m_pData = nullptr;
+        other.m_pBuffer = nullptr;
+    }
+    DynamicBufferHeap& operator=(DynamicBufferHeap&& other) noexcept 
+    {
+        if (this != &other) 
+        {
+            m_memTotalSize = other.m_memTotalSize;
+            m_mem = std::move(other.m_mem);
+            m_pData = other.m_pData;
+            m_pBuffer = other.m_pBuffer;
+            other.m_memTotalSize = 0;
+            other.m_pData = nullptr;
+            other.m_pBuffer = nullptr;
+        }
+        return *this;
+    }
+
     bool AllocIndexBuffer   (uint32_t numbeOfIndices , uint32_t strideInBytes, void** pData, D3D12_INDEX_BUFFER_VIEW* pView);
     bool AllocVertexBuffer  (uint32_t numbeOfVertices, uint32_t strideInBytes, void** pData, D3D12_VERTEX_BUFFER_VIEW* pView);
     bool AllocConstantBuffer(uint32_t size, void** pData, D3D12_GPU_VIRTUAL_ADDRESS* pBufferViewDesc);
+    bool AllocConstantBuffer_MT(uint32_t size, void** pData, D3D12_GPU_VIRTUAL_ADDRESS* pBufferViewDesc);
     void OnBeginFrame();
 
 private:
@@ -322,4 +356,5 @@ private:
     RingBufferWithTabs  m_mem;
     char* m_pData = nullptr;
     ID3D12Resource* m_pBuffer = nullptr;
+    std::mutex m_mutex;
 };

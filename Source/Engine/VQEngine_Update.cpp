@@ -217,7 +217,7 @@ void VQEngine::UpdateThread_PostUpdate()
 	ThreadPool& mWorkerThreads = mWorkers_Simulation;
 #endif
 
-	if (mbLoadingLevel)
+	if (mAppState == EAppState::LOADING)
 	{
 		return;
 	}

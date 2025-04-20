@@ -18,11 +18,14 @@
 #pragma once
 
 #include "Core/Types.h"
+#include "Core/Memory.h"
 #include "Scene/Mesh.h"
 #include "Scene/Material.h"
+#include "Scene/SceneViews.h"
 
 #include <unordered_map>
 #include <functional>
+#include <future>
 
 class GameObject;
 class ThreadPool;
@@ -52,12 +55,11 @@ bool IsFrustumIntersectingFrustum(const FFrustumPlaneset& FrustumPlanes0, const 
 // - each thread given a range of the vectors to process
 struct FThreadWorkerContext
 {
-	virtual void Process(size_t iRangeBegin, size_t iRangeEnd) = 0;
+	virtual void Process(size_t iRangeBegin, size_t iRangeEnd, ThreadPool* pWorkerThreadPool) = 0;
 };
 
 struct FFrustumCullWorkerContext : public FThreadWorkerContext
-{
-	
+{	
 	using IndexList_t = std::vector<size_t>;
 	// Hot Data (per view): used during culling --------------------------------------------------------------------------------------
 	/*in */ std::vector<FFrustumPlaneset > vFrustumPlanes;
@@ -67,10 +69,12 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	/*in */ std::vector<FBoundingBox     > vBoundingBoxList;
 	 
 	// store the index of the surviving bounding box in a list, per view frustum
-	struct FCullResult { size_t iBB; float fBBArea; int SelectedLOD; std::pair<BufferID, BufferID> VBIB; unsigned NumIndices; char bTessellated; };
-	/*out*/ std::vector<std::vector<FCullResult>> vCullResultsPerView;
-	
-	using SortingFunction_t = std::function<bool(const FFrustumCullWorkerContext::FCullResult&, const FFrustumCullWorkerContext::FCullResult&)>;
+	/*out*/ std::vector<std::vector<size_t>> vVisibleBBIndicesPerView;
+	/*out*/ std::vector<std::vector<FVisibleMeshSortData>> vSortData;
+	/*out*/ std::vector<FFrustumRenderList>* pFrustumRenderLists; // for each view
+
+
+	using SortingFunction_t = std::function<bool(const FVisibleMeshSortData&, const FVisibleMeshSortData&)>;
 	/*in */ std::vector<SortingFunction_t> vSortFunctions;
 	/*in */ std::vector<char> vForceLOD0;
 	// Hot Data ------------------------------------------------------------------------------------------------------------
@@ -80,22 +84,23 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 	size_t NumValidInputElements = 0;
 	const SceneBoundingBoxHierarchy& BBH;
 	const MeshLookup_t& mMeshes;
-	const MaterialLookup_t& mMaterials;
+	const MemoryPool<Material>& mMaterials;
 
 	// ====================================================================================
 	FFrustumCullWorkerContext() = delete;
 	FFrustumCullWorkerContext(
 		const SceneBoundingBoxHierarchy& BBH, 
 		const MeshLookup_t& mMeshes, 
-		const MaterialLookup_t& mMaterials
-	) : BBH(BBH), mMeshes(mMeshes), mMaterials(mMaterials) 
+		const MemoryPool<Material>& mMaterials
+	) 
+		: BBH(BBH)
+		, mMeshes(mMeshes)
+		, mMaterials(mMaterials)
+		, pFrustumRenderLists(nullptr)
 	{}
 	
-	void AddWorkerItem(const FFrustumPlaneset& FrustumPlaneSet
-		, const DirectX::XMMATRIX& MatViewProj
-		, const std::vector<FBoundingBox>& vBoundingBoxList
-		, const std::vector<size_t>& vGameObjectHandles
-		, const std::vector<MaterialID>& vMaterials
+	void AddWorkerItem(
+		  const std::vector<FBoundingBox>& vBoundingBoxList
 		, const  size_t i
 		, SortingFunction_t SortFunction
 		, bool bForceLOD0
@@ -110,6 +115,8 @@ struct FFrustumCullWorkerContext : public FThreadWorkerContext
 
 	void AllocInputMemoryIfNecessary(size_t sz);
 //private:
-	void Process(size_t iRangeBegin, size_t iRangeEnd) override;
+	void Process(size_t iRangeBegin, size_t iRangeEnd, ThreadPool* pWorkerThreadPool) override;
+	void SortMeshData(size_t iFrustum, ThreadPool* pWorkerThreadPool);
+	void GatherVisibleMeshData(size_t iFrustum);
 
 };

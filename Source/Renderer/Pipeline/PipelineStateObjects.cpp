@@ -999,7 +999,7 @@ void FDepthPrePassPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D1
 
 void FShadowPassPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12RootSignature*>& mRootSignatureLookup)
 {
-	SCOPED_CPU_MARKER("GatherPSOLoadDescs_ZPrePass");
+	SCOPED_CPU_MARKER("GatherPSOLoadDescs_ShadowPass");
 	const std::wstring ShaderFilePath = VQRenderer::GetFullPathOfShader(L"ShadowDepthPass.hlsl");
 
 	FPSODesc psoLoadDesc = {};
@@ -1054,8 +1054,8 @@ void FShadowPassPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12R
 			: D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
 		// shaders
-		size_t NumPixelShader = iDepthMode > 0 ? 1 : 0;
-		size_t NumShaders = 1 + NumPixelShader; // VS-PS(optional)
+		const bool bNeedPS = (iDepthMode > 0 || iAlpha > 0);
+		size_t NumShaders = bNeedPS ? 2 : 1; // VS-PS(optional)
 		if (iTess == 1)
 		{	                 // VS-HS-DS-PS | VS-HS-DS-GS-PS
 			NumShaders += iTessCull == 0 ? 2 : 3;
@@ -1069,21 +1069,16 @@ void FShadowPassPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12R
 			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "DSMain"     , "ds_6_0" };
 			if (iTessCull > 0)
 				psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "GSMain" , "gs_6_0" };
-			if (iDepthMode > 0)
-				psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain"     , "ps_6_0" };
 		}
 		else
 		{
 			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_0" };
-			if(iDepthMode > 0)
-				psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_0" };
 		}
-		const size_t iPixelShader = iShader - 1;
+		if (bNeedPS)
+			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_0" };
 
 		// macros
-		
 		const FShaderMacro InstancedDrawMacro = { "INSTANCED_DRAW", "1" };
-		const FShaderMacro InstanceCountMacro = FShaderMacro::CreateShaderMacro("INSTANCE_COUNT", "%d", MAX_INSTANCE_COUNT__SHADOW_MESHES);
 		if (iTess == 1)
 		{
 			AppendTessellationVSMacros(psoLoadDesc.ShaderStageCompileDescs[0/*VS*/].Macros, iDomain);
@@ -1095,10 +1090,13 @@ void FShadowPassPSOs::GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12R
 		for (FShaderStageCompileDesc& shdDesc : psoLoadDesc.ShaderStageCompileDescs)
 		{
 			shdDesc.Macros.push_back(InstancedDrawMacro);
-			shdDesc.Macros.push_back(InstanceCountMacro);
 			if (iAlpha == 1)
 			{
 				shdDesc.Macros.push_back({ "ENABLE_ALPHA_MASK", "1" });
+			}
+			if (iDepthMode == 1)
+			{
+				shdDesc.Macros.push_back({ "LINEAR_DEPTH", "1" });
 			}
 		}
 		

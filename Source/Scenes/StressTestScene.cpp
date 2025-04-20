@@ -49,9 +49,9 @@ void StressTestScene::UpdateScene(float dt, FSceneView& SceneView)
 	constexpr float HDRI_ROTATION_SPEED = 0.01f;
 	if (bAnimateEnvironmentMapRotation)
 	{
-		SceneView.sceneParameters.fYawSliderValue += HDRI_ROTATION_SPEED * dt;
-		if (SceneView.sceneParameters.fYawSliderValue > 1.0f)
-			SceneView.sceneParameters.fYawSliderValue = 0.0f;
+		SceneView.sceneRenderOptions.fYawSliderValue += HDRI_ROTATION_SPEED * dt;
+		if (SceneView.sceneRenderOptions.fYawSliderValue > 1.0f)
+			SceneView.sceneRenderOptions.fYawSliderValue = 0.0f;
 	}
 
 	// animation
@@ -200,11 +200,11 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 	//
 	{
 		FMaterialRepresentation matR;
-		matR.Tessellation.bEnableTessellation = true;
-		matR.Tessellation.Domain = ETessellationDomain::QUAD_PATCH;
-		matR.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW;
-		matR.Tessellation.Partitioning = ETessellationPartitioning::INTEGER;
-		constexpr float TERRAIN_TESS_FACTOR = FTessellationParameters::MAX_TESSELLATION_FACTOR;
+		matR.TessellationEnabled = (true);
+		matR.TessellationDomain = (ETessellationDomain::QUAD_PATCH);
+		matR.TessellationOutputTopology = (ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW);
+		matR.TessellationPartitioning = (ETessellationPartitioning::INTEGER);
+		constexpr float TERRAIN_TESS_FACTOR = Tessellation::MAX_TESSELLATION_FACTOR;
 		matR.Tessellation.SetAllTessellationFactors(TERRAIN_TESS_FACTOR);
 
 		matR.EmissiveIntensity    = 0.0f;
@@ -328,9 +328,9 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 	constexpr float fScaleBaseValue = 2.5f;
 	constexpr float fScaleNegativeOffsetMax = fScaleBaseValue / 3.f;
 
-	for(int x=-DIMENSION_X/2; x<DIMENSION_X/2; ++x)
-	for(int y=-DIMENSION_Y/2; y<DIMENSION_Y/2; ++y)
-	for(int z=-DIMENSION_Z/2; z<DIMENSION_Z/2; ++z)
+	for(int x=-DIMENSION_X/2; x<=(DIMENSION_X-1)/2; ++x)
+	for(int y=-DIMENSION_Y/2; y<=(DIMENSION_Y-1)/2; ++y)
+	for(int z=-DIMENSION_Z/2; z<=(DIMENSION_Z-1)/2; ++z)
 	{
 		FGameObjectRepresentation& obj = scene.Objects[iObj++];
 
@@ -421,10 +421,10 @@ void StressTestScene::LoadScene(FSceneRepresentation& scene)
 				//if constexpr (ENABLE_MATERIALS)
 				{
 					FMaterialRepresentation matR;
-					matR.Tessellation.bEnableTessellation = true;
-					matR.Tessellation.Domain = ETessellationDomain::TRIANGLE_PATCH;
-					matR.Tessellation.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW;
-					matR.Tessellation.Partitioning = ETessellationPartitioning::INTEGER;
+					matR.TessellationEnabled = (true);
+					matR.TessellationDomain = (ETessellationDomain::TRIANGLE_PATCH);
+					matR.TessellationOutputTopology = (ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW);
+					matR.TessellationPartitioning = (ETessellationPartitioning::INTEGER);
 					constexpr float TESSELLATION_FACTOR = 10.0f;
 					matR.Tessellation.SetAllTessellationFactors(TESSELLATION_FACTOR);
 					

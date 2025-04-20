@@ -61,7 +61,6 @@ set (CoreFiles
     "Source/Engine/Core/Input.h"
     "Source/Engine/Core/Events.h"
     "Source/Engine/Core/Types.h"
-    "Source/Engine/Core/RenderCommands.h"
     "Source/Engine/Core/FileParser.h"
     "Source/Engine/Core/Memory.h"
     "Source/Engine/Core/imgui_impl_win32.h"
@@ -119,10 +118,10 @@ set (UIFiles
 
 set (SourceVQE 
     "Source/Engine/VQEngine.h"
-    "Source/Engine/VQEngine_RenderCommon.h"
     "Source/Engine/Settings.h"
     "Source/Engine/Math.h"
     "Source/Engine/Culling.h"
+    "Source/Engine/MeshSorting.h"
     "Source/Engine/CullingData.h"
     "Source/Engine/AssetLoader.h"
     "Source/Engine/GPUMarker.h"

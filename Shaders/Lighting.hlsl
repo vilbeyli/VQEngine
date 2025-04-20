@@ -86,15 +86,6 @@ struct ShadowTestPCFData
 	float viewDistanceOfPixel;
 };
 
-ShadowTestPCFData FillPCFData_PointLight(in PointLight l, float3 N, float3 L, float3 P, float3 PCam)
-{
-	ShadowTestPCFData d = (ShadowTestPCFData) 0;
-	d.depthBias = l.depthBias;
-	d.NdotL = saturate(dot(N, L));
-	d.viewDistanceOfPixel = length(P - PCam);
-	return d;
-}
-
 float OmnidirectionalShadowTest(
 	in ShadowTestPCFData pcfTestLightData
 	, TextureCubeArray shadowCubeMapArr

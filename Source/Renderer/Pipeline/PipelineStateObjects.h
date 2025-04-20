@@ -141,7 +141,6 @@ struct FLightingPSOs : PSOCollection
 	static constexpr size_t NUM_ALPHA_OPTIONS = 2; // opaque/alpha masked
 	static constexpr size_t NUM_MAT_OPTIONS = NUM_ALPHA_OPTIONS;
 
-	//static size_t Hash(size_t iMSAA, size_t iRaster, size_t iFaceCull, const FTessellationParameters& Tessellation, size_t iAlpha);
 	static size_t Hash(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iOutMoVec, size_t iOutRough, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha);
 	inline PSO_ID  Get(size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iOutMoVec, size_t iOutRough, size_t iTess, size_t iDomain, size_t iPart, size_t iOutTopo, size_t iTessCullMode, size_t iAlpha) const
 	{
@@ -197,7 +196,6 @@ struct FShadowPassPSOs : public PSOCollection
 	{
 		return PSOCollection::Get(Hash(iDepthMode, iRaster, iFaceCull, iTess, iDomain, iPart, iOutTopo, iTessCullMode, iAlpha));
 	}
-	//PSO_ID  Get(const FTessellationParameters& Tessellation, bool bMSAA4, size_t iMSAA, size_t iRaster, size_t iFaceCull, size_t iAlpha) const;
 
 	void GatherPSOLoadDescs(const std::unordered_map<RS_ID, ID3D12RootSignature*>& mRootSignatureLookup) override;
 

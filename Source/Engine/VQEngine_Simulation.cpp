@@ -64,7 +64,7 @@ void VQEngine::SimulationThread_Initialize()
 #define PARALLEL_INIT 1
 
 #if PARALLEL_INIT
-	Signal UpdateThreadInitializeFinished;
+	EventSignal UpdateThreadInitializeFinished;
 	std::atomic<int> ThreadDone = 0;
 	mWorkers_Simulation.AddTask([=, &UpdateThreadInitializeFinished, &ThreadDone]()
 	{

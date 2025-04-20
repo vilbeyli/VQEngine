@@ -62,8 +62,12 @@ MaterialID Scene::LoadMaterial(const FMaterialRepresentation& matRep, TaskID tas
 	fnAssignF3(mat.diffuse, matRep.DiffuseColor);
 	fnAssignF(mat.tiling.x, matRep.TilingX);
 	fnAssignF(mat.tiling.y, matRep.TilingY);
-	mat.Tessellation = matRep.Tessellation;
 	fnAssignF(mat.displacement, matRep.Displacement);
+	mat.TessellationData = matRep.Tessellation;
+	mat.SetTessellationEnabled(matRep.TessellationEnabled);
+	mat.SetTessellationDomain(matRep.TessellationDomain);
+	mat.SetTessellationPartitioning(matRep.TessellationPartitioning);
+	mat.SetTessellationOutputTopology(matRep.TessellationOutputTopology);
 
 	// async data (textures)
 	bool bHasTexture = false;
@@ -115,11 +119,9 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	mBoundingBoxHierarchy.Clear();
 	{
 		SCOPED_CPU_MARKER("ClearShadowViews");
-		for (FSceneShadowViews& view : mFrameShadowViews)
+		for (FSceneView& view : mFrameSceneViews)
 		{
-			for (FShadowView& sv : view.ShadowViews_Spot ) sv.drawParamLookup.clear();
-			for (FShadowView& sv : view.ShadowViews_Point) sv.drawParamLookup.clear();
-			view.ShadowView_Directional.drawParamLookup.clear();
+			view.FrustumRenderLists.clear();
 		}
 	}
 	mFrustumCullWorkerContext.ClearMemory();
@@ -292,7 +294,7 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 		std::vector<std::pair<size_t, size_t>> ranges = PartitionWorkItemsIntoRanges(NumGameObjects, NumThreads);
 		const int NumTasks = static_cast<int>(ranges.size());
 		const int NumThreadTasks = NumTasks - 1;
-		Signal ThreadsDoneSignal;
+		EventSignal ThreadsDoneSignal;
 		std::atomic<bool> bThreadsDone = false;
 		{
 			SCOPED_CPU_MARKER("DispatchThreads");
@@ -414,7 +416,6 @@ void Scene::LoadCameras(std::vector<FCameraParameters>& CameraParams)
 void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 {
 	SCOPED_CPU_MARKER("Scene::LoadPostProcessSettings()");
-	// TODO: remove hardcode
 
 	const uint fWidth  = this->mpWindow->GetWidth();
 	const uint fHeight = this->mpWindow->GetHeight();
@@ -445,25 +446,27 @@ void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 
 void Scene::OnLoadComplete()
 {
-	SCOPED_CPU_MARKER("Scene::OnLoadComplete()");
+	SCOPED_CPU_MARKER("Scene.OnLoadComplete");
 	Log::Info("[Scene] OnLoadComplete()");
 
-	// Assign model data to game objects
-	for (auto it = mModelLoadResults.begin(); it != mModelLoadResults.end(); ++it)
 	{
-		GameObject* pObj = it->first;
-		AssetLoader::ModelLoadResult_t res = std::move(it->second);
+		SCOPED_CPU_MARKER("AssignModels");
+		// Assign model data to game objects
+		for (auto it = mModelLoadResults.begin(); it != mModelLoadResults.end(); ++it)
+		{
+			GameObject* pObj = it->first;
+			AssetLoader::ModelLoadResult_t res = std::move(it->second);
 
-		assert(res.valid());
-		///res.wait(); // we should already have the results ready in OnLoadComplete()
+			assert(res.valid());
+			///res.wait(); // we should already have the results ready in OnLoadComplete()
 
-		pObj->mModelID = res.get();
+			pObj->mModelID = res.get();
+		}
 	}
 
 	// assign material data
 	mMaterialAssignments.DoAssignments(this, this->mMtxTexturePaths, this->mTexturePaths, &mRenderer);
 
-	// calculate local-space game object AABBs
 	CalculateGameObjectLocalSpaceBoundingBoxes();
 
 	Log::Info("[Scene] %s loaded.", mSceneRepresentation.SceneName.c_str());
@@ -487,22 +490,19 @@ void Scene::Unload()
 
 	//mMeshes.clear(); // TODO
 	
-	for (size_t hTransform : mTransformHandles)
-		mGameObjectTransformPool.Free(hTransform);
-	for (size_t hObject : mGameObjectHandles)
-		mGameObjectPool.Free(hObject);
+	mGameObjectTransformPool.FreeAll();
+	mGameObjectPool.FreeAll();
 	mTransformHandles.clear();
 	mGameObjectHandles.clear();
 
 	mCameras.clear();
 	
-	for (const std::pair<MaterialID, Material>& matPair : mMaterials)
+	for (const Material* pMaterial : mMaterialPool.GetAllAliveObjects())
 	{
-		const Material& mat = matPair.second;
-		mRenderer.DestroySRV(mat.SRVHeightMap);
-		mRenderer.DestroySRV(mat.SRVMaterialMaps);
+		mRenderer.DestroySRV(pMaterial->SRVHeightMap);
+		mRenderer.DestroySRV(pMaterial->SRVMaterialMaps);
 	}
-	mMaterials.clear();
+	mMaterialPool.FreeAll();
 	mMaterialNames.clear();
 	mLoadedMaterials.clear();
 
@@ -527,6 +527,7 @@ void Scene::Unload()
 	mLightsStationary.clear();
 
 	mBoundingBoxHierarchy.Clear();
+	mFrustumCullWorkerContext.ClearMemory();
 
 	mIndex_SelectedCamera = 0;
 	mIndex_ActiveEnvironmentMapPreset = -1;
@@ -536,6 +537,7 @@ void Scene::Unload()
 
 void Scene::CalculateGameObjectLocalSpaceBoundingBoxes()
 {
+	SCOPED_CPU_MARKER("CalculateGameObjectLocalSpaceBoundingBoxes");
 	constexpr float max_f = std::numeric_limits<float>::max();
 	constexpr float min_f = -(max_f - 1.0f);
 	

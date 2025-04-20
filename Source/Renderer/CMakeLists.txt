@@ -84,6 +84,7 @@ set(PipelineSources
 set(RenderingHeaders
     "Rendering/WindowRenderContext.h"
     "Rendering/RenderResources.h"
+    "Rendering/DrawData.h"
     "Rendering/EnvironmentMapRendering.h"
     "Rendering/HDR.h"
 )

@@ -263,6 +263,7 @@ void VQEngine::UpdateThread_HandleEvents()
 
 void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent)
 {
+	SCOPED_CPU_MARKER("HandleWindowResizeEvent()");
 	std::shared_ptr<WindowResizeEvent> p = std::static_pointer_cast<WindowResizeEvent>(pEvent);
 
 	const uint uWidth  = p->width ;
@@ -360,6 +361,7 @@ void VQEngine::RenderThread_HandleEvents()
 
 void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent)
 {
+	SCOPED_CPU_MARKER("HandleWindowResizeEvent()");
 	const std::shared_ptr<WindowResizeEvent> pResizeEvent = std::static_pointer_cast<WindowResizeEvent>(pEvent);
 	const HWND&                      hwnd = pResizeEvent->hwnd;
 	const int                       WIDTH = pResizeEvent->width;
@@ -420,6 +422,7 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 
 void VQEngine::RenderThread_HandleWindowCloseEvent(const IEvent* pEvent)
 {
+	SCOPED_CPU_MARKER("HandleWindowCloseEvent()");
 	const WindowCloseEvent* pWindowCloseEvent = static_cast<const WindowCloseEvent*>(pEvent);
 	const HWND& hwnd = pWindowCloseEvent->hwnd;
 	SwapChain& Swapchain = mpRenderer->GetWindowSwapChain(hwnd);

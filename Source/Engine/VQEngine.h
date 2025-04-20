@@ -58,7 +58,7 @@
 
 struct ImGuiContext;
 class VQRenderer;
-struct FSceneRenderParameters;
+struct FSceneRenderOptions;
 
 //
 // DATA STRUCTS
@@ -292,7 +292,7 @@ private:
 	std::atomic<bool>               mbMainWindowHDRTransitionInProgress; // see DispatchHDRSwapchainTransitionEvents()
 	std::atomic<bool>               mbExitApp;
 	std::atomic<bool>               mbBuiltinMeshGenFinished;
-	Signal                          mBuiltinMeshGenSignal;
+	EventSignal                          mBuiltinMeshGenSignal;
 
 
 	// system & settings
@@ -364,10 +364,10 @@ private:
 	//
 	void                            UpdateUIState(HWND hwnd, float dt);
 	void                            DrawProfilerWindow(const FSceneStats& FrameStats, float dt);
-	void                            DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderParameters& SceneRenderParams);
+	void                            DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderOptions& SceneRenderParams);
 	void                            DrawPostProcessSettings(FPostProcessParameters& PPParams);
 	void                            DrawKeyMappingsWindow();
-	void                            DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams, FPostProcessParameters& PPParams);
+	void                            DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams, FPostProcessParameters& PPParams);
 	void                            DrawEditorWindow();
 	void                            DrawMaterialEditor();
 	void                            DrawLightEditor();

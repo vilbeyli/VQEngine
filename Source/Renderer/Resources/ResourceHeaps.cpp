@@ -156,6 +156,7 @@ void StaticResourceViewHeap::FreeDescriptor(ResourceView* pRV)
     const size_t iRV = (pRV->GetCPUDescHandle().ptr - mpHeap->GetCPUDescriptorHandleForHeapStart().ptr) / mDescriptorElementSize;
     for (uint32_t i = 0; i < pRV->GetSize(); ++i) 
     {
+        assert(iRV + i < mIsDescriptorFree.size());
         mIsDescriptorFree[iRV + i] = true;
     }
 }

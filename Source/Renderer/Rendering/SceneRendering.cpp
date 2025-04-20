@@ -36,14 +36,12 @@
 #include "Libs/VQUtils/Source/utils.h"
 #include "Libs/imgui/imgui.h"
 
-
-#define MARKER_COLOR  0xFF00FF00 
-#define RENDER_WORKER_CPU_MARKER   SCOPED_CPU_MARKER_C("RenderWorker", MARKER_COLOR)
-
+using namespace DirectX;
+using namespace VQ_SHADER_DATA;
 
 struct FFrameConstantBufferUnlit { DirectX::XMMATRIX matModelViewProj; DirectX::XMFLOAT4 color; };
 
-bool VQRenderer::ShouldEnableAsyncCompute(const FGraphicsSettings& GFXSettings, const FSceneView& SceneView, const FSceneShadowViews& ShadowView) const
+bool VQRenderer::ShouldEnableAsyncCompute(const FGraphicsSettings& GFXSettings, const FSceneView& SceneView, const FSceneShadowViews& ShadowView) 
 {
 	if (!GFXSettings.bEnableAsyncCompute)
 		return false;
@@ -59,73 +57,17 @@ bool VQRenderer::ShouldEnableAsyncCompute(const FGraphicsSettings& GFXSettings, 
 
 	return false;
 }
-
-static void CopyPerObjectConstantBufferData(
-	std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& cbAddresses,
-	DynamicBufferHeap* pCBufferHeap,
-	const FSceneView& SceneView
-)
+FSceneDrawData& VQRenderer::GetSceneDrawData(int FRAME_INDEX)
 {
-	SCOPED_CPU_MARKER("CopyPerObjectConstantBufferData");
-	using namespace DirectX;
-	using namespace VQ_SHADER_DATA;
-
-	int iCB = 0;
-	for (const MeshRenderCommand_t& meshRenderCmd : SceneView.meshRenderParams)
-	{
-		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		PerObjectData* pPerObj = {};
-		const size_t sz = sizeof(PerObjectData);
-		
-		pCBufferHeap->AllocConstantBuffer(sz, (void**)(&pPerObj), &cbAddr);
-		cbAddresses[iCB++] = cbAddr;
-
-#if RENDER_INSTANCED_SCENE_MESHES
-		const uint32 NumInstances = (uint32)meshRenderCmd.matNormal.size();
-		
-		const size_t memcpySrcSize = meshRenderCmd.matWorldViewProj.size() * sizeof(XMMATRIX);
-		const size_t memcpyDstSize = _countof(pPerObj->matWorldViewProj) * sizeof(XMMATRIX);
-		if (memcpyDstSize < memcpySrcSize)
-		{
-			Log::Error("Batch data (scene) too big (%d: %s) for destination cbuffer (%d: %s): "
-				, meshRenderCmd.matWorldViewProj.size()
-				, StrUtil::FormatByte(memcpySrcSize)
-				, _countof(pPerObj->matWorldViewProj)
-				, StrUtil::FormatByte(memcpyDstSize)
-			);
-		}
-
-		memcpy(pPerObj->matWorldViewProj    , meshRenderCmd.matWorldViewProj.data()    , sizeof(XMMATRIX) * NumInstances);
-		memcpy(pPerObj->matWorldViewProjPrev, meshRenderCmd.matWorldViewProjPrev.data(), sizeof(XMMATRIX) * NumInstances);
-		memcpy(pPerObj->matNormal           , meshRenderCmd.matNormal.data()           , sizeof(XMMATRIX) * NumInstances);
-		memcpy(pPerObj->matWorld            , meshRenderCmd.matWorld.data()            , sizeof(XMMATRIX) * NumInstances);
-		//memcpy(pPerObj->ObjID               , meshRenderCmd.objectID.data()            , sizeof(int) * NumInstances); // not 16B aligned
-		for (uint i = 0; i < NumInstances; ++i)
-		{
-			pPerObj->ObjID[i].x = meshRenderCmd.objectID[i];
-			pPerObj->ObjID[i].y = -222;
-			pPerObj->ObjID[i].z = -333;
-			pPerObj->ObjID[i].w = (int)(meshRenderCmd.projectedArea[i] * 10000); // float value --> int render target
-		}
-#else
-		const uint32 NumInstances = 1;
-		pPerObj->matWorldViewProj = meshRenderCmd.matWorldTransformation * SceneView.viewProj;
-		pPerObj->matWorldViewProjPrev = meshRenderCmd.matWorldTransformation;
-		pPerObj->matWorld = meshRenderCmd.matWorldTransformation;
-		pPerObj->matNormal = meshRenderCmd.matNormalTransformation;
-		pPerObj->mObjID = meshRenderCmd.objectID;
-#endif
-
-		const Material& mat = *meshRenderCmd.pMaterial;
-		pPerObj->materialData = std::move(mat.GetCBufferData());
-		//pPerObj->meshID = meshRenderCmd.meshID;
-		pPerObj->materialID = meshRenderCmd.matID;
-	}
+	// [0] since we don't have parallel update+render, use FRAME_INDEX otherwise
+	return mFrameSceneDrawData[0];
 }
+
 static uint32_t GetNumShadowViewCmdRecordingThreads(const FSceneShadowViews& ShadowView)
 {
 #if RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING
-	return (ShadowView.ShadowView_Directional.meshRenderParams.size() > 0 ? 1 : 0) // 1 thread for directional light (assumes long list of mesh render cmds)
+	return ShadowView.NumDirectionalViews
+		//(ShadowView.ShadowView_Directional.meshRenderParams.size() > 0 ? 1 : 0) // 1 thread for directional light (assumes long list of mesh render cmds)
 		+ ShadowView.NumPointShadowViews  // each point light view (6x frustums per point light)
 		+ (ShadowView.NumSpotShadowViews > 0 ? 1 : 0); // process spot light render lists in own thread
 #else
@@ -133,20 +75,21 @@ static uint32_t GetNumShadowViewCmdRecordingThreads(const FSceneShadowViews& Sha
 #endif
 }
 
-HRESULT VQRenderer::PreRenderScene(ThreadPool& WorkerThreads, const Window* pWindow, const FSceneView& SceneView, const FSceneShadowViews& SceneShadowView, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings, const FUIState& UIState)
+HRESULT VQRenderer::PreRenderScene(
+	  ThreadPool& WorkerThreads
+	, const Window* pWindow
+	, const FSceneView& SceneView
+	, const FSceneShadowViews& SceneShadowView
+	, const FPostProcessParameters& PPParams
+	, const FGraphicsSettings& GFXSettings
+	, const FUIState& UIState
+)
 {
-	SCOPED_CPU_MARKER("RenderThread_PreRender()");
+	SCOPED_CPU_MARKER("Renderer.PreRender");
 	FWindowRenderContext& ctx = this->GetWindowRenderContext(pWindow->GetHWND());
 
 	const bool bAsyncSubmit = mWaitForSubmitWorker;
 
-	if (mWaitForSubmitWorker) // not really used, need to offload submit to a non-worker thread (sync issues on main)
-	{
-		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS", 0xFFFF0000);
-		while (!mSubmitWorkerFinished.load());
-		mSubmitWorkerFinished.store(false);
-		mWaitForSubmitWorker = false;
-	}
 
 	const bool bUseAsyncCompute = ShouldEnableAsyncCompute(GFXSettings, SceneView, SceneShadowView);
 
@@ -177,6 +120,33 @@ HRESULT VQRenderer::PreRenderScene(ThreadPool& WorkerThreads, const Window* pWin
 	);
 #endif
 
+
+	{
+		SCOPED_CPU_MARKER("AllocCBMem");
+		ctx.AllocateConstantBufferMemory(NumCmdRecordingThreads, ConstantBufferBytesPerThread);
+	}
+	{
+		SCOPED_CPU_MARKER("CB.BeginFrame");
+		for (size_t iThread = 0; iThread < NumCmdRecordingThreads; ++iThread)
+		{
+			ctx.GetConstantBufferHeap(iThread).OnBeginFrame();
+		}
+	}
+
+	if (!SceneView.FrustumRenderLists.empty())
+	{
+		BatchDrawCalls(WorkerThreads, SceneView, SceneShadowView, ctx, PPParams, GFXSettings);
+	}
+
+	if (mWaitForSubmitWorker) // not really used, need to offload submit to a non-worker thread (sync issues on main)
+	{
+		{
+			SCOPED_CPU_MARKER_C("WAIT_SUBMIT_WORKER", 0xFFFF0000);
+			mSubmitWorkerSignal.Wait();
+		}
+		mWaitForSubmitWorker = false;
+		mSubmitWorkerSignal.Reset();
+	}
 	{
 		SCOPED_CPU_MARKER("AllocCmdLists");
 		ctx.AllocateCommandLists(CommandQueue::EType::GFX, NumCmdRecordingThreads_GFX);
@@ -206,17 +176,6 @@ HRESULT VQRenderer::PreRenderScene(ThreadPool& WorkerThreads, const Window* pWin
 			}
 		}
 	}
-	{
-		SCOPED_CPU_MARKER("AllocCBMem");
-		ctx.AllocateConstantBufferMemory(NumCmdRecordingThreads, ConstantBufferBytesPerThread);
-	}
-	{
-		SCOPED_CPU_MARKER("CB.BeginFrame");
-		for (size_t iThread = 0; iThread < NumCmdRecordingThreads; ++iThread)
-		{
-			ctx.GetConstantBufferHeap(iThread).OnBeginFrame();
-		}
-	}
 
 	ID3D12DescriptorHeap* ppHeaps[] = { this->GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 
@@ -227,19 +186,16 @@ HRESULT VQRenderer::PreRenderScene(ThreadPool& WorkerThreads, const Window* pWin
 		{
 			static_cast<ID3D12GraphicsCommandList*>(vpGFXCmds[iGFX])->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 		}
-
-		if (bUseAsyncCompute)
+		
+		if (bUseAsyncCompute && SceneView.bAppIsInSimulationState)
 		{
 			auto& vpCMPCmds = ctx.GetComputeCommandListPtrs();
 			for (uint iCMP = 0; iCMP < NumComputeCmdLists; ++iCMP)
 			{
-				// TODO: do we need this?
 				static_cast<ID3D12GraphicsCommandList*>(vpCMPCmds[iCMP])->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 			}
 		}
 	}
-
-	BatchDrawCalls();
 
 	return S_OK;
 }
@@ -247,7 +203,28 @@ HRESULT VQRenderer::PreRenderScene(ThreadPool& WorkerThreads, const Window* pWin
 HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow, const FSceneView& SceneView, const FSceneShadowViews& ShadowView, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings, const FUIState& UIState, bool bHDRDisplay)
 {
 	SCOPED_CPU_MARKER("Renderer.RenderScene");
-	
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	const int FRAME_DATA_INDEX = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
+#else
+	const int FRAME_DATA_INDEX = 0;
+#endif
+
+	{
+		SCOPED_CPU_MARKER_C("WaitBatching", 0xFFFF0000);
+		for(size_t i = 0; i < SceneView.NumActiveFrustumRenderLists; ++i)
+			SceneView.FrustumRenderLists[i].BatchDoneSignal.Wait();
+	}
+
+	const FSceneDrawData& SceneDrawData = GetSceneDrawData(FRAME_DATA_INDEX);
+	mRenderStats.NumLitMeshDrawCommands = (uint)SceneDrawData.mainViewDrawParams.size();
+	mRenderStats.NumBoundingBoxDrawCommands = (uint)SceneView.NumMeshBBRenderCmds;
+	mRenderStats.NumShadowMeshDrawCommands = 0;
+	for (auto& vParams : SceneDrawData.spotShadowDrawParams ) mRenderStats.NumShadowMeshDrawCommands += (uint)vParams.size();
+	for (auto& vParams : SceneDrawData.pointShadowDrawParams) mRenderStats.NumShadowMeshDrawCommands += (uint)vParams.size();
+	mRenderStats.NumShadowMeshDrawCommands += (uint)SceneDrawData.directionalShadowDrawParams.size();
+	mRenderStats.NumDispatches = 0;
+	mRenderStats.NumDraws = 0;
+
 	HWND hwnd = pWindow->GetHWND();
 	const uint32 W = pWindow->GetWidth();
 	const uint32 H = pWindow->GetHeight();
@@ -257,11 +234,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 	HRESULT hr                              = S_OK;
 	const int NUM_BACK_BUFFERS              = ctx.GetNumSwapchainBuffers();
 	const int BACK_BUFFER_INDEX             = ctx.GetCurrentSwapchainBufferIndex();
-#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
-	const int FRAME_DATA_INDEX              = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
-#else
-	const int FRAME_DATA_INDEX = 0;
-#endif
+
 	const bool bReflectionsEnabled = GFXSettings.Reflections != EReflections::REFLECTIONS_OFF && GFXSettings.Reflections == EReflections::SCREEN_SPACE_REFLECTIONS__FFX; // TODO: remove the && after RayTracing is added
 	const bool bDownsampleDepth    = GFXSettings.Reflections == EReflections::SCREEN_SPACE_REFLECTIONS__FFX;
 	const bool& bMSAA              = GFXSettings.bAntiAliasing;
@@ -322,21 +295,18 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 
 	const float RenderResolutionX = static_cast<float>(SceneView.SceneRTWidth);
 	const float RenderResolutionY = static_cast<float>(SceneView.SceneRTHeight);
-	mRenderStats = {};
 
-	std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddresses(SceneView.meshRenderParams.size());
 	UINT64 SSAODoneFenceValue = mAsyncComputeSSAODoneFence[BACK_BUFFER_INDEX].GetValue();
 	D3D12_GPU_VIRTUAL_ADDRESS cbPerFrame = {};
 	{
 		SCOPED_CPU_MARKER("CopyPerFrameConstantBufferData");
 		DynamicBufferHeap& CBHeap = ctx.GetConstantBufferHeap(0);
-		using namespace VQ_SHADER_DATA;
 		PerFrameData* pPerFrame = {};
 		CBHeap.AllocConstantBuffer(sizeof(PerFrameData), (void**)(&pPerFrame), &cbPerFrame);
 
 		assert(pPerFrame);
 		pPerFrame->Lights = SceneView.GPULightingData;
-		pPerFrame->fAmbientLightingFactor = SceneView.sceneParameters.fAmbientLightingFactor;
+		pPerFrame->fAmbientLightingFactor = SceneView.sceneRenderOptions.fAmbientLightingFactor;
 		pPerFrame->f2PointLightShadowMapDimensions       = { 1024.0f, 1024.f  }; // TODO
 		pPerFrame->f2SpotLightShadowMapDimensions        = { 1024.0f, 1024.f  }; // TODO
 		pPerFrame->f2DirectionalLightShadowMapDimensions = { 2048.0f, 2048.0f }; // TODO
@@ -354,8 +324,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 	{
 		SCOPED_CPU_MARKER("CopyPerViewConstantBufferData");
 		DynamicBufferHeap& CBHeap = ctx.GetConstantBufferHeap(0);
-		using namespace VQ_SHADER_DATA;
-		PerViewData* pPerView = {};
+		PerViewLightingData* pPerView = {};
 		CBHeap.AllocConstantBuffer(sizeof(decltype(*pPerView)), (void**)(&pPerView), &cbPerView);
 
 		assert(pPerView);
@@ -375,15 +344,13 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 		ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, THREAD_INDEX);
 		DynamicBufferHeap& CBHeap = ctx.GetConstantBufferHeap(THREAD_INDEX);
 
-		CopyPerObjectConstantBufferData(cbAddresses, &CBHeap, SceneView);
+		RenderSpotShadowMaps(pCmd, &CBHeap, ShadowView, SceneView);
+		RenderDirectionalShadowMaps(pCmd, &CBHeap, ShadowView, SceneView);
+		RenderPointShadowMaps(pCmd, &CBHeap, ShadowView, SceneView, 0, ShadowView.NumPointShadowViews);
 
-		RenderSpotShadowMaps(pCmd, &CBHeap, ShadowView);
-		RenderDirectionalShadowMaps(pCmd, &CBHeap, ShadowView);
-		RenderPointShadowMaps(pCmd, &CBHeap, ShadowView, 0, ShadowView.NumPointShadowViews);
+		RenderDepthPrePass(pCmd, SceneView, cbPerView, GFXSettings, bAsyncCompute);
 
-		RenderDepthPrePass(pCmd, &CBHeap, SceneView, cbAddresses, cbPerView, cbPerFrame, GFXSettings, bAsyncCompute);
-
-		RenderObjectIDPass(pCmd, pCmdCpy, &CBHeap, cbAddresses, cbPerView, SceneView, ShadowView, BACK_BUFFER_INDEX, GFXSettings);
+		RenderObjectIDPass(pCmd, pCmdCpy, &CBHeap, cbPerView, SceneView, ShadowView, BACK_BUFFER_INDEX, GFXSettings);
 
 		if (bMSAA)
 		{
@@ -406,7 +373,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 
 		TransitionForSceneRendering(pCmd, ctx, PPParams, GFXSettings);
 
-		RenderSceneColor(pCmd, &CBHeap, SceneView, PPParams, cbAddresses, cbPerView, cbPerFrame, GFXSettings, bHDRDisplay);
+		RenderSceneColor(pCmd, &CBHeap, SceneView, PPParams, cbPerView, cbPerFrame, GFXSettings, bHDRDisplay);
 
 		if (!bReflectionsEnabled)
 		{
@@ -449,7 +416,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 		constexpr size_t iCmdPointLightsThread = iCmdObjIDPassThread + 1;
 		const     size_t iCmdSpots        = iCmdPointLightsThread + ShadowView.NumPointShadowViews;
 		const     size_t iCmdDirectional  = iCmdSpots + (ShadowView.NumSpotShadowViews > 0 ? 1 : 0);
-		const     size_t iCmdRenderThread = iCmdDirectional + (ShadowView.ShadowView_Directional.meshRenderParams.empty() ? 0 : 1);
+		const     size_t iCmdRenderThread = iCmdDirectional + (ShadowView.NumDirectionalViews);
 
 		ID3D12GraphicsCommandList* pCmd_ThisThread = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdRenderThread);
 		DynamicBufferHeap& CBHeap_This = ctx.GetConstantBufferHeap(iCmdRenderThread);
@@ -458,24 +425,24 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000); // sync for SceneView
 			while (WorkerThreads.GetNumActiveTasks() != 0); // busy-wait is not good
 		}
-		CopyPerObjectConstantBufferData(cbAddresses, &CBHeap_This, SceneView); // TODO: threadify this, join+fork
 
 		{
 			SCOPED_CPU_MARKER("DispatchWorkers");
 
 			// ZPrePass
 			{
+				SCOPED_CPU_MARKER("Dispatch.ZPrePass");
 				ID3D12GraphicsCommandList* pCmd_ZPrePass = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdZPrePassThread);
 				ID3D12GraphicsCommandList* pCmd_Compute = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::COMPUTE, 0);
 
 				DynamicBufferHeap& CBHeap_WorkerZPrePass = ctx.GetConstantBufferHeap(iCmdZPrePassThread);
-				WorkerThreads.AddTask([=, &CBHeap_WorkerZPrePass, &SceneView, &cbAddresses, &ctx]()
+				WorkerThreads.AddTask([=, &CBHeap_WorkerZPrePass, &SceneView, &ctx]()
 				{
 					RENDER_WORKER_CPU_MARKER;
 
 					TransitionDepthPrePassForWrite(pCmd_ZPrePass, bMSAA);
 
-					RenderDepthPrePass(pCmd_ZPrePass, &CBHeap_WorkerZPrePass, SceneView, cbAddresses, cbPerView, cbPerFrame, GFXSettings, bAsyncCompute);
+					RenderDepthPrePass(pCmd_ZPrePass, SceneView, cbPerView, GFXSettings, bAsyncCompute);
 
 					if (bMSAA)
 					{
@@ -549,50 +516,56 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 
 			// objectID Pass
 			{
+				SCOPED_CPU_MARKER("Dispatch.ObjectID");
 				ID3D12GraphicsCommandList* pCmd_ObjIDPass = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdObjIDPassThread);
 
 				DynamicBufferHeap& CBHeap_WorkerObjIDPass = ctx.GetConstantBufferHeap(iCmdObjIDPassThread);
-				WorkerThreads.AddTask([=, &SceneView, &cbAddresses, &CBHeap_WorkerObjIDPass]()
+				WorkerThreads.AddTask([=, &SceneView, &ShadowView, &CBHeap_WorkerObjIDPass, &GFXSettings]()
 				{
 					RENDER_WORKER_CPU_MARKER;
-					RenderObjectIDPass(pCmd_ObjIDPass, pCmdCpy, &CBHeap_WorkerObjIDPass, cbAddresses, cbPerView, SceneView, ShadowView, BACK_BUFFER_INDEX, GFXSettings);
+					RenderObjectIDPass(pCmd_ObjIDPass, pCmdCpy, &CBHeap_WorkerObjIDPass, cbPerView, SceneView, ShadowView, BACK_BUFFER_INDEX, GFXSettings);
 				});
 			}
 
-			if (ShadowView.NumSpotShadowViews > 0)
+			// shadow passes
 			{
-				ID3D12GraphicsCommandList* pCmd_Spots = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdSpots);
-				DynamicBufferHeap& CBHeap_Spots = ctx.GetConstantBufferHeap(iCmdSpots);
-				WorkerThreads.AddTask([=, &CBHeap_Spots, &ShadowView]()
+				SCOPED_CPU_MARKER("Dispatch.ShadowPasses");
+
+				if (ShadowView.NumSpotShadowViews > 0)
 				{
-					RENDER_WORKER_CPU_MARKER;
-					RenderSpotShadowMaps(pCmd_Spots, &CBHeap_Spots, ShadowView);
-				});
-			}
-			if (ShadowView.NumPointShadowViews > 0)
-			{
-				for (uint iPoint = 0; iPoint < ShadowView.NumPointShadowViews; ++iPoint)
-				{
-					const size_t iPointWorker = iCmdPointLightsThread + iPoint;
-					ID3D12GraphicsCommandList* pCmd_Point = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iPointWorker);
-					DynamicBufferHeap& CBHeap_Point = ctx.GetConstantBufferHeap(iPointWorker);
-					WorkerThreads.AddTask([=, &CBHeap_Point, &ShadowView]()
+					ID3D12GraphicsCommandList* pCmd_Spots = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdSpots);
+					DynamicBufferHeap& CBHeap_Spots = ctx.GetConstantBufferHeap(iCmdSpots);
+					WorkerThreads.AddTask([=, &CBHeap_Spots, &ShadowView, &SceneView]()
 					{
 						RENDER_WORKER_CPU_MARKER;
-						RenderPointShadowMaps(pCmd_Point, &CBHeap_Point, ShadowView, iPoint, 1);
+						RenderSpotShadowMaps(pCmd_Spots, &CBHeap_Spots, ShadowView, SceneView);
 					});
 				}
-			}
-
-			if (!ShadowView.ShadowView_Directional.meshRenderParams.empty())
-			{
-				ID3D12GraphicsCommandList* pCmd_Directional = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdDirectional);
-				DynamicBufferHeap& CBHeap_Directional = ctx.GetConstantBufferHeap(iCmdDirectional);
-				WorkerThreads.AddTask([=, &CBHeap_Directional, &ShadowView]()
+				if (ShadowView.NumPointShadowViews > 0)
 				{
-					RENDER_WORKER_CPU_MARKER;
-					RenderDirectionalShadowMaps(pCmd_Directional, &CBHeap_Directional, ShadowView);
-				});
+					for (uint iPoint = 0; iPoint < ShadowView.NumPointShadowViews; ++iPoint)
+					{
+						const size_t iPointWorker = iCmdPointLightsThread + iPoint;
+						ID3D12GraphicsCommandList* pCmd_Point = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iPointWorker);
+						DynamicBufferHeap& CBHeap_Point = ctx.GetConstantBufferHeap(iPointWorker);
+						WorkerThreads.AddTask([=, &CBHeap_Point, &ShadowView, &SceneView]()
+						{
+							RENDER_WORKER_CPU_MARKER;
+							RenderPointShadowMaps(pCmd_Point, &CBHeap_Point, ShadowView, SceneView, iPoint, 1);
+						});
+					}
+				}
+
+				if (ShadowView.NumDirectionalViews > 0)
+				{
+					ID3D12GraphicsCommandList* pCmd_Directional = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, iCmdDirectional);
+					DynamicBufferHeap& CBHeap_Directional = ctx.GetConstantBufferHeap(iCmdDirectional);
+					WorkerThreads.AddTask([=, &CBHeap_Directional, &ShadowView, &SceneView]()
+					{
+						RENDER_WORKER_CPU_MARKER;
+						RenderDirectionalShadowMaps(pCmd_Directional, &CBHeap_Directional, ShadowView, SceneView);
+					});
+				}
 			}
 		}
 
@@ -617,7 +590,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 
 		TransitionForSceneRendering(pCmd_ThisThread, ctx, PPParams, GFXSettings);
 
-		RenderSceneColor(pCmd_ThisThread, &CBHeap_This, SceneView, PPParams, cbAddresses, cbPerView, cbPerFrame, GFXSettings, bHDRDisplay);
+		RenderSceneColor(pCmd_ThisThread, &CBHeap_This, SceneView, PPParams, cbPerView, cbPerFrame, GFXSettings, bHDRDisplay);
 
 		if (!bReflectionsEnabled)
 		{
@@ -685,7 +658,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 		constexpr size_t iCmdPointLightsThread = iCmdObjIDPassThread + 1;
 		const     size_t iCmdSpots = iCmdPointLightsThread + ShadowView.NumPointShadowViews;
 		const     size_t iCmdDirectional = iCmdSpots + (ShadowView.NumSpotShadowViews > 0 ? 1 : 0);
-		const     size_t iCmdRenderThread = iCmdDirectional + (ShadowView.ShadowView_Directional.meshRenderParams.empty() ? 0 : 1);
+		const     size_t iCmdRenderThread = iCmdDirectional + ShadowView.NumDirectionalViews;
 
 		// close command lists
 		const UINT NumCommandLists = ctx.GetNumCurrentlyRecordingThreads(CommandQueue::EType::GFX);
@@ -702,7 +675,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 		// execute command lists on a thread
 #if EXECUTE_CMD_LISTS_ON_WORKER
 		mWaitForSubmitWorker = true;
-		WorkerThreads.AddTask([=, &SceneView, &cbAddresses, &ctx, &ShadowView]()
+		WorkerThreads.AddTask([=, &SceneView, &ctx, &ShadowView]()
 		{	
 			RENDER_WORKER_CPU_MARKER;
 			{
@@ -774,18 +747,18 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 					ctx.SwapChain.MoveToNextFrame();
 
 #if EXECUTE_CMD_LISTS_ON_WORKER
-				mSubmitWorkerFinished.store(true);
+				mSubmitWorkerSignal.Notify();
 			}
 		});
 #endif
 	}
 
-	++mNumFramesRendered;
+	++mRenderStats.mNumFramesRendered;
 	return hr;
 }
 
 
-void VQRenderer::RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, ID3D12CommandList* pCmdCopy, DynamicBufferHeap* pCBufferHeap, const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, const FSceneShadowViews& ShadowView, const int BACK_BUFFER_INDEX, const FGraphicsSettings& GFXSettings)
+void VQRenderer::RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, ID3D12CommandList* pCmdCopy, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, const FSceneShadowViews& ShadowView, const int BACK_BUFFER_INDEX, const FGraphicsSettings& GFXSettings)
 {
 	std::shared_ptr<ObjectIDPass> pObjectIDPass = std::static_pointer_cast<ObjectIDPass>(this->GetRenderPass(ERenderPass::ObjectID));
 
@@ -794,9 +767,8 @@ void VQRenderer::RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, ID3D12Comma
 		ObjectIDPass::FDrawParameters params;
 		params.pCmd = pCmd;
 		params.pCmdCopy = pCmdCopy;
-		params.pCBAddresses = &CBAddresses;
 		params.pSceneView = &SceneView;
-		params.pCBufferHeap = pCBufferHeap;
+		params.pSceneDrawData = &mFrameSceneDrawData[0];
 		params.cbPerView = perViewCBAddr;
 		params.bEnableAsyncCopy = GFXSettings.bEnableAsyncCopy;
 		pObjectIDPass->RecordCommands(&params);
@@ -866,102 +838,49 @@ void VQRenderer::RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, ID3D12Comma
 }
 
 
-void VQRenderer::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FShadowView& shadowView, size_t iDepthMode)
+void VQRenderer::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, const std::vector<FInstancedDrawParameters>& drawParams, size_t iDepthMode)
 {
-	using namespace DirectX;
-
 #if RENDER_INSTANCED_SHADOW_MESHES
-	struct FCBufferLightVS
-	{
-		matrix matWorldViewProj[MAX_INSTANCE_COUNT__SHADOW_MESHES];
-		matrix matWorld        [MAX_INSTANCE_COUNT__SHADOW_MESHES];
-		float4 texScaleBias;
-		float displacement;
-	};
-
-	const size_t iFaceCull = 2; // 2:back
 
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 
-	//Log::Info("DrawShadowMeshList(%d)", shadowView.meshRenderParams.size());
-	for (const FInstancedShadowMeshRenderCommand& renderCmd : shadowView.meshRenderParams)
+	//Log::Info("DrawShadowMeshList(%d)", drawParams.size());
+	for (const FInstancedDrawParameters& draw : drawParams)
 	{
-		const uint32 NumInstances = (uint32)renderCmd.matWorldViewProj.size();
-		assert(NumInstances == renderCmd.matWorldViewProj.size());
-		assert(NumInstances == renderCmd.matWorld.size());
+		const bool bTessellationEnabled = draw.cbAddr_Tessellation != 0;
 
-		const Material& mat = *renderCmd.pMaterial;
+		size_t iAlpha = 0; size_t iRaster = 0; size_t iFaceCull = 0;
+		draw.UnpackMaterialConfig(iAlpha, iRaster, iFaceCull);
+		size_t iTess = 0; size_t iDomain = 0; size_t iPart = 0; size_t iOutTopo = 0; size_t iTessCull = 0;
+		draw.UnpackTessellationConfig(iTess, iDomain, iPart, iOutTopo, iTessCull);
 
-		const bool bSWCullTessellation = mat.Tessellation.GPUParams.bFaceCull > 0 || mat.Tessellation.GPUParams.bFrustumCull > 0;
-		const size_t iAlpha   = mat.IsAlphaMasked(*this) ? 1 : 0;
-		const size_t iRaster  = mat.bWireframe ? 1 : 0;
-		const size_t iTess    = mat.Tessellation.bEnableTessellation ? 1 : 0;
-		const size_t iDomain  = iTess == 0 ? 0 : mat.Tessellation.Domain;
-		const size_t iPart    = iTess == 0 ? 0 : mat.Tessellation.Partitioning;
-		const size_t iOutTopo = iTess == 0 ? 0 : mat.Tessellation.OutputTopology;
-		const size_t iTessCull = iTess == 1 && (bSWCullTessellation ? 1 : 0);
 		const PSO_ID psoID = this->mShadowPassPSOs.Get(iDepthMode, iRaster, iFaceCull, iTess, iDomain, iPart, iOutTopo, iTessCull, iAlpha);
 		pCmd->SetPipelineState(this->GetPSO(psoID));
 
 		// set constant buffer data
-		FCBufferLightVS* pCBuffer = {};
-		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
-		if (renderCmd.matWorldViewProj.empty())
+		pCmd->SetGraphicsRootConstantBufferView(1, draw.cbAddr); // 2: per object
+		if (bTessellationEnabled)
 		{
-			Log::Error("EMPTY COMMAND LIST WHYT??");
+			pCmd->SetGraphicsRootConstantBufferView(2, draw.cbAddr_Tessellation);
 		}
-		const size_t memcpySrcSize = renderCmd.matWorldViewProj.size() * sizeof(XMMATRIX);
-		const size_t memcpyDstSize = _countof(pCBuffer->matWorld) * sizeof(XMMATRIX);
-		if (memcpyDstSize < memcpySrcSize)
-		{
-			Log::Error("Batch data too big (%d: %s) for destination cbuffer (%d: %s): "
-				, renderCmd.matWorldViewProj.size()
-				, StrUtil::FormatByte(memcpySrcSize)
-				, _countof(pCBuffer->matWorld)
-				, StrUtil::FormatByte(memcpyDstSize)
-			);
-		}
-		memcpy(pCBuffer->matWorld        , renderCmd.matWorld.data()        , NumInstances * sizeof(XMMATRIX));
-		memcpy(pCBuffer->matWorldViewProj, renderCmd.matWorldViewProj.data(), NumInstances * sizeof(XMMATRIX));
-		pCBuffer->displacement = mat.displacement;
-		pCBuffer->texScaleBias = float4(mat.tiling.x, mat.tiling.y, mat.uv_bias.x, mat.uv_bias.y);
-		pCmd->SetGraphicsRootConstantBufferView(0, cbAddr);
 
-		if (mat.Tessellation.bEnableTessellation)
-		{
-			D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Tsl;
-			VQ_SHADER_DATA::TessellationParams* pCBuffer_Tessellation = nullptr;
-			auto data = mat.GetTessellationCBufferData();
-			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Tessellation)), (void**)(&pCBuffer_Tessellation), &cbAddr_Tsl);
-			memcpy(pCBuffer_Tessellation, &data, sizeof(data));
-			pCmd->SetGraphicsRootConstantBufferView(3, cbAddr_Tsl);
-		}
-		if (mat.SRVMaterialMaps != INVALID_ID) // set textures
+		if (draw.SRVMaterialMaps != INVALID_ID) // set textures
 		{
 			const CBV_SRV_UAV& NullTex2DSRV = this->GetSRV(rsc.SRV_NullTexture2D);
-			pCmd->SetGraphicsRootDescriptorTable(4, this->GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
-			pCmd->SetGraphicsRootDescriptorTable(5, mat.SRVHeightMap == INVALID_ID
+			pCmd->SetGraphicsRootDescriptorTable(3, this->GetSRV(draw.SRVMaterialMaps).GetGPUDescHandle(0));
+			pCmd->SetGraphicsRootDescriptorTable(4, draw.SRVHeightMap == INVALID_ID
 				? NullTex2DSRV.GetGPUDescHandle()
-				: this->GetSRV(mat.SRVHeightMap).GetGPUDescHandle(0)
+				: this->GetSRV(draw.SRVHeightMap).GetGPUDescHandle(0)
 			);
 		}
 
-		auto vb = this->GetVertexBufferView(renderCmd.vertexIndexBuffer.first);
-		auto ib = this->GetIndexBufferView(renderCmd.vertexIndexBuffer.second);
-		
-		D3D_PRIMITIVE_TOPOLOGY topo = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		if (mat.Tessellation.bEnableTessellation)
-		{
-			topo = mat.Tessellation.Domain == ETessellationDomain::QUAD_PATCH
-				? D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST
-				: D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
-		}
-		pCmd->IASetPrimitiveTopology(topo);
+		VBV vb = this->GetVertexBufferView(draw.VB);
+		IBV ib = this->GetIndexBufferView (draw.IB);
+		pCmd->IASetPrimitiveTopology(draw.IATopology);
 		pCmd->IASetVertexBuffers(0, 1, &vb);
 		pCmd->IASetIndexBuffer(&ib);
 
-		pCmd->DrawIndexedInstanced(renderCmd.numIndices, NumInstances, 0, 0, 0);
+		pCmd->DrawIndexedInstanced(draw.numIndices, draw.numInstances, 0, 0, 0);
 	}
 
 #else 
@@ -971,7 +890,7 @@ void VQRenderer::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, Dynamic
 		XMMATRIX matWorld;
 	};
 
-	for (const FShadowMeshRenderCommand& renderCmd : shadowView.meshRenderParams)
+	for (const FShadowMeshRenderData& renderCmd : shadowView.meshRenderParams)
 	{
 		SCOPED_CPU_MARKER("Process_ShadowMeshRenderCommand");
 		// set constant buffer data
@@ -992,7 +911,7 @@ void VQRenderer::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, Dynamic
 //
 // RENDER PASSES
 //
-static D3D12_GPU_VIRTUAL_ADDRESS SetPerViewCB(
+static D3D12_GPU_VIRTUAL_ADDRESS SetPerViewSceneCB(
 	DynamicBufferHeap& CBHeap,
 	const DirectX::XMFLOAT3& CamPosition,
 	float RenderResolutionX,
@@ -1000,11 +919,10 @@ static D3D12_GPU_VIRTUAL_ADDRESS SetPerViewCB(
 	const DirectX::XMMATRIX& ViewProj
 )
 {
-	SCOPED_CPU_MARKER("CopyPerViewConstantBufferData");
+	SCOPED_CPU_MARKER("CopyPerViewSceneCB");
 	D3D12_GPU_VIRTUAL_ADDRESS cbPerView = {};
 
-	using namespace VQ_SHADER_DATA;
-	PerViewData* pPerView = {};
+	PerViewLightingData* pPerView = {};
 	CBHeap.AllocConstantBuffer(sizeof(decltype(*pPerView)), (void**)(&pPerView), &cbPerView);
 
 	assert(pPerView);
@@ -1016,15 +934,38 @@ static D3D12_GPU_VIRTUAL_ADDRESS SetPerViewCB(
 	
 	return cbPerView;
 }
-void VQRenderer::RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView)
+static D3D12_GPU_VIRTUAL_ADDRESS SetPerViewShadowCB(
+	DynamicBufferHeap& CBHeap,
+	const DirectX::XMFLOAT3& CamPosition,
+	float fFarPlane,
+	const DirectX::XMMATRIX& ViewProj
+)
+{
+	SCOPED_CPU_MARKER("CopyPerViewSceneCB");
+	D3D12_GPU_VIRTUAL_ADDRESS cbPerView = {};
+
+	PerShadowViewData* pPerView = {};
+	CBHeap.AllocConstantBuffer(sizeof(decltype(*pPerView)), (void**)(&pPerView), &cbPerView);
+
+	assert(pPerView);
+	pPerView->CameraPosition = CamPosition;
+	pPerView->fFarPlane = fFarPlane;
+	const FFrustumPlaneset planes = FFrustumPlaneset::ExtractFromMatrix(ViewProj, true);
+	memcpy(pPerView->WorldFrustumPlanes, planes.abcd, sizeof(planes.abcd));
+
+	return cbPerView;
+}
+void VQRenderer::RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView, const FSceneView& SceneView)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderDirectionalShadowMaps");
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
-	const FShadowView& View = ShadowView.ShadowView_Directional;
-	if (!View.drawParamLookup.empty() && !View.meshRenderParams.empty())
+	const XMMATRIX& MatViewProj = ShadowView.ShadowView_Directional;
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
+	
+	const std::vector<FInstancedDrawParameters>& drawParams = SceneDrawData.directionalShadowDrawParams;
+	if (!drawParams.empty())
 	{
-		const std::string marker = "Directional";
-		SCOPED_GPU_MARKER(pCmd, marker.c_str());
+		SCOPED_GPU_MARKER(pCmd, "Directional");
 
 		pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ShadowPass));
 
@@ -1046,18 +987,24 @@ void VQRenderer::RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, Dy
 			pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, NULL);
 		}
 
-		DirectX::XMFLOAT3 f3(0, 0, 0); // TODO
-		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = SetPerViewCB(*pCBufferHeap, f3, RenderResolutionX, RenderResolutionY, View.matViewProj);
-		pCmd->SetGraphicsRootConstantBufferView(2, cbPerView); // preView
+		DirectX::XMFLOAT3 f3(0, 0, 0); // TODO: set this up properly, can affect tessellated geometry rendering
+		float range = 1.0f; // TODO: set this up properly, can affect tessellated geometry rendering
+		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = SetPerViewShadowCB(*pCBufferHeap, 
+			f3,
+			range,
+			MatViewProj
+		);
+		pCmd->SetGraphicsRootConstantBufferView(0, cbPerView);
 
-		DrawShadowViewMeshList(pCmd, pCBufferHeap, View, 0);
+		DrawShadowViewMeshList(pCmd, drawParams, 0);
 	}
 }
-void VQRenderer::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& SceneShadowViews)
+void VQRenderer::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& SceneShadowViews, const FSceneView& SceneView)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderSpotShadowMaps");
 	const bool bRenderAtLeastOneSpotShadowMap = SceneShadowViews.NumSpotShadowViews > 0;
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
 
 	// Set Viewport & Scissors
 	const float RenderResolutionX = 1024.0f; // TODO
@@ -1070,16 +1017,14 @@ void VQRenderer::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBu
 	if (!bRenderAtLeastOneSpotShadowMap)
 		return;
 
-
-	//
-	// SPOT LIGHTS
-	//
 	pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ShadowPass));
 	
+	assert(SceneDrawData.spotShadowDrawParams.size() == SceneShadowViews.NumSpotShadowViews);
 	for (uint i = 0; i < SceneShadowViews.NumSpotShadowViews; ++i)
 	{
-		const FShadowView& ShadowView = SceneShadowViews.ShadowViews_Spot[i];
-		if (ShadowView.drawParamLookup.empty())
+		const XMMATRIX& ShadowView = SceneShadowViews.ShadowViews_Spot[i];
+		const std::vector<FInstancedDrawParameters>& drawParams = SceneDrawData.spotShadowDrawParams[i];
+		if (drawParams.empty())
 			continue;
 
 		const std::string marker = "Spot[" + std::to_string(i) + "]";
@@ -1093,26 +1038,25 @@ void VQRenderer::RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBu
 		D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
 		pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, NULL);
 		
-		DirectX::XMFLOAT3 f3(0, 0, 0); // TODO
-		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = SetPerViewCB(*pCBufferHeap, f3, RenderResolutionX, RenderResolutionY, ShadowView.matViewProj);
-		pCmd->SetGraphicsRootConstantBufferView(2, cbPerView); // preView
-		DrawShadowViewMeshList(pCmd, pCBufferHeap, ShadowView, 0);
+		
+		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = SetPerViewShadowCB(*pCBufferHeap,
+			SceneView.GPULightingData.spot_casters[i].position,
+			SceneView.GPULightingData.spot_casters[i].range, // far plane
+			SceneShadowViews.ShadowViews_Spot[i]
+		);
+		pCmd->SetGraphicsRootConstantBufferView(0, cbPerView);
+
+		DrawShadowViewMeshList(pCmd, drawParams, 0);
 	}
 }
-void VQRenderer::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& SceneShadowViews, size_t iBegin, size_t NumPointLights)
+void VQRenderer::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& SceneShadowViews, const FSceneView& SceneView, size_t iBegin, size_t NumPointLights)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderPointShadowMaps");
 	if (SceneShadowViews.NumPointShadowViews <= 0)
 		return;
 
-	using namespace DirectX;
-	struct FCBufferLightPS
-	{
-		XMFLOAT3 vLightPos;
-		float fFarPlane;
-	};
-
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
 
 #if RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING
 	// Set Viewport & Scissors
@@ -1130,20 +1074,21 @@ void VQRenderer::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicB
 		const std::string marker = "Point[" + std::to_string(i) + "]";
 		SCOPED_GPU_MARKER(pCmd, marker.c_str());
 
-		FCBufferLightPS* pCBuffer = {};
-		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer)), (void**)(&pCBuffer), &cbAddr);
-
-		pCBuffer->vLightPos = SceneShadowViews.PointLightLinearDepthParams[i].vWorldPos;
-		pCBuffer->fFarPlane = SceneShadowViews.PointLightLinearDepthParams[i].fFarPlane;
-		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
+		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = SetPerViewShadowCB(*pCBufferHeap, 
+			SceneView.GPULightingData.point_casters[i].position,
+			SceneView.GPULightingData.point_casters[i].range, // far plane
+			SceneShadowViews.ShadowViews_Point[i]
+		);
+		pCmd->SetGraphicsRootConstantBufferView(0, cbPerView);
 
 		for (size_t face = 0; face < 6; ++face)
 		{
 			const size_t iShadowView = i * 6 + face;
-			const FShadowView& ShadowView = SceneShadowViews.ShadowViews_Point[iShadowView];
 
-			if (ShadowView.drawParamLookup.empty())
+			const std::vector<FInstancedDrawParameters>& drawParams = SceneDrawData.pointShadowDrawParams[iShadowView];
+			const XMMATRIX& ShadowView = SceneShadowViews.ShadowViews_Point[iShadowView];
+
+			if (drawParams.empty())
 				continue;
 
 			const std::string marker_face = "[Cubemap Face=" + std::to_string(face) + "]";
@@ -1156,36 +1101,30 @@ void VQRenderer::RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicB
 			pCmd->OMSetRenderTargets(0, NULL, FALSE, &dsvHandle);
 			pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, NULL);
 
-			D3D12_GPU_VIRTUAL_ADDRESS cbPerView = SetPerViewCB(*pCBufferHeap, SceneShadowViews.PointLightLinearDepthParams[i].vWorldPos, RenderResolutionX, RenderResolutionY, ShadowView.matViewProj);
-			pCmd->SetGraphicsRootConstantBufferView(2, cbPerView); // preView
-
-			// draw render list
-			DrawShadowViewMeshList(pCmd, pCBufferHeap, ShadowView, 1);
+			DrawShadowViewMeshList(pCmd, drawParams, 1);
 		}
 	}
 }
 
 void VQRenderer::RenderDepthPrePass(
-	ID3D12GraphicsCommandList* pCmd, 
-	DynamicBufferHeap* pCBufferHeap,
+	ID3D12GraphicsCommandList* pCmd,
 	const FSceneView& SceneView,
-	const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& cbAddresses,
 	D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr,
-	D3D12_GPU_VIRTUAL_ADDRESS perFrameCBAddr, 
 	const FGraphicsSettings& GFXSettings,
 	bool bAsyncCompute
 )
 {
-	using namespace DirectX;
-	using namespace VQ_SHADER_DATA;
+	SCOPED_GPU_MARKER(pCmd, "RenderDepthPrePass");
+
 	const bool& bMSAA = GFXSettings.bAntiAliasing;
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
 
-	auto pRscNormals     = this->GetTextureResource(rsc.Tex_SceneNormals);
-	auto pRscNormalsMSAA = this->GetTextureResource(rsc.Tex_SceneNormalsMSAA);
-	auto pRscDepthResolve= this->GetTextureResource(rsc.Tex_SceneDepthResolve);
-	auto pRscDepthMSAA   = this->GetTextureResource(rsc.Tex_SceneDepthMSAA);
-	auto pRscDepth       = this->GetTextureResource(rsc.Tex_SceneDepth);
+	ID3D12Resource* pRscNormals     = this->GetTextureResource(rsc.Tex_SceneNormals);
+	ID3D12Resource* pRscNormalsMSAA = this->GetTextureResource(rsc.Tex_SceneNormalsMSAA);
+	ID3D12Resource* pRscDepthResolve= this->GetTextureResource(rsc.Tex_SceneDepthResolve);
+	ID3D12Resource* pRscDepthMSAA   = this->GetTextureResource(rsc.Tex_SceneDepthMSAA);
+	ID3D12Resource* pRscDepth       = this->GetTextureResource(rsc.Tex_SceneDepth);
 
 	const DSV& dsvColor   = this->GetDSV(bMSAA ? rsc.DSV_SceneDepthMSAA : rsc.DSV_SceneDepth);
 	const RTV& rtvNormals = this->GetRTV(bMSAA ? rsc.RTV_SceneNormalsMSAA : rsc.RTV_SceneNormals);
@@ -1195,14 +1134,12 @@ void VQRenderer::RenderDepthPrePass(
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtvNormals.GetCPUDescHandle();
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvColor.GetCPUDescHandle();
 
-
 	const float RenderResolutionX = static_cast<float>(SceneView.SceneRTWidth);
 	const float RenderResolutionY = static_cast<float>(SceneView.SceneRTHeight);
 	D3D12_VIEWPORT viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
 	D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
 
-
-	SCOPED_GPU_MARKER(pCmd, "RenderDepthPrePass");
+	// ------------------------------------------------------------------------------------------------------------------------
 
 	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 	pCmd->ClearDepthStencilView(dsvHandle, DSVClearFlags, 1.0f, 0, 0, nullptr);
@@ -1212,68 +1149,60 @@ void VQRenderer::RenderDepthPrePass(
 	pCmd->RSSetScissorRects(1, &scissorsRect);
 
 	pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ZPrePass));
+	pCmd->SetGraphicsRootConstantBufferView(4, perViewCBAddr);
 
-	int iCB = 0;
-
-	// draw meshes
 	const size_t iMSAA = bMSAA ? 1 : 0;
 	const size_t iFaceCull = 2; // 2:back
-	for (const MeshRenderCommand_t& meshRenderCmd : SceneView.meshRenderParams)
+	PSO_ID psoIDPrev = INVALID_ID;
+	BufferID vbPrev = INVALID_ID;
+	BufferID ibPrev = INVALID_ID;
+	D3D_PRIMITIVE_TOPOLOGY topoPrev = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+	for (const FInstancedDrawParameters& meshRenderCmd : SceneDrawData.mainViewDrawParams)
 	{
-		const Material& mat = *meshRenderCmd.pMaterial;
-		const auto VBIBIDs = meshRenderCmd.vertexIndexBuffer;
-		const BufferID& VB_ID = VBIBIDs.first;
-		const BufferID& IB_ID = VBIBIDs.second;
-		const VBV& vb = this->GetVertexBufferView(VB_ID);
-		const IBV& ib = this->GetIndexBufferView(IB_ID);
-		const uint32 NumIndices = meshRenderCmd.numIndices;
+		size_t iAlpha = 0; size_t iRaster = 0; size_t iFaceCull = 0;
+		meshRenderCmd.UnpackMaterialConfig(iAlpha, iRaster, iFaceCull);
 
-#if RENDER_INSTANCED_SCENE_MESHES
-		const uint32 NumInstances = (uint32)meshRenderCmd.matNormal.size();
-#else
-		const uint32 NumInstances = 1;
-#endif
-		
 		size_t iTess = 0; size_t iDomain = 0; size_t iPart = 0; size_t iOutTopo = 0; size_t iTessCull = 0;
-		Tessellation::GetTessellationPSOConfig(mat.Tessellation, iTess, iDomain, iPart, iOutTopo, iTessCull);
-		const size_t iAlpha   = mat.IsAlphaMasked(*this) ? 1 : 0;
-		const size_t iRaster  = mat.bWireframe ? 1 : 0;
-		const PSO_ID psoID = this->mZPrePassPSOs.Get(iMSAA,iRaster,iFaceCull,iTess,iDomain,iPart,iOutTopo,iTessCull,iAlpha);
-		pCmd->SetPipelineState(this->GetPSO(psoID));
-		if (mat.Tessellation.bEnableTessellation)
+		meshRenderCmd.UnpackTessellationConfig(iTess, iDomain, iPart, iOutTopo, iTessCull);
+
+		const PSO_ID psoID = this->mZPrePassPSOs.Get(iMSAA, iRaster, iFaceCull, iTess, iDomain, iPart, iOutTopo, iTessCull, iAlpha);
+
+		if (psoIDPrev != psoID)
 		{
-			D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Tsl;
-			VQ_SHADER_DATA::TessellationParams* pCBuffer_Tessellation = nullptr;
-			VQ_SHADER_DATA::TessellationParams data = mat.GetTessellationCBufferData();
-			pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Tessellation)), (void**)(&pCBuffer_Tessellation), &cbAddr_Tsl);
-			memcpy(pCBuffer_Tessellation, &data, sizeof(data));
-			pCmd->SetGraphicsRootConstantBufferView(2, cbAddr_Tsl);
+			pCmd->SetPipelineState(this->GetPSO(psoID));
 		}
 
-		pCmd->SetGraphicsRootConstantBufferView(1, cbAddresses[iCB++]);
-		pCmd->SetGraphicsRootConstantBufferView(4, perViewCBAddr);
-
-		if (mat.SRVMaterialMaps != INVALID_ID) // set textures
+		pCmd->SetGraphicsRootConstantBufferView(1, meshRenderCmd.cbAddr);
+		if (meshRenderCmd.cbAddr_Tessellation)
+			pCmd->SetGraphicsRootConstantBufferView(2, meshRenderCmd.cbAddr_Tessellation);
+		if (meshRenderCmd.SRVMaterialMaps != INVALID_ID) // set textures
 		{
-			const CBV_SRV_UAV& NullTex2DSRV = this->GetSRV(rsc.SRV_NullTexture2D);
-			pCmd->SetGraphicsRootDescriptorTable(0, this->GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
-			pCmd->SetGraphicsRootDescriptorTable(3, mat.SRVHeightMap == INVALID_ID
-				? NullTex2DSRV.GetGPUDescHandle()
-				: this->GetSRV(mat.SRVHeightMap).GetGPUDescHandle(0)
-			);
+			const CBV_SRV_UAV& HeightMapSRV = this->GetSRV(meshRenderCmd.SRVHeightMap == INVALID_ID ? rsc.SRV_NullTexture2D : meshRenderCmd.SRVHeightMap);
+			pCmd->SetGraphicsRootDescriptorTable(0, this->GetSRV(meshRenderCmd.SRVMaterialMaps).GetGPUDescHandle(0));
+			pCmd->SetGraphicsRootDescriptorTable(3, HeightMapSRV.GetGPUDescHandle(0));
 		}
 
-		D3D_PRIMITIVE_TOPOLOGY topo = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-		if (mat.Tessellation.bEnableTessellation)
+		if (topoPrev != meshRenderCmd.IATopology)
 		{
-			topo = mat.Tessellation.Domain == ETessellationDomain::QUAD_PATCH
-				? D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST
-				: D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
+			pCmd->IASetPrimitiveTopology(meshRenderCmd.IATopology);
 		}
-		pCmd->IASetPrimitiveTopology(topo);
-		pCmd->IASetVertexBuffers(0, 1, &vb);
-		pCmd->IASetIndexBuffer(&ib);
-		pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
+		if (vbPrev != meshRenderCmd.VB)
+		{
+			const VBV& vb = GetVertexBufferView(meshRenderCmd.VB);
+			pCmd->IASetVertexBuffers(0, 1, &vb);
+		}
+		if (ibPrev != meshRenderCmd.IB)
+		{
+			const IBV& ib = GetIndexBufferView(meshRenderCmd.IB);
+			pCmd->IASetIndexBuffer(&ib);
+		}
+
+		pCmd->DrawIndexedInstanced(meshRenderCmd.numIndices, meshRenderCmd.numInstances, 0, 0, 0);
+
+		psoIDPrev = psoID;
+		ibPrev = meshRenderCmd.IB;
+		vbPrev = meshRenderCmd.VB;
+		topoPrev = meshRenderCmd.IATopology;
 	}
 }
 
@@ -1432,9 +1361,9 @@ void VQRenderer::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const F
 	SCOPED_GPU_MARKER(pCmd, pStrPass[pAOPass->GetMethod()]);
 	
 	static bool sbScreenSpaceAO_Previous = false;
-	const bool bSSAOToggledOff = sbScreenSpaceAO_Previous && !SceneView.sceneParameters.bScreenSpaceAO;
+	const bool bSSAOToggledOff = sbScreenSpaceAO_Previous && !SceneView.sceneRenderOptions.bScreenSpaceAO;
 
-	if (SceneView.sceneParameters.bScreenSpaceAO)
+	if (SceneView.sceneRenderOptions.bScreenSpaceAO)
 	{
 		AmbientOcclusionPass::FDrawParameters drawParams = {};
 		DirectX::XMStoreFloat4x4(&drawParams.matNormalToView, SceneView.view);
@@ -1466,22 +1395,22 @@ void VQRenderer::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const F
 		pCmd->ResourceBarrier(1, &barrierWR);
 	}
 
-	sbScreenSpaceAO_Previous = SceneView.sceneParameters.bScreenSpaceAO;
+	sbScreenSpaceAO_Previous = SceneView.sceneRenderOptions.bScreenSpaceAO;
 }
 
 static bool IsFFX_SSSREnabled(const FGraphicsSettings& GFXSettings)
 {
 	return GFXSettings.Reflections == EReflections::SCREEN_SPACE_REFLECTIONS__FFX;
 }
-static bool ShouldUseMotionVectorsTarget(const FGraphicsSettings& GFXSettings)
+bool VQRenderer::ShouldUseMotionVectorsTarget(const FGraphicsSettings& GFXSettings)
 {
 	return IsFFX_SSSREnabled(GFXSettings);
 }
-static bool ShouldUseVisualizationTarget(EDrawMode DrawModeEnum)
+bool VQRenderer::ShouldUseVisualizationTarget(const FPostProcessParameters& PPParams)
 {
-	return DrawModeEnum == EDrawMode::ALBEDO
-		|| DrawModeEnum == EDrawMode::ROUGHNESS
-		|| DrawModeEnum == EDrawMode::METALLIC;
+	return PPParams.DrawModeEnum == EDrawMode::ALBEDO
+		|| PPParams.DrawModeEnum == EDrawMode::ROUGHNESS
+		|| PPParams.DrawModeEnum == EDrawMode::METALLIC;
 }
 void VQRenderer::TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings)
 {
@@ -1513,7 +1442,7 @@ void VQRenderer::TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FW
 	vBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Point, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
 	vBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Directional, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
 
-	if (ShouldUseVisualizationTarget(PPParams.DrawModeEnum))
+	if (ShouldUseVisualizationTarget(PPParams))
 	{
 		vBarriers.push_back(bMSAA
 			? CD3DX12_RESOURCE_BARRIER::Transition(pRscVizMSAA, D3D12_RESOURCE_STATE_RESOLVE_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET)
@@ -1536,27 +1465,25 @@ void VQRenderer::RenderSceneColor(
 	DynamicBufferHeap* pCBufferHeap,
 	const FSceneView& SceneView, 
 	const FPostProcessParameters& PPParams,
-	const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& perObjCBAddr,
 	D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr,
 	D3D12_GPU_VIRTUAL_ADDRESS perFrameCBAddr, 
 	const FGraphicsSettings& GFXSettings,
 	bool bHDR
 )
 {
+	SCOPED_GPU_MARKER(pCmd, "RenderSceneColor");
+
 	struct FFrameConstantBuffer { DirectX::XMMATRIX matModelViewProj; };
 	struct FFrameConstantBuffer2 { DirectX::XMMATRIX matModelViewProj; int iTextureConfig; int iTextureOutput; };
-	using namespace VQ_SHADER_DATA;
 
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 
 	const bool bHDRDisplay = bHDR; // TODO: this->ShouldRenderHDR(pWindow->GetHWND());
 	const bool bHasEnvironmentMapHDRTexture = rsc.EnvironmentMap.SRV_HDREnvironment != INVALID_ID;
 	const bool bDrawEnvironmentMap = bHasEnvironmentMapHDRTexture && true;
-	const bool bUseVisualizationRenderTarget = ShouldUseVisualizationTarget(PPParams.DrawModeEnum);
+	const bool bUseVisualizationRenderTarget = ShouldUseVisualizationTarget(PPParams);
 	const bool bRenderMotionVectors = ShouldUseMotionVectorsTarget(GFXSettings);
 	const bool bRenderScreenSpaceReflections = IsFFX_SSSREnabled(GFXSettings);
-
-	using namespace DirectX;
 
 	const bool& bMSAA = GFXSettings.bAntiAliasing;
 
@@ -1570,7 +1497,7 @@ void VQRenderer::RenderSceneColor(
 	const CBV_SRV_UAV& NullCubemapSRV = this->GetSRV(rsc.SRV_NullCubemap);
 	const CBV_SRV_UAV& NullTex2DSRV = this->GetSRV(rsc.SRV_NullTexture2D);
 
-	SCOPED_GPU_MARKER(pCmd, "RenderSceneColor");
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
 
 	// Clear Depth & Render targets
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvColor.GetCPUDescHandle();
@@ -1608,7 +1535,6 @@ void VQRenderer::RenderSceneColor(
 	constexpr UINT PerViewRSBindSlot = 2;
 	{
 		SCOPED_GPU_MARKER(pCmd, "CBPerFrame");
-
 		pCmd->SetGraphicsRootConstantBufferView(PerFrameRSBindSlot, perFrameCBAddr);
 		pCmd->SetGraphicsRootDescriptorTable(4, this->GetSRV(rsc.SRV_ShadowMaps_Spot).GetGPUDescHandle(0));
 		pCmd->SetGraphicsRootDescriptorTable(5, this->GetSRV(rsc.SRV_ShadowMaps_Point).GetGPUDescHandle(0));
@@ -1635,32 +1561,24 @@ void VQRenderer::RenderSceneColor(
 	}
 
 	// Draw Objects -----------------------------------------------
-	if(!SceneView.meshRenderParams.empty())
+	if(!SceneDrawData.mainViewDrawParams.empty())
 	{
 		constexpr UINT PerObjRSBindSlot = 1;
 		SCOPED_GPU_MARKER(pCmd, "Geometry");
 
 		int iCB = 0;
-		PSO_ID psoID_Prev = -1;
-		for (const MeshRenderCommand_t& meshRenderCmd : SceneView.meshRenderParams)
+		PSO_ID psoID_Prev = INVALID_ID;
+		BufferID vbPrev = INVALID_ID;
+		BufferID ibPrev = INVALID_ID;
+		D3D_PRIMITIVE_TOPOLOGY topoPrev = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+		for (const FInstancedDrawParameters& meshRenderCmd : SceneDrawData.mainViewDrawParams)
 		{
-			const Material& mat = *meshRenderCmd.pMaterial;
-
-			const auto VBIBIDs = meshRenderCmd.vertexIndexBuffer;
-			const uint32 NumIndices = meshRenderCmd.numIndices;
-			const VBV& vb = this->GetVertexBufferView(VBIBIDs.first);
-			const IBV& ib = this->GetIndexBufferView(VBIBIDs.second);
-
-#if RENDER_INSTANCED_SCENE_MESHES
-			const uint32 NumInstances = (uint32)meshRenderCmd.matNormal.size();;
-#else
-			const uint32 NumInstances = 1;
-#endif
-			const size_t iAlpha    = mat.IsAlphaMasked(*this) ? 1 : 0;
-			const size_t iRaster   = mat.bWireframe ? 1 : 0;
+			size_t iAlpha = 0; size_t iRaster = 0; size_t iFaceCull = 0;
+			meshRenderCmd.UnpackMaterialConfig(iAlpha, iRaster, iFaceCull);
 			size_t iTess = 0; size_t iDomain = 0; size_t iPart = 0; size_t iOutTopo = 0; size_t iTessCull = 0;
-			Tessellation::GetTessellationPSOConfig(mat.Tessellation, iTess, iDomain, iPart, iOutTopo, iTessCull);
-			PSO_ID psoID = this->mLightingPSOs.Get(iMSAA,iRaster,iFaceCull,iOutMoVec,iOutRough,iTess,iDomain,iPart,iOutTopo,iTessCull,iAlpha);
+			meshRenderCmd.UnpackTessellationConfig(iTess, iDomain, iPart, iOutTopo, iTessCull);
+
+			PSO_ID psoID = this->mLightingPSOs.Get(iMSAA, iRaster, iFaceCull, iOutMoVec, iOutRough, iTess, iDomain, iPart, iOutTopo, iTessCull, iAlpha);
 			ID3D12PipelineState* pPipelineState = this->GetPSO(psoID);
 			
 			if(psoID_Prev != psoID) // TODO: profile PSO
@@ -1668,54 +1586,57 @@ void VQRenderer::RenderSceneColor(
 				pCmd->SetPipelineState(pPipelineState);
 			}
 
-			pCmd->SetGraphicsRootConstantBufferView(PerObjRSBindSlot, perObjCBAddr[iCB++]);
+			pCmd->SetGraphicsRootConstantBufferView(PerObjRSBindSlot, meshRenderCmd.cbAddr);
 
-			if (mat.SRVMaterialMaps != INVALID_ID) // set textures
+			if (meshRenderCmd.SRVMaterialMaps != INVALID_ID) // set textures
 			{
-				pCmd->SetGraphicsRootDescriptorTable(0, this->GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
+				pCmd->SetGraphicsRootDescriptorTable(0, this->GetSRV(meshRenderCmd.SRVMaterialMaps).GetGPUDescHandle(0));
 				//pCmd->SetGraphicsRootDescriptorTable(4, this->GetSRV(mat.SRVMaterialMaps).GetGPUDescHandle(0));
 			}
-			pCmd->SetGraphicsRootDescriptorTable(11, mat.SRVHeightMap == INVALID_ID
+			if (meshRenderCmd.cbAddr_Tessellation)
+			{
+				pCmd->SetGraphicsRootConstantBufferView(12, meshRenderCmd.cbAddr_Tessellation);
+			}
+
+			pCmd->SetGraphicsRootDescriptorTable(11, meshRenderCmd.SRVHeightMap == INVALID_ID
 				? NullTex2DSRV.GetGPUDescHandle()
-				: this->GetSRV(mat.SRVHeightMap).GetGPUDescHandle(0)
+				: this->GetSRV(meshRenderCmd.SRVHeightMap).GetGPUDescHandle(0)
 			);
-
-			if (mat.Tessellation.bEnableTessellation)
-			{
-				VQ_SHADER_DATA::TessellationParams* pCBuffer_Tessellation = nullptr;
-				D3D12_GPU_VIRTUAL_ADDRESS cbAddr_Tsl;
-				pCBufferHeap->AllocConstantBuffer(sizeof(decltype(*pCBuffer_Tessellation)), (void**)(&pCBuffer_Tessellation), &cbAddr_Tsl);
-				auto data = mat.GetTessellationCBufferData();
-				memcpy(pCBuffer_Tessellation, &data, sizeof(data));
-				pCmd->SetGraphicsRootConstantBufferView(12, cbAddr_Tsl);
-			}
 			
-			D3D_PRIMITIVE_TOPOLOGY topo = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-			if (mat.Tessellation.bEnableTessellation)
+			if (topoPrev != meshRenderCmd.IATopology)
 			{
-				topo = mat.Tessellation.Domain == ETessellationDomain::QUAD_PATCH 
-					? D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST 
-					: D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
+				topoPrev = meshRenderCmd.IATopology;
+				pCmd->IASetPrimitiveTopology(meshRenderCmd.IATopology);
 			}
-			pCmd->IASetPrimitiveTopology(topo);
-			pCmd->IASetVertexBuffers(0, 1, &vb);
-			pCmd->IASetIndexBuffer(&ib);
+			if (vbPrev != meshRenderCmd.VB)
+			{
+				const VBV& vb = GetVertexBufferView(meshRenderCmd.VB);
+				pCmd->IASetVertexBuffers(0, 1, &vb);
+			}
+			if (ibPrev != meshRenderCmd.IB)
+			{
+				const IBV& ib = GetIndexBufferView(meshRenderCmd.IB);
+				pCmd->IASetIndexBuffer(&ib);
+			}
 
-			pCmd->DrawIndexedInstanced(NumIndices, NumInstances, 0, 0, 0);
+			pCmd->DrawIndexedInstanced(meshRenderCmd.numIndices, meshRenderCmd.numInstances, 0, 0, 0);
 
 			psoID_Prev = psoID;
+			ibPrev = meshRenderCmd.IB;
+			vbPrev = meshRenderCmd.VB;
+			topoPrev = meshRenderCmd.IATopology;
 		}
 	}
 
 	// Draw Light Meshes ------------------------------------------
-	if(!SceneView.lightRenderParams.empty())
+	if(!SceneDrawData.lightRenderParams.empty())
 	{
 		SCOPED_GPU_MARKER(pCmd, "Lights");
 		pCmd->SetPipelineState(this->GetPSO(bMSAA ? EBuiltinPSOs::UNLIT_PSO_MSAA_4 : EBuiltinPSOs::UNLIT_PSO));
 		
 		pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
 
-		for (const FLightRenderCommand& lightRenderCmd : SceneView.lightRenderParams)
+		for (const FLightRenderData& lightRenderCmd : SceneDrawData.lightRenderParams)
 		{
 			FFrameConstantBufferUnlit* pCBuffer = {};
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
@@ -1776,8 +1697,9 @@ void VQRenderer::RenderSceneColor(
 void VQRenderer::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA)
 {
 	struct FFrameConstantBufferUnlitInstanced { DirectX::XMMATRIX matModelViewProj[MAX_INSTANCE_COUNT__UNLIT_SHADER]; DirectX::XMFLOAT4 color; };
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
 
-	if (!SceneView.boundingBoxRenderParams.empty())
+	if (!SceneDrawData.boundingBoxRenderParams.empty())
 	{
 		SCOPED_GPU_MARKER(pCmd, "BoundingBoxes");
 
@@ -1785,7 +1707,7 @@ void VQRenderer::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 		pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
 
 		// set IA
-		const FInstancedBoundingBoxRenderCommand& params = *SceneView.boundingBoxRenderParams.begin();
+		const FInstancedBoundingBoxRenderData& params = *SceneDrawData.boundingBoxRenderParams.begin();
 		const auto VBIBIDs = params.vertexIndexBuffer;
 		const uint32 NumIndices = params.numIndices;
 		const BufferID& VB_ID = VBIBIDs.first;
@@ -1803,7 +1725,7 @@ void VQRenderer::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 			: EBuiltinPSOs::WIREFRAME_INSTANCED_PSO)
 		);
 
-		for (const FInstancedBoundingBoxRenderCommand& BBRenderCmd : SceneView.boundingBoxRenderParams)
+		for (const FInstancedBoundingBoxRenderData& BBRenderCmd : SceneDrawData.boundingBoxRenderParams)
 		{
 			const int NumInstances = (int)BBRenderCmd.matWorldViewProj.size();
 			if (NumInstances == 0)
@@ -1828,7 +1750,7 @@ void VQRenderer::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 		);
 
 		const uint32 NumInstances = 1;
-		for (const FBoundingBoxRenderCommand& BBRenderCmd : SceneView.boundingBoxRenderParams)
+		for (const FBoundingBoxRenderData& BBRenderCmd : SceneView.boundingBoxRenderParams)
 		{
 			// set constant buffer data
 			FFrameConstantBufferUnlit* pCBuffer = {};
@@ -1846,6 +1768,8 @@ void VQRenderer::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 void VQRenderer::RenderOutline(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, bool bMSAA, const std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& rtvHandles)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderOutlinePass");
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
+
 	OutlinePass::FDrawParameters params;
 	params.pCmd = pCmd;
 	params.pCBufferHeap = pCBufferHeap;
@@ -1853,13 +1777,15 @@ void VQRenderer::RenderOutline(ID3D12GraphicsCommandList* pCmd, DynamicBufferHea
 	params.pSceneView = &SceneView;
 	params.bMSAA = bMSAA;
 	params.pRTVHandles = &rtvHandles;
+	params.pSceneDrawData = &SceneDrawData;
 	this->GetRenderPass(ERenderPass::Outline)->RecordCommands(&params);
 }
 
 void VQRenderer::RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA, bool bReflectionsEnabled)
 {
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
 
-	if (!SceneView.lightBoundsRenderParams.empty())
+	if (!SceneDrawData.lightBoundsRenderParams.empty())
 	{
 		SCOPED_GPU_MARKER(pCmd, "LightBounds");
 		const uint32 NumInstances = 1;
@@ -1877,9 +1803,9 @@ void VQRenderer::RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 		}
 		pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
 
-		std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddresses(SceneView.lightBoundsRenderParams.size());
+		std::vector< D3D12_GPU_VIRTUAL_ADDRESS> cbAddresses(SceneDrawData.lightBoundsRenderParams.size());
 		int iCbAddress = 0;
-		for (const FLightRenderCommand& lightBoundRenderCmd : SceneView.lightBoundsRenderParams)
+		for (const FLightRenderData& lightBoundRenderCmd : SceneDrawData.lightBoundsRenderParams)
 		{
 			// set constant buffer data
 			FFrameConstantBufferUnlit* pCBuffer = {};
@@ -1907,7 +1833,7 @@ void VQRenderer::RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 		}
 
 		pCmd->SetPipelineState(this->GetPSO(bMSAA ? EBuiltinPSOs::WIREFRAME_PSO_MSAA_4 : EBuiltinPSOs::WIREFRAME_PSO));
-		for (const FLightRenderCommand& lightBoundRenderCmd : SceneView.lightBoundsRenderParams)
+		for (const FLightRenderData& lightBoundRenderCmd : SceneDrawData.lightBoundsRenderParams)
 		{
 			FFrameConstantBufferUnlit* pCBuffer = {};
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
@@ -1943,14 +1869,16 @@ void VQRenderer::RenderDebugVertexAxes(ID3D12GraphicsCommandList* pCmd, DynamicB
 		float LocalAxisSize;
 	};
 
-	if (!SceneView.sceneParameters.bDrawVertexLocalAxes || SceneView.debugVertexAxesRenderParams.empty())
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
+
+	if (!SceneView.sceneRenderOptions.bDrawVertexLocalAxes || SceneDrawData.debugVertexAxesRenderParams.empty())
 	{
 		return;
 	}
 
 	pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ZPrePass));
 	pCmd->SetPipelineState(this->GetPSO(bMSAA ? EBuiltinPSOs::DEBUGVERTEX_LOCALSPACEVECTORS_PSO_MSAA_4 : EBuiltinPSOs::DEBUGVERTEX_LOCALSPACEVECTORS_PSO));
-	for (const MeshRenderCommand_t& cmd : SceneView.debugVertexAxesRenderParams)
+	for (const MeshRenderData_t& cmd : SceneDrawData.debugVertexAxesRenderParams)
 	{
 		FObjectConstantBufferDebugVertexVectors* pCBuffer = {};
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
@@ -1958,7 +1886,7 @@ void VQRenderer::RenderDebugVertexAxes(ID3D12GraphicsCommandList* pCmd, DynamicB
 		pCBuffer->matWorld    = cmd.matWorld [0];
 		pCBuffer->matNormal   = cmd.matNormal[0];
 		pCBuffer->matViewProj = SceneView.viewProj;
-		pCBuffer->LocalAxisSize = SceneView.sceneParameters.fVertexLocalAxixSize;
+		pCBuffer->LocalAxisSize = SceneView.sceneRenderOptions.fVertexLocalAxixSize;
 		
 		const uint32 NumInstances = 1;
 		const uint32 NumIndices = cmd.numIndices;
@@ -1991,7 +1919,7 @@ void VQRenderer::ResolveMSAA(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap*
 	auto pRscMoVecMSAA = this->GetTextureResource(rsc.Tex_SceneMotionVectorsMSAA);
 	auto pRscDepthMSAA = this->GetTextureResource(rsc.Tex_SceneDepthMSAA);
 
-	const bool bUseVizualization = ShouldUseVisualizationTarget(PPParams.DrawModeEnum);
+	const bool bUseVizualization = ShouldUseVisualizationTarget(PPParams);
 	const bool bRenderMotionVectors = ShouldUseMotionVectorsTarget(GFXSettings);
 	const bool bResolveRoughness = IsFFX_SSSREnabled(GFXSettings) && false;
 
@@ -2111,7 +2039,7 @@ static DirectX::XMMATRIX GetHDRIRotationMatrix(float fHDIROffsetInRadians)
 }
 void VQRenderer::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings)
 {
-	const FSceneRenderParameters::FFFX_SSSR_UIParameters& UIParams = SceneView.sceneParameters.FFX_SSSRParameters;
+	const FSceneRenderOptions::FFFX_SSSR_UIOptions& UIParams = SceneView.sceneRenderOptions.FFX_SSSRParameters;
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 
 	const FEnvironmentMapRenderingResources& EnvMapRsc = rsc.EnvironmentMap;
@@ -2145,7 +2073,7 @@ void VQRenderer::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 		params.ffxCBuffer.envMapRotation                       = GetHDRIRotationMatrix(SceneView.HDRIYawOffset);
 		params.ffxCBuffer.inverseBufferDimensions[0]           = 1.0f / params.ffxCBuffer.bufferDimensions[0];
 		params.ffxCBuffer.inverseBufferDimensions[1]           = 1.0f / params.ffxCBuffer.bufferDimensions[1];
-		params.ffxCBuffer.frameIndex                           = static_cast<uint32>(mNumFramesRendered);
+		params.ffxCBuffer.frameIndex                           = static_cast<uint32>(mRenderStats.mNumFramesRendered);
 		params.ffxCBuffer.temporalStabilityFactor              = UIParams.temporalStability;
 		params.ffxCBuffer.depthBufferThickness                 = UIParams.depthBufferThickness;
 		params.ffxCBuffer.roughnessThreshold                   = UIParams.roughnessThreshold;
@@ -2193,17 +2121,18 @@ void VQRenderer::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 	}
 }
 
-static bool ShouldSkipBoundsPass(const FSceneView& SceneView)
+static bool ShouldSkipBoundsPass(const FSceneDrawData& SceneDrawData)
 {
-	return SceneView.boundingBoxRenderParams.empty()
-		&& SceneView.lightBoundsRenderParams.empty()
-		&& SceneView.outlineRenderParams.empty()
-		&& SceneView.debugVertexAxesRenderParams.empty();
+	return SceneDrawData.boundingBoxRenderParams.empty()
+		&& SceneDrawData.lightBoundsRenderParams.empty()
+		&& SceneDrawData.outlineRenderParams.empty()
+		&& SceneDrawData.debugVertexAxesRenderParams.empty();
 }
 void VQRenderer::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, bool bMSAA)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderSceneBoundingVolumes");
-	const bool bNoBoundingVolumeToRender = ShouldSkipBoundsPass(SceneView);
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
+	const bool bNoBoundingVolumeToRender = ShouldSkipBoundsPass(SceneDrawData);
 
 	if (bNoBoundingVolumeToRender)
 		return;
@@ -2277,7 +2206,8 @@ void VQRenderer::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dyn
 
 void VQRenderer::CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings)
 {
-	const bool bNoBoundingVolumeToRender = ShouldSkipBoundsPass(SceneView);
+	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
+	const bool bNoBoundingVolumeToRender = ShouldSkipBoundsPass(SceneDrawData);
 
 	const bool& bMSAA = GFXSettings.bAntiAliasing;
 
@@ -2324,7 +2254,7 @@ void VQRenderer::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, co
 	const bool bCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f;
 	const bool bFSREnabled = PPParams.IsFSREnabled();
 	const bool bVizualizationEnabled = PPParams.DrawModeEnum != EDrawMode::LIT_AND_POSTPROCESSED;
-	const bool bVizualizationSceneTargetUsed = ShouldUseVisualizationTarget(PPParams.DrawModeEnum);
+	const bool bVizualizationSceneTargetUsed = ShouldUseVisualizationTarget(PPParams);
 	const bool bMotionVectorsEnabled = ShouldUseMotionVectorsTarget(GFXSettings);
 
 	auto pRscPostProcessInput = this->GetTextureResource(rsc.Tex_SceneColor);

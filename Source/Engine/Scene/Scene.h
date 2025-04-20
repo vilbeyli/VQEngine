@@ -25,7 +25,6 @@
 #include "SceneBoundingBoxHierarchy.h"
 
 #include "../Core/Memory.h"
-#include "../Core/RenderCommands.h"
 #include "../AssetLoader.h"
 #include "../PostProcess/PostProcess.h"
 
@@ -34,7 +33,6 @@
 
 using MeshLookup_t = std::unordered_map<MeshID, Mesh>;
 using ModelLookup_t = std::unordered_map<ModelID, Model>;
-using MaterialLookup_t = std::unordered_map<MaterialID, Material>;
 
 // fwd decl
 class Input;
@@ -46,56 +44,35 @@ class Window;
 struct FSceneView;
 struct FSceneShadowViews;
 struct FShadowView;
-
-
-namespace InstanceBatching
-{
-	inline int GetLODFromProjectedScreenArea(float fArea, int NumMaxLODs)
-	{
-		// LOD0 >= 0.100 >= LOD1 >= 0.010 >= LOD2 >= 0.001
-		//
-		// coarse algorithm: just pick 1/10th for each available lod
-		int CurrLOD = 0;
-		float Threshold = 0.1f;
-		while (CurrLOD < NumMaxLODs - 1 && fArea <= Threshold)
-		{
-			Threshold *= 0.1f;
-			++CurrLOD;
-		}
-		assert(CurrLOD < NumMaxLODs && CurrLOD >= 0);
-		return CurrLOD;
-	}
-
-}
+struct FRenderStats;
 
 struct FSceneStats
 {
 	// lights -----------------------
-	uint NumDirectionalLights;
-	uint NumStaticLights;
-	uint NumDynamicLights;
-	uint NumStationaryLights;
-	uint NumSpotLights;
-	uint NumPointLights;
-	uint NumDisabledSpotLights;
-	uint NumDisabledPointLights;
-	uint NumDisabledDirectionalLights;
-	uint NumShadowingPointLights;
-	uint NumShadowingSpotLights;
+	uint NumDirectionalLights = 0;
+	uint NumStaticLights = 0;
+	uint NumDynamicLights = 0;
+	uint NumStationaryLights = 0;
+	uint NumSpotLights = 0;
+	uint NumPointLights = 0;
+	uint NumDisabledSpotLights = 0;
+	uint NumDisabledPointLights = 0;
+	uint NumDisabledDirectionalLights = 0;
+	uint NumShadowingPointLights = 0;
+	uint NumShadowingSpotLights = 0;
 
 	// render cmds ------------------
-	uint NumMeshRenderCommands;
-	uint NumShadowMeshRenderCommands;
-	uint NumBoundingBoxRenderCommands;
+	const FRenderStats* pRenderStats = nullptr;
 
 	// scene ------------------------
-	uint NumMeshes;
-	uint NumModels;
-	uint NumMaterials;
-	uint NumObjects;
-	uint NumCameras;
+	uint NumMeshes = 0;
+	uint NumModels = 0;
+	uint NumMaterials = 0;
+	uint NumObjects = 0;
+	uint NumCameras = 0;
 };
 
+constexpr size_t NUM_MATERIAL_POOL_SIZE = 1024 * 64;
 constexpr size_t NUM_GAMEOBJECT_POOL_SIZE = 1024 * 64;
 constexpr size_t GAMEOBJECT_BYTE_ALIGNMENT = 64; // assumed typical cache-line size
 
@@ -164,15 +141,10 @@ private: // Derived Scenes shouldn't access these functions
 		, const std::vector<size_t>& vActiveLightIndices
 	);
 
-	void RecordRenderLightMeshCommands(FSceneView& SceneView) const;
-	void BatchInstanceData_BoundingBox(FSceneView& SceneView
-		, ThreadPool& UpdateWorkerThreadPool
-		, const DirectX::XMMATRIX matViewProj
-	) const;
+	void GatherLightMeshRenderData(const FSceneView& SceneView) const;
 
-	void GatherFrustumCullParameters(const FSceneView& SceneView, FSceneShadowViews& SceneShadowView, ThreadPool& UpdateWorkerThreadPool);
+	void GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews& SceneShadowView, ThreadPool& UpdateWorkerThreadPool);
 	void CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
-	void BatchInstanceData(FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);
 
 	void BuildGameObject(const FGameObjectRepresentation& rep, size_t iObj);
 	
@@ -254,7 +226,6 @@ protected:
 	//
 	std::unordered_map<MeshID, Mesh>         mMeshes;
 	std::unordered_map<ModelID, Model>       mModels;
-	std::unordered_map<MaterialID, Material> mMaterials;
 	std::vector<size_t>                      mGameObjectHandles;
 	std::vector<size_t>                      mTransformHandles;
 	std::vector<Camera>                      mCameras;
@@ -275,7 +246,6 @@ protected:
 	//
 	SceneBoundingBoxHierarchy mBoundingBoxHierarchy;
 	mutable FFrustumCullWorkerContext mFrustumCullWorkerContext;
-	std::unordered_map<size_t, FShadowView*> mFrustumIndex_pShadowViewLookup;
 
 	std::vector<size_t> mActiveLightIndices_Static;
 	std::vector<size_t> mActiveLightIndices_Stationary;
@@ -316,6 +286,7 @@ protected:
 private:
 	MemoryPool<GameObject> mGameObjectPool;
 	MemoryPool<Transform>  mGameObjectTransformPool;
+	MemoryPool<Material>   mMaterialPool;
 
 	std::mutex mMtx_GameObjects;
 	std::mutex mMtx_GameObjectTransforms;

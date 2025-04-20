@@ -20,29 +20,6 @@
 #include "Scene.h"
 #include "Renderer/Renderer.h"
 
-VQ_SHADER_DATA::MaterialData Material::GetCBufferData() const
-{
-	VQ_SHADER_DATA::MaterialData d = {};
-
-	d.diffuse = this->diffuse;
-	d.alpha = this->alpha;
-
-	d.emissiveColor = this->emissiveColor;
-	d.emissiveIntensity = this->emissiveIntensity;
-
-	d.specular = this->specular;
-	d.roughness = this->roughness;
-	d.displacement = this->displacement;
-
-	d.metalness = this->metalness;
-	d.uvScaleOffset = float4(this->tiling.x, this->tiling.y, this->uv_bias.x, this->uv_bias.y);
-
-	d.textureConfig = this->GetTextureConfig();
-	d.normalMapMipBias = this->normalMapMipBias;
-	
-	return d;
-}
-
 int Material::GetTextureConfig() const
 {
 	int textureConfig = 0;

@@ -53,7 +53,7 @@ cbuffer OutlineData : register(b0)
 	float Scale;
 	float HeightDisplacement;
 }
-cbuffer CBPerView   : register(b1) { PerViewData cbPerView; }
+cbuffer CBPerView   : register(b1) { PerViewLightingData cbPerView; }
 
 SamplerState LinearSampler        : register(s0);
 SamplerState PointSampler         : register(s1);

@@ -17,11 +17,13 @@
 //	Contact: volkanilbeyli@gmail.com
 #pragma once
 
+#include "Shaders/VQPlatform.h"
 #include "RenderPass.h"
 
 #include <unordered_map>
 
 struct FSceneView;
+struct FSceneDrawData;
 class DynamicBufferHeap;
 struct ID3D12GraphicsCommandList;
 
@@ -33,11 +35,10 @@ public:
 	{
 		ID3D12GraphicsCommandList* pCmd = nullptr;
 		ID3D12CommandList* pCmdCopy = nullptr;
-		const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>* pCBAddresses = nullptr;
-		DynamicBufferHeap* pCBufferHeap = nullptr;
 		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = 0;
 		bool bEnableAsyncCopy = false;
 		const FSceneView* pSceneView = nullptr;
+		const FSceneDrawData* pSceneDrawData = nullptr;
 	};
 
 	ObjectIDPass(VQRenderer& Renderer);
@@ -55,6 +56,8 @@ public:
 	       int4 ReadBackPixel(const int2& screenCoords, HWND hwnd) const;
 	inline int4 ReadBackPixel(int screenCoordsX, int screenCoordsY, HWND hwnd) const { return ReadBackPixel(int2(screenCoordsX, screenCoordsY), hwnd); }
 	inline int4 ReadBackPixel(float2 uv, HWND hwnd) const { return ReadBackPixel((int)(uv.x * mOutputResolutionX), (int)(uv.y * mOutputResolutionY), hwnd); }
+
+	PSO_ID GetPSO_ID(size_t iTess,size_t iDomain,size_t iPart,size_t iOutTopo,size_t iTessCullMode,size_t iAlpha) const;
 
 	ID3D12Resource* GetGPUTextureResource() const;
 	ID3D12Resource* GetCPUTextureResource() const;

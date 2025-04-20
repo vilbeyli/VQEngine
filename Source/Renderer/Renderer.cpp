@@ -186,6 +186,7 @@ static void InitializeD3D12MA(D3D12MA::Allocator*& mpAllocator, Device& mDevice)
 //
 void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 {
+	SCOPED_CPU_MARKER("Renderer.Initialize");
 	Device* pVQDevice = &mDevice;
 	mbMainSwapchainInitialized.store(false);
 
@@ -194,24 +195,29 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 	DirectoryUtil::CreateFolderIfItDoesntExist(VQRenderer::PSOCacheDirectory);
 
 	// Create the device
-	FDeviceCreateDesc deviceDesc = {};
-	deviceDesc.bEnableDebugLayer = ENABLE_DEBUG_LAYER;
-	deviceDesc.bEnableGPUValidationLayer = ENABLE_VALIDATION_LAYER;
-	const bool bDeviceCreateSucceeded = mDevice.Create(deviceDesc);
-	ID3D12Device* pDevice = pVQDevice->GetDevicePtr();
-
-	assert(bDeviceCreateSucceeded);
+	{
+		SCOPED_CPU_MARKER("Device");
+		FDeviceCreateDesc deviceDesc = {};
+		deviceDesc.bEnableDebugLayer = ENABLE_DEBUG_LAYER;
+		deviceDesc.bEnableGPUValidationLayer = ENABLE_VALIDATION_LAYER;
+		const bool bDeviceCreateSucceeded = mDevice.Create(deviceDesc);
+		assert(bDeviceCreateSucceeded);
+		ID3D12Device* pDevice = pVQDevice->GetDevicePtr();
+	}
 
 	// Create Command Queues of different types
-	for (int i = 0; i < CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES; ++i)
 	{
-		mCmdQueues[i].Create(pVQDevice, (CommandQueue::EType)i);
+		SCOPED_CPU_MARKER("CmdQ");
+		for (int i = 0; i < CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES; ++i)
+		{
+			mCmdQueues[i].Create(pVQDevice, (CommandQueue::EType)i);
+		}
 	}
 
 	// Initialize memory
 	InitializeD3D12MA(mpAllocator, mDevice);
 	{
-		SCOPED_CPU_MARKER("Renderer.InitializeHeaps");
+		SCOPED_CPU_MARKER("Heaps");
 		ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
 		const uint32 UPLOAD_HEAP_SIZE = (512 + 256 + 128) * MEGABYTE; // TODO: from RendererSettings.ini
@@ -236,13 +242,16 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 	}
 
 	// initialize thread
-	mbExitUploadThread.store(false);
-	mTextureUploadThread = std::thread(&VQRenderer::TextureUploadThread_Main, this);
+	{
+		SCOPED_CPU_MARKER("Threads");
+		mbExitUploadThread.store(false);
+		mTextureUploadThread = std::thread(&VQRenderer::TextureUploadThread_Main, this);
 
-	const size_t HWThreads = ThreadPool::sHardwareThreadCount;
-	const size_t HWCores   = HWThreads >> 1;
-	mWorkers_ShaderLoad.Initialize(HWCores, "ShaderLoadWorkers");
-	mWorkers_PSOLoad.Initialize(HWCores, "PSOLoadWorkers");
+		const size_t HWThreads = ThreadPool::sHardwareThreadCount;
+		const size_t HWCores = HWThreads >> 1;
+		mWorkers_ShaderLoad.Initialize(HWCores, "ShaderLoadWorkers");
+		mWorkers_PSOLoad.Initialize(HWCores, "PSOLoadWorkers");
+	}
 
 	// allocate render passes
 	{
@@ -258,7 +267,13 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		mRenderPasses[ERenderPass::Outline               ] = std::make_shared<OutlinePass>(*this);
 	}
 
-	mNumFramesRendered = 0;
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	mFrameSceneDrawData.resize(NumFrameBuffers);
+	mFrameShadowDrawData.resize(NumFrameBuffers);
+#else
+	mFrameSceneDrawData.resize(1);
+	//mFrameShadowDrawData.resize(1); // TODO
+#endif
 
 	Log::Info("[Renderer] Initialized.");
 }
@@ -456,10 +471,6 @@ void VQRenderer::Load()
 	const float tRenderPasses = timer.Tick();
 	Log::Info("[Renderer]    RenderPasses=%.2fs", tRenderPasses);
 
-	{
-
-	}
-
 	const float total = tRS + tDefaultRscs + tRenderRscs + tRenderPasses;
 	Log::Info("[Renderer] Loaded in %.2fs.", total);
 }
@@ -478,6 +489,7 @@ void VQRenderer::Destroy()
 	{
 		pPass->Destroy();
 	}
+	mRenderPasses.clear();
 
 	mWorkers_PSOLoad.Destroy();
 	mWorkers_ShaderLoad.Destroy();

@@ -24,6 +24,7 @@
 
 #include <cassert>
 #include <stdlib.h>
+#include <mutex>
 
 
 size_t StaticBufferHeap::MEMORY_ALIGNMENT = 256;
@@ -263,6 +264,12 @@ bool DynamicBufferHeap::AllocConstantBuffer(uint32_t size, void** pData, D3D12_G
     *pBufferViewDesc = m_pBuffer->GetGPUVirtualAddress() + memOffset;
 
     return true;
+}
+
+bool DynamicBufferHeap::AllocConstantBuffer_MT(uint32_t size, void** pData, D3D12_GPU_VIRTUAL_ADDRESS* pBufferViewDesc)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return AllocConstantBuffer(size, pData, pBufferViewDesc);
 }
 
 bool DynamicBufferHeap::AllocVertexBuffer(uint32_t NumVertices, uint32_t strideInBytes, void** ppData, D3D12_VERTEX_BUFFER_VIEW* pView)

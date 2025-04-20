@@ -19,12 +19,6 @@
 #define VQ_GPU 1
 #include "LightingConstantBufferData.h"
 
-#if INSTANCED_DRAW
-	#ifndef INSTANCED_COUNT
-	#define INSTANCE_COUNT 128
-	#endif
-#endif
-
 struct VSInput
 {
 	float3 position : POSITION;
@@ -45,28 +39,10 @@ struct PSInput
 #endif
 };
 
-struct PerObject
-{
-#if INSTANCED_DRAW
-	float4x4 matWorldViewProj[INSTANCE_COUNT];
-	float4x4 matWorld        [INSTANCE_COUNT];
-#else
-	float4x4 matWorldViewProj;
-	float4x4 matWorld;
-#endif
-	// material data
-	float4 texScaleBias;
-	float displacement;
-};
 
-cbuffer CBuffer   : register(b0) { PerObject cbPerObject; }
-cbuffer CBufferPx : register(b1)
-{
-	float3 vLightPosition;
-	float fFarPlane;
-}
-cbuffer CBPerView  : register(b2) { PerViewData cbPerView; }
-//cbuffer CBTessellation : register(b3) { TessellationParams tess; } // efined in Tessellation.h
+cbuffer CBPerView   : register(b0) { PerShadowViewData cbPerView; }
+cbuffer CBPerObject : register(b1) { PerObjectShadowData cbPerObject; }
+//cbuffer CBTessellation : register(b3) { TessellationParams tess; } // defined in Tessellation.h
 
 Texture2D    texHeightmap      : register(t1); // VS / PS
 SamplerState LinearSamplerTess : register(s1); // VS / HS / DS
@@ -146,7 +122,16 @@ PSInput VSMain(VSInput vertex)
 Texture2D    texDiffuseAlpha   : register(t0);
 SamplerState LinearSampler     : register(s0);
 #endif
-float PSMain(PSInput In) : SV_DEPTH
+
+#if LINEAR_DEPTH
+float 
+#else
+void
+#endif
+PSMain(PSInput In) 
+#if LINEAR_DEPTH
+: SV_DEPTH
+#endif
 {
 	#if ENABLE_ALPHA_MASK
 	float alpha = texDiffuseAlpha.SampleLevel(LinearSampler, In.uv, 0).a;
@@ -154,6 +139,16 @@ float PSMain(PSInput In) : SV_DEPTH
 		discard;
 	#endif
 	
-	const float depth = length(vLightPosition - In.WorldSpacePosition);
-	return depth / fFarPlane;
+	
+#if LINEAR_DEPTH
+	//float fFarPlane = 1.0f;
+	//switch (cbPerView.LightType)
+	//{
+	//	case 0: fFarPlane = cbPerFrame.Lights.point_casters[cbPerView.LightIndex].range; break;
+	//	case 1: fFarPlane = cbPerFrame.Lights.spot_casters[cbPerView.LightIndex].range; break;
+	//}
+	
+	const float depth = length(cbPerView.CameraPosition - In.WorldSpacePosition);
+	return depth / cbPerView.fFarPlane;
+#endif
 }

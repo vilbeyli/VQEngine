@@ -21,6 +21,7 @@
 #include "../CullingData.h"
 #include "../Math.h"
 
+#include <vector>
 #include <array>
 #include <memory>
 
