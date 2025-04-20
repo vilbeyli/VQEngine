@@ -141,7 +141,7 @@ private: // Derived Scenes shouldn't access these functions
 		, const std::vector<size_t>& vActiveLightIndices
 	);
 
-	void RecordRenderLightMeshCommands(const FSceneView& SceneView) const;
+	void GatherLightMeshRenderData(const FSceneView& SceneView) const;
 
 	void GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews& SceneShadowView, ThreadPool& UpdateWorkerThreadPool);
 	void CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerThreadPool);

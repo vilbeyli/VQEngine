@@ -456,55 +456,6 @@ void Scene::Update(float dt, int FRAME_DATA_INDEX)
 	this->UpdateScene(dt, SceneView);
 }
 
-static void RecordOutlineRenderCommands(
-	std::vector<FOutlineRenderData>& cmds,
-	const std::vector<size_t>& objHandles,
-	const Scene* pScene,
-	const XMMATRIX& matView,
-	const XMMATRIX& matProj,
-	const XMFLOAT4& SelectionColor
-)
-{
-	cmds.clear();
-	for (size_t hObj : objHandles)
-	{
-		const GameObject* pObj = pScene->GetGameObject(hObj);
-		if (!pObj)
-		{
-			//Log::Warning("pObj NULL in RecordOutlineRenderCommands");
-			continue;
-		}
-
-		const Transform& tf = *pScene->GetGameObjectTransform(hObj);
-		const XMMATRIX matWorld = tf.matWorldTransformation();
-		const XMMATRIX matNormal = tf.NormalMatrix(matWorld);
-		XMVECTOR det = XMMatrixDeterminant(matView);
-		const XMMATRIX matViewInverse = XMMatrixInverse(&det, matView);;
-		const Model& model = pScene->GetModel(pObj->mModelID);
-		for (const auto& pair : model.mData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH))
-		{
-			MeshID meshID = pair.first;
-			MaterialID matID = pair.second;
-			const Material& mat = pScene->GetMaterial(matID);
-			
-			FOutlineRenderData cmd = {};
-			cmd.pMesh = &pScene->GetMesh(meshID);
-			cmd.matID = matID;
-			cmd.pMaterial = &pScene->GetMaterial(matID);
-			cmd.cb.matWorld = matWorld;
-			cmd.cb.matWorldView = matWorld * matView;
-			cmd.cb.matNormalView = matNormal * matView;
-			cmd.cb.matProj = matProj;
-			cmd.cb.matViewInverse = matViewInverse;
-			cmd.cb.color = SelectionColor;
-			cmd.cb.uvScaleBias = float4(mat.tiling.x, mat.tiling.y, mat.uv_bias.x, mat.uv_bias.y);
-			cmd.cb.scale = 1.0f;
-			cmd.cb.heightDisplacement = mat.displacement;
-			cmds.push_back(cmd);
-		}
-	}
-}
-
 static void ExtractSceneView(FSceneView& SceneView, std::unordered_map<const Camera*, DirectX::XMMATRIX>& mViewProjectionMatrixHistory, const Camera& cam, std::pair<BufferID, BufferID> cubeVBIB)
 {
 	SCOPED_CPU_MARKER("ExtractSceneView");
@@ -601,7 +552,57 @@ static void CollectDebugVertexDrawParams(
 	}	
 }
 
-static void RecordRenderLightBoundsCommand(const Light& l,
+
+static void GatherOutlineMeshRenderData(
+	std::vector<FOutlineRenderData>& cmds,
+	const std::vector<size_t>& objHandles,
+	const Scene* pScene,
+	const XMMATRIX& matView,
+	const XMMATRIX& matProj,
+	const XMFLOAT4& SelectionColor
+)
+{
+	cmds.clear();
+	for (size_t hObj : objHandles)
+	{
+		const GameObject* pObj = pScene->GetGameObject(hObj);
+		if (!pObj)
+		{
+			//Log::Warning("pObj NULL in GatherOutlineMeshRenderData");
+			continue;
+		}
+
+		const Transform& tf = *pScene->GetGameObjectTransform(hObj);
+		const XMMATRIX matWorld = tf.matWorldTransformation();
+		const XMMATRIX matNormal = tf.NormalMatrix(matWorld);
+		XMVECTOR det = XMMatrixDeterminant(matView);
+		const XMMATRIX matViewInverse = XMMatrixInverse(&det, matView);;
+		const Model& model = pScene->GetModel(pObj->mModelID);
+		for (const auto& pair : model.mData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH))
+		{
+			MeshID meshID = pair.first;
+			MaterialID matID = pair.second;
+			const Material& mat = pScene->GetMaterial(matID);
+
+			FOutlineRenderData cmd = {};
+			cmd.pMesh = &pScene->GetMesh(meshID);
+			cmd.matID = matID;
+			cmd.pMaterial = &pScene->GetMaterial(matID);
+			cmd.cb.matWorld = matWorld;
+			cmd.cb.matWorldView = matWorld * matView;
+			cmd.cb.matNormalView = matNormal * matView;
+			cmd.cb.matProj = matProj;
+			cmd.cb.matViewInverse = matViewInverse;
+			cmd.cb.color = SelectionColor;
+			cmd.cb.uvScaleBias = float4(mat.tiling.x, mat.tiling.y, mat.uv_bias.x, mat.uv_bias.y);
+			cmd.cb.scale = 1.0f;
+			cmd.cb.heightDisplacement = mat.displacement;
+			cmds.push_back(cmd);
+		}
+	}
+}
+
+static void GatherLightBoundsRenderData(const Light& l,
 	std::vector<FLightRenderData>& cmds,
 	const XMVECTOR& CameraPosition,
 	const Scene* pScene
@@ -664,7 +665,6 @@ static void RecordRenderLightBoundsCommand(const Light& l,
 	}  break;
 	} // swicth
 }
-
 void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UIState, bool AppInSimulationState, int FRAME_DATA_INDEX)
 {
 	SCOPED_CPU_MARKER("Scene::PostUpdate()");
@@ -711,8 +711,8 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 
 	FSceneDrawData& DrawData = mRenderer.GetSceneDrawData(FRAME_DATA_INDEX);
 	
-	RecordRenderLightMeshCommands(SceneView);
-	RecordOutlineRenderCommands(DrawData.outlineRenderParams, mSelectedObjects, this, SceneView.view, SceneView.proj, SceneView.sceneRenderOptions.OutlineColor);
+	GatherLightMeshRenderData(SceneView);
+	GatherOutlineMeshRenderData(DrawData.outlineRenderParams, mSelectedObjects, this, SceneView.view, SceneView.proj, SceneView.sceneRenderOptions.OutlineColor);
 	 
 	if (UIState.bDrawLightVolume)
 	{
@@ -723,7 +723,7 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 			const Light& l = *lights[i];
 			if (l.bEnabled)
 			{
-				RecordRenderLightBoundsCommand(l, DrawData.lightBoundsRenderParams, SceneView.cameraPosition, this);
+				GatherLightBoundsRenderData(l, DrawData.lightBoundsRenderParams, SceneView.cameraPosition, this);
 			}
 		}
 	}
@@ -1224,9 +1224,7 @@ void Scene::CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerTh
 //
 //-------------------------------------------------------------------------------
 
-
-
-static void RecordRenderLightBoundsCommands(
+static void GatherLightBoundsRenderData(
 	const std::vector<Light>& vLights, 
 	std::vector<FLightRenderData>& cmds,
 	const XMVECTOR& CameraPosition,
@@ -1238,11 +1236,11 @@ static void RecordRenderLightBoundsCommands(
 		if (!l.bEnabled)
 			continue;
 
-		RecordRenderLightBoundsCommand(l, cmds, CameraPosition, pScene);
+		GatherLightBoundsRenderData(l, cmds, CameraPosition, pScene);
 	}
 }
 
-static void RecordRenderLightMeshCommands(
+static void GatherLightMeshRenderData(
 	const std::vector<Light>& vLights,
 	std::vector<FLightRenderData>& cmds,
 	const XMVECTOR& CameraPosition,
@@ -1291,34 +1289,23 @@ static void RecordRenderLightMeshCommands(
 }
 
 
-void Scene::RecordRenderLightMeshCommands(const FSceneView& SceneView) const
+void Scene::GatherLightMeshRenderData(const FSceneView& SceneView) const
 {
-	SCOPED_CPU_MARKER("Scene::RecordRenderLightMeshCommands()");
+	SCOPED_CPU_MARKER("GatherLightMeshRenderData");
 	FSceneDrawData& SceneDrawData = mRenderer.GetSceneDrawData(0);
 
 	SceneDrawData.lightBoundsRenderParams.clear();
 	SceneDrawData.lightRenderParams.clear();
 	if (SceneView.sceneRenderOptions.bDrawLightMeshes)
 	{
-		::RecordRenderLightMeshCommands(mLightsStatic    , SceneDrawData.lightRenderParams, SceneView.cameraPosition, this);
-		::RecordRenderLightMeshCommands(mLightsDynamic   , SceneDrawData.lightRenderParams, SceneView.cameraPosition, this);
-		::RecordRenderLightMeshCommands(mLightsStationary, SceneDrawData.lightRenderParams, SceneView.cameraPosition, this);
+		::GatherLightMeshRenderData(mLightsStatic    , SceneDrawData.lightRenderParams, SceneView.cameraPosition, this);
+		::GatherLightMeshRenderData(mLightsDynamic   , SceneDrawData.lightRenderParams, SceneView.cameraPosition, this);
+		::GatherLightMeshRenderData(mLightsStationary, SceneDrawData.lightRenderParams, SceneView.cameraPosition, this);
 	}
 	if (SceneView.sceneRenderOptions.bDrawLightBounds)
 	{
-		::RecordRenderLightBoundsCommands(mLightsStatic    , SceneDrawData.lightBoundsRenderParams, SceneView.cameraPosition, this);
-		::RecordRenderLightBoundsCommands(mLightsDynamic   , SceneDrawData.lightBoundsRenderParams, SceneView.cameraPosition, this);
-		::RecordRenderLightBoundsCommands(mLightsStationary, SceneDrawData.lightBoundsRenderParams, SceneView.cameraPosition, this);
+		::GatherLightBoundsRenderData(mLightsStatic    , SceneDrawData.lightBoundsRenderParams, SceneView.cameraPosition, this);
+		::GatherLightBoundsRenderData(mLightsDynamic   , SceneDrawData.lightBoundsRenderParams, SceneView.cameraPosition, this);
+		::GatherLightBoundsRenderData(mLightsStationary, SceneDrawData.lightBoundsRenderParams, SceneView.cameraPosition, this);
 	}
 }
-
-//-------------------------------------------------------------------------------
-//
-// MATERIAL REPRESENTATION
-//
-//-------------------------------------------------------------------------------
-FMaterialRepresentation::FMaterialRepresentation()
-	: DiffuseColor(MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE)
-	, EmissiveColor(MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE)
-{}
-

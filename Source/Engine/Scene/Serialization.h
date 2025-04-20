@@ -30,9 +30,9 @@
 struct FMaterialRepresentation
 {
 	std::string Name;
-	DirectX::XMFLOAT3 DiffuseColor;
+	DirectX::XMFLOAT3 DiffuseColor = { MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE };
 	float Alpha = MATERIAL_UNINITIALIZED_VALUE;
-	DirectX::XMFLOAT3 EmissiveColor;
+	DirectX::XMFLOAT3 EmissiveColor = { MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE };
 	float EmissiveIntensity = MATERIAL_UNINITIALIZED_VALUE;
 	float Metalness = MATERIAL_UNINITIALIZED_VALUE;
 	float Roughness = MATERIAL_UNINITIALIZED_VALUE;
@@ -54,8 +54,6 @@ struct FMaterialRepresentation
 	std::string RoughnessMapFilePath;
 	std::string AOMapFilePath;
 	std::string HeightMapFilePath;
-
-	FMaterialRepresentation();
 };
 struct FGameObjectRepresentation
 {
