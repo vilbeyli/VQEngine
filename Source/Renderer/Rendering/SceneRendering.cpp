@@ -216,12 +216,12 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 	}
 
 	const FSceneDrawData& SceneDrawData = GetSceneDrawData(FRAME_DATA_INDEX);
-	mRenderStats.NumLitMeshDrawCommands = SceneDrawData.mainViewDrawParams.size();
-	mRenderStats.NumBoundingBoxDrawCommands = SceneView.NumMeshBBRenderCmds;
+	mRenderStats.NumLitMeshDrawCommands = (uint)SceneDrawData.mainViewDrawParams.size();
+	mRenderStats.NumBoundingBoxDrawCommands = (uint)SceneView.NumMeshBBRenderCmds;
 	mRenderStats.NumShadowMeshDrawCommands = 0;
-	for (auto& vParams : SceneDrawData.spotShadowDrawParams ) mRenderStats.NumShadowMeshDrawCommands += vParams.size();
-	for (auto& vParams : SceneDrawData.pointShadowDrawParams) mRenderStats.NumShadowMeshDrawCommands += vParams.size();
-	mRenderStats.NumShadowMeshDrawCommands += SceneDrawData.directionalShadowDrawParams.size();
+	for (auto& vParams : SceneDrawData.spotShadowDrawParams ) mRenderStats.NumShadowMeshDrawCommands += (uint)vParams.size();
+	for (auto& vParams : SceneDrawData.pointShadowDrawParams) mRenderStats.NumShadowMeshDrawCommands += (uint)vParams.size();
+	mRenderStats.NumShadowMeshDrawCommands += (uint)SceneDrawData.directionalShadowDrawParams.size();
 	mRenderStats.NumDispatches = 0;
 	mRenderStats.NumDraws = 0;
 

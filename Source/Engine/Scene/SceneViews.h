@@ -160,8 +160,8 @@ struct FSceneView
 	int                   SceneRTWidth = 0;
 	int                   SceneRTHeight = 0;
 
-	size_t NumGameObjectBBRenderCmds = 0;
-	size_t NumMeshBBRenderCmds = 0;
+	uint NumGameObjectBBRenderCmds = 0;
+	uint NumMeshBBRenderCmds = 0;
 	BufferID cubeVB = INVALID_ID;
 	BufferID cubeIB = INVALID_ID;
 	const std::vector<FBoundingBox>* pGameObjectBoundingBoxList = nullptr;
@@ -171,7 +171,7 @@ struct FSceneView
 	// Renderer uses FSceneDrawData in DrawData.h to fill in batched draw parameters.
 	std::vector<FFrustumRenderList> FrustumRenderLists;
 	// Culled frustums are not removed from the vector so we track the active ones here
-	size_t NumActiveFrustumRenderLists = 0; 
+	uint NumActiveFrustumRenderLists = 0; 
 
 
 	VQ_SHADER_DATA::SceneLighting GPULightingData;

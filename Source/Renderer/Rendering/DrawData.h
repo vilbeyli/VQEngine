@@ -35,29 +35,32 @@ struct Material;
 // ------------------------------------------------------------------------------------
 // NON-INSTANCED DRAW DATA
 // ------------------------------------------------------------------------------------
-struct FMeshRenderDataBase
+struct FMeshRenderData
 {
-	const Mesh* pMesh = nullptr;
 	DirectX::XMMATRIX matWorldTransformation;
 	DirectX::XMMATRIX matWorldTransformationPrev;
-};
-struct FMeshRenderData : public FMeshRenderDataBase
-{
-	MaterialID matID = INVALID_ID;
 	DirectX::XMMATRIX matNormalTransformation; //ID ?
+	const Mesh* pMesh = nullptr;
+	MaterialID matID = INVALID_ID;
 	
 	// debug data
 	std::string ModelName;
 	std::string MaterialName;
 };
-struct FShadowMeshRenderData : public FMeshRenderDataBase
+struct FShadowMeshRenderData
 {
+	DirectX::XMMATRIX matWorldTransformation;
+	DirectX::XMMATRIX matWorldTransformationPrev;
 	DirectX::XMMATRIX matWorldViewProj;
+	const Mesh* pMesh = nullptr;
 	MaterialID matID = INVALID_ID;
 };
-struct FWireframeRenderData : public FMeshRenderDataBase
+struct FWireframeRenderData
 {
+	DirectX::XMMATRIX matWorldTransformation;
+	DirectX::XMMATRIX matWorldTransformationPrev;
 	DirectX::XMFLOAT4 color;
+	const Mesh* pMesh = nullptr;
 };
 struct FOutlineRenderData
 {

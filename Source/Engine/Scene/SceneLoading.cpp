@@ -416,7 +416,6 @@ void Scene::LoadCameras(std::vector<FCameraParameters>& CameraParams)
 void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 {
 	SCOPED_CPU_MARKER("Scene::LoadPostProcessSettings()");
-	// TODO: remove hardcode
 
 	const uint fWidth  = this->mpWindow->GetWidth();
 	const uint fHeight = this->mpWindow->GetHeight();

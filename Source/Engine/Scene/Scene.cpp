@@ -680,8 +680,8 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 	ExtractSceneView(SceneView, mViewProjectionMatrixHistory, cam, this->mMeshes.at(EBuiltInMeshes::CUBE).GetIABufferIDs());
 	SceneView.pEnvironmentMapMesh        = &mMeshes.at((MeshID)EBuiltInMeshes::CUBE);
 	SceneView.bAppIsInSimulationState    = AppInSimulationState;
-	SceneView.NumGameObjectBBRenderCmds  = (SceneView.sceneRenderOptions.bDrawGameObjectBoundingBoxes ? DIV_AND_ROUND_UP(mBoundingBoxHierarchy.mGameObjectBoundingBoxes.size(), MAX_INSTANCE_COUNT__UNLIT_SHADER) : 0);
-	SceneView.NumMeshBBRenderCmds        = (SceneView.sceneRenderOptions.bDrawMeshBoundingBoxes       ? DIV_AND_ROUND_UP(mBoundingBoxHierarchy.mMeshBoundingBoxes.size()      , MAX_INSTANCE_COUNT__UNLIT_SHADER) : 0);
+	SceneView.NumGameObjectBBRenderCmds  = (uint)(SceneView.sceneRenderOptions.bDrawGameObjectBoundingBoxes ? DIV_AND_ROUND_UP(mBoundingBoxHierarchy.mGameObjectBoundingBoxes.size(), MAX_INSTANCE_COUNT__UNLIT_SHADER) : 0);
+	SceneView.NumMeshBBRenderCmds        = (uint)(SceneView.sceneRenderOptions.bDrawMeshBoundingBoxes       ? DIV_AND_ROUND_UP(mBoundingBoxHierarchy.mMeshBoundingBoxes.size()      , MAX_INSTANCE_COUNT__UNLIT_SHADER) : 0);
 	SceneView.pGameObjectBoundingBoxList = &mBoundingBoxHierarchy.mGameObjectBoundingBoxes;
 	SceneView.pMeshBoundingBoxList       = &mBoundingBoxHierarchy.mMeshBoundingBoxes;
 
@@ -1049,7 +1049,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 			FrustumPlanesets[iFrustum++] = FFrustumPlaneset::ExtractFromMatrix(SceneShadowView.ShadowViews_Spot[iSpot]);
 		}
 	}
-	SceneView.NumActiveFrustumRenderLists = iFrustum;
+	SceneView.NumActiveFrustumRenderLists = (uint)iFrustum;
 
 	constexpr size_t MINIMUM_WORK_SIZE_PER_THREAD = 256;
 
