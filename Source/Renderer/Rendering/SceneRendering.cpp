@@ -203,12 +203,27 @@ HRESULT VQRenderer::PreRenderScene(
 HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow, const FSceneView& SceneView, const FSceneShadowViews& ShadowView, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings, const FUIState& UIState, bool bHDRDisplay)
 {
 	SCOPED_CPU_MARKER("Renderer.RenderScene");
-	
+#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
+	const int FRAME_DATA_INDEX = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
+#else
+	const int FRAME_DATA_INDEX = 0;
+#endif
+
 	{
 		SCOPED_CPU_MARKER_C("WaitBatching", 0xFFFF0000);
 		for(size_t i = 0; i < SceneView.NumActiveFrustumRenderLists; ++i)
 			SceneView.FrustumRenderLists[i].BatchDoneSignal.Wait();
 	}
+
+	const FSceneDrawData& SceneDrawData = GetSceneDrawData(FRAME_DATA_INDEX);
+	mRenderStats.NumLitMeshDrawCommands = SceneDrawData.mainViewDrawParams.size();
+	mRenderStats.NumBoundingBoxDrawCommands = SceneView.NumMeshBBRenderCmds;
+	mRenderStats.NumShadowMeshDrawCommands = 0;
+	for (auto& vParams : SceneDrawData.spotShadowDrawParams ) mRenderStats.NumShadowMeshDrawCommands += vParams.size();
+	for (auto& vParams : SceneDrawData.pointShadowDrawParams) mRenderStats.NumShadowMeshDrawCommands += vParams.size();
+	mRenderStats.NumShadowMeshDrawCommands += SceneDrawData.directionalShadowDrawParams.size();
+	mRenderStats.NumDispatches = 0;
+	mRenderStats.NumDraws = 0;
 
 	HWND hwnd = pWindow->GetHWND();
 	const uint32 W = pWindow->GetWidth();
@@ -219,11 +234,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 	HRESULT hr                              = S_OK;
 	const int NUM_BACK_BUFFERS              = ctx.GetNumSwapchainBuffers();
 	const int BACK_BUFFER_INDEX             = ctx.GetCurrentSwapchainBufferIndex();
-#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
-	const int FRAME_DATA_INDEX              = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
-#else
-	const int FRAME_DATA_INDEX = 0;
-#endif
+
 	const bool bReflectionsEnabled = GFXSettings.Reflections != EReflections::REFLECTIONS_OFF && GFXSettings.Reflections == EReflections::SCREEN_SPACE_REFLECTIONS__FFX; // TODO: remove the && after RayTracing is added
 	const bool bDownsampleDepth    = GFXSettings.Reflections == EReflections::SCREEN_SPACE_REFLECTIONS__FFX;
 	const bool& bMSAA              = GFXSettings.bAntiAliasing;
@@ -242,8 +253,6 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 	CommandQueue& GFXCmdQ = this->GetCommandQueue(CommandQueue::EType::GFX);
 	CommandQueue& CPYCmdQ = this->GetCommandQueue(CommandQueue::EType::COPY);
 	CommandQueue& CMPCmdQ = this->GetCommandQueue(CommandQueue::EType::COMPUTE);
-
-	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
 
 	// ---------------------------------------------------------------------------------------------------
 	// TODO: undo const cast and assign in a proper spot -------------------------------------------------
@@ -286,7 +295,6 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 
 	const float RenderResolutionX = static_cast<float>(SceneView.SceneRTWidth);
 	const float RenderResolutionY = static_cast<float>(SceneView.SceneRTHeight);
-	mRenderStats = {};
 
 	UINT64 SSAODoneFenceValue = mAsyncComputeSSAODoneFence[BACK_BUFFER_INDEX].GetValue();
 	D3D12_GPU_VIRTUAL_ADDRESS cbPerFrame = {};
@@ -745,7 +753,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 #endif
 	}
 
-	++mNumFramesRendered;
+	++mRenderStats.mNumFramesRendered;
 	return hr;
 }
 
@@ -2065,7 +2073,7 @@ void VQRenderer::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 		params.ffxCBuffer.envMapRotation                       = GetHDRIRotationMatrix(SceneView.HDRIYawOffset);
 		params.ffxCBuffer.inverseBufferDimensions[0]           = 1.0f / params.ffxCBuffer.bufferDimensions[0];
 		params.ffxCBuffer.inverseBufferDimensions[1]           = 1.0f / params.ffxCBuffer.bufferDimensions[1];
-		params.ffxCBuffer.frameIndex                           = static_cast<uint32>(mNumFramesRendered);
+		params.ffxCBuffer.frameIndex                           = static_cast<uint32>(mRenderStats.mNumFramesRendered);
 		params.ffxCBuffer.temporalStabilityFactor              = UIParams.temporalStability;
 		params.ffxCBuffer.depthBufferThickness                 = UIParams.depthBufferThickness;
 		params.ffxCBuffer.roughnessThreshold                   = UIParams.roughnessThreshold;

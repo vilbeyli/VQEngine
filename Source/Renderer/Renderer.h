@@ -84,8 +84,13 @@ enum EProceduralTextures
 };
 struct FRenderStats
 {
-	uint NumDraws;
-	uint NumDispatches;
+	uint64 mNumFramesRendered = 0;
+	uint   NumDraws = 0;
+	uint   NumDispatches = 0;
+	uint   NumLitMeshDrawCommands = 0;
+	uint   NumShadowMeshDrawCommands = 0;
+	uint   NumBoundingBoxDrawCommands = 0;
+	inline void Reset() { *this = FRenderStats(); }
 };
 
 //========================================================================================================================================================================================================---
@@ -248,7 +253,8 @@ public:
 	const FRenderingResources_DebugWindow& GetRenderingResources_DebugWindow() const { return mResources_DebugWnd; }
 	FSceneDrawData& GetSceneDrawData(int FRAME_INDEX);
 
-	void ResetNumFramesRendered() { mNumFramesRendered = 0; }
+	void ResetNumFramesRendered() { mRenderStats.mNumFramesRendered = 0; }
+	const FRenderStats& GetRenderStats() const { return mRenderStats; }
 
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Sync
@@ -323,7 +329,6 @@ private:
 	std::unordered_map<HWND, FWindowRenderContext> mRenderContextLookup;
 	FRenderingResources_MainWindow  mResources_MainWnd;
 	FRenderingResources_DebugWindow mResources_DebugWnd;
-	uint64                          mNumFramesRendered;
 	std::vector<FSceneDrawData>     mFrameSceneDrawData; // per-frame if pipelined update+render threads
 
 	// sync

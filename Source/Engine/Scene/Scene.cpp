@@ -303,21 +303,7 @@ FSceneStats Scene::GetSceneRenderStats(int FRAME_DATA_INDEX) const
 	fnCountLights(mLightsDynamic);
 	fnCountLights(mLightsStatic);
 
-
-	stats.NumMeshRenderCommands        = 0; // TODO: static_cast<uint>(view.meshRenderParams.size() + view.lightRenderParams.size() + view.lightBoundsRenderParams.size() /*+ view.boundingBoxRenderParams.size()*/);
-	stats.NumBoundingBoxRenderCommands = 0; // TODO: static_cast<uint>(view.boundingBoxRenderParams.size());
-	//auto fnCountShadowMeshRenderCommands = [](const FSceneShadowViews& shadowView) -> uint // TODO:
-	//{
-	//	uint NumShadowRenderCmds = 0;
-	//	for (uint i = 0; i < shadowView.NumPointShadowViews; ++i)
-	//	for (uint face = 0; face < 6u; ++face)
-	//		NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowViews_Point[i * 6 + face].meshRenderParams.size());
-	//	for (uint i = 0; i < shadowView.NumSpotShadowViews; ++i)
-	//		NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowViews_Spot[i].meshRenderParams.size());
-	//	NumShadowRenderCmds += static_cast<uint>(shadowView.ShadowView_Directional.meshRenderParams.size());
-	//	return NumShadowRenderCmds;
-	//};
-	stats.NumShadowMeshRenderCommands = 0;// fnCountShadowMeshRenderCommands(shadowView);
+	stats.pRenderStats = &this->mRenderer.GetRenderStats();
 	
 	stats.NumMeshes    = static_cast<uint>(this->mMeshes.size());
 	stats.NumModels    = static_cast<uint>(this->mModels.size());

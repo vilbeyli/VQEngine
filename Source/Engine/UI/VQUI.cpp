@@ -836,13 +836,12 @@ void VQEngine::DrawProfilerWindow(const FSceneStats& FrameStats, float dt)
 		ImGuiSpacing3();
 		if (ImGui::CollapsingHeader("RENDER COMMANDS", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			ImGui::TextColored(DataTextColor, "Mesh         : %d", s.NumMeshRenderCommands);
-			ImGui::TextColored(DataTextColor, "Shadow Mesh  : %d", s.NumShadowMeshRenderCommands);
-			ImGui::TextColored(DataTextColor, "Bounding Box : %d", s.NumBoundingBoxRenderCommands);
-#if 0 // TODO: track renderer API calls
-			ImGui::TextColored(DataTextColor, "Draw Calls     : %d", mRenderStats.NumDraws);
-			ImGui::TextColored(DataTextColor, "Dispatch Calls : %d", mRenderStats.NumDispatches);
-#endif
+			const FRenderStats& rs = *s.pRenderStats;
+			ImGui::TextColored(DataTextColor, "Lit Mesh         : %d", rs.NumLitMeshDrawCommands);
+			ImGui::TextColored(DataTextColor, "Shadow Mesh      : %d", rs.NumShadowMeshDrawCommands);
+			ImGui::TextColored(DataTextColor, "Bounding Box     : %d", rs.NumBoundingBoxDrawCommands);
+			ImGui::TextColored(DataTextColor, "Total Draws      : %d", rs.NumDraws);
+			ImGui::TextColored(DataTextColor, "Total Dispatches : %d", rs.NumDispatches);
 		}
 	}
 	ImGui::End();

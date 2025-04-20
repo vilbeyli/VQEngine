@@ -22,7 +22,7 @@
 #include "Model.h"
 #include "Transform.h"
 #include "Engine/PostProcess/PostProcess.h"
-#include "Libs/VQUtils/Source/Multithreading.h"
+#include "Libs/VQUtils/Source/Multithreading.h" // TaskSignal
 #include "Engine/Core/Memory.h"
 
 // typedefs

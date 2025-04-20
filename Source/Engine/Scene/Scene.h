@@ -44,8 +44,10 @@ class Window;
 struct FSceneView;
 struct FSceneShadowViews;
 struct FShadowView;
+struct FRenderStats;
 
 
+// TODO: remove namespace
 namespace InstanceBatching
 {
 	inline int GetLODFromProjectedScreenArea(float fArea, int NumMaxLODs)
@@ -69,29 +71,27 @@ namespace InstanceBatching
 struct FSceneStats
 {
 	// lights -----------------------
-	uint NumDirectionalLights;
-	uint NumStaticLights;
-	uint NumDynamicLights;
-	uint NumStationaryLights;
-	uint NumSpotLights;
-	uint NumPointLights;
-	uint NumDisabledSpotLights;
-	uint NumDisabledPointLights;
-	uint NumDisabledDirectionalLights;
-	uint NumShadowingPointLights;
-	uint NumShadowingSpotLights;
+	uint NumDirectionalLights = 0;
+	uint NumStaticLights = 0;
+	uint NumDynamicLights = 0;
+	uint NumStationaryLights = 0;
+	uint NumSpotLights = 0;
+	uint NumPointLights = 0;
+	uint NumDisabledSpotLights = 0;
+	uint NumDisabledPointLights = 0;
+	uint NumDisabledDirectionalLights = 0;
+	uint NumShadowingPointLights = 0;
+	uint NumShadowingSpotLights = 0;
 
 	// render cmds ------------------
-	uint NumMeshRenderCommands;
-	uint NumShadowMeshRenderCommands;
-	uint NumBoundingBoxRenderCommands;
+	const FRenderStats* pRenderStats = nullptr;
 
 	// scene ------------------------
-	uint NumMeshes;
-	uint NumModels;
-	uint NumMaterials;
-	uint NumObjects;
-	uint NumCameras;
+	uint NumMeshes = 0;
+	uint NumModels = 0;
+	uint NumMaterials = 0;
+	uint NumObjects = 0;
+	uint NumCameras = 0;
 };
 
 constexpr size_t NUM_MATERIAL_POOL_SIZE = 1024 * 64;

@@ -267,8 +267,6 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		mRenderPasses[ERenderPass::Outline               ] = std::make_shared<OutlinePass>(*this);
 	}
 
-	mNumFramesRendered = 0;
-
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mFrameSceneDrawData.resize(NumFrameBuffers);
 	mFrameShadowDrawData.resize(NumFrameBuffers);
