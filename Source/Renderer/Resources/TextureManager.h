@@ -83,7 +83,7 @@ public:
     void Update(); // Process streaming, uploads
 
     const FTexture*        GetTexture(TextureID ID) const;
-    inline ID3D12Resource* GetTextureResource(TextureID ID) const { return GetTexture(ID)->Resource; }
+    inline ID3D12Resource* GetTextureResource(TextureID ID) const { const FTexture* pTex = GetTexture(ID); return pTex ? pTex->Resource : nullptr; }
     inline DXGI_FORMAT     GetTextureFormat(TextureID ID) const { return GetTexture(ID)->Format; }
     void                   GetTextureDimensions(TextureID ID, int& Width, int& Height, int& Slices, int& Mips) const;
     inline bool            GetTextureAlphaChannelUsed(TextureID ID) const { return GetTexture(ID)->UsesAlphaChannel; }
@@ -169,6 +169,5 @@ private:
     void ScheduleNextTask(TextureID id);
 
     void TextureUploadThread_Main();
-    void ProcessTextureUploadQueue();
     void ProcessTextureUpload(const FTextureUploadTask& Task);
 };

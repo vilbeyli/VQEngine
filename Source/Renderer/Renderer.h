@@ -116,7 +116,7 @@ public:
 	// Device & Queues
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	inline ID3D12Device*         GetDevicePtr() const { return mDevice.GetDevicePtr(); }
-	inline CommandQueue&         GetCommandQueue(CommandQueue::EType eType) { return mCmdQueues[(int)eType]; }
+	inline CommandQueue&         GetCommandQueue(ECommandQueueType eType) { return mCmdQueues[(int)eType]; }
 	inline FDeviceCapabilities   GetDeviceCapabilities() const { return mDevice.GetDeviceCapabilities(); }
 
 
@@ -221,7 +221,7 @@ public:
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Render (Public)
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-	void PreFilterEnvironmentMap(const Mesh& CubeMesh, HWND hwnd);
+	void PreFilterEnvironmentMap(const Mesh& CubeMesh);
 
 	HRESULT PreRenderScene(ThreadPool& WorkerThreads,
 		const Window* pWindow,
@@ -283,10 +283,15 @@ private:
 	
 	// GPU
 	Device mDevice;
-	std::array<CommandQueue, CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES> mCmdQueues;
+	CommandQueue mCmdQueues[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES];
+	std::vector<std::vector<ID3D12CommandAllocator*>> mCommandAllocators[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES]; // pre queue type, per back buffer, per recording thread
+
+	std::vector<ID3D12CommandList*> mpCmds[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES]; // per queue, per recording thread
+	std::vector<DynamicBufferHeap> mDynamicHeap_ConstantBuffer; // per recording thread
+	UINT mNumCurrentlyRecordingThreads[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES];
 
 	// memory
-	D3D12MA::Allocator*    mpAllocator;
+	D3D12MA::Allocator*    mpAllocator = nullptr;
 	
 	StaticResourceViewHeap mHeapRTV;   // CPU-visible heap
 	StaticResourceViewHeap mHeapDSV;   // CPU-visible heap
@@ -323,11 +328,11 @@ private:
 	std::unordered_map<PSO_ID, ID3D12PipelineState*> mPSOs;
 	ThreadPool mWorkers_PSOLoad;
 	ThreadPool mWorkers_ShaderLoad;
-	struct FPSOCompileResult { ID3D12PipelineState* pPSO; PSO_ID id; };
+	struct FPSOCompileResult      { ID3D12PipelineState* pPSO; PSO_ID id; };
 	struct FShaderLoadTaskContext { std::queue<FShaderStageCompileDesc> TaskQueue; };
-	std::vector<std::shared_future<FPSOCompileResult>> mPSOCompileResults;
-	std::vector<std::shared_future<FShaderStageCompileResult>>     mShaderCompileResults;
-	std::unordered_map < TaskID, FShaderLoadTaskContext>           mLookup_ShaderLoadContext;
+	std::vector<std::shared_future<FPSOCompileResult>        > mPSOCompileResults;
+	std::vector<std::shared_future<FShaderStageCompileResult>> mShaderCompileResults;
+	std::unordered_map < TaskID, FShaderLoadTaskContext>       mLookup_ShaderLoadContext;
 
 	// rendering
 	std::vector<std::shared_ptr<IRenderPass>>      mRenderPasses; // WIP design
@@ -373,6 +378,7 @@ private:
 
 	ID3D12PipelineState* CompileGraphicsPSO(FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults);
 	ID3D12PipelineState* CompileComputePSO (FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults);
+	const FPSOCompileResult WaitPSOReady(PSO_ID psoID);
 
 	FShaderStageCompileResult LoadShader(const FShaderStageCompileDesc& shaderStageDesc, const std::unordered_map<std::string, bool>& ShaderCacheDirtyMap);
 
@@ -382,10 +388,14 @@ private:
 
 	bool CheckContext(HWND hwnd) const;
 
+	void AllocateCommandLists(ECommandQueueType eQueueType, size_t iBackBuffer, size_t NumRecordingThreads);
+	void ResetCommandLists(ECommandQueueType eQueueType, size_t iBackBuffer, size_t NumRecordingThreads);
+
+	void AllocateConstantBufferMemory(uint32_t NumHeaps, uint32_t NumBackBuffers, uint32_t MemoryPerHeap);
+
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Render (Private)
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-	void ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, SRV_ID& outSRV_ID);
 	void            RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, ID3D12CommandList* pCmdCopy, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, const FSceneShadowViews& ShadowView, const int BACK_BUFFER_INDEX, const FGraphicsSettings& GFXSettings);
 	void            TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings);
 	void            RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView, const FSceneView& SceneView);
@@ -425,6 +435,7 @@ public:
 	static std::vector< VQSystemInfo::FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters = false, IDXGIFactory6* pFactory = nullptr);
 	static const std::string_view&               DXGIFormatAsString(DXGI_FORMAT format);
 	static EProceduralTextures                   GetProceduralTextureEnumFromName(const std::string& ProceduralTextureName);
+	static D3D12_COMMAND_LIST_TYPE               GetDX12CmdListType(ECommandQueueType type);
 
 	static bool ShouldEnableAsyncCompute(const FGraphicsSettings& GFXSettings, const FSceneView& SceneView, const FSceneShadowViews& ShadowView);
 	static bool ShouldUseMotionVectorsTarget(const FGraphicsSettings& GFXSettings);

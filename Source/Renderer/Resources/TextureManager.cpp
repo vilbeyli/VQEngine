@@ -891,6 +891,7 @@ void TextureManager::TextureUploadThread_Main()
 	SCOPED_CPU_MARKER_C("TextureUploadThread_Main()", 0xFFCC22CC);
 	while (!mExitUploadThread.load())
 	{
+		SCOPED_CPU_MARKER("ProcessTextureUploadQueue");
 		{
 			SCOPED_CPU_MARKER_C("WAIT_TASK", 0xFFAA0000);
 			mUploadSignal.Wait([this]() { return !mUploadQueue.empty() || mExitUploadThread.load(); });
@@ -899,7 +900,40 @@ void TextureManager::TextureUploadThread_Main()
 		if (mExitUploadThread.load())
 			break;
 
-		ProcessTextureUploadQueue();
+		std::vector<TextureID> processedIDs;
+		{
+			SCOPED_CPU_MARKER("ProcessQueue");
+			FTextureUploadTask task;
+			while (mUploadQueue.try_pop(task))
+			{
+				processedIDs.push_back(task.ID);
+				ProcessTextureUpload(task);
+			}
+		}
+
+		if (processedIDs.empty())
+		{
+			return;
+		}
+
+		{
+			SCOPED_CPU_MARKER("UploadToGPUAndWait");
+			std::unique_lock<std::mutex> lock(*mpUploadHeapMutex);
+			mpUploadHeap->UploadToGPUAndWait();
+		}
+		{
+			SCOPED_CPU_MARKER("NotifyCompletion");
+			std::lock_guard<std::mutex> lock(mTaskMutex);
+			for (TextureID id : processedIDs)
+			{
+				auto it = mTaskStates.find(id);
+				if (it != mTaskStates.end())
+				{
+					it->second.State = ETextureTaskState::Ready;
+					it->second.CompletionSignal.count_down();
+				}
+			}
+		}
 	}
 }
 
@@ -965,16 +999,18 @@ void TextureManager::ProcessTextureUpload(const FTextureUploadTask& Task)
 	}
 	else 
 	{
+		SCOPED_CPU_MARKER("CopyPixels");
 		const int ArraySize = 1; // Array textures not implemented yet
 		const UINT BytePP = static_cast<UINT>(VQ_DXGI_UTILS::GetPixelByteSize(D3DDesc.Format));
 		const UINT ImgSizeInBytes = BytePP * PlacedSubresource[0].Footprint.Width * PlacedSubresource[0].Footprint.Height;
 
 		for (int ArrayIdx = 0; ArrayIdx < ArraySize; ++ArrayIdx) 
 		{
+			SCOPED_CPU_MARKER("Array");
 			for (uint Mip = 0; Mip < MipCount; ++Mip) 
 			{
+				SCOPED_CPU_MARKER("Mip");
 				{
-					SCOPED_CPU_MARKER("CopyPixels");
 					VQ_DXGI_UTILS::CopyPixels(
 						Task.DataArray[Mip],
 						pUploadBufferMem + PlacedSubresource[Mip].Offset,
@@ -1043,44 +1079,4 @@ void TextureManager::ProcessTextureUpload(const FTextureUploadTask& Task)
 		}
 	}
 
-}
-
-void TextureManager::ProcessTextureUploadQueue()
-{
-	SCOPED_CPU_MARKER("ProcessTextureUploadQueue");
-
-	std::vector<TextureID> processedIDs;
-	{
-		SCOPED_CPU_MARKER("ProcessQueue");
-		FTextureUploadTask task;
-		while (mUploadQueue.try_pop(task)) 
-		{
-			processedIDs.push_back(task.ID);
-			ProcessTextureUpload(task);
-		}
-	}
-
-	if (processedIDs.empty())
-	{
-		return;
-	}
-
-	{
-		SCOPED_CPU_MARKER("UploadToGPUAndWait");
-		std::unique_lock<std::mutex> lock(*mpUploadHeapMutex);
-		mpUploadHeap->UploadToGPUAndWait();
-	}
-	{
-		SCOPED_CPU_MARKER("NotifyCompletion");
-		std::lock_guard<std::mutex> lock(mTaskMutex);
-		for (TextureID id : processedIDs)
-		{
-			auto it = mTaskStates.find(id);
-			if (it != mTaskStates.end())
-			{
-				it->second.State = ETextureTaskState::Ready;
-				it->second.CompletionSignal.count_down();
-			}
-		}
-	}
 }

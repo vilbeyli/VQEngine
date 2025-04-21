@@ -396,7 +396,7 @@ void VQEngine::RenderThread_RenderMainWindow()
 
 	if (mbEnvironmentMapPreFilter.load())
 	{
-		mpRenderer->PreFilterEnvironmentMap(mBuiltinMeshes[EBuiltInMeshes::CUBE], hwndMain);
+		mpRenderer->PreFilterEnvironmentMap(mBuiltinMeshes[EBuiltInMeshes::CUBE]);
 		mbEnvironmentMapPreFilter.store(false);
 	}
 

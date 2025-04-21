@@ -113,6 +113,17 @@ std::wstring VQRenderer::GetFullPathOfShader(const std::string& shaderFileName)
 	return dir + StrUtil::ASCIIToUnicode(shaderFileName);
 }
 
+D3D12_COMMAND_LIST_TYPE VQRenderer::GetDX12CmdListType(ECommandQueueType type)
+{
+	switch (type)
+	{
+	case ECommandQueueType::GFX    : return D3D12_COMMAND_LIST_TYPE_DIRECT;
+	case ECommandQueueType::COMPUTE: return D3D12_COMMAND_LIST_TYPE_COMPUTE;
+	case ECommandQueueType::COPY   : return D3D12_COMMAND_LIST_TYPE_COPY;
+	}
+	assert(false);
+	return D3D12_COMMAND_LIST_TYPE_VIDEO_ENCODE; // shouldnt happen
+}
 
 
 // ---------------------------------------------------------------------------------------
@@ -192,11 +203,10 @@ static void InitializeD3D12MA(D3D12MA::Allocator*& mpAllocator, Device& mDevice)
 void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 {
 	SCOPED_CPU_MARKER("Renderer.Initialize");
-	Device* pVQDevice = &mDevice;
 
 	mTextureManager.InitializeEarly();
 
-	// initialize thread
+	// initialize threads
 	{
 		SCOPED_CPU_MARKER("Threads");
 		
@@ -226,16 +236,60 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		mLatchDeviceInitialized.count_down();
 	}
 
+	const int NumSwapchainBuffers = Settings.bUseTripleBuffering ? 3 : 2;
+	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
 	// Create Command Queues of different types
 	{
 		SCOPED_CPU_MARKER("CmdQ");
-		for (int i = 0; i < CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES; ++i)
+		for (int i = 0; i < ECommandQueueType::NUM_COMMAND_QUEUE_TYPES; ++i)
 		{
-			mCmdQueues[i].Create(pVQDevice, (CommandQueue::EType)i);
+			mCmdQueues[i].Create(&mDevice, (ECommandQueueType)i);
 		}
 
 		mLatchCmdQueuesInitialized.count_down();
+	}
+	{
+		SCOPED_CPU_MARKER("CmdAllocators");
+		for (int i = 0; i < ECommandQueueType::NUM_COMMAND_QUEUE_TYPES; ++i)
+			mCommandAllocators[i].resize(NumSwapchainBuffers); // allocate per-backbuffer containers
+		
+		for (int b = 0; b < NumSwapchainBuffers; ++b)
+		{
+			for (int q = 0; q < ECommandQueueType::NUM_COMMAND_QUEUE_TYPES; ++q)
+			{
+				mCommandAllocators[q][b].resize(1); // make at least one command allocator and command ready for each kind of queue, per back buffer
+				D3D12_COMMAND_LIST_TYPE t = GetDX12CmdListType((ECommandQueueType)q);
+				pDevice->CreateCommandAllocator(t, IID_PPV_ARGS(&this->mCommandAllocators[q][b][0]));
+			}
+
+			SetName(mCommandAllocators[ECommandQueueType::GFX    ][b][0], "CmdAllocGFX[%d][0]"    , b);
+			SetName(mCommandAllocators[ECommandQueueType::COPY   ][b][0], "CmdAllocCopy[%d][0]"   , b);
+			SetName(mCommandAllocators[ECommandQueueType::COMPUTE][b][0], "CmdAllocCompute[%d][0]", b);
+		}
+	}
+	{
+		SCOPED_CPU_MARKER("CmdLists");
+
+		// create 1 command list for each type
+		#if 0
+		// TODO: device4 create command list1 doesn't require command allocator, figure out if a further refactor is needed.
+		// https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nn-d3d12-id3d12device4
+		auto pDevice4 = pVQDevice->GetDevice4Ptr();
+		pDevice4->CreateCommandList1(0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_FLAG_NONE, this->mCommandAllocators[ECommandQueueType::GFX][b][b][0]);
+		#else	
+		for (int q = 0; q < ECommandQueueType::NUM_COMMAND_QUEUE_TYPES; ++q)
+		{
+			mpCmds[q].resize(1);
+			D3D12_COMMAND_LIST_TYPE t = GetDX12CmdListType((ECommandQueueType)q);
+			pDevice->CreateCommandList(0, t, this->mCommandAllocators[q][0][0], nullptr, IID_PPV_ARGS(&this->mpCmds[q][0]));
+			static_cast<ID3D12GraphicsCommandList*>(this->mpCmds[q][0])->Close();
+		}
+		#endif
+
+		// create 1 constant buffer
+		mDynamicHeap_ConstantBuffer.resize(1);
+		mDynamicHeap_ConstantBuffer[0].Create(pDevice, NumSwapchainBuffers, 64 * MEGABYTE);
 	}
 
 	// Initialize memory
@@ -247,7 +301,7 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
 		const uint32 UPLOAD_HEAP_SIZE = (512 + 256 + 128) * MEGABYTE; // TODO: from RendererSettings.ini
-		mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE, this->mCmdQueues[CommandQueue::EType::GFX].pQueue);
+		mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE, this->mCmdQueues[ECommandQueueType::GFX].pQueue);
 
 		constexpr uint32 NumDescsCBV = 100;
 		constexpr uint32 NumDescsSRV = 8192;
@@ -272,13 +326,11 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 	mTextureManager.InitializeLate(
 		mDevice.GetDevicePtr(),
 		mpAllocator,
-		mCmdQueues[CommandQueue::EType::COPY].pQueue,
+		mCmdQueues[ECommandQueueType::COPY].pQueue,
 		mHeapCBV_SRV_UAV,
 		mHeapUpload,
 		mMtxUploadHeap
 	);
-
-	mNumFramesRendered = 0;
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	mFrameSceneDrawData.resize(NumFrameBuffers);
@@ -485,12 +537,14 @@ void VQRenderer::Load()
 		mLatchRenderPassesInitialized.count_down();
 	});
 
-	LoadDefaultResources();
 	const float tDefaultRscs = timer.Tick();
 	Log::Info("[Renderer]    DefaultRscs=%.2fs", tDefaultRscs);
-
+	
+	WaitHeapsInitialized();
+	
 	AllocateDescriptors(mResources_MainWnd, *this);
 	CreateResourceViews(mResources_MainWnd, *this);
+	LoadDefaultResources();
 	mLatchDefaultResourcesLoaded.count_down();
 	const float tRenderRscs = timer.Tick();
 	Log::Info("[Renderer]    RenderRscs=%.2fs", tDefaultRscs);
@@ -510,6 +564,7 @@ void VQRenderer::Unload()
 
 void VQRenderer::Destroy()
 {
+	SCOPED_CPU_MARKER("Renderer.Destroy");
 	Log::Info("VQRenderer::Exit()");
 
 	for (std::shared_ptr<IRenderPass>& pPass : mRenderPasses)
@@ -528,6 +583,26 @@ void VQRenderer::Destroy()
 	mHeapRTV.Destroy();
 	mStaticHeap_VertexBuffer.Destroy();
 	mStaticHeap_IndexBuffer.Destroy();
+
+	
+	// clean up command lists & memory
+	assert(mCommandAllocators[ECommandQueueType::GFX].size() == mCommandAllocators[ECommandQueueType::COMPUTE].size());
+	assert(mCommandAllocators[ECommandQueueType::COMPUTE].size() == mCommandAllocators[ECommandQueueType::COPY].size());
+	assert(mCommandAllocators[ECommandQueueType::COPY].size() == mCommandAllocators[ECommandQueueType::GFX].size());
+	for (size_t BackBuffer = 0; BackBuffer < mCommandAllocators[ECommandQueueType::GFX].size(); ++BackBuffer)
+	{
+		for (int q = 0; q < ECommandQueueType::NUM_COMMAND_QUEUE_TYPES; ++q)
+		for (ID3D12CommandAllocator* pCmdAlloc : mCommandAllocators[q][BackBuffer]) 
+			if (pCmdAlloc) 
+				pCmdAlloc->Release();
+	}
+	for (int i = 0; i < ECommandQueueType::NUM_COMMAND_QUEUE_TYPES; ++i)
+	for (ID3D12CommandList* pCmd : mpCmds[i]) 
+		if (pCmd) pCmd->Release();
+
+	for (DynamicBufferHeap& Heap : mDynamicHeap_ConstantBuffer) // per cmd recording thread?
+		Heap.Destroy();
+	
 
 	// clean up textures
 	mTextureManager.Destroy();
@@ -555,7 +630,7 @@ void VQRenderer::Destroy()
 	}
 
 	// cleanp up device
-	for (int i = 0; i < CommandQueue::EType::NUM_COMMAND_QUEUE_TYPES; ++i)
+	for (int i = 0; i < ECommandQueueType::NUM_COMMAND_QUEUE_TYPES; ++i)
 	{
 		mCmdQueues[i].Destroy();
 	}
@@ -592,7 +667,7 @@ void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuf
 	Device*       pVQDevice = &mDevice;
 	ID3D12Device* pDevice = pVQDevice->GetDevicePtr();
 
-	FWindowRenderContext ctx = FWindowRenderContext(mCmdQueues[CommandQueue::EType::GFX]);
+	FWindowRenderContext ctx = FWindowRenderContext(mCmdQueues[ECommandQueueType::GFX]);
 	{
 		SCOPED_CPU_MARKER_C("WAIT_DEVICE_CREATE", 0xFF0000FF);
 		mLatchDeviceInitialized.wait();
@@ -711,6 +786,45 @@ FWindowRenderContext& VQRenderer::GetWindowRenderContext(HWND hwnd)
 // PRIVATE
 //
 
+static void ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, VQRenderer* pRenderer, SRV_ID& outSRV_ID)
+{
+	Log::Info("Environment Map:   ComputeBRDFIntegrationLUT");
+	SCOPED_GPU_MARKER(pCmd, "CreateBRDFIntegralLUT");
+
+	// Texture resource is created (on Renderer::LoadDefaultResources()) but not initialized at this point.
+	const TextureID TexBRDFLUT = pRenderer->GetProceduralTexture(EProceduralTextures::IBL_BRDF_INTEGRATION_LUT);
+	ID3D12Resource* pRscBRDFLUT = pRenderer->GetTextureResource(TexBRDFLUT);
+
+	int W, H;
+	pRenderer->GetTextureDimensions(TexBRDFLUT, W, H);
+
+	// Create & Initialize a UAV for the LUT 
+	UAV_ID uavBRDFLUT_ID = pRenderer->AllocateUAV();
+	pRenderer->InitializeUAV(uavBRDFLUT_ID, 0, TexBRDFLUT);
+	const UAV& uavBRDFLUT = pRenderer->GetUAV(uavBRDFLUT_ID);
+
+	pCmd->SetPipelineState(pRenderer->GetPSO(EBuiltinPSOs::BRDF_INTEGRATION_CS_PSO));
+	pCmd->SetComputeRootSignature(pRenderer->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__BRDFIntegrationCS));
+	pCmd->SetComputeRootDescriptorTable(0, uavBRDFLUT.GetGPUDescHandle());
+
+	// Dispatch
+	constexpr int THREAD_GROUP_X = 8;
+	constexpr int THREAD_GROUP_Y = 8;
+	const int DISPATCH_DIMENSION_X = (W + (THREAD_GROUP_X - 1)) / THREAD_GROUP_X;
+	const int DISPATCH_DIMENSION_Y = (H + (THREAD_GROUP_Y - 1)) / THREAD_GROUP_Y;
+	constexpr int DISPATCH_DIMENSION_Z = 1;
+	pCmd->Dispatch(DISPATCH_DIMENSION_X, DISPATCH_DIMENSION_Y, DISPATCH_DIMENSION_Z);
+
+	const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+	{
+		CD3DX12_RESOURCE_BARRIER::Transition(pRscBRDFLUT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+	};
+	pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+
+	outSRV_ID = pRenderer->GetProceduralTextureSRV_ID(EProceduralTextures::IBL_BRDF_INTEGRATION_LUT);
+}
+
+
 void VQRenderer::LoadDefaultResources()
 {
 	SCOPED_CPU_MARKER("LoadDefaultResources");
@@ -785,6 +899,25 @@ void VQRenderer::LoadDefaultResources()
 			mLookup_ProceduralTextureIDs [(EProceduralTextures)i] = textureIDs[i];
 			mLookup_ProceduralTextureSRVs[(EProceduralTextures)i] = this->AllocateAndInitializeSRV(textureIDs[i]);
 		}
+	}
+
+	
+	WaitMainSwapchainReady();
+
+	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpCmds[ECommandQueueType::GFX][0];
+
+	{
+		SCOPED_CPU_MARKER("WAIT_PSO_WORKER_DISPATCH");
+		mLatchPSOLoaderDispatched.wait();
+	}
+	FPSOCompileResult result = WaitPSOReady(EBuiltinPSOs::BRDF_INTEGRATION_CS_PSO);
+	mPSOs[result.id] = result.pPSO;
+
+	ComputeBRDFIntegrationLUT(pCmd, this, mResources_MainWnd.SRV_BRDFIntegrationLUT);
+	pCmd->Close();
+	{
+		SCOPED_CPU_MARKER("ExecuteCommandLists()");
+		mCmdQueues[ECommandQueueType::GFX].pQueue->ExecuteCommandLists(1, (ID3D12CommandList**)&pCmd);
 	}
 }
 void VQRenderer::UploadVertexAndIndexBufferHeaps()

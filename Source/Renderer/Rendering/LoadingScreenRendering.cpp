@@ -38,11 +38,15 @@ HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScr
 	HWND hwnd = pWindow->GetHWND();
 	FWindowRenderContext& ctx = mRenderContextLookup.at(hwnd);
 
-#if RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING
-	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, 1); // RenderThreadID == 1
-#else
-	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, 0);
-#endif
+	// pCmd[0] : resource initialization (GPU-generated)
+	// pCmd[1] : render loading screen
+	// pCmd[2] : <unused>
+	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpCmds[ECommandQueueType::GFX][1];
+	if (mpCmds[ECommandQueueType::GFX].size() > 2)
+	{
+		ID3D12GraphicsCommandList* pCmd2 = (ID3D12GraphicsCommandList*)mpCmds[ECommandQueueType::GFX][2];
+		pCmd2->Close();
+	}
 
 	// Transition SwapChain RT
 	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
@@ -78,17 +82,11 @@ HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScr
 		SCOPED_CPU_MARKER("WAIT_PSO_WORKER_DISPATCH");
 		mLatchPSOLoaderDispatched.wait();
 	}
+	
 	if (!mPSOCompileResults.empty())
 	{
-		std::shared_future<FPSOCompileResult>& future = mPSOCompileResults[bUseHDRRenderPath ? EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO : EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO];
-		if (future.valid())
-		{
-			future.wait();
-			const FPSOCompileResult& result = future.get();
-			mPSOs[result.id] = result.pPSO;
-		}
-		else
-			return S_OK;
+		const FPSOCompileResult& result = this->WaitPSOReady(bUseHDRRenderPath ? EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO : EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO);
+		mPSOs[result.id] = result.pPSO;
 	}
 
 	this->WaitLoadingScreenReady();
@@ -106,18 +104,13 @@ HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScr
 
 	pCmd->DrawInstanced(3, 1, 0, 0);
 
-	// Transition SwapChain for Present
-	pCmd->ResourceBarrier(1, &barrierWP); 
+	pCmd->ResourceBarrier(1, &barrierWP); // Transition SwapChain for Present
 
-	std::vector<ID3D12CommandList*>& vCmdLists = ctx.GetGFXCommandListPtrs();
-	const UINT NumCommandLists = ctx.GetNumCurrentlyRecordingThreads(CommandQueue::EType::GFX);
-	for (UINT i = 0; i < NumCommandLists; ++i)
-	{
-		static_cast<ID3D12GraphicsCommandList*>(vCmdLists[i])->Close();
-	}
+	pCmd->Close();
+
 	{
 		SCOPED_CPU_MARKER("ExecuteCommandLists()");
-		ctx.PresentQueue.pQueue->ExecuteCommandLists(NumCommandLists, (ID3D12CommandList**)vCmdLists.data());
+		ctx.PresentQueue.pQueue->ExecuteCommandLists(1, (ID3D12CommandList**)&pCmd);
 	}
 
 	hr = PresentFrame(ctx);

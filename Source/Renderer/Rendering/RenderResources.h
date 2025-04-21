@@ -91,6 +91,7 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	SRV_ID    SRV_SceneVisualization = INVALID_ID;
 	SRV_ID    SRV_SceneVisualizationMSAA = INVALID_ID;
 	SRV_ID    SRV_SceneMotionVectors = INVALID_ID;
+	SRV_ID    SRV_BRDFIntegrationLUT = INVALID_ID;
 
 	UAV_ID    UAV_FFXCACAO_Out = INVALID_ID;
 	UAV_ID    UAV_PostProcess_BlurIntermediate = INVALID_ID;

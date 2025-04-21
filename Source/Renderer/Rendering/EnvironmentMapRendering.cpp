@@ -21,9 +21,8 @@ void FEnvironmentMapRenderingResources::CreateRenderingResources(VQRenderer& Ren
 {
 	// HDR map
 	this->Tex_HDREnvironment = Renderer.CreateTextureFromFile(desc.FilePath.c_str(), false, true);
-	this->SRV_HDREnvironment = Renderer.AllocateAndInitializeSRV(this->Tex_HDREnvironment);
 	this->MaxContentLightLevel = static_cast<int>(desc.MaxContentLightLevel);
-
+	
 	// HDR Map Downsampled 
 	int HDREnvironmentSizeX = 0;
 	int HDREnvironmentSizeY = 0;
@@ -66,6 +65,11 @@ void FEnvironmentMapRenderingResources::CreateRenderingResources(VQRenderer& Ren
 
 	const int& NUM_MIPS = tdesc.D3D12Desc.MipLevels;
 
+	Renderer.WaitHeapsInitialized();
+
+	// Create HDR Map SRV
+	this->SRV_HDREnvironment = Renderer.AllocateAndInitializeSRV(this->Tex_HDREnvironment);
+
 	// Create Irradiance Map SRVs 
 	this->SRV_IrradianceDiff = Renderer.AllocateSRV();
 	this->SRV_IrradianceSpec = Renderer.AllocateSRV();
@@ -96,8 +100,8 @@ void FEnvironmentMapRenderingResources::CreateRenderingResources(VQRenderer& Ren
 	Renderer.InitializeUAV(this->UAV_BlurTemp, 0, this->Tex_BlurTemp, 0, 0);
 
 	for (int mip = 0; mip < NUM_MIPS; ++mip)
-		for (int face = 0; face < 6; ++face)
-			Renderer.InitializeRTV(this->RTV_IrradianceSpec, mip * 6 + face, this->Tex_IrradianceSpec, face, mip);
+	for (int face = 0; face < 6; ++face)
+		Renderer.InitializeRTV(this->RTV_IrradianceSpec, mip * 6 + face, this->Tex_IrradianceSpec, face, mip);
 
 }
 
@@ -132,38 +136,26 @@ void FEnvironmentMapRenderingResources::DestroyRenderingResources(VQRenderer& Re
 //
 // Rendering
 //
-void VQRenderer::PreFilterEnvironmentMap(const Mesh& CubeMesh, HWND hwnd)
+void VQRenderer::PreFilterEnvironmentMap(const Mesh& CubeMesh)
 {
 	Log::Info("Environment Map: PreFilterEnvironmentMap");
 	using namespace DirectX;
 
-	FWindowRenderContext& ctx = mRenderContextLookup.at(hwnd);
-	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, 0);
-	DynamicBufferHeap& cbHeap = ctx.GetConstantBufferHeap(0);
+	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpCmds[ECommandQueueType::GFX][0];
+	DynamicBufferHeap& cbHeap = mDynamicHeap_ConstantBuffer[0];
 	FEnvironmentMapRenderingResources& env = mResources_MainWnd.EnvironmentMap;
 
+	// sync for PSO initialization 
 	this->WaitHeapsInitialized();
-	//this->WaitRoot
-
 	{
 		SCOPED_CPU_MARKER("WAIT_PSO_WORKER_DISPATCH");
 		mLatchPSOLoaderDispatched.wait();
 	}
-	if (!mPSOCompileResults.empty())
+	
+	if (mPSOs.find(EBuiltinPSOs::CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO) == mPSOs.end())
 	{
-		std::shared_future<FPSOCompileResult>& future = mPSOCompileResults[EBuiltinPSOs::BRDF_INTEGRATION_CS_PSO];
-		if (future.valid())
-		{
-			SCOPED_CPU_MARKER("WAIT_PSO_COMPILE");
-			future.wait();
-			const FPSOCompileResult& result = future.get();
-			mPSOs[result.id] = result.pPSO;
-		}
-	}
-
-	if (env.SRV_BRDFIntegrationLUT == INVALID_ID)
-	{
-		ComputeBRDFIntegrationLUT(pCmd, env.SRV_BRDFIntegrationLUT);
+		const FPSOCompileResult result = this->WaitPSOReady(EBuiltinPSOs::CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO);
+		mPSOs[result.id] = result.pPSO;
 	}
 
 	SCOPED_GPU_MARKER(pCmd, "RenderEnvironmentMapCubeFaces");
@@ -216,17 +208,6 @@ void VQRenderer::PreFilterEnvironmentMap(const Mesh& CubeMesh, HWND hwnd)
 
 		if constexpr (DRAW_CUBE_FACES_SEPARATELY)
 		{
-			if (!mPSOCompileResults.empty())
-			{
-				std::shared_future<FPSOCompileResult>& future = mPSOCompileResults[EBuiltinPSOs::CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO];
-				if (future.valid())
-				{
-					SCOPED_CPU_MARKER("WAIT_PSO_COMPILE");
-					future.wait();
-					const FPSOCompileResult& result = future.get();
-					mPSOs[result.id] = result.pPSO;
-				}
-			}
 			pCmd->SetPipelineState(this->GetPSO(CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO));
 			pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ConvolutionCubemap));
 			pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());
@@ -485,42 +466,3 @@ void VQRenderer::PreFilterEnvironmentMap(const Mesh& CubeMesh, HWND hwnd)
 		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
 	}
 }
-
-void VQRenderer::ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, SRV_ID& outSRV_ID)
-{
-	Log::Info("Environment Map:   ComputeBRDFIntegrationLUT");
-	SCOPED_GPU_MARKER(pCmd, "CreateBRDFIntegralLUT");
-
-	// Texture resource is created (on Renderer::LoadDefaultResources()) but not initialized at this point.
-	const TextureID TexBRDFLUT = this->GetProceduralTexture(EProceduralTextures::IBL_BRDF_INTEGRATION_LUT);
-	ID3D12Resource* pRscBRDFLUT = this->GetTextureResource(TexBRDFLUT);
-
-	int W, H;
-	this->GetTextureDimensions(TexBRDFLUT, W, H);
-
-	// Create & Initialize a UAV for the LUT 
-	UAV_ID uavBRDFLUT_ID = this->AllocateUAV();
-	this->InitializeUAV(uavBRDFLUT_ID, 0, TexBRDFLUT);
-	const UAV& uavBRDFLUT = this->GetUAV(uavBRDFLUT_ID);
-
-	// Dispatch
-	pCmd->SetPipelineState(this->GetPSO(EBuiltinPSOs::BRDF_INTEGRATION_CS_PSO));
-	pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__BRDFIntegrationCS));
-	pCmd->SetComputeRootDescriptorTable(0, uavBRDFLUT.GetGPUDescHandle());
-
-	constexpr int THREAD_GROUP_X = 8;
-	constexpr int THREAD_GROUP_Y = 8;
-	const int DISPATCH_DIMENSION_X = (W + (THREAD_GROUP_X - 1)) / THREAD_GROUP_X;
-	const int DISPATCH_DIMENSION_Y = (H + (THREAD_GROUP_Y - 1)) / THREAD_GROUP_Y;
-	constexpr int DISPATCH_DIMENSION_Z = 1;
-	pCmd->Dispatch(DISPATCH_DIMENSION_X, DISPATCH_DIMENSION_Y, DISPATCH_DIMENSION_Z);
-
-	const CD3DX12_RESOURCE_BARRIER pBarriers[] =
-	{
-		  CD3DX12_RESOURCE_BARRIER::Transition(pRscBRDFLUT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
-	};
-	pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
-
-	outSRV_ID = this->GetProceduralTextureSRV_ID(EProceduralTextures::IBL_BRDF_INTEGRATION_LUT);
-}
-

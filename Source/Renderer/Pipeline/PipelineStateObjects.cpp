@@ -612,6 +612,22 @@ void VQRenderer::ReservePSOMap(size_t NumPSOs)
 		mPSOs[EBuiltinPSOs::NUM_BUILTIN_PSOs + (int)i] = nullptr;
 }
 
+const VQRenderer::FPSOCompileResult VQRenderer::WaitPSOReady(PSO_ID psoID)
+{
+	if (!mPSOCompileResults.empty())
+	{
+		SCOPED_CPU_MARKER("WAIT_PSO_COMPILE");
+		std::shared_future<FPSOCompileResult>& future = mPSOCompileResults[psoID];
+		if (future.valid())
+		{
+			future.wait();
+			return future.get();
+		}
+	}
+	FPSOCompileResult r{ .pPSO = nullptr, .id = -1 };
+	return r;
+}
+
 std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs()
 {
 	SCOPED_CPU_MARKER("LoadPSODescs_Builtin");

@@ -25,7 +25,7 @@
 #include <d3d12.h>
 #include <cassert>
 
-void CommandQueue::Create(Device* pDevice, EType type, const char* pName /*= nullptr*/)
+void CommandQueue::Create(Device* pDevice, ECommandQueueType type, const char* pName /*= nullptr*/)
 {
 	HRESULT hr = {};
 	ID3D12Device* pDevice_ = pDevice->GetDevicePtr();
@@ -36,9 +36,9 @@ void CommandQueue::Create(Device* pDevice, EType type, const char* pName /*= nul
 	qDesc.Priority = 0;
 	switch (type)
 	{
-	case CommandQueue::GFX     : qDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;  break;
-	case CommandQueue::COMPUTE : qDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE; break;
-	case CommandQueue::COPY    : qDesc.Type = D3D12_COMMAND_LIST_TYPE_COPY;    break;
+	case ECommandQueueType::GFX    : qDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;  break;
+	case ECommandQueueType::COMPUTE: qDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE; break;
+	case ECommandQueueType::COPY   : qDesc.Type = D3D12_COMMAND_LIST_TYPE_COPY;    break;
 	default: assert(false); break;
 	}
 

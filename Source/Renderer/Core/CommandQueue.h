@@ -21,21 +21,21 @@
 struct ID3D12CommandQueue;
 class Device;
 
+enum ECommandQueueType
+{
+	GFX = 0,
+	COMPUTE,
+	COPY,
+
+	NUM_COMMAND_QUEUE_TYPES
+};
+
 class CommandQueue
 {
-public:
-	enum EType
-	{
-		GFX = 0,
-		COMPUTE,
-		COPY,
-
-		NUM_COMMAND_QUEUE_TYPES
-	};
 
 public:
-	void Create(Device* pDevice, EType type, const char* pName = nullptr);
+	void Create(Device* pDevice, ECommandQueueType type, const char* pName = nullptr);
 	void Destroy();
 
-	ID3D12CommandQueue* pQueue;
+	ID3D12CommandQueue* pQueue = nullptr;
 };
