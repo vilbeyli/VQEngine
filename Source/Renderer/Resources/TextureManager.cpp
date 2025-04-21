@@ -1006,7 +1006,6 @@ void TextureManager::ProcessTextureUpload(const FTextureUploadTask& Task)
 
 		for (int ArrayIdx = 0; ArrayIdx < ArraySize; ++ArrayIdx) 
 		{
-			SCOPED_CPU_MARKER("Array");
 			for (uint Mip = 0; Mip < MipCount; ++Mip) 
 			{
 				SCOPED_CPU_MARKER("Mip");

@@ -32,6 +32,7 @@
 
 HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScreenData& LoadingScreenData, bool bUseHDRRenderPath)
 {
+	SCOPED_CPU_MARKER("RenderLoadingScreen");
 	HRESULT hr = S_OK;
 	
 	this->WaitMainSwapchainReady();
@@ -79,7 +80,7 @@ HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScr
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
 
 	{
-		SCOPED_CPU_MARKER("WAIT_PSO_WORKER_DISPATCH");
+		SCOPED_CPU_MARKER_C("WAIT_PSO_WORKER_DISPATCH", 0xFFFF0000);
 		mLatchPSOLoaderDispatched.wait();
 	}
 	

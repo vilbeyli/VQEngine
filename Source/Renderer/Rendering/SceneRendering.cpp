@@ -217,7 +217,7 @@ HRESULT VQRenderer::PreRenderScene(
 	);
 #endif
 
-
+	WaitHeapsInitialized();
 	{
 		SCOPED_CPU_MARKER("AllocCBMem");
 		AllocateConstantBufferMemory(NumCmdRecordingThreads, NUM_SWAPCHAIN_BACKBUFFERS, ConstantBufferBytesPerThread);
@@ -261,7 +261,6 @@ HRESULT VQRenderer::PreRenderScene(
 		}
 	}
 
-	WaitHeapsInitialized();
 	ID3D12DescriptorHeap* ppHeaps[] = { this->GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 
 	{

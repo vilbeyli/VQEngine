@@ -303,23 +303,35 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		const uint32 UPLOAD_HEAP_SIZE = (512 + 256 + 128) * MEGABYTE; // TODO: from RendererSettings.ini
 		mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE, this->mCmdQueues[ECommandQueueType::GFX].pQueue);
 
-		constexpr uint32 NumDescsCBV = 100;
-		constexpr uint32 NumDescsSRV = 8192;
-		constexpr uint32 NumDescsUAV = 100;
-		constexpr bool   bCPUVisible = false;
-		mHeapCBV_SRV_UAV.Create(pDevice, "HeapCBV_SRV_UAV", EResourceHeapType::CBV_SRV_UAV_HEAP, NumDescsCBV + NumDescsSRV + NumDescsUAV, bCPUVisible);
-
-		constexpr uint32 NumDescsDSV = 100;
-		mHeapDSV.Create(pDevice, "HeapDSV", EResourceHeapType::DSV_HEAP, NumDescsDSV);
-
-		constexpr uint32 NumDescsRTV = 1000;
-		mHeapRTV.Create(pDevice, "HeapRTV", EResourceHeapType::RTV_HEAP, NumDescsRTV);
+		{
+			SCOPED_CPU_MARKER("CBV_SRV_UAV");
+			constexpr uint32 NumDescsCBV = 100;
+			constexpr uint32 NumDescsSRV = 8192;
+			constexpr uint32 NumDescsUAV = 100;
+			constexpr bool   bCPUVisible = false;
+			mHeapCBV_SRV_UAV.Create(pDevice, "HeapCBV_SRV_UAV", EResourceHeapType::CBV_SRV_UAV_HEAP, NumDescsCBV + NumDescsSRV + NumDescsUAV, bCPUVisible);
+		}
+		{
+			SCOPED_CPU_MARKER("DSV");
+			constexpr uint32 NumDescsDSV = 100;
+			mHeapDSV.Create(pDevice, "HeapDSV", EResourceHeapType::DSV_HEAP, NumDescsDSV);
+		}
+		{
+			SCOPED_CPU_MARKER("RTV");
+			constexpr uint32 NumDescsRTV = 1000;
+			mHeapRTV.Create(pDevice, "HeapRTV", EResourceHeapType::RTV_HEAP, NumDescsRTV);
+		}
 
 		constexpr uint32 STATIC_GEOMETRY_MEMORY_SIZE = 256 * MEGABYTE;
 		constexpr bool USE_GPU_MEMORY = true;
-		mStaticHeap_VertexBuffer.Create(pDevice, EBufferType::VERTEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticVertexBufferPool");
-		mStaticHeap_IndexBuffer.Create(pDevice, EBufferType::INDEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticIndexBufferPool");
-
+		{
+			SCOPED_CPU_MARKER("VB");
+			mStaticHeap_VertexBuffer.Create(pDevice, EBufferType::VERTEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticVertexBufferPool");
+		}
+		{
+			SCOPED_CPU_MARKER("IB");
+			mStaticHeap_IndexBuffer.Create(pDevice, EBufferType::INDEX_BUFFER, STATIC_GEOMETRY_MEMORY_SIZE, USE_GPU_MEMORY, "VQRenderer::mStaticIndexBufferPool");
+		}
 		mLatchHeapsInitialized.count_down();
 	}
 
