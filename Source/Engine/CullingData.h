@@ -47,45 +47,15 @@ struct FFrustumPlaneset
 	// 
 	inline static FFrustumPlaneset ExtractFromMatrix(const DirectX::XMMATRIX& projectionTransformation, const bool bNormalize = false)
 	{
-		const DirectX::XMMATRIX& m = projectionTransformation;
+		DirectX::XMMATRIX m = DirectX::XMMatrixTranspose(projectionTransformation);
 
 		FFrustumPlaneset viewPlanes;
-		viewPlanes.abcd[FFrustumPlaneset::PL_RIGHT] = DirectX::XMVectorSet(
-			m.r[0].m128_f32[3] - m.r[0].m128_f32[0],
-			m.r[1].m128_f32[3] - m.r[1].m128_f32[0],
-			m.r[2].m128_f32[3] - m.r[2].m128_f32[0],
-			m.r[3].m128_f32[3] - m.r[3].m128_f32[0]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_LEFT] = DirectX::XMVectorSet(
-			m.r[0].m128_f32[3] + m.r[0].m128_f32[0],
-			m.r[1].m128_f32[3] + m.r[1].m128_f32[0],
-			m.r[2].m128_f32[3] + m.r[2].m128_f32[0],
-			m.r[3].m128_f32[3] + m.r[3].m128_f32[0]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_TOP] = DirectX::XMVectorSet(
-			m.r[0].m128_f32[3] - m.r[0].m128_f32[1],
-			m.r[1].m128_f32[3] - m.r[1].m128_f32[1],
-			m.r[2].m128_f32[3] - m.r[2].m128_f32[1],
-			m.r[3].m128_f32[3] - m.r[3].m128_f32[1]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_BOTTOM] = DirectX::XMVectorSet(
-			m.r[0].m128_f32[3] + m.r[0].m128_f32[1],
-			m.r[1].m128_f32[3] + m.r[1].m128_f32[1],
-			m.r[2].m128_f32[3] + m.r[2].m128_f32[1],
-			m.r[3].m128_f32[3] + m.r[3].m128_f32[1]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_FAR] = DirectX::XMVectorSet(
-			m.r[0].m128_f32[3] - m.r[0].m128_f32[2],
-			m.r[1].m128_f32[3] - m.r[1].m128_f32[2],
-			m.r[2].m128_f32[3] - m.r[2].m128_f32[2],
-			m.r[3].m128_f32[3] - m.r[3].m128_f32[2]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_NEAR] = DirectX::XMVectorSet(
-			m.r[0].m128_f32[2],
-			m.r[1].m128_f32[2],
-			m.r[2].m128_f32[2],
-			m.r[3].m128_f32[2]
-		);
+		viewPlanes.abcd[FFrustumPlaneset::PL_RIGHT]  = DirectX::XMVectorSubtract(m.r[3], m.r[0]);
+		viewPlanes.abcd[FFrustumPlaneset::PL_LEFT]   = DirectX::XMVectorAdd(m.r[3], m.r[0]);
+		viewPlanes.abcd[FFrustumPlaneset::PL_TOP]    = DirectX::XMVectorSubtract(m.r[3], m.r[1]);
+		viewPlanes.abcd[FFrustumPlaneset::PL_BOTTOM] = DirectX::XMVectorAdd(m.r[3], m.r[1]);
+		viewPlanes.abcd[FFrustumPlaneset::PL_FAR]    = DirectX::XMVectorSubtract(m.r[3], m.r[2]);
+		viewPlanes.abcd[FFrustumPlaneset::PL_NEAR]   = m.r[2];
 
 		if (bNormalize)
 		{
