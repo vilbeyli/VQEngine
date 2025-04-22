@@ -620,6 +620,7 @@ void TextureManager::GenerateMips(TextureID id)
 	if (data.DiskImage.IsValid())
 	{
 		data.MipImages[0] = std::move(data.DiskImage); // Move DiskImage to MipImages[0]
+		data.DiskImage = Image();
 	}
 	else
 	{
@@ -1051,7 +1052,7 @@ void TextureManager::ProcessTextureUpload(const FTextureUploadTask& Task)
 				mDiskWorkers.AddTask([img = std::move(diskImage)]() mutable 
 				{
 					SCOPED_CPU_MARKER("DestroyDiskImage");
-					;// TODO: img.Destroy();
+					img.Destroy();
 				});
 			}
 
@@ -1065,7 +1066,7 @@ void TextureManager::ProcessTextureUpload(const FTextureUploadTask& Task)
 					SCOPED_CPU_MARKER("DestroyMipImage");
 					if (mipImage.IsValid())
 					{
-						// mipImage.Destroy();
+						mipImage.Destroy();
 					}
 				}
 				data.MipImages.clear();
