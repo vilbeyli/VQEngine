@@ -546,6 +546,11 @@ void VQRenderer::Load()
 		}
 		for (std::shared_ptr<IRenderPass>& pPass : mRenderPasses)
 			pPass->Initialize();
+
+		// std::latch doesn't guarantee memory ops, so the thread that immediately reads
+		// mRenderPasses may get corrupted while reading it (e.g. LoadRenderPassPSODescs()).
+		// use a thread fence to prevent corruption.
+		std::atomic_thread_fence(std::memory_order_release);
 		mLatchRenderPassesInitialized.count_down();
 	});
 
@@ -876,8 +881,6 @@ void VQRenderer::LoadDefaultResources()
 	std::array<TextureID, NUM_PROCEDURAL_TEXTURES> textureIDs = { INVALID_ID, INVALID_ID, INVALID_ID };
 	std::array<D3D12_RESOURCE_DESC, NUM_PROCEDURAL_TEXTURES> texDescs{ textureDesc, textureDesc, textureDesc };
 
-	WaitHeapsInitialized();
-
 	{
 		SCOPED_CPU_MARKER("ProceduralTextures");
 
@@ -905,7 +908,7 @@ void VQRenderer::LoadDefaultResources()
 
 			textureIDs[i] = this->CreateTexture(req, false);
 		}
-
+		
 		for (size_t i = 0; i < NUM_PROCEDURAL_TEXTURES; ++i)
 		{
 			mLookup_ProceduralTextureIDs [(EProceduralTextures)i] = textureIDs[i];
