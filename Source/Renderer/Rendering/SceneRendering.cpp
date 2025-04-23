@@ -938,6 +938,7 @@ void VQRenderer::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, const s
 #if RENDER_INSTANCED_SHADOW_MESHES
 
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
+	const CBV_SRV_UAV& NullTex2DSRV = this->GetSRV(rsc.SRV_NullTexture2D);
 
 	//Log::Info("DrawShadowMeshList(%d)", drawParams.size());
 	for (const FInstancedDrawParameters& draw : drawParams)
@@ -959,15 +960,15 @@ void VQRenderer::DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, const s
 			pCmd->SetGraphicsRootConstantBufferView(2, draw.cbAddr_Tessellation);
 		}
 
-		if (draw.SRVMaterialMaps != INVALID_ID) // set textures
-		{
-			const CBV_SRV_UAV& NullTex2DSRV = this->GetSRV(rsc.SRV_NullTexture2D);
-			pCmd->SetGraphicsRootDescriptorTable(3, this->GetSRV(draw.SRVMaterialMaps).GetGPUDescHandle(0));
-			pCmd->SetGraphicsRootDescriptorTable(4, draw.SRVHeightMap == INVALID_ID
-				? NullTex2DSRV.GetGPUDescHandle()
-				: this->GetSRV(draw.SRVHeightMap).GetGPUDescHandle(0)
-			);
-		}
+		// set textures
+		pCmd->SetGraphicsRootDescriptorTable(3, draw.SRVMaterialMaps == INVALID_ID 
+			? NullTex2DSRV.GetGPUDescHandle()
+			: this->GetSRV(draw.SRVMaterialMaps).GetGPUDescHandle(0)
+		);
+		pCmd->SetGraphicsRootDescriptorTable(4, draw.SRVHeightMap == INVALID_ID
+			? NullTex2DSRV.GetGPUDescHandle()
+			: this->GetSRV(draw.SRVHeightMap).GetGPUDescHandle(0)
+		);
 
 		VBV vb = this->GetVertexBufferView(draw.VB);
 		IBV ib = this->GetIndexBufferView (draw.IB);
@@ -2182,7 +2183,7 @@ void VQRenderer::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 		params.TexDepthHierarchy                               = rsc.Tex_DownsampledSceneDepth;
 		params.TexNormals                                      = rsc.Tex_SceneNormals;
 		params.SRVEnvironmentSpecularIrradianceCubemap         = bHasEnvironmentMap ? EnvMapRsc.SRV_IrradianceSpec : rsc.SRV_NullCubemap;
-		params.SRVBRDFIntegrationLUT                           = bHasEnvironmentMap ? rsc.SRV_BRDFIntegrationLUT : rsc.SRV_NullTexture2D;
+		params.SRVBRDFIntegrationLUT                           = rsc.SRV_BRDFIntegrationLUT;
 
 		if (bHasEnvironmentMap)
 		{

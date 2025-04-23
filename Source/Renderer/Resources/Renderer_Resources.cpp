@@ -382,7 +382,10 @@ void VQRenderer::InitializeNullSRV(SRV_ID srvID, uint heapIndex, UINT ShaderComp
 	nullSrvDesc.Texture2D.MipLevels = 1;
 	nullSrvDesc.Texture2D.MostDetailedMip = 0;
 	nullSrvDesc.Texture2D.ResourceMinLODClamp = 0.0f;
-	pDevice->CreateShaderResourceView(nullptr, &nullSrvDesc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
+	{
+		std::lock_guard<std::mutex> lk(this->mMtxSRVs_CBVs_UAVs);
+		pDevice->CreateShaderResourceView(nullptr, &nullSrvDesc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
+	}
 }
 
 void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bool bInitAsArrayView /*= false*/, bool bInitAsCubeView /*= false*/, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc /*=nullptr*/, UINT ShaderComponentMapping)
@@ -399,9 +402,9 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 	assert(pDevice);
 
-	std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 	if (pTexture)
 	{
+		std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 		if (bInitAsCubeView)
 		{
 			if (!pTexture->IsCubemap)
@@ -414,8 +417,6 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 		//
 		// TODO: bool bInitAsArrayView needed so that InitializeSRV() can initialize a per-face SRV of a cubemap
 		//
-
-		mTextureManager.WaitForTexture(texID);
 		ID3D12Resource* pResource = pTexture->Resource;
 
 		if (!pResource)
@@ -882,125 +883,6 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 	return Result;
 }
 
-#if 0
-void VQRenderer::ProcessTextureUpload(const FTextureUploadDesc& desc)
-{
-	SCOPED_CPU_MARKER("ProcessTextureUpload()");
-	ID3D12GraphicsCommandList* pCmd = mHeapUpload.GetCommandList();
-	ID3D12Device* pDevice = mDevice.GetDevicePtr();
-	const D3D12_RESOURCE_DESC& d3dDesc = desc.desc.d3d12Desc;
-	//--------------------------------------------------------------
-	ID3D12Resource* pResc = GetTextureResource(desc.id);
-	const void* pData = !desc.imgs.empty() ? desc.imgs[0].pData : desc.pDataArr[0];
-	assert(pData);
-
-	const uint MIP_COUNT = desc.desc.d3d12Desc.MipLevels;
-
-	UINT64 UplHeapSize;
-	uint32_t num_rows[D3D12_REQ_MIP_LEVELS] = { 0 };
-	UINT64 row_size_in_bytes[D3D12_REQ_MIP_LEVELS] = { 0 };
-	D3D12_PLACED_SUBRESOURCE_FOOTPRINT placedSubresource[D3D12_REQ_MIP_LEVELS];
-
-	pDevice->GetCopyableFootprints(&d3dDesc, 0, MIP_COUNT, 0, placedSubresource, num_rows, row_size_in_bytes, &UplHeapSize);
-
-	UINT8* pUploadBufferMem = mHeapUpload.Suballocate(SIZE_T(UplHeapSize), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
-	if (pUploadBufferMem == NULL)
-	{
-		SCOPED_CPU_MARKER("UploadToGPUAndWait()");
-		mHeapUpload.UploadToGPUAndWait(); // We ran out of mem in the upload heap, upload contents and try allocating again
-		pUploadBufferMem = mHeapUpload.Suballocate(SIZE_T(UplHeapSize), D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
-		assert(pUploadBufferMem);
-	}
-
-	const bool bBufferResource = d3dDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER;
-
-	if (bBufferResource)
-	{
-		const UINT64 SourceRscOffset = pUploadBufferMem - mHeapUpload.BasePtr();
-		memcpy(pUploadBufferMem, pData, d3dDesc.Width);
-		pCmd->CopyBufferRegion(pResc, 0, mHeapUpload.GetResource(), SourceRscOffset, d3dDesc.Width);
-	}
-	else // textures
-	{
-		const int szArray = 1; // array size (not impl for now)
-		const UINT bytePP = static_cast<UINT>(VQ_DXGI_UTILS::GetPixelByteSize(d3dDesc.Format));
-		const UINT imgSizeInBytes = bytePP * placedSubresource[0].Footprint.Width * placedSubresource[0].Footprint.Height;
-		
-		for (int a = 0; a < szArray; ++a)
-		{
-			for (uint mip = 0; mip < MIP_COUNT; ++mip)
-			{
-				VQ_DXGI_UTILS::CopyPixels((mip == 0 ? pData : desc.imgs[mip].pData)
-					, pUploadBufferMem + placedSubresource[mip].Offset
-					, placedSubresource[mip].Footprint.RowPitch
-					, placedSubresource[mip].Footprint.Width * bytePP
-					, num_rows[mip]
-				);
-
-				D3D12_PLACED_SUBRESOURCE_FOOTPRINT slice = placedSubresource[mip];
-				slice.Offset += (pUploadBufferMem - mHeapUpload.BasePtr());
-
-				CD3DX12_TEXTURE_COPY_LOCATION Dst(pResc, a * MIP_COUNT + mip);
-				CD3DX12_TEXTURE_COPY_LOCATION Src(mHeapUpload.GetResource(), slice);
-				pCmd->CopyTextureRegion(&Dst, 0, 0, 0, &Src, NULL);
-			}
-		}
-	}
-
-
-	D3D12_RESOURCE_BARRIER barrier = {};
-	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-	barrier.Transition.pResource = pResc;
-	barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-	barrier.Transition.StateAfter = desc.desc.ResourceState;
-	barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-	pCmd->ResourceBarrier(1, &barrier);
-}
-
-void VQRenderer::ProcessTextureUploadQueue()
-{
-	std::unique_lock<std::mutex> lk(mMtxTextureUploadQueue);
-	if (mTextureUploadQueue.empty())
-		return;
-
-	std::vector<EventSignal*> vTexResidentSignals;
-	std::vector<std::atomic<bool>*> vTexResidentBools;
-
-	while (!mTextureUploadQueue.empty())
-	{
-		FTextureUploadDesc desc = std::move(mTextureUploadQueue.front());
-		mTextureUploadQueue.pop();
-
-		ProcessTextureUpload(desc);
-
-		{
-			std::unique_lock<std::mutex> lk(mMtxTextures);
-			assert(mTextures.find(desc.id) != mTextures.end());
-			Texture& tex = mTextures.at(desc.id); // already locked the mutex, direct access is granted to mTextures
-			vTexResidentSignals.push_back(&tex.mSignalResident);
-			vTexResidentBools.push_back(&tex.mbResident);
-		}
-	}
-
-	{
-		SCOPED_CPU_MARKER("UploadToGPUAndWait()");
-		mHeapUpload.UploadToGPUAndWait();
-	}
-
-	{
-		SCOPED_CPU_MARKER("NotifyResidentSignals");
-		{
-			for (int i=0; i< vTexResidentSignals.size(); ++i)
-			{
-				vTexResidentBools[i]->store(true);
-				vTexResidentSignals[i]->NotifyOne();
-			}
-		}
-	}
-}
-
-#endif
-
 // -----------------------------------------------------------------------------------------------------------------
 //
 // GETTERS
@@ -1027,6 +909,7 @@ const IBV& VQRenderer::GetIndexBufferView(BufferID Id) const
 }
 const CBV_SRV_UAV& VQRenderer::GetShaderResourceView(SRV_ID Id) const
 {
+	std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 	assert(Id < LAST_USED_SRV_ID && mSRVs.find(Id) != mSRVs.end());
 	return mSRVs.at(Id);
 }
