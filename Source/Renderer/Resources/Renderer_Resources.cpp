@@ -567,6 +567,7 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 }
 void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc)
 {
+	std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
 	mDevice.GetDevicePtr()->CreateShaderResourceView(nullptr, &srvDesc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
 }
 void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID)
@@ -698,7 +699,10 @@ void VQRenderer::InitializeSRVForBuffer(SRV_ID srvID, uint heapIndex, TextureID 
 	desc.Format = DXGI_FORMAT_UNKNOWN;
 	desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
 	desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	mDevice.GetDevicePtr()->CreateShaderResourceView(pRsc, &desc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
+	{
+		std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
+		mDevice.GetDevicePtr()->CreateShaderResourceView(pRsc, &desc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
+	}
 
 }
 void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, uint arraySlice /*=0*/, uint mipSlice /*=0*/)
