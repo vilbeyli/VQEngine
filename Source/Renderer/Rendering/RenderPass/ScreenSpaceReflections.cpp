@@ -264,9 +264,10 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 		SCOPED_GPU_MARKER(pCmd, "FFX DNSR ClassifyTiles");
 		pCmd->SetComputeRootSignature(mSubpassRootSignatureLookup.at(ESubpass::CLASSIFY_TILES));
 		pCmd->SetComputeRootDescriptorTable(0, mRenderer.GetSRV(SRVClassifyTilesInputs[iBuffer]).GetGPUDescHandle());
-		pCmd->SetComputeRootDescriptorTable(1, mRenderer.GetSRV(pParams->SRVEnvironmentSpecularIrradianceCubemap).GetGPUDescHandle());
-		pCmd->SetComputeRootDescriptorTable(2, mRenderer.GetSRV(pParams->SRVBRDFIntegrationLUT).GetGPUDescHandle());
-		pCmd->SetComputeRootConstantBufferView(3, cbAddr);
+		pCmd->SetComputeRootDescriptorTable(1, mRenderer.GetUAV(UAVClassifyTilesOutputs[iBuffer]).GetGPUDescHandle());
+		pCmd->SetComputeRootDescriptorTable(2, mRenderer.GetSRV(pParams->SRVEnvironmentSpecularIrradianceCubemap).GetGPUDescHandle());
+		pCmd->SetComputeRootDescriptorTable(3, mRenderer.GetSRV(pParams->SRVBRDFIntegrationLUT).GetGPUDescHandle());
+		pCmd->SetComputeRootConstantBufferView(4, cbAddr);
 		pCmd->SetPipelineState(mRenderer.GetPSO(PSOClassifyTilesPass));
 		const UINT DISPATCH_X = DIV_AND_ROUND_UP(W, 8u);
 		const UINT DISPATCH_Y = DIV_AND_ROUND_UP(H, 8u);
@@ -652,21 +653,26 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 		const UINT srvCount = 4;
 		const UINT uavCount = 5;
 
-		CD3DX12_ROOT_PARAMETER RTSlot[4] = {};
+		CD3DX12_ROOT_PARAMETER RTSlot[5] = {};
 
 		int parameterCount = 0;
 		CD3DX12_DESCRIPTOR_RANGE DescRange_3[1] = {};
-		CD3DX12_DESCRIPTOR_RANGE DescRange_1[2] = {};
+		CD3DX12_DESCRIPTOR_RANGE DescRange_1[1] = {};
+		CD3DX12_DESCRIPTOR_RANGE DescRange_4[1] = {};
 		CD3DX12_DESCRIPTOR_RANGE DescRange_2[1] = {};
 		{
-			//Param 0
+			// Param 0 : SRVs
 			int rangeCount = 0;
 			DescRange_1[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, srvCount, 0, 0, 0);
-			DescRange_1[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, uavCount, 0, 0, srvCount);
 			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_1[0], D3D12_SHADER_VISIBILITY_ALL);
 		}
+		{
+			int rangeCount = 0;
+			DescRange_4[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, uavCount, 0, 0, 0);
+			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_4[0], D3D12_SHADER_VISIBILITY_ALL);
+		}
 
-		// Param 1
+		// Param 2 : UAVs
 		{
 			int rangeCount = 0;
 			int space = 1;
@@ -674,7 +680,7 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_3[0], D3D12_SHADER_VISIBILITY_ALL);
 		}		
 		
-		// Param 2
+		// Param 3
 		{
 			int rangeCount = 0;
 			int space = 1;
@@ -682,7 +688,7 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_2[0], D3D12_SHADER_VISIBILITY_ALL);
 		}
 
-		//Param 3
+		//Param 4
 		RTSlot[parameterCount++].InitAsConstantBufferView(0);
 
 		D3D12_STATIC_SAMPLER_DESC samplerDescs[] = { InitLinearSampler(0) }; // g_linear_sampler
