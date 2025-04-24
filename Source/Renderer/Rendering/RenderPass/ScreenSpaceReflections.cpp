@@ -280,7 +280,8 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 		SCOPED_GPU_MARKER(pCmd, "FFX DNSR PrepareBlueNoise");
 		pCmd->SetComputeRootSignature(mSubpassRootSignatureLookup.at(ESubpass::BLUE_NOISE));
 		pCmd->SetComputeRootDescriptorTable(0, mRenderer.GetSRV(SRVBlueNoisePassInputs[iBuffer]).GetGPUDescHandle());
-		pCmd->SetComputeRootConstantBufferView(1, cbAddr);
+		pCmd->SetComputeRootDescriptorTable(1, mRenderer.GetUAV(UAVBlueNoisePassOutputs[iBuffer]).GetGPUDescHandle());
+		pCmd->SetComputeRootConstantBufferView(2, cbAddr);
 		pCmd->SetPipelineState(mRenderer.GetPSO(PSOBlueNoisePass));
 		const UINT DISPATCH_X = BLUE_NOISE_TEXTURE_DIM / 8;
 		const UINT DISPATCH_Y = BLUE_NOISE_TEXTURE_DIM / 8;
@@ -324,9 +325,10 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 		SCOPED_GPU_MARKER(pCmd, "FFX SSSR Intersection");
 		pCmd->SetComputeRootSignature(mSubpassRootSignatureLookup.at(ESubpass::INTERSECTION));
 		pCmd->SetComputeRootDescriptorTable(0, mRenderer.GetSRV(SRVIntersectionInputs[iBuffer]).GetGPUDescHandle());
-		pCmd->SetComputeRootDescriptorTable(1, mRenderer.GetSRV(pParams->SRVEnvironmentSpecularIrradianceCubemap).GetGPUDescHandle());
-		pCmd->SetComputeRootDescriptorTable(2, mRenderer.GetSRV(pParams->SRVBRDFIntegrationLUT).GetGPUDescHandle());
-		pCmd->SetComputeRootConstantBufferView(3, cbAddr);
+		pCmd->SetComputeRootDescriptorTable(1, mRenderer.GetUAV(UAVIntersectionOutputs[iBuffer]).GetGPUDescHandle());
+		pCmd->SetComputeRootDescriptorTable(2, mRenderer.GetSRV(pParams->SRVEnvironmentSpecularIrradianceCubemap).GetGPUDescHandle());
+		pCmd->SetComputeRootDescriptorTable(3, mRenderer.GetSRV(pParams->SRVBRDFIntegrationLUT).GetGPUDescHandle());
+		pCmd->SetComputeRootConstantBufferView(4, cbAddr);
 		pCmd->SetPipelineState(mRenderer.GetPSO(PSOIntersectPass));
 		pCmd->ExecuteIndirect(mpCommandSignature, 1, mRenderer.GetTextureResource(TexIntersectionPassIndirectArgs), 0, nullptr, 0);
 		//gpuTimer.GetTimeStamp(pCommandList, "FFX SSSR Intersection");
@@ -725,10 +727,15 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 			//Param 0
 			int rangeCount = 0;
 			DescRange[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, srvCount, 0, 0, 0);
-			DescRange[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, uavCount, 0, 0, srvCount);
 			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange[0], D3D12_SHADER_VISIBILITY_ALL);
 		}
-		//Param 1
+		{
+			//Param 1
+			int rangeCount = 1;
+			DescRange[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, uavCount, 0, 0, 0);
+			RTSlot[parameterCount++].InitAsDescriptorTable(1, &DescRange[1], D3D12_SHADER_VISIBILITY_ALL);
+		}
+		//Param 2
 		RTSlot[parameterCount++].InitAsConstantBufferView(0);
 
 		CD3DX12_ROOT_SIGNATURE_DESC descRootSignature = CD3DX12_ROOT_SIGNATURE_DESC();
@@ -876,29 +883,35 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 		const UINT srvCount = 6;
 		const UINT uavCount = 2;
 
-		CD3DX12_ROOT_PARAMETER RTSlot[4] = {};
+		CD3DX12_ROOT_PARAMETER RTSlot[5] = {};
 
 		int parameterCount = 0;
 		CD3DX12_DESCRIPTOR_RANGE DescRange_1[3] = {};
 		CD3DX12_DESCRIPTOR_RANGE DescRange_2[1] = {};
 		CD3DX12_DESCRIPTOR_RANGE DescRange_3[1] = {};
 		CD3DX12_DESCRIPTOR_RANGE DescRange_4[1] = {};
+		CD3DX12_DESCRIPTOR_RANGE DescRange_5[1] = {};
 		{
 			//Param 0
 			int rangeCount = 0;
 			DescRange_1[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, srvCount, 0, 0, 0);
-			DescRange_1[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, uavCount, 0, 0, srvCount);
 			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_1[0], D3D12_SHADER_VISIBILITY_ALL);
 		}
-		
-		// Param 1
+		{
+			//Param 1
+			int rangeCount = 0;
+			DescRange_5[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, uavCount, 0, 0, 0);
+			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_5[0], D3D12_SHADER_VISIBILITY_ALL);
+		}
+
+		// Param 2
 		{
 			int rangeCount = 0;
 			int space = 1;
 			DescRange_3[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, space, 0);
 			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_3[0], D3D12_SHADER_VISIBILITY_ALL);
 		}
-		// Param 2
+		// Param 3
 		{
 			int rangeCount = 0;
 			int space = 1;
@@ -906,7 +919,7 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_4[0], D3D12_SHADER_VISIBILITY_ALL);
 		}
 
-		//Param 3
+		//Param 4
 		RTSlot[parameterCount++].InitAsConstantBufferView(0);
 		
 		CD3DX12_ROOT_SIGNATURE_DESC descRootSignature = CD3DX12_ROOT_SIGNATURE_DESC();

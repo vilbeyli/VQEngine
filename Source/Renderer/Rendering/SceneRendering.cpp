@@ -2141,7 +2141,7 @@ void VQRenderer::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 	const FEnvironmentMapRenderingResources& EnvMapRsc = rsc.EnvironmentMap;
 	const bool bHasEnvironmentMap = EnvMapRsc.SRV_IrradianceSpec != INVALID_ID;
 	ID3D12Resource* pRscEnvIrradianceSpecular = bHasEnvironmentMap ? pRscEnvIrradianceSpecular = this->GetTextureResource(EnvMapRsc.Tex_IrradianceSpec)  : nullptr;
-	ID3D12Resource* pRscBRDFIntegrationLUT    = bHasEnvironmentMap ? pRscBRDFIntegrationLUT = this->GetTextureResource(this->GetProceduralTexture(EProceduralTextures::IBL_BRDF_INTEGRATION_LUT)) : nullptr;
+	ID3D12Resource* pRscBRDFIntegrationLUT    = pRscBRDFIntegrationLUT = this->GetTextureResource(this->GetProceduralTexture(EProceduralTextures::IBL_BRDF_INTEGRATION_LUT));
 	int EnvMapSpecIrrCubemapDimX = 0;
 	int EnvMapSpecIrrCubemapDimY = 0;
 	if (bHasEnvironmentMap)
@@ -2185,25 +2185,24 @@ void VQRenderer::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 		params.SRVEnvironmentSpecularIrradianceCubemap         = bHasEnvironmentMap ? EnvMapRsc.SRV_IrradianceSpec : rsc.SRV_NullCubemap;
 		params.SRVBRDFIntegrationLUT                           = rsc.SRV_BRDFIntegrationLUT;
 
-		if (bHasEnvironmentMap)
 		{
 			D3D12_RESOURCE_BARRIER barriers[] = {
-				CD3DX12_RESOURCE_BARRIER::Transition(pRscEnvIrradianceSpecular, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 				CD3DX12_RESOURCE_BARRIER::Transition(pRscBRDFIntegrationLUT   , D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+				CD3DX12_RESOURCE_BARRIER::Transition(pRscEnvIrradianceSpecular, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 			};
-			pCmd->ResourceBarrier(_countof(barriers), barriers);
+			pCmd->ResourceBarrier(bHasEnvironmentMap ? _countof(barriers) : 1, barriers);
 		}
 
 		this->GetRenderPass(ERenderPass::ScreenSpaceReflections)->RecordCommands(&params);
 
-		if (bHasEnvironmentMap)
 		{
 			D3D12_RESOURCE_BARRIER barriers[] = {
-				CD3DX12_RESOURCE_BARRIER::Transition(pRscEnvIrradianceSpecular, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
 				CD3DX12_RESOURCE_BARRIER::Transition(pRscBRDFIntegrationLUT   , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+				CD3DX12_RESOURCE_BARRIER::Transition(pRscEnvIrradianceSpecular, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
 			};
-			pCmd->ResourceBarrier(_countof(barriers), barriers);
+			pCmd->ResourceBarrier(bHasEnvironmentMap ? _countof(barriers) : 1, barriers);
 		}
+		
 	} break;
 
 	case EReflections::RAY_TRACED_REFLECTIONS:
@@ -2353,16 +2352,16 @@ void VQRenderer::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, co
 	const bool bVizualizationSceneTargetUsed = ShouldUseVisualizationTarget(PPParams);
 	const bool bMotionVectorsEnabled = ShouldUseMotionVectorsTarget(GFXSettings);
 
-	auto pRscPostProcessInput = this->GetTextureResource(rsc.Tex_SceneColor);
-	auto pRscTonemapperOut    = this->GetTextureResource(rsc.Tex_PostProcess_TonemapperOut);
-	auto pRscFFXCASOut        = this->GetTextureResource(rsc.Tex_PostProcess_FFXCASOut);
-	auto pRscFSROut           = this->GetTextureResource(rsc.Tex_PostProcess_FSR_RCASOut); // TODO: handle RCAS=off
-	auto pRscVizMSAA          = this->GetTextureResource(rsc.Tex_SceneVisualizationMSAA);
-	auto pRscViz              = this->GetTextureResource(rsc.Tex_SceneVisualization);
-	auto pRscMoVecMSAA        = this->GetTextureResource(rsc.Tex_SceneMotionVectorsMSAA);
-	auto pRscMoVec            = this->GetTextureResource(rsc.Tex_SceneMotionVectors);
-	auto pRscVizOut           = this->GetTextureResource(rsc.Tex_PostProcess_VisualizationOut);
-	auto pRscPostProcessOut   = bVizualizationEnabled ? pRscVizOut
+	ID3D12Resource* pRscPostProcessInput = this->GetTextureResource(rsc.Tex_SceneColor);
+	ID3D12Resource* pRscTonemapperOut    = this->GetTextureResource(rsc.Tex_PostProcess_TonemapperOut);
+	ID3D12Resource* pRscFFXCASOut        = this->GetTextureResource(rsc.Tex_PostProcess_FFXCASOut);
+	ID3D12Resource* pRscFSROut           = this->GetTextureResource(rsc.Tex_PostProcess_FSR_RCASOut); // TODO: handle RCAS=off
+	ID3D12Resource* pRscVizMSAA          = this->GetTextureResource(rsc.Tex_SceneVisualizationMSAA);
+	ID3D12Resource* pRscViz              = this->GetTextureResource(rsc.Tex_SceneVisualization);
+	ID3D12Resource* pRscMoVecMSAA        = this->GetTextureResource(rsc.Tex_SceneMotionVectorsMSAA);
+	ID3D12Resource* pRscMoVec            = this->GetTextureResource(rsc.Tex_SceneMotionVectors);
+	ID3D12Resource* pRscVizOut           = this->GetTextureResource(rsc.Tex_PostProcess_VisualizationOut);
+	ID3D12Resource* pRscPostProcessOut   = bVizualizationEnabled ? pRscVizOut
 		: (bFSREnabled
 			? pRscFSROut 
 			: (bCASEnabled
@@ -2370,9 +2369,9 @@ void VQRenderer::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, co
 				: pRscTonemapperOut)
 	);
 
-	auto pRscShadowMaps_Spot = this->GetTextureResource(rsc.Tex_ShadowMaps_Spot);
-	auto pRscShadowMaps_Point = this->GetTextureResource(rsc.Tex_ShadowMaps_Point);
-	auto pRscShadowMaps_Directional = this->GetTextureResource(rsc.Tex_ShadowMaps_Directional);
+	ID3D12Resource* pRscShadowMaps_Spot = this->GetTextureResource(rsc.Tex_ShadowMaps_Spot);
+	ID3D12Resource* pRscShadowMaps_Point = this->GetTextureResource(rsc.Tex_ShadowMaps_Point);
+	ID3D12Resource* pRscShadowMaps_Directional = this->GetTextureResource(rsc.Tex_ShadowMaps_Directional);
 
 	SCOPED_GPU_MARKER(pCmd, "TransitionForPostProcessing");
 	std::vector<CD3DX12_RESOURCE_BARRIER> barriers =
