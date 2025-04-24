@@ -929,11 +929,45 @@ void VQRenderer::LoadDefaultResources()
 	mPSOs[result.id] = result.pPSO;
 
 	ComputeBRDFIntegrationLUT(pCmd, this, mResources_MainWnd.SRV_BRDFIntegrationLUT);
+
+	// Create a fence for synchronization
+	Microsoft::WRL::ComPtr<ID3D12Fence> pFence;
+	HRESULT hr = pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&pFence));
+	if (FAILED(hr))
+	{
+		Log::Error("Failed to create fence for BRDF LUT initialization");
+		return;
+	}
+	HANDLE fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr); // Create an event for CPU waiting
+	if (!fenceEvent)
+	{
+		Log::Error("Failed to create fence event for BRDF LUT initialization");
+		return;
+	}
+	UINT64 fenceValue = 1; // Initialize fence value
+
 	pCmd->Close();
 	{
 		SCOPED_CPU_MARKER("ExecuteCommandLists()");
 		mCmdQueues[ECommandQueueType::GFX].pQueue->ExecuteCommandLists(1, (ID3D12CommandList**)&pCmd);
 	}
+	mCmdQueues[ECommandQueueType::GFX].pQueue->Signal(pFence.Get(), fenceValue);
+
+	// Wait for the GPU to complete the BRDF LUT initialization
+	if (pFence->GetCompletedValue() < fenceValue)
+	{
+		hr = pFence->SetEventOnCompletion(fenceValue, fenceEvent);
+		if (SUCCEEDED(hr))
+		{
+			SCOPED_CPU_MARKER("WAIT_FENCE");
+			WaitForSingleObject(fenceEvent, INFINITE);
+		}
+		else
+		{
+			Log::Error("Failed to set fence event for BRDF LUT initialization");
+		}
+	}
+	CloseHandle(fenceEvent); // Cleanup event handle
 }
 void VQRenderer::UploadVertexAndIndexBufferHeaps()
 {
