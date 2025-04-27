@@ -388,8 +388,8 @@ void VQEngine::ExitThreads()
 	mWorkers_Update.Exit();
 	mWorkers_Render.Exit();
 #else
-	mSimulationThread.join();
 	mWorkers_Simulation.Destroy();
+	mSimulationThread.join();
 #endif
 }
 

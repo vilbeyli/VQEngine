@@ -44,15 +44,18 @@
 //
 struct Light
 {
-	enum EType : int
+	enum EType : unsigned char
 	{
 		POINT = 0,
 		SPOT,
 		DIRECTIONAL,
+		LINEAR,
+		CYLINDER,
+		RECTANGULAR,
 
 		LIGHT_TYPE_COUNT
 	};
-	enum EMobility : int
+	enum EMobility : unsigned char
 	{
 		// Static lights = constant lights
 		STATIC = 0,
@@ -104,9 +107,7 @@ struct Light
 
 	EMobility GetMobility() const { return Mobility; }
 
-	//
-	// DATA
-	//
+
 public:
 	// CPU (Hot) data
 	DirectX::XMFLOAT3 Position;
@@ -167,23 +168,47 @@ public:
 		};
 
 
-		// TODO: linear lights from GPU Zen
+		// LTC Area Lights
 		// Eric Heitz Slides: https://drive.google.com/file/d/0BzvWIdpUpRx_Z2pZWWFtam5xTFE/view
+		
 		// LINEAR LIGHT  ------------------------------------------------
 		//
+		// -----------  L
+		// ' ' ' ' ' '
 		//
-		//
-		//
-		//
-		//
-		struct // Area
+		struct // Linear
 		{
-			float dummy2;
-			float dummy3;
-			float dummy4;
+			float Length;
+		};
+
+		// CYLINDER LIGHT  ------------------------------------------------
+		//
+		//         L
+		//  (||||||||||||||||)  R
+		//  / ' ' ' ' ' ' '  \
+		//
+		struct // Area-Cylinder
+		{
+			float Length;
+			float Radius;
+		};
+
+		// CYLINDER LIGHT  ------------------------------------------------
+		//
+		//        W
+		// +----------------+
+		// ||||||||||||||||||
+		// |||||||||||||||||| H
+		// ||||||||||||||||||
+		// +----------------+
+		// / ' ' ' ' ' ' ' ' \
+		//
+		struct // Area-Rectangular
+		{
+			float Width;
+			float Height;
 		};
 	};
-
 };
 
 //constexpr size_t SZ_LIGHT_STRUCT = sizeof(Light);
