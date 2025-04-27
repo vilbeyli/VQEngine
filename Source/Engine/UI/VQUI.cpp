@@ -1599,6 +1599,9 @@ const char* LightTypeToString(Light::EType type)
 	case Light::EType::DIRECTIONAL: return "Directional";
 	case Light::EType::SPOT: return "Spot";
 	case Light::EType::POINT: return "Point";
+	case Light::EType::LINEAR: return "Linear";
+	case Light::EType::CYLINDER: return "Cylinder";
+	case Light::EType::RECTANGULAR: return "Rectangular";
 	default: return "Unknown";
 	}
 }
@@ -1631,6 +1634,9 @@ void VQEngine::DrawLightEditor()
 				case Light::EType::POINT       : LightName += "Point #"; break;
 				case Light::EType::SPOT        : LightName += "Spot #" ; break;
 				case Light::EType::DIRECTIONAL : LightName += "Directional #"; break;
+				case Light::EType::LINEAR      : LightName += "Linear #"; break;
+				case Light::EType::CYLINDER    : LightName += "Cylinder #"; break;
+				case Light::EType::RECTANGULAR : LightName += "Rectangular #"; break;
 				default: Log::Error("DrawLightEditor(): undefined light type"); break;
 			}
 			LightName += lightCount;
@@ -1730,17 +1736,23 @@ void VQEngine::DrawLightEditor()
 
 	ImGui::ColorEdit3("Color", reinterpret_cast<float*>(&l->Color));
 	ImGui::DragFloat("Brightness", &l->Brightness, 0.1f, 0.0f, 10000.0f, "%.1f");
-	if (l->Type != Light::EType::DIRECTIONAL) {
+	
+	const bool bLightTypeSupportsShadows = l->Type != Light::EType::LINEAR && l->Type != Light::EType::CYLINDER && l->Type != Light::EType::RECTANGULAR;
+	if (l->Type != Light::EType::DIRECTIONAL && bLightTypeSupportsShadows)
+	{
 		ImGui::DragFloat("Range", &l->Range, 0.5f, 0.0f, 10000.0f, "%.1f");
 	}
 
 	ImGuiSpacing(2);
 
-	// Light type
+	// Light type dropdown
 	assert(NumLightsPerType[Light::EType::DIRECTIONAL] >= 0 && NumLightsPerType[Light::EType::DIRECTIONAL] <= 1);
 	const bool bEnableSpotLightDropdown        = !l->bCastingShadows || (NumShadowCastingLight[Light::EType::SPOT  ] < NUM_SHADOWING_LIGHTS__SPOT        && l->Type != Light::EType::SPOT);
 	const bool bEnablePointLightDropdown       = !l->bCastingShadows || (NumShadowCastingLight[Light::EType::POINT ] < NUM_SHADOWING_LIGHTS__POINT       && l->Type != Light::EType::POINT);
 	const bool bEnableDirectionalLightDropdown = !l->bCastingShadows || (NumLightsPerType[Light::EType::DIRECTIONAL] < NUM_SHADOWING_LIGHTS__DIRECTIONAL && l->Type != Light::EType::DIRECTIONAL); // only 1 supported
+	const bool bEnableLinearLightDropdown      = (NumLightsPerType[Light::EType::LINEAR     ] < NUM_LIGHTS__LINEAR      && l->Type != Light::EType::LINEAR);
+	const bool bEnableCylinderLightDropdown    = (NumLightsPerType[Light::EType::CYLINDER   ] < NUM_LIGHTS__CYLINDER    && l->Type != Light::EType::CYLINDER);
+	const bool bEnableRectangularLightDropdown = (NumLightsPerType[Light::EType::RECTANGULAR] < NUM_LIGHTS__RECTANGULAR && l->Type != Light::EType::RECTANGULAR);
 	if (ImGui::BeginCombo("Type", LightTypeToString(l->Type))) 
 	{
 		BeginDisabledUIState(bEnableDirectionalLightDropdown);
@@ -1754,6 +1766,19 @@ void VQEngine::DrawLightEditor()
 		BeginDisabledUIState(bEnablePointLightDropdown);
 		if (ImGui::Selectable("Point", l->Type == Light::EType::POINT)) { l->Type = Light::EType::POINT; }
 		EndDisabledUIState(bEnablePointLightDropdown);
+
+		BeginDisabledUIState(bEnableLinearLightDropdown);
+		if (ImGui::Selectable("Linear", l->Type == Light::EType::LINEAR)) { l->Type = Light::EType::LINEAR; }
+		EndDisabledUIState(bEnableLinearLightDropdown);
+
+		BeginDisabledUIState(bEnableCylinderLightDropdown);
+		if (ImGui::Selectable("Cylinder", l->Type == Light::EType::CYLINDER)) { l->Type = Light::EType::CYLINDER; }
+		EndDisabledUIState(bEnableCylinderLightDropdown);
+
+		BeginDisabledUIState(bEnableRectangularLightDropdown);
+		if (ImGui::Selectable("Rectangular", l->Type == Light::EType::RECTANGULAR)) { l->Type = Light::EType::RECTANGULAR; }
+		EndDisabledUIState(bEnableRectangularLightDropdown);
+
 		ImGui::EndCombo();
 	}
 
@@ -1771,6 +1796,17 @@ void VQEngine::DrawLightEditor()
 		break;
 	case Light::EType::POINT:
 		// Point lights have no additional specific properties in this example
+		break;
+	case Light::EType::LINEAR:
+		ImGui::DragFloat("Length", &l->Length, 0.1f, 0.01f, 200.0f, "%.1f");
+		break;
+	case Light::EType::CYLINDER:
+		ImGui::DragFloat("Length", &l->Length, 0.1f, 0.01f, 200.0f, "%.1f");
+		ImGui::DragFloat("Radius", &l->Radius, 0.1f, 0.01f, 10.0f, "%.1f");
+		break;
+	case Light::EType::RECTANGULAR:
+		ImGui::DragFloat("Width", &l->Width, 0.1f, 0.01f, 200.0f, "%.1f");
+		ImGui::DragFloat("Height", &l->Height, 0.1f, 0.01f, 10.0f, "%.1f");
 		break;
 	}
 
@@ -1791,15 +1827,20 @@ void VQEngine::DrawLightEditor()
 
 	ImGuiSpacing(2);
 
-	ImGui::Checkbox("Cast Shadows", &l->bCastingShadows);
-	if (l->bCastingShadows) {
-		ImGui::DragFloat("Depth Bias", &l->ShadowData.DepthBias, 0.0001f, 0.0f, 1.0f, "%.4f");
-		ImGui::DragFloat("Near Plane", &l->ShadowData.NearPlane, 0.1f, 0.1f, 100.0f, "%.1f");
-		ImGui::DragFloat("Far Plane", &l->ShadowData.FarPlane  , 1.0f, 1.0f, 10000.0f, "%.1f");
-		if (l->ShadowData.FarPlane == 0.0f)
-			l->ShadowData.FarPlane = 1.0f;
-		if (l->ShadowData.NearPlane - l->ShadowData.FarPlane >= 0.0f)
-			l->ShadowData.FarPlane = l->ShadowData.NearPlane + 0.001f;
+
+	if (bLightTypeSupportsShadows)
+	{
+		ImGui::Checkbox("Cast Shadows", &l->bCastingShadows);
+		if (l->bCastingShadows)
+		{
+			ImGui::DragFloat("Depth Bias", &l->ShadowData.DepthBias, 0.0001f, 0.0f, 1.0f, "%.4f");
+			ImGui::DragFloat("Near Plane", &l->ShadowData.NearPlane, 0.1f, 0.1f, 100.0f, "%.1f");
+			ImGui::DragFloat("Far Plane", &l->ShadowData.FarPlane, 1.0f, 1.0f, 10000.0f, "%.1f");
+			if (l->ShadowData.FarPlane == 0.0f)
+				l->ShadowData.FarPlane = 1.0f;
+			if (l->ShadowData.NearPlane - l->ShadowData.FarPlane >= 0.0f)
+				l->ShadowData.FarPlane = l->ShadowData.NearPlane + 0.001f;
+		}
 	}
 }
 

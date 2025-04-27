@@ -38,6 +38,9 @@ namespace VQ_SHADER_DATA {
 // don't forget to update CPU define too (RenderPasses.h)
 #define NUM_LIGHTS__POINT 100
 #define NUM_LIGHTS__SPOT  20
+#define NUM_LIGHTS__LINEAR 30
+#define NUM_LIGHTS__CYLINDER 20
+#define NUM_LIGHTS__RECTANGULAR 10
 
 #define NUM_SHADOWING_LIGHTS__POINT 5
 #define NUM_SHADOWING_LIGHTS__SPOT  5
@@ -47,64 +50,95 @@ namespace VQ_SHADER_DATA {
 #define LIGHT_INDEX_POINT      1
 
 
-struct PointLight
-{	// 48 bytes
+struct ALIGNAS(16) PointLight // 48 bytes
+{	
 	float3 position;
 	float  range;
-	//---------------
 	float3 color;
 	float  brightness;
-	//---------------
 	float3 attenuation;
 	float  depthBias;
-	//---------------
 };
 
-struct SpotLight
-{	// 48 bytes
+struct ALIGNAS(16) SpotLight // 48 bytes
+{	
 	float3 position;
 	float  outerConeAngle;
-	//---------------
 	float3 color;
 	float  brightness;
 	float3 spotDir;
 	float  depthBias;
-	//---------------
+
 	float innerConeAngle;
 	float range;
 	float dummy1;
 	float dummy2;
-	//---------------
 };
 
-struct DirectionalLight
-{	// 40 bytes
+struct ALIGNAS(16) DirectionalLight // 40 bytes
+{	
 	float3 lightDirection;
 	float  brightness;
-	//---------------
 	float3 color;
 	float depthBias;
-	//---------------
+
 	int shadowing;
 	int enabled;
 };
 
+struct ALIGNAS(16) LinearLight
+{
+	float3 position;
+	float length;
+	float3 tangent;
+
+	float  brightness;
+	float3 color;
+};
+
+struct ALIGNAS(16) CylinderLight
+{
+	float3 position;
+	float length;
+	float3 tangent;
+	float radius;
+
+	float  brightness;
+	float3 color;
+};
+
+struct ALIGNAS(16) RectangularLight
+{
+	float  brightness;
+	float3 color;
+};
+
 struct SceneLighting
 {
-	int numPointLights; // non-shadow caster counts
+	// non-shadow caster counts
+	int numPointLights; 
 	int numSpotLights;
-	int numPointCasters; // shadow caster counts
+	int numLinearLights;
+	int numCylinderLights;
+	int numRectangularLights;
+	
+	// shadow caster counts
+	int numPointCasters; 
 	int numSpotCasters;
-	//----------------------------------------------
+
 	DirectionalLight directional;
 	matrix shadowViewDirectional;
-	//----------------------------------------------
+
 	PointLight point_lights[NUM_LIGHTS__POINT];
 	PointLight point_casters[NUM_SHADOWING_LIGHTS__POINT];
-	//----------------------------------------------
+
 	SpotLight spot_lights[NUM_LIGHTS__SPOT];
 	SpotLight spot_casters[NUM_SHADOWING_LIGHTS__SPOT];
-	//----------------------------------------------
+
+	LinearLight linear_lights[NUM_LIGHTS__LINEAR];
+	CylinderLight cylinder_lights[NUM_LIGHTS__CYLINDER];
+	RectangularLight rectangular_lights[NUM_LIGHTS__RECTANGULAR];
+
 	matrix shadowViews[NUM_SHADOWING_LIGHTS__SPOT];
 };
 

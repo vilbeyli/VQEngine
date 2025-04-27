@@ -668,8 +668,16 @@ FSceneRepresentation FileParser::ParseSceneFile(const std::string& SceneFile)
 		XMLElement* pPoint = pLight->FirstChildElement("Point");
 		XMLElement* pAttenuation = pPoint ? pPoint->FirstChildElement("Attenuation") : nullptr;
 
-		XMLElement* pArea = pLight->FirstChildElement("Area");
-		// TODO: area light implementation
+		XMLElement* pLinear = pLight->FirstChildElement("Linear");
+		XMLElement* pCylinder = pLight->FirstChildElement("Cylinder");
+		XMLElement* pLength = pLinear ? pLinear->FirstChildElement("Length") 
+							: (pCylinder ? pCylinder->FirstChildElement("Length") : nullptr);
+
+		XMLElement* pRadius = pCylinder ? pCylinder->FirstChildElement("Radius") : nullptr;
+
+		XMLElement* pRectangular = pLight->FirstChildElement("Rectangular");
+		XMLElement* pWidth = pRectangular ? pRectangular->FirstChildElement("Width") : nullptr;
+		XMLElement* pHeight = pRectangular ? pRectangular->FirstChildElement("Height") : nullptr;
 
 		//---------------------------------------------------
 
@@ -717,8 +725,26 @@ FSceneRepresentation FileParser::ParseSceneFile(const std::string& SceneFile)
 			l.AttenuationLinear    = attn.y;
 			l.AttenuationQuadratic = attn.z;
 		}
-		// TODO: area light impl
-		//if (pArea)        l.Type = Light::EType::AREA;
+		if (pLength)
+		{
+			XMLParseFloatVal(pLength, l.Length);
+		}
+		if (pRadius)
+		{
+			XMLParseFloatVal(pRadius, l.Radius);
+		}
+		if (pWidth)
+		{
+			XMLParseFloatVal(pWidth, l.Width);
+		}
+		if (pHeight)
+		{
+			XMLParseFloatVal(pHeight, l.Height);
+		}
+
+		if (pLinear)      l.Type = Light::EType::LINEAR;
+		if (pCylinder)    l.Type = Light::EType::CYLINDER;
+		if (pRectangular) l.Type = Light::EType::RECTANGULAR;
 		if (pSpot)        l.Type = Light::EType::SPOT;
 		if (pDirectional) l.Type = Light::EType::DIRECTIONAL;
 		if (pPoint)       l.Type = Light::EType::POINT;
