@@ -1350,13 +1350,13 @@ static void GatherLightMeshRenderData(
 		XMVECTOR dot = XMVector3Dot(lightToCamera, lightToCamera);
 
 		const float distanceSq = dot.m128_f32[0];
-		const float attenuation = 1.0f / distanceSq;
+		const float attenuation = 1.0f / sqrt(distanceSq);
 		const float attenuatedBrightness = l.Brightness * attenuation;
 		FLightRenderData cmd;
 		cmd.color = XMFLOAT4(
-			  l.Color.x * bAttenuateLight ? attenuatedBrightness : 1.0f
-			, l.Color.y * bAttenuateLight ? attenuatedBrightness : 1.0f
-			, l.Color.z * bAttenuateLight ? attenuatedBrightness : 1.0f
+			  l.Color.x * (bAttenuateLight ? attenuatedBrightness : 1.0f)
+			, l.Color.y * (bAttenuateLight ? attenuatedBrightness : 1.0f)
+			, l.Color.z * (bAttenuateLight ? attenuatedBrightness : 1.0f)
 			, 1.0f
 		);
 		cmd.matWorldTransformation = l.GetWorldTransformationMatrix();
@@ -1368,15 +1368,27 @@ static void GatherLightMeshRenderData(
 		case Light::EType::SPOT:
 		{
 			cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::SPHERE);
-			cmds.push_back(cmd);
 		}	break;
-
 		case Light::EType::POINT:
 		{
 			cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::SPHERE);
-			cmds.push_back(cmd);
+		}  break;
+		case Light::EType::LINEAR:
+		{
+			cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::CYLINDER);
+		}  break;
+		case Light::EType::CYLINDER:
+		{
+			cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::CYLINDER);
+		}  break;
+		case Light::EType::RECTANGULAR:
+		{
+			cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::CUBE);
 		}  break;
 		}
+		
+		if(l.Type != Light::EType::DIRECTIONAL)
+			cmds.push_back(cmd);
 	} 
 }
 

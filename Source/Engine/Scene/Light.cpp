@@ -122,11 +122,29 @@ void Light::GetGPUData(VQ_SHADER_DATA::SpotLight* pLight) const
 
 DirectX::XMMATRIX Light::GetWorldTransformationMatrix() const
 {
-	constexpr float LightMeshScale = 0.1f;
 	Transform tf;
 	tf._position = this->Position;
 	tf._rotation = this->RotationQuaternion;
-	tf._scale = XMFLOAT3(LightMeshScale, LightMeshScale, LightMeshScale);
+
+	
+	switch (this->Type)
+	{
+	case Light::EType::LINEAR:
+		tf._scale = XMFLOAT3(0.01f, this->Length, 0.5f);
+		break;
+	case Light::EType::CYLINDER:
+		tf._scale = XMFLOAT3(this->Radius, this->Length, this->Radius);
+		break;
+	case Light::EType::RECTANGULAR:
+		tf._scale = XMFLOAT3(this->Width, this->Height, 0.01f);
+		break;
+	default:
+	{
+		constexpr float LightMeshScale = 0.1f;
+		tf._scale = XMFLOAT3(LightMeshScale, LightMeshScale, LightMeshScale);
+	} break;
+	}
+
 	return tf.matWorldTransformation();
 }
 
