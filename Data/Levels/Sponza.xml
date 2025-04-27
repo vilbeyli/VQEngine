@@ -72,52 +72,48 @@
 
     <Light>
         <Transform>
-            <Position>856.140625 55.589787 36.861996</Position>
+            <Position>1196.140625 55.589787 36.861996</Position>
             <Rotation> 0 0 0 </Rotation>
-            <Scale> 0.1 0.1 0.1 </Scale>
         </Transform>
-        <!-- Area Light -->
+        <!-- Linear Light -->
         <Mobility> Dynamic </Mobility>
         <Enabled>true</Enabled>
-        <Color>0.9 0.9 0.85</Color>
-        <Range> 5000 </Range>
-        <Brightness> 65000 </Brightness>
+        <Color>0.1 0.2 0.85</Color>
+        <Brightness> 5000 </Brightness>
         <Linear>
-            <Length> 10 </Length>
+            <Length> 100 </Length>
         </Linear>
     </Light>
     <Light>
         <Transform>
-            <Position>816.140625 55.589787 36.861996</Position>
-            <Rotation> 0 0 0 </Rotation>
+            <Position>886.140625 55.589787 140.861996</Position>
+            <Rotation> 90 0 20 </Rotation>
             <Scale> 0.1 0.1 0.1 </Scale>
         </Transform>
-        <!-- Area Light -->
+        <!-- Cylinder Light -->
         <Mobility> Dynamic </Mobility>
         <Enabled>true</Enabled>
-        <Color>0.9 0.9 0.85</Color>
-        <Range> 5000 </Range>
-        <Brightness> 65000 </Brightness>
+        <Color>0.1 0.9 0.15</Color>
+        <Brightness> 3000 </Brightness>
         <Cylinder>
-            <Length> 15 </Length>
-            <Radius> 2 </Radius>
+            <Length> 40 </Length>
+            <Radius> 5 </Radius>
         </Cylinder>
     </Light>
     <Light>
         <Transform>
-            <Position>896.140625 55.589787 36.861996</Position>
-            <Rotation> 0 0 0 </Rotation>
+            <Position>896.140625 55.589787 -40.861996</Position>
+            <Rotation> 0 120 0 </Rotation>
             <Scale> 0.1 0.1 0.1 </Scale>
         </Transform>
-        <!-- Area Light -->
+        <!-- Rectangular Light -->
         <Mobility> Dynamic </Mobility>
         <Enabled>true</Enabled>
-        <Color>0.9 0.9 0.85</Color>
-        <Range> 5000 </Range>
-        <Brightness> 65000 </Brightness>
+        <Color>0.6 0.02 0.02</Color>
+        <Brightness> 4000 </Brightness>
         <Rectangular>
-            <Width> 16 </Width>
-            <Height> 9 </Height>
+            <Width> 80 </Width>
+            <Height> 45 </Height>
         </Rectangular>
     </Light>
 
