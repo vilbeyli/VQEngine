@@ -296,23 +296,6 @@ void TextureManager::DestroyTexture(TextureID& ID)
 		meta.Texture.Allocation = nullptr;
 	}
 
-	// Free descriptors (assumes VQRenderer manages DSV/UAV heaps)
-	if (meta.SRVID != INVALID_ID)
-	{
-		// mpSRVHeap->Free(meta.SRVID); // Implement if heap supports freeing
-		meta.SRVID = INVALID_ID;
-	}
-	if (meta.DSVID != INVALID_ID)
-	{
-		// VQRenderer::FreeDSV(meta.DSVID); // Placeholder
-		meta.DSVID = INVALID_ID;
-	}
-	if (meta.UAVID != INVALID_ID)
-	{
-		// VQRenderer::FreeUAV(meta.UAVID); // Placeholder
-		meta.UAVID = INVALID_ID;
-	}
-
 	// Remove from bookkeeping
 	if (!meta.Request.FilePath.empty())
 	{
@@ -428,43 +411,6 @@ const FTexture* TextureManager::GetTexture(TextureID id) const
 	}
 	return &it->second.Texture;
 }
-
-SRV_ID TextureManager::GetSRVID(TextureID ID) const
-{
-	std::shared_lock<std::shared_mutex> lock(mMetadataMutex);
-	auto it = mMetadata.find(ID);
-	if (it == mMetadata.end())
-	{
-		Log::Warning("Texture ID %d not found for SRV ID getter", ID);
-		return INVALID_ID;
-	}
-	return it->second.SRVID;
-}
-
-DSV_ID TextureManager::GetDSVID(TextureID ID) const
-{
-	std::shared_lock<std::shared_mutex> lock(mMetadataMutex);
-	auto it = mMetadata.find(ID);
-	if (it == mMetadata.end())
-	{
-		Log::Warning("Texture ID %d not found for DSV ID getter", ID);
-		return INVALID_ID;
-	}
-	return it->second.DSVID;
-}
-
-UAV_ID TextureManager::GetUAVID(TextureID ID) const
-{
-	std::shared_lock<std::shared_mutex> lock(mMetadataMutex);
-	auto it = mMetadata.find(ID);
-	if (it == mMetadata.end())
-	{
-		Log::Warning("Texture ID %d not found for UAV ID getter", ID);
-		return INVALID_ID;
-	}
-	return it->second.UAVID;
-}
-
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 //

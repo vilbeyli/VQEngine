@@ -46,8 +46,6 @@ struct FTextureRequest
     bool bGenerateMips = false;          // Whether to generate mipmaps
     bool bCubemap = false;               // Whether this is a cubemap or not
     bool bCPUReadback = false;           // Whether to use D3D12_HEAP_TYPE_READBACK
-    DXGI_FORMAT SRVFormat;               // Format for SRV (if applicable)
-    DXGI_FORMAT UAVFormat;               // Format for UAV (if applicable)
 };
 
 enum class ETextureTaskState
@@ -89,10 +87,6 @@ public:
     inline bool            GetTextureAlphaChannelUsed(TextureID ID) const { return GetTexture(ID)->UsesAlphaChannel; }
     inline uint            GetTextureMips(TextureID ID) const { return GetTexture(ID)->MipCount; }
 
-    SRV_ID GetSRVID(TextureID ID) const;
-    DSV_ID GetDSVID(TextureID ID) const;
-    UAV_ID GetUAVID(TextureID ID) const;
-
 private:
     struct FTextureTaskState
     {
@@ -104,9 +98,6 @@ private:
     {
         FTextureRequest Request;
         FTexture Texture; // Resource, Allocation, Format, etc.
-        SRV_ID SRVID = INVALID_ID;
-        DSV_ID DSVID = INVALID_ID;
-        UAV_ID UAVID = INVALID_ID;
     };
     struct FTextureData
     {

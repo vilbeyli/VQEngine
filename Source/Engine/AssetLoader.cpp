@@ -240,7 +240,6 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 					Request.bGenerateMips = true;
 					Request.bCPUReadback = false;
 					Request.InitialState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-					Request.SRVFormat = DXGI_FORMAT_R8G8B8A8_UNORM; // Adjust per TexType
 
 					const bool bCheckAlphaMask = (TexLoadParams.TexType == ETextureType::DIFFUSE) || TexLoadParams.TexType == ETextureType::ALPHA_MASK;
 					texID = mTextureManager.CreateTexture(Request, bCheckAlphaMask);
