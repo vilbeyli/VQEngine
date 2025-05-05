@@ -63,7 +63,7 @@ set (CoreFiles
     "Source/Engine/Core/Types.h"
     "Source/Engine/Core/FileParser.h"
     "Source/Engine/Core/Memory.h"
-    "Source/Engine/Core/imgui_impl_win32.h"
+    "Libs/imgui/backends/imgui_impl_win32.h"
 
     "Source/Engine/Core/Platform.cpp"
     "Source/Engine/Core/Window.cpp"
@@ -73,7 +73,7 @@ set (CoreFiles
     "Source/Engine/Core/VQEngine_EventHandlers.cpp"
     "Source/Engine/Core/FileParser.cpp"
     "Source/Engine/Core/Memory.cpp"
-    "Source/Engine/Core/imgui_impl_win32.cpp"
+    "Libs/imgui/backends/imgui_impl_win32.cpp"
 )
 
 set (SceneFiles   
