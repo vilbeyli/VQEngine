@@ -51,7 +51,7 @@
 //-------------------------------------------------------------------------------
 // Multithreading
 //-------------------------------------------------------------------------------
-#define UPDATE_THREAD__ENABLE_WORKERS 1
+#define ENABLE_WORKER_THREADS 1
 //-------------------------------------------------------------------------------
 
 using namespace DirectX;
@@ -1065,7 +1065,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 
 	const size_t NumThreads = 1 + NumWorkerThreads;
 
-#if UPDATE_THREAD__ENABLE_WORKERS
+#if ENABLE_WORKER_THREADS
 
 	std::vector<TaskSignal<void>> Signals;
 	{
@@ -1205,7 +1205,7 @@ void Scene::CullFrustums(const FSceneView& SceneView, ThreadPool& UpdateWorkerTh
 	const bool bThreadTheWork = NumWorkerThreadsToUse > 0;
 
 
-	if (UPDATE_THREAD__ENABLE_WORKERS && bThreadTheWork)
+	if (ENABLE_WORKER_THREADS && bThreadTheWork)
 	{
 		mFrustumCullWorkerContext.ProcessWorkItems_MultiThreaded(NumThreads, UpdateWorkerThreadPool);
 	}

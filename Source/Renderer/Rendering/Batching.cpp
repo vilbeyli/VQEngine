@@ -26,8 +26,7 @@
 using namespace DirectX;
 using namespace VQ_SHADER_DATA;
 
-#define UPDATE_THREAD__ENABLE_WORKERS 1  // TODO: rename to render thread
-
+#define ENABLE_WORKER_THREADS 1
 
 struct FDrawCallInputDataRange
 {
@@ -537,7 +536,7 @@ static void BatchBoundingBoxRenderCommandData(
 		FInstancedBoundingBoxRenderData& cmd = cmds[iBegin + i];
 		cmd.matWorldViewProj.resize(std::min(MAX_INSTANCE_COUNT__UNLIT_SHADER, (size_t)NumBBsToProcess));
 		cmd.vertexIndexBuffer = { VB, IB };
-		cmd.numIndices = 36; // TODO: remove magic number
+		cmd.numIndices = 36; // cube rendered w/ 12 trianges, 36 indices
 		cmd.color = Color;
 
 		int iBatch = 0;
@@ -577,7 +576,7 @@ static void BatchInstanceData_BoundingBox(FSceneDrawData& SceneDrawData
 		SCOPED_CPU_MARKER(strMarker);
 
 		constexpr size_t MIN_NUM_BOUNDING_BOX_FOR_THREADING = 128;
-		if (BBs.size() < MIN_NUM_BOUNDING_BOX_FOR_THREADING || !UPDATE_THREAD__ENABLE_WORKERS)
+		if (BBs.size() < MIN_NUM_BOUNDING_BOX_FOR_THREADING || !ENABLE_WORKER_THREADS)
 		{
 			BatchBoundingBoxRenderCommandData(cmds
 				, BBs
