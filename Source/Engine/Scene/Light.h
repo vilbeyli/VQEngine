@@ -100,6 +100,9 @@ struct Light
 	void GetGPUData(VQ_SHADER_DATA::DirectionalLight* pLight) const;
 	void GetGPUData(VQ_SHADER_DATA::PointLight*       pLight) const;
 	void GetGPUData(VQ_SHADER_DATA::SpotLight*        pLight) const;
+	void GetGPUData(VQ_SHADER_DATA::LinearLight*      pLight) const;
+	void GetGPUData(VQ_SHADER_DATA::CylinderLight*    pLight) const;
+	void GetGPUData(VQ_SHADER_DATA::RectangularLight* pLight) const;
 
 	DirectX::XMMATRIX GetWorldTransformationMatrix() const;
 	DirectX::XMMATRIX GetViewProjectionMatrix(CubemapUtility::ECubeMapLookDirections lookDir = CubemapUtility::ECubeMapLookDirections::CUBEMAP_LOOK_FRONT) const;

@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Scene>
+    <!-- 
+    CAMERAS
+    -->
+    <Camera>
+        <Position>  0 112 246 </Position>
+        <Pitch> 17.100004 </Pitch>
+        <Yaw>  0 </Yaw>
+        <Projection>Perspective</Projection>
+        <FoV>60.0</FoV>
+        <Near>0.1</Near>
+        <Far>5000</Far>
+
+        <FirstPerson>
+            <TranslationSpeed>5800</TranslationSpeed>
+            <AngularSpeed>0.05</AngularSpeed>
+            <Drag>9.5</Drag>
+        </FirstPerson>
+    </Camera>
+
+    <!-- 
+    OBJECTS
+    -->
+
+    <!-- 
+    LIGHTS
+    -->
+
+    <Light>
+        <Transform>
+            <Position>36.86 35.58 396.14</Position>
+            <Rotation> 90 0 0 </Rotation>
+        </Transform>
+        <!-- Linear Light -->
+        <Mobility> Dynamic </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.1 0.2 0.85</Color>
+        <Brightness> 100 </Brightness>
+        <Linear>
+            <Length> 100 </Length>
+        </Linear>
+    </Light>
+    <Light>
+        <Transform>
+            <Position>140.86 35.58 386.14</Position>
+            <Rotation> 90 90 0 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <!-- Cylinder Light -->
+        <Mobility> Dynamic </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.1 0.9 0.15</Color>
+        <Brightness> 500 </Brightness>
+        <Cylinder>
+            <Length> 40 </Length>
+            <Radius> 5 </Radius>
+        </Cylinder>
+    </Light>
+    <Light>
+        <Transform>
+            <Position>-80.86 45.58 396.14</Position>
+            <Rotation> 0 120 0 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <!-- Rectangular Light -->
+        <Mobility> Dynamic </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.6 0.02 0.02</Color>
+        <Brightness> 4000 </Brightness>
+        <Rectangular>
+            <Width> 80 </Width>
+            <Height> 45 </Height>
+        </Rectangular>
+    </Light>
+
+    <!-- 
+    POST PROCESS
+    -->
+    <PostProcess>
+    <!-- TBA -->
+    </PostProcess>
+</Scene>

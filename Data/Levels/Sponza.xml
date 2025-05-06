@@ -79,7 +79,7 @@
         <Mobility> Dynamic </Mobility>
         <Enabled>true</Enabled>
         <Color>0.1 0.2 0.85</Color>
-        <Brightness> 5000 </Brightness>
+        <Brightness> 500 </Brightness>
         <Linear>
             <Length> 100 </Length>
         </Linear>
@@ -94,7 +94,7 @@
         <Mobility> Dynamic </Mobility>
         <Enabled>true</Enabled>
         <Color>0.1 0.9 0.15</Color>
-        <Brightness> 3000 </Brightness>
+        <Brightness> 300 </Brightness>
         <Cylinder>
             <Length> 40 </Length>
             <Radius> 5 </Radius>
@@ -110,7 +110,7 @@
         <Mobility> Dynamic </Mobility>
         <Enabled>true</Enabled>
         <Color>0.6 0.02 0.02</Color>
-        <Brightness> 4000 </Brightness>
+        <Brightness> 400 </Brightness>
         <Rectangular>
             <Width> 80 </Width>
             <Height> 45 </Height>
@@ -128,7 +128,7 @@
         <Enabled>true</Enabled>
         <Color>0.4 0.4 0.85</Color>
         <Range> 5000 </Range>
-        <Brightness> 65000 </Brightness>
+        <Brightness> 40 </Brightness>
         <Shadows>
             <DepthBias> 0.5 </DepthBias>
             <NearPlane> 0.001 </NearPlane>

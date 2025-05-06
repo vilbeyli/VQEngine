@@ -28,7 +28,8 @@
 //----------------------------------------------------------
 inline float AttenuationBRDF(float dist)
 {
-	return 1.0f / (dist * dist);	// quadratic attenuation (inverse square) is physically more accurate
+	float d = dist * 0.01; // TODO: cm to m
+	return 1.0f / (1.0f + d * d);	// quadratic attenuation (inverse square) is physically more accurate
 }
 
 inline float AttenuationPhong(float2 coeffs, float dist)
@@ -402,3 +403,121 @@ float3 CalculateEnvironmentMapIllumination_DiffuseOnly(
 //    return uv - uv_offset;
 //}
 
+// code from [Frisvad2012]
+void BuildOrthonormalBasis(in float3 n, out float3 b1, out float3 b2)
+{
+	if (n.z < -0.9999999)
+	{
+		b1 = float3(0.0, -1.0, 0.0);
+		b2 = float3(-1.0, 0.0, 0.0);
+		return;
+	}
+	float a = 1.0 / (1.0 + n.z);
+	float b = -n.x * n.y * a;
+	b1 = float3(1.0 - n.x * n.x * a, b, -n.x);
+	b2 = float3(b, 1.0 - n.y * n.y * a, -n.y);
+}
+
+float3 D(float3 w, in BRDF_Surface s, float3 V /*Wo*/)
+{
+	return BRDF(s, w, V) * max(0, dot(s.N, w));
+}
+
+float3 I_cylinder_numerical(float3 p1, float3 p2, float R, float L, float3 CylinderAxis, in BRDF_Surface s, float3 V /*Wo*/, float3 P)
+{
+	// init orthonormal basis
+	float3 wt = CylinderAxis; // normalize(p2 - p1); // tangent vector from p1 to p2 along the cylinder light
+	float3 wt1, wt2;
+	BuildOrthonormalBasis(wt, wt1, wt2);
+	
+	// integral discretization
+	float3 I = 0.0f.xxx;
+	const int nSamplesPhi = 20; // [0, 2PI]
+	const int nSamplesL = 100;  // [0, L]
+	
+	for (int i = 0; i < nSamplesPhi; ++i)
+	for (int j = 0; j < nSamplesL  ; ++j)
+	{
+		// normal
+		float phi = TWO_PI * float(i)/float(nSamplesPhi);
+		float3 wn = cos(phi)*wt1 + sin(phi)*wt2;
+			
+		// position
+		float l = L * float(j)/float(nSamplesL - 1);
+		float3 p = p1 + l*wt + R*wn;
+			
+		// normalized direction
+		float3 wp = normalize(p); // shading spot location = (0,0,0);
+			
+		// integrate
+		I +=  D(wp, s, V) * AttenuationBRDF(length(p)) * max(0.0f, dot(-wp, wn)) / dot(p, p);
+	}
+	
+	I *= TWO_PI * R * L / float(nSamplesL * nSamplesPhi);
+	
+	return I;
+}
+
+float3 I_line_numerical(float3 p1, float3 p2, float L, float3 LightTangent, in BRDF_Surface s, float3 V /*Wo*/, float3 P)
+{
+	float3 wt = LightTangent; // normalize(p2 - p1);
+	
+	// integral discretization
+	float3 I = 0.0f.xxx;
+	const int nSamples = 100;
+	for (int i = 0; i < nSamples; ++i)
+	{
+		// position on light
+		float3 p = p1 + L * wt * float(i) / float(nSamples - 1);
+		
+		// normalized direction
+		float3 wp = normalize(p); // shading spot location = (0,0,0);
+		
+		// integrate
+		I += 2.0f * D(wp, s, V) * AttenuationBRDF(length(p)) * length(cross(wp, wt)) / dot(p, p);
+	}
+	
+	I *= L / float(nSamples);
+	
+	return I;
+}
+
+
+// approximation is most accurate with
+// - cylinders of small radius
+// - cylinders fra from the shading point
+// - low-frequency (large roughness) materials
+float I_cylinder_approx(float3 p1, float3 p2, float R, float L, float3 CylinderAxis, in BRDF_Surface s, float3 V /*Wo*/, float3 P)
+{
+	return min(1.0f, R * I_line_numerical(p1, p2, L, CylinderAxis, s, V, P));
+}
+
+
+float3 CalculateCylinderLightIllumination(CylinderLight l, in BRDF_Surface s, float3 V /*Wo*/, float3 P)
+{
+	float3 p1WorldSpace = l.position - l.tangent * l.length * 0.5f;
+	float3 p2WorldSpace = l.position + l.tangent * l.length * 0.5f;
+		
+	float3 p1 = p1WorldSpace - P;
+	float3 p2 = p2WorldSpace - P;
+	
+	float R = l.radius;
+	float L = l.length; // length(p2 - p1);	
+	
+	//return I_cylinder_numerical(p1, p2, R, L, l.tangent, s, V, P) * l.brightness * l.color;
+	return I_cylinder_approx(p1, p2, R, L, l.tangent, s, V, P) * l.brightness * l.color;
+}
+
+
+float3 CalculateLinearLightIllumination(LinearLight l, in BRDF_Surface s, float3 V /*Wo*/, float3 P)
+{
+	float3 p1WorldSpace = l.position - l.tangent * l.length * 0.5f;
+	float3 p2WorldSpace = l.position + l.tangent * l.length * 0.5f;
+		
+	float3 p1 = p1WorldSpace - P;
+	float3 p2 = p2WorldSpace - P;
+
+	float L = l.length; // length(p2 - p1);
+	
+	return I_line_numerical(p1, p2, L, l.tangent, s, V, P) * l.brightness * l.color;
+}

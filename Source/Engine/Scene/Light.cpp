@@ -120,6 +120,38 @@ void Light::GetGPUData(VQ_SHADER_DATA::SpotLight* pLight) const
 	pLight->outerConeAngle = this->SpotOuterConeAngleDegrees * DEG2RAD;
 }
 
+void Light::GetGPUData(VQ_SHADER_DATA::LinearLight* pLight) const
+{
+	pLight->brightness = this->Brightness;
+	pLight->color = this->Color;
+	pLight->length = this->Length;
+	pLight->position = this->Position;
+
+	XMVECTOR T = XMVectorSet(0, 1, 0, 0);
+	XMStoreFloat3(&pLight->tangent, this->RotationQuaternion.TransformVector(T));
+}
+
+void Light::GetGPUData(VQ_SHADER_DATA::CylinderLight* pLight) const
+{
+	pLight->brightness = this->Brightness;
+	pLight->color = this->Color;
+	pLight->position = this->Position;
+	pLight->length = this->Length;
+	pLight->radius = this->Radius;
+
+	XMVECTOR T = XMVectorSet(0, 1, 0, 0);
+	XMStoreFloat3(&pLight->tangent, this->RotationQuaternion.TransformVector(T));
+}
+
+void Light::GetGPUData(VQ_SHADER_DATA::RectangularLight* pLight) const
+{
+	pLight->brightness = this->Brightness;
+	pLight->color = this->Color;
+
+	// TODO:
+	//pLight->position = this->Position;
+}
+
 DirectX::XMMATRIX Light::GetWorldTransformationMatrix() const
 {
 	Transform tf;
@@ -130,10 +162,10 @@ DirectX::XMMATRIX Light::GetWorldTransformationMatrix() const
 	switch (this->Type)
 	{
 	case Light::EType::LINEAR:
-		tf._scale = XMFLOAT3(0.01f, this->Length, 0.5f);
+		tf._scale = XMFLOAT3(0.01f, this->Length*0.5f, 0.5f);
 		break;
 	case Light::EType::CYLINDER:
-		tf._scale = XMFLOAT3(this->Radius, this->Length, this->Radius);
+		tf._scale = XMFLOAT3(this->Radius, this->Length*0.5f, this->Radius);
 		break;
 	case Light::EType::RECTANGULAR:
 		tf._scale = XMFLOAT3(this->Width, this->Height, 0.01f);
