@@ -376,6 +376,25 @@ PSOutput PSMain(PSInput In)
 		}
 	}
 	
+	// linear lights
+	for (int ll = 0; ll < cbPerFrame.Lights.numLinearLights; ++ll)
+	{
+		I_total += CalculateLinearLightIllumination(cbPerFrame.Lights.linear_lights[ll], Surface, V, P);
+	}
+	
+	// cylinder lights
+	for (int cl = 0; cl < cbPerFrame.Lights.numCylinderLights; ++cl)
+	{
+		I_total += CalculateCylinderLightIllumination(cbPerFrame.Lights.cylinder_lights[cl], Surface, V, P);
+	}
+	
+	// rectangular lights
+	for (int rl = 0; rl < cbPerFrame.Lights.numRectangularLights; ++rl)
+	{
+		// cbPerFrame.Lights.rectangular_lights[rl];
+		
+	}
+	
 	// write out
 	o.color = float4(I_total, Surface.roughness.r);
 

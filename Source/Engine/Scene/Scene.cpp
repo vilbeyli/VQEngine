@@ -981,6 +981,8 @@ void Scene::GatherSceneLightData(FSceneView& SceneView) const
 
 	int iGPUSpot = 0;  int iGPUSpotShadow = 0;
 	int iGPUPoint = 0; int iGPUPointShadow = 0;
+	int iGPULinear = 0; int iGPUCylinder = 0;
+	int iGPURect = 0;
 	auto fnGatherLightData = [&](const std::vector<Light>& vLights, Light::EMobility eLightMobility)
 	{
 		for (const Light& l : vLights)
@@ -1008,10 +1010,12 @@ void Scene::GatherSceneLightData(FSceneView& SceneView) const
 				l.GetGPUData(l.bCastingShadows ? &data.point_casters[iGPUPointShadow++] : &data.point_lights[iGPUPoint++]);
 				// TODO: 
 				break;
+			case Light::EType::LINEAR     : l.GetGPUData(&data.linear_lights[iGPULinear++]); break;
+			case Light::EType::CYLINDER   : l.GetGPUData(&data.cylinder_lights[iGPUCylinder++]); break;
+			case Light::EType::RECTANGULAR: l.GetGPUData(&data.rectangular_lights[iGPURect++]); break;
 			default:
 				break;
 			}
-
 		}
 	};
 	fnGatherLightData(mLightsStatic, Light::EMobility::STATIC);
@@ -1022,6 +1026,9 @@ void Scene::GatherSceneLightData(FSceneView& SceneView) const
 	data.numPointLights = iGPUPoint;
 	data.numSpotCasters = iGPUSpotShadow;
 	data.numSpotLights = iGPUSpot;
+	data.numLinearLights = iGPULinear;
+	data.numCylinderLights = iGPUCylinder;
+	data.numRectangularLights = iGPURect;
 }
 
 void Scene::GatherShadowViewData(FSceneShadowViews& SceneShadowView, const std::vector<Light>& vLights, const std::vector<size_t>& vActiveLightIndices)
@@ -1345,11 +1352,11 @@ static void GatherLightMeshRenderData(
 
 		XMVECTOR lightPosition = XMLoadFloat3(&l.Position);
 		XMVECTOR lightToCamera = CameraPosition - lightPosition;
-		XMVECTOR dot = XMVector3Dot(lightToCamera, lightToCamera);
+		XMVECTOR dot = XMVector3Dot(lightToCamera*0.01, lightToCamera*0.01);
 
 		const float distanceSq = dot.m128_f32[0];
 		const float attenuation = 1.0f / sqrt(distanceSq);
-		const float attenuatedBrightness = l.Brightness * attenuation;
+		const float attenuatedBrightness = l.Brightness * attenuation * attenuation;
 		FLightRenderData cmd;
 		cmd.color = XMFLOAT4(
 			  l.Color.x * (bAttenuateLight ? attenuatedBrightness : 1.0f)
@@ -1361,28 +1368,12 @@ static void GatherLightMeshRenderData(
 
 		switch (l.Type)
 		{
-		case Light::EType::DIRECTIONAL:
-			break; // don't draw directional light mesh
-		case Light::EType::SPOT:
-		{
-			cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::SPHERE);
-		}	break;
-		case Light::EType::POINT:
-		{
-			cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::SPHERE);
-		}  break;
-		case Light::EType::LINEAR:
-		{
-			cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::CYLINDER);
-		}  break;
-		case Light::EType::CYLINDER:
-		{
-			cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::CYLINDER);
-		}  break;
-		case Light::EType::RECTANGULAR:
-		{
-			cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::CUBE);
-		}  break;
+		case Light::EType::DIRECTIONAL: break; // don't draw directional light mesh
+		case Light::EType::SPOT       : cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::SPHERE); break;
+		case Light::EType::POINT      : cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::SPHERE); break;
+		case Light::EType::LINEAR     : cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::CYLINDER); break;
+		case Light::EType::CYLINDER   : cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::CYLINDER); break;
+		case Light::EType::RECTANGULAR: cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::CUBE); break;
 		}
 		
 		if(l.Type != Light::EType::DIRECTIONAL)

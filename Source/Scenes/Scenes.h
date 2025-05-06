@@ -81,3 +81,10 @@ class TerrainScene : public Scene
 	DECLARE_CTOR(TerrainScene)
 	bool bAnimateEnvironmentMapRotation = false;
 };
+
+class LightingTestScene : public Scene
+{
+	DECLARE_SCENE_INTERFACE()
+
+	DECLARE_CTOR(LightingTestScene)
+};
