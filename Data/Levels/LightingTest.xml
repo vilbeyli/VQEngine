@@ -43,7 +43,7 @@
     </Light>
     <Light>
         <Transform>
-            <Position>140.86 35.58 386.14</Position>
+            <Position>240.86 35.58 386.14</Position>
             <Rotation> 90 90 0 </Rotation>
             <Scale> 0.1 0.1 0.1 </Scale>
         </Transform>
@@ -59,7 +59,7 @@
     </Light>
     <Light>
         <Transform>
-            <Position>-80.86 45.58 396.14</Position>
+            <Position>-280.86 45.58 396.14</Position>
             <Rotation> 0 120 0 </Rotation>
             <Scale> 0.1 0.1 0.1 </Scale>
         </Transform>

@@ -44,7 +44,9 @@
 #include "Engine/EnvironmentMap.h"
 #include "Engine/Math.h"
 #include "Engine/Scene/Mesh.h"
+
 #include "Shaders/LightingConstantBufferData.h"
+#include "Shaders/LTCMatrix.h"
 
 #include "Libs/VQUtils/Source/Log.h"
 #include "Libs/VQUtils/Source/utils.h"
@@ -672,24 +674,21 @@ void VQRenderer::LoadDefaultResources()
 	const UINT sizeX = 1024;
 	const UINT sizeY = 1024;
 	
-	D3D12_RESOURCE_DESC textureDesc = {};
-	{
-		textureDesc = {};
-		textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-		textureDesc.Alignment = 0;
-		textureDesc.Width = sizeX;
-		textureDesc.Height = sizeY;
-		textureDesc.DepthOrArraySize = 1;
-		textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-		textureDesc.MipLevels = 1;
-		textureDesc.SampleDesc.Count = 1;
-		textureDesc.SampleDesc.Quality = 0;
-		textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-		textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-	}
+
 	TextureCreateDesc desc("Checkerboard");
-	desc.d3d12Desc = textureDesc;
 	desc.ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+	desc.d3d12Desc = {};
+	desc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	desc.d3d12Desc.Alignment = 0;
+	desc.d3d12Desc.Width = sizeX;
+	desc.d3d12Desc.Height = sizeY;
+	desc.d3d12Desc.DepthOrArraySize = 1;
+	desc.d3d12Desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	desc.d3d12Desc.MipLevels = 1;
+	desc.d3d12Desc.SampleDesc.Count = 1;
+	desc.d3d12Desc.SampleDesc.Quality = 0;
+	desc.d3d12Desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	desc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
 	// programmatically generated textures
 	{
@@ -710,9 +709,33 @@ void VQRenderer::LoadDefaultResources()
 		desc.pDataArray.pop_back();
 	}
 	{
+		desc.TexName = "LTC_Minv";
+		desc.ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+		desc.d3d12Desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+		const uint SIZE = (uint)sqrtf(sizeof(LTC1) / (4 * sizeof(float)));
+		desc.d3d12Desc.Width = SIZE;
+		desc.d3d12Desc.Height = SIZE;
+		desc.pDataArray.push_back((const void* const)LTC1);
+		TextureID texID = this->CreateTexture(desc);
+		mLookup_ProceduralTextureIDs [EProceduralTextures::LTC1] = texID;
+		mLookup_ProceduralTextureSRVs[EProceduralTextures::LTC1] = this->AllocateAndInitializeSRV(texID);
+		desc.pDataArray.pop_back();
+	}
+	{
+		desc.TexName = "LTC_GGX_F_0_Sphere";
+		desc.pDataArray.push_back((const void* const)LTC2);
+		const uint SIZE = (uint)sqrtf(sizeof(LTC2) / (4 * sizeof(float)));
+		desc.d3d12Desc.Width = SIZE;
+		desc.d3d12Desc.Height = SIZE;
+		TextureID texID = this->CreateTexture(desc);
+		mLookup_ProceduralTextureIDs[EProceduralTextures::LTC2] = texID;
+		mLookup_ProceduralTextureSRVs[EProceduralTextures::LTC2] = this->AllocateAndInitializeSRV(texID);
+		desc.pDataArray.pop_back();
+	}
+	{
 		desc.TexName = "IBL_BRDF_Integration";
 		desc.ResourceState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-		desc.d3d12Desc.Width  = 1024;
+		desc.d3d12Desc.Width = 1024;
 		desc.d3d12Desc.Height = 1024;
 		desc.d3d12Desc.Format = DXGI_FORMAT_R16G16_FLOAT;
 		desc.d3d12Desc.Flags = D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;

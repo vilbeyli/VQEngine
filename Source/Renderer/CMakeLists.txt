@@ -159,6 +159,8 @@ set (Shaders
     "../../Shaders/Outline.hlsl"
     "../../Shaders/VertexDebug.hlsl"
     "../../Shaders/Tessellation.hlsl"
+    "../../Shaders/LTCMatrix.h"
+    "../../Shaders/LTC.hlsl"
     "../../Shaders/VQPlatform.h"
 )
 set (FFX_CAS_Shaders

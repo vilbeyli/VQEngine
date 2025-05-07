@@ -74,11 +74,13 @@ struct FLoadingScreenData;
 //========================================================================================================================================================================================================---
 constexpr size_t MAX_INSTANCE_COUNT__UNLIT_SHADER = 512;
 
-enum EProceduralTextures
+enum class EProceduralTextures
 {
 	  CHECKERBOARD = 0
 	, CHECKERBOARD_GRAYSCALE
 	, IBL_BRDF_INTEGRATION_LUT
+	, LTC1
+	, LTC2
 
 	, NUM_PROCEDURAL_TEXTURES
 };
