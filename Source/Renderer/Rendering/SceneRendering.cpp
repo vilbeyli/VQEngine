@@ -1629,9 +1629,6 @@ void VQRenderer::RenderSceneColor(
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderSceneColor");
 
-	struct FFrameConstantBuffer { DirectX::XMMATRIX matModelViewProj; };
-	struct FFrameConstantBuffer2 { DirectX::XMMATRIX matModelViewProj; int iTextureConfig; int iTextureOutput; };
-
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 
 	const bool bHDRDisplay = bHDR; // TODO: this->ShouldRenderHDR(pWindow->GetHWND());
@@ -1708,6 +1705,9 @@ void VQRenderer::RenderSceneColor(
 			: NullTex2DSRV.GetGPUDescHandle()
 		);
 		pCmd->SetGraphicsRootDescriptorTable(10, this->GetSRV(rsc.SRV_FFXCACAO_Out).GetGPUDescHandle());
+
+		pCmd->SetGraphicsRootDescriptorTable(13, this->GetProceduralTextureSRV(EProceduralTextures::LTC1).GetGPUDescHandle());
+		pCmd->SetGraphicsRootDescriptorTable(14, this->GetProceduralTextureSRV(EProceduralTextures::LTC2).GetGPUDescHandle());
 	}
 
 	// set PerView constants
@@ -1826,6 +1826,7 @@ void VQRenderer::RenderSceneColor(
 		ID3D12DescriptorHeap* ppHeaps[] = { this->GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+		struct FFrameConstantBuffer { DirectX::XMMATRIX matModelViewProj; };
 		FFrameConstantBuffer * pConstBuffer = {};
 		pCBufferHeap->AllocConstantBuffer(sizeof(FFrameConstantBuffer ), (void**)(&pConstBuffer), &cbAddr);
 		pConstBuffer->matModelViewProj = SceneView.EnvironmentMapViewProj;

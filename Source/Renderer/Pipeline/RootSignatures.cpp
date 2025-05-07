@@ -278,7 +278,7 @@ void VQRenderer::LoadBuiltinRootSignatures()
 
 	// ForwardLighting Root Signature : [5]
 	{
-		CD3DX12_DESCRIPTOR_RANGE1 ranges[9];
+		CD3DX12_DESCRIPTOR_RANGE1 ranges[11];
 		// material textures
 		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
 		ranges[7].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 8, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/); // heightmap
@@ -293,8 +293,12 @@ void VQRenderer::LoadBuiltinRootSignatures()
 		ranges[6].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 12, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
 		//ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC); // perView  cb's are DescRanges
 		//ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC); // perFrame cb's are DescRanges
+		
+		// LTC maps
+		ranges[9 ].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 52, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
+		ranges[10].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 53, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE/*D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC*/);
 
-		CD3DX12_ROOT_PARAMETER1 rootParameters[13]; 
+		CD3DX12_ROOT_PARAMETER1 rootParameters[15]; 
 		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
 		rootParameters[1].InitAsConstantBufferView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE, D3D12_SHADER_VISIBILITY_ALL);
 #if 0
@@ -323,6 +327,10 @@ void VQRenderer::LoadBuiltinRootSignatures()
 		
 		// Heightmap binding
 		rootParameters[11].InitAsDescriptorTable(1, &ranges[7], D3D12_SHADER_VISIBILITY_ALL);
+
+		// LTC bindings
+		rootParameters[13].InitAsDescriptorTable(1, &ranges[9], D3D12_SHADER_VISIBILITY_PIXEL);
+		rootParameters[14].InitAsDescriptorTable(1, &ranges[10], D3D12_SHADER_VISIBILITY_PIXEL);
 
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
 		rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, _countof(PBRsamplers), &PBRsamplers[0], D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);

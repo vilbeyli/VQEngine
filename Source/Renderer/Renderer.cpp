@@ -45,7 +45,9 @@
 #include "Engine/EnvironmentMap.h"
 #include "Engine/Math.h"
 #include "Engine/Scene/Mesh.h"
+
 #include "Shaders/LightingConstantBufferData.h"
+#include "Shaders/LTCMatrix.h"
 
 #include "Libs/VQUtils/Include/Log.h"
 #include "Libs/VQUtils/Include/utils.h"
@@ -973,18 +975,23 @@ void VQRenderer::LoadDefaultResources()
 	CloseHandle(fenceEvent); // Cleanup event handle
 }
 
+constexpr size_t NUM_PROCEDURAL_TEXTURES = (size_t)EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
 static constexpr UINT PROCEDURAL_TEXTURE_SIZE_X = 1024;
 static constexpr UINT PROCEDURAL_TEXTURE_SIZE_Y = 1024;
-static const std::array<std::vector<UINT8>, EProceduralTextures::NUM_PROCEDURAL_TEXTURES> textureData =
+static const std::array<std::vector<UINT8>, NUM_PROCEDURAL_TEXTURES> textureData =
 {
 	FTexture::GenerateTexture_Checkerboard(PROCEDURAL_TEXTURE_SIZE_X),
 	FTexture::GenerateTexture_Checkerboard(PROCEDURAL_TEXTURE_SIZE_X, true),
+	{},
+	{},
 	{} // GPU-initialized texture has no data
 };
-static const std::array<const char*, EProceduralTextures::NUM_PROCEDURAL_TEXTURES> textureNames =
+static const std::array<const char*, NUM_PROCEDURAL_TEXTURES> textureNames =
 {
 	"Checkerboard",
 	"Checkerboard_Gray",
+	"LTC_Minv",
+	"LTC_GGX_F_0_Sphere",
 	"IBL_BRDF_Integration"
 };
 
@@ -1007,8 +1014,8 @@ void VQRenderer::CreateProceduralTextures()
 	};
 
 	
-	std::array<TextureID, NUM_PROCEDURAL_TEXTURES> textureIDs = { INVALID_ID, INVALID_ID, INVALID_ID };
-	std::array<D3D12_RESOURCE_DESC, NUM_PROCEDURAL_TEXTURES> texDescs{ textureDesc, textureDesc, textureDesc };
+	std::array<TextureID, NUM_PROCEDURAL_TEXTURES> textureIDs = { INVALID_ID, INVALID_ID, INVALID_ID, INVALID_ID, INVALID_ID };
+	std::array<D3D12_RESOURCE_DESC, NUM_PROCEDURAL_TEXTURES> texDescs{ textureDesc, textureDesc, textureDesc, textureDesc, textureDesc };
 
 	for (size_t i = 0; i < NUM_PROCEDURAL_TEXTURES; ++i)
 	{
@@ -1029,6 +1036,16 @@ void VQRenderer::CreateProceduralTextures()
 			req.D3D12Desc.Height = 1024;
 			req.D3D12Desc.Format = DXGI_FORMAT_R16G16_FLOAT;
 			req.D3D12Desc.Flags = D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+			break;
+		case EProceduralTextures::LTC1:
+			req.DataArray.push_back(LTC1);
+			req.D3D12Desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+			req.D3D12Desc.Width = req.D3D12Desc.Height = (uint)sqrtf(sizeof(LTC1) / (4 * sizeof(float)));
+			break;
+		case EProceduralTextures::LTC2:
+			req.DataArray.push_back(LTC2);
+			req.D3D12Desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+			req.D3D12Desc.Width = req.D3D12Desc.Height = (uint)sqrtf(sizeof(LTC2) / (4 * sizeof(float)));
 			break;
 		}
 

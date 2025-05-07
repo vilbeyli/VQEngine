@@ -21,8 +21,6 @@
 
 #include "Lighting.hlsl"
 
-
-
 //---------------------------------------------------------------------------------------------------
 //
 // DATA
@@ -105,7 +103,8 @@ Texture2D        texDirectionalLightShadowMap : register(t13);
 Texture2DArray   texSpotLightShadowMaps       : register(t16);
 TextureCubeArray texPointLightShadowMaps      : register(t22);
 
-
+Texture2D texLTC1 : register(t52);
+Texture2D texLTC2 : register(t53);
 
 
 //---------------------------------------------------------------------------------------------------
@@ -376,23 +375,32 @@ PSOutput PSMain(PSInput In)
 		}
 	}
 	
-	// linear lights
+	// area lights
+	const float LUT_SIZE = 64.0f; // ltc_texture size
+	const float LUT_SCALE = (LUT_SIZE - 1.0f) / LUT_SIZE;
+	const float LUT_BIAS = 0.5f / LUT_SIZE;
+	
+	float2 uvLTC = float2(Surface.roughness, sqrt(1.0f - dot(Surface.N, V)));
+	uvLTC = uvLTC * LUT_SCALE + LUT_BIAS;
+	float4 t1 = texLTC1.Sample(LinearSampler, uvLTC);
+	float4 t2 = texLTC2.Sample(LinearSampler, uvLTC);
+	float3x3 Minv = float3x3(
+		t1.x, 0.0f, t1.y,
+		0.0f, 1.0f, 0.0f,
+		t1.z, 0.0f, t1.w
+	);
+	
 	for (int ll = 0; ll < cbPerFrame.Lights.numLinearLights; ++ll)
 	{
 		I_total += CalculateLinearLightIllumination(cbPerFrame.Lights.linear_lights[ll], Surface, V, P);
 	}
-	
-	// cylinder lights
 	for (int cl = 0; cl < cbPerFrame.Lights.numCylinderLights; ++cl)
 	{
 		I_total += CalculateCylinderLightIllumination(cbPerFrame.Lights.cylinder_lights[cl], Surface, V, P);
 	}
-	
-	// rectangular lights
 	for (int rl = 0; rl < cbPerFrame.Lights.numRectangularLights; ++rl)
 	{
-		// cbPerFrame.Lights.rectangular_lights[rl];
-		
+		I_total += ClaculateRectangularLightIllumination(cbPerFrame.Lights.rectangular_lights[rl], Surface, V, P, Minv);
 	}
 	
 	// write out
