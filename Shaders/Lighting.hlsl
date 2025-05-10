@@ -445,8 +445,8 @@ float3x3 GetHDRIRotationMatrix(float fHDIROffsetInRadians)
 	const float cosB = cos(-fHDIROffsetInRadians);
 	const float sinB = sin(-fHDIROffsetInRadians);
 	float3x3 m = {
-		cosB, 0, sinB,
-		0, 1, 0,
+		+cosB, 0, sinB,
+		  0 ,  1,  0,
 		-sinB, 0, cosB
 	};
 	return m;
@@ -512,8 +512,15 @@ float3 CalculateCylinderLightIllumination(CylinderLight l, in BRDF_Surface s, fl
 	return I_cylinder_approx(p1, p2, R, L, l.tangent, s, V, P) * l.brightness * l.color;
 }
 
-
-float3 CalculateLinearLightIllumination(LinearLight l, in BRDF_Surface s, float3 V /*Wo*/, float3 P)
+float3 CalculateLinearLightIllumination(
+	LinearLight l,
+	in BRDF_Surface s,
+	float3 V /*Wo*/, 
+	float3 P, // shading world position
+	Texture2D texLTC1,
+	Texture2D texLTC2,
+	SamplerState LTCSampler // linear
+)
 {
 	float3 p1WorldSpace = l.position - l.tangent * l.length * 0.5f;
 	float3 p2WorldSpace = l.position + l.tangent * l.length * 0.5f;
@@ -523,15 +530,70 @@ float3 CalculateLinearLightIllumination(LinearLight l, in BRDF_Surface s, float3
 
 	float L = l.length; // length(p2 - p1);
 	
-	return I_line_numerical(p1, p2, L, l.tangent, s, V, P) * l.brightness * l.color;
+	bool LTC = l.LTC > 0;
+	if (LTC) // analytic solution
+	{
+		float NdotV = saturate(dot(s.N, V));
+		float3x3 Minv = LTCMinv(texLTC1, LTCSampler, s.roughness, NdotV);
+		
+		// Construct orthonormal basis around N
+		float3 T1 = normalize(V - s.N * dot(V, s.N));
+		float3 T2 = cross(s.N, T1);
+		//float3 T2 = cross(T1, s.N);
+		float3x3 B = float3x3(T1, T2, s.N);
+		
+		p1 = mul(B, p1);
+		p2 = mul(B, p2);
+		float3 I_Specular = I_ltc_line(p1, p2, Minv);
+		
+		float3 I_Diffuse = I_ltc_line(p1, p2, float3x3(1,0,0, 0,1,0, 0,0,1));
+		I_Diffuse /= 2.0f* PI;
+		
+		return I_Diffuse * l.brightness * l.color;
+	}
+	
+	else // numerical solution
+	{
+		return I_line_numerical(p1, p2, L, l.tangent, s, V, P) * l.brightness * l.color;
+	}
 }
 
-float3 ClaculateRectangularLightIllumination(RectangularLight l, in BRDF_Surface s, float3 V /*Wo*/, float3 P, float3x3 Minv)
+float3 ClaculateRectangularLightIllumination(
+	RectangularLight l, 
+	in BRDF_Surface s, 
+	float3 V /*Wo*/, 
+	float3 P,
+	Texture2D texLTC1,
+	Texture2D texLTC2,
+	SamplerState LTCSampler // linear
+)
 {
+	// build rectangle corner points
+	float halfH = l.height * 0.5f;
+	float halfW = l.width * 0.5f;
 	float3 points[4];
-	points[0] = float3(0, 0, 0);
-	points[1] = float3(0, 0, 0);
-	points[2] = float3(0, 0, 0);
-	points[3] = float3(0, 0, 0);
-	return LTC_Evaluate_Rectangular(s.N, V, P, Minv, points) * l.brightness * l.color;
+	points[0] = l.position + l.tangent * halfW + l.bitangent * halfH;
+	points[1] = l.position + l.tangent * halfW - l.bitangent * halfH;
+	points[2] = l.position - l.tangent * halfW - l.bitangent * halfH;
+	points[3] = l.position - l.tangent * halfW + l.bitangent * halfH;
+	
+	// Construct orthonormal basis around N
+	float3 T1 = normalize(V - s.N * dot(V, s.N));
+	float3 T2 = cross(s.N, T1);
+	float3x3 B = float3x3(T1, T2, s.N);
+	
+	points[0] = mul(B, points[0]);
+	points[1] = mul(B, points[1]);
+	points[2] = mul(B, points[2]);
+	points[3] = mul(B, points[3]);
+	
+	// get LTC parameters
+	float NdotV = saturate(dot(s.N, V));
+	float3x3 Minv = LTCMinv(texLTC1, LTCSampler, s.roughness, NdotV);
+	
+	// calculate illumination
+	float3 I_Specular = I_ltc_quad(s.N, V, P, Minv, points);
+	float3 I_Diffuse = I_ltc_quad(s.N, V, P, float3x3(1, 0, 0,  0, 1, 0,  0, 0, 1), points);
+	
+	return (I_Specular + I_Diffuse) * l.brightness * l.color;
 }

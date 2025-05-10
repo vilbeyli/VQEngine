@@ -376,23 +376,9 @@ PSOutput PSMain(PSInput In)
 	}
 	
 	// area lights
-	const float LUT_SIZE = 64.0f; // ltc_texture size
-	const float LUT_SCALE = (LUT_SIZE - 1.0f) / LUT_SIZE;
-	const float LUT_BIAS = 0.5f / LUT_SIZE;
-	
-	float2 uvLTC = float2(Surface.roughness, sqrt(1.0f - dot(Surface.N, V)));
-	uvLTC = uvLTC * LUT_SCALE + LUT_BIAS;
-	float4 t1 = texLTC1.Sample(LinearSampler, uvLTC);
-	float4 t2 = texLTC2.Sample(LinearSampler, uvLTC);
-	float3x3 Minv = float3x3(
-		t1.x, 0.0f, t1.y,
-		0.0f, 1.0f, 0.0f,
-		t1.z, 0.0f, t1.w
-	);
-	
 	for (int ll = 0; ll < cbPerFrame.Lights.numLinearLights; ++ll)
 	{
-		I_total += CalculateLinearLightIllumination(cbPerFrame.Lights.linear_lights[ll], Surface, V, P);
+		I_total += CalculateLinearLightIllumination(cbPerFrame.Lights.linear_lights[ll], Surface, V, P, texLTC1, texLTC2, LinearSampler);
 	}
 	for (int cl = 0; cl < cbPerFrame.Lights.numCylinderLights; ++cl)
 	{
@@ -400,7 +386,7 @@ PSOutput PSMain(PSInput In)
 	}
 	for (int rl = 0; rl < cbPerFrame.Lights.numRectangularLights; ++rl)
 	{
-		I_total += ClaculateRectangularLightIllumination(cbPerFrame.Lights.rectangular_lights[rl], Surface, V, P, Minv);
+		I_total += ClaculateRectangularLightIllumination(cbPerFrame.Lights.rectangular_lights[rl], Surface, V, P, texLTC1, texLTC2, LinearSampler);
 	}
 	
 	// write out
