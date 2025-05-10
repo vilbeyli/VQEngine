@@ -227,21 +227,15 @@ void FFrustumCullWorkerContext::AddWorkerItem(
 
 void FFrustumCullWorkerContext::ProcessWorkItems_SingleThreaded()
 {
-	const size_t szFP = vFrustumPlanes.size();
-	
-	const size_t& NumWorkItems = szFP;
+	const size_t& NumWorkItems = NumValidInputElements;
 	if (NumWorkItems == 0)
 	{
 		// LogWarning?
 		return;
 	}
 
-	// allocate context memory
-	pFrustumRenderLists->resize(szFP);
-	vVisibleBBIndicesPerView.resize(szFP);
-
 	// process all items on this thread
-	this->Process(0, szFP - 1, nullptr);
+	this->Process(0, NumWorkItems - 1, nullptr);
 }
 
 static void DispatchWorkers(ThreadPool& WorkerThreadPool, size_t NumWorkItems, void (*pfnProcess)(size_t iBegin, size_t iEnd))
