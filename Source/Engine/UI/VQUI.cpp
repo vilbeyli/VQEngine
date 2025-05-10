@@ -1799,6 +1799,7 @@ void VQEngine::DrawLightEditor()
 		break;
 	case Light::EType::LINEAR:
 		ImGui::DragFloat("Length", &l->Length, 0.1f, 0.01f, 200.0f, "%.1f");
+		ImGui::Checkbox("LTC", &l->LTC);
 		break;
 	case Light::EType::CYLINDER:
 		ImGui::DragFloat("Length", &l->Length, 0.1f, 0.01f, 200.0f, "%.1f");

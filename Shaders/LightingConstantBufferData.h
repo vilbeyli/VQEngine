@@ -94,6 +94,8 @@ struct ALIGNAS(16) LinearLight
 
 	float  brightness;
 	float3 color;
+
+	float LTC;
 };
 
 struct ALIGNAS(16) CylinderLight
@@ -111,6 +113,16 @@ struct ALIGNAS(16) RectangularLight
 {
 	float  brightness;
 	float3 color;
+	float  width;
+	float3 position;
+	float  height;
+	float3 tangent;
+	float3 bitangent;
+};
+
+struct ALIGNAS(16) SphericalLight
+{
+
 };
 
 struct SceneLighting
