@@ -145,6 +145,91 @@ MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 	return id;
 }
 
+int Scene::CreateLight(Light::EType Type, Light::EMobility Mobility)
+{
+	// create light
+	std::vector<Light>* pLights = nullptr;
+	switch (Mobility)
+	{
+	case Light::STATIC    : pLights = &mLightsStatic; break;
+	case Light::STATIONARY: pLights = &mLightsStationary; break;
+	case Light::DYNAMIC   : pLights = &mLightsDynamic; break;
+	default:
+		Log::Error("CreateLight calle w/ invalid mobility");
+		return -1;
+	}
+	assert(pLights);
+	switch (Type)
+	{
+	case Light::POINT      : pLights->push_back(Light::MakePointLight()); break;
+	case Light::SPOT       : pLights->push_back(Light::MakeSpotLight()); break;
+	case Light::DIRECTIONAL: pLights->push_back(Light::MakeDirectionalLight()); break;
+	default:
+		Log::Error("CreateLight called w/ invalid type");
+		return -1;
+	}
+
+	// validate directional light singularity
+	int NumDirectional = 0;
+	for (const Light& l : *pLights) NumDirectional += l.Type == Light::EType::DIRECTIONAL ? 1 : 0;
+	assert(NumDirectional <= 1);
+	if (NumDirectional > 1)
+	{
+		Log::Warning("More than 1 Directional Light created");
+	}
+
+	Light& l = pLights->back();
+
+	// calculate light spawn location
+	const float SPAWN_DISTANCE_TO_CAMERA = 3.0f;
+	float3 spawnLocation = float3(0, 0, 0);
+	if (mIndex_SelectedCamera >= 0)
+	{
+		const Camera& cam = this->GetActiveCamera();
+		const XMFLOAT3 pos = cam.GetPositionF();
+		XMVECTOR vPos = XMLoadFloat3(&pos);
+		XMVECTOR vDir = cam.GetDirection();
+		vPos += vDir * SPAWN_DISTANCE_TO_CAMERA;
+		XMStoreFloat3(&spawnLocation, vPos);
+	}
+	l.Position = spawnLocation;
+
+	return (int)pLights->size() - 1;
+}
+
+bool Scene::RemoveLight(Light* pLight)
+{
+	if (!pLight)
+	{
+		Log::Warning("RemoveLight received invalid light address");
+		return false;
+	}
+	std::vector<Light>* pLights = nullptr;
+	switch (pLight->Mobility)
+	{
+	case Light::STATIC    : pLights = &mLightsStatic; break;
+	case Light::STATIONARY: pLights = &mLightsStationary; break;
+	case Light::DYNAMIC   : pLights = &mLightsDynamic; break;
+	default:
+		Log::Error("RemoveLight called w/ invalid mobility");
+		return false;
+	}
+	assert(pLights);
+
+	for (auto it = pLights->begin(); it != pLights->end(); ++it)
+	{
+		if (&*it == pLight)
+		{
+			pLights->erase(it);
+			return true;
+		}
+	}
+
+	Log::Warning("Couldn't find light to remove");
+	return false;
+}
+
+
 const std::string& Scene::GetMaterialName(MaterialID ID) const
 {
 	auto it = mMaterialNames.find(ID);
@@ -316,6 +401,11 @@ FSceneStats Scene::GetSceneRenderStats(int FRAME_DATA_INDEX) const
 
 GameObject* Scene::GetGameObject(size_t hObject) const { return mGameObjectPool.Get(hObject); }
 Transform* Scene::GetGameObjectTransform(size_t hObject) const { return mGameObjectTransformPool.Get(hObject); }
+
+const Light* Scene::GetLight(Light::EMobility Mobility) const
+{
+	return nullptr;
+}
 
 //-------------------------------------------------------------------------------
 //

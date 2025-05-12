@@ -151,6 +151,7 @@ public:
 	inline       FProjectionMatrixParameters& GetProjectionParameters() { return mProjParams; }
 	inline       FFrustumPlaneset GetViewFrustumPlanesInWorldSpace() const { return FFrustumPlaneset::ExtractFromMatrix(GetViewMatrix() * GetProjectionMatrix()); }
 	
+	DirectX::XMVECTOR GetDirection() const;
 	ECameraControllerType GetControllerType() const { return static_cast<ECameraControllerType>(mControllerIndex); };
 	void SetControllerType(ECameraControllerType c) { mControllerIndex = c; }
 	void SetTargetPosition(const DirectX::XMFLOAT3& f3Position);

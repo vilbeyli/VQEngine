@@ -157,6 +157,13 @@ XMMATRIX Camera::GetViewInverseMatrix() const
 XMMATRIX Camera::GetProjectionMatrix() const { return  XMLoadFloat4x4(&mMatProj); }
 XMMATRIX Camera::GetRotationMatrix() const   { return XMMatrixRotationRollPitchYaw(mPitch, mYaw, 0.0f); }
 
+DirectX::XMVECTOR Camera::GetDirection() const
+{
+	const XMMATRIX MRot = GetRotationMatrix();
+	XMVECTOR direction = XMVector3TransformCoord(XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f), MRot);
+	return direction;
+}
+
 void Camera::SetTargetPosition(const DirectX::XMFLOAT3& f3Position)
 {
 	if (mpControllers.size() > ECameraControllerType::ORBIT)

@@ -1592,8 +1592,10 @@ void VQEngine::DrawMaterialEditor()
 	ImGui::EndTable();
 }
 
-const char* LightTypeToString(Light::EType type) {
-	switch (type) {
+const char* LightTypeToString(Light::EType type) 
+{
+	switch (type) 
+	{
 	case Light::EType::DIRECTIONAL: return "Directional";
 	case Light::EType::SPOT: return "Spot";
 	case Light::EType::POINT: return "Point";
@@ -1602,46 +1604,64 @@ const char* LightTypeToString(Light::EType type) {
 }
 void VQEngine::DrawLightEditor()
 {
-	// build light names
 	const std::vector<Light*> Lights = mpScene->GetLights();
-	int NumSpotLights = 0; int NumPointLights = 0; // this naming scheme isnt great: changing light type renames them...
-	int NumShadowingSpotLights = 0; int NumShadowingPointLights = 0; int NumDirectionalLights = 0;
-	std::vector<std::string> LightNames;
-	for (Light* l : Lights)
+
+	// build light names & count lights
+	std::array<int, Light::EType::LIGHT_TYPE_COUNT> NumShadowCastingLight;
+	std::array<int, Light::EType::LIGHT_TYPE_COUNT> NumLightsPerType;
+	auto fnBuildLightNamesAndCountLights = [this](const std::vector<Light*>& Lights, 
+		std::array<int, Light::EType::LIGHT_TYPE_COUNT>& NumShadowCastingLight,
+		std::array<int, Light::EType::LIGHT_TYPE_COUNT>& NumLightsPerType
+	) -> std::vector<std::string>
 	{
-		std::string LightName;
-		switch (l->Type)
+		// reset counts
+		for (int& i : NumShadowCastingLight) i = 0;
+		for (int& i : NumLightsPerType) i = 0;
+
+		std::vector<std::string> LightNames;
+		for (Light* l : Lights)
 		{
-			case Light::EType::POINT       : LightName += "Point #" + std::to_string(NumPointLights++); NumShadowingPointLights += l->bCastingShadows ? 1 : 0; break;
-			case Light::EType::SPOT        : LightName += "Spot #" + std::to_string(NumSpotLights++); NumShadowingSpotLights += l->bCastingShadows ? 1 : 0; break;
-			case Light::EType::DIRECTIONAL : LightName += "Directional"; NumDirectionalLights += 1; break;
-			default: 
-				Log::Error("DrawLightEditor(): undefined light type");
-				break;
+			const std::string lightCount = std::to_string(NumLightsPerType[l->Type]++);
+			NumShadowCastingLight[l->Type] += l->bCastingShadows ? 1 : 0;
+			
+			std::string LightName;
+			switch (l->Type)
+			{
+				// this naming scheme isnt great: changing light type renames them...
+				case Light::EType::POINT       : LightName += "Point #"; break;
+				case Light::EType::SPOT        : LightName += "Spot #" ; break;
+				case Light::EType::DIRECTIONAL : LightName += "Directional #"; break;
+				default: Log::Error("DrawLightEditor(): undefined light type"); break;
+			}
+			LightName += lightCount;
+			LightNames.push_back(LightName);
 		}
-		LightNames.push_back(LightName);
-	}
-	LightNames.push_back("");
-	
+		LightNames.push_back("");
+		return LightNames;
+	};
+	std::vector<std::string> LightNames = fnBuildLightNamesAndCountLights(Lights, NumShadowCastingLight, NumLightsPerType);
+
+
 	// validate selected light index
 	int& i = mUIState.SelectedEditeeIndex[FUIState::EEditorMode::LIGHTS];
-	if (i >= LightNames.size())
+	auto fnCalculateSelectedLightIndex = [](int& i, const std::vector<std::string>& LightNames)
 	{
-		Log::Warning("SelectedLightIndex > ObjNames.size() : capping SelectedLightIndex ");
-		i = (int)(LightNames.size() - 1);
-	}
-	if (i < 0)
-	{
-		// Log::Warning("SelectedLightIndex negative : Setting to 0");
-		// i = 0;
-	}
-
-	// get pointers to light name data 
-	const std::string& SelectedLightName = i >= 0 ?  LightNames[i] : LightNames.back();
-	std::vector<const char*> szLightNames(LightNames.size());
-	for (int i = 0; i < LightNames.size(); ++i)
-		szLightNames[i] = LightNames[i].c_str();
+		if (i >= LightNames.size()-1)
+		{
+			Log::Warning("SelectedLightIndex > ObjNames.size() : capping SelectedLightIndex ");
+			i = (int)(LightNames.size() - 2);
+		}
+		if (i < 0)
+		{
+			// Log::Warning("SelectedLightIndex negative : Setting to 0");
+			// i = 0;
+		}
+	};
+	fnCalculateSelectedLightIndex(i, LightNames);
 	
+	// get light data from selected index
+	const std::string& SelectedLightName = i >= 0 ?  LightNames[i] : LightNames.back();
+	Light* l = Lights.empty() ? nullptr : Lights[i];
 
 	// gui layout
 	ImGui::TableSetupColumn(SelectedLightName.c_str(), ImGuiTableColumnFlags_WidthStretch, 0.7f); // 70% width
@@ -1649,16 +1669,42 @@ void VQEngine::DrawLightEditor()
 	ImGui::TableHeadersRow();
 	ImGui::TableNextRow();
 
-	// draw selector
+	// right side: list & selection
 	ImGui::TableSetColumnIndex(1);
 	ImGui::SetNextItemWidth(-1); // Make the controls take the full width of the column
-	ImGui::ListBox("##", &i, szLightNames.data(), (int)szLightNames.size(), 18);
+	if (ImGui::Button("+##0", ImVec2(20, 0)))
+	{
+		if(l) mpScene->CreateLight(l->Type, l->Mobility);
+		else  mpScene->CreateLight();
+	}
+	ImGui::SameLine();
+
+	bool bEnableRemoveButton = !Lights.empty();
+	BeginDisabledUIState(bEnableRemoveButton);
+	if (ImGui::Button("-##0", ImVec2(20, 0)))
+	{
+		mpScene->RemoveLight(l);
+		LightNames = fnBuildLightNamesAndCountLights(Lights, NumShadowCastingLight, NumLightsPerType);
+		fnCalculateSelectedLightIndex(i, LightNames);
+		l = Lights[i];
+	}
+	EndDisabledUIState(bEnableRemoveButton);
+
+	ImGui::SameLine();
+
+	// get pointers to light name data 
+	std::vector<const char*> szLightNames(LightNames.size());
+	for (int i = 0; i < LightNames.size(); ++i) szLightNames[i] = LightNames[i].c_str();
 	if (ImGui::Button("Unselect##", ImVec2(-1, 0)))
 	{
 		i = (int)(szLightNames.size() - 1);
 	}
+	ImGui::SetNextItemWidth(-1); // Make the controls take the full width of the column
+	ImGui::ListBox("##", &i, szLightNames.data(), (int)szLightNames.size()-1, 18);
 
-	
+	if (!l)
+		return;
+
 	// draw editor
 	ImGui::TableSetColumnIndex(0);
 
@@ -1667,8 +1713,6 @@ void VQEngine::DrawLightEditor()
 	{
 		return;
 	}
-
-	Light* l = Lights[i];
 
 	if (ImGui::Checkbox("Enabled", &l->bEnabled))
 	{
@@ -1692,23 +1736,30 @@ void VQEngine::DrawLightEditor()
 
 	ImGuiSpacing(2);
 
-	// Light type specific properties
-	const bool bEnableSpotLightDropdown        = !l->bCastingShadows || (NumShadowingSpotLights  < NUM_SHADOWING_LIGHTS__SPOT        && l->Type != Light::EType::SPOT);
-	const bool bEnablePointLightDropdown       = !l->bCastingShadows || (NumShadowingPointLights < NUM_SHADOWING_LIGHTS__POINT       && l->Type != Light::EType::POINT);
-	const bool bEnableDirectionalLightDropdown = !l->bCastingShadows || (NumDirectionalLights    < NUM_SHADOWING_LIGHTS__DIRECTIONAL && l->Type != Light::EType::DIRECTIONAL); // only 1 supported
-	if (ImGui::BeginCombo("Type", LightTypeToString(l->Type))) {
+	// Light type
+	assert(NumLightsPerType[Light::EType::DIRECTIONAL] >= 0 && NumLightsPerType[Light::EType::DIRECTIONAL] <= 1);
+	const bool bEnableSpotLightDropdown        = !l->bCastingShadows || (NumShadowCastingLight[Light::EType::SPOT  ] < NUM_SHADOWING_LIGHTS__SPOT        && l->Type != Light::EType::SPOT);
+	const bool bEnablePointLightDropdown       = !l->bCastingShadows || (NumShadowCastingLight[Light::EType::POINT ] < NUM_SHADOWING_LIGHTS__POINT       && l->Type != Light::EType::POINT);
+	const bool bEnableDirectionalLightDropdown = !l->bCastingShadows || (NumLightsPerType[Light::EType::DIRECTIONAL] < NUM_SHADOWING_LIGHTS__DIRECTIONAL && l->Type != Light::EType::DIRECTIONAL); // only 1 supported
+	if (ImGui::BeginCombo("Type", LightTypeToString(l->Type))) 
+	{
 		BeginDisabledUIState(bEnableDirectionalLightDropdown);
 		if (ImGui::Selectable("Directional", l->Type == Light::EType::DIRECTIONAL)) { l->Type = Light::EType::DIRECTIONAL; }
 		EndDisabledUIState(bEnableDirectionalLightDropdown);
+
 		BeginDisabledUIState(bEnableSpotLightDropdown);
 		if (ImGui::Selectable("Spot", l->Type == Light::EType::SPOT)) { l->Type = Light::EType::SPOT; }
 		EndDisabledUIState(bEnableSpotLightDropdown);
+
 		BeginDisabledUIState(bEnablePointLightDropdown);
 		if (ImGui::Selectable("Point", l->Type == Light::EType::POINT)) { l->Type = Light::EType::POINT; }
 		EndDisabledUIState(bEnablePointLightDropdown);
 		ImGui::EndCombo();
 	}
-	switch (l->Type) {
+
+	// Light type specific properties
+	switch (l->Type) 
+	{
 	case Light::EType::DIRECTIONAL:
 		ImGui::DragInt("Viewport X", &l->ViewportX, 1, 0, 2048);
 		ImGui::DragInt("Viewport Y", &l->ViewportY, 1, 0, 2048);

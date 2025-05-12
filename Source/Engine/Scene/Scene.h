@@ -179,7 +179,9 @@ public:
 	inline       int&    GetActiveCameraIndex() { return mIndex_SelectedCamera; }
 	inline       int&    GetActiveEnvironmentMapPresetIndex() { return mIndex_ActiveEnvironmentMapPreset; }
 
-	// Mesh, Model, GameObj management
+	//----------------------------------------------------------------------------------------------------------------
+	// SCENE ELEMENT MANAGEMENT
+	//----------------------------------------------------------------------------------------------------------------
 	//TransformID CreateTransform(Transform** ppTransform);
 	//GameObject* CreateObject(TransformID tfID, ModelID modelID);
 	MeshID      AddMesh(Mesh&& mesh);
@@ -187,28 +189,43 @@ public:
 	ModelID     CreateModel();
 	MaterialID  CreateMaterial(const std::string& UniqueMaterialName);
 	MaterialID  LoadMaterial(const FMaterialRepresentation& matRep, TaskID taskID);
+	int         CreateLight(Light::EType eType = Light::EType::POINT, Light::EMobility Mobility = Light::EMobility::DYNAMIC);
+	bool        RemoveLight(Light* pLight);
 
+	//----------------------------------------------------------------------------------------------------------------
+	// GETTERS
+	//----------------------------------------------------------------------------------------------------------------
+	// Materials
 	const std::vector<FMaterialRepresentation>& GetMaterialRepresentations() const { return mSceneRepresentation.Materials; }
 	const std::string& GetMaterialName(MaterialID ID) const;
 	std::vector<MaterialID> GetMaterialIDs() const;
 	const Material& GetMaterial(MaterialID ID) const;
 	Material& GetMaterial(MaterialID ID);
 	
+	// Meshes
 	const Mesh& GetMesh(MeshID ID) const;
 
+	// Textures
 	const std::string& GetTexturePath(TextureID) const;
 	std::string GetTextureName(TextureID) const;
 
+	// Lights
 	std::vector<const Light*> GetLightsOfType(Light::EType eType) const;
 	std::vector<const Light*> GetLights() const;
 	std::vector<Light*> GetLights();
 	
+	// Models
 	Model&      GetModel(ModelID);
 	const Model& GetModel(ModelID) const;
 	FSceneStats GetSceneRenderStats(int FRAME_DATA_INDEX) const;
 	
+	// Game Objects
 	GameObject* GetGameObject(size_t hObject) const;
 	Transform* GetGameObjectTransform(size_t hObject) const;
+
+	// Lights
+	const Light* GetLight(Light::EMobility Mobility) const;
+	      Light* GetLight(Light::EMobility Mobility);
 
 //----------------------------------------------------------------------------------------------------------------
 // SCENE DATA
