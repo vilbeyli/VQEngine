@@ -87,4 +87,6 @@ class LightingTestScene : public Scene
 	DECLARE_SCENE_INTERFACE()
 
 	DECLARE_CTOR(LightingTestScene)
+
+	bool bRotateLights = false;
 };
