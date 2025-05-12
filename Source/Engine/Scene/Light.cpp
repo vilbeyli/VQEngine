@@ -22,38 +22,44 @@
 
 using namespace DirectX;
 
-Light Light::MakePointLight()
+Light Light::MakeLight(Light::EType eType)
 {
 	Light l; // default ctor takes care of most
-	l.AttenuationConstant  = 1.0f;
-	l.AttenuationLinear    = 1.0f;
-	l.AttenuationQuadratic = 1.0f;
-	l.Type = Light::EType::POINT;
+	l.Type = eType;
+	switch (eType)
+	{
+	case Light::POINT:
+		l.AttenuationConstant = 1.0f;
+		l.AttenuationLinear = 1.0f;
+		l.AttenuationQuadratic = 1.0f;
+		break;
+	case Light::SPOT:
+		l.SpotInnerConeAngleDegrees = 25.0f;
+		l.SpotOuterConeAngleDegrees = 35.0f;
+		break;
+	case Light::DIRECTIONAL:
+		l.ViewportX = 2048;
+		l.ViewportY = 2048;
+		l.DistanceFromOrigin = 500.0f;
+		l.Type = Light::EType::DIRECTIONAL;
+		break;
+	case Light::LINEAR:
+		l.Length = 50.0f;
+		break;
+	case Light::CYLINDER:
+		l.Length = 60.0f;
+		l.Radius = 3.0f;
+		break;
+	case Light::RECTANGULAR:
+		l.Width = 192;
+		l.Height = 108;
+		break;
+	default:
+		l.Type = Light::LIGHT_TYPE_COUNT;
+		break;
+	}
 	return l;
 }
-
-Light Light::MakeDirectionalLight()
-{
-	Light l; // default ctor takes care of most
-
-	l.ViewportX = 2048;
-	l.ViewportY = 2048;
-	l.DistanceFromOrigin = 500.0f;
-	l.Type = Light::EType::DIRECTIONAL;
-
-	return l;
-}
-
-Light Light::MakeSpotLight()
-{
-	Light l; // default ctor takes care of most
-
-	l.SpotInnerConeAngleDegrees = 25.0f;
-	l.SpotOuterConeAngleDegrees = 35.0f;
-	l.Type = Light::EType::SPOT;
-	return l;
-}
-
 
 Light::Light()
 	: Position(XMFLOAT3(0,0,0))
