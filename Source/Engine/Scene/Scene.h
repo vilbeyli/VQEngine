@@ -215,8 +215,9 @@ public:
 
 	// Lights
 	std::vector<const Light*> GetLightsOfType(Light::EType eType) const;
+	std::vector<      Light*> GetLightsOfType(Light::EType eType);
 	std::vector<const Light*> GetLights() const;
-	std::vector<Light*> GetLights();
+	std::vector<      Light*> GetLights();
 	
 	// Models
 	Model&      GetModel(ModelID);

@@ -253,6 +253,15 @@ std::vector<const Light*> Scene::GetLightsOfType(Light::EType eType) const
 	for (const Light& l : mLightsDynamic   ) if(l.Type == eType) lights.push_back(&l);
 	return lights;
 }
+std::vector<Light*> Scene::GetLightsOfType(Light::EType eType)
+{
+	SCOPED_CPU_MARKER("Scene.GetLightsOfType");
+	std::vector<Light*> lights;
+	for (Light& l : mLightsStatic    ) if(l.Type == eType) lights.push_back(&l);
+	for (Light& l : mLightsStationary) if(l.Type == eType) lights.push_back(&l);
+	for (Light& l : mLightsDynamic   ) if(l.Type == eType) lights.push_back(&l);
+	return lights;
+}
 
 std::vector<const Light*> Scene::GetLights() const
 {
@@ -1080,7 +1089,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 	const SceneBoundingBoxHierarchy& BVH = mBoundingBoxHierarchy;
 	const size_t NumWorkerThreadsAvailable = UpdateWorkerThreadPool.GetThreadPoolSize();
 
-	const std::vector<const Light*> dirLights = GetLightsOfType(Light::EType::DIRECTIONAL);
+	const std::vector<const Light*> dirLights = static_cast<const Scene*>(this)->GetLightsOfType(Light::EType::DIRECTIONAL);
 	const bool bCullDirectionalLightView = !dirLights.empty() && dirLights[0]->bEnabled && dirLights[0]->bCastingShadows;
 
 	const uint NumSceneViews = 1;

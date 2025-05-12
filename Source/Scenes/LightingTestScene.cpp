@@ -12,7 +12,18 @@ static const char* pszTerrainMaterialName = "TerrainMaterial0";
 void LightingTestScene::UpdateScene(float dt, FSceneView& SceneView)
 {
 	if (mInput.IsKeyTriggered("Space"))
-		;
+		bRotateLights = !bRotateLights;
+
+	if (bRotateLights)
+	{
+		const float ROTATION_SPEED = 0.3f * PI;
+		std::vector<Light*> lights = this->GetLightsOfType(Light::EType::LINEAR);
+		for (Light* pL : lights)
+		{
+			Quaternion rotQ = Quaternion::FromAxisAngle(XMFLOAT3(1, 0, 0), ROTATION_SPEED * dt);
+			pL->RotationQuaternion = rotQ * pL->RotationQuaternion;
+		}
+	}
 }
 
 void LightingTestScene::InitializeScene()
