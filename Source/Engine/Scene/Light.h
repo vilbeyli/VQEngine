@@ -90,9 +90,7 @@ struct Light
 
 	// Creates a default Light type with some fields pre-initialized
 	//
-	static Light MakePointLight();
-	static Light MakeDirectionalLight();
-	static Light MakeSpotLight();
+	static Light MakeLight(Light::EType eType);
 	// ===========================================================================================================
 	
 	Light();

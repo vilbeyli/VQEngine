@@ -146,15 +146,13 @@ int Scene::CreateLight(Light::EType Type, Light::EMobility Mobility)
 		return -1;
 	}
 	assert(pLights);
-	switch (Type)
+
+	if (Type >= Light::EType::LIGHT_TYPE_COUNT)
 	{
-	case Light::POINT      : pLights->push_back(Light::MakePointLight()); break;
-	case Light::SPOT       : pLights->push_back(Light::MakeSpotLight()); break;
-	case Light::DIRECTIONAL: pLights->push_back(Light::MakeDirectionalLight()); break;
-	default:
 		Log::Error("CreateLight called w/ invalid type");
 		return -1;
 	}
+	pLights->push_back(Light::MakeLight(Type));
 
 	// validate directional light singularity
 	int NumDirectional = 0;
