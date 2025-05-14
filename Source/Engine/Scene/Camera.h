@@ -75,6 +75,7 @@ class CameraController
 {
 public:
 	virtual void UpdateCamera(const Input& input, float dt, bool bUseInput) = 0;
+	virtual ~CameraController() = default;
 	inline std::unique_ptr<CameraController> Clone(Camera* pNewCam) { return std::unique_ptr<CameraController>(Clone_impl(pNewCam)); }
 protected:
 	virtual CameraController* Clone_impl(Camera* pNewCam) = 0;

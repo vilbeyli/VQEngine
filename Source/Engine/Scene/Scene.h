@@ -119,6 +119,7 @@ protected:
 	//
 	virtual void RenderSceneUI() const = 0;
 
+
 //----------------------------------------------------------------------------------------------------------------
 // ENGINE INTERFACE
 //----------------------------------------------------------------------------------------------------------------
@@ -165,6 +166,7 @@ public:
 		, const std::unique_ptr<Window>& pWin
 		, VQRenderer& renderer
 	);
+	virtual ~Scene() = default;
 
 	      FSceneView&       GetSceneView (int FRAME_DATA_INDEX);
 	const FSceneView&       GetSceneView (int FRAME_DATA_INDEX) const;
