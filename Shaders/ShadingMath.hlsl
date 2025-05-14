@@ -16,7 +16,6 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-
 #ifndef _SHADING_MATH_H
 #define _SHADING_MATH_H
 
@@ -156,7 +155,6 @@ float3 ViewSpacePosition(in const float nonLinearDepth, const in float2 uv, cons
 }
 
 #endif
-
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------
 //

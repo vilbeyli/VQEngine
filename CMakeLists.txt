@@ -26,12 +26,14 @@ set (Scenes
     "Data/Levels/EnvironmentMapUnitTest.xml"
     "Data/Levels/StressTest.xml"
     "Data/Levels/Terrain.xml"
+    "Data/Levels/LightingTest.xml"
     "Source/Scenes/Scenes.h"
     "Source/Scenes/DefaultScene.cpp"
     "Source/Scenes/SponzaScene.cpp"
     "Source/Scenes/EnvironmentMapUnitTestScene.cpp"
     "Source/Scenes/StressTestScene.cpp"
     "Source/Scenes/TerrainScene.cpp"
+    "Source/Scenes/LightingTestScene.cpp"
 )
 
 set (Config

@@ -16,8 +16,6 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-#include "ShadingMath.hlsl"
-
 #include "BRDF.hlsl"
 
 struct PSInput

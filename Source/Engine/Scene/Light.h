@@ -44,15 +44,18 @@
 //
 struct Light
 {
-	enum EType : int
+	enum EType : unsigned char
 	{
 		POINT = 0,
 		SPOT,
 		DIRECTIONAL,
+		LINEAR,
+		CYLINDER,
+		RECTANGULAR,
 
 		LIGHT_TYPE_COUNT
 	};
-	enum EMobility : int
+	enum EMobility : unsigned char
 	{
 		// Static lights = constant lights
 		STATIC = 0,
@@ -87,9 +90,7 @@ struct Light
 
 	// Creates a default Light type with some fields pre-initialized
 	//
-	static Light MakePointLight();
-	static Light MakeDirectionalLight();
-	static Light MakeSpotLight();
+	static Light MakeLight(Light::EType eType);
 	// ===========================================================================================================
 	
 	Light();
@@ -97,6 +98,9 @@ struct Light
 	void GetGPUData(VQ_SHADER_DATA::DirectionalLight* pLight) const;
 	void GetGPUData(VQ_SHADER_DATA::PointLight*       pLight) const;
 	void GetGPUData(VQ_SHADER_DATA::SpotLight*        pLight) const;
+	void GetGPUData(VQ_SHADER_DATA::LinearLight*      pLight) const;
+	void GetGPUData(VQ_SHADER_DATA::CylinderLight*    pLight) const;
+	void GetGPUData(VQ_SHADER_DATA::RectangularLight* pLight) const;
 
 	DirectX::XMMATRIX GetWorldTransformationMatrix() const;
 	DirectX::XMMATRIX GetViewProjectionMatrix(CubemapUtility::ECubeMapLookDirections lookDir = CubemapUtility::ECubeMapLookDirections::CUBEMAP_LOOK_FRONT) const;
@@ -104,9 +108,7 @@ struct Light
 
 	EMobility GetMobility() const { return Mobility; }
 
-	//
-	// DATA
-	//
+
 public:
 	// CPU (Hot) data
 	DirectX::XMFLOAT3 Position;
@@ -167,23 +169,50 @@ public:
 		};
 
 
-		// TODO: linear lights from GPU Zen
+		// LTC Area Lights
 		// Eric Heitz Slides: https://drive.google.com/file/d/0BzvWIdpUpRx_Z2pZWWFtam5xTFE/view
-		// LINEAR LIGHT  ------------------------------------------------
+		
+		// LINE LIGHT  --------------------------------------------------
 		//
+		// -----------  L
+		// ' ' ' ' ' '
 		//
-		//
-		//
-		//
-		//
-		struct // Area
+		struct // Linear
 		{
-			float dummy2;
-			float dummy3;
-			float dummy4;
+			float Length;
+			bool LTC;
+		};
+
+		// CYLINDER LIGHT  ------------------------------------------------
+		//
+		//  <       L        >
+		//  \ ' ' ' ' ' ' '  /
+		//  (||||||||||||||||)  R
+		//  / ' ' ' ' ' ' '  \
+		//
+		struct // Area-Cylinder
+		{
+			float Length;
+			float Radius;
+		};
+
+		// CYLINDER LIGHT  ------------------------------------------------
+		//
+		// <       W          >
+		// \ ' ' ' ' ' ' ' '  /
+		//  +----------------+ 
+		//  |||||||||||||||||| 
+		//  ||||||||||||||||||  H
+		//  |||||||||||||||||| 
+		//  +----------------+
+		//  / ' ' ' ' ' ' ' ' \
+		//
+		struct // Area-Rectangular
+		{
+			float Width;
+			float Height;
 		};
 	};
-
 };
 
 //constexpr size_t SZ_LIGHT_STRUCT = sizeof(Light);

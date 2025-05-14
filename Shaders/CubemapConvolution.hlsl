@@ -20,7 +20,6 @@
 #define INTEGRATION_STEP_DIFFUSE_IRRADIANCE 0.010f
 #endif
 
-#include "ShadingMath.hlsl"
 #include "BRDF.hlsl"
 
 struct VSInput

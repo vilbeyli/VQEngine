@@ -159,15 +159,13 @@ int Scene::CreateLight(Light::EType Type, Light::EMobility Mobility)
 		return -1;
 	}
 	assert(pLights);
-	switch (Type)
+
+	if (Type >= Light::EType::LIGHT_TYPE_COUNT)
 	{
-	case Light::POINT      : pLights->push_back(Light::MakePointLight()); break;
-	case Light::SPOT       : pLights->push_back(Light::MakeSpotLight()); break;
-	case Light::DIRECTIONAL: pLights->push_back(Light::MakeDirectionalLight()); break;
-	default:
 		Log::Error("CreateLight called w/ invalid type");
 		return -1;
 	}
+	pLights->push_back(Light::MakeLight(Type));
 
 	// validate directional light singularity
 	int NumDirectional = 0;
@@ -264,6 +262,15 @@ std::vector<const Light*> Scene::GetLightsOfType(Light::EType eType) const
 	for (const Light& l : mLightsStatic    ) if(l.Type == eType) lights.push_back(&l);
 	for (const Light& l : mLightsStationary) if(l.Type == eType) lights.push_back(&l);
 	for (const Light& l : mLightsDynamic   ) if(l.Type == eType) lights.push_back(&l);
+	return lights;
+}
+std::vector<Light*> Scene::GetLightsOfType(Light::EType eType)
+{
+	SCOPED_CPU_MARKER("Scene.GetLightsOfType");
+	std::vector<Light*> lights;
+	for (Light& l : mLightsStatic    ) if(l.Type == eType) lights.push_back(&l);
+	for (Light& l : mLightsStationary) if(l.Type == eType) lights.push_back(&l);
+	for (Light& l : mLightsDynamic   ) if(l.Type == eType) lights.push_back(&l);
 	return lights;
 }
 
@@ -981,6 +988,8 @@ void Scene::GatherSceneLightData(FSceneView& SceneView) const
 
 	int iGPUSpot = 0;  int iGPUSpotShadow = 0;
 	int iGPUPoint = 0; int iGPUPointShadow = 0;
+	int iGPULinear = 0; int iGPUCylinder = 0;
+	int iGPURect = 0;
 	auto fnGatherLightData = [&](const std::vector<Light>& vLights, Light::EMobility eLightMobility)
 	{
 		for (const Light& l : vLights)
@@ -1008,10 +1017,12 @@ void Scene::GatherSceneLightData(FSceneView& SceneView) const
 				l.GetGPUData(l.bCastingShadows ? &data.point_casters[iGPUPointShadow++] : &data.point_lights[iGPUPoint++]);
 				// TODO: 
 				break;
+			case Light::EType::LINEAR     : l.GetGPUData(&data.linear_lights[iGPULinear++]); break;
+			case Light::EType::CYLINDER   : l.GetGPUData(&data.cylinder_lights[iGPUCylinder++]); break;
+			case Light::EType::RECTANGULAR: l.GetGPUData(&data.rectangular_lights[iGPURect++]); break;
 			default:
 				break;
 			}
-
 		}
 	};
 	fnGatherLightData(mLightsStatic, Light::EMobility::STATIC);
@@ -1022,6 +1033,9 @@ void Scene::GatherSceneLightData(FSceneView& SceneView) const
 	data.numPointLights = iGPUPoint;
 	data.numSpotCasters = iGPUSpotShadow;
 	data.numSpotLights = iGPUSpot;
+	data.numLinearLights = iGPULinear;
+	data.numCylinderLights = iGPUCylinder;
+	data.numRectangularLights = iGPURect;
 }
 
 void Scene::GatherShadowViewData(FSceneShadowViews& SceneShadowView, const std::vector<Light>& vLights, const std::vector<size_t>& vActiveLightIndices)
@@ -1071,7 +1085,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 	const SceneBoundingBoxHierarchy& BVH = mBoundingBoxHierarchy;
 	const size_t NumWorkerThreadsAvailable = UpdateWorkerThreadPool.GetThreadPoolSize();
 
-	const std::vector<const Light*> dirLights = GetLightsOfType(Light::EType::DIRECTIONAL);
+	const std::vector<const Light*> dirLights = static_cast<const Scene*>(this)->GetLightsOfType(Light::EType::DIRECTIONAL);
 	const bool bCullDirectionalLightView = !dirLights.empty() && dirLights[0]->bEnabled && dirLights[0]->bCastingShadows;
 
 	const uint NumSceneViews = 1;
@@ -1345,36 +1359,32 @@ static void GatherLightMeshRenderData(
 
 		XMVECTOR lightPosition = XMLoadFloat3(&l.Position);
 		XMVECTOR lightToCamera = CameraPosition - lightPosition;
-		XMVECTOR dot = XMVector3Dot(lightToCamera, lightToCamera);
+		XMVECTOR dot = XMVector3Dot(lightToCamera*0.01, lightToCamera*0.01);
 
 		const float distanceSq = dot.m128_f32[0];
-		const float attenuation = 1.0f / distanceSq;
-		const float attenuatedBrightness = l.Brightness * attenuation;
+		const float attenuation = 1.0f / sqrt(distanceSq);
+		const float attenuatedBrightness = l.Brightness * attenuation * attenuation;
 		FLightRenderData cmd;
 		cmd.color = XMFLOAT4(
-			  l.Color.x * bAttenuateLight ? attenuatedBrightness : 1.0f
-			, l.Color.y * bAttenuateLight ? attenuatedBrightness : 1.0f
-			, l.Color.z * bAttenuateLight ? attenuatedBrightness : 1.0f
+			  l.Color.x * (bAttenuateLight ? attenuatedBrightness : 1.0f)
+			, l.Color.y * (bAttenuateLight ? attenuatedBrightness : 1.0f)
+			, l.Color.z * (bAttenuateLight ? attenuatedBrightness : 1.0f)
 			, 1.0f
 		);
 		cmd.matWorldTransformation = l.GetWorldTransformationMatrix();
 
 		switch (l.Type)
 		{
-		case Light::EType::DIRECTIONAL:
-			break; // don't draw directional light mesh
-		case Light::EType::SPOT:
-		{
-			cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::SPHERE);
-			cmds.push_back(cmd);
-		}	break;
-
-		case Light::EType::POINT:
-		{
-			cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::SPHERE);
-			cmds.push_back(cmd);
-		}  break;
+		case Light::EType::DIRECTIONAL: break; // don't draw directional light mesh
+		case Light::EType::SPOT       : cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::SPHERE); break;
+		case Light::EType::POINT      : cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::SPHERE); break;
+		case Light::EType::LINEAR     : cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::CYLINDER); break;
+		case Light::EType::CYLINDER   : cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::CYLINDER); break;
+		case Light::EType::RECTANGULAR: cmd.pMesh = &pScene->GetMesh(EBuiltInMeshes::CUBE); break;
 		}
+		
+		if(l.Type != Light::EType::DIRECTIONAL)
+			cmds.push_back(cmd);
 	} 
 }
 

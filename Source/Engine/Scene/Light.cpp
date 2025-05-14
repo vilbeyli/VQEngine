@@ -22,38 +22,44 @@
 
 using namespace DirectX;
 
-Light Light::MakePointLight()
+Light Light::MakeLight(Light::EType eType)
 {
 	Light l; // default ctor takes care of most
-	l.AttenuationConstant  = 1.0f;
-	l.AttenuationLinear    = 1.0f;
-	l.AttenuationQuadratic = 1.0f;
-	l.Type = Light::EType::POINT;
+	l.Type = eType;
+	switch (eType)
+	{
+	case Light::POINT:
+		l.AttenuationConstant = 1.0f;
+		l.AttenuationLinear = 1.0f;
+		l.AttenuationQuadratic = 1.0f;
+		break;
+	case Light::SPOT:
+		l.SpotInnerConeAngleDegrees = 25.0f;
+		l.SpotOuterConeAngleDegrees = 35.0f;
+		break;
+	case Light::DIRECTIONAL:
+		l.ViewportX = 2048;
+		l.ViewportY = 2048;
+		l.DistanceFromOrigin = 500.0f;
+		l.Type = Light::EType::DIRECTIONAL;
+		break;
+	case Light::LINEAR:
+		l.Length = 50.0f;
+		break;
+	case Light::CYLINDER:
+		l.Length = 60.0f;
+		l.Radius = 3.0f;
+		break;
+	case Light::RECTANGULAR:
+		l.Width = 192;
+		l.Height = 108;
+		break;
+	default:
+		l.Type = Light::LIGHT_TYPE_COUNT;
+		break;
+	}
 	return l;
 }
-
-Light Light::MakeDirectionalLight()
-{
-	Light l; // default ctor takes care of most
-
-	l.ViewportX = 2048;
-	l.ViewportY = 2048;
-	l.DistanceFromOrigin = 500.0f;
-	l.Type = Light::EType::DIRECTIONAL;
-
-	return l;
-}
-
-Light Light::MakeSpotLight()
-{
-	Light l; // default ctor takes care of most
-
-	l.SpotInnerConeAngleDegrees = 25.0f;
-	l.SpotOuterConeAngleDegrees = 35.0f;
-	l.Type = Light::EType::SPOT;
-	return l;
-}
-
 
 Light::Light()
 	: Position(XMFLOAT3(0,0,0))
@@ -120,13 +126,70 @@ void Light::GetGPUData(VQ_SHADER_DATA::SpotLight* pLight) const
 	pLight->outerConeAngle = this->SpotOuterConeAngleDegrees * DEG2RAD;
 }
 
+void Light::GetGPUData(VQ_SHADER_DATA::LinearLight* pLight) const
+{
+	pLight->brightness = this->Brightness;
+	pLight->color = this->Color;
+	pLight->length = this->Length;
+	pLight->position = this->Position;
+
+	XMVECTOR T = XMVectorSet(0, 1, 0, 0);
+	XMStoreFloat3(&pLight->tangent, this->RotationQuaternion.TransformVector(T));
+
+	pLight->LTC = this->LTC ? 1.0f : 0.0f;
+}
+
+void Light::GetGPUData(VQ_SHADER_DATA::CylinderLight* pLight) const
+{
+	pLight->brightness = this->Brightness;
+	pLight->color = this->Color;
+	pLight->position = this->Position;
+	pLight->length = this->Length;
+	pLight->radius = this->Radius;
+
+	XMVECTOR T = XMVectorSet(0, 1, 0, 0);
+	XMStoreFloat3(&pLight->tangent, this->RotationQuaternion.TransformVector(T));
+}
+
+void Light::GetGPUData(VQ_SHADER_DATA::RectangularLight* pLight) const
+{
+	pLight->brightness = this->Brightness;
+	pLight->color = this->Color;
+
+	XMVECTOR T = XMVectorSet(1, 0, 0, 0);
+	XMVECTOR B = XMVectorSet(0, 1, 0, 0);
+	XMStoreFloat3(&pLight->tangent, this->RotationQuaternion.TransformVector(T));
+	XMStoreFloat3(&pLight->bitangent, this->RotationQuaternion.TransformVector(B));
+
+	pLight->position = this->Position;
+	pLight->width = this->Width;
+	pLight->height = this->Height;
+}
+
 DirectX::XMMATRIX Light::GetWorldTransformationMatrix() const
 {
-	constexpr float LightMeshScale = 0.1f;
 	Transform tf;
 	tf._position = this->Position;
 	tf._rotation = this->RotationQuaternion;
-	tf._scale = XMFLOAT3(LightMeshScale, LightMeshScale, LightMeshScale);
+	
+	switch (this->Type)
+	{
+	case Light::EType::LINEAR:
+		tf._scale = XMFLOAT3(0.01f, this->Length*0.3333f, 0.5f);
+		break;
+	case Light::EType::CYLINDER:
+		tf._scale = XMFLOAT3(this->Radius, this->Length*0.3333f, this->Radius);
+		break;
+	case Light::EType::RECTANGULAR:
+		tf._scale = XMFLOAT3(this->Width, this->Height, 0.01f);
+		break;
+	default:
+	{
+		constexpr float LightMeshScale = 0.1f;
+		tf._scale = XMFLOAT3(LightMeshScale, LightMeshScale, LightMeshScale);
+	} break;
+	}
+
 	return tf.matWorldTransformation();
 }
 

@@ -252,7 +252,7 @@
         <Enabled>false</Enabled>
         <Color>0.4 0.4 0.15</Color>
         <Range> 200 </Range>
-        <Brightness> 35 </Brightness>z
+        <Brightness> 35 </Brightness>
         <Shadows>
             <DepthBias> 0.05 </DepthBias>
             <NearPlane> 0.001 </NearPlane>
@@ -268,7 +268,7 @@
         <Enabled>true</Enabled>
         <Color>0.9 0.9 0.9</Color>
         <Range> 35 </Range>
-        <Brightness> 1500 </Brightness>
+        <Brightness> 15 </Brightness>
         <Shadows>
             <DepthBias> 0.000009 </DepthBias>
             <NearPlane> 0.001 </NearPlane>
@@ -290,7 +290,7 @@
         <Enabled>true</Enabled>
         <Color>0.4 0.4 0.15</Color>
         <Range> 35 </Range>
-        <Brightness> 1000 </Brightness>
+        <Brightness> 10 </Brightness>
         <Shadows>
             <DepthBias> 0.000005 </DepthBias>
             <NearPlane> 0.001 </NearPlane>

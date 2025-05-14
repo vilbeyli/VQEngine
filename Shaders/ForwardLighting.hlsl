@@ -21,8 +21,6 @@
 
 #include "Lighting.hlsl"
 
-
-
 //---------------------------------------------------------------------------------------------------
 //
 // DATA
@@ -105,7 +103,8 @@ Texture2D        texDirectionalLightShadowMap : register(t13);
 Texture2DArray   texSpotLightShadowMaps       : register(t16);
 TextureCubeArray texPointLightShadowMaps      : register(t22);
 
-
+Texture2D texLTC1 : register(t52);
+Texture2D texLTC2 : register(t53);
 
 
 //---------------------------------------------------------------------------------------------------
@@ -374,6 +373,20 @@ PSOutput PSMain(PSInput In)
 			
 			I_total += CalculateDirectionalLightIllumination(l, Surface, V) * ShadowingFactor;
 		}
+	}
+	
+	// area lights
+	for (int ll = 0; ll < cbPerFrame.Lights.numLinearLights; ++ll)
+	{
+		I_total += CalculateLinearLightIllumination(cbPerFrame.Lights.linear_lights[ll], Surface, V, P, texLTC1, texLTC2, LinearSampler);
+	}
+	for (int cl = 0; cl < cbPerFrame.Lights.numCylinderLights; ++cl)
+	{
+		I_total += CalculateCylinderLightIllumination(cbPerFrame.Lights.cylinder_lights[cl], Surface, V, P);
+	}
+	for (int rl = 0; rl < cbPerFrame.Lights.numRectangularLights; ++rl)
+	{
+		I_total += ClaculateRectangularLightIllumination(cbPerFrame.Lights.rectangular_lights[rl], Surface, V, P, texLTC1, texLTC2, LinearSampler);
 	}
 	
 	// write out

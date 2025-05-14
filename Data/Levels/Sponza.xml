@@ -4,9 +4,9 @@
     CAMERAS
     -->
     <Camera>
-        <Position> 700.0 170.0 -50 </Position>
-        <Pitch> 15 </Pitch>
-        <Yaw> -90 </Yaw>
+        <Position>  631.155762 124.675674 34.538948 </Position>
+        <Pitch> 17.100004 </Pitch>
+        <Yaw>  89.500031 </Yaw>
         <Projection>Perspective</Projection>
         <FoV>60.0</FoV>
         <Near>0.1</Near>
@@ -69,7 +69,54 @@
             <Name>Sponza</Name>
         </Model>
     </GameObject>
-    
+
+    <Light>
+        <Transform>
+            <Position>1196.140625 55.589787 36.861996</Position>
+            <Rotation> 0 0 0 </Rotation>
+        </Transform>
+        <!-- Linear Light -->
+        <Mobility> Dynamic </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.1 0.2 0.85</Color>
+        <Brightness> 500 </Brightness>
+        <Linear>
+            <Length> 100 </Length>
+        </Linear>
+    </Light>
+    <Light>
+        <Transform>
+            <Position>886.140625 55.589787 140.861996</Position>
+            <Rotation> 90 0 20 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <!-- Cylinder Light -->
+        <Mobility> Dynamic </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.1 0.9 0.15</Color>
+        <Brightness> 300 </Brightness>
+        <Cylinder>
+            <Length> 40 </Length>
+            <Radius> 5 </Radius>
+        </Cylinder>
+    </Light>
+    <Light>
+        <Transform>
+            <Position>896.140625 55.589787 -40.861996</Position>
+            <Rotation> 0 120 0 </Rotation>
+            <Scale> 0.1 0.1 0.1 </Scale>
+        </Transform>
+        <!-- Rectangular Light -->
+        <Mobility> Dynamic </Mobility>
+        <Enabled>true</Enabled>
+        <Color>0.6 0.02 0.02</Color>
+        <Brightness> 400 </Brightness>
+        <Rectangular>
+            <Width> 80 </Width>
+            <Height> 45 </Height>
+        </Rectangular>
+    </Light>
+
     <Light>
         <Transform>
             <Position>12.5 100 0</Position>
@@ -81,7 +128,7 @@
         <Enabled>true</Enabled>
         <Color>0.4 0.4 0.85</Color>
         <Range> 5000 </Range>
-        <Brightness> 65000 </Brightness>
+        <Brightness> 40 </Brightness>
         <Shadows>
             <DepthBias> 0.5 </DepthBias>
             <NearPlane> 0.001 </NearPlane>

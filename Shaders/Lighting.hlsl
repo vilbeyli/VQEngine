@@ -16,11 +16,11 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-#include "BRDF.hlsl"
-#include "ShadingMath.hlsl"
-
 #define VQ_GPU 1
+
+#include "BRDF.hlsl"
 #include "LightingConstantBufferData.h"
+#include "LTC.hlsl"
 
 
 //----------------------------------------------------------
@@ -28,7 +28,8 @@
 //----------------------------------------------------------
 inline float AttenuationBRDF(float dist)
 {
-	return 1.0f / (dist * dist);	// quadratic attenuation (inverse square) is physically more accurate
+	float d = dist * 0.01; // TODO: cm to m
+	return 1.0f / (1.0f + d * d);	// quadratic attenuation (inverse square) is physically more accurate
 }
 
 inline float AttenuationPhong(float2 coeffs, float dist)
@@ -303,6 +304,100 @@ float3 ShadowTestDebug(float3 worldPos, float4 lightSpacePos, float3 illuminatio
 
 
 //----------------------------------------------------------
+// AREA LIGHTS
+//----------------------------------------------------------
+
+// code from [Frisvad2012]
+void BuildOrthonormalBasis(in float3 n, out float3 b1, out float3 b2)
+{
+	if (n.z < -0.9999999)
+	{
+		b1 = float3(0.0, -1.0, 0.0);
+		b2 = float3(-1.0, 0.0, 0.0);
+		return;
+	}
+	float a = 1.0 / (1.0 + n.z);
+	float b = -n.x * n.y * a;
+	b1 = float3(1.0 - n.x * n.x * a, b, -n.x);
+	b2 = float3(b, 1.0 - n.y * n.y * a, -n.y);
+}
+
+// distribution function: BRDF * cos(theta)
+float3 D(float3 w, in BRDF_Surface s, float3 V /*Wo*/)
+{
+	return BRDF(s, w, V) * max(0, dot(s.N, w));
+}
+
+float3 I_cylinder_numerical(float3 p1, float3 p2, float R, float L, float3 CylinderAxis, in BRDF_Surface s, float3 V /*Wo*/, float3 P)
+{
+	// init orthonormal basis
+	float3 wt = CylinderAxis; // normalize(p2 - p1); // tangent vector from p1 to p2 along the cylinder light
+	float3 wt1, wt2;
+	BuildOrthonormalBasis(wt, wt1, wt2);
+	
+	// integral discretization
+	float3 I = 0.0f.xxx;
+	const int nSamplesPhi = 20; // [0, 2PI]
+	const int nSamplesL = 100;  // [0, L]
+	
+	for (int i = 0; i < nSamplesPhi; ++i)
+	for (int j = 0; j < nSamplesL  ; ++j)
+	{
+		// normal
+		float phi = TWO_PI * float(i)/float(nSamplesPhi);
+		float3 wn = cos(phi)*wt1 + sin(phi)*wt2;
+			
+		// position
+		float l = L * float(j)/float(nSamplesL - 1);
+		float3 p = p1 + l*wt + R*wn;
+			
+		// normalized direction
+		float3 wp = normalize(p); // shading spot location = (0,0,0);
+			
+		// integrate
+		I +=  D(wp, s, V) * AttenuationBRDF(length(p)) * max(0.0f, dot(-wp, wn)) / dot(p, p);
+	}
+	
+	I *= TWO_PI * R * L / float(nSamplesL * nSamplesPhi);
+	
+	return I;
+}
+
+float3 I_line_numerical(float3 p1, float3 p2, float L, float3 LightTangent, in BRDF_Surface s, float3 V /*Wo*/, float3 P)
+{
+	float3 wt = LightTangent; // normalize(p2 - p1);
+	
+	// integral discretization
+	float3 I = 0.0f.xxx;
+	const int nSamples = 100;
+	for (int i = 0; i < nSamples; ++i)
+	{
+		// position on light
+		float3 p = p1 + L * wt * float(i) / float(nSamples - 1);
+		
+		// normalized direction
+		float3 wp = normalize(p); // shading spot location = (0,0,0);
+		
+		// integrate
+		I += 2.0f * D(wp, s, V) * AttenuationBRDF(length(p)) * length(cross(wp, wt)) / dot(p, p);
+	}
+	
+	I *= L / float(nSamples);
+	
+	return I;
+}
+// approximation is most accurate with
+// - cylinders of small radius
+// - cylinders far from the shading point
+// - low-frequency (large roughness) materials
+float3 I_cylinder_approx(float3 p1, float3 p2, float R, float L, float3 CylinderAxis, in BRDF_Surface s, float3 V /*Wo*/, float3 P)
+{
+	return min(1.0f.xxx, R * I_line_numerical(p1, p2, L, CylinderAxis, s, V, P));
+}
+
+
+
+//----------------------------------------------------------
 // ILLUMINATION CALCULATION FUNCTIONS
 //----------------------------------------------------------
 float3 CalculatePointLightIllumination(in const PointLight l, in BRDF_Surface s, const in float3 P, const in float3 V)
@@ -350,8 +445,8 @@ float3x3 GetHDRIRotationMatrix(float fHDIROffsetInRadians)
 	const float cosB = cos(-fHDIROffsetInRadians);
 	const float sinB = sin(-fHDIROffsetInRadians);
 	float3x3 m = {
-		cosB, 0, sinB,
-		0, 1, 0,
+		+cosB, 0, sinB,
+		  0 ,  1,  0,
 		-sinB, 0, cosB
 	};
 	return m;
@@ -402,3 +497,103 @@ float3 CalculateEnvironmentMapIllumination_DiffuseOnly(
 //    return uv - uv_offset;
 //}
 
+float3 CalculateCylinderLightIllumination(CylinderLight l, in BRDF_Surface s, float3 V /*Wo*/, float3 P)
+{
+	float3 p1WorldSpace = l.position - l.tangent * l.length * 0.5f;
+	float3 p2WorldSpace = l.position + l.tangent * l.length * 0.5f;
+		
+	float3 p1 = p1WorldSpace - P;
+	float3 p2 = p2WorldSpace - P;
+	
+	float R = l.radius;
+	float L = l.length; // length(p2 - p1);	
+	
+	//return I_cylinder_numerical(p1, p2, R, L, l.tangent, s, V, P) * l.brightness * l.color;
+	return I_cylinder_approx(p1, p2, R, L, l.tangent, s, V, P) * l.brightness * l.color;
+}
+
+float3 CalculateLinearLightIllumination(
+	LinearLight l,
+	in BRDF_Surface s,
+	float3 V /*Wo*/, 
+	float3 P, // shading world position
+	Texture2D texLTC1,
+	Texture2D texLTC2,
+	SamplerState LTCSampler // linear
+)
+{
+	float3 p1WorldSpace = l.position - l.tangent * l.length * 0.5f;
+	float3 p2WorldSpace = l.position + l.tangent * l.length * 0.5f;
+		
+	float3 p1 = p1WorldSpace - P;
+	float3 p2 = p2WorldSpace - P;
+
+	float L = l.length; // length(p2 - p1);
+	
+	bool LTC = l.LTC > 0;
+	if (LTC) // analytic solution
+	{
+		float NdotV = saturate(dot(s.N, V));
+		float3x3 Minv = LTCMinv(texLTC1, LTCSampler, s.roughness, NdotV);
+		
+		// Construct orthonormal basis around N
+		float3 T1 = normalize(V - s.N * dot(V, s.N));
+		float3 T2 = cross(s.N, T1);
+		//float3 T2 = cross(T1, s.N);
+		float3x3 B = float3x3(T1, T2, s.N);
+		
+		p1 = mul(B, p1);
+		p2 = mul(B, p2);
+		float3 I_Specular = I_ltc_line(p1, p2, Minv);
+		
+		float3 I_Diffuse = I_ltc_line(p1, p2, float3x3(1,0,0, 0,1,0, 0,0,1));
+		I_Diffuse /= 2.0f* PI;
+		
+		return I_Diffuse * l.brightness * l.color;
+	}
+	
+	else // numerical solution
+	{
+		return I_line_numerical(p1, p2, L, l.tangent, s, V, P) * l.brightness * l.color;
+	}
+}
+
+float3 ClaculateRectangularLightIllumination(
+	RectangularLight l, 
+	in BRDF_Surface s, 
+	float3 V /*Wo*/, 
+	float3 P,
+	Texture2D texLTC1,
+	Texture2D texLTC2,
+	SamplerState LTCSampler // linear
+)
+{
+	// build rectangle corner points
+	float halfH = l.height * 0.5f;
+	float halfW = l.width * 0.5f;
+	float3 points[4];
+	points[0] = l.position + l.tangent * halfW + l.bitangent * halfH;
+	points[1] = l.position + l.tangent * halfW - l.bitangent * halfH;
+	points[2] = l.position - l.tangent * halfW - l.bitangent * halfH;
+	points[3] = l.position - l.tangent * halfW + l.bitangent * halfH;
+	
+	// Construct orthonormal basis around N
+	float3 T1 = normalize(V - s.N * dot(V, s.N));
+	float3 T2 = cross(s.N, T1);
+	float3x3 B = float3x3(T1, T2, s.N);
+	
+	points[0] = mul(B, points[0]);
+	points[1] = mul(B, points[1]);
+	points[2] = mul(B, points[2]);
+	points[3] = mul(B, points[3]);
+	
+	// get LTC parameters
+	float NdotV = saturate(dot(s.N, V));
+	float3x3 Minv = LTCMinv(texLTC1, LTCSampler, s.roughness, NdotV);
+	
+	// calculate illumination
+	float3 I_Specular = I_ltc_quad(s.N, V, P, Minv, points);
+	float3 I_Diffuse = I_ltc_quad(s.N, V, P, float3x3(1, 0, 0,  0, 1, 0,  0, 0, 1), points);
+	
+	return (I_Specular + I_Diffuse) * l.brightness * l.color;
+}
