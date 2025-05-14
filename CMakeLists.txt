@@ -228,8 +228,6 @@ set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 20)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 set_target_properties(assimp PROPERTIES FOLDER Libs/assimp)
-set_target_properties(IrrXML PROPERTIES FOLDER Libs/assimp)
-set_target_properties(uninstall PROPERTIES FOLDER Libs/assimp)
 set_target_properties(UpdateAssimpLibsDebugSymbolsAndDLLs PROPERTIES FOLDER Libs/assimp)
 set_target_properties(zlibstatic PROPERTIES FOLDER Libs/assimp)
 
