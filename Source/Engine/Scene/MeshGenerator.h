@@ -565,7 +565,7 @@ namespace GeometryGenerator
 				// Cap center vertex
 				TVertex capCenter;
 				SetFVec<3>(capCenter.position, { 0.0f, y, 0.0f });
-				SetFVec<3>(capCenter.uv, { 0.5f, 0.5f });
+				SetFVec<2>(capCenter.uv, { 0.5f, 0.5f });
 				if constexpr (bHasNormals)  SetFVec<3>(capCenter.normal, normal);
 				if constexpr (bHasTangents) SetFVec<3>(capCenter.tangent, tangent);
 				Vertices.push_back(capCenter);

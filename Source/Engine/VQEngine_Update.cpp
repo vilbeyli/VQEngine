@@ -665,7 +665,7 @@ void VQEngine::StartLoadingScene(int IndexScene)
 	mQueue_SceneLoad.push(mResourceNames.mSceneNames[IndexScene]);
 
 	// signal clearing history buffers to the render passes
-	std::shared_ptr<ScreenSpaceReflectionsPass> pReclectionsPass = std::static_pointer_cast<ScreenSpaceReflectionsPass>(mpRenderer->GetRenderPass(ERenderPass::ObjectID));
+	std::shared_ptr<ScreenSpaceReflectionsPass> pReclectionsPass = std::static_pointer_cast<ScreenSpaceReflectionsPass>(mpRenderer->GetRenderPass(ERenderPass::ScreenSpaceReflections));
 	pReclectionsPass->SetClearHistoryBuffers();
 
 	mAppState = INITIALIZING;
