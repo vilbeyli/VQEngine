@@ -152,7 +152,8 @@ void VQRenderer::PreFilterEnvironmentMap(const Mesh& CubeMesh)
 		mLatchPSOLoaderDispatched.wait();
 	}
 	
-	if (mPSOs.find(EBuiltinPSOs::CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO) == mPSOs.end())
+	auto it = mPSOs.find(EBuiltinPSOs::CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO);
+	if (it == mPSOs.end() || it->second == nullptr)
 	{
 		const FPSOCompileResult result = this->WaitPSOReady(EBuiltinPSOs::CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO);
 		mPSOs[result.id] = result.pPSO;
