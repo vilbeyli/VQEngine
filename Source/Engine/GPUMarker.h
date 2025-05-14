@@ -32,13 +32,22 @@
 #ifdef max
 #error "max macro is defined"
 #endif
+
+#define DISBALE_MARKERS 0
+#if DISBALE_MARKERS
+#define SCOPED_GPU_MARKER(pCmd, pStr)             do{}while(0)
+#define SCOPED_CPU_MARKER(pStr)                   do{}while(0)
+#define SCOPED_CPU_MARKER_C(pStr, PIXColor)       do{}while(0)
+#define SCOPED_CPU_MARKER_F(pStr, ...)            do{}while(0)
+#define SCOPED_CPU_MARKER_CF(PIXColor, pStr, ...) do{}while(0)
+#else
 #define SCOPED_GPU_MARKER(pCmd, pStr)             ScopedGPUMarker GPUMarker(pCmd,pStr)
 
 #define SCOPED_CPU_MARKER(pStr)                   ScopedMarker    CPUMarker(pStr)
 #define SCOPED_CPU_MARKER_C(pStr, PIXColor)       ScopedMarker    CPUMarker(pStr, PIXColor)
 #define SCOPED_CPU_MARKER_F(pStr, ...)            ScopedMarker    CPUMarker(PIX_COLOR_DEFAULT, pStr, __VA_ARGS__)
 #define SCOPED_CPU_MARKER_CF(PIXColor, pStr, ...) ScopedMarker    CPUMarker(PIXColor, pStr, __VA_ARGS__)
-
+#endif
 
 class ScopedMarker
 {
