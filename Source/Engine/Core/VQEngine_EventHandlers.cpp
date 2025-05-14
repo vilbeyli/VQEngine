@@ -430,8 +430,6 @@ void VQEngine::RenderThread_HandleWindowCloseEvent(const IEvent* pEvent)
 
 	Log::Info("RenderThread: Handle Window Close event <%x>", hwnd);
 
-	pWindowCloseEvent->Signal_WindowDependentResourcesDestroyed.NotifyAll();
-
 	if (hwnd == mpWinMain->GetHWND())
 	{
 		mbStopAllThreads.store(true);
@@ -442,6 +440,7 @@ void VQEngine::RenderThread_HandleWindowCloseEvent(const IEvent* pEvent)
 	
 	mpRenderer->GetWindowSwapChain(hwnd).WaitForGPU();
 	RenderThread_UnloadWindowSizeDependentResources(hwnd);
+	pWindowCloseEvent->Signal_WindowDependentResourcesDestroyed.NotifyAll();
 }
 
 void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
