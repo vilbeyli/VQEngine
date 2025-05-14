@@ -126,7 +126,7 @@ namespace GeometryGenerator
 		// normals
 		if constexpr (bHasNormals)
 		{
-			constexpr std::initializer_list<float> NormalVec = { 0, 0, -1 };
+			const std::initializer_list<float> NormalVec = { 0, 0, -1 };
 			SetFVec<3>(v[0].normal, NormalVec);
 			SetFVec<3>(v[1].normal, NormalVec);
 			SetFVec<3>(v[2].normal, NormalVec);
