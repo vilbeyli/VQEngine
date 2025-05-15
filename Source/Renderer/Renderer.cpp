@@ -339,7 +339,6 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		mDevice.GetDevicePtr(),
 		mpAllocator,
 		mCmdQueues[ECommandQueueType::COPY].pQueue,
-		mHeapCBV_SRV_UAV,
 		mHeapUpload,
 		mMtxUploadHeap
 	);

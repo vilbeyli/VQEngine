@@ -90,7 +90,6 @@ void TextureManager::InitializeLate(
 	ID3D12Device* pDevice,
 	D3D12MA::Allocator* pAllocator,
 	ID3D12CommandQueue* pCopyQueue,
-	StaticResourceViewHeap& SRVHeap,
 	UploadHeap& UploadHeap,
 	std::mutex& UploadHeapMutex
 )
@@ -101,7 +100,6 @@ void TextureManager::InitializeLate(
 	mpDevice = pDevice;
 	mpAllocator = pAllocator;
 	mpCopyQueue = pCopyQueue;
-	mpSRVHeap = &SRVHeap;
 	mpUploadHeap = &UploadHeap;
 	mpUploadHeapMutex = &UploadHeapMutex;
 
@@ -175,7 +173,6 @@ void TextureManager::Destroy()
 	mpDevice = nullptr;
 	mpAllocator = nullptr;
 	mpCopyQueue = nullptr;
-	mpSRVHeap = nullptr;
 	mpUploadHeap = nullptr;
 }
 

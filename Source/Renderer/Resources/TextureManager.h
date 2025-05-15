@@ -67,7 +67,6 @@ public:
         ID3D12Device* pDevice,
         D3D12MA::Allocator* pAllocator,
         ID3D12CommandQueue* pCopyQueue,
-        StaticResourceViewHeap& SRVHeap,
         UploadHeap& UploadHeap,
         std::mutex& UploadHeapMutex
     );

@@ -109,6 +109,7 @@ static std::vector<const FShaderStageCompileDesc*> GatherUniqueShaderCompileDesc
 		std::hash<std::string> hasher;
 		for (size_t i = start; i <= end; ++i) 
 		{
+			PSO_ID id = (PSO_ID)i;
 			for (const FShaderStageCompileDesc& shaderDesc : PSODescs[i].ShaderStageCompileDescs) 
 			{
 				const std::string CachedShaderBinaryPath = VQRenderer::GetCachedShaderBinaryPath(shaderDesc);
@@ -117,14 +118,14 @@ static std::vector<const FShaderStageCompileDesc*> GatherUniqueShaderCompileDesc
 				auto it = result.LocalUniqueCompilePathHashToIndex.find(hash);
 				if (it != result.LocalUniqueCompilePathHashToIndex.end()) 
 				{
-					PSOShaderMap[i].push_back(it->second);
+					PSOShaderMap[id].push_back(it->second);
 					continue;
 				}
 
 				result.LocalUniqueCompileDescs.push_back(&shaderDesc);
 				const size_t iShader = result.LocalUniqueCompileDescs.size() - 1;
 				result.LocalUniqueCompilePathHashToIndex[hash] = iShader;
-				PSOShaderMap[i].push_back(iShader);
+				PSOShaderMap[id].push_back(iShader);
 			}
 		}
 	};
@@ -191,7 +192,8 @@ static std::vector<const FShaderStageCompileDesc*> GatherUniqueShaderCompileDesc
 			// Note: Assumes PSO_ID is compatible with size_t; verify PSOShaderMap key type
 			for (size_t i = vRanges[iRange].first; i <= vRanges[iRange].second; ++i)
 			{
-				for (size_t& shaderIndex : PSOShaderMap[i])
+				PSO_ID id = (PSO_ID)i;
+				for (size_t& shaderIndex : PSOShaderMap[id])
 				{
 					shaderIndex = tempHashToGlobalIndex.at(shaderIndex);
 				}
