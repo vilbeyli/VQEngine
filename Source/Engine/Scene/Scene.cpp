@@ -761,6 +761,13 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
 	FSceneShadowViews& ShadowView = mFrameShadowViews[FRAME_DATA_INDEX];
 
+	if (!AppInSimulationState)
+	{
+		mFrustumCullWorkerContext.InvalidateContextData();
+		SceneView.FrustumRenderLists.clear();
+		return;
+	}
+
 	mBoundingBoxHierarchy.Build(this, mGameObjectHandles, UpdateWorkerThreadPool);
 
 	ExtractSceneView(SceneView, mViewProjectionMatrixHistory, cam, this->mMeshes.at(EBuiltInMeshes::CUBE).GetIABufferIDs());

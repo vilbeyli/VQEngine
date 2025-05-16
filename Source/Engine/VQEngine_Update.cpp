@@ -227,11 +227,6 @@ void VQEngine::UpdateThread_PostUpdate()
 	ThreadPool& mWorkerThreads = mWorkers_Simulation;
 #endif
 
-	if (mAppState == EAppState::LOADING)
-	{
-		return;
-	}
-
 	// TODO: this is a hack, do proper sync.
 	if (mpScene == nullptr)
 	{

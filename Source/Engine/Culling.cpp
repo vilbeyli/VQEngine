@@ -189,10 +189,11 @@ void FFrustumCullWorkerContext::AllocInputMemoryIfNecessary(size_t sz)
 		vSortFunctions.resize(sz);
 		vForceLOD0.resize(sz);
 		vSortData.resize(sz);
-		assert(pFrustumRenderLists);
-		if(pFrustumRenderLists)
-			pFrustumRenderLists->resize(sz);
 	}
+
+	assert(pFrustumRenderLists);
+	if (pFrustumRenderLists && pFrustumRenderLists->size() < sz)
+		pFrustumRenderLists->resize(sz);
 }
 void FFrustumCullWorkerContext::ClearMemory()
 {
