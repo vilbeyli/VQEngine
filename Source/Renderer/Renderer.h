@@ -156,7 +156,7 @@ public:
 	uint                         GetTextureMips(TextureID Id) const;
 	uint                         GetTextureSampleCount(TextureID) const;
 	
-	TextureID                    GetProceduralTexture(EProceduralTextures tex) const; // TODO: this returns an SRV_ID!
+	TextureID                    GetProceduralTexture(EProceduralTextures tex) const;
 	inline const SRV&            GetProceduralTextureSRV(EProceduralTextures tex) const { return GetSRV(GetProceduralTextureSRV_ID(tex)); }
 	inline const SRV_ID          GetProceduralTextureSRV_ID(EProceduralTextures tex) const { return mLookup_ProceduralTextureSRVs.at(tex); }
 	
@@ -363,10 +363,8 @@ private:
 	std::latch                      mLatchDefaultResourcesLoaded{ 1 };
 
 	// bookkeeping
-	std::unordered_map<TextureID, std::string>         mLookup_TextureDiskLocations;
 	std::unordered_map<EProceduralTextures, SRV_ID>    mLookup_ProceduralTextureSRVs;
 	std::unordered_map<EProceduralTextures, TextureID> mLookup_ProceduralTextureIDs;
-	std::unordered_map<std::string, TextureID>         mLoadedTexturePaths;
 	std::unordered_map<std::string, bool>              mShaderCacheDirtyMap;
 
 
@@ -375,6 +373,8 @@ private:
 private:
 	void LoadBuiltinRootSignatures();
 	void LoadDefaultResources();
+	void CreateProceduralTextures();
+	void CreateProceduralTextureViews();
 
 	ID3D12PipelineState* CompileGraphicsPSO(FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults);
 	ID3D12PipelineState* CompileComputePSO (FPSODesc& Desc, std::vector<std::shared_future<FShaderStageCompileResult>>& ShaderCompileResults);

@@ -230,7 +230,9 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 				TextureManager& mTextureManager = mRenderer.GetTextureManager();
 				if (bProceduralTexture)
 				{
-					texID = mRenderer.GetProceduralTexture(VQRenderer::GetProceduralTextureEnumFromName(vPathTokens[1]));
+					texID = mRenderer.GetProceduralTexture(
+						VQRenderer::GetProceduralTextureEnumFromName(vPathTokens[1])
+					);
 				}
 				else
 				{
