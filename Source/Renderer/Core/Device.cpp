@@ -42,8 +42,10 @@ using namespace VQSystemInfo;
 static void CheckDeviceFeatureSupport(ID3D12Device4* pDevice, FDeviceCapabilities& dc)
 {
     HRESULT hr;
+    if constexpr (false) // TODO: check per MSAA scenario
     {
         D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS ftQualityLevels = {};
+        
         hr = pDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &ftQualityLevels, sizeof(ftQualityLevels));
         if (!SUCCEEDED(hr))
         {

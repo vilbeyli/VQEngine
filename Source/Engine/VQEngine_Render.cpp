@@ -374,6 +374,7 @@ void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
 void VQEngine::RenderThread_RenderMainWindow()
 {
 	SCOPED_CPU_MARKER("RenderThread_RenderMainWindow()");
+
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	const int FRAME_DATA_INDEX = mNumRenderLoopsExecuted % NUM_BACK_BUFFERS;
 	ThreadPool& WorkerThreads = mWorkers_Render;
@@ -381,6 +382,7 @@ void VQEngine::RenderThread_RenderMainWindow()
 	const int FRAME_DATA_INDEX = 0;
 	ThreadPool& WorkerThreads = mWorkers_Simulation;
 #endif
+
 	// TODO: remove this hack, properly sync
 	if (!mpScene)
 		return;
