@@ -30,11 +30,17 @@ enum ECommandQueueType
 	NUM_COMMAND_QUEUE_TYPES
 };
 
+enum class ECommandQueuePriority
+{
+	NORMAL,
+	HIGH,
+	REALTIME
+};
+
 class CommandQueue
 {
-
 public:
-	void Create(Device* pDevice, ECommandQueueType type, const char* pName = nullptr);
+	void Create(Device* pDevice, ECommandQueueType type, ECommandQueuePriority priority = ECommandQueuePriority::NORMAL, const char* pName = nullptr);
 	void Destroy();
 
 	ID3D12CommandQueue* pQueue = nullptr;
