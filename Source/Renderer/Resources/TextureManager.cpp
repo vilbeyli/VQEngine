@@ -30,6 +30,8 @@
 
 using namespace Microsoft::WRL;
 
+#define LOG_CACHED_RESOURCES_ON_LOAD 0
+#define LOG_TEXTURE_CREATE           1
 
 #define DISK_WORKER_MAKRER SCOPED_CPU_MARKER_C("DiskWorker", 0xFF00AAAA);
 #define MIP_WORKER_MAKRER SCOPED_CPU_MARKER_C("MipWorker", 0xFFAA0000);
@@ -204,6 +206,9 @@ TextureID TextureManager::CreateTexture(const FTextureRequest& Request, bool bCh
 
 	// Assign ID and initialize metadata
 	TextureID id = GenerateUniqueID();
+#if LOG_TEXTURE_CREATE
+	Log::Info("CreateTexture (%d) %s", id, Request.Name.c_str());
+#endif
 	{
 		std::lock_guard<std::shared_mutex> lock(mMetadataMutex);
 		mMetadata[id].Request = Request;

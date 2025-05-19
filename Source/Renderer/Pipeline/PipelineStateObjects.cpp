@@ -31,6 +31,8 @@
 #include <map>
 #include <d3dcompiler.h>
 
+#define DISABLE_PSO_LOGGING    1
+
 using namespace Microsoft::WRL;
 using namespace VQSystemInfo;
 using namespace Tessellation;
@@ -590,8 +592,9 @@ static std::unordered_map<std::string, bool> BuildShaderCacheDirtyMap(
 static std::vector<uint8_t> LoadPSOBinary(const std::string& CachedPSOBinaryPath)
 {
 	SCOPED_CPU_MARKER("LoadPSOBinary");
+#if !DISABLE_PSO_LOGGING
 	Log::Info("Loading PSO Binary: %s ", DirectoryUtil::GetFileNameFromPath(CachedPSOBinaryPath).c_str());
-
+#endif
 	std::ifstream cacheFile(CachedPSOBinaryPath, std::ios::binary);
 	if (!cacheFile.is_open())
 	{
