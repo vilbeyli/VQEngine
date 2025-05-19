@@ -300,6 +300,7 @@ static AssetLoader::ETextureType GetTextureType(aiTextureType aiType)
 		break;
 	case aiTextureType_DIFFUSE_ROUGHNESS:
 		break;
+	case aiTextureType_GLTF_METALLIC_ROUGHNESS: return AssetLoader::ETextureType::CUSTOM_MAP; break;
 	case aiTextureType_AMBIENT_OCCLUSION: return AssetLoader::ETextureType::AMBIENT_OCCLUSION; 
 	case aiTextureType_UNKNOWN:
 		// packed textures are unknown type for assimp, hence the engine assumes occl/rough/metal packed texture type
@@ -320,88 +321,87 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 	{
 		Material& mat = pScene->GetMaterial(assignment.matID);
 
-		bool bFound = mTextureLoadResults.find(assignment.matID) != mTextureLoadResults.end();
-		if (!bFound)
-		{
-			Log::Error("TextureLoadResutls for MatID=%d not found!", assignment.matID);
-			continue;
-		}
-
+		const bool bLoadedTextures = mTextureLoadResults.find(assignment.matID) != mTextureLoadResults.end();
+		
 		UINT OcclRoughMtlMap_ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-
-		auto pair_itBeginEnd = mTextureLoadResults.equal_range(assignment.matID);
-		for (auto it = pair_itBeginEnd.first; it != pair_itBeginEnd.second; ++it)
+		if(bLoadedTextures)
 		{
-			const MaterialID& matID = it->first;
-			FTextureLoadResult& result = it->second;
 
-			const TextureID loadedTextureID = result.TexID;
-			pRenderer->GetTextureManager().WaitForTexture(loadedTextureID);
+			auto pair_itBeginEnd = mTextureLoadResults.equal_range(assignment.matID);
+			// wait for textures, assign IDs, cache texture path
+			for (auto it = pair_itBeginEnd.first; it != pair_itBeginEnd.second; ++it)
+			{
+				const MaterialID& matID = it->first;
+				FTextureLoadResult& result = it->second;
 
-			switch (result.type)
-			{
-			case DIFFUSE           : mat.TexDiffuseMap          = loadedTextureID; break;
-			case NORMALS           : mat.TexNormalMap           = loadedTextureID; break;
-			case ALPHA_MASK        : mat.TexAlphaMaskMap        = loadedTextureID; break;
-			case EMISSIVE          : mat.TexEmissiveMap         = loadedTextureID; break;
-			case METALNESS         : mat.TexMetallicMap         = loadedTextureID; mat.metalness = 1.0f; break;
-			case ROUGHNESS         : mat.TexRoughnessMap        = loadedTextureID; mat.roughness = 1.0f; break;
-			case HEIGHT            : mat.TexHeightMap           = loadedTextureID; break;
-			case AMBIENT_OCCLUSION : mat.TexAmbientOcclusionMap = loadedTextureID; break;
-			case SPECULAR          : assert(false); /*mat.TexSpecularMap  = result.texLoadResult.get();*/ break;
-			case CUSTOM_MAP        :
-			{
-				const ECustomMapType customMapType = DetermineCustomMapType(result.TexturePath);
-				switch (customMapType)
+				const TextureID loadedTextureID = result.TexID;
+				pRenderer->GetTextureManager().WaitForTexture(loadedTextureID);
+
+				switch (result.type)
 				{
-				case OCCLUSION_ROUGHNESS_METALNESS:
-					OcclRoughMtlMap_ComponentMapping; // leave as is
-					mat.TexOcclusionRoughnessMetalnessMap = result.TexID;
-					mat.metalness = 1.0f;
-					mat.roughness = 1.0f;
-					break;
-				case METALNESS_ROUGHNESS:
-					// turns out: even the file is named in reverse order, the common thing to do is to store
-					//            roughness in G and metalness in B channels. Hence we're not handling this case 
-					//            here.
-#if 0 
-					OcclRoughMtlMap_ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(
-						  D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_1
-						, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_2
-						, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1
-						, D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0
-					);
-					mat.TexOcclusionRoughnessMetalnessMap = result.TexID;
-					break;
-#endif
-				case ROUGHNESS_METALNESS:
-					OcclRoughMtlMap_ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(
-						D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_1
-						, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1
-						, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_2
-						, D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0
-					);
-					mat.TexOcclusionRoughnessMetalnessMap = result.TexID;
-					mat.metalness = 1.0f;
-					mat.roughness = 1.0f;
-					break;
+				case DIFFUSE           : mat.TexDiffuseMap          = loadedTextureID; break;
+				case NORMALS           : mat.TexNormalMap           = loadedTextureID; break;
+				case ALPHA_MASK        : mat.TexAlphaMaskMap        = loadedTextureID; break;
+				case EMISSIVE          : mat.TexEmissiveMap         = loadedTextureID; break;
+				case METALNESS         : mat.TexMetallicMap         = loadedTextureID; mat.metalness = 1.0f; break;
+				case ROUGHNESS         : mat.TexRoughnessMap        = loadedTextureID; mat.roughness = 1.0f; break;
+				case HEIGHT            : mat.TexHeightMap           = loadedTextureID; break;
+				case AMBIENT_OCCLUSION : mat.TexAmbientOcclusionMap = loadedTextureID; break;
+				case SPECULAR          : assert(false); /*mat.TexSpecularMap  = result.texLoadResult.get();*/ break;
+				case CUSTOM_MAP        :
+				{
+					const ECustomMapType customMapType = DetermineCustomMapType(result.TexturePath);
+					switch (customMapType)
+					{
+					case OCCLUSION_ROUGHNESS_METALNESS:
+						OcclRoughMtlMap_ComponentMapping; // leave as is
+						mat.TexOcclusionRoughnessMetalnessMap = result.TexID;
+						mat.metalness = 1.0f;
+						mat.roughness = 1.0f;
+						break;
+					case METALNESS_ROUGHNESS:
+						// turns out: even the file is named in reverse order, the common thing to do is to store
+						//            roughness in G and metalness in B channels. Hence we're not handling this case 
+						//            here.
+	#if 0 
+						OcclRoughMtlMap_ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(
+							  D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_1
+							, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_2
+							, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1
+							, D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0
+						);
+						mat.TexOcclusionRoughnessMetalnessMap = result.TexID;
+						break;
+	#endif
+					case ROUGHNESS_METALNESS:
+						OcclRoughMtlMap_ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(
+							D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_1
+							, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1
+							, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_2
+							, D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0
+						);
+						mat.TexOcclusionRoughnessMetalnessMap = result.TexID;
+						mat.metalness = 1.0f;
+						mat.roughness = 1.0f;
+						break;
+					default:
+					case UNKNOWN:
+						//Log::Warning("Unknown custom map (%s) type for material MatID=%d!", result.TexturePath.c_str(), assignment.matID);
+						DetermineCustomMapType(result.TexturePath);
+						break;
+					}
+				} break;
 				default:
-				case UNKNOWN:
-					//Log::Warning("Unknown custom map (%s) type for material MatID=%d!", result.TexturePath.c_str(), assignment.matID);
-					DetermineCustomMapType(result.TexturePath);
+					Log::Warning("TODO");
 					break;
 				}
-			} break;
-			default:
-				Log::Warning("TODO");
-				break;
-			}
 			
-			// store the loaded texture path if we have a successful texture creation
-			if (loadedTextureID != INVALID_ID)
-			{
-				std::lock_guard<std::mutex> lk(mtxTexturePaths);
-				TexturePaths[loadedTextureID] = result.TexturePath;
+				// store the loaded texture path if we have a successful texture creation
+				if (loadedTextureID != INVALID_ID)
+				{
+					std::lock_guard<std::mutex> lk(mtxTexturePaths);
+					TexturePaths[loadedTextureID] = result.TexturePath;
+				}
 			}
 		}
 
@@ -574,7 +574,7 @@ static void QueueUpTextureLoadRequests(
 		heightMaps = GenerateTextureLoadParams(material, matID, aiTextureType_HEIGHT, modelDirectory);
 		alphaMaps = GenerateTextureLoadParams(material, matID, aiTextureType_OPACITY, modelDirectory);
 		emissiveMaps = GenerateTextureLoadParams(material, matID, aiTextureType_EMISSIVE, modelDirectory);
-		occlRoughMetlMaps = GenerateTextureLoadParams(material, matID, aiTextureType_UNKNOWN, modelDirectory);
+		occlRoughMetlMaps = GenerateTextureLoadParams(material, matID, aiTextureType_GLTF_METALLIC_ROUGHNESS, modelDirectory);
 		aoMaps = GenerateTextureLoadParams(material, matID, aiTextureType_AMBIENT_OCCLUSION, modelDirectory);
 	}
 
