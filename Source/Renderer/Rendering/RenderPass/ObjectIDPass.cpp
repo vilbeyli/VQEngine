@@ -166,6 +166,8 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 
 	ID3D12GraphicsCommandList* pCmd = pParams->pCmd;
 	ID3D12GraphicsCommandList* pCmdCpy = static_cast<ID3D12GraphicsCommandList*>(pParams->pCmdCopy);
+	const bool bEmptyDrawList = pParams->pSceneDrawData->mainViewDrawParams.empty();
+
 	auto pRscRT = mRenderer.GetTextureResource(TEXPassOutput);
 	auto pRscCPU = mRenderer.GetTextureResource(TEXPassOutputCPUReadback);
 
@@ -203,6 +205,8 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	PSO_ID psoPrev = INVALID_ID;
 	BufferID vbPrev = INVALID_ID;
 	BufferID ibPrev = INVALID_ID;
+	SRV_ID matSRVPrev = INVALID_ID;
+	SRV_ID heightSRVPrev = INVALID_ID;
 	D3D_PRIMITIVE_TOPOLOGY topoPrev = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
 	for (const FInstancedDrawParameters& meshRenderCmd : pParams->pSceneDrawData->mainViewDrawParams)
 	{
@@ -225,14 +229,13 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 		}
 
 		// set textures
-		if (meshRenderCmd.SRVMaterialMaps != INVALID_ID)
+		if (meshRenderCmd.SRVMaterialMaps != matSRVPrev)
 		{
-			//const CBV_SRV_UAV& NullTex2DSRV = mRenderer.GetSRV(mResources_MainWnd.SRV_NullTexture2D);
 			pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(meshRenderCmd.SRVMaterialMaps).GetGPUDescHandle(0));
-			if (meshRenderCmd.SRVHeightMap != INVALID_ID)
-			{
-				pCmd->SetGraphicsRootDescriptorTable(3, mRenderer.GetSRV(meshRenderCmd.SRVHeightMap).GetGPUDescHandle(0));
-			}
+		}
+		if (meshRenderCmd.SRVHeightMap != heightSRVPrev)
+		{
+			pCmd->SetGraphicsRootDescriptorTable(3, mRenderer.GetSRV(meshRenderCmd.SRVHeightMap).GetGPUDescHandle(0));
 		}
 
 		// set IA-VB-IB
@@ -258,6 +261,8 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 		vbPrev = meshRenderCmd.VB;
 		topoPrev = meshRenderCmd.IATopology;
 		psoPrev = psoID;
+		matSRVPrev = meshRenderCmd.SRVMaterialMaps;
+		heightSRVPrev = meshRenderCmd.SRVHeightMap;
 	}
 
 
