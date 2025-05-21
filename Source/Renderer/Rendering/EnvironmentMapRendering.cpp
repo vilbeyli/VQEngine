@@ -141,8 +141,8 @@ void VQRenderer::PreFilterEnvironmentMap(const Mesh& CubeMesh)
 	Log::Info("Environment Map: PreFilterEnvironmentMap");
 	using namespace DirectX;
 
-	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpCmds[ECommandQueueType::GFX][0];
-	DynamicBufferHeap& cbHeap = mDynamicHeap_ConstantBuffer[0];
+	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpBackgroundTaskCmds[GFX][0];
+	DynamicBufferHeap& cbHeap = mDynamicHeap_BackgroundTaskConstantBuffer[0];
 	FEnvironmentMapRenderingResources& env = mResources_MainWnd.EnvironmentMap;
 
 	// sync for PSO initialization 
@@ -172,6 +172,8 @@ void VQRenderer::PreFilterEnvironmentMap(const Mesh& CubeMesh)
 
 	struct cb0_t { XMMATRIX viewProj[NUM_CUBE_FACES]; };
 	struct cb1_t { float ViewDimX; float ViewDimY; float Roughness; int MIP; };
+
+	pCmd->Reset(mBackgroundTaskCommandAllocators[GFX][0], nullptr);
 
 	// Diffuse Irradiance Convolution
 	{

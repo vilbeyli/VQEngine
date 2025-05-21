@@ -39,14 +39,11 @@ HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScr
 	HWND hwnd = pWindow->GetHWND();
 	FWindowRenderContext& ctx = mRenderContextLookup.at(hwnd);
 
-	// pCmd[0] : resource initialization (GPU-generated)
-	// pCmd[1] : render loading screen
-	// pCmd[2] : <unused>
-	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpCmds[ECommandQueueType::GFX][1];
-	if (mpCmds[ECommandQueueType::GFX].size() > 2)
+	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpRenderingCmds[ECommandQueueType::GFX][0];
+	for(size_t iCmd = 1; iCmd < mpRenderingCmds[ECommandQueueType::GFX].size(); ++iCmd)
 	{
-		ID3D12GraphicsCommandList* pCmd2 = (ID3D12GraphicsCommandList*)mpCmds[ECommandQueueType::GFX][2];
-		pCmd2->Close();
+		ID3D12GraphicsCommandList* pCmd_ = (ID3D12GraphicsCommandList*)mpRenderingCmds[ECommandQueueType::GFX][iCmd];
+		pCmd_->Close();
 	}
 
 	// Transition SwapChain RT

@@ -242,30 +242,49 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 	// Create Command Queues of different types
 	{
 		SCOPED_CPU_MARKER("CmdQ");
-		for (int i = 0; i < ECommandQueueType::NUM_COMMAND_QUEUE_TYPES; ++i)
-		{
-			mCmdQueues[i].Create(&mDevice, (ECommandQueueType)i);
-		}
+		
+		mRenderingCmdQueues[GFX].Create(&mDevice, GFX); SetName(mRenderingCmdQueues[GFX].pQueue, "Rendering GFX Q");
+		mRenderingCmdQueues[COPY].Create(&mDevice, COPY); SetName(mRenderingCmdQueues[COPY].pQueue, "Rendering CPY Q");
+		mRenderingCmdQueues[COMPUTE].Create(&mDevice, COMPUTE); SetName(mRenderingCmdQueues[COMPUTE].pQueue, "Rendering CMP Q");
 
+		mBackgroundTaskCmdQueues[GFX].Create(&mDevice, GFX); SetName(mBackgroundTaskCmdQueues[GFX].pQueue, "BackgroundTask GFX Q");
+		mBackgroundTaskCmdQueues[COPY].Create(&mDevice, COPY); SetName(mBackgroundTaskCmdQueues[COPY].pQueue, "BackgroundTask GFX Q");
+		mBackgroundTaskCmdQueues[COMPUTE].Create(&mDevice, COMPUTE); SetName(mBackgroundTaskCmdQueues[COMPUTE].pQueue, "BackgroundTask GFX Q");
+		
 		mLatchCmdQueuesInitialized.count_down();
 	}
 	{
 		SCOPED_CPU_MARKER("CmdAllocators");
-		for (int i = 0; i < ECommandQueueType::NUM_COMMAND_QUEUE_TYPES; ++i)
-			mCommandAllocators[i].resize(NumSwapchainBuffers); // allocate per-backbuffer containers
-		
-		for (int b = 0; b < NumSwapchainBuffers; ++b)
+		for (int q = 0; q < ECommandQueueType::NUM_COMMAND_QUEUE_TYPES; ++q)
 		{
-			for (int q = 0; q < ECommandQueueType::NUM_COMMAND_QUEUE_TYPES; ++q)
-			{
-				mCommandAllocators[q][b].resize(1); // make at least one command allocator and command ready for each kind of queue, per back buffer
-				D3D12_COMMAND_LIST_TYPE t = GetDX12CmdListType((ECommandQueueType)q);
-				pDevice->CreateCommandAllocator(t, IID_PPV_ARGS(&this->mCommandAllocators[q][b][0]));
-			}
+			D3D12_COMMAND_LIST_TYPE t = GetDX12CmdListType((ECommandQueueType)q);
 
-			SetName(mCommandAllocators[ECommandQueueType::GFX    ][b][0], "CmdAllocGFX[%d][0]"    , b);
-			SetName(mCommandAllocators[ECommandQueueType::COPY   ][b][0], "CmdAllocCopy[%d][0]"   , b);
-			SetName(mCommandAllocators[ECommandQueueType::COMPUTE][b][0], "CmdAllocCompute[%d][0]", b);
+			// background task command allocators
+			mBackgroundTaskCommandAllocators[q].resize(1); // assume only 1 thread for now
+			pDevice->CreateCommandAllocator(t, IID_PPV_ARGS(&this->mBackgroundTaskCommandAllocators[q][0]));
+			SetName(mBackgroundTaskCommandAllocators[q][0], "BackgroundTaskCmdAlloc[0]");
+
+			// rendering command allocators
+			mRenderingCommandAllocators[q].resize(NumSwapchainBuffers); // allocate per-backbuffer containers
+			auto fnGetCmdAllocName = [q](int b) -> std::string
+			{
+				std::string name = "RenderCmdAlloc";
+				switch (q)
+				{
+				case ECommandQueueType::GFX:    name += "GFX"; break;
+				case ECommandQueueType::COPY:   name += "Copy"; break;
+				case ECommandQueueType::COMPUTE:name += "Compute"; break;
+				}
+				name += "[" + std::to_string(b) + "][0]";
+				return name;
+			};
+			for (int b = 0; b < NumSwapchainBuffers; ++b)
+			{
+				mRenderingCommandAllocators[q][b].resize(1); // make at least one command allocator and command ready for each kind of queue, per back buffer
+				
+				pDevice->CreateCommandAllocator(t, IID_PPV_ARGS(&this->mRenderingCommandAllocators[q][b][0]));
+				SetName(mRenderingCommandAllocators[q][b][0], fnGetCmdAllocName(b).c_str());
+			}
 		}
 	}
 	{
@@ -276,20 +295,29 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		// TODO: device4 create command list1 doesn't require command allocator, figure out if a further refactor is needed.
 		// https://docs.microsoft.com/en-us/windows/win32/api/d3d12/nn-d3d12-id3d12device4
 		auto pDevice4 = pVQDevice->GetDevice4Ptr();
-		pDevice4->CreateCommandList1(0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_FLAG_NONE, this->mCommandAllocators[ECommandQueueType::GFX][b][b][0]);
+		pDevice4->CreateCommandList1(0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_FLAG_NONE, this->mRenderingCommandAllocators[ECommandQueueType::GFX][b][b][0]);
 		#else	
 		for (int q = 0; q < ECommandQueueType::NUM_COMMAND_QUEUE_TYPES; ++q)
 		{
-			mpCmds[q].resize(1);
 			D3D12_COMMAND_LIST_TYPE t = GetDX12CmdListType((ECommandQueueType)q);
-			pDevice->CreateCommandList(0, t, this->mCommandAllocators[q][0][0], nullptr, IID_PPV_ARGS(&this->mpCmds[q][0]));
-			static_cast<ID3D12GraphicsCommandList*>(this->mpCmds[q][0])->Close();
+
+			mpRenderingCmds[q].resize(1);
+			pDevice->CreateCommandList(0, t, this->mRenderingCommandAllocators[q][0][0], nullptr, IID_PPV_ARGS(&this->mpRenderingCmds[q][0]));
+			static_cast<ID3D12GraphicsCommandList*>(this->mpRenderingCmds[q][0])->Close();
+
+			mpBackgroundTaskCmds[q].resize(1);
+			pDevice->CreateCommandList(0, t, this->mBackgroundTaskCommandAllocators[q][0], nullptr, IID_PPV_ARGS(&this->mpBackgroundTaskCmds[q][0]));
+			//static_cast<ID3D12GraphicsCommandList*>(this->mpBackgroundTaskCmds[q][0])->Close();
+			// skip closing it, we'll use on startup.
 		}
 		#endif
 
 		// create 1 constant buffer
-		mDynamicHeap_ConstantBuffer.resize(1);
-		mDynamicHeap_ConstantBuffer[0].Create(pDevice, NumSwapchainBuffers, 64 * MEGABYTE);
+		mDynamicHeap_RenderingConstantBuffer.resize(1);
+		mDynamicHeap_RenderingConstantBuffer[0].Create(pDevice, NumSwapchainBuffers, 64 * MEGABYTE);
+
+		mDynamicHeap_BackgroundTaskConstantBuffer.resize(1);
+		mDynamicHeap_BackgroundTaskConstantBuffer[0].Create(pDevice, 1, 64 * MEGABYTE);
 	}
 
 	// Initialize memory
@@ -301,7 +329,7 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
 		const uint32 UPLOAD_HEAP_SIZE = (512 + 256 + 128) * MEGABYTE; // TODO: from RendererSettings.ini
-		mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE, this->mCmdQueues[ECommandQueueType::GFX].pQueue);
+		mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE, this->mRenderingCmdQueues[ECommandQueueType::GFX].pQueue);
 
 		{
 			SCOPED_CPU_MARKER("CBV_SRV_UAV");
@@ -338,7 +366,7 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 	mTextureManager.InitializeLate(
 		mDevice.GetDevicePtr(),
 		mpAllocator,
-		mCmdQueues[ECommandQueueType::COPY].pQueue,
+		mRenderingCmdQueues[ECommandQueueType::COPY].pQueue,
 		mHeapUpload,
 		mMtxUploadHeap
 	);
@@ -597,25 +625,10 @@ void VQRenderer::Destroy()
 	mStaticHeap_VertexBuffer.Destroy();
 	mStaticHeap_IndexBuffer.Destroy();
 
-	
-	// clean up command lists & memory
-	assert(mCommandAllocators[ECommandQueueType::GFX].size() == mCommandAllocators[ECommandQueueType::COMPUTE].size());
-	assert(mCommandAllocators[ECommandQueueType::COMPUTE].size() == mCommandAllocators[ECommandQueueType::COPY].size());
-	assert(mCommandAllocators[ECommandQueueType::COPY].size() == mCommandAllocators[ECommandQueueType::GFX].size());
-	for (size_t BackBuffer = 0; BackBuffer < mCommandAllocators[ECommandQueueType::GFX].size(); ++BackBuffer)
-	{
-		for (int q = 0; q < ECommandQueueType::NUM_COMMAND_QUEUE_TYPES; ++q)
-		for (ID3D12CommandAllocator* pCmdAlloc : mCommandAllocators[q][BackBuffer]) 
-			if (pCmdAlloc) 
-				pCmdAlloc->Release();
-	}
-	for (int i = 0; i < ECommandQueueType::NUM_COMMAND_QUEUE_TYPES; ++i)
-	for (ID3D12CommandList* pCmd : mpCmds[i]) 
-		if (pCmd) pCmd->Release();
-
-	for (DynamicBufferHeap& Heap : mDynamicHeap_ConstantBuffer) // per cmd recording thread?
+	for (DynamicBufferHeap& Heap : mDynamicHeap_RenderingConstantBuffer) // per cmd recording thread
 		Heap.Destroy();
-	
+	for (DynamicBufferHeap& Heap : mDynamicHeap_BackgroundTaskConstantBuffer) // per cmd recording thread
+		Heap.Destroy();
 
 	// clean up textures
 	mTextureManager.Destroy();
@@ -642,12 +655,38 @@ void VQRenderer::Destroy()
 		ctx.CleanupContext();
 	}
 
-	// cleanp up device
+	// release command lists & allocators
+	assert(mRenderingCommandAllocators[ECommandQueueType::GFX].size() == mRenderingCommandAllocators[ECommandQueueType::COMPUTE].size());
+	assert(mRenderingCommandAllocators[ECommandQueueType::COMPUTE].size() == mRenderingCommandAllocators[ECommandQueueType::COPY].size());
+	assert(mRenderingCommandAllocators[ECommandQueueType::COPY].size() == mRenderingCommandAllocators[ECommandQueueType::GFX].size());
+	for (int q = 0; q < ECommandQueueType::NUM_COMMAND_QUEUE_TYPES; ++q)
+	{
+		// release commands
+		for (ID3D12CommandList* pCmd : mpRenderingCmds[q])
+			if (pCmd)
+				pCmd->Release();
+		for (ID3D12CommandList* pCmd : mpBackgroundTaskCmds[q])
+			if (pCmd)
+				pCmd->Release();
+
+		// release command allocators
+		for (size_t BackBuffer = 0; BackBuffer < mRenderingCommandAllocators[ECommandQueueType::GFX].size(); ++BackBuffer)
+			for (ID3D12CommandAllocator* pCmdAlloc : mRenderingCommandAllocators[q][BackBuffer])
+				if (pCmdAlloc)
+					pCmdAlloc->Release();
+		for (ID3D12CommandAllocator* pCmdAlloc : mBackgroundTaskCommandAllocators[q])
+			if (pCmdAlloc)
+				pCmdAlloc->Release();
+	}
+
+	// release queues
 	for (int i = 0; i < ECommandQueueType::NUM_COMMAND_QUEUE_TYPES; ++i)
 	{
-		mCmdQueues[i].Destroy();
+		mRenderingCmdQueues[i].Destroy();
+		mBackgroundTaskCmdQueues[i].Destroy();
 	}
-	mDevice.Destroy();
+
+	mDevice.Destroy(); // cleanp up device
 }
 
 void VQRenderer::OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h)
@@ -680,7 +719,7 @@ void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuf
 	Device*       pVQDevice = &mDevice;
 	ID3D12Device* pDevice = pVQDevice->GetDevicePtr();
 
-	FWindowRenderContext ctx = FWindowRenderContext(mCmdQueues[ECommandQueueType::GFX]);
+	FWindowRenderContext ctx = FWindowRenderContext(mRenderingCmdQueues[ECommandQueueType::GFX]);
 	{
 		SCOPED_CPU_MARKER_C("WAIT_DEVICE_CREATE", 0xFF0000FF);
 		mLatchDeviceInitialized.wait();
@@ -807,6 +846,7 @@ static void ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, VQRendere
 	// Texture resource is created (on Renderer::LoadDefaultResources()) but not initialized at this point.
 	const TextureID TexBRDFLUT = pRenderer->GetProceduralTexture(EProceduralTextures::IBL_BRDF_INTEGRATION_LUT);
 	ID3D12Resource* pRscBRDFLUT = pRenderer->GetTextureResource(TexBRDFLUT);
+	ID3D12DescriptorHeap* ppHeaps[] = { pRenderer->GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 
 	int W, H;
 	pRenderer->GetTextureDimensions(TexBRDFLUT, W, H);
@@ -816,6 +856,7 @@ static void ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, VQRendere
 	pRenderer->InitializeUAV(uavBRDFLUT_ID, 0, TexBRDFLUT);
 	const UAV& uavBRDFLUT = pRenderer->GetUAV(uavBRDFLUT_ID);
 
+	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 	pCmd->SetPipelineState(pRenderer->GetPSO(EBuiltinPSOs::BRDF_INTEGRATION_CS_PSO));
 	pCmd->SetComputeRootSignature(pRenderer->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__BRDFIntegrationCS));
 	pCmd->SetComputeRootDescriptorTable(0, uavBRDFLUT.GetGPUDescHandle());
@@ -846,11 +887,12 @@ void VQRenderer::LoadDefaultResources()
 
 	CreateProceduralTextureViews();
 
-
+	// ---------------------
 	WaitMainSwapchainReady();
+	// ---------------------
 
-	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpCmds[ECommandQueueType::GFX][0];
-
+	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpBackgroundTaskCmds[ECommandQueueType::GFX][0];
+	assert(pCmd);
 	{
 		SCOPED_CPU_MARKER("WAIT_PSO_WORKER_DISPATCH");
 		mLatchPSOLoaderDispatched.wait();
@@ -879,9 +921,9 @@ void VQRenderer::LoadDefaultResources()
 	pCmd->Close();
 	{
 		SCOPED_CPU_MARKER("ExecuteCommandLists()");
-		mCmdQueues[ECommandQueueType::GFX].pQueue->ExecuteCommandLists(1, (ID3D12CommandList**)&pCmd);
+		mBackgroundTaskCmdQueues[ECommandQueueType::GFX].pQueue->ExecuteCommandLists(1, (ID3D12CommandList**)&pCmd);
 	}
-	mCmdQueues[ECommandQueueType::GFX].pQueue->Signal(pFence.Get(), fenceValue);
+	mBackgroundTaskCmdQueues[ECommandQueueType::GFX].pQueue->Signal(pFence.Get(), fenceValue);
 
 	// Wait for the GPU to complete the BRDF LUT initialization
 	if (pFence->GetCompletedValue() < fenceValue)

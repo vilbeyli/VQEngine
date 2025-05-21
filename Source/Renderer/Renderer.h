@@ -116,7 +116,7 @@ public:
 	// Device & Queues
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	inline ID3D12Device*         GetDevicePtr() const { return mDevice.GetDevicePtr(); }
-	inline CommandQueue&         GetCommandQueue(ECommandQueueType eType) { return mCmdQueues[(int)eType]; }
+	inline CommandQueue&         GetCommandQueue(ECommandQueueType eType) { return mRenderingCmdQueues[(int)eType]; }
 	inline FDeviceCapabilities   GetDeviceCapabilities() const { return mDevice.GetDeviceCapabilities(); }
 
 
@@ -283,16 +283,33 @@ private:
 	
 	// GPU
 	Device mDevice;
-	CommandQueue mCmdQueues[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES];
-	std::vector<std::vector<ID3D12CommandAllocator*>> mCommandAllocators[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES]; // pre queue type, per back buffer, per recording thread
 
-	std::vector<ID3D12CommandList*> mpCmds[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES]; // per queue, per recording thread
-	std::vector<DynamicBufferHeap> mDynamicHeap_ConstantBuffer; // per recording thread
-	UINT mNumCurrentlyRecordingThreads[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES];
+	// render command execution context | TODO: move to an execution context struct
+	CommandQueue mRenderingCmdQueues[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES];
+	CommandQueue mRenderingPresentationQueue; // TODO: use this queue to submit
+	std::vector<std::vector<ID3D12CommandAllocator*>> mRenderingCommandAllocators[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES]; // pre queue type, per back buffer, per recording thread
+	std::vector<ID3D12CommandList*                  > mpRenderingCmds[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES]; // per queue, per recording thread
+	std::vector<DynamicBufferHeap                   > mDynamicHeap_RenderingConstantBuffer; // per recording thread
+	UINT mNumCurrentlyRecordingRenderingThreads[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES];
+	std::vector<Fence> mAsyncComputeSSAOReadyFence;
+	std::vector<Fence> mAsyncComputeSSAODoneFence;
+	std::vector<Fence> mCopyObjIDDoneFence; // GPU->CPU
+	std::atomic<bool>  mAsyncComputeWorkSubmitted = false;
+	bool               mWaitForSubmitWorker = false;
+	TaskSignal<void>   mSubmitWorkerSignal;
+	std::thread        mFrameSubmitThread;
 
-	// memory
+	// background gpu task execution context | TODO: move to an execution context struct
+	CommandQueue mBackgroundTaskCmdQueues[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES];
+	std::vector<ID3D12CommandAllocator*> mBackgroundTaskCommandAllocators[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES]; // pre queue type, per recording thread
+	std::vector<ID3D12CommandList*     > mpBackgroundTaskCmds[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES]; // per queue, per recording thread
+	std::vector<DynamicBufferHeap      > mDynamicHeap_BackgroundTaskConstantBuffer; // per recording thread
+	UINT mNumCurrentlyRecordingBackgroundTaskThreads[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES];
+
+	// memory allocator
 	D3D12MA::Allocator*    mpAllocator = nullptr;
 	
+	// heaps
 	StaticResourceViewHeap mHeapRTV;   // CPU-visible heap
 	StaticResourceViewHeap mHeapDSV;   // CPU-visible heap
 	StaticResourceViewHeap mHeapUAV;   // CPU-visible heap
@@ -311,7 +328,7 @@ private:
 	std::unordered_map<UAV_ID  , CBV_SRV_UAV> mUAVs;
 	std::unordered_map<RTV_ID  , RTV>         mRTVs;
 	std::unordered_map<DSV_ID  , DSV>         mDSVs;
-	mutable std::mutex                        mMtxStaticVBHeap;
+	mutable std::mutex                        mMtxStaticVBHeap; // TODO: interleave mutices
 	mutable std::mutex                        mMtxStaticIBHeap;
 	mutable std::mutex                        mMtxDynamicCBHeap;
 	mutable std::mutex                        mMtxSamplers;
@@ -340,15 +357,6 @@ private:
 	FRenderingResources_MainWindow  mResources_MainWnd;
 	FRenderingResources_DebugWindow mResources_DebugWnd;
 	std::vector<FSceneDrawData>     mFrameSceneDrawData; // per-frame if pipelined update+render threads
-
-	// frame sync
-	std::vector<Fence>              mAsyncComputeSSAOReadyFence;
-	std::vector<Fence>              mAsyncComputeSSAODoneFence;
-	std::vector<Fence>              mCopyObjIDDoneFence; // GPU->CPU
-	std::atomic<bool>               mAsyncComputeWorkSubmitted = false;
-	bool                            mWaitForSubmitWorker = false;
-	TaskSignal<void>                mSubmitWorkerSignal;
-	std::thread                     mFrameSubmitThread;
 
 	// init sync
 	std::latch                      mLatchDeviceInitialized{ 1 };

@@ -678,7 +678,7 @@ void VQRenderer::BatchDrawCalls(
 
 	const bool bUseWorkerThreadForMainView = NUM_MIN_SCENE_MESHES_FOR_THREADING <= NumSceneViewMeshes;
 	
-	std::vector<DynamicBufferHeap>& CBHeaps = this->mDynamicHeap_ConstantBuffer;
+	std::vector<DynamicBufferHeap>& CBHeaps = this->mDynamicHeap_RenderingConstantBuffer;
 	RenderWorkerThreadPool.AddTask([&]() 
 	{
 		RENDER_WORKER_CPU_MARKER;
