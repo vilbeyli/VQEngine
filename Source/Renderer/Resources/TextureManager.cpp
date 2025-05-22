@@ -432,7 +432,8 @@ void TextureManager::DiskRead(TextureID id, const FTextureRequest& request)
 	// load image
 	FTextureData data;
 	{
-		SCOPED_CPU_MARKER("LoadFromFile");
+		std::string fileName = DirectoryUtil::GetFileNameFromPath(request.FilePath);
+		SCOPED_CPU_MARKER_F("LoadFromFile: %s", fileName.c_str());
 		data.DiskImage = Image::LoadFromFile(request.FilePath.c_str());
 	}
 

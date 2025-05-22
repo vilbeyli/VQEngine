@@ -391,7 +391,11 @@ void VQRenderer::InitializeNullSRV(SRV_ID srvID, uint heapIndex, UINT ShaderComp
 void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bool bInitAsArrayView /*= false*/, bool bInitAsCubeView /*= false*/, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc /*=nullptr*/, UINT ShaderComponentMapping)
 {
 	CHECK_RESOURCE_VIEW(SRV, srvID);
-	
+	if (mSRVs.find(srvID) == mSRVs.end())
+	{
+		Log::Error("SRV Not allocated for texID = %d", texID);
+	}
+
 	if (texID != INVALID_ID)
 	{
 		mTextureManager.WaitForTexture(texID);

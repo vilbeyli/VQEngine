@@ -367,7 +367,7 @@ static std::string GetErrString(HRESULT hr)
 	case E_OUTOFMEMORY: return "Out of memory";
 	case E_INVALIDARG: return "Invalid arguments";
 	}
-	return "Unspecified error, contact dev";
+	return "Unspecified error (" + std::to_string(hr) + "), contact dev";
 }
 
 static bool CachePSO(ID3D12PipelineState* pPSO, const std::string& PSOCacheFilePath)
