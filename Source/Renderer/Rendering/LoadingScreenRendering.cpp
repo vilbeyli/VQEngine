@@ -30,21 +30,47 @@
 #include "Libs/imgui/imgui.h"
 
 
+HRESULT VQRenderer::PreRenderLoadingScreen(ThreadPool& WorkerThreads, const Window* pWindow, const FGraphicsSettings& GFXSettings, const FUIState& UIState)
+{
+	SCOPED_CPU_MARKER("Renderer.PreRenderScene");
+	WaitMainSwapchainReady();
+	WaitHeapsInitialized();
+
+	FWindowRenderContext& ctx = this->GetWindowRenderContext(pWindow->GetHWND());
+	const int SWAPCHAIN_INDEX = ctx.SwapChain.GetCurrentBackBufferIndex();
+	const int NUM_SWAPCHAIN_BACKBUFFERS = ctx.SwapChain.GetNumBackBuffers();
+	constexpr int NUM_COMMAND_RECORDING_THREADS = 1;
+	{
+		SCOPED_CPU_MARKER("AllocCmdLists");
+		AllocateCommandLists(ECommandQueueType::GFX, SWAPCHAIN_INDEX, NUM_COMMAND_RECORDING_THREADS);
+	}
+	{
+		SCOPED_CPU_MARKER("ResetCmdLists");
+		ResetCommandLists(ECommandQueueType::GFX, SWAPCHAIN_INDEX, NUM_COMMAND_RECORDING_THREADS);
+	}
+	
+	ID3D12DescriptorHeap* ppHeaps[] = { this->GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
+	{
+		SCOPED_CPU_MARKER("Cmd.SetDescHeap");
+		auto& vpGFXCmds = mpRenderingCmds[ECommandQueueType::GFX];
+		for (uint32_t iGFX = 0; iGFX < NUM_COMMAND_RECORDING_THREADS; ++iGFX)
+		{
+			static_cast<ID3D12GraphicsCommandList*>(vpGFXCmds[iGFX])->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+		}
+	}
+
+	return S_OK;
+}
+
 HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScreenData& LoadingScreenData, bool bUseHDRRenderPath)
 {
 	SCOPED_CPU_MARKER("RenderLoadingScreen");
 	HRESULT hr = S_OK;
 	
-	this->WaitMainSwapchainReady();
 	HWND hwnd = pWindow->GetHWND();
 	FWindowRenderContext& ctx = mRenderContextLookup.at(hwnd);
 
 	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpRenderingCmds[ECommandQueueType::GFX][0];
-	for(size_t iCmd = 1; iCmd < mpRenderingCmds[ECommandQueueType::GFX].size(); ++iCmd)
-	{
-		ID3D12GraphicsCommandList* pCmd_ = (ID3D12GraphicsCommandList*)mpRenderingCmds[ECommandQueueType::GFX][iCmd];
-		pCmd_->Close();
-	}
 
 	// Transition SwapChain RT
 	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();

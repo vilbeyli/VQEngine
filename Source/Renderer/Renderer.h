@@ -242,7 +242,15 @@ public:
 		bool bHDRDisplay
 	);
 	
-	HRESULT RenderLoadingScreen(const Window* pWindow, const FLoadingScreenData& LoadingScreenData, bool bUseHDRRenderPath); // TODO: should be generalized and removed later
+	HRESULT PreRenderLoadingScreen(ThreadPool& WorkerThreads,
+		const Window* pWindow,
+		const FGraphicsSettings& GFXSettings,
+		const FUIState& UIState
+	);
+	HRESULT RenderLoadingScreen(const Window* pWindow, 
+		const FLoadingScreenData& LoadingScreenData, 
+		bool bUseHDRRenderPath
+	);
 	
 	void ClearRenderPassHistories();
 
@@ -289,6 +297,7 @@ private:
 	CommandQueue mRenderingPresentationQueue; // TODO: use this queue to submit
 	std::vector<std::vector<ID3D12CommandAllocator*>> mRenderingCommandAllocators[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES]; // pre queue type, per back buffer, per recording thread
 	std::vector<ID3D12CommandList*                  > mpRenderingCmds[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES]; // per queue, per recording thread
+	std::vector<bool                                > mCmdClosed[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES]; // per queue, per recording thread
 	std::vector<DynamicBufferHeap                   > mDynamicHeap_RenderingConstantBuffer; // per recording thread
 	UINT mNumCurrentlyRecordingRenderingThreads[ECommandQueueType::NUM_COMMAND_QUEUE_TYPES];
 	std::vector<Fence> mAsyncComputeSSAOReadyFence;
@@ -404,7 +413,7 @@ private:
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Render (Private)
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-	void            RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, ID3D12CommandList* pCmdCopy, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, const FSceneShadowViews& ShadowView, const int BACK_BUFFER_INDEX, const FGraphicsSettings& GFXSettings);
+	void            RenderObjectIDPass(int iThread, ID3D12CommandList* pCmdCopy, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, const FSceneShadowViews& ShadowView, const int BACK_BUFFER_INDEX, const FGraphicsSettings& GFXSettings);
 	void            TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings);
 	void            RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView, const FSceneView& SceneView);
 	void            RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView, const FSceneView& SceneView);

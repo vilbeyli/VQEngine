@@ -178,7 +178,6 @@ struct FSceneView
 
 	FSceneRenderOptions sceneRenderOptions;
 	FPostProcessParameters postProcessParameters;
-	bool bAppIsInSimulationState = false;
 };
 
 struct FSceneDebugView

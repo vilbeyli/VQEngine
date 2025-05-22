@@ -42,16 +42,12 @@ using namespace DirectX;
 using namespace VQ_SHADER_DATA;
 struct FFrameConstantBufferUnlit { DirectX::XMMATRIX matModelViewProj; DirectX::XMFLOAT4 color; };
 
-// tmp debugging
-static bool CPY_CMD_CLOSED = false;
-
 void VQRenderer::AllocateCommandLists(ECommandQueueType eQueueType, size_t iBackBuffer, size_t NumRecordingThreads)
 {
 	ID3D12Device* pD3DDevice = mDevice.GetDevicePtr();
 
 	D3D12_COMMAND_LIST_TYPE CMD_LIST_TYPE = GetDX12CmdListType(eQueueType);
 	std::vector<ID3D12CommandAllocator*>& vCmdAllocators = mRenderingCommandAllocators[eQueueType][iBackBuffer];
-	std::vector<ID3D12CommandList*>& vCmdListPtrs = mpRenderingCmds[eQueueType];
 
 	mNumCurrentlyRecordingRenderingThreads[eQueueType] = static_cast<UINT>(NumRecordingThreads);
 
@@ -73,18 +69,19 @@ void VQRenderer::AllocateCommandLists(ECommandQueueType eQueueType, size_t iBack
 	}
 
 	// we need to create new command lists
-	const size_t NumAlreadyAllocatedCommandLists = vCmdListPtrs.size();
+	const size_t NumAlreadyAllocatedCommandLists = mpRenderingCmds[eQueueType].size();
 	if (NumAlreadyAllocatedCommandLists < NumRecordingThreads)
 	{
 		// create command allocators and command lists for the new threads
-		vCmdListPtrs.resize(NumRecordingThreads);
+		mpRenderingCmds[eQueueType].resize(NumRecordingThreads);
+		mCmdClosed[eQueueType].resize(NumRecordingThreads);
 
 		assert(NumAlreadyAllocatedCommandLists >= 1);
 		for (size_t iNewCmdListAlloc = NumAlreadyAllocatedCommandLists; iNewCmdListAlloc < NumRecordingThreads; ++iNewCmdListAlloc)
 		{
 			// create the command list
-			pD3DDevice->CreateCommandList(0, CMD_LIST_TYPE, vCmdAllocators[iNewCmdListAlloc], nullptr, IID_PPV_ARGS(&vCmdListPtrs[iNewCmdListAlloc]));
-			ID3D12CommandList* pCmd = vCmdListPtrs[iNewCmdListAlloc];
+			pD3DDevice->CreateCommandList(0, CMD_LIST_TYPE, vCmdAllocators[iNewCmdListAlloc], nullptr, IID_PPV_ARGS(&mpRenderingCmds[eQueueType][iNewCmdListAlloc]));
+			ID3D12CommandList* pCmd = mpRenderingCmds[eQueueType][iNewCmdListAlloc];
 			if (pCmd)
 			{
 				SetName(pCmd, "pCmd[%d]", (int)iNewCmdListAlloc);
@@ -95,6 +92,7 @@ void VQRenderer::AllocateCommandLists(ECommandQueueType eQueueType, size_t iBack
 			{
 				ID3D12GraphicsCommandList* pGfxCmdList = (ID3D12GraphicsCommandList*)pCmd;
 				pGfxCmdList->Close();
+				mCmdClosed[eQueueType][iNewCmdListAlloc] = true;
 			}
 		}
 	}
@@ -135,6 +133,7 @@ void VQRenderer::ResetCommandLists(ECommandQueueType eQueueType, size_t iBackBuf
 		// re-recording.
 		assert(mpRenderingCmds[eQueueType][iThread]);
 		static_cast<ID3D12GraphicsCommandList*>(mpRenderingCmds[eQueueType][iThread])->Reset(pAlloc, nullptr);
+		mCmdClosed[eQueueType][iThread] = false;
 	}
 }
 
@@ -143,16 +142,10 @@ bool VQRenderer::ShouldEnableAsyncCompute(const FGraphicsSettings& GFXSettings, 
 {
 	if (!GFXSettings.bEnableAsyncCompute)
 		return false;
-
-	// TODO: test and figure out a better way to handle these cases
-	//if (mbLoadingLevel || mbLoadingEnvironmentMap)
-	//	return false;
-
 	if (ShadowView.NumPointShadowViews > 0)
 		return true;
-	if (ShadowView.NumPointShadowViews > 3)
+	if (ShadowView.NumSpotShadowViews > 3)
 		return true;
-
 	return false;
 }
 FSceneDrawData& VQRenderer::GetSceneDrawData(int FRAME_INDEX)
@@ -183,7 +176,7 @@ HRESULT VQRenderer::PreRenderScene(
 	, const FUIState& UIState
 )
 {
-	SCOPED_CPU_MARKER("Renderer.PreRender");
+	SCOPED_CPU_MARKER("Renderer.PreRenderScene");
 	WaitMainSwapchainReady();
 	FWindowRenderContext& ctx = this->GetWindowRenderContext(pWindow->GetHWND());
 	const int SWAPCHAIN_INDEX = ctx.SwapChain.GetCurrentBackBufferIndex();
@@ -255,11 +248,8 @@ HRESULT VQRenderer::PreRenderScene(
 	{
 		SCOPED_CPU_MARKER("ResetCmdLists");
 		ResetCommandLists(ECommandQueueType::GFX, SWAPCHAIN_INDEX, NumCmdRecordingThreads_GFX);
-		if (SceneView.bAppIsInSimulationState)
-		{
-			if (GFXSettings.bEnableAsyncCopy) { ResetCommandLists(ECommandQueueType::COPY, SWAPCHAIN_INDEX, NumCopyCmdLists); CPY_CMD_CLOSED = false; }
-			if (bUseAsyncCompute)             { ResetCommandLists(ECommandQueueType::COMPUTE, SWAPCHAIN_INDEX, NumComputeCmdLists); }
-		}
+		if (GFXSettings.bEnableAsyncCopy) { ResetCommandLists(ECommandQueueType::COPY, SWAPCHAIN_INDEX, NumCopyCmdLists); }
+		if (bUseAsyncCompute)             { ResetCommandLists(ECommandQueueType::COMPUTE, SWAPCHAIN_INDEX, NumComputeCmdLists); }
 	}
 
 	ID3D12DescriptorHeap* ppHeaps[] = { this->GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
@@ -272,7 +262,7 @@ HRESULT VQRenderer::PreRenderScene(
 			static_cast<ID3D12GraphicsCommandList*>(vpGFXCmds[iGFX])->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 		}
 		
-		if (bUseAsyncCompute && SceneView.bAppIsInSimulationState)
+		if (bUseAsyncCompute)
 		{
 			auto& vpCMPCmds = mpRenderingCmds[ECommandQueueType::COMPUTE];
 			for (uint iCMP = 0; iCMP < NumComputeCmdLists; ++iCMP)
@@ -446,7 +436,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 
 		RenderDepthPrePass(pCmd, SceneView, cbPerView, GFXSettings, bAsyncCompute);
 
-		RenderObjectIDPass(pCmd, pCmdCpy, &CBHeap, cbPerView, SceneView, ShadowView, BACK_BUFFER_INDEX, GFXSettings);
+		RenderObjectIDPass(THREAD_INDEX, pCmdCpy, &CBHeap, cbPerView, SceneView, ShadowView, BACK_BUFFER_INDEX, GFXSettings);
 
 		if (bMSAA)
 		{
@@ -557,6 +547,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 						pCmd_ZPrePass->ResourceBarrier(1, &barrier);
 
 						pCmd_ZPrePass->Close();
+						mCmdClosed[GFX][iCmdZPrePassThread] = true;
 						{
 							SCOPED_CPU_MARKER("ExecGfxCmdList");
 							GFXCmdQ.pQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&pCmd_ZPrePass);
@@ -584,6 +575,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 						{
 							SCOPED_CPU_MARKER("ExecCmpCmdList");
 							pCmd_Compute->Close();
+							mCmdClosed[COMPUTE][0] = true;
 							CMPCmdQ.pQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&pCmd_Compute);
 						}
 						mAsyncComputeSSAODoneFence[BACK_BUFFER_INDEX].Signal(CMPCmdQ.pQueue);
@@ -619,7 +611,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 				WorkerThreads.AddTask([=, &SceneView, &ShadowView, &CBHeap_WorkerObjIDPass, &GFXSettings]()
 				{
 					RENDER_WORKER_CPU_MARKER;
-					RenderObjectIDPass(pCmd_ObjIDPass, pCmdCpy, &CBHeap_WorkerObjIDPass, cbPerView, SceneView, ShadowView, BACK_BUFFER_INDEX, GFXSettings);
+					RenderObjectIDPass(iCmdObjIDPassThread, pCmdCpy, &CBHeap_WorkerObjIDPass, cbPerView, SceneView, ShadowView, BACK_BUFFER_INDEX, GFXSettings);
 				});
 			}
 
@@ -734,6 +726,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 	{
 		// TODO: async compute support for single-threaded CPU cmd recording
 		static_cast<ID3D12GraphicsCommandList*>(vCmdLists[0])->Close();
+		mCmdClosed[GFX][0] = true;
 		ctx.PresentQueue.pQueue->ExecuteCommandLists(1, vCmdLists.data());
 
 		hr = PresentFrame(ctx);
@@ -761,11 +754,18 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 		for (UINT i = 0; i < NumCommandLists; ++i)
 		{
 			if (GFXSettings.bEnableAsyncCopy && (i == iCmdObjIDPassThread))
+			{
+				assert(mCmdClosed[GFX][i]);
 				continue;
-			if (bAsyncCompute && (i == iCmdZPrePassThread)) 
+			}
+			if (bAsyncCompute && (i == iCmdZPrePassThread))
+			{
+				assert(mCmdClosed[GFX][i]);
 				continue; // already closed & executed
+			}
 
 			static_cast<ID3D12GraphicsCommandList*>(vCmdLists[i])->Close();
+			mCmdClosed[GFX][i] = true;
 		}
 
 		// execute command lists on a thread
@@ -804,6 +804,9 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 					}
 
 					mAsyncComputeSSAODoneFence[BACK_BUFFER_INDEX].WaitOnGPU(ctx.PresentQueue.pQueue, SSAODoneFenceValue + 1);
+					for (int i = 0; i < mCmdClosed[GFX].size(); ++i)
+						if (!mCmdClosed[GFX][i])
+							Log::Warning("Cmd[GFX][%d] not closed!", i);
 					ctx.PresentQueue.pQueue->ExecuteCommandLists(1, &pGfxCmd);
 				}
 				else
@@ -830,6 +833,9 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 					#endif
 
 					const size_t NumCmds = iCmdRenderThread + (GFXSettings.bEnableAsyncCopy ? 0 : 1);
+					for(int i=0; i<mCmdClosed[GFX].size(); ++i)
+						if(!mCmdClosed[GFX][i])
+							Log::Warning("Cmd[GFX][%d] not closed!", i);
 					ctx.PresentQueue.pQueue->ExecuteCommandLists((UINT)NumCmds, (ID3D12CommandList**)&vCmdLists[0]);
 				}
 
@@ -854,10 +860,10 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 }
 
 
-void VQRenderer::RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, ID3D12CommandList* pCmdCopy, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, const FSceneShadowViews& ShadowView, const int BACK_BUFFER_INDEX, const FGraphicsSettings& GFXSettings)
+void VQRenderer::RenderObjectIDPass(int iThread, ID3D12CommandList* pCmdCopy, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, const FSceneShadowViews& ShadowView, const int BACK_BUFFER_INDEX, const FGraphicsSettings& GFXSettings)
 {
 	std::shared_ptr<ObjectIDPass> pObjectIDPass = std::static_pointer_cast<ObjectIDPass>(this->GetRenderPass(ERenderPass::ObjectID));
-
+	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpRenderingCmds[ECommandQueueType::GFX][iThread];
 	{
 		SCOPED_GPU_MARKER(pCmd, "RenderObjectIDPass");
 		ObjectIDPass::FDrawParameters params;
@@ -890,9 +896,9 @@ void VQRenderer::RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, ID3D12Comma
 		ID3D12GraphicsCommandList* pCmdCpy = static_cast<ID3D12GraphicsCommandList*>(pCmdCopy);
 		Fence& CopyFence = mCopyObjIDDoneFence[BACK_BUFFER_INDEX];
 
-		
 		pCmd->Close();
-		CPY_CMD_CLOSED = true;
+		mCmdClosed[GFX][iThread] = true;
+
 		if (ShouldEnableAsyncCompute(GFXSettings, SceneView, ShadowView))
 		{
 			SCOPED_CPU_MARKER_C("WAIT_DEPTH_PREPASS_SUBMIT", 0xFFFF0000);
@@ -919,6 +925,7 @@ void VQRenderer::RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, ID3D12Comma
 		{
 			SCOPED_CPU_MARKER("ExecuteListCpy");
 			pCmdCpy->Close();
+			mCmdClosed[COPY][0] = true;
 			CPYCmdQ.pQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&pCmdCpy);
 		}
 		{

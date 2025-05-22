@@ -394,7 +394,7 @@ void VQEngine::RenderThread_RenderMainWindow()
 	const bool bHDR = this->ShouldRenderHDR(hwndMain);
 	const Window* pWindow = mpWinMain.get();
 
-	HRESULT hr = mpRenderer->PreRenderScene(WorkerThreads, pWindow, SceneView, SceneShadowView, PPParams, mSettings.gfx, mUIState);
+	
 
 	if (mbEnvironmentMapPreFilter.load())
 	{
@@ -402,12 +402,15 @@ void VQEngine::RenderThread_RenderMainWindow()
 		mbEnvironmentMapPreFilter.store(false);
 	}
 
+	HRESULT hr = S_OK;
 	if (mbLoadingLevel || mbLoadingEnvironmentMap)
 	{
+		hr = mpRenderer->PreRenderLoadingScreen(WorkerThreads, pWindow, mSettings.gfx, mUIState);
 		hr = mpRenderer->RenderLoadingScreen(pWindow, mLoadingScreenData, bHDR);
 	}
 	else
 	{
+		hr = mpRenderer->PreRenderScene(WorkerThreads, pWindow, SceneView, SceneShadowView, PPParams, mSettings.gfx, mUIState);
 		hr = mpRenderer->RenderScene(WorkerThreads, pWindow, SceneView, SceneShadowView, PPParams, mSettings.gfx, mUIState, bHDR);
 	}
 

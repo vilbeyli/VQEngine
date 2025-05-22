@@ -302,6 +302,7 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 			D3D12_COMMAND_LIST_TYPE t = GetDX12CmdListType((ECommandQueueType)q);
 
 			mpRenderingCmds[q].resize(1);
+			mCmdClosed[q].resize(1);
 			pDevice->CreateCommandList(0, t, this->mRenderingCommandAllocators[q][0][0], nullptr, IID_PPV_ARGS(&this->mpRenderingCmds[q][0]));
 			static_cast<ID3D12GraphicsCommandList*>(this->mpRenderingCmds[q][0])->Close();
 
@@ -926,7 +927,7 @@ void VQRenderer::LoadDefaultResources()
 	mBackgroundTaskCmdQueues[ECommandQueueType::GFX].pQueue->Signal(pFence.Get(), fenceValue);
 
 	// Wait for the GPU to complete the BRDF LUT initialization
-	if (pFence->GetCompletedValue() < fenceValue)
+	if (pFence->GetCompletedValue() < fenceValue) 
 	{
 		hr = pFence->SetEventOnCompletion(fenceValue, fenceEvent);
 		if (SUCCEEDED(hr))

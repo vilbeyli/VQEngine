@@ -141,8 +141,10 @@ void VQRenderer::PreFilterEnvironmentMap(const Mesh& CubeMesh)
 	Log::Info("Environment Map: PreFilterEnvironmentMap");
 	using namespace DirectX;
 
-	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpBackgroundTaskCmds[GFX][0];
-	DynamicBufferHeap& cbHeap = mDynamicHeap_BackgroundTaskConstantBuffer[0];
+	//ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpBackgroundTaskCmds[GFX][0];
+	//DynamicBufferHeap& cbHeap = mDynamicHeap_BackgroundTaskConstantBuffer[0];
+	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpRenderingCmds[GFX][0];
+	DynamicBufferHeap& cbHeap = mDynamicHeap_RenderingConstantBuffer[0];
 	FEnvironmentMapRenderingResources& env = mResources_MainWnd.EnvironmentMap;
 
 	// sync for PSO initialization 
