@@ -342,7 +342,7 @@ void TextureManager::WaitForTexture(TextureID ID) const
 		auto it = mTaskStates.find(ID);
 		if (it == mTaskStates.end())
 		{
-			Log::Warning("Texture ID %d not found", ID);
+			Log::Warning("Texture ID %d not found for WaitForTexture", ID);
 			return;
 		}
 		signal = &it->second.CompletionSignal;
@@ -408,7 +408,7 @@ const FTexture* TextureManager::GetTexture(TextureID id) const
 	auto it = mMetadata.find(id);
 	if (it == mMetadata.end())
 	{
-		Log::Warning("Texture ID %d not found", id);
+		Log::Warning("Texture ID %d not found GetTexture()", id);
 		return nullptr;
 	}
 	return &it->second.Texture;
