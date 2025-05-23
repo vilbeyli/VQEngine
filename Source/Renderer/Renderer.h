@@ -381,6 +381,7 @@ private:
 	std::latch                      mLatchRenderPassesInitialized{ 1 };
 	std::latch                      mLatchSwapchainInitialized{ 1 };
 	std::latch                      mLatchDefaultResourcesLoaded{ 1 };
+	std::latch                      mLatchWindowSizeDependentResourcesInitialized{ 1 };
 
 	// bookkeeping
 	std::unordered_map<EProceduralTextures, SRV_ID>    mLookup_ProceduralTextureSRVs;

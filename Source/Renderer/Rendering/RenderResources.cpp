@@ -404,12 +404,17 @@ void VQRenderer::LoadWindowSizeDependentResources(HWND hwnd, unsigned Width, uns
 		CopyFence.WaitOnCPU(CopyFence.GetValue());
 	}
 	mRenderPasses[ERenderPass::ObjectID]->OnCreateWindowSizeDependentResources(Width, Height, nullptr);
+
+	mLatchWindowSizeDependentResourcesInitialized.count_down();
 }
 
 void VQRenderer::UnloadWindowSizeDependentResources(HWND hwnd)
 {
 	FRenderingResources_MainWindow& r = mResources_MainWnd;
-
+	{
+		SCOPED_CPU_MARKER_C("WAIT_WINDOW_SIZE_DEPENDENT_RSC_INIT", 0xFF0000FF);
+		mLatchWindowSizeDependentResourcesInitialized.wait();
+	}
 	// sync GPU
 	auto& ctx = this->GetWindowRenderContext(hwnd);
 	ctx.SwapChain.WaitForGPU();
