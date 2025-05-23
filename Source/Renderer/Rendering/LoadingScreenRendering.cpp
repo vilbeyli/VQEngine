@@ -131,6 +131,7 @@ HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScr
 	pCmd->ResourceBarrier(1, &barrierWP); // Transition SwapChain for Present
 
 	pCmd->Close();
+	mCmdClosed[GFX][0] = true;
 
 	{
 		SCOPED_CPU_MARKER("ExecuteCommandLists()");
@@ -140,6 +141,10 @@ HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScr
 	hr = PresentFrame(ctx);
 	if(hr == S_OK)
 		ctx.SwapChain.MoveToNextFrame();
+	else
+	{
+		Log::Warning("Error presenting frame during Loading Screen rendering!");
+	}
 
 	return hr;
 }

@@ -193,7 +193,6 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 				mAppState = EAppState::SIMULATING;
 
 				mbLoadingLevel.store(false);
-				mbLoadingEnvironmentMap.store(false);
 
 				mLoadingScreenData.RotateLoadingScreenImageIndex();
 
@@ -665,7 +664,6 @@ MeshID VQEngine::GetBuiltInMeshID(const std::string& MeshName) const
 void VQEngine::StartLoadingEnvironmentMap(int IndexEnvMap)
 {
 	assert(IndexEnvMap >= 0 && IndexEnvMap < mResourceNames.mEnvironmentMapPresetNames.size());
-	this->WaitUntilRenderingFinishes();
 	mAppState = EAppState::LOADING;
 	mbLoadingEnvironmentMap = true;
 	mWorkers_Simulation.AddTask([&, IndexEnvMap]()

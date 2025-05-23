@@ -140,20 +140,22 @@ void VQRenderer::PreFilterEnvironmentMap(const Mesh& CubeMesh)
 {
 	Log::Info("Environment Map: PreFilterEnvironmentMap");
 	using namespace DirectX;
-
-	//ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpBackgroundTaskCmds[GFX][0];
-	//DynamicBufferHeap& cbHeap = mDynamicHeap_BackgroundTaskConstantBuffer[0];
-	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpRenderingCmds[GFX][0];
-	DynamicBufferHeap& cbHeap = mDynamicHeap_RenderingConstantBuffer[0];
 	FEnvironmentMapRenderingResources& env = mResources_MainWnd.EnvironmentMap;
 
-	// sync for PSO initialization 
 	this->WaitHeapsInitialized();
+
+	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpBackgroundTaskCmds[GFX][0];
+	pCmd->Reset(mBackgroundTaskCommandAllocators[GFX][0], nullptr);
+	DynamicBufferHeap& cbHeap = mDynamicHeap_BackgroundTaskConstantBuffer[0];
+
+	ID3D12DescriptorHeap* ppHeaps[] = { GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
+	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+
+	// sync for PSO initialization 
 	{
 		SCOPED_CPU_MARKER("WAIT_PSO_WORKER_DISPATCH");
 		mLatchPSOLoaderDispatched.wait();
 	}
-	
 	auto it = mPSOs.find(EBuiltinPSOs::CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO);
 	if (it == mPSOs.end() || it->second == nullptr)
 	{
@@ -161,66 +163,86 @@ void VQRenderer::PreFilterEnvironmentMap(const Mesh& CubeMesh)
 		mPSOs[result.id] = result.pPSO;
 	}
 
-	SCOPED_GPU_MARKER(pCmd, "RenderEnvironmentMapCubeFaces");
-
-	constexpr int NUM_CUBE_FACES = 6;
-
-	const SRV& srvEnv = this->GetSRV(env.SRV_HDREnvironment);
-	const SRV& srvIrrDiffuse = this->GetSRV(env.SRV_IrradianceDiff);
-	const SRV& srvIrrSpcecular = this->GetSRV(env.SRV_IrradianceSpec);
-
-	const XMFLOAT4X4 f16proj = MakePerspectiveProjectionMatrix(PI_DIV2, 1.0f, 0.1f, 10.0f);
-	const XMMATRIX proj = XMLoadFloat4x4(&f16proj);
-
-	struct cb0_t { XMMATRIX viewProj[NUM_CUBE_FACES]; };
-	struct cb1_t { float ViewDimX; float ViewDimY; float Roughness; int MIP; };
-
-	pCmd->Reset(mBackgroundTaskCommandAllocators[GFX][0], nullptr);
-
-	// Diffuse Irradiance Convolution
 	{
-		Log::Info("Environment Map:   DiffuseIrradianceCubemap");
-		SCOPED_GPU_MARKER(pCmd, "DiffuseIrradianceCubemap");
+		SCOPED_GPU_MARKER(pCmd, "RenderEnvironmentMapCubeFaces");
+		constexpr int NUM_CUBE_FACES = 6;
 
-		// Since calculating the diffuse irradiance integral takes a long time,
-		// we opt-in for drawing cube faces separately instead of doing all at one 
-		// go using GS for RT slicing. Otherwise, a TDR can occur when drawing all
-		// 6 faces per draw call as the integration takes long for each face.
-		constexpr bool DRAW_CUBE_FACES_SEPARATELY = true;
-		//------------------------------------------------------------------------
+		const SRV& srvEnv = this->GetSRV(env.SRV_HDREnvironment);
+		const SRV& srvIrrDiffuse = this->GetSRV(env.SRV_IrradianceDiff);
+		const SRV& srvIrrSpcecular = this->GetSRV(env.SRV_IrradianceSpec);
 
-		const RTV& rtv = this->GetRTV(env.RTV_IrradianceDiff);
+		const XMFLOAT4X4 f16proj = MakePerspectiveProjectionMatrix(PI_DIV2, 1.0f, 0.1f, 10.0f);
+		const XMMATRIX proj = XMLoadFloat4x4(&f16proj);
 
-		// Viewport & Scissors
-		int w, h, d;
-		this->GetTextureDimensions(env.Tex_IrradianceDiff, w, h, d);
-		D3D12_VIEWPORT viewport{ 0.0f, 0.0f, static_cast<float>(w), static_cast<float>(h), 0.0f, 1.0f };
-		D3D12_RECT     scissorsRect{ 0, 0, (LONG)w, (LONG)h };
-		pCmd->RSSetViewports(1, &viewport);
-		pCmd->RSSetScissorRects(1, &scissorsRect);
+		struct cb0_t { XMMATRIX viewProj[NUM_CUBE_FACES]; };
+		struct cb1_t { float ViewDimX; float ViewDimY; float Roughness; int MIP; };
 
-		// geometry input
-		const auto VBIBIDs = CubeMesh.GetIABufferIDs();
-		const uint32 NumIndices = CubeMesh.GetNumIndices();
-		const BufferID& VB_ID = VBIBIDs.first;
-		const BufferID& IB_ID = VBIBIDs.second;
-		const VBV& vb = this->GetVertexBufferView(VB_ID);
-		const IBV& ib = this->GetIndexBufferView(IB_ID);
-
-		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		pCmd->IASetVertexBuffers(0, 1, &vb);
-		pCmd->IASetIndexBuffer(&ib);
-
-		if constexpr (DRAW_CUBE_FACES_SEPARATELY)
+		// Diffuse Irradiance Convolution
 		{
-			pCmd->SetPipelineState(this->GetPSO(CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO));
-			pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ConvolutionCubemap));
-			pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());
-			pCmd->SetGraphicsRootDescriptorTable(3, srvEnv.GetGPUDescHandle());
+			Log::Info("Environment Map:   DiffuseIrradianceCubemap");
+			SCOPED_GPU_MARKER(pCmd, "DiffuseIrradianceCubemap");
 
-			for (int face = 0; face < NUM_CUBE_FACES; ++face)
+			// Since calculating the diffuse irradiance integral takes a long time,
+			// we opt-in for drawing cube faces separately instead of doing all at one 
+			// go using GS for RT slicing. Otherwise, a TDR can occur when drawing all
+			// 6 faces per draw call as the integration takes long for each face.
+			constexpr bool DRAW_CUBE_FACES_SEPARATELY = true;
+			//------------------------------------------------------------------------
+
+			const RTV& rtv = this->GetRTV(env.RTV_IrradianceDiff);
+
+			// Viewport & Scissors
+			int w, h, d;
+			this->GetTextureDimensions(env.Tex_IrradianceDiff, w, h, d);
+			D3D12_VIEWPORT viewport{ 0.0f, 0.0f, static_cast<float>(w), static_cast<float>(h), 0.0f, 1.0f };
+			D3D12_RECT     scissorsRect{ 0, 0, (LONG)w, (LONG)h };
+			pCmd->RSSetViewports(1, &viewport);
+			pCmd->RSSetScissorRects(1, &scissorsRect);
+
+			// geometry input
+			const auto VBIBIDs = CubeMesh.GetIABufferIDs();
+			const uint32 NumIndices = CubeMesh.GetNumIndices();
+			const BufferID& VB_ID = VBIBIDs.first;
+			const BufferID& IB_ID = VBIBIDs.second;
+			const VBV& vb = this->GetVertexBufferView(VB_ID);
+			const IBV& ib = this->GetIndexBufferView(IB_ID);
+
+			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			pCmd->IASetVertexBuffers(0, 1, &vb);
+			pCmd->IASetIndexBuffer(&ib);
+
+			if constexpr (DRAW_CUBE_FACES_SEPARATELY)
 			{
-				D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle(face);
+				pCmd->SetPipelineState(this->GetPSO(CUBEMAP_CONVOLUTION_DIFFUSE_PER_FACE_PSO));
+				pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ConvolutionCubemap));
+				pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());
+				pCmd->SetGraphicsRootDescriptorTable(3, srvEnv.GetGPUDescHandle());
+
+				for (int face = 0; face < NUM_CUBE_FACES; ++face)
+				{
+					D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle(face);
+
+					D3D12_GPU_VIRTUAL_ADDRESS cbAddr0 = {};
+					D3D12_GPU_VIRTUAL_ADDRESS cbAddr1 = {};
+					cb0_t* pCB0 = {};
+					cb1_t* pCB1 = {};
+					cbHeap.AllocConstantBuffer(sizeof(cb0_t), (void**)(&pCB0), &cbAddr0);
+					cbHeap.AllocConstantBuffer(sizeof(cb1_t), (void**)(&pCB1), &cbAddr1);
+					pCB1->ViewDimX = static_cast<float>(w);
+					pCB1->ViewDimY = static_cast<float>(h);
+					pCB1->Roughness = 0.0f;
+					pCB0->viewProj[0] = CubemapUtility::CalculateViewMatrix(face) * proj;
+
+					pCmd->SetGraphicsRootConstantBufferView(1, cbAddr1);
+					pCmd->SetGraphicsRootConstantBufferView(0, cbAddr0);
+					pCmd->OMSetRenderTargets(1, &rtvHandle, TRUE, NULL);
+					pCmd->DrawIndexedInstanced(NumIndices, 1, 0, 0, 0);
+				}
+			}
+
+			else // Draw Instanced Cubes (1x instance / cube face) w/ GS RT slicing
+			{
+				D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle();
 
 				D3D12_GPU_VIRTUAL_ADDRESS cbAddr0 = {};
 				D3D12_GPU_VIRTUAL_ADDRESS cbAddr1 = {};
@@ -230,244 +252,235 @@ void VQRenderer::PreFilterEnvironmentMap(const Mesh& CubeMesh)
 				cbHeap.AllocConstantBuffer(sizeof(cb1_t), (void**)(&pCB1), &cbAddr1);
 				pCB1->ViewDimX = static_cast<float>(w);
 				pCB1->ViewDimY = static_cast<float>(h);
+				pCB1->MIP = 0;
 				pCB1->Roughness = 0.0f;
-				pCB0->viewProj[0] = CubemapUtility::CalculateViewMatrix(face) * proj;
+				for (int face = 0; face < NUM_CUBE_FACES; ++face)
+				{
+					pCB0->viewProj[face] = CubemapUtility::CalculateViewMatrix(face) * proj;
+				}
 
-				pCmd->SetGraphicsRootConstantBufferView(1, cbAddr1);
+				pCmd->SetPipelineState(this->GetPSO(CUBEMAP_CONVOLUTION_DIFFUSE_PSO));
+				pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ConvolutionCubemap));
+				pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());
+				pCmd->SetGraphicsRootDescriptorTable(3, srvEnv.GetGPUDescHandle());
 				pCmd->SetGraphicsRootConstantBufferView(0, cbAddr0);
+				pCmd->SetGraphicsRootConstantBufferView(1, cbAddr1);
 				pCmd->OMSetRenderTargets(1, &rtvHandle, TRUE, NULL);
-				pCmd->DrawIndexedInstanced(NumIndices, 1, 0, 0, 0);
+				pCmd->DrawIndexedInstanced(NumIndices, NUM_CUBE_FACES, 0, 0, 0);
 			}
-		}
-
-		else // Draw Instanced Cubes (1x instance / cube face) w/ GS RT slicing
-		{
-			D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle();
-
-			D3D12_GPU_VIRTUAL_ADDRESS cbAddr0 = {};
-			D3D12_GPU_VIRTUAL_ADDRESS cbAddr1 = {};
-			cb0_t* pCB0 = {};
-			cb1_t* pCB1 = {};
-			cbHeap.AllocConstantBuffer(sizeof(cb0_t), (void**)(&pCB0), &cbAddr0);
-			cbHeap.AllocConstantBuffer(sizeof(cb1_t), (void**)(&pCB1), &cbAddr1);
-			pCB1->ViewDimX = static_cast<float>(w);
-			pCB1->ViewDimY = static_cast<float>(h);
-			pCB1->MIP = 0;
-			pCB1->Roughness = 0.0f;
-			for (int face = 0; face < NUM_CUBE_FACES; ++face)
-			{
-				pCB0->viewProj[face] = CubemapUtility::CalculateViewMatrix(face) * proj;
-			}
-
-			pCmd->SetPipelineState(this->GetPSO(CUBEMAP_CONVOLUTION_DIFFUSE_PSO));
-			pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ConvolutionCubemap));
-			pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());
-			pCmd->SetGraphicsRootDescriptorTable(3, srvEnv.GetGPUDescHandle());
-			pCmd->SetGraphicsRootConstantBufferView(0, cbAddr0);
-			pCmd->SetGraphicsRootConstantBufferView(1, cbAddr1);
-			pCmd->OMSetRenderTargets(1, &rtvHandle, TRUE, NULL);
-			pCmd->DrawIndexedInstanced(NumIndices, NUM_CUBE_FACES, 0, 0, 0);
-		}
-
-		const CD3DX12_RESOURCE_BARRIER pBarriers[] =
-		{
-			  CD3DX12_RESOURCE_BARRIER::Transition(this->GetTextureResource(env.Tex_IrradianceDiff), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
-		};
-		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
-	}
-
-	// Blur Diffuse Irradiance
-	for (int face = 0; face < NUM_CUBE_FACES; ++face)
-	{
-		std::string marker = "CubeFace[";
-		marker += std::to_string(face);
-		marker += "]";
-		SCOPED_GPU_MARKER(pCmd, marker.c_str());
-
-
-		// compute dispatch dimensions
-		int InputImageWidth = 0;
-		int InputImageHeight = 0;
-		int InputImageNumSlices = 0;
-		this->GetTextureDimensions(env.Tex_IrradianceDiff, InputImageWidth, InputImageHeight, InputImageNumSlices);
-		assert(InputImageNumSlices == NUM_CUBE_FACES);
-
-		const SRV& srv = this->GetSRV(env.SRV_IrradianceDiffFaces[face]);
-
-		constexpr int DispatchGroupDimensionX = 8;
-		constexpr int DispatchGroupDimensionY = 8;
-		const     int DispatchX = (InputImageWidth + (DispatchGroupDimensionX - 1)) / DispatchGroupDimensionX;
-		const     int DispatchY = (InputImageHeight + (DispatchGroupDimensionY - 1)) / DispatchGroupDimensionY;
-		constexpr int DispatchZ = 1;
-
-		const UAV& uav_BlurIntermediate = this->GetUAV(env.UAV_BlurTemp);
-		const UAV& uav_BlurOutput = this->GetUAV(env.UAV_IrradianceDiffBlurred);
-		const SRV& srv_BlurIntermediate = this->GetSRV(env.SRV_BlurTemp);
-		ID3D12Resource* pRscBlurIntermediate = this->GetTextureResource(env.Tex_BlurTemp);
-		ID3D12Resource* pRscBlurOutput = this->GetTextureResource(env.Tex_IrradianceDiffBlurred);
-
-		struct FBlurParams { int iImageSizeX; int iImageSizeY; };
-		FBlurParams* pBlurParams = nullptr;
-
-		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		cbHeap.AllocConstantBuffer(sizeof(FBlurParams), (void**)&pBlurParams, &cbAddr);
-		pBlurParams->iImageSizeX = InputImageWidth;
-		pBlurParams->iImageSizeY = InputImageHeight;
-
-		if (!mPSOCompileResults.empty())
-		{
-			{
-				std::shared_future<FPSOCompileResult>& future = mPSOCompileResults[EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_X_PSO];
-				if (future.valid())
-				{
-					SCOPED_CPU_MARKER("WAIT_PSO_COMPILE");
-					future.wait();
-					const FPSOCompileResult& result = future.get();
-					mPSOs[result.id] = result.pPSO;
-				}
-			}
-			{
-				std::shared_future<FPSOCompileResult>& future = mPSOCompileResults[EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_Y_PSO];
-				if (future.valid())
-				{
-					SCOPED_CPU_MARKER("WAIT_PSO_COMPILE");
-					future.wait();
-					const FPSOCompileResult& result = future.get();
-					mPSOs[result.id] = result.pPSO;
-				}
-			}
-		}
-
-		{
-			SCOPED_GPU_MARKER(pCmd, "BlurX");
-			pCmd->SetPipelineState(this->GetPSO(EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_X_PSO));
-			pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1));
-
-			pCmd->SetComputeRootDescriptorTable(0, srv.GetGPUDescHandle());
-			pCmd->SetComputeRootDescriptorTable(1, uav_BlurIntermediate.GetGPUDescHandle());
-			pCmd->SetComputeRootConstantBufferView(2, cbAddr);
-			pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
 
 			const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 			{
-				  CD3DX12_RESOURCE_BARRIER::Transition(pRscBlurIntermediate, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+				  CD3DX12_RESOURCE_BARRIER::Transition(this->GetTextureResource(env.Tex_IrradianceDiff), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
 			};
 			pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
 		}
+
+		// Blur Diffuse Irradiance
+		for (int face = 0; face < NUM_CUBE_FACES; ++face)
 		{
-			SCOPED_GPU_MARKER(pCmd, "BlurY");
-			pCmd->SetPipelineState(this->GetPSO(EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_Y_PSO));
-			pCmd->SetComputeRootDescriptorTable(0, srv_BlurIntermediate.GetGPUDescHandle());
-			pCmd->SetComputeRootDescriptorTable(1, uav_BlurOutput.GetGPUDescHandle(face));
-			pCmd->SetComputeRootConstantBufferView(2, cbAddr);
-			pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
+			std::string marker = "CubeFace[";
+			marker += std::to_string(face);
+			marker += "]";
+			SCOPED_GPU_MARKER(pCmd, marker.c_str());
+
+
+			// compute dispatch dimensions
+			int InputImageWidth = 0;
+			int InputImageHeight = 0;
+			int InputImageNumSlices = 0;
+			this->GetTextureDimensions(env.Tex_IrradianceDiff, InputImageWidth, InputImageHeight, InputImageNumSlices);
+			assert(InputImageNumSlices == NUM_CUBE_FACES);
+
+			const SRV& srv = this->GetSRV(env.SRV_IrradianceDiffFaces[face]);
+
+			constexpr int DispatchGroupDimensionX = 8;
+			constexpr int DispatchGroupDimensionY = 8;
+			const     int DispatchX = (InputImageWidth + (DispatchGroupDimensionX - 1)) / DispatchGroupDimensionX;
+			const     int DispatchY = (InputImageHeight + (DispatchGroupDimensionY - 1)) / DispatchGroupDimensionY;
+			constexpr int DispatchZ = 1;
+
+			const UAV& uav_BlurIntermediate = this->GetUAV(env.UAV_BlurTemp);
+			const UAV& uav_BlurOutput = this->GetUAV(env.UAV_IrradianceDiffBlurred);
+			const SRV& srv_BlurIntermediate = this->GetSRV(env.SRV_BlurTemp);
+			ID3D12Resource* pRscBlurIntermediate = this->GetTextureResource(env.Tex_BlurTemp);
+			ID3D12Resource* pRscBlurOutput = this->GetTextureResource(env.Tex_IrradianceDiffBlurred);
+
+			struct FBlurParams { int iImageSizeX; int iImageSizeY; };
+			FBlurParams* pBlurParams = nullptr;
+
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+			cbHeap.AllocConstantBuffer(sizeof(FBlurParams), (void**)&pBlurParams, &cbAddr);
+			pBlurParams->iImageSizeX = InputImageWidth;
+			pBlurParams->iImageSizeY = InputImageHeight;
+
+			if (!mPSOCompileResults.empty())
+			{
+				{
+					std::shared_future<FPSOCompileResult>& future = mPSOCompileResults[EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_X_PSO];
+					if (future.valid())
+					{
+						SCOPED_CPU_MARKER("WAIT_PSO_COMPILE");
+						future.wait();
+						const FPSOCompileResult& result = future.get();
+						mPSOs[result.id] = result.pPSO;
+					}
+				}
+				{
+					std::shared_future<FPSOCompileResult>& future = mPSOCompileResults[EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_Y_PSO];
+					if (future.valid())
+					{
+						SCOPED_CPU_MARKER("WAIT_PSO_COMPILE");
+						future.wait();
+						const FPSOCompileResult& result = future.get();
+						mPSOs[result.id] = result.pPSO;
+					}
+				}
+			}
+
+			{
+				SCOPED_GPU_MARKER(pCmd, "BlurX");
+				pCmd->SetPipelineState(this->GetPSO(EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_X_PSO));
+				pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1));
+
+				pCmd->SetComputeRootDescriptorTable(0, srv.GetGPUDescHandle());
+				pCmd->SetComputeRootDescriptorTable(1, uav_BlurIntermediate.GetGPUDescHandle());
+				pCmd->SetComputeRootConstantBufferView(2, cbAddr);
+				pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
+
+				const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+				{
+					  CD3DX12_RESOURCE_BARRIER::Transition(pRscBlurIntermediate, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+				};
+				pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+			}
+			{
+				SCOPED_GPU_MARKER(pCmd, "BlurY");
+				pCmd->SetPipelineState(this->GetPSO(EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_Y_PSO));
+				pCmd->SetComputeRootDescriptorTable(0, srv_BlurIntermediate.GetGPUDescHandle());
+				pCmd->SetComputeRootDescriptorTable(1, uav_BlurOutput.GetGPUDescHandle(face));
+				pCmd->SetComputeRootConstantBufferView(2, cbAddr);
+				pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
+
+				const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+				{
+					CD3DX12_RESOURCE_BARRIER::Transition(pRscBlurIntermediate, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+				};
+
+				if (face != NUM_CUBE_FACES - 1) // skip the last barrier as its not necessary (also causes DXGI error)
+					pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+			}
+		} // for_each face
+
+		// transition blurred diffuse irradiance map resource
+		{
+			const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+			{
+				CD3DX12_RESOURCE_BARRIER::Transition(this->GetTextureResource(env.Tex_IrradianceDiffBlurred), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+			  , CD3DX12_RESOURCE_BARRIER::Transition(this->GetTextureResource(env.Tex_IrradianceDiff), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+			};
+			pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+		}
+
+
+		// Specular Irradiance
+		if constexpr (true)
+		{
+			Log::Info("Environment Map:   SpecularIrradianceCubemap");
+			SCOPED_GPU_MARKER(pCmd, "SpecularIrradianceCubemap");
+			if (!mPSOCompileResults.empty())
+			{
+				std::shared_future<FPSOCompileResult>& future = mPSOCompileResults[EBuiltinPSOs::CUBEMAP_CONVOLUTION_SPECULAR_PSO];
+				if (future.valid())
+				{
+					SCOPED_CPU_MARKER("WAIT_PSO_COMPILE");
+					future.wait();
+					const FPSOCompileResult& result = future.get();
+					mPSOs[result.id] = result.pPSO;
+				}
+			}
+			pCmd->SetPipelineState(this->GetPSO(CUBEMAP_CONVOLUTION_SPECULAR_PSO));
+			pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ConvolutionCubemap));
+			pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());
+			pCmd->SetGraphicsRootDescriptorTable(3, srvIrrDiffuse.GetGPUDescHandle());
+
+			int w, h, d, MIP_LEVELS;
+			this->GetTextureDimensions(env.Tex_IrradianceSpec, w, h, d, MIP_LEVELS);
+
+			int inpTexW, inpTexH;
+			this->GetTextureDimensions(env.Tex_HDREnvironment, inpTexW, inpTexH);
+
+			for (int mip = 0; mip < MIP_LEVELS; ++mip)
+			{
+				for (int face = 0; face < NUM_CUBE_FACES; ++face)
+				{
+					std::string marker = "CubeFace["; marker += std::to_string(face); marker += "]";
+					marker += ", MIP=" + std::to_string(mip);
+					SCOPED_GPU_MARKER(pCmd, marker.c_str());
+
+					const RTV& rtv = this->GetRTV(env.RTV_IrradianceSpec);
+					D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle(mip * 6 + face);
+
+					D3D12_GPU_VIRTUAL_ADDRESS cbAddr0 = {};
+					D3D12_GPU_VIRTUAL_ADDRESS cbAddr1 = {};
+					cb0_t* pCB0 = {};
+					cb1_t* pCB1 = {};
+					cbHeap.AllocConstantBuffer(sizeof(cb0_t), (void**)(&pCB0), &cbAddr0);
+					cbHeap.AllocConstantBuffer(sizeof(cb1_t), (void**)(&pCB1), &cbAddr1);
+
+					pCB0->viewProj[0] = CubemapUtility::CalculateViewMatrix(face) * proj;
+					pCB1->Roughness = static_cast<float>(mip) / (MIP_LEVELS - 1); // min(0.04, ) ?
+					pCB1->ViewDimX = static_cast<float>(inpTexW);
+					pCB1->ViewDimY = static_cast<float>(inpTexH);
+					pCB1->MIP = mip;
+
+					assert(pCB1->ViewDimX > 0);
+					assert(pCB1->ViewDimY > 0);
+
+					pCmd->SetGraphicsRootConstantBufferView(0, cbAddr0);
+					pCmd->SetGraphicsRootConstantBufferView(1, cbAddr1);
+
+					LONG Viewport[2] = {};
+					Viewport[0] = w >> mip;
+					Viewport[1] = h >> mip;
+					D3D12_VIEWPORT viewport{ 0.0f, 0.0f, (FLOAT)Viewport[0], (FLOAT)Viewport[1], 0.0f, 1.0f };
+					D3D12_RECT     scissorsRect{ 0, 0, Viewport[0], Viewport[1] };
+					pCmd->RSSetViewports(1, &viewport);
+					pCmd->RSSetScissorRects(1, &scissorsRect);
+
+					const auto VBIBIDs = CubeMesh.GetIABufferIDs();
+					const uint32 NumIndices = CubeMesh.GetNumIndices();
+					const BufferID& VB_ID = VBIBIDs.first;
+					const BufferID& IB_ID = VBIBIDs.second;
+					const VBV& vb = this->GetVertexBufferView(VB_ID);
+					const IBV& ib = this->GetIndexBufferView(IB_ID);
+
+					pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+					pCmd->IASetVertexBuffers(0, 1, &vb);
+					pCmd->IASetIndexBuffer(&ib);
+
+					pCmd->OMSetRenderTargets(1, &rtvHandle, TRUE, NULL);
+					pCmd->DrawIndexedInstanced(NumIndices, 1, 0, 0, 0);
+				}
+			}
 
 			const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 			{
-				CD3DX12_RESOURCE_BARRIER::Transition(pRscBlurIntermediate, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+				CD3DX12_RESOURCE_BARRIER::Transition(this->GetTextureResource(env.Tex_IrradianceSpec), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
 			};
-
-			if (face != NUM_CUBE_FACES - 1) // skip the last barrier as its not necessary (also causes DXGI error)
-				pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+			pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
 		}
-	} // for_each face
-
-	// transition blurred diffuse irradiance map resource
-	{
-		const CD3DX12_RESOURCE_BARRIER pBarriers[] =
-		{
-			CD3DX12_RESOURCE_BARRIER::Transition(this->GetTextureResource(env.Tex_IrradianceDiffBlurred), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
-		  , CD3DX12_RESOURCE_BARRIER::Transition(this->GetTextureResource(env.Tex_IrradianceDiff), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
-		};
-		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
 	}
 
+	// execute command list
+	pCmd->Close();
+	mBackgroundTaskCmdQueues[GFX].pQueue->ExecuteCommandLists(1, (ID3D12CommandList**)&pCmd);
 
-	// Specular Irradiance
-	if constexpr (true)
+	// wait for execution to finish
 	{
-		Log::Info("Environment Map:   SpecularIrradianceCubemap");
-		SCOPED_GPU_MARKER(pCmd, "SpecularIrradianceCubemap");
-		if (!mPSOCompileResults.empty())
-		{
-			std::shared_future<FPSOCompileResult>& future = mPSOCompileResults[EBuiltinPSOs::CUBEMAP_CONVOLUTION_SPECULAR_PSO];
-			if (future.valid())
-			{
-				SCOPED_CPU_MARKER("WAIT_PSO_COMPILE");
-				future.wait();
-				const FPSOCompileResult& result = future.get();
-				mPSOs[result.id] = result.pPSO;
-			}
-		}
-		pCmd->SetPipelineState(this->GetPSO(CUBEMAP_CONVOLUTION_SPECULAR_PSO));
-		pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__ConvolutionCubemap));
-		pCmd->SetGraphicsRootDescriptorTable(2, srvEnv.GetGPUDescHandle());
-		pCmd->SetGraphicsRootDescriptorTable(3, srvIrrDiffuse.GetGPUDescHandle());
-
-		int w, h, d, MIP_LEVELS;
-		this->GetTextureDimensions(env.Tex_IrradianceSpec, w, h, d, MIP_LEVELS);
-
-		int inpTexW, inpTexH;
-		this->GetTextureDimensions(env.Tex_HDREnvironment, inpTexW, inpTexH);
-
-		for (int mip = 0; mip < MIP_LEVELS; ++mip)
-		{
-			for (int face = 0; face < NUM_CUBE_FACES; ++face)
-			{
-				std::string marker = "CubeFace["; marker += std::to_string(face); marker += "]";
-				marker += ", MIP=" + std::to_string(mip);
-				SCOPED_GPU_MARKER(pCmd, marker.c_str());
-
-				const RTV& rtv = this->GetRTV(env.RTV_IrradianceSpec);
-				D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtv.GetCPUDescHandle(mip * 6 + face);
-
-				D3D12_GPU_VIRTUAL_ADDRESS cbAddr0 = {};
-				D3D12_GPU_VIRTUAL_ADDRESS cbAddr1 = {};
-				cb0_t* pCB0 = {};
-				cb1_t* pCB1 = {};
-				cbHeap.AllocConstantBuffer(sizeof(cb0_t), (void**)(&pCB0), &cbAddr0);
-				cbHeap.AllocConstantBuffer(sizeof(cb1_t), (void**)(&pCB1), &cbAddr1);
-
-				pCB0->viewProj[0] = CubemapUtility::CalculateViewMatrix(face) * proj;
-				pCB1->Roughness = static_cast<float>(mip) / (MIP_LEVELS - 1); // min(0.04, ) ?
-				pCB1->ViewDimX = static_cast<float>(inpTexW);
-				pCB1->ViewDimY = static_cast<float>(inpTexH);
-				pCB1->MIP = mip;
-
-				assert(pCB1->ViewDimX > 0);
-				assert(pCB1->ViewDimY > 0);
-
-				pCmd->SetGraphicsRootConstantBufferView(0, cbAddr0);
-				pCmd->SetGraphicsRootConstantBufferView(1, cbAddr1);
-
-				LONG Viewport[2] = {};
-				Viewport[0] = w >> mip;
-				Viewport[1] = h >> mip;
-				D3D12_VIEWPORT viewport{ 0.0f, 0.0f, (FLOAT)Viewport[0], (FLOAT)Viewport[1], 0.0f, 1.0f };
-				D3D12_RECT     scissorsRect{ 0, 0, Viewport[0], Viewport[1] };
-				pCmd->RSSetViewports(1, &viewport);
-				pCmd->RSSetScissorRects(1, &scissorsRect);
-
-				const auto VBIBIDs = CubeMesh.GetIABufferIDs();
-				const uint32 NumIndices = CubeMesh.GetNumIndices();
-				const BufferID& VB_ID = VBIBIDs.first;
-				const BufferID& IB_ID = VBIBIDs.second;
-				const VBV& vb = this->GetVertexBufferView(VB_ID);
-				const IBV& ib = this->GetIndexBufferView(IB_ID);
-
-				pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				pCmd->IASetVertexBuffers(0, 1, &vb);
-				pCmd->IASetIndexBuffer(&ib);
-
-				pCmd->OMSetRenderTargets(1, &rtvHandle, TRUE, NULL);
-				pCmd->DrawIndexedInstanced(NumIndices, 1, 0, 0, 0);
-			}
-		}
-
-		const CD3DX12_RESOURCE_BARRIER pBarriers[] =
-		{
-			CD3DX12_RESOURCE_BARRIER::Transition(this->GetTextureResource(env.Tex_IrradianceSpec), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
-		};
-		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+		SCOPED_CPU_MARKER("WAIT_GPU");
+		int val = mBackgroundTaskFencesPerQueue[GFX].GetValue();
+		mBackgroundTaskFencesPerQueue[GFX].Signal(mBackgroundTaskCmdQueues[ECommandQueueType::GFX].pQueue);
+		mBackgroundTaskFencesPerQueue[GFX].WaitOnCPU(val);
 	}
 }

@@ -289,7 +289,6 @@ private:
 #endif
 	std::atomic<bool>               mbLoadingLevel;
 	std::atomic<bool>               mbLoadingEnvironmentMap;
-	std::atomic<bool>               mbEnvironmentMapPreFilter;
 	std::atomic<bool>               mbMainWindowHDRTransitionInProgress; // see DispatchHDRSwapchainTransitionEvents()
 	std::atomic<bool>               mbExitApp;
 	std::atomic<bool>               mbBuiltinMeshGenFinished;

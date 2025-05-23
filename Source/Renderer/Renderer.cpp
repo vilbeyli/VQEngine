@@ -755,6 +755,10 @@ void VQRenderer::InitializeFences(HWND hwnd)
 		mAsyncComputeSSAODoneFence[i].Create(pDevice, "AsyncComputeSSAODoneFence");
 		mCopyObjIDDoneFence[i].Create(pDevice, "CopyObjIDDoneFence");
 	}
+
+	mBackgroundTaskFencesPerQueue[GFX].Create(pDevice, "BackgroundTaskGFXFence");
+	mBackgroundTaskFencesPerQueue[COPY].Create(pDevice, "BackgroundTaskCopyFence");
+	mBackgroundTaskFencesPerQueue[COMPUTE].Create(pDevice, "BackgroundTaskComputeFence");
 }
 
 void VQRenderer::DestroyFences(HWND hwnd)
@@ -767,6 +771,9 @@ void VQRenderer::DestroyFences(HWND hwnd)
 		mAsyncComputeSSAODoneFence[i].Destroy();
 	}
 
+	mBackgroundTaskFencesPerQueue[GFX].Destroy();
+	mBackgroundTaskFencesPerQueue[COPY].Destroy();
+	mBackgroundTaskFencesPerQueue[COMPUTE].Destroy();
 }
 
 void VQRenderer::WaitCopyFenceOnCPU(HWND hwnd)

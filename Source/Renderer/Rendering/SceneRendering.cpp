@@ -47,24 +47,23 @@ void VQRenderer::AllocateCommandLists(ECommandQueueType eQueueType, size_t iBack
 	ID3D12Device* pD3DDevice = mDevice.GetDevicePtr();
 
 	D3D12_COMMAND_LIST_TYPE CMD_LIST_TYPE = GetDX12CmdListType(eQueueType);
-	std::vector<ID3D12CommandAllocator*>& vCmdAllocators = mRenderingCommandAllocators[eQueueType][iBackBuffer];
 
 	mNumCurrentlyRecordingRenderingThreads[eQueueType] = static_cast<UINT>(NumRecordingThreads);
 
 	// we need to create new command list allocators
-	const size_t NumAlreadyAllocatedCommandListAllocators = vCmdAllocators.size();
-	if (NumAlreadyAllocatedCommandListAllocators < NumRecordingThreads)
+	const size_t NumExistingCommandAllocators = mRenderingCommandAllocators[eQueueType][iBackBuffer].size();
+	if (NumExistingCommandAllocators < NumRecordingThreads)
 	{
 		// create command allocators and command lists for the new threads
-		vCmdAllocators.resize(NumRecordingThreads);
+		mRenderingCommandAllocators[eQueueType][iBackBuffer].resize(NumRecordingThreads);
 
-		assert(NumAlreadyAllocatedCommandListAllocators >= 1);
-		for (size_t iNewCmdListAlloc = NumAlreadyAllocatedCommandListAllocators; iNewCmdListAlloc < NumRecordingThreads; ++iNewCmdListAlloc)
+		assert(NumExistingCommandAllocators >= 1);
+		for (size_t iNewAllocator = NumExistingCommandAllocators; iNewAllocator < NumRecordingThreads; ++iNewAllocator)
 		{
 			// create the command allocator
-			ID3D12CommandAllocator*& pAlloc = vCmdAllocators[iNewCmdListAlloc];
+			ID3D12CommandAllocator*& pAlloc = mRenderingCommandAllocators[eQueueType][iBackBuffer][iNewAllocator];
 			pD3DDevice->CreateCommandAllocator(CMD_LIST_TYPE, IID_PPV_ARGS(&pAlloc));
-			SetName(pAlloc, "CmdListAlloc[%d]", (int)iNewCmdListAlloc);
+			SetName(pAlloc, "CmdListAlloc[%d]", (int)iNewAllocator);
 		}
 	}
 
@@ -80,7 +79,7 @@ void VQRenderer::AllocateCommandLists(ECommandQueueType eQueueType, size_t iBack
 		for (size_t iNewCmdListAlloc = NumAlreadyAllocatedCommandLists; iNewCmdListAlloc < NumRecordingThreads; ++iNewCmdListAlloc)
 		{
 			// create the command list
-			pD3DDevice->CreateCommandList(0, CMD_LIST_TYPE, vCmdAllocators[iNewCmdListAlloc], nullptr, IID_PPV_ARGS(&mpRenderingCmds[eQueueType][iNewCmdListAlloc]));
+			pD3DDevice->CreateCommandList(0, CMD_LIST_TYPE, mRenderingCommandAllocators[eQueueType][iBackBuffer][iNewCmdListAlloc], nullptr, IID_PPV_ARGS(&mpRenderingCmds[eQueueType][iNewCmdListAlloc]));
 			ID3D12CommandList* pCmd = mpRenderingCmds[eQueueType][iNewCmdListAlloc];
 			if (pCmd)
 			{
@@ -117,15 +116,14 @@ void VQRenderer::AllocateConstantBufferMemory(uint32_t NumHeaps, uint32_t NumBac
 
 void VQRenderer::ResetCommandLists(ECommandQueueType eQueueType, size_t iBackBuffer, size_t NumRecordingThreads)
 {
-	std::vector<ID3D12CommandAllocator*>& vCmdAllocators = mRenderingCommandAllocators[eQueueType][iBackBuffer];
-	assert(NumRecordingThreads <= vCmdAllocators.size());
+	assert(NumRecordingThreads <= mRenderingCommandAllocators[eQueueType][iBackBuffer].size());
 
 	// Command list allocators can only be reset when the associated 
 	// command lists have finished execution on the GPU; apps should use 
 	// fences to determine GPU execution progress.
 	for (size_t iThread = 0; iThread < NumRecordingThreads; ++iThread)
 	{
-		ID3D12CommandAllocator*& pAlloc = vCmdAllocators[iThread];
+		ID3D12CommandAllocator*& pAlloc = mRenderingCommandAllocators[eQueueType][iBackBuffer][iThread];
 		ThrowIfFailed(pAlloc->Reset());
 
 		// However, when ExecuteCommandList() is called on a particular command 

@@ -289,7 +289,6 @@ void VQEngine::InitializeHDRProfiles()
 void VQEngine::InitializeEnvironmentMaps()
 {
 	SCOPED_CPU_MARKER("InitializeEnvironmentMaps");
-	mbEnvironmentMapPreFilter.store(false);
 	std::vector<FEnvironmentMapDescriptor> descs = FileParser::ParseEnvironmentMapsFile();
 	for (const FEnvironmentMapDescriptor& desc : descs)
 	{

@@ -394,14 +394,6 @@ void VQEngine::RenderThread_RenderMainWindow()
 	const bool bHDR = this->ShouldRenderHDR(hwndMain);
 	const Window* pWindow = mpWinMain.get();
 
-	
-
-	if (mbEnvironmentMapPreFilter.load())
-	{
-		mpRenderer->PreFilterEnvironmentMap(mBuiltinMeshes[EBuiltInMeshes::CUBE]);
-		mbEnvironmentMapPreFilter.store(false);
-	}
-
 	HRESULT hr = S_OK;
 	if (mbLoadingLevel || mbLoadingEnvironmentMap)
 	{
