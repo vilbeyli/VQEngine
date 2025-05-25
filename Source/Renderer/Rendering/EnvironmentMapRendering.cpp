@@ -146,7 +146,7 @@ void VQRenderer::PreFilterEnvironmentMap(const Mesh& CubeMesh)
 
 	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpBackgroundTaskCmds[GFX][EnvironmentMap_Prefiltering];
 	pCmd->Reset(mBackgroundTaskCommandAllocators[GFX][EnvironmentMap_Prefiltering], nullptr);
-	DynamicBufferHeap& cbHeap = mDynamicHeap_BackgroundTaskConstantBuffer[0];
+	DynamicBufferHeap& cbHeap = mDynamicHeap_BackgroundTaskConstantBuffer[EnvironmentMap_Prefiltering];
 
 	ID3D12DescriptorHeap* ppHeaps[] = { GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 	pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
