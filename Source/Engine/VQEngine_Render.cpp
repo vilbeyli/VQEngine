@@ -330,7 +330,11 @@ void VQEngine::FinalizeBuiltinMeshes()
 		mpRenderer->UploadVertexAndIndexBufferHeaps();
 	}
 
-	mBuiltinMeshUploadedLatch.count_down();
+	if (!mbBuiltinMeshUploadFinished)
+	{
+		mBuiltinMeshUploadedLatch.count_down();
+		mbBuiltinMeshUploadFinished = true;
+	}
 }
 
 void VQEngine::WaitForBuiltinMeshGeneration()

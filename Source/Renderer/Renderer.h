@@ -330,6 +330,7 @@ private:
 	{
 		EnvironmentMap_Prefiltering = 0,
 		GPU_Generated_Textures,
+
 		NUM_BACKGROUND_TASK_THREADS,
 	};
 	CommandQueue mBackgroundTaskCmdQueues[NUM_COMMAND_QUEUE_TYPES];
@@ -403,6 +404,7 @@ private:
 	std::latch                      mLatchSwapchainInitialized{ 1 };
 	std::latch                      mLatchDefaultResourcesLoaded{ 1 };
 	std::latch                      mLatchWindowSizeDependentResourcesInitialized{ 1 };
+	bool                            mbWindowSizeDependentResourcesFirstInitiazliationDone = false;
 
 	// bookkeeping
 	std::unordered_map<EProceduralTextures, SRV_ID>    mLookup_ProceduralTextureSRVs;

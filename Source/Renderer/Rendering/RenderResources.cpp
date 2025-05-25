@@ -405,7 +405,11 @@ void VQRenderer::LoadWindowSizeDependentResources(HWND hwnd, unsigned Width, uns
 	}
 	mRenderPasses[ERenderPass::ObjectID]->OnCreateWindowSizeDependentResources(Width, Height, nullptr);
 
-	mLatchWindowSizeDependentResourcesInitialized.count_down();
+	if (!mbWindowSizeDependentResourcesFirstInitiazliationDone)
+	{
+		mLatchWindowSizeDependentResourcesInitialized.count_down();
+		mbWindowSizeDependentResourcesFirstInitiazliationDone = true;
+	}
 }
 
 void VQRenderer::UnloadWindowSizeDependentResources(HWND hwnd)

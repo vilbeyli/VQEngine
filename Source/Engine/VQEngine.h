@@ -295,6 +295,7 @@ private:
 	std::atomic<bool>               mbBuiltinMeshGenFinished;
 	EventSignal                     mBuiltinMeshGenSignal;
 	std::latch                      mBuiltinMeshUploadedLatch{ 1 };
+	bool                            mbBuiltinMeshUploadFinished = false;
 
 
 	// system & settings
