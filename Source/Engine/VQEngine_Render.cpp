@@ -329,6 +329,8 @@ void VQEngine::FinalizeBuiltinMeshes()
 		SCOPED_CPU_MARKER("Upload");
 		mpRenderer->UploadVertexAndIndexBufferHeaps();
 	}
+
+	mBuiltinMeshUploadedLatch.count_down();
 }
 
 void VQEngine::WaitForBuiltinMeshGeneration()

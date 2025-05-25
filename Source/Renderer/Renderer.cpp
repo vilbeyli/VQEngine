@@ -260,9 +260,11 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 			D3D12_COMMAND_LIST_TYPE t = GetDX12CmdListType((ECommandQueueType)q);
 
 			// background task command allocators
-			mBackgroundTaskCommandAllocators[q].resize(1); // assume only 1 thread for now
-			pDevice->CreateCommandAllocator(t, IID_PPV_ARGS(&this->mBackgroundTaskCommandAllocators[q][0]));
-			SetName(mBackgroundTaskCommandAllocators[q][0], "BackgroundTaskCmdAlloc[0]");
+			for(int thr = 0; thr < EBackgroungTaskThread::NUM_BACKGROUND_TASK_THREADS; ++thr)
+			{
+				pDevice->CreateCommandAllocator(t, IID_PPV_ARGS(&this->mBackgroundTaskCommandAllocators[q][thr]));
+				SetName(mBackgroundTaskCommandAllocators[q][thr], "BackgroundTaskCmdAlloc[%d][%d]", q, thr);
+			}
 
 			// rendering command allocators
 			mRenderingCommandAllocators[q].resize(NumSwapchainBuffers); // allocate per-backbuffer containers
@@ -306,8 +308,11 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 			pDevice->CreateCommandList(0, t, this->mRenderingCommandAllocators[q][0][0], nullptr, IID_PPV_ARGS(&this->mpRenderingCmds[q][0]));
 			static_cast<ID3D12GraphicsCommandList*>(this->mpRenderingCmds[q][0])->Close();
 
-			mpBackgroundTaskCmds[q].resize(1);
-			pDevice->CreateCommandList(0, t, this->mBackgroundTaskCommandAllocators[q][0], nullptr, IID_PPV_ARGS(&this->mpBackgroundTaskCmds[q][0]));
+			for (int thr = 0; thr < EBackgroungTaskThread::NUM_BACKGROUND_TASK_THREADS; ++thr)
+			{
+				pDevice->CreateCommandList(0, t, this->mBackgroundTaskCommandAllocators[q][thr], nullptr, IID_PPV_ARGS(&this->mpBackgroundTaskCmds[q][thr]));
+			}
+
 			//static_cast<ID3D12GraphicsCommandList*>(this->mpBackgroundTaskCmds[q][0])->Close();
 			// skip closing it, we'll use on startup.
 		}
@@ -317,8 +322,10 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		mDynamicHeap_RenderingConstantBuffer.resize(1);
 		mDynamicHeap_RenderingConstantBuffer[0].Create(pDevice, NumSwapchainBuffers, 64 * MEGABYTE);
 
-		mDynamicHeap_BackgroundTaskConstantBuffer.resize(1);
-		mDynamicHeap_BackgroundTaskConstantBuffer[0].Create(pDevice, 1, 64 * MEGABYTE);
+		for (int thr = 0; thr < EBackgroungTaskThread::NUM_BACKGROUND_TASK_THREADS; ++thr)
+		{
+			mDynamicHeap_BackgroundTaskConstantBuffer[thr].Create(pDevice, 1, 4 * MEGABYTE);
+		}
 	}
 
 	// Initialize memory
@@ -899,7 +906,7 @@ void VQRenderer::LoadDefaultResources()
 	WaitMainSwapchainReady();
 	// ---------------------
 
-	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpBackgroundTaskCmds[ECommandQueueType::GFX][0];
+	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpBackgroundTaskCmds[ECommandQueueType::GFX][GPU_Generated_Textures];
 	assert(pCmd);
 	{
 		SCOPED_CPU_MARKER("WAIT_PSO_WORKER_DISPATCH");

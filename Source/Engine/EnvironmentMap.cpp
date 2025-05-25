@@ -262,6 +262,10 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 
 	//assert(mpScene->mIndex_ActiveEnvironmentMapPreset == static_cast<int>(ActiveEnvMapIndex)); // Only false during initialization
 	mpScene->mIndex_ActiveEnvironmentMapPreset = static_cast<int>(ActiveEnvMapIndex);
+	{
+		SCOPED_CPU_MARKER_C("WAIT_MESH_UPLOAD", 0xFFAA0000);
+		mBuiltinMeshUploadedLatch.wait();
+	}
 	mpRenderer->PreFilterEnvironmentMap(mBuiltinMeshes[EBuiltInMeshes::CUBE]);
 	mbLoadingEnvironmentMap.store(false);
 

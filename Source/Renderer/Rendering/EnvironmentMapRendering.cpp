@@ -144,8 +144,8 @@ void VQRenderer::PreFilterEnvironmentMap(const Mesh& CubeMesh)
 
 	this->WaitHeapsInitialized();
 
-	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpBackgroundTaskCmds[GFX][0];
-	pCmd->Reset(mBackgroundTaskCommandAllocators[GFX][0], nullptr);
+	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpBackgroundTaskCmds[GFX][EnvironmentMap_Prefiltering];
+	pCmd->Reset(mBackgroundTaskCommandAllocators[GFX][EnvironmentMap_Prefiltering], nullptr);
 	DynamicBufferHeap& cbHeap = mDynamicHeap_BackgroundTaskConstantBuffer[0];
 
 	ID3D12DescriptorHeap* ppHeaps[] = { GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
@@ -479,8 +479,8 @@ void VQRenderer::PreFilterEnvironmentMap(const Mesh& CubeMesh)
 	// wait for execution to finish
 	{
 		SCOPED_CPU_MARKER("WAIT_GPU");
-		int val = mBackgroundTaskFencesPerQueue[GFX].GetValue();
+		uint64 val = mBackgroundTaskFencesPerQueue[GFX].GetValue();
 		mBackgroundTaskFencesPerQueue[GFX].Signal(mBackgroundTaskCmdQueues[ECommandQueueType::GFX].pQueue);
-		mBackgroundTaskFencesPerQueue[GFX].WaitOnCPU(val);
+		mBackgroundTaskFencesPerQueue[GFX].WaitOnCPU(val+1);
 	}
 }

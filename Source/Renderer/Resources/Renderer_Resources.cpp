@@ -562,6 +562,8 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 			}
 			pDevice->CreateShaderResourceView(pResource, pSRVDesc, srv.GetCPUDescHandle(heapIndex));
 		}
+
+		Log::Info("InitializeSRV %d[%d] for Texture %d | desc_handl = %ul", srvID, heapIndex, texID, srv.GetGPUDescHandle(heapIndex));
 	}
 	else // init NULL SRV
 	{

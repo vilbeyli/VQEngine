@@ -42,6 +42,7 @@
 #include "Libs/VQUtils/Source/SystemInfo.h"
 
 #include <memory>
+#include <latch>
 
 //--------------------------------------------------------------------
 // MUILTI-THREADING 
@@ -293,6 +294,7 @@ private:
 	std::atomic<bool>               mbExitApp;
 	std::atomic<bool>               mbBuiltinMeshGenFinished;
 	EventSignal                     mBuiltinMeshGenSignal;
+	std::latch                      mBuiltinMeshUploadedLatch{ 1 };
 
 
 	// system & settings

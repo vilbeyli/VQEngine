@@ -293,6 +293,21 @@ private:
 	Device mDevice;
 
 	// render command execution context | TODO: move to an execution context struct
+	enum ERenderCommandRecorderThread
+	{
+		ZPrePass = 0,
+		AsyncCompute,
+		PointShadow0,
+		PointShadow1,
+		PointShadow2,
+		PointShadow3,
+		PointShadow4,
+		SpotShadows,
+		DirectionalShadows,
+		SceneAndPostprocessing,
+
+		NUM_RENDER_COMMAND_RECORDER_THREADS,
+	};
 	CommandQueue mRenderingCmdQueues[NUM_COMMAND_QUEUE_TYPES];
 	std::vector<std::vector<ID3D12CommandAllocator*>> mRenderingCommandAllocators[NUM_COMMAND_QUEUE_TYPES]; // pre queue type, per back buffer, per recording thread
 	std::vector<ID3D12CommandList*                  > mpRenderingCmds[NUM_COMMAND_QUEUE_TYPES]; // per queue, per recording thread
@@ -311,10 +326,16 @@ private:
 	std::thread      mFrameSubmitThread;
 
 	// background gpu task execution context | TODO: move to an execution context struct
+	enum EBackgroungTaskThread
+	{
+		EnvironmentMap_Prefiltering = 0,
+		GPU_Generated_Textures,
+		NUM_BACKGROUND_TASK_THREADS,
+	};
 	CommandQueue mBackgroundTaskCmdQueues[NUM_COMMAND_QUEUE_TYPES];
-	std::vector<ID3D12CommandAllocator*> mBackgroundTaskCommandAllocators[NUM_COMMAND_QUEUE_TYPES]; // pre queue type, per recording thread
-	std::vector<ID3D12CommandList*     > mpBackgroundTaskCmds[NUM_COMMAND_QUEUE_TYPES]; // per queue, per recording thread
-	std::vector<DynamicBufferHeap      > mDynamicHeap_BackgroundTaskConstantBuffer; // per recording thread
+	ID3D12CommandAllocator* mBackgroundTaskCommandAllocators[NUM_COMMAND_QUEUE_TYPES][NUM_BACKGROUND_TASK_THREADS];
+	ID3D12CommandList* mpBackgroundTaskCmds[NUM_COMMAND_QUEUE_TYPES][NUM_BACKGROUND_TASK_THREADS];
+	DynamicBufferHeap mDynamicHeap_BackgroundTaskConstantBuffer[NUM_BACKGROUND_TASK_THREADS];
 	UINT mNumCurrentlyRecordingBackgroundTaskThreads[NUM_COMMAND_QUEUE_TYPES];
 	Fence mBackgroundTaskFencesPerQueue[NUM_COMMAND_QUEUE_TYPES];
 

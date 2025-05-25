@@ -664,17 +664,22 @@ void TextureManager::AllocateResource(TextureID id)
 		mInitialized.wait();
 	}
 
-	HRESULT Hr = mpAllocator->CreateResource(
-		&AllocDesc,
-		&meta.Request.D3D12Desc,
-		ResourceState,
-		pClearValue,
-		&meta.Texture.Allocation,
-		IID_PPV_ARGS(&meta.Texture.Resource)
-	);
+	HRESULT Hr = S_OK;
+	{
+		SCOPED_CPU_MARKER("Create");
+		Hr = mpAllocator->CreateResource(
+			&AllocDesc,
+			&meta.Request.D3D12Desc,
+			ResourceState,
+			pClearValue,
+			&meta.Texture.Allocation,
+			IID_PPV_ARGS(&meta.Texture.Resource)
+		);
+	}
 
 	if (FAILED(Hr)) 
 	{
+		SCOPED_CPU_MARKER("FAILED");
 		Log::Error("Failed to create texture: %s", meta.Request.Name.c_str());
 		std::lock_guard<std::mutex> lock(mTaskMutex);
 		mTaskStates[id].State = ETextureTaskState::Failed;
@@ -694,6 +699,7 @@ void TextureManager::AllocateResource(TextureID id)
 	Texture.IsTypeless = meta.Request.D3D12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 	if (bHasData && meta.Request.bCPUReadback)
 	{
+		SCOPED_CPU_MARKER("CheckData-Alpha");
 		std::lock_guard<std::mutex> lock(mDataMutex);
 		auto it = mTextureData.find(id);
 		if (it != mTextureData.end() && !it->second.InputData.empty())
@@ -703,6 +709,7 @@ void TextureManager::AllocateResource(TextureID id)
 	}
 
 	{
+		SCOPED_CPU_MARKER("RecordMetaData");
 		std::lock_guard<std::shared_mutex> lock(mMetadataMutex);
 		mMetadata[id] = meta;
 	}
@@ -711,6 +718,7 @@ void TextureManager::AllocateResource(TextureID id)
 	// so that ScheduleNextTask can signal completion.
 	if (!bHasData)
 	{
+		SCOPED_CPU_MARKER("UpdateState");
 		std::lock_guard<std::mutex> lock(mTaskMutex);
 		mTaskStates[id].State = ETextureTaskState::Uploading;
 	}
