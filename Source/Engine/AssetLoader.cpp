@@ -198,6 +198,13 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 {
 	SCOPED_CPU_MARKER("AssetLoader.StartLoadingTextures()");
 	TextureLoadResults_t TextureLoadResults;
+	
+	if (mLookup_TextureLoadContext.find(taskID) == mLookup_TextureLoadContext.end())
+	{
+		Log::Warning("AssetLoader::StartLoadingTextures(taskID=%d): no Textures to load", taskID);
+		return TextureLoadResults;
+	}
+
 	FLoadTaskContext<FTextureLoadParams>& ctx = mLookup_TextureLoadContext.at(taskID);
 
 	if (ctx.LoadQueue.empty())
