@@ -70,14 +70,22 @@ MaterialID Scene::LoadMaterial(const FMaterialRepresentation& matRep, TaskID tas
 	mat.SetTessellationOutputTopology(matRep.TessellationOutputTopology);
 
 	// textures
-	const bool bHasSurfaceTexture = 
-		   fnEnqueueTexLoad(id, matRep.DiffuseMapFilePath  , AssetLoader::ETextureType::DIFFUSE)
-		|| fnEnqueueTexLoad(id, matRep.NormalMapFilePath   , AssetLoader::ETextureType::NORMALS)
-		|| fnEnqueueTexLoad(id, matRep.EmissiveMapFilePath , AssetLoader::ETextureType::EMISSIVE)
-		|| fnEnqueueTexLoad(id, matRep.AlphaMaskMapFilePath, AssetLoader::ETextureType::ALPHA_MASK)
-		|| fnEnqueueTexLoad(id, matRep.MetallicMapFilePath , AssetLoader::ETextureType::METALNESS)
-		|| fnEnqueueTexLoad(id, matRep.RoughnessMapFilePath, AssetLoader::ETextureType::ROUGHNESS)
-		|| fnEnqueueTexLoad(id, matRep.AOMapFilePath       , AssetLoader::ETextureType::AMBIENT_OCCLUSION);
+	const bool bHasSurfaceTexture =
+		!matRep.DiffuseMapFilePath.empty() ||
+		!matRep.NormalMapFilePath.empty() ||
+		!matRep.EmissiveMapFilePath.empty() ||
+		!matRep.AlphaMaskMapFilePath.empty() ||
+		!matRep.MetallicMapFilePath.empty() ||
+		!matRep.RoughnessMapFilePath.empty() ||
+		!matRep.AOMapFilePath.empty()
+	;
+	fnEnqueueTexLoad(id, matRep.DiffuseMapFilePath  , AssetLoader::ETextureType::DIFFUSE);
+	fnEnqueueTexLoad(id, matRep.NormalMapFilePath   , AssetLoader::ETextureType::NORMALS);
+	fnEnqueueTexLoad(id, matRep.EmissiveMapFilePath , AssetLoader::ETextureType::EMISSIVE);
+	fnEnqueueTexLoad(id, matRep.AlphaMaskMapFilePath, AssetLoader::ETextureType::ALPHA_MASK);
+	fnEnqueueTexLoad(id, matRep.MetallicMapFilePath , AssetLoader::ETextureType::METALNESS);
+	fnEnqueueTexLoad(id, matRep.RoughnessMapFilePath, AssetLoader::ETextureType::ROUGHNESS);
+	fnEnqueueTexLoad(id, matRep.AOMapFilePath       , AssetLoader::ETextureType::AMBIENT_OCCLUSION);
 	const bool bHasHeightmap = fnEnqueueTexLoad(id, matRep.HeightMapFilePath, AssetLoader::ETextureType::HEIGHT);
 	const bool bHasTexture = bHasHeightmap || bHasSurfaceTexture;
 
