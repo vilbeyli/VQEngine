@@ -302,19 +302,20 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		for (int q = 0; q < ECommandQueueType::NUM_COMMAND_QUEUE_TYPES; ++q)
 		{
 			D3D12_COMMAND_LIST_TYPE t = GetDX12CmdListType((ECommandQueueType)q);
-
-			mpRenderingCmds[q].resize(1);
-			mCmdClosed[q].resize(1);
-			pDevice->CreateCommandList(0, t, this->mRenderingCommandAllocators[q][0][0], nullptr, IID_PPV_ARGS(&this->mpRenderingCmds[q][0]));
-			static_cast<ID3D12GraphicsCommandList*>(this->mpRenderingCmds[q][0])->Close();
-
+			mpRenderingCmds[q].resize(NumSwapchainBuffers);
+			mCmdClosed[q].resize(NumSwapchainBuffers);
+			for (int b = 0; b < NumSwapchainBuffers; ++b)
+			{
+				mpRenderingCmds[q][b].resize(1);
+				mCmdClosed[q][b].resize(1);
+				pDevice->CreateCommandList(0, t, this->mRenderingCommandAllocators[q][b][0], nullptr, IID_PPV_ARGS(&this->mpRenderingCmds[q][b][0]));
+				static_cast<ID3D12GraphicsCommandList*>(this->mpRenderingCmds[q][b][0])->Close();
+			}
 			for (int thr = 0; thr < EBackgroungTaskThread::NUM_BACKGROUND_TASK_THREADS; ++thr)
 			{
 				pDevice->CreateCommandList(0, t, this->mBackgroundTaskCommandAllocators[q][thr], nullptr, IID_PPV_ARGS(&this->mpBackgroundTaskCmds[q][thr]));
+				static_cast<ID3D12GraphicsCommandList*>(this->mpBackgroundTaskCmds[q][thr])->Close();
 			}
-
-			//static_cast<ID3D12GraphicsCommandList*>(this->mpBackgroundTaskCmds[q][0])->Close();
-			// skip closing it, we'll use on startup.
 		}
 		#endif
 
@@ -656,7 +657,7 @@ void VQRenderer::Destroy()
 	mPSOs.clear();
 
 	// clean up contexts
-	size_t NumBackBuffers = 0;
+	const size_t NumBackBuffers = mRenderingCommandAllocators[GFX].size();
 	for (std::unordered_map<HWND, FWindowRenderContext>::iterator it = mRenderContextLookup.begin(); it != mRenderContextLookup.end(); ++it)
 	{
 		auto& ctx = it->second;
@@ -664,13 +665,14 @@ void VQRenderer::Destroy()
 	}
 
 	// release command lists & allocators
-	assert(mRenderingCommandAllocators[ECommandQueueType::GFX].size() == mRenderingCommandAllocators[ECommandQueueType::COMPUTE].size());
-	assert(mRenderingCommandAllocators[ECommandQueueType::COMPUTE].size() == mRenderingCommandAllocators[ECommandQueueType::COPY].size());
-	assert(mRenderingCommandAllocators[ECommandQueueType::COPY].size() == mRenderingCommandAllocators[ECommandQueueType::GFX].size());
+	assert(mRenderingCommandAllocators[GFX    ].size() == mRenderingCommandAllocators[COMPUTE].size());
+	assert(mRenderingCommandAllocators[COMPUTE].size() == mRenderingCommandAllocators[COPY   ].size());
+	assert(mRenderingCommandAllocators[COPY   ].size() == mRenderingCommandAllocators[GFX    ].size());
 	for (int q = 0; q < ECommandQueueType::NUM_COMMAND_QUEUE_TYPES; ++q)
 	{
 		// release commands
-		for (ID3D12CommandList* pCmd : mpRenderingCmds[q])
+		for(int b = 0; b < NumBackBuffers; ++b)
+		for (ID3D12CommandList* pCmd : mpRenderingCmds[q][b])
 			if (pCmd)
 				pCmd->Release();
 		for (ID3D12CommandList* pCmd : mpBackgroundTaskCmds[q])
@@ -678,8 +680,8 @@ void VQRenderer::Destroy()
 				pCmd->Release();
 
 		// release command allocators
-		for (size_t BackBuffer = 0; BackBuffer < mRenderingCommandAllocators[ECommandQueueType::GFX].size(); ++BackBuffer)
-			for (ID3D12CommandAllocator* pCmdAlloc : mRenderingCommandAllocators[q][BackBuffer])
+		for (size_t b = 0; b < NumBackBuffers; ++b)
+			for (ID3D12CommandAllocator* pCmdAlloc : mRenderingCommandAllocators[q][b])
 				if (pCmdAlloc)
 					pCmdAlloc->Release();
 		for (ID3D12CommandAllocator* pCmdAlloc : mBackgroundTaskCommandAllocators[q])
@@ -906,7 +908,8 @@ void VQRenderer::LoadDefaultResources()
 	WaitMainSwapchainReady();
 	// ---------------------
 
-	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpBackgroundTaskCmds[ECommandQueueType::GFX][GPU_Generated_Textures];
+	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpBackgroundTaskCmds[GFX][GPU_Generated_Textures];
+	pCmd->Reset(mBackgroundTaskCommandAllocators[GFX][GPU_Generated_Textures], nullptr);
 	assert(pCmd);
 	{
 		SCOPED_CPU_MARKER("WAIT_PSO_WORKER_DISPATCH");

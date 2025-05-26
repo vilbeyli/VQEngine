@@ -47,7 +47,7 @@
 
 #define THREADED_CTX_INIT 1
 #define RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING 1
-#define EXECUTE_CMD_LISTS_ON_WORKER 1
+#define EXECUTE_CMD_LISTS_ON_WORKER 0 // TODO: fix cmd list submission thread + swapchain index sync
 #define MARKER_COLOR  0xFF00FF00 
 #define RENDER_WORKER_CPU_MARKER   SCOPED_CPU_MARKER_C("RenderWorker", MARKER_COLOR)
 
@@ -309,9 +309,9 @@ private:
 		NUM_RENDER_COMMAND_RECORDER_THREADS,
 	};
 	CommandQueue mRenderingCmdQueues[NUM_COMMAND_QUEUE_TYPES];
-	std::vector<std::vector<ID3D12CommandAllocator*>> mRenderingCommandAllocators[NUM_COMMAND_QUEUE_TYPES]; // pre queue type, per back buffer, per recording thread
-	std::vector<ID3D12CommandList*                  > mpRenderingCmds[NUM_COMMAND_QUEUE_TYPES]; // per queue, per recording thread
-	std::vector<bool                                > mCmdClosed[NUM_COMMAND_QUEUE_TYPES]; // per queue, per recording thread
+	std::vector<std::vector<ID3D12CommandAllocator*>> mRenderingCommandAllocators[NUM_COMMAND_QUEUE_TYPES]; // pre queue, per back buffer, per recording thread
+	std::vector<std::vector<ID3D12CommandList*     >> mpRenderingCmds[NUM_COMMAND_QUEUE_TYPES]; // per queue, per back buffer, per recording thread
+	std::vector<std::vector<bool                   >> mCmdClosed[NUM_COMMAND_QUEUE_TYPES]; // per queue, per back buffer, per recording thread
 	std::vector<DynamicBufferHeap                   > mDynamicHeap_RenderingConstantBuffer; // per recording thread
 	UINT mNumCurrentlyRecordingRenderingThreads[NUM_COMMAND_QUEUE_TYPES];
 	std::vector<Fence> mAsyncComputeSSAOReadyFence;
