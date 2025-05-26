@@ -390,12 +390,6 @@ void VQRenderer::InitializeNullSRV(SRV_ID srvID, uint heapIndex, UINT ShaderComp
 
 void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bool bInitAsArrayView /*= false*/, bool bInitAsCubeView /*= false*/, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc /*=nullptr*/, UINT ShaderComponentMapping)
 {
-	CHECK_RESOURCE_VIEW(SRV, srvID);
-	if (mSRVs.find(srvID) == mSRVs.end())
-	{
-		Log::Error("SRV Not allocated for texID = %d", texID);
-	}
-
 	if (texID != INVALID_ID)
 	{
 		mTextureManager.WaitForTexture(texID);
@@ -442,6 +436,11 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 			assert(bArraySizeMultipleOfSix);
 		}
 
+
+		if (mSRVs.find(srvID) == mSRVs.end())
+		{
+			Log::Error("SRV Not allocated for texID = %d", texID);
+		}
 		SRV& srv = mSRVs.at(srvID);
 		const bool bBufferSRV = resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER;
 		const bool bCustomComponentMappingSpecified = ShaderComponentMapping != D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -563,7 +562,7 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 			pDevice->CreateShaderResourceView(pResource, pSRVDesc, srv.GetCPUDescHandle(heapIndex));
 		}
 
-		Log::Info("InitializeSRV %d[%d] for Texture %d | desc_handl = %ul", srvID, heapIndex, texID, srv.GetGPUDescHandle(heapIndex));
+		//Log::Info("InitializeSRV %d[%d] for Texture %d | desc_handl = %u", srvID, heapIndex, texID, srv.GetGPUDescHandle(heapIndex));
 	}
 	else // init NULL SRV
 	{
@@ -571,6 +570,7 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 		// to achieve the effect of an "unbound" resource.
 		InitializeNullSRV(srvID, heapIndex, ShaderComponentMapping);
 	}
+	Log::Info("InitializeSRV %d[%d] for Texture %d", srvID, heapIndex, texID);
 }
 void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc)
 {
@@ -678,7 +678,7 @@ void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID 
 	// create the UAV
 	ID3D12Resource* pRscCounter = nullptr; // TODO: find a use case for this parameter and implement proper interface
 	assert(pTexture->Resource);
-	mDevice.GetDevicePtr()->CreateUnorderedAccessView(
+	pDevice->CreateUnorderedAccessView(
 		pTexture->Resource,
 		pRscCounter,
 		&uavDesc,

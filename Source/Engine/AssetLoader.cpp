@@ -320,13 +320,12 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 	for (FMaterialTextureAssignment& assignment : mAssignments)
 	{
 		Material& mat = pScene->GetMaterial(assignment.matID);
-
+		std::string log = "DoAssignments for mat: " + std::to_string(assignment.matID) + ":\n";
 		const bool bLoadedTextures = mTextureLoadResults.find(assignment.matID) != mTextureLoadResults.end();
 		
 		UINT OcclRoughMtlMap_ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 		if(bLoadedTextures)
 		{
-
 			auto pair_itBeginEnd = mTextureLoadResults.equal_range(assignment.matID);
 			// wait for textures, assign IDs, cache texture path
 			for (auto it = pair_itBeginEnd.first; it != pair_itBeginEnd.second; ++it)
@@ -336,7 +335,7 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 
 				const TextureID loadedTextureID = result.TexID;
 				pRenderer->GetTextureManager().WaitForTexture(loadedTextureID);
-
+				log += " - texID: " + std::to_string(loadedTextureID) + "\n";
 				switch (result.type)
 				{
 				case DIFFUSE           : mat.TexDiffuseMap          = loadedTextureID; break;
@@ -392,7 +391,7 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 					}
 				} break;
 				default:
-					Log::Warning("TODO");
+					Log::Warning("UNHANDLED CUSTOM_MAP TEXTURE ASSIGNMENT");
 					break;
 				}
 			
@@ -405,20 +404,27 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 			}
 		}
 
+		//Log::Info(log);
+
 		if (mat.SRVMaterialMaps == INVALID_ID)
 		{
 			mat.SRVMaterialMaps = pRenderer->AllocateSRV(NUM_MATERIAL_TEXTURE_MAP_BINDINGS - 1);
 			mat.SRVHeightMap = pRenderer->AllocateSRV(1);
+
+			pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ALBEDO, mat.TexDiffuseMap);
+			pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::NORMALS, mat.TexNormalMap);
+			pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::EMISSIVE, mat.TexEmissiveMap);
+			pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ALPHA_MASK, mat.TexAlphaMaskMap);
+			pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::METALLIC, mat.TexMetallicMap);
+			pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ROUGHNESS, mat.TexRoughnessMap);
+			pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::OCCLUSION_ROUGHNESS_METALNESS, mat.TexOcclusionRoughnessMetalnessMap, OcclRoughMtlMap_ComponentMapping);
+			pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::AMBIENT_OCCLUSION, mat.TexAmbientOcclusionMap);
+			pRenderer->InitializeSRV(mat.SRVHeightMap, 0, mat.TexHeightMap);
 		}
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ALBEDO, mat.TexDiffuseMap);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::NORMALS, mat.TexNormalMap);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::EMISSIVE, mat.TexEmissiveMap);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ALPHA_MASK, mat.TexAlphaMaskMap);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::METALLIC, mat.TexMetallicMap);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ROUGHNESS, mat.TexRoughnessMap);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::OCCLUSION_ROUGHNESS_METALNESS, mat.TexOcclusionRoughnessMetalnessMap, OcclRoughMtlMap_ComponentMapping);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::AMBIENT_OCCLUSION, mat.TexAmbientOcclusionMap);
-		pRenderer->InitializeSRV(mat.SRVHeightMap, 0, mat.TexHeightMap);
+		else
+		{
+			Log::Warning("Material (%d) texture map SRV (%d) already initialized: %s", assignment.matID, mat.SRVMaterialMaps, pScene->GetMaterialName(assignment.matID).c_str());
+		}
 	}
 }
 

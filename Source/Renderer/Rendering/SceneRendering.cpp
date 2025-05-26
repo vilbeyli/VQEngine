@@ -205,7 +205,7 @@ HRESULT VQRenderer::PreRenderScene(
 	const uint NumCopyCmdLists = 1;
 	const uint NumComputeCmdLists = 1;
 
-#if 1
+#if 0
 	Log::Info("");
 	Log::Info("PreRender(): Swapchain[%d] %s | GFX: %d",
 		ctx.GetCurrentSwapchainBufferIndex()
@@ -852,7 +852,8 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 					ctx.PresentQueue.pQueue->ExecuteCommandLists((UINT)NumCmds, (ID3D12CommandList**)&vCmdLists[0]);
 				}
 
-				Log::Info("RenderScene[%d]", ctx.GetCurrentSwapchainBufferIndex());
+				//Log::Info("RenderScene[%d]", ctx.GetCurrentSwapchainBufferIndex());
+
 				HRESULT hr = PresentFrame(ctx);
 				#if !EXECUTE_CMD_LISTS_ON_WORKER
 				//if (hr == DXGI_STATUS_OCCLUDED) { RenderThread_HandleStatusOccluded(); }

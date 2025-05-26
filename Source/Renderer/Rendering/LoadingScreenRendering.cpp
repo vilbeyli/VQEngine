@@ -148,7 +148,7 @@ HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScr
 		ctx.PresentQueue.pQueue->ExecuteCommandLists(1, (ID3D12CommandList**)&pCmd);
 	}
 
-	Log::Info("RenderLoadinScreen[%d]", ctx.GetCurrentSwapchainBufferIndex());
+	//Log::Info("RenderLoadinScreen[%d]", ctx.GetCurrentSwapchainBufferIndex());
 	hr = PresentFrame(ctx);
 	if(hr == S_OK)
 		ctx.SwapChain.MoveToNextFrame();
