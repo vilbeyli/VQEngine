@@ -20,6 +20,7 @@
 #include "Renderer.h"
 #include "Shaders/LightingConstantBufferData.h"
 #include "Engine/GPUMarker.h"
+#include "Core/Common.h"
 
 using namespace Microsoft::WRL;
 using namespace VQSystemInfo;
@@ -580,6 +581,7 @@ void VQRenderer::LoadBuiltinRootSignatures()
 		SetName(pRS, "RootSignature_DownsampleDepth");
 		mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__DownsampleDepthCS] = pRS;
 	}
+
 	mLatchRootSignaturesInitialized.count_down();
 }
 

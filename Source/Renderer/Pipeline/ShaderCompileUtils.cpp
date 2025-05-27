@@ -22,6 +22,7 @@
 #include "Engine/GPUMarker.h"
 #include "Libs/DirectXCompiler/inc/dxcapi.h"
 #include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Source/Log.h"
 #include <fstream>
 #include <stack>
 
@@ -29,6 +30,8 @@
 #include <D3Dcompiler.h>
 #pragma comment(lib, "D3DCompiler.lib")
 #pragma comment(lib, "dxcompiler.lib")
+
+#define DISABLE_SHADER_LOGGING 1
 
 //-------------------------------------------------------------------------------------------------------------
 // CONSTANTS & STATICS
@@ -505,7 +508,9 @@ static bool ValidateDXCBlob(IDxcBlob* pShaderBlob)
 bool CompileFromCachedBinary(const std::string& ShaderBinaryFilePath, FBlob& Blob, bool bSM6, std::string& errMsg)
 {
 	SCOPED_CPU_MARKER("CompileFromCachedBinary");
+#if !DISABLE_SHADER_LOGGING
 	Log::Info("Loading Shader Binary: %s ", DirectoryUtil::GetFileNameFromPath(ShaderBinaryFilePath).c_str());
+#endif
 
 	if (bSM6)
 	{

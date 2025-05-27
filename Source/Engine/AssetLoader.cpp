@@ -46,9 +46,8 @@ TaskID AssetLoader::GenerateModelLoadTaskID()
 	return id;
 }
 
-AssetLoader::AssetLoader(ThreadPool& WorkerThreads_Model, ThreadPool& WorkerThreads_Texture, ThreadPool& WorkerThreads_Mesh, VQRenderer& renderer)
+AssetLoader::AssetLoader(ThreadPool& WorkerThreads_Model, ThreadPool& WorkerThreads_Mesh, VQRenderer& renderer)
 	: mWorkers_ModelLoad(WorkerThreads_Model)
-	, mWorkers_TextureLoad(WorkerThreads_Texture)
 	, mWorkers_MeshLoad(WorkerThreads_Mesh)
 	, mRenderer(renderer)
 {}
@@ -94,7 +93,7 @@ AssetLoader::ModelLoadResults_t AssetLoader::StartLoadingModels(Scene* pScene)
 			mUniqueModelPaths.insert(ModelPath);
 
 			// check whether Exit signal is given to the app before dispatching workers
-			if (mWorkers_ModelLoad.IsExiting() || mWorkers_TextureLoad.IsExiting())
+			if (mWorkers_ModelLoad.IsExiting())
 			{
 				break;
 			}
@@ -197,8 +196,15 @@ static AssetLoader::ECustomMapType DetermineCustomMapType(const std::string& Fil
 
 AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskID)
 {
-	SCOPED_CPU_MARKER("AssetLoader::StartLoadingTextures()");
+	SCOPED_CPU_MARKER("AssetLoader.StartLoadingTextures()");
 	TextureLoadResults_t TextureLoadResults;
+	
+	if (mLookup_TextureLoadContext.find(taskID) == mLookup_TextureLoadContext.end())
+	{
+		Log::Warning("AssetLoader::StartLoadingTextures(taskID=%d): no Textures to load", taskID);
+		return TextureLoadResults;
+	}
+
 	FLoadTaskContext<FTextureLoadParams>& ctx = mLookup_TextureLoadContext.at(taskID);
 
 	if (ctx.LoadQueue.empty())
@@ -207,12 +213,12 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 		return TextureLoadResults;
 	}
 	
-	std::unordered_map<std::string, std::shared_future<TextureID>> Lookup_TextureLoadResult;
+	std::unordered_map<std::string, TextureID> Lookup_TextureLoadResult;
 
 	// process texture load queue
 	{
 		SCOPED_CPU_MARKER("DispatchTextureWorkers");
-		do
+		while (!ctx.LoadQueue.empty())
 		{
 			FTextureLoadParams TexLoadParams = std::move(ctx.LoadQueue.front());
 			ctx.LoadQueue.pop();
@@ -227,41 +233,40 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 				assert(!vPathTokens.empty());
 				const bool bProceduralTexture = vPathTokens[0] == "Procedural";
 
-				EProceduralTextures ProcTex = bProceduralTexture
-					? VQRenderer::GetProceduralTextureEnumFromName(vPathTokens[1])
-					: EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
-
-				// check whether Exit signal is given to the app before dispatching workers
-				if (mWorkers_TextureLoad.IsExiting())
+				TextureID texID = INVALID_ID;
+				TextureManager& mTextureManager = mRenderer.GetTextureManager();
+				if (bProceduralTexture)
 				{
-					break;
+					texID = mRenderer.GetProceduralTexture(
+						VQRenderer::GetProceduralTextureEnumFromName(vPathTokens[1])
+					);
+				}
+				else
+				{
+					FTextureRequest Request;
+					Request.Name = DirectoryUtil::GetFileNameFromPath(TexLoadParams.TexturePath);
+					Request.FilePath = TexLoadParams.TexturePath;
+					Request.bGenerateMips = true;
+					Request.bCPUReadback = false;
+					Request.InitialState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+					const bool bCheckAlphaMask = (TexLoadParams.TexType == ETextureType::DIFFUSE) || TexLoadParams.TexType == ETextureType::ALPHA_MASK;
+					texID = mTextureManager.CreateTexture(Request, bCheckAlphaMask);
 				}
 
-				// dispatch worker thread
-				std::shared_future<TextureID> texLoadResult = std::move(mWorkers_TextureLoad.AddTask([this, TexLoadParams, ProcTex]()
-				{
-					SCOPED_CPU_MARKER_C("TextureLoadWorker", mWorkers_TextureLoad.mMarkerColor);
-					constexpr bool GENERATE_MIPS = true;
-					const bool IS_PROCEDURAL = ProcTex != EProceduralTextures::NUM_PROCEDURAL_TEXTURES;
-					const bool bCheckAlphaMask = (TexLoadParams.TexType == ETextureType::DIFFUSE) || TexLoadParams.TexType == ETextureType::ALPHA_MASK;
-					const TextureID texID = IS_PROCEDURAL
-						? mRenderer.GetProceduralTexture(ProcTex)
-						: mRenderer.CreateTextureFromFile(TexLoadParams.TexturePath.c_str(), bCheckAlphaMask, GENERATE_MIPS);
-					return texID;
-				}));
-
 				// update results lookup for the shared textures (among different materials)
-				Lookup_TextureLoadResult[TexLoadParams.TexturePath] = texLoadResult;
+				Lookup_TextureLoadResult[TexLoadParams.TexturePath] = texID;
 
 				// record load results
-				TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, FTextureLoadResult{ TexLoadParams.TexType, TexLoadParams.TexturePath, std::move(texLoadResult) }));
+				TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, FTextureLoadResult{ TexLoadParams.TexType, TexLoadParams.TexturePath, texID }));
 			}
+
 			// shared textures among materials
 			else
 			{
 				TextureLoadResults.emplace(std::make_pair(TexLoadParams.MatID, FTextureLoadResult{ TexLoadParams.TexType, TexLoadParams.TexturePath, Lookup_TextureLoadResult.at(TexLoadParams.TexturePath) }));
 			}
-		} while (!ctx.LoadQueue.empty());
+		}
 	}
 
 	ctx.UniquePaths.clear();
@@ -270,7 +275,6 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 
 	return std::move(TextureLoadResults);
 }
-
 
 static AssetLoader::ETextureType GetTextureType(aiTextureType aiType)
 {
@@ -303,6 +307,7 @@ static AssetLoader::ETextureType GetTextureType(aiTextureType aiType)
 		break;
 	case aiTextureType_DIFFUSE_ROUGHNESS:
 		break;
+	case aiTextureType_GLTF_METALLIC_ROUGHNESS: return AssetLoader::ETextureType::CUSTOM_MAP; break;
 	case aiTextureType_AMBIENT_OCCLUSION: return AssetLoader::ETextureType::AMBIENT_OCCLUSION; 
 	case aiTextureType_UNKNOWN:
 		// packed textures are unknown type for assimp, hence the engine assumes occl/rough/metal packed texture type
@@ -318,132 +323,117 @@ static AssetLoader::ETextureType GetTextureType(aiTextureType aiType)
 
 void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std::mutex& mtxTexturePaths, std::unordered_map<TextureID, std::string>& TexturePaths, VQRenderer* pRenderer)
 {
-	SCOPED_CPU_MARKER("FMaterialTextureAssignments::DoAssignments()");
-
-	
+	SCOPED_CPU_MARKER("FMaterialTextureAssignments.DoAssignments()");
 	for (FMaterialTextureAssignment& assignment : mAssignments)
 	{
 		Material& mat = pScene->GetMaterial(assignment.matID);
-
-		bool bFound = mTextureLoadResults.find(assignment.matID) != mTextureLoadResults.end();
-		if (!bFound)
-		{
-			Log::Error("TextureLoadResutls for MatID=%d not found!", assignment.matID);
-			continue;
-		}
-
+		std::string log = "DoAssignments for mat: " + std::to_string(assignment.matID) + ":\n";
+		const bool bLoadedTextures = mTextureLoadResults.find(assignment.matID) != mTextureLoadResults.end();
+		
 		UINT OcclRoughMtlMap_ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-
-		auto pair_itBeginEnd = mTextureLoadResults.equal_range(assignment.matID);
-		for (auto it = pair_itBeginEnd.first; it != pair_itBeginEnd.second; ++it)
+		if(bLoadedTextures)
 		{
-			const MaterialID& matID = it->first;
-			FTextureLoadResult& result = it->second;
-			
-			if (mWorkersThreads.IsExiting())
-				break;
-
-			assert(result.texLoadResult.valid());
-
-			result.texLoadResult.wait();
-
-			const TextureID loadedTextureID = result.texLoadResult.get();
-
-			switch (result.type)
+			auto pair_itBeginEnd = mTextureLoadResults.equal_range(assignment.matID);
+			// wait for textures, assign IDs, cache texture path
+			for (auto it = pair_itBeginEnd.first; it != pair_itBeginEnd.second; ++it)
 			{
-			case DIFFUSE           : mat.TexDiffuseMap          = loadedTextureID; break;
-			case NORMALS           : mat.TexNormalMap           = loadedTextureID; break;
-			case ALPHA_MASK        : mat.TexAlphaMaskMap        = loadedTextureID; break;
-			case EMISSIVE          : mat.TexEmissiveMap         = loadedTextureID; break;
-			case METALNESS         : mat.TexMetallicMap         = loadedTextureID; mat.metalness = 1.0f; break;
-			case ROUGHNESS         : mat.TexRoughnessMap        = loadedTextureID; mat.roughness = 1.0f; break;
-			case HEIGHT            : mat.TexHeightMap           = loadedTextureID; break;
-			case AMBIENT_OCCLUSION : mat.TexAmbientOcclusionMap = loadedTextureID; break;
-			case SPECULAR          : assert(false); /*mat.TexSpecularMap  = result.texLoadResult.get();*/ break;
-			case CUSTOM_MAP        :
-			{
-				const ECustomMapType customMapType = DetermineCustomMapType(result.TexturePath);
-				switch (customMapType)
+				const MaterialID& matID = it->first;
+				FTextureLoadResult& result = it->second;
+
+				const TextureID loadedTextureID = result.TexID;
+				pRenderer->GetTextureManager().WaitForTexture(loadedTextureID);
+				log += " - texID: " + std::to_string(loadedTextureID) + "\n";
+				switch (result.type)
 				{
-				case OCCLUSION_ROUGHNESS_METALNESS:
-					OcclRoughMtlMap_ComponentMapping; // leave as is
-					mat.TexOcclusionRoughnessMetalnessMap = result.texLoadResult.get();
-					mat.metalness = 1.0f;
-					mat.roughness = 1.0f;
-					break;
-				case METALNESS_ROUGHNESS:
-					// turns out: even the file is named in reverse order, the common thing to do is to store
-					//            roughness in G and metalness in B channels. Hence we're not handling this case 
-					//            here.
-#if 0 
-					OcclRoughMtlMap_ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(
-						  D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_1
-						, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_2
-						, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1
-						, D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0
-					);
-					mat.TexOcclusionRoughnessMetalnessMap = result.texLoadResult.get();
-					break;
-#endif
-				case ROUGHNESS_METALNESS:
-					OcclRoughMtlMap_ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(
-						D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_1
-						, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1
-						, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_2
-						, D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0
-					);
-					mat.TexOcclusionRoughnessMetalnessMap = result.texLoadResult.get();
-					mat.metalness = 1.0f;
-					mat.roughness = 1.0f;
-					break;
+				case DIFFUSE           : mat.TexDiffuseMap          = loadedTextureID; break;
+				case NORMALS           : mat.TexNormalMap           = loadedTextureID; break;
+				case ALPHA_MASK        : mat.TexAlphaMaskMap        = loadedTextureID; break;
+				case EMISSIVE          : mat.TexEmissiveMap         = loadedTextureID; break;
+				case METALNESS         : mat.TexMetallicMap         = loadedTextureID; mat.metalness = 1.0f; break;
+				case ROUGHNESS         : mat.TexRoughnessMap        = loadedTextureID; mat.roughness = 1.0f; break;
+				case HEIGHT            : mat.TexHeightMap           = loadedTextureID; break;
+				case AMBIENT_OCCLUSION : mat.TexAmbientOcclusionMap = loadedTextureID; break;
+				case SPECULAR          : assert(false); /*mat.TexSpecularMap  = result.texLoadResult.get();*/ break;
+				case CUSTOM_MAP        :
+				{
+					const ECustomMapType customMapType = DetermineCustomMapType(result.TexturePath);
+					switch (customMapType)
+					{
+					case OCCLUSION_ROUGHNESS_METALNESS:
+						OcclRoughMtlMap_ComponentMapping; // leave as is
+						mat.TexOcclusionRoughnessMetalnessMap = result.TexID;
+						mat.metalness = 1.0f;
+						mat.roughness = 1.0f;
+						break;
+					case METALNESS_ROUGHNESS:
+						// turns out: even the file is named in reverse order, the common thing to do is to store
+						//            roughness in G and metalness in B channels. Hence we're not handling this case 
+						//            here.
+	#if 0 
+						OcclRoughMtlMap_ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(
+							  D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_1
+							, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_2
+							, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1
+							, D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0
+						);
+						mat.TexOcclusionRoughnessMetalnessMap = result.TexID;
+						break;
+	#endif
+					case ROUGHNESS_METALNESS:
+						OcclRoughMtlMap_ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(
+							D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_1
+							, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1
+							, D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_2
+							, D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0
+						);
+						mat.TexOcclusionRoughnessMetalnessMap = result.TexID;
+						mat.metalness = 1.0f;
+						mat.roughness = 1.0f;
+						break;
+					default:
+					case UNKNOWN:
+						//Log::Warning("Unknown custom map (%s) type for material MatID=%d!", result.TexturePath.c_str(), assignment.matID);
+						DetermineCustomMapType(result.TexturePath);
+						break;
+					}
+				} break;
 				default:
-				case UNKNOWN:
-					//Log::Warning("Unknown custom map (%s) type for material MatID=%d!", result.TexturePath.c_str(), assignment.matID);
-					DetermineCustomMapType(result.TexturePath);
+					Log::Warning("UNHANDLED CUSTOM_MAP TEXTURE ASSIGNMENT");
 					break;
 				}
-			} break;
-			default:
-				Log::Warning("TODO");
-				break;
-			}
 			
-			// store the loaded texture path if we have a successful texture creation
-			if (loadedTextureID != INVALID_ID)
-			{
-				std::lock_guard<std::mutex> lk(mtxTexturePaths);
-				TexturePaths[loadedTextureID] = result.TexturePath;
+				// store the loaded texture path if we have a successful texture creation
+				if (loadedTextureID != INVALID_ID)
+				{
+					std::lock_guard<std::mutex> lk(mtxTexturePaths);
+					TexturePaths[loadedTextureID] = result.TexturePath;
+				}
 			}
 		}
 
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ALBEDO, mat.TexDiffuseMap);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::NORMALS, mat.TexNormalMap);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::EMISSIVE, mat.TexEmissiveMap);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ALPHA_MASK, mat.TexAlphaMaskMap);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::METALLIC, mat.TexMetallicMap);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ROUGHNESS, mat.TexRoughnessMap);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::OCCLUSION_ROUGHNESS_METALNESS, mat.TexOcclusionRoughnessMetalnessMap, OcclRoughMtlMap_ComponentMapping);
-		pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::AMBIENT_OCCLUSION, mat.TexAmbientOcclusionMap);
-		pRenderer->InitializeSRV(mat.SRVHeightMap, 0, mat.TexHeightMap);
+		//Log::Info(log);
+
+		if (mat.SRVMaterialMaps == INVALID_ID)
+		{
+			mat.SRVMaterialMaps = pRenderer->AllocateSRV(NUM_MATERIAL_TEXTURE_MAP_BINDINGS - 1);
+			mat.SRVHeightMap = pRenderer->AllocateSRV(1);
+
+			pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ALBEDO, mat.TexDiffuseMap);
+			pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::NORMALS, mat.TexNormalMap);
+			pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::EMISSIVE, mat.TexEmissiveMap);
+			pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ALPHA_MASK, mat.TexAlphaMaskMap);
+			pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::METALLIC, mat.TexMetallicMap);
+			pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::ROUGHNESS, mat.TexRoughnessMap);
+			pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::OCCLUSION_ROUGHNESS_METALNESS, mat.TexOcclusionRoughnessMetalnessMap, OcclRoughMtlMap_ComponentMapping);
+			pRenderer->InitializeSRV(mat.SRVMaterialMaps, EMaterialTextureMapBindings::AMBIENT_OCCLUSION, mat.TexAmbientOcclusionMap);
+			pRenderer->InitializeSRV(mat.SRVHeightMap, 0, mat.TexHeightMap);
+		}
+		else
+		{
+			Log::Warning("Material (%d) texture map SRV (%d) already initialized: %s", assignment.matID, mat.SRVMaterialMaps, pScene->GetMaterialName(assignment.matID).c_str());
+		}
 	}
 }
-
-void AssetLoader::FMaterialTextureAssignments::WaitForTextureLoads()
-{
-	SCOPED_CPU_MARKER_C("FMaterialTextureAssignments::WaitForTextureLoads()", 0xFFFF0000);
-	for (auto it = mTextureLoadResults.begin(); it != mTextureLoadResults.end(); ++it)
-	{
-		const MaterialID& matID = it->first;
-		const FTextureLoadResult& result = it->second;
-		assert(result.texLoadResult.valid());
-
-		if (mWorkersThreads.IsExiting())
-			break;
-
-		result.texLoadResult.wait();
-	}
-}
-
 
 //----------------------------------------------------------------------------------------------------------------
 // ASSIMP HELPER FUNCTIONS
@@ -479,8 +469,9 @@ static Mesh ProcessAssimpMesh(
 )
 {
 	SCOPED_CPU_MARKER("ProcessAssimpMesh()");
-	std::vector<FVertexWithNormalAndTangent> Vertices;
-	std::vector<unsigned> Indices;
+	GeometryData< FVertexWithNormalAndTangent, unsigned> GeometryData(1);
+	std::vector<FVertexWithNormalAndTangent>& Vertices = GeometryData.LODVertices[0];
+	std::vector<unsigned>& Indices = GeometryData.LODIndices[0];
 
 	{
 		SCOPED_CPU_MARKER("MemAlloc");
@@ -545,7 +536,7 @@ static Mesh ProcessAssimpMesh(
 		}
 	}
 
-	return Mesh(pRenderer, Vertices, Indices, ModelName);
+	return Mesh(nullptr, std::move(GeometryData), ModelName);
 }
 
 static std::string CreateUniqueMaterialName(const aiMaterial* material, size_t iMat, const std::string& modelDirectory)
@@ -596,7 +587,7 @@ static void QueueUpTextureLoadRequests(
 		heightMaps = GenerateTextureLoadParams(material, matID, aiTextureType_HEIGHT, modelDirectory);
 		alphaMaps = GenerateTextureLoadParams(material, matID, aiTextureType_OPACITY, modelDirectory);
 		emissiveMaps = GenerateTextureLoadParams(material, matID, aiTextureType_EMISSIVE, modelDirectory);
-		occlRoughMetlMaps = GenerateTextureLoadParams(material, matID, aiTextureType_UNKNOWN, modelDirectory);
+		occlRoughMetlMaps = GenerateTextureLoadParams(material, matID, aiTextureType_GLTF_METALLIC_ROUGHNESS, modelDirectory);
 		aoMaps = GenerateTextureLoadParams(material, matID, aiTextureType_AMBIENT_OCCLUSION, modelDirectory);
 	}
 
@@ -855,13 +846,8 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 	Log::Info("   [%.2fs] ReadFile=%s ", fTimeReadFile, objFilePath.c_str());
 
 	// parse scene and initialize model data
-	FMaterialTextureAssignments MaterialTextureAssignments(pAssetLoader->mWorkers_TextureLoad);
+	FMaterialTextureAssignments MaterialTextureAssignments;
 	Model::Data data = ProcessAssimpNode(ModelName, pAiScene->mRootNode, pAiScene, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
-
-	{
-		SCOPED_CPU_MARKER("UploadVertexAndIndexBufferHeaps()");
-		pRenderer->UploadVertexAndIndexBufferHeaps(); // load VB/IBs
-	}
 
 	if (!MaterialTextureAssignments.mAssignments.empty()) // dispatch texture workers
 		MaterialTextureAssignments.mTextureLoadResults = pAssetLoader->StartLoadingTextures(taskID);
@@ -880,13 +866,20 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 		delete importer;
 	});
 
-	// SYNC POINT : wait for textures to load
-	{
-		MaterialTextureAssignments.WaitForTextureLoads();
-	}
-
 	// assign TextureIDs to the materials;
 	MaterialTextureAssignments.DoAssignments(pScene, pScene->mMtxTexturePaths,  pScene->mTexturePaths, pRenderer);
+
+	// Create buffers for loaded meshes
+	pRenderer->WaitHeapsInitialized();
+	for (const auto& [meshID, matID] : model.mData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH))
+	{
+		Mesh& mesh = pScene->GetMesh(meshID);
+		mesh.CreateBuffers(pRenderer);
+	}
+	//pObject->mModelID = modelID;
+	
+
+	pRenderer->UploadVertexAndIndexBufferHeaps();
 
 	t.Stop();
 	Log::Info("   [%.2fs] Loaded Model '%s': %d meshes, %d materials"

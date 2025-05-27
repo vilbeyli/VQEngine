@@ -25,6 +25,7 @@
 #include "Libs/VQUtils/Source/utils.h"
 #include "Engine/Scene/Mesh.h"
 #include "Engine/Scene/Material.h"
+#include "Libs/VQUtils/Source/Log.h"
 
 #include <cassert>
 
@@ -56,8 +57,8 @@ void OutlinePass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned 
 	mOutputResolutionY = Height;
 
 	{	// Scene depth stencil view
-		TextureCreateDesc desc("OutlineStencil");
-		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
+		FTextureRequest desc("OutlineStencil");
+		desc.D3D12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 			DXGI_FORMAT_R24G8_TYPELESS // DXGI_FORMAT_D24_UNORM_S8_UINT
 			, mOutputResolutionX
 			, mOutputResolutionY
@@ -67,13 +68,13 @@ void OutlinePass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned 
 			, 0 // MSAA SampleQuality
 			, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
 		);
-		desc.ResourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+		desc.InitialState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 		TEXPassOutputDepth = mRenderer.CreateTexture(desc);
 		mRenderer.InitializeDSV(DSV, 0u, TEXPassOutputDepth);
 	}
 	{	// Scene depth stencil view
-		TextureCreateDesc desc("OutlineStencilMSAA");
-		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
+		FTextureRequest desc("OutlineStencilMSAA");
+		desc.D3D12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 			DXGI_FORMAT_R24G8_TYPELESS // DXGI_FORMAT_D24_UNORM_S8_UINT
 			, mOutputResolutionX
 			, mOutputResolutionY
@@ -83,7 +84,7 @@ void OutlinePass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned 
 			, 0 // MSAA SampleQuality
 			, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
 		);
-		desc.ResourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+		desc.InitialState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 		TEXPassOutputDepthMSAA4 = mRenderer.CreateTexture(desc);
 		mRenderer.InitializeDSV(DSVMSAA, 0u, TEXPassOutputDepthMSAA4);
 	}

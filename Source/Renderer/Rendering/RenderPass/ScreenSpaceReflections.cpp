@@ -18,6 +18,7 @@
 
 #include "ScreenSpaceReflections.h"
 
+#include "Renderer/Core/Common.h"
 #include "Renderer/Libs/D3DX12/d3dx12.h"
 #include "Renderer/Renderer.h"
 #include "Engine/GPUMarker.h"
@@ -76,6 +77,7 @@ ScreenSpaceReflectionsPass::~ScreenSpaceReflectionsPass()
 
 bool ScreenSpaceReflectionsPass::Initialize()
 {
+	SCOPED_CPU_MARKER("ScreenSpaceReflectionsPass.Initialize");
 	CreateResources();
 	LoadRootSignatures();
 	AllocateResourceViews();
@@ -100,11 +102,11 @@ void ScreenSpaceReflectionsPass::OnCreateWindowSizeDependentResources(unsigned W
 
 	//==============================Create Tile Classification-related buffers============================================
 	{
-		TextureCreateDesc desc("FFX_SSSR - Ray List");
-		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(NumPixels * ELEMENT_BYTE_SIZE, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS); // 4B - single uint variable
-		desc.ResourceState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+		FTextureRequest desc("FFX_SSSR - Ray List");
+		desc.D3D12Desc = CD3DX12_RESOURCE_DESC::Buffer(NumPixels * ELEMENT_BYTE_SIZE, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS); // 4B - single uint variable
+		desc.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 		TexRayList = mRenderer.CreateTexture(desc);
-		desc.TexName = "FFX_DNSR - Denoiser Tile List"; 
+		desc.Name = "FFX_DNSR - Denoiser Tile List"; 
 		TexDenoiserTileList = mRenderer.CreateTexture(desc);
 	}
 	//==============================Create denoising-related resources==============================
@@ -135,27 +137,27 @@ void ScreenSpaceReflectionsPass::OnCreateWindowSizeDependentResources(unsigned W
 		};
 		const D3D12_RESOURCE_STATES rscStateSRV = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 		const D3D12_RESOURCE_STATES rscStateUAV = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-		std::vector<TextureCreateDesc> texCreateDescs =
+		std::vector<FTextureRequest> texCreateDescs =
 		{
-			  TextureCreateDesc("Reflection Denoiser - Extracted Roughness Texture"        , descs[EDescs::ROUGHNESS_TEXTURE], rscStateSRV)
-			, TextureCreateDesc("Reflection Denoiser - Depth Buffer History"               , descs[EDescs::DEPTH_HISTORY]    , rscStateSRV)
-			, TextureCreateDesc("Reflection Denoiser - Normal Buffer History"              , descs[EDescs::NORMAL_HISTORY]   , rscStateSRV)
-			, TextureCreateDesc("Reflection Denoiser - Extracted Roughness History Texture", descs[EDescs::ROUGHNESS_TEXTURE], rscStateSRV)
-			, TextureCreateDesc("Reflection Denoiser - Radiance 0"                         , descs[EDescs::RADIANCE]         , rscStateSRV)
-			, TextureCreateDesc("Reflection Denoiser - Radiance 1"                         , descs[EDescs::RADIANCE]         , rscStateUAV)
-			, TextureCreateDesc("Reflection Denoiser - Variance 0"                         , descs[EDescs::VARIANCE]         , rscStateUAV)
-			, TextureCreateDesc("Reflection Denoiser - Variance 1"                         , descs[EDescs::VARIANCE]         , rscStateUAV)
-			, TextureCreateDesc("Reflection Denoiser - SampleCount 0"                      , descs[EDescs::SAMPLE_COUNT]     , rscStateUAV)
-			, TextureCreateDesc("Reflection Denoiser - SampleCount 1"                      , descs[EDescs::SAMPLE_COUNT]     , rscStateUAV)
-			, TextureCreateDesc("Reflection Denoiser - Average Radiance 0"                 , descs[EDescs::AVERAGE_RADIANCE] , rscStateUAV)
-			, TextureCreateDesc("Reflection Denoiser - Average Radiance 1"                 , descs[EDescs::AVERAGE_RADIANCE] , rscStateUAV)
-			, TextureCreateDesc("Reflection Denoiser - Reprojected Radiance"               , descs[EDescs::RADIANCE]         , rscStateUAV)
+			  FTextureRequest{ .Name = "Reflection Denoiser - Extracted Roughness Texture"        , .D3D12Desc = descs[EDescs::ROUGHNESS_TEXTURE], .InitialState = rscStateSRV }
+			, FTextureRequest{ .Name = "Reflection Denoiser - Depth Buffer History"               , .D3D12Desc = descs[EDescs::DEPTH_HISTORY]    , .InitialState = rscStateSRV }
+			, FTextureRequest{ .Name = "Reflection Denoiser - Normal Buffer History"              , .D3D12Desc = descs[EDescs::NORMAL_HISTORY]   , .InitialState = rscStateSRV }
+			, FTextureRequest{ .Name = "Reflection Denoiser - Extracted Roughness History Texture", .D3D12Desc = descs[EDescs::ROUGHNESS_TEXTURE], .InitialState = rscStateSRV }
+			, FTextureRequest{ .Name = "Reflection Denoiser - Radiance 0"                         , .D3D12Desc = descs[EDescs::RADIANCE]         , .InitialState = rscStateSRV }
+			, FTextureRequest{ .Name = "Reflection Denoiser - Radiance 1"                         , .D3D12Desc = descs[EDescs::RADIANCE]         , .InitialState = rscStateUAV }
+			, FTextureRequest{ .Name = "Reflection Denoiser - Variance 0"                         , .D3D12Desc = descs[EDescs::VARIANCE]         , .InitialState = rscStateUAV }
+			, FTextureRequest{ .Name = "Reflection Denoiser - Variance 1"                         , .D3D12Desc = descs[EDescs::VARIANCE]         , .InitialState = rscStateUAV }
+			, FTextureRequest{ .Name = "Reflection Denoiser - SampleCount 0"                      , .D3D12Desc = descs[EDescs::SAMPLE_COUNT]     , .InitialState = rscStateUAV }
+			, FTextureRequest{ .Name = "Reflection Denoiser - SampleCount 1"                      , .D3D12Desc = descs[EDescs::SAMPLE_COUNT]     , .InitialState = rscStateUAV }
+			, FTextureRequest{ .Name = "Reflection Denoiser - Average Radiance 0"                 , .D3D12Desc = descs[EDescs::AVERAGE_RADIANCE] , .InitialState = rscStateUAV }
+			, FTextureRequest{ .Name = "Reflection Denoiser - Average Radiance 1"                 , .D3D12Desc = descs[EDescs::AVERAGE_RADIANCE] , .InitialState = rscStateUAV }
+			, FTextureRequest{ .Name = "Reflection Denoiser - Reprojected Radiance"               , .D3D12Desc = descs[EDescs::RADIANCE]         , .InitialState = rscStateUAV }
 		};
 
 		int i = 0;
 		std::vector<TextureID*> pTexIDs = GetWindowSizeDependentDenoisingTextures();
 		assert(pTexIDs.size() == texCreateDescs.size());
-		for(const TextureCreateDesc& desc : texCreateDescs)
+		for(const FTextureRequest& desc : texCreateDescs)
 		{
 			*pTexIDs[i++] = mRenderer.CreateTexture(desc);
 		}
@@ -262,9 +264,10 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 		SCOPED_GPU_MARKER(pCmd, "FFX DNSR ClassifyTiles");
 		pCmd->SetComputeRootSignature(mSubpassRootSignatureLookup.at(ESubpass::CLASSIFY_TILES));
 		pCmd->SetComputeRootDescriptorTable(0, mRenderer.GetSRV(SRVClassifyTilesInputs[iBuffer]).GetGPUDescHandle());
-		pCmd->SetComputeRootDescriptorTable(1, mRenderer.GetSRV(pParams->SRVEnvironmentSpecularIrradianceCubemap).GetGPUDescHandle());
-		pCmd->SetComputeRootDescriptorTable(2, mRenderer.GetSRV(pParams->SRVBRDFIntegrationLUT).GetGPUDescHandle());
-		pCmd->SetComputeRootConstantBufferView(3, cbAddr);
+		pCmd->SetComputeRootDescriptorTable(1, mRenderer.GetUAV(UAVClassifyTilesOutputs[iBuffer]).GetGPUDescHandle());
+		pCmd->SetComputeRootDescriptorTable(2, mRenderer.GetSRV(pParams->SRVEnvironmentSpecularIrradianceCubemap).GetGPUDescHandle());
+		pCmd->SetComputeRootDescriptorTable(3, mRenderer.GetSRV(pParams->SRVBRDFIntegrationLUT).GetGPUDescHandle());
+		pCmd->SetComputeRootConstantBufferView(4, cbAddr);
 		pCmd->SetPipelineState(mRenderer.GetPSO(PSOClassifyTilesPass));
 		const UINT DISPATCH_X = DIV_AND_ROUND_UP(W, 8u);
 		const UINT DISPATCH_Y = DIV_AND_ROUND_UP(H, 8u);
@@ -277,7 +280,8 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 		SCOPED_GPU_MARKER(pCmd, "FFX DNSR PrepareBlueNoise");
 		pCmd->SetComputeRootSignature(mSubpassRootSignatureLookup.at(ESubpass::BLUE_NOISE));
 		pCmd->SetComputeRootDescriptorTable(0, mRenderer.GetSRV(SRVBlueNoisePassInputs[iBuffer]).GetGPUDescHandle());
-		pCmd->SetComputeRootConstantBufferView(1, cbAddr);
+		pCmd->SetComputeRootDescriptorTable(1, mRenderer.GetUAV(UAVBlueNoisePassOutputs[iBuffer]).GetGPUDescHandle());
+		pCmd->SetComputeRootConstantBufferView(2, cbAddr);
 		pCmd->SetPipelineState(mRenderer.GetPSO(PSOBlueNoisePass));
 		const UINT DISPATCH_X = BLUE_NOISE_TEXTURE_DIM / 8;
 		const UINT DISPATCH_Y = BLUE_NOISE_TEXTURE_DIM / 8;
@@ -321,9 +325,10 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 		SCOPED_GPU_MARKER(pCmd, "FFX SSSR Intersection");
 		pCmd->SetComputeRootSignature(mSubpassRootSignatureLookup.at(ESubpass::INTERSECTION));
 		pCmd->SetComputeRootDescriptorTable(0, mRenderer.GetSRV(SRVIntersectionInputs[iBuffer]).GetGPUDescHandle());
-		pCmd->SetComputeRootDescriptorTable(1, mRenderer.GetSRV(pParams->SRVEnvironmentSpecularIrradianceCubemap).GetGPUDescHandle());
-		pCmd->SetComputeRootDescriptorTable(2, mRenderer.GetSRV(pParams->SRVBRDFIntegrationLUT).GetGPUDescHandle());
-		pCmd->SetComputeRootConstantBufferView(3, cbAddr);
+		pCmd->SetComputeRootDescriptorTable(1, mRenderer.GetUAV(UAVIntersectionOutputs[iBuffer]).GetGPUDescHandle());
+		pCmd->SetComputeRootDescriptorTable(2, mRenderer.GetSRV(pParams->SRVEnvironmentSpecularIrradianceCubemap).GetGPUDescHandle());
+		pCmd->SetComputeRootDescriptorTable(3, mRenderer.GetSRV(pParams->SRVBRDFIntegrationLUT).GetGPUDescHandle());
+		pCmd->SetComputeRootConstantBufferView(4, cbAddr);
 		pCmd->SetPipelineState(mRenderer.GetPSO(PSOIntersectPass));
 		pCmd->ExecuteIndirect(mpCommandSignature, 1, mRenderer.GetTextureResource(TexIntersectionPassIndirectArgs), 0, nullptr, 0);
 		//gpuTimer.GetTimeStamp(pCommandList, "FFX SSSR Intersection");
@@ -359,7 +364,8 @@ void ScreenSpaceReflectionsPass::RecordCommands(const IRenderPassDrawParameters*
 			SCOPED_GPU_MARKER(pCmd, "FFX DNSR Reproject");
 			pCmd->SetComputeRootSignature(mSubpassRootSignatureLookup.at(ESubpass::REPROJECT));
 			pCmd->SetComputeRootDescriptorTable(0, mRenderer.GetSRV(SRVReprojectPassInputs[iBuffer]).GetGPUDescHandle());
-			pCmd->SetComputeRootConstantBufferView(1, cbAddr);
+			pCmd->SetComputeRootDescriptorTable(1, mRenderer.GetUAV(UAVReprojectPassOutputs[iBuffer]).GetGPUDescHandle());
+			pCmd->SetComputeRootConstantBufferView(2, cbAddr);
 			pCmd->SetPipelineState(mRenderer.GetPSO(PSOReprojectPass));
 			pCmd->ExecuteIndirect(mpCommandSignature, 1, mRenderer.GetTextureResource(TexIntersectionPassIndirectArgs), 12, nullptr, 0);
 			//gpuTimer.GetTimeStamp(pCommandList, "FFX DNSR Reproject");
@@ -650,21 +656,26 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 		const UINT srvCount = 4;
 		const UINT uavCount = 5;
 
-		CD3DX12_ROOT_PARAMETER RTSlot[4] = {};
+		CD3DX12_ROOT_PARAMETER RTSlot[5] = {};
 
 		int parameterCount = 0;
 		CD3DX12_DESCRIPTOR_RANGE DescRange_3[1] = {};
-		CD3DX12_DESCRIPTOR_RANGE DescRange_1[2] = {};
+		CD3DX12_DESCRIPTOR_RANGE DescRange_1[1] = {};
+		CD3DX12_DESCRIPTOR_RANGE DescRange_4[1] = {};
 		CD3DX12_DESCRIPTOR_RANGE DescRange_2[1] = {};
 		{
-			//Param 0
+			// Param 0 : SRVs
 			int rangeCount = 0;
 			DescRange_1[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, srvCount, 0, 0, 0);
-			DescRange_1[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, uavCount, 0, 0, srvCount);
 			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_1[0], D3D12_SHADER_VISIBILITY_ALL);
 		}
+		{
+			int rangeCount = 0;
+			DescRange_4[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, uavCount, 0, 0, 0);
+			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_4[0], D3D12_SHADER_VISIBILITY_ALL);
+		}
 
-		// Param 1
+		// Param 2 : UAVs
 		{
 			int rangeCount = 0;
 			int space = 1;
@@ -672,7 +683,7 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_3[0], D3D12_SHADER_VISIBILITY_ALL);
 		}		
 		
-		// Param 2
+		// Param 3
 		{
 			int rangeCount = 0;
 			int space = 1;
@@ -680,7 +691,7 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_2[0], D3D12_SHADER_VISIBILITY_ALL);
 		}
 
-		//Param 3
+		//Param 4
 		RTSlot[parameterCount++].InitAsConstantBufferView(0);
 
 		D3D12_STATIC_SAMPLER_DESC samplerDescs[] = { InitLinearSampler(0) }; // g_linear_sampler
@@ -717,10 +728,15 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 			//Param 0
 			int rangeCount = 0;
 			DescRange[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, srvCount, 0, 0, 0);
-			DescRange[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, uavCount, 0, 0, srvCount);
 			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange[0], D3D12_SHADER_VISIBILITY_ALL);
 		}
-		//Param 1
+		{
+			//Param 1
+			int rangeCount = 1;
+			DescRange[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, uavCount, 0, 0, 0);
+			RTSlot[parameterCount++].InitAsDescriptorTable(1, &DescRange[1], D3D12_SHADER_VISIBILITY_ALL);
+		}
+		//Param 2
 		RTSlot[parameterCount++].InitAsConstantBufferView(0);
 
 		CD3DX12_ROOT_SIGNATURE_DESC descRootSignature = CD3DX12_ROOT_SIGNATURE_DESC();
@@ -754,12 +770,15 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 		CD3DX12_DESCRIPTOR_RANGE DescRange[3] = {};
 		{
 			//Param 0
-			int rangeCount = 0;
-			DescRange[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, srvCount, 0, 0, 0);
-			DescRange[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, uavCount, 0, 0, srvCount);
-			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange[0], D3D12_SHADER_VISIBILITY_ALL);
+			DescRange[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, srvCount, 0, 0, 0);
+			RTSlot[parameterCount++].InitAsDescriptorTable(1, &DescRange[0], D3D12_SHADER_VISIBILITY_ALL);
 		}
-		//Param 1
+		{
+			//Param 1
+			DescRange[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, uavCount, 0, 0, 0);
+			RTSlot[parameterCount++].InitAsDescriptorTable(1, &DescRange[1], D3D12_SHADER_VISIBILITY_ALL);
+		}
+		//Param 2
 		RTSlot[parameterCount++].InitAsConstantBufferView(0);
 
 		D3D12_STATIC_SAMPLER_DESC samplerDescs[] = { InitLinearSampler(0) }; // g_linear_sampler
@@ -868,29 +887,35 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 		const UINT srvCount = 6;
 		const UINT uavCount = 2;
 
-		CD3DX12_ROOT_PARAMETER RTSlot[4] = {};
+		CD3DX12_ROOT_PARAMETER RTSlot[5] = {};
 
 		int parameterCount = 0;
 		CD3DX12_DESCRIPTOR_RANGE DescRange_1[3] = {};
 		CD3DX12_DESCRIPTOR_RANGE DescRange_2[1] = {};
 		CD3DX12_DESCRIPTOR_RANGE DescRange_3[1] = {};
 		CD3DX12_DESCRIPTOR_RANGE DescRange_4[1] = {};
+		CD3DX12_DESCRIPTOR_RANGE DescRange_5[1] = {};
 		{
 			//Param 0
 			int rangeCount = 0;
 			DescRange_1[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, srvCount, 0, 0, 0);
-			DescRange_1[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, uavCount, 0, 0, srvCount);
 			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_1[0], D3D12_SHADER_VISIBILITY_ALL);
 		}
-		
-		// Param 1
+		{
+			//Param 1
+			int rangeCount = 0;
+			DescRange_5[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, uavCount, 0, 0, 0);
+			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_5[0], D3D12_SHADER_VISIBILITY_ALL);
+		}
+
+		// Param 2
 		{
 			int rangeCount = 0;
 			int space = 1;
 			DescRange_3[rangeCount++].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, space, 0);
 			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_3[0], D3D12_SHADER_VISIBILITY_ALL);
 		}
-		// Param 2
+		// Param 3
 		{
 			int rangeCount = 0;
 			int space = 1;
@@ -898,7 +923,7 @@ void ScreenSpaceReflectionsPass::LoadRootSignatures()
 			RTSlot[parameterCount++].InitAsDescriptorTable(rangeCount, &DescRange_4[0], D3D12_SHADER_VISIBILITY_ALL);
 		}
 
-		//Param 3
+		//Param 4
 		RTSlot[parameterCount++].InitAsConstantBufferView(0);
 		
 		CD3DX12_ROOT_SIGNATURE_DESC descRootSignature = CD3DX12_ROOT_SIGNATURE_DESC();
@@ -962,16 +987,16 @@ void ScreenSpaceReflectionsPass::CreateResources()
 	//==============================Create Tile Classification-related buffers============================================
 	{
 		const unsigned NumCounters = 4; // ray and tile counters, 4 in total
-		TextureCreateDesc desc("FFX_SSSR - Ray Counter");
-		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(NumCounters * ELEMENT_BYTE_SIZE, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS); // 4B - single uint variable
-		desc.ResourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		FTextureRequest desc("FFX_SSSR - Ray Counter");
+		desc.D3D12Desc = CD3DX12_RESOURCE_DESC::Buffer(NumCounters * ELEMENT_BYTE_SIZE, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS); // 4B - single uint variable
+		desc.InitialState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 		TexRayCounter = mRenderer.CreateTexture(desc);
 	}
 	//==============================Create PrepareIndirectArgs-related buffers============================================
 	{
-		TextureCreateDesc desc("FFX_SSSR - Intersect Indirect Args");
-		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(6ull * ELEMENT_BYTE_SIZE, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-		desc.ResourceState = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+		FTextureRequest desc("FFX_SSSR - Intersect Indirect Args");
+		desc.D3D12Desc = CD3DX12_RESOURCE_DESC::Buffer(6ull * ELEMENT_BYTE_SIZE, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+		desc.InitialState = D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
 		TexIntersectionPassIndirectArgs = mRenderer.CreateTexture(desc);
 	}
 	//==============================Command Signature==========================================
@@ -989,30 +1014,30 @@ void ScreenSpaceReflectionsPass::CreateResources()
 	}
 	//==============================Blue Noise buffers============================================
 	{
-		TextureCreateDesc desc("FFX_SSSR - Sobol Buffer");
-		desc.pDataArray.push_back( (void*)&g_blueNoiseSamplerState.sobolBuffer );
-		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(ELEMENT_BYTE_SIZE * _countof(g_blueNoiseSamplerState.sobolBuffer), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+		FTextureRequest desc("FFX_SSSR - Sobol Buffer");
+		desc.DataArray.push_back( (void*)&g_blueNoiseSamplerState.sobolBuffer );
+		desc.D3D12Desc = CD3DX12_RESOURCE_DESC::Buffer(ELEMENT_BYTE_SIZE * _countof(g_blueNoiseSamplerState.sobolBuffer), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 		TexBlueNoiseSobolBuffer = mRenderer.CreateTexture(desc);
-		desc.pDataArray.pop_back();
+		desc.DataArray.pop_back();
 	}
 	{
-		TextureCreateDesc desc("FFX_SSSR - Ranking Tile Buffer");
-		desc.pDataArray.push_back( (void*)&g_blueNoiseSamplerState.rankingTileBuffer );
-		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(ELEMENT_BYTE_SIZE * _countof(g_blueNoiseSamplerState.rankingTileBuffer), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+		FTextureRequest desc("FFX_SSSR - Ranking Tile Buffer");
+		desc.DataArray.push_back( (void*)&g_blueNoiseSamplerState.rankingTileBuffer );
+		desc.D3D12Desc = CD3DX12_RESOURCE_DESC::Buffer(ELEMENT_BYTE_SIZE * _countof(g_blueNoiseSamplerState.rankingTileBuffer), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 		TexBlueNoiseRankingTileBuffer = mRenderer.CreateTexture(desc);
-		desc.pDataArray.pop_back();
+		desc.DataArray.pop_back();
 	}
 	{
-		TextureCreateDesc desc("FFX_SSSR - Scrambling Tile Buffer");
-		desc.pDataArray.push_back( (void*)&g_blueNoiseSamplerState.scramblingTileBuffer );
-		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Buffer(ELEMENT_BYTE_SIZE * _countof(g_blueNoiseSamplerState.scramblingTileBuffer), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+		FTextureRequest desc("FFX_SSSR - Scrambling Tile Buffer");
+		desc.DataArray.push_back( (void*)&g_blueNoiseSamplerState.scramblingTileBuffer );
+		desc.D3D12Desc = CD3DX12_RESOURCE_DESC::Buffer(ELEMENT_BYTE_SIZE * _countof(g_blueNoiseSamplerState.scramblingTileBuffer), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 		TexBlueNoiseScramblingTileBuffer = mRenderer.CreateTexture(desc);
-		desc.pDataArray.pop_back();
+		desc.DataArray.pop_back();
 	}
 	{			
-		TextureCreateDesc desc("Reflection Denoiser - Blue Noise Texture");
-		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8_UNORM, BLUE_NOISE_TEXTURE_DIM, BLUE_NOISE_TEXTURE_DIM, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-		desc.ResourceState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+		FTextureRequest desc("Reflection Denoiser - Blue Noise Texture");
+		desc.D3D12Desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8_UNORM, BLUE_NOISE_TEXTURE_DIM, BLUE_NOISE_TEXTURE_DIM, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+		desc.InitialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 		TexReflectionDenoiserBlueNoise = mRenderer.CreateTexture(desc);
 	}
 }
@@ -1033,6 +1058,7 @@ void ScreenSpaceReflectionsPass::DestroyResources()
 
 void ScreenSpaceReflectionsPass::AllocateResourceViews()
 {
+	mRenderer.WaitHeapsInitialized();
 	for (size_t i = 0; i < 2; i++)
 	{
 		SRVScreenSpaceReflectionOutput[i] = mRenderer.AllocateSRV();

@@ -128,20 +128,7 @@ MaterialID Scene::CreateMaterial(const std::string& UniqueMaterialName)
 
 	Material& mat = *mMaterialPool.Get(id);
 	mat = Material();
-	if (mat.SRVMaterialMaps == INVALID_ID)
-	{
-		mat.SRVMaterialMaps = mRenderer.AllocateSRV(NUM_MATERIAL_TEXTURE_MAP_BINDINGS-1);
-		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 0, INVALID_ID);
-		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 1, INVALID_ID);
-		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 2, INVALID_ID);
-		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 3, INVALID_ID);
-		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 4, INVALID_ID);
-		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 5, INVALID_ID);
-		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 6, INVALID_ID);
-		mRenderer.InitializeSRV(mat.SRVMaterialMaps, 7, INVALID_ID);
-		mat.SRVHeightMap = mRenderer.AllocateSRV(1);
-		mRenderer.InitializeSRV(mat.SRVHeightMap, 0, INVALID_ID);
-	}
+
 	return id;
 }
 
@@ -327,6 +314,16 @@ const Mesh& Scene::GetMesh(MeshID ID) const
 	return mMeshes.at(ID);
 }
 
+Mesh& Scene::GetMesh(MeshID ID)
+{
+	if (mMeshes.find(ID) == mMeshes.end())
+	{
+		Log::Error("Mesh not found. Did you call Scene::AddMesh()? (meshID=%d)", ID);
+		assert(false);
+	}
+	return mMeshes.at(ID);
+}
+
 Model& Scene::GetModel(ModelID id)
 {
 	if (mModels.find(id) == mModels.end())
@@ -498,7 +495,6 @@ Scene::Scene(VQEngine& engine, int NumFrameBuffers, const Input& input, const st
 	, mResourceNames(engine.GetResourceNames())
 	, mAssetLoader(engine.GetAssetLoader())
 	, mRenderer(renderer)
-	, mMaterialAssignments(engine.GetAssetLoader().GetThreadPool_TextureLoad())
 	, mBoundingBoxHierarchy(mMeshes, mModels, mMaterialPool, mTransformHandles)
 	, mInvalidMaterialName("INVALID MATERIAL")
 	, mInvalidTexturePath("INVALID PATH")
@@ -765,11 +761,17 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 	FSceneView& SceneView = mFrameSceneViews[FRAME_DATA_INDEX];
 	FSceneShadowViews& ShadowView = mFrameShadowViews[FRAME_DATA_INDEX];
 
+	if (!AppInSimulationState)
+	{
+		mFrustumCullWorkerContext.InvalidateContextData();
+		SceneView.FrustumRenderLists.clear();
+		return;
+	}
+
 	mBoundingBoxHierarchy.Build(this, mGameObjectHandles, UpdateWorkerThreadPool);
 
 	ExtractSceneView(SceneView, mViewProjectionMatrixHistory, cam, this->mMeshes.at(EBuiltInMeshes::CUBE).GetIABufferIDs());
 	SceneView.pEnvironmentMapMesh        = &mMeshes.at((MeshID)EBuiltInMeshes::CUBE);
-	SceneView.bAppIsInSimulationState    = AppInSimulationState;
 	SceneView.NumGameObjectBBRenderCmds  = (uint)(SceneView.sceneRenderOptions.bDrawGameObjectBoundingBoxes ? DIV_AND_ROUND_UP(mBoundingBoxHierarchy.mGameObjectBoundingBoxes.size(), MAX_INSTANCE_COUNT__UNLIT_SHADER) : 0);
 	SceneView.NumMeshBBRenderCmds        = (uint)(SceneView.sceneRenderOptions.bDrawMeshBoundingBoxes       ? DIV_AND_ROUND_UP(mBoundingBoxHierarchy.mMeshBoundingBoxes.size()      , MAX_INSTANCE_COUNT__UNLIT_SHADER) : 0);
 	SceneView.pGameObjectBoundingBoxList = &mBoundingBoxHierarchy.mGameObjectBoundingBoxes;

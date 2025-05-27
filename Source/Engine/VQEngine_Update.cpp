@@ -179,14 +179,13 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 
 
 			// check if loading is done
-			const int NumActiveTasks = mWorkers_ModelLoading.GetNumActiveTasks() + mWorkers_TextureLoading.GetNumActiveTasks();
+			const int NumActiveTasks = mWorkers_ModelLoading.GetNumActiveTasks();
 			const bool bLoadTasksFinished = NumActiveTasks == 0;
 			if (bLoadTasksFinished)
 			{
 				if (mbLoadingLevel)
 				{
-					SCOPED_CPU_MARKER("Scene->OnLoadComplete()");
-					mpScene->OnLoadComplete();
+					mpScene->OnLoadComplete(mBuiltinMeshes);
 				}
 				// OnEnvMapLoaded = noop
 
@@ -194,7 +193,6 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 				mAppState = EAppState::SIMULATING;
 
 				mbLoadingLevel.store(false);
-				mbLoadingEnvironmentMap.store(false);
 
 				mLoadingScreenData.RotateLoadingScreenImageIndex();
 
@@ -227,11 +225,6 @@ void VQEngine::UpdateThread_PostUpdate()
 	const int FRAME_DATA_INDEX = 0;
 	ThreadPool& mWorkerThreads = mWorkers_Simulation;
 #endif
-
-	if (mAppState == EAppState::LOADING)
-	{
-		return;
-	}
 
 	// TODO: this is a hack, do proper sync.
 	if (mpScene == nullptr)
@@ -549,13 +542,11 @@ void VQEngine::Load_SceneData_Dispatch()
 	// start loading environment map textures
 	if (!SceneRep.EnvironmentMapPreset.empty())
 	{
-		mWorkers_TextureLoading.AddTask([=]() { LoadEnvironmentMap(SceneRep.EnvironmentMapPreset, mSettings.gfx.EnvironmentMapResolution); });
+		mWorkers_Simulation.AddTask([=]() { LoadEnvironmentMap(SceneRep.EnvironmentMapPreset, mSettings.gfx.EnvironmentMapResolution); });
 	}
 
 	// start loading textures, models, materials with worker threads
-	mpRenderer->WaitHeapsInitialized();
-	mpScene->StartLoading(this->mBuiltinMeshes, SceneRep, mWorkers_Simulation);
-
+	mpScene->StartLoading(SceneRep, mWorkers_Simulation);
 }
 
 void VQEngine::LoadLoadingScreenData()
@@ -574,6 +565,18 @@ void VQEngine::LoadLoadingScreenData()
 	constexpr bool CHECK_ALPHA_MASK = false;
 	constexpr bool GENERATE_MIPS = false;
 
+	// load the selected loading screen image
+	{
+		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(SelectedLoadingScreenIndex) + ".png");
+		TextureID texID = mpRenderer->CreateTextureFromFile(LoadingScreenTextureFilePath.c_str(), CHECK_ALPHA_MASK, GENERATE_MIPS);
+		mpRenderer->WaitHeapsInitialized();
+		SRV_ID    srvID = mpRenderer->AllocateAndInitializeSRV(texID);
+		std::lock_guard<std::mutex> lk(data.Mtx);
+		data.SRVs.push_back(srvID);
+		data.SelectedLoadingScreenSRVIndex = static_cast<int>(data.SRVs.size() - 1);
+		mpRenderer->SignalLoadingScreenReady();
+	}
+	
 	// dispatch background workers for other 
 	for (size_t i = 0; i < NUM_LOADING_SCREEN_BACKGROUNDS; ++i)
 	{
@@ -582,26 +585,17 @@ void VQEngine::LoadLoadingScreenData()
 
 		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(i) + ".png");
 
-		mWorkers_TextureLoading.AddTask([this, &data, LoadingScreenTextureFilePath, CHECK_ALPHA_MASK, GENERATE_MIPS]()
+		mWorkers_Simulation.AddTask([this, &data, LoadingScreenTextureFilePath, CHECK_ALPHA_MASK, GENERATE_MIPS]()
 		{
-			mpRenderer->WaitHeapsInitialized();
+			SCOPED_CPU_MARKER("LoadLoadingScreenImage");
 			const TextureID texID = mpRenderer->CreateTextureFromFile(LoadingScreenTextureFilePath.c_str(), CHECK_ALPHA_MASK, GENERATE_MIPS);
+			mpRenderer->WaitForTexture(texID);
 			const SRV_ID srvID = mpRenderer->AllocateAndInitializeSRV(texID);
-			std::lock_guard<std::mutex> lk(data.Mtx);
-			data.SRVs.push_back(srvID);
+			{
+				std::lock_guard<std::mutex> lk(data.Mtx);
+				data.SRVs.push_back(srvID);
+			}
 		});
-	}
-
-	// load the selected loading screen image
-	{
-		mpRenderer->WaitHeapsInitialized();
-		const std::string LoadingScreenTextureFilePath = LoadingScreenTextureFileDirectory + (std::to_string(SelectedLoadingScreenIndex) + ".png");
-		TextureID texID = mpRenderer->CreateTextureFromFile(LoadingScreenTextureFilePath.c_str(), CHECK_ALPHA_MASK, GENERATE_MIPS);
-		SRV_ID    srvID = mpRenderer->AllocateAndInitializeSRV(texID);
-		std::lock_guard<std::mutex> lk(data.Mtx);
-		data.SRVs.push_back(srvID);
-		data.SelectedLoadingScreenSRVIndex = static_cast<int>(data.SRVs.size() - 1);
-		mpRenderer->SignalLoadingScreenReady();
 	}
 }
 
@@ -670,10 +664,9 @@ MeshID VQEngine::GetBuiltInMeshID(const std::string& MeshName) const
 void VQEngine::StartLoadingEnvironmentMap(int IndexEnvMap)
 {
 	assert(IndexEnvMap >= 0 && IndexEnvMap < mResourceNames.mEnvironmentMapPresetNames.size());
-	this->WaitUntilRenderingFinishes();
 	mAppState = EAppState::LOADING;
 	mbLoadingEnvironmentMap = true;
-	mWorkers_TextureLoading.AddTask([&, IndexEnvMap]()
+	mWorkers_Simulation.AddTask([&, IndexEnvMap]()
 	{
 		LoadEnvironmentMap(mResourceNames.mEnvironmentMapPresetNames[IndexEnvMap], mSettings.gfx.EnvironmentMapResolution);
 	});

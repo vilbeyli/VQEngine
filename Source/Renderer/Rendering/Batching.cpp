@@ -378,7 +378,7 @@ static void BatchMainViewDrawCalls(
 static DynamicBufferHeap& GetThreadConstantBufferHeap(
 	FFrustumRenderList::EFrustumType FrustumType,
 	uint FrustumIndex,
-	FWindowRenderContext& ctx,
+	std::vector<DynamicBufferHeap>& CBHeaps,
 	const FSceneShadowViews& SceneShadowView
 )
 {
@@ -391,12 +391,12 @@ static DynamicBufferHeap& GetThreadConstantBufferHeap(
 
 	switch (FrustumType)
 	{
-	case FFrustumRenderList::EFrustumType::MainView          : return ctx.GetConstantBufferHeap(iCmdRenderThread);
-	case FFrustumRenderList::EFrustumType::SpotShadow        : return ctx.GetConstantBufferHeap(iCmdSpots);
-	case FFrustumRenderList::EFrustumType::PointShadow       : return ctx.GetConstantBufferHeap(iCmdPointLightsThread + FrustumIndex/6);
-	case FFrustumRenderList::EFrustumType::DirectionalShadow : return ctx.GetConstantBufferHeap(iCmdDirectional);
+	case FFrustumRenderList::EFrustumType::MainView          : return CBHeaps[iCmdRenderThread];
+	case FFrustumRenderList::EFrustumType::SpotShadow        : return CBHeaps[iCmdSpots];
+	case FFrustumRenderList::EFrustumType::PointShadow       : return CBHeaps[iCmdPointLightsThread + FrustumIndex/6];
+	case FFrustumRenderList::EFrustumType::DirectionalShadow : return CBHeaps[iCmdDirectional];
 	}
-	return ctx.GetConstantBufferHeap(iCmdRenderThread);
+	return CBHeaps[iCmdRenderThread];
 }
 
 static void DispatchWorkers_ShadowViews(FWindowRenderContext& ctx,
@@ -404,7 +404,8 @@ static void DispatchWorkers_ShadowViews(FWindowRenderContext& ctx,
 	ThreadPool& RenderWorkerThreadPool,
 	const std::vector<FFrustumRenderList>& mFrustumRenderLists,
 	const size_t NumActiveFrustumRenderLists,
-	VQRenderer* pRenderer
+	VQRenderer* pRenderer,
+	std::vector<DynamicBufferHeap>& CBHeaps
 )
 {
 	SCOPED_CPU_MARKER("DispatchWorkers_ShadowViews");
@@ -478,7 +479,7 @@ static void DispatchWorkers_ShadowViews(FWindowRenderContext& ctx,
 				DynamicBufferHeap& CBHeap = GetThreadConstantBufferHeap(
 					pFrustumRenderList->Type,
 					pFrustumRenderList->TypeIndex,
-					ctx,
+					CBHeaps,
 					SceneShadowView
 				);
 
@@ -677,10 +678,11 @@ void VQRenderer::BatchDrawCalls(
 
 	const bool bUseWorkerThreadForMainView = NUM_MIN_SCENE_MESHES_FOR_THREADING <= NumSceneViewMeshes;
 	
+	std::vector<DynamicBufferHeap>& CBHeaps = this->mDynamicHeap_RenderingConstantBuffer;
 	RenderWorkerThreadPool.AddTask([&]() 
 	{
 		RENDER_WORKER_CPU_MARKER;
-		DynamicBufferHeap& CBHeap = GetThreadConstantBufferHeap(MainViewFrustumRenderList.Type, MainViewFrustumRenderList.TypeIndex, ctx, SceneShadowView);
+		DynamicBufferHeap& CBHeap = GetThreadConstantBufferHeap(MainViewFrustumRenderList.Type, MainViewFrustumRenderList.TypeIndex, CBHeaps, SceneShadowView);
 
 		// ---------------------------------------------------SYNC ---------------------------------------------------
 		MainViewFrustumRenderList.DataReadySignal.Wait();
@@ -703,7 +705,8 @@ void VQRenderer::BatchDrawCalls(
 		RenderWorkerThreadPool,
 		SceneView.FrustumRenderLists,
 		SceneView.NumActiveFrustumRenderLists,
-		this
+		this,
+		CBHeaps
 	);
 
 	BatchInstanceData_BoundingBox(DrawData, SceneView, RenderWorkerThreadPool, SceneView.viewProj);

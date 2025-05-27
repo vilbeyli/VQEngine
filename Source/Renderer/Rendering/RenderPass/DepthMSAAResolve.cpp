@@ -19,6 +19,7 @@
 #include "DepthMSAAResolve.h"
 #include "Renderer/Renderer.h"
 #include "Engine/GPUMarker.h"
+#include "Core/Common.h"
 
 DepthMSAAResolvePass::DepthMSAAResolvePass(VQRenderer& Renderer)
 	: RenderPassBase(Renderer)

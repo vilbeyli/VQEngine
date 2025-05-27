@@ -30,19 +30,57 @@
 #include "Libs/imgui/imgui.h"
 
 
+HRESULT VQRenderer::PreRenderLoadingScreen(ThreadPool& WorkerThreads, const Window* pWindow, const FGraphicsSettings& GFXSettings, const FUIState& UIState)
+{
+	SCOPED_CPU_MARKER("Renderer.PreRenderScene");
+	WaitMainSwapchainReady();
+	WaitHeapsInitialized();
+
+	FWindowRenderContext& ctx = this->GetWindowRenderContext(pWindow->GetHWND());
+	const int NUM_SWAPCHAIN_BACKBUFFERS = ctx.SwapChain.GetNumBackBuffers();
+
+	// TODO: proper submit thread sync
+	//if constexpr (true)
+	//{
+	//	// ensure submission is done, swapchain is flipped
+	//	SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000); // sync for SceneView
+	//	while (WorkerThreads.GetNumActiveTasks() != 0); // busy-wait is not good
+	//}
+	const int SWAPCHAIN_INDEX = ctx.SwapChain.GetCurrentBackBufferIndex();
+
+	constexpr int NUM_COMMAND_RECORDING_THREADS = 1;
+	{
+		SCOPED_CPU_MARKER("AllocCmdLists");
+		AllocateCommandLists(ECommandQueueType::GFX, SWAPCHAIN_INDEX, NUM_COMMAND_RECORDING_THREADS);
+	}
+	{
+		SCOPED_CPU_MARKER("ResetCmdLists");
+		ResetCommandLists(ECommandQueueType::GFX, SWAPCHAIN_INDEX, NUM_COMMAND_RECORDING_THREADS);
+	}
+	
+	ID3D12DescriptorHeap* ppHeaps[] = { this->GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
+	{
+		SCOPED_CPU_MARKER("Cmd.SetDescHeap");
+		auto& vpGFXCmds = mpRenderingCmds[ECommandQueueType::GFX][SWAPCHAIN_INDEX];
+		for (uint32_t iGFX = 0; iGFX < NUM_COMMAND_RECORDING_THREADS; ++iGFX)
+		{
+			static_cast<ID3D12GraphicsCommandList*>(vpGFXCmds[iGFX])->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+		}
+	}
+
+	return S_OK;
+}
+
 HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScreenData& LoadingScreenData, bool bUseHDRRenderPath)
 {
+	SCOPED_CPU_MARKER("RenderLoadingScreen");
 	HRESULT hr = S_OK;
 	
-	this->WaitMainSwapchainReady();
 	HWND hwnd = pWindow->GetHWND();
 	FWindowRenderContext& ctx = mRenderContextLookup.at(hwnd);
+	const int SWAPCHAIN_INDEX = ctx.SwapChain.GetCurrentBackBufferIndex();
 
-#if RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING
-	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, 1); // RenderThreadID == 1
-#else
-	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)ctx.GetCommandListPtr(CommandQueue::EType::GFX, 0);
-#endif
+	ID3D12GraphicsCommandList* pCmd = (ID3D12GraphicsCommandList*)mpRenderingCmds[ECommandQueueType::GFX][SWAPCHAIN_INDEX][0];
 
 	// Transition SwapChain RT
 	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
@@ -75,18 +113,14 @@ HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScr
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
 
 	{
-		SCOPED_CPU_MARKER("WAIT_PSO_WORKER_DISPATCH");
+		SCOPED_CPU_MARKER_C("WAIT_PSO_WORKER_DISPATCH", 0xFFFF0000);
 		mLatchPSOLoaderDispatched.wait();
 	}
+	
 	if (!mPSOCompileResults.empty())
 	{
-		std::shared_future<FPSOCompileResult>& future = mPSOCompileResults[bUseHDRRenderPath ? EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO : EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO];
-		if (future.valid())
-		{
-			future.wait();
-			const FPSOCompileResult& result = future.get();
-			mPSOs[result.id] = result.pPSO;
-		}
+		const FPSOCompileResult& result = this->WaitPSOReady(bUseHDRRenderPath ? EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO : EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO);
+		mPSOs[result.id] = result.pPSO;
 	}
 
 	this->WaitLoadingScreenReady();
@@ -104,23 +138,24 @@ HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScr
 
 	pCmd->DrawInstanced(3, 1, 0, 0);
 
-	// Transition SwapChain for Present
-	pCmd->ResourceBarrier(1, &barrierWP); 
+	pCmd->ResourceBarrier(1, &barrierWP); // Transition SwapChain for Present
 
-	std::vector<ID3D12CommandList*>& vCmdLists = ctx.GetGFXCommandListPtrs();
-	const UINT NumCommandLists = ctx.GetNumCurrentlyRecordingThreads(CommandQueue::EType::GFX);
-	for (UINT i = 0; i < NumCommandLists; ++i)
-	{
-		static_cast<ID3D12GraphicsCommandList*>(vCmdLists[i])->Close();
-	}
+	pCmd->Close();
+	mCmdClosed[GFX][SWAPCHAIN_INDEX][0] = true;
+
 	{
 		SCOPED_CPU_MARKER("ExecuteCommandLists()");
-		ctx.PresentQueue.pQueue->ExecuteCommandLists(NumCommandLists, (ID3D12CommandList**)vCmdLists.data());
+		ctx.PresentQueue.pQueue->ExecuteCommandLists(1, (ID3D12CommandList**)&pCmd);
 	}
 
+	//Log::Info("RenderLoadinScreen[%d]", ctx.GetCurrentSwapchainBufferIndex());
 	hr = PresentFrame(ctx);
 	if(hr == S_OK)
 		ctx.SwapChain.MoveToNextFrame();
+	else
+	{
+		Log::Warning("Error presenting frame during Loading Screen rendering!");
+	}
 
 	return hr;
 }

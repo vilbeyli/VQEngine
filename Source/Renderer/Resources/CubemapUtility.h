@@ -20,7 +20,7 @@
 
 #include <DirectXMath.h>
 
-struct CubemapUtility
+namespace CubemapUtility
 {
 	// cube face order: https://msdn.microsoft.com/en-us/library/windows/desktop/ff476906(v=vs.85).aspx
 	//------------------------------------------------------------------------------------------------------
@@ -40,6 +40,6 @@ struct CubemapUtility
 		NUM_CUBEMAP_LOOK_DIRECTIONS
 	};
 
-	static DirectX::XMMATRIX CalculateViewMatrix(ECubeMapLookDirections cubeFace, const DirectX::XMFLOAT3& position = DirectX::XMFLOAT3(0, 0, 0));
-	inline static DirectX::XMMATRIX CalculateViewMatrix(int face, const DirectX::XMFLOAT3& position = DirectX::XMFLOAT3(0, 0, 0)) { return CalculateViewMatrix(static_cast<ECubeMapLookDirections>(face), position); }
+	DirectX::XMMATRIX CalculateViewMatrix(ECubeMapLookDirections cubeFace, const DirectX::XMFLOAT3& position = DirectX::XMFLOAT3(0, 0, 0));
+	inline DirectX::XMMATRIX CalculateViewMatrix(int face, const DirectX::XMFLOAT3& position = DirectX::XMFLOAT3(0, 0, 0)) { return CalculateViewMatrix(static_cast<ECubeMapLookDirections>(face), position); }
 };
