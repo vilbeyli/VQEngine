@@ -26,7 +26,7 @@
 #include "Engine/Core/Window.h"
 #include "Engine/LoadingScreen.h"
 
-#include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Include/utils.h"
 #include "Libs/imgui/imgui.h"
 
 

@@ -29,8 +29,8 @@
 #include "Renderer/Rendering/RenderPass/ScreenSpaceReflections.h"
 #include "Renderer/Rendering/RenderPass/ObjectIDPass.h"
 
-#include "Libs/VQUtils/Source/utils.h"
-#include "Libs/VQUtils/Source/Timer.h"
+#include "Libs/VQUtils/Include/utils.h"
+#include "Libs/VQUtils/Include/Timer.h"
 
 #include <algorithm>
 

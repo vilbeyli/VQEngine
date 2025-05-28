@@ -23,7 +23,7 @@
 #include "Renderer/Rendering/RenderPass/MagnifierPass.h"
 #include "Renderer/Renderer.h"
 
-#include "VQUtils/Source/utils.h"
+#include "VQUtils/Include/utils.h"
 
 #include "Libs/imgui/backends/imgui_impl_win32.h"
 #include "Libs/imgui/imgui.h"

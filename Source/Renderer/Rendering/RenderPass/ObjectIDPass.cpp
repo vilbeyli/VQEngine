@@ -21,7 +21,7 @@
 #include "Engine/Scene/Scene.h"
 #include "Engine/Scene/SceneViews.h"
 #include "Shaders/LightingConstantBufferData.h"
-#include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Include/utils.h"
 #include "Engine/GPUMarker.h"
 
 #include <cassert>

@@ -25,9 +25,9 @@
 #include "Engine/GPUMarker.h"
 #include "Engine/Core/Platform.h" // CHECK_HR
 #include "Engine/Core/Window.h"
-#include "Libs/VQUtils/Source/Log.h"
-#include "Libs/VQUtils/Source/utils.h"
-#include "Libs/VQUtils/Source/SystemInfo.h"
+#include "Libs/VQUtils/Include/Log.h"
+#include "Libs/VQUtils/Include/utils.h"
+#include "Libs/VQUtils/Include/SystemInfo.h"
 
 
 #include <dxgi1_6.h>

@@ -21,7 +21,7 @@
 #include "DXGIUtils.h"
 
 #include "Core/Common.h"
-#include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Include/utils.h"
 #include "Libs/D3D12MA/src/D3D12MemAlloc.h"
 #include "Libs/D3DX12/d3dx12.h"
 

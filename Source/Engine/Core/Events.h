@@ -20,7 +20,7 @@
 #include "Platform.h"
 #include <dxgi1_6.h>
 
-#include "Libs/VQUtils/Source/Multithreading.h"
+#include "Libs/VQUtils/Include/Multithreading/EventSignal.h"
 
 #include "Renderer/Rendering/HDR.h"
 

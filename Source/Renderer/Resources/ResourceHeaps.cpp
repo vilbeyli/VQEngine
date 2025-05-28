@@ -43,7 +43,7 @@
 
 #include "Libs/D3DX12/d3dx12.h"
 #include "Engine/GPUMarker.h"
-#include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Include/utils.h"
 
 //--------------------------------------------------------------------------------------
 //

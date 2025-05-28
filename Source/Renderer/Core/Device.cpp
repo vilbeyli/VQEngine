@@ -22,8 +22,8 @@
 
 #include "Engine/GPUMarker.h"
 #include "Engine/Core/Platform.h" // CHECK_HR
-#include "Libs/VQUtils/Source/Log.h"
-#include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Include/Log.h"
+#include "Libs/VQUtils/Include/utils.h"
 
 #include <d3d12.h>
 #include <dxgi1_6.h>

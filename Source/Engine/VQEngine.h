@@ -35,8 +35,9 @@
 
 #include "UI/VQUI.h"
 
-#include "Libs/VQUtils/Source/Multithreading.h"
-#include "Libs/VQUtils/Source/SystemInfo.h"
+#include "Libs/VQUtils/Include/Multithreading/BufferedContainer.h"
+#include "Libs/VQUtils/Include/Multithreading/ThreadPool.h"
+#include "Libs/VQUtils/Include/SystemInfo.h"
 
 #include <memory>
 #include <latch>

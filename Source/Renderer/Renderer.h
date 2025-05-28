@@ -40,7 +40,9 @@
 #include "Engine/Settings.h"
 
 #define VQUTILS_SYSTEMINFO_INCLUDE_D3D12 1
-#include "Libs/VQUtils/Source/SystemInfo.h" // FGPUInfo
+#include "Libs/VQUtils/Include/SystemInfo.h" // FGPUInfo
+#include "Libs/VQUtils/Include/Multithreading/ThreadPool.h"
+#include "Libs/VQUtils/Include/Multithreading/TaskSignal.h"
 
 #include <vector>
 #include <array>

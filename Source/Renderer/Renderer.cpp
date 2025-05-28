@@ -47,9 +47,9 @@
 #include "Engine/Scene/Mesh.h"
 #include "Shaders/LightingConstantBufferData.h"
 
-#include "Libs/VQUtils/Source/Log.h"
-#include "Libs/VQUtils/Source/utils.h"
-#include "Libs/VQUtils/Source/Timer.h"
+#include "Libs/VQUtils/Include/Log.h"
+#include "Libs/VQUtils/Include/utils.h"
+#include "Libs/VQUtils/Include/Timer.h"
 #include "Libs/D3D12MA/src/D3D12MemAlloc.h"
 
 #include <cassert>

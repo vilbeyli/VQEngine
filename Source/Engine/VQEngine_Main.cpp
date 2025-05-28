@@ -25,8 +25,8 @@
 
 #include "Renderer/Renderer.h"
 
-#include "Libs/VQUtils/Source/utils.h"
-#include "Libs/VQUtils/Source/Timer.h"
+#include "Libs/VQUtils/Include/utils.h"
+#include "Libs/VQUtils/Include/Timer.h"
 #include "Libs/DirectXCompiler/inc/dxcapi.h"
 #include <cassert>
 

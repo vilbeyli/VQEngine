@@ -24,7 +24,7 @@
 
 #define CAMERA_DEBUG 0
 #if CAMERA_DEBUG
-#include "Libs/VQUtils/Source/Log.h"
+#include "Libs/VQUtils/Include/Log.h"
 #endif
 
 using namespace DirectX;

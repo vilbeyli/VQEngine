@@ -18,8 +18,8 @@
 
 #include "VQEngine.h"
 #include "GPUMarker.h"
-#include "Libs/VQUtils/Source/Log.h"
-#include "Libs/VQUtils/Source/Timer.h"
+#include "Libs/VQUtils/Include/Log.h"
+#include "Libs/VQUtils/Include/Timer.h"
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 //
