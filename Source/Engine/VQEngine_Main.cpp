@@ -26,6 +26,7 @@
 #include "Renderer/Renderer.h"
 
 #include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Source/Timer.h"
 #include "Libs/DirectXCompiler/inc/dxcapi.h"
 #include <cassert>
 
@@ -52,6 +53,7 @@ VQEngine::VQEngine()
 	: mAssetLoader(mWorkers_ModelLoading, mWorkers_MeshLoading, *mpRenderer)
 	, mbBuiltinMeshGenFinished(false)
 	, mpRenderer(std::make_unique<VQRenderer>())
+	, mpTimer(std::make_unique<Timer>())
 {}
 
 void VQEngine::MainThread_Tick()

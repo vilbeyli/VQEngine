@@ -19,6 +19,7 @@
 #include "VQEngine.h"
 #include "GPUMarker.h"
 #include "Libs/VQUtils/Source/Log.h"
+#include "Libs/VQUtils/Source/Timer.h"
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 //
@@ -36,7 +37,7 @@ void VQEngine::SimulationThread_Main()
 	bool bQuit = false;
 	while (!mbStopAllThreads && !bQuit)
 	{
-		dt = mTimer.Tick(); // update timer
+		dt = mpTimer->Tick(); // update timer
 
 		SimulationThread_Tick(dt);
 
@@ -44,8 +45,8 @@ void VQEngine::SimulationThread_Main()
 
 		// SimulationThread_Logging()
 		constexpr int LOGGING_PERIOD = 4; // seconds
-		static float LAST_LOG_TIME = mTimer.TotalTime();
-		const float TotalTime = mTimer.TotalTime();
+		static float LAST_LOG_TIME = mpTimer->TotalTime();
+		const float TotalTime = mpTimer->TotalTime();
 		if (TotalTime - LAST_LOG_TIME > 4)
 		{
 			Log::Info("SimulationThread_Tick() : dt=%.2f ms (Sleep=%.2f)", dt * 1000.0f, FrameLimiterTimeSpent);

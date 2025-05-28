@@ -21,6 +21,7 @@
 
 #include "Libs/DirectXCompiler/inc/dxcapi.h"
 #include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Source/Timer.h"
 #include "Renderer/Renderer.h"
 #include "Scene/SceneViews.h"
 #include "Scene/Scene.h"

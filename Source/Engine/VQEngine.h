@@ -36,7 +36,6 @@
 #include "UI/VQUI.h"
 
 #include "Libs/VQUtils/Source/Multithreading.h"
-#include "Libs/VQUtils/Source/Timer.h"
 #include "Libs/VQUtils/Source/SystemInfo.h"
 
 #include <memory>
@@ -55,12 +54,14 @@
 #define DEBUG_LOG_THREAD_SYNC_VERBOSE 0
 //--------------------------------------------------------------------
 
+// Forward Declarations
 struct ImGuiContext;
 class VQRenderer;
 struct FSceneRenderOptions;
 class Scene;
 struct FSceneStats;
 struct FPostProcessParameters;
+class Timer;
 
 //
 // DATA STRUCTS
@@ -72,6 +73,7 @@ enum EAppState
 	SIMULATING,
 	UNLOADING,
 	EXITING,
+
 	NUM_APP_STATES
 };
 
@@ -314,8 +316,7 @@ private:
 	FUIState                        mUIState;
 
 	// timer / profiler
-	Timer                           mTimer;
-	Timer                           mTimerRender;
+	std::unique_ptr<Timer>          mpTimer;
 	float                           mEffectiveFrameRateLimit_ms;
 
 	// misc.

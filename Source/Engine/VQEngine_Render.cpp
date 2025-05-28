@@ -240,9 +240,6 @@ void VQEngine::RenderThread_Inititalize()
 
 		RenderThread_LoadWindowSizeDependentResources(hwndMain, W, H, fResolutionScale); 
 	});
-
-	mTimerRender.Reset();
-	mTimerRender.Start();
 }
 
 void VQEngine::RenderThread_Exit()
