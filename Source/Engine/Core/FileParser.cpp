@@ -27,6 +27,7 @@
 #include <fstream>
 #include <cassert>
 #include <unordered_map>
+#include <algorithm>
 
 using namespace DirectX;
 

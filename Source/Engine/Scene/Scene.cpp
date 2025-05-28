@@ -30,6 +30,7 @@
 #include "Libs/VQUtils/Include/utils.h"
 
 #include <fstream>
+#include <sstream>
 #include <bitset>
 
 //-------------------------------------------------------------------------------

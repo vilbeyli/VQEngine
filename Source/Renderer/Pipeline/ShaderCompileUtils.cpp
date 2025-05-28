@@ -26,7 +26,7 @@
 
 #include <fstream>
 #include <stack>
-
+#include <sstream>
 #include <wrl.h>
 #include <D3Dcompiler.h>
 #pragma comment(lib, "D3DCompiler.lib")
