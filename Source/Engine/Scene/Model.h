@@ -19,7 +19,6 @@
 
 #include "../Core/Types.h"
 
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 #include <array>
@@ -39,10 +38,6 @@ struct MeshRenderSettings
 	static EMeshRenderMode DefaultRenderSettings() { return { EMeshRenderMode::FILL }; }
 	EMeshRenderMode renderMode = EMeshRenderMode::FILL;
 };
-
-using MeshMaterialLookup_t       = std::unordered_map<MeshID, MaterialID>;
-using MeshRenderSettingsLookup_t = std::unordered_map<MeshID, MeshRenderSettings>;
-
 
 //
 // MODEL 

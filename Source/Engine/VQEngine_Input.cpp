@@ -19,7 +19,6 @@
 #include "Math.h"
 #include "Scene/Scene.h"
 #include "Scene/SceneViews.h"
-#include "../Scenes/Scenes.h" // scene instances
 
 #include "GPUMarker.h"
 #include "imgui.h" // io
