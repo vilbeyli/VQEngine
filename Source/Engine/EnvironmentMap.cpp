@@ -19,6 +19,7 @@
 #include "VQEngine.h"
 #include "GPUMarker.h"
 #include "Renderer/Renderer.h"
+#include "Engine/Scene/Scene.h"
 
 #include "Libs/VQUtils/Source/utils.h"
 #include "Libs/VQUtils/Source/Image.h"

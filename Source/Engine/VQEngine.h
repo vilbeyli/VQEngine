@@ -24,10 +24,8 @@
 #include "Core/Events.h"
 #include "Core/Input.h"
 
-#include "Scene/Scene.h"
 #include "Scene/Mesh.h"
 #include "Scene/Camera.h"
-#include "Scene/Transform.h"
 
 #include "Renderer/Rendering/EnvironmentMapRendering.h"
 #include "EnvironmentMap.h"
@@ -60,6 +58,9 @@
 struct ImGuiContext;
 class VQRenderer;
 struct FSceneRenderOptions;
+class Scene;
+struct FSceneStats;
+struct FPostProcessParameters;
 
 //
 // DATA STRUCTS

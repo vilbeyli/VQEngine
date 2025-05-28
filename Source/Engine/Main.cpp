@@ -23,6 +23,7 @@
 #include "Libs/VQUtils/Source/utils.h"
 #include "Renderer/Renderer.h"
 #include "Scene/SceneViews.h"
+#include "Scene/Scene.h"
 
 #include <Windows.h>
 #include <ShellScalingAPI.h>

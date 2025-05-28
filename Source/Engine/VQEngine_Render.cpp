@@ -21,7 +21,9 @@
 
 #include "Shaders/LightingConstantBufferData.h"
 
+#include "Engine/Scene/Scene.h"
 #include "Scene/MeshGenerator.h"
+#include "Engine/Scene/Scene.h"
 
 #include "Libs/VQUtils/Source/utils.h"
 

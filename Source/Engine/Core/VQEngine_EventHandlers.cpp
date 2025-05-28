@@ -18,7 +18,7 @@
 
 #include "Engine/VQEngine.h"
 #include "Engine/GPUMarker.h"
-
+#include "Engine/Scene/Scene.h"
 #include "Renderer/Renderer.h"
 
 #include "Windows.h"
