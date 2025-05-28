@@ -32,7 +32,7 @@ size_t StaticBufferHeap::MEMORY_ALIGNMENT = 256;
 
 static D3D12_RESOURCE_STATES GetResourceTransitionState(EBufferType eType)
 {
-    D3D12_RESOURCE_STATES s;
+    D3D12_RESOURCE_STATES s = D3D12_RESOURCE_STATE_COMMON;
     switch (eType)
     {
         case CONSTANT_BUFFER : s = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER; break;

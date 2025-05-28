@@ -105,7 +105,7 @@ struct FInstancedMeshRenderData : public FInstancedMotionVectorMeshData, public 
 struct FInstancedWireframeRenderData : public FInstancedMeshRenderDataBase
 {
 	// single color for all instances, ideally we could make the color an instance data
-	DirectX::XMFLOAT4 color; 
+	DirectX::XMFLOAT4 color{ 0 };
 };
 struct FInstancedShadowMeshRenderData : public FInstancedMeshRenderDataBase
 {
@@ -161,7 +161,7 @@ struct FInstancedDrawParameters
 	//     bit  1  : iRaster
 	//     bits 2-3: iFaceCull
 	//     bit  4-7: <unused>
-	uint8 PackedMaterialConfig;
+	uint8 PackedMaterialConfig = 0;
 	inline void PackMaterialConfig(bool bAlphaMasked, bool bWireFrame, uint8 iFaceCull)
 	{
 		PackedMaterialConfig = (bAlphaMasked ? 1 : 0) |

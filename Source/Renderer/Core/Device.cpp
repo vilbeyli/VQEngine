@@ -20,6 +20,7 @@
 #include "Device.h"
 #include "Renderer.h"
 
+#include "Engine/GPUMarker.h"
 #include "Engine/Core/Platform.h" // CHECK_HR
 #include "Libs/VQUtils/Source/Log.h"
 #include "Libs/VQUtils/Source/utils.h"
@@ -41,6 +42,7 @@ using namespace VQSystemInfo;
 
 static void CheckDeviceFeatureSupport(ID3D12Device4* pDevice, FDeviceCapabilities& dc)
 {
+    SCOPED_CPU_MARKER("CheckDeviceFeatureSupport");
     HRESULT hr;
     if constexpr (false) // TODO: check per MSAA scenario
     {
@@ -192,6 +194,7 @@ bool Device::Create(const FDeviceCreateDesc& desc)
     // Debug & Validation Layer
     if (desc.bEnableDebugLayer)
     {
+        SCOPED_CPU_MARKER("Debug & Validation Layer");
         ID3D12Debug1* pDebugController;
         hr = D3D12GetDebugInterface(IID_PPV_ARGS(&pDebugController));
         if (hr == S_OK)
@@ -221,16 +224,22 @@ bool Device::Create(const FDeviceCreateDesc& desc)
 
     // throws COM error but returns S_OK : Microsoft C++ exception: _com_error at memory location 0x
     this->mpAdapter = std::move(adapter.pAdapter);
-    hr = D3D12CreateDevice(this->mpAdapter, adapter.MaxSupportedFeatureLevel, IID_PPV_ARGS(&mpDevice));
-    if (!SUCCEEDED(hr))
     {
-        Log::Error("Device::Create(): D3D12CreateDevice() failed.");
-	    return false;
+        SCOPED_CPU_MARKER("CreateDevice");
+        hr = D3D12CreateDevice(this->mpAdapter, adapter.MaxSupportedFeatureLevel, IID_PPV_ARGS(&mpDevice));
+        if (!SUCCEEDED(hr))
+        {
+            Log::Error("Device::Create(): D3D12CreateDevice() failed.");
+            return false;
+        }
     }
-    hr = D3D12CreateDevice(this->mpAdapter, adapter.MaxSupportedFeatureLevel, IID_PPV_ARGS(&mpDevice4));
-    if (!SUCCEEDED(hr))
     {
-        Log::Error("Device::Create(): D3D12CreateDevice4() failed.");
+        SCOPED_CPU_MARKER("CreateDevice4");
+        hr = D3D12CreateDevice(this->mpAdapter, adapter.MaxSupportedFeatureLevel, IID_PPV_ARGS(&mpDevice4));
+        if (!SUCCEEDED(hr))
+        {
+            Log::Error("Device::Create(): D3D12CreateDevice4() failed.");
+        }
     }
     const bool bDeviceCreated = true;
 
@@ -240,6 +249,7 @@ bool Device::Create(const FDeviceCreateDesc& desc)
         ID3D12InfoQueue* pInfoQueue = nullptr;
         if (SUCCEEDED(mpDevice->QueryInterface(IID_PPV_ARGS(&pInfoQueue))))
         {
+            SCOPED_CPU_MARKER("IgnoreWarnings");
             D3D12_MESSAGE_ID ignoredWarnings[] = {
                 D3D12_MESSAGE_ID_COMMAND_LIST_DRAW_VERTEX_BUFFER_NOT_SET
             };
