@@ -25,12 +25,13 @@
 #include <string>
 #include <atomic>
 
+#include <Windows.h>
+
 #define ENABLE_RAW_INPUT 1
 
 // A char[] is used for key mappings, large enough array will do
 #define NUM_MAX_KEYS 256
 
-#include "Window.h"
 using KeyCode = WPARAM;
 
 class Input
