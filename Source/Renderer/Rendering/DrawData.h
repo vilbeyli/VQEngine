@@ -18,16 +18,11 @@
 
 #pragma once
 
+#include "stdafx.h"
 #include "Engine/Core/Types.h"
 
 #include "Shaders/LightingConstantBufferData.h"
 #include "Engine/Scene/Material.h"
-
-#include <d3d12.h>
-
-#include <string>
-#include <vector>
-#include <unordered_map>
 
 struct Mesh;
 struct Material;

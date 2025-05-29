@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include "stdafx.h"
 #include "Core/Device.h"
 #include "Core/CommandQueue.h"
 #include "Core/Fence.h"
@@ -43,9 +44,6 @@
 #include "Libs/VQUtils/Include/SystemInfo.h" // FGPUInfo
 #include "Libs/VQUtils/Include/Multithreading/ThreadPool.h"
 #include "Libs/VQUtils/Include/Multithreading/TaskSignal.h"
-
-#include <vector>
-#include <array>
 
 #define THREADED_CTX_INIT 1
 #define RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING 1

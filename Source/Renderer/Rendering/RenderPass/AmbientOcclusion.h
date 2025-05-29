@@ -23,9 +23,6 @@
 // #define FFX_CACAO_ENABLE_NATIVE_RESOLUTION 1 
 #include "Renderer/Libs/AMDFidelityFX/CACAO/ffx_cacao.h"
 
-#include <DirectXMath.h>
-#include <dxgiformat.h>
-
 struct ID3D12Resource;
 struct ID3D12GraphicsCommandList;
 class AmbientOcclusionPass : public RenderPassBase

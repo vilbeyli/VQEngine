@@ -18,8 +18,7 @@
 
 #pragma once
 
-#include <dxgiformat.h>
-#include <unordered_map>
+#include "stdafx.h"
 
 struct IDXGIFactory6;
 struct ID3D12Device4;

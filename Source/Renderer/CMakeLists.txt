@@ -129,6 +129,7 @@ set(RenderPassSources
 set(Renderer
     "Renderer.h"
     "Renderer.cpp"
+    "stdafx.cpp"
 )
 
 # Shaders
@@ -273,6 +274,7 @@ add_library(${PROJECT_NAME} STATIC
 
 add_definitions(-DFFX_CACAO_ENABLE_D3D12)
 
+target_precompile_headers(${PROJECT_NAME} PRIVATE stdafx.h)
 target_include_directories(${PROJECT_NAME} PUBLIC "../") # Engine / Renderer / Scenes
 target_include_directories(${PROJECT_NAME} PUBLIC "../../") # VQE root
 target_include_directories(${PROJECT_NAME} PUBLIC "./") # Renderer root

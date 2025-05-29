@@ -23,13 +23,15 @@
 // - https://simonstechblog.blogspot.com/2019/06/d3d12-descriptor-heap-management.html
 
 #include "Renderer.h"
-#include "Core/Device.h"
+
 #include "Core/Common.h"
+
 #include "Resources/Texture.h"
 #include "Resources/CubemapUtility.h"
-#include "Pipeline/Shader.h"
-#include "Rendering/WindowRenderContext.h"
 
+#include "Pipeline/Shader.h"
+
+#include "Rendering/WindowRenderContext.h"
 #include "Rendering/RenderPass/AmbientOcclusion.h"
 #include "Rendering/RenderPass/DepthPrePass.h"
 #include "Rendering/RenderPass/DepthMSAAResolve.h"
@@ -54,7 +56,6 @@
 
 #include <cassert>
 #include <atomic>
-#include <memory>
 
 using namespace Microsoft::WRL;
 using namespace VQSystemInfo;

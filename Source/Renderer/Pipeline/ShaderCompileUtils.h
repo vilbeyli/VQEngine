@@ -18,14 +18,8 @@
 
 #pragma once
 
-#define VC_EXTRALEAN
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
+#include "stdafx.h"
 #include "Shader.h"
-#include <vector>
-#include <string>
-#include <d3d12.h>
-#include <wrl/client.h>
 
 struct FShaderStageCompileDesc;
 

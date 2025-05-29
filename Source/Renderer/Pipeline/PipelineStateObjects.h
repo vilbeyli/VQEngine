@@ -18,8 +18,8 @@
 
 #pragma once
 
+#include "stdafx.h"
 #include "ShaderCompileUtils.h"
-#include <unordered_map>
 #include "Tessellation.h"
 #include "Engine/Core/Types.h"
 

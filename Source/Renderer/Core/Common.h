@@ -17,10 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 #pragma once
 
-#define VC_EXTRALEAN
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <d3d12.h>
+#include "stdafx.h"
 #include "Engine/Core/Types.h"
 #include "Libs/VQUtils/Include/Log.h"
 #include <cassert>

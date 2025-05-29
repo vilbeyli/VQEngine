@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include <DirectXMath.h>
+#include "stdafx.h"
 
 namespace CubemapUtility
 {

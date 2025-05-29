@@ -18,11 +18,9 @@
 
 #pragma once
 
+#include "stdafx.h"
 #include "Engine/Core/Types.h"
 #include "Shader.h"
-
-#include <string>
-#include <vector>
 
 enum class ETessellationDomain : uint8
 {

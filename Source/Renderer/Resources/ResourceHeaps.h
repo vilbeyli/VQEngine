@@ -39,9 +39,8 @@
 // THE SOFTWARE.
 #pragma once
 
+#include "stdafx.h"
 #include "Engine/Core/Types.h"
-
-#include <vector>
 
 typedef void* HANDLE;
 

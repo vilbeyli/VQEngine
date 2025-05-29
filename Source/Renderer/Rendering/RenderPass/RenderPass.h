@@ -17,9 +17,8 @@
 //	Contact: volkanilbeyli@gmail.com
 #pragma once
 
+#include "stdafx.h"
 #include "Renderer/Pipeline/PipelineStateObjects.h"
-
-#include <vector>
 
 struct IRenderPassResourceCollection {}; // TODO: rename to IRenderPassResources
 struct IRenderPassDrawParameters {};

@@ -39,7 +39,7 @@
 // THE SOFTWARE.
 #pragma once
 
-#include <d3d12.h>
+#include "stdafx.h"
 #include "Engine/Core/Types.h"
 
 class ResourceView
