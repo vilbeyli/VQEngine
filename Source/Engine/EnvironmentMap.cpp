@@ -20,6 +20,7 @@
 #include "GPUMarker.h"
 #include "Renderer/Renderer.h"
 #include "Engine/Scene/Scene.h"
+#include "Engine/Core/Window.h"
 
 #include "Libs/VQUtils/Include/utils.h"
 #include "Libs/VQUtils/Include/Image.h"

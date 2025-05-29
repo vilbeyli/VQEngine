@@ -22,6 +22,7 @@
 #include "Scene/Scene.h"
 
 #include "Core/FileParser.h"
+#include "Core/Window.h"
 
 #include "Renderer/Renderer.h"
 

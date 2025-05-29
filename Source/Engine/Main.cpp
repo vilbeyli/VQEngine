@@ -23,6 +23,7 @@
 #include "Libs/VQUtils/Include/utils.h"
 #include "Libs/VQUtils/Include/Timer.h"
 #include "Renderer/Renderer.h"
+#include "Core/Window.h"
 #include "Scene/SceneViews.h"
 #include "Scene/Scene.h"
 

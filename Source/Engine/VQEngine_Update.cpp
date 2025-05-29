@@ -22,6 +22,7 @@
 #include "Scene/SceneViews.h"
 #include "../Scenes/Scenes.h" // scene instances
 #include "Core/FileParser.h"
+#include "Core/Window.h"
 #include "imgui.h"
 
 #include "Renderer/Renderer.h"
@@ -649,6 +650,9 @@ const std::string& VQEngine::GetWindowName(HWND hwnd) const
 #endif
 	return mWinNameLookup.at(hwnd);
 }
+
+const std::string& VQEngine::GetWindowName(const std::unique_ptr<Window>& pWin) const { return GetWindowName(pWin->GetHWND()); }
+const std::string& VQEngine::GetWindowName(const Window* pWin) const { return GetWindowName(pWin->GetHWND()); }
 
 
 MeshID VQEngine::GetBuiltInMeshID(const std::string& MeshName) const

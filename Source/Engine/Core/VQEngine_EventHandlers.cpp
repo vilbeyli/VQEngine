@@ -18,6 +18,7 @@
 
 #include "Engine/VQEngine.h"
 #include "Engine/GPUMarker.h"
+#include "Engine/Core/Window.h"
 #include "Engine/Scene/Scene.h"
 #include "Renderer/Renderer.h"
 
@@ -127,6 +128,8 @@ void VQEngine::SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse, bool bRel
 #endif
 	}
 }
+
+void VQEngine::SetMouseCaptureForWindow(Window* pWin, bool bCaptureMouse, bool bReleaseAtCapturedPosition) { this->SetMouseCaptureForWindow(pWin->GetHWND(), bCaptureMouse, bReleaseAtCapturedPosition); }
 
 
 
@@ -543,7 +546,9 @@ void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
 		desc.numBackBuffers = Swapchain.GetNumBackBuffers();
 		desc.pCmdQueue      = &ctx.PresentQueue;
 		desc.pDevice        = ctx.pDevice->GetDevicePtr();
-		desc.pWindow        = pWnd.get();
+		desc.hwnd           = pWnd->GetHWND();
+		desc.windowHeight   = pWnd->GetHeight();
+		desc.windowWidth    = pWnd->GetWidth();
 		desc.bHDR           = Swapchain.IsHDRFormat();
 
 		constexpr bool bHDR10 = false; // TODO;

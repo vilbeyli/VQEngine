@@ -17,6 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 #include "VQEngine.h"
 #include "Math.h"
+#include "Core/Window.h"
 #include "Scene/Scene.h"
 #include "Scene/SceneViews.h"
 

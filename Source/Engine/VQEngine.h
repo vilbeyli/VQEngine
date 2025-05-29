@@ -20,7 +20,7 @@
 
 #include "Core/Types.h"
 #include "Core/Platform.h"
-#include "Core/Window.h"
+#include "Core/IWindow.h"
 #include "Core/Input.h"
 
 #include "Scene/Mesh.h"
@@ -62,6 +62,9 @@ class Scene;
 struct FSceneStats;
 struct FPostProcessParameters;
 class Timer;
+class Window;
+
+using pfnWndProc_t = LRESULT(CALLBACK*)(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 //
 // DATA STRUCTS
@@ -191,11 +194,11 @@ public:
 
 //-----------------------------------------------------------------------
 	
-	void                       SetWindowName(HWND hwnd, const std::string& name);
-	void                       SetWindowName(const std::unique_ptr<Window>& pWin, const std::string& name);
-	const std::string&         GetWindowName(HWND hwnd) const;
-	inline const std::string&  GetWindowName(const std::unique_ptr<Window>& pWin) const { return GetWindowName(pWin->GetHWND()); }
-	inline const std::string&  GetWindowName(const Window* pWin) const { return GetWindowName(pWin->GetHWND()); }
+	void               SetWindowName(HWND hwnd, const std::string& name);
+	void               SetWindowName(const std::unique_ptr<Window>& pWin, const std::string& name);
+	const std::string& GetWindowName(HWND hwnd) const;
+	const std::string& GetWindowName(const std::unique_ptr<Window>& pWin) const;
+	const std::string& GetWindowName(const Window* pWin) const;
 
 
 	// ---------------------------------------------------------
@@ -341,7 +344,7 @@ private:
 
 	void                            HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWindowSettings& settings);
 	void                            SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse, bool bReleaseAtCapturedPosition);
-	inline void                     SetMouseCaptureForWindow(Window* pWin, bool bCaptureMouse, bool bReleaseAtCapturedPosition) { this->SetMouseCaptureForWindow(pWin->GetHWND(), bCaptureMouse, bReleaseAtCapturedPosition); };
+	void                            SetMouseCaptureForWindow(Window* pWin, bool bCaptureMouse, bool bReleaseAtCapturedPosition);
 
 	void                            GenerateBuiltinMeshes();
 	void                            LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete

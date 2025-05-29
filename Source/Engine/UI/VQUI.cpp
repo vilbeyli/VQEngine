@@ -19,6 +19,7 @@
 #include "Engine/GPUMarker.h"
 #include "Engine/Scene/SceneViews.h"
 #include "Engine/Scene/Scene.h"
+#include "Engine/Core/Window.h"
 
 #include "Renderer/Rendering/RenderPass/MagnifierPass.h"
 #include "Renderer/Renderer.h"

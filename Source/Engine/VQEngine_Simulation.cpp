@@ -18,6 +18,7 @@
 
 #include "VQEngine.h"
 #include "GPUMarker.h"
+#include "Engine/Core/Window.h"
 #include "Libs/VQUtils/Include/Log.h"
 #include "Libs/VQUtils/Include/Timer.h"
 

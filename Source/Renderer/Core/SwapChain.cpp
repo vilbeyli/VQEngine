@@ -24,7 +24,6 @@
 
 #include "Engine/GPUMarker.h"
 #include "Engine/Core/Platform.h" // CHECK_HR
-#include "Engine/Core/Window.h"
 #include "Libs/VQUtils/Include/Log.h"
 #include "Libs/VQUtils/Include/utils.h"
 #include "Libs/VQUtils/Include/SystemInfo.h"
@@ -127,15 +126,11 @@ void SwapChain::ClearHDRMetaData()
 bool SwapChain::Create(const FSwapChainCreateDesc& desc)
 {
     assert(desc.pDevice);
-    assert(desc.pWindow && desc.pWindow->GetHWND());
     assert(desc.pCmdQueue && desc.pCmdQueue->pQueue);
     assert(desc.numBackBuffers > 0 && desc.numBackBuffers <= NUM_MAX_BACK_BUFFERS);
 
-    const int WIDTH  = desc.pWindow->GetWidth();
-    const int HEIGHT = desc.pWindow->GetHeight();
-
     this->mpDevice = desc.pDevice;
-    this->mHwnd = desc.pWindow->GetHWND();
+    this->mHwnd = desc.hwnd;
     this->mNumBackBuffers = desc.numBackBuffers;
     this->mpPresentQueue = desc.pCmdQueue->pQueue;
     this->mbVSync = desc.bVSync;
@@ -190,8 +185,8 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
 
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.BufferCount = desc.numBackBuffers;
-    swapChainDesc.Height = HEIGHT;
-    swapChainDesc.Width  = WIDTH;
+    swapChainDesc.Height = desc.windowHeight;
+    swapChainDesc.Width  = desc.windowWidth;
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapChainDesc.SampleDesc.Quality = 0;
     swapChainDesc.SampleDesc.Count = 1;
@@ -306,8 +301,8 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
         //       we have to call here. For now, we use the specified w and h,
         //       however, that results in non native screen resolution (=low res fullscreen).
         //       Need to figure out how to properly start a swapchain in fullscreen mode.
-        this->SetFullscreen(true, WIDTH, HEIGHT);
-        this->Resize(WIDTH, HEIGHT, this->mFormat);
+        this->SetFullscreen(true, desc.windowWidth, desc.windowHeight);
+        this->Resize(desc.windowWidth, desc.windowHeight, this->mFormat);
     }
     // create RTVs if non-fullscreen swapchain
     else
@@ -321,8 +316,8 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
         , this->mbVSync
         , desc.numBackBuffers
         , VQRenderer::DXGIFormatAsString(this->mFormat).data()
-        , WIDTH
-        , HEIGHT
+        , desc.windowWidth
+        , desc.windowHeight
     );
     return bSuccess;
 }
