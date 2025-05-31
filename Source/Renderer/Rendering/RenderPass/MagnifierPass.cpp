@@ -89,7 +89,7 @@ void MagnifierPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamet
 		pCmd->RSSetViewports(1, &viewport);
 		pCmd->RSSetScissorRects(1, &scissorsRect);
 
-		pCmd->DrawIndexedInstanced(3, 1, 0, 0, 0);
+		pCmd->DrawInstanced(3, 1, 0, 0);
 
 		return;
 	}
