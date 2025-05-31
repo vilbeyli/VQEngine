@@ -291,7 +291,7 @@ static void BatchMainViewDrawCalls(
 				size_t iInstance = 0;
 				for (size_t iMesh = r.iStart; iMesh < r.iStart + r.Stride; ++iMesh)
 				{
-					pPerObj[iDraw]->ObjID[iInstance].x = (int)ViewVisibleMeshes.PerInstanceData[iMesh].hGameObject;
+					pPerObj[iDraw]->ObjID[iInstance].x = (int)ViewVisibleMeshes.PerInstanceData[iMesh].hGameObject + 1;
 					pPerObj[iDraw]->ObjID[iInstance].y = -222; //debug val
 					pPerObj[iDraw]->ObjID[iInstance].z = -333; //debug val
 					pPerObj[iDraw]->ObjID[iInstance].w = (int)(ViewVisibleMeshes.PerInstanceData[iMesh].fBBArea * 10000); // float value --> int render target
