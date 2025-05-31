@@ -68,7 +68,128 @@ static bool HasAlphaValues(const void* pData, uint W, uint H, DXGI_FORMAT Format
 	}
 	return false; // all 1 or all 0
 }
+static bool HasAlphaValuesSIMD(const void* pData, uint W, uint H, DXGI_FORMAT Format)
+{
+	SCOPED_CPU_MARKER("HasAlphaValuesSIMD");
 
+	const uint BytesPerPixel = (uint)VQ_DXGI_UTILS::GetPixelByteSize(Format);
+	assert(BytesPerPixel >= 4 && "Format must have at least 4 bytes per pixel");
+
+	const uint AlphaByteOffset = 3 * BytesPerPixel / 4;
+	bool bAllZero = true;
+	bool bAllWhite = true;
+
+	// SIMD constants for 128-bit SSE (4 pixels at a time for 4-byte pixels)
+	const __m128i zero = _mm_setzero_si128();
+	const __m128i all255 = _mm_set1_epi8(255);
+
+	for (uint row = 0; row < H; ++row)
+	{
+		const char* pRow = static_cast<const char*>(pData) + row * W * BytesPerPixel;
+		uint col = 0;
+
+		// Process 4 pixels at a time using SSE
+		for (; col <= W - 4; col += 4)
+		{
+			// Load 4 pixels (16 bytes for 4-byte pixels)
+			__m128i pixels = _mm_loadu_si128(reinterpret_cast<const __m128i*>(pRow + col * BytesPerPixel));
+
+			// Extract alpha bytes (assuming alpha is at AlphaByteOffset)
+			__m128i alpha;
+			if (BytesPerPixel == 4 && AlphaByteOffset == 3) // Optimize for RGBA
+			{
+				// Shuffle to get alpha bytes (byte 3 of each pixel)
+				alpha = _mm_shuffle_epi8(pixels, _mm_set_epi8(-1, -1, -1, 15, -1, -1, -1, 11, -1, -1, -1, 7, -1, -1, -1, 3));
+				alpha = _mm_and_si128(alpha, _mm_set_epi8(0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255));
+			}
+			else
+			{
+				// Fallback: extract alpha bytes manually
+				alignas(16) uint8_t temp[16];
+				_mm_storeu_si128(reinterpret_cast<__m128i*>(temp), pixels);
+				alignas(16) uint8_t alphaBytes[16] = { 0 };
+				for (int i = 0; i < 4; ++i)
+					alphaBytes[i * 4] = temp[i * BytesPerPixel + AlphaByteOffset];
+				alpha = _mm_load_si128(reinterpret_cast<const __m128i*>(alphaBytes));
+			}
+
+			// Compare alphas against 0 and 255
+			__m128i cmpZero = _mm_cmpeq_epi8(alpha, zero);
+			__m128i cmp255 = _mm_cmpeq_epi8(alpha, all255);
+
+			// Check if all are 0 or all are 255
+			int maskZero = _mm_movemask_epi8(cmpZero);
+			int mask255 = _mm_movemask_epi8(cmp255);
+
+			bAllZero = bAllZero && (maskZero == 0xFFFF);
+			bAllWhite = bAllWhite && (mask255 == 0xFFFF);
+
+			if (!bAllZero && !bAllWhite)
+				return true;
+		}
+
+		// Handle remaining pixels scalarly
+		for (; col < W; ++col)
+		{
+			uint8_t a = pRow[col * BytesPerPixel + AlphaByteOffset];
+			bAllZero = bAllZero && a == 0;
+			bAllWhite = bAllWhite && a == 255;
+
+			if (!bAllZero && !bAllWhite)
+				return true;
+		}
+	}
+
+	return false; // All 0 or all 255
+}
+
+static bool HasAlphaValuesSIMD3(const void* pData, uint32_t W, uint32_t H, DXGI_FORMAT Format) // this is 100x slower, why?
+{
+	SCOPED_CPU_MARKER("HasAlphaValuesSIMD3"); 
+	const uint32_t BytesPerPixel = (uint32_t)VQ_DXGI_UTILS::GetPixelByteSize(Format);
+	assert(BytesPerPixel >= 4);
+
+	const uint32_t NumPixels = W * H;
+	const uint8_t* data = static_cast<const uint8_t*>(pData);
+
+	// Fast path: use SSE to process 4 pixels (16 bytes) per loop
+	const uint32_t PixelsPerBatch = 4;
+	const uint32_t BatchSize = PixelsPerBatch * BytesPerPixel;
+	uint32_t i = 0;
+
+	__m128i zero = _mm_setzero_si128();
+	__m128i allFF = _mm_set1_epi32(0xFF);
+
+	for (; i + PixelsPerBatch <= NumPixels; i += PixelsPerBatch)
+	{
+		// Load 4 pixels (assumes 4 bytes per pixel minimum)
+		__m128i pixels = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + i * BytesPerPixel));
+
+		// Shift right logical each 32-bit int by 24 to isolate alpha (byte 3)
+		__m128i alphas = _mm_srli_epi32(pixels, 24);
+
+		// Check if any alpha != 0 and != 255
+		__m128i isZero = _mm_cmpeq_epi32(alphas, zero);
+		__m128i isFF = _mm_cmpeq_epi32(alphas, allFF);
+		__m128i either = _mm_or_si128(isZero, isFF); // 1 if 0 or 255
+
+		// Now invert: if not all are 0 or 255, we have a meaningful alpha
+		int mask = _mm_movemask_epi8(either);
+		if (mask != 0xFFFF) // not all elements are 0 or 255
+			return true;
+	}
+
+	// Scalar tail (if remaining pixels < 4)
+	for (; i < NumPixels; ++i)
+	{
+		const uint8_t* pixel = data + i * BytesPerPixel;
+		uint8_t a = pixel[3]; // assuming alpha is the 4th byte (RGBA)
+		if (a != 0 && a != 255)
+			return true;
+	}
+
+	return false; // all alpha are 0 or 255
+}
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 //
@@ -630,7 +751,6 @@ void TextureManager::AllocateResource(TextureID id)
 		bHasData = it != mTextureData.end() && (!it->second.InputData.empty() || !it->second.MipImages.empty() || it->second.DiskImage.IsValid());
 	}
 
-
 	D3D12_RESOURCE_STATES ResourceState = bHasData ? D3D12_RESOURCE_STATE_COPY_DEST : meta.Request.InitialState;
 	D3D12_CLEAR_VALUE* pClearValue = nullptr;
 	D3D12_CLEAR_VALUE ClearValueData = {};
@@ -697,14 +817,14 @@ void TextureManager::AllocateResource(TextureID id)
 	Texture.MipCount = meta.Request.D3D12Desc.MipLevels;
 	Texture.IsCubemap = meta.Request.bCubemap;
 	Texture.IsTypeless = meta.Request.D3D12Desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-	if (bHasData && meta.Request.bCPUReadback)
+	if (bHasData)
 	{
 		SCOPED_CPU_MARKER("CheckData-Alpha");
 		std::lock_guard<std::mutex> lock(mDataMutex);
 		auto it = mTextureData.find(id);
 		if (it != mTextureData.end() && !it->second.InputData.empty())
 		{
-			meta.Texture.UsesAlphaChannel = HasAlphaValues(it->second.InputData[0], meta.Texture.Width, meta.Texture.Height, meta.Texture.Format);
+			meta.Texture.UsesAlphaChannel = HasAlphaValuesSIMD(it->second.InputData[0], meta.Texture.Width, meta.Texture.Height, meta.Texture.Format);
 		}
 	}
 
