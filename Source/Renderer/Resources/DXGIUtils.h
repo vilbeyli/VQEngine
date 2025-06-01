@@ -1,5 +1,5 @@
 //	VQE
-//	Copyright(C) 2020  - Volkan Ilbeyli
+//	Copyright(C) 2025  - Volkan Ilbeyli
 //
 //	This program is free software : you can redistribute it and / or modify
 //	it under the terms of the GNU General Public License as published by
@@ -18,30 +18,18 @@
 
 #pragma once
 
-struct ID3D12CommandQueue;
-class Device;
+#include "Engine/Core/Types.h"
+#include <dxgiformat.h>
 
-enum ECommandQueueType
+namespace VQ_DXGI_UTILS
 {
-	GFX = 0,
-	COMPUTE,
-	COPY,
+	size_t BitsPerPixel(DXGI_FORMAT fmt);
 
-	NUM_COMMAND_QUEUE_TYPES
-};
+	//=====================================================================================-
+	// return the byte size of a pixel (or block if block compressed)
+	//=====================================================================================-
+	size_t GetPixelByteSize(DXGI_FORMAT fmt);
 
-enum class ECommandQueuePriority
-{
-	NORMAL,
-	HIGH,
-	REALTIME
-};
-
-class CommandQueue
-{
-public:
-	void Create(Device* pDevice, ECommandQueueType type, ECommandQueuePriority priority = ECommandQueuePriority::NORMAL, const char* pName = nullptr);
-	void Destroy();
-
-	ID3D12CommandQueue* pQueue = nullptr;
-};
+	void MipImage(const void* pDataSrc, void* pDataDst, uint width, uint height, uint bytesPerPixel);
+	void CopyPixels(const void* pData, void* pDest, uint stride, uint bytesWidth, uint height);
+}

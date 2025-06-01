@@ -25,7 +25,11 @@
 #include <d3d12.h>
 #include <cassert>
 
-void CommandQueue::Create(Device* pDevice, EType type, const char* pName /*= nullptr*/)
+void CommandQueue::Create(Device* pDevice, 
+	ECommandQueueType type,
+	ECommandQueuePriority priority /*= NORMAL*/,
+	const char* pName /*= nullptr*/
+)
 {
 	HRESULT hr = {};
 	ID3D12Device* pDevice_ = pDevice->GetDevicePtr();
@@ -33,12 +37,18 @@ void CommandQueue::Create(Device* pDevice, EType type, const char* pName /*= nul
 
 	qDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
 	qDesc.NodeMask = 0;
-	qDesc.Priority = 0;
+	switch (priority)
+	{
+	case ECommandQueuePriority::NORMAL  : qDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL; break;
+	case ECommandQueuePriority::HIGH    : qDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_HIGH; break;
+	case ECommandQueuePriority::REALTIME: qDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_GLOBAL_REALTIME; break;
+	default: assert(false); break;
+	}
 	switch (type)
 	{
-	case CommandQueue::GFX     : qDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;  break;
-	case CommandQueue::COMPUTE : qDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE; break;
-	case CommandQueue::COPY    : qDesc.Type = D3D12_COMMAND_LIST_TYPE_COPY;    break;
+	case ECommandQueueType::GFX    : qDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;  break;
+	case ECommandQueueType::COMPUTE: qDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE; break;
+	case ECommandQueueType::COPY   : qDesc.Type = D3D12_COMMAND_LIST_TYPE_COPY;    break;
 	default: assert(false); break;
 	}
 

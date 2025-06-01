@@ -259,11 +259,15 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 
 	env.CreateRenderingResources(*mpRenderer, desc, DIFFUSE_IRRADIANCE_CUBEMAP_RESOLUTION, SpecularMapMip0Resolution);
 
-	// Queue irradiance cube face rendering
-	mbEnvironmentMapPreFilter.store(true);
 
 	//assert(mpScene->mIndex_ActiveEnvironmentMapPreset == static_cast<int>(ActiveEnvMapIndex)); // Only false during initialization
 	mpScene->mIndex_ActiveEnvironmentMapPreset = static_cast<int>(ActiveEnvMapIndex);
+	{
+		SCOPED_CPU_MARKER_C("WAIT_MESH_UPLOAD", 0xFFAA0000);
+		mBuiltinMeshUploadedLatch.wait();
+	}
+	mpRenderer->PreFilterEnvironmentMap(mBuiltinMeshes[EBuiltInMeshes::CUBE]);
+	mbLoadingEnvironmentMap.store(false);
 
 	// Update HDRMetaData when the environment map is loaded
 	HWND hwnd = mpWinMain->GetHWND();
@@ -273,5 +277,6 @@ void VQEngine::LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMap
 void VQEngine::UnloadEnvironmentMap()
 {
 	FRenderingResources_MainWindow& rsc = mpRenderer->GetRenderingResources_MainWindow();
+	// TODO: wait if in use.
 	rsc.EnvironmentMap.DestroyRenderingResources(*mpRenderer, mpWinMain->GetHWND());
 }

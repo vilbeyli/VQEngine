@@ -20,6 +20,7 @@
 #include "Renderer.h"
 #include "Shaders/LightingConstantBufferData.h"
 #include "Engine/GPUMarker.h"
+#include "Core/Common.h"
 
 using namespace Microsoft::WRL;
 using namespace VQSystemInfo;
@@ -132,6 +133,10 @@ void VQRenderer::LoadBuiltinRootSignatures()
 {
 	SCOPED_CPU_MARKER("RootSignatures");
 	HRESULT hr = {};
+	{
+		SCOPED_CPU_MARKER_C("WAIT_DEVICE_CREATE", 0xFF0000FF);
+		mLatchDeviceInitialized.wait();
+	}
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
 	ComPtr<ID3DBlob> signature;
@@ -576,6 +581,7 @@ void VQRenderer::LoadBuiltinRootSignatures()
 		SetName(pRS, "RootSignature_DownsampleDepth");
 		mRootSignatureLookup[EBuiltinRootSignatures::LEGACY__DownsampleDepthCS] = pRS;
 	}
-	
+
+	mLatchRootSignaturesInitialized.count_down();
 }
 

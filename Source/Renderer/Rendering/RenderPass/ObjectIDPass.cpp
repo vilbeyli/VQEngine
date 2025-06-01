@@ -52,8 +52,8 @@ void ObjectIDPass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned
 	mOutputResolutionY = Height;
 
 	{	// Scene depth stencil view
-		TextureCreateDesc desc("ObjectIDDepth");
-		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
+		FTextureRequest desc("ObjectIDDepth");
+		desc.D3D12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 			DXGI_FORMAT_R32_TYPELESS
 			, mOutputResolutionX
 			, mOutputResolutionY
@@ -63,13 +63,13 @@ void ObjectIDPass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned
 			, 0 // MSAA SampleQuality
 			, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
 		);
-		desc.ResourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+		desc.InitialState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 		TEXPassOutputDepth = mRenderer.CreateTexture(desc);
 		mRenderer.InitializeDSV(DSVPassOutput, 0u, TEXPassOutputDepth);
 	}
 	{ // Main render target view
-		TextureCreateDesc desc("ObjectID");
-		desc.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
+		FTextureRequest desc("ObjectID");
+		desc.D3D12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 			DXGI_FORMAT::DXGI_FORMAT_R32G32B32A32_SINT
 			, mOutputResolutionX
 			, mOutputResolutionY
@@ -80,23 +80,23 @@ void ObjectIDPass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned
 			, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
 		);
 
-		desc.ResourceState = D3D12_RESOURCE_STATE_COMMON;
+		desc.InitialState = D3D12_RESOURCE_STATE_COMMON;
 		TEXPassOutput = mRenderer.CreateTexture(desc);
 		mRenderer.InitializeRTV(RTVPassOutput, 0u, TEXPassOutput);
 
 		D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint;
 		UINT64 byteAlignedSize = 0;
-		mRenderer.GetDevicePtr()->GetCopyableFootprints(&desc.d3d12Desc, 0, 1, 0, &footprint, nullptr, nullptr, &byteAlignedSize);
+		mRenderer.GetDevicePtr()->GetCopyableFootprints(&desc.D3D12Desc, 0, 1, 0, &footprint, nullptr, nullptr, &byteAlignedSize);
 
-		desc.TexName = "ObjectID_CPU_READBACK";
+		desc.Name = "ObjectID_CPU_READBACK";
 		desc.bCPUReadback = true;
-		desc.ResourceState = D3D12_RESOURCE_STATE_COPY_DEST;
-		desc.d3d12Desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-		desc.d3d12Desc.Format = DXGI_FORMAT_UNKNOWN;
-		desc.d3d12Desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-		desc.d3d12Desc.Height = 1;
-		desc.d3d12Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-		desc.d3d12Desc.Width = byteAlignedSize;
+		desc.InitialState = D3D12_RESOURCE_STATE_COPY_DEST;
+		desc.D3D12Desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		desc.D3D12Desc.Format = DXGI_FORMAT_UNKNOWN;
+		desc.D3D12Desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+		desc.D3D12Desc.Height = 1;
+		desc.D3D12Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+		desc.D3D12Desc.Width = byteAlignedSize;
 		TEXPassOutputCPUReadback = mRenderer.CreateTexture(desc);
 	}
 }
@@ -166,6 +166,8 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 
 	ID3D12GraphicsCommandList* pCmd = pParams->pCmd;
 	ID3D12GraphicsCommandList* pCmdCpy = static_cast<ID3D12GraphicsCommandList*>(pParams->pCmdCopy);
+	const bool bEmptyDrawList = pParams->pSceneDrawData->mainViewDrawParams.empty();
+
 	auto pRscRT = mRenderer.GetTextureResource(TEXPassOutput);
 	auto pRscCPU = mRenderer.GetTextureResource(TEXPassOutputCPUReadback);
 
@@ -203,6 +205,8 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	PSO_ID psoPrev = INVALID_ID;
 	BufferID vbPrev = INVALID_ID;
 	BufferID ibPrev = INVALID_ID;
+	SRV_ID matSRVPrev = INVALID_ID;
+	SRV_ID heightSRVPrev = INVALID_ID;
 	D3D_PRIMITIVE_TOPOLOGY topoPrev = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
 	for (const FInstancedDrawParameters& meshRenderCmd : pParams->pSceneDrawData->mainViewDrawParams)
 	{
@@ -225,14 +229,13 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 		}
 
 		// set textures
-		if (meshRenderCmd.SRVMaterialMaps != INVALID_ID)
+		if (meshRenderCmd.SRVMaterialMaps != matSRVPrev)
 		{
-			//const CBV_SRV_UAV& NullTex2DSRV = mRenderer.GetSRV(mResources_MainWnd.SRV_NullTexture2D);
 			pCmd->SetGraphicsRootDescriptorTable(0, mRenderer.GetSRV(meshRenderCmd.SRVMaterialMaps).GetGPUDescHandle(0));
-			if (meshRenderCmd.SRVHeightMap != INVALID_ID)
-			{
-				pCmd->SetGraphicsRootDescriptorTable(3, mRenderer.GetSRV(meshRenderCmd.SRVHeightMap).GetGPUDescHandle(0));
-			}
+		}
+		if (meshRenderCmd.SRVHeightMap != heightSRVPrev)
+		{
+			pCmd->SetGraphicsRootDescriptorTable(3, mRenderer.GetSRV(meshRenderCmd.SRVHeightMap).GetGPUDescHandle(0));
 		}
 
 		// set IA-VB-IB
@@ -258,6 +261,8 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 		vbPrev = meshRenderCmd.VB;
 		topoPrev = meshRenderCmd.IATopology;
 		psoPrev = psoID;
+		matSRVPrev = meshRenderCmd.SRVMaterialMaps;
+		heightSRVPrev = meshRenderCmd.SRVHeightMap;
 	}
 
 
@@ -346,17 +351,17 @@ std::vector<FPSOCreationTaskParameters> ObjectIDPass::CollectPSOCreationParamete
 		size_t iShader = 0;
 		if (iTess == 1)
 		{
-			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain_Tess", "vs_6_0" };
-			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "HSMain"     , "hs_6_0" };
-			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "DSMain"     , "ds_6_0" };
+			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain_Tess", EShaderStage::VS, EShaderModel::SM6_0 };
+			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "HSMain"     , EShaderStage::HS, EShaderModel::SM6_0 };
+			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "DSMain"     , EShaderStage::DS, EShaderModel::SM6_0 };
 			if (iTessCull > 0)
-				psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "GSMain" , "gs_6_0" };
+				psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "GSMain" , EShaderStage::GS, EShaderModel::SM6_0 };
 		}
 		else
 		{
-			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_0" };
+			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain", EShaderStage::VS, EShaderModel::SM6_0 };
 		}
-		psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_0" };
+		psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain", EShaderStage::PS, EShaderModel::SM6_0 };
 		const size_t iPixelShader = iShader - 1;
 
 		// macros

@@ -56,14 +56,18 @@ set(ResourceHeaders
     "Resources/ResourceHeaps.h"
     "Resources/ResourceViews.h"
     "Resources/Texture.h"
+    "Resources/TextureManager.h"
+    "Resources/DXGIUtils.h"
 )
 set(ResourceSources
     "Resources/Buffer.cpp"
     "Resources/CubemapUtility.cpp"
     "Resources/ResourceHeaps.cpp"
     "Resources/ResourceViews.cpp"
+    "Resources/TextureManager.cpp"
     "Resources/Texture.cpp"
     "Resources/Renderer_Resources.cpp"
+    "Resources/DXGIUtils.cpp"
 )
 
 # Pipeline configuration

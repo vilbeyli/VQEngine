@@ -69,40 +69,47 @@ MaterialID Scene::LoadMaterial(const FMaterialRepresentation& matRep, TaskID tas
 	mat.SetTessellationPartitioning(matRep.TessellationPartitioning);
 	mat.SetTessellationOutputTopology(matRep.TessellationOutputTopology);
 
-	// async data (textures)
-	bool bHasTexture = false;
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.DiffuseMapFilePath, AssetLoader::ETextureType::DIFFUSE);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.NormalMapFilePath, AssetLoader::ETextureType::NORMALS);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.EmissiveMapFilePath, AssetLoader::ETextureType::EMISSIVE);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.AlphaMaskMapFilePath, AssetLoader::ETextureType::ALPHA_MASK);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.MetallicMapFilePath, AssetLoader::ETextureType::METALNESS);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.RoughnessMapFilePath, AssetLoader::ETextureType::ROUGHNESS);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.AOMapFilePath, AssetLoader::ETextureType::AMBIENT_OCCLUSION);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.HeightMapFilePath, AssetLoader::ETextureType::HEIGHT);
+	// textures
+	const bool bHasSurfaceTexture =
+		!matRep.DiffuseMapFilePath.empty() ||
+		!matRep.NormalMapFilePath.empty() ||
+		!matRep.EmissiveMapFilePath.empty() ||
+		!matRep.AlphaMaskMapFilePath.empty() ||
+		!matRep.MetallicMapFilePath.empty() ||
+		!matRep.RoughnessMapFilePath.empty() ||
+		!matRep.AOMapFilePath.empty()
+	;
+	fnEnqueueTexLoad(id, matRep.DiffuseMapFilePath  , AssetLoader::ETextureType::DIFFUSE);
+	fnEnqueueTexLoad(id, matRep.NormalMapFilePath   , AssetLoader::ETextureType::NORMALS);
+	fnEnqueueTexLoad(id, matRep.EmissiveMapFilePath , AssetLoader::ETextureType::EMISSIVE);
+	fnEnqueueTexLoad(id, matRep.AlphaMaskMapFilePath, AssetLoader::ETextureType::ALPHA_MASK);
+	fnEnqueueTexLoad(id, matRep.MetallicMapFilePath , AssetLoader::ETextureType::METALNESS);
+	fnEnqueueTexLoad(id, matRep.RoughnessMapFilePath, AssetLoader::ETextureType::ROUGHNESS);
+	fnEnqueueTexLoad(id, matRep.AOMapFilePath       , AssetLoader::ETextureType::AMBIENT_OCCLUSION);
+	const bool bHasHeightmap = fnEnqueueTexLoad(id, matRep.HeightMapFilePath, AssetLoader::ETextureType::HEIGHT);
+	const bool bHasTexture = bHasHeightmap || bHasSurfaceTexture;
 
 	AssetLoader::FMaterialTextureAssignment MatTexAssignment = {};
 	MatTexAssignment.matID = id;
-	if (bHasTexture)
-		mMaterialAssignments.mAssignments.push_back(MatTexAssignment);
+	
+	mMaterialAssignments.mAssignments.push_back(MatTexAssignment);
+	
 	return id;
 }
 
-void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& sceneRep, ThreadPool& UpdateWorkerThreadPool)
+void Scene::StartLoading(FSceneRepresentation& sceneRep, ThreadPool& UpdateWorkerThreadPool)
 {
 	SCOPED_CPU_MARKER("SceneStartLoading");
 
 	const TaskID taskID = AssetLoader::GenerateModelLoadTaskID();
 	LoadBuiltinMaterials(taskID, sceneRep.Objects);
 	
-	mRenderer.WaitForLoadCompletion();
-	
 	Log::Info("[Scene] Loading Scene: %s", sceneRep.SceneName.c_str());
-
 
 	mSceneRepresentation = sceneRep;
 
 	{
-		SCOPED_CPU_MARKER("LoadScene()");
+		SCOPED_CPU_MARKER("LoadScene");
 		this->LoadScene(sceneRep); // scene-specific load 
 	}
 
@@ -126,9 +133,6 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	}
 	mFrustumCullWorkerContext.ClearMemory();
 
-	mEngine.WaitForBuiltinMeshGeneration();
-
-	LoadBuiltinMeshes(builtinMeshes);
 	LoadGameObjects(std::move(sceneRep.Objects), UpdateWorkerThreadPool);
 }
 
@@ -136,7 +140,7 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 
 void Scene::LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRepresentation>& GameObjsToBeLoaded)
 {
-	SCOPED_CPU_MARKER("Scene::LoadBuiltinMaterials()");
+	SCOPED_CPU_MARKER("Scene.LoadBuiltinMaterials()");
 
 	const char* STR_MATERIALS_FOLDER = "Data/Materials/";
 	auto vMatFiles = DirectoryUtil::ListFilesInDirectory(STR_MATERIALS_FOLDER, "xml");
@@ -184,7 +188,7 @@ void Scene::LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRep
 
 void Scene::LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes)
 {
-	SCOPED_CPU_MARKER("Scene::LoadBuiltinMeshes()");
+	SCOPED_CPU_MARKER("Scene.LoadBuiltinMeshes()");
 
 	// register builtin meshes to scene mesh lookup
 	// @mMeshes[0-NUM_BUILTIN_MESHES] are assigned here directly while the rest
@@ -332,7 +336,7 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 		}
 		if(!bThreadsDone.load())
 		{
-			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
+			SCOPED_CPU_MARKER_C("WAIT_WORKER", 0xFFFF0000);
 			ThreadsDoneSignal.Wait();
 		}
 	}
@@ -444,7 +448,7 @@ void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 	}
 }
 
-void Scene::OnLoadComplete()
+void Scene::OnLoadComplete(const BuiltinMeshArray_t& builtinMeshes)
 {
 	SCOPED_CPU_MARKER("Scene.OnLoadComplete");
 	Log::Info("[Scene] OnLoadComplete()");
@@ -466,6 +470,9 @@ void Scene::OnLoadComplete()
 
 	// assign material data
 	mMaterialAssignments.DoAssignments(this, this->mMtxTexturePaths, this->mTexturePaths, &mRenderer);
+
+	mEngine.FinalizeBuiltinMeshes();
+	LoadBuiltinMeshes(builtinMeshes);
 
 	CalculateGameObjectLocalSpaceBoundingBoxes();
 

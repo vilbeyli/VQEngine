@@ -61,9 +61,6 @@ void VQEngine::SimulationThread_Initialize()
 	SCOPED_CPU_MARKER_C("SimulationThread_Initialize()", 0xFF007777);
 	mNumSimulationTicks = 0;
 
-#define PARALLEL_INIT 1
-
-#if PARALLEL_INIT
 	EventSignal UpdateThreadInitializeFinished;
 	std::atomic<int> ThreadDone = 0;
 	mWorkers_Simulation.AddTask([=, &UpdateThreadInitializeFinished, &ThreadDone]()
@@ -73,20 +70,7 @@ void VQEngine::SimulationThread_Initialize()
 		ThreadDone++;
 		UpdateThreadInitializeFinished.NotifyOne();
 	});
-#endif
 	RenderThread_Inititalize();
-
-#if !PARALLEL_INIT
-	UpdateThread_Inititalize();
-#endif
-
-#if PARALLEL_INIT
-	{
-		SCOPED_CPU_MARKER_C("WAIT_UpdateWorkers", 0xFFFF0000);
-		if(ThreadDone.load() == 0)
-			UpdateThreadInitializeFinished.Wait();
-	}
-#endif
 
 	Log::Info("SimulationThread Initialized.");
 }
