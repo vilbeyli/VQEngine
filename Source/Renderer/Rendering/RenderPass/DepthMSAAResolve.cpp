@@ -122,17 +122,18 @@ std::vector<FPSOCreationTaskParameters> DepthMSAAResolvePass::CollectPSOCreation
 		FPSOCreationTaskParameters param = {};
 		param.pID = &mPSO[iDpth][iNrml][iRghn];
 
-		FShaderStageCompileDesc shaderDesc = {};
-		shaderDesc.EntryPoint = "CSMain";
-		shaderDesc.FilePath = VQRenderer::GetFullPathOfShader("DepthResolve.hlsl");
-		shaderDesc.ShaderStage = EShaderStage::CS; 
-		shaderDesc.ShaderModel = EShaderModel::SM6_0;
-		shaderDesc.Macros =
-		{
-			  FShaderMacro::CreateShaderMacro("OUTPUT_DEPTH"    , "%s", (iDpth ? "1" : "0"))
-			, FShaderMacro::CreateShaderMacro("OUTPUT_NORMALS"  , "%s", (iNrml ? "1" : "0"))
-			, FShaderMacro::CreateShaderMacro("OUTPUT_ROUGHNESS", "%s", (iRghn ? "1" : "0"))
-		};
+		//strncpy_s(shaderDesc.EntryPoint, "CSMain", sizeof("CSMain"));
+		FShaderStageCompileDesc shaderDesc(
+			VQRenderer::GetFullPathOfShader("DepthResolve.hlsl"),
+			"CSMain",
+			EShaderStage::CS,
+			EShaderModel::SM6_0,
+			{
+				  FShaderMacro::CreateShaderMacro("OUTPUT_DEPTH"    , "%s", (iDpth ? "1" : "0"))
+				, FShaderMacro::CreateShaderMacro("OUTPUT_NORMALS"  , "%s", (iNrml ? "1" : "0"))
+				, FShaderMacro::CreateShaderMacro("OUTPUT_ROUGHNESS", "%s", (iRghn ? "1" : "0"))
+			}
+		);
 
 		FPSODesc& psoDesc = param.Desc;
 		psoDesc.PSOName = "DepthMSAAResolveCS" 

@@ -833,13 +833,7 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 	const std::string ShaderSourcePath = StrUtil::UnicodeToASCII<512>(ShaderStageCompileDesc.FilePath.c_str());
 	const std::string CachedShaderBinaryPath = GetCachedShaderBinaryPath(ShaderStageCompileDesc);
 
-	// decide whether to use shader cache or compile from source
-#if 1
 	const bool bUseCachedShaders = !ShaderCacheDirtyMap.at(CachedShaderBinaryPath);
-#else
-	const bool bUseCachedShaders = DirectoryUtil::FileExists(CachedShaderBinaryPath)
-		&& !ShaderUtils::IsCacheDirty(ShaderSourcePath, CachedShaderBinaryPath);
-#endif
 
 	// load the shader d3dblob
 	FShaderStageCompileResult Result = {};

@@ -71,8 +71,6 @@ namespace ShaderUtils
 		ID3D12ShaderReflection* Reflections[EShaderStage::NUM_SHADER_STAGES] = { nullptr };
 	};
 
-	bool IsShaderSM5(const char* ShaderModelStr);
-	bool IsShaderSM6(const char* ShaderModelStr);
 
 	// Compiles shader from source file with the given file path, entry point, shader model & macro definitions
 	//
@@ -149,8 +147,8 @@ namespace ShaderUtils
 
 struct FShaderStageCompileDesc
 {
-	std::wstring FilePath;
-	std::string EntryPoint;
+	std::wstring FilePath = L"";
+	std::string EntryPoint = "";
 	EShaderStage ShaderStage = EShaderStage::NUM_SHADER_STAGES;
 	EShaderModel ShaderModel = EShaderModel::SM6_0;
 	std::vector<FShaderMacro> Macros;
