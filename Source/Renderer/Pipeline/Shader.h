@@ -43,6 +43,21 @@ enum EShaderStage : unsigned // use this enum for array indexing
 	NUM_SHADER_STAGES // =6
 	, UNINITIALIZED = NUM_SHADER_STAGES
 };
+enum EShaderModel : unsigned
+{   // https://github.com/microsoft/DirectXShaderCompiler/wiki/Shader-Model
+	SM5_0 = 0 , // DX11 Tessellation, compute shaders - DXBC
+	SM6_0,      // DX12 DXIL
+	SM6_1,      // Conservative rasterization, ROVs
+	SM6_2,      // Wave intrinsics, quad ops
+	SM6_3,      // DXR 1.0
+	SM6_4,      // VRS, enhanced ray tracing
+	SM6_5,      // Mesh shaders, task (amplification) shaders
+	SM6_6,      // Atomics, dynamic resources
+	SM6_7,      // DXR 1.1
+	SM6_8,      // Work graphs
+	
+	NUM_SHADER_MODELS
+};
 
 struct FShaderMacro
 {

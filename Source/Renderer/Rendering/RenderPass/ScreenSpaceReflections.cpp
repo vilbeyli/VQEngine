@@ -484,7 +484,7 @@ std::vector<FPSOCreationTaskParameters> ScreenSpaceReflectionsPass::CollectPSOCr
 		const std::wstring ShaderFilePath = VQRenderer::GetFullPathOfShader("ScreenSpaceReflections/ClassifyReflectionTiles.hlsl");
 		FPSODesc psoLoadDesc = {}; //"-enable-16bit-types -T cs_6_2 /Zi /Zss"
 		psoLoadDesc.PSOName = "[PSO] Reflection Denoiser - ClassifyReflectionTiles";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2", {}, bUseFP16Types });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", EShaderStage::CS, EShaderModel::SM6_2, {}, bUseFP16Types });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mSubpassRootSignatureLookup.at(ESubpass::CLASSIFY_TILES);
 		psoLoadDesc.D3D12ComputeDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 		psoLoadDesc.D3D12ComputeDesc.NodeMask = 0;
@@ -494,7 +494,7 @@ std::vector<FPSOCreationTaskParameters> ScreenSpaceReflectionsPass::CollectPSOCr
 		const std::wstring ShaderFilePath = VQRenderer::GetFullPathOfShader("ScreenSpaceReflections/PrepareBlueNoiseTexture.hlsl");
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "[PSO] Reflection Denoiser - Prepare Blue Noise Texture";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2", {}, bUseFP16Types });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", EShaderStage::CS, EShaderModel::SM6_2, {}, bUseFP16Types });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mSubpassRootSignatureLookup.at(ESubpass::BLUE_NOISE);
 		psoLoadDesc.D3D12ComputeDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 		psoLoadDesc.D3D12ComputeDesc.NodeMask = 0;
@@ -504,7 +504,7 @@ std::vector<FPSOCreationTaskParameters> ScreenSpaceReflectionsPass::CollectPSOCr
 		const std::wstring ShaderFilePath = VQRenderer::GetFullPathOfShader("ScreenSpaceReflections/Reproject.hlsl");
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "[PSO] Reflection Denoiser - Reproject";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2", {}, bUseFP16Types });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", EShaderStage::CS, EShaderModel::SM6_2, {}, bUseFP16Types });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mSubpassRootSignatureLookup.at(ESubpass::REPROJECT);
 		psoLoadDesc.D3D12ComputeDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 		psoLoadDesc.D3D12ComputeDesc.NodeMask = 0;
@@ -514,7 +514,7 @@ std::vector<FPSOCreationTaskParameters> ScreenSpaceReflectionsPass::CollectPSOCr
 		const std::wstring ShaderFilePath = VQRenderer::GetFullPathOfShader("ScreenSpaceReflections/Prefilter.hlsl");
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "[PSO] Reflection Denoiser - Prefilter";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2", {}, bUseFP16Types });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", EShaderStage::CS, EShaderModel::SM6_2, {}, bUseFP16Types });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mSubpassRootSignatureLookup.at(ESubpass::PREFILTER);
 		psoLoadDesc.D3D12ComputeDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 		psoLoadDesc.D3D12ComputeDesc.NodeMask = 0;
@@ -524,7 +524,7 @@ std::vector<FPSOCreationTaskParameters> ScreenSpaceReflectionsPass::CollectPSOCr
 		const std::wstring ShaderFilePath = VQRenderer::GetFullPathOfShader("ScreenSpaceReflections/ResolveTemporal.hlsl");
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "[PSO] Reflection Denoiser - Temporal Resolve";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2", {}, bUseFP16Types });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", EShaderStage::CS, EShaderModel::SM6_2, {}, bUseFP16Types });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mSubpassRootSignatureLookup.at(ESubpass::RESOLVE_TEMPORAL);
 		psoLoadDesc.D3D12ComputeDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 		psoLoadDesc.D3D12ComputeDesc.NodeMask = 0;
@@ -534,7 +534,7 @@ std::vector<FPSOCreationTaskParameters> ScreenSpaceReflectionsPass::CollectPSOCr
 		const std::wstring ShaderFilePath = VQRenderer::GetFullPathOfShader("ScreenSpaceReflections/Intersect.hlsl");
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "[PSO] SSSR - Intersection";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2", {}, bUseFP16Types });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", EShaderStage::CS, EShaderModel::SM6_2, {}, bUseFP16Types });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mSubpassRootSignatureLookup.at(ESubpass::INTERSECTION);
 		psoLoadDesc.D3D12ComputeDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 		psoLoadDesc.D3D12ComputeDesc.NodeMask = 0;
@@ -544,7 +544,7 @@ std::vector<FPSOCreationTaskParameters> ScreenSpaceReflectionsPass::CollectPSOCr
 		const std::wstring ShaderFilePath = VQRenderer::GetFullPathOfShader("ScreenSpaceReflections/PrepareIndirectArgs.hlsl");
 		FPSODesc psoLoadDesc = {};
 		psoLoadDesc.PSOName = "[PSO] PrepareIndirectArgs";
-		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", "cs_6_2", {}, bUseFP16Types });
+		psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "CSMain", EShaderStage::CS, EShaderModel::SM6_2, {}, bUseFP16Types });
 		psoLoadDesc.D3D12ComputeDesc.pRootSignature = mSubpassRootSignatureLookup.at(ESubpass::PREPARE_INDIRECT_ARGS);
 		psoLoadDesc.D3D12ComputeDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 		psoLoadDesc.D3D12ComputeDesc.NodeMask = 0;

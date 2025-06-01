@@ -106,8 +106,8 @@ std::vector<FPSOCreationTaskParameters> MagnifierPass::CollectPSOCreationParamet
 	psoLoadDesc.PSOName = "PSO_Magnifier";
 
 	// Shader description
-	psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", "vs_6_0" });
-	psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", "ps_6_0" });
+	psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "VSMain", EShaderStage::VS, EShaderModel::SM6_0 });
+	psoLoadDesc.ShaderStageCompileDescs.push_back(FShaderStageCompileDesc{ ShaderFilePath, "PSMain", EShaderStage::PS, EShaderModel::SM6_0 });
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC& psoDesc = psoLoadDesc.D3D12GraphicsDesc;
 	psoDesc.InputLayout = { };

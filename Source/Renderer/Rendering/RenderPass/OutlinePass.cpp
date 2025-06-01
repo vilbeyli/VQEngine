@@ -358,19 +358,19 @@ std::vector<FPSOCreationTaskParameters> OutlinePass::CollectPSOCreationParameter
 		size_t iShader = 0;
 		if (iTess == 1)
 		{
-			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain_Tess", "vs_6_1" };
-			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "HSMain"     , "hs_6_1" };
-			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "DSMain"     , "ds_6_1" };
+			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain_Tess", EShaderStage::VS, EShaderModel::SM6_1 };
+			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "HSMain"     , EShaderStage::HS, EShaderModel::SM6_1 };
+			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "DSMain"     , EShaderStage::DS, EShaderModel::SM6_1 };
 			if (iTessCull > 0)
-				psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "GSMain" , "gs_6_1" };
+				psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "GSMain" , EShaderStage::GS, EShaderModel::SM6_1 };
 		}
 		else
 		{
-			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain"     , "vs_6_1"};
+			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "VSMain"     , EShaderStage::VS, EShaderModel::SM6_1};
 		}
 		if (iPass == 1)
 		{
-			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain"     , "ps_6_1" };
+			psoLoadDesc.ShaderStageCompileDescs[iShader++] = FShaderStageCompileDesc{ ShaderFilePath, "PSMain"     , EShaderStage::PS, EShaderModel::SM6_1 };
 		}
 		const size_t iPixelShader = iShader - 1;
 

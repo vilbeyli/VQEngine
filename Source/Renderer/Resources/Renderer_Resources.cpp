@@ -844,9 +844,9 @@ FShaderStageCompileResult VQRenderer::LoadShader(const FShaderStageCompileDesc& 
 	// load the shader d3dblob
 	FShaderStageCompileResult Result = {};
 	Result.FilePath = ShaderStageCompileDesc.FilePath;
-	Result.bSM6 = IsShaderSM6(ShaderStageCompileDesc.ShaderModel.c_str());
+	Result.bSM6 = ShaderStageCompileDesc.ShaderModel >= EShaderModel::SM6_0;
 	FBlob& ShaderBlob = Result.ShaderBlob;
-	Result.ShaderStageEnum = ShaderUtils::GetShaderStageEnumFromShaderModel(ShaderStageCompileDesc.ShaderModel);
+	Result.ShaderStage = ShaderStageCompileDesc.ShaderStage;
 	
 	std::string errMsg;
 	bool bCompileSuccessful = false;

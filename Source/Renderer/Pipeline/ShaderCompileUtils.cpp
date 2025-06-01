@@ -263,34 +263,16 @@ std::vector<D3D12_INPUT_ELEMENT_DESC> ReflectInputLayoutFromVS(ID3D12ShaderRefle
 	return inputLayout;
 }
 
-
-// https://github.com/microsoft/DirectXShaderCompiler/wiki/Shader-Model
-bool IsShaderSM5(const char* ShaderModelStr)
-{
-	// TODO: validate input
-	const std::vector<std::string> SMTokens = StrUtil::split(ShaderModelStr, '_');
-	assert(SMTokens.size() == 3);
-	return SMTokens[1][0] == '5';
-}
-bool IsShaderSM6(const char* ShaderModelStr)
-{
-	// TODO: validate input
-	const std::vector<std::string> SMTokens = StrUtil::split(ShaderModelStr, '_');
-	assert(SMTokens.size() == 3);
-	return SMTokens[1][0] == '6';
-}
-
 FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompileDesc, std::string& OutErrorString)
 {
 	SCOPED_CPU_MARKER("CompileFromSource");
 	const WCHAR* strPath = ShaderStageCompileDesc.FilePath.data();
 
-	const bool bIsShaderModel5 = IsShaderSM5(ShaderStageCompileDesc.ShaderModel.c_str());
+	const bool bIsShaderModel5 = ShaderStageCompileDesc.ShaderModel == EShaderModel::SM5_0;
 
-	const EShaderStage ShaderStageEnum = GetShaderStageEnumFromShaderModel(ShaderStageCompileDesc.ShaderModel);
 	Log::Info("Compiling Shader Source: %s [%s @ %s()]"
 		, StrUtil::UnicodeToASCII<256>(strPath).c_str()
-		, ShaderStageCompileDesc.ShaderModel.c_str()
+		, GetShaderModel_cstr(ShaderStageCompileDesc.ShaderModel, ShaderStageCompileDesc.ShaderStage)
 		, ShaderStageCompileDesc.EntryPoint.c_str()
 	);
 
@@ -329,7 +311,7 @@ FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompileDesc, s
 			d3dMacros.data(),
 			SHADER_INCLUDE_HANDLER,
 			ShaderStageCompileDesc.EntryPoint.c_str(),
-			ShaderStageCompileDesc.ShaderModel.c_str(),
+			GetShaderModel_cstr(ShaderStageCompileDesc.ShaderModel, ShaderStageCompileDesc.ShaderStage),
 			SHADER_COMPILE_FLAGS,
 			0,
 			&blob.pD3DBlob,
@@ -346,7 +328,6 @@ FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompileDesc, s
 		SCOPED_CPU_MARKER("SM6");
 		// collection of wstrings to feed into dxc compiler
 		const std::wstring strEntryPoint  = StrUtil::ASCIIToUnicode(ShaderStageCompileDesc.EntryPoint);
-		const std::wstring strShaderModel = StrUtil::ASCIIToUnicode(StrUtil::GetLowercased(ShaderStageCompileDesc.ShaderModel));
 		const std::wstring strParentFolder = StrUtil::ASCIIToUnicode(DirectoryUtil::GetFolderPath(StrUtil::UnicodeToASCII<260>(strPath)));
 		std::vector<std::wstring> unicodeDefineArgs;
 		for (const FShaderMacro& macro : ShaderStageCompileDesc.Macros)
@@ -431,7 +412,7 @@ FBlob CompileFromSource(const FShaderStageCompileDesc& ShaderStageCompileDesc, s
 
 		// build args: shader model
 		ppArgs.push_back(L"-T");
-		ppArgs.push_back(strShaderModel.c_str());
+		ppArgs.push_back(GetShaderModel_wcstr(ShaderStageCompileDesc.ShaderModel, ShaderStageCompileDesc.ShaderStage));
 
 		// build args: include path
 		ppArgs.push_back(L"-I");
