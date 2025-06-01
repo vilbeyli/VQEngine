@@ -71,6 +71,8 @@ static bool HasAlphaValues(const void* pData, uint W, uint H, DXGI_FORMAT Format
 static bool HasAlphaValuesSIMD(const void* pData, uint W, uint H, DXGI_FORMAT Format)
 {
 	SCOPED_CPU_MARKER("HasAlphaValuesSIMD");
+	if (Format == DXGI_FORMAT_UNKNOWN)
+		return false;
 
 	const uint BytesPerPixel = (uint)VQ_DXGI_UTILS::GetPixelByteSize(Format);
 	assert(BytesPerPixel >= 4 && "Format must have at least 4 bytes per pixel");
@@ -81,7 +83,7 @@ static bool HasAlphaValuesSIMD(const void* pData, uint W, uint H, DXGI_FORMAT Fo
 
 	// SIMD constants for 128-bit SSE (4 pixels at a time for 4-byte pixels)
 	const __m128i zero = _mm_setzero_si128();
-	const __m128i all255 = _mm_set1_epi8(255);
+	const __m128i all255 = _mm_set1_epi8((char)255);
 
 	for (uint row = 0; row < H; ++row)
 	{
@@ -100,7 +102,7 @@ static bool HasAlphaValuesSIMD(const void* pData, uint W, uint H, DXGI_FORMAT Fo
 			{
 				// Shuffle to get alpha bytes (byte 3 of each pixel)
 				alpha = _mm_shuffle_epi8(pixels, _mm_set_epi8(-1, -1, -1, 15, -1, -1, -1, 11, -1, -1, -1, 7, -1, -1, -1, 3));
-				alpha = _mm_and_si128(alpha, _mm_set_epi8(0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255));
+				alpha = _mm_and_si128(alpha, _mm_set_epi8('\0', '\0', '\0', '\255', '\0', '\0', '\0', '\255', '\0', '\0', '\0', '\255', '\0', '\0', '\0', '\255'));
 			}
 			else
 			{
