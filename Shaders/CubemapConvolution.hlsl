@@ -16,10 +16,6 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-#ifndef INTEGRATION_STEP_DIFFUSE_IRRADIANCE
-#define INTEGRATION_STEP_DIFFUSE_IRRADIANCE 0.010f
-#endif
-
 #include "ShadingMath.hlsl"
 #include "BRDF.hlsl"
 
@@ -130,6 +126,9 @@ float4 PSMain_DiffuseIrradiance(GSOut In) : SV_TARGET
 	float3 irradiance = 0.0f.xxx;
 	
 	float numSamples = 0.0f;
+#ifndef INTEGRATION_STEP_DIFFUSE_IRRADIANCE
+#define INTEGRATION_STEP_DIFFUSE_IRRADIANCE 0.010f
+#endif
 	for (float phi = 0.0f; phi < TWO_PI; phi += INTEGRATION_STEP_DIFFUSE_IRRADIANCE)
 	{
 		// theta = 0.0f doesn't yield any irradiance (sinTheta==0.0f)

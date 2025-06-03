@@ -411,7 +411,7 @@ HSOutputPatchConstants CalcHSPatchConstants(
 	c.EdgeTessFactor[0] = tess.EdgeTessFactor.x;
 	c.EdgeTessFactor[1] = tess.EdgeTessFactor.y;
 	c.EdgeTessFactor[2] = tess.EdgeTessFactor.z;
-	c.InsideTessFactor  = tess.InsideTessFactor;
+	c.InsideTessFactor  = tess.InsideTessFactor[0];
 	
 #elif defined(DOMAIN__QUAD)
 	
@@ -421,7 +421,7 @@ HSOutputPatchConstants CalcHSPatchConstants(
 		float3 e1 = 0.5f * (patch[2].WorldSpacePosition + patch[1].WorldSpacePosition);
 		float3 e2 = 0.5f * (patch[3].WorldSpacePosition + patch[2].WorldSpacePosition);
 		float3 e3 = 0.5f * (patch[0].WorldSpacePosition + patch[3].WorldSpacePosition);
-		float3 fCenter = CalcTessFactor(PatchCenter, Eye, fDTessMin, fDTessMax);
+		float  fCenter = CalcTessFactor(PatchCenter, Eye, fDTessMin, fDTessMax);
 
 		c.EdgeTessFactor[0]   = CalcTessFactor(e0, Eye, fDTessMin, fDTessMax);
 		c.EdgeTessFactor[1]   = CalcTessFactor(e1, Eye, fDTessMin, fDTessMax);

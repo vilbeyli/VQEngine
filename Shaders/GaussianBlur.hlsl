@@ -143,7 +143,7 @@ void CSMain_X(
 		
 		sampleCoord.x = clamp(sampleCoord.x, 0, iImageSize.x - 1);
 		
-		float3 sampledColor = texColorInput[sampleCoord];
+		float3 sampledColor = texColorInput[sampleCoord].rgb;
 		OutRGB += Convolve(sampledColor, kernelIndex);
 	}
 	
@@ -179,7 +179,7 @@ void CSMain_Y(
 		
 		sampleCoord.y = clamp(sampleCoord.y, 0, iImageSize.y - 1);
 		
-		float3 sampledColor = texColorInput[sampleCoord];
+		float3 sampledColor = texColorInput[sampleCoord].rgb;
 		OutRGB += Convolve(sampledColor, kernelIndex);
 	}
 	

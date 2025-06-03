@@ -110,12 +110,12 @@ PSInput TransformVertex(
 	float distance = 0.5; // *Scale;
 	float3 viewPosition = mul(matWorldView, vPosition).xyz;
 	float3 viewNormal = normalize(mul(matNormalView, float4(Normal, 0)).xyx);
-	float3 viewPositionWithOffset = viewPosition + viewNormal * distance;
+	float4 viewPositionWithOffset = float4(viewPosition + viewNormal * distance, 1);
 	#endif
 	
 	PSInput result;
 	#if OUTLINE_PASS
-	result.position = mul(matProj, float4(viewPositionWithOffset, 1));
+	result.position = mul(matProj, viewPositionWithOffset);
 	#else
 	result.position = mul(matWVP, vPosition);
 	#endif
