@@ -98,6 +98,8 @@ void ObjectIDPass::OnCreateWindowSizeDependentResources(unsigned Width, unsigned
 		desc.D3D12Desc.Flags = D3D12_RESOURCE_FLAG_NONE;
 		desc.D3D12Desc.Width = byteAlignedSize;
 		TEXPassOutputCPUReadback = mRenderer.CreateTexture(desc);
+
+		mRenderer.WaitForTexture(TEXPassOutputCPUReadback);
 	}
 }
 
