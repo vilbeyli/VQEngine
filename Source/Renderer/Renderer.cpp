@@ -421,7 +421,7 @@ static void AllocateDescriptors(FRenderingResources_MainWindow& rsc, VQRenderer&
 		rsc.DSV_ShadowMaps_Spot = mRenderer.AllocateDSV(NUM_SHADOWING_LIGHTS__SPOT);
 		rsc.SRV_ShadowMaps_Spot = mRenderer.AllocateSRV();
 		rsc.DSV_ShadowMaps_Point = mRenderer.AllocateDSV(NUM_SHADOWING_LIGHTS__POINT * 6);
-		rsc.SRV_ShadowMaps_Point = mRenderer.AllocateSRV();
+		rsc.SRV_ShadowMaps_Point = mRenderer.AllocateSRV(NUM_SHADOWING_LIGHTS__POINT);
 		rsc.DSV_ShadowMaps_Directional = mRenderer.AllocateDSV();
 		rsc.SRV_ShadowMaps_Directional = mRenderer.AllocateSRV();
 	}
