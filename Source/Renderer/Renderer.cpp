@@ -342,7 +342,7 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
 		const uint32 UPLOAD_HEAP_SIZE = (512 + 256 + 128) * MEGABYTE; // TODO: from RendererSettings.ini
-		mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE, this->mRenderingCmdQueues[ECommandQueueType::GFX].pQueue);
+		mHeapUpload.Create(pDevice, UPLOAD_HEAP_SIZE, this->mBackgroundTaskCmdQueues[ECommandQueueType::GFX].pQueue);
 
 		{
 			SCOPED_CPU_MARKER("CBV_SRV_UAV");
