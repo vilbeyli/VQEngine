@@ -125,8 +125,6 @@ public:
 	ModelLoadResults_t   StartLoadingModels(Scene* pScene);
 	TextureLoadResults_t StartLoadingTextures(TaskID taskID);
 
-private:
-	static ModelID ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName = "NONE");
 
 	//
 	// DATA

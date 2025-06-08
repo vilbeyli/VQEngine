@@ -77,6 +77,11 @@ set (CoreFiles
     "Libs/imgui/backends/imgui_impl_win32.cpp"
 )
 
+set (ImporterFiles
+    "Libs/cgltf/cgltf.h"
+    "Libs/cgltf/cgltf_write.h"
+)
+
 set (SceneFiles   
     "Shaders/LightingConstantBufferData.h"
     
@@ -160,15 +165,7 @@ add_link_options(/SUBSYSTEM:WINDOWS)
 add_subdirectory(Libs/VQUtils)
 add_subdirectory(Source/Renderer)
 
-#add_definitions(
-#    -DASSIMP_BUILD_ASSIMP_TOOLS=OFF 
-#    -DASSIMP_NO_EXPORT=ON 
-#    -DBUILD_SHARED_LIBS=OFF 
-#    -DASSIMP_BUILD_TESTS=OFF 
-#    -DASSIMP_INSTALL=OFF
-#)
 #add_definitions(-DNOMINMAX)
-add_subdirectory(Libs/assimp)
 add_subdirectory(Libs/imgui)
 
 source_group("Config"   FILES ${Config})
@@ -176,7 +173,7 @@ source_group("Resource" FILES ${Resource})
 source_group("Icons"    FILES ${Icons})
 source_group("Scenes"   FILES ${Scenes})
 source_group("Materials" FILES ${Materials})
-source_group("Source\\RenderPass" FILES ${RenderPassFiles})
+source_group("Source\\Importer" FILES ${ImporterFiles})
 source_group("Source\\Core" FILES ${CoreFiles})
 source_group("Source\\Scene" FILES ${SceneFiles})
 source_group("Source\\UI" FILES ${UIFiles})
@@ -184,10 +181,10 @@ source_group("Source\\PostProcess" FILES ${PostProcessFiles})
 source_group("Source" FILES ${SourceVQE})
 
 set_source_files_properties(${Config} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${Materials} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Scenes} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${Materials} PROPERTIES VS_TOOL_OVERRIDE "Text")
+set_source_files_properties(${ImporterFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${CoreFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${RenderPassFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${SceneFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${UIFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${PostProcessFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
@@ -204,7 +201,7 @@ add_executable( ${PROJECT_NAME}
     ${Scenes} 
     ${Resource} 
     ${Materials} 
-    ${RenderPassFiles} 
+    ${ImporterFiles} 
     ${CoreFiles} 
     ${UIFiles} 
     ${PostProcessFiles} 
@@ -228,10 +225,6 @@ endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 20)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-set_target_properties(assimp PROPERTIES FOLDER Libs/assimp)
-set_target_properties(UpdateAssimpLibsDebugSymbolsAndDLLs PROPERTIES FOLDER Libs/assimp)
-set_target_properties(zlibstatic PROPERTIES FOLDER Libs/assimp)
-
 #set_target_properties(VQRenderer PROPERTIES FOLDER Libs)
 #set_target_properties(VQUtils PROPERTIES FOLDER Libs)
 set_target_properties(ImGUI PROPERTIES FOLDER Libs)
@@ -240,7 +233,7 @@ set_target_properties(ImGUI PROPERTIES FOLDER Libs)
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${Includes})
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${LibsIncl})
 
-target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer assimp WinPixEventRuntime ImGUI)
+target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer WinPixEventRuntime ImGUI)
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different

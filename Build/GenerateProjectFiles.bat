@@ -108,8 +108,8 @@ if !NEED_TO_INIT_SUBMODULES! neq 0 (
     echo.
     git submodule update --init Source/Renderer/Libs/D3D12MA
     git submodule update --init Libs/VQUtils
-    git submodule update --init Libs/assimp
     git submodule update --init Libs/imgui
+    git submodule update --init Libs/cgltf
     git submodule update --init Source/Renderer/Libs/D3DX12
     cd Build
 
@@ -139,20 +139,7 @@ exit /b 0
 ::
 :RunCmake
 
-:: assimp importers
-set ASSIMP_IMPORT_FORMATS=-DASSIMP_BUILD_OBJ_IMPORTER=TRUE
-set ASSIMP_IMPORT_FORMATS=!ASSIMP_IMPORT_FORMATS! -DASSIMP_BUILD_GLTF_IMPORTER=TRUE
-:: assimp build options
-set CMAKE_ASSIMP_PARAMETERS=-DASSIMP_BUILD_ASSIMP_TOOLS=OFF
-set CMAKE_ASSIMP_PARAMETERS=!CMAKE_ASSIMP_PARAMETERS! -DASSIMP_NO_EXPORT=ON 
-set CMAKE_ASSIMP_PARAMETERS=!CMAKE_ASSIMP_PARAMETERS! -DASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT=OFF
-set CMAKE_ASSIMP_PARAMETERS=!CMAKE_ASSIMP_PARAMETERS! -DBUILD_SHARED_LIBS=OFF 
-set CMAKE_ASSIMP_PARAMETERS=!CMAKE_ASSIMP_PARAMETERS! -DASSIMP_BUILD_TESTS=OFF 
-set CMAKE_ASSIMP_PARAMETERS=!CMAKE_ASSIMP_PARAMETERS! -DASSIMP_INSTALL=OFF
-set CMAKE_ASSIMP_PARAMETERS=!CMAKE_ASSIMP_PARAMETERS! !ASSIMP_IMPORT_FORMATS!
-
-
-cmake ..\.. -G "Visual Studio 17 2022" -A x64 !CMAKE_ASSIMP_PARAMETERS!
+cmake ..\.. -G "Visual Studio 17 2022" -A x64
 
 if !errorlevel! EQU 0 (
     echo [VQBuild] Success!
@@ -164,7 +151,7 @@ if !errorlevel! EQU 0 (
     echo [VQBuild] cmake VS2022 failed, retrying with VS2019...
     echo [VQBuild] removing %~dp0SolutionFiles ...
     rmdir /S /Q  %~dp0SolutionFiles
-    cmake ..\.. -G "Visual Studio 16 2019" -A x64 !CMAKE_ASSIMP_PARAMETERS!
+    cmake ..\.. -G "Visual Studio 16 2019" -A x64
     if !errorlevel! NEQ 0 (    
         echo [VQBuild] GenerateSolutions.bat: Error with CMake. No solution file generated after retrying. 
         exit /b -1

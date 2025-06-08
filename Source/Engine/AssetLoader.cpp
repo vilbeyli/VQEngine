@@ -31,11 +31,14 @@
 #include "Libs/VQUtils/Include/Timer.h"
 #include "Libs/VQUtils/Include/Log.h"
 
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
+#define CGLTF_IMPLEMENTATION
+#ifdef matrix
+#undef matrix
+#endif
 
-using namespace Assimp;
+#pragma warning (disable: 4996) // 'This function or variable may be unsafe': strcpy, strdup, sprintf, vsnprintf, sscanf, fopen
+#include "Libs/cgltf/cgltf.h"
+
 using namespace DirectX;
 
 TaskID AssetLoader::GenerateModelLoadTaskID()
@@ -808,16 +811,7 @@ static Model::Data ProcessAssimpNode(
 ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName)
 {
 	SCOPED_CPU_MARKER("AssetLoader::ImportModel()");
-	constexpr auto ASSIMP_LOAD_FLAGS
-		= aiProcess_Triangulate
-		| aiProcess_CalcTangentSpace
-		| aiProcess_MakeLeftHanded
-		| aiProcess_FlipUVs
-		| aiProcess_FlipWindingOrder
-		//| aiProcess_TransformUVCoords 
-		//| aiProcess_FixInfacingNormals
-		| aiProcess_JoinIdenticalVertices
-		| aiProcess_GenSmoothNormals;
+
 
 
 	TaskID taskID = GenerateModelLoadTaskID();
@@ -833,6 +827,17 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 	const aiScene* pAiScene = nullptr;
 	{
 		SCOPED_CPU_MARKER("ReadFile()");
+		constexpr auto ASSIMP_LOAD_FLAGS
+			= aiProcess_Triangulate
+			| aiProcess_CalcTangentSpace
+			| aiProcess_MakeLeftHanded
+			| aiProcess_FlipUVs
+			| aiProcess_FlipWindingOrder
+			//| aiProcess_TransformUVCoords 
+			//| aiProcess_FixInfacingNormals
+			| aiProcess_JoinIdenticalVertices
+			| aiProcess_GenSmoothNormals;
+
 		pAiScene = importer->ReadFile(objFilePath, ASSIMP_LOAD_FLAGS);
 	}
 
