@@ -20,8 +20,6 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include "Renderer/Renderer.h"
-#include "Core/Device.h"
-#include "Texture.h"
 
 #include "Engine/GPUMarker.h"
 #include "Engine/Core/Window.h"
@@ -30,7 +28,6 @@
 #include "Libs/VQUtils/Include/utils.h"
 #include "Libs/VQUtils/Include/Timer.h"
 #include "Libs/VQUtils/Include/Image.h"
-#include "Libs/D3D12MA/src/Common.h"
 #include "Libs/DirectXCompiler/inc/dxcapi.h"
 
 #include <cassert>
