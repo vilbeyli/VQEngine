@@ -218,6 +218,8 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		const size_t HWCores = HWThreads >> 1;
 		mWorkers_ShaderLoad.Initialize(HWCores, "ShaderLoadWorkers");
 		mWorkers_PSOLoad.Initialize(HWCores, "PSOLoadWorkers");
+
+		mFrameSubmitThread = std::thread(&VQRenderer::FrameSubmitThread_Main, this);
 	}
 
 	// create PSO & Shader cache folders
@@ -248,9 +250,11 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		mRenderingCmdQueues[COMPUTE].Create(&mDevice, COMPUTE); SetName(mRenderingCmdQueues[COMPUTE].pQueue, "Rendering CMP Q");
 
 		mBackgroundTaskCmdQueues[GFX].Create(&mDevice, GFX); SetName(mBackgroundTaskCmdQueues[GFX].pQueue, "BackgroundTask GFX Q");
-		mBackgroundTaskCmdQueues[COPY].Create(&mDevice, COPY); SetName(mBackgroundTaskCmdQueues[COPY].pQueue, "BackgroundTask GFX Q");
-		mBackgroundTaskCmdQueues[COMPUTE].Create(&mDevice, COMPUTE); SetName(mBackgroundTaskCmdQueues[COMPUTE].pQueue, "BackgroundTask GFX Q");
+		mBackgroundTaskCmdQueues[COPY].Create(&mDevice, COPY); SetName(mBackgroundTaskCmdQueues[COPY].pQueue, "BackgroundTask CPY Q");
+		mBackgroundTaskCmdQueues[COMPUTE].Create(&mDevice, COMPUTE); SetName(mBackgroundTaskCmdQueues[COMPUTE].pQueue, "BackgroundTask CMP Q");
 		
+		mRenderingPresentationQueue.Create(&mDevice, ECommandQueueType::GFX, ECommandQueuePriority::HIGH); SetName(mRenderingPresentationQueue.pQueue, "Presentation Q");
+
 		mLatchCmdQueuesInitialized.count_down();
 	}
 	{
@@ -615,8 +619,9 @@ void VQRenderer::Unload()
 void VQRenderer::Destroy()
 {
 	SCOPED_CPU_MARKER("Renderer.Destroy");
-	Log::Info("VQRenderer::Exit()");
-
+	Log::Info("VQRenderer.Exit()");
+	
+	mStopTrheads.store(true);
 	for (std::shared_ptr<IRenderPass>& pPass : mRenderPasses)
 	{
 		pPass->Destroy();
@@ -625,6 +630,7 @@ void VQRenderer::Destroy()
 
 	mWorkers_PSOLoad.Destroy();
 	mWorkers_ShaderLoad.Destroy();
+	mFrameSubmitThread.join();
 
 	// clean up memory
 	mHeapUpload.Destroy();
@@ -695,6 +701,7 @@ void VQRenderer::Destroy()
 		mRenderingCmdQueues[i].Destroy();
 		mBackgroundTaskCmdQueues[i].Destroy();
 	}
+	mRenderingPresentationQueue.Destroy();
 
 	mDevice.Destroy(); // cleanp up device
 }
@@ -729,7 +736,7 @@ void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuf
 	Device*       pVQDevice = &mDevice;
 	ID3D12Device* pDevice = pVQDevice->GetDevicePtr();
 
-	FWindowRenderContext ctx = FWindowRenderContext(mRenderingCmdQueues[ECommandQueueType::GFX]);
+	FWindowRenderContext ctx = FWindowRenderContext(mRenderingPresentationQueue);
 	{
 		SCOPED_CPU_MARKER_C("WAIT_DEVICE_CREATE", 0xFF0000FF);
 		mLatchDeviceInitialized.wait();
@@ -764,6 +771,7 @@ void VQRenderer::InitializeFences(HWND hwnd)
 		mAsyncComputeSSAODoneFence[i].Create(pDevice, "AsyncComputeSSAODoneFence");
 		mCopyObjIDDoneFence[i].Create(pDevice, "CopyObjIDDoneFence");
 	}
+	mFrameRenderDoneFence.Create(pDevice, "FrameRenderDoneFence");
 
 	mBackgroundTaskFencesPerQueue[GFX].Create(pDevice, "BackgroundTaskGFXFence");
 	mBackgroundTaskFencesPerQueue[COPY].Create(pDevice, "BackgroundTaskCopyFence");
@@ -779,6 +787,7 @@ void VQRenderer::DestroyFences(HWND hwnd)
 		mAsyncComputeSSAOReadyFence[i].Destroy();
 		mAsyncComputeSSAODoneFence[i].Destroy();
 	}
+	mFrameRenderDoneFence.Destroy();
 
 	mBackgroundTaskFencesPerQueue[GFX].Destroy();
 	mBackgroundTaskFencesPerQueue[COPY].Destroy();
@@ -1077,6 +1086,24 @@ TextureID VQRenderer::GetProceduralTexture(EProceduralTextures tex) const
 ID3D12RootSignature* VQRenderer::GetBuiltinRootSignature(EBuiltinRootSignatures eRootSignature) const
 {
 	return mRootSignatureLookup.at((RS_ID)eRootSignature);
+}
+
+void VQRenderer::FrameSubmitThread_Main()
+{
+	SCOPED_CPU_MARKER("FrameSubmitThread_Main()");
+	Log::Info("FrameSubmitThread_Main() started.");
+	
+	while (!mStopTrheads)
+	{
+		//mLatchFrameReady.wait();
+		//
+		//this->SubmitFrame();
+		//
+		//// reset the latch for the next frame
+		//mLatchFrameReady.reset();
+	}
+
+	Log::Info("FrameSubmitThread_Main() finished.");
 }
 
 

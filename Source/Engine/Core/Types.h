@@ -27,7 +27,7 @@
 using int64 = long long;
 using int32 = int;
 using int16 = short;
-using int8  = char;
+using int8  = signed char;
 
 using uint64 = unsigned long long;
 using uint32 = unsigned;

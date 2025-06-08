@@ -493,8 +493,6 @@ HRESULT SwapChain::Present()
             assert(false); // unhandled Present() return code
             break;
         }
-
-        
     }
 
     return hr;

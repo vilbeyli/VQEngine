@@ -293,21 +293,6 @@ private:
 	Device mDevice;
 
 	// render command execution context | TODO: move to an execution context struct
-	enum ERenderCommandRecorderThread
-	{
-		ZPrePass = 0,
-		AsyncCompute,
-		PointShadow0,
-		PointShadow1,
-		PointShadow2,
-		PointShadow3,
-		PointShadow4,
-		SpotShadows,
-		DirectionalShadows,
-		SceneAndPostprocessing,
-
-		NUM_RENDER_COMMAND_RECORDER_THREADS,
-	};
 	CommandQueue mRenderingCmdQueues[NUM_COMMAND_QUEUE_TYPES];
 	std::vector<std::vector<ID3D12CommandAllocator*>> mRenderingCommandAllocators[NUM_COMMAND_QUEUE_TYPES]; // pre queue, per back buffer, per recording thread
 	std::vector<std::vector<ID3D12CommandList*     >> mpRenderingCmds[NUM_COMMAND_QUEUE_TYPES]; // per queue, per back buffer, per recording thread
@@ -318,12 +303,38 @@ private:
 	std::vector<Fence> mAsyncComputeSSAODoneFence;
 	std::vector<Fence> mCopyObjIDDoneFence; // GPU->CPU
 	std::atomic<bool>  mAsyncComputeWorkSubmitted = false;
+	Fence mFrameRenderDoneFence;
 	
 	// frame presentation context
-	CommandQueue     mRenderingPresentationQueue; // TODO: use this queue to submit
+	CommandQueue     mRenderingPresentationQueue;
 	bool             mWaitForSubmitWorker = false;
 	TaskSignal<void> mSubmitWorkerSignal;
 	std::thread      mFrameSubmitThread;
+	std::atomic<bool> mStopTrheads = false;
+
+	enum ERenderThreadWorkID
+	{
+		ZPrePassAndAsyncCompute = 0,
+		ObjectIDRenderAndCopy,
+		PointShadow0,
+		PointShadow1,
+		PointShadow2,
+		PointShadow3,
+		PointShadow4,
+		SpotShadows,
+		DirectionalShadows,
+		SceneAndPostprocessing,
+		UIAndPresentation,
+
+		NUM_RENDER_COMMAND_RECORDER_THREADS,
+	};
+	struct FCommandRecordingThreadConfig
+	{
+		int8 iGfxCmd = -1;
+		int8 iCopyCmd = -1;
+		int8 iComputeCmd = -1;
+	};
+	FCommandRecordingThreadConfig mRenderWorkerConfig[NUM_RENDER_COMMAND_RECORDER_THREADS];
 
 	// background gpu task execution context | TODO: move to an execution context struct
 	enum EBackgroungTaskThread
@@ -464,14 +475,16 @@ private:
 	void            RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, bool bMSAA);
 	void            CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings);
 	void            TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings);
+	void            TransitionForUI(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings, bool bHDRDisplay, ID3D12Resource* pRsc, ID3D12Resource* pSwapChainRT);
 	ID3D12Resource* RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams, bool bHDR);
-	void            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, ID3D12Resource* pRscIn, const FUIState& UIState, bool bHDR);
+	void            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, ID3D12Resource* pRscIn, const SRV& srv_ColorIn, const FUIState& UIState, bool bHDR);
 	void            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, const Window* pWindow);
 	HRESULT         PresentFrame(FWindowRenderContext& ctx);
 	void DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, const std::vector<FInstancedDrawParameters>& drawParams, size_t iDepthMode);
 
 	void BatchDrawCalls(ThreadPool& WorkerThreads, const FSceneView& SceneView, const FSceneShadowViews& SceneShadowView, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings);
 	
+	void FrameSubmitThread_Main();
 //
 // STATIC PUBLIC DATA/INTERFACE
 //

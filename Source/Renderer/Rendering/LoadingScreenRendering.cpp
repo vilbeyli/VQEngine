@@ -37,6 +37,7 @@ HRESULT VQRenderer::PreRenderLoadingScreen(ThreadPool& WorkerThreads, const Wind
 	WaitHeapsInitialized();
 
 	FWindowRenderContext& ctx = this->GetWindowRenderContext(pWindow->GetHWND());
+	ctx.SwapChain.MoveToNextFrame();
 	const int NUM_SWAPCHAIN_BACKBUFFERS = ctx.SwapChain.GetNumBackBuffers();
 
 	// TODO: proper submit thread sync
@@ -150,8 +151,8 @@ HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScr
 
 	//Log::Info("RenderLoadinScreen[%d]", ctx.GetCurrentSwapchainBufferIndex());
 	hr = PresentFrame(ctx);
-	if(hr == S_OK)
-		ctx.SwapChain.MoveToNextFrame();
+	if (hr == S_OK)
+		;
 	else
 	{
 		Log::Warning("Error presenting frame during Loading Screen rendering!");
