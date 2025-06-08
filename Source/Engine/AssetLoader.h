@@ -126,6 +126,8 @@ public:
 	TextureLoadResults_t StartLoadingTextures(TaskID taskID);
 
 
+	static ModelID ImportGLTF(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName);
+
 	//
 	// DATA
 	//
