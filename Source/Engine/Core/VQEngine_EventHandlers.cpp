@@ -316,7 +316,7 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 void VQEngine::RenderThread_HandleEvents()
 {
-	SCOPED_CPU_MARKER("RenderThread_HandleEvents()");
+	SCOPED_CPU_MARKER("RenderThread_HandleEvents");
 
 	// do not process events anymore if we're exiting
 	if (mbStopAllThreads)
@@ -604,6 +604,7 @@ void VQEngine::RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent)
 }
 void VQEngine::RenderThread_HandleSetSwapchainQueueEvent(const IEvent* pEvent)
 {
+	SCOPED_CPU_MARKER("HandleSetSwapchainQueueEvent");
 	const SetSwapchainPresentationQueueEvent* pSwapchainEvent = static_cast<const SetSwapchainPresentationQueueEvent*>(pEvent);
 	const HWND&                      hwnd = pEvent->hwnd;
 	const std::unique_ptr<Window>&   pWnd = GetWindow(hwnd);
@@ -614,9 +615,15 @@ void VQEngine::RenderThread_HandleSetSwapchainQueueEvent(const IEvent* pEvent)
 		? mpRenderer->GetPresentationCommandQueue() 
 		: mpRenderer->GetCommandQueue(GFX);
 
-	Swapchain.WaitForGPU();
+	{
+		SCOPED_CPU_MARKER_C("WAIT_SWAPCHAIN_DONE", 0xFF00AA00);
+		Swapchain.WaitForGPU();
+	}
 	Swapchain.UpdatePresentQueue(q.pQueue);
-	Swapchain.Resize(WIDTH, HEIGHT, Swapchain.GetFormat());
+	{
+		SCOPED_CPU_MARKER("Swapchain.Resize");
+		Swapchain.Resize(WIDTH, HEIGHT, Swapchain.GetFormat());
+	}
 }
 
 void VQEngine::RenderThread_HandleSetHDRMetaDataEvent(const IEvent* pEvent)

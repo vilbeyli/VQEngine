@@ -200,7 +200,6 @@ HRESULT VQRenderer::PreRenderScene(
 		+ 1 // worker thrd: ObjectIDPass
 		+ 1 // this thread: AO+SceneColor+PostProcess
 		+ (GFXSettings.bUseSeparateSubmissionQueue ? 1 : 0) // worker thrd: UI+Present
-		//+ 1 // worker thrd: UI+Present
 		+ GetNumShadowViewCmdRecordingThreads(SceneShadowView);
 	const uint32_t NumCmdRecordingThreads_CMP = 0;
 	const uint32_t NumCmdRecordingThreads_CPY = 0;
