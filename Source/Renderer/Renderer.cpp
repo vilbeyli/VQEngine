@@ -425,7 +425,7 @@ static void AllocateDescriptors(FRenderingResources_MainWindow& rsc, VQRenderer&
 		rsc.DSV_ShadowMaps_Spot = mRenderer.AllocateDSV(NUM_SHADOWING_LIGHTS__SPOT);
 		rsc.SRV_ShadowMaps_Spot = mRenderer.AllocateSRV();
 		rsc.DSV_ShadowMaps_Point = mRenderer.AllocateDSV(NUM_SHADOWING_LIGHTS__POINT * 6);
-		rsc.SRV_ShadowMaps_Point = mRenderer.AllocateSRV();
+		rsc.SRV_ShadowMaps_Point = mRenderer.AllocateSRV(NUM_SHADOWING_LIGHTS__POINT);
 		rsc.DSV_ShadowMaps_Directional = mRenderer.AllocateDSV();
 		rsc.SRV_ShadowMaps_Directional = mRenderer.AllocateSRV();
 	}
@@ -731,12 +731,15 @@ unsigned short VQRenderer::GetSwapChainBackBufferCount(HWND hwnd) const
 }
 
 
-void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuffers, bool bVSync, bool bHDRSwapchain)
+void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuffers, bool bVSync, bool bHDRSwapchain, bool bDedicatedPresentQueue)
 {
 	Device*       pVQDevice = &mDevice;
 	ID3D12Device* pDevice = pVQDevice->GetDevicePtr();
 
-	FWindowRenderContext ctx = FWindowRenderContext(mRenderingPresentationQueue);
+	FWindowRenderContext ctx = FWindowRenderContext(bDedicatedPresentQueue
+		? mRenderingPresentationQueue
+		: mRenderingCmdQueues[GFX]
+	);
 	{
 		SCOPED_CPU_MARKER_C("WAIT_DEVICE_CREATE", 0xFF0000FF);
 		mLatchDeviceInitialized.wait();

@@ -358,6 +358,7 @@ private:
 	void                            RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent);
 	void                            RenderThread_HandleSetVSyncEvent(const IEvent* pEvent);
 	void                            RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent);
+	void                            RenderThread_HandleSetSwapchainQueueEvent(const IEvent* pEvent);
 	void                            RenderThread_HandleSetHDRMetaDataEvent(const IEvent* pEvent);
 
 	void                            UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent);

@@ -117,13 +117,14 @@ public:
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	inline ID3D12Device*         GetDevicePtr() const { return mDevice.GetDevicePtr(); }
 	inline CommandQueue&         GetCommandQueue(ECommandQueueType eType) { return mRenderingCmdQueues[(int)eType]; }
+	inline CommandQueue&         GetPresentationCommandQueue() { return mRenderingPresentationQueue; }
 	inline FDeviceCapabilities   GetDeviceCapabilities() const { return mDevice.GetDeviceCapabilities(); }
 
 
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Swapchain
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-	void                         InitializeRenderContext(const Window* pWnd, int NumSwapchainBuffers, bool bVSync, bool bHDRSwapchain);
+	void                         InitializeRenderContext(const Window* pWnd, int NumSwapchainBuffers, bool bVSync, bool bHDRSwapchain, bool bDedicatedPresentQueue);
 	inline short                 GetSwapChainBackBufferCount(std::unique_ptr<Window>& pWnd) const { return GetSwapChainBackBufferCount(pWnd.get()); };
 	unsigned short               GetSwapChainBackBufferCount(Window* pWnd) const;
 	unsigned short               GetSwapChainBackBufferCount(HWND hwnd) const;
@@ -292,7 +293,7 @@ private:
 	// GPU
 	Device mDevice;
 
-	// render command execution context | TODO: move to an execution context struct
+	// render command execution context
 	CommandQueue mRenderingCmdQueues[NUM_COMMAND_QUEUE_TYPES];
 	std::vector<std::vector<ID3D12CommandAllocator*>> mRenderingCommandAllocators[NUM_COMMAND_QUEUE_TYPES]; // pre queue, per back buffer, per recording thread
 	std::vector<std::vector<ID3D12CommandList*     >> mpRenderingCmds[NUM_COMMAND_QUEUE_TYPES]; // per queue, per back buffer, per recording thread
@@ -305,13 +306,6 @@ private:
 	std::atomic<bool>  mAsyncComputeWorkSubmitted = false;
 	Fence mFrameRenderDoneFence;
 	
-	// frame presentation context
-	CommandQueue     mRenderingPresentationQueue;
-	bool             mWaitForSubmitWorker = false;
-	TaskSignal<void> mSubmitWorkerSignal;
-	std::thread      mFrameSubmitThread;
-	std::atomic<bool> mStopTrheads = false;
-
 	enum ERenderThreadWorkID
 	{
 		ZPrePassAndAsyncCompute = 0,
@@ -336,7 +330,14 @@ private:
 	};
 	FCommandRecordingThreadConfig mRenderWorkerConfig[NUM_RENDER_COMMAND_RECORDER_THREADS];
 
-	// background gpu task execution context | TODO: move to an execution context struct
+	// frame presentation context
+	CommandQueue     mRenderingPresentationQueue;
+	bool             mWaitForSubmitWorker = false;
+	TaskSignal<void> mSubmitWorkerSignal;
+	std::thread      mFrameSubmitThread; // currenly unused, main thread submits the frame
+	std::atomic<bool> mStopTrheads = false;
+
+	// background gpu task execution context
 	enum EBackgroungTaskThread
 	{
 		EnvironmentMap_Prefiltering = 0,

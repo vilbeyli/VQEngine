@@ -49,8 +49,9 @@ struct FGraphicsSettings
 
 	bool bEnableAsyncCopy = true;
 	bool bEnableAsyncCompute = true;
+	bool bUseSeparateSubmissionQueue = true;
 };
-
+ 
 struct FWindowSettings
 {
 	int Width                 = -1;

@@ -343,12 +343,13 @@ void VQEngine::RenderThread_HandleEvents()
 
 		switch (pEvent->mType)
 		{
-		case EEventType::WINDOW_RESIZE_EVENT             : pLastResizeEventLookup[pEvent->hwnd] = std::static_pointer_cast<WindowResizeEvent>(pEvent); break;
-		case EEventType::TOGGLE_FULLSCREEN_EVENT         : RenderThread_HandleToggleFullscreenEvent(pEvent.get()); break;
-		case EEventType::WINDOW_CLOSE_EVENT              : RenderThread_HandleWindowCloseEvent(pEvent.get()); break;
-		case EEventType::SET_VSYNC_EVENT                 : RenderThread_HandleSetVSyncEvent(pEvent.get()); break;
-		case EEventType::SET_SWAPCHAIN_FORMAT_EVENT      : RenderThread_HandleSetSwapchainFormatEvent(pEvent.get()); break;
-		case EEventType::SET_HDR10_STATIC_METADATA_EVENT : RenderThread_HandleSetHDRMetaDataEvent(pEvent.get()); break;
+		case EEventType::WINDOW_RESIZE_EVENT              : pLastResizeEventLookup[pEvent->hwnd] = std::static_pointer_cast<WindowResizeEvent>(pEvent); break;
+		case EEventType::TOGGLE_FULLSCREEN_EVENT          : RenderThread_HandleToggleFullscreenEvent(pEvent.get()); break;
+		case EEventType::WINDOW_CLOSE_EVENT               : RenderThread_HandleWindowCloseEvent(pEvent.get()); break;
+		case EEventType::SET_VSYNC_EVENT                  : RenderThread_HandleSetVSyncEvent(pEvent.get()); break;
+		case EEventType::SET_SWAPCHAIN_FORMAT_EVENT       : RenderThread_HandleSetSwapchainFormatEvent(pEvent.get()); break;
+		case EEventType::SET_SWAPCHAIN_PRESENTATION_QUEUE : RenderThread_HandleSetSwapchainQueueEvent(pEvent.get()); break;
+		case EEventType::SET_HDR10_STATIC_METADATA_EVENT  : RenderThread_HandleSetHDRMetaDataEvent(pEvent.get()); break;
 		}
 	}
 
@@ -600,6 +601,22 @@ void VQEngine::RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent)
 		, VQRenderer::DXGIFormatAsString(pSwapchainEvent->format).data()
 		, (OutputDisplayCurve == EDisplayCurve::sRGB ? "Gamma2.2" : (OutputDisplayCurve == EDisplayCurve::Linear ? "Linear" : "PQ"))
 	);
+}
+void VQEngine::RenderThread_HandleSetSwapchainQueueEvent(const IEvent* pEvent)
+{
+	const SetSwapchainPresentationQueueEvent* pSwapchainEvent = static_cast<const SetSwapchainPresentationQueueEvent*>(pEvent);
+	const HWND&                      hwnd = pEvent->hwnd;
+	const std::unique_ptr<Window>&   pWnd = GetWindow(hwnd);
+	const int                       WIDTH = pWnd->GetWidth();
+	const int                      HEIGHT = pWnd->GetHeight();
+	SwapChain&                  Swapchain = mpRenderer->GetWindowSwapChain(hwnd);
+	CommandQueue& q = pSwapchainEvent->bUseDedicatedPresentationQueue 
+		? mpRenderer->GetPresentationCommandQueue() 
+		: mpRenderer->GetCommandQueue(GFX);
+
+	Swapchain.WaitForGPU();
+	Swapchain.UpdatePresentQueue(q.pQueue);
+	Swapchain.Resize(WIDTH, HEIGHT, Swapchain.GetFormat());
 }
 
 void VQEngine::RenderThread_HandleSetHDRMetaDataEvent(const IEvent* pEvent)

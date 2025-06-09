@@ -199,7 +199,8 @@ HRESULT VQRenderer::PreRenderScene(
 		= 1 // worker thrd: DepthPrePass
 		+ 1 // worker thrd: ObjectIDPass
 		+ 1 // this thread: AO+SceneColor+PostProcess
-		+ 1 // worker thrd: UI+Present
+		+ (GFXSettings.bUseSeparateSubmissionQueue ? 1 : 0) // worker thrd: UI+Present
+		//+ 1 // worker thrd: UI+Present
 		+ GetNumShadowViewCmdRecordingThreads(SceneShadowView);
 	const uint32_t NumCmdRecordingThreads_CMP = 0;
 	const uint32_t NumCmdRecordingThreads_CPY = 0;
@@ -222,7 +223,7 @@ HRESULT VQRenderer::PreRenderScene(
 	mRenderWorkerConfig[SpotShadows       ]      = { .iGfxCmd = SceneShadowView.NumSpotShadowViews  > 0 ? iGfx++ : INVALID_ID, .iCopyCmd = INVALID_ID, .iComputeCmd = INVALID_ID };
 	mRenderWorkerConfig[DirectionalShadows]      = { .iGfxCmd = SceneShadowView.NumDirectionalViews > 0 ? iGfx++ : INVALID_ID, .iCopyCmd = INVALID_ID, .iComputeCmd = INVALID_ID };
 	mRenderWorkerConfig[SceneAndPostprocessing]  = { .iGfxCmd = iGfx++, .iCopyCmd = INVALID_ID, .iComputeCmd = INVALID_ID };
-	mRenderWorkerConfig[UIAndPresentation]       = { .iGfxCmd = iGfx++, .iCopyCmd = INVALID_ID, .iComputeCmd = INVALID_ID };
+	mRenderWorkerConfig[UIAndPresentation]       = { .iGfxCmd = GFXSettings.bUseSeparateSubmissionQueue ? iGfx++ : mRenderWorkerConfig[SceneAndPostprocessing].iGfxCmd, .iCopyCmd = INVALID_ID, .iComputeCmd = INVALID_ID };
 
 #if 0
 	Log::Info("");
@@ -844,11 +845,13 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 					pCmdLists[iCmdList++] = mpRenderingCmds[GFX][BACK_BUFFER_INDEX][mRenderWorkerConfig[ERenderThreadWorkID::DirectionalShadows].iGfxCmd];
 				
 				// execute command lists
+				if(GFXSettings.bUseSeparateSubmissionQueue)
 				{
 					const UINT64 FrameDoneValue = mFrameRenderDoneFence.GetValue();
 					if (FrameDoneValue > 0) // ensure presentation queue is done with resources
 						mFrameRenderDoneFence.WaitOnGPU(mRenderingCmdQueues[GFX].pQueue, FrameDoneValue);
 				}
+
 				if (bAsyncCompute)
 				{
 					SCOPED_CPU_MARKER("ExecuteCommandLists_Async");
@@ -860,7 +863,11 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 
 					mAsyncComputeSSAODoneFence[BACK_BUFFER_INDEX].WaitOnGPU(mRenderingCmdQueues[GFX].pQueue, SSAODoneFenceValue + 1);
 					
-					mRenderingCmdQueues[GFX].pQueue->ExecuteCommandLists(1, &mpRenderingCmds[GFX][BACK_BUFFER_INDEX][iCmdSceneRenderThread]);
+					int ipCmdLists2 = 0;
+					ID3D12CommandList* pCmdLists2[2] = { nullptr };
+					pCmdLists2[ipCmdLists2++] = mpRenderingCmds[GFX][BACK_BUFFER_INDEX][iCmdSceneRenderThread];
+
+					mRenderingCmdQueues[GFX].pQueue->ExecuteCommandLists(ipCmdLists2, pCmdLists2);
 				}
 				else
 				{
@@ -868,15 +875,16 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 					pCmdLists[iCmdList++] = mpRenderingCmds[GFX][BACK_BUFFER_INDEX][iCmdSceneRenderThread];
 					mRenderingCmdQueues[GFX].pQueue->ExecuteCommandLists(iCmdList, pCmdLists);
 				}
-
+				
+				if (GFXSettings.bUseSeparateSubmissionQueue)
 				{
 					const UINT64 FrameDoneValue = mFrameRenderDoneFence.GetValue();
 					mFrameRenderDoneFence.Signal(mRenderingCmdQueues[GFX].pQueue);
 					mFrameRenderDoneFence.WaitOnGPU(ctx.PresentQueue.pQueue, FrameDoneValue + 1);
-				}
 
-				mRenderingPresentationQueue.pQueue->ExecuteCommandLists(1, &mpRenderingCmds[GFX][BACK_BUFFER_INDEX][iCmdUIPresentationThread]);
-				mFrameRenderDoneFence.Signal(mRenderingPresentationQueue.pQueue);
+					mRenderingPresentationQueue.pQueue->ExecuteCommandLists(1, &mpRenderingCmds[GFX][BACK_BUFFER_INDEX][iCmdUIPresentationThread]);
+					mFrameRenderDoneFence.Signal(mRenderingPresentationQueue.pQueue);
+				}
 
 #if 0
 				Log::Info("RenderScene[%d]", ctx.GetCurrentSwapchainBufferIndex());

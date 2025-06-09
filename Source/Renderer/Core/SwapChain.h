@@ -77,6 +77,7 @@ public:
 	void ClearHDRMetaData();
 	void EnsureSwapChainColorSpace(SwapChainBitDepth swapChainBitDepth, bool bHDR10Signal); 
 	bool IsInitialized() const { return this->mpSwapChain != nullptr; }
+	inline void UpdatePresentQueue(ID3D12CommandQueue* pCmdQueue) { mpPresentQueue = pCmdQueue; }
 
 	/* Getters */ 
 	inline unsigned short                GetNumBackBuffers()                const { return mNumBackBuffers; }
