@@ -45,6 +45,7 @@ enum EEventType
 	SET_FULLSCREEN_EVENT,
 	SET_VSYNC_EVENT,
 	SET_SWAPCHAIN_FORMAT_EVENT,
+	SET_SWAPCHAIN_PRESENTATION_QUEUE,
 	SET_HDR10_STATIC_METADATA_EVENT,
 
 	// Windows->VQE input events
@@ -135,6 +136,11 @@ struct SetSwapchainFormatEvent : public IEvent
 {
 	SetSwapchainFormatEvent(HWND hwnd_, DXGI_FORMAT format_) : IEvent(EEventType::SET_SWAPCHAIN_FORMAT_EVENT, hwnd_), format(format_) {}
 	DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
+};
+struct SetSwapchainPresentationQueueEvent : public IEvent
+{
+	SetSwapchainPresentationQueueEvent(HWND hwnd_, bool bUseDedicatedPresentationQueueIn) : IEvent(EEventType::SET_SWAPCHAIN_PRESENTATION_QUEUE, hwnd_), bUseDedicatedPresentationQueue(bUseDedicatedPresentationQueueIn) {}
+	bool bUseDedicatedPresentationQueue = false;
 };
 struct SetStaticHDRMetaDataEvent : public IEvent
 {

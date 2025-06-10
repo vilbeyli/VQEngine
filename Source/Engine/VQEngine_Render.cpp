@@ -197,7 +197,7 @@ void VQEngine::RenderThread_Inititalize()
 				Log::Warning("RenderThread_Initialize(): HDR Swapchain requested, but the containing monitor does not support HDR. Falling back to SDR Swapchain, and will enable HDR swapchain when the window is moved to a HDR-capable display");
 			}
 
-			mpRenderer->InitializeRenderContext(mpWinMain.get(), NUM_SWAPCHAIN_BUFFERS, mSettings.gfx.bVsync, bCreateHDRSwapchain);
+			mpRenderer->InitializeRenderContext(mpWinMain.get(), NUM_SWAPCHAIN_BUFFERS, mSettings.gfx.bVsync, bCreateHDRSwapchain, mSettings.gfx.bUseSeparateSubmissionQueue);
 			mEventQueue_VQEToWin_Main.AddItem(std::make_shared<HandleWindowTransitionsEvent>(hwndMain));
 		}
 		if(mpWinDebug)
@@ -205,7 +205,7 @@ void VQEngine::RenderThread_Inititalize()
 			SCOPED_CPU_MARKER("mpWinDebugInitContext");
 			const bool bIsContainingWindowOnHDRScreen = VQSystemInfo::FMonitorInfo::CheckHDRSupport(mpWinDebug->GetHWND());
 			constexpr bool bCreateHDRSwapchain = false; // only main window in HDR for now
-			mpRenderer->InitializeRenderContext(mpWinDebug.get(), NUM_SWAPCHAIN_BUFFERS, false, bCreateHDRSwapchain);
+			mpRenderer->InitializeRenderContext(mpWinDebug.get(), NUM_SWAPCHAIN_BUFFERS, false, bCreateHDRSwapchain, mSettings.gfx.bUseSeparateSubmissionQueue);
 			mEventQueue_VQEToWin_Main.AddItem(std::make_shared<HandleWindowTransitionsEvent>(mpWinDebug->GetHWND()));
 		}
 #if THREADED_CTX_INIT

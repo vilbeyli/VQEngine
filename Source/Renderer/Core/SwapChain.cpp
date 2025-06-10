@@ -286,7 +286,6 @@ bool SwapChain::Create(const FSwapChainCreateDesc& desc)
     // otherwise we would set the heap's flag to D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
     RTVHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 
-    ID3D12DescriptorHeap* rtvDescriptorHeap = nullptr;
     hr = this->mpDevice->CreateDescriptorHeap(&RTVHeapDesc, IID_PPV_ARGS(&this->mpDescHeapRTV));
     if (FAILED(hr))
     {
@@ -358,11 +357,27 @@ HRESULT SwapChain::Resize(int w, int h, DXGI_FORMAT format)
         mFenceValues[i] = mFenceValues[mpSwapChain->GetCurrentBackBufferIndex()];
     }
 
-    HRESULT hr = mpSwapChain->ResizeBuffers(
-        (UINT)this->mFenceValues.size(),
+	assert(this->mNumBackBuffers <= NUM_MAX_BACK_BUFFERS);
+	IUnknown* const Buffers[NUM_MAX_BACK_BUFFERS] = 
+    { 
+        this->mpPresentQueue,
+        this->mpPresentQueue,
+        this->mpPresentQueue,
+    };
+    UINT NodeMasks[NUM_MAX_BACK_BUFFERS] =
+    {
+        1,
+        1,
+        1
+    };
+
+    HRESULT hr = mpSwapChain->ResizeBuffers1(
+        (UINT)this->mNumBackBuffers,
         w, h,
         format,
-        this->mbVSync ? 0 : (DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING /*| DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH*/)
+        this->mbVSync ? 0 : (DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING /*| DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH*/),
+        NodeMasks,
+        Buffers
     );
     if (hr == S_OK)
     {
@@ -493,8 +508,6 @@ HRESULT SwapChain::Present()
             assert(false); // unhandled Present() return code
             break;
         }
-
-        
     }
 
     return hr;
@@ -560,9 +573,7 @@ void SwapChain::WaitForGPU()
         return;
     }
 
-    ID3D12CommandQueue* queue = mpPresentQueue;
-
-    ThrowIfFailed(queue->Signal(pFence, 1));
+    ThrowIfFailed(mpPresentQueue->Signal(pFence, 1));
 
     HANDLE mHandleFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     pFence->SetEventOnCompletion(1, mHandleFenceEvent);

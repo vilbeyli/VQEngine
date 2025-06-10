@@ -1106,6 +1106,10 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams
 
 		ImGui::Checkbox("Async Compute", &mSettings.gfx.bEnableAsyncCompute);
 		ImGui::Checkbox("Async Copy", &mSettings.gfx.bEnableAsyncCopy);
+		if (ImGui::Checkbox("Separate Submission Queue", &mSettings.gfx.bUseSeparateSubmissionQueue))
+		{
+			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetSwapchainPresentationQueueEvent>(hwnd, mSettings.gfx.bUseSeparateSubmissionQueue));
+		}
 
 		ImGui::Checkbox("ForceLOD0 (Shadow)", &SceneRenderParams.bForceLOD0_ShadowView);
 		ImGui::Checkbox("ForceLOD0 (Scene )", &SceneRenderParams.bForceLOD0_SceneView);

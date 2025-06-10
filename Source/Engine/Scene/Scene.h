@@ -90,7 +90,7 @@ constexpr size_t GAMEOBJECT_BYTE_ALIGNMENT = 64; // assumed typical cache-line s
 class Scene
 {
 	// Engine has easy access to the scene as scene is essentially a part of the engine.
-	friend class VQEngine; 
+	friend class VQEngine;
 	friend class AssetLoader;
 
 //----------------------------------------------------------------------------------------------------------------
