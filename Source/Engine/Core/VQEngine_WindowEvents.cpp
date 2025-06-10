@@ -18,6 +18,8 @@
 
 #include "../VQEngine.h"
 #include "Renderer/Renderer.h"
+#include "Libs/VQutils/Include/Log.h"
+#include "Engine/Core/Window.h"
 #include "Input.h"
 #include "imgui.h"
 

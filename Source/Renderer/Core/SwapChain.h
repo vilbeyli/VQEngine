@@ -48,9 +48,11 @@ enum SwapChainBitDepth
 struct FSwapChainCreateDesc
 {
 	ID3D12Device* pDevice   = nullptr;
-	const Window* pWindow   = nullptr;
 	CommandQueue* pCmdQueue = nullptr;
 
+	HWND hwnd = 0;
+	int windowWidth = 0;
+	int windowHeight = 0;
 	int numBackBuffers = 2;
 	bool bVSync        = false;
 	bool bFullscreen   = false;

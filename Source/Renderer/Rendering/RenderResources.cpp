@@ -18,7 +18,7 @@
 
 #include "RenderResources.h"
 #include "Renderer.h"
-#include "Libs/VQUtils/Source/Image.h"
+#include "Libs/VQUtils/Include/Image.h"
 #include "Rendering/RenderPass/AmbientOcclusion.h"
 #include "Rendering/RenderPass/ScreenSpaceReflections.h"
 

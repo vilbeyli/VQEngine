@@ -18,7 +18,7 @@
 #pragma once
 
 #include "../Core/Types.h"
-#include "../Libs/VQUtils/Source/utils.h"
+#include "../Libs/VQUtils/Include/utils.h"
 #include "Renderer/Resources/Buffer.h"
 #include "../Math.h"
 #include "MeshGeometryData.h"

@@ -22,7 +22,7 @@
 #define NOMINMAX
 #include <d3d12.h>
 #include "Engine/Core/Types.h"
-#include "Libs/VQUtils/Source/Log.h"
+#include "Libs/VQUtils/Include/Log.h"
 #include <cassert>
 #include <cwchar>
 

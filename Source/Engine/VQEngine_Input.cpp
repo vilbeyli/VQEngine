@@ -17,16 +17,16 @@
 //	Contact: volkanilbeyli@gmail.com
 #include "VQEngine.h"
 #include "Math.h"
+#include "Core/Window.h"
 #include "Scene/Scene.h"
 #include "Scene/SceneViews.h"
-#include "../Scenes/Scenes.h" // scene instances
 
 #include "GPUMarker.h"
 #include "imgui.h" // io
 
 #include "Renderer/Renderer.h"
 
-#include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Include/utils.h"
 
 #include <algorithm>
 

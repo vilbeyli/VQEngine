@@ -47,8 +47,8 @@
 #include "Window.h"
 #include "../VQEngine.h"
 #include "Renderer/Core/SwapChain.h"
-#include "Libs/VQUtils/Source/Log.h"
-#include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Include/Log.h"
+#include "Libs/VQUtils/Include/utils.h"
 #include "Data/Resources/resource.h"
 
 #include <dxgi1_6.h>

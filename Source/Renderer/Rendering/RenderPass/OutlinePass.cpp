@@ -22,10 +22,10 @@
 #include "Renderer/Rendering/DrawData.h"
 #include "Shaders/LightingConstantBufferData.h"
 #include "Engine/GPUMarker.h"
-#include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Include/utils.h"
 #include "Engine/Scene/Mesh.h"
 #include "Engine/Scene/Material.h"
-#include "Libs/VQUtils/Source/Log.h"
+#include "Libs/VQUtils/Include/Log.h"
 
 #include <cassert>
 

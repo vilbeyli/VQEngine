@@ -19,14 +19,15 @@
 #include "FileParser.h"
 #include "Platform.h"
 
-#include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Include/utils.h"
 #include "Libs/VQUtils/Libs/tinyxml2/tinyxml2.h"
 
-#include "VQUtils/Source/Log.h"
+#include "VQUtils/Include/Log.h"
 
 #include <fstream>
 #include <cassert>
 #include <unordered_map>
+#include <algorithm>
 
 using namespace DirectX;
 

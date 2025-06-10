@@ -20,7 +20,7 @@
 #include "MeshSorting.h"
 #include "Math.h"
 #include "Scene/Scene.h"
-#include "Libs/VQUtils/Source/Multithreading.h"
+#include "Libs/VQUtils/Include/Multithreading/ThreadPool.h"
 
 #include <algorithm>
 #include <execution>

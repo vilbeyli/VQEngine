@@ -17,8 +17,8 @@
 //	Contact: volkanilbeyli@gmail.com
 #include "Input.h"
 
-#include "Libs/VQUtils/Source/Log.h"
-#include "Libs/VQUtils/Source/Utils.h"
+#include "Libs/VQUtils/Include/Log.h"
+#include "Libs/VQUtils/Include/Utils.h"
 
 #include <algorithm>
 #include <cassert>

@@ -18,11 +18,13 @@
 #include "Engine/VQEngine.h"
 #include "Engine/GPUMarker.h"
 #include "Engine/Scene/SceneViews.h"
+#include "Engine/Scene/Scene.h"
+#include "Engine/Core/Window.h"
 
 #include "Renderer/Rendering/RenderPass/MagnifierPass.h"
 #include "Renderer/Renderer.h"
 
-#include "VQUtils/Source/utils.h"
+#include "VQUtils/Include/utils.h"
 
 #include "Libs/imgui/backends/imgui_impl_win32.h"
 #include "Libs/imgui/imgui.h"

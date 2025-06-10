@@ -58,6 +58,7 @@ add_definitions(-DFFX_CACAO_ENABLE_D3D12) # TODO: move render passes to renderer
 set (CoreFiles 
     "Source/Engine/Core/Platform.h"
     "Source/Engine/Core/Window.h"
+    "Source/Engine/Core/IWindow.h"
     "Source/Engine/Core/Input.h"
     "Source/Engine/Core/Events.h"
     "Source/Engine/Core/Types.h"

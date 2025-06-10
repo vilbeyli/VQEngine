@@ -24,7 +24,7 @@
 
 #include "../Core/Types.h"
 #if FFX_DEBUG_LOG
-#include "../../VQUtils/Source/Log.h"
+#include "../../VQUtils/Include/Log.h"
 #endif
 
 #include <cmath>

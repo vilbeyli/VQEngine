@@ -17,7 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "LoadingScreen.h"
-#include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Include/utils.h"
 #include <cassert>
 
 SRV_ID FLoadingScreenData::GetSelectedLoadingScreenSRV_ID() const

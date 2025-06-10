@@ -19,7 +19,7 @@
 
 #include "CommandQueue.h"
 #include "Device.h"
-#include "Libs/VQUtils/Source/Log.h"
+#include "Libs/VQUtils/Include/Log.h"
 #include "Common.h"
 
 #include <d3d12.h>

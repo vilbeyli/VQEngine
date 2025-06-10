@@ -37,7 +37,9 @@ void FWindowRenderContext::InitializeContext(const Window* pWin, Device* pVQDevi
 	FSwapChainCreateDesc swapChainDesc = {};
 	swapChainDesc.numBackBuffers = NumSwapchainBuffers;
 	swapChainDesc.pDevice        = pVQDevice->GetDevicePtr();
-	swapChainDesc.pWindow        = pWin;
+	swapChainDesc.hwnd           = pWin->GetHWND();
+	swapChainDesc.windowWidth    = pWin->GetWidth();
+	swapChainDesc.windowHeight   = pWin->GetHeight();
 	swapChainDesc.pCmdQueue      = &this->PresentQueue;
 	swapChainDesc.bVSync         = bVSync;
 	swapChainDesc.bHDR           = bHDRSwapchain;

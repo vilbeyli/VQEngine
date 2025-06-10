@@ -18,7 +18,7 @@
 
 #include "Light.h"
 
-#include "Libs/VQUtils/Source/Log.h"
+#include "Libs/VQUtils/Include/Log.h"
 
 using namespace DirectX;
 

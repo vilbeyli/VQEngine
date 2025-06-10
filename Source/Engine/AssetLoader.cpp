@@ -26,11 +26,10 @@
 
 #include "../Renderer/Renderer.h"
 
-#include "Libs/VQUtils/Source/Multithreading.h"
-#include "Libs/VQUtils/Source/utils.h"
-#include "Libs/VQUtils/Source/Image.h"
-#include "Libs/VQUtils/Source/Timer.h"
-#include "Libs/VQUtils/Source/Log.h"
+#include "Libs/VQUtils/Include/utils.h"
+#include "Libs/VQUtils/Include/Image.h"
+#include "Libs/VQUtils/Include/Timer.h"
+#include "Libs/VQUtils/Include/Log.h"
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>

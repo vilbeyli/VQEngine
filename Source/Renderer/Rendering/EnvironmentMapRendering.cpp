@@ -1,8 +1,8 @@
 #include "EnvironmentMapRendering.h"
 #include "Renderer/Renderer.h"
 #include "Renderer/Resources/CubemapUtility.h"
-#include "Libs/VQUtils/Source/Image.h"
-#include "Libs/VQUtils/Source/Log.h"
+#include "Libs/VQUtils/Include/Image.h"
+#include "Libs/VQUtils/Include/Log.h"
 
 #include "Engine/EnvironmentMap.h"
 #include "Engine/GPUMarker.h"

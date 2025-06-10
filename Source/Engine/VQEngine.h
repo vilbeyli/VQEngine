@@ -20,14 +20,11 @@
 
 #include "Core/Types.h"
 #include "Core/Platform.h"
-#include "Core/Window.h"
-#include "Core/Events.h"
+#include "Core/IWindow.h"
 #include "Core/Input.h"
 
-#include "Scene/Scene.h"
 #include "Scene/Mesh.h"
 #include "Scene/Camera.h"
-#include "Scene/Transform.h"
 
 #include "Renderer/Rendering/EnvironmentMapRendering.h"
 #include "EnvironmentMap.h"
@@ -37,9 +34,9 @@
 
 #include "UI/VQUI.h"
 
-#include "Libs/VQUtils/Source/Multithreading.h"
-#include "Libs/VQUtils/Source/Timer.h"
-#include "Libs/VQUtils/Source/SystemInfo.h"
+#include "Libs/VQUtils/Include/Multithreading/BufferedContainer.h"
+#include "Libs/VQUtils/Include/Multithreading/ThreadPool.h"
+#include "Libs/VQUtils/Include/SystemInfo.h"
 
 #include <memory>
 #include <latch>
@@ -57,9 +54,17 @@
 #define DEBUG_LOG_THREAD_SYNC_VERBOSE 0
 //--------------------------------------------------------------------
 
+// Forward Declarations
 struct ImGuiContext;
 class VQRenderer;
 struct FSceneRenderOptions;
+class Scene;
+struct FSceneStats;
+struct FPostProcessParameters;
+class Timer;
+class Window;
+
+using pfnWndProc_t = LRESULT(CALLBACK*)(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 //
 // DATA STRUCTS
@@ -71,6 +76,7 @@ enum EAppState
 	SIMULATING,
 	UNLOADING,
 	EXITING,
+
 	NUM_APP_STATES
 };
 
@@ -188,11 +194,11 @@ public:
 
 //-----------------------------------------------------------------------
 	
-	void                       SetWindowName(HWND hwnd, const std::string& name);
-	void                       SetWindowName(const std::unique_ptr<Window>& pWin, const std::string& name);
-	const std::string&         GetWindowName(HWND hwnd) const;
-	inline const std::string&  GetWindowName(const std::unique_ptr<Window>& pWin) const { return GetWindowName(pWin->GetHWND()); }
-	inline const std::string&  GetWindowName(const Window* pWin) const { return GetWindowName(pWin->GetHWND()); }
+	void               SetWindowName(HWND hwnd, const std::string& name);
+	void               SetWindowName(const std::unique_ptr<Window>& pWin, const std::string& name);
+	const std::string& GetWindowName(HWND hwnd) const;
+	const std::string& GetWindowName(const std::unique_ptr<Window>& pWin) const;
+	const std::string& GetWindowName(const Window* pWin) const;
 
 
 	// ---------------------------------------------------------
@@ -313,8 +319,7 @@ private:
 	FUIState                        mUIState;
 
 	// timer / profiler
-	Timer                           mTimer;
-	Timer                           mTimerRender;
+	std::unique_ptr<Timer>          mpTimer;
 	float                           mEffectiveFrameRateLimit_ms;
 
 	// misc.
@@ -339,7 +344,7 @@ private:
 
 	void                            HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWindowSettings& settings);
 	void                            SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse, bool bReleaseAtCapturedPosition);
-	inline void                     SetMouseCaptureForWindow(Window* pWin, bool bCaptureMouse, bool bReleaseAtCapturedPosition) { this->SetMouseCaptureForWindow(pWin->GetHWND(), bCaptureMouse, bReleaseAtCapturedPosition); };
+	void                            SetMouseCaptureForWindow(Window* pWin, bool bCaptureMouse, bool bReleaseAtCapturedPosition);
 
 	void                            GenerateBuiltinMeshes();
 	void                            LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete

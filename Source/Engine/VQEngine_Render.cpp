@@ -21,9 +21,12 @@
 
 #include "Shaders/LightingConstantBufferData.h"
 
-#include "Scene/MeshGenerator.h"
+#include "Engine/Scene/Scene.h"
+#include "Engine/Scene/Scene.h"
+#include "Engine/Scene/MeshGenerator.h"
+#include "Engine/Core/Window.h"
 
-#include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Include/utils.h"
 
 #include "Renderer/Renderer.h"
 
@@ -238,9 +241,6 @@ void VQEngine::RenderThread_Inititalize()
 
 		RenderThread_LoadWindowSizeDependentResources(hwndMain, W, H, fResolutionScale); 
 	});
-
-	mTimerRender.Reset();
-	mTimerRender.Start();
 }
 
 void VQEngine::RenderThread_Exit()

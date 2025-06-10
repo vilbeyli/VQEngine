@@ -22,6 +22,7 @@
 #include "Scene/SceneViews.h"
 #include "../Scenes/Scenes.h" // scene instances
 #include "Core/FileParser.h"
+#include "Core/Window.h"
 #include "imgui.h"
 
 #include "Renderer/Renderer.h"
@@ -29,7 +30,8 @@
 #include "Renderer/Rendering/RenderPass/ScreenSpaceReflections.h"
 #include "Renderer/Rendering/RenderPass/ObjectIDPass.h"
 
-#include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Include/utils.h"
+#include "Libs/VQUtils/Include/Timer.h"
 
 #include <algorithm>
 
@@ -49,14 +51,14 @@ void VQEngine::UpdateThread_Main()
 	bool bQuit = false;
 	while (!mbStopAllThreads && !bQuit)
 	{
-		dt = mTimer.Tick(); // update timer
+		dt = mpTimer->Tick(); // update timer
 
 		UpdateThread_Tick(dt);
 
 		// UpdateThread_Logging()
 		constexpr int LOGGING_PERIOD = 4; // seconds
 		static float LAST_LOG_TIME = 0;
-		const float TotalTime = mTimer.TotalTime();
+		const float TotalTime = mpTimer->TotalTime();
 		if (TotalTime - LAST_LOG_TIME > 4)
 		{
 			Log::Info("UpdateTick() : dt=%.2f ms", (dt * 1000.0f) /* - (dt_RenderWaitTime * 1000.0f)*/);
@@ -92,8 +94,8 @@ void VQEngine::UpdateThread_Inititalize()
 		InitializeUI(mpWinMain->GetHWND());
 	});
 
-	mTimer.Reset();
-	mTimer.Start();
+	mpTimer->Reset();
+	mpTimer->Start();
 }
 
 void VQEngine::UpdateThread_Tick(const float dt)
@@ -196,10 +198,10 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 
 				mLoadingScreenData.RotateLoadingScreenImageIndex();
 
-				float dt_loading = mTimer.StopGetDeltaTimeAndReset();
+				float dt_loading = mpTimer->StopGetDeltaTimeAndReset();
 				SetEffectiveFrameRateLimit(mSettings.gfx.MaxFrameRate);
 				Log::Info("Loading completed in %.2fs, starting scene simulation", dt_loading);
-				mTimer.Start();
+				mpTimer->Start();
 				UpdateThread_UpdateScene_MainWnd(dt);
 				UpdateThread_UpdateScene_DebugWnd(dt);
 			}
@@ -648,6 +650,9 @@ const std::string& VQEngine::GetWindowName(HWND hwnd) const
 #endif
 	return mWinNameLookup.at(hwnd);
 }
+
+const std::string& VQEngine::GetWindowName(const std::unique_ptr<Window>& pWin) const { return GetWindowName(pWin->GetHWND()); }
+const std::string& VQEngine::GetWindowName(const Window* pWin) const { return GetWindowName(pWin->GetHWND()); }
 
 
 MeshID VQEngine::GetBuiltInMeshID(const std::string& MeshName) const

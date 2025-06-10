@@ -21,8 +21,9 @@
 #include "Texture.h"
 
 #include "Engine/Core/Types.h"
-#include "Libs/VQUtils/Source/Multithreading.h"
-#include "Libs/VQUtils/Source/Image.h"
+#include "Libs/VQUtils/Include/Multithreading/EventSignal.h"
+#include "Libs/VQUtils/Include/Multithreading/ThreadPool.h"
+#include "Libs/VQUtils/Include/Image.h"
 
 #include <d3d12.h>
 #include <latch>

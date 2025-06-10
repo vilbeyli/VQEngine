@@ -21,11 +21,12 @@
 
 #include "Engine/GPUMarker.h"
 #include "Libs/DirectXCompiler/inc/dxcapi.h"
-#include "Libs/VQUtils/Source/utils.h"
-#include "Libs/VQUtils/Source/Log.h"
+#include "Libs/VQUtils/Include/utils.h"
+#include "Libs/VQUtils/Include/Log.h"
+
 #include <fstream>
 #include <stack>
-
+#include <sstream>
 #include <wrl.h>
 #include <D3Dcompiler.h>
 #pragma comment(lib, "D3DCompiler.lib")
