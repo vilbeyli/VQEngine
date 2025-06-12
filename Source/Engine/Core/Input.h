@@ -20,7 +20,6 @@
 
 #include "Events.h"
 
-#include <array>
 #include <unordered_map>
 #include <string>
 #include <atomic>
@@ -80,9 +79,8 @@ public:
 	bool IsKeyTriggered(const char*) const;
 	bool IsKeyTriggered(const std::string&) const;
 
-	inline const std::array<float, 2>& GetMouseDelta() const { return mMouseDelta; }
-	inline float MouseDeltaX() const { return mMouseDelta[0] && !mbIgnoreInput; };
-	inline float MouseDeltaY() const { return mMouseDelta[1] && !mbIgnoreInput; };
+	inline float MouseDeltaX() const { return mMouseDelta[0]; };
+	inline float MouseDeltaY() const { return mMouseDelta[1]; };
 	inline long GetMousePosX() const { return mMousePosition[0]; }
 	inline long GetMousePosY() const { return mMousePosition[1]; }
 
@@ -98,19 +96,18 @@ public:
 
 private:
 	// state
-	std::atomic<bool>                    mbIgnoreInput;
+	std::atomic<bool> mbIgnoreInput;
 
 	// keyboard
-	std::array<KeyState, NUM_MAX_KEYS>   mKeys;
-	std::array<KeyState, NUM_MAX_KEYS>   mKeysPrevious;
+	KeyState mKeys[NUM_MAX_KEYS];
+	KeyState mKeysPrevious[NUM_MAX_KEYS];
 
 	// mouse
-	ButtonStateMap_t                     mMouseButtons;
-	ButtonStateMap_t                     mMouseButtonsPrevious;
-	ButtonStateMap_t                     mMouseButtonDoubleClicks;
+	ButtonStateMap_t mMouseButtons;
+	ButtonStateMap_t mMouseButtonsPrevious;
+	ButtonStateMap_t mMouseButtonDoubleClicks;
 
-	std::array<float, 2>                 mMouseDelta;
-	std::array<long, 2>                  mMousePosition;
-	short                                mMouseScroll;
+	float mMouseDelta[2];
+	long  mMousePosition[2];
+	short mMouseScroll;
 };
-

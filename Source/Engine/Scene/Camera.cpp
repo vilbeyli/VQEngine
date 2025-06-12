@@ -262,7 +262,8 @@ void OrbitController::UpdateCamera(const Input& input, float dt, bool bUseInput)
 
 	// generate the FCameraInput data
 	FCameraInput camInput(vZERO);
-	camInput.DeltaMouseXY = input.GetMouseDelta();
+	camInput.DeltaMouseXY[0] = input.MouseDeltaX();
+	camInput.DeltaMouseXY[1] = input.MouseDeltaY();
 
 	// build camera transform
 	Transform tf(pCam->mPosition);
@@ -365,7 +366,8 @@ void FirstPersonController::UpdateCamera(const Input& input, float dt, bool bUse
 
 	// update camera
 	FCameraInput camInput(LocalSpaceTranslation);
-	camInput.DeltaMouseXY = input.GetMouseDelta();
+	camInput.DeltaMouseXY[0] = input.MouseDeltaX();
+	camInput.DeltaMouseXY[1] = input.MouseDeltaY();
 
 
 	//this->mpCamera->Update(dt, camInput);

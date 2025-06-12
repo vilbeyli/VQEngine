@@ -263,29 +263,28 @@ Input::Input()
 	
 	mMouseButtonDoubleClicks = mMouseButtonsPrevious = mMouseButtons;
 
-	mKeys.fill(0);
-	mKeysPrevious.fill(0);
+	memset(mKeys, 0, sizeof(mKeys));
+	memset(mKeysPrevious, 0, sizeof(mKeysPrevious));
 }
 
 Input::Input(Input&& other)
 
 	: mbIgnoreInput(other.mbIgnoreInput.load())
-
-	, mMouseDelta   (other.mMouseDelta)
-	, mMousePosition(other.mMousePosition)
 	, mMouseScroll  (other.mMouseScroll)
 	, mMouseButtons (other.mMouseButtons)
 	, mMouseButtonsPrevious(other.mMouseButtonsPrevious)
 	, mMouseButtonDoubleClicks(other.mMouseButtonsPrevious)
-
-	, mKeys(other.mKeys)
-	, mKeysPrevious(other.mKeysPrevious)
-{}
+{
+	memcpy_s(mMouseDelta, sizeof(mMouseDelta), other.mMouseDelta, sizeof(other.mMouseDelta));
+	memcpy_s(mMousePosition, sizeof(mMousePosition), other.mMousePosition, sizeof(other.mMousePosition));
+	memcpy_s(mKeys, sizeof(mKeys), other.mKeys, sizeof(other.mKeys));
+	memcpy_s(mKeysPrevious, sizeof(mKeysPrevious), other.mKeysPrevious, sizeof(other.mKeysPrevious));
+}
 
 // called at the end of the frame
 void Input::PostUpdate()
 {
-	mKeysPrevious = mKeys;
+	memcpy_s(mKeysPrevious, sizeof(mKeysPrevious), mKeys, sizeof(mKeys));
 	mMouseButtonsPrevious = mMouseButtons;
 
 	// Reset Mouse Data
