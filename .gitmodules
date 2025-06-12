@@ -7,12 +7,12 @@
 [submodule "Source/Renderer/Libs/D3D12MA"]
 	path = Source/Renderer/Libs/D3D12MA
 	url = https://github.com/vilbeyli/D3D12MemoryAllocator.git
-[submodule "Libs/assimp"]
-	path = Libs/assimp
-	url = https://github.com/assimp/assimp.git
 [submodule "Data/Models"]
 	path = Data/Models
 	url = https://github.com/vilbeyli/VQModels.git
 [submodule "Libs/imgui"]
 	path = Libs/imgui
 	url = https://github.com/vilbeyli/imgui.git
+[submodule "Libs/cgltf"]
+	path = Libs/cgltf
+	url = https://github.com/jkuhlmann/cgltf.git

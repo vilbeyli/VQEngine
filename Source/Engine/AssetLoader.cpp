@@ -31,12 +31,29 @@
 #include "Libs/VQUtils/Include/Timer.h"
 #include "Libs/VQUtils/Include/Log.h"
 
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
+#define CGLTF_IMPLEMENTATION
+#ifdef matrix
+#undef matrix
+#endif
 
-using namespace Assimp;
+#pragma warning (disable: 4996) // 'This function or variable may be unsafe': strcpy, strdup, sprintf, vsnprintf, sscanf, fopen
+#include "Libs/cgltf/cgltf.h"
+
 using namespace DirectX;
+
+static ModelID ImportOBJ(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName)
+{
+	assert(false);
+	return INVALID_ID;
+}
+static const std::unordered_map<std::string, AssetLoader::FModelLoadParams::pfnImportModel_t> ImportModelFunctions = 
+{
+	{ "gltf", AssetLoader::ImportGLTF },
+	{ "obj",  ImportOBJ },
+	// { "glb",  ImportGLB },
+	// { "fbx",  ImportFBX },
+	// add more formats here
+};
 
 TaskID AssetLoader::GenerateModelLoadTaskID()
 {
@@ -51,15 +68,17 @@ AssetLoader::AssetLoader(ThreadPool& WorkerThreads_Model, ThreadPool& WorkerThre
 	, mRenderer(renderer)
 {}
 
+
 //----------------------------------------------------------------------------------------------------------------
 // MODEL LOADER
 //----------------------------------------------------------------------------------------------------------------
 void AssetLoader::QueueModelLoad(GameObject* pObject, const std::string& ModelPath, const std::string& ModelName)
 {
 	const std::string FileExtension = DirectoryUtil::GetFileExtension(ModelPath);
-
-	std::unique_lock<std::mutex> lk(mMtxQueue_ModelLoad);
-	mModelLoadQueue.push({pObject, ModelPath, ModelName, AssetLoader::ImportModel });
+	{
+		std::unique_lock<std::mutex> lk(mMtxQueue_ModelLoad);
+		mModelLoadQueue.push({ pObject, ModelPath, ModelName, ImportModelFunctions.at(StrUtil::GetLowercased(FileExtension)) });
+	}
 }
 
 AssetLoader::ModelLoadResults_t AssetLoader::StartLoadingModels(Scene* pScene)
@@ -275,54 +294,26 @@ AssetLoader::TextureLoadResults_t AssetLoader::StartLoadingTextures(TaskID taskI
 	return std::move(TextureLoadResults);
 }
 
-static AssetLoader::ETextureType GetTextureType(aiTextureType aiType)
+static AssetLoader::ETextureType GetTextureTypeFromGLTF(const cgltf_texture_view* texture_view, const cgltf_material* material)
 {
-	switch (aiType)
-	{
-	case aiTextureType_NONE:      return AssetLoader::ETextureType::NUM_TEXTURE_TYPES; break;
-	case aiTextureType_DIFFUSE:   return AssetLoader::ETextureType::DIFFUSE; break;
-	case aiTextureType_SPECULAR:  return AssetLoader::ETextureType::SPECULAR; break;
-	case aiTextureType_EMISSIVE:  return AssetLoader::ETextureType::EMISSIVE; break;
-	case aiTextureType_HEIGHT:    return AssetLoader::ETextureType::HEIGHT; break;
-	case aiTextureType_NORMALS:   return AssetLoader::ETextureType::NORMALS; break;
-	case aiTextureType_OPACITY:   return AssetLoader::ETextureType::ALPHA_MASK; break;
-	case aiTextureType_METALNESS: return AssetLoader::ETextureType::METALNESS; break;
-	case aiTextureType_AMBIENT:   
-		assert(false);
-		break;
-	case aiTextureType_SHININESS: break;
-	case aiTextureType_DISPLACEMENT:
-		break;
-	case aiTextureType_LIGHTMAP:
-		break;
-	case aiTextureType_REFLECTION:
-		break;
-	case aiTextureType_BASE_COLOR:
-		break;
-	case aiTextureType_NORMAL_CAMERA:
-		break;
-	case aiTextureType_EMISSION_COLOR:
-		assert(false);
-		break;
-	case aiTextureType_DIFFUSE_ROUGHNESS:
-		break;
-	case aiTextureType_GLTF_METALLIC_ROUGHNESS: return AssetLoader::ETextureType::CUSTOM_MAP; break;
-	case aiTextureType_AMBIENT_OCCLUSION: return AssetLoader::ETextureType::AMBIENT_OCCLUSION; 
-	case aiTextureType_UNKNOWN:
-		// packed textures are unknown type for assimp, hence the engine assumes occl/rough/metal packed texture type
-		return AssetLoader::ETextureType::CUSTOM_MAP; break; 
-		break;
-	case _aiTextureType_Force32Bit:
-		break;
-	default:
-		break;
-	}
+	// Map glTF texture roles to engine's ETextureType
+	if (texture_view == &material->pbr_metallic_roughness.base_color_texture)
+		return AssetLoader::ETextureType::DIFFUSE;
+	if (texture_view == &material->normal_texture)
+		return AssetLoader::ETextureType::NORMALS;
+	if (texture_view == &material->emissive_texture)
+		return AssetLoader::ETextureType::EMISSIVE;
+	if (texture_view == &material->occlusion_texture)
+		return AssetLoader::ETextureType::AMBIENT_OCCLUSION;
+	if (texture_view == &material->pbr_metallic_roughness.metallic_roughness_texture)
+		return AssetLoader::ETextureType::CUSTOM_MAP; // Likely OCCLUSION_ROUGHNESS_METALNESS
 	return AssetLoader::ETextureType::NUM_TEXTURE_TYPES;
 }
 
+
 void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std::mutex& mtxTexturePaths, std::unordered_map<TextureID, std::string>& TexturePaths, VQRenderer* pRenderer)
 {
-	SCOPED_CPU_MARKER("FMaterialTextureAssignments.DoAssignments()");
+	SCOPED_CPU_MARKER("MaterialTextureAssignments");
 	for (FMaterialTextureAssignment& assignment : mAssignments)
 	{
 		Material& mat = pScene->GetMaterial(assignment.matID);
@@ -414,6 +405,7 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 
 		if (mat.SRVMaterialMaps == INVALID_ID)
 		{
+			SCOPED_CPU_MARKER("SRVs");
 			mat.SRVMaterialMaps = pRenderer->AllocateSRV(NUM_MATERIAL_TEXTURE_MAP_BINDINGS - 1);
 			mat.SRVHeightMap = pRenderer->AllocateSRV(1);
 
@@ -435,127 +427,246 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 }
 
 //----------------------------------------------------------------------------------------------------------------
-// ASSIMP HELPER FUNCTIONS
+// HELPER FUNCTIONS
 //----------------------------------------------------------------------------------------------------------------
 static std::vector<AssetLoader::FTextureLoadParams> GenerateTextureLoadParams(
-	  const aiMaterial*  pMaterial
-	, MaterialID         matID
-	, aiTextureType      type
-	, const std::string& modelDirectory
-)
+	const cgltf_material* material,
+	MaterialID matID,
+	const std::string& modelDirectory)
 {
 	SCOPED_CPU_MARKER("GenerateTextureLoadParams()");
 	std::vector<AssetLoader::FTextureLoadParams> TexLoadParams;
-	for (unsigned int i = 0; i < pMaterial->GetTextureCount(type); ++i)
-	{
-		aiString str;
-		pMaterial->GetTexture(type, i, &str);
-		std::string path = str.C_Str();
 
-		AssetLoader::FTextureLoadParams params = {};
-		params.TexturePath = modelDirectory + path;
-		params.MatID = matID;
-		params.TexType = GetTextureType(type);
-		TexLoadParams.push_back(params);
+	// List of texture views to check
+	const cgltf_texture_view* texture_views[] = 
+	{
+		&material->pbr_metallic_roughness.base_color_texture,
+		&material->pbr_metallic_roughness.metallic_roughness_texture,
+		&material->normal_texture,
+		&material->occlusion_texture,
+		&material->emissive_texture
+	};
+
+	for (const cgltf_texture_view* view : texture_views)
+	{
+		if (view->texture && view->texture->image && view->texture->image->uri)
+		{
+			AssetLoader::FTextureLoadParams params = {};
+			params.TexturePath = modelDirectory + view->texture->image->uri;
+			params.MatID = matID;
+			params.TexType = GetTextureTypeFromGLTF(view, material);
+			if (params.TexType != AssetLoader::ETextureType::NUM_TEXTURE_TYPES)
+			{
+				TexLoadParams.push_back(params);
+			}
+		}
 	}
+
 	return TexLoadParams;
 }
 
-static Mesh ProcessAssimpMesh(
-	VQRenderer*          pRenderer
-	, const aiMesh*      pMesh
-	, const std::string& ModelName
+static Mesh ProcessGLTFMesh(
+	VQRenderer* pRenderer,
+	const cgltf_primitive* prim,
+	const cgltf_data* data,
+	const std::string& ModelName
 )
 {
-	SCOPED_CPU_MARKER("ProcessAssimpMesh()");
-	GeometryData< FVertexWithNormalAndTangent, unsigned> GeometryData(1);
+	SCOPED_CPU_MARKER("ProcessGLTFMesh()");
+	GeometryData<FVertexWithNormalAndTangent, unsigned> GeometryData(1);
 	std::vector<FVertexWithNormalAndTangent>& Vertices = GeometryData.LODVertices[0];
 	std::vector<unsigned>& Indices = GeometryData.LODIndices[0];
 
+	// Load buffers if not already loaded
+	if (prim->attributes_count > 0 && prim->attributes[0].data->buffer_view && !prim->attributes[0].data->buffer_view->buffer->data)
+	{
+		// Buffers should be loaded by cgltf_load_buffers in the main function
+		Log::Error("Buffer data not loaded for mesh %s", ModelName.c_str());
+		return Mesh(nullptr, std::move(GeometryData), ModelName);
+	}
+
+	// Count total indices
+	size_t NumIndices = 0;
+	if (prim->indices)
+	{
+		if (prim->type == cgltf_primitive_type_triangles)
+		{
+			NumIndices = prim->indices->count;
+		}
+		else if (prim->type == cgltf_primitive_type_triangle_strip)
+		{
+			NumIndices = (prim->indices->count >= 3) ? (prim->indices->count - 2) * 3 : 0;
+		}
+		else if (prim->type == cgltf_primitive_type_triangle_fan)
+		{
+			NumIndices = (prim->indices->count >= 3) ? (prim->indices->count - 2) * 3 : 0;
+		}
+		else
+		{
+			Log::Error("Unsupported primitive type %d in mesh %s", prim->type, ModelName.c_str());
+			return Mesh(nullptr, std::move(GeometryData), ModelName);
+		}
+	}
+
+	// Count vertices
+	size_t NumVertices = 0;
+	for (size_t i = 0; i < prim->attributes_count; ++i)
+	{
+		if (prim->attributes[i].type == cgltf_attribute_type_position)
+		{
+			NumVertices = prim->attributes[i].data->count;
+			break;
+		}
+	}
+
 	{
 		SCOPED_CPU_MARKER("MemAlloc");
-		size_t NumIndices = 0;
-		for (unsigned int i = 0; i < pMesh->mNumFaces; i++) NumIndices += pMesh->mFaces[i].mNumIndices;
 		Indices.resize(NumIndices);
-		Vertices.resize(pMesh->mNumVertices);
+		Vertices.resize(NumVertices);
 	}
 
 	{
 		SCOPED_CPU_MARKER("Verts");
-		// Walk through each of the mesh's vertices
-		for (unsigned int i = 0; i < pMesh->mNumVertices; i++)
+		for (size_t i = 0; i < NumVertices; ++i)
 		{
 			FVertexWithNormalAndTangent& Vert = Vertices[i];
 
-			// POSITIONS
-			Vert.position[0] = pMesh->mVertices[i].x;
-			Vert.position[1] = pMesh->mVertices[i].y;
-			Vert.position[2] = pMesh->mVertices[i].z;
-
-			// TEXTURE COORDINATES
-			// a vertex can contain up to 8 different texture coordinates. We thus make the assumption that we won't 
-			// use models where a vertex can have multiple texture coordinates so we always take the first set (0).
-			Vert.uv[0] = pMesh->mTextureCoords[0] ? pMesh->mTextureCoords[0][i].x : 0;
-			Vert.uv[1] = pMesh->mTextureCoords[0] ? pMesh->mTextureCoords[0][i].y : 0;
-
-			// NORMALS
-			if (pMesh->mNormals)
+			// Process attributes
+			for (size_t j = 0; j < prim->attributes_count; ++j)
 			{
-				Vert.normal[0] = pMesh->mNormals[i].x;
-				Vert.normal[1] = pMesh->mNormals[i].y;
-				Vert.normal[2] = pMesh->mNormals[i].z;
-			}
+				const cgltf_attribute* attr = &prim->attributes[j];
+				const cgltf_accessor* acc = attr->data;
 
-			// TANGENT
-			if (pMesh->mTangents)
-			{
-				Vert.tangent[0] = pMesh->mTangents[i].x;
-				Vert.tangent[1] = pMesh->mTangents[i].y;
-				Vert.tangent[2] = pMesh->mTangents[i].z;
-			}
+				if (acc->is_sparse) 
+				{
+					Log::Warning("Sparse accessors not supported for mesh %s", ModelName.c_str());
+					continue;
+				}
 
-			// BITANGENT ( NOT USED )
-			// Vert.bitangent = XMFLOAT3(
-			// 	mesh->mBitangents[i].x,
-			// 	mesh->mBitangents[i].y,
-			// 	mesh->mBitangents[i].z
-			// );
+				if (attr->type == cgltf_attribute_type_position && acc->type == cgltf_type_vec3)
+				{
+					if (!cgltf_accessor_read_float(acc, i, Vert.position, 3))
+					{
+						Log::Warning("Failed to read position for vertex %zu in mesh %s", i, ModelName.c_str());
+					}
+					Vert.position[2] = -Vert.position[2]; // Convert to left-handed coordinate system
+				}
+				else if (attr->type == cgltf_attribute_type_texcoord && acc->type == cgltf_type_vec2 && attr->index == 0)
+				{
+					if (!cgltf_accessor_read_float(acc, i, Vert.uv, 2))
+					{
+						Log::Warning("Failed to read UV for vertex %zu in mesh %s", i, ModelName.c_str());
+					}
+				}
+				else if (attr->type == cgltf_attribute_type_normal && acc->type == cgltf_type_vec3)
+				{
+					if (!cgltf_accessor_read_float(acc, i, Vert.normal, 3))
+					{
+						Log::Warning("Failed to read normal for vertex %zu in mesh %s", i, ModelName.c_str());
+					}
+					Vert.normal[2] = -Vert.normal[2]; // Convert to left-handed coordinate system
+				}
+				else if (attr->type == cgltf_attribute_type_tangent && acc->type == cgltf_type_vec4)
+				{
+					float tan[4];
+					if (cgltf_accessor_read_float(acc, i, tan, 4))
+					{
+						Vert.tangent[0] = tan[0];
+						Vert.tangent[1] = tan[1];
+						Vert.tangent[2] = -tan[2];
+					}
+				}
+				else
+				{
+					assert(false);
+				}
+			}
 		}
 	}
-
-	// now walk through each of the mesh's faces (a face is a mesh its triangle) and retrieve the corresponding vertex indices.
+	
+	if (prim->indices)
 	{
 		SCOPED_CPU_MARKER("Indices");
-		size_t iIdx = 0;
-		for (unsigned int i = 0; i < pMesh->mNumFaces; i++)
+		if (prim->type == cgltf_primitive_type_triangles)
 		{
-			aiFace face = pMesh->mFaces[i];
-			memcpy(&Indices[iIdx], face.mIndices, sizeof(unsigned) * face.mNumIndices);
-			iIdx += face.mNumIndices;
+			for (size_t i = 0; i < NumIndices; i += 3)
+			{
+				Indices[i] = static_cast<unsigned>(cgltf_accessor_read_index(prim->indices, i));
+				Indices[i + 1] = static_cast<unsigned>(cgltf_accessor_read_index(prim->indices, i + 2)); // Flip winding
+				Indices[i + 2] = static_cast<unsigned>(cgltf_accessor_read_index(prim->indices, i + 1));
+			}
+		}
+		else if (prim->type == cgltf_primitive_type_triangle_strip)
+		{
+			for (size_t i = 2; i < prim->indices->count; ++i)
+			{
+				size_t idx0 = cgltf_accessor_read_index(prim->indices, i - 2);
+				size_t idx1 = cgltf_accessor_read_index(prim->indices, i - 1);
+				size_t idx2 = cgltf_accessor_read_index(prim->indices, i);
+				size_t base = (i - 2) * 3;
+				if (i % 2 == 0)
+				{
+					Indices[base] = static_cast<unsigned>(idx0);
+					Indices[base + 1] = static_cast<unsigned>(idx2); // Flip winding
+					Indices[base + 2] = static_cast<unsigned>(idx1);
+				}
+				else
+				{
+					Indices[base] = static_cast<unsigned>(idx0);
+					Indices[base + 1] = static_cast<unsigned>(idx1);
+					Indices[base + 2] = static_cast<unsigned>(idx2);
+				}
+			}
+		}
+		else if (prim->type == cgltf_primitive_type_triangle_fan)
+		{
+			size_t idx0 = cgltf_accessor_read_index(prim->indices, 0);
+			for (size_t i = 2; i < prim->indices->count; ++i)
+			{
+				size_t idx1 = cgltf_accessor_read_index(prim->indices, i - 1);
+				size_t idx2 = cgltf_accessor_read_index(prim->indices, i);
+				size_t base = (i - 2) * 3;
+				Indices[base] = static_cast<unsigned>(idx0);
+				Indices[base + 1] = static_cast<unsigned>(idx2); // Flip winding
+				Indices[base + 2] = static_cast<unsigned>(idx1);
+			}
 		}
 	}
 
 	return Mesh(nullptr, std::move(GeometryData), ModelName);
 }
 
-static std::string CreateUniqueMaterialName(const aiMaterial* material, size_t iMat, const std::string& modelDirectory)
+static std::vector<Mesh> ProcessGLTFMeshPrimitives
+(
+	VQRenderer* pRenderer,
+	const cgltf_mesh* mesh,
+	const cgltf_data* data,
+	const std::string& ModelName
+)
+{
+	SCOPED_CPU_MARKER("ProcessGLTFMeshPrimitives()");
+
+	std::vector<Mesh> meshes;
+	meshes.reserve(mesh->primitives_count);
+
+	for (size_t i = 0; i < mesh->primitives_count; ++i)
+	{
+		meshes.push_back(ProcessGLTFMesh(pRenderer, &mesh->primitives[i], data, ModelName));
+	}
+
+	return meshes;
+}
+
+static std::string CreateUniqueMaterialName(const cgltf_material* material, size_t iMat, const std::string& modelDirectory)
 {
 	std::string uniqueMatName;
-	aiString matName;
-	if (aiReturn_SUCCESS != material->Get(AI_MATKEY_NAME, matName))
-	{ // material doesn't have a name, use generic name Material#
-		matName = std::string("Material#") + std::to_string(iMat);
-	}
+	std::string matName = material->name ? material->name : ("Material#" + std::to_string(iMat));
 
 	// Data/Models/%MODEL_NAME%/... : index 2 will give model name
 	auto vFolders = DirectoryUtil::GetFlattenedFolderHierarchy(modelDirectory);
 	assert(vFolders.size() > 2);
 	const std::string ModelFolderName = vFolders[2];
-	uniqueMatName = matName.C_Str();
-
-	// modelDirectory = "Data/Models/%MODEL_NAME%/"
-	// Materials use the following unique naming: %MODEL_NAME%/%MATERIAL_NAME%
-	uniqueMatName = ModelFolderName + "/" + uniqueMatName;
+	uniqueMatName = ModelFolderName + "/" + matName;
 
 	return uniqueMatName;
 }
@@ -563,167 +674,124 @@ static std::string CreateUniqueMaterialName(const aiMaterial* material, size_t i
 static void QueueUpTextureLoadRequests(
 	AssetLoader* pAssetLoader,
 	const std::string& modelDirectory,
-	const aiMaterial* material,
+	const cgltf_material* material,
 	MaterialID matID,
-	TaskID taskID
-)
+	TaskID taskID)
 {
 	SCOPED_CPU_MARKER("QueueUpTextureLoadRequests");
-
-	// get texture paths to load
-	std::vector<AssetLoader::FTextureLoadParams> diffuseMaps;
-	std::vector<AssetLoader::FTextureLoadParams> specularMaps;
-	std::vector<AssetLoader::FTextureLoadParams> normalMaps;
-	std::vector<AssetLoader::FTextureLoadParams> heightMaps;
-	std::vector<AssetLoader::FTextureLoadParams> alphaMaps;
-	std::vector<AssetLoader::FTextureLoadParams> emissiveMaps;
-	std::vector<AssetLoader::FTextureLoadParams> occlRoughMetlMaps;
-	std::vector<AssetLoader::FTextureLoadParams> aoMaps;
+	std::vector<AssetLoader::FTextureLoadParams> TexLoadParams = GenerateTextureLoadParams(material, matID, modelDirectory);
+	for (const auto& param : TexLoadParams) 
 	{
-		diffuseMaps = GenerateTextureLoadParams(material, matID, aiTextureType_DIFFUSE, modelDirectory);
-		specularMaps = GenerateTextureLoadParams(material, matID, aiTextureType_SPECULAR, modelDirectory);
-		normalMaps = GenerateTextureLoadParams(material, matID, aiTextureType_NORMALS, modelDirectory);
-		heightMaps = GenerateTextureLoadParams(material, matID, aiTextureType_HEIGHT, modelDirectory);
-		alphaMaps = GenerateTextureLoadParams(material, matID, aiTextureType_OPACITY, modelDirectory);
-		emissiveMaps = GenerateTextureLoadParams(material, matID, aiTextureType_EMISSIVE, modelDirectory);
-		occlRoughMetlMaps = GenerateTextureLoadParams(material, matID, aiTextureType_GLTF_METALLIC_ROUGHNESS, modelDirectory);
-		aoMaps = GenerateTextureLoadParams(material, matID, aiTextureType_AMBIENT_OCCLUSION, modelDirectory);
-	}
-
-
-	// queue texture load
-	std::array<decltype(diffuseMaps)*, 8> TexLoadParams = { &diffuseMaps, &specularMaps, &normalMaps, &heightMaps, &alphaMaps, &emissiveMaps, &occlRoughMetlMaps, &aoMaps };
-	int iTexType = 0;
-	for (const auto* pvLoadParams : TexLoadParams)
-	{
-		int iTex = 0;
-		for (const AssetLoader::FTextureLoadParams& param : *pvLoadParams)
-		{
-			pAssetLoader->QueueTextureLoad(taskID, param);
-			++iTex;
-		}
-		++iTexType;
+		pAssetLoader->QueueTextureLoad(taskID, param);
 	}
 }
 
-static MaterialID ProcessAssimpMaterial(
-	  const aiMaterial* material
-	, size_t aiMatIndex
-	, const std::string& modelDirectory
-	, Scene* pScene
-	, AssetLoader* pAssetLoader
-	, AssetLoader::FMaterialTextureAssignments& MaterialTextureAssignments
-	, TaskID taskID
-)
+static MaterialID ProcessGLTFMaterial(
+	const cgltf_material* material,
+	size_t matIndex,
+	const std::string& modelDirectory,
+	Scene* pScene,
+	AssetLoader* pAssetLoader,
+	AssetLoader::FMaterialTextureAssignments& MaterialTextureAssignments,
+	TaskID taskID)
 {
-	// Create new Material, every material assumed to have a name 
-	const std::string matName = CreateUniqueMaterialName(material, aiMatIndex, modelDirectory);
+	SCOPED_CPU_MARKER("ProcessGLTFMaterial");
+	const std::string matName = CreateUniqueMaterialName(material, matIndex, modelDirectory);
 	MaterialID matID = pScene->CreateMaterial(matName);
 	Material& mat = pScene->GetMaterial(matID);
 
 	QueueUpTextureLoadRequests(pAssetLoader, modelDirectory, material, matID, taskID);
 	MaterialTextureAssignments.mAssignments.push_back({ matID });
 
-	// MATERIAL - http://assimp.sourceforge.net/lib_html/materials.html
-	aiColor3D color(0.f, 0.f, 0.f);
-	if (aiReturn_SUCCESS == material->Get(AI_MATKEY_COLOR_DIFFUSE, color))
-	{
-		mat.diffuse = XMFLOAT3(color.r, color.g, color.b);
+	// Set material properties (PBR metallic-roughness model)
+	if (material->has_pbr_metallic_roughness) {
+		const auto& pbr = material->pbr_metallic_roughness;
+		mat.diffuse = XMFLOAT3(pbr.base_color_factor[0], pbr.base_color_factor[1], pbr.base_color_factor[2]);
+		mat.metalness = pbr.metallic_factor;
+		mat.roughness = pbr.roughness_factor;
+		mat.alpha = pbr.base_color_factor[3];
 	}
 
-	aiColor3D specular(0.f, 0.f, 0.f);
-	if (aiReturn_SUCCESS == material->Get(AI_MATKEY_COLOR_SPECULAR, specular))
-	{
-		mat.specular = XMFLOAT3(specular.r, specular.g, specular.b);
+	if (material->emissive_factor[0] != 0.0f || material->emissive_factor[1] != 0.0f || material->emissive_factor[2] != 0.0f) {
+		mat.emissiveIntensity = std::max({ material->emissive_factor[0], material->emissive_factor[1], material->emissive_factor[2] });
 	}
 
-	aiColor3D transparent(0.0f, 0.0f, 0.0f);
-	if (aiReturn_SUCCESS == material->Get(AI_MATKEY_COLOR_TRANSPARENT, transparent))
-	{	// Defines the transparent color of the material, this is the color to be multiplied 
-		// with the color of translucent light to construct the final 'destination color' 
-		// for a particular position in the screen buffer. T
-		//
-		int a = 5;
+	// Handle alpha mode
+	if (material->alpha_mode == cgltf_alpha_mode_mask) {
+		// mat.alphaCutoff = material->alpha_cutoff; // TODO:
 	}
 
-	float opacity = 0.0f;
-	if (aiReturn_SUCCESS == material->Get(AI_MATKEY_OPACITY, opacity))
-	{
-		mat.alpha = opacity;
-	}
-
-	float shininess = 0.0f;
-	if (aiReturn_SUCCESS == material->Get(AI_MATKEY_SHININESS, shininess))
-	{
-		// Phong Shininess -> Beckmann BRDF Roughness conversion
-		//
-		// https://simonstechblog.blogspot.com/2011/12/microfacet-brdf.html
-		// https://computergraphics.stackexchange.com/questions/1515/what-is-the-accepted-method-of-converting-shininess-to-roughness-and-vice-versa
-		//
-		mat.roughness = sqrtf(2.0f / (2.0f + shininess));
-	}
-
-	aiColor3D emissiveIntensity(0.0f, 0.0f, 0.0f);
-	if (aiReturn_SUCCESS == material->Get(AI_MATKEY_COLOR_EMISSIVE, emissiveIntensity))
-	{
-		mat.emissiveIntensity = emissiveIntensity.r;
-	}
-
-	// other material keys to consider
-	//
-	// AI_MATKEY_TWOSIDED
-	// AI_MATKEY_ENABLE_WIREFRAME
-	// AI_MATKEY_BLEND_FUNC
-	// AI_MATKEY_BUMPSCALING
+	// Note: glTF doesn't directly provide specular or shininess like Assimp; we rely on PBR properties
+	// If specular-glossiness is needed, check material->has_pbr_specular_glossiness and convert
 
 	return matID;
 }
 
 
-#define THREADED_ASSIMP_MESH_LOAD 1
-static Model::Data ProcessAssimpNode(
+#define THREADED_MESH_LOAD 1
+static Model::Data ImportGLTFAllMeshes
+(
 	const std::string& ModelName,
-	aiNode* const      pNode,
-	const aiScene*     pAiScene,
+	cgltf_data* data,
 	const std::string& modelDirectory,
-	AssetLoader*       pAssetLoader,
-	Scene*             pScene,
-	VQRenderer*        pRenderer,
+	AssetLoader* pAssetLoader,
+	Scene* pScene,
+	VQRenderer* pRenderer,
 	AssetLoader::FMaterialTextureAssignments& MaterialTextureAssignments,
-	TaskID                                    taskID
+	TaskID taskID
 )
 {
-	SCOPED_CPU_MARKER("ProcessAssimpNode()");
+	SCOPED_CPU_MARKER("ImportGLTFAllMeshes()");
 	Model::Data modelData;
-	
+
 	ThreadPool& WorkerThreadPool = pAssetLoader->mWorkers_MeshLoad;
 
-	std::vector<Mesh> NodeMeshData(pNode->mNumMeshes);
-	std::vector<MaterialID> NodeMaterialIDs(pNode->mNumMeshes, INVALID_ID);
-	const bool bThreaded = THREADED_ASSIMP_MESH_LOAD && NodeMeshData.size() > 1;
+	// Count total primitives across all meshes
+	size_t total_primitives = 0;
+	for (size_t i = 0; i < data->meshes_count; ++i)
+	{
+		total_primitives += data->meshes[i].primitives_count;
+	}
+
+	// Process all meshes in cgltf_data->meshes
+	std::vector<Mesh> MeshData(total_primitives);
+	std::vector<MaterialID> MaterialIDs(total_primitives, INVALID_ID);
+	const bool bThreaded = THREADED_MESH_LOAD && total_primitives > 1;
 
 	if (bThreaded)
 	{
 		constexpr size_t NumMinWorkItemsPerThread = 1;
-		const size_t NumWorkItems = NodeMeshData.size();
+		const size_t NumWorkItems = total_primitives;
 		const size_t NumThreadsToUse = CalculateNumThreadsToUse(NumWorkItems, WorkerThreadPool.GetThreadPoolSize() + 1, NumMinWorkItemsPerThread);
 		const size_t NumWorkerThreadsToUse = NumThreadsToUse - 1;
 		auto vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, NumThreadsToUse);
 
-		// synchronization
-		std::atomic<int> WorkerCounter(static_cast<int>(std::min(vRanges.size()-1, NumWorkerThreadsToUse)));
+		// Synchronization
+		std::atomic<int> WorkerCounter(static_cast<int>(std::min(vRanges.size() - 1, NumWorkerThreadsToUse)));
 		EventSignal WorkerSignal;
+		
+		// Map primitive indices to mesh/primitive pairs
+		std::vector<std::pair<size_t, size_t>> primitive_map(total_primitives);
+		size_t prim_idx = 0;
+		for (size_t mesh_idx = 0; mesh_idx < data->meshes_count; ++mesh_idx)
+		{
+			for (size_t p = 0; p < data->meshes[mesh_idx].primitives_count; ++p)
+			{
+				primitive_map[prim_idx++] = { mesh_idx, p };
+			}
+		}
+
 		{
 			SCOPED_CPU_MARKER("DispatchMeshWorkers");
 			for (size_t iRange = 1; iRange < vRanges.size(); ++iRange)
 			{
-				WorkerThreadPool.AddTask([=, &NodeMeshData, &WorkerSignal, &WorkerCounter]()
+				WorkerThreadPool.AddTask([=, &MeshData, &WorkerSignal, &WorkerCounter]()
 				{
 					SCOPED_CPU_MARKER_C("MeshWorker", 0xFF0000FF);
 					for (size_t i = vRanges[iRange].first; i <= vRanges[iRange].second; ++i)
 					{
-						aiMesh* pAiMesh = pAiScene->mMeshes[pNode->mMeshes[i]];
-						NodeMeshData[i] = ProcessAssimpMesh(pRenderer, pAiMesh, ModelName);
+						auto [mesh_idx, prim_idx] = primitive_map[i];
+						MeshData[i] = ProcessGLTFMesh(pRenderer, &data->meshes[mesh_idx].primitives[prim_idx], data, ModelName);
 					}
 					WorkerCounter.fetch_sub(1);
 					WorkerSignal.NotifyOne();
@@ -734,17 +802,26 @@ static Model::Data ProcessAssimpNode(
 			SCOPED_CPU_MARKER("ThisThread_Mesh");
 			for (size_t i = vRanges[0].first; i <= vRanges[0].second; ++i)
 			{
-				aiMesh* pAiMesh = pAiScene->mMeshes[pNode->mMeshes[i]];
-				NodeMeshData[i] = ProcessAssimpMesh(pRenderer, pAiMesh, ModelName);
+				auto [mesh_idx, prim_idx] = primitive_map[i];
+				MeshData[i] = ProcessGLTFMesh(pRenderer, &data->meshes[mesh_idx].primitives[prim_idx], data, ModelName);
 			}
 		}
 		{
 			SCOPED_CPU_MARKER("ProcessMaterials");
-			for (unsigned int i = 0; i < pNode->mNumMeshes; i++)
+			size_t idx = 0;
+			for (size_t mesh_idx = 0; mesh_idx < data->meshes_count; ++mesh_idx)
 			{
-				aiMesh* pAiMesh = pAiScene->mMeshes[pNode->mMeshes[i]];
-				aiMaterial* material = pAiScene->mMaterials[pAiMesh->mMaterialIndex];
-				NodeMaterialIDs[i] = ProcessAssimpMaterial(material, pAiMesh->mMaterialIndex, modelDirectory, pScene, pAssetLoader, MaterialTextureAssignments, taskID);
+				for (size_t prim_idx = 0; prim_idx < data->meshes[mesh_idx].primitives_count; ++prim_idx)
+				{
+					if (data->meshes[mesh_idx].primitives[prim_idx].material)
+					{
+						MaterialIDs[idx] = ProcessGLTFMaterial(
+							data->meshes[mesh_idx].primitives[prim_idx].material, idx,
+							modelDirectory, pScene, pAssetLoader, MaterialTextureAssignments, taskID
+						);
+					}
+					++idx;
+				}
 			}
 		}
 		{
@@ -753,49 +830,188 @@ static Model::Data ProcessAssimpNode(
 		}
 		{
 			SCOPED_CPU_MARKER("UpdateSceneData");
-			for (unsigned int i = 0; i < pNode->mNumMeshes; i++)
-			{	
-				aiMesh* pAiMesh = pAiScene->mMeshes[pNode->mMeshes[i]];
-				aiMaterial* material = pAiScene->mMaterials[pAiMesh->mMaterialIndex];
-
-				MeshID id = pScene->AddMesh(std::move(NodeMeshData[i]));
-				MaterialID matID = NodeMaterialIDs[i];
-				Material& mat = pScene->GetMaterial(matID);
-
-				modelData.AddMesh(id, matID, Model::Data::EMeshType::OPAQUE_MESH);
-			} // for: NumMeshes
+			for (size_t i = 0; i < total_primitives; ++i)
+			{
+				if (MaterialIDs[i] != INVALID_ID)
+				{
+					MeshID id = pScene->AddMesh(std::move(MeshData[i]));
+					modelData.AddMesh(id, MaterialIDs[i], Model::Data::EMeshType::OPAQUE_MESH);
+				}
+			}
 		}
 	}
-	else
+	else // single thread
 	{
-		for (unsigned int i = 0; i < pNode->mNumMeshes; i++)
-		{	// process all the node's meshes (if any)
-			aiMesh* pAiMesh = pAiScene->mMeshes[pNode->mMeshes[i]];
-			aiMaterial* material = pAiScene->mMaterials[pAiMesh->mMaterialIndex];
-			Mesh& mesh = NodeMeshData[i];
-
-			// generate data
-			MaterialID matID = ProcessAssimpMaterial(material, pAiMesh->mMaterialIndex, modelDirectory, pScene, pAssetLoader, MaterialTextureAssignments, taskID);
-			mesh = ProcessAssimpMesh(pRenderer, pAiMesh, ModelName);
-
-			MeshID id = pScene->AddMesh(std::move(mesh));
-			Material& mat = pScene->GetMaterial(matID);
-			modelData.AddMesh(id, matID, Model::Data::EMeshType::OPAQUE_MESH);
-		} // for: NumMeshes
+		size_t idx = 0;
+		for (size_t mesh_idx = 0; mesh_idx < data->meshes_count; ++mesh_idx)
+		{
+			for (size_t prim_idx = 0; prim_idx < data->meshes[mesh_idx].primitives_count; ++prim_idx)
+			{
+				Mesh mesh = ProcessGLTFMesh(pRenderer, &data->meshes[mesh_idx].primitives[prim_idx], data, ModelName);
+				MaterialID mat_id = INVALID_ID;
+				if (data->meshes[mesh_idx].primitives[prim_idx].material)
+				{
+					mat_id = ProcessGLTFMaterial(
+						data->meshes[mesh_idx].primitives[prim_idx].material, idx,
+						modelDirectory, pScene, pAssetLoader, MaterialTextureAssignments, taskID);
+				}
+				MeshID id = pScene->AddMesh(std::move(mesh));
+				if (mat_id != INVALID_ID)
+				{
+					modelData.AddMesh(id, mat_id, Model::Data::EMeshType::OPAQUE_MESH);
+				}
+				++idx;
+			}
+		}
 	}
 
+	return modelData;
+}
+
+
+static Model::Data ProcessGLTFNode(
+	const std::string& ModelName,
+	cgltf_node* node,
+	const cgltf_data* data,
+	const std::string& modelDirectory,
+	AssetLoader* pAssetLoader,
+	Scene* pScene,
+	VQRenderer* pRenderer,
+	AssetLoader::FMaterialTextureAssignments& MaterialTextureAssignments,
+	TaskID taskID)
+{
+	SCOPED_CPU_MARKER("ProcessGLTFNode()");
+	Model::Data modelData;
+
+	ThreadPool& WorkerThreadPool = pAssetLoader->mWorkers_MeshLoad;
+
+	std::vector<Mesh> NodeMeshData;
+	std::vector<MaterialID> NodeMaterialIDs;
+	if (node->mesh) {
+		NodeMeshData.resize(1); // One mesh per node for simplicity
+		NodeMaterialIDs.resize(1, INVALID_ID);
+	}
+	const bool bThreaded = THREADED_MESH_LOAD && NodeMeshData.size() > 1; // Adjust if supporting multiple primitives
+
+	if (node->mesh)
+	{
+		if (bThreaded)
+		{
+			// Threaded processing (though unlikely for single mesh per node)
+			constexpr size_t NumMinWorkItemsPerThread = 1;
+			const size_t NumWorkItems = NodeMeshData.size();
+			const size_t NumThreadsToUse = CalculateNumThreadsToUse(NumWorkItems, WorkerThreadPool.GetThreadPoolSize() + 1, NumMinWorkItemsPerThread);
+			const size_t NumWorkerThreadsToUse = NumThreadsToUse - 1;
+			auto vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, NumThreadsToUse);
+
+			std::atomic<int> WorkerCounter(static_cast<int>(std::min(vRanges.size() - 1, NumWorkerThreadsToUse)));
+			EventSignal WorkerSignal;
+			{
+				SCOPED_CPU_MARKER("DispatchMeshWorkers");
+				for (size_t iRange = 1; iRange < vRanges.size(); ++iRange)
+				{
+					WorkerThreadPool.AddTask([=, &NodeMeshData, &WorkerSignal, &WorkerCounter]()
+					{
+						SCOPED_CPU_MARKER_C("MeshWorker", 0xFF0000FF);
+						for (size_t i = vRanges[iRange].first; i <= vRanges[iRange].second; ++i)
+						{
+							NodeMeshData[i] = ProcessGLTFMesh(pRenderer, &node->mesh->primitives[i], data, ModelName);
+						}
+						WorkerCounter.fetch_sub(1);
+						WorkerSignal.NotifyOne();
+					});
+				}
+			}
+			{
+				SCOPED_CPU_MARKER("ThisThread_Mesh");
+				for (size_t i = vRanges[0].first; i <= vRanges[0].second; ++i) 
+				{
+					NodeMeshData[i] = ProcessGLTFMesh(pRenderer, &node->mesh->primitives[i], data, ModelName);
+				}
+			}
+			{
+				SCOPED_CPU_MARKER("ProcessMaterials");
+				if (node->mesh->primitives_count > 0 && node->mesh->primitives[0].material)
+				{
+					NodeMaterialIDs[0] = ProcessGLTFMaterial(node->mesh->primitives[0].material, 0, modelDirectory, pScene, pAssetLoader, MaterialTextureAssignments, taskID);
+				}
+			}
+			{
+				SCOPED_CPU_MARKER_C("WAIT_MESH_WORKERS", 0xFFAA0000);
+				WorkerSignal.Wait([&]() { return WorkerCounter.load() == 0; });
+			}
+			{
+				SCOPED_CPU_MARKER("UpdateSceneData");
+				if (node->mesh->primitives_count > 0 && node->mesh->primitives[0].material)
+				{
+					MeshID id = pScene->AddMesh(std::move(NodeMeshData[0]));
+					MaterialID matID = NodeMaterialIDs[0];
+					modelData.AddMesh(id, matID, Model::Data::EMeshType::OPAQUE_MESH);
+				}
+			}
+		}
+		else // Non-threaded processing
+		{
+			for (size_t i = 0; i < NodeMeshData.size(); ++i)
+			{
+				MaterialID mat_id = INVALID_ID;
+				if (node->mesh->primitives[i].material)
+				{
+					mat_id = ProcessGLTFMaterial(
+						node->mesh->primitives[i].material, i,
+						modelDirectory, pScene, pAssetLoader, MaterialTextureAssignments, taskID);
+				}
+				MeshID id = pScene->AddMesh(std::move(NodeMeshData[i]));
+				if (mat_id != INVALID_ID)
+				{
+					modelData.AddMesh(id, mat_id, Model::Data::EMeshType::OPAQUE_MESH);
+				}
+			}
+		}
+	}
 
 	{
 		SCOPED_CPU_MARKER("Children");
-		for (unsigned int i = 0; i < pNode->mNumChildren; i++)
-		{	// then do the same for each of its children
-			Model::Data childModelData = ProcessAssimpNode(ModelName, pNode->mChildren[i], pAiScene, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
+		for (size_t i = 0; i < node->children_count; ++i)
+		{
+			Model::Data childModelData = ProcessGLTFNode(ModelName, node->children[i], data, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
 			const std::vector<std::pair<MeshID, MaterialID>>& ChildMeshes = childModelData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH);
-
 			std::copy(ChildMeshes.begin(), ChildMeshes.end(), std::back_inserter(modelData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH)));
 			std::unordered_set<MaterialID>& childMats = childModelData.GetMaterials();
 			modelData.GetMaterials().insert(childMats.begin(), childMats.end());
-		} // for: NumChildren
+		}
+	}
+
+	return modelData;
+}
+
+static Model::Data ImportGLTFScene
+(
+	const std::string& ModelName,
+	cgltf_data* data,
+	const std::string& modelDirectory,
+	AssetLoader* pAssetLoader,
+	Scene* pScene,
+	VQRenderer* pRenderer,
+	AssetLoader::FMaterialTextureAssignments& MaterialTextureAssignments,
+	TaskID taskID
+)
+{
+	SCOPED_CPU_MARKER("ImportGLTFScene()");
+	Model::Data modelData;
+
+	// Process the default scene's root node or fallback to the first node
+	if (data->scene && data->scene->nodes_count > 0)
+	{
+		modelData = ProcessGLTFNode(ModelName, data->scene->nodes[0], data, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
+	}
+	else if (data->nodes_count > 0)
+	{
+		modelData = ProcessGLTFNode(ModelName, &data->nodes[0], data, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
+	}
+	else
+	{
+		Log::Warning("No nodes found in glTF file for scene import: %s", ModelName.c_str());
 	}
 
 	return modelData;
@@ -805,70 +1021,129 @@ static Model::Data ProcessAssimpNode(
 //----------------------------------------------------------------------------------------------------------------
 // IMPORT MODEL FUNCTION FOR WORKER THREADS
 //----------------------------------------------------------------------------------------------------------------
-ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName)
+ModelID AssetLoader::ImportGLTF(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName)
 {
-	SCOPED_CPU_MARKER("AssetLoader::ImportModel()");
-	constexpr auto ASSIMP_LOAD_FLAGS
-		= aiProcess_Triangulate
-		| aiProcess_CalcTangentSpace
-		| aiProcess_MakeLeftHanded
-		| aiProcess_FlipUVs
-		| aiProcess_FlipWindingOrder
-		//| aiProcess_TransformUVCoords 
-		//| aiProcess_FixInfacingNormals
-		| aiProcess_JoinIdenticalVertices
-		| aiProcess_GenSmoothNormals;
+	SCOPED_CPU_MARKER("AssetLoader::ImportGLTF()");
 
-
-	TaskID taskID = GenerateModelLoadTaskID();
-	//-----------------------------------------------
+	TaskID taskID = AssetLoader::GenerateModelLoadTaskID();
 	const std::string modelDirectory = DirectoryUtil::GetFolderPath(objFilePath);
 
-	Log::Info("ImportModel: %s - %s", ModelName.c_str(), objFilePath.c_str());
+	Log::Info("ImportGLTF: %s - %s", ModelName.c_str(), objFilePath.c_str());
 	Timer t;
 	t.Start();
 
-	// Import Assimp Scene
-	Importer* importer = new Importer();
-	const aiScene* pAiScene = nullptr;
+	// Initialize cgltf options
+	cgltf_options options = {};
+	options.file.read = [](const struct cgltf_memory_options* memory_options, const struct cgltf_file_options* file_options, const char* path, cgltf_size* size, void** data)
 	{
-		SCOPED_CPU_MARKER("ReadFile()");
-		pAiScene = importer->ReadFile(objFilePath, ASSIMP_LOAD_FLAGS);
-	}
+		FILE* file = fopen(path, "rb");
+		if (!file)
+			return cgltf_result_file_not_found;
+		fseek(file, 0, SEEK_END);
+		long length = ftell(file);
+		fseek(file, 0, SEEK_SET);
+		if (length < 0)
+		{
+			fclose(file);
+			return cgltf_result_io_error;
+		}
+		*size = (cgltf_size)length;
+		char* file_data = (char*)memory_options->alloc_func(memory_options->user_data, *size);
+		if (!file_data)
+		{
+			fclose(file);
+			return cgltf_result_out_of_memory;
+		}
+		size_t read_size = fread(file_data, 1, *size, file);
+		fclose(file);
+		if (read_size != *size)
+		{
+			memory_options->free_func(memory_options->user_data, file_data);
+			return cgltf_result_io_error;
+		}
+		*data = file_data;
+		return cgltf_result_success;
+	};
+	options.file.release = [](const struct cgltf_memory_options* memory_options, const struct cgltf_file_options* file_options, void* data)
+	{
+		memory_options->free_func(memory_options->user_data, data);
+	};
+	options.memory.alloc_func = [](void* user, cgltf_size size) { return malloc(size); };
+	options.memory.free_func = [](void* user, void* ptr) { free(ptr); };
 
-	if (!pAiScene || pAiScene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !pAiScene->mRootNode)
+	// Parse glTF file
+	cgltf_data* data = nullptr;
+	cgltf_result result = cgltf_parse_file(&options, objFilePath.c_str(), &data);
+	if (result != cgltf_result_success)
 	{
-		Log::Error("Assimp error: %s", importer->GetErrorString());
+		Log::Error("cgltf_parse_file failed: %d", result);
 		return INVALID_ID;
 	}
-	t.Tick(); float fTimeReadFile = t.DeltaTime();
+
+	t.Tick();
+	float fTimeReadFile = t.DeltaTime();
 	Log::Info("   [%.2fs] ReadFile=%s ", fTimeReadFile, objFilePath.c_str());
 
-	// parse scene and initialize model data
-	FMaterialTextureAssignments MaterialTextureAssignments;
-	Model::Data data = ProcessAssimpNode(ModelName, pAiScene->mRootNode, pAiScene, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
+	// Load buffers
+	result = cgltf_load_buffers(&options, data, objFilePath.c_str());
+	if (result != cgltf_result_success)
+	{
+		Log::Error("cgltf_load_buffers failed: %d", result);
+		cgltf_free(data);
+		return INVALID_ID;
+	}
 
-	if (!MaterialTextureAssignments.mAssignments.empty()) // dispatch texture workers
+	// Validate data
+	result = cgltf_validate(data);
+	if (result != cgltf_result_success) 
+	{
+		Log::Warning("cgltf_validate failed: %d", result);
+		// Proceed anyway, as some issues might be non-critical
+	}
+
+
+	// Process scene or all meshes based on mode
+	bool bImportAllMeshes = true; // Default to importing all meshes
+	// Process scene
+	AssetLoader::FMaterialTextureAssignments MaterialTextureAssignments;
+	Model::Data modelData;
+	if (bImportAllMeshes)
+	{
+		modelData = ImportGLTFAllMeshes(ModelName, data, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
+	}
+	else
+	{
+		modelData = ImportGLTFScene(ModelName, data, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
+	}
+
+
+	pRenderer->WaitHeapsInitialized();
+
+	{
+		SCOPED_CPU_MARKER("UploadVertexAndIndexBufferHeaps()");
+		pRenderer->UploadVertexAndIndexBufferHeaps();
+	}
+
+	if (!MaterialTextureAssignments.mAssignments.empty()) 
+	{
 		MaterialTextureAssignments.mTextureLoadResults = pAssetLoader->StartLoadingTextures(taskID);
+	}
 
-	// cache the imported model in Scene
+	// Cache the imported model
 	ModelID mID = pScene->CreateModel();
 	Model& model = pScene->GetModel(mID);
-	model = Model(objFilePath, ModelName, std::move(data));
-	
-	// async clear, we don't need to block this thread for cleaning up.
-	// Don't use ModelLoad workers because app state changes from Loading
-	// into Simulating uses ModelLoad worker's task count.
-	pAssetLoader->mWorkers_MeshLoad.AddTask([=]()
+	model = Model(objFilePath, ModelName, std::move(modelData));
+
+	// Async cleanup
+	pAssetLoader->mWorkers_MeshLoad.AddTask([=]() 
 	{
-		SCOPED_CPU_MARKER("CleanUpImporter");
-		delete importer;
+		SCOPED_CPU_MARKER("CleanUpGLTFData");
+		cgltf_free(data);
 	});
 
-	// assign TextureIDs to the materials;
-	MaterialTextureAssignments.DoAssignments(pScene, pScene->mMtxTexturePaths,  pScene->mTexturePaths, pRenderer);
+	// Assign texture IDs
+	MaterialTextureAssignments.DoAssignments(pScene, pScene->mMtxTexturePaths, pScene->mTexturePaths, pRenderer);
 
-	// Create buffers for loaded meshes
 	pRenderer->WaitHeapsInitialized();
 	for (const auto& [meshID, matID] : model.mData.GetMeshMaterialIDPairs(Model::Data::EMeshType::OPAQUE_MESH))
 	{
@@ -876,20 +1151,15 @@ ModelID AssetLoader::ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRen
 		mesh.CreateBuffers(pRenderer);
 	}
 	//pObject->mModelID = modelID;
-	
 
 	pRenderer->UploadVertexAndIndexBufferHeaps();
 
 	t.Stop();
-	Log::Info("   [%.2fs] Loaded Model '%s': %d meshes, %d materials"
-		, fTimeReadFile + t.DeltaTime()
-		, ModelName.c_str()
-		, model.mData.GetNumMeshesOfAllTypes()
-		, model.mData.GetMaterials().size()
-	);
-
-	// TODO: post process
+	Log::Info("   [%.2fs] Loaded Model '%s': %d meshes, %d materials",
+		fTimeReadFile + t.DeltaTime(),
+		ModelName.c_str(),
+		model.mData.GetNumMeshesOfAllTypes(),
+		model.mData.GetMaterials().size());
 
 	return mID;
 }
-

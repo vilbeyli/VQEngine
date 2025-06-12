@@ -333,46 +333,52 @@ TextureID TextureManager::CreateTexture(const FTextureRequest& Request, bool bCh
 	Log::Info("CreateTexture (%d) %s", id, Request.Name.c_str());
 #endif
 	{
+		SCOPED_CPU_MARKER("CacheRequest");
 		std::lock_guard<std::shared_mutex> lock(mMetadataMutex);
 		mMetadata[id].Request = Request;
 	}
 
 	// Initialize task state
 	{
+		SCOPED_CPU_MARKER("InitTaskState");
 		std::lock_guard<std::mutex> lock(mTaskMutex);
 		mTaskStates[id].State = ETextureTaskState::Pending;
 	}
 
 	// Queue initial task
-	if (bInitFromFile)
 	{
-		mDiskWorkers.AddTask([this, id, Request]()
+		SCOPED_CPU_MARKER("Dispatch");
+		if (bInitFromFile)
 		{
-			DISK_WORKER_MAKRER;
-			DiskRead(id, Request);
-		});
-	}
-	else if (bInitFromRAM)
-	{
-		mDiskWorkers.AddTask([this, id, Request]()
+			mDiskWorkers.AddTask([this, id, Request]()
+			{
+				DISK_WORKER_MAKRER;
+				DiskRead(id, Request);
+			});
+		}
+		else if (bInitFromRAM)
 		{
-			DISK_WORKER_MAKRER;
-			LoadFromMemory(id, Request);
-		});
-	}
-	else
-	{
-		// GPU-only texture (e.g., render target)
-		mGPUWorkers.AddTask([this, id]()
+			mDiskWorkers.AddTask([this, id, Request]()
+			{
+				DISK_WORKER_MAKRER;
+				LoadFromMemory(id, Request);
+			});
+		}
+		else
 		{
-			GPU_WORKER_MAKRER;
-			AllocateResource(id);
-		});
+			// GPU-only texture (e.g., render target)
+			mGPUWorkers.AddTask([this, id]()
+			{
+				GPU_WORKER_MAKRER;
+				AllocateResource(id);
+			});
+		}
 	}
 
 	// update cache
 	if (bInitFromFile)
 	{
+		SCOPED_CPU_MARKER("CachePath");
 		std::lock_guard<std::mutex> Lock(mLoadedTexturePathsMutex);
 		mLoadedTexturePaths[Request.FilePath] = id;
 	}
