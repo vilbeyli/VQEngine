@@ -313,7 +313,7 @@ static AssetLoader::ETextureType GetTextureTypeFromGLTF(const cgltf_texture_view
 
 void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std::mutex& mtxTexturePaths, std::unordered_map<TextureID, std::string>& TexturePaths, VQRenderer* pRenderer)
 {
-	SCOPED_CPU_MARKER("FMaterialTextureAssignments.DoAssignments()");
+	SCOPED_CPU_MARKER("MaterialTextureAssignments");
 	for (FMaterialTextureAssignment& assignment : mAssignments)
 	{
 		Material& mat = pScene->GetMaterial(assignment.matID);
@@ -405,6 +405,7 @@ void AssetLoader::FMaterialTextureAssignments::DoAssignments(Scene* pScene, std:
 
 		if (mat.SRVMaterialMaps == INVALID_ID)
 		{
+			SCOPED_CPU_MARKER("SRVs");
 			mat.SRVMaterialMaps = pRenderer->AllocateSRV(NUM_MATERIAL_TEXTURE_MAP_BINDINGS - 1);
 			mat.SRVHeightMap = pRenderer->AllocateSRV(1);
 
