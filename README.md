@@ -113,7 +113,7 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
     - Asset loading
     - PSO & Shader compilation
   - Main + Simulation threads to decouple OS events from the update loop
-- [glTF](https://en.wikipedia.org/wiki/GlTF) [2.0](https://github.com/KhronosGroup/glTF/tree/master/specification/2.0) model loading using [assimp](https://github.com/assimp/assimp)
+- [glTF](https://en.wikipedia.org/wiki/GlTF) [2.0](https://github.com/KhronosGroup/glTF/tree/master/specification/2.0) model loading
 - Shader system
   - Shader cache
   - Multi-threaded shader compilation
@@ -254,7 +254,7 @@ VQE supports the following command line parameters:
 - [D3D12MA](https://github.com/GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator)
 - [stb](https://github.com/nothings/stb)
 - [tinyxml2](https://github.com/leethomason/tinyxml2)
-- [assimp](https://github.com/assimp/assimp)
+- [cgltf][https://github.com/jkuhlmann/cgltf]
 - [WinPixEventRuntime](https://devblogs.microsoft.com/pix/winpixeventruntime/)
 - [Khronos glTF Sample Models](https://github.com/KhronosGroup/glTF-Sample-Models)
 - [cgbookcase PBR Textures](https://www.cgbookcase.com/)
