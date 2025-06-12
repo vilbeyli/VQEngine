@@ -466,7 +466,7 @@ static std::vector<AssetLoader::FTextureLoadParams> GenerateTextureLoadParams(
 
 static Mesh ProcessGLTFMesh(
 	VQRenderer* pRenderer,
-	const cgltf_mesh* mesh,
+	const cgltf_primitive* prim,
 	const cgltf_data* data,
 	const std::string& ModelName
 )
@@ -475,14 +475,6 @@ static Mesh ProcessGLTFMesh(
 	GeometryData<FVertexWithNormalAndTangent, unsigned> GeometryData(1);
 	std::vector<FVertexWithNormalAndTangent>& Vertices = GeometryData.LODVertices[0];
 	std::vector<unsigned>& Indices = GeometryData.LODIndices[0];
-
-	// Assume one primitive per mesh for simplicity (extend if needed)
-	if (mesh->primitives_count == 0) 
-	{
-		return Mesh(nullptr, std::move(GeometryData), ModelName);
-	}
-
-	const cgltf_primitive* prim = &mesh->primitives[0];
 
 	// Load buffers if not already loaded
 	if (prim->attributes_count > 0 && prim->attributes[0].data->buffer_view && !prim->attributes[0].data->buffer_view->buffer->data)
@@ -496,7 +488,23 @@ static Mesh ProcessGLTFMesh(
 	size_t NumIndices = 0;
 	if (prim->indices)
 	{
-		NumIndices = prim->indices->count;
+		if (prim->type == cgltf_primitive_type_triangles)
+		{
+			NumIndices = prim->indices->count;
+		}
+		else if (prim->type == cgltf_primitive_type_triangle_strip)
+		{
+			NumIndices = (prim->indices->count >= 3) ? (prim->indices->count - 2) * 3 : 0;
+		}
+		else if (prim->type == cgltf_primitive_type_triangle_fan)
+		{
+			NumIndices = (prim->indices->count >= 3) ? (prim->indices->count - 2) * 3 : 0;
+		}
+		else
+		{
+			Log::Error("Unsupported primitive type %d in mesh %s", prim->type, ModelName.c_str());
+			return Mesh(nullptr, std::move(GeometryData), ModelName);
+		}
 	}
 
 	// Count vertices
@@ -567,6 +575,10 @@ static Mesh ProcessGLTFMesh(
 						Vert.tangent[2] = -tan[2];
 					}
 				}
+				else
+				{
+					assert(false);
+				}
 			}
 		}
 	}
@@ -623,6 +635,26 @@ static Mesh ProcessGLTFMesh(
 	return Mesh(nullptr, std::move(GeometryData), ModelName);
 }
 
+static std::vector<Mesh> ProcessGLTFMeshPrimitives
+(
+	VQRenderer* pRenderer,
+	const cgltf_mesh* mesh,
+	const cgltf_data* data,
+	const std::string& ModelName
+)
+{
+	SCOPED_CPU_MARKER("ProcessGLTFMeshPrimitives()");
+
+	std::vector<Mesh> meshes;
+	meshes.reserve(mesh->primitives_count);
+
+	for (size_t i = 0; i < mesh->primitives_count; ++i)
+	{
+		meshes.push_back(ProcessGLTFMesh(pRenderer, &mesh->primitives[i], data, ModelName));
+	}
+
+	return meshes;
+}
 
 static std::string CreateUniqueMaterialName(const cgltf_material* material, size_t iMat, const std::string& modelDirectory)
 {
@@ -694,7 +726,148 @@ static MaterialID ProcessGLTFMaterial(
 	return matID;
 }
 
+
 #define THREADED_MESH_LOAD 1
+static Model::Data ImportGLTFAllMeshes
+(
+	const std::string& ModelName,
+	cgltf_data* data,
+	const std::string& modelDirectory,
+	AssetLoader* pAssetLoader,
+	Scene* pScene,
+	VQRenderer* pRenderer,
+	AssetLoader::FMaterialTextureAssignments& MaterialTextureAssignments,
+	TaskID taskID
+)
+{
+	SCOPED_CPU_MARKER("ImportGLTFAllMeshes()");
+	Model::Data modelData;
+
+	ThreadPool& WorkerThreadPool = pAssetLoader->mWorkers_MeshLoad;
+
+	// Count total primitives across all meshes
+	size_t total_primitives = 0;
+	for (size_t i = 0; i < data->meshes_count; ++i)
+	{
+		total_primitives += data->meshes[i].primitives_count;
+	}
+
+	// Process all meshes in cgltf_data->meshes
+	std::vector<Mesh> MeshData(total_primitives);
+	std::vector<MaterialID> MaterialIDs(total_primitives, INVALID_ID);
+	const bool bThreaded = THREADED_MESH_LOAD && total_primitives > 1;
+
+	if (bThreaded)
+	{
+		constexpr size_t NumMinWorkItemsPerThread = 1;
+		const size_t NumWorkItems = total_primitives;
+		const size_t NumThreadsToUse = CalculateNumThreadsToUse(NumWorkItems, WorkerThreadPool.GetThreadPoolSize() + 1, NumMinWorkItemsPerThread);
+		const size_t NumWorkerThreadsToUse = NumThreadsToUse - 1;
+		auto vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, NumThreadsToUse);
+
+		// Synchronization
+		std::atomic<int> WorkerCounter(static_cast<int>(std::min(vRanges.size() - 1, NumWorkerThreadsToUse)));
+		EventSignal WorkerSignal;
+		
+		// Map primitive indices to mesh/primitive pairs
+		std::vector<std::pair<size_t, size_t>> primitive_map(total_primitives);
+		size_t prim_idx = 0;
+		for (size_t mesh_idx = 0; mesh_idx < data->meshes_count; ++mesh_idx)
+		{
+			for (size_t p = 0; p < data->meshes[mesh_idx].primitives_count; ++p)
+			{
+				primitive_map[prim_idx++] = { mesh_idx, p };
+			}
+		}
+
+		{
+			SCOPED_CPU_MARKER("DispatchMeshWorkers");
+			for (size_t iRange = 1; iRange < vRanges.size(); ++iRange)
+			{
+				WorkerThreadPool.AddTask([=, &MeshData, &WorkerSignal, &WorkerCounter]()
+				{
+					SCOPED_CPU_MARKER_C("MeshWorker", 0xFF0000FF);
+					for (size_t i = vRanges[iRange].first; i <= vRanges[iRange].second; ++i)
+					{
+						auto [mesh_idx, prim_idx] = primitive_map[i];
+						MeshData[i] = ProcessGLTFMesh(pRenderer, &data->meshes[mesh_idx].primitives[prim_idx], data, ModelName);
+					}
+					WorkerCounter.fetch_sub(1);
+					WorkerSignal.NotifyOne();
+				});
+			}
+		}
+		{
+			SCOPED_CPU_MARKER("ThisThread_Mesh");
+			for (size_t i = vRanges[0].first; i <= vRanges[0].second; ++i)
+			{
+				auto [mesh_idx, prim_idx] = primitive_map[i];
+				MeshData[i] = ProcessGLTFMesh(pRenderer, &data->meshes[mesh_idx].primitives[prim_idx], data, ModelName);
+			}
+		}
+		{
+			SCOPED_CPU_MARKER("ProcessMaterials");
+			size_t idx = 0;
+			for (size_t mesh_idx = 0; mesh_idx < data->meshes_count; ++mesh_idx)
+			{
+				for (size_t prim_idx = 0; prim_idx < data->meshes[mesh_idx].primitives_count; ++prim_idx)
+				{
+					if (data->meshes[mesh_idx].primitives[prim_idx].material)
+					{
+						MaterialIDs[idx] = ProcessGLTFMaterial(
+							data->meshes[mesh_idx].primitives[prim_idx].material, idx,
+							modelDirectory, pScene, pAssetLoader, MaterialTextureAssignments, taskID
+						);
+					}
+					++idx;
+				}
+			}
+		}
+		{
+			SCOPED_CPU_MARKER_C("WAIT_MESH_WORKERS", 0xFFAA0000);
+			WorkerSignal.Wait([&]() { return WorkerCounter.load() == 0; });
+		}
+		{
+			SCOPED_CPU_MARKER("UpdateSceneData");
+			for (size_t i = 0; i < total_primitives; ++i)
+			{
+				if (MaterialIDs[i] != INVALID_ID)
+				{
+					MeshID id = pScene->AddMesh(std::move(MeshData[i]));
+					modelData.AddMesh(id, MaterialIDs[i], Model::Data::EMeshType::OPAQUE_MESH);
+				}
+			}
+		}
+	}
+	else // single thread
+	{
+		size_t idx = 0;
+		for (size_t mesh_idx = 0; mesh_idx < data->meshes_count; ++mesh_idx)
+		{
+			for (size_t prim_idx = 0; prim_idx < data->meshes[mesh_idx].primitives_count; ++prim_idx)
+			{
+				Mesh mesh = ProcessGLTFMesh(pRenderer, &data->meshes[mesh_idx].primitives[prim_idx], data, ModelName);
+				MaterialID mat_id = INVALID_ID;
+				if (data->meshes[mesh_idx].primitives[prim_idx].material)
+				{
+					mat_id = ProcessGLTFMaterial(
+						data->meshes[mesh_idx].primitives[prim_idx].material, idx,
+						modelDirectory, pScene, pAssetLoader, MaterialTextureAssignments, taskID);
+				}
+				MeshID id = pScene->AddMesh(std::move(mesh));
+				if (mat_id != INVALID_ID)
+				{
+					modelData.AddMesh(id, mat_id, Model::Data::EMeshType::OPAQUE_MESH);
+				}
+				++idx;
+			}
+		}
+	}
+
+	return modelData;
+}
+
+
 static Model::Data ProcessGLTFNode(
 	const std::string& ModelName,
 	cgltf_node* node,
@@ -741,7 +914,7 @@ static Model::Data ProcessGLTFNode(
 						SCOPED_CPU_MARKER_C("MeshWorker", 0xFF0000FF);
 						for (size_t i = vRanges[iRange].first; i <= vRanges[iRange].second; ++i)
 						{
-							NodeMeshData[i] = ProcessGLTFMesh(pRenderer, node->mesh, data, ModelName);
+							NodeMeshData[i] = ProcessGLTFMesh(pRenderer, &node->mesh->primitives[i], data, ModelName);
 						}
 						WorkerCounter.fetch_sub(1);
 						WorkerSignal.NotifyOne();
@@ -752,7 +925,7 @@ static Model::Data ProcessGLTFNode(
 				SCOPED_CPU_MARKER("ThisThread_Mesh");
 				for (size_t i = vRanges[0].first; i <= vRanges[0].second; ++i) 
 				{
-					NodeMeshData[i] = ProcessGLTFMesh(pRenderer, node->mesh, data, ModelName);
+					NodeMeshData[i] = ProcessGLTFMesh(pRenderer, &node->mesh->primitives[i], data, ModelName);
 				}
 			}
 			{
@@ -776,20 +949,22 @@ static Model::Data ProcessGLTFNode(
 				}
 			}
 		}
-		else
+		else // Non-threaded processing
 		{
-			// Non-threaded processing
-			Mesh& mesh = NodeMeshData[0];
-			mesh = ProcessGLTFMesh(pRenderer, node->mesh, data, ModelName);
-			MaterialID matID = INVALID_ID;
-			if (node->mesh->primitives_count > 0 && node->mesh->primitives[0].material)
+			for (size_t i = 0; i < NodeMeshData.size(); ++i)
 			{
-				matID = ProcessGLTFMaterial(node->mesh->primitives[0].material, 0, modelDirectory, pScene, pAssetLoader, MaterialTextureAssignments, taskID);
-			}
-			MeshID id = pScene->AddMesh(std::move(mesh));
-			if (matID != INVALID_ID) {
-				Material& mat = pScene->GetMaterial(matID);
-				modelData.AddMesh(id, matID, Model::Data::EMeshType::OPAQUE_MESH);
+				MaterialID mat_id = INVALID_ID;
+				if (node->mesh->primitives[i].material)
+				{
+					mat_id = ProcessGLTFMaterial(
+						node->mesh->primitives[i].material, i,
+						modelDirectory, pScene, pAssetLoader, MaterialTextureAssignments, taskID);
+				}
+				MeshID id = pScene->AddMesh(std::move(NodeMeshData[i]));
+				if (mat_id != INVALID_ID)
+				{
+					modelData.AddMesh(id, mat_id, Model::Data::EMeshType::OPAQUE_MESH);
+				}
 			}
 		}
 	}
@@ -804,6 +979,38 @@ static Model::Data ProcessGLTFNode(
 			std::unordered_set<MaterialID>& childMats = childModelData.GetMaterials();
 			modelData.GetMaterials().insert(childMats.begin(), childMats.end());
 		}
+	}
+
+	return modelData;
+}
+
+static Model::Data ImportGLTFScene
+(
+	const std::string& ModelName,
+	cgltf_data* data,
+	const std::string& modelDirectory,
+	AssetLoader* pAssetLoader,
+	Scene* pScene,
+	VQRenderer* pRenderer,
+	AssetLoader::FMaterialTextureAssignments& MaterialTextureAssignments,
+	TaskID taskID
+)
+{
+	SCOPED_CPU_MARKER("ImportGLTFScene()");
+	Model::Data modelData;
+
+	// Process the default scene's root node or fallback to the first node
+	if (data->scene && data->scene->nodes_count > 0)
+	{
+		modelData = ProcessGLTFNode(ModelName, data->scene->nodes[0], data, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
+	}
+	else if (data->nodes_count > 0)
+	{
+		modelData = ProcessGLTFNode(ModelName, &data->nodes[0], data, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
+	}
+	else
+	{
+		Log::Warning("No nodes found in glTF file for scene import: %s", ModelName.c_str());
 	}
 
 	return modelData;
@@ -893,18 +1100,21 @@ ModelID AssetLoader::ImportGLTF(Scene* pScene, AssetLoader* pAssetLoader, VQRend
 		// Proceed anyway, as some issues might be non-critical
 	}
 
+
+	// Process scene or all meshes based on mode
+	bool bImportAllMeshes = true; // Default to importing all meshes
 	// Process scene
 	AssetLoader::FMaterialTextureAssignments MaterialTextureAssignments;
 	Model::Data modelData;
-	if (data->scene) 
+	if (bImportAllMeshes)
 	{
-		modelData = ProcessGLTFNode(ModelName, data->scene->nodes[0], data, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
+		modelData = ImportGLTFAllMeshes(ModelName, data, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
 	}
-	else if (data->nodes_count > 0) 
+	else
 	{
-		// Fallback to first node if no default scene
-		modelData = ProcessGLTFNode(ModelName, &data->nodes[0], data, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
+		modelData = ImportGLTFScene(ModelName, data, modelDirectory, pAssetLoader, pScene, pRenderer, MaterialTextureAssignments, taskID);
 	}
+
 
 	pRenderer->WaitHeapsInitialized();
 
