@@ -644,6 +644,7 @@ static Mesh ProcessGLTFMesh(
 					{
 						Log::Warning("Failed to read position for vertex %zu in mesh %s", i, ModelName.c_str());
 					}
+					Vert.position[2] = -Vert.position[2]; // Convert to left-handed coordinate system
 				}
 				else if (attr->type == cgltf_attribute_type_texcoord && acc->type == cgltf_type_vec2 && attr->index == 0)
 				{
@@ -658,6 +659,7 @@ static Mesh ProcessGLTFMesh(
 					{
 						Log::Warning("Failed to read normal for vertex %zu in mesh %s", i, ModelName.c_str());
 					}
+					Vert.normal[2] = -Vert.normal[2]; // Convert to left-handed coordinate system
 				}
 				else if (attr->type == cgltf_attribute_type_tangent && acc->type == cgltf_type_vec4)
 				{
@@ -666,7 +668,7 @@ static Mesh ProcessGLTFMesh(
 					{
 						Vert.tangent[0] = tan[0];
 						Vert.tangent[1] = tan[1];
-						Vert.tangent[2] = tan[2];
+						Vert.tangent[2] = -tan[2];
 					}
 				}
 			}
@@ -676,9 +678,49 @@ static Mesh ProcessGLTFMesh(
 	if (prim->indices)
 	{
 		SCOPED_CPU_MARKER("Indices");
-		for (size_t i = 0; i < NumIndices; ++i)
+		if (prim->type == cgltf_primitive_type_triangles)
 		{
-			Indices[i] = static_cast<unsigned>(cgltf_accessor_read_index(prim->indices, i));
+			for (size_t i = 0; i < NumIndices; i += 3)
+			{
+				Indices[i] = static_cast<unsigned>(cgltf_accessor_read_index(prim->indices, i));
+				Indices[i + 1] = static_cast<unsigned>(cgltf_accessor_read_index(prim->indices, i + 2)); // Flip winding
+				Indices[i + 2] = static_cast<unsigned>(cgltf_accessor_read_index(prim->indices, i + 1));
+			}
+		}
+		else if (prim->type == cgltf_primitive_type_triangle_strip)
+		{
+			for (size_t i = 2; i < prim->indices->count; ++i)
+			{
+				size_t idx0 = cgltf_accessor_read_index(prim->indices, i - 2);
+				size_t idx1 = cgltf_accessor_read_index(prim->indices, i - 1);
+				size_t idx2 = cgltf_accessor_read_index(prim->indices, i);
+				size_t base = (i - 2) * 3;
+				if (i % 2 == 0)
+				{
+					Indices[base] = static_cast<unsigned>(idx0);
+					Indices[base + 1] = static_cast<unsigned>(idx2); // Flip winding
+					Indices[base + 2] = static_cast<unsigned>(idx1);
+				}
+				else
+				{
+					Indices[base] = static_cast<unsigned>(idx0);
+					Indices[base + 1] = static_cast<unsigned>(idx1);
+					Indices[base + 2] = static_cast<unsigned>(idx2);
+				}
+			}
+		}
+		else if (prim->type == cgltf_primitive_type_triangle_fan)
+		{
+			size_t idx0 = cgltf_accessor_read_index(prim->indices, 0);
+			for (size_t i = 2; i < prim->indices->count; ++i)
+			{
+				size_t idx1 = cgltf_accessor_read_index(prim->indices, i - 1);
+				size_t idx2 = cgltf_accessor_read_index(prim->indices, i);
+				size_t base = (i - 2) * 3;
+				Indices[base] = static_cast<unsigned>(idx0);
+				Indices[base + 1] = static_cast<unsigned>(idx2); // Flip winding
+				Indices[base + 2] = static_cast<unsigned>(idx1);
+			}
 		}
 	}
 
@@ -1064,10 +1106,13 @@ static Model::Data ProcessGLTFNode(
 			EventSignal WorkerSignal;
 			{
 				SCOPED_CPU_MARKER("DispatchMeshWorkers");
-				for (size_t iRange = 1; iRange < vRanges.size(); ++iRange) {
-					WorkerThreadPool.AddTask([=, &NodeMeshData, &WorkerSignal, &WorkerCounter]() {
+				for (size_t iRange = 1; iRange < vRanges.size(); ++iRange)
+				{
+					WorkerThreadPool.AddTask([=, &NodeMeshData, &WorkerSignal, &WorkerCounter]()
+						{
 						SCOPED_CPU_MARKER_C("MeshWorker", 0xFF0000FF);
-						for (size_t i = vRanges[iRange].first; i <= vRanges[iRange].second; ++i) {
+						for (size_t i = vRanges[iRange].first; i <= vRanges[iRange].second; ++i)
+						{
 							NodeMeshData[i] = ProcessGLTFMesh(pRenderer, node->mesh, data, ModelName);
 						}
 						WorkerCounter.fetch_sub(1);
@@ -1077,13 +1122,15 @@ static Model::Data ProcessGLTFNode(
 			}
 			{
 				SCOPED_CPU_MARKER("ThisThread_Mesh");
-				for (size_t i = vRanges[0].first; i <= vRanges[0].second; ++i) {
+				for (size_t i = vRanges[0].first; i <= vRanges[0].second; ++i) 
+				{
 					NodeMeshData[i] = ProcessGLTFMesh(pRenderer, node->mesh, data, ModelName);
 				}
 			}
 			{
 				SCOPED_CPU_MARKER("ProcessMaterials");
-				if (node->mesh->primitives_count > 0 && node->mesh->primitives[0].material) {
+				if (node->mesh->primitives_count > 0 && node->mesh->primitives[0].material)
+				{
 					NodeMaterialIDs[0] = ProcessGLTFMaterial(node->mesh->primitives[0].material, 0, modelDirectory, pScene, pAssetLoader, MaterialTextureAssignments, taskID);
 				}
 			}
@@ -1093,7 +1140,8 @@ static Model::Data ProcessGLTFNode(
 			}
 			{
 				SCOPED_CPU_MARKER("UpdateSceneData");
-				if (node->mesh->primitives_count > 0 && node->mesh->primitives[0].material) {
+				if (node->mesh->primitives_count > 0 && node->mesh->primitives[0].material)
+				{
 					MeshID id = pScene->AddMesh(std::move(NodeMeshData[0]));
 					MaterialID matID = NodeMaterialIDs[0];
 					modelData.AddMesh(id, matID, Model::Data::EMeshType::OPAQUE_MESH);
@@ -1105,7 +1153,8 @@ static Model::Data ProcessGLTFNode(
 			Mesh& mesh = NodeMeshData[0];
 			mesh = ProcessGLTFMesh(pRenderer, node->mesh, data, ModelName);
 			MaterialID matID = INVALID_ID;
-			if (node->mesh->primitives_count > 0 && node->mesh->primitives[0].material) {
+			if (node->mesh->primitives_count > 0 && node->mesh->primitives[0].material)
+			{
 				matID = ProcessGLTFMaterial(node->mesh->primitives[0].material, 0, modelDirectory, pScene, pAssetLoader, MaterialTextureAssignments, taskID);
 			}
 			MeshID id = pScene->AddMesh(std::move(mesh));
