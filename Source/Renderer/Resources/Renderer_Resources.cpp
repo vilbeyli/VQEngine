@@ -370,6 +370,7 @@ void VQRenderer::InitializeDSV(DSV_ID dsvID, uint32 heapIndex, TextureID texID, 
 
 void VQRenderer::InitializeNullSRV(SRV_ID srvID, uint heapIndex, UINT ShaderComponentMapping)
 {
+	// Null descriptors are needed for an "unbound" resource.
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC nullSrvDesc = {};
@@ -387,58 +388,71 @@ void VQRenderer::InitializeNullSRV(SRV_ID srvID, uint heapIndex, UINT ShaderComp
 
 void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bool bInitAsArrayView /*= false*/, bool bInitAsCubeView /*= false*/, D3D12_SHADER_RESOURCE_VIEW_DESC* pSRVDesc /*=nullptr*/, UINT ShaderComponentMapping)
 {
-	if (texID != INVALID_ID)
+	if (texID == INVALID_ID)
+	{
+		InitializeNullSRV(srvID, heapIndex, ShaderComponentMapping);
+		return;
+	}
+	else
 	{
 		mTextureManager.WaitForTexture(texID);
 	}
 
-	const FTexture* pTexture = texID == INVALID_ID ? nullptr : mTextureManager.GetTexture(texID);
+	const FTexture* pTexture = mTextureManager.GetTexture(texID);
+	assert(pTexture);
+	if (!pTexture)
+	{
+		Log::Error("VQRenderer::InitializeSRV() texture data not found TextureID=%d ", texID);
+		return;
+	}
+
+	//
+	// TODO: bool bInitAsArrayView needed so that InitializeSRV() can initialize a per-face SRV of a cubemap
+	//
+	ID3D12Resource* pResource = pTexture->Resource;
+	if (!pResource)
+	{
+		InitializeNullSRV(srvID, heapIndex, ShaderComponentMapping);
+		return;
+	}
+	D3D12_RESOURCE_DESC resourceDesc = pResource->GetDesc();
 
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 	assert(pDevice);
 
-	if (pTexture)
+
+	if (bInitAsCubeView)
 	{
-		std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
-		if (bInitAsCubeView)
+		if (!pTexture->IsCubemap)
 		{
-			if (!pTexture->IsCubemap)
-			{
-				Log::Warning("Cubemap view requested on a non-cubemap resource");
-			}
-			assert(pTexture->IsCubemap); // could this be an actual use case: e.g. view array[6] as cubemap?
+			Log::Warning("Cubemap view requested on a non-cubemap resource");
 		}
+		assert(pTexture->IsCubemap); // could this be an actual use case: e.g. view array[6] as cubemap?
+	}
+	const bool bInitializeAsCubemapView = pTexture->IsCubemap && bInitAsCubeView;
 
-		//
-		// TODO: bool bInitAsArrayView needed so that InitializeSRV() can initialize a per-face SRV of a cubemap
-		//
-		ID3D12Resource* pResource = pTexture->Resource;
-
-		if (!pResource)
+	const int NumCubes = pTexture->IsCubemap ? resourceDesc.DepthOrArraySize / 6 : 0;
+	
+	if (bInitializeAsCubemapView)
+	{
+		const bool bArraySizeMultipleOfSix = resourceDesc.DepthOrArraySize % 6 == 0;
+		if (!bArraySizeMultipleOfSix)
 		{
-			InitializeNullSRV(srvID, heapIndex, ShaderComponentMapping);
-			return;
+			Log::Warning("Cubemap Texture's array size is not multiple of 6");
 		}
+		assert(bArraySizeMultipleOfSix);
+	}
 
-		D3D12_RESOURCE_DESC resourceDesc = pResource->GetDesc();
-		const int NumCubes = pTexture->IsCubemap ? resourceDesc.DepthOrArraySize / 6 : 0;
-		const bool bInitializeAsCubemapView = pTexture->IsCubemap && bInitAsCubeView;
-		if (bInitializeAsCubemapView)
-		{
-			const bool bArraySizeMultipleOfSix = resourceDesc.DepthOrArraySize % 6 == 0;
-			if (!bArraySizeMultipleOfSix)
-			{
-				Log::Warning("Cubemap Texture's array size is not multiple of 6");
-			}
-			assert(bArraySizeMultipleOfSix);
-		}
-
-
+	// get SRV
+	std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
+	{
 		if (mSRVs.find(srvID) == mSRVs.end())
 		{
 			Log::Error("SRV Not allocated for texID = %d", texID);
+			return;
 		}
 		SRV& srv = mSRVs.at(srvID);
+
 		const bool bBufferSRV = resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER;
 		const bool bCustomComponentMappingSpecified = ShaderComponentMapping != D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 		if (pTexture->IsTypeless || bCustomComponentMappingSpecified || pTexture->IsCubemap || bBufferSRV)
@@ -529,6 +543,7 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 						srvDesc.TextureCubeArray.First2DArrayFace = cube;
 						srvDesc.TextureCubeArray.NumCubes = NumCubes - cube;
 						pDevice->CreateShaderResourceView(pResource, &srvDesc, srv.GetCPUDescHandle(heapIndex + cube));
+						Log::Info("InitializeSRV %d[%d] for Texture %d | desc_gpu_addr = 0x%x", srvID, heapIndex, texID, srv.GetGPUDescHandle(heapIndex + cube).ptr);
 					}
 				}
 				else
@@ -538,6 +553,7 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 						srvDesc.Texture2DArray.FirstArraySlice = heapIndex;
 						srvDesc.Texture2DArray.ArraySize = resourceDesc.DepthOrArraySize - heapIndex;
 						pDevice->CreateShaderResourceView(pResource, &srvDesc, srv.GetCPUDescHandle(0 /*+ i*/));
+						Log::Info("InitializeSRV %d[%d] for Texture %d | desc_gpu_addr = 0x%x", srvID, heapIndex, texID, srv.GetGPUDescHandle(heapIndex).ptr);
 					}
 				}
 			}
@@ -546,6 +562,7 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 			else
 			{
 				pDevice->CreateShaderResourceView(pResource, &srvDesc, srv.GetCPUDescHandle(0));
+				Log::Info("InitializeSRV %d[%d] for Texture %d | desc_gpu_addr = 0x%x", srvID, heapIndex, texID, srv.GetGPUDescHandle(heapIndex).ptr);
 			}
 		}
 		else
@@ -557,17 +574,10 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 				return;
 			}
 			pDevice->CreateShaderResourceView(pResource, pSRVDesc, srv.GetCPUDescHandle(heapIndex));
+			Log::Info("InitializeSRV %d[%d] for Texture %d | desc_gpu_addr = 0x%x", srvID, heapIndex, texID, srv.GetGPUDescHandle(heapIndex).ptr);
 		}
+	}
 
-		//Log::Info("InitializeSRV %d[%d] for Texture %d | desc_handl = %u", srvID, heapIndex, texID, srv.GetGPUDescHandle(heapIndex));
-	}
-	else // init NULL SRV
-	{
-		// Describe and create null SRV. Null descriptors are needed in order 
-		// to achieve the effect of an "unbound" resource.
-		InitializeNullSRV(srvID, heapIndex, ShaderComponentMapping);
-	}
-	Log::Info("InitializeSRV %d[%d] for Texture %d", srvID, heapIndex, texID);
 }
 void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc)
 {
