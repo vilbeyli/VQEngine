@@ -582,6 +582,10 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 					{
 						TransitionDepthPrePassMSAAResolve(pCmd_ZPrePass);
 					}
+					else
+					{
+						TransitionDepthPrePassForRead(pCmd_ZPrePass, bMSAA);
+					}
 
 					if (bAsyncCompute)
 					{
@@ -1386,29 +1390,30 @@ void VQRenderer::TransitionDepthPrePassForRead(ID3D12GraphicsCommandList* pCmd, 
 	SCOPED_GPU_MARKER(pCmd, "TransitionDepthPrePassForRead");
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 
-	auto pRscNormals     = this->GetTextureResource(rsc.Tex_SceneNormals);
-	auto pRscNormalsMSAA = this->GetTextureResource(rsc.Tex_SceneNormalsMSAA);
-	auto pRscDepthResolve= this->GetTextureResource(rsc.Tex_SceneDepthResolve);
-	auto pRscDepthMSAA   = this->GetTextureResource(rsc.Tex_SceneDepthMSAA);
-	auto pRscDepth       = this->GetTextureResource(rsc.Tex_SceneDepth);
+	ID3D12Resource* pRscNormals     = this->GetTextureResource(rsc.Tex_SceneNormals);
+	ID3D12Resource* pRscNormalsMSAA = this->GetTextureResource(rsc.Tex_SceneNormalsMSAA);
+	ID3D12Resource* pRscDepthResolve= this->GetTextureResource(rsc.Tex_SceneDepthResolve);
+	ID3D12Resource* pRscDepthMSAA   = this->GetTextureResource(rsc.Tex_SceneDepthMSAA);
+	ID3D12Resource* pRscDepth       = this->GetTextureResource(rsc.Tex_SceneDepth);
 
-	std::vector<CD3DX12_RESOURCE_BARRIER> Barriers;
+	CD3DX12_RESOURCE_BARRIER Barriers[4];
+	int iB = 0;
 	if (bMSAA)
 	{
-		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
-		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET));
+		Barriers[iB++] = CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+		Barriers[iB++] = CD3DX12_RESOURCE_BARRIER::Transition(pRscNormalsMSAA, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		
-		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
-		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+		Barriers[iB++] = CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		Barriers[iB++] = CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 	}
 	else
 	{
-		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_COPY_SOURCE));
-		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST));
-		Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+		Barriers[iB++] = CD3DX12_RESOURCE_BARRIER::Transition(pRscDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_COPY_SOURCE);
+		Barriers[iB++] = CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST);
+		Barriers[iB++] = CD3DX12_RESOURCE_BARRIER::Transition(pRscNormals, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 	}
 
-	pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
+	pCmd->ResourceBarrier(iB, Barriers);
 }
 
 void VQRenderer::TransitionDepthPrePassForReadAsyncCompute(ID3D12GraphicsCommandList* pCmd)
@@ -1486,16 +1491,15 @@ void VQRenderer::CopyDepthForCompute(ID3D12GraphicsCommandList* pCmd)
 {
 	SCOPED_GPU_MARKER(pCmd, "CopyDepthForCompute");
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
-
-	auto pRscDepthResolve= this->GetTextureResource(rsc.Tex_SceneDepthResolve);
-	auto pRscDepth       = this->GetTextureResource(rsc.Tex_SceneDepth);
+	ID3D12Resource* pRscDepthResolve = this->GetTextureResource(rsc.Tex_SceneDepthResolve);
+	ID3D12Resource* pRscDepth = this->GetTextureResource(rsc.Tex_SceneDepth);
 
 	pCmd->CopyResource(pRscDepthResolve, pRscDepth);
 	
-	std::vector<CD3DX12_RESOURCE_BARRIER> Barriers;
-	Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
-	Barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscDepth, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
-	pCmd->ResourceBarrier((UINT32)Barriers.size(), Barriers.data());
+	CD3DX12_RESOURCE_BARRIER Barriers[2];
+	Barriers[0] = (CD3DX12_RESOURCE_BARRIER::Transition(pRscDepthResolve, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+	Barriers[1] = (CD3DX12_RESOURCE_BARRIER::Transition(pRscDepth, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE));
+	pCmd->ResourceBarrier(2, Barriers);
 }
 // ------------------------------------------------------------------------------------------------------------
 
