@@ -637,10 +637,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 						{
 							ResolveMSAA_DepthPrePass(pCmd_ZPrePass, &CBHeap_WorkerZPrePass);
 						}
-
-						TransitionDepthPrePassForRead(pCmd_ZPrePass, bMSAA);
-
-						if (!bMSAA)
+						else
 						{
 							CopyDepthForCompute(pCmd_ZPrePass); // This should be eventually removed, see function body
 						}
