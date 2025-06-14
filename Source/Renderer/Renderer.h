@@ -361,11 +361,15 @@ private:
 	StaticResourceViewHeap mHeapRTV;   // CPU-visible heap
 	StaticResourceViewHeap mHeapDSV;   // CPU-visible heap
 	StaticResourceViewHeap mHeapUAV;   // CPU-visible heap
-	UploadHeap             mHeapUpload;
 	StaticResourceViewHeap mHeapCBV_SRV_UAV;         // GPU-visible heap
 	StaticResourceViewHeap mHeapSampler;             // GPU-visible heap
+	UploadHeap             mHeapUpload;
 	StaticBufferHeap       mStaticHeap_VertexBuffer; // GPU-visible heap
 	StaticBufferHeap       mStaticHeap_IndexBuffer;  // GPU-visible heap
+	mutable std::mutex     mMtxSamplers;
+	mutable std::mutex     mMtxUploadHeap;
+	mutable std::mutex     mMtxStaticVBHeap;
+	mutable std::mutex     mMtxStaticIBHeap;
 	
 	// resources & views
 	std::unordered_map<SamplerID, SAMPLER>    mSamplers;
@@ -376,16 +380,12 @@ private:
 	std::unordered_map<UAV_ID  , CBV_SRV_UAV> mUAVs;
 	std::unordered_map<RTV_ID  , RTV>         mRTVs;
 	std::unordered_map<DSV_ID  , DSV>         mDSVs;
-	mutable std::mutex                        mMtxStaticVBHeap; // TODO: interleave mutices
-	mutable std::mutex                        mMtxStaticIBHeap;
 	mutable std::mutex                        mMtxDynamicCBHeap;
-	mutable std::mutex                        mMtxSamplers;
 	mutable std::mutex                        mMtxSRVs_CBVs_UAVs; // TODO: separate mutexes for SRV/CBV/UAV
 	mutable std::mutex                        mMtxRTVs;
 	mutable std::mutex                        mMtxDSVs;
 	mutable std::mutex                        mMtxVBVs;
 	mutable std::mutex                        mMtxIBVs;
-	mutable std::mutex                        mMtxUploadHeap;
 	TextureManager                            mTextureManager;
 
 	// PSOs & Root Signatures

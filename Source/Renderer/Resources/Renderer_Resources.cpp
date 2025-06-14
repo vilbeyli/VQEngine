@@ -383,6 +383,7 @@ void VQRenderer::InitializeNullSRV(SRV_ID srvID, uint heapIndex, UINT ShaderComp
 	{
 		std::lock_guard<std::mutex> lk(this->mMtxSRVs_CBVs_UAVs);
 		pDevice->CreateShaderResourceView(nullptr, &nullSrvDesc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
+		Log::Info("InitializeNullSRV %d[%d] | desc_gpu_addr = 0x%x", srvID, heapIndex, mSRVs.at(srvID).GetGPUDescHandle(heapIndex).ptr);
 	}
 }
 
@@ -582,7 +583,9 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc)
 {
 	std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
-	mDevice.GetDevicePtr()->CreateShaderResourceView(nullptr, &srvDesc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
+	SRV& srv = mSRVs.at(srvID);
+	mDevice.GetDevicePtr()->CreateShaderResourceView(nullptr, &srvDesc, srv.GetCPUDescHandle(heapIndex));
+	Log::Info("InitializeSRV %d[%d] | desc_gpu_addr = 0x%x", srvID, heapIndex, srv.GetGPUDescHandle(heapIndex).ptr);
 }
 void VQRenderer::InitializeRTV(RTV_ID rtvID, uint heapIndex, TextureID texID)
 {
@@ -685,11 +688,12 @@ void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID 
 	// create the UAV
 	ID3D12Resource* pRscCounter = nullptr; // TODO: find a use case for this parameter and implement proper interface
 	assert(pTexture->Resource);
+	UAV& uav = mUAVs.at(uavID);
 	pDevice->CreateUnorderedAccessView(
 		pTexture->Resource,
 		pRscCounter,
 		&uavDesc,
-		mUAVs.at(uavID).GetCPUDescHandle(heapIndex)
+		uav.GetCPUDescHandle(heapIndex)
 	);
 }
 void VQRenderer::InitializeSRVForBuffer(SRV_ID srvID, uint heapIndex, TextureID texID, DXGI_FORMAT bufferViewFormatOverride)

@@ -519,7 +519,7 @@ static void DispatchWorkers_ShadowViews(FWindowRenderContext& ctx,
 
 
 static void BatchBoundingBoxRenderCommandData(
-	std::vector<FInstancedBoundingBoxRenderData>& cmds
+	std::vector<FInstancedWireframeRenderData>& cmds
 	, const std::vector<FBoundingBox>& BBs
 	, const XMMATRIX viewProj
 	, const XMFLOAT4 Color
@@ -534,7 +534,7 @@ static void BatchBoundingBoxRenderCommandData(
 	int iBB = 0;
 	while (NumBBsToProcess > 0)
 	{
-		FInstancedBoundingBoxRenderData& cmd = cmds[iBegin + i];
+		FInstancedWireframeRenderData& cmd = cmds[iBegin + i];
 		cmd.matWorldViewProj.resize(std::min(MAX_INSTANCE_COUNT__UNLIT_SHADER, (size_t)NumBBsToProcess));
 		cmd.vertexIndexBuffer = { VB, IB };
 		cmd.numIndices = 36; // cube rendered w/ 12 trianges, 36 indices
@@ -566,7 +566,7 @@ static void BatchInstanceData_BoundingBox(FSceneDrawData& SceneDrawData
 	const XMFLOAT4 BBColor_Mesh = XMFLOAT4(0.0f, 0.8f, 0.2f, Transparency);
 
 	auto fnBatch = [&UpdateWorkerThreadPool, &SceneView](
-		std::vector<FInstancedBoundingBoxRenderData>& cmds
+		std::vector<FInstancedWireframeRenderData>& cmds
 		, const std::vector<FBoundingBox>& BBs
 		, size_t iBoundingBox
 		, const XMFLOAT4 BBColor

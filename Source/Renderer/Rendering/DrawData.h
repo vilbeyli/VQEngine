@@ -105,7 +105,7 @@ struct FInstancedMeshRenderData : public FInstancedMotionVectorMeshData, public 
 struct FInstancedWireframeRenderData : public FInstancedMeshRenderDataBase
 {
 	// single color for all instances, ideally we could make the color an instance data
-	DirectX::XMFLOAT4 color{ 0 };
+	DirectX::XMFLOAT4 color{ 0, 0, 0, 0 };
 };
 struct FInstancedShadowMeshRenderData : public FInstancedMeshRenderDataBase
 {
@@ -178,7 +178,6 @@ struct FInstancedDrawParameters
 
 using FLightRenderData = FWireframeRenderData;
 using FBoundingBoxRenderData = FWireframeRenderData;
-using FInstancedBoundingBoxRenderData = FInstancedWireframeRenderData;
 
 #if RENDER_INSTANCED_SCENE_MESHES
 using MeshRenderData_t = FInstancedMeshRenderData;
@@ -187,7 +186,7 @@ using MeshRenderData_t = FMeshRenderData;
 #endif
 
 #if RENDER_INSTANCED_BOUNDING_BOXES
-using BoundingBoxRenderData_t = FInstancedBoundingBoxRenderData;
+using BoundingBoxRenderData_t = FInstancedWireframeRenderData;
 #else
 using BoundingBoxRenderData_t = FBoundingBoxRenderData;
 #endif

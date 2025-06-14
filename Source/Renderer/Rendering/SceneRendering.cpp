@@ -1862,7 +1862,7 @@ void VQRenderer::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 		pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__WireframeUnlit));
 
 		// set IA
-		const FInstancedBoundingBoxRenderData& params = *SceneDrawData.boundingBoxRenderParams.begin();
+		const FInstancedWireframeRenderData& params = *SceneDrawData.boundingBoxRenderParams.begin();
 		const auto VBIBIDs = params.vertexIndexBuffer;
 		const uint32 NumIndices = params.numIndices;
 		const BufferID& VB_ID = VBIBIDs.first;
@@ -1880,7 +1880,7 @@ void VQRenderer::RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBuf
 			: EBuiltinPSOs::WIREFRAME_INSTANCED_PSO)
 		);
 
-		for (const FInstancedBoundingBoxRenderData& BBRenderCmd : SceneDrawData.boundingBoxRenderParams)
+		for (const FInstancedWireframeRenderData& BBRenderCmd : SceneDrawData.boundingBoxRenderParams)
 		{
 			const int NumInstances = (int)BBRenderCmd.matWorldViewProj.size();
 			if (NumInstances == 0)
