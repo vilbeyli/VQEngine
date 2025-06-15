@@ -16,3 +16,6 @@
 [submodule "Libs/cgltf"]
 	path = Libs/cgltf
 	url = https://github.com/jkuhlmann/cgltf.git
+[submodule "Data/Textures/PBR"]
+	path = Data/Textures/PBR
+	url = https://github.com/vilbeyli/PBRCollection.git

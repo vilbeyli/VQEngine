@@ -8,11 +8,6 @@ set WGET_PATH="%~dp0../Tools/wget.exe"
 pushd "%~dp0"
 cd "../Data/Textures/HDRI"
 set HDRI_TEXTURES_DESTINATION_PATH=%cd%\
-if not exist "../PBR" (
-  mkdir "../PBR"
-)
-cd "../PBR"
-set PBR_TEXTURES_DESTINATION_PATH=%cd%\
 popd
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
 set MAIN_SCREEN_RESOLUTION_Y=0
@@ -26,20 +21,6 @@ set HDRI_FILE_LIST=%HDRI_FILE_LIST%;stadium_01_!HDRI_RESOLUTION!.hdr
 set HDRI_FILE_LIST=%HDRI_FILE_LIST%;sunny_vondelpark_!HDRI_RESOLUTION!.hdr
 set HDRI_DOWNLOADED_FILES=
 
-:: PBR Files
-set PBR_RESOLUTION=2K
-set PBR_WEB_PATH=https://cgbookcase-volume.b-cdn.net/t/
-set PBR_FILE_LIST=Pebbles02_MR_!PBR_RESOLUTION!.zip
-set PBR_FILE_LIST==%PBR_FILE_LIST%;Fabric05_MR_!PBR_RESOLUTION!.zip
-set PBR_FILE_LIST==%PBR_FILE_LIST%;PaintedMetal02_MR_!PBR_RESOLUTION!.zip
-set PBR_FILE_LIST==%PBR_FILE_LIST%;BlackTiles01_MR_!PBR_RESOLUTION!.zip
-set PBR_FILE_LIST==%PBR_FILE_LIST%;BlackTiles07_MR_!PBR_RESOLUTION!.zip
-set PBR_FILE_LIST==%PBR_FILE_LIST%;BlackHerringboneTiles01_MR_!PBR_RESOLUTION!.zip
-set PBR_FILE_LIST==%PBR_FILE_LIST%;Marble08_MR_!PBR_RESOLUTION!.zip
-set PBR_FILE_LIST==%PBR_FILE_LIST%;DarkOceanTiles05_MR_!PBR_RESOLUTION!.zip
-set PBR_FILE_LIST==%PBR_FILE_LIST%;BasicCarpet01_MR_!PBR_RESOLUTION!.zip
-
-set PBR_DOWNLOADED_FILES=
 ::-------------------------------------------------------------------------------------------------------------------------------------------------------------
 :: parameter scan
 for %%i IN (%*) DO (
@@ -51,7 +32,6 @@ for %%i IN (%*) DO (
 :: MAIN()
 ::
 call :GetMainScreenResolution
-::call :DetermineResolution_PBR
 ::call :DetermineResolution_HDRI
 ::exit /b 0
 
@@ -96,62 +76,10 @@ if !ALL_ASSETS_ALREADY_DOWNLOADED! equ 1 (
   )
 )
 
-:: Download the PBR textures that doesn't already exist using wget and store them in the PBR_DOWNLOADED_FILES 'list'
-set ALL_ASSETS_ALREADY_DOWNLOADED=1
-for %%f in (%PBR_FILE_LIST%) do ( 
-  if not exist !PBR_TEXTURES_DESTINATION_PATH!%%f (
-    %WGET_PATH% %PBR_WEB_PATH%%%f -O !PBR_TEXTURES_DESTINATION_PATH!%%f
-    set ALL_ASSETS_ALREADY_DOWNLOADED=0
-    set PBR_DOWNLOADED_FILES=!PBR_DOWNLOADED_FILES!;!PBR_TEXTURES_DESTINATION_PATH!%%f
-  )
-)
-if !ALL_ASSETS_ALREADY_DOWNLOADED! equ 1 (
-  echo All PBR assets already downloaded.
-) else (
-  echo.
-  echo Downloaded PBR textures to: !PBR_TEXTURES_DESTINATION_PATH!
-)
-
-
-:: unpack zip and remove zip
-for %%f in (%PBR_FILE_LIST%) do ( 
-  set FILE_PATH=!PBR_TEXTURES_DESTINATION_PATH!%%f
-  if exist !FILE_PATH! (
-      echo  - !FILE_PATH!
-      if %%~xf equ .zip (
-          !SEVEN_ZIP_PATH! x "!FILE_PATH!" -o"!FILE_PATH!\..\%%~nf" -y
-          if !errorlevel! equ 0 (
-              echo Unpacked: %%f
-              echo  - !FILE_PATH!
-              :: Optionally, delete the ZIP file after extraction
-              echo Deleting: !FILE_PATH!
-              if exist "!FILE_PATH!" (
-                  del "!FILE_PATH!"
-                  echo Deleted: !FILE_PATH!
-              ) else (
-                  echo File not found: !FILE_PATH!
-              )
-          ) else (
-            echo Error extracting: !FILE_PATH!
-          )
-      )
-    )
-)
-
+:: Download the PBR textures & models
 git submodule update --init ../Data/Models
+git submodule update --init ../Data/Textures/PBR
 
-exit /b 0
-
-
-::
-:: DetermineResolution_PBR()
-::
-:DetermineResolution_PBR
-if !MAIN_SCREEN_RESOLUTION_Y! geq 720  set PBR_RESOLUTION=1K
-if !MAIN_SCREEN_RESOLUTION_Y! geq 1080 set PBR_RESOLUTION=1K
-if !MAIN_SCREEN_RESOLUTION_Y! geq 1440 set PBR_RESOLUTION=1K
-if !MAIN_SCREEN_RESOLUTION_Y! geq 2160 set PBR_RESOLUTION=2K
-echo PBR Resolution : !PBR_RESOLUTION!
 exit /b 0
 
 
