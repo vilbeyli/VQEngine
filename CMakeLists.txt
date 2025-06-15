@@ -3,7 +3,7 @@
 # CMakeLists files in this project can
 # refer to the root source directory of the project as ${HELLO_SOURCE_DIR} and
 # to the root binary directory of the project as ${HELLO_BINARY_DIR}.
-cmake_minimum_required (VERSION 3.4)
+cmake_minimum_required (VERSION 3.24)
 
 project (VQE)
 
@@ -181,15 +181,9 @@ source_group("Source\\PostProcess" FILES ${PostProcessFiles})
 source_group("Source" FILES ${SourceVQE})
 
 set_source_files_properties(${Config} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${Scenes} PROPERTIES VS_TOOL_OVERRIDE "Text")
 set_source_files_properties(${Materials} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${ImporterFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${CoreFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${SceneFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${UIFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(${PostProcessFiles} PROPERTIES VS_TOOL_OVERRIDE "Text")
-set_source_files_properties(Data/Resources/VQE.rc PROPERTIES VS_TOOL_OVERRIDE "ResourceCompile")
-set_source_files_properties(Data/Icons/VQE32.ico  PROPERTIES VS_TOOL_OVERRIDE "Image")
+#set_source_files_properties(Data/Resources/VQE.rc PROPERTIES VS_TOOL_OVERRIDE "ResourceCompile")
+#set_source_files_properties(Data/Icons/VQE32.ico  PROPERTIES VS_TOOL_OVERRIDE "Image")
 
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/VQUtils/Bin/)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/WinPixEventRuntime/bin/x64)
