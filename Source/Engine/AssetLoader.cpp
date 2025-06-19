@@ -525,6 +525,7 @@ static Mesh ProcessGLTFMesh(
 		Vertices.resize(NumVertices);
 	}
 
+	bool bTangentDataExists = false;
 	{
 		SCOPED_CPU_MARKER("Verts");
 		for (size_t i = 0; i < NumVertices; ++i)
@@ -543,47 +544,84 @@ static Mesh ProcessGLTFMesh(
 					continue;
 				}
 
-				if (attr->type == cgltf_attribute_type_position && acc->type == cgltf_type_vec3)
+				switch (attr->type)
 				{
+				case cgltf_attribute_type_invalid:
+					Log::Warning("Invalid attribute type for mesh %s", ModelName.c_str());
+					break;
+				
+				case cgltf_attribute_type_position:
+					assert(acc->type == cgltf_type_vec3);
 					if (!cgltf_accessor_read_float(acc, i, Vert.position, 3))
 					{
 						Log::Warning("Failed to read position for vertex %zu in mesh %s", i, ModelName.c_str());
+						break;
 					}
 					Vert.position[2] = -Vert.position[2]; // Convert to left-handed coordinate system
-				}
-				else if (attr->type == cgltf_attribute_type_texcoord && acc->type == cgltf_type_vec2 && attr->index == 0)
+					break;
+
+				case cgltf_attribute_type_normal:
+					assert(acc->type == cgltf_type_vec3);
+					if (!cgltf_accessor_read_float(acc, i, Vert.normal, 3))
+					{
+						Log::Warning("Failed to read normal for vertex %zu in mesh %s", i, ModelName.c_str());
+						break;
+					}
+					Vert.normal[2] = -Vert.normal[2]; // Convert to left-handed coordinate system
+					break;
+
+				case cgltf_attribute_type_tangent:
 				{
+					if (acc->type == cgltf_type_vec4)
+					{
+						float tan[4];
+						if (!cgltf_accessor_read_float(acc, i, tan, 4))
+						{
+							Log::Warning("Failed to read tangent for vertex %zu in mesh %s", i, ModelName.c_str());
+							break;
+						}
+						Vert.tangent[0] = tan[0];
+						Vert.tangent[1] = tan[1];
+						Vert.tangent[2] = -tan[2]; // Convert to left-handed coordinate system
+						bTangentDataExists = true;
+					}
+					else if (acc->type == cgltf_type_vec3)
+					{
+						if (!cgltf_accessor_read_float(acc, i, Vert.tangent, 3))
+						{
+							Log::Warning("Failed to read tangent for vertex %zu in mesh %s", i, ModelName.c_str());
+							break;
+						}
+						Vert.tangent[2] = -Vert.tangent[2]; // Convert to left-handed coordinate system
+						bTangentDataExists = true;
+					}
+					else
+					{
+						Log::Warning("Unsupported tangent type for vertex %zu in mesh %s", i, ModelName.c_str());
+					}
+					break;
+				}
+
+				case cgltf_attribute_type_texcoord:
+					assert(acc->type == cgltf_type_vec2);
 					if (!cgltf_accessor_read_float(acc, i, Vert.uv, 2))
 					{
 						Log::Warning("Failed to read UV for vertex %zu in mesh %s", i, ModelName.c_str());
 					}
-				}
-				else if (attr->type == cgltf_attribute_type_normal && acc->type == cgltf_type_vec3)
-				{
-					if (!cgltf_accessor_read_float(acc, i, Vert.normal, 3))
-					{
-						Log::Warning("Failed to read normal for vertex %zu in mesh %s", i, ModelName.c_str());
-					}
-					Vert.normal[2] = -Vert.normal[2]; // Convert to left-handed coordinate system
-				}
-				else if (attr->type == cgltf_attribute_type_tangent && acc->type == cgltf_type_vec4)
-				{
-					float tan[4];
-					if (cgltf_accessor_read_float(acc, i, tan, 4))
-					{
-						Vert.tangent[0] = tan[0];
-						Vert.tangent[1] = tan[1];
-						Vert.tangent[2] = -tan[2];
-					}
-				}
-				else
-				{
-					assert(false);
+					break;
+
+				case cgltf_attribute_type_color:
+				case cgltf_attribute_type_joints:
+				case cgltf_attribute_type_weights:
+				case cgltf_attribute_type_custom:
+				case cgltf_attribute_type_max_enum:
+					Log::Warning("Unhandled attribute type %d for vertex %zu in mesh %s", attr->type, i, ModelName.c_str());
+					break;
 				}
 			}
 		}
 	}
-	
+
 	if (prim->indices)
 	{
 		SCOPED_CPU_MARKER("Indices");
@@ -630,6 +668,129 @@ static Mesh ProcessGLTFMesh(
 				Indices[base + 1] = static_cast<unsigned>(idx2); // Flip winding
 				Indices[base + 2] = static_cast<unsigned>(idx1);
 			}
+		}
+	}
+
+	constexpr bool CALCULATE_TANGENTS = true;
+	if constexpr (CALCULATE_TANGENTS)
+	{
+		if (!bTangentDataExists)
+		{
+			SCOPED_CPU_MARKER("CalculateTangents");
+
+			size_t numTriangles = Indices.empty() ? NumVertices / 3 : Indices.size() / 3;
+			for (size_t i = 0; i < numTriangles; ++i) // Process triangles
+			{
+				// Get vertex indices for the triangle
+				size_t i0 = Indices.empty() ? (i * 3 + 0) : Indices[i * 3 + 0];
+				size_t i1 = Indices.empty() ? (i * 3 + 1) : Indices[i * 3 + 1];
+				size_t i2 = Indices.empty() ? (i * 3 + 2) : Indices[i * 3 + 2];
+
+				// Ensure indices are valid
+				if (i0 >= NumVertices || i1 >= NumVertices || i2 >= NumVertices)
+				{
+					Log::Warning("Invalid triangle indices for mesh %s", ModelName.c_str());
+					continue;
+				}
+
+				const FVertexWithNormalAndTangent& v0 = Vertices[i0];
+				const FVertexWithNormalAndTangent& v1 = Vertices[i1];
+				const FVertexWithNormalAndTangent& v2 = Vertices[i2];
+
+				// Compute edges
+				float e1[3] = { v1.position[0] - v0.position[0], v1.position[1] - v0.position[1], v1.position[2] - v0.position[2] };
+				float e2[3] = { v2.position[0] - v0.position[0], v2.position[1] - v0.position[1], v2.position[2] - v0.position[2] };
+
+				// Compute UV differences
+				float du1 = v1.uv[0] - v0.uv[0];
+				float dv1 = v1.uv[1] - v0.uv[1];
+				float du2 = v2.uv[0] - v0.uv[0];
+				float dv2 = v2.uv[1] - v0.uv[1];
+
+				// Compute determinant
+				float det = du1 * dv2 - dv1 * du2;
+				if (fabs(det) < 1e-6f)
+				{
+					// Degenerate UVs; skip or use fallback
+					continue;
+				}
+
+				float invDet = 1.0f / det;
+
+				// Compute tangent
+				float tangent[3];
+				tangent[0] = invDet * (dv2 * e1[0] - dv1 * e2[0]);
+				tangent[1] = invDet * (dv2 * e1[1] - dv1 * e2[1]);
+				tangent[2] = invDet * (dv2 * e1[2] - dv1 * e2[2]);
+
+				// Adjust for left-handed coordinate system (negate z)
+				tangent[2] = -tangent[2];
+
+				// Accumulate tangents for each vertex
+				for (size_t j : {i0, i1, i2})
+				{
+					FVertexWithNormalAndTangent& vert = Vertices[j];
+					vert.tangent[0] += tangent[0];
+					vert.tangent[1] += tangent[1];
+					vert.tangent[2] += tangent[2];
+				}
+			}
+
+			// Normalize tangents and orthogonalize against normals
+			for (size_t i = 0; i < NumVertices; ++i)
+			{
+				FVertexWithNormalAndTangent& vert = Vertices[i];
+
+				// Normalize tangent
+				float len = sqrtf(vert.tangent[0] * vert.tangent[0] + vert.tangent[1] * vert.tangent[1] + vert.tangent[2] * vert.tangent[2]);
+				if (len > 1e-6f) {
+					vert.tangent[0] /= len;
+					vert.tangent[1] /= len;
+					vert.tangent[2] /= len;
+				}
+				else 
+				{
+					// Fallback: use arbitrary tangent perpendicular to normal
+					float absNx = fabs(vert.normal[0]);
+					float absNy = fabs(vert.normal[1]);
+					float absNz = fabs(vert.normal[2]);
+					if (absNx <= absNy && absNx <= absNz)
+					{
+						vert.tangent[0] = 1.0f;
+						vert.tangent[1] = 0.0f;
+						vert.tangent[2] = 0.0f;
+					}
+					else if (absNy <= absNx && absNy <= absNz)
+					{
+						vert.tangent[0] = 0.0f;
+						vert.tangent[1] = 1.0f;
+						vert.tangent[2] = 0.0f;
+					}
+					else
+					{
+						vert.tangent[0] = 0.0f;
+						vert.tangent[1] = 0.0f;
+						vert.tangent[2] = 1.0f;
+					}
+				}
+
+				// Orthogonalize tangent against normal (Gram-Schmidt)
+				float dot = vert.normal[0] * vert.tangent[0] + vert.normal[1] * vert.tangent[1] + vert.normal[2] * vert.tangent[2];
+				vert.tangent[0] -= dot * vert.normal[0];
+				vert.tangent[1] -= dot * vert.normal[1];
+				vert.tangent[2] -= dot * vert.normal[2];
+
+				// Re-normalize
+				len = sqrtf(vert.tangent[0] * vert.tangent[0] + vert.tangent[1] * vert.tangent[1] + vert.tangent[2] * vert.tangent[2]);
+				if (len > 1e-6f)
+				{
+					vert.tangent[0] /= len;
+					vert.tangent[1] /= len;
+					vert.tangent[2] /= len;
+				}
+			}
+
+			// Log::Info("Calculated tangents for mesh %s with %zu vertices", ModelName.c_str(), NumVertices);
 		}
 	}
 

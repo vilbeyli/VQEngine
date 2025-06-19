@@ -45,6 +45,8 @@
 #include "Engine/GPUMarker.h"
 #include "Libs/VQUtils/Include/utils.h"
 
+#include <cassert>
+
 //--------------------------------------------------------------------------------------
 //
 // StaticResourceViewHeap
@@ -133,6 +135,11 @@ bool StaticResourceViewHeap::AllocateDescriptor(uint32 Count, ResourceView* pRV)
     // mark allocated
     for (uint32 i = 0; i < Count; ++i)
     {
+        assert(mIsDescriptorFree[iStart + i]);
+        if (!mIsDescriptorFree[iStart + i])
+        {
+            Log::Warning("OVERWRITING DESCRIPTOR %d (base=%d+offset=%d)", iStart + i, iStart, i);
+        }
         mIsDescriptorFree[iStart + i] = false;
     }
 
