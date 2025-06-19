@@ -47,13 +47,6 @@ using namespace VQSystemInfo;
 #define LOG_RESOURCE_CREATE          1
 
 
-#define CHECK_TEXTURE(map, id)\
-if(map.find(id) == map.end())\
-{\
-Log::Error("Texture not created. Call mRenderer.CreateTexture() on the given Texture (id=%d)", id);\
-}\
-assert(map.find(id) != map.end());
-
 #define CHECK_RESOURCE_VIEW(RV_t, id)\
 if(m ## RV_t ## s.find(id) == m ## RV_t ## s.end())\
 {\
@@ -545,6 +538,7 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 						srvDesc.TextureCubeArray.NumCubes = NumCubes - cube;
 						pDevice->CreateShaderResourceView(pResource, &srvDesc, srv.GetCPUDescHandle(heapIndex + cube));
 						Log::Info("InitializeSRV %d[%d] for Texture %d | desc_gpu_addr = 0x%x", srvID, heapIndex, texID, srv.GetGPUDescHandle(heapIndex + cube).ptr);
+						assert(heapIndex + cube < srv.GetSize());
 					}
 				}
 				else
@@ -555,6 +549,7 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 						srvDesc.Texture2DArray.ArraySize = resourceDesc.DepthOrArraySize - heapIndex;
 						pDevice->CreateShaderResourceView(pResource, &srvDesc, srv.GetCPUDescHandle(0 /*+ i*/));
 						Log::Info("InitializeSRV %d[%d] for Texture %d | desc_gpu_addr = 0x%x", srvID, heapIndex, texID, srv.GetGPUDescHandle(heapIndex).ptr);
+						assert(heapIndex < srv.GetSize());
 					}
 				}
 			}
@@ -563,6 +558,7 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 			else
 			{
 				pDevice->CreateShaderResourceView(pResource, &srvDesc, srv.GetCPUDescHandle(0));
+				assert(heapIndex < srv.GetSize());
 				Log::Info("InitializeSRV %d[%d] for Texture %d | desc_gpu_addr = 0x%x", srvID, heapIndex, texID, srv.GetGPUDescHandle(heapIndex).ptr);
 			}
 		}
@@ -575,6 +571,7 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 				return;
 			}
 			pDevice->CreateShaderResourceView(pResource, pSRVDesc, srv.GetCPUDescHandle(heapIndex));
+			assert(heapIndex < srv.GetSize());
 			Log::Info("InitializeSRV %d[%d] for Texture %d | desc_gpu_addr = 0x%x", srvID, heapIndex, texID, srv.GetGPUDescHandle(heapIndex).ptr);
 		}
 	}
@@ -695,6 +692,8 @@ void VQRenderer::InitializeUAVForBuffer(UAV_ID uavID, uint heapIndex, TextureID 
 		&uavDesc,
 		uav.GetCPUDescHandle(heapIndex)
 	);
+	assert(heapIndex < uav.GetSize());
+	Log::Info("InitializeUAV %d[%d] tex=%d | desc_gpu_addr = 0x%x", uavID, heapIndex, texID, uav.GetGPUDescHandle(heapIndex).ptr);
 }
 void VQRenderer::InitializeSRVForBuffer(SRV_ID srvID, uint heapIndex, TextureID texID, DXGI_FORMAT bufferViewFormatOverride)
 {
@@ -719,9 +718,11 @@ void VQRenderer::InitializeSRVForBuffer(SRV_ID srvID, uint heapIndex, TextureID 
 	desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 	{
 		std::lock_guard<std::mutex> lk(mMtxSRVs_CBVs_UAVs);
-		mDevice.GetDevicePtr()->CreateShaderResourceView(pRsc, &desc, mSRVs.at(srvID).GetCPUDescHandle(heapIndex));
+		SRV& srv = mSRVs.at(srvID);
+		mDevice.GetDevicePtr()->CreateShaderResourceView(pRsc, &desc, srv.GetCPUDescHandle(heapIndex));
+		assert(heapIndex < srv.GetSize());
+		Log::Info("InitializeSRVForBuffer %d[%d] | desc_gpu_addr = 0x%x", srvID, heapIndex, srv.GetGPUDescHandle(heapIndex).ptr);
 	}
-
 }
 void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, uint arraySlice /*=0*/, uint mipSlice /*=0*/)
 {
@@ -788,12 +789,15 @@ void VQRenderer::InitializeUAV(UAV_ID uavID, uint heapIndex, TextureID texID, ui
 	// create the UAV
 	ID3D12Resource* pRscCounter = nullptr; // TODO: find a use case for this parameter and implement proper interface
 	assert(pTexture->Resource);
+	UAV& uav = mUAVs.at(uavID);
 	mDevice.GetDevicePtr()->CreateUnorderedAccessView(
 		pTexture->Resource,
 		pRscCounter,
 		&uavDesc,
-		mUAVs.at(uavID).GetCPUDescHandle(heapIndex)
+		uav.GetCPUDescHandle(heapIndex)
 	);
+	assert(heapIndex < uav.GetSize());
+	Log::Info("InitializeUAV %d[%d] tex=%d | desc_gpu_addr = 0x%x", uavID, heapIndex, texID, uav.GetGPUDescHandle(heapIndex).ptr);
 }
 
 void VQRenderer::DestroySRV(SRV_ID srvID)
@@ -938,8 +942,6 @@ uint VQRenderer::GetTextureMips(TextureID Id) const                             
 
 uint VQRenderer::GetTextureSampleCount(TextureID Id) const
 {
-	//CHECK_TEXTURE(mTextures, Id);
-	//const Texture& tex = GetTexture_ThreadSafe(Id);
 	assert(false);
 	return 0; // TODO:
 }

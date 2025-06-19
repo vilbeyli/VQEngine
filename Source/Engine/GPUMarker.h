@@ -33,8 +33,7 @@
 #error "max macro is defined"
 #endif
 
-#define DISBALE_MARKERS 0
-#if DISBALE_MARKERS
+#if 0 // Disable markers for ASAN builds, as it causes issues with memory tracking
 #define SCOPED_GPU_MARKER(pCmd, pStr)             do{}while(0)
 #define SCOPED_CPU_MARKER(pStr)                   do{}while(0)
 #define SCOPED_CPU_MARKER_C(pStr, PIXColor)       do{}while(0)

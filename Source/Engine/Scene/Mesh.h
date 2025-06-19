@@ -141,7 +141,7 @@ Mesh::Mesh(VQRenderer* pRenderer, GeometryData<TVertex, TIndex>&& meshLODData, c
 
 		// Serialize
 		std::vector<char> vertexData(reinterpret_cast<char*>(vertices.data()), reinterpret_cast<char*>(vertices.data() + vertices.size()));
-		std::vector<char> indexData (reinterpret_cast<char*>(indices.data() ), reinterpret_cast<char*>(indices.data()  + indices.size()) );
+		std::vector<char>  indexData(reinterpret_cast<char*>( indices.data()), reinterpret_cast<char*>( indices.data()  + indices.size()));
 		mGeometryData.LODVertices.push_back(std::move(vertexData));
 		mGeometryData.LODIndices.push_back(std::move(indexData));
 		mGeometryData.VertexStrides.push_back(sizeof(TVertex));
