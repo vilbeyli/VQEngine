@@ -46,7 +46,7 @@ THE SOFTWARE.
 ********************************************************************/
 namespace _1spp
 {
-#include "Renderer/Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_1spp.cpp"
+#include "Renderer/Libs/AMD/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_1spp.cpp"
 }
 struct FBlueNoiseSamplerStateCPU
 {

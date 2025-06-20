@@ -50,7 +50,7 @@ cbuffer cbDownsampleDepth
 
 #define A_GPU
 #define A_HLSL
-#include "AMDFidelityFX/SPD/ffx_a.h"
+#include "AMD/SPD/ffx_a.h"
 
 groupshared float g_group_shared_depth_values[16][16];
 groupshared uint g_group_shared_counter;
@@ -71,7 +71,7 @@ AF4 SpdLoadIntermediate(AU1 x, AU1 y) {
 void SpdStoreIntermediate(AU1 x, AU1 y, AF4 value) { g_group_shared_depth_values[x][y] = value.x; }
 AF4 SpdReduce4(AF4 v0, AF4 v1, AF4 v2, AF4 v3) { return min(min(v0, v1), min(v2, v3)); }
 
-#include "AMDFidelityFX/SPD/ffx_spd.h"
+#include "AMD/SPD/ffx_spd.h"
 
 uint GetThreadgroupCount(uint2 image_size) {
 	// Each threadgroup works on 64x64 texels

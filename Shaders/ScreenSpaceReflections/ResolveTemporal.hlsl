@@ -50,7 +50,7 @@ void FFX_DNSR_Reflections_StoreTemporalAccumulation(int2 pixel_coordinate, min16
     g_out_variance[pixel_coordinate] = variance.x;
 }
 
-#include "../AMDFidelityFX/DNSR/ffx_denoiser_reflections_resolve_temporal.h"
+#include "../AMD/DNSR/ffx_denoiser_reflections_resolve_temporal.h"
 
 [numthreads(8, 8, 1)]
 void CSMain(int2 group_thread_id      : SV_GroupThreadID,

@@ -29,10 +29,10 @@
 
 #include <cmath>
 
-//#include "Shaders/AMDFidelityFX/CAS/ffx_a.h"
-#include "Shaders/AMDFidelityFX/FSR1.0/ffx_a.h"
-#include "Shaders/AMDFidelityFX/CAS/ffx_cas.h"
-#include "Shaders/AMDFidelityFX/FSR1.0/ffx_fsr1.h"
+//#include "Shaders/AMD/CAS/ffx_a.h"
+#include "Shaders/AMD/FSR1.0/ffx_a.h"
+#include "Shaders/AMD/CAS/ffx_cas.h"
+#include "Shaders/AMD/FSR1.0/ffx_fsr1.h"
 
 float FPostProcessParameters::FFSR1_RCAS::GetLinearSharpness() const { return std::powf(0.5f, this->RCASSharpnessStops); }
 void FPostProcessParameters::FFSR1_RCAS::SetLinearSharpness(float Sharpness) { this->RCASSharpnessStops = std::log10f(Sharpness) / std::log10f(0.5f); }
