@@ -268,7 +268,7 @@ void Window::ToggleWindowedFullscreen(SwapChain* pSwapChain /*= nullptr*/)
             HRESULT hr = pSwapChain->mpSwapChain->GetContainingOutput(&pOutput);
             if(!SUCCEEDED(hr))
             {
-                Log::Error("ToggleWindowedFullscreen(): GetContainingOutput() failed with error: 0x%x", VQ_DXGI_UTILS::GetDXGIError(hr));
+                Log::Error("ToggleWindowedFullscreen(): GetContainingOutput() failed with error: [0x%x] %s", hr, VQ_DXGI_UTILS::GetDXGIError(hr));
             }
             if (pOutput)
             {
