@@ -828,7 +828,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 			{
 #endif
 				// gather render command lists
-				ID3D12CommandList* pCmdLists[ERenderThreadWorkID::NUM_RENDER_COMMAND_RECORDER_THREADS] = { nullptr };
+				ID3D12CommandList* pCmdLists[ERenderThreadWorkID::NUM_RENDER_THREAD_WORK_IDS] = { nullptr };
 				int iCmdList = 0;
 
 				if (!bAsyncCompute)

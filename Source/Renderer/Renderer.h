@@ -92,6 +92,28 @@ struct FRenderStats
 	uint   NumBoundingBoxDrawCommands = 0;
 	inline void Reset() { *this = FRenderStats(); }
 };
+struct FCommandRecordingThreadConfig
+{
+	int8 iGfxCmd = -1;
+	int8 iCopyCmd = -1;
+	int8 iComputeCmd = -1;
+};
+enum ERenderThreadWorkID
+{
+	ZPrePassAndAsyncCompute = 0,
+	ObjectIDRenderAndCopy,
+	PointShadow0,
+	PointShadow1,
+	PointShadow2,
+	PointShadow3,
+	PointShadow4,
+	SpotShadows,
+	DirectionalShadows,
+	SceneAndPostprocessing,
+	UIAndPresentation,
+
+	NUM_RENDER_THREAD_WORK_IDS,
+};
 
 //========================================================================================================================================================================================================---
 //
@@ -308,29 +330,7 @@ private:
 	std::atomic<bool>  mAsyncComputeWorkSubmitted = false;
 	Fence mFrameRenderDoneFence;
 	
-	enum ERenderThreadWorkID
-	{
-		ZPrePassAndAsyncCompute = 0,
-		ObjectIDRenderAndCopy,
-		PointShadow0,
-		PointShadow1,
-		PointShadow2,
-		PointShadow3,
-		PointShadow4,
-		SpotShadows,
-		DirectionalShadows,
-		SceneAndPostprocessing,
-		UIAndPresentation,
-
-		NUM_RENDER_COMMAND_RECORDER_THREADS,
-	};
-	struct FCommandRecordingThreadConfig
-	{
-		int8 iGfxCmd = -1;
-		int8 iCopyCmd = -1;
-		int8 iComputeCmd = -1;
-	};
-	FCommandRecordingThreadConfig mRenderWorkerConfig[NUM_RENDER_COMMAND_RECORDER_THREADS];
+	FCommandRecordingThreadConfig mRenderWorkerConfig[NUM_RENDER_THREAD_WORK_IDS];
 
 	// frame presentation context
 	CommandQueue     mRenderingPresentationQueue;
