@@ -90,8 +90,8 @@ struct alignas(16) Material
 	inline ETessellationDomain         GetTessellationDomain() const         { return static_cast<ETessellationDomain        >((PackedTessellationConfig >> 2) & 0x3); }
 	inline ETessellationOutputTopology GetTessellationOutputTopology() const { return static_cast<ETessellationOutputTopology>((PackedTessellationConfig >> 4) & 0x3); }
 	inline ETessellationPartitioning   GetTessellationPartitioning() const   { return static_cast<ETessellationPartitioning  >((PackedTessellationConfig >> 6) & 0x3); }
-	inline void SetTessellationEnabled(bool b)                               { PackedTessellationConfig |= (b ? 1 : 0); }
-	inline void SetVertexTBNVisualization(bool b)                            { PackedTessellationConfig |= (b ? 2 : 0); }
+	inline void SetTessellationEnabled(bool b)                               { if(b) PackedTessellationConfig |= 1; else PackedTessellationConfig &= ~1; }
+	inline void SetVertexTBNVisualization(bool b)                            { if(b) PackedTessellationConfig |= 2; else PackedTessellationConfig &= ~2; }
 	inline void SetTessellationDomain(ETessellationDomain d)                 { PackedTessellationConfig |= ((uint8)d) << 2; }
 	inline void SetTessellationOutputTopology(ETessellationOutputTopology t) { PackedTessellationConfig |= ((uint8)t) << 4; }
 	inline void SetTessellationPartitioning(ETessellationPartitioning p)     { PackedTessellationConfig |= ((uint8)p) << 6; }
