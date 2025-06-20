@@ -73,15 +73,15 @@ struct alignas(16) Material
 	SRV_ID SRVMaterialMaps = INVALID_ID;
 	SRV_ID SRVHeightMap = INVALID_ID;
 
-	TextureID TexDiffuseMap   = INVALID_ID;
-	TextureID TexNormalMap    = INVALID_ID;
-	TextureID TexEmissiveMap  = INVALID_ID;
-	TextureID TexAlphaMaskMap = INVALID_ID;
-	TextureID TexMetallicMap  = INVALID_ID;
-	TextureID TexRoughnessMap = INVALID_ID;
+	TextureID TexDiffuseMap                     = INVALID_ID;
+	TextureID TexNormalMap                      = INVALID_ID;
+	TextureID TexEmissiveMap                    = INVALID_ID;
+	TextureID TexAlphaMaskMap                   = INVALID_ID;
+	TextureID TexMetallicMap                    = INVALID_ID;
+	TextureID TexRoughnessMap                   = INVALID_ID;
 	TextureID TexOcclusionRoughnessMetalnessMap = INVALID_ID;
-	TextureID TexAmbientOcclusionMap = INVALID_ID;
-	TextureID TexHeightMap    = INVALID_ID;
+	TextureID TexAmbientOcclusionMap            = INVALID_ID;
+	TextureID TexHeightMap                      = INVALID_ID;
 	TextureID padding2 = INVALID_ID; // to align TessellationData w/ a cache line
 
 	VQ_SHADER_DATA::TessellationParams TessellationData;

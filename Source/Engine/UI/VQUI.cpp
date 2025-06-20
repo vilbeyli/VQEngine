@@ -1548,22 +1548,30 @@ void VQEngine::DrawMaterialEditor()
 		"Diffuse Map",  //EMaterialTextureMapBindings::ALBEDO
 		"Normal Map",  //EMaterialTextureMapBindings::NORMALS
 		"Emissive Map",  //EMaterialTextureMapBindings::EMISSIVE
-		"Height Map",  
 		"Alpha Mask Map", //EMaterialTextureMapBindings::ALPHA_MASK
 		"Metallic Map",  //EMaterialTextureMapBindings::METALLIC
 		"Roughness Map",  //EMaterialTextureMapBindings::ROUGHNESS
 		"Occlusion Roughness Metalness Map",  //EMaterialTextureMapBindings::OCCLUSION_ROUGHNESS_METALNESS
-		"Ambient Occlusion Map"//EMaterialTextureMapBindings::AMBIENT_OCCLUSION
-		, ""
+		"Ambient Occlusion Map", //EMaterialTextureMapBindings::AMBIENT_OCCLUSION
+		"Height Map",
+		""
 	};
 	const int textureIDs[] = 
 	{
-		mat.TexDiffuseMap, mat.TexNormalMap, mat.TexEmissiveMap, mat.TexHeightMap,
-		mat.TexAlphaMaskMap, mat.TexMetallicMap, mat.TexRoughnessMap,
-		mat.TexOcclusionRoughnessMetalnessMap, mat.TexAmbientOcclusionMap,
+		mat.TexDiffuseMap,
+		mat.TexNormalMap,
+		mat.TexEmissiveMap,
+		mat.TexAlphaMaskMap,
+		mat.TexMetallicMap,
+		mat.TexRoughnessMap,
+		mat.TexOcclusionRoughnessMetalnessMap,
+		mat.TexAmbientOcclusionMap,
+		mat.TexHeightMap,
 		INVALID_ID
 	};
-	for (int i = 0; i < _countof(textureLabels); ++i) 
+
+	const int NumTextures = _countof(textureLabels);
+	for (int i = 0; i < NumTextures; ++i)
 	{
 		if (textureIDs[i] == INVALID_ID)
 			continue;
@@ -1575,8 +1583,15 @@ void VQEngine::DrawMaterialEditor()
 		mpRenderer->GetTextureDimensions(textureIDs[i], textureSizeX, textureSizeY);
 		int textureMIPs = mpRenderer->GetTextureMips(textureIDs[i]);
 
-		const CBV_SRV_UAV& srv = mpRenderer->GetShaderResourceView(mat.SRVMaterialMaps);
-		ImTextureID ImTexID = (ImTextureID)srv.GetGPUDescHandle(i).ptr;
+		const bool bIsHeightMap = i == NumTextures - 1;
+		const CBV_SRV_UAV& srv = bIsHeightMap
+			? mpRenderer->GetShaderResourceView(mat.SRVHeightMap)
+			: mpRenderer->GetShaderResourceView(mat.SRVMaterialMaps);
+
+		ImTextureID ImTexID = (ImTextureID)(bIsHeightMap 
+			? srv.GetGPUDescHandle().ptr
+			: srv.GetGPUDescHandle(i).ptr
+		);
 
 		const int texturePreviewSize = 64;
 
