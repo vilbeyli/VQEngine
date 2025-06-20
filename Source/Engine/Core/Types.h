@@ -81,6 +81,7 @@ typedef unsigned int UINT;
 typedef unsigned long long WPARAM;
 typedef long long LPARAM;
 typedef long long LRESULT;
+typedef long HRESULT;
 
 #define FORWARD_DECLARE_HANDLE(name) struct name##__; typedef struct name##__ *name
 FORWARD_DECLARE_HANDLE(HINSTANCE);

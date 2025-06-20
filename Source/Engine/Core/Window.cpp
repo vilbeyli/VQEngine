@@ -47,6 +47,7 @@
 #include "Window.h"
 #include "../VQEngine.h"
 #include "Renderer/Core/SwapChain.h"
+#include "Renderer/Resources/DXGIUtils.h"
 #include "Libs/VQUtils/Include/Log.h"
 #include "Libs/VQUtils/Include/utils.h"
 #include "Data/Resources/resource.h"
@@ -259,17 +260,27 @@ void Window::ToggleWindowedFullscreen(SwapChain* pSwapChain /*= nullptr*/)
 
         RECT fullscreenWindowRect;
         
+		bool bSwapChainMonitorFound = false;
         if (pSwapChain)
         {
             // Get the settings of the display on which the app's window is currently displayed
             IDXGIOutput* pOutput = nullptr;
-            pSwapChain->mpSwapChain->GetContainingOutput(&pOutput);
-            DXGI_OUTPUT_DESC Desc;
-            pOutput->GetDesc(&Desc);
-            fullscreenWindowRect = Desc.DesktopCoordinates;
-            pOutput->Release();
+            HRESULT hr = pSwapChain->mpSwapChain->GetContainingOutput(&pOutput);
+            if(!SUCCEEDED(hr))
+            {
+                Log::Error("ToggleWindowedFullscreen(): GetContainingOutput() failed with error: 0x%x", VQ_DXGI_UTILS::GetDXGIError(hr));
+            }
+            if (pOutput)
+            {
+                DXGI_OUTPUT_DESC Desc;
+                pOutput->GetDesc(&Desc);
+                fullscreenWindowRect = Desc.DesktopCoordinates;
+                pOutput->Release();
+                bSwapChainMonitorFound = true;
+            }
         }
-        else
+        
+        if(!bSwapChainMonitorFound)
         {
             // Fallback to EnumDisplaySettings implementation
             // Get the settings of the primary display

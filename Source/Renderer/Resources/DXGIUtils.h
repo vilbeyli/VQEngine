@@ -32,4 +32,6 @@ namespace VQ_DXGI_UTILS
 
 	void MipImage(const void* pDataSrc, void* pDataDst, uint width, uint height, uint bytesPerPixel);
 	void CopyPixels(const void* pData, void* pDest, uint stride, uint bytesWidth, uint height);
+
+	const char* GetDXGIError(HRESULT hr);
 }
