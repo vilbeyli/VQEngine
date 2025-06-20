@@ -298,12 +298,12 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 					PPParams.FFXCASParams.UpdateCASConstantBlock(uWidth, uHeight, uWidth, uHeight);
 				}
 #endif
-				if (PPParams.IsFSREnabled())
+				if (PPParams.IsFSR1Enabled())
 				{
 					const uint InputWidth  = static_cast<uint>(PPParams.ResolutionScale * uWidth);
 					const uint InputHeight = static_cast<uint>(PPParams.ResolutionScale * uHeight);
-					PPParams.FSR_EASUParams.UpdateEASUConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, uWidth, uHeight);
-					PPParams.FSR_RCASParams.UpdateRCASConstantBlock();
+					PPParams.FSR1ShaderParameters.easu.UpdateConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, uWidth, uHeight);
+					PPParams.FSR1ShaderParameters.rcas.UpdateConstantBlock();
 				}
 			}
 		}
@@ -415,7 +415,7 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	mpRenderer->OnWindowSizeChanged(hwnd, WIDTH, HEIGHT); // updates render context
 
 	const FPostProcessParameters& PPParams = this->mpScene->GetPostProcessParameters(0);
-	const bool bFSREnabled = PPParams.IsFSREnabled() && !bUseHDRRenderPath; // TODO: remove this when FSR-HDR is implemented
+	const bool bFSREnabled = PPParams.IsFSR1Enabled() && !bUseHDRRenderPath; // TODO: remove this when FSR-HDR is implemented
 	const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
 
 	const float fResolutionScale = bUpscaling ? PPParams.ResolutionScale : 1.0f;
@@ -479,7 +479,7 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 	Swapchain.WaitForGPU(); // make sure GPU is finished
 
 	const auto& PPParams = this->mpScene->GetPostProcessParameters(0);
-	const bool bFSREnabled = PPParams.IsFSREnabled();
+	const bool bFSREnabled = PPParams.IsFSR1Enabled();
 	const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
 
 	const float fResolutionScale = bUpscaling ? PPParams.ResolutionScale : 1.0f;

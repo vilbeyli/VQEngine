@@ -359,13 +359,12 @@ constexpr size_t NUM_MAX_ENV_MAP_NAMES    = 10;
 constexpr size_t NUM_MAX_LEVEL_NAMES      = 8;
 constexpr size_t NUM_MAX_CAMERA_NAMES     = 10;
 constexpr size_t NUM_MAX_DRAW_MODE_NAMES  = static_cast<size_t>(EDrawMode::NUM_DRAW_MODES);
-constexpr size_t NUM_MAX_FSR_OPTION_NAMES = AMD_FidelityFX_SuperResolution1::EPreset::NUM_FSR1_PRESET_OPTIONS;
 static const char* szSceneNames [NUM_MAX_LEVEL_NAMES  ] = {};
 static const char* szEnvMapNames[NUM_MAX_ENV_MAP_NAMES] = {};
 static const char* szCameraNames[NUM_MAX_CAMERA_NAMES] = {};
 static const char* szDrawModes  [NUM_MAX_DRAW_MODE_NAMES] = {};
 static const char* szUpscalingLabels[FPostProcessParameters::EUpscalingAlgorithm::NUM_UPSCALING_ALGORITHMS] = {};
-static const char* szUpscalingQualityLabels[NUM_MAX_FSR_OPTION_NAMES] = {};
+static const char* szFSR1QualityLabels[AMD_FidelityFX_SuperResolution1::EPreset::NUM_FSR1_PRESET_OPTIONS] = {};
 static const char* szMaxFrameRateOptionLabels[3] = {}; // see Settings.h:FGraphicsSettings
 
 
@@ -417,14 +416,15 @@ static void InitializeStaticCStringData_PostProcessingControls()
 	if (!bPostPRocessLabelsInitialized)
 	{
 		using namespace AMD_FidelityFX_SuperResolution1;
-		szUpscalingQualityLabels[EPreset::ULTRA_QUALITY] = "Ultra Quality";
-		szUpscalingQualityLabels[EPreset::QUALITY] = "Quality";
-		szUpscalingQualityLabels[EPreset::BALANCED] = "Balanced";
-		szUpscalingQualityLabels[EPreset::PERFORMANCE] = "Performance";
-		szUpscalingQualityLabels[EPreset::CUSTOM] = "Custom";
+		szFSR1QualityLabels[EPreset::ULTRA_QUALITY] = "Ultra Quality";
+		szFSR1QualityLabels[EPreset::QUALITY] = "Quality";
+		szFSR1QualityLabels[EPreset::BALANCED] = "Balanced";
+		szFSR1QualityLabels[EPreset::PERFORMANCE] = "Performance";
+		szFSR1QualityLabels[EPreset::CUSTOM] = "Custom";
 
 		szUpscalingLabels[FPostProcessParameters::EUpscalingAlgorithm::NONE] = "None";
-		szUpscalingLabels[FPostProcessParameters::EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION1] = "AMD FSR1";
+		szUpscalingLabels[FPostProcessParameters::EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1] = "AMD FSR1";
+		szUpscalingLabels[FPostProcessParameters::EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3] = "AMD FSR3";
 
 		bPostPRocessLabelsInitialized = true;
 	}
@@ -832,7 +832,7 @@ void VQEngine::DrawProfilerWindow(const FSceneStats& FrameStats, float dt)
 void VQEngine::DrawPostProcessSettings(FPostProcessParameters& PPParams)
 {
 	// constants
-	const bool bFSREnabled = PPParams.IsFSREnabled();
+	const bool bFSREnabled = PPParams.IsFSR1Enabled();
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
 
@@ -857,11 +857,11 @@ void VQEngine::DrawPostProcessSettings(FPostProcessParameters& PPParams)
 	if (PPParams.UpscalingAlgorithm != FPostProcessParameters::EUpscalingAlgorithm::NONE)
 	{
 		// preset: ultra quality / quality / balanced / performance / custom
-		if (ImGui_RightAlignedCombo("Quality", (int*)&PPParams.UpscalingQualityPresetEnum, szUpscalingQualityLabels, _countof(szUpscalingQualityLabels)))
+		if (ImGui_RightAlignedCombo("Quality", (int*)&PPParams.UpscalingQualityPresetEnum, szFSR1QualityLabels, _countof(szFSR1QualityLabels)))
 		{
 			if (PPParams.UpscalingQualityPresetEnum != AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
 			{
-				PPParams.ResolutionScale = AMD_FidelityFX_SuperResolution1::GetAMDFSR1ScreenPercentage(PPParams.UpscalingQualityPresetEnum);
+				PPParams.ResolutionScale = AMD_FidelityFX_SuperResolution1::GetScreenPercentage(PPParams.UpscalingQualityPresetEnum);
 			}
 			
 			fnSendWindowResizeEvents();
@@ -883,11 +883,11 @@ void VQEngine::DrawPostProcessSettings(FPostProcessParameters& PPParams)
 
 	ImGui::Text("Sharpness");
 	ImGui::Separator();
-	float LinearSharpness = PPParams.FSR_RCASParams.GetLinearSharpness();
+	float LinearSharpness = PPParams.FSR1ShaderParameters.rcas.GetLinearSharpness();
 	if (ImGui::SliderFloat("Amount##", &LinearSharpness, 0.01f, 1.00f, "%.2f"))
 	{
-		PPParams.FSR_RCASParams.SetLinearSharpness(LinearSharpness);
-		PPParams.FSR_RCASParams.UpdateRCASConstantBlock();
+		PPParams.FSR1ShaderParameters.rcas.SetLinearSharpness(LinearSharpness);
+		PPParams.FSR1ShaderParameters.rcas.UpdateConstantBlock();
 	}
 
 	//

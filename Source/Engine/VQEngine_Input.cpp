@@ -188,7 +188,7 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 			PPParams.UpscalingAlgorithmLastValue = PPParams.UpscalingAlgorithm;
 		}
 		
-		PPParams.UpscalingAlgorithm = PPParams.IsFSREnabled() 
+		PPParams.UpscalingAlgorithm = PPParams.IsFSR1Enabled() 
 			? FPostProcessParameters::EUpscalingAlgorithm::NONE 
 			: PPParams.UpscalingAlgorithmLastValue;
 
@@ -196,7 +196,7 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 		const uint32 H = mpWinMain->GetHeight();
 		mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<WindowResizeEvent>(W, H, hwnd));
 		mEventQueue_WinToVQE_Update.AddItem(std::make_unique<WindowResizeEvent>(W, H, hwnd));
-		Log::Info("Toggle FSR: %d", PPParams.IsFSREnabled());
+		Log::Info("Toggle FSR: %d", PPParams.IsFSR1Enabled());
 	}
 
 	// Scene switching

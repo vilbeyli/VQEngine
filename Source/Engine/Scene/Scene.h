@@ -26,7 +26,8 @@
 
 #include "../Core/Memory.h"
 #include "../AssetLoader.h"
-#include "../PostProcess/PostProcess.h"
+
+#include "Renderer/Rendering/PostProcess/PostProcess.h"
 
 #include <algorithm>
 

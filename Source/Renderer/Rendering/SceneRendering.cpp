@@ -357,7 +357,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 	const bool bAsyncCompute         = ShouldEnableAsyncCompute(GFXSettings, SceneView, ShadowView);
 	const bool bVizualizationEnabled = PPParams.DrawModeEnum != EDrawMode::LIT_AND_POSTPROCESSED;
 	const bool bFFXCASEnabled        = PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f;
-	const bool bFSREnabled           = PPParams.IsFSREnabled();
+	const bool bFSREnabled           = PPParams.IsFSR1Enabled();
 
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 	ID3D12Resource* pRscNormals = this->GetTextureResource(rsc.Tex_SceneNormals);
@@ -380,8 +380,8 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 	FSceneView& RefSceneView = const_cast<FSceneView&>(SceneView);
 	FPostProcessParameters& RefPPParams = const_cast<FPostProcessParameters&>(PPParams);
 
-	RefSceneView.SceneRTWidth  = static_cast<int>(ctx.WindowDisplayResolutionX * (PPParams.IsFSREnabled() ? PPParams.ResolutionScale : 1.0f));
-	RefSceneView.SceneRTHeight = static_cast<int>(ctx.WindowDisplayResolutionY * (PPParams.IsFSREnabled() ? PPParams.ResolutionScale : 1.0f));
+	RefSceneView.SceneRTWidth  = static_cast<int>(ctx.WindowDisplayResolutionX * (PPParams.IsFSR1Enabled() ? PPParams.ResolutionScale : 1.0f));
+	RefSceneView.SceneRTHeight = static_cast<int>(ctx.WindowDisplayResolutionY * (PPParams.IsFSR1Enabled() ? PPParams.ResolutionScale : 1.0f));
 	RefPPParams.SceneRTWidth  = SceneView.SceneRTWidth;
 	RefPPParams.SceneRTHeight = SceneView.SceneRTHeight;
 	RefPPParams.DisplayResolutionWidth  = ctx.WindowDisplayResolutionX;
@@ -395,7 +395,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 			RefPPParams.bEnableCAS = false;
 		}
 #endif
-		if (RefPPParams.IsFSREnabled())
+		if (RefPPParams.IsFSR1Enabled())
 		{
 			// TODO: HDR conversion pass to handle color range and precision/packing, shader variants etc.
 			Log::Warning("FidelityFX Super Resolution HDR not implemented yet, turning FSR off"); 
@@ -2407,7 +2407,7 @@ void VQRenderer::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, co
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 
 	const bool bCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f;
-	const bool bFSREnabled = PPParams.IsFSREnabled();
+	const bool bFSREnabled = PPParams.IsFSR1Enabled();
 	const bool bVizualizationEnabled = PPParams.DrawModeEnum != EDrawMode::LIT_AND_POSTPROCESSED;
 	const bool bVizualizationSceneTargetUsed = ShouldUseVisualizationTarget(PPParams);
 	const bool bMotionVectorsEnabled = ShouldUseMotionVectorsTarget(GFXSettings);
@@ -2467,7 +2467,7 @@ void VQRenderer::TransitionForUI(ID3D12GraphicsCommandList* pCmd, const FPostPro
 
 	const bool bVizualizationEnabled = PPParams.DrawModeEnum != EDrawMode::LIT_AND_POSTPROCESSED;
 	const bool bFFXCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f;
-	const bool bFSREnabled = PPParams.IsFSREnabled();
+	const bool bFSREnabled = PPParams.IsFSR1Enabled();
 	
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 
@@ -2503,6 +2503,10 @@ void VQRenderer::TransitionForUI(ID3D12GraphicsCommandList* pCmd, const FPostPro
 	}
 	pCmd->ResourceBarrier(iB, barriers);
 }
+
+
+
+
 
 ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams, bool bHDR)
 {
@@ -2692,7 +2696,7 @@ ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, D
 		}
 #endif
 
-		if (PPParams.IsFSREnabled()) // FSR & CAS are mutually exclusive
+		if (PPParams.IsFSR1Enabled()) // FSR & CAS are mutually exclusive
 		{
 			if (bHDR)
 			{
@@ -2715,7 +2719,7 @@ ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, D
 				D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 				const size_t cbSize = sizeof(unsigned) * 16;
 				pCBufferHeap->AllocConstantBuffer(cbSize, (void**)&pConstBuffer, &cbAddr);
-				memcpy(pConstBuffer, PPParams.FSR_EASUParams.EASUConstantBlock, cbSize);
+				memcpy(pConstBuffer, PPParams.FSR1ShaderParameters.easu.EASUConstantBlock, cbSize);
 
 				ID3D12PipelineState* pPSO = this->GetPSO(EBuiltinPSOs::FFX_FSR1_EASU_CS_PSO);
 				assert(pPSO);
@@ -2751,10 +2755,10 @@ ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, D
 
 				ID3D12PipelineState* pPSO = this->GetPSO(EBuiltinPSOs::FFX_FSR1_RCAS_CS_PSO);
 
-				FPostProcessParameters::FFSR1_RCAS* pConstBuffer = {};
+				AMD_FidelityFX_SuperResolution1::FShaderParameters::RCAS* pConstBuffer = {};
 				D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-				pCBufferHeap->AllocConstantBuffer(sizeof(FPostProcessParameters::FFSR1_RCAS), (void**)&pConstBuffer, &cbAddr);
-				*pConstBuffer = PPParams.FSR_RCASParams;
+				pCBufferHeap->AllocConstantBuffer(sizeof(AMD_FidelityFX_SuperResolution1::FShaderParameters::RCAS), (void**)&pConstBuffer, &cbAddr);
+				*pConstBuffer = PPParams.FSR1ShaderParameters.rcas;
 
 				pCmd->SetPipelineState(pPSO);
 				pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FFX_FSR1));
@@ -2993,7 +2997,7 @@ void VQRenderer::CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, Dynam
 	nullIBV.BufferLocation = 0;
 
 	const bool bFFXCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f;
-	const bool bFSREnabled = PPParams.IsFSREnabled();
+	const bool bFSREnabled = PPParams.IsFSR1Enabled();
 
 	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = ctx.SwapChain.GetCurrentBackBufferRTVHandle();

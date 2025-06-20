@@ -112,11 +112,6 @@ set (SceneFiles
     "Source/Engine/Scene/Quaternion.cpp"
 )
 
-set (PostProcessFiles
-    "Source/Engine/PostProcess/PostProcess.h"
-    "Source/Engine/PostProcess/PostProcess.cpp"
-)
-
 set (UIFiles
     "Source/Engine/UI/VQUI.cpp"
     "Source/Engine/UI/VQUI.h"
@@ -177,7 +172,6 @@ source_group("Source\\Importer" FILES ${ImporterFiles})
 source_group("Source\\Core" FILES ${CoreFiles})
 source_group("Source\\Scene" FILES ${SceneFiles})
 source_group("Source\\UI" FILES ${UIFiles})
-source_group("Source\\PostProcess" FILES ${PostProcessFiles})
 source_group("Source" FILES ${SourceVQE})
 
 set_source_files_properties(${Config} PROPERTIES VS_TOOL_OVERRIDE "Text")

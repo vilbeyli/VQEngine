@@ -438,12 +438,12 @@ void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 		}
 #endif
 
-		if (PPParams.IsFSREnabled())
+		if (PPParams.IsFSR1Enabled())
 		{
 			const uint InputWidth = static_cast<uint> (PPParams.ResolutionScale * fWidth);
 			const uint InputHeight = static_cast<uint>(PPParams.ResolutionScale * fHeight);
-			PPParams.FSR_EASUParams.UpdateEASUConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, fWidth, fHeight);
-			PPParams.FSR_RCASParams.UpdateRCASConstantBlock();
+			PPParams.FSR1ShaderParameters.easu.UpdateConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, fWidth, fHeight);
+			PPParams.FSR1ShaderParameters.rcas.UpdateConstantBlock();
 		}
 	}
 }

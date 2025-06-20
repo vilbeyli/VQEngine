@@ -100,7 +100,14 @@ set(RenderingSources
     "Rendering/LoadingScreenRendering.cpp"
     "Rendering/Batching.cpp"
 )
-
+set (PostProcessHeaders
+    "Rendering/PostProcess/PostProcess.h"
+    "Rendering/PostProcess/Upscaling.h"
+)
+set (PostProcessSources
+    "Rendering/PostProcess/PostProcess.cpp"
+    "Rendering/PostProcess/Upscaling.cpp"
+)
 # Render Passes
 set(RenderPassHeaders
     "Rendering/RenderPass/RenderPass.h"
@@ -210,19 +217,20 @@ source_group("Resources" FILES ${ResourceHeaders} ${ResourceSources})
 source_group("Pipeline" FILES ${PipelineHeaders} ${PipelineSources})
 source_group("Rendering" FILES ${RenderingHeaders} ${RenderingSources})
 source_group("Rendering\\RenderPass" FILES ${RenderPassHeaders} ${RenderPassSources})
+source_group("Rendering\\PostProcess" FILES ${PostProcessHeaders} ${PostProcessSources})
 source_group("Renderer" FILES ${Renderer})
 
 source_group("Shaders"  FILES ${Shaders})
 source_group("Shaders\\ScreenSpaceReflections"  FILES ${ShadersScreenSpaceReflections})
-source_group("Shaders\\AMD-FidelityFX\\CAS"   FILES ${FFX_CAS_Shaders})
-source_group("Shaders\\AMD-FidelityFX\\FSR1"  FILES ${FFX_FSR_Shaders})
-source_group("Shaders\\AMD-FidelityFX\\SPD"   FILES ${FFX_SPD_Shaders})
-source_group("Shaders\\AMD-FidelityFX\\CACAO" FILES ${FFX_CACAO_Shaders})
-source_group("Shaders\\AMD-FidelityFX\\SSSR" FILES ${FFX_SSSR_Shaders})
-source_group("Shaders\\AMD-FidelityFX\\DNSR" FILES ${FFX_DNSR_Shaders})
+source_group("Shaders\\AMD\\CAS"   FILES ${FFX_CAS_Shaders})
+source_group("Shaders\\AMD\\FSR1"  FILES ${FFX_FSR_Shaders})
+source_group("Shaders\\AMD\\SPD"   FILES ${FFX_SPD_Shaders})
+source_group("Shaders\\AMD\\CACAO" FILES ${FFX_CACAO_Shaders})
+source_group("Shaders\\AMD\\SSSR" FILES ${FFX_SSSR_Shaders})
+source_group("Shaders\\AMD\\DNSR" FILES ${FFX_DNSR_Shaders})
 
-source_group("Libs\\AMD-FidelityFX\\CACAO" FILES ${LibFFX_CACAO})
-source_group("Libs\\AMD-FidelityFX\\SSSR" FILES ${LibFFX_SSSR})
+source_group("Libs\\AMD\\CACAO" FILES ${LibFFX_CACAO})
+source_group("Libs\\AMD\\SSSR" FILES ${LibFFX_SSSR})
 source_group("Libs\\D3D12X" FILES ${LibHeadersD3D12X})
 source_group("Libs\\D3D12MA" FILES ${LibD3D12MA})
 
@@ -247,6 +255,7 @@ endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 
 # add_link_options(/SUBSYSTEM:WINDOWS)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/DirectXCompiler/lib/x64)
+link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/AMD/FidelityFX-SDK/PrebuiltSignedDLL/)
 
 add_library(${PROJECT_NAME} STATIC
     ${LibHeadersD3D12X} 
@@ -259,6 +268,7 @@ add_library(${PROJECT_NAME} STATIC
     ${PipelineHeaders} ${PipelineSources}
     ${RenderingHeaders} ${RenderingSources}
     ${RenderPassHeaders} ${RenderPassSources}
+    ${PostProcessHeaders} ${PostProcessSources}
     ${Renderer}
     
     ${Shaders} 
@@ -276,6 +286,15 @@ add_definitions(-DFFX_CACAO_ENABLE_D3D12)
 target_include_directories(${PROJECT_NAME} PUBLIC "../") # Engine / Renderer / Scenes
 target_include_directories(${PROJECT_NAME} PUBLIC "../../") # VQE root
 target_include_directories(${PROJECT_NAME} PUBLIC "./") # Renderer root
+target_include_directories(${PROJECT_NAME} PUBLIC "./Libs/AMD/FidelityFX-SDK/ffx_api/include/")
 
 add_custom_command(TARGET ${PROJECT_NAME} PRE_BUILD
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Libs/AMD/CACAO/build_shaders_dxil.bat)
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Libs/AMD/CACAO/build_shaders_dxil.bat
+)
+
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/Libs/AMD/FidelityFX-SDK/PrebuiltSignedDLL/amd_fidelityfx_dx12.dll"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../Bin/${CMAKE_CFG_INTDIR}/"
+    COMMENT "Copying amd_fidelityfx_dx12.dll to Bin directory"
+)
