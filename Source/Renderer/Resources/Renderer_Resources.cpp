@@ -548,8 +548,23 @@ void VQRenderer::InitializeSRV(SRV_ID srvID, uint heapIndex, TextureID texID, bo
 						srvDesc.Texture2DArray.FirstArraySlice = heapIndex;
 						srvDesc.Texture2DArray.ArraySize = resourceDesc.DepthOrArraySize - heapIndex;
 						pDevice->CreateShaderResourceView(pResource, &srvDesc, srv.GetCPUDescHandle(0 /*+ i*/));
-						Log::Info("InitializeSRV %d[%d] for Texture %d | desc_gpu_addr = 0x%x", srvID, heapIndex, texID, srv.GetGPUDescHandle(heapIndex).ptr);
-						assert(heapIndex < srv.GetSize());
+						//assert(heapIndex < srv.GetSize());
+						if (heapIndex >= srv.GetSize() || heapIndex < 0)
+						{
+							Log::Warning("InitializeSRV %d[%d] for Texture %d | desc_gpu_addr = 0x%x [0x%x - 0x%x]", srvID, heapIndex, texID
+								, srv.GetGPUDescHandle(heapIndex).ptr
+								, srv.GetGPUDescHandle(0).ptr
+								, srv.GetGPUDescHandle(srv.GetSize() - 1).ptr
+							);
+						}
+						else
+						{
+							Log::Info("InitializeSRV %d[%d] for Texture %d | desc_gpu_addr = 0x%x [0x%x - 0x%x]", srvID, heapIndex, texID
+								, srv.GetGPUDescHandle(heapIndex).ptr
+								, srv.GetGPUDescHandle(0).ptr
+								, srv.GetGPUDescHandle(srv.GetSize() - 1).ptr
+							);
+						}
 					}
 				}
 			}
