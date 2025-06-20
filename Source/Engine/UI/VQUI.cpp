@@ -691,7 +691,7 @@ void VQEngine::DrawKeyMappingsWindow()
 		ImGui::Text(" Right Click : Operate Camera");
 		ImGui::Text("  Left Click : Pick object");
 		ImGui::Text("      Scroll : Adjust distance (Orbit Camera)");
-		ImGui::Text("      WASDEQ : Move Camera (Free Camera)");
+		ImGui::Text("      WASDEQ : Move Camera (First Person Camera)");
 		ImGui::Text("       Space : Toggle animation (if available)");
 		ImGui::Text("");
 
