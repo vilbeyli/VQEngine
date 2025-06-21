@@ -47,6 +47,14 @@ See [Releases](https://github.com/vilbeyli/VQE/releases) to download the source 
 <sub><i>How a frame is rendered by VQEngine</i></sub>
 </p>
 
+![image](https://github.com/user-attachments/assets/28e36310-d845-4bea-bbcd-362f5c310571)
+![image](https://github.com/user-attachments/assets/fd95fe70-996f-413a-adb9-06a09bbf339f)
+<p align="center">
+<sub><i>Command list & queue management: rendering, background (lower prio) gpu tasks and dedicated presentation queue</i></sub>
+<br/>
+<sub><i>The dedicated presentation queue, can be toggled on/off from settings</i></sub>
+</p>
+
 <br/>
 
 ![](Screenshots/FrameCapture.png)
