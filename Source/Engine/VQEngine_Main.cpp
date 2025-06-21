@@ -17,18 +17,26 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "VQEngine.h"
-#include "Libs/VQUtils/Source/utils.h"
 #include "GPUMarker.h"
+#include "Scene/SceneViews.h"
+#include "Scene/Scene.h"
 
-#include "../../Libs/DirectXCompiler/inc/dxcapi.h"
+#include "Core/FileParser.h"
+#include "Core/Window.h"
+
+#include "Renderer/Renderer.h"
+
+#include "Libs/VQUtils/Include/utils.h"
+#include "Libs/VQUtils/Include/Timer.h"
+#include "Libs/DirectXCompiler/inc/dxcapi.h"
 #include <cassert>
 
 #ifdef _DEBUG
-constexpr char* BUILD_CONFIG = "-Debug";
+constexpr const char* BUILD_CONFIG = "-Debug";
 #else
-constexpr char* BUILD_CONFIG = "";
+constexpr const char* BUILD_CONFIG = "";
 #endif
-constexpr char* VQENGINE_VERSION = "v0.10.0";
+constexpr const char* VQENGINE_VERSION = "v0.11.0";
 
 
 #define REPORT_SYSTEM_INFO 1
@@ -43,16 +51,10 @@ void ReportSystemInfo(const VQSystemInfo::FSystemInfo& i, bool bDetailed = false
 
 // TODO: heed to W4 warnings, initialize the variables
 VQEngine::VQEngine()
-	: mAssetLoader(mWorkers_ModelLoading, mWorkers_TextureLoading, mWorkers_MeshLoading, mRenderer)
-	, mRenderPass_ZPrePass(mRenderer)
-	, mRenderPass_AO(mRenderer, AmbientOcclusionPass::EMethod::FFX_CACAO)
-	, mRenderPass_SSR(mRenderer)
-	, mRenderPass_ApplyReflections(mRenderer)
-	, mRenderPass_DepthResolve(mRenderer)
-	, mRenderPass_Magnifier(mRenderer, true) // true: outputs to swapchain
-	, mRenderPass_ObjectID(mRenderer)
-	, mRenderPass_Outline(mRenderer)
+	: mAssetLoader(mWorkers_ModelLoading, mWorkers_MeshLoading, *mpRenderer)
 	, mbBuiltinMeshGenFinished(false)
+	, mpRenderer(std::make_unique<VQRenderer>())
+	, mpTimer(std::make_unique<Timer>())
 {}
 
 void VQEngine::MainThread_Tick()
@@ -77,32 +79,27 @@ void VQEngine::MainThread_Tick()
 bool VQEngine::Initialize(const FStartupParameters& Params)
 {
 	SCOPED_CPU_MARKER("VQEngine.Initialize");
-	Timer  t;  t.Reset();  t.Start();
-	Timer t2; t2.Reset(); t2.Start();
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	ThreadPool& WorkerThreads = mWorkers_Update;
 #else
 	ThreadPool& WorkerThreads = mWorkers_Simulation;
 #endif
-
 	InitializeEngineSettings(Params);
+	InitializeEngineThreads();
 	InitializeEnvironmentMaps();
 	InitializeHDRProfiles();
-	float f1 = t.Tick();
+
 	InitializeWindows(Params);
-	float f3 = t.Tick();
 	InitializeInput();
-	InitializeImGUI(mpWinMain->GetHWND());
-	InitializeScenes();
-	float f2 = t.Tick();
+
+	WorkerThreads.AddTask([=]() { InitializeScenes(); });
+
 	// --------------------------------------------------------
 	// Note: Device should be initialized from WinMain thread, 
 	// otherwise device may be lost if launched from RenderDoc
-	mRenderer.Initialize(mSettings.gfx); // Device, Queues, Heaps, WorkerThreads
+	mpRenderer->Initialize(mSettings.gfx); // Device, Queues, Heaps, WorkerThreads
 	// --------------------------------------------------------
-	InitializeEngineThreads();
-	float f4 = t.Tick();
 
 	// offload system info acquisition to a thread as it takes a few seconds on Debug build
 	WorkerThreads.AddTask([&]()
@@ -128,16 +125,6 @@ bool VQEngine::Initialize(const FStartupParameters& Params)
 			}
 		});
 	});
-	float f0 = t.Tick();
-
-#if 0
-	Log::Info("[PERF] VQEngine::Initialize() : %.3fs", t2.StopGetDeltaTimeAndReset());
-	Log::Info("[PERF]    DispatchSysInfo : %.3fs", f0);
-	Log::Info("[PERF]    Settings        : %.3fs", f1);
-	Log::Info("[PERF]    Scenes          : %.3fs", f2);
-	Log::Info("[PERF]    Windows         : %.3fs", f3);
-	Log::Info("[PERF]    Threads         : %.3fs", f4);
-#endif
 	return true; 
 }
 
@@ -145,8 +132,8 @@ void VQEngine::Destroy()
 {
 	ExitThreads();
 
-	mRenderer.Unload();
-	mRenderer.Destroy();
+	mpRenderer->Unload();
+	mpRenderer->Destroy();
 }
 
 
@@ -192,10 +179,12 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	s.bAutomatedTestRun = false;
 	s.NumAutomatedTestFrames = 100; // default num frames to run if -Test is specified in cmd line params
 
-	s.StartupScene = "Default";
+	strncpy_s(s.StartupScene, "Default", sizeof(s.StartupScene));
 
 	// Override #0 : from file
-	FStartupParameters paramFile = VQEngine::ParseEngineSettingsFile();
+	FStartupParameters paramFile;
+	FileParser::ParseEngineSettingsFile(paramFile);
+
 	const FEngineSettings& pf = paramFile.EngineSettings;
 	if (paramFile.bOverrideGFXSetting_bVSync)                      s.gfx.bVsync              = pf.gfx.bVsync;
 	if (paramFile.bOverrideGFXSetting_bAA)                         s.gfx.bAntiAliasing       = pf.gfx.bAntiAliasing;
@@ -224,7 +213,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 		s.NumAutomatedTestFrames = pf.NumAutomatedTestFrames; 
 	}
 
-	if (paramFile.bOverrideENGSetting_StartupScene)              s.StartupScene = pf.StartupScene;
+	if (paramFile.bOverrideENGSetting_StartupScene)              strncpy_s(s.StartupScene, pf.StartupScene, sizeof(s.StartupScene));
 
 
 	// Override #1 : if there's command line params
@@ -254,7 +243,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 		s.NumAutomatedTestFrames = p.NumAutomatedTestFrames;
 	}
 
-	if (Params.bOverrideENGSetting_StartupScene)             s.StartupScene           = p.StartupScene;
+	if (Params.bOverrideENGSetting_StartupScene)               strncpy_s(s.StartupScene, p.StartupScene, sizeof(s.StartupScene));
 }
 
 void VQEngine::InitializeWindows(const FStartupParameters& Params)
@@ -282,6 +271,7 @@ void VQEngine::InitializeWindows(const FStartupParameters& Params)
 
 	fnInitializeWindow(mSettings.WndMain, Params.hExeInstance, mpWinMain, "Main Window");
 	Log::Info("Created main window<0x%x>: %dx%d", mpWinMain->GetHWND(), mpWinMain->GetWidth(), mpWinMain->GetHeight());
+	mSignalMainWindowCreated.NotifyAll();
 
 	if (mSettings.bShowDebugWindow)
 	{
@@ -297,14 +287,13 @@ void VQEngine::InitializeWindows(const FStartupParameters& Params)
 void VQEngine::InitializeHDRProfiles()
 {
 	SCOPED_CPU_MARKER("ParseHDRProfilesFile");
-	mDisplayHDRProfiles = VQEngine::ParseHDRProfilesFile();
+	mDisplayHDRProfiles = FileParser::ParseHDRProfilesFile();
 }
 
 void VQEngine::InitializeEnvironmentMaps()
 {
 	SCOPED_CPU_MARKER("InitializeEnvironmentMaps");
-	mbEnvironmentMapPreFilter.store(false);
-	std::vector<FEnvironmentMapDescriptor> descs = VQEngine::ParseEnvironmentMapsFile();
+	std::vector<FEnvironmentMapDescriptor> descs = FileParser::ParseEnvironmentMapsFile();
 	for (const FEnvironmentMapDescriptor& desc : descs)
 	{
 		mLookup_EnvironmentMapDescriptors[desc.Name] = desc;
@@ -319,7 +308,7 @@ void VQEngine::InitializeScenes()
 
 	// Read Scene Index Mappings from file and initialize @mSceneNames
 	{
-		std::vector<std::pair<std::string, int>> SceneIndexMappings = VQEngine::ParseSceneIndexMappingFile();
+		std::vector<std::pair<std::string, int>> SceneIndexMappings = FileParser::ParseSceneIndexMappingFile();
 		for (auto& nameIndex : SceneIndexMappings)
 			mSceneNames.push_back(std::move(nameIndex.first));
 	}
@@ -344,7 +333,7 @@ void VQEngine::InitializeScenes()
 		if (!bSceneNameMatch)
 		{
 			it2 = mSceneNames.begin();
-			Log::Error("Couldn't find scene '%s' among scene file names, loading level '%s' by default.", mSettings.StartupScene.c_str(), it2->c_str());
+			Log::Error("Couldn't find scene '%s' among scene file names, loading level '%s' by default.", mSettings.StartupScene, it2->c_str());
 		}
 	}
 	mIndex_SelectedScene = static_cast<int>(it2 - mSceneNames.begin());
@@ -369,7 +358,6 @@ void VQEngine::InitializeEngineThreads()
 	mbStopAllThreads.store(false);
 
 	mWorkers_ModelLoading.Initialize(HWCores    , "LoadWorkers_Model"  , 0xFFDDAA00);
-	mWorkers_TextureLoading.Initialize(HWThreads, "LoadWorkers_Texture", 0xFFCC0077);
 	mWorkers_MeshLoading.Initialize(HWCores     , "LoadWorkers_Mesh"   , 0xFFEE2266);
 
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
@@ -390,7 +378,6 @@ void VQEngine::ExitThreads()
 {
 	SCOPED_CPU_MARKER("ExitThreads");
 	mWorkers_ModelLoading.Destroy();
-	mWorkers_TextureLoading.Destroy();
 	mWorkers_MeshLoading.Destroy();
 	mbStopAllThreads.store(true);
 

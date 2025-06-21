@@ -23,15 +23,30 @@
 	// Enable PIX markers for RGP, must be included before pix3.h
 	#define VQE_ENABLE_RGP_PIX 0
 #endif
-#include "WinPixEventRuntime/Include/WinPixEventRuntime/pix3.h"
 
+#define VC_EXTRALEAN
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+#include "Libs/WinPixEventRuntime/Include/WinPixEventRuntime/pix3.h"
+#ifdef max
+#error "max macro is defined"
+#endif
+
+#if 0 // Disable markers for ASAN builds, as it causes issues with memory tracking
+#define SCOPED_GPU_MARKER(pCmd, pStr)             do{}while(0)
+#define SCOPED_CPU_MARKER(pStr)                   do{}while(0)
+#define SCOPED_CPU_MARKER_C(pStr, PIXColor)       do{}while(0)
+#define SCOPED_CPU_MARKER_F(pStr, ...)            do{}while(0)
+#define SCOPED_CPU_MARKER_CF(PIXColor, pStr, ...) do{}while(0)
+#else
 #define SCOPED_GPU_MARKER(pCmd, pStr)             ScopedGPUMarker GPUMarker(pCmd,pStr)
 
 #define SCOPED_CPU_MARKER(pStr)                   ScopedMarker    CPUMarker(pStr)
 #define SCOPED_CPU_MARKER_C(pStr, PIXColor)       ScopedMarker    CPUMarker(pStr, PIXColor)
 #define SCOPED_CPU_MARKER_F(pStr, ...)            ScopedMarker    CPUMarker(PIX_COLOR_DEFAULT, pStr, __VA_ARGS__)
 #define SCOPED_CPU_MARKER_CF(PIXColor, pStr, ...) ScopedMarker    CPUMarker(PIXColor, pStr, __VA_ARGS__)
-
+#endif
 
 class ScopedMarker
 {

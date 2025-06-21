@@ -1,13 +1,12 @@
 #include "Scenes.h"
-
-#include "../Engine/Core/Input.h"
+#include "Engine/Scene/SceneViews.h"
+#include "Engine/Core/Input.h"
+#include "Engine/Core/Window.h"
+#include "Libs/imgui/imgui.h"
 
 using namespace DirectX;
 
 static void Toggle(bool& b) { b = !b; }
-
-
-#include "Libs/imgui/imgui.h"
 
 void DefaultScene::UpdateScene(float dt, FSceneView& SceneView)
 {

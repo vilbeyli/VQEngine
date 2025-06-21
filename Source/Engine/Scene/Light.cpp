@@ -18,7 +18,7 @@
 
 #include "Light.h"
 
-#include "Libs/VQUtils/Source/Log.h"
+#include "Libs/VQUtils/Include/Log.h"
 
 using namespace DirectX;
 
@@ -130,7 +130,7 @@ DirectX::XMMATRIX Light::GetWorldTransformationMatrix() const
 	return tf.matWorldTransformation();
 }
 
-DirectX::XMMATRIX Light::GetViewProjectionMatrix(Texture::CubemapUtility::ECubeMapLookDirections PointLightFace) const
+DirectX::XMMATRIX Light::GetViewProjectionMatrix(CubemapUtility::ECubeMapLookDirections PointLightFace) const
 {
 	XMFLOAT2 ViewportSize = XMFLOAT2((float)this->ViewportX, (float)this->ViewportY);
 
@@ -170,9 +170,9 @@ DirectX::XMMATRIX Light::CalculateSpotLightViewMatrix(const Transform& mTransfor
 	return XMMatrixLookAtLH(pos, taraget, up);
 }
 
-DirectX::XMMATRIX Light::CalculatePointLightViewMatrix(Texture::CubemapUtility::ECubeMapLookDirections lookDir, const DirectX::XMFLOAT3& position)
+DirectX::XMMATRIX Light::CalculatePointLightViewMatrix(CubemapUtility::ECubeMapLookDirections lookDir, const DirectX::XMFLOAT3& position)
 {
-	return Texture::CubemapUtility::CalculateViewMatrix(lookDir, position);
+	return CubemapUtility::CalculateViewMatrix(lookDir, position);
 }
 
 DirectX::XMMATRIX Light::CalculateDirectionalLightViewMatrix(const Light& mDirLight)

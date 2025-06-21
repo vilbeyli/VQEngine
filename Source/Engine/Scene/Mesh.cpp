@@ -18,7 +18,7 @@
 
 #include "Mesh.h"
 
-#include "../../Renderer/Renderer.h"
+#include "Renderer/Renderer.h"
 #include <cassert>
 
 #define VERBOSE_LOGGING 0
@@ -54,7 +54,41 @@ std::pair<BufferID, BufferID> Mesh::GetIABufferIDs(int lod /*= 0*/) const
 	return mLODBufferPairs.back().GetIABufferPair();
 }
 
-BufferID GeometryGenerator::CreateBuffer(VQRenderer* pRenderer, const FBufferDesc& desc)
+BufferID Mesh::CreateBuffer(VQRenderer* pRenderer, const FBufferDesc& desc) 
 {
-	return pRenderer->CreateBuffer(desc);
+	pRenderer->WaitHeapsInitialized(); 
+	return pRenderer->CreateBuffer(desc); 
+}
+
+void Mesh::CreateBuffers(VQRenderer* pRenderer)
+{
+	if (!this->mLODBufferPairs.empty() || !mGeometryData.IsValid())
+		return;
+
+	for (size_t LOD = 0; LOD < mGeometryData.LODVertices.size(); ++LOD)
+	{
+		FBufferDesc bufferDesc = {};
+		char VBName[128]; _snprintf_s(VBName, sizeof(VBName), "%s_LOD[%zu]_VB", mGeometryData.Name.c_str(), LOD);
+		char IBName[128]; _snprintf_s(IBName, sizeof(IBName), "%s_LOD[%zu]_IB", mGeometryData.Name.c_str(), LOD);
+
+		bufferDesc.Type = VERTEX_BUFFER;
+		bufferDesc.NumElements = static_cast<unsigned>(mGeometryData.LODVertices[LOD].size() / mGeometryData.VertexStrides[LOD]);
+		bufferDesc.pData = mGeometryData.LODVertices[LOD].data();
+		bufferDesc.Stride = mGeometryData.VertexStrides[LOD];
+		bufferDesc.Name = VBName;
+		BufferID vertexBufferID = CreateBuffer(pRenderer, bufferDesc);
+
+		bufferDesc.Type = INDEX_BUFFER;
+		bufferDesc.NumElements = mGeometryData.NumIndices[LOD];
+		bufferDesc.pData = mGeometryData.LODIndices[LOD].data();
+		bufferDesc.Stride = mGeometryData.IndexStrides[LOD];
+		bufferDesc.Name = IBName;
+		BufferID indexBufferID = CreateBuffer(pRenderer, bufferDesc);
+
+		mLODBufferPairs.push_back({ vertexBufferID, indexBufferID });
+		mNumIndicesPerLODLevel.push_back(bufferDesc.NumElements);
+	}
+
+	// Clear geometry data
+	mGeometryData = GeometryDataStorage();
 }

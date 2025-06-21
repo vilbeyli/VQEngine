@@ -4,15 +4,18 @@
 [submodule "Source/Renderer/Libs/D3DX12"]
 	path = Source/Renderer/Libs/D3DX12
 	url = https://github.com/vilbeyli/D3DX12.git
-[submodule "Libs/D3D12MA"]
-	path = Libs/D3D12MA
+[submodule "Source/Renderer/Libs/D3D12MA"]
+	path = Source/Renderer/Libs/D3D12MA
 	url = https://github.com/vilbeyli/D3D12MemoryAllocator.git
-[submodule "Libs/assimp"]
-	path = Libs/assimp
-	url = https://github.com/assimp/assimp.git
 [submodule "Data/Models"]
 	path = Data/Models
 	url = https://github.com/vilbeyli/VQModels.git
 [submodule "Libs/imgui"]
 	path = Libs/imgui
 	url = https://github.com/vilbeyli/imgui.git
+[submodule "Libs/cgltf"]
+	path = Libs/cgltf
+	url = https://github.com/jkuhlmann/cgltf.git
+[submodule "Data/Textures/PBR"]
+	path = Data/Textures/PBR
+	url = https://github.com/vilbeyli/PBRCollection.git

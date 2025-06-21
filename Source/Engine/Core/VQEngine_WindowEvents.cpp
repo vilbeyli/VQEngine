@@ -17,6 +17,9 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "../VQEngine.h"
+#include "Renderer/Renderer.h"
+#include "Libs/VQutils/Include/Log.h"
+#include "Engine/Core/Window.h"
 #include "Input.h"
 #include "imgui.h"
 
@@ -31,7 +34,6 @@ static void LogWndMsg(UINT uMsg, HWND hwnd);
 
 // ===================================================================================================================================
 // WINDOW PROCEDURE
-
 // ===================================================================================================================================
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -207,7 +209,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 // WINDOW EVENTS
 // ===================================================================================================================================
 // Due to multi-threading, this thread will record the events and 
-// Render Thread will process the queue at the beginning & end of a render loop
+// Render Thread will process its queue at the beginning & end of a render loop
 void VQEngine::OnWindowResize(HWND hWnd)
 {
 	// https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/d3d10-graphics-programming-guide-dxgi#handling-window-resizing
@@ -278,7 +280,7 @@ void VQEngine::DispatchHDRSwapchainTransitionEvents(HWND hwnd)
 
 	if (bCurrentMonitorWasSupportingHDR ^ bCurrentMonitorSupportsHDR)
 	{
-		DXGI_FORMAT FORMAT = bCurrentMonitorSupportsHDR ? PREFERRED_HDR_FORMAT : PREFERRED_SDR_FORMAT;
+		DXGI_FORMAT FORMAT = bCurrentMonitorSupportsHDR ? VQRenderer::PREFERRED_HDR_FORMAT : VQRenderer::PREFERRED_SDR_FORMAT;
 		Log::Info("OnWindowMove<%0x, %s>() : Window moved to %s monitor."
 			, hwnd
 			, GetWindowName(hwnd).c_str()

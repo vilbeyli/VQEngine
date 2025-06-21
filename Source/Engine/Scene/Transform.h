@@ -84,15 +84,16 @@ public:
 	DirectX::XMMATRIX WorldTransformationMatrix_NoScale() const;
 	DirectX::XMMATRIX RotationMatrix() const;
 
+	// builds normal matrix from world matrix, ignoring translation
+	// and using inverse-transpose of rotation/scale matrix
 	static DirectX::XMMATRIX NormalMatrix(const DirectX::XMMATRIX& world);
 
 	//----------------------------------------------------------------------------------------------------------------
 	// DATA
 	//----------------------------------------------------------------------------------------------------------------
-	DirectX::XMFLOAT3       _position;
 	Quaternion              _rotation;
+	DirectX::XMFLOAT3       _position;
 	DirectX::XMFLOAT3       _scale;
-
 	DirectX::XMFLOAT3       _positionPrev;
 };
 

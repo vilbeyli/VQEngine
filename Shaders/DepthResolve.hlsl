@@ -36,7 +36,7 @@ cbuffer DepthResolveParameters : register(b0)
 [numthreads(8, 8, 1)]
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 { 
-	if (dispatchThreadId.x > ImageSizeX || dispatchThreadId.y > ImageSizeY)
+	if (dispatchThreadId.x >= ImageSizeX || dispatchThreadId.y >= ImageSizeY)
 	{
 		return;
 	}

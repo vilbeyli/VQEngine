@@ -20,7 +20,12 @@
 #include "GPUMarker.h"
 
 #include "Libs/DirectXCompiler/inc/dxcapi.h"
-#include "Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Include/utils.h"
+#include "Libs/VQUtils/Include/Timer.h"
+#include "Renderer/Renderer.h"
+#include "Core/Window.h"
+#include "Scene/SceneViews.h"
+#include "Scene/Scene.h"
 
 #include <Windows.h>
 #include <ShellScalingAPI.h>
@@ -30,7 +35,7 @@
 #include <cstdlib>
 
 
-void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmdl)
+static void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmdl)
 {
 	SCOPED_CPU_MARKER("ParseCommandLineParameters");
 	const std::string StrCmdLineParams = pScmdl;
@@ -39,7 +44,7 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 	{
 		const std::vector<std::string> paramNameValue = StrUtil::split(param, '=');
 		const std::string& paramName = paramNameValue.front();
-		std::string  paramValue = paramNameValue.size() > 1 ? paramNameValue[1] : "";
+		std::string paramValue = paramNameValue.size() > 1 ? paramNameValue[1] : "";
 
 		//
 		// Log Settings
@@ -51,7 +56,7 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 		if (paramName == "-LogFile")
 		{
 			refStartupParams.LogInitParams.bLogFile = true;
-			refStartupParams.LogInitParams.LogFilePath = std::move(paramValue);
+			strncpy_s(refStartupParams.LogInitParams.LogFilePath, paramValue.c_str(), sizeof(refStartupParams.LogInitParams.LogFilePath));
 		}
 
 		//
@@ -163,7 +168,7 @@ void ParseCommandLineParameters(FStartupParameters& refStartupParams, PSTR pScmd
 		if (paramName == "-Scene")
 		{
 			refStartupParams.bOverrideENGSetting_StartupScene = true;
-			refStartupParams.EngineSettings.StartupScene = paramValue;
+			strncpy_s(refStartupParams.EngineSettings.StartupScene, paramValue.c_str(), sizeof(refStartupParams.EngineSettings.StartupScene));
 		}
 	}
 }
@@ -184,7 +189,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrevInst, PSTR pScmdl, int iCmdSh
 	
 	{
 		SCOPED_CPU_MARKER("Log::Initialize");
-		Log::Initialize(StartupParameters.LogInitParams);
+		Log::Initialize(StartupParameters.LogInitParams.bLogConsole, StartupParameters.LogInitParams.bLogFile, StartupParameters.LogInitParams.LogFilePath);
 	}
 
 	{

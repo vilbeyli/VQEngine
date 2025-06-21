@@ -19,7 +19,6 @@
 
 #include <DirectXMath.h>
 #include <array>
-#include <vector>
 
 //------------------------------------------------------------------------------------------------------------------------------
 //
@@ -28,7 +27,7 @@
 //------------------------------------------------------------------------------------------------------------------------------
 struct FFrustumPlaneset
 {	// plane equations: aX + bY + cZ + d = 0
-	DirectX::XMFLOAT4 abcd[6]; // planes[6]: r, l, t, b, n, f
+	DirectX::XMVECTOR abcd[6]; // planes[6]: r, l, t, b, n, f
 	enum EPlaneset
 	{
 		PL_RIGHT = 0,
@@ -48,54 +47,23 @@ struct FFrustumPlaneset
 	// 
 	inline static FFrustumPlaneset ExtractFromMatrix(const DirectX::XMMATRIX& projectionTransformation, const bool bNormalize = false)
 	{
-		const DirectX::XMMATRIX& m = projectionTransformation;
+		DirectX::XMMATRIX m = DirectX::XMMatrixTranspose(projectionTransformation);
 
 		FFrustumPlaneset viewPlanes;
-		viewPlanes.abcd[FFrustumPlaneset::PL_RIGHT] = DirectX::XMFLOAT4(
-			m.r[0].m128_f32[3] - m.r[0].m128_f32[0],
-			m.r[1].m128_f32[3] - m.r[1].m128_f32[0],
-			m.r[2].m128_f32[3] - m.r[2].m128_f32[0],
-			m.r[3].m128_f32[3] - m.r[3].m128_f32[0]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_LEFT] = DirectX::XMFLOAT4(
-			m.r[0].m128_f32[3] + m.r[0].m128_f32[0],
-			m.r[1].m128_f32[3] + m.r[1].m128_f32[0],
-			m.r[2].m128_f32[3] + m.r[2].m128_f32[0],
-			m.r[3].m128_f32[3] + m.r[3].m128_f32[0]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_TOP] = DirectX::XMFLOAT4(
-			m.r[0].m128_f32[3] - m.r[0].m128_f32[1],
-			m.r[1].m128_f32[3] - m.r[1].m128_f32[1],
-			m.r[2].m128_f32[3] - m.r[2].m128_f32[1],
-			m.r[3].m128_f32[3] - m.r[3].m128_f32[1]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_BOTTOM] = DirectX::XMFLOAT4(
-			m.r[0].m128_f32[3] + m.r[0].m128_f32[1],
-			m.r[1].m128_f32[3] + m.r[1].m128_f32[1],
-			m.r[2].m128_f32[3] + m.r[2].m128_f32[1],
-			m.r[3].m128_f32[3] + m.r[3].m128_f32[1]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_FAR] = DirectX::XMFLOAT4(
-			m.r[0].m128_f32[3] - m.r[0].m128_f32[2],
-			m.r[1].m128_f32[3] - m.r[1].m128_f32[2],
-			m.r[2].m128_f32[3] - m.r[2].m128_f32[2],
-			m.r[3].m128_f32[3] - m.r[3].m128_f32[2]
-		);
-		viewPlanes.abcd[FFrustumPlaneset::PL_NEAR] = DirectX::XMFLOAT4(
-			m.r[0].m128_f32[2],
-			m.r[1].m128_f32[2],
-			m.r[2].m128_f32[2],
-			m.r[3].m128_f32[2]
-		);
+		viewPlanes.abcd[FFrustumPlaneset::PL_RIGHT]  = DirectX::XMVectorSubtract(m.r[3], m.r[0]);
+		viewPlanes.abcd[FFrustumPlaneset::PL_LEFT]   = DirectX::XMVectorAdd(m.r[3], m.r[0]);
+		viewPlanes.abcd[FFrustumPlaneset::PL_TOP]    = DirectX::XMVectorSubtract(m.r[3], m.r[1]);
+		viewPlanes.abcd[FFrustumPlaneset::PL_BOTTOM] = DirectX::XMVectorAdd(m.r[3], m.r[1]);
+		viewPlanes.abcd[FFrustumPlaneset::PL_FAR]    = DirectX::XMVectorSubtract(m.r[3], m.r[2]);
+		viewPlanes.abcd[FFrustumPlaneset::PL_NEAR]   = m.r[2];
 
 		if (bNormalize)
 		{
 			for (int i = 0; i < 6; ++i)
 			{
-				DirectX::XMVECTOR vPlane = DirectX::XMLoadFloat4(&viewPlanes.abcd[i]);
+				DirectX::XMVECTOR& vPlane = viewPlanes.abcd[i];
 				DirectX::XMVECTOR vLen = DirectX::XMVectorSqrt(DirectX::XMVector3Dot(vPlane, vPlane));
 				vPlane = DirectX::XMVectorMultiply(vPlane, DirectX::XMVectorReciprocal(vLen));
-				DirectX::XMStoreFloat4(&viewPlanes.abcd[i], vPlane);
 			}
 		}
 

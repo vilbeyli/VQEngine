@@ -17,14 +17,12 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #pragma once
+#include "Platform.h"
+#include <dxgiformat.h>
 
-#define NOMINMAX
-#include <Windows.h>
-#include <dxgi1_6.h>
+#include "Libs/VQUtils/Include/Multithreading/EventSignal.h"
 
-#include "Libs/VQUtils/Source/Multithreading.h"
-
-#include "../../Renderer/HDR.h"
+#include "Renderer/Rendering/HDR.h"
 
 //
 // EVENT BASE CLASS
@@ -47,6 +45,7 @@ enum EEventType
 	SET_FULLSCREEN_EVENT,
 	SET_VSYNC_EVENT,
 	SET_SWAPCHAIN_FORMAT_EVENT,
+	SET_SWAPCHAIN_PRESENTATION_QUEUE,
 	SET_HDR10_STATIC_METADATA_EVENT,
 
 	// Windows->VQE input events
@@ -115,7 +114,7 @@ struct WindowCloseEvent : public IEvent
 {
 	WindowCloseEvent(HWND hwnd_) : IEvent(EEventType::WINDOW_CLOSE_EVENT, hwnd_){}
 
-	mutable Signal Signal_WindowDependentResourcesDestroyed;
+	mutable EventSignal Signal_WindowDependentResourcesDestroyed;
 };
 
 struct ToggleFullscreenEvent : public IEvent
@@ -137,6 +136,11 @@ struct SetSwapchainFormatEvent : public IEvent
 {
 	SetSwapchainFormatEvent(HWND hwnd_, DXGI_FORMAT format_) : IEvent(EEventType::SET_SWAPCHAIN_FORMAT_EVENT, hwnd_), format(format_) {}
 	DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
+};
+struct SetSwapchainPresentationQueueEvent : public IEvent
+{
+	SetSwapchainPresentationQueueEvent(HWND hwnd_, bool bUseDedicatedPresentationQueueIn) : IEvent(EEventType::SET_SWAPCHAIN_PRESENTATION_QUEUE, hwnd_), bUseDedicatedPresentationQueue(bUseDedicatedPresentationQueueIn) {}
+	bool bUseDedicatedPresentationQueue = false;
 };
 struct SetStaticHDRMetaDataEvent : public IEvent
 {

@@ -18,14 +18,9 @@
 
 #include "VQEngine.h"
 #include "GPUMarker.h"
-
-#include <d3d12.h>
-#include <dxgi.h>
-
-#include "RenderPass/AmbientOcclusion.h"
-#include "RenderPass/DepthPrePass.h"
-
-#include "VQEngine_RenderCommon.h"
+#include "Engine/Core/Window.h"
+#include "Libs/VQUtils/Include/Log.h"
+#include "Libs/VQUtils/Include/Timer.h"
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 //
@@ -43,7 +38,7 @@ void VQEngine::SimulationThread_Main()
 	bool bQuit = false;
 	while (!mbStopAllThreads && !bQuit)
 	{
-		dt = mTimer.Tick(); // update timer
+		dt = mpTimer->Tick(); // update timer
 
 		SimulationThread_Tick(dt);
 
@@ -51,8 +46,8 @@ void VQEngine::SimulationThread_Main()
 
 		// SimulationThread_Logging()
 		constexpr int LOGGING_PERIOD = 4; // seconds
-		static float LAST_LOG_TIME = mTimer.TotalTime();
-		const float TotalTime = mTimer.TotalTime();
+		static float LAST_LOG_TIME = mpTimer->TotalTime();
+		const float TotalTime = mpTimer->TotalTime();
 		if (TotalTime - LAST_LOG_TIME > 4)
 		{
 			Log::Info("SimulationThread_Tick() : dt=%.2f ms (Sleep=%.2f)", dt * 1000.0f, FrameLimiterTimeSpent);
@@ -69,10 +64,7 @@ void VQEngine::SimulationThread_Initialize()
 	SCOPED_CPU_MARKER_C("SimulationThread_Initialize()", 0xFF007777);
 	mNumSimulationTicks = 0;
 
-#define PARALLEL_INIT 1
-
-#if PARALLEL_INIT
-	Signal UpdateThreadInitializeFinished;
+	EventSignal UpdateThreadInitializeFinished;
 	std::atomic<int> ThreadDone = 0;
 	mWorkers_Simulation.AddTask([=, &UpdateThreadInitializeFinished, &ThreadDone]()
 	{
@@ -81,20 +73,7 @@ void VQEngine::SimulationThread_Initialize()
 		ThreadDone++;
 		UpdateThreadInitializeFinished.NotifyOne();
 	});
-#endif
 	RenderThread_Inititalize();
-
-#if !PARALLEL_INIT
-	UpdateThread_Inititalize();
-#endif
-
-#if PARALLEL_INIT
-	{
-		SCOPED_CPU_MARKER_C("WAIT_UpdateWorkers", 0xFFFF0000);
-		if(ThreadDone.load() == 0)
-			UpdateThreadInitializeFinished.Wait();
-	}
-#endif
 
 	Log::Info("SimulationThread Initialized.");
 }

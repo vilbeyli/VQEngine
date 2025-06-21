@@ -74,7 +74,7 @@ public:
 	{
 		ETextureType type; // material textures: diffuse/normal/alpha_mask/...
 		std::string TexturePath;
-		std::shared_future<TextureID> texLoadResult;
+		TextureID TexID;
 	};
 	using TextureLoadResults_t = std::unordered_multimap<MaterialID, FTextureLoadResult>;
 
@@ -99,16 +99,13 @@ public:
 	};
 	struct FMaterialTextureAssignments
 	{
-		FMaterialTextureAssignments(const ThreadPool& workers) : mWorkersThreads(workers) {}
 		void DoAssignments(
 			Scene* pScene, 
 			std::mutex& mtxTexturePaths,
 			std::unordered_map<TextureID, std::string>& TexturePaths, 
 			VQRenderer* pRenderer
 		);
-		void WaitForTextureLoads();
 
-		const ThreadPool&                       mWorkersThreads; // to check if pool IsExiting()
 		std::vector<FMaterialTextureAssignment> mAssignments;
 		TextureLoadResults_t                    mTextureLoadResults;
 	};
@@ -118,13 +115,9 @@ public:
 	// 
 	AssetLoader(
 		  ThreadPool& WorkerThreads_Model
-		, ThreadPool& WorkerThreads_Texture
 		, ThreadPool& WorkerThreads_Mesh
 		, VQRenderer& renderer
 	);
-
-	inline const ThreadPool& GetThreadPool_TextureLoad() const { return mWorkers_TextureLoad; }
-
 
 	void QueueModelLoad(GameObject* pObject, const std::string& ModelPath, const std::string& ModelName);
 	void QueueTextureLoad(TaskID taskID, const FTextureLoadParams& TexLoadParam);
@@ -132,15 +125,14 @@ public:
 	ModelLoadResults_t   StartLoadingModels(Scene* pScene);
 	TextureLoadResults_t StartLoadingTextures(TaskID taskID);
 
-private:
-	static ModelID ImportModel(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName = "NONE");
+
+	static ModelID ImportGLTF(Scene* pScene, AssetLoader* pAssetLoader, VQRenderer* pRenderer, const std::string& objFilePath, std::string ModelName);
 
 	//
 	// DATA
 	//
 public:
 	ThreadPool& mWorkers_ModelLoad;
-	ThreadPool& mWorkers_TextureLoad;
 	ThreadPool& mWorkers_MeshLoad;
 private:
 	VQRenderer& mRenderer;

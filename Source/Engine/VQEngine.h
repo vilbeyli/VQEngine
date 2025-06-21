@@ -20,34 +20,26 @@
 
 #include "Core/Types.h"
 #include "Core/Platform.h"
-#include "Core/Window.h"
-#include "Core/Events.h"
+#include "Core/IWindow.h"
 #include "Core/Input.h"
 
-#include "Scene/Scene.h"
 #include "Scene/Mesh.h"
 #include "Scene/Camera.h"
-#include "Scene/Transform.h"
 
+#include "Renderer/Rendering/EnvironmentMapRendering.h"
+#include "EnvironmentMap.h"
 #include "Settings.h"
 #include "AssetLoader.h"
+#include "LoadingScreen.h"
+
 #include "UI/VQUI.h"
 
-#include "RenderPass/AmbientOcclusion.h"
-#include "RenderPass/DepthPrePass.h"
-#include "RenderPass/DepthMSAAResolve.h"
-#include "RenderPass/ScreenSpaceReflections.h"
-#include "RenderPass/ApplyReflections.h"
-#include "RenderPass/MagnifierPass.h"
-#include "RenderPass/ObjectIDPass.h"
-#include "RenderPass/OutlinePass.h"
-
-#include "Libs/VQUtils/Source/Multithreading.h"
-#include "Libs/VQUtils/Source/Timer.h"
-
-#include "Source/Renderer/Renderer.h"
+#include "Libs/VQUtils/Include/Multithreading/BufferedContainer.h"
+#include "Libs/VQUtils/Include/Multithreading/ThreadPool.h"
+#include "Libs/VQUtils/Include/SystemInfo.h"
 
 #include <memory>
+#include <latch>
 
 //--------------------------------------------------------------------
 // MUILTI-THREADING 
@@ -62,176 +54,21 @@
 #define DEBUG_LOG_THREAD_SYNC_VERBOSE 0
 //--------------------------------------------------------------------
 
+// Forward Declarations
 struct ImGuiContext;
+class VQRenderer;
+struct FSceneRenderOptions;
+class Scene;
+struct FSceneStats;
+struct FPostProcessParameters;
+class Timer;
+class Window;
+
+using pfnWndProc_t = LRESULT(CALLBACK*)(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 //
 // DATA STRUCTS
 //
-
-
-struct FLoadingScreenData
-{
-	std::array<float, 4> SwapChainClearColor;
-
-	int SelectedLoadingScreenSRVIndex = INVALID_ID;
-	std::mutex Mtx;
-	std::vector<SRV_ID> SRVs;
-
-	SRV_ID GetSelectedLoadingScreenSRV_ID() const;
-	void RotateLoadingScreenImageIndex();
-
-	// TODO: animation resources
-};
-
-
-struct FEnvironmentMapDescriptor
-{
-	std::string Name;
-	std::string FilePath;
-	float MaxContentLightLevel = 0.0f;
-};
-struct FEnvironmentMapRenderingResources
-{
-	TextureID Tex_HDREnvironment = INVALID_ID; // equirect input
-	TextureID Tex_IrradianceDiff = INVALID_ID; // Kd
-	TextureID Tex_IrradianceSpec = INVALID_ID; // Ks
-	
-	// temporary resources
-	TextureID Tex_BlurTemp = INVALID_ID;
-	TextureID Tex_IrradianceDiffBlurred = INVALID_ID; // Kd
-
-	RTV_ID RTV_IrradianceDiff = INVALID_ID;
-	RTV_ID RTV_IrradianceSpec = INVALID_ID;
-
-	SRV_ID SRV_HDREnvironment = INVALID_ID;
-	SRV_ID SRV_IrradianceDiff = INVALID_ID;
-	SRV_ID SRV_IrradianceSpec = INVALID_ID;
-	SRV_ID SRV_IrradianceDiffFaces[6] = { INVALID_ID };
-	SRV_ID SRV_IrradianceDiffBlurred = INVALID_ID;
-
-	UAV_ID UAV_BlurTemp = INVALID_ID;
-	UAV_ID UAV_IrradianceDiffBlurred = INVALID_ID;
-
-	SRV_ID SRV_BlurTemp = INVALID_ID;
-
-	SRV_ID SRV_BRDFIntegrationLUT = INVALID_ID;
-
-	//
-	// HDR10 Static Metadata Parameters -------------------------------
-	// https://docs.microsoft.com/en-us/windows/win32/api/dxgi1_5/ns-dxgi1_5-dxgi_hdr_metadata_hdr10
-	//
-	// The maximum content light level (MaxCLL). This is the nit value 
-	// corresponding to the brightest pixel used anywhere in the content.
-	int MaxContentLightLevel = 0;
-
-	// The maximum frame average light level (MaxFALL). 
-	// This is the nit value corresponding to the average luminance of 
-	// the frame which has the brightest average luminance anywhere in 
-	// the content.
-	int MaxFrameAverageLightLevel = 0;
-
-	int GetNumSpecularIrradianceCubemapLODLevels(const VQRenderer& Renderer) const;
-};
-
-struct FRenderingResources{};
-struct FRenderingResources_MainWindow : public FRenderingResources
-{
-	TextureID Tex_ShadowMaps_Spot                    = INVALID_ID;
-	TextureID Tex_ShadowMaps_Point                   = INVALID_ID;
-	TextureID Tex_ShadowMaps_Directional             = INVALID_ID;
-
-	TextureID Tex_SceneColorMSAA                     = INVALID_ID;
-	TextureID Tex_SceneColor                         = INVALID_ID;
-	TextureID Tex_SceneColorBoundingVolumes          = INVALID_ID;
-	TextureID Tex_SceneDepthMSAA                     = INVALID_ID;
-	TextureID Tex_SceneDepth                         = INVALID_ID;
-	TextureID Tex_SceneDepthResolve                  = INVALID_ID;
-	TextureID Tex_SceneNormalsMSAA                   = INVALID_ID;
-	TextureID Tex_SceneNormals                       = INVALID_ID;
-	TextureID Tex_AmbientOcclusion                   = INVALID_ID;
-	TextureID Tex_SceneVisualization                 = INVALID_ID;
-	TextureID Tex_SceneVisualizationMSAA             = INVALID_ID;
-	TextureID Tex_SceneMotionVectors                 = INVALID_ID;
-	TextureID Tex_SceneMotionVectorsMSAA             = INVALID_ID;
-
-	TextureID Tex_DownsampledSceneDepth              = INVALID_ID;
-	TextureID Tex_DownsampledSceneDepthAtomicCounter = INVALID_ID;
-
-	TextureID Tex_PostProcess_BlurIntermediate       = INVALID_ID;
-	TextureID Tex_PostProcess_BlurOutput             = INVALID_ID;
-	TextureID Tex_PostProcess_TonemapperOut          = INVALID_ID;
-	TextureID Tex_PostProcess_VisualizationOut       = INVALID_ID;
-	TextureID Tex_PostProcess_FFXCASOut              = INVALID_ID;
-	TextureID Tex_PostProcess_FSR_EASUOut            = INVALID_ID;
-	TextureID Tex_PostProcess_FSR_RCASOut            = INVALID_ID;
-	TextureID Tex_UI_SDR                             = INVALID_ID;
-
-	RTV_ID    RTV_SceneColorMSAA                     = INVALID_ID;
-	RTV_ID    RTV_SceneColor                         = INVALID_ID;
-	RTV_ID    RTV_SceneColorBoundingVolumes          = INVALID_ID;
-	RTV_ID    RTV_SceneNormalsMSAA                   = INVALID_ID;
-	RTV_ID    RTV_SceneNormals                       = INVALID_ID;
-	RTV_ID    RTV_UI_SDR                             = INVALID_ID;
-	RTV_ID    RTV_SceneVisualization                 = INVALID_ID;
-	RTV_ID    RTV_SceneVisualizationMSAA             = INVALID_ID;
-	RTV_ID    RTV_SceneMotionVectors                 = INVALID_ID;
-	RTV_ID    RTV_SceneMotionVectorsMSAA             = INVALID_ID;
-
-	SRV_ID    SRV_PostProcess_BlurIntermediate       = INVALID_ID;
-	SRV_ID    SRV_PostProcess_BlurOutput             = INVALID_ID;
-	SRV_ID    SRV_PostProcess_TonemapperOut          = INVALID_ID;
-	SRV_ID    SRV_PostProcess_VisualizationOut       = INVALID_ID;
-	SRV_ID    SRV_PostProcess_FFXCASOut              = INVALID_ID;
-	SRV_ID    SRV_PostProcess_FSR_EASUOut            = INVALID_ID;
-	SRV_ID    SRV_PostProcess_FSR_RCASOut            = INVALID_ID;
-	SRV_ID    SRV_ShadowMaps_Spot                    = INVALID_ID;
-	SRV_ID    SRV_ShadowMaps_Point                   = INVALID_ID;
-	SRV_ID    SRV_ShadowMaps_Directional             = INVALID_ID;
-	SRV_ID    SRV_SceneColor                         = INVALID_ID;
-	SRV_ID    SRV_SceneColorBoundingVolumes          = INVALID_ID;
-	SRV_ID    SRV_SceneColorMSAA                     = INVALID_ID;
-	SRV_ID    SRV_SceneNormals                       = INVALID_ID;
-	SRV_ID    SRV_SceneNormalsMSAA                   = INVALID_ID;
-	SRV_ID    SRV_SceneDepth                         = INVALID_ID;
-	SRV_ID    SRV_SceneDepthMSAA                     = INVALID_ID;
-	SRV_ID    SRV_FFXCACAO_Out                       = INVALID_ID;
-	SRV_ID    SRV_UI_SDR                             = INVALID_ID;
-	SRV_ID    SRV_SceneVisualization                 = INVALID_ID;
-	SRV_ID    SRV_SceneVisualizationMSAA             = INVALID_ID;
-	SRV_ID    SRV_SceneMotionVectors                 = INVALID_ID;
-
-	UAV_ID    UAV_FFXCACAO_Out                       = INVALID_ID;
-	UAV_ID    UAV_PostProcess_BlurIntermediate       = INVALID_ID;
-	UAV_ID    UAV_PostProcess_BlurOutput             = INVALID_ID;
-	UAV_ID    UAV_PostProcess_TonemapperOut          = INVALID_ID;
-	UAV_ID    UAV_PostProcess_VisualizationOut       = INVALID_ID;
-	UAV_ID    UAV_PostProcess_FFXCASOut              = INVALID_ID;
-	UAV_ID    UAV_PostProcess_FSR_EASUOut            = INVALID_ID;
-	UAV_ID    UAV_PostProcess_FSR_RCASOut            = INVALID_ID;
-	UAV_ID    UAV_SceneDepth                         = INVALID_ID;
-	UAV_ID    UAV_SceneColor                         = INVALID_ID;
-	UAV_ID    UAV_SceneNormals                       = INVALID_ID;
-
-	UAV_ID    UAV_DownsampledSceneDepth              = INVALID_ID;
-	UAV_ID    UAV_DownsampledSceneDepthAtomicCounter = INVALID_ID;
-
-	DSV_ID    DSV_SceneDepth                         = INVALID_ID;
-	DSV_ID    DSV_SceneDepthMSAA                     = INVALID_ID;
-	DSV_ID    DSV_ShadowMaps_Spot                    = INVALID_ID;
-	DSV_ID    DSV_ShadowMaps_Point                   = INVALID_ID;
-	DSV_ID    DSV_ShadowMaps_Directional             = INVALID_ID;
-
-	FEnvironmentMapRenderingResources EnvironmentMap;
-
-	SRV_ID SRV_NullCubemap   = INVALID_ID;
-	SRV_ID SRV_NullTexture2D = INVALID_ID;
-};
-struct FRenderingResources_DebugWindow : public FRenderingResources
-{
-	// TODO
-};
-
-
 enum EAppState
 {
 	INITIALIZING = 0,
@@ -239,6 +76,7 @@ enum EAppState
 	SIMULATING,
 	UNLOADING,
 	EXITING,
+
 	NUM_APP_STATES
 };
 
@@ -249,13 +87,6 @@ struct FResourceNames
 	std::vector<std::string>    mEnvironmentMapPresetNames;
 	std::vector<std::string>    mSceneNames;
 };
-
-struct FRenderStats
-{
-	uint NumDraws;
-	uint NumDispatches;
-};
-
 
 
 //
@@ -310,18 +141,12 @@ public:
 #endif
 
 	void RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height, float ResolutionScale);
-	void RenderThread_LoadResources();
 	void RenderThread_UnloadWindowSizeDependentResources(HWND hwnd);
-
-	// PRE_RENDER()
-	// - TBA
-	void RenderThread_PreRender();
 
 	// RENDER()
 	// - Records command lists in parallel per FSceneView
 	// - Submits commands to the GPU
 	// - Presents SwapChain
-	void RenderThread_RenderFrame();
 	void RenderThread_RenderMainWindow();
 	void RenderThread_RenderDebugWindow();
 
@@ -369,11 +194,11 @@ public:
 
 //-----------------------------------------------------------------------
 	
-	void                       SetWindowName(HWND hwnd, const std::string& name);
-	void                       SetWindowName(const std::unique_ptr<Window>& pWin, const std::string& name);
-	const std::string&         GetWindowName(HWND hwnd) const;
-	inline const std::string&  GetWindowName(const std::unique_ptr<Window>& pWin) const { return GetWindowName(pWin->GetHWND()); }
-	inline const std::string&  GetWindowName(const Window* pWin) const { return GetWindowName(pWin->GetHWND()); }
+	void               SetWindowName(HWND hwnd, const std::string& name);
+	void               SetWindowName(const std::unique_ptr<Window>& pWin, const std::string& name);
+	const std::string& GetWindowName(HWND hwnd) const;
+	const std::string& GetWindowName(const std::unique_ptr<Window>& pWin) const;
+	const std::string& GetWindowName(const Window* pWin) const;
 
 
 	// ---------------------------------------------------------
@@ -382,14 +207,14 @@ public:
 	void StartLoadingScene(int IndexScene);
 	
 	void StartLoadingEnvironmentMap(int IndexEnvMap);
-	void PreFilterEnvironmentMap(ID3D12GraphicsCommandList* pCmd, FEnvironmentMapRenderingResources& env);
-	void ComputeBRDFIntegrationLUT(ID3D12GraphicsCommandList* pCmd, SRV_ID& outSRV_ID);
+	
 	void UnloadEnvironmentMap();
 
 	void WaitForBuiltinMeshGeneration();
 
 	// Getters
 	MeshID GetBuiltInMeshID(const std::string& MeshName) const;
+	void   FinalizeBuiltinMeshes();
 
 	inline const FResourceNames& GetResourceNames() const { return mResourceNames; }
 	inline AssetLoader& GetAssetLoader() { return mAssetLoader; }
@@ -402,7 +227,6 @@ private:
 	using EventPtr_t                  = std::shared_ptr<IEvent>;
 	using EventQueue_t                = BufferedContainer<std::queue<EventPtr_t>, EventPtr_t>;
 	//-------------------------------------------------------------------------------------------------
-	using RenderingResourcesLookup_t  = std::unordered_map<HWND, std::shared_ptr<FRenderingResources>>;
 	using WindowLookup_t              = std::unordered_map<HWND, std::unique_ptr<Window>>;
 	using WindowNameLookup_t          = std::unordered_map<HWND, std::string>;
 	//-------------------------------------------------------------------------------------------------
@@ -418,7 +242,6 @@ private:
 	ThreadPool                      mWorkers_Simulation;
 #endif
 	ThreadPool                      mWorkers_ModelLoading;
-	ThreadPool                      mWorkers_TextureLoading;
 	ThreadPool                      mWorkers_MeshLoading;
 
 	// sync
@@ -436,6 +259,7 @@ private:
 	std::unique_ptr<Window>         mpWinDebug;
 #endif
 	WindowNameLookup_t              mWinNameLookup;
+	EventSignal                     mSignalMainWindowCreated;
 	POINT                           mMouseCapturePosition;
 
 	// input
@@ -445,18 +269,12 @@ private:
 	EventQueue_t                    mEventQueue_VQEToWin_Main;
 	EventQueue_t                    mEventQueue_WinToVQE_Renderer;
 	EventQueue_t                    mEventQueue_WinToVQE_Update;
-	std::vector<Fence>              mAsyncComputeSSAOReadyFence;
-	std::vector<Fence>              mAsyncComputeSSAODoneFence;
-	std::vector<Fence>              mCopyObjIDDoneFence; // GPU->CPU
-	std::atomic<bool>               mAsyncComputeWorkSubmitted = false;
-	std::atomic<bool>               mSubmitWorkerFinished = true;
-	bool                            mWaitForSubmitWorker = false;
 
 	// load events
 	std::future<bool>              mbLoadingScreenLoaded;
 
 	// renderer
-	VQRenderer                      mRenderer;
+	std::unique_ptr<VQRenderer>    mpRenderer;
 
 	// assets 
 	AssetLoader                     mAssetLoader;
@@ -478,11 +296,12 @@ private:
 #endif
 	std::atomic<bool>               mbLoadingLevel;
 	std::atomic<bool>               mbLoadingEnvironmentMap;
-	std::atomic<bool>               mbEnvironmentMapPreFilter;
 	std::atomic<bool>               mbMainWindowHDRTransitionInProgress; // see DispatchHDRSwapchainTransitionEvents()
 	std::atomic<bool>               mbExitApp;
 	std::atomic<bool>               mbBuiltinMeshGenFinished;
-	Signal                          mBuiltinMeshGenSignal;
+	EventSignal                     mBuiltinMeshGenSignal;
+	std::latch                      mBuiltinMeshUploadedLatch{ 1 };
+	bool                            mbBuiltinMeshUploadFinished = false;
 
 
 	// system & settings
@@ -498,31 +317,9 @@ private:
 	// ui
 	ImGuiContext*                   mpImGuiContext;
 	FUIState                        mUIState;
-	FRenderStats                    mRenderStats;
-
-	// rendering resources per window
-#if 0
-	RenderingResourcesLookup_t      mRenderingResources;
-#else
-	FRenderingResources_MainWindow  mResources_MainWnd;
-	FRenderingResources_DebugWindow mResources_DebugWnd;
-#endif
-
-	// RenderPasses (WIP design)
-	std::vector<IRenderPass*>       mRenderPasses;
-	DepthPrePass                    mRenderPass_ZPrePass;
-	AmbientOcclusionPass            mRenderPass_AO;
-	ScreenSpaceReflectionsPass      mRenderPass_SSR;
-	DepthMSAAResolvePass            mRenderPass_DepthResolve;
-	ApplyReflectionsPass            mRenderPass_ApplyReflections;
-	MagnifierPass                   mRenderPass_Magnifier;
-	ObjectIDPass                    mRenderPass_ObjectID;
-	OutlinePass                     mRenderPass_Outline;
-
 
 	// timer / profiler
-	Timer                           mTimer;
-	Timer                           mTimerRender;
+	std::unique_ptr<Timer>          mpTimer;
 	float                           mEffectiveFrameRateLimit_ms;
 
 	// misc.
@@ -547,15 +344,12 @@ private:
 
 	void                            HandleWindowTransitions(std::unique_ptr<Window>& pWin, const FWindowSettings& settings);
 	void                            SetMouseCaptureForWindow(HWND hwnd, bool bCaptureMouse, bool bReleaseAtCapturedPosition);
-	inline void                     SetMouseCaptureForWindow(Window* pWin, bool bCaptureMouse, bool bReleaseAtCapturedPosition) { this->SetMouseCaptureForWindow(pWin->GetHWND(), bCaptureMouse, bReleaseAtCapturedPosition); };
+	void                            SetMouseCaptureForWindow(Window* pWin, bool bCaptureMouse, bool bReleaseAtCapturedPosition);
 
-	void                            InitializeBuiltinMeshes();
+	void                            GenerateBuiltinMeshes();
 	void                            LoadLoadingScreenData(); // data is loaded in parallel but it blocks the calling thread until load is complete
 	void                            Load_SceneData_Dispatch();
 	void                            LoadEnvironmentMap(const std::string& EnvMapName, int SpecularMapMip0Resolution);
-
-	HRESULT                         RenderThread_RenderMainWindow_LoadingScreen(FWindowRenderContext& ctx);
-	HRESULT                         RenderThread_RenderMainWindow_Scene(FWindowRenderContext& ctx);
 
 	//
 	// EVENTS
@@ -569,62 +363,25 @@ private:
 	void                            RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent);
 	void                            RenderThread_HandleSetVSyncEvent(const IEvent* pEvent);
 	void                            RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent);
+	void                            RenderThread_HandleSetSwapchainQueueEvent(const IEvent* pEvent);
 	void                            RenderThread_HandleSetHDRMetaDataEvent(const IEvent* pEvent);
 
 	void                            UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent>& pEvent);
-
-	//
-	// FRAME RENDERING PIPELINE
-	//
-	void                            TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
-	void                            RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView);
-	void                            RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView);
-	void                            RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView, size_t iBegin, size_t NumPointLights);
-	void                            RenderDepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, D3D12_GPU_VIRTUAL_ADDRESS perFrameCBAddr);
-	void                            RenderObjectIDPass(ID3D12GraphicsCommandList* pCmd, ID3D12CommandList* pCmdCopy, DynamicBufferHeap* pCBufferHeap, const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, const int BACK_BUFFER_INDEX);
-	void                            TransitionDepthPrePassForWrite(ID3D12GraphicsCommandList* pCmd, bool bMSAA);
-	void                            TransitionDepthPrePassForRead(ID3D12GraphicsCommandList* pCmd, bool bMSAA);
-	void                            TransitionDepthPrePassForReadAsyncCompute(ID3D12GraphicsCommandList* pCmd);
-	void                            TransitionDepthPrePassMSAAResolve(ID3D12GraphicsCommandList* pCmd);
-	void                            ResolveMSAA_DepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap);
-	void                            CopyDepthForCompute(ID3D12GraphicsCommandList* pCmd);
-	void                            RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView);
-	void                            RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FPostProcessParameters& PPParams, const std::vector< D3D12_GPU_VIRTUAL_ADDRESS>& CBAddresses, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, D3D12_GPU_VIRTUAL_ADDRESS perFrameCBAddr);
-	void                            RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA);
-	void                            RenderOutline(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, bool bMSAA, const std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& rtvHandles);
-	void                            RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA, bool bReflectionsEnabled);
-	void                            RenderDebugVertexAxes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA);
-	void                            ResolveMSAA(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams);
-	void                            DownsampleDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTextureID, SRV_ID SRVDepth);
-	void                            RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
-	void                            RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, bool bMSAA);
-	void                            CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView);
-	void                            TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams);
-	ID3D12Resource*                 RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams);
-	void                            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, ID3D12Resource* pRscIn);
-	void                            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams);
-	HRESULT                         PresentFrame(FWindowRenderContext& ctx);
-	
-	bool                            ShouldEnableAsyncCompute();
 
 	//
 	// UI
 	//
 	void                            UpdateUIState(HWND hwnd, float dt);
 	void                            DrawProfilerWindow(const FSceneStats& FrameStats, float dt);
-	void                            DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderParameters& SceneRenderParams);
+	void                            DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderOptions& SceneRenderParams);
 	void                            DrawPostProcessSettings(FPostProcessParameters& PPParams);
 	void                            DrawKeyMappingsWindow();
-	void                            DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams, FPostProcessParameters& PPParams);
+	void                            DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams, FPostProcessParameters& PPParams);
 	void                            DrawEditorWindow();
 	void                            DrawMaterialEditor();
 	void                            DrawLightEditor();
 	void                            DrawObjectEditor();
 
-	//
-	// RENDER HELPERS
-	//
-	void                            DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews::FShadowView& shadowView, size_t iDepthMode);
 
 	std::unique_ptr<Window>&        GetWindow(HWND hwnd);
 	const std::unique_ptr<Window>&  GetWindow(HWND hwnd) const;
@@ -655,41 +412,6 @@ private:
 
 	// Busy waits until render thread catches up with update thread
 	void                            WaitUntilRenderingFinishes();
-
-	// temp data
-	struct FFrameConstantBuffer { DirectX::XMMATRIX matModelViewProj; };
-	struct FFrameConstantBuffer2 { DirectX::XMMATRIX matModelViewProj; int iTextureConfig; int iTextureOutput; };
-	struct FFrameConstantBufferUnlit { DirectX::XMMATRIX matModelViewProj; DirectX::XMFLOAT4 color; };
-	struct FFrameConstantBufferUnlitInstanced { DirectX::XMMATRIX matModelViewProj[MAX_INSTANCE_COUNT__UNLIT_SHADER]; DirectX::XMFLOAT4 color; };
-	struct FObjectConstantBufferDebugVertexVectors 
-	{ 
-		DirectX::XMMATRIX matWorld;
-		DirectX::XMMATRIX matNormal;
-		DirectX::XMMATRIX matViewProj;
-		float LocalAxisSize;
-	};
-
-// ------------------------------------------------------------------------------------------------------
-//
-// VQENGINE STATIC
-// 
-// ------------------------------------------------------------------------------------------------------
-private:
-	// Reads EngineSettings.ini from next to the executable and returns a 
-	// FStartupParameters struct as it readily has override booleans for engine settings
-	static FStartupParameters                       ParseEngineSettingsFile();
-	static std::vector<std::pair<std::string, int>> ParseSceneIndexMappingFile();
-	static std::vector<FEnvironmentMapDescriptor>   ParseEnvironmentMapsFile();
-	static std::vector<FDisplayHDRProfile>          ParseHDRProfilesFile();
-	static FSceneRepresentation                     ParseSceneFile(const std::string& SceneFile);
-public:
-	static std::vector<FMaterialRepresentation>     ParseMaterialFile(const std::string& MaterialFilePath);
-
-public:
-	// Supported HDR Formats { DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_FORMAT_R16G16B16A16_FLOAT  }
-	// Supported SDR Formats { DXGI_FORMAT_R8G8B8A8_UNORM   , DXGI_FORMAT_R8G8B8A8_UNORM_SRGB }
-	static const DXGI_FORMAT PREFERRED_HDR_FORMAT = DXGI_FORMAT_R16G16B16A16_FLOAT;
-	static const DXGI_FORMAT PREFERRED_SDR_FORMAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 };
 
 

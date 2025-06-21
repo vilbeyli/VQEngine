@@ -50,9 +50,10 @@ void Transform::Translate(const XMFLOAT3& translation)
 
 void Transform::Translate(float x, float y, float z)
 {
+	XMFLOAT3 t = XMFLOAT3(x, y, z);
 	_positionPrev = _position;
 	XMVECTOR POSITION = XMLoadFloat3(&_position);
-	XMVECTOR TRANSLATION = XMLoadFloat3(&XMFLOAT3(x, y, z));
+	XMVECTOR TRANSLATION = XMLoadFloat3(&t);
 	POSITION += TRANSLATION;
 	XMStoreFloat3(&_position, POSITION);
 }
@@ -110,8 +111,6 @@ XMMATRIX Transform::RotationMatrix() const
 	return _rotation.Matrix();
 }
 
-// builds normal matrix from world matrix, ignoring translation
-// and using inverse-transpose of rotation/scale matrix
 DirectX::XMMATRIX Transform::NormalMatrix(const XMMATRIX& world)
 {
 	XMMATRIX nrm = world;

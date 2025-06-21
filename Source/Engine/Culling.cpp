@@ -17,14 +17,14 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "Culling.h"
+#include "MeshSorting.h"
 #include "Math.h"
 #include "Scene/Scene.h"
-#include "Libs/VQUtils/Source/Multithreading.h"
+#include "Libs/VQUtils/Include/Multithreading/ThreadPool.h"
 
 #include <algorithm>
 #include <execution>
 
-#include <Windows.h>
 #include "GPUMarker.h"
 
 using namespace DirectX;
@@ -101,7 +101,7 @@ bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset FrustumPlanes, cons
 		for (const XMFLOAT4& f4Point : vPoints)
 		{
 			XMVECTOR vPoint = XMLoadFloat4(&f4Point);
-			XMVECTOR vPlane = XMLoadFloat4(&FrustumPlanes.abcd[p]);
+			const XMVECTOR& vPlane = FrustumPlanes.abcd[p];
 			XMVECTOR cmp = XMVectorGreater(XMVector4Dot(vPoint, vPlane), V_EPSILON);
 			if (bInside = cmp.m128_u32[0]) // is point inside frustum ?
 			{
@@ -114,13 +114,16 @@ bool IsBoundingBoxIntersectingFrustum(const FFrustumPlaneset FrustumPlanes, cons
 	
 	return true;
 }
-static bool IsBoundingBoxIntersectingFrustum2(const FFrustumPlaneset FrustumPlanes, const FBoundingBox& BBox)
+static bool IsBoundingBoxIntersectingFrustum2(const FFrustumPlaneset& FrustumPlanes, const FBoundingBox& BBox)
 {
 	constexpr float EPSILON = 0.000002f;
 	const XMVECTOR V_EPSILON = XMVectorSet(EPSILON, EPSILON, EPSILON, EPSILON);
+	const XMVECTOR vExtent = BBox.GetExtent();
+	XMVECTOR vCenter = BBox.GetCenter();
+	vCenter.m128_f32[3] = 1.0f;
 	for (int p = 0; p < 6; ++p)	// for each plane
 	{
-		XMVECTOR vPlane = XMLoadFloat4(&FrustumPlanes.abcd[p]);
+		const XMVECTOR& vPlane = FrustumPlanes.abcd[p];
 		
 		// N : get the absolute value of the plane normal, so all {x,y,z} are positive
 		//     which aligns well with the extents vector which is all positive due to
@@ -128,14 +131,11 @@ static bool IsBoundingBoxIntersectingFrustum2(const FFrustumPlaneset FrustumPlan
 		XMVECTOR vN = XMVectorAbs(vPlane);
 
 		// r : how far away is the furthest point along the plane normal
-		XMVECTOR R = XMVector3Dot(vN, BBox.GetExtent());
+		XMVECTOR R = XMVector3Dot(vN, vExtent);
 		// Intuition: see https://fgiesen.wordpress.com/2010/10/17/view-frustum-culling/
-		
-		XMVECTOR Center = BBox.GetCenter();
-		Center.m128_f32[3] = 1.0f;
 
 		// signed distance of the center point of AABB to the plane
-		XMVECTOR Dist = XMVector4Dot(Center, vPlane);
+		XMVECTOR Dist = XMVector4Dot(vCenter, vPlane);
 
 		if (XMVectorLess((Dist + R), V_EPSILON).m128_f32[0])
 			return false;
@@ -179,63 +179,64 @@ float CalculateProjectedBoundingBoxArea(const FBoundingBox& BBox, const XMMATRIX
 //------------------------------------------------------------------------------------------------------------------------------
 void FFrustumCullWorkerContext::AllocInputMemoryIfNecessary(size_t sz)
 {
+	NumValidInputElements = sz;
 	if (vFrustumPlanes.size() < sz)
 	{
 		SCOPED_CPU_MARKER("AllocMem");
+		vVisibleBBIndicesPerView.resize(sz);
 		vFrustumPlanes.resize(sz);
 		vMatViewProj.resize(sz);
 		vSortFunctions.resize(sz);
 		vForceLOD0.resize(sz);
+		vSortData.resize(sz);
 	}
+
+	assert(pFrustumRenderLists);
+	if (pFrustumRenderLists && pFrustumRenderLists->size() < sz)
+		pFrustumRenderLists->resize(sz);
 }
 void FFrustumCullWorkerContext::ClearMemory()
 {
-
-	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::ClearMemory()");
+	SCOPED_CPU_MARKER("ClearMemory()");
 	vFrustumPlanes.clear();
 	vMatViewProj.clear();
 	vSortFunctions.clear();
 	vForceLOD0.clear();
 	vBoundingBoxList.clear();
-	vCullResultsPerView.clear();
+	vVisibleBBIndicesPerView.clear();
+
+	// initial startup won't have this assigned but consecutive 
+	// scene loads will have.
+	if(pFrustumRenderLists)
+		pFrustumRenderLists->clear();
+	
 	NumValidInputElements = 0;
 }
 
 void FFrustumCullWorkerContext::AddWorkerItem(
-	const FFrustumPlaneset& FrustumPlaneSet
-	, const DirectX::XMMATRIX& MatViewProj
-	, const std::vector<FBoundingBox>& vBoundingBoxListIn
-	, const std::vector<size_t>& vGameObjectHandles
-	, const std::vector<MaterialID>& vMaterials
+	  const std::vector<FBoundingBox>& vBoundingBoxListIn
 	, size_t i
 	, SortingFunction_t SortFunction
 	, bool bForceLOD0
 )
 {
-	SCOPED_CPU_MARKER("FFrustumCullWorkerContext::AddWorkerItem()");
-	vFrustumPlanes[i] = FrustumPlaneSet;
-	vMatViewProj[i] = MatViewProj;
+	SCOPED_CPU_MARKER("AddWorkerItem()");
 	vSortFunctions[i] = SortFunction;
 	vForceLOD0[i] = bForceLOD0;
-	vBoundingBoxList = vBoundingBoxListIn;
+	vBoundingBoxList = vBoundingBoxListIn; // copy
 }
 
 void FFrustumCullWorkerContext::ProcessWorkItems_SingleThreaded()
 {
-	const size_t szFP = vFrustumPlanes.size();
-	
-	const size_t& NumWorkItems = szFP;
+	const size_t& NumWorkItems = NumValidInputElements;
 	if (NumWorkItems == 0)
 	{
 		// LogWarning?
 		return;
 	}
 
-	// allocate context memory
-	vCullResultsPerView.resize(szFP);
-
 	// process all items on this thread
-	this->Process(0, szFP - 1);
+	this->Process(0, NumWorkItems - 1, nullptr);
 }
 
 static void DispatchWorkers(ThreadPool& WorkerThreadPool, size_t NumWorkItems, void (*pfnProcess)(size_t iBegin, size_t iEnd))
@@ -285,9 +286,6 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 	}
 #endif
 
-	// allocate context memory
-	vCullResultsPerView.resize(NumValidInputElements); // prepare worker output memory, each worker will then populate the vector
-
 	// distribute ranges of work into worker threads
 	const std::vector<std::pair<size_t, size_t>> vRanges = GetWorkRanges(NumThreadsIncludingThisThread);
 	
@@ -300,15 +298,11 @@ void FFrustumCullWorkerContext::ProcessWorkItems_MultiThreaded(const size_t NumT
 			const size_t& iBegin = Range.first;
 			const size_t& iEnd = Range.second; // inclusive
 			assert(iBegin <= iEnd); // ensure work context bounds
-
-			for (size_t iWork = iBegin; iWork <= iEnd; ++iWork)
+			WorkerThreadPool.AddTask([=, &WorkerThreadPool]()
 			{
-				WorkerThreadPool.AddTask([=]()
-				{
-					SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
-					this->Process(iWork, iWork);
-				});
-			}
+				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+				this->Process(iBegin, iEnd, &WorkerThreadPool);
+			}, ETaskPriority::REAL_TIME);
 			++currRange;
 		}
 	}
@@ -325,68 +319,250 @@ const std::vector<std::pair<size_t, size_t>> FFrustumCullWorkerContext::GetWorkR
 }
 
 
-void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd)
+void FFrustumCullWorkerContext::Process(size_t iRangeBegin, size_t iRangeEnd, ThreadPool* pWorkerThreadPool)
 {
+	const std::string marker = "ProcessFrustums[" + std::to_string(iRangeBegin) + "-" + std::to_string(iRangeEnd) + "]";
+	SCOPED_CPU_MARKER_C(marker.c_str(), 0xFF0000AA);
 	const size_t szFP = vFrustumPlanes.size();
 	assert(iRangeBegin <= szFP); // ensure work context bounds
 	assert(iRangeEnd < szFP); // ensure work context bounds
 	assert(iRangeBegin <= iRangeEnd); // ensure work context bounds
-	
-	const MeshLookup_t MeshLookupCopy = mMeshes;
-	const MaterialLookup_t MaterialLookupCopy = mMaterials;
-	const std::vector<MeshID> MeshBB_MeshID	= BBH.GetMeshesIDs();		   // copy
-	const std::vector<MaterialID> MeshBB_MatID = BBH.GetMeshMaterialIDs(); // copy
+
+#define DEBUG_LOG_SORT 0
+	const MeshLookup_t& MeshLookupCopy = mMeshes;
+	const MemoryPool<Material>& MaterialPool = mMaterials;
+	const std::vector<MeshID>& MeshBB_MeshID	= BBH.GetMeshesIDs();
+	const std::vector<MaterialID>& MeshBB_MatID = BBH.GetMeshMaterialIDs();
+	const std::vector<size_t>& MeshBB_GameObjHandles = BBH.GetMeshGameObjectHandles();
+	const std::vector<const Transform*>& MeshBB_Transforms = BBH.GetMeshTransforms();
 	
 	// process each frustum
-	for (size_t iWork = iRangeBegin; iWork <= iRangeEnd; ++iWork)
 	{
+		SCOPED_CPU_MARKER("Clear");
+		for (size_t iWork = iRangeBegin; iWork <= iRangeEnd; ++iWork)
 		{
-			SCOPED_CPU_MARKER("Clear");
-			vCullResultsPerView[iWork].clear();
+			vVisibleBBIndicesPerView[iWork].clear();
 		}
+	}
+	{
+		SCOPED_CPU_MARKER_C("CullFrustums", 0xFF2222AA);
+		for (size_t iWork = iRangeBegin; iWork <= iRangeEnd; ++iWork)
 		{
-			SCOPED_CPU_MARKER("CullFrustum");
-			for (size_t bb = 0; bb < vBoundingBoxList.size(); ++bb)
+			const std::string marker2 = "Frustum[" + std::to_string(iWork) + "]";
 			{
-				if (IsBoundingBoxIntersectingFrustum2(vFrustumPlanes[iWork], vBoundingBoxList[bb]))
+				SCOPED_CPU_MARKER_C(marker2.c_str(), 0xFF2222AA);
+				for (size_t bb = 0; bb < vBoundingBoxList.size(); ++bb)
 				{
-					const Mesh& mesh = MeshLookupCopy.at(MeshBB_MeshID[bb]);
-					const Material mat = MaterialLookupCopy.at(MeshBB_MatID[bb]);
-
-					FCullResult r;
-					r.iBB = bb;
-					r.fBBArea = CalculateProjectedBoundingBoxArea(vBoundingBoxList[bb], vMatViewProj[iWork]);
-					r.SelectedLOD = vForceLOD0[iWork] ? 0 : InstanceBatching::GetLODFromProjectedScreenArea(r.fBBArea, mesh.GetNumLODs());
-					r.NumIndices = mesh.GetNumIndices(r.SelectedLOD);
-					r.VBIB = mesh.GetIABufferIDs(r.SelectedLOD);
-					r.bTessellated = mat.Tessellation.bEnableTessellation;
-					vCullResultsPerView[iWork].push_back(r); // grows as we go (no pre-alloc)
+					if (IsBoundingBoxIntersectingFrustum2(vFrustumPlanes[iWork], vBoundingBoxList[bb]))
+					{
+						vVisibleBBIndicesPerView[iWork].push_back(bb); // grows as we go (no pre-alloc)
+					}
 				}
 			}
-		}
-		{
-			SCOPED_CPU_MARKER("Sort");
-			std::sort(std::execution::par_unseq, vCullResultsPerView[iWork].begin(), vCullResultsPerView[iWork].end(), vSortFunctions[iWork]);
-
-#if 0
-			Log::Info("PostSort-------");
-			for (int hObj = 0; hObj < vViewCullRestuls.size(); ++hObj)
+			const size_t NumVisibleItems = vVisibleBBIndicesPerView[iWork].size();
+			FVisibleMeshDataSoA& vVisibleMeshListSoA = (*pFrustumRenderLists)[iWork].Data;
+			std::vector<FVisibleMeshSortData>& sortData = vSortData[iWork];
 			{
-				const size_t iBBL = vViewCullRestuls[hObj].first;
-				const float fAreaL = vViewCullRestuls[hObj].second;
-				const MaterialID    matIDL = MeshBB_MatID[iBBL];
-				const MeshID       meshIDL = MeshBB_MeshID[iBBL];
-				const Mesh& meshL = mMeshes.at(meshIDL);
-				const int NumLODsL = meshL.GetNumLODs();
-				const int lodL = bForceLOD0 ? 0 : GetLODFromProjectedScreenArea(fAreaL, NumLODsL);
-				const uint64 keyL = GetKey(matIDL, meshIDL, lodL);
-				const std::string keyLBinary = std::bitset<64>(keyL).to_string(); // Convert to binary string
-
-				Log::Info("%-5d --> %-13llu -->%s", hObj, keyL, keyLBinary.c_str());
+				SCOPED_CPU_MARKER("AllocRenderData");
+				if (NumVisibleItems > sortData.size())
+					sortData.resize(NumVisibleItems);
+				vVisibleMeshListSoA.Reserve(NumVisibleItems);
 			}
-#endif
 		}
+	}
+	if(pWorkerThreadPool)
+	{
+		for (size_t iWork = iRangeBegin; iWork <= iRangeEnd; ++iWork)
+		{
+			pWorkerThreadPool->AddTask([iWork, this, pWorkerThreadPool]()
+			{
+				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+				SortMeshData(iWork, nullptr); // GatherVisibleMeshData() called from within SortMeshData()
 
+				{
+					SCOPED_CPU_MARKER("SignalCount"); // unblocks dispatching batch workers which wait until GatherVisibleMeshData signals data ready.
+					(*pFrustumRenderLists)[iWork].DataCountReadySignal.Notify(vVisibleBBIndicesPerView[iWork].size());
+				}
+
+				GatherVisibleMeshData(iWork);
+
+			}, ETaskPriority::CRITICAL);
+		}
+	}
+	else
+	{
+		for (size_t iWork = iRangeBegin; iWork <= iRangeEnd; ++iWork)
+		{
+			SortMeshData(iWork, nullptr);
+
+			{
+				SCOPED_CPU_MARKER("SignalCount"); // unblocks dispatching batch workers which wait until GatherVisibleMeshData signals data ready.
+				(*pFrustumRenderLists)[iWork].DataCountReadySignal.Notify(vVisibleBBIndicesPerView[iWork].size());
+			}
+
+			GatherVisibleMeshData(iWork);
+		}
+	}
+}
+
+static int GetLODFromProjectedScreenArea(float fArea, int NumMaxLODs)
+{
+	// LOD0 >= 0.100 >= LOD1 >= 0.010 >= LOD2 >= 0.001
+	//
+	// coarse algorithm: just pick 1/10th for each available lod
+	int CurrLOD = 0;
+	float Threshold = 0.1f;
+	while (CurrLOD < NumMaxLODs - 1 && fArea <= Threshold)
+	{
+		Threshold *= 0.1f;
+		++CurrLOD;
+	}
+	assert(CurrLOD < NumMaxLODs && CurrLOD >= 0);
+	return CurrLOD;
+}
+void FFrustumCullWorkerContext::SortMeshData(size_t iWork, ThreadPool* pWorkerThreadPool)
+{
+	SCOPED_CPU_MARKER_C("SortMeshData", 0xFFAA00AA);
+	const MeshLookup_t& MeshLookupCopy = mMeshes;
+	const MemoryPool<Material>& MaterialPool = mMaterials;
+	const std::vector<MeshID>& MeshBB_MeshID = BBH.GetMeshesIDs();
+	const std::vector<MaterialID>& MeshBB_MatID = BBH.GetMeshMaterialIDs();
+	const std::vector<size_t>& MeshBB_GameObjHandles = BBH.GetMeshGameObjectHandles();
+	const std::vector<const Transform*>& MeshBB_Transforms = BBH.GetMeshTransforms();
+
+	const size_t NumVisibleItems = vVisibleBBIndicesPerView[iWork].size();
+	std::vector<FVisibleMeshSortData>& sortData = vSortData[iWork];
+	{
+		SCOPED_CPU_MARKER_C("Set", 0xFFAA00AA);
+		int ii = 0;
+		XMMATRIX matVP = vMatViewProj[iWork];
+		for (size_t bb : vVisibleBBIndicesPerView[iWork])
+		{
+			const float fBBArea = CalculateProjectedBoundingBoxArea(vBoundingBoxList[bb], matVP);
+			const MeshID meshID = MeshBB_MeshID[bb];
+			const MaterialID matID = MeshBB_MatID[bb];
+			const Material& mat = *MaterialPool.Get(matID);
+			const Mesh& mesh = MeshLookupCopy.at(meshID);
+
+			sortData[ii].iBB = (int32)bb;
+			sortData[ii].fBBArea = fBBArea;
+			sortData[ii].matID = matID;
+			sortData[ii].meshID = meshID;
+			sortData[ii].bTess = mat.IsTessellationEnabled() ? 1 : 0;
+			sortData[ii].iLOD = vForceLOD0[iWork] ? 0 : GetLODFromProjectedScreenArea(fBBArea, mesh.GetNumLODs());
+
+			assert(sortData[ii].iLOD < 256);
+			++ii;
+		}
+	}
+	if (pWorkerThreadPool)
+	{
+		pWorkerThreadPool->AddTask([iWork, this, pWorkerThreadPool, &sortData, NumVisibleItems]()
+		{
+			SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+			{
+				SCOPED_CPU_MARKER_C("Sort", 0xFFAA00AA);
+				std::sort(std::execution::seq,
+					sortData.begin(),
+					sortData.begin() + NumVisibleItems,
+					vSortFunctions[iWork]
+				);
+			}
+
+			pWorkerThreadPool->AddTask([iWork, this]() 
+			{
+				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+				GatherVisibleMeshData(iWork);
+			}, ETaskPriority::HIGH);
+		});
+	}
+	else
+	{
+		SCOPED_CPU_MARKER("Sort");
+		std::sort(std::execution::seq,
+			sortData.begin(),
+			sortData.begin() + NumVisibleItems,
+			vSortFunctions[iWork]
+		);
+	}
+}
+
+void FFrustumCullWorkerContext::GatherVisibleMeshData(size_t iWork)
+{
+	SCOPED_CPU_MARKER_C("GatherMeshData", 0xFFFF5500);
+
+	const MeshLookup_t& MeshLookupCopy = mMeshes;
+	const MemoryPool<Material>& MaterialPool = mMaterials;
+	const std::vector<MeshID>& MeshBB_MeshID = BBH.GetMeshesIDs();
+	const std::vector<MaterialID>& MeshBB_MatID = BBH.GetMeshMaterialIDs();
+	const std::vector<size_t>& MeshBB_GameObjHandles = BBH.GetMeshGameObjectHandles();
+	const std::vector<const Transform*>& MeshBB_Transforms = BBH.GetMeshTransforms();
+
+	FFrustumRenderList& FrustumRenderList = (*pFrustumRenderLists)[iWork];
+	const std::vector<FVisibleMeshSortData>& sortData = vSortData[iWork];
+	const size_t NumVisibleItems = vVisibleBBIndicesPerView[iWork].size();
+	FVisibleMeshDataSoA& vVisibleMeshListSoA = FrustumRenderList.Data;
+	vVisibleMeshListSoA.pMaterialPool = &this->mMaterials;
+	{
+		SCOPED_CPU_MARKER("SortKey");
+		for (size_t i = 0; i < NumVisibleItems; ++i)
+		{
+			const FVisibleMeshSortData& d = sortData[i];
+			switch (FrustumRenderList.Type)
+			{
+			case FFrustumRenderList::EFrustumType::MainView:
+				vVisibleMeshListSoA.SortKey[i] = MeshSorting::GetLitMeshKey(d.matID, d.meshID, d.iLOD, d.bTess);
+				break;
+			case FFrustumRenderList::EFrustumType::SpotShadow:
+			case FFrustumRenderList::EFrustumType::PointShadow:
+			case FFrustumRenderList::EFrustumType::DirectionalShadow:
+				vVisibleMeshListSoA.SortKey[i] = MeshSorting::GetShadowMeshKey(d.matID, d.meshID, d.iLOD, d.bTess);
+				break;
+			default:
+				assert(false); // shouldn't happen
+			}
+		}
+	}
+	for (size_t i = 0; i < NumVisibleItems; ++i)
+	{
+		const FVisibleMeshSortData& d = sortData[i];
+		const Mesh& mesh = MeshLookupCopy.at(d.meshID);
+		vVisibleMeshListSoA.PerDrawData[i] = FPerDrawData{
+			.hMaterial = d.matID,
+			.hMesh = d.meshID,
+			.VBIB = mesh.GetIABufferIDs(d.iLOD),
+			.NumIndices = mesh.GetNumIndices(d.iLOD),
+			.SelectedLOD = d.iLOD,
+		};
+	}
+	{
+		SCOPED_CPU_MARKER("Transform");
+		for (size_t i = 0; i < NumVisibleItems; ++i)
+		{
+			const FVisibleMeshSortData& d = sortData[i];
+			vVisibleMeshListSoA.Transform[i] = *MeshBB_Transforms[d.iBB]; // copy the transform
+		}
+	}
+	{
+		SCOPED_CPU_MARKER("MatID");
+		for (size_t i = 0; i < NumVisibleItems; ++i)
+		{
+			const FVisibleMeshSortData& d = sortData[i];
+			vVisibleMeshListSoA.MaterialID[i] = d.matID;
+		}
+	}
+	for (size_t i = 0; i < NumVisibleItems; ++i)
+	{
+		const FVisibleMeshSortData& d = sortData[i];
+		vVisibleMeshListSoA.PerInstanceData[i] = FPerInstanceData{
+			.hGameObject = MeshBB_GameObjHandles[d.iBB],
+			.fBBArea = d.fBBArea,
+		};
+	}
+	{
+		SCOPED_CPU_MARKER_C("SignalDataReady", 0xFF00FF00);
+		//Log::Info("Signal FrustumRenderList[%d] : %d", iWork, NumVisibleItems);
+		FrustumRenderList.DataReadySignal.Notify();
 	}
 }
 
@@ -543,6 +719,8 @@ void SceneBoundingBoxHierarchy::Build(const Scene* pScene, const std::vector<siz
 
 #if BOUNDING_BOX_HIERARCHY__MULTI_THREADED_BUILD
 
+	std::vector<TaskSignal<void>> Signals;
+
 	// dispatch gameobject bounding box workers
 	{
 		const size_t NumWorkItems = vGameObjectHandles.size();
@@ -551,26 +729,24 @@ void SceneBoundingBoxHierarchy::Build(const Scene* pScene, const std::vector<siz
 			+ (WorkerThreadPool.GetNumActiveTasks() == 0 ? 1 : 0);
 
 		const std::vector<std::pair<size_t, size_t>> vRanges = PartitionWorkItemsIntoRanges(NumWorkItems, NumWorkersToUse);
+		Signals.resize(vRanges.size());
 		
 		// dispatch worker threads
 		{
 			SCOPED_CPU_MARKER("DispatchWorkers");
-			size_t currRange = 0;
-			for (const std::pair<size_t, size_t>& Range : vRanges)
+			for(size_t iRange=1; iRange<vRanges.size(); ++iRange)
+			//for (const std::pair<size_t, size_t>& Range : vRanges)
 			{
-				if (currRange == 0)
-				{
-					++currRange; // skip the first range, and do it on this thread after dispatches
-					continue;
-				}
+				const std::pair<size_t, size_t>& Range = vRanges[iRange];
 				const size_t& iBegin = Range.first;
 				const size_t& iEnd = Range.second; // inclusive
 				assert(iBegin <= iEnd); // ensure work context bounds
 
-				WorkerThreadPool.AddTask([=, &vGameObjectHandles]()
+				WorkerThreadPool.AddTask([=, &vGameObjectHandles, &Signals]()
 				{
 					SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
 					this->BuildGameObjectBoundingBoxes_Range(pScene, vGameObjectHandles, iBegin, iEnd);
+					Signals[iRange].Notify();
 				});
 			}
 		}
@@ -579,81 +755,85 @@ void SceneBoundingBoxHierarchy::Build(const Scene* pScene, const std::vector<siz
 		if(!vRanges.empty())
 		{
 			this->BuildGameObjectBoundingBoxes_Range(pScene, vGameObjectHandles, vRanges[0].first, vRanges[0].second);
+			Signals[0].Notify();
 		}
 	}
 
 
 	// dispatch mesh bounding box workers
-	{
-		using namespace std;
-		//CountGameObjectMeshes(pObjects);
+	
+	using namespace std;
+	//CountGameObjectMeshes(pObjects);
 		
-		// Sync point -------------------------------------------------
-		{
-			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS_GObjBB", 0xFFFF0000);
-			while (WorkerThreadPool.GetNumActiveTasks() != 0); // busy-wait is bad...
-		}
-		{
-			SCOPED_CPU_MARKER("CountGameObjectMeshes");
-			mNumValidMeshBoundingBoxes = 0;
-			for (size_t NumMeshes : mGameObjectNumMeshes)
-				mNumValidMeshBoundingBoxes += NumMeshes;
-		}
-
-		ResizeGameMeshBoxContainer(mNumValidMeshBoundingBoxes);
-#if 1
-		std::vector<std::tuple<size_t, size_t, size_t>> vRanges;
-		{
-			SCOPED_CPU_MARKER("PrepareRanges");
-			const size_t  NumObjs = vGameObjectHandles.size();
-			const size_t& NumWorkItems = mNumValidMeshBoundingBoxes;
-			const size_t  NumWorkerThreadsToUse = CalculateNumThreadsToUse(NumWorkItems, NumWorkerThreadsAvailable, NumDesiredMinimumWorkItemsPerThread);
-
-			const size_t ThreadBBBatchCapacity = mNumValidMeshBoundingBoxes / (NumWorkerThreadsToUse+1);
-
-			size_t iBegin = 0;       size_t iEnd = 0;
-			size_t CurrBatchSize = 0; size_t iBB = 0;
-			for (size_t i=0; i<NumObjs; ++i)
-			{
-				CurrBatchSize += mGameObjectNumMeshes[i];
-				++iEnd;
-
-				if (CurrBatchSize > ThreadBBBatchCapacity)
-				{
-					vRanges.push_back({ iBegin, iEnd, iBB });
-					iBegin = iEnd;
-					iBB += CurrBatchSize;
-					CurrBatchSize = 0;
-				}
-			}
-
-			vRanges.push_back({ iBegin, iEnd, iBB });
-		}
-		{
-			SCOPED_CPU_MARKER("DispatchWorkers");
-			for (size_t i = 1; i < vRanges.size(); ++i)
-			{
-				WorkerThreadPool.AddTask([=]()
-				{
-					SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
-					this->BuildMeshBoundingBoxes_Range(pScene, vGameObjectHandles, get<0>(vRanges[i]), get<1>(vRanges[i]), get<2>(vRanges[i]));
-				});
-			}
-
-		}
-		{
-			SCOPED_CPU_MARKER("Process_ThisThread");
-			this->BuildMeshBoundingBoxes_Range(pScene, vGameObjectHandles, get<0>(vRanges.front()), get<1>(vRanges.front()), get<2>(vRanges.front()));
-		}
-#else
-		this->BuildMeshBoundingBoxes(pObjects);
-#endif
+	// Sync point -------------------------------------------------
+	{
+		for (TaskSignal<void>& Signal : Signals)
+			Signal.Wait();
 	}
+	{
+		SCOPED_CPU_MARKER("CountGameObjectMeshes");
+		mNumValidMeshBoundingBoxes = 0;
+		for (size_t NumMeshes : mGameObjectNumMeshes)
+			mNumValidMeshBoundingBoxes += NumMeshes;
+	}
+
+	ResizeGameMeshBoxContainer(mNumValidMeshBoundingBoxes);
+#if 1
+	std::vector<std::tuple<size_t, size_t, size_t>> vRanges;
+	{
+		SCOPED_CPU_MARKER("PrepareRanges");
+		const size_t  NumObjs = vGameObjectHandles.size();
+		const size_t& NumWorkItems = mNumValidMeshBoundingBoxes;
+		const size_t  NumWorkerThreadsToUse = CalculateNumThreadsToUse(NumWorkItems, NumWorkerThreadsAvailable, NumDesiredMinimumWorkItemsPerThread);
+
+		const size_t ThreadBBBatchCapacity = mNumValidMeshBoundingBoxes / (NumWorkerThreadsToUse+1);
+
+		size_t iBegin = 0;       size_t iEnd = 0;
+		size_t CurrBatchSize = 0; size_t iBB = 0;
+		for (size_t i=0; i<NumObjs; ++i)
+		{
+			CurrBatchSize += mGameObjectNumMeshes[i];
+			++iEnd;
+
+			if (CurrBatchSize > ThreadBBBatchCapacity)
+			{
+				vRanges.push_back({ iBegin, iEnd, iBB });
+				iBegin = iEnd;
+				iBB += CurrBatchSize;
+				CurrBatchSize = 0;
+			}
+		}
+
+		vRanges.push_back({ iBegin, iEnd, iBB });
+	}
+	std::vector<TaskSignal<void>> SignalsMeshBB(vRanges.size());
+	{
+		SCOPED_CPU_MARKER("DispatchWorkers");
+		for (size_t i = 1; i < vRanges.size(); ++i)
+		{
+			WorkerThreadPool.AddTask([=, &vGameObjectHandles, &SignalsMeshBB]()
+			{
+				SCOPED_CPU_MARKER_C("UpdateWorker", 0xFF0000FF);
+				this->BuildMeshBoundingBoxes_Range(pScene, vGameObjectHandles, get<0>(vRanges[i]), get<1>(vRanges[i]), get<2>(vRanges[i]));
+				SignalsMeshBB[i].Notify();
+			});
+		}
+	}
+	{
+		SCOPED_CPU_MARKER("Process_ThisThread");
+		this->BuildMeshBoundingBoxes_Range(pScene, vGameObjectHandles, get<0>(vRanges.front()), get<1>(vRanges.front()), get<2>(vRanges.front()));
+	}
+#else
+	this->BuildMeshBoundingBoxes(pObjects);
+#endif
 	
 	// Sync point -------------------------------------------------
 	{
-		SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKERS_MeshBB", 0xFFFF0000);
-		while (WorkerThreadPool.GetNumActiveTasks() != 0); // busy-wait is bad...
+		SCOPED_CPU_MARKER_C("WAIT_WORKERS_MeshBB", 0xFFFF0000);
+		for (size_t i = 1; i < vRanges.size(); ++i)
+		{
+			SignalsMeshBB[i].Wait();
+		}
 	}
 
 #else
@@ -731,10 +911,9 @@ void SceneBoundingBoxHierarchy::BuildMeshBoundingBox(const Scene* pScene, size_t
 			MeshID meshID = meshMaterialIDPair.first;
 			const Mesh& mesh = mMeshes.at(meshID);
 			MaterialID mat = meshMaterialIDPair.second;
-			FBoundingBox AABB = CalculateAxisAlignedBoundingBox(matWorld, mesh.GetLocalSpaceBoundingBox());
 			const int numMaxLODs = mesh.GetNumLODs();
 
-			mMeshBoundingBoxes[iMesh] = std::move(AABB);
+			mMeshBoundingBoxes[iMesh] = CalculateAxisAlignedBoundingBox(matWorld, mesh.GetLocalSpaceBoundingBox());
 			mMeshIDs[iMesh] = meshID;
 			mNumMeshLODs[iMesh] = numMaxLODs;
 			mMeshMaterials[iMesh] = mat;

@@ -17,13 +17,16 @@
 //	Contact: volkanilbeyli@gmail.com
 #include "VQEngine.h"
 #include "Math.h"
+#include "Core/Window.h"
 #include "Scene/Scene.h"
-#include "../Scenes/Scenes.h" // scene instances
+#include "Scene/SceneViews.h"
 
 #include "GPUMarker.h"
 #include "imgui.h" // io
 
-#include "Libs/VQUtils/Source/utils.h"
+#include "Renderer/Renderer.h"
+
+#include "Libs/VQUtils/Include/utils.h"
 
 #include <algorithm>
 
@@ -41,7 +44,7 @@ static void Toggle(bool& b) { b = !b; }
 void VQEngine::HandleEngineInput()
 {
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
+	const int NUM_BACK_BUFFERS = mpRenderer->GetSwapChainBackBufferCount(mpWinMain->GetHWND());
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
 #endif
 
@@ -88,7 +91,7 @@ void VQEngine::HandleUIInput()
 			{
 				WaitUntilRenderingFinishes();
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
-				const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
+				const int NUM_BACK_BUFFERS = mpRenderer->GetSwapChainBackBufferCount(mpWinMain->GetHWND());
 				const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
 #endif
 				FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
@@ -118,7 +121,7 @@ void VQEngine::HandleUIInput()
 void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 {
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCount(mpWinMain->GetHWND());
+	const int NUM_BACK_BUFFERS = mpRenderer->GetSwapChainBackBufferCount(mpWinMain->GetHWND());
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
 #endif
 	const bool bIsShiftDown = input.IsKeyDown("Shift");
@@ -161,7 +164,7 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 	// Graphics Settings Controls
 	if (input.IsKeyTriggered("V")) // Vsync
 	{
-		auto& SwapChain = mRenderer.GetWindowSwapChain(hwnd);
+		auto& SwapChain = mpRenderer->GetWindowSwapChain(hwnd);
 		mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetVSyncEvent>(hwnd, !SwapChain.IsVSyncOn()));
 	}
 	if (input.IsKeyTriggered("M")) // MSAA

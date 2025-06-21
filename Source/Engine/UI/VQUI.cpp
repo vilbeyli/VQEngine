@@ -15,15 +15,18 @@
 //	along with this program.If not, see <http://www.gnu.org/licenses/>.
 //
 //	Contact: volkanilbeyli@gmail.com
-#include <utility>
-#include "../VQEngine.h"
-#include "../GPUMarker.h"
+#include "Engine/VQEngine.h"
+#include "Engine/GPUMarker.h"
+#include "Engine/Scene/SceneViews.h"
+#include "Engine/Scene/Scene.h"
+#include "Engine/Core/Window.h"
 
-#include "../RenderPass/MagnifierPass.h"
+#include "Renderer/Rendering/RenderPass/MagnifierPass.h"
+#include "Renderer/Renderer.h"
 
-#include "VQUtils/Source/utils.h"
+#include "VQUtils/Include/utils.h"
 
-#include "../Core/imgui_impl_win32.h"
+#include "Libs/imgui/backends/imgui_impl_win32.h"
 #include "Libs/imgui/imgui.h"
 // To use the 'disabled UI state' functionality (ImGuiItemFlags_Disabled), include internal header
 // https://github.com/ocornut/imgui/issues/211#issuecomment-339241929
@@ -212,37 +215,13 @@ void FUIState::GetMouseScreenPosition(int& X, int& Y) const
 
 void VQEngine::InitializeImGUI(HWND hwnd)
 {
+	SCOPED_CPU_MARKER("InitializeImGUI");
 	mpImGuiContext = ImGui::CreateContext();
 	ImGui::SetCurrentContext(mpImGuiContext);
 	ImGui_ImplWin32_Init(hwnd);
 
 	ImGuiIO& io = ImGui::GetIO();
 	io.IniFilename = nullptr; // don't save out to a .ini file
-
-
-#if 0 // do we need imgui keymapping?
-	io.KeyMap[ImGuiKey_Tab] = VK_TAB;
-	io.KeyMap[ImGuiKey_LeftArrow] = VK_LEFT;
-	io.KeyMap[ImGuiKey_RightArrow] = VK_RIGHT;
-	io.KeyMap[ImGuiKey_UpArrow] = VK_UP;
-	io.KeyMap[ImGuiKey_DownArrow] = VK_DOWN;
-	io.KeyMap[ImGuiKey_PageUp] = VK_PRIOR;
-	io.KeyMap[ImGuiKey_PageDown] = VK_NEXT;
-	io.KeyMap[ImGuiKey_Home] = VK_HOME;
-	io.KeyMap[ImGuiKey_End] = VK_END;
-	io.KeyMap[ImGuiKey_Delete] = VK_DELETE;
-	io.KeyMap[ImGuiKey_Backspace] = VK_BACK;
-	io.KeyMap[ImGuiKey_Enter] = VK_RETURN;
-	io.KeyMap[ImGuiKey_Escape] = VK_ESCAPE;
-	io.KeyMap[ImGuiKey_A] = 'A';
-	io.KeyMap[ImGuiKey_C] = 'C';
-	io.KeyMap[ImGuiKey_V] = 'V';
-	io.KeyMap[ImGuiKey_X] = 'X';
-	io.KeyMap[ImGuiKey_Y] = 'Y';
-	io.KeyMap[ImGuiKey_Z] = 'Z';
-
-#endif
-	io.ImeWindowHandle = hwnd;
 	// Hide OS mouse cursor if ImGui is drawing it
 	if (io.MouseDrawCursor)
 		SetCursor(NULL);
@@ -260,15 +239,11 @@ void VQEngine::InitializeUI(HWND hwnd)
 
 	// Create the texture object
 	//
-	TextureCreateDesc rDescs("texUI");
-	rDescs.d3d12Desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height, 1, 1);
-	rDescs.pDataArray.push_back( pixels );
-	TextureID texUI = mRenderer.CreateTexture(rDescs);
-	SRV_ID srvUI = mRenderer.AllocateAndInitializeSRV(texUI);
+	FTextureRequest rDescs("texUI");
+	rDescs.D3D12Desc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height, 1, 1);
+	rDescs.DataArray.push_back( pixels );
 
-	// Tell ImGUI what the image view is
-	//
-	io.Fonts->TexID = (ImTextureID)mRenderer.GetSRV(srvUI).GetGPUDescHandle().ptr;
+	TextureID texUI = mpRenderer->CreateTexture(rDescs);
 
 
 	// Create sampler
@@ -288,9 +263,14 @@ void VQEngine::InitializeUI(HWND hwnd)
 	SamplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
 	InitializeEngineUIState(mUIState);
+	
+	mpRenderer->WaitHeapsInitialized();
+	SRV_ID srvUI = mpRenderer->AllocateAndInitializeSRV(texUI);
+	io.Fonts->TexID = (ImTextureID)mpRenderer->GetSRV(srvUI).GetGPUDescHandle().ptr;
 }
 void VQEngine::ExitUI()
 {
+	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext(mpImGuiContext);
 }
 
@@ -301,11 +281,16 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 
 	// Data for the UI controller to update
 #if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
-	const int NUM_BACK_BUFFERS = mRenderer.GetSwapChainBackBufferCountmpWinMain->GetHWND());
+	const int NUM_BACK_BUFFERS = mpRenderer->GetSwapChainBackBufferCountmpWinMain->GetHWND());
 	const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
 #endif
+
+	// TODO: remove this hack, properly sync
+	if (!mpScene)
+		return;
+
 	FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
-	FSceneRenderParameters& SceneParams = mpScene->GetSceneView(FRAME_DATA_INDEX).sceneParameters;
+	FSceneRenderOptions& SceneParams = mpScene->GetSceneView(FRAME_DATA_INDEX).sceneRenderOptions;
 	ImGuiStyle& style = ImGui::GetStyle();
 
 	// ----------------------------------
@@ -561,7 +546,7 @@ static void DrawFrameTimeChart()
 // VQEngine UI Drawing
 //
 
-void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderParameters& SceneRenderParams)
+void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderOptions& SceneRenderParams)
 {
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
@@ -706,7 +691,7 @@ void VQEngine::DrawKeyMappingsWindow()
 		ImGui::Text(" Right Click : Operate Camera");
 		ImGui::Text("  Left Click : Pick object");
 		ImGui::Text("      Scroll : Adjust distance (Orbit Camera)");
-		ImGui::Text("      WASDEQ : Move Camera (Free Camera)");
+		ImGui::Text("      WASDEQ : Move Camera (First Person Camera)");
 		ImGui::Text("       Space : Toggle animation (if available)");
 		ImGui::Text("");
 
@@ -724,7 +709,6 @@ void VQEngine::DrawKeyMappingsWindow()
 		ImGui::Text("     Shift+R : Reload level");
 		ImGui::Text("Page Up/Down : Change the HDRI Environment Map");
 		ImGui::Text("         1-4 : Change between available scenes");
-		ImGui::Text("           R : Reset camera");
 		ImGui::Text("           C : Cycle scene cameras");
 		ImGui::Text("           G : Toggle gamma correction");
 		ImGui::Text("           B : Toggle FidelityFX Sharpening");
@@ -834,13 +818,12 @@ void VQEngine::DrawProfilerWindow(const FSceneStats& FrameStats, float dt)
 		ImGuiSpacing3();
 		if (ImGui::CollapsingHeader("RENDER COMMANDS", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			ImGui::TextColored(DataTextColor, "Mesh         : %d", s.NumMeshRenderCommands);
-			ImGui::TextColored(DataTextColor, "Shadow Mesh  : %d", s.NumShadowMeshRenderCommands);
-			ImGui::TextColored(DataTextColor, "Bounding Box : %d", s.NumBoundingBoxRenderCommands);
-#if 0 // TODO: track renderer API calls
-			ImGui::TextColored(DataTextColor, "Draw Calls     : %d", mRenderStats.NumDraws);
-			ImGui::TextColored(DataTextColor, "Dispatch Calls : %d", mRenderStats.NumDispatches);
-#endif
+			const FRenderStats& rs = *s.pRenderStats;
+			ImGui::TextColored(DataTextColor, "Lit Mesh         : %d", rs.NumLitMeshDrawCommands);
+			ImGui::TextColored(DataTextColor, "Shadow Mesh      : %d", rs.NumShadowMeshDrawCommands);
+			ImGui::TextColored(DataTextColor, "Bounding Box     : %d", rs.NumBoundingBoxDrawCommands);
+			ImGui::TextColored(DataTextColor, "Total Draws      : %d", rs.NumDraws);
+			ImGui::TextColored(DataTextColor, "Total Dispatches : %d", rs.NumDispatches);
 		}
 	}
 	ImGui::End();
@@ -933,7 +916,7 @@ void VQEngine::DrawPostProcessSettings(FPostProcessParameters& PPParams)
 
 }
 
-void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderParams, FPostProcessParameters& PPParams)
+void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams, FPostProcessParameters& PPParams)
 {
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
@@ -1090,7 +1073,7 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 		{
 		case EReflections::SCREEN_SPACE_REFLECTIONS__FFX:
 		{
-			FSceneRenderParameters::FFFX_SSSR_UIParameters& FFXParams = SceneRenderParams.FFX_SSSRParameters;
+			FSceneRenderOptions::FFFX_SSSR_UIOptions& FFXParams = SceneRenderParams.FFX_SSSRParameters;
 
 			ImGui::PushStyleColor(ImGuiCol_Header, UI_COLLAPSING_HEADER_COLOR_VALUE);
 			if (ImGui::CollapsingHeader("SSSR Settings"))
@@ -1124,6 +1107,10 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderParameters& SceneRenderPar
 
 		ImGui::Checkbox("Async Compute", &mSettings.gfx.bEnableAsyncCompute);
 		ImGui::Checkbox("Async Copy", &mSettings.gfx.bEnableAsyncCopy);
+		if (ImGui::Checkbox("Separate Submission Queue", &mSettings.gfx.bUseSeparateSubmissionQueue))
+		{
+			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetSwapchainPresentationQueueEvent>(hwnd, mSettings.gfx.bUseSeparateSubmissionQueue));
+		}
 
 		ImGui::Checkbox("ForceLOD0 (Shadow)", &SceneRenderParams.bForceLOD0_ShadowView);
 		ImGui::Checkbox("ForceLOD0 (Scene )", &SceneRenderParams.bForceLOD0_SceneView);
@@ -1240,13 +1227,15 @@ void VQEngine::DrawEditorWindow()
 	ImGui::End();
 }
 
-static void DrawTessellationEditorGUI(FUIState& mUIState, FTessellationParameters& tess, bool& bWireframe)
+static void DrawTessellationEditorGUI(FUIState& mUIState, Material& mat)
 {
 	StartDrawingMaterialEditorRow("Tessellation");
-	ImGui::Checkbox("Enable##", &tess.bEnableTessellation);
+	bool bEnableTessellation = mat.IsTessellationEnabled();
+	if (ImGui::Checkbox("Enable##", &bEnableTessellation))
+		mat.SetTessellationEnabled(bEnableTessellation);
 	ImGui::SameLine();
-	ImGui::Checkbox("Wireframe", &bWireframe);
-	if (tess.bEnableTessellation)
+	ImGui::Checkbox("Wireframe", &mat.bWireframe);
+	if (bEnableTessellation)
 	{
 		const char* pszTessellationModeNames[] = {
 			"Triangle",
@@ -1254,42 +1243,45 @@ static void DrawTessellationEditorGUI(FUIState& mUIState, FTessellationParameter
 			// "Line"
 			""
 		};
-		if (ImGui::BeginCombo("Domain", pszTessellationModeNames[tess.Domain]))
+
+		ETessellationDomain Domain = mat.GetTessellationDomain();
+		if (ImGui::BeginCombo("Domain", pszTessellationModeNames[(size_t)Domain]))
 		{
-			if (ImGui::Selectable(pszTessellationModeNames[0], tess.Domain == ETessellationDomain::TRIANGLE_PATCH)) { tess.Domain = ETessellationDomain::TRIANGLE_PATCH; }
-			if (ImGui::Selectable(pszTessellationModeNames[1], tess.Domain == ETessellationDomain::QUAD_PATCH)) { tess.Domain = ETessellationDomain::QUAD_PATCH; }
+			if (ImGui::Selectable(pszTessellationModeNames[0], Domain == ETessellationDomain::TRIANGLE_PATCH)) { mat.SetTessellationDomain( ETessellationDomain::TRIANGLE_PATCH ); }
+			if (ImGui::Selectable(pszTessellationModeNames[1], Domain == ETessellationDomain::QUAD_PATCH)) { mat.SetTessellationDomain( ETessellationDomain::QUAD_PATCH ); }
 			ImGui::EndCombo();
 		}
 
-		constexpr float MAX_TESSELLATION = FTessellationParameters::MAX_TESSELLATION_FACTOR;
-		switch (tess.Domain)
+		Domain = mat.GetTessellationDomain();
+		constexpr float MAX_TESSELLATION = Tessellation::MAX_TESSELLATION_FACTOR;
+		switch (Domain)
 		{
 		case::ETessellationDomain::TRIANGLE_PATCH:
 		{
 			if (mUIState.bTessellationSliderFloatVec)
 			{
-				ImGui::SliderFloat3("Outer", &tess.GPUParams.TriEdgeTessFactor.x, 0.0f, MAX_TESSELLATION, "%.1f");
+				ImGui::SliderFloat3("Outer", &mat.TessellationData.EdgeTessFactor.x, 0.0f, MAX_TESSELLATION, "%.1f");
 			}
 			else
 			{
-				float fOuterMin = std::fminf(tess.GPUParams.TriEdgeTessFactor.x, std::fminf(tess.GPUParams.TriEdgeTessFactor.y, tess.GPUParams.TriEdgeTessFactor.z));
+				float fOuterMin = std::fminf(mat.TessellationData.EdgeTessFactor.x, std::fminf(mat.TessellationData.EdgeTessFactor.y, mat.TessellationData.EdgeTessFactor.z));
 				if (ImGui::SliderFloat("Outer##", &fOuterMin, 0.0f, MAX_TESSELLATION, "%.1f"))
 				{
-					tess.GPUParams.TriEdgeTessFactor.x = tess.GPUParams.TriEdgeTessFactor.y = tess.GPUParams.TriEdgeTessFactor.z = fOuterMin;
+					mat.TessellationData.EdgeTessFactor.x = mat.TessellationData.EdgeTessFactor.y = mat.TessellationData.EdgeTessFactor.z = fOuterMin;
 					if (mUIState.bLockTessellationSliders)
 					{
-						tess.GPUParams.TriInnerTessFactor = fOuterMin;
+						mat.TessellationData.InsideTessFactor.x = fOuterMin;
 					}
 				}
 			}
 			ImGui::SameLine();
 
 			ImGui::Checkbox("[]", &mUIState.bTessellationSliderFloatVec);
-			if (ImGui::SliderFloat("Inner", &tess.GPUParams.TriInnerTessFactor, 0.0f, MAX_TESSELLATION, "%.1f"))
+			if (ImGui::SliderFloat("Inner", &mat.TessellationData.InsideTessFactor.x, 0.0f, MAX_TESSELLATION, "%.1f"))
 			{
 				if (mUIState.bLockTessellationSliders)
 				{
-					tess.SetAllTessellationFactors(tess.GPUParams.TriInnerTessFactor);
+					mat.TessellationData.SetAllTessellationFactors(mat.TessellationData.InsideTessFactor.x);
 				}
 			}
 		}	break;
@@ -1297,32 +1289,32 @@ static void DrawTessellationEditorGUI(FUIState& mUIState, FTessellationParameter
 		{
 			if (mUIState.bTessellationSliderFloatVec)
 			{
-				ImGui::SliderFloat4("Outer", &tess.GPUParams.QuadEdgeTessFactor.x, 0.0f, MAX_TESSELLATION, "%.1f");
+				ImGui::SliderFloat4("Outer", &mat.TessellationData.EdgeTessFactor.x, 0.0f, MAX_TESSELLATION, "%.1f");
 				ImGui::SameLine();
 				ImGui::Checkbox("[]", &mUIState.bTessellationSliderFloatVec);
-				ImGui::SliderFloat2("Inner", &tess.GPUParams.QuadInsideFactor.x, 0.0f, MAX_TESSELLATION, "%.1f");
+				ImGui::SliderFloat2("Inner", &mat.TessellationData.InsideTessFactor.x, 0.0f, MAX_TESSELLATION, "%.1f");
 			}
 			else
 			{
-				float fOuterMin = std::fminf(tess.GPUParams.QuadEdgeTessFactor.x, std::fminf(tess.GPUParams.QuadEdgeTessFactor.y, std::fminf(tess.GPUParams.QuadEdgeTessFactor.z, tess.GPUParams.QuadEdgeTessFactor.w)));
+				float fOuterMin = std::fminf(mat.TessellationData.EdgeTessFactor.x, std::fminf(mat.TessellationData.EdgeTessFactor.y, std::fminf(mat.TessellationData.EdgeTessFactor.z, mat.TessellationData.EdgeTessFactor.w)));
 				if (ImGui::SliderFloat("Outer", &fOuterMin, 0.0f, MAX_TESSELLATION, "%.1f"))
 				{
-					tess.GPUParams.QuadEdgeTessFactor.x = tess.GPUParams.QuadEdgeTessFactor.y = tess.GPUParams.QuadEdgeTessFactor.z = tess.GPUParams.QuadEdgeTessFactor.w = fOuterMin;
+					mat.TessellationData.EdgeTessFactor.x = mat.TessellationData.EdgeTessFactor.y = mat.TessellationData.EdgeTessFactor.z = mat.TessellationData.EdgeTessFactor.w = fOuterMin;
 					if (mUIState.bLockTessellationSliders)
 					{
-						tess.SetAllTessellationFactors(fOuterMin);
+						mat.TessellationData.SetAllTessellationFactors(fOuterMin);
 					}
 				}
 				ImGui::SameLine();
 				ImGui::Checkbox("[]", &mUIState.bTessellationSliderFloatVec);
 
-				float fInnerMin = std::fminf(tess.GPUParams.QuadInsideFactor.x, tess.GPUParams.QuadInsideFactor.y);
+				float fInnerMin = std::fminf(mat.TessellationData.InsideTessFactor.x, mat.TessellationData.InsideTessFactor.y);
 				if (ImGui::SliderFloat("Inner", &fInnerMin, 0.0f, MAX_TESSELLATION, "%.1f"))
 				{
-					tess.GPUParams.QuadInsideFactor.x = tess.GPUParams.QuadInsideFactor.y = fInnerMin;
+					mat.TessellationData.InsideTessFactor.x = mat.TessellationData.InsideTessFactor.y = fInnerMin;
 					if (mUIState.bLockTessellationSliders)
 					{
-						tess.SetAllTessellationFactors(fInnerMin);
+						mat.TessellationData.SetAllTessellationFactors(fInnerMin);
 					}
 				}
 			}
@@ -1346,20 +1338,15 @@ static void DrawTessellationEditorGUI(FUIState& mUIState, FTessellationParameter
 			"Pow2",
 			""
 		};
-		if (ImGui::BeginCombo("Partitioning", pszPartitioningNames[tess.Partitioning]))
+
+		ETessellationPartitioning partitioning = mat.GetTessellationPartitioning();
+		if (ImGui::BeginCombo("Partitioning", pszPartitioningNames[(size_t)partitioning]))
 		{
-			if (ImGui::Selectable(pszPartitioningNames[0], tess.Partitioning == ETessellationPartitioning::INTEGER)) { tess.Partitioning = ETessellationPartitioning::INTEGER; }
-			if (ImGui::Selectable(pszPartitioningNames[1], tess.Partitioning == ETessellationPartitioning::FRACTIONAL_EVEN)) { tess.Partitioning = ETessellationPartitioning::FRACTIONAL_EVEN; }
-			if (ImGui::Selectable(pszPartitioningNames[2], tess.Partitioning == ETessellationPartitioning::FRACTIONAL_ODD)) { tess.Partitioning = ETessellationPartitioning::FRACTIONAL_ODD; }
-			if (ImGui::Selectable(pszPartitioningNames[3], tess.Partitioning == ETessellationPartitioning::POWER_OF_TWO)) { tess.Partitioning = ETessellationPartitioning::POWER_OF_TWO; }
+			if (ImGui::Selectable(pszPartitioningNames[0], partitioning == ETessellationPartitioning::INTEGER))        { mat.SetTessellationPartitioning(ETessellationPartitioning::INTEGER); }
+			if (ImGui::Selectable(pszPartitioningNames[1], partitioning == ETessellationPartitioning::FRACTIONAL_EVEN)){ mat.SetTessellationPartitioning(ETessellationPartitioning::FRACTIONAL_EVEN); }
+			if (ImGui::Selectable(pszPartitioningNames[2], partitioning == ETessellationPartitioning::FRACTIONAL_ODD)) { mat.SetTessellationPartitioning(ETessellationPartitioning::FRACTIONAL_ODD); }
+			if (ImGui::Selectable(pszPartitioningNames[3], partitioning == ETessellationPartitioning::POWER_OF_TWO))   { mat.SetTessellationPartitioning(ETessellationPartitioning::POWER_OF_TWO); }
 			ImGui::EndCombo();
-		}
-
-
-		switch (tess.Domain)
-		{
-		case::ETessellationDomain::TRIANGLE_PATCH:
-			break;
 		}
 
 		// topo
@@ -1370,62 +1357,64 @@ static void DrawTessellationEditorGUI(FUIState& mUIState, FTessellationParameter
 			"Triangle CCW",
 			""
 		};
-		const bool bLineDomain = tess.Domain == ETessellationDomain::ISOLINE_PATCH;
-		if (ImGui::BeginCombo("Output Topology", pszOutputTopologyNames[tess.OutputTopology]))
+		const bool bLineDomain = mat.GetTessellationDomain() == ETessellationDomain::ISOLINE_PATCH;
+		ETessellationOutputTopology topology = mat.GetTessellationOutputTopology();
+		if (ImGui::BeginCombo("Output Topology", pszOutputTopologyNames[(size_t)topology]))
 		{
-			if (ImGui::Selectable(pszOutputTopologyNames[0], tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT)) { tess.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT; }
+			if (ImGui::Selectable(pszOutputTopologyNames[0], topology == ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT)) { mat.SetTessellationOutputTopology(ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT); }
 			BeginDisabledUIState(bLineDomain);
-			if (ImGui::Selectable(pszOutputTopologyNames[1], tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE)) { tess.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE; }
+			if (ImGui::Selectable(pszOutputTopologyNames[1], topology == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE)) { mat.SetTessellationOutputTopology(ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE); }
 			EndDisabledUIState(bLineDomain);
-			if (ImGui::Selectable(pszOutputTopologyNames[2], tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW)) { tess.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW; }
-			if (ImGui::Selectable(pszOutputTopologyNames[3], tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW)) { tess.OutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW; }
+			if (ImGui::Selectable(pszOutputTopologyNames[2], topology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW)) { mat.SetTessellationOutputTopology(ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW); }
+			if (ImGui::Selectable(pszOutputTopologyNames[3], topology == ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW)) { mat.SetTessellationOutputTopology(ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CCW); }
 			ImGui::EndCombo();
 		}
-
-		const bool bShouldDisableCullingOptionsForTessellation = tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT || tess.OutputTopology == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE;
+		
+		topology = mat.GetTessellationOutputTopology();
+		const bool bShouldDisableCullingOptionsForTessellation = topology == ETessellationOutputTopology::TESSELLATION_OUTPUT_POINT || topology == ETessellationOutputTopology::TESSELLATION_OUTPUT_LINE;
 		if (bShouldDisableCullingOptionsForTessellation)
 		{
-			tess.GPUParams.bFaceCull = false;
-			tess.GPUParams.bFrustumCull = false;
+			mat.TessellationData.SetFaceCulling(false);
+			mat.TessellationData.SetFrustumCulling(false);
 		}
 
 		// cull toggles
-		bool bFrustumCull = tess.GPUParams.bFrustumCull;
+		bool bFrustumCull = mat.TessellationData.IsFaceCullingOn();
 		BeginDisabledUIState(!bShouldDisableCullingOptionsForTessellation);
-		if (ImGui::Checkbox("Frustum Cull", &bFrustumCull)) { tess.GPUParams.bFrustumCull = bFrustumCull; }
+		if (ImGui::Checkbox("Frustum Cull", &bFrustumCull)) { mat.TessellationData.SetFrustumCulling(bFrustumCull); }
 		ImGui::SameLine();
-		bool bBackFaceCull = tess.GPUParams.bFaceCull;
-		if (ImGui::Checkbox("BackFace Cull", &bBackFaceCull)) { tess.GPUParams.bFaceCull = bBackFaceCull; }
+		bool bBackFaceCull = mat.TessellationData.IsFaceCullingOn();
+		if (ImGui::Checkbox("BackFace Cull", &bBackFaceCull)) { mat.TessellationData.SetFaceCulling(bBackFaceCull); }
 		EndDisabledUIState(!bShouldDisableCullingOptionsForTessellation);
 
 		// cull thresholdes
-		float fCullFrustumAndBackfaceThresholds[2] = { tess.GPUParams.fHSFrustumCullEpsilon, tess.GPUParams.fHSFaceCullEpsilon };
+		float fCullFrustumAndBackfaceThresholds[2] = { mat.TessellationData.fHSFrustumCullEpsilon, mat.TessellationData.fHSFaceCullEpsilon };
 		if (bBackFaceCull && bFrustumCull)
 		{
 			if (ImGui::InputFloat2("Thresholds (Frustum, BackFace)", fCullFrustumAndBackfaceThresholds))
 			{
-				tess.GPUParams.fHSFrustumCullEpsilon = fCullFrustumAndBackfaceThresholds[0];
-				tess.GPUParams.fHSFaceCullEpsilon = fCullFrustumAndBackfaceThresholds[1];
+				mat.TessellationData.fHSFrustumCullEpsilon = fCullFrustumAndBackfaceThresholds[0];
+				mat.TessellationData.fHSFaceCullEpsilon = fCullFrustumAndBackfaceThresholds[1];
 			}
 		}
 		else if (bBackFaceCull)
 		{
-			ImGui::InputFloat("Threshold", &tess.GPUParams.fHSFaceCullEpsilon);
+			ImGui::InputFloat("Threshold", &mat.TessellationData.fHSFaceCullEpsilon);
 		}
 		else if (bFrustumCull)
 		{
-			ImGui::InputFloat("Threshold", &tess.GPUParams.fHSFrustumCullEpsilon);
+			ImGui::InputFloat("Threshold", &mat.TessellationData.fHSFrustumCullEpsilon);
 		}
 
-		bool bAdaptiveTess = tess.GPUParams.bAdaptiveTessellation;
-		if (ImGui::Checkbox("Adaptive", &bAdaptiveTess)) { tess.GPUParams.bAdaptiveTessellation = bAdaptiveTess; }
+		bool bAdaptiveTess = mat.TessellationData.IsAdaptiveTessellationOn();
+		if (ImGui::Checkbox("Adaptive", &bAdaptiveTess)) { mat.TessellationData.SetAdaptiveTessellation(bAdaptiveTess); }
 		if (bAdaptiveTess)
 		{
-			float fMinMaxDistanceThresholds[2] = { tess.GPUParams.fHSAdaptiveTessellationMinDist, tess.GPUParams.fHSAdaptiveTessellationMaxDist };
+			float fMinMaxDistanceThresholds[2] = { mat.TessellationData.fHSAdaptiveTessellationMinDist, mat.TessellationData.fHSAdaptiveTessellationMaxDist };
 			if (ImGui::InputFloat2("Min/Max Distance", fMinMaxDistanceThresholds))
 			{
-				tess.GPUParams.fHSAdaptiveTessellationMinDist = fMinMaxDistanceThresholds[0];
-				tess.GPUParams.fHSAdaptiveTessellationMaxDist = fMinMaxDistanceThresholds[1];
+				mat.TessellationData.fHSAdaptiveTessellationMinDist = fMinMaxDistanceThresholds[0];
+				mat.TessellationData.fHSAdaptiveTessellationMaxDist = fMinMaxDistanceThresholds[1];
 			}
 		}
 	}
@@ -1434,7 +1423,6 @@ static void DrawTessellationEditorGUI(FUIState& mUIState, FTessellationParameter
 void VQEngine::DrawMaterialEditor()
 {
 	// gather material data
-	const std::vector<FMaterialRepresentation>& matReps = mpScene->GetMaterialRepresentations();
 	std::vector<MaterialID> matIDsAll = mpScene->GetMaterialIDs();
 	
 	// filter materials by selected objects
@@ -1549,9 +1537,7 @@ void VQEngine::DrawMaterialEditor()
 
 	ImGuiSpacing(3);
 
-	// Tessellation
-	FTessellationParameters& tess = mat.Tessellation;
-	DrawTessellationEditorGUI(mUIState, tess, mat.bWireframe);
+	DrawTessellationEditorGUI(mUIState, mat);
 
 	ImGuiSpacing(6);
 
@@ -1561,35 +1547,50 @@ void VQEngine::DrawMaterialEditor()
 		"Diffuse Map",  //EMaterialTextureMapBindings::ALBEDO
 		"Normal Map",  //EMaterialTextureMapBindings::NORMALS
 		"Emissive Map",  //EMaterialTextureMapBindings::EMISSIVE
-		"Height Map",  
 		"Alpha Mask Map", //EMaterialTextureMapBindings::ALPHA_MASK
 		"Metallic Map",  //EMaterialTextureMapBindings::METALLIC
 		"Roughness Map",  //EMaterialTextureMapBindings::ROUGHNESS
 		"Occlusion Roughness Metalness Map",  //EMaterialTextureMapBindings::OCCLUSION_ROUGHNESS_METALNESS
-		"Ambient Occlusion Map"//EMaterialTextureMapBindings::AMBIENT_OCCLUSION
-		, ""
+		"Ambient Occlusion Map", //EMaterialTextureMapBindings::AMBIENT_OCCLUSION
+		"Height Map",
+		""
 	};
 	const int textureIDs[] = 
 	{
-		mat.TexDiffuseMap, mat.TexNormalMap, mat.TexEmissiveMap, mat.TexHeightMap,
-		mat.TexAlphaMaskMap, mat.TexMetallicMap, mat.TexRoughnessMap,
-		mat.TexOcclusionRoughnessMetalnessMap, mat.TexAmbientOcclusionMap,
+		mat.TexDiffuseMap,
+		mat.TexNormalMap,
+		mat.TexEmissiveMap,
+		mat.TexAlphaMaskMap,
+		mat.TexMetallicMap,
+		mat.TexRoughnessMap,
+		mat.TexOcclusionRoughnessMetalnessMap,
+		mat.TexAmbientOcclusionMap,
+		mat.TexHeightMap,
 		INVALID_ID
 	};
-	for (int i = 0; i < _countof(textureLabels); ++i) 
+
+	const int NumTextures = _countof(textureLabels);
+	for (int i = 0; i < NumTextures; ++i)
 	{
 		if (textureIDs[i] == INVALID_ID)
 			continue;
 
-		const std::string_view& textureFormat = mRenderer.DXGIFormatAsString(mRenderer.GetTextureFormat(textureIDs[i]));
+		const std::string_view& textureFormat = mpRenderer->DXGIFormatAsString(mpRenderer->GetTextureFormat(textureIDs[i]));
 		const std::string& texturePath = mpScene->GetTexturePath(textureIDs[i]);
 		const std::string textureName = mpScene->GetTextureName(textureIDs[i]);
 		int textureSizeX, textureSizeY;
-		mRenderer.GetTextureDimensions(textureIDs[i], textureSizeX, textureSizeY);
-		int textureMIPs = mRenderer.GetTextureMips(textureIDs[i]);
+		mpRenderer->GetTextureDimensions(textureIDs[i], textureSizeX, textureSizeY);
+		int textureMIPs = mpRenderer->GetTextureMips(textureIDs[i]);
 
-		const CBV_SRV_UAV& srv = mRenderer.GetShaderResourceView(mat.SRVMaterialMaps);
-		ImTextureID ImTexID = (ImTextureID)srv.GetGPUDescHandle(i).ptr;
+		const bool bIsHeightMap = i == NumTextures - 1;
+		const CBV_SRV_UAV& srv = bIsHeightMap
+			? mpRenderer->GetShaderResourceView(mat.SRVHeightMap)
+			: mpRenderer->GetShaderResourceView(mat.SRVMaterialMaps);
+
+		ImTextureID ImTexID = (ImTextureID)(bIsHeightMap 
+			? srv.GetGPUDescHandle().ptr
+			: srv.GetGPUDescHandle(i).ptr
+		);
 
 		const int texturePreviewSize = 64;
 
@@ -1616,8 +1617,10 @@ void VQEngine::DrawMaterialEditor()
 	ImGui::EndTable();
 }
 
-const char* LightTypeToString(Light::EType type) {
-	switch (type) {
+const char* LightTypeToString(Light::EType type) 
+{
+	switch (type) 
+	{
 	case Light::EType::DIRECTIONAL: return "Directional";
 	case Light::EType::SPOT: return "Spot";
 	case Light::EType::POINT: return "Point";
@@ -1626,46 +1629,64 @@ const char* LightTypeToString(Light::EType type) {
 }
 void VQEngine::DrawLightEditor()
 {
-	// build light names
 	const std::vector<Light*> Lights = mpScene->GetLights();
-	int NumSpotLights = 0; int NumPointLights = 0; // this naming scheme isnt great: changing light type renames them...
-	int NumShadowingSpotLights = 0; int NumShadowingPointLights = 0; int NumDirectionalLights = 0;
-	std::vector<std::string> LightNames;
-	for (Light* l : Lights)
+
+	// build light names & count lights
+	std::array<int, Light::EType::LIGHT_TYPE_COUNT> NumShadowCastingLight;
+	std::array<int, Light::EType::LIGHT_TYPE_COUNT> NumLightsPerType;
+	auto fnBuildLightNamesAndCountLights = [this](const std::vector<Light*>& Lights, 
+		std::array<int, Light::EType::LIGHT_TYPE_COUNT>& NumShadowCastingLight,
+		std::array<int, Light::EType::LIGHT_TYPE_COUNT>& NumLightsPerType
+	) -> std::vector<std::string>
 	{
-		std::string LightName;
-		switch (l->Type)
+		// reset counts
+		for (int& i : NumShadowCastingLight) i = 0;
+		for (int& i : NumLightsPerType) i = 0;
+
+		std::vector<std::string> LightNames;
+		for (Light* l : Lights)
 		{
-			case Light::EType::POINT       : LightName += "Point #" + std::to_string(NumPointLights++); NumShadowingPointLights += l->bCastingShadows ? 1 : 0; break;
-			case Light::EType::SPOT        : LightName += "Spot #" + std::to_string(NumSpotLights++); NumShadowingSpotLights += l->bCastingShadows ? 1 : 0; break;
-			case Light::EType::DIRECTIONAL : LightName += "Directional"; NumDirectionalLights += 1; break;
-			default: 
-				Log::Error("DrawLightEditor(): undefined light type");
-				break;
+			const std::string lightCount = std::to_string(NumLightsPerType[l->Type]++);
+			NumShadowCastingLight[l->Type] += l->bCastingShadows ? 1 : 0;
+			
+			std::string LightName;
+			switch (l->Type)
+			{
+				// this naming scheme isnt great: changing light type renames them...
+				case Light::EType::POINT       : LightName += "Point #"; break;
+				case Light::EType::SPOT        : LightName += "Spot #" ; break;
+				case Light::EType::DIRECTIONAL : LightName += "Directional #"; break;
+				default: Log::Error("DrawLightEditor(): undefined light type"); break;
+			}
+			LightName += lightCount;
+			LightNames.push_back(LightName);
 		}
-		LightNames.push_back(LightName);
-	}
-	LightNames.push_back("");
-	
+		LightNames.push_back("");
+		return LightNames;
+	};
+	std::vector<std::string> LightNames = fnBuildLightNamesAndCountLights(Lights, NumShadowCastingLight, NumLightsPerType);
+
+
 	// validate selected light index
 	int& i = mUIState.SelectedEditeeIndex[FUIState::EEditorMode::LIGHTS];
-	if (i >= LightNames.size())
+	auto fnCalculateSelectedLightIndex = [](int& i, const std::vector<std::string>& LightNames)
 	{
-		Log::Warning("SelectedLightIndex > ObjNames.size() : capping SelectedLightIndex ");
-		i = (int)(LightNames.size() - 1);
-	}
-	if (i < 0)
-	{
-		// Log::Warning("SelectedLightIndex negative : Setting to 0");
-		// i = 0;
-	}
-
-	// get pointers to light name data 
-	const std::string& SelectedLightName = i >= 0 ?  LightNames[i] : LightNames.back();
-	std::vector<const char*> szLightNames(LightNames.size());
-	for (int i = 0; i < LightNames.size(); ++i)
-		szLightNames[i] = LightNames[i].c_str();
+		if (i >= LightNames.size()-1)
+		{
+			Log::Warning("SelectedLightIndex > ObjNames.size() : capping SelectedLightIndex ");
+			i = (int)(LightNames.size() - 2);
+		}
+		if (i < 0)
+		{
+			// Log::Warning("SelectedLightIndex negative : Setting to 0");
+			// i = 0;
+		}
+	};
+	fnCalculateSelectedLightIndex(i, LightNames);
 	
+	// get light data from selected index
+	const std::string& SelectedLightName = i >= 0 ?  LightNames[i] : LightNames.back();
+	Light* l = Lights.empty() ? nullptr : Lights[i];
 
 	// gui layout
 	ImGui::TableSetupColumn(SelectedLightName.c_str(), ImGuiTableColumnFlags_WidthStretch, 0.7f); // 70% width
@@ -1673,16 +1694,42 @@ void VQEngine::DrawLightEditor()
 	ImGui::TableHeadersRow();
 	ImGui::TableNextRow();
 
-	// draw selector
+	// right side: list & selection
 	ImGui::TableSetColumnIndex(1);
 	ImGui::SetNextItemWidth(-1); // Make the controls take the full width of the column
-	ImGui::ListBox("##", &i, szLightNames.data(), (int)szLightNames.size(), 18);
+	if (ImGui::Button("+##0", ImVec2(20, 0)))
+	{
+		if(l) mpScene->CreateLight(l->Type, l->Mobility);
+		else  mpScene->CreateLight();
+	}
+	ImGui::SameLine();
+
+	bool bEnableRemoveButton = !Lights.empty();
+	BeginDisabledUIState(bEnableRemoveButton);
+	if (ImGui::Button("-##0", ImVec2(20, 0)))
+	{
+		mpScene->RemoveLight(l);
+		LightNames = fnBuildLightNamesAndCountLights(Lights, NumShadowCastingLight, NumLightsPerType);
+		fnCalculateSelectedLightIndex(i, LightNames);
+		l = Lights[i];
+	}
+	EndDisabledUIState(bEnableRemoveButton);
+
+	ImGui::SameLine();
+
+	// get pointers to light name data 
+	std::vector<const char*> szLightNames(LightNames.size());
+	for (int i = 0; i < LightNames.size(); ++i) szLightNames[i] = LightNames[i].c_str();
 	if (ImGui::Button("Unselect##", ImVec2(-1, 0)))
 	{
 		i = (int)(szLightNames.size() - 1);
 	}
+	ImGui::SetNextItemWidth(-1); // Make the controls take the full width of the column
+	ImGui::ListBox("##", &i, szLightNames.data(), (int)szLightNames.size()-1, 18);
 
-	
+	if (!l)
+		return;
+
 	// draw editor
 	ImGui::TableSetColumnIndex(0);
 
@@ -1691,8 +1738,6 @@ void VQEngine::DrawLightEditor()
 	{
 		return;
 	}
-
-	Light* l = Lights[i];
 
 	if (ImGui::Checkbox("Enabled", &l->bEnabled))
 	{
@@ -1716,23 +1761,30 @@ void VQEngine::DrawLightEditor()
 
 	ImGuiSpacing(2);
 
-	// Light type specific properties
-	const bool bEnableSpotLightDropdown        = !l->bCastingShadows || (NumShadowingSpotLights  < NUM_SHADOWING_LIGHTS__SPOT        && l->Type != Light::EType::SPOT);
-	const bool bEnablePointLightDropdown       = !l->bCastingShadows || (NumShadowingPointLights < NUM_SHADOWING_LIGHTS__POINT       && l->Type != Light::EType::POINT);
-	const bool bEnableDirectionalLightDropdown = !l->bCastingShadows || (NumDirectionalLights    < NUM_SHADOWING_LIGHTS__DIRECTIONAL && l->Type != Light::EType::DIRECTIONAL); // only 1 supported
-	if (ImGui::BeginCombo("Type", LightTypeToString(l->Type))) {
+	// Light type
+	assert(NumLightsPerType[Light::EType::DIRECTIONAL] >= 0 && NumLightsPerType[Light::EType::DIRECTIONAL] <= 1);
+	const bool bEnableSpotLightDropdown        = !l->bCastingShadows || (NumShadowCastingLight[Light::EType::SPOT  ] < NUM_SHADOWING_LIGHTS__SPOT        && l->Type != Light::EType::SPOT);
+	const bool bEnablePointLightDropdown       = !l->bCastingShadows || (NumShadowCastingLight[Light::EType::POINT ] < NUM_SHADOWING_LIGHTS__POINT       && l->Type != Light::EType::POINT);
+	const bool bEnableDirectionalLightDropdown = !l->bCastingShadows || (NumLightsPerType[Light::EType::DIRECTIONAL] < NUM_SHADOWING_LIGHTS__DIRECTIONAL && l->Type != Light::EType::DIRECTIONAL); // only 1 supported
+	if (ImGui::BeginCombo("Type", LightTypeToString(l->Type))) 
+	{
 		BeginDisabledUIState(bEnableDirectionalLightDropdown);
 		if (ImGui::Selectable("Directional", l->Type == Light::EType::DIRECTIONAL)) { l->Type = Light::EType::DIRECTIONAL; }
 		EndDisabledUIState(bEnableDirectionalLightDropdown);
+
 		BeginDisabledUIState(bEnableSpotLightDropdown);
 		if (ImGui::Selectable("Spot", l->Type == Light::EType::SPOT)) { l->Type = Light::EType::SPOT; }
 		EndDisabledUIState(bEnableSpotLightDropdown);
+
 		BeginDisabledUIState(bEnablePointLightDropdown);
 		if (ImGui::Selectable("Point", l->Type == Light::EType::POINT)) { l->Type = Light::EType::POINT; }
 		EndDisabledUIState(bEnablePointLightDropdown);
 		ImGui::EndCombo();
 	}
-	switch (l->Type) {
+
+	// Light type specific properties
+	switch (l->Type) 
+	{
 	case Light::EType::DIRECTIONAL:
 		ImGui::DragInt("Viewport X", &l->ViewportX, 1, 0, 2048);
 		ImGui::DragInt("Viewport Y", &l->ViewportY, 1, 0, 2048);

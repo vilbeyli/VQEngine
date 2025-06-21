@@ -16,11 +16,15 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 #include "Scene.h"
-#include "../Core/Window.h"
-#include "../VQEngine.h"
-#include "../GPUMarker.h"
+#include "Engine/Scene/SceneViews.h"
+#include "Engine/Core/Window.h"
+#include "Engine/Core/FileParser.h"
+#include "Engine/VQEngine.h"
+#include "Engine/GPUMarker.h"
 
-#include "Libs/VQUtils/Source/utils.h"
+#include "Renderer/Renderer.h"
+
+#include "Libs/VQUtils/Include/utils.h"
 
 #include <fstream>
 
@@ -58,43 +62,54 @@ MaterialID Scene::LoadMaterial(const FMaterialRepresentation& matRep, TaskID tas
 	fnAssignF3(mat.diffuse, matRep.DiffuseColor);
 	fnAssignF(mat.tiling.x, matRep.TilingX);
 	fnAssignF(mat.tiling.y, matRep.TilingY);
-	mat.Tessellation = matRep.Tessellation;
 	fnAssignF(mat.displacement, matRep.Displacement);
+	mat.TessellationData = matRep.Tessellation;
+	mat.SetTessellationEnabled(matRep.TessellationEnabled);
+	mat.SetTessellationDomain(matRep.TessellationDomain);
+	mat.SetTessellationPartitioning(matRep.TessellationPartitioning);
+	mat.SetTessellationOutputTopology(matRep.TessellationOutputTopology);
 
-	// async data (textures)
-	bool bHasTexture = false;
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.DiffuseMapFilePath, AssetLoader::ETextureType::DIFFUSE);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.NormalMapFilePath, AssetLoader::ETextureType::NORMALS);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.EmissiveMapFilePath, AssetLoader::ETextureType::EMISSIVE);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.AlphaMaskMapFilePath, AssetLoader::ETextureType::ALPHA_MASK);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.MetallicMapFilePath, AssetLoader::ETextureType::METALNESS);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.RoughnessMapFilePath, AssetLoader::ETextureType::ROUGHNESS);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.AOMapFilePath, AssetLoader::ETextureType::AMBIENT_OCCLUSION);
-	bHasTexture |= fnEnqueueTexLoad(id, matRep.HeightMapFilePath, AssetLoader::ETextureType::HEIGHT);
+	// textures
+	const bool bHasSurfaceTexture =
+		!matRep.DiffuseMapFilePath.empty() ||
+		!matRep.NormalMapFilePath.empty() ||
+		!matRep.EmissiveMapFilePath.empty() ||
+		!matRep.AlphaMaskMapFilePath.empty() ||
+		!matRep.MetallicMapFilePath.empty() ||
+		!matRep.RoughnessMapFilePath.empty() ||
+		!matRep.AOMapFilePath.empty()
+	;
+	fnEnqueueTexLoad(id, matRep.DiffuseMapFilePath  , AssetLoader::ETextureType::DIFFUSE);
+	fnEnqueueTexLoad(id, matRep.NormalMapFilePath   , AssetLoader::ETextureType::NORMALS);
+	fnEnqueueTexLoad(id, matRep.EmissiveMapFilePath , AssetLoader::ETextureType::EMISSIVE);
+	fnEnqueueTexLoad(id, matRep.AlphaMaskMapFilePath, AssetLoader::ETextureType::ALPHA_MASK);
+	fnEnqueueTexLoad(id, matRep.MetallicMapFilePath , AssetLoader::ETextureType::METALNESS);
+	fnEnqueueTexLoad(id, matRep.RoughnessMapFilePath, AssetLoader::ETextureType::ROUGHNESS);
+	fnEnqueueTexLoad(id, matRep.AOMapFilePath       , AssetLoader::ETextureType::AMBIENT_OCCLUSION);
+	const bool bHasHeightmap = fnEnqueueTexLoad(id, matRep.HeightMapFilePath, AssetLoader::ETextureType::HEIGHT);
+	const bool bHasTexture = bHasHeightmap || bHasSurfaceTexture;
 
 	AssetLoader::FMaterialTextureAssignment MatTexAssignment = {};
 	MatTexAssignment.matID = id;
-	if (bHasTexture)
-		mMaterialAssignments.mAssignments.push_back(MatTexAssignment);
+	
+	mMaterialAssignments.mAssignments.push_back(MatTexAssignment);
+	
 	return id;
 }
 
-void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresentation& sceneRep, ThreadPool& UpdateWorkerThreadPool)
+void Scene::StartLoading(FSceneRepresentation& sceneRep, ThreadPool& UpdateWorkerThreadPool)
 {
 	SCOPED_CPU_MARKER("SceneStartLoading");
 
 	const TaskID taskID = AssetLoader::GenerateModelLoadTaskID();
 	LoadBuiltinMaterials(taskID, sceneRep.Objects);
 	
-	mRenderer.WaitForLoadCompletion();
-	
 	Log::Info("[Scene] Loading Scene: %s", sceneRep.SceneName.c_str());
-
 
 	mSceneRepresentation = sceneRep;
 
 	{
-		SCOPED_CPU_MARKER("LoadScene()");
+		SCOPED_CPU_MARKER("LoadScene");
 		this->LoadScene(sceneRep); // scene-specific load 
 	}
 
@@ -111,18 +126,13 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 	mBoundingBoxHierarchy.Clear();
 	{
 		SCOPED_CPU_MARKER("ClearShadowViews");
-		for (FSceneShadowViews& view : mFrameShadowViews)
+		for (FSceneView& view : mFrameSceneViews)
 		{
-			for (FSceneShadowViews::FShadowView& sv : view.ShadowViews_Spot ) sv.drawParamLookup.clear();
-			for (FSceneShadowViews::FShadowView& sv : view.ShadowViews_Point) sv.drawParamLookup.clear();
-			view.ShadowView_Directional.drawParamLookup.clear();
+			view.FrustumRenderLists.clear();
 		}
 	}
 	mFrustumCullWorkerContext.ClearMemory();
 
-	mEngine.WaitForBuiltinMeshGeneration();
-
-	LoadBuiltinMeshes(builtinMeshes);
 	LoadGameObjects(std::move(sceneRep.Objects), UpdateWorkerThreadPool);
 }
 
@@ -130,7 +140,7 @@ void Scene::StartLoading(const BuiltinMeshArray_t& builtinMeshes, FSceneRepresen
 
 void Scene::LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRepresentation>& GameObjsToBeLoaded)
 {
-	SCOPED_CPU_MARKER("Scene::LoadBuiltinMaterials()");
+	SCOPED_CPU_MARKER("Scene.LoadBuiltinMaterials()");
 
 	const char* STR_MATERIALS_FOLDER = "Data/Materials/";
 	auto vMatFiles = DirectoryUtil::ListFilesInDirectory(STR_MATERIALS_FOLDER, "xml");
@@ -141,7 +151,7 @@ void Scene::LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRep
 		std::vector<FMaterialRepresentation> vBuiltinMaterialReps;
 		for (const std::string& filePath : vMatFiles) // for each material file
 		{
-			std::vector<FMaterialRepresentation> vMaterialReps = VQEngine::ParseMaterialFile(filePath); // get all materials in an xml file
+			std::vector<FMaterialRepresentation> vMaterialReps = FileParser::ParseMaterialFile(filePath); // get all materials in an xml file
 			vBuiltinMaterialReps.insert(vBuiltinMaterialReps.end(), vMaterialReps.begin(), vMaterialReps.end());
 		}
 
@@ -178,7 +188,7 @@ void Scene::LoadBuiltinMaterials(TaskID taskID, const std::vector<FGameObjectRep
 
 void Scene::LoadBuiltinMeshes(const BuiltinMeshArray_t& builtinMeshes)
 {
-	SCOPED_CPU_MARKER("Scene::LoadBuiltinMeshes()");
+	SCOPED_CPU_MARKER("Scene.LoadBuiltinMeshes()");
 
 	// register builtin meshes to scene mesh lookup
 	// @mMeshes[0-NUM_BUILTIN_MESHES] are assigned here directly while the rest
@@ -288,7 +298,7 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 		std::vector<std::pair<size_t, size_t>> ranges = PartitionWorkItemsIntoRanges(NumGameObjects, NumThreads);
 		const int NumTasks = static_cast<int>(ranges.size());
 		const int NumThreadTasks = NumTasks - 1;
-		Signal ThreadsDoneSignal;
+		EventSignal ThreadsDoneSignal;
 		std::atomic<bool> bThreadsDone = false;
 		{
 			SCOPED_CPU_MARKER("DispatchThreads");
@@ -326,7 +336,7 @@ void Scene::LoadGameObjects(std::vector<FGameObjectRepresentation>&& GameObjects
 		}
 		if(!bThreadsDone.load())
 		{
-			SCOPED_CPU_MARKER_C("BUSY_WAIT_WORKER", 0xFFFF0000);
+			SCOPED_CPU_MARKER_C("WAIT_WORKER", 0xFFFF0000);
 			ThreadsDoneSignal.Wait();
 		}
 	}
@@ -410,7 +420,6 @@ void Scene::LoadCameras(std::vector<FCameraParameters>& CameraParams)
 void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 {
 	SCOPED_CPU_MARKER("Scene::LoadPostProcessSettings()");
-	// TODO: remove hardcode
 
 	const uint fWidth  = this->mpWindow->GetWidth();
 	const uint fHeight = this->mpWindow->GetHeight();
@@ -439,27 +448,32 @@ void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
 	}
 }
 
-void Scene::OnLoadComplete()
+void Scene::OnLoadComplete(const BuiltinMeshArray_t& builtinMeshes)
 {
-	SCOPED_CPU_MARKER("Scene::OnLoadComplete()");
+	SCOPED_CPU_MARKER("Scene.OnLoadComplete");
 	Log::Info("[Scene] OnLoadComplete()");
 
-	// Assign model data to game objects
-	for (auto it = mModelLoadResults.begin(); it != mModelLoadResults.end(); ++it)
 	{
-		GameObject* pObj = it->first;
-		AssetLoader::ModelLoadResult_t res = std::move(it->second);
+		SCOPED_CPU_MARKER("AssignModels");
+		// Assign model data to game objects
+		for (auto it = mModelLoadResults.begin(); it != mModelLoadResults.end(); ++it)
+		{
+			GameObject* pObj = it->first;
+			AssetLoader::ModelLoadResult_t res = std::move(it->second);
 
-		assert(res.valid());
-		///res.wait(); // we should already have the results ready in OnLoadComplete()
+			assert(res.valid());
+			///res.wait(); // we should already have the results ready in OnLoadComplete()
 
-		pObj->mModelID = res.get();
+			pObj->mModelID = res.get();
+		}
 	}
 
 	// assign material data
 	mMaterialAssignments.DoAssignments(this, this->mMtxTexturePaths, this->mTexturePaths, &mRenderer);
 
-	// calculate local-space game object AABBs
+	mEngine.FinalizeBuiltinMeshes();
+	LoadBuiltinMeshes(builtinMeshes);
+
 	CalculateGameObjectLocalSpaceBoundingBoxes();
 
 	Log::Info("[Scene] %s loaded.", mSceneRepresentation.SceneName.c_str());
@@ -483,22 +497,19 @@ void Scene::Unload()
 
 	//mMeshes.clear(); // TODO
 	
-	for (size_t hTransform : mTransformHandles)
-		mGameObjectTransformPool.Free(hTransform);
-	for (size_t hObject : mGameObjectHandles)
-		mGameObjectPool.Free(hObject);
+	mGameObjectTransformPool.FreeAll();
+	mGameObjectPool.FreeAll();
 	mTransformHandles.clear();
 	mGameObjectHandles.clear();
 
 	mCameras.clear();
 	
-	for (const std::pair<MaterialID, Material>& matPair : mMaterials)
+	for (const Material* pMaterial : mMaterialPool.GetAllAliveObjects())
 	{
-		const Material& mat = matPair.second;
-		mRenderer.DestroySRV(mat.SRVHeightMap);
-		mRenderer.DestroySRV(mat.SRVMaterialMaps);
+		mRenderer.DestroySRV(pMaterial->SRVHeightMap);
+		mRenderer.DestroySRV(pMaterial->SRVMaterialMaps);
 	}
-	mMaterials.clear();
+	mMaterialPool.FreeAll();
 	mMaterialNames.clear();
 	mLoadedMaterials.clear();
 
@@ -523,6 +534,7 @@ void Scene::Unload()
 	mLightsStationary.clear();
 
 	mBoundingBoxHierarchy.Clear();
+	mFrustumCullWorkerContext.ClearMemory();
 
 	mIndex_SelectedCamera = 0;
 	mIndex_ActiveEnvironmentMapPreset = -1;
@@ -532,6 +544,7 @@ void Scene::Unload()
 
 void Scene::CalculateGameObjectLocalSpaceBoundingBoxes()
 {
+	SCOPED_CPU_MARKER("CalculateGameObjectLocalSpaceBoundingBoxes");
 	constexpr float max_f = std::numeric_limits<float>::max();
 	constexpr float min_f = -(max_f - 1.0f);
 	

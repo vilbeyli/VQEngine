@@ -18,8 +18,6 @@
 
 #pragma once
 
-#include <string>
-
 enum EDisplayMode
 {
 	WINDOWED = 0,
@@ -51,8 +49,9 @@ struct FGraphicsSettings
 
 	bool bEnableAsyncCopy = true;
 	bool bEnableAsyncCompute = true;
+	bool bUseSeparateSubmissionQueue = true;
 };
-
+ 
 struct FWindowSettings
 {
 	int Width                 = -1;
@@ -77,5 +76,5 @@ struct FEngineSettings
 	bool bAutomatedTestRun     = false;
 	int NumAutomatedTestFrames = -1;
 	
-	std::string StartupScene;
+	char StartupScene[512];
 };

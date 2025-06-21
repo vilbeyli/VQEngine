@@ -353,9 +353,9 @@ HSOutputPatchConstants CalcHSPatchConstants(
 	// Also missing is the edge case of all 3 vertices of the triangle are outside frustum but its 
 	// edges intersect the frustum (i.e. plane of triangle is visible within the plane)
 	#if 0
-	bool bCull = tess.bFrustumCull && ShouldFrustumCullPatch(cbPerView.WorldFrustumPlanes, patch, tess.fHSFrustumCullEpsilon);
+	bool bCull = tess.IsFrustumCullingOn() && ShouldFrustumCullPatch(cbPerView.WorldFrustumPlanes, patch, tess.fHSFrustumCullEpsilon);
 	if(!bCull)
-		bCull = tess.bFaceCull && ShouldCullBackFace(patch, tess.fHSFaceCullEpsilon);
+		bCull = tess.IsFaceCullingOn() && ShouldCullBackFace(patch, tess.fHSFaceCullEpsilon);
 	if(bCull)
 	{
 		#ifdef DOMAIN__TRIANGLE
@@ -395,7 +395,7 @@ HSOutputPatchConstants CalcHSPatchConstants(
 	
 #ifdef DOMAIN__TRIANGLE
 	
-	if(tess.bAdaptiveTessellation)
+	if(tess.IsAdaptiveTessellationOn())
 	{
 		float3 e0 = 0.5f * (patch[1].WorldSpacePosition + patch[0].WorldSpacePosition);
 		float3 e1 = 0.5f * (patch[2].WorldSpacePosition + patch[0].WorldSpacePosition);
@@ -408,20 +408,20 @@ HSOutputPatchConstants CalcHSPatchConstants(
 		return c;
 	}
 	
-	c.EdgeTessFactor[0] = tess.TriEdgeTessFactor.x;
-	c.EdgeTessFactor[1] = tess.TriEdgeTessFactor.y;
-	c.EdgeTessFactor[2] = tess.TriEdgeTessFactor.z;
-	c.InsideTessFactor  = tess.TriInnerTessFactor;
+	c.EdgeTessFactor[0] = tess.EdgeTessFactor.x;
+	c.EdgeTessFactor[1] = tess.EdgeTessFactor.y;
+	c.EdgeTessFactor[2] = tess.EdgeTessFactor.z;
+	c.InsideTessFactor  = tess.InsideTessFactor[0];
 	
 #elif defined(DOMAIN__QUAD)
 	
-	if(tess.bAdaptiveTessellation)
+	if(tess.IsAdaptiveTessellationOn())
 	{
 		float3 e0 = 0.5f * (patch[1].WorldSpacePosition + patch[0].WorldSpacePosition);
 		float3 e1 = 0.5f * (patch[2].WorldSpacePosition + patch[1].WorldSpacePosition);
 		float3 e2 = 0.5f * (patch[3].WorldSpacePosition + patch[2].WorldSpacePosition);
 		float3 e3 = 0.5f * (patch[0].WorldSpacePosition + patch[3].WorldSpacePosition);
-		float3 fCenter = CalcTessFactor(PatchCenter, Eye, fDTessMin, fDTessMax);
+		float  fCenter = CalcTessFactor(PatchCenter, Eye, fDTessMin, fDTessMax);
 
 		c.EdgeTessFactor[0]   = CalcTessFactor(e0, Eye, fDTessMin, fDTessMax);
 		c.EdgeTessFactor[1]   = CalcTessFactor(e1, Eye, fDTessMin, fDTessMax);
@@ -432,12 +432,12 @@ HSOutputPatchConstants CalcHSPatchConstants(
 		return c;
 	}
 	
-	c.EdgeTessFactor[0]   = tess.QuadEdgeTessFactor.x;
-	c.EdgeTessFactor[1]   = tess.QuadEdgeTessFactor.y;
-	c.EdgeTessFactor[2]   = tess.QuadEdgeTessFactor.z;
-	c.EdgeTessFactor[3]   = tess.QuadEdgeTessFactor.w;
-	c.InsideTessFactor[0] = tess.QuadInsideFactor.x;
-	c.InsideTessFactor[1] = tess.QuadInsideFactor.y;
+	c.EdgeTessFactor[0]   = tess.EdgeTessFactor.x;
+	c.EdgeTessFactor[1]   = tess.EdgeTessFactor.y;
+	c.EdgeTessFactor[2]   = tess.EdgeTessFactor.z;
+	c.EdgeTessFactor[3]   = tess.EdgeTessFactor.w;
+	c.InsideTessFactor[0] = tess.InsideTessFactor.x;
+	c.InsideTessFactor[1] = tess.InsideTessFactor.y;
 	
 #elif defined(DOMAIN__LINE)
 	c.EdgeTessFactor[0]   = 1.0f;
@@ -653,9 +653,9 @@ void GSMain(
 {	
 	#if OUTTOPO__TRI_CW || OUTTOPO__TRI_CCW
 	// cull triangle
-	if(tess.bFrustumCull && ShouldFrustumCullTriangle(cbPerView.WorldFrustumPlanes, Input[0].WorldSpacePosition, Input[1].WorldSpacePosition, Input[2].WorldSpacePosition, tess.fHSFrustumCullEpsilon))
+	if(tess.IsFrustumCullingOn() && ShouldFrustumCullTriangle(cbPerView.WorldFrustumPlanes, Input[0].WorldSpacePosition, Input[1].WorldSpacePosition, Input[2].WorldSpacePosition, tess.fHSFrustumCullEpsilon))
 		return;
-	if (tess.bFaceCull && ShouldCullBackFace(Input[0].position, Input[1].position, Input[2].position, tess.fHSFaceCullEpsilon)) // need a GSFaceCullEpsilon?
+	if (tess.IsFaceCullingOn() && ShouldCullBackFace(Input[0].position, Input[1].position, Input[2].position, tess.fHSFaceCullEpsilon)) // need a GSFaceCullEpsilon?
 		return;
 	#endif
 

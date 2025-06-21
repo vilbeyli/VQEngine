@@ -21,6 +21,8 @@
 #include "Camera.h"
 #include "Light.h"
 #include "Transform.h"
+#include "Renderer/Pipeline/Tessellation.h"
+
 #include <string>
 #include <vector>
 
@@ -28,9 +30,9 @@
 struct FMaterialRepresentation
 {
 	std::string Name;
-	DirectX::XMFLOAT3 DiffuseColor;
+	DirectX::XMFLOAT3 DiffuseColor = { MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE };
 	float Alpha = MATERIAL_UNINITIALIZED_VALUE;
-	DirectX::XMFLOAT3 EmissiveColor;
+	DirectX::XMFLOAT3 EmissiveColor = { MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE, MATERIAL_UNINITIALIZED_VALUE };
 	float EmissiveIntensity = MATERIAL_UNINITIALIZED_VALUE;
 	float Metalness = MATERIAL_UNINITIALIZED_VALUE;
 	float Roughness = MATERIAL_UNINITIALIZED_VALUE;
@@ -38,7 +40,11 @@ struct FMaterialRepresentation
 	float TilingX = 1.0f;
 	float TilingY = 1.0f;
 
-	FTessellationParameters Tessellation;
+	VQ_SHADER_DATA::TessellationParams Tessellation;
+	ETessellationDomain TessellationDomain = ETessellationDomain::QUAD_PATCH;
+	ETessellationOutputTopology TessellationOutputTopology = ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW;
+	ETessellationPartitioning TessellationPartitioning = ETessellationPartitioning::FRACTIONAL_EVEN;
+	bool TessellationEnabled = false;
 
 	std::string DiffuseMapFilePath;
 	std::string NormalMapFilePath;
@@ -48,8 +54,6 @@ struct FMaterialRepresentation
 	std::string RoughnessMapFilePath;
 	std::string AOMapFilePath;
 	std::string HeightMapFilePath;
-
-	FMaterialRepresentation();
 };
 struct FGameObjectRepresentation
 {

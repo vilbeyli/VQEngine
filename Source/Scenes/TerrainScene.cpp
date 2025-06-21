@@ -1,8 +1,9 @@
 #include "Scenes.h"
 
-#include "../Engine/Core/Input.h"
+#include "Engine/Scene/SceneViews.h"
+#include "Engine/Core/Input.h"
 
-#include "../Libs/VQUtils/Source/utils.h"
+#include "Libs/VQUtils/Include/utils.h"
 
 using namespace DirectX;
 
@@ -35,9 +36,8 @@ void TerrainScene::LoadScene(FSceneRepresentation& scene)
 	mr.TilingX              = 1.0f;
 	mr.TilingY              = 1.0f;
 
-	FTessellationParameters& tess = mr.Tessellation;
-	tess.bEnableTessellation = true;
-	tess.SetAllTessellationFactors(4.0f);
+	mr.TessellationEnabled = (true);
+	mr.Tessellation.SetAllTessellationFactors(4.0f);
 	scene.Materials.push_back(mr);
 	
 	const float fTerrainScale = 1000.f;

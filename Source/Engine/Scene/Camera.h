@@ -18,11 +18,10 @@
 
 #pragma once
 
-#include <DirectXMath.h>
-
+#include "../CullingData.h"
 #include "../Math.h"
-#include "../Culling.h"
 
+#include <vector>
 #include <array>
 #include <memory>
 
@@ -76,6 +75,7 @@ class CameraController
 {
 public:
 	virtual void UpdateCamera(const Input& input, float dt, bool bUseInput) = 0;
+	virtual ~CameraController() = default;
 	inline std::unique_ptr<CameraController> Clone(Camera* pNewCam) { return std::unique_ptr<CameraController>(Clone_impl(pNewCam)); }
 protected:
 	virtual CameraController* Clone_impl(Camera* pNewCam) = 0;
@@ -130,7 +130,7 @@ class Camera
 
 public:
 	Camera();
-	Camera Clone();
+	Camera Clone() const;
 
 	void InitializeCamera(const FCameraParameters& data);
 	void InitializeController(const FCameraParameters& data);
@@ -152,6 +152,7 @@ public:
 	inline       FProjectionMatrixParameters& GetProjectionParameters() { return mProjParams; }
 	inline       FFrustumPlaneset GetViewFrustumPlanesInWorldSpace() const { return FFrustumPlaneset::ExtractFromMatrix(GetViewMatrix() * GetProjectionMatrix()); }
 	
+	DirectX::XMVECTOR GetDirection() const;
 	ECameraControllerType GetControllerType() const { return static_cast<ECameraControllerType>(mControllerIndex); };
 	void SetControllerType(ECameraControllerType c) { mControllerIndex = c; }
 	void SetTargetPosition(const DirectX::XMFLOAT3& f3Position);

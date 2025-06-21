@@ -19,14 +19,11 @@
 
 #include "../Core/Types.h"
 #include "../CullingData.h"
+#include "MeshGeometryData.h"
+#include "Renderer/Resources/Buffer.h"
 
-#include <string>
-#include <vector>
 #include <limits>
-
-#include <DirectXMath.h>
-
-#include "MeshGenerator.h"
+#include <cstdio>
 
 struct FBufferDesc;
 class VQRenderer;
@@ -83,25 +80,16 @@ struct Mesh
 {
 public:
 	static EBuiltInMeshes GetBuiltInMeshType(const std::string& MeshTypeStr);
-	//
-	// Constructors / Operators
-	//
-	template<class TVertex, class TIndex = unsigned>
-	Mesh(
-		VQRenderer* pRenderer,
-		const std::vector<TVertex>&  vertices,
-		const std::vector<TIndex>&   indices,
-		const std::string&           name
-	);
 
+	// init
 	template<class TVertex, class TIndex>
-	Mesh(VQRenderer* pRenderer, const GeometryGenerator::GeometryData<TVertex, TIndex>& meshLODData, const std::string& name);
-
+	Mesh(VQRenderer* pRenderer, GeometryData<TVertex, TIndex>&& meshLODData, const std::string& name);
 	Mesh() = default;
 
-	//
-	// Interface
-	//
+	// Creates GPU buffers, needs renderer heaps initialized (used for deferred initialization)
+	void CreateBuffers(VQRenderer* pRenderer);
+
+	// getters
 	std::pair<BufferID, BufferID> GetIABufferIDs(int lod = 0) const;
 	inline uint GetNumIndices(int lod = 0) const { assert(mNumIndicesPerLODLevel.size()>lod); return mNumIndicesPerLODLevel[lod]; }
 	inline uint GetNumLODs() const { return static_cast<uint>(mLODBufferPairs.size()); }
@@ -112,60 +100,75 @@ private:
 	std::vector<uint> mNumIndicesPerLODLevel;
 	FBoundingBox mLocalSpaceBoundingBox;
 
+	struct GeometryDataStorage
+	{
+		std::vector<std::vector<char>> LODVertices; // Serialized vertex data
+		std::vector<std::vector<char>> LODIndices;  // Serialized index data
+		std::vector<uint> VertexStrides;
+		std::vector<uint> IndexStrides;
+		std::vector<unsigned> NumIndices;
+		std::string Name;
+		bool IsValid() const { return !LODVertices.empty(); }
+	};
+	GeometryDataStorage mGeometryData; // temporary, until uploaded to GPU
+
+
 private:
 
 	template<class TVertex>
 	static FBoundingBox CalculateBoundingBox(const std::vector<TVertex>& verts);
+
+	static BufferID CreateBuffer(VQRenderer* pRenderer, const FBufferDesc& desc);
 };
 
 //
 // Template Definitions
 //
+#if 1
 template<class TVertex, class TIndex>
-Mesh::Mesh(
-	VQRenderer* pRenderer,
-	const std::vector<TVertex>& vertices,
-	const std::vector<TIndex>& indices,
-	const std::string& name
-)
+Mesh::Mesh(VQRenderer* pRenderer, GeometryData<TVertex, TIndex>&& meshLODData, const std::string& name)
 {
-	assert(pRenderer);
-	FBufferDesc bufferDesc = {};
+	//SCOPED_CPU_MARKER("Mesh::Mesh");
 
-	const std::string VBName = name + "_LOD[0]_VB";
-	const std::string IBName = name + "_LOD[0]_IB";
+	mGeometryData.Name = name;
 
-	bufferDesc.Type         = VERTEX_BUFFER;
-	//bufferDesc.Usage        = GPU_READ_WRITE;
-	bufferDesc.NumElements  = static_cast<unsigned>(vertices.size());
-	bufferDesc.Stride       = sizeof(vertices[0]);
-	bufferDesc.pData        = static_cast<const void*>(vertices.data());
-	bufferDesc.Name         = VBName;
-	BufferID vertexBufferID = GeometryGenerator::CreateBuffer(pRenderer, bufferDesc);
+	// Move and serialize geometry data
+	for (size_t LOD = 0; LOD < meshLODData.LODVertices.size(); ++LOD)
+	{
+		// Move vertex and index data
+		std::vector<TVertex> vertices = std::move(meshLODData.LODVertices[LOD]);
+		std::vector<TIndex> indices = std::move(meshLODData.LODIndices[LOD]);
 
-	bufferDesc.Type        = INDEX_BUFFER;
-	//bufferDesc.Usage       = GPU_READ_WRITE;
-	bufferDesc.NumElements = static_cast<unsigned>(indices.size());
-	bufferDesc.Stride      = sizeof(unsigned);
-	bufferDesc.pData       = static_cast<const void*>(indices.data());
-	bufferDesc.Name        = IBName;
-	BufferID indexBufferID = GeometryGenerator::CreateBuffer(pRenderer, bufferDesc);
+		// Serialize
+		std::vector<char> vertexData(reinterpret_cast<char*>(vertices.data()), reinterpret_cast<char*>(vertices.data() + vertices.size()));
+		std::vector<char>  indexData(reinterpret_cast<char*>( indices.data()), reinterpret_cast<char*>( indices.data()  + indices.size()));
+		mGeometryData.LODVertices.push_back(std::move(vertexData));
+		mGeometryData.LODIndices.push_back(std::move(indexData));
+		mGeometryData.VertexStrides.push_back(sizeof(TVertex));
+		mGeometryData.IndexStrides.push_back(sizeof(TIndex));
+		mGeometryData.NumIndices.push_back(static_cast<unsigned>(indices.size()));
 
-	mLODBufferPairs.push_back({ vertexBufferID, indexBufferID }); // LOD[0]
-	mNumIndicesPerLODLevel.push_back(bufferDesc.NumElements);
+		if (LOD == 0)
+		{
+			mLocalSpaceBoundingBox = CalculateBoundingBox(vertices);
+		}
+	}
 
-	mLocalSpaceBoundingBox = CalculateBoundingBox(vertices);
+	if (pRenderer) // Create buffers if renderer is provided
+	{
+		CreateBuffers(pRenderer);
+	}
 }
-
+#else
 template<class TVertex, class TIndex>
-Mesh::Mesh(VQRenderer* pRenderer, const GeometryGenerator::GeometryData<TVertex, TIndex>& meshLODData, const std::string& name)
+Mesh::Mesh(VQRenderer* pRenderer, GeometryData<TVertex, TIndex>&& meshLODData, const std::string& name)
 {
 	for (size_t LOD = 0; LOD < meshLODData.LODVertices.size(); ++LOD)
 	{
 		FBufferDesc bufferDesc = {};
 
-		const std::string VBName = name + "_LOD[" + std::to_string(LOD) + "]_VB";
-		const std::string IBName = name + "_LOD[" + std::to_string(LOD) + "]_IB";
+		char VBName[128]; _snprintf_s(VBName, sizeof(VBName), "%s_LOD[%zu]_VB", name.c_str(), LOD);
+		char IBName[128]; _snprintf_s(IBName, sizeof(IBName), "%s_LOD[%zu]_IB", name.c_str(), LOD);
 		const std::vector<TVertex>& vertices = meshLODData.LODVertices[LOD];
 		const std::vector<TIndex>& indices = meshLODData.LODIndices[LOD];
 
@@ -175,7 +178,7 @@ Mesh::Mesh(VQRenderer* pRenderer, const GeometryGenerator::GeometryData<TVertex,
 		bufferDesc.pData = static_cast<const void*>(vertices.data());
 		bufferDesc.Stride = sizeof(vertices[0]);
 		bufferDesc.Name = VBName;
-		BufferID vertexBufferID = GeometryGenerator::CreateBuffer(pRenderer, bufferDesc);
+		BufferID vertexBufferID = CreateBuffer(pRenderer, bufferDesc);
 
 		bufferDesc.Type = INDEX_BUFFER;
 		//bufferDesc.Usage = GPU_READ_WRITE;
@@ -183,7 +186,7 @@ Mesh::Mesh(VQRenderer* pRenderer, const GeometryGenerator::GeometryData<TVertex,
 		bufferDesc.pData = static_cast<const void*>(indices.data());
 		bufferDesc.Stride = sizeof(unsigned);
 		bufferDesc.Name = IBName;
-		BufferID indexBufferID = GeometryGenerator::CreateBuffer(pRenderer, bufferDesc);
+		BufferID indexBufferID = CreateBuffer(pRenderer, bufferDesc);
 
 		mLODBufferPairs.push_back({ vertexBufferID, indexBufferID });
 		mNumIndicesPerLODLevel.push_back(bufferDesc.NumElements);
@@ -194,13 +197,14 @@ Mesh::Mesh(VQRenderer* pRenderer, const GeometryGenerator::GeometryData<TVertex,
 		}
 	}
 }
+#endif
 
 template<class TVertex>
 inline FBoundingBox Mesh::CalculateBoundingBox(const std::vector<TVertex>& verts)
 {
 	using namespace DirectX;
-	const float max_f = std::numeric_limits<float>::max();
-	const float min_f = -(max_f - 1.0f);
+	constexpr float max_f = std::numeric_limits<float>::max();
+	constexpr float min_f = -(max_f - 1.0f);
 
 	FBoundingBox bb;
 	XMFLOAT3& mins = bb.ExtentMin;
