@@ -38,6 +38,7 @@
 #include "Rendering/RenderPass/MagnifierPass.h"
 #include "Rendering/RenderPass/ObjectIDPass.h"
 #include "Rendering/RenderPass/OutlinePass.h"
+#include "Rendering/RenderPass/FSR3UpscalePass.h"
 
 #include "Engine/Core/Window.h"
 #include "Engine/Core/Platform.h"
@@ -583,6 +584,7 @@ void VQRenderer::Load()
 		mRenderPasses[ERenderPass::ObjectID              ] = std::make_shared<ObjectIDPass>(*this);
 		mRenderPasses[ERenderPass::ScreenSpaceReflections] = std::make_shared<ScreenSpaceReflectionsPass>(*this);
 		mRenderPasses[ERenderPass::Outline               ] = std::make_shared<OutlinePass>(*this);
+		mRenderPasses[ERenderPass::FSR3Upscale           ] = std::make_shared<FSR3UpscalePass>(*this);
 		{
 			SCOPED_CPU_MARKER_C("WaitRootSignatures", 0xFF0000AA);
 			mLatchRootSignaturesInitialized.wait();
@@ -715,8 +717,6 @@ void VQRenderer::OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h)
 	FWindowRenderContext& ctx = mRenderContextLookup.at(hwnd);
 	ctx.WindowDisplayResolutionX = w;
 	ctx.WindowDisplayResolutionY = h;
-
-
 }
 
 SwapChain& VQRenderer::GetWindowSwapChain(HWND hwnd) { return mRenderContextLookup.at(hwnd).SwapChain; }

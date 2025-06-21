@@ -23,9 +23,13 @@
 
 #define DISABLE_FIDELITYFX_CAS 1 // disable ffx cas but keep implementaiton around, now using fsr1 rcas
 
-// AMD FidelityFX Super Resolution 1.0: Spatial Upscaling and RCAS
+class ID3D12Device;
+
+
 namespace AMD_FidelityFX_SuperResolution1
 {
+	// AMD FidelityFX Super Resolution 1.0: Spatial Upscaling and RCAS
+
 	enum EPreset
 	{
 		ULTRA_QUALITY = 0,
@@ -36,6 +40,7 @@ namespace AMD_FidelityFX_SuperResolution1
 
 		NUM_FSR1_PRESET_OPTIONS
 	};
+	inline const char* GetVersionString() { return "1.0"; }
 	inline float GetScreenPercentage(EPreset ePreset)
 	{
 		switch (ePreset)
@@ -83,8 +88,10 @@ namespace AMD_FidelityFX_SuperResolution3
 		PERFORMANCE,
 		ULTRA_PERFORMANCE,
 		CUSTOM,
+
 		NUM_FSR3_PRESET_OPTIONS
 	};
+	inline const char* GetVersionString() { return "3.1.4"; }
 	inline const char* GetPresetName(EPreset ePreset)
 	{
 		switch (ePreset)
@@ -110,4 +117,16 @@ namespace AMD_FidelityFX_SuperResolution3
 		}
 		return -1.0f;
 	}
+	struct FShaderParameters
+	{
+
+	};
+	struct ContextImpl;
+	struct Context
+	{
+		void Initialize(ID3D12Device* pDevice, uint DisplayWidth, uint DisplayHeight, uint RenderWidth, uint RenderHeight);
+		void Destroy();
+
+		ContextImpl* pImpl = nullptr;
+	};
 }

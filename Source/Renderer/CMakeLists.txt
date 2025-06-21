@@ -119,6 +119,7 @@ set(RenderPassHeaders
     "Rendering/RenderPass/MagnifierPass.h"
     "Rendering/RenderPass/ObjectIDPass.h"
     "Rendering/RenderPass/OutlinePass.h"
+    "Rendering/RenderPass/FSR3UpscalePass.h"
 )
 set(RenderPassSources
     "Rendering/RenderPass/RenderPass.cpp"
@@ -130,6 +131,7 @@ set(RenderPassSources
     "Rendering/RenderPass/MagnifierPass.cpp"
     "Rendering/RenderPass/ObjectIDPass.cpp"
     "Rendering/RenderPass/OutlinePass.cpp"
+    "Rendering/RenderPass/FSR3UpscalePass.cpp"
 )
 
 # Renderer
@@ -255,7 +257,6 @@ endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 
 # add_link_options(/SUBSYSTEM:WINDOWS)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/DirectXCompiler/lib/x64)
-link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/AMD/FidelityFX-SDK/PrebuiltSignedDLL/)
 
 add_library(${PROJECT_NAME} STATIC
     ${LibHeadersD3D12X} 
@@ -286,7 +287,7 @@ add_definitions(-DFFX_CACAO_ENABLE_D3D12)
 target_include_directories(${PROJECT_NAME} PUBLIC "../") # Engine / Renderer / Scenes
 target_include_directories(${PROJECT_NAME} PUBLIC "../../") # VQE root
 target_include_directories(${PROJECT_NAME} PUBLIC "./") # Renderer root
-target_include_directories(${PROJECT_NAME} PUBLIC "./Libs/AMD/FidelityFX-SDK/ffx_api/include/")
+target_include_directories(${PROJECT_NAME} PUBLIC "./Libs/AMD/FidelityFX-SDK/ffx-api/include/")
 
 add_custom_command(TARGET ${PROJECT_NAME} PRE_BUILD
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Libs/AMD/CACAO/build_shaders_dxil.bat

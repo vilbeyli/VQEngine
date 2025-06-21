@@ -369,7 +369,7 @@ private:
 	// UI
 	//
 	void                            UpdateUIState(HWND hwnd, float dt);
-	void                            DrawProfilerWindow(const FSceneStats& FrameStats, float dt);
+	void                            DrawProfilerWindow(const FSceneStats& FrameStats, float RenderResolutionScale, float dt);
 	void                            DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderOptions& SceneRenderParams);
 	void                            DrawPostProcessSettings(FPostProcessParameters& PPParams);
 	void                            DrawKeyMappingsWindow();

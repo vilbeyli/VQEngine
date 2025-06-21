@@ -304,7 +304,7 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 	{
 		if (mUIState.bWindowVisible_KeyMappings)           DrawKeyMappingsWindow();
 		if (mUIState.bWindowVisible_SceneControls)         DrawSceneControlsWindow(mpScene->GetActiveCameraIndex(), mpScene->GetActiveEnvironmentMapPresetIndex(), SceneParams);
-		if (mUIState.bWindowVisible_Profiler)              DrawProfilerWindow(mpScene->GetSceneRenderStats(FRAME_DATA_INDEX), dt);
+		if (mUIState.bWindowVisible_Profiler)              DrawProfilerWindow(mpScene->GetSceneRenderStats(FRAME_DATA_INDEX), PPParams.ResolutionScale, dt);
 		if (mUIState.bWindowVisible_GraphicsSettingsPanel) DrawGraphicsSettingsWindow(SceneParams, PPParams);
 		if (mUIState.bWindowVisible_Editor)                DrawEditorWindow();
 	}
@@ -728,12 +728,14 @@ void VQEngine::DrawKeyMappingsWindow()
 }
 
 
-void VQEngine::DrawProfilerWindow(const FSceneStats& FrameStats, float dt)
+void VQEngine::DrawProfilerWindow(const FSceneStats& FrameStats, float RenderResolutionScale, float dt)
 {
 	const FSceneStats& s = FrameStats; // shorthand rename
 
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
+	const uint32 RenderW = W * RenderResolutionScale;
+	const uint32 RenderH = H * RenderResolutionScale;
 
 	const uint32_t PROFILER_WINDOW_POS_X = W - PROFILER_WINDOW_PADDIG_X - PROFILER_WINDOW_SIZE_X;
 	const uint32_t PROFILER_WINDOW_POS_Y = PROFILER_WINDOW_PADDIG_Y;
@@ -755,8 +757,9 @@ void VQEngine::DrawProfilerWindow(const FSceneStats& FrameStats, float dt)
 		const int fps = static_cast<int>(1.0f / dt);
 		const float frameTime_ms = dt * 1000.0f;
 		const float frameTime_us = frameTime_ms * 1000.0f;
-		ImGui::TextColored(DataTextColor      , "Resolution : %ix%i", W, H);
-		ImGui::TextColored(SelectFPSColor(fps), "FPS        : %d (%.2f ms)", fps, frameTime_ms);
+		ImGui::TextColored(DataTextColor      , "Display Resolution : %ix%i", W, H);
+		ImGui::TextColored(DataTextColor      , "Render Resolution  : %ix%i", RenderW, RenderH);
+		ImGui::TextColored(SelectFPSColor(fps), "FPS                : %d (%.2f ms)", fps, frameTime_ms);
 		
 		DrawFPSChart(fps);
 		DrawFrameTimeChart();
@@ -848,27 +851,34 @@ void VQEngine::DrawPostProcessSettings(FPostProcessParameters& PPParams)
 
 	ImGui::Text("Upscaling");
 	ImGui::Separator();
-	// upscaling dropdown : None / FidelityFX Super Resolution 1.0
 	if (ImGui_RightAlignedCombo("Algorithm", (int*) &PPParams.UpscalingAlgorithm, szUpscalingLabels, _countof(szUpscalingLabels)))
 	{
+		if (PPParams.UpscalingAlgorithm == FPostProcessParameters::EUpscalingAlgorithm::NONE)
+		{
+			PPParams.ResolutionScale = 1.0f;
+		}
+		else if (PPParams.FSR1UpscalingQualityEnum != AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
+		{
+			PPParams.ResolutionScale = AMD_FidelityFX_SuperResolution1::GetScreenPercentage(PPParams.FSR1UpscalingQualityEnum);
+		}
 		fnSendWindowResizeEvents();
 	}
 
 	if (PPParams.UpscalingAlgorithm != FPostProcessParameters::EUpscalingAlgorithm::NONE)
 	{
 		// preset: ultra quality / quality / balanced / performance / custom
-		if (ImGui_RightAlignedCombo("Quality", (int*)&PPParams.UpscalingQualityPresetEnum, szFSR1QualityLabels, _countof(szFSR1QualityLabels)))
+		if (ImGui_RightAlignedCombo("Quality", (int*)&PPParams.FSR1UpscalingQualityEnum, szFSR1QualityLabels, _countof(szFSR1QualityLabels)))
 		{
-			if (PPParams.UpscalingQualityPresetEnum != AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
+			if (PPParams.FSR1UpscalingQualityEnum != AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
 			{
-				PPParams.ResolutionScale = AMD_FidelityFX_SuperResolution1::GetScreenPercentage(PPParams.UpscalingQualityPresetEnum);
+				PPParams.ResolutionScale = AMD_FidelityFX_SuperResolution1::GetScreenPercentage(PPParams.FSR1UpscalingQualityEnum);
 			}
 			
 			fnSendWindowResizeEvents();
 		}
 
 		// resolution scale
-		if (PPParams.UpscalingQualityPresetEnum == AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
+		if (PPParams.FSR1UpscalingQualityEnum == AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
 		{
 			// if we are to support resolution scale > 1.0f, we'll need to stop using FSR1 upscaling
 			// and use a linear min filter for AA

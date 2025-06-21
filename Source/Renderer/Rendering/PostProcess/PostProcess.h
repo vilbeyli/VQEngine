@@ -98,7 +98,7 @@ struct FPostProcessParameters
 	using AMD_FSR1_Preset = AMD_FidelityFX_SuperResolution1::EPreset;
 	using AMD_FSR3_Preset = AMD_FidelityFX_SuperResolution3::EPreset;
 	using AMD_FSR1_ShaderParams = AMD_FidelityFX_SuperResolution1::FShaderParameters;
-	//using AMD_FSR3_ShaderParams = AMD_FidelityFX_SuperResolution3::FShaderParameters;
+	using AMD_FSR3_ShaderParams = AMD_FidelityFX_SuperResolution3::FShaderParameters;
 
 	//-------------------------------------------------------------------------------------------
 	//-------------------------------------------------------------------------------------------
@@ -119,10 +119,12 @@ struct FPostProcessParameters
 	FTonemapper          TonemapperParams = {};
 	FBlurParams          BlurParams       = {};
 
-	EUpscalingAlgorithm  UpscalingAlgorithm = EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1;
-	AMD_FSR1_Preset      UpscalingQualityPresetEnum = AMD_FSR1_Preset::ULTRA_QUALITY;
+	EUpscalingAlgorithm   UpscalingAlgorithm = EUpscalingAlgorithm::NONE;
+	AMD_FSR1_Preset       FSR1UpscalingQualityEnum = AMD_FSR1_Preset::ULTRA_QUALITY;
 	AMD_FSR1_ShaderParams FSR1ShaderParameters = {};
-	
+	AMD_FSR3_Preset       FSR3UpscalingQualityEnum = AMD_FSR3_Preset::NATIVE_AA;
+	AMD_FSR3_ShaderParams FSR3ShaderParameters = {};
+
 #if !DISABLE_FIDELITYFX_CAS
 	FFFXCAS              FFXCASParams = {};
 #endif

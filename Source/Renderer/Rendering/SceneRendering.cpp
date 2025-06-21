@@ -347,9 +347,9 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 
 	FWindowRenderContext& ctx = this->GetWindowRenderContext(hwnd);
 
-	HRESULT hr                              = S_OK;
-	const int NUM_BACK_BUFFERS              = ctx.GetNumSwapchainBuffers();
-	const int BACK_BUFFER_INDEX             = ctx.GetCurrentSwapchainBufferIndex();
+	HRESULT hr                       = S_OK;
+	const int NUM_BACK_BUFFERS       = ctx.GetNumSwapchainBuffers();
+	const int BACK_BUFFER_INDEX      = ctx.GetCurrentSwapchainBufferIndex();
 
 	const bool bReflectionsEnabled   = GFXSettings.Reflections != EReflections::REFLECTIONS_OFF && GFXSettings.Reflections == EReflections::SCREEN_SPACE_REFLECTIONS__FFX; // TODO: remove the && after RayTracing is added
 	const bool bDownsampleDepth      = GFXSettings.Reflections == EReflections::SCREEN_SPACE_REFLECTIONS__FFX;
@@ -360,14 +360,12 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 	const bool bFSREnabled           = PPParams.IsFSR1Enabled();
 
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
-	ID3D12Resource* pRscNormals = this->GetTextureResource(rsc.Tex_SceneNormals);
-	ID3D12Resource* pRscNormalsMSAA = this->GetTextureResource(rsc.Tex_SceneNormalsMSAA);
+	ID3D12Resource* pRscNormals      = this->GetTextureResource(rsc.Tex_SceneNormals);
+	ID3D12Resource* pRscNormalsMSAA  = this->GetTextureResource(rsc.Tex_SceneNormalsMSAA);
 	ID3D12Resource* pRscDepthResolve = this->GetTextureResource(rsc.Tex_SceneDepthResolve);
-	ID3D12Resource* pRscDepthMSAA = this->GetTextureResource(rsc.Tex_SceneDepthMSAA);
-	ID3D12Resource* pRscDepth       = this->GetTextureResource(rsc.Tex_SceneDepth);
-	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
-
-
+	ID3D12Resource* pRscDepthMSAA    = this->GetTextureResource(rsc.Tex_SceneDepthMSAA);
+	ID3D12Resource* pRscDepth        = this->GetTextureResource(rsc.Tex_SceneDepth);
+	ID3D12Resource* pSwapChainRT     = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
 	ID3D12Resource* pRsc = nullptr;
 	
 	ID3D12CommandList* pCmdCpy = (ID3D12CommandList*)mpRenderingCmds[COPY][BACK_BUFFER_INDEX][0];
@@ -2510,6 +2508,8 @@ void VQRenderer::TransitionForUI(ID3D12GraphicsCommandList* pCmd, const FPostPro
 
 ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams, bool bHDR)
 {
+	SCOPED_GPU_MARKER(pCmd, "RenderPostProcess");
+
 	ID3D12DescriptorHeap* ppHeaps[] = { this->GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
@@ -2526,7 +2526,6 @@ ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, D
 	const SRV& srv_FSR_RCASOut      = this->GetSRV(rsc.SRV_PostProcess_FSR_RCASOut);
 	ID3D12Resource* pRscTonemapperOut = this->GetTextureResource(rsc.Tex_PostProcess_TonemapperOut);
 
-
 	constexpr bool PP_ENABLE_BLUR_PASS = false;
 
 	// compute dispatch dimensions
@@ -2540,8 +2539,8 @@ ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, D
 	const     int DispatchRenderY = (InputImageHeight + (DispatchGroupDimensionY - 1)) / DispatchGroupDimensionY;
 	constexpr int DispatchZ = 1;
 
-	// cmds
 	ID3D12Resource* pRscOutput = nullptr;
+	
 	if (PPParams.DrawModeEnum != EDrawMode::LIT_AND_POSTPROCESSED)
 	{
 		SCOPED_GPU_MARKER(pCmd, "RenderPostProcess_DebugViz");
@@ -2577,216 +2576,227 @@ ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, D
 		pCmd->Dispatch(DispatchRenderX, DispatchRenderY, DispatchZ);
 
 		pRscOutput = this->GetTextureResource(rsc.Tex_PostProcess_VisualizationOut);
+		return pRscOutput;
 	}
-	else
+
+	if (PPParams.IsFSR3Enabled())
 	{
-		SCOPED_GPU_MARKER(pCmd, "RenderPostProcess");
-		const SRV& srv_blurOutput = this->GetSRV(rsc.SRV_PostProcess_BlurOutput);
-
-		if constexpr (PP_ENABLE_BLUR_PASS && PPParams.bEnableGaussianBlur)
-		{
-			SCOPED_GPU_MARKER(pCmd, "BlurCS");
-			const UAV& uav_BlurIntermediate = this->GetUAV(rsc.UAV_PostProcess_BlurIntermediate);
-			const UAV& uav_BlurOutput       = this->GetUAV(rsc.UAV_PostProcess_BlurOutput);
-			const SRV& srv_blurIntermediate = this->GetSRV(rsc.SRV_PostProcess_BlurIntermediate);
-			auto pRscBlurIntermediate = this->GetTextureResource(rsc.Tex_PostProcess_BlurIntermediate);
-			auto pRscBlurOutput       = this->GetTextureResource(rsc.Tex_PostProcess_BlurOutput);
-
-
-			FPostProcessParameters::FBlurParams* pBlurParams = nullptr;
-
-			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-			pCBufferHeap->AllocConstantBuffer(sizeof(FPostProcessParameters::FBlurParams), (void**)&pBlurParams, &cbAddr);
-			pBlurParams->iImageSizeX = PPParams.SceneRTWidth;
-			pBlurParams->iImageSizeY = PPParams.SceneRTHeight;
-
-			{
-				SCOPED_GPU_MARKER(pCmd, "BlurX");
-				pCmd->SetPipelineState(this->GetPSO(EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_X_PSO));
-				pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1));
-
-				const int FFXDispatchGroupDimension = 16;
-				const     int FFXDispatchX = (InputImageWidth  + (FFXDispatchGroupDimension - 1)) / FFXDispatchGroupDimension;
-				const     int FFXDispatchY = (InputImageHeight + (FFXDispatchGroupDimension - 1)) / FFXDispatchGroupDimension;
-
-				pCmd->SetComputeRootDescriptorTable(0, srv_ColorIn.GetGPUDescHandle());
-				pCmd->SetComputeRootDescriptorTable(1, uav_BlurIntermediate.GetGPUDescHandle());
-				pCmd->SetComputeRootConstantBufferView(2, cbAddr);
-				pCmd->Dispatch(DispatchRenderX, DispatchRenderY, DispatchZ);
-
-				const CD3DX12_RESOURCE_BARRIER pBarriers[] =
-				{
-					  CD3DX12_RESOURCE_BARRIER::Transition(pRscBlurIntermediate, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
-					, CD3DX12_RESOURCE_BARRIER::Transition(pRscBlurOutput      , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
-
-				};
-				pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
-			}
+		//if (!PPParams.FSR3Context.pImpl)
+		//{
+		//	PPParams.FSR3Context.Initialize(this->GetDevicePtr(),
+		//		PPParams.SceneRTWidth,
+		//		PPParams.SceneRTHeight,
+		//		PPParams.DisplayResolutionWidth,
+		//		PPParams.DisplayResolutionHeight
+		//	);
+		//}
+		Log::Warning("TODO: FSR3 command recording");
+	}
 
 
-			{
-				SCOPED_GPU_MARKER(pCmd, "BlurY");
-				pCmd->SetPipelineState(this->GetPSO(EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_Y_PSO));
-				pCmd->SetComputeRootDescriptorTable(0, srv_blurIntermediate.GetGPUDescHandle());
-				pCmd->SetComputeRootDescriptorTable(1, uav_BlurOutput.GetGPUDescHandle());
-				pCmd->SetComputeRootConstantBufferView(2, cbAddr);
-				pCmd->Dispatch(DispatchRenderX, DispatchRenderY, DispatchZ);
+	const SRV& srv_blurOutput = this->GetSRV(rsc.SRV_PostProcess_BlurOutput);
 
-				const CD3DX12_RESOURCE_BARRIER pBarriers[] =
-				{
-					  CD3DX12_RESOURCE_BARRIER::Transition(pRscBlurOutput      , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
-					, CD3DX12_RESOURCE_BARRIER::Transition(pRscBlurIntermediate, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
-				};
-				pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
-			}
-		}
+	if constexpr (PP_ENABLE_BLUR_PASS && PPParams.bEnableGaussianBlur)
+	{
+		SCOPED_GPU_MARKER(pCmd, "BlurCS");
+		const UAV& uav_BlurIntermediate = this->GetUAV(rsc.UAV_PostProcess_BlurIntermediate);
+		const UAV& uav_BlurOutput       = this->GetUAV(rsc.UAV_PostProcess_BlurOutput);
+		const SRV& srv_blurIntermediate = this->GetSRV(rsc.SRV_PostProcess_BlurIntermediate);
+		auto pRscBlurIntermediate = this->GetTextureResource(rsc.Tex_PostProcess_BlurIntermediate);
+		auto pRscBlurOutput       = this->GetTextureResource(rsc.Tex_PostProcess_BlurOutput);
+
+
+		FPostProcessParameters::FBlurParams* pBlurParams = nullptr;
+
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+		pCBufferHeap->AllocConstantBuffer(sizeof(FPostProcessParameters::FBlurParams), (void**)&pBlurParams, &cbAddr);
+		pBlurParams->iImageSizeX = PPParams.SceneRTWidth;
+		pBlurParams->iImageSizeY = PPParams.SceneRTHeight;
 
 		{
-			SCOPED_GPU_MARKER(pCmd, "TonemapperCS");
-
-			FPostProcessParameters::FTonemapper* pConstBuffer = {};
-			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-			pCBufferHeap->AllocConstantBuffer(sizeof(FPostProcessParameters::FTonemapper), (void**)&pConstBuffer, &cbAddr);
-			*pConstBuffer = PPParams.TonemapperParams;
-
-			pCmd->SetPipelineState(this->GetPSO(EBuiltinPSOs::TONEMAPPER_PSO));
+			SCOPED_GPU_MARKER(pCmd, "BlurX");
+			pCmd->SetPipelineState(this->GetPSO(EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_X_PSO));
 			pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1));
-			pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-			pCmd->SetComputeRootDescriptorTable(0, PP_ENABLE_BLUR_PASS ? srv_blurOutput.GetGPUDescHandle() : srv_ColorIn.GetGPUDescHandle());
-			pCmd->SetComputeRootDescriptorTable(1, uav_TonemapperOut.GetGPUDescHandle());
+
+			const int FFXDispatchGroupDimension = 16;
+			const int FFXDispatchX = (InputImageWidth  + (FFXDispatchGroupDimension - 1)) / FFXDispatchGroupDimension;
+			const int FFXDispatchY = (InputImageHeight + (FFXDispatchGroupDimension - 1)) / FFXDispatchGroupDimension;
+
+			pCmd->SetComputeRootDescriptorTable(0, srv_ColorIn.GetGPUDescHandle());
+			pCmd->SetComputeRootDescriptorTable(1, uav_BlurIntermediate.GetGPUDescHandle());
 			pCmd->SetComputeRootConstantBufferView(2, cbAddr);
 			pCmd->Dispatch(DispatchRenderX, DispatchRenderY, DispatchZ);
-			pRscOutput = pRscTonemapperOut;
-		}
 
-#if !DISABLE_FIDELITYFX_CAS
-		if(PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f)
-		{
-			ID3D12Resource* pRscFFXCASOut = this->GetTextureResource(rsc.Tex_PostProcess_FFXCASOut);
 			const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 			{
-				CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+					CD3DX12_RESOURCE_BARRIER::Transition(pRscBlurIntermediate, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+				, CD3DX12_RESOURCE_BARRIER::Transition(pRscBlurOutput      , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+
 			};
 			pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+		}
 
-			SCOPED_GPU_MARKER(pCmd, "FFX-CAS CS");
+
+		{
+			SCOPED_GPU_MARKER(pCmd, "BlurY");
+			pCmd->SetPipelineState(this->GetPSO(EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_Y_PSO));
+			pCmd->SetComputeRootDescriptorTable(0, srv_blurIntermediate.GetGPUDescHandle());
+			pCmd->SetComputeRootDescriptorTable(1, uav_BlurOutput.GetGPUDescHandle());
+			pCmd->SetComputeRootConstantBufferView(2, cbAddr);
+			pCmd->Dispatch(DispatchRenderX, DispatchRenderY, DispatchZ);
+
+			const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+			{
+					CD3DX12_RESOURCE_BARRIER::Transition(pRscBlurOutput      , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+				, CD3DX12_RESOURCE_BARRIER::Transition(pRscBlurIntermediate, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+			};
+			pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+		}
+	}
+
+	{
+		SCOPED_GPU_MARKER(pCmd, "TonemapperCS");
+
+		FPostProcessParameters::FTonemapper* pConstBuffer = {};
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+		pCBufferHeap->AllocConstantBuffer(sizeof(FPostProcessParameters::FTonemapper), (void**)&pConstBuffer, &cbAddr);
+		*pConstBuffer = PPParams.TonemapperParams;
+
+		pCmd->SetPipelineState(this->GetPSO(EBuiltinPSOs::TONEMAPPER_PSO));
+		pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1));
+		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+		pCmd->SetComputeRootDescriptorTable(0, PP_ENABLE_BLUR_PASS ? srv_blurOutput.GetGPUDescHandle() : srv_ColorIn.GetGPUDescHandle());
+		pCmd->SetComputeRootDescriptorTable(1, uav_TonemapperOut.GetGPUDescHandle());
+		pCmd->SetComputeRootConstantBufferView(2, cbAddr);
+		pCmd->Dispatch(DispatchRenderX, DispatchRenderY, DispatchZ);
+		pRscOutput = pRscTonemapperOut;
+	}
+
+#if !DISABLE_FIDELITYFX_CAS
+	if(PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f)
+	{
+		ID3D12Resource* pRscFFXCASOut = this->GetTextureResource(rsc.Tex_PostProcess_FFXCASOut);
+		const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+		{
+			CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+		};
+		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+
+		SCOPED_GPU_MARKER(pCmd, "FFX-CAS CS");
+
+		unsigned* pConstBuffer = {};
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+		const size_t cbSize = sizeof(unsigned) * 8;
+		pCBufferHeap->AllocConstantBuffer(cbSize, (void**)&pConstBuffer, &cbAddr);
+		memcpy(pConstBuffer, PPParams.FFXCASParams.CASConstantBlock, cbSize);
+			
+
+		ID3D12PipelineState* pPSO = this->GetPSO(EBuiltinPSOs::FFX_CAS_CS_PSO);
+		assert(pPSO);
+		pCmd->SetPipelineState(pPSO);
+		pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1));
+		pCmd->SetComputeRootDescriptorTable(0, srv_TonemapperOut.GetGPUDescHandle());
+		pCmd->SetComputeRootDescriptorTable(1, uav_FFXCASOut.GetGPUDescHandle());
+		pCmd->SetComputeRootConstantBufferView(2, cbAddr);
+			
+		// each FFX-CAS CS thread processes 4 pixels.
+		// workgroup is 64 threads, hence 256 (16x16) pixels are processed per thread group that is dispatched
+ 		constexpr int CAS_WORKGROUP_WORK_DIMENSION = 16;
+		const int CASDispatchX = (InputImageWidth  + (CAS_WORKGROUP_WORK_DIMENSION - 1)) / CAS_WORKGROUP_WORK_DIMENSION;
+		const int CASDispatchY = (InputImageHeight + (CAS_WORKGROUP_WORK_DIMENSION - 1)) / CAS_WORKGROUP_WORK_DIMENSION;
+		pCmd->Dispatch(CASDispatchX, CASDispatchY, DispatchZ);
+		pRscOutput = pRscFFXCASOut;
+	}
+#endif
+
+	if (PPParams.IsFSR1Enabled()) // FSR & CAS are mutually exclusive
+	{
+		if (bHDR)
+		{
+			// TODO: color conversion pass, barriers etc.
+		}
+
+		CD3DX12_RESOURCE_BARRIER barriers[] =
+		{
+			CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+		};
+		pCmd->ResourceBarrier(_countof(barriers), barriers);
+
+		{
+			SCOPED_GPU_MARKER(pCmd, "FSR-EASU CS");
 
 			unsigned* pConstBuffer = {};
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-			const size_t cbSize = sizeof(unsigned) * 8;
+			const size_t cbSize = sizeof(unsigned) * 16;
 			pCBufferHeap->AllocConstantBuffer(cbSize, (void**)&pConstBuffer, &cbAddr);
-			memcpy(pConstBuffer, PPParams.FFXCASParams.CASConstantBlock, cbSize);
-			
+			memcpy(pConstBuffer, PPParams.FSR1ShaderParameters.easu.EASUConstantBlock, cbSize);
 
-			ID3D12PipelineState* pPSO = this->GetPSO(EBuiltinPSOs::FFX_CAS_CS_PSO);
+			ID3D12PipelineState* pPSO = this->GetPSO(EBuiltinPSOs::FFX_FSR1_EASU_CS_PSO);
 			assert(pPSO);
 			pCmd->SetPipelineState(pPSO);
-			pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1));
+			pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FFX_FSR1));
 			pCmd->SetComputeRootDescriptorTable(0, srv_TonemapperOut.GetGPUDescHandle());
-			pCmd->SetComputeRootDescriptorTable(1, uav_FFXCASOut.GetGPUDescHandle());
+			pCmd->SetComputeRootDescriptorTable(1, uav_FSR_EASUOut.GetGPUDescHandle());
 			pCmd->SetComputeRootConstantBufferView(2, cbAddr);
-			
-			// each FFX-CAS CS thread processes 4 pixels.
+
+			// each FSR-EASU CS thread processes 4 pixels.
 			// workgroup is 64 threads, hence 256 (16x16) pixels are processed per thread group that is dispatched
- 			constexpr int CAS_WORKGROUP_WORK_DIMENSION = 16;
-			const int CASDispatchX = (InputImageWidth  + (CAS_WORKGROUP_WORK_DIMENSION - 1)) / CAS_WORKGROUP_WORK_DIMENSION;
-			const int CASDispatchY = (InputImageHeight + (CAS_WORKGROUP_WORK_DIMENSION - 1)) / CAS_WORKGROUP_WORK_DIMENSION;
-			pCmd->Dispatch(CASDispatchX, CASDispatchY, DispatchZ);
-			pRscOutput = pRscFFXCASOut;
+			constexpr int WORKGROUP_WORK_DIMENSION = 16;
+			const int DispatchX = (PPParams.DisplayResolutionWidth  + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
+			const int DispatchY = (PPParams.DisplayResolutionHeight + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
+			pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
 		}
-#endif
-
-		if (PPParams.IsFSR1Enabled()) // FSR & CAS are mutually exclusive
+		const bool bFFX_RCAS_Enabled = true; // TODO: drive with UI ?
+		ID3D12Resource* pRscFSR1Out = this->GetTextureResource(rsc.Tex_PostProcess_FSR_RCASOut);
+		if (bFFX_RCAS_Enabled)
 		{
-			if (bHDR)
-			{
-				// TODO: color conversion pass, barriers etc.
-			}
+			ID3D12Resource* pRscEASUOut = this->GetTextureResource(rsc.Tex_PostProcess_FSR_EASUOut);
+			ID3D12Resource* pRscRCASOut = this->GetTextureResource(rsc.Tex_PostProcess_FSR_RCASOut);
 
-			std::vector<CD3DX12_RESOURCE_BARRIER> pBarriers =
+			SCOPED_GPU_MARKER(pCmd, "FSR-RCAS CS");
 			{
-				CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut
-				, D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+				std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
+				barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscEASUOut
+					, D3D12_RESOURCE_STATE_UNORDERED_ACCESS
 					, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-				)
-			};
-			pCmd->ResourceBarrier((UINT)pBarriers.size(), pBarriers.data());
-
-			{
-				SCOPED_GPU_MARKER(pCmd, "FSR-EASU CS");
-
-				unsigned* pConstBuffer = {};
-				D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-				const size_t cbSize = sizeof(unsigned) * 16;
-				pCBufferHeap->AllocConstantBuffer(cbSize, (void**)&pConstBuffer, &cbAddr);
-				memcpy(pConstBuffer, PPParams.FSR1ShaderParameters.easu.EASUConstantBlock, cbSize);
-
-				ID3D12PipelineState* pPSO = this->GetPSO(EBuiltinPSOs::FFX_FSR1_EASU_CS_PSO);
-				assert(pPSO);
-				pCmd->SetPipelineState(pPSO);
-				pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FFX_FSR1));
-				pCmd->SetComputeRootDescriptorTable(0, srv_TonemapperOut.GetGPUDescHandle());
-				pCmd->SetComputeRootDescriptorTable(1, uav_FSR_EASUOut.GetGPUDescHandle());
-				pCmd->SetComputeRootConstantBufferView(2, cbAddr);
-
-				// each FSR-EASU CS thread processes 4 pixels.
-				// workgroup is 64 threads, hence 256 (16x16) pixels are processed per thread group that is dispatched
-				constexpr int WORKGROUP_WORK_DIMENSION = 16;
-				const int DispatchX = (PPParams.DisplayResolutionWidth  + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
-				const int DispatchY = (PPParams.DisplayResolutionHeight + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
-				pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
-			}
-			const bool bFFX_RCAS_Enabled = true; // TODO: drive with UI ?
-			ID3D12Resource* pRscFSR1Out = this->GetTextureResource(rsc.Tex_PostProcess_FSR_RCASOut);
-			if (bFFX_RCAS_Enabled)
-			{
-				ID3D12Resource* pRscEASUOut = this->GetTextureResource(rsc.Tex_PostProcess_FSR_EASUOut);
-				ID3D12Resource* pRscRCASOut = this->GetTextureResource(rsc.Tex_PostProcess_FSR_RCASOut);
-
-				SCOPED_GPU_MARKER(pCmd, "FSR-RCAS CS");
-				{
-					std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
-					barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscEASUOut
-						, D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-						, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-					));
-					pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
-				}
-
-				ID3D12PipelineState* pPSO = this->GetPSO(EBuiltinPSOs::FFX_FSR1_RCAS_CS_PSO);
-
-				AMD_FidelityFX_SuperResolution1::FShaderParameters::RCAS* pConstBuffer = {};
-				D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-				pCBufferHeap->AllocConstantBuffer(sizeof(AMD_FidelityFX_SuperResolution1::FShaderParameters::RCAS), (void**)&pConstBuffer, &cbAddr);
-				*pConstBuffer = PPParams.FSR1ShaderParameters.rcas;
-
-				pCmd->SetPipelineState(pPSO);
-				pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FFX_FSR1));
-				pCmd->SetComputeRootDescriptorTable(0, srv_FSR_EASUOut.GetGPUDescHandle());
-				pCmd->SetComputeRootDescriptorTable(1, uav_FSR_RCASOut.GetGPUDescHandle());
-				pCmd->SetComputeRootConstantBufferView(2, cbAddr);
-
-				// each FSR-RCAS CS thread processes 4 pixels.
-				// workgroup is 64 threads, hence 256 (16x16) pixels are processed per thread group that is dispatched
-				constexpr int WORKGROUP_WORK_DIMENSION = 16;
-				const int DispatchX = (PPParams.DisplayResolutionWidth + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
-				const int DispatchY = (PPParams.DisplayResolutionHeight + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
-				pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
-
-				{
-					const CD3DX12_RESOURCE_BARRIER pBarriers[] =
-					{
-						CD3DX12_RESOURCE_BARRIER::Transition(pRscEASUOut, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
-						CD3DX12_RESOURCE_BARRIER::Transition(pRscRCASOut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
-					};
-					pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
-				}
-
+				));
+				pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
 			}
 
-			pRscOutput = pRscFSR1Out;
+			ID3D12PipelineState* pPSO = this->GetPSO(EBuiltinPSOs::FFX_FSR1_RCAS_CS_PSO);
+
+			AMD_FidelityFX_SuperResolution1::FShaderParameters::RCAS* pConstBuffer = {};
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+			pCBufferHeap->AllocConstantBuffer(sizeof(AMD_FidelityFX_SuperResolution1::FShaderParameters::RCAS), (void**)&pConstBuffer, &cbAddr);
+			*pConstBuffer = PPParams.FSR1ShaderParameters.rcas;
+
+			pCmd->SetPipelineState(pPSO);
+			pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FFX_FSR1));
+			pCmd->SetComputeRootDescriptorTable(0, srv_FSR_EASUOut.GetGPUDescHandle());
+			pCmd->SetComputeRootDescriptorTable(1, uav_FSR_RCASOut.GetGPUDescHandle());
+			pCmd->SetComputeRootConstantBufferView(2, cbAddr);
+
+			// each FSR-RCAS CS thread processes 4 pixels.
+			// workgroup is 64 threads, hence 256 (16x16) pixels are processed per thread group that is dispatched
+			constexpr int WORKGROUP_WORK_DIMENSION = 16;
+			const int DispatchX = (PPParams.DisplayResolutionWidth + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
+			const int DispatchY = (PPParams.DisplayResolutionHeight + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
+			pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
+
+			{
+				const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+				{
+					CD3DX12_RESOURCE_BARRIER::Transition(pRscEASUOut, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+					CD3DX12_RESOURCE_BARRIER::Transition(pRscRCASOut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+				};
+				pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+			}
+
 		}
+
+		pRscOutput = pRscFSR1Out;
 	}
+	
 
 	return pRscOutput;
 }

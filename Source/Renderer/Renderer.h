@@ -320,9 +320,9 @@ private:
 	// render command execution context
 	CommandQueue mRenderingCmdQueues[NUM_COMMAND_QUEUE_TYPES];
 	std::vector<std::vector<ID3D12CommandAllocator*>> mRenderingCommandAllocators[NUM_COMMAND_QUEUE_TYPES]; // pre queue, per back buffer, per recording thread
-	std::vector<std::vector<ID3D12CommandList*     >> mpRenderingCmds[NUM_COMMAND_QUEUE_TYPES]; // per queue, per back buffer, per recording thread
-	std::vector<std::vector<bool                   >> mCmdClosed[NUM_COMMAND_QUEUE_TYPES]; // per queue, per back buffer, per recording thread
-	std::vector<DynamicBufferHeap                   > mDynamicHeap_RenderingConstantBuffer; // per recording thread
+	std::vector<std::vector<ID3D12CommandList*>> mpRenderingCmds[NUM_COMMAND_QUEUE_TYPES]; // per queue, per back buffer, per recording thread
+	std::vector<std::vector<bool>> mCmdClosed[NUM_COMMAND_QUEUE_TYPES]; // per queue, per back buffer, per recording thread
+	std::vector<DynamicBufferHeap> mDynamicHeap_RenderingConstantBuffer; // per recording thread
 	UINT mNumCurrentlyRecordingRenderingThreads[NUM_COMMAND_QUEUE_TYPES];
 	std::vector<Fence> mAsyncComputeSSAOReadyFence;
 	std::vector<Fence> mAsyncComputeSSAODoneFence;
@@ -333,10 +333,10 @@ private:
 	FCommandRecordingThreadConfig mRenderWorkerConfig[NUM_RENDER_THREAD_WORK_IDS];
 
 	// frame presentation context
-	CommandQueue     mRenderingPresentationQueue;
-	bool             mWaitForSubmitWorker = false;
-	TaskSignal<void> mSubmitWorkerSignal;
-	std::thread      mFrameSubmitThread; // currenly unused, main thread submits the frame
+	CommandQueue      mRenderingPresentationQueue;
+	bool              mWaitForSubmitWorker = false;
+	TaskSignal<void>  mSubmitWorkerSignal;
+	std::thread       mFrameSubmitThread; // currenly unused, main thread submits the frame
 	std::atomic<bool> mStopTrheads = false;
 
 	// background gpu task execution context
@@ -347,12 +347,12 @@ private:
 
 		NUM_BACKGROUND_TASK_THREADS,
 	};
-	CommandQueue mBackgroundTaskCmdQueues[NUM_COMMAND_QUEUE_TYPES];
+	CommandQueue            mBackgroundTaskCmdQueues[NUM_COMMAND_QUEUE_TYPES];
 	ID3D12CommandAllocator* mBackgroundTaskCommandAllocators[NUM_COMMAND_QUEUE_TYPES][NUM_BACKGROUND_TASK_THREADS];
-	ID3D12CommandList* mpBackgroundTaskCmds[NUM_COMMAND_QUEUE_TYPES][NUM_BACKGROUND_TASK_THREADS];
-	DynamicBufferHeap mDynamicHeap_BackgroundTaskConstantBuffer[NUM_BACKGROUND_TASK_THREADS];
-	UINT mNumCurrentlyRecordingBackgroundTaskThreads[NUM_COMMAND_QUEUE_TYPES];
-	Fence mBackgroundTaskFencesPerQueue[NUM_COMMAND_QUEUE_TYPES];
+	ID3D12CommandList*      mpBackgroundTaskCmds[NUM_COMMAND_QUEUE_TYPES][NUM_BACKGROUND_TASK_THREADS];
+	DynamicBufferHeap       mDynamicHeap_BackgroundTaskConstantBuffer[NUM_BACKGROUND_TASK_THREADS];
+	UINT                    mNumCurrentlyRecordingBackgroundTaskThreads[NUM_COMMAND_QUEUE_TYPES];
+	Fence                   mBackgroundTaskFencesPerQueue[NUM_COMMAND_QUEUE_TYPES];
 
 	// memory allocator
 	D3D12MA::Allocator*    mpAllocator = nullptr;
@@ -393,7 +393,7 @@ private:
 	std::unordered_map<PSO_ID, ID3D12PipelineState*> mPSOs;
 	ThreadPool mWorkers_PSOLoad;
 	ThreadPool mWorkers_ShaderLoad;
-	struct FPSOCompileResult      { ID3D12PipelineState* pPSO; PSO_ID id; };
+	struct FPSOCompileResult { ID3D12PipelineState* pPSO; PSO_ID id; };
 	struct FShaderLoadTaskContext { std::queue<FShaderStageCompileDesc> TaskQueue; };
 	std::vector<std::shared_future<FPSOCompileResult>        > mPSOCompileResults;
 	std::vector<std::shared_future<FShaderStageCompileResult>> mShaderCompileResults;
@@ -407,24 +407,23 @@ private:
 	std::vector<FSceneDrawData>     mFrameSceneDrawData; // per-frame if pipelined update+render threads
 
 	// init sync
-	std::latch                      mLatchDeviceInitialized{ 1 };
-	std::latch                      mLatchCmdQueuesInitialized{ 1 };
-	std::latch                      mLatchMemoryAllocatorInitialized{ 1 };
-	std::latch                      mLatchHeapsInitialized{ 1 };
-	std::latch                      mLatchRootSignaturesInitialized{ 1 };
-	std::latch                      mLatchSignalLoadingScreenReady{ 1 };
-	std::latch                      mLatchPSOLoaderDispatched{ 1 };
-	std::latch                      mLatchRenderPassesInitialized{ 1 };
-	std::latch                      mLatchSwapchainInitialized{ 1 };
-	std::latch                      mLatchDefaultResourcesLoaded{ 1 };
-	std::latch                      mLatchWindowSizeDependentResourcesInitialized{ 1 };
-	bool                            mbWindowSizeDependentResourcesFirstInitiazliationDone = false;
+	std::latch mLatchDeviceInitialized{ 1 };
+	std::latch mLatchCmdQueuesInitialized{ 1 };
+	std::latch mLatchMemoryAllocatorInitialized{ 1 };
+	std::latch mLatchHeapsInitialized{ 1 };
+	std::latch mLatchRootSignaturesInitialized{ 1 };
+	std::latch mLatchSignalLoadingScreenReady{ 1 };
+	std::latch mLatchPSOLoaderDispatched{ 1 };
+	std::latch mLatchRenderPassesInitialized{ 1 };
+	std::latch mLatchSwapchainInitialized{ 1 };
+	std::latch mLatchDefaultResourcesLoaded{ 1 };
+	std::latch mLatchWindowSizeDependentResourcesInitialized{ 1 };
+	bool mbWindowSizeDependentResourcesFirstInitiazliationDone = false;
 
 	// bookkeeping
 	std::unordered_map<EProceduralTextures, SRV_ID>    mLookup_ProceduralTextureSRVs;
 	std::unordered_map<EProceduralTextures, TextureID> mLookup_ProceduralTextureIDs;
 	std::unordered_map<std::string, bool>              mShaderCacheDirtyMap;
-
 
 	FRenderStats mRenderStats;
 

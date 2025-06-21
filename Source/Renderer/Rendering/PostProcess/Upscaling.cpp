@@ -65,7 +65,7 @@ namespace AMD_FidelityFX_SuperResolution1
 			, OutputHeight);
 #endif
 		FsrEasuCon(
-			reinterpret_cast<AU1*>(&this->EASUConstantBlock[0])
+			  reinterpret_cast<AU1*>(&this->EASUConstantBlock[0])
 			, reinterpret_cast<AU1*>(&this->EASUConstantBlock[4])
 			, reinterpret_cast<AU1*>(&this->EASUConstantBlock[8])
 			, reinterpret_cast<AU1*>(&this->EASUConstantBlock[12])
@@ -101,4 +101,63 @@ namespace AMD_FidelityFX_SuperResolution1
 		);
 	}
 #endif
+}
+
+
+#include "ffx_api/dx12/ffx_api_dx12.h"
+#include "ffx_api/ffx_upscale.h"
+#include <cassert>
+namespace AMD_FidelityFX_SuperResolution3
+{
+	void FSR3MessageCallback(uint type, const wchar_t* msg)
+	{
+		Log::Info("[FFX_FSR3]: %ls", msg);
+	}
+
+	struct ContextImpl
+	{
+		ffxContext upscalingContext{};
+	};
+
+	void Context::Initialize(ID3D12Device* pDevice, uint DisplayWidth, uint DisplayHeight, uint RenderWidth, uint RenderHeight)
+	{
+		assert(!pImpl);
+		pImpl = new ContextImpl();
+
+		ffxCreateBackendDX12Desc backendDesc{};
+		backendDesc.device = pDevice;
+		backendDesc.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_BACKEND_DX12;
+
+		ffxCreateContextDescUpscale createUpscaling = {};
+		createUpscaling.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE;
+		createUpscaling.maxUpscaleSize = { DisplayWidth, DisplayHeight };
+		createUpscaling.maxRenderSize = { RenderWidth, RenderHeight };
+		createUpscaling.flags = FFX_UPSCALE_ENABLE_AUTO_EXPOSURE | FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE;
+#if _DEBUG
+		createUpscaling.flags |= FFX_UPSCALE_ENABLE_DEBUG_CHECKING;
+		createUpscaling.fpMessage = FSR3MessageCallback;
+#endif
+
+		backendDesc.header.pNext = &createUpscaling.header;
+
+		ffxReturnCode_t retCode = ffxCreateContext(&pImpl->upscalingContext, &createUpscaling.header, nullptr);
+	}
+
+	void Context::Destroy()
+	{
+		assert(pImpl);
+		if(!pImpl)
+		{
+			Log::Warning("FSR3 Context Destroy called without initialization.");
+			return;
+		}
+		
+		ffxDestroyContext(&pImpl->upscalingContext, nullptr);
+
+		if (pImpl)
+		{
+			free(pImpl);
+			pImpl = nullptr;
+		}
+	}
 }
