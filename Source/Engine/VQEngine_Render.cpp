@@ -210,7 +210,7 @@ void VQEngine::RenderThread_Inititalize()
 		const int H = bFullscreen ? mpWinMain->GetFullscreenHeight() : mpWinMain->GetHeight();
 		const float fResolutionScale = 1.0f; // Post process parameters are not initialized at this stage to determine the resolution scale
 
-		RenderThread_LoadWindowSizeDependentResources(hwndMain, W, H, fResolutionScale); 
+		mpRenderer->LoadWindowSizeDependentResources(hwndMain, W, H, fResolutionScale, this->ShouldRenderHDR(hwndMain));
 	});
 }
 
@@ -313,34 +313,6 @@ void VQEngine::WaitForBuiltinMeshGeneration()
 	SCOPED_CPU_MARKER_C("WaitForBuiltinMeshGeneration", 0xFFAA0000);
 	mBuiltinMeshGenSignal.Wait([&]() { return mbBuiltinMeshGenFinished.load(); });
 }
-
-
-// ------------------------------------------------------------------------------------------------------------------------------------------------------------
-//
-// LOAD
-//
-// ------------------------------------------------------------------------------------------------------------------------------------------------------------
-void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height, float fResolutionScale)
-{
-	SCOPED_CPU_MARKER("RenderThread_LoadWindowSizeDependentResources()");
-
-	if (hwnd == mpWinMain->GetHWND())
-	{
-		mpRenderer->LoadWindowSizeDependentResources(hwnd, Width, Height, fResolutionScale, this->ShouldRenderHDR(hwnd));
-	}
-	// TODO: generic implementation of other window procedures for load
-}
-
-void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
-{
-	SCOPED_CPU_MARKER("RenderThread_UnloadWindowSizeDependentResources()");
-	if (hwnd == mpWinMain->GetHWND())
-	{
-		mpRenderer->UnloadWindowSizeDependentResources(hwnd);
-	}
-	// TODO: generic implementation of other window procedures for unload
-}
-
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 //

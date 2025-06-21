@@ -140,9 +140,6 @@ public:
 	void RenderThread_SignalUpdateThread();
 #endif
 
-	void RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height, float ResolutionScale);
-	void RenderThread_UnloadWindowSizeDependentResources(HWND hwnd);
-
 	// RENDER()
 	// - Records command lists in parallel per FSceneView
 	// - Submits commands to the GPU

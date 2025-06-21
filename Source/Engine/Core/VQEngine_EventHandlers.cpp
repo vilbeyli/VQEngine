@@ -420,8 +420,11 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 
 	const float fResolutionScale = bUpscaling ? PPParams.ResolutionScale : 1.0f;
 
-	RenderThread_UnloadWindowSizeDependentResources(hwnd);
-	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT, fResolutionScale);
+	if (hwnd == mpWinMain->GetHWND())
+	{
+		mpRenderer->UnloadWindowSizeDependentResources(hwnd);
+		mpRenderer->LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT, fResolutionScale, this->ShouldRenderHDR(hwnd));
+	}
 }
 
 void VQEngine::RenderThread_HandleWindowCloseEvent(const IEvent* pEvent)
@@ -443,7 +446,7 @@ void VQEngine::RenderThread_HandleWindowCloseEvent(const IEvent* pEvent)
 	}
 	
 	mpRenderer->GetWindowSwapChain(hwnd).WaitForGPU();
-	RenderThread_UnloadWindowSizeDependentResources(hwnd);
+	mpRenderer->UnloadWindowSizeDependentResources(hwnd);
 	pWindowCloseEvent->Signal_WindowDependentResourcesDestroyed.NotifyAll();
 }
 
