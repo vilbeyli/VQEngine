@@ -49,6 +49,7 @@ struct FSceneRenderOptions
 		int     samplesPerQuad = 1;
 	};
 
+	// debug
 	bool bForceLOD0_ShadowView = false;
 	bool bForceLOD0_SceneView = false;
 	bool bDrawLightBounds = false;
@@ -57,6 +58,7 @@ struct FSceneRenderOptions
 	bool bDrawLightMeshes = true;
 	bool bDrawVertexLocalAxes = false;
 	float fVertexLocalAxixSize = 1.0f;
+	
 	float fYawSliderValue = 0.0f;
 	float fAmbientLightingFactor = 0.055f;
 	bool bScreenSpaceAO = true;
@@ -157,8 +159,8 @@ struct FSceneView
 	float                 HDRIYawOffset = 0.0f;
 	DirectX::XMMATRIX     EnvironmentMapViewProj;
 	const Mesh*           pEnvironmentMapMesh = nullptr;
-	int                   SceneRTWidth = 0;
-	int                   SceneRTHeight = 0;
+	//int                   SceneRTWidth = 0;
+	//int                   SceneRTHeight = 0;
 
 	uint NumGameObjectBBRenderCmds = 0;
 	uint NumMeshBBRenderCmds = 0;

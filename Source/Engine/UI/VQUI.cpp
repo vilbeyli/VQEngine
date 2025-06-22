@@ -92,6 +92,7 @@ static const char* szAALabels[] =
 {
 	  "None ##0"
 	, "MSAAx4"
+	, "FSR3 AA"
 	, ""
 };
 static const char* szSSAOLabels[] =
@@ -304,7 +305,7 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 	{
 		if (mUIState.bWindowVisible_KeyMappings)           DrawKeyMappingsWindow();
 		if (mUIState.bWindowVisible_SceneControls)         DrawSceneControlsWindow(mpScene->GetActiveCameraIndex(), mpScene->GetActiveEnvironmentMapPresetIndex(), SceneParams);
-		if (mUIState.bWindowVisible_Profiler)              DrawProfilerWindow(mpScene->GetSceneRenderStats(FRAME_DATA_INDEX), PPParams.ResolutionScale, dt);
+		if (mUIState.bWindowVisible_Profiler)              DrawProfilerWindow(mpScene->GetSceneRenderStats(FRAME_DATA_INDEX), mSettings.gfx.RenderResolutionScale, dt);
 		if (mUIState.bWindowVisible_GraphicsSettingsPanel) DrawGraphicsSettingsWindow(SceneParams, PPParams);
 		if (mUIState.bWindowVisible_Editor)                DrawEditorWindow();
 	}
@@ -363,7 +364,7 @@ static const char* szSceneNames [NUM_MAX_LEVEL_NAMES  ] = {};
 static const char* szEnvMapNames[NUM_MAX_ENV_MAP_NAMES] = {};
 static const char* szCameraNames[NUM_MAX_CAMERA_NAMES] = {};
 static const char* szDrawModes  [NUM_MAX_DRAW_MODE_NAMES] = {};
-static const char* szUpscalingLabels[FPostProcessParameters::EUpscalingAlgorithm::NUM_UPSCALING_ALGORITHMS] = {};
+static const char* szUpscalingLabels[EUpscalingAlgorithm::NUM_UPSCALING_ALGORITHMS] = {};
 static const char* szFSR1QualityLabels[AMD_FidelityFX_SuperResolution1::EPreset::NUM_FSR1_PRESET_OPTIONS] = {};
 static const char* szMaxFrameRateOptionLabels[3] = {}; // see Settings.h:FGraphicsSettings
 
@@ -422,9 +423,9 @@ static void InitializeStaticCStringData_PostProcessingControls()
 		szFSR1QualityLabels[EPreset::PERFORMANCE] = "Performance";
 		szFSR1QualityLabels[EPreset::CUSTOM] = "Custom";
 
-		szUpscalingLabels[FPostProcessParameters::EUpscalingAlgorithm::NONE] = "None";
-		szUpscalingLabels[FPostProcessParameters::EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1] = "AMD FSR1";
-		szUpscalingLabels[FPostProcessParameters::EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3] = "AMD FSR3";
+		szUpscalingLabels[EUpscalingAlgorithm::NONE] = "None";
+		szUpscalingLabels[EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1] = "AMD FSR1";
+		szUpscalingLabels[EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3] = "AMD FSR3";
 
 		bPostPRocessLabelsInitialized = true;
 	}
@@ -728,14 +729,14 @@ void VQEngine::DrawKeyMappingsWindow()
 }
 
 
-void VQEngine::DrawProfilerWindow(const FSceneStats& FrameStats, float RenderResolutionScale, float dt)
+void VQEngine::DrawProfilerWindow(const FSceneStats& FrameStats, float RenderRenderResolutionScale, float dt)
 {
 	const FSceneStats& s = FrameStats; // shorthand rename
 
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
-	const uint32 RenderW = W * RenderResolutionScale;
-	const uint32 RenderH = H * RenderResolutionScale;
+	const uint32 RenderW = W * RenderRenderResolutionScale;
+	const uint32 RenderH = H * RenderRenderResolutionScale;
 
 	const uint32_t PROFILER_WINDOW_POS_X = W - PROFILER_WINDOW_PADDIG_X - PROFILER_WINDOW_SIZE_X;
 	const uint32_t PROFILER_WINDOW_POS_Y = PROFILER_WINDOW_PADDIG_Y;
@@ -832,10 +833,10 @@ void VQEngine::DrawProfilerWindow(const FSceneStats& FrameStats, float RenderRes
 	ImGui::End();
 }
 
-void VQEngine::DrawPostProcessSettings(FPostProcessParameters& PPParams)
+void VQEngine::DrawPostProcessSettings(FGraphicsSettings& GFXSettings)
 {
 	// constants
-	const bool bFSREnabled = PPParams.IsFSR1Enabled();
+	const bool bFSREnabled = GFXSettings.IsFSR1Enabled();
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
 
@@ -851,38 +852,38 @@ void VQEngine::DrawPostProcessSettings(FPostProcessParameters& PPParams)
 
 	ImGui::Text("Upscaling");
 	ImGui::Separator();
-	if (ImGui_RightAlignedCombo("Algorithm", (int*) &PPParams.UpscalingAlgorithm, szUpscalingLabels, _countof(szUpscalingLabels)))
+	if (ImGui_RightAlignedCombo("Algorithm", (int*) &GFXSettings.UpscalingAlgorithm, szUpscalingLabels, _countof(szUpscalingLabels)))
 	{
-		if (PPParams.UpscalingAlgorithm == FPostProcessParameters::EUpscalingAlgorithm::NONE)
+		if (GFXSettings.UpscalingAlgorithm == EUpscalingAlgorithm::NONE)
 		{
-			PPParams.ResolutionScale = 1.0f;
+			GFXSettings.RenderResolutionScale = 1.0f;
 		}
-		else if (PPParams.FSR1UpscalingQualityEnum != AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
+		else if (GFXSettings.FSR1UpscalingQualityEnum != AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
 		{
-			PPParams.ResolutionScale = AMD_FidelityFX_SuperResolution1::GetScreenPercentage(PPParams.FSR1UpscalingQualityEnum);
+			GFXSettings.RenderResolutionScale = AMD_FidelityFX_SuperResolution1::GetScreenPercentage(GFXSettings.FSR1UpscalingQualityEnum);
 		}
 		fnSendWindowResizeEvents();
 	}
 
-	if (PPParams.UpscalingAlgorithm != FPostProcessParameters::EUpscalingAlgorithm::NONE)
+	if (GFXSettings.UpscalingAlgorithm != EUpscalingAlgorithm::NONE)
 	{
 		// preset: ultra quality / quality / balanced / performance / custom
-		if (ImGui_RightAlignedCombo("Quality", (int*)&PPParams.FSR1UpscalingQualityEnum, szFSR1QualityLabels, _countof(szFSR1QualityLabels)))
+		if (ImGui_RightAlignedCombo("Quality", (int*)&GFXSettings.FSR1UpscalingQualityEnum, szFSR1QualityLabels, _countof(szFSR1QualityLabels)))
 		{
-			if (PPParams.FSR1UpscalingQualityEnum != AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
+			if (GFXSettings.FSR1UpscalingQualityEnum != AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
 			{
-				PPParams.ResolutionScale = AMD_FidelityFX_SuperResolution1::GetScreenPercentage(PPParams.FSR1UpscalingQualityEnum);
+				GFXSettings.RenderResolutionScale = AMD_FidelityFX_SuperResolution1::GetScreenPercentage(GFXSettings.FSR1UpscalingQualityEnum);
 			}
 			
 			fnSendWindowResizeEvents();
 		}
 
 		// resolution scale
-		if (PPParams.FSR1UpscalingQualityEnum == AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
+		if (GFXSettings.FSR1UpscalingQualityEnum == AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
 		{
 			// if we are to support resolution scale > 1.0f, we'll need to stop using FSR1 upscaling
 			// and use a linear min filter for AA
-			if (ImGui::SliderFloat("Resolution Scale", &PPParams.ResolutionScale, 0.25f, 1.00f, "%.2f"))
+			if (ImGui::SliderFloat("Resolution Scale", &GFXSettings.RenderResolutionScale, 0.25f, 1.00f, "%.2f"))
 			{
 				fnSendWindowResizeEvents();
 			}
@@ -893,11 +894,12 @@ void VQEngine::DrawPostProcessSettings(FPostProcessParameters& PPParams)
 
 	ImGui::Text("Sharpness");
 	ImGui::Separator();
-	float LinearSharpness = PPParams.FSR1ShaderParameters.rcas.GetLinearSharpness();
-	if (ImGui::SliderFloat("Amount##", &LinearSharpness, 0.01f, 1.00f, "%.2f"))
+	
+	//float LinearSharpness = GFXSettings.FSR1ShaderParameters.rcas.GetLinearSharpness();
+	if (ImGui::SliderFloat("Amount##", &GFXSettings.Sharpness, 0.01f, 1.00f, "%.2f"))
 	{
-		PPParams.FSR1ShaderParameters.rcas.SetLinearSharpness(LinearSharpness);
-		PPParams.FSR1ShaderParameters.rcas.UpdateConstantBlock();
+		//GFXSettings.FSR1ShaderParameters.rcas.SetLinearSharpness(LinearSharpness);
+		//GFXSettings.FSR1ShaderParameters.rcas.UpdateConstantBlock();
 	}
 
 	//
@@ -910,17 +912,15 @@ void VQEngine::DrawPostProcessSettings(FPostProcessParameters& PPParams)
 	{
 		if (bHDR)
 		{
-			const std::string strDispalyCurve = GetDisplayCurveString(PPParams.TonemapperParams.OutputDisplayCurve);
-			const std::string strColorSpace   = GetColorSpaceString(PPParams.TonemapperParams.ContentColorSpace);
+			const std::string strDispalyCurve = GetDisplayCurveString(GFXSettings.OutputDisplayCurve);
+			const std::string strColorSpace   = GetColorSpaceString(GFXSettings.ContentColorSpace);
 			ImGui::Text("OutputDevice : %s", strDispalyCurve.c_str() );
 			ImGui::Text("Color Space  : %s", strColorSpace.c_str() );
-			ImGui::SliderFloat("UI Brightness", &PPParams.TonemapperParams.UIHDRBrightness, 0.1f, 20.f, "%.1f");
+			ImGui::SliderFloat("UI Brightness", &GFXSettings.UIHDRBrightness, 0.1f, 20.f, "%.1f");
 		}
 		else
 		{
-			bool bGamma = PPParams.TonemapperParams.ToggleGammaCorrection;
-			ImGui::Checkbox("[SDR] Apply Gamma (G)", &bGamma);
-			PPParams.TonemapperParams.ToggleGammaCorrection = bGamma ? 1 : 0;
+			ImGui::Checkbox("[SDR] Apply Gamma (G)", &GFXSettings.EnableGammaCorrection);
 		}
 	}
 
@@ -937,8 +937,6 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams
 	InitializeStaticCStringData_GraphicsSettings();
 	// static data
 
-
-	int iAALabel = gfx.bAntiAliasing ? 1 : 0;
 	int iSSAOLabel = SceneRenderParams.bScreenSpaceAO ? 1 : 0;
 	int iReflections = gfx.Reflections;
 
@@ -1062,10 +1060,9 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams
 
 	if (ImGui::BeginTabItem("Rendering"))
 	{
-		if (ImGui_RightAlignedCombo("AntiAliasing (M)", &iAALabel, szAALabels, _countof(szAALabels) - 1))
+		if (ImGui_RightAlignedCombo("AntiAliasing (M)", (int*)&gfx.AntiAliasing, szAALabels, _countof(szAALabels) - 1))
 		{
-			gfx.bAntiAliasing = iAALabel;
-			Log::Info("AA Changed: %d", gfx.bAntiAliasing);
+			Log::Info("AA Changed: %d", gfx.AntiAliasing);
 		}
 
 		if (ImGui_RightAlignedCombo("Ambient Occlusion", &iSSAOLabel, szSSAOLabels, _countof(szSSAOLabels) - 1))
@@ -1131,7 +1128,7 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams
 
 	if (ImGui::BeginTabItem("Post Processing"))
 	{
-		DrawPostProcessSettings(PPParams);
+		DrawPostProcessSettings(mSettings.gfx);
 		ImGui::EndTabItem();
 	}
 

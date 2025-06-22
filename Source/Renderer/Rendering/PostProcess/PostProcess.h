@@ -19,6 +19,7 @@
 
 #include "Upscaling.h"
 #include "Engine/Core/Types.h"
+#include "Engine/Settings.h"
 
 #include "Renderer/Rendering/HDR.h"
 
@@ -45,26 +46,9 @@ enum class EDrawMode
 	NUM_DRAW_MODES,
 };
 
-// TODO: separate post process options from parameters (shader data)
 struct FPostProcessParameters
 {
-	enum EUpscalingAlgorithm
-	{
-		NONE = 0,
-		FIDELITYFX_SUPER_RESOLUTION_1,
-		FIDELITYFX_SUPER_RESOLUTION_3,
-
-		NUM_UPSCALING_ALGORITHMS
-	};
-	enum ESharpeningAlgorithm
-	{
-		NO_SHARPENING = 0,
-		FIDELITYFX_CAS, // FFX CAS
-
-		NUM_SHARPENING_ALGORITHMS
-	};
-
-	struct FTonemapper
+	struct FTonemapperParams
 	{
 		EColorSpace   ContentColorSpace = EColorSpace::REC_709;
 		EDisplayCurve OutputDisplayCurve = EDisplayCurve::sRGB;
@@ -95,43 +79,31 @@ struct FPostProcessParameters
 	};
 #endif
 	
-	using AMD_FSR1_Preset = AMD_FidelityFX_SuperResolution1::EPreset;
-	using AMD_FSR3_Preset = AMD_FidelityFX_SuperResolution3::EPreset;
 	using AMD_FSR1_ShaderParams = AMD_FidelityFX_SuperResolution1::FShaderParameters;
 	using AMD_FSR3_ShaderParams = AMD_FidelityFX_SuperResolution3::FShaderParameters;
 
 	//-------------------------------------------------------------------------------------------
 	//-------------------------------------------------------------------------------------------
 	//-------------------------------------------------------------------------------------------
+
 #if DISABLE_FIDELITYFX_CAS
 	inline bool IsFFXCASEnabled() const { return false; }
 #else
 	inline bool IsFFXCASEnabled() const { return !this->IsFSR1Enabled() && this->bEnableCAS; }
 #endif
-	inline bool IsFSR1Enabled() const { return UpscalingAlgorithm == EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1; }
-	inline bool IsFSR3Enabled() const { return UpscalingAlgorithm == EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3; }
 
-	int SceneRTWidth = 0;
-	int SceneRTHeight = 0;
-	int DisplayResolutionWidth = 0;
-	int DisplayResolutionHeight = 0;
-
-	FTonemapper          TonemapperParams = {};
-	FBlurParams          BlurParams       = {};
-
-	EUpscalingAlgorithm   UpscalingAlgorithm = EUpscalingAlgorithm::NONE;
-	AMD_FSR1_Preset       FSR1UpscalingQualityEnum = AMD_FSR1_Preset::ULTRA_QUALITY;
-	AMD_FSR1_ShaderParams FSR1ShaderParameters = {};
-	AMD_FSR3_Preset       FSR3UpscalingQualityEnum = AMD_FSR3_Preset::NATIVE_AA;
-	AMD_FSR3_ShaderParams FSR3ShaderParameters = {};
+	FTonemapperParams     TonemapperParams = {};
+	FBlurParams           BlurParams       = {};
+	AMD_FSR1_ShaderParams FSR1ShaderParams = {};
+	AMD_FSR3_ShaderParams FSR3ShaderParams = {};
 
 #if !DISABLE_FIDELITYFX_CAS
 	FFFXCAS              FFXCASParams = {};
 #endif
-	float                ResolutionScale = 1.0f;
-	float                Sharpness = 0.8f;
+	float ResolutionScale = 1.0f;
+	float Sharpness = 0.8f;
 
-	EDrawMode            DrawModeEnum = EDrawMode::LIT_AND_POSTPROCESSED;
+	EDrawMode DrawModeEnum = EDrawMode::LIT_AND_POSTPROCESSED;
 	FVizualizationParams VizParams = {};
 
 #if !DISABLE_FIDELITYFX_CAS

@@ -18,7 +18,14 @@
 
 #pragma once
 
-enum EDisplayMode
+#include "Renderer/Rendering/PostProcess/Upscaling.h"
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// 
+// GRAPHICS SETTINGS
+// 
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+enum EDisplayMode : unsigned char
 {
 	WINDOWED = 0,
 	BORDERLESS_FULLSCREEN,
@@ -26,8 +33,7 @@ enum EDisplayMode
 
 	NUM_DISPLAY_MODES
 };
-
-enum EReflections
+enum EReflections : unsigned char
 {
 	REFLECTIONS_OFF,
 	SCREEN_SPACE_REFLECTIONS__FFX,
@@ -35,23 +41,77 @@ enum EReflections
 
 	NUM_REFLECTION_SETTINGS
 };
+enum EUpscalingAlgorithm : unsigned char
+{
+	NONE = 0,
+	FIDELITYFX_SUPER_RESOLUTION_1,
+	FIDELITYFX_SUPER_RESOLUTION_3,
+
+	NUM_UPSCALING_ALGORITHMS
+};
+enum ESharpeningAlgorithm : unsigned char
+{
+	NO_SHARPENING = 0,
+	FIDELITYFX_CAS,
+
+	NUM_SHARPENING_ALGORITHMS
+};
+enum EAntiAliasingAlgorithm : unsigned char
+{
+	NO_ANTI_ALIASING = 0,
+	MSAA4,
+	FSR3_ANTI_ALIASING,
+
+	NUM_ANTI_ALIASING_ALGORITHMS
+};
 
 struct FGraphicsSettings
 {
+	using AMD_FSR1_Preset = AMD_FidelityFX_SuperResolution1::EPreset;
+	using AMD_FSR3_Preset = AMD_FidelityFX_SuperResolution3::EPreset;
+
+	// display
+	unsigned short DisplayResolutionX = 1600;
+	unsigned short DisplayResolutionY = 900;
 	bool bVsync              = false;
 	bool bUseTripleBuffering = false;
-	bool bAntiAliasing       = false;
+
+	// rendering
+	EAntiAliasingAlgorithm AntiAliasing = EAntiAliasingAlgorithm::MSAA4;
 	EReflections Reflections = EReflections::REFLECTIONS_OFF;
+	float RenderResolutionScale = 1.0f;
+	short MaxFrameRate = -1; // -1: Auto (RefreshRate x 1.15) | 0: Unlimited | <int>: specified value
+	short EnvironmentMapResolution = 256;
 
-	float RenderScale = 1.0f;
-	int   MaxFrameRate = -1; // -1: Auto (RefreshRate x 1.15) | 0: Unlimited | <int>: specified value
-	int   EnvironmentMapResolution = 256;
+	// post processing
+	EUpscalingAlgorithm UpscalingAlgorithm = EUpscalingAlgorithm::NONE;
+	AMD_FSR1_Preset FSR1UpscalingQualityEnum = AMD_FSR1_Preset::ULTRA_QUALITY;
+	AMD_FSR3_Preset FSR3UpscalingQualityEnum = AMD_FSR3_Preset::NATIVE_AA;
+	float Sharpness = 0.8f;
 
+	// tonemap
+	float         UIHDRBrightness = 1.0f;
+	float         DisplayReferenceBrightnessLevel = 200.0f;
+	EColorSpace   ContentColorSpace = EColorSpace::REC_709;
+	EDisplayCurve OutputDisplayCurve = EDisplayCurve::sRGB;
+	bool          EnableGammaCorrection = true;
+
+	// command recording
 	bool bEnableAsyncCopy = true;
 	bool bEnableAsyncCompute = true;
 	bool bUseSeparateSubmissionQueue = true;
+	
+	// =====================================================================================================================
+
+	inline bool IsFSR1Enabled() const { return UpscalingAlgorithm == EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1; }
+	inline bool IsFSR3Enabled() const { return UpscalingAlgorithm == EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3; }
 };
- 
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// 
+// WINDOW SETTINGS
+// 
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 struct FWindowSettings
 {
 	int Width                 = -1;
@@ -64,6 +124,11 @@ struct FWindowSettings
 	inline bool IsDisplayModeFullscreen() const { return DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN || DisplayMode == EDisplayMode::BORDERLESS_FULLSCREEN; }
 };
 
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// 
+// ENGINE SETTINGS
+// 
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 struct FEngineSettings
 {
 	FGraphicsSettings gfx;

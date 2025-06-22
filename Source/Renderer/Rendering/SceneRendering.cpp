@@ -353,11 +353,11 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 
 	const bool bReflectionsEnabled   = GFXSettings.Reflections != EReflections::REFLECTIONS_OFF && GFXSettings.Reflections == EReflections::SCREEN_SPACE_REFLECTIONS__FFX; // TODO: remove the && after RayTracing is added
 	const bool bDownsampleDepth      = GFXSettings.Reflections == EReflections::SCREEN_SPACE_REFLECTIONS__FFX;
-	const bool& bMSAA                = GFXSettings.bAntiAliasing;
+	const bool bMSAA                 = GFXSettings.AntiAliasing == EAntiAliasingAlgorithm::MSAA4;
 	const bool bAsyncCompute         = ShouldEnableAsyncCompute(GFXSettings, SceneView, ShadowView);
 	const bool bVizualizationEnabled = PPParams.DrawModeEnum != EDrawMode::LIT_AND_POSTPROCESSED;
 	const bool bFFXCASEnabled        = PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f;
-	const bool bFSREnabled           = PPParams.IsFSR1Enabled();
+	const bool bFSREnabled           = GFXSettings.IsFSR1Enabled();
 
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 	ID3D12Resource* pRscNormals      = this->GetTextureResource(rsc.Tex_SceneNormals);
@@ -373,45 +373,6 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 	CommandQueue& CPYCmdQ = this->GetCommandQueue(ECommandQueueType::COPY);
 	CommandQueue& CMPCmdQ = this->GetCommandQueue(ECommandQueueType::COMPUTE);
 
-	// ---------------------------------------------------------------------------------------------------
-	// TODO: undo const cast and assign in a proper spot -------------------------------------------------
-	FSceneView& RefSceneView = const_cast<FSceneView&>(SceneView);
-	FPostProcessParameters& RefPPParams = const_cast<FPostProcessParameters&>(PPParams);
-
-	RefSceneView.SceneRTWidth  = static_cast<int>(ctx.WindowDisplayResolutionX * (PPParams.IsFSR1Enabled() ? PPParams.ResolutionScale : 1.0f));
-	RefSceneView.SceneRTHeight = static_cast<int>(ctx.WindowDisplayResolutionY * (PPParams.IsFSR1Enabled() ? PPParams.ResolutionScale : 1.0f));
-	RefPPParams.SceneRTWidth  = SceneView.SceneRTWidth;
-	RefPPParams.SceneRTHeight = SceneView.SceneRTHeight;
-	RefPPParams.DisplayResolutionWidth  = ctx.WindowDisplayResolutionX;
-	RefPPParams.DisplayResolutionHeight = ctx.WindowDisplayResolutionY;
-	if (bHDRDisplay) // do some settings override for some render paths
-	{
-#if !DISABLE_FIDELITYFX_CAS
-		if (RefPPParams.IsFFXCASEnabled())
-		{
-			Log::Warning("FidelityFX CAS HDR not implemented, turning CAS off");
-			RefPPParams.bEnableCAS = false;
-		}
-#endif
-		if (RefPPParams.IsFSR1Enabled())
-		{
-			// TODO: HDR conversion pass to handle color range and precision/packing, shader variants etc.
-			Log::Warning("FidelityFX Super Resolution HDR not implemented yet, turning FSR off"); 
-			// RefPPParams.bEnableFSR = false;
-			RefPPParams.UpscalingAlgorithm = FPostProcessParameters::EUpscalingAlgorithm::NONE; // TODO: enable resolution scaling for HDR
-#if 0
-			// this causes UI pass PSO to not match the render target format
-			mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<WindowResizeEvent>(W, H, hwnd));
-			mEventQueue_WinToVQE_Update.AddItem(std::make_unique<WindowResizeEvent>(W, H, hwnd));
-#endif
-		}
-	}
-	assert(PPParams.DisplayResolutionHeight != 0);
-	assert(PPParams.DisplayResolutionWidth != 0);
-	// TODO: undo const cast and assign in a proper spot -------------------------------------------------
-	// ---------------------------------------------------------------------------------------------------
-
-
 	const SRV& srv_UIColorIn = bVizualizationEnabled ?
 		this->GetSRV(rsc.SRV_PostProcess_VisualizationOut) : (
 			bFFXCASEnabled
@@ -420,8 +381,8 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 				? this->GetSRV(rsc.SRV_PostProcess_FSR_RCASOut)
 				: this->GetSRV(rsc.SRV_PostProcess_TonemapperOut)));
 
-	const float RenderResolutionX = static_cast<float>(SceneView.SceneRTWidth);
-	const float RenderResolutionY = static_cast<float>(SceneView.SceneRTHeight);
+	const float RenderResolutionX = static_cast<float>(GFXSettings.DisplayResolutionX * GFXSettings.RenderResolutionScale);
+	const float RenderResolutionY = static_cast<float>(GFXSettings.DisplayResolutionY * GFXSettings.RenderResolutionScale);
 
 	UINT64 SSAODoneFenceValue = mAsyncComputeSSAODoneFence[BACK_BUFFER_INDEX].GetValue();
 	D3D12_GPU_VIRTUAL_ADDRESS cbPerFrame = {};
@@ -521,20 +482,20 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 			RenderReflections(pCmd, &CBHeap, SceneView, GFXSettings);
 			
 			// render scene-debugging stuff that shouldn't be in reflections: bounding volumes, etc
-			RenderSceneBoundingVolumes(pCmd, &CBHeap, cbPerView, SceneView, bMSAA);
+			RenderSceneBoundingVolumes(pCmd, &CBHeap, cbPerView, SceneView, GFXSettings);
 
 			CompositeReflections(pCmd, &CBHeap, SceneView, GFXSettings);
 		}
 
-		pRsc = RenderPostProcess(pCmd, &CBHeap, PPParams, bHDRDisplay);
+		pRsc = RenderPostProcess(pCmd, &CBHeap, PPParams, GFXSettings, bHDRDisplay);
 
 		TransitionForUI(pCmd, PPParams, GFXSettings, bHDRDisplay, pRsc, pSwapChainRT);
 
-		RenderUI(pCmd, &CBHeap, ctx, PPParams, pRsc, srv_UIColorIn, UIState, bHDRDisplay);
+		RenderUI(pCmd, &CBHeap, ctx, PPParams, pRsc, srv_UIColorIn, UIState, GFXSettings, bHDRDisplay);
 
 		if (bHDRDisplay)
 		{
-			CompositUIToHDRSwapchain(pCmd, &CBHeap, ctx, PPParams, pWindow);
+			CompositUIToHDRSwapchain(pCmd, &CBHeap, ctx, PPParams, GFXSettings);
 		}
 	}
 
@@ -745,20 +706,20 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 			RenderReflections(pCmd_ThisThread, &CBHeap_This, SceneView, GFXSettings);
 			
 			// render scene-debugging stuff that shouldn't be in reflections: bounding volumes, etc
-			RenderSceneBoundingVolumes(pCmd_ThisThread, &CBHeap_This, cbPerView, SceneView, bMSAA);
+			RenderSceneBoundingVolumes(pCmd_ThisThread, &CBHeap_This, cbPerView, SceneView, GFXSettings);
 
 			CompositeReflections(pCmd_ThisThread, &CBHeap_This, SceneView, GFXSettings);
 		}
 
-		pRsc = RenderPostProcess(pCmd_ThisThread, &CBHeap_This, PPParams, bHDRDisplay);
+		pRsc = RenderPostProcess(pCmd_ThisThread, &CBHeap_This, PPParams, GFXSettings, bHDRDisplay);
 		
 		TransitionForUI(pCmd_PresentThread, PPParams, GFXSettings, bHDRDisplay, pRsc, pSwapChainRT);
 
-		RenderUI(pCmd_PresentThread, &CBHeap_This, ctx, PPParams, pRsc, srv_UIColorIn, UIState, bHDRDisplay);
+		RenderUI(pCmd_PresentThread, &CBHeap_This, ctx, PPParams, pRsc, srv_UIColorIn, UIState, GFXSettings, bHDRDisplay);
 
 		if (bHDRDisplay)
 		{
-			CompositUIToHDRSwapchain(pCmd_PresentThread, &CBHeap_This, ctx, PPParams, pWindow);
+			CompositUIToHDRSwapchain(pCmd_PresentThread, &CBHeap_This, ctx, PPParams, GFXSettings);
 		}
 
 		// SYNC Render Workers
@@ -1270,7 +1231,7 @@ void VQRenderer::RenderDepthPrePass(
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderDepthPrePass");
 
-	const bool& bMSAA = GFXSettings.bAntiAliasing;
+	const bool bMSAA = GFXSettings.AntiAliasing == EAntiAliasingAlgorithm::MSAA4;
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
 
@@ -1288,8 +1249,8 @@ void VQRenderer::RenderDepthPrePass(
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = rtvNormals.GetCPUDescHandle();
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvColor.GetCPUDescHandle();
 
-	const float RenderResolutionX = static_cast<float>(SceneView.SceneRTWidth);
-	const float RenderResolutionY = static_cast<float>(SceneView.SceneRTHeight);
+	const float RenderResolutionX = static_cast<float>(GFXSettings.DisplayResolutionX * GFXSettings.RenderResolutionScale);
+	const float RenderResolutionY = static_cast<float>(GFXSettings.DisplayResolutionY * GFXSettings.RenderResolutionScale);
 	D3D12_VIEWPORT viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
 	D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
 
@@ -1502,7 +1463,7 @@ void VQRenderer::RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const F
 {
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 
-	const bool& bMSAA = GFXSettings.bAntiAliasing;
+	const bool bMSAA = GFXSettings.AntiAliasing == EAntiAliasingAlgorithm::MSAA4;
 	
 	std::shared_ptr<AmbientOcclusionPass> pAOPass = std::static_pointer_cast<AmbientOcclusionPass>(this->GetRenderPass(ERenderPass::AmbientOcclusion));
 	ID3D12Resource* pRscAmbientOcclusion = this->GetTextureResource(rsc.Tex_AmbientOcclusion);
@@ -1568,7 +1529,7 @@ bool VQRenderer::ShouldUseVisualizationTarget(const FPostProcessParameters& PPPa
 }
 void VQRenderer::TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings)
 {
-	const bool& bMSAA = GFXSettings.bAntiAliasing;
+	const bool bMSAA = GFXSettings.AntiAliasing == EAntiAliasingAlgorithm::MSAA4;
 
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 
@@ -1638,8 +1599,7 @@ void VQRenderer::RenderSceneColor(
 	const bool bUseVisualizationRenderTarget = ShouldUseVisualizationTarget(PPParams);
 	const bool bRenderMotionVectors = ShouldUseMotionVectorsTarget(GFXSettings);
 	const bool bRenderScreenSpaceReflections = IsFFX_SSSREnabled(GFXSettings);
-
-	const bool& bMSAA = GFXSettings.bAntiAliasing;
+	const bool bMSAA = GFXSettings.AntiAliasing == EAntiAliasingAlgorithm::MSAA4;
 
 	const RTV& rtvColor = this->GetRTV(bMSAA ? rsc.RTV_SceneColorMSAA : rsc.RTV_SceneColor);
 	const RTV& rtvColorViz = this->GetRTV(bMSAA ? rsc.RTV_SceneVisualizationMSAA : rsc.RTV_SceneVisualization);
@@ -1670,8 +1630,8 @@ void VQRenderer::RenderSceneColor(
 	pCmd->OMSetRenderTargets((UINT)rtvHandles.size(), rtvHandles.data(), FALSE, &dsvHandle);
 
 	// Set Viewport & Scissors
-	const float RenderResolutionX = static_cast<float>(SceneView.SceneRTWidth);
-	const float RenderResolutionY = static_cast<float>(SceneView.SceneRTHeight);
+	const float RenderResolutionX = static_cast<float>(GFXSettings.DisplayResolutionX * GFXSettings.RenderResolutionScale);
+	const float RenderResolutionY = static_cast<float>(GFXSettings.DisplayResolutionY * GFXSettings.RenderResolutionScale);
 	D3D12_VIEWPORT viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
 	D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
 	pCmd->RSSetViewports(1, &viewport);
@@ -2057,7 +2017,7 @@ void VQRenderer::RenderDebugVertexAxes(ID3D12GraphicsCommandList* pCmd, DynamicB
 
 void VQRenderer::ResolveMSAA(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings)
 {
-	const bool& bMSAA = GFXSettings.bAntiAliasing;
+	const bool bMSAA = GFXSettings.AntiAliasing == EAntiAliasingAlgorithm::MSAA4;
 
 	if (!bMSAA)
 		return;
@@ -2206,7 +2166,9 @@ void VQRenderer::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 	{
 		this->GetTextureDimensions(EnvMapRsc.Tex_IrradianceSpec, EnvMapSpecIrrCubemapDimX, EnvMapSpecIrrCubemapDimY);
 	}
-	
+
+	const float RenderResolutionX = static_cast<float>(GFXSettings.DisplayResolutionX * GFXSettings.RenderResolutionScale);
+	const float RenderResolutionY = static_cast<float>(GFXSettings.DisplayResolutionY * GFXSettings.RenderResolutionScale);
 	switch (GFXSettings.Reflections)
 	{
 	case EReflections::SCREEN_SPACE_REFLECTIONS__FFX:
@@ -2222,8 +2184,8 @@ void VQRenderer::RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBuffe
 		params.ffxCBuffer.invProjection                        = SceneView.projInverse;
 		params.ffxCBuffer.view                                 = SceneView.view;
 		params.ffxCBuffer.invView                              = SceneView.viewInverse;
-		params.ffxCBuffer.bufferDimensions[0]                  = SceneView.SceneRTWidth;
-		params.ffxCBuffer.bufferDimensions[1]                  = SceneView.SceneRTHeight;
+		params.ffxCBuffer.bufferDimensions[0]                  = RenderResolutionX;
+		params.ffxCBuffer.bufferDimensions[1]                  = RenderResolutionY;
 		params.ffxCBuffer.envMapRotation                       = GetHDRIRotationMatrix(SceneView.HDRIYawOffset);
 		params.ffxCBuffer.inverseBufferDimensions[0]           = 1.0f / params.ffxCBuffer.bufferDimensions[0];
 		params.ffxCBuffer.inverseBufferDimensions[1]           = 1.0f / params.ffxCBuffer.bufferDimensions[1];
@@ -2281,11 +2243,12 @@ static bool ShouldSkipBoundsPass(const FSceneDrawData& SceneDrawData)
 		&& SceneDrawData.outlineRenderParams.empty()
 		&& SceneDrawData.debugVertexAxesRenderParams.empty();
 }
-void VQRenderer::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, bool bMSAA)
+void VQRenderer::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderSceneBoundingVolumes");
 	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
 	const bool bNoBoundingVolumeToRender = ShouldSkipBoundsPass(SceneDrawData);
+	const bool bMSAA = GFXSettings.AntiAliasing == EAntiAliasingAlgorithm::MSAA4;
 
 	if (bNoBoundingVolumeToRender)
 		return;
@@ -2300,8 +2263,8 @@ void VQRenderer::RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, Dyn
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = this->GetDSV(bMSAA ? rsc.DSV_SceneDepthMSAA : rsc.DSV_SceneDepth).GetCPUDescHandle();
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvBVHandle = this->GetRTV(rsc.RTV_SceneColorBoundingVolumes).GetCPUDescHandle();
 
-	const float RenderResolutionX = static_cast<float>(SceneView.SceneRTWidth);
-	const float RenderResolutionY = static_cast<float>(SceneView.SceneRTHeight);
+	const float RenderResolutionX = static_cast<float>(GFXSettings.DisplayResolutionX * GFXSettings.RenderResolutionScale);
+	const float RenderResolutionY = static_cast<float>(GFXSettings.DisplayResolutionY * GFXSettings.RenderResolutionScale);
 	D3D12_VIEWPORT viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
 	D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
 
@@ -2362,7 +2325,9 @@ void VQRenderer::CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBu
 	const FSceneDrawData& SceneDrawData = mFrameSceneDrawData[0]; // [0] since we don't have parallel update+render
 	const bool bNoBoundingVolumeToRender = ShouldSkipBoundsPass(SceneDrawData);
 
-	const bool& bMSAA = GFXSettings.bAntiAliasing;
+	const float RenderResolutionX = static_cast<float>(GFXSettings.DisplayResolutionX * GFXSettings.RenderResolutionScale);
+	const float RenderResolutionY = static_cast<float>(GFXSettings.DisplayResolutionY * GFXSettings.RenderResolutionScale);
+	const bool bMSAA = GFXSettings.AntiAliasing == EAntiAliasingAlgorithm::MSAA4;
 
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 	std::shared_ptr<ScreenSpaceReflectionsPass> pReflectionsPass = std::static_pointer_cast<ScreenSpaceReflectionsPass>(this->GetRenderPass(ERenderPass::ScreenSpaceReflections));
@@ -2377,8 +2342,8 @@ void VQRenderer::CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBu
 	params.SRVReflectionRadiance = pReflectionsPass->GetPassOutputSRV();
 	params.SRVBoundingVolumes = bNoBoundingVolumeToRender ? INVALID_ID : rsc.SRV_SceneColorBoundingVolumes;
 	params.UAVSceneRadiance = rsc.UAV_SceneColor;
-	params.iSceneRTWidth  = SceneView.SceneRTWidth;
-	params.iSceneRTHeight = SceneView.SceneRTHeight;
+	params.iSceneRTWidth  = RenderResolutionX;
+	params.iSceneRTHeight = RenderResolutionY;
 
 	{			
 		D3D12_RESOURCE_BARRIER barriers[] = {
@@ -2401,11 +2366,11 @@ void VQRenderer::CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBu
 
 void VQRenderer::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings)
 {
-	const bool& bMSAA = GFXSettings.bAntiAliasing;
+	const bool bMSAA = GFXSettings.AntiAliasing == EAntiAliasingAlgorithm::MSAA4;
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 
 	const bool bCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f;
-	const bool bFSREnabled = PPParams.IsFSR1Enabled();
+	const bool bFSREnabled = GFXSettings.IsFSR1Enabled();
 	const bool bVizualizationEnabled = PPParams.DrawModeEnum != EDrawMode::LIT_AND_POSTPROCESSED;
 	const bool bVizualizationSceneTargetUsed = ShouldUseVisualizationTarget(PPParams);
 	const bool bMotionVectorsEnabled = ShouldUseMotionVectorsTarget(GFXSettings);
@@ -2465,7 +2430,7 @@ void VQRenderer::TransitionForUI(ID3D12GraphicsCommandList* pCmd, const FPostPro
 
 	const bool bVizualizationEnabled = PPParams.DrawModeEnum != EDrawMode::LIT_AND_POSTPROCESSED;
 	const bool bFFXCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f;
-	const bool bFSREnabled = PPParams.IsFSR1Enabled();
+	const bool bFSREnabled = GFXSettings.IsFSR1Enabled();
 	
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 
@@ -2506,7 +2471,13 @@ void VQRenderer::TransitionForUI(ID3D12GraphicsCommandList* pCmd, const FPostPro
 
 
 
-ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams, bool bHDR)
+ID3D12Resource* VQRenderer::RenderPostProcess(
+	ID3D12GraphicsCommandList* pCmd, 
+	DynamicBufferHeap* pCBufferHeap, 
+	const FPostProcessParameters& PPParams,
+	const FGraphicsSettings& GFXSettings,
+	bool bHDR
+)
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderPostProcess");
 
@@ -2529,10 +2500,11 @@ ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, D
 	constexpr bool PP_ENABLE_BLUR_PASS = false;
 
 	// compute dispatch dimensions
-	const int& InputImageWidth  = PPParams.SceneRTWidth;
-	const int& InputImageHeight = PPParams.SceneRTHeight;
-	assert(PPParams.SceneRTWidth != 0);
-	assert(PPParams.SceneRTHeight != 0);
+	
+	const int InputImageWidth  = GFXSettings.DisplayResolutionX * GFXSettings.RenderResolutionScale;
+	const int InputImageHeight = GFXSettings.DisplayResolutionY * GFXSettings.RenderResolutionScale;
+	assert(InputImageWidth != 0);
+	assert(InputImageHeight != 0);
 	constexpr int DispatchGroupDimensionX = 8;
 	constexpr int DispatchGroupDimensionY = 8;
 	const     int DispatchRenderX = (InputImageWidth  + (DispatchGroupDimensionX - 1)) / DispatchGroupDimensionX;
@@ -2579,7 +2551,7 @@ ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, D
 		return pRscOutput;
 	}
 
-	if (PPParams.IsFSR3Enabled())
+	//if (GFXSettings.IsFSR3Enabled())
 	{
 		//if (!PPParams.FSR3Context.pImpl)
 		//{
@@ -2590,7 +2562,7 @@ ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, D
 		//		PPParams.DisplayResolutionHeight
 		//	);
 		//}
-		Log::Warning("TODO: FSR3 command recording");
+		//Log::Warning("TODO: FSR3 command recording");
 	}
 
 
@@ -2610,8 +2582,8 @@ ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, D
 
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 		pCBufferHeap->AllocConstantBuffer(sizeof(FPostProcessParameters::FBlurParams), (void**)&pBlurParams, &cbAddr);
-		pBlurParams->iImageSizeX = PPParams.SceneRTWidth;
-		pBlurParams->iImageSizeY = PPParams.SceneRTHeight;
+		pBlurParams->iImageSizeX = InputImageWidth;
+		pBlurParams->iImageSizeY = InputImageHeight;
 
 		{
 			SCOPED_GPU_MARKER(pCmd, "BlurX");
@@ -2629,14 +2601,12 @@ ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, D
 
 			const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 			{
-					CD3DX12_RESOURCE_BARRIER::Transition(pRscBlurIntermediate, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+				  CD3DX12_RESOURCE_BARRIER::Transition(pRscBlurIntermediate, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
 				, CD3DX12_RESOURCE_BARRIER::Transition(pRscBlurOutput      , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
 
 			};
 			pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
 		}
-
-
 		{
 			SCOPED_GPU_MARKER(pCmd, "BlurY");
 			pCmd->SetPipelineState(this->GetPSO(EBuiltinPSOs::GAUSSIAN_BLUR_CS_NAIVE_Y_PSO));
@@ -2647,7 +2617,7 @@ ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, D
 
 			const CD3DX12_RESOURCE_BARRIER pBarriers[] =
 			{
-					CD3DX12_RESOURCE_BARRIER::Transition(pRscBlurOutput      , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+				  CD3DX12_RESOURCE_BARRIER::Transition(pRscBlurOutput      , D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
 				, CD3DX12_RESOURCE_BARRIER::Transition(pRscBlurIntermediate, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
 			};
 			pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
@@ -2657,9 +2627,9 @@ ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, D
 	{
 		SCOPED_GPU_MARKER(pCmd, "TonemapperCS");
 
-		FPostProcessParameters::FTonemapper* pConstBuffer = {};
+		FPostProcessParameters::FTonemapperParams* pConstBuffer = {};
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		pCBufferHeap->AllocConstantBuffer(sizeof(FPostProcessParameters::FTonemapper), (void**)&pConstBuffer, &cbAddr);
+		pCBufferHeap->AllocConstantBuffer(sizeof(FPostProcessParameters::FTonemapperParams), (void**)&pConstBuffer, &cbAddr);
 		*pConstBuffer = PPParams.TonemapperParams;
 
 		pCmd->SetPipelineState(this->GetPSO(EBuiltinPSOs::TONEMAPPER_PSO));
@@ -2709,7 +2679,7 @@ ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, D
 	}
 #endif
 
-	if (PPParams.IsFSR1Enabled()) // FSR & CAS are mutually exclusive
+	if (GFXSettings.IsFSR1Enabled()) // FSR & CAS are mutually exclusive
 	{
 		if (bHDR)
 		{
@@ -2729,7 +2699,7 @@ ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, D
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 			const size_t cbSize = sizeof(unsigned) * 16;
 			pCBufferHeap->AllocConstantBuffer(cbSize, (void**)&pConstBuffer, &cbAddr);
-			memcpy(pConstBuffer, PPParams.FSR1ShaderParameters.easu.EASUConstantBlock, cbSize);
+			memcpy(pConstBuffer, PPParams.FSR1ShaderParams.easu.EASUConstantBlock, cbSize);
 
 			ID3D12PipelineState* pPSO = this->GetPSO(EBuiltinPSOs::FFX_FSR1_EASU_CS_PSO);
 			assert(pPSO);
@@ -2742,8 +2712,8 @@ ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, D
 			// each FSR-EASU CS thread processes 4 pixels.
 			// workgroup is 64 threads, hence 256 (16x16) pixels are processed per thread group that is dispatched
 			constexpr int WORKGROUP_WORK_DIMENSION = 16;
-			const int DispatchX = (PPParams.DisplayResolutionWidth  + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
-			const int DispatchY = (PPParams.DisplayResolutionHeight + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
+			const int DispatchX = (GFXSettings.DisplayResolutionX + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
+			const int DispatchY = (GFXSettings.DisplayResolutionY + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
 			pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
 		}
 		const bool bFFX_RCAS_Enabled = true; // TODO: drive with UI ?
@@ -2768,7 +2738,7 @@ ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, D
 			AMD_FidelityFX_SuperResolution1::FShaderParameters::RCAS* pConstBuffer = {};
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 			pCBufferHeap->AllocConstantBuffer(sizeof(AMD_FidelityFX_SuperResolution1::FShaderParameters::RCAS), (void**)&pConstBuffer, &cbAddr);
-			*pConstBuffer = PPParams.FSR1ShaderParameters.rcas;
+			*pConstBuffer = PPParams.FSR1ShaderParams.rcas;
 
 			pCmd->SetPipelineState(pPSO);
 			pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FFX_FSR1));
@@ -2779,8 +2749,8 @@ ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, D
 			// each FSR-RCAS CS thread processes 4 pixels.
 			// workgroup is 64 threads, hence 256 (16x16) pixels are processed per thread group that is dispatched
 			constexpr int WORKGROUP_WORK_DIMENSION = 16;
-			const int DispatchX = (PPParams.DisplayResolutionWidth + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
-			const int DispatchY = (PPParams.DisplayResolutionHeight + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
+			const int DispatchX = (GFXSettings.DisplayResolutionX + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
+			const int DispatchY = (GFXSettings.DisplayResolutionY + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
 			pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
 
 			{
@@ -2801,11 +2771,11 @@ ID3D12Resource* VQRenderer::RenderPostProcess(ID3D12GraphicsCommandList* pCmd, D
 	return pRscOutput;
 }
 
-void VQRenderer::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, ID3D12Resource* pRscInput, const SRV& srv_ColorIn, const FUIState& UIState, bool bHDR)
+void VQRenderer::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, ID3D12Resource* pRscInput, const SRV& srv_ColorIn, const FUIState& UIState, const FGraphicsSettings& GFXSettings, bool bHDR)
 {
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
-	const float             RenderResolutionX = static_cast<float>(PPParams.DisplayResolutionWidth);
-	const float             RenderResolutionY = static_cast<float>(PPParams.DisplayResolutionHeight);
+	const float             RenderResolutionX = static_cast<float>(GFXSettings.DisplayResolutionX);
+	const float             RenderResolutionY = static_cast<float>(GFXSettings.DisplayResolutionY);
 	D3D12_VIEWPORT                   viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
 	ID3D12DescriptorHeap*           ppHeaps[] = { this->GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 	D3D12_RECT                   scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
@@ -2994,7 +2964,13 @@ void VQRenderer::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pC
 	}
 }
 
-void VQRenderer::CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, const Window* pWindow)
+void VQRenderer::CompositUIToHDRSwapchain(
+	ID3D12GraphicsCommandList* pCmd, 
+	DynamicBufferHeap* pCBufferHeap, 
+	FWindowRenderContext& ctx, 
+	const FPostProcessParameters& PPParams,
+	const FGraphicsSettings& GFXSettings
+)
 {
 	SCOPED_GPU_MARKER(pCmd, "CompositUIToHDRSwapchain");
 
@@ -3007,7 +2983,7 @@ void VQRenderer::CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, Dynam
 	nullIBV.BufferLocation = 0;
 
 	const bool bFFXCASEnabled = PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f;
-	const bool bFSREnabled = PPParams.IsFSR1Enabled();
+	const bool bFSREnabled = GFXSettings.IsFSR1Enabled();
 
 	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = ctx.SwapChain.GetCurrentBackBufferRTVHandle();
@@ -3019,8 +2995,8 @@ void VQRenderer::CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, Dynam
 			? this->GetSRV(rsc.SRV_PostProcess_FSR_RCASOut)
 			: this->GetSRV(rsc.SRV_PostProcess_TonemapperOut));
 
-	const int W = pWindow->GetWidth();
-	const int H = pWindow->GetHeight();
+	const int W = GFXSettings.DisplayResolutionX;
+	const int H = GFXSettings.DisplayResolutionY;
 
 	// transition barriers
 	std::vector< CD3DX12_RESOURCE_BARRIER> barriers;

@@ -117,7 +117,6 @@ void Scene::StartLoading(FSceneRepresentation& sceneRep, ThreadPool& UpdateWorke
 
 	LoadLights(sceneRep.Lights);
 	LoadCameras(sceneRep.Cameras);
-	LoadPostProcessSettings();
 
 	{
 		SCOPED_CPU_MARKER("ClearHistoryData");
@@ -415,37 +414,6 @@ void Scene::LoadCameras(std::vector<FCameraParameters>& CameraParams)
 		}
 	}
 	Log::Info("[Scene] Cameras initialized");
-}
-
-void Scene::LoadPostProcessSettings(/*TODO: scene PP settings*/)
-{
-	SCOPED_CPU_MARKER("Scene::LoadPostProcessSettings()");
-
-	const uint fWidth  = this->mpWindow->GetWidth();
-	const uint fHeight = this->mpWindow->GetHeight();
-
-	// Update PostProcess Data
-	for (size_t i = 0; i < mFrameSceneViews.size(); ++i)
-	{
-		FPostProcessParameters& PPParams = this->GetPostProcessParameters(static_cast<int>(i));
-
-		// Update FidelityFX constant blocks
-#if !DISABLE_FIDELITYFX_CAS
-		PPParams.bEnableCAS = true; // TODO: read from scene PP settings
-		if (PPParams.IsFFXCASEnabled())
-		{
-			PPParams.FFXCASParams.UpdateCASConstantBlock(fWidth, fHeight, fWidth, fHeight);
-		}
-#endif
-
-		if (PPParams.IsFSR1Enabled())
-		{
-			const uint InputWidth = static_cast<uint> (PPParams.ResolutionScale * fWidth);
-			const uint InputHeight = static_cast<uint>(PPParams.ResolutionScale * fHeight);
-			PPParams.FSR1ShaderParameters.easu.UpdateConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, fWidth, fHeight);
-			PPParams.FSR1ShaderParameters.rcas.UpdateConstantBlock();
-		}
-	}
 }
 
 void Scene::OnLoadComplete(const BuiltinMeshArray_t& builtinMeshes)

@@ -127,18 +127,6 @@ static void ParseCommandLineParameters(FStartupParameters& refStartupParams, PST
 				refStartupParams.EngineSettings.gfx.bVsync = StrUtil::ParseBool(paramValue);
 			}
 		}
-		if (paramName == "-AntiAliasing" || paramName == "-AA")
-		{
-			refStartupParams.bOverrideGFXSetting_bAA = true;
-			if (paramValue.empty())
-			{
-				refStartupParams.EngineSettings.gfx.bAntiAliasing = true;
-			}
-			else
-			{
-				refStartupParams.EngineSettings.gfx.bAntiAliasing = StrUtil::ParseBool(paramValue);
-			}
-		}
 		if (paramName == "-TripleBuffering")
 		{
 			refStartupParams.bOverrideGFXSetting_bUseTripleBuffering = true;

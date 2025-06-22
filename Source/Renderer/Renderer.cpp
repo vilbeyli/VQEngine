@@ -711,12 +711,6 @@ void VQRenderer::Destroy()
 
 void VQRenderer::OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h)
 {
-	if (!CheckContext(hwnd)) 
-		return;
-
-	FWindowRenderContext& ctx = mRenderContextLookup.at(hwnd);
-	ctx.WindowDisplayResolutionX = w;
-	ctx.WindowDisplayResolutionY = h;
 }
 
 SwapChain& VQRenderer::GetWindowSwapChain(HWND hwnd) { return mRenderContextLookup.at(hwnd).SwapChain; }
@@ -750,10 +744,6 @@ void VQRenderer::InitializeRenderContext(const Window* pWin, int NumSwapchainBuf
 		mLatchCmdQueuesInitialized.wait();
 	}
 	ctx.InitializeContext(pWin, pVQDevice, NumSwapchainBuffers, bVSync, bHDRSwapchain);
-
-	// Save other context data
-	ctx.WindowDisplayResolutionX = pWin->GetWidth();
-	ctx.WindowDisplayResolutionY = pWin->GetHeight();
 
 	// save the render context
 	this->mRenderContextLookup.emplace(pWin->GetHWND(), std::move(ctx));

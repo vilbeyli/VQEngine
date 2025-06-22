@@ -103,21 +103,23 @@ void FileParser::ParseEngineSettingsFile(FStartupParameters& params)
 				params.bOverrideGFXSetting_bVSync = true;
 				params.EngineSettings.gfx.bVsync = StrUtil::ParseBool(SettingValue);
 			}
-			if (SettingName == "RenderScale")
+			if (SettingName == "RenderResolutionScale")
 			{
 				params.bOverrideGFXSetting_RenderScale = true;
-				params.EngineSettings.gfx.RenderScale = StrUtil::ParseFloat(SettingValue);
+				params.EngineSettings.gfx.RenderResolutionScale = StrUtil::ParseFloat(SettingValue);
 			}
 			if (SettingName == "TripleBuffer")
 			{
 				params.bOverrideGFXSetting_bUseTripleBuffering = true;
 				params.EngineSettings.gfx.bUseTripleBuffering = StrUtil::ParseBool(SettingValue);
 			}
+#if 0 // TODO: enable anti-alising with its enum options
 			if (SettingName == "AntiAliasing" || SettingName == "AA")
 			{
 				params.bOverrideGFXSetting_bAA = true;
 				params.EngineSettings.gfx.bAntiAliasing = StrUtil::ParseBool(SettingValue);
 			}
+#endif
 			if (SettingName == "MaxFrameRate" || SettingName == "MaxFPS")
 			{
 				params.bOverrideGFXSetting_bMaxFrameRate = true;
@@ -678,7 +680,7 @@ FSceneRepresentation FileParser::ParseSceneFile(const std::string& SceneFile)
 		{
 			const Transform tf = fnParseTransform(pTransform);
 			l.Position = tf._position;
-			l.RenderScale = tf._scale;
+			l.MeshScale = tf._scale;
 			l.RotationQuaternion = tf._rotation;
 		}
 

@@ -157,7 +157,6 @@ private: // Derived Scenes shouldn't access these functions
 	void LoadSceneMaterials(const std::vector<FMaterialRepresentation>& Materials, TaskID taskID);
 	void LoadLights(const std::vector<Light>& SceneLights);
 	void LoadCameras(std::vector<FCameraParameters>& CameraParams);
-	void LoadPostProcessSettings();
 
 	void CalculateGameObjectLocalSpaceBoundingBoxes();
 

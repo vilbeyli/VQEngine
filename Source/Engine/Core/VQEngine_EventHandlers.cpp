@@ -277,7 +277,7 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 		SwapChain& Swapchain = mpRenderer->GetWindowSwapChain(p->hwnd);
 		const int NUM_BACK_BUFFERS =  Swapchain.GetNumBackBuffers();
 
-		if ((uWidth | uHeight) != 0 && mpScene)
+		if (mpScene)
 		{
 			// Update Camera Projection Matrices
 			Camera& cam = mpScene->GetActiveCamera(); // TODO: all cameras?
@@ -286,6 +286,7 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 			UpdatedProjectionMatrixParams.ViewportHeight = static_cast<float>(uHeight);
 			cam.SetProjectionMatrix(UpdatedProjectionMatrixParams);
 
+#if 0
 			// Update PostProcess Data
 			for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
 			{
@@ -306,6 +307,7 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 					PPParams.FSR1ShaderParameters.rcas.UpdateConstantBlock();
 				}
 			}
+#endif
 		}
 	}
 }
@@ -415,7 +417,7 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	mpRenderer->OnWindowSizeChanged(hwnd, WIDTH, HEIGHT); // updates render context
 
 	const FPostProcessParameters& PPParams = this->mpScene->GetPostProcessParameters(0);
-	const bool bFSREnabled = PPParams.IsFSR1Enabled() && !bUseHDRRenderPath; // TODO: remove this when FSR-HDR is implemented
+	const bool bFSREnabled = mSettings.gfx.IsFSR1Enabled() && !bUseHDRRenderPath; // TODO: remove this when FSR-HDR is implemented
 	const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
 
 	const float fResolutionScale = bUpscaling ? PPParams.ResolutionScale : 1.0f;
@@ -482,7 +484,7 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 	Swapchain.WaitForGPU(); // make sure GPU is finished
 
 	const auto& PPParams = this->mpScene->GetPostProcessParameters(0);
-	const bool bFSREnabled = PPParams.IsFSR1Enabled();
+	const bool bFSREnabled = mSettings.gfx.IsFSR1Enabled();
 	const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
 
 	const float fResolutionScale = bUpscaling ? PPParams.ResolutionScale : 1.0f;

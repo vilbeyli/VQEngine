@@ -169,21 +169,30 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 	}
 	if (input.IsKeyTriggered("M")) // MSAA
 	{
-		mSettings.gfx.bAntiAliasing = !mSettings.gfx.bAntiAliasing;
-		Log::Info("Toggle MSAA: %d", mSettings.gfx.bAntiAliasing);
+		if (mSettings.gfx.AntiAliasing == EAntiAliasingAlgorithm::NO_ANTI_ALIASING)
+		{
+			// TODO: handle other MSAA algorithms
+			mSettings.gfx.AntiAliasing = EAntiAliasingAlgorithm::MSAA4;
+		}
+		else
+		{
+			mSettings.gfx.AntiAliasing = EAntiAliasingAlgorithm::NO_ANTI_ALIASING;
+		}
+		Log::Info("Toggle MSAA: %d", mSettings.gfx.AntiAliasing);
 	}
 
+	FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 	if (input.IsKeyTriggered("G")) // Gamma
 	{
-		FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 		PPParams.TonemapperParams.ToggleGammaCorrection = PPParams.TonemapperParams.ToggleGammaCorrection == 1 ? 0 : 1;
 		Log::Info("Tonemapper: ApplyGamma=%d (SDR-only)", PPParams.TonemapperParams.ToggleGammaCorrection);
 	}
+
+#if 0 // temporarily disabled, TODO: enable it
 	if (input.IsKeyTriggered("J")) // Upscaling toggle
 	{
 		WaitUntilRenderingFinishes();
-		FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
-		if (PPParams.UpscalingAlgorithm != FPostProcessParameters::EUpscalingAlgorithm::NONE)
+		if (PPParams.UpscalingAlgorithm != EUpscalingAlgorithm::NONE)
 		{
 			PPParams.UpscalingAlgorithmLastValue = PPParams.UpscalingAlgorithm;
 		}
@@ -198,6 +207,7 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 		mEventQueue_WinToVQE_Update.AddItem(std::make_unique<WindowResizeEvent>(W, H, hwnd));
 		Log::Info("Toggle FSR: %d", PPParams.IsFSR1Enabled());
 	}
+#endif
 
 	// Scene switching
 	if (!mbLoadingLevel)

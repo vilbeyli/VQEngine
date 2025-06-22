@@ -55,9 +55,6 @@ public:
 #endif
 
 public:
-	int WindowDisplayResolutionX = -1;
-	int WindowDisplayResolutionY = -1;
-
 	Device*       pDevice = nullptr;
 	SwapChain     SwapChain;
 	CommandQueue& PresentQueue;

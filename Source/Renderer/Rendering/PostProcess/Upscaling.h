@@ -30,7 +30,7 @@ namespace AMD_FidelityFX_SuperResolution1
 {
 	// AMD FidelityFX Super Resolution 1.0: Spatial Upscaling and RCAS
 
-	enum EPreset
+	enum EPreset : unsigned char
 	{
 		ULTRA_QUALITY = 0,
 		QUALITY,
@@ -80,7 +80,7 @@ namespace AMD_FidelityFX_SuperResolution1
 
 namespace AMD_FidelityFX_SuperResolution3
 {
-	enum EPreset
+	enum EPreset : unsigned char
 	{
 		NATIVE_AA = 0,
 		QUALITY,
