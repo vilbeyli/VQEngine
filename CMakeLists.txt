@@ -181,6 +181,7 @@ set_source_files_properties(${Materials} PROPERTIES VS_TOOL_OVERRIDE "Text")
 
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/VQUtils/Bin/)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/WinPixEventRuntime/bin/x64)
+link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Source/Renderer/Libs/AMD/FidelityFX-SDK/PrebuiltSignedDLL)
 
 # Create a library with the project name that is build with the Headers and Source files
 add_executable( ${PROJECT_NAME} 
@@ -221,7 +222,8 @@ set_target_properties(ImGUI PROPERTIES FOLDER Libs)
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${Includes})
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${LibsIncl})
 
-target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer WinPixEventRuntime ImGUI)
+target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer WinPixEventRuntime ImGUI amd_fidelityfx_dx12)
+
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
