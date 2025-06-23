@@ -240,7 +240,7 @@ void VQRenderer::Initialize(const FGraphicsSettings& Settings)
 		mLatchDeviceInitialized.count_down();
 	}
 
-	const int NumSwapchainBuffers = Settings.bUseTripleBuffering ? 3 : 2;
+	const int NumSwapchainBuffers = Settings.Display.bUseTripleBuffering ? 3 : 2;
 	ID3D12Device* pDevice = mDevice.GetDevicePtr();
 
 	// Create Command Queues of different types

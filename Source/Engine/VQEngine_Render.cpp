@@ -161,7 +161,7 @@ void VQEngine::RenderThread_Inititalize()
 #endif
 		// Initialize swapchains for each rendering window
 		// all windows use the same number of swapchains as the main window
-		const int NUM_SWAPCHAIN_BUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
+		const int NUM_SWAPCHAIN_BUFFERS = mSettings.gfx.Display.bUseTripleBuffering ? 3 : 2;
 		{
 			SCOPED_CPU_MARKER("mpWinMainInitContext");
 			const bool bIsContainingWindowOnHDRScreen = VQSystemInfo::FMonitorInfo::CheckHDRSupport(hwndMain);
@@ -171,7 +171,7 @@ void VQEngine::RenderThread_Inititalize()
 				Log::Warning("RenderThread_Initialize(): HDR Swapchain requested, but the containing monitor does not support HDR. Falling back to SDR Swapchain, and will enable HDR swapchain when the window is moved to a HDR-capable display");
 			}
 
-			mpRenderer->InitializeRenderContext(mpWinMain.get(), NUM_SWAPCHAIN_BUFFERS, mSettings.gfx.bVsync, bCreateHDRSwapchain, mSettings.gfx.bUseSeparateSubmissionQueue);
+			mpRenderer->InitializeRenderContext(mpWinMain.get(), NUM_SWAPCHAIN_BUFFERS, mSettings.gfx.Display.bVsync, bCreateHDRSwapchain, mSettings.gfx.bUseSeparateSubmissionQueue);
 			mEventQueue_VQEToWin_Main.AddItem(std::make_shared<HandleWindowTransitionsEvent>(hwndMain));
 		}
 		if(mpWinDebug)

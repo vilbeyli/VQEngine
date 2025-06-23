@@ -169,16 +169,16 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 	}
 	if (input.IsKeyTriggered("M")) // MSAA
 	{
-		if (mSettings.gfx.AntiAliasing == EAntiAliasingAlgorithm::NO_ANTI_ALIASING)
+		if (mSettings.gfx.Rendering.AntiAliasing == EAntiAliasingAlgorithm::NO_ANTI_ALIASING)
 		{
 			// TODO: handle other MSAA algorithms
-			mSettings.gfx.AntiAliasing = EAntiAliasingAlgorithm::MSAA4;
+			mSettings.gfx.Rendering.AntiAliasing = EAntiAliasingAlgorithm::MSAA4;
 		}
 		else
 		{
-			mSettings.gfx.AntiAliasing = EAntiAliasingAlgorithm::NO_ANTI_ALIASING;
+			mSettings.gfx.Rendering.AntiAliasing = EAntiAliasingAlgorithm::NO_ANTI_ALIASING;
 		}
-		Log::Info("Toggle MSAA: %d", mSettings.gfx.AntiAliasing);
+		Log::Info("Toggle MSAA: %d", mSettings.gfx.Rendering.AntiAliasing);
 	}
 
 	FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);

@@ -199,7 +199,7 @@ void VQEngine::UpdateThread_UpdateAppState(const float dt)
 				mLoadingScreenData.RotateLoadingScreenImageIndex();
 
 				float dt_loading = mpTimer->StopGetDeltaTimeAndReset();
-				SetEffectiveFrameRateLimit(mSettings.gfx.MaxFrameRate);
+				SetEffectiveFrameRateLimit(mSettings.gfx.Rendering.MaxFrameRate);
 				Log::Info("Loading completed in %.2fs, starting scene simulation", dt_loading);
 				mpTimer->Start();
 				UpdateThread_UpdateScene_MainWnd(dt);
@@ -234,7 +234,7 @@ void VQEngine::UpdateThread_PostUpdate()
 		return;
 	}
 	
-	mpScene->PostUpdate(mWorkerThreads, mUIState, mAppState == EAppState::SIMULATING, FRAME_DATA_INDEX);
+	mpScene->PostUpdate(mWorkerThreads, mUIState, mAppState == EAppState::SIMULATING, mSettings, FRAME_DATA_INDEX);
 
 	ImGuiIO& io = ImGui::GetIO();
 	HWND hwndMain = mpWinMain->GetHWND();
@@ -490,7 +490,7 @@ void VQEngine::Load_SceneData_Dispatch()
 	mQueue_SceneLoad.pop();
 
 
-	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
+	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.Display.bUseTripleBuffering ? 3 : 2;
 	const Input& input = mInputStates.at(mpWinMain->GetHWND());
 
 	auto fnCreateSceneInstance = [&](const std::string& SceneType, std::unique_ptr<Scene>& pScene) -> void
@@ -544,7 +544,7 @@ void VQEngine::Load_SceneData_Dispatch()
 	// start loading environment map textures
 	if (!SceneRep.EnvironmentMapPreset.empty())
 	{
-		mWorkers_Simulation.AddTask([=]() { LoadEnvironmentMap(SceneRep.EnvironmentMapPreset, mSettings.gfx.EnvironmentMapResolution); });
+		mWorkers_Simulation.AddTask([=]() { LoadEnvironmentMap(SceneRep.EnvironmentMapPreset, mSettings.gfx.Rendering.EnvironmentMapResolution); });
 	}
 
 	// start loading textures, models, materials with worker threads
@@ -673,7 +673,7 @@ void VQEngine::StartLoadingEnvironmentMap(int IndexEnvMap)
 	mbLoadingEnvironmentMap = true;
 	mWorkers_Simulation.AddTask([&, IndexEnvMap]()
 	{
-		LoadEnvironmentMap(mResourceNames.mEnvironmentMapPresetNames[IndexEnvMap], mSettings.gfx.EnvironmentMapResolution);
+		LoadEnvironmentMap(mResourceNames.mEnvironmentMapPresetNames[IndexEnvMap], mSettings.gfx.Rendering.EnvironmentMapResolution);
 	});
 }
 

@@ -155,12 +155,7 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	SCOPED_CPU_MARKER("InitializeEngineSettings");
 	const FEngineSettings& p = Params.EngineSettings;
 
-	// Defaults
 	FEngineSettings& s = mSettings;
-	s.gfx.bVsync = false;
-	s.gfx.bUseTripleBuffering = true;
-	s.gfx.RenderResolutionScale = 1.0f;
-	s.gfx.MaxFrameRate = -1; // Auto
 
 	s.WndMain.Width = 1920;
 	s.WndMain.Height = 1080;
@@ -186,13 +181,13 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	FileParser::ParseEngineSettingsFile(paramFile);
 
 	const FEngineSettings& pf = paramFile.EngineSettings;
-	if (paramFile.bOverrideGFXSetting_bVSync)                      s.gfx.bVsync                   = pf.gfx.bVsync;
-	if (paramFile.bOverrideGFXSetting_bAA)                         s.gfx.AntiAliasing             = pf.gfx.AntiAliasing;
-	if (paramFile.bOverrideGFXSetting_bUseTripleBuffering)         s.gfx.bUseTripleBuffering      = pf.gfx.bUseTripleBuffering;
-	if (paramFile.bOverrideGFXSetting_RenderScale)                 s.gfx.RenderResolutionScale    = pf.gfx.RenderResolutionScale;
-	if (paramFile.bOverrideGFXSetting_bMaxFrameRate)               s.gfx.MaxFrameRate             = pf.gfx.MaxFrameRate;
-	if (paramFile.bOverrideGFXSetting_EnvironmentMapResolution)    s.gfx.EnvironmentMapResolution = pf.gfx.EnvironmentMapResolution;
-	if (paramFile.bOverrideGFXSettings_Reflections)                s.gfx.Reflections              = pf.gfx.Reflections;
+	if (paramFile.bOverrideGFXSetting_bVSync)                      s.gfx.Display.bVsync                     = pf.gfx.Display.bVsync;
+	if (paramFile.bOverrideGFXSetting_bAA)                         s.gfx.Rendering.AntiAliasing             = pf.gfx.Rendering.AntiAliasing;
+	if (paramFile.bOverrideGFXSetting_bUseTripleBuffering)         s.gfx.Display.bUseTripleBuffering        = pf.gfx.Display.bUseTripleBuffering;
+	if (paramFile.bOverrideGFXSetting_RenderScale)                 s.gfx.Rendering.RenderResolutionScale    = pf.gfx.Rendering.RenderResolutionScale;
+	if (paramFile.bOverrideGFXSetting_bMaxFrameRate)               s.gfx.Rendering.MaxFrameRate             = pf.gfx.Rendering.MaxFrameRate;
+	if (paramFile.bOverrideGFXSetting_EnvironmentMapResolution)    s.gfx.Rendering.EnvironmentMapResolution = pf.gfx.Rendering.EnvironmentMapResolution;
+	if (paramFile.bOverrideGFXSettings_Reflections)                s.gfx.Rendering.Reflections              = pf.gfx.Rendering.Reflections;
 
 	if (paramFile.bOverrideENGSetting_MainWindowWidth)             s.WndMain.Width            = pf.WndMain.Width;
 	if (paramFile.bOverrideENGSetting_MainWindowHeight)            s.WndMain.Height           = pf.WndMain.Height;
@@ -217,12 +212,12 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 
 
 	// Override #1 : if there's command line params
-	if (Params.bOverrideGFXSetting_bVSync)                      s.gfx.bVsync               = p.gfx.bVsync;
-	if (Params.bOverrideGFXSetting_bAA)                         s.gfx.AntiAliasing         = p.gfx.AntiAliasing;
-	if (Params.bOverrideGFXSetting_bUseTripleBuffering)         s.gfx.bUseTripleBuffering  = p.gfx.bUseTripleBuffering;
-	if (Params.bOverrideGFXSetting_RenderScale)                 s.gfx.RenderResolutionScale          = p.gfx.RenderResolutionScale;
-	if (Params.bOverrideGFXSetting_bMaxFrameRate)               s.gfx.MaxFrameRate         = p.gfx.MaxFrameRate;
-	if (Params.bOverrideGFXSettings_Reflections)                s.gfx.Reflections          = p.gfx.Reflections;
+	if (Params.bOverrideGFXSetting_bVSync)                      s.gfx.Display.bVsync                  = p.gfx.Display.bVsync;
+	if (Params.bOverrideGFXSetting_bAA)                         s.gfx.Rendering.AntiAliasing          = p.gfx.Rendering.AntiAliasing;
+	if (Params.bOverrideGFXSetting_bUseTripleBuffering)         s.gfx.Display.bUseTripleBuffering     = p.gfx.Display.bUseTripleBuffering;
+	if (Params.bOverrideGFXSetting_RenderScale)                 s.gfx.Rendering.RenderResolutionScale = p.gfx.Rendering.RenderResolutionScale;
+	if (Params.bOverrideGFXSetting_bMaxFrameRate)               s.gfx.Rendering.MaxFrameRate          = p.gfx.Rendering.MaxFrameRate;
+	if (Params.bOverrideGFXSettings_Reflections)                s.gfx.Rendering.Reflections           = p.gfx.Rendering.Reflections;
 
 	if (Params.bOverrideENGSetting_MainWindowWidth)             s.WndMain.Width            = p.WndMain.Width;
 	if (Params.bOverrideENGSetting_MainWindowHeight)            s.	WndMain.Height         = p.WndMain.Height;
@@ -344,7 +339,7 @@ void VQEngine::InitializeScenes()
 void VQEngine::InitializeEngineThreads()
 {
 	SCOPED_CPU_MARKER("InitializeEngineThreads");
-	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
+	const int NUM_SWAPCHAIN_BACKBUFFERS = mSettings.gfx.Display.bUseTripleBuffering ? 3 : 2;
 	const size_t HWThreads  = ThreadPool::sHardwareThreadCount;
 	const size_t HWCores    = HWThreads / 2;
 	const size_t NumRuntimeWorkers = HWCores - 1; // reserve 1 core for Update + Render threads

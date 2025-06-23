@@ -565,7 +565,7 @@ static void ExtractSceneView(FSceneView& SceneView, std::unordered_map<const Cam
 	SceneView.cameraPosition = XMLoadFloat3(&camPos);
 	SceneView.MainViewCameraYaw = cam.GetYaw();
 	SceneView.MainViewCameraPitch = cam.GetPitch();
-	SceneView.HDRIYawOffset = SceneView.sceneRenderOptions.fYawSliderValue * XM_PI * 2.0f;
+	SceneView.HDRIYawOffset = SceneView.sceneRenderOptions.Lighting.fYawSliderValue * XM_PI * 2.0f;
 
 	SceneView.cubeVB = cubeVBIB.first;
 	SceneView.cubeIB = cubeVBIB.second;
@@ -751,7 +751,7 @@ static void GatherLightBoundsRenderData(const Light& l,
 	}  break;
 	} // swicth
 }
-void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UIState, bool AppInSimulationState, int FRAME_DATA_INDEX)
+void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UIState, bool AppInSimulationState, const FEngineSettings& Settings, int FRAME_DATA_INDEX)
 {
 	SCOPED_CPU_MARKER("Scene::PostUpdate()");
 	assert(FRAME_DATA_INDEX < mFrameSceneViews.size());
@@ -772,8 +772,8 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 
 	ExtractSceneView(SceneView, mViewProjectionMatrixHistory, cam, this->mMeshes.at(EBuiltInMeshes::CUBE).GetIABufferIDs());
 	SceneView.pEnvironmentMapMesh        = &mMeshes.at((MeshID)EBuiltInMeshes::CUBE);
-	SceneView.NumGameObjectBBRenderCmds  = (uint)(SceneView.sceneRenderOptions.bDrawGameObjectBoundingBoxes ? DIV_AND_ROUND_UP(mBoundingBoxHierarchy.mGameObjectBoundingBoxes.size(), MAX_INSTANCE_COUNT__UNLIT_SHADER) : 0);
-	SceneView.NumMeshBBRenderCmds        = (uint)(SceneView.sceneRenderOptions.bDrawMeshBoundingBoxes       ? DIV_AND_ROUND_UP(mBoundingBoxHierarchy.mMeshBoundingBoxes.size()      , MAX_INSTANCE_COUNT__UNLIT_SHADER) : 0);
+	SceneView.NumGameObjectBBRenderCmds  = (uint)(SceneView.sceneRenderOptions.Debug.bDrawGameObjectBoundingBoxes ? DIV_AND_ROUND_UP(mBoundingBoxHierarchy.mGameObjectBoundingBoxes.size(), MAX_INSTANCE_COUNT__UNLIT_SHADER) : 0);
+	SceneView.NumMeshBBRenderCmds        = (uint)(SceneView.sceneRenderOptions.Debug.bDrawMeshBoundingBoxes       ? DIV_AND_ROUND_UP(mBoundingBoxHierarchy.mMeshBoundingBoxes.size()      , MAX_INSTANCE_COUNT__UNLIT_SHADER) : 0);
 	SceneView.pGameObjectBoundingBoxList = &mBoundingBoxHierarchy.mGameObjectBoundingBoxes;
 	SceneView.pMeshBoundingBoxList       = &mBoundingBoxHierarchy.mMeshBoundingBoxes;
 
@@ -804,7 +804,13 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 	FSceneDrawData& DrawData = mRenderer.GetSceneDrawData(FRAME_DATA_INDEX);
 	
 	GatherLightMeshRenderData(SceneView);
-	GatherOutlineMeshRenderData(DrawData.outlineRenderParams, mSelectedObjects, this, SceneView.view, SceneView.proj, SceneView.sceneRenderOptions.OutlineColor);
+	GatherOutlineMeshRenderData(DrawData.outlineRenderParams, 
+		mSelectedObjects, 
+		this, 
+		SceneView.view, 
+		SceneView.proj, 
+		XMFLOAT4(Settings.Editor.OutlineColor)
+	);
 	 
 	if (UIState.bDrawLightVolume)
 	{
@@ -820,7 +826,7 @@ void Scene::PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UISta
 		}
 	}
 
-	if (SceneView.sceneRenderOptions.bDrawVertexLocalAxes)
+	if (SceneView.sceneRenderOptions.Debug.bDrawVertexLocalAxes)
 	{
 		CollectDebugVertexDrawParams(DrawData, mSelectedObjects, this, mModels, mMeshes, cam);
 	}
@@ -897,12 +903,12 @@ void Scene::HandleInput(FSceneView& SceneView)
 	}
 	if (mInput.IsKeyTriggered("L"))
 	{
-		ToggleBool(SceneView.sceneRenderOptions.bDrawLightBounds);
+		ToggleBool(SceneView.sceneRenderOptions.Debug.bDrawLightBounds);
 	}
 	if (mInput.IsKeyTriggered("N"))
 	{
-		if(bIsShiftDown) ToggleBool(SceneView.sceneRenderOptions.bDrawGameObjectBoundingBoxes);
-		else             ToggleBool(SceneView.sceneRenderOptions.bDrawMeshBoundingBoxes);
+		if(bIsShiftDown) ToggleBool(SceneView.sceneRenderOptions.Debug.bDrawGameObjectBoundingBoxes);
+		else             ToggleBool(SceneView.sceneRenderOptions.Debug.bDrawMeshBoundingBoxes);
 	}
 
 	
@@ -1171,7 +1177,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 		{
 			mFrustumCullWorkerContext.vBoundingBoxList = BVH.mMeshBoundingBoxes;
 
-			const bool bForceLOD0_ShadowView = SceneView.sceneRenderOptions.bForceLOD0_ShadowView;
+			const bool bForceLOD0_ShadowView = SceneView.sceneRenderOptions.Debug.bForceLOD0_ShadowView;
 			std::function<bool(const FVisibleMeshSortData&, const FVisibleMeshSortData&)> fnShadowViewSort = [](const FVisibleMeshSortData& l, const FVisibleMeshSortData& r)
 			{
 				return MeshSorting::GetShadowMeshKey(l.matID, l.meshID, l.iLOD, l.bTess) > MeshSorting::GetShadowMeshKey(r.matID, r.meshID, r.iLOD, r.bTess);
@@ -1216,7 +1222,7 @@ void Scene::GatherFrustumCullParameters(FSceneView& SceneView, FSceneShadowViews
 			// main view
 			SCOPED_CPU_MARKER(fnMark("InitWorkerContexts", vRanges[0].first, vRanges[0].second).c_str());
 
-			const bool bForceLOD0 = SceneView.sceneRenderOptions.bForceLOD0_SceneView;
+			const bool bForceLOD0 = SceneView.sceneRenderOptions.Debug.bForceLOD0_SceneView;
 			std::function<bool(const FVisibleMeshSortData&, const FVisibleMeshSortData&)> fnMainViewSort = [](const FVisibleMeshSortData& l, const FVisibleMeshSortData& r)
 			{
 				return MeshSorting::GetLitMeshKey(l.matID, l.meshID, l.iLOD, l.bTess) > MeshSorting::GetLitMeshKey(r.matID, r.meshID, r.iLOD, r.bTess);
@@ -1388,13 +1394,13 @@ void Scene::GatherLightMeshRenderData(const FSceneView& SceneView) const
 
 	SceneDrawData.lightBoundsRenderParams.clear();
 	SceneDrawData.lightRenderParams.clear();
-	if (SceneView.sceneRenderOptions.bDrawLightMeshes)
+	if (SceneView.sceneRenderOptions.Debug.bDrawLightMeshes)
 	{
 		::GatherLightMeshRenderData(mLightsStatic    , SceneDrawData.lightRenderParams, SceneView.cameraPosition, this);
 		::GatherLightMeshRenderData(mLightsDynamic   , SceneDrawData.lightRenderParams, SceneView.cameraPosition, this);
 		::GatherLightMeshRenderData(mLightsStationary, SceneDrawData.lightRenderParams, SceneView.cameraPosition, this);
 	}
-	if (SceneView.sceneRenderOptions.bDrawLightBounds)
+	if (SceneView.sceneRenderOptions.Debug.bDrawLightBounds)
 	{
 		::GatherLightBoundsRenderData(mLightsStatic    , SceneDrawData.lightBoundsRenderParams, SceneView.cameraPosition, this);
 		::GatherLightBoundsRenderData(mLightsDynamic   , SceneDrawData.lightBoundsRenderParams, SceneView.cameraPosition, this);

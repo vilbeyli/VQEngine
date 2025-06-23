@@ -65,25 +65,19 @@ enum EAntiAliasingAlgorithm : unsigned char
 	NUM_ANTI_ALIASING_ALGORITHMS
 };
 
-struct FGraphicsSettings
+struct FDisplaySettings
+{
+	unsigned short DisplayResolutionX = 1600;
+	unsigned short DisplayResolutionY = 900;
+	bool bVsync = false;
+	bool bUseTripleBuffering = false;
+};
+struct FPostProcessingSettings
 {
 	using AMD_FSR1_Preset = AMD_FidelityFX_SuperResolution1::EPreset;
 	using AMD_FSR3_Preset = AMD_FidelityFX_SuperResolution3::EPreset;
 
-	// display
-	unsigned short DisplayResolutionX = 1600;
-	unsigned short DisplayResolutionY = 900;
-	bool bVsync              = false;
-	bool bUseTripleBuffering = false;
-
-	// rendering
-	EAntiAliasingAlgorithm AntiAliasing = EAntiAliasingAlgorithm::MSAA4;
-	EReflections Reflections = EReflections::REFLECTIONS_OFF;
-	float RenderResolutionScale = 1.0f;
-	short MaxFrameRate = -1; // -1: Auto (RefreshRate x 1.15) | 0: Unlimited | <int>: specified value
-	short EnvironmentMapResolution = 256;
-
-	// post processing
+	// upscaling
 	EUpscalingAlgorithm UpscalingAlgorithm = EUpscalingAlgorithm::NONE;
 	AMD_FSR1_Preset FSR1UpscalingQualityEnum = AMD_FSR1_Preset::ULTRA_QUALITY;
 	AMD_FSR3_Preset FSR3UpscalingQualityEnum = AMD_FSR3_Preset::NATIVE_AA;
@@ -95,6 +89,36 @@ struct FGraphicsSettings
 	EColorSpace   ContentColorSpace = EColorSpace::REC_709;
 	EDisplayCurve OutputDisplayCurve = EDisplayCurve::sRGB;
 	bool          EnableGammaCorrection = true;
+};
+struct FRenderingSettings
+{
+	struct FFFX_SSSR_Options
+	{
+		bool  bEnableTemporalVarianceGuidedTracing = true;
+		int   MaxTraversalIterations = 128;
+		int   MostDetailedDepthHierarchyMipLevel = 0;
+		int   MinTraversalOccupancy = 4;
+		float DepthBufferThickness = 0.45f;
+		float RoughnessThreshold = 0.2f;
+		float TemporalStability = 0.25f;
+		float TemporalVarianceThreshold = 0.0f;
+		int   SamplesPerQuad = 1;
+	};
+
+
+	EAntiAliasingAlgorithm AntiAliasing = EAntiAliasingAlgorithm::MSAA4;
+	EReflections Reflections = EReflections::REFLECTIONS_OFF;
+	FFFX_SSSR_Options FFX_SSSR_Options;
+	float RenderResolutionScale = 1.0f;
+	short MaxFrameRate = -1; // -1: Auto (RefreshRate x 1.15) | 0: Unlimited | <int>: specified value
+	short EnvironmentMapResolution = 256;
+};
+
+struct FGraphicsSettings
+{
+	FDisplaySettings Display;
+	FRenderingSettings Rendering;
+	FPostProcessingSettings PostProcessing;
 
 	// command recording
 	bool bEnableAsyncCopy = true;
@@ -103,8 +127,8 @@ struct FGraphicsSettings
 	
 	// =====================================================================================================================
 
-	inline bool IsFSR1Enabled() const { return UpscalingAlgorithm == EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1; }
-	inline bool IsFSR3Enabled() const { return UpscalingAlgorithm == EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3; }
+	inline bool IsFSR1Enabled() const { return PostProcessing.UpscalingAlgorithm == EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1; }
+	inline bool IsFSR3Enabled() const { return PostProcessing.UpscalingAlgorithm == EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3; }
 };
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -129,9 +153,14 @@ struct FWindowSettings
 // ENGINE SETTINGS
 // 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+struct FEditorSettings
+{
+	float OutlineColor[4] = { 1.0f, 0.647f, 0.1f, 1.0f };
+};
 struct FEngineSettings
 {
 	FGraphicsSettings gfx;
+	FEditorSettings Editor;
 
 	FWindowSettings WndMain;
 	FWindowSettings WndDebug;

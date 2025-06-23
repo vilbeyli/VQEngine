@@ -571,7 +571,7 @@ void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
 		Swapchain.EnsureSwapChainColorSpace(Swapchain.GetFormat() == DXGI_FORMAT_R16G16B16A16_FLOAT ? _16 : _8, false);
 	}
 
-	mSettings.gfx.bVsync = bVsyncState;
+	mSettings.gfx.Display.bVsync = bVsyncState;
 	Log::Info("Toggle VSync: %d", bVsyncState);
 }
 

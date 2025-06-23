@@ -305,7 +305,7 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 	{
 		if (mUIState.bWindowVisible_KeyMappings)           DrawKeyMappingsWindow();
 		if (mUIState.bWindowVisible_SceneControls)         DrawSceneControlsWindow(mpScene->GetActiveCameraIndex(), mpScene->GetActiveEnvironmentMapPresetIndex(), SceneParams);
-		if (mUIState.bWindowVisible_Profiler)              DrawProfilerWindow(mpScene->GetSceneRenderStats(FRAME_DATA_INDEX), mSettings.gfx.RenderResolutionScale, dt);
+		if (mUIState.bWindowVisible_Profiler)              DrawProfilerWindow(mpScene->GetSceneRenderStats(FRAME_DATA_INDEX), mSettings.gfx.Rendering.RenderResolutionScale, dt);
 		if (mUIState.bWindowVisible_GraphicsSettingsPanel) DrawGraphicsSettingsWindow(SceneParams, PPParams);
 		if (mUIState.bWindowVisible_Editor)                DrawEditorWindow();
 	}
@@ -622,14 +622,14 @@ void VQEngine::DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMa
 
 	if (iSelectedEnvMap != INVALID_ID)
 	{
-		ImGui::SliderFloat("HDRI Rotation", &SceneRenderParams.fYawSliderValue, 0.0f, 1.0f);
+		ImGui::SliderFloat("HDRI Rotation", &SceneRenderParams.Lighting.fYawSliderValue, 0.0f, 1.0f);
 	}
 
 	const float MaxAmbientLighting = this->ShouldRenderHDR(mpWinMain->GetHWND()) ? 150.0f : 2.0f;
-	MathUtil::Clamp(SceneRenderParams.fAmbientLightingFactor, 0.0f, MaxAmbientLighting);
-	ImGui::SliderFloat("Ambient Lighting Factor", &SceneRenderParams.fAmbientLightingFactor, 0.0f, MaxAmbientLighting, "%.3f");
+	MathUtil::Clamp(SceneRenderParams.Lighting.fAmbientLightingFactor, 0.0f, MaxAmbientLighting);
+	ImGui::SliderFloat("Ambient Lighting Factor", &SceneRenderParams.Lighting.fAmbientLightingFactor, 0.0f, MaxAmbientLighting, "%.3f");
 
-	ImGui::ColorEdit4("Outline Color", reinterpret_cast<float*>(&SceneRenderParams.OutlineColor), ImGuiColorEditFlags_DefaultOptions_);
+	ImGui::ColorEdit4("Outline Color", reinterpret_cast<float*>(&mSettings.Editor.OutlineColor), ImGuiColorEditFlags_DefaultOptions_);
 
 	//ImGui::ColorEdit4();
 
@@ -852,38 +852,38 @@ void VQEngine::DrawPostProcessSettings(FGraphicsSettings& GFXSettings)
 
 	ImGui::Text("Upscaling");
 	ImGui::Separator();
-	if (ImGui_RightAlignedCombo("Algorithm", (int*) &GFXSettings.UpscalingAlgorithm, szUpscalingLabels, _countof(szUpscalingLabels)))
+	if (ImGui_RightAlignedCombo("Algorithm", (int*) &GFXSettings.PostProcessing.UpscalingAlgorithm, szUpscalingLabels, _countof(szUpscalingLabels)))
 	{
-		if (GFXSettings.UpscalingAlgorithm == EUpscalingAlgorithm::NONE)
+		if (GFXSettings.PostProcessing.UpscalingAlgorithm == EUpscalingAlgorithm::NONE)
 		{
-			GFXSettings.RenderResolutionScale = 1.0f;
+			GFXSettings.Rendering.RenderResolutionScale = 1.0f;
 		}
-		else if (GFXSettings.FSR1UpscalingQualityEnum != AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
+		else if (GFXSettings.PostProcessing.FSR1UpscalingQualityEnum != AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
 		{
-			GFXSettings.RenderResolutionScale = AMD_FidelityFX_SuperResolution1::GetScreenPercentage(GFXSettings.FSR1UpscalingQualityEnum);
+			GFXSettings.Rendering.RenderResolutionScale = AMD_FidelityFX_SuperResolution1::GetScreenPercentage(GFXSettings.PostProcessing.FSR1UpscalingQualityEnum);
 		}
 		fnSendWindowResizeEvents();
 	}
 
-	if (GFXSettings.UpscalingAlgorithm != EUpscalingAlgorithm::NONE)
+	if (GFXSettings.PostProcessing.UpscalingAlgorithm != EUpscalingAlgorithm::NONE)
 	{
 		// preset: ultra quality / quality / balanced / performance / custom
-		if (ImGui_RightAlignedCombo("Quality", (int*)&GFXSettings.FSR1UpscalingQualityEnum, szFSR1QualityLabels, _countof(szFSR1QualityLabels)))
+		if (ImGui_RightAlignedCombo("Quality", (int*)&GFXSettings.PostProcessing.FSR1UpscalingQualityEnum, szFSR1QualityLabels, _countof(szFSR1QualityLabels)))
 		{
-			if (GFXSettings.FSR1UpscalingQualityEnum != AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
+			if (GFXSettings.PostProcessing.FSR1UpscalingQualityEnum != AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
 			{
-				GFXSettings.RenderResolutionScale = AMD_FidelityFX_SuperResolution1::GetScreenPercentage(GFXSettings.FSR1UpscalingQualityEnum);
+				GFXSettings.Rendering.RenderResolutionScale = AMD_FidelityFX_SuperResolution1::GetScreenPercentage(GFXSettings.PostProcessing.FSR1UpscalingQualityEnum);
 			}
 			
 			fnSendWindowResizeEvents();
 		}
 
 		// resolution scale
-		if (GFXSettings.FSR1UpscalingQualityEnum == AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
+		if (GFXSettings.PostProcessing.FSR1UpscalingQualityEnum == AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
 		{
 			// if we are to support resolution scale > 1.0f, we'll need to stop using FSR1 upscaling
 			// and use a linear min filter for AA
-			if (ImGui::SliderFloat("Resolution Scale", &GFXSettings.RenderResolutionScale, 0.25f, 1.00f, "%.2f"))
+			if (ImGui::SliderFloat("Resolution Scale", &GFXSettings.Rendering.RenderResolutionScale, 0.25f, 1.00f, "%.2f"))
 			{
 				fnSendWindowResizeEvents();
 			}
@@ -896,7 +896,7 @@ void VQEngine::DrawPostProcessSettings(FGraphicsSettings& GFXSettings)
 	ImGui::Separator();
 	
 	//float LinearSharpness = GFXSettings.FSR1ShaderParameters.rcas.GetLinearSharpness();
-	if (ImGui::SliderFloat("Amount##", &GFXSettings.Sharpness, 0.01f, 1.00f, "%.2f"))
+	if (ImGui::SliderFloat("Amount##", &GFXSettings.PostProcessing.Sharpness, 0.01f, 1.00f, "%.2f"))
 	{
 		//GFXSettings.FSR1ShaderParameters.rcas.SetLinearSharpness(LinearSharpness);
 		//GFXSettings.FSR1ShaderParameters.rcas.UpdateConstantBlock();
@@ -912,15 +912,15 @@ void VQEngine::DrawPostProcessSettings(FGraphicsSettings& GFXSettings)
 	{
 		if (bHDR)
 		{
-			const std::string strDispalyCurve = GetDisplayCurveString(GFXSettings.OutputDisplayCurve);
-			const std::string strColorSpace   = GetColorSpaceString(GFXSettings.ContentColorSpace);
+			const std::string strDispalyCurve = GetDisplayCurveString(GFXSettings.PostProcessing.OutputDisplayCurve);
+			const std::string strColorSpace   = GetColorSpaceString(GFXSettings.PostProcessing.ContentColorSpace);
 			ImGui::Text("OutputDevice : %s", strDispalyCurve.c_str() );
 			ImGui::Text("Color Space  : %s", strColorSpace.c_str() );
-			ImGui::SliderFloat("UI Brightness", &GFXSettings.UIHDRBrightness, 0.1f, 20.f, "%.1f");
+			ImGui::SliderFloat("UI Brightness", &GFXSettings.PostProcessing.UIHDRBrightness, 0.1f, 20.f, "%.1f");
 		}
 		else
 		{
-			ImGui::Checkbox("[SDR] Apply Gamma (G)", &GFXSettings.EnableGammaCorrection);
+			ImGui::Checkbox("[SDR] Apply Gamma (G)", &GFXSettings.PostProcessing.EnableGammaCorrection);
 		}
 	}
 
@@ -937,8 +937,8 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams
 	InitializeStaticCStringData_GraphicsSettings();
 	// static data
 
-	int iSSAOLabel = SceneRenderParams.bScreenSpaceAO ? 1 : 0;
-	int iReflections = gfx.Reflections;
+	int iSSAOLabel = SceneRenderParams.Lighting.bScreenSpaceAO ? 1 : 0;
+	int iReflections = gfx.Rendering.Reflections;
 
 	const uint32_t GFX_WINDOW_POS_X = W - GFX_WINDOW_SIZE_X - PROFILER_WINDOW_SIZE_X - PROFILER_WINDOW_PADDIG_X - GFX_WINDOW_PADDING_X;
 	const uint32_t GFX_WINDOW_POS_Y = H - GFX_WINDOW_PADDING_Y*2 - GFX_WINDOW_SIZE_Y;
@@ -968,14 +968,14 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams
 			ImGui::SliderFloat("MoVec Intensity", &PPParams.VizParams.fInputStrength, 0.0f, 200.0f);
 		}
 
-		ImGui::Checkbox("Show GameObject Bounding Boxes (Shift+N)", &SceneRenderParams.bDrawGameObjectBoundingBoxes);
-		ImGui::Checkbox("Show Mesh Bounding Boxes (N)", &SceneRenderParams.bDrawMeshBoundingBoxes);
-		ImGui::Checkbox("Show Light Bounding Volumes (L)", &SceneRenderParams.bDrawLightBounds);
-		ImGui::Checkbox("Draw Lights", &SceneRenderParams.bDrawLightMeshes);
-		ImGui::Checkbox("Draw Vertex Axes", &SceneRenderParams.bDrawVertexLocalAxes);
-		if (SceneRenderParams.bDrawVertexLocalAxes)
+		ImGui::Checkbox("Show GameObject Bounding Boxes (Shift+N)", &SceneRenderParams.Debug.bDrawGameObjectBoundingBoxes);
+		ImGui::Checkbox("Show Mesh Bounding Boxes (N)", &SceneRenderParams.Debug.bDrawMeshBoundingBoxes);
+		ImGui::Checkbox("Show Light Bounding Volumes (L)", &SceneRenderParams.Debug.bDrawLightBounds);
+		ImGui::Checkbox("Draw Lights", &SceneRenderParams.Debug.bDrawLightMeshes);
+		ImGui::Checkbox("Draw Vertex Axes", &SceneRenderParams.Debug.bDrawVertexLocalAxes);
+		if (SceneRenderParams.Debug.bDrawVertexLocalAxes)
 		{
-			ImGui::SliderFloat("Axis Size", &SceneRenderParams.fVertexLocalAxixSize, 1.0f, 10.0f);
+			ImGui::SliderFloat("Axis Size", &SceneRenderParams.Debug.fVertexLocalAxisSize, 1.0f, 10.0f);
 		}
 
 		//
@@ -1018,36 +1018,36 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams
 
 	if (ImGui::BeginTabItem("Display"))
 	{
-		BeginDisabledUIState(!gfx.bVsync);
+		BeginDisabledUIState(!gfx.Display.bVsync);
 		{
-			static int iLimiter = mSettings.gfx.MaxFrameRate == -1 ? 0 : (mSettings.gfx.MaxFrameRate == 0 ? 1 : 2); // see Settings.h
-			static int CustomFrameLimit = mSettings.gfx.MaxFrameRate;
+			static int iLimiter = mSettings.gfx.Rendering.MaxFrameRate == -1 ? 0 : (mSettings.gfx.Rendering.MaxFrameRate == 0 ? 1 : 2); // see Settings.h
+			static int CustomFrameLimit = mSettings.gfx.Rendering.MaxFrameRate;
 			if (ImGui_RightAlignedCombo("FrameRate Limit", &iLimiter, szMaxFrameRateOptionLabels, _countof(szMaxFrameRateOptionLabels)))
 			{
 				switch (iLimiter)
 				{
-				case 0: mSettings.gfx.MaxFrameRate = -1; break;
-				case 1: mSettings.gfx.MaxFrameRate = 0; break;
-				case 2: mSettings.gfx.MaxFrameRate = CustomFrameLimit; break;
+				case 0: mSettings.gfx.Rendering.MaxFrameRate = -1; break;
+				case 1: mSettings.gfx.Rendering.MaxFrameRate = 0; break;
+				case 2: mSettings.gfx.Rendering.MaxFrameRate = CustomFrameLimit; break;
 				default:
 					break;
 				}
-				SetEffectiveFrameRateLimit(mSettings.gfx.MaxFrameRate);
+				SetEffectiveFrameRateLimit(mSettings.gfx.Rendering.MaxFrameRate);
 			}
 			if (iLimiter == 2) // custom frame limit value
 			{
 				if (ImGui::SliderInt("MaxFrames", &CustomFrameLimit, 10, 1000))
 				{
-					mSettings.gfx.MaxFrameRate = CustomFrameLimit;
-					SetEffectiveFrameRateLimit(mSettings.gfx.MaxFrameRate);
+					mSettings.gfx.Rendering.MaxFrameRate = CustomFrameLimit;
+					SetEffectiveFrameRateLimit(mSettings.gfx.Rendering.MaxFrameRate);
 				}
 			}
 		}
-		EndDisabledUIState(!gfx.bVsync);
+		EndDisabledUIState(!gfx.Display.bVsync);
 
-		if (ImGui::Checkbox("VSync (V)", &gfx.bVsync))
+		if (ImGui::Checkbox("VSync (V)", &gfx.Display.bVsync))
 		{
-			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetVSyncEvent>(hwnd, gfx.bVsync));
+			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetVSyncEvent>(hwnd, gfx.Display.bVsync));
 		}
 		bool bFS = mpWinMain->IsFullscreen();
 		if (ImGui::Checkbox("Fullscreen (Alt+Enter)", &bFS))
@@ -1060,44 +1060,44 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams
 
 	if (ImGui::BeginTabItem("Rendering"))
 	{
-		if (ImGui_RightAlignedCombo("AntiAliasing (M)", (int*)&gfx.AntiAliasing, szAALabels, _countof(szAALabels) - 1))
+		if (ImGui_RightAlignedCombo("AntiAliasing (M)", (int*)&gfx.Rendering.AntiAliasing, szAALabels, _countof(szAALabels) - 1))
 		{
-			Log::Info("AA Changed: %d", gfx.AntiAliasing);
+			Log::Info("AA Changed: %d", gfx.Rendering.AntiAliasing);
 		}
 
 		if (ImGui_RightAlignedCombo("Ambient Occlusion", &iSSAOLabel, szSSAOLabels, _countof(szSSAOLabels) - 1))
 		{
-			SceneRenderParams.bScreenSpaceAO = iSSAOLabel == 1;
-			Log::Info("AO Changed: %d", SceneRenderParams.bScreenSpaceAO);
+			SceneRenderParams.Lighting.bScreenSpaceAO = iSSAOLabel == 1;
+			Log::Info("AO Changed: %d", SceneRenderParams.Lighting.bScreenSpaceAO);
 		}
-		int iRefl = gfx.Reflections;
+		int iRefl = gfx.Rendering.Reflections;
 		if (ImGui_RightAlignedCombo("Reflections", &iRefl, szReflectionsLabels, _countof(szReflectionsLabels)-1))
 		{
-			gfx.Reflections = static_cast<EReflections>(iRefl);
-			Log::Info("Reflections Changed: %d", gfx.Reflections);
+			gfx.Rendering.Reflections = static_cast<EReflections>(iRefl);
+			Log::Info("Reflections Changed: %d", gfx.Rendering.Reflections);
 		}
-		switch (gfx.Reflections)
+		switch (gfx.Rendering.Reflections)
 		{
 		case EReflections::SCREEN_SPACE_REFLECTIONS__FFX:
 		{
-			FSceneRenderOptions::FFFX_SSSR_UIOptions& FFXParams = SceneRenderParams.FFX_SSSRParameters;
+			FRenderingSettings::FFFX_SSSR_Options& FFXParams = mSettings.gfx.Rendering.FFX_SSSR_Options;
 
 			ImGui::PushStyleColor(ImGuiCol_Header, UI_COLLAPSING_HEADER_COLOR_VALUE);
 			if (ImGui::CollapsingHeader("SSSR Settings"))
 			{
 				ImGui::PopStyleColor();
-				ImGui::SliderFloat("Roughness Threshold", &FFXParams.roughnessThreshold, 0.0f, 1.f);
-				ImGui::SliderInt("Max Traversal Iterations", &FFXParams.maxTraversalIterations, 0, 256);
-				ImGui::SliderInt("Min Traversal Occupancy", &FFXParams.minTraversalOccupancy, 0, 32);
-				ImGui::SliderInt("Most Detailed Level", &FFXParams.mostDetailedDepthHierarchyMipLevel, 0, 5);
-				ImGui::SliderFloat("Depth Buffer Thickness", &FFXParams.depthBufferThickness, 0.0f, 5.0f);
-				ImGui::SliderFloat("Temporal Stability", &FFXParams.temporalStability, 0.0f, 1.0f);
-				ImGui::SliderFloat("Temporal Variance Threshold", &FFXParams.temporalVarianceThreshold, 0.0f, 0.01f);
+				ImGui::SliderFloat("Roughness Threshold"        , &FFXParams.RoughnessThreshold, 0.0f, 1.f);
+				ImGui::SliderInt("Max Traversal Iterations"     , &FFXParams.MaxTraversalIterations, 0, 256);
+				ImGui::SliderInt("Min Traversal Occupancy"      , &FFXParams.MinTraversalOccupancy, 0, 32);
+				ImGui::SliderInt("Most Detailed Level"          , &FFXParams.MostDetailedDepthHierarchyMipLevel, 0, 5);
+				ImGui::SliderFloat("Depth Buffer Thickness"     , &FFXParams.DepthBufferThickness, 0.0f, 5.0f);
+				ImGui::SliderFloat("Temporal Stability"         , &FFXParams.TemporalStability, 0.0f, 1.0f);
+				ImGui::SliderFloat("Temporal Variance Threshold", &FFXParams.TemporalVarianceThreshold, 0.0f, 0.01f);
 				ImGui::Checkbox("Enable Variance Guided Tracing", &FFXParams.bEnableTemporalVarianceGuidedTracing);
 				ImGui::Text("Samples per Quad"); ImGui::SameLine();
-				ImGui::RadioButton("1", &FFXParams.samplesPerQuad, 1); ImGui::SameLine();
-				ImGui::RadioButton("2", &FFXParams.samplesPerQuad, 2); ImGui::SameLine();
-				ImGui::RadioButton("4", &FFXParams.samplesPerQuad, 4);
+				ImGui::RadioButton("1", &FFXParams.SamplesPerQuad, 1); ImGui::SameLine();
+				ImGui::RadioButton("2", &FFXParams.SamplesPerQuad, 2); ImGui::SameLine();
+				ImGui::RadioButton("4", &FFXParams.SamplesPerQuad, 4);
 				ImGui::Separator();
 			}
 			else
@@ -1119,8 +1119,8 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams
 			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetSwapchainPresentationQueueEvent>(hwnd, mSettings.gfx.bUseSeparateSubmissionQueue));
 		}
 
-		ImGui::Checkbox("ForceLOD0 (Shadow)", &SceneRenderParams.bForceLOD0_ShadowView);
-		ImGui::Checkbox("ForceLOD0 (Scene )", &SceneRenderParams.bForceLOD0_SceneView);
+		ImGui::Checkbox("ForceLOD0 (Shadow)", &SceneRenderParams.Debug.bForceLOD0_ShadowView);
+		ImGui::Checkbox("ForceLOD0 (Scene )", &SceneRenderParams.Debug.bForceLOD0_SceneView);
 
 		ImGui::EndTabItem();
 	}
