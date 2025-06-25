@@ -659,7 +659,6 @@ void VQRenderer::BatchDrawCalls(
 	const FSceneView& SceneView,
 	const FSceneShadowViews& SceneShadowView,
 	FWindowRenderContext& ctx, 
-	const FPostProcessParameters& PPParams,
 	const FGraphicsSettings& GFXSettings
 )
 {

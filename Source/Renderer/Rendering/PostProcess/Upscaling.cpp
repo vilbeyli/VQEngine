@@ -36,14 +36,23 @@
 
 namespace AMD_FidelityFX_SuperResolution1
 {
-	float FShaderParameters::RCAS::GetLinearSharpness() const { return std::powf(0.5f, this->RCASSharpnessStops); }
-	void  FShaderParameters::RCAS::SetLinearSharpness(float Sharpness) { this->RCASSharpnessStops = std::log10f(Sharpness) / std::log10f(0.5f); }
-	void  FShaderParameters::RCAS::UpdateConstantBlock()
+	//float FShaderParameters::RCAS::GetLinearSharpness() const { return std::powf(0.5f, this->RCASSharpnessStops); }
+	
+	static float GetSharpnessStops(float Sharpness)
 	{
+		return std::log10f(Sharpness) / std::log10f(0.5f);
+	}
+
+	void  FShaderParameters::RCAS::UpdateConstantBlock(float Sharpness)
+	{
+		const float SharpnessStops = GetSharpnessStops(Sharpness);
 #if FFX_DEBUG_LOG
-		Log::Info("[FidelityFX][FSR-RCAS]: FsrRcasCon() called with SharpnessStops=%.2f", this->RCASSharpnessStops);
+		Log::Info("[FidelityFX][FSR-RCAS]: FsrRcasCon() called with Sharpness=%.2f | SharpnessStops=%.2f", 
+			Sharpness,
+			SharpnessStops
+		);
 #endif
-		FsrRcasCon(reinterpret_cast<AU1*>(&this->RCASConstantBlock[0]), this->RCASSharpnessStops);
+		FsrRcasCon(reinterpret_cast<AU1*>(&this->RCASConstantBlock[0]), SharpnessStops);
 	}
 
 	void FShaderParameters::EASU::UpdateConstantBlock(

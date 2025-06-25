@@ -22,8 +22,7 @@
 #include "Core/CommandQueue.h"
 #include "Resources/ResourceHeaps.h"
 #include "Resources/Buffer.h"
-
-#if 1
+#include "PostProcess/PostProcess.h"
 
 namespace D3D12MA { class Allocator; }
 class Window;
@@ -31,34 +30,16 @@ struct ID3D12RootSignature;
 struct ID3D12PipelineState;
 class Device;
 
-class FWindowRenderContext
+struct FWindowRenderContext
 {
-public:
 	FWindowRenderContext(CommandQueue& PresentQueueIn) : PresentQueue(PresentQueueIn) {}
 	void InitializeContext(const Window* pWin, Device* pDevice, int NumSwapchainBuffers, bool bVSync, bool bHDRSwapchain);
 	void CleanupContext();
 
-	inline unsigned short     GetNumSwapchainBuffers() const { return SwapChain.GetNumBackBuffers(); }
-	inline unsigned short     GetCurrentSwapchainBufferIndex() const { return SwapChain.GetCurrentBackBufferIndex(); }
+	inline unsigned short GetNumSwapchainBuffers() const { return SwapChain.GetNumBackBuffers(); }
+	inline unsigned short GetCurrentSwapchainBufferIndex() const { return SwapChain.GetCurrentBackBufferIndex(); }
 
-#if 0
-	inline DynamicBufferHeap& GetConstantBufferHeap(size_t iThread) { return mDynamicHeap_RenderingConstantBuffer[iThread]; }
-	inline ID3D12CommandList* GetCommandListPtr(ECommandQueueType eQueueType, size_t THREAD_INDEX) { return GetCommandListPtrs(eQueueType)[THREAD_INDEX]; };
-	inline UINT GetNumCurrentlyRecordingThreads(ECommandQueueType eQueueType) const { return mNumCurrentlyRecordingRenderingThreads[eQueueType]; }
-
-	// returns the current back buffer's command allocators
-	inline std::vector<ID3D12CommandAllocator*>& GetCommandAllocators(ECommandQueueType eQueueType) { return mRenderingCommandAllocators[eQueueType][SwapChain.GetCurrentBackBufferIndex()]; };
-	inline std::vector<ID3D12CommandList*>& GetCommandListPtrs(ECommandQueueType eQueueType){ return mpRenderingCmds[eQueueType]; }
-	inline std::vector<ID3D12CommandList*>& GetGFXCommandListPtrs() { return GetCommandListPtrs(ECommandQueueType::GFX); }
-	inline std::vector<ID3D12CommandList*>& GetComputeCommandListPtrs() { return GetCommandListPtrs(ECommandQueueType::COMPUTE); }
-	inline std::vector<ID3D12CommandList*>& GetCopyCommandListPtrs() { return GetCommandListPtrs(ECommandQueueType::COPY); }
-#endif
-
-public:
 	Device*       pDevice = nullptr;
 	SwapChain     SwapChain;
 	CommandQueue& PresentQueue;
 };
-
-
-#endif

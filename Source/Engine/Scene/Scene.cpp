@@ -857,22 +857,6 @@ const FSceneShadowViews& Scene::GetShadowView(int FRAME_DATA_INDEX) const
 	return mFrameShadowViews[0];
 #endif
 }
-FPostProcessParameters& Scene::GetPostProcessParameters(int FRAME_DATA_INDEX) 
-{
-#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
-	return mFrameSceneViews[FRAME_DATA_INDEX].postProcessParameters; 
-#else
-	return mFrameSceneViews[0].postProcessParameters;
-#endif
-}
-const FPostProcessParameters& Scene::GetPostProcessParameters(int FRAME_DATA_INDEX) const 
-{
-#if VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
-	return mFrameSceneViews[FRAME_DATA_INDEX].postProcessParameters; 
-#else
-	return mFrameSceneViews[0].postProcessParameters;
-#endif
-}
 
 
 void Scene::RenderUI(FUIState& UIState, uint32_t W, uint32_t H)

@@ -338,7 +338,6 @@ void VQEngine::RenderThread_RenderMainWindow()
 
 	const FSceneView& SceneView = mpScene->GetSceneView(FRAME_DATA_INDEX);
 	const FSceneShadowViews& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
-	const FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 	const HWND hwndMain = mpWinMain->GetHWND();
 	const bool bHDR = this->ShouldRenderHDR(hwndMain);
 	const Window* pWindow = mpWinMain.get();
@@ -351,8 +350,8 @@ void VQEngine::RenderThread_RenderMainWindow()
 	}
 	else
 	{
-		hr = mpRenderer->PreRenderScene(WorkerThreads, pWindow, SceneView, SceneShadowView, PPParams, mSettings.gfx, mUIState);
-		hr = mpRenderer->RenderScene(WorkerThreads, pWindow, SceneView, SceneShadowView, PPParams, mSettings.gfx, mUIState, bHDR);
+		hr = mpRenderer->PreRenderScene(WorkerThreads, pWindow, SceneView, SceneShadowView, mSettings.gfx, mUIState);
+		hr = mpRenderer->RenderScene(WorkerThreads, pWindow, SceneView, SceneShadowView, mSettings.gfx, mUIState, bHDR);
 	}
 
 	if (hr == DXGI_STATUS_OCCLUDED) { RenderThread_HandleStatusOccluded(); }

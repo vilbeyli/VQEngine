@@ -51,7 +51,7 @@ struct FSceneLightingOptions
 	float fAmbientLightingFactor = 0.055f;
 	bool bScreenSpaceAO = true;
 };
-struct FSceneRenderOptions
+struct FSceneRenderOptions // these options directly affect scene data gathering
 {
 	FRenderDebugOptions Debug;
 	FSceneLightingOptions Lighting;
@@ -167,9 +167,7 @@ struct FSceneView
 
 	VQ_SHADER_DATA::SceneLighting GPULightingData;
 
-	// TODO: move out
 	FSceneRenderOptions sceneRenderOptions;
-	FPostProcessParameters postProcessParameters;
 };
 
 struct FSceneDebugView

@@ -30,7 +30,7 @@ namespace AMD_FidelityFX_SuperResolution1
 {
 	// AMD FidelityFX Super Resolution 1.0: Spatial Upscaling and RCAS
 
-	enum EPreset : unsigned char
+	enum EPreset : int
 	{
 		ULTRA_QUALITY = 0,
 		QUALITY,
@@ -57,12 +57,7 @@ namespace AMD_FidelityFX_SuperResolution1
 		struct RCAS
 		{
 			unsigned RCASConstantBlock[4];
-			float RCASSharpnessStops = 0.2f;
-
-			float GetLinearSharpness() const;
-			void  SetLinearSharpness(float Sharpness);
-
-			void UpdateConstantBlock();
+			void UpdateConstantBlock(float Sharpness);
 		};
 		struct EASU
 		{
@@ -80,7 +75,7 @@ namespace AMD_FidelityFX_SuperResolution1
 
 namespace AMD_FidelityFX_SuperResolution3
 {
-	enum EPreset : unsigned char
+	enum EPreset : int
 	{
 		NATIVE_AA = 0,
 		QUALITY,

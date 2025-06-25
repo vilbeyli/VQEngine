@@ -108,9 +108,9 @@ inline constexpr const char* GetDisplayCurveString(EDisplayCurve dc)
 {
 	switch (dc)
 	{
-	case sRGB: return "sRGB";
+	case sRGB: return "sRGB (Gamma 2.2)";
 	case ST2084: return "ST2084 (PQ)";
-	case Linear: return "scRGB";
+	case Linear: return "scRGB (Linear)";
 	}
 	return "";
 }

@@ -172,8 +172,6 @@ public:
 	      FSceneView&       GetSceneView (int FRAME_DATA_INDEX);
 	const FSceneView&       GetSceneView (int FRAME_DATA_INDEX) const;
 	const FSceneShadowViews& GetShadowView(int FRAME_DATA_INDEX) const;
-	      FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX);
-	const FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX) const ;
 
 	inline const Camera& GetActiveCamera() const { return mCameras[mIndex_SelectedCamera]; }
 	inline       Camera& GetActiveCamera() { return mCameras[mIndex_SelectedCamera]; }

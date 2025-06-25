@@ -94,7 +94,6 @@ void VQEngine::HandleUIInput()
 				const int NUM_BACK_BUFFERS = mpRenderer->GetSwapChainBackBufferCount(mpWinMain->GetHWND());
 				const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
 #endif
-				FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 #if !DISABLE_FIDELITYFX_CAS
 				PPParams.bEnableCAS = !PPParams.bEnableCAS;
 				Log::Info("Toggle FFX-CAS: %d", PPParams.bEnableCAS);
@@ -181,11 +180,10 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 		Log::Info("Toggle MSAA: %d", mSettings.gfx.Rendering.AntiAliasing);
 	}
 
-	FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 	if (input.IsKeyTriggered("G")) // Gamma
 	{
-		PPParams.TonemapperParams.ToggleGammaCorrection = PPParams.TonemapperParams.ToggleGammaCorrection == 1 ? 0 : 1;
-		Log::Info("Tonemapper: ApplyGamma=%d (SDR-only)", PPParams.TonemapperParams.ToggleGammaCorrection);
+		mSettings.gfx.PostProcessing.EnableGammaCorrection = !mSettings.gfx.PostProcessing.EnableGammaCorrection;
+		Log::Info("Tonemapper: ApplyGamma=%d (SDR-only)", mSettings.gfx.PostProcessing.EnableGammaCorrection);
 	}
 
 #if 0 // temporarily disabled, TODO: enable it
@@ -198,7 +196,7 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 		}
 		
 		PPParams.UpscalingAlgorithm = PPParams.IsFSR1Enabled() 
-			? FPostProcessParameters::EUpscalingAlgorithm::NONE 
+			? EUpscalingAlgorithm::NONE 
 			: PPParams.UpscalingAlgorithmLastValue;
 
 		const uint32 W = mpWinMain->GetWidth();

@@ -41,7 +41,7 @@ enum EReflections : unsigned char
 
 	NUM_REFLECTION_SETTINGS
 };
-enum EUpscalingAlgorithm : unsigned char
+enum EUpscalingAlgorithm : int
 {
 	NONE = 0,
 	FIDELITYFX_SUPER_RESOLUTION_1,
@@ -49,14 +49,15 @@ enum EUpscalingAlgorithm : unsigned char
 
 	NUM_UPSCALING_ALGORITHMS
 };
-enum ESharpeningAlgorithm : unsigned char
+enum ESharpeningAlgorithm : int
 {
 	NO_SHARPENING = 0,
-	FIDELITYFX_CAS,
+	FIDELITY_FX_CAS,
+	FIDELITY_FX_RCAS,
 
 	NUM_SHARPENING_ALGORITHMS
 };
-enum EAntiAliasingAlgorithm : unsigned char
+enum EAntiAliasingAlgorithm : int
 {
 	NO_ANTI_ALIASING = 0,
 	MSAA4,
@@ -81,14 +82,42 @@ struct FPostProcessingSettings
 	EUpscalingAlgorithm UpscalingAlgorithm = EUpscalingAlgorithm::NONE;
 	AMD_FSR1_Preset FSR1UpscalingQualityEnum = AMD_FSR1_Preset::ULTRA_QUALITY;
 	AMD_FSR3_Preset FSR3UpscalingQualityEnum = AMD_FSR3_Preset::NATIVE_AA;
+	ESharpeningAlgorithm SharpeningAlgorithm = ESharpeningAlgorithm::FIDELITY_FX_RCAS;
 	float Sharpness = 0.8f;
+
+	bool bEnableGaussianBlur = false;
 
 	// tonemap
 	float         UIHDRBrightness = 1.0f;
 	float         DisplayReferenceBrightnessLevel = 200.0f;
 	EColorSpace   ContentColorSpace = EColorSpace::REC_709;
-	EDisplayCurve OutputDisplayCurve = EDisplayCurve::sRGB;
+	EDisplayCurve SDROutputDisplayCurve = EDisplayCurve::sRGB;
+	EDisplayCurve HDROutputDisplayCurve = EDisplayCurve::Linear;
 	bool          EnableGammaCorrection = true;
+};
+struct FDebugVisualizationSettings
+{
+	enum class EDrawMode : int
+	{
+		LIT_AND_POSTPROCESSED = 0,
+		//WIREFRAME,    // TODO: add support
+		//NO_MATERIALS, // TODO: add support
+
+		DEPTH,
+		NORMALS,
+		ROUGHNESS,
+		METALLIC,
+		AO,
+		ALBEDO,
+		REFLECTIONS,
+		MOTION_VECTORS,
+
+		NUM_DRAW_MODES,
+	};
+
+	EDrawMode DrawModeEnum = EDrawMode::LIT_AND_POSTPROCESSED;
+	bool bUnpackNormals = false;
+	float fInputStrength = 100.0f;
 };
 struct FRenderingSettings
 {
@@ -105,7 +134,6 @@ struct FRenderingSettings
 		int   SamplesPerQuad = 1;
 	};
 
-
 	EAntiAliasingAlgorithm AntiAliasing = EAntiAliasingAlgorithm::MSAA4;
 	EReflections Reflections = EReflections::REFLECTIONS_OFF;
 	FFFX_SSSR_Options FFX_SSSR_Options;
@@ -119,6 +147,7 @@ struct FGraphicsSettings
 	FDisplaySettings Display;
 	FRenderingSettings Rendering;
 	FPostProcessingSettings PostProcessing;
+	FDebugVisualizationSettings DebugVizualization;
 
 	// command recording
 	bool bEnableAsyncCopy = true;
@@ -129,6 +158,7 @@ struct FGraphicsSettings
 
 	inline bool IsFSR1Enabled() const { return PostProcessing.UpscalingAlgorithm == EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1; }
 	inline bool IsFSR3Enabled() const { return PostProcessing.UpscalingAlgorithm == EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3; }
+	inline bool IsFFXCASEnabled() const { return false; } // TODO: handle RCAS (FSR1) vs CAS
 };
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------

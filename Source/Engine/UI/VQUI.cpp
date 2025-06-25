@@ -289,8 +289,6 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 	// TODO: remove this hack, properly sync
 	if (!mpScene)
 		return;
-
-	FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 	FSceneRenderOptions& SceneParams = mpScene->GetSceneView(FRAME_DATA_INDEX).sceneRenderOptions;
 	ImGuiStyle& style = ImGui::GetStyle();
 
@@ -306,7 +304,7 @@ void VQEngine::UpdateUIState(HWND hwnd, float dt)
 		if (mUIState.bWindowVisible_KeyMappings)           DrawKeyMappingsWindow();
 		if (mUIState.bWindowVisible_SceneControls)         DrawSceneControlsWindow(mpScene->GetActiveCameraIndex(), mpScene->GetActiveEnvironmentMapPresetIndex(), SceneParams);
 		if (mUIState.bWindowVisible_Profiler)              DrawProfilerWindow(mpScene->GetSceneRenderStats(FRAME_DATA_INDEX), mSettings.gfx.Rendering.RenderResolutionScale, dt);
-		if (mUIState.bWindowVisible_GraphicsSettingsPanel) DrawGraphicsSettingsWindow(SceneParams, PPParams);
+		if (mUIState.bWindowVisible_GraphicsSettingsPanel) DrawGraphicsSettingsWindow(SceneParams);
 		if (mUIState.bWindowVisible_Editor)                DrawEditorWindow();
 	}
 
@@ -359,7 +357,7 @@ const     ImVec4 UI_COLLAPSING_HEADER_COLOR_VALUE = ImVec4(0.0, 0.00, 0.0, 0.7f)
 constexpr size_t NUM_MAX_ENV_MAP_NAMES    = 10;
 constexpr size_t NUM_MAX_LEVEL_NAMES      = 8;
 constexpr size_t NUM_MAX_CAMERA_NAMES     = 10;
-constexpr size_t NUM_MAX_DRAW_MODE_NAMES  = static_cast<size_t>(EDrawMode::NUM_DRAW_MODES);
+constexpr size_t NUM_MAX_DRAW_MODE_NAMES  = static_cast<size_t>(FDebugVisualizationSettings::EDrawMode::NUM_DRAW_MODES);
 static const char* szSceneNames [NUM_MAX_LEVEL_NAMES  ] = {};
 static const char* szEnvMapNames[NUM_MAX_ENV_MAP_NAMES] = {};
 static const char* szCameraNames[NUM_MAX_CAMERA_NAMES] = {};
@@ -446,26 +444,26 @@ static void InitializeStaticCStringData_EDrawMode()
 	static bool EDrawModeDropdownDataInitialized = false;
 	if (!EDrawModeDropdownDataInitialized)
 	{
-		auto fnToStr = [](EDrawMode m) {
+		auto fnToStr = [](FDebugVisualizationSettings::EDrawMode m) {
 			switch (m)
 			{
-			case EDrawMode::LIT_AND_POSTPROCESSED: return "LIT_AND_POSTPROCESSED";
-			//case EDrawMode::WIREFRAME: return "WIREFRAME";
-			//case EDrawMode::NO_MATERIALS: return "NO_MATERIALS";
-			case EDrawMode::DEPTH: return "DEPTH";
-			case EDrawMode::NORMALS: return "NORMALS";
-			case EDrawMode::ROUGHNESS: return "ROUGHNESS";
-			case EDrawMode::METALLIC: return "METALLIC";
-			case EDrawMode::AO: return "AO";
-			case EDrawMode::ALBEDO: return "ALBEDO";
-			case EDrawMode::REFLECTIONS: return "REFLECTIONS";
-			case EDrawMode::MOTION_VECTORS: return "MOTION_VECTORS";
-			case EDrawMode::NUM_DRAW_MODES: return "NUM_DRAW_MODES";
+			case FDebugVisualizationSettings::EDrawMode::LIT_AND_POSTPROCESSED: return "LIT_AND_POSTPROCESSED";
+			//case FDebugVisualizationSettings::EDrawMode::WIREFRAME: return "WIREFRAME";
+			//case FDebugVisualizationSettings::EDrawMode::NO_MATERIALS: return "NO_MATERIALS";
+			case FDebugVisualizationSettings::EDrawMode::DEPTH: return "DEPTH";
+			case FDebugVisualizationSettings::EDrawMode::NORMALS: return "NORMALS";
+			case FDebugVisualizationSettings::EDrawMode::ROUGHNESS: return "ROUGHNESS";
+			case FDebugVisualizationSettings::EDrawMode::METALLIC: return "METALLIC";
+			case FDebugVisualizationSettings::EDrawMode::AO: return "AO";
+			case FDebugVisualizationSettings::EDrawMode::ALBEDO: return "ALBEDO";
+			case FDebugVisualizationSettings::EDrawMode::REFLECTIONS: return "REFLECTIONS";
+			case FDebugVisualizationSettings::EDrawMode::MOTION_VECTORS: return "MOTION_VECTORS";
+			case FDebugVisualizationSettings::EDrawMode::NUM_DRAW_MODES: return "NUM_DRAW_MODES";
 			}
 			return "";
 		};
-		for (int i = 0; i < (int)EDrawMode::NUM_DRAW_MODES; ++i)
-			szDrawModes[i] = fnToStr((EDrawMode)i);
+		for (int i = 0; i < (int)FDebugVisualizationSettings::EDrawMode::NUM_DRAW_MODES; ++i)
+			szDrawModes[i] = fnToStr((FDebugVisualizationSettings::EDrawMode)i);
 		
 		EDrawModeDropdownDataInitialized = true;
 	}
@@ -912,7 +910,7 @@ void VQEngine::DrawPostProcessSettings(FGraphicsSettings& GFXSettings)
 	{
 		if (bHDR)
 		{
-			const std::string strDispalyCurve = GetDisplayCurveString(GFXSettings.PostProcessing.OutputDisplayCurve);
+			const std::string strDispalyCurve = GetDisplayCurveString(GFXSettings.PostProcessing.HDROutputDisplayCurve);
 			const std::string strColorSpace   = GetColorSpaceString(GFXSettings.PostProcessing.ContentColorSpace);
 			ImGui::Text("OutputDevice : %s", strDispalyCurve.c_str() );
 			ImGui::Text("Color Space  : %s", strColorSpace.c_str() );
@@ -926,7 +924,7 @@ void VQEngine::DrawPostProcessSettings(FGraphicsSettings& GFXSettings)
 
 }
 
-void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams, FPostProcessParameters& PPParams)
+void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams)
 {
 	const uint32 W = mpWinMain->GetWidth();
 	const uint32 H = mpWinMain->GetHeight();
@@ -944,7 +942,7 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams
 	const uint32_t GFX_WINDOW_POS_Y = H - GFX_WINDOW_PADDING_Y*2 - GFX_WINDOW_SIZE_Y;
 	ImGui::SetNextWindowPos(ImVec2((float)GFX_WINDOW_POS_X, (float)GFX_WINDOW_POS_Y), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(GFX_WINDOW_SIZE_X, GFX_WINDOW_SIZE_Y), ImGuiCond_FirstUseEver);
-
+	
 
 	ImGui::Begin("GRAPHICS SETTINGS", &mUIState.bWindowVisible_GraphicsSettingsPanel);
 	
@@ -954,18 +952,16 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams
 	if (ImGui::BeginTabItem("Debug"))
 	{
 		InitializeStaticCStringData_EDrawMode();
-		int iDrawMode = (int)PPParams.DrawModeEnum;
-		ImGui_RightAlignedCombo("Draw Mode", &iDrawMode, szDrawModes, _countof(szDrawModes));
-		PPParams.DrawModeEnum = (EDrawMode)iDrawMode;
-		if (PPParams.DrawModeEnum == EDrawMode::NORMALS)
+		ImGui_RightAlignedCombo("Draw Mode", (int*)&gfx.DebugVizualization.DrawModeEnum, szDrawModes, _countof(szDrawModes));
+		
+		switch (gfx.DebugVizualization.DrawModeEnum)
 		{
-			bool bUnpackNormals = PPParams.VizParams.iUnpackNormals;
-			ImGui::Checkbox("Unpack Normals", &bUnpackNormals);
-			PPParams.VizParams.iUnpackNormals = bUnpackNormals;
-		}
-		if (PPParams.DrawModeEnum == EDrawMode::MOTION_VECTORS)
-		{
-			ImGui::SliderFloat("MoVec Intensity", &PPParams.VizParams.fInputStrength, 0.0f, 200.0f);
+		case FDebugVisualizationSettings::EDrawMode::NORMALS:
+			ImGui::Checkbox("Unpack Normals", &gfx.DebugVizualization.bUnpackNormals);
+			break;
+		case FDebugVisualizationSettings::EDrawMode::MOTION_VECTORS:
+			ImGui::SliderFloat("MoVec Intensity", &gfx.DebugVizualization.fInputStrength, 0.0f, 200.0f);
+			break;
 		}
 
 		ImGui::Checkbox("Show GameObject Bounding Boxes (Shift+N)", &SceneRenderParams.Debug.bDrawGameObjectBoundingBoxes);

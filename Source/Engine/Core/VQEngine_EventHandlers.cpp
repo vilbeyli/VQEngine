@@ -416,11 +416,10 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	pWnd->OnResize(WIDTH, HEIGHT);
 	mpRenderer->OnWindowSizeChanged(hwnd, WIDTH, HEIGHT); // updates render context
 
-	const FPostProcessParameters& PPParams = this->mpScene->GetPostProcessParameters(0);
 	const bool bFSREnabled = mSettings.gfx.IsFSR1Enabled() && !bUseHDRRenderPath; // TODO: remove this when FSR-HDR is implemented
 	const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
 
-	const float fResolutionScale = bUpscaling ? PPParams.ResolutionScale : 1.0f;
+	const float fResolutionScale = bUpscaling ? mSettings.gfx.Rendering.RenderResolutionScale : 1.0f;
 
 	if (hwnd == mpWinMain->GetHWND())
 	{
@@ -483,11 +482,10 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 
 	Swapchain.WaitForGPU(); // make sure GPU is finished
 
-	const auto& PPParams = this->mpScene->GetPostProcessParameters(0);
 	const bool bFSREnabled = mSettings.gfx.IsFSR1Enabled();
 	const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
 
-	const float fResolutionScale = bUpscaling ? PPParams.ResolutionScale : 1.0f;
+	const float fResolutionScale = bUpscaling ? mSettings.gfx.Rendering.RenderResolutionScale : 1.0f;
 
 	//
 	// EXCLUSIVE FULLSCREEN
@@ -603,13 +601,14 @@ void VQEngine::RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent)
 
 	const int NUM_BACK_BUFFERS  = Swapchain.GetNumBackBuffers();
 	const int BACK_BUFFER_INDEX = Swapchain.GetCurrentBackBufferIndex();
-	const EDisplayCurve OutputDisplayCurve = Swapchain.IsHDRFormat() ? EDisplayCurve::Linear : EDisplayCurve::sRGB;
-	for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
-		mpScene->GetPostProcessParameters(i).TonemapperParams.OutputDisplayCurve = OutputDisplayCurve;
+	const EDisplayCurve OutputDisplayCurve = Swapchain.IsHDRFormat()
+		? mSettings.gfx.PostProcessing.HDROutputDisplayCurve
+		: mSettings.gfx.PostProcessing.SDROutputDisplayCurve;
+	
 	
 	Log::Info("Set Swapchain Format: %s | OutputDisplayCurve: %s"
 		, VQRenderer::DXGIFormatAsString(pSwapchainEvent->format).data()
-		, (OutputDisplayCurve == EDisplayCurve::sRGB ? "Gamma2.2" : (OutputDisplayCurve == EDisplayCurve::Linear ? "Linear" : "PQ"))
+		, GetDisplayCurveString(OutputDisplayCurve)
 	);
 }
 void VQEngine::RenderThread_HandleSetSwapchainQueueEvent(const IEvent* pEvent)
@@ -648,8 +647,4 @@ void VQEngine::RenderThread_HandleSetHDRMetaDataEvent(const IEvent* pEvent)
 		Swapchain.WaitForGPU();
 		Swapchain.SetHDRMetaData(pSetMetaDataEvent->payload);
 	}
-
-	const EDisplayCurve OutputDisplayCurve = Swapchain.IsHDRFormat() ? EDisplayCurve::Linear : EDisplayCurve::sRGB;
-	for (int i = 0; i < Swapchain.GetNumBackBuffers(); ++i)
-		mpScene->GetPostProcessParameters(i).TonemapperParams.OutputDisplayCurve = OutputDisplayCurve;
 }

@@ -60,7 +60,6 @@ class VQRenderer;
 struct FSceneRenderOptions;
 class Scene;
 struct FSceneStats;
-struct FPostProcessParameters;
 class Timer;
 class Window;
 
@@ -373,7 +372,7 @@ private:
 	void                            DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderOptions& SceneRenderParams);
 	void                            DrawPostProcessSettings(FGraphicsSettings& GFXSettings);
 	void                            DrawKeyMappingsWindow();
-	void                            DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams, FPostProcessParameters& PPParams);
+	void                            DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams);
 	void                            DrawEditorWindow();
 	void                            DrawMaterialEditor();
 	void                            DrawLightEditor();
