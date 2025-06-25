@@ -25,6 +25,7 @@
 #include "RenderPass/MagnifierPass.h"
 #include "RenderPass/ObjectIDPass.h"
 #include "RenderPass/OutlinePass.h"
+#include "RenderPass/FSR3UpscalePass.h"
 
 #include "Shaders/LightingConstantBufferData.h"
 
@@ -486,7 +487,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 			CompositeReflections(pCmd, &CBHeap, SceneView, GFXSettings);
 		}
 
-		pRsc = RenderPostProcess(pCmd, &CBHeap, GFXSettings, bHDRDisplay);
+		pRsc = RenderPostProcess(pCmd, &CBHeap, SceneView, GFXSettings, bHDRDisplay);
 
 		TransitionForUI(pCmd, GFXSettings, bHDRDisplay, pRsc, pSwapChainRT);
 
@@ -710,7 +711,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 			CompositeReflections(pCmd_ThisThread, &CBHeap_This, SceneView, GFXSettings);
 		}
 
-		pRsc = RenderPostProcess(pCmd_ThisThread, &CBHeap_This, GFXSettings, bHDRDisplay);
+		pRsc = RenderPostProcess(pCmd_ThisThread, &CBHeap_This, SceneView, GFXSettings, bHDRDisplay);
 		
 		TransitionForUI(pCmd_PresentThread, GFXSettings, bHDRDisplay, pRsc, pSwapChainRT);
 
@@ -2472,6 +2473,7 @@ void VQRenderer::TransitionForUI(ID3D12GraphicsCommandList* pCmd, const FGraphic
 ID3D12Resource* VQRenderer::RenderPostProcess(
 	ID3D12GraphicsCommandList* pCmd,
 	DynamicBufferHeap* pCBufferHeap,
+	const FSceneView& SceneView,
 	const FGraphicsSettings& GFXSettings,
 	bool bHDR
 )
@@ -2554,24 +2556,31 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 		return pRscOutput;
 	}
 
-	//if (GFXSettings.IsFSR3Enabled())
+	if (GFXSettings.IsFSR3Enabled())
 	{
-		//if (!PPParams.FSR3Context.pImpl)
-		//{
-		//	PPParams.FSR3Context.Initialize(this->GetDevicePtr(),
-		//		PPParams.SceneRTWidth,
-		//		PPParams.SceneRTHeight,
-		//		PPParams.Display.DisplayResolutionWidth,
-		//		PPParams.Display.DisplayResolutionHeight
-		//	);
-		//}
-		//Log::Warning("TODO: FSR3 command recording");
+		const XMMATRIX& proj = SceneView.proj;
+		const float fNear = -proj.r[3].m128_f32[2] / proj.r[2].m128_f32[2];
+		const float fFar = -proj.r[3].m128_f32[2] / (proj.r[2].m128_f32[2] - 1.0f);
+		const float fVerticalFoVRadians = 2.0f * atanf(1.0f / proj.r[1].m128_f32[1]);
+
+		FSR3UpscalePass::Parameters params = {};
+		params.pCmd = pCmd;
+		params.bEnableSharpening = true;
+		params.fSharpness = GFXSettings.PostProcessing.Sharpness;
+		params.fDeltaTimeMilliseconds = SceneView.DeltaTimeInSeconds * 1000.0f;
+		params.fCameraFar = fFar;
+		params.fCameraNear = fNear;
+		params.fCameraFoVAngleVerticalRadians = fVerticalFoVRadians;
+		params.fViewSpaceToMetersFactor = 1.0f;
+		params.bReset = false; // TODO:
+
+		mRenderPasses[ERenderPass::FSR3Upscale]->RecordCommands(&params);
 	}
 
 
 	const SRV& srv_blurOutput = this->GetSRV(rsc.SRV_PostProcess_BlurOutput);
 
-	if constexpr (PP_ENABLE_BLUR_PASS && GFXSettings.PostProcessing.bEnableGaussianBlur)
+	if constexpr (PP_ENABLE_BLUR_PASS && GFXSettings.PostProcessing.EnableGaussianBlur)
 	{
 		SCOPED_GPU_MARKER(pCmd, "BlurCS");
 		const UAV& uav_BlurIntermediate = this->GetUAV(rsc.UAV_PostProcess_BlurIntermediate);

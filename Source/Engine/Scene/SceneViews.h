@@ -151,6 +151,7 @@ struct FSceneView
 	float                 HDRIYawOffset = 0.0f;
 	DirectX::XMMATRIX     EnvironmentMapViewProj;
 	const Mesh*           pEnvironmentMapMesh = nullptr;
+	float                 DeltaTimeInSeconds = 0.0f;
 
 	uint NumGameObjectBBRenderCmds = 0;
 	uint NumMeshBBRenderCmds = 0;

@@ -112,16 +112,4 @@ namespace AMD_FidelityFX_SuperResolution3
 		}
 		return -1.0f;
 	}
-	struct FShaderParameters
-	{
-
-	};
-	struct ContextImpl;
-	struct Context
-	{
-		void Initialize(ID3D12Device* pDevice, uint DisplayWidth, uint DisplayHeight, uint RenderWidth, uint RenderHeight);
-		void Destroy();
-
-		ContextImpl* pImpl = nullptr;
-	};
 }

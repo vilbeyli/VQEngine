@@ -28,12 +28,28 @@ struct FSR3UpscalePass : public RenderPassBase
 {
 	struct Parameters : public IRenderPassDrawParameters
 	{
+		void* pCmd = nullptr;
 
+		bool bEnableSharpening = true;
+		float fSharpness = 0.8f;
+		float fDeltaTimeMilliseconds = 0.0f;
+		float fCameraNear = 0.0f;
+		float fCameraFar = 0.0f;
+		float fCameraFoVAngleVerticalRadians = 0.0f;
+		float fPreExposure = 1.0f;
+		float fViewSpaceToMetersFactor = 1.0f;
+		bool bReset = false;
 	};
 
 	struct FResourceCollection : public IRenderPassResourceCollection 
 	{
-
+		float fResolutionScale = 0.0f;
+		TextureID texColorInput = INVALID_ID;
+		TextureID texDepthBuffer = INVALID_ID;
+		TextureID texMotionVectors = INVALID_ID;
+		TextureID texOutput = INVALID_ID;
+		TextureID texReactiveMask = INVALID_ID;
+		TextureID texTransparencyAndComposition = INVALID_ID;
 	};
 
 public:
@@ -51,5 +67,6 @@ public:
 	std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() override;
 
 private:
-	AMD_FidelityFX_SuperResolution3::Context Context;
+	struct ContextImpl;
+	ContextImpl* pImpl = nullptr;
 };

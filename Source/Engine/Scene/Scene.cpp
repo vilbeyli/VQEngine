@@ -540,6 +540,7 @@ void Scene::Update(float dt, int FRAME_DATA_INDEX)
 	Cam.Update(dt, mInput);
 	this->HandleInput(SceneView);
 	this->UpdateScene(dt, SceneView);
+	SceneView.DeltaTimeInSeconds = dt;
 }
 
 static void ExtractSceneView(FSceneView& SceneView, std::unordered_map<const Camera*, DirectX::XMMATRIX>& mViewProjectionMatrixHistory, const Camera& cam, std::pair<BufferID, BufferID> cubeVBIB)

@@ -79,13 +79,13 @@ struct FPostProcessingSettings
 	using AMD_FSR3_Preset = AMD_FidelityFX_SuperResolution3::EPreset;
 
 	// upscaling
-	EUpscalingAlgorithm UpscalingAlgorithm = EUpscalingAlgorithm::NONE;
+	EUpscalingAlgorithm UpscalingAlgorithm = EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3;
 	AMD_FSR1_Preset FSR1UpscalingQualityEnum = AMD_FSR1_Preset::ULTRA_QUALITY;
 	AMD_FSR3_Preset FSR3UpscalingQualityEnum = AMD_FSR3_Preset::NATIVE_AA;
 	ESharpeningAlgorithm SharpeningAlgorithm = ESharpeningAlgorithm::FIDELITY_FX_RCAS;
 	float Sharpness = 0.8f;
 
-	bool bEnableGaussianBlur = false;
+	bool EnableGaussianBlur = false;
 
 	// tonemap
 	float         UIHDRBrightness = 1.0f;
