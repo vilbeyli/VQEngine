@@ -178,6 +178,7 @@ void FSR3UpscalePass::RecordCommands(const IRenderPassDrawParameters* pDrawParam
 	assert(RenderSizeX > 0 && RenderSizeY > 0);
 
 	int OutputSizeX, OutputSizeY;
+	mRenderer.WaitForTexture(texOutput);
 	mRenderer.GetTextureDimensions(texOutput, OutputSizeX, OutputSizeY);
 	assert(OutputSizeX > 0 && OutputSizeY > 0);
 

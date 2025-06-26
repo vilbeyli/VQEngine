@@ -416,8 +416,9 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	pWnd->OnResize(WIDTH, HEIGHT);
 	mpRenderer->OnWindowSizeChanged(hwnd, WIDTH, HEIGHT); // updates render context
 
-	const bool bFSREnabled = mSettings.gfx.IsFSR1Enabled() && !bUseHDRRenderPath; // TODO: remove this when FSR-HDR is implemented
-	const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
+	const bool bFSR1Enabled = mSettings.gfx.IsFSR1Enabled() && !bUseHDRRenderPath; // TODO: remove this when FSR-HDR is implemented
+	const bool bFSR3Enabled = mSettings.gfx.IsFSR3Enabled();
+	const bool bUpscaling = bFSR1Enabled || bFSR3Enabled || 0; // update here when other upscaling methods are added
 
 	const float fResolutionScale = bUpscaling ? mSettings.gfx.Rendering.RenderResolutionScale : 1.0f;
 

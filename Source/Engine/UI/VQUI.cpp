@@ -364,6 +364,7 @@ static const char* szCameraNames[NUM_MAX_CAMERA_NAMES] = {};
 static const char* szDrawModes  [NUM_MAX_DRAW_MODE_NAMES] = {};
 static const char* szUpscalingLabels[EUpscalingAlgorithm::NUM_UPSCALING_ALGORITHMS] = {};
 static const char* szFSR1QualityLabels[AMD_FidelityFX_SuperResolution1::EPreset::NUM_FSR1_PRESET_OPTIONS] = {};
+static const char* szFSR3QualityLabels[AMD_FidelityFX_SuperResolution3::EPreset::NUM_FSR3_PRESET_OPTIONS] = {};
 static const char* szMaxFrameRateOptionLabels[3] = {}; // see Settings.h:FGraphicsSettings
 
 
@@ -414,13 +415,19 @@ static void InitializeStaticCStringData_PostProcessingControls()
 
 	if (!bPostPRocessLabelsInitialized)
 	{
-		using namespace AMD_FidelityFX_SuperResolution1;
-		szFSR1QualityLabels[EPreset::ULTRA_QUALITY] = "Ultra Quality";
-		szFSR1QualityLabels[EPreset::QUALITY] = "Quality";
-		szFSR1QualityLabels[EPreset::BALANCED] = "Balanced";
-		szFSR1QualityLabels[EPreset::PERFORMANCE] = "Performance";
-		szFSR1QualityLabels[EPreset::CUSTOM] = "Custom";
-
+		{
+			using namespace AMD_FidelityFX_SuperResolution1;
+			szFSR1QualityLabels[EPreset::ULTRA_QUALITY] = "Ultra Quality";
+			szFSR1QualityLabels[EPreset::QUALITY] = "Quality";
+			szFSR1QualityLabels[EPreset::BALANCED] = "Balanced";
+			szFSR1QualityLabels[EPreset::PERFORMANCE] = "Performance";
+			szFSR1QualityLabels[EPreset::CUSTOM] = "Custom";
+		}
+		{
+			using namespace AMD_FidelityFX_SuperResolution3;
+			for (EPreset p = EPreset::NATIVE_AA; p < EPreset::NUM_FSR3_PRESET_OPTIONS; p = (EPreset)((uint)p + 1))
+				szFSR3QualityLabels[p] = GetPresetName(p);
+		}
 		szUpscalingLabels[EUpscalingAlgorithm::NONE] = "None";
 		szUpscalingLabels[EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1] = "AMD FSR1";
 		szUpscalingLabels[EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3] = "AMD FSR3";
@@ -852,13 +859,17 @@ void VQEngine::DrawPostProcessSettings(FGraphicsSettings& GFXSettings)
 	ImGui::Separator();
 	if (ImGui_RightAlignedCombo("Algorithm", (int*) &GFXSettings.PostProcessing.UpscalingAlgorithm, szUpscalingLabels, _countof(szUpscalingLabels)))
 	{
-		if (GFXSettings.PostProcessing.UpscalingAlgorithm == EUpscalingAlgorithm::NONE)
+		switch (GFXSettings.PostProcessing.UpscalingAlgorithm)
 		{
+		case EUpscalingAlgorithm::NONE:
 			GFXSettings.Rendering.RenderResolutionScale = 1.0f;
-		}
-		else if (GFXSettings.PostProcessing.FSR1UpscalingQualityEnum != AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
-		{
+			break;
+		case EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1:
 			GFXSettings.Rendering.RenderResolutionScale = AMD_FidelityFX_SuperResolution1::GetScreenPercentage(GFXSettings.PostProcessing.FSR1UpscalingQualityEnum);
+			break;
+		case EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3:
+			GFXSettings.Rendering.RenderResolutionScale = AMD_FidelityFX_SuperResolution3::GetScreenPercentage(GFXSettings.PostProcessing.FSR3UpscalingQualityEnum);
+			break;
 		}
 		fnSendWindowResizeEvents();
 	}
@@ -866,18 +877,44 @@ void VQEngine::DrawPostProcessSettings(FGraphicsSettings& GFXSettings)
 	if (GFXSettings.PostProcessing.UpscalingAlgorithm != EUpscalingAlgorithm::NONE)
 	{
 		// preset: ultra quality / quality / balanced / performance / custom
-		if (ImGui_RightAlignedCombo("Quality", (int*)&GFXSettings.PostProcessing.FSR1UpscalingQualityEnum, szFSR1QualityLabels, _countof(szFSR1QualityLabels)))
+		int* pIndexQualityPreset = nullptr;
+		const char** pszQualityLabels = nullptr;
+		int NumQualities = 0;
+		switch (GFXSettings.PostProcessing.UpscalingAlgorithm)
 		{
-			if (GFXSettings.PostProcessing.FSR1UpscalingQualityEnum != AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
+		case EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1:
+			pIndexQualityPreset = (int*)&GFXSettings.PostProcessing.FSR1UpscalingQualityEnum;
+			pszQualityLabels = szFSR1QualityLabels;
+			NumQualities = AMD_FidelityFX_SuperResolution1::EPreset::NUM_FSR1_PRESET_OPTIONS;
+			break;
+		case EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3:
+			pIndexQualityPreset = (int*)&GFXSettings.PostProcessing.FSR3UpscalingQualityEnum;
+			pszQualityLabels = szFSR3QualityLabels;
+			NumQualities = AMD_FidelityFX_SuperResolution3::EPreset::NUM_FSR3_PRESET_OPTIONS;
+			break;
+		}
+
+		if (ImGui_RightAlignedCombo("Quality", pIndexQualityPreset, pszQualityLabels, NumQualities))
+		{
+			switch (GFXSettings.PostProcessing.UpscalingAlgorithm)
 			{
-				GFXSettings.Rendering.RenderResolutionScale = AMD_FidelityFX_SuperResolution1::GetScreenPercentage(GFXSettings.PostProcessing.FSR1UpscalingQualityEnum);
+			case EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1:
+				if (GFXSettings.PostProcessing.FSR1UpscalingQualityEnum != AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
+					GFXSettings.Rendering.RenderResolutionScale = AMD_FidelityFX_SuperResolution1::GetScreenPercentage(GFXSettings.PostProcessing.FSR1UpscalingQualityEnum);
+				break;
+			case EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3:
+				if (GFXSettings.PostProcessing.FSR3UpscalingQualityEnum != AMD_FidelityFX_SuperResolution3::EPreset::CUSTOM)
+					GFXSettings.Rendering.RenderResolutionScale = AMD_FidelityFX_SuperResolution3::GetScreenPercentage(GFXSettings.PostProcessing.FSR3UpscalingQualityEnum);
+				break;
 			}
 			
 			fnSendWindowResizeEvents();
 		}
 
 		// resolution scale
-		if (GFXSettings.PostProcessing.FSR1UpscalingQualityEnum == AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
+		if (   GFXSettings.PostProcessing.FSR1UpscalingQualityEnum == AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM
+			|| GFXSettings.PostProcessing.FSR3UpscalingQualityEnum == AMD_FidelityFX_SuperResolution3::EPreset::CUSTOM
+		)
 		{
 			// if we are to support resolution scale > 1.0f, we'll need to stop using FSR1 upscaling
 			// and use a linear min filter for AA
@@ -893,12 +930,8 @@ void VQEngine::DrawPostProcessSettings(FGraphicsSettings& GFXSettings)
 	ImGui::Text("Sharpness");
 	ImGui::Separator();
 	
-	//float LinearSharpness = GFXSettings.FSR1ShaderParameters.rcas.GetLinearSharpness();
-	if (ImGui::SliderFloat("Amount##", &GFXSettings.PostProcessing.Sharpness, 0.01f, 1.00f, "%.2f"))
-	{
-		//GFXSettings.FSR1ShaderParameters.rcas.SetLinearSharpness(LinearSharpness);
-		//GFXSettings.FSR1ShaderParameters.rcas.UpdateConstantBlock();
-	}
+	ImGui::SliderFloat("Amount##", &GFXSettings.PostProcessing.Sharpness, 0.01f, 1.00f, "%.2f");
+
 
 	//
 	// TONEMAPPER
