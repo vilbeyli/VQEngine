@@ -949,6 +949,7 @@ const CBV_SRV_UAV& VQRenderer::GetUnorderedAccessView(UAV_ID Id) const { return 
 const DSV& VQRenderer::GetDepthStencilView(RTV_ID Id) const { return mDSVs.at(Id); }
 const RTV& VQRenderer::GetRenderTargetView(RTV_ID Id) const { return mRTVs.at(Id); }
 
+const FTexture* VQRenderer::GetTexture(TextureID Id) const { return mTextureManager.GetTexture(Id); }
 ID3D12Resource* VQRenderer::GetTextureResource(TextureID Id) const                                              { return mTextureManager.GetTextureResource(Id); }
 DXGI_FORMAT VQRenderer::GetTextureFormat(TextureID Id) const                                                    { return mTextureManager.GetTextureFormat(Id); }
 bool VQRenderer::GetTextureAlphaChannelUsed(TextureID Id) const                                                 { return mTextureManager.GetTextureAlphaChannelUsed(Id); }

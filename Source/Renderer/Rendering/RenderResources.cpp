@@ -409,6 +409,7 @@ void VQRenderer::LoadWindowSizeDependentResources(HWND hwnd, unsigned DisplayWid
 	// TODO: conditionally create resources
 	FSR3UpscalePass::FResourceCollection upscaleInitParams = {};
 	upscaleInitParams.fResolutionScale = fResolutionScale;
+	upscaleInitParams.texColorInput = r.Tex_SceneColor;
 	mRenderPasses[ERenderPass::FSR3Upscale]->OnCreateWindowSizeDependentResources(DisplayWidth, DisplayHeight, &upscaleInitParams);
 
 

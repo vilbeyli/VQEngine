@@ -172,6 +172,7 @@ public:
 	inline void                  WaitForTexture(TextureID ID) const { mTextureManager.WaitForTexture(ID); }; // blocks caller until texture is loaded
 	TextureManager&              GetTextureManager() { return mTextureManager; }
 
+	const FTexture*              GetTexture(TextureID Id) const;
 	ID3D12Resource*              GetTextureResource(TextureID Id) const;
 	DXGI_FORMAT                  GetTextureFormat(TextureID Id) const;
 	bool                         GetTextureAlphaChannelUsed(TextureID Id) const;

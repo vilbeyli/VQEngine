@@ -22,10 +22,17 @@
 #include "Renderer.h"
 
 #include "Libs/VQUtils/Include/Log.h"
+#include "Engine/GPUMarker.h"
 
 #include "ffx_api/dx12/ffx_api_dx12.h"
 #include "ffx_api/ffx_upscale.h"
 #include "ffx_api/ffx_upscale.hpp"
+
+struct FSR3UpscalePass::ContextImpl
+{
+	ffxContext ctx = {};
+};
+
 
 FSR3UpscalePass::FSR3UpscalePass(VQRenderer& Renderer)
 	: RenderPassBase(Renderer)
@@ -36,19 +43,16 @@ FSR3UpscalePass::~FSR3UpscalePass()
 {
 }
 
-struct FSR3UpscalePass::ContextImpl
-{
-	ffxContext ctx{};
-};
-
 bool FSR3UpscalePass::Initialize()
 {
+	assert(!pImpl);
 	pImpl = new ContextImpl();
 	return pImpl != nullptr;
 }
 
 void FSR3UpscalePass::Destroy()
 {
+	assert(pImpl);
 	if (pImpl)
 	{
 		delete pImpl;
@@ -73,11 +77,27 @@ static void FSR3MessageCallback(uint type, const wchar_t* msg)
 }
 void FSR3UpscalePass::OnCreateWindowSizeDependentResources(unsigned DisplayWidth, unsigned DisplayHeight, const IRenderPassResourceCollection* pRscParameters)
 {
+	assert(pImpl);
+	if (!pImpl)
+	{
+		Log::Error("FSR3 Create: Memory not allocated for context");
+		return;
+	}
+
 	ID3D12Device* pDevice = mRenderer.GetDevicePtr();
+	assert(pDevice);
+
 	const FResourceCollection* pResourceInput = static_cast<const FResourceCollection*>(pRscParameters);
 	const uint RenderResolutionX = pResourceInput->fResolutionScale * DisplayWidth;
 	const uint RenderResolutionY = pResourceInput->fResolutionScale * DisplayHeight;
-	
+	const FTexture* pTexture = mRenderer.GetTexture(pResourceInput->texColorInput);
+	assert(pTexture);
+	if (!pTexture)
+	{
+		Log::Error("FSR3 OnCreateWindowSizeDependentResources(): invalid input texture, ID=%d", pResourceInput->texColorInput);
+		return;
+	}
+
 	ffxCreateBackendDX12Desc backendDesc{};
 	backendDesc.device = pDevice;
 	backendDesc.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_BACKEND_DX12;
@@ -93,19 +113,30 @@ void FSR3UpscalePass::OnCreateWindowSizeDependentResources(unsigned DisplayWidth
 	createUpscaling.fpMessage = FSR3MessageCallback;
 #endif
 
-	assert(pImpl);
-	if (!pImpl)
-	{
-		Log::Error("FSR3 Create: Memory not allocated for context");
-		return;
-	}
-
 	ffxReturnCode_t retCode = ffxCreateContext(&pImpl->ctx, &createUpscaling.header, nullptr);
 	bool bSucceeded = retCode == 0;
 	if (!bSucceeded)
 	{
 		Log::Error("FSR3: Error (%d) creating ffxContext", retCode);
+		texOutput = INVALID_ID;
+		return;
 	}
+
+	FTextureRequest createDesc = {};
+	createDesc.bCPUReadback = false;
+	createDesc.bCubemap = pTexture->IsCubemap;
+	createDesc.bGenerateMips = pTexture->MipCount > 1;
+	createDesc.InitialState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+	createDesc.Name = "FSR3_Output";
+	createDesc.D3D12Desc.Dimension = D3D12_RESOURCE_DIMENSION::D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	createDesc.D3D12Desc.Format = pTexture->Format;
+	createDesc.D3D12Desc.MipLevels = pTexture->MipCount;
+	createDesc.D3D12Desc.DepthOrArraySize = pTexture->ArraySlices;
+	createDesc.D3D12Desc.Height = pTexture->Height;
+	createDesc.D3D12Desc.Width = pTexture->Width;
+	createDesc.D3D12Desc.SampleDesc.Count = 1;
+	createDesc.D3D12Desc.Flags = D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	texOutput = mRenderer.CreateTexture(createDesc);
 }
 
 void FSR3UpscalePass::OnDestroyWindowSizeDependentResources()
@@ -135,9 +166,24 @@ void FSR3UpscalePass::RecordCommands(const IRenderPassDrawParameters* pDrawParam
 	}
 
 	const Parameters* pParams = static_cast<const Parameters*>(pDrawParameters);
+	assert(pParams->pCmd);
 
-	ffxDispatchDescUpscale DispatchDescUpscale = {};
-	DispatchDescUpscale.header.type = FFX_API_DISPATCH_DESC_TYPE_UPSCALE;
+	const FResourceCollection& rsc = pParams->Resources;
+	assert(rsc.texColorInput != INVALID_ID);
+	assert(rsc.texDepthBuffer != INVALID_ID);
+	assert(rsc.texMotionVectors != INVALID_ID);
+
+	int RenderSizeX, RenderSizeY;
+	mRenderer.GetTextureDimensions(rsc.texColorInput, RenderSizeX, RenderSizeY);
+	assert(RenderSizeX > 0 && RenderSizeY > 0);
+
+	int OutputSizeX, OutputSizeY;
+	mRenderer.GetTextureDimensions(texOutput, OutputSizeX, OutputSizeY);
+	assert(OutputSizeX > 0 && OutputSizeY > 0);
+
+	int MotionVectorScaleX, MotionVectorScaleY;
+	mRenderer.GetTextureDimensions(rsc.texMotionVectors, MotionVectorScaleX, MotionVectorScaleY);
+	assert(MotionVectorScaleX > 0 && MotionVectorScaleY > 0);
 
 	/*
 	struct ffxDispatchDescUpscale
@@ -167,23 +213,40 @@ void FSR3UpscalePass::RecordCommands(const IRenderPassDrawParameters* pDrawParam
 		uint32_t                   flags;                      ///< Zero or a combination of values from FfxApiDispatchFsrUpscaleFlags.
 	};
 	*/
+	ffxDispatchDescUpscale DispatchDescUpscale = {};
+	DispatchDescUpscale.header.type = FFX_API_DISPATCH_DESC_TYPE_UPSCALE;
 	DispatchDescUpscale.commandList = pParams->pCmd;
 
-	DispatchDescUpscale.color;
-	DispatchDescUpscale.depth;
-	DispatchDescUpscale.motionVectors;
-	DispatchDescUpscale.exposure;
-	DispatchDescUpscale.reactive;
-	DispatchDescUpscale.transparencyAndComposition;
+	// mandatory input textures
+	DispatchDescUpscale.color         = ffxApiGetResourceDX12(mRenderer.GetTextureResource(rsc.texColorInput   ), FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+	DispatchDescUpscale.depth         = ffxApiGetResourceDX12(mRenderer.GetTextureResource(rsc.texDepthBuffer  ), FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+	DispatchDescUpscale.motionVectors = ffxApiGetResourceDX12(mRenderer.GetTextureResource(rsc.texMotionVectors), FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+	
+	// optional input textures
+	if(rsc.texExposure != INVALID_ID)
+		DispatchDescUpscale.exposure = ffxApiGetResourceDX12(mRenderer.GetTextureResource(rsc.texExposure), FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+	if (rsc.texReactiveMask != INVALID_ID)
+		DispatchDescUpscale.reactive = ffxApiGetResourceDX12(mRenderer.GetTextureResource(rsc.texReactiveMask), FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+	if(rsc.texTransparencyAndComposition != INVALID_ID)
+		DispatchDescUpscale.transparencyAndComposition = ffxApiGetResourceDX12(mRenderer.GetTextureResource(rsc.texTransparencyAndComposition), FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+	
+	// output texture
+	DispatchDescUpscale.output = ffxApiGetResourceDX12(mRenderer.GetTextureResource(texOutput), FFX_API_RESOURCE_STATE_UNORDERED_ACCESS, 0);
+	
+	// params
+	DispatchDescUpscale.jitterOffset.x = 0; // TODO
+	DispatchDescUpscale.jitterOffset.y = 0; // TODO
 
-	DispatchDescUpscale.output;
+	DispatchDescUpscale.motionVectorScale.x = -MotionVectorScaleX; // - because MVs expected pointing from this frame to prev frame
+	DispatchDescUpscale.motionVectorScale.y = -MotionVectorScaleY; // - because MVs expected pointing from this frame to prev frame
 
-	DispatchDescUpscale.jitterOffset;
-	DispatchDescUpscale.motionVectorScale;
-	DispatchDescUpscale.renderSize;
-	DispatchDescUpscale.upscaleSize;
+	DispatchDescUpscale.renderSize.width   = (uint)RenderSizeX;
+	DispatchDescUpscale.renderSize.height  = (uint)RenderSizeY;
+	DispatchDescUpscale.upscaleSize.width  = (uint)OutputSizeX;
+	DispatchDescUpscale.upscaleSize.height = (uint)OutputSizeY;
 	DispatchDescUpscale.enableSharpening = pParams->bEnableSharpening;
 	DispatchDescUpscale.sharpness = pParams->fSharpness;
+
 	DispatchDescUpscale.frameTimeDelta = pParams->fDeltaTimeMilliseconds;
 	DispatchDescUpscale.preExposure = pParams->fPreExposure;
 	DispatchDescUpscale.reset = pParams->bReset;
@@ -200,7 +263,12 @@ void FSR3UpscalePass::RecordCommands(const IRenderPassDrawParameters* pDrawParam
 	*/
 	DispatchDescUpscale.flags = flags;
 
-	ffxReturnCode_t retCode = ffxDispatch(&pImpl->ctx, &DispatchDescUpscale.header);
+	ffxReturnCode_t retCode = 0; 
+	{
+		SCOPED_GPU_MARKER(pParams->pCmd, "FSR3UpcalePass");
+		retCode = ffxDispatch(&pImpl->ctx, &DispatchDescUpscale.header);
+	}
+
 	bool bSucceeded = retCode == 0;
 	if (!bSucceeded)
 	{
@@ -208,7 +276,3 @@ void FSR3UpscalePass::RecordCommands(const IRenderPassDrawParameters* pDrawParam
 	}
 }
 
-std::vector<FPSOCreationTaskParameters> FSR3UpscalePass::CollectPSOCreationParameters()
-{
-	return std::vector<FPSOCreationTaskParameters>();
-}

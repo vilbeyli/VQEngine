@@ -2556,6 +2556,18 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 		return pRscOutput;
 	}
 
+	// FSR3 must be 
+	// -----------------------------------------
+	//    before                   after
+	// -----------------------------------------
+	//   Film Grain                SSR           
+	//   Chromatic Aberration      SSAO          
+	//   Vignette                  Denoising     
+	//   Tonemapping               Exposure      
+	//   Bloom                                   
+	//   Depth of Field                          
+	//   Motion Blur                             
+	// -----------------------------------------
 	if (GFXSettings.IsFSR3Enabled())
 	{
 		const XMMATRIX& proj = SceneView.proj;
@@ -2573,8 +2585,19 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 		params.fCameraFoVAngleVerticalRadians = fVerticalFoVRadians;
 		params.fViewSpaceToMetersFactor = 1.0f;
 		params.bReset = false; // TODO:
+		params.fPreExposure = 1.0f;
 
-		mRenderPasses[ERenderPass::FSR3Upscale]->RecordCommands(&params);
+		params.Resources.fResolutionScale = GFXSettings.Rendering.RenderResolutionScale;
+		params.Resources.texColorInput = rsc.Tex_SceneColor;
+		params.Resources.texDepthBuffer = rsc.Tex_SceneDepthResolve;
+		params.Resources.texMotionVectors = rsc.Tex_SceneMotionVectors;
+		params.Resources.texExposure = INVALID_ID;
+		params.Resources.texReactiveMask = INVALID_ID;
+		params.Resources.texTransparencyAndComposition = INVALID_ID;
+
+		FSR3UpscalePass* pFSR3Pass = static_cast<FSR3UpscalePass*>(mRenderPasses[ERenderPass::FSR3Upscale].get());
+		pFSR3Pass->RecordCommands(&params);
+		pRscOutput = this->GetTextureResource(pFSR3Pass->texOutput); // TODO
 	}
 
 

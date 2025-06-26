@@ -26,9 +26,19 @@
 
 struct FSR3UpscalePass : public RenderPassBase
 {
+	struct FResourceCollection : public IRenderPassResourceCollection 
+	{
+		float fResolutionScale = 0.0f;
+		TextureID texColorInput = INVALID_ID;
+		TextureID texDepthBuffer = INVALID_ID;
+		TextureID texMotionVectors = INVALID_ID;
+		TextureID texExposure = INVALID_ID;
+		TextureID texReactiveMask = INVALID_ID;
+		TextureID texTransparencyAndComposition = INVALID_ID;
+	};
 	struct Parameters : public IRenderPassDrawParameters
 	{
-		void* pCmd = nullptr;
+		ID3D12GraphicsCommandList* pCmd = nullptr;
 
 		bool bEnableSharpening = true;
 		float fSharpness = 0.8f;
@@ -39,17 +49,8 @@ struct FSR3UpscalePass : public RenderPassBase
 		float fPreExposure = 1.0f;
 		float fViewSpaceToMetersFactor = 1.0f;
 		bool bReset = false;
-	};
 
-	struct FResourceCollection : public IRenderPassResourceCollection 
-	{
-		float fResolutionScale = 0.0f;
-		TextureID texColorInput = INVALID_ID;
-		TextureID texDepthBuffer = INVALID_ID;
-		TextureID texMotionVectors = INVALID_ID;
-		TextureID texOutput = INVALID_ID;
-		TextureID texReactiveMask = INVALID_ID;
-		TextureID texTransparencyAndComposition = INVALID_ID;
+		FResourceCollection Resources;
 	};
 
 public:
@@ -64,9 +65,11 @@ public:
 
 	void RecordCommands(const IRenderPassDrawParameters* pDrawParameters = nullptr) override;
 
-	std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() override;
+	std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() override { return std::vector<FPSOCreationTaskParameters>(); }
 
+	TextureID texOutput; // TODO: make private
 private:
+
 	struct ContextImpl;
 	ContextImpl* pImpl = nullptr;
 };
