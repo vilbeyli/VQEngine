@@ -159,6 +159,34 @@ FSceneDrawData& VQRenderer::GetSceneDrawData(int FRAME_INDEX)
 	return mFrameSceneDrawData[0];
 }
 
+bool VQRenderer::ShouldEnableCameraJitters(const FGraphicsSettings& gfx) const
+{
+	return gfx.PostProcessing.UpscalingAlgorithm == EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3;
+}
+
+void VQRenderer::GetCameraPixelSpaceJitter(const FGraphicsSettings& gfx, size_t iFrame, float& JitterX, float& JitterY) const
+{
+	JitterX = 0.0f;
+	JitterY = 0.0f;
+
+	switch (gfx.PostProcessing.UpscalingAlgorithm)
+	{
+	case EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3:
+	{
+		if (mRenderPasses[ERenderPass::FSR3Upscale] != nullptr)
+		{
+			const FSR3UpscalePass* pPass = static_cast<const FSR3UpscalePass*>(mRenderPasses[ERenderPass::FSR3Upscale].get());
+			assert(pPass);
+
+			const uint DisplayResolutionX = gfx.Display.DisplayResolutionX;
+			const uint RenderResolutionX = DisplayResolutionX * gfx.Rendering.RenderResolutionScale;
+			pPass->GetJitterXY(JitterX, JitterY, RenderResolutionX, DisplayResolutionX, iFrame);
+			return;
+		}
+	}
+	}
+}
+
 static uint32_t GetNumShadowViewCmdRecordingThreads(const FSceneShadowViews& ShadowView)
 {
 #if RENDER_THREAD__MULTI_THREADED_COMMAND_RECORDING
@@ -2579,6 +2607,7 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 		params.fViewSpaceToMetersFactor = 1.0f;
 		params.bReset = false; // TODO:
 		params.fPreExposure = 1.0f;
+		params.iFrame = mRenderStats.mNumFramesRendered;
 
 		params.Resources.fResolutionScale = GFXSettings.Rendering.RenderResolutionScale;
 		params.Resources.texColorInput = rsc.Tex_SceneColor;

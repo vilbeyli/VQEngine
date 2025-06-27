@@ -49,6 +49,7 @@ struct FSR3UpscalePass : public RenderPassBase
 		float fPreExposure = 1.0f;
 		float fViewSpaceToMetersFactor = 1.0f;
 		bool bReset = false;
+		uint32 iFrame = 0;
 
 		FResourceCollection Resources;
 	};
@@ -66,6 +67,9 @@ public:
 	void RecordCommands(const IRenderPassDrawParameters* pDrawParameters = nullptr) override;
 
 	std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() override { return std::vector<FPSOCreationTaskParameters>(); }
+
+	void GetJitterXY(float& OutPixelSpaceJitterX, float& OutPixelSpaceJitterY, uint RenderResolutionX, uint OutputResolutionX, size_t iFrame) const;
+	static float GetMipBias(uint RenderResolutionX, uint OutputResolutionX);
 
 	TextureID texOutput; // TODO: make private
 private:

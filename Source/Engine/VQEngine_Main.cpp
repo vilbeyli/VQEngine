@@ -160,9 +160,10 @@ void FGraphicsSettings::Validate()
 		}
 		Rendering.AntiAliasing = EAntiAliasingAlgorithm::FSR3_ANTI_ALIASING;
 	}
-	else if(Rendering.AntiAliasing == EAntiAliasingAlgorithm::FSR3_ANTI_ALIASING)
+	else 
 	{
-		Rendering.AntiAliasing = EAntiAliasingAlgorithm::NO_ANTI_ALIASING;
+		if(Rendering.AntiAliasing == EAntiAliasingAlgorithm::FSR3_ANTI_ALIASING)
+			Rendering.AntiAliasing = EAntiAliasingAlgorithm::NO_ANTI_ALIASING;
 	}
 }
 

@@ -180,6 +180,7 @@ private:
 	// -------------------------
 	DirectX::XMFLOAT4X4 mMatView;
 	// -------------------------
+
 	std::vector<std::unique_ptr<CameraController>> mpControllers;
 	size_t mControllerIndex;
 };

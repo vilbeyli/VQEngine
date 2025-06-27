@@ -287,6 +287,9 @@ public:
 	void ResetNumFramesRendered() { mRenderStats.mNumFramesRendered = 0; }
 	const FRenderStats& GetRenderStats() const { return mRenderStats; }
 
+	bool ShouldEnableCameraJitters(const FGraphicsSettings& gfx) const;
+	void GetCameraPixelSpaceJitter(const FGraphicsSettings& gfx, size_t iFrame, float& JitterX, float& JitterY) const;
+
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Frame Sync
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------

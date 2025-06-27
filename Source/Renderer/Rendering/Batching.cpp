@@ -203,6 +203,8 @@ static void BatchMainViewDrawCalls(
 	const FVisibleMeshDataSoA& ViewVisibleMeshes,
 	const XMMATRIX viewProj,     // take in copy for less cache thrashing
 	const XMMATRIX viewProjPrev, // take in copy for less cache thrashing
+	const XMMATRIX jitteredViewProj,
+	const XMMATRIX jitteredViewProjPrev,
 	DynamicBufferHeap& CBHeap,
 	const VQRenderer* pRenderer
 )
@@ -217,6 +219,8 @@ static void BatchMainViewDrawCalls(
 	}
 	if (NumInstancedDrawCalls == 0)
 		return;
+
+	//const bool bShouldUpoadJitteredMatrices = pRenderer->ShouldEnableCameraJitters();
 
 	std::vector<D3D12_GPU_VIRTUAL_ADDRESS> cbAddr(NumInstancedDrawCalls);
 	std::vector<PerObjectLightingData*> pPerObj(NumInstancedDrawCalls);
@@ -237,6 +241,20 @@ static void BatchMainViewDrawCalls(
 				{
 					const Transform& tf = ViewVisibleMeshes.Transform[i];
 					pPerObj[iDraw]->matWorldViewProj[iInstance++] = tf.matWorldTransformation() * viewProj;
+				}
+				++iDraw;
+			}
+		}
+		{
+			SCOPED_CPU_MARKER("matJitteredWorldViewProj");
+			size_t iDraw = 0;
+			for (const FDrawCallInputDataRange& r : drawCallRanges)
+			{
+				size_t iInstance = 0;
+				for (size_t i = r.iStart; i < r.iStart + r.Stride; ++i)
+				{
+					const Transform& tf = ViewVisibleMeshes.Transform[i];
+					pPerObj[iDraw]->matJitteredWorldViewProj[iInstance++] = tf.matWorldTransformationPrev() * jitteredViewProj;
 				}
 				++iDraw;
 			}
@@ -265,6 +283,20 @@ static void BatchMainViewDrawCalls(
 				{
 					const Transform& tf = ViewVisibleMeshes.Transform[i];
 					pPerObj[iDraw]->matWorldViewProjPrev[iInstance++] = tf.matWorldTransformationPrev() * viewProjPrev;
+				}
+				++iDraw;
+			}
+		}
+		{
+			SCOPED_CPU_MARKER("matJitteredWorldViewProjPrev");
+			size_t iDraw = 0;
+			for (const FDrawCallInputDataRange& r : drawCallRanges)
+			{
+				size_t iInstance = 0;
+				for (size_t i = r.iStart; i < r.iStart + r.Stride; ++i)
+				{
+					const Transform& tf = ViewVisibleMeshes.Transform[i];
+					pPerObj[iDraw]->matJitteredWorldViewProjPrev[iInstance++] = tf.matWorldTransformationPrev() * jitteredViewProjPrev;
 				}
 				++iDraw;
 			}
@@ -658,7 +690,7 @@ void VQRenderer::BatchDrawCalls(
 	ThreadPool& RenderWorkerThreadPool,
 	const FSceneView& SceneView,
 	const FSceneShadowViews& SceneShadowView,
-	FWindowRenderContext& ctx, 
+	FWindowRenderContext& ctx,
 	const FGraphicsSettings& GFXSettings
 )
 {
@@ -687,12 +719,33 @@ void VQRenderer::BatchDrawCalls(
 		// ---------------------------------------------------SYNC ---------------------------------------------------
 		MainViewFrustumRenderList.DataReadySignal.Wait();
 		// -------------------------------------------------- SYNC ---------------------------------------------------
+		
+		// get jitter info
+		const uint64 iFrame = mRenderStats.mNumFramesRendered;
+		const uint64 iFramePrev = iFrame == 0 ? 0 : iFrame - 1;
+		float PixelJitterX, PixelJitterY;
+		float PixelJitterXPrev, PixelJitterYPrev;
+		this->GetCameraPixelSpaceJitter(GFXSettings, iFrame    , PixelJitterX    , PixelJitterY);
+		this->GetCameraPixelSpaceJitter(GFXSettings, iFramePrev, PixelJitterXPrev, PixelJitterYPrev);
+
+		const float RenderResolutionWidth = GFXSettings.GetRenderResolutionX();
+		const float RenderResolutionHeight = GFXSettings.GetRenderResolutionY();
+
+		const float JitterX =  2.0f * PixelJitterX / RenderResolutionWidth;
+		const float JitterY = -2.0f * PixelJitterY / RenderResolutionHeight;
+		const XMMATRIX matJitterOffset = XMMatrixTranslation(JitterX, JitterY, 0.0f);
+		
+		const float JitterXPrev =  2.0f * PixelJitterXPrev / RenderResolutionWidth;
+		const float JitterYPrev = -2.0f * PixelJitterYPrev / RenderResolutionHeight;
+		const XMMATRIX matJitterOffsetPrev = XMMatrixTranslation(JitterXPrev, JitterYPrev, 0.0f);
 
 		BatchMainViewDrawCalls(
 			DrawData.mainViewDrawParams,
 			MainViewFrustumRenderList.Data,
 			SceneView.viewProj,
 			SceneView.viewProjPrev,
+			SceneView.viewProj * matJitterOffset,
+			SceneView.viewProjPrev * matJitterOffsetPrev,
 			CBHeap, 
 			this
 		);

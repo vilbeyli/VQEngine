@@ -188,15 +188,19 @@ struct PerViewLightingData
 struct ALIGNAS(64) PerObjectLightingData
 {
 #if INSTANCED_DRAW
-	matrix matWorldViewProj    [MAX_INSTANCE_COUNT__SCENE_MESHES];
-	matrix matWorld            [MAX_INSTANCE_COUNT__SCENE_MESHES];
-	matrix matWorldViewProjPrev[MAX_INSTANCE_COUNT__SCENE_MESHES];
-	matrix matNormal           [MAX_INSTANCE_COUNT__SCENE_MESHES]; // could be 4x3
-	int4   ObjID               [MAX_INSTANCE_COUNT__SCENE_MESHES]; // int[] causes alignment issues as each element is aligned to 16B on the GPU. use int4.x
+	matrix matWorldViewProj            [MAX_INSTANCE_COUNT__SCENE_MESHES];
+	matrix matJitteredWorldViewProj    [MAX_INSTANCE_COUNT__SCENE_MESHES];
+	matrix matWorld                    [MAX_INSTANCE_COUNT__SCENE_MESHES];
+	matrix matWorldViewProjPrev        [MAX_INSTANCE_COUNT__SCENE_MESHES];
+	matrix matJitteredWorldViewProjPrev[MAX_INSTANCE_COUNT__SCENE_MESHES];
+	matrix matNormal                   [MAX_INSTANCE_COUNT__SCENE_MESHES]; // could be 4x3
+	int4   ObjID                       [MAX_INSTANCE_COUNT__SCENE_MESHES]; // int[] causes alignment issues as each element is aligned to 16B on the GPU. use int4.x
 #else
 	matrix matWorldViewProj;
+	matrix matJitteredWorldViewProj;
 	matrix matWorld;
 	matrix matWorldViewProjPrev;
+	matrix matJitteredWorldViewProjPrev;
 	matrix matNormal;
 	int4   ObjID;
 #endif

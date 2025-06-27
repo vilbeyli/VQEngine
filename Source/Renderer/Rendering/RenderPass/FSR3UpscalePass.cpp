@@ -235,8 +235,7 @@ void FSR3UpscalePass::RecordCommands(const IRenderPassDrawParameters* pDrawParam
 	DispatchDescUpscale.output = ffxApiGetResourceDX12(mRenderer.GetTextureResource(texOutput), FFX_API_RESOURCE_STATE_UNORDERED_ACCESS, 0);
 	
 	// params
-	DispatchDescUpscale.jitterOffset.x = 0; // TODO
-	DispatchDescUpscale.jitterOffset.y = 0; // TODO
+	GetJitterXY(DispatchDescUpscale.jitterOffset.x, DispatchDescUpscale.jitterOffset.y, (uint)RenderSizeX, (uint)OutputSizeX, pParams->iFrame);
 
 	DispatchDescUpscale.motionVectorScale.x = -MotionVectorScaleX; // - because MVs expected pointing from this frame to prev frame
 	DispatchDescUpscale.motionVectorScale.y = -MotionVectorScaleY; // - because MVs expected pointing from this frame to prev frame
@@ -275,5 +274,54 @@ void FSR3UpscalePass::RecordCommands(const IRenderPassDrawParameters* pDrawParam
 	{
 		Log::Error("FSR3: Error (%d) dispatching", retCode);
 	}
+}
+
+void FSR3UpscalePass::GetJitterXY(float& OutPixelSpaceJitterX, float& OutPixelSpaceJitterY, uint RenderResolutionX, uint OutputResolutionX, size_t iFrame) const
+{
+	OutPixelSpaceJitterX = 0.0f;
+	OutPixelSpaceJitterY = 0.0f;
+
+	const bool bContextInitialized = pImpl->ctx != nullptr;
+	if (!bContextInitialized)
+	{
+		return;
+	}
+
+	ffxReturnCode_t ret = 0;
+	int NumPhases = 0;
+	{
+		ffxQueryDescUpscaleGetJitterPhaseCount desc = {};
+		desc.header.type = FFX_API_QUERY_DESC_TYPE_UPSCALE_GETJITTERPHASECOUNT;
+		desc.displayWidth = OutputResolutionX;
+		desc.renderWidth = RenderResolutionX;
+		desc.pOutPhaseCount = &NumPhases;
+
+		ret = ffxQuery(&pImpl->ctx, &desc.header);
+		if (ret != 0)
+		{
+			Log::Warning("ffxQuery for phase count unssuccessful");
+			return;
+		}
+	}
+
+	iFrame = iFrame % NumPhases;
+	ffxQueryDescUpscaleGetJitterOffset desc;
+	desc.header.type = FFX_API_QUERY_DESC_TYPE_UPSCALE_GETJITTEROFFSET;
+	desc.index = iFrame;
+	desc.phaseCount = NumPhases;
+	desc.pOutX = &OutPixelSpaceJitterX;
+	desc.pOutY = &OutPixelSpaceJitterY;
+
+	ret = ffxQuery(&pImpl->ctx, &desc.header);
+	if (ret != 0)
+	{
+		Log::Warning("ffxQuery for jitter offset unssuccessful");
+		return;
+	}
+}
+
+float FSR3UpscalePass::GetMipBias(uint RenderResolutionX, uint OutputResolutionX)
+{
+	return std::log2(float(RenderResolutionX) / (float)OutputResolutionX) - 1.0f;
 }
 

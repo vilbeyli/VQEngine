@@ -118,14 +118,14 @@ TextureCubeArray texPointLightShadowMaps      : register(t22);
 #if INSTANCED_DRAW
 matrix GetWorldMatrix(uint instID) { return cbPerObject.matWorld[instID]; }
 matrix GetWorldNormalMatrix(uint instID) { return cbPerObject.matNormal[instID]; }
-matrix GetWorldViewProjectionMatrix(uint instID) { return cbPerObject.matWorldViewProj[instID]; }
+matrix GetWorldViewProjectionMatrix(uint instID) { return cbPerObject.matJitteredWorldViewProj[instID]; }
 #if PS_OUTPUT_MOTION_VECTORS
 matrix GetPrevWorldViewProjectionMatrix(uint instID) { return cbPerObject.matWorldViewProjPrev[instID]; }
 #endif
 #else
 matrix GetWorldMatrix() { return cbPerObject.matWorld; }
 matrix GetWorldNormalMatrix() { return cbPerObject.matNormal; }
-matrix GetWorldViewProjectionMatrix() { return cbPerObject.matWorldViewProj; }
+matrix GetWorldViewProjectionMatrix() { return cbPerObject.matJitteredWorldViewProj; }
 #if PS_OUTPUT_MOTION_VECTORS
 matrix GetPrevWorldViewProjectionMatrix() { return cbPerObject.matWorldViewProjPrev; }
 #endif
@@ -175,9 +175,9 @@ PSInput TransformVertex(
 	result.WorldSpacePosition = mul(matW, vPosition).xyz;
 	result.WorldSpaceNormal = mul((float4x3)matWN, Normal).xyz;
 	result.WorldSpaceTangent = mul((float4x3)matWN, Tangent).xyz;
-	#if PS_OUTPUT_MOTION_VECTORS
+#if PS_OUTPUT_MOTION_VECTORS
 	result.svPositionPrev = mul(matPrevWVP, vPosition);
-	#endif
+#endif
 	result.uv = uv;
 
 #if PS_OUTPUT_MOTION_VECTORS

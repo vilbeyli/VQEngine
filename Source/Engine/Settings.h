@@ -138,8 +138,10 @@ struct FRenderingSettings
 	EReflections Reflections = EReflections::REFLECTIONS_OFF;
 	FFFX_SSSR_Options FFX_SSSR_Options;
 	float RenderResolutionScale = 1.0f;
+	float GlobalMipBias = 0.0f;
 	short MaxFrameRate = -1; // -1: Auto (RefreshRate x 1.15) | 0: Unlimited | <int>: specified value
 	short EnvironmentMapResolution = 256;
+	
 };
 
 struct FGraphicsSettings
@@ -159,6 +161,8 @@ struct FGraphicsSettings
 	inline bool IsFSR1Enabled() const { return PostProcessing.UpscalingAlgorithm == EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1; }
 	inline bool IsFSR3Enabled() const { return PostProcessing.UpscalingAlgorithm == EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3; }
 	inline bool IsFFXCASEnabled() const { return false; } // TODO: handle RCAS (FSR1) vs CAS
+	inline float GetRenderResolutionX() const { return Rendering.RenderResolutionScale * Display.DisplayResolutionX; }
+	inline float GetRenderResolutionY() const { return Rendering.RenderResolutionScale * Display.DisplayResolutionY; }
 	void Validate();
 };
 
