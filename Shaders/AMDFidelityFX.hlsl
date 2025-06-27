@@ -57,7 +57,7 @@
 //
 //--------------------------------------------------------------------------------------
 #if FFXCAS_CS || FFXCAS_PS
-#include "AMDFidelityFX/CAS/ffx_a.h"
+#include "AMD/CAS/ffx_a.h"
 
 //
 // App-side Defines
@@ -114,7 +114,7 @@ cbuffer             CASConstants     : register(b0)
 
 
 
-#include "AMDFidelityFX/CAS/ffx_cas.h"
+#include "AMD/CAS/ffx_cas.h"
 
 //
 // CAS Main
@@ -183,7 +183,7 @@ void CAS_CSMain(uint3 LocalThreadId : SV_GroupThreadID, uint3 WorkGroupId : SV_G
 //
 //--------------------------------------------------------------------------------------
 #if FSR_EASU_CS || FSR_EASU_PS
-#include "AMDFidelityFX/FSR1.0/ffx_a.h"
+#include "AMD/FSR1.0/ffx_a.h"
 
 //
 // App-side Defines
@@ -238,7 +238,7 @@ SamplerState samLinearClamp : register(s0);
 
 
 
-#include "AMDFidelityFX/FSR1.0/ffx_fsr1.h"
+#include "AMD/FSR1.0/ffx_fsr1.h"
 
 
 //
@@ -304,7 +304,7 @@ cbuffer             RCASConstants : register(b0)
 	uint4 RCASConst0;
 }
 
-#include "AMDFidelityFX/FSR1.0/ffx_a.h"
+#include "AMD/FSR1.0/ffx_a.h"
 
 
 //
@@ -328,7 +328,7 @@ cbuffer             RCASConstants : register(b0)
 
 #endif // FSR_FP16
 
-#include "AMDFidelityFX/FSR1.0/ffx_fsr1.h"
+#include "AMD/FSR1.0/ffx_fsr1.h"
 //
 // RCAS
 //
@@ -518,7 +518,7 @@ AH4 SpdReduce4H(AH4 v0, AH4 v1, AH4 v2, AH4 v3)
 }
 #endif // A_HALF
 
-#include "AMDFidelityFX/SPD/ffx_spd.h"
+#include "AMD/SPD/ffx_spd.h"
 //
 // SPD Main
 //

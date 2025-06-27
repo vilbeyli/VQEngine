@@ -25,7 +25,7 @@
 #include "Windows.h"
 #include "imgui.h"
 
-#define VERBOSE_LOGGING 0
+#define VERBOSE_LOGGING 1
 
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 //
@@ -277,7 +277,7 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 		SwapChain& Swapchain = mpRenderer->GetWindowSwapChain(p->hwnd);
 		const int NUM_BACK_BUFFERS =  Swapchain.GetNumBackBuffers();
 
-		if ((uWidth | uHeight) != 0 && mpScene)
+		if (mpScene)
 		{
 			// Update Camera Projection Matrices
 			Camera& cam = mpScene->GetActiveCamera(); // TODO: all cameras?
@@ -286,6 +286,7 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 			UpdatedProjectionMatrixParams.ViewportHeight = static_cast<float>(uHeight);
 			cam.SetProjectionMatrix(UpdatedProjectionMatrixParams);
 
+#if 0
 			// Update PostProcess Data
 			for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
 			{
@@ -298,14 +299,15 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 					PPParams.FFXCASParams.UpdateCASConstantBlock(uWidth, uHeight, uWidth, uHeight);
 				}
 #endif
-				if (PPParams.IsFSREnabled())
+				if (PPParams.IsFSR1Enabled())
 				{
 					const uint InputWidth  = static_cast<uint>(PPParams.ResolutionScale * uWidth);
 					const uint InputHeight = static_cast<uint>(PPParams.ResolutionScale * uHeight);
-					PPParams.FSR_EASUParams.UpdateEASUConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, uWidth, uHeight);
-					PPParams.FSR_RCASParams.UpdateRCASConstantBlock();
+					PPParams.FSR1ShaderParameters.easu.UpdateConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, uWidth, uHeight);
+					PPParams.FSR1ShaderParameters.rcas.UpdateConstantBlock();
 				}
 			}
+#endif
 		}
 	}
 }
@@ -414,14 +416,17 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	pWnd->OnResize(WIDTH, HEIGHT);
 	mpRenderer->OnWindowSizeChanged(hwnd, WIDTH, HEIGHT); // updates render context
 
-	const FPostProcessParameters& PPParams = this->mpScene->GetPostProcessParameters(0);
-	const bool bFSREnabled = PPParams.IsFSREnabled() && !bUseHDRRenderPath; // TODO: remove this when FSR-HDR is implemented
-	const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
+	const bool bFSR1Enabled = mSettings.gfx.IsFSR1Enabled() && !bUseHDRRenderPath; // TODO: remove this when FSR-HDR is implemented
+	const bool bFSR3Enabled = mSettings.gfx.IsFSR3Enabled();
+	const bool bUpscaling = bFSR1Enabled || bFSR3Enabled || 0; // update here when other upscaling methods are added
 
-	const float fResolutionScale = bUpscaling ? PPParams.ResolutionScale : 1.0f;
+	const float fResolutionScale = bUpscaling ? mSettings.gfx.Rendering.RenderResolutionScale : 1.0f;
 
-	RenderThread_UnloadWindowSizeDependentResources(hwnd);
-	RenderThread_LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT, fResolutionScale);
+	if (hwnd == mpWinMain->GetHWND())
+	{
+		mpRenderer->UnloadWindowSizeDependentResources(hwnd);
+		mpRenderer->LoadWindowSizeDependentResources(hwnd, WIDTH, HEIGHT, fResolutionScale, this->ShouldRenderHDR(hwnd));
+	}
 }
 
 void VQEngine::RenderThread_HandleWindowCloseEvent(const IEvent* pEvent)
@@ -443,7 +448,7 @@ void VQEngine::RenderThread_HandleWindowCloseEvent(const IEvent* pEvent)
 	}
 	
 	mpRenderer->GetWindowSwapChain(hwnd).WaitForGPU();
-	RenderThread_UnloadWindowSizeDependentResources(hwnd);
+	mpRenderer->UnloadWindowSizeDependentResources(hwnd);
 	pWindowCloseEvent->Signal_WindowDependentResourcesDestroyed.NotifyAll();
 }
 
@@ -478,11 +483,10 @@ void VQEngine::RenderThread_HandleToggleFullscreenEvent(const IEvent* pEvent)
 
 	Swapchain.WaitForGPU(); // make sure GPU is finished
 
-	const auto& PPParams = this->mpScene->GetPostProcessParameters(0);
-	const bool bFSREnabled = PPParams.IsFSREnabled();
+	const bool bFSREnabled = mSettings.gfx.IsFSR1Enabled();
 	const bool bUpscaling = bFSREnabled || 0; // update here when other upscaling methods are added
 
-	const float fResolutionScale = bUpscaling ? PPParams.ResolutionScale : 1.0f;
+	const float fResolutionScale = bUpscaling ? mSettings.gfx.Rendering.RenderResolutionScale : 1.0f;
 
 	//
 	// EXCLUSIVE FULLSCREEN
@@ -566,7 +570,7 @@ void VQEngine::RenderThread_HandleSetVSyncEvent(const IEvent* pEvent)
 		Swapchain.EnsureSwapChainColorSpace(Swapchain.GetFormat() == DXGI_FORMAT_R16G16B16A16_FLOAT ? _16 : _8, false);
 	}
 
-	mSettings.gfx.bVsync = bVsyncState;
+	mSettings.gfx.Display.bVsync = bVsyncState;
 	Log::Info("Toggle VSync: %d", bVsyncState);
 }
 
@@ -598,13 +602,14 @@ void VQEngine::RenderThread_HandleSetSwapchainFormatEvent(const IEvent* pEvent)
 
 	const int NUM_BACK_BUFFERS  = Swapchain.GetNumBackBuffers();
 	const int BACK_BUFFER_INDEX = Swapchain.GetCurrentBackBufferIndex();
-	const EDisplayCurve OutputDisplayCurve = Swapchain.IsHDRFormat() ? EDisplayCurve::Linear : EDisplayCurve::sRGB;
-	for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
-		mpScene->GetPostProcessParameters(i).TonemapperParams.OutputDisplayCurve = OutputDisplayCurve;
+	const EDisplayCurve OutputDisplayCurve = Swapchain.IsHDRFormat()
+		? mSettings.gfx.PostProcessing.HDROutputDisplayCurve
+		: mSettings.gfx.PostProcessing.SDROutputDisplayCurve;
+	
 	
 	Log::Info("Set Swapchain Format: %s | OutputDisplayCurve: %s"
 		, VQRenderer::DXGIFormatAsString(pSwapchainEvent->format).data()
-		, (OutputDisplayCurve == EDisplayCurve::sRGB ? "Gamma2.2" : (OutputDisplayCurve == EDisplayCurve::Linear ? "Linear" : "PQ"))
+		, GetDisplayCurveString(OutputDisplayCurve)
 	);
 }
 void VQEngine::RenderThread_HandleSetSwapchainQueueEvent(const IEvent* pEvent)
@@ -643,8 +648,4 @@ void VQEngine::RenderThread_HandleSetHDRMetaDataEvent(const IEvent* pEvent)
 		Swapchain.WaitForGPU();
 		Swapchain.SetHDRMetaData(pSetMetaDataEvent->payload);
 	}
-
-	const EDisplayCurve OutputDisplayCurve = Swapchain.IsHDRFormat() ? EDisplayCurve::Linear : EDisplayCurve::sRGB;
-	for (int i = 0; i < Swapchain.GetNumBackBuffers(); ++i)
-		mpScene->GetPostProcessParameters(i).TonemapperParams.OutputDisplayCurve = OutputDisplayCurve;
 }

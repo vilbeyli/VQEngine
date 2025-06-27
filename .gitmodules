@@ -19,3 +19,6 @@
 [submodule "Data/Textures/PBR"]
 	path = Data/Textures/PBR
 	url = https://github.com/vilbeyli/PBRCollection.git
+[submodule "Source/Renderer/Libs/AMD/FidelityFX-SDK"]
+	path = Source/Renderer/Libs/AMD/FidelityFX-SDK
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK.git

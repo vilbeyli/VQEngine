@@ -10,22 +10,22 @@ set (LibHeadersD3D12X
     "Libs/D3DX12/d3dx12.h"
 )
 set (LibFFX_CACAO
-    "Libs/AMDFidelityFX/CACAO/ffx_cacao_defines.h"
-    "Libs/AMDFidelityFX/CACAO/ffx_cacao.cpp"
-    "Libs/AMDFidelityFX/CACAO/ffx_cacao.h"
-    "Libs/AMDFidelityFX/CACAO/ffx_cacao_impl.cpp"
-    "Libs/AMDFidelityFX/CACAO/ffx_cacao_impl.h"
+    "Libs/AMD/CACAO/ffx_cacao_defines.h"
+    "Libs/AMD/CACAO/ffx_cacao.cpp"
+    "Libs/AMD/CACAO/ffx_cacao.h"
+    "Libs/AMD/CACAO/ffx_cacao_impl.cpp"
+    "Libs/AMD/CACAO/ffx_cacao_impl.h"
 )
 set (LibFFX_SSSR
-    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_128spp.cpp"
-    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_16spp.cpp"
-    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_1spp.cpp"
-    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_256spp.cpp"
-    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_2spp.cpp"
-    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_32spp.cpp"
-    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_4spp.cpp"
-    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_64spp.cpp"
-    "Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_8spp.cpp"
+    "Libs/AMD/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_128spp.cpp"
+    "Libs/AMD/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_16spp.cpp"
+    "Libs/AMD/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_1spp.cpp"
+    "Libs/AMD/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_256spp.cpp"
+    "Libs/AMD/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_2spp.cpp"
+    "Libs/AMD/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_32spp.cpp"
+    "Libs/AMD/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_4spp.cpp"
+    "Libs/AMD/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_64spp.cpp"
+    "Libs/AMD/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_8spp.cpp"
 )
 set (LibD3D12MA
     "Libs/D3D12MA/src/D3D12MemAlloc.h"
@@ -100,7 +100,14 @@ set(RenderingSources
     "Rendering/LoadingScreenRendering.cpp"
     "Rendering/Batching.cpp"
 )
-
+set (PostProcessHeaders
+    "Rendering/PostProcess/PostProcess.h"
+    "Rendering/PostProcess/Upscaling.h"
+)
+set (PostProcessSources
+    "Rendering/PostProcess/PostProcess.cpp"
+    "Rendering/PostProcess/Upscaling.cpp"
+)
 # Render Passes
 set(RenderPassHeaders
     "Rendering/RenderPass/RenderPass.h"
@@ -112,6 +119,7 @@ set(RenderPassHeaders
     "Rendering/RenderPass/MagnifierPass.h"
     "Rendering/RenderPass/ObjectIDPass.h"
     "Rendering/RenderPass/OutlinePass.h"
+    "Rendering/RenderPass/FSR3UpscalePass.h"
 )
 set(RenderPassSources
     "Rendering/RenderPass/RenderPass.cpp"
@@ -123,6 +131,7 @@ set(RenderPassSources
     "Rendering/RenderPass/MagnifierPass.cpp"
     "Rendering/RenderPass/ObjectIDPass.cpp"
     "Rendering/RenderPass/OutlinePass.cpp"
+    "Rendering/RenderPass/FSR3UpscalePass.cpp"
 )
 
 # Renderer
@@ -166,33 +175,33 @@ set (Shaders
     "../../Shaders/VQPlatform.h"
 )
 set (FFX_CAS_Shaders
-    "../../Shaders/AMDFidelityFX/CAS/ffx_a.h"
-    "../../Shaders/AMDFidelityFX/CAS/ffx_cas.h"
+    "../../Shaders/AMD/CAS/ffx_a.h"
+    "../../Shaders/AMD/CAS/ffx_cas.h"
 )
 set (FFX_FSR_Shaders
-    "../../Shaders/AMDFidelityFX/FSR1.0/ffx_a.h"
-    "../../Shaders/AMDFidelityFX/FSR1.0/ffx_fsr1.h"
+    "../../Shaders/AMD/FSR1.0/ffx_a.h"
+    "../../Shaders/AMD/FSR1.0/ffx_fsr1.h"
 )
 set (FFX_SPD_Shaders
-    "../../Shaders/AMDFidelityFX/SPD/ffx_a.h"
-    "../../Shaders/AMDFidelityFX/SPD/ffx_spd.h"
+    "../../Shaders/AMD/SPD/ffx_a.h"
+    "../../Shaders/AMD/SPD/ffx_spd.h"
 )
 set (FFX_CACAO_Shaders
-    "../../Shaders/AMDFidelityFX/CACAO/ffx_cacao.hlsl"
+    "../../Shaders/AMD/CACAO/ffx_cacao.hlsl"
 )
 set (FFX_SSSR_Shaders
-    "../../Shaders/AMDFidelityFX/SSSR/ffx_sssr.h"
+    "../../Shaders/AMD/SSSR/ffx_sssr.h"
 )
 set (FFX_DNSR_Shaders
-    "../../Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_common.h"
-    "../../Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_config.h"
-    "../../Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_prefilter.h"
-    "../../Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_reproject.h"
-    "../../Shaders/AMDFidelityFX/DNSR/ffx_denoiser_reflections_resolve_temporal.h"
-    "../../Shaders/AMDFidelityFX/DNSR/ffx_denoiser_shadows_filter.h"
-    "../../Shaders/AMDFidelityFX/DNSR/ffx_denoiser_shadows_prepare.h"
-    "../../Shaders/AMDFidelityFX/DNSR/ffx_denoiser_shadows_tileclassification.h"
-    "../../Shaders/AMDFidelityFX/DNSR/ffx_denoiser_shadows_util.h"
+    "../../Shaders/AMD/DNSR/ffx_denoiser_reflections_common.h"
+    "../../Shaders/AMD/DNSR/ffx_denoiser_reflections_config.h"
+    "../../Shaders/AMD/DNSR/ffx_denoiser_reflections_prefilter.h"
+    "../../Shaders/AMD/DNSR/ffx_denoiser_reflections_reproject.h"
+    "../../Shaders/AMD/DNSR/ffx_denoiser_reflections_resolve_temporal.h"
+    "../../Shaders/AMD/DNSR/ffx_denoiser_shadows_filter.h"
+    "../../Shaders/AMD/DNSR/ffx_denoiser_shadows_prepare.h"
+    "../../Shaders/AMD/DNSR/ffx_denoiser_shadows_tileclassification.h"
+    "../../Shaders/AMD/DNSR/ffx_denoiser_shadows_util.h"
 )
 set (ShadersScreenSpaceReflections
     "../../Shaders/ScreenSpaceReflections/ClassifyReflectionTiles.hlsl"
@@ -210,19 +219,20 @@ source_group("Resources" FILES ${ResourceHeaders} ${ResourceSources})
 source_group("Pipeline" FILES ${PipelineHeaders} ${PipelineSources})
 source_group("Rendering" FILES ${RenderingHeaders} ${RenderingSources})
 source_group("Rendering\\RenderPass" FILES ${RenderPassHeaders} ${RenderPassSources})
+source_group("Rendering\\PostProcess" FILES ${PostProcessHeaders} ${PostProcessSources})
 source_group("Renderer" FILES ${Renderer})
 
 source_group("Shaders"  FILES ${Shaders})
 source_group("Shaders\\ScreenSpaceReflections"  FILES ${ShadersScreenSpaceReflections})
-source_group("Shaders\\AMD-FidelityFX\\CAS"   FILES ${FFX_CAS_Shaders})
-source_group("Shaders\\AMD-FidelityFX\\FSR1"  FILES ${FFX_FSR_Shaders})
-source_group("Shaders\\AMD-FidelityFX\\SPD"   FILES ${FFX_SPD_Shaders})
-source_group("Shaders\\AMD-FidelityFX\\CACAO" FILES ${FFX_CACAO_Shaders})
-source_group("Shaders\\AMD-FidelityFX\\SSSR" FILES ${FFX_SSSR_Shaders})
-source_group("Shaders\\AMD-FidelityFX\\DNSR" FILES ${FFX_DNSR_Shaders})
+source_group("Shaders\\AMD\\CAS"   FILES ${FFX_CAS_Shaders})
+source_group("Shaders\\AMD\\FSR1"  FILES ${FFX_FSR_Shaders})
+source_group("Shaders\\AMD\\SPD"   FILES ${FFX_SPD_Shaders})
+source_group("Shaders\\AMD\\CACAO" FILES ${FFX_CACAO_Shaders})
+source_group("Shaders\\AMD\\SSSR" FILES ${FFX_SSSR_Shaders})
+source_group("Shaders\\AMD\\DNSR" FILES ${FFX_DNSR_Shaders})
 
-source_group("Libs\\AMD-FidelityFX\\CACAO" FILES ${LibFFX_CACAO})
-source_group("Libs\\AMD-FidelityFX\\SSSR" FILES ${LibFFX_SSSR})
+source_group("Libs\\AMD\\CACAO" FILES ${LibFFX_CACAO})
+source_group("Libs\\AMD\\SSSR" FILES ${LibFFX_SSSR})
 source_group("Libs\\D3D12X" FILES ${LibHeadersD3D12X})
 source_group("Libs\\D3D12MA" FILES ${LibD3D12MA})
 
@@ -259,6 +269,7 @@ add_library(${PROJECT_NAME} STATIC
     ${PipelineHeaders} ${PipelineSources}
     ${RenderingHeaders} ${RenderingSources}
     ${RenderPassHeaders} ${RenderPassSources}
+    ${PostProcessHeaders} ${PostProcessSources}
     ${Renderer}
     
     ${Shaders} 
@@ -276,6 +287,15 @@ add_definitions(-DFFX_CACAO_ENABLE_D3D12)
 target_include_directories(${PROJECT_NAME} PUBLIC "../") # Engine / Renderer / Scenes
 target_include_directories(${PROJECT_NAME} PUBLIC "../../") # VQE root
 target_include_directories(${PROJECT_NAME} PUBLIC "./") # Renderer root
+target_include_directories(${PROJECT_NAME} PUBLIC "./Libs/AMD/FidelityFX-SDK/ffx-api/include/")
 
 add_custom_command(TARGET ${PROJECT_NAME} PRE_BUILD
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Libs/AMDFidelityFX/CACAO/build_shaders_dxil.bat)
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/Libs/AMD/CACAO/build_shaders_dxil.bat
+)
+
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/Libs/AMD/FidelityFX-SDK/PrebuiltSignedDLL/amd_fidelityfx_dx12.dll"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../Bin/${CMAKE_CFG_INTDIR}/"
+    COMMENT "Copying amd_fidelityfx_dx12.dll to Bin directory"
+)

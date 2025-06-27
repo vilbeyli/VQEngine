@@ -112,11 +112,6 @@ set (SceneFiles
     "Source/Engine/Scene/Quaternion.cpp"
 )
 
-set (PostProcessFiles
-    "Source/Engine/PostProcess/PostProcess.h"
-    "Source/Engine/PostProcess/PostProcess.cpp"
-)
-
 set (UIFiles
     "Source/Engine/UI/VQUI.cpp"
     "Source/Engine/UI/VQUI.h"
@@ -177,7 +172,6 @@ source_group("Source\\Importer" FILES ${ImporterFiles})
 source_group("Source\\Core" FILES ${CoreFiles})
 source_group("Source\\Scene" FILES ${SceneFiles})
 source_group("Source\\UI" FILES ${UIFiles})
-source_group("Source\\PostProcess" FILES ${PostProcessFiles})
 source_group("Source" FILES ${SourceVQE})
 
 set_source_files_properties(${Config} PROPERTIES VS_TOOL_OVERRIDE "Text")
@@ -187,6 +181,7 @@ set_source_files_properties(${Materials} PROPERTIES VS_TOOL_OVERRIDE "Text")
 
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/VQUtils/Bin/)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Libs/WinPixEventRuntime/bin/x64)
+link_directories(${CMAKE_CURRENT_SOURCE_DIR}/Source/Renderer/Libs/AMD/FidelityFX-SDK/PrebuiltSignedDLL)
 
 # Create a library with the project name that is build with the Headers and Source files
 add_executable( ${PROJECT_NAME} 
@@ -227,7 +222,8 @@ set_target_properties(ImGUI PROPERTIES FOLDER Libs)
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${Includes})
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${LibsIncl})
 
-target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer WinPixEventRuntime ImGUI)
+target_link_libraries(${PROJECT_NAME} PRIVATE VQUtils VQRenderer WinPixEventRuntime ImGUI amd_fidelityfx_dx12)
+
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different

@@ -331,6 +331,13 @@ void VQRenderer::InitializeDSV(DSV_ID dsvID, uint32 heapIndex, TextureID texID, 
 	assert(pDevice);
 
 	mTextureManager.WaitForTexture(texID);
+	assert(pTexture->Resource);
+	if (!pTexture->Resource)
+	{
+		Log::Error("InitializeDSV failed: texture resource was null, TexID=%", texID);
+		return;
+	}
+
 	const D3D12_RESOURCE_DESC texDesc = pTexture->Resource->GetDesc();
 
 	D3D12_DEPTH_STENCIL_VIEW_DESC DSViewDesc = {};
@@ -949,6 +956,7 @@ const CBV_SRV_UAV& VQRenderer::GetUnorderedAccessView(UAV_ID Id) const { return 
 const DSV& VQRenderer::GetDepthStencilView(RTV_ID Id) const { return mDSVs.at(Id); }
 const RTV& VQRenderer::GetRenderTargetView(RTV_ID Id) const { return mRTVs.at(Id); }
 
+const FTexture* VQRenderer::GetTexture(TextureID Id) const { return mTextureManager.GetTexture(Id); }
 ID3D12Resource* VQRenderer::GetTextureResource(TextureID Id) const                                              { return mTextureManager.GetTextureResource(Id); }
 DXGI_FORMAT VQRenderer::GetTextureFormat(TextureID Id) const                                                    { return mTextureManager.GetTextureFormat(Id); }
 bool VQRenderer::GetTextureAlphaChannelUsed(TextureID Id) const                                                 { return mTextureManager.GetTextureAlphaChannelUsed(Id); }

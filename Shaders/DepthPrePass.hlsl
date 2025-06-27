@@ -84,11 +84,11 @@ Texture2D texHeightmap : register(t8);
 #if INSTANCED_DRAW
 matrix GetWorldMatrix(uint instID) { return cbPerObject.matWorld[instID]; }
 matrix GetWorldNormalMatrix(uint instID) { return cbPerObject.matNormal[instID]; }
-matrix GetWorldViewProjectionMatrix(uint instID) { return cbPerObject.matWorldViewProj[instID]; }
+matrix GetWorldViewProjectionMatrix(uint instID) { return cbPerObject.matJitteredWorldViewProj[instID]; }
 #else
 matrix GetWorldMatrix() { return cbPerObject.matWorld; }
 matrix GetWorldNormalMatrix() { return cbPerObject.matNormal; }
-matrix GetWorldViewProjectionMatrix() { return cbPerObject.matWorldViewProj; }
+matrix GetWorldViewProjectionMatrix() { return cbPerObject.matJitteredWorldViewProj; }
 #endif
 float2 GetUVScale() { return cbPerObject.materialData.uvScaleOffset.xy; }
 float2 GetUVOffset() { return cbPerObject.materialData.uvScaleOffset.zw; }

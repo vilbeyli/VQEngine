@@ -70,7 +70,7 @@ void FFX_DNSR_Reflections_StorePrefilteredReflections(int2 pixel_coordinate, min
     g_out_variance[pixel_coordinate] = variance.x;
 }
 
-#include "../AMDFidelityFX/DNSR/ffx_denoiser_reflections_prefilter.h"
+#include "../AMD/DNSR/ffx_denoiser_reflections_prefilter.h"
 
 [numthreads(8, 8, 1)]
 void CSMain(int2 group_thread_id      : SV_GroupThreadID,
