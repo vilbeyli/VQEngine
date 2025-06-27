@@ -91,8 +91,8 @@ static void UpdateImGUIState(HWND hwnd)
 static const char* szAALabels[] =
 {
 	  "None ##0"
-	, "MSAAx4"
-	, "FSR3 AA"
+	, "MSAA x4"
+	, "FidelityFX Super Resolution 3 AA"
 	, ""
 };
 static const char* szSSAOLabels[] =
@@ -430,8 +430,8 @@ static void InitializeStaticCStringData_PostProcessingControls()
 				szFSR3QualityLabels[p] = GetPresetName(p);
 		}
 		szUpscalingLabels[EUpscalingAlgorithm::NONE] = "None";
-		szUpscalingLabels[EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1] = "AMD FSR1";
-		szUpscalingLabels[EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3] = "AMD FSR3";
+		szUpscalingLabels[EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1] = "AMD FidelityFX Super Resolution 1";
+		szUpscalingLabels[EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3] = "AMD FidelityFX Super Resolution 3";
 
 		bPostPRocessLabelsInitialized = true;
 	}
@@ -872,7 +872,7 @@ void VQEngine::DrawPostProcessSettings(FGraphicsSettings& GFXSettings)
 			GFXSettings.Rendering.RenderResolutionScale = AMD_FidelityFX_SuperResolution3::GetScreenPercentage(GFXSettings.PostProcessing.FSR3UpscalingQualityEnum);
 			break;
 		}
-
+		GFXSettings.Validate();
 		mUIState.ResolutionScaleSliderValue = GFXSettings.Rendering.RenderResolutionScale;
 		fnSendWindowResizeEvents();
 	}
@@ -1104,10 +1104,15 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams
 
 	if (ImGui::BeginTabItem("Rendering"))
 	{
-		if (ImGui_RightAlignedCombo("AntiAliasing (M)", (int*)&gfx.Rendering.AntiAliasing, szAALabels, _countof(szAALabels) - 1))
+		bool bShouldEnableAntiAliasingOptions = !gfx.IsFSR3Enabled();
+		BeginDisabledUIState(bShouldEnableAntiAliasingOptions);
 		{
-			Log::Info("AA Changed: %d", gfx.Rendering.AntiAliasing);
+			if (ImGui_RightAlignedCombo("AntiAliasing (M)", (int*)&gfx.Rendering.AntiAliasing, szAALabels, _countof(szAALabels) - 1))
+			{
+				Log::Info("AA Changed: %d", gfx.Rendering.AntiAliasing);
+			}
 		}
+		EndDisabledUIState(bShouldEnableAntiAliasingOptions);
 
 		if (ImGui_RightAlignedCombo("Ambient Occlusion", &iSSAOLabel, szSSAOLabels, _countof(szSSAOLabels) - 1))
 		{

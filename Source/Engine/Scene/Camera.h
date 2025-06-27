@@ -86,6 +86,7 @@ protected:
 protected:
 	Camera* mpCamera = nullptr;
 };
+
 class FirstPersonController : public CameraController
 {
 public: 
@@ -99,6 +100,7 @@ private:
 	float AngularSpeedDeg;
 	float MoveSpeed;
 };
+
 class OrbitController : public CameraController
 {
 public:
@@ -111,6 +113,7 @@ protected:
 private:
 	DirectX::XMFLOAT3 mF3LookAt;
 };
+
 enum ECameraControllerType
 {
 	FIRST_PERSON = 0,

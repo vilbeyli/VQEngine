@@ -150,6 +150,22 @@ void VQEngine::InitializeInput()
 	if (mpWinDebug) RegisterWindowForInput(mpWinDebug);
 }
 
+void FGraphicsSettings::Validate()
+{
+	if (IsFSR3Enabled())
+	{
+		if (Rendering.AntiAliasing != EAntiAliasingAlgorithm::FSR3_ANTI_ALIASING)
+		{
+			Log::Warning("FSR3 is enabled, but AntiAliasingAlgorithm is not set to FSR3_ANTI_ALIASING. Overriding value \"%d\".", Rendering.AntiAliasing);
+		}
+		Rendering.AntiAliasing = EAntiAliasingAlgorithm::FSR3_ANTI_ALIASING;
+	}
+	else if(Rendering.AntiAliasing == EAntiAliasingAlgorithm::FSR3_ANTI_ALIASING)
+	{
+		Rendering.AntiAliasing = EAntiAliasingAlgorithm::NO_ANTI_ALIASING;
+	}
+}
+
 void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 {
 	SCOPED_CPU_MARKER("InitializeEngineSettings");
@@ -239,6 +255,8 @@ void VQEngine::InitializeEngineSettings(const FStartupParameters& Params)
 	}
 
 	if (Params.bOverrideENGSetting_StartupScene)               strncpy_s(s.StartupScene, p.StartupScene, sizeof(s.StartupScene));
+
+	mSettings.gfx.Validate();
 }
 
 void VQEngine::InitializeWindows(const FStartupParameters& Params)

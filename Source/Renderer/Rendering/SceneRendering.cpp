@@ -848,14 +848,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 #if 0
 				Log::Info("RenderScene[%d]", ctx.GetCurrentSwapchainBufferIndex());
 #endif
-
-				HRESULT hr = PresentFrame(ctx);
-
-				#if !EXECUTE_CMD_LISTS_ON_WORKER
-				//if (hr == DXGI_STATUS_OCCLUDED) { RenderThread_HandleStatusOccluded(); }
-				//if (hr == DXGI_ERROR_DEVICE_REMOVED) { RenderThread_HandleDeviceRemoved(); }
-				#endif
-
+				hr = PresentFrame(ctx);
 
 #if EXECUTE_CMD_LISTS_ON_WORKER
 				mSubmitWorkerSignal.Notify();

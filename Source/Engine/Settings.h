@@ -159,6 +159,7 @@ struct FGraphicsSettings
 	inline bool IsFSR1Enabled() const { return PostProcessing.UpscalingAlgorithm == EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1; }
 	inline bool IsFSR3Enabled() const { return PostProcessing.UpscalingAlgorithm == EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3; }
 	inline bool IsFFXCASEnabled() const { return false; } // TODO: handle RCAS (FSR1) vs CAS
+	void Validate();
 };
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
