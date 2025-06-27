@@ -331,6 +331,13 @@ void VQRenderer::InitializeDSV(DSV_ID dsvID, uint32 heapIndex, TextureID texID, 
 	assert(pDevice);
 
 	mTextureManager.WaitForTexture(texID);
+	assert(pTexture->Resource);
+	if (!pTexture->Resource)
+	{
+		Log::Error("InitializeDSV failed: texture resource was null, TexID=%", texID);
+		return;
+	}
+
 	const D3D12_RESOURCE_DESC texDesc = pTexture->Resource->GetDesc();
 
 	D3D12_DEPTH_STENCIL_VIEW_DESC DSViewDesc = {};

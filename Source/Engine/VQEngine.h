@@ -316,7 +316,7 @@ private:
 
 	// timer / profiler
 	std::unique_ptr<Timer>          mpTimer;
-	float                           mEffectiveFrameRateLimit_ms; // TODO: move to rendering settings
+	float                           mEffectiveFrameRateLimit_ms;
 
 	// misc.
 	// One Swapchain.Resize() call is required for the first time 

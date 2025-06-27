@@ -63,5 +63,7 @@ struct FUIState
 	bool bProfiler_ShowEngineStats = true;
 	std::unique_ptr<FMagnifierUIState> mpMagnifierState = nullptr;
 	
+	float ResolutionScaleSliderValue = 1.0f;
+
 	void GetMouseScreenPosition(int& X, int& Y) const;
 };

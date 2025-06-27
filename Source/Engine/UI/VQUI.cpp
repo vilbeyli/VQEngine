@@ -263,6 +263,7 @@ void VQEngine::InitializeUI(HWND hwnd)
 	SamplerDesc.RegisterSpace = 0;
 	SamplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
+	mUIState.ResolutionScaleSliderValue = mSettings.gfx.Rendering.RenderResolutionScale;
 	InitializeEngineUIState(mUIState);
 	
 	mpRenderer->WaitHeapsInitialized();
@@ -871,6 +872,8 @@ void VQEngine::DrawPostProcessSettings(FGraphicsSettings& GFXSettings)
 			GFXSettings.Rendering.RenderResolutionScale = AMD_FidelityFX_SuperResolution3::GetScreenPercentage(GFXSettings.PostProcessing.FSR3UpscalingQualityEnum);
 			break;
 		}
+
+		mUIState.ResolutionScaleSliderValue = GFXSettings.Rendering.RenderResolutionScale;
 		fnSendWindowResizeEvents();
 	}
 
@@ -908,18 +911,30 @@ void VQEngine::DrawPostProcessSettings(FGraphicsSettings& GFXSettings)
 				break;
 			}
 			
+			mUIState.ResolutionScaleSliderValue = GFXSettings.Rendering.RenderResolutionScale;
 			fnSendWindowResizeEvents();
 		}
 
 		// resolution scale
-		if (   GFXSettings.PostProcessing.FSR1UpscalingQualityEnum == AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM
-			|| GFXSettings.PostProcessing.FSR3UpscalingQualityEnum == AMD_FidelityFX_SuperResolution3::EPreset::CUSTOM
-		)
+		bool bDrawResolutionScaleSlider = false;
+		switch (GFXSettings.PostProcessing.UpscalingAlgorithm)
 		{
-			// if we are to support resolution scale > 1.0f, we'll need to stop using FSR1 upscaling
-			// and use a linear min filter for AA
-			if (ImGui::SliderFloat("Resolution Scale", &GFXSettings.Rendering.RenderResolutionScale, 0.25f, 1.00f, "%.2f"))
+		case EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1:
+			bDrawResolutionScaleSlider = GFXSettings.PostProcessing.FSR1UpscalingQualityEnum == AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM;
+			break;
+		case EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3:
+			bDrawResolutionScaleSlider = GFXSettings.PostProcessing.FSR3UpscalingQualityEnum == AMD_FidelityFX_SuperResolution3::EPreset::CUSTOM;
+			break;
+		}
+		if (bDrawResolutionScaleSlider)
+		{
+			ImGui::SliderFloat("Resolution Scale", &mUIState.ResolutionScaleSliderValue, 0.25f, 1.00f, "%.2f");
+
+			// to avoid updating resolution scale depending resources every tick,
+			// we do it only after the user let the slider go.
+			if (ImGui::IsItemDeactivatedAfterEdit())
 			{
+				GFXSettings.Rendering.RenderResolutionScale = mUIState.ResolutionScaleSliderValue;
 				fnSendWindowResizeEvents();
 			}
 		}
