@@ -2390,7 +2390,8 @@ void VQRenderer::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, co
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 
 	const bool bCASEnabled = GFXSettings.IsFFXCASEnabled() && GFXSettings.PostProcessing.Sharpness > 0.0f;
-	const bool bFSREnabled = GFXSettings.IsFSR1Enabled();
+	const bool bFSR1Enabled = GFXSettings.IsFSR1Enabled();
+	const bool bFSR3Enabled = GFXSettings.IsFSR3Enabled();
 	const bool bVizualizationEnabled = GFXSettings.DebugVizualization.DrawModeEnum != FDebugVisualizationSettings::EDrawMode::LIT_AND_POSTPROCESSED;
 	const bool bVizualizationSceneTargetUsed = ShouldUseVisualizationTarget(GFXSettings);
 	const bool bMotionVectorsEnabled = ShouldUseMotionVectorsTarget(GFXSettings);
@@ -2405,7 +2406,7 @@ void VQRenderer::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, co
 	ID3D12Resource* pRscMoVec            = this->GetTextureResource(rsc.Tex_SceneMotionVectors);
 	ID3D12Resource* pRscVizOut           = this->GetTextureResource(rsc.Tex_PostProcess_VisualizationOut);
 	ID3D12Resource* pRscPostProcessOut   = bVizualizationEnabled ? pRscVizOut
-		: (bFSREnabled
+		: (bFSR1Enabled
 			? pRscFSROut 
 			: (bCASEnabled
 				? pRscFFXCASOut 
@@ -2426,9 +2427,14 @@ void VQRenderer::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, co
 		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Point      , D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE)
 		, CD3DX12_RESOURCE_BARRIER::Transition(pRscShadowMaps_Directional, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE)
 	};
-	if ((bFSREnabled || bCASEnabled) && !bVizualizationEnabled)
+	if ((bFSR1Enabled || bCASEnabled) && !bVizualizationEnabled)
 		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-	
+	if (bFSR3Enabled)
+	{
+		const FSR3UpscalePass* pFSR3Pass = static_cast<FSR3UpscalePass*>(mRenderPasses[ERenderPass::FSR3Upscale].get());
+		ID3D12Resource* pFSR3Rsc = this->GetTextureResource(pFSR3Pass->texOutput);
+		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pFSR3Rsc, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+	}
 	if (bVizualizationSceneTargetUsed)
 	{
 		barriers.push_back(bMSAA
@@ -2515,6 +2521,7 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 	const SRV& srv_FSR_EASUOut      = this->GetSRV(rsc.SRV_PostProcess_FSR_EASUOut);
 	const UAV& uav_FSR_RCASOut      = this->GetUAV(rsc.UAV_PostProcess_FSR_RCASOut);
 	const SRV& srv_FSR_RCASOut      = this->GetSRV(rsc.SRV_PostProcess_FSR_RCASOut);
+	const SRV& srv_blurOutput       = this->GetSRV(rsc.SRV_PostProcess_BlurOutput);
 	ID3D12Resource* pRscTonemapperOut = this->GetTextureResource(rsc.Tex_PostProcess_TonemapperOut);
 
 	constexpr bool PP_ENABLE_BLUR_PASS = false;
@@ -2532,6 +2539,7 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 	constexpr int DispatchZ = 1;
 
 	ID3D12Resource* pRscOutput = nullptr;
+	const SRV* pSrvCurrentInput = &srv_ColorIn;
 	
 	if (GFXSettings.DebugVizualization.DrawModeEnum != FDebugVisualizationSettings::EDrawMode::LIT_AND_POSTPROCESSED)
 	{
@@ -2552,7 +2560,7 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 		pConstBuffer->iUnpackNormals = GFXSettings.DebugVizualization.bUnpackNormals ? 1 : 0;
 		pConstBuffer->iDrawMode = static_cast<int>(GFXSettings.DebugVizualization.DrawModeEnum); // iDrawMode is not connected to the UI
 
-		SRV SRVIn = srv_ColorIn;
+		SRV SRVIn = *pSrvCurrentInput;
 		switch (GFXSettings.DebugVizualization.DrawModeEnum)
 		{
 		case FDebugVisualizationSettings::EDrawMode::DEPTH         : SRVIn = this->GetSRV(rsc.SRV_SceneDepth); break;
@@ -2619,11 +2627,16 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 
 		FSR3UpscalePass* pFSR3Pass = static_cast<FSR3UpscalePass*>(mRenderPasses[ERenderPass::FSR3Upscale].get());
 		pFSR3Pass->RecordCommands(&params);
-		pRscOutput = this->GetTextureResource(pFSR3Pass->texOutput); // TODO
+
+		pRscOutput = this->GetTextureResource(pFSR3Pass->texOutput);
+		pSrvCurrentInput = &this->GetSRV(pFSR3Pass->srvOutput);
+
+		CD3DX12_RESOURCE_BARRIER barriers[] =
+		{
+			CD3DX12_RESOURCE_BARRIER::Transition(pRscOutput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+		};
+		pCmd->ResourceBarrier(_countof(barriers), barriers);
 	}
-
-
-	const SRV& srv_blurOutput = this->GetSRV(rsc.SRV_PostProcess_BlurOutput);
 
 	if constexpr (PP_ENABLE_BLUR_PASS && GFXSettings.PostProcessing.EnableGaussianBlur)
 	{
@@ -2682,6 +2695,8 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 			};
 			pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
 		}
+
+		pSrvCurrentInput = &srv_blurOutput;
 	}
 
 	{
@@ -2707,22 +2722,23 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 		pCmd->SetPipelineState(this->GetPSO(EBuiltinPSOs::TONEMAPPER_PSO));
 		pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1));
 		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-		pCmd->SetComputeRootDescriptorTable(0, PP_ENABLE_BLUR_PASS ? srv_blurOutput.GetGPUDescHandle() : srv_ColorIn.GetGPUDescHandle());
+		pCmd->SetComputeRootDescriptorTable(0, pSrvCurrentInput->GetGPUDescHandle());
 		pCmd->SetComputeRootDescriptorTable(1, uav_TonemapperOut.GetGPUDescHandle());
 		pCmd->SetComputeRootConstantBufferView(2, cbAddr);
 		pCmd->Dispatch(DispatchRenderX, DispatchRenderY, DispatchZ);
 		pRscOutput = pRscTonemapperOut;
+		pSrvCurrentInput = &srv_TonemapperOut;
 	}
 
 #if !DISABLE_FIDELITYFX_CAS
 	if(PPParams.IsFFXCASEnabled() && PPParams.Sharpness > 0.0f)
 	{
 		ID3D12Resource* pRscFFXCASOut = this->GetTextureResource(rsc.Tex_PostProcess_FFXCASOut);
-		const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+		const CD3DX12_RESOURCE_BARRIER barriers[] =
 		{
 			CD3DX12_RESOURCE_BARRIER::Transition(pRscTonemapperOut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
 		};
-		pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+		pCmd->ResourceBarrier(_countof(barriers), barriers);
 
 		SCOPED_GPU_MARKER(pCmd, "FFX-CAS CS");
 
@@ -2785,7 +2801,7 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 			assert(pPSO);
 			pCmd->SetPipelineState(pPSO);
 			pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FFX_FSR1));
-			pCmd->SetComputeRootDescriptorTable(0, srv_TonemapperOut.GetGPUDescHandle());
+			pCmd->SetComputeRootDescriptorTable(0, pSrvCurrentInput->GetGPUDescHandle());
 			pCmd->SetComputeRootDescriptorTable(1, uav_FSR_EASUOut.GetGPUDescHandle());
 			pCmd->SetComputeRootConstantBufferView(2, cbAddr);
 
@@ -2805,12 +2821,11 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 
 			SCOPED_GPU_MARKER(pCmd, "FSR-RCAS CS");
 			{
-				std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
-				barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pRscEASUOut
-					, D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-					, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-				));
-				pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
+				CD3DX12_RESOURCE_BARRIER barriers[] =
+				{
+					CD3DX12_RESOURCE_BARRIER::Transition(pRscEASUOut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+				};
+				pCmd->ResourceBarrier(_countof(barriers), barriers);
 			}
 
 			ID3D12PipelineState* pPSO = this->GetPSO(EBuiltinPSOs::FFX_FSR1_RCAS_CS_PSO);
@@ -2834,12 +2849,12 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 			pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
 
 			{
-				const CD3DX12_RESOURCE_BARRIER pBarriers[] =
+				const CD3DX12_RESOURCE_BARRIER barriers[] =
 				{
 					CD3DX12_RESOURCE_BARRIER::Transition(pRscEASUOut, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 					CD3DX12_RESOURCE_BARRIER::Transition(pRscRCASOut, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
 				};
-				pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
+				pCmd->ResourceBarrier(_countof(barriers), barriers);
 			}
 
 		}

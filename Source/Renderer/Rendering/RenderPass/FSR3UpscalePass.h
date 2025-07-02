@@ -72,6 +72,7 @@ public:
 	static float GetMipBias(uint RenderResolutionX, uint OutputResolutionX);
 
 	TextureID texOutput; // TODO: make private
+	SRV_ID srvOutput;
 private:
 
 	struct ContextImpl;

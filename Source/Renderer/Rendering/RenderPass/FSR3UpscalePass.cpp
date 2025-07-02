@@ -126,7 +126,7 @@ void FSR3UpscalePass::OnCreateWindowSizeDependentResources(unsigned DisplayWidth
 	createDesc.bCPUReadback = false;
 	createDesc.bCubemap = pTexture->IsCubemap;
 	createDesc.bGenerateMips = pTexture->MipCount > 1;
-	createDesc.InitialState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+	createDesc.InitialState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 	createDesc.Name = "FSR3_Output";
 	createDesc.D3D12Desc.Dimension = D3D12_RESOURCE_DIMENSION::D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 	createDesc.D3D12Desc.Format = pTexture->Format;
@@ -137,6 +137,9 @@ void FSR3UpscalePass::OnCreateWindowSizeDependentResources(unsigned DisplayWidth
 	createDesc.D3D12Desc.SampleDesc.Count = 1;
 	createDesc.D3D12Desc.Flags = D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	texOutput = mRenderer.CreateTexture(createDesc);
+
+	srvOutput = mRenderer.AllocateSRV(1);
+	mRenderer.InitializeSRV(srvOutput, 0, texOutput);
 }
 
 void FSR3UpscalePass::OnDestroyWindowSizeDependentResources()
@@ -154,6 +157,9 @@ void FSR3UpscalePass::OnDestroyWindowSizeDependentResources()
 	{
 		Log::Error("Error (%d) destroying ffxContext", retCode);
 	}
+
+	mRenderer.DestroySRV(srvOutput);
+	mRenderer.DestroyTexture(texOutput);
 }
 
 void FSR3UpscalePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameters)
@@ -236,7 +242,6 @@ void FSR3UpscalePass::RecordCommands(const IRenderPassDrawParameters* pDrawParam
 	
 	// params
 	GetJitterXY(DispatchDescUpscale.jitterOffset.x, DispatchDescUpscale.jitterOffset.y, (uint)RenderSizeX, (uint)OutputSizeX, pParams->iFrame);
-
 	DispatchDescUpscale.motionVectorScale.x = -MotionVectorScaleX; // - because MVs expected pointing from this frame to prev frame
 	DispatchDescUpscale.motionVectorScale.y = -MotionVectorScaleY; // - because MVs expected pointing from this frame to prev frame
 
@@ -318,6 +323,8 @@ void FSR3UpscalePass::GetJitterXY(float& OutPixelSpaceJitterX, float& OutPixelSp
 		Log::Warning("ffxQuery for jitter offset unssuccessful");
 		return;
 	}
+	
+	//Log::Info("ffx Jitter[%d/%d] {%.4f, %.4f}", iFrame, NumPhases, OutPixelSpaceJitterX, OutPixelSpaceJitterY);
 }
 
 float FSR3UpscalePass::GetMipBias(uint RenderResolutionX, uint OutputResolutionX)

@@ -118,14 +118,16 @@ TextureCubeArray texPointLightShadowMaps      : register(t22);
 #if INSTANCED_DRAW
 matrix GetWorldMatrix(uint instID) { return cbPerObject.matWorld[instID]; }
 matrix GetWorldNormalMatrix(uint instID) { return cbPerObject.matNormal[instID]; }
-matrix GetWorldViewProjectionMatrix(uint instID) { return cbPerObject.matJitteredWorldViewProj[instID]; }
+matrix GetWorldViewProjectionMatrix(uint instID) { return cbPerObject.matWorldViewProj[instID]; }
+matrix GetJitteredWorldViewProjectionMatrix(uint instID) { return cbPerObject.matJitteredWorldViewProj[instID]; }
 #if PS_OUTPUT_MOTION_VECTORS
 matrix GetPrevWorldViewProjectionMatrix(uint instID) { return cbPerObject.matWorldViewProjPrev[instID]; }
 #endif
 #else
 matrix GetWorldMatrix() { return cbPerObject.matWorld; }
 matrix GetWorldNormalMatrix() { return cbPerObject.matNormal; }
-matrix GetWorldViewProjectionMatrix() { return cbPerObject.matJitteredWorldViewProj; }
+matrix GetWorldViewProjectionMatrix() { return cbPerObject.matWorldViewProj; }
+matrix GetJitteredWorldViewProjectionMatrix() { return cbPerObject.matJitteredWorldViewProj; }
 #if PS_OUTPUT_MOTION_VECTORS
 matrix GetPrevWorldViewProjectionMatrix() { return cbPerObject.matWorldViewProjPrev; }
 #endif
@@ -155,23 +157,25 @@ PSInput TransformVertex(
 	
 #if INSTANCED_DRAW
 	matrix matW   = GetWorldMatrix(InstanceID);
-	matrix matWVP = GetWorldViewProjectionMatrix(InstanceID);
+	matrix matJWVP = GetJitteredWorldViewProjectionMatrix(InstanceID);
 	matrix matWN = GetWorldNormalMatrix(InstanceID);
 	
 	#if PS_OUTPUT_MOTION_VECTORS
+	matrix matWVP = GetWorldViewProjectionMatrix(InstanceID);
 	matrix matPrevWVP = GetPrevWorldViewProjectionMatrix(InstanceID);
 	#endif
 #else
 	matrix matW   = GetWorldMatrix();
-	matrix matWVP = GetWorldViewProjectionMatrix();
+	matrix matJWVP = GetJitteredWorldViewProjectionMatrix();
 	matrix matWN = GetWorldNormalMatrix();
 	#if PS_OUTPUT_MOTION_VECTORS
+	matrix matWVP = GetWorldViewProjectionMatrix();
 	matrix matPrevWVP = GetPrevWorldViewProjectionMatrix();
 	#endif
 #endif // INSTANCED_DRAW
 	
 	PSInput result;
-	result.position = mul(matWVP, vPosition);
+	result.position = mul(matJWVP, vPosition);
 	result.WorldSpacePosition = mul(matW, vPosition).xyz;
 	result.WorldSpaceNormal = mul((float4x3)matWN, Normal).xyz;
 	result.WorldSpaceTangent = mul((float4x3)matWN, Tangent).xyz;
@@ -181,7 +185,7 @@ PSInput TransformVertex(
 	result.uv = uv;
 
 #if PS_OUTPUT_MOTION_VECTORS
-	result.svPositionCurr = result.position;
+	result.svPositionCurr = mul(matWVP, vPosition);
 #endif
 	
 	return result;
@@ -383,7 +387,6 @@ PSOutput PSMain(PSInput In)
 	o.albedo_metallic = float4(Surface.diffuseColor, Surface.metalness);
 	#endif
 	#if PS_OUTPUT_MOTION_VECTORS
-	//o.motion_vectors = float2(0.77777777777777, 0.8888888888888888); // debug output
 	o.motion_vectors = float2(In.svPositionCurr.xy / In.svPositionCurr.w - In.svPositionPrev.xy / In.svPositionPrev.w);
 	#endif
 
