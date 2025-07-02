@@ -25,9 +25,8 @@
 
 #include "Engine/GPUMarker.h"
 
-void VQRenderer::LoadWindowSizeDependentResources(HWND hwnd, unsigned DisplayWidth, unsigned DisplayHeight, float fResolutionScale, bool bRenderingHDR)
+void VQRenderer::LoadWindowSizeDependentResources(HWND hwnd, const FGraphicsSettings& GFXSettings, bool bRenderingHDR)
 {
-	assert(DisplayWidth >= 1 && DisplayHeight >= 1);
 	SCOPED_CPU_MARKER("LoadWindowSizeDependentResources");
 
 	{
@@ -35,8 +34,16 @@ void VQRenderer::LoadWindowSizeDependentResources(HWND hwnd, unsigned DisplayWid
 		mLatchDefaultResourcesLoaded.wait();
 	}
 
-	const uint RenderResolutionX = static_cast<uint>(DisplayWidth * fResolutionScale);
-	const uint RenderResolutionY = static_cast<uint>(DisplayHeight * fResolutionScale);
+	
+	const uint RenderResolutionX = static_cast<uint>(GFXSettings.GetRenderResolutionX());
+	const uint RenderResolutionY = static_cast<uint>(GFXSettings.GetRenderResolutionY());
+	assert(RenderResolutionX >= 1 && RenderResolutionY >= 1);
+
+	const uint DisplayResolutionX = GFXSettings.Display.DisplayResolutionX;
+	const uint DisplayResolutionY = GFXSettings.Display.DisplayResolutionY;
+	assert(DisplayResolutionX >= 1 && DisplayResolutionY >= 1);
+
+	const bool bTonemapperOutputsDisplayResolution = GFXSettings.IsFSR3Enabled();
 
 	constexpr DXGI_FORMAT MainColorRTFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 	const DXGI_FORMAT TonemapperOutputFormat = bRenderingHDR ? VQRenderer::PREFERRED_HDR_FORMAT : DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -247,8 +254,8 @@ void VQRenderer::LoadWindowSizeDependentResources(HWND hwnd, unsigned DisplayWid
 		FTextureRequest desc("TonemapperOut");
 		desc.D3D12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 			TonemapperOutputFormat
-			, RenderResolutionX
-			, RenderResolutionY
+			, bTonemapperOutputsDisplayResolution ? DisplayResolutionX : RenderResolutionX
+			, bTonemapperOutputsDisplayResolution ? DisplayResolutionY : RenderResolutionY
 			, 1 // Array Size
 			, 1 // MIP levels
 			, 1 // MSAA SampleCount
@@ -302,8 +309,8 @@ void VQRenderer::LoadWindowSizeDependentResources(HWND hwnd, unsigned DisplayWid
 		FTextureRequest desc("FSR_EASU_Out");
 		desc.D3D12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 			TonemapperOutputFormat
-			, DisplayWidth
-			, DisplayHeight
+			, DisplayResolutionX
+			, DisplayResolutionY
 			, 1 // Array Size
 			, 1 // MIP levels
 			, 1 // MSAA SampleCount
@@ -319,8 +326,8 @@ void VQRenderer::LoadWindowSizeDependentResources(HWND hwnd, unsigned DisplayWid
 		FTextureRequest desc("FSR_RCAS_Out");
 		desc.D3D12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 			TonemapperOutputFormat
-			, DisplayWidth
-			, DisplayHeight
+			, DisplayResolutionX
+			, DisplayResolutionY
 			, 1 // Array Size
 			, 1 // MIP levels
 			, 1 // MSAA SampleCount
@@ -337,8 +344,8 @@ void VQRenderer::LoadWindowSizeDependentResources(HWND hwnd, unsigned DisplayWid
 		FTextureRequest desc("UI_SDR");
 		desc.D3D12Desc = CD3DX12_RESOURCE_DESC::Tex2D(
 			DXGI_FORMAT_R8G8B8A8_UNORM
-			, DisplayWidth
-			, DisplayHeight
+			, DisplayResolutionX
+			, DisplayResolutionY
 			, 1 // Array Size
 			, 1 // MIP levels
 			, 1 // MSAA SampleCount
@@ -396,7 +403,7 @@ void VQRenderer::LoadWindowSizeDependentResources(HWND hwnd, unsigned DisplayWid
 	}
 
 	mRenderPasses[ERenderPass::Magnifier]->OnCreateWindowSizeDependentResources(RenderResolutionX, RenderResolutionY, nullptr);
-	mRenderPasses[ERenderPass::Outline]->OnCreateWindowSizeDependentResources(DisplayWidth, DisplayHeight, nullptr);
+	mRenderPasses[ERenderPass::Outline]->OnCreateWindowSizeDependentResources(DisplayResolutionX, DisplayResolutionY, nullptr);
 
 	{
 		SCOPED_CPU_MARKER_C("WAIT_COPY_Q", 0xFFFF0000);
@@ -404,13 +411,13 @@ void VQRenderer::LoadWindowSizeDependentResources(HWND hwnd, unsigned DisplayWid
 		Fence& CopyFence = mCopyObjIDDoneFence[BACK_BUFFER_INDEX];
 		CopyFence.WaitOnCPU(CopyFence.GetValue());
 	}
-	mRenderPasses[ERenderPass::ObjectID]->OnCreateWindowSizeDependentResources(DisplayWidth, DisplayHeight, nullptr);
+	mRenderPasses[ERenderPass::ObjectID]->OnCreateWindowSizeDependentResources(DisplayResolutionX, DisplayResolutionY, nullptr);
 
 	// TODO: conditionally create resources
 	FSR3UpscalePass::FResourceCollection upscaleInitParams = {};
-	upscaleInitParams.fResolutionScale = fResolutionScale;
+	upscaleInitParams.fResolutionScale = GFXSettings.Rendering.RenderResolutionScale;
 	upscaleInitParams.texColorInput = r.Tex_SceneColor;
-	mRenderPasses[ERenderPass::FSR3Upscale]->OnCreateWindowSizeDependentResources(DisplayWidth, DisplayHeight, &upscaleInitParams);
+	mRenderPasses[ERenderPass::FSR3Upscale]->OnCreateWindowSizeDependentResources(DisplayResolutionX, DisplayResolutionY, &upscaleInitParams);
 
 
 	if (!mbWindowSizeDependentResourcesFirstInitiazliationDone)

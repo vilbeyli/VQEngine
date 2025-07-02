@@ -210,7 +210,7 @@ void VQEngine::RenderThread_Inititalize()
 		const int H = bFullscreen ? mpWinMain->GetFullscreenHeight() : mpWinMain->GetHeight();
 		const float fResolutionScale = 1.0f; // Post process parameters are not initialized at this stage to determine the resolution scale
 
-		mpRenderer->LoadWindowSizeDependentResources(hwndMain, W, H, fResolutionScale, this->ShouldRenderHDR(hwndMain));
+		mpRenderer->LoadWindowSizeDependentResources(hwndMain, mSettings.gfx, this->ShouldRenderHDR(hwndMain));
 	});
 }
 

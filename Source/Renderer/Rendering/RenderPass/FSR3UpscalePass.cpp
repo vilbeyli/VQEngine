@@ -132,8 +132,8 @@ void FSR3UpscalePass::OnCreateWindowSizeDependentResources(unsigned DisplayWidth
 	createDesc.D3D12Desc.Format = pTexture->Format;
 	createDesc.D3D12Desc.MipLevels = pTexture->MipCount;
 	createDesc.D3D12Desc.DepthOrArraySize = pTexture->ArraySlices;
-	createDesc.D3D12Desc.Height = pTexture->Height;
-	createDesc.D3D12Desc.Width = pTexture->Width;
+	createDesc.D3D12Desc.Height = DisplayHeight;
+	createDesc.D3D12Desc.Width = DisplayWidth;
 	createDesc.D3D12Desc.SampleDesc.Count = 1;
 	createDesc.D3D12Desc.Flags = D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	texOutput = mRenderer.CreateTexture(createDesc);

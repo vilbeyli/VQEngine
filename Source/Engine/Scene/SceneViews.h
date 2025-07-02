@@ -60,10 +60,7 @@ struct FRenderDebugOptions
 		int LockedScreenPositionY = 0;
 		float BorderColorLocked[3] = { 0.002f, 0.52f, 0.0f }; // G
 		float BorderColorFree[3] = { 0.72f, 0.002f, 0.0f };   // R
-		inline void GetBorderColor(float* pOut) const
-		{
-			memcpy(pOut, bLockPosition ? BorderColorLocked : BorderColorFree, sizeof(float) * 3);
-		}
+		inline void GetBorderColor(float* pOut) const { memcpy(pOut, bLockPosition ? BorderColorLocked : BorderColorFree, sizeof(float) * 3); }
 		inline void ToggleLock(int MousePosX, int MousePosY)
 		{
 			if (!bEnable)

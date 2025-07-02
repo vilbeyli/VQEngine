@@ -133,7 +133,7 @@ public:
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	void                         WaitForLoadCompletion() const;
 	void                         OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h);
-	void                         LoadWindowSizeDependentResources(HWND hwnd, unsigned w, unsigned h, float fResolutionScale, bool bHDR);
+	void                         LoadWindowSizeDependentResources(HWND hwnd, const FGraphicsSettings& GFXSettings, bool bHDR);
 	void                         UnloadWindowSizeDependentResources(HWND hwnd);
 
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -455,6 +455,7 @@ private:
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Render (Private)
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	struct FPostProcessOutput { ID3D12Resource* pRsc; SRV_ID srv; };
 	void            RenderObjectIDPass(int iThread, ID3D12CommandList* pCmdCopy, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, const FSceneShadowViews& ShadowView, const int BACK_BUFFER_INDEX, const FGraphicsSettings& GFXSettings);
 	void            TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx, const FGraphicsSettings& GFXSettings);
 	void            RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView, const FSceneView& SceneView);
@@ -480,7 +481,7 @@ private:
 	void            CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings);
 	void            TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FGraphicsSettings& GFXSettings);
 	void            TransitionForUI(ID3D12GraphicsCommandList* pCmd, const FGraphicsSettings& GFXSettings, bool bHDRDisplay, ID3D12Resource* pRsc, ID3D12Resource* pSwapChainRT);
-	ID3D12Resource* RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings, bool bHDR);
+	FPostProcessOutput RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings, bool bHDR);
 	void            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, ID3D12Resource* pRscIn, const SRV& srv_ColorIn, const FUIState& UIState, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings, bool bHDR);
 	void            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FGraphicsSettings& GFXSettings);
 	HRESULT         PresentFrame(FWindowRenderContext& ctx);

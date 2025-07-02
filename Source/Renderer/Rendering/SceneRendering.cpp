@@ -394,21 +394,14 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 	ID3D12Resource* pRscDepthMSAA    = this->GetTextureResource(rsc.Tex_SceneDepthMSAA);
 	ID3D12Resource* pRscDepth        = this->GetTextureResource(rsc.Tex_SceneDepth);
 	ID3D12Resource* pSwapChainRT     = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
-	ID3D12Resource* pRsc = nullptr;
 	
 	ID3D12CommandList* pCmdCpy = (ID3D12CommandList*)mpRenderingCmds[COPY][BACK_BUFFER_INDEX][0];
 	CommandQueue& GFXCmdQ = this->GetCommandQueue(ECommandQueueType::GFX);
 	CommandQueue& CPYCmdQ = this->GetCommandQueue(ECommandQueueType::COPY);
 	CommandQueue& CMPCmdQ = this->GetCommandQueue(ECommandQueueType::COMPUTE);
-
-	const SRV& srv_UIColorIn = bVizualizationEnabled ?
-		this->GetSRV(rsc.SRV_PostProcess_VisualizationOut) : (
-			bFFXCASEnabled
-			? this->GetSRV(rsc.SRV_PostProcess_FFXCASOut)
-			: (bFSREnabled
-				? this->GetSRV(rsc.SRV_PostProcess_FSR_RCASOut)
-				: this->GetSRV(rsc.SRV_PostProcess_TonemapperOut)));
-
+	
+	FPostProcessOutput ppOutput = {};
+	
 	const float RenderResolutionX = static_cast<float>(GFXSettings.Display.DisplayResolutionX * GFXSettings.Rendering.RenderResolutionScale);
 	const float RenderResolutionY = static_cast<float>(GFXSettings.Display.DisplayResolutionY * GFXSettings.Rendering.RenderResolutionScale);
 
@@ -515,11 +508,11 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 			CompositeReflections(pCmd, &CBHeap, SceneView, GFXSettings);
 		}
 
-		pRsc = RenderPostProcess(pCmd, &CBHeap, SceneView, GFXSettings, bHDRDisplay);
+		ppOutput = RenderPostProcess(pCmd, &CBHeap, SceneView, GFXSettings, bHDRDisplay);
 
-		TransitionForUI(pCmd, GFXSettings, bHDRDisplay, pRsc, pSwapChainRT);
+		TransitionForUI(pCmd, GFXSettings, bHDRDisplay, ppOutput.pRsc, pSwapChainRT);
 
-		RenderUI(pCmd, &CBHeap, ctx, pRsc, srv_UIColorIn, UIState, SceneView, GFXSettings, bHDRDisplay);
+		RenderUI(pCmd, &CBHeap, ctx, ppOutput.pRsc, GetSRV(ppOutput.srv), UIState, SceneView, GFXSettings, bHDRDisplay);
 
 		if (bHDRDisplay)
 		{
@@ -739,11 +732,11 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 			CompositeReflections(pCmd_ThisThread, &CBHeap_This, SceneView, GFXSettings);
 		}
 
-		pRsc = RenderPostProcess(pCmd_ThisThread, &CBHeap_This, SceneView, GFXSettings, bHDRDisplay);
+		ppOutput = RenderPostProcess(pCmd_ThisThread, &CBHeap_This, SceneView, GFXSettings, bHDRDisplay);
 		
-		TransitionForUI(pCmd_PresentThread, GFXSettings, bHDRDisplay, pRsc, pSwapChainRT);
+		TransitionForUI(pCmd_PresentThread, GFXSettings, bHDRDisplay, ppOutput.pRsc, pSwapChainRT);
 
-		RenderUI(pCmd_PresentThread, &CBHeap_This, ctx, pRsc, srv_UIColorIn, UIState, SceneView, GFXSettings, bHDRDisplay);
+		RenderUI(pCmd_PresentThread, &CBHeap_This, ctx, ppOutput.pRsc, GetSRV(ppOutput.srv), UIState, SceneView, GFXSettings, bHDRDisplay);
 
 		if (bHDRDisplay)
 		{
@@ -2497,7 +2490,7 @@ void VQRenderer::TransitionForUI(ID3D12GraphicsCommandList* pCmd, const FGraphic
 
 
 
-ID3D12Resource* VQRenderer::RenderPostProcess(
+VQRenderer::FPostProcessOutput VQRenderer::RenderPostProcess(
 	ID3D12GraphicsCommandList* pCmd,
 	DynamicBufferHeap* pCBufferHeap,
 	const FSceneView& SceneView,
@@ -2506,10 +2499,10 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 )
 {
 	SCOPED_GPU_MARKER(pCmd, "RenderPostProcess");
-
-	ID3D12DescriptorHeap* ppHeaps[] = { this->GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
-
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
+
+	FPostProcessOutput output = { .pRsc = nullptr, .srv = rsc.SRV_SceneColor };
+	ID3D12DescriptorHeap* ppHeaps[] = { this->GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 
 	// pass io
 	const SRV& srv_ColorIn          = this->GetSRV(rsc.SRV_SceneColor);
@@ -2528,24 +2521,24 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 
 	// compute dispatch dimensions
 	
-	const int InputImageWidth  = GFXSettings.Display.DisplayResolutionX * GFXSettings.Rendering.RenderResolutionScale;
-	const int InputImageHeight = GFXSettings.Display.DisplayResolutionY * GFXSettings.Rendering.RenderResolutionScale;
-	assert(InputImageWidth != 0);
-	assert(InputImageHeight != 0);
+	const int SceneRenderResolutionX  = GFXSettings.Display.DisplayResolutionX * GFXSettings.Rendering.RenderResolutionScale;
+	const int SceneRenderResolutionY = GFXSettings.Display.DisplayResolutionY * GFXSettings.Rendering.RenderResolutionScale;
+	assert(SceneRenderResolutionX != 0);
+	assert(SceneRenderResolutionY != 0);
+
 	constexpr int DispatchGroupDimensionX = 8;
 	constexpr int DispatchGroupDimensionY = 8;
-	const     int DispatchRenderX = (InputImageWidth  + (DispatchGroupDimensionX - 1)) / DispatchGroupDimensionX;
-	const     int DispatchRenderY = (InputImageHeight + (DispatchGroupDimensionY - 1)) / DispatchGroupDimensionY;
-	constexpr int DispatchZ = 1;
-
-	ID3D12Resource* pRscOutput = nullptr;
-	const SRV* pSrvCurrentInput = &srv_ColorIn;
+	
 	TextureID texOutput = INVALID_ID;
 	
 	if (GFXSettings.DebugVizualization.DrawModeEnum != FDebugVisualizationSettings::EDrawMode::LIT_AND_POSTPROCESSED)
 	{
 		SCOPED_GPU_MARKER(pCmd, "RenderPostProcess_DebugViz");
 		std::shared_ptr<ScreenSpaceReflectionsPass> pReflectionsPass = std::static_pointer_cast<ScreenSpaceReflectionsPass>(this->GetRenderPass(ERenderPass::ScreenSpaceReflections));
+
+		const     int DispatchRenderX = (SceneRenderResolutionX + (DispatchGroupDimensionX - 1)) / DispatchGroupDimensionX;
+		const     int DispatchRenderY = (SceneRenderResolutionY + (DispatchGroupDimensionY - 1)) / DispatchGroupDimensionY;
+		constexpr int DispatchZ = 1;
 
 		// cbuffer
 		struct FVizualizationParams
@@ -2561,29 +2554,30 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 		pConstBuffer->iUnpackNormals = GFXSettings.DebugVizualization.bUnpackNormals ? 1 : 0;
 		pConstBuffer->iDrawMode = static_cast<int>(GFXSettings.DebugVizualization.DrawModeEnum); // iDrawMode is not connected to the UI
 
-		SRV SRVIn = *pSrvCurrentInput;
+		SRV_ID srvID = rsc.SRV_SceneColor;
 		switch (GFXSettings.DebugVizualization.DrawModeEnum)
 		{
-		case FDebugVisualizationSettings::EDrawMode::DEPTH         : SRVIn = this->GetSRV(rsc.SRV_SceneDepth); break;
-		case FDebugVisualizationSettings::EDrawMode::NORMALS       : SRVIn = this->GetSRV(rsc.SRV_SceneNormals); break;
-		case FDebugVisualizationSettings::EDrawMode::AO            : SRVIn = this->GetSRV(rsc.SRV_FFXCACAO_Out); break;
+		case FDebugVisualizationSettings::EDrawMode::DEPTH         : srvID = rsc.SRV_SceneDepth; break;
+		case FDebugVisualizationSettings::EDrawMode::NORMALS       : srvID = rsc.SRV_SceneNormals; break;
+		case FDebugVisualizationSettings::EDrawMode::AO            : srvID = rsc.SRV_FFXCACAO_Out; break;
 		case FDebugVisualizationSettings::EDrawMode::ALBEDO        : // same as below
-		case FDebugVisualizationSettings::EDrawMode::METALLIC      : SRVIn = this->GetSRV(rsc.SRV_SceneVisualization); break;
+		case FDebugVisualizationSettings::EDrawMode::METALLIC      : srvID = rsc.SRV_SceneVisualization; break;
 		case FDebugVisualizationSettings::EDrawMode::ROUGHNESS     : srv_ColorIn; break;
-		case FDebugVisualizationSettings::EDrawMode::REFLECTIONS   : SRVIn = this->GetSRV(pReflectionsPass->GetPassOutputSRV()); break;
-		case FDebugVisualizationSettings::EDrawMode::MOTION_VECTORS: SRVIn = this->GetSRV(rsc.SRV_SceneMotionVectors); break;
+		case FDebugVisualizationSettings::EDrawMode::REFLECTIONS   : srvID = pReflectionsPass->GetPassOutputSRV(); break;
+		case FDebugVisualizationSettings::EDrawMode::MOTION_VECTORS: srvID = rsc.SRV_SceneMotionVectors; break;
 		}
 
 		pCmd->SetPipelineState(this->GetPSO(EBuiltinPSOs::VIZUALIZATION_CS_PSO));
 		pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1));
 		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-		pCmd->SetComputeRootDescriptorTable(0, SRVIn.GetGPUDescHandle());
+		pCmd->SetComputeRootDescriptorTable(0, GetSRV(srvID).GetGPUDescHandle());
 		pCmd->SetComputeRootDescriptorTable(1, uav_VisualizationOut.GetGPUDescHandle());
 		pCmd->SetComputeRootConstantBufferView(2, cbAddr);
 		pCmd->Dispatch(DispatchRenderX, DispatchRenderY, DispatchZ);
 
-		pRscOutput = this->GetTextureResource(rsc.Tex_PostProcess_VisualizationOut);
-		return pRscOutput;
+		output.pRsc = this->GetTextureResource(rsc.Tex_PostProcess_VisualizationOut);
+		output.srv = srvID;
+		return output;
 	}
 
 	// FSR3 must be 
@@ -2629,13 +2623,13 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 		FSR3UpscalePass* pFSR3Pass = static_cast<FSR3UpscalePass*>(mRenderPasses[ERenderPass::FSR3Upscale].get());
 		pFSR3Pass->RecordCommands(&params);
 
-		pRscOutput = this->GetTextureResource(pFSR3Pass->texOutput);
-		pSrvCurrentInput = &this->GetSRV(pFSR3Pass->srvOutput);
+		output.pRsc = this->GetTextureResource(pFSR3Pass->texOutput);
+		output.srv = pFSR3Pass->srvOutput;
 		texOutput = pFSR3Pass->texOutput;
 
 		CD3DX12_RESOURCE_BARRIER barriers[] =
 		{
-			CD3DX12_RESOURCE_BARRIER::Transition(pRscOutput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+			CD3DX12_RESOURCE_BARRIER::Transition(output.pRsc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS , D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
 		};
 		pCmd->ResourceBarrier(_countof(barriers), barriers);
 	}
@@ -2643,6 +2637,10 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 	if constexpr (PP_ENABLE_BLUR_PASS && GFXSettings.PostProcessing.EnableGaussianBlur)
 	{
 		SCOPED_GPU_MARKER(pCmd, "BlurCS");
+		const     int DispatchRenderX = (GFXSettings.Display.DisplayResolutionX + (DispatchGroupDimensionX - 1)) / DispatchGroupDimensionX;
+		const     int DispatchRenderY = (GFXSettings.Display.DisplayResolutionY + (DispatchGroupDimensionY - 1)) / DispatchGroupDimensionY;
+		constexpr int DispatchZ = 1;
+
 		const UAV& uav_BlurIntermediate = this->GetUAV(rsc.UAV_PostProcess_BlurIntermediate);
 		const UAV& uav_BlurOutput       = this->GetUAV(rsc.UAV_PostProcess_BlurOutput);
 		const SRV& srv_blurIntermediate = this->GetSRV(rsc.SRV_PostProcess_BlurIntermediate);
@@ -2657,8 +2655,8 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 		FBlurParams* pBlurParams = nullptr;
 		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 		pCBufferHeap->AllocConstantBuffer(sizeof(FBlurParams), (void**)&pBlurParams, &cbAddr);
-		pBlurParams->iImageSizeX = InputImageWidth;
-		pBlurParams->iImageSizeY = InputImageHeight;
+		pBlurParams->iImageSizeX = SceneRenderResolutionX;
+		pBlurParams->iImageSizeY = SceneRenderResolutionY;
 
 		{
 			SCOPED_GPU_MARKER(pCmd, "BlurX");
@@ -2666,8 +2664,8 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 			pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1));
 
 			const int FFXDispatchGroupDimension = 16;
-			const int FFXDispatchX = (InputImageWidth  + (FFXDispatchGroupDimension - 1)) / FFXDispatchGroupDimension;
-			const int FFXDispatchY = (InputImageHeight + (FFXDispatchGroupDimension - 1)) / FFXDispatchGroupDimension;
+			const int FFXDispatchX = (SceneRenderResolutionX  + (FFXDispatchGroupDimension - 1)) / FFXDispatchGroupDimension;
+			const int FFXDispatchY = (SceneRenderResolutionY + (FFXDispatchGroupDimension - 1)) / FFXDispatchGroupDimension;
 
 			pCmd->SetComputeRootDescriptorTable(0, srv_ColorIn.GetGPUDescHandle());
 			pCmd->SetComputeRootDescriptorTable(1, uav_BlurIntermediate.GetGPUDescHandle());
@@ -2698,12 +2696,16 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 			pCmd->ResourceBarrier(_countof(pBarriers), pBarriers);
 		}
 
-		pSrvCurrentInput = &srv_blurOutput;
+		output.pRsc = pRscBlurOutput;
+		output.srv = rsc.SRV_PostProcess_BlurOutput;
 		texOutput = rsc.Tex_PostProcess_BlurOutput;
 	}
 
 	{
 		SCOPED_GPU_MARKER(pCmd, "TonemapperCS");
+		const     int DispatchRenderX = (GFXSettings.Display.DisplayResolutionX + (DispatchGroupDimensionX - 1)) / DispatchGroupDimensionX;
+		const     int DispatchRenderY = (GFXSettings.Display.DisplayResolutionY + (DispatchGroupDimensionY - 1)) / DispatchGroupDimensionY;
+		constexpr int DispatchZ = 1;
 
 		struct FTonemapperParams
 		{
@@ -2725,12 +2727,13 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 		pCmd->SetPipelineState(this->GetPSO(EBuiltinPSOs::TONEMAPPER_PSO));
 		pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::CS__SRV1_UAV1_ROOTCBV1));
 		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-		pCmd->SetComputeRootDescriptorTable(0, pSrvCurrentInput->GetGPUDescHandle());
+		pCmd->SetComputeRootDescriptorTable(0, GetSRV(output.srv).GetGPUDescHandle());
 		pCmd->SetComputeRootDescriptorTable(1, uav_TonemapperOut.GetGPUDescHandle());
 		pCmd->SetComputeRootConstantBufferView(2, cbAddr);
 		pCmd->Dispatch(DispatchRenderX, DispatchRenderY, DispatchZ);
-		pRscOutput = pRscTonemapperOut;
-		pSrvCurrentInput = &srv_TonemapperOut;
+
+		output.pRsc = pRscTonemapperOut;
+		output.srv = rsc.SRV_PostProcess_TonemapperOut;
 	}
 
 #if !DISABLE_FIDELITYFX_CAS
@@ -2763,8 +2766,8 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 		// each FFX-CAS CS thread processes 4 pixels.
 		// workgroup is 64 threads, hence 256 (16x16) pixels are processed per thread group that is dispatched
  		constexpr int CAS_WORKGROUP_WORK_DIMENSION = 16;
-		const int CASDispatchX = (InputImageWidth  + (CAS_WORKGROUP_WORK_DIMENSION - 1)) / CAS_WORKGROUP_WORK_DIMENSION;
-		const int CASDispatchY = (InputImageHeight + (CAS_WORKGROUP_WORK_DIMENSION - 1)) / CAS_WORKGROUP_WORK_DIMENSION;
+		const int CASDispatchX = (SceneRenderResolutionX  + (CAS_WORKGROUP_WORK_DIMENSION - 1)) / CAS_WORKGROUP_WORK_DIMENSION;
+		const int CASDispatchY = (SceneRenderResolutionY + (CAS_WORKGROUP_WORK_DIMENSION - 1)) / CAS_WORKGROUP_WORK_DIMENSION;
 		pCmd->Dispatch(CASDispatchX, CASDispatchY, DispatchZ);
 		pRscOutput = pRscFFXCASOut;
 	}
@@ -2807,7 +2810,7 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 			assert(pPSO);
 			pCmd->SetPipelineState(pPSO);
 			pCmd->SetComputeRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FFX_FSR1));
-			pCmd->SetComputeRootDescriptorTable(0, pSrvCurrentInput->GetGPUDescHandle());
+			pCmd->SetComputeRootDescriptorTable(0, GetSRV(output.srv).GetGPUDescHandle());
 			pCmd->SetComputeRootDescriptorTable(1, uav_FSR_EASUOut.GetGPUDescHandle());
 			pCmd->SetComputeRootConstantBufferView(2, cbAddr);
 
@@ -2816,10 +2819,11 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 			constexpr int WORKGROUP_WORK_DIMENSION = 16;
 			const int DispatchX = (GFXSettings.Display.DisplayResolutionX + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
 			const int DispatchY = (GFXSettings.Display.DisplayResolutionY + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
-			pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
+			pCmd->Dispatch(DispatchX, DispatchY, 1);
 			
 			texFSR1Out = rsc.Tex_PostProcess_FSR_EASUOut;
 			pRscFSR1Out = this->GetTextureResource(rsc.Tex_PostProcess_FSR_EASUOut);
+			output.srv = rsc.SRV_PostProcess_FSR_EASUOut;
 		}
 		
 		const bool bFFX_RCAS_Enabled = true; // TODO: drive with UI ?
@@ -2855,7 +2859,7 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 			constexpr int WORKGROUP_WORK_DIMENSION = 16;
 			const int DispatchX = (GFXSettings.Display.DisplayResolutionX + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
 			const int DispatchY = (GFXSettings.Display.DisplayResolutionY + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
-			pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
+			pCmd->Dispatch(DispatchX, DispatchY, 1);
 
 			{
 				const CD3DX12_RESOURCE_BARRIER barriers[] =
@@ -2868,15 +2872,14 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 
 			texFSR1Out = rsc.Tex_PostProcess_FSR_RCASOut;
 			pRscFSR1Out = this->GetTextureResource(rsc.Tex_PostProcess_FSR_RCASOut);
+			output.srv = rsc.SRV_PostProcess_FSR_RCASOut;
 		}
 
-		pRscOutput = pRscFSR1Out;
+		output.pRsc = pRscFSR1Out;
 		texOutput = texFSR1Out;
-		pSrvCurrentInput = nullptr; // TODO
-		assert(pSrvCurrentInput);
 	}
 
-	return pRscOutput;
+	return output;
 }
 
 void VQRenderer::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, ID3D12Resource* pRscInput, const SRV& srv_ColorIn, const FUIState& UIState, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings, bool bHDR)
