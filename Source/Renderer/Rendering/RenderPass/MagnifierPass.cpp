@@ -56,7 +56,7 @@ void MagnifierPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamet
 	const FDrawParameters* pParams = static_cast<const FDrawParameters*>(pDrawParameters);
 	assert(pParams);
 	assert(pParams->pCmd);
-	assert(pParams->pCBufferHeap);
+	assert(pParams->cbAddr != 0);
 	assert(pParams->pCBufferParams);
 
 	ID3D12GraphicsCommandList* pCmd = pParams->pCmd;
@@ -70,17 +70,12 @@ void MagnifierPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamet
 		D3D12_VIEWPORT viewport{ 0.0f, 0.0f, W, H, 0.0f, 1.0f };
 		D3D12_RECT     scissorsRect{ 0, 0, (LONG)W, (LONG)H };
 
-		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-		FMagnifierParameters* CB = nullptr;
-		pParams->pCBufferHeap->AllocConstantBuffer(sizeof(FMagnifierParameters), (void**)&CB, &cbAddr);
-		memcpy(CB, pParams->pCBufferParams.get(), sizeof(FMagnifierParameters));
-		
 		pCmd->SetPipelineState(mRenderer.GetPSO(PSOMagnifierPS));
 		pCmd->OMSetRenderTargets(1, &pParams->RTV, FALSE, NULL);
 		
 		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FullScreenTriangle));
 		pCmd->SetGraphicsRootDescriptorTable(0, pParams->SRVColorInput.GetGPUDescHandle());
-		pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
+		pCmd->SetGraphicsRootConstantBufferView(1, pParams->cbAddr);
 
 		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		pCmd->IASetVertexBuffers(0, 1, NULL);

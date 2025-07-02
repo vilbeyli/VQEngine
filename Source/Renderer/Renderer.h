@@ -481,7 +481,7 @@ private:
 	void            TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FGraphicsSettings& GFXSettings);
 	void            TransitionForUI(ID3D12GraphicsCommandList* pCmd, const FGraphicsSettings& GFXSettings, bool bHDRDisplay, ID3D12Resource* pRsc, ID3D12Resource* pSwapChainRT);
 	ID3D12Resource* RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings, bool bHDR);
-	void            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, ID3D12Resource* pRscIn, const SRV& srv_ColorIn, const FUIState& UIState, const FGraphicsSettings& GFXSettings, bool bHDR);
+	void            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, ID3D12Resource* pRscIn, const SRV& srv_ColorIn, const FUIState& UIState, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings, bool bHDR);
 	void            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FGraphicsSettings& GFXSettings);
 	HRESULT         PresentFrame(FWindowRenderContext& ctx);
 	void DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, const std::vector<FInstancedDrawParameters>& drawParams, size_t iDepthMode);

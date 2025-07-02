@@ -21,31 +21,16 @@
 #include "Renderer/Resources/ResourceViews.h" // TODO: use IDs instead of SRV & IBV in draw params
 #include <memory>
 
-static constexpr float MAGNIFIER_BORDER_COLOR__LOCKED[3] = { 0.002f, 0.52f, 0.0f }; // G
-static constexpr float MAGNIFIER_BORDER_COLOR__FREE[3] = { 0.72f, 0.002f, 0.0f };   // R
-
 class DynamicBufferHeap;
 struct FMagnifierParameters
 {
-	FMagnifierParameters()
-		: uImageWidth(1)
-		, uImageHeight(1)
-		, iMousePos{ 0, 0 }
-		, fBorderColorRGB{ 1, 1, 1, 1 }
-		, fMagnificationAmount(6.0f)
-		, fMagnifierScreenRadius(0.35f)
-		, iMagnifierOffset{ 500, -500 }
-	{}
-
-	uint32_t    uImageWidth;
-	uint32_t    uImageHeight;
-	int         iMousePos[2];            // in pixels, driven by ImGuiIO.MousePos.xy
-
-	float       fBorderColorRGB[4];      // Linear RGBA
-
-	float       fMagnificationAmount;    // [1-...]
-	float       fMagnifierScreenRadius;  // [0-1]
-	mutable int iMagnifierOffset[2];     // in pixels
+	uint32_t    uImageWidth = 1;
+	uint32_t    uImageHeight = 1;
+	int         iMousePos[2] = { 0, 0 }; // in pixels, driven by ImGuiIO.MousePos.xy
+	float       fBorderColorRGB[4] = { 1, 1, 1, 1 }; // Linear RGBA
+	float       fMagnificationAmount = 6.0f;         // [1-...]
+	float       fMagnifierScreenRadius = 0.35f;      // [0-1]
+	mutable int iMagnifierOffset[2] = { 500, -500 }; // in pixels
 };
 
 class MagnifierPass : public RenderPassBase
@@ -55,8 +40,8 @@ public:
 	struct FDrawParameters : public IRenderPassDrawParameters
 	{
 		ID3D12GraphicsCommandList* pCmd = nullptr;
-		DynamicBufferHeap* pCBufferHeap = nullptr;
-		std::shared_ptr<const FMagnifierParameters> pCBufferParams;
+		const FMagnifierParameters* pCBufferParams = nullptr;
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = 0;
 		D3D12_CPU_DESCRIPTOR_HANDLE RTV = {};
 		SRV SRVColorInput = {};
 		IBV IndexBufferView = {};

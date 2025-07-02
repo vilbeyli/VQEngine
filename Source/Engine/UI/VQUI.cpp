@@ -140,40 +140,6 @@ static constexpr float MAGNIFICATION_AMOUNT_MIN = 1.0f;
 static constexpr float MAGNIFICATION_AMOUNT_MAX = 32.0f;
 static constexpr float MAGNIFIER_RADIUS_MIN = 0.01f;
 static constexpr float MAGNIFIER_RADIUS_MAX = 0.85f;
-void FMagnifierUIState::ToggleMagnifierLock()
-{
-	if (this->bUseMagnifier)
-	{
-		this->bLockMagnifierPositionHistory = this->bLockMagnifierPosition; // record histroy
-		this->bLockMagnifierPosition = !this->bLockMagnifierPosition; // flip state
-		const bool bLockSwitchedOn = !this->bLockMagnifierPositionHistory && this->bLockMagnifierPosition;
-		const bool bLockSwitchedOff = this->bLockMagnifierPositionHistory && !this->bLockMagnifierPosition;
-		if (bLockSwitchedOn)
-		{
-			const ImGuiIO& io = ImGui::GetIO();
-			this->LockedMagnifiedScreenPositionX = static_cast<int>(io.MousePos.x);
-			this->LockedMagnifiedScreenPositionY = static_cast<int>(io.MousePos.y);
-			for (int ch = 0; ch < 3; ++ch) this->pMagnifierParams->fBorderColorRGB[ch] = MAGNIFIER_BORDER_COLOR__LOCKED[ch];
-		}
-		else if (bLockSwitchedOff)
-		{
-			for (int ch = 0; ch < 3; ++ch) this->pMagnifierParams->fBorderColorRGB[ch] = MAGNIFIER_BORDER_COLOR__FREE[ch];
-		}
-	}
-}
-
-template<class T> static T clamped(const T& v, const T& min, const T& max)
-{
-	if (v < min)      return min;
-	else if (v > max) return max;
-	else              return v;
-}
-// These are currently not bound to any mouse input and are here for convenience/reference.
-// Mouse scroll is currently wired up to camera for panning and moving in the local Z direction.
-// Any application that would prefer otherwise can utilize these for easily controlling the magnifier parameters through the desired input.
-void FMagnifierUIState::AdjustMagnifierSize(float increment /*= 0.05f*/) { pMagnifierParams->fMagnifierScreenRadius = clamped(pMagnifierParams->fMagnifierScreenRadius + increment, MAGNIFIER_RADIUS_MIN, MAGNIFIER_RADIUS_MAX); }
-void FMagnifierUIState::AdjustMagnifierMagnification(float increment /*= 1.00f*/) { pMagnifierParams->fMagnificationAmount = clamped(pMagnifierParams->fMagnificationAmount + increment, MAGNIFICATION_AMOUNT_MIN, MAGNIFICATION_AMOUNT_MAX); }
-
 
 // -----------------------------------------------------------------------------------------------
 // -----------------------------------------------------------------------------------------------
@@ -194,13 +160,6 @@ static void InitializeEngineUIState(FUIState& s)
 
 	for (int i = 0; i < FUIState::EEditorMode::NUM_EDITOR_MODES; ++i)
 		s.SelectedEditeeIndex[i] = 0;
-
-	// couldn't bother using smart pointers due to inlined default destructors.
-	// There's never a smooth way to work with them -- either too verbose or breaks compilation.
-	// Raw ptrs will do for now
-	
-	s.mpMagnifierState = std::make_unique<FMagnifierUIState>();
-	s.mpMagnifierState->pMagnifierParams = std::make_unique<FMagnifierParameters>();
 }
 
 void FUIState::GetMouseScreenPosition(int& X, int& Y) const
@@ -1031,31 +990,31 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams
 		ImGui::Text("Magnifier");
 		ImGui::Separator();
 		{
-			ImGui::Checkbox("Show Magnifier (Middle Mouse)", &mUIState.mpMagnifierState->bUseMagnifier);
+			FRenderDebugOptions::FMagnifierOptions& MagnifierOptions = SceneRenderParams.Debug.Magnifier;
+			ImGui::Checkbox("Show Magnifier (Middle Mouse)", &MagnifierOptions.bEnable);
 
-			BeginDisabledUIState(mUIState.mpMagnifierState->bUseMagnifier);
+			BeginDisabledUIState(MagnifierOptions.bEnable);
 			{
-				FMagnifierParameters& params = *mUIState.mpMagnifierState->pMagnifierParams;
-
 				// Use a local bool state here to track locked state through the UI widget,
 				// and then call ToggleMagnifierLockedState() to update the persistent state (m_UIstate).
 				// The keyboard input for toggling lock directly operates on the persistent state.
-				const bool bIsMagnifierCurrentlyLocked = mUIState.mpMagnifierState->bLockMagnifierPosition;
+				const bool bIsMagnifierCurrentlyLocked = MagnifierOptions.bLockPosition;
 				bool bMagnifierToggle = bIsMagnifierCurrentlyLocked;
 				ImGui::Checkbox("Lock Position (Shift + Middle Mouse)", &bMagnifierToggle);
 
 				if (bMagnifierToggle != bIsMagnifierCurrentlyLocked)
-					mUIState.mpMagnifierState->ToggleMagnifierLock();
+					MagnifierOptions.ToggleLock(io.MousePos.x, io.MousePos.y);
 
-				ImGui::SliderFloat("Screen Size", &params.fMagnifierScreenRadius, MAGNIFIER_RADIUS_MIN, MAGNIFIER_RADIUS_MAX);
-				ImGui::SliderFloat("Magnification", &params.fMagnificationAmount, MAGNIFICATION_AMOUNT_MIN, MAGNIFICATION_AMOUNT_MAX);
+				
+				ImGui::SliderFloat("Screen Size"  , &MagnifierOptions.fMagnifierScreenRadius, MAGNIFIER_RADIUS_MIN, MAGNIFIER_RADIUS_MAX);
+				ImGui::SliderFloat("Magnification", &MagnifierOptions.fMagnificationAmount, MAGNIFICATION_AMOUNT_MIN, MAGNIFICATION_AMOUNT_MAX);
 				if (bMagnifierToggle)
 				{
-					ImGui::SliderInt("OffsetX", &params.iMagnifierOffset[0], -(int)W, W);
-					ImGui::SliderInt("OffsetY", &params.iMagnifierOffset[1], -(int)H, H);
+					ImGui::SliderInt("OffsetX", &MagnifierOptions.ScreenOffsetY, -(int)W, W);
+					ImGui::SliderInt("OffsetY", &MagnifierOptions.ScreenOffsetY, -(int)H, H);
 				}
 			}
-			EndDisabledUIState(mUIState.mpMagnifierState->bUseMagnifier);
+			EndDisabledUIState(SceneRenderParams.Debug.Magnifier.bEnable);
 		}
 		ImGui::EndTabItem();
 	}

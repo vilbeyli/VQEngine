@@ -230,9 +230,9 @@ PSOutput PSMain(PSInput In)
 	const float2 uv = In.uv * cbPerObject.materialData.uvScaleOffset.xy + cbPerObject.materialData.uvScaleOffset.zw;
 	const int TEX_CFG = cbPerObject.materialData.textureConfig;
 	
-	float4 AlbedoAlpha = texDiffuse  .Sample(AnisoSampler, uv);
+	float4 AlbedoAlpha = texDiffuse.Sample(AnisoSampler, uv);
 	float3 Normal      = texNormals.SampleBias(AnisoSampler, uv, cbPerObject.materialData.normalMapMipBias).rgb;
-	float3 Emissive    = texEmissive .Sample(LinearSampler, uv).rgb;
+	float3 Emissive    = texEmissive.Sample(LinearSampler, uv).rgb;
 	float  Metalness   = texMetalness.Sample(AnisoSampler, uv).r;
 	float  Roughness   = texRoughness.Sample(AnisoSampler, uv).r;
 	float3 OcclRghMtl  = texOcclRoughMetal.Sample(AnisoSampler, uv).rgb;

@@ -519,7 +519,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 
 		TransitionForUI(pCmd, GFXSettings, bHDRDisplay, pRsc, pSwapChainRT);
 
-		RenderUI(pCmd, &CBHeap, ctx, pRsc, srv_UIColorIn, UIState, GFXSettings, bHDRDisplay);
+		RenderUI(pCmd, &CBHeap, ctx, pRsc, srv_UIColorIn, UIState, SceneView, GFXSettings, bHDRDisplay);
 
 		if (bHDRDisplay)
 		{
@@ -743,7 +743,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 		
 		TransitionForUI(pCmd_PresentThread, GFXSettings, bHDRDisplay, pRsc, pSwapChainRT);
 
-		RenderUI(pCmd_PresentThread, &CBHeap_This, ctx, pRsc, srv_UIColorIn, UIState, GFXSettings, bHDRDisplay);
+		RenderUI(pCmd_PresentThread, &CBHeap_This, ctx, pRsc, srv_UIColorIn, UIState, SceneView, GFXSettings, bHDRDisplay);
 
 		if (bHDRDisplay)
 		{
@@ -2540,6 +2540,7 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 
 	ID3D12Resource* pRscOutput = nullptr;
 	const SRV* pSrvCurrentInput = &srv_ColorIn;
+	TextureID texOutput = INVALID_ID;
 	
 	if (GFXSettings.DebugVizualization.DrawModeEnum != FDebugVisualizationSettings::EDrawMode::LIT_AND_POSTPROCESSED)
 	{
@@ -2630,6 +2631,7 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 
 		pRscOutput = this->GetTextureResource(pFSR3Pass->texOutput);
 		pSrvCurrentInput = &this->GetSRV(pFSR3Pass->srvOutput);
+		texOutput = pFSR3Pass->texOutput;
 
 		CD3DX12_RESOURCE_BARRIER barriers[] =
 		{
@@ -2697,6 +2699,7 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 		}
 
 		pSrvCurrentInput = &srv_blurOutput;
+		texOutput = rsc.Tex_PostProcess_BlurOutput;
 	}
 
 	{
@@ -2780,6 +2783,9 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 		};
 		pCmd->ResourceBarrier(_countof(barriers), barriers);
 
+		ID3D12Resource* pRscFSR1Out = nullptr;
+		TextureID texFSR1Out = INVALID_ID;
+
 		{
 			SCOPED_GPU_MARKER(pCmd, "FSR-EASU CS");
 
@@ -2811,9 +2817,12 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 			const int DispatchX = (GFXSettings.Display.DisplayResolutionX + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
 			const int DispatchY = (GFXSettings.Display.DisplayResolutionY + (WORKGROUP_WORK_DIMENSION - 1)) / WORKGROUP_WORK_DIMENSION;
 			pCmd->Dispatch(DispatchX, DispatchY, DispatchZ);
+			
+			texFSR1Out = rsc.Tex_PostProcess_FSR_EASUOut;
+			pRscFSR1Out = this->GetTextureResource(rsc.Tex_PostProcess_FSR_EASUOut);
 		}
+		
 		const bool bFFX_RCAS_Enabled = true; // TODO: drive with UI ?
-		ID3D12Resource* pRscFSR1Out = this->GetTextureResource(rsc.Tex_PostProcess_FSR_RCASOut);
 		if (bFFX_RCAS_Enabled)
 		{
 			ID3D12Resource* pRscEASUOut = this->GetTextureResource(rsc.Tex_PostProcess_FSR_EASUOut);
@@ -2857,16 +2866,20 @@ ID3D12Resource* VQRenderer::RenderPostProcess(
 				pCmd->ResourceBarrier(_countof(barriers), barriers);
 			}
 
+			texFSR1Out = rsc.Tex_PostProcess_FSR_RCASOut;
+			pRscFSR1Out = this->GetTextureResource(rsc.Tex_PostProcess_FSR_RCASOut);
 		}
 
 		pRscOutput = pRscFSR1Out;
+		texOutput = texFSR1Out;
+		pSrvCurrentInput = nullptr; // TODO
+		assert(pSrvCurrentInput);
 	}
-	
 
 	return pRscOutput;
 }
 
-void VQRenderer::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, ID3D12Resource* pRscInput, const SRV& srv_ColorIn, const FUIState& UIState, const FGraphicsSettings& GFXSettings, bool bHDR)
+void VQRenderer::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, ID3D12Resource* pRscInput, const SRV& srv_ColorIn, const FUIState& UIState, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings, bool bHDR)
 {
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 	const float             RenderResolutionX = static_cast<float>(GFXSettings.Display.DisplayResolutionX);
@@ -2890,21 +2903,57 @@ void VQRenderer::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pC
 		? this->GetRTV(rsc.RTV_UI_SDR).GetCPUDescHandle()
 		: ctx.SwapChain.GetCurrentBackBufferRTVHandle();
 
-	if (!bHDR)
+	// MAGNIFIER
+	const FRenderDebugOptions::FMagnifierOptions& Magnifier = SceneView.sceneRenderOptions.Debug.Magnifier;
+	if (Magnifier.bEnable)
 	{
-		if (UIState.mpMagnifierState->bUseMagnifier)
+		SCOPED_GPU_MARKER(pCmd, "MagnifierPass");
+
+		D3D12_INDEX_BUFFER_VIEW nullIBV = {};
+		nullIBV.Format = DXGI_FORMAT_R32_UINT;
+		nullIBV.SizeInBytes = 0;
+		nullIBV.BufferLocation = 0;
+
+		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = bHDR
+			? this->GetRTV(rsc.RTV_UI_SDR).GetCPUDescHandle()
+			: ctx.SwapChain.GetCurrentBackBufferRTVHandle();
+
+		if (bHDR)
 		{
-			SCOPED_GPU_MARKER(pCmd, "MagnifierPass");
+			// TODO:
+		}
+		else
+		{
+			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+			FMagnifierParameters* CB = nullptr;
+			pCBufferHeap->AllocConstantBuffer(sizeof(FMagnifierParameters), (void**)&CB, &cbAddr);
+			*CB = FMagnifierParameters();
+			CB->fMagnificationAmount = Magnifier.fMagnificationAmount;
+			CB->fMagnifierScreenRadius = Magnifier.fMagnifierScreenRadius;
+			CB->iMagnifierOffset[0] = Magnifier.ScreenOffsetX;
+			CB->iMagnifierOffset[1] = Magnifier.ScreenOffsetY;
+			CB->iMousePos[0] = SceneView.iMousePosX;
+			CB->iMousePos[1] = SceneView.iMousePosY;
+			CB->uImageWidth = static_cast<uint>(RenderResolutionX);
+			CB->uImageHeight = static_cast<uint>(RenderResolutionY);
+			Magnifier.GetBorderColor(CB->fBorderColorRGB);
+			MagnifierPass::KeepMagnifierOnScreen(*CB);
+
 			MagnifierPass::FDrawParameters MagnifierDrawParams;
 			MagnifierDrawParams.pCmd = pCmd;
-			MagnifierDrawParams.pCBufferHeap = pCBufferHeap;
 			MagnifierDrawParams.IndexBufferView = nullIBV;
 			MagnifierDrawParams.RTV = rtvHandle;
 			MagnifierDrawParams.SRVColorInput = srv_ColorIn;
-			MagnifierDrawParams.pCBufferParams = UIState.mpMagnifierState->pMagnifierParams;
+			MagnifierDrawParams.cbAddr = cbAddr;
+			MagnifierDrawParams.pCBufferParams = CB;
 			this->GetRenderPass(ERenderPass::Magnifier)->RecordCommands(&MagnifierDrawParams);
 		}
-		else
+	}
+	
+	// PASSTHROUGH
+	else 
+	{
+		if (!bHDR) // SDR
 		{
 			SCOPED_GPU_MARKER(pCmd, "SwapchainPassthrough");
 			pCmd->SetPipelineState(this->GetPSO(bHDR ? EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO : EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO));
@@ -2923,15 +2972,9 @@ void VQRenderer::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pC
 
 			pCmd->DrawInstanced(3, 1, 0, 0);
 		}
-	}
-	else
-	{
-		if (UIState.mpMagnifierState->bUseMagnifier)
+		else // HDR
 		{
-			// TODO: make magnifier work w/ HDR when the new HDR monitor arrives
-		}
-		else
-		{
+			SCOPED_GPU_MARKER(pCmd, "ClearSwapchain");
 			pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
 			const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
 			pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, NULL);

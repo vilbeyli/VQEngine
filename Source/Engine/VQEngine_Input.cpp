@@ -99,19 +99,6 @@ void VQEngine::HandleUIInput()
 				Log::Info("Toggle FFX-CAS: %d", PPParams.bEnableCAS);
 #endif
 			}
-
-			/* MAGNIFIER CONTROLS */
-			const bool bMidMouseTriggered = input.IsMouseTriggered(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE);
-			if (bMidMouseTriggered)
-			{
-				if (bIsShiftDown)
-				{
-					if (mUIState.mpMagnifierState->bUseMagnifier)
-						mUIState.mpMagnifierState->ToggleMagnifierLock();
-				}
-				else
-					mUIState.mpMagnifierState->bUseMagnifier ^= 1;
-			}
 		}
 	}
 }
@@ -159,6 +146,23 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 	{
 		Toggle(mUIState.bHideAllWindows);
 	}
+
+	/* MAGNIFIER CONTROLS */
+	const bool bMidMouseTriggered = input.IsMouseTriggered(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE);
+	FSceneView& SceneView = mpScene->GetSceneView(0);
+	FRenderDebugOptions::FMagnifierOptions& Magnifier = SceneView.sceneRenderOptions.Debug.Magnifier;
+	if (bMidMouseTriggered)
+	{
+		if (bIsShiftDown)
+		{
+			if (Magnifier.bEnable)
+				Magnifier.ToggleLock(io.MousePos.x, io.MousePos.y);
+		}
+		else
+			Magnifier.bEnable ^= 1;
+	}
+	SceneView.iMousePosX = Magnifier.bLockPosition ? Magnifier.LockedScreenPositionX : io.MousePos.x;
+	SceneView.iMousePosY = Magnifier.bLockPosition ? Magnifier.LockedScreenPositionY : io.MousePos.y;
 
 	// Graphics Settings Controls
 	if (input.IsKeyTriggered("V")) // Vsync

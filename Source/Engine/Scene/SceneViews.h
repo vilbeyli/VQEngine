@@ -43,6 +43,42 @@ struct FRenderDebugOptions
 	bool bDrawLightMeshes = true;
 	bool bDrawVertexLocalAxes = false;
 	float fVertexLocalAxisSize = 1.0f;
+
+	struct FMagnifierOptions
+	{
+		bool bEnable = false;
+		float fMagnifierScreenRadius = 0.35f;
+		float fMagnificationAmount = 6.0f;
+
+		int ScreenOffsetX = 0;
+		int ScreenOffsetY = 0;
+
+		// lock
+		bool bLockPosition = false;
+		bool bLockPositionHistory = false;
+		int LockedScreenPositionX = 0;
+		int LockedScreenPositionY = 0;
+		float BorderColorLocked[3] = { 0.002f, 0.52f, 0.0f }; // G
+		float BorderColorFree[3] = { 0.72f, 0.002f, 0.0f };   // R
+		inline void GetBorderColor(float* pOut) const
+		{
+			memcpy(pOut, bLockPosition ? BorderColorLocked : BorderColorFree, sizeof(float) * 3);
+		}
+		inline void ToggleLock(int MousePosX, int MousePosY)
+		{
+			if (!bEnable)
+				return;
+			bLockPositionHistory = bLockPosition; // record histroy
+			bLockPosition = !bLockPosition; // flip state
+			const bool bLockSwitchedOn = !this->bLockPositionHistory && bLockPosition;
+			const bool bLockSwitchedOff = this->bLockPositionHistory && !bLockPosition;
+			if (bLockSwitchedOn)
+			{
+				LockedScreenPositionX = MousePosX;
+				LockedScreenPositionY = MousePosY;
+			}
+		}
+	} Magnifier;
 };
 struct FSceneLightingOptions
 {
@@ -168,6 +204,8 @@ struct FSceneView
 	VQ_SHADER_DATA::SceneLighting GPULightingData;
 
 	FSceneRenderOptions sceneRenderOptions;
+	int iMousePosX = 0;
+	int iMousePosY = 0;
 };
 
 struct FSceneDebugView
