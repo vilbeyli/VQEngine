@@ -420,6 +420,7 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 		pPerFrame->f2SpotLightShadowMapDimensions        = { 1024.0f, 1024.f  }; // TODO
 		pPerFrame->f2DirectionalLightShadowMapDimensions = { 2048.0f, 2048.0f }; // TODO
 		pPerFrame->fHDRIOffsetInRadians = SceneView.HDRIYawOffset;
+		pPerFrame->fGlobalMipBias = GFXSettings.Rendering.GlobalMipBias;
 
 		if (bHDRDisplay)
 		{

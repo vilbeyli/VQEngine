@@ -229,14 +229,15 @@ PSOutput PSMain(PSInput In)
 
 	const float2 uv = In.uv * cbPerObject.materialData.uvScaleOffset.xy + cbPerObject.materialData.uvScaleOffset.zw;
 	const int TEX_CFG = cbPerObject.materialData.textureConfig;
+	const float MipBias = OverrideGlobalMipBias(TEX_CFG) ? cbPerObject.materialData.mipMapBias : cbPerFrame.fGlobalMipBias;
 	
-	float4 AlbedoAlpha = texDiffuse.Sample(AnisoSampler, uv);
+	float4 AlbedoAlpha = texDiffuse.SampleBias(AnisoSampler, uv, MipBias);
 	float3 Normal      = texNormals.SampleBias(AnisoSampler, uv, cbPerObject.materialData.normalMapMipBias).rgb;
-	float3 Emissive    = texEmissive.Sample(LinearSampler, uv).rgb;
-	float  Metalness   = texMetalness.Sample(AnisoSampler, uv).r;
-	float  Roughness   = texRoughness.Sample(AnisoSampler, uv).r;
-	float3 OcclRghMtl  = texOcclRoughMetal.Sample(AnisoSampler, uv).rgb;
-	float LocalAO      = texLocalAO.Sample(AnisoSampler, uv).r;
+	float3 Emissive    = texEmissive.SampleBias(LinearSampler, uv, MipBias).rgb;
+	float  Metalness   = texMetalness.SampleBias(AnisoSampler, uv, MipBias).r;
+	float  Roughness   = texRoughness.SampleBias(AnisoSampler, uv, MipBias).r;
+	float3 OcclRghMtl  = texOcclRoughMetal.SampleBias(AnisoSampler, uv, MipBias).rgb;
+	float LocalAO      = texLocalAO.SampleBias(AnisoSampler, uv, MipBias).r;
 	
 	#if ENABLE_ALPHA_MASK
 	if (HasDiffuseMap(TEX_CFG) && AlbedoAlpha.a < 0.01f)

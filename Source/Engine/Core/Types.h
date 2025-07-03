@@ -34,7 +34,9 @@ using uint32 = unsigned;
 using uint16 = unsigned short;
 using uint8  = unsigned char;
 
+#ifndef uint
 using uint = unsigned;
+#endif
 
 using fp32 = float;
 

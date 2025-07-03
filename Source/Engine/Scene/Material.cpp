@@ -20,9 +20,9 @@
 #include "Scene.h"
 #include "Renderer/Renderer.h"
 
-int Material::GetTextureConfig() const
+uint Material::GetTextureConfig() const
 {
-	int textureConfig = 0;
+	uint textureConfig = 0;
 	textureConfig |= TexDiffuseMap                     == -1 ? 0 : (1 << 0);
 	textureConfig |= TexNormalMap                      == -1 ? 0 : (1 << 1);
 	textureConfig |= TexAmbientOcclusionMap            == -1 ? 0 : (1 << 2);
@@ -32,6 +32,7 @@ int Material::GetTextureConfig() const
 	textureConfig |= TexHeightMap                      == -1 ? 0 : (1 << 6);
 	textureConfig |= TexEmissiveMap                    == -1 ? 0 : (1 << 7);
 	textureConfig |= TexOcclusionRoughnessMetalnessMap == -1 ? 0 : (1 << 8);
+	textureConfig |= bOverrideGlobalMipBias                  ? (1 << 31) : 0;
 	return textureConfig;
 }
 

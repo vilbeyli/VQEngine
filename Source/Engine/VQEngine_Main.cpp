@@ -159,6 +159,7 @@ void FGraphicsSettings::Validate()
 			Log::Warning("FSR3 is enabled, but AntiAliasingAlgorithm is not set to FSR3_ANTI_ALIASING. Overriding value \"%d\".", Rendering.AntiAliasing);
 		}
 		Rendering.AntiAliasing = EAntiAliasingAlgorithm::FSR3_ANTI_ALIASING;
+		Rendering.GlobalMipBias = AMD_FidelityFX_SuperResolution3::GetMipBias(GetRenderResolutionX(), Display.DisplayResolutionX);
 	}
 	else 
 	{

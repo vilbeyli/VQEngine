@@ -69,7 +69,6 @@ public:
 	std::vector<FPSOCreationTaskParameters> CollectPSOCreationParameters() override { return std::vector<FPSOCreationTaskParameters>(); }
 
 	void GetJitterXY(float& OutPixelSpaceJitterX, float& OutPixelSpaceJitterY, uint RenderResolutionX, uint OutputResolutionX, size_t iFrame) const;
-	static float GetMipBias(uint RenderResolutionX, uint OutputResolutionX);
 
 	TextureID texOutput; // TODO: make private
 	SRV_ID srvOutput;

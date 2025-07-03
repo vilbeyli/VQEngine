@@ -21,6 +21,8 @@
 
 #include "Renderer/Rendering/HDR.h"
 
+#include <cmath>
+
 #define DISABLE_FIDELITYFX_CAS 1 // disable ffx cas but keep implementaiton around, now using fsr1 rcas
 
 class ID3D12Device;
@@ -111,5 +113,9 @@ namespace AMD_FidelityFX_SuperResolution3
 		case EPreset::ULTRA_PERFORMANCE: return 0.333f;
 		}
 		return -1.0f;
+	}
+	inline float GetMipBias(uint RenderResolutionX, uint OutputResolutionX)
+	{
+		return std::log2(float(RenderResolutionX) / (float)OutputResolutionX) - 1.0f;
 	}
 }

@@ -31,9 +31,10 @@
 #define int2     DirectX::XMINT2
 #define int3     DirectX::XMINT3
 #define int4     DirectX::XMINT4
-#define uint2    DirectX::XMUINT2;
-#define uint3    DirectX::XMUINT3;
-#define uint4    DirectX::XMUINT4;
+#define uint     unsigned
+#define uint2    DirectX::XMUINT2
+#define uint3    DirectX::XMUINT3
+#define uint4    DirectX::XMUINT4
 #define matrix   DirectX::XMMATRIX
 #define float3x3 DirectX::XMFLOAT3X3
 #define float4x3 DirectX::XMFLOAT4X3
@@ -41,7 +42,6 @@
 #define float4x4 DirectX::XMFLOAT4X4
 namespace VQ_SHADER_DATA {
 #endif
-
 
 
 #ifdef VQ_CPU

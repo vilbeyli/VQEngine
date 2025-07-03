@@ -856,6 +856,7 @@ void VQEngine::DrawPostProcessSettings(FGraphicsSettings& GFXSettings)
 			break;
 		}
 
+		bool bShouldUpdateGlobalMipBias = false;
 		if (ImGui_RightAlignedCombo("Quality", pIndexQualityPreset, pszQualityLabels, NumQualities))
 		{
 			switch (GFXSettings.PostProcessing.UpscalingAlgorithm)
@@ -863,10 +864,12 @@ void VQEngine::DrawPostProcessSettings(FGraphicsSettings& GFXSettings)
 			case EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1:
 				if (GFXSettings.PostProcessing.FSR1UpscalingQualityEnum != AMD_FidelityFX_SuperResolution1::EPreset::CUSTOM)
 					GFXSettings.Rendering.RenderResolutionScale = AMD_FidelityFX_SuperResolution1::GetScreenPercentage(GFXSettings.PostProcessing.FSR1UpscalingQualityEnum);
+				bShouldUpdateGlobalMipBias = true;
 				break;
 			case EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3:
 				if (GFXSettings.PostProcessing.FSR3UpscalingQualityEnum != AMD_FidelityFX_SuperResolution3::EPreset::CUSTOM)
-					GFXSettings.Rendering.RenderResolutionScale = AMD_FidelityFX_SuperResolution3::GetScreenPercentage(GFXSettings.PostProcessing.FSR3UpscalingQualityEnum);
+					GFXSettings.Rendering.RenderResolutionScale = AMD_FidelityFX_SuperResolution3::GetScreenPercentage(GFXSettings.PostProcessing.FSR3UpscalingQualityEnum);				
+				bShouldUpdateGlobalMipBias = true;
 				break;
 			}
 			
@@ -894,9 +897,14 @@ void VQEngine::DrawPostProcessSettings(FGraphicsSettings& GFXSettings)
 			if (ImGui::IsItemDeactivatedAfterEdit())
 			{
 				GFXSettings.Rendering.RenderResolutionScale = mUIState.ResolutionScaleSliderValue;
+				if (GFXSettings.IsFSR3Enabled() || GFXSettings.IsFSR1Enabled())
+					bShouldUpdateGlobalMipBias = true; 
 				fnSendWindowResizeEvents();
 			}
 		}
+
+		if(bShouldUpdateGlobalMipBias)
+			GFXSettings.Rendering.GlobalMipBias = AMD_FidelityFX_SuperResolution3::GetMipBias(GFXSettings.GetRenderResolutionX(), GFXSettings.Display.DisplayResolutionX);
 	}
 
 	ImGuiSpacing3();
@@ -1063,7 +1071,7 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams
 
 	if (ImGui::BeginTabItem("Rendering"))
 	{
-		bool bShouldEnableAntiAliasingOptions = !gfx.IsFSR3Enabled();
+		const bool bShouldEnableAntiAliasingOptions = !gfx.IsFSR3Enabled();
 		BeginDisabledUIState(bShouldEnableAntiAliasingOptions);
 		{
 			if (ImGui_RightAlignedCombo("AntiAliasing (M)", (int*)&gfx.Rendering.AntiAliasing, szAALabels, _countof(szAALabels) - 1))
@@ -1120,6 +1128,7 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams
 			break;
 		}
 
+		ImGuiSpacing3();
 		ImGui::Checkbox("Async Compute", &mSettings.gfx.bEnableAsyncCompute);
 		ImGui::Checkbox("Async Copy", &mSettings.gfx.bEnableAsyncCopy);
 		if (ImGui::Checkbox("Separate Submission Queue", &mSettings.gfx.bUseSeparateSubmissionQueue))
@@ -1127,9 +1136,15 @@ void VQEngine::DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams
 			mEventQueue_WinToVQE_Renderer.AddItem(std::make_shared<SetSwapchainPresentationQueueEvent>(hwnd, mSettings.gfx.bUseSeparateSubmissionQueue));
 		}
 
-		ImGui::Checkbox("ForceLOD0 (Shadow)", &SceneRenderParams.Debug.bForceLOD0_ShadowView);
-		ImGui::Checkbox("ForceLOD0 (Scene )", &SceneRenderParams.Debug.bForceLOD0_SceneView);
+		ImGui::Checkbox("ForceLOD0 Shadow View", &SceneRenderParams.Debug.bForceLOD0_ShadowView);
+		ImGui::Checkbox("ForceLOD0 Scene View", &SceneRenderParams.Debug.bForceLOD0_SceneView);
 
+		const bool bShouldEnableGlobalMipBias = !gfx.IsFSR3Enabled();
+		BeginDisabledUIState(bShouldEnableGlobalMipBias);
+		{
+			ImGui::SliderFloat("Global Mip Bias", &mSettings.gfx.Rendering.GlobalMipBias, -5.0f, 5.0f, "%.2f");
+		}
+		EndDisabledUIState(bShouldEnableGlobalMipBias);
 		ImGui::EndTabItem();
 	}
 
@@ -1539,7 +1554,25 @@ void VQEngine::DrawMaterialEditor()
 	ImGui::DragFloat("##roughness", &mat.roughness, 0.01f, 0.04f, 1.0f, "%.2f");
 
 	StartDrawingMaterialEditorRow("Mip Bias (Normals)");
-	ImGui::DragFloat("##mip_bias", &mat.normalMapMipBias, 0.01f, -5.0f, 5.0f, "%.2f");
+	ImGui::DragFloat("##mip_bias_normal", &mat.normalMapMipBias, 0.01f, -5.0f, 5.0f, "%.2f");
+
+	StartDrawingMaterialEditorRow("Mip Bias");
+	const float fullWidth = ImGui::GetContentRegionAvail().x;
+	const float checkboxLabelWidth = ImGui::CalcTextSize("Override ").x;
+	const float spacing = ImGui::GetStyle().ItemInnerSpacing.x; // spacing between items
+	const float checkboxWidth = ImGui::GetFrameHeight(); // checkbox square width
+	const float widthForDrag = ImMax(fullWidth - checkboxLabelWidth - spacing - checkboxWidth - spacing, 50.0f);
+	ImGui::SetNextItemWidth(widthForDrag);
+	if (mat.bOverrideGlobalMipBias)
+	{
+		ImGui::DragFloat("##mip_bias", &mat.mipMapBias, 0.01f, -5.0f, 5.0f, "%.2f");
+	}
+	else
+	{
+		ImGui::LabelText("##global_mip_bias_value", "%.2f", mSettings.gfx.Rendering.GlobalMipBias);
+	}
+	ImGui::SameLine();
+	ImGui::Checkbox("Override##", &mat.bOverrideGlobalMipBias);
 
 	StartDrawingMaterialEditorRow("Tiling");
 	ImGui::DragFloat2("##tiling", reinterpret_cast<float*>(&mat.tiling), 0.01f, 0.0f, 10.0f, "%.2f");

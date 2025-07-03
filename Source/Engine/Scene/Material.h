@@ -43,7 +43,9 @@ enum EMaterialTextureMapBindings
 
 struct alignas(16) Material
 {
-	DirectX::XMFLOAT3 diffuse           = {1, 1, 1};   // 12 Bytes
+	// cbuffer section
+	//------------------------------------------------------------
+	DirectX::XMFLOAT3 diffuse           = { 1, 1, 1 }; // 12 Bytes
 	float             alpha             = 1.0f;        // 4  Bytes
 	DirectX::XMFLOAT3 emissiveColor     = { 1, 1, 1 }; // 12 Bytes
 	float             emissiveIntensity = 0.0f;        // 4  Bytes
@@ -51,7 +53,7 @@ struct alignas(16) Material
 	float             normalMapMipBias  = 0.0f;        // 4 Bytes
 	DirectX::XMFLOAT2 tiling            = { 1, 1 };    // 8 Bytes
 	DirectX::XMFLOAT2 uv_bias           = { 0, 0 };    // 8 Bytes
-	// Cook-Torrence BRDF
+	float mipMapBias                    = 0.0f;        // 4 Bytes
 	float roughness                     = 0.8f;        // 4 Bytes
 	float metalness                     = 0.0f;        // 4 Bytes
 	float displacement                  = 0.0f;        // 4 Bytes
@@ -67,8 +69,8 @@ struct alignas(16) Material
 		(((uint8)ETessellationOutputTopology::TESSELLATION_OUTPUT_TRIANGLE_CW) << 4) |
 		(((uint8)ETessellationPartitioning::FRACTIONAL_ODD)                    << 6);
 	bool bWireframe = false;
-	uint8 padding0 = 0xDE;
-	uint8 padding1 = 0xAD;
+	bool bOverrideGlobalMipBias = false;
+	uint8 padding1 = 0xDE;
 
 	SRV_ID SRVMaterialMaps = INVALID_ID;
 	SRV_ID SRVHeightMap = INVALID_ID;
@@ -82,7 +84,6 @@ struct alignas(16) Material
 	TextureID TexOcclusionRoughnessMetalnessMap = INVALID_ID;
 	TextureID TexAmbientOcclusionMap            = INVALID_ID;
 	TextureID TexHeightMap                      = INVALID_ID;
-	TextureID padding2 = INVALID_ID; // to align TessellationData w/ a cache line
 
 	VQ_SHADER_DATA::TessellationParams TessellationData;
 	inline bool                        IsTessellationEnabled() const         { return PackedTessellationConfig & 0x1; }
@@ -123,10 +124,10 @@ struct alignas(16) Material
 		// at the end of MaterialData for encoding the texture configuration.
 		const size_t BytesToCopy = sizeof(VQ_SHADER_DATA::MaterialData);// -sizeof(float);
 		memcpy(&data, this, BytesToCopy);
-		data.textureConfig = static_cast<float>(GetTextureConfig());
+		data.textureConfig = GetTextureConfig();
 	}
 
-	int                          GetTextureConfig() const;
+	uint GetTextureConfig() const;
 	bool IsTransparent(const VQRenderer& mRenderer) const;
 	bool IsAlphaMasked(const VQRenderer& mRenderer) const;
 

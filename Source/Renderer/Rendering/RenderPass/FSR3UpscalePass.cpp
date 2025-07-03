@@ -26,7 +26,6 @@
 
 #include "ffx_api/dx12/ffx_api_dx12.h"
 #include "ffx_api/ffx_upscale.h"
-#include "ffx_api/ffx_upscale.hpp"
 
 struct FSR3UpscalePass::ContextImpl
 {
@@ -325,10 +324,5 @@ void FSR3UpscalePass::GetJitterXY(float& OutPixelSpaceJitterX, float& OutPixelSp
 	}
 	
 	//Log::Info("ffx Jitter[%d/%d] {%.4f, %.4f}", iFrame, NumPhases, OutPixelSpaceJitterX, OutPixelSpaceJitterY);
-}
-
-float FSR3UpscalePass::GetMipBias(uint RenderResolutionX, uint OutputResolutionX)
-{
-	return std::log2(float(RenderResolutionX) / (float)OutputResolutionX) - 1.0f;
 }
 
