@@ -106,11 +106,11 @@ namespace AMD_FidelityFX_SuperResolution3
 	{
 		switch (ePreset)
 		{
-		case EPreset::NATIVE_AA        : return 1.000f;
-		case EPreset::QUALITY          : return 0.667f;
-		case EPreset::BALANCED         : return 0.588f;
-		case EPreset::PERFORMANCE      : return 0.500f;
-		case EPreset::ULTRA_PERFORMANCE: return 0.333f;
+		case EPreset::NATIVE_AA        : return 1.00000f;
+		case EPreset::QUALITY          : return 0.66667f;
+		case EPreset::BALANCED         : return 0.58802f;
+		case EPreset::PERFORMANCE      : return 0.50000f;
+		case EPreset::ULTRA_PERFORMANCE: return 0.33333f;
 		}
 		return -1.0f;
 	}

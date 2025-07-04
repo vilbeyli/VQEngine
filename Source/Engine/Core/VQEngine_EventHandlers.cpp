@@ -284,30 +284,9 @@ void VQEngine::UpdateThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 			FProjectionMatrixParameters UpdatedProjectionMatrixParams = cam.GetProjectionParameters();
 			UpdatedProjectionMatrixParams.ViewportWidth = static_cast<float>(uWidth);
 			UpdatedProjectionMatrixParams.ViewportHeight = static_cast<float>(uHeight);
+			const float AspectRatio = UpdatedProjectionMatrixParams.ViewportWidth / UpdatedProjectionMatrixParams.ViewportHeight;
+			Log::Info("Update ActiveSceneCamera Viewport Size %dx%d | aspect ratio: %.3f", (int)uWidth, (int)uHeight, AspectRatio);
 			cam.SetProjectionMatrix(UpdatedProjectionMatrixParams);
-
-#if 0
-			// Update PostProcess Data
-			for (int i = 0; i < NUM_BACK_BUFFERS; ++i)
-			{
-				FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(i);
-
-#if !DISABLE_FIDELITYFX_CAS
-				// Update FidelityFX constant blocks
-				if (PPParams.IsFFXCASEnabled())
-				{
-					PPParams.FFXCASParams.UpdateCASConstantBlock(uWidth, uHeight, uWidth, uHeight);
-				}
-#endif
-				if (PPParams.IsFSR1Enabled())
-				{
-					const uint InputWidth  = static_cast<uint>(PPParams.ResolutionScale * uWidth);
-					const uint InputHeight = static_cast<uint>(PPParams.ResolutionScale * uHeight);
-					PPParams.FSR1ShaderParameters.easu.UpdateConstantBlock(InputWidth, InputHeight, InputWidth, InputHeight, uWidth, uHeight);
-					PPParams.FSR1ShaderParameters.rcas.UpdateConstantBlock();
-				}
-			}
-#endif
 		}
 	}
 }
@@ -414,6 +393,10 @@ void VQEngine::RenderThread_HandleWindowResizeEvent(const std::shared_ptr<IEvent
 	}
 	Swapchain.EnsureSwapChainColorSpace(Swapchain.GetFormat() == DXGI_FORMAT_R16G16B16A16_FLOAT ? _16 : _8, false);
 	pWnd->OnResize(WIDTH, HEIGHT);
+
+	mSettings.gfx.Display.DisplayResolutionX = WIDTH;
+	mSettings.gfx.Display.DisplayResolutionY = HEIGHT;
+
 	mpRenderer->OnWindowSizeChanged(hwnd, WIDTH, HEIGHT); // updates render context
 
 	if (hwnd == mpWinMain->GetHWND())

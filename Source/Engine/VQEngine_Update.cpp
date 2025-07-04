@@ -517,8 +517,9 @@ void VQEngine::Load_SceneData_Dispatch()
 	{
 		const uint32 W = mpWinMain->GetWidth();
 		const uint32 H = mpWinMain->GetHeight();
-		mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<WindowResizeEvent>(W, H, mpWinMain->GetHWND()));
-		mEventQueue_WinToVQE_Update.AddItem(std::make_unique<WindowResizeEvent>(W, H, mpWinMain->GetHWND()));
+		HWND hwnd = mpWinMain->GetHWND();
+		mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<WindowResizeEvent>(W, H, hwnd));
+		mEventQueue_WinToVQE_Update.AddItem(std::make_unique<WindowResizeEvent>(W, H, hwnd));
 	}
 	//----------------------------------------------------------------------
 	

@@ -16,7 +16,7 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-#define FFX_DEBUG_LOG 1
+#define FFX_DEBUG_LOG 0
 
 #define A_CPU 1
 
