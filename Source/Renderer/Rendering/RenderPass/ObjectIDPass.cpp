@@ -165,6 +165,8 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	assert(pParams->pCmdCopy);
 	assert(pParams->pSceneView);
 	assert(pParams->pSceneDrawData);
+	assert(pParams->RenderResolutionX > 0);
+	assert(pParams->RenderResolutionY > 0);
 
 	ID3D12GraphicsCommandList* pCmd = pParams->pCmd;
 	ID3D12GraphicsCommandList* pCmdCpy = static_cast<ID3D12GraphicsCommandList*>(pParams->pCmdCopy);

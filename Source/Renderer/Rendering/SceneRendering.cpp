@@ -897,6 +897,8 @@ void VQRenderer::RenderObjectIDPass(int iThread, ID3D12CommandList* pCmdCopy, Dy
 		params.pSceneDrawData = &mFrameSceneDrawData[0];
 		params.cbPerView = perViewCBAddr;
 		params.bEnableAsyncCopy = GFXSettings.bEnableAsyncCopy;
+		params.RenderResolutionX = GFXSettings.GetRenderResolutionX();
+		params.RenderResolutionY = GFXSettings.GetRenderResolutionY();
 		pObjectIDPass->RecordCommands(&params);
 	}
 
