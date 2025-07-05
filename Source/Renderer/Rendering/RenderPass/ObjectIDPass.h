@@ -36,9 +36,11 @@ public:
 		ID3D12GraphicsCommandList* pCmd = nullptr;
 		ID3D12CommandList* pCmdCopy = nullptr;
 		D3D12_GPU_VIRTUAL_ADDRESS cbPerView = 0;
-		bool bEnableAsyncCopy = false;
 		const FSceneView* pSceneView = nullptr;
 		const FSceneDrawData* pSceneDrawData = nullptr;
+		float RenderResolutionX = 0;
+		float RenderResolutionY = 0;
+		bool bEnableAsyncCopy = false;
 	};
 
 	ObjectIDPass(VQRenderer& Renderer);

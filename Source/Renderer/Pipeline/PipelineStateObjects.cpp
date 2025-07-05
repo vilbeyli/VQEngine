@@ -1152,6 +1152,15 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 
 		descs[EBuiltinPSOs::SKYDOME_PSO] = psoLoadDesc;
 
+		psoLoadDesc.PSOName = "PSO_Skydome_Masked";
+		psoDesc.NumRenderTargets = 2;
+		psoDesc.RTVFormats[1] = DXGI_FORMAT_R16_FLOAT;
+		psoLoadDesc.ShaderStageCompileDescs[1].Macros.push_back(FShaderMacro{"PS_OUTPUT_MASK", "1"});
+		descs[EBuiltinPSOs::SKYDOME_MASK_PSO] = psoLoadDesc;
+		psoLoadDesc.ShaderStageCompileDescs[1].Macros.pop_back();
+		psoDesc.RTVFormats[1] = DXGI_FORMAT_UNKNOWN;
+		psoDesc.NumRenderTargets = 1;
+
 		// MSAA PSO
 		psoLoadDesc.PSOName = "PSO_Skydome_MSAA4";
 		psoDesc.SampleDesc.Count = 4;

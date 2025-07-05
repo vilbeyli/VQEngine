@@ -140,7 +140,7 @@ bool IsMirrorReflection(float roughness) {
     return roughness < 0.041;
 }
 
-#include "../AMDFidelityFX/SSSR/ffx_sssr.h"
+#include "../AMD/SSSR/ffx_sssr.h"
 
 [numthreads(8, 8, 1)]
 void CSMain(uint group_index : SV_GroupIndex, uint group_id : SV_GroupID) {

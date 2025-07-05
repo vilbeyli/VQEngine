@@ -94,24 +94,10 @@ void VQEngine::HandleUIInput()
 				const int NUM_BACK_BUFFERS = mpRenderer->GetSwapChainBackBufferCount(mpWinMain->GetHWND());
 				const int FRAME_DATA_INDEX = mNumUpdateLoopsExecuted % NUM_BACK_BUFFERS;
 #endif
-				FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 #if !DISABLE_FIDELITYFX_CAS
 				PPParams.bEnableCAS = !PPParams.bEnableCAS;
 				Log::Info("Toggle FFX-CAS: %d", PPParams.bEnableCAS);
 #endif
-			}
-
-			/* MAGNIFIER CONTROLS */
-			const bool bMidMouseTriggered = input.IsMouseTriggered(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE);
-			if (bMidMouseTriggered)
-			{
-				if (bIsShiftDown)
-				{
-					if (mUIState.mpMagnifierState->bUseMagnifier)
-						mUIState.mpMagnifierState->ToggleMagnifierLock();
-				}
-				else
-					mUIState.mpMagnifierState->bUseMagnifier ^= 1;
 			}
 		}
 	}
@@ -161,6 +147,23 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 		Toggle(mUIState.bHideAllWindows);
 	}
 
+	/* MAGNIFIER CONTROLS */
+	const bool bMidMouseTriggered = input.IsMouseTriggered(Input::EMouseButtons::MOUSE_BUTTON_MIDDLE);
+	FSceneView& SceneView = mpScene->GetSceneView(0);
+	FRenderDebugOptions::FMagnifierOptions& Magnifier = SceneView.sceneRenderOptions.Debug.Magnifier;
+	if (bMidMouseTriggered)
+	{
+		if (bIsShiftDown)
+		{
+			if (Magnifier.bEnable)
+				Magnifier.ToggleLock(io.MousePos.x, io.MousePos.y);
+		}
+		else
+			Magnifier.bEnable ^= 1;
+	}
+	SceneView.iMousePosX = Magnifier.bLockPosition ? Magnifier.LockedScreenPositionX : io.MousePos.x;
+	SceneView.iMousePosY = Magnifier.bLockPosition ? Magnifier.LockedScreenPositionY : io.MousePos.y;
+
 	// Graphics Settings Controls
 	if (input.IsKeyTriggered("V")) // Vsync
 	{
@@ -169,35 +172,44 @@ void VQEngine::HandleMainWindowInput(Input& input, HWND hwnd)
 	}
 	if (input.IsKeyTriggered("M")) // MSAA
 	{
-		mSettings.gfx.bAntiAliasing = !mSettings.gfx.bAntiAliasing;
-		Log::Info("Toggle MSAA: %d", mSettings.gfx.bAntiAliasing);
+		if (mSettings.gfx.Rendering.AntiAliasing == EAntiAliasingAlgorithm::NO_ANTI_ALIASING)
+		{
+			// TODO: handle other MSAA algorithms
+			mSettings.gfx.Rendering.AntiAliasing = EAntiAliasingAlgorithm::MSAA4;
+		}
+		else
+		{
+			mSettings.gfx.Rendering.AntiAliasing = EAntiAliasingAlgorithm::NO_ANTI_ALIASING;
+		}
+		Log::Info("Toggle MSAA: %d", mSettings.gfx.Rendering.AntiAliasing);
 	}
 
 	if (input.IsKeyTriggered("G")) // Gamma
 	{
-		FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
-		PPParams.TonemapperParams.ToggleGammaCorrection = PPParams.TonemapperParams.ToggleGammaCorrection == 1 ? 0 : 1;
-		Log::Info("Tonemapper: ApplyGamma=%d (SDR-only)", PPParams.TonemapperParams.ToggleGammaCorrection);
+		mSettings.gfx.PostProcessing.EnableGammaCorrection = !mSettings.gfx.PostProcessing.EnableGammaCorrection;
+		Log::Info("Tonemapper: ApplyGamma=%d (SDR-only)", mSettings.gfx.PostProcessing.EnableGammaCorrection);
 	}
+
+#if 0 // temporarily disabled, TODO: enable it
 	if (input.IsKeyTriggered("J")) // Upscaling toggle
 	{
 		WaitUntilRenderingFinishes();
-		FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
-		if (PPParams.UpscalingAlgorithm != FPostProcessParameters::EUpscalingAlgorithm::NONE)
+		if (PPParams.UpscalingAlgorithm != EUpscalingAlgorithm::NONE)
 		{
 			PPParams.UpscalingAlgorithmLastValue = PPParams.UpscalingAlgorithm;
 		}
 		
-		PPParams.UpscalingAlgorithm = PPParams.IsFSREnabled() 
-			? FPostProcessParameters::EUpscalingAlgorithm::NONE 
+		PPParams.UpscalingAlgorithm = PPParams.IsFSR1Enabled() 
+			? EUpscalingAlgorithm::NONE 
 			: PPParams.UpscalingAlgorithmLastValue;
 
 		const uint32 W = mpWinMain->GetWidth();
 		const uint32 H = mpWinMain->GetHeight();
 		mEventQueue_WinToVQE_Renderer.AddItem(std::make_unique<WindowResizeEvent>(W, H, hwnd));
 		mEventQueue_WinToVQE_Update.AddItem(std::make_unique<WindowResizeEvent>(W, H, hwnd));
-		Log::Info("Toggle FSR: %d", PPParams.IsFSREnabled());
+		Log::Info("Toggle FSR: %d", PPParams.IsFSR1Enabled());
 	}
+#endif
 
 	// Scene switching
 	if (!mbLoadingLevel)

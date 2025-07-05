@@ -133,7 +133,7 @@ public:
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	void                         WaitForLoadCompletion() const;
 	void                         OnWindowSizeChanged(HWND hwnd, unsigned w, unsigned h);
-	void                         LoadWindowSizeDependentResources(HWND hwnd, unsigned w, unsigned h, float fResolutionScale, bool bHDR);
+	void                         LoadWindowSizeDependentResources(HWND hwnd, const FGraphicsSettings& GFXSettings, bool bHDR);
 	void                         UnloadWindowSizeDependentResources(HWND hwnd);
 
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -172,6 +172,7 @@ public:
 	inline void                  WaitForTexture(TextureID ID) const { mTextureManager.WaitForTexture(ID); }; // blocks caller until texture is loaded
 	TextureManager&              GetTextureManager() { return mTextureManager; }
 
+	const FTexture*              GetTexture(TextureID Id) const;
 	ID3D12Resource*              GetTextureResource(TextureID Id) const;
 	DXGI_FORMAT                  GetTextureFormat(TextureID Id) const;
 	bool                         GetTextureAlphaChannelUsed(TextureID Id) const;
@@ -252,7 +253,6 @@ public:
 		const Window* pWindow,
 		const FSceneView& SceneView,
 		const FSceneShadowViews& ShadowView,
-		const FPostProcessParameters& PPParams,
 		const FGraphicsSettings& GFXSettings,
 		const FUIState& UIState
 	);
@@ -261,7 +261,6 @@ public:
 		const Window* pWindow,
 		const FSceneView& SceneView,
 		const FSceneShadowViews& ShadowView,
-		const FPostProcessParameters& PPParams,
 		const FGraphicsSettings& GFXSettings,
 		const FUIState& UIState,
 		bool bHDRDisplay
@@ -287,6 +286,9 @@ public:
 
 	void ResetNumFramesRendered() { mRenderStats.mNumFramesRendered = 0; }
 	const FRenderStats& GetRenderStats() const { return mRenderStats; }
+
+	bool ShouldEnableCameraJitters(const FGraphicsSettings& gfx) const;
+	void GetCameraPixelSpaceJitter(const FGraphicsSettings& gfx, size_t iFrame, float& JitterX, float& JitterY) const;
 
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Frame Sync
@@ -320,9 +322,9 @@ private:
 	// render command execution context
 	CommandQueue mRenderingCmdQueues[NUM_COMMAND_QUEUE_TYPES];
 	std::vector<std::vector<ID3D12CommandAllocator*>> mRenderingCommandAllocators[NUM_COMMAND_QUEUE_TYPES]; // pre queue, per back buffer, per recording thread
-	std::vector<std::vector<ID3D12CommandList*     >> mpRenderingCmds[NUM_COMMAND_QUEUE_TYPES]; // per queue, per back buffer, per recording thread
-	std::vector<std::vector<bool                   >> mCmdClosed[NUM_COMMAND_QUEUE_TYPES]; // per queue, per back buffer, per recording thread
-	std::vector<DynamicBufferHeap                   > mDynamicHeap_RenderingConstantBuffer; // per recording thread
+	std::vector<std::vector<ID3D12CommandList*>> mpRenderingCmds[NUM_COMMAND_QUEUE_TYPES]; // per queue, per back buffer, per recording thread
+	std::vector<std::vector<bool>> mCmdClosed[NUM_COMMAND_QUEUE_TYPES]; // per queue, per back buffer, per recording thread
+	std::vector<DynamicBufferHeap> mDynamicHeap_RenderingConstantBuffer; // per recording thread
 	UINT mNumCurrentlyRecordingRenderingThreads[NUM_COMMAND_QUEUE_TYPES];
 	std::vector<Fence> mAsyncComputeSSAOReadyFence;
 	std::vector<Fence> mAsyncComputeSSAODoneFence;
@@ -333,10 +335,10 @@ private:
 	FCommandRecordingThreadConfig mRenderWorkerConfig[NUM_RENDER_THREAD_WORK_IDS];
 
 	// frame presentation context
-	CommandQueue     mRenderingPresentationQueue;
-	bool             mWaitForSubmitWorker = false;
-	TaskSignal<void> mSubmitWorkerSignal;
-	std::thread      mFrameSubmitThread; // currenly unused, main thread submits the frame
+	CommandQueue      mRenderingPresentationQueue;
+	bool              mWaitForSubmitWorker = false;
+	TaskSignal<void>  mSubmitWorkerSignal;
+	std::thread       mFrameSubmitThread; // currenly unused, main thread submits the frame
 	std::atomic<bool> mStopTrheads = false;
 
 	// background gpu task execution context
@@ -347,12 +349,12 @@ private:
 
 		NUM_BACKGROUND_TASK_THREADS,
 	};
-	CommandQueue mBackgroundTaskCmdQueues[NUM_COMMAND_QUEUE_TYPES];
+	CommandQueue            mBackgroundTaskCmdQueues[NUM_COMMAND_QUEUE_TYPES];
 	ID3D12CommandAllocator* mBackgroundTaskCommandAllocators[NUM_COMMAND_QUEUE_TYPES][NUM_BACKGROUND_TASK_THREADS];
-	ID3D12CommandList* mpBackgroundTaskCmds[NUM_COMMAND_QUEUE_TYPES][NUM_BACKGROUND_TASK_THREADS];
-	DynamicBufferHeap mDynamicHeap_BackgroundTaskConstantBuffer[NUM_BACKGROUND_TASK_THREADS];
-	UINT mNumCurrentlyRecordingBackgroundTaskThreads[NUM_COMMAND_QUEUE_TYPES];
-	Fence mBackgroundTaskFencesPerQueue[NUM_COMMAND_QUEUE_TYPES];
+	ID3D12CommandList*      mpBackgroundTaskCmds[NUM_COMMAND_QUEUE_TYPES][NUM_BACKGROUND_TASK_THREADS];
+	DynamicBufferHeap       mDynamicHeap_BackgroundTaskConstantBuffer[NUM_BACKGROUND_TASK_THREADS];
+	UINT                    mNumCurrentlyRecordingBackgroundTaskThreads[NUM_COMMAND_QUEUE_TYPES];
+	Fence                   mBackgroundTaskFencesPerQueue[NUM_COMMAND_QUEUE_TYPES];
 
 	// memory allocator
 	D3D12MA::Allocator*    mpAllocator = nullptr;
@@ -393,7 +395,7 @@ private:
 	std::unordered_map<PSO_ID, ID3D12PipelineState*> mPSOs;
 	ThreadPool mWorkers_PSOLoad;
 	ThreadPool mWorkers_ShaderLoad;
-	struct FPSOCompileResult      { ID3D12PipelineState* pPSO; PSO_ID id; };
+	struct FPSOCompileResult { ID3D12PipelineState* pPSO; PSO_ID id; };
 	struct FShaderLoadTaskContext { std::queue<FShaderStageCompileDesc> TaskQueue; };
 	std::vector<std::shared_future<FPSOCompileResult>        > mPSOCompileResults;
 	std::vector<std::shared_future<FShaderStageCompileResult>> mShaderCompileResults;
@@ -407,24 +409,23 @@ private:
 	std::vector<FSceneDrawData>     mFrameSceneDrawData; // per-frame if pipelined update+render threads
 
 	// init sync
-	std::latch                      mLatchDeviceInitialized{ 1 };
-	std::latch                      mLatchCmdQueuesInitialized{ 1 };
-	std::latch                      mLatchMemoryAllocatorInitialized{ 1 };
-	std::latch                      mLatchHeapsInitialized{ 1 };
-	std::latch                      mLatchRootSignaturesInitialized{ 1 };
-	std::latch                      mLatchSignalLoadingScreenReady{ 1 };
-	std::latch                      mLatchPSOLoaderDispatched{ 1 };
-	std::latch                      mLatchRenderPassesInitialized{ 1 };
-	std::latch                      mLatchSwapchainInitialized{ 1 };
-	std::latch                      mLatchDefaultResourcesLoaded{ 1 };
-	std::latch                      mLatchWindowSizeDependentResourcesInitialized{ 1 };
-	bool                            mbWindowSizeDependentResourcesFirstInitiazliationDone = false;
+	std::latch mLatchDeviceInitialized{ 1 };
+	std::latch mLatchCmdQueuesInitialized{ 1 };
+	std::latch mLatchMemoryAllocatorInitialized{ 1 };
+	std::latch mLatchHeapsInitialized{ 1 };
+	std::latch mLatchRootSignaturesInitialized{ 1 };
+	std::latch mLatchSignalLoadingScreenReady{ 1 };
+	std::latch mLatchPSOLoaderDispatched{ 1 };
+	std::latch mLatchRenderPassesInitialized{ 1 };
+	std::latch mLatchSwapchainInitialized{ 1 };
+	std::latch mLatchDefaultResourcesLoaded{ 1 };
+	std::latch mLatchWindowSizeDependentResourcesInitialized{ 1 };
+	bool mbWindowSizeDependentResourcesFirstInitiazliationDone = false;
 
 	// bookkeeping
 	std::unordered_map<EProceduralTextures, SRV_ID>    mLookup_ProceduralTextureSRVs;
 	std::unordered_map<EProceduralTextures, TextureID> mLookup_ProceduralTextureIDs;
 	std::unordered_map<std::string, bool>              mShaderCacheDirtyMap;
-
 
 	FRenderStats mRenderStats;
 
@@ -454,8 +455,9 @@ private:
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 	// Render (Private)
 	// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	struct FPostProcessOutput { ID3D12Resource* pRsc; SRV_ID srv; };
 	void            RenderObjectIDPass(int iThread, ID3D12CommandList* pCmdCopy, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, const FSceneShadowViews& ShadowView, const int BACK_BUFFER_INDEX, const FGraphicsSettings& GFXSettings);
-	void            TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings);
+	void            TransitionForSceneRendering(ID3D12GraphicsCommandList* pCmd, FWindowRenderContext& ctx, const FGraphicsSettings& GFXSettings);
 	void            RenderDirectionalShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView, const FSceneView& SceneView);
 	void            RenderSpotShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView, const FSceneView& SceneView);
 	void            RenderPointShadowMaps(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneShadowViews& ShadowView, const FSceneView& SceneView, size_t iBegin, size_t NumPointLights);
@@ -467,25 +469,25 @@ private:
 	void            ResolveMSAA_DepthPrePass(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap);
 	void            CopyDepthForCompute(ID3D12GraphicsCommandList* pCmd);
 	void            RenderAmbientOcclusion(ID3D12GraphicsCommandList* pCmd, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings, bool bAsyncCompute);
-	void            RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FPostProcessParameters& PPParams, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, D3D12_GPU_VIRTUAL_ADDRESS perFrameCBAddr, const FGraphicsSettings& GFXSettings, bool bHDR);
+	void            RenderSceneColor(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, D3D12_GPU_VIRTUAL_ADDRESS perFrameCBAddr, const FGraphicsSettings& GFXSettings, bool bHDR);
 	void            RenderBoundingBoxes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA);
 	void            RenderOutline(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, bool bMSAA, const std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>& rtvHandles);
 	void            RenderLightBounds(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA, bool bReflectionsEnabled);
 	void            RenderDebugVertexAxes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, bool bMSAA);
-	void            ResolveMSAA(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings);
+	void            ResolveMSAA(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FGraphicsSettings& GFXSettings);
 	void            DownsampleDepth(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, TextureID DepthTextureID, SRV_ID SRVDepth);
 	void            RenderReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings);
-	void            RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, bool bMSAA);
+	void            RenderSceneBoundingVolumes(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, D3D12_GPU_VIRTUAL_ADDRESS perViewCBAddr, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings);
 	void            CompositeReflections(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings);
-	void            TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings);
-	void            TransitionForUI(ID3D12GraphicsCommandList* pCmd, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings, bool bHDRDisplay, ID3D12Resource* pRsc, ID3D12Resource* pSwapChainRT);
-	ID3D12Resource* RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FPostProcessParameters& PPParams, bool bHDR);
-	void            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, ID3D12Resource* pRscIn, const SRV& srv_ColorIn, const FUIState& UIState, bool bHDR);
-	void            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, const Window* pWindow);
+	void            TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, const FGraphicsSettings& GFXSettings);
+	void            TransitionForUI(ID3D12GraphicsCommandList* pCmd, const FGraphicsSettings& GFXSettings, bool bHDRDisplay, ID3D12Resource* pRsc, ID3D12Resource* pSwapChainRT);
+	FPostProcessOutput RenderPostProcess(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings, bool bHDR);
+	void            RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, ID3D12Resource* pRscIn, const SRV& srv_ColorIn, const FUIState& UIState, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings, bool bHDR);
+	void            CompositUIToHDRSwapchain(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, const FGraphicsSettings& GFXSettings);
 	HRESULT         PresentFrame(FWindowRenderContext& ctx);
 	void DrawShadowViewMeshList(ID3D12GraphicsCommandList* pCmd, const std::vector<FInstancedDrawParameters>& drawParams, size_t iDepthMode);
 
-	void BatchDrawCalls(ThreadPool& WorkerThreads, const FSceneView& SceneView, const FSceneShadowViews& SceneShadowView, FWindowRenderContext& ctx, const FPostProcessParameters& PPParams, const FGraphicsSettings& GFXSettings);
+	void BatchDrawCalls(ThreadPool& WorkerThreads, const FSceneView& SceneView, const FSceneShadowViews& SceneShadowView, FWindowRenderContext& ctx, const FGraphicsSettings& GFXSettings);
 	
 	void FrameSubmitThread_Main();
 //
@@ -493,13 +495,13 @@ private:
 //
 public:
 	static std::vector< VQSystemInfo::FGPUInfo > EnumerateDX12Adapters(bool bEnableDebugLayer, bool bEnumerateSoftwareAdapters = false, IDXGIFactory6* pFactory = nullptr);
-	static const std::string_view&               DXGIFormatAsString(DXGI_FORMAT format);
+	static const std::string_view&               DXGIFormatAsString(DXGI_FORMAT format); // todo: return const char*
 	static EProceduralTextures                   GetProceduralTextureEnumFromName(const std::string& ProceduralTextureName);
 	static D3D12_COMMAND_LIST_TYPE               GetDX12CmdListType(ECommandQueueType type);
 
 	static bool ShouldEnableAsyncCompute(const FGraphicsSettings& GFXSettings, const FSceneView& SceneView, const FSceneShadowViews& ShadowView);
 	static bool ShouldUseMotionVectorsTarget(const FGraphicsSettings& GFXSettings);
-	static bool ShouldUseVisualizationTarget(const FPostProcessParameters& PPParams);
+	static bool ShouldUseVisualizationTarget(const FGraphicsSettings& GFXSettings);
 
 	static std::wstring GetFullPathOfShader(LPCWSTR shaderFileName);
 	static std::wstring GetFullPathOfShader(const std::string& shaderFileName);

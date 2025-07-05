@@ -18,7 +18,14 @@
 
 #pragma once
 
-enum EDisplayMode
+#include "Renderer/Rendering/PostProcess/Upscaling.h"
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// 
+// GRAPHICS SETTINGS
+// 
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+enum EDisplayMode : unsigned char
 {
 	WINDOWED = 0,
 	BORDERLESS_FULLSCREEN,
@@ -26,8 +33,7 @@ enum EDisplayMode
 
 	NUM_DISPLAY_MODES
 };
-
-enum EReflections
+enum EReflections : unsigned char
 {
 	REFLECTIONS_OFF,
 	SCREEN_SPACE_REFLECTIONS__FFX,
@@ -35,23 +41,149 @@ enum EReflections
 
 	NUM_REFLECTION_SETTINGS
 };
+enum EUpscalingAlgorithm : int
+{
+	NONE = 0,
+	FIDELITYFX_SUPER_RESOLUTION_1,
+	FIDELITYFX_SUPER_RESOLUTION_3,
+
+	NUM_UPSCALING_ALGORITHMS
+};
+enum ESharpeningAlgorithm : int
+{
+	NO_SHARPENING = 0,
+	FIDELITY_FX_CAS,
+	FIDELITY_FX_RCAS,
+
+	NUM_SHARPENING_ALGORITHMS
+};
+enum EAntiAliasingAlgorithm : int
+{
+	NO_ANTI_ALIASING = 0,
+	MSAA4,
+	FSR3_ANTI_ALIASING,
+
+	NUM_ANTI_ALIASING_ALGORITHMS
+};
+
+struct FDisplaySettings
+{
+	unsigned short DisplayResolutionX = 1600;
+	unsigned short DisplayResolutionY = 900;
+	bool bVsync = false;
+	bool bUseTripleBuffering = false;
+};
+struct FPostProcessingSettings
+{
+	// typedefs & structs
+	using AMD_FSR1_Preset = AMD_FidelityFX_SuperResolution1::EPreset;
+	using AMD_FSR3_Preset = AMD_FidelityFX_SuperResolution3::EPreset;
+
+	struct FFSR3Settings
+	{
+		bool bGenerateReactivityMask = false;
+		float GeneratedReactiveMaskScale = 1.0f;
+		float GeneratedReactiveMaskCutoffThreshold = 0.0f;
+		float GeneratedReactiveMaskBinaryValue = 0.0f;
+	};
+
+	// upscaling
+	EUpscalingAlgorithm UpscalingAlgorithm = EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3;
+	AMD_FSR1_Preset FSR1UpscalingQualityEnum = AMD_FSR1_Preset::ULTRA_QUALITY;
+	AMD_FSR3_Preset FSR3UpscalingQualityEnum = AMD_FSR3_Preset::NATIVE_AA;
+	ESharpeningAlgorithm SharpeningAlgorithm = ESharpeningAlgorithm::FIDELITY_FX_RCAS;
+	FFSR3Settings FSR3Settings;
+
+	// sharpening
+	float Sharpness = 0.8f;
+
+	// blur
+	bool EnableGaussianBlur = false;
+
+	// tonemap
+	float         UIHDRBrightness = 1.0f;
+	float         DisplayReferenceBrightnessLevel = 200.0f;
+	EColorSpace   ContentColorSpace = EColorSpace::REC_709;
+	EDisplayCurve SDROutputDisplayCurve = EDisplayCurve::sRGB;
+	EDisplayCurve HDROutputDisplayCurve = EDisplayCurve::Linear;
+	bool          EnableGammaCorrection = true;
+};
+struct FDebugVisualizationSettings
+{
+	enum class EDrawMode : int
+	{
+		LIT_AND_POSTPROCESSED = 0,
+		//WIREFRAME,    // TODO: add support
+		//NO_MATERIALS, // TODO: add support
+
+		DEPTH,
+		NORMALS,
+		ROUGHNESS,
+		METALLIC,
+		AO,
+		ALBEDO,
+		REFLECTIONS,
+		MOTION_VECTORS,
+
+		NUM_DRAW_MODES,
+	};
+
+	EDrawMode DrawModeEnum = EDrawMode::LIT_AND_POSTPROCESSED;
+	bool bUnpackNormals = false;
+	float fInputStrength = 100.0f;
+};
+struct FRenderingSettings
+{
+	struct FFFX_SSSR_Options
+	{
+		bool  bEnableTemporalVarianceGuidedTracing = true;
+		int   MaxTraversalIterations = 128;
+		int   MostDetailedDepthHierarchyMipLevel = 0;
+		int   MinTraversalOccupancy = 4;
+		float DepthBufferThickness = 0.45f;
+		float RoughnessThreshold = 0.2f;
+		float TemporalStability = 0.25f;
+		float TemporalVarianceThreshold = 0.0f;
+		int   SamplesPerQuad = 1;
+	};
+
+	EAntiAliasingAlgorithm AntiAliasing = EAntiAliasingAlgorithm::MSAA4;
+	EReflections Reflections = EReflections::REFLECTIONS_OFF;
+	FFFX_SSSR_Options FFX_SSSR_Options;
+	float RenderResolutionScale = 1.0f;
+	float GlobalMipBias = 0.0f;
+	short MaxFrameRate = -1; // -1: Auto (RefreshRate x 1.15) | 0: Unlimited | <int>: specified value
+	short EnvironmentMapResolution = 256;
+	
+};
 
 struct FGraphicsSettings
 {
-	bool bVsync              = false;
-	bool bUseTripleBuffering = false;
-	bool bAntiAliasing       = false;
-	EReflections Reflections = EReflections::REFLECTIONS_OFF;
+	FDisplaySettings Display;
+	FRenderingSettings Rendering;
+	FPostProcessingSettings PostProcessing;
+	FDebugVisualizationSettings DebugVizualization;
 
-	float RenderScale = 1.0f;
-	int   MaxFrameRate = -1; // -1: Auto (RefreshRate x 1.15) | 0: Unlimited | <int>: specified value
-	int   EnvironmentMapResolution = 256;
-
+	// command recording
 	bool bEnableAsyncCopy = true;
 	bool bEnableAsyncCompute = true;
 	bool bUseSeparateSubmissionQueue = true;
+	
+	// =====================================================================================================================
+
+	inline bool IsFSR1Enabled() const { return PostProcessing.UpscalingAlgorithm == EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_1; }
+	inline bool IsFSR3Enabled() const { return PostProcessing.UpscalingAlgorithm == EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3; }
+	inline bool IsFFXCASEnabled() const { return false; } // TODO: handle RCAS (FSR1) vs CAS
+	inline float GetRenderResolutionX() const { return Rendering.RenderResolutionScale * Display.DisplayResolutionX; }
+	inline float GetRenderResolutionY() const { return Rendering.RenderResolutionScale * Display.DisplayResolutionY; }
+	void Validate();
 };
- 
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// 
+// WINDOW SETTINGS
+// 
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 struct FWindowSettings
 {
 	int Width                 = -1;
@@ -64,9 +196,19 @@ struct FWindowSettings
 	inline bool IsDisplayModeFullscreen() const { return DisplayMode == EDisplayMode::EXCLUSIVE_FULLSCREEN || DisplayMode == EDisplayMode::BORDERLESS_FULLSCREEN; }
 };
 
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// 
+// ENGINE SETTINGS
+// 
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+struct FEditorSettings
+{
+	float OutlineColor[4] = { 1.0f, 0.647f, 0.1f, 1.0f };
+};
 struct FEngineSettings
 {
 	FGraphicsSettings gfx;
+	FEditorSettings Editor;
 
 	FWindowSettings WndMain;
 	FWindowSettings WndDebug;

@@ -161,7 +161,7 @@ void VQEngine::RenderThread_Inititalize()
 #endif
 		// Initialize swapchains for each rendering window
 		// all windows use the same number of swapchains as the main window
-		const int NUM_SWAPCHAIN_BUFFERS = mSettings.gfx.bUseTripleBuffering ? 3 : 2;
+		const int NUM_SWAPCHAIN_BUFFERS = mSettings.gfx.Display.bUseTripleBuffering ? 3 : 2;
 		{
 			SCOPED_CPU_MARKER("mpWinMainInitContext");
 			const bool bIsContainingWindowOnHDRScreen = VQSystemInfo::FMonitorInfo::CheckHDRSupport(hwndMain);
@@ -171,7 +171,7 @@ void VQEngine::RenderThread_Inititalize()
 				Log::Warning("RenderThread_Initialize(): HDR Swapchain requested, but the containing monitor does not support HDR. Falling back to SDR Swapchain, and will enable HDR swapchain when the window is moved to a HDR-capable display");
 			}
 
-			mpRenderer->InitializeRenderContext(mpWinMain.get(), NUM_SWAPCHAIN_BUFFERS, mSettings.gfx.bVsync, bCreateHDRSwapchain, mSettings.gfx.bUseSeparateSubmissionQueue);
+			mpRenderer->InitializeRenderContext(mpWinMain.get(), NUM_SWAPCHAIN_BUFFERS, mSettings.gfx.Display.bVsync, bCreateHDRSwapchain, mSettings.gfx.bUseSeparateSubmissionQueue);
 			mEventQueue_VQEToWin_Main.AddItem(std::make_shared<HandleWindowTransitionsEvent>(hwndMain));
 		}
 		if(mpWinDebug)
@@ -210,7 +210,7 @@ void VQEngine::RenderThread_Inititalize()
 		const int H = bFullscreen ? mpWinMain->GetFullscreenHeight() : mpWinMain->GetHeight();
 		const float fResolutionScale = 1.0f; // Post process parameters are not initialized at this stage to determine the resolution scale
 
-		RenderThread_LoadWindowSizeDependentResources(hwndMain, W, H, fResolutionScale); 
+		mpRenderer->LoadWindowSizeDependentResources(hwndMain, mSettings.gfx, this->ShouldRenderHDR(hwndMain));
 	});
 }
 
@@ -314,34 +314,6 @@ void VQEngine::WaitForBuiltinMeshGeneration()
 	mBuiltinMeshGenSignal.Wait([&]() { return mbBuiltinMeshGenFinished.load(); });
 }
 
-
-// ------------------------------------------------------------------------------------------------------------------------------------------------------------
-//
-// LOAD
-//
-// ------------------------------------------------------------------------------------------------------------------------------------------------------------
-void VQEngine::RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height, float fResolutionScale)
-{
-	SCOPED_CPU_MARKER("RenderThread_LoadWindowSizeDependentResources()");
-
-	if (hwnd == mpWinMain->GetHWND())
-	{
-		mpRenderer->LoadWindowSizeDependentResources(hwnd, Width, Height, fResolutionScale, this->ShouldRenderHDR(hwnd));
-	}
-	// TODO: generic implementation of other window procedures for load
-}
-
-void VQEngine::RenderThread_UnloadWindowSizeDependentResources(HWND hwnd)
-{
-	SCOPED_CPU_MARKER("RenderThread_UnloadWindowSizeDependentResources()");
-	if (hwnd == mpWinMain->GetHWND())
-	{
-		mpRenderer->UnloadWindowSizeDependentResources(hwnd);
-	}
-	// TODO: generic implementation of other window procedures for unload
-}
-
-
 // ------------------------------------------------------------------------------------------------------------------------------------------------------------
 //
 // RENDER
@@ -366,7 +338,6 @@ void VQEngine::RenderThread_RenderMainWindow()
 
 	const FSceneView& SceneView = mpScene->GetSceneView(FRAME_DATA_INDEX);
 	const FSceneShadowViews& SceneShadowView = mpScene->GetShadowView(FRAME_DATA_INDEX);
-	const FPostProcessParameters& PPParams = mpScene->GetPostProcessParameters(FRAME_DATA_INDEX);
 	const HWND hwndMain = mpWinMain->GetHWND();
 	const bool bHDR = this->ShouldRenderHDR(hwndMain);
 	const Window* pWindow = mpWinMain.get();
@@ -379,8 +350,8 @@ void VQEngine::RenderThread_RenderMainWindow()
 	}
 	else
 	{
-		hr = mpRenderer->PreRenderScene(WorkerThreads, pWindow, SceneView, SceneShadowView, PPParams, mSettings.gfx, mUIState);
-		hr = mpRenderer->RenderScene(WorkerThreads, pWindow, SceneView, SceneShadowView, PPParams, mSettings.gfx, mUIState, bHDR);
+		hr = mpRenderer->PreRenderScene(WorkerThreads, pWindow, SceneView, SceneShadowView, mSettings.gfx, mUIState);
+		hr = mpRenderer->RenderScene(WorkerThreads, pWindow, SceneView, SceneShadowView, mSettings.gfx, mUIState, bHDR);
 	}
 
 	if (hr == DXGI_STATUS_OCCLUDED) { RenderThread_HandleStatusOccluded(); }

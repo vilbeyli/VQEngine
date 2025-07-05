@@ -16,23 +16,6 @@
 //
 //	Contact: volkanilbeyli@gmail.com
 
-#include <memory>
-
-struct FMagnifierParameters;
-struct FMagnifierUIState
-{
-	bool  bUseMagnifier = false;
-	bool  bLockMagnifierPosition = false;
-	bool  bLockMagnifierPositionHistory = false;
-	int   LockedMagnifiedScreenPositionX = 0;
-	int   LockedMagnifiedScreenPositionY = 0;
-	std::shared_ptr<FMagnifierParameters> pMagnifierParams = nullptr;
-
-	void ToggleMagnifierLock();
-	void AdjustMagnifierSize(float increment = 0.05f);
-	void AdjustMagnifierMagnification(float increment = 1.00f);
-};
-
 struct FUIState
 {
 	bool bWindowVisible_KeyMappings = false;
@@ -61,7 +44,8 @@ struct FUIState
 
 	bool bUIOnSeparateWindow = false;
 	bool bProfiler_ShowEngineStats = true;
-	std::unique_ptr<FMagnifierUIState> mpMagnifierState = nullptr;
 	
+	float ResolutionScaleSliderValue = 1.0f;
+
 	void GetMouseScreenPosition(int& X, int& Y) const;
 };

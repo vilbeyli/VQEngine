@@ -17,7 +17,7 @@
 //	Contact: volkanilbeyli@gmail.com
 
 #include "AmbientOcclusion.h"
-#include "Renderer/Libs/AMDFidelityFX/CACAO/ffx_cacao_impl.h"
+#include "Renderer/Libs/AMD/CACAO/ffx_cacao_impl.h"
 
 #include "Libs/VQUtils/Include/Log.h"
 

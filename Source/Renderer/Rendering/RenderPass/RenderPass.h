@@ -36,6 +36,7 @@ enum ERenderPass
 	Magnifier,
 	ObjectID,
 	Outline,
+	FSR3Upscale,
 
 	NUM_RENDER_PASSES
 };

@@ -113,15 +113,16 @@ struct SceneLighting
 // MATERIAL
 //----------------------------------------------------------
 // Has*Map() encoding should match Material::GetTextureConfig()
-inline int HasDiffuseMap(int textureConfig)                     { return ((textureConfig & (1 << 0)) > 0 ? 1 : 0); }
-inline int HasNormalMap(int textureConfig)	                    { return ((textureConfig & (1 << 1)) > 0 ? 1 : 0); }
-inline int HasAmbientOcclusionMap(int textureConfig)            { return ((textureConfig & (1 << 2)) > 0 ? 1 : 0); }
-inline int HasAlphaMask(int textureConfig)                      { return ((textureConfig & (1 << 3)) > 0 ? 1 : 0); }
-inline int HasRoughnessMap(int textureConfig)                   { return ((textureConfig & (1 << 4)) > 0 ? 1 : 0); }
-inline int HasMetallicMap(int textureConfig)                    { return ((textureConfig & (1 << 5)) > 0 ? 1 : 0); }
-inline int HasHeightMap(int textureConfig)                      { return ((textureConfig & (1 << 6)) > 0 ? 1 : 0); }
-inline int HasEmissiveMap(int textureConfig)                    { return ((textureConfig & (1 << 7)) > 0 ? 1 : 0); }
-inline int HasOcclusionRoughnessMetalnessMap(int textureConfig) { return ((textureConfig & (1 << 8)) > 0 ? 1 : 0); }
+inline int HasDiffuseMap(int textureConfig)                     { return ((textureConfig & (1 << 0 )) > 0 ? 1 : 0); }
+inline int HasNormalMap(int textureConfig)	                    { return ((textureConfig & (1 << 1 )) > 0 ? 1 : 0); }
+inline int HasAmbientOcclusionMap(int textureConfig)            { return ((textureConfig & (1 << 2 )) > 0 ? 1 : 0); }
+inline int HasAlphaMask(int textureConfig)                      { return ((textureConfig & (1 << 3 )) > 0 ? 1 : 0); }
+inline int HasRoughnessMap(int textureConfig)                   { return ((textureConfig & (1 << 4 )) > 0 ? 1 : 0); }
+inline int HasMetallicMap(int textureConfig)                    { return ((textureConfig & (1 << 5 )) > 0 ? 1 : 0); }
+inline int HasHeightMap(int textureConfig)                      { return ((textureConfig & (1 << 6 )) > 0 ? 1 : 0); }
+inline int HasEmissiveMap(int textureConfig)                    { return ((textureConfig & (1 << 7 )) > 0 ? 1 : 0); }
+inline int HasOcclusionRoughnessMetalnessMap(int textureConfig) { return ((textureConfig & (1 << 8 )) > 0 ? 1 : 0); }
+inline bool OverrideGlobalMipBias(uint textureConfig)           { return ((textureConfig & (1 << 31)) > 0 ? 1 : 0); }
 
 struct ALIGNAS(16) MaterialData
 {
@@ -136,10 +137,12 @@ struct ALIGNAS(16) MaterialData
 
     float4 uvScaleOffset;
 
+    float mipMapBias;
     float roughness;
     float metalness;
     float displacement;
-    float textureConfig;
+
+    uint textureConfig;
 };
 
 
@@ -169,6 +172,7 @@ struct PerFrameData
 	float2 f2DirectionalLightShadowMapDimensions;
 	float fAmbientLightingFactor;
 	float fHDRIOffsetInRadians;
+	float fGlobalMipBias;
 };
 struct PerViewLightingData
 {
@@ -188,15 +192,19 @@ struct PerViewLightingData
 struct ALIGNAS(64) PerObjectLightingData
 {
 #if INSTANCED_DRAW
-	matrix matWorldViewProj    [MAX_INSTANCE_COUNT__SCENE_MESHES];
-	matrix matWorld            [MAX_INSTANCE_COUNT__SCENE_MESHES];
-	matrix matWorldViewProjPrev[MAX_INSTANCE_COUNT__SCENE_MESHES];
-	matrix matNormal           [MAX_INSTANCE_COUNT__SCENE_MESHES]; // could be 4x3
-	int4   ObjID               [MAX_INSTANCE_COUNT__SCENE_MESHES]; // int[] causes alignment issues as each element is aligned to 16B on the GPU. use int4.x
+	matrix matWorldViewProj            [MAX_INSTANCE_COUNT__SCENE_MESHES];
+	matrix matJitteredWorldViewProj    [MAX_INSTANCE_COUNT__SCENE_MESHES];
+	matrix matWorld                    [MAX_INSTANCE_COUNT__SCENE_MESHES];
+	matrix matWorldViewProjPrev        [MAX_INSTANCE_COUNT__SCENE_MESHES];
+	matrix matJitteredWorldViewProjPrev[MAX_INSTANCE_COUNT__SCENE_MESHES];
+	matrix matNormal                   [MAX_INSTANCE_COUNT__SCENE_MESHES]; // could be 4x3
+	int4   ObjID                       [MAX_INSTANCE_COUNT__SCENE_MESHES]; // int[] causes alignment issues as each element is aligned to 16B on the GPU. use int4.x
 #else
 	matrix matWorldViewProj;
+	matrix matJitteredWorldViewProj;
 	matrix matWorld;
 	matrix matWorldViewProjPrev;
+	matrix matJitteredWorldViewProjPrev;
 	matrix matNormal;
 	int4   ObjID;
 #endif
