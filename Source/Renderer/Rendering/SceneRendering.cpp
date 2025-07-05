@@ -2598,6 +2598,8 @@ VQRenderer::FPostProcessOutput VQRenderer::RenderPostProcess(
 	// -----------------------------------------
 	if (GFXSettings.IsFSR3Enabled())
 	{
+		const FPostProcessingSettings::FFSR3Settings& Settings = GFXSettings.PostProcessing.FSR3Settings;
+
 		const XMMATRIX& proj = SceneView.proj;
 		const float fNear = -proj.r[3].m128_f32[2] / proj.r[2].m128_f32[2];
 		const float fFar = -proj.r[3].m128_f32[2] / (proj.r[2].m128_f32[2] - 1.0f);
@@ -2622,6 +2624,11 @@ VQRenderer::FPostProcessOutput VQRenderer::RenderPostProcess(
 		params.Resources.texExposure = INVALID_ID;
 		params.Resources.texReactiveMask = INVALID_ID;
 		params.Resources.texTransparencyAndComposition = INVALID_ID;
+
+		params.bUseGeneratedReactiveMask = Settings.bGenerateReactivityMask;
+		params.GeneratedReactiveMaskScale = Settings.GeneratedReactiveMaskScale;
+		params.GeneratedReactiveMaskCutoffThreshold = Settings.GeneratedReactiveMaskCutoffThreshold;
+		params.GeneratedReactiveMaskBinaryValue = Settings.GeneratedReactiveMaskBinaryValue;
 
 		FSR3UpscalePass* pFSR3Pass = static_cast<FSR3UpscalePass*>(mRenderPasses[ERenderPass::FSR3Upscale].get());
 		pFSR3Pass->RecordCommands(&params);

@@ -50,6 +50,11 @@ struct FSR3UpscalePass : public RenderPassBase
 		float fViewSpaceToMetersFactor = 1.0f;
 		uint32 iFrame = 0;
 
+		bool bUseGeneratedReactiveMask = false;
+		float GeneratedReactiveMaskScale = 1.0f;
+		float GeneratedReactiveMaskCutoffThreshold = 0.0f;
+		float GeneratedReactiveMaskBinaryValue = 0.0f;
+
 		FResourceCollection Resources;
 	};
 

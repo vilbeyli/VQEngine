@@ -905,6 +905,19 @@ void VQEngine::DrawPostProcessSettings(FGraphicsSettings& GFXSettings)
 
 		if(bShouldUpdateGlobalMipBias)
 			GFXSettings.Rendering.GlobalMipBias = AMD_FidelityFX_SuperResolution3::GetMipBias(GFXSettings.GetRenderResolutionX(), GFXSettings.Display.DisplayResolutionX);
+
+		if (GFXSettings.IsFSR3Enabled())
+		{
+			FPostProcessingSettings::FFSR3Settings& s = GFXSettings.PostProcessing.FSR3Settings;
+
+			ImGui::Checkbox("Generate Reactive Mask", &s.bGenerateReactivityMask);
+			if (s.bGenerateReactivityMask)
+			{
+				ImGui::SliderFloat("Scale", &s.GeneratedReactiveMaskScale, 0.0f, 1.0f, "%.3f");
+				ImGui::SliderFloat("Cutoff Threshold", &s.GeneratedReactiveMaskCutoffThreshold, 0.0f, 1.0f, "%.3f");
+				ImGui::SliderFloat("Binary Value", &s.GeneratedReactiveMaskBinaryValue, 0.0f, 1.0f, "%.3f");
+			}
+		}
 	}
 
 	ImGuiSpacing3();

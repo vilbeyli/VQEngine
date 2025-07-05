@@ -136,9 +136,17 @@ void FSR3UpscalePass::OnCreateWindowSizeDependentResources(unsigned DisplayWidth
 	createDesc.D3D12Desc.SampleDesc.Count = 1;
 	createDesc.D3D12Desc.Flags = D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	texOutput = mRenderer.CreateTexture(createDesc);
+	
+	createDesc.Name = "FSR3_ReactivityMask";
+	createDesc.D3D12Desc.Width = RenderResolutionX;
+	createDesc.D3D12Desc.Height = RenderResolutionY;
+	createDesc.D3D12Desc.Format = DXGI_FORMAT_R16_FLOAT;
+	texReactivityMask = mRenderer.CreateTexture(createDesc);
 
 	srvOutput = mRenderer.AllocateSRV(1);
 	mRenderer.InitializeSRV(srvOutput, 0, texOutput);
+
+	mRenderer.WaitForTexture(texReactivityMask);
 }
 
 void FSR3UpscalePass::OnDestroyWindowSizeDependentResources()
@@ -159,6 +167,7 @@ void FSR3UpscalePass::OnDestroyWindowSizeDependentResources()
 
 	mRenderer.DestroySRV(srvOutput);
 	mRenderer.DestroyTexture(texOutput);
+	mRenderer.DestroyTexture(texReactivityMask);
 }
 
 void FSR3UpscalePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameters)
@@ -190,6 +199,23 @@ void FSR3UpscalePass::RecordCommands(const IRenderPassDrawParameters* pDrawParam
 	int MotionVectorScaleX, MotionVectorScaleY;
 	mRenderer.GetTextureDimensions(rsc.texMotionVectors, MotionVectorScaleX, MotionVectorScaleY);
 	assert(MotionVectorScaleX > 0 && MotionVectorScaleY > 0);
+
+	ID3D12Resource* pRscColorInput = mRenderer.GetTextureResource(rsc.texColorInput);
+	ID3D12Resource* pRscDepthBuffer = mRenderer.GetTextureResource(rsc.texDepthBuffer);
+	ID3D12Resource* pRscMoVec = mRenderer.GetTextureResource(rsc.texMotionVectors);
+	ID3D12Resource* pRscOutput = mRenderer.GetTextureResource(texOutput);
+	assert(pRscColorInput);
+	assert(pRscDepthBuffer);
+	assert(pRscMoVec);
+
+	ID3D12Resource* pRscExposure = rsc.texExposure == INVALID_ID ? nullptr : mRenderer.GetTextureResource(rsc.texExposure);
+	ID3D12Resource* pRscTransparencyAndComposition = rsc.texTransparencyAndComposition == INVALID_ID ? nullptr : mRenderer.GetTextureResource(rsc.texTransparencyAndComposition);
+	ID3D12Resource* pRscReactiveMask = rsc.texReactiveMask == INVALID_ID ? nullptr : mRenderer.GetTextureResource(rsc.texReactiveMask);
+
+	if (pParams->bUseGeneratedReactiveMask)
+	{
+		pRscReactiveMask = texReactivityMask == INVALID_ID ? nullptr : mRenderer.GetTextureResource(texReactivityMask);
+	}
 
 	/*
 	struct ffxDispatchDescUpscale
@@ -223,21 +249,14 @@ void FSR3UpscalePass::RecordCommands(const IRenderPassDrawParameters* pDrawParam
 	DispatchDescUpscale.header.type = FFX_API_DISPATCH_DESC_TYPE_UPSCALE;
 	DispatchDescUpscale.commandList = pParams->pCmd;
 
-	// mandatory input textures
-	DispatchDescUpscale.color         = ffxApiGetResourceDX12(mRenderer.GetTextureResource(rsc.texColorInput   ), FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
-	DispatchDescUpscale.depth         = ffxApiGetResourceDX12(mRenderer.GetTextureResource(rsc.texDepthBuffer  ), FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
-	DispatchDescUpscale.motionVectors = ffxApiGetResourceDX12(mRenderer.GetTextureResource(rsc.texMotionVectors), FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
-	
-	// optional input textures
-	if(rsc.texExposure != INVALID_ID)
-		DispatchDescUpscale.exposure = ffxApiGetResourceDX12(mRenderer.GetTextureResource(rsc.texExposure), FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
-	if (rsc.texReactiveMask != INVALID_ID)
-		DispatchDescUpscale.reactive = ffxApiGetResourceDX12(mRenderer.GetTextureResource(rsc.texReactiveMask), FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
-	if(rsc.texTransparencyAndComposition != INVALID_ID)
-		DispatchDescUpscale.transparencyAndComposition = ffxApiGetResourceDX12(mRenderer.GetTextureResource(rsc.texTransparencyAndComposition), FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
-	
-	// output texture
-	DispatchDescUpscale.output = ffxApiGetResourceDX12(mRenderer.GetTextureResource(texOutput), FFX_API_RESOURCE_STATE_UNORDERED_ACCESS, 0);
+	DispatchDescUpscale.color                      = ffxApiGetResourceDX12(pRscColorInput                , FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+	DispatchDescUpscale.depth                      = ffxApiGetResourceDX12(pRscDepthBuffer               , FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+	DispatchDescUpscale.motionVectors              = ffxApiGetResourceDX12(pRscMoVec                     , FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+	DispatchDescUpscale.exposure                   = ffxApiGetResourceDX12(pRscExposure                  , FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+	DispatchDescUpscale.reactive                   = ffxApiGetResourceDX12(pRscReactiveMask              , FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+	DispatchDescUpscale.transparencyAndComposition = ffxApiGetResourceDX12(pRscTransparencyAndComposition, FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+
+	DispatchDescUpscale.output                     = ffxApiGetResourceDX12(pRscOutput                    , FFX_API_RESOURCE_STATE_UNORDERED_ACCESS, 0);
 	
 	// params
 	GetJitterXY(DispatchDescUpscale.jitterOffset.x, DispatchDescUpscale.jitterOffset.y, (uint)RenderSizeX, (uint)OutputSizeX, pParams->iFrame);
@@ -268,6 +287,38 @@ void FSR3UpscalePass::RecordCommands(const IRenderPassDrawParameters* pDrawParam
 	DispatchDescUpscale.flags = flags;
 
 	ffxReturnCode_t retCode = 0; 
+
+	if (pParams->bUseGeneratedReactiveMask)
+	{
+		SCOPED_GPU_MARKER(pParams->pCmd, "FSR3GenerateRactivityMaskPass");
+		assert(pRscReactiveMask);
+
+		ffxDispatchDescUpscaleGenerateReactiveMask GenReactiveMaskDesc = {};
+		GenReactiveMaskDesc.header.type = FFX_API_DISPATCH_DESC_TYPE_UPSCALE_GENERATEREACTIVEMASK;
+		GenReactiveMaskDesc.commandList = pParams->pCmd;
+		GenReactiveMaskDesc.colorOpaqueOnly = ffxApiGetResourceDX12(pRscColorInput, FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+		GenReactiveMaskDesc.colorPreUpscale = ffxApiGetResourceDX12(pRscColorInput, FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+		GenReactiveMaskDesc.outReactive = ffxApiGetResourceDX12(pRscReactiveMask, FFX_API_RESOURCE_STATE_UNORDERED_ACCESS, 0);
+		GenReactiveMaskDesc.renderSize.width = (uint)RenderSizeX;
+		GenReactiveMaskDesc.renderSize.height = (uint)RenderSizeY;
+		GenReactiveMaskDesc.scale = pParams->GeneratedReactiveMaskScale;
+		GenReactiveMaskDesc.cutoffThreshold = pParams->GeneratedReactiveMaskCutoffThreshold;
+		GenReactiveMaskDesc.binaryValue = pParams->GeneratedReactiveMaskBinaryValue;
+		GenReactiveMaskDesc.flags;
+		
+		CD3DX12_RESOURCE_BARRIER barriers[] =
+		{
+			CD3DX12_RESOURCE_BARRIER::Transition(pRscReactiveMask, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+		};
+		pParams->pCmd->ResourceBarrier(_countof(barriers), barriers);
+		
+		retCode = ffxDispatch(&pImpl->ctx, &GenReactiveMaskDesc.header);
+
+		barriers[0] = CD3DX12_RESOURCE_BARRIER::Transition(pRscReactiveMask, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		pParams->pCmd->ResourceBarrier(_countof(barriers), barriers);
+	}
+
+
 	{
 		SCOPED_GPU_MARKER(pParams->pCmd, "FSR3UpcalePass");
 		retCode = ffxDispatch(&pImpl->ctx, &DispatchDescUpscale.header);

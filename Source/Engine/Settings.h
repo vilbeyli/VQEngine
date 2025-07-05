@@ -75,16 +75,29 @@ struct FDisplaySettings
 };
 struct FPostProcessingSettings
 {
+	// typedefs & structs
 	using AMD_FSR1_Preset = AMD_FidelityFX_SuperResolution1::EPreset;
 	using AMD_FSR3_Preset = AMD_FidelityFX_SuperResolution3::EPreset;
+
+	struct FFSR3Settings
+	{
+		bool bGenerateReactivityMask = false;
+		float GeneratedReactiveMaskScale = 1.0f;
+		float GeneratedReactiveMaskCutoffThreshold = 0.0f;
+		float GeneratedReactiveMaskBinaryValue = 0.0f;
+	};
 
 	// upscaling
 	EUpscalingAlgorithm UpscalingAlgorithm = EUpscalingAlgorithm::FIDELITYFX_SUPER_RESOLUTION_3;
 	AMD_FSR1_Preset FSR1UpscalingQualityEnum = AMD_FSR1_Preset::ULTRA_QUALITY;
 	AMD_FSR3_Preset FSR3UpscalingQualityEnum = AMD_FSR3_Preset::NATIVE_AA;
 	ESharpeningAlgorithm SharpeningAlgorithm = ESharpeningAlgorithm::FIDELITY_FX_RCAS;
+	FFSR3Settings FSR3Settings;
+
+	// sharpening
 	float Sharpness = 0.8f;
 
+	// blur
 	bool EnableGaussianBlur = false;
 
 	// tonemap
