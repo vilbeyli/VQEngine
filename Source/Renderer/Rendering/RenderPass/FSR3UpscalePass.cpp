@@ -253,7 +253,7 @@ void FSR3UpscalePass::RecordCommands(const IRenderPassDrawParameters* pDrawParam
 
 	DispatchDescUpscale.frameTimeDelta = pParams->fDeltaTimeMilliseconds;
 	DispatchDescUpscale.preExposure = pParams->fPreExposure;
-	DispatchDescUpscale.reset = pParams->bReset;
+	DispatchDescUpscale.reset = this->bClearHistoryBuffers;
 	DispatchDescUpscale.cameraNear = pParams->fCameraNear;
 	DispatchDescUpscale.cameraFar = pParams->fCameraFar;
 	DispatchDescUpscale.cameraFovAngleVertical = pParams->fCameraFoVAngleVerticalRadians;
@@ -271,6 +271,11 @@ void FSR3UpscalePass::RecordCommands(const IRenderPassDrawParameters* pDrawParam
 	{
 		SCOPED_GPU_MARKER(pParams->pCmd, "FSR3UpcalePass");
 		retCode = ffxDispatch(&pImpl->ctx, &DispatchDescUpscale.header);
+	}
+
+	if (this->bClearHistoryBuffers)
+	{
+		this->bClearHistoryBuffers = false;
 	}
 
 	bool bSucceeded = retCode == 0;

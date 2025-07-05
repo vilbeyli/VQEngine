@@ -1633,17 +1633,18 @@ void VQRenderer::RenderSceneColor(
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvColor.GetCPUDescHandle();
 	const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
 	
-	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvHandles(1, rtvColor.GetCPUDescHandle());
-	if (bUseVisualizationRenderTarget) rtvHandles.push_back(rtvColorViz.GetCPUDescHandle());
-	if (bRenderMotionVectors)          rtvHandles.push_back(rtvMoVec.GetCPUDescHandle());
-	
+	size_t iRTV = 0;
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[3] = { 0, 0, 0 };
+	rtvHandles[iRTV++] = rtvColor.GetCPUDescHandle();
+	if (bUseVisualizationRenderTarget) rtvHandles[iRTV++] = rtvColorViz.GetCPUDescHandle();
+	if (bRenderMotionVectors)          rtvHandles[iRTV++] = rtvMoVec.GetCPUDescHandle();
 	{
 		SCOPED_GPU_MARKER(pCmd, "Clear");
-		for (D3D12_CPU_DESCRIPTOR_HANDLE& rtv : rtvHandles)
-			pCmd->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
+		for (size_t i = 0; i < iRTV; ++i)
+			pCmd->ClearRenderTargetView(rtvHandles[i], clearColor, 0, nullptr);
 	}
 	
-	pCmd->OMSetRenderTargets((UINT)rtvHandles.size(), rtvHandles.data(), FALSE, &dsvHandle);
+	pCmd->OMSetRenderTargets(iRTV, rtvHandles, FALSE, &dsvHandle);
 
 	// Set Viewport & Scissors
 	const float RenderResolutionX = static_cast<float>(GFXSettings.Display.DisplayResolutionX * GFXSettings.Rendering.RenderResolutionScale);
@@ -2428,7 +2429,7 @@ void VQRenderer::TransitionForPostProcessing(ID3D12GraphicsCommandList* pCmd, co
 	if (bFSR3Enabled)
 	{
 		const FSR3UpscalePass* pFSR3Pass = static_cast<FSR3UpscalePass*>(mRenderPasses[ERenderPass::FSR3Upscale].get());
-		ID3D12Resource* pFSR3Rsc = this->GetTextureResource(pFSR3Pass->texOutput);
+		ID3D12Resource* pFSR3Rsc = this->GetTextureResource(pFSR3Pass->GetTextureID(FSR3UpscalePass::EResources::Output));
 		barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pFSR3Rsc, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
 	}
 	if (bVizualizationSceneTargetUsed)
@@ -2611,7 +2612,6 @@ VQRenderer::FPostProcessOutput VQRenderer::RenderPostProcess(
 		params.fCameraNear = fNear;
 		params.fCameraFoVAngleVerticalRadians = fVerticalFoVRadians;
 		params.fViewSpaceToMetersFactor = 1.0f;
-		params.bReset = false; // TODO:
 		params.fPreExposure = 1.0f;
 		params.iFrame = mRenderStats.mNumFramesRendered;
 
@@ -2626,9 +2626,10 @@ VQRenderer::FPostProcessOutput VQRenderer::RenderPostProcess(
 		FSR3UpscalePass* pFSR3Pass = static_cast<FSR3UpscalePass*>(mRenderPasses[ERenderPass::FSR3Upscale].get());
 		pFSR3Pass->RecordCommands(&params);
 
-		output.pRsc = this->GetTextureResource(pFSR3Pass->texOutput);
-		output.srv = pFSR3Pass->srvOutput;
-		texOutput = pFSR3Pass->texOutput;
+		TextureID texOutput = pFSR3Pass->GetTextureID(FSR3UpscalePass::EResources::Output);
+		output.pRsc = this->GetTextureResource(texOutput);
+		output.srv = pFSR3Pass->GetSRV_ID(FSR3UpscalePass::EResources::Output);
+		texOutput = texOutput;
 
 		CD3DX12_RESOURCE_BARRIER barriers[] =
 		{
@@ -2909,27 +2910,14 @@ void VQRenderer::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pC
 		? this->GetRTV(rsc.RTV_UI_SDR).GetCPUDescHandle()
 		: ctx.SwapChain.GetCurrentBackBufferRTVHandle();
 
-	// MAGNIFIER
 	const FRenderDebugOptions::FMagnifierOptions& Magnifier = SceneView.sceneRenderOptions.Debug.Magnifier;
-	if (Magnifier.bEnable)
+	
+	// PASSTHROUGH
+	if (!bHDR) // SDR
 	{
-		SCOPED_GPU_MARKER(pCmd, "MagnifierPass");
-
-		D3D12_INDEX_BUFFER_VIEW nullIBV = {};
-		nullIBV.Format = DXGI_FORMAT_R32_UINT;
-		nullIBV.SizeInBytes = 0;
-		nullIBV.BufferLocation = 0;
-
-		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = bHDR
-			? this->GetRTV(rsc.RTV_UI_SDR).GetCPUDescHandle()
-			: ctx.SwapChain.GetCurrentBackBufferRTVHandle();
-
-		if (bHDR)
+		if (Magnifier.bEnable)
 		{
-			// TODO:
-		}
-		else
-		{
+			SCOPED_GPU_MARKER(pCmd, "MagnifierPass");
 			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
 			FMagnifierParameters* CB = nullptr;
 			pCBufferHeap->AllocConstantBuffer(sizeof(FMagnifierParameters), (void**)&CB, &cbAddr);
@@ -2954,12 +2942,6 @@ void VQRenderer::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pC
 			MagnifierDrawParams.pCBufferParams = CB;
 			this->GetRenderPass(ERenderPass::Magnifier)->RecordCommands(&MagnifierDrawParams);
 		}
-	}
-	
-	// PASSTHROUGH
-	else 
-	{
-		if (!bHDR) // SDR
 		{
 			SCOPED_GPU_MARKER(pCmd, "SwapchainPassthrough");
 			pCmd->SetPipelineState(this->GetPSO(bHDR ? EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO : EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO));
@@ -2978,14 +2960,15 @@ void VQRenderer::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pC
 
 			pCmd->DrawInstanced(3, 1, 0, 0);
 		}
-		else // HDR
-		{
-			SCOPED_GPU_MARKER(pCmd, "ClearSwapchain");
-			pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
-			const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-			pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, NULL);
-		}
 	}
+	else // HDR
+	{
+		SCOPED_GPU_MARKER(pCmd, "ClearSwapchain");
+		pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
+		const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
+		pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, NULL);
+	}
+	
 
 #if !VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	{
@@ -3206,4 +3189,7 @@ void VQRenderer::ClearRenderPassHistories()
 
 	std::shared_ptr<ScreenSpaceReflectionsPass> pReclectionsPass = std::static_pointer_cast<ScreenSpaceReflectionsPass>(GetRenderPass(ERenderPass::ScreenSpaceReflections));
 	pReclectionsPass->SetClearHistoryBuffers();
+
+	std::shared_ptr<FSR3UpscalePass> pFSR3Pass = std::static_pointer_cast<FSR3UpscalePass>(GetRenderPass(ERenderPass::FSR3Upscale));
+	pFSR3Pass->SetClearHistoryBuffers();
 }

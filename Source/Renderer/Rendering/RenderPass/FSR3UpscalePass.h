@@ -48,7 +48,6 @@ struct FSR3UpscalePass : public RenderPassBase
 		float fCameraFoVAngleVerticalRadians = 0.0f;
 		float fPreExposure = 1.0f;
 		float fViewSpaceToMetersFactor = 1.0f;
-		bool bReset = false;
 		uint32 iFrame = 0;
 
 		FResourceCollection Resources;
@@ -70,9 +69,58 @@ public:
 
 	void GetJitterXY(float& OutPixelSpaceJitterX, float& OutPixelSpaceJitterY, uint RenderResolutionX, uint OutputResolutionX, size_t iFrame) const;
 
-	TextureID texOutput; // TODO: make private
-	SRV_ID srvOutput;
+	inline void SetClearHistoryBuffers() { this->bClearHistoryBuffers = true; }
+
+
+	enum EResources
+	{
+		ReactivityMask,
+		TransparencyAndCompositionMask,
+		Output
+	};
+	inline TextureID GetTextureID(EResources eRsc) const
+	{
+		switch (eRsc)
+		{
+		case EResources::ReactivityMask: return texReactivityMask;
+		case EResources::TransparencyAndCompositionMask: return texTransparencyAndCompositionMask;
+		case EResources::Output: return texOutput;
+		}
+		return INVALID_ID;
+	}
+	inline SRV_ID GetSRV_ID(EResources eRsc) const
+	{
+		switch (eRsc)
+		{
+		case EResources::Output: return srvOutput;
+		}
+		return INVALID_ID;
+	}
+
 private:
+	bool bClearHistoryBuffers = false;
+
+	// "reactivity" means how much influence the samples rendered for the 
+	// current frame have over the production of the final upscaled image.
+	// 
+	// adjusts the accumulation balance.
+	// pixelValue
+	//   0: use the default FSR composition strategy
+	//   1: alpha value for alpha-blended objects
+	// recommended clamping the maximum reactive value to around 0.9
+	TextureID texReactivityMask = INVALID_ID;
+
+	// denotes the areas of other specialist rendering like raytraced reflections or 
+	// animated textures which should be accounted for during the upscaling process. 
+	// 
+	// adjusts the pixel history protection mechanisms
+	// pixelValue
+	//   0: does not perform any additional modification to the lock for that pixel.
+	//   1: the lock for that pixel should be completely removed
+	TextureID texTransparencyAndCompositionMask = INVALID_ID;
+
+	TextureID texOutput = INVALID_ID;
+	SRV_ID srvOutput = INVALID_ID;
 
 	struct ContextImpl;
 	ContextImpl* pImpl = nullptr;
