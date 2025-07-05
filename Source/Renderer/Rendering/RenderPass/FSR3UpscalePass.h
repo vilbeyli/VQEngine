@@ -33,8 +33,9 @@ struct FSR3UpscalePass : public RenderPassBase
 		TextureID texDepthBuffer = INVALID_ID;
 		TextureID texMotionVectors = INVALID_ID;
 		TextureID texExposure = INVALID_ID;
-		TextureID texReactiveMask = INVALID_ID;
-		TextureID texTransparencyAndComposition = INVALID_ID;
+
+		bool bAllocateReactivityMaskTexture = false;
+		bool bAllocateTransparencyAndCompositionMaskTexture = false;
 	};
 	struct Parameters : public IRenderPassDrawParameters
 	{
@@ -101,6 +102,14 @@ public:
 		}
 		return INVALID_ID;
 	}
+	inline RTV_ID GetRTV_ID(EResources eRsc) const
+	{
+		switch (eRsc)
+		{
+		case EResources::TransparencyAndCompositionMask: return rtvTransparencyAndCompositionMask;
+		}
+		return INVALID_ID;
+	}
 
 private:
 	bool bClearHistoryBuffers = false;
@@ -123,6 +132,7 @@ private:
 	//   0: does not perform any additional modification to the lock for that pixel.
 	//   1: the lock for that pixel should be completely removed
 	TextureID texTransparencyAndCompositionMask = INVALID_ID;
+	RTV_ID rtvTransparencyAndCompositionMask = INVALID_ID;
 
 	TextureID texOutput = INVALID_ID;
 	SRV_ID srvOutput = INVALID_ID;

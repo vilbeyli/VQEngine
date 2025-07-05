@@ -417,6 +417,7 @@ void VQRenderer::LoadWindowSizeDependentResources(HWND hwnd, const FGraphicsSett
 	FSR3UpscalePass::FResourceCollection upscaleInitParams = {};
 	upscaleInitParams.fResolutionScale = GFXSettings.Rendering.RenderResolutionScale;
 	upscaleInitParams.texColorInput = r.Tex_SceneColor;
+	upscaleInitParams.bAllocateTransparencyAndCompositionMaskTexture = true;
 	mRenderPasses[ERenderPass::FSR3Upscale]->OnCreateWindowSizeDependentResources(DisplayResolutionX, DisplayResolutionY, &upscaleInitParams);
 
 

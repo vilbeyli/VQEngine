@@ -48,9 +48,26 @@ PSInput VSMain(float4 position : POSITION, float2 uv : TEXCOORD0)
 	return result;
 }
 
-float4 PSMain(PSInput input) : SV_TARGET
+
+struct PSOutput
 {
+	float4 color : SV_TARGET0;
+#if PS_OUTPUT_MASK
+	float transparencyAndCompositionMask : SV_TARGET1;
+#endif
+};
+
+PSOutput PSMain(PSInput input)
+{
+	PSOutput o = (PSOutput) 0;
+	
 	float2 uv = DirectionToEquirectUV(normalize(input.CubemapLookDirection));
 	float3 ColorTex = texEquirectEnvironmentMap.SampleLevel(Sampler, uv, 0).rgb;
-	return float4(ColorTex, 1);
+	o.color = float4(ColorTex, 1);
+	
+#if PS_OUTPUT_MASK
+	o.transparencyAndCompositionMask = 1.0f;
+#endif
+	
+	return o;
 }

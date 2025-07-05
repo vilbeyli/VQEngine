@@ -136,17 +136,36 @@ void FSR3UpscalePass::OnCreateWindowSizeDependentResources(unsigned DisplayWidth
 	createDesc.D3D12Desc.SampleDesc.Count = 1;
 	createDesc.D3D12Desc.Flags = D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	texOutput = mRenderer.CreateTexture(createDesc);
-	
-	createDesc.Name = "FSR3_ReactivityMask";
-	createDesc.D3D12Desc.Width = RenderResolutionX;
-	createDesc.D3D12Desc.Height = RenderResolutionY;
-	createDesc.D3D12Desc.Format = DXGI_FORMAT_R16_FLOAT;
-	texReactivityMask = mRenderer.CreateTexture(createDesc);
+
+	// TODO: enable conditional resource consumption
+	//if (pResourceInput->bAllocateReactivityMaskTexture)
+	{
+		createDesc.Name = "FSR3_ReactivityMask";
+		createDesc.D3D12Desc.Width = RenderResolutionX;
+		createDesc.D3D12Desc.Height = RenderResolutionY;
+		createDesc.D3D12Desc.Format = DXGI_FORMAT_R16_FLOAT;
+		texReactivityMask = mRenderer.CreateTexture(createDesc);
+	}
+	//if (pResourceInput->bAllocateTransparencyAndCompositionMaskTexture)
+	{
+		createDesc.Name = "FSR3_TransparencyAndCompositionMask";
+		createDesc.D3D12Desc.Width = RenderResolutionX;
+		createDesc.D3D12Desc.Height = RenderResolutionY;
+		createDesc.D3D12Desc.Format = DXGI_FORMAT_R16_FLOAT;
+		createDesc.D3D12Desc.Flags = D3D12_RESOURCE_FLAGS::D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+		createDesc.InitialState = D3D12_RESOURCE_STATES::D3D12_RESOURCE_STATE_RENDER_TARGET;
+		texTransparencyAndCompositionMask = mRenderer.CreateTexture(createDesc);
+	}
 
 	srvOutput = mRenderer.AllocateSRV(1);
 	mRenderer.InitializeSRV(srvOutput, 0, texOutput);
 
-	mRenderer.WaitForTexture(texReactivityMask);
+	if (pResourceInput->bAllocateReactivityMaskTexture) mRenderer.WaitForTexture(texReactivityMask);
+	//if (pResourceInput->bAllocateTransparencyAndCompositionMaskTexture) 
+	{
+		rtvTransparencyAndCompositionMask = mRenderer.AllocateRTV(1);
+		mRenderer.InitializeRTV(rtvTransparencyAndCompositionMask, 0, texTransparencyAndCompositionMask);
+	}
 }
 
 void FSR3UpscalePass::OnDestroyWindowSizeDependentResources()
@@ -165,9 +184,14 @@ void FSR3UpscalePass::OnDestroyWindowSizeDependentResources()
 		Log::Error("Error (%d) destroying ffxContext", retCode);
 	}
 
+	if (rtvTransparencyAndCompositionMask != INVALID_ID)
+		//mRenderer.DestroyRTV(rtvTransparencyAndCompositionMask);
+
 	mRenderer.DestroySRV(srvOutput);
 	mRenderer.DestroyTexture(texOutput);
-	mRenderer.DestroyTexture(texReactivityMask);
+	
+	if (texReactivityMask != INVALID_ID) mRenderer.DestroyTexture(texReactivityMask);
+	if (texTransparencyAndCompositionMask != INVALID_ID) mRenderer.DestroyTexture(texTransparencyAndCompositionMask);
 }
 
 void FSR3UpscalePass::RecordCommands(const IRenderPassDrawParameters* pDrawParameters)
@@ -207,87 +231,12 @@ void FSR3UpscalePass::RecordCommands(const IRenderPassDrawParameters* pDrawParam
 	assert(pRscColorInput);
 	assert(pRscDepthBuffer);
 	assert(pRscMoVec);
-
+	assert(pRscOutput);
 	ID3D12Resource* pRscExposure = rsc.texExposure == INVALID_ID ? nullptr : mRenderer.GetTextureResource(rsc.texExposure);
-	ID3D12Resource* pRscTransparencyAndComposition = rsc.texTransparencyAndComposition == INVALID_ID ? nullptr : mRenderer.GetTextureResource(rsc.texTransparencyAndComposition);
-	ID3D12Resource* pRscReactiveMask = rsc.texReactiveMask == INVALID_ID ? nullptr : mRenderer.GetTextureResource(rsc.texReactiveMask);
+	ID3D12Resource* pRscReactiveMask = texReactivityMask == INVALID_ID ? nullptr : mRenderer.GetTextureResource(texReactivityMask);		
+	ID3D12Resource* pRscTransparencyAndComposition = texTransparencyAndCompositionMask == INVALID_ID ? nullptr : mRenderer.GetTextureResource(texTransparencyAndCompositionMask);
 
-	if (pParams->bUseGeneratedReactiveMask)
-	{
-		pRscReactiveMask = texReactivityMask == INVALID_ID ? nullptr : mRenderer.GetTextureResource(texReactivityMask);
-	}
-
-	/*
-	struct ffxDispatchDescUpscale
-	{
-		ffxDispatchDescHeader      header;
-		void* commandList;                ///< Command list to record upscaling rendering commands into.
-		struct FfxApiResource      color;                      ///< Color buffer for the current frame (at render resolution).
-		struct FfxApiResource      depth;                      ///< 32bit depth values for the current frame (at render resolution).
-		struct FfxApiResource      motionVectors;              ///< 2-dimensional motion vectors (at render resolution if <c><i>FFX_FSR_ENABLE_DISPLAY_RESOLUTION_MOTION_VECTORS</i></c> is not set).
-		struct FfxApiResource      exposure;                   ///< Optional resource containing a 1x1 exposure value.
-		struct FfxApiResource      reactive;                   ///< Optional resource containing alpha value of reactive objects in the scene.
-		struct FfxApiResource      transparencyAndComposition; ///< Optional resource containing alpha value of special objects in the scene.
-		struct FfxApiResource      output;                     ///< Output color buffer for the current frame (at presentation resolution).
-		struct FfxApiFloatCoords2D jitterOffset;               ///< The subpixel jitter offset applied to the camera.
-		struct FfxApiFloatCoords2D motionVectorScale;          ///< The scale factor to apply to motion vectors.
-		struct FfxApiDimensions2D  renderSize;                 ///< The resolution that was used for rendering the input resources.
-		struct FfxApiDimensions2D  upscaleSize;                ///< The resolution that the upscaler will upscale to (optional, assumed maxUpscaleSize otherwise).
-		bool                       enableSharpening;           ///< Enable an additional sharpening pass.
-		float                      sharpness;                  ///< The sharpness value between 0 and 1, where 0 is no additional sharpness and 1 is maximum additional sharpness.
-		float                      frameTimeDelta;             ///< The time elapsed since the last frame (expressed in milliseconds).
-		float                      preExposure;                ///< The pre exposure value (must be > 0.0f)
-		bool                       reset;                      ///< A boolean value which when set to true, indicates the camera has moved discontinuously.
-		float                      cameraNear;                 ///< The distance to the near plane of the camera.
-		float                      cameraFar;                  ///< The distance to the far plane of the camera.
-		float                      cameraFovAngleVertical;     ///< The camera angle field of view in the vertical direction (expressed in radians).
-		float                      viewSpaceToMetersFactor;    ///< The scale factor to convert view space units to meters
-		uint32_t                   flags;                      ///< Zero or a combination of values from FfxApiDispatchFsrUpscaleFlags.
-	};
-	*/
-	ffxDispatchDescUpscale DispatchDescUpscale = {};
-	DispatchDescUpscale.header.type = FFX_API_DISPATCH_DESC_TYPE_UPSCALE;
-	DispatchDescUpscale.commandList = pParams->pCmd;
-
-	DispatchDescUpscale.color                      = ffxApiGetResourceDX12(pRscColorInput                , FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
-	DispatchDescUpscale.depth                      = ffxApiGetResourceDX12(pRscDepthBuffer               , FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
-	DispatchDescUpscale.motionVectors              = ffxApiGetResourceDX12(pRscMoVec                     , FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
-	DispatchDescUpscale.exposure                   = ffxApiGetResourceDX12(pRscExposure                  , FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
-	DispatchDescUpscale.reactive                   = ffxApiGetResourceDX12(pRscReactiveMask              , FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
-	DispatchDescUpscale.transparencyAndComposition = ffxApiGetResourceDX12(pRscTransparencyAndComposition, FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
-
-	DispatchDescUpscale.output                     = ffxApiGetResourceDX12(pRscOutput                    , FFX_API_RESOURCE_STATE_UNORDERED_ACCESS, 0);
-	
-	// params
-	GetJitterXY(DispatchDescUpscale.jitterOffset.x, DispatchDescUpscale.jitterOffset.y, (uint)RenderSizeX, (uint)OutputSizeX, pParams->iFrame);
-	DispatchDescUpscale.motionVectorScale.x = -MotionVectorScaleX; // - because MVs expected pointing from this frame to prev frame
-	DispatchDescUpscale.motionVectorScale.y = -MotionVectorScaleY; // - because MVs expected pointing from this frame to prev frame
-
-	DispatchDescUpscale.renderSize.width   = (uint)RenderSizeX;
-	DispatchDescUpscale.renderSize.height  = (uint)RenderSizeY;
-	DispatchDescUpscale.upscaleSize.width  = (uint)OutputSizeX;
-	DispatchDescUpscale.upscaleSize.height = (uint)OutputSizeY;
-	DispatchDescUpscale.enableSharpening = pParams->bEnableSharpening;
-	DispatchDescUpscale.sharpness = pParams->fSharpness;
-
-	DispatchDescUpscale.frameTimeDelta = pParams->fDeltaTimeMilliseconds;
-	DispatchDescUpscale.preExposure = pParams->fPreExposure;
-	DispatchDescUpscale.reset = this->bClearHistoryBuffers;
-	DispatchDescUpscale.cameraNear = pParams->fCameraNear;
-	DispatchDescUpscale.cameraFar = pParams->fCameraFar;
-	DispatchDescUpscale.cameraFovAngleVertical = pParams->fCameraFoVAngleVerticalRadians;
-	DispatchDescUpscale.viewSpaceToMetersFactor = pParams->fViewSpaceToMetersFactor;
-
-	FfxApiDispatchFsrUpscaleFlags flags = {};
-	/*
-	FFX_UPSCALE_FLAG_DRAW_DEBUG_VIEW      
-	FFX_UPSCALE_FLAG_NON_LINEAR_COLOR_SRGB
-	FFX_UPSCALE_FLAG_NON_LINEAR_COLOR_PQ  
-	*/
-	DispatchDescUpscale.flags = flags;
-
-	ffxReturnCode_t retCode = 0; 
-
+	ffxReturnCode_t retCode = 0;
 	if (pParams->bUseGeneratedReactiveMask)
 	{
 		SCOPED_GPU_MARKER(pParams->pCmd, "FSR3GenerateRactivityMaskPass");
@@ -305,22 +254,59 @@ void FSR3UpscalePass::RecordCommands(const IRenderPassDrawParameters* pDrawParam
 		GenReactiveMaskDesc.cutoffThreshold = pParams->GeneratedReactiveMaskCutoffThreshold;
 		GenReactiveMaskDesc.binaryValue = pParams->GeneratedReactiveMaskBinaryValue;
 		GenReactiveMaskDesc.flags;
-		
+
 		CD3DX12_RESOURCE_BARRIER barriers[] =
 		{
 			CD3DX12_RESOURCE_BARRIER::Transition(pRscReactiveMask, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
 		};
 		pParams->pCmd->ResourceBarrier(_countof(barriers), barriers);
-		
+
 		retCode = ffxDispatch(&pImpl->ctx, &GenReactiveMaskDesc.header);
 
 		barriers[0] = CD3DX12_RESOURCE_BARRIER::Transition(pRscReactiveMask, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		pParams->pCmd->ResourceBarrier(_countof(barriers), barriers);
 	}
-
-
 	{
 		SCOPED_GPU_MARKER(pParams->pCmd, "FSR3UpcalePass");
+		ffxDispatchDescUpscale DispatchDescUpscale = {};
+		DispatchDescUpscale.header.type = FFX_API_DISPATCH_DESC_TYPE_UPSCALE;
+		DispatchDescUpscale.commandList = pParams->pCmd;
+
+		DispatchDescUpscale.color                      = ffxApiGetResourceDX12(pRscColorInput                , FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+		DispatchDescUpscale.depth                      = ffxApiGetResourceDX12(pRscDepthBuffer               , FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+		DispatchDescUpscale.motionVectors              = ffxApiGetResourceDX12(pRscMoVec                     , FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+		DispatchDescUpscale.exposure                   = ffxApiGetResourceDX12(pRscExposure                  , FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+		DispatchDescUpscale.reactive                   = ffxApiGetResourceDX12(pRscReactiveMask              , FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+		DispatchDescUpscale.transparencyAndComposition = ffxApiGetResourceDX12(pRscTransparencyAndComposition, FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+		DispatchDescUpscale.output                     = ffxApiGetResourceDX12(pRscOutput                    , FFX_API_RESOURCE_STATE_UNORDERED_ACCESS, 0);
+	
+		GetJitterXY(DispatchDescUpscale.jitterOffset.x, DispatchDescUpscale.jitterOffset.y, (uint)RenderSizeX, (uint)OutputSizeX, pParams->iFrame);
+		DispatchDescUpscale.motionVectorScale.x = -MotionVectorScaleX; // - because MVs expected pointing from this frame to prev frame
+		DispatchDescUpscale.motionVectorScale.y = -MotionVectorScaleY; // - because MVs expected pointing from this frame to prev frame
+
+		DispatchDescUpscale.renderSize.width   = (uint)RenderSizeX;
+		DispatchDescUpscale.renderSize.height  = (uint)RenderSizeY;
+		DispatchDescUpscale.upscaleSize.width  = (uint)OutputSizeX;
+		DispatchDescUpscale.upscaleSize.height = (uint)OutputSizeY;
+		DispatchDescUpscale.enableSharpening = pParams->bEnableSharpening;
+		DispatchDescUpscale.sharpness = pParams->fSharpness;
+
+		DispatchDescUpscale.frameTimeDelta = pParams->fDeltaTimeMilliseconds;
+		DispatchDescUpscale.preExposure = pParams->fPreExposure;
+		DispatchDescUpscale.reset = this->bClearHistoryBuffers;
+		DispatchDescUpscale.cameraNear = pParams->fCameraNear;
+		DispatchDescUpscale.cameraFar = pParams->fCameraFar;
+		DispatchDescUpscale.cameraFovAngleVertical = pParams->fCameraFoVAngleVerticalRadians;
+		DispatchDescUpscale.viewSpaceToMetersFactor = pParams->fViewSpaceToMetersFactor;
+
+		FfxApiDispatchFsrUpscaleFlags flags = {};
+		/*
+		FFX_UPSCALE_FLAG_DRAW_DEBUG_VIEW      
+		FFX_UPSCALE_FLAG_NON_LINEAR_COLOR_SRGB
+		FFX_UPSCALE_FLAG_NON_LINEAR_COLOR_PQ  
+		*/
+		DispatchDescUpscale.flags = flags;
+
 		retCode = ffxDispatch(&pImpl->ctx, &DispatchDescUpscale.header);
 	}
 

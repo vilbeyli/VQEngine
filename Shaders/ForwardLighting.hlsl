@@ -56,14 +56,27 @@ struct PSInput
 struct PSOutput
 {
 	float4 color : SV_TARGET0;
+
 #if PS_OUTPUT_ALBEDO_METALLIC
 	float4 albedo_metallic : SV_TARGET1;
 #endif
 
-#if PS_OUTPUT_ALBEDO_METALLIC && PS_OUTPUT_MOTION_VECTORS
+#if PS_OUTPUT_MOTION_VECTORS
+	#if PS_OUTPUT_ALBEDO_METALLIC
 	float2 motion_vectors : SV_TARGET2;
-#elif !PS_OUTPUT_ALBEDO_METALLIC && PS_OUTPUT_MOTION_VECTORS
+	#else
 	float2 motion_vectors : SV_TARGET1;
+	#endif
+#endif
+	
+#if PS_OUTPUT_MASK
+	#if PS_OUTPUT_ALBEDO_METALLIC && PS_OUTPUT_MOTION_VECTORS
+		float transparencyAndCompositionMask : SV_TARGET3;
+	#elif S_OUTPUT_ALBEDO_METALLIC || PS_OUTPUT_MOTION_VECTORS
+		float transparencyAndCompositionMask : SV_TARGET2;
+	#else
+		float transparencyAndCompositionMask : SV_TARGET1;
+	#endif
 #endif
 };
 
@@ -187,7 +200,6 @@ PSInput TransformVertex(
 #if PS_OUTPUT_MOTION_VECTORS
 	result.svPositionCurr = mul(matWVP, vPosition);
 #endif
-	
 	return result;
 }
 
@@ -389,6 +401,9 @@ PSOutput PSMain(PSInput In)
 	#endif
 	#if PS_OUTPUT_MOTION_VECTORS
 	o.motion_vectors = float2(In.svPositionCurr.xy / In.svPositionCurr.w - In.svPositionPrev.xy / In.svPositionPrev.w);
+	#endif
+	#if PS_OUTPUT_MASK
+	o.transparencyAndCompositionMask = 1.0f;
 	#endif
 
 	return o;

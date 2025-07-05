@@ -1606,7 +1606,7 @@ void VQRenderer::RenderSceneColor(
 
 	struct FFrameConstantBuffer { DirectX::XMMATRIX matModelViewProj; };
 	struct FFrameConstantBuffer2 { DirectX::XMMATRIX matModelViewProj; int iTextureConfig; int iTextureOutput; };
-
+	
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
 
 	const bool bHDRDisplay = bHDR; // TODO: this->ShouldRenderHDR(pWindow->GetHWND());
@@ -1616,6 +1616,7 @@ void VQRenderer::RenderSceneColor(
 	const bool bRenderMotionVectors = ShouldUseMotionVectorsTarget(GFXSettings);
 	const bool bRenderScreenSpaceReflections = IsFFX_SSSREnabled(GFXSettings);
 	const bool bMSAA = GFXSettings.Rendering.AntiAliasing == EAntiAliasingAlgorithm::MSAA4;
+	const bool bOutputMaskRT = GFXSettings.IsFSR3Enabled() && bDrawEnvironmentMap;
 
 	const RTV& rtvColor = this->GetRTV(bMSAA ? rsc.RTV_SceneColorMSAA : rsc.RTV_SceneColor);
 	const RTV& rtvColorViz = this->GetRTV(bMSAA ? rsc.RTV_SceneVisualizationMSAA : rsc.RTV_SceneVisualization);
@@ -1632,19 +1633,26 @@ void VQRenderer::RenderSceneColor(
 	// Clear Depth & Render targets
 	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvColor.GetCPUDescHandle();
 	const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-	
-	size_t iRTV = 0;
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[3] = { 0, 0, 0 };
-	rtvHandles[iRTV++] = rtvColor.GetCPUDescHandle();
-	if (bUseVisualizationRenderTarget) rtvHandles[iRTV++] = rtvColorViz.GetCPUDescHandle();
-	if (bRenderMotionVectors)          rtvHandles[iRTV++] = rtvMoVec.GetCPUDescHandle();
+
 	{
 		SCOPED_GPU_MARKER(pCmd, "Clear");
+		size_t iRTV = 0;
+		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[4] = { 0, 0, 0, 0 };
+		rtvHandles[iRTV++] = rtvColor.GetCPUDescHandle();
+		if (bUseVisualizationRenderTarget) rtvHandles[iRTV++] = rtvColorViz.GetCPUDescHandle();
+		if (bRenderMotionVectors)          rtvHandles[iRTV++] = rtvMoVec.GetCPUDescHandle();
+		if (bOutputMaskRT)
+		{
+			std::shared_ptr<FSR3UpscalePass> pFSR3Pass = std::static_pointer_cast<FSR3UpscalePass>(GetRenderPass(ERenderPass::FSR3Upscale));
+			assert(pFSR3Pass);
+			rtvHandles[iRTV++] = GetRTV(pFSR3Pass->GetRTV_ID(FSR3UpscalePass::EResources::TransparencyAndCompositionMask)).GetCPUDescHandle();
+		}
+
 		for (size_t i = 0; i < iRTV; ++i)
 			pCmd->ClearRenderTargetView(rtvHandles[i], clearColor, 0, nullptr);
-	}
 	
-	pCmd->OMSetRenderTargets(iRTV, rtvHandles, FALSE, &dsvHandle);
+		pCmd->OMSetRenderTargets(iRTV, rtvHandles, FALSE, &dsvHandle);
+	}
 
 	// Set Viewport & Scissors
 	const float RenderResolutionX = static_cast<float>(GFXSettings.Display.DisplayResolutionX * GFXSettings.Rendering.RenderResolutionScale);
@@ -1797,6 +1805,20 @@ void VQRenderer::RenderSceneColor(
 	if (bDrawEnvironmentMap)
 	{
 		SCOPED_GPU_MARKER(pCmd, "EnvironmentMap");
+		if (bOutputMaskRT)
+		{
+			// re-arrange RTVs because forward lighting has higher number of RTVs potentiall bound
+			size_t iRTV = 0;
+			D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[2] = { 0, 0 };
+			rtvHandles[iRTV++] = rtvColor.GetCPUDescHandle();
+			if (bOutputMaskRT)
+			{
+				std::shared_ptr<FSR3UpscalePass> pFSR3Pass = std::static_pointer_cast<FSR3UpscalePass>(GetRenderPass(ERenderPass::FSR3Upscale));
+				assert(pFSR3Pass);
+				rtvHandles[iRTV++] = GetRTV(pFSR3Pass->GetRTV_ID(FSR3UpscalePass::EResources::TransparencyAndCompositionMask)).GetCPUDescHandle();
+			}
+			pCmd->OMSetRenderTargets(iRTV, rtvHandles, FALSE, &dsvHandle);
+		}
 
 		ID3D12DescriptorHeap* ppHeaps[] = { this->GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
 
@@ -1805,7 +1827,13 @@ void VQRenderer::RenderSceneColor(
 		pCBufferHeap->AllocConstantBuffer(sizeof(FFrameConstantBuffer ), (void**)(&pConstBuffer), &cbAddr);
 		pConstBuffer->matModelViewProj = SceneView.EnvironmentMapViewProj;
 
-		pCmd->SetPipelineState(this->GetPSO(bMSAA ? EBuiltinPSOs::SKYDOME_PSO_MSAA_4 : EBuiltinPSOs::SKYDOME_PSO));
+		EBuiltinPSOs psoID = bMSAA ? EBuiltinPSOs::SKYDOME_PSO_MSAA_4 : EBuiltinPSOs::SKYDOME_PSO;
+		if (bOutputMaskRT)
+		{
+			psoID = EBuiltinPSOs::SKYDOME_MASK_PSO;
+		}
+
+		pCmd->SetPipelineState(this->GetPSO(psoID));
 		pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__HelloWorldCube));
 
 		pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
@@ -2622,8 +2650,6 @@ VQRenderer::FPostProcessOutput VQRenderer::RenderPostProcess(
 		params.Resources.texDepthBuffer = rsc.Tex_SceneDepthResolve;
 		params.Resources.texMotionVectors = rsc.Tex_SceneMotionVectors;
 		params.Resources.texExposure = INVALID_ID;
-		params.Resources.texReactiveMask = INVALID_ID;
-		params.Resources.texTransparencyAndComposition = INVALID_ID;
 
 		params.bUseGeneratedReactiveMask = Settings.bGenerateReactivityMask;
 		params.GeneratedReactiveMaskScale = Settings.GeneratedReactiveMaskScale;
