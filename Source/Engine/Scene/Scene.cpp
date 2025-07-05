@@ -523,7 +523,7 @@ void Scene::PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX)
 		for (size_t Handle : mTransformHandles)
 		{
 			Transform* pTF = mGameObjectTransformPool.Get(Handle);
-			pTF->_positionPrev = pTF->_position;
+			pTF->UpdateHistory();
 		}
 	}
 }

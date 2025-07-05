@@ -254,7 +254,7 @@ static void BatchMainViewDrawCalls(
 				for (size_t i = r.iStart; i < r.iStart + r.Stride; ++i)
 				{
 					const Transform& tf = ViewVisibleMeshes.Transform[i];
-					pPerObj[iDraw]->matJitteredWorldViewProj[iInstance++] = tf.matWorldTransformationPrev() * jitteredViewProj;
+					pPerObj[iDraw]->matJitteredWorldViewProj[iInstance++] = tf.matWorldTransformation() * jitteredViewProj;
 				}
 				++iDraw;
 			}
