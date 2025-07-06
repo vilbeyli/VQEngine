@@ -18,6 +18,7 @@
 
 
 #include "Transform.h"
+#include <cstring>
 
 using namespace DirectX;
 
