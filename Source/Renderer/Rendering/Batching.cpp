@@ -565,8 +565,14 @@ static void BatchBoundingBoxRenderCommandData(
 	int NumBBsToProcess = (int)BBs.size();
 	size_t i = 0;
 	int iBB = 0;
+
 	while (NumBBsToProcess > 0)
 	{
+		if (iBegin + i >= cmds.size())
+		{
+			Log::Warning("BatchBoundingBoxRenderCommandData called with empty wireframe render data");
+			return;
+		}
 		FInstancedWireframeRenderData& cmd = cmds[iBegin + i];
 		cmd.matWorldViewProj.resize(std::min(MAX_INSTANCE_COUNT__UNLIT_SHADER, (size_t)NumBBsToProcess));
 		cmd.vertexIndexBuffer = { VB, IB };
