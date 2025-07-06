@@ -20,7 +20,7 @@
 
 #define A_CPU 1
 
-#include "PostProcess.h"
+#include "Upscaling.h"
 
 #include "Engine/Core/Types.h"
 #if FFX_DEBUG_LOG
@@ -43,7 +43,7 @@ namespace AMD_FidelityFX_SuperResolution1
 		return std::log10f(Sharpness) / std::log10f(0.5f);
 	}
 
-	void  FShaderParameters::RCAS::UpdateConstantBlock(float Sharpness)
+	void FShaderParameters::RCAS::UpdateConstantBlock(float Sharpness)
 	{
 		const float SharpnessStops = GetSharpnessStops(Sharpness);
 #if FFX_DEBUG_LOG
