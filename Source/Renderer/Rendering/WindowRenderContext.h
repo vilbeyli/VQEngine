@@ -22,7 +22,6 @@
 #include "Core/CommandQueue.h"
 #include "Resources/ResourceHeaps.h"
 #include "Resources/Buffer.h"
-#include "PostProcess/PostProcess.h"
 
 namespace D3D12MA { class Allocator; }
 class Window;

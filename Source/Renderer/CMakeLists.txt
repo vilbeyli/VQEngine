@@ -101,11 +101,9 @@ set(RenderingSources
     "Rendering/Batching.cpp"
 )
 set (PostProcessHeaders
-    "Rendering/PostProcess/PostProcess.h"
     "Rendering/PostProcess/Upscaling.h"
 )
 set (PostProcessSources
-    "Rendering/PostProcess/PostProcess.cpp"
     "Rendering/PostProcess/Upscaling.cpp"
 )
 # Render Passes
