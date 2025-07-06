@@ -241,11 +241,13 @@ void FSR3UpscalePass::RecordCommands(const IRenderPassDrawParameters* pDrawParam
 	{
 		SCOPED_GPU_MARKER(pParams->pCmd, "FSR3GenerateRactivityMaskPass");
 		assert(pRscReactiveMask);
+		ID3D12Resource* pRscOpaqueOnly = mRenderer.GetTextureResource(rsc.texOpaqueOnly);
+		assert(pRscOpaqueOnly);
 
 		ffxDispatchDescUpscaleGenerateReactiveMask GenReactiveMaskDesc = {};
 		GenReactiveMaskDesc.header.type = FFX_API_DISPATCH_DESC_TYPE_UPSCALE_GENERATEREACTIVEMASK;
 		GenReactiveMaskDesc.commandList = pParams->pCmd;
-		GenReactiveMaskDesc.colorOpaqueOnly = ffxApiGetResourceDX12(pRscColorInput, FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
+		GenReactiveMaskDesc.colorOpaqueOnly = ffxApiGetResourceDX12(pRscOpaqueOnly, FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
 		GenReactiveMaskDesc.colorPreUpscale = ffxApiGetResourceDX12(pRscColorInput, FFX_API_RESOURCE_STATE_COMPUTE_READ, 0);
 		GenReactiveMaskDesc.outReactive = ffxApiGetResourceDX12(pRscReactiveMask, FFX_API_RESOURCE_STATE_UNORDERED_ACCESS, 0);
 		GenReactiveMaskDesc.renderSize.width = (uint)RenderSizeX;

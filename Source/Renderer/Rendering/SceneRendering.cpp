@@ -2634,17 +2634,17 @@ VQRenderer::FPostProcessOutput VQRenderer::RenderPostProcess(
 	}
 
 	// FSR3 must be 
-	// -----------------------------------------
-	//    before                   after
-	// -----------------------------------------
-	//   Film Grain                SSR           
-	//   Chromatic Aberration      SSAO          
-	//   Vignette                  Denoising     
-	//   Tonemapping               Exposure      
-	//   Bloom                                   
-	//   Depth of Field                          
-	//   Motion Blur                             
-	// -----------------------------------------
+	// -------------------------------------
+	//  after          before              
+	// -------------------------------------
+	//  SSR            Film Grain            
+	//  SSAO           Chromatic Aberration  
+	//  Denoising      Vignette              
+	//  Exposure       Tonemapping           
+	//                 Bloom                 
+	//                 Depth of Field        
+	//                 Motion Blur           
+	// -------------------------------------
 	if (GFXSettings.IsFSR3Enabled())
 	{
 		const FPostProcessingSettings::FFSR3Settings& Settings = GFXSettings.PostProcessing.FSR3Settings;
@@ -2671,6 +2671,7 @@ VQRenderer::FPostProcessOutput VQRenderer::RenderPostProcess(
 		params.Resources.texDepthBuffer = rsc.Tex_SceneDepthResolve;
 		params.Resources.texMotionVectors = rsc.Tex_SceneMotionVectors;
 		params.Resources.texExposure = INVALID_ID;
+		params.Resources.texOpaqueOnly = rsc.Tex_SceneColor; // TODO: need a separate opaque-only color texture
 
 		params.bUseGeneratedReactiveMask = Settings.bGenerateReactivityMask;
 		params.GeneratedReactiveMaskScale = Settings.GeneratedReactiveMaskScale;

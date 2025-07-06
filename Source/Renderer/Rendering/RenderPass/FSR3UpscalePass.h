@@ -29,6 +29,7 @@ struct FSR3UpscalePass : public RenderPassBase
 	struct FResourceCollection : public IRenderPassResourceCollection 
 	{
 		float fResolutionScale = 0.0f;
+		TextureID texOpaqueOnly = INVALID_ID;
 		TextureID texColorInput = INVALID_ID;
 		TextureID texDepthBuffer = INVALID_ID;
 		TextureID texMotionVectors = INVALID_ID;
