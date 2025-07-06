@@ -112,7 +112,7 @@ public:
 	DirectX::XMFLOAT3 Position;
 	float             Range;
 	Quaternion        RotationQuaternion;
-	DirectX::XMFLOAT3 RenderScale;
+	DirectX::XMFLOAT3 MeshScale;
 	bool              bEnabled;
 	bool              bCastingShadows;
 	EMobility         Mobility;

@@ -21,7 +21,7 @@ THE SOFTWARE.
 ********************************************************************/
 
 #include "Common.hlsl"
-#include "../AMDFidelityFX/DNSR/ffx_denoiser_reflections_common.h"
+#include "../AMD/DNSR/ffx_denoiser_reflections_common.h"
 #include "../BRDF.hlsl"
 
 Texture2D<float4> g_roughness                         : register(t0);

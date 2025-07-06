@@ -56,14 +56,27 @@ struct PSInput
 struct PSOutput
 {
 	float4 color : SV_TARGET0;
+
 #if PS_OUTPUT_ALBEDO_METALLIC
 	float4 albedo_metallic : SV_TARGET1;
 #endif
 
-#if PS_OUTPUT_ALBEDO_METALLIC && PS_OUTPUT_MOTION_VECTORS
+#if PS_OUTPUT_MOTION_VECTORS
+	#if PS_OUTPUT_ALBEDO_METALLIC
 	float2 motion_vectors : SV_TARGET2;
-#elif !PS_OUTPUT_ALBEDO_METALLIC && PS_OUTPUT_MOTION_VECTORS
+	#else
 	float2 motion_vectors : SV_TARGET1;
+	#endif
+#endif
+	
+#if PS_OUTPUT_MASK
+	#if PS_OUTPUT_ALBEDO_METALLIC && PS_OUTPUT_MOTION_VECTORS
+		float transparencyAndCompositionMask : SV_TARGET3;
+	#elif S_OUTPUT_ALBEDO_METALLIC || PS_OUTPUT_MOTION_VECTORS
+		float transparencyAndCompositionMask : SV_TARGET2;
+	#else
+		float transparencyAndCompositionMask : SV_TARGET1;
+	#endif
 #endif
 };
 
@@ -119,6 +132,7 @@ TextureCubeArray texPointLightShadowMaps      : register(t22);
 matrix GetWorldMatrix(uint instID) { return cbPerObject.matWorld[instID]; }
 matrix GetWorldNormalMatrix(uint instID) { return cbPerObject.matNormal[instID]; }
 matrix GetWorldViewProjectionMatrix(uint instID) { return cbPerObject.matWorldViewProj[instID]; }
+matrix GetJitteredWorldViewProjectionMatrix(uint instID) { return cbPerObject.matJitteredWorldViewProj[instID]; }
 #if PS_OUTPUT_MOTION_VECTORS
 matrix GetPrevWorldViewProjectionMatrix(uint instID) { return cbPerObject.matWorldViewProjPrev[instID]; }
 #endif
@@ -126,6 +140,7 @@ matrix GetPrevWorldViewProjectionMatrix(uint instID) { return cbPerObject.matWor
 matrix GetWorldMatrix() { return cbPerObject.matWorld; }
 matrix GetWorldNormalMatrix() { return cbPerObject.matNormal; }
 matrix GetWorldViewProjectionMatrix() { return cbPerObject.matWorldViewProj; }
+matrix GetJitteredWorldViewProjectionMatrix() { return cbPerObject.matJitteredWorldViewProj; }
 #if PS_OUTPUT_MOTION_VECTORS
 matrix GetPrevWorldViewProjectionMatrix() { return cbPerObject.matWorldViewProjPrev; }
 #endif
@@ -155,35 +170,36 @@ PSInput TransformVertex(
 	
 #if INSTANCED_DRAW
 	matrix matW   = GetWorldMatrix(InstanceID);
-	matrix matWVP = GetWorldViewProjectionMatrix(InstanceID);
+	matrix matJWVP = GetJitteredWorldViewProjectionMatrix(InstanceID);
 	matrix matWN = GetWorldNormalMatrix(InstanceID);
 	
 	#if PS_OUTPUT_MOTION_VECTORS
+	matrix matWVP = GetWorldViewProjectionMatrix(InstanceID);
 	matrix matPrevWVP = GetPrevWorldViewProjectionMatrix(InstanceID);
 	#endif
 #else
 	matrix matW   = GetWorldMatrix();
-	matrix matWVP = GetWorldViewProjectionMatrix();
+	matrix matJWVP = GetJitteredWorldViewProjectionMatrix();
 	matrix matWN = GetWorldNormalMatrix();
 	#if PS_OUTPUT_MOTION_VECTORS
+	matrix matWVP = GetWorldViewProjectionMatrix();
 	matrix matPrevWVP = GetPrevWorldViewProjectionMatrix();
 	#endif
 #endif // INSTANCED_DRAW
 	
 	PSInput result;
-	result.position = mul(matWVP, vPosition);
+	result.position = mul(matJWVP, vPosition);
 	result.WorldSpacePosition = mul(matW, vPosition).xyz;
 	result.WorldSpaceNormal = mul((float4x3)matWN, Normal).xyz;
 	result.WorldSpaceTangent = mul((float4x3)matWN, Tangent).xyz;
-	#if PS_OUTPUT_MOTION_VECTORS
+#if PS_OUTPUT_MOTION_VECTORS
 	result.svPositionPrev = mul(matPrevWVP, vPosition);
-	#endif
+#endif
 	result.uv = uv;
 
 #if PS_OUTPUT_MOTION_VECTORS
-	result.svPositionCurr = result.position;
+	result.svPositionCurr = mul(matWVP, vPosition);
 #endif
-	
 	return result;
 }
 
@@ -225,14 +241,15 @@ PSOutput PSMain(PSInput In)
 
 	const float2 uv = In.uv * cbPerObject.materialData.uvScaleOffset.xy + cbPerObject.materialData.uvScaleOffset.zw;
 	const int TEX_CFG = cbPerObject.materialData.textureConfig;
+	const float MipBias = OverrideGlobalMipBias(TEX_CFG) ? cbPerObject.materialData.mipMapBias : cbPerFrame.fGlobalMipBias;
 	
-	float4 AlbedoAlpha = texDiffuse  .Sample(AnisoSampler, uv);
+	float4 AlbedoAlpha = texDiffuse.SampleBias(AnisoSampler, uv, MipBias);
 	float3 Normal      = texNormals.SampleBias(AnisoSampler, uv, cbPerObject.materialData.normalMapMipBias).rgb;
-	float3 Emissive    = texEmissive .Sample(LinearSampler, uv).rgb;
-	float  Metalness   = texMetalness.Sample(AnisoSampler, uv).r;
-	float  Roughness   = texRoughness.Sample(AnisoSampler, uv).r;
-	float3 OcclRghMtl  = texOcclRoughMetal.Sample(AnisoSampler, uv).rgb;
-	float LocalAO      = texLocalAO.Sample(AnisoSampler, uv).r;
+	float3 Emissive    = texEmissive.SampleBias(LinearSampler, uv, MipBias).rgb;
+	float  Metalness   = texMetalness.SampleBias(AnisoSampler, uv, MipBias).r;
+	float  Roughness   = texRoughness.SampleBias(AnisoSampler, uv, MipBias).r;
+	float3 OcclRghMtl  = texOcclRoughMetal.SampleBias(AnisoSampler, uv, MipBias).rgb;
+	float LocalAO      = texLocalAO.SampleBias(AnisoSampler, uv, MipBias).r;
 	
 	#if ENABLE_ALPHA_MASK
 	if (HasDiffuseMap(TEX_CFG) && AlbedoAlpha.a < 0.01f)
@@ -383,8 +400,10 @@ PSOutput PSMain(PSInput In)
 	o.albedo_metallic = float4(Surface.diffuseColor, Surface.metalness);
 	#endif
 	#if PS_OUTPUT_MOTION_VECTORS
-	//o.motion_vectors = float2(0.77777777777777, 0.8888888888888888); // debug output
 	o.motion_vectors = float2(In.svPositionCurr.xy / In.svPositionCurr.w - In.svPositionPrev.xy / In.svPositionPrev.w);
+	#endif
+	#if PS_OUTPUT_MASK
+	o.transparencyAndCompositionMask = 1.0f;
 	#endif
 
 	return o;

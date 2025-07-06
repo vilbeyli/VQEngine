@@ -46,7 +46,7 @@ THE SOFTWARE.
 ********************************************************************/
 namespace _1spp
 {
-#include "Renderer/Libs/AMDFidelityFX/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_1spp.cpp"
+#include "Renderer/Libs/AMD/SSSR/samplerCPP/samplerBlueNoiseErrorDistribution_128x128_OptimizedFor_2d2d2d2d_1spp.cpp"
 }
 struct FBlueNoiseSamplerStateCPU
 {
@@ -111,8 +111,8 @@ void ScreenSpaceReflectionsPass::OnCreateWindowSizeDependentResources(unsigned W
 	}
 	//==============================Create denoising-related resources==============================
 	{
-		const UINT Widt8  = DIV_AND_ROUND_UP(Width , 8u);
-		const UINT Heigh8 = DIV_AND_ROUND_UP(Height, 8u);
+		const UINT Width8  = DIV_AND_ROUND_UP(Width , 8u);
+		const UINT Height8 = DIV_AND_ROUND_UP(Height, 8u);
 		enum EDescs
 		{
 			RADIANCE = 0,
@@ -127,13 +127,13 @@ void ScreenSpaceReflectionsPass::OnCreateWindowSizeDependentResources(unsigned W
 		};
 		std::array<CD3DX12_RESOURCE_DESC, NUM_DESCS> descs =
 		{
-			  CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16G16B16A16_FLOAT, Width, Height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
-			, CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R11G11B10_FLOAT   , Widt8, Heigh8, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
-			, CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16_FLOAT         , Width, Height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
-			, CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16_FLOAT         , Width, Height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
-			, CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32_FLOAT         , Width, Height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
-			, CD3DX12_RESOURCE_DESC::Tex2D(pParams->NormalBufferFormat   , Width, Height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
-			, CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8_UNORM          , Width, Height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
+			  CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16G16B16A16_FLOAT, Width, Height  , 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
+			, CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R11G11B10_FLOAT   , Width8, Height8, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
+			, CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16_FLOAT         , Width, Height  , 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
+			, CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16_FLOAT         , Width, Height  , 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
+			, CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32_FLOAT         , Width, Height  , 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
+			, CD3DX12_RESOURCE_DESC::Tex2D(pParams->NormalBufferFormat   , Width, Height  , 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
+			, CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8_UNORM          , Width, Height  , 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)
 		};
 		const D3D12_RESOURCE_STATES rscStateSRV = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 		const D3D12_RESOURCE_STATES rscStateUAV = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;

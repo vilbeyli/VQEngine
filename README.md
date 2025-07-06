@@ -262,7 +262,7 @@ VQE supports the following command line parameters:
 - [D3D12MA](https://github.com/GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator)
 - [stb](https://github.com/nothings/stb)
 - [tinyxml2](https://github.com/leethomason/tinyxml2)
-- [cgltf][https://github.com/jkuhlmann/cgltf]
+- [cgltf](https://github.com/jkuhlmann/cgltf)
 - [WinPixEventRuntime](https://devblogs.microsoft.com/pix/winpixeventruntime/)
 - [Khronos glTF Sample Models](https://github.com/KhronosGroup/glTF-Sample-Models)
 - [cgbookcase PBR Textures](https://www.cgbookcase.com/)

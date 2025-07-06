@@ -21,7 +21,6 @@
 #include "Material.h"
 #include "Model.h"
 #include "Transform.h"
-#include "Engine/PostProcess/PostProcess.h"
 #include "Libs/VQUtils/Include/Multithreading/TaskSignal.h"
 #include "Engine/Core/Memory.h"
 
@@ -34,21 +33,8 @@ struct Transform;
 class Scene;
 
 
-struct FSceneRenderOptions
+struct FRenderDebugOptions
 {
-	struct FFFX_SSSR_UIOptions
-	{
-		bool    bEnableTemporalVarianceGuidedTracing = true;
-		int     maxTraversalIterations = 128;
-		int     mostDetailedDepthHierarchyMipLevel = 0;
-		int     minTraversalOccupancy = 4;
-		float   depthBufferThickness = 0.45f;
-		float   roughnessThreshold = 0.2f;
-		float   temporalStability = 0.25f;
-		float   temporalVarianceThreshold = 0.0f;
-		int     samplesPerQuad = 1;
-	};
-
 	bool bForceLOD0_ShadowView = false;
 	bool bForceLOD0_SceneView = false;
 	bool bDrawLightBounds = false;
@@ -56,13 +42,53 @@ struct FSceneRenderOptions
 	bool bDrawGameObjectBoundingBoxes = false;
 	bool bDrawLightMeshes = true;
 	bool bDrawVertexLocalAxes = false;
-	float fVertexLocalAxixSize = 1.0f;
-	float fYawSliderValue = 0.0f;
+	float fVertexLocalAxisSize = 1.0f;
+
+	struct FMagnifierOptions
+	{
+		bool bEnable = false;
+		float fMagnifierScreenRadius = 0.35f;
+		float fMagnificationAmount = 6.0f;
+
+		int ScreenOffsetX = 0;
+		int ScreenOffsetY = 0;
+
+		// lock
+		bool bLockPosition = false;
+		bool bLockPositionHistory = false;
+		int LockedScreenPositionX = 0;
+		int LockedScreenPositionY = 0;
+		float BorderColorLocked[3] = { 0.002f, 0.52f, 0.0f }; // G
+		float BorderColorFree[3] = { 0.72f, 0.002f, 0.0f };   // R
+		inline void GetBorderColor(float* pOut) const { memcpy(pOut, bLockPosition ? BorderColorLocked : BorderColorFree, sizeof(float) * 3); }
+		inline void ToggleLock(int MousePosX, int MousePosY)
+		{
+			if (!bEnable)
+				return;
+			bLockPositionHistory = bLockPosition; // record histroy
+			bLockPosition = !bLockPosition; // flip state
+			const bool bLockSwitchedOn = !this->bLockPositionHistory && bLockPosition;
+			const bool bLockSwitchedOff = this->bLockPositionHistory && !bLockPosition;
+			if (bLockSwitchedOn)
+			{
+				LockedScreenPositionX = MousePosX;
+				LockedScreenPositionY = MousePosY;
+			}
+		}
+	} Magnifier;
+};
+struct FSceneLightingOptions
+{
+	float fYawSliderValue = 0.0f; // env map
 	float fAmbientLightingFactor = 0.055f;
 	bool bScreenSpaceAO = true;
-	FFFX_SSSR_UIOptions FFX_SSSRParameters = {};
-	DirectX::XMFLOAT4 OutlineColor = DirectX::XMFLOAT4(1.0f, 0.647f, 0.1f, 1.0f);
 };
+struct FSceneRenderOptions // these options directly affect scene data gathering
+{
+	FRenderDebugOptions Debug;
+	FSceneLightingOptions Lighting;
+};
+
 
 struct FVisibleMeshSortData
 {
@@ -157,8 +183,7 @@ struct FSceneView
 	float                 HDRIYawOffset = 0.0f;
 	DirectX::XMMATRIX     EnvironmentMapViewProj;
 	const Mesh*           pEnvironmentMapMesh = nullptr;
-	int                   SceneRTWidth = 0;
-	int                   SceneRTHeight = 0;
+	float                 DeltaTimeInSeconds = 0.0f;
 
 	uint NumGameObjectBBRenderCmds = 0;
 	uint NumMeshBBRenderCmds = 0;
@@ -173,11 +198,11 @@ struct FSceneView
 	// Culled frustums are not removed from the vector so we track the active ones here
 	uint NumActiveFrustumRenderLists = 0; 
 
-
 	VQ_SHADER_DATA::SceneLighting GPULightingData;
 
 	FSceneRenderOptions sceneRenderOptions;
-	FPostProcessParameters postProcessParameters;
+	int iMousePosX = 0;
+	int iMousePosY = 0;
 };
 
 struct FSceneDebugView

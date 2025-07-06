@@ -330,7 +330,7 @@ TextureID TextureManager::CreateTexture(const FTextureRequest& Request, bool bCh
 	// Assign ID and initialize metadata
 	TextureID id = GenerateUniqueID();
 #if LOG_TEXTURE_CREATE
-	Log::Info("CreateTexture (%d) %s", id, Request.Name.c_str());
+	Log::Info("CreateTexture ID=%d %s [%dx%d]", id, Request.Name.c_str(), Request.D3D12Desc.Width, Request.D3D12Desc.Height);
 #endif
 	{
 		SCOPED_CPU_MARKER("CacheRequest");
