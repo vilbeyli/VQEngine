@@ -120,34 +120,22 @@ static void ParseCommandLineParameters(FStartupParameters& refStartupParams, PST
 			refStartupParams.bOverrideGFXSetting_bVSync = true;
 			if (paramValue.empty())
 			{
-				refStartupParams.EngineSettings.gfx.bVsync = true;
+				refStartupParams.EngineSettings.gfx.Display.bVsync = true;
 			}
 			else
 			{
-				refStartupParams.EngineSettings.gfx.bVsync = StrUtil::ParseBool(paramValue);
-			}
-		}
-		if (paramName == "-AntiAliasing" || paramName == "-AA")
-		{
-			refStartupParams.bOverrideGFXSetting_bAA = true;
-			if (paramValue.empty())
-			{
-				refStartupParams.EngineSettings.gfx.bAntiAliasing = true;
-			}
-			else
-			{
-				refStartupParams.EngineSettings.gfx.bAntiAliasing = StrUtil::ParseBool(paramValue);
+				refStartupParams.EngineSettings.gfx.Display.bVsync = StrUtil::ParseBool(paramValue);
 			}
 		}
 		if (paramName == "-TripleBuffering")
 		{
 			refStartupParams.bOverrideGFXSetting_bUseTripleBuffering = true;
-			refStartupParams.EngineSettings.gfx.bUseTripleBuffering = true;
+			refStartupParams.EngineSettings.gfx.Display.bUseTripleBuffering = true;
 		}
 		if (paramName == "-DoubleBuffering")
 		{
 			refStartupParams.bOverrideGFXSetting_bUseTripleBuffering = true;
-			refStartupParams.EngineSettings.gfx.bUseTripleBuffering = false;
+			refStartupParams.EngineSettings.gfx.Display.bUseTripleBuffering = false;
 		}
 		if (paramName == "-HDR")
 		{
@@ -158,11 +146,11 @@ static void ParseCommandLineParameters(FStartupParameters& refStartupParams, PST
 		{
 			refStartupParams.bOverrideGFXSetting_bMaxFrameRate = true;
 			if (paramValue == "Unlimited" || paramValue == "0")
-				refStartupParams.EngineSettings.gfx.MaxFrameRate = 0;
+				refStartupParams.EngineSettings.gfx.Rendering.MaxFrameRate = 0;
 			else if (paramValue == "Auto" || paramValue == "Automatic" || paramValue == "-1")
-				refStartupParams.EngineSettings.gfx.MaxFrameRate = -1;
+				refStartupParams.EngineSettings.gfx.Rendering.MaxFrameRate = -1;
 			else
-				refStartupParams.EngineSettings.gfx.MaxFrameRate = StrUtil::ParseInt(paramValue);
+				refStartupParams.EngineSettings.gfx.Rendering.MaxFrameRate = StrUtil::ParseInt(paramValue);
 		}
 
 		if (paramName == "-Scene")

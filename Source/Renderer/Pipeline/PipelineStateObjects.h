@@ -59,6 +59,7 @@ enum EBuiltinPSOs // TODO: remove the hardcoded PSOs when a generic Shader solut
 	TONEMAPPER_PSO,
 	HDR_FP16_SWAPCHAIN_PSO,
 	SKYDOME_PSO,
+	SKYDOME_MASK_PSO,
 	SKYDOME_PSO_MSAA_4,
 	WIREFRAME_PSO,
 	WIREFRAME_PSO_MSAA_4,

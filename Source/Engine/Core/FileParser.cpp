@@ -101,42 +101,44 @@ void FileParser::ParseEngineSettingsFile(FStartupParameters& params)
 			if (SettingName == "VSync")
 			{
 				params.bOverrideGFXSetting_bVSync = true;
-				params.EngineSettings.gfx.bVsync = StrUtil::ParseBool(SettingValue);
+				params.EngineSettings.gfx.Display.bVsync = StrUtil::ParseBool(SettingValue);
 			}
-			if (SettingName == "RenderScale")
+			if (SettingName == "RenderResolutionScale")
 			{
 				params.bOverrideGFXSetting_RenderScale = true;
-				params.EngineSettings.gfx.RenderScale = StrUtil::ParseFloat(SettingValue);
+				params.EngineSettings.gfx.Rendering.RenderResolutionScale = StrUtil::ParseFloat(SettingValue);
 			}
 			if (SettingName == "TripleBuffer")
 			{
 				params.bOverrideGFXSetting_bUseTripleBuffering = true;
-				params.EngineSettings.gfx.bUseTripleBuffering = StrUtil::ParseBool(SettingValue);
+				params.EngineSettings.gfx.Display.bUseTripleBuffering = StrUtil::ParseBool(SettingValue);
 			}
+#if 0 // TODO: enable anti-alising with its enum options
 			if (SettingName == "AntiAliasing" || SettingName == "AA")
 			{
 				params.bOverrideGFXSetting_bAA = true;
 				params.EngineSettings.gfx.bAntiAliasing = StrUtil::ParseBool(SettingValue);
 			}
+#endif
 			if (SettingName == "MaxFrameRate" || SettingName == "MaxFPS")
 			{
 				params.bOverrideGFXSetting_bMaxFrameRate = true;
 				if (SettingValue == "Unlimited" || SettingValue == "0")
-					params.EngineSettings.gfx.MaxFrameRate = 0;
+					params.EngineSettings.gfx.Rendering.MaxFrameRate = 0;
 				else if (SettingValue == "Auto" || SettingValue == "Automatic" || SettingValue == "-1")
-					params.EngineSettings.gfx.MaxFrameRate = -1;
+					params.EngineSettings.gfx.Rendering.MaxFrameRate = -1;
 				else
-					params.EngineSettings.gfx.MaxFrameRate = StrUtil::ParseInt(SettingValue);
+					params.EngineSettings.gfx.Rendering.MaxFrameRate = StrUtil::ParseInt(SettingValue);
 			}
 			if (SettingName == "EnvironmentMapResolution")
 			{
-				params.EngineSettings.gfx.EnvironmentMapResolution = StrUtil::ParseInt(SettingValue);
+				params.EngineSettings.gfx.Rendering.EnvironmentMapResolution = StrUtil::ParseInt(SettingValue);
 				params.bOverrideGFXSetting_EnvironmentMapResolution = true;
 			}
 			if (SettingName == "Reflections")
 			{
 				params.bOverrideGFXSettings_Reflections = true;
-				params.EngineSettings.gfx.Reflections = static_cast<EReflections>(StrUtil::ParseInt(SettingValue));
+				params.EngineSettings.gfx.Rendering.Reflections = static_cast<EReflections>(StrUtil::ParseInt(SettingValue));
 			}
 
 			// 
@@ -678,7 +680,7 @@ FSceneRepresentation FileParser::ParseSceneFile(const std::string& SceneFile)
 		{
 			const Transform tf = fnParseTransform(pTransform);
 			l.Position = tf._position;
-			l.RenderScale = tf._scale;
+			l.MeshScale = tf._scale;
 			l.RotationQuaternion = tf._rotation;
 		}
 

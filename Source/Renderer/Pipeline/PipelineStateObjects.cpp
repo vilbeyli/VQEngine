@@ -1066,8 +1066,8 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 		psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
 		psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
 		psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-		psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
-		psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+		psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_SRC_ALPHA;
+		psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_DEST_ALPHA;
 		psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
 		psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 		psoDesc.DepthStencilState.DepthEnable = FALSE;
@@ -1100,13 +1100,13 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 		psoDesc.pRootSignature = mRootSignatureLookup.at(EBuiltinRootSignatures::LEGACY__UI_HDR_Composite);
 		psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 		psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-		psoDesc.BlendState.RenderTarget[0].BlendEnable = false;
-		psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-		psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-		psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-		psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+		psoDesc.BlendState.RenderTarget[0].BlendEnable = true;
+		psoDesc.BlendState.RenderTarget[0].SrcBlend       = D3D12_BLEND_SRC_ALPHA;
+		psoDesc.BlendState.RenderTarget[0].DestBlend      = D3D12_BLEND_INV_SRC_ALPHA;
+		psoDesc.BlendState.RenderTarget[0].BlendOp        = D3D12_BLEND_OP_ADD;
+		psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha  = D3D12_BLEND_ZERO;
 		psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-		psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+		psoDesc.BlendState.RenderTarget[0].BlendOpAlpha   = D3D12_BLEND_OP_MAX;
 		psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 		psoDesc.DepthStencilState.DepthEnable = FALSE;
 		psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
@@ -1151,6 +1151,15 @@ std::vector<FPSODesc> VQRenderer::LoadBuiltinPSODescs_Legacy()
 		psoDesc.SampleDesc.Count = 1;
 
 		descs[EBuiltinPSOs::SKYDOME_PSO] = psoLoadDesc;
+
+		psoLoadDesc.PSOName = "PSO_Skydome_Masked";
+		psoDesc.NumRenderTargets = 2;
+		psoDesc.RTVFormats[1] = DXGI_FORMAT_R16_FLOAT;
+		psoLoadDesc.ShaderStageCompileDescs[1].Macros.push_back(FShaderMacro{"PS_OUTPUT_MASK", "1"});
+		descs[EBuiltinPSOs::SKYDOME_MASK_PSO] = psoLoadDesc;
+		psoLoadDesc.ShaderStageCompileDescs[1].Macros.pop_back();
+		psoDesc.RTVFormats[1] = DXGI_FORMAT_UNKNOWN;
+		psoDesc.NumRenderTargets = 1;
 
 		// MSAA PSO
 		psoLoadDesc.PSOName = "PSO_Skydome_MSAA4";

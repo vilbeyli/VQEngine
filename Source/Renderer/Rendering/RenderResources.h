@@ -25,8 +25,7 @@
 constexpr bool MSAA_ENABLE = true;
 constexpr uint MSAA_SAMPLE_COUNT = 4;
 
-struct FRenderingResources {};
-struct FRenderingResources_MainWindow : public FRenderingResources
+struct FRenderingResources_MainWindow
 {
 	TextureID Tex_ShadowMaps_Spot = INVALID_ID;
 	TextureID Tex_ShadowMaps_Point = INVALID_ID;
@@ -119,7 +118,7 @@ struct FRenderingResources_MainWindow : public FRenderingResources
 	SRV_ID SRV_NullCubemap = INVALID_ID;
 	SRV_ID SRV_NullTexture2D = INVALID_ID;
 };
-struct FRenderingResources_DebugWindow : public FRenderingResources
+struct FRenderingResources_DebugWindow
 {
 	// TODO
 };

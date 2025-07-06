@@ -60,7 +60,6 @@ class VQRenderer;
 struct FSceneRenderOptions;
 class Scene;
 struct FSceneStats;
-struct FPostProcessParameters;
 class Timer;
 class Window;
 
@@ -139,9 +138,6 @@ public:
 	void RenderThread_WaitForUpdateThread();
 	void RenderThread_SignalUpdateThread();
 #endif
-
-	void RenderThread_LoadWindowSizeDependentResources(HWND hwnd, int Width, int Height, float ResolutionScale);
-	void RenderThread_UnloadWindowSizeDependentResources(HWND hwnd);
 
 	// RENDER()
 	// - Records command lists in parallel per FSceneView
@@ -372,11 +368,11 @@ private:
 	// UI
 	//
 	void                            UpdateUIState(HWND hwnd, float dt);
-	void                            DrawProfilerWindow(const FSceneStats& FrameStats, float dt);
+	void                            DrawProfilerWindow(const FSceneStats& FrameStats, float RenderResolutionScale, float dt);
 	void                            DrawSceneControlsWindow(int& iSelectedCamera, int& iSelectedEnvMap, FSceneRenderOptions& SceneRenderParams);
-	void                            DrawPostProcessSettings(FPostProcessParameters& PPParams);
+	void                            DrawPostProcessSettings(FGraphicsSettings& GFXSettings);
 	void                            DrawKeyMappingsWindow();
-	void                            DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams, FPostProcessParameters& PPParams);
+	void                            DrawGraphicsSettingsWindow(FSceneRenderOptions& SceneRenderParams);
 	void                            DrawEditorWindow();
 	void                            DrawMaterialEditor();
 	void                            DrawLightEditor();

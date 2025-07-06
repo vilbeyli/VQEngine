@@ -71,7 +71,7 @@ void FFX_DNSR_Reflections_StoreRadianceReprojected(int2 pixel_coordinate, min16f
 void FFX_DNSR_Reflections_StoreAverageRadiance(int2 pixel_coordinate, min16float3 value) { g_out_average_radiance[pixel_coordinate] = value; }
 void FFX_DNSR_Reflections_StoreVariance(int2 pixel_coordinate, min16float value) { g_out_variance[pixel_coordinate] = value; }
 void FFX_DNSR_Reflections_StoreNumSamples(int2 pixel_coordinate, min16float value) { g_out_sample_count[pixel_coordinate] = value; }
-#include "../AMDFidelityFX/DNSR/ffx_denoiser_reflections_reproject.h"
+#include "../AMD/DNSR/ffx_denoiser_reflections_reproject.h"
 
 [numthreads(8, 8, 1)]
 void CSMain(int2 group_thread_id      : SV_GroupThreadID,

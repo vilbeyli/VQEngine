@@ -165,6 +165,8 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	assert(pParams->pCmdCopy);
 	assert(pParams->pSceneView);
 	assert(pParams->pSceneDrawData);
+	assert(pParams->RenderResolutionX > 0);
+	assert(pParams->RenderResolutionY > 0);
 
 	ID3D12GraphicsCommandList* pCmd = pParams->pCmd;
 	ID3D12GraphicsCommandList* pCmdCpy = static_cast<ID3D12GraphicsCommandList*>(pParams->pCmdCopy);
@@ -176,10 +178,8 @@ void ObjectIDPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamete
 	const DSV& dsv = mRenderer.GetDSV(DSVPassOutput);
 	const RTV& rtv = mRenderer.GetRTV(RTVPassOutput);
 
-	const float RenderResolutionX = static_cast<float>(pParams->pSceneView->SceneRTWidth);
-	const float RenderResolutionY = static_cast<float>(pParams->pSceneView->SceneRTHeight);
-	D3D12_VIEWPORT viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
-	D3D12_RECT scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
+	D3D12_VIEWPORT viewport{ 0.0f, 0.0f, pParams->RenderResolutionX, pParams->RenderResolutionY, 0.0f, 1.0f };
+	D3D12_RECT scissorsRect{ 0, 0, (LONG)pParams->RenderResolutionX, (LONG)pParams->RenderResolutionY };
 
 	D3D12_CLEAR_FLAGS DSVClearFlags = D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
 	const float clearColor[] = { 0, 0, 0, 0 };

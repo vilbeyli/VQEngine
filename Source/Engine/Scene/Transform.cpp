@@ -26,16 +26,15 @@ Transform::Transform(const XMFLOAT3& position, const Quaternion& rotation, const
 	, _rotation(rotation)
 	, _scale(scale)
 	, _positionPrev(position)
+	, _rotationPrev(rotation)
+	, _scalePrev(scale)
 {}
 
 Transform::~Transform() {}
 
 Transform & Transform::operator=(const Transform & t)
 {
-	this->_positionPrev = t._positionPrev;
-	this->_position = t._position;
-	this->_rotation = t._rotation;
-	this->_scale    = t._scale;
+	memcpy(this, &t, sizeof(Transform));
 	return *this;
 }
 
@@ -87,10 +86,10 @@ XMMATRIX Transform::matWorldTransformation() const
 
 DirectX::XMMATRIX Transform::matWorldTransformationPrev() const
 {
-	XMVECTOR scale = XMLoadFloat3(&_scale);
+	XMVECTOR scale = XMLoadFloat3(&_scalePrev);
 	XMVECTOR translation = XMLoadFloat3(&_positionPrev);
 
-	const Quaternion& Q = _rotation;
+	const Quaternion& Q = _rotationPrev;
 	XMVECTOR rotation = XMVectorSet(Q.V.x, Q.V.y, Q.V.z, Q.S);
 	XMVECTOR rotOrigin = XMVectorZero();
 	return XMMatrixAffineTransformation(scale, rotOrigin, rotation, translation);

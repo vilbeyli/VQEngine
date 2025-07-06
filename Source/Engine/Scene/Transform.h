@@ -88,12 +88,22 @@ public:
 	// and using inverse-transpose of rotation/scale matrix
 	static DirectX::XMMATRIX NormalMatrix(const DirectX::XMMATRIX& world);
 
+	inline void UpdateHistory()
+	{
+		_rotationPrev = _rotation;
+		_positionPrev = _position;
+		_scalePrev = _scale;
+	}
+
 	//----------------------------------------------------------------------------------------------------------------
 	// DATA
 	//----------------------------------------------------------------------------------------------------------------
 	Quaternion              _rotation;
 	DirectX::XMFLOAT3       _position;
 	DirectX::XMFLOAT3       _scale;
+
+	Quaternion              _rotationPrev;
 	DirectX::XMFLOAT3       _positionPrev;
+	DirectX::XMFLOAT3       _scalePrev;
 };
 

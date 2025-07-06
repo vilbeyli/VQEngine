@@ -14,7 +14,7 @@
 # Precompiled Headers
 *.gch
 *.pch
-Source/Renderer/Libs/AMDFidelityFX/CACAO/PrecompiledShadersDXIL/*
+Source/Renderer/Libs/AMD/CACAO/PrecompiledShadersDXIL/*
 
 # Compiled Dynamic libraries
 *.so

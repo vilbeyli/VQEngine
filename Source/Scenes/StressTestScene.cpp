@@ -49,9 +49,9 @@ void StressTestScene::UpdateScene(float dt, FSceneView& SceneView)
 	constexpr float HDRI_ROTATION_SPEED = 0.01f;
 	if (bAnimateEnvironmentMapRotation)
 	{
-		SceneView.sceneRenderOptions.fYawSliderValue += HDRI_ROTATION_SPEED * dt;
-		if (SceneView.sceneRenderOptions.fYawSliderValue > 1.0f)
-			SceneView.sceneRenderOptions.fYawSliderValue = 0.0f;
+		SceneView.sceneRenderOptions.Lighting.fYawSliderValue += HDRI_ROTATION_SPEED * dt;
+		if (SceneView.sceneRenderOptions.Lighting.fYawSliderValue > 1.0f)
+			SceneView.sceneRenderOptions.Lighting.fYawSliderValue = 0.0f;
 	}
 
 	// animation

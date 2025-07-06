@@ -101,10 +101,10 @@ HRESULT VQRenderer::RenderLoadingScreen(const Window* pWindow, const FLoadingScr
 	pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
 	// Draw Triangle
-	const float           RenderResolutionX = static_cast<float>(ctx.WindowDisplayResolutionX);
-	const float           RenderResolutionY = static_cast<float>(ctx.WindowDisplayResolutionY);
-	D3D12_VIEWPORT        viewport          { 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
-	D3D12_RECT            scissorsRect      { 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
+	const float    RenderResolutionX = static_cast<float>(pWindow->GetWidth());
+	const float    RenderResolutionY = static_cast<float>(pWindow->GetHeight());
+	D3D12_VIEWPORT viewport     { 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
+	D3D12_RECT     scissorsRect { 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
 	
 	D3D12_INDEX_BUFFER_VIEW nullIBV = {};
 	nullIBV.Format = DXGI_FORMAT_R32_UINT;

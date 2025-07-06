@@ -26,7 +26,6 @@
 
 #include "../Core/Memory.h"
 #include "../AssetLoader.h"
-#include "../PostProcess/PostProcess.h"
 
 #include <algorithm>
 
@@ -127,7 +126,7 @@ protected:
 private: // Derived Scenes shouldn't access these functions
 	void PreUpdate(int FRAME_DATA_INDEX, int FRAME_DATA_PREV_INDEX);
 	void Update(float dt, int FRAME_DATA_INDEX = 0);
-	void PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UIState, bool bAppInSimulationState, int FRAME_DATA_INDEX = 0);
+	void PostUpdate(ThreadPool& UpdateWorkerThreadPool, const FUIState& UIState, bool bAppInSimulationState, const FEngineSettings& Settings, int FRAME_DATA_INDEX = 0);
 	
 	void StartLoading(FSceneRepresentation& scene, ThreadPool& UpdateWorkerThreadPool);
 	void OnLoadComplete(const BuiltinMeshArray_t& builtinMeshes);
@@ -156,7 +155,6 @@ private: // Derived Scenes shouldn't access these functions
 	void LoadSceneMaterials(const std::vector<FMaterialRepresentation>& Materials, TaskID taskID);
 	void LoadLights(const std::vector<Light>& SceneLights);
 	void LoadCameras(std::vector<FCameraParameters>& CameraParams);
-	void LoadPostProcessSettings();
 
 	void CalculateGameObjectLocalSpaceBoundingBoxes();
 
@@ -172,8 +170,6 @@ public:
 	      FSceneView&       GetSceneView (int FRAME_DATA_INDEX);
 	const FSceneView&       GetSceneView (int FRAME_DATA_INDEX) const;
 	const FSceneShadowViews& GetShadowView(int FRAME_DATA_INDEX) const;
-	      FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX);
-	const FPostProcessParameters& GetPostProcessParameters(int FRAME_DATA_INDEX) const ;
 
 	inline const Camera& GetActiveCamera() const { return mCameras[mIndex_SelectedCamera]; }
 	inline       Camera& GetActiveCamera() { return mCameras[mIndex_SelectedCamera]; }
