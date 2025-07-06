@@ -393,14 +393,17 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 	ID3D12Resource* pRscDepthResolve = this->GetTextureResource(rsc.Tex_SceneDepthResolve);
 	ID3D12Resource* pRscDepthMSAA    = this->GetTextureResource(rsc.Tex_SceneDepthMSAA);
 	ID3D12Resource* pRscDepth        = this->GetTextureResource(rsc.Tex_SceneDepth);
-	ID3D12Resource* pSwapChainRT     = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
+	ID3D12Resource* pRscSwapChainRT  = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
 	
+	D3D12_CPU_DESCRIPTOR_HANDLE RTVHandleSwapchain = ctx.SwapChain.GetCurrentBackBufferRTVHandle();
+	
+
 	ID3D12CommandList* pCmdCpy = (ID3D12CommandList*)mpRenderingCmds[COPY][BACK_BUFFER_INDEX][0];
 	CommandQueue& GFXCmdQ = this->GetCommandQueue(ECommandQueueType::GFX);
 	CommandQueue& CPYCmdQ = this->GetCommandQueue(ECommandQueueType::COPY);
 	CommandQueue& CMPCmdQ = this->GetCommandQueue(ECommandQueueType::COMPUTE);
 	
-	FPostProcessOutput ppOutput = {};
+	FPostProcessOutput PostProcessOutput = {};
 	
 	const float RenderResolutionX = static_cast<float>(GFXSettings.Display.DisplayResolutionX * GFXSettings.Rendering.RenderResolutionScale);
 	const float RenderResolutionY = static_cast<float>(GFXSettings.Display.DisplayResolutionY * GFXSettings.Rendering.RenderResolutionScale);
@@ -509,15 +512,24 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 			CompositeReflections(pCmd, &CBHeap, SceneView, GFXSettings);
 		}
 
-		ppOutput = RenderPostProcess(pCmd, &CBHeap, SceneView, GFXSettings, bHDRDisplay);
+		PostProcessOutput = RenderPostProcess(pCmd, &CBHeap, SceneView, GFXSettings, bHDRDisplay);
 
-		TransitionForUI(pCmd, GFXSettings, bHDRDisplay, ppOutput.pRsc, pSwapChainRT);
+		TransitionForUI(pCmd, GFXSettings, bHDRDisplay, PostProcessOutput.pRsc, pRscSwapChainRT);
 
-		RenderUI(pCmd, &CBHeap, ctx, ppOutput.pRsc, GetSRV(ppOutput.srv), UIState, SceneView, GFXSettings, bHDRDisplay);
+		SwapChainRenderPass(pCmd, &CBHeap, SceneView, GFXSettings, RTVHandleSwapchain, GetSRV(PostProcessOutput.srv), bHDRDisplay);
+
+		D3D12_CPU_DESCRIPTOR_HANDLE RTVHandleUI = bHDRDisplay ? this->GetRTV(rsc.RTV_UI_SDR).GetCPUDescHandle(): RTVHandleSwapchain;
+		RenderUI(pCmd, &CBHeap, RTVHandleUI, UIState, SceneView, GFXSettings, bHDRDisplay);
 
 		if (bHDRDisplay)
 		{
 			CompositUIToHDRSwapchain(pCmd, &CBHeap, ctx, GFXSettings);
+		}
+
+		{
+			SCOPED_GPU_MARKER(pCmd, "SwapchainTransitionToPresent");
+			CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(pRscSwapChainRT, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+			pCmd->ResourceBarrier(1, &barrier);
 		}
 	}
 
@@ -733,15 +745,23 @@ HRESULT VQRenderer::RenderScene(ThreadPool& WorkerThreads, const Window* pWindow
 			CompositeReflections(pCmd_ThisThread, &CBHeap_This, SceneView, GFXSettings);
 		}
 
-		ppOutput = RenderPostProcess(pCmd_ThisThread, &CBHeap_This, SceneView, GFXSettings, bHDRDisplay);
+		PostProcessOutput = RenderPostProcess(pCmd_ThisThread, &CBHeap_This, SceneView, GFXSettings, bHDRDisplay);
 		
-		TransitionForUI(pCmd_PresentThread, GFXSettings, bHDRDisplay, ppOutput.pRsc, pSwapChainRT);
+		TransitionForUI(pCmd_PresentThread, GFXSettings, bHDRDisplay, PostProcessOutput.pRsc, pRscSwapChainRT);
+		
+		SwapChainRenderPass(pCmd_PresentThread, &CBHeap_This, SceneView, GFXSettings, RTVHandleSwapchain, GetSRV(PostProcessOutput.srv), bHDRDisplay);
 
-		RenderUI(pCmd_PresentThread, &CBHeap_This, ctx, ppOutput.pRsc, GetSRV(ppOutput.srv), UIState, SceneView, GFXSettings, bHDRDisplay);
+		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = bHDRDisplay ? this->GetRTV(rsc.RTV_UI_SDR).GetCPUDescHandle() : RTVHandleSwapchain;
+		RenderUI(pCmd_PresentThread, &CBHeap_This, rtvHandle, UIState, SceneView, GFXSettings, bHDRDisplay);
 
 		if (bHDRDisplay)
 		{
 			CompositUIToHDRSwapchain(pCmd_PresentThread, &CBHeap_This, ctx, GFXSettings);
+		}
+		{
+			SCOPED_GPU_MARKER(pCmd_PresentThread, "SwapchainTransitionToPresent");
+			CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(pRscSwapChainRT, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+			pCmd_PresentThread->ResourceBarrier(1, &barrier);
 		}
 
 		// SYNC Render Workers
@@ -2494,8 +2514,9 @@ void VQRenderer::TransitionForUI(ID3D12GraphicsCommandList* pCmd, const FGraphic
 	CD3DX12_RESOURCE_BARRIER SwapChainTransition = CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	CD3DX12_RESOURCE_BARRIER UITransition = CD3DX12_RESOURCE_BARRIER::Transition(pRscUI, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	
-	CD3DX12_RESOURCE_BARRIER barriers[3]; int iB = 0;
-	barriers[iB++] = bHDRDisplay ? UITransition : SwapChainTransition;
+	CD3DX12_RESOURCE_BARRIER barriers[4]; int iB = 0;
+	barriers[iB++] = SwapChainTransition;
+	if (bHDRDisplay) barriers[iB++] = UITransition;
 	if (bVizualizationEnabled)
 	{
 		barriers[iB++] = CD3DX12_RESOURCE_BARRIER::Transition(pRsc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -2919,93 +2940,29 @@ VQRenderer::FPostProcessOutput VQRenderer::RenderPostProcess(
 	return output;
 }
 
-void VQRenderer::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pCBufferHeap, FWindowRenderContext& ctx, ID3D12Resource* pRscInput, const SRV& srv_ColorIn, const FUIState& UIState, const FSceneView& SceneView, const FGraphicsSettings& GFXSettings, bool bHDR)
+void VQRenderer::RenderUI(
+	ID3D12GraphicsCommandList* pCmd,
+	DynamicBufferHeap* pCBufferHeap,
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle,
+	const FUIState& UIState, 
+	const FSceneView& SceneView, 
+	const FGraphicsSettings& GFXSettings,
+	bool bHDRDisplay
+)
 {
 	const FRenderingResources_MainWindow& rsc = this->GetRenderingResources_MainWindow();
-	const float             RenderResolutionX = static_cast<float>(GFXSettings.Display.DisplayResolutionX);
-	const float             RenderResolutionY = static_cast<float>(GFXSettings.Display.DisplayResolutionY);
-	D3D12_VIEWPORT                   viewport{ 0.0f, 0.0f, RenderResolutionX, RenderResolutionY, 0.0f, 1.0f };
 	ID3D12DescriptorHeap*           ppHeaps[] = { this->GetDescHeap(EResourceHeapType::CBV_SRV_UAV_HEAP) };
-	D3D12_RECT                   scissorsRect{ 0, 0, (LONG)RenderResolutionX, (LONG)RenderResolutionY };
-
-	ID3D12Resource* pSwapChainRT = ctx.SwapChain.GetCurrentBackBufferRenderTarget();
-
-	D3D12_INDEX_BUFFER_VIEW nullIBV = {};
-	nullIBV.Format = DXGI_FORMAT_R32_UINT;
-	nullIBV.SizeInBytes = 0;
-	nullIBV.BufferLocation = 0;
 	
-#if 0
-	Log::Info("RenderUI: Backbuffer[%d]: 0x%08x | pCmd = %p", swapchain.GetCurrentBackBufferIndex(), pSwapChainRT, pCmd);
-#endif
-	
-	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = bHDR 
-		? this->GetRTV(rsc.RTV_UI_SDR).GetCPUDescHandle()
-		: ctx.SwapChain.GetCurrentBackBufferRTVHandle();
-
-	const FRenderDebugOptions::FMagnifierOptions& Magnifier = SceneView.sceneRenderOptions.Debug.Magnifier;
-	
-	// PASSTHROUGH
-	if (!bHDR) // SDR
-	{
-		if (Magnifier.bEnable)
-		{
-			SCOPED_GPU_MARKER(pCmd, "MagnifierPass");
-			D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
-			FMagnifierParameters* CB = nullptr;
-			pCBufferHeap->AllocConstantBuffer(sizeof(FMagnifierParameters), (void**)&CB, &cbAddr);
-			*CB = FMagnifierParameters();
-			CB->fMagnificationAmount = Magnifier.fMagnificationAmount;
-			CB->fMagnifierScreenRadius = Magnifier.fMagnifierScreenRadius;
-			CB->iMagnifierOffset[0] = Magnifier.ScreenOffsetX;
-			CB->iMagnifierOffset[1] = Magnifier.ScreenOffsetY;
-			CB->iMousePos[0] = SceneView.iMousePosX;
-			CB->iMousePos[1] = SceneView.iMousePosY;
-			CB->uImageWidth = static_cast<uint>(RenderResolutionX);
-			CB->uImageHeight = static_cast<uint>(RenderResolutionY);
-			Magnifier.GetBorderColor(CB->fBorderColorRGB);
-			MagnifierPass::KeepMagnifierOnScreen(*CB);
-
-			MagnifierPass::FDrawParameters MagnifierDrawParams;
-			MagnifierDrawParams.pCmd = pCmd;
-			MagnifierDrawParams.IndexBufferView = nullIBV;
-			MagnifierDrawParams.RTV = rtvHandle;
-			MagnifierDrawParams.SRVColorInput = srv_ColorIn;
-			MagnifierDrawParams.cbAddr = cbAddr;
-			MagnifierDrawParams.pCBufferParams = CB;
-			this->GetRenderPass(ERenderPass::Magnifier)->RecordCommands(&MagnifierDrawParams);
-		}
-		{
-			SCOPED_GPU_MARKER(pCmd, "SwapchainPassthrough");
-			pCmd->SetPipelineState(this->GetPSO(bHDR ? EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO : EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO));
-			pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FullScreenTriangle));
-			pCmd->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-			pCmd->SetGraphicsRootDescriptorTable(0, srv_ColorIn.GetGPUDescHandle());
-
-			pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-			pCmd->IASetVertexBuffers(0, 1, NULL);
-			pCmd->IASetIndexBuffer(&nullIBV);
-
-			pCmd->RSSetViewports(1, &viewport);
-			pCmd->RSSetScissorRects(1, &scissorsRect);
-
-			pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
-
-			pCmd->DrawInstanced(3, 1, 0, 0);
-		}
-	}
-	else // HDR
-	{
-		SCOPED_GPU_MARKER(pCmd, "ClearSwapchain");
-		pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
-		const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-		pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, NULL);
-	}
-	
-
+	 
 #if !VQENGINE_MT_PIPELINED_UPDATE_AND_RENDER_THREADS
 	{
 		SCOPED_GPU_MARKER(pCmd, "UI");
+
+		if (bHDRDisplay)
+		{
+			const FLOAT clearColor[4] = { 0,0,0,0 };
+			pCmd->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+		}
 
 		struct cb
 		{
@@ -3115,12 +3072,75 @@ void VQRenderer::RenderUI(ID3D12GraphicsCommandList* pCmd, DynamicBufferHeap* pC
 	}
 #endif
 
-	if(!bHDR)
+}
+
+void VQRenderer::SwapChainRenderPass(
+	ID3D12GraphicsCommandList* pCmd,
+	DynamicBufferHeap* pCBufferHeap,
+	const FSceneView& SceneView, 
+	const FGraphicsSettings& GFXSettings,
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle,
+	SRV srv_ColorIn,
+	bool bHDRDisplay
+)
+{
+	const FRenderDebugOptions::FMagnifierOptions& Magnifier = SceneView.sceneRenderOptions.Debug.Magnifier;
+	
+	const float DisplayResolutionX = static_cast<float>(GFXSettings.Display.DisplayResolutionX);
+	const float DisplayResolutionY = static_cast<float>(GFXSettings.Display.DisplayResolutionY);
+	D3D12_VIEWPORT viewport{ 0.0f, 0.0f, DisplayResolutionX, DisplayResolutionY, 0.0f, 1.0f };
+	D3D12_RECT scissorsRect{ 0, 0, (LONG)DisplayResolutionX, (LONG)DisplayResolutionY };
+	
+	D3D12_INDEX_BUFFER_VIEW nullIBV = {};
+	nullIBV.Format = DXGI_FORMAT_R32_UINT;
+	nullIBV.SizeInBytes = 0;
+	nullIBV.BufferLocation = 0;
+
+	if (Magnifier.bEnable)
 	{
-		SCOPED_GPU_MARKER(pCmd, "SwapchainTransitionToPresent");
-		// Transition SwapChain for Present
-		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-		pCmd->ResourceBarrier(1, &barrier);
+		SCOPED_GPU_MARKER(pCmd, "MagnifierPass");
+		D3D12_GPU_VIRTUAL_ADDRESS cbAddr = {};
+		FMagnifierParameters* CB = nullptr;
+		pCBufferHeap->AllocConstantBuffer(sizeof(FMagnifierParameters), (void**)&CB, &cbAddr);
+		*CB = FMagnifierParameters();
+		CB->fMagnificationAmount = Magnifier.fMagnificationAmount;
+		CB->fMagnifierScreenRadius = Magnifier.fMagnifierScreenRadius;
+		CB->iMagnifierOffset[0] = Magnifier.ScreenOffsetX;
+		CB->iMagnifierOffset[1] = Magnifier.ScreenOffsetY;
+		CB->iMousePos[0] = SceneView.iMousePosX;
+		CB->iMousePos[1] = SceneView.iMousePosY;
+		CB->uImageWidth = static_cast<uint>(DisplayResolutionX);
+		CB->uImageHeight = static_cast<uint>(DisplayResolutionY);
+		Magnifier.GetBorderColor(CB->fBorderColorRGB);
+		MagnifierPass::KeepMagnifierOnScreen(*CB);
+
+		MagnifierPass::FDrawParameters MagnifierDrawParams;
+		MagnifierDrawParams.pCmd = pCmd;
+		MagnifierDrawParams.IndexBufferView = nullIBV;
+		MagnifierDrawParams.RTV = rtvHandle;
+		MagnifierDrawParams.SRVColorInput = srv_ColorIn;
+		MagnifierDrawParams.cbAddr = cbAddr;
+		MagnifierDrawParams.pCBufferParams = CB;
+		MagnifierDrawParams.bHDROutput = bHDRDisplay;
+		this->GetRenderPass(ERenderPass::Magnifier)->RecordCommands(&MagnifierDrawParams);
+	}
+	else
+	{
+		SCOPED_GPU_MARKER(pCmd, "SwapchainPassthrough");
+		pCmd->SetPipelineState(this->GetPSO(bHDRDisplay ? EBuiltinPSOs::HDR_FP16_SWAPCHAIN_PSO : EBuiltinPSOs::FULLSCREEN_TRIANGLE_PSO));
+		pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FullScreenTriangle));
+		pCmd->SetGraphicsRootDescriptorTable(0, srv_ColorIn.GetGPUDescHandle());
+
+		pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		pCmd->IASetVertexBuffers(0, 1, NULL);
+		pCmd->IASetIndexBuffer(&nullIBV);
+
+		pCmd->RSSetViewports(1, &viewport);
+		pCmd->RSSetScissorRects(1, &scissorsRect);
+
+		pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
+
+		pCmd->DrawInstanced(3, 1, 0, 0);
 	}
 }
 
@@ -3148,24 +3168,18 @@ void VQRenderer::CompositUIToHDRSwapchain(
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = ctx.SwapChain.GetCurrentBackBufferRTVHandle();
 	ID3D12Resource* pRscUI = this->GetTextureResource(rsc.Tex_UI_SDR);
 	const SRV& srv_UI_SDR = this->GetSRV(rsc.SRV_UI_SDR);
-	const SRV& srv_SceneColor = bFFXCASEnabled
-		? this->GetSRV(rsc.SRV_PostProcess_FFXCASOut)
-		: (bFSREnabled
-			? this->GetSRV(rsc.SRV_PostProcess_FSR_RCASOut)
-			: this->GetSRV(rsc.SRV_PostProcess_TonemapperOut));
 
 	const int W = GFXSettings.Display.DisplayResolutionX;
 	const int H = GFXSettings.Display.DisplayResolutionY;
 
-	// transition barriers
-	std::vector< CD3DX12_RESOURCE_BARRIER> barriers;
-	CD3DX12_RESOURCE_BARRIER SwapChainTransition = CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	CD3DX12_RESOURCE_BARRIER UITransition = CD3DX12_RESOURCE_BARRIER::Transition(pRscUI, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	barriers.push_back(UITransition);
-	barriers.push_back(SwapChainTransition);
-	pCmd->ResourceBarrier((UINT)barriers.size(), barriers.data());
+	size_t iBarrier = 0;
+	CD3DX12_RESOURCE_BARRIER barriers[2] = {};
+	barriers[iBarrier++] = CD3DX12_RESOURCE_BARRIER::Transition(pRscUI, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	//if ()
+	//barriers[iBarrier++] = CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-	// states
+	pCmd->ResourceBarrier(iBarrier, barriers);
+
 	D3D12_VIEWPORT vp = {};
 	vp.Width  = static_cast<FLOAT>(W);
 	vp.Height = static_cast<FLOAT>(H);
@@ -3180,30 +3194,18 @@ void VQRenderer::CompositUIToHDRSwapchain(
 	pCBufferHeap->AllocConstantBuffer(cbSize, (void**)&pConstBuffer, &cbAddr);
 	*pConstBuffer = GFXSettings.PostProcessing.UIHDRBrightness;
 
-
 	// set states
 	pCmd->SetPipelineState(this->GetPSO(EBuiltinPSOs::UI_HDR_scRGB_PSO)); // TODO: HDR10/PQ PSO?
 	pCmd->SetGraphicsRootSignature(this->GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__UI_HDR_Composite));
-	pCmd->SetGraphicsRootDescriptorTable(0, srv_SceneColor.GetGPUDescHandle());
-	pCmd->SetGraphicsRootDescriptorTable(1, srv_UI_SDR.GetGPUDescHandle());
-	//pCmd->SetGraphicsRootConstantBufferView(1, cbAddr);
-	pCmd->SetGraphicsRoot32BitConstant(2, *((UINT*)pConstBuffer), 0);
+	pCmd->SetGraphicsRootDescriptorTable(0, srv_UI_SDR.GetGPUDescHandle());
+	pCmd->SetGraphicsRoot32BitConstant(1, *((UINT*)pConstBuffer), 0);
 	pCmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	pCmd->IASetVertexBuffers(0, 1, NULL);
 	pCmd->IASetIndexBuffer(&nullIBV);
 	pCmd->RSSetScissorRects(1, &rect);
 	pCmd->RSSetViewports(1, &vp);
 	pCmd->OMSetRenderTargets(1, &rtvHandle, FALSE, NULL);
-
-	// draw fullscreen triangle
 	pCmd->DrawInstanced(3, 1, 0, 0);
-
-	{
-		//SCOPED_GPU_MARKER(pCmd, "SwapchainTransitionToPresent");
-		// Transition SwapChain for Present
-		CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(pSwapChainRT, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-		pCmd->ResourceBarrier(1, &barrier);
-	}
 }
 
 HRESULT VQRenderer::PresentFrame(FWindowRenderContext& ctx)

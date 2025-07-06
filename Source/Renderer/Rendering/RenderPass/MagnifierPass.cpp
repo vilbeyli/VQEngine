@@ -70,7 +70,7 @@ void MagnifierPass::RecordCommands(const IRenderPassDrawParameters* pDrawParamet
 		D3D12_VIEWPORT viewport{ 0.0f, 0.0f, W, H, 0.0f, 1.0f };
 		D3D12_RECT     scissorsRect{ 0, 0, (LONG)W, (LONG)H };
 
-		pCmd->SetPipelineState(mRenderer.GetPSO(PSOMagnifierPS));
+		pCmd->SetPipelineState(mRenderer.GetPSO(pParams->bHDROutput ? PSOMagnifierPSHDR : PSOMagnifierPS));
 		pCmd->OMSetRenderTargets(1, &pParams->RTV, FALSE, NULL);
 		
 		pCmd->SetGraphicsRootSignature(mRenderer.GetBuiltinRootSignature(EBuiltinRootSignatures::LEGACY__FullScreenTriangle));
@@ -120,6 +120,10 @@ std::vector<FPSOCreationTaskParameters> MagnifierPass::CollectPSOCreationParamet
 
 	std::vector<FPSOCreationTaskParameters> params;
 	params.push_back({ &PSOMagnifierPS, psoLoadDesc });
+
+	psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
+	psoLoadDesc.PSOName = "PSO_MagnifierHDR";
+	params.push_back({ &PSOMagnifierPSHDR, psoLoadDesc });
 
 	return params;
 }

@@ -45,6 +45,7 @@ public:
 		D3D12_CPU_DESCRIPTOR_HANDLE RTV = {};
 		SRV SRVColorInput = {};
 		IBV IndexBufferView = {};
+		bool bHDROutput = false;
 	};
 	struct FResourceCollection : public IRenderPassResourceCollection {};
 
@@ -73,6 +74,7 @@ private:
 	const bool bOutputsToSwapchain = true;
 
 	PSO_ID PSOMagnifierPS = INVALID_ID;
+	PSO_ID PSOMagnifierPSHDR = INVALID_ID;
 
 	// resources for CS implementation, used when bOutputsToSwapchain==false
 	PSO_ID PSOMagnifierCS    = INVALID_ID;
