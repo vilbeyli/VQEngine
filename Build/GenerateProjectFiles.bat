@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 cd /d %~dp0
 
 set LAUNCH_VS=1
-set SOLUTION_FILE=VQE.sln
+set SOLUTION_FILE=VQE.slnx
 set SOLUTION_DIRECTORY=SolutionFiles
 
 :: parameter scan
@@ -147,7 +147,7 @@ exit /b 0
 ::
 :RunCmake
 
-cmake ..\.. -G "Visual Studio 17 2022" -A x64
+cmake ..\.. -G "Visual Studio 18 2026" -A x64 -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
 if !errorlevel! EQU 0 (
     echo [VQBuild] Success!
@@ -156,10 +156,10 @@ if !errorlevel! EQU 0 (
     )
 ) else (
     echo.
-    echo [VQBuild] cmake VS2022 failed, retrying with VS2019...
+    echo [VQBuild] cmake VS2026 failed, retrying with VS2022...
     echo [VQBuild] removing %~dp0SolutionFiles ...
     rmdir /S /Q  %~dp0SolutionFiles
-    cmake ..\.. -G "Visual Studio 16 2019" -A x64
+    cmake ..\.. -G "Visual Studio 17 2022" -A x64
     if !errorlevel! NEQ 0 (    
         echo [VQBuild] GenerateSolutions.bat: Error with CMake. No solution file generated after retrying. 
         exit /b -1
